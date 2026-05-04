@@ -581,7 +581,7 @@ fn vectors() -> Vec<Vector> {
             "TokenOrderAck_marketmaker_fill",
             "TokenOrderAck",
             json!({
-                "fill_type": "3520775774",  // 0xD1CEC45E in decimal
+                "fill_type": "3519988830",  // 0xD1CEC45E in decimal
                 "market_maker": hex0x(b"maker-address"),
             }),
             &v,

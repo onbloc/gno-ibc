@@ -1,2 +1,84 @@
 # gno-ibc
-gno &lt;> union integration
+
+Gno ↔ Union integration. CometBLS light client and UCS03 ZKGM contract ported to Gno realms.
+
+<!-- TODO: Update README -->
+
+## Dependencies
+
+### Toolchain
+
+This repo requires a `gno` binary built from **[gnolang/gno PR #5583](https://github.com/gnolang/gno/pull/5583)** (the CometBLS Groth16 verifier additions). A stock release build will not work — five stdlib packages are unavailable elsewhere.
+
+Verify your binary:
+
+```bash
+gno version    # output should reference the PR #5583 / cometbls-groth16-verifier branch
+```
+
+### Stdlib packages (added by PR #5583)
+
+| Package | Purpose |
+|---|---|
+| `crypto/bn254` | BN254 curve arithmetic (EIP-196/197 layout) |
+| `crypto/cometbls` | CometBLS Groth16 verifier (native-heavy) |
+| `crypto/cometblszk` | Same public API, gno-heavy implementation |
+| `crypto/keccak256` | Ethereum Keccak-256 |
+| `crypto/modexp` | EIP-198 modular exponentiation |
+
+### Workspace packages
+
+| Import path | Location | Source |
+|---|---|---|
+| `gno.land/p/gnoswap/uint256` | `gno.land/p/gnoswap/uint256/` | Vendored from upstream `gnoswap`. See [`gno.land/p/gnoswap/VENDORED.md`](gno.land/p/gnoswap/VENDORED.md) for the pinned commit and refresh procedure |
+
+## Environment check
+
+```bash
+gno test ./gno.land/p/aib/_smoke/ -v
+```
+
+Expected — 4 PASS:
+- `TestStdlibSizes` — sanity-checks key constants (Keccak `Size`=32, LightHeader=116 bytes, BN254 `G1AddInputSize`=128, etc.)
+- `TestKeccakEmpty` — `keccak256("") == c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470`
+- `TestModExpSmall` — `modexp(2, 1, 5) == 2`
+- `TestUint256Add` — `uint256.Add(1, 2) == 3`
+
+The `_smoke` package exists only to validate the environment. Delete it once Wave 0 is in.
+
+## Toolchain gotchas
+
+Non-obvious behaviors observed while wiring up the workspace:
+
+### 1. Symbolic links are not followed
+If a package under the workspace is a symlink, `gno test` falls through to the mod cache and fails:
+
+```text
+gno: downloading gno.land/p/.../...
+... package "gno.land/p/.../..." is not available
+```
+
+**Use real directory copies** (`cp -R`) when bringing in packages from sibling repos. No symlinks.
+
+### 2. `gnowork.toml` is just a marker
+An empty file works. Its job is to mark the workspace root, not to enumerate members. Member packages are auto-discovered — any directory containing a `gnomod.toml` is a package.
+
+### 3. Package resolution order
+When `gno test` resolves an import like `gno.land/p/x`:
+1. **Workspace local** — walk up to the nearest `gnowork.toml`, then look for `gno.land/p/x/gnomod.toml` underneath.
+2. **Mod cache** — the `gno/pkg/mod/gno.land/p/x/` directory under your platform's user data dir.
+3. **Remote download** — try fetching from the gno.land chain.
+
+External packages that are neither in the workspace nor in the mod cache (e.g. `gnoswap/uint256`) trigger a download attempt and fail. **They must be vendored or pre-populated in the mod cache.**
+
+### 4. Vendored packages do not auto-update
+A vendored copy (e.g. `gno.land/p/gnoswap/uint256`) does not track upstream changes. To refresh, follow the procedure in [`gno.land/p/gnoswap/VENDORED.md`](gno.land/p/gnoswap/VENDORED.md).
+
+### 5. No `go tool gno` here
+This repo has no `go.mod` and does not pin the fork via a Go module `replace` directive. Use the standalone `gno` binary directly:
+
+```bash
+gno test ./...
+```
+
+Make sure the `gno` on your `PATH` is the PR #5583 build (see Toolchain section above).

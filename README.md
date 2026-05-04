@@ -42,7 +42,7 @@ Source of truth lives under [`stdlibs/`](stdlibs/). Each package's `gnomod.toml`
 ## Environment check
 
 ```bash
-gno test ./gno.land/p/aib/_smoke/ -v
+gno test ./gno.land/p/core/_smoke/ -v
 ```
 
 Expected — 4 PASS:
@@ -55,7 +55,7 @@ The `_smoke` package exists only to validate the environment. Delete it once Wav
 
 ## Test fixtures
 
-The Solidity ABI codec at `gno.land/p/aib/encoding/abi/` is tested against ground-truth byte sequences produced by Union's own `sol!` macro definitions. See [`tools/abi-fixtures/`](tools/abi-fixtures/) for the Rust harness; gno tests read its output from `gno.land/p/aib/encoding/abi/testdata/vectors.json`.
+The Solidity ABI codec at `gno.land/p/core/encoding/abi/` is tested against ground-truth byte sequences produced by Union's own `sol!` macro definitions. See [`tools/abi-fixtures/`](tools/abi-fixtures/) for the Rust harness; gno tests read its output from `gno.land/p/core/encoding/abi/testdata/vectors.json`.
 
 ```bash
 make refresh-abi-vectors    # regenerate vectors.json after editing the harness

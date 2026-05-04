@@ -15,7 +15,7 @@ GNO_BIN    := $(GO_BIN_DIR)/gno
 GNO_SHORT  := $(shell echo $(GNO_COMMIT) | cut -c1-7)
 
 ABI_FIXTURES_DIR := tools/abi-fixtures
-ABI_VECTORS      := gno.land/p/aib/encoding/abi/testdata/vectors.json
+ABI_VECTORS      := gno.land/p/core/encoding/abi/testdata/vectors.json
 
 .PHONY: help install-gno verify-gno test test-stdlibs test-smoke clean-gno-cache refresh-abi-vectors
 
@@ -64,7 +64,7 @@ test-stdlibs: verify-gno
 	@cd $(GNO_CACHE)/gnovm && go test $(addprefix ./stdlibs/,$(STDLIB_NATIVE))
 
 test-smoke: verify-gno
-	@gno test ./gno.land/p/aib/_smoke/ -v
+	@gno test ./gno.land/p/core/_smoke/ -v
 
 clean-gno-cache:
 	@rm -rf $(GNO_CACHE)

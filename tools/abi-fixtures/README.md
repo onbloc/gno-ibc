@@ -48,7 +48,7 @@ make refresh-abi-vectors
 
 This runs `cargo run --release -p abi-fixtures`, captures stdout, and writes the result to a single canonical fixture next to the gno tests that consume it:
 
-- `gno.land/p/aib/encoding/abi/testdata/vectors.json`
+- `gno.land/p/core/encoding/abi/testdata/vectors.json`
 
 The `abi-fixtures` CI workflow re-runs this generator on every PR that touches the harness or the committed vectors and asserts the result matches what's checked in — editing `src/main.rs` without committing the regenerated `vectors.json` fails CI. Drift between the committed bytes and the gno encoder/decoder is independently caught by the gno test suite.
 

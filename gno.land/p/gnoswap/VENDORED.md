@@ -21,13 +21,13 @@ rm -rf gno.land/p/gnoswap/uint256
 cp -R <path-to-gnoswap-checkout>/contract/p/gnoswap/uint256 \
       gno.land/p/gnoswap/uint256
 # update the commit hash above in this file
-gno test ./gno.land/p/aib/_smoke/   # verify
+gno test ./gno.land/p/core/_smoke/   # verify
 ```
 
 If `gnoswap/uint256` becomes resolvable as a remote chain package later, drop the vendored copy in favor of regular import resolution.
 
 ## What depends on this
 
-- `gno.land/p/aib/_smoke` (env-prep smoke test) — delete after Wave 0
-- ZKGM port — `p/aib/tokenbucket`, `p/aib/ibc/zkgm/*`, `r/aib/ibc/apps/zkgm/*`
-- CometBLS light client — `p/aib/ibc/lightclient/cometbls/`
+- `gno.land/p/gnoswap/_smoke` (env-prep smoke test) — delete after Wave 0
+- ZKGM port — `p/gnoswap/tokenbucket`, `p/gnoswap/ibc/zkgm/*`, `r/gnoswap/ibc/apps/zkgm/*`
+- CometBLS light client — `p/gnoswap/ibc/lightclient/cometbls/`

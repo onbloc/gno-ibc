@@ -34,3 +34,6 @@ go.work.sum
 # Local-only design/analysis docs (kept alongside the code for reference,
 # but not part of the committed source).
 /local_docs/
+
+# Rust build artifacts (Cargo workspace at repo root).
+/target/

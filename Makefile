@@ -11,15 +11,19 @@ GO_BIN_DIR := $(shell go env GOPATH)/bin
 GNO_BIN    := $(GO_BIN_DIR)/gno
 GNO_SHORT  := $(shell echo $(GNO_COMMIT) | cut -c1-7)
 
-.PHONY: help install-gno verify-gno test test-smoke clean-gno-cache
+ABI_FIXTURES_DIR := tools/abi-fixtures
+ABI_VECTORS      := gno.land/p/aib/encoding/abi/testdata/vectors.json
+
+.PHONY: help install-gno verify-gno test test-smoke clean-gno-cache refresh-abi-vectors
 
 help:
 	@echo "Targets:"
-	@echo "  install-gno       — clone+build+install the pinned gno binary"
-	@echo "  verify-gno        — assert the gno on PATH matches the pin"
-	@echo "  test              — verify-gno, then run all gno tests"
-	@echo "  test-smoke        — run only the env-prep smoke tests"
-	@echo "  clean-gno-cache   — remove the cloned gno fork (forces re-clone next install)"
+	@echo "  install-gno           — clone+build+install the pinned gno binary"
+	@echo "  verify-gno            — assert the gno on PATH matches the pin"
+	@echo "  test                  — verify-gno, then run all gno tests"
+	@echo "  test-smoke            — run only the env-prep smoke tests"
+	@echo "  clean-gno-cache       — remove the cloned gno fork (forces re-clone next install)"
+	@echo "  refresh-abi-vectors   — regenerate ABI ground-truth vectors via the Rust harness"
 	@echo
 	@echo "Pinned: $(GNO_REPO)@$(GNO_SHORT)  (.gno-version)"
 
@@ -57,3 +61,13 @@ test-smoke: verify-gno
 clean-gno-cache:
 	@rm -rf $(GNO_CACHE)
 	@echo "removed $(GNO_CACHE)"
+
+# Regenerates ABI test vectors against Union's `sol!` macro definitions.
+# Single canonical fixture lives next to the gno tests that consume it.
+# CI re-runs this and asserts the committed bytes match.
+refresh-abi-vectors:
+	@command -v cargo >/dev/null 2>&1 || { \
+		echo "ERROR: 'cargo' not found on PATH. Install Rust toolchain (rustup) to refresh ABI vectors."; exit 1; }
+	@echo ">> regenerating $(ABI_VECTORS)"
+	@cargo run --release --quiet -p abi-fixtures > $(ABI_VECTORS)
+	@echo "ok: vectors written to $(ABI_VECTORS) ($$(grep -c '"name":' $(ABI_VECTORS)) scenarios)"

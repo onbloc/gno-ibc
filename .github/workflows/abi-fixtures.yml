@@ -1,0 +1,50 @@
+name: abi-fixtures
+
+# Regenerates ABI ground-truth vectors via the Rust harness and asserts the
+# committed JSON matches. Catches the case where someone edits the harness in
+# tools/abi-fixtures/src but forgets to run `make refresh-abi-vectors` — the
+# gno test suite would still pass against stale bytes.
+
+on:
+  push:
+    branches: [main]
+    paths: &abi_paths
+      - 'tools/abi-fixtures/**'
+      - 'gno.land/p/aib/encoding/abi/testdata/vectors.json'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/abi-fixtures.yml'
+  pull_request:
+    paths: *abi_paths
+
+concurrency:
+  group: abi-fixtures-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-vectors:
+    name: vectors.json is up-to-date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target
+
+      - name: Regenerate ABI vectors
+        run: make refresh-abi-vectors
+
+      - name: Assert committed vectors match generator output
+        run: |
+          if ! git diff --exit-code -- \
+                 gno.land/p/aib/encoding/abi/testdata/vectors.json; then
+            echo
+            echo "::error::ABI vectors are out of date."
+            echo "Run 'make refresh-abi-vectors' locally and commit the result."
+            exit 1
+          fi

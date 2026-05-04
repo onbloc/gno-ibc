@@ -51,6 +51,16 @@ Expected — 4 PASS:
 
 The `_smoke` package exists only to validate the environment. Delete it once Wave 0 is in.
 
+## Test fixtures
+
+The Solidity ABI codec at `gno.land/p/aib/encoding/abi/` is tested against ground-truth byte sequences produced by Union's own `sol!` macro definitions. See [`tools/abi-fixtures/`](tools/abi-fixtures/) for the Rust harness; gno tests read its output from `gno.land/p/aib/encoding/abi/testdata/vectors.json`.
+
+```bash
+make refresh-abi-vectors    # regenerate vectors.json after editing the harness
+```
+
+ZKGM wire bytes follow the `abi_encode_params` flavor (no top-level head-offset prefix), not plain `abi_encode`. Both the harness and the gno codec must use this flavor — see the harness README for details.
+
 ## Toolchain gotchas
 
 Non-obvious behaviors observed while wiring up the workspace:

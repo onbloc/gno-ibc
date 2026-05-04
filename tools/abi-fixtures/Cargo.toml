@@ -1,0 +1,13 @@
+[package]
+name = "abi-fixtures"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "Generates ground-truth Solidity ABI test vectors for the gno encoding/abi codec by reusing Union's `sol!` macro definitions verbatim."
+
+[dependencies]
+alloy-primitives = "1.5"
+alloy-sol-types = "1.5"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+hex = "0.4.3"

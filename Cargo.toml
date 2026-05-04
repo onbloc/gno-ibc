@@ -1,0 +1,3 @@
+[workspace]
+members = ["tools/abi-fixtures"]
+resolver = "2"

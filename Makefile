@@ -49,7 +49,7 @@ verify-gno:
 	@echo "ok: gno binary matches pinned commit $(GNO_SHORT)"
 
 test: verify-gno
-	@gno test ./...
+	@gno test -v ./...
 
 test-smoke: verify-gno
 	@gno test ./gno.land/p/aib/_smoke/ -v

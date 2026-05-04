@@ -32,7 +32,10 @@ install-gno:
 	@cd $(GNO_CACHE) && git fetch --quiet origin
 	@cd $(GNO_CACHE) && git checkout --quiet $(GNO_COMMIT)
 	@echo ">> building gno from $(GNO_SHORT)"
-	@cd $(GNO_CACHE) && go install ./gnovm/cmd/gno
+	@# Delegate to upstream gnovm/Makefile's install target. It bakes in:
+	@#  - version.Version  (so `gno version` contains the commit hash)
+	@#  - gnoenv._GNOROOT  (so the binary finds its stdlibs at runtime)
+	@$(MAKE) --no-print-directory -C $(GNO_CACHE)/gnovm install
 	@$(MAKE) --no-print-directory verify-gno
 
 verify-gno:

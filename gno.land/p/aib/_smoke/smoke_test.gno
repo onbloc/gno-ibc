@@ -7,10 +7,6 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 )
 
-// TestStdlibSizes asserts the CometBLS-fork stdlib constants have the values
-// the rest of the Phase 3/4 port assumes (Keccak Size=32, LightHeader=116,
-// BN254 EIP-196/197 sizes). If any of these change upstream, the rest of the
-// port needs to be audited.
 func TestStdlibSizes(t *testing.T) {
 	if KeccakSize != 32 {
 		t.Fatalf("keccak size: got %d want 32", KeccakSize)

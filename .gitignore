@@ -37,3 +37,8 @@ go.work.sum
 
 # Rust build artifacts (Cargo workspace at repo root).
 /target/
+
+# Vendored mirrors of third-party gno packages. Source of truth is the
+# sparse-checkout submodule under third_party/; populated by `make vendor`.
+/gno.land/p/gnoswap/uint256/
+/gno.land/p/onbloc/json/

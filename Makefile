@@ -17,7 +17,15 @@ GNO_SHORT  := $(shell echo $(GNO_COMMIT) | cut -c1-7)
 ABI_FIXTURES_DIR := tools/abi-fixtures
 ABI_VECTORS      := gno.land/p/core/encoding/abi/testdata/vectors.json
 
-.PHONY: help install-gno verify-gno test test-stdlibs test-smoke clean-gno-cache refresh-abi-vectors
+# Third-party packages mirrored from sparse-checkout submodules into their
+# gno.land/p/<org>/<pkg>/ workspace paths. The submodule pin is the source of
+# truth; the mirrors are .gitignored and rebuilt by `make vendor`.
+VENDOR_GNOSWAP_SRC := third_party/gnoswap/contract/p/gnoswap/uint256
+VENDOR_GNOSWAP_DST := gno.land/p/gnoswap/uint256
+VENDOR_ONBLOC_SRC  := third_party/gnolang-gno/examples/gno.land/p/onbloc/json
+VENDOR_ONBLOC_DST  := gno.land/p/onbloc/json
+
+.PHONY: help install-gno verify-gno vendor test test-stdlibs test-smoke clean-gno-cache refresh-abi-vectors
 
 # Vendored stdlib import paths, derived from stdlibs/<path>/gnomod.toml presence.
 STDLIB_PKGS   := $(patsubst stdlibs/%/gnomod.toml,%,$(wildcard stdlibs/*/*/gnomod.toml))
@@ -28,7 +36,8 @@ help:
 	@echo "Targets:"
 	@echo "  install-gno           — vendor stdlibs/, regenerate, build+install gno"
 	@echo "  verify-gno            — assert the gno binary is on PATH"
-	@echo "  test                  — verify-gno, then run user-package gno tests"
+	@echo "  vendor                — mirror third_party/* submodule sub-paths into gno.land/p/{onbloc,gnoswap}/"
+	@echo "  test                  — verify-gno + vendor, then run user-package gno tests"
 	@echo "  test-stdlibs          — run the vendored stdlib's own .gno and .go tests"
 	@echo "  test-smoke            — run only the env-prep smoke tests"
 	@echo "  clean-gno-cache       — remove the cloned gno repo (forces re-clone next install)"
@@ -38,6 +47,20 @@ help:
 
 install-gno:
 	@python3 tools/setup-stdlibs.py
+
+# Initialise/update the third_party submodules, ensure sparse-checkout is set,
+# and rsync the relevant subdirectories into the gno.land workspace paths.
+# Idempotent — safe to run on every test invocation.
+vendor:
+	@git submodule update --init --recursive --quiet
+	@git -C third_party/gnolang-gno sparse-checkout init --cone >/dev/null
+	@git -C third_party/gnolang-gno sparse-checkout set examples/gno.land/p/onbloc/json >/dev/null
+	@git -C third_party/gnoswap sparse-checkout init --cone >/dev/null
+	@git -C third_party/gnoswap sparse-checkout set contract/p/gnoswap/uint256 >/dev/null
+	@mkdir -p $(VENDOR_GNOSWAP_DST) $(VENDOR_ONBLOC_DST)
+	@rsync -a --delete $(VENDOR_GNOSWAP_SRC)/ $(VENDOR_GNOSWAP_DST)/
+	@rsync -a --delete $(VENDOR_ONBLOC_SRC)/ $(VENDOR_ONBLOC_DST)/
+	@echo "ok: vendored $(VENDOR_GNOSWAP_DST), $(VENDOR_ONBLOC_DST)"
 
 verify-gno:
 	@command -v gno >/dev/null 2>&1 || { \
@@ -49,7 +72,7 @@ verify-gno:
 		exit 1; }
 	@echo "ok: gno binary matches pinned commit $(GNO_SHORT)"
 
-test: verify-gno
+test: verify-gno vendor
 	@gno test -v ./gno.land/...
 
 # Stdlib sources live under stdlibs/ but their gnomod.toml declares stdlib

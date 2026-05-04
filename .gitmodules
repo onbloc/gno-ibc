@@ -1,0 +1,6 @@
+[submodule "gnolang-gno"]
+	path = third_party/gnolang-gno
+	url = https://github.com/gnolang/gno.git
+[submodule "gnoswap"]
+	path = third_party/gnoswap
+	url = https://github.com/gnoswap-labs/gnoswap.git

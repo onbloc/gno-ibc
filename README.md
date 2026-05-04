@@ -8,13 +8,18 @@ Gno ↔ Union integration. CometBLS light client and UCS03 ZKGM contract ported 
 
 ### Toolchain
 
-This repo requires a `gno` binary built from **[gnolang/gno PR #5583](https://github.com/gnolang/gno/pull/5583)** (the CometBLS Groth16 verifier additions). A stock release build will not work — five stdlib packages are unavailable elsewhere.
+This repo requires a `gno` binary built from a specific commit on **[gnolang/gno PR #5583](https://github.com/gnolang/gno/pull/5583)** (the CometBLS Groth16 verifier additions). A stock release build will not work — five stdlib packages are unavailable elsewhere.
 
-Verify your binary:
+The pin lives in [`.gno-version`](.gno-version). Install or refresh the toolchain with:
 
 ```bash
-gno version    # output should reference the PR #5583 / cometbls-groth16-verifier branch
+make install-gno    # clone the pinned commit into ~/.cache/gno-ibc/gno and `go install` it
+make verify-gno     # assert the gno on PATH matches the pin
 ```
+
+Make sure `$(go env GOPATH)/bin` is on your `PATH` so the freshly installed `gno` is picked up.
+
+To roll the toolchain forward, edit `.gno-version` and re-run `make install-gno`.
 
 ### Stdlib packages (added by PR #5583)
 
@@ -75,10 +80,11 @@ External packages that are neither in the workspace nor in the mod cache (e.g. `
 A vendored copy (e.g. `gno.land/p/gnoswap/uint256`) does not track upstream changes. To refresh, follow the procedure in [`gno.land/p/gnoswap/VENDORED.md`](gno.land/p/gnoswap/VENDORED.md).
 
 ### 5. No `go tool gno` here
-This repo has no `go.mod` and does not pin the fork via a Go module `replace` directive. Use the standalone `gno` binary directly:
+This repo has no `go.mod` and does not pin the fork via a Go module `replace` directive. The pin is a commit SHA in [`.gno-version`](.gno-version), and the `gno` binary is installed by `make install-gno`. Test invocations go through `make`:
 
 ```bash
-gno test ./...
+make test          # verify-gno, then `gno test ./...`
+make test-smoke    # only the env-prep smoke tests
 ```
 
-Make sure the `gno` on your `PATH` is the PR #5583 build (see Toolchain section above).
+`make verify-gno` (also run as a prerequisite of `make test`) checks the `gno` on `PATH` matches the pinned commit and tells you to re-run `make install-gno` if not.

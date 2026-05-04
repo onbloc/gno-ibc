@@ -1,0 +1,10 @@
+# Pinned gno toolchain.
+#
+# This repo requires a `gno` binary built from a specific commit on
+# gnolang/gno PR #5583 (the CometBLS Groth16 verifier additions). Bump the
+# commit below and CI / `make install-gno` rebuilds against the new pin.
+#
+# PR: https://github.com/gnolang/gno/pull/5583
+
+GNO_REPO=https://github.com/gnolang/gno.git
+GNO_COMMIT=1ecdb8c70bb9f8dc7cd79a81888f9a3fa56a2d0a

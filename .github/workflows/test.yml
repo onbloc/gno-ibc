@@ -1,0 +1,38 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  gno-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+
+      # Cache the installed gno binary, keyed on the pinned commit.
+      # Bumping .gno-version invalidates the cache automatically.
+      - name: Cache gno binary
+        id: gno-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/bin/gno
+            ~/.cache/gno-ibc/gno
+          key: gno-${{ runner.os }}-${{ hashFiles('.gno-version') }}
+
+      - name: Install pinned gno toolchain
+        if: steps.gno-cache.outputs.cache-hit != 'true'
+        run: make install-gno
+
+      - name: Verify gno binary
+        run: make verify-gno
+
+      - name: Run tests
+        run: make test

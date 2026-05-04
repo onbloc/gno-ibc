@@ -67,6 +67,126 @@ Skip ADRs for: trivial bug fixes, formatting, simple tests, docs-only changes.
 
 ---
 
+# Gno-Specific Conventions
+
+ref: https://github.com/allinbits/gno-realms/blob/master/AGENTS.md#gno-specific-conventions
+
+### Module Manifests (gnomod.toml)
+
+Each package/realm has a `gnomod.toml` (not `gno.mod`):
+```toml
+module = "gno.land/r/aib/ibc/core"
+gno = "0.9"
+```
+
+- `p/` = packages (stateless, reusable libraries)
+- `r/` = realms (stateful contracts with persistent storage)
+
+### The `cur realm` and `cross` Keywords
+
+Realm functions that need caller context use `cur realm` parameter:
+```gno
+func CreateClient(cur realm, clientState lightclient.ClientState, ...) string
+```
+
+Callers pass `cross` as the argument:
+```gno
+clientID := core.CreateClient(cross, clientState, consensusState)
+```
+
+### MsgRun vs MsgCall
+
+Most IBC functions require `MsgRun` (not `MsgCall`) because they take complex arguments (structs, slices of bytes). See `gno.land/r/aib/ibc/core/README.md` for examples.
+
+### Gno Standard Library
+
+- `chain/banker` - coin manipulation interface
+- `chain.Emit(eventType, kvPairs...)` - event emission
+- `runtime.OriginCaller()`, `runtime.PreviousRealm()`, `runtime.CurrentRealm()` - caller context
+- `gno.land/p/nt/avl/v0` - AVL tree (primary key-value storage)
+- `gno.land/p/nt/seqid/v0` - monotonic ID generation
+- `gno.land/p/nt/ufmt/v0` - string formatting
+- `gno.land/p/nt/urequire/v0` / `gno.land/p/nt/uassert/v0` - test assertions
+
+## GRC20 Voucher Tokens
+
+IBC voucher tokens (minted on RecvPacket for cross-chain tokens) use **GRC20 tokens** instead of native banker coins. This enables DeFi compatibility (Gnoswap, etc.) via the `grc20reg` registry.
+
+### Key Dependencies
+- `gno.land/p/demo/tokens/grc20` - GRC20 token implementation (`NewToken`, `PrivateLedger.Mint/Burn`)
+- `gno.land/r/demo/defi/grc20reg` - Global token registry (`Register`, `Get`)
+
+---
+
+## Testing Patterns
+
+### Filetests (primary test mechanism)
+
+Files named `z*_filetest.gno` in realm directories. These are integration tests that run as standalone `package main` programs with expected output matching:
+
+```gno
+package main
+
+import "gno.land/r/aib/ibc/core"
+
+func main() {
+    clientID := core.CreateClient(cross, clientState, consensusState)
+    println("CreateClient", clientID)
+}
+
+// Output:
+// CreateClient 07-tendermint-1
+
+// Events:
+// [{"type": "create_client", "attrs": [...]}]
+```
+
+Naming convention: `z{category}{letter}_{description}_filetest.gno`
+
+**core realm**: `z1*` = create client, `z2*` = update client, `z3*` = send packet, `z5*` = acknowledgement, `z6*` = timeout, `z7*` = recv packet, `z8*` = misbehaviour
+
+**transfer app**: `z0*` = init, `z1*` = send packet, `z2*` = ack packet, `z3*` = timeout, `z4*` = recv packet, `z5*` = Transfer function. Double letters (e.g. `z1aa`) = IBC voucher token variant (vs `z1a` = native token)
+
+`zz_*_example_filetest.gno` = documentation examples (referenced from README)
+
+### Unit Tests with Malleate Pattern
+
+`*_test.gno` files use table-driven tests with a `malleate` function that mutates a default valid object to test specific conditions:
+
+```gno
+testCases := []struct {
+    name     string
+    malleate func()
+    expErr   string
+}{
+    {"success", func() {}, ""},
+    {"failure: empty field", func() { msg.Field = "" }, "field required"},
+}
+for _, tc := range testCases {
+    t.Run(tc.name, func(t *testing.T) {
+        msg = newValidMsg()    // reset to valid defaults
+        tc.malleate()          // apply mutation
+        err := msg.Validate()
+        // assert error
+    })
+}
+```
+
+---
+
+### Assertion Libraries
+
+```gno
+import (
+    "gno.land/p/nt/urequire"  // fails test immediately
+    "gno.land/p/nt/uassert"   // records failure, continues
+)
+
+urequire.NoError(t, err)
+urequire.ErrorContains(t, err, "expected substring")
+uassert.Equal(t, expected, actual)
+```
+
 ---
 
 ## Glossary

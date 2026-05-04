@@ -16,7 +16,7 @@ GNO_SHORT  := $(shell echo $(GNO_COMMIT) | cut -c1-7)
 
 ABI_FIXTURES_DIR := tools/abi-fixtures
 ABI_VECTORS      := gno.land/p/core/encoding/abi/testdata/vectors.json
-ABI_VECTORS_GNO  := gno.land/p/core/encoding/abi/vectors_fixture_test.gno
+ABI_VECTORS_GNO  := gno.land/p/core/ibc/zkgm/vectors_fixture_test.gno
 
 # Third-party packages mirrored from sparse-checkout submodules into their
 # gno.land/p/<org>/<pkg>/ workspace paths. The submodule pin is the source of
@@ -102,5 +102,5 @@ refresh-abi-vectors:
 		echo "ERROR: 'cargo' not found on PATH. Install Rust toolchain (rustup) to refresh ABI vectors."; exit 1; }
 	@echo ">> regenerating $(ABI_VECTORS)"
 	@cargo run --release --quiet -p abi-fixtures > $(ABI_VECTORS)
-	@python3 -c 'from pathlib import Path; src = Path("$(ABI_VECTORS)").read_text(); assert "\x60" not in src, "vectors.json contains a backtick; cannot embed in Gno raw string"; Path("$(ABI_VECTORS_GNO)").write_text("package abi\n\nconst fixtureVectorsJSON = `" + src + "`\n")'
+	@python3 -c 'from pathlib import Path; src = Path("$(ABI_VECTORS)").read_text(); assert "\x60" not in src, "vectors.json contains a backtick; cannot embed in Gno raw string"; Path("$(ABI_VECTORS_GNO)").write_text("package zkgm\n\nconst fixtureVectorsJSON = `" + src + "`\n")'
 	@echo "ok: vectors written to $(ABI_VECTORS) and $(ABI_VECTORS_GNO) ($$(grep -c '"name":' $(ABI_VECTORS)) scenarios)"

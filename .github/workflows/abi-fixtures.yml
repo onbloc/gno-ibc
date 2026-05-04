@@ -11,6 +11,7 @@ on:
     paths: &abi_paths
       - 'tools/abi-fixtures/**'
       - 'gno.land/p/core/encoding/abi/testdata/vectors.json'
+      - 'gno.land/p/core/ibc/zkgm/vectors_fixture_test.gno'
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/abi-fixtures.yml'
@@ -42,7 +43,8 @@ jobs:
       - name: Assert committed vectors match generator output
         run: |
           if ! git diff --exit-code -- \
-                 gno.land/p/core/encoding/abi/testdata/vectors.json; then
+                 gno.land/p/core/encoding/abi/testdata/vectors.json \
+                 gno.land/p/core/ibc/zkgm/vectors_fixture_test.gno; then
             echo
             echo "::error::ABI vectors are out of date."
             echo "Run 'make refresh-abi-vectors' locally and commit the result."

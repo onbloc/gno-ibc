@@ -1,4 +1,4 @@
-package abi
+package zkgm
 
 const fixtureVectorsJSON = `[
   {

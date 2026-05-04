@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   gno-test:
     runs-on: ubuntu-latest
@@ -16,8 +20,9 @@ jobs:
           go-version: stable
           cache: false
 
-      # Cache the installed gno binary, keyed on the pinned commit.
-      # Bumping .gno-version invalidates the cache automatically.
+      # Cache the installed gno binary, keyed on the pinned commit AND the
+      # vendored stdlib sources. Bumping .gno-version or editing stdlibs/
+      # invalidates the cache so the binary is rebuilt with the new bindings.
       - name: Cache gno binary
         id: gno-cache
         uses: actions/cache@v4
@@ -25,7 +30,7 @@ jobs:
           path: |
             ~/go/bin/gno
             ~/.cache/gno-ibc/gno
-          key: gno-${{ runner.os }}-${{ hashFiles('.gno-version') }}
+          key: gno-${{ runner.os }}-${{ hashFiles('.gno-version', 'stdlibs/**', 'tools/setup-stdlibs.py') }}
 
       - name: Install pinned gno toolchain
         if: steps.gno-cache.outputs.cache-hit != 'true'
@@ -36,3 +41,6 @@ jobs:
 
       - name: Run tests
         run: make test
+
+      - name: Run vendored stdlib tests
+        run: make test-stdlibs

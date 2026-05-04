@@ -1,7 +1,7 @@
-// Package smoke confirms that the gno toolchain (built from gnolang/gno
-// PR #5583, the CometBLS Groth16 verifier additions) can resolve and link
-// the five fork stdlibs that the CometBLS + ZKGM port depends on, plus the
-// vendored gnoswap/uint256.
+// Package smoke confirms that the gno toolchain can resolve and link the
+// five native stdlib packages vendored under stdlibs/ (bn254, cometbls,
+// cometblszk, keccak256, modexp) that the CometBLS + ZKGM port depends on,
+// plus the vendored gnoswap/uint256.
 //
 // This package exists only to validate the environment. It is safe to delete
 // once the rest of Wave 0 is in place.

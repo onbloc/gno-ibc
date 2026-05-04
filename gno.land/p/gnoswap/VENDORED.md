@@ -9,7 +9,7 @@ The `uint256/` directory under this path is a **vendored copy** of the `gnoswap/
 
 ## Why vendor (not symlink)
 
-The gno toolchain (PR #5583 build) does not follow filesystem symlinks for workspace package discovery — `gno test ./...` against a symlinked path falls back to the gno mod cache and fails with `package "..." is not available`. A real directory copy resolves correctly.
+The gno toolchain does not follow filesystem symlinks for workspace package discovery — `gno test ./...` against a symlinked path falls back to the gno mod cache and fails with `package "..." is not available`. A real directory copy resolves correctly. (Stdlib packages under `stdlibs/` *are* symlinked into the gno cache, but those are loaded via `_GNOROOT` at runtime and not via workspace discovery.)
 
 ## Updating
 

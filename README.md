@@ -8,20 +8,22 @@ Gno ↔ Union integration. CometBLS light client and UCS03 ZKGM contract ported 
 
 ### Toolchain
 
-This repo requires a `gno` binary built from a specific commit on **[gnolang/gno PR #5583](https://github.com/gnolang/gno/pull/5583)** (the CometBLS Groth16 verifier additions). A stock release build will not work — five stdlib packages are unavailable elsewhere.
+This repo requires a `gno` binary built from upstream `gnolang/gno` (commit pinned in [`.gno-version`](.gno-version)) **plus** a set of native stdlib packages vendored under [`stdlibs/`](stdlibs/). A stock release build will not resolve them.
 
-The pin lives in [`.gno-version`](.gno-version). Install or refresh the toolchain with:
+`make install-gno` runs [`tools/setup-stdlibs.py`](tools/setup-stdlibs.py), which clones the pinned commit into `~/.cache/gno-ibc/gno`, symlinks every `stdlibs/<path>/` into `<cache>/gnovm/stdlibs/<path>/`, regenerates the native-binding dispatch table (`go generate ./stdlibs/...`), and installs the resulting binary.
 
 ```bash
-make install-gno    # clone the pinned commit into ~/.cache/gno-ibc/gno and `go install` it
+make install-gno    # clone + vendor + regenerate + go install
 make verify-gno     # assert the gno on PATH matches the pin
 ```
 
 Make sure `$(go env GOPATH)/bin` is on your `PATH` so the freshly installed `gno` is picked up.
 
-To roll the toolchain forward, edit `.gno-version` and re-run `make install-gno`.
+To roll the toolchain forward, edit `.gno-version` and re-run `make install-gno`. To edit a vendored stdlib, change files under `stdlibs/` and re-run `make install-gno`.
 
-### Stdlib packages (added by PR #5583)
+### Vendored stdlib packages
+
+Source of truth lives under [`stdlibs/`](stdlibs/). Each package's `gnomod.toml` declares its `module = "crypto/<name>"` path; the setup script symlinks it into the gno cache at the matching location.
 
 | Package | Purpose |
 |---|---|
@@ -65,7 +67,7 @@ ZKGM wire bytes follow the `abi_encode_params` flavor (no top-level head-offset 
 
 Non-obvious behaviors observed while wiring up the workspace:
 
-### 1. Symbolic links are not followed
+### 1. Symbolic links are not followed (workspace packages only)
 If a package under the workspace is a symlink, `gno test` falls through to the mod cache and fails:
 
 ```text
@@ -73,7 +75,7 @@ gno: downloading gno.land/p/.../...
 ... package "gno.land/p/.../..." is not available
 ```
 
-**Use real directory copies** (`cp -R`) when bringing in packages from sibling repos. No symlinks.
+**Use real directory copies** (`cp -R`) when bringing in packages from sibling repos. No symlinks for workspace packages. (Stdlib packages under `stdlibs/` *are* symlinked into the gno cache by [`tools/setup-stdlibs.py`](tools/setup-stdlibs.py), but those are loaded via `_GNOROOT` at runtime — separate code path.)
 
 ### 2. `gnowork.toml` is just a marker
 An empty file works. Its job is to mark the workspace root, not to enumerate members. Member packages are auto-discovered — any directory containing a `gnomod.toml` is a package.
@@ -93,7 +95,8 @@ A vendored copy (e.g. `gno.land/p/gnoswap/uint256`) does not track upstream chan
 This repo has no `go.mod` and does not pin the fork via a Go module `replace` directive. The pin is a commit SHA in [`.gno-version`](.gno-version), and the `gno` binary is installed by `make install-gno`. Test invocations go through `make`:
 
 ```bash
-make test          # verify-gno, then `gno test ./...`
+make test          # verify-gno, then `gno test ./gno.land/...`
+make test-stdlibs  # vendored stdlib's own .gno + .go tests
 make test-smoke    # only the env-prep smoke tests
 ```
 

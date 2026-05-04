@@ -1,10 +1,12 @@
 # Pinned gno toolchain.
 #
-# This repo requires a `gno` binary built from a specific commit on
-# gnolang/gno PR #5583 (the CometBLS Groth16 verifier additions). Bump the
-# commit below and CI / `make install-gno` rebuilds against the new pin.
+# `make install-gno` clones gnolang/gno at the commit below, then symlinks
+# every package under stdlibs/ into <cache>/gnovm/stdlibs/<module>/, runs
+# `go generate` to regenerate the native-binding dispatch table, and
+# `go install`s the resulting binary. See tools/setup-stdlibs.py.
 #
-# PR: https://github.com/gnolang/gno/pull/5583
+# Bump the commit to roll the upstream toolchain. Stdlib sources live in
+# this repo under stdlibs/.
 
 GNO_REPO=https://github.com/gnolang/gno.git
-GNO_COMMIT=1ecdb8c70bb9f8dc7cd79a81888f9a3fa56a2d0a
+GNO_COMMIT=e16676eec5f75ab563d4ade83e17d4a96ea04aee

@@ -70,7 +70,7 @@ STDLIB_PKGS   := $(patsubst stdlibs/%/gnomod.toml,%,$(wildcard stdlibs/*/*/gnomo
 STDLIB_NATIVE := $(foreach p,$(STDLIB_PKGS),$(if $(wildcard stdlibs/$(p)/*.go),$(p)))
 # First-party gno packages. Third-party mirrors under gno.land/p/{aib,gnoswap,nt,onbloc}
 # and gno.land/r/aib are dependency inputs only, so local and CI tests skip them.
-USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/core gno.land/r/core -name gnomod.toml 2>/dev/null | sort))
+USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/core gno.land/r/core -name gnomod.toml | sort))
 
 help:
 	@echo "Targets:"
@@ -98,7 +98,7 @@ vendor:
 	@git -C third_party/gnoswap sparse-checkout init --cone >/dev/null
 	@git -C third_party/gnoswap sparse-checkout set contract/p/gnoswap/uint256 >/dev/null
 	@git -C third_party/gno-realms sparse-checkout init --cone >/dev/null
-	@git -C third_party/gno-realms sparse-checkout set gno.land/p/aib/encoding gno.land/p/aib/encoding/proto gno.land/p/aib/ics23 gno.land/p/aib/jsonpage gno.land/p/aib/merkle gno.land/p/aib/ibc/app gno.land/p/aib/ibc/host gno.land/p/aib/ibc/lightclient gno.land/p/aib/ibc/lightclient/tendermint gno.land/p/aib/ibc/types gno.land/r/aib/ibc/core >/dev/null
+	@git -C third_party/gno-realms sparse-checkout set gno.land/p/aib/encoding gno.land/p/aib/ics23 gno.land/p/aib/jsonpage gno.land/p/aib/merkle gno.land/p/aib/ibc/app gno.land/p/aib/ibc/host gno.land/p/aib/ibc/lightclient gno.land/p/aib/ibc/types gno.land/r/aib/ibc/core >/dev/null
 	@mkdir -p $(VENDOR_GNOSWAP_DST) $(VENDOR_ONBLOC_DST) $(VENDOR_NT_AVL_DST) $(VENDOR_BPTREE_DST) $(VENDOR_NT_CFORD32_DST) $(VENDOR_NT_MUX_DST) $(VENDOR_NT_SEQID_DST) $(VENDOR_NT_UASSERT_DST) $(VENDOR_NT_UFMT_DST) $(VENDOR_AIB_ENCODING_DST) $(VENDOR_AIB_PROTO_DST) $(VENDOR_AIB_ICS23_DST) $(VENDOR_AIB_JSONPAGE_DST) $(VENDOR_AIB_MERKLE_DST) $(VENDOR_AIB_APP_DST) $(VENDOR_AIB_HOST_DST) $(VENDOR_AIB_LIGHTCLIENT_DST) $(VENDOR_AIB_TM_DST) $(VENDOR_AIB_TYPES_DST) $(VENDOR_AIB_CORE_DST)
 	@rsync -a --delete $(VENDOR_GNOSWAP_SRC)/ $(VENDOR_GNOSWAP_DST)/
 	@rsync -a --delete $(VENDOR_ONBLOC_SRC)/ $(VENDOR_ONBLOC_DST)/

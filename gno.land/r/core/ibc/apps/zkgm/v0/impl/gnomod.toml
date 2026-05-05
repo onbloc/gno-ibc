@@ -1,0 +1,2 @@
+module = "gno.land/r/gnoswap/ibc/apps/zkgm/v0/impl"
+gno = "0.9"

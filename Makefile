@@ -24,14 +24,19 @@ ABI_VECTORS_GNO  := gno.land/p/core/ibc/zkgm/vectors_fixture_test.gno
 VENDOR_GNOLANG_REPO := third_party/gnolang-gno
 VENDOR_GNOLANG_SUB  := examples/gno.land
 VENDOR_GNOLANG_RELS := \
+	p/demo/tokens/grc20 \
+	p/moul/md \
+	p/onbloc/diff \
 	p/onbloc/json \
 	p/nt/avl/v0 \
 	p/nt/bptree/v0 \
 	p/nt/cford32/v0 \
+	p/nt/fqname/v0 \
 	p/nt/mux/v0 \
 	p/nt/seqid/v0 \
 	p/nt/uassert/v0 \
-	p/nt/ufmt/v0
+	p/nt/ufmt/v0 \
+	r/demo/defi/grc20reg
 
 VENDOR_GNOSWAP_REPO := third_party/gnoswap
 VENDOR_GNOSWAP_SUB  := contract
@@ -56,7 +61,7 @@ STD_EXCLUDES := --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.g
 
 FLAGS_p_gnoswap_uint256 :=
 FLAGS_p_onbloc_json     :=
-FLAGS_p_nt_avl_v0       := $(STD_EXCLUDES) --exclude='filetests/' --exclude='list/' --exclude='pager/' --exclude='rolist/' --exclude='rotree/'
+FLAGS_p_nt_avl_v0       := $(STD_EXCLUDES) --exclude='filetests/' --exclude='list/' --exclude='pager/' --exclude='rolist/'
 FLAGS_p_nt_bptree_v0    := --delete-excluded --exclude='list/' --exclude='pager/' --exclude='rolist/' --exclude='rotree/'
 FLAGS_p_aib_ibc_lightclient            := $(STD_EXCLUDES) --exclude='testing/'
 FLAGS_p_aib_ibc_lightclient_tendermint := $(STD_EXCLUDES) --exclude='testing/'

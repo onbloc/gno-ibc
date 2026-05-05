@@ -41,7 +41,10 @@ go.work.sum
 # Vendored mirrors of third-party gno packages. Source of truth is the
 # sparse-checkout submodule under third_party/; populated by `make vendor`.
 /gno.land/p/gnoswap/uint256/
-/gno.land/p/onbloc/json/
+/gno.land/p/onbloc/
 /gno.land/p/aib/
+/gno.land/p/demo/
+/gno.land/p/moul/
 /gno.land/r/aib/
+/gno.land/r/demo/
 /gno.land/p/nt/*

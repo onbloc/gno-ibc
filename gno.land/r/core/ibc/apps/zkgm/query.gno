@@ -1,6 +1,9 @@
 package zkgm
 
 import (
+	"crypto/keccak256"
+	"encoding/hex"
+
 	tb "gno.land/p/gnoswap/tokenbucket"
 	u256 "gno.land/p/gnoswap/uint256"
 )
@@ -21,7 +24,13 @@ func Render(path string) string {
 }
 
 func PredictWrappedToken(channelID string, baseToken string) string {
-	return "zkgm/" + channelID + "/" + baseToken
+	const tag = "ZKGM_V1"
+	buf := make([]byte, 0, len(tag)+len(channelID)+len(baseToken))
+	buf = append(buf, tag...)
+	buf = append(buf, channelID...)
+	buf = append(buf, baseToken...)
+	h := keccak256.Sum256(buf)
+	return "ibc/" + hex.EncodeToString(h[:20])
 }
 
 func GetChannelBalanceV2(key string) *u256.Uint {

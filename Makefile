@@ -18,49 +18,54 @@ ABI_FIXTURES_DIR := tools/abi-fixtures
 ABI_VECTORS      := gno.land/p/core/encoding/abi/testdata/vectors.json
 ABI_VECTORS_GNO  := gno.land/p/core/ibc/zkgm/vectors_fixture_test.gno
 
-# Third-party packages mirrored from sparse-checkout submodules into their
-# gno.land/p/<org>/<pkg>/ workspace paths. The submodule pin is the source of
-# truth; the mirrors are .gitignored and rebuilt by `make vendor`.
-VENDOR_GNOSWAP_SRC := third_party/gnoswap/contract/p/gnoswap/uint256
-VENDOR_GNOSWAP_DST := gno.land/p/gnoswap/uint256
-VENDOR_ONBLOC_SRC  := third_party/gnolang-gno/examples/gno.land/p/onbloc/json
-VENDOR_ONBLOC_DST  := gno.land/p/onbloc/json
-VENDOR_NT_AVL_SRC  := third_party/gnolang-gno/examples/gno.land/p/nt/avl/v0
-VENDOR_NT_AVL_DST  := gno.land/p/nt/avl/v0
-VENDOR_BPTREE_SRC  := third_party/gnolang-gno/examples/gno.land/p/nt/bptree/v0
-VENDOR_BPTREE_DST  := gno.land/p/nt/bptree/v0
-VENDOR_NT_CFORD32_SRC := third_party/gnolang-gno/examples/gno.land/p/nt/cford32/v0
-VENDOR_NT_CFORD32_DST := gno.land/p/nt/cford32/v0
-VENDOR_NT_MUX_SRC  := third_party/gnolang-gno/examples/gno.land/p/nt/mux/v0
-VENDOR_NT_MUX_DST  := gno.land/p/nt/mux/v0
-VENDOR_NT_SEQID_SRC := third_party/gnolang-gno/examples/gno.land/p/nt/seqid/v0
-VENDOR_NT_SEQID_DST := gno.land/p/nt/seqid/v0
-VENDOR_NT_UASSERT_SRC := third_party/gnolang-gno/examples/gno.land/p/nt/uassert/v0
-VENDOR_NT_UASSERT_DST := gno.land/p/nt/uassert/v0
-VENDOR_NT_UFMT_SRC := third_party/gnolang-gno/examples/gno.land/p/nt/ufmt/v0
-VENDOR_NT_UFMT_DST := gno.land/p/nt/ufmt/v0
-VENDOR_AIB_ENCODING_SRC := third_party/gno-realms/gno.land/p/aib/encoding
-VENDOR_AIB_ENCODING_DST := gno.land/p/aib/encoding
-VENDOR_AIB_PROTO_SRC    := third_party/gno-realms/gno.land/p/aib/encoding/proto
-VENDOR_AIB_PROTO_DST    := gno.land/p/aib/encoding/proto
-VENDOR_AIB_ICS23_SRC    := third_party/gno-realms/gno.land/p/aib/ics23
-VENDOR_AIB_ICS23_DST    := gno.land/p/aib/ics23
-VENDOR_AIB_JSONPAGE_SRC := third_party/gno-realms/gno.land/p/aib/jsonpage
-VENDOR_AIB_JSONPAGE_DST := gno.land/p/aib/jsonpage
-VENDOR_AIB_MERKLE_SRC   := third_party/gno-realms/gno.land/p/aib/merkle
-VENDOR_AIB_MERKLE_DST   := gno.land/p/aib/merkle
-VENDOR_AIB_APP_SRC      := third_party/gno-realms/gno.land/p/aib/ibc/app
-VENDOR_AIB_APP_DST      := gno.land/p/aib/ibc/app
-VENDOR_AIB_HOST_SRC     := third_party/gno-realms/gno.land/p/aib/ibc/host
-VENDOR_AIB_HOST_DST     := gno.land/p/aib/ibc/host
-VENDOR_AIB_LIGHTCLIENT_SRC := third_party/gno-realms/gno.land/p/aib/ibc/lightclient
-VENDOR_AIB_LIGHTCLIENT_DST := gno.land/p/aib/ibc/lightclient
-VENDOR_AIB_TM_SRC       := third_party/gno-realms/gno.land/p/aib/ibc/lightclient/tendermint
-VENDOR_AIB_TM_DST       := gno.land/p/aib/ibc/lightclient/tendermint
-VENDOR_AIB_TYPES_SRC    := third_party/gno-realms/gno.land/p/aib/ibc/types
-VENDOR_AIB_TYPES_DST    := gno.land/p/aib/ibc/types
-VENDOR_AIB_CORE_SRC     := third_party/gno-realms/gno.land/r/aib/ibc/core
-VENDOR_AIB_CORE_DST     := gno.land/r/aib/ibc/core
+# Submodule pins (.gitmodules + tree gitlinks) are the source of truth; the
+# gno.land/<rel>/ mirrors built by `make vendor` are .gitignored.
+
+VENDOR_GNOLANG_REPO := third_party/gnolang-gno
+VENDOR_GNOLANG_SUB  := examples/gno.land
+VENDOR_GNOLANG_RELS := \
+	p/onbloc/json \
+	p/nt/avl/v0 \
+	p/nt/bptree/v0 \
+	p/nt/cford32/v0 \
+	p/nt/mux/v0 \
+	p/nt/seqid/v0 \
+	p/nt/uassert/v0 \
+	p/nt/ufmt/v0
+
+VENDOR_GNOSWAP_REPO := third_party/gnoswap
+VENDOR_GNOSWAP_SUB  := contract
+VENDOR_GNOSWAP_RELS := p/gnoswap/uint256
+
+VENDOR_GNOREALMS_REPO := third_party/gno-realms
+VENDOR_GNOREALMS_SUB  := gno.land
+VENDOR_GNOREALMS_RELS := \
+	p/aib/encoding \
+	p/aib/ics23 \
+	p/aib/jsonpage \
+	p/aib/merkle \
+	p/aib/ibc/app \
+	p/aib/ibc/host \
+	p/aib/ibc/lightclient \
+	p/aib/ibc/lightclient/tendermint \
+	p/aib/ibc/types \
+	r/aib/ibc/core
+
+RSYNC_BASE   := -a --delete
+STD_EXCLUDES := --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.gno'
+
+FLAGS_p_gnoswap_uint256 :=
+FLAGS_p_onbloc_json     :=
+FLAGS_p_nt_avl_v0       := $(STD_EXCLUDES) --exclude='filetests/' --exclude='list/' --exclude='pager/' --exclude='rolist/' --exclude='rotree/'
+FLAGS_p_nt_bptree_v0    := --delete-excluded --exclude='list/' --exclude='pager/' --exclude='rolist/' --exclude='rotree/'
+FLAGS_p_aib_ibc_lightclient            := $(STD_EXCLUDES) --exclude='testing/'
+FLAGS_p_aib_ibc_lightclient_tendermint := $(STD_EXCLUDES) --exclude='testing/'
+FLAGS_r_aib_ibc_core    := $(STD_EXCLUDES) --exclude='README.md' --exclude='recover-client.md'
+
+vendor-flags = $(if $(filter undefined,$(origin FLAGS_$(subst /,_,$(1)))),$(STD_EXCLUDES),$(FLAGS_$(subst /,_,$(1))))
+
+# rsync only auto-creates the leaf dest dir, so mkdir -p covers intermediates.
+vendor-cmd = mkdir -p $(dir gno.land/$(2)) && rsync $(RSYNC_BASE) $(call vendor-flags,$(2)) $(1)/$(2)/ gno.land/$(2)/
 
 .PHONY: help install-gno verify-gno vendor test test-stdlibs test-smoke clean-gno-cache refresh-abi-vectors
 
@@ -93,33 +98,15 @@ install-gno:
 # Idempotent — safe to run on every test invocation.
 vendor:
 	@git submodule update --init --recursive --quiet
-	@git -C third_party/gnolang-gno sparse-checkout init --cone >/dev/null
-	@git -C third_party/gnolang-gno sparse-checkout set examples/gno.land/p/onbloc/json examples/gno.land/p/nt/avl/v0 examples/gno.land/p/nt/bptree/v0 examples/gno.land/p/nt/cford32/v0 examples/gno.land/p/nt/mux/v0 examples/gno.land/p/nt/seqid/v0 examples/gno.land/p/nt/uassert/v0 examples/gno.land/p/nt/ufmt/v0 >/dev/null
-	@git -C third_party/gnoswap sparse-checkout init --cone >/dev/null
-	@git -C third_party/gnoswap sparse-checkout set contract/p/gnoswap/uint256 >/dev/null
-	@git -C third_party/gno-realms sparse-checkout init --cone >/dev/null
-	@git -C third_party/gno-realms sparse-checkout set gno.land/p/aib/encoding gno.land/p/aib/ics23 gno.land/p/aib/jsonpage gno.land/p/aib/merkle gno.land/p/aib/ibc/app gno.land/p/aib/ibc/host gno.land/p/aib/ibc/lightclient gno.land/p/aib/ibc/types gno.land/r/aib/ibc/core >/dev/null
-	@mkdir -p $(VENDOR_GNOSWAP_DST) $(VENDOR_ONBLOC_DST) $(VENDOR_NT_AVL_DST) $(VENDOR_BPTREE_DST) $(VENDOR_NT_CFORD32_DST) $(VENDOR_NT_MUX_DST) $(VENDOR_NT_SEQID_DST) $(VENDOR_NT_UASSERT_DST) $(VENDOR_NT_UFMT_DST) $(VENDOR_AIB_ENCODING_DST) $(VENDOR_AIB_PROTO_DST) $(VENDOR_AIB_ICS23_DST) $(VENDOR_AIB_JSONPAGE_DST) $(VENDOR_AIB_MERKLE_DST) $(VENDOR_AIB_APP_DST) $(VENDOR_AIB_HOST_DST) $(VENDOR_AIB_LIGHTCLIENT_DST) $(VENDOR_AIB_TM_DST) $(VENDOR_AIB_TYPES_DST) $(VENDOR_AIB_CORE_DST)
-	@rsync -a --delete $(VENDOR_GNOSWAP_SRC)/ $(VENDOR_GNOSWAP_DST)/
-	@rsync -a --delete $(VENDOR_ONBLOC_SRC)/ $(VENDOR_ONBLOC_DST)/
-	@rsync -a --delete --delete-excluded --exclude='filetests/' --exclude='list/' --exclude='pager/' --exclude='rolist/' --exclude='rotree/' --exclude='*_test.gno' --exclude='*_filetest.gno' $(VENDOR_NT_AVL_SRC)/ $(VENDOR_NT_AVL_DST)/
-	@rsync -a --delete --delete-excluded --exclude='list/' --exclude='pager/' --exclude='rolist/' --exclude='rotree/' $(VENDOR_BPTREE_SRC)/ $(VENDOR_BPTREE_DST)/
-	@rsync -a --delete --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.gno' $(VENDOR_NT_CFORD32_SRC)/ $(VENDOR_NT_CFORD32_DST)/
-	@rsync -a --delete --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.gno' $(VENDOR_NT_MUX_SRC)/ $(VENDOR_NT_MUX_DST)/
-	@rsync -a --delete --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.gno' $(VENDOR_NT_SEQID_SRC)/ $(VENDOR_NT_SEQID_DST)/
-	@rsync -a --delete --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.gno' $(VENDOR_NT_UASSERT_SRC)/ $(VENDOR_NT_UASSERT_DST)/
-	@rsync -a --delete --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.gno' $(VENDOR_NT_UFMT_SRC)/ $(VENDOR_NT_UFMT_DST)/
-	@rsync -a --delete --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.gno' $(VENDOR_AIB_ENCODING_SRC)/ $(VENDOR_AIB_ENCODING_DST)/
-	@rsync -a --delete --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.gno' $(VENDOR_AIB_PROTO_SRC)/ $(VENDOR_AIB_PROTO_DST)/
-	@rsync -a --delete --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.gno' $(VENDOR_AIB_ICS23_SRC)/ $(VENDOR_AIB_ICS23_DST)/
-	@rsync -a --delete --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.gno' $(VENDOR_AIB_JSONPAGE_SRC)/ $(VENDOR_AIB_JSONPAGE_DST)/
-	@rsync -a --delete --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.gno' $(VENDOR_AIB_MERKLE_SRC)/ $(VENDOR_AIB_MERKLE_DST)/
-	@rsync -a --delete --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.gno' $(VENDOR_AIB_APP_SRC)/ $(VENDOR_AIB_APP_DST)/
-	@rsync -a --delete --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.gno' $(VENDOR_AIB_HOST_SRC)/ $(VENDOR_AIB_HOST_DST)/
-	@rsync -a --delete --delete-excluded --exclude='testing/' --exclude='*_test.gno' --exclude='*_filetest.gno' $(VENDOR_AIB_LIGHTCLIENT_SRC)/ $(VENDOR_AIB_LIGHTCLIENT_DST)/
-	@rsync -a --delete --delete-excluded --exclude='testing/' --exclude='*_test.gno' --exclude='*_filetest.gno' $(VENDOR_AIB_TM_SRC)/ $(VENDOR_AIB_TM_DST)/
-	@rsync -a --delete --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.gno' $(VENDOR_AIB_TYPES_SRC)/ $(VENDOR_AIB_TYPES_DST)/
-	@rsync -a --delete --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.gno' --exclude='README.md' --exclude='recover-client.md' $(VENDOR_AIB_CORE_SRC)/ $(VENDOR_AIB_CORE_DST)/
+	@git -C $(VENDOR_GNOLANG_REPO) sparse-checkout init --cone >/dev/null
+	@git -C $(VENDOR_GNOLANG_REPO) sparse-checkout set $(addprefix $(VENDOR_GNOLANG_SUB)/,$(VENDOR_GNOLANG_RELS)) >/dev/null
+	@git -C $(VENDOR_GNOSWAP_REPO) sparse-checkout init --cone >/dev/null
+	@git -C $(VENDOR_GNOSWAP_REPO) sparse-checkout set $(addprefix $(VENDOR_GNOSWAP_SUB)/,$(VENDOR_GNOSWAP_RELS)) >/dev/null
+	@git -C $(VENDOR_GNOREALMS_REPO) sparse-checkout init --cone >/dev/null
+	@git -C $(VENDOR_GNOREALMS_REPO) sparse-checkout set $(addprefix $(VENDOR_GNOREALMS_SUB)/,$(VENDOR_GNOREALMS_RELS)) >/dev/null
+	@$(foreach r,$(VENDOR_GNOLANG_RELS),$(call vendor-cmd,$(VENDOR_GNOLANG_REPO)/$(VENDOR_GNOLANG_SUB),$(r)) && )true
+	@$(foreach r,$(VENDOR_GNOSWAP_RELS),$(call vendor-cmd,$(VENDOR_GNOSWAP_REPO)/$(VENDOR_GNOSWAP_SUB),$(r)) && )true
+	@$(foreach r,$(VENDOR_GNOREALMS_RELS),$(call vendor-cmd,$(VENDOR_GNOREALMS_REPO)/$(VENDOR_GNOREALMS_SUB),$(r)) && )true
 	@echo "ok: vendored third_party package mirrors into gno.land/"
 
 verify-gno:

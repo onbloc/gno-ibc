@@ -34,6 +34,7 @@ VENDOR_GNOLANG_RELS := \
 	p/nt/fqname/v0 \
 	p/nt/mux/v0 \
 	p/nt/seqid/v0 \
+	p/nt/testutils/v0 \
 	p/nt/uassert/v0 \
 	p/nt/ufmt/v0 \
 	r/demo/defi/grc20reg

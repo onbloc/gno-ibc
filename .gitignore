@@ -42,3 +42,6 @@ go.work.sum
 # sparse-checkout submodule under third_party/; populated by `make vendor`.
 /gno.land/p/gnoswap/uint256/
 /gno.land/p/onbloc/json/
+/gno.land/p/aib/
+/gno.land/r/aib/
+/gno.land/p/nt/*

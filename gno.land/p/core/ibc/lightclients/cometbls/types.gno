@@ -60,8 +60,8 @@ type LightHeader struct {
 // Header is the ClientMessage used to update the CometBLS light client.
 // Mirrors union.ibc.lightclients.cometbls.v1.Header.
 type Header struct {
-	SignedHeader        LightHeader
-	TrustedHeight       Height
+	SignedHeader       LightHeader
+	TrustedHeight      Height
 	ZeroKnowledgeProof []byte
 }
 

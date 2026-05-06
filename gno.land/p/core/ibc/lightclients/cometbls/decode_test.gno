@@ -1,3 +1,9 @@
+// Test vectors cross-validated against Union's proto_iso test suite:
+//   client_state:    https://github.com/unionlabs/union/blob/c68023ca390031a3b4c23d2ffbc8fa76235340ae/lib/cometbls-light-client-types/src/client_state.rs#L123
+//   consensus_state: https://github.com/unionlabs/union/blob/c68023ca390031a3b4c23d2ffbc8fa76235340ae/lib/cometbls-light-client-types/src/consensus_state.rs#L124
+//   header/light_header: https://github.com/unionlabs/union/blob/c68023ca390031a3b4c23d2ffbc8fa76235340ae/lib/cometbls-light-client-types/src/header.rs#L184
+//   misbehaviour:    https://github.com/unionlabs/union/blob/c68023ca390031a3b4c23d2ffbc8fa76235340ae/lib/cometbls-light-client-types/src/misbehaviour.rs#L118
+
 package cometbls
 
 import (
@@ -91,8 +97,8 @@ func TestDecodeClientState(t *testing.T) {
 	//   Height{1,50}: [0x08,0x01,0x10,0x32]
 	buf := []byte{
 		0x0A, 0x03, 0x61, 0x62, 0x63, // field 1: "abc"
-		0x10, 0xE8, 0x07,              // field 2: 1000
-		0x20, 0x64,                    // field 4: 100
+		0x10, 0xE8, 0x07, // field 2: 1000
+		0x20, 0x64, // field 4: 100
 		0x32, 0x04, 0x08, 0x01, 0x10, 0x32, // field 6: Height{1,50}
 	}
 	got, err := DecodeClientState(buf)
@@ -126,9 +132,9 @@ func TestDecodeConsensusState(t *testing.T) {
 	//   inner MerkleRoot: field1 tag=0x0A len=1 [0xAB]
 	// field 3 (next_validators_hash): tag=0x1A len=2 [0xCD,0xEF]
 	buf := []byte{
-		0x08, 0xF4, 0x03,              // field 1: timestamp=500
+		0x08, 0xF4, 0x03, // field 1: timestamp=500
 		0x12, 0x03, 0x0A, 0x01, 0xAB, // field 2: root
-		0x1A, 0x02, 0xCD, 0xEF,       // field 3: next_validators_hash
+		0x1A, 0x02, 0xCD, 0xEF, // field 3: next_validators_hash
 	}
 	got, err := DecodeConsensusState(buf)
 	if err != nil {
@@ -153,11 +159,11 @@ func TestDecodeLightHeader(t *testing.T) {
 		// field 4 (next_validators_hash): tag=0x22 len=2 [0x03,0x04]
 		// field 5 (app_hash):             tag=0x2A len=1 [0x05]
 		buf := []byte{
-			0x08, 0x2A,                   // field 1: height=42
+			0x08, 0x2A, // field 1: height=42
 			0x12, 0x03, 0x08, 0xE8, 0x07, // field 2: time (seconds=1000)
-			0x1A, 0x02, 0x01, 0x02,       // field 3: validators_hash
-			0x22, 0x02, 0x03, 0x04,       // field 4: next_validators_hash
-			0x2A, 0x01, 0x05,             // field 5: app_hash
+			0x1A, 0x02, 0x01, 0x02, // field 3: validators_hash
+			0x22, 0x02, 0x03, 0x04, // field 4: next_validators_hash
+			0x2A, 0x01, 0x05, // field 5: app_hash
 		}
 		got, err := DecodeLightHeader(buf)
 		if err != nil {
@@ -181,11 +187,11 @@ func TestDecodeLightHeader(t *testing.T) {
 		// Same but TimeNanos=500
 		// Timestamp inner: field1=[0x08,0xE8,0x07] field2=tag=0x10 varint(500)=[0xF4,0x03] → 6 bytes
 		buf := []byte{
-			0x08, 0x2A,                               // field 1: height=42
+			0x08, 0x2A, // field 1: height=42
 			0x12, 0x06, 0x08, 0xE8, 0x07, 0x10, 0xF4, 0x03, // field 2: time (s=1000,ns=500)
-			0x1A, 0x02, 0x01, 0x02,                   // field 3
-			0x22, 0x02, 0x03, 0x04,                   // field 4
-			0x2A, 0x01, 0x05,                         // field 5
+			0x1A, 0x02, 0x01, 0x02, // field 3
+			0x22, 0x02, 0x03, 0x04, // field 4
+			0x2A, 0x01, 0x05, // field 5
 		}
 		got, err := DecodeLightHeader(buf)
 		if err != nil {
@@ -211,9 +217,9 @@ func TestDecodeHeader(t *testing.T) {
 	//   tag=0x12 len=4
 	// field 3 (zero_knowledge_proof): tag=0x1A len=2 [0xAA,0xBB]
 	buf := []byte{
-		0x0A, 0x02, 0x08, 0x07,             // field 1: signed_header
+		0x0A, 0x02, 0x08, 0x07, // field 1: signed_header
 		0x12, 0x04, 0x08, 0x01, 0x10, 0x0A, // field 2: trusted_height
-		0x1A, 0x02, 0xAA, 0xBB,             // field 3: zkp
+		0x1A, 0x02, 0xAA, 0xBB, // field 3: zkp
 	}
 	got, err := DecodeHeader(buf)
 	if err != nil {

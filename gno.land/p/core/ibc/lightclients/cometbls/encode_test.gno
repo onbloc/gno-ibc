@@ -63,9 +63,9 @@ func TestEncodeClientState(t *testing.T) {
 		LatestHeight:   Height{RevisionNumber: 1, RevisionHeight: 50},
 	}
 	want := []byte{
-		0x0A, 0x03, 0x61, 0x62, 0x63,       // field 1: "abc"
-		0x10, 0xE8, 0x07,                    // field 2: 1000
-		0x20, 0x64,                          // field 4: 100
+		0x0A, 0x03, 0x61, 0x62, 0x63, // field 1: "abc"
+		0x10, 0xE8, 0x07, // field 2: 1000
+		0x20, 0x64, // field 4: 100
 		0x32, 0x04, 0x08, 0x01, 0x10, 0x32, // field 6: Height{1,50}
 	}
 	bytesEq(t, "EncodeClientState", EncodeClientState(cs), want)
@@ -79,9 +79,9 @@ func TestEncodeConsensusState(t *testing.T) {
 		NextValidatorsHash: []byte{0xCD, 0xEF},
 	}
 	want := []byte{
-		0x08, 0xF4, 0x03,              // field 1: timestamp=500
+		0x08, 0xF4, 0x03, // field 1: timestamp=500
 		0x12, 0x03, 0x0A, 0x01, 0xAB, // field 2: root (MerkleRoot{[0xAB]})
-		0x1A, 0x02, 0xCD, 0xEF,       // field 3: next_validators_hash
+		0x1A, 0x02, 0xCD, 0xEF, // field 3: next_validators_hash
 	}
 	bytesEq(t, "EncodeConsensusState", EncodeConsensusState(cs), want)
 }
@@ -97,11 +97,11 @@ func TestEncodeLightHeader(t *testing.T) {
 			AppHash:            []byte{0x05},
 		}
 		want := []byte{
-			0x08, 0x2A,                    // field 1: height=42
+			0x08, 0x2A, // field 1: height=42
 			0x12, 0x03, 0x08, 0xE8, 0x07, // field 2: time (seconds=1000, nanos=0 omitted)
-			0x1A, 0x02, 0x01, 0x02,        // field 3: validators_hash
-			0x22, 0x02, 0x03, 0x04,        // field 4: next_validators_hash
-			0x2A, 0x01, 0x05,              // field 5: app_hash
+			0x1A, 0x02, 0x01, 0x02, // field 3: validators_hash
+			0x22, 0x02, 0x03, 0x04, // field 4: next_validators_hash
+			0x2A, 0x01, 0x05, // field 5: app_hash
 		}
 		bytesEq(t, "EncodeLightHeader zero_nanos", EncodeLightHeader(lh), want)
 	})
@@ -116,11 +116,11 @@ func TestEncodeLightHeader(t *testing.T) {
 			AppHash:            []byte{0x05},
 		}
 		want := []byte{
-			0x08, 0x2A,                                        // field 1: height=42
-			0x12, 0x06, 0x08, 0xE8, 0x07, 0x10, 0xF4, 0x03,  // field 2: time (s=1000,ns=500)
-			0x1A, 0x02, 0x01, 0x02,                            // field 3
-			0x22, 0x02, 0x03, 0x04,                            // field 4
-			0x2A, 0x01, 0x05,                                  // field 5
+			0x08, 0x2A, // field 1: height=42
+			0x12, 0x06, 0x08, 0xE8, 0x07, 0x10, 0xF4, 0x03, // field 2: time (s=1000,ns=500)
+			0x1A, 0x02, 0x01, 0x02, // field 3
+			0x22, 0x02, 0x03, 0x04, // field 4
+			0x2A, 0x01, 0x05, // field 5
 		}
 		bytesEq(t, "EncodeLightHeader nonzero_nanos", EncodeLightHeader(lh), want)
 	})
@@ -133,9 +133,9 @@ func TestEncodeHeader(t *testing.T) {
 		ZeroKnowledgeProof: []byte{0xAA, 0xBB},
 	}
 	want := []byte{
-		0x0A, 0x02, 0x08, 0x07,             // field 1: signed_header (LightHeader{Height:7})
+		0x0A, 0x02, 0x08, 0x07, // field 1: signed_header (LightHeader{Height:7})
 		0x12, 0x04, 0x08, 0x01, 0x10, 0x0A, // field 2: trusted_height {1,10}
-		0x1A, 0x02, 0xAA, 0xBB,             // field 3: zero_knowledge_proof
+		0x1A, 0x02, 0xAA, 0xBB, // field 3: zero_knowledge_proof
 	}
 	bytesEq(t, "EncodeHeader", EncodeHeader(h), want)
 }

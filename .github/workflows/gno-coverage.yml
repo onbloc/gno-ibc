@@ -1,9 +1,13 @@
 name: coverage
 
-# Opt-in coverage run. Pinned commit in .gno-version does not include the
-# `-cover` flag yet; this workflow installs a gno build that has it
-# (defaulting to gnolang/gno#4241 head) without touching the main toolchain
-# pin or the regular test pipeline.
+# The pinned commit in .gno-version doesn't include the `-cover` flag yet;
+# this workflow installs a gno build that has it (defaulting to
+# gnolang/gno#4241 head) and runs `make test-cover`. The main toolchain pin
+# and the regular test pipeline are untouched.
+#
+# Risk: if the PR #4241 author rebases, GNO_COMMIT below becomes orphaned
+# and `make install-gno` will fail until the default is bumped. Treat this
+# check as non-required for that reason.
 on:
   workflow_dispatch:
     inputs:
@@ -11,10 +15,27 @@ on:
         description: "gno commit SHA to install (must include PR #4241; defaults to that PR's head)"
         required: false
         default: "57ad9a4a35daf50bdca5617fc89725a666a9c94b"
+  pull_request:
+    paths: &cov_paths
+      - '**.gno'
+      - '**.go'
+      - 'gnowork.toml'
+      - 'Makefile'
+      - 'stdlibs/**'
+      - 'tools/setup-stdlibs.py'
+      - '.github/workflows/gno-coverage.yml'
+  push:
+    branches: [main]
+    paths: *cov_paths
 
 concurrency:
   group: coverage-${{ github.ref }}
   cancel-in-progress: true
+
+env:
+  # `inputs.gno_commit` is only set on workflow_dispatch; fall back to the
+  # same default so pull_request and push events use a fixed SHA.
+  GNO_COMMIT: ${{ inputs.gno_commit || '57ad9a4a35daf50bdca5617fc89725a666a9c94b' }}
 
 jobs:
   gno-coverage:
@@ -36,9 +57,9 @@ jobs:
           path: |
             ~/go/bin/gno
             ~/.cache/gno-ibc/gno
-          key: gno-cover-${{ runner.os }}-${{ inputs.gno_commit }}-${{ hashFiles('stdlibs/**/*.go', 'stdlibs/**/gnomod.toml', 'stdlibs/go.mod', 'stdlibs/go.sum', 'tools/setup-stdlibs.py') }}
+          key: gno-cover-${{ runner.os }}-${{ env.GNO_COMMIT }}-${{ hashFiles('stdlibs/**/*.go', 'stdlibs/**/gnomod.toml', 'stdlibs/go.mod', 'stdlibs/go.sum', 'tools/setup-stdlibs.py') }}
           restore-keys: |
-            gno-cover-${{ runner.os }}-${{ inputs.gno_commit }}-
+            gno-cover-${{ runner.os }}-${{ env.GNO_COMMIT }}-
 
       - name: Cache Go build + modules
         uses: actions/cache@v4
@@ -46,23 +67,23 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: gobuild-cover-${{ runner.os }}-${{ inputs.gno_commit }}
+          key: gobuild-cover-${{ runner.os }}-${{ env.GNO_COMMIT }}
           restore-keys: |
             gobuild-cover-${{ runner.os }}-
 
       - name: Install gno toolchain (coverage build)
         if: steps.gno-cache.outputs.cache-hit != 'true'
-        run: make install-gno GNO_COMMIT=${{ inputs.gno_commit }}
+        run: make install-gno GNO_COMMIT=${{ env.GNO_COMMIT }}
 
       - name: Refresh stdlib symlinks
         if: steps.gno-cache.outputs.cache-hit == 'true'
-        run: make link-stdlibs GNO_COMMIT=${{ inputs.gno_commit }}
+        run: make link-stdlibs GNO_COMMIT=${{ env.GNO_COMMIT }}
 
       - name: Verify gno binary
-        run: make verify-gno GNO_COMMIT=${{ inputs.gno_commit }}
+        run: make verify-gno GNO_COMMIT=${{ env.GNO_COMMIT }}
 
       - name: Run gno tests with coverage
-        run: make test-cover GNO_COMMIT=${{ inputs.gno_commit }}
+        run: make test-cover GNO_COMMIT=${{ env.GNO_COMMIT }}
 
       - name: Render coverage summary
         if: always()
@@ -70,7 +91,7 @@ jobs:
           {
             echo "## Gno coverage"
             echo ""
-            echo "Toolchain commit: \`${{ inputs.gno_commit }}\`"
+            echo "Toolchain commit: \`${{ env.GNO_COMMIT }}\`"
             echo ""
             if [ -s coverage/profile.txt ]; then
               echo '<details><summary>Full report</summary>'

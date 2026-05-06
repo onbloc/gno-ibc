@@ -138,8 +138,58 @@ def link_stdlib(stdlib: Stdlib, cache_dir: Path) -> None:
     log(f"  link  {stdlib.module_path}  ->  {source}")
 
 
+def _read_direct_requires(gomod_path: Path) -> dict[str, str]:
+    """Parse direct (non-indirect) require entries from a go.mod file."""
+    requires: dict[str, str] = {}
+    if not gomod_path.is_file():
+        return requires
+    in_block = False
+    for raw in gomod_path.read_text().splitlines():
+        line = raw.strip()
+        if line == "require (":
+            in_block = True
+            continue
+        if in_block and line == ")":
+            in_block = False
+            continue
+        if line.startswith("require ") and "(" not in line:
+            parts = line[len("require "):].split()
+            if len(parts) >= 2 and "// indirect" not in line:
+                requires[parts[0]] = parts[1]
+            continue
+        if in_block and line and not line.startswith("//") and "// indirect" not in line:
+            parts = line.split()
+            if len(parts) >= 2:
+                requires[parts[0]] = parts[1]
+    return requires
+
+
+def _inject_native_deps(cache_dir: Path) -> None:
+    """Add to the gno module any extra deps declared in stdlibs/go.mod.
+
+    Native stdlib .go files may import third-party packages that are not yet
+    in the upstream gno go.mod. Reading the versions from stdlibs/go.mod keeps
+    this script and the IDE-support go.mod in sync automatically.
+    """
+    requires = _read_direct_requires(REPO_ROOT / "stdlibs" / "go.mod")
+    # Deps that start with the gno module prefix are already provided by the
+    # host module; skip them and the replace-directive placeholder version.
+    gno_module = "github.com/gnolang/gno"
+    deps = [
+        f"{mod}@{ver}"
+        for mod, ver in sorted(requires.items())
+        if not mod.startswith(gno_module)
+        and ver != "v0.0.0-00010101000000-000000000000"
+    ]
+    if not deps:
+        return
+    log(f"injecting native stdlib deps into gno module: {deps}")
+    run(["go", "get"] + deps, cwd=cache_dir)
+
+
 def regenerate_and_install(cache_dir: Path, skip_install: bool) -> None:
     gnovm = cache_dir / "gnovm"
+    _inject_native_deps(cache_dir)
     run(["go", "mod", "tidy"], cwd=gnovm)
     run(["go", "generate", "./stdlibs/..."], cwd=gnovm)
     if skip_install:

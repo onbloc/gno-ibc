@@ -9,8 +9,8 @@ import (
 )
 
 // Forward.Instruction.Operand is raw bytes, so an outer Forward whose
-// instruction wraps another Forward must round-trip cleanly. Wave 6's nested
-// forward continuation depends on this.
+// instruction wraps another Forward must round-trip cleanly. Forward
+// continuation rebuilds depend on this.
 func TestSanityForwardOfForwardRoundTrip(t *testing.T) {
 	innerCallBytes, err := EncodeCall(Call{
 		Sender:           []byte("a"),
@@ -64,8 +64,8 @@ func TestSanityForwardOfForwardRoundTrip(t *testing.T) {
 	uassert.Equal(t, "c", string(decodedCall.ContractCalldata))
 }
 
-// Forward → Batch[Call] round-trip — Wave 6 lastHop continuation may dispatch
-// a Batch as the final instruction.
+// Forward → Batch[Call] round-trip. A final-hop continuation may dispatch a
+// Batch as the final instruction.
 func TestSanityForwardOfBatchRoundTrip(t *testing.T) {
 	callBytes, err := EncodeCall(Call{Sender: []byte("s"), ContractAddress: []byte("r")})
 	uassert.NoError(t, err)

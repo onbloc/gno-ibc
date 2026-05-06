@@ -68,6 +68,21 @@ func TestVerifyForwardAllowsPathHelperMaximum(cur realm, t *testing.T) {
 	uassert.NoError(t, err)
 }
 
+func TestVerifyForwardAllowsExactlyMaxHops(cur realm, t *testing.T) {
+	path := u256.Zero()
+	for i := 0; i < z.MaxHops; i++ {
+		slot := new(u256.Uint).Lsh(u256.NewUint(uint64(i+1)), uint(32*i))
+		path = new(u256.Uint).Or(path, slot)
+	}
+
+	err := (&ZkgmV0{}).verifyForward("client-1", "sender", nil, u256.Zero(), z.Forward{
+		Path:        path,
+		Instruction: mustCallInstruction(batchCall("sender", "")),
+	})
+
+	uassert.NoError(t, err)
+}
+
 func TestBuildForwardChildPacket(cur realm, t *testing.T) {
 	parentSalt := [32]byte{0xA}
 	payload, hash, nextSourceChannel, err := buildForwardChild(zkgm.RecvRequest{
@@ -121,6 +136,47 @@ func TestExecuteForwardIntentReturnsOnlyMaker(cur realm, t *testing.T) {
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatus_Success)
 	uassert.True(t, equalBytes(z.ACK_ERR_ONLY_MAKER, res.Acknowledgement))
+}
+
+func TestAcknowledgeForwardDispatchesToInnerInstruction(cur realm, t *testing.T) {
+	err := (&ZkgmV0{}).acknowledgeForward(zkgm.AckRequest{
+		SourceClient: "client-a",
+	}, u256.Zero(), [32]byte{}, z.Forward{
+		Path:        forwardPath(1, 2),
+		Instruction: mustCallInstruction(batchCall("sender", "calldata")),
+	}, z.Ack{Tag: tagAckSuccess, InnerAck: []byte{}})
+
+	uassert.NoError(t, err)
+}
+
+func TestAcknowledgeForwardWithTokenOrderChildRefundsOnFailure(cur realm, t *testing.T) {
+	resetImplForTest()
+
+	sender := testAddress("sender")
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte("ibc/forward-refund"),
+		BaseAmount:  u256.NewUint(20),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(20),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	path := u256.NewUint(7)
+	increaseChannelBalanceV2(cross, "client-a", path, order.BaseToken, order.QuoteToken, order.BaseAmount)
+	childFailAck, err := z.EncodeAck(z.Ack{Tag: tagAckFailure, InnerAck: []byte("failed")})
+	uassert.NoError(t, err)
+
+	err = (&ZkgmV0{}).acknowledgeForward(zkgm.AckRequest{
+		SourceClient: "client-a",
+	}, path, [32]byte{}, z.Forward{
+		Path:        forwardPath(1, 2),
+		Instruction: mustOrderInstruction(order),
+	}, z.Ack{Tag: tagAckSuccess, InnerAck: childFailAck})
+
+	uassert.NoError(t, err)
+	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2("client-a", path, order.BaseToken, order.QuoteToken))
+	uassert.True(t, balance == nil || balance.IsZero())
+	uassert.Equal(t, int64(20), VoucherBalanceOf(string(order.BaseToken), address(sender)))
 }
 
 func TestForwardChildAckClearsInFlight(cur realm, t *testing.T) {

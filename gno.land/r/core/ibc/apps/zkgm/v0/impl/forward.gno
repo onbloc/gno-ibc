@@ -19,6 +19,7 @@ func (v *ZkgmV0) verifyForward(channelID string, sender string, sentCoins chain.
 	if !isAllowedForwardInstruction(forward.Instruction.Opcode) {
 		return errors.New("zkgm/v0: invalid forward instruction")
 	}
+	// defensive: this should unreachable given the bounds of u256.
 	if z.HopCount(forward.Path) > z.MaxHops {
 		return errors.New("zkgm/v0: forward hop count exceeded")
 	}

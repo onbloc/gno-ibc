@@ -84,10 +84,20 @@ def run(cmd: list[str], cwd: Path | None = None) -> None:
 
 
 def ensure_clone(version: GnoVersion, cache_dir: Path) -> None:
-    """Clone the gno repo into cache_dir if needed; fetch + checkout the pin."""
+    """Clone the gno repo into cache_dir if needed; fetch + checkout the pin.
+
+    Uses ``--filter=blob:none`` (partial clone) so the initial network fetch
+    skips file blobs; ``git checkout`` then lazily downloads only the blobs
+    reachable from the pinned commit. Materially faster than a full clone on
+    cold CI runs while still supporting arbitrary commit checkouts.
+    """
     if not (cache_dir / ".git").is_dir():
         cache_dir.parent.mkdir(parents=True, exist_ok=True)
-        run(["git", "clone", "--quiet", version.repo, str(cache_dir)])
+        run([
+            "git", "clone", "--quiet",
+            "--filter=blob:none",
+            version.repo, str(cache_dir),
+        ])
     have_commit = subprocess.run(
         ["git", "cat-file", "-e", f"{version.commit}^{{commit}}"],
         cwd=cache_dir,
@@ -213,6 +223,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Stop after `go generate`; don't install the binary",
     )
+    p.add_argument(
+        "--link-only",
+        action="store_true",
+        help="Only ensure the clone + refresh stdlib symlinks; skip generate + install",
+    )
     return p.parse_args()
 
 
@@ -236,6 +251,10 @@ def main() -> int:
     log(f"vendoring {len(stdlibs)} stdlib package(s):")
     for sl in stdlibs:
         link_stdlib(sl, args.cache_dir)
+
+    if args.link_only:
+        log("done (link-only: skipped generate + install).")
+        return 0
 
     regenerate_and_install(args.cache_dir, skip_install=args.skip_install)
 

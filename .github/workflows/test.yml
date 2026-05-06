@@ -30,9 +30,11 @@ jobs:
           go-version: stable
           cache: false
 
-      # Cache the installed gno binary, keyed on the pinned commit AND the
-      # vendored stdlib sources. Bumping .gno-version or editing stdlibs/
-      # invalidates the cache so the binary is rebuilt with the new bindings.
+      # Cache the installed gno binary, keyed on inputs that actually affect
+      # the binary: pinned commit + native bindings (.go) + package layout
+      # (gnomod.toml) + build script. Pure .gno edits don't invalidate — the
+      # binary's _GNOROOT points at the cache, and symlinks (refreshed by the
+      # link-stdlibs step below) resolve to the current working tree.
       - name: Cache gno binary
         id: gno-cache
         uses: actions/cache@v4
@@ -40,11 +42,31 @@ jobs:
           path: |
             ~/go/bin/gno
             ~/.cache/gno-ibc/gno
-          key: gno-${{ runner.os }}-${{ hashFiles('.gno-version', 'stdlibs/**', 'tools/setup-stdlibs.py') }}
+          key: gno-${{ runner.os }}-${{ hashFiles('.gno-version', 'stdlibs/**/*.go', 'stdlibs/**/gnomod.toml', 'stdlibs/go.mod', 'stdlibs/go.sum', 'tools/setup-stdlibs.py') }}
+          restore-keys: |
+            gno-${{ runner.os }}-
+
+      # Make `make install` (run when the gno binary cache misses) incremental
+      # by reusing Go's module + build artifacts across runs.
+      - name: Cache Go build + modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: gobuild-${{ runner.os }}-${{ hashFiles('.gno-version', 'stdlibs/go.sum') }}
+          restore-keys: |
+            gobuild-${{ runner.os }}-
 
       - name: Install pinned gno toolchain
         if: steps.gno-cache.outputs.cache-hit != 'true'
         run: make install-gno
+
+      # On cache hit, install-gno is skipped, so re-run only the symlink pass
+      # to pick up any .gno files added/removed since the cache was saved.
+      - name: Refresh stdlib symlinks
+        if: steps.gno-cache.outputs.cache-hit == 'true'
+        run: make link-stdlibs
 
       - name: Verify gno binary
         run: make verify-gno

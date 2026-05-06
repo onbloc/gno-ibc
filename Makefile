@@ -73,7 +73,7 @@ vendor-flags = $(if $(filter undefined,$(origin FLAGS_$(subst /,_,$(1)))),$(STD_
 # rsync only auto-creates the leaf dest dir, so mkdir -p covers intermediates.
 vendor-cmd = mkdir -p $(dir gno.land/$(2)) && rsync $(RSYNC_BASE) $(call vendor-flags,$(2)) $(1)/$(2)/ gno.land/$(2)/
 
-.PHONY: help install-gno verify-gno vendor test test-stdlibs test-smoke clean-gno-cache refresh-abi-vectors
+.PHONY: help install-gno link-stdlibs verify-gno vendor test test-stdlibs test-smoke clean-gno-cache refresh-abi-vectors
 
 # Vendored stdlib import paths, derived from stdlibs/<path>/gnomod.toml presence.
 STDLIB_PKGS   := $(patsubst stdlibs/%/gnomod.toml,%,$(wildcard stdlibs/*/*/gnomod.toml))
@@ -86,6 +86,7 @@ USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/core gno.
 help:
 	@echo "Targets:"
 	@echo "  install-gno           — vendor stdlibs/, regenerate, build+install gno"
+	@echo "  link-stdlibs          — refresh stdlib symlinks only (no rebuild)"
 	@echo "  verify-gno            — assert the gno binary is on PATH"
 	@echo "  vendor                — mirror sparse third_party package sub-paths into gno.land/"
 	@echo "  test                  — verify-gno + vendor, then run first-party gno tests"
@@ -98,6 +99,13 @@ help:
 
 install-gno:
 	@python3 tools/setup-stdlibs.py
+
+# Refresh stdlib symlinks under the cached gno checkout without rebuilding
+# the binary. Used in CI when the binary cache hits but .gno files in
+# stdlibs/ may have been added/removed (edits to existing files are picked
+# up automatically since symlinks resolve to the working-tree path).
+link-stdlibs:
+	@python3 tools/setup-stdlibs.py --link-only
 
 # Initialise/update the third_party submodules, ensure sparse-checkout is set,
 # and rsync the relevant subdirectories into the gno.land workspace paths.

@@ -43,6 +43,7 @@ func Calls() int {
 // realms. omitting it causes Gno to panic at the cross-realm boundary.
 
 func LastCaller(cur realm) string             { return receiver.Last.Caller }
+func LastProxyAccount(cur realm) string       { return receiver.Last.ProxyAccount }
 func LastSourceChannel(cur realm) string      { return receiver.Last.SourceChannel }
 func LastDestinationChannel(cur realm) string { return receiver.Last.DestinationChannel }
 func LastSender(cur realm) string             { return string(receiver.Last.Sender) }

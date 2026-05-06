@@ -112,6 +112,28 @@ func TestAppRecvErrorAckWhenPaused(cur realm, t *testing.T) {
 	}
 }
 
+func TestAppRecvPopulatesCallerRelayer(cur realm, t *testing.T) {
+	resetProxyForTest()
+	d := &dummyImpl{name: "recv"}
+	impl = d
+	testing.SetOriginCaller("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsx")
+
+	res := (&App{}).OnRecvPacket(cross, "client-0", "client-1", 7, types.Payload{Value: []byte("packet")})
+
+	if res.Status != types.PacketStatus_Success {
+		t.Fatalf("expected success acknowledgement")
+	}
+	if d.lastRecv.Caller != "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsx" {
+		t.Fatalf("caller: got %q", d.lastRecv.Caller)
+	}
+	if string(d.lastRecv.Relayer) != "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsx" {
+		t.Fatalf("relayer: got %q", string(d.lastRecv.Relayer))
+	}
+	if len(d.lastRecv.RelayerMsg) != 0 {
+		t.Fatalf("relayer msg should be empty until core exposes one")
+	}
+}
+
 func resetProxyForTest() {
 	impl = nil
 	implPath = ""
@@ -152,7 +174,8 @@ func expectAbort(t *testing.T, want string, fn func()) {
 }
 
 type dummyImpl struct {
-	name string
+	name     string
+	lastRecv RecvRequest
 }
 
 func (d *dummyImpl) PreSend(req SendRequest) error {
@@ -174,6 +197,7 @@ func (d *dummyImpl) PreRecv(req RecvRequest) error {
 }
 
 func (d *dummyImpl) Recv(req RecvRequest) (types.RecvPacketResult, error) {
+	d.lastRecv = req
 	return types.RecvPacketResult{
 		Status:          types.PacketStatus_Success,
 		Acknowledgement: []byte("ok"),

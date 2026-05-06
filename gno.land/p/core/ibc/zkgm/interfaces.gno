@@ -14,6 +14,7 @@ type Zkgmable interface {
 
 type CallEnv struct {
 	Caller             string
+	ProxyAccount       string
 	Path               *u256.Uint
 	SourceChannel      string
 	DestinationChannel string
@@ -25,6 +26,7 @@ type CallEnv struct {
 
 type IntentCallEnv struct {
 	Caller             string
+	ProxyAccount       string
 	Path               *u256.Uint
 	SourceChannel      string
 	DestinationChannel string

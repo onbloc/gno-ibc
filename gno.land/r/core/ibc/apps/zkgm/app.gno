@@ -1,6 +1,7 @@
 package zkgm
 
 import (
+	"chain/runtime"
 	"errors"
 
 	"gno.land/p/aib/ibc/app"
@@ -40,6 +41,9 @@ func (a *App) OnRecvPacket(cur realm, sourceClient string, destinationClient str
 		DestinationClient: destinationClient,
 		Sequence:          sequence,
 		Payload:           payload,
+		Caller:            runtime.OriginCaller().String(),
+		Relayer:           []byte(runtime.OriginCaller().String()),
+		RelayerMsg:        nil,
 	}
 	if err := impl.PreRecv(req); err != nil {
 		return errAck(err)
@@ -64,6 +68,9 @@ func (a *App) OnTimeoutPacket(cur realm, sourceClient string, destinationClient 
 		DestinationClient: destinationClient,
 		Sequence:          sequence,
 		Payload:           payload,
+		Caller:            runtime.OriginCaller().String(),
+		Relayer:           []byte(runtime.OriginCaller().String()),
+		RelayerMsg:        nil,
 	}
 	if err := impl.PreTimeout(req); err != nil {
 		return err
@@ -88,6 +95,9 @@ func (a *App) OnAcknowledgementPacket(cur realm, sourceClient string, destinatio
 		Sequence:          sequence,
 		Acknowledgement:   acknowledgement,
 		Payload:           payload,
+		Caller:            runtime.OriginCaller().String(),
+		Relayer:           []byte(runtime.OriginCaller().String()),
+		RelayerMsg:        nil,
 	}
 	if err := impl.PreAck(req); err != nil {
 		return err

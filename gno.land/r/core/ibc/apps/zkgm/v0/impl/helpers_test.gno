@@ -32,3 +32,19 @@ func TestParseCoinsRoundTripString(t *testing.T) {
 	uassert.Equal(t, int64(12), coins.AmountOf("ugnot"))
 	uassert.Equal(t, int64(3), coins.AmountOf("uatom"))
 }
+
+func TestPredictCallProxyAccountDeterministic(t *testing.T) {
+	got := PredictCallProxyAccount(u256.NewUint(7), "client-b", []byte("sender"))
+	again := PredictCallProxyAccount(u256.NewUint(7), "client-b", []byte("sender"))
+
+	uassert.Equal(t, got, again)
+	uassert.True(t, len(got) == len("zkgm1")+40)
+}
+
+func TestPredictCallProxyAccountInputSensitivity(t *testing.T) {
+	base := PredictCallProxyAccount(u256.NewUint(7), "client-b", []byte("sender"))
+
+	uassert.True(t, base != PredictCallProxyAccount(u256.NewUint(8), "client-b", []byte("sender")))
+	uassert.True(t, base != PredictCallProxyAccount(u256.NewUint(7), "client-c", []byte("sender")))
+	uassert.True(t, base != PredictCallProxyAccount(u256.NewUint(7), "client-b", []byte("other")))
+}

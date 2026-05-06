@@ -25,6 +25,9 @@ func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
 	res, err := (&ZkgmV0{}).executeCall(zkgm.RecvRequest{
 		SourceClient:      "client-a",
 		DestinationClient: "client-b",
+		Caller:            "relayer-1",
+		Relayer:           []byte("relayer-1"),
+		RelayerMsg:        []byte("relay-msg"),
 	}, path, call)
 
 	uassert.NoError(t, err)
@@ -37,7 +40,10 @@ func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
 	uassert.Equal(t, "client-b", mock.LastDestinationChannel(cross))
 	uassert.Equal(t, "sender", mock.LastSender(cross))
 	uassert.Equal(t, "calldata", mock.LastCalldata(cross))
-	uassert.Equal(t, PredictCallProxyAccount(path, "client-b", []byte("sender")), mock.LastCaller(cross))
+	uassert.Equal(t, "relayer-1", mock.LastCaller(cross))
+	uassert.Equal(t, PredictCallProxyAccount(path, "client-b", []byte("sender")), mock.LastProxyAccount(cross))
+	uassert.Equal(t, "relayer-1", mock.LastRelayer(cross))
+	uassert.Equal(t, "relay-msg", mock.LastRelayerMsg(cross))
 }
 
 func TestExecuteCallReceiverErrorReturnsFailureAck(cur realm, t *testing.T) {
@@ -83,6 +89,22 @@ func TestVerifyCallRejectsEurekaAndSenderMismatch(cur realm, t *testing.T) {
 	uassert.ErrorContains(t, err, "eureka mode not supported")
 }
 
+func TestAcknowledgeCallNoopForStandardMode(t *testing.T) {
+	err := (&ZkgmV0{}).acknowledgeCall(zkgm.AckRequest{SourceClient: "client-a"}, u256.NewUint(1), z.Call{
+		Sender: []byte("sender"),
+	})
+
+	uassert.NoError(t, err)
+}
+
+func TestTimeoutCallNoopForStandardMode(t *testing.T) {
+	err := (&ZkgmV0{}).timeoutCall(zkgm.TimeoutRequest{SourceClient: "client-a"}, u256.NewUint(1), z.Call{
+		Sender: []byte("sender"),
+	})
+
+	uassert.NoError(t, err)
+}
+
 func TestRecvDispatchesCallOpcode(cur realm, t *testing.T) {
 	mock.Reset(cross)
 	call := z.Call{
@@ -96,12 +118,15 @@ func TestRecvDispatchesCallOpcode(cur realm, t *testing.T) {
 		SourceClient:      "client-a",
 		DestinationClient: "client-b",
 		Payload:           payload,
+		Caller:            "relayer-2",
+		Relayer:           []byte("relayer-2"),
 	})
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatus_Success)
 	uassert.Equal(t, 1, mock.Calls())
 	uassert.Equal(t, "dispatch", mock.LastCalldata(cross))
+	uassert.Equal(t, "relayer-2", mock.LastCaller(cross))
 }
 
 // equalBytes is used instead of bytes.Equal because bytes.Equal does

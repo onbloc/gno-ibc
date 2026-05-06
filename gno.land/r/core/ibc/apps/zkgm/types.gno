@@ -44,6 +44,9 @@ type RecvRequest struct {
 	DestinationClient string
 	Sequence          uint64
 	Payload           types.Payload
+	Caller            string
+	Relayer           []byte
+	RelayerMsg        []byte
 }
 
 type AckRequest struct {
@@ -52,6 +55,9 @@ type AckRequest struct {
 	Sequence          uint64
 	Acknowledgement   []byte
 	Payload           types.Payload
+	Caller            string
+	Relayer           []byte
+	RelayerMsg        []byte
 }
 
 type TimeoutRequest struct {
@@ -59,6 +65,9 @@ type TimeoutRequest struct {
 	DestinationClient string
 	Sequence          uint64
 	Payload           types.Payload
+	Caller            string
+	Relayer           []byte
+	RelayerMsg        []byte
 }
 
 type UpdateRequest struct {

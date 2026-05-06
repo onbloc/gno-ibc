@@ -52,12 +52,15 @@ func (v *ZkgmV0) executeCall(req zkgm.RecvRequest, path *u256.Uint, call z.Call)
 	}
 
 	env := z.CallEnv{
-		Caller:             PredictCallProxyAccount(path, req.DestinationClient, call.Sender),
+		Caller:             req.Caller,
+		ProxyAccount:       PredictCallProxyAccount(path, req.DestinationClient, call.Sender),
 		Path:               path,
 		SourceChannel:      req.SourceClient,
 		DestinationChannel: req.DestinationClient,
 		Sender:             call.Sender,
 		Calldata:           call.ContractCalldata,
+		Relayer:            req.Relayer,
+		RelayerMsg:         req.RelayerMsg,
 	}
 
 	err, panicked := safeCallOnZkgm(receiver, env)
@@ -68,7 +71,7 @@ func (v *ZkgmV0) executeCall(req zkgm.RecvRequest, path *u256.Uint, call z.Call)
 		return callErrAck(err), nil
 	}
 
-	ack, err := z.EncodeAck(z.Ack{Tag: u256.NewUint(1), InnerAck: []byte{}})
+	ack, err := z.EncodeAck(z.Ack{Tag: u256FromBytes32(z.TAG_ACK_SUCCESS), InnerAck: []byte{}})
 	if err != nil {
 		return types.RecvPacketResult{}, err
 	}
@@ -80,6 +83,8 @@ func (v *ZkgmV0) acknowledgeCall(req zkgm.AckRequest, path *u256.Uint, call z.Ca
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
+	// Standard Call is fire-and-forget. If eureka mode is introduced later,
+	// universal error acknowledgements must be handled here.
 	return nil
 }
 
@@ -98,7 +103,7 @@ func safeCallOnZkgm(receiver z.Zkgmable, env z.CallEnv) (err error, panicked boo
 }
 
 func callErrAck(err error) types.RecvPacketResult {
-	ack, encErr := z.EncodeAck(z.Ack{Tag: u256.NewUint(0), InnerAck: []byte(err.Error())})
+	ack, encErr := z.EncodeAck(z.Ack{Tag: u256FromBytes32(z.TAG_ACK_FAILURE), InnerAck: []byte(err.Error())})
 	if encErr != nil {
 		ack = []byte(err.Error())
 	}

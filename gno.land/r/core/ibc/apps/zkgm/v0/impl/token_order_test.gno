@@ -1,6 +1,9 @@
 package impl
 
 import (
+	"chain"
+	"chain/banker"
+	"chain/runtime"
 	"testing"
 
 	"gno.land/p/aib/ibc/types"
@@ -200,12 +203,86 @@ func TestAckSuccessProtocolNoopPreservesChannelBalance(cur realm, t *testing.T) 
 	uassert.Equal(t, "5", balance.ToString())
 }
 
+func TestTokenTransferRoundTripReleasesEscrowedNative(cur realm, t *testing.T) {
+	resetImplForTest()
+
+	sender := testAddress("roundtrip-sender")
+	receiver := testAddress("roundtrip-receiver")
+	channelID := "client-roundtrip"
+	nativeDenom := "/" + runtime.CurrentRealm().PkgPath() + ":roundtrip"
+	amount := u256.NewUint(100)
+	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    []byte("roundtrip"),
+	})
+	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	voucherDenom := PredictWrappedTokenV2("client-dst-roundtrip", []byte(nativeDenom), image)
+
+	issueNativeToCurrentRealm(nativeDenom, 100)
+	beforeReceiverNative := nativeBalance(receiver, nativeDenom)
+
+	sendOrder := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		Receiver:    []byte(sender),
+		BaseToken:   []byte(nativeDenom),
+		BaseAmount:  amount,
+		QuoteToken:  []byte(voucherDenom),
+		QuoteAmount: amount,
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    metaBytes,
+	}
+	err := (&ZkgmV0{}).verifyTokenOrderV2(channelID, sender, chain.NewCoins(chain.NewCoin(nativeDenom, 100)), sendOrder)
+	uassert.NoError(t, err)
+	sourceKey := ChannelBalanceKeyV2(channelID, u256.Zero(), sendOrder.BaseToken, sendOrder.QuoteToken)
+	uassert.Equal(t, "100", zkgm.GetChannelBalanceV2(sourceKey).ToString())
+
+	recvRes, err := (&ZkgmV0{}).executeTokenOrderV2(zkgm.RecvRequest{
+		DestinationClient: "client-dst-roundtrip",
+	}, u256.Zero(), sendOrder)
+	uassert.NoError(t, err)
+	uassert.True(t, recvRes.Status == types.PacketStatus_Success)
+	assertProtocolAck(t, recvRes.Acknowledgement)
+	uassert.Equal(t, int64(100), VoucherBalanceOf(voucherDenom, address(sender)))
+
+	returnOrder := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		Receiver:    []byte(receiver),
+		BaseToken:   []byte(voucherDenom),
+		BaseAmount:  amount,
+		QuoteToken:  []byte(nativeDenom),
+		QuoteAmount: amount,
+		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
+	}
+	err = (&ZkgmV0{}).verifyTokenOrderV2(channelID, sender, nil, returnOrder)
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(0), VoucherBalanceOf(voucherDenom, address(sender)))
+
+	returnRes, err := (&ZkgmV0{}).executeTokenOrderV2(zkgm.RecvRequest{
+		DestinationClient: channelID,
+	}, u256.Zero(), returnOrder)
+	uassert.NoError(t, err)
+	uassert.True(t, returnRes.Status == types.PacketStatus_Success)
+	assertProtocolAck(t, returnRes.Acknowledgement)
+	uassert.True(t, zkgm.GetChannelBalanceV2(sourceKey) == nil)
+	uassert.Equal(t, beforeReceiverNative+100, nativeBalance(receiver, nativeDenom))
+}
+
 func resetImplForTest() {
 	voucherTokens = bptree.NewBPTree32()
 }
 
 func testAddress(name string) string {
 	return string(testutils.TestAddress(name))
+}
+
+func issueNativeToCurrentRealm(denom string, amount int64) {
+	b := banker.NewBanker(banker.BankerTypeRealmIssue)
+	b.IssueCoin(runtime.CurrentRealm().Address(), denom, amount)
+}
+
+func nativeBalance(addr string, denom string) int64 {
+	b := banker.NewBanker(banker.BankerTypeReadonly)
+	return b.GetCoins(address(addr)).AmountOf(denom)
 }
 
 func assertProtocolAck(t *testing.T, ackBytes []byte) {

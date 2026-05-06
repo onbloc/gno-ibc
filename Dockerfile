@@ -13,7 +13,6 @@ RUN git clone https://github.com/gnolang/gno.git /gno && \
 # Build gnoland
 WORKDIR /gno
 RUN go build -o /usr/local/bin/gnoland ./gno.land/cmd/gnoland
-RUN go build -o /usr/local/bin/gnokey ./gno.land/cmd/gnokey
 
 # Stage 2: Runtime
 FROM alpine:3.19
@@ -21,7 +20,6 @@ FROM alpine:3.19
 RUN apk add --no-cache ca-certificates bash
 
 COPY --from=builder /usr/local/bin/gnoland /usr/local/bin/gnoland
-COPY --from=builder /usr/local/bin/gnokey /usr/local/bin/gnokey
 
 EXPOSE 26656 26657 26660
 

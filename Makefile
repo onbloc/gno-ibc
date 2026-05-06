@@ -9,6 +9,10 @@
 
 include .gno-version
 
+# Exported so `make install-gno GNO_COMMIT=...` propagates the override into
+# tools/setup-stdlibs.py, which otherwise reads .gno-version directly.
+export GNO_COMMIT GNO_REPO
+
 GNO_CACHE  := $(HOME)/.cache/gno-ibc/gno
 GO_BIN_DIR := $(shell go env GOPATH)/bin
 GNO_BIN    := $(GO_BIN_DIR)/gno

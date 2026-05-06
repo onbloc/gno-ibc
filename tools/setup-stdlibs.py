@@ -15,6 +15,7 @@ wires ``X_<func>`` Go bindings into the dispatch table.
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 import sys
@@ -240,6 +241,18 @@ def main() -> int:
         raise SystemExit(f"ERROR: {STDLIBS_DIR} not found")
 
     version = parse_gno_version(GNO_VERSION_FILE)
+    # Allow GNO_COMMIT / GNO_REPO env vars (exported by the Makefile) to
+    # override the file pin without touching .gno-version. Used by the
+    # coverage workflow to install gnolang/gno#4241 alongside the regular
+    # toolchain.
+    env_repo = os.environ.get("GNO_REPO")
+    env_commit = os.environ.get("GNO_COMMIT")
+    if (env_repo and env_repo != version.repo) or (env_commit and env_commit != version.commit):
+        version = GnoVersion(
+            repo=env_repo or version.repo,
+            commit=env_commit or version.commit,
+        )
+        log(f"override from env: repo={version.repo} commit={version.commit[:12]}")
     log(f"gno = {version.repo} @ {version.commit[:12]}")
     log(f"cache = {args.cache_dir}")
 

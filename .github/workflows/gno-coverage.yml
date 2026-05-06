@@ -1,0 +1,99 @@
+name: coverage
+
+# Opt-in coverage run. Pinned commit in .gno-version does not include the
+# `-cover` flag yet; this workflow installs a gno build that has it
+# (defaulting to gnolang/gno#4241 head) without touching the main toolchain
+# pin or the regular test pipeline.
+on:
+  workflow_dispatch:
+    inputs:
+      gno_commit:
+        description: "gno commit SHA to install (must include PR #4241; defaults to that PR's head)"
+        required: false
+        default: "57ad9a4a35daf50bdca5617fc89725a666a9c94b"
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gno-coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: false
+
+      # Keyed on the override commit so this cache stays isolated from the
+      # main test workflow's cache (which keys on .gno-version).
+      - name: Cache gno binary (coverage)
+        id: gno-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/go/bin/gno
+            ~/.cache/gno-ibc/gno
+          key: gno-cover-${{ runner.os }}-${{ inputs.gno_commit }}-${{ hashFiles('stdlibs/**/*.go', 'stdlibs/**/gnomod.toml', 'stdlibs/go.mod', 'stdlibs/go.sum', 'tools/setup-stdlibs.py') }}
+          restore-keys: |
+            gno-cover-${{ runner.os }}-${{ inputs.gno_commit }}-
+
+      - name: Cache Go build + modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: gobuild-cover-${{ runner.os }}-${{ inputs.gno_commit }}
+          restore-keys: |
+            gobuild-cover-${{ runner.os }}-
+
+      - name: Install gno toolchain (coverage build)
+        if: steps.gno-cache.outputs.cache-hit != 'true'
+        run: make install-gno GNO_COMMIT=${{ inputs.gno_commit }}
+
+      - name: Refresh stdlib symlinks
+        if: steps.gno-cache.outputs.cache-hit == 'true'
+        run: make link-stdlibs GNO_COMMIT=${{ inputs.gno_commit }}
+
+      - name: Verify gno binary
+        run: make verify-gno GNO_COMMIT=${{ inputs.gno_commit }}
+
+      - name: Run gno tests with coverage
+        run: make test-cover GNO_COMMIT=${{ inputs.gno_commit }}
+
+      - name: Render coverage summary
+        if: always()
+        run: |
+          {
+            echo "## Gno coverage"
+            echo ""
+            echo "Toolchain commit: \`${{ inputs.gno_commit }}\`"
+            echo ""
+            if [ -s coverage/profile.txt ]; then
+              echo '<details><summary>Full report</summary>'
+              echo ''
+              echo '```'
+              cat coverage/profile.txt
+              echo '```'
+              echo ''
+              echo '</details>'
+              echo ''
+              total=$(grep -E '^Total Coverage:' coverage/profile.txt | tail -n1 || true)
+              if [ -n "$total" ]; then
+                echo "**$total**"
+              fi
+            else
+              echo "_No coverage report produced. See the job logs and the \`gno-coverage\` artifact._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gno-coverage
+          path: coverage/
+          if-no-files-found: warn

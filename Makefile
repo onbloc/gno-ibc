@@ -54,6 +54,7 @@ VENDOR_GNOREALMS_RELS := \
 	p/aib/ibc/host \
 	p/aib/ibc/lightclient \
 	p/aib/ibc/lightclient/tendermint \
+	p/aib/ibc/lightclient/tendermint/testing \
 	p/aib/ibc/types \
 	r/aib/ibc/core
 

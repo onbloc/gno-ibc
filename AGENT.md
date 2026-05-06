@@ -75,7 +75,7 @@ ref: https://github.com/allinbits/gno-realms/blob/master/AGENTS.md#gno-specific-
 
 Each package/realm has a `gnomod.toml` (not `gno.mod`):
 ```toml
-module = "gno.land/r/gnoswap/ibc/core"
+module = "gno.land/r/gnoswap/ibc/apps/zkgm/v0/impl"
 gno = "0.9"
 ```
 
@@ -129,7 +129,7 @@ func equalBytes(a, b []byte) bool {
 
 ### MsgRun vs MsgCall
 
-Most IBC functions require `MsgRun` (not `MsgCall`) because they take complex arguments (structs, slices of bytes). See `gno.land/r/gnoswap/ibc/core/README.md` for examples.
+Most IBC functions require `MsgRun` (not `MsgCall`) because they take complex arguments (structs, slices of bytes). The IBC core realm itself lives at `gno.land/r/aib/ibc/core` (vendored from `gno-realms`); see filetests under `gno.land/r/core/ibc/apps/zkgm/v0/impl/` for working `MsgRun` examples.
 
 ### Gno Standard Library
 

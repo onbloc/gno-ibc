@@ -1,0 +1,2 @@
+module = "gno.land/p/gnoswap/ibc/lightclients/cometbls"
+gno = "0.9"

@@ -59,9 +59,9 @@ func TestDeriveForwardSalt(t *testing.T) {
 func TestUint256ToBytes32(t *testing.T) {
 	bz := mustBytes32(t, "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20")
 	x := new(u256.Uint).SetBytes(bz[:])
-	got := uint256ToBytes32(x)
+	got := Uint256ToBytes32(x)
 
-	assertHex(t, "uint256ToBytes32", got[:], "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20")
+	assertHex(t, "Uint256ToBytes32", got[:], "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20")
 }
 
 func mustBytes32(t *testing.T, h string) [32]byte {

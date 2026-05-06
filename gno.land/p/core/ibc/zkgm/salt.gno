@@ -36,7 +36,8 @@ func DeriveForwardSalt(salt [32]byte) [32]byte {
 	return TintForwardSalt(hash)
 }
 
-func uint256ToBytes32(x *u256.Uint) [32]byte {
+// Uint256ToBytes32 returns the big-endian 32-byte encoding of x.
+func Uint256ToBytes32(x *u256.Uint) [32]byte {
 	var out [32]byte
 	putUint256BE(out[:], x)
 	return out

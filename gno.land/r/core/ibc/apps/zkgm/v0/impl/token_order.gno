@@ -5,15 +5,12 @@ import (
 	"chain"
 	"chain/banker"
 	"chain/runtime"
-	"crypto/keccak256"
-	"encoding/hex"
 	"errors"
 	"strings"
 
 	"gno.land/p/aib/ibc/types"
 	z "gno.land/p/gnoswap/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/aib/ibc/core"
 	zkgm "gno.land/r/gnoswap/ibc/apps/zkgm"
 )
 
@@ -30,9 +27,6 @@ var (
 )
 
 func (v *ZkgmV0) sendTokenOrderV2(req zkgm.SendRequest) (zkgm.SendResult, error) {
-	if req.Instruction.Opcode != z.OP_TOKEN_ORDER {
-		return zkgm.SendResult{}, errors.New("zkgm/v0: unsupported opcode")
-	}
 	if req.Instruction.Version != z.INSTR_VERSION_2 {
 		return zkgm.SendResult{}, errors.New("zkgm/v0: unsupported instruction version")
 	}
@@ -43,30 +37,7 @@ func (v *ZkgmV0) sendTokenOrderV2(req zkgm.SendRequest) (zkgm.SendResult, error)
 	if err := v.verifyTokenOrderV2(req.ChannelID, req.Sender, parseCoins(req.SentCoins), order); err != nil {
 		return zkgm.SendResult{}, err
 	}
-	packet := z.ZkgmPacket{
-		Salt:        req.Salt,
-		Path:        u256.Zero(),
-		Instruction: req.Instruction,
-	}
-	packetBytes, err := z.EncodeZkgmPacket(packet)
-	if err != nil {
-		return zkgm.SendResult{}, err
-	}
-	payload := types.Payload{
-		SourcePort:      PortID,
-		DestinationPort: PortID,
-		Version:         z.PROTOCOL_VERSION,
-		Encoding:        packetEncoding,
-		Value:           packetBytes,
-	}
-	sequence := core.SendPacket(cross, types.MsgSendPacket{
-		SourceClient:     req.ChannelID,
-		TimeoutTimestamp: req.TimeoutTimestamp,
-		Payloads:         []types.Payload{payload},
-	})
-	packetHash := keccak256.Sum256(packetBytes)
-	zkgm.SetInFlightPacket(cross, hex.EncodeToString(packetHash[:]), types.NewPacket(sequence, req.ChannelID, "", req.TimeoutTimestamp, payload))
-	return zkgm.SendResult{PacketSequence: sequence, PacketHash: packetHash}, nil
+	return v.sendPacket(req)
 }
 
 func (v *ZkgmV0) verifyTokenOrderV2(channelID string, sender string, sent chain.Coins, order z.TokenOrderV2) error {
@@ -209,9 +180,6 @@ func decodePacket(payload types.Payload) (z.ZkgmPacket, error) {
 }
 
 func decodeOrder(packet z.ZkgmPacket) (z.TokenOrderV2, error) {
-	if packet.Instruction.Opcode != z.OP_TOKEN_ORDER {
-		return z.TokenOrderV2{}, errors.New("zkgm/v0: unsupported opcode")
-	}
 	if packet.Instruction.Version != z.INSTR_VERSION_2 {
 		return z.TokenOrderV2{}, errors.New("zkgm/v0: unsupported instruction version")
 	}

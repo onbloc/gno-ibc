@@ -66,5 +66,5 @@ func amountInt64(amount *u256.Uint) int64 {
 	if !amount.IsUint64() || amount.Uint64() > uint64(math.MaxInt64) {
 		panic("zkgm/voucher: amount overflows int64")
 	}
-	return int64(amount.Uint64())
+	return amount.Int64()
 }

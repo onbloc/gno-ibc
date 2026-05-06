@@ -125,6 +125,7 @@ func resetProxyForTest() {
 	channelBalanceV2 = bptreeNew()
 	inFlightPacket = bptreeNew()
 	tokenBucket = bptreeNew()
+	receivers = bptreeNew()
 }
 
 func bptreeNew() *bptree.BPTree {

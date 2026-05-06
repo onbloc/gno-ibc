@@ -1,6 +1,11 @@
 package zkgm
 
-import "chain/runtime"
+import (
+	"chain/runtime"
+
+	z "gno.land/p/gnoswap/ibc/zkgm"
+	"gno.land/p/nt/bptree/v0"
+)
 
 var (
 	impl            ZkgmImpl
@@ -9,6 +14,7 @@ var (
 	paused          bool
 	gRealm          = runtime.CurrentRealm()
 	adminAddressStr string
+	receivers       = bptree.NewBPTree32()
 )
 
 func UpdateImpl(cur realm, r UpdateRequest) {
@@ -47,6 +53,21 @@ func ImplPath() string {
 
 func IsPaused() bool {
 	return paused
+}
+
+func RegisterReceiver(cur realm, receiver z.Zkgmable) {
+	path := runtime.PreviousRealm().PkgPath()
+	if updated := receivers.Set(path, receiver); updated {
+		panic("zkgm: receiver already registered for " + path)
+	}
+}
+
+func GetReceiver(path string) z.Zkgmable {
+	value, ok := receivers.Get(path)
+	if !ok {
+		return nil
+	}
+	return value.(z.Zkgmable)
 }
 
 func cloneStrings(in []string) []string {

@@ -47,7 +47,7 @@ jobs:
           GNO_COMMIT: ${{ steps.gno_version.outputs.GNO_COMMIT }}
         run: |
           IMAGE_TAG=${GNO_COMMIT::7}
-          docker build \
+          docker build --no-cache \
             --build-arg GNO_COMMIT=${GNO_COMMIT} \
             -t ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG} \
             -t ${ECR_REGISTRY}/${ECR_REPOSITORY}:latest \

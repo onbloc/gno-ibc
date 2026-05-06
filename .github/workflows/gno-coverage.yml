@@ -5,9 +5,18 @@ name: coverage
 # gnolang/gno#4241 head) and runs `make test-cover`. The main toolchain pin
 # and the regular test pipeline are untouched.
 #
-# Risk: if the PR #4241 author rebases, GNO_COMMIT below becomes orphaned
-# and `make install-gno` will fail until the default is bumped. Treat this
-# check as non-required for that reason.
+# KNOWN BROKEN against gnolang/gno#4241 head as of 2026-05-07:
+#   1. `gno test -cover` regresses import resolution for packages whose
+#      gnomod.toml `module = ...` differs from their on-disk directory
+#      (PR #4241 bug — fix needed upstream).
+#   2. Realm packages (gno.land/r/...) with the same dir-vs-module mismatch
+#      fail `gno test` (no -cover) under any master commit newer than the
+#      .gno-version pin — independent regression on master.
+# This check is intentionally non-required until both are addressed
+# upstream. Do not gate merges on it.
+#
+# Other risk: if the PR #4241 author rebases, GNO_COMMIT below becomes
+# orphaned and `make install-gno` will fail until the default is bumped.
 on:
   workflow_dispatch:
     inputs:
@@ -81,15 +90,6 @@ jobs:
 
       - name: Verify gno binary
         run: make verify-gno GNO_COMMIT=${{ env.GNO_COMMIT }}
-
-      # Diagnostic: run the same packages WITHOUT -cover under the override
-      # toolchain. If this passes but `make test-cover` fails, the regression
-      # is in PR #4241's `-cover` path. If both fail, the regression is on
-      # master between the .gno-version pin and the override SHA. Allowed to
-      # fail so the coverage step still runs and we collect both signals.
-      - name: Diagnostic — gno test (no -cover, override toolchain)
-        continue-on-error: true
-        run: make test GNO_COMMIT=${{ env.GNO_COMMIT }}
 
       - name: Run gno tests with coverage
         run: make test-cover GNO_COMMIT=${{ env.GNO_COMMIT }}

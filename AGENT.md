@@ -152,6 +152,73 @@ IBC voucher tokens (minted on RecvPacket for cross-chain tokens) use **GRC20 tok
 
 ---
 
+## ZKGM Porting Notes
+
+The ZKGM port is tracked in `local_docs/zkgm/`. Before changing ZKGM code, read the relevant wave plan/review there first. The main implementation paths are:
+
+- ABI/types: `gno.land/p/core/ibc/zkgm/`
+- Proxy realm: `gno.land/r/core/ibc/apps/zkgm/`
+- v0 implementation: `gno.land/r/core/ibc/apps/zkgm/v0/impl/`
+- Mock receiver realm: `gno.land/r/core/ibc/apps/zkgm/testing/mock/`
+
+### Call Handler Invariants
+
+- `CallEnv.Caller` is the tx origin / relayer identity captured by the ZKGM app request, not the deterministic proxy account.
+- `CallEnv.ProxyAccount` carries `PredictCallProxyAccount(path, destinationClient, sender)`.
+- `CallEnv.Relayer` currently mirrors `runtime.OriginCaller().String()` as bytes. `RelayerMsg` is empty until the IBC core exposes relayer metadata.
+- Receiver realms must register with `zkgm.RegisterReceiver(cross, receiver)` from their own realm. Tests should use the mock receiver realm instead of directly storing receiver instances from the impl package.
+- Mock receiver getters that read stored `[]byte` fields must be crossing functions (`cur realm`) and should return strings/scalars, not structs containing slices.
+
+### Batch Dispatcher Invariants
+
+The ZKGM implementation uses dispatcher helpers in `v0/impl/dispatch.gno`. Use these for new opcode integration:
+
+- `dispatchVerify`
+- `dispatchExecute`
+- `dispatchAck`
+- `dispatchTimeout`
+
+Batch children are intentionally limited to `OP_CALL` and `OP_TOKEN_ORDER`. Nested batch and forward children are rejected in v0. `dispatchExecute` must preserve `types.RecvPacketResult.Status`; do not reduce it to acknowledgement bytes only, or standalone Call failure status will be lost.
+
+Batch acknowledgement rules:
+
+- Child acknowledgements are collected into `BatchAck`, then wrapped in outer `Ack{Tag: SUCCESS}`.
+- A child `ACK_ERR_ONLY_MAKER` is propagated as the parent batch acknowledgement and remaining children are skipped.
+- Universal-error batch ack is distributed to children as `types.UniversalErrorAcknowledgement()` so TokenOrder children refund correctly.
+- Batch ack count must match child instruction count.
+
+### Forward Handler Invariants
+
+Forward v0 is limited by the current IBC core, which always writes an acknowledgement during `RecvPacket`. Full deferred parent acknowledgement propagation is not available yet.
+
+- Forward children may be `OP_CALL`, `OP_TOKEN_ORDER`, or `OP_BATCH`. Direct Forward-of-Forward input is rejected by verify, but multi-hop continuation rebuilds a nested Forward internally.
+- `executeForward` sends the child packet immediately and returns a success ack for the parent. Child ack/timeout later only looks up the parent in `inFlightPacket`, emits a ZKGM event, and clears the entry. Real parent ack writing needs a future IBC core `WriteAcknowledgement` / async-ack change.
+- Numeric path channels map through the temporary `channelToClient(uint32) -> "client-<id>"` stub. Replace this with a registry before relying on real channel/client mappings.
+- Parent packet reconstruction currently sets `TimeoutTimestamp` to `0` because `RecvRequest` does not expose the original packet timeout. This is only suitable for lookup/event metadata until deferred acknowledgement handling exists.
+- The path helper can represent at most the uint256 channel slots it can build; do not assume a 9-hop overflow test can be constructed through `UpdateChannelPath`.
+
+### Path and Byte Safety
+
+- Treat `path *u256.Uint` as read-only inside child handlers. `gnoswap/uint256` arithmetic mutates the receiver; copy first for derived paths:
+  ```gno
+  childPath := new(u256.Uint).Set(path)
+  ```
+- Use `equalBytes` for `ACK_ERR_ONLY_MAKER` comparisons. Avoid `bytes.Equal` on foreign or package-level byte slices because it may convert to string internally and panic on readonly tainted slices.
+- Use `cloneBytes` before returning package-level `[]byte` values as acknowledgements.
+
+### ZKGM Test Guidance
+
+The ZKGM impl currently relies mostly on focused unit tests, not filetests. For Batch and Call work, keep tests close to `v0/impl/` and cover:
+
+- direct handler behavior (`executeCall`, `executeBatch`, `acknowledgeBatch`, `timeoutBatch`)
+- dispatcher routing from `Recv` / `Ack` / `Timeout`
+- mixed opcode batches (`Call + TokenOrder`)
+- only-maker ack propagation
+- TokenOrder refund side effects via channel balance and voucher balance
+- realm-boundary behavior through `testing/mock`
+
+---
+
 ## Testing Patterns
 
 ### Wire-format ground truth (ABI codec)

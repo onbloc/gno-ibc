@@ -94,6 +94,39 @@ Callers pass `cross` as the argument:
 clientID := core.CreateClient(cross, clientState, consensusState)
 ```
 
+### Cross-Realm Reads: Tainted Slices and Pointers
+
+A non-crossing function (`func F() T`) called from another realm runs in the **caller's** realm-storage-context. Persistent state owned by the function's home realm is reachable but treated as foreign:
+
+- Scalar and string fields read fine — the value is copied.
+- Slice, pointer, and map fields come back as **readonly tainted** references. Operations that touch the underlying object — reassignment, `string([]byte)`, `bytes.Equal`, `copy`, `append`, range-iteration that mutates — panic with `cannot directly modify readonly tainted object`.
+
+Returned structs that contain such reference fields stay tainted on the caller's side, so deep-cloning inside the getter doesn't help: the caller can't write back into the local copy either.
+
+**Rule of thumb**: any getter that exposes a reference-typed field from a realm's persistent state must be a crossing function (`cur realm`) and return immutable values — string, int, or freshly-allocated objects.
+
+```gno
+// BAD — runs in caller's realm; conversion of tainted []byte panics.
+func GetPayload() string { return string(state.payload) }
+
+// GOOD — runs in the owning realm; string crosses back safely.
+func GetPayload(cur realm) string { return string(state.payload) }
+```
+
+Prefer one accessor per scalar field over a single struct-returning getter: `GetX(cur realm) string`, `GetY(cur realm) int`, etc.
+
+#### bytes.Equal pitfall
+
+`bytes.Equal(a, b)` is implemented as `string(a) == string(b)`, so comparing against any cross-realm `[]byte` (including package-level `[]byte` constants imported from another realm or `p/`) panics. Use a manual loop when the operand may be foreign:
+
+```gno
+func equalBytes(a, b []byte) bool {
+    if len(a) != len(b) { return false }
+    for i := range a { if a[i] != b[i] { return false } }
+    return true
+}
+```
+
 ### MsgRun vs MsgCall
 
 Most IBC functions require `MsgRun` (not `MsgCall`) because they take complex arguments (structs, slices of bytes). See `gno.land/r/gnoswap/ibc/core/README.md` for examples.
@@ -113,6 +146,7 @@ Most IBC functions require `MsgRun` (not `MsgCall`) because they take complex ar
 IBC voucher tokens (minted on RecvPacket for cross-chain tokens) use **GRC20 tokens** instead of native banker coins. This enables DeFi compatibility (Gnoswap, etc.) via the `grc20reg` registry.
 
 ### Key Dependencies
+
 - `gno.land/p/demo/tokens/grc20` - GRC20 token implementation (`NewToken`, `PrivateLedger.Mint/Burn`)
 - `gno.land/r/demo/defi/grc20reg` - Global token registry (`Register`, `Get`)
 

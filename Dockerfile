@@ -20,6 +20,7 @@ FROM alpine:3.19
 RUN apk add --no-cache ca-certificates bash
 
 COPY --from=builder /usr/local/bin/gnoland /usr/local/bin/gnoland
+COPY --from=builder /gno/gno.land/genesis /gno/gno.land/genesis
 
 EXPOSE 26656 26657 26660
 

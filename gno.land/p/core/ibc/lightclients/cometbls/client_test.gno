@@ -6,10 +6,15 @@ import "testing"
 const testNow = uint64(1_704_067_200) * 1_000_000_000
 
 func newTestClient(cs ClientState, states map[Height]ConsensusState) *CometBLSClient {
-	return New(cs, func(h Height) (ConsensusState, bool) {
-		s, ok := states[h]
-		return s, ok
-	})
+	return New(cs,
+		func(h Height) (ConsensusState, bool) {
+			s, ok := states[h]
+			return s, ok
+		},
+		func(h Height, s ConsensusState) {
+			states[h] = s
+		},
+	)
 }
 
 func baseCS() ClientState {
@@ -105,5 +110,165 @@ func TestVerifyClientMessageHeaderOK(t *testing.T) {
 	msg := NewHeaderMessage(devnetHeader())
 	if err := client.VerifyClientMessage(msg, devnetNow()); err != nil {
 		t.Fatalf("VerifyClientMessage: %v", err)
+	}
+}
+
+// --- CheckForMisbehaviour tests ---
+
+func TestCheckForMisbehaviourMisbehaviourMsg(t *testing.T) {
+	// A Misbehaviour message always indicates misbehaviour (VerifyClientMessage already passed).
+	client := newTestClient(devnetClientState(), devnetStates())
+	msg := NewMisbehaviourMessage(Misbehaviour{HeaderA: devnetHeader(), HeaderB: devnetHeader()})
+	if !client.CheckForMisbehaviour(msg) {
+		t.Fatal("expected misbehaviour for Misbehaviour message")
+	}
+}
+
+func TestCheckForMisbehaviourNoExistingState(t *testing.T) {
+	// Header with no existing consensus state at that height — not misbehaviour.
+	client := newTestClient(devnetClientState(), devnetStates())
+	if client.CheckForMisbehaviour(NewHeaderMessage(devnetHeader())) {
+		t.Fatal("expected no misbehaviour when no existing consensus state at header height")
+	}
+}
+
+func TestCheckForMisbehaviourMatchingState(t *testing.T) {
+	// Existing consensus state matches the incoming header — not misbehaviour (duplicate submit).
+	h := devnetHeader()
+	lh := h.SignedHeader
+	headerNanos := uint64(lh.TimeSeconds)*1_000_000_000 + uint64(lh.TimeNanos)
+	existing := ConsensusState{
+		Timestamp:          headerNanos,
+		NextValidatorsHash: lh.NextValidatorsHash,
+		Root:               MerkleRoot{Hash: lh.AppHash},
+	}
+	headerHeight := Height{RevisionNumber: h.TrustedHeight.RevisionNumber, RevisionHeight: uint64(lh.Height)}
+	states := map[Height]ConsensusState{
+		h.TrustedHeight: devnetTrusted(),
+		headerHeight:    existing,
+	}
+	client := newTestClient(devnetClientState(), states)
+	if client.CheckForMisbehaviour(NewHeaderMessage(h)) {
+		t.Fatal("expected no misbehaviour when existing consensus state matches header")
+	}
+}
+
+func TestCheckForMisbehaviourConflictingTimestamp(t *testing.T) {
+	// Existing consensus state has a different timestamp — misbehaviour.
+	h := devnetHeader()
+	lh := h.SignedHeader
+	headerNanos := uint64(lh.TimeSeconds)*1_000_000_000 + uint64(lh.TimeNanos)
+	existing := ConsensusState{
+		Timestamp:          headerNanos + 1, // differs
+		NextValidatorsHash: lh.NextValidatorsHash,
+		Root:               MerkleRoot{Hash: lh.AppHash},
+	}
+	headerHeight := Height{RevisionNumber: h.TrustedHeight.RevisionNumber, RevisionHeight: uint64(lh.Height)}
+	states := map[Height]ConsensusState{
+		h.TrustedHeight: devnetTrusted(),
+		headerHeight:    existing,
+	}
+	client := newTestClient(devnetClientState(), states)
+	if !client.CheckForMisbehaviour(NewHeaderMessage(h)) {
+		t.Fatal("expected misbehaviour for conflicting timestamp")
+	}
+}
+
+func TestCheckForMisbehaviourConflictingAppHash(t *testing.T) {
+	// Existing consensus state has a different AppHash — misbehaviour.
+	h := devnetHeader()
+	lh := h.SignedHeader
+	headerNanos := uint64(lh.TimeSeconds)*1_000_000_000 + uint64(lh.TimeNanos)
+	existing := ConsensusState{
+		Timestamp:          headerNanos,
+		NextValidatorsHash: lh.NextValidatorsHash,
+		Root:               MerkleRoot{Hash: []byte{0xFF}}, // differs
+	}
+	headerHeight := Height{RevisionNumber: h.TrustedHeight.RevisionNumber, RevisionHeight: uint64(lh.Height)}
+	states := map[Height]ConsensusState{
+		h.TrustedHeight: devnetTrusted(),
+		headerHeight:    existing,
+	}
+	client := newTestClient(devnetClientState(), states)
+	if !client.CheckForMisbehaviour(NewHeaderMessage(h)) {
+		t.Fatal("expected misbehaviour for conflicting AppHash")
+	}
+}
+
+func TestCheckForMisbehaviourEmptyMessage(t *testing.T) {
+	client := newTestClient(devnetClientState(), devnetStates())
+	if client.CheckForMisbehaviour(ClientMessage{}) {
+		t.Fatal("expected no misbehaviour for empty message")
+	}
+}
+
+// --- UpdateStateOnMisbehaviour tests ---
+
+func TestUpdateStateOnMisbehaviour(t *testing.T) {
+	cs := devnetClientState()
+	client := newTestClient(cs, devnetStates())
+	client.UpdateStateOnMisbehaviour()
+	if client.Status(devnetNow()) != StatusFrozen {
+		t.Fatal("expected client to be frozen after UpdateStateOnMisbehaviour")
+	}
+}
+
+// --- UpdateState tests ---
+
+func TestUpdateStateStoresConsensusState(t *testing.T) {
+	states := devnetStates()
+	client := newTestClient(devnetClientState(), states)
+	h := devnetHeader()
+	heights := client.UpdateState(NewHeaderMessage(h))
+	if len(heights) != 1 {
+		t.Fatalf("expected 1 height, got %d", len(heights))
+	}
+	newHeight := Height{RevisionNumber: h.TrustedHeight.RevisionNumber, RevisionHeight: uint64(h.SignedHeader.Height)}
+	if heights[0] != newHeight {
+		t.Fatalf("got height %+v want %+v", heights[0], newHeight)
+	}
+	stored, found := states[newHeight]
+	if !found {
+		t.Fatal("expected consensus state to be stored at new height")
+	}
+	wantNanos := uint64(h.SignedHeader.TimeSeconds)*1_000_000_000 + uint64(h.SignedHeader.TimeNanos)
+	if stored.Timestamp != wantNanos {
+		t.Fatalf("stored timestamp %d want %d", stored.Timestamp, wantNanos)
+	}
+}
+
+func TestUpdateStateAdvancesLatestHeight(t *testing.T) {
+	cs := devnetClientState()
+	cs.LatestHeight = Height{RevisionNumber: 0, RevisionHeight: uint64(devnetHeight - 1)}
+	states := devnetStates()
+	client := newTestClient(cs, states)
+	client.UpdateState(NewHeaderMessage(devnetHeader()))
+	want := Height{RevisionNumber: 0, RevisionHeight: uint64(devnetHeight)}
+	if client.cs.LatestHeight != want {
+		t.Fatalf("LatestHeight got %+v want %+v", client.cs.LatestHeight, want)
+	}
+}
+
+func TestUpdateStateDuplicateNoOp(t *testing.T) {
+	h := devnetHeader()
+	newHeight := Height{RevisionNumber: h.TrustedHeight.RevisionNumber, RevisionHeight: uint64(h.SignedHeader.Height)}
+	existing := ConsensusState{Timestamp: 999}
+	states := map[Height]ConsensusState{
+		h.TrustedHeight: devnetTrusted(),
+		newHeight:       existing,
+	}
+	client := newTestClient(devnetClientState(), states)
+	client.UpdateState(NewHeaderMessage(h))
+	// existing state must not be overwritten
+	if states[newHeight].Timestamp != 999 {
+		t.Fatal("expected no-op: existing consensus state should not be overwritten")
+	}
+}
+
+func TestUpdateStateMisbehaviourMsgReturnsNil(t *testing.T) {
+	client := newTestClient(devnetClientState(), devnetStates())
+	heights := client.UpdateState(NewMisbehaviourMessage(Misbehaviour{HeaderA: devnetHeader(), HeaderB: devnetHeader()}))
+	if heights != nil {
+		t.Fatal("expected nil for Misbehaviour message")
 	}
 }

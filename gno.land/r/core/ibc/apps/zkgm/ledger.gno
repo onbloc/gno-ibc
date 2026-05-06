@@ -2,6 +2,7 @@ package zkgm
 
 import (
 	"chain/runtime"
+	"encoding/hex"
 
 	"gno.land/p/aib/ibc/types"
 	tb "gno.land/p/gnoswap/tokenbucket"
@@ -94,6 +95,13 @@ func RemoveChannelBalanceV2(cur realm, key string) {
 	channelBalanceV2.Remove(key)
 }
 
+// InFlightKey is the canonical bptree key for an in-flight packet. All
+// callers that hash a packet payload to derive its key MUST go through this
+// helper so the encoding contract lives in one place.
+func InFlightKey(packetHash [32]byte) string {
+	return hex.EncodeToString(packetHash[:])
+}
+
 func SetInFlightPacket(cur realm, packetHash string, packet types.Packet) {
 	mustBeAuthorizedImpl()
 	inFlightPacket.Set(packetHash, packet)
@@ -110,6 +118,18 @@ func GetInFlightPacket(packetHash string) (types.Packet, bool) {
 func RemoveInFlightPacket(cur realm, packetHash string) {
 	mustBeAuthorizedImpl()
 	inFlightPacket.Remove(packetHash)
+}
+
+// PopInFlightPacket retrieves and removes the in-flight packet for packetHash
+// in a single tree walk. Returns ok=false if no entry exists.
+func PopInFlightPacket(cur realm, packetHash string) (types.Packet, bool) {
+	mustBeAuthorizedImpl()
+	value, ok := inFlightPacket.Get(packetHash)
+	if !ok {
+		return types.Packet{}, false
+	}
+	inFlightPacket.Remove(packetHash)
+	return value.(types.Packet), true
 }
 
 func SetTokenBucket(cur realm, denom string, bucket *tb.TokenBucket) {

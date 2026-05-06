@@ -135,6 +135,52 @@ func TestAppRecvPopulatesCallerRelayer(cur realm, t *testing.T) {
 	}
 }
 
+// Wave 6 preflight: confirm types.Packet survives bptree round-trip via
+// the SetInFlightPacket / GetInFlightPacket / RemoveInFlightPacket API.
+// Wave 6 will read this state to look up the parent packet on child ack/timeout.
+func TestSanityInFlightPacketRoundTrip(cur realm, t *testing.T) {
+	resetProxyForTest()
+	lockToV0()
+	testing.SetRealm(testing.NewCodeRealm(v0Impl))
+
+	parent := types.NewPacket(
+		42,
+		"client-a",
+		"client-b",
+		1700000000,
+		types.Payload{
+			SourcePort:      "zkgm",
+			DestinationPort: "zkgm",
+			Version:         "1",
+			Encoding:        "abi",
+			Value:           []byte("payload"),
+		},
+	)
+
+	SetInFlightPacket(cross, "hash-1", parent)
+	got, ok := GetInFlightPacket("hash-1")
+	if !ok {
+		t.Fatalf("GetInFlightPacket: expected to find hash-1")
+	}
+	if got.Sequence != 42 {
+		t.Fatalf("Sequence: got %d, want 42", got.Sequence)
+	}
+	if got.SourceClient != "client-a" || got.DestinationClient != "client-b" {
+		t.Fatalf("clients: got src=%q dst=%q", got.SourceClient, got.DestinationClient)
+	}
+	if got.TimeoutTimestamp != 1700000000 {
+		t.Fatalf("TimeoutTimestamp: got %d", got.TimeoutTimestamp)
+	}
+	if len(got.Payloads) != 1 || string(got.Payloads[0].Value) != "payload" {
+		t.Fatalf("Payloads: got %+v", got.Payloads)
+	}
+
+	RemoveInFlightPacket(cross, "hash-1")
+	if _, ok := GetInFlightPacket("hash-1"); ok {
+		t.Fatalf("RemoveInFlightPacket did not clear hash-1")
+	}
+}
+
 func resetProxyForTest() {
 	impl = nil
 	implPath = ""

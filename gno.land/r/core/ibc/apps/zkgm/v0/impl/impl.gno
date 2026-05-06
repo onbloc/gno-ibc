@@ -30,8 +30,7 @@ func (v *ZkgmV0) Send(req zkgm.SendRequest) (zkgm.SendResult, error) {
 	return v.sendPacket(req)
 }
 
-func (v *ZkgmV0) PostSend(req zkgm.SendRequest, res zkgm.SendResult) {
-}
+func (v *ZkgmV0) PostSend(req zkgm.SendRequest, res zkgm.SendResult) {}
 
 func (v *ZkgmV0) PreRecv(req zkgm.RecvRequest) error {
 	return nil
@@ -56,11 +55,13 @@ func (v *ZkgmV0) Ack(req zkgm.AckRequest) error {
 	if err != nil {
 		return err
 	}
+	if handleForwardChildAck(req, packet) {
+		return nil
+	}
 	return v.dispatchAck(req, packet.Path, packet.Salt, packet.Instruction, req.Acknowledgement)
 }
 
-func (v *ZkgmV0) PostAck(req zkgm.AckRequest) {
-}
+func (v *ZkgmV0) PostAck(req zkgm.AckRequest) {}
 
 func (v *ZkgmV0) PreTimeout(req zkgm.TimeoutRequest) error {
 	return nil
@@ -70,6 +71,9 @@ func (v *ZkgmV0) Timeout(req zkgm.TimeoutRequest) error {
 	packet, err := decodePacket(req.Payload)
 	if err != nil {
 		return err
+	}
+	if handleForwardChildTimeout(req, packet) {
+		return nil
 	}
 	return v.dispatchTimeout(req, packet.Path, packet.Salt, packet.Instruction)
 }

@@ -37,6 +37,12 @@ func (v *ZkgmV0) dispatchVerify(channelID string, sender string, sentCoins chain
 			return err
 		}
 		return v.verifyBatch(channelID, sender, sentCoins, path, batch)
+	case z.OP_FORWARD:
+		forward, err := decodeForwardInstruction(instr)
+		if err != nil {
+			return err
+		}
+		return v.verifyForward(channelID, sender, sentCoins, path, forward)
 	default:
 		return errors.New("zkgm/v0: unsupported opcode")
 	}
@@ -66,6 +72,12 @@ func (v *ZkgmV0) dispatchExecute(req zkgm.RecvRequest, path *u256.Uint, salt [32
 			return types.RecvPacketResult{}, err
 		}
 		return types.RecvPacketResult{Status: types.PacketStatus_Success, Acknowledgement: ack}, nil
+	case z.OP_FORWARD:
+		forward, err := decodeForwardInstruction(instr)
+		if err != nil {
+			return types.RecvPacketResult{}, err
+		}
+		return v.executeForward(req, path, salt, forward, intent)
 	default:
 		return types.RecvPacketResult{}, errors.New("zkgm/v0: unsupported opcode")
 	}
@@ -105,6 +117,16 @@ func (v *ZkgmV0) dispatchAck(req zkgm.AckRequest, path *u256.Uint, salt [32]byte
 			return err
 		}
 		return v.acknowledgeBatch(req, path, salt, batch, ack)
+	case z.OP_FORWARD:
+		forward, err := decodeForwardInstruction(instr)
+		if err != nil {
+			return err
+		}
+		ack, err := z.DecodeAck(ackBytes)
+		if err != nil {
+			return err
+		}
+		return v.acknowledgeForward(req, path, salt, forward, ack)
 	default:
 		return errors.New("zkgm/v0: unsupported opcode")
 	}
@@ -130,6 +152,12 @@ func (v *ZkgmV0) dispatchTimeout(req zkgm.TimeoutRequest, path *u256.Uint, salt 
 			return err
 		}
 		return v.timeoutBatch(req, path, salt, batch)
+	case z.OP_FORWARD:
+		forward, err := decodeForwardInstruction(instr)
+		if err != nil {
+			return err
+		}
+		return v.timeoutForward(req, path, salt, forward)
 	default:
 		return errors.New("zkgm/v0: unsupported opcode")
 	}

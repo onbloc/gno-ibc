@@ -2,7 +2,6 @@ package impl
 
 import (
 	"crypto/keccak256"
-	"encoding/hex"
 	"errors"
 
 	"gno.land/p/aib/ibc/types"
@@ -139,6 +138,6 @@ func (v *ZkgmV0) sendPacket(req zkgm.SendRequest) (zkgm.SendResult, error) {
 	})
 
 	packetHash := keccak256.Sum256(packetBytes)
-	zkgm.SetInFlightPacket(cross, hex.EncodeToString(packetHash[:]), types.NewPacket(sequence, req.ChannelID, "", req.TimeoutTimestamp, payload))
+	zkgm.SetInFlightPacket(cross, zkgm.InFlightKey(packetHash), types.NewPacket(sequence, req.ChannelID, "", req.TimeoutTimestamp, payload))
 	return zkgm.SendResult{PacketSequence: sequence, PacketHash: packetHash}, nil
 }

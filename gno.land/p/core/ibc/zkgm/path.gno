@@ -14,6 +14,9 @@ const (
 	channelIDMask  = uint64(0xFFFFFFFF)
 	channelSlotBit = uint(32)
 	maxHopIndex    = 7
+	// MaxHops is the largest number of channel hops a path can encode.
+	// Mirrors the maxHopIndex+1 invariant enforced by UpdateChannelPath.
+	MaxHops = maxHopIndex + 1
 )
 
 // channelIDMaskU256 is shared across functions; bitwise ops here only read it.
@@ -79,6 +82,15 @@ func GetChannelFromPath(path *u256.Uint, index int) uint32 {
 	shifted := new(u256.Uint).Rsh(path, uint(index)*channelSlotBit)
 	masked := new(u256.Uint).And(shifted, channelIDMaskU256)
 	return uint32(masked.Uint64())
+}
+
+// HopCount returns the number of 32-bit channel slots occupied by path.
+// A nil or zero path has zero hops.
+func HopCount(path *u256.Uint) int {
+	if path == nil || path.IsZero() {
+		return 0
+	}
+	return (path.BitLen() + int(channelSlotBit) - 1) / int(channelSlotBit)
 }
 
 // MakePathFromChannel builds a path containing channelID at the given slot.

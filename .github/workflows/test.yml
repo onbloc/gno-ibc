@@ -3,7 +3,17 @@ name: test
 on:
   push:
     branches: [main]
+    paths: &test_paths
+      - '**.gno'
+      - '**.go'
+      - '.gno-version'
+      - 'gnowork.toml'
+      - 'Makefile'
+      - 'stdlibs/**'
+      - 'tools/setup-stdlibs.py'
+      - '.github/workflows/test.yml'
   pull_request:
+    paths: *test_paths
 
 concurrency:
   group: test-${{ github.ref }}

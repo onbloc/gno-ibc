@@ -1,6 +1,9 @@
 package cometbls
 
-import "errors"
+import (
+	"bytes"
+	"errors"
+)
 
 // Client status values, mirroring IBC Go and allinbits/gno-realms lightclient interface.
 // Ref: https://github.com/allinbits/gno-realms/blob/master/gno.land/p/aib/ibc/lightclient/lightclient.gno
@@ -96,27 +99,21 @@ func (c *CometBLSClient) UpdateState(msg ClientMessage) []Height {
 	if msg.header == nil {
 		return nil
 	}
+
 	h := msg.header
-	lh := h.SignedHeader
-	newHeight := Height{
-		RevisionNumber: h.TrustedHeight.RevisionNumber,
-		RevisionHeight: uint64(lh.Height),
-	}
+	newHeight := headerHeight(*h)
 
 	// Duplicate update — consensus state at this height already stored.
 	if _, found := c.getConsensusState(newHeight); found {
 		return []Height{newHeight}
 	}
 
-	if newHeight.RevisionHeight > c.cs.LatestHeight.RevisionHeight {
+	// GT compares RevisionNumber first, so this stays correct across chain upgrades.
+	if newHeight.GT(c.cs.LatestHeight) {
 		c.cs.LatestHeight = newHeight
 	}
 
-	c.setConsensusState(newHeight, ConsensusState{
-		Timestamp:          uint64(lh.TimeSeconds)*1_000_000_000 + uint64(lh.TimeNanos),
-		Root:               MerkleRoot{Hash: lh.AppHash},
-		NextValidatorsHash: lh.NextValidatorsHash,
-	})
+	c.setConsensusState(newHeight, consensusStateFromHeader(h.SignedHeader))
 	return []Height{newHeight}
 }
 
@@ -133,27 +130,37 @@ func (c *CometBLSClient) CheckForMisbehaviour(msg ClientMessage) bool {
 	if msg.misbehaviour != nil {
 		return true
 	}
-	if msg.header != nil {
-		h := msg.header
-		existing, found := c.getConsensusState(Height{
-			RevisionNumber: h.TrustedHeight.RevisionNumber,
-			RevisionHeight: uint64(h.SignedHeader.Height),
-		})
-		if !found {
-			return false
-		}
-		lh := h.SignedHeader
-		headerNanos := uint64(lh.TimeSeconds)*1_000_000_000 + uint64(lh.TimeNanos)
-		if existing.Timestamp != headerNanos {
-			return true
-		}
-		if !bytesEqual(existing.NextValidatorsHash, lh.NextValidatorsHash) {
-			return true
-		}
-		if !bytesEqual(existing.Root.Hash, lh.AppHash) {
-			return true
-		}
+	if msg.header == nil {
+		return false
 	}
-	return false
+	h := msg.header
+	existing, found := c.getConsensusState(headerHeight(*h))
+	if !found {
+		return false
+	}
+	return !consensusEqualsHeader(existing, h.SignedHeader)
 }
 
+// headerHeight returns the consensus-state height for a verified Header.
+func headerHeight(h Header) Height {
+	return Height{
+		RevisionNumber: h.TrustedHeight.RevisionNumber,
+		RevisionHeight: uint64(h.SignedHeader.Height),
+	}
+}
+
+// consensusStateFromHeader builds the ConsensusState corresponding to a verified LightHeader.
+func consensusStateFromHeader(lh LightHeader) ConsensusState {
+	return ConsensusState{
+		Timestamp:          lh.Nanos(),
+		Root:               MerkleRoot{Hash: lh.AppHash},
+		NextValidatorsHash: lh.NextValidatorsHash,
+	}
+}
+
+// consensusEqualsHeader reports whether a stored ConsensusState matches a LightHeader's content.
+func consensusEqualsHeader(cs ConsensusState, lh LightHeader) bool {
+	return cs.Timestamp == lh.Nanos() &&
+		bytes.Equal(cs.NextValidatorsHash, lh.NextValidatorsHash) &&
+		bytes.Equal(cs.Root.Hash, lh.AppHash)
+}

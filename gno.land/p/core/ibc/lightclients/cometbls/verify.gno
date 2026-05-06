@@ -1,6 +1,7 @@
 package cometbls
 
 import (
+	"bytes"
 	"crypto/cometblszk"
 	"errors"
 )
@@ -25,7 +26,8 @@ func (c *CometBLSClient) verifyHeader(trusted ConsensusState, h Header, nowNanos
 	if lh.TimeSeconds < 0 || lh.TimeNanos < 0 {
 		return errors.New("cometbls: invalid header timestamp")
 	}
-	headerNanos := uint64(lh.TimeSeconds)*1_000_000_000 + uint64(lh.TimeNanos)
+
+	headerNanos := lh.Nanos()
 
 	// Header must be strictly newer than the trusted consensus state.
 	if headerNanos <= trusted.Timestamp {
@@ -101,19 +103,7 @@ func lightHeadersEqual(a, b LightHeader) bool {
 	if a.Height != b.Height || a.TimeSeconds != b.TimeSeconds || a.TimeNanos != b.TimeNanos {
 		return false
 	}
-	return bytesEqual(a.ValidatorsHash, b.ValidatorsHash) &&
-		bytesEqual(a.NextValidatorsHash, b.NextValidatorsHash) &&
-		bytesEqual(a.AppHash, b.AppHash)
-}
-
-func bytesEqual(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
+	return bytes.Equal(a.ValidatorsHash, b.ValidatorsHash) &&
+		bytes.Equal(a.NextValidatorsHash, b.NextValidatorsHash) &&
+		bytes.Equal(a.AppHash, b.AppHash)
 }

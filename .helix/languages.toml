@@ -1,0 +1,17 @@
+[language-server.gnopls]
+command = "gnopls"
+
+[[language]]
+comment-token    = "//"
+file-types       = ["gno"]
+indent           = { tab-width = 4, unit = "  " }
+injection-regex  = "gno"
+language-servers = ["gnopls"]
+name             = "gno"
+roots            = ["gnomod.toml"]
+scope            = "source.gno"
+shebangs         = []
+
+[[grammar]]
+name   = "gno"
+source = { git = "https://github.com/unionlabs/tree-sitter-gno", rev = "cf7ecea411425c5757710f58fabe91b929020c8a" }

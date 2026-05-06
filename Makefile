@@ -9,6 +9,11 @@
 
 include .gno-version
 
+# Use bash with pipefail so failures inside `cmd | tee` (e.g. test-cover)
+# bubble out instead of being masked by tee's exit code.
+SHELL       := /bin/bash
+.SHELLFLAGS := -o pipefail -c
+
 # Exported so `make install-gno GNO_COMMIT=...` propagates the override into
 # tools/setup-stdlibs.py, which otherwise reads .gno-version directly.
 export GNO_COMMIT GNO_REPO

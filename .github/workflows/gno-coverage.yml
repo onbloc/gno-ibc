@@ -82,6 +82,15 @@ jobs:
       - name: Verify gno binary
         run: make verify-gno GNO_COMMIT=${{ env.GNO_COMMIT }}
 
+      # Diagnostic: run the same packages WITHOUT -cover under the override
+      # toolchain. If this passes but `make test-cover` fails, the regression
+      # is in PR #4241's `-cover` path. If both fail, the regression is on
+      # master between the .gno-version pin and the override SHA. Allowed to
+      # fail so the coverage step still runs and we collect both signals.
+      - name: Diagnostic — gno test (no -cover, override toolchain)
+        continue-on-error: true
+        run: make test GNO_COMMIT=${{ env.GNO_COMMIT }}
+
       - name: Run gno tests with coverage
         run: make test-cover GNO_COMMIT=${{ env.GNO_COMMIT }}
 

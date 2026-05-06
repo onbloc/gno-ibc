@@ -179,11 +179,11 @@ func decodePacket(payload types.Payload) (z.ZkgmPacket, error) {
 	return z.DecodeZkgmPacket(payload.Value)
 }
 
-func decodeOrder(packet z.ZkgmPacket) (z.TokenOrderV2, error) {
-	if packet.Instruction.Version != z.INSTR_VERSION_2 {
+func decodeOrderInstruction(instr z.Instruction) (z.TokenOrderV2, error) {
+	if instr.Version != z.INSTR_VERSION_2 {
 		return z.TokenOrderV2{}, errors.New("zkgm/v0: unsupported instruction version")
 	}
-	return z.DecodeTokenOrderV2(packet.Instruction.Operand)
+	return z.DecodeTokenOrderV2(instr.Operand)
 }
 
 func isUniversalErrorAck(ack []byte) bool {

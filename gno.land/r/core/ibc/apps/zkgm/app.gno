@@ -36,14 +36,14 @@ func (a *App) OnRecvPacket(cur realm, sourceClient string, destinationClient str
 		return errAck(errors.New("zkgm: impl not set"))
 	}
 
+	caller, relayer := originRelayer()
 	req := RecvRequest{
 		SourceClient:      sourceClient,
 		DestinationClient: destinationClient,
 		Sequence:          sequence,
 		Payload:           payload,
-		Caller:            runtime.OriginCaller().String(),
-		Relayer:           []byte(runtime.OriginCaller().String()),
-		RelayerMsg:        nil,
+		Caller:            caller,
+		Relayer:           relayer,
 	}
 	if err := impl.PreRecv(req); err != nil {
 		return errAck(err)
@@ -63,14 +63,14 @@ func (a *App) OnTimeoutPacket(cur realm, sourceClient string, destinationClient 
 	if impl == nil {
 		return errors.New("zkgm: impl not set")
 	}
+	caller, relayer := originRelayer()
 	req := TimeoutRequest{
 		SourceClient:      sourceClient,
 		DestinationClient: destinationClient,
 		Sequence:          sequence,
 		Payload:           payload,
-		Caller:            runtime.OriginCaller().String(),
-		Relayer:           []byte(runtime.OriginCaller().String()),
-		RelayerMsg:        nil,
+		Caller:            caller,
+		Relayer:           relayer,
 	}
 	if err := impl.PreTimeout(req); err != nil {
 		return err
@@ -89,15 +89,15 @@ func (a *App) OnAcknowledgementPacket(cur realm, sourceClient string, destinatio
 	if impl == nil {
 		return errors.New("zkgm: impl not set")
 	}
+	caller, relayer := originRelayer()
 	req := AckRequest{
 		SourceClient:      sourceClient,
 		DestinationClient: destinationClient,
 		Sequence:          sequence,
 		Acknowledgement:   acknowledgement,
 		Payload:           payload,
-		Caller:            runtime.OriginCaller().String(),
-		Relayer:           []byte(runtime.OriginCaller().String()),
-		RelayerMsg:        nil,
+		Caller:            caller,
+		Relayer:           relayer,
 	}
 	if err := impl.PreAck(req); err != nil {
 		return err
@@ -107,6 +107,15 @@ func (a *App) OnAcknowledgementPacket(cur realm, sourceClient string, destinatio
 	}
 	impl.PostAck(req)
 	return nil
+}
+
+// originRelayer returns the OriginCaller as both string (Caller) and bytes
+// (Relayer). This is a placeholder until core IBC surfaces a distinct relayer
+// identity and message; once it does, callers should populate the two fields
+// independently.
+func originRelayer() (caller string, relayer []byte) {
+	s := runtime.OriginCaller().String()
+	return s, []byte(s)
 }
 
 func errAck(err error) types.RecvPacketResult {

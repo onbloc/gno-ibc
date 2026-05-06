@@ -129,19 +129,26 @@ func TestRecvDispatchesCallOpcode(cur realm, t *testing.T) {
 	uassert.Equal(t, "relayer-2", mock.LastCaller(cross))
 }
 
-// equalBytes is used instead of bytes.Equal because bytes.Equal does
-// string(a)==string(b) internally, which panics on readonly cross-realm
-// slices like z.ACK_ERR_ONLY_MAKER.
-func equalBytes(a []byte, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
+func TestRecvDispatchesCallFailureStatus(cur realm, t *testing.T) {
+	mock.Reset(cross)
+	mock.SetError(cross, "receiver failed")
+	payload := mustCallPayload(z.Call{
+		Sender:          []byte("sender"),
+		ContractAddress: []byte(mockReceiverPath),
+	})
+
+	res, err := (&ZkgmV0{}).Recv(zkgm.RecvRequest{
+		SourceClient:      "client-a",
+		DestinationClient: "client-b",
+		Payload:           payload,
+		Caller:            "relayer",
+	})
+
+	uassert.NoError(t, err)
+	uassert.True(t, res.Status == types.PacketStatus_Failure)
+	ack, err := z.DecodeAck(res.Acknowledgement)
+	uassert.NoError(t, err)
+	uassert.True(t, ack.Tag.Eq(tagAckFailure))
 }
 
 func mustCallPayload(call z.Call) types.Payload {

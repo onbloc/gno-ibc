@@ -14,22 +14,6 @@ import (
 
 var errEurekaUnsupported = errors.New("zkgm/v0: eureka mode not supported")
 
-func (v *ZkgmV0) sendCall(req zkgm.SendRequest) (zkgm.SendResult, error) {
-	if req.Instruction.Version != z.INSTR_VERSION_0 {
-		return zkgm.SendResult{}, errors.New("zkgm/v0: unsupported call version")
-	}
-
-	call, err := z.DecodeCall(req.Instruction.Operand)
-	if err != nil {
-		return zkgm.SendResult{}, err
-	}
-	if err := v.verifyCall(req.Sender, call); err != nil {
-		return zkgm.SendResult{}, err
-	}
-
-	return v.sendPacket(req)
-}
-
 func (v *ZkgmV0) verifyCall(sender string, call z.Call) error {
 	if call.Eureka {
 		return errEurekaUnsupported
@@ -71,7 +55,7 @@ func (v *ZkgmV0) executeCall(req zkgm.RecvRequest, path *u256.Uint, call z.Call)
 		return callErrAck(err), nil
 	}
 
-	ack, err := z.EncodeAck(z.Ack{Tag: u256FromBytes32(z.TAG_ACK_SUCCESS), InnerAck: []byte{}})
+	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess, InnerAck: []byte{}})
 	if err != nil {
 		return types.RecvPacketResult{}, err
 	}
@@ -83,8 +67,7 @@ func (v *ZkgmV0) acknowledgeCall(req zkgm.AckRequest, path *u256.Uint, call z.Ca
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
-	// Standard Call is fire-and-forget. If eureka mode is introduced later,
-	// universal error acknowledgements must be handled here.
+	// Standard Call is fire-and-forget; nothing to do on success ack.
 	return nil
 }
 
@@ -103,18 +86,18 @@ func safeCallOnZkgm(receiver z.Zkgmable, env z.CallEnv) (err error, panicked boo
 }
 
 func callErrAck(err error) types.RecvPacketResult {
-	ack, encErr := z.EncodeAck(z.Ack{Tag: u256FromBytes32(z.TAG_ACK_FAILURE), InnerAck: []byte(err.Error())})
+	ack, encErr := z.EncodeAck(z.Ack{Tag: tagAckFailure, InnerAck: []byte(err.Error())})
 	if encErr != nil {
 		ack = []byte(err.Error())
 	}
 	return types.RecvPacketResult{Status: types.PacketStatus_Failure, Acknowledgement: ack}
 }
 
-func decodeCall(packet z.ZkgmPacket) (z.Call, error) {
-	if packet.Instruction.Version != z.INSTR_VERSION_0 {
+func decodeCallInstruction(instr z.Instruction) (z.Call, error) {
+	if instr.Version != z.INSTR_VERSION_0 {
 		return z.Call{}, errors.New("zkgm/v0: unsupported call version")
 	}
-	return z.DecodeCall(packet.Instruction.Operand)
+	return z.DecodeCall(instr.Operand)
 }
 
 // cloneBytes copies cross-realm package vars (e.g. ACK_ERR_ONLY_MAKER)

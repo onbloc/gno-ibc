@@ -1,6 +1,7 @@
 package mock
 
 import (
+	"chain/runtime"
 	"errors"
 
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -8,10 +9,12 @@ import (
 )
 
 type Mock struct {
-	Calls    int
-	Last     z.CallEnv
-	ErrorMsg string
-	PanicMsg string
+	Calls            int
+	Last             z.CallEnv
+	LastOriginCaller string
+	CaptureOrigin    bool
+	ErrorMsg         string
+	PanicMsg         string
 }
 
 var receiver = &Mock{}
@@ -23,6 +26,8 @@ func init() {
 func Reset(cur realm) {
 	receiver.Calls = 0
 	receiver.Last = z.CallEnv{}
+	receiver.LastOriginCaller = ""
+	receiver.CaptureOrigin = false
 	receiver.ErrorMsg = ""
 	receiver.PanicMsg = ""
 }
@@ -31,9 +36,9 @@ func SetError(cur realm, msg string) {
 	receiver.ErrorMsg = msg
 }
 
-func SetPanic(cur realm, msg string) {
-	receiver.PanicMsg = msg
-}
+func SetPanic(cur realm, msg string) { receiver.PanicMsg = msg }
+
+func SetCaptureOrigin(cur realm, on bool) { receiver.CaptureOrigin = on }
 
 func Calls() int {
 	return receiver.Calls
@@ -42,6 +47,7 @@ func Calls() int {
 // Note: Getters take `cur realm` because they read mutable package state across
 // realms. omitting it causes Gno to panic at the cross-realm boundary.
 
+func LastOriginCaller(cur realm) string       { return receiver.LastOriginCaller }
 func LastCaller(cur realm) string             { return receiver.Last.Caller }
 func LastProxyAccount(cur realm) string       { return receiver.Last.ProxyAccount }
 func LastSourceChannel(cur realm) string      { return receiver.Last.SourceChannel }
@@ -61,6 +67,9 @@ func LastPathDec(cur realm) string {
 func (m *Mock) OnZkgm(cur realm, env z.CallEnv) error {
 	m.Calls++
 	m.Last = env
+	if m.CaptureOrigin {
+		m.LastOriginCaller = runtime.OriginCaller().String()
+	}
 	if m.PanicMsg != "" {
 		panic(m.PanicMsg)
 	}

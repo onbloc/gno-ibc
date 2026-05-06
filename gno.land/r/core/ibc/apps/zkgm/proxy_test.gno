@@ -7,6 +7,7 @@ import (
 	"gno.land/p/aib/ibc/types"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/bptree/v0"
+	"gno.land/p/nt/ufmt/v0"
 )
 
 const (
@@ -130,7 +131,7 @@ func TestAppRecvPopulatesCallerRelayer(cur realm, t *testing.T) {
 		t.Fatalf("relayer: got %q", string(d.lastRecv.Relayer))
 	}
 	if len(d.lastRecv.RelayerMsg) != 0 {
-		t.Fatalf("relayer msg should be empty until core exposes one")
+		t.Fatalf("relayer msg: got %d bytes, want 0", len(d.lastRecv.RelayerMsg))
 	}
 }
 
@@ -167,9 +168,20 @@ func expectAbort(t *testing.T, want string, fn func()) {
 	if r == nil {
 		t.Fatalf("expected abort %q", want)
 	}
-	got := r.(string)
+	got := extractPanicMessage(r)
 	if got != want {
 		t.Fatalf("abort: got %q want %q", got, want)
+	}
+}
+
+func extractPanicMessage(r any) string {
+	switch v := r.(type) {
+	case string:
+		return v
+	case error:
+		return v.Error()
+	default:
+		return ufmt.Sprintf("%v", v)
 	}
 }
 

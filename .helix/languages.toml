@@ -1,3 +1,5 @@
+use-grammars = { except = [ "gotmpl" ] }
+
 [language-server.gnopls]
 command = "gnopls"
 
@@ -8,10 +10,12 @@ indent           = { tab-width = 4, unit = "  " }
 injection-regex  = "gno"
 language-servers = ["gnopls"]
 name             = "gno"
-roots            = ["gnomod.toml"]
+formatter        = { command = "gofumpt" }
+auto-format      = true
+roots            = ["gnowork.toml", "gnomod.toml"]
 scope            = "source.gno"
 shebangs         = []
 
 [[grammar]]
 name   = "gno"
-source = { git = "https://github.com/unionlabs/tree-sitter-gno", rev = "cf7ecea411425c5757710f58fabe91b929020c8a" }
+source = { git = "https://github.com/unionlabs/tree-sitter-gno", rev = "e0549d4dd8b5d02184ffacbb5481e93f41abbbdb" }

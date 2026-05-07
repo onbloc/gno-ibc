@@ -1,32 +1,64 @@
 package core
 
+import (
+	"bytes"
+	"encoding/binary"
+)
+
 // you can't have byte arrays as a const in go :(
 var (
-  // 0x0100000000000000000000000000000000000000000000000000000000000000
-  COMMITMENT_MAGIC [32]byte = [32]byte{1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+	// 0x0100000000000000000000000000000000000000000000000000000000000000
+	COMMITMENT_MAGIC [32]byte = [32]byte{
+		0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	}
 
-  // 0x0200000000000000000000000000000000000000000000000000000000000000
-  COMMITMENT_MAGIC_ACK [32]byte = [32]byte{2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+	// 0x0200000000000000000000000000000000000000000000000000000000000000
+	COMMITMENT_MAGIC_ACK [32]byte = [32]byte{
+		0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	}
 
-  // 0x0000000000000000000000000000000000000000000000000000000000000001
-  NON_MEMBERSHIP_COMMITMENT_VALUE [32]byte = [32]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 };
-
-  // /// 0x0000000000000000000000000000000000000000000000000000000000000001
-  // NON_MEMBERSHIP_COMMITMENT_VALUE [32]byte = {
-  //     let mut bz = [0; 32];
-  //     bz[31] = 1;
-  //     H256::new(bz)
-  // };
-
-  // CLIENT_STATE: U256 = U256::from_limbs([0, 0, 0, 0]);
-  // CONSENSUS_STATE: U256 = U256::from_limbs([1, 0, 0, 0]);
-  // CONNECTIONS: U256 = U256::from_limbs([2, 0, 0, 0]);
-  // CHANNELS: U256 = U256::from_limbs([3, 0, 0, 0]);
-  // PACKETS: U256 = U256::from_limbs([4, 0, 0, 0]);
-  // PACKET_ACKS: U256 = U256::from_limbs([5, 0, 0, 0]);
-  // MEMBERSHIP_PROOF: U256 = U256::from_limbs([6, 0, 0, 0]);
-  // NON_MEMBERSHIP_PROOF: U256 = U256::from_limbs([7, 0, 0, 0]);
-  // PACKET_TIMEOUTS: U256 = U256::from_limbs([8, 0, 0, 0]);
+	CLIENT_STATE [32]byte = [32]byte{
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	}
+	CONSENSUS_STATE [32]byte = [32]byte{
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01,
+	}
+	CONNECTIONS [32]byte = [32]byte{
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02,
+	}
+	CHANNELS [32]byte = [32]byte{
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x03,
+	}
+	PACKETS [32]byte = [32]byte{
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04,
+	}
+	PACKET_ACKS [32]byte = [32]byte{
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
+	}
 )
 
 // #[cfg(feature = "ethabi")]
@@ -40,91 +72,46 @@ var (
 //         .into()
 // }
 
-func ClientStatePath(clientId ClientId) (H256) {
-  keccak
+func u32ToH256(n uint32) []byte {
+	bz := [32]byte{}
+	binary.BigEndian.PutUint32(bz[28:], n)
+	return bz[:]
 }
 
-// impl ClientStatePath {
-//     #[must_use]
-//     pub fn key(&self) -> H256 {
-//         Keccak256::new()
-//             .chain_update(CLIENT_STATE.to_be_bytes())
-//             .chain_update(U256::from(self.client_id.get()).to_be_bytes())
-//             .finalize()
-//             .into()
-//     }
-// }
+func u64ToH256(n uint64) []byte {
+	bz := [32]byte{}
+	binary.BigEndian.PutUint64(bz[24:], n)
+	return bz[:]
+}
 
-// impl IbcStorePathKey for ClientStatePath {
-//     type Spec = IbcUnion;
+func ClientStatePath(clientId ClientId) H256 {
+	return keccak(bytes.Join([][]byte{
+		CLIENT_STATE[:],
+		u32ToH256(uint32(clientId)),
+	}, []byte{}))
+}
 
-//     type Value = Bytes;
-// }
+func ConsensusStatePath(clientId ClientId, height Height) H256 {
+	return keccak(bytes.Join([][]byte{
+		CONSENSUS_STATE[:],
+		u32ToH256(uint32(clientId)),
+		u64ToH256(uint64(height)),
+	}, []byte{}))
+}
 
-// pub struct ConsensusStatePath {
-//     pub client_id: ClientId,
-//     pub height: u64,
-// }
+func ConnectionPath(connectionId ConnectionId) H256 {
+	return keccak(bytes.Join([][]byte{
+		CONNECTIONS[:],
+		u32ToH256(uint32(connectionId)),
+	}, []byte{}))
+}
 
-// impl ConsensusStatePath {
-//     #[must_use]
-//     pub fn key(&self) -> H256 {
-//         Keccak256::new()
-//             .chain_update(CONSENSUS_STATE.to_be_bytes())
-//             .chain_update(U256::from(self.client_id.get()).to_be_bytes())
-//             .chain_update(U256::from(self.height).to_be_bytes())
-//             .finalize()
-//             .into()
-//     }
-// }
-
-// impl IbcStorePathKey for ConsensusStatePath {
-//     type Spec = IbcUnion;
-
-//     type Value = Bytes;
-// }
-
-// pub struct ConnectionPath {
-//     pub connection_id: ConnectionId,
-// }
-
-// impl ConnectionPath {
-//     #[must_use]
-//     pub fn key(&self) -> H256 {
-//         Keccak256::new()
-//             .chain_update(CONNECTIONS.to_be_bytes())
-//             .chain_update(U256::from(self.connection_id.get()).to_be_bytes())
-//             .finalize()
-//             .into()
-//     }
-// }
-
-// impl IbcStorePathKey for ConnectionPath {
-//     type Spec = IbcUnion;
-
-//     type Value = Connection;
-// }
-
-// pub struct ChannelPath {
-//     pub channel_id: ChannelId,
-// }
-
-// impl ChannelPath {
-//     #[must_use]
-//     pub fn key(&self) -> H256 {
-//         Keccak256::new()
-//             .chain_update(CHANNELS.to_be_bytes())
-//             .chain_update(U256::from(self.channel_id.get()).to_be_bytes())
-//             .finalize()
-//             .into()
-//     }
-// }
-
-// impl IbcStorePathKey for ChannelPath {
-//     type Spec = IbcUnion;
-
-//     type Value = Channel;
-// }
+func ChannelPath(channelId ChannelId) H256 {
+	return keccak(bytes.Join([][]byte{
+		CHANNELS[:],
+		u32ToH256(uint32(channelId)),
+	}, []byte{}))
+}
 
 // pub struct BatchReceiptsPath {
 //     pub batch_hash [32]byte,

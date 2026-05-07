@@ -35,6 +35,23 @@
         "type": "github"
       }
     },
+    "gnopls": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1776252344,
+        "narHash": "sha256-0E2Q93537xx6tVm/8oLUYgxKQ4+1NrEnTmMz8uK+xW4=",
+        "owner": "gnoverse",
+        "repo": "gnopls",
+        "rev": "32e82ac207a551ee04fce8559b96e70daca083f9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "gnoverse",
+        "repo": "gnopls",
+        "rev": "32e82ac207a551ee04fce8559b96e70daca083f9",
+        "type": "github"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1778003029,
@@ -86,6 +103,7 @@
       "inputs": {
         "flake-parts": "flake-parts",
         "gno": "gno",
+        "gnopls": "gnopls",
         "nixpkgs": "nixpkgs",
         "treefmt-nix": "treefmt-nix"
       }

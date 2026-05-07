@@ -39,13 +39,46 @@ type CometBLSClient struct {
 	setConsensusState func(Height, ConsensusState)
 }
 
-// New creates a CometBLSClient.
+// New creates a CometBLSClient with realm-provided storage callbacks.
+// Call Initialize before using any other method.
 func New(
-	cs ClientState,
 	getConsensusState func(Height) (ConsensusState, bool),
 	setConsensusState func(Height, ConsensusState),
 ) *CometBLSClient {
-	return &CometBLSClient{cs: cs, getConsensusState: getConsensusState, setConsensusState: setConsensusState}
+	return &CometBLSClient{getConsensusState: getConsensusState, setConsensusState: setConsensusState}
+}
+
+// Initialize sets the client state and stores the initial consensus state.
+// Must be called once upon client creation before any other method.
+func (c *CometBLSClient) Initialize(cs ClientState, initial ConsensusState) error {
+	if err := validateInitialize(cs, initial); err != nil {
+		return err
+	}
+	c.cs = cs
+	c.setConsensusState(cs.LatestHeight, initial)
+	return nil
+}
+
+func validateInitialize(cs ClientState, initial ConsensusState) error {
+	if cs.ChainID == "" {
+		return errors.New("cometbls: chain ID cannot be empty")
+	}
+	if cs.TrustingPeriod == 0 {
+		return errors.New("cometbls: trusting period must be positive")
+	}
+	if cs.MaxClockDrift == 0 {
+		return errors.New("cometbls: max clock drift must be positive")
+	}
+	if cs.LatestHeight == 0 {
+		return errors.New("cometbls: latest height must be positive")
+	}
+	if initial.Timestamp == 0 {
+		return errors.New("cometbls: initial consensus state timestamp must be positive")
+	}
+	if len(initial.NextValidatorsHash) == 0 {
+		return errors.New("cometbls: initial consensus state next validators hash cannot be empty")
+	}
+	return nil
 }
 
 // Status returns the current status of the client.
@@ -119,6 +152,18 @@ func (c *CometBLSClient) CheckForMisbehaviour(msg ClientMessage) bool {
 		return false
 	}
 	return !consensusEqualsHeader(existing, h.SignedHeader)
+}
+
+func (c *CometBLSClient) LatestHeight() Height {
+	return c.cs.LatestHeight
+}
+
+func (c *CometBLSClient) TimestampAtHeight(h Height) (uint64, bool) {
+	cs, found := c.getConsensusState(h)
+	if !found {
+		return 0, false
+	}
+	return cs.Timestamp, true
 }
 
 func headerHeight(h Header) Height {

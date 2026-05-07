@@ -6,7 +6,7 @@ import "testing"
 const testNow = uint64(1_704_067_200) * 1_000_000_000
 
 func newTestClient(cs ClientState, states map[Height]ConsensusState) *CometBLSClient {
-	return New(cs,
+	c := New(
 		func(h Height) (ConsensusState, bool) {
 			s, ok := states[h]
 			return s, ok
@@ -15,6 +15,8 @@ func newTestClient(cs ClientState, states map[Height]ConsensusState) *CometBLSCl
 			states[h] = s
 		},
 	)
+	c.cs = cs
+	return c
 }
 
 func baseCS() ClientState {
@@ -260,5 +262,115 @@ func TestUpdateStateMisbehaviourMsgReturnsNil(t *testing.T) {
 	heights := client.UpdateState(NewMisbehaviourMessage(Misbehaviour{HeaderA: devnetHeader(), HeaderB: devnetHeader()}))
 	if heights != nil {
 		t.Fatal("expected nil for Misbehaviour message")
+	}
+}
+
+// --- Initialize tests ---
+
+func TestInitializeOK(t *testing.T) {
+	states := map[Height]ConsensusState{}
+	client := newTestClient(ClientState{}, states)
+	cs := devnetClientState()
+	cs.LatestHeight = Height(100)
+	initial := ConsensusState{
+		Timestamp:          testNow,
+		NextValidatorsHash: devnetVH,
+	}
+	if err := client.Initialize(cs, initial); err != nil {
+		t.Fatalf("Initialize: %v", err)
+	}
+	if client.LatestHeight() != cs.LatestHeight {
+		t.Fatal("LatestHeight not set after Initialize")
+	}
+	stored, ok := states[cs.LatestHeight]
+	if !ok {
+		t.Fatal("expected initial consensus state to be stored")
+	}
+	if stored.Timestamp != testNow {
+		t.Fatalf("stored timestamp %d want %d", stored.Timestamp, testNow)
+	}
+}
+
+func TestInitializeEmptyChainID(t *testing.T) {
+	cs := devnetClientState()
+	cs.ChainID = ""
+	if err := newTestClient(ClientState{}, map[Height]ConsensusState{}).Initialize(cs, ConsensusState{Timestamp: testNow, NextValidatorsHash: devnetVH}); err == nil {
+		t.Fatal("expected error for empty chain ID")
+	}
+}
+
+func TestInitializeZeroTrustingPeriod(t *testing.T) {
+	cs := devnetClientState()
+	cs.TrustingPeriod = 0
+	if err := newTestClient(ClientState{}, map[Height]ConsensusState{}).Initialize(cs, ConsensusState{Timestamp: testNow, NextValidatorsHash: devnetVH}); err == nil {
+		t.Fatal("expected error for zero trusting period")
+	}
+}
+
+func TestInitializeZeroLatestHeight(t *testing.T) {
+	cs := devnetClientState()
+	cs.LatestHeight = 0
+	if err := newTestClient(ClientState{}, map[Height]ConsensusState{}).Initialize(cs, ConsensusState{Timestamp: testNow, NextValidatorsHash: devnetVH}); err == nil {
+		t.Fatal("expected error for zero latest height")
+	}
+}
+
+func TestInitializeZeroTimestamp(t *testing.T) {
+	cs := devnetClientState()
+	cs.LatestHeight = Height(100)
+	if err := newTestClient(ClientState{}, map[Height]ConsensusState{}).Initialize(cs, ConsensusState{NextValidatorsHash: devnetVH}); err == nil {
+		t.Fatal("expected error for zero initial timestamp")
+	}
+}
+
+func TestInitializeEmptyNextValidatorsHash(t *testing.T) {
+	cs := devnetClientState()
+	cs.LatestHeight = Height(100)
+	if err := newTestClient(ClientState{}, map[Height]ConsensusState{}).Initialize(cs, ConsensusState{Timestamp: testNow}); err == nil {
+		t.Fatal("expected error for empty next validators hash")
+	}
+}
+
+// --- LatestHeight tests ---
+
+func TestLatestHeight(t *testing.T) {
+	cs := baseCS()
+	if got := newTestClient(cs, map[Height]ConsensusState{}).LatestHeight(); got != cs.LatestHeight {
+		t.Fatalf("got %d want %d", got, cs.LatestHeight)
+	}
+}
+
+func TestLatestHeightUpdatedAfterUpdateState(t *testing.T) {
+	cs := devnetClientState()
+	cs.LatestHeight = Height(devnetHeight - 1)
+	client := newTestClient(cs, devnetStates())
+	client.UpdateState(NewHeaderMessage(devnetHeader()))
+	if got := client.LatestHeight(); got != Height(devnetHeight) {
+		t.Fatalf("got %d want %d", got, Height(devnetHeight))
+	}
+}
+
+// --- TimestampAtHeight tests ---
+
+func TestTimestampAtHeightFound(t *testing.T) {
+	cs := baseCS()
+	wantNanos := testNow - 1_000*1_000_000_000
+	states := map[Height]ConsensusState{
+		cs.LatestHeight: {Timestamp: wantNanos},
+	}
+	ts, ok := newTestClient(cs, states).TimestampAtHeight(cs.LatestHeight)
+	if !ok {
+		t.Fatal("expected consensus state to be found")
+	}
+	if ts != wantNanos {
+		t.Fatalf("got %d want %d", ts, wantNanos)
+	}
+}
+
+func TestTimestampAtHeightNotFound(t *testing.T) {
+	cs := baseCS()
+	_, ok := newTestClient(cs, map[Height]ConsensusState{}).TimestampAtHeight(cs.LatestHeight)
+	if ok {
+		t.Fatal("expected not found for missing consensus state")
 	}
 }

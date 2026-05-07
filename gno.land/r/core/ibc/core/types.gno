@@ -81,3 +81,12 @@ const (
 	ChannelStateOpen        ChannelState = 3
 	ChannelStateClosed      ChannelState = 4
 )
+
+type Status uint8
+
+const (
+	StatusUnknown = 0
+	StatusActive  = 1
+	StatusExpired = 2
+	StatusFrozen  = 3
+)

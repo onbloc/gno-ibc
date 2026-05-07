@@ -27,16 +27,34 @@ func init() {
 	}
 }
 
-type ILightClient struct {
-	CreateClient     func(clientId ClientId, clientStateBytes, consensusStateBytes []byte) string
-	UpdateClient     func(clientId ClientId, clientMessage []byte) ConsensusStateUpdate
-	VerifyMembership func(
-		clientId ClientId,
-		height Height,
-		proof []byte,
-		key []byte,
-		value []byte,
-	) ConsensusStateUpdate
+// ILightClient defines the required functionality for a light client.
+//
+// All methods are expected to panic on error.
+// REVIEW: Is panic best here? Or should we do more traditional error handling?
+type ILightClient interface {
+	// CreateClient creates a new client with the given TOFU states.
+	CreateClient(clientId ClientId, clientStateBytes, consensusStateBytes []byte) string
+
+	// UpdateClient updates a client with the given client message.
+	UpdateClient(clientId ClientId, clientMessage []byte) ConsensusStateUpdate
+
+	// Misbehaviour checks for misbehaviour on the counterparty chain tracked by clientId, returning the newly frozen client state if the misbehaviour is valid.
+	Misbehaviour(clientId ClientId, clientMessage []byte) []byte
+
+	// VerifyMembership verifies an inclusion proof against a client's trusted state at a given height for a given key and value.
+	VerifyMembership(clientId ClientId, height Height, proof []byte, key []byte, value []byte)
+
+	// VerifyNonMembership verifies an exclusion proof against a client's trusted state at a given height for a given key.
+	VerifyNonMembership(clientId ClientId, height Height, proof []byte, key []byte)
+
+	// GetTimestamp gets the timestamp of a client at a specific height.
+	GetTimestamp(client_id ClientId, height Height) Timestamp
+
+	// GetLatestHeight gets the latest trusted height of a client.
+	GetLatestHeight(client_id ClientId) Height
+
+	// GetStatus gets the status of a client.
+	GetStatus(client_id ClientId) Status
 }
 
 type ConsensusStateUpdate struct {

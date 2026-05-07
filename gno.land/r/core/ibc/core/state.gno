@@ -8,10 +8,8 @@ type State struct {
 	clientRegistry map[ClientType]ILightClient
 	clientTypes    map[ClientId]ClientType
 
-	clientStates    map[ClientId][]byte
-	consensusStates map[ClientId]map[Height][]byte
-	connections     map[ConnectionId]Connection
-	channels        map[ChannelId]Channel
+	connections map[ConnectionId]Connection
+	channels    map[ChannelId]Channel
 }
 
 func (s State) generateClientId() ClientId {
@@ -77,12 +75,10 @@ func (s State) getChannel(channelId ChannelId) Channel {
 }
 
 func (s State) saveClientState(clientId ClientId, clientStateBytes []byte) {
-	s.clientStates[clientId] = clientStateBytes
 	commit(ClientStatePath(clientId), keccak(clientStateBytes))
 }
 
 func (s State) saveConsensusState(clientId ClientId, height Height, consensusStateBytes []byte) {
-	s.consensusStates[clientId][height] = consensusStateBytes
 	commit(ClientStatePath(clientId), keccak(consensusStateBytes))
 }
 

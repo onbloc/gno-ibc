@@ -18,12 +18,13 @@ var (
 
 func init() {
 	state = State{
-		clientRegistry:  make(map[ClientType]ILightClient),
-		clientTypes:     make(map[ClientId]ClientType),
-		clientStates:    make(map[ClientId][]byte),
-		consensusStates: make(map[ClientId]map[Height][]byte),
-		connections:     make(map[ConnectionId]Connection),
-		channels:        make(map[ChannelId]Channel),
+		nextClientId:     ClientId(1),
+		nextConnectionId: ConnectionId(1),
+		nextChannelId:    ChannelId(1),
+		clientRegistry:   make(map[ClientType]ILightClient),
+		clientTypes:      make(map[ClientId]ClientType),
+		connections:      make(map[ConnectionId]Connection),
+		channels:         make(map[ChannelId]Channel),
 	}
 }
 
@@ -58,11 +59,12 @@ type ILightClient interface {
 }
 
 type ConsensusStateUpdate struct {
-	height              Height
-	consensusStateBytes []byte
-	clientStateBytes    []byte
+	Height              Height
+	ConsensusStateBytes []byte
+	ClientStateBytes    []byte
 }
 
+// TODO: Move to a /p/ package
 const (
 	CreateClientEvent          = "CreateClient"
 	UpdateClientEvent          = "UpdateClient"
@@ -95,23 +97,18 @@ func RegisterClient(
 	state.registerClient(clientType, client)
 }
 
-func CreateClient(
-	_ realm,
-	clientType ClientType,
-	clientStateBytes []byte,
-	consensusStateBytes []byte,
-) ClientId {
-	impl := state.clientRegistry[clientType]
+func CreateClient(_ realm, msg MsgCreateClient) ClientId {
+	impl := state.clientRegistry[msg.ClientType]
 
 	clientId := state.generateClientId()
 
-	counterpartyChainId := impl.CreateClient(clientId, clientStateBytes, consensusStateBytes)
+	counterpartyChainId := impl.CreateClient(clientId, msg.ClientStateBytes, msg.ConsensusStateBytes)
 
-	state.clientTypes[clientId] = clientType
+	state.clientTypes[clientId] = msg.ClientType
 
 	chain.Emit(
 		CreateClientEvent,
-		"client_type", string(clientType),
+		"client_type", string(msg.ClientType),
 		"client_id", clientId.String(),
 		"counterparty_chain_id", counterpartyChainId,
 	)
@@ -119,104 +116,83 @@ func CreateClient(
 	return clientId
 }
 
-func UpdateClient(
-	_ realm,
-	clientId ClientId,
-	clientMessage []byte,
-) Height {
-	impl := state.getClient(clientId)
+func UpdateClient(_ realm, msg MsgUpdateClient) Height {
+	impl := state.getClient(msg.ClientId)
 
-	update := impl.UpdateClient(clientId, clientMessage)
+	update := impl.UpdateClient(msg.ClientId, msg.ClientMessage)
 
-	state.saveClientState(clientId, update.clientStateBytes)
-	state.saveConsensusState(clientId, update.height, update.consensusStateBytes)
+	state.saveClientState(msg.ClientId, update.ClientStateBytes)
+	state.saveConsensusState(msg.ClientId, update.Height, update.ConsensusStateBytes)
 
 	chain.Emit(
 		UpdateClientEvent,
-		"client_id", clientId.String(),
-		"height", update.height.String(),
+		"client_id", msg.ClientId.String(),
+		"height", update.Height.String(),
 	)
 
-	return update.height
+	return update.Height
 }
 
-func ConnectionOpenInit(
-	_ realm,
-	clientId ClientId,
-	counterpartyClientId ClientId,
-) ConnectionId {
+func ConnectionOpenInit(_ realm, msg MsgConnectionOpenInit) ConnectionId {
 	connectionId := state.generateConnectionId()
 
 	state.saveConnection(connectionId, Connection{
 		state:                      ConnectionStateInit,
-		client_id:                  clientId,
-		counterparty_client_id:     counterpartyClientId,
+		client_id:                  msg.ClientId,
+		counterparty_client_id:     msg.CounterpartyClientId,
 		counterparty_connection_id: 0,
 	})
 
 	chain.Emit(
 		ConnectionOpenInitEvent,
 		"connection_id", connectionId.String(),
-		"client_id", clientId.String(),
-		"counterparty_client_id", counterpartyClientId.String(),
+		"client_id", msg.ClientId.String(),
+		"counterparty_client_id", msg.CounterpartyClientId.String(),
 	)
 
 	return connectionId
 }
 
-func ConnectionOpenTry(
-	_ realm,
-	clientId ClientId,
-	counterpartyClientId ClientId,
-	counterpartyConnectionId ConnectionId,
-	proofInit []byte,
-	proofHeight Height,
-) ConnectionId {
+func ConnectionOpenTry(_ realm, msg MsgConnectionOpenTry) ConnectionId {
 	connectionId := state.generateConnectionId()
 
 	expectedConnection := Connection{
 		state:                      ConnectionStateInit,
-		client_id:                  counterpartyClientId,
-		counterparty_client_id:     clientId,
+		client_id:                  msg.CounterpartyClientId,
+		counterparty_client_id:     msg.ClientId,
 		counterparty_connection_id: 0,
 	}
 
-	key := ConnectionPath(counterpartyConnectionId)
+	key := ConnectionPath(msg.CounterpartyConnectionId)
 	value := keccak(ethabi(expectedConnection))
-	state.getClient(clientId).VerifyMembership(
-		clientId,
-		proofHeight,
-		proofInit,
+	state.getClient(msg.ClientId).VerifyMembership(
+		msg.ClientId,
+		msg.ProofHeight,
+		msg.ProofInit,
 		key[:],
 		value[:],
 	)
 
 	state.saveConnection(connectionId, Connection{
 		state:                      ConnectionStateTryOpen,
-		client_id:                  clientId,
-		counterparty_client_id:     counterpartyClientId,
-		counterparty_connection_id: counterpartyConnectionId,
+		client_id:                  msg.ClientId,
+		counterparty_client_id:     msg.CounterpartyClientId,
+		counterparty_connection_id: msg.CounterpartyConnectionId,
 	})
 
 	chain.Emit(
 		ConnectionOpenTryEvent,
 		"connection_id", connectionId.String(),
-		"client_id", clientId.String(),
-		"counterparty_client_id", counterpartyClientId.String(),
-		"counterparty_connection_id", counterpartyConnectionId.String(),
+		"client_id", msg.ClientId.String(),
+		"counterparty_client_id", msg.CounterpartyClientId.String(),
+		"counterparty_connection_id", msg.CounterpartyConnectionId.String(),
 	)
 
 	return connectionId
 }
 
-func ConnectionOpenAck(
-	_ realm,
-	connectionId ConnectionId,
-	counterpartyConnectionId ConnectionId,
-	proofTry []byte,
-	proofHeight Height,
-) ConnectionId {
-	connection := state.getConnection(connectionId)
+func ConnectionOpenAck(_ realm, msg MsgConnectionOpenAck) ConnectionId {
+	connection := state.getConnection(msg.ConnectionId)
 
 	if connection.state != ConnectionStateInit {
 		panic(ErrInvalidConnectionState)
@@ -226,41 +202,36 @@ func ConnectionOpenAck(
 		state:                      ConnectionStateTryOpen,
 		client_id:                  connection.counterparty_client_id,
 		counterparty_client_id:     connection.client_id,
-		counterparty_connection_id: connectionId,
+		counterparty_connection_id: msg.ConnectionId,
 	}
 
-	key := ConnectionPath(counterpartyConnectionId)
+	key := ConnectionPath(msg.CounterpartyConnectionId)
 	value := keccak(ethabi(expectedConnection))
 	state.getClient(connection.client_id).VerifyMembership(
 		connection.client_id,
-		proofHeight,
-		proofTry,
+		msg.ProofHeight,
+		msg.ProofTry,
 		key[:],
 		value[:],
 	)
 
 	connection.state = ConnectionStateOpen
-	connection.counterparty_connection_id = counterpartyConnectionId
-	state.saveConnection(connectionId, connection)
+	connection.counterparty_connection_id = msg.CounterpartyConnectionId
+	state.saveConnection(msg.ConnectionId, connection)
 
 	chain.Emit(
 		ConnectionOpenAckEvent,
-		"connection_id", connectionId.String(),
+		"connection_id", msg.ConnectionId.String(),
 		"client_id", connection.client_id.String(),
 		"counterparty_client_id", connection.counterparty_client_id.String(),
-		"counterparty_connection_id", counterpartyConnectionId.String(),
+		"counterparty_connection_id", msg.CounterpartyConnectionId.String(),
 	)
 
-	return connectionId
+	return msg.ConnectionId
 }
 
-func ConnectionOpenConfirm(
-	_ realm,
-	connectionId ConnectionId,
-	proofAck []byte,
-	proofHeight Height,
-) ConnectionId {
-	connection := state.getConnection(connectionId)
+func ConnectionOpenConfirm(_ realm, msg MsgConnectionOpenConfirm) ConnectionId {
+	connection := state.getConnection(msg.ConnectionId)
 
 	if connection.state != ConnectionStateTryOpen {
 		panic(ErrInvalidConnectionState)
@@ -270,31 +241,31 @@ func ConnectionOpenConfirm(
 		state:                      ConnectionStateOpen,
 		client_id:                  connection.counterparty_client_id,
 		counterparty_client_id:     connection.client_id,
-		counterparty_connection_id: connectionId,
+		counterparty_connection_id: msg.ConnectionId,
 	}
 
 	key := ConnectionPath(connection.counterparty_connection_id)
 	value := keccak(ethabi(expectedConnection))
 	state.getClient(connection.client_id).VerifyMembership(
 		connection.client_id,
-		proofHeight,
-		proofAck,
+		msg.ProofHeight,
+		msg.ProofAck,
 		key[:],
 		value[:],
 	)
 
 	connection.state = ConnectionStateOpen
-	state.saveConnection(connectionId, connection)
+	state.saveConnection(msg.ConnectionId, connection)
 
 	chain.Emit(
 		ConnectionOpenConfirmEvent,
-		"connection_id", connectionId.String(),
+		"connection_id", msg.ConnectionId.String(),
 		"client_id", connection.client_id.String(),
 		"counterparty_client_id", connection.counterparty_client_id.String(),
 		"counterparty_connection_id", connection.counterparty_connection_id.String(),
 	)
 
-	return connectionId
+	return msg.ConnectionId
 }
 
 func Render(_ string) string {

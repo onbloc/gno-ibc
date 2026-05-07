@@ -119,6 +119,8 @@
                 nixd
                 typescript-language-server
                 gofumpt
+                python3
+                rsync
               ]);
             };
             nativeBuildInputs = [

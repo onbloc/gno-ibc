@@ -17,29 +17,24 @@ func (c *CometBLSClient) verifyHeader(trusted ConsensusState, h Header, nowNanos
 
 	lh := h.SignedHeader
 
-	// New block height must be strictly greater than the trusted height.
-	if uint64(lh.Height) <= h.TrustedHeight.RevisionHeight {
+	if uint64(lh.Height) <= h.TrustedHeight {
 		return errors.New("cometbls: header height must exceed trusted height")
 	}
 
-	// Header timestamp must be non-negative.
 	if lh.TimeSeconds < 0 || lh.TimeNanos < 0 {
 		return errors.New("cometbls: invalid header timestamp")
 	}
 
 	headerNanos := lh.Nanos()
 
-	// Header must be strictly newer than the trusted consensus state.
 	if headerNanos <= trusted.Timestamp {
 		return errors.New("cometbls: header timestamp not newer than trusted consensus state")
 	}
 
-	// Trusted consensus state must still be within the trusting period.
 	if nowNanos > trusted.Timestamp && nowNanos-trusted.Timestamp >= c.cs.TrustingPeriod {
 		return errors.New("cometbls: trusted consensus state has expired")
 	}
 
-	// Header must not be too far ahead of the local clock (clock drift check).
 	if headerNanos > nowNanos+c.cs.MaxClockDrift {
 		return errors.New("cometbls: header timestamp exceeds clock drift bound")
 	}
@@ -67,7 +62,6 @@ func (c *CometBLSClient) verifyMisbehaviour(m Misbehaviour, nowNanos uint64) err
 		return errors.New("cometbls: client is already frozen")
 	}
 
-	// Both conflicting headers must be for the same block height.
 	if m.HeaderA.SignedHeader.Height != m.HeaderB.SignedHeader.Height {
 		return errors.New("cometbls: misbehaviour headers must be at the same height")
 	}
@@ -87,7 +81,6 @@ func (c *CometBLSClient) verifyMisbehaviour(m Misbehaviour, nowNanos uint64) err
 		return errors.New("cometbls: misbehaviour headers are identical")
 	}
 
-	// Both headers must independently pass ZKP verification.
 	if err := c.verifyHeader(trustedA, m.HeaderA, nowNanos); err != nil {
 		return errors.New("cometbls: header A: " + err.Error())
 	}

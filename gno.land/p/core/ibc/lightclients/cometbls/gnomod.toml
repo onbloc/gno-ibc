@@ -1,2 +1,2 @@
-module = "gno.land/p/gnoswap/ibc/lightclients/cometbls"
+module = "gno.land/p/core/ibc/lightclients/cometbls"
 gno = "0.9"

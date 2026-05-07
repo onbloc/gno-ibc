@@ -19,8 +19,8 @@ func newTestClient(cs ClientState, states map[Height]ConsensusState) *CometBLSCl
 
 func baseCS() ClientState {
 	return ClientState{
-		TrustingPeriod: 14 * 24 * 3600 * 1_000_000_000, // 14 days in ns; mirrors common Cosmos convention (2/3 of 21-day unbonding period)
-		LatestHeight:   Height{RevisionNumber: 0, RevisionHeight: 100},
+		TrustingPeriod: 14 * 24 * 3600 * 1_000_000_000, // 14 days in ns
+		LatestHeight:   Height(100),
 	}
 }
 
@@ -38,7 +38,7 @@ func TestStatusActive(t *testing.T) {
 
 func TestStatusFrozen(t *testing.T) {
 	cs := baseCS()
-	cs.FrozenHeight = Height{RevisionNumber: 0, RevisionHeight: 1}
+	cs.FrozenHeight = FrozenHeight
 	states := map[Height]ConsensusState{
 		cs.LatestHeight: {Timestamp: testNow - 1_000*1_000_000_000},
 	}
@@ -66,8 +66,7 @@ func TestStatusExpiredTrustingPeriod(t *testing.T) {
 
 func TestStatusFrozenTakesPrecedence(t *testing.T) {
 	cs := baseCS()
-	cs.FrozenHeight = Height{RevisionNumber: 0, RevisionHeight: 1}
-	// also expired — frozen should win
+	cs.FrozenHeight = FrozenHeight
 	states := map[Height]ConsensusState{
 		cs.LatestHeight: {Timestamp: testNow - cs.TrustingPeriod - 1},
 	}
@@ -101,7 +100,7 @@ func TestVerifyClientMessageHeaderOK(t *testing.T) {
 		ChainID:        devnetChainID,
 		TrustingPeriod: 14 * 24 * 3600 * 1_000_000_000,
 		MaxClockDrift:  10 * 1_000_000_000,
-		LatestHeight:   Height{RevisionNumber: 0, RevisionHeight: uint64(devnetHeight - 1)},
+		LatestHeight:   Height(devnetHeight - 1),
 	}
 	states := map[Height]ConsensusState{
 		cs.LatestHeight: devnetTrusted(),
@@ -133,19 +132,16 @@ func TestCheckForMisbehaviourNoExistingState(t *testing.T) {
 }
 
 func TestCheckForMisbehaviourMatchingState(t *testing.T) {
-	// Existing consensus state matches the incoming header — not misbehaviour (duplicate submit).
 	h := devnetHeader()
 	lh := h.SignedHeader
-	headerNanos := uint64(lh.TimeSeconds)*1_000_000_000 + uint64(lh.TimeNanos)
-	existing := ConsensusState{
-		Timestamp:          headerNanos,
-		NextValidatorsHash: lh.NextValidatorsHash,
-		Root:               MerkleRoot{Hash: lh.AppHash},
-	}
-	headerHeight := Height{RevisionNumber: h.TrustedHeight.RevisionNumber, RevisionHeight: uint64(lh.Height)}
+	hHeight := Height(lh.Height)
 	states := map[Height]ConsensusState{
 		h.TrustedHeight: devnetTrusted(),
-		headerHeight:    existing,
+		hHeight: {
+			Timestamp:          lh.Nanos(),
+			NextValidatorsHash: lh.NextValidatorsHash,
+			Root:               MerkleRoot{Hash: lh.AppHash},
+		},
 	}
 	client := newTestClient(devnetClientState(), states)
 	if client.CheckForMisbehaviour(NewHeaderMessage(h)) {
@@ -154,19 +150,16 @@ func TestCheckForMisbehaviourMatchingState(t *testing.T) {
 }
 
 func TestCheckForMisbehaviourConflictingTimestamp(t *testing.T) {
-	// Existing consensus state has a different timestamp — misbehaviour.
 	h := devnetHeader()
 	lh := h.SignedHeader
-	headerNanos := uint64(lh.TimeSeconds)*1_000_000_000 + uint64(lh.TimeNanos)
-	existing := ConsensusState{
-		Timestamp:          headerNanos + 1, // differs
-		NextValidatorsHash: lh.NextValidatorsHash,
-		Root:               MerkleRoot{Hash: lh.AppHash},
-	}
-	headerHeight := Height{RevisionNumber: h.TrustedHeight.RevisionNumber, RevisionHeight: uint64(lh.Height)}
+	hHeight := Height(lh.Height)
 	states := map[Height]ConsensusState{
 		h.TrustedHeight: devnetTrusted(),
-		headerHeight:    existing,
+		hHeight: {
+			Timestamp:          lh.Nanos() + 1, // differs
+			NextValidatorsHash: lh.NextValidatorsHash,
+			Root:               MerkleRoot{Hash: lh.AppHash},
+		},
 	}
 	client := newTestClient(devnetClientState(), states)
 	if !client.CheckForMisbehaviour(NewHeaderMessage(h)) {
@@ -175,19 +168,16 @@ func TestCheckForMisbehaviourConflictingTimestamp(t *testing.T) {
 }
 
 func TestCheckForMisbehaviourConflictingAppHash(t *testing.T) {
-	// Existing consensus state has a different AppHash — misbehaviour.
 	h := devnetHeader()
 	lh := h.SignedHeader
-	headerNanos := uint64(lh.TimeSeconds)*1_000_000_000 + uint64(lh.TimeNanos)
-	existing := ConsensusState{
-		Timestamp:          headerNanos,
-		NextValidatorsHash: lh.NextValidatorsHash,
-		Root:               MerkleRoot{Hash: []byte{0xFF}}, // differs
-	}
-	headerHeight := Height{RevisionNumber: h.TrustedHeight.RevisionNumber, RevisionHeight: uint64(lh.Height)}
+	hHeight := Height(lh.Height)
 	states := map[Height]ConsensusState{
 		h.TrustedHeight: devnetTrusted(),
-		headerHeight:    existing,
+		hHeight: {
+			Timestamp:          lh.Nanos(),
+			NextValidatorsHash: lh.NextValidatorsHash,
+			Root:               MerkleRoot{Hash: []byte{0xFF}}, // differs
+		},
 	}
 	client := newTestClient(devnetClientState(), states)
 	if !client.CheckForMisbehaviour(NewHeaderMessage(h)) {
@@ -223,9 +213,9 @@ func TestUpdateStateStoresConsensusState(t *testing.T) {
 	if len(heights) != 1 {
 		t.Fatalf("expected 1 height, got %d", len(heights))
 	}
-	newHeight := Height{RevisionNumber: h.TrustedHeight.RevisionNumber, RevisionHeight: uint64(h.SignedHeader.Height)}
+	newHeight := Height(h.SignedHeader.Height)
 	if heights[0] != newHeight {
-		t.Fatalf("got height %+v want %+v", heights[0], newHeight)
+		t.Fatalf("got height %d want %d", heights[0], newHeight)
 	}
 	stored, found := states[newHeight]
 	if !found {
@@ -239,19 +229,19 @@ func TestUpdateStateStoresConsensusState(t *testing.T) {
 
 func TestUpdateStateAdvancesLatestHeight(t *testing.T) {
 	cs := devnetClientState()
-	cs.LatestHeight = Height{RevisionNumber: 0, RevisionHeight: uint64(devnetHeight - 1)}
+	cs.LatestHeight = Height(devnetHeight - 1)
 	states := devnetStates()
 	client := newTestClient(cs, states)
 	client.UpdateState(NewHeaderMessage(devnetHeader()))
-	want := Height{RevisionNumber: 0, RevisionHeight: uint64(devnetHeight)}
+	want := Height(devnetHeight)
 	if client.cs.LatestHeight != want {
-		t.Fatalf("LatestHeight got %+v want %+v", client.cs.LatestHeight, want)
+		t.Fatalf("LatestHeight got %d want %d", client.cs.LatestHeight, want)
 	}
 }
 
 func TestUpdateStateDuplicateNoOp(t *testing.T) {
 	h := devnetHeader()
-	newHeight := Height{RevisionNumber: h.TrustedHeight.RevisionNumber, RevisionHeight: uint64(h.SignedHeader.Height)}
+	newHeight := Height(h.SignedHeader.Height)
 	existing := ConsensusState{Timestamp: 999}
 	states := map[Height]ConsensusState{
 		h.TrustedHeight: devnetTrusted(),

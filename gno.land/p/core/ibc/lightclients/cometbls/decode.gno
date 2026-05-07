@@ -79,20 +79,18 @@ func DecodeHeight(buf []byte) (Height, error) {
 			return h, err
 		}
 		switch fieldNum {
-		case 1: // revision_number (uint64)
-			v, newPos, err := decodeVarint(buf, pos)
-			pos = newPos
+		case 1: // revision_number — ibc-union always uses revision 0, skip
+			pos, err = skipField(buf, pos, wireType)
 			if err != nil {
 				return h, err
 			}
-			h.RevisionNumber = v
 		case 2: // revision_height (uint64)
 			v, newPos, err := decodeVarint(buf, pos)
 			pos = newPos
 			if err != nil {
 				return h, err
 			}
-			h.RevisionHeight = v
+			h = v
 		default:
 			pos, err = skipField(buf, pos, wireType)
 			if err != nil {

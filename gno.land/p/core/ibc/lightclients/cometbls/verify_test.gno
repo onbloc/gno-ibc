@@ -69,7 +69,7 @@ func devnetHeader() Header {
 			NextValidatorsHash: devnetVH,
 			AppHash:            devnetAH,
 		},
-		TrustedHeight:      Height{RevisionNumber: 0, RevisionHeight: uint64(devnetHeight - 1)},
+		TrustedHeight:      Height(devnetHeight - 1),
 		ZeroKnowledgeProof: devnetZKP,
 	}
 }
@@ -98,7 +98,7 @@ func TestVerifyHeaderOK(t *testing.T) {
 
 func TestVerifyHeaderFrozenClient(t *testing.T) {
 	cs := devnetClientState()
-	cs.FrozenHeight = Height{RevisionNumber: 0, RevisionHeight: 1}
+	cs.FrozenHeight = FrozenHeight
 	client := newTestClient(cs, devnetStates())
 	if err := client.VerifyClientMessage(NewHeaderMessage(devnetHeader()), devnetNow()); err == nil {
 		t.Fatal("expected error for frozen client")
@@ -108,7 +108,7 @@ func TestVerifyHeaderFrozenClient(t *testing.T) {
 func TestVerifyHeaderHeightNotAdvancing(t *testing.T) {
 	h := devnetHeader()
 	// Set trusted height equal to header height — must fail.
-	h.TrustedHeight.RevisionHeight = uint64(devnetHeight)
+	h.TrustedHeight = Height(devnetHeight)
 	states := map[Height]ConsensusState{
 		h.TrustedHeight: devnetTrusted(),
 	}
@@ -165,7 +165,7 @@ func TestVerifyHeaderTamperedProof(t *testing.T) {
 
 func TestVerifyMisbehaviourFrozenClient(t *testing.T) {
 	cs := devnetClientState()
-	cs.FrozenHeight = Height{RevisionNumber: 0, RevisionHeight: 1}
+	cs.FrozenHeight = FrozenHeight
 	client := newTestClient(cs, devnetStates())
 	if err := client.VerifyClientMessage(NewMisbehaviourMessage(Misbehaviour{HeaderA: devnetHeader(), HeaderB: devnetHeader()}), devnetNow()); err == nil {
 		t.Fatal("expected error for frozen client")

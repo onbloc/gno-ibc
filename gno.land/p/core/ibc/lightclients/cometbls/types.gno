@@ -1,22 +1,8 @@
 package cometbls
 
-// Height represents an IBC block height with a revision number.
-// Mirrors ibc.core.client.v1.Height.
-type Height struct {
-	RevisionNumber uint64
-	RevisionHeight uint64
-}
-
-func (h Height) IsZero() bool {
-	return h.RevisionNumber == 0 && h.RevisionHeight == 0
-}
-
-func (h Height) GT(other Height) bool {
-	if h.RevisionNumber != other.RevisionNumber {
-		return h.RevisionNumber > other.RevisionNumber
-	}
-	return h.RevisionHeight > other.RevisionHeight
-}
+// Height is a block height for ibc-union.
+// Mirrors the ibc-union spec where height is a plain uint64 (revision 0 only).
+type Height = uint64
 
 // MerkleRoot is the commitment root (app hash).
 // Mirrors ibc.core.commitment.v1.MerkleRoot.
@@ -35,7 +21,7 @@ type ClientState struct {
 }
 
 func (cs ClientState) IsFrozen() bool {
-	return !cs.FrozenHeight.IsZero()
+	return cs.FrozenHeight != 0
 }
 
 // ConsensusState holds the verified state at a given height.

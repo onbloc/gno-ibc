@@ -5,18 +5,14 @@ import (
 	"errors"
 )
 
-// Client status values, mirroring IBC Go and allinbits/gno-realms lightclient interface.
-// Ref: https://github.com/allinbits/gno-realms/blob/master/gno.land/p/aib/ibc/lightclient/lightclient.gno
 const (
 	StatusActive  = "Active"
 	StatusFrozen  = "Frozen"
 	StatusExpired = "Expired"
-	StatusUnknown = "Unknown"
 )
 
 // FrozenHeight is the sentinel height used to freeze a client on misbehaviour.
-// Mirrors the tendermint light client convention.
-var FrozenHeight = Height{RevisionNumber: 0, RevisionHeight: 1}
+const FrozenHeight Height = 1
 
 // ClientMessage wraps either a Header or Misbehaviour for VerifyClientMessage.
 type ClientMessage struct {
@@ -37,8 +33,6 @@ func NewMisbehaviourMessage(m Misbehaviour) ClientMessage {
 // CometBLSClient is the CometBLS IBC light client.
 // getConsensusState and setConsensusState are provided by the realm to
 // read and write stored consensus states.
-//
-// Ref: https://github.com/allinbits/gno-realms/blob/master/gno.land/p/aib/ibc/lightclient/tendermint/tendermint.gno
 type CometBLSClient struct {
 	cs                ClientState
 	getConsensusState func(Height) (ConsensusState, bool)
@@ -55,7 +49,6 @@ func New(
 }
 
 // Status returns the current status of the client.
-// Ref: https://github.com/allinbits/gno-realms/blob/master/gno.land/p/aib/ibc/lightclient/tendermint/tendermint.gno
 func (c *CometBLSClient) Status(nowNanos uint64) string {
 	if c.cs.IsFrozen() {
 		return StatusFrozen
@@ -85,16 +78,13 @@ func (c *CometBLSClient) VerifyClientMessage(msg ClientMessage, nowNanos uint64)
 	return errors.New("cometbls: empty client message")
 }
 
-// UpdateStateOnMisbehaviour freezes the client by setting FrozenHeight to {0,1}.
-// Must be called after CheckForMisbehaviour returns true.
+// UpdateStateOnMisbehaviour freezes the client by setting FrozenHeight to 1.
 func (c *CometBLSClient) UpdateStateOnMisbehaviour() {
 	c.cs.FrozenHeight = FrozenHeight
 }
 
 // UpdateState stores a new ConsensusState derived from the verified Header and
-// advances LatestHeight if necessary. Returns the updated height.
-// Must be called after VerifyClientMessage succeeds for a Header message.
-// Returns nil if msg is not a Header (e.g. Misbehaviour — use UpdateStateOnMisbehaviour instead).
+// advances LatestHeight if necessary.
 func (c *CometBLSClient) UpdateState(msg ClientMessage) []Height {
 	if msg.header == nil {
 		return nil
@@ -103,13 +93,11 @@ func (c *CometBLSClient) UpdateState(msg ClientMessage) []Height {
 	h := msg.header
 	newHeight := headerHeight(*h)
 
-	// Duplicate update — consensus state at this height already stored.
 	if _, found := c.getConsensusState(newHeight); found {
 		return []Height{newHeight}
 	}
 
-	// GT compares RevisionNumber first, so this stays correct across chain upgrades.
-	if newHeight.GT(c.cs.LatestHeight) {
+	if newHeight > c.cs.LatestHeight {
 		c.cs.LatestHeight = newHeight
 	}
 
@@ -118,14 +106,6 @@ func (c *CometBLSClient) UpdateState(msg ClientMessage) []Height {
 }
 
 // CheckForMisbehaviour returns true if the ClientMessage constitutes misbehaviour.
-// It assumes VerifyClientMessage has already passed.
-//
-// For a Misbehaviour message: always true — two ZKP-valid headers at the same
-// height with different content is equivocation by definition.
-//
-// For a Header message: true if a consensus state already exists at the header's
-// height with different content, indicating the validator set signed two distinct
-// blocks at the same height.
 func (c *CometBLSClient) CheckForMisbehaviour(msg ClientMessage) bool {
 	if msg.misbehaviour != nil {
 		return true
@@ -141,15 +121,10 @@ func (c *CometBLSClient) CheckForMisbehaviour(msg ClientMessage) bool {
 	return !consensusEqualsHeader(existing, h.SignedHeader)
 }
 
-// headerHeight returns the consensus-state height for a verified Header.
 func headerHeight(h Header) Height {
-	return Height{
-		RevisionNumber: h.TrustedHeight.RevisionNumber,
-		RevisionHeight: uint64(h.SignedHeader.Height),
-	}
+	return Height(h.SignedHeader.Height)
 }
 
-// consensusStateFromHeader builds the ConsensusState corresponding to a verified LightHeader.
 func consensusStateFromHeader(lh LightHeader) ConsensusState {
 	return ConsensusState{
 		Timestamp:          lh.Nanos(),
@@ -158,7 +133,6 @@ func consensusStateFromHeader(lh LightHeader) ConsensusState {
 	}
 }
 
-// consensusEqualsHeader reports whether a stored ConsensusState matches a LightHeader's content.
 func consensusEqualsHeader(cs ConsensusState, lh LightHeader) bool {
 	return cs.Timestamp == lh.Nanos() &&
 		bytes.Equal(cs.NextValidatorsHash, lh.NextValidatorsHash) &&

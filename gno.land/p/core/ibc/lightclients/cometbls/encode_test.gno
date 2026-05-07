@@ -13,21 +13,19 @@ func TestEncodeHeight(t *testing.T) {
 	}{
 		{
 			name: "zero height encodes to empty",
-			h:    Height{},
+			h:    0,
 			want: []byte{},
 		},
 		{
-			// field 1 (revision_number=1): tag=0x08, varint(1)=0x01
 			// field 2 (revision_height=100): tag=0x10, varint(100)=0x64
-			name: "revision_number=1 revision_height=100",
-			h:    Height{RevisionNumber: 1, RevisionHeight: 100},
-			want: []byte{0x08, 0x01, 0x10, 0x64},
+			name: "height=100",
+			h:    100,
+			want: []byte{0x10, 0x64},
 		},
 		{
-			// field 1 (revision_number=0): omitted by proto3
 			// field 2 (revision_height=300): tag=0x10, varint(300)=[0xAC,0x02]
-			name: "revision_height=300 only",
-			h:    Height{RevisionNumber: 0, RevisionHeight: 300},
+			name: "height=300",
+			h:    300,
 			want: []byte{0x10, 0xAC, 0x02},
 		},
 	}
@@ -54,19 +52,19 @@ func TestEncodeMerkleRoot(t *testing.T) {
 }
 
 func TestEncodeClientState(t *testing.T) {
-	// ClientState{ChainID:"abc", TrustingPeriod:1000, MaxClockDrift:100, LatestHeight:{1,50}}
+	// ClientState{ChainID:"abc", TrustingPeriod:1000, MaxClockDrift:100, LatestHeight:50}
 	// FrozenHeight is zero — omitted by proto3 (no 2a00 in output).
 	cs := ClientState{
 		ChainID:        "abc",
 		TrustingPeriod: 1000,
 		MaxClockDrift:  100,
-		LatestHeight:   Height{RevisionNumber: 1, RevisionHeight: 50},
+		LatestHeight:   50,
 	}
 	want := []byte{
 		0x0A, 0x03, 0x61, 0x62, 0x63, // field 1: "abc"
 		0x10, 0xE8, 0x07, // field 2: 1000
 		0x20, 0x64, // field 4: 100
-		0x32, 0x04, 0x08, 0x01, 0x10, 0x32, // field 6: Height{1,50}
+		0x32, 0x02, 0x10, 0x32, // field 6: Height(50)
 	}
 	bytesEq(t, "EncodeClientState", EncodeClientState(cs), want)
 }
@@ -129,12 +127,12 @@ func TestEncodeLightHeader(t *testing.T) {
 func TestEncodeHeader(t *testing.T) {
 	h := Header{
 		SignedHeader:       LightHeader{Height: 7},
-		TrustedHeight:      Height{RevisionNumber: 1, RevisionHeight: 10},
+		TrustedHeight:      10,
 		ZeroKnowledgeProof: []byte{0xAA, 0xBB},
 	}
 	want := []byte{
 		0x0A, 0x02, 0x08, 0x07, // field 1: signed_header (LightHeader{Height:7})
-		0x12, 0x04, 0x08, 0x01, 0x10, 0x0A, // field 2: trusted_height {1,10}
+		0x12, 0x02, 0x10, 0x0A, // field 2: trusted_height
 		0x1A, 0x02, 0xAA, 0xBB, // field 3: zero_knowledge_proof
 	}
 	bytesEq(t, "EncodeHeader", EncodeHeader(h), want)
@@ -163,7 +161,7 @@ func TestEncodeDecodeClientStateFixture(t *testing.T) {
 		ChainID:        "oogabooga",
 		TrustingPeriod: 12345,
 		MaxClockDrift:  67890,
-		LatestHeight:   Height{RevisionNumber: 0, RevisionHeight: 1337},
+		LatestHeight:   1337,
 	}
 	got, err := DecodeClientState(EncodeClientState(original))
 	if err != nil {
@@ -234,7 +232,7 @@ func TestEncodeHeaderFixture(t *testing.T) {
 			NextValidatorsHash: aaHash,
 			AppHash:            aaHash,
 		},
-		TrustedHeight:      Height{RevisionNumber: 0, RevisionHeight: 100},
+		TrustedHeight:      100,
 		ZeroKnowledgeProof: []byte("zkp"),
 	}
 	want := mustHex(
@@ -260,7 +258,7 @@ func TestEncodeMisbehaviourFixture(t *testing.T) {
 			NextValidatorsHash: aaHash,
 			AppHash:            aaHash,
 		},
-		TrustedHeight:      Height{RevisionNumber: 0, RevisionHeight: 100},
+		TrustedHeight:      100,
 		ZeroKnowledgeProof: []byte("zkp"),
 	}
 	hdrHex := "0a72" +

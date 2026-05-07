@@ -54,10 +54,10 @@ func appendMessageField(buf []byte, fieldNum int, msg []byte) []byte {
 }
 
 // EncodeHeight encodes an ibc.core.client.v1.Height message.
+// ibc-union always uses revision_number=0; only revision_height (field 2) is emitted.
 func EncodeHeight(h Height) []byte {
 	var buf []byte
-	buf = appendUint64Field(buf, 1, h.RevisionNumber)
-	buf = appendUint64Field(buf, 2, h.RevisionHeight)
+	buf = appendUint64Field(buf, 2, h)
 	return buf
 }
 

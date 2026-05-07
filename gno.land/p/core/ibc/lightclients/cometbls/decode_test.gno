@@ -46,21 +46,21 @@ func TestDecodeHeight(t *testing.T) {
 		{
 			name: "empty buf gives zero height",
 			buf:  []byte{},
-			want: Height{},
+			want: 0,
 		},
 		{
-			// field 1 (revision_number): tag=0x08, varint(1)=0x01
+			// field 1 (revision_number): tag=0x08, varint(1)=0x01 — skipped (ibc-union uses revision 0)
 			// field 2 (revision_height): tag=0x10, varint(100)=0x64
 			name: "revision_number=1 revision_height=100",
 			buf:  []byte{0x08, 0x01, 0x10, 0x64},
-			want: Height{RevisionNumber: 1, RevisionHeight: 100},
+			want: 100,
 		},
 		{
 			// field 2 only (revision_number=0 omitted by proto3)
 			// tag=0x10, varint(300): 300%128=44 → 0xAC (cont), 300>>7=2 → 0x02
 			name: "revision_height=300 only",
 			buf:  []byte{0x10, 0xAC, 0x02},
-			want: Height{RevisionNumber: 0, RevisionHeight: 300},
+			want: 300,
 		},
 	}
 	for _, tc := range tests {
@@ -117,9 +117,8 @@ func TestDecodeClientState(t *testing.T) {
 	if got.IsFrozen() {
 		t.Fatal("FrozenHeight should be zero")
 	}
-	want := Height{RevisionNumber: 1, RevisionHeight: 50}
-	if got.LatestHeight != want {
-		t.Fatalf("LatestHeight: got %+v want %+v", got.LatestHeight, want)
+	if got.LatestHeight != 50 {
+		t.Fatalf("LatestHeight: got %d want 50", got.LatestHeight)
 	}
 }
 
@@ -228,9 +227,8 @@ func TestDecodeHeader(t *testing.T) {
 	if got.SignedHeader.Height != 7 {
 		t.Fatalf("SignedHeader.Height: got %d want 7", got.SignedHeader.Height)
 	}
-	wantTH := Height{RevisionNumber: 1, RevisionHeight: 10}
-	if got.TrustedHeight != wantTH {
-		t.Fatalf("TrustedHeight: got %+v want %+v", got.TrustedHeight, wantTH)
+	if got.TrustedHeight != 10 {
+		t.Fatalf("TrustedHeight: got %d want 10", got.TrustedHeight)
 	}
 	bytesEq(t, "ZeroKnowledgeProof", got.ZeroKnowledgeProof, []byte{0xAA, 0xBB})
 }
@@ -309,9 +307,8 @@ func TestDecodeClientStateFixture(t *testing.T) {
 	if got.IsFrozen() {
 		t.Fatalf("FrozenHeight should be zero, got %+v", got.FrozenHeight)
 	}
-	wantLatest := Height{RevisionNumber: 0, RevisionHeight: 1337}
-	if got.LatestHeight != wantLatest {
-		t.Fatalf("LatestHeight: got %+v want %+v", got.LatestHeight, wantLatest)
+	if got.LatestHeight != 1337 {
+		t.Fatalf("LatestHeight: got %d want 1337", got.LatestHeight)
 	}
 }
 
@@ -416,9 +413,8 @@ func TestDecodeHeaderFixture(t *testing.T) {
 	if !bytes.Equal(got.SignedHeader.AppHash, aaHash) {
 		t.Fatalf("SignedHeader.AppHash mismatch")
 	}
-	wantTH := Height{RevisionNumber: 0, RevisionHeight: 100}
-	if got.TrustedHeight != wantTH {
-		t.Fatalf("TrustedHeight: got %+v want %+v", got.TrustedHeight, wantTH)
+	if got.TrustedHeight != 100 {
+		t.Fatalf("TrustedHeight: got %d want 100", got.TrustedHeight)
 	}
 	if !bytes.Equal(got.ZeroKnowledgeProof, []byte("zkp")) {
 		t.Fatalf("ZKP: got %x want %x", got.ZeroKnowledgeProof, []byte("zkp"))
@@ -447,8 +443,7 @@ func TestDecodeMisbehaviourFixture(t *testing.T) {
 	if got.HeaderB.SignedHeader.Height != 0xDEADC0DE {
 		t.Fatalf("HeaderB.Height: got %d want %d", got.HeaderB.SignedHeader.Height, int64(0xDEADC0DE))
 	}
-	wantTH := Height{RevisionNumber: 0, RevisionHeight: 100}
-	if got.HeaderA.TrustedHeight != wantTH || got.HeaderB.TrustedHeight != wantTH {
+	if got.HeaderA.TrustedHeight != 100 || got.HeaderB.TrustedHeight != 100 {
 		t.Fatalf("TrustedHeight mismatch in misbehaviour headers")
 	}
 }

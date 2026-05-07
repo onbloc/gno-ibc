@@ -7,6 +7,7 @@ type Type int
 
 const (
 	TypeUint8 Type = iota
+	TypeUint32
 	TypeUint64
 	TypeUint256
 	TypeBytes32
@@ -39,6 +40,6 @@ type Schema struct {
 }
 
 const (
-	wordSize        = 32
-	maxDecodeDepth  = 256
+	wordSize       = 32
+	maxDecodeDepth = 256
 )

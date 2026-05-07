@@ -1,6 +1,7 @@
 package cometbls
 
 import (
+	"gno.land/p/gnoswap/ibc/lightclients/cometbls"
 	"gno.land/r/union/core"
 )
 
@@ -53,16 +54,16 @@ func (c Cometbls) GetStatus(client_id core.ClientId) core.Status {
 // STATE
 
 type State struct {
-	clientStates    map[core.ClientId][]byte
-	consensusStates map[core.ClientId]map[core.Height][]byte
+	clientStates    map[core.ClientId]cometbls.ClientState
+	consensusStates map[core.ClientId]map[core.Height]cometbls.ConsensusState
 }
 
-func (s State) saveClientState(clientId core.ClientId, clientStateBytes []byte) {
-	s.clientStates[clientId] = clientStateBytes
+func (s State) saveClientState(clientId core.ClientId, clientState cometbls.ClientState) {
+	s.clientStates[clientId] = clientState
 }
 
-func (s State) saveConsensusState(clientId core.ClientId, height core.Height, consensusStateBytes []byte) {
-	s.consensusStates[clientId][height] = consensusStateBytes
+func (s State) saveConsensusState(clientId core.ClientId, height core.Height, consensusState cometbls.ConsensusState) {
+	s.consensusStates[clientId][height] = consensusState
 }
 
 // func Render(_ string) string {

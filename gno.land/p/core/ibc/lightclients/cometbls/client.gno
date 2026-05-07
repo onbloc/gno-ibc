@@ -156,4 +156,3 @@ func (c *CometBLSClient) CheckForMisbehaviour(msg ClientMessage) bool {
 	}
 	return false
 }
-

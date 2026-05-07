@@ -108,6 +108,12 @@ func (d *decoder) staticValue(field Field, pos, end, depth int) (any, error) {
 			return nil, ErrInvalidData
 		}
 		return uint8(v), nil
+	case TypeUint32:
+		v, err := decodeWordUint64(d.data[pos : pos+wordSize])
+		if err != nil {
+			return nil, err
+		}
+		return uint32(v), nil
 	case TypeUint64:
 		v, err := decodeWordUint64(d.data[pos : pos+wordSize])
 		if err != nil {

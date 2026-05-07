@@ -1,8 +1,9 @@
 package core
 
 import (
-	// "chain/params"
 	"chain"
+	"chain/params"
+	"crypto/keccak256"
 	"errors"
 )
 
@@ -10,10 +11,13 @@ var state State
 
 var (
 	ErrClientTypeAlreadyRegistered = errors.New("client type already registered")
+	ErrClientTypeNotFound          = errors.New("client type not found")
 	ErrClientNotFound              = errors.New("client not found")
 	ErrConnectionNotFound          = errors.New("connection not found")
 	ErrInvalidConnectionState      = errors.New("invalid connection state")
 	ErrChannelNotFound             = errors.New("channel not found")
+	ErrInvalidChannelState         = errors.New("invalid channel state")
+	ErrPortNotFound                = errors.New("port not found")
 )
 
 func init() {
@@ -49,19 +53,26 @@ type ILightClient interface {
 	VerifyNonMembership(clientId ClientId, height Height, proof []byte, key []byte)
 
 	// GetTimestamp gets the timestamp of a client at a specific height.
-	GetTimestamp(client_id ClientId, height Height) Timestamp
+	GetTimestamp(clientId ClientId, height Height) Timestamp
 
 	// GetLatestHeight gets the latest trusted height of a client.
-	GetLatestHeight(client_id ClientId) Height
+	GetLatestHeight(clientId ClientId) Height
 
 	// GetStatus gets the status of a client.
-	GetStatus(client_id ClientId) Status
+	GetStatus(clientId ClientId) Status
 }
 
-type ConsensusStateUpdate struct {
-	Height              Height
-	ConsensusStateBytes []byte
-	ClientStateBytes    []byte
+type IApp interface {
+	OnChannelOpenInit(connectionId ConnectionId, channelId ChannelId, version string, relayer address)
+	OnChannelOpenTry(connectionId ConnectionId, channelId ChannelId, version string, counterpartyVersion string, relayer address)
+	OnChannelOpenAck(channelId ChannelId, counterpartyChannelId ChannelId, counterpartyVersion string, relayer address)
+	OnChannelOpenConfirm(channelId ChannelId, relayer address)
+	OnChannelCloseInit(channelId ChannelId, relayer address)
+	OnChannelCloseConfirm(channelId ChannelId, relayer address)
+	OnIntentRecvPacket(packet Packet, marketMaker string, marketMakerMsg Bytes)
+	OnRecvPacket(packet Packet, relayer address, relayerMsg Bytes)
+	OnAcknowledgementPacket(packet Packet, acknowledgement Bytes, relayer address)
+	OnTimeoutPacket(packet Packet, relayer address)
 }
 
 // TODO: Move to a /p/ package
@@ -85,9 +96,13 @@ const (
 	PacketTimeoutEvent         = "PacketTimeout"
 )
 
-func keccak(bz []byte) (_ H256)       { return } // stub for now
-func ethabi(i interface{}) (_ []byte) { return } // stub for now
-func commit(key H256, value H256)     {}         // stub for now
+func keccak(bz []byte) (_ H256) {
+	return keccak256.Sum256(bz)
+}
+
+func commit(key H256, value H256) {
+	params.SetBytes(string(key[:]), value[:])
+}
 
 func RegisterClient(
 	_ realm,
@@ -137,10 +152,10 @@ func ConnectionOpenInit(_ realm, msg MsgConnectionOpenInit) ConnectionId {
 	connectionId := state.generateConnectionId()
 
 	state.saveConnection(connectionId, Connection{
-		state:                      ConnectionStateInit,
-		client_id:                  msg.ClientId,
-		counterparty_client_id:     msg.CounterpartyClientId,
-		counterparty_connection_id: 0,
+		State:                    ConnectionStateInit,
+		ClientId:                 msg.ClientId,
+		CounterpartyClientId:     msg.CounterpartyClientId,
+		CounterpartyConnectionId: 0, // not yet known, will be filled at ack
 	})
 
 	chain.Emit(
@@ -157,14 +172,14 @@ func ConnectionOpenTry(_ realm, msg MsgConnectionOpenTry) ConnectionId {
 	connectionId := state.generateConnectionId()
 
 	expectedConnection := Connection{
-		state:                      ConnectionStateInit,
-		client_id:                  msg.CounterpartyClientId,
-		counterparty_client_id:     msg.ClientId,
-		counterparty_connection_id: 0,
+		State:                    ConnectionStateInit,
+		ClientId:                 msg.CounterpartyClientId,
+		CounterpartyClientId:     msg.ClientId,
+		CounterpartyConnectionId: 0,
 	}
 
 	key := ConnectionPath(msg.CounterpartyConnectionId)
-	value := keccak(ethabi(expectedConnection))
+	value := keccak(expectedConnection.EthAbiEncode())
 	state.getClient(msg.ClientId).VerifyMembership(
 		msg.ClientId,
 		msg.ProofHeight,
@@ -174,98 +189,286 @@ func ConnectionOpenTry(_ realm, msg MsgConnectionOpenTry) ConnectionId {
 	)
 
 	state.saveConnection(connectionId, Connection{
-		state:                      ConnectionStateTryOpen,
-		client_id:                  msg.ClientId,
-		counterparty_client_id:     msg.CounterpartyClientId,
-		counterparty_connection_id: msg.CounterpartyConnectionId,
+		State:                    ConnectionStateTryOpen,
+		ClientId:                 msg.ClientId,
+		CounterpartyClientId:     msg.CounterpartyClientId,
+		CounterpartyConnectionId: msg.CounterpartyConnectionId,
 	})
 
 	chain.Emit(
 		ConnectionOpenTryEvent,
 		"connection_id", connectionId.String(),
-		"client_id", msg.ClientId.String(),
-		"counterparty_client_id", msg.CounterpartyClientId.String(),
-		"counterparty_connection_id", msg.CounterpartyConnectionId.String(),
+		"ClientId", msg.ClientId.String(),
+		"counterpartyClientId", msg.CounterpartyClientId.String(),
+		"CounterpartyConnectionId", msg.CounterpartyConnectionId.String(),
 	)
 
 	return connectionId
 }
 
-func ConnectionOpenAck(_ realm, msg MsgConnectionOpenAck) ConnectionId {
+func ConnectionOpenAck(_ realm, msg MsgConnectionOpenAck) {
 	connection := state.getConnection(msg.ConnectionId)
 
-	if connection.state != ConnectionStateInit {
+	if connection.State != ConnectionStateInit {
 		panic(ErrInvalidConnectionState)
 	}
 
 	expectedConnection := Connection{
-		state:                      ConnectionStateTryOpen,
-		client_id:                  connection.counterparty_client_id,
-		counterparty_client_id:     connection.client_id,
-		counterparty_connection_id: msg.ConnectionId,
+		State:                    ConnectionStateTryOpen,
+		ClientId:                 connection.CounterpartyClientId,
+		CounterpartyClientId:     connection.ClientId,
+		CounterpartyConnectionId: msg.ConnectionId,
 	}
 
 	key := ConnectionPath(msg.CounterpartyConnectionId)
-	value := keccak(ethabi(expectedConnection))
-	state.getClient(connection.client_id).VerifyMembership(
-		connection.client_id,
+	value := keccak(expectedConnection.EthAbiEncode())
+	state.getClient(connection.ClientId).VerifyMembership(
+		connection.ClientId,
 		msg.ProofHeight,
 		msg.ProofTry,
 		key[:],
 		value[:],
 	)
 
-	connection.state = ConnectionStateOpen
-	connection.counterparty_connection_id = msg.CounterpartyConnectionId
+	connection.State = ConnectionStateOpen
+	connection.CounterpartyConnectionId = msg.CounterpartyConnectionId
 	state.saveConnection(msg.ConnectionId, connection)
 
 	chain.Emit(
 		ConnectionOpenAckEvent,
 		"connection_id", msg.ConnectionId.String(),
-		"client_id", connection.client_id.String(),
-		"counterparty_client_id", connection.counterparty_client_id.String(),
-		"counterparty_connection_id", msg.CounterpartyConnectionId.String(),
+		"ClientId", connection.ClientId.String(),
+		"counterpartyClientId", connection.CounterpartyClientId.String(),
+		"CounterpartyConnectionId", msg.CounterpartyConnectionId.String(),
 	)
-
-	return msg.ConnectionId
 }
 
-func ConnectionOpenConfirm(_ realm, msg MsgConnectionOpenConfirm) ConnectionId {
+func ConnectionOpenConfirm(_ realm, msg MsgConnectionOpenConfirm) {
 	connection := state.getConnection(msg.ConnectionId)
 
-	if connection.state != ConnectionStateTryOpen {
+	if connection.State != ConnectionStateTryOpen {
 		panic(ErrInvalidConnectionState)
 	}
 
 	expectedConnection := Connection{
-		state:                      ConnectionStateOpen,
-		client_id:                  connection.counterparty_client_id,
-		counterparty_client_id:     connection.client_id,
-		counterparty_connection_id: msg.ConnectionId,
+		State:                    ConnectionStateOpen,
+		ClientId:                 connection.CounterpartyClientId,
+		CounterpartyClientId:     connection.ClientId,
+		CounterpartyConnectionId: msg.ConnectionId,
 	}
 
-	key := ConnectionPath(connection.counterparty_connection_id)
-	value := keccak(ethabi(expectedConnection))
-	state.getClient(connection.client_id).VerifyMembership(
-		connection.client_id,
+	key := ConnectionPath(connection.CounterpartyConnectionId)
+	value := keccak(expectedConnection.EthAbiEncode())
+	state.getClient(connection.ClientId).VerifyMembership(
+		connection.ClientId,
 		msg.ProofHeight,
 		msg.ProofAck,
 		key[:],
 		value[:],
 	)
 
-	connection.state = ConnectionStateOpen
+	connection.State = ConnectionStateOpen
 	state.saveConnection(msg.ConnectionId, connection)
 
 	chain.Emit(
 		ConnectionOpenConfirmEvent,
 		"connection_id", msg.ConnectionId.String(),
-		"client_id", connection.client_id.String(),
-		"counterparty_client_id", connection.counterparty_client_id.String(),
-		"counterparty_connection_id", connection.counterparty_connection_id.String(),
+		"ClientId", connection.ClientId.String(),
+		"counterpartyClientId", connection.CounterpartyClientId.String(),
+		"CounterpartyConnectionId", connection.CounterpartyConnectionId.String(),
+	)
+}
+
+func ChannelOpenInit(_ realm, msg MsgChannelOpenInit) ChannelId {
+	ensureConnectionState(msg.ConnectionId)
+
+	channelId := state.generateChannelId()
+
+	state.channelOwners[channelId] = msg.PortId
+
+	state.getAppByPortId(msg.PortId).OnChannelOpenInit(
+		msg.ConnectionId,
+		channelId,
+		msg.Version,
+		msg.Relayer,
 	)
 
-	return msg.ConnectionId
+	state.saveChannel(channelId, Channel{
+		State:                 ChannelStateInit,
+		ConnectionId:          msg.ConnectionId,
+		CounterpartyChannelId: 0, // not yet known, will be filled in at ack
+		CounterpartyPortId:    Bytes(msg.CounterpartyPortId),
+		Version:               msg.Version,
+	})
+
+	chain.Emit(
+		ChannelOpenInitEvent,
+		"port_id", msg.PortId.String(),
+		"channel_id", channelId.String(),
+		"counterparty_port_id", msg.CounterpartyPortId.String(),
+		"connection_id", msg.ConnectionId.String(),
+		"version", msg.Version,
+	)
+
+	return channelId
+}
+
+func ChannelOpenTry(_ realm, msg MsgChannelOpenTry) ChannelId {
+	if msg.Channel.State != ChannelStateTryOpen {
+		panic(ErrInvalidChannelState)
+	}
+
+	connection := ensureConnectionState(msg.Channel.ConnectionId)
+
+	channelId := state.generateChannelId()
+
+	expectedChannel := Channel{
+		State:                 ChannelStateInit,
+		ConnectionId:          msg.Channel.ConnectionId,
+		CounterpartyChannelId: 0, // not yet known, will be filled in at ack
+		CounterpartyPortId:    Bytes(msg.PortId),
+		Version:               msg.Channel.Version,
+	}
+
+	key := ChannelPath(msg.Channel.CounterpartyChannelId)
+	value := keccak(expectedChannel.EthAbiEncode())
+	state.getClient(connection.ClientId).VerifyMembership(
+		connection.ClientId,
+		msg.ProofHeight,
+		msg.ProofInit,
+		key[:],
+		value[:],
+	)
+
+	state.channelOwners[channelId] = msg.PortId
+
+	state.getAppByPortId(msg.PortId).OnChannelOpenTry(
+		msg.Channel.ConnectionId,
+		channelId,
+		msg.Channel.Version,
+		msg.CounterpartyVersion,
+		msg.Relayer,
+	)
+
+	state.saveChannel(channelId, msg.Channel)
+
+	chain.Emit(
+		ChannelOpenTryEvent,
+		"port_id", msg.PortId.String(),
+		"channel_id", channelId.String(),
+		"counterparty_port_id", msg.Channel.CounterpartyPortId.String(),
+		"connection_id", msg.Channel.ConnectionId.String(),
+		"version", msg.Channel.Version,
+	)
+
+	return channelId
+}
+
+func ChannelOpenAck(_ realm, msg MsgChannelOpenAck) {
+	channel := state.getChannel(msg.ChannelId)
+
+	if channel.State != ChannelStateInit {
+		panic(ErrInvalidChannelState)
+	}
+
+	connection := ensureConnectionState(channel.ConnectionId)
+
+	portId := state.getChannelOwner(msg.ChannelId)
+
+	expectedChannel := Channel{
+		State:                 ChannelStateTryOpen,
+		ConnectionId:          connection.CounterpartyConnectionId,
+		CounterpartyChannelId: msg.ChannelId,
+		CounterpartyPortId:    Bytes(portId),
+		Version:               msg.CounterpartyVersion,
+	}
+
+	key := ChannelPath(msg.CounterpartyChannelId)
+	value := keccak(expectedChannel.EthAbiEncode())
+	state.getClient(connection.ClientId).VerifyMembership(
+		connection.ClientId,
+		msg.ProofHeight,
+		msg.ProofTry,
+		key[:],
+		value[:],
+	)
+
+	state.getAppByPortId(portId).OnChannelOpenAck(
+		msg.ChannelId,
+		channel.CounterpartyChannelId,
+		msg.CounterpartyVersion,
+		msg.Relayer,
+	)
+
+	channel.State = ChannelStateOpen
+	channel.Version = msg.CounterpartyVersion
+	channel.CounterpartyChannelId = msg.CounterpartyChannelId
+
+	state.saveChannel(msg.ChannelId, channel)
+
+	chain.Emit(
+		ChannelOpenAckEvent,
+		"port_id", portId.String(),
+		"channel_id", msg.ChannelId.String(),
+		"counterparty_port_id", channel.CounterpartyPortId.String(),
+		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
+		"connection_id", channel.ConnectionId.String(),
+		"counterparty_version", msg.CounterpartyVersion,
+	)
+}
+
+func ChannelOpenConfirm(_ realm, msg MsgChannelOpenConfirm) {
+	channel := state.getChannel(msg.ChannelId)
+
+	if channel.State != ChannelStateTryOpen {
+		panic(ErrInvalidChannelState)
+	}
+
+	connection := ensureConnectionState(channel.ConnectionId)
+
+	portId := state.getChannelOwner(msg.ChannelId)
+
+	expectedChannel := Channel{
+		State:                 ChannelStateOpen,
+		ConnectionId:          connection.CounterpartyConnectionId,
+		CounterpartyChannelId: msg.ChannelId,
+		CounterpartyPortId:    Bytes(portId),
+		Version:               channel.Version,
+	}
+
+	key := ChannelPath(channel.CounterpartyChannelId)
+	value := keccak(expectedChannel.EthAbiEncode())
+	state.getClient(connection.ClientId).VerifyMembership(
+		connection.ClientId,
+		msg.ProofHeight,
+		msg.ProofAck,
+		key[:],
+		value[:],
+	)
+
+	state.getAppByPortId(portId).OnChannelOpenConfirm(msg.ChannelId, msg.Relayer)
+
+	channel.State = ChannelStateOpen
+
+	state.saveChannel(msg.ChannelId, channel)
+
+	chain.Emit(
+		ChannelOpenConfirmEvent,
+		"port_id", portId.String(),
+		"channel_id", msg.ChannelId.String(),
+		"counterparty_port_id", channel.CounterpartyPortId.String(),
+		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
+		"connection_id", channel.ConnectionId.String(),
+	)
+}
+
+func ensureConnectionState(connectionId ConnectionId) Connection {
+	connection := state.getConnection(connectionId)
+	if connection.State != ConnectionStateOpen {
+		panic(ErrInvalidConnectionState)
+	} else {
+		return connection
+	}
 }
 
 func Render(_ string) string {

@@ -38,18 +38,20 @@ type MsgConnectionOpenConfirm struct {
 }
 
 type MsgChannelOpenInit struct {
-	PortId             Bytes
-	CounterpartyPortId Bytes
+	PortId             address
+	CounterpartyPortId address
 	ConnectionId       ConnectionId
-	version            string
+	Version            string
+	Relayer            address
 }
 
 type MsgChannelOpenTry struct {
-	PortId              Bytes
-	channel             Channel
+	PortId              address
+	Channel             Channel
 	CounterpartyVersion string
 	ProofInit           Bytes
 	ProofHeight         Height
+	Relayer             address
 }
 
 type MsgChannelOpenAck struct {
@@ -58,12 +60,14 @@ type MsgChannelOpenAck struct {
 	CounterpartyChannelId ChannelId
 	ProofTry              Bytes
 	ProofHeight           Height
+	Relayer               address
 }
 
 type MsgChannelOpenConfirm struct {
 	ChannelId   ChannelId
 	ProofAck    Bytes
 	ProofHeight Height
+	Relayer     address
 }
 
 type MsgChannelCloseInit struct{}
@@ -75,6 +79,7 @@ type MsgPacketRecv struct {
 	RelayerMsgs []Bytes
 	Proof       Bytes
 	ProofHeight Height
+	Relayer     address
 }
 
 type MsgPacketAcknowledgement struct {

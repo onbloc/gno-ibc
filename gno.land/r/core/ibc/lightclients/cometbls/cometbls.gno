@@ -3,6 +3,7 @@ package cometbls
 import (
 	"time"
 
+	"gno.land/p/aib/ibc/types"
 	cometblsp "gno.land/p/core/ibc/lightclients/cometbls"
 	"gno.land/r/core/ibc/core"
 )
@@ -16,6 +17,8 @@ type clientEntry struct {
 }
 
 var entries = make(map[core.ClientId]*clientEntry)
+
+var ibcStoreKey = []byte("ibc")
 
 func init() {
 	core.RegisterClient(ClientType, Adapter{})
@@ -124,12 +127,28 @@ func (Adapter) Misbehaviour(clientId core.ClientId, clientMessage []byte) []byte
 	return cometblsp.EncodeClientState(e.cs)
 }
 
-func (Adapter) VerifyMembership(_ core.ClientId, _ core.Height, _, _, _ []byte) {
-	panic("cometbls: VerifyMembership not yet implemented")
+func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proof, key, value []byte) {
+	e := getEntry(clientId)
+	proofs, err := cometblsp.DecodeProofs(proof)
+	if err != nil {
+		panic("cometbls: invalid membership proof: " + err.Error())
+	}
+	path := types.MerklePath{KeyPath: [][]byte{ibcStoreKey, key}}
+	if err := e.client.VerifyMembership(cometblsp.Height(height), proofs, path, value); err != nil {
+		panic("cometbls: membership verification failed: " + err.Error())
+	}
 }
 
-func (Adapter) VerifyNonMembership(_ core.ClientId, _ core.Height, _, _ []byte) {
-	panic("cometbls: VerifyNonMembership not yet implemented")
+func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, proof, key []byte) {
+	e := getEntry(clientId)
+	proofs, err := cometblsp.DecodeProofs(proof)
+	if err != nil {
+		panic("cometbls: invalid non-membership proof: " + err.Error())
+	}
+	path := types.MerklePath{KeyPath: [][]byte{ibcStoreKey, key}}
+	if err := e.client.VerifyNonMembership(cometblsp.Height(height), proofs, path); err != nil {
+		panic("cometbls: non-membership verification failed: " + err.Error())
+	}
 }
 
 func (Adapter) GetTimestamp(clientId core.ClientId, height core.Height) core.Timestamp {

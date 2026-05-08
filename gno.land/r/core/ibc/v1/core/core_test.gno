@@ -10,8 +10,8 @@ type mockClient struct {
 	status  Status
 }
 
-func (m *mockClient) CreateClient(_ ClientId, _, _ []byte) string { return m.chainId }
-func (m *mockClient) UpdateClient(_ ClientId, _ []byte) ConsensusStateUpdate {
+func (m *mockClient) CreateClient(_ realm, _ ClientId, _, _ []byte) string { return m.chainId }
+func (m *mockClient) UpdateClient(_ realm, _ ClientId, _ []byte) ConsensusStateUpdate {
 	m.height++
 	return ConsensusStateUpdate{
 		Height:              m.height,
@@ -19,7 +19,7 @@ func (m *mockClient) UpdateClient(_ ClientId, _ []byte) ConsensusStateUpdate {
 		ConsensusStateBytes: []byte("cons"),
 	}
 }
-func (m *mockClient) Misbehaviour(_ ClientId, _ []byte) []byte        { return []byte("frozen") }
+func (m *mockClient) Misbehaviour(_ realm, _ ClientId, _ []byte) []byte { return []byte("frozen") }
 func (m *mockClient) VerifyMembership(_ ClientId, _ Height, _, _, _ []byte) {}
 func (m *mockClient) VerifyNonMembership(_ ClientId, _ Height, _, _ []byte) {}
 func (m *mockClient) GetTimestamp(_ ClientId, _ Height) Timestamp      { return Timestamp(1e9) }

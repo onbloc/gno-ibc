@@ -24,10 +24,12 @@ func init() {
 }
 
 // ILightClient defines the interface that light client adapters must implement.
+// Methods that modify adapter state must declare _ realm as the first parameter
+// (Gno crossing function requirement for cross-realm state writes).
 type ILightClient interface {
-	CreateClient(clientId ClientId, clientStateBytes, consensusStateBytes []byte) string
-	UpdateClient(clientId ClientId, clientMessage []byte) ConsensusStateUpdate
-	Misbehaviour(clientId ClientId, clientMessage []byte) []byte
+	CreateClient(_ realm, clientId ClientId, clientStateBytes, consensusStateBytes []byte) string
+	UpdateClient(_ realm, clientId ClientId, clientMessage []byte) ConsensusStateUpdate
+	Misbehaviour(_ realm, clientId ClientId, clientMessage []byte) []byte
 	VerifyMembership(clientId ClientId, height Height, proof []byte, key []byte, value []byte)
 	VerifyNonMembership(clientId ClientId, height Height, proof []byte, key []byte)
 	GetTimestamp(clientId ClientId, height Height) Timestamp
@@ -73,9 +75,6 @@ func keccak(bz []byte) H256 {
 	return keccak256.Sum256(bz)
 }
 
-// commit stores value at key in chain/params.
-// Key is hex-encoded to avoid : in raw keccak bytes (params rejects keys with :).
-// Union queries: abci_query path=".store/main/key" data=0x{hex(key)}
 func commit(key H256, value H256) {
 	params.SetBytes(hex.EncodeToString(key[:]), value[:])
 }
@@ -105,7 +104,7 @@ func CreateClient(_ realm, msg MsgCreateClient) ClientId {
 	}
 
 	clientId := st.generateClientId()
-	counterpartyChainId := impl.CreateClient(clientId, msg.ClientStateBytes, msg.ConsensusStateBytes)
+	counterpartyChainId := impl.CreateClient(cross, clientId, msg.ClientStateBytes, msg.ConsensusStateBytes)
 	st.clientTypes[clientId] = msg.ClientType
 	st.saveClientState(clientId, msg.ClientStateBytes)
 
@@ -121,7 +120,7 @@ func CreateClient(_ realm, msg MsgCreateClient) ClientId {
 func UpdateClient(_ realm, msg MsgUpdateClient) Height {
 	impl := st.getClient(msg.ClientId)
 
-	update := impl.UpdateClient(msg.ClientId, msg.ClientMessage)
+	update := impl.UpdateClient(cross, msg.ClientId, msg.ClientMessage)
 
 	st.saveClientState(msg.ClientId, update.ClientStateBytes)
 	st.saveConsensusState(msg.ClientId, update.Height, update.ConsensusStateBytes)
@@ -340,7 +339,7 @@ func ChannelOpenConfirm(_ realm, msg MsgChannelOpenConfirm) {
 
 func Misbehaviour(_ realm, msg MsgMisbehaviour) {
 	impl := st.getClient(msg.ClientId)
-	impl.Misbehaviour(msg.ClientId, msg.ClientMessage)
+	impl.Misbehaviour(cross, msg.ClientId, msg.ClientMessage)
 	chain.Emit(MisbehaviourEvent,
 		"client_id", msg.ClientId.String(),
 	)
@@ -508,6 +507,23 @@ func PacketTimeout(_ realm, msg MsgPacketTimeout) {
 		"destination_channel_id", packet.DestinationChannelId.String(),
 		"relayer", string(msg.Relayer),
 	)
+}
+
+// CreateClientRaw is a convenience wrapper for testing: accepts hex-encoded bytes.
+func CreateClientRaw(_ realm, clientType string, clientStateHex, consensusStateHex string) ClientId {
+	csBytes, err := hex.DecodeString(clientStateHex)
+	if err != nil {
+		panic("invalid clientStateHex: " + err.Error())
+	}
+	consBytes, err := hex.DecodeString(consensusStateHex)
+	if err != nil {
+		panic("invalid consensusStateHex: " + err.Error())
+	}
+	return CreateClient(cross, MsgCreateClient{
+		ClientType:          ClientType(clientType),
+		ClientStateBytes:    csBytes,
+		ConsensusStateBytes: consBytes,
+	})
 }
 
 func Render(_ string) string {

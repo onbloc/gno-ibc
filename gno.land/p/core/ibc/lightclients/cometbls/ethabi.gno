@@ -3,7 +3,7 @@ package cometbls
 import (
 	"errors"
 
-	abienc "gno.land/p/gnoswap/encoding/abi"
+	abienc "gno.land/p/core/encoding/abi"
 )
 
 // Ethereum ABI wire format for Union CometBLS light client types.

@@ -1,7 +1,7 @@
 package zkgm
 
 import (
-	"gno.land/p/gnoswap/encoding/abi"
+	"gno.land/p/core/encoding/abi"
 	u256 "gno.land/p/gnoswap/uint256"
 )
 

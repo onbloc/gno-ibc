@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"testing"
 
-	"gno.land/p/gnoswap/encoding/abi"
+	"gno.land/p/core/encoding/abi"
 	"gno.land/p/onbloc/json"
 
 	u256 "gno.land/p/gnoswap/uint256"

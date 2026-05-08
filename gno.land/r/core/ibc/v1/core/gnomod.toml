@@ -2,4 +2,4 @@ module = "gno.land/r/core/ibc/v1/core"
 gno = "0.9"
 
 [require]
-"gno.land/p/gnoswap/encoding/abi" = "v0.0.0"
+"gno.land/p/core/encoding/abi" = "v0.0.0"

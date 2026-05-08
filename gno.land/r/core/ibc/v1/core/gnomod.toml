@@ -1,4 +1,4 @@
-module = "gno.land/r/core/ibc/core"
+module = "gno.land/r/core/ibc/v1/core"
 gno = "0.9"
 
 [require]

@@ -5,7 +5,7 @@ import (
 
 	"gno.land/p/aib/ibc/types"
 	cometblsp "gno.land/p/core/ibc/lightclients/cometbls"
-	"gno.land/r/core/ibc/core"
+	"gno.land/r/core/ibc/v1/core"
 )
 
 const ClientType core.ClientType = "07-cometbls"

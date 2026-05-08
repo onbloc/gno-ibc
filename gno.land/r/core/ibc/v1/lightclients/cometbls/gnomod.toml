@@ -1,4 +1,4 @@
-module = "gno.land/r/core/ibc/lightclients/cometbls"
+module = "gno.land/r/core/ibc/v1/lightclients/cometbls"
 gno = "0.9"
 
 [require]

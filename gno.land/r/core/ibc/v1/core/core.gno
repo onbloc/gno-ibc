@@ -4,6 +4,7 @@ import (
 	"chain"
 	"chain/params"
 	"crypto/keccak256"
+	"encoding/hex"
 )
 
 var st State
@@ -72,8 +73,11 @@ func keccak(bz []byte) H256 {
 	return keccak256.Sum256(bz)
 }
 
+// commit stores value at key in chain/params.
+// Key is hex-encoded to avoid : in raw keccak bytes (params rejects keys with :).
+// Union queries: abci_query path=".store/main/key" data=0x{hex(key)}
 func commit(key H256, value H256) {
-	params.SetBytes(string(key[:]), value[:])
+	params.SetBytes(hex.EncodeToString(key[:]), value[:])
 }
 
 func getCommit(key H256) H256 {

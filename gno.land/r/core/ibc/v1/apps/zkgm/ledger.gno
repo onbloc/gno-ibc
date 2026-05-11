@@ -2,7 +2,9 @@ package zkgm
 
 import (
 	"chain/runtime"
+	"time"
 
+	tb "gno.land/p/gnoswap/tokenbucket"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/bptree/v0"
 )
@@ -12,6 +14,8 @@ var (
 	metadataImageOf  = bptree.NewBPTree32()
 	channelBalanceV2 = bptree.NewBPTree32()
 	inFlightPackets  = bptree.NewBPTree32()
+	tokenBucket      = bptree.NewBPTree32()
+	rateLimitDisabled = false
 )
 
 func mustBeAuthorizedImpl() {
@@ -99,4 +103,48 @@ func PopInFlightPacket(cur realm, key InFlightKey) (InFlightValue, bool) {
 
 func inFlightKeyString(key InFlightKey) string {
 	return key.SourceChannelId.String() + "/" + key.DestinationChannelId.String() + "/" + key.Sequence.String()
+}
+
+// SetTokenBucket stores the rate-limit bucket for denom.
+func SetTokenBucket(cur realm, denom string, bucket *tb.TokenBucket) {
+	mustBeAuthorizedImpl()
+	tokenBucket.Set(denom, bucket)
+}
+
+// RemoveTokenBucket removes the rate-limit bucket for denom.
+func RemoveTokenBucket(cur realm, denom string) {
+	mustBeAuthorizedImpl()
+	tokenBucket.Remove(denom)
+}
+
+// GetTokenBucket returns the rate-limit bucket for denom, if configured.
+func GetTokenBucket(denom string) *tb.TokenBucket {
+	value, ok := tokenBucket.Get(denom)
+	if !ok {
+		return nil
+	}
+
+	return value.(*tb.TokenBucket)
+}
+
+// RateLimit charges amount from denom's bucket when rate limiting is enabled.
+// `now` is sourced from block time (time.Now().Unix()), so RefillRate is
+// interpreted as tokens per second.
+func RateLimit(cur realm, denom string, amount *u256.Uint) error {
+	mustBeAuthorizedImpl()
+
+	if rateLimitDisabled || amount == nil {
+		return nil
+	}
+
+	bucket := GetTokenBucket(denom)
+	if bucket == nil {
+		return nil
+	}
+
+	return bucket.RateLimit(amount, blockNow())
+}
+
+func blockNow() *u256.Uint {
+	return u256.NewUint(uint64(time.Now().Unix()))
 }

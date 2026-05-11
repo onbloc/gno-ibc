@@ -24,6 +24,10 @@ func (v *ZkgmV1) verifyTokenOrderV2(channelId core.ChannelId, sender string, sen
 	switch order.Kind {
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
 		baseDenom := string(order.BaseToken)
+		if err := zkgm.RateLimit(cross, baseDenom, order.BaseAmount); err != nil {
+			return err
+		}
+
 		if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
 			if err := burnVoucher(cross, baseDenom, sender, order.BaseAmount); err != nil {
 				return err
@@ -31,10 +35,15 @@ func (v *ZkgmV1) verifyTokenOrderV2(channelId core.ChannelId, sender string, sen
 		} else if err := requireSentCoin(sent, baseDenom, order.BaseAmount); err != nil {
 			return err
 		}
+
 		increaseChannelBalanceV2(cross, channelId, u256.Zero(), order.BaseToken, order.QuoteToken, order.BaseAmount)
 		return nil
 	case z.TOKEN_ORDER_KIND_UNESCROW:
 		baseDenom := string(order.BaseToken)
+		if err := zkgm.RateLimit(cross, baseDenom, order.BaseAmount); err != nil {
+			return err
+		}
+
 		if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
 			return burnVoucher(cross, baseDenom, sender, order.BaseAmount)
 		}
@@ -52,15 +61,18 @@ func (v *ZkgmV1) executeTokenOrderV2(packet core.Packet, path *u256.Uint, order 
 		if len(order.Metadata) == 0 {
 			return core.RecvPacketResult{}, errors.New("zkgm/v1: initialize requires metadata")
 		}
+
 		meta, err := z.DecodeTokenMetadata(order.Metadata)
 		if err != nil {
 			return core.RecvPacketResult{}, err
 		}
+
 		image := MetadataImage(meta)
 		ibcDenom := PredictWrappedTokenV2(packet.DestinationChannelId, order.BaseToken, image)
 		if err := mintVoucher(cross, ibcDenom, string(order.BaseToken), image, string(order.Receiver), order.QuoteAmount); err != nil {
 			return core.RecvPacketResult{}, err
 		}
+
 		zkgm.SetTokenOrigin(cross, ibcDenom, path)
 	case z.TOKEN_ORDER_KIND_ESCROW:
 		ibcDenom := string(order.QuoteToken)
@@ -83,6 +95,7 @@ func (v *ZkgmV1) executeTokenOrderV2(packet core.Packet, path *u256.Uint, order 
 	default:
 		return core.RecvPacketResult{}, errors.New("zkgm/v1: unknown token order kind")
 	}
+
 	innerAck, err := z.EncodeTokenOrderAck(z.TokenOrderAck{
 		FillType:    fillTypeProtocol,
 		MarketMaker: nil,
@@ -90,10 +103,12 @@ func (v *ZkgmV1) executeTokenOrderV2(packet core.Packet, path *u256.Uint, order 
 	if err != nil {
 		return core.RecvPacketResult{}, err
 	}
+
 	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess, InnerAck: innerAck})
 	if err != nil {
 		return core.RecvPacketResult{}, err
 	}
+
 	return core.NewRecvPacketResult(cross, core.PacketStatusSuccess, ack), nil
 }
 
@@ -114,6 +129,7 @@ func (v *ZkgmV1) acknowledgeTokenOrderV2(sourceChannelId core.ChannelId, path *u
 	if !orderAck.FillType.Eq(fillTypeMarketMaker) {
 		return errors.New("zkgm/v1: unknown fill type")
 	}
+
 	marketMaker := string(orderAck.MarketMaker)
 	switch order.Kind {
 	case z.TOKEN_ORDER_KIND_UNESCROW:
@@ -150,7 +166,9 @@ func sendNative(denom string, receiver string, amount *u256.Uint) error {
 	if err != nil {
 		return err
 	}
+
 	b := banker.NewBanker(banker.BankerTypeRealmSend)
 	b.SendCoins(runtime.CurrentRealm().Address(), address(receiver), chain.NewCoins(chain.NewCoin(denom, n)))
+
 	return nil
 }

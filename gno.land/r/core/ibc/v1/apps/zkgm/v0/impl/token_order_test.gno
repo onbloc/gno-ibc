@@ -32,6 +32,7 @@ func TestTokenOrderVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm,
 
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(37), VoucherBalanceOf(baseToken, address(sender)))
+
 	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(core.ChannelId(3), u256.Zero(), order.BaseToken, order.QuoteToken))
 	uassert.Equal(t, "13", balance.ToString())
 }
@@ -48,6 +49,29 @@ func TestTokenOrderVerifyNativeRequiresSentCoin(cur realm, t *testing.T) {
 	err := (&ZkgmV1{}).verifyTokenOrderV2(core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin("ugnot", 13)), order)
 
 	uassert.NoError(t, err)
+}
+
+func TestTokenOrderVerifyAppliesRateLimit(cur realm, t *testing.T) {
+	denom := "rate-limit-denom"
+	zkgm.SetRateLimitDisabled(cross, false)
+	zkgm.SetBucketConfig(cross, denom, u256.NewUint(10), u256.NewUint(1))
+	order := z.TokenOrderV2{
+		Sender:      []byte(testAddress("v1-rate-limit-sender")),
+		BaseToken:   []byte(denom),
+		BaseAmount:  u256.NewUint(7),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(7),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+	}
+
+	err := (&ZkgmV1{}).verifyTokenOrderV2(core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin(denom, 7)), order)
+	uassert.NoError(t, err)
+
+	err = (&ZkgmV1{}).verifyTokenOrderV2(core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin(denom, 7)), order)
+	uassert.ErrorContains(t, err, "token bucket rate limit exceeded")
+
+	zkgm.RemoveTokenBucket(cross, denom)
+	zkgm.SetRateLimitDisabled(cross, true)
 }
 
 func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *testing.T) {
@@ -78,9 +102,11 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
 	ibcDenom := PredictWrappedTokenV2(core.ChannelId(5), order.BaseToken, image)
 	uassert.Equal(t, int64(95), VoucherBalanceOf(ibcDenom, address(order.Receiver)))
+
 	storedImage, ok := zkgm.GetMetadataImageOf(ibcDenom)
 	uassert.True(t, ok)
 	uassert.True(t, image == storedImage)
+
 	origin, ok := zkgm.GetTokenOrigin(ibcDenom)
 	uassert.True(t, ok)
 	uassert.Equal(t, "7", origin.ToString())
@@ -98,6 +124,7 @@ func assertProtocolAck(t *testing.T, ackBytes []byte) {
 	ack, err := z.DecodeAck(ackBytes)
 	uassert.NoError(t, err)
 	uassert.True(t, ack.Tag.Eq(tagAckSuccess))
+
 	orderAck, err := z.DecodeTokenOrderAck(ack.InnerAck)
 	uassert.NoError(t, err)
 	uassert.True(t, orderAck.FillType.Eq(fillTypeProtocol))

@@ -56,6 +56,7 @@ func PredictCallProxyAccount(path *u256.Uint, channelId core.ChannelId, sender [
 	buf = append(buf, pathBytes[:]...)
 	buf = append(buf, channel...)
 	buf = append(buf, sender...)
+
 	h := keccak256.Sum256(buf)
 	return "zkgm1" + hex.EncodeToString(h[:20])
 }

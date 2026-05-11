@@ -23,10 +23,13 @@ func getOrCreateVoucherV2(cur realm, ibcDenom string, baseDenom string, metadata
 	if v, ok := voucherTokens.Get(ibcDenom); ok {
 		return v.(*voucher)
 	}
+
 	token, ledger := grc20.NewToken(baseDenom, ibcDenom, 0)
 	grc20reg.Register(cross, token, strings.TrimPrefix(ibcDenom, ibcDenomPrefix))
+
 	v := &voucher{token: token, ledger: ledger}
 	voucherTokens.Set(ibcDenom, v)
+
 	zkgm.SetMetadataImageOf(cross, ibcDenom, metadataImage)
 	return v
 }
@@ -44,6 +47,7 @@ func mintVoucher(cur realm, ibcDenom string, baseDenom string, metadataImage [32
 	if err != nil {
 		return err
 	}
+
 	v := getOrCreateVoucherV2(cur, ibcDenom, baseDenom, metadataImage)
 	return v.ledger.Mint(address(receiver), n)
 }

@@ -58,6 +58,12 @@ func encodeValue(field Field, value any) ([]byte, error) {
 			return nil, ErrInvalidValue
 		}
 		return encodeUint64Word(uint64(v)), nil
+	case TypeUint32:
+		v, ok := value.(uint32)
+		if !ok {
+			return nil, ErrInvalidValue
+		}
+		return encodeUint64Word(uint64(v)), nil
 	case TypeUint64:
 		v, ok := value.(uint64)
 		if !ok {

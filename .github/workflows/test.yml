@@ -11,6 +11,7 @@ on:
       - 'Makefile'
       - 'stdlibs/**'
       - 'tools/setup-stdlibs.py'
+      - 'tools/test_setup_stdlibs.py'
       - '.github/workflows/test.yml'
   pull_request:
     paths: *test_paths
@@ -24,6 +25,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      # Fail fast on tooling regressions before the heavy gno install.
+      - name: Run tools tests
+        run: |
+          python3 -m pip install --quiet 'pytest~=8.4'
+          python3 -m pytest tools/test_setup_stdlibs.py -v
 
       - uses: actions/setup-go@v5
         with:

@@ -36,6 +36,8 @@ on:
       - 'Makefile'
       - 'stdlibs/**'
       - 'tools/setup-stdlibs.py'
+      - 'flake.nix'
+      - 'flake.lock'
       - '.github/workflows/gno-coverage.yml'
   push:
     branches: [main]
@@ -56,13 +58,22 @@ env:
 jobs:
   gno-coverage:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
         with:
-          go-version: stable
-          cache: false
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # Materialize the dev shell once; later `run:` steps source it via
+      # BASH_ENV. Avoids `nix develop` re-evaluating the flake on every step.
+      - name: Materialize dev shell
+        run: |
+          nix print-dev-env .#ci > "$RUNNER_TEMP/ci-env.sh"
+          echo "BASH_ENV=$RUNNER_TEMP/ci-env.sh" >> "$GITHUB_ENV"
 
       # Keyed on the override commit so this cache stays isolated from the
       # main test workflow's cache (which keys on .gno-version).
@@ -77,15 +88,17 @@ jobs:
           restore-keys: |
             gno-cover-${{ runner.os }}-${{ env.GNO_COMMIT }}-
 
+      # flake.lock in the key invalidates the Go cache when nixpkgs bumps
+      # Go — `~/.cache/go-build` is keyed by Go version internally.
       - name: Cache Go build + modules
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: gobuild-cover-${{ runner.os }}-${{ env.GNO_COMMIT }}
+          key: gobuild-cover-${{ runner.os }}-${{ env.GNO_COMMIT }}-${{ hashFiles('flake.lock') }}
           restore-keys: |
-            gobuild-cover-${{ runner.os }}-
+            gobuild-cover-${{ runner.os }}-${{ env.GNO_COMMIT }}-
 
       - name: Install gno toolchain (coverage build)
         if: steps.gno-cache.outputs.cache-hit != 'true'

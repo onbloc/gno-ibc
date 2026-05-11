@@ -38,6 +38,9 @@ go.work.sum
 # Rust build artifacts (Cargo workspace at repo root).
 /target/
 
+# direnv cache populated by `.envrc` / `nix develop`.
+/.direnv/
+
 # Vendored mirrors of third-party gno packages. Source of truth is the
 # sparse-checkout submodule under third_party/; populated by `make vendor`.
 /gno.land/p/gnoswap/uint256/

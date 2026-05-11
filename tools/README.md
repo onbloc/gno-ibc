@@ -5,5 +5,6 @@ Auxiliary tools that support development and testing but are not part of the on-
 | Tool | Purpose |
 |---|---|
 | [`abi-fixtures/`](abi-fixtures/) | Rust harness that emits canonical Solidity ABI vectors for the gno `encoding/abi` codec to test against |
+| [`gen-ethereum-storage-proof-fixture/`](gen-ethereum-storage-proof-fixture/) | Go harness that emits go-ethereum storage proof vectors for the Gno Ethereum storage verifier |
 
 Tools may use languages and toolchains other than Gno (e.g. Rust, Go). They are invoked via `make` targets at the repo root.

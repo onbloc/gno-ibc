@@ -23,8 +23,8 @@ func EncodeList(items ...[]byte) []byte {
 	for _, item := range items {
 		size += len(item)
 	}
-	out := make([]byte, 0, int(ListSize(uint64(size))))
-	out = appendHeader(out, 0xC0, 0xF7, uint64(size))
+	out := make([]byte, 0, ListSize(size))
+	out = appendHeader(out, 0xC0, uint64(size))
 	for _, item := range items {
 		out = append(out, item...)
 	}
@@ -50,7 +50,7 @@ func AppendBytes(out []byte, b []byte) []byte {
 	if len(b) == 1 && b[0] <= 0x7f {
 		return append(out, b[0])
 	}
-	out = appendHeader(out, 0x80, 0xB7, uint64(len(b)))
+	out = appendHeader(out, 0x80, uint64(len(b)))
 	return append(out, b...)
 }
 
@@ -62,29 +62,28 @@ func AppendUint64(out []byte, x uint64) []byte {
 	if x < 0x80 {
 		return append(out, byte(x))
 	}
-	buf := make([]byte, 8)
-	n := putUint(buf, x)
+	n := intSize(x)
 	out = append(out, byte(0x80+n))
-	return append(out, buf[8-n:]...)
+	return appendBigEndianUint(out, x, n)
 }
 
 // StringSize returns the encoded size of s.
-func StringSize(s string) uint64 {
+func StringSize(s string) int {
 	return BytesSize([]byte(s))
 }
 
 // BytesSize returns the encoded size of b.
-func BytesSize(b []byte) uint64 {
+func BytesSize(b []byte) int {
 	n := len(b)
 	if n == 1 && b[0] <= 0x7f {
 		return 1
 	}
-	return uint64(headerSize(uint64(n)) + n)
+	return headerSize(n) + n
 }
 
 // ListSize returns the encoded size of a list with contentSize payload bytes.
-func ListSize(contentSize uint64) uint64 {
-	return uint64(headerSize(contentSize)) + contentSize
+func ListSize(contentSize int) int {
+	return headerSize(contentSize) + contentSize
 }
 
 // IntSize returns the encoded size of x.
@@ -95,21 +94,28 @@ func IntSize(x uint64) int {
 	return 1 + intSize(x)
 }
 
-func appendHeader(out []byte, smallTag, largeTag byte, size uint64) []byte {
+func appendHeader(out []byte, baseTag byte, size uint64) []byte {
 	if size < 56 {
-		return append(out, smallTag+byte(size))
+		return append(out, baseTag+byte(size))
 	}
-	buf := make([]byte, 8)
-	n := putUint(buf, size)
-	out = append(out, largeTag+byte(n))
-	return append(out, buf[8-n:]...)
+	n := intSize(size)
+	out = append(out, baseTag+55+byte(n))
+	return appendBigEndianUint(out, size, n)
 }
 
-func headerSize(size uint64) int {
-	if size < 56 {
+// appendBigEndianUint appends the n low-order bytes of x to out, big-endian.
+func appendBigEndianUint(out []byte, x uint64, n int) []byte {
+	for i := n - 1; i >= 0; i-- {
+		out = append(out, byte(x>>uint(i*8)))
+	}
+	return out
+}
+
+func headerSize(payloadSize int) int {
+	if payloadSize < 56 {
 		return 1
 	}
-	return 1 + intSize(size)
+	return 1 + intSize(uint64(payloadSize))
 }
 
 func intSize(x uint64) int {
@@ -131,13 +137,4 @@ func intSize(x uint64) int {
 	default:
 		return 8
 	}
-}
-
-func putUint(buf []byte, x uint64) int {
-	n := intSize(x)
-	for i := 0; i < n; i++ {
-		shift := uint((n - i - 1) * 8)
-		buf[8-n+i] = byte(x >> shift)
-	}
-	return n
 }

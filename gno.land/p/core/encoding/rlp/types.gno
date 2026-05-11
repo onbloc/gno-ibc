@@ -30,4 +30,7 @@ var (
 	ErrDepthLimit     = errors.New("rlp: depth limit exceeded")
 )
 
-const maxDecodeDepth = 256
+const (
+	maxDecodeDepth = 256
+	maxInt         = int(^uint(0) >> 1)
+)

@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"chain"
 	"errors"
 
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -9,13 +10,14 @@ import (
 	core "gno.land/r/core/ibc/v1/core"
 )
 
-func (v *ZkgmV1) dispatchVerify(channelId core.ChannelId, salt [32]byte, instr z.Instruction) error {
+func (v *ZkgmV1) dispatchVerify(channelId core.ChannelId, sender string, sent chain.Coins, salt [32]byte, instr z.Instruction) error {
 	switch instr.Opcode {
 	case z.OP_TOKEN_ORDER:
-		if _, err := decodeOrderInstruction(instr); err != nil {
+		order, err := decodeOrderInstruction(instr)
+		if err != nil {
 			return err
 		}
-		return errors.New("zkgm/v1: token order verify not implemented")
+		return v.verifyTokenOrderV2(channelId, sender, sent, order)
 	case z.OP_CALL:
 		if _, err := decodeCallInstruction(instr); err != nil {
 			return err
@@ -46,10 +48,11 @@ func (v *ZkgmV1) dispatchExecute(packet core.Packet, path *u256.Uint, salt [32]b
 
 	switch instr.Opcode {
 	case z.OP_TOKEN_ORDER:
-		if _, err := decodeOrderInstruction(instr); err != nil {
+		order, err := decodeOrderInstruction(instr)
+		if err != nil {
 			return core.RecvPacketResult{}, err
 		}
-		panic("zkgm/v1: token order execute not implemented")
+		return v.executeTokenOrderV2(packet, path, order)
 	case z.OP_CALL:
 		if _, err := decodeCallInstruction(instr); err != nil {
 			return core.RecvPacketResult{}, err
@@ -73,10 +76,15 @@ func (v *ZkgmV1) dispatchExecute(packet core.Packet, path *u256.Uint, salt [32]b
 func (v *ZkgmV1) dispatchAck(packet core.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction, ack core.Bytes) error {
 	switch instr.Opcode {
 	case z.OP_TOKEN_ORDER:
-		if _, err := decodeOrderInstruction(instr); err != nil {
+		order, err := decodeOrderInstruction(instr)
+		if err != nil {
 			return err
 		}
-		return errors.New("zkgm/v1: token order ack not implemented")
+		decodedAck, err := z.DecodeAck(ack)
+		if err != nil {
+			return err
+		}
+		return v.acknowledgeTokenOrderV2(packet.SourceChannelId, path, order, decodedAck)
 	case z.OP_CALL:
 		if _, err := decodeCallInstruction(instr); err != nil {
 			return err
@@ -100,10 +108,11 @@ func (v *ZkgmV1) dispatchAck(packet core.Packet, path *u256.Uint, salt [32]byte,
 func (v *ZkgmV1) dispatchTimeout(packet core.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction) error {
 	switch instr.Opcode {
 	case z.OP_TOKEN_ORDER:
-		if _, err := decodeOrderInstruction(instr); err != nil {
+		order, err := decodeOrderInstruction(instr)
+		if err != nil {
 			return err
 		}
-		return errors.New("zkgm/v1: token order timeout not implemented")
+		return v.refundV2(packet.SourceChannelId, path, order)
 	case z.OP_CALL:
 		if _, err := decodeCallInstruction(instr); err != nil {
 			return err

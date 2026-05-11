@@ -71,8 +71,8 @@ func (d *dummyImpl) Timeout(packet core.Packet, relayer address) {
 	d.timeoutCalled = true
 }
 
-func (d *dummyImpl) Send(channelId core.ChannelId, data core.Bytes, timeoutTimestamp core.Timestamp) (core.Packet, error) {
-	return core.NewPacket(cross, 0, channelId, 0, data, timeoutTimestamp), nil
+func (d *dummyImpl) Send(req SendRequest) (core.Packet, error) {
+	return core.NewPacket(cross, 0, req.ChannelId, 0, nil, req.TimeoutTimestamp), nil
 }
 
 func (d *dummyImpl) Render(pkgpath string, path string) string {

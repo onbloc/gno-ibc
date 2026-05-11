@@ -4,6 +4,7 @@ import (
 	"chain/runtime"
 
 	z "gno.land/p/gnoswap/ibc/zkgm"
+	u256 "gno.land/p/gnoswap/uint256"
 	core "gno.land/r/core/ibc/v1/core"
 	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
 )
@@ -63,18 +64,22 @@ func (v *ZkgmV1) Timeout(packet core.Packet, relayer address) {
 	}
 }
 
-func (v *ZkgmV1) Send(channelId core.ChannelId, data core.Bytes, timeoutTimestamp core.Timestamp) (core.Packet, error) {
-	zp, err := z.DecodeZkgmPacket(data)
+func (v *ZkgmV1) Send(req zkgm.SendRequest) (core.Packet, error) {
+	if err := v.dispatchVerify(req.ChannelId, req.Sender, parseCoins(req.SentCoins), req.Salt, req.Instruction); err != nil {
+		return core.Packet{}, err
+	}
+	data, err := z.EncodeZkgmPacket(z.ZkgmPacket{
+		Salt:        req.Salt,
+		Path:        u256.Zero(),
+		Instruction: req.Instruction,
+	})
 	if err != nil {
 		return core.Packet{}, err
 	}
-	if err := v.dispatchVerify(channelId, zp.Salt, zp.Instruction); err != nil {
-		return core.Packet{}, err
-	}
 	return core.PacketSend(cross, core.MsgPacketSend{
-		SourceChannelId:  channelId,
-		TimeoutTimestamp: timeoutTimestamp,
-		Data:             data,
+		SourceChannelId:  req.ChannelId,
+		TimeoutTimestamp: req.TimeoutTimestamp,
+		Data:             core.NewBytes(cross, data),
 	}), nil
 }
 

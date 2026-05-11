@@ -1,6 +1,7 @@
 package zkgm
 
 import (
+	"chain/banker"
 	"chain/runtime"
 
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -14,18 +15,23 @@ func Send(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, 
 	if impl == nil {
 		panic("zkgm: impl not set")
 	}
-	data, err := z.EncodeZkgmPacket(z.ZkgmPacket{
-		Salt:        salt,
-		Path:        nil,
-		Instruction: instruction,
+	// An intermediate realm (or `maketx run`) can attach -send to the outer tx
+	// but spend it elsewhere, so OriginSend only reflects coins that landed
+	// here when the caller is the EOA.
+	var sentCoins string
+	if runtime.PreviousRealm().IsUserCall() {
+		sentCoins = banker.OriginSend().String()
+	}
+	packet, err := impl.Send(SendRequest{
+		ChannelId:        channelId,
+		TimeoutTimestamp: timeoutTimestamp,
+		Salt:             salt,
+		Instruction:      instruction,
+		Sender:           runtime.OriginCaller().String(),
+		SentCoins:        sentCoins,
 	})
 	if err != nil {
 		panic(err)
 	}
-	packet, err := impl.Send(channelId, core.Bytes(data), timeoutTimestamp)
-	if err != nil {
-		panic(err)
-	}
-	_ = runtime.OriginCaller()
 	return packet
 }

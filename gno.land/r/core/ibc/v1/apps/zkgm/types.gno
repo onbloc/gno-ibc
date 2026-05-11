@@ -19,7 +19,7 @@ type ZkgmImpl interface {
 	Ack(packet core.Packet, ack core.Bytes, relayer address)
 	Timeout(packet core.Packet, relayer address)
 
-	Send(channelId core.ChannelId, data core.Bytes, timeoutTimestamp core.Timestamp) (core.Packet, error)
+	Send(req SendRequest) (core.Packet, error)
 	Render(pkgpath string, path string) string
 }
 
@@ -28,6 +28,8 @@ type SendRequest struct {
 	TimeoutTimestamp core.Timestamp
 	Salt             [32]byte
 	Instruction      z.Instruction
+	Sender           string
+	SentCoins        string
 }
 
 type inFlightKey struct {

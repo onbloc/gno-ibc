@@ -12,6 +12,8 @@ on:
       - 'stdlibs/**'
       - 'tools/setup-stdlibs.py'
       - 'tools/test_setup_stdlibs.py'
+      - 'flake.nix'
+      - 'flake.lock'
       - '.github/workflows/test.yml'
   pull_request:
     paths: *test_paths
@@ -23,19 +25,27 @@ concurrency:
 jobs:
   gno-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
-      # Fail fast on tooling regressions before the heavy gno install.
-      - name: Run tools tests
-        run: |
-          python3 -m pip install --quiet 'pytest~=8.4'
-          python3 -m pytest tools/test_setup_stdlibs.py -v
-
-      - uses: actions/setup-go@v5
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
         with:
-          go-version: stable
-          cache: false
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # Materialize the dev shell once; later `run:` steps source it via
+      # BASH_ENV. Avoids `nix develop` re-evaluating the flake on every step.
+      - name: Materialize dev shell
+        run: |
+          nix print-dev-env .#ci > "$RUNNER_TEMP/ci-env.sh"
+          echo "BASH_ENV=$RUNNER_TEMP/ci-env.sh" >> "$GITHUB_ENV"
+
+      # Run before install-gno so tooling regressions fail in seconds, not
+      # after the gno build.
+      - name: Run tools tests
+        run: python3 -m pytest tools/test_setup_stdlibs.py -v
 
       # Cache the installed gno binary, keyed on inputs that actually affect
       # the binary: pinned commit + native bindings (.go) + package layout
@@ -53,15 +63,15 @@ jobs:
           restore-keys: |
             gno-${{ runner.os }}-
 
-      # Make `make install` (run when the gno binary cache misses) incremental
-      # by reusing Go's module + build artifacts across runs.
+      # flake.lock in the key invalidates the Go cache when nixpkgs bumps
+      # Go — `~/.cache/go-build` is keyed by Go version internally.
       - name: Cache Go build + modules
         uses: actions/cache@v4
         with:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: gobuild-${{ runner.os }}-${{ hashFiles('.gno-version', 'stdlibs/go.sum') }}
+          key: gobuild-${{ runner.os }}-${{ hashFiles('.gno-version', 'stdlibs/go.sum', 'flake.lock') }}
           restore-keys: |
             gobuild-${{ runner.os }}-
 

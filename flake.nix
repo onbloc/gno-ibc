@@ -74,21 +74,28 @@
         {
           packages = { inherit gno gnopls gnodev; };
 
+          # Limited to packages served by cache.nixos.org so CI setup stays
+          # under a minute; gno is built later by `make install-gno`.
+          devShells.ci = pkgs.mkShell {
+            buildInputs = [ pythonEnv ] ++ (with pkgs; [
+              go
+              rsync
+            ]);
+          };
+
           devShells.default = pkgs.mkShell {
+            inputsFrom = [ self'.devShells.ci ];
             buildInputs = [
               self'.packages.gno
               self'.packages.gnopls
               self'.packages.gnodev
-              pythonEnv
             ]
             ++ (with pkgs; [
-              go
               gopls
               gofumpt
               jq
               moreutils
               nixd
-              rsync
             ]);
 
             nativeBuildInputs = [

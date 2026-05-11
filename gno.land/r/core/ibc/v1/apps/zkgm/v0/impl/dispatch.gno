@@ -19,10 +19,11 @@ func (v *ZkgmV1) dispatchVerify(channelId core.ChannelId, sender string, sent ch
 		}
 		return v.verifyTokenOrderV2(channelId, sender, sent, order)
 	case z.OP_CALL:
-		if _, err := decodeCallInstruction(instr); err != nil {
+		call, err := decodeCallInstruction(instr)
+		if err != nil {
 			return err
 		}
-		return errors.New("zkgm/v1: call verify not implemented")
+		return v.verifyCall(sender, call)
 	case z.OP_BATCH:
 		if _, err := decodeBatchInstruction(instr); err != nil {
 			return err
@@ -38,7 +39,7 @@ func (v *ZkgmV1) dispatchVerify(channelId core.ChannelId, sender string, sent ch
 	}
 }
 
-func (v *ZkgmV1) dispatchExecute(packet core.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction, intent bool) (result core.RecvPacketResult, err error) {
+func (v *ZkgmV1) dispatchExecute(packet core.Packet, relayer address, relayerMsg core.Bytes, path *u256.Uint, salt [32]byte, instr z.Instruction, intent bool) (result core.RecvPacketResult, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			result = failureResult(universalErrorAck())
@@ -54,10 +55,11 @@ func (v *ZkgmV1) dispatchExecute(packet core.Packet, path *u256.Uint, salt [32]b
 		}
 		return v.executeTokenOrderV2(packet, path, order)
 	case z.OP_CALL:
-		if _, err := decodeCallInstruction(instr); err != nil {
+		call, err := decodeCallInstruction(instr)
+		if err != nil {
 			return core.RecvPacketResult{}, err
 		}
-		panic("zkgm/v1: call execute not implemented")
+		return v.executeCall(packet, relayer, relayerMsg, path, call)
 	case z.OP_BATCH:
 		if _, err := decodeBatchInstruction(instr); err != nil {
 			return core.RecvPacketResult{}, err
@@ -86,10 +88,11 @@ func (v *ZkgmV1) dispatchAck(packet core.Packet, path *u256.Uint, salt [32]byte,
 		}
 		return v.acknowledgeTokenOrderV2(packet.SourceChannelId, path, order, decodedAck)
 	case z.OP_CALL:
-		if _, err := decodeCallInstruction(instr); err != nil {
+		call, err := decodeCallInstruction(instr)
+		if err != nil {
 			return err
 		}
-		return errors.New("zkgm/v1: call ack not implemented")
+		return v.acknowledgeCall(packet, path, call)
 	case z.OP_BATCH:
 		if _, err := decodeBatchInstruction(instr); err != nil {
 			return err
@@ -114,10 +117,11 @@ func (v *ZkgmV1) dispatchTimeout(packet core.Packet, path *u256.Uint, salt [32]b
 		}
 		return v.refundV2(packet.SourceChannelId, path, order)
 	case z.OP_CALL:
-		if _, err := decodeCallInstruction(instr); err != nil {
+		call, err := decodeCallInstruction(instr)
+		if err != nil {
 			return err
 		}
-		return errors.New("zkgm/v1: call timeout not implemented")
+		return v.timeoutCall(packet, path, call)
 	case z.OP_BATCH:
 		if _, err := decodeBatchInstruction(instr); err != nil {
 			return err

@@ -43,4 +43,3 @@ func decreaseChannelBalanceV2(cur realm, channelId core.ChannelId, path *u256.Ui
 	}
 	return nil
 }
-

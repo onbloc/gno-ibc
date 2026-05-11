@@ -12,11 +12,14 @@ import (
 func TestRecvDispatchPanicBecomesUniversalErrorAck(cur realm, t *testing.T) {
 	data := mustZkgmPacketBytes(z.Instruction{
 		Version: z.INSTR_VERSION_0,
-		Opcode:  z.OP_CALL,
-		Operand: mustCallBytes(z.Call{
-			Sender:           []byte("sender"),
-			ContractAddress:  []byte("receiver"),
-			ContractCalldata: []byte("calldata"),
+		Opcode:  z.OP_FORWARD,
+		Operand: mustForwardBytes(z.Forward{
+			Path: u256.Zero(),
+			Instruction: z.Instruction{
+				Version: z.INSTR_VERSION_0,
+				Opcode:  z.OP_CALL,
+				Operand: mustCallBytes(z.Call{}),
+			},
 		}),
 	})
 	packet := core.NewPacket(cross, core.Sequence(1), core.ChannelId(1), core.ChannelId(2), data, core.Timestamp(0))
@@ -42,15 +45,19 @@ func TestRecvMalformedPacketReturnsFailure(cur realm, t *testing.T) {
 func TestAckUnsupportedStubAborts(cur realm, t *testing.T) {
 	data := mustZkgmPacketBytes(z.Instruction{
 		Version: z.INSTR_VERSION_0,
-		Opcode:  z.OP_CALL,
-		Operand: mustCallBytes(z.Call{
-			Sender:          []byte("sender"),
-			ContractAddress: []byte("receiver"),
+		Opcode:  z.OP_FORWARD,
+		Operand: mustForwardBytes(z.Forward{
+			Path: u256.Zero(),
+			Instruction: z.Instruction{
+				Version: z.INSTR_VERSION_0,
+				Opcode:  z.OP_CALL,
+				Operand: mustCallBytes(z.Call{}),
+			},
 		}),
 	})
 	packet := core.NewPacket(cross, core.Sequence(1), core.ChannelId(1), core.ChannelId(2), data, core.Timestamp(0))
 
-	uassert.AbortsContains(t, "call ack not implemented", func(cur realm) {
+	uassert.AbortsContains(t, "forward ack not implemented", func(cur realm) {
 		(&ZkgmV1{}).Ack(packet, nil, address("g1relayer"))
 	})
 }
@@ -69,6 +76,14 @@ func mustZkgmPacketBytes(instr z.Instruction) []byte {
 
 func mustCallBytes(call z.Call) []byte {
 	out, err := z.EncodeCall(call)
+	if err != nil {
+		panic(err)
+	}
+	return out
+}
+
+func mustForwardBytes(forward z.Forward) []byte {
+	out, err := z.EncodeForward(forward)
 	if err != nil {
 		panic(err)
 	}

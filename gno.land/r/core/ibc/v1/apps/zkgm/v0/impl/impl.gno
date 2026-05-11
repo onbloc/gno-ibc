@@ -37,7 +37,7 @@ func (v *ZkgmV1) Recv(packet core.Packet, relayer address, relayerMsg core.Bytes
 	if err != nil {
 		return errResult(err)
 	}
-	res, err := v.dispatchExecute(packet, zp.Path, zp.Salt, zp.Instruction, false)
+	res, err := v.dispatchExecute(packet, relayer, relayerMsg, zp.Path, zp.Salt, zp.Instruction, false)
 	if err != nil {
 		return errResult(err)
 	}

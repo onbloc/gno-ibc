@@ -49,6 +49,12 @@ func (bz Bytes) String() string {
 	return "0x" + hex.EncodeToString(bz)
 }
 
+// NewBytes constructs a Bytes value from a plain []byte. Required for callers
+// in other realms: Gno forbids `core.Bytes(b)` conversions outside this realm.
+func NewBytes(_ realm, b []byte) Bytes {
+	return Bytes(b)
+}
+
 type H256 [32]byte
 
 func (h H256) String() string {
@@ -93,6 +99,16 @@ type Packet struct {
 	TimeoutTimestamp     Timestamp
 }
 
+func NewPacket(_ realm, sequence Sequence, sourceChannelId ChannelId, destinationChannelId ChannelId, data []byte, timeoutTimestamp Timestamp) Packet {
+	return Packet{
+		Sequence:             sequence,
+		SourceChannelId:      sourceChannelId,
+		DestinationChannelId: destinationChannelId,
+		Data:                 Bytes(data),
+		TimeoutTimestamp:     timeoutTimestamp,
+	}
+}
+
 func (p Packet) EthAbiEncode() []byte {
 	schema := abi.Schema{Fields: []abi.Field{
 		{Type: abi.TypeUint64},
@@ -128,6 +144,10 @@ const (
 type RecvPacketResult struct {
 	Status PacketStatus
 	Ack    Bytes
+}
+
+func NewRecvPacketResult(_ realm, status PacketStatus, ack []byte) RecvPacketResult {
+	return RecvPacketResult{Status: status, Ack: Bytes(ack)}
 }
 
 type Channel struct {

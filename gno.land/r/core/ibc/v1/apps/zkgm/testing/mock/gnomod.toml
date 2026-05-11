@@ -1,0 +1,2 @@
+module = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
+gno = "0.9"

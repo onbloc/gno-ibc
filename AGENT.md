@@ -127,6 +127,24 @@ func equalBytes(a, b []byte) bool {
 }
 ```
 
+#### Foreign typed-slice construction pitfall
+
+Symmetric to the read-side problem: **constructing** a value of a foreign realm's typed slice in the calling realm also fails. Passing `[]byte{0x01}` to a parameter typed `core.Bytes` (where `type Bytes []byte` is defined in `core`) panics with `illegal conversion to external realm type` — the implicit `core.Bytes([]byte{...})` conversion happens in the caller's realm, which Gno forbids. `nil`, plain `[]byte`, and untyped numeric literals are unaffected; only foreign-defined typed wrappers trigger this.
+
+The owning realm must expose a `cross`-tagged constructor; callers invoke it with `cross`:
+
+```gno
+// in owning realm (e.g., r/core/ibc/v1/core/types.gno)
+func NewBytes(_ realm, b []byte) Bytes {
+    return Bytes(b) // legal: conversion runs inside the owning realm
+}
+
+// in caller realm
+core.NewBytes(cross, []byte{0x01})
+```
+
+Same pattern for other foreign typed wrappers (`NewPacket`, `NewRecvPacketResult`, …). When designing a realm that exports typed slices/structs, ship a constructor for every type external callers will need to instantiate.
+
 ### MsgRun vs MsgCall
 
 Most IBC functions require `MsgRun` (not `MsgCall`) because they take complex arguments (structs, slices of bytes). The IBC core realm itself lives at `gno.land/r/aib/ibc/core` (vendored from `gno-realms`); see filetests under `gno.land/r/core/ibc/apps/zkgm/v0/impl/` for working `MsgRun` examples.

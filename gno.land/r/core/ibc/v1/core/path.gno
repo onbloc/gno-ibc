@@ -43,6 +43,12 @@ var (
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
 	}
+	PACKET_RECEIPTS [32]byte = [32]byte{
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06,
+	}
 
 	// Sentinel values stored for commitments
 	COMMITMENT_MAGIC H256 = [32]byte{
@@ -117,5 +123,16 @@ func PacketAcknowledgementPath(packet Packet) H256 {
 	return keccak(bytes.Join([][]byte{
 		PACKET_ACKS[:],
 		batchHash[:],
+	}, nil))
+}
+
+// PacketReceiptPath returns the storage key for a packet receipt.
+// key = keccak(PACKET_RECEIPTS || source_channel || destination_channel || sequence)
+func PacketReceiptPath(packet Packet) H256 {
+	return keccak(bytes.Join([][]byte{
+		PACKET_RECEIPTS[:],
+		u32ToH256(uint32(packet.SourceChannelId)),
+		u32ToH256(uint32(packet.DestinationChannelId)),
+		u64ToH256(uint64(packet.Sequence)),
 	}, nil))
 }

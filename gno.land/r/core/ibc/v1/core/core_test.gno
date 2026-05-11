@@ -1,13 +1,19 @@
 package core
 
-import "testing"
+import (
+	"chain/runtime"
+	"testing"
+
+	"gno.land/p/nt/uassert/v0"
+)
 
 // --- Mock implementations ---
 
 type mockClient struct {
-	chainId string
-	height  Height
-	status  Status
+	chainId           string
+	height            Height
+	status            Status
+	nonMembershipKeys [][]byte
 }
 
 func (m *mockClient) CreateClient(_ realm, _ ClientId, _, _ []byte) string { return m.chainId }
@@ -19,12 +25,14 @@ func (m *mockClient) UpdateClient(_ realm, _ ClientId, _ []byte) ConsensusStateU
 		ConsensusStateBytes: []byte("cons"),
 	}
 }
-func (m *mockClient) Misbehaviour(_ realm, _ ClientId, _ []byte) []byte { return []byte("frozen") }
+func (m *mockClient) Misbehaviour(_ realm, _ ClientId, _ []byte) []byte     { return []byte("frozen") }
 func (m *mockClient) VerifyMembership(_ ClientId, _ Height, _, _, _ []byte) {}
-func (m *mockClient) VerifyNonMembership(_ ClientId, _ Height, _, _ []byte) {}
-func (m *mockClient) GetTimestamp(_ ClientId, _ Height) Timestamp      { return Timestamp(1e9) }
-func (m *mockClient) GetLatestHeight(_ ClientId) Height                { return m.height }
-func (m *mockClient) GetStatus(_ ClientId) Status                      { return m.status }
+func (m *mockClient) VerifyNonMembership(_ ClientId, _ Height, _, key []byte) {
+	m.nonMembershipKeys = append(m.nonMembershipKeys, key)
+}
+func (m *mockClient) GetTimestamp(_ ClientId, _ Height) Timestamp { return Timestamp(1e9) }
+func (m *mockClient) GetLatestHeight(_ ClientId) Height           { return m.height }
+func (m *mockClient) GetStatus(_ ClientId) Status                 { return m.status }
 
 type mockApp struct {
 	initCalled     bool
@@ -32,6 +40,7 @@ type mockApp struct {
 	recvPackets    []Packet
 	ackPackets     []Packet
 	timeoutPackets []Packet
+	recvResult     RecvPacketResult
 }
 
 func (a *mockApp) OnChannelOpenInit(_ ConnectionId, _ ChannelId, _ string, _ address) {
@@ -43,15 +52,23 @@ func (a *mockApp) OnChannelOpenConfirm(_ ChannelId, _ address)                  
 func (a *mockApp) OnChannelCloseInit(ch ChannelId, _ address) {
 	a.closedChannels = append(a.closedChannels, ch)
 }
+
 func (a *mockApp) OnChannelCloseConfirm(ch ChannelId, _ address) {
 	a.closedChannels = append(a.closedChannels, ch)
 }
-func (a *mockApp) OnRecvPacket(p Packet, _ address, _ Bytes) {
+
+func (a *mockApp) OnRecvPacket(p Packet, _ address, _ Bytes) RecvPacketResult {
 	a.recvPackets = append(a.recvPackets, p)
+	if a.recvResult.Status != PacketStatusUnknown {
+		return a.recvResult
+	}
+	return RecvPacketResult{Status: PacketStatusSuccess, Ack: Bytes{0x01}}
 }
+
 func (a *mockApp) OnAcknowledgementPacket(p Packet, _ Bytes, _ address) {
 	a.ackPackets = append(a.ackPackets, p)
 }
+
 func (a *mockApp) OnTimeoutPacket(p Packet, _ address) {
 	a.timeoutPackets = append(a.timeoutPackets, p)
 }
@@ -61,17 +78,7 @@ func (a *mockApp) OnTimeoutPacket(p Packet, _ address) {
 const mockType ClientType = "mock"
 
 func resetState() {
-	st = State{
-		nextClientId:     ClientId(1),
-		nextConnectionId: ConnectionId(1),
-		nextChannelId:    ChannelId(1),
-		clientRegistry:   make(map[ClientType]ILightClient),
-		clientTypes:      make(map[ClientId]ClientType),
-		connections:      make(map[ConnectionId]Connection),
-		channels:         make(map[ChannelId]Channel),
-		ports:            make(map[address]IApp),
-		channelOwners:    make(map[ChannelId]address),
-	}
+	st = newState()
 }
 
 func mustPanic(t *testing.T, fn func()) {
@@ -114,6 +121,14 @@ func setupOpenChannel(t *testing.T) (address, ConnectionId, ChannelId) {
 	return portId, connId, channelId
 }
 
+func setupPendingAsyncAck(t *testing.T) Packet {
+	t.Helper()
+	resetState()
+	packet := Packet{Sequence: 7, SourceChannelId: 99, DestinationChannelId: 1, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	st.savePendingAsyncAck(packet, runtime.CurrentRealm().Address())
+	return packet
+}
+
 // --- Path tests ---
 
 func TestClientStatePathUnique(t *testing.T) {
@@ -147,17 +162,27 @@ func TestConnectionChannelPathUnique(t *testing.T) {
 }
 
 func TestPacketCommitmentAndAckPathsDiffer(t *testing.T) {
-	p := Packet{SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
+	p := Packet{Sequence: 1, SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
 	if PacketCommitmentPath(p) == PacketAcknowledgementPath(p) {
 		t.Error("commitment and ack paths must differ for the same packet")
 	}
 }
 
 func TestPacketCommitmentPathUnique(t *testing.T) {
-	p1 := Packet{SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
-	p2 := Packet{SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 9999}
+	p1 := Packet{Sequence: 1, SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
+	p2 := Packet{Sequence: 2, SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
 	if PacketCommitmentPath(p1) == PacketCommitmentPath(p2) {
-		t.Error("packets with different timestamps must have different commitment paths")
+		t.Error("packets with different sequences must have different commitment paths")
+	}
+}
+
+func TestPacketReceiptPathDiffers(t *testing.T) {
+	p := Packet{Sequence: 1, SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
+	if PacketReceiptPath(p) == PacketCommitmentPath(p) {
+		t.Error("receipt and commitment paths must differ for the same packet")
+	}
+	if PacketReceiptPath(p) == PacketAcknowledgementPath(p) {
+		t.Error("receipt and ack paths must differ for the same packet")
 	}
 }
 
@@ -311,6 +336,22 @@ func TestAcknowledgementDoesNotPanic(t *testing.T) {
 	st.commitAcknowledgement(p, []byte("ack"))
 }
 
+func TestPacketReceiptLifecycle(t *testing.T) {
+	resetState()
+	p := Packet{Sequence: 1, SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
+	if st.hasPacketReceipt(p) {
+		t.Fatal("receipt must not exist before set")
+	}
+	st.setPacketReceipt(p)
+	if !st.hasPacketReceipt(p) {
+		t.Fatal("receipt must exist after set")
+	}
+	st.deletePacketReceipt(p)
+	if st.hasPacketReceipt(p) {
+		t.Fatal("receipt must not exist after delete")
+	}
+}
+
 // --- ensureConnectionOpen ---
 
 func TestEnsureConnectionOpenPanicsOnInit(t *testing.T) {
@@ -402,7 +443,259 @@ func TestPacketSendAndCommit(t *testing.T) {
 		TimeoutTimestamp:     Timestamp(9999),
 	}
 	st.commitPacket(packet)
-	// commitPacket must not panic; commitment is stored via chain/params
+}
+
+func TestPacketSendReturnsPacketWithSequence(t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+
+	p0 := PacketSend(cross, MsgPacketSend{SourceChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: 100})
+	p1 := PacketSend(cross, MsgPacketSend{SourceChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: 100})
+	p2 := PacketSend(cross, MsgPacketSend{SourceChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: 100})
+
+	if p0.Sequence != 0 || p1.Sequence != 1 || p2.Sequence != 2 {
+		t.Errorf("unexpected sequences: got %d %d %d", p0.Sequence, p1.Sequence, p2.Sequence)
+	}
+	if PacketCommitmentPath(p0) == PacketCommitmentPath(p1) || PacketCommitmentPath(p1) == PacketCommitmentPath(p2) {
+		t.Fatal("commitment paths must differ by sequence")
+	}
+}
+
+func TestPacketRecvSyncAckWritten(t *testing.T) {
+	resetState()
+	portId, _, channelId := setupOpenChannel(t)
+	app := st.ports[portId].(*mockApp)
+	packet := Packet{Sequence: 7, SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+
+	uassert.NotAborts(t, func(cur realm) {
+		PacketRecv(cur, MsgPacketRecv{
+			Packets: []Packet{packet},
+			Relayer: address("g1relayer"),
+		})
+	})
+
+	if len(app.recvPackets) != 1 {
+		t.Fatalf("OnRecvPacket calls: got %d want 1", len(app.recvPackets))
+	}
+	if !st.hasPacketReceipt(packet) {
+		t.Fatal("PacketRecv must set packet receipt")
+	}
+	if !st.hasAcknowledgement(packet) {
+		t.Fatal("PacketRecv must commit sync acknowledgement")
+	}
+}
+
+func TestPacketRecvSyncEmptyAckRejected(t *testing.T) {
+	resetState()
+	portId, _, channelId := setupOpenChannel(t)
+	app := st.ports[portId].(*mockApp)
+	app.recvResult = RecvPacketResult{Status: PacketStatusSuccess, Ack: nil}
+	packet := Packet{Sequence: 7, SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+
+	uassert.AbortsContains(t, "sync ack cannot be empty", func(cur realm) {
+		PacketRecv(cur, MsgPacketRecv{Packets: []Packet{packet}})
+	})
+}
+
+// --- Async acknowledgement ---
+
+func TestPacketRecvAsyncDefersAck(t *testing.T) {
+	resetState()
+	portId, _, channelId := setupOpenChannel(t)
+	app := st.ports[portId].(*mockApp)
+	app.recvResult = RecvPacketResult{Status: PacketStatusAsync}
+	packet := Packet{Sequence: 7, SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+
+	uassert.NotAborts(t, func(cur realm) {
+		PacketRecv(cur, MsgPacketRecv{Packets: []Packet{packet}})
+	})
+
+	if !st.hasPacketReceipt(packet) {
+		t.Fatal("async recv must still set packet receipt")
+	}
+	if st.hasAcknowledgement(packet) {
+		t.Fatal("async recv must not commit acknowledgement")
+	}
+	if !st.hasPendingAsyncAck(packet.DestinationChannelId, packet.Sequence) {
+		t.Fatal("async recv must save pending async acknowledgement")
+	}
+}
+
+func TestPendingAsyncAckLifecycle(t *testing.T) {
+	resetState()
+	packet := Packet{Sequence: 7, SourceChannelId: 99, DestinationChannelId: 1, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	portId := address("g1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq9ex6sz")
+
+	st.savePendingAsyncAck(packet, portId)
+	pending, ok := st.getPendingAsyncAck(packet.DestinationChannelId, packet.Sequence)
+	if !ok {
+		t.Fatal("pending async ack must exist after save")
+	}
+	if pending.Packet.Sequence != packet.Sequence || pending.AuthorizedPort != portId {
+		t.Fatal("pending async ack stored unexpected data")
+	}
+	if !st.hasPendingAsyncAck(packet.DestinationChannelId, packet.Sequence) {
+		t.Fatal("hasPendingAsyncAck must report saved pending ack")
+	}
+	st.deletePendingAsyncAck(packet.DestinationChannelId, packet.Sequence)
+	if st.hasPendingAsyncAck(packet.DestinationChannelId, packet.Sequence) {
+		t.Fatal("pending async ack must be deleted")
+	}
+}
+
+func TestSavePendingAsyncAckRejectsDuplicate(t *testing.T) {
+	resetState()
+	packet := Packet{Sequence: 7, SourceChannelId: 99, DestinationChannelId: 1, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	portId := address("g1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq9ex6sz")
+
+	st.savePendingAsyncAck(packet, portId)
+	mustPanic(t, func() {
+		st.savePendingAsyncAck(packet, portId)
+	})
+}
+
+func TestSavePendingAsyncAckRejectsAlreadyAcked(t *testing.T) {
+	resetState()
+	packet := Packet{Sequence: 7, SourceChannelId: 99, DestinationChannelId: 1, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	portId := address("g1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq9ex6sz")
+
+	st.commitAcknowledgement(packet, Bytes{0x01})
+	mustPanic(t, func() {
+		st.savePendingAsyncAck(packet, portId)
+	})
+}
+
+func TestWriteAcknowledgementWithoutAsyncRejected(t *testing.T) {
+	resetState()
+
+	uassert.AbortsContains(t, "no pending async ack", func(cur realm) {
+		WriteAcknowledgement(cur, ChannelId(1), Sequence(7), Bytes{0x01})
+	})
+}
+
+func TestWriteAcknowledgementWrongCallerPreservesPending(t *testing.T) {
+	resetState()
+	packet := Packet{Sequence: 7, SourceChannelId: 99, DestinationChannelId: 1, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	st.savePendingAsyncAck(packet, address("g1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq9ex6sz"))
+
+	uassert.AbortsContains(t, "caller not authorized", func(cur realm) {
+		WriteAcknowledgement(cur, packet.DestinationChannelId, packet.Sequence, Bytes{0x01})
+	})
+	if !st.hasPendingAsyncAck(packet.DestinationChannelId, packet.Sequence) {
+		t.Fatal("wrong caller must not consume pending async ack")
+	}
+}
+
+func TestWriteAcknowledgementEmptyAckRejected(t *testing.T) {
+	packet := setupPendingAsyncAck(t)
+
+	uassert.AbortsContains(t, "acknowledgement cannot be empty", func(cur realm) {
+		WriteAcknowledgement(cur, packet.DestinationChannelId, packet.Sequence, nil)
+	})
+	if !st.hasPendingAsyncAck(packet.DestinationChannelId, packet.Sequence) {
+		t.Fatal("empty ack must not consume pending async ack")
+	}
+}
+
+func TestWriteAcknowledgementSuccess(t *testing.T) {
+	packet := setupPendingAsyncAck(t)
+
+	uassert.NotAborts(t, func(cur realm) {
+		WriteAcknowledgement(cur, packet.DestinationChannelId, packet.Sequence, Bytes{0x01})
+	})
+
+	if !st.hasAcknowledgement(packet) {
+		t.Fatal("WriteAcknowledgement must commit ack")
+	}
+	if st.hasPendingAsyncAck(packet.DestinationChannelId, packet.Sequence) {
+		t.Fatal("WriteAcknowledgement must consume pending async ack")
+	}
+}
+
+func TestWriteAcknowledgementDuplicateRejected(t *testing.T) {
+	packet := setupPendingAsyncAck(t)
+
+	WriteAcknowledgement(cross, packet.DestinationChannelId, packet.Sequence, Bytes{0x01})
+	uassert.AbortsContains(t, "no pending async ack", func(cur realm) {
+		WriteAcknowledgement(cur, packet.DestinationChannelId, packet.Sequence, Bytes{0x02})
+	})
+}
+
+func TestWriteAcknowledgementAlreadyAckedRejected(t *testing.T) {
+	packet := setupPendingAsyncAck(t)
+	st.commitAcknowledgement(packet, Bytes{0x01})
+
+	uassert.AbortsContains(t, "acknowledgement already written", func(cur realm) {
+		WriteAcknowledgement(cur, packet.DestinationChannelId, packet.Sequence, Bytes{0x02})
+	})
+	if !st.hasPendingAsyncAck(packet.DestinationChannelId, packet.Sequence) {
+		t.Fatal("already-acked failure must not consume pending async ack")
+	}
+}
+
+func TestPacketRecvReceiptDupRejected(t *testing.T) {
+	resetState()
+	portId, _, channelId := setupOpenChannel(t)
+	app := st.ports[portId].(*mockApp)
+	packet := Packet{Sequence: 7, SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+
+	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
+	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
+
+	if len(app.recvPackets) != 1 {
+		t.Fatalf("duplicate recv must not call app again: got %d calls", len(app.recvPackets))
+	}
+}
+
+func TestPacketAcknowledgementRoundtrip(t *testing.T) {
+	resetState()
+	portId, connId, channelId := setupOpenChannel(t)
+	app := st.ports[portId].(*mockApp)
+	packet := PacketSend(cross, MsgPacketSend{SourceChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100})
+	st.channelOwners[packet.DestinationChannelId] = portId
+	st.saveChannel(packet.DestinationChannelId, Channel{
+		State:                 ChannelStateOpen,
+		ConnectionId:          connId,
+		CounterpartyChannelId: packet.SourceChannelId,
+		CounterpartyPortId:    Bytes("counterparty"),
+		Version:               "ics20-1",
+	})
+
+	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
+	PacketAcknowledgement(cross, MsgPacketAcknowledgement{
+		Packets:          []Packet{packet},
+		Acknowledgements: []Bytes{{0x01}},
+		Relayer:          address("g1relayer"),
+	})
+
+	if len(app.ackPackets) != 1 {
+		t.Fatalf("OnAcknowledgementPacket calls: got %d want 1", len(app.ackPackets))
+	}
+	if st.hasPacketCommitment(packet) {
+		t.Fatal("acknowledgement must delete source packet commitment")
+	}
+}
+
+func TestPacketTimeoutReceiptPath(t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := PacketSend(cross, MsgPacketSend{SourceChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100})
+	client := st.clientRegistry[mockType].(*mockClient)
+
+	PacketTimeout(cross, MsgPacketTimeout{Packet: packet})
+
+	if len(client.nonMembershipKeys) != 1 {
+		t.Fatalf("non-membership calls: got %d want 1", len(client.nonMembershipKeys))
+	}
+	got := string(client.nonMembershipKeys[0])
+	receiptPath := PacketReceiptPath(packet)
+	want := string(receiptPath[:])
+	if got != want {
+		t.Fatal("PacketTimeout must verify PacketReceiptPath non-membership")
+	}
+	if st.hasPacketCommitment(packet) {
+		t.Fatal("timeout must delete source packet commitment")
+	}
 }
 
 // --- Integration: channel close ---

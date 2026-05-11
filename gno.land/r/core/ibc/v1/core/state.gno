@@ -38,8 +38,8 @@ type State struct {
 	packetCommitments map[H256]bool
 	packetReceipts    map[H256]bool
 	packetAcks        map[H256]bool
-	// Entries are not auto-expired; ZKGM Forward writes a universal-error ack
-	// on child timeout. See local_docs/zkgm/26-v1-phaseB-core-async.md §26.1.5.
+	// Entries are not auto-expired; on child timeout, ZKGM Forward writes
+	// a universal-error ACK.
 	pendingAsyncAcks map[asyncAckKey]pendingAsyncAck
 }
 

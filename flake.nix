@@ -81,6 +81,12 @@
               go
               rsync
             ]);
+            # `nix print-dev-env` overwrites PATH with the shell's store
+            # paths; re-prepend GOBIN so `make verify-gno` finds the gno
+            # binary installed there by `make install-gno`.
+            shellHook = ''
+              export PATH="''${GOBIN:-$HOME/go/bin}:$PATH"
+            '';
           };
 
           devShells.default = pkgs.mkShell {

@@ -3,14 +3,21 @@ package core
 import "errors"
 
 var (
-	ErrClientTypeAlreadyRegistered = errors.New("client type already registered")
-	ErrClientTypeNotFound          = errors.New("client type not found")
-	ErrClientNotFound              = errors.New("client not found")
-	ErrConnectionNotFound          = errors.New("connection not found")
-	ErrInvalidConnectionState      = errors.New("invalid connection state")
-	ErrChannelNotFound             = errors.New("channel not found")
-	ErrInvalidChannelState         = errors.New("invalid channel state")
-	ErrPortNotFound                = errors.New("port not found")
+	ErrClientTypeAlreadyRegistered   = errors.New("client type already registered")
+	ErrClientTypeNotFound            = errors.New("client type not found")
+	ErrClientNotFound                = errors.New("client not found")
+	ErrConnectionNotFound            = errors.New("connection not found")
+	ErrInvalidConnectionState        = errors.New("invalid connection state")
+	ErrChannelNotFound               = errors.New("channel not found")
+	ErrInvalidChannelState           = errors.New("invalid channel state")
+	ErrPortNotFound                  = errors.New("port not found")
+	ErrSyncAckEmpty                  = errors.New("sync ack cannot be empty")
+	ErrUnknownPacketStatus           = errors.New("unknown packet status")
+	ErrNoPendingAsyncAck             = errors.New("no pending async ack")
+	ErrUnauthorizedAckWriter         = errors.New("caller not authorized to write ack")
+	ErrAcknowledgementAlreadyWritten = errors.New("acknowledgement already written")
+	ErrPendingAsyncAckExists         = errors.New("pending async ack already exists")
+	ErrAcknowledgementEmpty          = errors.New("acknowledgement cannot be empty")
 )
 
 type State struct {
@@ -31,6 +38,19 @@ type State struct {
 	packetCommitments map[H256]bool
 	packetReceipts    map[H256]bool
 	packetAcks        map[H256]bool
+	// Entries are not auto-expired; ZKGM Forward writes a universal-error ack
+	// on child timeout. See local_docs/zkgm/26-v1-phaseB-core-async.md §26.1.5.
+	pendingAsyncAcks map[asyncAckKey]pendingAsyncAck
+}
+
+type asyncAckKey struct {
+	ChannelId ChannelId
+	Sequence  Sequence
+}
+
+type pendingAsyncAck struct {
+	Packet         Packet
+	AuthorizedPort address
 }
 
 func newState() State {
@@ -48,6 +68,7 @@ func newState() State {
 		packetCommitments: make(map[H256]bool),
 		packetReceipts:    make(map[H256]bool),
 		packetAcks:        make(map[H256]bool),
+		pendingAsyncAcks:  make(map[asyncAckKey]pendingAsyncAck),
 	}
 }
 
@@ -186,4 +207,32 @@ func (s *State) deletePacketReceipt(packet Packet) {
 	key := PacketReceiptPath(packet)
 	delete(s.packetReceipts, key)
 	commit(key, zero)
+}
+
+func (s *State) savePendingAsyncAck(packet Packet, authorizedPort address) {
+	key := asyncAckKey{ChannelId: packet.DestinationChannelId, Sequence: packet.Sequence}
+	if _, exists := s.pendingAsyncAcks[key]; exists {
+		panic(ErrPendingAsyncAckExists)
+	}
+	if s.hasAcknowledgement(packet) {
+		panic(ErrAcknowledgementAlreadyWritten)
+	}
+	s.pendingAsyncAcks[key] = pendingAsyncAck{
+		Packet:         packet,
+		AuthorizedPort: authorizedPort,
+	}
+}
+
+func (s *State) getPendingAsyncAck(channelId ChannelId, sequence Sequence) (pendingAsyncAck, bool) {
+	v, ok := s.pendingAsyncAcks[asyncAckKey{ChannelId: channelId, Sequence: sequence}]
+	return v, ok
+}
+
+func (s *State) deletePendingAsyncAck(channelId ChannelId, sequence Sequence) {
+	delete(s.pendingAsyncAcks, asyncAckKey{ChannelId: channelId, Sequence: sequence})
+}
+
+func (s *State) hasPendingAsyncAck(channelId ChannelId, sequence Sequence) bool {
+	_, ok := s.pendingAsyncAcks[asyncAckKey{ChannelId: channelId, Sequence: sequence}]
+	return ok
 }

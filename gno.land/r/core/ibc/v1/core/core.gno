@@ -3,6 +3,7 @@ package core
 import (
 	"chain"
 	"chain/params"
+	"chain/runtime"
 	"crypto/keccak256"
 	"encoding/hex"
 )
@@ -424,19 +425,22 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 		res := st.getAppByPortId(portId).OnRecvPacket(packet, msg.Relayer, relayerMsg)
 		switch res.Status {
 		case PacketStatusAsync:
-			panic("async ack not supported")
+			st.savePendingAsyncAck(packet, portId)
 		case PacketStatusSuccess, PacketStatusFailure:
 			if len(res.Ack) == 0 {
-				panic("sync ack cannot be empty")
+				panic(ErrSyncAckEmpty)
 			}
 			st.commitAcknowledgement(packet, res.Ack)
+			ackHash := keccak(res.Ack)
 			chain.Emit(WriteAckEvent,
 				"source_channel_id", packet.SourceChannelId.String(),
 				"destination_channel_id", packet.DestinationChannelId.String(),
 				"sequence", packet.Sequence.String(),
+				"ack_hash_hex", hex.EncodeToString(ackHash[:]),
+				"deferred", "false",
 			)
 		default:
-			panic("unknown packet status")
+			panic(ErrUnknownPacketStatus)
 		}
 
 		chain.Emit(PacketRecvEvent,
@@ -445,6 +449,36 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 			"sequence", packet.Sequence.String(),
 		)
 	}
+}
+
+func WriteAcknowledgement(_ realm, channelId ChannelId, sequence Sequence, ack Bytes) {
+	pending, found := st.getPendingAsyncAck(channelId, sequence)
+	if !found {
+		panic(ErrNoPendingAsyncAck)
+	}
+
+	callerAddr := runtime.PreviousRealm().Address()
+	if callerAddr != pending.AuthorizedPort {
+		panic(ErrUnauthorizedAckWriter)
+	}
+	if st.hasAcknowledgement(pending.Packet) {
+		panic(ErrAcknowledgementAlreadyWritten)
+	}
+	if len(ack) == 0 {
+		panic(ErrAcknowledgementEmpty)
+	}
+
+	st.commitAcknowledgement(pending.Packet, ack)
+	st.deletePendingAsyncAck(channelId, sequence)
+
+	ackHash := keccak(ack)
+	chain.Emit(WriteAckEvent,
+		"source_channel_id", pending.Packet.SourceChannelId.String(),
+		"destination_channel_id", pending.Packet.DestinationChannelId.String(),
+		"sequence", sequence.String(),
+		"ack_hash_hex", hex.EncodeToString(ackHash[:]),
+		"deferred", "true",
+	)
 }
 
 func PacketAcknowledgement(_ realm, msg MsgPacketAcknowledgement) {

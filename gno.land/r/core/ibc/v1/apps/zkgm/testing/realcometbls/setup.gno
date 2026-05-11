@@ -14,6 +14,15 @@ func CreateRealCometBLSClient(cur realm) core.ClientId {
 	})
 }
 
+func CreateSyntheticCometBLSClient(cur realm) core.ClientId {
+	return core.CreateClient(cross, core.MsgCreateClient{
+		ClientType:          realcometbls.ClientType,
+		ClientStateBytes:    core.NewBytes(cross, ClientStateBytes(cross)),
+		ConsensusStateBytes: core.NewBytes(cross, SyntheticConsensusStateBytes(cross)),
+		Relayer:             address("g1relayer"),
+	})
+}
+
 func UpdateRealCometBLSClient(cur realm, clientId core.ClientId) core.Height {
 	return core.UpdateClient(cross, core.MsgUpdateClient{
 		ClientId:      clientId,

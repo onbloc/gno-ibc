@@ -20,6 +20,19 @@ var (
 	devnetAppHash = mustHex(
 		"EE7E3E58F98AC95D63CE93B270981DF3EE54CA367F8D521ED1F444717595CD36",
 	)
+	syntheticMembershipRoot = mustHex(
+		"13a5b650ff50759f50ef8f9591209557d51c4583ec4340862f769b0cf4644e0a",
+	)
+	syntheticMembershipProof = mustHex(
+		"0a2b0a290a0a7061636b65742d6b6579120c7061636b65742d76616c75651a0d08011000180120012a03" +
+			"0002020a360a340a036962631220dfc4876d278dc1a3b0a9c51d5b09b459f0b16fa9979c5abeddaab004" +
+			"11afc7481a0b08011000180120012a0100",
+	)
+	syntheticMembershipWrongSubrootProof = mustHex(
+		"0a2b0a290a0a7061636b65742d6b6579120c7061636b65742d76616c75651a0d08011000180120012a03" +
+			"0002020a360a340a036962631220dec4876d278dc1a3b0a9c51d5b09b459f0b16fa9979c5abeddaab004" +
+			"11afc7481a0b08011000180120012a0100",
+	)
 	devnetZKP = mustHex(
 		"03CF56142A1E03D2445A82100FEAF70C1CD95A731ED85792AFFF5792EC0BDD21" +
 			"08991BB56F9043A269F88903DE616A9AB99A3C5AB778E566744B060456C5616C" +
@@ -46,17 +59,41 @@ func ClientStateBytes(cur realm) []byte {
 }
 
 func TrustedConsensusStateBytes(cur realm) []byte {
+	return consensusStateBytes(devnetAppHash)
+}
+
+func SyntheticConsensusStateBytes(cur realm) []byte {
+	return consensusStateBytes(syntheticMembershipRoot)
+}
+
+func consensusStateBytes(root []byte) []byte {
 	bz, err := cometblsp.EncodeConsensusState(cometblsp.ConsensusState{
 		Timestamp:          uint64(DevnetTimeSeconds-1000) * 1_000_000_000,
 		NextValidatorsHash: cloneBytes(devnetValidatorsHash),
 		Root: cometblsp.MerkleRoot{
-			Hash: cloneBytes(devnetAppHash),
+			Hash: cloneBytes(root),
 		},
 	})
 	if err != nil {
 		panic(err)
 	}
 	return bz
+}
+
+func SyntheticMembershipKey(cur realm) []byte {
+	return []byte("packet-key")
+}
+
+func SyntheticMembershipValue(cur realm) []byte {
+	return []byte("packet-value")
+}
+
+func SyntheticMembershipProof(cur realm) []byte {
+	return cloneBytes(syntheticMembershipProof)
+}
+
+func SyntheticMembershipWrongSubrootProof(cur realm) []byte {
+	return cloneBytes(syntheticMembershipWrongSubrootProof)
 }
 
 func HeaderBytes(cur realm) []byte {

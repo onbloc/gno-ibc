@@ -49,6 +49,10 @@ func (v *ZkgmV1) Ack(packet core.Packet, ack core.Bytes, relayer address) {
 	if err != nil {
 		panic(err.Error())
 	}
+	if v.handleForwardChild(packet, zp, ack) {
+		return
+	}
+
 	if err := v.dispatchAck(packet, zp.Path, zp.Salt, zp.Instruction, ack); err != nil {
 		panic(err.Error())
 	}
@@ -59,6 +63,10 @@ func (v *ZkgmV1) Timeout(packet core.Packet, relayer address) {
 	if err != nil {
 		panic(err.Error())
 	}
+	if v.handleForwardChild(packet, zp, core.NewBytes(cross, universalErrorAck())) {
+		return
+	}
+
 	if err := v.dispatchTimeout(packet, zp.Path, zp.Salt, zp.Instruction); err != nil {
 		panic(err.Error())
 	}
@@ -68,6 +76,7 @@ func (v *ZkgmV1) Send(req zkgm.SendRequest) (core.Packet, error) {
 	if err := v.dispatchVerify(req.ChannelId, req.Sender, parseCoins(req.SentCoins), req.Salt, req.Instruction); err != nil {
 		return core.Packet{}, err
 	}
+
 	data, err := z.EncodeZkgmPacket(z.ZkgmPacket{
 		Salt:        req.Salt,
 		Path:        u256.Zero(),
@@ -76,6 +85,7 @@ func (v *ZkgmV1) Send(req zkgm.SendRequest) (core.Packet, error) {
 	if err != nil {
 		return core.Packet{}, err
 	}
+
 	return core.PacketSend(cross, core.MsgPacketSend{
 		SourceChannelId:  req.ChannelId,
 		TimeoutTimestamp: req.TimeoutTimestamp,

@@ -32,10 +32,20 @@ type SendRequest struct {
 	SentCoins        string
 }
 
-type inFlightKey struct {
+// InFlightKey identifies a forwarded child packet awaiting the counterparty's
+// resolution; the source-side IBC core stores the parent ack against this tuple.
+type InFlightKey struct {
 	SourceChannelId      core.ChannelId
 	DestinationChannelId core.ChannelId
 	Sequence             core.Sequence
+}
+
+// InFlightValue carries the parent packet identity so that when the child resolves,
+// the parent's deferred ack/timeout can be written on the correct destination channel.
+type InFlightValue struct {
+	ParentSourceChannelId      core.ChannelId
+	ParentDestinationChannelId core.ChannelId
+	ParentSequence             core.Sequence
 }
 
 type UpdateRequest struct {

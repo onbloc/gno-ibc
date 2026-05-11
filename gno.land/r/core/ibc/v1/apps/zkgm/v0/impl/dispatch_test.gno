@@ -9,7 +9,7 @@ import (
 	core "gno.land/r/core/ibc/v1/core"
 )
 
-func TestRecvDispatchPanicBecomesUniversalErrorAck(cur realm, t *testing.T) {
+func TestRecvForwardExecuteErrorReturnsFailure(cur realm, t *testing.T) {
 	data := mustZkgmPacketBytes(z.Instruction{
 		Version: z.INSTR_VERSION_0,
 		Opcode:  z.OP_FORWARD,
@@ -27,10 +27,7 @@ func TestRecvDispatchPanicBecomesUniversalErrorAck(cur realm, t *testing.T) {
 	res := (&ZkgmV1{}).Recv(packet, address("g1relayer"), nil)
 
 	uassert.True(t, res.Status == core.PacketStatusFailure)
-	ack, err := z.DecodeAck(res.Ack)
-	uassert.NoError(t, err)
-	uassert.True(t, ack.Tag.Eq(u256.NewUint(0)))
-	uassert.Equal(t, "UNIVERSAL_ERROR", string(ack.InnerAck))
+	uassert.Equal(t, "zkgm/v1: forward missing previous destination channel", string(res.Ack))
 }
 
 func TestRecvMalformedPacketReturnsFailure(cur realm, t *testing.T) {
@@ -42,22 +39,14 @@ func TestRecvMalformedPacketReturnsFailure(cur realm, t *testing.T) {
 	uassert.True(t, len(res.Ack) > 0)
 }
 
-func TestAckUnsupportedStubAborts(cur realm, t *testing.T) {
+func TestAckUnsupportedOpcodeAborts(cur realm, t *testing.T) {
 	data := mustZkgmPacketBytes(z.Instruction{
 		Version: z.INSTR_VERSION_0,
-		Opcode:  z.OP_FORWARD,
-		Operand: mustForwardBytes(z.Forward{
-			Path: u256.Zero(),
-			Instruction: z.Instruction{
-				Version: z.INSTR_VERSION_0,
-				Opcode:  z.OP_CALL,
-				Operand: mustCallBytes(z.Call{}),
-			},
-		}),
+		Opcode:  0xFF,
 	})
 	packet := core.NewPacket(cross, core.Sequence(1), core.ChannelId(1), core.ChannelId(2), data, core.Timestamp(0))
 
-	uassert.AbortsContains(t, "forward ack not implemented", func(cur realm) {
+	uassert.AbortsContains(t, "unsupported opcode", func(cur realm) {
 		(&ZkgmV1{}).Ack(packet, nil, address("g1relayer"))
 	})
 }

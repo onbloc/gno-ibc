@@ -31,10 +31,11 @@ func (v *ZkgmV1) dispatchVerify(channelId core.ChannelId, sender string, sent ch
 		}
 		return v.verifyBatch(channelId, sender, sent, salt, batch)
 	case z.OP_FORWARD:
-		if _, err := decodeForwardInstruction(instr); err != nil {
+		forward, err := decodeForwardInstruction(instr)
+		if err != nil {
 			return err
 		}
-		return errors.New("zkgm/v1: forward verify not implemented")
+		return v.verifyForward(channelId, sender, sent, salt, forward)
 	default:
 		return errors.New("zkgm/v1: unsupported opcode")
 	}
@@ -72,10 +73,11 @@ func (v *ZkgmV1) dispatchExecute(packet core.Packet, relayer address, relayerMsg
 		}
 		return core.NewRecvPacketResult(cross, core.PacketStatusSuccess, ack), nil
 	case z.OP_FORWARD:
-		if _, err := decodeForwardInstruction(instr); err != nil {
+		forward, err := decodeForwardInstruction(instr)
+		if err != nil {
 			return core.RecvPacketResult{}, err
 		}
-		panic("zkgm/v1: forward execute not implemented")
+		return v.executeForward(packet, path, salt, forward, intent)
 	default:
 		return core.RecvPacketResult{}, errors.New("zkgm/v1: unsupported opcode")
 	}
@@ -110,10 +112,15 @@ func (v *ZkgmV1) dispatchAck(packet core.Packet, path *u256.Uint, salt [32]byte,
 		}
 		return v.acknowledgeBatch(packet, path, salt, batch, outerAck)
 	case z.OP_FORWARD:
-		if _, err := decodeForwardInstruction(instr); err != nil {
+		forward, err := decodeForwardInstruction(instr)
+		if err != nil {
 			return err
 		}
-		return errors.New("zkgm/v1: forward ack not implemented")
+		outerAck, err := z.DecodeAck(ack)
+		if err != nil {
+			return err
+		}
+		return v.acknowledgeForward(packet, path, salt, forward, outerAck)
 	default:
 		return errors.New("zkgm/v1: unsupported opcode")
 	}
@@ -140,10 +147,11 @@ func (v *ZkgmV1) dispatchTimeout(packet core.Packet, path *u256.Uint, salt [32]b
 		}
 		return v.timeoutBatch(packet, path, salt, batch)
 	case z.OP_FORWARD:
-		if _, err := decodeForwardInstruction(instr); err != nil {
+		forward, err := decodeForwardInstruction(instr)
+		if err != nil {
 			return err
 		}
-		return errors.New("zkgm/v1: forward timeout not implemented")
+		return v.timeoutForward(packet, path, salt, forward)
 	default:
 		return errors.New("zkgm/v1: unsupported opcode")
 	}

@@ -7,7 +7,7 @@ Stateless gno libraries (`p/`). Importable from any realm or package; no on-chai
 | Namespace | Origin | Notes |
 |---|---|---|
 | `aib/` | mirrored from `third_party/gno-realms` (`p/aib/...`) | encoding/merkle/ics23 helpers and IBC primitives (app, host, lightclient, types) |
-| `core/` | first-party | ABI codec (`encoding/abi`), IBC protobuf, ZKGM ABI types, CometBLS / Tendermint light-client primitives |
+| `core/` | first-party | ABI/RLP codecs (`encoding/abi`, `encoding/rlp`), IBC protobuf, ZKGM ABI types, CometBLS / Tendermint light-client primitives |
 | `demo/` | mirrored from `third_party/gnolang-gno` | `tokens/grc20` reference token |
 | `gnoswap/` | mirrored from `third_party/gnoswap` | `uint256` arithmetic used by ZKGM and CometBLS |
 | `moul/` | mirrored from `third_party/gnolang-gno` | `md` (markdown helpers) |

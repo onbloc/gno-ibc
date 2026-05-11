@@ -1,0 +1,2 @@
+module = "gno.land/p/core/encoding/rlp"
+gno = "0.9"

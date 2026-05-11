@@ -2,8 +2,8 @@ package impl
 
 import (
 	"chain/runtime"
-	"errors"
 
+	z "gno.land/p/gnoswap/ibc/zkgm"
 	core "gno.land/r/core/ibc/v1/core"
 	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
 )
@@ -32,14 +32,45 @@ func (v *ZkgmV1) PreChannelCloseInit(channelId core.ChannelId) {}
 func (v *ZkgmV1) PostChannelCloseConfirm(channelId core.ChannelId) {}
 
 func (v *ZkgmV1) Recv(packet core.Packet, relayer address, relayerMsg core.Bytes) core.RecvPacketResult {
-	return errResult(errors.New("zkgm/v1: recv not implemented"))
+	zp, err := z.DecodeZkgmPacket(packet.Data)
+	if err != nil {
+		return errResult(err)
+	}
+	res, err := v.dispatchExecute(packet, zp.Path, zp.Salt, zp.Instruction, false)
+	if err != nil {
+		return errResult(err)
+	}
+	return res
 }
 
-func (v *ZkgmV1) Ack(packet core.Packet, ack core.Bytes, relayer address) {}
+func (v *ZkgmV1) Ack(packet core.Packet, ack core.Bytes, relayer address) {
+	zp, err := z.DecodeZkgmPacket(packet.Data)
+	if err != nil {
+		panic(err.Error())
+	}
+	if err := v.dispatchAck(packet, zp.Path, zp.Salt, zp.Instruction, ack); err != nil {
+		panic(err.Error())
+	}
+}
 
-func (v *ZkgmV1) Timeout(packet core.Packet, relayer address) {}
+func (v *ZkgmV1) Timeout(packet core.Packet, relayer address) {
+	zp, err := z.DecodeZkgmPacket(packet.Data)
+	if err != nil {
+		panic(err.Error())
+	}
+	if err := v.dispatchTimeout(packet, zp.Path, zp.Salt, zp.Instruction); err != nil {
+		panic(err.Error())
+	}
+}
 
 func (v *ZkgmV1) Send(channelId core.ChannelId, data core.Bytes, timeoutTimestamp core.Timestamp) (core.Packet, error) {
+	zp, err := z.DecodeZkgmPacket(data)
+	if err != nil {
+		return core.Packet{}, err
+	}
+	if err := v.dispatchVerify(channelId, zp.Salt, zp.Instruction); err != nil {
+		return core.Packet{}, err
+	}
 	return core.PacketSend(cross, core.MsgPacketSend{
 		SourceChannelId:  channelId,
 		TimeoutTimestamp: timeoutTimestamp,
@@ -55,7 +86,7 @@ func (v *ZkgmV1) Render(pkgpath string, path string) string {
 }
 
 func errResult(err error) core.RecvPacketResult {
-	return core.NewRecvPacketResult(cross, core.PacketStatusFailure, []byte(err.Error()))
+	return failureResult([]byte(err.Error()))
 }
 
 var _ zkgm.ZkgmImpl = &ZkgmV1{}

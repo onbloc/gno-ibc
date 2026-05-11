@@ -26,6 +26,29 @@ type State struct {
 
 	connections map[ConnectionId]Connection
 	channels    map[ChannelId]Channel
+
+	nextSequenceSends map[ChannelId]Sequence
+	packetCommitments map[H256]bool
+	packetReceipts    map[H256]bool
+	packetAcks        map[H256]bool
+}
+
+func newState() State {
+	return State{
+		nextClientId:      ClientId(1),
+		nextConnectionId:  ConnectionId(1),
+		nextChannelId:     ChannelId(1),
+		clientRegistry:    make(map[ClientType]ILightClient),
+		clientTypes:       make(map[ClientId]ClientType),
+		connections:       make(map[ConnectionId]Connection),
+		channels:          make(map[ChannelId]Channel),
+		ports:             make(map[address]IApp),
+		channelOwners:     make(map[ChannelId]address),
+		nextSequenceSends: make(map[ChannelId]Sequence),
+		packetCommitments: make(map[H256]bool),
+		packetReceipts:    make(map[H256]bool),
+		packetAcks:        make(map[H256]bool),
+	}
 }
 
 func (s *State) generateClientId() ClientId {
@@ -44,6 +67,12 @@ func (s *State) generateChannelId() ChannelId {
 	id := s.nextChannelId
 	s.nextChannelId++
 	return id
+}
+
+func (s *State) generatePacketSequence(channelId ChannelId) Sequence {
+	sequence := s.nextSequenceSends[channelId]
+	s.nextSequenceSends[channelId] = sequence + 1
+	return sequence
 }
 
 func (s *State) registerClient(clientType ClientType, impl ILightClient) {
@@ -116,22 +145,45 @@ func (s *State) saveChannel(channelId ChannelId, channel Channel) {
 }
 
 func (s *State) commitPacket(packet Packet) {
-	commit(PacketCommitmentPath(packet), COMMITMENT_MAGIC)
+	key := PacketCommitmentPath(packet)
+	s.packetCommitments[key] = true
+	commit(key, COMMITMENT_MAGIC)
 }
 
 func (s *State) deletePacketCommitment(packet Packet) {
 	var zero H256
-	commit(PacketCommitmentPath(packet), zero)
+	key := PacketCommitmentPath(packet)
+	delete(s.packetCommitments, key)
+	commit(key, zero)
 }
 
 func (s *State) hasPacketCommitment(packet Packet) bool {
-	return getCommit(PacketCommitmentPath(packet)) != [32]byte{}
+	return s.packetCommitments[PacketCommitmentPath(packet)]
 }
 
 func (s *State) commitAcknowledgement(packet Packet, ack []byte) {
-	commit(PacketAcknowledgementPath(packet), keccak(ack))
+	key := PacketAcknowledgementPath(packet)
+	s.packetAcks[key] = true
+	commit(key, keccak(ack))
 }
 
 func (s *State) hasAcknowledgement(packet Packet) bool {
-	return getCommit(PacketAcknowledgementPath(packet)) != [32]byte{}
+	return s.packetAcks[PacketAcknowledgementPath(packet)]
+}
+
+func (s *State) setPacketReceipt(packet Packet) {
+	key := PacketReceiptPath(packet)
+	s.packetReceipts[key] = true
+	commit(key, COMMITMENT_MAGIC_ACK)
+}
+
+func (s *State) hasPacketReceipt(packet Packet) bool {
+	return s.packetReceipts[PacketReceiptPath(packet)]
+}
+
+func (s *State) deletePacketReceipt(packet Packet) {
+	var zero H256
+	key := PacketReceiptPath(packet)
+	delete(s.packetReceipts, key)
+	commit(key, zero)
 }

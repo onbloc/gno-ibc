@@ -10,17 +10,7 @@ import (
 var st State
 
 func init() {
-	st = State{
-		nextClientId:     ClientId(1),
-		nextConnectionId: ConnectionId(1),
-		nextChannelId:    ChannelId(1),
-		clientRegistry:   make(map[ClientType]ILightClient),
-		clientTypes:      make(map[ClientId]ClientType),
-		connections:      make(map[ConnectionId]Connection),
-		channels:         make(map[ChannelId]Channel),
-		ports:            make(map[address]IApp),
-		channelOwners:    make(map[ChannelId]address),
-	}
+	st = newState()
 }
 
 // ILightClient defines the interface that light client adapters must implement.
@@ -45,7 +35,7 @@ type IApp interface {
 	OnChannelOpenConfirm(channelId ChannelId, relayer address)
 	OnChannelCloseInit(channelId ChannelId, relayer address)
 	OnChannelCloseConfirm(channelId ChannelId, relayer address)
-	OnRecvPacket(packet Packet, relayer address, relayerMsg Bytes)
+	OnRecvPacket(packet Packet, relayer address, relayerMsg Bytes) RecvPacketResult
 	OnAcknowledgementPacket(packet Packet, acknowledgement Bytes, relayer address)
 	OnTimeoutPacket(packet Packet, relayer address)
 }
@@ -77,13 +67,6 @@ func keccak(bz []byte) H256 {
 
 func commit(key H256, value H256) {
 	params.SetBytes(hex.EncodeToString(key[:]), value[:])
-}
-
-func getCommit(key H256) H256 {
-	// params doesn't expose getters; used only for existence checks in tests
-	// In production Union queries ABCI directly
-	var zero H256
-	return zero
 }
 
 func RegisterClient(_ realm, clientType ClientType, client ILightClient) {
@@ -394,6 +377,7 @@ func PacketSend(_ realm, msg MsgPacketSend) Packet {
 	}
 
 	packet := Packet{
+		Sequence:             st.generatePacketSequence(msg.SourceChannelId),
 		SourceChannelId:      msg.SourceChannelId,
 		DestinationChannelId: channel.CounterpartyChannelId,
 		Data:                 msg.Data,
@@ -405,6 +389,7 @@ func PacketSend(_ realm, msg MsgPacketSend) Packet {
 	chain.Emit(PacketSendEvent,
 		"source_channel_id", packet.SourceChannelId.String(),
 		"destination_channel_id", packet.DestinationChannelId.String(),
+		"sequence", packet.Sequence.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
 	)
 	return packet
@@ -418,27 +403,46 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 		}
 		connection := ensureConnectionOpen(channel.ConnectionId)
 
-		// Verify packet commitment on counterparty
-		key := PacketCommitmentPath(Packet{
-			SourceChannelId:      packet.SourceChannelId,
-			DestinationChannelId: packet.DestinationChannelId,
-			Data:                 packet.Data,
-			TimeoutTimestamp:     packet.TimeoutTimestamp,
-		})
+		// Receipt presence is the replay-protection signal: skip silently so
+		// honest relayers can re-submit batches without aborting the whole tx.
+		if st.hasPacketReceipt(packet) {
+			continue
+		}
+
+		key := PacketCommitmentPath(packet)
 		st.getClient(connection.ClientId).VerifyMembership(
 			connection.ClientId, msg.ProofHeight, msg.Proof, key[:], COMMITMENT_MAGIC[:],
 		)
+
+		st.setPacketReceipt(packet)
 
 		var relayerMsg Bytes
 		if i < len(msg.RelayerMsgs) {
 			relayerMsg = msg.RelayerMsgs[i]
 		}
 		portId := st.getChannelOwner(packet.DestinationChannelId)
-		st.getAppByPortId(portId).OnRecvPacket(packet, msg.Relayer, relayerMsg)
+		res := st.getAppByPortId(portId).OnRecvPacket(packet, msg.Relayer, relayerMsg)
+		switch res.Status {
+		case PacketStatusAsync:
+			panic("async ack not supported")
+		case PacketStatusSuccess, PacketStatusFailure:
+			if len(res.Ack) == 0 {
+				panic("sync ack cannot be empty")
+			}
+			st.commitAcknowledgement(packet, res.Ack)
+			chain.Emit(WriteAckEvent,
+				"source_channel_id", packet.SourceChannelId.String(),
+				"destination_channel_id", packet.DestinationChannelId.String(),
+				"sequence", packet.Sequence.String(),
+			)
+		default:
+			panic("unknown packet status")
+		}
 
 		chain.Emit(PacketRecvEvent,
 			"source_channel_id", packet.SourceChannelId.String(),
 			"destination_channel_id", packet.DestinationChannelId.String(),
+			"sequence", packet.Sequence.String(),
 		)
 	}
 }
@@ -446,19 +450,14 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 func PacketAcknowledgement(_ realm, msg MsgPacketAcknowledgement) {
 	for i, packet := range msg.Packets {
 		if !st.hasPacketCommitment(packet) {
-			continue // no-op: already acknowledged or never sent
+			continue
 		}
 
 		channel := st.getChannel(packet.SourceChannelId)
 		connection := ensureConnectionOpen(channel.ConnectionId)
 
 		ack := msg.Acknowledgements[i]
-		key := PacketAcknowledgementPath(Packet{
-			SourceChannelId:      packet.DestinationChannelId,
-			DestinationChannelId: packet.SourceChannelId,
-			Data:                 packet.Data,
-			TimeoutTimestamp:     packet.TimeoutTimestamp,
-		})
+		key := PacketAcknowledgementPath(packet)
 		value := keccak(ack)
 		st.getClient(connection.ClientId).VerifyMembership(
 			connection.ClientId, msg.ProofHeight, msg.Proof, key[:], value[:],
@@ -480,19 +479,13 @@ func PacketAcknowledgement(_ realm, msg MsgPacketAcknowledgement) {
 func PacketTimeout(_ realm, msg MsgPacketTimeout) {
 	packet := msg.Packet
 	if !st.hasPacketCommitment(packet) {
-		return // no-op
+		return
 	}
 
 	channel := st.getChannel(packet.SourceChannelId)
 	connection := ensureConnectionOpen(channel.ConnectionId)
 
-	// Verify non-membership of packet receipt on counterparty
-	key := PacketCommitmentPath(Packet{
-		SourceChannelId:      packet.DestinationChannelId,
-		DestinationChannelId: packet.SourceChannelId,
-		Data:                 packet.Data,
-		TimeoutTimestamp:     packet.TimeoutTimestamp,
-	})
+	key := PacketReceiptPath(packet)
 	st.getClient(connection.ClientId).VerifyNonMembership(
 		connection.ClientId, msg.ProofHeight, msg.Proof, key[:],
 	)

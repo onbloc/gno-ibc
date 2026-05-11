@@ -31,6 +31,12 @@ func (ts Timestamp) String() string {
 	return strconv.FormatUint(uint64(ts), 10)
 }
 
+type Sequence uint64
+
+func (s Sequence) String() string {
+	return strconv.FormatUint(uint64(s), 10)
+}
+
 type Height uint64
 
 func (h Height) String() string {
@@ -80,6 +86,7 @@ const (
 )
 
 type Packet struct {
+	Sequence             Sequence
 	SourceChannelId      ChannelId
 	DestinationChannelId ChannelId
 	Data                 Bytes
@@ -88,6 +95,7 @@ type Packet struct {
 
 func (p Packet) EthAbiEncode() []byte {
 	schema := abi.Schema{Fields: []abi.Field{
+		{Type: abi.TypeUint64},
 		{Type: abi.TypeUint32},
 		{Type: abi.TypeUint32},
 		{Type: abi.TypeBytes},
@@ -95,6 +103,7 @@ func (p Packet) EthAbiEncode() []byte {
 		{Type: abi.TypeUint64},
 	}}
 	bz, err := abi.Encode(schema, []any{
+		uint64(p.Sequence),
 		uint32(p.SourceChannelId),
 		uint32(p.DestinationChannelId),
 		[]byte(p.Data),
@@ -105,6 +114,20 @@ func (p Packet) EthAbiEncode() []byte {
 		panic(err)
 	}
 	return bz
+}
+
+type PacketStatus uint8
+
+const (
+	PacketStatusUnknown PacketStatus = 0
+	PacketStatusSuccess PacketStatus = 1
+	PacketStatusFailure PacketStatus = 2
+	PacketStatusAsync   PacketStatus = 3
+)
+
+type RecvPacketResult struct {
+	Status PacketStatus
+	Ack    Bytes
 }
 
 type Channel struct {

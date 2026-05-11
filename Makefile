@@ -83,7 +83,7 @@ vendor-flags = $(if $(filter undefined,$(origin FLAGS_$(subst /,_,$(1)))),$(STD_
 # rsync only auto-creates the leaf dest dir, so mkdir -p covers intermediates.
 vendor-cmd = mkdir -p $(dir gno.land/$(2)) && rsync $(RSYNC_BASE) $(call vendor-flags,$(2)) $(1)/$(2)/ gno.land/$(2)/
 
-.PHONY: help install-gno link-stdlibs verify-gno vendor test test-cover test-stdlibs test-smoke clean-gno-cache refresh-abi-vectors
+.PHONY: help install-gno link-stdlibs verify-gno vendor fmt test test-cover test-stdlibs test-smoke clean-gno-cache refresh-abi-vectors
 
 COVERAGE_DIR := coverage
 
@@ -101,6 +101,7 @@ help:
 	@echo "  link-stdlibs          — refresh stdlib symlinks only (no rebuild)"
 	@echo "  verify-gno            — assert the gno binary is on PATH"
 	@echo "  vendor                — mirror sparse third_party package sub-paths into gno.land/"
+	@echo "  fmt                   — gofumpt -w on uncommitted .go/.gno files (modified, staged, untracked)"
 	@echo "  test                  — verify-gno + vendor, then run first-party gno tests"
 	@echo "  test-cover            — same as test, plus -cover (needs gno PR #4241; override GNO_COMMIT)"
 	@echo "  test-stdlibs          — run the vendored stdlib's own .gno and .go tests"
@@ -145,6 +146,21 @@ verify-gno:
 		echo "       Run 'make install-gno' to rebuild against the current pin + stdlibs/."; \
 		exit 1; }
 	@echo "ok: gno binary matches pinned commit $(GNO_SHORT)"
+
+fmt:
+	@command -v gofumpt >/dev/null 2>&1 || { \
+		echo "ERROR: 'gofumpt' not found on PATH. Install with: go install mvdan.cc/gofumpt@latest"; exit 1; }
+	@files=$$( { \
+		git diff --name-only --diff-filter=ACMR; \
+		git diff --cached --name-only --diff-filter=ACMR; \
+		git ls-files --others --exclude-standard; \
+	} | sort -u | grep -E '\.(go|gno)$$' || true); \
+	if [ -z "$$files" ]; then \
+		echo "fmt: no uncommitted .go/.gno files"; \
+		exit 0; \
+	fi; \
+	echo "$$files" | xargs gofumpt -w; \
+	echo "ok: formatted $$(echo "$$files" | wc -l | tr -d ' ') file(s)"
 
 test: verify-gno vendor
 	@gno test -v $(USER_GNO_PKGS)

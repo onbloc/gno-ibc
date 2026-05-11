@@ -1,0 +1,2 @@
+module = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e/scenarios"
+gno = "0.9"

@@ -9,6 +9,15 @@
 
 include .gno-version
 
+# Use bash with pipefail so failures inside `cmd | tee` (e.g. test-cover)
+# bubble out instead of being masked by tee's exit code.
+SHELL       := /bin/bash
+.SHELLFLAGS := -o pipefail -c
+
+# Exported so `make install-gno GNO_COMMIT=...` propagates the override into
+# tools/setup-stdlibs.py, which otherwise reads .gno-version directly.
+export GNO_COMMIT GNO_REPO
+
 GNO_CACHE  := $(HOME)/.cache/gno-ibc/gno
 GO_BIN_DIR := $(shell go env GOPATH)/bin
 GNO_BIN    := $(GO_BIN_DIR)/gno
@@ -74,7 +83,9 @@ vendor-flags = $(if $(filter undefined,$(origin FLAGS_$(subst /,_,$(1)))),$(STD_
 # rsync only auto-creates the leaf dest dir, so mkdir -p covers intermediates.
 vendor-cmd = mkdir -p $(dir gno.land/$(2)) && rsync $(RSYNC_BASE) $(call vendor-flags,$(2)) $(1)/$(2)/ gno.land/$(2)/
 
-.PHONY: help install-gno link-stdlibs verify-gno vendor test test-stdlibs test-smoke clean-gno-cache refresh-abi-vectors
+.PHONY: help install-gno link-stdlibs verify-gno vendor test test-cover test-stdlibs test-smoke clean-gno-cache refresh-abi-vectors
+
+COVERAGE_DIR := coverage
 
 # Vendored stdlib import paths, derived from stdlibs/<path>/gnomod.toml presence.
 STDLIB_PKGS   := $(patsubst stdlibs/%/gnomod.toml,%,$(wildcard stdlibs/*/*/gnomod.toml))
@@ -91,6 +102,7 @@ help:
 	@echo "  verify-gno            — assert the gno binary is on PATH"
 	@echo "  vendor                — mirror sparse third_party package sub-paths into gno.land/"
 	@echo "  test                  — verify-gno + vendor, then run first-party gno tests"
+	@echo "  test-cover            — same as test, plus -cover (needs gno PR #4241; override GNO_COMMIT)"
 	@echo "  test-stdlibs          — run the vendored stdlib's own .gno and .go tests"
 	@echo "  test-smoke            — run only the env-prep smoke tests"
 	@echo "  clean-gno-cache       — remove the cloned gno repo (forces re-clone next install)"
@@ -136,6 +148,16 @@ verify-gno:
 
 test: verify-gno vendor
 	@gno test -v $(USER_GNO_PKGS)
+
+# Coverage requires a gno toolchain that includes gnolang/gno#4241
+# (`-cover` / `-coverprofile`). Override GNO_COMMIT on the make command line
+# to point at a build that has those flags, e.g.
+#   make test-cover GNO_COMMIT=57ad9a4a35daf50bdca5617fc89725a666a9c94b
+# The .github/workflows/gno-coverage.yml workflow does this automatically.
+test-cover: verify-gno vendor
+	@mkdir -p $(COVERAGE_DIR)
+	@gno test -cover -coverprofile=$(COVERAGE_DIR)/profile.txt -v $(USER_GNO_PKGS) 2>&1 \
+		| tee $(COVERAGE_DIR)/output.log
 
 # Stdlib sources live under stdlibs/ but their gnomod.toml declares stdlib
 # paths, so `gno test ./stdlibs/...` would reject them as user mempackages.

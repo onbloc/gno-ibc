@@ -81,6 +81,12 @@ func RegisterApp(_ realm, portId address, app IApp) {
 	st.ports[portId] = app
 }
 
+// HasApp reports whether portId has an app registered.
+func HasApp(portId address) bool {
+	_, ok := st.ports[portId]
+	return ok
+}
+
 func CreateClient(_ realm, msg MsgCreateClient) ClientId {
 	impl, ok := st.clientRegistry[msg.ClientType]
 	if !ok {

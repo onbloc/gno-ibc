@@ -234,7 +234,9 @@ func (c *forwardTestLightClient) GetStatus(clientId core.ClientId) core.Status {
 
 func openForwardTestChannel(cur realm, counterpartyChannelId core.ChannelId) core.ChannelId {
 	zkgm.UpdateImpl(cross, zkgm.UpdateRequest{Impl: &ZkgmV1{}})
-	core.RegisterApp(cross, zkgm.ProxyAddress(), zkgm.AsIBCApp())
+	if !core.HasApp(zkgm.ProxyAddress()) {
+		core.RegisterApp(cross, zkgm.ProxyAddress(), zkgm.AsIBCApp())
+	}
 	core.RegisterClient(cross, core.ClientType("forward-test"), &forwardTestLightClient{})
 
 	clientId := core.CreateClient(cross, core.MsgCreateClient{

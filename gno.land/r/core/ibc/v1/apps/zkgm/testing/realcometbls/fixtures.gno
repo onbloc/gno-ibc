@@ -69,6 +69,19 @@ func TamperedHeaderBytes(cur realm) []byte {
 	return encodeHeader(devnetHeader(proof))
 }
 
+func TwoExistenceProofStubs(cur realm) []byte {
+	return encodeMerkleProof(
+		encodeCommitmentExist(encodeExistenceProof([]byte("leaf-key"), []byte("leaf-value"))),
+		encodeCommitmentExist(encodeExistenceProof([]byte("ibc"), []byte("subroot"))),
+	)
+}
+
+func OneExistenceProofStub(cur realm) []byte {
+	return encodeMerkleProof(
+		encodeCommitmentExist(encodeExistenceProof([]byte("leaf-key"), []byte("leaf-value"))),
+	)
+}
+
 func devnetHeader(proof []byte) cometblsp.Header {
 	return cometblsp.Header{
 		SignedHeader: cometblsp.LightHeader{
@@ -103,5 +116,47 @@ func mustHex(s string) []byte {
 func cloneBytes(in []byte) []byte {
 	out := make([]byte, len(in))
 	copy(out, in)
+	return out
+}
+
+func pbVarint(v uint64) []byte {
+	var out []byte
+	for v >= 0x80 {
+		out = append(out, byte(v)|0x80)
+		v >>= 7
+	}
+	return append(out, byte(v))
+}
+
+func pbTag(fieldNum, wireType int) []byte {
+	return pbVarint(uint64(fieldNum<<3 | wireType))
+}
+
+func pbBytesField(fieldNum int, data []byte) []byte {
+	out := pbTag(fieldNum, 2)
+	out = append(out, pbVarint(uint64(len(data)))...)
+	return append(out, data...)
+}
+
+func encodeExistenceProof(key, value []byte) []byte {
+	var out []byte
+	if len(key) > 0 {
+		out = append(out, pbBytesField(1, key)...)
+	}
+	if len(value) > 0 {
+		out = append(out, pbBytesField(2, value)...)
+	}
+	return out
+}
+
+func encodeCommitmentExist(epBytes []byte) []byte {
+	return pbBytesField(1, epBytes)
+}
+
+func encodeMerkleProof(proofs ...[]byte) []byte {
+	var out []byte
+	for _, proof := range proofs {
+		out = append(out, pbBytesField(1, proof)...)
+	}
 	return out
 }

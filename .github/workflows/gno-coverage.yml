@@ -1,29 +1,33 @@
 name: coverage
 
 # The pinned commit in .gno-version doesn't include the `-cover` flag yet;
-# this workflow installs a gno build that has it (defaulting to
-# gnolang/gno#4241 head) and runs `make test-cover`. The main toolchain pin
-# and the regular test pipeline are untouched.
+# this workflow installs a gno build that has it (defaulting to a fork of
+# gnolang/gno#4241 that also carries the `Packages: pkgs` import-resolution
+# fix) and runs `make test-cover`. The main toolchain pin and the regular
+# test pipeline are untouched.
 #
-# KNOWN BROKEN against gnolang/gno#4241 head as of 2026-05-07:
-#   1. `gno test -cover` regresses import resolution for packages whose
-#      gnomod.toml `module = ...` differs from their on-disk directory
-#      (PR #4241 bug — fix needed upstream).
-#   2. Realm packages (gno.land/r/...) with the same dir-vs-module mismatch
-#      fail `gno test` (no -cover) under any master commit newer than the
-#      .gno-version pin — independent regression on master.
-# This check is intentionally non-required until both are addressed
-# upstream. Do not gate merges on it.
+# KNOWN BROKEN (independent of `-cover`):
+#   1. `gno.land/p/core/_smoke` — `MPUserAll` rejects path segments that
+#      start with `_` after gnolang/gno e20cb0a2b tightened `Re_name`.
+#   2. `gno.land/r/core/ibc/apps/zkgm/send.gno` calls `cur.SentCoins()`,
+#      which is not a method on the `realm` type in current gno-core.
+# Both fail under regular `gno test` too. This workflow stays non-required
+# until they are addressed.
 #
-# Other risk: if the PR #4241 author rebases, GNO_COMMIT below becomes
-# orphaned and `make install-gno` will fail until the default is bumped.
+# Other risk: if either the fork branch is force-pushed or upstream rebases,
+# GNO_COMMIT below becomes orphaned and `make install-gno` will fail until
+# the default is bumped.
 on:
   workflow_dispatch:
     inputs:
-      gno_commit:
-        description: "gno commit SHA to install (must include PR #4241; defaults to that PR's head)"
+      gno_repo:
+        description: "gno repo URL to clone (must include PR #4241 + Packages: pkgs fix)"
         required: false
-        default: "57ad9a4a35daf50bdca5617fc89725a666a9c94b"
+        default: "https://github.com/notJoon/gno-core.git"
+      gno_commit:
+        description: "gno commit SHA to install (head of notJoon/gno-core#instrumental-coverage)"
+        required: false
+        default: "8981c2b6ca8b197e1ec191573986c68bd4c037a5"
   pull_request:
     paths: &cov_paths
       - '**.gno'
@@ -42,9 +46,12 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # `inputs.gno_commit` is only set on workflow_dispatch; fall back to the
-  # same default so pull_request and push events use a fixed SHA.
-  GNO_COMMIT: ${{ inputs.gno_commit || '57ad9a4a35daf50bdca5617fc89725a666a9c94b' }}
+  # `inputs.*` are only set on workflow_dispatch; fall back to the same
+  # defaults so pull_request and push events use a fixed repo + SHA.
+  # setup-stdlibs.py reads both from the environment (Makefile exports
+  # them via `export GNO_COMMIT GNO_REPO`).
+  GNO_REPO:   ${{ inputs.gno_repo   || 'https://github.com/notJoon/gno-core.git' }}
+  GNO_COMMIT: ${{ inputs.gno_commit || '8981c2b6ca8b197e1ec191573986c68bd4c037a5' }}
 
 jobs:
   gno-coverage:

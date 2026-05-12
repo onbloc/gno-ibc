@@ -80,6 +80,28 @@ The `abi-fixtures` CI workflow should be extended to also re-run this generator 
 3. Pick a `name` that's stable (it ends up in gno test failure output) and unique.
 4. Run `make refresh-zkgm-scenarios` and commit both the updated `main.rs` and the regenerated `scenarios.json` + `scenarios_fixture_test.gno` files.
 
+## Replaying scenarios via gnokey
+
+The `scripts/` directory contains a small wrapper that turns each scenario into a `gnokey maketx run` script that invokes `zkgm.Send(...)` with the scenario's `salt`, `instruction`, `source_channel`, and `tx_timeout_timestamp`.
+
+```bash
+# Render every scenario into scripts/out/<name>.gno (no execution).
+tools/zkgm-fixtures/scripts/gen-send-script.sh --all
+
+# Render a single scenario.
+tools/zkgm-fixtures/scripts/gen-send-script.sh recv_call_eureka_true
+
+# Render and execute against a running chain.
+GNOKEY_REMOTE=tcp://127.0.0.1:26657 \
+GNOKEY_CHAINID=dev \
+GNOKEY_KEYNAME=test1 \
+tools/zkgm-fixtures/scripts/gen-send-script.sh recv_token_order_v2_escrow_protocol_fill --exec
+```
+
+The rendered scripts compile against the published `gno.land/r/core/ibc/v1/apps/zkgm` realm and reuse `gno.land/p/gnoswap/ibc/zkgm` types. Output directory (`scripts/out/`) is gitignored — re-render whenever scenarios are regenerated.
+
+This only covers the **send** side. Replaying the recv/ack side would require a real IBC light-client proof and is out of scope for direct fixture replay; the `gno.land/r/core/ibc/v1/apps/zkgm/testing/e2e/` harness is the right place for that.
+
 ## Sync with Union
 
 The `sol!` struct block, opcode constants, fill-type constants, ack-tag constants, and token-order-kind constants are a verbatim copy of `union/cosmwasm/app/ucs03-zkgm/src/com.rs` — the same source `abi-fixtures` keeps in sync. If Union ever changes the wire format, regenerate **both** fixtures.

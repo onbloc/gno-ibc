@@ -237,7 +237,16 @@ struct Scenario {
     /// what the gno handler emits via `universalErrorAck()` in
     /// dispatch.gno: `Ack{tag=0, inner_ack=b"UNIVERSAL_ERROR"}`.
     failure_ack_hex: String,
+    /// Suggested IBC `timeout_timestamp` (nanoseconds) for a Send call that
+    /// transports this packet. Encoded as a decimal string to avoid JSON
+    /// number-precision loss on the uint64. Independent of the `packet` /
+    /// `decoded` body — the IBC envelope's timeout is set by the relayer
+    /// caller, not by ZKGM, so this field exists only as a stable input for
+    /// gnokey-driven Send invocations that replay this scenario.
+    tx_timeout_timestamp: String,
 }
+
+const DEFAULT_TX_TIMEOUT_NS: u64 = 1_700_000_000_000_000_000;
 
 fn scenarios() -> Vec<Scenario> {
     let mut out = Vec::new();
@@ -288,6 +297,7 @@ fn scenarios() -> Vec<Scenario> {
             packet_data_hex: hex0x(&packet_bytes),
             success_ack_hex: hex0x(&success_ack(&[])),
             failure_ack_hex: hex0x(&failure_ack(UNIVERSAL_ERROR)),
+            tx_timeout_timestamp: DEFAULT_TX_TIMEOUT_NS.to_string(),
         });
     }
 
@@ -327,6 +337,7 @@ fn scenarios() -> Vec<Scenario> {
             packet_data_hex: hex0x(&packet_bytes),
             success_ack_hex: hex0x(&success_ack(&[])),
             failure_ack_hex: hex0x(&failure_ack(UNIVERSAL_ERROR)),
+            tx_timeout_timestamp: DEFAULT_TX_TIMEOUT_NS.to_string(),
         });
     }
 
@@ -385,6 +396,7 @@ fn scenarios() -> Vec<Scenario> {
             packet_data_hex: hex0x(&packet_bytes),
             success_ack_hex: hex0x(&success_ack(&protocol_fill_ack())),
             failure_ack_hex: hex0x(&failure_ack(UNIVERSAL_ERROR)),
+            tx_timeout_timestamp: DEFAULT_TX_TIMEOUT_NS.to_string(),
         });
     }
 
@@ -433,6 +445,7 @@ fn scenarios() -> Vec<Scenario> {
             packet_data_hex: hex0x(&packet_bytes),
             success_ack_hex: hex0x(&success_ack(&protocol_fill_ack())),
             failure_ack_hex: hex0x(&failure_ack(UNIVERSAL_ERROR)),
+            tx_timeout_timestamp: DEFAULT_TX_TIMEOUT_NS.to_string(),
         });
     }
 
@@ -480,6 +493,7 @@ fn scenarios() -> Vec<Scenario> {
             packet_data_hex: hex0x(&packet_bytes),
             success_ack_hex: hex0x(&success_ack(&protocol_fill_ack())),
             failure_ack_hex: hex0x(&failure_ack(UNIVERSAL_ERROR)),
+            tx_timeout_timestamp: DEFAULT_TX_TIMEOUT_NS.to_string(),
         });
     }
 
@@ -528,6 +542,7 @@ fn scenarios() -> Vec<Scenario> {
             packet_data_hex: hex0x(&packet_bytes),
             success_ack_hex: hex0x(&success_ack(&marketmaker_fill_ack(b"maker-address"))),
             failure_ack_hex: hex0x(&failure_ack(UNIVERSAL_ERROR)),
+            tx_timeout_timestamp: DEFAULT_TX_TIMEOUT_NS.to_string(),
         });
     }
 
@@ -579,6 +594,7 @@ fn scenarios() -> Vec<Scenario> {
             packet_data_hex: hex0x(&packet_bytes),
             success_ack_hex: hex0x(&success_ack(&protocol_fill_ack())),
             failure_ack_hex: hex0x(&failure_ack(UNIVERSAL_ERROR)),
+            tx_timeout_timestamp: DEFAULT_TX_TIMEOUT_NS.to_string(),
         });
     }
 
@@ -612,6 +628,7 @@ fn scenarios() -> Vec<Scenario> {
             packet_data_hex: hex0x(&packet_bytes),
             success_ack_hex: hex0x(&success_ack(&batch_ack(vec![]))),
             failure_ack_hex: hex0x(&failure_ack(UNIVERSAL_ERROR)),
+            tx_timeout_timestamp: DEFAULT_TX_TIMEOUT_NS.to_string(),
         });
     }
 
@@ -677,6 +694,7 @@ fn scenarios() -> Vec<Scenario> {
             packet_data_hex: hex0x(&packet_bytes),
             success_ack_hex: hex0x(&success_ack(&success_inner)),
             failure_ack_hex: hex0x(&failure_ack(UNIVERSAL_ERROR)),
+            tx_timeout_timestamp: DEFAULT_TX_TIMEOUT_NS.to_string(),
         });
     }
 
@@ -731,6 +749,7 @@ fn scenarios() -> Vec<Scenario> {
             // hop's ack. For a Call inner the canonical inner ack is empty.
             success_ack_hex: hex0x(&success_ack(&[])),
             failure_ack_hex: hex0x(&failure_ack(UNIVERSAL_ERROR)),
+            tx_timeout_timestamp: DEFAULT_TX_TIMEOUT_NS.to_string(),
         });
     }
 
@@ -789,6 +808,7 @@ fn scenarios() -> Vec<Scenario> {
             packet_data_hex: hex0x(&packet_bytes),
             success_ack_hex: hex0x(&success_ack(&[])),
             failure_ack_hex: hex0x(&failure_ack(UNIVERSAL_ERROR)),
+            tx_timeout_timestamp: DEFAULT_TX_TIMEOUT_NS.to_string(),
         });
     }
 

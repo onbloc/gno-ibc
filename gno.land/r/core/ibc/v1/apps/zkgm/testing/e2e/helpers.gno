@@ -99,6 +99,18 @@ func MustTokenOrderInstruction(cur realm, order z.TokenOrderV2) z.Instruction {
 	}
 }
 
+func MustCallInstruction(cur realm, call z.Call) z.Instruction {
+	callBytes, err := z.EncodeCall(call)
+	if err != nil {
+		panic(err)
+	}
+	return z.Instruction{
+		Version: z.INSTR_VERSION_0,
+		Opcode:  z.OP_CALL,
+		Operand: callBytes,
+	}
+}
+
 func MustPacketData(cur realm, instr z.Instruction) core.Bytes {
 	packetBytes, err := z.EncodeZkgmPacket(z.ZkgmPacket{
 		Path:        u256.Zero(),

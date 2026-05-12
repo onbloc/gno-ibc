@@ -86,6 +86,16 @@ func main() {
 			value:            []byte("z37-neighbor-value"),
 			nonMembershipKey: mustHex("aaa7bd6e1524998c867fc9248d3940e6873a82884f0754f79fd7bec370f222b7"),
 		},
+		{
+			name:  "z39_call_packet_commitment",
+			key:   mustHex("52a3f6a3b7cb06a9e9de4cf05631fb75ead91a4e306ad41dae1294991b7527bb"),
+			value: mustHex("0100000000000000000000000000000000000000000000000000000000000000"),
+		},
+		{
+			name:  "z39_missing_call_packet_commitment",
+			key:   mustHex("813e4115edb9f7976a17ee9ede68b5b0a285129e57077768d0a7038be71adbe2"),
+			value: mustHex("0100000000000000000000000000000000000000000000000000000000000000"),
+		},
 	}
 	for _, fx := range makeFixtureSet(baseFixtures) {
 		printFixture(fx)

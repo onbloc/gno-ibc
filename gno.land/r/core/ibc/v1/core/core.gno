@@ -557,6 +557,18 @@ func HasPacketCommitment(_ realm, packet Packet) bool {
 	return st.hasPacketCommitment(packet)
 }
 
+// HasPacketReceipt exposes packet receipt presence for filetests and
+// lifecycle diagnostics.
+func HasPacketReceipt(_ realm, packet Packet) bool {
+	return st.hasPacketReceipt(packet)
+}
+
+// HasAcknowledgement exposes packet acknowledgement presence for filetests and
+// lifecycle diagnostics.
+func HasAcknowledgement(_ realm, packet Packet) bool {
+	return st.hasAcknowledgement(packet)
+}
+
 // CreateClientRaw is a convenience wrapper for testing: accepts hex-encoded bytes.
 func CreateClientRaw(_ realm, clientType string, clientStateHex, consensusStateHex string) ClientId {
 	csBytes, err := hex.DecodeString(clientStateHex)

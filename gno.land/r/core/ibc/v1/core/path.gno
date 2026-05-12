@@ -43,6 +43,24 @@ var (
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
 	}
+	MEMBERSHIP_PROOF [32]byte = [32]byte{
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06,
+	}
+	NON_MEMBERSHIP_PROOF [32]byte = [32]byte{
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07,
+	}
+	PACKET_TIMEOUTS [32]byte = [32]byte{
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
+	}
 	PACKET_RECEIPTS [32]byte = [32]byte{
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -110,18 +128,61 @@ func ChannelPath(channelId ChannelId) H256 {
 // key = keccak(PACKETS || keccak(packet.EthAbiEncode()))
 func PacketCommitmentPath(packet Packet) H256 {
 	batchHash := keccak(packet.EthAbiEncode())
-	return keccak(bytes.Join([][]byte{
-		PACKETS[:],
-		batchHash[:],
-	}, nil))
+	return BatchPacketsPath(batchHash)
 }
 
 // PacketAcknowledgementPath returns the storage key for a packet acknowledgement.
 // key = keccak(PACKET_ACKS || keccak(packet.EthAbiEncode()))
 func PacketAcknowledgementPath(packet Packet) H256 {
 	batchHash := keccak(packet.EthAbiEncode())
+	return BatchReceiptsPath(batchHash)
+}
+
+// BatchPacketsPath returns the Union state-lens key for a batch packet commitment.
+// key = keccak(PACKETS || batch_hash)
+func BatchPacketsPath(batchHash H256) H256 {
+	return keccak(bytes.Join([][]byte{
+		PACKETS[:],
+		batchHash[:],
+	}, nil))
+}
+
+// BatchReceiptsPath returns the Union state-lens key for a batch receipt.
+// key = keccak(PACKET_ACKS || batch_hash)
+func BatchReceiptsPath(batchHash H256) H256 {
 	return keccak(bytes.Join([][]byte{
 		PACKET_ACKS[:],
+		batchHash[:],
+	}, nil))
+}
+
+// MembershipProofPath returns the Union state-lens key for a cached membership proof.
+// key = keccak(MEMBERSHIP_PROOF || client_id || proof_height || path)
+func MembershipProofPath(clientId ClientId, proofHeight Height, path []byte) H256 {
+	return keccak(bytes.Join([][]byte{
+		MEMBERSHIP_PROOF[:],
+		u32ToH256(uint32(clientId)),
+		u64ToH256(uint64(proofHeight)),
+		path,
+	}, nil))
+}
+
+// NonMembershipProofPath returns the Union state-lens key for a cached non-membership proof.
+// key = keccak(NON_MEMBERSHIP_PROOF || client_id || proof_height || path)
+func NonMembershipProofPath(clientId ClientId, proofHeight Height, path []byte) H256 {
+	return keccak(bytes.Join([][]byte{
+		NON_MEMBERSHIP_PROOF[:],
+		u32ToH256(uint32(clientId)),
+		u64ToH256(uint64(proofHeight)),
+		path,
+	}, nil))
+}
+
+// BatchTimeoutPath returns the Union state-lens key for a batch timeout.
+// key = keccak(PACKET_TIMEOUTS || batch_hash)
+func BatchTimeoutPath(batchHash H256) H256 {
+	return keccak(bytes.Join([][]byte{
+		PACKET_TIMEOUTS[:],
 		batchHash[:],
 	}, nil))
 }

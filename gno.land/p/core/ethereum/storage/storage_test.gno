@@ -80,6 +80,54 @@ func TestVerifyGethStorageProofFixture(t *testing.T) {
 	}
 }
 
+func TestIBCCommitmentKey(t *testing.T) {
+	// These vectors intentionally pin both sides of the contract:
+	// - Union: ethereum::ibc_commitment_key(path), fixed commitments slot 0.
+	// - Ethereum: Solidity mapping(bytes32 => bytes32) storage layout.
+	//
+	// Union reference:
+	// https://github.com/unionlabs/union/blob/main/lib/unionlabs/src/ethereum.rs
+	// Ethereum reference:
+	// https://docs.soliditylang.org/en/latest/internals/layout_in_storage.html#mappings-and-dynamic-arrays
+	tests := []struct {
+		name             string
+		path             []byte
+		unionExpected    string
+		ethereumExpected string
+	}{
+		{
+			name:             "all 0x11 path",
+			path:             mustHex("1111111111111111111111111111111111111111111111111111111111111111"),
+			unionExpected:    "5c75bb376affa44a4f06c8a768453c2f7945122a65eb322a0dd3cc2edcbd6f0a",
+			ethereumExpected: "5c75bb376affa44a4f06c8a768453c2f7945122a65eb322a0dd3cc2edcbd6f0a",
+		},
+		{
+			name:             "zero path",
+			path:             make([]byte, 32),
+			unionExpected:    "ad3228b676f7d3cd4284a5443f17f1962b36e491b30a40b2405849e597ba5fb5",
+			ethereumExpected: "ad3228b676f7d3cd4284a5443f17f1962b36e491b30a40b2405849e597ba5fb5",
+		},
+	}
+
+	for _, tt := range tests {
+		got, err := IBCCommitmentKey(tt.path)
+		if err != nil {
+			t.Fatalf("%s IBCCommitmentKey: %v", tt.name, err)
+		}
+		if tt.unionExpected != tt.ethereumExpected {
+			t.Fatalf("%s reference mismatch: union %s ethereum %s", tt.name, tt.unionExpected, tt.ethereumExpected)
+		}
+		assertHex(t, tt.name+" union reference", got[:], tt.unionExpected)
+
+		ethereumGot := ethereumMappingBytes32Slot0(tt.path)
+		assertHex(t, tt.name+" ethereum reference", ethereumGot[:], tt.ethereumExpected)
+	}
+
+	if _, err := IBCCommitmentKey(tests[0].path[:31]); err != ErrInvalidPathLength {
+		t.Fatalf("path length: got %v want %v", err, ErrInvalidPathLength)
+	}
+}
+
 func TestRejectInvalidWordLengths(t *testing.T) {
 	root := make([]byte, 32)
 	slot := make([]byte, 32)
@@ -106,6 +154,12 @@ func mustEncode(t *testing.T, word []byte) []byte {
 		t.Fatalf("EncodeStorageValue: %v", err)
 	}
 	return out
+}
+
+func ethereumMappingBytes32Slot0(path []byte) [32]byte {
+	var input [64]byte
+	copy(input[0:32], path)
+	return keccak256.Sum256(input[:])
 }
 
 func wordWithLastByte(b byte) []byte {

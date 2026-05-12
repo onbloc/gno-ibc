@@ -13,7 +13,12 @@ type mockClient struct {
 	chainId           string
 	height            Height
 	status            Status
+	membershipKeys    [][]byte
+	membershipValues  [][]byte
 	nonMembershipKeys [][]byte
+
+	expectedMembershipKey   []byte
+	expectedMembershipValue []byte
 }
 
 func (m *mockClient) CreateClient(_ realm, _ ClientId, _, _ []byte) string { return m.chainId }
@@ -25,8 +30,18 @@ func (m *mockClient) UpdateClient(_ realm, _ ClientId, _ []byte) ConsensusStateU
 		ConsensusStateBytes: []byte("cons"),
 	}
 }
-func (m *mockClient) Misbehaviour(_ realm, _ ClientId, _ []byte) []byte     { return []byte("frozen") }
-func (m *mockClient) VerifyMembership(_ ClientId, _ Height, _, _, _ []byte) {}
+func (m *mockClient) Misbehaviour(_ realm, _ ClientId, _ []byte) []byte { return []byte("frozen") }
+func (m *mockClient) VerifyMembership(_ ClientId, _ Height, _, key, value []byte) {
+	m.membershipKeys = append(m.membershipKeys, key)
+	m.membershipValues = append(m.membershipValues, value)
+	if m.expectedMembershipKey != nil && string(key) != string(m.expectedMembershipKey) {
+		panic("unexpected membership key")
+	}
+	if m.expectedMembershipValue != nil && string(value) != string(m.expectedMembershipValue) {
+		panic("unexpected membership value")
+	}
+}
+
 func (m *mockClient) VerifyNonMembership(_ ClientId, _ Height, _, key []byte) {
 	m.nonMembershipKeys = append(m.nonMembershipKeys, key)
 }
@@ -671,6 +686,31 @@ func TestPacketRecvReceiptDupRejected(t *testing.T) {
 
 	if len(app.recvPackets) != 1 {
 		t.Fatalf("duplicate recv must not call app again: got %d calls", len(app.recvPackets))
+	}
+}
+
+func TestPacketRecvTamperedPacketDataRejectsMembershipPath(t *testing.T) {
+	resetState()
+	portId, _, channelId := setupOpenChannel(t)
+	app := st.ports[portId].(*mockApp)
+	client := st.clientRegistry[mockType].(*mockClient)
+
+	original := Packet{Sequence: 7, SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	originalPath := PacketCommitmentPath(original)
+	client.expectedMembershipKey = originalPath[:]
+	client.expectedMembershipValue = COMMITMENT_MAGIC[:]
+
+	tampered := original
+	tampered.Data = Bytes("tampered")
+	uassert.AbortsContains(t, "unexpected membership key", func(cur realm) {
+		PacketRecv(cur, MsgPacketRecv{Packets: []Packet{tampered}})
+	})
+
+	if len(app.recvPackets) != 0 {
+		t.Fatal("tampered packet must not reach app callback")
+	}
+	if st.hasPacketReceipt(tampered) {
+		t.Fatal("tampered packet must not set receipt")
 	}
 }
 

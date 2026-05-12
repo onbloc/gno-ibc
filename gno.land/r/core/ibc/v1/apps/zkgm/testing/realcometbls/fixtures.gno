@@ -11,6 +11,8 @@ const (
 	DevnetHeight      = int64(3405691582)
 	DevnetTimeSeconds = int64(1732205251)
 	DevnetTimeNanos   = int32(998131342)
+
+	longTrustingPeriod = uint64(100 * 365 * 24 * 3600 * 1_000_000_000)
 )
 
 var (
@@ -50,25 +52,42 @@ var (
 )
 
 func ClientStateBytes(cur realm) []byte {
+	return clientStateBytes(longTrustingPeriod, 0)
+}
+
+func FrozenClientStateBytes(cur realm) []byte {
+	return clientStateBytes(longTrustingPeriod, cometblsp.FrozenHeight)
+}
+
+func ExpiredClientStateBytes(cur realm) []byte {
+	return clientStateBytes(1, 0)
+}
+
+func clientStateBytes(trustingPeriod uint64, frozenHeight cometblsp.Height) []byte {
 	return cometblsp.EncodeClientState(cometblsp.ClientState{
 		ChainID:        DevnetChainID,
-		TrustingPeriod: 100 * 365 * 24 * 3600 * 1_000_000_000,
+		TrustingPeriod: trustingPeriod,
 		MaxClockDrift:  100 * 365 * 24 * 3600 * 1_000_000_000,
 		LatestHeight:   cometblsp.Height(DevnetHeight - 1),
+		FrozenHeight:   frozenHeight,
 	})
 }
 
 func TrustedConsensusStateBytes(cur realm) []byte {
-	return consensusStateBytes(devnetAppHash)
+	return consensusStateBytes(devnetAppHash, uint64(DevnetTimeSeconds-1000)*1_000_000_000)
 }
 
 func SyntheticConsensusStateBytes(cur realm) []byte {
-	return consensusStateBytes(syntheticMembershipRoot)
+	return consensusStateBytes(syntheticMembershipRoot, uint64(DevnetTimeSeconds-1000)*1_000_000_000)
 }
 
-func consensusStateBytes(root []byte) []byte {
+func ExpiredSyntheticConsensusStateBytes(cur realm) []byte {
+	return consensusStateBytes(syntheticMembershipRoot, 1)
+}
+
+func consensusStateBytes(root []byte, timestamp uint64) []byte {
 	bz, err := cometblsp.EncodeConsensusState(cometblsp.ConsensusState{
-		Timestamp:          uint64(DevnetTimeSeconds-1000) * 1_000_000_000,
+		Timestamp:          timestamp,
 		NextValidatorsHash: cloneBytes(devnetValidatorsHash),
 		Root: cometblsp.MerkleRoot{
 			Hash: cloneBytes(root),

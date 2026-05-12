@@ -32,10 +32,6 @@ func main() {
 	marketMaker := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	ack := e2e.MustSuccessAck(cross, mustMarketMakerTokenOrderAck([]byte(marketMaker)))
 
-	println("packet_sequence", packet.Sequence.String())
-	println("commitment_before_ack", core.HasPacketCommitment(cross, packet))
-	println("market_maker_balance_before_ack", impl.VoucherBalanceOf(string(order.BaseToken), address(marketMaker)))
-
 	core.PacketAcknowledgement(cross, core.MsgPacketAcknowledgement{
 		Packets:          []core.Packet{packet},
 		Acknowledgements: []core.Bytes{ack},
@@ -46,7 +42,19 @@ func main() {
 
 	println("commitment_after_ack", core.HasPacketCommitment(cross, packet))
 	println("market_maker_balance_after_ack", impl.VoucherBalanceOf(string(order.BaseToken), address(marketMaker)))
-	println("ack_real_cometbls", "ok")
+	println("sender_balance_before_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))
+
+	core.PacketTimeout(cross, core.MsgPacketTimeout{
+		Packet:      packet,
+		Proof:       core.NewBytes(cross, realcometbls.Z37ReceiptNonMembershipProof(cross)),
+		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
+		Relayer:     realcometbls.Relayer,
+	})
+
+	println("commitment_after_timeout", core.HasPacketCommitment(cross, packet))
+	println("market_maker_balance_after_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(marketMaker)))
+	println("sender_balance_after_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))
+	println("timeout_after_ack_noop", "ok")
 }
 
 func mustMarketMakerTokenOrderAck(marketMaker []byte) []byte {
@@ -61,9 +69,10 @@ func mustMarketMakerTokenOrderAck(marketMaker []byte) []byte {
 }
 
 // Output:
-// packet_sequence 0
-// commitment_before_ack true
-// market_maker_balance_before_ack 0
 // commitment_after_ack false
 // market_maker_balance_after_ack 21
-// ack_real_cometbls ok
+// sender_balance_before_timeout 0
+// commitment_after_timeout false
+// market_maker_balance_after_timeout 21
+// sender_balance_after_timeout 0
+// timeout_after_ack_noop ok

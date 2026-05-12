@@ -3,6 +3,7 @@ package main
 import (
 	z "gno.land/p/gnoswap/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
+	"gno.land/p/nt/testutils/v0"
 	core "gno.land/r/core/ibc/v1/core"
 	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
 	realcometbls "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls"
@@ -12,9 +13,10 @@ import (
 
 func main() {
 	pair := realcometbls.OpenZ35CometBLSChannel(cross)
+	sender := string(testutils.TestAddress("timeout-sender"))
 
 	order := z.TokenOrderV2{
-		Sender:      []byte("sender"),
+		Sender:      []byte(sender),
 		Receiver:    []byte("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"),
 		BaseToken:   []byte("ibc/base"),
 		BaseAmount:  u256.NewUint(21),

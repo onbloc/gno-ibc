@@ -77,7 +77,7 @@ func main() {
 		},
 		{
 			name:  "z36_ack_membership",
-			key:   mustHex("01a2eb330b6260811ce5ca10fbff1cfb4611444cc65003ad76eacd804085ce55"),
+			key:   mustHex("4ac425445292c5591b4460085a7e9bf2089ed970aa4423927640a7cff8b3f6ae"),
 			value: mustHex("51b1bc1398f211274f5339ff648616f0aaf364c1cab142847beae15e25a0f2d9"),
 		},
 		{

@@ -113,6 +113,36 @@ func main() {
 	for _, fx := range makeFixtureSet(z35Fixtures) {
 		printFixture(fx)
 	}
+	z42WrongVersionFixtures := []fixtureInput{
+		{
+			name:  "z42_wrong_version_connection_try",
+			key:   mustHex("05f3c8eef62e74b10b7ee910fcc73c8358000f692d9ce2341a989e008e45b35d"),
+			value: mustHex("ff4fb67348c16e70c898c7cf43c460a684bc900d2b41e5a24ef6dcb294586034"),
+		},
+		{
+			name:  "z42_wrong_version_channel_try",
+			key:   mustHex("88601476d11616a71c5be67555bd1dff4b1cbf21533d2669b768b61518cfe1c3"),
+			value: mustHex("cd241e37da32c69a48f490b088006f8e4b664e2dd28a079730fa9e47c5fd943d"),
+		},
+	}
+	z42StaleFixtures := []fixtureInput{
+		{
+			name:  "z42_stale_connection_try",
+			key:   mustHex("05f3c8eef62e74b10b7ee910fcc73c8358000f692d9ce2341a989e008e45b35d"),
+			value: mustHex("ff4fb67348c16e70c898c7cf43c460a684bc900d2b41e5a24ef6dcb294586034"),
+		},
+		{
+			name:  "z42_stale_channel_try",
+			key:   mustHex("88601476d11616a71c5be67555bd1dff4b1cbf21533d2669b768b61518cfe1c3"),
+			value: mustHex("71eac86d6ae84d0093ae6a570909eb39ab5ee69ffc7ebb213e436fc9ddf24958"),
+		},
+	}
+	for _, fx := range makeFixtureSet(z42WrongVersionFixtures) {
+		printFixture(fx)
+	}
+	for _, fx := range makeFixtureSet(z42StaleFixtures) {
+		printFixture(fx)
+	}
 }
 
 func makeFixtureSet(inputs []fixtureInput) []fixture {

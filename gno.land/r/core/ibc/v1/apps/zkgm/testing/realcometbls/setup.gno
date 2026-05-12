@@ -40,6 +40,14 @@ func CreateZ35CometBLSClient(cur realm) core.ClientId {
 	return createCometBLSClient(cross, ClientStateBytes(cross), Z35ConsensusStateBytes(cross))
 }
 
+func CreateZ42WrongVersionCometBLSClient(cur realm) core.ClientId {
+	return createCometBLSClient(cross, ClientStateBytes(cross), Z42WrongVersionConsensusStateBytes(cross))
+}
+
+func CreateZ42StaleCometBLSClient(cur realm) core.ClientId {
+	return createCometBLSClient(cross, ClientStateBytes(cross), Z42StaleConsensusStateBytes(cross))
+}
+
 func createSyntheticCometBLSClient(cur realm, clientStateBytes []byte) core.ClientId {
 	return createCometBLSClient(cross, clientStateBytes, SyntheticConsensusStateBytes(cross))
 }

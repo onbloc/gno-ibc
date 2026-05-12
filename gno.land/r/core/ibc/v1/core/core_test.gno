@@ -33,6 +33,7 @@ func (m *mockClient) UpdateClient(_ realm, _ ClientId, _ []byte) ConsensusStateU
 		ConsensusStateBytes: []byte("cons"),
 	}
 }
+
 func (m *mockClient) VerifyMembership(clientId ClientId, height Height, proof []byte, key []byte, value []byte) {
 	m.membershipClientIds = append(m.membershipClientIds, clientId)
 	m.membershipHeights = append(m.membershipHeights, height)
@@ -40,6 +41,7 @@ func (m *mockClient) VerifyMembership(clientId ClientId, height Height, proof []
 	m.membershipKeys = append(m.membershipKeys, key)
 	m.membershipValues = append(m.membershipValues, value)
 }
+
 func (m *mockClient) VerifyNonMembership(clientId ClientId, height Height, proof []byte, key []byte) {
 	m.nonMembershipClientIds = append(m.nonMembershipClientIds, clientId)
 	m.nonMembershipHeights = append(m.nonMembershipHeights, height)

@@ -77,6 +77,26 @@ func commit(key H256, value H256) {
 	params.SetBytes(hex.EncodeToString(key[:]), value[:])
 }
 
+// h256Bytes copies an H256 value into a fresh []byte. Required when passing
+// COMMITMENT_MAGIC (a package-level array) to a foreign-realm light client:
+// ics23's bytes.Equal would otherwise panic with "illegal conversion of
+// readonly or externally stored value" on the underlying slice.
+func h256Bytes(h H256) []byte {
+	out := make([]byte, len(h))
+	copy(out, h[:])
+	return out
+}
+
+// safeString materializes a fresh string from a (possibly foreign-realm)
+// []byte. A direct string(b) conversion on a cross-realm slice trips the
+// same readonly/external-conversion guard that bytes.Equal hits, so event
+// emission paths funnel through this helper.
+func safeString(b []byte) string {
+	out := make([]byte, len(b))
+	copy(out, b)
+	return string(out)
+}
+
 func emitChannelEvent(eventType string, portId Bytes, channelId ChannelId, channel Channel, connection Connection) {
 	chain.Emit(eventType,
 		"port_id", string(portId),
@@ -107,7 +127,7 @@ func emitBatchSendEvent(batchHash H256, packet Packet, sourceChannel Channel, so
 func emitPacketRecvEvent(eventType string, packet Packet, destinationChannel Channel, connection Connection, msgAttrName string, msg []byte) {
 	chain.Emit(eventType,
 		"packet_hash", CommitPacket(packet).String(),
-		"packet_data", string(packet.Data),
+		"packet_data", safeString(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_connection_id", connection.CounterpartyConnectionId.String(),
 		"source_connection_client_id", connection.CounterpartyClientId.String(),
@@ -116,14 +136,14 @@ func emitPacketRecvEvent(eventType string, packet Packet, destinationChannel Cha
 		"destination_connection_id", destinationChannel.ConnectionId.String(),
 		"destination_connection_client_id", connection.ClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
-		msgAttrName, string(msg),
+		msgAttrName, safeString(msg),
 	)
 }
 
 func emitWriteAckEvent(packet Packet, destinationChannel Channel, connection Connection, acknowledgement []byte) {
 	chain.Emit(WriteAckEvent,
 		"packet_hash", CommitPacket(packet).String(),
-		"packet_data", string(packet.Data),
+		"packet_data", safeString(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_connection_id", connection.CounterpartyConnectionId.String(),
 		"source_connection_client_id", connection.CounterpartyClientId.String(),
@@ -132,14 +152,14 @@ func emitWriteAckEvent(packet Packet, destinationChannel Channel, connection Con
 		"destination_connection_id", destinationChannel.ConnectionId.String(),
 		"destination_connection_client_id", connection.ClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
-		"acknowledgement", string(acknowledgement),
+		"acknowledgement", safeString(acknowledgement),
 	)
 }
 
 func emitPacketAckEvent(packet Packet, sourceChannel Channel, connection Connection, acknowledgement []byte) {
 	chain.Emit(PacketAckEvent,
 		"packet_hash", CommitPacket(packet).String(),
-		"packet_data", string(packet.Data),
+		"packet_data", safeString(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_channel_version", sourceChannel.Version,
 		"source_connection_id", sourceChannel.ConnectionId.String(),
@@ -148,14 +168,14 @@ func emitPacketAckEvent(packet Packet, sourceChannel Channel, connection Connect
 		"destination_connection_id", connection.CounterpartyConnectionId.String(),
 		"destination_connection_client_id", connection.CounterpartyClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
-		"acknowledgement", string(acknowledgement),
+		"acknowledgement", safeString(acknowledgement),
 	)
 }
 
 func emitPacketTimeoutEvent(packet Packet, sourceChannel Channel, connection Connection) {
 	chain.Emit(PacketTimeoutEvent,
 		"packet_hash", CommitPacket(packet).String(),
-		"packet_data", string(packet.Data),
+		"packet_data", safeString(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_channel_version", sourceChannel.Version,
 		"source_connection_id", sourceChannel.ConnectionId.String(),
@@ -424,7 +444,7 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 	firstConnection := ensureConnectionOpen(firstChannel.ConnectionId)
 	batchKey := BatchPacketsPath(CommitPackets(msg.Packets))
 	st.getClient(firstConnection.ClientId).VerifyMembership(
-		firstConnection.ClientId, msg.ProofHeight, msg.Proof, batchKey[:], COMMITMENT_MAGIC[:],
+		firstConnection.ClientId, msg.ProofHeight, msg.Proof, batchKey[:], h256Bytes(COMMITMENT_MAGIC),
 	)
 
 	for i, packet := range msg.Packets {
@@ -558,12 +578,60 @@ func PacketTimeout(_ realm, msg MsgPacketTimeout) {
 	emitPacketTimeoutEvent(packet, channel, connection)
 }
 
+// HasPacketCommitment exposes packet commitment presence for filetests and
+// lifecycle diagnostics.
+func HasPacketCommitment(_ realm, packet Packet) bool {
+	return st.hasPacketCommitment(packet)
+}
+
+// HasPacketReceipt exposes packet receipt presence for filetests and
+// lifecycle diagnostics.
+func HasPacketReceipt(_ realm, packet Packet) bool {
+	return st.hasPacketReceipt(packet)
+}
+
+// HasAcknowledgement exposes packet acknowledgement presence for filetests and
+// lifecycle diagnostics.
+func HasAcknowledgement(_ realm, packet Packet) bool {
+	return st.hasAcknowledgement(packet)
+}
+
+// AcknowledgementHash exposes the committed Union-spec acknowledgement hash
+// (CommitAcks of the single ack) for filetests and lifecycle diagnostics.
+func AcknowledgementHash(_ realm, packet Packet) H256 {
+	return st.acknowledgementHash(packet)
+}
+
+// CreateClientRaw is a convenience wrapper for testing: accepts hex-encoded bytes.
+func CreateClientRaw(_ realm, clientType string, clientStateHex, consensusStateHex string) ClientId {
+	csBytes, err := hex.DecodeString(clientStateHex)
+	if err != nil {
+		panic("invalid clientStateHex: " + err.Error())
+	}
+	consBytes, err := hex.DecodeString(consensusStateHex)
+	if err != nil {
+		panic("invalid consensusStateHex: " + err.Error())
+	}
+	return CreateClient(cross, MsgCreateClient{
+		ClientType:          ClientType(clientType),
+		ClientStateBytes:    csBytes,
+		ConsensusStateBytes: consBytes,
+	})
+}
+
 func BatchSend(_ realm, msg MsgBatchSend) H256 {
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
 	}
 	batchHash := CommitPackets(msg.Packets)
 	commit(BatchPacketsPath(batchHash), COMMITMENT_MAGIC)
+	// In-memory per-packet membership keeps HasPacketCommitment and the
+	// PacketAcknowledgement / PacketTimeout cleanup paths working for
+	// single-packet sends; multi-packet batches still commit at the batch
+	// path on chain.
+	for _, packet := range msg.Packets {
+		st.packetCommitments[PacketCommitmentPath(packet)] = true
+	}
 	first := msg.Packets[0]
 	channel := st.getChannel(first.SourceChannelId)
 	connection := ensureConnectionOpen(channel.ConnectionId)
@@ -668,7 +736,7 @@ func CommitPacketTimeout(_ realm, msg MsgCommitPacketTimeout) {
 		msg.ProofHeight,
 		msg.Proof,
 		key[:],
-		COMMITMENT_MAGIC[:],
+		h256Bytes(COMMITMENT_MAGIC),
 	)
 	commit(key, COMMITMENT_MAGIC)
 }

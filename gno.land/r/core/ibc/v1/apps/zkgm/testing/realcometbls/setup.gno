@@ -15,10 +15,26 @@ func CreateRealCometBLSClient(cur realm) core.ClientId {
 }
 
 func CreateSyntheticCometBLSClient(cur realm) core.ClientId {
+	return createSyntheticCometBLSClient(cross, ClientStateBytes(cross))
+}
+
+func CreateFrozenSyntheticCometBLSClient(cur realm) core.ClientId {
+	return createSyntheticCometBLSClient(cross, FrozenClientStateBytes(cross))
+}
+
+func CreateExpiredSyntheticCometBLSClient(cur realm) core.ClientId {
+	return createCometBLSClient(cross, ExpiredClientStateBytes(cross), ExpiredSyntheticConsensusStateBytes(cross))
+}
+
+func createSyntheticCometBLSClient(cur realm, clientStateBytes []byte) core.ClientId {
+	return createCometBLSClient(cross, clientStateBytes, SyntheticConsensusStateBytes(cross))
+}
+
+func createCometBLSClient(cur realm, clientStateBytes, consensusStateBytes []byte) core.ClientId {
 	return core.CreateClient(cross, core.MsgCreateClient{
 		ClientType:          realcometbls.ClientType,
-		ClientStateBytes:    core.NewBytes(cross, ClientStateBytes(cross)),
-		ConsensusStateBytes: core.NewBytes(cross, SyntheticConsensusStateBytes(cross)),
+		ClientStateBytes:    core.NewBytes(cross, clientStateBytes),
+		ConsensusStateBytes: core.NewBytes(cross, consensusStateBytes),
 		Relayer:             address("g1relayer"),
 	})
 }

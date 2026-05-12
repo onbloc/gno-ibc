@@ -2,20 +2,13 @@ package core
 
 type MsgCreateClient struct {
 	ClientType          ClientType
-	ClientStateBytes    Bytes
-	ConsensusStateBytes Bytes
-	Relayer             address
+	ClientStateBytes    []byte
+	ConsensusStateBytes []byte
 }
 
 type MsgUpdateClient struct {
 	ClientId      ClientId
-	ClientMessage Bytes
-	Relayer       address
-}
-
-type MsgMisbehaviour struct {
-	ClientId      ClientId
-	ClientMessage Bytes
+	ClientMessage []byte
 }
 
 type MsgConnectionOpenInit struct {
@@ -27,93 +20,112 @@ type MsgConnectionOpenTry struct {
 	ClientId                 ClientId
 	CounterpartyClientId     ClientId
 	CounterpartyConnectionId ConnectionId
-	ProofInit                Bytes
+	ProofInit                []byte
 	ProofHeight              Height
 }
 
 type MsgConnectionOpenAck struct {
 	ConnectionId             ConnectionId
 	CounterpartyConnectionId ConnectionId
-	ProofTry                 Bytes
+	ProofTry                 []byte
 	ProofHeight              Height
 }
 
 type MsgConnectionOpenConfirm struct {
 	ConnectionId ConnectionId
-	ProofAck     Bytes
+	ProofAck     []byte
 	ProofHeight  Height
 }
 
 type MsgChannelOpenInit struct {
-	PortId             address
-	CounterpartyPortId address
+	PortId             []byte
+	CounterpartyPortId []byte
 	ConnectionId       ConnectionId
 	Version            string
-	Relayer            address
 }
 
 type MsgChannelOpenTry struct {
-	PortId              address
+	PortId              []byte
 	Channel             Channel
 	CounterpartyVersion string
-	ProofInit           Bytes
+	ProofInit           []byte
 	ProofHeight         Height
-	Relayer             address
 }
 
 type MsgChannelOpenAck struct {
 	ChannelId             ChannelId
 	CounterpartyVersion   string
 	CounterpartyChannelId ChannelId
-	ProofTry              Bytes
+	ProofTry              []byte
 	ProofHeight           Height
-	Relayer               address
 }
 
 type MsgChannelOpenConfirm struct {
 	ChannelId   ChannelId
-	ProofAck    Bytes
+	ProofAck    []byte
 	ProofHeight Height
-	Relayer     address
 }
 
-type MsgChannelCloseInit struct {
-	ChannelId ChannelId
-	Relayer   address
-}
+type MsgChannelCloseInit struct{}
 
-type MsgChannelCloseConfirm struct {
-	ChannelId   ChannelId
-	ProofClose  Bytes
-	ProofHeight Height
-	Relayer     address
-}
-
-type MsgPacketSend struct {
-	SourceChannelId  ChannelId
-	TimeoutTimestamp Timestamp
-	Data             Bytes
-}
+type MsgChannelCloseConfirm struct{}
 
 type MsgPacketRecv struct {
 	Packets     []Packet
-	RelayerMsgs []Bytes
-	Proof       Bytes
+	RelayerMsgs [][]byte
+	Proof       []byte
 	ProofHeight Height
-	Relayer     address
 }
 
 type MsgPacketAcknowledgement struct {
 	Packets          []Packet
-	Acknowledgements []Bytes
-	Proof            Bytes
+	Acknowledgements [][]byte
+	Proof            []byte
 	ProofHeight      Height
-	Relayer          address
 }
 
 type MsgPacketTimeout struct {
 	Packet      Packet
-	Proof       Bytes
+	Proof       []byte
 	ProofHeight Height
-	Relayer     address
+}
+
+type MsgIntentPacketRecv struct {
+	Packets             []Packet
+	MarketMakerMessages [][]byte
+}
+
+type MsgBatchSend struct {
+	Packets []Packet
+}
+
+type MsgBatchAcks struct {
+	Packets []Packet
+	Acks    [][]byte
+}
+
+type MsgCommitMembershipProof struct {
+	ClientId    ClientId
+	ProofHeight Height
+	Proof       []byte
+	Path        []byte
+	Value       []byte
+}
+
+type MsgCommitNonMembershipProof struct {
+	ClientId    ClientId
+	ProofHeight Height
+	Proof       []byte
+	Path        []byte
+}
+
+type MsgCommitPacketTimeout struct {
+	Packet      Packet
+	ProofHeight Height
+	Proof       []byte
+}
+
+type MsgWriteAcknowledgement struct {
+	Packet          Packet
+	Acknowledgement []byte
 }

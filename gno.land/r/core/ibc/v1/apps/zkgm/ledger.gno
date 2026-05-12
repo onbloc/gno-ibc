@@ -102,7 +102,7 @@ func PopInFlightPacket(cur realm, key InFlightKey) (InFlightValue, bool) {
 }
 
 func inFlightKeyString(key InFlightKey) string {
-	return key.SourceChannelId.String() + "/" + key.DestinationChannelId.String() + "/" + key.Sequence.String()
+	return key.PacketHash.String()
 }
 
 // SetTokenBucket stores the rate-limit bucket for denom.

@@ -41,7 +41,7 @@ func (v *ZkgmV1) dispatchVerify(channelId core.ChannelId, sender string, sent ch
 	}
 }
 
-func (v *ZkgmV1) dispatchExecute(packet core.Packet, relayer address, relayerMsg core.Bytes, path *u256.Uint, salt [32]byte, instr z.Instruction, intent bool) (result core.RecvPacketResult, err error) {
+func (v *ZkgmV1) dispatchExecute(packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, salt [32]byte, instr z.Instruction, intent bool) (result core.RecvPacketResult, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			result = failureResult(universalErrorAck())
@@ -71,7 +71,7 @@ func (v *ZkgmV1) dispatchExecute(packet core.Packet, relayer address, relayerMsg
 		if err != nil {
 			return core.RecvPacketResult{}, err
 		}
-		return core.NewRecvPacketResult(cross, core.PacketStatusSuccess, ack), nil
+		return core.RecvPacketResult{Status: core.PacketStatusSuccess, Ack: ack}, nil
 	case z.OP_FORWARD:
 		forward, err := decodeForwardInstruction(instr)
 		if err != nil {
@@ -83,7 +83,7 @@ func (v *ZkgmV1) dispatchExecute(packet core.Packet, relayer address, relayerMsg
 	}
 }
 
-func (v *ZkgmV1) dispatchAck(packet core.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction, ack core.Bytes) error {
+func (v *ZkgmV1) dispatchAck(packet core.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction, ack []byte) error {
 	switch instr.Opcode {
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instr)
@@ -186,7 +186,7 @@ func decodeForwardInstruction(instr z.Instruction) (z.Forward, error) {
 }
 
 func failureResult(ack []byte) core.RecvPacketResult {
-	return core.NewRecvPacketResult(cross, core.PacketStatusFailure, ack)
+	return core.RecvPacketResult{Status: core.PacketStatusFailure, Ack: ack}
 }
 
 func universalErrorAck() []byte {

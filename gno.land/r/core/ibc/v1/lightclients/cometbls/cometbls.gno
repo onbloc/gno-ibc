@@ -20,10 +20,6 @@ var entries = make(map[core.ClientId]*clientEntry)
 
 var ibcStoreKey = []byte("ibc")
 
-func init() {
-	core.RegisterClient(cross, ClientType, Adapter{})
-}
-
 func nowNanos() uint64 { return uint64(time.Now().UnixNano()) }
 
 func getEntry(clientId core.ClientId) *clientEntry {

@@ -56,6 +56,7 @@ const (
 	ChannelOpenConfirmEvent    = "ChannelOpenConfirm"
 	ChannelCloseInitEvent      = "ChannelCloseInit"
 	ChannelCloseConfirmEvent   = "ChannelCloseConfirm"
+	PacketSendEvent            = "PacketSend"
 	BatchSendEvent             = "BatchSend"
 	PacketRecvEvent            = "PacketRecv"
 	IntentPacketRecvEvent      = "IntentPacketRecv"
@@ -101,6 +102,21 @@ func emitBatchSendEvent(batchHash H256, packet Packet, sourceChannel Channel, so
 		"destination_channel_id", packet.DestinationChannelId.String(),
 		"destination_connection_id", sourceConnection.CounterpartyConnectionId.String(),
 		"destination_connection_client_id", sourceConnection.CounterpartyClientId.String(),
+	)
+}
+
+func emitPacketSendEvent(packet Packet, sourceChannel Channel, sourceConnection Connection) {
+	chain.Emit(PacketSendEvent,
+		"packet_hash", CommitPacket(packet).String(),
+		"packet_data", string(packet.Data),
+		"source_channel_id", packet.SourceChannelId.String(),
+		"source_channel_version", sourceChannel.Version,
+		"source_connection_id", sourceChannel.ConnectionId.String(),
+		"source_connection_client_id", sourceConnection.ClientId.String(),
+		"destination_channel_id", packet.DestinationChannelId.String(),
+		"destination_connection_id", sourceConnection.CounterpartyConnectionId.String(),
+		"destination_connection_client_id", sourceConnection.CounterpartyClientId.String(),
+		"timeout_timestamp", packet.TimeoutTimestamp.String(),
 	)
 }
 
@@ -412,6 +428,26 @@ func ChannelCloseInit(_ realm, msg MsgChannelCloseInit) {
 
 func ChannelCloseConfirm(_ realm, msg MsgChannelCloseConfirm) {
 	panic("channel close confirm unsupported: Union MsgChannelCloseConfirm has no channel id")
+}
+
+func PacketSend(_ realm, sourceChannelId ChannelId, timeoutHeight Height, timeoutTimestamp Timestamp, data []byte) Packet {
+	channel := st.getChannel(sourceChannelId)
+	if channel.State != ChannelStateOpen {
+		panic(ErrInvalidChannelState)
+	}
+	connection := ensureConnectionOpen(channel.ConnectionId)
+
+	packet := Packet{
+		SourceChannelId:      sourceChannelId,
+		DestinationChannelId: channel.CounterpartyChannelId,
+		Data:                 data,
+		TimeoutHeight:        timeoutHeight,
+		TimeoutTimestamp:     timeoutTimestamp,
+	}
+	st.commitPacket(packet)
+
+	emitPacketSendEvent(packet, channel, connection)
+	return packet
 }
 
 func PacketRecv(_ realm, msg MsgPacketRecv) {

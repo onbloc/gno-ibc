@@ -20,7 +20,7 @@ type ZkgmImpl interface {
 	Ack(packet core.Packet, ack []byte, relayer address)
 	Timeout(packet core.Packet, relayer address)
 
-	Send(req SendRequest) (core.Packet, error)
+	Send(req SendRequest) ([]byte, error)
 	Render(pkgpath string, path string) string
 }
 

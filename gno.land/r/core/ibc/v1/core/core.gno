@@ -65,7 +65,12 @@ const (
 )
 
 func keccak(bz []byte) H256 {
-	return keccak256.Sum256(bz)
+	sum := keccak256.Sum256(bz)
+	var out H256
+	for i := range out {
+		out[i] = sum[i]
+	}
+	return out
 }
 
 func commit(key H256, value H256) {
@@ -612,11 +617,26 @@ func RegisterClient(_ realm, clientType ClientType, client ILightClient) {
 // loaders can pass values without hitting the typed-slice cross-realm pitfall;
 // conversion to the typed Bytes wrapper happens inside this realm.
 func RegisterApp(_ realm, portId []byte, app IApp) {
-	key := portKey(Bytes(portId))
+	key := string(portId)
 	if _, ok := st.ports[key]; ok {
 		panic("port already registered")
 	}
 	st.ports[key] = app
+}
+
+// HasApp reports whether an app is registered at portId. Loaders can branch on
+// this for idempotent registration (e.g. running tests that reuse the same
+// proxy realm address). string(portId) builds the lookup key without invoking
+// the foreign-typed-slice conversion that tripped on Bytes(portId) earlier.
+func HasApp(portId []byte) bool {
+	_, ok := st.ports[string(portId)]
+	return ok
+}
+
+// HasClient reports whether a light client is registered for clientType.
+func HasClient(clientType ClientType) bool {
+	_, ok := st.clientRegistry[clientType]
+	return ok
 }
 
 // WriteAcknowledgement drains a pending async acknowledgement saved when an

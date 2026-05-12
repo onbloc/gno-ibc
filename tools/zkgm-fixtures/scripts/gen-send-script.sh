@@ -148,10 +148,14 @@ render_one() {
   echo "rendered: $out_file"
   if [[ $DO_EXEC -eq 1 ]]; then
     echo ">> gnokey maketx run $out_file"
-    "$GNOKEY_BIN" maketx run \
+    # `-insecure-password-stdin` lets dev/CI flows feed an empty (or scripted)
+    # password on stdin instead of opening /dev/tty. Set GNOKEY_PASSWORD to
+    # override; default is empty, which matches the keyring on `gnodev local`.
+    printf '%s\n' "${GNOKEY_PASSWORD-}" | "$GNOKEY_BIN" maketx run \
       -gas-fee "$GNOKEY_GAS_FEE" \
       -gas-wanted "$GNOKEY_GAS_WANTED" \
       -broadcast \
+      -insecure-password-stdin \
       -chainid "$GNOKEY_CHAINID" \
       -remote "$GNOKEY_REMOTE" \
       "$GNOKEY_KEYNAME" "$out_file"

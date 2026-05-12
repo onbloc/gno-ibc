@@ -98,9 +98,39 @@ GNOKEY_KEYNAME=test1 \
 tools/zkgm-fixtures/scripts/gen-send-script.sh recv_token_order_v2_escrow_protocol_fill --exec
 ```
 
-The rendered scripts compile against the published `gno.land/r/core/ibc/v1/apps/zkgm` realm and reuse `gno.land/p/gnoswap/ibc/zkgm` types. Output directory (`scripts/out/`) is gitignored — re-render whenever scenarios are regenerated.
+The rendered scripts target the module path `gno.land/r/gnoswap/ibc/v1/apps/zkgm` (the zkgm v1 realm) and reuse `gno.land/p/gnoswap/ibc/zkgm` types. Output directory (`scripts/out/`) is gitignored — re-render whenever scenarios are regenerated.
 
 This only covers the **send** side. Replaying the recv/ack side would require a real IBC light-client proof and is out of scope for direct fixture replay; the `gno.land/r/core/ibc/v1/apps/zkgm/testing/e2e/` harness is the right place for that.
+
+### Running against `gnodev local`
+
+The zkgm packages live on disk under `gno.land/{p,r}/core/...` but declare their module name as `gno.land/{p,r}/gnoswap/...` in `gnomod.toml`. The default `gnodev` `root=` resolver matches directory layout to import path, so it cannot find these aliased modules. Use `local=` resolvers (one per alias) and pre-deploy via `-paths`:
+
+```bash
+gnodev local \
+  -root "$HOME/.cache/gno-ibc/gno" \
+  -resolver "root=$PWD" \
+  -resolver "root=$HOME/.cache/gno-ibc/gno/examples" \
+  -resolver "local=$PWD/gno.land/p/core/tokenbucket" \
+  -resolver "local=$PWD/gno.land/p/core/ibc/zkgm" \
+  -resolver "local=$PWD/gno.land/r/core/ibc/v1/apps/zkgm" \
+  -resolver "local=$PWD/gno.land/r/core/ibc/v1/apps/zkgm/v0/impl" \
+  -resolver "local=$PWD/gno.land/r/core/ibc/v1/apps/zkgm/v0/loader" \
+  -paths "gno.land/r/core/ibc/v1/core,gno.land/r/core/ibc/v1/lightclients/cometbls,gno.land/r/gnoswap/ibc/v1/apps/zkgm,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader" \
+  -no-web \
+  -node-rpc-listener 0.0.0.0:26657
+```
+
+With this gnodev configuration, `--exec` against the default `gnodev` `test1` keyring works without further setup:
+
+```bash
+GNOKEY_REMOTE=tcp://127.0.0.1:26657 \
+GNOKEY_CHAINID=dev \
+GNOKEY_KEYNAME=test1 \
+tools/zkgm-fixtures/scripts/gen-send-script.sh recv_call_eureka_false_empty_calldata --exec
+```
+
+The fixtures carry toy values in the inner instruction (e.g. `sender = "alice"`, `base_token = "ibc/v1-send"`), so Send-side replay will surface realm-level validation errors that are tied to those toy values — `zkgm/v1: invalid call sender` (Call.Sender doesn't match `runtime.OriginCaller()`), `zkgm/voucher: not found: ibc/v1-send` (no voucher minted on this denom), `zkgm/v1: eureka mode not supported` (v1 rejects `eureka=true`). These are evidence the harness reached the realm; they're not harness bugs. For a fully successful replay, mint the relevant vouchers / register the relevant ports beforehand and patch the rendered script to use an address the caller controls.
 
 ## Sync with Union
 

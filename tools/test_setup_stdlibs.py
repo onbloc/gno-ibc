@@ -108,3 +108,30 @@ def test_warm_cache_preserves_root_go_mod(setup_stdlibs, warm_cache):
     setup_stdlibs.ensure_clone(version, cache)
 
     assert marker in go_mod.read_text()
+
+
+def test_regenerate_tidies_gnodev_after_injecting_native_deps(setup_stdlibs, monkeypatch, tmp_path):
+    """gnodev is its own Go module, so direct deps alone are not enough on a
+    clean machine; its go.sum also needs transitive checksums from go mod tidy."""
+    calls = []
+
+    def fake_inject(module_dir: Path) -> None:
+        calls.append(("inject", module_dir))
+
+    def fake_run(cmd: list[str], cwd: Path | None = None) -> None:
+        calls.append(("run", tuple(cmd), cwd))
+
+    monkeypatch.setattr(setup_stdlibs, "_inject_native_deps", fake_inject)
+    monkeypatch.setattr(setup_stdlibs, "run", fake_run)
+
+    setup_stdlibs.regenerate_and_install(tmp_path, skip_install=False)
+
+    gnodev = tmp_path / "contribs" / "gnodev"
+    assert ("inject", gnodev) in calls
+    assert ("run", ("go", "mod", "tidy"), gnodev) in calls
+    assert calls.index(("inject", gnodev)) < calls.index(
+        ("run", ("go", "mod", "tidy"), gnodev)
+    )
+    assert calls.index(("run", ("go", "mod", "tidy"), gnodev)) < calls.index(
+        ("run", ("make", "install.gnodev"), tmp_path)
+    )

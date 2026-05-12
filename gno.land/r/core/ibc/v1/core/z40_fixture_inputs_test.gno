@@ -10,22 +10,22 @@ import (
 const z40MockReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
 
 func TestZ40BatchFixtureInputPaths(t *testing.T) {
-	mixedPacket := z40BatchPacket(10, z.Batch{Instructions: []z.Instruction{
+	mixedPacket := z40BatchPacket(z.Batch{Instructions: []z.Instruction{
 		z40CallInstruction("batch-call"),
 		z40TokenOrderInstruction("ibc/batch-quote"),
 	}})
-	assertH256Hex(t, "z40 mixed batch packet commitment key", PacketCommitmentPath(mixedPacket), "0x642c27b2a9c2cbe440533099564bb5326041acfc25c5142322e3c453a50570c3")
+	assertH256Hex(t, "z40 mixed batch packet commitment key", PacketCommitmentPath(mixedPacket), "0xa27e1b52c3beaeb1c4b3c6afb3bb6000536eb98562c019f0109f7b1274a3d102")
 	assertH256Hex(t, "z40 mixed batch packet commitment value", COMMITMENT_MAGIC, "0x0100000000000000000000000000000000000000000000000000000000000000")
 
-	panicPacket := z40BatchPacket(11, z.Batch{Instructions: []z.Instruction{
+	panicPacket := z40BatchPacket(z.Batch{Instructions: []z.Instruction{
 		z40CallInstruction("panic-call"),
 		z40TokenOrderInstruction("ibc/batch-panic-quote"),
 	}})
-	assertH256Hex(t, "z40 panic batch packet commitment key", PacketCommitmentPath(panicPacket), "0x5650289645e1d5dc8de38e678c37ec8a608cc7befffed6d0b62359403da79567")
+	assertH256Hex(t, "z40 panic batch packet commitment key", PacketCommitmentPath(panicPacket), "0x9102811e2a4d94c7593e8711e65c4163820045992a2ab08e771615a067ca23cd")
 	assertH256Hex(t, "z40 panic batch packet commitment value", COMMITMENT_MAGIC, "0x0100000000000000000000000000000000000000000000000000000000000000")
 }
 
-func z40BatchPacket(sequence Sequence, batch z.Batch) Packet {
+func z40BatchPacket(batch z.Batch) Packet {
 	batchBytes, err := z.EncodeBatch(batch)
 	if err != nil {
 		panic(err)
@@ -42,7 +42,6 @@ func z40BatchPacket(sequence Sequence, batch z.Batch) Packet {
 		panic(err)
 	}
 	return Packet{
-		Sequence:             sequence,
 		SourceChannelId:      2,
 		DestinationChannelId: 1,
 		Data:                 Bytes(packetBytes),

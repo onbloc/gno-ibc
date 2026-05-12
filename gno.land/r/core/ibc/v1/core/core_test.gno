@@ -91,6 +91,13 @@ func mustPanic(t *testing.T, fn func()) {
 	fn()
 }
 
+func assertH256Hex(t *testing.T, name string, got H256, want string) {
+	t.Helper()
+	if got.String() != want {
+		t.Errorf("%s: got %s want %s", name, got.String(), want)
+	}
+}
+
 func setupOpenChannel(t *testing.T) (address, ConnectionId, ChannelId) {
 	t.Helper()
 	clientId := st.generateClientId()
@@ -184,6 +191,26 @@ func TestPacketReceiptPathDiffers(t *testing.T) {
 	if PacketReceiptPath(p) == PacketAcknowledgementPath(p) {
 		t.Error("receipt and ack paths must differ for the same packet")
 	}
+}
+
+func TestUnionPathReferenceVectors(t *testing.T) {
+	// Mirrors Union ibc-union-spec path keys:
+	// https://github.com/unionlabs/union/blob/main/lib/ibc-union-spec/src/path.rs
+	packet := Packet{Sequence: 1, SourceChannelId: 2, DestinationChannelId: 3, Data: Bytes("abc"), TimeoutTimestamp: 1000}
+	batchHash := keccak(packet.EthAbiEncode())
+	proofPath := []byte("clients/4/clientState")
+
+	assertH256Hex(t, "client state", ClientStatePath(4), "0x17ef568e3e12ab5b9c7254a8d58478811de00f9e6eb34345acd53bf8fd09d3ec")
+	assertH256Hex(t, "consensus state", ConsensusStatePath(4, 10), "0xa1776da6f811742b0b6e4f3e386ffa26edc18b9096a5d56e6d8c6366d1f86b32")
+	assertH256Hex(t, "connection", ConnectionPath(100), "0x303c03027bd4a34f7fcda516f1651933dbc8cbe20bd53649eb722d1f989225cb")
+	assertH256Hex(t, "channel", ChannelPath(7), "0x3be6fd20d5acfde5b873b48692cd31f4d3c7e8ee8a813af4696af8859e5ca6c6")
+	assertH256Hex(t, "batch packets", BatchPacketsPath(batchHash), "0x8b8629e6fb7eb02a8feac9308f7e5e348ea9d36c8684a401b6a70353b20e3b79")
+	assertH256Hex(t, "packet commitment", PacketCommitmentPath(packet), BatchPacketsPath(batchHash).String())
+	assertH256Hex(t, "batch receipts", BatchReceiptsPath(batchHash), "0xadc23064410bdfd73a17ba2fedc8ad33cae78c14fea19b08884cb783c5060ec5")
+	assertH256Hex(t, "packet acknowledgement", PacketAcknowledgementPath(packet), BatchReceiptsPath(batchHash).String())
+	assertH256Hex(t, "membership proof", MembershipProofPath(4, 10, proofPath), "0x3b320e52a57f28090d6ba22ed1f5b6a3e5df2884e92c9b1df05f407660fd6a27")
+	assertH256Hex(t, "non-membership proof", NonMembershipProofPath(4, 10, proofPath), "0x70322f8424ea2964bf16d99caebfc5e38bbcb75d8f2b1b2dfae87a36cb9688b1")
+	assertH256Hex(t, "batch timeout", BatchTimeoutPath(batchHash), "0x97cd6ee7fd4a33d5b6a3db8830b0c93a36ed0c06a59b394165faf7fa7d601014")
 }
 
 // --- Type encoding tests ---

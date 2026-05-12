@@ -16,9 +16,8 @@ func main() {
 
 	core.PacketRecv(cross, core.MsgPacketRecv{
 		Packets:     []core.Packet{packet},
-		Proof:       core.NewBytes(cross, realcometbls.Z39MissingCallPacketCommitmentProof(cross)),
+		Proof:       realcometbls.Z39MissingCallPacketCommitmentProof(cross),
 		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
-		Relayer:     realcometbls.Relayer,
 	})
 
 	println("receipt_after_recv", core.HasPacketReceipt(cross, packet))
@@ -32,14 +31,12 @@ func callPacket(pair realcometbls.ChannelPair, receiverPath string) core.Packet 
 		ContractAddress:  []byte(receiverPath),
 		ContractCalldata: []byte("calldata"),
 	}
-	return core.NewPacket(
-		cross,
-		core.Sequence(9),
-		pair.Source,
-		pair.Destination,
-		e2e.MustPacketData(cross, e2e.MustCallInstruction(cross, call)),
-		core.Timestamp(0),
-	)
+	return core.Packet{
+		SourceChannelId:      pair.Source,
+		DestinationChannelId: pair.Destination,
+		Data:                 e2e.MustPacketData(cross, e2e.MustCallInstruction(cross, call)),
+		TimeoutTimestamp:     core.Timestamp(0),
+	}
 }
 
 // Output:

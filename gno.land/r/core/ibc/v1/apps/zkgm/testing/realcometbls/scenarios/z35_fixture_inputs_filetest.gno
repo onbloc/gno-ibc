@@ -30,7 +30,7 @@ func main() {
 		State:                 core.ChannelStateTryOpen,
 		ConnectionId:          counterpartyConnectionId,
 		CounterpartyChannelId: channelId,
-		CounterpartyPortId:    core.NewBytes(cross, []byte(string(zkgm.ProxyAddress()))),
+		CounterpartyPortId:    []byte(string(zkgm.ProxyAddress())),
 		Version:               zkgm.Version,
 	}
 	order := z.TokenOrderV2{
@@ -42,14 +42,7 @@ func main() {
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(
-		cross,
-		core.Sequence(7),
-		counterpartyChannelId,
-		channelId,
-		e2e.MustPacketData(cross, e2e.MustTokenOrderInstruction(cross, order)),
-		core.Timestamp(0),
-	)
+	packet := core.Packet{SourceChannelId: counterpartyChannelId, DestinationChannelId: channelId, Data: e2e.MustPacketData(cross, e2e.MustTokenOrderInstruction(cross, order)), TimeoutTimestamp: core.Timestamp(0)}
 
 	connectionKey := connectionPath(counterpartyConnectionId)
 	connectionValue := hash(connection.EthAbiEncode())

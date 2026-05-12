@@ -22,15 +22,14 @@ type ChannelPair struct {
 }
 
 func RegisterMockLightClient(cur realm) {
-	core.RegisterClient(cross, MockClientType, &MockLightClient{})
+	if !core.HasClient(MockClientType) {
+		core.RegisterClient(cross, MockClientType, &MockLightClient{})
+	}
 }
 
 func CreateMockClient(cur realm) core.ClientId {
 	return core.CreateClient(cross, core.MsgCreateClient{
-		ClientType:          MockClientType,
-		ClientStateBytes:    core.NewBytes(cross, nil),
-		ConsensusStateBytes: core.NewBytes(cross, nil),
-		Relayer:             Relayer,
+		ClientType: MockClientType,
 	})
 }
 
@@ -62,27 +61,24 @@ func openConnection(clientId core.ClientId) core.ConnectionId {
 	core.ConnectionOpenAck(cross, core.MsgConnectionOpenAck{
 		ConnectionId:             connectionId,
 		CounterpartyConnectionId: core.ConnectionId(77),
-		ProofTry:                 core.NewBytes(cross, nil),
 		ProofHeight:              core.Height(1),
 	})
 	return connectionId
 }
 
 func openChannel(connectionId core.ConnectionId, counterpartyChannelId core.ChannelId) core.ChannelId {
+	portId := []byte(zkgm.ProxyAddress())
 	channelId := core.ChannelOpenInit(cross, core.MsgChannelOpenInit{
-		PortId:             zkgm.ProxyAddress(),
-		CounterpartyPortId: zkgm.ProxyAddress(),
+		PortId:             portId,
+		CounterpartyPortId: portId,
 		ConnectionId:       connectionId,
 		Version:            zkgm.Version,
-		Relayer:            Relayer,
 	})
 	core.ChannelOpenAck(cross, core.MsgChannelOpenAck{
 		ChannelId:             channelId,
 		CounterpartyVersion:   zkgm.Version,
 		CounterpartyChannelId: counterpartyChannelId,
-		ProofTry:              core.NewBytes(cross, nil),
 		ProofHeight:           core.Height(1),
-		Relayer:               Relayer,
 	})
 	return channelId
 }
@@ -123,7 +119,7 @@ func MustBatchInstruction(cur realm, batch z.Batch) z.Instruction {
 	}
 }
 
-func MustPacketData(cur realm, instr z.Instruction) core.Bytes {
+func MustPacketData(cur realm, instr z.Instruction) []byte {
 	packetBytes, err := z.EncodeZkgmPacket(z.ZkgmPacket{
 		Path:        u256.Zero(),
 		Instruction: instr,
@@ -131,7 +127,7 @@ func MustPacketData(cur realm, instr z.Instruction) core.Bytes {
 	if err != nil {
 		panic(err)
 	}
-	return core.NewBytes(cross, packetBytes)
+	return packetBytes
 }
 
 func MustTokenMetadata(cur realm, implementation string, initializer string) []byte {
@@ -145,12 +141,12 @@ func MustTokenMetadata(cur realm, implementation string, initializer string) []b
 	return meta
 }
 
-func MustAck(cur realm, tag *u256.Uint, inner []byte) core.Bytes {
+func MustAck(cur realm, tag *u256.Uint, inner []byte) []byte {
 	ack, err := z.EncodeAck(z.Ack{Tag: tag, InnerAck: inner})
 	if err != nil {
 		panic(err)
 	}
-	return core.NewBytes(cross, ack)
+	return ack
 }
 
 func MustProtocolTokenOrderAck(cur realm) []byte {
@@ -163,7 +159,7 @@ func MustProtocolTokenOrderAck(cur realm) []byte {
 	return bz
 }
 
-func MustSuccessAck(cur realm, inner []byte) core.Bytes {
+func MustSuccessAck(cur realm, inner []byte) []byte {
 	return MustAck(cross, tagAckSuccessU256, inner)
 }
 

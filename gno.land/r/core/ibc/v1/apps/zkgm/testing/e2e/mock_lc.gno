@@ -13,13 +13,9 @@ func (m *MockLightClient) CreateClient(_ realm, clientId core.ClientId, clientSt
 func (m *MockLightClient) UpdateClient(_ realm, clientId core.ClientId, clientMessage []byte) core.ConsensusStateUpdate {
 	return core.ConsensusStateUpdate{
 		Height:              core.Height(1),
-		ClientStateBytes:    core.NewBytes(cross, clientMessage),
-		ConsensusStateBytes: core.NewBytes(cross, clientMessage),
+		ClientStateBytes:    clientMessage,
+		ConsensusStateBytes: clientMessage,
 	}
-}
-
-func (m *MockLightClient) Misbehaviour(_ realm, clientId core.ClientId, clientMessage []byte) []byte {
-	return nil
 }
 
 func (m *MockLightClient) VerifyMembership(clientId core.ClientId, height core.Height, proof []byte, key []byte, value []byte) {

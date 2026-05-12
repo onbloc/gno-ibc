@@ -24,19 +24,20 @@ func main() {
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
-	packet := core.PacketSend(cross, core.MsgPacketSend{
-		SourceChannelId:  pair.Destination,
-		TimeoutTimestamp: core.Timestamp(3600),
-		Data:             e2e.MustPacketData(cross, e2e.MustTokenOrderInstruction(cross, order)),
-	})
+	packet := core.Packet{
+		SourceChannelId:      pair.Destination,
+		DestinationChannelId: core.GetChannel(pair.Destination).CounterpartyChannelId,
+		Data:                 e2e.MustPacketData(cross, e2e.MustTokenOrderInstruction(cross, order)),
+		TimeoutTimestamp:     core.Timestamp(3600),
+	}
+	core.BatchSend(cross, core.MsgBatchSend{Packets: []core.Packet{packet}})
 	marketMaker := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	ack := e2e.MustSuccessAck(cross, mustMarketMakerTokenOrderAck([]byte(marketMaker)))
 	msg := core.MsgPacketAcknowledgement{
 		Packets:          []core.Packet{packet},
-		Acknowledgements: []core.Bytes{ack},
-		Proof:            core.NewBytes(cross, realcometbls.Z36AckMembershipProof(cross)),
+		Acknowledgements: [][]byte{ack},
+		Proof:            realcometbls.Z36AckMembershipProof(cross),
 		ProofHeight:      core.Height(realcometbls.DevnetHeight - 1),
-		Relayer:          realcometbls.Relayer,
 	}
 
 	core.PacketAcknowledgement(cross, msg)

@@ -15,7 +15,7 @@ func main() {
 	core.ConnectionOpenAck(cross, core.MsgConnectionOpenAck{
 		ConnectionId:             connectionId,
 		CounterpartyConnectionId: core.ConnectionId(78),
-		ProofTry:                 core.NewBytes(cross, realcometbls.Z35ConnectionTryProof(cross)),
+		ProofTry:                 realcometbls.Z35ConnectionTryProof(cross),
 		ProofHeight:              core.Height(realcometbls.DevnetHeight - 1),
 	})
 }

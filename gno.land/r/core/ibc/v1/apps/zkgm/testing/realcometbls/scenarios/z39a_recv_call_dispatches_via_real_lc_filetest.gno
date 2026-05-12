@@ -18,10 +18,9 @@ func main() {
 
 	core.PacketRecv(cross, core.MsgPacketRecv{
 		Packets:     []core.Packet{packet},
-		RelayerMsgs: []core.Bytes{core.NewBytes(cross, []byte("relay-msg"))},
-		Proof:       core.NewBytes(cross, realcometbls.Z39CallPacketCommitmentProof(cross)),
+		RelayerMsgs: [][]byte{[]byte("relay-msg")},
+		Proof:       realcometbls.Z39CallPacketCommitmentProof(cross),
 		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
-		Relayer:     realcometbls.Relayer,
 	})
 
 	println("mock_calls", mock.Calls(cross))
@@ -39,14 +38,12 @@ func callPacket(pair realcometbls.ChannelPair, receiverPath string) core.Packet 
 		ContractAddress:  []byte(receiverPath),
 		ContractCalldata: []byte("calldata"),
 	}
-	return core.NewPacket(
-		cross,
-		core.Sequence(9),
-		pair.Source,
-		pair.Destination,
-		e2e.MustPacketData(cross, e2e.MustCallInstruction(cross, call)),
-		core.Timestamp(0),
-	)
+	return core.Packet{
+		SourceChannelId:      pair.Source,
+		DestinationChannelId: pair.Destination,
+		Data:                 e2e.MustPacketData(cross, e2e.MustCallInstruction(cross, call)),
+		TimeoutTimestamp:     core.Timestamp(0),
+	}
 }
 
 // Output:

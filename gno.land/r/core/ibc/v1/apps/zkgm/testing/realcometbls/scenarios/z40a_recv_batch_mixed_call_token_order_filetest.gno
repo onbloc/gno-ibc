@@ -24,10 +24,9 @@ func main() {
 
 	core.PacketRecv(cross, core.MsgPacketRecv{
 		Packets:     []core.Packet{packet},
-		RelayerMsgs: []core.Bytes{core.NewBytes(cross, []byte("batch-relay-msg"))},
-		Proof:       core.NewBytes(cross, realcometbls.Z40MixedBatchPacketCommitmentProof(cross)),
+		RelayerMsgs: [][]byte{[]byte("batch-relay-msg")},
+		Proof:       realcometbls.Z40MixedBatchPacketCommitmentProof(cross),
 		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
-		Relayer:     realcometbls.Relayer,
 	})
 
 	println("mock_calls", mock.Calls(cross))
@@ -57,14 +56,12 @@ func mixedBatchPacket(pair realcometbls.ChannelPair, receiver string) core.Packe
 			Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 		}),
 	}}
-	return core.NewPacket(
-		cross,
-		core.Sequence(10),
-		pair.Source,
-		pair.Destination,
-		e2e.MustPacketData(cross, e2e.MustBatchInstruction(cross, batch)),
-		core.Timestamp(0),
-	)
+	return core.Packet{
+		SourceChannelId:      pair.Source,
+		DestinationChannelId: pair.Destination,
+		Data:                 e2e.MustPacketData(cross, e2e.MustBatchInstruction(cross, batch)),
+		TimeoutTimestamp:     core.Timestamp(0),
+	}
 }
 
 func expectedAckHash() string {

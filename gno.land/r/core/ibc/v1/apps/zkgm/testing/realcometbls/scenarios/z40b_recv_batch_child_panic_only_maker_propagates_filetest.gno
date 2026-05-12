@@ -25,9 +25,8 @@ func main() {
 
 	core.PacketRecv(cross, core.MsgPacketRecv{
 		Packets:     []core.Packet{packet},
-		Proof:       core.NewBytes(cross, realcometbls.Z40PanicBatchPacketCommitmentProof(cross)),
+		Proof:       realcometbls.Z40PanicBatchPacketCommitmentProof(cross),
 		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
-		Relayer:     realcometbls.Relayer,
 	})
 
 	println("mock_calls", mock.Calls(cross))
@@ -55,14 +54,12 @@ func panicBatchPacket(pair realcometbls.ChannelPair, receiver string) core.Packe
 			Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 		}),
 	}}
-	return core.NewPacket(
-		cross,
-		core.Sequence(11),
-		pair.Source,
-		pair.Destination,
-		e2e.MustPacketData(cross, e2e.MustBatchInstruction(cross, batch)),
-		core.Timestamp(0),
-	)
+	return core.Packet{
+		SourceChannelId:      pair.Source,
+		DestinationChannelId: pair.Destination,
+		Data:                 e2e.MustPacketData(cross, e2e.MustBatchInstruction(cross, batch)),
+		TimeoutTimestamp:     core.Timestamp(0),
+	}
 }
 
 func onlyMakerAckHash() string {

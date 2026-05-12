@@ -6,8 +6,6 @@ import (
 	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
 )
 
-var Relayer = address("g1relayer")
-
 type ChannelPair struct {
 	ClientId     core.ClientId
 	ConnectionId core.ConnectionId
@@ -16,12 +14,7 @@ type ChannelPair struct {
 }
 
 func CreateRealCometBLSClient(cur realm) core.ClientId {
-	return core.CreateClient(cross, core.MsgCreateClient{
-		ClientType:          realcometbls.ClientType,
-		ClientStateBytes:    core.NewBytes(cross, ClientStateBytes(cross)),
-		ConsensusStateBytes: core.NewBytes(cross, TrustedConsensusStateBytes(cross)),
-		Relayer:             Relayer,
-	})
+	return createCometBLSClient(cross, ClientStateBytes(cross), TrustedConsensusStateBytes(cross))
 }
 
 func CreateSyntheticCometBLSClient(cur realm) core.ClientId {
@@ -53,11 +46,13 @@ func createSyntheticCometBLSClient(cur realm, clientStateBytes []byte) core.Clie
 }
 
 func createCometBLSClient(cur realm, clientStateBytes, consensusStateBytes []byte) core.ClientId {
+	if !core.HasClient(realcometbls.ClientType) {
+		core.RegisterClient(cross, realcometbls.ClientType, realcometbls.Adapter{})
+	}
 	return core.CreateClient(cross, core.MsgCreateClient{
 		ClientType:          realcometbls.ClientType,
-		ClientStateBytes:    core.NewBytes(cross, clientStateBytes),
-		ConsensusStateBytes: core.NewBytes(cross, consensusStateBytes),
-		Relayer:             Relayer,
+		ClientStateBytes:    clientStateBytes,
+		ConsensusStateBytes: consensusStateBytes,
 	})
 }
 
@@ -71,7 +66,7 @@ func OpenZ35CometBLSChannel(cur realm) ChannelPair {
 	core.ConnectionOpenAck(cross, core.MsgConnectionOpenAck{
 		ConnectionId:             connectionId,
 		CounterpartyConnectionId: core.ConnectionId(77),
-		ProofTry:                 core.NewBytes(cross, Z35ConnectionTryProof(cross)),
+		ProofTry:                 Z35ConnectionTryProof(cross),
 		ProofHeight:              core.Height(DevnetHeight - 1),
 	})
 
@@ -85,20 +80,19 @@ func OpenZ35CometBLSChannel(cur realm) ChannelPair {
 }
 
 func openZ35Channel(cur realm, connectionId core.ConnectionId, counterpartyChannelId core.ChannelId) core.ChannelId {
+	portId := []byte(zkgm.ProxyAddress())
 	channelId := core.ChannelOpenInit(cross, core.MsgChannelOpenInit{
-		PortId:             zkgm.ProxyAddress(),
-		CounterpartyPortId: zkgm.ProxyAddress(),
+		PortId:             portId,
+		CounterpartyPortId: portId,
 		ConnectionId:       connectionId,
 		Version:            zkgm.Version,
-		Relayer:            Relayer,
 	})
 	core.ChannelOpenAck(cross, core.MsgChannelOpenAck{
 		ChannelId:             channelId,
 		CounterpartyVersion:   zkgm.Version,
 		CounterpartyChannelId: counterpartyChannelId,
-		ProofTry:              core.NewBytes(cross, Z35ChannelTryProof(cross)),
+		ProofTry:              Z35ChannelTryProof(cross),
 		ProofHeight:           core.Height(DevnetHeight - 1),
-		Relayer:               Relayer,
 	})
 	return channelId
 }
@@ -106,15 +100,13 @@ func openZ35Channel(cur realm, connectionId core.ConnectionId, counterpartyChann
 func UpdateRealCometBLSClient(cur realm, clientId core.ClientId) core.Height {
 	return core.UpdateClient(cross, core.MsgUpdateClient{
 		ClientId:      clientId,
-		ClientMessage: core.NewBytes(cross, HeaderBytes(cross)),
-		Relayer:       Relayer,
+		ClientMessage: HeaderBytes(cross),
 	})
 }
 
 func UpdateRealCometBLSClientWithTamperedHeader(cur realm, clientId core.ClientId) core.Height {
 	return core.UpdateClient(cross, core.MsgUpdateClient{
 		ClientId:      clientId,
-		ClientMessage: core.NewBytes(cross, TamperedHeaderBytes(cross)),
-		Relayer:       Relayer,
+		ClientMessage: TamperedHeaderBytes(cross),
 	})
 }

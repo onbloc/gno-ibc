@@ -23,20 +23,12 @@ func main() {
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(
-		cross,
-		core.Sequence(7),
-		pair.Source,
-		pair.Destination,
-		e2e.MustPacketData(cross, e2e.MustTokenOrderInstruction(cross, order)),
-		core.Timestamp(0),
-	)
+	packet := core.Packet{SourceChannelId: pair.Source, DestinationChannelId: pair.Destination, Data: e2e.MustPacketData(cross, e2e.MustTokenOrderInstruction(cross, order)), TimeoutTimestamp: core.Timestamp(0)}
 
 	core.PacketRecv(cross, core.MsgPacketRecv{
 		Packets:     []core.Packet{packet},
-		Proof:       core.NewBytes(cross, realcometbls.Z35PacketCommitmentProof(cross)),
+		Proof:       realcometbls.Z35PacketCommitmentProof(cross),
 		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
-		Relayer:     realcometbls.Relayer,
 	})
 
 	println("quote_balance", impl.VoucherBalanceOf("ibc/quote", address(receiver)))

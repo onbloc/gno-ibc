@@ -31,14 +31,12 @@ func z39CallPacket(receiverPath string) core.Packet {
 		ContractAddress:  []byte(receiverPath),
 		ContractCalldata: []byte("calldata"),
 	}
-	return core.NewPacket(
-		cross,
-		core.Sequence(9),
-		core.ChannelId(2),
-		core.ChannelId(1),
-		e2e.MustPacketData(cross, e2e.MustCallInstruction(cross, call)),
-		core.Timestamp(0),
-	)
+	return core.Packet{
+		SourceChannelId:      core.ChannelId(2),
+		DestinationChannelId: core.ChannelId(1),
+		Data:                 e2e.MustPacketData(cross, e2e.MustCallInstruction(cross, call)),
+		TimeoutTimestamp:     core.Timestamp(0),
+	}
 }
 
 func hash(bz []byte) [32]byte {

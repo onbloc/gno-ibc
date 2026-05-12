@@ -26,29 +26,26 @@ func main() {
 		Metadata:    e2e.MustTokenMetadata(cross, "grc20", "roundtrip"),
 	}
 	instr := e2e.MustTokenOrderInstruction(cross, order)
-	packet := core.PacketSend(cross, core.MsgPacketSend{
-		SourceChannelId:  pair.Source,
-		TimeoutTimestamp: core.Timestamp(3600),
-		Data:             e2e.MustPacketData(cross, instr),
-	})
+	packet := core.Packet{
+		SourceChannelId:      pair.Source,
+		DestinationChannelId: pair.Destination,
+		Data:                 e2e.MustPacketData(cross, instr),
+		TimeoutTimestamp:     core.Timestamp(3600),
+	}
+	core.BatchSend(cross, core.MsgBatchSend{Packets: []core.Packet{packet}})
 
 	core.PacketRecv(cross, core.MsgPacketRecv{
 		Packets:     []core.Packet{packet},
-		Proof:       core.NewBytes(cross, nil),
 		ProofHeight: core.Height(1),
-		Relayer:     e2e.Relayer,
 	})
 
 	ack := e2e.MustSuccessAck(cross, e2e.MustProtocolTokenOrderAck(cross))
 	core.PacketAcknowledgement(cross, core.MsgPacketAcknowledgement{
 		Packets:          []core.Packet{packet},
-		Acknowledgements: []core.Bytes{ack},
-		Proof:            core.NewBytes(cross, nil),
+		Acknowledgements: [][]byte{ack},
 		ProofHeight:      core.Height(1),
-		Relayer:          e2e.Relayer,
 	})
 
-	println("packet_sequence", packet.Sequence.String())
 	println("quote_balance", impl.VoucherBalanceOf(impl.PredictWrappedTokenV2(pair.Destination, order.BaseToken, impl.MetadataImage(mustDecodeTokenMetadata(order.Metadata))), address(receiver)))
 	println("ack_roundtrip", "ok")
 }
@@ -62,6 +59,5 @@ func mustDecodeTokenMetadata(bz []byte) z.TokenMetadata {
 }
 
 // Output:
-// packet_sequence 0
 // quote_balance 33
 // ack_roundtrip ok

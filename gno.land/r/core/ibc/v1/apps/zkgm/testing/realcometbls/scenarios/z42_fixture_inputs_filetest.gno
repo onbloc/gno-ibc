@@ -27,14 +27,14 @@ func main() {
 		State:                 core.ChannelStateTryOpen,
 		ConnectionId:          counterpartyConnectionId,
 		CounterpartyChannelId: channelId,
-		CounterpartyPortId:    core.NewBytes(cross, []byte(string(zkgm.ProxyAddress()))),
+		CounterpartyPortId:    []byte(string(zkgm.ProxyAddress())),
 		Version:               "bad-version",
 	}
 	staleChannel := core.Channel{
 		State:                 core.ChannelStateInit,
 		ConnectionId:          counterpartyConnectionId,
 		CounterpartyChannelId: channelId,
-		CounterpartyPortId:    core.NewBytes(cross, []byte(string(zkgm.ProxyAddress()))),
+		CounterpartyPortId:    []byte(string(zkgm.ProxyAddress())),
 		Version:               zkgm.Version,
 	}
 

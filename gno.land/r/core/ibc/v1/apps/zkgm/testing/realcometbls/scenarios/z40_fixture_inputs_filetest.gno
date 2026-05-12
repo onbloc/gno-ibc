@@ -24,7 +24,7 @@ func main() {
 }
 
 func z40MixedBatchPacket() core.Packet {
-	return z40BatchPacket(core.Sequence(10), z.Batch{Instructions: []z.Instruction{
+	return z40BatchPacket(z.Batch{Instructions: []z.Instruction{
 		e2e.MustCallInstruction(cross, z.Call{
 			Sender:           []byte("sender"),
 			ContractAddress:  []byte(mockReceiverPath),
@@ -43,7 +43,7 @@ func z40MixedBatchPacket() core.Packet {
 }
 
 func z40PanicBatchPacket() core.Packet {
-	return z40BatchPacket(core.Sequence(11), z.Batch{Instructions: []z.Instruction{
+	return z40BatchPacket(z.Batch{Instructions: []z.Instruction{
 		e2e.MustCallInstruction(cross, z.Call{
 			Sender:           []byte("sender"),
 			ContractAddress:  []byte(mockReceiverPath),
@@ -61,15 +61,13 @@ func z40PanicBatchPacket() core.Packet {
 	}})
 }
 
-func z40BatchPacket(sequence core.Sequence, batch z.Batch) core.Packet {
-	return core.NewPacket(
-		cross,
-		sequence,
-		core.ChannelId(2),
-		core.ChannelId(1),
-		e2e.MustPacketData(cross, e2e.MustBatchInstruction(cross, batch)),
-		core.Timestamp(0),
-	)
+func z40BatchPacket(batch z.Batch) core.Packet {
+	return core.Packet{
+		SourceChannelId:      core.ChannelId(2),
+		DestinationChannelId: core.ChannelId(1),
+		Data:                 e2e.MustPacketData(cross, e2e.MustBatchInstruction(cross, batch)),
+		TimeoutTimestamp:     core.Timestamp(0),
+	}
 }
 
 func hash(bz []byte) [32]byte {

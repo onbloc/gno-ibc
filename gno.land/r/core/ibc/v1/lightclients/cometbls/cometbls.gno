@@ -129,6 +129,9 @@ func (Adapter) Misbehaviour(_ realm, clientId core.ClientId, clientMessage []byt
 
 func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proof, key, value []byte) {
 	e := getEntry(clientId)
+	if status := e.client.Status(nowNanos()); status != cometblsp.StatusActive {
+		panic("cometbls: client is " + status)
+	}
 	proofs, err := cometblsp.DecodeProofs(proof)
 	if err != nil {
 		panic("cometbls: invalid membership proof: " + err.Error())
@@ -141,6 +144,9 @@ func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proo
 
 func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, proof, key []byte) {
 	e := getEntry(clientId)
+	if status := e.client.Status(nowNanos()); status != cometblsp.StatusActive {
+		panic("cometbls: client is " + status)
+	}
 	proofs, err := cometblsp.DecodeProofs(proof)
 	if err != nil {
 		panic("cometbls: invalid non-membership proof: " + err.Error())

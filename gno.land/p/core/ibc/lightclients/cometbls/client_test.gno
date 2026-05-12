@@ -1,6 +1,7 @@
 package cometbls
 
 import (
+	"strings"
 	"testing"
 
 	"gno.land/p/aib/ics23"
@@ -503,6 +504,16 @@ func TestVerifyMembershipProofFails(t *testing.T) {
 	}
 }
 
+func TestVerifyMembershipFrozenClient(t *testing.T) {
+	cs := baseCS()
+	cs.FrozenHeight = FrozenHeight
+	client := newTestClient(cs, map[Height]ConsensusState{cs.LatestHeight: {Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}})
+	err := client.VerifyMembership(cs.LatestHeight, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")), []byte("v"))
+	if err == nil || !strings.Contains(err.Error(), "client is frozen") {
+		t.Fatalf("got %v, want frozen client error", err)
+	}
+}
+
 // --- VerifyNonMembership tests ---
 
 func TestVerifyNonMembershipProofCountMismatch(t *testing.T) {
@@ -511,6 +522,16 @@ func TestVerifyNonMembershipProofCountMismatch(t *testing.T) {
 	oneProof := []ics23.CommitmentProof{ics23.CommitmentProof_Exist{Exist: &ics23.ExistenceProof{}}}
 	if err := client.VerifyNonMembership(cs.LatestHeight, oneProof, twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
 		t.Fatal("expected error for proof count mismatch")
+	}
+}
+
+func TestVerifyNonMembershipFrozenClient(t *testing.T) {
+	cs := baseCS()
+	cs.FrozenHeight = FrozenHeight
+	client := newTestClient(cs, map[Height]ConsensusState{cs.LatestHeight: {Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}})
+	err := client.VerifyNonMembership(cs.LatestHeight, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")))
+	if err == nil || !strings.Contains(err.Error(), "client is frozen") {
+		t.Fatalf("got %v, want frozen client error", err)
 	}
 }
 

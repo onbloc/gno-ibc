@@ -4,7 +4,7 @@
 Reads ``.gno-version`` for the upstream gno repo + commit, ensures a checkout
 under ``~/.cache/gno-ibc/gno``, symlinks every package under ``stdlibs/`` into
 ``<cache>/gnovm/stdlibs/<module>/``, regenerates the native-binding dispatch
-table, and installs the resulting ``gno`` binary.
+table, and installs the resulting ``gno`` and ``gnodev`` binaries.
 
 The symlinks are the load-bearing part: the gno binary's baked-in ``_GNOROOT``
 points at the cache, so at runtime it walks the symlinked dirs to load .gno
@@ -199,31 +199,37 @@ def _read_direct_requires(gomod_path: Path) -> dict[str, str]:
     return requires
 
 
-def _inject_native_deps(cache_dir: Path) -> None:
-    """Add to the gno module any extra deps declared in stdlibs/go.mod.
-
-    Native stdlib .go files may import third-party packages that are not yet
-    in the upstream gno go.mod. Reading the versions from stdlibs/go.mod keeps
-    this script and the IDE-support go.mod in sync automatically.
-    """
+def _native_deps() -> list[str]:
+    """Return extra Go deps declared by this repo's native stdlibs."""
     requires = _read_direct_requires(REPO_ROOT / "stdlibs" / "go.mod")
     # Deps that start with the gno module prefix are already provided by the
     # host module; skip them and the replace-directive placeholder version.
     gno_module = "github.com/gnolang/gno"
-    deps = [
+    return [
         f"{mod}@{ver}"
         for mod, ver in sorted(requires.items())
         if not mod.startswith(gno_module)
         and ver != "v0.0.0-00010101000000-000000000000"
     ]
+
+
+def _inject_native_deps(module_dir: Path) -> None:
+    """Add extra stdlib native-binding deps to a Go module.
+
+    Native stdlib .go files may import third-party packages that are not yet
+    in the upstream gno go.mod. Reading the versions from stdlibs/go.mod keeps
+    this script and the IDE-support go.mod in sync automatically.
+    """
+    deps = _native_deps()
     if not deps:
         return
-    log(f"injecting native stdlib deps into gno module: {deps}")
-    run(["go", "get"] + deps, cwd=cache_dir)
+    log(f"injecting native stdlib deps into {module_dir}: {deps}")
+    run(["go", "get"] + deps, cwd=module_dir)
 
 
 def regenerate_and_install(cache_dir: Path, skip_install: bool) -> None:
     gnovm = cache_dir / "gnovm"
+    gnodev = cache_dir / "contribs" / "gnodev"
     _inject_native_deps(cache_dir)
     run(["go", "mod", "tidy"], cwd=gnovm)
     run(["go", "generate", "./stdlibs/..."], cwd=gnovm)
@@ -233,6 +239,12 @@ def regenerate_and_install(cache_dir: Path, skip_install: bool) -> None:
     # Delegate to gnovm/Makefile so VERSION + GNOROOT_DIR ldflags match the
     # upstream install path.
     run(["make", "install"], cwd=gnovm)
+    # gnodev embeds the same stdlib dispatch table through gnovm, so rebuild it
+    # from the same checkout after stdlib generation. Otherwise an older
+    # gnodev binary can keep looking for stdlibs removed from this repo.
+    _inject_native_deps(gnodev)
+    run(["go", "mod", "tidy"], cwd=gnodev)
+    run(["make", "install.gnodev"], cwd=cache_dir)
 
 
 def parse_args() -> argparse.Namespace:
@@ -299,6 +311,7 @@ def main() -> int:
     if not args.skip_install:
         gobin = subprocess.check_output(["go", "env", "GOPATH"]).decode().strip()
         log(f"installed: {gobin}/bin/gno")
+        log(f"installed: {gobin}/bin/gnodev")
     return 0
 
 

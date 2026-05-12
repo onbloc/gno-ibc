@@ -3,7 +3,7 @@
 # `make install-gno` runs tools/setup-stdlibs.py, which clones the pinned gno
 # repo into a per-user cache, symlinks every package under stdlibs/ into
 # <cache>/gnovm/stdlibs/<module>/, regenerates the native-binding dispatch
-# table (`go generate`), and installs the resulting `gno` binary.
+# table (`go generate`), and installs the resulting `gno` and `gnodev` binaries.
 #
 # Bump GNO_COMMIT in .gno-version to roll the upstream toolchain.
 
@@ -97,7 +97,7 @@ USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/core gno.
 
 help:
 	@echo "Targets:"
-	@echo "  install-gno           — vendor stdlibs/, regenerate, build+install gno"
+	@echo "  install-gno           — vendor stdlibs/, regenerate, build+install gno + gnodev"
 	@echo "  link-stdlibs          — refresh stdlib symlinks only (no rebuild)"
 	@echo "  verify-gno            — assert the gno binary is on PATH"
 	@echo "  vendor                — mirror sparse third_party package sub-paths into gno.land/"

@@ -431,6 +431,23 @@ func TestAcknowledgementDoesNotPanic(t *testing.T) {
 	st.commitAcknowledgement(p, []byte("ack"))
 }
 
+func TestPacketSendCommitsPacket(t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+
+	packet := PacketSend(cross, channelId, 0, 100, []byte("data"))
+
+	if packet.SourceChannelId != channelId {
+		t.Fatal("PacketSend must preserve source channel")
+	}
+	if packet.DestinationChannelId != st.getChannel(channelId).CounterpartyChannelId {
+		t.Fatal("PacketSend must use channel counterparty as destination")
+	}
+	if !st.hasPacketCommitment(packet) {
+		t.Fatal("PacketSend must commit packet")
+	}
+}
+
 func TestBatchSendReturnsUnionPacketCommitment(t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)

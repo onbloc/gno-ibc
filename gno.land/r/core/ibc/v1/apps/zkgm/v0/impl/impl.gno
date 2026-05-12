@@ -87,9 +87,9 @@ func (v *ZkgmV1) IntentRecv(packet core.Packet, marketMaker address, marketMaker
 	}
 }
 
-func (v *ZkgmV1) Send(req zkgm.SendRequest) (core.Packet, error) {
+func (v *ZkgmV1) Send(req zkgm.SendRequest) ([]byte, error) {
 	if err := v.dispatchVerify(req.ChannelId, req.Sender, parseCoins(req.SentCoins), req.Salt, req.Instruction); err != nil {
-		return core.Packet{}, err
+		return nil, err
 	}
 
 	data, err := z.EncodeZkgmPacket(z.ZkgmPacket{
@@ -98,17 +98,10 @@ func (v *ZkgmV1) Send(req zkgm.SendRequest) (core.Packet, error) {
 		Instruction: req.Instruction,
 	})
 	if err != nil {
-		return core.Packet{}, err
+		return nil, err
 	}
 
-	sourceChannel := core.GetChannel(req.ChannelId)
-	return core.Packet{
-		SourceChannelId:      req.ChannelId,
-		DestinationChannelId: sourceChannel.CounterpartyChannelId,
-		Data:                 data,
-		TimeoutHeight:        0,
-		TimeoutTimestamp:     req.TimeoutTimestamp,
-	}, nil
+	return data, nil
 }
 
 func (v *ZkgmV1) Render(pkgpath string, path string) string {

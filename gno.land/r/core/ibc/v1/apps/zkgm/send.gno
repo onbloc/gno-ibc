@@ -24,7 +24,7 @@ func Send(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, 
 		sentCoins = banker.OriginSend().String()
 	}
 
-	packet, err := impl.Send(SendRequest{
+	data, err := impl.Send(SendRequest{
 		ChannelId:        channelId,
 		TimeoutTimestamp: timeoutTimestamp,
 		Salt:             salt,
@@ -36,7 +36,5 @@ func Send(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, 
 		panic(err)
 	}
 
-	core.BatchSend(cross, core.MsgBatchSend{Packets: []core.Packet{packet}})
-
-	return packet
+	return core.PacketSend(cross, channelId, 0, timeoutTimestamp, data)
 }

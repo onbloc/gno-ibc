@@ -81,6 +81,17 @@ func TestSyntheticMembershipProofFixture(t *testing.T) {
 				"9222fb38eb4d95c71a0c2c7899672746f529150a360a340a036962631220a6c1e70fa2cceb831692" +
 				"a8607087e2f0fecc025e2fee771bf13ae95902ad1f831a0b08011000180120012a0100",
 		},
+		{
+			name:    "z36_ack_membership",
+			key:     mustHex("7cdf87cee2bf28fffdd8dd98af1ed5bd99585afb5b6e537d718f1f9391b44067"),
+			value:   mustHex("41502841361a25f62632a8138da2f5da1948539832b0fc2bfb733cc7b081836e"),
+			rootHex: "a1be834affb97f92fa64a9fb234a7b9692adeae6a984de2f6afce4efd6b080b2",
+			proofHex: "0a80010a7e0a207cdf87cee2bf28fffdd8dd98af1ed5bd99585afb5b6e537d718f1f9391b44067" +
+				"122041502841361a25f62632a8138da2f5da1948539832b0fc2bfb733cc7b081836e1a0d080110" +
+				"00180120012a0300020222290801122502040220673b9cd2b12cf905618f6b5f169960026fbfd2e1" +
+				"620582d85278f42c8f3dbabb200a360a340a03696263122073f8956e449da09927af05f41734ef" +
+				"2691cd5a6b7b64b9847be76a1fe10c49711a0b08011000180120012a0100",
+		},
 	}
 
 	for _, tc := range cases {
@@ -104,28 +115,51 @@ func TestSyntheticMembershipProofFixture(t *testing.T) {
 }
 
 func TestSyntheticNonMembershipProofFixture(t *testing.T) {
-	key := []byte("packet-key-missing")
-	rootHex := "4d52c3c46fce6c9d7cd187c0cbf6a7dd6e8f0d89661d98b5b9e2161d8a965323"
-	proofHex := "0a6c126a0a127061636b65742d6b65792d6d697373696e6712540a0a7061636b65742d6b657912" +
-		"0c7061636b65742d76616c75651a0d08011000180120012a0300020222290801122504060220d1" +
-		"e824347279953135d11eb8eca353e5e22dcf0b08b408dc170c133c0fc00f49200a360a340a03" +
-		"6962631220755595e19553fed6b6654dc0ea6c44fae960c5c242cba6b336412fb2b45a02eb1a" +
-		"0b08011000180120012a0100"
-
-	proofs, err := DecodeProofs(mustHex(proofHex))
-	if err != nil {
-		t.Fatalf("DecodeProofs: %v", err)
+	cases := []struct {
+		name     string
+		key      []byte
+		rootHex  string
+		proofHex string
+	}{
+		{
+			name:    "packet",
+			key:     []byte("packet-key-missing"),
+			rootHex: "4d52c3c46fce6c9d7cd187c0cbf6a7dd6e8f0d89661d98b5b9e2161d8a965323",
+			proofHex: "0a6c126a0a127061636b65742d6b65792d6d697373696e6712540a0a7061636b65742d6b657912" +
+				"0c7061636b65742d76616c75651a0d08011000180120012a0300020222290801122504060220d1" +
+				"e824347279953135d11eb8eca353e5e22dcf0b08b408dc170c133c0fc00f49200a360a340a03" +
+				"6962631220755595e19553fed6b6654dc0ea6c44fae960c5c242cba6b336412fb2b45a02eb1a" +
+				"0b08011000180120012a0100",
+		},
+		{
+			name:    "z37_receipt",
+			key:     mustHex("aaa7bd6e1524998c867fc9248d3940e6873a82884f0754f79fd7bec370f222b7"),
+			rootHex: "a1be834affb97f92fa64a9fb234a7b9692adeae6a984de2f6afce4efd6b080b2",
+			proofHex: "0aa50112a2010a20aaa7bd6e1524998c867fc9248d3940e6873a82884f0754f79fd7bec370f222" +
+				"b7127e0a207cdf87cee2bf28fffdd8dd98af1ed5bd99585afb5b6e537d718f1f9391b440671220" +
+				"41502841361a25f62632a8138da2f5da1948539832b0fc2bfb733cc7b081836e1a0d0801100018" +
+				"0120012a0300020222290801122502040220673b9cd2b12cf905618f6b5f169960026fbfd2e162" +
+				"0582d85278f42c8f3dbabb200a360a340a03696263122073f8956e449da09927af05f41734ef26" +
+				"91cd5a6b7b64b9847be76a1fe10c49711a0b08011000180120012a0100",
+		},
 	}
 
-	cs := baseCS()
-	client := newTestClient(cs, map[Height]ConsensusState{
-		cs.LatestHeight: {
-			Timestamp: testNow,
-			Root:      MerkleRoot{Hash: mustHex(rootHex)},
-		},
-	})
-	path := types.MerklePath{KeyPath: [][]byte{[]byte("ibc"), key}}
-	if err := client.VerifyNonMembership(cs.LatestHeight, proofs, path); err != nil {
-		t.Fatalf("VerifyNonMembership: %v", err)
+	for _, tc := range cases {
+		proofs, err := DecodeProofs(mustHex(tc.proofHex))
+		if err != nil {
+			t.Fatalf("%s DecodeProofs: %v", tc.name, err)
+		}
+
+		cs := baseCS()
+		client := newTestClient(cs, map[Height]ConsensusState{
+			cs.LatestHeight: {
+				Timestamp: testNow,
+				Root:      MerkleRoot{Hash: mustHex(tc.rootHex)},
+			},
+		})
+		path := types.MerklePath{KeyPath: [][]byte{[]byte("ibc"), tc.key}}
+		if err := client.VerifyNonMembership(cs.LatestHeight, proofs, path); err != nil {
+			t.Fatalf("%s VerifyNonMembership: %v", tc.name, err)
+		}
 	}
 }

@@ -24,6 +24,9 @@ const (
 //     gno.land/r/core/ibc/v1/core/z35_fixture_inputs_test.gno derive the
 //     z35*Key/z35*Value bytes from the production path/encoding code, so
 //     drift in either direction breaks one of those checks first.
+//   - scenarios/packet_lifecycle_fixture_inputs_filetest.gno and
+//     gno.land/r/core/ibc/v1/core/packet_lifecycle_fixture_inputs_test.gno derive the
+//     z36/z37 key/value bytes from the production path/encoding code.
 var (
 	devnetValidatorsHash = mustHex(
 		"20DDFE7A0F75C65D876316091ECCD494A54A2BB324C872015F73E528D53CB9C4",
@@ -97,6 +100,33 @@ var (
 			"9222fb38eb4d95c71a0c2c7899672746f529150a360a340a036962631220a6c1e70fa2cceb831692" +
 			"a8607087e2f0fecc025e2fee771bf13ae95902ad1f831a0b08011000180120012a0100",
 	)
+	z36z37Root = mustHex(
+		"a1be834affb97f92fa64a9fb234a7b9692adeae6a984de2f6afce4efd6b080b2",
+	)
+	z36AckMembershipKey = mustHex(
+		"7cdf87cee2bf28fffdd8dd98af1ed5bd99585afb5b6e537d718f1f9391b44067",
+	)
+	z36AckMembershipValue = mustHex(
+		"41502841361a25f62632a8138da2f5da1948539832b0fc2bfb733cc7b081836e",
+	)
+	z36AckMembershipProof = mustHex(
+		"0a80010a7e0a207cdf87cee2bf28fffdd8dd98af1ed5bd99585afb5b6e537d718f1f9391b44067" +
+			"122041502841361a25f62632a8138da2f5da1948539832b0fc2bfb733cc7b081836e1a0d080110" +
+			"00180120012a0300020222290801122502040220673b9cd2b12cf905618f6b5f169960026fbfd2e1" +
+			"620582d85278f42c8f3dbabb200a360a340a03696263122073f8956e449da09927af05f41734ef" +
+			"2691cd5a6b7b64b9847be76a1fe10c49711a0b08011000180120012a0100",
+	)
+	z37ReceiptNonMembershipKey = mustHex(
+		"aaa7bd6e1524998c867fc9248d3940e6873a82884f0754f79fd7bec370f222b7",
+	)
+	z37ReceiptNonMembershipProof = mustHex(
+		"0aa50112a2010a20aaa7bd6e1524998c867fc9248d3940e6873a82884f0754f79fd7bec370f222" +
+			"b7127e0a207cdf87cee2bf28fffdd8dd98af1ed5bd99585afb5b6e537d718f1f9391b440671220" +
+			"41502841361a25f62632a8138da2f5da1948539832b0fc2bfb733cc7b081836e1a0d0801100018" +
+			"0120012a0300020222290801122502040220673b9cd2b12cf905618f6b5f169960026fbfd2e162" +
+			"0582d85278f42c8f3dbabb200a360a340a03696263122073f8956e449da09927af05f41734ef26" +
+			"91cd5a6b7b64b9847be76a1fe10c49711a0b08011000180120012a0100",
+	)
 	devnetZKP = mustHex(
 		"03CF56142A1E03D2445A82100FEAF70C1CD95A731ED85792AFFF5792EC0BDD21" +
 			"08991BB56F9043A269F88903DE616A9AB99A3C5AB778E566744B060456C5616C" +
@@ -149,6 +179,10 @@ func ExpiredSyntheticConsensusStateBytes(cur realm) []byte {
 
 func Z35ConsensusStateBytes(cur realm) []byte {
 	return consensusStateBytes(z35Root, uint64(DevnetTimeSeconds-1000)*1_000_000_000)
+}
+
+func Z36Z37ConsensusStateBytes(cur realm) []byte {
+	return consensusStateBytes(z36z37Root, uint64(DevnetTimeSeconds-1000)*1_000_000_000)
 }
 
 func consensusStateBytes(root []byte, timestamp uint64) []byte {
@@ -223,6 +257,26 @@ func Z35PacketCommitmentValue(cur realm) []byte {
 
 func Z35PacketCommitmentProof(cur realm) []byte {
 	return cloneBytes(z35PacketCommitmentProof)
+}
+
+func Z36AckMembershipKey(cur realm) []byte {
+	return cloneBytes(z36AckMembershipKey)
+}
+
+func Z36AckMembershipValue(cur realm) []byte {
+	return cloneBytes(z36AckMembershipValue)
+}
+
+func Z36AckMembershipProof(cur realm) []byte {
+	return cloneBytes(z36AckMembershipProof)
+}
+
+func Z37ReceiptNonMembershipKey(cur realm) []byte {
+	return cloneBytes(z37ReceiptNonMembershipKey)
+}
+
+func Z37ReceiptNonMembershipProof(cur realm) []byte {
+	return cloneBytes(z37ReceiptNonMembershipProof)
 }
 
 func HeaderBytes(cur realm) []byte {

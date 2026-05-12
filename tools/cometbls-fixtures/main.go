@@ -76,10 +76,26 @@ func main() {
 			value: mustHex("0100000000000000000000000000000000000000000000000000000000000000"),
 		},
 	}
+	z36z37Fixtures := []fixtureInput{
+		{
+			name:  "z36_ack_membership",
+			key:   mustHex("7cdf87cee2bf28fffdd8dd98af1ed5bd99585afb5b6e537d718f1f9391b44067"),
+			value: mustHex("41502841361a25f62632a8138da2f5da1948539832b0fc2bfb733cc7b081836e"),
+		},
+		{
+			name:             "z37_receipt_non_membership",
+			key:              []byte("z37-neighbor-anchor"),
+			value:            []byte("z37-neighbor-value"),
+			nonMembershipKey: mustHex("aaa7bd6e1524998c867fc9248d3940e6873a82884f0754f79fd7bec370f222b7"),
+		},
+	}
 	for _, fx := range makeFixtureSet(baseFixtures) {
 		printFixture(fx)
 	}
 	for _, fx := range makeFixtureSet(z35Fixtures) {
+		printFixture(fx)
+	}
+	for _, fx := range makeFixtureSet(z36z37Fixtures) {
 		printFixture(fx)
 	}
 }

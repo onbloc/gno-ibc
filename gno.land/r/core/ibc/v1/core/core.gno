@@ -70,6 +70,12 @@ func commit(key H256, value H256) {
 	params.SetBytes(hex.EncodeToString(key[:]), value[:])
 }
 
+func h256Bytes(h H256) []byte {
+	out := make([]byte, len(h))
+	copy(out, h[:])
+	return out
+}
+
 func RegisterClient(_ realm, clientType ClientType, client ILightClient) {
 	st.registerClient(clientType, client)
 }
@@ -417,8 +423,11 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 		}
 
 		key := PacketCommitmentPath(packet)
+		// Copy the commitment sentinel before handing it to light clients.
+		// Some implementations compare with bytes.Equal, which rejects readonly
+		// slices derived directly from package-level arrays.
 		st.getClient(connection.ClientId).VerifyMembership(
-			connection.ClientId, msg.ProofHeight, msg.Proof, key[:], COMMITMENT_MAGIC[:],
+			connection.ClientId, msg.ProofHeight, msg.Proof, key[:], h256Bytes(COMMITMENT_MAGIC),
 		)
 
 		st.setPacketReceipt(packet)

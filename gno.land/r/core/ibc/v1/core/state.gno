@@ -21,6 +21,7 @@ var (
 	ErrNotEnoughPackets              = errors.New("not enough packets")
 	ErrBatchSameChannelOnly          = errors.New("batch must use the same channel")
 	ErrAcknowledgementCountMismatch  = errors.New("acknowledgement count mismatch")
+	ErrPortAlreadyRegistered         = errors.New("port already registered")
 )
 
 type State struct {
@@ -44,8 +45,7 @@ type State struct {
 }
 
 type pendingAsyncAck struct {
-	Packet         Packet
-	AuthorizedPort Bytes
+	Packet Packet
 }
 
 func newState() State {
@@ -177,7 +177,7 @@ func (s *State) hasPacketCommitment(packet Packet) bool {
 func (s *State) commitAcknowledgement(packet Packet, ack []byte) {
 	key := PacketAcknowledgementPath(packet)
 	s.packetAcks[key] = true
-	commit(key, CommitAcks([]Bytes{Bytes(ack)}))
+	commit(key, CommitAcks([][]byte{ack}))
 }
 
 func (s *State) hasAcknowledgement(packet Packet) bool {
@@ -201,7 +201,7 @@ func (s *State) deletePacketReceipt(packet Packet) {
 	commit(key, zero)
 }
 
-func (s *State) savePendingAsyncAck(packet Packet, authorizedPort Bytes) {
+func (s *State) savePendingAsyncAck(packet Packet) {
 	key := CommitPacket(packet)
 	if _, exists := s.pendingAsyncAcks[key]; exists {
 		panic(ErrPendingAsyncAckExists)
@@ -209,10 +209,7 @@ func (s *State) savePendingAsyncAck(packet Packet, authorizedPort Bytes) {
 	if s.hasAcknowledgement(packet) {
 		panic(ErrAcknowledgementAlreadyWritten)
 	}
-	s.pendingAsyncAcks[key] = pendingAsyncAck{
-		Packet:         packet,
-		AuthorizedPort: authorizedPort,
-	}
+	s.pendingAsyncAcks[key] = pendingAsyncAck{Packet: packet}
 }
 
 func (s *State) getPendingAsyncAck(packet Packet) (pendingAsyncAck, bool) {

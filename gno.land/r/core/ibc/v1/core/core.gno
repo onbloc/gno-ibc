@@ -104,7 +104,7 @@ func emitBatchSendEvent(batchHash H256, packet Packet, sourceChannel Channel, so
 	)
 }
 
-func emitPacketRecvEvent(eventType string, packet Packet, destinationChannel Channel, connection Connection, msgAttrName string, msg Bytes) {
+func emitPacketRecvEvent(eventType string, packet Packet, destinationChannel Channel, connection Connection, msgAttrName string, msg []byte) {
 	chain.Emit(eventType,
 		"packet_hash", CommitPacket(packet).String(),
 		"packet_data", string(packet.Data),
@@ -120,7 +120,7 @@ func emitPacketRecvEvent(eventType string, packet Packet, destinationChannel Cha
 	)
 }
 
-func emitWriteAckEvent(packet Packet, destinationChannel Channel, connection Connection, acknowledgement Bytes) {
+func emitWriteAckEvent(packet Packet, destinationChannel Channel, connection Connection, acknowledgement []byte) {
 	chain.Emit(WriteAckEvent,
 		"packet_hash", CommitPacket(packet).String(),
 		"packet_data", string(packet.Data),
@@ -136,7 +136,7 @@ func emitWriteAckEvent(packet Packet, destinationChannel Channel, connection Con
 	)
 }
 
-func emitPacketAckEvent(packet Packet, sourceChannel Channel, connection Connection, acknowledgement Bytes) {
+func emitPacketAckEvent(packet Packet, sourceChannel Channel, connection Connection, acknowledgement []byte) {
 	chain.Emit(PacketAckEvent,
 		"packet_hash", CommitPacket(packet).String(),
 		"packet_data", string(packet.Data),
@@ -452,18 +452,18 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 		res := st.getAppByPortId(portId).OnRecvPacket(packet, relayer, relayerMsg)
 		switch res.Status {
 		case PacketStatusAsync:
-			st.savePendingAsyncAck(packet, portId)
+			st.savePendingAsyncAck(packet)
 		case PacketStatusSuccess, PacketStatusFailure:
 			if len(res.Ack) == 0 {
 				panic(ErrSyncAckEmpty)
 			}
 			st.commitAcknowledgement(packet, res.Ack)
-			emitWriteAckEvent(packet, channel, firstConnection, Bytes(res.Ack))
+			emitWriteAckEvent(packet, channel, firstConnection, res.Ack)
 		default:
 			panic(ErrUnknownPacketStatus)
 		}
 
-		emitPacketRecvEvent(PacketRecvEvent, packet, channel, firstConnection, "maker_msg", Bytes(relayerMsg))
+		emitPacketRecvEvent(PacketRecvEvent, packet, channel, firstConnection, "maker_msg", relayerMsg)
 	}
 }
 
@@ -496,7 +496,7 @@ func IntentPacketRecv(_ realm, msg MsgIntentPacketRecv) {
 		st.getAppByPortId(portId).OnIntentRecvPacket(packet, marketMaker, marketMakerMsg)
 
 		connection := ensureConnectionOpen(channel.ConnectionId)
-		emitPacketRecvEvent(IntentPacketRecvEvent, packet, channel, connection, "market_maker_msg", Bytes(marketMakerMsg))
+		emitPacketRecvEvent(IntentPacketRecvEvent, packet, channel, connection, "market_maker_msg", marketMakerMsg)
 	}
 }
 
@@ -512,7 +512,7 @@ func PacketAcknowledgement(_ realm, msg MsgPacketAcknowledgement) {
 	channel := st.getChannel(first.SourceChannelId)
 	connection := ensureConnectionOpen(channel.ConnectionId)
 	key := BatchReceiptsPath(CommitPackets(msg.Packets))
-	value := CommitAcks(toBytesSlice(msg.Acknowledgements))
+	value := CommitAcks(msg.Acknowledgements)
 	st.getClient(connection.ClientId).VerifyMembership(
 		connection.ClientId, msg.ProofHeight, msg.Proof, key[:], value[:],
 	)
@@ -531,7 +531,7 @@ func PacketAcknowledgement(_ realm, msg MsgPacketAcknowledgement) {
 
 		st.deletePacketCommitment(packet)
 
-		emitPacketAckEvent(packet, channel, connection, Bytes(ack))
+		emitPacketAckEvent(packet, channel, connection, ack)
 	}
 }
 
@@ -579,19 +579,8 @@ func BatchAcks(_ realm, msg MsgBatchAcks) H256 {
 		panic(ErrAcknowledgementCountMismatch)
 	}
 	batchHash := CommitPackets(msg.Packets)
-	commit(BatchReceiptsPath(batchHash), CommitAcks(toBytesSlice(msg.Acks)))
+	commit(BatchReceiptsPath(batchHash), CommitAcks(msg.Acks))
 	return batchHash
-}
-
-// toBytesSlice wraps a [][]byte (used in foreign-facing msg fields) into the
-// realm-local []Bytes typed slice expected by CommitAcks; runs inside the core
-// realm so the wrapper conversion is legal.
-func toBytesSlice(in [][]byte) []Bytes {
-	out := make([]Bytes, len(in))
-	for i, b := range in {
-		out[i] = Bytes(b)
-	}
-	return out
 }
 
 func CommitMembershipProof(_ realm, msg MsgCommitMembershipProof) {
@@ -619,7 +608,7 @@ func RegisterClient(_ realm, clientType ClientType, client ILightClient) {
 func RegisterApp(_ realm, portId []byte, app IApp) {
 	key := string(portId)
 	if _, ok := st.ports[key]; ok {
-		panic("port already registered")
+		panic(ErrPortAlreadyRegistered)
 	}
 	st.ports[key] = app
 }
@@ -646,7 +635,8 @@ func HasClient(clientType ClientType) bool {
 // that originally returned PacketStatusAsync knows the packet identity needed
 // to drain it (see e.g. zkgm proxy's WriteForwardAck gating).
 func WriteAcknowledgement(_ realm, msg MsgWriteAcknowledgement) {
-	pending, ok := st.getPendingAsyncAck(msg.Packet)
+	hash := CommitPacket(msg.Packet)
+	pending, ok := st.pendingAsyncAcks[hash]
 	if !ok {
 		panic(ErrNoPendingAsyncAck)
 	}
@@ -657,9 +647,9 @@ func WriteAcknowledgement(_ realm, msg MsgWriteAcknowledgement) {
 	connection := ensureConnectionOpen(channel.ConnectionId)
 
 	st.commitAcknowledgement(pending.Packet, msg.Acknowledgement)
-	st.deletePendingAsyncAck(pending.Packet)
+	delete(st.pendingAsyncAcks, hash)
 
-	emitWriteAckEvent(pending.Packet, channel, connection, Bytes(msg.Acknowledgement))
+	emitWriteAckEvent(pending.Packet, channel, connection, msg.Acknowledgement)
 }
 
 // GetChannel returns the stored channel record for channelId. Apps need this

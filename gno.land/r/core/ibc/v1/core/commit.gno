@@ -8,7 +8,7 @@ func CommitPackets(packets []Packet) H256 {
 	return keccak(encodeTopLevelDynamic(encodePacketArray(packets)))
 }
 
-func CommitAcks(acks []Bytes) H256 {
+func CommitAcks(acks [][]byte) H256 {
 	return mergeAck(keccak(encodeTopLevelDynamic(encodeBytesArray(acks))))
 }
 
@@ -32,7 +32,7 @@ func encodePacketArray(packets []Packet) []byte {
 	return append(out, tail...)
 }
 
-func encodeBytesArray(items []Bytes) []byte {
+func encodeBytesArray(items [][]byte) []byte {
 	out := make([]byte, 0)
 	out = append(out, u64ToH256(uint64(len(items)))...)
 

@@ -677,16 +677,14 @@ func TestPacketRecvAsyncDefersAck(t *testing.T) {
 func TestPendingAsyncAckLifecycle(t *testing.T) {
 	resetState()
 	packet := Packet{SourceChannelId: 99, DestinationChannelId: 1, Data: Bytes("transfer"), TimeoutTimestamp: 100}
-	portId := Bytes("g1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq9ex6sz")
 
-	st.savePendingAsyncAck(packet, portId)
+	st.savePendingAsyncAck(packet)
 	pending, ok := st.getPendingAsyncAck(packet)
 	if !ok {
 		t.Fatal("pending async ack must exist after save")
 	}
 	if pending.Packet.SourceChannelId != packet.SourceChannelId ||
-		pending.Packet.DestinationChannelId != packet.DestinationChannelId ||
-		string(pending.AuthorizedPort) != string(portId) {
+		pending.Packet.DestinationChannelId != packet.DestinationChannelId {
 		t.Fatal("pending async ack stored unexpected data")
 	}
 	if !st.hasPendingAsyncAck(packet) {
@@ -701,22 +699,20 @@ func TestPendingAsyncAckLifecycle(t *testing.T) {
 func TestSavePendingAsyncAckRejectsDuplicate(t *testing.T) {
 	resetState()
 	packet := Packet{SourceChannelId: 99, DestinationChannelId: 1, Data: Bytes("transfer"), TimeoutTimestamp: 100}
-	portId := Bytes("g1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq9ex6sz")
 
-	st.savePendingAsyncAck(packet, portId)
+	st.savePendingAsyncAck(packet)
 	mustPanic(t, func() {
-		st.savePendingAsyncAck(packet, portId)
+		st.savePendingAsyncAck(packet)
 	})
 }
 
 func TestSavePendingAsyncAckRejectsAlreadyAcked(t *testing.T) {
 	resetState()
 	packet := Packet{SourceChannelId: 99, DestinationChannelId: 1, Data: Bytes("transfer"), TimeoutTimestamp: 100}
-	portId := Bytes("g1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq9ex6sz")
 
-	st.commitAcknowledgement(packet, Bytes{0x01})
+	st.commitAcknowledgement(packet, []byte{0x01})
 	mustPanic(t, func() {
-		st.savePendingAsyncAck(packet, portId)
+		st.savePendingAsyncAck(packet)
 	})
 }
 
@@ -831,7 +827,7 @@ func TestPacketAcknowledgementBatchUsesUnionBatchReceipts(t *testing.T) {
 	if string(client.membershipKeys[0]) != string(receiptPath[:]) {
 		t.Fatal("PacketAcknowledgement must verify Union batch receipts path")
 	}
-	ackValue := CommitAcks(toBytesSlice(acks))
+	ackValue := CommitAcks(acks)
 	if string(client.membershipValues[0]) != string(ackValue[:]) {
 		t.Fatal("PacketAcknowledgement must verify Union batch ack value")
 	}

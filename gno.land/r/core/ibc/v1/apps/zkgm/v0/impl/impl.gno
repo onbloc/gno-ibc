@@ -49,12 +49,11 @@ func (v *ZkgmV1) Ack(packet core.Packet, ack []byte, relayer address) {
 	if err != nil {
 		panic(err.Error())
 	}
-	ackBytes := []byte(ack)
-	if v.handleForwardChild(packet, zp, ackBytes) {
+	if v.handleForwardChild(packet, zp, ack) {
 		return
 	}
 
-	if err := v.dispatchAck(packet, zp.Path, zp.Salt, zp.Instruction, ackBytes); err != nil {
+	if err := v.dispatchAck(packet, zp.Path, zp.Salt, zp.Instruction, ack); err != nil {
 		panic(err.Error())
 	}
 }

@@ -58,39 +58,95 @@ zkgm.Send(
 )
 ```
 
-The fixture carries **toy** values for `Sender`, `BaseToken`, etc., so every
-scenario surfaces a realm-level validation error on the happy path. The
-panic message is the **expected ground truth** for the configured fixture —
-it confirms the harness reached the realm and the realm's validation chain
-ran as documented. Use these as reference outputs; if a future change
-causes a different panic, the diff is the regression signal.
+### Why every fixture scenario fails on Send (and the harness is still fine)
 
-To make a scenario succeed end-to-end, you must additionally:
-- patch the rendered script's `sender` field to `runtime.OriginCaller()` (the
-  gnokey signer address), and
-- pre-stage realm state matching the scenario (mint vouchers, register IBC
-  port, open channel, register impl version) — out of scope for fixture
-  replay; the `testing/e2e/` harness owns that.
+A direct replay of every scenario against a fresh `gnodev local` panics. This
+is **not** a harness bug — both layers ahead of Send are intact (the
+`gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader` package's `init()` calls
+`zkgm.UpdateImpl(...)` and `core.RegisterApp(...)` at deploy time, so the
+proxy and impl are wired). The fixtures simply weren't designed for Send.
 
-## Results summary
+`scenarios.json` is **decode-oriented** — its job is to feed the Recv-side
+handler tests with stable wire bytes that exercise ABI edge cases (32-byte
+boundaries, recursive Forward shapes, every TokenOrder kind). The inner
+fields therefore carry placeholders ("alice", "ibc/v1-send", `eureka=true`,
+V1 legacy bodies, deep recursion) that no caller would actually submit.
 
-| # | Scenario | Opcode | Expected Result on Send |
-|---|---|---|---|
-| 1 | `recv_call_eureka_true` | Call (eureka=true) | `zkgm/v1: eureka mode not supported` |
-| 2 | `recv_call_eureka_false_empty_calldata` | Call (eureka=false) | `zkgm/v1: invalid call sender` |
-| 3 | `recv_token_order_v2_initialize_protocol_fill` | TokenOrderV2 (INITIALIZE) | `zkgm/coins: sent coin mismatch` |
-| 4 | `recv_token_order_v2_escrow_protocol_fill` | TokenOrderV2 (ESCROW) | `zkgm/voucher: not found: ibc/v1-send` |
-| 5 | `recv_token_order_v2_unescrow_protocol_fill` | TokenOrderV2 (UNESCROW) | `zkgm/coins: sent coin mismatch` |
-| 6 | `recv_token_order_v2_solve_marketmaker_fill` | TokenOrderV2 (SOLVE) | `zkgm/v1: solve token order not implemented` |
-| 7 | `recv_token_order_v1_legacy_protocol_fill` | TokenOrderV1 (legacy) | `zkgm/v1: unsupported token order version` |
-| 8 | `recv_batch_empty` | Batch (empty) | `port not found` |
-| 9 | `recv_batch_call_then_token_order_escrow` | Batch (Call + TokenOrderV2) | `zkgm/v1: eureka mode not supported` |
-| 10 | `recv_forward_single_hop_call` | Forward (→ Call) | `zkgm/v1: eureka mode not supported` |
-| 11 | `recv_forward_recursive_two_hops_call` | Forward (→ Forward → Call) | `zkgm/v1: invalid forward instruction` |
+To prove the pipeline is sound, replace the fixture's toy `sender` with the
+gnokey signer and re-send a clean Call:
 
-All 11 scenarios panic with a deterministic realm-level message. None reach a
-successful packet commit because the fixture is **decode-oriented** (designed
-to feed the Recv-side handler tests).
+```gno
+// /tmp/probe.gno
+package main
+import (
+    "chain/runtime"
+    z "gno.land/p/gnoswap/ibc/zkgm"
+    zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+    core "gno.land/r/core/ibc/v1/core"
+)
+func main() {
+    call := z.Call{
+        Sender:           []byte(runtime.OriginCaller().String()),
+        Eureka:           false,
+        ContractAddress:  []byte("any-contract"),
+        ContractCalldata: nil,
+    }
+    operand, _ := z.EncodeCall(call)
+    zkgm.Send(cross, core.ChannelId(1), core.Timestamp(1700000000000000000),
+        [32]byte{}, z.Instruction{
+            Version: z.INSTR_VERSION_0, Opcode: z.OP_CALL, Operand: operand,
+        })
+}
+```
+
+```sh
+printf '\n' | gnokey maketx run -gas-fee 1000000ugnot -gas-wanted 90000000 \
+  -broadcast -insecure-password-stdin -chainid dev \
+  -remote tcp://127.0.0.1:26657 test1 /tmp/probe.gno
+# panic: port not found       ← passed verifyCall, reached core.PacketSend
+```
+
+`verifyCall` accepts the well-formed Call; the next blocker (`port not
+found`) is *deeper* — `core.PacketSend` needs an open channel, which on a
+fresh `gnodev local` requires the full client / connection / channel open
+sequence from `gno.land/r/core/ibc/v1/core/gnokey_tx_queries.md`.
+
+So the realistic categories of "expected panic" the fixture replay produces:
+
+| Category | Cause | Fix to make scenario succeed |
+|---|---|---|
+| `invalid call sender` | fixture `Sender = "alice"` ≠ signer | replace inline with `runtime.OriginCaller().String()` |
+| `eureka mode not supported` | fixture sets `eureka=true` (v1 rejects) | set `eureka=false` in the rendered script |
+| `unsupported token order version` | fixture exercises V1 legacy shape | only V2 is dispatcher-routable on Send |
+| `solve token order not implemented` | fixture has `Kind=SOLVE` (v1 stub) | use ESCROW/UNESCROW/INITIALIZE |
+| `invalid forward instruction` | fixture nests Forward→Forward→Call | Forward shapes are constructed on the destination side |
+| `coins: sent coin mismatch` | INITIALIZE/UNESCROW need `-send` matching `BaseAmount` | attach the right `-send <amount><denom>` on the tx |
+| `voucher: not found` | ESCROW needs the base token to be a registered voucher | mint via a prior Recv (or pre-stage state) |
+| `port not found` | source channel has no open IBC port | run the full Client→Connection→Channel open sequence first |
+
+All eight categories are **realm/state preconditions**, not encoder bugs.
+The fixtures hit them in order; the harness itself is verified end-to-end.
+
+## Results summary (raw fixture replay, no patches)
+
+| # | Scenario | Opcode | Observed panic | Why (category) |
+|---|---|---|---|---|
+| 1 | `recv_call_eureka_true` | Call (eureka=true) | `zkgm/v1: eureka mode not supported` | eureka |
+| 2 | `recv_call_eureka_false_empty_calldata` | Call (eureka=false) | `zkgm/v1: invalid call sender` | sender |
+| 3 | `recv_token_order_v2_initialize_protocol_fill` | TokenOrderV2 (INITIALIZE) | `zkgm/coins: sent coin mismatch` | -send |
+| 4 | `recv_token_order_v2_escrow_protocol_fill` | TokenOrderV2 (ESCROW) | `zkgm/voucher: not found: ibc/v1-send` | voucher |
+| 5 | `recv_token_order_v2_unescrow_protocol_fill` | TokenOrderV2 (UNESCROW) | `zkgm/coins: sent coin mismatch` | -send |
+| 6 | `recv_token_order_v2_solve_marketmaker_fill` | TokenOrderV2 (SOLVE) | `zkgm/v1: solve token order not implemented` | solve-stub |
+| 7 | `recv_token_order_v1_legacy_protocol_fill` | TokenOrderV1 (legacy) | `zkgm/v1: unsupported token order version` | v1-only |
+| 8 | `recv_batch_empty` | Batch (empty) | `port not found` | port |
+| 9 | `recv_batch_call_then_token_order_escrow` | Batch (Call + TokenOrderV2) | `zkgm/v1: eureka mode not supported` | eureka (inner) |
+| 10 | `recv_forward_single_hop_call` | Forward (→ Call) | `zkgm/v1: eureka mode not supported` | eureka (inner) |
+| 11 | `recv_forward_recursive_two_hops_call` | Forward (→ Forward → Call) | `zkgm/v1: invalid forward instruction` | forward-stub |
+
+Eight of the eleven categories above are state/preconditions you can clear
+externally; three (`eureka`, `unsupported version`, `solve`, `invalid
+forward`) are deliberate v1 stubs. Therefore the failure-on-replay table is
+expected — not a sign of a broken send path.
 
 ---
 

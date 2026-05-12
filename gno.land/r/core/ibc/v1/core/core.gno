@@ -20,7 +20,6 @@ func init() {
 type ILightClient interface {
 	CreateClient(_ realm, clientId ClientId, clientStateBytes, consensusStateBytes []byte) string
 	UpdateClient(_ realm, clientId ClientId, clientMessage []byte) ConsensusStateUpdate
-	Misbehaviour(_ realm, clientId ClientId, clientMessage []byte) []byte
 	VerifyMembership(clientId ClientId, height Height, proof []byte, key []byte, value []byte)
 	VerifyNonMembership(clientId ClientId, height Height, proof []byte, key []byte)
 	GetTimestamp(clientId ClientId, height Height) Timestamp
@@ -37,6 +36,7 @@ type IApp interface {
 	OnChannelCloseInit(channelId ChannelId, relayer address)
 	OnChannelCloseConfirm(channelId ChannelId, relayer address)
 	OnRecvPacket(packet Packet, relayer address, relayerMsg Bytes) RecvPacketResult
+	OnIntentRecvPacket(packet Packet, marketMaker address, marketMakerMsg Bytes)
 	OnAcknowledgementPacket(packet Packet, acknowledgement Bytes, relayer address)
 	OnTimeoutPacket(packet Packet, relayer address)
 }
@@ -48,15 +48,14 @@ const (
 	ConnectionOpenTryEvent     = "ConnectionOpenTry"
 	ConnectionOpenAckEvent     = "ConnectionOpenAck"
 	ConnectionOpenConfirmEvent = "ConnectionOpenConfirm"
-	MisbehaviourEvent          = "Misbehaviour"
 	ChannelOpenInitEvent       = "ChannelOpenInit"
 	ChannelOpenTryEvent        = "ChannelOpenTry"
 	ChannelOpenAckEvent        = "ChannelOpenAck"
 	ChannelOpenConfirmEvent    = "ChannelOpenConfirm"
 	ChannelCloseInitEvent      = "ChannelCloseInit"
 	ChannelCloseConfirmEvent   = "ChannelCloseConfirm"
-	PacketSendEvent            = "PacketSend"
 	PacketRecvEvent            = "PacketRecv"
+	IntentPacketRecvEvent      = "IntentPacketRecv"
 	WriteAckEvent              = "WriteAck"
 	PacketAckEvent             = "PacketAck"
 	PacketTimeoutEvent         = "PacketTimeout"
@@ -70,18 +69,8 @@ func commit(key H256, value H256) {
 	params.SetBytes(hex.EncodeToString(key[:]), value[:])
 }
 
-func RegisterClient(_ realm, clientType ClientType, client ILightClient) {
-	st.registerClient(clientType, client)
-}
-
-func RegisterApp(_ realm, portId address, app IApp) {
-	if _, ok := st.ports[portId]; ok {
-		panic("port already registered")
-	}
-	st.ports[portId] = app
-}
-
 func CreateClient(_ realm, msg MsgCreateClient) ClientId {
+	relayer := runtime.OriginCaller()
 	impl, ok := st.clientRegistry[msg.ClientType]
 	if !ok {
 		panic(ErrClientTypeNotFound)
@@ -96,12 +85,13 @@ func CreateClient(_ realm, msg MsgCreateClient) ClientId {
 		"client_type", string(msg.ClientType),
 		"client_id", clientId.String(),
 		"counterparty_chain_id", counterpartyChainId,
-		"relayer", string(msg.Relayer),
+		"relayer", string(relayer),
 	)
 	return clientId
 }
 
 func UpdateClient(_ realm, msg MsgUpdateClient) Height {
+	relayer := runtime.OriginCaller()
 	impl := st.getClient(msg.ClientId)
 
 	update := impl.UpdateClient(cross, msg.ClientId, msg.ClientMessage)
@@ -112,7 +102,7 @@ func UpdateClient(_ realm, msg MsgUpdateClient) Height {
 	chain.Emit(UpdateClientEvent,
 		"client_id", msg.ClientId.String(),
 		"height", update.Height.String(),
-		"relayer", string(msg.Relayer),
+		"relayer", string(relayer),
 	)
 	return update.Height
 }
@@ -212,17 +202,19 @@ func ConnectionOpenConfirm(_ realm, msg MsgConnectionOpenConfirm) {
 }
 
 func ChannelOpenInit(_ realm, msg MsgChannelOpenInit) ChannelId {
+	relayer := runtime.OriginCaller()
+	portId := msg.PortId
 	ensureConnectionOpen(msg.ConnectionId)
 	channelId := st.generateChannelId()
-	st.channelOwners[channelId] = msg.PortId
+	st.channelOwners[channelId] = portId
 
-	st.getAppByPortId(msg.PortId).OnChannelOpenInit(msg.ConnectionId, channelId, msg.Version, msg.Relayer)
+	st.getAppByPortId(portId).OnChannelOpenInit(msg.ConnectionId, channelId, msg.Version, relayer)
 
 	st.saveChannel(channelId, Channel{
 		State:                 ChannelStateInit,
 		ConnectionId:          msg.ConnectionId,
 		CounterpartyChannelId: 0,
-		CounterpartyPortId:    Bytes(msg.CounterpartyPortId[:]),
+		CounterpartyPortId:    msg.CounterpartyPortId,
 		Version:               msg.Version,
 	})
 	chain.Emit(ChannelOpenInitEvent,
@@ -233,6 +225,8 @@ func ChannelOpenInit(_ realm, msg MsgChannelOpenInit) ChannelId {
 }
 
 func ChannelOpenTry(_ realm, msg MsgChannelOpenTry) ChannelId {
+	relayer := runtime.OriginCaller()
+	portId := msg.PortId
 	if msg.Channel.State != ChannelStateTryOpen {
 		panic(ErrInvalidChannelState)
 	}
@@ -243,15 +237,15 @@ func ChannelOpenTry(_ realm, msg MsgChannelOpenTry) ChannelId {
 		State:                 ChannelStateInit,
 		ConnectionId:          msg.Channel.ConnectionId,
 		CounterpartyChannelId: 0,
-		CounterpartyPortId:    Bytes(msg.PortId[:]),
+		CounterpartyPortId:    msg.PortId,
 		Version:               msg.Channel.Version,
 	}
 	key := ChannelPath(msg.Channel.CounterpartyChannelId)
 	value := keccak(expectedChannel.EthAbiEncode())
 	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofInit, key[:], value[:])
 
-	st.channelOwners[channelId] = msg.PortId
-	st.getAppByPortId(msg.PortId).OnChannelOpenTry(msg.Channel.ConnectionId, channelId, msg.Channel.Version, msg.CounterpartyVersion, msg.Relayer)
+	st.channelOwners[channelId] = portId
+	st.getAppByPortId(portId).OnChannelOpenTry(msg.Channel.ConnectionId, channelId, msg.Channel.Version, msg.CounterpartyVersion, relayer)
 	st.saveChannel(channelId, msg.Channel)
 
 	chain.Emit(ChannelOpenTryEvent,
@@ -262,6 +256,7 @@ func ChannelOpenTry(_ realm, msg MsgChannelOpenTry) ChannelId {
 }
 
 func ChannelOpenAck(_ realm, msg MsgChannelOpenAck) {
+	relayer := runtime.OriginCaller()
 	channel := st.getChannel(msg.ChannelId)
 	if channel.State != ChannelStateInit {
 		panic(ErrInvalidChannelState)
@@ -273,14 +268,14 @@ func ChannelOpenAck(_ realm, msg MsgChannelOpenAck) {
 		State:                 ChannelStateTryOpen,
 		ConnectionId:          connection.CounterpartyConnectionId,
 		CounterpartyChannelId: msg.ChannelId,
-		CounterpartyPortId:    Bytes(portId[:]),
+		CounterpartyPortId:    portId,
 		Version:               msg.CounterpartyVersion,
 	}
 	key := ChannelPath(msg.CounterpartyChannelId)
 	value := keccak(expectedChannel.EthAbiEncode())
 	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofTry, key[:], value[:])
 
-	st.getAppByPortId(portId).OnChannelOpenAck(msg.ChannelId, msg.CounterpartyChannelId, msg.CounterpartyVersion, msg.Relayer)
+	st.getAppByPortId(portId).OnChannelOpenAck(msg.ChannelId, msg.CounterpartyChannelId, msg.CounterpartyVersion, relayer)
 
 	channel.State = ChannelStateOpen
 	channel.Version = msg.CounterpartyVersion
@@ -294,6 +289,7 @@ func ChannelOpenAck(_ realm, msg MsgChannelOpenAck) {
 }
 
 func ChannelOpenConfirm(_ realm, msg MsgChannelOpenConfirm) {
+	relayer := runtime.OriginCaller()
 	channel := st.getChannel(msg.ChannelId)
 	if channel.State != ChannelStateTryOpen {
 		panic(ErrInvalidChannelState)
@@ -305,14 +301,14 @@ func ChannelOpenConfirm(_ realm, msg MsgChannelOpenConfirm) {
 		State:                 ChannelStateOpen,
 		ConnectionId:          connection.CounterpartyConnectionId,
 		CounterpartyChannelId: msg.ChannelId,
-		CounterpartyPortId:    Bytes(portId[:]),
+		CounterpartyPortId:    portId,
 		Version:               channel.Version,
 	}
 	key := ChannelPath(channel.CounterpartyChannelId)
 	value := keccak(expectedChannel.EthAbiEncode())
 	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofAck, key[:], value[:])
 
-	st.getAppByPortId(portId).OnChannelOpenConfirm(msg.ChannelId, msg.Relayer)
+	st.getAppByPortId(portId).OnChannelOpenConfirm(msg.ChannelId, relayer)
 	channel.State = ChannelStateOpen
 	st.saveChannel(msg.ChannelId, channel)
 
@@ -321,99 +317,41 @@ func ChannelOpenConfirm(_ realm, msg MsgChannelOpenConfirm) {
 	)
 }
 
-func Misbehaviour(_ realm, msg MsgMisbehaviour) {
-	impl := st.getClient(msg.ClientId)
-	impl.Misbehaviour(cross, msg.ClientId, msg.ClientMessage)
-	chain.Emit(MisbehaviourEvent,
-		"client_id", msg.ClientId.String(),
-	)
-}
-
 func ChannelCloseInit(_ realm, msg MsgChannelCloseInit) {
-	channel := st.getChannel(msg.ChannelId)
-	if channel.State != ChannelStateOpen {
-		panic(ErrInvalidChannelState)
-	}
-	ensureConnectionOpen(channel.ConnectionId)
-	portId := st.getChannelOwner(msg.ChannelId)
-	st.getAppByPortId(portId).OnChannelCloseInit(msg.ChannelId, msg.Relayer)
-	channel.State = ChannelStateClosed
-	st.saveChannel(msg.ChannelId, channel)
-	chain.Emit(ChannelCloseInitEvent,
-		"channel_id", msg.ChannelId.String(),
-	)
+	panic("channel close init unsupported: Union MsgChannelCloseInit has no channel id")
 }
 
 func ChannelCloseConfirm(_ realm, msg MsgChannelCloseConfirm) {
-	channel := st.getChannel(msg.ChannelId)
-	if channel.State != ChannelStateOpen {
-		panic(ErrInvalidChannelState)
-	}
-	connection := ensureConnectionOpen(channel.ConnectionId)
-	portId := st.getChannelOwner(msg.ChannelId)
-
-	expectedChannel := Channel{
-		State:                 ChannelStateClosed,
-		ConnectionId:          connection.CounterpartyConnectionId,
-		CounterpartyChannelId: msg.ChannelId,
-		CounterpartyPortId:    Bytes(portId[:]),
-		Version:               channel.Version,
-	}
-	key := ChannelPath(channel.CounterpartyChannelId)
-	value := keccak(expectedChannel.EthAbiEncode())
-	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofClose, key[:], value[:])
-
-	st.getAppByPortId(portId).OnChannelCloseConfirm(msg.ChannelId, msg.Relayer)
-	channel.State = ChannelStateClosed
-	st.saveChannel(msg.ChannelId, channel)
-	chain.Emit(ChannelCloseConfirmEvent,
-		"channel_id", msg.ChannelId.String(),
-	)
-}
-
-func PacketSend(_ realm, msg MsgPacketSend) Packet {
-	channel := st.getChannel(msg.SourceChannelId)
-	if channel.State != ChannelStateOpen {
-		panic(ErrInvalidChannelState)
-	}
-
-	packet := Packet{
-		Sequence:             st.generatePacketSequence(msg.SourceChannelId),
-		SourceChannelId:      msg.SourceChannelId,
-		DestinationChannelId: channel.CounterpartyChannelId,
-		Data:                 msg.Data,
-		TimeoutTimestamp:     msg.TimeoutTimestamp,
-	}
-
-	st.commitPacket(packet)
-
-	chain.Emit(PacketSendEvent,
-		"source_channel_id", packet.SourceChannelId.String(),
-		"destination_channel_id", packet.DestinationChannelId.String(),
-		"sequence", packet.Sequence.String(),
-		"timeout_timestamp", packet.TimeoutTimestamp.String(),
-	)
-	return packet
+	panic("channel close confirm unsupported: Union MsgChannelCloseConfirm has no channel id")
 }
 
 func PacketRecv(_ realm, msg MsgPacketRecv) {
+	relayer := runtime.OriginCaller()
+	if len(msg.Packets) == 0 {
+		panic(ErrNotEnoughPackets)
+	}
+	first := msg.Packets[0]
+	firstChannel := st.getChannel(first.DestinationChannelId)
+	firstConnection := ensureConnectionOpen(firstChannel.ConnectionId)
+	batchKey := BatchPacketsPath(CommitPackets(msg.Packets))
+	st.getClient(firstConnection.ClientId).VerifyMembership(
+		firstConnection.ClientId, msg.ProofHeight, msg.Proof, batchKey[:], COMMITMENT_MAGIC[:],
+	)
+
 	for i, packet := range msg.Packets {
 		channel := st.getChannel(packet.DestinationChannelId)
 		if channel.State != ChannelStateOpen {
 			panic(ErrInvalidChannelState)
 		}
-		connection := ensureConnectionOpen(channel.ConnectionId)
+		if packet.DestinationChannelId != first.DestinationChannelId {
+			panic(ErrBatchSameChannelOnly)
+		}
 
 		// Receipt presence is the replay-protection signal: skip silently so
 		// honest relayers can re-submit batches without aborting the whole tx.
 		if st.hasPacketReceipt(packet) {
 			continue
 		}
-
-		key := PacketCommitmentPath(packet)
-		st.getClient(connection.ClientId).VerifyMembership(
-			connection.ClientId, msg.ProofHeight, msg.Proof, key[:], COMMITMENT_MAGIC[:],
-		)
 
 		st.setPacketReceipt(packet)
 
@@ -422,7 +360,7 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 			relayerMsg = msg.RelayerMsgs[i]
 		}
 		portId := st.getChannelOwner(packet.DestinationChannelId)
-		res := st.getAppByPortId(portId).OnRecvPacket(packet, msg.Relayer, relayerMsg)
+		res := st.getAppByPortId(portId).OnRecvPacket(packet, relayer, relayerMsg)
 		switch res.Status {
 		case PacketStatusAsync:
 			st.savePendingAsyncAck(packet, portId)
@@ -435,7 +373,7 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 			chain.Emit(WriteAckEvent,
 				"source_channel_id", packet.SourceChannelId.String(),
 				"destination_channel_id", packet.DestinationChannelId.String(),
-				"sequence", packet.Sequence.String(),
+				"packet_hash", CommitPacket(packet).String(),
 				"ack_hash_hex", hex.EncodeToString(ackHash[:]),
 				"deferred", "false",
 			)
@@ -446,71 +384,89 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 		chain.Emit(PacketRecvEvent,
 			"source_channel_id", packet.SourceChannelId.String(),
 			"destination_channel_id", packet.DestinationChannelId.String(),
-			"sequence", packet.Sequence.String(),
+			"packet_hash", CommitPacket(packet).String(),
 		)
 	}
 }
 
-func WriteAcknowledgement(_ realm, channelId ChannelId, sequence Sequence, ack Bytes) {
-	pending, found := st.getPendingAsyncAck(channelId, sequence)
-	if !found {
-		panic(ErrNoPendingAsyncAck)
+func IntentPacketRecv(_ realm, msg MsgIntentPacketRecv) {
+	marketMaker := runtime.OriginCaller()
+	if len(msg.Packets) == 0 {
+		panic(ErrNotEnoughPackets)
 	}
+	first := msg.Packets[0]
 
-	callerAddr := runtime.PreviousRealm().Address()
-	if callerAddr != pending.AuthorizedPort {
-		panic(ErrUnauthorizedAckWriter)
-	}
-	if st.hasAcknowledgement(pending.Packet) {
-		panic(ErrAcknowledgementAlreadyWritten)
-	}
-	if len(ack) == 0 {
-		panic(ErrAcknowledgementEmpty)
-	}
+	for i, packet := range msg.Packets {
+		channel := st.getChannel(packet.DestinationChannelId)
+		if channel.State != ChannelStateOpen {
+			panic(ErrInvalidChannelState)
+		}
+		if packet.DestinationChannelId != first.DestinationChannelId {
+			panic(ErrBatchSameChannelOnly)
+		}
+		if st.hasPacketReceipt(packet) {
+			continue
+		}
 
-	st.commitAcknowledgement(pending.Packet, ack)
-	st.deletePendingAsyncAck(channelId, sequence)
+		st.setPacketReceipt(packet)
 
-	ackHash := keccak(ack)
-	chain.Emit(WriteAckEvent,
-		"source_channel_id", pending.Packet.SourceChannelId.String(),
-		"destination_channel_id", pending.Packet.DestinationChannelId.String(),
-		"sequence", sequence.String(),
-		"ack_hash_hex", hex.EncodeToString(ackHash[:]),
-		"deferred", "true",
-	)
+		var marketMakerMsg Bytes
+		if i < len(msg.MarketMakerMessages) {
+			marketMakerMsg = msg.MarketMakerMessages[i]
+		}
+		portId := st.getChannelOwner(packet.DestinationChannelId)
+		st.getAppByPortId(portId).OnIntentRecvPacket(packet, marketMaker, marketMakerMsg)
+
+		chain.Emit(IntentPacketRecvEvent,
+			"source_channel_id", packet.SourceChannelId.String(),
+			"destination_channel_id", packet.DestinationChannelId.String(),
+			"packet_hash", CommitPacket(packet).String(),
+			"market_maker", string(marketMaker),
+		)
+	}
 }
 
 func PacketAcknowledgement(_ realm, msg MsgPacketAcknowledgement) {
+	relayer := runtime.OriginCaller()
+	if len(msg.Packets) == 0 {
+		panic(ErrNotEnoughPackets)
+	}
+	if len(msg.Packets) != len(msg.Acknowledgements) {
+		panic(ErrAcknowledgementCountMismatch)
+	}
+	first := msg.Packets[0]
+	channel := st.getChannel(first.SourceChannelId)
+	connection := ensureConnectionOpen(channel.ConnectionId)
+	key := BatchReceiptsPath(CommitPackets(msg.Packets))
+	value := CommitAcks(msg.Acknowledgements)
+	st.getClient(connection.ClientId).VerifyMembership(
+		connection.ClientId, msg.ProofHeight, msg.Proof, key[:], value[:],
+	)
+
 	for i, packet := range msg.Packets {
 		if !st.hasPacketCommitment(packet) {
 			continue
 		}
-
-		channel := st.getChannel(packet.SourceChannelId)
-		connection := ensureConnectionOpen(channel.ConnectionId)
+		if packet.SourceChannelId != first.SourceChannelId {
+			panic(ErrBatchSameChannelOnly)
+		}
 
 		ack := msg.Acknowledgements[i]
-		key := PacketAcknowledgementPath(packet)
-		value := keccak(ack)
-		st.getClient(connection.ClientId).VerifyMembership(
-			connection.ClientId, msg.ProofHeight, msg.Proof, key[:], value[:],
-		)
-
 		portId := st.getChannelOwner(packet.SourceChannelId)
-		st.getAppByPortId(portId).OnAcknowledgementPacket(packet, ack, msg.Relayer)
+		st.getAppByPortId(portId).OnAcknowledgementPacket(packet, ack, relayer)
 
 		st.deletePacketCommitment(packet)
 
 		chain.Emit(PacketAckEvent,
 			"source_channel_id", packet.SourceChannelId.String(),
 			"destination_channel_id", packet.DestinationChannelId.String(),
-			"relayer", string(msg.Relayer),
+			"relayer", string(relayer),
 		)
 	}
 }
 
 func PacketTimeout(_ realm, msg MsgPacketTimeout) {
+	relayer := runtime.OriginCaller()
 	packet := msg.Packet
 	if !st.hasPacketCommitment(packet) {
 		return
@@ -519,38 +475,67 @@ func PacketTimeout(_ realm, msg MsgPacketTimeout) {
 	channel := st.getChannel(packet.SourceChannelId)
 	connection := ensureConnectionOpen(channel.ConnectionId)
 
-	key := PacketReceiptPath(packet)
+	key := BatchReceiptsPath(CommitPacket(packet))
 	st.getClient(connection.ClientId).VerifyNonMembership(
 		connection.ClientId, msg.ProofHeight, msg.Proof, key[:],
 	)
 
 	portId := st.getChannelOwner(packet.SourceChannelId)
-	st.getAppByPortId(portId).OnTimeoutPacket(packet, msg.Relayer)
+	st.getAppByPortId(portId).OnTimeoutPacket(packet, relayer)
 
 	st.deletePacketCommitment(packet)
 
 	chain.Emit(PacketTimeoutEvent,
 		"source_channel_id", packet.SourceChannelId.String(),
 		"destination_channel_id", packet.DestinationChannelId.String(),
-		"relayer", string(msg.Relayer),
+		"relayer", string(relayer),
 	)
 }
 
-// CreateClientRaw is a convenience wrapper for testing: accepts hex-encoded bytes.
-func CreateClientRaw(_ realm, clientType string, clientStateHex, consensusStateHex string) ClientId {
-	csBytes, err := hex.DecodeString(clientStateHex)
-	if err != nil {
-		panic("invalid clientStateHex: " + err.Error())
+func BatchSend(_ realm, msg MsgBatchSend) H256 {
+	if len(msg.Packets) == 0 {
+		panic(ErrNotEnoughPackets)
 	}
-	consBytes, err := hex.DecodeString(consensusStateHex)
-	if err != nil {
-		panic("invalid consensusStateHex: " + err.Error())
+	batchHash := CommitPackets(msg.Packets)
+	commit(BatchPacketsPath(batchHash), COMMITMENT_MAGIC)
+	return batchHash
+}
+
+func BatchAcks(_ realm, msg MsgBatchAcks) H256 {
+	if len(msg.Packets) == 0 {
+		panic(ErrNotEnoughPackets)
 	}
-	return CreateClient(cross, MsgCreateClient{
-		ClientType:          ClientType(clientType),
-		ClientStateBytes:    csBytes,
-		ConsensusStateBytes: consBytes,
-	})
+	if len(msg.Packets) != len(msg.Acks) {
+		panic(ErrAcknowledgementCountMismatch)
+	}
+	batchHash := CommitPackets(msg.Packets)
+	commit(BatchReceiptsPath(batchHash), CommitAcks(msg.Acks))
+	return batchHash
+}
+
+func CommitMembershipProof(_ realm, msg MsgCommitMembershipProof) {
+	st.getClient(msg.ClientId).VerifyMembership(msg.ClientId, msg.ProofHeight, msg.Proof, msg.Path, msg.Value)
+	key := MembershipProofPath(msg.ClientId, msg.ProofHeight, msg.Path)
+	params.SetBytes(hex.EncodeToString(key[:]), msg.Value)
+}
+
+func CommitNonMembershipProof(_ realm, msg MsgCommitNonMembershipProof) {
+	st.getClient(msg.ClientId).VerifyNonMembership(msg.ClientId, msg.ProofHeight, msg.Proof, msg.Path)
+	commit(NonMembershipProofPath(msg.ClientId, msg.ProofHeight, msg.Path), COMMITMENT_MAGIC)
+}
+
+func CommitPacketTimeout(_ realm, msg MsgCommitPacketTimeout) {
+	key := BatchTimeoutPath(msg.Packet)
+	channel := st.getChannel(msg.Packet.SourceChannelId)
+	connection := st.getConnection(channel.ConnectionId)
+	st.getClient(connection.ClientId).VerifyMembership(
+		connection.ClientId,
+		msg.ProofHeight,
+		msg.Proof,
+		key[:],
+		COMMITMENT_MAGIC[:],
+	)
+	commit(key, COMMITMENT_MAGIC)
 }
 
 func Render(_ string) string {

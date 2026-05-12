@@ -4,16 +4,9 @@ type MsgCreateClient struct {
 	ClientType          ClientType
 	ClientStateBytes    Bytes
 	ConsensusStateBytes Bytes
-	Relayer             address
 }
 
 type MsgUpdateClient struct {
-	ClientId      ClientId
-	ClientMessage Bytes
-	Relayer       address
-}
-
-type MsgMisbehaviour struct {
 	ClientId      ClientId
 	ClientMessage Bytes
 }
@@ -45,20 +38,18 @@ type MsgConnectionOpenConfirm struct {
 }
 
 type MsgChannelOpenInit struct {
-	PortId             address
-	CounterpartyPortId address
+	PortId             Bytes
+	CounterpartyPortId Bytes
 	ConnectionId       ConnectionId
 	Version            string
-	Relayer            address
 }
 
 type MsgChannelOpenTry struct {
-	PortId              address
+	PortId              Bytes
 	Channel             Channel
 	CounterpartyVersion string
 	ProofInit           Bytes
 	ProofHeight         Height
-	Relayer             address
 }
 
 type MsgChannelOpenAck struct {
@@ -67,40 +58,23 @@ type MsgChannelOpenAck struct {
 	CounterpartyChannelId ChannelId
 	ProofTry              Bytes
 	ProofHeight           Height
-	Relayer               address
 }
 
 type MsgChannelOpenConfirm struct {
 	ChannelId   ChannelId
 	ProofAck    Bytes
 	ProofHeight Height
-	Relayer     address
 }
 
-type MsgChannelCloseInit struct {
-	ChannelId ChannelId
-	Relayer   address
-}
+type MsgChannelCloseInit struct{}
 
-type MsgChannelCloseConfirm struct {
-	ChannelId   ChannelId
-	ProofClose  Bytes
-	ProofHeight Height
-	Relayer     address
-}
-
-type MsgPacketSend struct {
-	SourceChannelId  ChannelId
-	TimeoutTimestamp Timestamp
-	Data             Bytes
-}
+type MsgChannelCloseConfirm struct{}
 
 type MsgPacketRecv struct {
 	Packets     []Packet
 	RelayerMsgs []Bytes
 	Proof       Bytes
 	ProofHeight Height
-	Relayer     address
 }
 
 type MsgPacketAcknowledgement struct {
@@ -108,12 +82,45 @@ type MsgPacketAcknowledgement struct {
 	Acknowledgements []Bytes
 	Proof            Bytes
 	ProofHeight      Height
-	Relayer          address
 }
 
 type MsgPacketTimeout struct {
 	Packet      Packet
 	Proof       Bytes
 	ProofHeight Height
-	Relayer     address
+}
+
+type MsgIntentPacketRecv struct {
+	Packets             []Packet
+	MarketMakerMessages []Bytes
+}
+
+type MsgBatchSend struct {
+	Packets []Packet
+}
+
+type MsgBatchAcks struct {
+	Packets []Packet
+	Acks    []Bytes
+}
+
+type MsgCommitMembershipProof struct {
+	ClientId    ClientId
+	ProofHeight Height
+	Proof       Bytes
+	Path        Bytes
+	Value       Bytes
+}
+
+type MsgCommitNonMembershipProof struct {
+	ClientId    ClientId
+	ProofHeight Height
+	Proof       Bytes
+	Path        Bytes
+}
+
+type MsgCommitPacketTimeout struct {
+	Packet      Packet
+	ProofHeight Height
+	Proof       Bytes
 }

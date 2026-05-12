@@ -69,6 +69,12 @@ func main() {
 	fmt.Printf("absenceKey: 0x%s\n", hex.EncodeToString(missingSlot))
 	fmt.Printf("absencePath: 0x%s\n", hex.EncodeToString(crypto.Keccak256(missingSlot)))
 	printProof("absenceProof", root, absenceProof)
+	fmt.Println()
+
+	ibcPath := bytes.Repeat([]byte{0x11}, 32)
+	fmt.Printf("ibcPath: 0x%s\n", hex.EncodeToString(ibcPath))
+	fmt.Printf("ibcCommitmentKey: 0x%s\n", hex.EncodeToString(ibcCommitmentKey(ibcPath)))
+	fmt.Printf("ibcZeroPathCommitmentKey: 0x%s\n", hex.EncodeToString(ibcCommitmentKey(make([]byte, 32))))
 }
 
 func printProof(name string, root common.Hash, db *memorydb.Database) {
@@ -172,6 +178,15 @@ func mustRLPEncodeUint64(v uint64) []byte {
 		panic(err)
 	}
 	return out
+}
+
+func ibcCommitmentKey(path []byte) []byte {
+	if len(path) != 32 {
+		panic("path must be 32 bytes")
+	}
+	var input [64]byte
+	copy(input[:32], path)
+	return crypto.Keccak256(input[:])
 }
 
 func copyBytes(b []byte) []byte {

@@ -96,6 +96,16 @@ func main() {
 			key:   mustHex("813e4115edb9f7976a17ee9ede68b5b0a285129e57077768d0a7038be71adbe2"),
 			value: mustHex("0100000000000000000000000000000000000000000000000000000000000000"),
 		},
+		{
+			name:  "z40_mixed_batch_packet_commitment",
+			key:   mustHex("642c27b2a9c2cbe440533099564bb5326041acfc25c5142322e3c453a50570c3"),
+			value: mustHex("0100000000000000000000000000000000000000000000000000000000000000"),
+		},
+		{
+			name:  "z40_panic_batch_packet_commitment",
+			key:   mustHex("5650289645e1d5dc8de38e678c37ec8a608cc7befffed6d0b62359403da79567"),
+			value: mustHex("0100000000000000000000000000000000000000000000000000000000000000"),
+		},
 	}
 	for _, fx := range makeFixtureSet(baseFixtures) {
 		printFixture(fx)

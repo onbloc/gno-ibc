@@ -38,6 +38,7 @@ type State struct {
 	packetCommitments map[H256]bool
 	packetReceipts    map[H256]bool
 	packetAcks        map[H256]bool
+	packetAckHashes   map[H256]H256
 	// Entries are not auto-expired; on child timeout, ZKGM Forward writes
 	// a universal-error ACK.
 	pendingAsyncAcks map[asyncAckKey]pendingAsyncAck
@@ -68,6 +69,7 @@ func newState() State {
 		packetCommitments: make(map[H256]bool),
 		packetReceipts:    make(map[H256]bool),
 		packetAcks:        make(map[H256]bool),
+		packetAckHashes:   make(map[H256]H256),
 		pendingAsyncAcks:  make(map[asyncAckKey]pendingAsyncAck),
 	}
 }
@@ -184,12 +186,18 @@ func (s *State) hasPacketCommitment(packet Packet) bool {
 
 func (s *State) commitAcknowledgement(packet Packet, ack []byte) {
 	key := PacketAcknowledgementPath(packet)
+	ackHash := keccak(ack)
 	s.packetAcks[key] = true
-	commit(key, keccak(ack))
+	s.packetAckHashes[key] = ackHash
+	commit(key, ackHash)
 }
 
 func (s *State) hasAcknowledgement(packet Packet) bool {
 	return s.packetAcks[PacketAcknowledgementPath(packet)]
+}
+
+func (s *State) acknowledgementHash(packet Packet) H256 {
+	return s.packetAckHashes[PacketAcknowledgementPath(packet)]
 }
 
 func (s *State) setPacketReceipt(packet Packet) {

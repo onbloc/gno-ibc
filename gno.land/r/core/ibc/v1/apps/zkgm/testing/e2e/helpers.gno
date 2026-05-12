@@ -111,6 +111,18 @@ func MustCallInstruction(cur realm, call z.Call) z.Instruction {
 	}
 }
 
+func MustBatchInstruction(cur realm, batch z.Batch) z.Instruction {
+	batchBytes, err := z.EncodeBatch(batch)
+	if err != nil {
+		panic(err)
+	}
+	return z.Instruction{
+		Version: z.INSTR_VERSION_0,
+		Opcode:  z.OP_BATCH,
+		Operand: batchBytes,
+	}
+}
+
 func MustPacketData(cur realm, instr z.Instruction) core.Bytes {
 	packetBytes, err := z.EncodeZkgmPacket(z.ZkgmPacket{
 		Path:        u256.Zero(),
@@ -153,4 +165,24 @@ func MustProtocolTokenOrderAck(cur realm) []byte {
 
 func MustSuccessAck(cur realm, inner []byte) core.Bytes {
 	return MustAck(cross, tagAckSuccessU256, inner)
+}
+
+func MustSuccessAckBytes(cur realm, inner []byte) []byte {
+	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccessU256, InnerAck: inner})
+	if err != nil {
+		panic(err)
+	}
+	return ack
+}
+
+func MustCallAck(cur realm) []byte {
+	return MustSuccessAckBytes(cross, []byte{})
+}
+
+func MustBatchAck(cur realm, childAcks [][]byte) []byte {
+	batchAck, err := z.EncodeBatchAck(z.BatchAck{Acknowledgements: childAcks})
+	if err != nil {
+		panic(err)
+	}
+	return MustSuccessAckBytes(cross, batchAck)
 }

@@ -79,11 +79,7 @@ func SplitListValues(b []byte) ([][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	n, err := CountValues(content)
-	if err != nil {
-		return nil, err
-	}
-	out := make([][]byte, 0, n)
+	var out [][]byte
 	for len(content) > 0 {
 		_, tagSize, contentSize, err := readKind(content)
 		if err != nil {
@@ -108,11 +104,7 @@ func decodeValue(b []byte, depth int) (Value, []byte, error) {
 		return Value{Kind: k, Bytes: content}, rest, nil
 	}
 
-	n, err := CountValues(content)
-	if err != nil {
-		return Value{}, b, err
-	}
-	items := make([]Value, 0, n)
+	var items []Value
 	for len(content) > 0 {
 		var item Value
 		item, content, err = decodeValue(content, depth+1)
@@ -142,15 +134,7 @@ func readKind(b []byte) (Kind, int, int, error) {
 		}
 		return KindString, 1, size, nil
 	case prefix < 0xC0:
-		sizeLen := int(prefix - 0xB7)
-		size, err := readSize(b[1:], sizeLen)
-		if err != nil {
-			return 0, 0, 0, err
-		}
-		if size > len(b)-1-sizeLen {
-			return 0, 0, 0, ErrValueTooLarge
-		}
-		return KindString, 1 + sizeLen, size, nil
+		return readLongItem(b, int(prefix-0xB7), KindString)
 	case prefix < 0xF8:
 		size := int(prefix - 0xC0)
 		if len(b) < 1+size {
@@ -158,16 +142,19 @@ func readKind(b []byte) (Kind, int, int, error) {
 		}
 		return KindList, 1, size, nil
 	default:
-		sizeLen := int(prefix - 0xF7)
-		size, err := readSize(b[1:], sizeLen)
-		if err != nil {
-			return 0, 0, 0, err
-		}
-		if size > len(b)-1-sizeLen {
-			return 0, 0, 0, ErrValueTooLarge
-		}
-		return KindList, 1 + sizeLen, size, nil
+		return readLongItem(b, int(prefix-0xF7), KindList)
 	}
+}
+
+func readLongItem(b []byte, sizeLen int, kind Kind) (Kind, int, int, error) {
+	size, err := readSize(b[1:], sizeLen)
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	if size > len(b)-1-sizeLen {
+		return 0, 0, 0, ErrValueTooLarge
+	}
+	return kind, 1 + sizeLen, size, nil
 }
 
 func readSize(b []byte, sizeLen int) (int, error) {
@@ -184,7 +171,7 @@ func readSize(b []byte, sizeLen int) (int, error) {
 	if size < 56 {
 		return 0, ErrCanonSize
 	}
-	if size > uint64(maxInt()) {
+	if size > uint64(maxInt) {
 		return 0, ErrValueTooLarge
 	}
 	return int(size), nil
@@ -197,10 +184,7 @@ func uint64FromContent(content []byte) (uint64, error) {
 	if len(content) > 8 {
 		return 0, ErrValueTooLarge
 	}
-	if len(content) > 1 && content[0] == 0 {
-		return 0, ErrCanonInt
-	}
-	if len(content) == 1 && content[0] == 0 {
+	if content[0] == 0 {
 		return 0, ErrCanonInt
 	}
 	var x uint64
@@ -208,8 +192,4 @@ func uint64FromContent(content []byte) (uint64, error) {
 		x = (x << 8) | uint64(b)
 	}
 	return x, nil
-}
-
-func maxInt() int {
-	return int(^uint(0) >> 1)
 }

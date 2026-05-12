@@ -13,6 +13,7 @@ import (
 var (
 	ErrInvalidRootLength  = errors.New("storage: root must be 32 bytes")
 	ErrInvalidKeyLength   = errors.New("storage: key must be 32 bytes")
+	ErrInvalidPathLength  = errors.New("storage: path must be 32 bytes")
 	ErrInvalidValueLength = errors.New("storage: value must be 32 bytes")
 	ErrValueMismatch      = errors.New("storage: value mismatch")
 )
@@ -78,6 +79,20 @@ func StoragePath(slot []byte) ([32]byte, error) {
 		return [32]byte{}, err
 	}
 	return keccak256.Sum256(slot), nil
+}
+
+// IBCCommitmentKey mirrors Union's ethereum::ibc_commitment_key for
+// mapping(bytes32 => bytes32) commitments at slot 0.
+//
+// Union reference:
+// https://github.com/unionlabs/union/blob/main/lib/unionlabs/src/ethereum.rs
+func IBCCommitmentKey(path []byte) ([32]byte, error) {
+	if err := validateWord(path, ErrInvalidPathLength); err != nil {
+		return [32]byte{}, err
+	}
+	var input [64]byte
+	copy(input[0:32], path)
+	return keccak256.Sum256(input[:]), nil
 }
 
 // EncodeStorageValue returns the leaf payload expected by the storage trie.

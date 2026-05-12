@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	pair := realcometbls.OpenZ35CometBLSChannel(cross)
+	pair := realcometbls.OpenZ37CometBLSChannel(cross)
 	sender := string(testutils.TestAddress("timeout-sender"))
 
 	order := z.TokenOrderV2{

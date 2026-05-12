@@ -1,9 +1,6 @@
 package main
 
 import (
-	"crypto/keccak256"
-	"encoding/hex"
-
 	z "gno.land/p/gnoswap/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	core "gno.land/r/core/ibc/v1/core"
@@ -65,8 +62,7 @@ func panicBatchPacket(pair realcometbls.ChannelPair, receiver string) core.Packe
 func onlyMakerAckHash() string {
 	ack := make([]byte, len(z.ACK_ERR_ONLY_MAKER))
 	copy(ack, z.ACK_ERR_ONLY_MAKER)
-	hash := keccak256.Sum256(ack)
-	return "0x" + hex.EncodeToString(hash[:])
+	return core.CommitAcks([][]byte{ack}).String()
 }
 
 // Output:

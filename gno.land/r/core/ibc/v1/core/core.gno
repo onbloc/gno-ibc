@@ -87,6 +87,16 @@ func h256Bytes(h H256) []byte {
 	return out
 }
 
+// safeString materializes a fresh string from a (possibly foreign-realm)
+// []byte. A direct string(b) conversion on a cross-realm slice trips the
+// same readonly/external-conversion guard that bytes.Equal hits, so event
+// emission paths funnel through this helper.
+func safeString(b []byte) string {
+	out := make([]byte, len(b))
+	copy(out, b)
+	return string(out)
+}
+
 func emitChannelEvent(eventType string, portId Bytes, channelId ChannelId, channel Channel, connection Connection) {
 	chain.Emit(eventType,
 		"port_id", string(portId),
@@ -117,7 +127,7 @@ func emitBatchSendEvent(batchHash H256, packet Packet, sourceChannel Channel, so
 func emitPacketRecvEvent(eventType string, packet Packet, destinationChannel Channel, connection Connection, msgAttrName string, msg []byte) {
 	chain.Emit(eventType,
 		"packet_hash", CommitPacket(packet).String(),
-		"packet_data", string(packet.Data),
+		"packet_data", safeString(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_connection_id", connection.CounterpartyConnectionId.String(),
 		"source_connection_client_id", connection.CounterpartyClientId.String(),
@@ -126,14 +136,14 @@ func emitPacketRecvEvent(eventType string, packet Packet, destinationChannel Cha
 		"destination_connection_id", destinationChannel.ConnectionId.String(),
 		"destination_connection_client_id", connection.ClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
-		msgAttrName, string(msg),
+		msgAttrName, safeString(msg),
 	)
 }
 
 func emitWriteAckEvent(packet Packet, destinationChannel Channel, connection Connection, acknowledgement []byte) {
 	chain.Emit(WriteAckEvent,
 		"packet_hash", CommitPacket(packet).String(),
-		"packet_data", string(packet.Data),
+		"packet_data", safeString(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_connection_id", connection.CounterpartyConnectionId.String(),
 		"source_connection_client_id", connection.CounterpartyClientId.String(),
@@ -142,14 +152,14 @@ func emitWriteAckEvent(packet Packet, destinationChannel Channel, connection Con
 		"destination_connection_id", destinationChannel.ConnectionId.String(),
 		"destination_connection_client_id", connection.ClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
-		"acknowledgement", string(acknowledgement),
+		"acknowledgement", safeString(acknowledgement),
 	)
 }
 
 func emitPacketAckEvent(packet Packet, sourceChannel Channel, connection Connection, acknowledgement []byte) {
 	chain.Emit(PacketAckEvent,
 		"packet_hash", CommitPacket(packet).String(),
-		"packet_data", string(packet.Data),
+		"packet_data", safeString(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_channel_version", sourceChannel.Version,
 		"source_connection_id", sourceChannel.ConnectionId.String(),
@@ -158,14 +168,14 @@ func emitPacketAckEvent(packet Packet, sourceChannel Channel, connection Connect
 		"destination_connection_id", connection.CounterpartyConnectionId.String(),
 		"destination_connection_client_id", connection.CounterpartyClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
-		"acknowledgement", string(acknowledgement),
+		"acknowledgement", safeString(acknowledgement),
 	)
 }
 
 func emitPacketTimeoutEvent(packet Packet, sourceChannel Channel, connection Connection) {
 	chain.Emit(PacketTimeoutEvent,
 		"packet_hash", CommitPacket(packet).String(),
-		"packet_data", string(packet.Data),
+		"packet_data", safeString(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_channel_version", sourceChannel.Version,
 		"source_connection_id", sourceChannel.ConnectionId.String(),
@@ -615,6 +625,13 @@ func BatchSend(_ realm, msg MsgBatchSend) H256 {
 	}
 	batchHash := CommitPackets(msg.Packets)
 	commit(BatchPacketsPath(batchHash), COMMITMENT_MAGIC)
+	// In-memory per-packet membership keeps HasPacketCommitment and the
+	// PacketAcknowledgement / PacketTimeout cleanup paths working for
+	// single-packet sends; multi-packet batches still commit at the batch
+	// path on chain.
+	for _, packet := range msg.Packets {
+		st.packetCommitments[PacketCommitmentPath(packet)] = true
+	}
 	first := msg.Packets[0]
 	channel := st.getChannel(first.SourceChannelId)
 	connection := ensureConnectionOpen(channel.ConnectionId)

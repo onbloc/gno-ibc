@@ -72,38 +72,32 @@ func main() {
 		},
 		{
 			name:  "z35_packet_commitment",
-			key:   mustHex("6cdd701570bc5e4ca75bc46a6499076fcd9d3485329063a1cf23cf6ee66a5d10"),
+			key:   mustHex("cd7b438a4f36b68a13ce77733e104cbf38a4bd2460f5a35d75a5aa0180b951cc"),
 			value: mustHex("0100000000000000000000000000000000000000000000000000000000000000"),
 		},
 		{
 			name:  "z36_ack_membership",
-			key:   mustHex("4ac425445292c5591b4460085a7e9bf2089ed970aa4423927640a7cff8b3f6ae"),
-			value: mustHex("51b1bc1398f211274f5339ff648616f0aaf364c1cab142847beae15e25a0f2d9"),
-		},
-		{
-			name:             "z37_receipt_non_membership",
-			key:              []byte("z37-neighbor-anchor"),
-			value:            []byte("z37-neighbor-value"),
-			nonMembershipKey: mustHex("aaa7bd6e1524998c867fc9248d3940e6873a82884f0754f79fd7bec370f222b7"),
+			key:   mustHex("3cde3b6891df12ae3a04f23e62738b1c7e209ddb5a5dd6ebc27b6c29cd539b18"),
+			value: mustHex("015b3cd48177600c2efac9e26b978edfdf97f8480c0a7f3b0884f0b4817ed5a8"),
 		},
 		{
 			name:  "z39_call_packet_commitment",
-			key:   mustHex("52a3f6a3b7cb06a9e9de4cf05631fb75ead91a4e306ad41dae1294991b7527bb"),
+			key:   mustHex("ecfa376e2392e124e1633138b49b4ca5920159120ec4106c2a559b5b674b0b30"),
 			value: mustHex("0100000000000000000000000000000000000000000000000000000000000000"),
 		},
 		{
 			name:  "z39_missing_call_packet_commitment",
-			key:   mustHex("813e4115edb9f7976a17ee9ede68b5b0a285129e57077768d0a7038be71adbe2"),
+			key:   mustHex("5abf92c58482b9e5ccf6981e0559c5cc299a42a1f6f04a461b11a3b8a3014de5"),
 			value: mustHex("0100000000000000000000000000000000000000000000000000000000000000"),
 		},
 		{
 			name:  "z40_mixed_batch_packet_commitment",
-			key:   mustHex("642c27b2a9c2cbe440533099564bb5326041acfc25c5142322e3c453a50570c3"),
+			key:   mustHex("a27e1b52c3beaeb1c4b3c6afb3bb6000536eb98562c019f0109f7b1274a3d102"),
 			value: mustHex("0100000000000000000000000000000000000000000000000000000000000000"),
 		},
 		{
 			name:  "z40_panic_batch_packet_commitment",
-			key:   mustHex("5650289645e1d5dc8de38e678c37ec8a608cc7befffed6d0b62359403da79567"),
+			key:   mustHex("9102811e2a4d94c7593e8711e65c4163820045992a2ab08e771615a067ca23cd"),
 			value: mustHex("0100000000000000000000000000000000000000000000000000000000000000"),
 		},
 	}
@@ -111,6 +105,32 @@ func main() {
 		printFixture(fx)
 	}
 	for _, fx := range makeFixtureSet(z35Fixtures) {
+		printFixture(fx)
+	}
+	// Receipt and ack share PacketAcknowledgementPath under the Union spec,
+	// so z37's non-membership target collides with z36's ack key inside one
+	// fixture set. Generate z37 in its own set, but include the connection
+	// and channel try entries so scenarios can open a channel on the same
+	// client/consensus state used to verify the timeout non-membership.
+	z37Fixtures := []fixtureInput{
+		{
+			name:  "z37_connection_try",
+			key:   mustHex("05f3c8eef62e74b10b7ee910fcc73c8358000f692d9ce2341a989e008e45b35d"),
+			value: mustHex("ff4fb67348c16e70c898c7cf43c460a684bc900d2b41e5a24ef6dcb294586034"),
+		},
+		{
+			name:  "z37_channel_try",
+			key:   mustHex("88601476d11616a71c5be67555bd1dff4b1cbf21533d2669b768b61518cfe1c3"),
+			value: mustHex("fa3c11d224a164cd0beca2b6756128dc1531714a75813e9c2b5840bd8f2a8347"),
+		},
+		{
+			name:             "z37_receipt_non_membership",
+			key:              []byte("z37-neighbor-anchor"),
+			value:            []byte("z37-neighbor-value"),
+			nonMembershipKey: mustHex("3cde3b6891df12ae3a04f23e62738b1c7e209ddb5a5dd6ebc27b6c29cd539b18"),
+		},
+	}
+	for _, fx := range makeFixtureSet(z37Fixtures) {
 		printFixture(fx)
 	}
 	z42WrongVersionFixtures := []fixtureInput{

@@ -1,9 +1,6 @@
 package main
 
 import (
-	"crypto/keccak256"
-	"encoding/hex"
-
 	z "gno.land/p/gnoswap/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	core "gno.land/r/core/ibc/v1/core"
@@ -69,8 +66,7 @@ func expectedAckHash() string {
 		e2e.MustCallAck(cross),
 		e2e.MustSuccessAckBytes(cross, e2e.MustProtocolTokenOrderAck(cross)),
 	})
-	hash := keccak256.Sum256(ack)
-	return "0x" + hex.EncodeToString(hash[:])
+	return core.CommitAcks([][]byte{ack}).String()
 }
 
 // Output:

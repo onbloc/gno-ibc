@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/keccak256"
 	"encoding/hex"
 
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -15,8 +14,8 @@ const mockReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
 func main() {
 	mixedPacket := z40MixedBatchPacket()
 	panicPacket := z40PanicBatchPacket()
-	mixedPacketKey := packetCommitmentPath(mixedPacket)
-	panicPacketKey := packetCommitmentPath(panicPacket)
+	mixedPacketKey := core.PacketCommitmentPath(mixedPacket)
+	panicPacketKey := core.PacketCommitmentPath(panicPacket)
 	packetValue := core.COMMITMENT_MAGIC
 
 	printKV("mixed_batch_packet_commitment", mixedPacketKey[:], packetValue[:])
@@ -70,34 +69,13 @@ func z40BatchPacket(batch z.Batch) core.Packet {
 	}
 }
 
-func hash(bz []byte) [32]byte {
-	return keccak256.Sum256(bz)
-}
-
-func packetCommitmentPath(packet core.Packet) [32]byte {
-	batchHash := hash(packet.EthAbiEncode())
-	return hash(concat(core.PACKETS[:], batchHash[:]))
-}
-
-func concat(parts ...[]byte) []byte {
-	size := 0
-	for _, p := range parts {
-		size += len(p)
-	}
-	out := make([]byte, 0, size)
-	for _, p := range parts {
-		out = append(out, p...)
-	}
-	return out
-}
-
 func printKV(name string, key []byte, value []byte) {
 	println(name+"_key", "0x"+hex.EncodeToString(key))
 	println(name+"_value", "0x"+hex.EncodeToString(value))
 }
 
 // Output:
-// mixed_batch_packet_commitment_key 0x642c27b2a9c2cbe440533099564bb5326041acfc25c5142322e3c453a50570c3
+// mixed_batch_packet_commitment_key 0xa27e1b52c3beaeb1c4b3c6afb3bb6000536eb98562c019f0109f7b1274a3d102
 // mixed_batch_packet_commitment_value 0x0100000000000000000000000000000000000000000000000000000000000000
-// panic_batch_packet_commitment_key 0x5650289645e1d5dc8de38e678c37ec8a608cc7befffed6d0b62359403da79567
+// panic_batch_packet_commitment_key 0x9102811e2a4d94c7593e8711e65c4163820045992a2ab08e771615a067ca23cd
 // panic_batch_packet_commitment_value 0x0100000000000000000000000000000000000000000000000000000000000000

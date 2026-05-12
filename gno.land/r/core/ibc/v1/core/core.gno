@@ -451,6 +451,11 @@ func ChannelCloseConfirm(_ realm, msg MsgChannelCloseConfirm) {
 }
 
 func PacketSend(_ realm, sourceChannelId ChannelId, timeoutHeight Height, timeoutTimestamp Timestamp, data []byte) Packet {
+	portId := st.getChannelOwner(sourceChannelId)
+	if string(portId) != runtime.PreviousRealm().Address().String() {
+		panic(ErrUnauthorizedPacketSender)
+	}
+
 	channel := st.getChannel(sourceChannelId)
 	if channel.State != ChannelStateOpen {
 		panic(ErrInvalidChannelState)

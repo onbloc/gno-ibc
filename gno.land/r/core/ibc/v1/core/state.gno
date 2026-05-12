@@ -18,6 +18,7 @@ var (
 	ErrAcknowledgementAlreadyWritten = errors.New("acknowledgement already written")
 	ErrPendingAsyncAckExists         = errors.New("pending async ack already exists")
 	ErrAcknowledgementEmpty          = errors.New("acknowledgement cannot be empty")
+	ErrUnauthorizedPacketSender     = errors.New("caller not authorized to send packet")
 	ErrNotEnoughPackets              = errors.New("not enough packets")
 	ErrBatchSameChannelOnly          = errors.New("batch must use the same channel")
 	ErrAcknowledgementCountMismatch  = errors.New("acknowledgement count mismatch")

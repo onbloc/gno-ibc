@@ -1,6 +1,7 @@
 package core
 
 import (
+	"chain/runtime"
 	"encoding/hex"
 	"testing"
 
@@ -152,7 +153,7 @@ func setupOpenChannel(t *testing.T) (Bytes, ConnectionId, ChannelId) {
 		CounterpartyConnectionId: ConnectionId(99),
 	})
 
-	portId := Bytes("g1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq9ex6sz")
+	portId := Bytes(runtime.CurrentRealm().Address().String())
 	app := &mockApp{}
 	st.ports[portKey(portId)] = app
 
@@ -446,6 +447,16 @@ func TestPacketSendCommitsPacket(t *testing.T) {
 	if !st.hasPacketCommitment(packet) {
 		t.Fatal("PacketSend must commit packet")
 	}
+}
+
+func TestPacketSendRejectsNonOwner(t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	st.channelOwners[channelId] = Bytes("g1notchannelowner")
+
+	uassert.AbortsContains(t, "caller not authorized to send packet", func(cur realm) {
+		PacketSend(cur, channelId, 0, 100, []byte("data"))
+	})
 }
 
 func TestBatchSendReturnsUnionPacketCommitment(t *testing.T) {

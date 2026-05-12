@@ -431,8 +431,9 @@ func TestAcknowledgementDoesNotPanic(t *testing.T) {
 
 func TestBatchSendReturnsUnionPacketCommitment(t *testing.T) {
 	resetState()
-	p1 := Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: Bytes("a"), TimeoutTimestamp: 100}
-	p2 := Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: Bytes("b"), TimeoutTimestamp: 100}
+	_, _, channelId := setupOpenChannel(t)
+	p1 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
+	p2 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("b"), TimeoutTimestamp: 100}
 
 	got := BatchSend(cross, MsgBatchSend{Packets: []Packet{p1, p2}})
 	want := CommitPackets([]Packet{p1, p2})

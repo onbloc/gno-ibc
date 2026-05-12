@@ -35,6 +35,12 @@ var (
 			"0002020a360a340a036962631220dec4876d278dc1a3b0a9c51d5b09b459f0b16fa9979c5abeddaab004" +
 			"11afc7481a0b08011000180120012a0100",
 	)
+	syntheticNonMembershipProof = mustHex(
+		"0a41123f0a127061636b65742d6b65792d6d697373696e6712290a0a7061636b65742d6b657912" +
+			"0c7061636b65742d76616c75651a0d08011000180120012a030002020a360a340a036962631220df" +
+			"c4876d278dc1a3b0a9c51d5b09b459f0b16fa9979c5abeddaab00411afc7481a0b080110001801" +
+			"20012a0100",
+	)
 	devnetZKP = mustHex(
 		"03CF56142A1E03D2445A82100FEAF70C1CD95A731ED85792AFFF5792EC0BDD21" +
 			"08991BB56F9043A269F88903DE616A9AB99A3C5AB778E566744B060456C5616C" +
@@ -113,6 +119,14 @@ func SyntheticMembershipProof(cur realm) []byte {
 
 func SyntheticMembershipWrongSubrootProof(cur realm) []byte {
 	return cloneBytes(syntheticMembershipWrongSubrootProof)
+}
+
+func SyntheticNonMembershipKey(cur realm) []byte {
+	return []byte("packet-key-missing")
+}
+
+func SyntheticNonMembershipProof(cur realm) []byte {
+	return cloneBytes(syntheticNonMembershipProof)
 }
 
 func HeaderBytes(cur realm) []byte {

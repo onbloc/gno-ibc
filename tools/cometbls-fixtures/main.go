@@ -18,21 +18,28 @@ const (
 )
 
 type fixtureInput struct {
-	name  string
-	key   []byte
-	value []byte
+	name             string
+	key              []byte
+	value            []byte
+	nonMembershipKey []byte
 }
 
 type fixture struct {
-	input   fixtureInput
-	subroot []byte
-	appRoot []byte
-	proofBz []byte
+	input              fixtureInput
+	subroot            []byte
+	appRoot            []byte
+	proofBz            []byte
+	nonMembershipProof []byte
 }
 
 func main() {
 	fixtures := []fixtureInput{
-		{name: "packet", key: []byte("packet-key"), value: []byte("packet-value")},
+		{
+			name:             "packet",
+			key:              []byte("packet-key"),
+			value:            []byte("packet-value"),
+			nonMembershipKey: []byte("packet-key-missing"),
+		},
 		{name: "connection", key: []byte("connection-state-key"), value: []byte("connection-state-value")},
 		{name: "channel", key: []byte("channel-state-key"), value: []byte("channel-state-value")},
 	}
@@ -69,11 +76,23 @@ func makeMembershipFixture(input fixtureInput) fixture {
 		encodeCommitmentExist(tmExist),
 	)
 
+	var nonMembershipProof []byte
+	if len(input.nonMembershipKey) > 0 {
+		// Reuse the membership leaf as the left neighbor; the right side is empty
+		// (no successor for keys sorting after input.key in this single-leaf subtree).
+		iavlNonexist := encodeNonExistenceProof(input.nonMembershipKey, iavlExist, nil)
+		nonMembershipProof = encodeMerkleProof(
+			encodeCommitmentNonexist(iavlNonexist),
+			encodeCommitmentExist(tmExist),
+		)
+	}
+
 	return fixture{
-		input:   input,
-		subroot: iavlRoot,
-		appRoot: appRoot,
-		proofBz: proof,
+		input:              input,
+		subroot:            iavlRoot,
+		appRoot:            appRoot,
+		proofBz:            proof,
+		nonMembershipProof: nonMembershipProof,
 	}
 }
 
@@ -85,6 +104,10 @@ func printFixture(f fixture) {
 	fmt.Printf("iavl_subroot: 0x%s\n", hex.EncodeToString(f.subroot))
 	fmt.Printf("app_root: 0x%s\n", hex.EncodeToString(f.appRoot))
 	fmt.Printf("membership_proof: 0x%s\n", hex.EncodeToString(f.proofBz))
+	if len(f.nonMembershipProof) > 0 {
+		fmt.Printf("non_membership_key: %q\n", f.input.nonMembershipKey)
+		fmt.Printf("non_membership_proof: 0x%s\n", hex.EncodeToString(f.nonMembershipProof))
+	}
 	fmt.Println()
 }
 
@@ -146,8 +169,26 @@ func encodeExistenceProof(key, value, leaf []byte, innerOps [][]byte) []byte {
 	return out
 }
 
+func encodeNonExistenceProof(key, left, right []byte) []byte {
+	var out []byte
+	if len(key) > 0 {
+		out = append(out, pbBytesField(1, key)...)
+	}
+	if len(left) > 0 {
+		out = append(out, pbBytesField(2, left)...)
+	}
+	if len(right) > 0 {
+		out = append(out, pbBytesField(3, right)...)
+	}
+	return out
+}
+
 func encodeCommitmentExist(epBytes []byte) []byte {
 	return pbBytesField(1, epBytes)
+}
+
+func encodeCommitmentNonexist(nepBytes []byte) []byte {
+	return pbBytesField(2, nepBytes)
 }
 
 func encodeMerkleProof(proofs ...[]byte) []byte {

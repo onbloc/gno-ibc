@@ -62,3 +62,29 @@ func TestSyntheticMembershipProofFixture(t *testing.T) {
 		}
 	}
 }
+
+func TestSyntheticNonMembershipProofFixture(t *testing.T) {
+	key := []byte("packet-key-missing")
+	rootHex := "13a5b650ff50759f50ef8f9591209557d51c4583ec4340862f769b0cf4644e0a"
+	proofHex := "0a41123f0a127061636b65742d6b65792d6d697373696e6712290a0a7061636b65742d6b657912" +
+		"0c7061636b65742d76616c75651a0d08011000180120012a030002020a360a340a036962631220df" +
+		"c4876d278dc1a3b0a9c51d5b09b459f0b16fa9979c5abeddaab00411afc7481a0b080110001801" +
+		"20012a0100"
+
+	proofs, err := DecodeProofs(mustHex(proofHex))
+	if err != nil {
+		t.Fatalf("DecodeProofs: %v", err)
+	}
+
+	cs := baseCS()
+	client := newTestClient(cs, map[Height]ConsensusState{
+		cs.LatestHeight: {
+			Timestamp: testNow,
+			Root:      MerkleRoot{Hash: mustHex(rootHex)},
+		},
+	})
+	path := types.MerklePath{KeyPath: [][]byte{[]byte("ibc"), key}}
+	if err := client.VerifyNonMembership(cs.LatestHeight, proofs, path); err != nil {
+		t.Fatalf("VerifyNonMembership: %v", err)
+	}
+}

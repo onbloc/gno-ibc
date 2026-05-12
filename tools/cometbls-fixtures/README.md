@@ -18,3 +18,17 @@ Run:
 ```sh
 go run .
 ```
+
+## Consumers
+
+When fixtures change, update and re-verify these files (each derives expected
+key/value bytes from production path/encoding code so drift surfaces fast):
+
+- `gno.land/p/core/ibc/lightclients/cometbls/synthetic_fixture_test.gno` —
+  mirrors `synthetic*` proofs and roots.
+- `gno.land/r/core/ibc/v1/apps/zkgm/testing/realcometbls/fixtures.gno` — byte
+  literals consumed by all `realcometbls` scenarios.
+- Sibling fixture-input filetests under
+  `gno.land/r/core/ibc/v1/apps/zkgm/testing/realcometbls/scenarios/` and
+  `gno.land/r/core/ibc/v1/core/` (z35, z36/z37 packet-lifecycle, z39, z40,
+  z42).

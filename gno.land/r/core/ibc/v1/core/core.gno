@@ -423,9 +423,9 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 		}
 
 		key := PacketCommitmentPath(packet)
-		// Copy the commitment sentinel before handing it to light clients.
-		// Some implementations compare with bytes.Equal, which rejects readonly
-		// slices derived directly from package-level arrays.
+		// Copy COMMITMENT_MAGIC before passing it across realms: bytes.Equal in
+		// ics23 verification panics with "illegal conversion of readonly or
+		// externally stored value" when handed a slice over a package-level array.
 		st.getClient(connection.ClientId).VerifyMembership(
 			connection.ClientId, msg.ProofHeight, msg.Proof, key[:], h256Bytes(COMMITMENT_MAGIC),
 		)

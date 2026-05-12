@@ -49,7 +49,7 @@ type iavlNode struct {
 }
 
 func main() {
-	fixtures := []fixtureInput{
+	baseFixtures := []fixtureInput{
 		{
 			name:             "packet",
 			key:              []byte("packet-key"),
@@ -59,7 +59,27 @@ func main() {
 		{name: "connection", key: []byte("connection-state-key"), value: []byte("connection-state-value")},
 		{name: "channel", key: []byte("channel-state-key"), value: []byte("channel-state-value")},
 	}
-	for _, fx := range makeFixtureSet(fixtures) {
+	z35Fixtures := []fixtureInput{
+		{
+			name:  "z35_connection_try",
+			key:   mustHex("05f3c8eef62e74b10b7ee910fcc73c8358000f692d9ce2341a989e008e45b35d"),
+			value: mustHex("ff4fb67348c16e70c898c7cf43c460a684bc900d2b41e5a24ef6dcb294586034"),
+		},
+		{
+			name:  "z35_channel_try",
+			key:   mustHex("88601476d11616a71c5be67555bd1dff4b1cbf21533d2669b768b61518cfe1c3"),
+			value: mustHex("fa3c11d224a164cd0beca2b6756128dc1531714a75813e9c2b5840bd8f2a8347"),
+		},
+		{
+			name:  "z35_packet_commitment",
+			key:   mustHex("6cdd701570bc5e4ca75bc46a6499076fcd9d3485329063a1cf23cf6ee66a5d10"),
+			value: mustHex("0100000000000000000000000000000000000000000000000000000000000000"),
+		},
+	}
+	for _, fx := range makeFixtureSet(baseFixtures) {
+		printFixture(fx)
+	}
+	for _, fx := range makeFixtureSet(z35Fixtures) {
 		printFixture(fx)
 	}
 }
@@ -100,7 +120,7 @@ func makeFixtureSet(inputs []fixtureInput) []fixture {
 
 	out := make([]fixture, len(leaves))
 	for _, leaf := range leaves {
-		iavlExist := encodeExistenceProof(leaf.input.key, leaf.input.value, iavlLeaf, leaf.proof)
+		iavlExist := encodeIavlExistenceProof(iavlLeaf, leaf)
 		proof := encodeMerkleProof(
 			encodeCommitmentExist(iavlExist),
 			encodeCommitmentExist(tmExist),
@@ -108,7 +128,8 @@ func makeFixtureSet(inputs []fixtureInput) []fixture {
 
 		var nonMembershipProof []byte
 		if len(leaf.input.nonMembershipKey) > 0 {
-			iavlNonexist := encodeNonExistenceProof(leaf.input.nonMembershipKey, iavlExist, nil)
+			left, right := nonMembershipNeighbors(leaves, leaf.input.nonMembershipKey, iavlLeaf)
+			iavlNonexist := encodeNonExistenceProof(leaf.input.nonMembershipKey, left, right)
 			nonMembershipProof = encodeMerkleProof(
 				encodeCommitmentNonexist(iavlNonexist),
 				encodeCommitmentExist(tmExist),
@@ -124,6 +145,26 @@ func makeFixtureSet(inputs []fixtureInput) []fixture {
 		}
 	}
 	return out
+}
+
+func encodeIavlExistenceProof(iavlLeaf []byte, leaf *iavlLeafNode) []byte {
+	return encodeExistenceProof(leaf.input.key, leaf.input.value, iavlLeaf, leaf.proof)
+}
+
+func nonMembershipNeighbors(leaves []*iavlLeafNode, key []byte, iavlLeaf []byte) (left, right []byte) {
+	for _, leaf := range leaves {
+		cmp := bytes.Compare(leaf.input.key, key)
+		if cmp < 0 {
+			left = encodeIavlExistenceProof(iavlLeaf, leaf)
+			continue
+		}
+		if cmp > 0 {
+			right = encodeIavlExistenceProof(iavlLeaf, leaf)
+			return left, right
+		}
+		panic(fmt.Sprintf("non-membership key %q exists in fixture set", key))
+	}
+	return left, nil
 }
 
 func buildIavlRoot(leaves []*iavlLeafNode) *iavlNode {
@@ -247,6 +288,14 @@ func iavlInnerPrefix(height, size int64) []byte {
 
 func pbVarint(v uint64) []byte {
 	return binary.AppendUvarint(nil, v)
+}
+
+func mustHex(s string) []byte {
+	bz, err := hex.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return bz
 }
 
 func pbTag(fieldNum, wireType int) []byte {

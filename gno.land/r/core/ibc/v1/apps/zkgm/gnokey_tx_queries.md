@@ -102,7 +102,7 @@ packet.TimeoutTimestamp 1700000000000000000
 packet.Data.len 544
 OK!
 GAS WANTED: 90000000
-GAS USED:   ~47_400_000   # approximate; varies with compiler/kernel version
+GAS USED:   47424092
 TX HASH:    <base64>
 ```
 
@@ -143,7 +143,7 @@ source_channel 3
 destination_channel 4
 packet.Data.len 1280
 OK!
-GAS USED:   ~51_200_000   # approximate
+GAS USED:   51252767
 ```
 
 (Source channel is 3 because the previous run already consumed 1/2 — each

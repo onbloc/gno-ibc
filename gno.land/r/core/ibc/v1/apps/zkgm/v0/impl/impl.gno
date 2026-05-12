@@ -32,7 +32,7 @@ func (v *ZkgmV1) PreChannelCloseInit(channelId core.ChannelId) {}
 
 func (v *ZkgmV1) PostChannelCloseConfirm(channelId core.ChannelId) {}
 
-func (v *ZkgmV1) Recv(packet core.Packet, relayer address, relayerMsg core.Bytes) core.RecvPacketResult {
+func (v *ZkgmV1) Recv(packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
 	zp, err := z.DecodeZkgmPacket(packet.Data)
 	if err != nil {
 		return errResult(err)
@@ -44,16 +44,17 @@ func (v *ZkgmV1) Recv(packet core.Packet, relayer address, relayerMsg core.Bytes
 	return res
 }
 
-func (v *ZkgmV1) Ack(packet core.Packet, ack core.Bytes, relayer address) {
+func (v *ZkgmV1) Ack(packet core.Packet, ack []byte, relayer address) {
 	zp, err := z.DecodeZkgmPacket(packet.Data)
 	if err != nil {
 		panic(err.Error())
 	}
-	if v.handleForwardChild(packet, zp, ack) {
+	ackBytes := []byte(ack)
+	if v.handleForwardChild(packet, zp, ackBytes) {
 		return
 	}
 
-	if err := v.dispatchAck(packet, zp.Path, zp.Salt, zp.Instruction, ack); err != nil {
+	if err := v.dispatchAck(packet, zp.Path, zp.Salt, zp.Instruction, ackBytes); err != nil {
 		panic(err.Error())
 	}
 }
@@ -63,11 +64,26 @@ func (v *ZkgmV1) Timeout(packet core.Packet, relayer address) {
 	if err != nil {
 		panic(err.Error())
 	}
-	if v.handleForwardChild(packet, zp, core.NewBytes(cross, universalErrorAck())) {
+	if v.handleForwardChild(packet, zp, universalErrorAck()) {
 		return
 	}
 
 	if err := v.dispatchTimeout(packet, zp.Path, zp.Salt, zp.Instruction); err != nil {
+		panic(err.Error())
+	}
+}
+
+// IntentRecv handles a market-maker fast-path delivery. The new core spec
+// dispatches IntentPacketRecv without a relayer proof; impl reuses the same
+// dispatch chain with intent=true so each opcode can render an only-maker
+// outcome where appropriate. The result is dropped because the new
+// OnIntentRecvPacket callback has no return.
+func (v *ZkgmV1) IntentRecv(packet core.Packet, marketMaker address, marketMakerMsg []byte) {
+	zp, err := z.DecodeZkgmPacket(packet.Data)
+	if err != nil {
+		panic(err.Error())
+	}
+	if _, err := v.dispatchExecute(packet, marketMaker, marketMakerMsg, zp.Path, zp.Salt, zp.Instruction, true); err != nil {
 		panic(err.Error())
 	}
 }
@@ -86,11 +102,14 @@ func (v *ZkgmV1) Send(req zkgm.SendRequest) (core.Packet, error) {
 		return core.Packet{}, err
 	}
 
-	return core.PacketSend(cross, core.MsgPacketSend{
-		SourceChannelId:  req.ChannelId,
-		TimeoutTimestamp: req.TimeoutTimestamp,
-		Data:             core.NewBytes(cross, data),
-	}), nil
+	sourceChannel := core.GetChannel(req.ChannelId)
+	return core.Packet{
+		SourceChannelId:      req.ChannelId,
+		DestinationChannelId: sourceChannel.CounterpartyChannelId,
+		Data:                 data,
+		TimeoutHeight:        0,
+		TimeoutTimestamp:     req.TimeoutTimestamp,
+	}, nil
 }
 
 func (v *ZkgmV1) Render(pkgpath string, path string) string {

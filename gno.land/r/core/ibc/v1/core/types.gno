@@ -82,7 +82,7 @@ const (
 type Packet struct {
 	SourceChannelId      ChannelId
 	DestinationChannelId ChannelId
-	Data                 Bytes
+	Data                 []byte
 	TimeoutHeight        Height
 	TimeoutTimestamp     Timestamp
 }
@@ -101,7 +101,7 @@ func (p Packet) EthAbiEncode() []byte {
 	bz, err := abi.Encode(schema, []any{
 		uint32(p.SourceChannelId),
 		uint32(p.DestinationChannelId),
-		[]byte(p.Data),
+		p.Data,
 		uint64(0),
 		uint64(p.TimeoutTimestamp),
 	})
@@ -122,7 +122,7 @@ const (
 
 type RecvPacketResult struct {
 	Status PacketStatus
-	Ack    Bytes
+	Ack    []byte
 }
 
 type Channel struct {

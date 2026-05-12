@@ -46,7 +46,7 @@ func (a *App) OnChannelCloseConfirm(channelId core.ChannelId, relayer address) {
 	impl.PostChannelCloseConfirm(channelId)
 }
 
-func (a *App) OnRecvPacket(packet core.Packet, relayer address, relayerMsg core.Bytes) core.RecvPacketResult {
+func (a *App) OnRecvPacket(packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
 	if paused {
 		return errAck(errors.New("zkgm: paused"))
 	}
@@ -56,7 +56,17 @@ func (a *App) OnRecvPacket(packet core.Packet, relayer address, relayerMsg core.
 	return impl.Recv(packet, relayer, relayerMsg)
 }
 
-func (a *App) OnAcknowledgementPacket(packet core.Packet, ack core.Bytes, relayer address) {
+func (a *App) OnIntentRecvPacket(packet core.Packet, marketMaker address, marketMakerMsg []byte) {
+	if paused {
+		panic("zkgm: paused")
+	}
+	if impl == nil {
+		panic("zkgm: impl not set")
+	}
+	impl.IntentRecv(packet, marketMaker, marketMakerMsg)
+}
+
+func (a *App) OnAcknowledgementPacket(packet core.Packet, ack []byte, relayer address) {
 	if impl == nil {
 		return
 	}
@@ -90,5 +100,5 @@ func errAck(err error) core.RecvPacketResult {
 	if encErr != nil {
 		ackBytes = []byte(err.Error())
 	}
-	return core.NewRecvPacketResult(cross, core.PacketStatusFailure, ackBytes)
+	return core.RecvPacketResult{Status: core.PacketStatusFailure, Ack: ackBytes}
 }

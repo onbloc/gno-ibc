@@ -27,7 +27,7 @@ func (v *ZkgmV1) verifyBatch(channelId core.ChannelId, sender string, sentCoins 
 	return nil
 }
 
-func (v *ZkgmV1) executeBatch(packet core.Packet, relayer address, relayerMsg core.Bytes, path *u256.Uint, parentSalt [32]byte, batch z.Batch, intent bool) ([]byte, error) {
+func (v *ZkgmV1) executeBatch(packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, parentSalt [32]byte, batch z.Batch, intent bool) ([]byte, error) {
 	acks := make([][]byte, len(batch.Instructions))
 	for i, instr := range batch.Instructions {
 		if !isAllowedBatchInstruction(instr.Opcode) {
@@ -84,7 +84,7 @@ func (v *ZkgmV1) acknowledgeBatch(packet core.Packet, path *u256.Uint, parentSal
 			childAck = batchAck.Acknowledgements[i]
 		}
 		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), parentSalt)
-		if err := v.dispatchAck(packet, path, childSalt, instr, core.NewBytes(cross, childAck)); err != nil {
+		if err := v.dispatchAck(packet, path, childSalt, instr, childAck); err != nil {
 			return err
 		}
 	}

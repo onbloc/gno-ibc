@@ -15,6 +15,7 @@ func Send(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, 
 	if impl == nil {
 		panic("zkgm: impl not set")
 	}
+
 	// An intermediate realm (or `maketx run`) can attach -send to the outer tx
 	// but spend it elsewhere, so OriginSend only reflects coins that landed
 	// here when the caller is the EOA.
@@ -22,6 +23,7 @@ func Send(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, 
 	if runtime.PreviousRealm().IsUserCall() {
 		sentCoins = banker.OriginSend().String()
 	}
+
 	packet, err := impl.Send(SendRequest{
 		ChannelId:        channelId,
 		TimeoutTimestamp: timeoutTimestamp,
@@ -33,5 +35,8 @@ func Send(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, 
 	if err != nil {
 		panic(err)
 	}
+
+	core.BatchSend(cross, core.MsgBatchSend{Packets: []core.Packet{packet}})
+
 	return packet
 }

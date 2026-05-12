@@ -55,15 +55,19 @@ func (d *dummyImpl) PostChannelCloseConfirm(channelId core.ChannelId) {
 	d.lastChannelId = channelId
 }
 
-func (d *dummyImpl) Recv(packet core.Packet, relayer address, relayerMsg core.Bytes) core.RecvPacketResult {
+func (d *dummyImpl) Recv(packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
 	d.recvCalled = true
 	if d.recvResult.Status != core.PacketStatusUnknown {
 		return d.recvResult
 	}
-	return core.NewRecvPacketResult(cross, core.PacketStatusSuccess, []byte{0x01})
+	return core.RecvPacketResult{Status: core.PacketStatusSuccess, Ack: []byte{0x01}}
 }
 
-func (d *dummyImpl) Ack(packet core.Packet, ack core.Bytes, relayer address) {
+func (d *dummyImpl) IntentRecv(packet core.Packet, marketMaker address, marketMakerMsg []byte) {
+	d.recvCalled = true
+}
+
+func (d *dummyImpl) Ack(packet core.Packet, ack []byte, relayer address) {
 	d.ackCalled = true
 }
 
@@ -72,7 +76,10 @@ func (d *dummyImpl) Timeout(packet core.Packet, relayer address) {
 }
 
 func (d *dummyImpl) Send(req SendRequest) (core.Packet, error) {
-	return core.NewPacket(cross, 0, req.ChannelId, 0, nil, req.TimeoutTimestamp), nil
+	return core.Packet{
+		SourceChannelId:  req.ChannelId,
+		TimeoutTimestamp: req.TimeoutTimestamp,
+	}, nil
 }
 
 func (d *dummyImpl) Render(pkgpath string, path string) string {
@@ -121,14 +128,14 @@ func TestAppNineMethodsDelegate(t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	impl = d
-	packet := core.NewPacket(cross, 7, 1, 2, []byte("data"), 0)
+	packet := core.Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: []byte("data")}
 
 	(&App{}).OnChannelOpenAck(2, 3, Version, address("g1relayer"))
 	(&App{}).OnChannelOpenConfirm(2, address("g1relayer"))
 	(&App{}).OnChannelCloseInit(2, address("g1relayer"))
 	(&App{}).OnChannelCloseConfirm(2, address("g1relayer"))
 	res := (&App{}).OnRecvPacket(packet, address("g1relayer"), nil)
-	(&App{}).OnAcknowledgementPacket(packet, core.NewBytes(cross, []byte{0x01}), address("g1relayer"))
+	(&App{}).OnAcknowledgementPacket(packet, []byte{0x01}, address("g1relayer"))
 	(&App{}).OnTimeoutPacket(packet, address("g1relayer"))
 
 	if !d.openAckCalled || !d.openConfirmCalled || !d.closeInitCalled || !d.closeConfirmCalled {
@@ -147,11 +154,11 @@ func TestAppPausedOnlyBlocksRecv(t *testing.T) {
 	d := &dummyImpl{}
 	impl = d
 	paused = true
-	packet := core.NewPacket(cross, 7, 1, 2, []byte("data"), 0)
+	packet := core.Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: []byte("data")}
 
 	(&App{}).OnChannelOpenInit(1, 2, Version, address("g1relayer"))
 	res := (&App{}).OnRecvPacket(packet, address("g1relayer"), nil)
-	(&App{}).OnAcknowledgementPacket(packet, core.NewBytes(cross, []byte{0x01}), address("g1relayer"))
+	(&App{}).OnAcknowledgementPacket(packet, []byte{0x01}, address("g1relayer"))
 	(&App{}).OnTimeoutPacket(packet, address("g1relayer"))
 
 	if !d.openInitCalled {
@@ -170,7 +177,7 @@ func TestAppPausedOnlyBlocksRecv(t *testing.T) {
 
 func TestAppNilImplPolicy(t *testing.T) {
 	resetZkgmForTest()
-	packet := core.NewPacket(cross, 7, 1, 2, []byte("data"), 0)
+	packet := core.Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: []byte("data")}
 
 	uassert.PanicsContains(t, "impl not set", func() {
 		(&App{}).OnChannelOpenInit(1, 2, Version, address("g1relayer"))
@@ -180,6 +187,6 @@ func TestAppNilImplPolicy(t *testing.T) {
 		t.Fatal("nil impl recv must return failure acknowledgement")
 	}
 
-	(&App{}).OnAcknowledgementPacket(packet, core.NewBytes(cross, []byte{0x01}), address("g1relayer"))
+	(&App{}).OnAcknowledgementPacket(packet, []byte{0x01}, address("g1relayer"))
 	(&App{}).OnTimeoutPacket(packet, address("g1relayer"))
 }

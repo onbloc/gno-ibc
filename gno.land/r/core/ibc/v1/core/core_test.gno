@@ -55,7 +55,7 @@ type mockApp struct {
 	closedChannels []ChannelId
 	recvPackets    []Packet
 	intentPackets  []Packet
-	intentMsgs     []Bytes
+	intentMsgs     [][]byte
 	ackPackets     []Packet
 	timeoutPackets []Packet
 	recvResult     RecvPacketResult
@@ -75,20 +75,20 @@ func (a *mockApp) OnChannelCloseConfirm(ch ChannelId, _ address) {
 	a.closedChannels = append(a.closedChannels, ch)
 }
 
-func (a *mockApp) OnRecvPacket(p Packet, _ address, _ Bytes) RecvPacketResult {
+func (a *mockApp) OnRecvPacket(p Packet, _ address, _ []byte) RecvPacketResult {
 	a.recvPackets = append(a.recvPackets, p)
 	if a.recvResult.Status != PacketStatusUnknown {
 		return a.recvResult
 	}
-	return RecvPacketResult{Status: PacketStatusSuccess, Ack: Bytes{0x01}}
+	return RecvPacketResult{Status: PacketStatusSuccess, Ack: []byte{0x01}}
 }
 
-func (a *mockApp) OnIntentRecvPacket(p Packet, _ address, msg Bytes) {
+func (a *mockApp) OnIntentRecvPacket(p Packet, _ address, msg []byte) {
 	a.intentPackets = append(a.intentPackets, p)
 	a.intentMsgs = append(a.intentMsgs, msg)
 }
 
-func (a *mockApp) OnAcknowledgementPacket(p Packet, _ Bytes, _ address) {
+func (a *mockApp) OnAcknowledgementPacket(p Packet, _ []byte, _ address) {
 	a.ackPackets = append(a.ackPackets, p)
 }
 
@@ -456,7 +456,7 @@ func TestBatchAcksReturnsUnionPacketCommitment(t *testing.T) {
 
 	got := BatchAcks(cross, MsgBatchAcks{
 		Packets: []Packet{p1, p2},
-		Acks:    []Bytes{Bytes("ack-a"), Bytes("ack-b")},
+		Acks:    [][]byte{[]byte("ack-a"), []byte("ack-b")},
 	})
 	want := CommitPackets([]Packet{p1, p2})
 	if got != want {
@@ -468,7 +468,7 @@ func TestBatchAcksRejectsAckCountMismatch(t *testing.T) {
 	resetState()
 	p := Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: Bytes("a"), TimeoutTimestamp: 100}
 	uassert.AbortsContains(t, "acknowledgement count mismatch", func(cur realm) {
-		BatchAcks(cur, MsgBatchAcks{Packets: []Packet{p}, Acks: []Bytes{}})
+		BatchAcks(cur, MsgBatchAcks{Packets: []Packet{p}, Acks: [][]byte{}})
 	})
 }
 
@@ -598,7 +598,7 @@ func TestPacketRecvBatchUsesUnionBatchCommitment(t *testing.T) {
 
 	PacketRecv(cross, MsgPacketRecv{
 		Packets:     []Packet{p1, p2},
-		RelayerMsgs: []Bytes{Bytes("relay-a"), Bytes("relay-b")},
+		RelayerMsgs: [][]byte{[]byte("relay-a"), []byte("relay-b")},
 		Proof:       proof,
 		ProofHeight: Height(10),
 	})
@@ -743,7 +743,7 @@ func TestIntentPacketRecvDispatchesAndSetsReceipt(t *testing.T) {
 	uassert.NotAborts(t, func(cur realm) {
 		IntentPacketRecv(cur, MsgIntentPacketRecv{
 			Packets:             []Packet{packet},
-			MarketMakerMessages: []Bytes{Bytes("maker-msg")},
+			MarketMakerMessages: [][]byte{[]byte("maker-msg")},
 		})
 	})
 
@@ -793,7 +793,7 @@ func TestPacketAcknowledgementRoundtrip(t *testing.T) {
 	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
 	PacketAcknowledgement(cross, MsgPacketAcknowledgement{
 		Packets:          []Packet{packet},
-		Acknowledgements: []Bytes{{0x01}},
+		Acknowledgements: [][]byte{{0x01}},
 	})
 
 	if len(app.ackPackets) != 1 {
@@ -813,7 +813,7 @@ func TestPacketAcknowledgementBatchUsesUnionBatchReceipts(t *testing.T) {
 	p2 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("b"), TimeoutTimestamp: 100}
 	st.commitPacket(p1)
 	st.commitPacket(p2)
-	acks := []Bytes{Bytes{0x01}, Bytes{0x02}}
+	acks := [][]byte{{0x01}, {0x02}}
 	proof := Bytes("ack-proof")
 
 	PacketAcknowledgement(cross, MsgPacketAcknowledgement{
@@ -831,7 +831,7 @@ func TestPacketAcknowledgementBatchUsesUnionBatchReceipts(t *testing.T) {
 	if string(client.membershipKeys[0]) != string(receiptPath[:]) {
 		t.Fatal("PacketAcknowledgement must verify Union batch receipts path")
 	}
-	ackValue := CommitAcks(acks)
+	ackValue := CommitAcks(toBytesSlice(acks))
 	if string(client.membershipValues[0]) != string(ackValue[:]) {
 		t.Fatal("PacketAcknowledgement must verify Union batch ack value")
 	}
@@ -859,7 +859,7 @@ func TestPacketAcknowledgementBatchRejectsDifferentSourceChannel(t *testing.T) {
 	uassert.AbortsContains(t, "batch must use the same channel", func(cur realm) {
 		PacketAcknowledgement(cur, MsgPacketAcknowledgement{
 			Packets:          []Packet{p1, p2},
-			Acknowledgements: []Bytes{Bytes{0x01}, Bytes{0x02}},
+			Acknowledgements: [][]byte{{0x01}, {0x02}},
 		})
 	})
 }

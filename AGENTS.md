@@ -22,6 +22,16 @@
 
 ---
 
+## Light Client Proof Verification
+
+- Any code path that verifies membership or non-membership proofs must reject inactive clients before proof verification.
+- For v1 light client adapters (`gno.land/r/core/ibc/v1/lightclients/...`), put an explicit status guard in the adapter's `VerifyMembership` and `VerifyNonMembership` methods before decoding or verifying proof bytes. Only `StatusActive` clients may proceed.
+- For v2 core paths (`gno.land/r/aib/ibc/core`), keep the existing core-level `lightClient.Status() == Active` checks before every `VerifyMembership` or `VerifyNonMembership` call.
+- Inner light client implementations should still enforce any status checks they can determine without caller context. For example, frozen-client checks belong in the inner client, while expiration checks that need the current block time may need to stay in the adapter or core caller.
+- New light client adapters, including future adapters such as state-lens-mpt, must include tests showing that frozen or expired clients cannot be used for membership or non-membership proof verification.
+
+---
+
 ### Universal
 - Commits: conventional (`feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`) with optional scope (`feat(gnovm):`).
 - Branches: kebab-case (`fix-vm-params`), always feature branches.

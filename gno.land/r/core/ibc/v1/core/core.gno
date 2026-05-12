@@ -551,6 +551,12 @@ func PacketTimeout(_ realm, msg MsgPacketTimeout) {
 	)
 }
 
+// HasPacketCommitment exposes packet commitment presence for filetests and
+// lifecycle diagnostics.
+func HasPacketCommitment(_ realm, packet Packet) bool {
+	return st.hasPacketCommitment(packet)
+}
+
 // CreateClientRaw is a convenience wrapper for testing: accepts hex-encoded bytes.
 func CreateClientRaw(_ realm, clientType string, clientStateHex, consensusStateHex string) ClientId {
 	csBytes, err := hex.DecodeString(clientStateHex)

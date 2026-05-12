@@ -75,12 +75,10 @@ func main() {
 			key:   mustHex("6cdd701570bc5e4ca75bc46a6499076fcd9d3485329063a1cf23cf6ee66a5d10"),
 			value: mustHex("0100000000000000000000000000000000000000000000000000000000000000"),
 		},
-	}
-	z36z37Fixtures := []fixtureInput{
 		{
 			name:  "z36_ack_membership",
-			key:   mustHex("7cdf87cee2bf28fffdd8dd98af1ed5bd99585afb5b6e537d718f1f9391b44067"),
-			value: mustHex("41502841361a25f62632a8138da2f5da1948539832b0fc2bfb733cc7b081836e"),
+			key:   mustHex("01a2eb330b6260811ce5ca10fbff1cfb4611444cc65003ad76eacd804085ce55"),
+			value: mustHex("51b1bc1398f211274f5339ff648616f0aaf364c1cab142847beae15e25a0f2d9"),
 		},
 		{
 			name:             "z37_receipt_non_membership",
@@ -93,9 +91,6 @@ func main() {
 		printFixture(fx)
 	}
 	for _, fx := range makeFixtureSet(z35Fixtures) {
-		printFixture(fx)
-	}
-	for _, fx := range makeFixtureSet(z36z37Fixtures) {
 		printFixture(fx)
 	}
 }

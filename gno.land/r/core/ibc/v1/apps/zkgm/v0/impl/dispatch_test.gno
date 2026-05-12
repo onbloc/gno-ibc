@@ -22,7 +22,7 @@ func TestRecvForwardExecuteErrorReturnsFailure(cur realm, t *testing.T) {
 			},
 		}),
 	})
-	packet := core.NewPacket(cross, core.Sequence(1), core.ChannelId(1), core.ChannelId(2), data, core.Timestamp(0))
+	packet := core.Packet{SourceChannelId: core.ChannelId(1), DestinationChannelId: core.ChannelId(2), Data: data}
 
 	res := (&ZkgmV1{}).Recv(packet, address("g1relayer"), nil)
 
@@ -31,7 +31,7 @@ func TestRecvForwardExecuteErrorReturnsFailure(cur realm, t *testing.T) {
 }
 
 func TestRecvMalformedPacketReturnsFailure(cur realm, t *testing.T) {
-	packet := core.NewPacket(cross, core.Sequence(1), core.ChannelId(1), core.ChannelId(2), []byte{0x01}, core.Timestamp(0))
+	packet := core.Packet{SourceChannelId: core.ChannelId(1), DestinationChannelId: core.ChannelId(2), Data: []byte{0x01}}
 
 	res := (&ZkgmV1{}).Recv(packet, address("g1relayer"), nil)
 
@@ -44,7 +44,7 @@ func TestAckUnsupportedOpcodeAborts(cur realm, t *testing.T) {
 		Version: z.INSTR_VERSION_0,
 		Opcode:  0xFF,
 	})
-	packet := core.NewPacket(cross, core.Sequence(1), core.ChannelId(1), core.ChannelId(2), data, core.Timestamp(0))
+	packet := core.Packet{SourceChannelId: core.ChannelId(1), DestinationChannelId: core.ChannelId(2), Data: data}
 
 	uassert.AbortsContains(t, "unsupported opcode", func(cur realm) {
 		(&ZkgmV1{}).Ack(packet, nil, address("g1relayer"))

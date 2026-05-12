@@ -11,5 +11,5 @@ func init() {
 		Impl:         impl.GetInstance(),
 		AllowedImpls: []string{"gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"},
 	})
-	core.RegisterApp(cross, zkgm.ProxyAddress(), zkgm.AsIBCApp())
+	core.RegisterApp(cross, []byte(zkgm.ProxyAddress()), zkgm.AsIBCApp())
 }

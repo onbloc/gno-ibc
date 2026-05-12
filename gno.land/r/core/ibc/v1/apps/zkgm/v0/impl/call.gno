@@ -24,7 +24,7 @@ func (v *ZkgmV1) verifyCall(sender string, call z.Call) error {
 	return nil
 }
 
-func (v *ZkgmV1) executeCall(packet core.Packet, relayer address, relayerMsg core.Bytes, path *u256.Uint, call z.Call) (core.RecvPacketResult, error) {
+func (v *ZkgmV1) executeCall(packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, call z.Call) (core.RecvPacketResult, error) {
 	if call.Eureka {
 		return callErrAck(errEurekaUnsupported), nil
 	}
@@ -50,7 +50,7 @@ func (v *ZkgmV1) executeCall(packet core.Packet, relayer address, relayerMsg cor
 
 	err, panicked := safeCallOnZkgm(receiver, env)
 	if panicked {
-		return core.NewRecvPacketResult(cross, core.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
+		return core.RecvPacketResult{Status: core.PacketStatusSuccess, Ack: cloneBytes(z.ACK_ERR_ONLY_MAKER)}, nil
 	}
 	if err != nil {
 		return callErrAck(err), nil
@@ -60,7 +60,7 @@ func (v *ZkgmV1) executeCall(packet core.Packet, relayer address, relayerMsg cor
 	if err != nil {
 		return core.RecvPacketResult{}, err
 	}
-	return core.NewRecvPacketResult(cross, core.PacketStatusSuccess, ack), nil
+	return core.RecvPacketResult{Status: core.PacketStatusSuccess, Ack: ack}, nil
 }
 
 func (v *ZkgmV1) acknowledgeCall(packet core.Packet, path *u256.Uint, call z.Call) error {

@@ -109,7 +109,7 @@ func (v *ZkgmV1) executeTokenOrderV2(packet core.Packet, path *u256.Uint, order 
 		return core.RecvPacketResult{}, err
 	}
 
-	return core.NewRecvPacketResult(cross, core.PacketStatusSuccess, ack), nil
+	return core.RecvPacketResult{Status: core.PacketStatusSuccess, Ack: ack}, nil
 }
 
 func (v *ZkgmV1) acknowledgeTokenOrderV2(sourceChannelId core.ChannelId, path *u256.Uint, order z.TokenOrderV2, ack z.Ack) error {

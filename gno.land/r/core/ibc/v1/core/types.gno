@@ -31,12 +31,6 @@ func (ts Timestamp) String() string {
 	return strconv.FormatUint(uint64(ts), 10)
 }
 
-type Sequence uint64
-
-func (s Sequence) String() string {
-	return strconv.FormatUint(uint64(s), 10)
-}
-
 type Height uint64
 
 func (h Height) String() string {
@@ -47,12 +41,6 @@ type Bytes []byte
 
 func (bz Bytes) String() string {
 	return "0x" + hex.EncodeToString(bz)
-}
-
-// NewBytes constructs a Bytes value from a plain []byte. Required for callers
-// in other realms: Gno forbids `core.Bytes(b)` conversions outside this realm.
-func NewBytes(_ realm, b []byte) Bytes {
-	return Bytes(b)
 }
 
 type H256 [32]byte
@@ -92,26 +80,18 @@ const (
 )
 
 type Packet struct {
-	Sequence             Sequence
 	SourceChannelId      ChannelId
 	DestinationChannelId ChannelId
-	Data                 Bytes
+	Data                 []byte
+	TimeoutHeight        Height
 	TimeoutTimestamp     Timestamp
 }
 
-func NewPacket(_ realm, sequence Sequence, sourceChannelId ChannelId, destinationChannelId ChannelId, data []byte, timeoutTimestamp Timestamp) Packet {
-	return Packet{
-		Sequence:             sequence,
-		SourceChannelId:      sourceChannelId,
-		DestinationChannelId: destinationChannelId,
-		Data:                 Bytes(data),
-		TimeoutTimestamp:     timeoutTimestamp,
-	}
-}
-
 func (p Packet) EthAbiEncode() []byte {
+	if p.TimeoutHeight != 0 {
+		panic("packet timeout height must be zero")
+	}
 	schema := abi.Schema{Fields: []abi.Field{
-		{Type: abi.TypeUint64},
 		{Type: abi.TypeUint32},
 		{Type: abi.TypeUint32},
 		{Type: abi.TypeBytes},
@@ -119,11 +99,10 @@ func (p Packet) EthAbiEncode() []byte {
 		{Type: abi.TypeUint64},
 	}}
 	bz, err := abi.Encode(schema, []any{
-		uint64(p.Sequence),
 		uint32(p.SourceChannelId),
 		uint32(p.DestinationChannelId),
-		[]byte(p.Data),
-		uint64(0), // TimeoutHeight always zero
+		p.Data,
+		uint64(0),
 		uint64(p.TimeoutTimestamp),
 	})
 	if err != nil {
@@ -143,11 +122,7 @@ const (
 
 type RecvPacketResult struct {
 	Status PacketStatus
-	Ack    Bytes
-}
-
-func NewRecvPacketResult(_ realm, status PacketStatus, ack []byte) RecvPacketResult {
-	return RecvPacketResult{Status: status, Ack: Bytes(ack)}
+	Ack    []byte
 }
 
 type Channel struct {

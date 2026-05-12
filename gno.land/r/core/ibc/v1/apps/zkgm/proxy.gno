@@ -80,12 +80,18 @@ func GetReceiver(path string) z.Zkgmable {
 	return value.(z.Zkgmable)
 }
 
-func WriteForwardAck(cur realm, parentChannelId core.ChannelId, parentSequence core.Sequence, ack core.Bytes) {
+// WriteForwardAck drains the parent packet's pending async ack via the new
+// Union-aligned WriteAcknowledgement datagram. The parent's identity is the
+// full Packet captured in InFlightValue at forward dispatch time.
+func WriteForwardAck(cur realm, parentPacket core.Packet, ack []byte) {
 	callerPath := runtime.PreviousRealm().PkgPath()
 	if callerPath != implPath {
 		panic(ufmt.Sprintf("zkgm: only registered impl (%s) can write forward ack, got %s", implPath, callerPath))
 	}
-	core.WriteAcknowledgement(cross, parentChannelId, parentSequence, ack)
+	core.WriteAcknowledgement(cross, core.MsgWriteAcknowledgement{
+		Packet:          parentPacket,
+		Acknowledgement: ack,
+	})
 }
 
 func cloneStrings(in []string) []string {

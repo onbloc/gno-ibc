@@ -14,7 +14,7 @@ const mockReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
 
 func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
 	mock.Reset(cross)
-	packet := core.NewPacket(cross, core.Sequence(1), core.ChannelId(7), core.ChannelId(8), nil, core.Timestamp(0))
+	packet := core.Packet{SourceChannelId: core.ChannelId(7), DestinationChannelId: core.ChannelId(8)}
 	call := z.Call{
 		Sender:           []byte("sender"),
 		ContractAddress:  []byte(mockReceiverPath),
@@ -22,7 +22,7 @@ func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
 	}
 	path := u256.NewUint(9)
 
-	res, err := (&ZkgmV1{}).executeCall(packet, address("g1relayer"), core.NewBytes(cross, []byte("relay-msg")), path, call)
+	res, err := (&ZkgmV1{}).executeCall(packet, address("g1relayer"), []byte("relay-msg"), path, call)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == core.PacketStatusSuccess)
@@ -44,7 +44,7 @@ func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
 func TestExecuteCallReceiverErrorReturnsFailureAck(cur realm, t *testing.T) {
 	mock.Reset(cross)
 	mock.SetError(cross, "receiver failed")
-	packet := core.NewPacket(cross, core.Sequence(1), core.ChannelId(7), core.ChannelId(8), nil, core.Timestamp(0))
+	packet := core.Packet{SourceChannelId: core.ChannelId(7), DestinationChannelId: core.ChannelId(8)}
 
 	res, err := (&ZkgmV1{}).executeCall(packet, address("g1relayer"), nil, u256.Zero(), z.Call{
 		Sender:          []byte("sender"),
@@ -53,6 +53,7 @@ func TestExecuteCallReceiverErrorReturnsFailureAck(cur realm, t *testing.T) {
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == core.PacketStatusFailure)
+
 	ack, err := z.DecodeAck(res.Ack)
 	uassert.NoError(t, err)
 	uassert.True(t, ack.Tag.Eq(tagAckFailure))
@@ -62,7 +63,7 @@ func TestExecuteCallReceiverErrorReturnsFailureAck(cur realm, t *testing.T) {
 func TestExecuteCallReceiverPanicReturnsOnlyMakerAck(cur realm, t *testing.T) {
 	mock.Reset(cross)
 	mock.SetPanic(cross, "boom")
-	packet := core.NewPacket(cross, core.Sequence(1), core.ChannelId(7), core.ChannelId(8), nil, core.Timestamp(0))
+	packet := core.Packet{SourceChannelId: core.ChannelId(7), DestinationChannelId: core.ChannelId(8)}
 
 	res, err := (&ZkgmV1{}).executeCall(packet, address("g1relayer"), nil, u256.Zero(), z.Call{
 		Sender:          []byte("sender"),

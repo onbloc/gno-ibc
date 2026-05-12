@@ -91,7 +91,7 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	packet := core.NewPacket(cross, core.Sequence(1), core.ChannelId(1), core.ChannelId(5), nil, core.Timestamp(0))
+	packet := core.Packet{SourceChannelId: core.ChannelId(1), DestinationChannelId: core.ChannelId(5)}
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(packet, u256.NewUint(7), order)
 

@@ -51,6 +51,6 @@ func TestWriteForwardAckRequiresRegisteredImpl(t *testing.T) {
 	implPath = "gno.land/r/not-this-realm"
 
 	uassert.AbortsContains(t, "only registered impl", func(cur realm) {
-		WriteForwardAck(cur, core.ChannelId(1), core.Sequence(7), core.NewBytes(cross, []byte{0x01}))
+		WriteForwardAck(cur, core.Packet{SourceChannelId: 1, DestinationChannelId: 2}, []byte{0x01})
 	})
 }

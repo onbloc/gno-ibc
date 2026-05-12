@@ -35,7 +35,7 @@ func TestVerifyBatchPassesAllowedCallChildren(cur realm, t *testing.T) {
 
 func TestExecuteBatchAggregatesChildAcks(cur realm, t *testing.T) {
 	mock.Reset(cross)
-	packet := core.NewPacket(cross, core.Sequence(1), core.ChannelId(7), core.ChannelId(8), nil, core.Timestamp(0))
+	packet := core.Packet{SourceChannelId: core.ChannelId(7), DestinationChannelId: core.ChannelId(8)}
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustCallInstruction(batchCall("sender", "first")),
 		batchMustCallInstruction(batchCall("sender", "second")),
@@ -59,7 +59,7 @@ func TestExecuteBatchAggregatesChildAcks(cur realm, t *testing.T) {
 func TestExecuteBatchPanicChildPropagatesOnlyMaker(cur realm, t *testing.T) {
 	mock.Reset(cross)
 	mock.SetPanic(cross, "boom")
-	packet := core.NewPacket(cross, core.Sequence(1), core.ChannelId(7), core.ChannelId(8), nil, core.Timestamp(0))
+	packet := core.Packet{SourceChannelId: core.ChannelId(7), DestinationChannelId: core.ChannelId(8)}
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustCallInstruction(batchCall("sender", "first")),
 		batchMustCallInstruction(batchCall("sender", "second")),
@@ -73,7 +73,7 @@ func TestExecuteBatchPanicChildPropagatesOnlyMaker(cur realm, t *testing.T) {
 }
 
 func TestAcknowledgeBatchRejectsAckCountMismatch(cur realm, t *testing.T) {
-	packet := core.NewPacket(cross, core.Sequence(1), core.ChannelId(7), core.ChannelId(8), nil, core.Timestamp(0))
+	packet := core.Packet{SourceChannelId: core.ChannelId(7), DestinationChannelId: core.ChannelId(8)}
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustCallInstruction(batchCall("sender", "first")),
 		batchMustCallInstruction(batchCall("sender", "second")),
@@ -87,7 +87,7 @@ func TestAcknowledgeBatchRejectsAckCountMismatch(cur realm, t *testing.T) {
 func TestTimeoutBatchTokenOrderChildrenRefund(cur realm, t *testing.T) {
 	resetTokenOrderTest()
 	path := u256.NewUint(23)
-	packet := core.NewPacket(cross, core.Sequence(1), core.ChannelId(7), core.ChannelId(8), nil, core.Timestamp(0))
+	packet := core.Packet{SourceChannelId: core.ChannelId(7), DestinationChannelId: core.ChannelId(8)}
 	orderA := batchRefundOrder("timeout-a", "ibc/batch-timeout-a", "quote-a", 11)
 	orderB := batchRefundOrder("timeout-b", "ibc/batch-timeout-b", "quote-b", 17)
 	increaseChannelBalanceV2(cross, core.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount)

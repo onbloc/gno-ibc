@@ -15,8 +15,9 @@ type ZkgmImpl interface {
 	PreChannelCloseInit(channelId core.ChannelId)
 	PostChannelCloseConfirm(channelId core.ChannelId)
 
-	Recv(packet core.Packet, relayer address, relayerMsg core.Bytes) core.RecvPacketResult
-	Ack(packet core.Packet, ack core.Bytes, relayer address)
+	Recv(packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult
+	IntentRecv(packet core.Packet, marketMaker address, marketMakerMsg []byte)
+	Ack(packet core.Packet, ack []byte, relayer address)
 	Timeout(packet core.Packet, relayer address)
 
 	Send(req SendRequest) (core.Packet, error)
@@ -33,19 +34,16 @@ type SendRequest struct {
 }
 
 // InFlightKey identifies a forwarded child packet awaiting the counterparty's
-// resolution; the source-side IBC core stores the parent ack against this tuple.
+// resolution by the child packet's Union batch hash (CommitPacket result).
 type InFlightKey struct {
-	SourceChannelId      core.ChannelId
-	DestinationChannelId core.ChannelId
-	Sequence             core.Sequence
+	PacketHash core.H256
 }
 
-// InFlightValue carries the parent packet identity so that when the child resolves,
-// the parent's deferred ack/timeout can be written on the correct destination channel.
+// InFlightValue carries the full parent packet so that when the child resolves,
+// the parent's deferred ack/timeout can be written via core.WriteAcknowledgement
+// on the parent's identity.
 type InFlightValue struct {
-	ParentSourceChannelId      core.ChannelId
-	ParentDestinationChannelId core.ChannelId
-	ParentSequence             core.Sequence
+	ParentPacket core.Packet
 }
 
 type UpdateRequest struct {

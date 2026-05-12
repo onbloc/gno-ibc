@@ -18,6 +18,10 @@ var (
 	ErrAcknowledgementAlreadyWritten = errors.New("acknowledgement already written")
 	ErrPendingAsyncAckExists         = errors.New("pending async ack already exists")
 	ErrAcknowledgementEmpty          = errors.New("acknowledgement cannot be empty")
+	ErrNotEnoughPackets              = errors.New("not enough packets")
+	ErrBatchSameChannelOnly          = errors.New("batch must use the same channel")
+	ErrAcknowledgementCountMismatch  = errors.New("acknowledgement count mismatch")
+	ErrPortAlreadyRegistered         = errors.New("port already registered")
 )
 
 type State struct {
@@ -25,8 +29,8 @@ type State struct {
 	nextConnectionId ConnectionId
 	nextChannelId    ChannelId
 
-	ports         map[address]IApp
-	channelOwners map[ChannelId]address
+	ports         map[string]IApp
+	channelOwners map[ChannelId]Bytes
 
 	clientRegistry map[ClientType]ILightClient
 	clientTypes    map[ClientId]ClientType
@@ -34,23 +38,14 @@ type State struct {
 	connections map[ConnectionId]Connection
 	channels    map[ChannelId]Channel
 
-	nextSequenceSends map[ChannelId]Sequence
 	packetCommitments map[H256]bool
 	packetReceipts    map[H256]bool
 	packetAcks        map[H256]bool
-	// Entries are not auto-expired; on child timeout, ZKGM Forward writes
-	// a universal-error ACK.
-	pendingAsyncAcks map[asyncAckKey]pendingAsyncAck
-}
-
-type asyncAckKey struct {
-	ChannelId ChannelId
-	Sequence  Sequence
+	pendingAsyncAcks  map[H256]pendingAsyncAck
 }
 
 type pendingAsyncAck struct {
-	Packet         Packet
-	AuthorizedPort address
+	Packet Packet
 }
 
 func newState() State {
@@ -62,13 +57,12 @@ func newState() State {
 		clientTypes:       make(map[ClientId]ClientType),
 		connections:       make(map[ConnectionId]Connection),
 		channels:          make(map[ChannelId]Channel),
-		ports:             make(map[address]IApp),
-		channelOwners:     make(map[ChannelId]address),
-		nextSequenceSends: make(map[ChannelId]Sequence),
+		ports:             make(map[string]IApp),
+		channelOwners:     make(map[ChannelId]Bytes),
 		packetCommitments: make(map[H256]bool),
 		packetReceipts:    make(map[H256]bool),
 		packetAcks:        make(map[H256]bool),
-		pendingAsyncAcks:  make(map[asyncAckKey]pendingAsyncAck),
+		pendingAsyncAcks:  make(map[H256]pendingAsyncAck),
 	}
 }
 
@@ -90,12 +84,6 @@ func (s *State) generateChannelId() ChannelId {
 	return id
 }
 
-func (s *State) generatePacketSequence(channelId ChannelId) Sequence {
-	sequence := s.nextSequenceSends[channelId]
-	s.nextSequenceSends[channelId] = sequence + 1
-	return sequence
-}
-
 func (s *State) registerClient(clientType ClientType, impl ILightClient) {
 	if _, ok := s.clientRegistry[clientType]; ok {
 		panic(ErrClientTypeAlreadyRegistered)
@@ -115,15 +103,19 @@ func (s *State) getClient(clientId ClientId) ILightClient {
 	return impl
 }
 
-func (s *State) getAppByPortId(portId address) IApp {
-	app, ok := s.ports[portId]
+func portKey(portId Bytes) string {
+	return string(portId)
+}
+
+func (s *State) getAppByPortId(portId Bytes) IApp {
+	app, ok := s.ports[portKey(portId)]
 	if !ok {
 		panic(ErrPortNotFound)
 	}
 	return app
 }
 
-func (s *State) getChannelOwner(channelId ChannelId) address {
+func (s *State) getChannelOwner(channelId ChannelId) Bytes {
 	portId, ok := s.channelOwners[channelId]
 	if !ok {
 		panic(ErrPortNotFound)
@@ -185,7 +177,7 @@ func (s *State) hasPacketCommitment(packet Packet) bool {
 func (s *State) commitAcknowledgement(packet Packet, ack []byte) {
 	key := PacketAcknowledgementPath(packet)
 	s.packetAcks[key] = true
-	commit(key, keccak(ack))
+	commit(key, CommitAcks([][]byte{ack}))
 }
 
 func (s *State) hasAcknowledgement(packet Packet) bool {
@@ -193,46 +185,43 @@ func (s *State) hasAcknowledgement(packet Packet) bool {
 }
 
 func (s *State) setPacketReceipt(packet Packet) {
-	key := PacketReceiptPath(packet)
+	key := PacketAcknowledgementPath(packet)
 	s.packetReceipts[key] = true
 	commit(key, COMMITMENT_MAGIC_ACK)
 }
 
 func (s *State) hasPacketReceipt(packet Packet) bool {
-	return s.packetReceipts[PacketReceiptPath(packet)]
+	return s.packetReceipts[PacketAcknowledgementPath(packet)]
 }
 
 func (s *State) deletePacketReceipt(packet Packet) {
 	var zero H256
-	key := PacketReceiptPath(packet)
+	key := PacketAcknowledgementPath(packet)
 	delete(s.packetReceipts, key)
 	commit(key, zero)
 }
 
-func (s *State) savePendingAsyncAck(packet Packet, authorizedPort address) {
-	key := asyncAckKey{ChannelId: packet.DestinationChannelId, Sequence: packet.Sequence}
+func (s *State) savePendingAsyncAck(packet Packet) {
+	key := CommitPacket(packet)
 	if _, exists := s.pendingAsyncAcks[key]; exists {
 		panic(ErrPendingAsyncAckExists)
 	}
 	if s.hasAcknowledgement(packet) {
 		panic(ErrAcknowledgementAlreadyWritten)
 	}
-	s.pendingAsyncAcks[key] = pendingAsyncAck{
-		Packet:         packet,
-		AuthorizedPort: authorizedPort,
-	}
+	s.pendingAsyncAcks[key] = pendingAsyncAck{Packet: packet}
 }
 
-func (s *State) getPendingAsyncAck(channelId ChannelId, sequence Sequence) (pendingAsyncAck, bool) {
-	v, ok := s.pendingAsyncAcks[asyncAckKey{ChannelId: channelId, Sequence: sequence}]
+func (s *State) getPendingAsyncAck(packet Packet) (pendingAsyncAck, bool) {
+	v, ok := s.pendingAsyncAcks[CommitPacket(packet)]
 	return v, ok
 }
 
-func (s *State) deletePendingAsyncAck(channelId ChannelId, sequence Sequence) {
-	delete(s.pendingAsyncAcks, asyncAckKey{ChannelId: channelId, Sequence: sequence})
+func (s *State) deletePendingAsyncAck(packet Packet) {
+	delete(s.pendingAsyncAcks, CommitPacket(packet))
 }
 
-func (s *State) hasPendingAsyncAck(channelId ChannelId, sequence Sequence) bool {
-	_, ok := s.pendingAsyncAcks[asyncAckKey{ChannelId: channelId, Sequence: sequence}]
+func (s *State) hasPendingAsyncAck(packet Packet) bool {
+	_, ok := s.pendingAsyncAcks[CommitPacket(packet)]
 	return ok
 }

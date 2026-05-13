@@ -716,6 +716,14 @@ func QueryClientState(clientId ClientId) string {
 	return hexString(st.getClientState(clientId))
 }
 
+func GetClientType(clientId ClientId) string {
+	clientType, ok := st.clientTypes[clientId]
+	if !ok {
+		return ""
+	}
+	return string(clientType)
+}
+
 func QueryConsensusState(clientId ClientId, height Height) string {
 	return hexString(st.getConsensusState(clientId, height))
 }

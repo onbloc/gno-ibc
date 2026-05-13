@@ -344,6 +344,25 @@ func TestGetClientStateReturnsStoredBytes(t *testing.T) {
 	}
 }
 
+func TestGetClientTypeReturnsRegisteredType(t *testing.T) {
+	resetState()
+	st.clientTypes[ClientId(1)] = mockType
+
+	got := GetClientType(ClientId(1))
+	if got != string(mockType) {
+		t.Errorf("GetClientType: got %q want %q", got, string(mockType))
+	}
+}
+
+func TestGetClientTypeUnknownReturnsEmpty(t *testing.T) {
+	resetState()
+
+	got := GetClientType(ClientId(999))
+	if got != "" {
+		t.Errorf("GetClientType: got %q want empty", got)
+	}
+}
+
 func TestGetConsensusStateReturnsStoredBytes(t *testing.T) {
 	resetState()
 	st.saveConsensusState(ClientId(1), Height(10), []byte("consensus-state"))

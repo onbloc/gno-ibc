@@ -48,11 +48,7 @@ type State struct {
 	batchPackets  map[H256]H256
 	batchReceipts map[H256]H256
 
-	packetCommitments map[H256]bool
-	packetReceipts    map[H256]bool
-	packetAcks        map[H256]bool
-	packetAckHashes   map[H256]H256
-	pendingAsyncAcks  map[H256]pendingAsyncAck
+	pendingAsyncAcks map[H256]pendingAsyncAck
 }
 
 type pendingAsyncAck struct {
@@ -74,10 +70,6 @@ func newState() State {
 		batchReceipts:     make(map[H256]H256),
 		ports:             make(map[string]IApp),
 		channelOwners:     make(map[ChannelId]Bytes),
-		packetCommitments: make(map[H256]bool),
-		packetReceipts:    make(map[H256]bool),
-		packetAcks:        make(map[H256]bool),
-		packetAckHashes:   make(map[H256]H256),
 		pendingAsyncAcks:  make(map[H256]pendingAsyncAck),
 	}
 }
@@ -205,6 +197,10 @@ func (s *State) saveBatchPackets(batchHash H256, value H256) {
 	commit(BatchPacketsPath(batchHash), value)
 }
 
+func (s *State) setBatchPackets(batchHash H256, value H256) {
+	s.batchPackets[batchHash] = value
+}
+
 func (s *State) getBatchPackets(batchHash H256) H256 {
 	value, ok := s.batchPackets[batchHash]
 	if !ok {
@@ -227,53 +223,48 @@ func (s *State) getBatchReceipts(batchHash H256) H256 {
 }
 
 func (s *State) commitPacket(packet Packet) {
-	key := PacketCommitmentPath(packet)
-	s.packetCommitments[key] = true
-	commit(key, COMMITMENT_MAGIC)
+	s.saveBatchPackets(CommitPacket(packet), COMMITMENT_MAGIC)
 }
 
 func (s *State) deletePacketCommitment(packet Packet) {
 	var zero H256
-	key := PacketCommitmentPath(packet)
-	delete(s.packetCommitments, key)
-	commit(key, zero)
+	batchHash := CommitPacket(packet)
+	delete(s.batchPackets, batchHash)
+	commit(BatchPacketsPath(batchHash), zero)
 }
 
 func (s *State) hasPacketCommitment(packet Packet) bool {
-	return s.packetCommitments[PacketCommitmentPath(packet)]
+	_, ok := s.batchPackets[CommitPacket(packet)]
+	return ok
 }
 
 func (s *State) commitAcknowledgement(packet Packet, ack []byte) {
-	key := PacketAcknowledgementPath(packet)
-	value := CommitAcks([][]byte{ack})
-	s.packetAcks[key] = true
-	s.packetAckHashes[key] = value
-	commit(key, value)
+	s.saveBatchReceipts(CommitPacket(packet), CommitAcks([][]byte{ack}))
 }
 
 func (s *State) hasAcknowledgement(packet Packet) bool {
-	return s.packetAcks[PacketAcknowledgementPath(packet)]
+	value, ok := s.batchReceipts[CommitPacket(packet)]
+	return ok && value != COMMITMENT_MAGIC_ACK
 }
 
 func (s *State) acknowledgementHash(packet Packet) H256 {
-	return s.packetAckHashes[PacketAcknowledgementPath(packet)]
+	return s.batchReceipts[CommitPacket(packet)]
 }
 
 func (s *State) setPacketReceipt(packet Packet) {
-	key := PacketAcknowledgementPath(packet)
-	s.packetReceipts[key] = true
-	commit(key, COMMITMENT_MAGIC_ACK)
+	s.saveBatchReceipts(CommitPacket(packet), COMMITMENT_MAGIC_ACK)
 }
 
 func (s *State) hasPacketReceipt(packet Packet) bool {
-	return s.packetReceipts[PacketAcknowledgementPath(packet)]
+	_, ok := s.batchReceipts[CommitPacket(packet)]
+	return ok
 }
 
 func (s *State) deletePacketReceipt(packet Packet) {
 	var zero H256
-	key := PacketAcknowledgementPath(packet)
-	delete(s.packetReceipts, key)
-	commit(key, zero)
+	batchHash := CommitPacket(packet)
+	delete(s.batchReceipts, batchHash)
+	commit(BatchReceiptsPath(batchHash), zero)
 }
 
 func (s *State) savePendingAsyncAck(packet Packet) {

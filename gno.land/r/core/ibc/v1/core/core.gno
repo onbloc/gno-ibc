@@ -661,7 +661,7 @@ func BatchSend(_ realm, msg MsgBatchSend) H256 {
 	// single-packet sends; multi-packet batches still commit at the batch
 	// path on chain.
 	for _, packet := range msg.Packets {
-		st.packetCommitments[PacketCommitmentPath(packet)] = true
+		st.setBatchPackets(CommitPacket(packet), COMMITMENT_MAGIC)
 	}
 	first := msg.Packets[0]
 	channel := st.getChannel(first.SourceChannelId)

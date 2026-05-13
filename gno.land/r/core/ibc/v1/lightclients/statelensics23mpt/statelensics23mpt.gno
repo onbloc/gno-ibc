@@ -1,6 +1,7 @@
 package statelensics23mpt
 
 import (
+	"chain/runtime"
 	"crypto/keccak256"
 	"encoding/binary"
 	"errors"
@@ -28,6 +29,12 @@ type clientEntry struct {
 
 var entries = make(map[core.ClientId]*clientEntry)
 
+func mustBeCore() {
+	if runtime.PreviousRealm().PkgPath() != "gno.land/r/core/ibc/v1/core" {
+		panic("statelensics23mpt: core only")
+	}
+}
+
 func getEntry(clientId core.ClientId) *clientEntry {
 	e, ok := entries[clientId]
 	if !ok {
@@ -39,6 +46,8 @@ func getEntry(clientId core.ClientId) *clientEntry {
 type Adapter struct{}
 
 func (Adapter) CreateClient(_ realm, clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) string {
+	mustBeCore()
+
 	cs, err := statelensp.DecodeClientState(clientStateBytes)
 	if err != nil {
 		panic("statelensics23mpt: invalid client state: " + err.Error())
@@ -58,6 +67,8 @@ func (Adapter) CreateClient(_ realm, clientId core.ClientId, clientStateBytes, c
 }
 
 func (Adapter) UpdateClient(_ realm, clientId core.ClientId, clientMessage []byte) core.ConsensusStateUpdate {
+	mustBeCore()
+
 	e := getEntry(clientId)
 
 	header, err := statelensp.DecodeHeader(clientMessage)

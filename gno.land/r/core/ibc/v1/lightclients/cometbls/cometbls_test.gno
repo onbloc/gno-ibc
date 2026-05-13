@@ -54,6 +54,21 @@ func installAdapterClient(clientId core.ClientId, cs cometblsp.ClientState, cons
 	entries[clientId] = newAdapterClientEntry(cs, cons)
 }
 
+func TestMutatingEntrypointsRequireCoreCaller(t *testing.T) {
+	resetAdapterEntries()
+	adapter := Adapter{}
+
+	uassert.AbortsContains(t, "cometbls: core only", func(cur realm) {
+		adapter.CreateClient(cross, core.ClientId(1), nil, nil)
+	})
+	uassert.AbortsContains(t, "cometbls: core only", func(cur realm) {
+		adapter.UpdateClient(cross, core.ClientId(1), nil)
+	})
+	uassert.AbortsContains(t, "cometbls: core only", func(cur realm) {
+		adapter.Misbehaviour(cross, core.ClientId(1), nil)
+	})
+}
+
 func TestVerifyMembershipRejectsFrozenClientBeforeProofDecode(t *testing.T) {
 	resetAdapterEntries()
 	clientId := core.ClientId(1)

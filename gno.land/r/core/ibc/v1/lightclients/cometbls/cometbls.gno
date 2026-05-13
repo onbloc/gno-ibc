@@ -1,6 +1,7 @@
 package cometbls
 
 import (
+	"chain/runtime"
 	"time"
 
 	"gno.land/p/aib/ibc/types"
@@ -22,6 +23,12 @@ var ibcStoreKey = []byte("ibc")
 
 func nowNanos() uint64 { return uint64(time.Now().UnixNano()) }
 
+func mustBeCore() {
+	if runtime.PreviousRealm().PkgPath() != "gno.land/r/core/ibc/v1/core" {
+		panic("cometbls: core only")
+	}
+}
+
 func getEntry(clientId core.ClientId) *clientEntry {
 	e, ok := entries[clientId]
 	if !ok {
@@ -33,6 +40,8 @@ func getEntry(clientId core.ClientId) *clientEntry {
 type Adapter struct{}
 
 func (Adapter) CreateClient(_ realm, clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) string {
+	mustBeCore()
+
 	cs, err := cometblsp.DecodeClientState(clientStateBytes)
 	if err != nil {
 		panic("cometbls: invalid client state: " + err.Error())
@@ -63,6 +72,8 @@ func (Adapter) CreateClient(_ realm, clientId core.ClientId, clientStateBytes, c
 }
 
 func (Adapter) UpdateClient(_ realm, clientId core.ClientId, clientMessage []byte) core.ConsensusStateUpdate {
+	mustBeCore()
+
 	e := getEntry(clientId)
 
 	header, err := cometblsp.DecodeHeader(clientMessage)
@@ -102,6 +113,8 @@ func (Adapter) UpdateClient(_ realm, clientId core.ClientId, clientMessage []byt
 }
 
 func (Adapter) Misbehaviour(_ realm, clientId core.ClientId, clientMessage []byte) []byte {
+	mustBeCore()
+
 	e := getEntry(clientId)
 
 	m, err := cometblsp.DecodeMisbehaviour(clientMessage)

@@ -42,16 +42,24 @@ func getVoucher(ibcDenom string) *voucher {
 }
 
 func mintVoucher(cur realm, ibcDenom string, baseDenom string, metadataImage [32]byte, receiver string, amount *u256.Uint) error {
+	n, err := amountInt64(amount)
+	if err != nil {
+		return err
+	}
 	v := getOrCreateVoucherV2(cur, ibcDenom, baseDenom, metadataImage)
-	return v.ledger.Mint(address(receiver), amountInt64(amount))
+	return v.ledger.Mint(address(receiver), n)
 }
 
 func burnVoucher(cur realm, ibcDenom string, sender string, amount *u256.Uint) error {
+	n, err := amountInt64(amount)
+	if err != nil {
+		return err
+	}
 	v := getVoucher(ibcDenom)
 	if v == nil {
 		return errors.New("zkgm/voucher: not found: " + ibcDenom)
 	}
-	return v.ledger.Burn(address(sender), amountInt64(amount))
+	return v.ledger.Burn(address(sender), n)
 }
 
 func VoucherBalanceOf(ibcDenom string, addr address) int64 {
@@ -62,9 +70,11 @@ func VoucherBalanceOf(ibcDenom string, addr address) int64 {
 	return v.token.BalanceOf(addr)
 }
 
-func amountInt64(amount *u256.Uint) int64 {
+var errAmountOverflow = errors.New("zkgm/voucher: amount overflows int64")
+
+func amountInt64(amount *u256.Uint) (int64, error) {
 	if !amount.IsUint64() || amount.Uint64() > uint64(math.MaxInt64) {
-		panic("zkgm/voucher: amount overflows int64")
+		return 0, errAmountOverflow
 	}
-	return amount.Int64()
+	return amount.Int64(), nil
 }

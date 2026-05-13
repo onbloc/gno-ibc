@@ -60,11 +60,11 @@ func (v *ZkgmV0) executeForward(req zkgm.RecvRequest, path *u256.Uint, parentSal
 }
 
 func (v *ZkgmV0) acknowledgeForward(req zkgm.AckRequest, path *u256.Uint, salt [32]byte, forward z.Forward, ack z.Ack) error {
-	return v.dispatchAck(req, path, salt, forward.Instruction, ack.InnerAck)
+	return v.dispatchAck(req, forward.Path, salt, forward.Instruction, ack.InnerAck)
 }
 
 func (v *ZkgmV0) timeoutForward(req zkgm.TimeoutRequest, path *u256.Uint, salt [32]byte, forward z.Forward) error {
-	return v.dispatchTimeout(req, path, salt, forward.Instruction)
+	return v.dispatchTimeout(req, forward.Path, salt, forward.Instruction)
 }
 
 func buildForwardChild(req zkgm.RecvRequest, path *u256.Uint, parentSalt [32]byte, forward z.Forward) (types.Payload, [32]byte, uint32, error) {

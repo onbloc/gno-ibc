@@ -161,15 +161,15 @@ func TestAcknowledgeForwardWithTokenOrderChildRefundsOnFailure(cur realm, t *tes
 		QuoteAmount: u256.NewUint(20),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	path := u256.NewUint(7)
+	path := forwardPath(1, 2)
 	increaseChannelBalanceV2(cross, "client-a", path, order.BaseToken, order.QuoteToken, order.BaseAmount)
 	childFailAck, err := z.EncodeAck(z.Ack{Tag: tagAckFailure, InnerAck: []byte("failed")})
 	uassert.NoError(t, err)
 
 	err = (&ZkgmV0{}).acknowledgeForward(zkgm.AckRequest{
 		SourceClient: "client-a",
-	}, path, [32]byte{}, z.Forward{
-		Path:        forwardPath(1, 2),
+	}, u256.Zero(), [32]byte{}, z.Forward{
+		Path:        path,
 		Instruction: mustOrderInstruction(order),
 	}, z.Ack{Tag: tagAckSuccess, InnerAck: childFailAck})
 

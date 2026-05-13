@@ -88,7 +88,7 @@ func (v *ZkgmV1) IntentRecv(packet core.Packet, marketMaker address, marketMaker
 }
 
 func (v *ZkgmV1) Send(req zkgm.SendRequest) ([]byte, error) {
-	if err := v.dispatchVerify(req.ChannelId, req.Sender, parseCoins(req.SentCoins), req.Salt, req.Instruction); err != nil {
+	if err := v.dispatchVerify(req.ChannelId, req.Sender, parseCoins(req.SentCoins), u256.Zero(), req.Salt, req.Instruction); err != nil {
 		return nil, err
 	}
 

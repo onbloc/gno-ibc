@@ -24,7 +24,7 @@ func (v *ZkgmV0) dispatchVerify(channelID string, sender string, sentCoins chain
 		if err != nil {
 			return err
 		}
-		return v.verifyTokenOrderV2(channelID, sender, sentCoins, order)
+		return v.verifyTokenOrderV2(channelID, sender, sentCoins, path, order)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instr)
 		if err != nil {

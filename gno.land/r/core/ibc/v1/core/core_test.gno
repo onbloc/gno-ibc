@@ -246,6 +246,23 @@ func TestUnionPathReferenceVectors(t *testing.T) {
 	assertH256Hex(t, "batch timeout", BatchTimeoutPath(packet), "0xb7b713e653ed37563f2260ffcee26b6a8fb5a8b91210373aefcde7b3d36bd0eb")
 }
 
+func TestStateGetterPathsMatchCanonicalPaths(t *testing.T) {
+	batchHash := H256{0x42}
+
+	if got := GetClientStatePath(4); got != ClientStatePath(4) {
+		t.Errorf("GetClientStatePath: got %s want %s", got, ClientStatePath(4))
+	}
+	if got := GetConsensusStatePath(4, 10); got != ConsensusStatePath(4, 10) {
+		t.Errorf("GetConsensusStatePath: got %s want %s", got, ConsensusStatePath(4, 10))
+	}
+	if got := GetBatchPacketsPath(batchHash); got != BatchPacketsPath(batchHash) {
+		t.Errorf("GetBatchPacketsPath: got %s want %s", got, BatchPacketsPath(batchHash))
+	}
+	if got := GetBatchReceiptsPath(batchHash); got != BatchReceiptsPath(batchHash) {
+		t.Errorf("GetBatchReceiptsPath: got %s want %s", got, BatchReceiptsPath(batchHash))
+	}
+}
+
 // --- Type encoding tests ---
 
 func TestConnectionEthAbiEncodeDistinct(t *testing.T) {
@@ -372,6 +389,16 @@ func TestSaveAndGetConnection(t *testing.T) {
 	if got.ClientId != ClientId(1) {
 		t.Errorf("clientId: got %v want 1", got.ClientId)
 	}
+
+	if got := GetConnection(id); got.CounterpartyConnectionId != ConnectionId(99) {
+		t.Errorf("GetConnection counterparty connection: got %v want 99", got.CounterpartyConnectionId)
+	}
+	if got := GetConnectionPath(id); got != ConnectionPath(id) {
+		t.Errorf("GetConnectionPath: got %s want %s", got, ConnectionPath(id))
+	}
+	if got := GetConnectionCommitment(id); got != keccak(conn.EthAbiEncode()) {
+		t.Errorf("GetConnectionCommitment: got %s want %s", got, keccak(conn.EthAbiEncode()))
+	}
 }
 
 func TestGetConnectionNotFoundPanics(t *testing.T) {
@@ -409,6 +436,13 @@ func TestSaveAndGetChannel(t *testing.T) {
 	}
 	if got.Version != "ics20-1" {
 		t.Errorf("version: got %v want ics20-1", got.Version)
+	}
+
+	if got := GetChannelPath(id); got != ChannelPath(id) {
+		t.Errorf("GetChannelPath: got %s want %s", got, ChannelPath(id))
+	}
+	if got := GetChannelCommitment(id); got != keccak(ch.EthAbiEncode()) {
+		t.Errorf("GetChannelCommitment: got %s want %s", got, keccak(ch.EthAbiEncode()))
 	}
 }
 
@@ -470,6 +504,9 @@ func TestBatchSendReturnsUnionPacketCommitment(t *testing.T) {
 	if got != want {
 		t.Fatal("BatchSend must return Union packet batch commitment")
 	}
+	if got := GetBatchPacketsPath(got); got != BatchPacketsPath(want) {
+		t.Errorf("GetBatchPacketsPath: got %s want %s", got, BatchPacketsPath(want))
+	}
 }
 
 func TestBatchSendRejectsEmptyPacketList(t *testing.T) {
@@ -491,6 +528,9 @@ func TestBatchAcksReturnsUnionPacketCommitment(t *testing.T) {
 	want := CommitPackets([]Packet{p1, p2})
 	if got != want {
 		t.Fatal("BatchAcks must return Union packet batch commitment")
+	}
+	if got := GetBatchReceiptsPath(got); got != BatchReceiptsPath(want) {
+		t.Errorf("GetBatchReceiptsPath: got %s want %s", got, BatchReceiptsPath(want))
 	}
 }
 

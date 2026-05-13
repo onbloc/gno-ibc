@@ -699,6 +699,50 @@ func GetClientStatus(clientId ClientId) Status {
 	return st.getClient(clientId).GetStatus(clientId)
 }
 
+// GetClientStatePath returns the canonical Union storage key for a client
+// state commitment. The committed value is keccak(encoded client state); v1
+// does not currently retain the original encoded client state bytes.
+func GetClientStatePath(clientId ClientId) H256 {
+	return ClientStatePath(clientId)
+}
+
+// GetConsensusStatePath returns the canonical Union storage key for a
+// consensus state commitment. The committed value is keccak(encoded consensus
+// state); v1 does not currently retain the original encoded consensus bytes.
+func GetConsensusStatePath(clientId ClientId, height Height) H256 {
+	return ConsensusStatePath(clientId, height)
+}
+
+func GetConnection(connectionId ConnectionId) Connection {
+	return st.getConnection(connectionId)
+}
+
+func GetConnectionPath(connectionId ConnectionId) H256 {
+	return ConnectionPath(connectionId)
+}
+
+func GetConnectionCommitment(connectionId ConnectionId) H256 {
+	connection := st.getConnection(connectionId)
+	return keccak(connection.EthAbiEncode())
+}
+
+func GetChannelPath(channelId ChannelId) H256 {
+	return ChannelPath(channelId)
+}
+
+func GetChannelCommitment(channelId ChannelId) H256 {
+	channel := st.getChannel(channelId)
+	return keccak(channel.EthAbiEncode())
+}
+
+func GetBatchPacketsPath(batchHash H256) H256 {
+	return BatchPacketsPath(batchHash)
+}
+
+func GetBatchReceiptsPath(batchHash H256) H256 {
+	return BatchReceiptsPath(batchHash)
+}
+
 func CommitNonMembershipProof(_ realm, msg MsgCommitNonMembershipProof) {
 	st.getClient(msg.ClientId).VerifyNonMembership(msg.ClientId, msg.ProofHeight, msg.Proof, msg.Path)
 	commit(NonMembershipProofPath(msg.ClientId, msg.ProofHeight, msg.Path), COMMITMENT_MAGIC)

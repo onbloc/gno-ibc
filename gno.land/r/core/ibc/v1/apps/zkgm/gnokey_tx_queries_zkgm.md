@@ -2,54 +2,41 @@
 
 Target realm: `gno.land/r/gnoswap/ibc/v1/apps/zkgm`
 
-This document is a runnable integration guide. Every script or command in the
-**Happy paths** section can be copy-pasted onto a fresh `gnodev local`
-boot and produces a successful ZKGM packet-side effect on chain.
+The copy-paste transactions below exercise ZKGM on a single local node with a
+mock light client and locally opened channel pairs. They are intended as smoke
+checks for `gnokey`, not as production relayer examples.
 
-The **Reference** section at the end records the raw output of replaying
-`gno.land/p/core/ibc/zkgm/testdata/scenarios.json` (decoder-side fixtures)
-through Send — every scenario hits a deterministic realm-level rejection;
-the table is useful as a regression signal but does not exercise a happy
-path. See the reference section for why.
+## Local Smoke Node
 
-## gnodev local setup
-
-zkgm packages live on disk under `gno.land/{p,r}/core/...` but declare
-module names `gno.land/{p,r}/gnoswap/...` in `gnomod.toml`. The default
-`gnodev` `root=` resolver matches directory layout to import path, so the
-aliased modules need explicit `local=` resolvers, plus the e2e helper
-package for the channel-open shortcut used below:
-
-```sh
-gnodev local \
-  -root "$HOME/.cache/gno-ibc/gno" \
-  -resolver "root=$PWD" \
-  -resolver "root=$HOME/.cache/gno-ibc/gno/examples" \
-  -resolver "local=$PWD/gno.land/p/core/tokenbucket" \
-  -resolver "local=$PWD/gno.land/p/core/ibc/zkgm" \
-  -resolver "local=$PWD/gno.land/r/core/ibc/v1/apps/zkgm" \
-  -resolver "local=$PWD/gno.land/r/core/ibc/v1/apps/zkgm/v0/impl" \
-  -resolver "local=$PWD/gno.land/r/core/ibc/v1/apps/zkgm/v0/loader" \
-  -resolver "local=$PWD/gno.land/r/core/ibc/v1/apps/zkgm/testing/e2e" \
-  -paths "gno.land/r/core/ibc/v1/core,gno.land/r/core/ibc/v1/lightclients/cometbls,gno.land/r/gnoswap/ibc/v1/apps/zkgm,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader,gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e" \
-  -no-web \
-  -node-rpc-listener 0.0.0.0:26657
-```
-
-You can use the same setup through:
+Start a local node with core, cometbls, ZKGM, and the ZKGM helper package
+loaded:
 
 ```sh
 tools/run-v1-ibc-smoke-node.sh
 ```
 
-The loader's `init()` calls `zkgm.UpdateImpl(...)` and
-`core.RegisterApp(...)` at deploy time, so the proxy and impl are wired
-the moment gnodev finishes booting. No further admin step is needed.
+The script defaults to:
 
-## How to send
+```sh
+GNO_ROOT=$HOME/.cache/gno-ibc/gno
+GNO_IBC_ROOT=<repo root>
+RPC_LISTENER=0.0.0.0:26657
+```
 
-Every happy-path script below ends with one `zkgm.Send(...)` call. Run
-them via `gnokey maketx run`:
+The ZKGM loader runs at package load time and calls `core.RegisterApp`, so
+there is no separate `maketx` step for app registration. The script includes
+extra `local` resolvers because ZKGM module paths use
+`gno.land/{p,r}/gnoswap/...`, while source directories live under
+`gno.land/{p,r}/core/...` in this repository.
+
+All examples use the default `gnodev local` `test1` key, whose password is
+empty. The leading `printf '\n'` feeds that empty password to `gnokey`.
+
+## 1. Send Call
+
+Source: `tools/zkgm-fixtures/scripts/happy/send_call.gno`.
+
+Copy-paste transaction:
 
 ```sh
 printf '\n' | gnokey maketx run \
@@ -59,97 +46,20 @@ printf '\n' | gnokey maketx run \
   test1 tools/zkgm-fixtures/scripts/happy/send_call.gno
 ```
 
-The empty stdin (`printf '\n'`) feeds an empty password to gnokey; the
-default `gnodev local` `test1` keyring has no password. Override via
-`GNOKEY_PASSWORD` if your keyring is encrypted.
+Verify:
 
-Each script opens its own channel pair via the in-tree helper
-`gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e`, which:
-1. Calls `core.RegisterClient` with the `zkgm-e2e-mock` light-client type,
-2. Calls `core.CreateClient` + `ConnectionOpenInit` + `ConnectionOpenAck`,
-3. Calls `ChannelOpenInit` + `ChannelOpenAck` **twice** (source +
-   destination) so the pair is bilaterally addressable inside one chain.
-
-The mock light-client (`testing/e2e/mock_lc.gno`) is permissive on proofs,
-so the open dance succeeds without external proof generation. **Do not
-re-use this in production** — it is the smallest possible substitute that
-lets `gnokey maketx run` exercise zkgm.Send end-to-end.
-
----
-
-## Happy paths (verified end-to-end)
-
-The probes are grouped by which realm entry they exercise:
-
-- **Send** — `zkgm.Send(...)` → `impl.dispatchVerify` → `core.PacketSend`.
-  Exercises the source-side verification + packet commit.
-- **SendRaw** — `zkgm.SendRaw(...)` via `gnokey maketx call`. Exercises the
-  same Send path, but accepts primitive hex/string arguments so `gnokey` can
-  attach banker coins with `-send`.
-- **Recv** — `core.PacketRecv(MsgPacketRecv{...})` →
-  `zkgm.App.OnRecvPacket` → `impl.dispatchExecute`. Exercises the
-  destination-side handler + state mutations (voucher mint) + `WriteAck`.
-
-A successful Send produces only a `PacketSend` event. A successful Recv
-produces both `PacketRecv` and `WriteAck` (the latter carries the
-canonical `Ack{tag, inner}` bytes the counterparty will deliver back).
-
-### Send side
-
-#### 1. `zkgm.Send` with a single `Call`
-
-Script: [`tools/zkgm-fixtures/scripts/happy/send_call.gno`](../../../../../tools/zkgm-fixtures/scripts/happy/send_call.gno).
-
-What it does: open a channel pair, then build a `z.Call{Sender = signer,
-Eureka = false, ContractAddress = "any-contract"}` and submit it as the
-Send instruction.
-
-```sh
-printf '\n' | gnokey maketx run \
-  -gas-fee 1000000ugnot -gas-wanted 90000000 \
-  -broadcast -insecure-password-stdin \
-  -chainid dev -remote tcp://127.0.0.1:26657 \
-  test1 tools/zkgm-fixtures/scripts/happy/send_call.gno
-```
-
-Observed result (first run after gnodev boot):
-
-```
-source_channel 1
-destination_channel 2
-client_id 1
-connection_id 1
-packet.SourceChannelId 1
-packet.DestinationChannelId 2
-packet.TimeoutTimestamp 1700000000000000000
+```txt
 packet.Data.len 544
 OK!
-GAS WANTED: 90000000
-GAS USED:   47424092
-TX HASH:    <base64>
 ```
 
-Emitted events (one tx):
+The emitted events must include `PacketSend`.
 
-| event | key fields |
-|---|---|
-| `CreateClient` | `client_type=zkgm-e2e-mock`, `client_id=1` |
-| `ConnectionOpenInit` | `connection_id=1`, `client_id=1`, `counterparty_client_id=99` |
-| `ConnectionOpenAck` | `connection_id=1`, `counterparty_connection_id=77` |
-| `ChannelOpenInit` ×2 | `channel_id=1`, `channel_id=2`, `version=ucs03-zkgm-0` |
-| `ChannelOpenAck` ×2 | `channel_id=1` (cp=2), `channel_id=2` (cp=1) |
-| `PacketSend` | `packet_hash=0xfba0e1a9…`, `source_channel_id=1`, `destination_channel_id=2`, `timeout_timestamp=1700000000000000000` |
+## 2. Send Batch
 
-The `packet_data` attribute on `PacketSend` carries the full
-ABI-encoded `ZkgmPacket` (544 bytes), with `runtime.OriginCaller().String()`
-embedded as the `Call.Sender` field.
+Source: `tools/zkgm-fixtures/scripts/happy/send_batch.gno`.
 
-#### 2. `zkgm.Send` with a `Batch` of two `Call`s
-
-Script: [`tools/zkgm-fixtures/scripts/happy/send_batch.gno`](../../../../../tools/zkgm-fixtures/scripts/happy/send_batch.gno).
-
-What it does: same channel-open shortcut, then `z.Batch{[Call{eureka=false},
-Call{eureka=false}]}` where both inner sender fields are the tx signer.
+Copy-paste transaction:
 
 ```sh
 printf '\n' | gnokey maketx run \
@@ -159,27 +69,20 @@ printf '\n' | gnokey maketx run \
   test1 tools/zkgm-fixtures/scripts/happy/send_batch.gno
 ```
 
-Observed result:
+Verify:
 
-```
-source_channel 3
-destination_channel 4
+```txt
 packet.Data.len 1280
 OK!
-GAS USED:   51252767
 ```
 
-(Source channel is 3 because the previous run already consumed 1/2 — each
-`OpenE2EChannelPair` call mints fresh channel IDs.)
+The emitted events must include `PacketSend`.
 
-#### 3. `zkgm.Send` with a `Forward` wrapping a `Call`
+## 3. Send Forward
 
-Script: [`tools/zkgm-fixtures/scripts/happy/send_forward.gno`](../../../../../tools/zkgm-fixtures/scripts/happy/send_forward.gno).
+Source: `tools/zkgm-fixtures/scripts/happy/send_forward.gno`.
 
-What it does: `z.Forward{Path=1, TimeoutHeight=0, TimeoutTimestamp=…,
-Instruction=Call{sender=signer, eureka=false}}`. v1 accepts a single-hop
-forward whose inner instruction is a Call; recursion (Forward → Forward)
-is rejected.
+Copy-paste transaction:
 
 ```sh
 printf '\n' | gnokey maketx run \
@@ -189,23 +92,22 @@ printf '\n' | gnokey maketx run \
   test1 tools/zkgm-fixtures/scripts/happy/send_forward.gno
 ```
 
-Observed result:
+Verify:
 
-```
-source_channel 5
-destination_channel 6
+```txt
 packet.Data.len 832
 OK!
 ```
 
-#### 3.1. `zkgm.SendRaw` with a `TokenOrderV2{INITIALIZE}` and `-send`
+The emitted events must include `PacketSend`.
 
-`maketx run` introduces an intermediate realm frame, so `zkgm.Send` cannot
-observe banker coins attached to the outer tx. `SendRaw` is the
-`maketx call`-friendly wrapper for this case: the instruction fields are passed
-as primitive arguments, and `-send` lands directly on the ZKGM realm.
+## 4. SendRaw TokenOrder Initialize
 
-First open a channel pair and print the raw instruction arguments:
+`zkgm.SendRaw` is the `maketx call` wrapper for TokenOrder sends that need
+banker coins. `maketx run` cannot make `banker.OriginSend()` visible to
+`zkgm.Send`, but direct `maketx call` with `-send` can.
+
+First generate a fresh channel pair and the raw instruction arguments:
 
 ```sh
 printf '\n' | gnokey maketx run \
@@ -215,16 +117,15 @@ printf '\n' | gnokey maketx run \
   test1 tools/zkgm-fixtures/scripts/happy/sendraw_token_order_args.gno
 ```
 
-Then use the printed `source_channel`, `timeout_timestamp`, `salt_hex`,
-`version`, `opcode`, `operand_hex`, and `send` values:
+Copy the printed values into the variables below, then submit:
 
 ```sh
-SOURCE_CHANNEL=1
-TIMEOUT_TIMESTAMP=1700000000000000000
-SALT_HEX=0000000000000000000000000000000000000000000000000000000000000000
-VERSION=2
-OPCODE=3
-OPERAND_HEX='<operand_hex printed above>'
+SOURCE_CHANNEL=<source_channel>
+TIMEOUT_TIMESTAMP=<timeout_timestamp>
+SALT_HEX=<salt_hex>
+VERSION=<version>
+OPCODE=<opcode>
+OPERAND_HEX=<operand_hex>
 
 printf '\n' | gnokey maketx call \
   -gas-fee 1000000ugnot -gas-wanted 90000000 \
@@ -242,59 +143,19 @@ printf '\n' | gnokey maketx call \
   test1
 ```
 
-Observed result:
+Verify:
 
-```
+```txt
 OK!
-GAS USED:   38868215
 ```
 
-The tx emits `PacketSend`, and the send-side channel balance is recorded under
-the packet path for `(channel, baseToken=ugnot, quoteToken=counterparty-projected-quote)`.
+The emitted events must include `PacketSend`.
 
-### Why no happy path for TokenOrder
+## 5. Recv TokenOrder Escrow
 
-`zkgm.SendRaw` covers TokenOrder source-side sends that need banker `-send`.
-For TokenOrder ESCROW sends, you still need a voucher balance first:
+Source: `tools/zkgm-fixtures/scripts/happy/recv_token_order.gno`.
 
-1. **Pre-mint a voucher** (denom starting with `ibc/`) via a Recv probe,
-   then Send with `Kind=ESCROW` on a follow-up tx. The Send-side `verify`
-   path then takes the `burnVoucher` branch and avoids `requireSentCoin`
-   entirely. `tools/zkgm-fixtures/scripts/happy/recv_token_order.gno`
-   (next section) does the voucher mint; pairing it with a Send probe is
-   the multi-tx round-trip integration scenario.
-2. **Drive the existing e2e filetest** at
-   `gno.land/r/core/ibc/v1/apps/zkgm/testing/e2e/scenarios/z21_v1_create_client_handshake_send_filetest.gno`
-   which sidesteps `zkgm.Send` and submits via `core.BatchSend` directly
-   (acceptable for golden-output testing, not for replay through the
-   realm's public entry).
-
-### Recv side
-
-Each Recv probe builds a `core.Packet` whose `Data` is an ABI-encoded
-`ZkgmPacket`, then calls `core.PacketRecv(MsgPacketRecv{Packets: [packet],
-ProofHeight: 1})`. The mock light client accepts any proof bytes, so the
-membership verification step is a no-op. `App.OnRecvPacket` →
-`ZkgmV1.Recv` → `dispatchExecute` runs the per-opcode `executeXxx` path,
-including state mutations and ack assembly. The resulting ack is
-committed via `core.WriteAck` and is visible in the `WriteAck` event's
-`acknowledgement` attribute.
-
-#### 4. `core.PacketRecv` with a `TokenOrderV2{ESCROW}` — mints a voucher
-
-Script: [`tools/zkgm-fixtures/scripts/happy/recv_token_order.gno`](../../../../../tools/zkgm-fixtures/scripts/happy/recv_token_order.gno).
-The golden-output counterpart (consumed by `gno test`, not by gnokey) is
-`testing/e2e/scenarios/z22_v1_recv_packet_dispatches_token_order_filetest.gno`
-— same setup, but asserts the balance via filetest `// Output:` instead
-of `gnokey maketx run`.
-
-What it does: opens a channel pair, predicts the destination chain's local
-wrapped denom for `(path=0, destinationChannel, baseToken=ugnot)`, then
-receives a TokenOrderV2 with `Kind=ESCROW`, `BaseToken=ugnot`,
-`QuoteToken=<predicted denom>`, `QuoteAmount=21`, `Receiver=g1wymu47…`.
-On the destination side
-`executeTokenOrderV2` mints 21 units of that predicted voucher token to the
-receiver via the GRC20 minter; the script then reads back the balance.
+Copy-paste transaction:
 
 ```sh
 printf '\n' | gnokey maketx run \
@@ -304,42 +165,22 @@ printf '\n' | gnokey maketx run \
   test1 tools/zkgm-fixtures/scripts/happy/recv_token_order.gno
 ```
 
-Observed result (first run after gnodev boot):
+Verify:
 
-```
-source_channel 1
-destination_channel 2
+```txt
 voucher_denom ibc/<predicted>
 voucher_balance 21
 OK!
-GAS USED:   69398754
 ```
 
-Notable events (one tx):
+The emitted events must include `PacketRecv`, `WriteAck`, and a GRC20
+`Transfer` mint to the receiver.
 
-| event | meaning |
-|---|---|
-| `register` (`grc20reg`) | the voucher token is registered on first sight |
-| `Transfer` (`grc20`) | mint from `""` to receiver (21 units) |
-| `WriteAck` | success ack: `tag=1`, inner = `TokenOrderAck{fill_type=FILL_TYPE_PROTOCOL, market_maker=0x}` |
-| `PacketRecv` | normal IBC recv attestation |
+## 6. Recv Call Failure Ack
 
-The `acknowledgement` attribute on `WriteAck` is the canonical encoded
-success Ack envelope (`Ack{tag=1, inner_ack = TokenOrderAck{fill_type =
-FILL_TYPE_PROTOCOL, market_maker = 0x}}`) that a relayer would deliver
-back to the source side. The same byte string is what
-`tools/zkgm-fixtures` emits as `success_ack_hex` for this scenario shape.
+Source: `tools/zkgm-fixtures/scripts/happy/recv_call.gno`.
 
-#### 5. `core.PacketRecv` with a `Call` (unregistered target) — failure ack path
-
-Script: [`tools/zkgm-fixtures/scripts/happy/recv_call.gno`](../../../../../tools/zkgm-fixtures/scripts/happy/recv_call.gno).
-
-What it does: receives a `Call{Sender=signer, Eureka=false,
-ContractAddress="unregistered-target"}`. Since no `Zkgmable` receiver is
-registered under `"unregistered-target"`, `executeCall` short-circuits
-with `callErrAck("zkgm/v1: receiver not registered: ...")` — note this
-returns a **failure-tag Ack**, it does **not** panic, so the tx commits
-and `WriteAck` is emitted with the failure payload.
+Copy-paste transaction:
 
 ```sh
 printf '\n' | gnokey maketx run \
@@ -349,34 +190,22 @@ printf '\n' | gnokey maketx run \
   test1 tools/zkgm-fixtures/scripts/happy/recv_call.gno
 ```
 
-Observed result:
+Verify:
 
-```
-source_channel 3
-destination_channel 4
+```txt
 packet.Data.len 576
 OK!
-GAS USED:   54917645
 ```
 
-The `WriteAck.acknowledgement` field decodes to
-`Ack{tag=0, inner=b"zkgm/v1: receiver not registered: unregistered-target"}`.
+The emitted events must include `PacketRecv` and `WriteAck`. This probe
+intentionally targets an unregistered receiver, so the acknowledgement is a
+failure ack while the transaction still succeeds.
 
-To exercise the **success** branch, register a Zkgmable receiver from a
-separate realm (`zkgm.RegisterReceiver(cur)`); the receiver's package
-path becomes the value to put into `Call.ContractAddress`.
+## 7. Recv Batch TokenOrders
 
-#### 6. `core.PacketRecv` with a `Batch[TokenOrder, TokenOrder]` — two vouchers
+Source: `tools/zkgm-fixtures/scripts/happy/recv_batch.gno`.
 
-Script: [`tools/zkgm-fixtures/scripts/happy/recv_batch.gno`](../../../../../tools/zkgm-fixtures/scripts/happy/recv_batch.gno).
-
-What it does: receives a Batch of two `TokenOrderV2{ESCROW}` orders with
-different base tokens and predicted quote token denoms. The
-destination self-match rule requires each `QuoteToken` to equal the local
-`PredictWrappedTokenV1(path=0, destinationChannel, baseToken)` result.
-`dispatchExecute`'s batch path runs each sub-instruction and assembles a
-`BatchAck` of per-instruction inner acks; the outer Ack envelope is
-success-tagged.
+Copy-paste transaction:
 
 ```sh
 printf '\n' | gnokey maketx run \
@@ -386,67 +215,15 @@ printf '\n' | gnokey maketx run \
   test1 tools/zkgm-fixtures/scripts/happy/recv_batch.gno
 ```
 
-Observed result:
+Verify:
 
-```
-source_channel 7
-destination_channel 8
+```txt
 alpha_denom ibc/<predicted-alpha>
 alpha_balance 11
 beta_denom ibc/<predicted-beta>
 beta_balance 22
 OK!
-GAS USED:   86294205
 ```
 
-Two separate `Transfer` events fire (one per voucher denom), and a
-single `WriteAck` commits the BatchAck.
-
----
-
-## Reference: raw fixture replay (does **not** reach a successful Send)
-
-`tools/zkgm-fixtures/scripts/gen-send-script.sh --all` renders one
-`maketx run` script per entry in `scenarios.json`. Replaying these unmodified
-produces deterministic realm-level panics — the fixtures carry decoder-side
-test values (`Sender = "alice"`, `Eureka = true`, `BaseToken = "ibc/v1-send"`,
-recursive Forward, etc.) that the Send path correctly rejects.
-
-| # | Scenario | Observed panic | Why |
-|---|---|---|---|
-| 1 | `recv_call_eureka_true` | `zkgm/v1: eureka mode not supported` | fixture sets `eureka=true`; v1 stub rejects |
-| 2 | `recv_call_eureka_false_empty_calldata` | `zkgm/v1: invalid call sender` | fixture `Sender="alice"` ≠ signer |
-| 3 | `recv_token_order_v2_initialize_protocol_fill` | `zkgm/coins: sent coin mismatch` | INITIALIZE needs direct realm `-send`; use `SendRaw` with `maketx call` for a positive source-side probe |
-| 4 | `recv_token_order_v2_escrow_protocol_fill` | `zkgm/voucher: not found: ibc/v1-send` | ESCROW needs a pre-minted voucher |
-| 5 | `recv_token_order_v2_unescrow_protocol_fill` | `zkgm/coins: sent coin mismatch` | UNESCROW (non-ibc denom) needs `-send` |
-| 6 | `recv_token_order_v2_solve_marketmaker_fill` | `zkgm/v1: solve token order not implemented` | v1 stub |
-| 7 | `recv_token_order_v1_legacy_protocol_fill` | `zkgm/v1: unsupported token order version` | dispatcher routes only V2 |
-| 8 | `recv_batch_empty` | `port not found` | empty batch passes verify, then PacketSend needs an open channel |
-| 9 | `recv_batch_call_then_token_order_escrow` | `zkgm/v1: eureka mode not supported` | first sub-instruction is `Call{eureka=true}` |
-| 10 | `recv_forward_single_hop_call` | `zkgm/v1: eureka mode not supported` | inner Call has `eureka=true` |
-| 11 | `recv_forward_recursive_two_hops_call` | `zkgm/v1: invalid forward instruction` | recursion rejected by v1 |
-
-Reproduce the entire table on a freshly booted `gnodev local`:
-
-```sh
-for name in $(jq -r '.[].name' gno.land/p/core/ibc/zkgm/testdata/scenarios.json); do
-  echo "===> $name"
-  GNOKEY_REMOTE=tcp://127.0.0.1:26657 GNOKEY_CHAINID=dev GNOKEY_KEYNAME=test1 \
-    tools/zkgm-fixtures/scripts/gen-send-script.sh "$name" --exec 2>&1 \
-    | grep -E '^(Data: |panic: )' | head -3
-  echo
-done
-```
-
-A diff against the table is a behavioral regression signal: the realm's
-rejection messages are stable, so any change in the line for an unchanged
-scenario is worth investigating before updating this document.
-
-## Updating this document
-
-- **Happy paths**: re-run every script/command in the Happy paths section
-  after any change to `send.gno`, `impl/`, the e2e helper, or `loader.gno`.
-  Copy fresh GAS / hash values into the observed-result blocks above.
-- **Reference table**: re-run the loop in the previous section after any
-  change to `scenarios.json` or to realm validation. A new panic line
-  there is the regression signal mentioned above.
+The emitted events must include `PacketRecv`, `WriteAck`, and GRC20 `Transfer`
+mints for both voucher denoms.

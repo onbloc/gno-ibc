@@ -1,6 +1,7 @@
 package cometbls
 
 import (
+	"bytes"
 	"testing"
 
 	cometblsp "gno.land/p/core/ibc/lightclients/cometbls"
@@ -52,6 +53,22 @@ func activeAdapterConsensusState() cometblsp.ConsensusState {
 
 func installAdapterClient(clientId core.ClientId, cs cometblsp.ClientState, cons cometblsp.ConsensusState) {
 	entries[clientId] = newAdapterClientEntry(cs, cons)
+}
+
+func TestWasmContractStoreKey(t *testing.T) {
+	var contractAddress cometblsp.H256
+	for i := 0; i < len(contractAddress); i++ {
+		contractAddress[i] = byte(i)
+	}
+	key := []byte{0xAA, 0xBB}
+
+	got := wasmContractStoreKey(contractAddress, key)
+	want := append([]byte{0x03}, contractAddress[:]...)
+	want = append(want, 0x00)
+	want = append(want, key...)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("wasmContractStoreKey: got %x want %x", got, want)
+	}
 }
 
 func TestMutatingEntrypointsRequireCoreCaller(t *testing.T) {

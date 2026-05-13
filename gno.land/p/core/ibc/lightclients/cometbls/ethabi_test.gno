@@ -60,25 +60,30 @@ func TestEncodeClientState(t *testing.T) {
 				word32(1000) +
 				word32(100) +
 				word32(0) +
-				word32(0),
+				word32(0) +
+				bytes32hex(0x00),
 		)
 		bytesEq(t, "EncodeClientState/basic", EncodeClientState(cs), want)
 	})
 
 	t.Run("with_heights", func(t *testing.T) {
+		var contractAddress [32]byte
+		copy(contractAddress[:], bytes.Repeat([]byte{0xAB}, 32))
 		cs := ClientState{
-			ChainID:        "chain",
-			TrustingPeriod: 100,
-			MaxClockDrift:  10,
-			FrozenHeight:   1,
-			LatestHeight:   999,
+			ChainID:         "chain",
+			TrustingPeriod:  100,
+			MaxClockDrift:   10,
+			FrozenHeight:    1,
+			LatestHeight:    999,
+			ContractAddress: contractAddress,
 		}
 		want := mustHex(
 			chainIDWord32("chain") +
 				word32(100) +
 				word32(10) +
 				word32(1) +
-				word32(999),
+				word32(999) +
+				bytes32hex(0xAB),
 		)
 		bytesEq(t, "EncodeClientState/with_heights", EncodeClientState(cs), want)
 	})
@@ -87,8 +92,8 @@ func TestEncodeClientState(t *testing.T) {
 		id := string(bytes.Repeat([]byte{'x'}, 32))
 		cs := ClientState{ChainID: id}
 		got := EncodeClientState(cs)
-		if len(got) != 5*wordSize {
-			t.Fatalf("want %d bytes got %d", 5*wordSize, len(got))
+		if len(got) != 6*wordSize {
+			t.Fatalf("want %d bytes got %d", 6*wordSize, len(got))
 		}
 		if string(got[:32]) != id {
 			t.Fatalf("chain_id mismatch")
@@ -220,7 +225,8 @@ func TestDecodeClientState(t *testing.T) {
 				word32(1000) +
 				word32(100) +
 				word32(0) +
-				word32(50),
+				word32(50) +
+				bytes32hex(0xCD),
 		)
 		got, err := DecodeClientState(buf)
 		if err != nil {
@@ -241,6 +247,9 @@ func TestDecodeClientState(t *testing.T) {
 		if got.LatestHeight != 50 {
 			t.Fatalf("LatestHeight: got %d want 50", got.LatestHeight)
 		}
+		if !bytes.Equal(got.ContractAddress[:], bytes.Repeat([]byte{0xCD}, 32)) {
+			t.Fatal("ContractAddress mismatch")
+		}
 	})
 
 	t.Run("frozen", func(t *testing.T) {
@@ -249,7 +258,8 @@ func TestDecodeClientState(t *testing.T) {
 				word32(100) +
 				word32(10) +
 				word32(1) +
-				word32(99),
+				word32(99) +
+				bytes32hex(0x00),
 		)
 		got, err := DecodeClientState(buf)
 		if err != nil {

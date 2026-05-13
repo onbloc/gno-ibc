@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"errors"
 
-	"gno.land/p/aib/ics23"
 	"gno.land/p/aib/ibc/types"
+	"gno.land/p/aib/ics23"
 )
 
 const (
@@ -204,6 +204,7 @@ func (c *CometBLSClient) RecoverClient(substitute *CometBLSClient) error {
 	c.cs.ChainID = substitute.cs.ChainID
 	c.cs.LatestHeight = subLatest
 	c.cs.TrustingPeriod = substitute.cs.TrustingPeriod
+	c.cs.ContractAddress = substitute.cs.ContractAddress
 	c.cs.FrozenHeight = 0
 	c.setConsensusState(subLatest, subConsState)
 	return nil

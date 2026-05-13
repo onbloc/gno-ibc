@@ -15,13 +15,14 @@ import (
 //   - Misbehaviour:   protobuf (ABI encoding is a TODO in Union)
 
 var (
-	// [0] chain_id bytes32  [1-4] uint64 × 4
+	// [0] chain_id bytes32  [1-4] uint64 × 4  [5] contract_address bytes32
 	clientStateSchema = abienc.Schema{Fields: []abienc.Field{
 		{Type: abienc.TypeBytes32},
 		{Type: abienc.TypeUint64},
 		{Type: abienc.TypeUint64},
 		{Type: abienc.TypeUint64},
 		{Type: abienc.TypeUint64},
+		{Type: abienc.TypeBytes32},
 	}}
 
 	// [0] timestamp uint64  [1-2] bytes32 × 2
@@ -51,12 +52,14 @@ func EncodeClientState(cs ClientState) []byte {
 		n = 32
 	}
 	copy(chainID[:], cs.ChainID[:n])
+	contractAddress := [32]byte(cs.ContractAddress)
 	buf, _ := abienc.Encode(clientStateSchema, []any{
 		chainID,
 		cs.TrustingPeriod,
 		cs.MaxClockDrift,
 		cs.FrozenHeight,
 		cs.LatestHeight,
+		contractAddress,
 	})
 	return buf
 }
@@ -77,6 +80,7 @@ func DecodeClientState(buf []byte) (ClientState, error) {
 	cs.MaxClockDrift = vals[2].(uint64)
 	cs.FrozenHeight = vals[3].(uint64)
 	cs.LatestHeight = vals[4].(uint64)
+	cs.ContractAddress = H256(vals[5].([32]byte))
 	return cs, nil
 }
 

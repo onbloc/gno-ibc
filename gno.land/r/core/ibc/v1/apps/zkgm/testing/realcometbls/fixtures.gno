@@ -192,11 +192,12 @@ func ExpiredClientStateBytes(cur realm) []byte {
 
 func clientStateBytes(trustingPeriod uint64, frozenHeight cometblsp.Height) []byte {
 	return cometblsp.EncodeClientState(cometblsp.ClientState{
-		ChainID:        DevnetChainID,
-		TrustingPeriod: trustingPeriod,
-		MaxClockDrift:  100 * 365 * 24 * 3600 * 1_000_000_000,
-		LatestHeight:   cometblsp.Height(DevnetHeight - 1),
-		FrozenHeight:   frozenHeight,
+		ChainID:         DevnetChainID,
+		TrustingPeriod:  trustingPeriod,
+		MaxClockDrift:   100 * 365 * 24 * 3600 * 1_000_000_000,
+		LatestHeight:    cometblsp.Height(DevnetHeight - 1),
+		FrozenHeight:    frozenHeight,
+		ContractAddress: mustH256("0cf2ffe8f45a20514018173d3007644817a9767dc0fbdb246696fd9c261ce3bc"),
 	})
 }
 
@@ -446,6 +447,16 @@ func mustHex(s string) []byte {
 		panic(err)
 	}
 	return bz
+}
+
+func mustH256(s string) cometblsp.H256 {
+	bz := mustHex(s)
+	if len(bz) != 32 {
+		panic("realcometbls: H256 must be 32 bytes")
+	}
+	var out cometblsp.H256
+	copy(out[:], bz)
+	return out
 }
 
 func cloneBytes(in []byte) []byte {

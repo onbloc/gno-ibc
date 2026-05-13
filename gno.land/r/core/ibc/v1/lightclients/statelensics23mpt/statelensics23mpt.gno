@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"errors"
 
+	"gno.land/p/core/ethereum/storage"
 	statelensp "gno.land/p/core/ibc/lightclients/statelensics23mpt"
 	"gno.land/r/core/ibc/v1/core"
 )
@@ -12,8 +13,10 @@ import (
 const ClientType core.ClientType = "08-state-lens-ics23-mpt"
 
 var (
-	ErrConsensusStateTooShort  = errors.New("statelensics23mpt: l2 consensus state too short")
-	ErrMembershipUnimplemented = errors.New("statelensics23mpt: storage membership verification not implemented")
+	ErrConsensusStateTooShort = errors.New("statelensics23mpt: l2 consensus state too short")
+	ErrInvalidCommitmentKey   = errors.New("statelensics23mpt: invalid commitment key")
+	ErrInvalidCommitmentValue = errors.New("statelensics23mpt: invalid commitment value")
+	ErrStoredValueMismatch    = errors.New("statelensics23mpt: stored value mismatch")
 )
 
 type clientEntry struct {
@@ -99,7 +102,32 @@ func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proo
 	if status != core.StatusActive {
 		panic("statelensics23mpt: client is not active")
 	}
-	panic(ErrMembershipUnimplemented)
+
+	e := getEntry(clientId)
+	consState, ok := e.consensusStates[statelensp.Height(height)]
+	if !ok {
+		panic("statelensics23mpt: consensus state not found at height " + height.String())
+	}
+	storageProof, err := storage.DecodeProof(proof)
+	if err != nil {
+		panic("statelensics23mpt: invalid storage proof: " + err.Error())
+	}
+	if err := verifyCommitmentKey(key, storageProof.Key); err != nil {
+		panic(err)
+	}
+	if len(value) != 32 {
+		panic(ErrInvalidCommitmentValue)
+	}
+	if !equalBytes(storageProof.Value, value) {
+		panic(ErrStoredValueMismatch)
+	}
+	if err := storage.VerifyProof(consState.StorageRoot, storage.Proof{
+		Key:   storageProof.Key,
+		Value: storageProof.Value,
+		Proof: storageProof.Proof,
+	}); err != nil {
+		panic("statelensics23mpt: storage membership verification failed: " + err.Error())
+	}
 }
 
 func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, proof, key []byte) {
@@ -108,7 +136,25 @@ func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, p
 	if status != core.StatusActive {
 		panic("statelensics23mpt: client is not active")
 	}
-	panic(ErrMembershipUnimplemented)
+
+	e := getEntry(clientId)
+	consState, ok := e.consensusStates[statelensp.Height(height)]
+	if !ok {
+		panic("statelensics23mpt: consensus state not found at height " + height.String())
+	}
+	storageProof, err := storage.DecodeProof(proof)
+	if err != nil {
+		panic("statelensics23mpt: invalid storage proof: " + err.Error())
+	}
+	if err := verifyCommitmentKey(key, storageProof.Key); err != nil {
+		panic(err)
+	}
+	if err := storage.VerifyAbsence(consState.StorageRoot, storage.Proof{
+		Key:   storageProof.Key,
+		Proof: storageProof.Proof,
+	}); err != nil {
+		panic("statelensics23mpt: storage non-membership verification failed: " + err.Error())
+	}
 }
 
 func (Adapter) GetTimestamp(clientId core.ClientId, height core.Height) core.Timestamp {
@@ -161,4 +207,27 @@ func extractBytes32(data []byte, offset int) ([]byte, error) {
 	out := make([]byte, 32)
 	copy(out, data[offset:offset+32])
 	return out, nil
+}
+
+func verifyCommitmentKey(path []byte, proofKey []byte) error {
+	expected, err := storage.IBCCommitmentKey(path)
+	if err != nil {
+		return ErrInvalidCommitmentKey
+	}
+	if !equalBytes(expected[:], proofKey) {
+		return ErrInvalidCommitmentKey
+	}
+	return nil
+}
+
+func equalBytes(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

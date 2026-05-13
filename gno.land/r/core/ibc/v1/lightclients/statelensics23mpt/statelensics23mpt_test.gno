@@ -5,6 +5,8 @@ import (
 	"crypto/keccak256"
 	"testing"
 
+	"gno.land/p/core/encoding/rlp"
+	"gno.land/p/core/ethereum/storage"
 	statelensp "gno.land/p/core/ibc/lightclients/statelensics23mpt"
 	"gno.land/p/nt/uassert/v0"
 	"gno.land/r/core/ibc/v1/core"
@@ -176,6 +178,97 @@ func TestVerifyMembershipRejectsInactiveBeforeProofDecode(t *testing.T) {
 	})
 }
 
+func TestVerifyMembershipStorageProof(t *testing.T) {
+	resetTestState()
+	l1ClientId := createMockL1Client()
+	lensClientId := core.ClientId(102)
+	path := bytes.Repeat([]byte{0x11}, 32)
+	value := storage.WordFromUint64(0xdeadbeef)
+	slot, err := storage.IBCCommitmentKey(path)
+	if err != nil {
+		t.Fatalf("IBCCommitmentKey: %v", err)
+	}
+	root, proofNodes := storageProofFixture(slot[:], value)
+
+	cs := statelensp.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
+	cons := statelensp.ConsensusState{
+		Timestamp:   1,
+		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
+		StorageRoot: root[:],
+	}
+	consBytes, err := statelensp.EncodeConsensusState(cons)
+	if err != nil {
+		t.Fatalf("EncodeConsensusState: %v", err)
+	}
+	adapter := Adapter{}
+	adapter.CreateClient(cross, lensClientId, statelensp.EncodeClientState(cs), consBytes)
+
+	proof := storage.EncodeProof(storage.Proof{
+		Key:   slot[:],
+		Value: value,
+		Proof: proofNodes,
+	})
+	adapter.VerifyMembership(lensClientId, core.Height(1), proof, path, value)
+}
+
+func TestVerifyNonMembershipStorageProof(t *testing.T) {
+	resetTestState()
+	l1ClientId := createMockL1Client()
+	lensClientId := core.ClientId(103)
+	path := bytes.Repeat([]byte{0x22}, 32)
+	slot, err := storage.IBCCommitmentKey(path)
+	if err != nil {
+		t.Fatalf("IBCCommitmentKey: %v", err)
+	}
+	emptyRoot := keccak256.Sum256(rlp.EncodeBytes(nil))
+
+	cs := statelensp.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
+	cons := statelensp.ConsensusState{
+		Timestamp:   1,
+		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
+		StorageRoot: emptyRoot[:],
+	}
+	consBytes, err := statelensp.EncodeConsensusState(cons)
+	if err != nil {
+		t.Fatalf("EncodeConsensusState: %v", err)
+	}
+	adapter := Adapter{}
+	adapter.CreateClient(cross, lensClientId, statelensp.EncodeClientState(cs), consBytes)
+
+	proof := storage.EncodeProof(storage.Proof{
+		Key:   slot[:],
+		Value: make([]byte, 32),
+	})
+	adapter.VerifyNonMembership(lensClientId, core.Height(1), proof, path)
+}
+
+func TestVerifyMembershipRejectsWrongCommitmentKey(t *testing.T) {
+	resetTestState()
+	l1ClientId := createMockL1Client()
+	lensClientId := core.ClientId(104)
+
+	cs := statelensp.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
+	cons := statelensp.ConsensusState{
+		Timestamp:   1,
+		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
+		StorageRoot: bytes.Repeat([]byte{0x02}, 32),
+	}
+	consBytes, err := statelensp.EncodeConsensusState(cons)
+	if err != nil {
+		t.Fatalf("EncodeConsensusState: %v", err)
+	}
+	adapter := Adapter{}
+	adapter.CreateClient(cross, lensClientId, statelensp.EncodeClientState(cs), consBytes)
+
+	proof := storage.EncodeProof(storage.Proof{
+		Key:   storage.WordFromUint64(2),
+		Value: storage.WordFromUint64(0xdeadbeef),
+	})
+	uassert.AbortsContains(t, ErrInvalidCommitmentKey.Error(), func(cur realm) {
+		adapter.VerifyMembership(lensClientId, core.Height(1), proof, bytes.Repeat([]byte{0x11}, 32), storage.WordFromUint64(0xdeadbeef))
+	})
+}
+
 func TestExtractConsensusStateRejectsShortData(t *testing.T) {
 	_, err := extractConsensusState([]byte{0x01}, statelensp.ClientState{
 		TimestampOffset:   0,
@@ -208,14 +301,47 @@ func cloneBytes(b []byte) []byte {
 	return out
 }
 
-func equalBytes(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
+func storageProofFixture(slot []byte, value []byte) ([32]byte, [][]byte) {
+	path, err := storage.StoragePath(slot)
+	if err != nil {
+		panic(err)
 	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
+	leaf := rlp.EncodeList(rlp.EncodeBytes(compactEncode(true, nibbles(path[:]))), rlp.EncodeBytes(mustStorageValue(value)))
+	root := keccak256.Sum256(leaf)
+	return root, [][]byte{leaf}
+}
+
+func mustStorageValue(value []byte) []byte {
+	out, err := storage.EncodeStorageValue(value)
+	if err != nil {
+		panic(err)
 	}
-	return true
+	return out
+}
+
+func nibbles(key []byte) []byte {
+	out := make([]byte, 0, len(key)*2)
+	for _, b := range key {
+		out = append(out, b>>4, b&0x0f)
+	}
+	return out
+}
+
+func compactEncode(leaf bool, ns []byte) []byte {
+	flag := byte(0)
+	if leaf {
+		flag = 2
+	}
+	odd := len(ns)%2 == 1
+	out := make([]byte, 0, (len(ns)+2)/2)
+	if odd {
+		out = append(out, (flag+1)<<4|ns[0])
+		ns = ns[1:]
+	} else {
+		out = append(out, flag<<4)
+	}
+	for i := 0; i < len(ns); i += 2 {
+		out = append(out, ns[i]<<4|ns[i+1])
+	}
+	return out
 }

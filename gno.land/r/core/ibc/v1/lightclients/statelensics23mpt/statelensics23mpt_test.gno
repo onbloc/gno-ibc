@@ -208,6 +208,25 @@ func TestGetStatusMirrorsL1Client(t *testing.T) {
 	}
 }
 
+func TestGetStatusReturnsFrozenWhenL1ClientMissing(t *testing.T) {
+	resetTestState()
+	lensClientId := core.ClientId(105)
+
+	cs := statelensp.ClientState{L2ChainID: "l2", L1ClientID: 999999, L2LatestHeight: 1}
+	cons := statelensp.ConsensusState{
+		Timestamp:   1,
+		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
+		StorageRoot: bytes.Repeat([]byte{0x02}, 32),
+	}
+	adapter := Adapter{}
+	installLensClient(lensClientId, cs, cons)
+
+	got := adapter.GetStatus(lensClientId)
+	if got != core.StatusFrozen {
+		t.Fatalf("GetStatus: got %d want %d", got, core.StatusFrozen)
+	}
+}
+
 func TestVerifyMembershipStorageProof(t *testing.T) {
 	resetTestState()
 	l1ClientId := createMockL1Client()

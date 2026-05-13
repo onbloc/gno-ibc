@@ -183,7 +183,8 @@ func (Adapter) GetLatestHeight(clientId core.ClientId) core.Height {
 }
 
 func (Adapter) GetStatus(clientId core.ClientId) core.Status {
-	return core.GetClientStatus(core.ClientId(getEntry(clientId).cs.L1ClientID))
+	l1ClientId := core.ClientId(getEntry(clientId).cs.L1ClientID)
+	return core.GetClientStatusOrFrozen(l1ClientId)
 }
 
 func extractConsensusState(data []byte, cs statelensp.ClientState) (statelensp.ConsensusState, error) {

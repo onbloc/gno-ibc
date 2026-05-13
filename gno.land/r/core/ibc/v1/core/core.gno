@@ -735,6 +735,16 @@ func HasClient(clientType ClientType) bool {
 	return ok
 }
 
+// GetClientStatusOrFrozen returns Frozen when the client status cannot be
+// resolved. State-lens clients use this to mirror Union's
+// ctx.status(l1_client_id).unwrap_or(Status::Frozen) behavior.
+func GetClientStatusOrFrozen(clientId ClientId) Status {
+	if _, ok := st.clientTypes[clientId]; !ok {
+		return StatusFrozen
+	}
+	return GetClientStatus(clientId)
+}
+
 // WriteAcknowledgement drains a pending async acknowledgement saved when an
 // app's OnRecvPacket returned PacketStatusAsync. It commits the acknowledgement
 // against the packet's destination channel, emits WriteAck, and clears the

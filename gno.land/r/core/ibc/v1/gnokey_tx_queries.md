@@ -218,6 +218,37 @@ Expected output includes:
 registered true
 ```
 
+## Relayer State Queries
+
+These are read-only ABCI queries. They do not submit transactions.
+
+```sh
+gnokey query vm/qeval -remote tcp://127.0.0.1:26657 \
+  -data 'gno.land/r/core/ibc/v1/core.GetClientType(1)'
+
+gnokey query vm/qeval -remote tcp://127.0.0.1:26657 \
+  -data 'gno.land/r/core/ibc/v1/core.QueryClientState(1)'
+
+gnokey query vm/qeval -remote tcp://127.0.0.1:26657 \
+  -data 'gno.land/r/core/ibc/v1/core.QueryConsensusState(1, 100)'
+
+gnokey query vm/qeval -remote tcp://127.0.0.1:26657 \
+  -data 'gno.land/r/core/ibc/v1/core.QueryConnection(1)'
+
+gnokey query vm/qeval -remote tcp://127.0.0.1:26657 \
+  -data 'gno.land/r/core/ibc/v1/core.QueryChannel(1)'
+```
+
+Expected formats:
+
+- `GetClientType` returns the registered client type string.
+- `QueryClientState` and `QueryConsensusState` return the stored client bytes as
+  `0x` hex.
+- `QueryConnection` and `QueryChannel` return ethabi-encoded struct bytes as
+  `0x` hex.
+- `QueryBatchPackets` and `QueryBatchReceipts` return stored `H256` values as
+  `0x` hex. They take a `core.H256` batch hash argument.
+
 ## Decode ABCI Data
 
 ABCI proof queries use `path=".store/main/key"` and `data=0x...`, where

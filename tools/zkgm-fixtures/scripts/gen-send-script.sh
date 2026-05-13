@@ -41,7 +41,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
 DEFAULT_SCENARIOS="$REPO_ROOT/gno.land/p/core/ibc/zkgm/testdata/scenarios.json"
-TEMPLATE="$SCRIPT_DIR/send_template.gno"
+TEMPLATE="$SCRIPT_DIR/send_template.gno.tmpl"
 OUT_DIR="$SCRIPT_DIR/out"
 SCENARIOS_PATH="$DEFAULT_SCENARIOS"
 SELECT="" # empty = require --all or a name

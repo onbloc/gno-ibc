@@ -231,6 +231,7 @@ func CreateClient(_ realm, msg MsgCreateClient) ClientId {
 
 	chain.Emit(CreateClientEvent,
 		"client_id", clientId.String(),
+		"client_type", string(msg.ClientType),
 	)
 	return clientId
 }

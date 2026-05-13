@@ -344,6 +344,15 @@ func TestGetClientStateReturnsStoredBytes(t *testing.T) {
 	}
 }
 
+func TestQueryClientStateUnknownReturnsEmpty(t *testing.T) {
+	resetState()
+
+	got := QueryClientState(ClientId(999))
+	if got != "" {
+		t.Errorf("QueryClientState: got %q want empty", got)
+	}
+}
+
 func TestGetClientTypeReturnsRegisteredType(t *testing.T) {
 	resetState()
 	st.clientTypes[ClientId(1)] = mockType
@@ -370,6 +379,18 @@ func TestGetConsensusStateReturnsStoredBytes(t *testing.T) {
 	got := QueryConsensusState(ClientId(1), Height(10))
 	if got != "0x636f6e73656e7375732d7374617465" {
 		t.Errorf("GetConsensusState: got %q want hex consensus-state", got)
+	}
+}
+
+func TestQueryConsensusStateUnknownReturnsEmpty(t *testing.T) {
+	resetState()
+	st.saveConsensusState(ClientId(1), Height(10), []byte("consensus-state"))
+
+	if got := QueryConsensusState(ClientId(999), Height(10)); got != "" {
+		t.Errorf("QueryConsensusState unknown client: got %q want empty", got)
+	}
+	if got := QueryConsensusState(ClientId(1), Height(999)); got != "" {
+		t.Errorf("QueryConsensusState unknown height: got %q want empty", got)
 	}
 }
 
@@ -441,6 +462,15 @@ func TestGetConnectionNotFoundPanics(t *testing.T) {
 	mustPanic(t, func() { st.getConnection(ConnectionId(999)) })
 }
 
+func TestQueryConnectionUnknownReturnsEmpty(t *testing.T) {
+	resetState()
+
+	got := QueryConnection(ConnectionId(999))
+	if got != "" {
+		t.Errorf("QueryConnection: got %q want empty", got)
+	}
+}
+
 func TestConnectionStateSaved(t *testing.T) {
 	resetState()
 	id := st.generateConnectionId()
@@ -482,6 +512,15 @@ func TestSaveAndGetChannel(t *testing.T) {
 func TestGetChannelNotFoundPanics(t *testing.T) {
 	resetState()
 	mustPanic(t, func() { st.getChannel(ChannelId(999)) })
+}
+
+func TestQueryChannelUnknownReturnsEmpty(t *testing.T) {
+	resetState()
+
+	got := QueryChannel(ChannelId(999))
+	if got != "" {
+		t.Errorf("QueryChannel: got %q want empty", got)
+	}
 }
 
 // --- State: packet commitment ---
@@ -542,6 +581,16 @@ func TestBatchSendReturnsUnionPacketCommitment(t *testing.T) {
 	}
 }
 
+func TestQueryBatchPacketsUnknownReturnsEmpty(t *testing.T) {
+	resetState()
+
+	var batchHash H256
+	got := QueryBatchPackets(batchHash)
+	if got != "" {
+		t.Errorf("QueryBatchPackets: got %q want empty", got)
+	}
+}
+
 func TestBatchSendRejectsEmptyPacketList(t *testing.T) {
 	resetState()
 	uassert.AbortsContains(t, "not enough packets", func(cur realm) {
@@ -565,6 +614,16 @@ func TestBatchAcksReturnsUnionPacketCommitment(t *testing.T) {
 	wantAck := CommitAcks([][]byte{[]byte("ack-a"), []byte("ack-b")})
 	if got := QueryBatchReceipts(want); got != wantAck.String() {
 		t.Errorf("GetBatchReceipts: got %s want %s", got, wantAck)
+	}
+}
+
+func TestQueryBatchReceiptsUnknownReturnsEmpty(t *testing.T) {
+	resetState()
+
+	var batchHash H256
+	got := QueryBatchReceipts(batchHash)
+	if got != "" {
+		t.Errorf("QueryBatchReceipts: got %q want empty", got)
 	}
 }
 

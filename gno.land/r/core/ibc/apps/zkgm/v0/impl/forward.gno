@@ -183,17 +183,17 @@ func channelToClient(numericID uint32) string {
 	return "client-" + strconv.FormatUint(uint64(numericID), 10)
 }
 
-func clientToChannel(clientID string) uint32 {
+func clientToChannel(clientID string) (uint32, bool) {
 	// TODO: replace with the same registry as channelToClient. This parser only
 	// supports the temporary "client-<id>" test/e2e convention.
 	if !strings.HasPrefix(clientID, "client-") {
-		return 0
+		return 0, false
 	}
-	n, err := strconv.Atoi(clientID[len("client-"):])
-	if err != nil || n < 0 {
-		return 0
+	n, err := strconv.ParseUint(clientID[len("client-"):], 10, 32)
+	if err != nil {
+		return 0, false
 	}
-	return uint32(n)
+	return uint32(n), true
 }
 
 func decodeForwardInstruction(instr z.Instruction) (z.Forward, error) {

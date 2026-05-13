@@ -258,6 +258,9 @@ func (v *ZkgmV0) acknowledgeTokenOrderV2(sourceClient string, path *u256.Uint, o
 		image, _ := zkgm.GetMetadataImageOf(baseDenom)
 		return mintVoucher(cross, baseDenom, baseDenom, image, marketMaker, order.BaseAmount)
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
+		if _, err := amountInt64(order.BaseAmount); err != nil {
+			return err
+		}
 		if err := decreaseChannelBalanceV2(cross, sourceClient, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
 			return err
 		}
@@ -274,6 +277,9 @@ func (v *ZkgmV0) refundV2(sourceClient string, path *u256.Uint, order z.TokenOrd
 		image, _ := zkgm.GetMetadataImageOf(baseDenom)
 		return mintVoucher(cross, baseDenom, baseDenom, image, string(order.Sender), order.BaseAmount)
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
+		if _, err := amountInt64(order.BaseAmount); err != nil {
+			return err
+		}
 		if err := decreaseChannelBalanceV2(cross, sourceClient, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
 			return err
 		}
@@ -333,8 +339,8 @@ func universalErrorAck() []byte {
 }
 
 func tokenOrderDestinationChannel(clientID string) (uint32, error) {
-	destChan := clientToChannel(clientID)
-	if destChan == 0 {
+	destChan, ok := clientToChannel(clientID)
+	if !ok || destChan == 0 {
 		return 0, errors.New("zkgm/v0: invalid token order destination client")
 	}
 	return destChan, nil

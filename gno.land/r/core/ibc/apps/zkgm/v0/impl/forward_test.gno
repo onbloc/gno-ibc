@@ -215,8 +215,15 @@ func TestForwardChildTimeoutClearsInFlight(cur realm, t *testing.T) {
 
 func TestChannelClientRoundTrip(t *testing.T) {
 	uassert.Equal(t, "client-42", channelToClient(42))
-	uassert.Equal(t, uint32(42), clientToChannel("client-42"))
-	uassert.Equal(t, uint32(0), clientToChannel("07-tendermint-0"))
+	channel, ok := clientToChannel("client-42")
+	uassert.True(t, ok)
+	uassert.Equal(t, uint32(42), channel)
+
+	_, ok = clientToChannel("07-tendermint-0")
+	uassert.False(t, ok)
+
+	_, ok = clientToChannel("client-4294967297")
+	uassert.False(t, ok)
 }
 
 func TestSanityOriginCallerSingleChainNHopStability(cur realm, t *testing.T) {

@@ -247,6 +247,9 @@ func (v *ZkgmV1) acknowledgeTokenOrderV2(sourceChannelId core.ChannelId, path *u
 		image, _ := zkgm.GetMetadataImageOf(baseDenom)
 		return mintVoucher(cross, baseDenom, baseDenom, image, marketMaker, order.BaseAmount)
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
+		if _, err := amountInt64(order.BaseAmount); err != nil {
+			return err
+		}
 		if err := decreaseChannelBalanceV2(cross, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
 			return err
 		}
@@ -263,6 +266,9 @@ func (v *ZkgmV1) refundV2(sourceChannelId core.ChannelId, path *u256.Uint, order
 		image, _ := zkgm.GetMetadataImageOf(baseDenom)
 		return mintVoucher(cross, baseDenom, baseDenom, image, string(order.Sender), order.BaseAmount)
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
+		if _, err := amountInt64(order.BaseAmount); err != nil {
+			return err
+		}
 		if err := decreaseChannelBalanceV2(cross, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
 			return err
 		}

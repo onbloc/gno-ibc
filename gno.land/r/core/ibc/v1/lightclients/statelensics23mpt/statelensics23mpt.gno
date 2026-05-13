@@ -121,7 +121,7 @@ func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proo
 	if !equalBytes(storageProof.Value, value) {
 		panic(ErrStoredValueMismatch)
 	}
-	if err := storage.VerifyProof(consState.StorageRoot, storage.Proof{
+	if err := storage.VerifyProof(copyBytes(consState.StorageRoot), storage.Proof{
 		Key:   storageProof.Key,
 		Value: storageProof.Value,
 		Proof: storageProof.Proof,
@@ -149,7 +149,7 @@ func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, p
 	if err := verifyCommitmentKey(key, storageProof.Key); err != nil {
 		panic(err)
 	}
-	if err := storage.VerifyAbsence(consState.StorageRoot, storage.Proof{
+	if err := storage.VerifyAbsence(copyBytes(consState.StorageRoot), storage.Proof{
 		Key:   storageProof.Key,
 		Proof: storageProof.Proof,
 	}); err != nil {
@@ -230,4 +230,12 @@ func equalBytes(a, b []byte) bool {
 		}
 	}
 	return true
+}
+
+func copyBytes(b []byte) []byte {
+	out := make([]byte, len(b))
+	for i := range b {
+		out[i] = b[i]
+	}
+	return out
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/keccak256"
 	"testing"
 
+	"gno.land/p/core/encoding/abi"
 	"gno.land/p/core/encoding/rlp"
 	"gno.land/p/core/ethereum/storage"
 	statelensp "gno.land/p/core/ibc/lightclients/statelensics23mpt"
@@ -46,6 +47,27 @@ func (mockL1Client) GetTimestamp(_ core.ClientId, _ core.Height) core.Timestamp 
 func (mockL1Client) GetLatestHeight(_ core.ClientId) core.Height                     { return 0 }
 func (mockL1Client) GetStatus(_ core.ClientId) core.Status                           { return mockL1Status }
 
+type flowApp struct {
+	recvCount int
+}
+
+func (a *flowApp) OnChannelOpenInit(_ core.ConnectionId, _ core.ChannelId, _ string, _ address) {
+}
+func (a *flowApp) OnChannelOpenTry(_ core.ConnectionId, _ core.ChannelId, _, _ string, _ address) {
+}
+func (a *flowApp) OnChannelOpenAck(_ core.ChannelId, _ core.ChannelId, _ string, _ address) {}
+func (a *flowApp) OnChannelOpenConfirm(_ core.ChannelId, _ address)                         {}
+func (a *flowApp) OnChannelCloseInit(_ core.ChannelId, _ address)                           {}
+func (a *flowApp) OnChannelCloseConfirm(_ core.ChannelId, _ address)                        {}
+func (a *flowApp) OnRecvPacket(_ core.Packet, _ address, _ []byte) core.RecvPacketResult {
+	a.recvCount++
+	return core.RecvPacketResult{Status: core.PacketStatusSuccess, Ack: []byte{0x01}}
+}
+func (a *flowApp) OnIntentRecvPacket(_ core.Packet, _ address, _ []byte) {}
+func (a *flowApp) OnAcknowledgementPacket(_ core.Packet, _ []byte, _ address) {
+}
+func (a *flowApp) OnTimeoutPacket(_ core.Packet, _ address) {}
+
 func resetTestState() {
 	entries = make(map[core.ClientId]*clientEntry)
 	mockL1Status = core.StatusActive
@@ -57,6 +79,9 @@ func resetTestState() {
 	wantValue = nil
 	if !core.HasClient(mockL1ClientType) {
 		core.RegisterClient(cross, mockL1ClientType, mockL1Client{})
+	}
+	if !core.HasClient(ClientType) {
+		core.RegisterClient(cross, ClientType, Adapter{})
 	}
 }
 
@@ -269,6 +294,117 @@ func TestVerifyMembershipRejectsWrongCommitmentKey(t *testing.T) {
 	})
 }
 
+func TestPacketRecvUsesStateLensStorageProof(t *testing.T) {
+	resetTestState()
+	l1ClientId := createMockL1Client()
+	l2ClientId := core.ClientId(77)
+	counterpartyClientId := core.ClientId(88)
+	counterpartyConnectionId := core.ConnectionId(99)
+	counterpartyChannelId := core.ChannelId(100)
+	portId := []byte("statelens-flow-port")
+	app := &flowApp{}
+	if !core.HasApp(portId) {
+		core.RegisterApp(cross, portId, app)
+	}
+
+	cs := statelensp.ClientState{
+		L2ChainID:         "l2",
+		L1ClientID:        uint32(l1ClientId),
+		L2ClientID:        uint32(l2ClientId),
+		L2LatestHeight:    1,
+		TimestampOffset:   64,
+		StateRootOffset:   0,
+		StorageRootOffset: 32,
+	}
+	cons := statelensp.ConsensusState{
+		Timestamp:   1,
+		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
+		StorageRoot: bytes.Repeat([]byte{0x02}, 32),
+	}
+	consBytes, err := statelensp.EncodeConsensusState(cons)
+	if err != nil {
+		t.Fatalf("EncodeConsensusState: %v", err)
+	}
+	lensClientId := core.CreateClient(cross, core.MsgCreateClient{
+		ClientType:          ClientType,
+		ClientStateBytes:    statelensp.EncodeClientState(cs),
+		ConsensusStateBytes: consBytes,
+	})
+
+	connInit := core.Connection{
+		State:                    core.ConnectionStateInit,
+		ClientId:                 counterpartyClientId,
+		CounterpartyClientId:     lensClientId,
+		CounterpartyConnectionId: 0,
+	}
+	connInitKey := core.ConnectionPath(counterpartyConnectionId)
+	connInitValue := hashBytes(connInit.EthAbiEncode())
+	_, proof := updateLensRootForPathValue(t, lensClientId, l1ClientId, l2ClientId, 2, connInitKey[:], connInitValue[:])
+	connectionId := core.ConnectionOpenTry(cross, core.MsgConnectionOpenTry{
+		ClientId:                 lensClientId,
+		CounterpartyClientId:     counterpartyClientId,
+		CounterpartyConnectionId: counterpartyConnectionId,
+		ProofInit:                proof,
+		ProofHeight:              2,
+	})
+
+	connOpen := core.Connection{
+		State:                    core.ConnectionStateOpen,
+		ClientId:                 counterpartyClientId,
+		CounterpartyClientId:     lensClientId,
+		CounterpartyConnectionId: connectionId,
+	}
+	connOpenValue := hashBytes(connOpen.EthAbiEncode())
+	_, proof = updateLensRootForPathValue(t, lensClientId, l1ClientId, l2ClientId, 3, connInitKey[:], connOpenValue[:])
+	core.ConnectionOpenConfirm(cross, core.MsgConnectionOpenConfirm{
+		ConnectionId: connectionId,
+		ProofAck:     proof,
+		ProofHeight:  3,
+	})
+
+	channelId := core.ChannelOpenInit(cross, core.MsgChannelOpenInit{
+		PortId:             portId,
+		CounterpartyPortId: []byte("counterparty-port"),
+		ConnectionId:       connectionId,
+		Version:            "ics-test-1",
+	})
+
+	channelKey := core.ChannelPath(counterpartyChannelId)
+	channelTryValue := hashChannel(t, core.ChannelStateTryOpen, counterpartyConnectionId, channelId, portId, "ics-test-1")
+	_, proof = updateLensRootForPathValue(t, lensClientId, l1ClientId, l2ClientId, 4, channelKey[:], channelTryValue[:])
+	core.ChannelOpenAck(cross, core.MsgChannelOpenAck{
+		ChannelId:             channelId,
+		CounterpartyVersion:   "ics-test-1",
+		CounterpartyChannelId: counterpartyChannelId,
+		ProofTry:              proof,
+		ProofHeight:           4,
+	})
+
+	packet := core.Packet{
+		SourceChannelId:      counterpartyChannelId,
+		DestinationChannelId: channelId,
+		Data:                 []byte("payload"),
+		TimeoutTimestamp:     100,
+	}
+	packetKey := core.BatchPacketsPath(core.CommitPackets([]core.Packet{packet}))
+	_, proof = updateLensRootForPathValue(t, lensClientId, l1ClientId, l2ClientId, 5, packetKey[:], core.COMMITMENT_MAGIC[:])
+	core.PacketRecv(cross, core.MsgPacketRecv{
+		Packets:     []core.Packet{packet},
+		Proof:       proof,
+		ProofHeight: 5,
+	})
+
+	if app.recvCount != 1 {
+		t.Fatalf("OnRecvPacket calls: got %d want 1", app.recvCount)
+	}
+	if !core.HasPacketReceipt(cross, packet) {
+		t.Fatal("PacketRecv must set packet receipt after state-lens proof verification")
+	}
+	if !core.HasAcknowledgement(cross, packet) {
+		t.Fatal("PacketRecv must commit acknowledgement after state-lens proof verification")
+	}
+}
+
 func TestExtractConsensusStateRejectsShortData(t *testing.T) {
 	_, err := extractConsensusState([]byte{0x01}, statelensp.ClientState{
 		TimestampOffset:   0,
@@ -309,6 +445,71 @@ func storageProofFixture(slot []byte, value []byte) ([32]byte, [][]byte) {
 	leaf := rlp.EncodeList(rlp.EncodeBytes(compactEncode(true, nibbles(path[:]))), rlp.EncodeBytes(mustStorageValue(value)))
 	root := keccak256.Sum256(leaf)
 	return root, [][]byte{leaf}
+}
+
+func proofForPathValue(t *testing.T, path []byte, value []byte) ([32]byte, []byte) {
+	t.Helper()
+	slot, err := storage.IBCCommitmentKey(path)
+	if err != nil {
+		t.Fatalf("IBCCommitmentKey: %v", err)
+	}
+	root, nodes := storageProofFixture(slot[:], value)
+	return root, storage.EncodeProof(storage.Proof{
+		Key:   slot[:],
+		Value: value,
+		Proof: nodes,
+	})
+}
+
+func updateLensRootForPathValue(t *testing.T, lensClientId core.ClientId, l1ClientId core.ClientId, l2ClientId core.ClientId, height uint64, path []byte, value []byte) ([32]byte, []byte) {
+	t.Helper()
+	root, proof := proofForPathValue(t, path, value)
+	l2Consensus := makeConsensusBytes(height, bytes.Repeat([]byte{0xaa}, 32), root[:])
+	header := statelensp.Header{
+		L1Height:              height,
+		L2Height:              height,
+		L2ConsensusStateProof: []byte{byte(height)},
+		L2ConsensusState:      l2Consensus,
+	}
+	wantPath := core.ConsensusStatePath(l2ClientId, core.Height(height))
+	wantValueHash := keccak256.Sum256(l2Consensus)
+	wantMembershipCheck = true
+	wantClientId = l1ClientId
+	wantHeight = core.Height(height)
+	wantProof = cloneBytes(header.L2ConsensusStateProof)
+	wantKey = cloneBytes(wantPath[:])
+	wantValue = cloneBytes(wantValueHash[:])
+	core.UpdateClient(cross, core.MsgUpdateClient{
+		ClientId:      lensClientId,
+		ClientMessage: statelensp.EncodeHeader(header),
+	})
+	return root, proof
+}
+
+func hashBytes(b []byte) [32]byte {
+	return keccak256.Sum256(b)
+}
+
+func hashChannel(t *testing.T, state core.ChannelState, connectionId core.ConnectionId, counterpartyChannelId core.ChannelId, counterpartyPortId []byte, version string) [32]byte {
+	t.Helper()
+	schema := abi.Schema{Fields: []abi.Field{
+		{Type: abi.TypeUint8},
+		{Type: abi.TypeUint32},
+		{Type: abi.TypeUint32},
+		{Type: abi.TypeBytes},
+		{Type: abi.TypeString},
+	}}
+	bz, err := abi.Encode(schema, []any{
+		uint8(state),
+		uint32(connectionId),
+		uint32(counterpartyChannelId),
+		counterpartyPortId,
+		version,
+	})
+	if err != nil {
+		t.Fatalf("Encode channel: %v", err)
+	}
+	return keccak256.Sum256(bz)
 }
 
 func mustStorageValue(value []byte) []byte {

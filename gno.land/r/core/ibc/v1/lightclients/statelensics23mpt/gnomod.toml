@@ -2,6 +2,7 @@ module = "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
 gno = "0.9"
 
 [require]
+"gno.land/p/core/encoding/abi" = "v0.0.0"
 "gno.land/p/core/encoding/rlp" = "v0.0.0"
 "gno.land/p/core/ethereum/storage" = "v0.0.0"
 "gno.land/p/core/ibc/lightclients/statelensics23mpt" = "v0.0.0"

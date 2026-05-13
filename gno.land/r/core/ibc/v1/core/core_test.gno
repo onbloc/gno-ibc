@@ -1016,16 +1016,11 @@ func TestGetClientStatusDelegatesToClient(t *testing.T) {
 	}
 }
 
-func TestGetClientStatusOrFrozen(t *testing.T) {
+func TestGetClientStatusReturnsUnknownForMissingClient(t *testing.T) {
 	resetState()
-	st.clientRegistry[mockType] = &mockClient{chainId: "union-1", status: StatusActive}
-	st.clientTypes[ClientId(4)] = mockType
 
-	if got := GetClientStatusOrFrozen(ClientId(4)); got != StatusActive {
-		t.Fatalf("GetClientStatusOrFrozen existing: got %d want %d", got, StatusActive)
-	}
-	if got := GetClientStatusOrFrozen(ClientId(5)); got != StatusFrozen {
-		t.Fatalf("GetClientStatusOrFrozen missing: got %d want %d", got, StatusFrozen)
+	if got := GetClientStatus(ClientId(5)); got != StatusUnknown {
+		t.Fatalf("GetClientStatus missing: got %d want %d", got, StatusUnknown)
 	}
 }
 

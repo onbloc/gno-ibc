@@ -693,6 +693,9 @@ func VerifyClientMembership(_ realm, clientId ClientId, proofHeight Height, proo
 // client. Lens clients use this to mirror the status of the underlying L1
 // client they depend on.
 func GetClientStatus(clientId ClientId) Status {
+	if _, ok := st.clientTypes[clientId]; !ok {
+		return StatusUnknown
+	}
 	return st.getClient(clientId).GetStatus(clientId)
 }
 
@@ -733,16 +736,6 @@ func HasApp(portId []byte) bool {
 func HasClient(clientType ClientType) bool {
 	_, ok := st.clientRegistry[clientType]
 	return ok
-}
-
-// GetClientStatusOrFrozen returns Frozen when the client status cannot be
-// resolved. State-lens clients use this to mirror Union's
-// ctx.status(l1_client_id).unwrap_or(Status::Frozen) behavior.
-func GetClientStatusOrFrozen(clientId ClientId) Status {
-	if _, ok := st.clientTypes[clientId]; !ok {
-		return StatusFrozen
-	}
-	return GetClientStatus(clientId)
 }
 
 // WriteAcknowledgement drains a pending async acknowledgement saved when an

@@ -62,17 +62,18 @@ func refundOrder(sender string, baseToken string, quoteToken string, amount uint
 
 func mintWrappedVoucher(receiver string, amount uint64) string {
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{Implementation: []byte("grc20"), Initializer: []byte("batch-timeout")})
+	quoteToken := impl.PredictWrappedTokenV2(nil, 1, []byte("ugnot"), impl.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
 	order := z.TokenOrderV2{
 		Receiver:    []byte(receiver),
 		BaseToken:   []byte("ugnot"),
 		BaseAmount:  u256.NewUint(amount),
-		QuoteToken:  []byte("quote"),
+		QuoteToken:  []byte(quoteToken),
 		QuoteAmount: u256.NewUint(amount),
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	zkgm.AsIBCApp().OnRecvPacket(cross, "client-a", "client-b", 1, mustOrderPayload(order))
-	return impl.PredictWrappedTokenV2("client-b", order.BaseToken, impl.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
+	zkgm.AsIBCApp().OnRecvPacket(cross, "client-a", "client-1", 1, mustOrderPayload(order))
+	return quoteToken
 }
 
 func mustBatchInstruction(batch z.Batch) z.Instruction {

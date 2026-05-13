@@ -17,7 +17,7 @@ func TestVerifyBatchRejectsNestedBatch(cur realm, t *testing.T) {
 		Opcode:  z.OP_BATCH,
 	}}}
 
-	err := (&ZkgmV1{}).verifyBatch(core.ChannelId(1), "sender", nil, [32]byte{}, batch)
+	err := (&ZkgmV1{}).verifyBatch(core.ChannelId(1), "sender", nil, u256.Zero(), [32]byte{}, batch)
 
 	uassert.ErrorContains(t, err, "invalid batch instruction")
 }
@@ -28,7 +28,7 @@ func TestVerifyBatchPassesAllowedCallChildren(cur realm, t *testing.T) {
 		batchMustCallInstruction(batchCall("sender", "b")),
 	}}
 
-	err := (&ZkgmV1{}).verifyBatch(core.ChannelId(1), "sender", nil, [32]byte{}, batch)
+	err := (&ZkgmV1{}).verifyBatch(core.ChannelId(1), "sender", nil, u256.Zero(), [32]byte{}, batch)
 
 	uassert.NoError(t, err)
 }

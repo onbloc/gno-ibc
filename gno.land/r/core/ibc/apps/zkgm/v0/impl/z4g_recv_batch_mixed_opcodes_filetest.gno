@@ -19,18 +19,20 @@ func main() {
 		Implementation: []byte("grc20"),
 		Initializer:    []byte("init"),
 	})
+	image := impl.MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	ibcDenom := impl.PredictWrappedTokenV2(u256.NewUint(7), 1, []byte("ugnot"), image)
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	order := z.TokenOrderV2{
 		Receiver:    []byte(receiver),
 		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(100),
-		QuoteToken:  []byte("quote"),
+		BaseAmount:  u256.NewUint(95),
+		QuoteToken:  []byte(ibcDenom),
 		QuoteAmount: u256.NewUint(95),
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
 
-	res := zkgm.AsIBCApp().OnRecvPacket(cross, "client-a", "client-b", 1, mustBatchPayload(z.Batch{
+	res := zkgm.AsIBCApp().OnRecvPacket(cross, "client-a", "client-1", 1, mustBatchPayload(z.Batch{
 		Instructions: []z.Instruction{
 			mustCallInstruction("call-payload"),
 			mustOrderInstruction(order),
@@ -44,9 +46,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	image := impl.MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	ibcDenom := impl.PredictWrappedTokenV2("client-b", order.BaseToken, image)
-
 	println("status", int(res.Status))
 	println("outer_ack_tag", outerAck.Tag.Dec())
 	println("child_acks", len(batchAck.Acknowledgements))

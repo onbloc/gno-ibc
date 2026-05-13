@@ -4,6 +4,7 @@ import (
 	"crypto/keccak256"
 	"encoding/hex"
 
+	abi "gno.land/p/core/encoding/abi"
 	z "gno.land/p/gnoswap/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 )
@@ -11,31 +12,46 @@ import (
 const ibcDenomPrefix = "ibc/"
 
 const (
-	tagZkgmV1     = "ZKGM_V1"
-	tagZkgmV2     = "ZKGM_V2"
-	tagCallProxy  = "ZKGM_CALL_PROXY"
+	tagCallProxy = "ZKGM_CALL_PROXY"
 )
 
+var predictV1Schema = abi.Schema{Fields: []abi.Field{
+	{Type: abi.TypeUint256},
+	{Type: abi.TypeUint32},
+	{Type: abi.TypeBytes},
+}}
+
+var predictV2Schema = abi.Schema{Fields: []abi.Field{
+	{Type: abi.TypeUint256},
+	{Type: abi.TypeUint32},
+	{Type: abi.TypeBytes},
+	{Type: abi.TypeUint256},
+}}
+
 // PredictWrappedTokenV1 derives the wrapped IBC denom for a v1 token order.
-func PredictWrappedTokenV1(channelID string, baseToken []byte) string {
-	buf := make([]byte, 0, len(tagZkgmV1)+len(channelID)+len(baseToken))
-	buf = append(buf, tagZkgmV1...)
-	buf = append(buf, channelID...)
-	buf = append(buf, baseToken...)
-	h := keccak256.Sum256(buf)
+func PredictWrappedTokenV1(path *u256.Uint, channelID uint32, baseToken []byte) string {
+	if path == nil {
+		path = u256.Zero()
+	}
+	bz, err := abi.Encode(predictV1Schema, []any{path, channelID, baseToken})
+	if err != nil {
+		panic(err)
+	}
+	h := keccak256.Sum256(bz)
 	return ibcDenomPrefix + hex.EncodeToString(h[:20])
 }
 
-// PredictWrappedTokenV2 derives the wrapped IBC denom for a v2 token order,
-// binding the on-chain denom to the metadata image so different metadata
-// produces a distinct wrapped token.
-func PredictWrappedTokenV2(channelID string, baseToken []byte, metadataImage [32]byte) string {
-	buf := make([]byte, 0, len(tagZkgmV2)+len(channelID)+len(baseToken)+len(metadataImage))
-	buf = append(buf, tagZkgmV2...)
-	buf = append(buf, channelID...)
-	buf = append(buf, baseToken...)
-	buf = append(buf, metadataImage[:]...)
-	h := keccak256.Sum256(buf)
+// PredictWrappedTokenV2 derives the wrapped IBC denom for a v2 token order.
+func PredictWrappedTokenV2(path *u256.Uint, channelID uint32, baseToken []byte, metadataImage [32]byte) string {
+	if path == nil {
+		path = u256.Zero()
+	}
+	image := new(u256.Uint).SetBytes(metadataImage[:])
+	bz, err := abi.Encode(predictV2Schema, []any{path, channelID, baseToken, image})
+	if err != nil {
+		panic(err)
+	}
+	h := keccak256.Sum256(bz)
 	return ibcDenomPrefix + hex.EncodeToString(h[:20])
 }
 

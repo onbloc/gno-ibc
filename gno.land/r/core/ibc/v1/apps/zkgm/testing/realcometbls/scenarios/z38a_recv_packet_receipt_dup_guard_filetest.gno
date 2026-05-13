@@ -35,10 +35,20 @@ func main() {
 
 	core.PacketRecv(cross, msg)
 	println("quote_balance_after_second_recv", impl.VoucherBalanceOf("ibc/quote", address(receiver)))
+	println("ack_hash_matches_failure", core.AcknowledgementHash(cross, packet).String() == expectedFailureAckHash())
 	println("duplicate_recv_noop", "ok")
 }
 
+func expectedFailureAckHash() string {
+	ack, err := z.EncodeAck(z.Ack{Tag: u256.NewUint(0), InnerAck: []byte("UNIVERSAL_ERROR")})
+	if err != nil {
+		panic(err)
+	}
+	return core.CommitAcks([][]byte{ack}).String()
+}
+
 // Output:
-// quote_balance_after_first_recv 21
-// quote_balance_after_second_recv 21
+// quote_balance_after_first_recv 0
+// quote_balance_after_second_recv 0
+// ack_hash_matches_failure true
 // duplicate_recv_noop ok

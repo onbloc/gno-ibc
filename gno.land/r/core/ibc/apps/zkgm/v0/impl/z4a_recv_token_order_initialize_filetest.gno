@@ -1,32 +1,37 @@
 package main
 
 import (
+	"chain/runtime"
+
 	"gno.land/p/aib/ibc/types"
 	z "gno.land/p/gnoswap/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
+	"gno.land/p/nt/testutils/v0"
 	zkgm "gno.land/r/gnoswap/ibc/apps/zkgm"
 	impl "gno.land/r/gnoswap/ibc/apps/zkgm/v0/impl"
 	_ "gno.land/r/gnoswap/ibc/apps/zkgm/v0/loader"
 )
 
 func main() {
-	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
+	receiver := string(testutils.TestAddress("receiver"))
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
 		Implementation: []byte("grc20"),
 		Initializer:    []byte("init"),
 	})
+	image := impl.MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	ibcDenom := impl.PredictWrappedTokenV2(u256.NewUint(7), 1, []byte("ugnot"), image)
 	order := z.TokenOrderV2{
 		Sender:      []byte("counterparty-sender"),
 		Receiver:    []byte(receiver),
 		BaseToken:   []byte("ugnot"),
 		BaseAmount:  u256.NewUint(100),
-		QuoteToken:  []byte("uatom"),
+		QuoteToken:  []byte(ibcDenom),
 		QuoteAmount: u256.NewUint(95),
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
 
-	res := zkgm.AsIBCApp().OnRecvPacket(cross, "client-a", "client-b", 1, mustTokenOrderPayload(order))
+	res := zkgm.AsIBCApp().OnRecvPacket(cross, "client-a", "client-1", 1, mustTokenOrderPayload(order))
 	ack, err := z.DecodeAck(res.Acknowledgement)
 	if err != nil {
 		panic(err)
@@ -35,8 +40,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	image := impl.MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	ibcDenom := impl.PredictWrappedTokenV2("client-b", order.BaseToken, image)
 	origin, hasOrigin := zkgm.GetTokenOrigin(ibcDenom)
 	_, hasImage := zkgm.GetMetadataImageOf(ibcDenom)
 
@@ -44,6 +47,7 @@ func main() {
 	println("ack_tag", ack.Tag.Dec())
 	println("fill_type", orderAck.FillType.Dec())
 	println("voucher_balance", impl.VoucherBalanceOf(ibcDenom, address(receiver)))
+	println("relayer_balance", impl.VoucherBalanceOf(ibcDenom, runtime.OriginCaller()))
 	println("has_origin", hasOrigin)
 	println("origin_path", origin.Dec())
 	println("has_metadata_image", hasImage)
@@ -89,6 +93,7 @@ func mustDecodeTokenMetadata(bz []byte) z.TokenMetadata {
 // ack_tag 1
 // fill_type 11586256
 // voucher_balance 95
+// relayer_balance 5
 // has_origin true
-// origin_path 7
+// origin_path 4294967303
 // has_metadata_image true

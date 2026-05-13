@@ -34,7 +34,7 @@ func main() {
 	instr := mustForwardInstruction(forward)
 
 	seq, _ := zkgm.Send(cross, clientID, uint64(time.Now().Add(time.Hour).Unix()), [32]byte{}, instr)
-	key := impl.ChannelBalanceKeyV2(clientID, u256.Zero(), order.BaseToken, order.QuoteToken)
+	key := impl.ChannelBalanceKeyV2(clientID, forward.Path, order.BaseToken, order.QuoteToken)
 	println("sequence", seq)
 	println("balance_after_send", zkgm.GetChannelBalanceV2(key).Dec())
 	println("voucher_after_send", impl.VoucherBalanceOf(baseToken, address(sender)))
@@ -60,17 +60,18 @@ func setupClient() string {
 
 func mintWrappedVoucher(receiver string, amount uint64) string {
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{Implementation: []byte("grc20"), Initializer: []byte("init")})
+	quoteToken := impl.PredictWrappedTokenV2(nil, 1, []byte("ugnot"), impl.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
 	order := z.TokenOrderV2{
 		Receiver:    []byte(receiver),
 		BaseToken:   []byte("ugnot"),
 		BaseAmount:  u256.NewUint(amount),
-		QuoteToken:  []byte("quote"),
+		QuoteToken:  []byte(quoteToken),
 		QuoteAmount: u256.NewUint(amount),
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	zkgm.AsIBCApp().OnRecvPacket(cross, "client-a", "client-b", 1, mustPayload(mustOrderInstruction(order)))
-	return impl.PredictWrappedTokenV2("client-b", order.BaseToken, impl.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
+	zkgm.AsIBCApp().OnRecvPacket(cross, "client-a", "client-1", 1, mustPayload(mustOrderInstruction(order)))
+	return quoteToken
 }
 
 func mustPayload(instr z.Instruction) types.Payload {

@@ -338,13 +338,9 @@ func TestGetClientStateReturnsStoredBytes(t *testing.T) {
 	resetState()
 	st.saveClientState(ClientId(1), []byte("client-state"))
 
-	got := GetClientState(ClientId(1))
-	if string(got) != "client-state" {
-		t.Errorf("GetClientState: got %q want client-state", string(got))
-	}
-	got[0] = 'C'
-	if again := GetClientState(ClientId(1)); string(again) != "client-state" {
-		t.Errorf("GetClientState must return a copy, got %q", string(again))
+	got := QueryClientState(ClientId(1))
+	if got != "0x636c69656e742d7374617465" {
+		t.Errorf("GetClientState: got %q want hex client-state", got)
 	}
 }
 
@@ -352,13 +348,9 @@ func TestGetConsensusStateReturnsStoredBytes(t *testing.T) {
 	resetState()
 	st.saveConsensusState(ClientId(1), Height(10), []byte("consensus-state"))
 
-	got := GetConsensusState(ClientId(1), Height(10))
-	if string(got) != "consensus-state" {
-		t.Errorf("GetConsensusState: got %q want consensus-state", string(got))
-	}
-	got[0] = 'C'
-	if again := GetConsensusState(ClientId(1), Height(10)); string(again) != "consensus-state" {
-		t.Errorf("GetConsensusState must return a copy, got %q", string(again))
+	got := QueryConsensusState(ClientId(1), Height(10))
+	if got != "0x636f6e73656e7375732d7374617465" {
+		t.Errorf("GetConsensusState: got %q want hex consensus-state", got)
 	}
 }
 
@@ -372,11 +364,11 @@ func TestCreateClientStoresInitialClientAndConsensusState(t *testing.T) {
 		ConsensusStateBytes: []byte("consensus-state"),
 	})
 
-	if got := GetClientState(clientId); string(got) != "client-state" {
-		t.Errorf("GetClientState: got %q want client-state", string(got))
+	if got := QueryClientState(clientId); got != "0x636c69656e742d7374617465" {
+		t.Errorf("GetClientState: got %q want hex client-state", got)
 	}
-	if got := GetConsensusState(clientId, Height(100)); string(got) != "consensus-state" {
-		t.Errorf("GetConsensusState: got %q want consensus-state", string(got))
+	if got := QueryConsensusState(clientId, Height(100)); got != "0x636f6e73656e7375732d7374617465" {
+		t.Errorf("GetConsensusState: got %q want hex consensus-state", got)
 	}
 }
 
@@ -419,8 +411,9 @@ func TestSaveAndGetConnection(t *testing.T) {
 		t.Errorf("clientId: got %v want 1", got.ClientId)
 	}
 
-	if got := GetConnection(id); got.CounterpartyConnectionId != ConnectionId(99) {
-		t.Errorf("GetConnection counterparty connection: got %v want 99", got.CounterpartyConnectionId)
+	want := hexString(conn.EthAbiEncode())
+	if got := QueryConnection(id); got != want {
+		t.Errorf("QueryConnection: got %q want %q", got, want)
 	}
 }
 
@@ -461,6 +454,10 @@ func TestSaveAndGetChannel(t *testing.T) {
 		t.Errorf("version: got %v want ics20-1", got.Version)
 	}
 
+	want := hexString(ch.EthAbiEncode())
+	if got := QueryChannel(id); got != want {
+		t.Errorf("QueryChannel: got %q want %q", got, want)
+	}
 }
 
 func TestGetChannelNotFoundPanics(t *testing.T) {
@@ -521,7 +518,7 @@ func TestBatchSendReturnsUnionPacketCommitment(t *testing.T) {
 	if got != want {
 		t.Fatal("BatchSend must return Union packet batch commitment")
 	}
-	if got := GetBatchPackets(want); got != COMMITMENT_MAGIC {
+	if got := QueryBatchPackets(want); got != COMMITMENT_MAGIC.String() {
 		t.Errorf("GetBatchPackets: got %s want %s", got, COMMITMENT_MAGIC)
 	}
 }
@@ -546,8 +543,9 @@ func TestBatchAcksReturnsUnionPacketCommitment(t *testing.T) {
 	if got != want {
 		t.Fatal("BatchAcks must return Union packet batch commitment")
 	}
-	if got := GetBatchReceipts(want); got != CommitAcks([][]byte{[]byte("ack-a"), []byte("ack-b")}) {
-		t.Errorf("GetBatchReceipts: got %s want %s", got, CommitAcks([][]byte{[]byte("ack-a"), []byte("ack-b")}))
+	wantAck := CommitAcks([][]byte{[]byte("ack-a"), []byte("ack-b")})
+	if got := QueryBatchReceipts(want); got != wantAck.String() {
+		t.Errorf("GetBatchReceipts: got %s want %s", got, wantAck)
 	}
 }
 

@@ -104,6 +104,14 @@ func safeString(b []byte) string {
 	return string(out)
 }
 
+func hexString(b []byte) string {
+	return "0x" + hex.EncodeToString(b)
+}
+
+func h256String(h H256) string {
+	return hexString(h[:])
+}
+
 func emitChannelEvent(eventType string, portId Bytes, channelId ChannelId, channel Channel, connection Connection) {
 	chain.Emit(eventType,
 		"port_id", string(portId),
@@ -706,24 +714,28 @@ func GetClientStatus(clientId ClientId) Status {
 	return st.getClient(clientId).GetStatus(clientId)
 }
 
-func GetClientState(clientId ClientId) []byte {
-	return st.getClientState(clientId)
+func QueryClientState(clientId ClientId) string {
+	return hexString(st.getClientState(clientId))
 }
 
-func GetConsensusState(clientId ClientId, height Height) []byte {
-	return st.getConsensusState(clientId, height)
+func QueryConsensusState(clientId ClientId, height Height) string {
+	return hexString(st.getConsensusState(clientId, height))
 }
 
-func GetConnection(connectionId ConnectionId) Connection {
-	return st.getConnection(connectionId)
+func QueryConnection(connectionId ConnectionId) string {
+	return hexString(st.getConnection(connectionId).EthAbiEncode())
 }
 
-func GetBatchPackets(batchHash H256) H256 {
-	return st.getBatchPackets(batchHash)
+func QueryChannel(channelId ChannelId) string {
+	return hexString(st.getChannel(channelId).EthAbiEncode())
 }
 
-func GetBatchReceipts(batchHash H256) H256 {
-	return st.getBatchReceipts(batchHash)
+func QueryBatchPackets(batchHash H256) string {
+	return h256String(st.getBatchPackets(batchHash))
+}
+
+func QueryBatchReceipts(batchHash H256) string {
+	return h256String(st.getBatchReceipts(batchHash))
 }
 
 func CommitNonMembershipProof(_ realm, msg MsgCommitNonMembershipProof) {
@@ -765,6 +777,13 @@ func HasClient(clientType ClientType) bool {
 	return ok
 }
 
+// GetChannel returns the stored channel record for channelId. Apps need this
+// to look up the counterparty channel id when constructing packets to send via
+// BatchSend (the core no longer auto-derives it from a sender-side helper).
+func GetChannel(channelId ChannelId) Channel {
+	return st.getChannel(channelId)
+}
+
 // WriteAcknowledgement drains a pending async acknowledgement saved when an
 // app's OnRecvPacket returned PacketStatusAsync. It commits the acknowledgement
 // against the packet's destination channel, emits WriteAck, and clears the
@@ -789,13 +808,6 @@ func WriteAcknowledgement(_ realm, msg MsgWriteAcknowledgement) {
 	delete(st.pendingAsyncAcks, hash)
 
 	emitWriteAckEvent(pending.Packet, channel, connection, msg.Acknowledgement)
-}
-
-// GetChannel returns the stored channel record for channelId. Apps need this
-// to look up the counterparty channel id when constructing packets to send via
-// BatchSend (the core no longer auto-derives it from a sender-side helper).
-func GetChannel(channelId ChannelId) Channel {
-	return st.getChannel(channelId)
 }
 
 func CommitPacketTimeout(_ realm, msg MsgCommitPacketTimeout) {

@@ -185,19 +185,28 @@ func decodeForwardInstruction(instr z.Instruction) (z.Forward, error) {
 	return z.DecodeForward(instr.Operand)
 }
 
+// universalErrorAckBytes is the cached ABI-encoded `z.Ack{Tag:0, InnerAck:"UNIVERSAL_ERROR"}`
+// that zkgm-internal recv failures emit. Built once at package init so the per-packet
+// `failureResult(universalErrorAck())` paths do not re-encode the same constant payload.
+var universalErrorAckBytes = mustEncodeUniversalErrorAck()
+
+func mustEncodeUniversalErrorAck() []byte {
+	bz, err := z.EncodeAck(z.Ack{
+		Tag:      u256.NewUint(0),
+		InnerAck: []byte("UNIVERSAL_ERROR"),
+	})
+	if err != nil {
+		panic(err)
+	}
+	return bz
+}
+
 func failureResult(ack []byte) core.RecvPacketResult {
 	return core.RecvPacketResult{Status: core.PacketStatusFailure, Ack: ack}
 }
 
 func universalErrorAck() []byte {
-	ack, err := z.EncodeAck(z.Ack{
-		Tag:      u256.NewUint(0),
-		InnerAck: []byte("UNIVERSAL_ERROR"),
-	})
-	if err != nil {
-		return []byte("UNIVERSAL_ERROR")
-	}
-	return ack
+	return universalErrorAckBytes
 }
 
 // tokenOrderDestinationChannel rejects the zero-channel sentinel so the

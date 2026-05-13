@@ -28,6 +28,7 @@ var predictV2Schema = abi.Schema{Fields: []abi.Field{
 	{Type: abi.TypeUint256},
 }}
 
+// PredictWrappedTokenV1 derives the wrapped IBC denom for a v1 token order.
 func PredictWrappedTokenV1(path *u256.Uint, channelId uint32, baseToken []byte) string {
 	if path == nil {
 		path = u256.Zero()

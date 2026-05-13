@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"bytes"
 	"chain"
 	"errors"
 
@@ -10,6 +11,37 @@ import (
 	"gno.land/p/nt/ufmt/v0"
 	zkgm "gno.land/r/gnoswap/ibc/apps/zkgm"
 )
+
+// universalErrorAckBytes is the cached ABI-encoded `z.Ack{Tag:0, InnerAck:"UNIVERSAL_ERROR"}`
+// that zkgm-internal recv failures emit. Built once at package init so the per-packet
+// `failureResult(universalErrorAck())` paths do not re-encode the same constant payload.
+var universalErrorAckBytes = mustEncodeUniversalErrorAck()
+
+func mustEncodeUniversalErrorAck() []byte {
+	bz, err := z.EncodeAck(z.Ack{
+		Tag:      u256.NewUint(0),
+		InnerAck: []byte("UNIVERSAL_ERROR"),
+	})
+	if err != nil {
+		panic(err)
+	}
+	return bz
+}
+
+func failureResult(ack []byte) types.RecvPacketResult {
+	return types.RecvPacketResult{Status: types.PacketStatus_Failure, Acknowledgement: ack}
+}
+
+func universalErrorAck() []byte {
+	return universalErrorAckBytes
+}
+
+// isUniversalErrorAck reports whether `ack` is the core-IBC "universal error
+// acknowledgement" sentinel (sha256("UNIVERSAL_ERROR_ACKNOWLEDGEMENT")), which
+// is distinct from the zkgm-internal `universalErrorAck()` payload above.
+func isUniversalErrorAck(ack []byte) bool {
+	return bytes.Equal(ack, types.UniversalErrorAcknowledgement())
+}
 
 // ZKGM v0 instruction dispatcher.
 //

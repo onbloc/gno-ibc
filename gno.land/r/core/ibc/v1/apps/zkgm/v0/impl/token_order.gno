@@ -248,9 +248,7 @@ func (v *ZkgmV1) acknowledgeTokenOrderV2(sourceChannelId core.ChannelId, path *u
 	marketMaker := string(orderAck.MarketMaker)
 	switch order.Kind {
 	case z.TOKEN_ORDER_KIND_UNESCROW:
-		baseDenom := string(order.BaseToken)
-		image, _ := zkgm.GetMetadataImageOf(baseDenom)
-		return mintVoucher(cross, baseDenom, baseDenom, image, marketMaker, order.BaseAmount)
+		return refundIBCVoucher(order.BaseToken, marketMaker, order.BaseAmount)
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
 		if _, err := amountInt64(order.BaseAmount); err != nil {
 			return err
@@ -267,9 +265,7 @@ func (v *ZkgmV1) acknowledgeTokenOrderV2(sourceChannelId core.ChannelId, path *u
 func (v *ZkgmV1) refundV2(sourceChannelId core.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
 	switch order.Kind {
 	case z.TOKEN_ORDER_KIND_UNESCROW:
-		baseDenom := string(order.BaseToken)
-		image, _ := zkgm.GetMetadataImageOf(baseDenom)
-		return mintVoucher(cross, baseDenom, baseDenom, image, string(order.Sender), order.BaseAmount)
+		return refundIBCVoucher(order.BaseToken, string(order.Sender), order.BaseAmount)
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
 		if _, err := amountInt64(order.BaseAmount); err != nil {
 			return err
@@ -278,14 +274,22 @@ func (v *ZkgmV1) refundV2(sourceChannelId core.ChannelId, path *u256.Uint, order
 			return err
 		}
 		if strings.HasPrefix(string(order.BaseToken), ibcDenomPrefix) {
-			baseDenom := string(order.BaseToken)
-			image, _ := zkgm.GetMetadataImageOf(baseDenom)
-			return mintVoucher(cross, baseDenom, baseDenom, image, string(order.Sender), order.BaseAmount)
+			return refundIBCVoucher(order.BaseToken, string(order.Sender), order.BaseAmount)
 		}
 		return sendNative(string(order.BaseToken), string(order.Sender), order.BaseAmount)
 	default:
 		return errors.New("zkgm/v1: unsupported token order kind for refund")
 	}
+}
+
+// refundIBCVoucher re-mints an IBC voucher to `recipient`, recovering the stored
+// V2 metadata image so wrapped denom identity is preserved across ack/refund
+// flows. Used by the UNESCROW market-maker fill ack, UNESCROW refund, and the
+// ibc-denom branch of INITIALIZE/ESCROW refund.
+func refundIBCVoucher(baseToken []byte, recipient string, amount *u256.Uint) error {
+	baseDenom := string(baseToken)
+	image, _ := zkgm.GetMetadataImageOf(baseDenom)
+	return mintVoucher(cross, baseDenom, baseDenom, image, recipient, amount)
 }
 
 func sendNative(denom string, receiver string, amount *u256.Uint) error {

@@ -36,7 +36,7 @@ const (
 	version                  = "ucs03-zkgm-0"
 
 	clientType                = "07-cometbls"
-	trustingPeriod            = 14 * 24 * 3600 * 1_000_000_000
+	trustingPeriod            = 10 * 365 * 24 * 3600 * 1_000_000_000
 	updatedTrustPeriod        = trustingPeriod
 	maxClockDrift             = 10 * 1_000_000_000
 	frozenHeight       uint64 = 0
@@ -191,9 +191,11 @@ func printSection(n, name, source string) {
 
 func printCommit(label string, key, value [32]byte) {
 	paramsKey := fmt.Sprintf("vm:%s:%s", realmPath, hex.EncodeToString(key[:]))
+	proofData := hex.EncodeToString([]byte("/pv/" + paramsKey))
 	fmt.Printf("%s.params_key=%s\n", label, paramsKey)
+	fmt.Printf("%s.proof_data=0x%s\n", label, strings.ToUpper(proofData))
 	fmt.Printf("%s.expected_value=%s\n", label, hex.EncodeToString(value[:]))
-	fmt.Printf("%s.abci_query=http://localhost:26657/abci_query?path=\"params/%s\"\n", label, paramsKey)
+	fmt.Printf("%s.abci_query=http://localhost:26657/abci_query?path=%%22.store/main/key%%22&data=0x%s&prove=true\n", label, strings.ToUpper(proofData))
 }
 
 func createClientArgs() (clientStateHex, consensusStateHex string) {

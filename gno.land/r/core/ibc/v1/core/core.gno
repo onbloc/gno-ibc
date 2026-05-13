@@ -740,14 +740,16 @@ func HasClient(clientType ClientType) bool {
 // WriteAcknowledgement drains a pending async acknowledgement saved when an
 // app's OnRecvPacket returned PacketStatusAsync. It commits the acknowledgement
 // against the packet's destination channel, emits WriteAck, and clears the
-// pending entry. Authorization is delegated to the calling app: only the app
-// that originally returned PacketStatusAsync knows the packet identity needed
-// to drain it (see e.g. zkgm proxy's WriteForwardAck gating).
+// pending entry.
 func WriteAcknowledgement(_ realm, msg MsgWriteAcknowledgement) {
 	hash := CommitPacket(msg.Packet)
 	pending, ok := st.pendingAsyncAcks[hash]
 	if !ok {
 		panic(ErrNoPendingAsyncAck)
+	}
+	portId := st.getChannelOwner(pending.Packet.DestinationChannelId)
+	if string(portId) != runtime.PreviousRealm().Address().String() {
+		panic(ErrUnauthorizedAckWriter)
 	}
 	if len(msg.Acknowledgement) == 0 {
 		panic(ErrAcknowledgementEmpty)

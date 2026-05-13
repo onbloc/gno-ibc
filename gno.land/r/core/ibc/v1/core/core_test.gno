@@ -746,6 +746,45 @@ func TestSavePendingAsyncAckRejectsAlreadyAcked(t *testing.T) {
 	})
 }
 
+func TestWriteAcknowledgementCommitsAsyncAck(t *testing.T) {
+	resetState()
+	portId, _, channelId := setupOpenChannel(t)
+	app := st.ports[portKey(portId)].(*mockApp)
+	app.recvResult = RecvPacketResult{Status: PacketStatusAsync}
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+
+	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
+	WriteAcknowledgement(cross, MsgWriteAcknowledgement{
+		Packet:          packet,
+		Acknowledgement: []byte("async-ack"),
+	})
+
+	if st.hasPendingAsyncAck(packet) {
+		t.Fatal("WriteAcknowledgement must delete pending async ack")
+	}
+	if !st.hasAcknowledgement(packet) {
+		t.Fatal("WriteAcknowledgement must commit acknowledgement")
+	}
+}
+
+func TestWriteAcknowledgementRejectsNonOwner(t *testing.T) {
+	resetState()
+	portId, _, channelId := setupOpenChannel(t)
+	app := st.ports[portKey(portId)].(*mockApp)
+	app.recvResult = RecvPacketResult{Status: PacketStatusAsync}
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+
+	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
+	st.channelOwners[channelId] = Bytes("g1notchannelowner")
+
+	uassert.AbortsContains(t, "caller not authorized to write ack", func(cur realm) {
+		WriteAcknowledgement(cur, MsgWriteAcknowledgement{
+			Packet:          packet,
+			Acknowledgement: []byte("async-ack"),
+		})
+	})
+}
+
 func TestPacketRecvReceiptDupRejected(t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)

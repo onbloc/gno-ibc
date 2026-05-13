@@ -79,8 +79,37 @@ func printCreateClient() {
 	fmt.Printf("CLIENT_TYPE=%s\n", clientType)
 	fmt.Printf("CLIENT_STATE_HEX=%s\n", clientStateHex)
 	fmt.Printf("CONSENSUS_STATE_HEX=%s\n", consensusStateHex)
+	printCreateClientRunScript(clientStateHex, consensusStateHex)
 	printCommit("client state", clientStatePath(clientID), keccak256(mustHex(clientStateHex)))
 	printCommit("consensus state", consensusStatePath(clientID, proofHeight), keccak256(mustHex(consensusStateHex)))
+}
+
+func printCreateClientRunScript(clientStateHex, consensusStateHex string) {
+	fmt.Printf("RUN_SCRIPT=cat >/tmp/create_client.gno <<'EOF'\n")
+	fmt.Printf("package main\n\n")
+	fmt.Printf("import (\n")
+	fmt.Printf("\t\"encoding/hex\"\n\n")
+	fmt.Printf("\tcore \"gno.land/r/core/ibc/v1/core\"\n")
+	fmt.Printf("\tcometbls \"gno.land/r/core/ibc/v1/lightclients/cometbls\"\n")
+	fmt.Printf(")\n\n")
+	fmt.Printf("func main() {\n")
+	fmt.Printf("\tclientState, err := hex.DecodeString(\"%s\")\n", clientStateHex)
+	fmt.Printf("\tif err != nil {\n")
+	fmt.Printf("\t\tpanic(err)\n")
+	fmt.Printf("\t}\n\n")
+	fmt.Printf("\tconsensusState, err := hex.DecodeString(\"%s\")\n", consensusStateHex)
+	fmt.Printf("\tif err != nil {\n")
+	fmt.Printf("\t\tpanic(err)\n")
+	fmt.Printf("\t}\n\n")
+	fmt.Printf("\tclientID := core.CreateClient(cross, core.MsgCreateClient{\n")
+	fmt.Printf("\t\tClientType:          cometbls.ClientType,\n")
+	fmt.Printf("\t\tClientStateBytes:    clientState,\n")
+	fmt.Printf("\t\tConsensusStateBytes: consensusState,\n")
+	fmt.Printf("\t})\n")
+	fmt.Printf("\tprintln(\"CreateClient\", clientID.String())\n")
+	fmt.Printf("}\n")
+	fmt.Printf("EOF\n")
+	fmt.Printf("gnokey maketx run -gas-fee 1000000ugnot -gas-wanted 50000000 -broadcast -chainid dev -remote tcp://127.0.0.1:26657 test1 /tmp/create_client.gno\n")
 }
 
 func printUpdateClient() {

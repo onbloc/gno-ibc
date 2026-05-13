@@ -94,6 +94,10 @@ This verifies that the ZKGM loader ran and registered the proxy app with core.
 It is the ZKGM-specific check that can run on a single local node before an open
 connection exists.
 
+For ZKGM opcode-level `gnokey` probes (`Send`, `SendRaw`, `PacketRecv` for
+TokenOrder/Call/Batch), see
+`gno.land/r/core/ibc/v1/apps/zkgm/gnokey_tx_queries_zkgm.md`.
+
 ```sh
 cat >/tmp/check_zkgm_app.gno <<'EOF'
 package main

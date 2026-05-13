@@ -1,10 +1,10 @@
-# gnokey transaction query vectors — zkgm.Send
+# gnokey transaction query vectors — ZKGM
 
 Target realm: `gno.land/r/gnoswap/ibc/v1/apps/zkgm`
 
-This document is a runnable integration guide. Every script in the
+This document is a runnable integration guide. Every script or command in the
 **Happy paths** section can be copy-pasted onto a fresh `gnodev local`
-boot and produces a successful `PacketSend` commit on chain.
+boot and produces a successful ZKGM packet-side effect on chain.
 
 The **Reference** section at the end records the raw output of replaying
 `gno.land/p/core/ibc/zkgm/testdata/scenarios.json` (decoder-side fixtures)
@@ -34,6 +34,12 @@ gnodev local \
   -paths "gno.land/r/core/ibc/v1/core,gno.land/r/core/ibc/v1/lightclients/cometbls,gno.land/r/gnoswap/ibc/v1/apps/zkgm,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader,gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e" \
   -no-web \
   -node-rpc-listener 0.0.0.0:26657
+```
+
+You can use the same setup through:
+
+```sh
+tools/run-v1-ibc-smoke-node.sh
 ```
 
 The loader's `init()` calls `zkgm.UpdateImpl(...)` and
@@ -77,6 +83,9 @@ The probes are grouped by which realm entry they exercise:
 
 - **Send** — `zkgm.Send(...)` → `impl.dispatchVerify` → `core.PacketSend`.
   Exercises the source-side verification + packet commit.
+- **SendRaw** — `zkgm.SendRaw(...)` via `gnokey maketx call`. Exercises the
+  same Send path, but accepts primitive hex/string arguments so `gnokey` can
+  attach banker coins with `-send`.
 - **Recv** — `core.PacketRecv(MsgPacketRecv{...})` →
   `zkgm.App.OnRecvPacket` → `impl.dispatchExecute`. Exercises the
   destination-side handler + state mutations (voucher mint) + `WriteAck`.
@@ -189,26 +198,72 @@ packet.Data.len 832
 OK!
 ```
 
+#### 3.1. `zkgm.SendRaw` with a `TokenOrderV2{INITIALIZE}` and `-send`
+
+`maketx run` introduces an intermediate realm frame, so `zkgm.Send` cannot
+observe banker coins attached to the outer tx. `SendRaw` is the
+`maketx call`-friendly wrapper for this case: the instruction fields are passed
+as primitive arguments, and `-send` lands directly on the ZKGM realm.
+
+First open a channel pair and print the raw instruction arguments:
+
+```sh
+printf '\n' | gnokey maketx run \
+  -gas-fee 1000000ugnot -gas-wanted 90000000 \
+  -broadcast -insecure-password-stdin \
+  -chainid dev -remote tcp://127.0.0.1:26657 \
+  test1 tools/zkgm-fixtures/scripts/happy/sendraw_token_order_args.gno
+```
+
+Then use the printed `source_channel`, `timeout_timestamp`, `salt_hex`,
+`version`, `opcode`, `operand_hex`, and `send` values:
+
+```sh
+SOURCE_CHANNEL=1
+TIMEOUT_TIMESTAMP=1700000000000000000
+SALT_HEX=0000000000000000000000000000000000000000000000000000000000000000
+VERSION=2
+OPCODE=3
+OPERAND_HEX='<operand_hex printed above>'
+
+printf '\n' | gnokey maketx call \
+  -gas-fee 1000000ugnot -gas-wanted 90000000 \
+  -broadcast -insecure-password-stdin \
+  -chainid dev -remote tcp://127.0.0.1:26657 \
+  -pkgpath gno.land/r/gnoswap/ibc/v1/apps/zkgm \
+  -func SendRaw \
+  -args "$SOURCE_CHANNEL" \
+  -args "$TIMEOUT_TIMESTAMP" \
+  -args "$SALT_HEX" \
+  -args "$VERSION" \
+  -args "$OPCODE" \
+  -args "$OPERAND_HEX" \
+  -send 100ugnot \
+  test1
+```
+
+Observed result:
+
+```
+OK!
+GAS USED:   38868215
+```
+
+The tx emits `PacketSend`, and the send-side channel balance is recorded under
+the packet path for `(channel, baseToken=ugnot, quoteToken=counterparty-projected-quote)`.
+
 ### Why no happy path for TokenOrder
 
-`zkgm.Send` (see `send.gno:23`) reads `banker.OriginSend()` only when
-`runtime.PreviousRealm().IsUserCall()` is true. `maketx run` produces an
-intermediate realm frame, so the user-call check is false and the
-read returns empty — `requireSentCoin` then fails with
-`zkgm/coins: sent coin mismatch` regardless of any `-send` flag on the
-outer transaction.
+`zkgm.SendRaw` covers TokenOrder source-side sends that need banker `-send`.
+For TokenOrder ESCROW sends, you still need a voucher balance first:
 
-For a TokenOrder happy path you have three options:
-1. **Submit Send via `maketx call`** — requires a primitives-only wrapper
-   that accepts `(channelId, timeoutTs, saltHex, version, opcode,
-   operandHex)`. None exists yet; adding `SendRaw` is the natural fix.
-2. **Pre-mint a voucher** (denom starting with `ibc/`) via a Recv probe,
+1. **Pre-mint a voucher** (denom starting with `ibc/`) via a Recv probe,
    then Send with `Kind=ESCROW` on a follow-up tx. The Send-side `verify`
    path then takes the `burnVoucher` branch and avoids `requireSentCoin`
    entirely. `tools/zkgm-fixtures/scripts/happy/recv_token_order.gno`
    (next section) does the voucher mint; pairing it with a Send probe is
    the multi-tx round-trip integration scenario.
-3. **Drive the existing e2e filetest** at
+2. **Drive the existing e2e filetest** at
    `gno.land/r/core/ibc/v1/apps/zkgm/testing/e2e/scenarios/z21_v1_create_client_handshake_send_filetest.gno`
    which sidesteps `zkgm.Send` and submits via `core.BatchSend` directly
    (acceptable for golden-output testing, not for replay through the
@@ -233,10 +288,12 @@ The golden-output counterpart (consumed by `gno test`, not by gnokey) is
 — same setup, but asserts the balance via filetest `// Output:` instead
 of `gnokey maketx run`.
 
-What it does: opens a channel pair, then receives a TokenOrderV2 with
-`Kind=ESCROW`, `BaseToken=ugnot`, `QuoteToken=ibc/quote`,
-`QuoteAmount=21`, `Receiver=g1wymu47…`. On the destination side
-`executeTokenOrderV2` mints `21 ibc/quote` voucher tokens to the
+What it does: opens a channel pair, predicts the destination chain's local
+wrapped denom for `(path=0, destinationChannel, baseToken=ugnot)`, then
+receives a TokenOrderV2 with `Kind=ESCROW`, `BaseToken=ugnot`,
+`QuoteToken=<predicted denom>`, `QuoteAmount=21`, `Receiver=g1wymu47…`.
+On the destination side
+`executeTokenOrderV2` mints 21 units of that predicted voucher token to the
 receiver via the GRC20 minter; the script then reads back the balance.
 
 ```sh
@@ -252,10 +309,10 @@ Observed result (first run after gnodev boot):
 ```
 source_channel 1
 destination_channel 2
-voucher_denom ibc/quote
+voucher_denom ibc/<predicted>
 voucher_balance 21
 OK!
-GAS USED:   66630542
+GAS USED:   69398754
 ```
 
 Notable events (one tx):
@@ -314,10 +371,12 @@ path becomes the value to put into `Call.ContractAddress`.
 Script: [`tools/zkgm-fixtures/scripts/happy/recv_batch.gno`](../../../../../tools/zkgm-fixtures/scripts/happy/recv_batch.gno).
 
 What it does: receives a Batch of two `TokenOrderV2{ESCROW}` orders with
-different `QuoteToken` denoms and receivers (`ibc/alpha`/11 to
-receiverA, `ibc/beta`/22 to receiverB). `dispatchExecute`'s batch path
-runs each sub-instruction and assembles a `BatchAck` of per-instruction
-inner acks; the outer Ack envelope is success-tagged.
+different base tokens and predicted quote token denoms. The
+destination self-match rule requires each `QuoteToken` to equal the local
+`PredictWrappedTokenV1(path=0, destinationChannel, baseToken)` result.
+`dispatchExecute`'s batch path runs each sub-instruction and assembles a
+`BatchAck` of per-instruction inner acks; the outer Ack envelope is
+success-tagged.
 
 ```sh
 printf '\n' | gnokey maketx run \
@@ -332,10 +391,12 @@ Observed result:
 ```
 source_channel 7
 destination_channel 8
+alpha_denom ibc/<predicted-alpha>
 alpha_balance 11
+beta_denom ibc/<predicted-beta>
 beta_balance 22
 OK!
-GAS USED:   76903352
+GAS USED:   86294205
 ```
 
 Two separate `Transfer` events fire (one per voucher denom), and a
@@ -355,7 +416,7 @@ recursive Forward, etc.) that the Send path correctly rejects.
 |---|---|---|---|
 | 1 | `recv_call_eureka_true` | `zkgm/v1: eureka mode not supported` | fixture sets `eureka=true`; v1 stub rejects |
 | 2 | `recv_call_eureka_false_empty_calldata` | `zkgm/v1: invalid call sender` | fixture `Sender="alice"` ≠ signer |
-| 3 | `recv_token_order_v2_initialize_protocol_fill` | `zkgm/coins: sent coin mismatch` | INITIALIZE needs `-send` (and `maketx call`, not run) |
+| 3 | `recv_token_order_v2_initialize_protocol_fill` | `zkgm/coins: sent coin mismatch` | INITIALIZE needs direct realm `-send`; use `SendRaw` with `maketx call` for a positive source-side probe |
 | 4 | `recv_token_order_v2_escrow_protocol_fill` | `zkgm/voucher: not found: ibc/v1-send` | ESCROW needs a pre-minted voucher |
 | 5 | `recv_token_order_v2_unescrow_protocol_fill` | `zkgm/coins: sent coin mismatch` | UNESCROW (non-ibc denom) needs `-send` |
 | 6 | `recv_token_order_v2_solve_marketmaker_fill` | `zkgm/v1: solve token order not implemented` | v1 stub |
@@ -383,9 +444,9 @@ scenario is worth investigating before updating this document.
 
 ## Updating this document
 
-- **Happy paths**: re-run each of the three scripts after any change to
-  `send.gno`, `impl/`, the e2e helper, or `loader.gno`. Copy fresh GAS /
-  hash values into the observed-result blocks above.
+- **Happy paths**: re-run every script/command in the Happy paths section
+  after any change to `send.gno`, `impl/`, the e2e helper, or `loader.gno`.
+  Copy fresh GAS / hash values into the observed-result blocks above.
 - **Reference table**: re-run the loop in the previous section after any
   change to `scenarios.json` or to realm validation. A new panic line
   there is the regression signal mentioned above.

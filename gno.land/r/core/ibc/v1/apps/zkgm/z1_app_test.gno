@@ -187,3 +187,17 @@ func TestAppNilImplPolicy(t *testing.T) {
 	(&App{}).OnAcknowledgementPacket(packet, []byte{0x01}, address("g1relayer"))
 	(&App{}).OnTimeoutPacket(packet, address("g1relayer"))
 }
+
+func TestDecodeHexArg(t *testing.T) {
+	uassert.PanicsContains(t, "invalid salt hex", func() {
+		mustDecodeHexArg("salt", "zz")
+	})
+	uassert.PanicsContains(t, "invalid operand hex", func() {
+		mustDecodeHexArg("operand", "zz")
+	})
+
+	got := mustDecodeHexArg("operand", "0xCAFE")
+	if len(got) != 2 || got[0] != 0xCA || got[1] != 0xFE {
+		t.Fatal("mustDecodeHexArg must accept 0x-prefixed hex")
+	}
+}

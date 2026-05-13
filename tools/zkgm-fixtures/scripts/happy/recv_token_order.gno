@@ -18,12 +18,13 @@ func main() {
 	pair := e2e.OpenE2EChannelPair(cross)
 
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
+	quoteDenom := impl.PredictWrappedTokenV1(u256.Zero(), uint32(pair.Destination), []byte("ugnot"))
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
 		BaseToken:   []byte("ugnot"),
 		BaseAmount:  u256.NewUint(100),
-		QuoteToken:  []byte("ibc/quote"),
+		QuoteToken:  []byte(quoteDenom),
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
@@ -40,6 +41,6 @@ func main() {
 
 	println("source_channel", pair.Source.String())
 	println("destination_channel", pair.Destination.String())
-	println("voucher_denom", "ibc/quote")
-	println("voucher_balance", impl.VoucherBalanceOf("ibc/quote", address(receiver)))
+	println("voucher_denom", quoteDenom)
+	println("voucher_balance", impl.VoucherBalanceOf(quoteDenom, address(receiver)))
 }

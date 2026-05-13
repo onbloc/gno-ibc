@@ -17,23 +17,27 @@ func main() {
 	pair := e2e.OpenE2EChannelPair(cross)
 
 	receiverA := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
-	receiverB := "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
+	receiverB := receiverA
+	baseA := []byte("ugnot-alpha")
+	baseB := []byte("ugnot-beta")
+	quoteA := impl.PredictWrappedTokenV1(u256.Zero(), uint32(pair.Destination), baseA)
+	quoteB := impl.PredictWrappedTokenV1(u256.Zero(), uint32(pair.Destination), baseB)
 
 	orderA := z.TokenOrderV2{
 		Sender:      []byte("counterparty"),
 		Receiver:    []byte(receiverA),
-		BaseToken:   []byte("ugnot"),
+		BaseToken:   baseA,
 		BaseAmount:  u256.NewUint(100),
-		QuoteToken:  []byte("ibc/alpha"),
+		QuoteToken:  []byte(quoteA),
 		QuoteAmount: u256.NewUint(11),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 	orderB := z.TokenOrderV2{
 		Sender:      []byte("counterparty"),
 		Receiver:    []byte(receiverB),
-		BaseToken:   []byte("ugnot"),
+		BaseToken:   baseB,
 		BaseAmount:  u256.NewUint(200),
-		QuoteToken:  []byte("ibc/beta"),
+		QuoteToken:  []byte(quoteB),
 		QuoteAmount: u256.NewUint(22),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
@@ -55,6 +59,8 @@ func main() {
 
 	println("source_channel", pair.Source.String())
 	println("destination_channel", pair.Destination.String())
-	println("alpha_balance", impl.VoucherBalanceOf("ibc/alpha", address(receiverA)))
-	println("beta_balance", impl.VoucherBalanceOf("ibc/beta", address(receiverB)))
+	println("alpha_denom", quoteA)
+	println("alpha_balance", impl.VoucherBalanceOf(quoteA, address(receiverA)))
+	println("beta_denom", quoteB)
+	println("beta_balance", impl.VoucherBalanceOf(quoteB, address(receiverB)))
 }

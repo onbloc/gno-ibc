@@ -28,7 +28,7 @@ func TestTokenOrderVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm,
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 
-	err := (&ZkgmV1{}).verifyTokenOrderV2(core.ChannelId(3), sender, nil, order)
+	err := (&ZkgmV1{}).verifyTokenOrderV2(core.ChannelId(3), sender, nil, u256.Zero(), order)
 
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(37), VoucherBalanceOf(baseToken, address(sender)))
@@ -46,7 +46,7 @@ func TestTokenOrderVerifyNativeRequiresSentCoin(cur realm, t *testing.T) {
 		Kind:       z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
 
-	err := (&ZkgmV1{}).verifyTokenOrderV2(core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin("ugnot", 13)), order)
+	err := (&ZkgmV1{}).verifyTokenOrderV2(core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin("ugnot", 13)), u256.Zero(), order)
 
 	uassert.NoError(t, err)
 }
@@ -64,10 +64,10 @@ func TestTokenOrderVerifyAppliesRateLimit(cur realm, t *testing.T) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
 
-	err := (&ZkgmV1{}).verifyTokenOrderV2(core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin(denom, 7)), order)
+	err := (&ZkgmV1{}).verifyTokenOrderV2(core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin(denom, 7)), u256.Zero(), order)
 	uassert.NoError(t, err)
 
-	err = (&ZkgmV1{}).verifyTokenOrderV2(core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin(denom, 7)), order)
+	err = (&ZkgmV1{}).verifyTokenOrderV2(core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin(denom, 7)), u256.Zero(), order)
 	uassert.ErrorContains(t, err, "token bucket rate limit exceeded")
 
 	zkgm.RemoveTokenBucket(cross, denom)
@@ -81,26 +81,26 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 		Implementation: []byte("grc20"),
 		Initializer:    []byte("init"),
 	})
+	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	ibcDenom := PredictWrappedTokenV2(u256.NewUint(7), 5, []byte("ugnot"), image)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(testAddress("v1-receiver")),
 		BaseToken:   []byte("ugnot"),
 		BaseAmount:  u256.NewUint(100),
-		QuoteToken:  []byte("quote"),
+		QuoteToken:  []byte(ibcDenom),
 		QuoteAmount: u256.NewUint(95),
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
 	packet := core.Packet{SourceChannelId: core.ChannelId(1), DestinationChannelId: core.ChannelId(5)}
 
-	res, err := (&ZkgmV1{}).executeTokenOrderV2(packet, u256.NewUint(7), order)
+	res, err := (&ZkgmV1{}).executeTokenOrderV2(packet, address(testAddress("v1-relayer")), u256.NewUint(7), order)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == core.PacketStatusSuccess)
 	assertProtocolAck(t, res.Ack)
 
-	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	ibcDenom := PredictWrappedTokenV2(core.ChannelId(5), order.BaseToken, image)
 	uassert.Equal(t, int64(95), VoucherBalanceOf(ibcDenom, address(order.Receiver)))
 
 	storedImage, ok := zkgm.GetMetadataImageOf(ibcDenom)
@@ -109,7 +109,7 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 
 	origin, ok := zkgm.GetTokenOrigin(ibcDenom)
 	uassert.True(t, ok)
-	uassert.Equal(t, "7", origin.ToString())
+	uassert.Equal(t, "21474836487", origin.ToString())
 }
 
 func resetTokenOrderTest() {

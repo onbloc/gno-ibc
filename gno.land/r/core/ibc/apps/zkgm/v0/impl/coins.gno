@@ -36,7 +36,10 @@ func parseCoins(s string) chain.Coins {
 }
 
 func requireSentCoin(sent chain.Coins, denom string, amount *u256.Uint) error {
-	want := amountInt64(amount)
+	want, err := amountInt64(amount)
+	if err != nil {
+		return err
+	}
 	if len(sent) != 1 || sent[0].Denom != denom || sent[0].Amount != want {
 		return errCoinMismatch
 	}

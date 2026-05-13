@@ -27,6 +27,10 @@ ABI_FIXTURES_DIR := tools/abi-fixtures
 ABI_VECTORS      := gno.land/p/core/encoding/abi/testdata/vectors.json
 ABI_VECTORS_GNO  := gno.land/p/core/ibc/zkgm/vectors_fixture_test.gno
 
+ZKGM_FIXTURES_DIR     := tools/zkgm-fixtures
+ZKGM_SCENARIOS        := gno.land/p/core/ibc/zkgm/testdata/scenarios.json
+ZKGM_SCENARIOS_GNO    := gno.land/p/core/ibc/zkgm/scenarios_fixture_test.gno
+
 # Submodule pins (.gitmodules + tree gitlinks) are the source of truth; the
 # gno.land/<rel>/ mirrors built by `make vendor` are .gitignored.
 
@@ -83,7 +87,7 @@ vendor-flags = $(if $(filter undefined,$(origin FLAGS_$(subst /,_,$(1)))),$(STD_
 # rsync only auto-creates the leaf dest dir, so mkdir -p covers intermediates.
 vendor-cmd = mkdir -p $(dir gno.land/$(2)) && rsync $(RSYNC_BASE) $(call vendor-flags,$(2)) $(1)/$(2)/ gno.land/$(2)/
 
-.PHONY: help install-gno link-stdlibs verify-gno vendor fmt test test-cover test-stdlibs test-smoke clean-gno-cache refresh-abi-vectors
+.PHONY: help install-gno link-stdlibs verify-gno vendor fmt test test-cover test-stdlibs test-smoke clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios
 
 COVERAGE_DIR := coverage
 
@@ -108,6 +112,7 @@ help:
 	@echo "  test-smoke            — run only the env-prep smoke tests"
 	@echo "  clean-gno-cache       — remove the cloned gno repo (forces re-clone next install)"
 	@echo "  refresh-abi-vectors   — regenerate ABI ground-truth vectors via the Rust harness"
+	@echo "  refresh-zkgm-scenarios — regenerate handler/dispatch end-to-end ZKGM scenarios via the Rust harness"
 	@echo
 	@echo "Pinned: $(GNO_REPO)@$(GNO_SHORT)  (.gno-version)"
 
@@ -203,3 +208,16 @@ refresh-abi-vectors:
 	@cargo run --release --quiet -p abi-fixtures > $(ABI_VECTORS)
 	@python3 -c 'from pathlib import Path; src = Path("$(ABI_VECTORS)").read_text(); assert "\x60" not in src, "vectors.json contains a backtick; cannot embed in Gno raw string"; Path("$(ABI_VECTORS_GNO)").write_text("package zkgm\n\nconst fixtureVectorsJSON = `" + src + "`\n")'
 	@echo "ok: vectors written to $(ABI_VECTORS) and $(ABI_VECTORS_GNO) ($$(grep -c '"name":' $(ABI_VECTORS)) scenarios)"
+
+# Regenerates handler/dispatch end-to-end ZKGM scenarios (full ZkgmPacket
+# envelopes + matching Ack pairs) against Union's `sol!` macro definitions.
+# Output lands next to the gno tests that consume it. CI re-runs this and
+# asserts the committed bytes match.
+refresh-zkgm-scenarios:
+	@command -v cargo >/dev/null 2>&1 || { \
+		echo "ERROR: 'cargo' not found on PATH. Install Rust toolchain (rustup) to refresh ZKGM scenarios."; exit 1; }
+	@mkdir -p $(dir $(ZKGM_SCENARIOS))
+	@echo ">> regenerating $(ZKGM_SCENARIOS)"
+	@cargo run --release --quiet -p zkgm-fixtures > $(ZKGM_SCENARIOS)
+	@python3 -c 'from pathlib import Path; src = Path("$(ZKGM_SCENARIOS)").read_text(); assert "\x60" not in src, "scenarios.json contains a backtick; cannot embed in Gno raw string"; Path("$(ZKGM_SCENARIOS_GNO)").write_text("package zkgm\n\nconst fixtureScenariosJSON = `" + src + "`\n")'
+	@echo "ok: scenarios written to $(ZKGM_SCENARIOS) and $(ZKGM_SCENARIOS_GNO) ($$(grep -c '"name":' $(ZKGM_SCENARIOS)) scenarios)"

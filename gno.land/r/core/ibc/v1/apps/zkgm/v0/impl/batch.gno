@@ -14,13 +14,13 @@ import (
 // each child runs full dispatchExecute incl. abi decode + keccak).
 var errInvalidBatchInstruction = errors.New("zkgm/v1: invalid batch instruction")
 
-func (v *ZkgmV1) verifyBatch(channelId core.ChannelId, sender string, sentCoins chain.Coins, parentSalt [32]byte, batch z.Batch) error {
+func (v *ZkgmV1) verifyBatch(channelId core.ChannelId, sender string, sentCoins chain.Coins, path *u256.Uint, parentSalt [32]byte, batch z.Batch) error {
 	for i, instr := range batch.Instructions {
 		if !isAllowedBatchInstruction(instr.Opcode) {
 			return errInvalidBatchInstruction
 		}
 		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), parentSalt)
-		if err := v.dispatchVerify(channelId, sender, sentCoins, childSalt, instr); err != nil {
+		if err := v.dispatchVerify(channelId, sender, sentCoins, path, childSalt, instr); err != nil {
 			return err
 		}
 	}

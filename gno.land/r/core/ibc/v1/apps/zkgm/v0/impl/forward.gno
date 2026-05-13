@@ -18,7 +18,7 @@ var (
 	errForwardPrevDestMismatch   = errors.New("zkgm/v1: forward previous-destination mismatch")
 )
 
-func (v *ZkgmV1) verifyForward(channelId core.ChannelId, sender string, sent chain.Coins, salt [32]byte, forward z.Forward) error {
+func (v *ZkgmV1) verifyForward(channelId core.ChannelId, sender string, sent chain.Coins, path *u256.Uint, salt [32]byte, forward z.Forward) error {
 	if !isAllowedForwardInstruction(forward.Instruction.Opcode) {
 		return errInvalidForwardInstruction
 	}
@@ -26,7 +26,7 @@ func (v *ZkgmV1) verifyForward(channelId core.ChannelId, sender string, sent cha
 		return errForwardHopExceeded
 	}
 
-	return v.dispatchVerify(channelId, sender, sent, z.DeriveForwardSalt(salt), forward.Instruction)
+	return v.dispatchVerify(channelId, sender, sent, forward.Path, z.DeriveForwardSalt(salt), forward.Instruction)
 }
 
 func (v *ZkgmV1) executeForward(packet core.Packet, path *u256.Uint, parentSalt [32]byte, forward z.Forward, intent bool) (core.RecvPacketResult, error) {
@@ -54,11 +54,11 @@ func (v *ZkgmV1) executeForward(packet core.Packet, path *u256.Uint, parentSalt 
 }
 
 func (v *ZkgmV1) acknowledgeForward(packet core.Packet, path *u256.Uint, salt [32]byte, forward z.Forward, ack z.Ack) error {
-	return v.dispatchAck(packet, path, salt, forward.Instruction, ack.InnerAck)
+	return v.dispatchAck(packet, forward.Path, salt, forward.Instruction, ack.InnerAck)
 }
 
 func (v *ZkgmV1) timeoutForward(packet core.Packet, path *u256.Uint, salt [32]byte, forward z.Forward) error {
-	return v.dispatchTimeout(packet, path, salt, forward.Instruction)
+	return v.dispatchTimeout(packet, forward.Path, salt, forward.Instruction)
 }
 
 func buildForwardChild(packet core.Packet, path *u256.Uint, parentSalt [32]byte, forward z.Forward) (core.Packet, error) {

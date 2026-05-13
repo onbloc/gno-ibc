@@ -1,3 +1,3 @@
 [workspace]
-members = ["tools/abi-fixtures"]
+members = ["tools/abi-fixtures", "tools/zkgm-fixtures"]
 resolver = "2"

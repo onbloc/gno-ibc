@@ -13,8 +13,8 @@ func TestPredictWrappedTokenV2IncludesMetadataImage(t *testing.T) {
 	metaA := MetadataImage(z.TokenMetadata{Implementation: []byte("impl-a"), Initializer: []byte("init")})
 	metaB := MetadataImage(z.TokenMetadata{Implementation: []byte("impl-b"), Initializer: []byte("init")})
 
-	wrappedA := PredictWrappedTokenV2("client-0", []byte("ugnot"), metaA)
-	wrappedB := PredictWrappedTokenV2("client-0", []byte("ugnot"), metaB)
+	wrappedA := PredictWrappedTokenV2(u256.Zero(), 0, []byte("ugnot"), metaA)
+	wrappedB := PredictWrappedTokenV2(u256.Zero(), 0, []byte("ugnot"), metaB)
 
 	uassert.True(t, len(wrappedA) > len("ibc/"))
 	uassert.True(t, wrappedA != wrappedB)

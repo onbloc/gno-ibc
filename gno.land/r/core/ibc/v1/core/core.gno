@@ -230,7 +230,6 @@ func CreateClient(_ realm, msg MsgCreateClient) ClientId {
 	st.saveConsensusState(clientId, impl.GetLatestHeight(clientId), msg.ConsensusStateBytes)
 
 	chain.Emit(CreateClientEvent,
-		"client_type", string(msg.ClientType),
 		"client_id", clientId.String(),
 	)
 	return clientId

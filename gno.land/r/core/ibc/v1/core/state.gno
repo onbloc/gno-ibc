@@ -6,6 +6,7 @@ var (
 	ErrClientTypeAlreadyRegistered   = errors.New("client type already registered")
 	ErrClientTypeNotFound            = errors.New("client type not found")
 	ErrClientNotFound                = errors.New("client not found")
+	ErrConsensusStateNotFound        = errors.New("consensus state not found")
 	ErrConnectionNotFound            = errors.New("connection not found")
 	ErrInvalidConnectionState        = errors.New("invalid connection state")
 	ErrChannelNotFound               = errors.New("channel not found")
@@ -23,6 +24,8 @@ var (
 	ErrBatchSameChannelOnly          = errors.New("batch must use the same channel")
 	ErrAcknowledgementCountMismatch  = errors.New("acknowledgement count mismatch")
 	ErrPortAlreadyRegistered         = errors.New("port already registered")
+	ErrBatchPacketsNotFound          = errors.New("batch packets not found")
+	ErrBatchReceiptsNotFound         = errors.New("batch receipts not found")
 )
 
 type State struct {
@@ -35,9 +38,15 @@ type State struct {
 
 	clientRegistry map[ClientType]ILightClient
 	clientTypes    map[ClientId]ClientType
+	clientStates   map[ClientId][]byte
+
+	consensusStates map[ClientId]map[Height][]byte
 
 	connections map[ConnectionId]Connection
 	channels    map[ChannelId]Channel
+
+	batchPackets  map[H256]H256
+	batchReceipts map[H256]H256
 
 	packetCommitments map[H256]bool
 	packetReceipts    map[H256]bool
@@ -57,8 +66,12 @@ func newState() State {
 		nextChannelId:     ChannelId(1),
 		clientRegistry:    make(map[ClientType]ILightClient),
 		clientTypes:       make(map[ClientId]ClientType),
+		clientStates:      make(map[ClientId][]byte),
+		consensusStates:   make(map[ClientId]map[Height][]byte),
 		connections:       make(map[ConnectionId]Connection),
 		channels:          make(map[ChannelId]Channel),
+		batchPackets:      make(map[H256]H256),
+		batchReceipts:     make(map[H256]H256),
 		ports:             make(map[string]IApp),
 		channelOwners:     make(map[ChannelId]Bytes),
 		packetCommitments: make(map[H256]bool),
@@ -143,11 +156,38 @@ func (s *State) getChannel(channelId ChannelId) Channel {
 }
 
 func (s *State) saveClientState(clientId ClientId, clientStateBytes []byte) {
+	s.clientStates[clientId] = cloneBytes(clientStateBytes)
 	commit(ClientStatePath(clientId), keccak(clientStateBytes))
 }
 
+func (s *State) getClientState(clientId ClientId) []byte {
+	state, ok := s.clientStates[clientId]
+	if !ok {
+		panic(ErrClientNotFound)
+	}
+	return cloneBytes(state)
+}
+
 func (s *State) saveConsensusState(clientId ClientId, height Height, consensusStateBytes []byte) {
+	byHeight, ok := s.consensusStates[clientId]
+	if !ok {
+		byHeight = make(map[Height][]byte)
+		s.consensusStates[clientId] = byHeight
+	}
+	byHeight[height] = cloneBytes(consensusStateBytes)
 	commit(ConsensusStatePath(clientId, height), keccak(consensusStateBytes))
+}
+
+func (s *State) getConsensusState(clientId ClientId, height Height) []byte {
+	byHeight, ok := s.consensusStates[clientId]
+	if !ok {
+		panic(ErrClientNotFound)
+	}
+	state, ok := byHeight[height]
+	if !ok {
+		panic(ErrConsensusStateNotFound)
+	}
+	return cloneBytes(state)
 }
 
 func (s *State) saveConnection(connectionId ConnectionId, connection Connection) {
@@ -158,6 +198,32 @@ func (s *State) saveConnection(connectionId ConnectionId, connection Connection)
 func (s *State) saveChannel(channelId ChannelId, channel Channel) {
 	s.channels[channelId] = channel
 	commit(ChannelPath(channelId), keccak(channel.EthAbiEncode()))
+}
+
+func (s *State) saveBatchPackets(batchHash H256, value H256) {
+	s.batchPackets[batchHash] = value
+	commit(BatchPacketsPath(batchHash), value)
+}
+
+func (s *State) getBatchPackets(batchHash H256) H256 {
+	value, ok := s.batchPackets[batchHash]
+	if !ok {
+		panic(ErrBatchPacketsNotFound)
+	}
+	return value
+}
+
+func (s *State) saveBatchReceipts(batchHash H256, value H256) {
+	s.batchReceipts[batchHash] = value
+	commit(BatchReceiptsPath(batchHash), value)
+}
+
+func (s *State) getBatchReceipts(batchHash H256) H256 {
+	value, ok := s.batchReceipts[batchHash]
+	if !ok {
+		panic(ErrBatchReceiptsNotFound)
+	}
+	return value
 }
 
 func (s *State) commitPacket(packet Packet) {

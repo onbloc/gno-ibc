@@ -246,23 +246,6 @@ func TestUnionPathReferenceVectors(t *testing.T) {
 	assertH256Hex(t, "batch timeout", BatchTimeoutPath(packet), "0xb7b713e653ed37563f2260ffcee26b6a8fb5a8b91210373aefcde7b3d36bd0eb")
 }
 
-func TestStateGetterPathsMatchCanonicalPaths(t *testing.T) {
-	batchHash := H256{0x42}
-
-	if got := GetClientStatePath(4); got != ClientStatePath(4) {
-		t.Errorf("GetClientStatePath: got %s want %s", got, ClientStatePath(4))
-	}
-	if got := GetConsensusStatePath(4, 10); got != ConsensusStatePath(4, 10) {
-		t.Errorf("GetConsensusStatePath: got %s want %s", got, ConsensusStatePath(4, 10))
-	}
-	if got := GetBatchPacketsPath(batchHash); got != BatchPacketsPath(batchHash) {
-		t.Errorf("GetBatchPacketsPath: got %s want %s", got, BatchPacketsPath(batchHash))
-	}
-	if got := GetBatchReceiptsPath(batchHash); got != BatchReceiptsPath(batchHash) {
-		t.Errorf("GetBatchReceiptsPath: got %s want %s", got, BatchReceiptsPath(batchHash))
-	}
-}
-
 // --- Type encoding tests ---
 
 func TestConnectionEthAbiEncodeDistinct(t *testing.T) {
@@ -351,6 +334,52 @@ func TestGetClientNotFoundPanics(t *testing.T) {
 	})
 }
 
+func TestGetClientStateReturnsStoredBytes(t *testing.T) {
+	resetState()
+	st.saveClientState(ClientId(1), []byte("client-state"))
+
+	got := GetClientState(ClientId(1))
+	if string(got) != "client-state" {
+		t.Errorf("GetClientState: got %q want client-state", string(got))
+	}
+	got[0] = 'C'
+	if again := GetClientState(ClientId(1)); string(again) != "client-state" {
+		t.Errorf("GetClientState must return a copy, got %q", string(again))
+	}
+}
+
+func TestGetConsensusStateReturnsStoredBytes(t *testing.T) {
+	resetState()
+	st.saveConsensusState(ClientId(1), Height(10), []byte("consensus-state"))
+
+	got := GetConsensusState(ClientId(1), Height(10))
+	if string(got) != "consensus-state" {
+		t.Errorf("GetConsensusState: got %q want consensus-state", string(got))
+	}
+	got[0] = 'C'
+	if again := GetConsensusState(ClientId(1), Height(10)); string(again) != "consensus-state" {
+		t.Errorf("GetConsensusState must return a copy, got %q", string(again))
+	}
+}
+
+func TestCreateClientStoresInitialClientAndConsensusState(t *testing.T) {
+	resetState()
+	st.clientRegistry[mockType] = &mockClient{chainId: "union-1", height: 100}
+
+	clientId := CreateClient(cross, MsgCreateClient{
+		ClientType:          mockType,
+		ClientStateBytes:    []byte("client-state"),
+		ConsensusStateBytes: []byte("consensus-state"),
+	})
+
+	if got := GetClientState(clientId); string(got) != "client-state" {
+		t.Errorf("GetClientState: got %q want client-state", string(got))
+	}
+	if got := GetConsensusState(clientId, Height(100)); string(got) != "consensus-state" {
+		t.Errorf("GetConsensusState: got %q want consensus-state", string(got))
+	}
+}
+
 // --- State: ID generation ---
 
 func TestGenerateIdsSequential(t *testing.T) {
@@ -393,12 +422,6 @@ func TestSaveAndGetConnection(t *testing.T) {
 	if got := GetConnection(id); got.CounterpartyConnectionId != ConnectionId(99) {
 		t.Errorf("GetConnection counterparty connection: got %v want 99", got.CounterpartyConnectionId)
 	}
-	if got := GetConnectionPath(id); got != ConnectionPath(id) {
-		t.Errorf("GetConnectionPath: got %s want %s", got, ConnectionPath(id))
-	}
-	if got := GetConnectionCommitment(id); got != keccak(conn.EthAbiEncode()) {
-		t.Errorf("GetConnectionCommitment: got %s want %s", got, keccak(conn.EthAbiEncode()))
-	}
 }
 
 func TestGetConnectionNotFoundPanics(t *testing.T) {
@@ -438,12 +461,6 @@ func TestSaveAndGetChannel(t *testing.T) {
 		t.Errorf("version: got %v want ics20-1", got.Version)
 	}
 
-	if got := GetChannelPath(id); got != ChannelPath(id) {
-		t.Errorf("GetChannelPath: got %s want %s", got, ChannelPath(id))
-	}
-	if got := GetChannelCommitment(id); got != keccak(ch.EthAbiEncode()) {
-		t.Errorf("GetChannelCommitment: got %s want %s", got, keccak(ch.EthAbiEncode()))
-	}
 }
 
 func TestGetChannelNotFoundPanics(t *testing.T) {
@@ -504,8 +521,8 @@ func TestBatchSendReturnsUnionPacketCommitment(t *testing.T) {
 	if got != want {
 		t.Fatal("BatchSend must return Union packet batch commitment")
 	}
-	if got := GetBatchPacketsPath(got); got != BatchPacketsPath(want) {
-		t.Errorf("GetBatchPacketsPath: got %s want %s", got, BatchPacketsPath(want))
+	if got := GetBatchPackets(want); got != COMMITMENT_MAGIC {
+		t.Errorf("GetBatchPackets: got %s want %s", got, COMMITMENT_MAGIC)
 	}
 }
 
@@ -529,8 +546,8 @@ func TestBatchAcksReturnsUnionPacketCommitment(t *testing.T) {
 	if got != want {
 		t.Fatal("BatchAcks must return Union packet batch commitment")
 	}
-	if got := GetBatchReceiptsPath(got); got != BatchReceiptsPath(want) {
-		t.Errorf("GetBatchReceiptsPath: got %s want %s", got, BatchReceiptsPath(want))
+	if got := GetBatchReceipts(want); got != CommitAcks([][]byte{[]byte("ack-a"), []byte("ack-b")}) {
+		t.Errorf("GetBatchReceipts: got %s want %s", got, CommitAcks([][]byte{[]byte("ack-a"), []byte("ack-b")}))
 	}
 }
 

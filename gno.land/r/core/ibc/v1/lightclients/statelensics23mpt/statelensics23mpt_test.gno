@@ -68,6 +68,15 @@ func (a *flowApp) OnAcknowledgementPacket(_ core.Packet, _ []byte, _ address) {
 }
 func (a *flowApp) OnTimeoutPacket(_ core.Packet, _ address) {}
 
+type stateLensFlow struct {
+	app                   *flowApp
+	l1ClientId            core.ClientId
+	l2ClientId            core.ClientId
+	lensClientId          core.ClientId
+	channelId             core.ChannelId
+	counterpartyChannelId core.ChannelId
+}
+
 func resetTestState() {
 	entries = make(map[core.ClientId]*clientEntry)
 	mockL1Status = core.StatusActive
@@ -179,30 +188,6 @@ func TestGetStatusMirrorsL1Client(t *testing.T) {
 	}
 }
 
-func TestVerifyMembershipRejectsInactiveBeforeProofDecode(t *testing.T) {
-	resetTestState()
-	l1ClientId := createMockL1Client()
-	lensClientId := core.ClientId(101)
-
-	cs := statelensp.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
-	cons := statelensp.ConsensusState{
-		Timestamp:   1,
-		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
-		StorageRoot: bytes.Repeat([]byte{0x02}, 32),
-	}
-	consBytes, err := statelensp.EncodeConsensusState(cons)
-	if err != nil {
-		t.Fatalf("EncodeConsensusState: %v", err)
-	}
-	adapter := Adapter{}
-	adapter.CreateClient(cross, lensClientId, statelensp.EncodeClientState(cs), consBytes)
-
-	mockL1Status = core.StatusFrozen
-	uassert.AbortsContains(t, "statelensics23mpt: client is not active", func(cur realm) {
-		adapter.VerifyMembership(lensClientId, core.Height(1), []byte{0xff}, []byte("key"), []byte("value"))
-	})
-}
-
 func TestVerifyMembershipStorageProof(t *testing.T) {
 	resetTestState()
 	l1ClientId := createMockL1Client()
@@ -234,6 +219,32 @@ func TestVerifyMembershipStorageProof(t *testing.T) {
 		Proof: proofNodes,
 	})
 	adapter.VerifyMembership(lensClientId, core.Height(1), proof, path, value)
+}
+
+func TestVerifyMembershipAndNonMembershipRejectInactiveBeforeProofDecode(t *testing.T) {
+	testCases := []struct {
+		name   string
+		status core.Status
+	}{
+		{"frozen", core.StatusFrozen},
+		{"expired", core.StatusExpired},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name+"/membership", func(t *testing.T) {
+			adapter, lensClientId := createLensClientForInactiveTest(t)
+			mockL1Status = tc.status
+			uassert.AbortsContains(t, "statelensics23mpt: client is not active", func(cur realm) {
+				adapter.VerifyMembership(lensClientId, core.Height(1), []byte{0xff}, []byte("key"), []byte("value"))
+			})
+		})
+		t.Run(tc.name+"/non-membership", func(t *testing.T) {
+			adapter, lensClientId := createLensClientForInactiveTest(t)
+			mockL1Status = tc.status
+			uassert.AbortsContains(t, "statelensics23mpt: client is not active", func(cur realm) {
+				adapter.VerifyNonMembership(lensClientId, core.Height(1), []byte{0xff}, []byte("key"))
+			})
+		})
+	}
 }
 
 func TestVerifyNonMembershipStorageProof(t *testing.T) {
@@ -295,17 +306,113 @@ func TestVerifyMembershipRejectsWrongCommitmentKey(t *testing.T) {
 }
 
 func TestPacketRecvUsesStateLensStorageProof(t *testing.T) {
+	flow := setupStateLensOpenChannel(t, []byte("statelens-flow-port-ok"))
+	packet := core.Packet{
+		SourceChannelId:      flow.counterpartyChannelId,
+		DestinationChannelId: flow.channelId,
+		Data:                 []byte("payload"),
+		TimeoutTimestamp:     100,
+	}
+	packetKey := core.BatchPacketsPath(core.CommitPackets([]core.Packet{packet}))
+	_, proof := updateLensRootForPathValue(t, flow.lensClientId, flow.l1ClientId, flow.l2ClientId, 5, packetKey[:], core.COMMITMENT_MAGIC[:])
+	core.PacketRecv(cross, core.MsgPacketRecv{
+		Packets:     []core.Packet{packet},
+		Proof:       proof,
+		ProofHeight: 5,
+	})
+
+	if flow.app.recvCount != 1 {
+		t.Fatalf("OnRecvPacket calls: got %d want 1", flow.app.recvCount)
+	}
+	if !core.HasPacketReceipt(cross, packet) {
+		t.Fatal("PacketRecv must set packet receipt after state-lens proof verification")
+	}
+	if !core.HasAcknowledgement(cross, packet) {
+		t.Fatal("PacketRecv must commit acknowledgement after state-lens proof verification")
+	}
+}
+
+func TestPacketRecvRejectsWrongStateLensStorageProof(t *testing.T) {
+	flow := setupStateLensOpenChannel(t, []byte("statelens-flow-port-bad-proof"))
+	packet := core.Packet{
+		SourceChannelId:      flow.counterpartyChannelId,
+		DestinationChannelId: flow.channelId,
+		Data:                 []byte("payload"),
+		TimeoutTimestamp:     101,
+	}
+	wrongPath := bytes.Repeat([]byte{0x33}, 32)
+	_, proof := updateLensRootForPathValue(t, flow.lensClientId, flow.l1ClientId, flow.l2ClientId, 5, wrongPath, core.COMMITMENT_MAGIC[:])
+
+	uassert.AbortsContains(t, ErrInvalidCommitmentKey.Error(), func(cur realm) {
+		core.PacketRecv(cross, core.MsgPacketRecv{
+			Packets:     []core.Packet{packet},
+			Proof:       proof,
+			ProofHeight: 5,
+		})
+	})
+	if flow.app.recvCount != 0 {
+		t.Fatalf("OnRecvPacket calls after bad proof: got %d want 0", flow.app.recvCount)
+	}
+	if core.HasPacketReceipt(cross, packet) {
+		t.Fatal("PacketRecv must not set packet receipt after bad state-lens proof")
+	}
+}
+
+func TestExtractConsensusStateRejectsShortData(t *testing.T) {
+	_, err := extractConsensusState([]byte{0x01}, statelensp.ClientState{
+		TimestampOffset:   0,
+		StateRootOffset:   0,
+		StorageRootOffset: 0,
+	})
+	if err != ErrConsensusStateTooShort {
+		t.Fatalf("extractConsensusState: got %v want %v", err, ErrConsensusStateTooShort)
+	}
+}
+
+func makeConsensusBytes(timestamp uint64, stateRoot, storageRoot []byte) []byte {
+	out := make([]byte, 72)
+	copy(out[0:32], stateRoot)
+	copy(out[32:64], storageRoot)
+	out[64] = byte(timestamp >> 56)
+	out[65] = byte(timestamp >> 48)
+	out[66] = byte(timestamp >> 40)
+	out[67] = byte(timestamp >> 32)
+	out[68] = byte(timestamp >> 24)
+	out[69] = byte(timestamp >> 16)
+	out[70] = byte(timestamp >> 8)
+	out[71] = byte(timestamp)
+	return out
+}
+
+func cloneBytes(b []byte) []byte {
+	out := make([]byte, len(b))
+	copy(out, b)
+	return out
+}
+
+func storageProofFixture(slot []byte, value []byte) ([32]byte, [][]byte) {
+	path, err := storage.StoragePath(slot)
+	if err != nil {
+		panic(err)
+	}
+	leaf := rlp.EncodeList(rlp.EncodeBytes(compactEncode(true, nibbles(path[:]))), rlp.EncodeBytes(mustStorageValue(value)))
+	root := keccak256.Sum256(leaf)
+	return root, [][]byte{leaf}
+}
+
+func setupStateLensOpenChannel(t *testing.T, portId []byte) stateLensFlow {
+	t.Helper()
 	resetTestState()
 	l1ClientId := createMockL1Client()
 	l2ClientId := core.ClientId(77)
 	counterpartyClientId := core.ClientId(88)
 	counterpartyConnectionId := core.ConnectionId(99)
 	counterpartyChannelId := core.ChannelId(100)
-	portId := []byte("statelens-flow-port")
 	app := &flowApp{}
-	if !core.HasApp(portId) {
-		core.RegisterApp(cross, portId, app)
+	if core.HasApp(portId) {
+		t.Fatalf("test port already registered: %s", string(portId))
 	}
+	core.RegisterApp(cross, portId, app)
 
 	cs := statelensp.ClientState{
 		L2ChainID:         "l2",
@@ -380,71 +487,35 @@ func TestPacketRecvUsesStateLensStorageProof(t *testing.T) {
 		ProofHeight:           4,
 	})
 
-	packet := core.Packet{
-		SourceChannelId:      counterpartyChannelId,
-		DestinationChannelId: channelId,
-		Data:                 []byte("payload"),
-		TimeoutTimestamp:     100,
-	}
-	packetKey := core.BatchPacketsPath(core.CommitPackets([]core.Packet{packet}))
-	_, proof = updateLensRootForPathValue(t, lensClientId, l1ClientId, l2ClientId, 5, packetKey[:], core.COMMITMENT_MAGIC[:])
-	core.PacketRecv(cross, core.MsgPacketRecv{
-		Packets:     []core.Packet{packet},
-		Proof:       proof,
-		ProofHeight: 5,
-	})
-
-	if app.recvCount != 1 {
-		t.Fatalf("OnRecvPacket calls: got %d want 1", app.recvCount)
-	}
-	if !core.HasPacketReceipt(cross, packet) {
-		t.Fatal("PacketRecv must set packet receipt after state-lens proof verification")
-	}
-	if !core.HasAcknowledgement(cross, packet) {
-		t.Fatal("PacketRecv must commit acknowledgement after state-lens proof verification")
+	return stateLensFlow{
+		app:                   app,
+		l1ClientId:            l1ClientId,
+		l2ClientId:            l2ClientId,
+		lensClientId:          lensClientId,
+		channelId:             channelId,
+		counterpartyChannelId: counterpartyChannelId,
 	}
 }
 
-func TestExtractConsensusStateRejectsShortData(t *testing.T) {
-	_, err := extractConsensusState([]byte{0x01}, statelensp.ClientState{
-		TimestampOffset:   0,
-		StateRootOffset:   0,
-		StorageRootOffset: 0,
-	})
-	if err != ErrConsensusStateTooShort {
-		t.Fatalf("extractConsensusState: got %v want %v", err, ErrConsensusStateTooShort)
+func createLensClientForInactiveTest(t *testing.T) (Adapter, core.ClientId) {
+	t.Helper()
+	resetTestState()
+	l1ClientId := createMockL1Client()
+	lensClientId := core.ClientId(101)
+
+	cs := statelensp.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
+	cons := statelensp.ConsensusState{
+		Timestamp:   1,
+		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
+		StorageRoot: bytes.Repeat([]byte{0x02}, 32),
 	}
-}
-
-func makeConsensusBytes(timestamp uint64, stateRoot, storageRoot []byte) []byte {
-	out := make([]byte, 72)
-	copy(out[0:32], stateRoot)
-	copy(out[32:64], storageRoot)
-	out[64] = byte(timestamp >> 56)
-	out[65] = byte(timestamp >> 48)
-	out[66] = byte(timestamp >> 40)
-	out[67] = byte(timestamp >> 32)
-	out[68] = byte(timestamp >> 24)
-	out[69] = byte(timestamp >> 16)
-	out[70] = byte(timestamp >> 8)
-	out[71] = byte(timestamp)
-	return out
-}
-
-func cloneBytes(b []byte) []byte {
-	out := make([]byte, len(b))
-	copy(out, b)
-	return out
-}
-
-func storageProofFixture(slot []byte, value []byte) ([32]byte, [][]byte) {
-	path, err := storage.StoragePath(slot)
+	consBytes, err := statelensp.EncodeConsensusState(cons)
 	if err != nil {
-		panic(err)
+		t.Fatalf("EncodeConsensusState: %v", err)
 	}
-	leaf := rlp.EncodeList(rlp.EncodeBytes(compactEncode(true, nibbles(path[:]))), rlp.EncodeBytes(mustStorageValue(value)))
-	root := keccak256.Sum256(leaf)
-	return root, [][]byte{leaf}
+	adapter := Adapter{}
+	adapter.CreateClient(cross, lensClientId, statelensp.EncodeClientState(cs), consBytes)
+	return adapter, lensClientId
 }
 
 func proofForPathValue(t *testing.T, path []byte, value []byte) ([32]byte, []byte) {

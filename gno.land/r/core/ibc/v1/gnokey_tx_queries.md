@@ -22,8 +22,8 @@ these commands again; the expired client cannot be repaired by `UpdateClient`.
 
 Before the channel sections, the ZKGM app must also be deployed and registered.
 For local `gnodev`, include the v1 ZKGM proxy, impl, and loader paths in
-addition to core and cometbls. The loader's `init()` registers the ZKGM proxy
-app with core.
+addition to core, cometbls, and state-lens-ics23-mpt. The loader's `init()`
+registers the ZKGM proxy app with core.
 
 The `g1TODO_PORT` values in the generated field vectors are placeholders. The
 copy-paste channel transactions below use `zkgm.ProxyAddress()` for both local
@@ -39,8 +39,8 @@ vectors only; do not use them as live local-chain proofs.
 
 ## Local Smoke Node
 
-Start a local node with core, cometbls, ZKGM, and the ZKGM helper packages
-loaded:
+Start a local node with core, cometbls, state-lens-ics23-mpt, ZKGM, and the
+ZKGM helper packages loaded:
 
 ```sh
 tools/run-v1-ibc-smoke-node.sh
@@ -60,13 +60,76 @@ is no separate `maketx` step for app registration. The script includes extra
 and `gno.land/p/gnoswap/...`, while the source directories live under
 `gno.land/r/core/...` and `gno.land/p/core/...` in this repository.
 
-## 0. Register 07-cometbls
+## 0. Register and Check
 
-Run this once before `CreateClient`. Without this, `CreateClient` fails with
-`client type not found`.
+Run the relevant registration step once before `CreateClient`. Without it,
+`CreateClient` fails with `client type not found`.
 
-Copy-paste setup (`RegisterClient` takes an adapter value, so this also cannot
-be expressed as a direct `maketx call`):
+### 0.1. Register state-lens/ics23/mpt
+
+Run this before creating a state-lens client. The client type follows Union's
+`STATE_LENS_ICS23_MPT` value:
+
+https://github.com/unionlabs/union/blob/6215985a5f27e24e9a34aa7259f38b0059c9a5ab/lib/voyager-primitives/src/lib.rs#L129
+
+Copy-paste setup:
+
+```sh
+cat >/tmp/register_statelens.gno <<'EOF'
+package main
+
+import (
+	core "gno.land/r/core/ibc/v1/core"
+	statelens "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
+)
+
+func main() {
+	if !core.HasClient(statelens.ClientType) {
+		core.RegisterClient(cross, statelens.ClientType, statelens.Adapter{})
+	}
+	println("registered", string(statelens.ClientType))
+}
+EOF
+
+gnokey maketx run -gas-fee 1000000ugnot -gas-wanted 50000000 -broadcast -chainid dev -remote tcp://127.0.0.1:26657 test1 /tmp/register_statelens.gno
+```
+
+Expected output includes:
+
+```txt
+registered state-lens/ics23/mpt
+```
+
+Check:
+
+```sh
+cat >/tmp/check_statelens.gno <<'EOF'
+package main
+
+import (
+	core "gno.land/r/core/ibc/v1/core"
+	statelens "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
+)
+
+func main() {
+	println("state_lens_client_type", string(statelens.ClientType))
+	println("registered", core.HasClient(statelens.ClientType))
+}
+EOF
+
+gnokey maketx run -gas-fee 1000000ugnot -gas-wanted 50000000 -broadcast -chainid dev -remote tcp://127.0.0.1:26657 test1 /tmp/check_statelens.gno
+```
+
+Expected output includes:
+
+```txt
+registered true
+```
+
+### 0.2. Register 07-cometbls
+
+Run this before creating a cometbls client. `RegisterClient` takes an adapter
+value, so this also cannot be expressed as a direct `maketx call`.
 
 ```sh
 cat >/tmp/register_cometbls.gno <<'EOF'
@@ -88,7 +151,39 @@ EOF
 gnokey maketx run -gas-fee 1000000ugnot -gas-wanted 50000000 -broadcast -chainid dev -remote tcp://127.0.0.1:26657 test1 /tmp/register_cometbls.gno
 ```
 
-## 0.1. Check ZKGM App Registration
+Expected output includes:
+
+```txt
+registered 07-cometbls
+```
+
+Check:
+
+```sh
+cat >/tmp/check_cometbls.gno <<'EOF'
+package main
+
+import (
+	core "gno.land/r/core/ibc/v1/core"
+	cometbls "gno.land/r/core/ibc/v1/lightclients/cometbls"
+)
+
+func main() {
+	println("cometbls_client_type", string(cometbls.ClientType))
+	println("registered", core.HasClient(cometbls.ClientType))
+}
+EOF
+
+gnokey maketx run -gas-fee 1000000ugnot -gas-wanted 50000000 -broadcast -chainid dev -remote tcp://127.0.0.1:26657 test1 /tmp/check_cometbls.gno
+```
+
+Expected output includes:
+
+```txt
+registered true
+```
+
+### 0.3. Check ZKGM App Registration
 
 This verifies that the ZKGM loader ran and registered the proxy app with core.
 It is the ZKGM-specific check that can run on a single local node before an open
@@ -134,6 +229,8 @@ python3 -c 'import base64,sys; print(base64.b64decode(sys.argv[1]).hex())' '<DAT
 Source: `createClientArgs`, `encodeClientState`, `encodeConsensusState`,
 `clientStatePath`, `consensusStatePath`.
 
+### 1.1. Create 07-cometbls Client
+
 Copy-paste transaction:
 
 ```sh
@@ -178,6 +275,103 @@ curl 'http://localhost:26657/abci_query?path=%22.store/main/key%22&data=0x2F7076
 
 curl 'http://localhost:26657/abci_query?path=%22.store/main/key%22&data=0x2F70762F766D3A676E6F2E6C616E642F722F636F72652F6962632F76312F636F72653A36643966326134663336636663343665636535333737663261643531623138613064373136353263366561626139386564343931313266346533373230656238&prove=true'
 # decoded Data: 5c472dc8054e98962b7b829056516d03476da26570c0307b8fe21ba4590fac87
+```
+
+### 1.2. Create state-lens/ics23/mpt Client
+
+This single-node command checks registration, client state decoding, consensus
+state decoding, and `CreateClient`. It does not verify a live L1 membership
+proof; `UpdateClient` and packet proof verification need counterparty
+state/proof data from an L1 client.
+
+```sh
+cat >/tmp/create_statelens_client.gno <<'EOF'
+package main
+
+import (
+	"bytes"
+
+	core "gno.land/r/core/ibc/v1/core"
+	statelensp "gno.land/p/core/ibc/lightclients/statelensics23mpt"
+	statelens "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
+)
+
+func main() {
+	if !core.HasClient(statelens.ClientType) {
+		core.RegisterClient(cross, statelens.ClientType, statelens.Adapter{})
+	}
+
+	consensusState, err := statelensp.EncodeConsensusState(statelensp.ConsensusState{
+		Timestamp:   1,
+		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
+		StorageRoot: bytes.Repeat([]byte{0x02}, 32),
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	clientID := core.CreateClient(cross, core.MsgCreateClient{
+		ClientType: statelens.ClientType,
+		ClientStateBytes: statelensp.EncodeClientState(statelensp.ClientState{
+			L2ChainID:         "local-l2",
+			L1ClientID:        1,
+			L2ClientID:        1,
+			L2LatestHeight:    1,
+			TimestampOffset:   64,
+			StateRootOffset:   0,
+			StorageRootOffset: 32,
+		}),
+		ConsensusStateBytes: consensusState,
+	})
+	println("CreateStateLensClient", clientID.String())
+}
+EOF
+
+gnokey maketx run -gas-fee 1000000ugnot -gas-wanted 50000000 -broadcast -chainid dev -remote tcp://127.0.0.1:26657 test1 /tmp/create_statelens_client.gno
+```
+
+Expected output includes:
+
+```txt
+CreateStateLensClient
+```
+
+Verify:
+
+This assumes `1.1` created the cometbls client as `1` and this command printed
+the state-lens client as `2`. If your printed client id differs, update
+`clientID` below.
+
+```sh
+cat >/tmp/check_statelens_client.gno <<'EOF'
+package main
+
+import core "gno.land/r/core/ibc/v1/core"
+
+func main() {
+	clientID := core.ClientId(2)
+	println("state_lens_active", core.GetClientStatus(clientID) == core.StatusActive)
+}
+EOF
+
+gnokey maketx run -gas-fee 1000000ugnot -gas-wanted 50000000 -broadcast -chainid dev -remote tcp://127.0.0.1:26657 test1 /tmp/check_statelens_client.gno
+```
+
+Expected output includes:
+
+```txt
+state_lens_active true
+```
+
+ABCI client state commitment:
+
+`CreateClient` stores the client state commitment in the core realm. The
+state-lens consensus state is owned by the state-lens client realm, so this
+create-client check only queries the core client state hash.
+
+```sh
+curl 'http://localhost:26657/abci_query?path=%22.store/main/key%22&data=0x2f70762f766d3a676e6f2e6c616e642f722f636f72652f6962632f76312f636f72653a61633333666637356331396537306665383335303764623064363833666433343635633939363539386463393732363838623761636536373663383930373762&prove=true'
+# decoded Data: 94d15ea7eb0ca5979a68af5f3805a62490fe73a94f7d5297a54a18e45a5030f1
 ```
 
 ## 2. UpdateClient

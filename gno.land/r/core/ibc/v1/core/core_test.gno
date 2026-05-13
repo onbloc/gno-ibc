@@ -982,6 +982,40 @@ func TestCommitMembershipProofVerifiesUnionPathValue(t *testing.T) {
 	}
 }
 
+func TestVerifyClientMembershipVerifiesUnionPathValue(t *testing.T) {
+	resetState()
+	client := &mockClient{chainId: "union-1", status: StatusActive}
+	st.clientRegistry[mockType] = client
+	st.clientTypes[ClientId(4)] = mockType
+
+	path := Bytes("clients/7/consensusStates/11")
+	value := Bytes("consensus-state")
+	proof := Bytes("membership-proof")
+	VerifyClientMembership(cross, ClientId(4), Height(10), proof, path, value)
+
+	if len(client.membershipKeys) != 1 {
+		t.Fatalf("membership calls: got %d want 1", len(client.membershipKeys))
+	}
+	if client.membershipClientIds[0] != ClientId(4) || client.membershipHeights[0] != Height(10) {
+		t.Fatal("VerifyClientMembership must pass client id and proof height through")
+	}
+	if string(client.membershipProofs[0]) != string(proof) ||
+		string(client.membershipKeys[0]) != string(path) ||
+		string(client.membershipValues[0]) != string(value) {
+		t.Fatal("VerifyClientMembership must pass proof path and value through")
+	}
+}
+
+func TestGetClientStatusDelegatesToClient(t *testing.T) {
+	resetState()
+	st.clientRegistry[mockType] = &mockClient{chainId: "union-1", status: StatusFrozen}
+	st.clientTypes[ClientId(4)] = mockType
+
+	if got := GetClientStatus(ClientId(4)); got != StatusFrozen {
+		t.Fatalf("GetClientStatus: got %d want %d", got, StatusFrozen)
+	}
+}
+
 func TestCommitNonMembershipProofVerifiesUnionPath(t *testing.T) {
 	resetState()
 	client := &mockClient{chainId: "union-1", status: StatusActive}

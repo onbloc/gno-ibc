@@ -21,6 +21,10 @@ var (
 // Proof is the storage proof shape returned by eth_getProof for one slot,
 // normalized to bytes. Key and Value are 32-byte EVM words. Proof contains the
 // raw RLP-encoded trie nodes from root to leaf.
+//
+// It is also the normalized form of Union's
+// ethereum_light_client_types::StorageProof wire type:
+// https://github.com/unionlabs/union/blob/main/lib/ethereum-light-client-types/src/storage_proof.rs
 type Proof struct {
 	Key   []byte
 	Value []byte

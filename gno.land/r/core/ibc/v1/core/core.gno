@@ -689,6 +689,13 @@ func VerifyClientMembership(_ realm, clientId ClientId, proofHeight Height, proo
 	st.getClient(clientId).VerifyMembership(clientId, proofHeight, proof, path, value)
 }
 
+// GetClientStatus returns the current status reported by a registered light
+// client. Lens clients use this to mirror the status of the underlying L1
+// client they depend on.
+func GetClientStatus(clientId ClientId) Status {
+	return st.getClient(clientId).GetStatus(clientId)
+}
+
 func CommitNonMembershipProof(_ realm, msg MsgCommitNonMembershipProof) {
 	st.getClient(msg.ClientId).VerifyNonMembership(msg.ClientId, msg.ProofHeight, msg.Proof, msg.Path)
 	commit(NonMembershipProofPath(msg.ClientId, msg.ProofHeight, msg.Path), COMMITMENT_MAGIC)

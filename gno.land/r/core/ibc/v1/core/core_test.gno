@@ -1006,6 +1006,16 @@ func TestVerifyClientMembershipVerifiesUnionPathValue(t *testing.T) {
 	}
 }
 
+func TestGetClientStatusDelegatesToClient(t *testing.T) {
+	resetState()
+	st.clientRegistry[mockType] = &mockClient{chainId: "union-1", status: StatusFrozen}
+	st.clientTypes[ClientId(4)] = mockType
+
+	if got := GetClientStatus(ClientId(4)); got != StatusFrozen {
+		t.Fatalf("GetClientStatus: got %d want %d", got, StatusFrozen)
+	}
+}
+
 func TestCommitNonMembershipProofVerifiesUnionPath(t *testing.T) {
 	resetState()
 	client := &mockClient{chainId: "union-1", status: StatusActive}

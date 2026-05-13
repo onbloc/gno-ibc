@@ -10,7 +10,9 @@ import (
 	"gno.land/r/core/ibc/v1/core"
 )
 
-const ClientType core.ClientType = "08-state-lens-ics23-mpt"
+// Union reference:
+// https://github.com/unionlabs/union/blob/6215985a5f27e24e9a34aa7259f38b0059c9a5ab/lib/voyager-primitives/src/lib.rs#L129
+const ClientType core.ClientType = "state-lens/ics23/mpt"
 
 var (
 	ErrConsensusStateTooShort = errors.New("statelensics23mpt: l2 consensus state too short")

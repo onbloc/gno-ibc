@@ -754,51 +754,6 @@ func TestPacketRecvAsyncDefersAck(t *testing.T) {
 	if st.hasAcknowledgement(packet) {
 		t.Fatal("async recv must not commit acknowledgement")
 	}
-	if !st.hasPendingAsyncAck(packet) {
-		t.Fatal("async recv must save pending async acknowledgement")
-	}
-}
-
-func TestPendingAsyncAckLifecycle(t *testing.T) {
-	resetState()
-	packet := Packet{SourceChannelId: 99, DestinationChannelId: 1, Data: Bytes("transfer"), TimeoutTimestamp: 100}
-
-	st.savePendingAsyncAck(packet)
-	pending, ok := st.getPendingAsyncAck(packet)
-	if !ok {
-		t.Fatal("pending async ack must exist after save")
-	}
-	if pending.Packet.SourceChannelId != packet.SourceChannelId ||
-		pending.Packet.DestinationChannelId != packet.DestinationChannelId {
-		t.Fatal("pending async ack stored unexpected data")
-	}
-	if !st.hasPendingAsyncAck(packet) {
-		t.Fatal("hasPendingAsyncAck must report saved pending ack")
-	}
-	st.deletePendingAsyncAck(packet)
-	if st.hasPendingAsyncAck(packet) {
-		t.Fatal("pending async ack must be deleted")
-	}
-}
-
-func TestSavePendingAsyncAckRejectsDuplicate(t *testing.T) {
-	resetState()
-	packet := Packet{SourceChannelId: 99, DestinationChannelId: 1, Data: Bytes("transfer"), TimeoutTimestamp: 100}
-
-	st.savePendingAsyncAck(packet)
-	mustPanic(t, func() {
-		st.savePendingAsyncAck(packet)
-	})
-}
-
-func TestSavePendingAsyncAckRejectsAlreadyAcked(t *testing.T) {
-	resetState()
-	packet := Packet{SourceChannelId: 99, DestinationChannelId: 1, Data: Bytes("transfer"), TimeoutTimestamp: 100}
-
-	st.commitAcknowledgement(packet, []byte{0x01})
-	mustPanic(t, func() {
-		st.savePendingAsyncAck(packet)
-	})
 }
 
 func TestWriteAcknowledgementCommitsAsyncAck(t *testing.T) {
@@ -814,9 +769,6 @@ func TestWriteAcknowledgementCommitsAsyncAck(t *testing.T) {
 		Acknowledgement: []byte("async-ack"),
 	})
 
-	if st.hasPendingAsyncAck(packet) {
-		t.Fatal("WriteAcknowledgement must delete pending async ack")
-	}
 	if !st.hasAcknowledgement(packet) {
 		t.Fatal("WriteAcknowledgement must commit acknowledgement")
 	}
@@ -833,6 +785,21 @@ func TestWriteAcknowledgementRejectsNonOwner(t *testing.T) {
 	st.channelOwners[channelId] = Bytes("g1notchannelowner")
 
 	uassert.AbortsContains(t, "caller not authorized to write ack", func(cur realm) {
+		WriteAcknowledgement(cur, MsgWriteAcknowledgement{
+			Packet:          packet,
+			Acknowledgement: []byte("async-ack"),
+		})
+	})
+}
+
+func TestWriteAcknowledgementRejectsAlreadyAcked(t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+
+	st.commitAcknowledgement(packet, []byte("ack"))
+
+	uassert.AbortsContains(t, "acknowledgement already written", func(cur realm) {
 		WriteAcknowledgement(cur, MsgWriteAcknowledgement{
 			Packet:          packet,
 			Acknowledgement: []byte("async-ack"),

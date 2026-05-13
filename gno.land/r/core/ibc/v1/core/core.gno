@@ -528,7 +528,6 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 		res := st.getAppByPortId(portId).OnRecvPacket(packet, relayer, relayerMsg)
 		switch res.Status {
 		case PacketStatusAsync:
-			st.savePendingAsyncAck(packet)
 		case PacketStatusSuccess, PacketStatusFailure:
 			if len(res.Ack) == 0 {
 				panic(ErrSyncAckEmpty)
@@ -784,30 +783,26 @@ func GetChannel(channelId ChannelId) Channel {
 	return st.getChannel(channelId)
 }
 
-// WriteAcknowledgement drains a pending async acknowledgement saved when an
-// app's OnRecvPacket returned PacketStatusAsync. It commits the acknowledgement
-// against the packet's destination channel, emits WriteAck, and clears the
-// pending entry.
+// WriteAcknowledgement commits an acknowledgement for a previously received
+// packet. Async acknowledgement ownership is protocol-managed: core does not
+// track pending async acknowledgement state.
 func WriteAcknowledgement(_ realm, msg MsgWriteAcknowledgement) {
-	hash := CommitPacket(msg.Packet)
-	pending, ok := st.pendingAsyncAcks[hash]
-	if !ok {
-		panic(ErrNoPendingAsyncAck)
-	}
-	portId := st.getChannelOwner(pending.Packet.DestinationChannelId)
+	portId := st.getChannelOwner(msg.Packet.DestinationChannelId)
 	if string(portId) != runtime.PreviousRealm().Address().String() {
 		panic(ErrUnauthorizedAckWriter)
 	}
 	if len(msg.Acknowledgement) == 0 {
 		panic(ErrAcknowledgementEmpty)
 	}
-	channel := st.getChannel(pending.Packet.DestinationChannelId)
+	if st.hasAcknowledgement(msg.Packet) {
+		panic(ErrAcknowledgementAlreadyWritten)
+	}
+	channel := st.getChannel(msg.Packet.DestinationChannelId)
 	connection := ensureConnectionOpen(channel.ConnectionId)
 
-	st.commitAcknowledgement(pending.Packet, msg.Acknowledgement)
-	delete(st.pendingAsyncAcks, hash)
+	st.commitAcknowledgement(msg.Packet, msg.Acknowledgement)
 
-	emitWriteAckEvent(pending.Packet, channel, connection, msg.Acknowledgement)
+	emitWriteAckEvent(msg.Packet, channel, connection, msg.Acknowledgement)
 }
 
 func CommitPacketTimeout(_ realm, msg MsgCommitPacketTimeout) {

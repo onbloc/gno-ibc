@@ -14,10 +14,8 @@ var (
 	ErrPortNotFound                  = errors.New("port not found")
 	ErrSyncAckEmpty                  = errors.New("sync ack cannot be empty")
 	ErrUnknownPacketStatus           = errors.New("unknown packet status")
-	ErrNoPendingAsyncAck             = errors.New("no pending async ack")
 	ErrUnauthorizedAckWriter         = errors.New("caller not authorized to write ack")
 	ErrAcknowledgementAlreadyWritten = errors.New("acknowledgement already written")
-	ErrPendingAsyncAckExists         = errors.New("pending async ack already exists")
 	ErrAcknowledgementEmpty          = errors.New("acknowledgement cannot be empty")
 	ErrUnauthorizedPacketSender     = errors.New("caller not authorized to send packet")
 	ErrNotEnoughPackets              = errors.New("not enough packets")
@@ -47,12 +45,6 @@ type State struct {
 
 	batchPackets  map[H256]H256
 	batchReceipts map[H256]H256
-
-	pendingAsyncAcks map[H256]pendingAsyncAck
-}
-
-type pendingAsyncAck struct {
-	Packet Packet
 }
 
 func newState() State {
@@ -70,7 +62,6 @@ func newState() State {
 		batchReceipts:     make(map[H256]H256),
 		ports:             make(map[string]IApp),
 		channelOwners:     make(map[ChannelId]Bytes),
-		pendingAsyncAcks:  make(map[H256]pendingAsyncAck),
 	}
 }
 
@@ -265,29 +256,4 @@ func (s *State) deletePacketReceipt(packet Packet) {
 	batchHash := CommitPacket(packet)
 	delete(s.batchReceipts, batchHash)
 	commit(BatchReceiptsPath(batchHash), zero)
-}
-
-func (s *State) savePendingAsyncAck(packet Packet) {
-	key := CommitPacket(packet)
-	if _, exists := s.pendingAsyncAcks[key]; exists {
-		panic(ErrPendingAsyncAckExists)
-	}
-	if s.hasAcknowledgement(packet) {
-		panic(ErrAcknowledgementAlreadyWritten)
-	}
-	s.pendingAsyncAcks[key] = pendingAsyncAck{Packet: packet}
-}
-
-func (s *State) getPendingAsyncAck(packet Packet) (pendingAsyncAck, bool) {
-	v, ok := s.pendingAsyncAcks[CommitPacket(packet)]
-	return v, ok
-}
-
-func (s *State) deletePendingAsyncAck(packet Packet) {
-	delete(s.pendingAsyncAcks, CommitPacket(packet))
-}
-
-func (s *State) hasPendingAsyncAck(packet Packet) bool {
-	_, ok := s.pendingAsyncAcks[CommitPacket(packet)]
-	return ok
 }

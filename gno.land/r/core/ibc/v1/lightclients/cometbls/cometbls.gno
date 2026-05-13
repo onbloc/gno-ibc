@@ -9,7 +9,7 @@ import (
 	"gno.land/r/core/ibc/v1/core"
 )
 
-const ClientType core.ClientType = "07-cometbls"
+const ClientType core.ClientType = "cometbls"
 
 type clientEntry struct {
 	client          *cometblsp.CometBLSClient

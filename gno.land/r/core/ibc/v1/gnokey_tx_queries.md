@@ -15,7 +15,7 @@ Most core entrypoints take `Msg*` structs, so there is no valid
 `gnokey maketx call -args ...` form for them. The copy-paste transactions below
 use `gnokey maketx run` and call the public core functions directly.
 
-The `07-cometbls` fixtures are old devnet proofs, so the generated client state
+The `cometbls` fixtures are old devnet proofs, so the generated client state
 uses a 10-year trusting period. If you already created a client with an older
 14-day trusting period vector, restart/reset the local dev chain before running
 these commands again; the expired client cannot be repaired by `UpdateClient`.
@@ -126,7 +126,7 @@ Expected output includes:
 registered true
 ```
 
-### 0.2. Register 07-cometbls
+### 0.2. Register cometbls
 
 Run this before creating a cometbls client. `RegisterClient` takes an adapter
 value, so this also cannot be expressed as a direct `maketx call`.
@@ -154,7 +154,7 @@ gnokey maketx run -gas-fee 1000000ugnot -gas-wanted 50000000 -broadcast -chainid
 Expected output includes:
 
 ```txt
-registered 07-cometbls
+registered cometbls
 ```
 
 Check:
@@ -233,7 +233,7 @@ python3 -c 'import base64,sys; print(base64.b64decode(sys.argv[1]).hex())' '<DAT
 Source: `createClientArgs`, `encodeClientState`, `encodeConsensusState`,
 `clientStatePath`, `consensusStatePath`.
 
-### 1.1. Create 07-cometbls Client
+### 1.1. Create cometbls Client
 
 Copy-paste transaction:
 

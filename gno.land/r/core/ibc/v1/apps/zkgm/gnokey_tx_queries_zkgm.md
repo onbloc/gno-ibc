@@ -201,7 +201,32 @@ The emitted events must include `PacketRecv` and `WriteAck`. This probe
 intentionally targets an unregistered receiver, so the acknowledgement is a
 failure ack while the transaction still succeeds.
 
-## 7. Recv Batch TokenOrders
+## 7. Recv TokenOrder Initialize
+
+Source: `tools/zkgm-fixtures/scripts/happy/recv_token_order_initialize.gno`.
+
+Copy-paste transaction:
+
+```sh
+printf '\n' | gnokey maketx run \
+  -gas-fee 1000000ugnot -gas-wanted 90000000 \
+  -broadcast -insecure-password-stdin \
+  -chainid dev -remote tcp://127.0.0.1:26657 \
+  test1 tools/zkgm-fixtures/scripts/happy/recv_token_order_initialize.gno
+```
+
+Verify:
+
+```txt
+receiver_balance 21
+relayer_fee_balance 12
+OK!
+```
+
+The emitted events must include `PacketRecv`, `WriteAck`, and GRC20
+`Transfer` mints for the receiver and relayer fee.
+
+## 8. Recv Batch TokenOrders
 
 Source: `tools/zkgm-fixtures/scripts/happy/recv_batch.gno`.
 
@@ -227,3 +252,57 @@ OK!
 
 The emitted events must include `PacketRecv`, `WriteAck`, and GRC20 `Transfer`
 mints for both voucher denoms.
+
+## 9. Ack TokenOrder Refund
+
+Source: `tools/zkgm-fixtures/scripts/happy/ack_token_order_refund.gno`.
+
+Copy-paste transaction:
+
+```sh
+printf '\n' | gnokey maketx run \
+  -gas-fee 1000000ugnot -gas-wanted 90000000 \
+  -broadcast -insecure-password-stdin \
+  -chainid dev -remote tcp://127.0.0.1:26657 \
+  test1 tools/zkgm-fixtures/scripts/happy/ack_token_order_refund.gno
+```
+
+Verify:
+
+```txt
+commitment_before_ack true
+sender_balance_before_ack 0
+commitment_after_ack false
+sender_balance_after_ack 21
+OK!
+```
+
+The emitted events must include `PacketSend` and `PacketAck`; the failed
+acknowledgement refunds the voucher to the sender.
+
+## 10. Timeout TokenOrder Refund
+
+Source: `tools/zkgm-fixtures/scripts/happy/timeout_token_order_refund.gno`.
+
+Copy-paste transaction:
+
+```sh
+printf '\n' | gnokey maketx run \
+  -gas-fee 1000000ugnot -gas-wanted 90000000 \
+  -broadcast -insecure-password-stdin \
+  -chainid dev -remote tcp://127.0.0.1:26657 \
+  test1 tools/zkgm-fixtures/scripts/happy/timeout_token_order_refund.gno
+```
+
+Verify:
+
+```txt
+commitment_before_timeout true
+sender_balance_before_timeout 0
+commitment_after_timeout false
+sender_balance_after_timeout 21
+OK!
+```
+
+The emitted events must include `PacketSend` and `PacketTimeout`; timeout
+refunds the voucher to the sender.

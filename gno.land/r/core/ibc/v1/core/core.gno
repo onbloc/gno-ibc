@@ -88,6 +88,12 @@ func h256Bytes(h H256) []byte {
 	return out
 }
 
+func cloneBytes(b []byte) []byte {
+	out := make([]byte, len(b))
+	copy(out, b)
+	return out
+}
+
 // safeString materializes a fresh string from a (possibly foreign-realm)
 // []byte. A direct string(b) conversion on a cross-realm slice trips the
 // same readonly/external-conversion guard that bytes.Equal hits, so event
@@ -213,6 +219,7 @@ func CreateClient(_ realm, msg MsgCreateClient) ClientId {
 	impl.CreateClient(cross, clientId, msg.ClientStateBytes, msg.ConsensusStateBytes)
 	st.clientTypes[clientId] = msg.ClientType
 	st.saveClientState(clientId, msg.ClientStateBytes)
+	st.saveConsensusState(clientId, impl.GetLatestHeight(clientId), msg.ConsensusStateBytes)
 
 	chain.Emit(CreateClientEvent,
 		"client_type", string(msg.ClientType),
@@ -648,13 +655,13 @@ func BatchSend(_ realm, msg MsgBatchSend) H256 {
 		panic(ErrNotEnoughPackets)
 	}
 	batchHash := CommitPackets(msg.Packets)
-	commit(BatchPacketsPath(batchHash), COMMITMENT_MAGIC)
+	st.saveBatchPackets(batchHash, COMMITMENT_MAGIC)
 	// In-memory per-packet membership keeps HasPacketCommitment and the
 	// PacketAcknowledgement / PacketTimeout cleanup paths working for
 	// single-packet sends; multi-packet batches still commit at the batch
 	// path on chain.
 	for _, packet := range msg.Packets {
-		st.packetCommitments[PacketCommitmentPath(packet)] = true
+		st.setBatchPackets(CommitPacket(packet), COMMITMENT_MAGIC)
 	}
 	first := msg.Packets[0]
 	channel := st.getChannel(first.SourceChannelId)
@@ -671,7 +678,7 @@ func BatchAcks(_ realm, msg MsgBatchAcks) H256 {
 		panic(ErrAcknowledgementCountMismatch)
 	}
 	batchHash := CommitPackets(msg.Packets)
-	commit(BatchReceiptsPath(batchHash), CommitAcks(msg.Acks))
+	st.saveBatchReceipts(batchHash, CommitAcks(msg.Acks))
 	return batchHash
 }
 
@@ -697,6 +704,26 @@ func GetClientStatus(clientId ClientId) Status {
 		return StatusUnknown
 	}
 	return st.getClient(clientId).GetStatus(clientId)
+}
+
+func GetClientState(clientId ClientId) []byte {
+	return st.getClientState(clientId)
+}
+
+func GetConsensusState(clientId ClientId, height Height) []byte {
+	return st.getConsensusState(clientId, height)
+}
+
+func GetConnection(connectionId ConnectionId) Connection {
+	return st.getConnection(connectionId)
+}
+
+func GetBatchPackets(batchHash H256) H256 {
+	return st.getBatchPackets(batchHash)
+}
+
+func GetBatchReceipts(batchHash H256) H256 {
+	return st.getBatchReceipts(batchHash)
 }
 
 func CommitNonMembershipProof(_ realm, msg MsgCommitNonMembershipProof) {

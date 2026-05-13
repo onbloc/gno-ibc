@@ -334,6 +334,52 @@ func TestGetClientNotFoundPanics(t *testing.T) {
 	})
 }
 
+func TestGetClientStateReturnsStoredBytes(t *testing.T) {
+	resetState()
+	st.saveClientState(ClientId(1), []byte("client-state"))
+
+	got := GetClientState(ClientId(1))
+	if string(got) != "client-state" {
+		t.Errorf("GetClientState: got %q want client-state", string(got))
+	}
+	got[0] = 'C'
+	if again := GetClientState(ClientId(1)); string(again) != "client-state" {
+		t.Errorf("GetClientState must return a copy, got %q", string(again))
+	}
+}
+
+func TestGetConsensusStateReturnsStoredBytes(t *testing.T) {
+	resetState()
+	st.saveConsensusState(ClientId(1), Height(10), []byte("consensus-state"))
+
+	got := GetConsensusState(ClientId(1), Height(10))
+	if string(got) != "consensus-state" {
+		t.Errorf("GetConsensusState: got %q want consensus-state", string(got))
+	}
+	got[0] = 'C'
+	if again := GetConsensusState(ClientId(1), Height(10)); string(again) != "consensus-state" {
+		t.Errorf("GetConsensusState must return a copy, got %q", string(again))
+	}
+}
+
+func TestCreateClientStoresInitialClientAndConsensusState(t *testing.T) {
+	resetState()
+	st.clientRegistry[mockType] = &mockClient{chainId: "union-1", height: 100}
+
+	clientId := CreateClient(cross, MsgCreateClient{
+		ClientType:          mockType,
+		ClientStateBytes:    []byte("client-state"),
+		ConsensusStateBytes: []byte("consensus-state"),
+	})
+
+	if got := GetClientState(clientId); string(got) != "client-state" {
+		t.Errorf("GetClientState: got %q want client-state", string(got))
+	}
+	if got := GetConsensusState(clientId, Height(100)); string(got) != "consensus-state" {
+		t.Errorf("GetConsensusState: got %q want consensus-state", string(got))
+	}
+}
+
 // --- State: ID generation ---
 
 func TestGenerateIdsSequential(t *testing.T) {
@@ -371,6 +417,10 @@ func TestSaveAndGetConnection(t *testing.T) {
 	}
 	if got.ClientId != ClientId(1) {
 		t.Errorf("clientId: got %v want 1", got.ClientId)
+	}
+
+	if got := GetConnection(id); got.CounterpartyConnectionId != ConnectionId(99) {
+		t.Errorf("GetConnection counterparty connection: got %v want 99", got.CounterpartyConnectionId)
 	}
 }
 
@@ -410,6 +460,7 @@ func TestSaveAndGetChannel(t *testing.T) {
 	if got.Version != "ics20-1" {
 		t.Errorf("version: got %v want ics20-1", got.Version)
 	}
+
 }
 
 func TestGetChannelNotFoundPanics(t *testing.T) {
@@ -470,6 +521,9 @@ func TestBatchSendReturnsUnionPacketCommitment(t *testing.T) {
 	if got != want {
 		t.Fatal("BatchSend must return Union packet batch commitment")
 	}
+	if got := GetBatchPackets(want); got != COMMITMENT_MAGIC {
+		t.Errorf("GetBatchPackets: got %s want %s", got, COMMITMENT_MAGIC)
+	}
 }
 
 func TestBatchSendRejectsEmptyPacketList(t *testing.T) {
@@ -491,6 +545,9 @@ func TestBatchAcksReturnsUnionPacketCommitment(t *testing.T) {
 	want := CommitPackets([]Packet{p1, p2})
 	if got != want {
 		t.Fatal("BatchAcks must return Union packet batch commitment")
+	}
+	if got := GetBatchReceipts(want); got != CommitAcks([][]byte{[]byte("ack-a"), []byte("ack-b")}) {
+		t.Errorf("GetBatchReceipts: got %s want %s", got, CommitAcks([][]byte{[]byte("ack-a"), []byte("ack-b")}))
 	}
 }
 

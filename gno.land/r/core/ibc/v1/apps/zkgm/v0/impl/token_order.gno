@@ -99,7 +99,10 @@ func (v *ZkgmV1) executeTokenOrderV2(packet core.Packet, relayer address, path *
 		}
 
 		image := MetadataImage(meta)
-		destChan := uint32(packet.DestinationChannelId)
+		destChan, err := tokenOrderDestinationChannel(packet.DestinationChannelId)
+		if err != nil {
+			return core.RecvPacketResult{}, err
+		}
 		ibcDenom := PredictWrappedTokenV2(path, destChan, order.BaseToken, image)
 		if string(order.QuoteToken) != ibcDenom || order.BaseAmount.Cmp(order.QuoteAmount) < 0 {
 			return failureResult(universalErrorAck()), nil
@@ -129,7 +132,10 @@ func (v *ZkgmV1) executeTokenOrderV2(packet core.Packet, relayer address, path *
 	case z.TOKEN_ORDER_KIND_ESCROW:
 		quoteDenom := string(order.QuoteToken)
 		image, hasImage := zkgm.GetMetadataImageOf(quoteDenom)
-		destChan := uint32(packet.DestinationChannelId)
+		destChan, err := tokenOrderDestinationChannel(packet.DestinationChannelId)
+		if err != nil {
+			return core.RecvPacketResult{}, err
+		}
 		predicted := ""
 		if hasImage {
 			predicted = PredictWrappedTokenV2(path, destChan, order.BaseToken, image)
@@ -150,7 +156,6 @@ func (v *ZkgmV1) executeTokenOrderV2(packet core.Packet, relayer address, path *
 		_, hasOrigin := zkgm.GetTokenOrigin(quoteDenom)
 		var nextPath *u256.Uint
 		if !hasOrigin {
-			var err error
 			nextPath, err = z.UpdateChannelPath(path, destChan)
 			if err != nil {
 				return core.RecvPacketResult{}, err

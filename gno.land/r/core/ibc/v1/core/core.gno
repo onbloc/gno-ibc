@@ -681,6 +681,14 @@ func CommitMembershipProof(_ realm, msg MsgCommitMembershipProof) {
 	params.SetBytes(hex.EncodeToString(key[:]), msg.Value)
 }
 
+// VerifyClientMembership verifies a membership proof against a registered
+// light client without committing the verified value into this realm's state.
+// State-lens light clients use this during UpdateClient to prove that an L2
+// consensus state is stored in the L1 state tracked by another client.
+func VerifyClientMembership(_ realm, clientId ClientId, proofHeight Height, proof, path, value []byte) {
+	st.getClient(clientId).VerifyMembership(clientId, proofHeight, proof, path, value)
+}
+
 func CommitNonMembershipProof(_ realm, msg MsgCommitNonMembershipProof) {
 	st.getClient(msg.ClientId).VerifyNonMembership(msg.ClientId, msg.ProofHeight, msg.Proof, msg.Path)
 	commit(NonMembershipProofPath(msg.ClientId, msg.ProofHeight, msg.Path), COMMITMENT_MAGIC)

@@ -8,6 +8,7 @@ import (
 	"gno.land/p/aib/ibc/types"
 	z "gno.land/p/gnoswap/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
+	"gno.land/p/nt/testutils/v0"
 	"gno.land/r/aib/ibc/core"
 	zkgm "gno.land/r/gnoswap/ibc/apps/zkgm"
 	impl "gno.land/r/gnoswap/ibc/apps/zkgm/v0/impl"
@@ -17,14 +18,15 @@ import (
 func main() {
 	clientID := setupClient()
 	sender := runtime.OriginCaller().String()
-	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
+	receiver := string(testutils.TestAddress("receiver"))
 	baseToken := mintWrappedVoucher(sender, 50)
+	quoteToken := impl.PredictWrappedTokenV1(u256.Zero(), 1, []byte(baseToken))
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
 		Receiver:    []byte(receiver),
 		BaseToken:   []byte(baseToken),
 		BaseAmount:  u256.NewUint(50),
-		QuoteToken:  []byte("quote"),
+		QuoteToken:  []byte(quoteToken),
 		QuoteAmount: u256.NewUint(45),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
@@ -32,7 +34,7 @@ func main() {
 	seq, _ := zkgm.Send(cross, clientID, uint64(time.Now().Add(time.Hour).Unix()), [32]byte{}, instr)
 	sourceKey := impl.ChannelBalanceKeyV2(clientID, u256.Zero(), order.BaseToken, order.QuoteToken)
 
-	res := zkgm.AsIBCApp().OnRecvPacket(cross, clientID, "client-dst", seq, mustPayload(instr))
+	res := zkgm.AsIBCApp().OnRecvPacket(cross, clientID, "client-1", seq, mustPayload(instr))
 	ack, err := z.DecodeAck(res.Acknowledgement)
 	if err != nil {
 		panic(err)
@@ -43,7 +45,7 @@ func main() {
 	println("source_sender_balance", impl.VoucherBalanceOf(baseToken, address(sender)))
 	println("recv_status", int(res.Status))
 	println("recv_ack_tag", ack.Tag.Dec())
-	println("dest_receiver_balance", impl.VoucherBalanceOf("quote", address(receiver)))
+	println("dest_receiver_balance", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 }
 
 func setupClient() string {
@@ -56,18 +58,23 @@ func setupClient() string {
 }
 
 func mintWrappedVoucher(receiver string, amount uint64) string {
-	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{Implementation: []byte("grc20"), Initializer: []byte("roundtrip")})
+	metaBytes := roundtripMetaBytes()
+	quoteToken := impl.PredictWrappedTokenV2(nil, 1, []byte("ugnot"), impl.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
 	order := z.TokenOrderV2{
 		Receiver:    []byte(receiver),
 		BaseToken:   []byte("ugnot"),
 		BaseAmount:  u256.NewUint(amount),
-		QuoteToken:  []byte("quote"),
+		QuoteToken:  []byte(quoteToken),
 		QuoteAmount: u256.NewUint(amount),
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	zkgm.AsIBCApp().OnRecvPacket(cross, "client-a", "client-b", 1, mustPayload(mustOrderInstruction(order)))
-	return impl.PredictWrappedTokenV2("client-b", order.BaseToken, impl.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
+	zkgm.AsIBCApp().OnRecvPacket(cross, "client-a", "client-1", 1, mustPayload(mustOrderInstruction(order)))
+	return quoteToken
+}
+
+func roundtripMetaBytes() []byte {
+	return mustEncodeTokenMetadata(z.TokenMetadata{Implementation: []byte("grc20"), Initializer: []byte("roundtrip")})
 }
 
 func mustPayload(instr z.Instruction) types.Payload {

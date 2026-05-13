@@ -32,7 +32,17 @@ func main() {
 	})
 
 	println("quote_balance", impl.VoucherBalanceOf("ibc/quote", address(receiver)))
+	println("ack_hash_matches_failure", core.AcknowledgementHash(cross, packet).String() == expectedFailureAckHash())
+}
+
+func expectedFailureAckHash() string {
+	ack, err := z.EncodeAck(z.Ack{Tag: u256.NewUint(0), InnerAck: []byte("UNIVERSAL_ERROR")})
+	if err != nil {
+		panic(err)
+	}
+	return core.CommitAcks([][]byte{ack}).String()
 }
 
 // Output:
-// quote_balance 21
+// quote_balance 0
+// ack_hash_matches_failure true

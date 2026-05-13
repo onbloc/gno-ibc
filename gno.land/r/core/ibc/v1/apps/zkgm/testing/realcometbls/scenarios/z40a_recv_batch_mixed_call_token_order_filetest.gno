@@ -64,16 +64,24 @@ func mixedBatchPacket(pair realcometbls.ChannelPair, receiver string) core.Packe
 func expectedAckHash() string {
 	ack := e2e.MustBatchAck(cross, [][]byte{
 		e2e.MustCallAck(cross),
-		e2e.MustSuccessAckBytes(cross, e2e.MustProtocolTokenOrderAck(cross)),
+		universalErrorAck(),
 	})
 	return core.CommitAcks([][]byte{ack}).String()
+}
+
+func universalErrorAck() []byte {
+	ack, err := z.EncodeAck(z.Ack{Tag: u256.NewUint(0), InnerAck: []byte("UNIVERSAL_ERROR")})
+	if err != nil {
+		panic(err)
+	}
+	return ack
 }
 
 // Output:
 // mock_calls 1
 // last_calldata batch-call
 // last_relayer_msg batch-relay-msg
-// quote_balance 21
+// quote_balance 0
 // receipt_after_recv true
 // ack_after_recv true
 // ack_hash_matches_batch_ack true

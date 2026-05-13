@@ -11,7 +11,7 @@ import (
 )
 
 func TestVerifyForwardRejectsNestedForward(cur realm, t *testing.T) {
-	err := (&ZkgmV1{}).verifyForward(core.ChannelId(1), "sender", nil, [32]byte{}, z.Forward{
+	err := (&ZkgmV1{}).verifyForward(core.ChannelId(1), "sender", nil, u256.Zero(), [32]byte{}, z.Forward{
 		Path: forwardPath(1, 2),
 		Instruction: z.Instruction{
 			Version: z.INSTR_VERSION_0,
@@ -48,7 +48,7 @@ func TestVerifyForwardPassesAllowedChildren(cur realm, t *testing.T) {
 		{Version: z.INSTR_VERSION_0, Opcode: z.OP_BATCH, Operand: batchBytes},
 	}
 	for _, instr := range cases {
-		err := (&ZkgmV1{}).verifyForward(core.ChannelId(1), sender, nil, [32]byte{}, z.Forward{
+		err := (&ZkgmV1{}).verifyForward(core.ChannelId(1), sender, nil, u256.Zero(), [32]byte{}, z.Forward{
 			Path:        forwardPath(1, 2),
 			Instruction: instr,
 		})
@@ -157,13 +157,13 @@ func TestAcknowledgeForwardWithTokenOrderChildRefundsOnFailure(cur realm, t *tes
 		QuoteAmount: u256.NewUint(20),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	path := u256.NewUint(7)
+	path := forwardPath(1, 2)
 	increaseChannelBalanceV2(cross, core.ChannelId(3), path, order.BaseToken, order.QuoteToken, order.BaseAmount)
 	childFailAck, err := z.EncodeAck(z.Ack{Tag: tagAckFailure, InnerAck: []byte("failed")})
 	uassert.NoError(t, err)
 
-	err = (&ZkgmV1{}).acknowledgeForward(core.Packet{SourceChannelId: core.ChannelId(3), DestinationChannelId: core.ChannelId(4)}, path, [32]byte{}, z.Forward{
-		Path:        forwardPath(1, 2),
+	err = (&ZkgmV1{}).acknowledgeForward(core.Packet{SourceChannelId: core.ChannelId(3), DestinationChannelId: core.ChannelId(4)}, u256.Zero(), [32]byte{}, z.Forward{
+		Path:        path,
 		Instruction: batchMustOrderInstruction(order),
 	}, z.Ack{Tag: tagAckSuccess, InnerAck: childFailAck})
 

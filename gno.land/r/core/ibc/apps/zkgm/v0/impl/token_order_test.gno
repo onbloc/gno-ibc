@@ -22,12 +22,14 @@ func TestExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *testing.T) {
 		Implementation: []byte("grc20"),
 		Initializer:    []byte("init"),
 	})
+	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	ibcDenom := PredictWrappedTokenV2(u256.NewUint(7), 1, []byte("ugnot"), image)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(testAddress("receiver")),
 		BaseToken:   []byte("ugnot"),
 		BaseAmount:  u256.NewUint(100),
-		QuoteToken:  []byte("quote"),
+		QuoteToken:  []byte(ibcDenom),
 		QuoteAmount: u256.NewUint(95),
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
@@ -35,21 +37,21 @@ func TestExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *testing.T) {
 
 	res, err := (&ZkgmV0{}).executeTokenOrderV2(zkgm.RecvRequest{
 		DestinationClient: "client-1",
+		Caller:            testAddress("relayer"),
 	}, u256.NewUint(7), order)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatus_Success)
 	assertProtocolAck(t, res.Acknowledgement)
 
-	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	ibcDenom := PredictWrappedTokenV2("client-1", order.BaseToken, image)
 	uassert.Equal(t, int64(95), VoucherBalanceOf(ibcDenom, address(order.Receiver)))
+	uassert.Equal(t, int64(5), VoucherBalanceOf(ibcDenom, address(testAddress("relayer"))))
 	storedImage, ok := zkgm.GetMetadataImageOf(ibcDenom)
 	uassert.True(t, ok)
 	uassert.True(t, image == storedImage)
 	origin, ok := zkgm.GetTokenOrigin(ibcDenom)
 	uassert.True(t, ok)
-	uassert.Equal(t, "7", origin.ToString())
+	uassert.Equal(t, "4294967303", origin.ToString())
 }
 
 func TestVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm, t *testing.T) {
@@ -67,7 +69,7 @@ func TestVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm, t *testin
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 
-	err := (&ZkgmV0{}).verifyTokenOrderV2("client-0", sender, nil, order)
+	err := (&ZkgmV0{}).verifyTokenOrderV2("client-0", sender, nil, u256.Zero(), order)
 
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(37), VoucherBalanceOf(baseToken, address(sender)))
@@ -79,8 +81,9 @@ func TestExecuteEscrowMintsQuoteVoucher(cur realm, t *testing.T) {
 	resetImplForTest()
 
 	receiver := testAddress("receiver")
-	quoteToken := "ibc/quote"
+	path := u256.NewUint(2)
 	image := MetadataImage(z.TokenMetadata{Implementation: []byte("grc20"), Initializer: []byte("quote")})
+	quoteToken := PredictWrappedTokenV2(path, 1, []byte("ugnot"), image)
 	uassert.NoError(t, mintVoucher(cross, quoteToken, "quote", image, receiver, u256.NewUint(1)))
 	order := z.TokenOrderV2{
 		Receiver:    []byte(receiver),
@@ -93,7 +96,8 @@ func TestExecuteEscrowMintsQuoteVoucher(cur realm, t *testing.T) {
 
 	res, err := (&ZkgmV0{}).executeTokenOrderV2(zkgm.RecvRequest{
 		DestinationClient: "client-1",
-	}, u256.NewUint(2), order)
+		Caller:            testAddress("relayer"),
+	}, path, order)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatus_Success)
@@ -102,7 +106,7 @@ func TestExecuteEscrowMintsQuoteVoucher(cur realm, t *testing.T) {
 }
 
 func TestSolveKindRemainsUnsupported(cur realm, t *testing.T) {
-	err := (&ZkgmV0{}).verifyTokenOrderV2("client-0", "sender", nil, z.TokenOrderV2{
+	err := (&ZkgmV0{}).verifyTokenOrderV2("client-0", "sender", nil, u256.Zero(), z.TokenOrderV2{
 		Kind: z.TOKEN_ORDER_KIND_SOLVE,
 	})
 
@@ -208,7 +212,7 @@ func TestTokenTransferRoundTripReleasesEscrowedNative(cur realm, t *testing.T) {
 
 	sender := testAddress("roundtrip-sender")
 	receiver := testAddress("roundtrip-receiver")
-	channelID := "client-roundtrip"
+	channelID := "client-1"
 	nativeDenom := "/" + runtime.CurrentRealm().PkgPath() + ":roundtrip"
 	amount := u256.NewUint(100)
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
@@ -216,7 +220,7 @@ func TestTokenTransferRoundTripReleasesEscrowedNative(cur realm, t *testing.T) {
 		Initializer:    []byte("roundtrip"),
 	})
 	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	voucherDenom := PredictWrappedTokenV2("client-dst-roundtrip", []byte(nativeDenom), image)
+	voucherDenom := PredictWrappedTokenV2(u256.Zero(), 1, []byte(nativeDenom), image)
 
 	issueNativeToCurrentRealm(nativeDenom, 100)
 	beforeReceiverNative := nativeBalance(receiver, nativeDenom)
@@ -231,13 +235,14 @@ func TestTokenTransferRoundTripReleasesEscrowedNative(cur realm, t *testing.T) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	err := (&ZkgmV0{}).verifyTokenOrderV2(channelID, sender, chain.NewCoins(chain.NewCoin(nativeDenom, 100)), sendOrder)
+	err := (&ZkgmV0{}).verifyTokenOrderV2(channelID, sender, chain.NewCoins(chain.NewCoin(nativeDenom, 100)), u256.Zero(), sendOrder)
 	uassert.NoError(t, err)
 	sourceKey := ChannelBalanceKeyV2(channelID, u256.Zero(), sendOrder.BaseToken, sendOrder.QuoteToken)
 	uassert.Equal(t, "100", zkgm.GetChannelBalanceV2(sourceKey).ToString())
 
 	recvRes, err := (&ZkgmV0{}).executeTokenOrderV2(zkgm.RecvRequest{
-		DestinationClient: "client-dst-roundtrip",
+		DestinationClient: channelID,
+		Relayer:           []byte(testAddress("roundtrip-relayer")),
 	}, u256.Zero(), sendOrder)
 	uassert.NoError(t, err)
 	uassert.True(t, recvRes.Status == types.PacketStatus_Success)
@@ -253,12 +258,13 @@ func TestTokenTransferRoundTripReleasesEscrowedNative(cur realm, t *testing.T) {
 		QuoteAmount: amount,
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
-	err = (&ZkgmV0{}).verifyTokenOrderV2(channelID, sender, nil, returnOrder)
+	err = (&ZkgmV0{}).verifyTokenOrderV2(channelID, sender, nil, u256.Zero(), returnOrder)
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(0), VoucherBalanceOf(voucherDenom, address(sender)))
 
 	returnRes, err := (&ZkgmV0{}).executeTokenOrderV2(zkgm.RecvRequest{
 		DestinationClient: channelID,
+		Relayer:           []byte(testAddress("roundtrip-relayer")),
 	}, u256.Zero(), returnOrder)
 	uassert.NoError(t, err)
 	uassert.True(t, returnRes.Status == types.PacketStatus_Success)

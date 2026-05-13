@@ -643,23 +643,6 @@ func AcknowledgementHash(_ realm, packet Packet) H256 {
 	return st.acknowledgementHash(packet)
 }
 
-// CreateClientRaw is a convenience wrapper for testing: accepts hex-encoded bytes.
-func CreateClientRaw(_ realm, clientType string, clientStateHex, consensusStateHex string) ClientId {
-	csBytes, err := hex.DecodeString(clientStateHex)
-	if err != nil {
-		panic("invalid clientStateHex: " + err.Error())
-	}
-	consBytes, err := hex.DecodeString(consensusStateHex)
-	if err != nil {
-		panic("invalid consensusStateHex: " + err.Error())
-	}
-	return CreateClient(cross, MsgCreateClient{
-		ClientType:          ClientType(clientType),
-		ClientStateBytes:    csBytes,
-		ConsensusStateBytes: consBytes,
-	})
-}
-
 func BatchSend(_ realm, msg MsgBatchSend) H256 {
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)

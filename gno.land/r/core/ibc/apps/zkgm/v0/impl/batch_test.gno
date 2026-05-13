@@ -154,11 +154,13 @@ func TestExecuteBatchMixedOpcodes(cur realm, t *testing.T) {
 		Implementation: []byte("grc20"),
 		Initializer:    []byte("init"),
 	})
+	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	ibcDenom := PredictWrappedTokenV2(u256.NewUint(7), 1, []byte("ugnot"), image)
 	order := z.TokenOrderV2{
 		Receiver:    []byte(receiver),
 		BaseToken:   []byte("ugnot"),
 		BaseAmount:  u256.NewUint(100),
-		QuoteToken:  []byte("quote"),
+		QuoteToken:  []byte(ibcDenom),
 		QuoteAmount: u256.NewUint(95),
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
@@ -170,8 +172,8 @@ func TestExecuteBatchMixedOpcodes(cur realm, t *testing.T) {
 
 	ackBytes, err := (&ZkgmV0{}).executeBatch(zkgm.RecvRequest{
 		SourceClient:      "client-a",
-		DestinationClient: "client-b",
-		Caller:            "relayer",
+		DestinationClient: "client-1",
+		Caller:            testAddress("relayer"),
 	}, u256.NewUint(7), [32]byte{}, batch, false)
 
 	uassert.NoError(t, err)
@@ -185,8 +187,6 @@ func TestExecuteBatchMixedOpcodes(cur realm, t *testing.T) {
 	assertSuccessAck(t, batchAck.Acknowledgements[0])
 	assertSuccessAck(t, batchAck.Acknowledgements[1])
 
-	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	ibcDenom := PredictWrappedTokenV2("client-b", order.BaseToken, image)
 	uassert.Equal(t, int64(95), VoucherBalanceOf(ibcDenom, address(receiver)))
 }
 

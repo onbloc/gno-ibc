@@ -60,11 +60,11 @@ func (v *ZkgmV0) executeForward(req zkgm.RecvRequest, path *u256.Uint, parentSal
 }
 
 func (v *ZkgmV0) acknowledgeForward(req zkgm.AckRequest, path *u256.Uint, salt [32]byte, forward z.Forward, ack z.Ack) error {
-	return v.dispatchAck(req, path, salt, forward.Instruction, ack.InnerAck)
+	return v.dispatchAck(req, forward.Path, salt, forward.Instruction, ack.InnerAck)
 }
 
 func (v *ZkgmV0) timeoutForward(req zkgm.TimeoutRequest, path *u256.Uint, salt [32]byte, forward z.Forward) error {
-	return v.dispatchTimeout(req, path, salt, forward.Instruction)
+	return v.dispatchTimeout(req, forward.Path, salt, forward.Instruction)
 }
 
 func buildForwardChild(req zkgm.RecvRequest, path *u256.Uint, parentSalt [32]byte, forward z.Forward) (types.Payload, [32]byte, uint32, error) {
@@ -183,17 +183,17 @@ func channelToClient(numericID uint32) string {
 	return "client-" + strconv.FormatUint(uint64(numericID), 10)
 }
 
-func clientToChannel(clientID string) uint32 {
+func clientToChannel(clientID string) (uint32, bool) {
 	// TODO: replace with the same registry as channelToClient. This parser only
 	// supports the temporary "client-<id>" test/e2e convention.
 	if !strings.HasPrefix(clientID, "client-") {
-		return 0
+		return 0, false
 	}
-	n, err := strconv.Atoi(clientID[len("client-"):])
-	if err != nil || n < 0 {
-		return 0
+	n, err := strconv.ParseUint(clientID[len("client-"):], 10, 32)
+	if err != nil {
+		return 0, false
 	}
-	return uint32(n)
+	return uint32(n), true
 }
 
 func decodeForwardInstruction(instr z.Instruction) (z.Forward, error) {

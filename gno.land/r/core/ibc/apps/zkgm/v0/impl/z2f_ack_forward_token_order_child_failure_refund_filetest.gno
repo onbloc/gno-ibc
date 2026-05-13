@@ -17,27 +17,36 @@ import (
 func main() {
 	clientID := setupClient()
 	sender := runtime.OriginCaller().String()
-	baseToken := mintWrappedVoucher(sender, 30)
-	orderA := refundOrder(sender, baseToken, "quote-a", 11)
-	orderB := refundOrder(sender, baseToken, "quote-b", 17)
-	batch := z.Batch{Instructions: []z.Instruction{mustOrderInstruction(orderA), mustOrderInstruction(orderB)}}
-	instr := mustBatchInstruction(batch)
+	baseToken := mintWrappedVoucher(sender, 25)
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		Receiver:    []byte("counterparty-receiver"),
+		BaseToken:   []byte(baseToken),
+		BaseAmount:  u256.NewUint(25),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(25),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	forward := z.Forward{
+		Path:        forwardPath(1, 2),
+		Instruction: mustOrderInstruction(order),
+	}
+	instr := mustForwardInstruction(forward)
 
 	seq, _ := zkgm.Send(cross, clientID, uint64(time.Now().Add(time.Hour).Unix()), [32]byte{}, instr)
-	keyA := impl.ChannelBalanceKeyV2(clientID, u256.Zero(), orderA.BaseToken, orderA.QuoteToken)
-	keyB := impl.ChannelBalanceKeyV2(clientID, u256.Zero(), orderB.BaseToken, orderB.QuoteToken)
+	key := impl.ChannelBalanceKeyV2(clientID, forward.Path, order.BaseToken, order.QuoteToken)
 	println("sequence", seq)
-	println("balance_a_after_send", zkgm.GetChannelBalanceV2(keyA).Dec())
-	println("balance_b_after_send", zkgm.GetChannelBalanceV2(keyB).Dec())
+	println("balance_after_send", zkgm.GetChannelBalanceV2(key).Dec())
 	println("voucher_after_send", impl.VoucherBalanceOf(baseToken, address(sender)))
 
-	err := zkgm.AsIBCApp().OnTimeoutPacket(cross, clientID, "07-tendermint-2", seq, mustBatchPayload(batch))
+	childFailAck := mustAck(z.Ack{Tag: u256.Zero(), InnerAck: []byte("failed")})
+	outerAck := mustAck(z.Ack{Tag: u256.NewUint(1), InnerAck: childFailAck})
+	err := zkgm.AsIBCApp().OnAcknowledgementPacket(cross, clientID, "07-tendermint-2", seq, outerAck, mustPayload(instr))
 	if err != nil {
 		panic(err)
 	}
-	println("balance_a_after_timeout", balanceDec(keyA))
-	println("balance_b_after_timeout", balanceDec(keyB))
-	println("voucher_after_timeout", impl.VoucherBalanceOf(baseToken, address(sender)))
+	println("balance_after_ack", balanceDec(key))
+	println("voucher_after_ack", impl.VoucherBalanceOf(baseToken, address(sender)))
 }
 
 func setupClient() string {
@@ -49,19 +58,8 @@ func setupClient() string {
 	return clientID
 }
 
-func refundOrder(sender string, baseToken string, quoteToken string, amount uint64) z.TokenOrderV2 {
-	return z.TokenOrderV2{
-		Sender:      []byte(sender),
-		BaseToken:   []byte(baseToken),
-		BaseAmount:  u256.NewUint(amount),
-		QuoteToken:  []byte(quoteToken),
-		QuoteAmount: u256.NewUint(amount),
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-	}
-}
-
 func mintWrappedVoucher(receiver string, amount uint64) string {
-	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{Implementation: []byte("grc20"), Initializer: []byte("batch-timeout")})
+	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{Implementation: []byte("grc20"), Initializer: []byte("init")})
 	quoteToken := impl.PredictWrappedTokenV2(nil, 1, []byte("ugnot"), impl.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
 	order := z.TokenOrderV2{
 		Receiver:    []byte(receiver),
@@ -72,16 +70,16 @@ func mintWrappedVoucher(receiver string, amount uint64) string {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	zkgm.AsIBCApp().OnRecvPacket(cross, "client-a", "client-1", 1, mustOrderPayload(order))
+	zkgm.AsIBCApp().OnRecvPacket(cross, "client-a", "client-1", 1, mustPayload(mustOrderInstruction(order)))
 	return quoteToken
 }
 
-func mustBatchInstruction(batch z.Batch) z.Instruction {
-	batchBytes, err := z.EncodeBatch(batch)
+func mustPayload(instr z.Instruction) types.Payload {
+	packetBytes, err := z.EncodeZkgmPacket(z.ZkgmPacket{Path: u256.Zero(), Instruction: instr})
 	if err != nil {
 		panic(err)
 	}
-	return z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_BATCH, Operand: batchBytes}
+	return types.Payload{Value: packetBytes}
 }
 
 func mustOrderInstruction(order z.TokenOrderV2) z.Instruction {
@@ -92,20 +90,20 @@ func mustOrderInstruction(order z.TokenOrderV2) z.Instruction {
 	return z.Instruction{Version: z.INSTR_VERSION_2, Opcode: z.OP_TOKEN_ORDER, Operand: orderBytes}
 }
 
-func mustBatchPayload(batch z.Batch) types.Payload {
-	return mustPayload(mustBatchInstruction(batch))
-}
-
-func mustOrderPayload(order z.TokenOrderV2) types.Payload {
-	return mustPayload(mustOrderInstruction(order))
-}
-
-func mustPayload(instr z.Instruction) types.Payload {
-	packetBytes, err := z.EncodeZkgmPacket(z.ZkgmPacket{Path: u256.Zero(), Instruction: instr})
+func mustForwardInstruction(forward z.Forward) z.Instruction {
+	forwardBytes, err := z.EncodeForward(forward)
 	if err != nil {
 		panic(err)
 	}
-	return types.Payload{Value: packetBytes}
+	return z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_FORWARD, Operand: forwardBytes}
+}
+
+func mustAck(ack z.Ack) []byte {
+	bz, err := z.EncodeAck(ack)
+	if err != nil {
+		panic(err)
+	}
+	return bz
 }
 
 func mustEncodeTokenMetadata(meta z.TokenMetadata) []byte {
@@ -124,6 +122,14 @@ func mustDecodeTokenMetadata(bz []byte) z.TokenMetadata {
 	return meta
 }
 
+func forwardPath(channels ...uint64) *u256.Uint {
+	path := u256.Zero()
+	for i, channel := range channels {
+		path = new(u256.Uint).Or(path, new(u256.Uint).Lsh(u256.NewUint(channel), uint(32*i)))
+	}
+	return path
+}
+
 func balanceDec(key string) string {
 	balance := zkgm.GetChannelBalanceV2(key)
 	if balance == nil {
@@ -134,9 +140,7 @@ func balanceDec(key string) string {
 
 // Output:
 // sequence 1
-// balance_a_after_send 11
-// balance_b_after_send 17
-// voucher_after_send 2
-// balance_a_after_timeout 0
-// balance_b_after_timeout 0
-// voucher_after_timeout 30
+// balance_after_send 25
+// voucher_after_send 0
+// balance_after_ack 0
+// voucher_after_ack 25

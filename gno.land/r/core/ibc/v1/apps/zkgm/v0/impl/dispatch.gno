@@ -10,14 +10,14 @@ import (
 	core "gno.land/r/core/ibc/v1/core"
 )
 
-func (v *ZkgmV1) dispatchVerify(channelId core.ChannelId, sender string, sent chain.Coins, salt [32]byte, instr z.Instruction) error {
+func (v *ZkgmV1) dispatchVerify(channelId core.ChannelId, sender string, sent chain.Coins, path *u256.Uint, salt [32]byte, instr z.Instruction) error {
 	switch instr.Opcode {
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instr)
 		if err != nil {
 			return err
 		}
-		return v.verifyTokenOrderV2(channelId, sender, sent, order)
+		return v.verifyTokenOrderV2(channelId, sender, sent, path, order)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instr)
 		if err != nil {
@@ -29,13 +29,13 @@ func (v *ZkgmV1) dispatchVerify(channelId core.ChannelId, sender string, sent ch
 		if err != nil {
 			return err
 		}
-		return v.verifyBatch(channelId, sender, sent, salt, batch)
+		return v.verifyBatch(channelId, sender, sent, path, salt, batch)
 	case z.OP_FORWARD:
 		forward, err := decodeForwardInstruction(instr)
 		if err != nil {
 			return err
 		}
-		return v.verifyForward(channelId, sender, sent, salt, forward)
+		return v.verifyForward(channelId, sender, sent, path, salt, forward)
 	default:
 		return errors.New("zkgm/v1: unsupported opcode")
 	}
@@ -55,7 +55,7 @@ func (v *ZkgmV1) dispatchExecute(packet core.Packet, relayer address, relayerMsg
 		if err != nil {
 			return core.RecvPacketResult{}, err
 		}
-		return v.executeTokenOrderV2(packet, path, order)
+		return v.executeTokenOrderV2(packet, relayer, path, order)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instr)
 		if err != nil {
@@ -185,19 +185,40 @@ func decodeForwardInstruction(instr z.Instruction) (z.Forward, error) {
 	return z.DecodeForward(instr.Operand)
 }
 
+// universalErrorAckBytes is the cached ABI-encoded `z.Ack{Tag:0, InnerAck:"UNIVERSAL_ERROR"}`
+// that zkgm-internal recv failures emit. Built once at package init so the per-packet
+// `failureResult(universalErrorAck())` paths do not re-encode the same constant payload.
+var universalErrorAckBytes = mustEncodeUniversalErrorAck()
+
+func mustEncodeUniversalErrorAck() []byte {
+	bz, err := z.EncodeAck(z.Ack{
+		Tag:      u256.NewUint(0),
+		InnerAck: []byte("UNIVERSAL_ERROR"),
+	})
+	if err != nil {
+		panic(err)
+	}
+	return bz
+}
+
 func failureResult(ack []byte) core.RecvPacketResult {
 	return core.RecvPacketResult{Status: core.PacketStatusFailure, Ack: ack}
 }
 
 func universalErrorAck() []byte {
-	ack, err := z.EncodeAck(z.Ack{
-		Tag:      u256.NewUint(0),
-		InnerAck: []byte("UNIVERSAL_ERROR"),
-	})
-	if err != nil {
-		return []byte("UNIVERSAL_ERROR")
+	return universalErrorAckBytes
+}
+
+// tokenOrderDestinationChannel rejects the zero-channel sentinel so the
+// derived destChan is safe to feed into UpdateChannelPath / PopChannelFromPath
+// without colliding with the "no channel" slot. Symmetric with the non-v1
+// helper at gno.land/r/core/ibc/apps/zkgm/v0/impl/token_order.gno.
+func tokenOrderDestinationChannel(channelId core.ChannelId) (uint32, error) {
+	raw := uint32(channelId)
+	if raw == 0 {
+		return 0, errors.New("zkgm/v1: invalid token order destination channel")
 	}
-	return ack
+	return raw, nil
 }
 
 func isOnlyMakerAck(ack []byte) bool {

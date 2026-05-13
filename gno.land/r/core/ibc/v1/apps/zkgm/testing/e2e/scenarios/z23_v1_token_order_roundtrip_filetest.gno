@@ -15,15 +15,17 @@ func main() {
 
 	sender := "g17xpfvakm2amg962yls6f84z3kell8c5lserqta"
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
+	metaBytes := e2e.MustTokenMetadata(cross, "grc20", "roundtrip")
+	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(pair.Destination), []byte("ugnot"), impl.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
 		Receiver:    []byte(receiver),
 		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.Zero(),
-		QuoteToken:  []byte("ibc/quote"),
+		BaseAmount:  u256.NewUint(33),
+		QuoteToken:  []byte(quoteToken),
 		QuoteAmount: u256.NewUint(33),
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
-		Metadata:    e2e.MustTokenMetadata(cross, "grc20", "roundtrip"),
+		Metadata:    metaBytes,
 	}
 	instr := e2e.MustTokenOrderInstruction(cross, order)
 	packet := core.Packet{
@@ -46,7 +48,7 @@ func main() {
 		ProofHeight:      core.Height(1),
 	})
 
-	println("quote_balance", impl.VoucherBalanceOf(impl.PredictWrappedTokenV2(pair.Destination, order.BaseToken, impl.MetadataImage(mustDecodeTokenMetadata(order.Metadata))), address(receiver)))
+	println("quote_balance", impl.VoucherBalanceOf(impl.PredictWrappedTokenV2(u256.Zero(), uint32(pair.Destination), order.BaseToken, impl.MetadataImage(mustDecodeTokenMetadata(order.Metadata))), address(receiver)))
 	println("ack_roundtrip", "ok")
 }
 

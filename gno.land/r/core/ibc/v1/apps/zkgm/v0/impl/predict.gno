@@ -4,6 +4,7 @@ import (
 	"crypto/keccak256"
 	"encoding/hex"
 
+	abi "gno.land/p/core/encoding/abi"
 	z "gno.land/p/gnoswap/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	core "gno.land/r/core/ibc/v1/core"
@@ -11,20 +12,46 @@ import (
 
 const (
 	ibcDenomPrefix = "ibc/"
-	tagZkgmV2      = "ZKGM_V2"
 	tagCallProxy   = "ZKGM_CALL_PROXY"
 )
 
+var predictV1Schema = abi.Schema{Fields: []abi.Field{
+	{Type: abi.TypeUint256},
+	{Type: abi.TypeUint32},
+	{Type: abi.TypeBytes},
+}}
+
+var predictV2Schema = abi.Schema{Fields: []abi.Field{
+	{Type: abi.TypeUint256},
+	{Type: abi.TypeUint32},
+	{Type: abi.TypeBytes},
+	{Type: abi.TypeUint256},
+}}
+
+// PredictWrappedTokenV1 derives the wrapped IBC denom for a v1 token order.
+func PredictWrappedTokenV1(path *u256.Uint, channelId uint32, baseToken []byte) string {
+	if path == nil {
+		path = u256.Zero()
+	}
+	bz, err := abi.Encode(predictV1Schema, []any{path, channelId, baseToken})
+	if err != nil {
+		panic(err)
+	}
+	h := keccak256.Sum256(bz)
+	return ibcDenomPrefix + hex.EncodeToString(h[:20])
+}
+
 // PredictWrappedTokenV2 derives the IBC voucher denom for a v2 token order.
-// key = ibc/<first-20-bytes-of-keccak(ZKGM_V2 || channelId || baseToken || metadataImage)>
-func PredictWrappedTokenV2(channelId core.ChannelId, baseToken []byte, metadataImage [32]byte) string {
-	channel := channelId.String()
-	buf := make([]byte, 0, len(tagZkgmV2)+len(channel)+len(baseToken)+len(metadataImage))
-	buf = append(buf, tagZkgmV2...)
-	buf = append(buf, channel...)
-	buf = append(buf, baseToken...)
-	buf = append(buf, metadataImage[:]...)
-	h := keccak256.Sum256(buf)
+func PredictWrappedTokenV2(path *u256.Uint, channelId uint32, baseToken []byte, metadataImage [32]byte) string {
+	if path == nil {
+		path = u256.Zero()
+	}
+	image := new(u256.Uint).SetBytes(metadataImage[:])
+	bz, err := abi.Encode(predictV2Schema, []any{path, channelId, baseToken, image})
+	if err != nil {
+		panic(err)
+	}
+	h := keccak256.Sum256(bz)
 	return ibcDenomPrefix + hex.EncodeToString(h[:20])
 }
 

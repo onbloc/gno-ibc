@@ -47,12 +47,12 @@ type LightHeader struct {
 }
 
 // Nanos returns the header timestamp as nanoseconds since Unix epoch.
-// Callers must ensure TimeSeconds and TimeNanos are non-negative; verifyHeader enforces this.
+// Callers must ensure TimeSeconds and TimeNanos are non-negative; VerifyHeader enforces this.
 func (lh LightHeader) Nanos() uint64 {
 	return uint64(lh.TimeSeconds)*1_000_000_000 + uint64(lh.TimeNanos)
 }
 
-// Header is the ClientMessage used to update the CometBLS light client.
+// Header is the message used to update the CometBLS light client.
 // Mirrors union.ibc.lightclients.cometbls.v1.Header.
 type Header struct {
 	SignedHeader       LightHeader

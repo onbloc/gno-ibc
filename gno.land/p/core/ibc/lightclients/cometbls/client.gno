@@ -17,52 +17,8 @@ const (
 // FrozenHeight is the sentinel height used to freeze a client on misbehaviour.
 const FrozenHeight Height = 1
 
-// ClientMessage wraps either a Header or Misbehaviour for VerifyClientMessage.
-type ClientMessage struct {
-	header       *Header
-	misbehaviour *Misbehaviour
-}
-
-// NewHeaderMessage wraps a Header as a ClientMessage.
-func NewHeaderMessage(h Header) ClientMessage {
-	return ClientMessage{header: &h}
-}
-
-// NewMisbehaviourMessage wraps a Misbehaviour as a ClientMessage.
-func NewMisbehaviourMessage(m Misbehaviour) ClientMessage {
-	return ClientMessage{misbehaviour: &m}
-}
-
-// CometBLSClient is the CometBLS IBC light client.
-// getConsensusState and setConsensusState are provided by the realm to
-// read and write stored consensus states.
-type CometBLSClient struct {
-	cs                ClientState
-	getConsensusState func(Height) (ConsensusState, bool)
-	setConsensusState func(Height, ConsensusState)
-}
-
-// New creates a CometBLSClient with realm-provided storage callbacks.
-// Call Initialize before using any other method.
-func New(
-	getConsensusState func(Height) (ConsensusState, bool),
-	setConsensusState func(Height, ConsensusState),
-) *CometBLSClient {
-	return &CometBLSClient{getConsensusState: getConsensusState, setConsensusState: setConsensusState}
-}
-
-// Initialize sets the client state and stores the initial consensus state.
-// Must be called once upon client creation before any other method.
-func (c *CometBLSClient) Initialize(cs ClientState, initial ConsensusState) error {
-	if err := validateInitialize(cs, initial); err != nil {
-		return err
-	}
-	c.cs = cs
-	c.setConsensusState(cs.LatestHeight, initial)
-	return nil
-}
-
-func validateInitialize(cs ClientState, initial ConsensusState) error {
+// ValidateInitialize checks the invariants required to initialize a CometBLS client.
+func ValidateInitialize(cs ClientState, initial ConsensusState) error {
 	if cs.ChainID == "" {
 		return errors.New("cometbls: chain ID cannot be empty")
 	}
@@ -85,95 +41,21 @@ func validateInitialize(cs ClientState, initial ConsensusState) error {
 }
 
 // Status returns the current status of the client.
-func (c *CometBLSClient) Status(nowNanos uint64) string {
-	if c.cs.IsFrozen() {
+func Status(cs ClientState, latest ConsensusState, latestFound bool, nowNanos uint64) string {
+	if cs.IsFrozen() {
 		return StatusFrozen
 	}
-	latest, found := c.getConsensusState(c.cs.LatestHeight)
-	if !found {
+	if !latestFound {
 		return StatusExpired
 	}
-	if nowNanos > latest.Timestamp && nowNanos-latest.Timestamp >= c.cs.TrustingPeriod {
+	if nowNanos > latest.Timestamp && nowNanos-latest.Timestamp >= cs.TrustingPeriod {
 		return StatusExpired
 	}
 	return StatusActive
 }
 
-// VerifyClientMessage verifies a Header or Misbehaviour against the current client state.
-func (c *CometBLSClient) VerifyClientMessage(msg ClientMessage, nowNanos uint64) error {
-	if msg.header != nil {
-		trusted, ok := c.getConsensusState(msg.header.TrustedHeight)
-		if !ok {
-			return errors.New("cometbls: trusted consensus state not found")
-		}
-		return c.verifyHeader(trusted, *msg.header, nowNanos)
-	}
-	if msg.misbehaviour != nil {
-		return c.verifyMisbehaviour(*msg.misbehaviour, nowNanos)
-	}
-	return errors.New("cometbls: empty client message")
-}
-
-// UpdateStateOnMisbehaviour freezes the client by setting FrozenHeight to 1.
-func (c *CometBLSClient) UpdateStateOnMisbehaviour() {
-	c.cs.FrozenHeight = FrozenHeight
-}
-
-// UpdateState stores a new ConsensusState derived from the verified Header and
-// advances LatestHeight if necessary.
-func (c *CometBLSClient) UpdateState(msg ClientMessage) []Height {
-	if msg.header == nil {
-		return nil
-	}
-
-	h := msg.header
-	newHeight := headerHeight(*h)
-
-	if _, found := c.getConsensusState(newHeight); found {
-		return []Height{newHeight}
-	}
-
-	if newHeight > c.cs.LatestHeight {
-		c.cs.LatestHeight = newHeight
-	}
-
-	c.setConsensusState(newHeight, consensusStateFromHeader(h.SignedHeader))
-	return []Height{newHeight}
-}
-
-// CheckForMisbehaviour returns true if the ClientMessage constitutes misbehaviour.
-func (c *CometBLSClient) CheckForMisbehaviour(msg ClientMessage) bool {
-	if msg.misbehaviour != nil {
-		return true
-	}
-	if msg.header == nil {
-		return false
-	}
-	h := msg.header
-	existing, found := c.getConsensusState(headerHeight(*h))
-	if !found {
-		return false
-	}
-	return !consensusEqualsHeader(existing, h.SignedHeader)
-}
-
-func (c *CometBLSClient) LatestHeight() Height {
-	return c.cs.LatestHeight
-}
-
-func (c *CometBLSClient) TimestampAtHeight(h Height) (uint64, bool) {
-	cs, found := c.getConsensusState(h)
-	if !found {
-		return 0, false
-	}
-	return cs.Timestamp, true
-}
-
-func headerHeight(h Header) Height {
-	return Height(h.SignedHeader.Height)
-}
-
-func consensusStateFromHeader(lh LightHeader) ConsensusState {
+// ConsensusStateFromHeader builds the ConsensusState stored for a verified Header.
+func ConsensusStateFromHeader(lh LightHeader) ConsensusState {
 	return ConsensusState{
 		Timestamp:          lh.Nanos(),
 		Root:               MerkleRoot{Hash: lh.AppHash},
@@ -181,86 +63,35 @@ func consensusStateFromHeader(lh LightHeader) ConsensusState {
 	}
 }
 
-func consensusEqualsHeader(cs ConsensusState, lh LightHeader) bool {
+// ConsensusEqualsHeader reports whether a ConsensusState matches a LightHeader.
+func ConsensusEqualsHeader(cs ConsensusState, lh LightHeader) bool {
 	return cs.Timestamp == lh.Nanos() &&
 		bytes.Equal(cs.NextValidatorsHash, lh.NextValidatorsHash) &&
 		bytes.Equal(cs.Root.Hash, lh.AppHash)
 }
 
-// RecoverClient copies the substitute's latest consensus state into the subject,
-// adopts its ChainID, LatestHeight and TrustingPeriod, and un-freezes the subject.
-func (c *CometBLSClient) RecoverClient(substitute *CometBLSClient) error {
-	if substitute == nil {
-		return errors.New("cometbls: substitute client must not be nil")
-	}
-	if c.cs.MaxClockDrift != substitute.cs.MaxClockDrift {
-		return errors.New("cometbls: subject and substitute client states differ on MaxClockDrift")
-	}
-	subLatest := substitute.cs.LatestHeight
-	subConsState, found := substitute.getConsensusState(subLatest)
-	if !found {
-		return errors.New("cometbls: substitute consensus state not found at latest height")
-	}
-	c.cs.ChainID = substitute.cs.ChainID
-	c.cs.LatestHeight = subLatest
-	c.cs.TrustingPeriod = substitute.cs.TrustingPeriod
-	c.cs.ContractAddress = substitute.cs.ContractAddress
-	c.cs.FrozenHeight = 0
-	c.setConsensusState(subLatest, subConsState)
-	return nil
+// HeaderHeight returns h.SignedHeader.Height as a CometBLS Height.
+func HeaderHeight(h Header) Height {
+	return Height(h.SignedHeader.Height)
 }
 
-// VerifyMembership verifies a chained ICS-23 existence proof against the
-// consensus state root at height. path and proofs must have the same length.
-func (c *CometBLSClient) VerifyMembership(height Height, proofs []ics23.CommitmentProof, path types.MerklePath, value []byte) error {
-	if c.cs.IsFrozen() {
-		return errors.New("cometbls: client is frozen")
-	}
+// VerifyMembership verifies a chained ICS-23 existence proof against a consensus state root.
+func VerifyMembership(cs ConsensusState, found bool, proofs []ics23.CommitmentProof, path types.MerklePath, value []byte) error {
 	if len(value) == 0 {
 		return errors.New("cometbls: empty value in membership proof")
 	}
-
-	specs := ics23.GetSDKProofSpecs()
-	if len(specs) != len(proofs) {
-		return errors.New("cometbls: proof count does not match spec count")
+	specs, root, proofs, path, err := prepareProofVerify(cs, found, proofs, path)
+	if err != nil {
+		return err
 	}
-	if len(path.KeyPath) != len(proofs) {
-		return errors.New("cometbls: path length does not match proof count")
-	}
-
-	cs, found := c.getConsensusState(height)
-	if !found {
-		return errors.New("cometbls: consensus state not found at height")
-	}
-	if len(cs.Root.Hash) == 0 {
-		return errors.New("cometbls: empty root hash in consensus state")
-	}
-
-	return verifyChainedMembershipProof(cs.Root.Hash, specs, proofs, path, value, 0)
+	return verifyChainedMembershipProof(root, specs, proofs, path, cloneBytes(value), 0)
 }
 
-// VerifyNonMembership verifies a chained ICS-23 non-existence proof against
-// the consensus state root at height.
-func (c *CometBLSClient) VerifyNonMembership(height Height, proofs []ics23.CommitmentProof, path types.MerklePath) error {
-	if c.cs.IsFrozen() {
-		return errors.New("cometbls: client is frozen")
-	}
-
-	specs := ics23.GetSDKProofSpecs()
-	if len(specs) != len(proofs) {
-		return errors.New("cometbls: proof count does not match spec count")
-	}
-
-	if len(path.KeyPath) != len(proofs) {
-		return errors.New("cometbls: path length does not match proof count")
-	}
-
-	cs, found := c.getConsensusState(height)
-	if !found {
-		return errors.New("cometbls: consensus state not found at height")
-	}
-	if len(cs.Root.Hash) == 0 {
-		return errors.New("cometbls: empty root hash in consensus state")
+// VerifyNonMembership verifies a chained ICS-23 non-existence proof against a consensus state root.
+func VerifyNonMembership(cs ConsensusState, found bool, proofs []ics23.CommitmentProof, path types.MerklePath) error {
+	specs, root, proofs, path, err := prepareProofVerify(cs, found, proofs, path)
+	if err != nil {
+		return err
 	}
 
 	nonexist := proofs[0].GetNonexist()
@@ -278,13 +109,141 @@ func (c *CometBLSClient) VerifyNonMembership(height Height, proofs []ics23.Commi
 		return errors.New("cometbls: non-existence proof verification failed: " + err.Error())
 	}
 
-	return verifyChainedMembershipProof(cs.Root.Hash, specs, proofs, path, subroot, 1)
+	return verifyChainedMembershipProof(root, specs, proofs, path, subroot, 1)
+}
+
+// prepareProofVerify validates shape and returns realm-local copies of the
+// inputs. Proofs, path bytes, and the root cross a realm boundary and must be
+// normalized before ics23 reads them with bytes.Equal, which otherwise panics
+// on readonly slices.
+func prepareProofVerify(cs ConsensusState, found bool, proofs []ics23.CommitmentProof, path types.MerklePath) ([]*ics23.ProofSpec, []byte, []ics23.CommitmentProof, types.MerklePath, error) {
+	specs := ics23.GetSDKProofSpecs()
+	if len(specs) != len(proofs) {
+		return nil, nil, nil, types.MerklePath{}, errors.New("cometbls: proof count does not match spec count")
+	}
+	if len(path.KeyPath) != len(proofs) {
+		return nil, nil, nil, types.MerklePath{}, errors.New("cometbls: path length does not match proof count")
+	}
+	if !found {
+		return nil, nil, nil, types.MerklePath{}, errors.New("cometbls: consensus state not found at height")
+	}
+	if len(cs.Root.Hash) == 0 {
+		return nil, nil, nil, types.MerklePath{}, errors.New("cometbls: empty root hash in consensus state")
+	}
+	return specs, cloneBytes(cs.Root.Hash), cloneCommitmentProofs(proofs), cloneMerklePath(path), nil
+}
+
+// TODO: these boilerplate methods could eliminate by adding type methods line `T.Clone`
+// to each type in the `ics23` package. but that package belongs to `gno-realms`,
+// it looks like we'd need to add those functions in a separate PR first.
+// for now, this seems to be the best approach, should be improved later.
+
+func cloneCommitmentProofs(proofs []ics23.CommitmentProof) []ics23.CommitmentProof {
+	out := make([]ics23.CommitmentProof, len(proofs))
+	for i, proof := range proofs {
+		if exist := proof.GetExist(); exist != nil {
+			out[i] = ics23.CommitmentProof_Exist{Exist: cloneExistenceProof(exist)}
+			continue
+		}
+		if nonexist := proof.GetNonexist(); nonexist != nil {
+			out[i] = ics23.CommitmentProof_Nonexist{Nonexist: cloneNonExistenceProof(nonexist)}
+		}
+	}
+	return out
+}
+
+func cloneExistenceProof(proof *ics23.ExistenceProof) *ics23.ExistenceProof {
+	if proof == nil {
+		return nil
+	}
+	out := &ics23.ExistenceProof{
+		Key:   cloneBytes(proof.Key),
+		Value: cloneBytes(proof.Value),
+		Leaf:  cloneLeafOp(proof.Leaf),
+		Path:  make([]*ics23.InnerOp, len(proof.Path)),
+	}
+	for i, inner := range proof.Path {
+		out.Path[i] = cloneInnerOp(inner)
+	}
+	return out
+}
+
+func cloneNonExistenceProof(proof *ics23.NonExistenceProof) *ics23.NonExistenceProof {
+	if proof == nil {
+		return nil
+	}
+	return &ics23.NonExistenceProof{
+		Key:   cloneBytes(proof.Key),
+		Left:  cloneExistenceProof(proof.Left),
+		Right: cloneExistenceProof(proof.Right),
+	}
+}
+
+func cloneLeafOp(op *ics23.LeafOp) *ics23.LeafOp {
+	if op == nil {
+		return nil
+	}
+	return &ics23.LeafOp{
+		Hash:         op.Hash,
+		PrehashKey:   op.PrehashKey,
+		PrehashValue: op.PrehashValue,
+		Length:       op.Length,
+		Prefix:       cloneBytes(op.Prefix),
+	}
+}
+
+func cloneInnerOp(op *ics23.InnerOp) *ics23.InnerOp {
+	if op == nil {
+		return nil
+	}
+	return &ics23.InnerOp{
+		Hash:   op.Hash,
+		Prefix: cloneBytes(op.Prefix),
+		Suffix: cloneBytes(op.Suffix),
+	}
+}
+
+func cloneMerklePath(path types.MerklePath) types.MerklePath {
+	out := types.MerklePath{KeyPath: make([][]byte, len(path.KeyPath))}
+	for i, key := range path.KeyPath {
+		out.KeyPath[i] = cloneBytes(key)
+	}
+	return out
+}
+
+func cloneBytes(b []byte) []byte {
+	if b == nil {
+		return nil
+	}
+	out := make([]byte, len(b))
+	copy(out, b)
+	return out
+}
+
+// DecodeUpgrade decodes and validates upgraded client and consensus state bytes.
+func DecodeUpgrade(currentLatestHeight Height, newClient, newConsState []byte) (ClientState, ConsensusState, error) {
+	upgradedCS, err := DecodeClientState(newClient)
+	if err != nil {
+		return ClientState{}, ConsensusState{}, errors.New("cometbls: failed to decode upgraded client state: " + err.Error())
+	}
+	upgradedConsState, err := DecodeConsensusState(newConsState)
+	if err != nil {
+		return ClientState{}, ConsensusState{}, errors.New("cometbls: failed to decode upgraded consensus state: " + err.Error())
+	}
+	if upgradedCS.IsFrozen() {
+		return ClientState{}, ConsensusState{}, errors.New("cometbls: upgraded client state must not be frozen")
+	}
+	if upgradedCS.LatestHeight <= currentLatestHeight {
+		return ClientState{}, ConsensusState{}, errors.New("cometbls: upgraded client height must be greater than current height")
+	}
+	if upgradedConsState.Timestamp == 0 {
+		return ClientState{}, ConsensusState{}, errors.New("cometbls: upgraded consensus state must have a non-zero timestamp")
+	}
+	return upgradedCS, upgradedConsState, nil
 }
 
 // verifyChainedMembershipProof verifies each existence proof in sequence, threading
 // the computed subroot as the value for the next level.
-// index is the proof index to start from (1 for non-membership to skip the
-// already-verified non-existence proof at index 0).
 func verifyChainedMembershipProof(root []byte, specs []*ics23.ProofSpec, proofs []ics23.CommitmentProof, keys types.MerklePath, value []byte, index int) error {
 	subroot := value
 	for i := index; i < len(proofs); i++ {
@@ -307,30 +266,5 @@ func verifyChainedMembershipProof(root []byte, specs []*ics23.ProofSpec, proofs 
 	if !bytes.Equal(root, subroot) {
 		return errors.New("cometbls: proof root does not match consensus state root")
 	}
-	return nil
-}
-
-// VerifyUpgradeAndUpdateState decodes and validates the upgraded ClientState and
-// ConsensusState (ABI-encoded), then applies the upgrade.
-func (c *CometBLSClient) VerifyUpgradeAndUpdateState(newClient, newConsState, _, _ []byte) error {
-	upgradedCS, err := DecodeClientState(newClient)
-	if err != nil {
-		return errors.New("cometbls: failed to decode upgraded client state: " + err.Error())
-	}
-	upgradedConsState, err := DecodeConsensusState(newConsState)
-	if err != nil {
-		return errors.New("cometbls: failed to decode upgraded consensus state: " + err.Error())
-	}
-	if upgradedCS.IsFrozen() {
-		return errors.New("cometbls: upgraded client state must not be frozen")
-	}
-	if upgradedCS.LatestHeight <= c.cs.LatestHeight {
-		return errors.New("cometbls: upgraded client height must be greater than current height")
-	}
-	if upgradedConsState.Timestamp == 0 {
-		return errors.New("cometbls: upgraded consensus state must have a non-zero timestamp")
-	}
-	c.cs = upgradedCS
-	c.setConsensusState(upgradedCS.LatestHeight, upgradedConsState)
 	return nil
 }

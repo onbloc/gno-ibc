@@ -12,7 +12,6 @@ import (
 const ClientType core.ClientType = "cometbls"
 
 type clientEntry struct {
-	client          *cometblsp.CometBLSClient
 	consensusStates map[cometblsp.Height]cometblsp.ConsensusState
 	cs              cometblsp.ClientState
 }
@@ -60,21 +59,12 @@ func (Adapter) CreateClient(_ realm, clientId core.ClientId, clientStateBytes, c
 		panic("cometbls: invalid consensus state: " + err.Error())
 	}
 
-	e := &clientEntry{
-		consensusStates: make(map[cometblsp.Height]cometblsp.ConsensusState),
-		cs:              cs,
-	}
-	e.client = cometblsp.New(
-		func(h cometblsp.Height) (cometblsp.ConsensusState, bool) {
-			cs, ok := e.consensusStates[h]
-			return cs, ok
-		},
-		func(h cometblsp.Height, cs cometblsp.ConsensusState) {
-			e.consensusStates[h] = cs
-		},
-	)
-	if err := e.client.Initialize(cs, consState); err != nil {
+	if err := cometblsp.ValidateInitialize(cs, consState); err != nil {
 		panic("cometbls: initialize failed: " + err.Error())
+	}
+	e := &clientEntry{
+		consensusStates: map[cometblsp.Height]cometblsp.ConsensusState{cs.LatestHeight: consState},
+		cs:              cs,
 	}
 	entries[clientId] = e
 	return cs.ChainID
@@ -90,22 +80,20 @@ func (Adapter) UpdateClient(_ realm, clientId core.ClientId, clientMessage []byt
 		panic("cometbls: invalid header: " + err.Error())
 	}
 
-	msg := cometblsp.NewHeaderMessage(header)
-	if err := e.client.VerifyClientMessage(msg, nowNanos()); err != nil {
+	trusted, ok := e.consensusStates[header.TrustedHeight]
+	if !ok {
+		panic("cometbls: trusted consensus state not found")
+	}
+	if err := cometblsp.VerifyHeader(e.cs, trusted, header, nowNanos()); err != nil {
 		panic("cometbls: " + err.Error())
 	}
 
-	heights := e.client.UpdateState(msg)
-	if len(heights) == 0 {
-		panic("cometbls: update state returned no heights")
-	}
-	newHeight := heights[0]
-
+	newHeight := cometblsp.HeaderHeight(header)
 	consState, ok := e.consensusStates[newHeight]
 	if !ok {
-		panic("cometbls: consensus state not found after update")
+		consState = cometblsp.ConsensusStateFromHeader(header.SignedHeader)
+		e.consensusStates[newHeight] = consState
 	}
-
 	e.cs.LatestHeight = newHeight
 
 	consStateBytes, err := cometblsp.EncodeConsensusState(consState)
@@ -131,15 +119,18 @@ func (Adapter) Misbehaviour(_ realm, clientId core.ClientId, clientMessage []byt
 		panic("cometbls: invalid misbehaviour: " + err.Error())
 	}
 
-	msg := cometblsp.NewMisbehaviourMessage(m)
-	if err := e.client.VerifyClientMessage(msg, nowNanos()); err != nil {
-		panic("cometbls: " + err.Error())
+	trustedA, ok := e.consensusStates[m.HeaderA.TrustedHeight]
+	if !ok {
+		panic("cometbls: trusted consensus state not found for header A")
 	}
-	if !e.client.CheckForMisbehaviour(msg) {
-		panic("cometbls: not misbehaviour")
+	trustedB, ok := e.consensusStates[m.HeaderB.TrustedHeight]
+	if !ok {
+		panic("cometbls: trusted consensus state not found for header B")
 	}
 
-	e.client.UpdateStateOnMisbehaviour()
+	if err := cometblsp.VerifyMisbehaviour(e.cs, trustedA, trustedB, m, nowNanos()); err != nil {
+		panic("cometbls: " + err.Error())
+	}
 	e.cs.FrozenHeight = cometblsp.FrozenHeight
 
 	return cometblsp.EncodeClientState(e.cs)
@@ -147,7 +138,7 @@ func (Adapter) Misbehaviour(_ realm, clientId core.ClientId, clientMessage []byt
 
 func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proof, key, value []byte) {
 	e := getEntry(clientId)
-	if status := e.client.Status(nowNanos()); status != cometblsp.StatusActive {
+	if status := adapterStatus(e); status != cometblsp.StatusActive {
 		panic("cometbls: client is " + status)
 	}
 	proofs, err := cometblsp.DecodeProofs(proof)
@@ -155,14 +146,15 @@ func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proo
 		panic("cometbls: invalid membership proof: " + err.Error())
 	}
 	path := types.MerklePath{KeyPath: [][]byte{wasmdModuleStoreKey, wasmContractStoreKey(e.cs.ContractAddress, key)}}
-	if err := e.client.VerifyMembership(cometblsp.Height(height), proofs, path, value); err != nil {
+	cs, ok := e.consensusStates[cometblsp.Height(height)]
+	if err := cometblsp.VerifyMembership(cs, ok, proofs, path, value); err != nil {
 		panic("cometbls: membership verification failed: " + err.Error())
 	}
 }
 
 func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, proof, key []byte) {
 	e := getEntry(clientId)
-	if status := e.client.Status(nowNanos()); status != cometblsp.StatusActive {
+	if status := adapterStatus(e); status != cometblsp.StatusActive {
 		panic("cometbls: client is " + status)
 	}
 	proofs, err := cometblsp.DecodeProofs(proof)
@@ -170,27 +162,28 @@ func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, p
 		panic("cometbls: invalid non-membership proof: " + err.Error())
 	}
 	path := types.MerklePath{KeyPath: [][]byte{wasmdModuleStoreKey, wasmContractStoreKey(e.cs.ContractAddress, key)}}
-	if err := e.client.VerifyNonMembership(cometblsp.Height(height), proofs, path); err != nil {
+	cs, ok := e.consensusStates[cometblsp.Height(height)]
+	if err := cometblsp.VerifyNonMembership(cs, ok, proofs, path); err != nil {
 		panic("cometbls: non-membership verification failed: " + err.Error())
 	}
 }
 
 func (Adapter) GetTimestamp(clientId core.ClientId, height core.Height) core.Timestamp {
 	e := getEntry(clientId)
-	ts, ok := e.client.TimestampAtHeight(cometblsp.Height(height))
+	cs, ok := e.consensusStates[cometblsp.Height(height)]
 	if !ok {
 		panic("cometbls: consensus state not found at height " + height.String())
 	}
-	return core.Timestamp(ts)
+	return core.Timestamp(cs.Timestamp)
 }
 
 func (Adapter) GetLatestHeight(clientId core.ClientId) core.Height {
-	return core.Height(getEntry(clientId).client.LatestHeight())
+	return core.Height(getEntry(clientId).cs.LatestHeight)
 }
 
 func (Adapter) GetStatus(clientId core.ClientId) core.Status {
 	e := getEntry(clientId)
-	switch e.client.Status(nowNanos()) {
+	switch adapterStatus(e) {
 	case cometblsp.StatusActive:
 		return core.StatusActive
 	case cometblsp.StatusFrozen:
@@ -200,4 +193,9 @@ func (Adapter) GetStatus(clientId core.ClientId) core.Status {
 	default:
 		return core.StatusUnknown
 	}
+}
+
+func adapterStatus(e *clientEntry) string {
+	latest, ok := e.consensusStates[e.cs.LatestHeight]
+	return cometblsp.Status(e.cs, latest, ok, nowNanos())
 }

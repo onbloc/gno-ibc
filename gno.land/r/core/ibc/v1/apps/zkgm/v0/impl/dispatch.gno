@@ -211,8 +211,8 @@ func universalErrorAck() []byte {
 
 // tokenOrderDestinationChannel rejects the zero-channel sentinel so the
 // derived destChan is safe to feed into UpdateChannelPath / PopChannelFromPath
-// without colliding with the "no channel" slot. Symmetric with the non-v1
-// helper at gno.land/r/core/ibc/apps/zkgm/v0/impl/token_order.gno.
+// without colliding with the "no channel" slot. This mirrors the TokenOrder
+// path helper's channel-zero rejection.
 func tokenOrderDestinationChannel(channelId core.ChannelId) (uint32, error) {
 	raw := uint32(channelId)
 	if raw == 0 {

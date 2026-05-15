@@ -388,10 +388,10 @@ func ChannelOpenTry(_ realm, msg MsgChannelOpenTry) ChannelId {
 
 	expectedChannel := Channel{
 		State:                 ChannelStateInit,
-		ConnectionId:          msg.Channel.ConnectionId,
+		ConnectionId:          connection.CounterpartyConnectionId,
 		CounterpartyChannelId: 0,
 		CounterpartyPortId:    msg.PortId,
-		Version:               msg.Channel.Version,
+		Version:               msg.CounterpartyVersion,
 	}
 	key := ChannelPath(msg.Channel.CounterpartyChannelId)
 	value := keccak(expectedChannel.EthAbiEncode())

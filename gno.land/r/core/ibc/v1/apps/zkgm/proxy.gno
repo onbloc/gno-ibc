@@ -27,6 +27,10 @@ func ProxyAddress() address {
 	return gRealm.Address()
 }
 
+func ProxyPkgPath() string {
+	return gRealm.PkgPath()
+}
+
 func UpdateImpl(cur realm, r UpdateRequest) {
 	caller := runtime.PreviousRealm().PkgPath()
 	if !InAllowedImpls(caller) {

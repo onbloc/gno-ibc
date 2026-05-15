@@ -84,7 +84,7 @@ func OpenZ35CometBLSChannel(cur realm) ChannelPair {
 }
 
 func openZ35Channel(cur realm, connectionId core.ConnectionId, counterpartyChannelId core.ChannelId) core.ChannelId {
-	portId := []byte(zkgm.ProxyAddress())
+	portId := []byte(zkgm.ProxyPkgPath())
 	channelId := core.ChannelOpenInit(cross, core.MsgChannelOpenInit{
 		PortId:             portId,
 		CounterpartyPortId: portId,
@@ -115,7 +115,7 @@ func OpenZ37CometBLSChannel(cur realm) ChannelPair {
 		ProofHeight:              core.Height(DevnetHeight - 1),
 	})
 
-	portId := []byte(zkgm.ProxyAddress())
+	portId := []byte(zkgm.ProxyPkgPath())
 	channelId := core.ChannelOpenInit(cross, core.MsgChannelOpenInit{
 		PortId:             portId,
 		CounterpartyPortId: portId,

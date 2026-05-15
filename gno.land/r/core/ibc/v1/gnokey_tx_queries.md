@@ -26,7 +26,7 @@ addition to core, cometbls, and state-lens-ics23-mpt. The loader's `init()`
 registers the ZKGM proxy app with core.
 
 The `g1TODO_PORT` values in the generated field vectors are placeholders. The
-copy-paste channel transactions below use `zkgm.ProxyAddress()` for both local
+copy-paste channel transactions below use `zkgm.ProxyPkgPath()` for both local
 and counterparty ports. If you need the ABCI query expected hashes for those
 channel sections, regenerate this document with that concrete port value.
 
@@ -203,7 +203,7 @@ import (
 )
 
 func main() {
-	portID := []byte(zkgm.ProxyAddress())
+	portID := []byte(zkgm.ProxyPkgPath())
 	println("zkgm_port", string(portID))
 	println("registered", core.HasApp(portID))
 }
@@ -724,7 +724,7 @@ import (
 )
 
 func main() {
-	portID := []byte(zkgm.ProxyAddress())
+	portID := []byte(zkgm.ProxyPkgPath())
 	channelID := core.ChannelOpenInit(cross, core.MsgChannelOpenInit{
 		PortId:             portID,
 		CounterpartyPortId: portID,
@@ -784,7 +784,7 @@ func main() {
 		panic(err)
 	}
 
-	portID := []byte(zkgm.ProxyAddress())
+	portID := []byte(zkgm.ProxyPkgPath())
 	channelID := core.ChannelOpenTry(cross, core.MsgChannelOpenTry{
 		PortId: portID,
 		Channel: core.Channel{

@@ -467,7 +467,7 @@ func ChannelCloseConfirm(_ realm, msg MsgChannelCloseConfirm) {
 
 func PacketSend(_ realm, sourceChannelId ChannelId, timeoutHeight Height, timeoutTimestamp Timestamp, data []byte) Packet {
 	portId := st.getChannelOwner(sourceChannelId)
-	if string(portId) != runtime.PreviousRealm().Address().String() {
+	if string(portId) != runtime.PreviousRealm().PkgPath() {
 		panic(ErrUnauthorizedPacketSender)
 	}
 
@@ -784,11 +784,10 @@ func RegisterClient(_ realm, clientType ClientType, client ILightClient) {
 	st.registerClient(clientType, client)
 }
 
-// RegisterApp registers an IBC application implementation at the given port
-// id. Port ids are arbitrary bytes (per Union spec) — typically the realm
-// address string bytes. The parameter type is plain []byte so foreign-realm
-// loaders can pass values without hitting the typed-slice cross-realm pitfall;
-// conversion to the typed Bytes wrapper happens inside this realm.
+// RegisterApp registers an IBC application at portId.
+//
+// Locally-owned ports must use the owning realm's package path bytes.
+// Note: portId is []byte to avoid cross-realm typed slice issues.
 func RegisterApp(_ realm, portId []byte, app IApp) {
 	key := string(portId)
 	if _, ok := st.ports[key]; ok {
@@ -797,10 +796,7 @@ func RegisterApp(_ realm, portId []byte, app IApp) {
 	st.ports[key] = app
 }
 
-// HasApp reports whether an app is registered at portId. Loaders can branch on
-// this for idempotent registration (e.g. running tests that reuse the same
-// proxy realm address). string(portId) builds the lookup key without invoking
-// the foreign-typed-slice conversion that tripped on Bytes(portId) earlier.
+// HasApp reports whether an app is registered at portId.
 func HasApp(portId []byte) bool {
 	_, ok := st.ports[string(portId)]
 	return ok
@@ -824,7 +820,7 @@ func GetChannel(channelId ChannelId) Channel {
 // track pending async acknowledgement state.
 func WriteAcknowledgement(_ realm, msg MsgWriteAcknowledgement) {
 	portId := st.getChannelOwner(msg.Packet.DestinationChannelId)
-	if string(portId) != runtime.PreviousRealm().Address().String() {
+	if string(portId) != runtime.PreviousRealm().PkgPath() {
 		panic(ErrUnauthorizedAckWriter)
 	}
 	if len(msg.Acknowledgement) == 0 {

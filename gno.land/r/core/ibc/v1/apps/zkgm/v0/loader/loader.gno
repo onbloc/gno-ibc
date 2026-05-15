@@ -16,5 +16,5 @@ func init() {
 			"gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl",
 		},
 	})
-	core.RegisterApp(cross, []byte(zkgm.ProxyAddress()), zkgm.AsIBCApp())
+	core.RegisterApp(cross, []byte(zkgm.ProxyPkgPath()), zkgm.AsIBCApp())
 }

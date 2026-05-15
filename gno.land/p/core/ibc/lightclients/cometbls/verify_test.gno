@@ -15,7 +15,7 @@ const (
 )
 
 var (
-	devnetVH  = mustHexV("20DDFE7A0F75C65D876316091ECCD494A54A2BB324C872015F73E528D53CB9C4")
+	devnetVH  = hexToH256("20DDFE7A0F75C65D876316091ECCD494A54A2BB324C872015F73E528D53CB9C4")
 	devnetAH  = mustHexV("EE7E3E58F98AC95D63CE93B270981DF3EE54CA367F8D521ED1F444717595CD36")
 	devnetZKP = mustHexV(
 		"03CF56142A1E03D2445A82100FEAF70C1CD95A731ED85792AFFF5792EC0BDD21" +
@@ -39,6 +39,16 @@ func mustHexV(s string) []byte {
 		panic("mustHexV: " + err.Error())
 	}
 	return b
+}
+
+func hexToH256(s string) H256 {
+	b := mustHexV(s)
+	if len(b) != 32 {
+		panic("hexToH256: not 32 bytes")
+	}
+	var out H256
+	copy(out[:], b)
+	return out
 }
 
 // devnetClientState returns a ClientState for the Union devnet test.
@@ -65,7 +75,7 @@ func devnetHeader() Header {
 			Height:             devnetHeight,
 			TimeSeconds:        devnetTimeSeconds,
 			TimeNanos:          devnetTimeNanos,
-			ValidatorsHash:     devnetVH,
+			ValidatorsHash:     devnetVH[:],
 			NextValidatorsHash: devnetVH,
 			AppHash:            devnetAH,
 		},
@@ -90,17 +100,15 @@ func devnetStates() map[Height]ConsensusState {
 
 // TestVerifyHeaderOK verifies a real Union devnet-1337 ZK proof passes end-to-end.
 func TestVerifyHeaderOK(t *testing.T) {
-	client := newTestClient(devnetClientState(), devnetStates())
-	if err := client.VerifyClientMessage(NewHeaderMessage(devnetHeader()), devnetNow()); err != nil {
-		t.Fatalf("VerifyClientMessage: %v", err)
+	if err := VerifyHeader(devnetClientState(), devnetTrusted(), devnetHeader(), devnetNow()); err != nil {
+		t.Fatalf("VerifyHeader: %v", err)
 	}
 }
 
 func TestVerifyHeaderFrozenClient(t *testing.T) {
 	cs := devnetClientState()
 	cs.FrozenHeight = FrozenHeight
-	client := newTestClient(cs, devnetStates())
-	if err := client.VerifyClientMessage(NewHeaderMessage(devnetHeader()), devnetNow()); err == nil {
+	if err := VerifyHeader(cs, devnetTrusted(), devnetHeader(), devnetNow()); err == nil {
 		t.Fatal("expected error for frozen client")
 	}
 }
@@ -112,8 +120,7 @@ func TestVerifyHeaderHeightNotAdvancing(t *testing.T) {
 	states := map[Height]ConsensusState{
 		h.TrustedHeight: devnetTrusted(),
 	}
-	client := newTestClient(devnetClientState(), states)
-	if err := client.VerifyClientMessage(NewHeaderMessage(h), devnetNow()); err == nil {
+	if err := VerifyHeader(devnetClientState(), states[h.TrustedHeight], h, devnetNow()); err == nil {
 		t.Fatal("expected error when header height does not exceed trusted height")
 	}
 }
@@ -125,8 +132,7 @@ func TestVerifyHeaderTimestampNotNewer(t *testing.T) {
 	states := map[Height]ConsensusState{
 		devnetHeader().TrustedHeight: trusted,
 	}
-	client := newTestClient(devnetClientState(), states)
-	if err := client.VerifyClientMessage(NewHeaderMessage(devnetHeader()), devnetNow()); err == nil {
+	if err := VerifyHeader(devnetClientState(), states[devnetHeader().TrustedHeight], devnetHeader(), devnetNow()); err == nil {
 		t.Fatal("expected error when header timestamp is not newer than trusted state")
 	}
 }
@@ -134,8 +140,7 @@ func TestVerifyHeaderTimestampNotNewer(t *testing.T) {
 func TestVerifyHeaderExpiredTrustingPeriod(t *testing.T) {
 	cs := devnetClientState()
 	cs.TrustingPeriod = 1 // 1 nanosecond — always expired
-	client := newTestClient(cs, devnetStates())
-	if err := client.VerifyClientMessage(NewHeaderMessage(devnetHeader()), devnetNow()); err == nil {
+	if err := VerifyHeader(cs, devnetTrusted(), devnetHeader(), devnetNow()); err == nil {
 		t.Fatal("expected error for expired trusting period")
 	}
 }
@@ -145,8 +150,7 @@ func TestVerifyHeaderClockDrift(t *testing.T) {
 	cs.MaxClockDrift = 0
 	// now = 1 second BEFORE the header → header is in the future beyond drift.
 	now := uint64(devnetTimeSeconds-1) * 1_000_000_000
-	client := newTestClient(cs, devnetStates())
-	if err := client.VerifyClientMessage(NewHeaderMessage(devnetHeader()), now); err == nil {
+	if err := VerifyHeader(cs, devnetTrusted(), devnetHeader(), now); err == nil {
 		t.Fatal("expected error for clock drift violation")
 	}
 }
@@ -155,8 +159,7 @@ func TestVerifyHeaderTamperedProof(t *testing.T) {
 	h := devnetHeader()
 	// Flip one byte in the proof — ZKP verification must fail.
 	h.ZeroKnowledgeProof[0] ^= 0xFF
-	client := newTestClient(devnetClientState(), devnetStates())
-	if err := client.VerifyClientMessage(NewHeaderMessage(h), devnetNow()); err == nil {
+	if err := VerifyHeader(devnetClientState(), devnetTrusted(), h, devnetNow()); err == nil {
 		t.Fatal("expected error for tampered ZK proof")
 	}
 }
@@ -166,8 +169,7 @@ func TestVerifyHeaderTamperedProof(t *testing.T) {
 func TestVerifyMisbehaviourFrozenClient(t *testing.T) {
 	cs := devnetClientState()
 	cs.FrozenHeight = FrozenHeight
-	client := newTestClient(cs, devnetStates())
-	if err := client.VerifyClientMessage(NewMisbehaviourMessage(Misbehaviour{HeaderA: devnetHeader(), HeaderB: devnetHeader()}), devnetNow()); err == nil {
+	if err := VerifyMisbehaviour(cs, devnetTrusted(), devnetTrusted(), Misbehaviour{HeaderA: devnetHeader(), HeaderB: devnetHeader()}, devnetNow()); err == nil {
 		t.Fatal("expected error for frozen client")
 	}
 }
@@ -176,22 +178,13 @@ func TestVerifyMisbehaviourDifferentHeights(t *testing.T) {
 	hA := devnetHeader()
 	hB := devnetHeader()
 	hB.SignedHeader.Height++ // different height
-	client := newTestClient(devnetClientState(), devnetStates())
-	if err := client.VerifyClientMessage(NewMisbehaviourMessage(Misbehaviour{HeaderA: hA, HeaderB: hB}), devnetNow()); err == nil {
+	if err := VerifyMisbehaviour(devnetClientState(), devnetTrusted(), devnetTrusted(), Misbehaviour{HeaderA: hA, HeaderB: hB}, devnetNow()); err == nil {
 		t.Fatal("expected error when misbehaviour headers have different heights")
 	}
 }
 
 func TestVerifyMisbehaviourIdenticalHeaders(t *testing.T) {
-	client := newTestClient(devnetClientState(), devnetStates())
-	if err := client.VerifyClientMessage(NewMisbehaviourMessage(Misbehaviour{HeaderA: devnetHeader(), HeaderB: devnetHeader()}), devnetNow()); err == nil {
+	if err := VerifyMisbehaviour(devnetClientState(), devnetTrusted(), devnetTrusted(), Misbehaviour{HeaderA: devnetHeader(), HeaderB: devnetHeader()}, devnetNow()); err == nil {
 		t.Fatal("expected error for identical headers (not misbehaviour)")
-	}
-}
-
-func TestVerifyMisbehaviourConsensusStateNotFound(t *testing.T) {
-	client := newTestClient(devnetClientState(), map[Height]ConsensusState{})
-	if err := client.VerifyClientMessage(NewMisbehaviourMessage(Misbehaviour{HeaderA: devnetHeader(), HeaderB: devnetHeader()}), devnetNow()); err == nil {
-		t.Fatal("expected error when consensus state not found")
 	}
 }

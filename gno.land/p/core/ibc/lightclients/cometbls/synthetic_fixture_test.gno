@@ -65,10 +65,9 @@ func TestSyntheticMembershipProofFixture(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s DecodeProofs: %v", tc.name, err)
 		}
-		cs := baseCS()
-		client := newTestClient(cs, map[Height]ConsensusState{cs.LatestHeight: {Timestamp: testNow, Root: MerkleRoot{Hash: mustHex(tc.rootHex)}}})
+		cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: mustHex(tc.rootHex)}}
 		path := types.MerklePath{KeyPath: [][]byte{[]byte("ibc"), tc.key}}
-		if err := client.VerifyMembership(cs.LatestHeight, proofs, path, tc.value); err != nil {
+		if err := VerifyMembership(cs, proofs, path, tc.value); err != nil {
 			t.Fatalf("%s VerifyMembership: %v", tc.name, err)
 		}
 	}
@@ -98,10 +97,9 @@ func TestSyntheticNonMembershipProofFixture(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s DecodeProofs: %v", tc.name, err)
 		}
-		cs := baseCS()
-		client := newTestClient(cs, map[Height]ConsensusState{cs.LatestHeight: {Timestamp: testNow, Root: MerkleRoot{Hash: mustHex(tc.rootHex)}}})
+		cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: mustHex(tc.rootHex)}}
 		path := types.MerklePath{KeyPath: [][]byte{[]byte("ibc"), tc.key}}
-		if err := client.VerifyNonMembership(cs.LatestHeight, proofs, path); err != nil {
+		if err := VerifyNonMembership(cs, proofs, path); err != nil {
 			t.Fatalf("%s VerifyNonMembership: %v", tc.name, err)
 		}
 	}

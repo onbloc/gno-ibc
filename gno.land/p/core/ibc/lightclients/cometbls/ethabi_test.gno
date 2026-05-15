@@ -15,6 +15,14 @@ func bytesEq(t *testing.T, label string, got, want []byte) {
 	}
 }
 
+func repeatH256(b byte) H256 {
+	var out H256
+	for i := range out {
+		out[i] = b
+	}
+	return out
+}
+
 func mustHex(s string) []byte {
 	b, err := hex.DecodeString(s)
 	if err != nil {
@@ -108,7 +116,7 @@ func TestEncodeConsensusState(t *testing.T) {
 		cs := ConsensusState{
 			Timestamp:          500,
 			Root:               MerkleRoot{Hash: bytes.Repeat([]byte{0xAB}, 32)},
-			NextValidatorsHash: bytes.Repeat([]byte{0xCD}, 32),
+			NextValidatorsHash: repeatH256(0xCD),
 		}
 		want := mustHex(word32(500) + bytes32hex(0xAB) + bytes32hex(0xCD))
 		got, err := EncodeConsensusState(cs)
@@ -122,23 +130,11 @@ func TestEncodeConsensusState(t *testing.T) {
 		cs := ConsensusState{
 			Timestamp:          1,
 			Root:               MerkleRoot{Hash: []byte{0x01}},
-			NextValidatorsHash: bytes.Repeat([]byte{0xFF}, 32),
+			NextValidatorsHash: repeatH256(0xFF),
 		}
 		_, err := EncodeConsensusState(cs)
 		if err == nil {
 			t.Fatal("expected error for non-32-byte root hash")
-		}
-	})
-
-	t.Run("invalid_nvh", func(t *testing.T) {
-		cs := ConsensusState{
-			Timestamp:          1,
-			Root:               MerkleRoot{Hash: bytes.Repeat([]byte{0xFF}, 32)},
-			NextValidatorsHash: []byte{0x01},
-		}
-		_, err := EncodeConsensusState(cs)
-		if err == nil {
-			t.Fatal("expected error for non-32-byte next validators hash")
 		}
 	})
 }
@@ -153,7 +149,7 @@ func TestEncodeHeader(t *testing.T) {
 				TimeSeconds:        1000,
 				TimeNanos:          500,
 				ValidatorsHash:     bytes.Repeat([]byte{0x01}, 32),
-				NextValidatorsHash: bytes.Repeat([]byte{0x02}, 32),
+				NextValidatorsHash: repeatH256(0x02),
 				AppHash:            bytes.Repeat([]byte{0x03}, 32),
 			},
 			TrustedHeight:      10,
@@ -186,7 +182,7 @@ func TestEncodeHeader(t *testing.T) {
 				Height:             1,
 				TimeSeconds:        100,
 				ValidatorsHash:     bytes.Repeat([]byte{0xAA}, 32),
-				NextValidatorsHash: bytes.Repeat([]byte{0xBB}, 32),
+				NextValidatorsHash: repeatH256(0xBB),
 				AppHash:            bytes.Repeat([]byte{0xCC}, 32),
 			},
 			TrustedHeight:      0,
@@ -209,10 +205,10 @@ func TestEncodeMisbehaviour(t *testing.T) {
 		HeaderA: Header{SignedHeader: LightHeader{Height: 1}},
 		HeaderB: Header{SignedHeader: LightHeader{Height: 2}},
 	}
-	want := []byte{
-		0x0A, 0x04, 0x0A, 0x02, 0x08, 0x01,
-		0x12, 0x04, 0x0A, 0x02, 0x08, 0x02,
-	}
+	want := mustHex(
+		"0a26" + "0a24" + "0801" + "2220" + bytes32hex(0x00) +
+			"1226" + "0a24" + "0802" + "2220" + bytes32hex(0x00),
+	)
 	bytesEq(t, "EncodeMisbehaviour", EncodeMisbehaviour(m), want)
 }
 
@@ -291,7 +287,10 @@ func TestDecodeConsensusState(t *testing.T) {
 			t.Fatalf("Timestamp: got %d want 500", got.Timestamp)
 		}
 		bytesEq(t, "Root.Hash", got.Root.Hash, bytes.Repeat([]byte{0xAB}, 32))
-		bytesEq(t, "NextValidatorsHash", got.NextValidatorsHash, bytes.Repeat([]byte{0xCD}, 32))
+		wantNVH := repeatH256(0xCD)
+		if got.NextValidatorsHash != wantNVH {
+			t.Fatalf("NextValidatorsHash: got %x want %x", got.NextValidatorsHash[:], wantNVH[:])
+		}
 	})
 
 	t.Run("too_short", func(t *testing.T) {
@@ -335,7 +334,10 @@ func TestDecodeHeader(t *testing.T) {
 			t.Fatalf("TimeNanos: got %d want 500", got.SignedHeader.TimeNanos)
 		}
 		bytesEq(t, "ValidatorsHash", got.SignedHeader.ValidatorsHash, bytes.Repeat([]byte{0x01}, 32))
-		bytesEq(t, "NextValidatorsHash", got.SignedHeader.NextValidatorsHash, bytes.Repeat([]byte{0x02}, 32))
+		wantNVH := repeatH256(0x02)
+		if got.SignedHeader.NextValidatorsHash != wantNVH {
+			t.Fatalf("NextValidatorsHash: got %x want %x", got.SignedHeader.NextValidatorsHash[:], wantNVH[:])
+		}
 		bytesEq(t, "AppHash", got.SignedHeader.AppHash, bytes.Repeat([]byte{0x03}, 32))
 		if got.TrustedHeight != 10 {
 			t.Fatalf("TrustedHeight: got %d want 10", got.TrustedHeight)
@@ -354,20 +356,49 @@ func TestDecodeHeader(t *testing.T) {
 // --- DecodeMisbehaviour ---
 
 func TestDecodeMisbehaviour(t *testing.T) {
-	buf := []byte{
-		0x0A, 0x04, 0x0A, 0x02, 0x08, 0x01,
-		0x12, 0x04, 0x0A, 0x02, 0x08, 0x02,
-	}
-	got, err := DecodeMisbehaviour(buf)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got.HeaderA.SignedHeader.Height != 1 {
-		t.Fatalf("HeaderA.Height: got %d want 1", got.HeaderA.SignedHeader.Height)
-	}
-	if got.HeaderB.SignedHeader.Height != 2 {
-		t.Fatalf("HeaderB.Height: got %d want 2", got.HeaderB.SignedHeader.Height)
-	}
+	t.Run("basic", func(t *testing.T) {
+		buf := []byte{
+			0x0A, 0x04, 0x0A, 0x02, 0x08, 0x01,
+			0x12, 0x04, 0x0A, 0x02, 0x08, 0x02,
+		}
+		got, err := DecodeMisbehaviour(buf)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.HeaderA.SignedHeader.Height != 1 {
+			t.Fatalf("HeaderA.Height: got %d want 1", got.HeaderA.SignedHeader.Height)
+		}
+		if got.HeaderB.SignedHeader.Height != 2 {
+			t.Fatalf("HeaderB.Height: got %d want 2", got.HeaderB.SignedHeader.Height)
+		}
+	})
+
+	t.Run("short_next_validators_hash", func(t *testing.T) {
+		var ts []byte
+		ts = pbAppendInt64(ts, 1, 1)
+
+		var lh []byte
+		lh = pbAppendInt64(lh, 1, 1)
+		lh = pbAppendMsg(lh, 2, ts)
+		lh = pbAppendBytes(lh, 3, bytes.Repeat([]byte{0x01}, 32))
+		lh = pbAppendBytes(lh, 4, bytes.Repeat([]byte{0x02}, 31))
+		lh = pbAppendBytes(lh, 5, bytes.Repeat([]byte{0x03}, 32))
+
+		var h []byte
+		h = pbAppendMsg(h, 1, lh)
+
+		var buf []byte
+		buf = pbAppendMsg(buf, 1, h)
+
+		_, err := DecodeMisbehaviour(buf)
+		want := "cometbls: next validators hash must be 32 bytes"
+		if err == nil {
+			t.Fatal("expected error for short next validators hash")
+		}
+		if err.Error() != want {
+			t.Fatalf("error got %q want %q", err.Error(), want)
+		}
+	})
 }
 
 // --- Union devnet fixture ---
@@ -414,7 +445,7 @@ func TestDecodeHeaderUnionFixture(t *testing.T) {
 	}
 	wantVH := mustHex("140379043aff431abf326b351ad625c9d817e3f589606b260867f56a9dd52cbc")
 	bytesEq(t, "ValidatorsHash", h.SignedHeader.ValidatorsHash, wantVH)
-	bytesEq(t, "NextValidatorsHash", h.SignedHeader.NextValidatorsHash, wantVH)
+	bytesEq(t, "NextValidatorsHash", h.SignedHeader.NextValidatorsHash[:], wantVH)
 	wantAH := mustHex("c75dfe45e0e98d0451c816ced153935ee304b4172272f91222f31fd937f56483")
 	bytesEq(t, "AppHash", h.SignedHeader.AppHash, wantAH)
 	if h.TrustedHeight != 6422742 {
@@ -475,7 +506,7 @@ func TestEncodeDecodeConsensusStateRoundTrip(t *testing.T) {
 	original := ConsensusState{
 		Timestamp:          123456789,
 		Root:               MerkleRoot{Hash: bytes.Repeat([]byte{0xAA}, 32)},
-		NextValidatorsHash: bytes.Repeat([]byte{0xBB}, 32),
+		NextValidatorsHash: repeatH256(0xBB),
 	}
 	enc, err := EncodeConsensusState(original)
 	if err != nil {
@@ -489,7 +520,9 @@ func TestEncodeDecodeConsensusStateRoundTrip(t *testing.T) {
 		t.Fatalf("Timestamp: got %d want %d", got.Timestamp, original.Timestamp)
 	}
 	bytesEq(t, "Root.Hash", got.Root.Hash, original.Root.Hash)
-	bytesEq(t, "NextValidatorsHash", got.NextValidatorsHash, original.NextValidatorsHash)
+	if got.NextValidatorsHash != original.NextValidatorsHash {
+		t.Fatalf("NextValidatorsHash: got %x want %x", got.NextValidatorsHash[:], original.NextValidatorsHash[:])
+	}
 }
 
 func TestEncodeDecodeHeaderRoundTrip(t *testing.T) {
@@ -499,7 +532,7 @@ func TestEncodeDecodeHeaderRoundTrip(t *testing.T) {
 			TimeSeconds:        1732205251,
 			TimeNanos:          998131342,
 			ValidatorsHash:     bytes.Repeat([]byte{0xDE}, 32),
-			NextValidatorsHash: bytes.Repeat([]byte{0xAD}, 32),
+			NextValidatorsHash: repeatH256(0xAD),
 			AppHash:            bytes.Repeat([]byte{0xBE}, 32),
 		},
 		TrustedHeight:      3405691581,
@@ -523,7 +556,9 @@ func TestEncodeDecodeHeaderRoundTrip(t *testing.T) {
 		t.Fatalf("TimeNanos: got %d want %d", got.SignedHeader.TimeNanos, original.SignedHeader.TimeNanos)
 	}
 	bytesEq(t, "ValidatorsHash", got.SignedHeader.ValidatorsHash, original.SignedHeader.ValidatorsHash)
-	bytesEq(t, "NextValidatorsHash", got.SignedHeader.NextValidatorsHash, original.SignedHeader.NextValidatorsHash)
+	if got.SignedHeader.NextValidatorsHash != original.SignedHeader.NextValidatorsHash {
+		t.Fatalf("NextValidatorsHash: got %x want %x", got.SignedHeader.NextValidatorsHash[:], original.SignedHeader.NextValidatorsHash[:])
+	}
 	bytesEq(t, "AppHash", got.SignedHeader.AppHash, original.SignedHeader.AppHash)
 	if got.TrustedHeight != original.TrustedHeight {
 		t.Fatalf("TrustedHeight: got %d want %d", got.TrustedHeight, original.TrustedHeight)

@@ -6,12 +6,12 @@ import (
 	"errors"
 )
 
-// verifyHeader verifies a CometBLS Header against the client's state and the
+// VerifyHeader verifies a CometBLS Header against the client's state and the
 // trusted ConsensusState at header.TrustedHeight.
 //
 // nowNanos is the current block time in nanoseconds since Unix epoch.
-func (c *CometBLSClient) verifyHeader(trusted ConsensusState, h Header, nowNanos uint64) error {
-	if c.cs.IsFrozen() {
+func VerifyHeader(cs ClientState, trusted ConsensusState, h Header, nowNanos uint64) error {
+	if cs.IsFrozen() {
 		return errors.New("cometbls: client is frozen")
 	}
 
@@ -31,48 +31,36 @@ func (c *CometBLSClient) verifyHeader(trusted ConsensusState, h Header, nowNanos
 		return errors.New("cometbls: header timestamp not newer than trusted consensus state")
 	}
 
-	if nowNanos > trusted.Timestamp && nowNanos-trusted.Timestamp >= c.cs.TrustingPeriod {
+	if nowNanos > trusted.Timestamp && nowNanos-trusted.Timestamp >= cs.TrustingPeriod {
 		return errors.New("cometbls: trusted consensus state has expired")
 	}
 
-	if headerNanos > nowNanos+c.cs.MaxClockDrift {
+	if headerNanos > nowNanos+cs.MaxClockDrift {
 		return errors.New("cometbls: header timestamp exceeds clock drift bound")
 	}
 
-	// Verify the Groth16 ZK proof.
-	// trustedValidatorsHash is the NextValidatorsHash from the trusted state:
-	// at the trusted height H, NextValidatorsHash commits to the validator set
-	// that signed the block at H+1 and beyond.
+	// trustedValidatorsHash commits to the validator set at trusted height + 1.
 	zkHeader := cometblszk.LightHeader{
 		Height:             lh.Height,
 		TimeSeconds:        lh.TimeSeconds,
 		TimeNanos:          lh.TimeNanos,
 		ValidatorsHash:     lh.ValidatorsHash,
-		NextValidatorsHash: lh.NextValidatorsHash,
+		NextValidatorsHash: lh.NextValidatorsHash[:],
 		AppHash:            lh.AppHash,
 	}
-	return cometblszk.VerifyZKP(c.cs.ChainID, trusted.NextValidatorsHash, zkHeader, h.ZeroKnowledgeProof)
+	return cometblszk.VerifyZKP(cs.ChainID, trusted.NextValidatorsHash[:], zkHeader, h.ZeroKnowledgeProof)
 }
 
-// verifyMisbehaviour verifies that two Headers constitute misbehaviour:
+// VerifyMisbehaviour verifies that two Headers constitute misbehaviour:
 // both pass ZKP verification for the same block height, proving the validator
 // set double-signed.
-func (c *CometBLSClient) verifyMisbehaviour(m Misbehaviour, nowNanos uint64) error {
-	if c.cs.IsFrozen() {
+func VerifyMisbehaviour(cs ClientState, trustedA, trustedB ConsensusState, m Misbehaviour, nowNanos uint64) error {
+	if cs.IsFrozen() {
 		return errors.New("cometbls: client is already frozen")
 	}
 
 	if m.HeaderA.SignedHeader.Height != m.HeaderB.SignedHeader.Height {
 		return errors.New("cometbls: misbehaviour headers must be at the same height")
-	}
-
-	trustedA, ok := c.getConsensusState(m.HeaderA.TrustedHeight)
-	if !ok {
-		return errors.New("cometbls: trusted consensus state not found for header A")
-	}
-	trustedB, ok := c.getConsensusState(m.HeaderB.TrustedHeight)
-	if !ok {
-		return errors.New("cometbls: trusted consensus state not found for header B")
 	}
 
 	// Headers must differ in content — identical headers at the same height
@@ -81,10 +69,10 @@ func (c *CometBLSClient) verifyMisbehaviour(m Misbehaviour, nowNanos uint64) err
 		return errors.New("cometbls: misbehaviour headers are identical")
 	}
 
-	if err := c.verifyHeader(trustedA, m.HeaderA, nowNanos); err != nil {
+	if err := VerifyHeader(cs, trustedA, m.HeaderA, nowNanos); err != nil {
 		return errors.New("cometbls: header A: " + err.Error())
 	}
-	if err := c.verifyHeader(trustedB, m.HeaderB, nowNanos); err != nil {
+	if err := VerifyHeader(cs, trustedB, m.HeaderB, nowNanos); err != nil {
 		return errors.New("cometbls: header B: " + err.Error())
 	}
 
@@ -97,6 +85,6 @@ func lightHeadersEqual(a, b LightHeader) bool {
 		return false
 	}
 	return bytes.Equal(a.ValidatorsHash, b.ValidatorsHash) &&
-		bytes.Equal(a.NextValidatorsHash, b.NextValidatorsHash) &&
+		a.NextValidatorsHash == b.NextValidatorsHash &&
 		bytes.Equal(a.AppHash, b.AppHash)
 }

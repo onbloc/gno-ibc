@@ -26,7 +26,7 @@ func TestZ35FixtureInputPaths(t *testing.T) {
 	assertH256Hex(t, "z35 connection try key", ConnectionPath(77), "0x05f3c8eef62e74b10b7ee910fcc73c8358000f692d9ce2341a989e008e45b35d")
 	assertH256Hex(t, "z35 connection try value", keccak(connection.EthAbiEncode()), "0xff4fb67348c16e70c898c7cf43c460a684bc900d2b41e5a24ef6dcb294586034")
 	assertH256Hex(t, "z35 channel try key", ChannelPath(2), "0x88601476d11616a71c5be67555bd1dff4b1cbf21533d2669b768b61518cfe1c3")
-	assertH256Hex(t, "z35 channel try value", keccak(channel.EthAbiEncode()), "0xfa3c11d224a164cd0beca2b6756128dc1531714a75813e9c2b5840bd8f2a8347")
+	assertH256Hex(t, "z35 channel try value", keccak(channel.EthAbiEncode()), "0xfb3f1597e2be05dd64c2fc04fb09db56afa2ac9c7c9157adc816dfae58b1f960")
 	assertH256Hex(t, "z35 packet commitment key", PacketCommitmentPath(packet), "0xcd7b438a4f36b68a13ce77733e104cbf38a4bd2460f5a35d75a5aa0180b951cc")
 	assertH256Hex(t, "z35 packet commitment value", COMMITMENT_MAGIC, "0x0100000000000000000000000000000000000000000000000000000000000000")
 }

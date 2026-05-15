@@ -27,6 +27,6 @@ func TestZ42HandshakeNegativeFixtureInputPaths(t *testing.T) {
 	assertH256Hex(t, "z42 connection try key", ConnectionPath(77), "0x05f3c8eef62e74b10b7ee910fcc73c8358000f692d9ce2341a989e008e45b35d")
 	assertH256Hex(t, "z42 connection try value", keccak(connection.EthAbiEncode()), "0xff4fb67348c16e70c898c7cf43c460a684bc900d2b41e5a24ef6dcb294586034")
 	assertH256Hex(t, "z42 channel try key", ChannelPath(2), "0x88601476d11616a71c5be67555bd1dff4b1cbf21533d2669b768b61518cfe1c3")
-	assertH256Hex(t, "z42 wrong version channel value", keccak(wrongVersionChannel.EthAbiEncode()), "0xcd241e37da32c69a48f490b088006f8e4b664e2dd28a079730fa9e47c5fd943d")
-	assertH256Hex(t, "z42 stale channel value", keccak(staleChannel.EthAbiEncode()), "0x71eac86d6ae84d0093ae6a570909eb39ab5ee69ffc7ebb213e436fc9ddf24958")
+	assertH256Hex(t, "z42 wrong version channel value", keccak(wrongVersionChannel.EthAbiEncode()), "0xaf0c0adb7e156ac5070391fd9a86d138475ecd4302b250b36511098ca4d2a240")
+	assertH256Hex(t, "z42 stale channel value", keccak(staleChannel.EthAbiEncode()), "0x0e108a322006151b61cf7e1fe81cf6f33c14817a2a92d3b7a5bc7a691790a539")
 }

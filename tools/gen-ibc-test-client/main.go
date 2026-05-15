@@ -31,8 +31,8 @@ const (
 	counterpartyConnectionID = uint32(77)
 	channelID                = uint32(1)
 	counterpartyChannelID    = uint32(2)
-	portID                   = "g1TODO_PORT"
-	counterpartyPortID       = "g1TODO_PORT"
+	portID                   = "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+	counterpartyPortID       = "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
 	version                  = "ucs03-zkgm-0"
 
 	clientType                = "cometbls"

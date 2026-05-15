@@ -72,56 +72,44 @@ func TestMutatingEntrypointsRequireCoreCaller(t *testing.T) {
 	})
 }
 
-func TestVerifyMembershipRejectsFrozenClientBeforeProofDecode(t *testing.T) {
-	resetAdapterEntries()
-	clientId := core.ClientId(1)
-	cs := activeAdapterClientState()
-	cs.FrozenHeight = cometblsp.FrozenHeight
-	installAdapterClient(clientId, cs, activeAdapterConsensusState())
-
-	uassert.AbortsContains(t, "cometbls: client is Frozen", func(cur realm) {
-		Adapter{}.VerifyMembership(clientId, core.Height(cs.LatestHeight), []byte{0xff}, []byte("key"), []byte("value"))
-	})
-}
-
-func TestVerifyNonMembershipRejectsFrozenClientBeforeProofDecode(t *testing.T) {
-	resetAdapterEntries()
-	clientId := core.ClientId(1)
-	cs := activeAdapterClientState()
-	cs.FrozenHeight = cometblsp.FrozenHeight
-	installAdapterClient(clientId, cs, activeAdapterConsensusState())
-
-	uassert.AbortsContains(t, "cometbls: client is Frozen", func(cur realm) {
-		Adapter{}.VerifyNonMembership(clientId, core.Height(cs.LatestHeight), []byte{0xff}, []byte("key"))
-	})
-}
-
-func TestVerifyMembershipRejectsExpiredClientBeforeProofDecode(t *testing.T) {
-	resetAdapterEntries()
-	clientId := core.ClientId(1)
-	cs := activeAdapterClientState()
-	cs.TrustingPeriod = 1
-	cons := activeAdapterConsensusState()
-	cons.Timestamp = 1
-	installAdapterClient(clientId, cs, cons)
-
-	uassert.AbortsContains(t, "cometbls: client is Expired", func(cur realm) {
-		Adapter{}.VerifyMembership(clientId, core.Height(cs.LatestHeight), []byte{0xff}, []byte("key"), []byte("value"))
-	})
-}
-
-func TestVerifyNonMembershipRejectsExpiredClientBeforeProofDecode(t *testing.T) {
-	resetAdapterEntries()
-	clientId := core.ClientId(1)
-	cs := activeAdapterClientState()
-	cs.TrustingPeriod = 1
-	cons := activeAdapterConsensusState()
-	cons.Timestamp = 1
-	installAdapterClient(clientId, cs, cons)
-
-	uassert.AbortsContains(t, "cometbls: client is Expired", func(cur realm) {
-		Adapter{}.VerifyNonMembership(clientId, core.Height(cs.LatestHeight), []byte{0xff}, []byte("key"))
-	})
+func TestVerifyMembershipAndNonMembershipRejectInactiveBeforeProofDecode(t *testing.T) {
+	testCases := []struct {
+		name        string
+		mutate      func(*cometblsp.ClientState, *cometblsp.ConsensusState)
+		statusLabel string
+	}{
+		{"frozen", func(cs *cometblsp.ClientState, _ *cometblsp.ConsensusState) {
+			cs.FrozenHeight = cometblsp.FrozenHeight
+		}, "Frozen"},
+		{"expired", func(cs *cometblsp.ClientState, cons *cometblsp.ConsensusState) {
+			cs.TrustingPeriod = 1
+			cons.Timestamp = 1
+		}, "Expired"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name+"/membership", func(t *testing.T) {
+			resetAdapterEntries()
+			clientId := core.ClientId(1)
+			cs := activeAdapterClientState()
+			cons := activeAdapterConsensusState()
+			tc.mutate(&cs, &cons)
+			installAdapterClient(clientId, cs, cons)
+			uassert.AbortsContains(t, "cometbls: client is "+tc.statusLabel, func(cur realm) {
+				Adapter{}.VerifyMembership(clientId, core.Height(cs.LatestHeight), []byte{0xff}, []byte("key"), []byte("value"))
+			})
+		})
+		t.Run(tc.name+"/non-membership", func(t *testing.T) {
+			resetAdapterEntries()
+			clientId := core.ClientId(1)
+			cs := activeAdapterClientState()
+			cons := activeAdapterConsensusState()
+			tc.mutate(&cs, &cons)
+			installAdapterClient(clientId, cs, cons)
+			uassert.AbortsContains(t, "cometbls: client is "+tc.statusLabel, func(cur realm) {
+				Adapter{}.VerifyNonMembership(clientId, core.Height(cs.LatestHeight), []byte{0xff}, []byte("key"))
+			})
+		})
+	}
 }
 
 func TestGetLatestHeightReturnsStoredClientStateHeight(t *testing.T) {

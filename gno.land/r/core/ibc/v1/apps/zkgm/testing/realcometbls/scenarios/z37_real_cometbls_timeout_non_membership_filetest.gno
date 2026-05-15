@@ -30,7 +30,7 @@ func main() {
 		Data:                 e2e.MustPacketData(cross, e2e.MustTokenOrderInstruction(cross, order)),
 		TimeoutTimestamp:     core.Timestamp(3600),
 	}
-	core.BatchSend(cross, core.MsgBatchSend{Packets: []core.Packet{packet}})
+	realcometbls.BatchSend(cross, packet)
 
 	println("commitment_before_timeout", core.HasPacketCommitment(cross, packet))
 	println("sender_balance_before_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))

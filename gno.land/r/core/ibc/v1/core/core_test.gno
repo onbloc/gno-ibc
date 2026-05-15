@@ -610,10 +610,22 @@ func TestBatchSendRejectsEmptyPacketList(t *testing.T) {
 	})
 }
 
+func TestBatchSendRejectsNonOwner(t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	st.channelOwners[channelId] = Bytes("gno.land/r/not-channel-owner")
+	packet := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
+
+	uassert.AbortsContains(t, "caller not authorized to send packet", func(cur realm) {
+		BatchSend(cur, MsgBatchSend{Packets: []Packet{packet}})
+	})
+}
+
 func TestBatchAcksReturnsUnionPacketCommitment(t *testing.T) {
 	resetState()
-	p1 := Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: Bytes("a"), TimeoutTimestamp: 100}
-	p2 := Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: Bytes("b"), TimeoutTimestamp: 100}
+	_, _, channelId := setupOpenChannel(t)
+	p1 := Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: 100}
+	p2 := Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: Bytes("b"), TimeoutTimestamp: 100}
 
 	got := BatchAcks(cross, MsgBatchAcks{
 		Packets: []Packet{p1, p2},
@@ -644,6 +656,17 @@ func TestBatchAcksRejectsAckCountMismatch(t *testing.T) {
 	p := Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: Bytes("a"), TimeoutTimestamp: 100}
 	uassert.AbortsContains(t, "acknowledgement count mismatch", func(cur realm) {
 		BatchAcks(cur, MsgBatchAcks{Packets: []Packet{p}, Acks: [][]byte{}})
+	})
+}
+
+func TestBatchAcksRejectsNonOwner(t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	st.channelOwners[channelId] = Bytes("gno.land/r/not-channel-owner")
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: 100}
+
+	uassert.AbortsContains(t, "caller not authorized to write ack", func(cur realm) {
+		BatchAcks(cur, MsgBatchAcks{Packets: []Packet{packet}, Acks: [][]byte{[]byte("ack")}})
 	})
 }
 

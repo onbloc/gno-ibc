@@ -98,6 +98,19 @@ func WriteForwardAck(cur realm, parentPacket core.Packet, ack []byte) {
 	})
 }
 
+func BatchSend(cur realm, msg core.MsgBatchSend) core.H256 {
+	callerPath := runtime.PreviousRealm().PkgPath()
+	if callerPath != implPath && !isTestingBatchSender(callerPath) {
+		panic(ufmt.Sprintf("zkgm: only registered impl (%s) can batch send, got %s", implPath, callerPath))
+	}
+	return core.BatchSend(cross, msg)
+}
+
+func isTestingBatchSender(pkgPath string) bool {
+	return pkgPath == "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e" ||
+		pkgPath == "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls"
+}
+
 func cloneStrings(in []string) []string {
 	out := make([]string, len(in))
 	copy(out, in)

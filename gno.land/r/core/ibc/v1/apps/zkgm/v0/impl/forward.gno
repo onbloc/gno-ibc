@@ -45,7 +45,7 @@ func (v *ZkgmV1) executeForward(packet core.Packet, path *u256.Uint, parentSalt 
 		return core.RecvPacketResult{}, err
 	}
 
-	core.BatchSend(cross, core.MsgBatchSend{Packets: []core.Packet{childPacket}})
+	zkgm.BatchSend(cross, core.MsgBatchSend{Packets: []core.Packet{childPacket}})
 	zkgm.SetInFlightPacket(cross, forwardInFlightKey(childPacket), zkgm.InFlightValue{
 		ParentPacket: packet,
 	})

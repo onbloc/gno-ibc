@@ -17,3 +17,7 @@ The flake supplies the supporting toolchain only — the gno and gnodev binaries
 make test          # first-party gno tests
 make test-stdlibs  # vendored stdlib tests
 ```
+
+## Documentation
+
+See [docs/](docs/README.md) for operational guides.

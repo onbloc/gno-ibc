@@ -259,6 +259,36 @@ base64 in `Data`; decode it with:
 python3 -c 'import base64,sys; print(base64.b64decode(sys.argv[1]).hex())' '<DATA_BASE64>'
 ```
 
+## Mock ZKGM Channel Setup
+
+Use this reset-friendly setup when you only need a local mock light client and
+open ZKGM channels for `SendRaw` testing. It calls the deployed e2e helper realm,
+so the mock light client implementation lives in a realm package instead of the
+non-realm `maketx run` package.
+
+```sh
+cat >/tmp/open_mock_zkgm_channels.gno <<'EOF'
+package main
+
+import (
+	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
+	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
+)
+
+func main() {
+	e2e.RegisterMockLightClient(cross)
+	pair := e2e.OpenE2EChannelPair(cross)
+
+	println("mock_client", pair.ClientId.String())
+	println("connection", pair.ConnectionId.String())
+	println("source_channel", pair.Source.String())
+	println("destination_channel", pair.Destination.String())
+}
+EOF
+
+gnokey maketx run -gas-fee 1000000ugnot -gas-wanted 90000000 -broadcast -chainid dev -remote tcp://127.0.0.1:26657 test1 /tmp/open_mock_zkgm_channels.gno
+```
+
 ## 1. CreateClient
 
 Source: `createClientArgs`, `encodeClientState`, `encodeConsensusState`,

@@ -220,28 +220,6 @@ func cloneBytes(b []byte) []byte {
 	return out
 }
 
-// DecodeUpgrade decodes and validates upgraded client and consensus state bytes.
-func DecodeUpgrade(currentLatestHeight Height, newClient, newConsState []byte) (ClientState, ConsensusState, error) {
-	upgradedCS, err := DecodeClientState(newClient)
-	if err != nil {
-		return ClientState{}, ConsensusState{}, errors.New("cometbls: failed to decode upgraded client state: " + err.Error())
-	}
-	upgradedConsState, err := DecodeConsensusState(newConsState)
-	if err != nil {
-		return ClientState{}, ConsensusState{}, errors.New("cometbls: failed to decode upgraded consensus state: " + err.Error())
-	}
-	if upgradedCS.IsFrozen() {
-		return ClientState{}, ConsensusState{}, errors.New("cometbls: upgraded client state must not be frozen")
-	}
-	if upgradedCS.LatestHeight <= currentLatestHeight {
-		return ClientState{}, ConsensusState{}, errors.New("cometbls: upgraded client height must be greater than current height")
-	}
-	if upgradedConsState.Timestamp == 0 {
-		return ClientState{}, ConsensusState{}, errors.New("cometbls: upgraded consensus state must have a non-zero timestamp")
-	}
-	return upgradedCS, upgradedConsState, nil
-}
-
 // verifyChainedMembershipProof verifies each existence proof in sequence, threading
 // the computed subroot as the value for the next level.
 func verifyChainedMembershipProof(root []byte, specs []*ics23.ProofSpec, proofs []ics23.CommitmentProof, keys types.MerklePath, value []byte, index int) error {

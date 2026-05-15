@@ -637,10 +637,17 @@ func PacketTimeout(_ realm, msg MsgPacketTimeout) {
 	channel := st.getChannel(packet.SourceChannelId)
 	connection := ensureConnectionOpen(channel.ConnectionId)
 
+	client := st.getClient(connection.ClientId)
+
+	// ICS-04: if TimeoutTimestamp is set, reject before proof verification
+	// unless the consensus time at ProofHeight is past the timeout.
+	if packet.TimeoutTimestamp == 0 ||
+		client.GetTimestamp(connection.ClientId, msg.ProofHeight) <= packet.TimeoutTimestamp {
+		panic(ErrPacketTimeoutNotReached)
+	}
+
 	key := BatchReceiptsPath(CommitPacket(packet))
-	st.getClient(connection.ClientId).VerifyNonMembership(
-		connection.ClientId, msg.ProofHeight, msg.Proof, key[:],
-	)
+	client.VerifyNonMembership(connection.ClientId, msg.ProofHeight, msg.Proof, key[:])
 
 	portId := st.getChannelOwner(packet.SourceChannelId)
 	st.getAppByPortId(portId).OnTimeoutPacket(packet, relayer)

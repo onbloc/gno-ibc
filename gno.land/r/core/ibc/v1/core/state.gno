@@ -25,6 +25,7 @@ var (
 	ErrBatchPacketsNotFound          = errors.New("batch packets not found")
 	ErrBatchReceiptsNotFound         = errors.New("batch receipts not found")
 	ErrPacketTimeoutExpired          = errors.New("packet timeout expired")
+	ErrPacketTimeoutNotReached       = errors.New("packet timeout not reached")
 )
 
 type State struct {

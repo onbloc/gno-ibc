@@ -14,6 +14,7 @@ type mockClient struct {
 	chainId                string
 	height                 Height
 	status                 Status
+	timestamp              Timestamp
 	membershipClientIds    []ClientId
 	membershipHeights      []Height
 	membershipProofs       [][]byte
@@ -49,9 +50,15 @@ func (m *mockClient) VerifyNonMembership(clientId ClientId, height Height, proof
 	m.nonMembershipProofs = append(m.nonMembershipProofs, proof)
 	m.nonMembershipKeys = append(m.nonMembershipKeys, key)
 }
-func (m *mockClient) GetTimestamp(_ ClientId, _ Height) Timestamp { return Timestamp(1e9) }
-func (m *mockClient) GetLatestHeight(_ ClientId) Height           { return m.height }
-func (m *mockClient) GetStatus(_ ClientId) Status                 { return m.status }
+
+func (m *mockClient) GetTimestamp(_ ClientId, _ Height) Timestamp {
+	if m.timestamp != 0 {
+		return m.timestamp
+	}
+	return Timestamp(1e9)
+}
+func (m *mockClient) GetLatestHeight(_ ClientId) Height { return m.height }
+func (m *mockClient) GetStatus(_ ClientId) Status       { return m.status }
 
 type mockApp struct {
 	initCalled     bool

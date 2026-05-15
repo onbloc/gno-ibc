@@ -32,7 +32,7 @@ func main() {
 		SourceChannelId:      pair.Source,
 		DestinationChannelId: pair.Destination,
 		Data:                 e2e.MustPacketData(cross, instr),
-		TimeoutTimestamp:     core.Timestamp(3600),
+		TimeoutTimestamp:     core.Timestamp(1 << 62),
 	}
 	e2e.BatchSend(cross, packet)
 

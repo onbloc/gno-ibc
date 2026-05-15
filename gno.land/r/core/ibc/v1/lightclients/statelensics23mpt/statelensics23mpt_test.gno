@@ -31,6 +31,7 @@ func (mockL1Client) CreateClient(_ realm, _ core.ClientId, _, _ []byte) string {
 func (mockL1Client) UpdateClient(_ realm, _ core.ClientId, _ []byte) core.ConsensusStateUpdate {
 	return core.ConsensusStateUpdate{}
 }
+
 func (mockL1Client) VerifyMembership(clientId core.ClientId, height core.Height, proof, key, value []byte) {
 	if !wantMembershipCheck {
 		panic("unexpected membership verification")
@@ -53,6 +54,7 @@ type flowApp struct {
 
 func (a *flowApp) OnChannelOpenInit(_ core.ConnectionId, _ core.ChannelId, _ string, _ address) {
 }
+
 func (a *flowApp) OnChannelOpenTry(_ core.ConnectionId, _ core.ChannelId, _, _ string, _ address) {
 }
 func (a *flowApp) OnChannelOpenAck(_ core.ChannelId, _ core.ChannelId, _ string, _ address) {}
@@ -338,7 +340,9 @@ func TestPacketRecvUsesStateLensStorageProof(t *testing.T) {
 		SourceChannelId:      flow.counterpartyChannelId,
 		DestinationChannelId: flow.channelId,
 		Data:                 []byte("payload"),
-		TimeoutTimestamp:     100,
+		// Far-future timeout (year ~2116 in nanoseconds) so the ICS-04
+		// destination-side timeout check in core.PacketRecv accepts the packet.
+		TimeoutTimestamp: 1 << 62,
 	}
 	packetKey := core.BatchPacketsPath(core.CommitPackets([]core.Packet{packet}))
 	_, proof := updateLensRootForPathValue(t, flow.lensClientId, flow.l1ClientId, flow.l2ClientId, 5, packetKey[:], core.COMMITMENT_MAGIC[:])

@@ -6,7 +6,12 @@ import (
 	"chain/runtime"
 	"crypto/keccak256"
 	"encoding/hex"
+	"time"
 )
+
+// nowNanos returns the current block time in nanoseconds. Used for ICS-04
+// packet timeout enforcement on the receive path.
+func nowNanos() uint64 { return uint64(time.Now().UnixNano()) }
 
 var st State
 
@@ -502,6 +507,7 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 	st.getClient(firstConnection.ClientId).VerifyMembership(
 		firstConnection.ClientId, msg.ProofHeight, msg.Proof, batchKey[:], h256Bytes(COMMITMENT_MAGIC),
 	)
+	now := nowNanos()
 
 	for i, packet := range msg.Packets {
 		channel := st.getChannel(packet.DestinationChannelId)
@@ -516,6 +522,11 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 		// honest relayers can re-submit batches without aborting the whole tx.
 		if st.hasPacketReceipt(packet) {
 			continue
+		}
+
+		// Prevent double-execution against a successful source-side timeout.
+		if packet.TimeoutTimestamp != 0 && now >= uint64(packet.TimeoutTimestamp) {
+			panic(ErrPacketTimeoutExpired)
 		}
 
 		st.setPacketReceipt(packet)
@@ -548,6 +559,7 @@ func IntentPacketRecv(_ realm, msg MsgIntentPacketRecv) {
 		panic(ErrNotEnoughPackets)
 	}
 	first := msg.Packets[0]
+	now := nowNanos()
 
 	for i, packet := range msg.Packets {
 		channel := st.getChannel(packet.DestinationChannelId)
@@ -559,6 +571,11 @@ func IntentPacketRecv(_ realm, msg MsgIntentPacketRecv) {
 		}
 		if st.hasPacketReceipt(packet) {
 			continue
+		}
+
+		// A market maker filling an expired packet can't claim it on the source.
+		if packet.TimeoutTimestamp != 0 && now >= uint64(packet.TimeoutTimestamp) {
+			panic(ErrPacketTimeoutExpired)
 		}
 
 		st.setPacketReceipt(packet)
@@ -620,10 +637,17 @@ func PacketTimeout(_ realm, msg MsgPacketTimeout) {
 	channel := st.getChannel(packet.SourceChannelId)
 	connection := ensureConnectionOpen(channel.ConnectionId)
 
+	client := st.getClient(connection.ClientId)
+
+	// ICS-04: if TimeoutTimestamp is set, reject before proof verification
+	// unless the consensus time at ProofHeight is past the timeout.
+	if packet.TimeoutTimestamp == 0 ||
+		client.GetTimestamp(connection.ClientId, msg.ProofHeight) <= packet.TimeoutTimestamp {
+		panic(ErrPacketTimeoutNotReached)
+	}
+
 	key := BatchReceiptsPath(CommitPacket(packet))
-	st.getClient(connection.ClientId).VerifyNonMembership(
-		connection.ClientId, msg.ProofHeight, msg.Proof, key[:],
-	)
+	client.VerifyNonMembership(connection.ClientId, msg.ProofHeight, msg.Proof, key[:])
 
 	portId := st.getChannelOwner(packet.SourceChannelId)
 	st.getAppByPortId(portId).OnTimeoutPacket(packet, relayer)

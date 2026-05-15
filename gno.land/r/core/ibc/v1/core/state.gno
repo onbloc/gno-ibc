@@ -17,13 +17,15 @@ var (
 	ErrUnauthorizedAckWriter         = errors.New("caller not authorized to write ack")
 	ErrAcknowledgementAlreadyWritten = errors.New("acknowledgement already written")
 	ErrAcknowledgementEmpty          = errors.New("acknowledgement cannot be empty")
-	ErrUnauthorizedPacketSender     = errors.New("caller not authorized to send packet")
+	ErrUnauthorizedPacketSender      = errors.New("caller not authorized to send packet")
 	ErrNotEnoughPackets              = errors.New("not enough packets")
 	ErrBatchSameChannelOnly          = errors.New("batch must use the same channel")
 	ErrAcknowledgementCountMismatch  = errors.New("acknowledgement count mismatch")
 	ErrPortAlreadyRegistered         = errors.New("port already registered")
 	ErrBatchPacketsNotFound          = errors.New("batch packets not found")
 	ErrBatchReceiptsNotFound         = errors.New("batch receipts not found")
+	ErrPacketTimeoutExpired          = errors.New("packet timeout expired")
+	ErrPacketTimeoutNotReached       = errors.New("packet timeout not reached")
 )
 
 type State struct {
@@ -49,19 +51,19 @@ type State struct {
 
 func newState() State {
 	return State{
-		nextClientId:      ClientId(1),
-		nextConnectionId:  ConnectionId(1),
-		nextChannelId:     ChannelId(1),
-		clientRegistry:    make(map[ClientType]ILightClient),
-		clientTypes:       make(map[ClientId]ClientType),
-		clientStates:      make(map[ClientId][]byte),
-		consensusStates:   make(map[ClientId]map[Height][]byte),
-		connections:       make(map[ConnectionId]Connection),
-		channels:          make(map[ChannelId]Channel),
-		batchPackets:      make(map[H256]H256),
-		batchReceipts:     make(map[H256]H256),
-		ports:             make(map[string]IApp),
-		channelOwners:     make(map[ChannelId]Bytes),
+		nextClientId:     ClientId(1),
+		nextConnectionId: ConnectionId(1),
+		nextChannelId:    ChannelId(1),
+		clientRegistry:   make(map[ClientType]ILightClient),
+		clientTypes:      make(map[ClientId]ClientType),
+		clientStates:     make(map[ClientId][]byte),
+		consensusStates:  make(map[ClientId]map[Height][]byte),
+		connections:      make(map[ConnectionId]Connection),
+		channels:         make(map[ChannelId]Channel),
+		batchPackets:     make(map[H256]H256),
+		batchReceipts:    make(map[H256]H256),
+		ports:            make(map[string]IApp),
+		channelOwners:    make(map[ChannelId]Bytes),
 	}
 }
 

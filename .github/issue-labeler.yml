@@ -1,0 +1,25 @@
+# Regex-based issue auto-labeler config (github/issue-labeler).
+# Patterns are matched against the issue title + body (case-insensitive).
+# Mirrors the area labels in .github/labeler.yml so issues and PRs share
+# the same taxonomy.
+
+A-ci:
+  - '(?i)\b(ci|github actions?|workflow|lint(er|ing)?)\b'
+
+A-doc:
+  - '(?i)\b(docs?|documentation|readme|godoc)\b'
+
+A-ibc:
+  - '(?i)\b(ibc|light ?clients?|cometbls|tendermint|ics-?\d+)\b'
+
+A-zkgm:
+  - '(?i)\bzkgm\b'
+
+A-crypto:
+  - '(?i)\b(crypto|keccak(256)?|bn254|bls12-?381|ed25519|secp256k1|modexp)\b'
+
+A-encoding:
+  - '(?i)\b(abi|rlp|ssz|ethereum|encoding)\b'
+
+A-tooling:
+  - '(?i)\b(makefile|dockerfile|nix|flake|gnowork|gno\.mod|go\.mod|cargo)\b'

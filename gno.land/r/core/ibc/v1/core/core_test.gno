@@ -14,6 +14,7 @@ type mockClient struct {
 	chainId                string
 	height                 Height
 	status                 Status
+	timestamp              Timestamp
 	membershipClientIds    []ClientId
 	membershipHeights      []Height
 	membershipProofs       [][]byte
@@ -49,9 +50,15 @@ func (m *mockClient) VerifyNonMembership(clientId ClientId, height Height, proof
 	m.nonMembershipProofs = append(m.nonMembershipProofs, proof)
 	m.nonMembershipKeys = append(m.nonMembershipKeys, key)
 }
-func (m *mockClient) GetTimestamp(_ ClientId, _ Height) Timestamp { return Timestamp(1e9) }
-func (m *mockClient) GetLatestHeight(_ ClientId) Height           { return m.height }
-func (m *mockClient) GetStatus(_ ClientId) Status                 { return m.status }
+
+func (m *mockClient) GetTimestamp(_ ClientId, _ Height) Timestamp {
+	if m.timestamp != 0 {
+		return m.timestamp
+	}
+	return Timestamp(1e9)
+}
+func (m *mockClient) GetLatestHeight(_ ClientId) Height { return m.height }
+func (m *mockClient) GetStatus(_ ClientId) Status       { return m.status }
 
 type mockApp struct {
 	initCalled     bool
@@ -766,7 +773,7 @@ func TestPacketRecvSyncAckWritten(t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
-	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.NotAborts(t, func(cur realm) {
 		PacketRecv(cur, MsgPacketRecv{
@@ -790,8 +797,8 @@ func TestPacketRecvBatchUsesUnionBatchCommitment(t *testing.T) {
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
 	client := st.clientRegistry[mockType].(*mockClient)
-	p1 := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: 100}
-	p2 := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("b"), TimeoutTimestamp: 100}
+	p1 := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: testFutureTimeoutNanos}
+	p2 := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("b"), TimeoutTimestamp: testFutureTimeoutNanos}
 	proof := Bytes("batch-proof")
 
 	PacketRecv(cross, MsgPacketRecv{
@@ -828,8 +835,8 @@ func TestPacketRecvBatchRejectsDifferentDestinationChannel(t *testing.T) {
 	_, _, channelId := setupOpenChannel(t)
 	otherChannelId := st.generateChannelId()
 	st.saveChannel(otherChannelId, Channel{State: ChannelStateOpen})
-	p1 := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: 100}
-	p2 := Packet{SourceChannelId: 99, DestinationChannelId: otherChannelId, Data: Bytes("b"), TimeoutTimestamp: 100}
+	p1 := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: testFutureTimeoutNanos}
+	p2 := Packet{SourceChannelId: 99, DestinationChannelId: otherChannelId, Data: Bytes("b"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.AbortsContains(t, "batch must use the same channel", func(cur realm) {
 		PacketRecv(cur, MsgPacketRecv{Packets: []Packet{p1, p2}})
@@ -841,7 +848,7 @@ func TestPacketRecvSyncEmptyAckRejected(t *testing.T) {
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
 	app.recvResult = RecvPacketResult{Status: PacketStatusSuccess, Ack: nil}
-	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.AbortsContains(t, "sync ack cannot be empty", func(cur realm) {
 		PacketRecv(cur, MsgPacketRecv{Packets: []Packet{packet}})
@@ -855,7 +862,7 @@ func TestPacketRecvAsyncDefersAck(t *testing.T) {
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
 	app.recvResult = RecvPacketResult{Status: PacketStatusAsync}
-	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.NotAborts(t, func(cur realm) {
 		PacketRecv(cur, MsgPacketRecv{Packets: []Packet{packet}})
@@ -874,7 +881,7 @@ func TestWriteAcknowledgementCommitsAsyncAck(t *testing.T) {
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
 	app.recvResult = RecvPacketResult{Status: PacketStatusAsync}
-	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
 	WriteAcknowledgement(cross, MsgWriteAcknowledgement{
@@ -892,7 +899,7 @@ func TestWriteAcknowledgementRejectsNonOwner(t *testing.T) {
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
 	app.recvResult = RecvPacketResult{Status: PacketStatusAsync}
-	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
 	st.channelOwners[channelId] = Bytes("g1notchannelowner")
@@ -910,7 +917,7 @@ func TestWriteAcknowledgementRejectsAddressAsPortId(t *testing.T) {
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
 	app.recvResult = RecvPacketResult{Status: PacketStatusAsync}
-	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
 	// Port registered with address (old behavior) must be rejected.
@@ -943,7 +950,7 @@ func TestPacketRecvReceiptDupRejected(t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
-	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
 	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
@@ -957,7 +964,7 @@ func TestIntentPacketRecvDispatchesAndSetsReceipt(t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
-	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("intent"), TimeoutTimestamp: 100}
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("intent"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.NotAborts(t, func(cur realm) {
 		IntentPacketRecv(cur, MsgIntentPacketRecv{
@@ -984,7 +991,7 @@ func TestIntentPacketRecvDuplicateSkipped(t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
-	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("intent"), TimeoutTimestamp: 100}
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("intent"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	IntentPacketRecv(cross, MsgIntentPacketRecv{Packets: []Packet{packet}})
 	IntentPacketRecv(cross, MsgIntentPacketRecv{Packets: []Packet{packet}})
@@ -998,7 +1005,7 @@ func TestPacketAcknowledgementRoundtrip(t *testing.T) {
 	resetState()
 	portId, connId, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
-	packet := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	packet := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 	st.commitPacket(packet)
 	st.channelOwners[packet.DestinationChannelId] = portId
 	st.saveChannel(packet.DestinationChannelId, Channel{

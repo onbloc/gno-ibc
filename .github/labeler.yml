@@ -1,0 +1,54 @@
+A-ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/**'
+
+A-doc:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docs/**'
+          - 'local_docs/**'
+          - '**/*.md'
+
+A-ibc:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'gno.land/p/core/ibc/lightclients/**'
+          - 'gno.land/r/core/ibc/**'
+          - 'tools/gen-ibc-test-client/**'
+          - 'tools/cometbls-fixtures/**'
+
+A-zkgm:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'gno.land/p/core/ibc/zkgm/**'
+          - 'tools/zkgm-fixtures/**'
+
+A-crypto:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'stdlibs/crypto/**'
+
+A-encoding:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'gno.land/p/core/encoding/**'
+          - 'gno.land/p/core/ethereum/**'
+          - 'tools/abi-fixtures/**'
+          - 'tools/gen-ethereum-storage-proof-fixture/**'
+
+A-tooling:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'Makefile'
+          - 'Dockerfile'
+          - 'flake.nix'
+          - 'flake.lock'
+          - 'tools/setup-stdlibs.py'
+          - 'tools/test_setup_stdlibs.py'
+          - 'stdlibs/go.mod'
+          - 'stdlibs/go.sum'
+          - 'Cargo.toml'
+          - 'Cargo.lock'
+          - 'gnowork.toml'
+          - '.gno-version'

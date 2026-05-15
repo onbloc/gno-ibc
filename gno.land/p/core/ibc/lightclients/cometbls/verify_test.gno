@@ -15,7 +15,7 @@ const (
 )
 
 var (
-	devnetVH  = mustHexV("20DDFE7A0F75C65D876316091ECCD494A54A2BB324C872015F73E528D53CB9C4")
+	devnetVH  = hexToH256("20DDFE7A0F75C65D876316091ECCD494A54A2BB324C872015F73E528D53CB9C4")
 	devnetAH  = mustHexV("EE7E3E58F98AC95D63CE93B270981DF3EE54CA367F8D521ED1F444717595CD36")
 	devnetZKP = mustHexV(
 		"03CF56142A1E03D2445A82100FEAF70C1CD95A731ED85792AFFF5792EC0BDD21" +
@@ -39,6 +39,16 @@ func mustHexV(s string) []byte {
 		panic("mustHexV: " + err.Error())
 	}
 	return b
+}
+
+func hexToH256(s string) H256 {
+	b := mustHexV(s)
+	if len(b) != 32 {
+		panic("hexToH256: not 32 bytes")
+	}
+	var out H256
+	copy(out[:], b)
+	return out
 }
 
 // devnetClientState returns a ClientState for the Union devnet test.
@@ -65,7 +75,7 @@ func devnetHeader() Header {
 			Height:             devnetHeight,
 			TimeSeconds:        devnetTimeSeconds,
 			TimeNanos:          devnetTimeNanos,
-			ValidatorsHash:     devnetVH,
+			ValidatorsHash:     devnetVH[:],
 			NextValidatorsHash: devnetVH,
 			AppHash:            devnetAH,
 		},

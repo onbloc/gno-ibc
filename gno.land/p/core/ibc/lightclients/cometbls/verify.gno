@@ -48,10 +48,10 @@ func VerifyHeader(cs ClientState, trusted ConsensusState, h Header, nowNanos uin
 		TimeSeconds:        lh.TimeSeconds,
 		TimeNanos:          lh.TimeNanos,
 		ValidatorsHash:     lh.ValidatorsHash,
-		NextValidatorsHash: lh.NextValidatorsHash,
+		NextValidatorsHash: lh.NextValidatorsHash[:],
 		AppHash:            lh.AppHash,
 	}
-	return cometblszk.VerifyZKP(cs.ChainID, trusted.NextValidatorsHash, zkHeader, h.ZeroKnowledgeProof)
+	return cometblszk.VerifyZKP(cs.ChainID, trusted.NextValidatorsHash[:], zkHeader, h.ZeroKnowledgeProof)
 }
 
 // VerifyMisbehaviour verifies that two Headers constitute misbehaviour:
@@ -88,6 +88,6 @@ func lightHeadersEqual(a, b LightHeader) bool {
 		return false
 	}
 	return bytes.Equal(a.ValidatorsHash, b.ValidatorsHash) &&
-		bytes.Equal(a.NextValidatorsHash, b.NextValidatorsHash) &&
+		a.NextValidatorsHash == b.NextValidatorsHash &&
 		bytes.Equal(a.AppHash, b.AppHash)
 }

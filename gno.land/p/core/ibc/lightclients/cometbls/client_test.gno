@@ -115,14 +115,6 @@ func TestValidateInitializeZeroTimestamp(t *testing.T) {
 	}
 }
 
-func TestValidateInitializeEmptyNextValidatorsHash(t *testing.T) {
-	cs := devnetClientState()
-	cs.LatestHeight = Height(100)
-	if err := ValidateInitialize(cs, ConsensusState{Timestamp: testNow}); err == nil {
-		t.Fatal("expected error for empty next validators hash")
-	}
-}
-
 // --- Header/consensus helpers ---
 
 func TestConsensusStateFromHeader(t *testing.T) {
@@ -134,7 +126,7 @@ func TestConsensusStateFromHeader(t *testing.T) {
 	if !bytes.Equal(got.Root.Hash, h.SignedHeader.AppHash) {
 		t.Fatalf("root got %x want %x", got.Root.Hash, h.SignedHeader.AppHash)
 	}
-	if !bytes.Equal(got.NextValidatorsHash, h.SignedHeader.NextValidatorsHash) {
+	if got.NextValidatorsHash != h.SignedHeader.NextValidatorsHash {
 		t.Fatalf("next validators hash got %x want %x", got.NextValidatorsHash, h.SignedHeader.NextValidatorsHash)
 	}
 }

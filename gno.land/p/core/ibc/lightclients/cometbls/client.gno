@@ -41,11 +41,14 @@ func ValidateInitialize(cs ClientState, initial ConsensusState) error {
 }
 
 // Status returns the current status of the client.
-func Status(cs ClientState, latest ConsensusState, latestFound bool, nowNanos uint64) string {
+//
+// latest is the consensus state at cs.LatestHeight.
+// A zero Timestamp indicates that no consensus state exists.
+func Status(cs ClientState, latest ConsensusState, nowNanos uint64) string {
 	if cs.IsFrozen() {
 		return StatusFrozen
 	}
-	if !latestFound {
+	if latest.Timestamp == 0 {
 		return StatusExpired
 	}
 	if nowNanos > latest.Timestamp && nowNanos-latest.Timestamp >= cs.TrustingPeriod {

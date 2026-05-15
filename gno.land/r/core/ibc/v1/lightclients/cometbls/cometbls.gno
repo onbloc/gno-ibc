@@ -196,6 +196,6 @@ func (Adapter) GetStatus(clientId core.ClientId) core.Status {
 }
 
 func adapterStatus(e *clientEntry) string {
-	latest, ok := e.consensusStates[e.cs.LatestHeight]
-	return cometblsp.Status(e.cs, latest, ok, nowNanos())
+	latest := e.consensusStates[e.cs.LatestHeight]
+	return cometblsp.Status(e.cs, latest, nowNanos())
 }

@@ -23,7 +23,7 @@ func baseCS() ClientState {
 func TestStatusActive(t *testing.T) {
 	cs := baseCS()
 	latest := ConsensusState{Timestamp: testNow - 1_000*1_000_000_000}
-	if got := Status(cs, latest, true, testNow); got != StatusActive {
+	if got := Status(cs, latest, testNow); got != StatusActive {
 		t.Fatalf("got %q want %q", got, StatusActive)
 	}
 }
@@ -32,14 +32,14 @@ func TestStatusFrozen(t *testing.T) {
 	cs := baseCS()
 	cs.FrozenHeight = FrozenHeight
 	latest := ConsensusState{Timestamp: testNow - 1_000*1_000_000_000}
-	if got := Status(cs, latest, true, testNow); got != StatusFrozen {
+	if got := Status(cs, latest, testNow); got != StatusFrozen {
 		t.Fatalf("got %q want %q", got, StatusFrozen)
 	}
 }
 
 func TestStatusExpiredNoConsensusState(t *testing.T) {
 	cs := baseCS()
-	if got := Status(cs, ConsensusState{}, false, testNow); got != StatusExpired {
+	if got := Status(cs, ConsensusState{}, testNow); got != StatusExpired {
 		t.Fatalf("got %q want %q", got, StatusExpired)
 	}
 }
@@ -47,7 +47,7 @@ func TestStatusExpiredNoConsensusState(t *testing.T) {
 func TestStatusExpiredTrustingPeriod(t *testing.T) {
 	cs := baseCS()
 	latest := ConsensusState{Timestamp: testNow - cs.TrustingPeriod - 1}
-	if got := Status(cs, latest, true, testNow); got != StatusExpired {
+	if got := Status(cs, latest, testNow); got != StatusExpired {
 		t.Fatalf("got %q want %q", got, StatusExpired)
 	}
 }
@@ -56,7 +56,7 @@ func TestStatusFrozenTakesPrecedence(t *testing.T) {
 	cs := baseCS()
 	cs.FrozenHeight = FrozenHeight
 	latest := ConsensusState{Timestamp: testNow - cs.TrustingPeriod - 1}
-	if got := Status(cs, latest, true, testNow); got != StatusFrozen {
+	if got := Status(cs, latest, testNow); got != StatusFrozen {
 		t.Fatalf("got %q want %q", got, StatusFrozen)
 	}
 }

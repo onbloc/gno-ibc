@@ -101,6 +101,10 @@ func openZ35Channel(cur realm, connectionId core.ConnectionId, counterpartyChann
 	return channelId
 }
 
+func BatchSend(cur realm, packet core.Packet) core.H256 {
+	return zkgm.BatchSend(cross, core.MsgBatchSend{Packets: []core.Packet{packet}})
+}
+
 func OpenZ37CometBLSChannel(cur realm) ChannelPair {
 	clientId := CreateZ37CometBLSClient(cross)
 

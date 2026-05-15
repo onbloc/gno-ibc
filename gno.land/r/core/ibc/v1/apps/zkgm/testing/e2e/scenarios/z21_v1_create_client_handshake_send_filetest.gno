@@ -28,7 +28,7 @@ func main() {
 		Data:                 e2e.MustPacketData(cross, e2e.MustTokenOrderInstruction(cross, order)),
 		TimeoutTimestamp:     core.Timestamp(3600),
 	}
-	core.BatchSend(cross, core.MsgBatchSend{Packets: []core.Packet{packet}})
+	e2e.BatchSend(cross, packet)
 
 	println("client", pair.ClientId.String())
 	println("source_channel", pair.Source.String())

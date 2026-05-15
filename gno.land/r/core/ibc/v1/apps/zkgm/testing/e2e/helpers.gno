@@ -83,6 +83,10 @@ func openChannel(connectionId core.ConnectionId, counterpartyChannelId core.Chan
 	return channelId
 }
 
+func BatchSend(cur realm, packet core.Packet) core.H256 {
+	return zkgm.BatchSend(cross, core.MsgBatchSend{Packets: []core.Packet{packet}})
+}
+
 func MustTokenOrderInstruction(cur realm, order z.TokenOrderV2) z.Instruction {
 	orderBytes, err := z.EncodeTokenOrderV2(order)
 	if err != nil {

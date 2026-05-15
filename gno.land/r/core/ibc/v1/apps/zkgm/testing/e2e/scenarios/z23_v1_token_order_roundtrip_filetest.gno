@@ -34,7 +34,7 @@ func main() {
 		Data:                 e2e.MustPacketData(cross, instr),
 		TimeoutTimestamp:     core.Timestamp(3600),
 	}
-	core.BatchSend(cross, core.MsgBatchSend{Packets: []core.Packet{packet}})
+	e2e.BatchSend(cross, packet)
 
 	core.PacketRecv(cross, core.MsgPacketRecv{
 		Packets:     []core.Packet{packet},

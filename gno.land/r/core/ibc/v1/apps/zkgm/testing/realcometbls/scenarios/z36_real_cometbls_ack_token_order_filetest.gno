@@ -30,7 +30,7 @@ func main() {
 		Data:                 e2e.MustPacketData(cross, e2e.MustTokenOrderInstruction(cross, order)),
 		TimeoutTimestamp:     core.Timestamp(3600),
 	}
-	core.BatchSend(cross, core.MsgBatchSend{Packets: []core.Packet{packet}})
+	realcometbls.BatchSend(cross, packet)
 	marketMaker := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	ack := e2e.MustSuccessAck(cross, mustMarketMakerTokenOrderAck([]byte(marketMaker)))
 

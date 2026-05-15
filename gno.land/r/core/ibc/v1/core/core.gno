@@ -661,6 +661,16 @@ func BatchSend(_ realm, msg MsgBatchSend) H256 {
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
 	}
+	first := msg.Packets[0]
+	portId := st.getChannelOwner(first.SourceChannelId)
+	if string(portId) != runtime.PreviousRealm().PkgPath() {
+		panic(ErrUnauthorizedPacketSender)
+	}
+	for _, packet := range msg.Packets {
+		if packet.SourceChannelId != first.SourceChannelId {
+			panic(ErrBatchSameChannelOnly)
+		}
+	}
 	batchHash := CommitPackets(msg.Packets)
 	st.saveBatchPackets(batchHash, COMMITMENT_MAGIC)
 	// In-memory per-packet membership keeps HasPacketCommitment and the
@@ -670,7 +680,6 @@ func BatchSend(_ realm, msg MsgBatchSend) H256 {
 	for _, packet := range msg.Packets {
 		st.setBatchPackets(CommitPacket(packet), COMMITMENT_MAGIC)
 	}
-	first := msg.Packets[0]
 	channel := st.getChannel(first.SourceChannelId)
 	connection := ensureConnectionOpen(channel.ConnectionId)
 	emitBatchSendEvent(batchHash, first, channel, connection)
@@ -683,6 +692,16 @@ func BatchAcks(_ realm, msg MsgBatchAcks) H256 {
 	}
 	if len(msg.Packets) != len(msg.Acks) {
 		panic(ErrAcknowledgementCountMismatch)
+	}
+	first := msg.Packets[0]
+	portId := st.getChannelOwner(first.DestinationChannelId)
+	if string(portId) != runtime.PreviousRealm().PkgPath() {
+		panic(ErrUnauthorizedAckWriter)
+	}
+	for _, packet := range msg.Packets {
+		if packet.DestinationChannelId != first.DestinationChannelId {
+			panic(ErrBatchSameChannelOnly)
+		}
 	}
 	batchHash := CommitPackets(msg.Packets)
 	st.saveBatchReceipts(batchHash, CommitAcks(msg.Acks))

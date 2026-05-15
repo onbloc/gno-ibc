@@ -116,7 +116,7 @@ func emitChannelEvent(eventType string, portId Bytes, channelId ChannelId, chann
 	chain.Emit(eventType,
 		"port_id", string(portId),
 		"channel_id", channelId.String(),
-		"counterparty_port_id", hexString([]byte(channel.CounterpartyPortId)),
+		"counterparty_port_id", channel.CounterpartyPortId.String(),
 		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
 		"connection_id", channel.ConnectionId.String(),
 		"connection_client_id", connection.ClientId.String(),

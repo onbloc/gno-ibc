@@ -153,7 +153,7 @@ func setupOpenChannel(t *testing.T) (Bytes, ConnectionId, ChannelId) {
 		CounterpartyConnectionId: ConnectionId(99),
 	})
 
-	portId := Bytes(runtime.CurrentRealm().Address().String())
+	portId := Bytes(runtime.CurrentRealm().PkgPath())
 	app := &mockApp{}
 	st.ports[portKey(portId)] = app
 
@@ -565,6 +565,18 @@ func TestPacketSendRejectsNonOwner(t *testing.T) {
 	})
 }
 
+func TestPacketSendRejectsAddressAsPortId(t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	// Port registered with address (old behavior) must be rejected when caller's
+	// PkgPath is compared instead.
+	st.channelOwners[channelId] = Bytes(runtime.CurrentRealm().Address().String())
+
+	uassert.AbortsContains(t, "caller not authorized to send packet", func(cur realm) {
+		PacketSend(cur, channelId, 0, 100, []byte("data"))
+	})
+}
+
 func TestBatchSendReturnsUnionPacketCommitment(t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
@@ -861,6 +873,25 @@ func TestWriteAcknowledgementRejectsNonOwner(t *testing.T) {
 
 	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
 	st.channelOwners[channelId] = Bytes("g1notchannelowner")
+
+	uassert.AbortsContains(t, "caller not authorized to write ack", func(cur realm) {
+		WriteAcknowledgement(cur, MsgWriteAcknowledgement{
+			Packet:          packet,
+			Acknowledgement: []byte("async-ack"),
+		})
+	})
+}
+
+func TestWriteAcknowledgementRejectsAddressAsPortId(t *testing.T) {
+	resetState()
+	portId, _, channelId := setupOpenChannel(t)
+	app := st.ports[portKey(portId)].(*mockApp)
+	app.recvResult = RecvPacketResult{Status: PacketStatusAsync}
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+
+	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
+	// Port registered with address (old behavior) must be rejected.
+	st.channelOwners[channelId] = Bytes(runtime.CurrentRealm().Address().String())
 
 	uassert.AbortsContains(t, "caller not authorized to write ack", func(cur realm) {
 		WriteAcknowledgement(cur, MsgWriteAcknowledgement{

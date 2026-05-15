@@ -467,7 +467,7 @@ func ChannelCloseConfirm(_ realm, msg MsgChannelCloseConfirm) {
 
 func PacketSend(_ realm, sourceChannelId ChannelId, timeoutHeight Height, timeoutTimestamp Timestamp, data []byte) Packet {
 	portId := st.getChannelOwner(sourceChannelId)
-	if string(portId) != runtime.PreviousRealm().Address().String() {
+	if string(portId) != runtime.PreviousRealm().PkgPath() {
 		panic(ErrUnauthorizedPacketSender)
 	}
 
@@ -824,7 +824,7 @@ func GetChannel(channelId ChannelId) Channel {
 // track pending async acknowledgement state.
 func WriteAcknowledgement(_ realm, msg MsgWriteAcknowledgement) {
 	portId := st.getChannelOwner(msg.Packet.DestinationChannelId)
-	if string(portId) != runtime.PreviousRealm().Address().String() {
+	if string(portId) != runtime.PreviousRealm().PkgPath() {
 		panic(ErrUnauthorizedAckWriter)
 	}
 	if len(msg.Acknowledgement) == 0 {

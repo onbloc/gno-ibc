@@ -34,9 +34,6 @@ func ValidateInitialize(cs ClientState, initial ConsensusState) error {
 	if initial.Timestamp == 0 {
 		return errors.New("cometbls: initial consensus state timestamp must be positive")
 	}
-	if len(initial.NextValidatorsHash) == 0 {
-		return errors.New("cometbls: initial consensus state next validators hash cannot be empty")
-	}
 	return nil
 }
 
@@ -69,7 +66,7 @@ func ConsensusStateFromHeader(lh LightHeader) ConsensusState {
 // ConsensusEqualsHeader reports whether a ConsensusState matches a LightHeader.
 func ConsensusEqualsHeader(cs ConsensusState, lh LightHeader) bool {
 	return cs.Timestamp == lh.Nanos() &&
-		bytes.Equal(cs.NextValidatorsHash, lh.NextValidatorsHash) &&
+		cs.NextValidatorsHash == lh.NextValidatorsHash &&
 		bytes.Equal(cs.Root.Hash, lh.AppHash)
 }
 

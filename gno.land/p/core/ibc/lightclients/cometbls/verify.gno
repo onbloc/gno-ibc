@@ -39,19 +39,16 @@ func VerifyHeader(cs ClientState, trusted ConsensusState, h Header, nowNanos uin
 		return errors.New("cometbls: header timestamp exceeds clock drift bound")
 	}
 
-	// Verify the Groth16 ZK proof.
-	// trustedValidatorsHash is the NextValidatorsHash from the trusted state:
-	// at the trusted height H, NextValidatorsHash commits to the validator set
-	// that signed the block at H+1 and beyond.
+	// trustedValidatorsHash commits to the validator set at trusted height + 1.
 	zkHeader := cometblszk.LightHeader{
 		Height:             lh.Height,
 		TimeSeconds:        lh.TimeSeconds,
 		TimeNanos:          lh.TimeNanos,
 		ValidatorsHash:     lh.ValidatorsHash,
-		NextValidatorsHash: lh.NextValidatorsHash,
+		NextValidatorsHash: lh.NextValidatorsHash[:],
 		AppHash:            lh.AppHash,
 	}
-	return cometblszk.VerifyZKP(cs.ChainID, trusted.NextValidatorsHash, zkHeader, h.ZeroKnowledgeProof)
+	return cometblszk.VerifyZKP(cs.ChainID, trusted.NextValidatorsHash[:], zkHeader, h.ZeroKnowledgeProof)
 }
 
 // VerifyMisbehaviour verifies that two Headers constitute misbehaviour:
@@ -88,6 +85,6 @@ func lightHeadersEqual(a, b LightHeader) bool {
 		return false
 	}
 	return bytes.Equal(a.ValidatorsHash, b.ValidatorsHash) &&
-		bytes.Equal(a.NextValidatorsHash, b.NextValidatorsHash) &&
+		a.NextValidatorsHash == b.NextValidatorsHash &&
 		bytes.Equal(a.AppHash, b.AppHash)
 }

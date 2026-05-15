@@ -33,7 +33,7 @@ func activeAdapterConsensusState() cometblsp.ConsensusState {
 	return cometblsp.ConsensusState{
 		Timestamp:          nowNanos(),
 		Root:               cometblsp.MerkleRoot{Hash: []byte{0x01}},
-		NextValidatorsHash: []byte{0x02},
+		NextValidatorsHash: cometblsp.H256{0x02},
 	}
 }
 

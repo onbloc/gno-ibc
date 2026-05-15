@@ -20,7 +20,7 @@ const (
 // *_fixture_inputs filetests. See tools/cometbls-fixtures/README.md for the
 // regenerate command and the list of consumers that must stay in sync.
 var (
-	devnetValidatorsHash = mustHex(
+	devnetValidatorsHash = mustH256(
 		"20DDFE7A0F75C65D876316091ECCD494A54A2BB324C872015F73E528D53CB9C4",
 	)
 	devnetAppHash = mustHex(
@@ -232,7 +232,7 @@ func Z42StaleConsensusStateBytes(cur realm) []byte {
 func consensusStateBytes(root []byte, timestamp uint64) []byte {
 	bz, err := cometblsp.EncodeConsensusState(cometblsp.ConsensusState{
 		Timestamp:          timestamp,
-		NextValidatorsHash: cloneBytes(devnetValidatorsHash),
+		NextValidatorsHash: devnetValidatorsHash,
 		Root: cometblsp.MerkleRoot{
 			Hash: cloneBytes(root),
 		},
@@ -424,8 +424,8 @@ func devnetHeader(proof []byte) cometblsp.Header {
 			Height:             DevnetHeight,
 			TimeSeconds:        DevnetTimeSeconds,
 			TimeNanos:          DevnetTimeNanos,
-			ValidatorsHash:     cloneBytes(devnetValidatorsHash),
-			NextValidatorsHash: cloneBytes(devnetValidatorsHash),
+			ValidatorsHash:     cloneBytes(devnetValidatorsHash[:]),
+			NextValidatorsHash: devnetValidatorsHash,
 			AppHash:            cloneBytes(devnetAppHash),
 		},
 		TrustedHeight:      cometblsp.Height(DevnetHeight - 1),

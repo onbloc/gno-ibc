@@ -32,7 +32,7 @@ func (cs ClientState) IsFrozen() bool {
 type ConsensusState struct {
 	Timestamp          uint64 // nanoseconds since Unix epoch
 	Root               MerkleRoot
-	NextValidatorsHash []byte
+	NextValidatorsHash H256
 }
 
 // LightHeader is the minimal block header committed to by a ZK proof.
@@ -42,7 +42,7 @@ type LightHeader struct {
 	TimeSeconds        int64
 	TimeNanos          int32
 	ValidatorsHash     []byte
-	NextValidatorsHash []byte
+	NextValidatorsHash H256
 	AppHash            []byte
 }
 

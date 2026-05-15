@@ -85,17 +85,13 @@ func DecodeClientState(buf []byte) (ClientState, error) {
 }
 
 // EncodeConsensusState ABI-encodes a ConsensusState (96 bytes).
-// Root.Hash and NextValidatorsHash must each be exactly 32 bytes.
+// Root.Hash must be exactly 32 bytes.
 func EncodeConsensusState(cs ConsensusState) ([]byte, error) {
 	appHash, err := toBytes32(cs.Root.Hash, "root hash")
 	if err != nil {
 		return nil, err
 	}
-	nvh, err := toBytes32(cs.NextValidatorsHash, "next validators hash")
-	if err != nil {
-		return nil, err
-	}
-	return abienc.Encode(consensusStateSchema, []any{cs.Timestamp, appHash, nvh})
+	return abienc.Encode(consensusStateSchema, []any{cs.Timestamp, appHash, [32]byte(cs.NextValidatorsHash)})
 }
 
 func DecodeConsensusState(buf []byte) (ConsensusState, error) {
@@ -108,19 +104,15 @@ func DecodeConsensusState(buf []byte) (ConsensusState, error) {
 	ah := vals[1].([32]byte)
 	cs.Root.Hash = ah[:]
 	nvh := vals[2].([32]byte)
-	cs.NextValidatorsHash = nvh[:]
+	cs.NextValidatorsHash = H256(nvh)
 	return cs, nil
 }
 
 // EncodeHeader ABI-encodes a Header.
-// ValidatorsHash, NextValidatorsHash, and AppHash must each be exactly 32 bytes.
+// ValidatorsHash and AppHash must each be exactly 32 bytes.
 func EncodeHeader(h Header) ([]byte, error) {
 	lh := h.SignedHeader
 	vh, err := toBytes32(lh.ValidatorsHash, "validators hash")
-	if err != nil {
-		return nil, err
-	}
-	nvh, err := toBytes32(lh.NextValidatorsHash, "next validators hash")
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +124,7 @@ func EncodeHeader(h Header) ([]byte, error) {
 		uint64(lh.Height),
 		uint64(lh.TimeSeconds),
 		uint64(lh.TimeNanos),
-		vh, nvh, ah,
+		vh, [32]byte(lh.NextValidatorsHash), ah,
 		h.TrustedHeight,
 		h.ZeroKnowledgeProof,
 	})
@@ -150,7 +142,7 @@ func DecodeHeader(buf []byte) (Header, error) {
 	vh := vals[3].([32]byte)
 	h.SignedHeader.ValidatorsHash = vh[:]
 	nvh := vals[4].([32]byte)
-	h.SignedHeader.NextValidatorsHash = nvh[:]
+	h.SignedHeader.NextValidatorsHash = H256(nvh)
 	ah := vals[5].([32]byte)
 	h.SignedHeader.AppHash = ah[:]
 	h.TrustedHeight = vals[6].(uint64)
@@ -278,7 +270,7 @@ func pbEncodeHeader(h Header) []byte {
 	tsBuf = pbAppendInt32(tsBuf, 2, h.SignedHeader.TimeNanos)
 	lhBuf = pbAppendMsg(lhBuf, 2, tsBuf)
 	lhBuf = pbAppendBytes(lhBuf, 3, h.SignedHeader.ValidatorsHash)
-	lhBuf = pbAppendBytes(lhBuf, 4, h.SignedHeader.NextValidatorsHash)
+	lhBuf = pbAppendBytes(lhBuf, 4, h.SignedHeader.NextValidatorsHash[:])
 	lhBuf = pbAppendBytes(lhBuf, 5, h.SignedHeader.AppHash)
 	buf = pbAppendMsg(buf, 1, lhBuf)
 	buf = pbAppendMsg(buf, 2, pbEncodeHeight(h.TrustedHeight))
@@ -446,7 +438,10 @@ func pbDecodeLightHeader(buf []byte) (LightHeader, error) {
 			if err != nil {
 				return lh, err
 			}
-			lh.NextValidatorsHash = b
+			if len(b) != 32 {
+				return lh, errors.New("cometbls: next validators hash must be 32 bytes")
+			}
+			copy(lh.NextValidatorsHash[:], b)
 		case 5:
 			b, newPos, err := pbDecodeBytes(buf, pos)
 			pos = newPos

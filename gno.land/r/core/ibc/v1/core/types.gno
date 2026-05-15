@@ -151,7 +151,7 @@ func (c Channel) EthAbiEncode() []byte {
 	if err != nil {
 		panic(err)
 	}
-	return bz
+	return encodeTopLevelDynamic(bz)
 }
 
 type Connection struct {

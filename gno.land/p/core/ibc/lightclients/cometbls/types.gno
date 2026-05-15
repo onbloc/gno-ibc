@@ -4,6 +4,8 @@ package cometbls
 // Mirrors the ibc-union spec where height is a plain uint64 (revision 0 only).
 type Height = uint64
 
+type H256 [32]byte
+
 // MerkleRoot is the commitment root (app hash).
 // Mirrors ibc.core.commitment.v1.MerkleRoot.
 type MerkleRoot struct {
@@ -13,11 +15,12 @@ type MerkleRoot struct {
 // ClientState tracks the state of the CometBLS light client.
 // Mirrors union.ibc.lightclients.cometbls.v1.ClientState.
 type ClientState struct {
-	ChainID        string
-	TrustingPeriod uint64 // nanoseconds
-	MaxClockDrift  uint64 // nanoseconds
-	FrozenHeight   Height
-	LatestHeight   Height
+	ChainID         string
+	TrustingPeriod  uint64 // nanoseconds
+	MaxClockDrift   uint64 // nanoseconds
+	FrozenHeight    Height
+	LatestHeight    Height
+	ContractAddress H256
 }
 
 func (cs ClientState) IsFrozen() bool {

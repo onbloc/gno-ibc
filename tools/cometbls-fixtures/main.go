@@ -13,7 +13,8 @@ const (
 	hashOpSHA256     = 1
 	hashOpNoHash     = 0
 	lengthOpVarProto = 1
-	ibcStoreKey      = "ibc"
+	wasmStoreKey     = "wasm"
+	contractAddress  = "0cf2ffe8f45a20514018173d3007644817a9767dc0fbdb246696fd9c261ce3bc"
 
 	wireTypeVarint = 0
 	wireTypeBytes  = 2
@@ -166,7 +167,8 @@ func main() {
 }
 
 func makeFixtureSet(inputs []fixtureInput) []fixture {
-	storeKey := []byte(ibcStoreKey)
+	storeKey := []byte(wasmStoreKey)
+	contractKeyPrefix := wasmContractStoreKeyPrefix()
 
 	iavlLeaf := encodeLeafOp(
 		hashOpSHA256,
@@ -178,10 +180,11 @@ func makeFixtureSet(inputs []fixtureInput) []fixture {
 
 	leaves := make([]*iavlLeafNode, 0, len(inputs))
 	for i, input := range inputs {
+		leafKey := append(append([]byte{}, contractKeyPrefix...), input.key...)
 		leaves = append(leaves, &iavlLeafNode{
 			input:    input,
 			inputIdx: i,
-			hash:     applyLeaf(iavlLeafPrefix(), input.key, input.value),
+			hash:     applyLeaf(iavlLeafPrefix(), leafKey, input.value),
 		})
 	}
 	sort.Slice(leaves, func(i, j int) bool {
@@ -229,12 +232,13 @@ func makeFixtureSet(inputs []fixtureInput) []fixture {
 }
 
 func encodeIavlExistenceProof(iavlLeaf []byte, leaf *iavlLeafNode) []byte {
-	return encodeExistenceProof(leaf.input.key, leaf.input.value, iavlLeaf, leaf.proof)
+	return encodeExistenceProof(wasmContractStoreKey(leaf.input.key), leaf.input.value, iavlLeaf, leaf.proof)
 }
 
 func nonMembershipNeighbors(leaves []*iavlLeafNode, key []byte, iavlLeaf []byte) (left, right []byte) {
+	targetKey := wasmContractStoreKey(key)
 	for _, leaf := range leaves {
-		cmp := bytes.Compare(leaf.input.key, key)
+		cmp := bytes.Compare(wasmContractStoreKey(leaf.input.key), targetKey)
 		if cmp < 0 {
 			left = encodeIavlExistenceProof(iavlLeaf, leaf)
 			continue
@@ -308,7 +312,8 @@ func printFixture(f fixture) {
 	fmt.Printf("[%s]\n", f.input.name)
 	fmt.Printf("key: %q\n", f.input.key)
 	fmt.Printf("value: %q\n", f.input.value)
-	fmt.Printf("store_key: %q\n", []byte(ibcStoreKey))
+	fmt.Printf("store_key: %q\n", []byte(wasmStoreKey))
+	fmt.Printf("contract_key: 0x%s\n", hex.EncodeToString(wasmContractStoreKey(f.input.key)))
 	fmt.Printf("iavl_subroot: 0x%s\n", hex.EncodeToString(f.subroot))
 	fmt.Printf("app_root: 0x%s\n", hex.EncodeToString(f.appRoot))
 	fmt.Printf("membership_proof: 0x%s\n", hex.EncodeToString(f.proofBz))
@@ -377,6 +382,16 @@ func mustHex(s string) []byte {
 		panic(err)
 	}
 	return bz
+}
+
+func wasmContractStoreKeyPrefix() []byte {
+	prefix := []byte{0x03}
+	prefix = append(prefix, mustHex(contractAddress)...)
+	return append(prefix, 0x00)
+}
+
+func wasmContractStoreKey(key []byte) []byte {
+	return append(wasmContractStoreKeyPrefix(), key...)
 }
 
 func pbTag(fieldNum, wireType int) []byte {

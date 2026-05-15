@@ -116,7 +116,7 @@ func emitChannelEvent(eventType string, portId Bytes, channelId ChannelId, chann
 	chain.Emit(eventType,
 		"port_id", string(portId),
 		"channel_id", channelId.String(),
-		"counterparty_port_id", string(channel.CounterpartyPortId),
+		"counterparty_port_id", channel.CounterpartyPortId.String(),
 		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
 		"connection_id", channel.ConnectionId.String(),
 		"connection_client_id", connection.ClientId.String(),
@@ -231,6 +231,7 @@ func CreateClient(_ realm, msg MsgCreateClient) ClientId {
 
 	chain.Emit(CreateClientEvent,
 		"client_id", clientId.String(),
+		"client_type", string(msg.ClientType),
 	)
 	return clientId
 }
@@ -713,7 +714,11 @@ func GetClientStatus(clientId ClientId) Status {
 }
 
 func QueryClientState(clientId ClientId) string {
-	return hexString(st.getClientState(clientId))
+	state, ok := st.clientStates[clientId]
+	if !ok {
+		return ""
+	}
+	return hexString(state)
 }
 
 func GetClientType(clientId ClientId) string {
@@ -725,23 +730,47 @@ func GetClientType(clientId ClientId) string {
 }
 
 func QueryConsensusState(clientId ClientId, height Height) string {
-	return hexString(st.getConsensusState(clientId, height))
+	byHeight, ok := st.consensusStates[clientId]
+	if !ok {
+		return ""
+	}
+	state, ok := byHeight[height]
+	if !ok {
+		return ""
+	}
+	return hexString(state)
 }
 
 func QueryConnection(connectionId ConnectionId) string {
-	return hexString(st.getConnection(connectionId).EthAbiEncode())
+	connection, ok := st.connections[connectionId]
+	if !ok {
+		return ""
+	}
+	return hexString(connection.EthAbiEncode())
 }
 
 func QueryChannel(channelId ChannelId) string {
-	return hexString(st.getChannel(channelId).EthAbiEncode())
+	channel, ok := st.channels[channelId]
+	if !ok {
+		return ""
+	}
+	return hexString(channel.EthAbiEncode())
 }
 
 func QueryBatchPackets(batchHash H256) string {
-	return h256String(st.getBatchPackets(batchHash))
+	value, ok := st.batchPackets[batchHash]
+	if !ok {
+		return ""
+	}
+	return h256String(value)
 }
 
 func QueryBatchReceipts(batchHash H256) string {
-	return h256String(st.getBatchReceipts(batchHash))
+	value, ok := st.batchReceipts[batchHash]
+	if !ok {
+		return ""
+	}
+	return h256String(value)
 }
 
 func CommitNonMembershipProof(_ realm, msg MsgCommitNonMembershipProof) {

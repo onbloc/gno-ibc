@@ -35,7 +35,7 @@ const (
 	counterpartyPortID       = "g1TODO_PORT"
 	version                  = "ucs03-zkgm-0"
 
-	clientType                = "07-cometbls"
+	clientType                = "cometbls"
 	trustingPeriod            = 10 * 365 * 24 * 3600 * 1_000_000_000
 	updatedTrustPeriod        = trustingPeriod
 	maxClockDrift             = 10 * 1_000_000_000
@@ -45,6 +45,7 @@ const (
 var (
 	devnetAppHash         = mustHex("EE7E3E58F98AC95D63CE93B270981DF3EE54CA367F8D521ED1F444717595CD36")
 	devnetValidatorsHash  = mustHex("20DDFE7A0F75C65D876316091ECCD494A54A2BB324C872015F73E528D53CB9C4")
+	contractAddress       = mustHex("0cf2ffe8f45a20514018173d3007644817a9767dc0fbdb246696fd9c261ce3bc")
 	z35Root               = mustHex("e86ffd094be9dde9459f6c88333e663785f4f88adc7f3f91a55e166a3cfa89d1")
 	z35ConnectionTryProof = mustHex("0add010ada010a2005f3c8eef62e74b10b7ee910fcc73c8358000f692d9ce2341a989e008e45b35d1220ff4fb67348c16e70c898c7cf43c460a684bc900d2b41e5a24ef6dcb2945860341a0d08011000180120012a03000202222b08011204020402201a212075fa5fd43f02dfcbcb0d9d1091ef50e8878f62e295bc58e670579fff822312c7222b08011204040802201a21208d76df01234dbce513db8913f231e2ad27b505ea2641f38079cd7d4e79136417222b08011204061002201a212023a5b9a52805603bebfa4b8d9153918f6bb74d8c190a95fb17651f3c228e15070a360a340a0369626312203b0e2fd01a894dc222e13ce7f5cfb397176764abe6376a7b7e63b2dfb9952a981a0b08011000180120012a0100")
 	z35ChannelTryProof    = mustHex("0ad9010ad6010a2088601476d11616a71c5be67555bd1dff4b1cbf21533d2669b768b61518cfe1c31220fa3c11d224a164cd0beca2b6756128dc1531714a75813e9c2b5840bd8f2a83471a0d08011000180120012a0300020222290801122502040220fc911eec9c73d4884020ebb7d0173bfb0739579e4e64c63585a1e61466f11fc120222908011225040802209581d4d357f7e8f0d772870c181754178423903f17e5a481ecf11eb2688ff79e20222b08011204061002201a212023a5b9a52805603bebfa4b8d9153918f6bb74d8c190a95fb17651f3c228e15070a360a340a0369626312203b0e2fd01a894dc222e13ce7f5cfb397176764abe6376a7b7e63b2dfb9952a981a0b08011000180120012a0100")
@@ -381,7 +382,7 @@ func keccak256(data []byte) [32]byte {
 func encodeClientState(chainID string, trustingPeriod, maxClockDrift, frozenHeight, latestHeight uint64) []byte {
 	var chainIDBytes [32]byte
 	copy(chainIDBytes[:], []byte(chainID))
-	return abiEncodeStatic(chainIDBytes[:], word(trustingPeriod), word(maxClockDrift), word(frozenHeight), word(latestHeight))
+	return abiEncodeStatic(chainIDBytes[:], word(trustingPeriod), word(maxClockDrift), word(frozenHeight), word(latestHeight), bytes32(contractAddress))
 }
 
 func encodeConsensusState(timestamp uint64, appHash, nextValidatorsHash []byte) []byte {

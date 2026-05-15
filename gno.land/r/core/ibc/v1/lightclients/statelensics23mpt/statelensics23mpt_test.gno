@@ -607,7 +607,26 @@ func hashChannel(t *testing.T, state core.ChannelState, connectionId core.Connec
 	if err != nil {
 		t.Fatalf("Encode channel: %v", err)
 	}
-	return keccak256.Sum256(bz)
+	return keccak256.Sum256(encodeTopLevelDynamic(bz))
+}
+
+func encodeTopLevelDynamic(encoded []byte) []byte {
+	out := make([]byte, 0, 32+len(encoded))
+	out = append(out, u64ToH256(32)...)
+	return append(out, encoded...)
+}
+
+func u64ToH256(v uint64) []byte {
+	out := make([]byte, 32)
+	out[24] = byte(v >> 56)
+	out[25] = byte(v >> 48)
+	out[26] = byte(v >> 40)
+	out[27] = byte(v >> 32)
+	out[28] = byte(v >> 24)
+	out[29] = byte(v >> 16)
+	out[30] = byte(v >> 8)
+	out[31] = byte(v)
+	return out
 }
 
 func mustStorageValue(value []byte) []byte {

@@ -356,47 +356,49 @@ func TestDecodeHeader(t *testing.T) {
 // --- DecodeMisbehaviour ---
 
 func TestDecodeMisbehaviour(t *testing.T) {
-	buf := []byte{
-		0x0A, 0x04, 0x0A, 0x02, 0x08, 0x01,
-		0x12, 0x04, 0x0A, 0x02, 0x08, 0x02,
-	}
-	got, err := DecodeMisbehaviour(buf)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got.HeaderA.SignedHeader.Height != 1 {
-		t.Fatalf("HeaderA.Height: got %d want 1", got.HeaderA.SignedHeader.Height)
-	}
-	if got.HeaderB.SignedHeader.Height != 2 {
-		t.Fatalf("HeaderB.Height: got %d want 2", got.HeaderB.SignedHeader.Height)
-	}
-}
+	t.Run("basic", func(t *testing.T) {
+		buf := []byte{
+			0x0A, 0x04, 0x0A, 0x02, 0x08, 0x01,
+			0x12, 0x04, 0x0A, 0x02, 0x08, 0x02,
+		}
+		got, err := DecodeMisbehaviour(buf)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.HeaderA.SignedHeader.Height != 1 {
+			t.Fatalf("HeaderA.Height: got %d want 1", got.HeaderA.SignedHeader.Height)
+		}
+		if got.HeaderB.SignedHeader.Height != 2 {
+			t.Fatalf("HeaderB.Height: got %d want 2", got.HeaderB.SignedHeader.Height)
+		}
+	})
 
-func TestDecodeMisbehaviourRejectsShortNextValidatorsHash(t *testing.T) {
-	var ts []byte
-	ts = pbAppendInt64(ts, 1, 1)
+	t.Run("short_next_validators_hash", func(t *testing.T) {
+		var ts []byte
+		ts = pbAppendInt64(ts, 1, 1)
 
-	var lh []byte
-	lh = pbAppendInt64(lh, 1, 1)
-	lh = pbAppendMsg(lh, 2, ts)
-	lh = pbAppendBytes(lh, 3, bytes.Repeat([]byte{0x01}, 32))
-	lh = pbAppendBytes(lh, 4, bytes.Repeat([]byte{0x02}, 31))
-	lh = pbAppendBytes(lh, 5, bytes.Repeat([]byte{0x03}, 32))
+		var lh []byte
+		lh = pbAppendInt64(lh, 1, 1)
+		lh = pbAppendMsg(lh, 2, ts)
+		lh = pbAppendBytes(lh, 3, bytes.Repeat([]byte{0x01}, 32))
+		lh = pbAppendBytes(lh, 4, bytes.Repeat([]byte{0x02}, 31))
+		lh = pbAppendBytes(lh, 5, bytes.Repeat([]byte{0x03}, 32))
 
-	var h []byte
-	h = pbAppendMsg(h, 1, lh)
+		var h []byte
+		h = pbAppendMsg(h, 1, lh)
 
-	var buf []byte
-	buf = pbAppendMsg(buf, 1, h)
+		var buf []byte
+		buf = pbAppendMsg(buf, 1, h)
 
-	_, err := DecodeMisbehaviour(buf)
-	want := "cometbls: next validators hash must be 32 bytes"
-	if err == nil {
-		t.Fatal("expected error for short next validators hash")
-	}
-	if err.Error() != want {
-		t.Fatalf("error got %q want %q", err.Error(), want)
-	}
+		_, err := DecodeMisbehaviour(buf)
+		want := "cometbls: next validators hash must be 32 bytes"
+		if err == nil {
+			t.Fatal("expected error for short next validators hash")
+		}
+		if err.Error() != want {
+			t.Fatalf("error got %q want %q", err.Error(), want)
+		}
+	})
 }
 
 // --- Union devnet fixture ---

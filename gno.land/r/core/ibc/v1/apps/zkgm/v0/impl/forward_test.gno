@@ -232,7 +232,7 @@ func (c *forwardTestLightClient) GetStatus(clientId core.ClientId) core.Status {
 
 func openForwardTestChannel(cur realm, counterpartyChannelId core.ChannelId) core.ChannelId {
 	zkgm.UpdateImpl(cross, zkgm.UpdateRequest{Impl: &ZkgmV1{}})
-	portId := []byte(zkgm.ProxyAddress())
+	portId := []byte(zkgm.ProxyPkgPath())
 	if !core.HasApp(portId) {
 		core.RegisterApp(cross, portId, zkgm.AsIBCApp())
 	}

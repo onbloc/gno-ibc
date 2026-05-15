@@ -11,8 +11,8 @@ func main() {
 	clientId := realcometbls.CreateZ35CometBLSClient(cross)
 	connectionId := openConnection(clientId, realcometbls.Z35ConnectionTryProof(cross))
 	channelId := core.ChannelOpenInit(cross, core.MsgChannelOpenInit{
-		PortId:             []byte(zkgm.ProxyAddress()),
-		CounterpartyPortId: []byte(zkgm.ProxyAddress()),
+		PortId:             []byte(zkgm.ProxyPkgPath()),
+		CounterpartyPortId: []byte(zkgm.ProxyPkgPath()),
 		ConnectionId:       connectionId,
 		Version:            zkgm.Version,
 	})

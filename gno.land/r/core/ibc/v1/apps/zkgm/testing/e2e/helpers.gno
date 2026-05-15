@@ -67,7 +67,7 @@ func openConnection(clientId core.ClientId) core.ConnectionId {
 }
 
 func openChannel(connectionId core.ConnectionId, counterpartyChannelId core.ChannelId) core.ChannelId {
-	portId := []byte(zkgm.ProxyAddress())
+	portId := []byte(zkgm.ProxyPkgPath())
 	channelId := core.ChannelOpenInit(cross, core.MsgChannelOpenInit{
 		PortId:             portId,
 		CounterpartyPortId: portId,

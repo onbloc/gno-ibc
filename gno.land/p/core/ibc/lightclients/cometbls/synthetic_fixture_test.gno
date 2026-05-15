@@ -67,7 +67,7 @@ func TestSyntheticMembershipProofFixture(t *testing.T) {
 		}
 		cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: mustHex(tc.rootHex)}}
 		path := types.MerklePath{KeyPath: [][]byte{[]byte("ibc"), tc.key}}
-		if err := VerifyMembership(cs, true, proofs, path, tc.value); err != nil {
+		if err := VerifyMembership(cs, proofs, path, tc.value); err != nil {
 			t.Fatalf("%s VerifyMembership: %v", tc.name, err)
 		}
 	}
@@ -99,7 +99,7 @@ func TestSyntheticNonMembershipProofFixture(t *testing.T) {
 		}
 		cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: mustHex(tc.rootHex)}}
 		path := types.MerklePath{KeyPath: [][]byte{[]byte("ibc"), tc.key}}
-		if err := VerifyNonMembership(cs, true, proofs, path); err != nil {
+		if err := VerifyNonMembership(cs, proofs, path); err != nil {
 			t.Fatalf("%s VerifyNonMembership: %v", tc.name, err)
 		}
 	}

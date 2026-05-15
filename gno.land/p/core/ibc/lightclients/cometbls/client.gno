@@ -78,26 +78,33 @@ func HeaderHeight(h Header) Height {
 	return Height(h.SignedHeader.Height)
 }
 
+type proofInputs struct {
+	specs  []*ics23.ProofSpec
+	root   []byte
+	proofs []ics23.CommitmentProof
+	path   types.MerklePath
+}
+
 // VerifyMembership verifies a chained ICS-23 existence proof against a consensus state root.
-func VerifyMembership(cs ConsensusState, found bool, proofs []ics23.CommitmentProof, path types.MerklePath, value []byte) error {
+func VerifyMembership(cs ConsensusState, proofs []ics23.CommitmentProof, path types.MerklePath, value []byte) error {
 	if len(value) == 0 {
 		return errors.New("cometbls: empty value in membership proof")
 	}
-	specs, root, proofs, path, err := prepareProofVerify(cs, found, proofs, path)
+	in, err := prepareProofVerify(cs, proofs, path)
 	if err != nil {
 		return err
 	}
-	return verifyChainedMembershipProof(root, specs, proofs, path, cloneBytes(value), 0)
+	return verifyChainedMembershipProof(in, cloneBytes(value), 0)
 }
 
 // VerifyNonMembership verifies a chained ICS-23 non-existence proof against a consensus state root.
-func VerifyNonMembership(cs ConsensusState, found bool, proofs []ics23.CommitmentProof, path types.MerklePath) error {
-	specs, root, proofs, path, err := prepareProofVerify(cs, found, proofs, path)
+func VerifyNonMembership(cs ConsensusState, proofs []ics23.CommitmentProof, path types.MerklePath) error {
+	in, err := prepareProofVerify(cs, proofs, path)
 	if err != nil {
 		return err
 	}
 
-	nonexist := proofs[0].GetNonexist()
+	nonexist := in.proofs[0].GetNonexist()
 	if nonexist == nil {
 		return errors.New("cometbls: first proof must be a non-existence proof")
 	}
@@ -107,33 +114,37 @@ func VerifyNonMembership(cs ConsensusState, found bool, proofs []ics23.Commitmen
 		return errors.New("cometbls: could not calculate root for non-existence proof: " + err.Error())
 	}
 
-	key := path.KeyPath[len(path.KeyPath)-1]
-	if err := nonexist.Verify(specs[0], subroot, key); err != nil {
+	key := in.path.KeyPath[len(in.path.KeyPath)-1]
+	if err := nonexist.Verify(in.specs[0], subroot, key); err != nil {
 		return errors.New("cometbls: non-existence proof verification failed: " + err.Error())
 	}
 
-	return verifyChainedMembershipProof(root, specs, proofs, path, subroot, 1)
+	return verifyChainedMembershipProof(in, subroot, 1)
 }
 
-// prepareProofVerify validates shape and returns realm-local copies of the
-// inputs. Proofs, path bytes, and the root cross a realm boundary and must be
-// normalized before ics23 reads them with bytes.Equal, which otherwise panics
-// on readonly slices.
-func prepareProofVerify(cs ConsensusState, found bool, proofs []ics23.CommitmentProof, path types.MerklePath) ([]*ics23.ProofSpec, []byte, []ics23.CommitmentProof, types.MerklePath, error) {
+// prepareProofVerify clones inputs across the realm boundary: ics23 reads
+// proofs, path bytes, and the root with bytes.Equal, which panics on
+// readonly slices.
+func prepareProofVerify(cs ConsensusState, proofs []ics23.CommitmentProof, path types.MerklePath) (*proofInputs, error) {
 	specs := ics23.GetSDKProofSpecs()
 	if len(specs) != len(proofs) {
-		return nil, nil, nil, types.MerklePath{}, errors.New("cometbls: proof count does not match spec count")
+		return nil, errors.New("cometbls: proof count does not match spec count")
 	}
 	if len(path.KeyPath) != len(proofs) {
-		return nil, nil, nil, types.MerklePath{}, errors.New("cometbls: path length does not match proof count")
+		return nil, errors.New("cometbls: path length does not match proof count")
 	}
-	if !found {
-		return nil, nil, nil, types.MerklePath{}, errors.New("cometbls: consensus state not found at height")
+	if cs.Timestamp == 0 {
+		return nil, errors.New("cometbls: consensus state not found at height")
 	}
 	if len(cs.Root.Hash) == 0 {
-		return nil, nil, nil, types.MerklePath{}, errors.New("cometbls: empty root hash in consensus state")
+		return nil, errors.New("cometbls: empty root hash in consensus state")
 	}
-	return specs, cloneBytes(cs.Root.Hash), cloneCommitmentProofs(proofs), cloneMerklePath(path), nil
+	return &proofInputs{
+		specs:  specs,
+		root:   cloneBytes(cs.Root.Hash),
+		proofs: cloneCommitmentProofs(proofs),
+		path:   cloneMerklePath(path),
+	}, nil
 }
 
 // TODO: these boilerplate methods could eliminate by adding type methods line `T.Clone`
@@ -225,10 +236,10 @@ func cloneBytes(b []byte) []byte {
 
 // verifyChainedMembershipProof verifies each existence proof in sequence, threading
 // the computed subroot as the value for the next level.
-func verifyChainedMembershipProof(root []byte, specs []*ics23.ProofSpec, proofs []ics23.CommitmentProof, keys types.MerklePath, value []byte, index int) error {
+func verifyChainedMembershipProof(in *proofInputs, value []byte, index int) error {
 	subroot := value
-	for i := index; i < len(proofs); i++ {
-		exist := proofs[i].GetExist()
+	for i := index; i < len(in.proofs); i++ {
+		exist := in.proofs[i].GetExist()
 		if exist == nil {
 			return errors.New("cometbls: proof at index must be an existence proof")
 		}
@@ -238,13 +249,13 @@ func verifyChainedMembershipProof(root []byte, specs []*ics23.ProofSpec, proofs 
 			return errors.New("cometbls: could not calculate proof root: " + err.Error())
 		}
 		// keys are ordered highest-to-lowest, proofs lowest-to-highest
-		key := keys.KeyPath[len(keys.KeyPath)-1-i]
-		if err := exist.Verify(specs[i], subroot, key, value); err != nil {
+		key := in.path.KeyPath[len(in.path.KeyPath)-1-i]
+		if err := exist.Verify(in.specs[i], subroot, key, value); err != nil {
 			return errors.New("cometbls: membership proof verification failed: " + err.Error())
 		}
 		value = subroot
 	}
-	if !bytes.Equal(root, subroot) {
+	if !bytes.Equal(in.root, subroot) {
 		return errors.New("cometbls: proof root does not match consensus state root")
 	}
 	return nil

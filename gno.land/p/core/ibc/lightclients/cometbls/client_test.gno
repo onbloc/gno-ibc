@@ -193,7 +193,7 @@ func twoExistProofs() []ics23.CommitmentProof {
 
 func TestVerifyMembershipEmptyValue(t *testing.T) {
 	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
-	if err := VerifyMembership(cs, true, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")), nil); err == nil {
+	if err := VerifyMembership(cs, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")), nil); err == nil {
 		t.Fatal("expected error for empty value")
 	}
 }
@@ -201,7 +201,7 @@ func TestVerifyMembershipEmptyValue(t *testing.T) {
 func TestVerifyMembershipProofCountMismatch(t *testing.T) {
 	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
 	oneProof := []ics23.CommitmentProof{ics23.CommitmentProof_Exist{Exist: &ics23.ExistenceProof{}}}
-	if err := VerifyMembership(cs, true, oneProof, twoLevelPath([]byte("ibc"), []byte("key")), []byte("v")); err == nil {
+	if err := VerifyMembership(cs, oneProof, twoLevelPath([]byte("ibc"), []byte("key")), []byte("v")); err == nil {
 		t.Fatal("expected error for proof count mismatch")
 	}
 }
@@ -209,27 +209,27 @@ func TestVerifyMembershipProofCountMismatch(t *testing.T) {
 func TestVerifyMembershipPathCountMismatch(t *testing.T) {
 	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
 	onePath := types.MerklePath{KeyPath: [][]byte{[]byte("ibc")}}
-	if err := VerifyMembership(cs, true, twoExistProofs(), onePath, []byte("v")); err == nil {
+	if err := VerifyMembership(cs, twoExistProofs(), onePath, []byte("v")); err == nil {
 		t.Fatal("expected error for path length mismatch")
 	}
 }
 
 func TestVerifyMembershipConsensusStateNotFound(t *testing.T) {
-	if err := VerifyMembership(ConsensusState{}, false, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")), []byte("v")); err == nil {
+	if err := VerifyMembership(ConsensusState{}, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")), []byte("v")); err == nil {
 		t.Fatal("expected error when consensus state not found")
 	}
 }
 
 func TestVerifyMembershipEmptyRoot(t *testing.T) {
 	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: nil}}
-	if err := VerifyMembership(cs, true, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")), []byte("v")); err == nil {
+	if err := VerifyMembership(cs, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")), []byte("v")); err == nil {
 		t.Fatal("expected error for empty root hash")
 	}
 }
 
 func TestVerifyMembershipProofFails(t *testing.T) {
 	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
-	if err := VerifyMembership(cs, true, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")), []byte("v")); err == nil {
+	if err := VerifyMembership(cs, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")), []byte("v")); err == nil {
 		t.Fatal("expected error for invalid proof")
 	}
 }
@@ -239,7 +239,7 @@ func TestVerifyMembershipProofFails(t *testing.T) {
 func TestVerifyNonMembershipProofCountMismatch(t *testing.T) {
 	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
 	oneProof := []ics23.CommitmentProof{ics23.CommitmentProof_Exist{Exist: &ics23.ExistenceProof{}}}
-	if err := VerifyNonMembership(cs, true, oneProof, twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
+	if err := VerifyNonMembership(cs, oneProof, twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
 		t.Fatal("expected error for proof count mismatch")
 	}
 }
@@ -249,7 +249,7 @@ func TestVerifyNonMembershipConsensusStateNotFound(t *testing.T) {
 		ics23.CommitmentProof_Nonexist{Nonexist: &ics23.NonExistenceProof{}},
 		ics23.CommitmentProof_Exist{Exist: &ics23.ExistenceProof{}},
 	}
-	if err := VerifyNonMembership(ConsensusState{}, false, proofs, twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
+	if err := VerifyNonMembership(ConsensusState{}, proofs, twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
 		t.Fatal("expected error when consensus state not found")
 	}
 }
@@ -260,14 +260,14 @@ func TestVerifyNonMembershipEmptyRoot(t *testing.T) {
 		ics23.CommitmentProof_Nonexist{Nonexist: &ics23.NonExistenceProof{}},
 		ics23.CommitmentProof_Exist{Exist: &ics23.ExistenceProof{}},
 	}
-	if err := VerifyNonMembership(cs, true, proofs, twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
+	if err := VerifyNonMembership(cs, proofs, twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
 		t.Fatal("expected error for empty root hash")
 	}
 }
 
 func TestVerifyNonMembershipFirstProofNotNonexist(t *testing.T) {
 	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
-	if err := VerifyNonMembership(cs, true, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
+	if err := VerifyNonMembership(cs, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
 		t.Fatal("expected error when first proof is not a non-existence proof")
 	}
 }
@@ -278,7 +278,7 @@ func TestVerifyNonMembershipProofFails(t *testing.T) {
 		ics23.CommitmentProof_Nonexist{Nonexist: &ics23.NonExistenceProof{}},
 		ics23.CommitmentProof_Exist{Exist: &ics23.ExistenceProof{}},
 	}
-	if err := VerifyNonMembership(cs, true, proofs, twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
+	if err := VerifyNonMembership(cs, proofs, twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
 		t.Fatal("expected error for invalid non-existence proof")
 	}
 }

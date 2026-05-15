@@ -146,8 +146,8 @@ func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proo
 		panic("cometbls: invalid membership proof: " + err.Error())
 	}
 	path := types.MerklePath{KeyPath: [][]byte{wasmdModuleStoreKey, wasmContractStoreKey(e.cs.ContractAddress, key)}}
-	cs, ok := e.consensusStates[cometblsp.Height(height)]
-	if err := cometblsp.VerifyMembership(cs, ok, proofs, path, value); err != nil {
+	cs := e.consensusStates[cometblsp.Height(height)]
+	if err := cometblsp.VerifyMembership(cs, proofs, path, value); err != nil {
 		panic("cometbls: membership verification failed: " + err.Error())
 	}
 }
@@ -162,8 +162,8 @@ func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, p
 		panic("cometbls: invalid non-membership proof: " + err.Error())
 	}
 	path := types.MerklePath{KeyPath: [][]byte{wasmdModuleStoreKey, wasmContractStoreKey(e.cs.ContractAddress, key)}}
-	cs, ok := e.consensusStates[cometblsp.Height(height)]
-	if err := cometblsp.VerifyNonMembership(cs, ok, proofs, path); err != nil {
+	cs := e.consensusStates[cometblsp.Height(height)]
+	if err := cometblsp.VerifyNonMembership(cs, proofs, path); err != nil {
 		panic("cometbls: non-membership verification failed: " + err.Error())
 	}
 }

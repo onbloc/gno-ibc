@@ -114,18 +114,31 @@ func h256String(h H256) string {
 	return hexString(h[:])
 }
 
-func emitChannelEvent(eventType string, portId Bytes, channelId ChannelId, channel Channel, connection Connection) {
-	chain.Emit(eventType,
+func channelEventAttrs(eventType string, portId Bytes, channelId ChannelId, channel Channel, connection Connection) []string {
+	attrs := []string{
 		"port_id", string(portId),
 		"channel_id", channelId.String(),
 		"counterparty_port_id", channel.CounterpartyPortId.String(),
-		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
+	}
+	// ChannelOpenInit has not learned the counterparty channel id yet.
+	// state.gno starts real channel ids at 1, so the zero value is only an unset sentinel.
+	if eventType != ChannelOpenInitEvent {
+		attrs = append(attrs,
+			"counterparty_channel_id", channel.CounterpartyChannelId.String(),
+		)
+	}
+	attrs = append(attrs,
 		"connection_id", channel.ConnectionId.String(),
 		"connection_client_id", connection.ClientId.String(),
 		"connection_counterparty_client_id", connection.CounterpartyClientId.String(),
 		"connection_counterparty_connection_id", connection.CounterpartyConnectionId.String(),
 		"version", channel.Version,
 	)
+	return attrs
+}
+
+func emitChannelEvent(eventType string, portId Bytes, channelId ChannelId, channel Channel, connection Connection) {
+	chain.Emit(eventType, channelEventAttrs(eventType, portId, channelId, channel, connection)...)
 }
 
 func emitBatchSendEvent(batchHash H256, packet Packet, sourceChannel Channel, sourceConnection Connection) {

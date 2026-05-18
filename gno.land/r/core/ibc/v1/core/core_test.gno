@@ -138,6 +138,40 @@ func assertBytesHex(t *testing.T, name string, got []byte, want string) {
 	}
 }
 
+func assertStringSliceEqual(t *testing.T, got []string, want []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("attribute count: got %d want %d; attrs=%v", len(got), len(want), got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("attr[%d]: got %q want %q; attrs=%v", i, got[i], want[i], got)
+		}
+	}
+}
+
+func assertAttrMissing(t *testing.T, attrs []string, key string) {
+	t.Helper()
+	for i := 0; i+1 < len(attrs); i += 2 {
+		if attrs[i] == key {
+			t.Fatalf("attribute %q present with value %q", key, attrs[i+1])
+		}
+	}
+}
+
+func assertAttrEqual(t *testing.T, attrs []string, key string, want string) {
+	t.Helper()
+	for i := 0; i+1 < len(attrs); i += 2 {
+		if attrs[i] == key {
+			if attrs[i+1] != want {
+				t.Fatalf("attribute %q: got %q want %q", key, attrs[i+1], want)
+			}
+			return
+		}
+	}
+	t.Fatalf("attribute %q missing", key)
+}
+
 func mustHex(s string) []byte {
 	bz, err := hex.DecodeString(s)
 	if err != nil {
@@ -793,6 +827,79 @@ func TestChannelStateTransitions(t *testing.T) {
 	st.saveChannel(id, Channel{State: ChannelStateClosed})
 	if st.getChannel(id).State != ChannelStateClosed {
 		t.Error("expected Closed")
+	}
+}
+
+func TestChannelEventAttrsOmitsCounterpartyChannelIdForOpenInit(t *testing.T) {
+	attrs := channelEventAttrs(
+		ChannelOpenInitEvent,
+		Bytes("gno.land/r/core/ibc/v1/apps/zkgm"),
+		ChannelId(1),
+		Channel{
+			State:                 ChannelStateInit,
+			ConnectionId:          ConnectionId(2),
+			CounterpartyChannelId: ChannelId(0),
+			CounterpartyPortId:    Bytes("counterparty"),
+			Version:               "ucs03-zkgm-0",
+		},
+		Connection{
+			ClientId:                 ClientId(3),
+			CounterpartyClientId:     ClientId(4),
+			CounterpartyConnectionId: ConnectionId(5),
+		},
+	)
+
+	want := []string{
+		"port_id", "gno.land/r/core/ibc/v1/apps/zkgm",
+		"channel_id", "1",
+		"counterparty_port_id", "0x636f756e7465727061727479",
+		"connection_id", "2",
+		"connection_client_id", "3",
+		"connection_counterparty_client_id", "4",
+		"connection_counterparty_connection_id", "5",
+		"version", "ucs03-zkgm-0",
+	}
+	assertStringSliceEqual(t, attrs, want)
+	assertAttrMissing(t, attrs, "counterparty_channel_id")
+}
+
+func TestChannelEventAttrsIncludesCounterpartyChannelIdForOtherEvents(t *testing.T) {
+	events := []string{
+		ChannelOpenTryEvent,
+		ChannelOpenAckEvent,
+		ChannelOpenConfirmEvent,
+	}
+	for _, eventType := range events {
+		attrs := channelEventAttrs(
+			eventType,
+			Bytes("gno.land/r/core/ibc/v1/apps/zkgm"),
+			ChannelId(1),
+			Channel{
+				State:                 ChannelStateOpen,
+				ConnectionId:          ConnectionId(2),
+				CounterpartyChannelId: ChannelId(7),
+				CounterpartyPortId:    Bytes("counterparty"),
+				Version:               "ucs03-zkgm-0",
+			},
+			Connection{
+				ClientId:                 ClientId(3),
+				CounterpartyClientId:     ClientId(4),
+				CounterpartyConnectionId: ConnectionId(5),
+			},
+		)
+
+		assertAttrEqual(t, attrs, "counterparty_channel_id", "7")
+		assertStringSliceEqual(t, attrs, []string{
+			"port_id", "gno.land/r/core/ibc/v1/apps/zkgm",
+			"channel_id", "1",
+			"counterparty_port_id", "0x636f756e7465727061727479",
+			"counterparty_channel_id", "7",
+			"connection_id", "2",
+			"connection_client_id", "3",
+			"connection_counterparty_client_id", "4",
+			"connection_counterparty_connection_id", "5",
+			"version", "ucs03-zkgm-0",
+		})
 	}
 }
 

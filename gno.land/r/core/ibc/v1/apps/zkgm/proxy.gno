@@ -1,6 +1,8 @@
 package zkgm
 
 import (
+	"chain"
+	"chain/banker"
 	"chain/runtime"
 
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -104,6 +106,21 @@ func BatchSend(cur realm, msg core.MsgBatchSend) core.H256 {
 		panic(ufmt.Sprintf("zkgm: only registered impl (%s) can batch send, got %s", implPath, callerPath))
 	}
 	return core.BatchSend(cross, msg)
+}
+
+func ReleaseNative(cur realm, denom string, recipient address, amount int64) {
+	callerPath := runtime.PreviousRealm().PkgPath()
+	if callerPath != implPath {
+		panic(ufmt.Sprintf("zkgm: only registered impl (%s) can release native, got %s", implPath, callerPath))
+	}
+	if amount <= 0 {
+		panic("zkgm: ReleaseNative amount must be positive")
+	}
+	if denom == "" {
+		panic("zkgm: ReleaseNative denom must not be empty")
+	}
+	b := banker.NewBanker(banker.BankerTypeRealmSend)
+	b.SendCoins(gRealm.Address(), recipient, chain.NewCoins(chain.NewCoin(denom, amount)))
 }
 
 func isTestingBatchSender(pkgPath string) bool {

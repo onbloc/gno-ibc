@@ -87,7 +87,7 @@ vendor-flags = $(if $(filter undefined,$(origin FLAGS_$(subst /,_,$(1)))),$(STD_
 # rsync only auto-creates the leaf dest dir, so mkdir -p covers intermediates.
 vendor-cmd = mkdir -p $(dir gno.land/$(2)) && rsync $(RSYNC_BASE) $(call vendor-flags,$(2)) $(1)/$(2)/ gno.land/$(2)/
 
-.PHONY: help install-gno link-stdlibs verify-gno vendor fmt test test-cover test-stdlibs test-smoke clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios
+.PHONY: help install-gno link-stdlibs verify-gno vendor fmt test test-cover test-stdlibs test-smoke clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios derive-sender-salt-vectors
 
 COVERAGE_DIR := coverage
 
@@ -113,6 +113,7 @@ help:
 	@echo "  clean-gno-cache       — remove the cloned gno repo (forces re-clone next install)"
 	@echo "  refresh-abi-vectors   — regenerate ABI ground-truth vectors via the Rust harness"
 	@echo "  refresh-zkgm-scenarios — regenerate handler/dispatch end-to-end ZKGM scenarios via the Rust harness"
+	@echo "  derive-sender-salt-vectors — print DeriveSenderSalt bootstrap vectors via the Rust harness"
 	@echo
 	@echo "Pinned: $(GNO_REPO)@$(GNO_SHORT)  (.gno-version)"
 
@@ -221,3 +222,8 @@ refresh-zkgm-scenarios:
 	@cargo run --release --quiet -p zkgm-fixtures > $(ZKGM_SCENARIOS)
 	@python3 -c 'from pathlib import Path; src = Path("$(ZKGM_SCENARIOS)").read_text(); assert "\x60" not in src, "scenarios.json contains a backtick; cannot embed in Gno raw string"; Path("$(ZKGM_SCENARIOS_GNO)").write_text("package zkgm\n\nconst fixtureScenariosJSON = `" + src + "`\n")'
 	@echo "ok: scenarios written to $(ZKGM_SCENARIOS) and $(ZKGM_SCENARIOS_GNO) ($$(grep -c '"name":' $(ZKGM_SCENARIOS)) scenarios)"
+
+derive-sender-salt-vectors:
+	@command -v cargo >/dev/null 2>&1 || { \
+		echo "ERROR: 'cargo' not found on PATH. Install Rust toolchain (rustup) to derive sender salt vectors."; exit 1; }
+	@cargo run --release --quiet -p zkgm-fixtures --bin derive_sender_salt

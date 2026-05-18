@@ -186,16 +186,17 @@ func (s *State) saveChannel(channelId ChannelId, channel Channel) {
 }
 
 func (s *State) saveBatchPackets(batchHash H256, value H256) {
-	s.batchPackets[batchHash] = value
-	commit(BatchPacketsPath(batchHash), value)
+	path := BatchPacketsPath(batchHash)
+	s.batchPackets[path] = value
+	commit(path, value)
 }
 
 func (s *State) setBatchPackets(batchHash H256, value H256) {
-	s.batchPackets[batchHash] = value
+	s.batchPackets[BatchPacketsPath(batchHash)] = value
 }
 
 func (s *State) getBatchPackets(batchHash H256) H256 {
-	value, ok := s.batchPackets[batchHash]
+	value, ok := s.batchPackets[BatchPacketsPath(batchHash)]
 	if !ok {
 		panic(ErrBatchPacketsNotFound)
 	}
@@ -203,12 +204,13 @@ func (s *State) getBatchPackets(batchHash H256) H256 {
 }
 
 func (s *State) saveBatchReceipts(batchHash H256, value H256) {
-	s.batchReceipts[batchHash] = value
-	commit(BatchReceiptsPath(batchHash), value)
+	path := BatchReceiptsPath(batchHash)
+	s.batchReceipts[path] = value
+	commit(path, value)
 }
 
 func (s *State) getBatchReceipts(batchHash H256) H256 {
-	value, ok := s.batchReceipts[batchHash]
+	value, ok := s.batchReceipts[BatchReceiptsPath(batchHash)]
 	if !ok {
 		panic(ErrBatchReceiptsNotFound)
 	}
@@ -222,12 +224,13 @@ func (s *State) commitPacket(packet Packet) {
 func (s *State) deletePacketCommitment(packet Packet) {
 	var zero H256
 	batchHash := CommitPacket(packet)
-	delete(s.batchPackets, batchHash)
-	commit(BatchPacketsPath(batchHash), zero)
+	path := BatchPacketsPath(batchHash)
+	delete(s.batchPackets, path)
+	commit(path, zero)
 }
 
 func (s *State) hasPacketCommitment(packet Packet) bool {
-	_, ok := s.batchPackets[CommitPacket(packet)]
+	_, ok := s.batchPackets[PacketCommitmentPath(packet)]
 	return ok
 }
 
@@ -236,12 +239,12 @@ func (s *State) commitAcknowledgement(packet Packet, ack []byte) {
 }
 
 func (s *State) hasAcknowledgement(packet Packet) bool {
-	value, ok := s.batchReceipts[CommitPacket(packet)]
+	value, ok := s.batchReceipts[PacketAcknowledgementPath(packet)]
 	return ok && value != COMMITMENT_MAGIC_ACK
 }
 
 func (s *State) acknowledgementHash(packet Packet) H256 {
-	return s.batchReceipts[CommitPacket(packet)]
+	return s.batchReceipts[PacketAcknowledgementPath(packet)]
 }
 
 func (s *State) setPacketReceipt(packet Packet) {
@@ -249,13 +252,14 @@ func (s *State) setPacketReceipt(packet Packet) {
 }
 
 func (s *State) hasPacketReceipt(packet Packet) bool {
-	_, ok := s.batchReceipts[CommitPacket(packet)]
+	_, ok := s.batchReceipts[PacketAcknowledgementPath(packet)]
 	return ok
 }
 
 func (s *State) deletePacketReceipt(packet Packet) {
 	var zero H256
 	batchHash := CommitPacket(packet)
-	delete(s.batchReceipts, batchHash)
-	commit(BatchReceiptsPath(batchHash), zero)
+	path := BatchReceiptsPath(batchHash)
+	delete(s.batchReceipts, path)
+	commit(path, zero)
 }

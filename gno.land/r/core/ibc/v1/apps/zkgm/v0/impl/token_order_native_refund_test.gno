@@ -30,7 +30,7 @@ func TestRefundV2InitializeNativeRestoresSender(cur realm, t *testing.T) {
 
 	sender := testAddress("native-refund")
 	senderAddr := address(sender)
-	denom := "ugnot"
+	denom := "urefundinit"
 	amount := int64(50)
 
 	// Proxy realm holds the user's -send (the post-tx, pre-timeout state).
@@ -77,7 +77,7 @@ func TestRefundV2EscrowNativeRestoresSender(cur realm, t *testing.T) {
 
 	sender := testAddress("native-escrow-refund")
 	senderAddr := address(sender)
-	denom := "ugnot"
+	denom := "urefundescrow"
 	amount := int64(75)
 
 	proxyAddr := chain.PackageAddress(proxyRealmPath)

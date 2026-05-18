@@ -2,8 +2,6 @@ package impl
 
 import (
 	"chain"
-	"chain/banker"
-	"chain/runtime"
 	"errors"
 	"strings"
 
@@ -298,8 +296,6 @@ func sendNative(denom string, receiver string, amount *u256.Uint) error {
 		return err
 	}
 
-	b := banker.NewBanker(banker.BankerTypeRealmSend)
-	b.SendCoins(runtime.CurrentRealm().Address(), address(receiver), chain.NewCoins(chain.NewCoin(denom, n)))
-
+	zkgm.ReleaseNative(cross, denom, address(receiver), n)
 	return nil
 }

@@ -114,6 +114,7 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 
 func resetTokenOrderTest() {
 	voucherTokens = bptree.NewBPTree32()
+	zkgm.UpdateImpl(cross, zkgm.UpdateRequest{Impl: &ZkgmV1{}})
 }
 
 func testAddress(name string) string {

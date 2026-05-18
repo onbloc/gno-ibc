@@ -1,6 +1,8 @@
 package zkgm
 
 import (
+	"chain"
+	"chain/banker"
 	"chain/runtime"
 
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -88,10 +90,8 @@ func GetReceiver(path string) z.Zkgmable {
 // parent's identity is the full Packet captured in InFlightValue at forward
 // dispatch time.
 func WriteForwardAck(cur realm, parentPacket core.Packet, ack []byte) {
-	callerPath := runtime.PreviousRealm().PkgPath()
-	if callerPath != implPath {
-		panic(ufmt.Sprintf("zkgm: only registered impl (%s) can write forward ack, got %s", implPath, callerPath))
-	}
+	requireImplCaller("write forward ack")
+
 	core.WriteAcknowledgement(cross, core.MsgWriteAcknowledgement{
 		Packet:          parentPacket,
 		Acknowledgement: ack,
@@ -104,6 +104,32 @@ func BatchSend(cur realm, msg core.MsgBatchSend) core.H256 {
 		panic(ufmt.Sprintf("zkgm: only registered impl (%s) can batch send, got %s", implPath, callerPath))
 	}
 	return core.BatchSend(cross, msg)
+}
+
+// ReleaseNative transfers `amount` of `denom` from the proxy realm's escrow
+// to `recipient`. Only callable by the registered impl realm. Used by the
+// impl-side `sendNative` so refunds and releases are sourced from where the
+// user's `-send` actually lands.
+func ReleaseNative(cur realm, denom string, recipient address, amount int64) {
+	requireImplCaller("release native")
+
+	if amount <= 0 {
+		panic("zkgm: ReleaseNative amount must be positive")
+	}
+	if denom == "" {
+		panic("zkgm: ReleaseNative denom must not be empty")
+	}
+	b := banker.NewBanker(banker.BankerTypeRealmSend)
+	b.SendCoins(gRealm.Address(), recipient, chain.NewCoins(chain.NewCoin(denom, amount)))
+}
+
+// requireImplCaller panics unless the caller is the registered impl realm.
+// Used by impl-only entrypoints that move state or funds on behalf of the proxy.
+func requireImplCaller(action string) {
+	callerPath := runtime.PreviousRealm().PkgPath()
+	if callerPath != implPath {
+		panic(ufmt.Sprintf("zkgm: only registered impl (%s) can %s, got %s", implPath, action, callerPath))
+	}
 }
 
 func isTestingBatchSender(pkgPath string) bool {

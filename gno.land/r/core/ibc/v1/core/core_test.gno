@@ -544,11 +544,17 @@ func TestQueryChannelUnknownReturnsEmpty(t *testing.T) {
 
 // --- State: packet commitment ---
 
-func TestCommitPacketDoesNotPanic(t *testing.T) {
+func TestPacketCommitmentLifecycle(t *testing.T) {
 	resetState()
 	p := Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: Bytes("data"), TimeoutTimestamp: 1000}
 	st.commitPacket(p)
+	if _, ok := st.batchPackets[PacketCommitmentPath(p)]; !ok {
+		t.Fatal("commitPacket must mirror at packet commitment path")
+	}
 	st.deletePacketCommitment(p)
+	if _, ok := st.batchPackets[PacketCommitmentPath(p)]; ok {
+		t.Fatal("deletePacketCommitment must clear packet commitment path")
+	}
 }
 
 func TestAcknowledgementDoesNotPanic(t *testing.T) {
@@ -610,6 +616,34 @@ func TestBatchSendReturnsUnionPacketCommitment(t *testing.T) {
 	if got := QueryBatchPackets(want); got != COMMITMENT_MAGIC.String() {
 		t.Errorf("GetBatchPackets: got %s want %s", got, COMMITMENT_MAGIC)
 	}
+	if v, ok := st.batchPackets[BatchPacketsPath(want)]; !ok || v != COMMITMENT_MAGIC {
+		t.Errorf("batch packet mirror at path: ok=%v value=%s want %s", ok, v, COMMITMENT_MAGIC)
+	}
+	if _, ok := st.batchPackets[want]; ok {
+		t.Error("batch packet mirror must not be keyed by raw batch hash")
+	}
+}
+
+func TestBatchSendPerPacketMirrorKeyedByPath(t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	p1 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
+	p2 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("b"), TimeoutTimestamp: 100}
+
+	BatchSend(cross, MsgBatchSend{Packets: []Packet{p1, p2}})
+	for _, packet := range []Packet{p1, p2} {
+		path := PacketCommitmentPath(packet)
+		got, ok := st.batchPackets[path]
+		if !ok {
+			t.Fatal("BatchSend must mirror per-packet commitment at the packet commitment path")
+		}
+		if got != COMMITMENT_MAGIC {
+			t.Fatalf("per-packet mirror: got %s want %s", got, COMMITMENT_MAGIC)
+		}
+		if _, ok := st.batchPackets[CommitPacket(packet)]; ok {
+			t.Fatal("BatchSend must not mirror per-packet commitment at the raw packet hash")
+		}
+	}
 }
 
 func TestQueryBatchPacketsUnknownReturnsEmpty(t *testing.T) {
@@ -658,6 +692,12 @@ func TestBatchAcksReturnsUnionPacketCommitment(t *testing.T) {
 	if got := QueryBatchReceipts(want); got != wantAck.String() {
 		t.Errorf("GetBatchReceipts: got %s want %s", got, wantAck)
 	}
+	if v, ok := st.batchReceipts[BatchReceiptsPath(want)]; !ok || v != wantAck {
+		t.Errorf("batch receipt mirror at path: ok=%v value=%s want %s", ok, v, wantAck)
+	}
+	if _, ok := st.batchReceipts[want]; ok {
+		t.Error("batch receipt mirror must not be keyed by raw batch hash")
+	}
 }
 
 func TestQueryBatchReceiptsUnknownReturnsEmpty(t *testing.T) {
@@ -699,9 +739,15 @@ func TestPacketReceiptLifecycle(t *testing.T) {
 	if !st.hasPacketReceipt(p) {
 		t.Fatal("receipt must exist after set")
 	}
+	if _, ok := st.batchReceipts[PacketAcknowledgementPath(p)]; !ok {
+		t.Fatal("setPacketReceipt must mirror at packet acknowledgement path")
+	}
 	st.deletePacketReceipt(p)
 	if st.hasPacketReceipt(p) {
 		t.Fatal("receipt must not exist after delete")
+	}
+	if _, ok := st.batchReceipts[PacketAcknowledgementPath(p)]; ok {
+		t.Fatal("deletePacketReceipt must clear packet acknowledgement path")
 	}
 }
 
@@ -767,19 +813,6 @@ func TestGetChannelOwnerPanicsWhenMissing(t *testing.T) {
 }
 
 // --- Integration: packet send lifecycle ---
-
-func TestPacketCommitmentLifecycle(t *testing.T) {
-	resetState()
-	_, _, channelId := setupOpenChannel(t)
-
-	packet := Packet{
-		SourceChannelId:      channelId,
-		DestinationChannelId: ChannelId(99),
-		Data:                 Bytes("transfer"),
-		TimeoutTimestamp:     Timestamp(9999),
-	}
-	st.commitPacket(packet)
-}
 
 func TestPacketRecvSyncAckWritten(t *testing.T) {
 	resetState()

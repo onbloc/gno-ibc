@@ -801,7 +801,7 @@ func QueryChannel(channelId ChannelId) string {
 }
 
 func QueryBatchPackets(batchHash H256) string {
-	value, ok := st.batchPackets[batchHash]
+	value, ok := st.batchPackets[BatchPacketsPath(batchHash)]
 	if !ok {
 		return ""
 	}
@@ -809,7 +809,7 @@ func QueryBatchPackets(batchHash H256) string {
 }
 
 func QueryBatchReceipts(batchHash H256) string {
-	value, ok := st.batchReceipts[batchHash]
+	value, ok := st.batchReceipts[BatchReceiptsPath(batchHash)]
 	if !ok {
 		return ""
 	}

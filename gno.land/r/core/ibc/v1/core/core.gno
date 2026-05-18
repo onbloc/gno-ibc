@@ -99,18 +99,15 @@ func cloneBytes(b []byte) []byte {
 	return out
 }
 
-// safeString materializes a fresh string from a (possibly foreign-realm)
-// []byte. A direct string(b) conversion on a cross-realm slice trips the
-// same readonly/external-conversion guard that bytes.Equal hits, so event
-// emission paths funnel through this helper.
-func safeString(b []byte) string {
-	out := make([]byte, len(b))
-	copy(out, b)
-	return string(out)
-}
-
 func hexString(b []byte) string {
 	return "0x" + hex.EncodeToString(b)
+}
+
+// hexAttr encodes a binary chain.Emit attribute as "0x" + lowercase-hex.
+// Use this at every emit site whose value is []byte. Direct string([]byte)
+// casts are lossy for non-UTF-8 input and are forbidden here (see issue #45).
+func hexAttr(b []byte) string {
+	return hexString(b)
 }
 
 func h256String(h H256) string {
@@ -147,7 +144,7 @@ func emitBatchSendEvent(batchHash H256, packet Packet, sourceChannel Channel, so
 func emitPacketSendEvent(packet Packet, sourceChannel Channel, sourceConnection Connection) {
 	chain.Emit(PacketSendEvent,
 		"packet_hash", CommitPacket(packet).String(),
-		"packet_data", string(packet.Data),
+		"packet_data", hexAttr(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_channel_version", sourceChannel.Version,
 		"source_connection_id", sourceChannel.ConnectionId.String(),
@@ -162,7 +159,7 @@ func emitPacketSendEvent(packet Packet, sourceChannel Channel, sourceConnection 
 func emitPacketRecvEvent(eventType string, packet Packet, destinationChannel Channel, connection Connection, msgAttrName string, msg []byte) {
 	chain.Emit(eventType,
 		"packet_hash", CommitPacket(packet).String(),
-		"packet_data", safeString(packet.Data),
+		"packet_data", hexAttr(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_connection_id", connection.CounterpartyConnectionId.String(),
 		"source_connection_client_id", connection.CounterpartyClientId.String(),
@@ -171,14 +168,14 @@ func emitPacketRecvEvent(eventType string, packet Packet, destinationChannel Cha
 		"destination_connection_id", destinationChannel.ConnectionId.String(),
 		"destination_connection_client_id", connection.ClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
-		msgAttrName, safeString(msg),
+		msgAttrName, hexAttr(msg),
 	)
 }
 
 func emitWriteAckEvent(packet Packet, destinationChannel Channel, connection Connection, acknowledgement []byte) {
 	chain.Emit(WriteAckEvent,
 		"packet_hash", CommitPacket(packet).String(),
-		"packet_data", safeString(packet.Data),
+		"packet_data", hexAttr(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_connection_id", connection.CounterpartyConnectionId.String(),
 		"source_connection_client_id", connection.CounterpartyClientId.String(),
@@ -187,14 +184,14 @@ func emitWriteAckEvent(packet Packet, destinationChannel Channel, connection Con
 		"destination_connection_id", destinationChannel.ConnectionId.String(),
 		"destination_connection_client_id", connection.ClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
-		"acknowledgement", safeString(acknowledgement),
+		"acknowledgement", hexAttr(acknowledgement),
 	)
 }
 
 func emitPacketAckEvent(packet Packet, sourceChannel Channel, connection Connection, acknowledgement []byte) {
 	chain.Emit(PacketAckEvent,
 		"packet_hash", CommitPacket(packet).String(),
-		"packet_data", safeString(packet.Data),
+		"packet_data", hexAttr(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_channel_version", sourceChannel.Version,
 		"source_connection_id", sourceChannel.ConnectionId.String(),
@@ -203,14 +200,14 @@ func emitPacketAckEvent(packet Packet, sourceChannel Channel, connection Connect
 		"destination_connection_id", connection.CounterpartyConnectionId.String(),
 		"destination_connection_client_id", connection.CounterpartyClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
-		"acknowledgement", safeString(acknowledgement),
+		"acknowledgement", hexAttr(acknowledgement),
 	)
 }
 
 func emitPacketTimeoutEvent(packet Packet, sourceChannel Channel, connection Connection) {
 	chain.Emit(PacketTimeoutEvent,
 		"packet_hash", CommitPacket(packet).String(),
-		"packet_data", safeString(packet.Data),
+		"packet_data", hexAttr(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_channel_version", sourceChannel.Version,
 		"source_connection_id", sourceChannel.ConnectionId.String(),

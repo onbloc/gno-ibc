@@ -223,8 +223,7 @@ func (s *State) commitPacket(packet Packet) {
 
 func (s *State) deletePacketCommitment(packet Packet) {
 	var zero H256
-	batchHash := CommitPacket(packet)
-	path := BatchPacketsPath(batchHash)
+	path := PacketCommitmentPath(packet)
 	delete(s.batchPackets, path)
 	commit(path, zero)
 }
@@ -258,8 +257,7 @@ func (s *State) hasPacketReceipt(packet Packet) bool {
 
 func (s *State) deletePacketReceipt(packet Packet) {
 	var zero H256
-	batchHash := CommitPacket(packet)
-	path := BatchReceiptsPath(batchHash)
+	path := PacketAcknowledgementPath(packet)
 	delete(s.batchReceipts, path)
 	commit(path, zero)
 }

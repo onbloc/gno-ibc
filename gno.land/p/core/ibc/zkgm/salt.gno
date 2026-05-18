@@ -43,6 +43,32 @@ func Uint256ToBytes32(x *u256.Uint) [32]byte {
 	return out
 }
 
+// DeriveSenderSalt computes:
+//
+//   keccak256((sender, salt).abi_encode())
+//
+// matching Union's alloy-sol-types encoding of a top-level dynamic tuple.
+// Callers must pass the raw UTF-8 bytes of the bech32 account string.
+func DeriveSenderSalt(sender []byte, salt [32]byte) [32]byte {
+	// ABI layout for alloy `(bytes, bytes32).abi_encode()`:
+	//
+	//   word 0: offset to top-level tuple body (0x20)
+	//   word 1: offset to sender data within tuple body (0x40)
+	//   word 2: salt
+	//   word 3: len(sender)
+	//   word 4+: sender bytes, right-padded to a 32-byte boundary
+	//
+	// The inner offset is relative to the start of the tuple body.
+	pad := (32 - len(sender)%32) % 32
+	buf := make([]byte, 4*32+len(sender)+pad)
+	buf[31] = 0x20
+	buf[63] = 0x40
+	copy(buf[64:96], salt[:])
+	binary.BigEndian.PutUint64(buf[120:128], uint64(len(sender)))
+	copy(buf[128:], sender)
+	return keccak256.Sum256(buf)
+}
+
 // TODO: depends on gnoswap/uint256's internal [4]uint64 layout (mirror of
 // SetBytes32). Replace with the upstream Bytes32() method once it exists.
 func putUint256BE(dst []byte, x *u256.Uint) {

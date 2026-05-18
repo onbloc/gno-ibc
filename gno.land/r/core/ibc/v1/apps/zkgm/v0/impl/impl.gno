@@ -88,12 +88,16 @@ func (v *ZkgmV1) IntentRecv(packet core.Packet, marketMaker address, marketMaker
 }
 
 func (v *ZkgmV1) Send(req zkgm.SendRequest) ([]byte, error) {
+	// dispatchVerify uses the raw user salt; only the wire packet is namespaced.
 	if err := v.dispatchVerify(req.ChannelId, req.Sender, parseCoins(req.SentCoins), u256.Zero(), req.Salt, req.Instruction); err != nil {
 		return nil, err
 	}
 
+	// Only user-initiated sends apply DeriveSenderSalt. Forwarded packets are
+	// built in forward.gno and use DeriveForwardSalt instead.
+	hashedSalt := z.DeriveSenderSalt([]byte(req.Sender), req.Salt)
 	data, err := z.EncodeZkgmPacket(z.ZkgmPacket{
-		Salt:        req.Salt,
+		Salt:        hashedSalt,
 		Path:        u256.Zero(),
 		Instruction: req.Instruction,
 	})

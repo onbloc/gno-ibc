@@ -89,7 +89,6 @@ vendor-cmd = mkdir -p $(dir gno.land/$(2)) && rsync $(RSYNC_BASE) $(call vendor-
 
 .PHONY: help install-gno link-stdlibs verify-gno vendor fmt test test-cover test-stdlibs test-smoke clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios derive-sender-salt-vectors generate generate-check
 
-# Packages that have //gno:protobuf-tagged structs the generator scans.
 PROTOGEN_PKGS := gno.land/p/core/ibc/lightclients/cometbls
 
 COVERAGE_DIR := coverage
@@ -233,16 +232,20 @@ derive-sender-salt-vectors:
 		echo "ERROR: 'cargo' not found on PATH. Install Rust toolchain (rustup) to derive sender salt vectors."; exit 1; }
 	@cargo run --release --quiet -p zkgm-fixtures --bin derive_sender_salt
 
-# Regenerates *_pb_gen.gno from //gno:protobuf-tagged structs in PROTOGEN_PKGS.
 generate:
 	@echo ">> regenerating _pb_gen.gno in $(PROTOGEN_PKGS)"
 	@cd tools/protogen && go run . $(addprefix $(CURDIR)/,$(PROTOGEN_PKGS))
 	@echo "ok: regenerated"
 
-# CI guard: regenerate and fail if anything changed.
+# `git diff` misses new files, so check untracked too (adding a new
+# //gno:protobuf struct produces a new _pb_gen.gno).
 generate-check: generate
-	@if ! git diff --exit-code -- '*_pb_gen.gno' >/dev/null 2>&1; then \
+	@modified=$$(git diff --name-only -- '*_pb_gen.gno'); \
+	untracked=$$(git ls-files --others --exclude-standard -- '*_pb_gen.gno'); \
+	if [ -n "$$modified$$untracked" ]; then \
 		echo "ERROR: generated _pb_gen.gno files are out of date. Run 'make generate' and commit."; \
+		[ -n "$$modified" ]  && { echo "modified:";  echo "$$modified";  }; \
+		[ -n "$$untracked" ] && { echo "untracked:"; echo "$$untracked"; }; \
 		git --no-pager diff -- '*_pb_gen.gno'; \
 		exit 1; \
 	fi

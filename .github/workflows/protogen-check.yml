@@ -1,0 +1,48 @@
+name: protogen-check
+
+on:
+  push:
+    branches: [main]
+    paths: &protogen_paths
+      - 'tools/protogen/**'
+      - 'gno.land/p/core/ibc/lightclients/cometbls/types.gno'
+      - 'gno.land/p/core/ibc/lightclients/cometbls/*_pb_gen.gno'
+      - 'Makefile'
+      - '.github/workflows/protogen-check.yml'
+  pull_request:
+    paths: *protogen_paths
+
+concurrency:
+  group: protogen-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-generated:
+    name: _pb_gen.gno files are up-to-date
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: tools/protogen/go.mod
+          cache-dependency-path: tools/protogen/go.mod
+
+      - name: Regenerate codecs
+        run: make generate
+
+      - name: Assert committed codecs match generator output
+        run: |
+          # Check untracked too; `git diff` alone misses new _pb_gen.gno files.
+          modified=$(git diff --name-only -- '*_pb_gen.gno')
+          untracked=$(git ls-files --others --exclude-standard -- '*_pb_gen.gno')
+          if [ -n "$modified$untracked" ]; then
+            echo "::error::Generated _pb_gen.gno files are out of date."
+            echo "Run 'make generate' locally and commit the result."
+            [ -n "$modified" ]  && { echo; echo "Modified:";  echo "$modified"; }
+            [ -n "$untracked" ] && { echo; echo "Untracked:"; echo "$untracked"; }
+            echo
+            git --no-pager diff -- '*_pb_gen.gno'
+            exit 1
+          fi

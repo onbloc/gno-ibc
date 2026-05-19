@@ -127,7 +127,7 @@ func ReleaseNative(cur realm, denom string, recipient address, amount int64) {
 // Used by impl-only entrypoints that move state or funds on behalf of the proxy.
 func requireImplCaller(action string) {
 	callerPath := runtime.PreviousRealm().PkgPath()
-	if callerPath != implPath {
+	if callerPath != implPath && (len(allowedImpls) == 0 || !InAllowedImpls(callerPath)) {
 		panic(ufmt.Sprintf("zkgm: only registered impl (%s) can %s, got %s", implPath, action, callerPath))
 	}
 }

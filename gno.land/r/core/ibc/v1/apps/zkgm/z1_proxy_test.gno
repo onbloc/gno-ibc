@@ -1,6 +1,8 @@
 package zkgm
 
 import (
+	"chain"
+	"chain/banker"
 	"testing"
 
 	"gno.land/p/nt/uassert/v0"
@@ -53,4 +55,22 @@ func TestWriteForwardAckRequiresRegisteredImpl(t *testing.T) {
 	uassert.AbortsContains(t, "only registered impl", func(cur realm) {
 		WriteForwardAck(cur, core.Packet{SourceChannelId: 1, DestinationChannelId: 2}, []byte{0x01})
 	})
+}
+
+func TestReleaseNativeAllowsAuthorizedImplCaller(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	implPath = "gno.land/r/not-this-realm"
+	allowedImpls = []string{ProxyPkgPath()}
+
+	denom := "ureleaseauth"
+	recipient := address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+	testing.IssueCoins(ProxyAddress(), chain.NewCoins(chain.NewCoin(denom, 7)))
+
+	uassert.NotAborts(t, func(cur realm) {
+		ReleaseNative(cur, denom, recipient, 7)
+	})
+
+	bk := banker.NewBanker(banker.BankerTypeReadonly)
+	uassert.Equal(t, int64(7), bk.GetCoins(recipient).AmountOf(denom))
+	uassert.Equal(t, int64(0), bk.GetCoins(ProxyAddress()).AmountOf(denom))
 }

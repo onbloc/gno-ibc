@@ -48,12 +48,6 @@ func bytes32hex(b byte) string {
 	return hex.EncodeToString(bytes.Repeat([]byte{b}, 32))
 }
 
-func chainIDWord32(s string) string {
-	out := make([]byte, 32)
-	copy(out, []byte(s))
-	return hex.EncodeToString(out)
-}
-
 func TestEncodeClientState(t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		cs := ClientState{
@@ -61,14 +55,7 @@ func TestEncodeClientState(t *testing.T) {
 			TrustingPeriod: 1000,
 			MaxClockDrift:  100,
 		}
-		want := mustHex(
-			chainIDWord32("abc") +
-				word32(1000) +
-				word32(100) +
-				word32(0) +
-				word32(0) +
-				bytes32hex(0x00),
-		)
+		want := mustHex("0a0361626310e8072064820120" + bytes32hex(0x00))
 		bytesEq(t, "EncodeClientState/basic", EncodeClientState(cs), want)
 	})
 
@@ -83,40 +70,27 @@ func TestEncodeClientState(t *testing.T) {
 			LatestHeight:    999,
 			ContractAddress: contractAddress,
 		}
-		want := mustHex(
-			chainIDWord32("chain") +
-				word32(100) +
-				word32(10) +
-				word32(1) +
-				word32(999) +
-				bytes32hex(0xAB),
-		)
+		want := mustHex("0a05636861696e1064200a2a021001320310e707820120" + bytes32hex(0xAB))
 		bytesEq(t, "EncodeClientState/with_heights", EncodeClientState(cs), want)
 	})
 
-	t.Run("chain_id_32_bytes", func(t *testing.T) {
-		id := string(bytes.Repeat([]byte{'x'}, 32))
+	t.Run("chain_id_64_bytes", func(t *testing.T) {
+		id := string(bytes.Repeat([]byte{'x'}, 64))
 		cs := ClientState{ChainID: id}
 		got := EncodeClientState(cs)
-		if len(got) != 6*wordSize {
-			t.Fatalf("want %d bytes got %d", 6*wordSize, len(got))
+		decoded, err := DecodeClientState(got)
+		if err != nil {
+			t.Fatalf("DecodeClientState: %v", err)
 		}
-		if string(got[:32]) != id {
-			t.Fatalf("chain_id mismatch")
+		if decoded.ChainID != id {
+			t.Fatalf("ChainID: got %q want %q", decoded.ChainID, id)
 		}
 	})
 }
 
 func TestDecodeClientState(t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
-		buf := mustHex(
-			chainIDWord32("abc") +
-				word32(1000) +
-				word32(100) +
-				word32(0) +
-				word32(50) +
-				bytes32hex(0xCD),
-		)
+		buf := mustHex("0a0361626310e807206432021032820120" + bytes32hex(0xCD))
 		got, err := DecodeClientState(buf)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -142,14 +116,7 @@ func TestDecodeClientState(t *testing.T) {
 	})
 
 	t.Run("frozen", func(t *testing.T) {
-		buf := mustHex(
-			chainIDWord32("x") +
-				word32(100) +
-				word32(10) +
-				word32(1) +
-				word32(99) +
-				bytes32hex(0x00),
-		)
+		buf := mustHex("0a01781064200a2a02100132021063820120" + bytes32hex(0x00))
 		got, err := DecodeClientState(buf)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
@@ -159,8 +126,29 @@ func TestDecodeClientState(t *testing.T) {
 		}
 	})
 
+	t.Run("unknown_tag_skipped", func(t *testing.T) {
+		buf := mustHex("0a0178a20103aabbcc820120" + bytes32hex(0x00))
+		got, err := DecodeClientState(buf)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.ChainID != "x" {
+			t.Fatalf("ChainID: got %q want x", got.ChainID)
+		}
+	})
+
+	t.Run("contract_address_absent_defaults_zero", func(t *testing.T) {
+		got, err := DecodeClientState(mustHex("0a0178"))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got.ContractAddress != (H256{}) {
+			t.Fatalf("ContractAddress: got %x want zero", got.ContractAddress[:])
+		}
+	})
+
 	t.Run("too_short", func(t *testing.T) {
-		_, err := DecodeClientState([]byte{0x01})
+		_, err := DecodeClientState([]byte{0x0a, 0x02, 0x01})
 		if err == nil {
 			t.Fatal("expected error for short buffer")
 		}
@@ -168,26 +156,55 @@ func TestDecodeClientState(t *testing.T) {
 }
 
 func TestEncodeDecodeClientStateRoundTrip(t *testing.T) {
-	original := ClientState{
-		ChainID:        "union-devnet-1337",
-		TrustingPeriod: 14 * 24 * 3600 * 1_000_000_000,
-		MaxClockDrift:  10 * 1_000_000_000,
-		LatestHeight:   1337,
+	maxUint64 := ^uint64(0)
+	testCases := []ClientState{
+		{
+			ContractAddress: repeatH256(0x00),
+		},
+		{
+			ChainID:         "a",
+			TrustingPeriod:  1,
+			MaxClockDrift:   1,
+			FrozenHeight:    1,
+			LatestHeight:    1,
+			ContractAddress: repeatH256(0x11),
+		},
+		{
+			ChainID:         string(bytes.Repeat([]byte{'x'}, 32)),
+			TrustingPeriod:  maxUint64,
+			MaxClockDrift:   maxUint64,
+			FrozenHeight:    0,
+			LatestHeight:    maxUint64,
+			ContractAddress: repeatH256(0xFF),
+		},
+		{
+			ChainID:         string(bytes.Repeat([]byte{'y'}, 64)),
+			TrustingPeriod:  14 * 24 * 3600 * 1_000_000_000,
+			MaxClockDrift:   10 * 1_000_000_000,
+			FrozenHeight:    1,
+			LatestHeight:    1337,
+			ContractAddress: repeatH256(0xAB),
+		},
+		{
+			ChainID:         string(bytes.Repeat([]byte{'z'}, 128)),
+			TrustingPeriod:  0,
+			MaxClockDrift:   0,
+			FrozenHeight:    0,
+			LatestHeight:    0,
+			ContractAddress: repeatH256(0xCD),
+		},
 	}
-	got, err := DecodeClientState(EncodeClientState(original))
-	if err != nil {
-		t.Fatalf("DecodeClientState: %v", err)
-	}
-	if got.ChainID != original.ChainID {
-		t.Fatalf("ChainID: got %q want %q", got.ChainID, original.ChainID)
-	}
-	if got.TrustingPeriod != original.TrustingPeriod {
-		t.Fatalf("TrustingPeriod: got %d want %d", got.TrustingPeriod, original.TrustingPeriod)
-	}
-	if got.MaxClockDrift != original.MaxClockDrift {
-		t.Fatalf("MaxClockDrift: got %d want %d", got.MaxClockDrift, original.MaxClockDrift)
-	}
-	if got.LatestHeight != original.LatestHeight {
-		t.Fatalf("LatestHeight: got %d want %d", got.LatestHeight, original.LatestHeight)
+
+	for _, original := range testCases {
+		got, err := DecodeClientState(EncodeClientState(original))
+		if err != nil {
+			t.Fatalf("DecodeClientState: %v", err)
+		}
+		if got != original {
+			t.Fatalf("ClientState: got %#v want %#v", got, original)
+		}
+		if got.IsFrozen() != (original.FrozenHeight != 0) {
+			t.Fatalf("IsFrozen: got %v want %v", got.IsFrozen(), original.FrozenHeight != 0)
+		}
 	}
 }

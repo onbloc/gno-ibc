@@ -246,7 +246,7 @@ func CreateClient(_ realm, msg MsgCreateClient) ClientId {
 
 	chain.Emit(CreateClientEvent,
 		"client_id", clientId.String(),
-		"client_type", string(msg.ClientType),
+		"client_type", msg.ClientType.String(),
 	)
 	return clientId
 }
@@ -260,7 +260,7 @@ func UpdateClient(_ realm, msg MsgUpdateClient) Height {
 	st.saveConsensusState(msg.ClientId, update.Height, update.ConsensusStateBytes)
 
 	chain.Emit(UpdateClientEvent,
-		"client_type", string(st.clientTypes[msg.ClientId]),
+		"client_type", st.clientTypes[msg.ClientId].String(),
 		"client_id", msg.ClientId.String(),
 		"height", update.Height.String(),
 	)
@@ -779,7 +779,7 @@ func GetClientType(clientId ClientId) string {
 	if !ok {
 		return ""
 	}
-	return string(clientType)
+	return clientType.String()
 }
 
 func QueryConsensusState(clientId ClientId, height Height) string {

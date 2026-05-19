@@ -51,6 +51,10 @@ func (h H256) String() string {
 
 type ClientType string
 
+func (ct ClientType) String() string {
+	return string(ct)
+}
+
 type Status uint8
 
 const (

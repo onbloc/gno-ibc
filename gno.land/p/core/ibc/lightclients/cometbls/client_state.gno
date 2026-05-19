@@ -1,16 +1,29 @@
 package cometbls
 
-import "errors"
+// clientState field numbers mirror
+// union.ibc.lightclients.cometbls.v1.ClientState.
+//
+// Field 3 is reserved for the historical unbonding_period field.
+//
+// Field 16 is a Gno extension for the wasmd contract address used in the
+// store key prefix.
+const (
+	csFieldChainID         = 1
+	csFieldTrustingPeriod  = 2
+	csFieldMaxClockDrift   = 4
+	csFieldFrozenHeight    = 5
+	csFieldLatestHeight    = 6
+	csFieldContractAddress = 16
+)
 
 func EncodeClientState(cs ClientState) []byte {
-	var buf []byte
-	buf = pbAppendBytes(buf, 1, []byte(cs.ChainID))
-	buf = pbAppendUint64(buf, 2, cs.TrustingPeriod)
-	// Field 3 is reserved by Union for the historical unbonding_period slot.
-	buf = pbAppendUint64(buf, 4, cs.MaxClockDrift)
-	buf = pbAppendMsg(buf, 5, pbEncodeHeight(cs.FrozenHeight))
-	buf = pbAppendMsg(buf, 6, pbEncodeHeight(cs.LatestHeight))
-	buf = pbAppendBytes(buf, 16, cs.ContractAddress[:])
+	buf := make([]byte, 0, 64+len(cs.ChainID))
+	buf = pbAppendBytes(buf, csFieldChainID, []byte(cs.ChainID))
+	buf = pbAppendUint64(buf, csFieldTrustingPeriod, cs.TrustingPeriod)
+	buf = pbAppendUint64(buf, csFieldMaxClockDrift, cs.MaxClockDrift)
+	buf = pbAppendMsg(buf, csFieldFrozenHeight, pbEncodeHeight(cs.FrozenHeight))
+	buf = pbAppendMsg(buf, csFieldLatestHeight, pbEncodeHeight(cs.LatestHeight))
+	buf = pbAppendBytes(buf, csFieldContractAddress, cs.ContractAddress[:])
 	return buf
 }
 
@@ -24,28 +37,28 @@ func DecodeClientState(buf []byte) (ClientState, error) {
 			return cs, err
 		}
 		switch fieldNum {
-		case 1:
+		case csFieldChainID:
 			b, newPos, err := pbDecodeBytes(buf, pos)
 			pos = newPos
 			if err != nil {
 				return cs, err
 			}
 			cs.ChainID = string(b)
-		case 2:
+		case csFieldTrustingPeriod:
 			v, newPos, err := pbDecodeVarint(buf, pos)
 			pos = newPos
 			if err != nil {
 				return cs, err
 			}
 			cs.TrustingPeriod = v
-		case 4:
+		case csFieldMaxClockDrift:
 			v, newPos, err := pbDecodeVarint(buf, pos)
 			pos = newPos
 			if err != nil {
 				return cs, err
 			}
 			cs.MaxClockDrift = v
-		case 5:
+		case csFieldFrozenHeight:
 			b, newPos, err := pbDecodeBytes(buf, pos)
 			pos = newPos
 			if err != nil {
@@ -55,7 +68,7 @@ func DecodeClientState(buf []byte) (ClientState, error) {
 			if err != nil {
 				return cs, err
 			}
-		case 6:
+		case csFieldLatestHeight:
 			b, newPos, err := pbDecodeBytes(buf, pos)
 			pos = newPos
 			if err != nil {
@@ -65,17 +78,17 @@ func DecodeClientState(buf []byte) (ClientState, error) {
 			if err != nil {
 				return cs, err
 			}
-		case 16:
-			// Gno extension (not in Union proto), used for wasmd store key prefix.
+		case csFieldContractAddress:
 			b, newPos, err := pbDecodeBytes(buf, pos)
 			pos = newPos
 			if err != nil {
 				return cs, err
 			}
-			if len(b) != 32 {
-				return cs, errors.New("cometbls: contract address must be 32 bytes")
+			addr, err := toBytes32(b, "contract address")
+			if err != nil {
+				return cs, err
 			}
-			copy(cs.ContractAddress[:], b)
+			cs.ContractAddress = H256(addr)
 		default:
 			newPos, err := pbSkipField(buf, pos, wireType)
 			pos = newPos

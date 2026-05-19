@@ -306,3 +306,32 @@ OK!
 
 The emitted events must include `PacketSend` and `PacketTimeout`; timeout
 refunds the voucher to the sender.
+
+## 11. Ack TokenOrder Market-Maker Voucher Reward
+
+Source: `tools/zkgm-fixtures/scripts/happy/ack_token_order_mm_escrow_voucher.gno`.
+
+Copy-paste transaction:
+
+```sh
+printf '\n' | gnokey maketx run \
+  -gas-fee 1000000ugnot -gas-wanted 200000000 \
+  -broadcast -insecure-password-stdin \
+  -chainid dev -remote tcp://127.0.0.1:26657 \
+  test1 tools/zkgm-fixtures/scripts/happy/ack_token_order_mm_escrow_voucher.gno
+```
+
+Verify:
+
+```txt
+commitment_before_ack true
+sender_balance_before_ack 0
+market_maker_balance_before_ack 0
+commitment_after_ack false
+sender_balance_after_ack 0
+market_maker_balance_after_ack 21
+OK!
+```
+
+The emitted events must include `PacketSend` and `PacketAck`; the successful
+market-maker acknowledgement pays the voucher to the market maker.

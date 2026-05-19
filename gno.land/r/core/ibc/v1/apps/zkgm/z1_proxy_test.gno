@@ -74,3 +74,38 @@ func TestReleaseNativeAllowsAuthorizedImplCaller(cur realm, t *testing.T) {
 	uassert.Equal(t, int64(7), bk.GetCoins(recipient).AmountOf(denom))
 	uassert.Equal(t, int64(0), bk.GetCoins(ProxyAddress()).AmountOf(denom))
 }
+
+func TestReleaseNativeRejectsUnlistedCaller(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	implPath = "gno.land/r/not-this-realm"
+	allowedImpls = []string{"gno.land/r/other-authorized-realm"}
+
+	denom := "ureleasedeny"
+	recipient := address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+	testing.IssueCoins(ProxyAddress(), chain.NewCoins(chain.NewCoin(denom, 7)))
+
+	uassert.AbortsContains(t, "only registered impl", func(cur realm) {
+		ReleaseNative(cur, denom, recipient, 7)
+	})
+
+	bk := banker.NewBanker(banker.BankerTypeReadonly)
+	uassert.Equal(t, int64(0), bk.GetCoins(recipient).AmountOf(denom))
+	uassert.Equal(t, int64(7), bk.GetCoins(ProxyAddress()).AmountOf(denom))
+}
+
+func TestReleaseNativeRejectsCallerWhenAllowedListEmpty(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	implPath = "gno.land/r/not-this-realm"
+
+	denom := "ureleaseempty"
+	recipient := address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+	testing.IssueCoins(ProxyAddress(), chain.NewCoins(chain.NewCoin(denom, 7)))
+
+	uassert.AbortsContains(t, "only registered impl", func(cur realm) {
+		ReleaseNative(cur, denom, recipient, 7)
+	})
+
+	bk := banker.NewBanker(banker.BankerTypeReadonly)
+	uassert.Equal(t, int64(0), bk.GetCoins(recipient).AmountOf(denom))
+	uassert.Equal(t, int64(7), bk.GetCoins(ProxyAddress()).AmountOf(denom))
+}

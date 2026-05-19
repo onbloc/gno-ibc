@@ -120,6 +120,27 @@ func TestDecodeClientState(t *testing.T) {
 			t.Fatal("expected error for short buffer")
 		}
 	})
+
+	t.Run("wrong_wire_type_on_known_field", func(t *testing.T) {
+		// 0x12 = (field 2 << 3) | wireType 2; field 2 is TrustingPeriod
+		// (varint, wire 0), so a length-delimited tag here must be rejected
+		// instead of being silently mis-decoded as zero.
+		_, err := DecodeClientState([]byte{0x12, 0x00})
+		if err == nil {
+			t.Fatal("expected error for wire-type mismatch on known field")
+		}
+	})
+
+	t.Run("overflow_length_does_not_panic", func(t *testing.T) {
+		// 0x0a = field 1 (ChainID, bytes); the varint length that follows is
+		// ~uint64(0). Without the bounds check this overflows int and either
+		// panics in make([]byte, length) or sneaks past the underflow guard.
+		buf := []byte{0x0a, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01}
+		_, err := DecodeClientState(buf)
+		if err == nil {
+			t.Fatal("expected error for overflow length")
+		}
+	})
 }
 
 func TestEncodeDecodeClientStateRoundTrip(t *testing.T) {

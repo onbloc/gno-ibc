@@ -2,55 +2,8 @@ package cometbls
 
 import "errors"
 
-// Misbehaviour is protobuf encoded.
-// ABI encoding for Misbehaviour is a TODO in Union; protobuf format is kept.
-func EncodeMisbehaviour(m Misbehaviour) []byte {
-	var buf []byte
-	buf = pbAppendMsg(buf, 1, pbEncodeHeader(m.HeaderA))
-	buf = pbAppendMsg(buf, 2, pbEncodeHeader(m.HeaderB))
-	return buf
-}
-
-// DecodeMisbehaviour protobuf-decodes a Misbehaviour from buf.
-func DecodeMisbehaviour(buf []byte) (Misbehaviour, error) {
-	var m Misbehaviour
-	pos := 0
-	for pos < len(buf) {
-		fieldNum, wireType, newPos, err := pbDecodeTag(buf, pos)
-		pos = newPos
-		if err != nil {
-			return m, err
-		}
-		switch fieldNum {
-		case 1:
-			b, newPos, err := pbDecodeBytes(buf, pos)
-			pos = newPos
-			if err != nil {
-				return m, err
-			}
-			m.HeaderA, err = pbDecodeHeader(b)
-			if err != nil {
-				return m, err
-			}
-		case 2:
-			b, newPos, err := pbDecodeBytes(buf, pos)
-			pos = newPos
-			if err != nil {
-				return m, err
-			}
-			m.HeaderB, err = pbDecodeHeader(b)
-			if err != nil {
-				return m, err
-			}
-		default:
-			pos, err = pbSkipField(buf, pos, wireType)
-			if err != nil {
-				return m, err
-			}
-		}
-	}
-	return m, nil
-}
+// Codecs are generated (misbehaviour_pb_gen.gno). This file holds the
+// hand-written pb* helpers they (and Header/Height/LightHeader) call into.
 
 func pbAppendVarint(buf []byte, v uint64) []byte {
 	for v >= 0x80 {
@@ -152,10 +105,13 @@ func pbDecodeBytes(buf []byte, pos int) ([]byte, int, error) {
 	if err != nil {
 		return nil, pos, err
 	}
-	end := pos + int(length)
-	if end > len(buf) {
+	// Bounds check before any int conversion: a malformed varint length
+	// (e.g. ~uint64(0)) would overflow `pos+int(length)` and let the
+	// allocation panic with len out of range.
+	if length > uint64(len(buf)-pos) {
 		return nil, pos, errors.New("proto: buffer underflow reading bytes")
 	}
+	end := pos + int(length)
 	out := make([]byte, length)
 	copy(out, buf[pos:end])
 	return out, end, nil
@@ -167,11 +123,24 @@ func pbSkipField(buf []byte, pos, wireType int) (int, error) {
 		_, newPos, err := pbDecodeVarint(buf, pos)
 		return newPos, err
 	case 2:
-		_, newPos, err := pbDecodeBytes(buf, pos)
-		return newPos, err
+		length, newPos, err := pbDecodeVarint(buf, pos)
+		if err != nil {
+			return pos, err
+		}
+		if length > uint64(len(buf)-newPos) {
+			return pos, errors.New("proto: buffer underflow skipping bytes")
+		}
+		return newPos + int(length), nil
 	default:
 		return pos, errors.New("proto: unsupported wire type")
 	}
+}
+
+func pbExpectWire(got, want int) error {
+	if got != want {
+		return errors.New("proto: unexpected wire type for known field")
+	}
+	return nil
 }
 
 func pbDecodeHeight(buf []byte) (Height, error) {

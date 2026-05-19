@@ -4,7 +4,7 @@
 Reads ``.gno-version`` for the upstream gno repo + commit, ensures a checkout
 under ``~/.cache/gno-ibc/gno``, symlinks every package under ``stdlibs/`` into
 ``<cache>/gnovm/stdlibs/<module>/``, regenerates the native-binding dispatch
-table, and installs the resulting ``gno`` and ``gnodev`` binaries.
+table, and installs the resulting ``gno``, ``gnodev``, and ``gnokey`` binaries.
 
 The symlinks are the load-bearing part: the gno binary's baked-in ``_GNOROOT``
 points at the cache, so at runtime it walks the symlinked dirs to load .gno
@@ -245,6 +245,7 @@ def regenerate_and_install(cache_dir: Path, skip_install: bool) -> None:
     _inject_native_deps(gnodev)
     run(["go", "mod", "tidy"], cwd=gnodev)
     run(["make", "install.gnodev"], cwd=cache_dir)
+    run(["make", "install.gnokey"], cwd=cache_dir)
 
 
 def parse_args() -> argparse.Namespace:
@@ -312,6 +313,7 @@ def main() -> int:
         gobin = subprocess.check_output(["go", "env", "GOPATH"]).decode().strip()
         log(f"installed: {gobin}/bin/gno")
         log(f"installed: {gobin}/bin/gnodev")
+        log(f"installed: {gobin}/bin/gnokey")
     return 0
 
 

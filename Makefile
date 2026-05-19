@@ -196,7 +196,7 @@ test-stdlibs: verify-gno
 test-smoke: verify-gno
 	@gno test ./gno.land/p/core/_smoke/ -v
 
-test-gnokey-query-smoke: verify-gno
+test-gnokey-query-smoke: verify-gno vendor
 	@./tools/gnokey-query-smoke.sh
 
 clean-gno-cache:

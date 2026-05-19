@@ -6,8 +6,10 @@ GNO_IBC_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RPC_ENDPOINT="tcp://127.0.0.1:26657"
 RPC_URL="http://127.0.0.1:26657"
 EXPECTED_HIT="0x0100000000000000000000000000000000000000000000000000000000000000"
+TEST1_MNEMONIC="source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast"
 
 WORKDIR=$(mktemp -d)
+KEYBASE="$WORKDIR/keybase"
 
 cleanup() {
   if [[ -n "${GNODEV_PID:-}" ]] && kill -0 "$GNODEV_PID" 2>/dev/null; then
@@ -55,10 +57,18 @@ if ! curl -sf "$RPC_URL/status" 2>/dev/null | grep -q latest_block_height; then
 fi
 echo ">> gnodev ready"
 
+echo ">> importing test1 into local keybase"
+if ! printf "%s\n\n\n" "$TEST1_MNEMONIC" | gnokey add test1 -recover -insecure-password-stdin=true -home "$KEYBASE" >"$WORKDIR/keyadd.log" 2>&1; then
+  echo "FAIL: gnokey add test1"
+  cat "$WORKDIR/keyadd.log"
+  exit 1
+fi
+
 maketx_run() {
   local script="$1"
   local log="$2"
   if ! echo "" | gnokey maketx run -insecure-password-stdin \
+    -home "$KEYBASE" \
     -gas-fee 1000000ugnot -gas-wanted 90000000 \
     -broadcast -chainid dev -remote "$RPC_ENDPOINT" \
     test1 "$script" >"$log" 2>&1; then

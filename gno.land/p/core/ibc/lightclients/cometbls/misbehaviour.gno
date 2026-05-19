@@ -97,7 +97,11 @@ func pbDecodeTag(buf []byte, pos int) (fieldNum, wireType, newPos int, err error
 	if err != nil {
 		return 0, 0, pos, err
 	}
-	return int(tag >> 3), int(tag & 0x7), newPos, nil
+	fieldNum = int(tag >> 3)
+	if fieldNum == 0 {
+		return 0, 0, pos, errors.New("proto: invalid field number 0")
+	}
+	return fieldNum, int(tag & 0x7), newPos, nil
 }
 
 func pbDecodeBytes(buf []byte, pos int) ([]byte, int, error) {
@@ -154,11 +158,17 @@ func pbDecodeHeight(buf []byte) (Height, error) {
 		}
 		switch fieldNum {
 		case 1: // revision_number — ibc-union always uses revision 0, skip
-			pos, err = pbSkipField(buf, pos, wireType)
+			if err := pbExpectWire(wireType, 0); err != nil {
+				return h, err
+			}
+			_, pos, err = pbDecodeVarint(buf, pos)
 			if err != nil {
 				return h, err
 			}
 		case 2:
+			if err := pbExpectWire(wireType, 0); err != nil {
+				return h, err
+			}
 			v, newPos, err := pbDecodeVarint(buf, pos)
 			pos = newPos
 			if err != nil {
@@ -185,6 +195,9 @@ func pbDecodeTimestamp(buf []byte) (seconds int64, nanos int32, err error) {
 		}
 		switch fieldNum {
 		case 1:
+			if err := pbExpectWire(wireType, 0); err != nil {
+				return 0, 0, err
+			}
 			v, newPos, decErr := pbDecodeVarint(buf, pos)
 			pos = newPos
 			if decErr != nil {
@@ -192,6 +205,9 @@ func pbDecodeTimestamp(buf []byte) (seconds int64, nanos int32, err error) {
 			}
 			seconds = int64(v)
 		case 2:
+			if err := pbExpectWire(wireType, 0); err != nil {
+				return 0, 0, err
+			}
 			v, newPos, decErr := pbDecodeVarint(buf, pos)
 			pos = newPos
 			if decErr != nil {
@@ -219,6 +235,9 @@ func pbDecodeLightHeader(buf []byte) (LightHeader, error) {
 		}
 		switch fieldNum {
 		case 1:
+			if err := pbExpectWire(wireType, 0); err != nil {
+				return lh, err
+			}
 			v, newPos, err := pbDecodeVarint(buf, pos)
 			pos = newPos
 			if err != nil {
@@ -226,6 +245,9 @@ func pbDecodeLightHeader(buf []byte) (LightHeader, error) {
 			}
 			lh.Height = int64(v)
 		case 2:
+			if err := pbExpectWire(wireType, 2); err != nil {
+				return lh, err
+			}
 			b, newPos, err := pbDecodeBytes(buf, pos)
 			pos = newPos
 			if err != nil {
@@ -236,6 +258,9 @@ func pbDecodeLightHeader(buf []byte) (LightHeader, error) {
 				return lh, err
 			}
 		case 3:
+			if err := pbExpectWire(wireType, 2); err != nil {
+				return lh, err
+			}
 			b, newPos, err := pbDecodeBytes(buf, pos)
 			pos = newPos
 			if err != nil {
@@ -243,6 +268,9 @@ func pbDecodeLightHeader(buf []byte) (LightHeader, error) {
 			}
 			lh.ValidatorsHash = b
 		case 4:
+			if err := pbExpectWire(wireType, 2); err != nil {
+				return lh, err
+			}
 			b, newPos, err := pbDecodeBytes(buf, pos)
 			pos = newPos
 			if err != nil {
@@ -253,6 +281,9 @@ func pbDecodeLightHeader(buf []byte) (LightHeader, error) {
 			}
 			copy(lh.NextValidatorsHash[:], b)
 		case 5:
+			if err := pbExpectWire(wireType, 2); err != nil {
+				return lh, err
+			}
 			b, newPos, err := pbDecodeBytes(buf, pos)
 			pos = newPos
 			if err != nil {
@@ -280,6 +311,9 @@ func pbDecodeHeader(buf []byte) (Header, error) {
 		}
 		switch fieldNum {
 		case 1:
+			if err := pbExpectWire(wireType, 2); err != nil {
+				return h, err
+			}
 			b, newPos, err := pbDecodeBytes(buf, pos)
 			pos = newPos
 			if err != nil {
@@ -290,6 +324,9 @@ func pbDecodeHeader(buf []byte) (Header, error) {
 				return h, err
 			}
 		case 2:
+			if err := pbExpectWire(wireType, 2); err != nil {
+				return h, err
+			}
 			b, newPos, err := pbDecodeBytes(buf, pos)
 			pos = newPos
 			if err != nil {
@@ -300,6 +337,9 @@ func pbDecodeHeader(buf []byte) (Header, error) {
 				return h, err
 			}
 		case 3:
+			if err := pbExpectWire(wireType, 2); err != nil {
+				return h, err
+			}
 			b, newPos, err := pbDecodeBytes(buf, pos)
 			pos = newPos
 			if err != nil {

@@ -131,6 +131,22 @@ func TestDecodeClientState(t *testing.T) {
 		}
 	})
 
+	t.Run("wrong_wire_type_on_nested_height_field", func(t *testing.T) {
+		// Outer field 6 is LatestHeight (message). Its nested field 2 is
+		// revision_height (varint, wire 0), so wire type 2 must be rejected.
+		_, err := DecodeClientState([]byte{0x32, 0x02, 0x12, 0x00})
+		if err == nil {
+			t.Fatal("expected error for nested wire-type mismatch")
+		}
+	})
+
+	t.Run("invalid_field_number_zero", func(t *testing.T) {
+		_, err := DecodeClientState([]byte{0x00})
+		if err == nil {
+			t.Fatal("expected error for invalid field number zero")
+		}
+	})
+
 	t.Run("overflow_length_does_not_panic", func(t *testing.T) {
 		// 0x0a = field 1 (ChainID, bytes); the varint length that follows is
 		// ~uint64(0). Without the bounds check this overflows int and either

@@ -61,6 +61,16 @@ func TestDecodeMisbehaviour(t *testing.T) {
 			t.Fatalf("error got %q want %q", err.Error(), want)
 		}
 	})
+
+	t.Run("wrong_wire_type_on_nested_light_header_field", func(t *testing.T) {
+		// HeaderA -> SignedHeader -> Height. The innermost Height field is
+		// varint (wire 0), so length-delimited wire type must be rejected.
+		buf := []byte{0x0A, 0x04, 0x0A, 0x02, 0x0A, 0x00}
+		_, err := DecodeMisbehaviour(buf)
+		if err == nil {
+			t.Fatal("expected error for nested light header wire-type mismatch")
+		}
+	})
 }
 
 func TestEncodeDecodeMisbehaviourRoundTrip(t *testing.T) {

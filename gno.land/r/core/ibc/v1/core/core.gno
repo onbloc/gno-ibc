@@ -613,12 +613,14 @@ func PacketAcknowledgement(_ realm, msg MsgPacketAcknowledgement) {
 	first := msg.Packets[0]
 	channel := st.getChannel(first.SourceChannelId)
 	connection := ensureConnectionOpen(channel.ConnectionId)
-	key := BatchReceiptsPath(CommitPackets(msg.Packets))
+	batchHash := CommitPackets(msg.Packets)
+	key := BatchReceiptsPath(batchHash)
 	value := CommitAcks(msg.Acknowledgements)
 	st.getClient(connection.ClientId).VerifyMembership(
 		connection.ClientId, msg.ProofHeight, msg.Proof, key[:], value[:],
 	)
 
+	processed := false
 	for i, packet := range msg.Packets {
 		if !st.hasPacketCommitment(packet) {
 			continue
@@ -632,8 +634,12 @@ func PacketAcknowledgement(_ realm, msg MsgPacketAcknowledgement) {
 		st.getAppByPortId(portId).OnAcknowledgementPacket(packet, ack, relayer)
 
 		st.deletePacketCommitment(packet)
+		processed = true
 
 		emitPacketAckEvent(packet, channel, connection, ack)
+	}
+	if processed {
+		st.deleteBatchPackets(batchHash)
 	}
 }
 

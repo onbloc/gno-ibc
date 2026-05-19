@@ -1,61 +1,87 @@
 package cometbls
 
-import (
-	"errors"
-
-	abienc "gno.land/p/core/encoding/abi"
-)
-
-// Ethereum ABI wire format for Union CometBLS ClientState.
-//
-// Encoding rules (Solidity params tuple form):
-//   - ClientState: 6 words x 32 bytes = 192 bytes (all static)
-
-// [0] chain_id bytes32  [1-4] uint64 x 4  [5] contract_address bytes32
-var clientStateSchema = abienc.Schema{Fields: []abienc.Field{
-	{Type: abienc.TypeBytes32},
-	{Type: abienc.TypeUint64},
-	{Type: abienc.TypeUint64},
-	{Type: abienc.TypeUint64},
-	{Type: abienc.TypeUint64},
-	{Type: abienc.TypeBytes32},
-}}
+import "errors"
 
 func EncodeClientState(cs ClientState) []byte {
-	var chainID [32]byte
-	n := len(cs.ChainID)
-	if n > 32 {
-		n = 32
-	}
-	copy(chainID[:], cs.ChainID[:n])
-	contractAddress := [32]byte(cs.ContractAddress)
-	buf, _ := abienc.Encode(clientStateSchema, []any{
-		chainID,
-		cs.TrustingPeriod,
-		cs.MaxClockDrift,
-		cs.FrozenHeight,
-		cs.LatestHeight,
-		contractAddress,
-	})
+	var buf []byte
+	buf = pbAppendBytes(buf, 1, []byte(cs.ChainID))
+	buf = pbAppendUint64(buf, 2, cs.TrustingPeriod)
+	// Field 3 is reserved by Union for the historical unbonding_period slot.
+	buf = pbAppendUint64(buf, 4, cs.MaxClockDrift)
+	buf = pbAppendMsg(buf, 5, pbEncodeHeight(cs.FrozenHeight))
+	buf = pbAppendMsg(buf, 6, pbEncodeHeight(cs.LatestHeight))
+	buf = pbAppendBytes(buf, 16, cs.ContractAddress[:])
 	return buf
 }
 
 func DecodeClientState(buf []byte) (ClientState, error) {
-	vals, err := abienc.Decode(clientStateSchema, buf)
-	if err != nil {
-		return ClientState{}, errors.New("cometbls: " + err.Error())
-	}
 	var cs ClientState
-	chainID := vals[0].([32]byte)
-	end := 32
-	for end > 0 && chainID[end-1] == 0 {
-		end--
+	pos := 0
+	for pos < len(buf) {
+		fieldNum, wireType, newPos, err := pbDecodeTag(buf, pos)
+		pos = newPos
+		if err != nil {
+			return cs, err
+		}
+		switch fieldNum {
+		case 1:
+			b, newPos, err := pbDecodeBytes(buf, pos)
+			pos = newPos
+			if err != nil {
+				return cs, err
+			}
+			cs.ChainID = string(b)
+		case 2:
+			v, newPos, err := pbDecodeVarint(buf, pos)
+			pos = newPos
+			if err != nil {
+				return cs, err
+			}
+			cs.TrustingPeriod = v
+		case 4:
+			v, newPos, err := pbDecodeVarint(buf, pos)
+			pos = newPos
+			if err != nil {
+				return cs, err
+			}
+			cs.MaxClockDrift = v
+		case 5:
+			b, newPos, err := pbDecodeBytes(buf, pos)
+			pos = newPos
+			if err != nil {
+				return cs, err
+			}
+			cs.FrozenHeight, err = pbDecodeHeight(b)
+			if err != nil {
+				return cs, err
+			}
+		case 6:
+			b, newPos, err := pbDecodeBytes(buf, pos)
+			pos = newPos
+			if err != nil {
+				return cs, err
+			}
+			cs.LatestHeight, err = pbDecodeHeight(b)
+			if err != nil {
+				return cs, err
+			}
+		case 16:
+			b, newPos, err := pbDecodeBytes(buf, pos)
+			pos = newPos
+			if err != nil {
+				return cs, err
+			}
+			if len(b) != 32 {
+				return cs, errors.New("cometbls: contract address must be 32 bytes")
+			}
+			copy(cs.ContractAddress[:], b)
+		default:
+			var err error
+			pos, err = pbSkipField(buf, pos, wireType)
+			if err != nil {
+				return cs, err
+			}
+		}
 	}
-	cs.ChainID = string(chainID[:end])
-	cs.TrustingPeriod = vals[1].(uint64)
-	cs.MaxClockDrift = vals[2].(uint64)
-	cs.FrozenHeight = vals[3].(uint64)
-	cs.LatestHeight = vals[4].(uint64)
-	cs.ContractAddress = H256(vals[5].([32]byte))
 	return cs, nil
 }

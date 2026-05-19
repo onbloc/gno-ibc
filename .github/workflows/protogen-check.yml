@@ -5,8 +5,9 @@ on:
     branches: [main]
     paths: &protogen_paths
       - 'tools/protogen/**'
-      - 'gno.land/p/core/ibc/lightclients/cometbls/types.gno'
-      - 'gno.land/p/core/ibc/lightclients/cometbls/*_pb_gen.gno'
+      # Any .gno source under a PROTOGEN_PKGS dir can host a //gno:protobuf
+      # struct. Keep this list in sync with the Makefile variable.
+      - 'gno.land/p/core/ibc/lightclients/cometbls/*.gno'
       - 'Makefile'
       - '.github/workflows/protogen-check.yml'
   pull_request:

@@ -56,6 +56,9 @@ func Decode{{.Name}}(buf []byte) ({{.Name}}, error) {
 
 {{- define "decode" -}}
 {{- if eq (print .Kind) "bytes" }}
+			if err := pbExpectWire(wireType, 2); err != nil {
+				return m, err
+			}
 			v, newPos, err := pbDecodeBytes(buf, pos)
 			pos = newPos
 			if err != nil {
@@ -69,6 +72,9 @@ func Decode{{.Name}}(buf []byte) ({{.Name}}, error) {
 			m.{{.Name}} = {{.GoType}}(v)
 	{{- end }}
 {{- else if eq (print .Kind) "varint" }}
+			if err := pbExpectWire(wireType, 0); err != nil {
+				return m, err
+			}
 			v, newPos, err := pbDecodeVarint(buf, pos)
 			pos = newPos
 			if err != nil {
@@ -76,6 +82,9 @@ func Decode{{.Name}}(buf []byte) ({{.Name}}, error) {
 			}
 			m.{{.Name}} = v
 {{- else if eq (print .Kind) "int64" }}
+			if err := pbExpectWire(wireType, 0); err != nil {
+				return m, err
+			}
 			v, newPos, err := pbDecodeVarint(buf, pos)
 			pos = newPos
 			if err != nil {
@@ -83,6 +92,9 @@ func Decode{{.Name}}(buf []byte) ({{.Name}}, error) {
 			}
 			m.{{.Name}} = int64(v)
 {{- else if eq (print .Kind) "int32" }}
+			if err := pbExpectWire(wireType, 0); err != nil {
+				return m, err
+			}
 			v, newPos, err := pbDecodeVarint(buf, pos)
 			pos = newPos
 			if err != nil {
@@ -90,6 +102,9 @@ func Decode{{.Name}}(buf []byte) ({{.Name}}, error) {
 			}
 			m.{{.Name}} = int32(v)
 {{- else if eq (print .Kind) "bytes32" }}
+			if err := pbExpectWire(wireType, 2); err != nil {
+				return m, err
+			}
 			v, newPos, err := pbDecodeBytes(buf, pos)
 			pos = newPos
 			if err != nil {
@@ -101,6 +116,9 @@ func Decode{{.Name}}(buf []byte) ({{.Name}}, error) {
 			}
 			m.{{.Name}} = {{.GoType}}(addr)
 {{- else if eq (print .Kind) "message" }}
+			if err := pbExpectWire(wireType, 2); err != nil {
+				return m, err
+			}
 			inner, newPos, err := pbDecodeBytes(buf, pos)
 			pos = newPos
 			if err != nil {

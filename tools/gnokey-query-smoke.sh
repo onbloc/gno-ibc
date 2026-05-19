@@ -67,27 +67,32 @@ fi
 maketx_run() {
   local script="$1"
   local log="$2"
+  echo "--- maketx run: $(basename "$script") ---"
   if ! echo "" | gnokey maketx run -insecure-password-stdin \
     -home "$KEYBASE" \
     -gas-fee 1000000ugnot -gas-wanted 90000000 \
     -broadcast -chainid dev -remote "$RPC_ENDPOINT" \
-    test1 "$script" >"$log" 2>&1; then
+    test1 "$script" 2>&1 | tee "$log"; then
     echo "FAIL: maketx run failed ($(basename "$script"))"
-    cat "$log"
     exit 1
   fi
-}
-
-run_qeval() {
-  gnokey query vm/qeval -remote "$RPC_ENDPOINT" -data "$1" 2>&1
+  echo "--- end maketx run ---"
 }
 
 extract_data() {
   grep -E '^data:' | sed -E 's/^data: \("(.*)" [^)]+\)$/\1/'
 }
 
-assert_eq() {
-  local label="$1" actual="$2" expected="$3"
+probe_qeval() {
+  local label="$1"
+  local data="$2"
+  local expected="$3"
+  local raw actual
+  raw=$(gnokey query vm/qeval -remote "$RPC_ENDPOINT" -data "$data" 2>&1)
+  echo "--- qeval: $label ---"
+  echo "expr: $data"
+  echo "$raw"
+  actual=$(echo "$raw" | extract_data)
   if [[ "$actual" != "$expected" ]]; then
     echo "FAIL: $label"
     echo "  expected: $expected"
@@ -97,15 +102,20 @@ assert_eq() {
   echo "PASS: $label"
 }
 
-assert_nonempty() {
-  local label="$1" actual="$2"
+probe_qeval_nonempty() {
+  local label="$1"
+  local data="$2"
+  local raw actual
+  raw=$(gnokey query vm/qeval -remote "$RPC_ENDPOINT" -data "$data" 2>&1)
+  echo "--- qeval: $label ---"
+  echo "expr: $data"
+  echo "$raw"
+  actual=$(echo "$raw" | extract_data)
   if [[ -z "$actual" ]]; then
     echo "FAIL: $label expected non-empty, got empty"
     exit 1
   fi
-  local preview="${actual:0:60}"
-  if (( ${#actual} > 60 )); then preview+="..."; fi
-  echo "PASS: $label ($preview)"
+  echo "PASS: $label"
 }
 
 hex_to_h256_lit() {
@@ -362,46 +372,54 @@ BATCH_HASH_LIT=$(hex_to_h256_lit "$BATCH_HASH")
 
 echo ">> Phase 8: qeval probes"
 
-R=$(run_qeval "gno.land/r/core/ibc/v1/core.GetClientType($COMETBLS_ID)" | extract_data)
-assert_nonempty "GetClientType(cometbls_id=$COMETBLS_ID)" "$R"
+probe_qeval_nonempty "GetClientType(cometbls_id=$COMETBLS_ID)" \
+  "gno.land/r/core/ibc/v1/core.GetClientType($COMETBLS_ID)"
 
-R=$(run_qeval "gno.land/r/core/ibc/v1/core.GetClientType($STATELENS_ID)" | extract_data)
-assert_nonempty "GetClientType(statelens_id=$STATELENS_ID)" "$R"
+probe_qeval_nonempty "GetClientType(statelens_id=$STATELENS_ID)" \
+  "gno.land/r/core/ibc/v1/core.GetClientType($STATELENS_ID)"
 
-R=$(run_qeval "gno.land/r/core/ibc/v1/core.GetClientType(9999)" | extract_data)
-assert_eq "GetClientType(9999) miss" "$R" ""
+probe_qeval "GetClientType(9999) miss" \
+  "gno.land/r/core/ibc/v1/core.GetClientType(9999)" \
+  ""
 
-R=$(run_qeval "gno.land/r/core/ibc/v1/core.QueryClientState($COMETBLS_ID)" | extract_data)
-assert_nonempty "QueryClientState(cometbls_id=$COMETBLS_ID)" "$R"
+probe_qeval_nonempty "QueryClientState(cometbls_id=$COMETBLS_ID)" \
+  "gno.land/r/core/ibc/v1/core.QueryClientState($COMETBLS_ID)"
 
-R=$(run_qeval "gno.land/r/core/ibc/v1/core.QueryClientState(9999)" | extract_data)
-assert_eq "QueryClientState(9999) miss" "$R" ""
+probe_qeval "QueryClientState(9999) miss" \
+  "gno.land/r/core/ibc/v1/core.QueryClientState(9999)" \
+  ""
 
-R=$(run_qeval "gno.land/r/core/ibc/v1/core.QueryConsensusState($COMETBLS_ID, $UPDATE_HEIGHT)" | extract_data)
-assert_nonempty "QueryConsensusState(cometbls_id=$COMETBLS_ID, height=$UPDATE_HEIGHT)" "$R"
+probe_qeval_nonempty "QueryConsensusState(cometbls_id=$COMETBLS_ID, height=$UPDATE_HEIGHT)" \
+  "gno.land/r/core/ibc/v1/core.QueryConsensusState($COMETBLS_ID, $UPDATE_HEIGHT)"
 
-R=$(run_qeval "gno.land/r/core/ibc/v1/core.QueryConnection($CONNECTION_ID)" | extract_data)
-assert_nonempty "QueryConnection(connection_id=$CONNECTION_ID)" "$R"
+probe_qeval_nonempty "QueryConnection(connection_id=$CONNECTION_ID)" \
+  "gno.land/r/core/ibc/v1/core.QueryConnection($CONNECTION_ID)"
 
-R=$(run_qeval "gno.land/r/core/ibc/v1/core.QueryConnection(9999)" | extract_data)
-assert_eq "QueryConnection(9999) miss" "$R" ""
+probe_qeval "QueryConnection(9999) miss" \
+  "gno.land/r/core/ibc/v1/core.QueryConnection(9999)" \
+  ""
 
-R=$(run_qeval "gno.land/r/core/ibc/v1/core.QueryChannel($MOCK_SOURCE)" | extract_data)
-assert_nonempty "QueryChannel(mock_source=$MOCK_SOURCE)" "$R"
+probe_qeval_nonempty "QueryChannel(mock_source=$MOCK_SOURCE)" \
+  "gno.land/r/core/ibc/v1/core.QueryChannel($MOCK_SOURCE)"
 
-R=$(run_qeval "gno.land/r/core/ibc/v1/core.QueryChannel(9999)" | extract_data)
-assert_eq "QueryChannel(9999) miss" "$R" ""
+probe_qeval "QueryChannel(9999) miss" \
+  "gno.land/r/core/ibc/v1/core.QueryChannel(9999)" \
+  ""
 
-R=$(run_qeval "gno.land/r/core/ibc/v1/core.QueryBatchPackets(${BATCH_HASH_LIT})" | extract_data)
-assert_eq "QueryBatchPackets(batchHash) baseline" "$R" "$EXPECTED_HIT"
+probe_qeval "QueryBatchPackets(batchHash) baseline" \
+  "gno.land/r/core/ibc/v1/core.QueryBatchPackets(${BATCH_HASH_LIT})" \
+  "$EXPECTED_HIT"
 
-R=$(run_qeval "gno.land/r/core/ibc/v1/core.QueryCommitmentAtPath(BatchPacketsPath(${BATCH_HASH_LIT}))" | extract_data)
-assert_eq "QueryCommitmentAtPath(BatchPacketsPath(batchHash)) composed" "$R" "$EXPECTED_HIT"
+probe_qeval "QueryCommitmentAtPath(BatchPacketsPath(batchHash)) composed" \
+  "gno.land/r/core/ibc/v1/core.QueryCommitmentAtPath(BatchPacketsPath(${BATCH_HASH_LIT}))" \
+  "$EXPECTED_HIT"
 
-R=$(run_qeval 'gno.land/r/core/ibc/v1/core.QueryCommitmentAtPath(H256{})' | extract_data)
-assert_eq "QueryCommitmentAtPath(H256{}) miss" "$R" ""
+probe_qeval "QueryCommitmentAtPath(H256{}) miss" \
+  'gno.land/r/core/ibc/v1/core.QueryCommitmentAtPath(H256{})' \
+  ""
 
-R=$(run_qeval 'gno.land/r/core/ibc/v1/core.QueryReceiptAtPath(H256{})' | extract_data)
-assert_eq "QueryReceiptAtPath(H256{}) miss" "$R" ""
+probe_qeval "QueryReceiptAtPath(H256{}) miss" \
+  'gno.land/r/core/ibc/v1/core.QueryReceiptAtPath(H256{})' \
+  ""
 
 echo "all qeval smoke assertions passed"

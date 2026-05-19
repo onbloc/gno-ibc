@@ -55,6 +55,10 @@ func TestEncodeClientState(t *testing.T) {
 			TrustingPeriod: 1000,
 			MaxClockDrift:  100,
 		}
+		// 0a 03 61 62 63        tag 1 (chain_id), len 3, "abc"
+		// 10 e8 07              tag 2 (trusting_period), varint 1000
+		// 20 64                 tag 4 (max_clock_drift), varint 100
+		// 82 01 20 <32x00>      tag 16 (contract_address, Gno ext), len 32, all-zero
 		want := mustHex("0a0361626310e8072064820120" + bytes32hex(0x00))
 		bytesEq(t, "EncodeClientState/basic", EncodeClientState(cs), want)
 	})
@@ -70,6 +74,12 @@ func TestEncodeClientState(t *testing.T) {
 			LatestHeight:    999,
 			ContractAddress: contractAddress,
 		}
+		// 0a 05 63 68 61 69 6e  tag 1 (chain_id), len 5, "chain"
+		// 10 64                 tag 2 (trusting_period), varint 100
+		// 20 0a                 tag 4 (max_clock_drift), varint 10
+		// 2a 02 10 01           tag 5 (frozen_height submessage), inner tag 2 varint 1
+		// 32 03 10 e7 07        tag 6 (latest_height submessage), inner tag 2 varint 999
+		// 82 01 20 <32xAB>      tag 16 (contract_address, Gno ext), len 32
 		want := mustHex("0a05636861696e1064200a2a021001320310e707820120" + bytes32hex(0xAB))
 		bytesEq(t, "EncodeClientState/with_heights", EncodeClientState(cs), want)
 	})

@@ -66,6 +66,7 @@ func DecodeClientState(buf []byte) (ClientState, error) {
 				return cs, err
 			}
 		case 16:
+			// Gno extension (not in Union proto), used for wasmd store key prefix.
 			b, newPos, err := pbDecodeBytes(buf, pos)
 			pos = newPos
 			if err != nil {
@@ -76,8 +77,8 @@ func DecodeClientState(buf []byte) (ClientState, error) {
 			}
 			copy(cs.ContractAddress[:], b)
 		default:
-			var err error
-			pos, err = pbSkipField(buf, pos, wireType)
+			newPos, err := pbSkipField(buf, pos, wireType)
+			pos = newPos
 			if err != nil {
 				return cs, err
 			}

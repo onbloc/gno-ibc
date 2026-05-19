@@ -110,6 +110,7 @@ help:
 	@echo "  test-cover            — same as test, plus -cover (needs gno PR #4241; override GNO_COMMIT)"
 	@echo "  test-stdlibs          — run the vendored stdlib's own .gno and .go tests"
 	@echo "  test-smoke            — run only the env-prep smoke tests"
+	@echo "  test-gnokey-query-smoke — boot gnodev and assert end-to-end gnokey maketx/qeval invariants against the IBC core realm"
 	@echo "  clean-gno-cache       — remove the cloned gno repo (forces re-clone next install)"
 	@echo "  refresh-abi-vectors   — regenerate ABI ground-truth vectors via the Rust harness"
 	@echo "  refresh-zkgm-scenarios — regenerate handler/dispatch end-to-end ZKGM scenarios via the Rust harness"
@@ -194,6 +195,9 @@ test-stdlibs: verify-gno
 
 test-smoke: verify-gno
 	@gno test ./gno.land/p/core/_smoke/ -v
+
+test-gnokey-query-smoke: verify-gno
+	@./tools/gnokey-query-smoke.sh
 
 clean-gno-cache:
 	@rm -rf $(GNO_CACHE)

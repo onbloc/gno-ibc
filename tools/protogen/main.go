@@ -23,6 +23,7 @@ import (
 	"go/ast"
 	"go/format"
 	"go/parser"
+	"go/printer"
 	"go/token"
 	"os"
 	"path/filepath"
@@ -50,13 +51,18 @@ const (
 )
 
 type Field struct {
-	Name    string
-	GoType  string
-	Num     int
-	Kind    kind
-	EncFn   string
-	DecFn   string
-	ErrName string // human form of Name used in toBytes32 error messages
+	Name   string
+	GoType string
+	Num    int
+	Kind   kind
+	EncFn  string
+	DecFn  string
+}
+
+// ErrName is the lowercase-with-spaces form passed to toBytes32 for
+// stable error messages ("contract address", "next validators hash").
+func (f *Field) ErrName() string {
+	return strings.ReplaceAll(snakeCase(f.Name), "_", " ")
 }
 
 type Message struct {
@@ -184,10 +190,11 @@ func parseStruct(name string, st *ast.StructType) (*Message, error) {
 		}
 		goType := typeString(astField.Type)
 		for _, fname := range astField.Names {
-			f, err := parseTag(fname.Name, goType, tagVal)
+			f, err := parseTag(fname.Name, tagVal)
 			if err != nil {
 				return nil, fmt.Errorf("field %s: %w", fname.Name, err)
 			}
+			f.GoType = goType
 			if other, dup := seenNums[f.Num]; dup {
 				return nil, fmt.Errorf("duplicate field number %d on %s and %s", f.Num, other, fname.Name)
 			}
@@ -201,7 +208,7 @@ func parseStruct(name string, st *ast.StructType) (*Message, error) {
 	return m, nil
 }
 
-func parseTag(fname, goType, tag string) (*Field, error) {
+func parseTag(fname, tag string) (*Field, error) {
 	parts := strings.Split(tag, ",")
 	if len(parts) < 2 {
 		return nil, fmt.Errorf("tag must be `pb:\"<num>,<kind>[,opt=val]...\"`, got %q", tag)
@@ -210,7 +217,7 @@ func parseTag(fname, goType, tag string) (*Field, error) {
 	if err != nil || num <= 0 {
 		return nil, fmt.Errorf("invalid field number %q", parts[0])
 	}
-	f := &Field{Name: fname, GoType: goType, Num: num, ErrName: errName(fname)}
+	f := &Field{Name: fname, Num: num}
 	switch strings.TrimSpace(parts[1]) {
 	case "bytes":
 		f.Kind = kindBytes
@@ -261,25 +268,15 @@ func render(m *Message) ([]byte, error) {
 	return formatted, nil
 }
 
-// typeString renders a field type back to source form. Only types we expect
-// in pb-tagged fields are supported.
+var typeFset = token.NewFileSet()
+
+// typeString renders a field type back to source form.
 func typeString(e ast.Expr) string {
-	switch t := e.(type) {
-	case *ast.Ident:
-		return t.Name
-	case *ast.ArrayType:
-		if t.Len == nil {
-			return "[]" + typeString(t.Elt)
-		}
-		if lit, ok := t.Len.(*ast.BasicLit); ok {
-			return "[" + lit.Value + "]" + typeString(t.Elt)
-		}
-	case *ast.SelectorExpr:
-		return typeString(t.X) + "." + t.Sel.Name
-	case *ast.StarExpr:
-		return "*" + typeString(t.X)
+	var buf bytes.Buffer
+	if err := printer.Fprint(&buf, typeFset, e); err != nil {
+		return fmt.Sprintf("/* unprintable %T */", e)
 	}
-	return fmt.Sprintf("%T", e)
+	return buf.String()
 }
 
 func snakeCase(s string) string {
@@ -294,10 +291,4 @@ func snakeCase(s string) string {
 		b.WriteRune(r)
 	}
 	return b.String()
-}
-
-// errName turns NextValidatorsHash into "next validators hash" — matches the
-// human strings the hand-written code passes to toBytes32().
-func errName(s string) string {
-	return strings.ReplaceAll(snakeCase(s), "_", " ")
 }

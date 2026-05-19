@@ -2,16 +2,14 @@
 
 package {{.Pkg}}
 
-// Encode{{.Name}} protobuf-encodes a {{.Name}}.
 func Encode{{.Name}}(m {{.Name}}) []byte {
-	var buf []byte
+	buf := make([]byte, 0, 128)
 {{- range .Fields}}
 	{{- template "encode" .}}
 {{- end}}
 	return buf
 }
 
-// Decode{{.Name}} protobuf-decodes a {{.Name}} from buf.
 func Decode{{.Name}}(buf []byte) ({{.Name}}, error) {
 	var m {{.Name}}
 	pos := 0
@@ -40,8 +38,6 @@ func Decode{{.Name}}(buf []byte) ({{.Name}}, error) {
 {{- if eq (print .Kind) "bytes" }}
 	{{- if eq .GoType "[]byte" }}
 	buf = pbAppendBytes(buf, {{.Num}}, m.{{.Name}})
-	{{- else if eq .GoType "string" }}
-	buf = pbAppendBytes(buf, {{.Num}}, []byte(m.{{.Name}}))
 	{{- else }}
 	buf = pbAppendBytes(buf, {{.Num}}, []byte(m.{{.Name}}))
 	{{- end }}

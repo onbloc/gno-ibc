@@ -70,6 +70,9 @@ func TestDecodeMisbehaviour(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for nested light header wire-type mismatch")
 		}
+		if err.Error() != "proto: unexpected wire type for field 1" {
+			t.Fatalf("error got %q", err.Error())
+		}
 	})
 }
 

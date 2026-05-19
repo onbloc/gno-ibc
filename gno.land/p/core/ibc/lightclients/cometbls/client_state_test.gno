@@ -129,6 +129,9 @@ func TestDecodeClientState(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for wire-type mismatch on known field")
 		}
+		if err.Error() != "proto: unexpected wire type for field 2" {
+			t.Fatalf("error got %q", err.Error())
+		}
 	})
 
 	t.Run("wrong_wire_type_on_nested_height_field", func(t *testing.T) {
@@ -138,12 +141,18 @@ func TestDecodeClientState(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for nested wire-type mismatch")
 		}
+		if err.Error() != "proto: unexpected wire type for field 2" {
+			t.Fatalf("error got %q", err.Error())
+		}
 	})
 
 	t.Run("invalid_field_number_zero", func(t *testing.T) {
 		_, err := DecodeClientState([]byte{0x00})
 		if err == nil {
 			t.Fatal("expected error for invalid field number zero")
+		}
+		if err.Error() != "proto: invalid field number 0" {
+			t.Fatalf("error got %q", err.Error())
 		}
 	})
 

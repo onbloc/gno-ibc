@@ -2,55 +2,9 @@ package cometbls
 
 import "errors"
 
-// Misbehaviour is protobuf encoded.
-// ABI encoding for Misbehaviour is a TODO in Union; protobuf format is kept.
-func EncodeMisbehaviour(m Misbehaviour) []byte {
-	var buf []byte
-	buf = pbAppendMsg(buf, 1, pbEncodeHeader(m.HeaderA))
-	buf = pbAppendMsg(buf, 2, pbEncodeHeader(m.HeaderB))
-	return buf
-}
-
-// DecodeMisbehaviour protobuf-decodes a Misbehaviour from buf.
-func DecodeMisbehaviour(buf []byte) (Misbehaviour, error) {
-	var m Misbehaviour
-	pos := 0
-	for pos < len(buf) {
-		fieldNum, wireType, newPos, err := pbDecodeTag(buf, pos)
-		pos = newPos
-		if err != nil {
-			return m, err
-		}
-		switch fieldNum {
-		case 1:
-			b, newPos, err := pbDecodeBytes(buf, pos)
-			pos = newPos
-			if err != nil {
-				return m, err
-			}
-			m.HeaderA, err = pbDecodeHeader(b)
-			if err != nil {
-				return m, err
-			}
-		case 2:
-			b, newPos, err := pbDecodeBytes(buf, pos)
-			pos = newPos
-			if err != nil {
-				return m, err
-			}
-			m.HeaderB, err = pbDecodeHeader(b)
-			if err != nil {
-				return m, err
-			}
-		default:
-			pos, err = pbSkipField(buf, pos, wireType)
-			if err != nil {
-				return m, err
-			}
-		}
-	}
-	return m, nil
-}
+// Wire format follows union.ibc.lightclients.cometbls.v1.Misbehaviour.
+// Codecs are generated (misbehaviour_pb_gen.gno); this file holds the
+// hand-written pb* helpers they (and Header/Height/LightHeader) call into.
 
 func pbAppendVarint(buf []byte, v uint64) []byte {
 	for v >= 0x80 {

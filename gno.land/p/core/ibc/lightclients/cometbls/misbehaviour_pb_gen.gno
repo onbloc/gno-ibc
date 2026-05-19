@@ -20,7 +20,7 @@ func DecodeMisbehaviour(buf []byte) (Misbehaviour, error) {
 		}
 		switch fieldNum {
 		case 1:
-			if err := pbExpectWire(wireType, 2); err != nil {
+			if err := pbExpectWire(1, wireType, 2); err != nil {
 				return m, err
 			}
 			inner, newPos, err := pbDecodeBytes(buf, pos)
@@ -34,7 +34,7 @@ func DecodeMisbehaviour(buf []byte) (Misbehaviour, error) {
 			}
 			m.HeaderA = v
 		case 2:
-			if err := pbExpectWire(wireType, 2); err != nil {
+			if err := pbExpectWire(2, wireType, 2); err != nil {
 				return m, err
 			}
 			inner, newPos, err := pbDecodeBytes(buf, pos)

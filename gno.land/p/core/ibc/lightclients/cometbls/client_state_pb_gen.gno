@@ -24,7 +24,7 @@ func DecodeClientState(buf []byte) (ClientState, error) {
 		}
 		switch fieldNum {
 		case 1:
-			if err := pbExpectWire(wireType, 2); err != nil {
+			if err := pbExpectWire(1, wireType, 2); err != nil {
 				return m, err
 			}
 			v, newPos, err := pbDecodeBytes(buf, pos)
@@ -34,7 +34,7 @@ func DecodeClientState(buf []byte) (ClientState, error) {
 			}
 			m.ChainID = string(v)
 		case 2:
-			if err := pbExpectWire(wireType, 0); err != nil {
+			if err := pbExpectWire(2, wireType, 0); err != nil {
 				return m, err
 			}
 			v, newPos, err := pbDecodeVarint(buf, pos)
@@ -44,7 +44,7 @@ func DecodeClientState(buf []byte) (ClientState, error) {
 			}
 			m.TrustingPeriod = v
 		case 4:
-			if err := pbExpectWire(wireType, 0); err != nil {
+			if err := pbExpectWire(4, wireType, 0); err != nil {
 				return m, err
 			}
 			v, newPos, err := pbDecodeVarint(buf, pos)
@@ -54,7 +54,7 @@ func DecodeClientState(buf []byte) (ClientState, error) {
 			}
 			m.MaxClockDrift = v
 		case 5:
-			if err := pbExpectWire(wireType, 2); err != nil {
+			if err := pbExpectWire(5, wireType, 2); err != nil {
 				return m, err
 			}
 			inner, newPos, err := pbDecodeBytes(buf, pos)
@@ -68,7 +68,7 @@ func DecodeClientState(buf []byte) (ClientState, error) {
 			}
 			m.FrozenHeight = v
 		case 6:
-			if err := pbExpectWire(wireType, 2); err != nil {
+			if err := pbExpectWire(6, wireType, 2); err != nil {
 				return m, err
 			}
 			inner, newPos, err := pbDecodeBytes(buf, pos)
@@ -82,7 +82,7 @@ func DecodeClientState(buf []byte) (ClientState, error) {
 			}
 			m.LatestHeight = v
 		case 16:
-			if err := pbExpectWire(wireType, 2); err != nil {
+			if err := pbExpectWire(16, wireType, 2); err != nil {
 				return m, err
 			}
 			v, newPos, err := pbDecodeBytes(buf, pos)

@@ -3,7 +3,7 @@
 # `make install-gno` runs tools/setup-stdlibs.py, which clones the pinned gno
 # repo into a per-user cache, symlinks every package under stdlibs/ into
 # <cache>/gnovm/stdlibs/<module>/, regenerates the native-binding dispatch
-# table (`go generate`), and installs the resulting `gno` and `gnodev` binaries.
+# table (`go generate`), and installs the resulting `gno`, `gnodev`, and `gnokey` binaries.
 #
 # Bump GNO_COMMIT in .gno-version to roll the upstream toolchain.
 
@@ -101,7 +101,7 @@ USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/core gno.
 
 help:
 	@echo "Targets:"
-	@echo "  install-gno           — vendor stdlibs/, regenerate, build+install gno + gnodev"
+	@echo "  install-gno           — vendor stdlibs/, regenerate, build+install gno + gnodev + gnokey"
 	@echo "  link-stdlibs          — refresh stdlib symlinks only (no rebuild)"
 	@echo "  verify-gno            — assert the gno binary is on PATH"
 	@echo "  vendor                — mirror sparse third_party package sub-paths into gno.land/"
@@ -110,6 +110,7 @@ help:
 	@echo "  test-cover            — same as test, plus -cover (needs gno PR #4241; override GNO_COMMIT)"
 	@echo "  test-stdlibs          — run the vendored stdlib's own .gno and .go tests"
 	@echo "  test-smoke            — run only the env-prep smoke tests"
+	@echo "  test-gnokey-query-smoke — boot gnodev and assert end-to-end gnokey maketx/qeval invariants against the IBC core realm"
 	@echo "  clean-gno-cache       — remove the cloned gno repo (forces re-clone next install)"
 	@echo "  refresh-abi-vectors   — regenerate ABI ground-truth vectors via the Rust harness"
 	@echo "  refresh-zkgm-scenarios — regenerate handler/dispatch end-to-end ZKGM scenarios via the Rust harness"
@@ -194,6 +195,9 @@ test-stdlibs: verify-gno
 
 test-smoke: verify-gno
 	@gno test ./gno.land/p/core/_smoke/ -v
+
+test-gnokey-query-smoke: verify-gno vendor
+	@./tools/gnokey-query-smoke.sh
 
 clean-gno-cache:
 	@rm -rf $(GNO_CACHE)

@@ -12,6 +12,7 @@ on:
       - 'stdlibs/**'
       - 'tools/setup-stdlibs.py'
       - 'tools/test_setup_stdlibs.py'
+      - 'tools/gnokey-query-smoke.sh'
       - 'flake.nix'
       - 'flake.lock'
       - '.github/workflows/test.yml'
@@ -58,6 +59,8 @@ jobs:
         with:
           path: |
             ~/go/bin/gno
+            ~/go/bin/gnodev
+            ~/go/bin/gnokey
             ~/.cache/gno-ibc/gno
           key: gno-${{ runner.os }}-${{ hashFiles('.gno-version', 'stdlibs/**/*.go', 'stdlibs/**/gnomod.toml', 'stdlibs/go.mod', 'stdlibs/go.sum', 'tools/setup-stdlibs.py') }}
           restore-keys: |
@@ -93,3 +96,6 @@ jobs:
 
       - name: Run vendored stdlib tests
         run: make test-stdlibs
+
+      - name: Run gnokey query smoke tests
+        run: make test-gnokey-query-smoke

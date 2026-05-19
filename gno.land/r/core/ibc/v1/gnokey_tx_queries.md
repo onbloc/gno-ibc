@@ -254,6 +254,17 @@ gnokey query vm/qeval -remote tcp://127.0.0.1:26657 \
   -data 'gno.land/r/core/ibc/v1/core.QueryChannel(1)'
 ```
 
+`H256` arguments are written as a 32-byte composite literal. Replace the byte
+sequence below with the actual batch hash or derived commitment path:
+
+```sh
+gnokey query vm/qeval -remote tcp://127.0.0.1:26657 \
+  -data 'gno.land/r/core/ibc/v1/core.QueryBatchPackets(H256{0xab,0xcd,0xef,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x1a,0x1b,0x1c,0x1d})'
+
+gnokey query vm/qeval -remote tcp://127.0.0.1:26657 \
+  -data 'gno.land/r/core/ibc/v1/core.QueryCommitmentAtPath(H256{0xab,0xcd,0xef,0x01,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x0a,0x0b,0x0c,0x0d,0x0e,0x0f,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x1a,0x1b,0x1c,0x1d})'
+```
+
 Expected formats:
 
 - `GetClientType` returns the registered client type string.
@@ -262,7 +273,15 @@ Expected formats:
 - `QueryConnection` and `QueryChannel` return ethabi-encoded struct bytes as
   `0x` hex.
 - `QueryBatchPackets` and `QueryBatchReceipts` return stored `H256` values as
-  `0x` hex. They take a `core.H256` batch hash argument.
+  `0x` hex. They take a `core.H256` batch hash argument and apply
+  `BatchPacketsPath` / `BatchReceiptsPath` internally before the map lookup.
+- `QueryCommitmentAtPath` and `QueryReceiptAtPath` are path-keyed siblings of
+  the batch queries. They take an already-derived commitment path (the output
+  of `BatchPacketsPath`, `BatchReceiptsPath`, `PacketCommitmentPath`, or
+  `PacketAcknowledgementPath`) and return the stored `H256` as `0x` hex, or
+  empty when absent. Use these when the relayer already has the derived path
+  in hand (e.g. extracted from a commitment tree) and wants to skip the keccak
+  derivation that the batch queries perform.
 
 ## Decode ABCI Data
 

@@ -24,9 +24,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # pytest has no dependency on the gno toolchain — runs independently of
+  # the gno-test matrix so tooling regressions surface in seconds.
+  tools:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install pytest
+        run: pip install --quiet pytest
+
+      - name: Run tools tests
+        run: python3 -m pytest tools/test_setup_stdlibs.py -v
+
   gno-test:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - test
+          - test-stdlibs
+          - test-gnokey-query-smoke
     steps:
       - uses: actions/checkout@v4
 
@@ -43,16 +68,6 @@ jobs:
           nix print-dev-env .#ci > "$RUNNER_TEMP/ci-env.sh"
           echo "BASH_ENV=$RUNNER_TEMP/ci-env.sh" >> "$GITHUB_ENV"
 
-      # Run before install-gno so tooling regressions fail in seconds, not
-      # after the gno build.
-      - name: Run tools tests
-        run: python3 -m pytest tools/test_setup_stdlibs.py -v
-
-      # Cache the installed gno binary, keyed on inputs that actually affect
-      # the binary: pinned commit + native bindings (.go) + package layout
-      # (gnomod.toml) + build script. Pure .gno edits don't invalidate — the
-      # binary's _GNOROOT points at the cache, and symlinks (refreshed by the
-      # link-stdlibs step below) resolve to the current working tree.
       - name: Cache gno binary
         id: gno-cache
         uses: actions/cache@v4
@@ -91,11 +106,5 @@ jobs:
       - name: Verify gno binary
         run: make verify-gno
 
-      - name: Run tests
-        run: make test
-
-      - name: Run vendored stdlib tests
-        run: make test-stdlibs
-
-      - name: Run gnokey query smoke tests
-        run: make test-gnokey-query-smoke
+      - name: Run make ${{ matrix.suite }}
+        run: make ${{ matrix.suite }}

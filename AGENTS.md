@@ -324,6 +324,18 @@ uassert.Equal(t, expected, actual)
 
 ---
 
+## gnokey qeval Expression Syntax
+
+`gnokey query vm/qeval -data '<expr>'` evaluates a single Gno expression against a realm package. Useful for relayer-style reads against a running node (see `gno.land/r/core/ibc/v1/gnokey_tx_queries.md` for IBC examples). Rules verified live against a `gnodev local` smoke node:
+
+- Top-level form is `gno.land/r/<path>.<Func>(<args>)`. The fully qualified package path is required for the entry function only.
+- Inside `<args>`, types and identifiers resolve in the **called package's scope**. Use unqualified names. Writing `gno.land/r/core/ibc/v1/core.H256{}` inside an arg fails with `name gno not declared` because the parser tries to read `gno` as an identifier.
+- 32-byte array aliases (e.g. `H256 [32]byte`) take a composite literal `H256{0xab,0xcd,...,0x33}` with exactly 32 entries. Bare numeric literals must include the `0x` prefix or be unsigned decimals in `byte` range.
+- Argument expressions can **compose other realm functions**. Example: `QueryCommitmentAtPath(BatchPacketsPath(H256{...}))` chains a path-derivation helper into the lookup, so callers do not need to precompute the derived hash off-chain.
+- qeval returns the result in the form `("<value>" string)` (or the appropriate type tag). Empty-string returns from query functions show as `("" string)`.
+
+---
+
 ## Glossary
 
 - **Realm** — stateful smart contract (`.gno`, under `r/`)

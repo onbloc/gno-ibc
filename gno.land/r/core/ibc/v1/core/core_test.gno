@@ -690,6 +690,33 @@ func TestQueryBatchPacketsUnknownReturnsEmpty(t *testing.T) {
 	}
 }
 
+func TestQueryCommitmentAtPathReturnsBatchValue(t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	p1 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
+	p2 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("b"), TimeoutTimestamp: 100}
+
+	batchHash := BatchSend(cross, MsgBatchSend{Packets: []Packet{p1, p2}})
+
+	if got := QueryCommitmentAtPath(BatchPacketsPath(batchHash)); got != COMMITMENT_MAGIC.String() {
+		t.Errorf("QueryCommitmentAtPath(batch path): got %s want %s", got, COMMITMENT_MAGIC)
+	}
+	for _, packet := range []Packet{p1, p2} {
+		if got := QueryCommitmentAtPath(PacketCommitmentPath(packet)); got != COMMITMENT_MAGIC.String() {
+			t.Errorf("QueryCommitmentAtPath(per-packet path): got %s want %s", got, COMMITMENT_MAGIC)
+		}
+	}
+}
+
+func TestQueryCommitmentAtPathUnknownReturnsEmpty(t *testing.T) {
+	resetState()
+
+	var path H256
+	if got := QueryCommitmentAtPath(path); got != "" {
+		t.Errorf("QueryCommitmentAtPath: got %q want empty", got)
+	}
+}
+
 func TestBatchSendRejectsEmptyPacketList(t *testing.T) {
 	resetState()
 	uassert.AbortsContains(t, "not enough packets", func(cur realm) {
@@ -741,6 +768,32 @@ func TestQueryBatchReceiptsUnknownReturnsEmpty(t *testing.T) {
 	got := QueryBatchReceipts(batchHash)
 	if got != "" {
 		t.Errorf("QueryBatchReceipts: got %q want empty", got)
+	}
+}
+
+func TestQueryReceiptAtPathReturnsBatchValue(t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	p1 := Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: 100}
+	p2 := Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: Bytes("b"), TimeoutTimestamp: 100}
+
+	batchHash := BatchAcks(cross, MsgBatchAcks{
+		Packets: []Packet{p1, p2},
+		Acks:    [][]byte{[]byte("ack-a"), []byte("ack-b")},
+	})
+	wantAck := CommitAcks([][]byte{[]byte("ack-a"), []byte("ack-b")})
+
+	if got := QueryReceiptAtPath(BatchReceiptsPath(batchHash)); got != wantAck.String() {
+		t.Errorf("QueryReceiptAtPath(batch path): got %s want %s", got, wantAck)
+	}
+}
+
+func TestQueryReceiptAtPathUnknownReturnsEmpty(t *testing.T) {
+	resetState()
+
+	var path H256
+	if got := QueryReceiptAtPath(path); got != "" {
+		t.Errorf("QueryReceiptAtPath: got %q want empty", got)
 	}
 }
 

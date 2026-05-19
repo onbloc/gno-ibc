@@ -826,6 +826,25 @@ func QueryBatchReceipts(batchHash H256) string {
 	return h256String(value)
 }
 
+// QueryCommitmentAtPath reads st.batchPackets by an already-derived commitment
+// path (e.g. BatchPacketsPath or per-packet PacketCommitmentPath output).
+func QueryCommitmentAtPath(path H256) string {
+	value, ok := st.batchPackets[path]
+	if !ok {
+		return ""
+	}
+	return h256String(value)
+}
+
+// QueryReceiptAtPath reads st.batchReceipts by an already-derived commitment path.
+func QueryReceiptAtPath(path H256) string {
+	value, ok := st.batchReceipts[path]
+	if !ok {
+		return ""
+	}
+	return h256String(value)
+}
+
 func CommitNonMembershipProof(_ realm, msg MsgCommitNonMembershipProof) {
 	st.getClient(msg.ClientId).VerifyNonMembership(msg.ClientId, msg.ProofHeight, msg.Proof, msg.Path)
 	commit(NonMembershipProofPath(msg.ClientId, msg.ProofHeight, msg.Path), COMMITMENT_MAGIC)

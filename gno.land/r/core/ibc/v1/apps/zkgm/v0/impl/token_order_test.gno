@@ -37,6 +37,36 @@ func TestTokenOrderVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm,
 	uassert.Equal(t, "13", balance.ToString())
 }
 
+func TestTokenOrderAckMarketMakerEscrowWithVoucherRewardsMarketMaker(cur realm, t *testing.T) {
+	resetTokenOrderTest()
+
+	sender := testAddress("v1-mm-voucher-sender")
+	marketMaker := testAddress("v1-mm-voucher-maker")
+	baseToken := "ibc/v1-mm-voucher"
+	channelId := core.ChannelId(8)
+	amount := u256.NewUint(13)
+	uassert.NoError(t, mintVoucher(cross, baseToken, baseToken, [32]byte{}, sender, u256.NewUint(50)))
+
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(baseToken),
+		BaseAmount:  amount,
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: amount,
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	uassert.NoError(t, (&ZkgmV1{}).verifyTokenOrderV2(channelId, sender, nil, u256.Zero(), order))
+	uassert.Equal(t, int64(37), VoucherBalanceOf(baseToken, address(sender)))
+
+	err := (&ZkgmV1{}).acknowledgeTokenOrderV2(channelId, u256.Zero(), order, marketMakerAck(marketMaker))
+
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(13), VoucherBalanceOf(baseToken, address(marketMaker)))
+
+	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(channelId, u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.True(t, balance == nil || balance.IsZero())
+}
+
 func TestTokenOrderVerifyNativeRequiresSentCoin(cur realm, t *testing.T) {
 	order := z.TokenOrderV2{
 		Sender:     []byte(testAddress("v1-native-sender")),
@@ -129,6 +159,17 @@ func assertProtocolAck(t *testing.T, ackBytes []byte) {
 	orderAck, err := z.DecodeTokenOrderAck(ack.InnerAck)
 	uassert.NoError(t, err)
 	uassert.True(t, orderAck.FillType.Eq(fillTypeProtocol))
+}
+
+func marketMakerAck(marketMaker string) z.Ack {
+	innerAck, err := z.EncodeTokenOrderAck(z.TokenOrderAck{
+		FillType:    fillTypeMarketMaker,
+		MarketMaker: []byte(marketMaker),
+	})
+	if err != nil {
+		panic(err)
+	}
+	return z.Ack{Tag: tagAckSuccess, InnerAck: innerAck}
 }
 
 func mustEncodeTokenMetadata(meta z.TokenMetadata) []byte {

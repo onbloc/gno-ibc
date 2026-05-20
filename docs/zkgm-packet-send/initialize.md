@@ -1,14 +1,15 @@
 # TokenOrderV2 INITIALIZE Send
 
-Use `INITIALIZE` only the first time a native token crosses a channel. It carries the `TokenMetadata` that creates the wrapped ERC20 on Union.
+Use `INITIALIZE` only for the first native-token send over a channel. It carries
+the `TokenMetadata` that creates the wrapped ERC20 on Union.
 
-The 2026-05-20 ugnot `INITIALIZE` at block 63 followed this flow.
+The 2026-05-20 ugnot `INITIALIZE` at block 63 followed this procedure.
 
 ## Required Inputs
 
-Before encoding or broadcasting anything, collect these inputs from Union.
-
-Any missing field should be treated as a blocker unless a placeholder send was explicitly approved.
+Before encoding or broadcasting anything, collect these inputs from Union. Treat
+any missing field as a blocker unless a placeholder send was explicitly
+approved.
 
 | Input | Source | Notes |
 |---|---|---|
@@ -24,11 +25,18 @@ Any missing field should be treated as a blocker unless a placeholder send was e
 
 ## Encode the Operand
 
-`gnokey maketx call` cannot pass nested Gno structs directly. Encode the `TokenOrderV2` operand ahead of time and pass it into `SendRaw(operandHex string)`.
+`gnokey maketx call` cannot pass nested Gno structs directly. Encode the
+`TokenOrderV2` operand ahead of time and pass it into
+`SendRaw(operandHex string)`.
 
 Use the ZKGM wire ABI flavor: `abi_encode_params`, not plain Solidity `abi.encode`.
 
-Plain `abi.encode` treats the struct as a single dynamic function argument and prepends an extra 32-byte head offset. Union's ZKGM wire format and this repository's encoder use the `_params` flavor, where the struct fields are encoded as the top-level tuple. In this repo, prefer `z.EncodeTokenOrderV2` and `z.EncodeTokenMetadata` from the module import path `gno.land/p/gnoswap/ibc/zkgm` (source tree: `gno.land/p/core/ibc/zkgm`).
+Plain `abi.encode` treats the struct as one dynamic function argument and
+prepends an extra 32-byte head offset. Union's ZKGM wire format uses the
+`_params` flavor, where the struct fields are encoded as the top-level tuple.
+In this repo, prefer `z.EncodeTokenOrderV2` and `z.EncodeTokenMetadata` from
+the module import path `gno.land/p/gnoswap/ibc/zkgm` (source tree:
+`gno.land/p/core/ibc/zkgm`).
 
 Field mapping for native-token `INITIALIZE`:
 
@@ -66,13 +74,14 @@ The correct selector is:
 0x8420ce99
 ```
 
-Always verify the selector locally:
+Verify the selector locally:
 
 ```bash
 cast sig 'initialize(address,address,string,string,uint8)'
 ```
 
-The typo `initializer(...)` resolves to `0xd0f68ee2` and silently fails on the recv side.
+The typo `initializer(...)` resolves to `0xd0f68ee2` and silently fails on the
+recv side.
 
 When writing an external encoder:
 
@@ -85,7 +94,8 @@ When writing an external encoder:
 
 The recv side validates `quote_token` against the result of `predictWrappedTokenV2(...)`.
 
-Any mismatch causes the packet to fail during recv with `universal_error_ack`, even if the packet itself was successfully relayed.
+Any mismatch causes the packet to fail during recv with `universal_error_ack`,
+even if the packet itself was successfully relayed.
 
 Example:
 
@@ -103,9 +113,11 @@ Example result:
 0x4271Eb8F0243F1E1F303912841fdcE55c06CF223
 ```
 
-Put the 20 raw returned address bytes into `TokenOrderV2.QuoteToken`. Do not encode the printable `0x...` string as bytes.
+Put the 20 raw returned address bytes into `TokenOrderV2.QuoteToken`. Do not
+encode the printable `0x...` string as bytes.
 
-Any change to implementation, initializer, or destination channel changes the predicted address.
+Any change to implementation, initializer, or destination channel changes the
+predicted address.
 
 ## Broadcast and Verify
 

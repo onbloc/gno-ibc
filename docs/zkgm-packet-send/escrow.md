@@ -1,12 +1,15 @@
 # TokenOrderV2 ESCROW Send
 
-Use `ESCROW` for later sends of a native token after the corresponding `INITIALIZE` has created the wrapped token on Union.
+Use `ESCROW` for later sends of a native token after the corresponding
+`INITIALIZE` has created the wrapped token on Union.
 
-The 2026-05-20 ugnot `ESCROW` at block 93 followed this variant. See the worked example at the end of this page for the recorded send.
+The 2026-05-20 ugnot `ESCROW` at block 93 followed this procedure. See the
+worked example at the end of this page for the recorded send.
 
 ## Required Inputs
 
-`ESCROW` does not need `TokenMetadata`, the `ZkgmERC20` implementation address, initializer calldata, authority, token name, token symbol, or decimals.
+`ESCROW` does not need `TokenMetadata`, the `ZkgmERC20` implementation address,
+initializer calldata, authority, token name, token symbol, or decimals.
 
 Collect:
 
@@ -29,7 +32,9 @@ Collect:
 | Implementation, Initializer, authority, name, symbol, decimals | required | not used |
 | `predictWrappedTokenV2` call | run it to obtain `QuoteToken` | skip it, reuse the known address |
 
-Send-side validation is identical for both kinds. `verifyTokenOrderV2` runs the same rate-limit, `requireSentCoin`, and `increaseChannelBalanceV2` path, so `-send` must still match `BaseAmount` exactly.
+Send-side validation is identical for both kinds. `verifyTokenOrderV2` runs the
+same rate-limit, `requireSentCoin`, and `increaseChannelBalanceV2` path, so
+`-send` must still match `BaseAmount` exactly.
 
 ## Operand
 
@@ -46,7 +51,8 @@ The `ESCROW` operand uses the same `TokenOrderV2Schema` as `INITIALIZE`:
 | `Kind` | `TOKEN_ORDER_KIND_ESCROW` | `1` |
 | `Metadata` | Empty bytes | dynamic bytes field of length `0` |
 
-Use the ZKGM wire ABI flavor: `abi_encode_params`, not plain Solidity `abi.encode`.
+Use the ZKGM wire ABI flavor: `abi_encode_params`, not plain Solidity
+`abi.encode`.
 
 A ugnot `ESCROW` for `1000000` ugnot with `QuoteToken` `0x4271Eb8F0243F1E1F303912841fdcE55c06CF223` and a placeholder receiver `0x<RECEIVER_EOA>` encodes to:
 
@@ -54,49 +60,32 @@ A ugnot `ESCROW` for `1000000` ugnot with `QuoteToken` `0x4271Eb8F0243F1E1F30391
 0000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000016000000000000000000000000000000000000000000000000000000000000001a000000000000000000000000000000000000000000000000000000000000f424000000000000000000000000000000000000000000000000000000000000001e000000000000000000000000000000000000000000000000000000000000f424000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000220000000000000000000000000000000000000000000000000000000000000002867316a67386d74757475396b6868667763346e786d756863706674663070616a64686676737166350000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000014eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee000000000000000000000000000000000000000000000000000000000000000000000000000000000000000575676e6f7400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000144271eb8f0243f1e1f303912841fdce55c06cf2230000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 ```
 
-The 20-byte receiver region is the repeated `ee` placeholder. Replace it with Union's real receiver address before broadcasting.
+The 20-byte receiver region is the repeated `ee` placeholder. Replace it with
+Union's real receiver address before broadcasting.
 
 ## Recv-side Precondition
 
-An `ESCROW` is valid only if the wrapped token already exists on Union. The recv path looks up the stored metadata image for `QuoteToken` and checks:
+An `ESCROW` is valid only if the wrapped token already exists on Union. The
+recv path looks up the stored metadata image for `QuoteToken` and checks:
 
 ```text
 QuoteToken == predictWrappedTokenV2(path, destChannel, baseToken, storedImage)
 ```
 
-If the preceding `INITIALIZE` has not been processed on Union, the recv path has no stored image and falls back to the V1 prediction, which does not match the V2 `QuoteToken` we sent. The `ESCROW` then fails recv with `universal_error_ack`.
+If the preceding `INITIALIZE` has not been processed on Union, the recv path has
+no stored image and falls back to the V1 prediction, which does not match the V2
+`QuoteToken` we sent. The `ESCROW` then fails recv with
+`universal_error_ack`.
 
 Confirm the `INITIALIZE` was acknowledged before broadcasting an `ESCROW` against it.
 
-## Broadcast
+## Broadcast and Verify
 
-Regenerate `SALT` and `TIMEOUT` for every send. A reused salt produces a duplicate packet that the chain rejects.
+Use [Common SendRaw Procedure](common.md) after `OPERAND` is ready. Regenerate
+`SALT` and `TIMEOUT` for every send. A reused salt produces a duplicate packet
+that the chain rejects.
 
-```bash
-SALT="$(openssl rand -hex 32)"
-TIMEOUT="$(python3 -c 'import time; print(int((time.time()+3600)*1_000_000_000))')"
-OPERAND="<ESCROW operand hex from the section above>"
-
-printf '\n' | gnokey maketx call \
-  -insecure-password-stdin \
-  -pkgpath "gno.land/r/gnoswap/ibc/v1/apps/zkgm" \
-  -func "SendRaw" \
-  -args "1" \
-  -args "$TIMEOUT" \
-  -args "$SALT" \
-  -args "2" \
-  -args "3" \
-  -args "$OPERAND" \
-  -gas-fee "5000000ugnot" \
-  -gas-wanted "200000000" \
-  -send "1000000ugnot" \
-  -broadcast \
-  -remote "http://23.20.153.250:26657" \
-  -chainid "dev" \
-  test1
-```
-
-The `-send` amount must equal `BaseAmount`. See [Common SendRaw Procedure](common.md) for argument mapping, verification, handoff, and operational hazards.
+The `-send` amount must equal `BaseAmount`.
 
 ## Worked Example
 

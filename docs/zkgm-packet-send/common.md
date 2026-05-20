@@ -1,6 +1,7 @@
 # Common SendRaw Procedure
 
-This page covers the shared broadcast, verification, and handoff steps for ZKGM `TokenOrderV2` sends.
+This page covers the shared broadcast, verification, and handoff steps for ZKGM
+`TokenOrderV2` sends.
 
 Use the per-kind pages first to build the correct `OPERAND`:
 
@@ -9,15 +10,17 @@ Use the per-kind pages first to build the correct `OPERAND`:
 
 ## Broadcast
 
-`SendRaw` only captures `-send` coins for direct EOA calls.
-
-`maketx run` scripts fail this check because the previous realm becomes the script package instead of the EOA. In that case `OriginSend` returns empty and verification panics.
+`SendRaw` captures `-send` coins only for direct EOA calls.
 
 Always use:
 
 ```bash
 maketx call -func SendRaw
 ```
+
+Do not use `maketx run` scripts for native-token sends. In a script call, the
+previous realm is the script package instead of the EOA, so `OriginSend` returns
+empty and verification panics.
 
 Template:
 
@@ -65,7 +68,8 @@ version = 2
 opcode  = 3
 ```
 
-`SendRaw(channelId, ...)` uses the Gno source channel id. Prediction helpers on Union use the Union-side counterparty channel id paired with that Gno channel.
+`SendRaw(channelId, ...)` uses the Gno source channel id. Prediction helpers on
+Union use the Union-side counterparty channel id paired with that Gno channel.
 
 ## Gas
 
@@ -76,13 +80,14 @@ Observed sends on 2026-05-20:
 | `INITIALIZE` | 63 | `51552539` |
 | `ESCROW` | 93 | `42649471` |
 
-The default 50M gnokey gas limit is insufficient for `INITIALIZE`. The `-gas-wanted 200000000` template value covers both observed kinds with headroom.
+The default 50M gnokey gas limit is insufficient for `INITIALIZE`.
+`-gas-wanted 200000000` covers both observed kinds with headroom.
 
 ## Verify Broadcast
 
 A successful broadcast emits a `PacketSend` event.
 
-Capture:
+Record:
 
 - packet hash
 - packet data
@@ -105,7 +110,7 @@ Store permanent logs under:
 local_docs/zkgm/sends/
 ```
 
-Each record should include:
+Each send record should include:
 
 - resolved inputs
 - operand hex
@@ -120,12 +125,14 @@ After a successful send, provide Union with:
 - tx hash (hex and base64)
 - block height
 - packet hash
+- packet data
 - source channel id
 - destination channel id
 - timeout timestamp
 - any placeholder values used during testing
 
-If multiple diagnostic packets were broadcast, explicitly identify which tx hash should be relayed.
+If multiple diagnostic packets were broadcast, explicitly identify which tx hash
+should be relayed.
 
 ## Operational Hazards
 
@@ -145,9 +152,11 @@ zkgm/coins: sent coin mismatch
 
 ### `quote_token` Must Be Correct
 
-`INITIALIZE` packets require the exact predicted `quote_token`. `ESCROW` packets require the wrapped token address created by the earlier `INITIALIZE`.
+`INITIALIZE` packets require the exact predicted `quote_token`. `ESCROW`
+packets require the wrapped token address created by the earlier `INITIALIZE`.
 
-Empty values or placeholder addresses can still broadcast successfully but fail during recv validation.
+Empty values or placeholder addresses can still broadcast successfully but fail
+during recv validation.
 
 ### Diagnostic Sends Pollute the Relayer
 
@@ -188,15 +197,17 @@ Timeout convention:
 (now + 1 hour) * 1_000_000_000
 ```
 
-### Placeholder Sends Require Explicit Approval
+### Placeholder Sends Need Explicit Approval
 
-Placeholder packets should only be broadcast after explicit approval from the requesting user.
+Placeholder packets should only be broadcast after explicit approval from the
+requester.
 
 All placeholder values must be disclosed during the Union handoff.
 
 ## Appendix: Re-verification Commands
 
-These commands are copy-paste diagnostics adapted from the 2026-05-20 send logs. Replace the variables before running block- or packet-specific queries.
+These commands are copy-paste diagnostics adapted from the 2026-05-20 send
+logs. Replace the variables before running block- or packet-specific queries.
 
 ```bash
 RPC_URL="http://23.20.153.250:26657"
@@ -245,7 +256,8 @@ curl -sS -X POST -H "Content-Type: application/json" \
   "$INDEXER_URL" | python3 -m json.tool
 ```
 
-Fetch full transaction details for the block, including `PacketSend` attrs and `packet_data`:
+Fetch full transaction details for the block, including `PacketSend` attrs and
+`packet_data`:
 
 ```bash
 curl -sS -X POST -H "Content-Type: application/json" \

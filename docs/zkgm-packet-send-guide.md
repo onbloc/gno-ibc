@@ -1,8 +1,10 @@
 # ZKGM Packet Send Guide
 
-This guide collects the operational procedures for broadcasting ZKGM packets from the Gno side when requested by the Union team.
+This guide collects the operational procedure for broadcasting ZKGM `TokenOrderV2`
+packets from the Gno side when requested by the Union team.
 
-Use this page as the index. The per-kind pages keep the exact input and operand rules separate, while the common page covers `SendRaw`, verification, and shared hazards.
+Start here to choose the correct send kind, then use the per-kind page to build
+the operand and the common page to broadcast and verify the packet.
 
 ## Documents
 
@@ -25,13 +27,18 @@ Use this page as the index. The per-kind pages keep the exact input and operand 
 | Gno channel id | `1` |
 | Union channel id | `25` |
 
-If the chain has been reset since this document was written, verify the current channel state using a recent `ChannelOpenAck` event before broadcasting.
+If the chain has been reset since this document was written, verify the current
+channel state from a recent `ChannelOpenAck` event before broadcasting.
 
 ## Choosing the Send Kind
 
-Use `INITIALIZE` only for the first native-token send that creates the wrapped token on Union. It carries `TokenMetadata`, requires Union's `ZkgmERC20` implementation address, and must use the predicted `quote_token`.
+Use `INITIALIZE` for the first native-token send over a channel. This creates
+the wrapped token on Union. It carries `TokenMetadata`, requires Union's
+`ZkgmERC20` implementation address, and must use the predicted `quote_token`.
 
-Use `ESCROW` for later sends of the same native token over the same channel after the `INITIALIZE` has been processed on Union. It reuses the known wrapped token address and carries empty metadata.
+Use `ESCROW` for later sends of the same native token over the same channel
+after the `INITIALIZE` has been processed on Union. It reuses the known wrapped
+token address and carries empty metadata.
 
 Both kinds use:
 
@@ -40,4 +47,4 @@ version = 2
 opcode  = 3
 ```
 
-See [Common SendRaw Procedure](zkgm-packet-send/common.md) before broadcasting either kind.
+See [Common SendRaw Procedure](zkgm-packet-send/common.md) before broadcasting.

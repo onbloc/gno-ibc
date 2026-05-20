@@ -30,6 +30,12 @@ LOG_FILE="${LOG_FILE:-$CACHE_DIR/gnoland.log}"
 # parsed), so the env var must be set even though we also pass -gnoroot-dir.
 export GNOROOT="$GNO_ROOT"
 
+# ── port check ────────────────────────────────────────────────────────────────
+if lsof -iTCP:26657 -sTCP:LISTEN -t &>/dev/null; then
+    echo "error: port 26657 is already in use — validator may already be running"
+    exit 1
+fi
+
 # ── flags ─────────────────────────────────────────────────────────────────────
 RESET=false
 for arg in "$@"; do

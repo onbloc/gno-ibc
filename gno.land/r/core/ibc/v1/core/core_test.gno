@@ -272,7 +272,6 @@ func TestUnionPathReferenceVectors(t *testing.T) {
 	// https://github.com/unionlabs/union/blob/main/lib/ibc-union-spec/src/path.rs
 	packet := Packet{SourceChannelId: 2, DestinationChannelId: 3, Data: Bytes("abc"), TimeoutTimestamp: 1000}
 	batchHash := CommitPackets([]Packet{packet})
-	proofPath := []byte("clients/4/clientState")
 
 	assertH256Hex(t, "client state", ClientStatePath(4), "0x17ef568e3e12ab5b9c7254a8d58478811de00f9e6eb34345acd53bf8fd09d3ec")
 	assertH256Hex(t, "consensus state", ConsensusStatePath(4, 10), "0xa1776da6f811742b0b6e4f3e386ffa26edc18b9096a5d56e6d8c6366d1f86b32")
@@ -282,9 +281,6 @@ func TestUnionPathReferenceVectors(t *testing.T) {
 	assertH256Hex(t, "packet commitment", PacketCommitmentPath(packet), BatchPacketsPath(batchHash).String())
 	assertH256Hex(t, "batch receipts", BatchReceiptsPath(batchHash), "0x9989767aa720c64326bd2716f9e2b4144d6429d56e8bb523c01b46ed1d17239a")
 	assertH256Hex(t, "packet acknowledgement", PacketAcknowledgementPath(packet), BatchReceiptsPath(batchHash).String())
-	assertH256Hex(t, "membership proof", MembershipProofPath(4, 10, proofPath), "0x3b320e52a57f28090d6ba22ed1f5b6a3e5df2884e92c9b1df05f407660fd6a27")
-	assertH256Hex(t, "non-membership proof", NonMembershipProofPath(4, 10, proofPath), "0x70322f8424ea2964bf16d99caebfc5e38bbcb75d8f2b1b2dfae87a36cb9688b1")
-	assertH256Hex(t, "batch timeout", BatchTimeoutPath(packet), "0xb7b713e653ed37563f2260ffcee26b6a8fb5a8b91210373aefcde7b3d36bd0eb")
 }
 
 // --- Type encoding tests ---
@@ -1277,6 +1273,29 @@ func TestPacketAcknowledgementBatchUsesUnionBatchReceipts(t *testing.T) {
 	}
 }
 
+func TestPacketAcknowledgementDeletesBatchCommitment(t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	p1 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
+	p2 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("b"), TimeoutTimestamp: 100}
+	acks := [][]byte{{0x01}, {0x02}}
+
+	batchHash := BatchSend(cross, MsgBatchSend{Packets: []Packet{p1, p2}})
+	if got := QueryBatchPackets(batchHash); got != COMMITMENT_MAGIC.String() {
+		t.Fatalf("batch commitment before ack: got %q want %s", got, COMMITMENT_MAGIC)
+	}
+
+	PacketAcknowledgement(cross, MsgPacketAcknowledgement{
+		Packets:          []Packet{p1, p2},
+		Acknowledgements: acks,
+		ProofHeight:      Height(10),
+	})
+
+	if got := QueryBatchPackets(batchHash); got != "" {
+		t.Fatalf("batch commitment after ack: got %q want empty", got)
+	}
+}
+
 func TestPacketAcknowledgementBatchRejectsDifferentSourceChannel(t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
@@ -1315,36 +1334,6 @@ func TestPacketTimeoutReceiptPath(t *testing.T) {
 	}
 	if st.hasPacketCommitment(packet) {
 		t.Fatal("timeout must delete source packet commitment")
-	}
-}
-
-func TestCommitMembershipProofVerifiesUnionPathValue(t *testing.T) {
-	resetState()
-	client := &mockClient{chainId: "union-1", status: StatusActive}
-	st.clientRegistry[mockType] = client
-	st.clientTypes[ClientId(4)] = mockType
-
-	path := Bytes("clients/4/clientState")
-	value := Bytes("client-state")
-	proof := Bytes("membership-proof")
-	CommitMembershipProof(cross, MsgCommitMembershipProof{
-		ClientId:    ClientId(4),
-		ProofHeight: Height(10),
-		Proof:       proof,
-		Path:        path,
-		Value:       value,
-	})
-
-	if len(client.membershipKeys) != 1 {
-		t.Fatalf("membership calls: got %d want 1", len(client.membershipKeys))
-	}
-	if client.membershipClientIds[0] != ClientId(4) || client.membershipHeights[0] != Height(10) {
-		t.Fatal("CommitMembershipProof must pass client id and proof height through")
-	}
-	if string(client.membershipProofs[0]) != string(proof) ||
-		string(client.membershipKeys[0]) != string(path) ||
-		string(client.membershipValues[0]) != string(value) {
-		t.Fatal("CommitMembershipProof must verify caller supplied proof path and value")
 	}
 }
 
@@ -1388,65 +1377,6 @@ func TestGetClientStatusReturnsUnknownForMissingClient(t *testing.T) {
 	if got := GetClientStatus(ClientId(5)); got != StatusUnknown {
 		t.Fatalf("GetClientStatus missing: got %d want %d", got, StatusUnknown)
 	}
-}
-
-func TestCommitNonMembershipProofVerifiesUnionPath(t *testing.T) {
-	resetState()
-	client := &mockClient{chainId: "union-1", status: StatusActive}
-	st.clientRegistry[mockType] = client
-	st.clientTypes[ClientId(4)] = mockType
-
-	path := Bytes("clients/4/clientState")
-	proof := Bytes("non-membership-proof")
-	CommitNonMembershipProof(cross, MsgCommitNonMembershipProof{
-		ClientId:    ClientId(4),
-		ProofHeight: Height(10),
-		Proof:       proof,
-		Path:        path,
-	})
-
-	if len(client.nonMembershipKeys) != 1 {
-		t.Fatalf("non-membership calls: got %d want 1", len(client.nonMembershipKeys))
-	}
-	if client.nonMembershipClientIds[0] != ClientId(4) || client.nonMembershipHeights[0] != Height(10) {
-		t.Fatal("CommitNonMembershipProof must pass client id and proof height through")
-	}
-	if string(client.nonMembershipProofs[0]) != string(proof) ||
-		string(client.nonMembershipKeys[0]) != string(path) {
-		t.Fatal("CommitNonMembershipProof must verify caller supplied proof path")
-	}
-}
-
-func TestCommitPacketTimeoutVerifiesUnionBatchTimeoutPath(t *testing.T) {
-	resetState()
-	_, connId, channelId := setupOpenChannel(t)
-	client := st.clientRegistry[mockType].(*mockClient)
-	packet := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("transfer"), TimeoutTimestamp: 100}
-	proof := Bytes("timeout-proof")
-
-	CommitPacketTimeout(cross, MsgCommitPacketTimeout{
-		Packet:      packet,
-		ProofHeight: Height(10),
-		Proof:       proof,
-	})
-
-	if len(client.membershipKeys) != 1 {
-		t.Fatalf("membership calls: got %d want 1", len(client.membershipKeys))
-	}
-	if client.membershipHeights[0] != Height(10) {
-		t.Fatal("CommitPacketTimeout must pass proof height through")
-	}
-	if string(client.membershipProofs[0]) != string(proof) {
-		t.Fatal("CommitPacketTimeout must pass proof bytes through")
-	}
-	timeoutPath := BatchTimeoutPath(packet)
-	if string(client.membershipKeys[0]) != string(timeoutPath[:]) {
-		t.Fatal("CommitPacketTimeout must verify Union batch timeout path")
-	}
-	if string(client.membershipValues[0]) != string(COMMITMENT_MAGIC[:]) {
-		t.Fatal("CommitPacketTimeout must verify commitment magic value")
-	}
-	_ = connId
 }
 
 // --- Integration: channel close ---

@@ -39,13 +39,13 @@ def pkg_name_from_files(files: list[dict]) -> str:
     return ""
 
 
-def make_addpkg_tx(pkgpath: str, dirpath: str) -> dict | None:
+def make_addpkg_tx(pkgpath: str, dirpath: str) -> dict:
     files = read_gno_files(dirpath)
     if not files:
-        return None
+        raise RuntimeError(f"no .gno files found in {dirpath} for {pkgpath}")
     name = pkg_name_from_files(files)
     if not name:
-        return None
+        raise RuntimeError(f"no package declaration found in {dirpath} for {pkgpath}")
     return {
         "tx": {
             "msg": [
@@ -133,9 +133,6 @@ def main() -> None:
                 skipped.append((pkgpath, dirpath))
                 continue
             tx = make_addpkg_tx(pkgpath, dirpath)
-            if tx is None:
-                skipped.append((pkgpath, dirpath))
-                continue
             out.write(json.dumps(tx, ensure_ascii=False) + "\n")
             written += 1
 

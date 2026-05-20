@@ -505,6 +505,34 @@ func PacketSend(_ realm, sourceChannelId ChannelId, timeoutHeight Height, timeou
 	return packet
 }
 
+// acceptRecvPacket validates packet against the recv-batch invariants and
+// records its receipt. It returns the destination channel and whether the packet
+// should be skipped because its receipt already exists.
+func acceptRecvPacket(packet Packet, batchChannelId ChannelId, now uint64) (Channel, bool) {
+	channel := st.getChannel(packet.DestinationChannelId)
+	if channel.State != ChannelStateOpen {
+		panic(ErrInvalidChannelState)
+	}
+	if packet.DestinationChannelId != batchChannelId {
+		panic(ErrBatchSameChannelOnly)
+	}
+
+	// Receipt presence is the replay-protection signal: skip silently so
+	// honest relayers can re-submit batches without aborting the whole tx.
+	if st.hasPacketReceipt(packet) {
+		return channel, true
+	}
+
+	// Reject a packet already past its source-side timeout so it cannot be
+	// executed on the destination after a successful source-side timeout.
+	if packet.TimeoutTimestamp != 0 && now >= uint64(packet.TimeoutTimestamp) {
+		panic(ErrPacketTimeoutExpired)
+	}
+
+	st.setPacketReceipt(packet)
+	return channel, false
+}
+
 func PacketRecv(_ realm, msg MsgPacketRecv) {
 	relayer := runtime.OriginCaller()
 	if len(msg.Packets) == 0 {
@@ -520,26 +548,10 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 	now := nowNanos()
 
 	for i, packet := range msg.Packets {
-		channel := st.getChannel(packet.DestinationChannelId)
-		if channel.State != ChannelStateOpen {
-			panic(ErrInvalidChannelState)
-		}
-		if packet.DestinationChannelId != first.DestinationChannelId {
-			panic(ErrBatchSameChannelOnly)
-		}
-
-		// Receipt presence is the replay-protection signal: skip silently so
-		// honest relayers can re-submit batches without aborting the whole tx.
-		if st.hasPacketReceipt(packet) {
+		channel, skip := acceptRecvPacket(packet, first.DestinationChannelId, now)
+		if skip {
 			continue
 		}
-
-		// Prevent double-execution against a successful source-side timeout.
-		if packet.TimeoutTimestamp != 0 && now >= uint64(packet.TimeoutTimestamp) {
-			panic(ErrPacketTimeoutExpired)
-		}
-
-		st.setPacketReceipt(packet)
 
 		var relayerMsg []byte
 		if i < len(msg.RelayerMsgs) {
@@ -572,23 +584,10 @@ func IntentPacketRecv(_ realm, msg MsgIntentPacketRecv) {
 	now := nowNanos()
 
 	for i, packet := range msg.Packets {
-		channel := st.getChannel(packet.DestinationChannelId)
-		if channel.State != ChannelStateOpen {
-			panic(ErrInvalidChannelState)
-		}
-		if packet.DestinationChannelId != first.DestinationChannelId {
-			panic(ErrBatchSameChannelOnly)
-		}
-		if st.hasPacketReceipt(packet) {
+		channel, skip := acceptRecvPacket(packet, first.DestinationChannelId, now)
+		if skip {
 			continue
 		}
-
-		// A market maker filling an expired packet can't claim it on the source.
-		if packet.TimeoutTimestamp != 0 && now >= uint64(packet.TimeoutTimestamp) {
-			panic(ErrPacketTimeoutExpired)
-		}
-
-		st.setPacketReceipt(packet)
 
 		var marketMakerMsg []byte
 		if i < len(msg.MarketMakerMessages) {

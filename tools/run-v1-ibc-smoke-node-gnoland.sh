@@ -52,6 +52,7 @@ if [ ! -f "$GENESIS_TXS" ]; then
     mkdir -p "$CACHE_DIR"
     python3 "$GNO_IBC_ROOT/tools/gen-ibc-genesis-txs.py" \
         --ibc-root "$GNO_IBC_ROOT" \
+        --gno-root "$GNO_ROOT" \
         --output "$GENESIS_TXS"
 fi
 

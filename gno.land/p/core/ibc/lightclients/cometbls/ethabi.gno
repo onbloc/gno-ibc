@@ -45,6 +45,13 @@ var (
 	}}
 )
 
+func validateTimeNanos(nanos uint64) (int32, error) {
+	if nanos >= 1_000_000_000 {
+		return 0, errors.New("cometbls: TimeNanos out of range")
+	}
+	return int32(nanos), nil
+}
+
 func EncodeClientState(cs ClientState) []byte {
 	var chainID [32]byte
 	n := len(cs.ChainID)
@@ -138,7 +145,10 @@ func DecodeHeader(buf []byte) (Header, error) {
 	var h Header
 	h.SignedHeader.Height = int64(vals[0].(uint64))
 	h.SignedHeader.TimeSeconds = int64(vals[1].(uint64))
-	h.SignedHeader.TimeNanos = int32(vals[2].(uint64))
+	h.SignedHeader.TimeNanos, err = validateTimeNanos(vals[2].(uint64))
+	if err != nil {
+		return Header{}, err
+	}
 	vh := vals[3].([32]byte)
 	h.SignedHeader.ValidatorsHash = vh[:]
 	nvh := vals[4].([32]byte)
@@ -387,7 +397,10 @@ func pbDecodeTimestamp(buf []byte) (seconds int64, nanos int32, err error) {
 			if decErr != nil {
 				return 0, 0, decErr
 			}
-			nanos = int32(v)
+			nanos, decErr = validateTimeNanos(v)
+			if decErr != nil {
+				return 0, 0, decErr
+			}
 		default:
 			pos, decErr = pbSkipField(buf, pos, wireType)
 			if decErr != nil {

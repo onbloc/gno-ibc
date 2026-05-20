@@ -351,6 +351,30 @@ func TestDecodeHeader(t *testing.T) {
 			t.Fatal("expected error for short buffer")
 		}
 	})
+
+	t.Run("timenanos_out_of_range", func(t *testing.T) {
+		zkpPadded := make([]byte, 32)
+		buf := mustHex(
+			word32(1) +
+				word32(1000) +
+				word32(1_000_000_000) +
+				bytes32hex(0x01) +
+				bytes32hex(0x02) +
+				bytes32hex(0x03) +
+				word32(0) +
+				word32(256) +
+				word32(uint64(len(zkpPadded))) +
+				hex.EncodeToString(zkpPadded),
+		)
+		_, err := DecodeHeader(buf)
+		if err == nil {
+			t.Fatal("expected error for TimeNanos >= 1e9")
+		}
+		want := "cometbls: TimeNanos out of range"
+		if err.Error() != want {
+			t.Fatalf("error: got %q want %q", err.Error(), want)
+		}
+	})
 }
 
 // --- DecodeMisbehaviour ---
@@ -370,6 +394,34 @@ func TestDecodeMisbehaviour(t *testing.T) {
 		}
 		if got.HeaderB.SignedHeader.Height != 2 {
 			t.Fatalf("HeaderB.Height: got %d want 2", got.HeaderB.SignedHeader.Height)
+		}
+	})
+
+	t.Run("timenanos_out_of_range", func(t *testing.T) {
+		var tsBuf []byte
+		tsBuf = pbAppendInt64(tsBuf, 1, 1000)
+		tsBuf = pbAppendUint64(tsBuf, 2, 1_000_000_000)
+
+		var lhBuf []byte
+		lhBuf = pbAppendInt64(lhBuf, 1, 1)
+		lhBuf = pbAppendMsg(lhBuf, 2, tsBuf)
+		lhBuf = pbAppendBytes(lhBuf, 3, bytes.Repeat([]byte{0x01}, 32))
+		lhBuf = pbAppendBytes(lhBuf, 4, bytes.Repeat([]byte{0x02}, 32))
+		lhBuf = pbAppendBytes(lhBuf, 5, bytes.Repeat([]byte{0x03}, 32))
+
+		var hBuf []byte
+		hBuf = pbAppendMsg(hBuf, 1, lhBuf)
+
+		var buf []byte
+		buf = pbAppendMsg(buf, 1, hBuf)
+
+		_, err := DecodeMisbehaviour(buf)
+		want := "cometbls: TimeNanos out of range"
+		if err == nil {
+			t.Fatal("expected error for TimeNanos >= 1e9")
+		}
+		if err.Error() != want {
+			t.Fatalf("error: got %q want %q", err.Error(), want)
 		}
 	})
 

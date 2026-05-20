@@ -1273,6 +1273,29 @@ func TestPacketAcknowledgementBatchUsesUnionBatchReceipts(t *testing.T) {
 	}
 }
 
+func TestPacketAcknowledgementDeletesBatchCommitment(t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	p1 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
+	p2 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("b"), TimeoutTimestamp: 100}
+	acks := [][]byte{{0x01}, {0x02}}
+
+	batchHash := BatchSend(cross, MsgBatchSend{Packets: []Packet{p1, p2}})
+	if got := QueryBatchPackets(batchHash); got != COMMITMENT_MAGIC.String() {
+		t.Fatalf("batch commitment before ack: got %q want %s", got, COMMITMENT_MAGIC)
+	}
+
+	PacketAcknowledgement(cross, MsgPacketAcknowledgement{
+		Packets:          []Packet{p1, p2},
+		Acknowledgements: acks,
+		ProofHeight:      Height(10),
+	})
+
+	if got := QueryBatchPackets(batchHash); got != "" {
+		t.Fatalf("batch commitment after ack: got %q want empty", got)
+	}
+}
+
 func TestPacketAcknowledgementBatchRejectsDifferentSourceChannel(t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)

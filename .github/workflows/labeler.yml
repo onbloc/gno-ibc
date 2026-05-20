@@ -2,11 +2,12 @@ name: labeler
 
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, edited]
 
 permissions:
   contents: read
   pull-requests: write
+  issues: read
 
 concurrency:
   group: labeler-pr-${{ github.event.pull_request.number }}
@@ -16,7 +17,24 @@ jobs:
   label:
     runs-on: ubuntu-latest
     steps:
+      # Apply directory-based labels using changes files and .github/labeler.yml
       - uses: actions/labeler@v5
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           sync-labels: true
+
+      # Checkout out only the base branch's .github/scripts directory.
+      # DO NOT check out the PR head, because pull_request_target runs with
+      # elevated token permissions and PR-authored code must not be executed.
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: .github/scripts
+
+      # Copy A-/P-/T- labels from issues that GitHub links to this PR via
+      # closing keywords such as "Closes #XXX".
+      - name: Copy labels from linked issues
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const copyLabels = require('./.github/scripts/copy-linked-issue-labels.js');
+            await copyLabels({ github, context, core });

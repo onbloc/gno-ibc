@@ -248,13 +248,7 @@ func (v *ZkgmV1) acknowledgeTokenOrderV2(sourceChannelId core.ChannelId, path *u
 	case z.TOKEN_ORDER_KIND_UNESCROW:
 		return refundIBCVoucher(order.BaseToken, marketMaker, order.BaseAmount)
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
-		if _, err := amountInt64(order.BaseAmount); err != nil {
-			return err
-		}
-		if err := decreaseChannelBalanceV2(cross, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
-			return err
-		}
-		return sendNative(string(order.BaseToken), marketMaker, order.BaseAmount)
+		return settleEscrowedV2(sourceChannelId, path, order, marketMaker)
 	default:
 		return errors.New("zkgm/v1: unsupported token order kind for ack")
 	}
@@ -265,25 +259,33 @@ func (v *ZkgmV1) refundV2(sourceChannelId core.ChannelId, path *u256.Uint, order
 	case z.TOKEN_ORDER_KIND_UNESCROW:
 		return refundIBCVoucher(order.BaseToken, string(order.Sender), order.BaseAmount)
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
-		if _, err := amountInt64(order.BaseAmount); err != nil {
-			return err
-		}
-		if err := decreaseChannelBalanceV2(cross, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
-			return err
-		}
-		if strings.HasPrefix(string(order.BaseToken), ibcDenomPrefix) {
-			return refundIBCVoucher(order.BaseToken, string(order.Sender), order.BaseAmount)
-		}
-		return sendNative(string(order.BaseToken), string(order.Sender), order.BaseAmount)
+		return settleEscrowedV2(sourceChannelId, path, order, string(order.Sender))
 	default:
 		return errors.New("zkgm/v1: unsupported token order kind for refund")
 	}
 }
 
-// refundIBCVoucher re-mints an IBC voucher to `recipient`, recovering the stored
-// V2 metadata image so wrapped denom identity is preserved across ack/refund
-// flows. Used by the UNESCROW market-maker fill ack, UNESCROW refund, and the
-// ibc-denom branch of INITIALIZE/ESCROW refund.
+// settleEscrowedV2 releases a previously escrowed INITIALIZE/ESCROW BaseAmount
+// to recipient. It re-mints the voucher for `ibc/` denoms and releases native
+// tokens from the proxy escrow otherwise. It is shared by refundV2 and the
+// market-maker fill branch of acknowledgeTokenOrderV2.
+func settleEscrowedV2(sourceChannelId core.ChannelId, path *u256.Uint, order z.TokenOrderV2, recipient string) error {
+	if _, err := amountInt64(order.BaseAmount); err != nil {
+		return err
+	}
+	if err := decreaseChannelBalanceV2(cross, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
+		return err
+	}
+	baseDenom := string(order.BaseToken)
+	if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
+		return refundIBCVoucher(order.BaseToken, recipient, order.BaseAmount)
+	}
+	return sendNative(baseDenom, recipient, order.BaseAmount)
+}
+
+// refundIBCVoucher re-mints an IBC voucher to recipient, recovering the stored
+// V2 metadata image so the wrapped denom identity is preserved across ack/refund
+// flows.
 func refundIBCVoucher(baseToken []byte, recipient string, amount *u256.Uint) error {
 	baseDenom := string(baseToken)
 	image, _ := zkgm.GetMetadataImageOf(baseDenom)

@@ -79,8 +79,31 @@ maketx_run() {
   echo "--- end maketx run ---"
 }
 
+# maketx_call <log> <gnokey maketx call flags...>. Unlike maketx run, a direct
+# call exposes -send / OriginSend to the target realm, which zkgm.SendRaw needs.
+maketx_call() {
+  local log="$1"
+  shift
+  echo "--- maketx call ---"
+  if ! echo "" | gnokey maketx call -insecure-password-stdin \
+    -home "$KEYBASE" \
+    -gas-fee 1000000ugnot -gas-wanted 90000000 \
+    -broadcast -chainid dev -remote "$RPC_ENDPOINT" \
+    "$@" test1 2>&1 | tee "$log"; then
+    echo "FAIL: maketx call failed"
+    exit 1
+  fi
+  echo "--- end maketx call ---"
+}
+
 extract_data() {
   grep -E '^data:' | sed -E 's/^data: \("(.*)" [^)]+\)$/\1/'
+}
+
+# native_balance <address> prints the bank balance string, e.g. "100ugnot".
+native_balance() {
+  gnokey query "bank/balances/$1" -remote "$RPC_ENDPOINT" 2>&1 \
+    | sed -nE 's/^data: "(.*)"$/\1/p'
 }
 
 probe_qeval() {
@@ -423,3 +446,155 @@ probe_qeval "QueryReceiptAtPath(H256{}) miss" \
   ""
 
 echo "all qeval smoke assertions passed"
+
+echo ">> Phase 9: native TokenOrder ack-failure refund (#58 regression)"
+# Regression guard for issue #58: a native TokenOrder failure-ack refund routes
+# core.PacketAcknowledgement -> impl.Ack -> refundV2 -> sendNative ->
+# zkgm.ReleaseNative. ReleaseNative's requireImplCaller must accept the core
+# realm as an authorized caller, otherwise the escrow refund panics.
+PROXY_ADDR=$(gnokey query vm/qeval -remote "$RPC_ENDPOINT" \
+  -data "gno.land/r/gnoswap/ibc/v1/apps/zkgm.ProxyAddress()" 2>&1 | extract_data)
+if [[ -z "$PROXY_ADDR" ]]; then
+  echo "FAIL: could not resolve zkgm proxy address"
+  exit 1
+fi
+REFUND_RECIPIENT="g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
+echo ">> proxy_address=$PROXY_ADDR refund_recipient=$REFUND_RECIPIENT"
+
+# Step 1: open a fresh channel pair (isolated from the Phase 7 pair) and encode
+# the native ugnot TokenOrder. This is the single definition of the order.
+cat >"$WORKDIR/native_refund_args.gno" <<EOF
+package main
+
+import (
+	"encoding/hex"
+
+	z "gno.land/p/gnoswap/ibc/zkgm"
+	u256 "gno.land/p/gnoswap/uint256"
+	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
+)
+
+func main() {
+	e2e.RegisterMockLightClient(cross)
+	pair := e2e.OpenE2EChannelPair(cross)
+
+	order := z.TokenOrderV2{
+		Sender:      []byte("$REFUND_RECIPIENT"),
+		Receiver:    []byte("counterparty-receiver"),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte("counterparty-projected-quote"),
+		QuoteAmount: u256.NewUint(100),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+	}
+	operand, err := z.EncodeTokenOrderV2(order)
+	if err != nil {
+		panic(err)
+	}
+
+	println("source_channel", pair.Source.String())
+	println("destination_channel", pair.Destination.String())
+	println("operand_hex", hex.EncodeToString(operand))
+}
+EOF
+maketx_run "$WORKDIR/native_refund_args.gno" "$WORKDIR/native_refund_args.log"
+REFUND_SOURCE=$(grep -m1 '^source_channel ' "$WORKDIR/native_refund_args.log" | awk '{print $2}')
+REFUND_DEST=$(grep -m1 '^destination_channel ' "$WORKDIR/native_refund_args.log" | awk '{print $2}')
+REFUND_OPERAND=$(grep -m1 '^operand_hex ' "$WORKDIR/native_refund_args.log" | awk '{print $2}')
+if [[ -z "$REFUND_SOURCE" || -z "$REFUND_DEST" || -z "$REFUND_OPERAND" ]]; then
+  echo "FAIL: could not capture native refund channel pair / operand"
+  cat "$WORKDIR/native_refund_args.log"
+  exit 1
+fi
+echo ">> refund channel pair: source=$REFUND_SOURCE destination=$REFUND_DEST"
+
+# Step 2: real native send. This escrows 100ugnot on the proxy realm and bumps
+# the channel balance. `maketx run` cannot expose OriginSend to zkgm.Send, so
+# this must be a direct `maketx call` with -send.
+# SendRaw args: channelId, timeoutTimestamp (far-future), salt (32 zero bytes),
+# version 2 (INSTR_VERSION_2), opcode 3 (OP_TOKEN_ORDER), operandHex.
+maketx_call "$WORKDIR/native_refund_send.log" \
+  -pkgpath "gno.land/r/gnoswap/ibc/v1/apps/zkgm" \
+  -func SendRaw \
+  -args "$REFUND_SOURCE" \
+  -args "2000000000000000000" \
+  -args "0000000000000000000000000000000000000000000000000000000000000000" \
+  -args "2" \
+  -args "3" \
+  -args "$REFUND_OPERAND" \
+  -send "100ugnot"
+
+PROXY_BAL_BEFORE=$(native_balance "$PROXY_ADDR")
+if [[ "$PROXY_BAL_BEFORE" != "100ugnot" ]]; then
+  echo "FAIL: expected 100ugnot escrowed on proxy after SendRaw, got '$PROXY_BAL_BEFORE'"
+  exit 1
+fi
+echo "PASS: SendRaw escrowed 100ugnot on the proxy realm"
+
+# Step 3: commit the packet and deliver a failure ack through the core callback.
+# The packet is rebuilt from the operand captured in step 1, so the TokenOrder
+# is defined once (in native_refund_args.gno) and cannot drift between the send
+# and the ack.
+cat >"$WORKDIR/native_refund_ack.gno" <<EOF
+package main
+
+import (
+	"encoding/hex"
+
+	z "gno.land/p/gnoswap/ibc/zkgm"
+	u256 "gno.land/p/gnoswap/uint256"
+	core "gno.land/r/core/ibc/v1/core"
+	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
+)
+
+func main() {
+	operand, err := hex.DecodeString("$REFUND_OPERAND")
+	if err != nil {
+		panic(err)
+	}
+	instruction := z.Instruction{
+		Version: z.INSTR_VERSION_2,
+		Opcode:  z.OP_TOKEN_ORDER,
+		Operand: operand,
+	}
+	packet := core.Packet{
+		SourceChannelId:      core.ChannelId($REFUND_SOURCE),
+		DestinationChannelId: core.ChannelId($REFUND_DEST),
+		Data:                 e2e.MustPacketData(cross, instruction),
+		TimeoutTimestamp:     core.Timestamp(1 << 62),
+	}
+	e2e.BatchSend(cross, packet)
+	println("commitment_before_ack", core.HasPacketCommitment(cross, packet))
+
+	failureAck := e2e.MustAck(cross, u256.Zero(), []byte("counterparty failed"))
+	core.PacketAcknowledgement(cross, core.MsgPacketAcknowledgement{
+		Packets:          []core.Packet{packet},
+		Acknowledgements: [][]byte{failureAck},
+		ProofHeight:      core.Height(1),
+	})
+
+	println("commitment_after_ack", core.HasPacketCommitment(cross, packet))
+	println("RESULT native ack-failure refund succeeded")
+}
+EOF
+maketx_run "$WORKDIR/native_refund_ack.gno" "$WORKDIR/native_refund_ack.log"
+grep -q 'commitment_before_ack true' "$WORKDIR/native_refund_ack.log" \
+  || { echo "FAIL: packet commitment missing before ack"; cat "$WORKDIR/native_refund_ack.log"; exit 1; }
+grep -q 'commitment_after_ack false' "$WORKDIR/native_refund_ack.log" \
+  || { echo "FAIL: packet commitment not cleared after ack"; cat "$WORKDIR/native_refund_ack.log"; exit 1; }
+grep -q 'RESULT native ack-failure refund succeeded' "$WORKDIR/native_refund_ack.log" \
+  || { echo "FAIL: native ack-failure refund did not complete"; cat "$WORKDIR/native_refund_ack.log"; exit 1; }
+
+PROXY_BAL_AFTER=$(native_balance "$PROXY_ADDR")
+RECIPIENT_BAL_AFTER=$(native_balance "$REFUND_RECIPIENT")
+if [[ -n "$PROXY_BAL_AFTER" ]]; then
+  echo "FAIL: expected proxy escrow drained after refund, got '$PROXY_BAL_AFTER'"
+  exit 1
+fi
+if [[ "$RECIPIENT_BAL_AFTER" != "100ugnot" ]]; then
+  echo "FAIL: expected 100ugnot refunded to sender, got '$RECIPIENT_BAL_AFTER'"
+  exit 1
+fi
+echo "PASS: native ack-failure refund released the 100ugnot escrow to the sender (#58)"
+
+echo "all smoke assertions passed"

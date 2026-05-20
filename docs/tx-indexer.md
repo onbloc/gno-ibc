@@ -1,6 +1,6 @@
 # TX Indexer Guide
 
-This guide covers how to use the [tx-indexer](https://github.com/gnolang/tx-indexer) deployed in the gno-ibc test environment for querying IBC transactions and events.
+This guide covers how to use the [tx-indexer](https://github.com/gnolang/tx-indexer) deployed in the `gno-ibc` test environment for querying IBC transactions and events.
 
 ## Connection Info
 
@@ -13,10 +13,10 @@ This guide covers how to use the [tx-indexer](https://github.com/gnolang/tx-inde
 ## Management Commands
 
 ```bash
-# Reset indexer after chain re-initialization
+# Reset indexer after chain reinitializing the chain
 bash ~/reset-indexer.sh
 
-# Check logs
+# Check indexer logs
 sudo docker logs tx-indexer
 ```
 
@@ -137,7 +137,7 @@ query getTransactionsByEvent {
 
 ## IBC Event Query Patterns
 
-Common IBC event types to filter on:
+The following table lists common IBC event types used for filtering:
 
 | IBC Action | Event Type | pkg_path |
 |------------|------------|----------|
@@ -155,6 +155,64 @@ attrs: {
   value: { eq: "08-cometbls-0" }
 }
 ```
+
+### Filtering on multiple event attributes (AND)
+
+A single `attrs:` filter only matches one attribute instance within an event. As a result, using `attrs: { _and: [...] }` does not combine conditions across different attributes. Instead, all conditions are evaluated against the same attribute entry, which means only one `key:` condition can succeed.
+
+To require an event that includes both `packet_hash = X` and `source_channel_id = Y`, move the `_and` condition to the `GnoEvent` level and define each attribute conditions as an independent `attrs:` predicate.
+
+```graphql
+query getPacketSendByMultipleAttrs {
+  getTransactions(
+    where: {
+      success: { eq: true }
+      response: {
+        events: {
+          GnoEvent: {
+            type: { eq: "PacketSend" }
+            pkg_path: { eq: "gno.land/r/core/ibc/v1/core" }
+            _and: [
+              {
+                attrs: {
+                  key: { eq: "packet_hash" }
+                  value: { eq: "0x<hash>" }
+                }
+              }
+              {
+                attrs: {
+                  key: { eq: "source_channel_id" }
+                  value: { eq: "1" }
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+    order: { heightAndIndex: DESC }
+  ) {
+    block_height
+    index
+    hash
+    success
+    response {
+      events {
+        ... on GnoEvent {
+          type
+          pkg_path
+          attrs {
+            key
+            value
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Each clause inside `_and` must be a complete `attrs:` predicate. Additional conditions such as `destination_channel_id` or `timeout_timestamp` can be added by appending more clauses.
 
 ## Tips
 

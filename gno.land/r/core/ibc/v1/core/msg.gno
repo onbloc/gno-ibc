@@ -104,27 +104,6 @@ type MsgBatchAcks struct {
 	Acks    [][]byte
 }
 
-type MsgCommitMembershipProof struct {
-	ClientId    ClientId
-	ProofHeight Height
-	Proof       []byte
-	Path        []byte
-	Value       []byte
-}
-
-type MsgCommitNonMembershipProof struct {
-	ClientId    ClientId
-	ProofHeight Height
-	Proof       []byte
-	Path        []byte
-}
-
-type MsgCommitPacketTimeout struct {
-	Packet      Packet
-	ProofHeight Height
-	Proof       []byte
-}
-
 type MsgWriteAcknowledgement struct {
 	Packet          Packet
 	Acknowledgement []byte

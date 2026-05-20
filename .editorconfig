@@ -1,0 +1,21 @@
+# EditorConfig — https://editorconfig.org
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Go / Gno sources use tabs (gofmt / gno fmt convention)
+[*.{go,gno}]
+indent_style = tab
+
+# Makefiles require real tabs
+[Makefile]
+indent_style = tab
+
+# GraphQL queries and CI scripts use 2-space indentation
+[*.{graphql,gql,js,json,yml,yaml}]
+indent_style = space
+indent_size = 2

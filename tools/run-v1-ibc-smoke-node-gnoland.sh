@@ -42,6 +42,8 @@ done
 if $RESET; then
     echo ">> wiping node state: $DATA_DIR"
     rm -rf "$DATA_DIR"
+    echo ">> wiping cached genesis txs: $GENESIS_TXS"
+    rm -rf "$GENESIS_TXS"
 fi
 
 # ── 1. Generate genesis txs if not cached ─────────────────────────────────────

@@ -10,6 +10,9 @@ The first committed shape is intentionally thin: it pins the wire contracts,
 fixture format, and script responsibilities before the runners grow into full
 node/proof automation.
 
+For a hands-on execution guide, see
+[`HANDS_ON.md`](./HANDS_ON.md).
+
 ## Directions
 
 - `run-gno-to-eth.sh` proves that a Gno ZKGM send emits packet metadata and a

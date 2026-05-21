@@ -33,7 +33,7 @@ func (v *ZkgmV1) PreChannelCloseInit(channelId core.ChannelId) {}
 func (v *ZkgmV1) PostChannelCloseConfirm(channelId core.ChannelId) {}
 
 func (v *ZkgmV1) Recv(packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
-	zp, err := z.DecodeZkgmPacket(packet.Data)
+	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
 		return errResult(err)
 	}
@@ -45,7 +45,7 @@ func (v *ZkgmV1) Recv(packet core.Packet, relayer address, relayerMsg []byte) co
 }
 
 func (v *ZkgmV1) Ack(packet core.Packet, ack []byte, relayer address) {
-	zp, err := z.DecodeZkgmPacket(packet.Data)
+	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
 		panic(err.Error())
 	}
@@ -59,7 +59,7 @@ func (v *ZkgmV1) Ack(packet core.Packet, ack []byte, relayer address) {
 }
 
 func (v *ZkgmV1) Timeout(packet core.Packet, relayer address) {
-	zp, err := z.DecodeZkgmPacket(packet.Data)
+	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
 		panic(err.Error())
 	}
@@ -78,7 +78,7 @@ func (v *ZkgmV1) Timeout(packet core.Packet, relayer address) {
 // outcome where appropriate. The result is dropped because the new
 // OnIntentRecvPacket callback has no return.
 func (v *ZkgmV1) IntentRecv(packet core.Packet, marketMaker address, marketMakerMsg []byte) {
-	zp, err := z.DecodeZkgmPacket(packet.Data)
+	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
 		panic(err.Error())
 	}

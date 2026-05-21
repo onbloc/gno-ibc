@@ -1,0 +1,68 @@
+{
+  "logs": [
+    {
+      "action": "mint",
+      "address": "0x4271eb8f0243f1e1f303912841fdce55c06cf223",
+      "amount_decimal": "1.000000",
+      "amount_raw": "1000000",
+      "block_number": "0xa605e4",
+      "data": "0x00000000000000000000000000000000000000000000000000000000000f4240",
+      "from": "0x0000000000000000000000000000000000000000",
+      "to": "0x40cdff51ae7487e0b4a4d6e5f86eb15fb7c1d9f4",
+      "topics": [
+        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+        "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "0x00000000000000000000000040cdff51ae7487e0b4a4d6e5f86eb15fb7c1d9f4"
+      ],
+      "transaction_hash": "0xa43e972bc1f20ddb548805660235ef436b8a7228354ee5558c4b24656d9ff1b6"
+    },
+    {
+      "action": "mint",
+      "address": "0x4271eb8f0243f1e1f303912841fdce55c06cf223",
+      "amount_decimal": "1.000000",
+      "amount_raw": "1000000",
+      "block_number": "0xa607c9",
+      "data": "0x00000000000000000000000000000000000000000000000000000000000f4240",
+      "from": "0x0000000000000000000000000000000000000000",
+      "to": "0x2c96e52fce14baa13868ca8182f8a7903e4e76e0",
+      "topics": [
+        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+        "0x0000000000000000000000000000000000000000000000000000000000000000",
+        "0x0000000000000000000000002c96e52fce14baa13868ca8182f8a7903e4e76e0"
+      ],
+      "transaction_hash": "0x586296ab07193c481245eec14e9c6488847cc43c8483d7decb33e0c1a61082be"
+    },
+    {
+      "action": "burn",
+      "address": "0x4271eb8f0243f1e1f303912841fdce55c06cf223",
+      "amount_decimal": "0.000001",
+      "amount_raw": "1",
+      "block_number": "0xa607f4",
+      "data": "0x0000000000000000000000000000000000000000000000000000000000000001",
+      "from": "0x2c96e52fce14baa13868ca8182f8a7903e4e76e0",
+      "to": "0x0000000000000000000000000000000000000000",
+      "topics": [
+        "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+        "0x0000000000000000000000002c96e52fce14baa13868ca8182f8a7903e4e76e0",
+        "0x0000000000000000000000000000000000000000000000000000000000000000"
+      ],
+      "transaction_hash": "0xfbd180c2706b966b669b5c001e4f71b3f413914718f5f2c31f11de69086973d1"
+    }
+  ],
+  "network": "sepolia",
+  "source": {
+    "rpc_env_var": "SEPOLIA_RPC_URL",
+    "rpc_methods": [
+      "eth_getLogs",
+      "eth_getTransactionReceipt",
+      "eth_getTransactionByHash"
+    ]
+  },
+  "token": {
+    "address": "0x4271eb8f0243f1e1f303912841fdce55c06cf223",
+    "decimals": 6,
+    "proxy_implementation": "0xAf739F34ddF951cBC24fdbBa4f76213688E13627",
+    "symbol": "ugnot"
+  },
+  "transfer_event_signature": "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
+}

@@ -87,7 +87,7 @@ vendor-flags = $(if $(filter undefined,$(origin FLAGS_$(subst /,_,$(1)))),$(STD_
 # rsync only auto-creates the leaf dest dir, so mkdir -p covers intermediates.
 vendor-cmd = mkdir -p $(dir gno.land/$(2)) && rsync $(RSYNC_BASE) $(call vendor-flags,$(2)) $(1)/$(2)/ gno.land/$(2)/
 
-.PHONY: help install-gno link-stdlibs verify-gno vendor fmt test test-cover test-stdlibs test-smoke test-gnokey-query-smoke test-gnokey-qeval-smoke test-zkgm-native-refund-smoke test-gno-to-eth-smoke test-eth-proof-fixture-smoke test-eth-to-gno-smoke test-eth-to-gno-success-smoke test-eth-gno-smoke clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios derive-sender-salt-vectors
+.PHONY: help install-gno link-stdlibs verify-gno vendor fmt test test-cover test-stdlibs test-smoke test-gnokey-query-smoke test-gnokey-qeval-smoke test-zkgm-native-refund-smoke test-gno-to-eth-smoke test-eth-proof-fixture-smoke test-eth-to-gno-smoke test-eth-to-gno-success-smoke test-eth-gno-smoke test-sepolia-ugnot-fixtures clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios derive-sender-salt-vectors
 
 COVERAGE_DIR := coverage
 
@@ -117,6 +117,7 @@ help:
 	@echo "  test-eth-proof-fixture-smoke — generate a local anvil ETH storage proof fixture"
 	@echo "  test-eth-to-gno-smoke — run the local ETH storage proof to Gno PacketRecv smoke"
 	@echo "  test-eth-to-gno-success-smoke — run the local ETH proof to Gno ZKGM success ack smoke"
+	@echo "  test-sepolia-ugnot-fixtures — validate offline Sepolia Union ugnot fixtures"
 	@echo "  clean-gno-cache       — remove the cloned gno repo (forces re-clone next install)"
 	@echo "  refresh-abi-vectors   — regenerate ABI ground-truth vectors via the Rust harness"
 	@echo "  refresh-zkgm-scenarios — regenerate handler/dispatch end-to-end ZKGM scenarios via the Rust harness"
@@ -224,6 +225,9 @@ test-eth-to-gno-success-smoke: verify-gno vendor
 	@./tools/eth-gno-smoke/run-eth-to-gno-success.sh
 
 test-eth-gno-smoke: test-gno-to-eth-smoke test-eth-to-gno-smoke test-eth-to-gno-success-smoke
+
+test-sepolia-ugnot-fixtures:
+	@go run ./tools/eth-gno-smoke/check-sepolia-ugnot-fixtures.go
 
 clean-gno-cache:
 	@rm -rf $(GNO_CACHE)

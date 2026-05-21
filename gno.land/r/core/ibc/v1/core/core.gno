@@ -82,10 +82,11 @@ func commit(key H256, value H256) {
 	params.SetBytes(hex.EncodeToString(key[:]), value[:])
 }
 
-// h256Bytes copies an H256 value into a fresh []byte. Required when passing
-// COMMITMENT_MAGIC (a package-level array) to a foreign-realm light client:
-// ics23's bytes.Equal would otherwise panic with "illegal conversion of
-// readonly or externally stored value" on the underlying slice.
+// h256Bytes returns a fresh byte slice containing h.
+//
+// Use it when passing package-level H256 values such as COMMITMENT_MAGIC to
+// foreign-realm light clients. Passing a slice backed by readonly or externally
+// stored memory can cause ics23 bytes comparisons to panic.
 func h256Bytes(h H256) []byte {
 	out := make([]byte, len(h))
 	copy(out, h[:])
@@ -102,9 +103,11 @@ func hexString(b []byte) string {
 	return "0x" + hex.EncodeToString(b)
 }
 
-// hexAttr encodes a binary chain.Emit attribute as "0x" + lowercase-hex.
-// Use this at every emit site whose value is []byte. Direct string([]byte)
-// casts are lossy for non-UTF-8 input and are forbidden here (see issue #45).
+// hexAttr encodes b as a lowercase 0x-prefixed hexadecimal string for use in
+// chain.Emit attributes.
+//
+// Use hexAttr for binary attribute values. Converting arbitrary []byte values
+// directly to string is lossy for non-UTF-8 input.
 func hexAttr(b []byte) string {
 	return hexString(b)
 }

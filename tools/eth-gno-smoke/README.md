@@ -1,7 +1,8 @@
 # ETH/Gno Packet Smoke Harness
 
 This directory is the local, repo-owned smoke harness for proving packet
-compatibility in both directions without depending on Union Voyager internals.
+compatibility in both directions without depending on Union Voyager internals,
+external EVM RPCs, Union deployments, or Union devnets.
 It starts from the plan in
 `local_docs/plans/eth-gno-independent-smoke-plan.md`.
 
@@ -13,9 +14,9 @@ node/proof automation.
 
 - `run-gno-to-eth.sh` proves that a Gno ZKGM send emits packet metadata and a
   batch packet commitment that an ETH-side relayer can consume.
-- `run-eth-to-gno.sh` proves that a packet batch commitment stored on ETH can
-  be proven with `eth_getProof`, encoded as Union `StorageProof`, and submitted
-  to Gno `core.PacketRecv`.
+- `run-eth-to-gno.sh` proves that a packet batch commitment stored in a local
+  `anvil` commitment-map contract can be proven with `eth_getProof`, encoded as
+  Union `StorageProof`, and submitted to Gno `core.PacketRecv`.
 
 ## Shared Packet Fields
 
@@ -86,7 +87,7 @@ The ETH receive runner is responsible for deriving these values:
 |---|---|
 | Packet fields | Local fixture or ETH-side send transaction input. |
 | `batch_hash` | `core.CommitPackets([]core.Packet{packet})`, mirrored by the ETH contract key convention. |
-| ETH storage slot | Union ZKGM commitment mapping slot, or a minimal test contract using the same mapping key convention. |
+| ETH storage slot | Local minimal commitment-map contract using the same mapping key convention. |
 | `storage_root` | ETH block header storage root for the proof block. |
 | `proof_height` | Gno state-lens consensus height that stores `storage_root`. |
 | `proof_bytes` | Union `ethereum_light_client_types::StorageProof` bytes accepted by `storage.DecodeProof`. |
@@ -118,6 +119,7 @@ Expected fixture:
   },
   "eth": {
     "contract": "0x...",
+    "commitment_map_slot": "0x...",
     "block_number": "0x...",
     "storage_root": "0x...",
     "storage_slot": "0x..."

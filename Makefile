@@ -87,7 +87,7 @@ vendor-flags = $(if $(filter undefined,$(origin FLAGS_$(subst /,_,$(1)))),$(STD_
 # rsync only auto-creates the leaf dest dir, so mkdir -p covers intermediates.
 vendor-cmd = mkdir -p $(dir gno.land/$(2)) && rsync $(RSYNC_BASE) $(call vendor-flags,$(2)) $(1)/$(2)/ gno.land/$(2)/
 
-.PHONY: help install-gno link-stdlibs verify-gno vendor fmt test test-cover test-stdlibs test-smoke test-gnokey-query-smoke test-gnokey-qeval-smoke test-zkgm-native-refund-smoke clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios derive-sender-salt-vectors
+.PHONY: help install-gno link-stdlibs verify-gno vendor fmt test test-cover test-stdlibs test-smoke test-gnokey-query-smoke test-gnokey-qeval-smoke test-zkgm-native-refund-smoke test-gno-to-eth-smoke test-eth-proof-fixture-smoke clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios derive-sender-salt-vectors
 
 COVERAGE_DIR := coverage
 
@@ -113,6 +113,8 @@ help:
 	@echo "  test-gnokey-query-smoke — run the full gnokey smoke suite"
 	@echo "  test-gnokey-qeval-smoke — run only the gnokey maketx/qeval core smoke suite"
 	@echo "  test-zkgm-native-refund-smoke — run only the ZKGM native refund gnokey smoke suite"
+	@echo "  test-gno-to-eth-smoke — run the local Gno packet extraction smoke"
+	@echo "  test-eth-proof-fixture-smoke — generate a local anvil ETH storage proof fixture"
 	@echo "  clean-gno-cache       — remove the cloned gno repo (forces re-clone next install)"
 	@echo "  refresh-abi-vectors   — regenerate ABI ground-truth vectors via the Rust harness"
 	@echo "  refresh-zkgm-scenarios — regenerate handler/dispatch end-to-end ZKGM scenarios via the Rust harness"
@@ -206,6 +208,12 @@ test-gnokey-qeval-smoke: verify-gno vendor
 
 test-zkgm-native-refund-smoke: verify-gno vendor
 	@./tools/gnokey-smoke/run-zkgm-native-refund.sh
+
+test-gno-to-eth-smoke: verify-gno vendor
+	@./tools/eth-gno-smoke/run-gno-to-eth.sh
+
+test-eth-proof-fixture-smoke:
+	@./tools/eth-gno-smoke/generate-eth-proof-fixture.sh
 
 clean-gno-cache:
 	@rm -rf $(GNO_CACHE)

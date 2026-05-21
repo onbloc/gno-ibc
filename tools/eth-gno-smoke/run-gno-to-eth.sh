@@ -6,7 +6,7 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 require_command gnokey
 require_command gnodev
 
-trap cleanup_smoke_env EXIT
+trap cleanup_eth_gno_smoke_env EXIT
 setup_smoke_chain
 
 GNO_TO_ETH_TESTDATA_DIR="$ETH_GNO_TESTDATA_DIR/gno-to-eth"
@@ -31,7 +31,7 @@ if [[ "$BATCH_HASH" != "$PACKET_HASH" ]]; then
   exit 1
 fi
 
-if [[ "$COMMITMENT_VALUE_HEX" != "0x0100000000000000000000000000000000000000000000000000000000000000" ]]; then
+if [[ "$COMMITMENT_VALUE_HEX" != "$ETH_GNO_COMMITMENT_MAGIC_HEX" ]]; then
   echo "FAIL: unexpected packet commitment value: $COMMITMENT_VALUE_HEX"
   exit 1
 fi

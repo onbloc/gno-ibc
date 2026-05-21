@@ -17,7 +17,7 @@ start_anvil
 ETH_TO_GNO_TESTDATA_DIR="$ETH_GNO_TESTDATA_DIR/eth-to-gno"
 OUTPUT_FIXTURE="${ETH_GNO_ETH_TO_GNO_FIXTURE:-$ETH_TO_GNO_TESTDATA_DIR/proof-latest.json}"
 COMMITMENT_PATH_HEX="${ETH_GNO_COMMITMENT_PATH_HEX:-0x472a9e75d39222a3bf79c3c11213f805e1268c67b038092c0eac21f1ad990409}"
-COMMITMENT_VALUE_HEX="${ETH_GNO_COMMITMENT_VALUE_HEX:-0x0100000000000000000000000000000000000000000000000000000000000000}"
+COMMITMENT_VALUE_HEX="${ETH_GNO_COMMITMENT_VALUE_HEX:-$ETH_GNO_COMMITMENT_MAGIC_HEX}"
 COMMITMENTS_JSON="${ETH_GNO_COMMITMENTS_JSON:-}"
 if [[ -z "$COMMITMENTS_JSON" ]]; then
   COMMITMENTS_JSON="$(jq -n \
@@ -57,6 +57,10 @@ done < <(jq -c '.[]' <<<"$COMMITMENTS_JSON")
 BLOCK_NUMBER_DEC="$(cast block-number --rpc-url "$ANVIL_RPC_URL")"
 BLOCK_NUMBER_HEX="$(cast to-hex "$BLOCK_NUMBER_DEC")"
 
+echo ">> building storage proof encoder"
+ENCODER_BIN="$WORKDIR/encode-storage-proof"
+go build -o "$ENCODER_BIN" "$ETH_GNO_SMOKE_DIR/encode-storage-proof.go"
+
 echo ">> fetching eth_getProof at block $BLOCK_NUMBER_DEC"
 : >"$WORKDIR/proofs.jsonl"
 while IFS= read -r commitment; do
@@ -78,7 +82,7 @@ while IFS= read -r commitment; do
   curl -sf -H "content-type: application/json" \
     --data @"$WORKDIR/get_proof_request_$NAME.json" \
     "$ANVIL_RPC_URL" >"$WORKDIR/get_proof_$NAME.json"
-  go run "$ETH_GNO_SMOKE_DIR/encode-storage-proof.go" <"$WORKDIR/get_proof_$NAME.json" >"$WORKDIR/encoded_proof_$NAME.json"
+  "$ENCODER_BIN" <"$WORKDIR/get_proof_$NAME.json" >"$WORKDIR/encoded_proof_$NAME.json"
 
   jq -n \
     --arg name "$NAME" \

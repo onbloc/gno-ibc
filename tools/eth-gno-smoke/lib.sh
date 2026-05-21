@@ -9,6 +9,10 @@ ANVIL_HOST="${ANVIL_HOST:-127.0.0.1}"
 ANVIL_PORT="${ANVIL_PORT:-8545}"
 ANVIL_PRIVATE_KEY="${ANVIL_PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
 
+# core.COMMITMENT_MAGIC (gno.land/r/core/ibc/v1/core/path.gno): the value stored
+# at a packet commitment path once a packet is committed.
+ETH_GNO_COMMITMENT_MAGIC_HEX="0x0100000000000000000000000000000000000000000000000000000000000000"
+
 # Reuse the existing smoke-node/key helpers until this harness needs behavior
 # that differs from tools/gnokey-smoke.
 source "$GNO_IBC_ROOT/tools/gnokey-smoke/lib.sh"
@@ -68,6 +72,17 @@ require_field() {
   printf "%s" "$value"
 }
 
+require_log_line() {
+  local pattern="$1"
+  local file="$2"
+  local msg="$3"
+  if ! grep -q "$pattern" "$file"; then
+    echo "FAIL: $msg"
+    cat "$file"
+    exit 1
+  fi
+}
+
 start_anvil() {
   init_smoke_env
 
@@ -103,22 +118,5 @@ start_anvil() {
 
   echo "anvil not ready within 30s"
   cat "$WORKDIR/anvil.log"
-  exit 1
-}
-
-status_incomplete() {
-  local direction="$1"
-  cat <<EOF
-ERROR: $direction smoke runner is scaffolded but not fully implemented.
-
-See tools/eth-gno-smoke/README.md and
-local_docs/plans/eth-gno-independent-smoke-plan.md for the byte contracts and
-remaining automation steps.
-
-Set ETH_GNO_SMOKE_ALLOW_INCOMPLETE=1 to print this status without failing.
-EOF
-  if [[ "${ETH_GNO_SMOKE_ALLOW_INCOMPLETE:-}" == "1" ]]; then
-    return 0
-  fi
   exit 1
 }

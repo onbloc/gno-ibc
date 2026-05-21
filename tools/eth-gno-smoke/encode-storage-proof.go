@@ -1,3 +1,7 @@
+// Command encode-storage-proof converts an eth_getProof JSON response into the
+// Union StorageProof wire format. The byte layout must stay identical to
+// gno.land/p/core/ethereum/storage.EncodeProof (codec.gno), so that the Gno-side
+// storage.DecodeProof accepts the fixtures this tool generates.
 package main
 
 import (

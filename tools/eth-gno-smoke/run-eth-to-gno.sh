@@ -66,20 +66,15 @@ render_template "$ETH_TO_GNO_TESTDATA_DIR/recv_packet.gno.tmpl" "$WORKDIR/recv_p
 echo ">> ETH -> Gno PacketRecv"
 maketx_run "$WORKDIR/recv_packet.gno" "$WORKDIR/recv_packet.log"
 
-grep -q '"type":"PacketRecv"' "$WORKDIR/recv_packet.log" \
-  || { echo "FAIL: PacketRecv event missing"; cat "$WORKDIR/recv_packet.log"; exit 1; }
-grep -q '"type":"WriteAck"' "$WORKDIR/recv_packet.log" \
-  || { echo "FAIL: WriteAck event missing"; cat "$WORKDIR/recv_packet.log"; exit 1; }
-grep -q '^has_receipt true$' "$WORKDIR/recv_packet.log" \
-  || { echo "FAIL: packet receipt missing"; cat "$WORKDIR/recv_packet.log"; exit 1; }
-grep -q '^has_ack true$' "$WORKDIR/recv_packet.log" \
-  || { echo "FAIL: acknowledgement missing"; cat "$WORKDIR/recv_packet.log"; exit 1; }
-grep -q '^has_receipt_after_duplicate true$' "$WORKDIR/recv_packet.log" \
-  || { echo "FAIL: packet receipt missing after duplicate"; cat "$WORKDIR/recv_packet.log"; exit 1; }
-grep -q '^has_ack_after_duplicate true$' "$WORKDIR/recv_packet.log" \
-  || { echo "FAIL: acknowledgement missing after duplicate"; cat "$WORKDIR/recv_packet.log"; exit 1; }
-ACK_HASH_AFTER_RECV="$(require_field ack_hash_after_recv "$WORKDIR/recv_packet.log")"
-ACK_HASH_AFTER_DUPLICATE="$(require_field ack_hash_after_duplicate "$WORKDIR/recv_packet.log")"
+RECV_LOG="$WORKDIR/recv_packet.log"
+require_log_line '"type":"PacketRecv"' "$RECV_LOG" "PacketRecv event missing"
+require_log_line '"type":"WriteAck"' "$RECV_LOG" "WriteAck event missing"
+require_log_line '^has_receipt true$' "$RECV_LOG" "packet receipt missing"
+require_log_line '^has_ack true$' "$RECV_LOG" "acknowledgement missing"
+require_log_line '^has_receipt_after_duplicate true$' "$RECV_LOG" "packet receipt missing after duplicate"
+require_log_line '^has_ack_after_duplicate true$' "$RECV_LOG" "acknowledgement missing after duplicate"
+ACK_HASH_AFTER_RECV="$(require_field ack_hash_after_recv "$RECV_LOG")"
+ACK_HASH_AFTER_DUPLICATE="$(require_field ack_hash_after_duplicate "$RECV_LOG")"
 if [[ "$ACK_HASH_AFTER_RECV" != "$ACK_HASH_AFTER_DUPLICATE" ]]; then
   echo "FAIL: duplicate receive changed acknowledgement hash"
   echo "  after_recv=$ACK_HASH_AFTER_RECV"

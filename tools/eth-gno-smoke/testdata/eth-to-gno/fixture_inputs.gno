@@ -2,10 +2,8 @@ package main
 
 import (
 	"crypto/keccak256"
-	"encoding/binary"
 	"encoding/hex"
 
-	"gno.land/p/core/encoding/abi"
 	z "gno.land/p/gnoswap/ibc/zkgm"
 	core "gno.land/r/core/ibc/v1/core"
 	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
@@ -32,7 +30,14 @@ func main() {
 	connValue := hash(conn.EthAbiEncode())
 
 	channelPath := core.ChannelPath(counterpartyChannelID)
-	channelValue := hash(encodeChannel(core.ChannelStateTryOpen, counterpartyConnectionID, channelID, portID, zkgm.Version))
+	channel := core.Channel{
+		State:                 core.ChannelStateTryOpen,
+		ConnectionId:          counterpartyConnectionID,
+		CounterpartyChannelId: channelID,
+		CounterpartyPortId:    portID,
+		Version:               zkgm.Version,
+	}
+	channelValue := hash(channel.EthAbiEncode())
 
 	call := z.Call{Sender: []byte("eth-sender"), ContractAddress: []byte("gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"), ContractCalldata: []byte("hello")}
 	packet := core.Packet{
@@ -58,36 +63,4 @@ func hash(bz []byte) core.H256 {
 	var out core.H256
 	copy(out[:], sum[:])
 	return out
-}
-
-func encodeChannel(state core.ChannelState, connectionID core.ConnectionId, counterpartyChannelID core.ChannelId, counterpartyPortID []byte, version string) []byte {
-	schema := abi.Schema{Fields: []abi.Field{
-		{Type: abi.TypeUint8},
-		{Type: abi.TypeUint32},
-		{Type: abi.TypeUint32},
-		{Type: abi.TypeBytes},
-		{Type: abi.TypeString},
-	}}
-	bz, err := abi.Encode(schema, []any{
-		uint8(state),
-		uint32(connectionID),
-		uint32(counterpartyChannelID),
-		counterpartyPortID,
-		version,
-	})
-	if err != nil {
-		panic(err)
-	}
-	return encodeTopLevelDynamic(bz)
-}
-
-func encodeTopLevelDynamic(encoded []byte) []byte {
-	out := make([]byte, 0, 32+len(encoded))
-	return append(append(out, u64ToH256(32)...), encoded...)
-}
-
-func u64ToH256(n uint64) []byte {
-	bz := [32]byte{}
-	binary.BigEndian.PutUint64(bz[24:], n)
-	return bz[:]
 }

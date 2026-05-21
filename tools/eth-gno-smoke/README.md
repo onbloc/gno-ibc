@@ -3,8 +3,6 @@
 This directory is the local, repo-owned smoke harness for proving packet
 compatibility in both directions without depending on Union Voyager internals,
 external EVM RPCs, Union deployments, or Union devnets.
-It starts from the plan in
-`local_docs/plans/eth-gno-independent-smoke-plan.md`.
 
 The first committed shape is intentionally thin: it pins the wire contracts,
 fixture format, and script responsibilities before the runners grow into full

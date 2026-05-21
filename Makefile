@@ -87,7 +87,7 @@ vendor-flags = $(if $(filter undefined,$(origin FLAGS_$(subst /,_,$(1)))),$(STD_
 # rsync only auto-creates the leaf dest dir, so mkdir -p covers intermediates.
 vendor-cmd = mkdir -p $(dir gno.land/$(2)) && rsync $(RSYNC_BASE) $(call vendor-flags,$(2)) $(1)/$(2)/ gno.land/$(2)/
 
-.PHONY: help install-gno link-stdlibs verify-gno vendor fmt test test-cover test-stdlibs test-smoke clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios derive-sender-salt-vectors
+.PHONY: help install-gno link-stdlibs verify-gno vendor fmt test test-cover test-stdlibs test-smoke test-gnokey-query-smoke test-gnokey-qeval-smoke test-zkgm-native-refund-smoke clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios derive-sender-salt-vectors
 
 COVERAGE_DIR := coverage
 
@@ -110,7 +110,9 @@ help:
 	@echo "  test-cover            — same as test, plus -cover (needs gno PR #4241; override GNO_COMMIT)"
 	@echo "  test-stdlibs          — run the vendored stdlib's own .gno and .go tests"
 	@echo "  test-smoke            — run only the env-prep smoke tests"
-	@echo "  test-gnokey-query-smoke — boot gnodev and assert end-to-end gnokey maketx/qeval invariants against the IBC core realm"
+	@echo "  test-gnokey-query-smoke — run the full gnokey smoke suite"
+	@echo "  test-gnokey-qeval-smoke — run only the gnokey maketx/qeval core smoke suite"
+	@echo "  test-zkgm-native-refund-smoke — run only the ZKGM native refund gnokey smoke suite"
 	@echo "  clean-gno-cache       — remove the cloned gno repo (forces re-clone next install)"
 	@echo "  refresh-abi-vectors   — regenerate ABI ground-truth vectors via the Rust harness"
 	@echo "  refresh-zkgm-scenarios — regenerate handler/dispatch end-to-end ZKGM scenarios via the Rust harness"
@@ -198,6 +200,12 @@ test-smoke: verify-gno
 
 test-gnokey-query-smoke: verify-gno vendor
 	@./tools/gnokey-query-smoke.sh
+
+test-gnokey-qeval-smoke: verify-gno vendor
+	@./tools/gnokey-smoke/run-query-smoke.sh
+
+test-zkgm-native-refund-smoke: verify-gno vendor
+	@./tools/gnokey-smoke/run-zkgm-native-refund.sh
 
 clean-gno-cache:
 	@rm -rf $(GNO_CACHE)

@@ -227,6 +227,12 @@ func compactDecode(encoded []byte) (bool, []byte, error) {
 	for i := 1; i < len(encoded); i++ {
 		out = append(out, encoded[i]>>4, encoded[i]&0x0f)
 	}
+	// extensions nodes must contain at least one path nibble.
+	// empty extension paths are non-canonical because they admit
+	// alternative proof encoding.
+	if !leaf && len(out) == 0 {
+		return false, nil, ErrPathMismatch
+	}
 	return leaf, out, nil
 }
 

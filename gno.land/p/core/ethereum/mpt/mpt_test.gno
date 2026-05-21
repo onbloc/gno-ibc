@@ -110,6 +110,21 @@ func TestRejectsBadRootAndMissingHashedChild(t *testing.T) {
 	}
 }
 
+func TestCompactDecodeRejectsEmptyExtension(t *testing.T) {
+	if _, _, err := compactDecode(extensionPath(nil)); err != ErrPathMismatch {
+		t.Fatalf("empty extension path: got %v want %v", err, ErrPathMismatch)
+	}
+
+	// A leaf with an empty path is canonical and must still decode.
+	leaf, partial, err := compactDecode(leafPath(nil))
+	if err != nil {
+		t.Fatalf("empty leaf path: %v", err)
+	}
+	if !leaf || len(partial) != 0 {
+		t.Fatalf("empty leaf path: got leaf=%v partial=%v", leaf, partial)
+	}
+}
+
 func node(path []byte, valueOrRef []byte) []byte {
 	return rlp.EncodeList(rlp.EncodeBytes(path), valueOrRef)
 }

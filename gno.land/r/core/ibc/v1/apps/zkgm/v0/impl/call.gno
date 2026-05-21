@@ -79,6 +79,9 @@ func (v *ZkgmV1) timeoutCall(packet core.Packet, path *u256.Uint, call z.Call) e
 	return nil
 }
 
+// safeCallOnZkgm runs the receiver and reports a failure as panicked=true.
+// revive is preferred since it also catches cross-realm aborts; the recover
+// fallback, used only when revive is unsupported, catches ordinary panics.
 func safeCallOnZkgm(receiver z.Zkgmable, env z.CallEnv) (err error, panicked bool) {
 	if canRevive() {
 		p := revive(func() {
@@ -97,6 +100,8 @@ func safeCallOnZkgm(receiver z.Zkgmable, env z.CallEnv) (err error, panicked boo
 	return err, false
 }
 
+// canRevive reports whether revive works in the current runtime. revive panics
+// rather than returning when the interpreter lacks support for it.
 func canRevive() (ok bool) {
 	ok = true
 	defer func() {

@@ -134,8 +134,9 @@ Expected fixture:
 
 ## Runner Status
 
-`run-eth-to-gno.sh` currently fails fast with an implementation-status message
-unless `ETH_GNO_SMOKE_ALLOW_INCOMPLETE=1` is set. The proof fixture generator is
-implemented, but full `core.PacketRecv` submission is still pending. This keeps
-future Make targets from silently passing before the complete receive smoke is
-wired.
+Both directional runners are implemented for local smoke coverage.
+`run-eth-to-gno.sh` generates local anvil storage proofs for the connection ack,
+channel ack, and packet commitment paths, creates a state-lens client with the
+resulting storage root, submits `core.PacketRecv`, checks `PacketRecv` and
+`WriteAck` events, and verifies duplicate receive leaves the acknowledgement
+unchanged.

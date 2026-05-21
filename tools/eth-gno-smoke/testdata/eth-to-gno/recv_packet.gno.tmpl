@@ -1,0 +1,111 @@
+package main
+
+import (
+	"bytes"
+	"encoding/hex"
+
+	statelensp "gno.land/p/core/ibc/lightclients/statelensics23mpt"
+	core "gno.land/r/core/ibc/v1/core"
+	statelens "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
+	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
+	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
+	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
+)
+
+func main() {
+	e2e.RegisterMockLightClient(cross)
+	l1ClientID := e2e.CreateMockClient(cross)
+
+	if !core.HasClient(statelens.ClientType) {
+		core.RegisterClient(cross, statelens.ClientType, statelens.Adapter{})
+	}
+
+	consensusState, err := statelensp.EncodeConsensusState(statelensp.ConsensusState{
+		Timestamp:   1,
+		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
+		StorageRoot: mustHex("@STORAGE_ROOT_HEX@"),
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	lensClientID := core.CreateClient(cross, core.MsgCreateClient{
+		ClientType: statelens.ClientType,
+		ClientStateBytes: statelensp.EncodeClientState(statelensp.ClientState{
+			L2ChainID:         "local-anvil",
+			L1ClientID:        uint32(l1ClientID),
+			L2ClientID:        77,
+			L2LatestHeight:    1,
+			TimestampOffset:   64,
+			StateRootOffset:   0,
+			StorageRootOffset: 32,
+		}),
+		ConsensusStateBytes: consensusState,
+	})
+	println("lens_client_id", lensClientID.String())
+
+	connectionID := core.ConnectionOpenInit(cross, core.MsgConnectionOpenInit{
+		ClientId:             lensClientID,
+		CounterpartyClientId: core.ClientId(99),
+	})
+	core.ConnectionOpenAck(cross, core.MsgConnectionOpenAck{
+		ConnectionId:             connectionID,
+		CounterpartyConnectionId: core.ConnectionId(77),
+		ProofTry:                 mustHex("@CONN_ACK_PROOF_HEX@"),
+		ProofHeight:              core.Height(1),
+	})
+	println("connection_id", connectionID.String())
+
+	channelID := core.ChannelOpenInit(cross, core.MsgChannelOpenInit{
+		PortId:             []byte(zkgm.ProxyPkgPath()),
+		CounterpartyPortId: []byte(zkgm.ProxyPkgPath()),
+		ConnectionId:       connectionID,
+		Version:            zkgm.Version,
+	})
+	core.ChannelOpenAck(cross, core.MsgChannelOpenAck{
+		ChannelId:             channelID,
+		CounterpartyVersion:   zkgm.Version,
+		CounterpartyChannelId: core.ChannelId(1),
+		ProofTry:              mustHex("@CHANNEL_ACK_PROOF_HEX@"),
+		ProofHeight:           core.Height(1),
+	})
+	println("channel_id", channelID.String())
+
+	packet := core.Packet{
+		SourceChannelId:      core.ChannelId(1),
+		DestinationChannelId: channelID,
+		Data:                 mustHex("@PACKET_DATA_HEX@"),
+		TimeoutTimestamp:     core.Timestamp(@PACKET_TIMEOUT_TIMESTAMP@),
+	}
+	msg := core.MsgPacketRecv{
+		Packets:     []core.Packet{packet},
+		RelayerMsgs: [][]byte{[]byte("relayer-msg")},
+		Proof:       mustHex("@PACKET_PROOF_HEX@"),
+		ProofHeight: core.Height(1),
+	}
+	core.PacketRecv(cross, msg)
+
+	println("packet_recv_event_expected", "PacketRecv")
+	println("write_ack_event_expected", "WriteAck")
+	println("has_receipt", core.HasPacketReceipt(cross, packet))
+	println("has_ack", core.HasAcknowledgement(cross, packet))
+	ackHash := core.AcknowledgementHash(cross, packet)
+	println("ack_hash_after_recv", ackHash.String())
+
+	core.PacketRecv(cross, msg)
+	println("has_receipt_after_duplicate", core.HasPacketReceipt(cross, packet))
+	println("has_ack_after_duplicate", core.HasAcknowledgement(cross, packet))
+	println("ack_hash_after_duplicate", core.AcknowledgementHash(cross, packet).String())
+}
+
+func mustHex(s string) []byte {
+	if len(s) >= 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X') {
+		s = s[2:]
+	}
+	bz, err := hex.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return bz
+}

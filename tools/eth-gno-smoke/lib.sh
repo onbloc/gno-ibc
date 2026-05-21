@@ -13,6 +13,26 @@ ANVIL_PRIVATE_KEY="${ANVIL_PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb4
 # that differs from tools/gnokey-smoke.
 source "$GNO_IBC_ROOT/tools/gnokey-smoke/lib.sh"
 
+run_smoke_node() {
+  GNODEV_HOME="${GNODEV_HOME:-$WORKDIR/gnodev-home}"
+  mkdir -p "$GNODEV_HOME"
+
+  gnodev local \
+    -home "$GNODEV_HOME" \
+    -root "$GNO_ROOT" \
+    -resolver "root=$GNO_IBC_ROOT" \
+    -resolver "root=$GNO_ROOT/examples" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/p/core/ibc/zkgm" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/p/core/tokenbucket" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm/v0/impl" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm/v0/loader" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm/testing/e2e" \
+    -paths "gno.land/r/core/ibc/v1/core,gno.land/r/core/ibc/v1/lightclients/cometbls,gno.land/r/core/ibc/v1/lightclients/statelensics23mpt,gno.land/r/gnoswap/ibc/v1/apps/zkgm,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader,gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e,gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock" \
+    -no-web \
+    -node-rpc-listener "$RPC_LISTENER"
+}
+
 cleanup_eth_gno_smoke_env() {
   if [[ -n "${ANVIL_PID:-}" ]] && kill -0 "$ANVIL_PID" 2>/dev/null; then
     kill "$ANVIL_PID" 2>/dev/null || true

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 GNO_SMOKE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SMOKE_TESTDATA_DIR="$GNO_SMOKE_DIR/testdata"
 GNO_IBC_ROOT="${GNO_IBC_ROOT:-$(cd "$GNO_SMOKE_DIR/../.." && pwd)}"
 GNO_ROOT="${GNO_ROOT:-$HOME/.cache/gno-ibc/gno}"
 RPC_ENDPOINT="${RPC_ENDPOINT:-tcp://127.0.0.1:26657}"
@@ -170,4 +171,11 @@ hex_to_h256_lit() {
   done
   out+="}"
   echo "$out"
+}
+
+render_template() {
+  local template="$1"
+  local output="$2"
+  shift 2
+  sed "$@" "$template" >"$output"
 }

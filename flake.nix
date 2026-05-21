@@ -102,6 +102,10 @@
               jq
               moreutils
               nixd
+              # ETH-side tooling for tools/eth-gno-smoke: foundry provides
+              # anvil, cast, and forge; solc compiles the commitment-map contract.
+              foundry
+              solc
             ]);
 
             nativeBuildInputs = [

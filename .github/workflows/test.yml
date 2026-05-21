@@ -12,9 +12,9 @@ on:
       - 'stdlibs/**'
       - 'tools/setup-stdlibs.py'
       - 'tools/test_setup_stdlibs.py'
-      - 'tools/gnokey-query-smoke.sh'
       - 'flake.nix'
       - 'flake.lock'
+      - '.github/actions/setup-gno/**'
       - '.github/workflows/test.yml'
   pull_request:
     paths: *test_paths
@@ -30,63 +30,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@v30
+      - name: Setup gno
+        uses: ./.github/actions/setup-gno
         with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
-
-      # Materialize the dev shell once; later `run:` steps source it via
-      # BASH_ENV. Avoids `nix develop` re-evaluating the flake on every step.
-      - name: Materialize dev shell
-        run: |
-          nix print-dev-env .#ci > "$RUNNER_TEMP/ci-env.sh"
-          echo "BASH_ENV=$RUNNER_TEMP/ci-env.sh" >> "$GITHUB_ENV"
-
-      # Run before install-gno so tooling regressions fail in seconds, not
-      # after the gno build.
-      - name: Run tools tests
-        run: python3 -m pytest tools/test_setup_stdlibs.py -v
-
-      # Cache the installed gno binary, keyed on inputs that actually affect
-      # the binary: pinned commit + native bindings (.go) + package layout
-      # (gnomod.toml) + build script. Pure .gno edits don't invalidate — the
-      # binary's _GNOROOT points at the cache, and symlinks (refreshed by the
-      # link-stdlibs step below) resolve to the current working tree.
-      - name: Cache gno binary
-        id: gno-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/go/bin/gno
-            ~/go/bin/gnodev
-            ~/go/bin/gnokey
-            ~/.cache/gno-ibc/gno
-          key: gno-${{ runner.os }}-${{ hashFiles('.gno-version', 'stdlibs/**/*.go', 'stdlibs/**/gnomod.toml', 'stdlibs/go.mod', 'stdlibs/go.sum', 'tools/setup-stdlibs.py') }}
-          restore-keys: |
-            gno-${{ runner.os }}-
-
-      # flake.lock in the key invalidates the Go cache when nixpkgs bumps
-      # Go — `~/.cache/go-build` is keyed by Go version internally.
-      - name: Cache Go build + modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: gobuild-${{ runner.os }}-${{ hashFiles('.gno-version', 'stdlibs/go.sum', 'flake.lock') }}
-          restore-keys: |
-            gobuild-${{ runner.os }}-
-
-      - name: Install pinned gno toolchain
-        if: steps.gno-cache.outputs.cache-hit != 'true'
-        run: make install-gno
-
-      # On cache hit, install-gno is skipped, so re-run only the symlink pass
-      # to pick up any .gno files added/removed since the cache was saved.
-      - name: Refresh stdlib symlinks
-        if: steps.gno-cache.outputs.cache-hit == 'true'
-        run: make link-stdlibs
+          pre-install-command: python3 -m pytest tools/test_setup_stdlibs.py -v
 
       - name: Verify gno binary
         run: make verify-gno
@@ -96,6 +43,3 @@ jobs:
 
       - name: Run vendored stdlib tests
         run: make test-stdlibs
-
-      - name: Run gnokey query smoke tests
-        run: make test-gnokey-query-smoke

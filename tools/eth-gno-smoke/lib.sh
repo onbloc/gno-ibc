@@ -17,6 +17,25 @@ require_command() {
   }
 }
 
+capture_field() {
+  local name="$1"
+  local file="$2"
+  awk -v key="$name" '$1 == key { print $2; exit }' "$file"
+}
+
+require_field() {
+  local name="$1"
+  local file="$2"
+  local value
+  value="$(capture_field "$name" "$file")"
+  if [[ -z "$value" ]]; then
+    echo "FAIL: missing '$name' in $file"
+    cat "$file"
+    exit 1
+  fi
+  printf "%s" "$value"
+}
+
 status_incomplete() {
   local direction="$1"
   cat <<EOF

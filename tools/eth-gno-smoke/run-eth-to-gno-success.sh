@@ -3,9 +3,9 @@ set -euo pipefail
 
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
-RPC_LISTENER="${ETH_GNO_SUCCESS_RECV_RPC_LISTENER:-${ETH_GNO_RECV_RPC_LISTENER:-127.0.0.1:26659}}"
-RPC_URL="${ETH_GNO_SUCCESS_RECV_RPC_URL:-${ETH_GNO_RECV_RPC_URL:-http://127.0.0.1:26659}}"
-RPC_ENDPOINT="${ETH_GNO_SUCCESS_RECV_RPC_ENDPOINT:-${ETH_GNO_RECV_RPC_ENDPOINT:-tcp://127.0.0.1:26659}}"
+RPC_LISTENER="${ETH_GNO_SUCCESS_RECV_RPC_LISTENER:-127.0.0.1:26659}"
+RPC_URL="${ETH_GNO_SUCCESS_RECV_RPC_URL:-http://127.0.0.1:26659}"
+RPC_ENDPOINT="${ETH_GNO_SUCCESS_RECV_RPC_ENDPOINT:-tcp://127.0.0.1:26659}"
 
 require_command gnokey
 require_command gnodev
@@ -33,7 +33,6 @@ PACKET_DATA_HEX="$(require_field packet_data_hex "$WORKDIR/fixture_inputs_succes
 PACKET_TIMEOUT_TIMESTAMP="$(require_field packet_timeout_timestamp "$WORKDIR/fixture_inputs_success.log")"
 EXPECTED_SENDER="$(require_field expected_sender "$WORKDIR/fixture_inputs_success.log")"
 EXPECTED_CALLDATA="$(require_field expected_calldata "$WORKDIR/fixture_inputs_success.log")"
-EXPECTED_RELAYER_MSG="$(require_field expected_relayer_msg "$WORKDIR/fixture_inputs_success.log")"
 
 COMMITMENTS_JSON="$(jq -n \
   --arg conn_path "$CONN_ACK_PATH" \
@@ -66,8 +65,7 @@ render_template "$ETH_TO_GNO_TESTDATA_DIR/recv_call_success.gno.tmpl" "$WORKDIR/
   -e "s|@PACKET_TIMEOUT_TIMESTAMP@|$PACKET_TIMEOUT_TIMESTAMP|g" \
   -e "s|@PACKET_PROOF_HEX@|$PACKET_PROOF|g" \
   -e "s|@EXPECTED_SENDER@|$EXPECTED_SENDER|g" \
-  -e "s|@EXPECTED_CALLDATA@|$EXPECTED_CALLDATA|g" \
-  -e "s|@EXPECTED_RELAYER_MSG@|$EXPECTED_RELAYER_MSG|g"
+  -e "s|@EXPECTED_CALLDATA@|$EXPECTED_CALLDATA|g"
 
 echo ">> ETH -> Gno success PacketRecv"
 maketx_run "$WORKDIR/recv_call_success.gno" "$WORKDIR/recv_call_success.log"
@@ -81,7 +79,7 @@ require_log_line '^ack_success true$' "$RECV_LOG" "success acknowledgement missi
 require_log_line '^mock_calls 1$' "$RECV_LOG" "mock receiver was not called exactly once"
 require_log_line "^last_sender $EXPECTED_SENDER$" "$RECV_LOG" "mock sender mismatch"
 require_log_line "^last_calldata $EXPECTED_CALLDATA$" "$RECV_LOG" "mock calldata mismatch"
-require_log_line "^last_relayer_msg $EXPECTED_RELAYER_MSG$" "$RECV_LOG" "mock relayer message mismatch"
+require_log_line '^last_relayer_msg success-relayer-msg$' "$RECV_LOG" "mock relayer message mismatch"
 require_log_line '^last_source_channel 1$' "$RECV_LOG" "mock source channel mismatch"
 require_log_line '^last_destination_channel 1$' "$RECV_LOG" "mock destination channel mismatch"
 require_log_line '^has_receipt_after_duplicate true$' "$RECV_LOG" "packet receipt missing after duplicate"

@@ -21,7 +21,9 @@ run_smoke_node() {
   GNODEV_HOME="${GNODEV_HOME:-$WORKDIR/gnodev-home}"
   mkdir -p "$GNODEV_HOME"
 
-  gnodev local \
+  # exec so the caller's `... & GNODEV_PID=$!` captures gnodev's PID, not
+  # the wrapping subshell — otherwise cleanup's kill orphans gnodev.
+  exec gnodev local \
     -home "$GNODEV_HOME" \
     -root "$GNO_ROOT" \
     -resolver "root=$GNO_IBC_ROOT" \

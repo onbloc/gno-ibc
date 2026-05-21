@@ -12,10 +12,9 @@ import (
 )
 
 const (
-	expectedSender     = "eth-success-sender"
-	expectedCalldata   = "success-calldata"
-	expectedRelayerMsg = "success-relayer-msg"
-	mockReceiverPath   = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
+	expectedSender   = "eth-success-sender"
+	expectedCalldata = "success-calldata"
+	mockReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
 )
 
 func main() {
@@ -69,7 +68,6 @@ func main() {
 	println("packet_timeout_timestamp", packet.TimeoutTimestamp.String())
 	println("expected_sender", expectedSender)
 	println("expected_calldata", expectedCalldata)
-	println("expected_relayer_msg", expectedRelayerMsg)
 }
 
 func hash(bz []byte) core.H256 {

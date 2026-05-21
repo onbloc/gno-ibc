@@ -23,22 +23,15 @@ cleanup_smoke_env() {
     kill "$GNODEV_PID" 2>/dev/null || true
     wait "$GNODEV_PID" 2>/dev/null || true
   fi
-  if [[ -n "${RPC_URL:-}" ]]; then
-    local deadline=$((SECONDS + 10))
-    while (( SECONDS < deadline )); do
-      if ! curl -sf "$RPC_URL/status" >/dev/null 2>&1; then
-        break
-      fi
-      sleep 0.2
-    done
-  fi
   if [[ -n "${WORKDIR:-}" ]]; then
     rm -rf "$WORKDIR"
   fi
 }
 
 run_smoke_node() {
-  gnodev local \
+  # exec so the caller's `... & GNODEV_PID=$!` captures gnodev's PID, not
+  # the wrapping subshell — otherwise cleanup's kill orphans gnodev.
+  exec gnodev local \
     -root "$GNO_ROOT" \
     -resolver "root=$GNO_IBC_ROOT" \
     -resolver "root=$GNO_ROOT/examples" \

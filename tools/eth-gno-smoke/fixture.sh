@@ -3,13 +3,14 @@
 #
 #   fixture.sh eth-proof                    generate a local anvil ETH storage proof
 #   fixture.sh sepolia-ugnot [--check]      validate committed Sepolia ugnot fixtures (offline)
+#   fixture.sh zkgm-tokenorder-vectors --check
 #   fixture.sh sepolia-ugnot --refresh      refetch Sepolia ugnot fixtures (needs SEPOLIA_RPC_URL)
 set -euo pipefail
 
 SMOKE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 usage() {
-  echo "usage: fixture.sh {eth-proof|sepolia-ugnot [--check|--refresh]}" >&2
+  echo "usage: fixture.sh {eth-proof|sepolia-ugnot [--check|--refresh]|zkgm-tokenorder-vectors --check}" >&2
   exit 2
 }
 
@@ -25,6 +26,17 @@ case "${1:-}" in
         ;;
       --refresh)
         exec "$SMOKE_DIR/scenarios/sepolia-ugnot/fetch.sh"
+        ;;
+      *)
+      usage
+      ;;
+    esac
+    ;;
+  zkgm-tokenorder-vectors)
+    case "${2:-}" in
+      --check)
+        cd "$SMOKE_DIR"
+        exec go run ./cmd/check-zkgm-tokenorder-vectors
         ;;
       *)
         usage

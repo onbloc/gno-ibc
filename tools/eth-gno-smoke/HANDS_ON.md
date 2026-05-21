@@ -22,6 +22,8 @@ make test-gno-to-eth-smoke
 make test-eth-proof-fixture-smoke
 make test-eth-to-gno-smoke
 make test-eth-to-gno-success-smoke
+make test-eth-to-gno-bad-proof-smoke
+make test-zkgm-tokenorder-vectors
 ```
 
 The `Makefile` targets call the two dispatchers, which can also be run directly:
@@ -38,6 +40,7 @@ tools/eth-gno-smoke/scenarios/gno-to-eth/fixture.json
 tools/eth-gno-smoke/scenarios/eth-proof/fixture.json
 tools/eth-gno-smoke/scenarios/eth-to-gno-error/fixture.json
 tools/eth-gno-smoke/scenarios/eth-to-gno-success/fixture.json
+tools/eth-gno-smoke/scenarios/eth-to-gno-bad-proof/fixture.json
 ```
 
 Re-running the smoke should leave these files unchanged in a clean environment.
@@ -72,6 +75,7 @@ Validation:
 
 - `batch_hash` must equal `packet_hash` for the single-packet batch.
 - `commitment_value_hex` must equal `COMMITMENT_MAGIC`.
+- the Gno params-store ABCI proof must include a height, value, and proof ops.
 - The fixture is regenerated deterministically.
 
 The runner does not submit anything to ETH. It captures the exact packet and
@@ -172,6 +176,11 @@ drives a packet that reaches a success acknowledgement and additionally asserts
 that the mock receiver was called exactly once with the expected sender and
 calldata.
 
+The bad-proof scenario reuses the success packet shape but writes a zero packet
+commitment value into local `anvil`. The generated proof is valid for that wrong
+value, so Gno must reject it when `PacketRecv` verifies membership against
+`COMMITMENT_MAGIC`.
+
 ## Artifacts
 
 `scenarios/gno-to-eth/fixture.json` contains:
@@ -180,7 +189,8 @@ calldata.
 - packet hash,
 - batch hash,
 - Gno batch commitment path,
-- commitment value.
+- commitment value,
+- ABCI proof height and proof ops for the Gno commitment store key.
 
 `scenarios/eth-proof/fixture.json` contains:
 

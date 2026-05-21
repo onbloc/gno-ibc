@@ -15,11 +15,13 @@ them, and they wrap the per-scenario scripts under `scenarios/`.
 smoke.sh gno-to-eth          # Gno ZKGM send -> ETH-consumable packet commitment
 smoke.sh eth-to-gno          # ETH storage proof -> Gno core.PacketRecv (error ack)
 smoke.sh eth-to-gno-success  # ETH storage proof -> Gno core.PacketRecv (success ack)
+smoke.sh eth-to-gno-bad-proof  # ETH storage proof rejection with wrong value
 smoke.sh all                 # every smoke scenario in order
 
 fixture.sh eth-proof                # local anvil ETH storage proof fixture
 fixture.sh sepolia-ugnot --check    # validate committed Sepolia ugnot fixtures (offline)
 fixture.sh sepolia-ugnot --refresh  # refetch Sepolia ugnot fixtures (needs SEPOLIA_RPC_URL)
+fixture.sh zkgm-tokenorder-vectors --check  # validate captured Gno -> Union TokenOrder payloads
 ```
 
 ## Layout
@@ -38,12 +40,15 @@ Each scenario owns its inputs, template, and generated `fixture.json`:
 - `scenarios/eth-proof/` starts local `anvil`, deploys a minimal commitment-map
   contract, writes packet commitments, fetches `eth_getProof`, and encodes Union
   `StorageProof` bytes. The two `eth-to-gno-*` scenarios reuse it.
-- `scenarios/eth-to-gno-error/` and `scenarios/eth-to-gno-success/` prove that
-  storage commitments in a local `anvil` contract can be proven with
-  `eth_getProof`, encoded as Union `StorageProof`, and submitted to Gno
-  `core.PacketRecv`.
+- `scenarios/eth-to-gno-error/`, `scenarios/eth-to-gno-success/`, and
+  `scenarios/eth-to-gno-bad-proof/` prove that storage commitments in a local
+  `anvil` contract can be proven with `eth_getProof`, encoded as Union
+  `StorageProof`, and submitted to Gno `core.PacketRecv` or rejected when the
+  proven commitment value is wrong.
 - `scenarios/sepolia-ugnot/` holds committed Union Sepolia ugnot observations
   and the offline validator behind `fixture.sh sepolia-ugnot`.
+- `scenarios/zkgm-tokenorder-vectors/` holds observed Gno -> Union TokenOrderV2
+  payloads from the integration notes and validates them offline.
 
 ## Shared Packet Fields
 
@@ -102,6 +107,7 @@ Expected fixture:
   "batch_path_hex": "0x...",
   "commitment_value_hex": "0x...",
   "proof_height": 123,
+  "proof_value_base64": "...",
   "proof": {}
 }
 ```
@@ -163,4 +169,6 @@ Both directional smoke scenarios are implemented for local coverage.
 connection ack, channel ack, and packet commitment paths, creates a state-lens
 client with the resulting storage root, submits `core.PacketRecv`, checks
 `PacketRecv` and `WriteAck` events, and verifies that a duplicate receive leaves
-the acknowledgement unchanged.
+the acknowledgement unchanged. `scenarios/eth-to-gno-bad-proof/run.sh` reuses
+the same proof path with a deliberately wrong packet commitment value and
+asserts that `PacketRecv` rejects the proof.

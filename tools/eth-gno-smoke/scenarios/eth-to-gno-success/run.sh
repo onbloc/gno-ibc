@@ -6,6 +6,7 @@ ETH_GNO_SMOKE_DIR="$(cd "$SCENARIO_DIR/../.." && pwd)"
 source "$ETH_GNO_SMOKE_DIR/lib/env.sh"
 source "$ETH_GNO_SMOKE_DIR/lib/log.sh"
 source "$ETH_GNO_SMOKE_DIR/lib/gno.sh"
+source "$ETH_GNO_SMOKE_DIR/lib/recv.sh"
 
 RPC_LISTENER="${ETH_GNO_SUCCESS_RECV_RPC_LISTENER:-127.0.0.1:26659}"
 RPC_URL="${ETH_GNO_SUCCESS_RECV_RPC_URL:-http://127.0.0.1:26659}"
@@ -25,40 +26,14 @@ OUTPUT_FIXTURE="${ETH_GNO_ETH_TO_GNO_SUCCESS_FIXTURE:-$SCENARIO_DIR/fixture.json
 
 echo ">> ETH -> Gno success proof input derivation"
 maketx_run "$SCENARIO_DIR/fixture_inputs.gno" "$WORKDIR/fixture_inputs_success.log"
-
-CONN_ACK_PATH="$(require_field conn_ack_path "$WORKDIR/fixture_inputs_success.log")"
-CONN_ACK_VALUE="$(require_field conn_ack_value "$WORKDIR/fixture_inputs_success.log")"
-CHANNEL_ACK_PATH="$(require_field channel_ack_path "$WORKDIR/fixture_inputs_success.log")"
-CHANNEL_ACK_VALUE="$(require_field channel_ack_value "$WORKDIR/fixture_inputs_success.log")"
-PACKET_PATH="$(require_field packet_path "$WORKDIR/fixture_inputs_success.log")"
-PACKET_VALUE="$(require_field packet_value "$WORKDIR/fixture_inputs_success.log")"
-PACKET_DATA_HEX="$(require_field packet_data_hex "$WORKDIR/fixture_inputs_success.log")"
-PACKET_TIMEOUT_TIMESTAMP="$(require_field packet_timeout_timestamp "$WORKDIR/fixture_inputs_success.log")"
+derive_recv_proof_inputs "$WORKDIR/fixture_inputs_success.log"
 EXPECTED_SENDER="$(require_field expected_sender "$WORKDIR/fixture_inputs_success.log")"
 EXPECTED_CALLDATA="$(require_field expected_calldata "$WORKDIR/fixture_inputs_success.log")"
-
-COMMITMENTS_JSON="$(jq -n \
-  --arg conn_path "$CONN_ACK_PATH" \
-  --arg conn_value "$CONN_ACK_VALUE" \
-  --arg channel_path "$CHANNEL_ACK_PATH" \
-  --arg channel_value "$CHANNEL_ACK_VALUE" \
-  --arg packet_path "$PACKET_PATH" \
-  --arg packet_value "$PACKET_VALUE" \
-  '[
-    {name: "conn_ack", path_hex: $conn_path, value_hex: $conn_value},
-    {name: "channel_ack", path_hex: $channel_path, value_hex: $channel_value},
-    {name: "packet", path_hex: $packet_path, value_hex: $packet_value}
-  ]')"
+COMMITMENTS_JSON="$(recv_commitments_json)"
 
 echo ">> ETH -> Gno success storage proof generation"
-ETH_GNO_COMMITMENTS_JSON="$COMMITMENTS_JSON" \
-ETH_GNO_ETH_TO_GNO_FIXTURE="$OUTPUT_FIXTURE" \
-  "$ETH_GNO_SMOKE_DIR/scenarios/eth-proof/run.sh"
-
-STORAGE_ROOT="$(jq -r '.eth.storage_root' "$OUTPUT_FIXTURE")"
-CONN_ACK_PROOF="$(jq -r '.proofs.conn_ack.proof_bytes_hex' "$OUTPUT_FIXTURE")"
-CHANNEL_ACK_PROOF="$(jq -r '.proofs.channel_ack.proof_bytes_hex' "$OUTPUT_FIXTURE")"
-PACKET_PROOF="$(jq -r '.proofs.packet.proof_bytes_hex' "$OUTPUT_FIXTURE")"
+generate_recv_proof_fixture "$OUTPUT_FIXTURE" "$COMMITMENTS_JSON"
+load_recv_proof_fixture "$OUTPUT_FIXTURE"
 
 render_template "$SCENARIO_DIR/recv.gno.tmpl" "$WORKDIR/recv_call_success.gno" \
   -e "s|@STORAGE_ROOT_HEX@|$STORAGE_ROOT|g" \

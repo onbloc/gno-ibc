@@ -32,65 +32,65 @@ export GNOROOT="$GNO_ROOT"
 
 # ── port check ────────────────────────────────────────────────────────────────
 if lsof -iTCP:26657 -sTCP:LISTEN -t &>/dev/null; then
-    echo "error: port 26657 is already in use — validator may already be running"
-    exit 1
+  echo "error: port 26657 is already in use — validator may already be running"
+  exit 1
 fi
 
 # ── flags ─────────────────────────────────────────────────────────────────────
 RESET=false
 for arg in "$@"; do
-    case "$arg" in
-        --reset) RESET=true ;;
-        *) echo "unknown flag: $arg"; exit 1 ;;
-    esac
+  case "$arg" in
+    --reset) RESET=true ;;
+    *) echo "unknown flag: $arg"; exit 1 ;;
+  esac
 done
 
 if $RESET; then
-    echo ">> wiping node state: $DATA_DIR"
-    rm -rf "$DATA_DIR"
-    echo ">> wiping cached genesis txs: $GENESIS_TXS"
-    rm -rf "$GENESIS_TXS"
+  echo ">> wiping node state: $DATA_DIR"
+  rm -rf "$DATA_DIR"
+  echo ">> wiping cached genesis txs: $GENESIS_TXS"
+  rm -rf "$GENESIS_TXS"
 fi
 
 # ── 1. Generate genesis txs if not cached ─────────────────────────────────────
 if [ ! -f "$GENESIS_TXS" ]; then
-    echo ">> generating genesis txs (cached at $GENESIS_TXS after first run)"
-    mkdir -p "$CACHE_DIR"
-    python3 "$GNO_IBC_ROOT/tools/gen-ibc-genesis-txs.py" \
-        --ibc-root "$GNO_IBC_ROOT" \
-        --gno-root "$GNO_ROOT" \
-        --output "$GENESIS_TXS"
+  echo ">> generating genesis txs (cached at $GENESIS_TXS after first run)"
+  mkdir -p "$CACHE_DIR"
+  python3 "$GNO_IBC_ROOT/tools/gen-ibc-genesis-txs.py" \
+    --ibc-root "$GNO_IBC_ROOT" \
+    --gno-root "$GNO_ROOT" \
+    --output "$GENESIS_TXS"
 fi
 
 # ── 2. Prepare config (idempotent) ───────────────────────────────────────────
 mkdir -p "$DATA_DIR"
 gnoland config init -force -config-path "$DATA_DIR/config/config.toml"
 gnoland config set rpc.laddr "tcp://$RPC_LISTENER" \
-    -config-path "$DATA_DIR/config/config.toml"
+  -config-path "$DATA_DIR/config/config.toml"
 
 # ── 3. First run vs. resume ───────────────────────────────────────────────────
 # genesis.json is stored explicitly inside DATA_DIR so its presence reliably
 # indicates whether a chain has already been initialised.
 if [ ! -f "$DATA_DIR/genesis.json" ]; then
-    echo ">> starting gnoland from block 0 (rpc: $RPC_LISTENER, data: $DATA_DIR)"
-    echo ">> logs: $LOG_FILE"
-    gnoland start \
-        -lazy \
-        -chainid "$CHAIN_ID" \
-        -gnoroot-dir "$GNO_ROOT" \
-        -data-dir "$DATA_DIR" \
-        -genesis "$DATA_DIR/genesis.json" \
-        -genesis-txs-file "$GENESIS_TXS" \
-        -skip-genesis-sig-verification \
-        -log-format console \
-        2>&1 | tee "$LOG_FILE"
+  echo ">> starting gnoland from block 0 (rpc: $RPC_LISTENER, data: $DATA_DIR)"
+  echo ">> logs: $LOG_FILE"
+  gnoland start \
+    -lazy \
+    -chainid "$CHAIN_ID" \
+    -gnoroot-dir "$GNO_ROOT" \
+    -data-dir "$DATA_DIR" \
+    -genesis "$DATA_DIR/genesis.json" \
+    -genesis-txs-file "$GENESIS_TXS" \
+    -skip-genesis-sig-verification \
+    -log-format console \
+    2>&1 | tee "$LOG_FILE"
 else
-    echo ">> resuming gnoland from existing state (rpc: $RPC_LISTENER, data: $DATA_DIR)"
-    echo ">> logs: $LOG_FILE"
-    gnoland start \
-        -gnoroot-dir "$GNO_ROOT" \
-        -data-dir "$DATA_DIR" \
-        -genesis "$DATA_DIR/genesis.json" \
-        -log-format console \
-        2>&1 | tee "$LOG_FILE"
+  echo ">> resuming gnoland from existing state (rpc: $RPC_LISTENER, data: $DATA_DIR)"
+  echo ">> logs: $LOG_FILE"
+  gnoland start \
+    -gnoroot-dir "$GNO_ROOT" \
+    -data-dir "$DATA_DIR" \
+    -genesis "$DATA_DIR/genesis.json" \
+    -log-format console \
+    2>&1 | tee "$LOG_FILE"
 fi

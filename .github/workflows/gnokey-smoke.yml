@@ -1,0 +1,38 @@
+name: gnokey smoke
+
+on:
+  push:
+    branches: [main]
+    paths: &gnokey_smoke_paths
+      - '**.gno'
+      - '**.go'
+      - '.gno-version'
+      - 'gnowork.toml'
+      - 'Makefile'
+      - 'stdlibs/**'
+      - 'tools/setup-stdlibs.py'
+      - 'tools/gnokey-query-smoke.sh'
+      - 'tools/gnokey-smoke/**'
+      - 'flake.nix'
+      - 'flake.lock'
+      - '.github/actions/setup-gno/**'
+      - '.github/workflows/gnokey-smoke.yml'
+  pull_request:
+    paths: *gnokey_smoke_paths
+
+concurrency:
+  group: gnokey-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gnokey-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup gno
+        uses: ./.github/actions/setup-gno
+
+      - name: Run gnokey smoke tests
+        run: make test-gnokey-query-smoke

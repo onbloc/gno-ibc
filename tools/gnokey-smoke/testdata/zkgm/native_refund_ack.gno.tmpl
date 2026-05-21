@@ -1,0 +1,40 @@
+package main
+
+import (
+	"encoding/hex"
+
+	z "gno.land/p/gnoswap/ibc/zkgm"
+	u256 "gno.land/p/gnoswap/uint256"
+	core "gno.land/r/core/ibc/v1/core"
+	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
+)
+
+func main() {
+	operand, err := hex.DecodeString("@REFUND_OPERAND@")
+	if err != nil {
+		panic(err)
+	}
+	instruction := z.Instruction{
+		Version: z.INSTR_VERSION_2,
+		Opcode:  z.OP_TOKEN_ORDER,
+		Operand: operand,
+	}
+	packet := core.Packet{
+		SourceChannelId:      core.ChannelId(@REFUND_SOURCE@),
+		DestinationChannelId: core.ChannelId(@REFUND_DEST@),
+		Data:                 e2e.MustPacketData(cross, instruction),
+		TimeoutTimestamp:     core.Timestamp(1 << 62),
+	}
+	e2e.BatchSend(cross, packet)
+	println("commitment_before_ack", core.HasPacketCommitment(cross, packet))
+
+	failureAck := e2e.MustAck(cross, u256.Zero(), []byte("counterparty failed"))
+	core.PacketAcknowledgement(cross, core.MsgPacketAcknowledgement{
+		Packets:          []core.Packet{packet},
+		Acknowledgements: [][]byte{failureAck},
+		ProofHeight:      core.Height(1),
+	})
+
+	println("commitment_after_ack", core.HasPacketCommitment(cross, packet))
+	println("RESULT native ack-failure refund succeeded")
+}

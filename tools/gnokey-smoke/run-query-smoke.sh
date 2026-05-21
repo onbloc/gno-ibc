@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-EXPECTED_HIT="0x0100000000000000000000000000000000000000000000000000000000000000"
-
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
 
 trap cleanup_smoke_env EXIT
@@ -94,54 +92,30 @@ BATCH_HASH_LIT=$(hex_to_h256_lit "$BATCH_HASH")
 
 echo ">> Phase 8: qeval probes"
 
-probe_qeval_nonempty "GetClientType(cometbls_id=$COMETBLS_ID)" \
-  "gno.land/r/core/ibc/v1/core.GetClientType($COMETBLS_ID)"
+render_template "$QUERY_TESTDATA_DIR/qeval_cases.tsv.tmpl" "$WORKDIR/qeval_cases.tsv" \
+  -e "s/@COMETBLS_ID@/$COMETBLS_ID/g" \
+  -e "s/@STATELENS_ID@/$STATELENS_ID/g" \
+  -e "s/@UPDATE_HEIGHT@/$UPDATE_HEIGHT/g" \
+  -e "s/@CONNECTION_ID@/$CONNECTION_ID/g" \
+  -e "s/@MOCK_SOURCE@/$MOCK_SOURCE/g" \
+  -e "s/@BATCH_HASH_LIT@/$BATCH_HASH_LIT/g"
 
-probe_qeval_nonempty "GetClientType(statelens_id=$STATELENS_ID)" \
-  "gno.land/r/core/ibc/v1/core.GetClientType($STATELENS_ID)"
+while IFS=$'\t' read -r mode label expr expected; do
+  [[ -z "$mode" || "$mode" == \#* ]] && continue
 
-probe_qeval "GetClientType(9999) miss" \
-  "gno.land/r/core/ibc/v1/core.GetClientType(9999)" \
-  ""
-
-probe_qeval_nonempty "QueryClientState(cometbls_id=$COMETBLS_ID)" \
-  "gno.land/r/core/ibc/v1/core.QueryClientState($COMETBLS_ID)"
-
-probe_qeval "QueryClientState(9999) miss" \
-  "gno.land/r/core/ibc/v1/core.QueryClientState(9999)" \
-  ""
-
-probe_qeval_nonempty "QueryConsensusState(cometbls_id=$COMETBLS_ID, height=$UPDATE_HEIGHT)" \
-  "gno.land/r/core/ibc/v1/core.QueryConsensusState($COMETBLS_ID, $UPDATE_HEIGHT)"
-
-probe_qeval_nonempty "QueryConnection(connection_id=$CONNECTION_ID)" \
-  "gno.land/r/core/ibc/v1/core.QueryConnection($CONNECTION_ID)"
-
-probe_qeval "QueryConnection(9999) miss" \
-  "gno.land/r/core/ibc/v1/core.QueryConnection(9999)" \
-  ""
-
-probe_qeval_nonempty "QueryChannel(mock_source=$MOCK_SOURCE)" \
-  "gno.land/r/core/ibc/v1/core.QueryChannel($MOCK_SOURCE)"
-
-probe_qeval "QueryChannel(9999) miss" \
-  "gno.land/r/core/ibc/v1/core.QueryChannel(9999)" \
-  ""
-
-probe_qeval "QueryBatchPackets(batchHash) baseline" \
-  "gno.land/r/core/ibc/v1/core.QueryBatchPackets(${BATCH_HASH_LIT})" \
-  "$EXPECTED_HIT"
-
-probe_qeval "QueryCommitmentAtPath(BatchPacketsPath(batchHash)) composed" \
-  "gno.land/r/core/ibc/v1/core.QueryCommitmentAtPath(BatchPacketsPath(${BATCH_HASH_LIT}))" \
-  "$EXPECTED_HIT"
-
-probe_qeval "QueryCommitmentAtPath(H256{}) miss" \
-  'gno.land/r/core/ibc/v1/core.QueryCommitmentAtPath(H256{})' \
-  ""
-
-probe_qeval "QueryReceiptAtPath(H256{}) miss" \
-  'gno.land/r/core/ibc/v1/core.QueryReceiptAtPath(H256{})' \
-  ""
+  case "$mode" in
+    nonempty)
+      probe_qeval_nonempty "$label" "$expr"
+      ;;
+    exact)
+      [[ "$expected" == "__EMPTY__" ]] && expected=""
+      probe_qeval "$label" "$expr" "$expected"
+      ;;
+    *)
+      echo "FAIL: unknown qeval case mode '$mode' for '$label'"
+      exit 1
+      ;;
+  esac
+done <"$WORKDIR/qeval_cases.tsv"
 
 echo "all qeval smoke assertions passed"

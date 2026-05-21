@@ -1,0 +1,15 @@
+# mode	label	expr	expected
+nonempty	GetClientType(cometbls_id=@COMETBLS_ID@)	gno.land/r/core/ibc/v1/core.GetClientType(@COMETBLS_ID@)	
+nonempty	GetClientType(statelens_id=@STATELENS_ID@)	gno.land/r/core/ibc/v1/core.GetClientType(@STATELENS_ID@)	
+exact	GetClientType(9999) miss	gno.land/r/core/ibc/v1/core.GetClientType(9999)	__EMPTY__
+nonempty	QueryClientState(cometbls_id=@COMETBLS_ID@)	gno.land/r/core/ibc/v1/core.QueryClientState(@COMETBLS_ID@)	
+exact	QueryClientState(9999) miss	gno.land/r/core/ibc/v1/core.QueryClientState(9999)	__EMPTY__
+nonempty	QueryConsensusState(cometbls_id=@COMETBLS_ID@, height=@UPDATE_HEIGHT@)	gno.land/r/core/ibc/v1/core.QueryConsensusState(@COMETBLS_ID@, @UPDATE_HEIGHT@)	
+nonempty	QueryConnection(connection_id=@CONNECTION_ID@)	gno.land/r/core/ibc/v1/core.QueryConnection(@CONNECTION_ID@)	
+exact	QueryConnection(9999) miss	gno.land/r/core/ibc/v1/core.QueryConnection(9999)	__EMPTY__
+nonempty	QueryChannel(mock_source=@MOCK_SOURCE@)	gno.land/r/core/ibc/v1/core.QueryChannel(@MOCK_SOURCE@)	
+exact	QueryChannel(9999) miss	gno.land/r/core/ibc/v1/core.QueryChannel(9999)	__EMPTY__
+exact	QueryBatchPackets(batchHash) baseline	gno.land/r/core/ibc/v1/core.QueryBatchPackets(@BATCH_HASH_LIT@)	0x0100000000000000000000000000000000000000000000000000000000000000
+exact	QueryCommitmentAtPath(BatchPacketsPath(batchHash)) composed	gno.land/r/core/ibc/v1/core.QueryCommitmentAtPath(BatchPacketsPath(@BATCH_HASH_LIT@))	0x0100000000000000000000000000000000000000000000000000000000000000
+exact	QueryCommitmentAtPath(H256{}) miss	gno.land/r/core/ibc/v1/core.QueryCommitmentAtPath(H256{})	__EMPTY__
+exact	QueryReceiptAtPath(H256{}) miss	gno.land/r/core/ibc/v1/core.QueryReceiptAtPath(H256{})	__EMPTY__

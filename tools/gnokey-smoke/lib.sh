@@ -6,6 +6,7 @@ GNO_IBC_ROOT="${GNO_IBC_ROOT:-$(cd "$GNO_SMOKE_DIR/../.." && pwd)}"
 GNO_ROOT="${GNO_ROOT:-$HOME/.cache/gno-ibc/gno}"
 RPC_ENDPOINT="${RPC_ENDPOINT:-tcp://127.0.0.1:26657}"
 RPC_URL="${RPC_URL:-http://127.0.0.1:26657}"
+RPC_LISTENER="${RPC_LISTENER:-0.0.0.0:26657}"
 CHAIN_ID="${CHAIN_ID:-dev}"
 SMOKE_KEY_NAME="${SMOKE_KEY_NAME:-test1}"
 SMOKE_GAS_FEE="${SMOKE_GAS_FEE:-1000000ugnot}"
@@ -27,10 +28,7 @@ cleanup_smoke_env() {
   fi
 }
 
-start_smoke_node() {
-  init_smoke_env
-
-  echo ">> starting gnodev on 127.0.0.1:26657"
+run_smoke_node() {
   gnodev local \
     -root "$GNO_ROOT" \
     -resolver "root=$GNO_IBC_ROOT" \
@@ -43,8 +41,14 @@ start_smoke_node() {
     -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm/testing/e2e" \
     -paths "gno.land/r/core/ibc/v1/core,gno.land/r/core/ibc/v1/lightclients/cometbls,gno.land/r/core/ibc/v1/lightclients/statelensics23mpt,gno.land/r/gnoswap/ibc/v1/apps/zkgm,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader,gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e" \
     -no-web \
-    -node-rpc-listener "0.0.0.0:26657" \
-    >"$WORKDIR/gnodev.log" 2>&1 &
+    -node-rpc-listener "$RPC_LISTENER"
+}
+
+start_smoke_node() {
+  init_smoke_env
+
+  echo ">> starting gnodev on 127.0.0.1:26657"
+  run_smoke_node >"$WORKDIR/gnodev.log" 2>&1 &
   GNODEV_PID=$!
 
   local deadline=$((SECONDS + 60))

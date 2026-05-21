@@ -4,11 +4,17 @@ These files snapshot observed Union Sepolia outputs for the wrapped `ugnot`
 ERC-20 at `0x4271eb8f0243f1e1f303912841fdce55c06cf223`.
 
 The committed fixtures are offline regression inputs. Tests must not call
-Sepolia, Etherscan, or Union services. To refresh them explicitly:
+Sepolia, Etherscan, or Union services. Validate them offline with:
+
+```sh
+tools/eth-gno-smoke/fixture.sh sepolia-ugnot --check
+```
+
+To refresh them explicitly:
 
 ```sh
 SEPOLIA_RPC_URL=https://ethereum-sepolia.publicnode.com \
-  tools/eth-gno-smoke/fetch-sepolia-ugnot-fixtures.sh
+  tools/eth-gno-smoke/fixture.sh sepolia-ugnot --refresh
 ```
 
 Files:

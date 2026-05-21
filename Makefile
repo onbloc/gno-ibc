@@ -213,21 +213,22 @@ test-zkgm-native-refund-smoke: verify-gno vendor
 	@./tools/gnokey-smoke/run-zkgm-native-refund.sh
 
 test-gno-to-eth-smoke: verify-gno vendor
-	@./tools/eth-gno-smoke/run-gno-to-eth.sh
+	@./tools/eth-gno-smoke/smoke.sh gno-to-eth
 
 test-eth-proof-fixture-smoke:
-	@./tools/eth-gno-smoke/generate-eth-proof-fixture.sh
+	@./tools/eth-gno-smoke/fixture.sh eth-proof
 
 test-eth-to-gno-smoke: verify-gno vendor
-	@./tools/eth-gno-smoke/run-eth-to-gno.sh
+	@./tools/eth-gno-smoke/smoke.sh eth-to-gno
 
 test-eth-to-gno-success-smoke: verify-gno vendor
-	@./tools/eth-gno-smoke/run-eth-to-gno-success.sh
+	@./tools/eth-gno-smoke/smoke.sh eth-to-gno-success
 
-test-eth-gno-smoke: test-gno-to-eth-smoke test-eth-to-gno-smoke test-eth-to-gno-success-smoke
+test-eth-gno-smoke: verify-gno vendor
+	@./tools/eth-gno-smoke/smoke.sh all
 
 test-sepolia-ugnot-fixtures:
-	@go run ./tools/eth-gno-smoke/check-sepolia-ugnot-fixtures.go
+	@./tools/eth-gno-smoke/fixture.sh sepolia-ugnot --check
 
 clean-gno-cache:
 	@rm -rf $(GNO_CACHE)

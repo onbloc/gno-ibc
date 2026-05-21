@@ -1,8 +1,5 @@
-//go:build ignore
-
 // Command check-sepolia-ugnot-fixtures validates committed Union Sepolia ugnot
-// observations without making network calls. It is a standalone `go run` tool,
-// kept out of package builds so it can share this directory with sibling tools.
+// observations without making network calls.
 package main
 
 import (
@@ -257,7 +254,7 @@ func sepoliaFixtureDir() string {
 	if !ok {
 		fail("cannot resolve fixture directory from source path")
 	}
-	return filepath.Join(filepath.Dir(self), "testdata", "sepolia")
+	return filepath.Join(filepath.Dir(self), "..", "..", "scenarios", "sepolia-ugnot")
 }
 
 func mustReadJSON[T any](name string) T {

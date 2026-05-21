@@ -1,23 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCENARIO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ETH_GNO_SMOKE_DIR="$(cd "$SCENARIO_DIR/../.." && pwd)"
+source "$ETH_GNO_SMOKE_DIR/lib/env.sh"
+
 SEPOLIA_RPC_URL="${SEPOLIA_RPC_URL:-}"
 if [[ -z "$SEPOLIA_RPC_URL" ]]; then
   echo "ERROR: set SEPOLIA_RPC_URL to refresh Sepolia ugnot fixtures"
   exit 1
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-OUT_DIR="$SCRIPT_DIR/testdata/sepolia"
-mkdir -p "$OUT_DIR"
-
-require_command() {
-  local name="$1"
-  command -v "$name" >/dev/null 2>&1 || {
-    echo "ERROR: '$name' not found on PATH"
-    exit 1
-  }
-}
+OUT_DIR="$SCENARIO_DIR"
 
 rpc() {
   local method="$1"

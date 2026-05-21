@@ -2,7 +2,7 @@
 
 ## Verification rules
 
-- Always run `/simplify` before presenting completed work on non-trivial changes.
+- Always run `/code-review` (formerly `/simplify`) before presenting completed work on non-trivial changes.
 
 ## PR descriptions
 

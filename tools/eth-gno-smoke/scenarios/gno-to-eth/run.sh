@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+SCENARIO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ETH_GNO_SMOKE_DIR="$(cd "$SCENARIO_DIR/../.." && pwd)"
+source "$ETH_GNO_SMOKE_DIR/lib/env.sh"
+source "$ETH_GNO_SMOKE_DIR/lib/log.sh"
+source "$ETH_GNO_SMOKE_DIR/lib/gno.sh"
 
 require_command gnokey
 require_command gnodev
@@ -9,11 +13,10 @@ require_command gnodev
 trap cleanup_eth_gno_smoke_env EXIT
 setup_smoke_chain
 
-GNO_TO_ETH_TESTDATA_DIR="$ETH_GNO_TESTDATA_DIR/gno-to-eth"
-OUTPUT_FIXTURE="${ETH_GNO_GNO_TO_ETH_FIXTURE:-$GNO_TO_ETH_TESTDATA_DIR/latest.json}"
+OUTPUT_FIXTURE="${ETH_GNO_GNO_TO_ETH_FIXTURE:-$SCENARIO_DIR/fixture.json}"
 
 echo ">> Gno -> ETH packet extraction smoke"
-maketx_run "$GNO_TO_ETH_TESTDATA_DIR/send_packet.gno" "$WORKDIR/send_packet.log"
+maketx_run "$SCENARIO_DIR/send_packet.gno" "$WORKDIR/send_packet.log"
 
 SOURCE_CHANNEL_ID="$(require_field source_channel_id "$WORKDIR/send_packet.log")"
 DESTINATION_CHANNEL_ID="$(require_field destination_channel_id "$WORKDIR/send_packet.log")"

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib.sh"
+SCENARIO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ETH_GNO_SMOKE_DIR="$(cd "$SCENARIO_DIR/../.." && pwd)"
+source "$ETH_GNO_SMOKE_DIR/lib/env.sh"
+source "$ETH_GNO_SMOKE_DIR/lib/eth.sh"
 
 require_command anvil
 require_command cast
@@ -14,8 +17,7 @@ trap cleanup_eth_gno_smoke_env EXIT
 init_smoke_env
 start_anvil
 
-ETH_TO_GNO_TESTDATA_DIR="$ETH_GNO_TESTDATA_DIR/eth-to-gno"
-OUTPUT_FIXTURE="${ETH_GNO_ETH_TO_GNO_FIXTURE:-$ETH_TO_GNO_TESTDATA_DIR/proof-latest.json}"
+OUTPUT_FIXTURE="${ETH_GNO_ETH_TO_GNO_FIXTURE:-$SCENARIO_DIR/fixture.json}"
 COMMITMENT_PATH_HEX="${ETH_GNO_COMMITMENT_PATH_HEX:-0x472a9e75d39222a3bf79c3c11213f805e1268c67b038092c0eac21f1ad990409}"
 COMMITMENT_VALUE_HEX="${ETH_GNO_COMMITMENT_VALUE_HEX:-$ETH_GNO_COMMITMENT_MAGIC_HEX}"
 COMMITMENTS_JSON="${ETH_GNO_COMMITMENTS_JSON:-}"
@@ -27,7 +29,7 @@ if [[ -z "$COMMITMENTS_JSON" ]]; then
 fi
 
 echo ">> compiling local CommitmentMap contract"
-solc --bin --abi --overwrite -o "$WORKDIR/solc" "$ETH_TO_GNO_TESTDATA_DIR/CommitmentMap.sol" >"$WORKDIR/solc.log"
+solc --bin --abi --overwrite -o "$WORKDIR/solc" "$SCENARIO_DIR/CommitmentMap.sol" >"$WORKDIR/solc.log"
 CONTRACT_BIN="$(tr -d '\n' <"$WORKDIR/solc/CommitmentMap.bin")"
 if [[ -z "$CONTRACT_BIN" ]]; then
   echo "FAIL: solc did not produce CommitmentMap bytecode"
@@ -59,7 +61,7 @@ BLOCK_NUMBER_HEX="$(cast to-hex "$BLOCK_NUMBER_DEC")"
 
 echo ">> building storage proof encoder"
 ENCODER_BIN="$WORKDIR/encode-storage-proof"
-go build -o "$ENCODER_BIN" "$ETH_GNO_SMOKE_DIR/encode-storage-proof.go"
+(cd "$ETH_GNO_SMOKE_DIR" && go build -o "$ENCODER_BIN" ./cmd/encode-storage-proof)
 
 echo ">> fetching eth_getProof at block $BLOCK_NUMBER_DEC"
 : >"$WORKDIR/proofs.jsonl"

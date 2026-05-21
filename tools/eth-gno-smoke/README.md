@@ -4,23 +4,46 @@ This directory is the local, repo-owned smoke harness for proving packet
 compatibility in both directions without depending on Union Voyager internals,
 external EVM RPCs, Union deployments, or Union devnets.
 
-The first committed shape is intentionally thin: it pins the wire contracts,
-fixture format, and script responsibilities before the runners grow into full
-node/proof automation.
+For a hands-on execution guide, see [`HANDS_ON.md`](./HANDS_ON.md).
 
-For a hands-on execution guide, see
-[`HANDS_ON.md`](./HANDS_ON.md).
+## Entrypoints
 
-## Directions
+Two dispatchers are the only entrypoints. The `Makefile` smoke targets call
+them, and they wrap the per-scenario scripts under `scenarios/`.
 
-- `run-gno-to-eth.sh` proves that a Gno ZKGM send emits packet metadata and a
-  batch packet commitment that an ETH-side relayer can consume.
-- `generate-eth-proof-fixture.sh` starts local `anvil`, deploys a minimal
-  commitment-map contract, writes one packet commitment, fetches `eth_getProof`,
-  and encodes Union `StorageProof` bytes.
-- `run-eth-to-gno.sh` proves that a packet batch commitment stored in a local
-  `anvil` commitment-map contract can be proven with `eth_getProof`, encoded as
-  Union `StorageProof`, and submitted to Gno `core.PacketRecv`.
+```sh
+smoke.sh gno-to-eth          # Gno ZKGM send -> ETH-consumable packet commitment
+smoke.sh eth-to-gno          # ETH storage proof -> Gno core.PacketRecv (error ack)
+smoke.sh eth-to-gno-success  # ETH storage proof -> Gno core.PacketRecv (success ack)
+smoke.sh all                 # every smoke scenario in order
+
+fixture.sh eth-proof                # local anvil ETH storage proof fixture
+fixture.sh sepolia-ugnot --check    # validate committed Sepolia ugnot fixtures (offline)
+fixture.sh sepolia-ugnot --refresh  # refetch Sepolia ugnot fixtures (needs SEPOLIA_RPC_URL)
+```
+
+## Layout
+
+```text
+smoke.sh / fixture.sh   dispatchers, the only entrypoints
+lib/                    shell library: env.sh, log.sh, gno.sh, eth.sh
+cmd/                    Go helpers: encode-storage-proof, check-sepolia-ugnot-fixtures
+scenarios/<name>/       one folder per scenario: run.sh, inputs, committed fixture.json
+```
+
+Each scenario owns its inputs, template, and generated `fixture.json`:
+
+- `scenarios/gno-to-eth/` proves that a Gno ZKGM send emits packet metadata and
+  a batch packet commitment that an ETH-side relayer can consume.
+- `scenarios/eth-proof/` starts local `anvil`, deploys a minimal commitment-map
+  contract, writes packet commitments, fetches `eth_getProof`, and encodes Union
+  `StorageProof` bytes. The two `eth-to-gno-*` scenarios reuse it.
+- `scenarios/eth-to-gno-error/` and `scenarios/eth-to-gno-success/` prove that
+  storage commitments in a local `anvil` contract can be proven with
+  `eth_getProof`, encoded as Union `StorageProof`, and submitted to Gno
+  `core.PacketRecv`.
+- `scenarios/sepolia-ugnot/` holds committed Union Sepolia ugnot observations
+  and the offline validator behind `fixture.sh sepolia-ugnot`.
 
 ## Shared Packet Fields
 
@@ -61,7 +84,7 @@ The Gno extraction runner is responsible for deriving these values:
 
 The tx-indexer query shape for multi-attribute `PacketSend` filtering is
 documented in `docs/tx-indexer.md`. Prefer direct RPC store proof extraction
-when available; keep the exact query JSON in `testdata/gno-to-eth/` whenever
+when available; keep the exact query JSON in `scenarios/gno-to-eth/` whenever
 the runner depends on GraphQL.
 
 Expected fixture:
@@ -135,9 +158,9 @@ Expected fixture:
 
 ## Runner Status
 
-Both directional runners are implemented for local smoke coverage.
-`run-eth-to-gno.sh` generates local anvil storage proofs for the connection ack,
-channel ack, and packet commitment paths, creates a state-lens client with the
-resulting storage root, submits `core.PacketRecv`, checks `PacketRecv` and
-`WriteAck` events, and verifies duplicate receive leaves the acknowledgement
-unchanged.
+Both directional smoke scenarios are implemented for local coverage.
+`scenarios/eth-to-gno-error/run.sh` generates local anvil storage proofs for the
+connection ack, channel ack, and packet commitment paths, creates a state-lens
+client with the resulting storage root, submits `core.PacketRecv`, checks
+`PacketRecv` and `WriteAck` events, and verifies that a duplicate receive leaves
+the acknowledgement unchanged.

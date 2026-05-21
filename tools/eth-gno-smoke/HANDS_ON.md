@@ -1,7 +1,7 @@
 # ETH/Gno Smoke Hands-On Guide
 
 This guide explains how the local ETH/Gno smoke harness behaves, what data it
-generates, and how each runner validates the result.
+generates, and how each scenario validates the result.
 
 The harness is intentionally local-only. It uses `gnodev`, `anvil`, `gnokey`,
 `cast`, `solc`, `jq`, and a minimal Solidity commitment map. It does not depend
@@ -21,25 +21,30 @@ Run each side separately:
 make test-gno-to-eth-smoke
 make test-eth-proof-fixture-smoke
 make test-eth-to-gno-smoke
+make test-eth-to-gno-success-smoke
 ```
 
-Generated fixtures are committed under:
+The `Makefile` targets call the two dispatchers, which can also be run directly:
+
+```sh
+tools/eth-gno-smoke/smoke.sh all
+tools/eth-gno-smoke/fixture.sh eth-proof
+```
+
+Generated fixtures are committed under each scenario folder:
 
 ```text
-tools/eth-gno-smoke/testdata/gno-to-eth/latest.json
-tools/eth-gno-smoke/testdata/eth-to-gno/proof-latest.json
-tools/eth-gno-smoke/testdata/eth-to-gno/latest.json
+tools/eth-gno-smoke/scenarios/gno-to-eth/fixture.json
+tools/eth-gno-smoke/scenarios/eth-proof/fixture.json
+tools/eth-gno-smoke/scenarios/eth-to-gno-error/fixture.json
+tools/eth-gno-smoke/scenarios/eth-to-gno-success/fixture.json
 ```
 
 Re-running the smoke should leave these files unchanged in a clean environment.
 
 ## Gno to ETH
 
-Runner:
-
-```text
-tools/eth-gno-smoke/run-gno-to-eth.sh
-```
+Scenario: `scenarios/gno-to-eth/`, run with `smoke.sh gno-to-eth`.
 
 Purpose: prove that a Gno ZKGM send produces packet metadata and a batch packet
 commitment that an ETH-side consumer can use.
@@ -48,11 +53,11 @@ Flow:
 
 1. Start a local `gnodev` chain.
 2. Import the deterministic smoke key.
-3. Run `testdata/gno-to-eth/send_packet.gno`.
+3. Run `scenarios/gno-to-eth/send_packet.gno`.
 4. Open an in-process mock IBC channel.
 5. Send a ZKGM `OP_CALL` packet.
 6. Print the packet fields and commitment data.
-7. Write `testdata/gno-to-eth/latest.json`.
+7. Write `scenarios/gno-to-eth/fixture.json`.
 
 The runner derives:
 
@@ -74,11 +79,7 @@ commitment data an ETH-side proof generator or relayer would need.
 
 ## ETH Proof Fixture
 
-Runner:
-
-```text
-tools/eth-gno-smoke/generate-eth-proof-fixture.sh
-```
+Scenario: `scenarios/eth-proof/`, run with `fixture.sh eth-proof`.
 
 Purpose: prove that local EVM storage commitments can be converted into the
 Union `StorageProof` byte format accepted by the Gno state-lens/ics23/mpt
@@ -87,11 +88,11 @@ adapter.
 Flow:
 
 1. Start local `anvil`.
-2. Compile and deploy `testdata/eth-to-gno/CommitmentMap.sol`.
+2. Compile and deploy `scenarios/eth-proof/CommitmentMap.sol`.
 3. Write one or more `bytes32 -> bytes32` commitments.
 4. Compute each Solidity mapping storage slot.
 5. Fetch `eth_getProof` for each slot.
-6. Encode each proof with `encode-storage-proof.go`.
+6. Encode each proof with `cmd/encode-storage-proof`.
 7. Write the selected fixture JSON.
 
 The minimal contract is:
@@ -118,36 +119,31 @@ proof = u64 count + repeated (u64 byte_length + rlp_node_bytes)
 Default output:
 
 ```text
-tools/eth-gno-smoke/testdata/eth-to-gno/proof-latest.json
+tools/eth-gno-smoke/scenarios/eth-proof/fixture.json
 ```
 
-When called by `run-eth-to-gno.sh`, the output is:
-
-```text
-tools/eth-gno-smoke/testdata/eth-to-gno/latest.json
-```
+When the `eth-to-gno-*` scenarios call it, they override the output so the proof
+lands in the calling scenario's own `fixture.json`.
 
 ## ETH to Gno
 
-Runner:
-
-```text
-tools/eth-gno-smoke/run-eth-to-gno.sh
-```
+Scenarios: `scenarios/eth-to-gno-error/` (`smoke.sh eth-to-gno`) and
+`scenarios/eth-to-gno-success/` (`smoke.sh eth-to-gno-success`).
 
 Purpose: prove that Gno can verify local ETH storage proofs and receive an
 ETH-originated packet through `core.PacketRecv`.
 
-Flow:
+Flow of the error scenario:
 
 1. Start a local `gnodev` chain on the ETH-to-Gno smoke port.
-2. Run `testdata/eth-to-gno/fixture_inputs.gno`.
+2. Run `scenarios/eth-to-gno-error/fixture_inputs.gno`.
 3. Derive the counterparty connection ack path/value.
 4. Derive the counterparty channel ack path/value.
 5. Derive the packet batch commitment path/value.
 6. Store all three commitments in local `anvil`.
 7. Fetch and encode an ETH storage proof for each commitment.
-8. Render `recv_packet.gno.tmpl` with the storage root and proof bytes.
+8. Render `scenarios/eth-to-gno-error/recv.gno.tmpl` with the storage root and
+   proof bytes.
 9. Submit the rendered script with `gnokey maketx run`.
 10. Verify packet receive, acknowledgement, and duplicate receive behavior.
 
@@ -169,15 +165,16 @@ Validation:
 - `core.HasAcknowledgement(cross, packet)` must be true,
 - duplicate receive must keep the same acknowledgement hash.
 
-The current packet payload reaches `WriteAck` with a `UNIVERSAL_ERROR`
-acknowledgement. That is acceptable for this smoke layer because it verifies the
-core receive path, state-lens proof verification, acknowledgement write, and
-duplicate guard. A later app-level smoke should add a success acknowledgement
-and assert the expected ZKGM side effect.
+The error scenario's packet payload reaches `WriteAck` with a `UNIVERSAL_ERROR`
+acknowledgement, which exercises the core receive path, state-lens proof
+verification, acknowledgement write, and duplicate guard. The success scenario
+drives a packet that reaches a success acknowledgement and additionally asserts
+that the mock receiver was called exactly once with the expected sender and
+calldata.
 
 ## Artifacts
 
-`gno-to-eth/latest.json` contains:
+`scenarios/gno-to-eth/fixture.json` contains:
 
 - packet fields,
 - packet hash,
@@ -185,14 +182,15 @@ and assert the expected ZKGM side effect.
 - Gno batch commitment path,
 - commitment value.
 
-`eth-to-gno/proof-latest.json` contains:
+`scenarios/eth-proof/fixture.json` contains:
 
 - local EVM contract address,
 - storage slot,
 - storage root,
 - one encoded proof.
 
-`eth-to-gno/latest.json` contains:
+`scenarios/eth-to-gno-error/fixture.json` and
+`scenarios/eth-to-gno-success/fixture.json` contain:
 
 - connection ack proof,
 - channel ack proof,
@@ -221,4 +219,3 @@ make test-eth-to-gno-smoke
 If `vendor` fails with a `.git/modules` lock error inside a sandboxed
 environment, run the make target outside the sandbox. The target updates
 submodule worktree metadata before launching the smoke.
-

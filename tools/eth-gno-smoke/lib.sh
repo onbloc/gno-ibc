@@ -4,10 +4,22 @@ set -euo pipefail
 ETH_GNO_SMOKE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ETH_GNO_TESTDATA_DIR="$ETH_GNO_SMOKE_DIR/testdata"
 GNO_IBC_ROOT="${GNO_IBC_ROOT:-$(cd "$ETH_GNO_SMOKE_DIR/../.." && pwd)}"
+ANVIL_RPC_URL="${ANVIL_RPC_URL:-http://127.0.0.1:8545}"
+ANVIL_HOST="${ANVIL_HOST:-127.0.0.1}"
+ANVIL_PORT="${ANVIL_PORT:-8545}"
+ANVIL_PRIVATE_KEY="${ANVIL_PRIVATE_KEY:-0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80}"
 
 # Reuse the existing smoke-node/key helpers until this harness needs behavior
 # that differs from tools/gnokey-smoke.
 source "$GNO_IBC_ROOT/tools/gnokey-smoke/lib.sh"
+
+cleanup_eth_gno_smoke_env() {
+  if [[ -n "${ANVIL_PID:-}" ]] && kill -0 "$ANVIL_PID" 2>/dev/null; then
+    kill "$ANVIL_PID" 2>/dev/null || true
+    wait "$ANVIL_PID" 2>/dev/null || true
+  fi
+  cleanup_smoke_env
+}
 
 require_command() {
   local name="$1"
@@ -34,6 +46,32 @@ require_field() {
     exit 1
   fi
   printf "%s" "$value"
+}
+
+start_anvil() {
+  init_smoke_env
+
+  echo ">> starting anvil on $ANVIL_HOST:$ANVIL_PORT"
+  anvil --host "$ANVIL_HOST" --port "$ANVIL_PORT" >"$WORKDIR/anvil.log" 2>&1 &
+  ANVIL_PID=$!
+
+  local deadline=$((SECONDS + 30))
+  while (( SECONDS < deadline )); do
+    if cast block-number --rpc-url "$ANVIL_RPC_URL" >/dev/null 2>&1; then
+      echo ">> anvil ready"
+      return
+    fi
+    if ! kill -0 "$ANVIL_PID" 2>/dev/null; then
+      echo "anvil exited unexpectedly"
+      cat "$WORKDIR/anvil.log"
+      exit 1
+    fi
+    sleep 1
+  done
+
+  echo "anvil not ready within 30s"
+  cat "$WORKDIR/anvil.log"
+  exit 1
 }
 
 status_incomplete() {

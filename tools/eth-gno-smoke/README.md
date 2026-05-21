@@ -14,6 +14,9 @@ node/proof automation.
 
 - `run-gno-to-eth.sh` proves that a Gno ZKGM send emits packet metadata and a
   batch packet commitment that an ETH-side relayer can consume.
+- `generate-eth-proof-fixture.sh` starts local `anvil`, deploys a minimal
+  commitment-map contract, writes one packet commitment, fetches `eth_getProof`,
+  and encodes Union `StorageProof` bytes.
 - `run-eth-to-gno.sh` proves that a packet batch commitment stored in a local
   `anvil` commitment-map contract can be proven with `eth_getProof`, encoded as
   Union `StorageProof`, and submitted to Gno `core.PacketRecv`.
@@ -131,6 +134,8 @@ Expected fixture:
 
 ## Runner Status
 
-The scripts currently fail fast with an implementation-status message unless
-`ETH_GNO_SMOKE_ALLOW_INCOMPLETE=1` is set. This keeps future Make targets from
-silently passing before real proof extraction and submission are wired.
+`run-eth-to-gno.sh` currently fails fast with an implementation-status message
+unless `ETH_GNO_SMOKE_ALLOW_INCOMPLETE=1` is set. The proof fixture generator is
+implemented, but full `core.PacketRecv` submission is still pending. This keeps
+future Make targets from silently passing before the complete receive smoke is
+wired.

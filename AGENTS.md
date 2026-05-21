@@ -247,6 +247,73 @@ The ZKGM impl currently relies mostly on focused unit tests, not filetests. For 
 
 ---
 
+## Live Testnet ZKGM Packet Submission
+
+Operational knowledge from sending real `SendRaw` calls against a `gnodev` testnet.
+
+### `Send` / `SendRaw` require an EOA caller
+
+Both `Send` and `SendRaw` in the ZKGM realm capture sent coins only when `runtime.PreviousRealm().IsUserCall()` returns true. A `gnokey maketx run` script does **not** satisfy this check — the script's package is the previous realm, not the user EOA — so `banker.OriginSend()` returns empty and `requireSentCoin` panics with `zkgm/coins: sent coin mismatch` even though `-send <denom>` was attached.
+
+For native-token sends, always use `gnokey maketx call -func SendRaw …`. Pre-encode the operand offline using the Solidity ABI schemas in `gno.land/p/core/ibc/zkgm/abi.gno` and pass it as `operandHex`.
+
+### `TokenMetadata` is just two `[]byte` fields
+
+Despite the Union spec describing "name, symbol, decimals", `z.TokenMetadata` is exactly:
+
+```gno
+type TokenMetadata struct {
+    Implementation []byte
+    Initializer    []byte
+}
+```
+
+`Implementation` is Union's `ZkgmERC20` impl address (20B). `Initializer` is the Solidity calldata for `initialize(address authority, address zkgm, string name, string symbol, uint8 decimals)` — selector `0x8420ce99`. Name/symbol/decimals are packed inside `Initializer`, never as direct fields. A typo to `initializer(...)` yields selector `0xd0f68ee2` and silently fails dispatch on the receiving side.
+
+### `quote_token` must be the predicted ZkgmERC20 address
+
+For `TOKEN_ORDER_KIND_INITIALIZE`, `quote_token` cannot be empty and cannot be an arbitrary placeholder. Union's recv path computes `PredictWrappedTokenV2(path, destChannel, baseToken, keccak256(metadata))` and rejects the packet with `universal_error_ack` unless `string(order.QuoteToken)` is byte-equal to that address.
+
+Compute the value before encoding by calling Union's on-chain helper:
+
+```bash
+cast call <zkgm-evm-contract> \
+  "predictWrappedTokenV2(uint256,uint32,bytes,tuple(bytes,bytes))(address,bytes32)" \
+  <path> <destChannel> <baseTokenHex> \
+  "(<implementationHex>,<initializerHex>)" \
+  --rpc-url <evm-rpc>
+```
+
+The tuple inputs must be byte-identical to the `TokenMetadata` you will ship in the operand. `path` matches the wire packet `Path` (typically `0` for direct sends), `destChannel` is the counterparty channel id, and `baseTokenHex` is the raw `BaseToken` bytes (`0x75676E6F74` for `ugnot`). The returned 20-byte address goes into `quote_token` verbatim. Any change to `Implementation`, `Initializer`, or the channel reroutes the predicted address.
+
+### `-send` must exactly match the operand `BaseAmount`
+
+`requireSentCoin` (see `apps/zkgm/v0/impl/coins.gno`) rejects anything that isn't a single coin with `Denom == BaseToken` and `Amount == BaseAmount`. Mismatched amounts, extra denoms, or zero-coin transactions all fail. Refunds on timeout or non-success ack land on the proxy realm — see PR#50.
+
+### Gas budget
+
+A TokenOrderV2 INITIALIZE `SendRaw` consumes ~50.7M gas on the dev chain. Use `-gas-wanted 200000000` for headroom; the common 50M default is not enough.
+
+### Deployed realm path vs. source tree
+
+Source files live under `gno.land/r/core/ibc/v1/apps/zkgm/`, but a testnet deployment may publish them under a different namespace such as `gno.land/r/gnoswap/ibc/v1/apps/zkgm`. For `maketx call -pkgpath`, use the *deployed* path. The authoritative deployed path is the `port_id` attribute of `ChannelOpenInit` / `ChannelOpenAck` / `ChannelOpenConfirm` events surfaced by the tx-indexer.
+
+### Indexer GraphQL quirks (see `docs/tx-indexer.md`)
+
+- Top-level latest-block field is `latestBlockHeight`, not `getLatestBlockHeight`.
+- `getBlocks` takes `order: { height: DESC }`; `heightAndIndex` is rejected.
+- `getTransactions` does take `order: { heightAndIndex: DESC }`.
+
+### gnokey non-interactive password
+
+`gnokey` reads passwords from the TTY by default and errors with `inappropriate ioctl for device` on a piped stdin. For empty-password keys (e.g. `test1` on `gnodev`):
+
+```bash
+printf '\n' | gnokey maketx call -insecure-password-stdin …
+```
+
+---
+
 ## Testing Patterns
 
 ### Wire-format ground truth (ABI codec)

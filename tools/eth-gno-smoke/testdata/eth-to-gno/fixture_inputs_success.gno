@@ -11,6 +11,13 @@ import (
 	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
 )
 
+const (
+	expectedSender     = "eth-success-sender"
+	expectedCalldata   = "success-calldata"
+	expectedRelayerMsg = "success-relayer-msg"
+	mockReceiverPath   = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
+)
+
 func main() {
 	lensClientID := core.ClientId(2)
 	connectionID := core.ConnectionId(1)
@@ -39,7 +46,11 @@ func main() {
 	}
 	channelValue := hash(channel.EthAbiEncode())
 
-	call := z.Call{Sender: []byte("eth-sender"), ContractAddress: []byte("gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"), ContractCalldata: []byte("hello")}
+	call := z.Call{
+		Sender:           []byte(expectedSender),
+		ContractAddress:  []byte(mockReceiverPath),
+		ContractCalldata: []byte(expectedCalldata),
+	}
 	packet := core.Packet{
 		SourceChannelId:      counterpartyChannelID,
 		DestinationChannelId: channelID,
@@ -56,6 +67,9 @@ func main() {
 	println("packet_value", core.COMMITMENT_MAGIC.String())
 	println("packet_data_hex", "0x"+hex.EncodeToString(packet.Data))
 	println("packet_timeout_timestamp", packet.TimeoutTimestamp.String())
+	println("expected_sender", expectedSender)
+	println("expected_calldata", expectedCalldata)
+	println("expected_relayer_msg", expectedRelayerMsg)
 }
 
 func hash(bz []byte) core.H256 {

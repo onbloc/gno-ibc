@@ -23,6 +23,15 @@ cleanup_smoke_env() {
     kill "$GNODEV_PID" 2>/dev/null || true
     wait "$GNODEV_PID" 2>/dev/null || true
   fi
+  if [[ -n "${RPC_URL:-}" ]]; then
+    local deadline=$((SECONDS + 10))
+    while (( SECONDS < deadline )); do
+      if ! curl -sf "$RPC_URL/status" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 0.2
+    done
+  fi
   if [[ -n "${WORKDIR:-}" ]]; then
     rm -rf "$WORKDIR"
   fi
@@ -47,9 +56,21 @@ run_smoke_node() {
 start_smoke_node() {
   init_smoke_env
 
-  echo ">> starting gnodev on 127.0.0.1:26657"
+  if curl -sf "$RPC_URL/status" >/dev/null 2>&1; then
+    echo "ERROR: $RPC_URL already responds before smoke gnodev startup"
+    echo "Stop the existing gnodev process or choose an isolated RPC_LISTENER/RPC_URL/RPC_ENDPOINT."
+    exit 1
+  fi
+
+  echo ">> starting gnodev on $RPC_LISTENER"
   run_smoke_node >"$WORKDIR/gnodev.log" 2>&1 &
   GNODEV_PID=$!
+  sleep 0.2
+  if ! kill -0 "$GNODEV_PID" 2>/dev/null; then
+    echo "gnodev exited unexpectedly"
+    cat "$WORKDIR/gnodev.log"
+    exit 1
+  fi
 
   local deadline=$((SECONDS + 60))
   while (( SECONDS < deadline )); do

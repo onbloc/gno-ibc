@@ -9,8 +9,14 @@ import (
 	statelens "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
 	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
 	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
-	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
+	"gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
 	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
+)
+
+const (
+	expectedSender     = "@EXPECTED_SENDER@"
+	expectedCalldata   = "@EXPECTED_CALLDATA@"
+	expectedRelayerMsg = "@EXPECTED_RELAYER_MSG@"
 )
 
 func main() {
@@ -80,10 +86,12 @@ func main() {
 	}
 	msg := core.MsgPacketRecv{
 		Packets:     []core.Packet{packet},
-		RelayerMsgs: [][]byte{[]byte("relayer-msg")},
+		RelayerMsgs: [][]byte{[]byte(expectedRelayerMsg)},
 		Proof:       mustHex("@PACKET_PROOF_HEX@"),
 		ProofHeight: core.Height(1),
 	}
+
+	mock.Reset(cross)
 	core.PacketRecv(cross, msg)
 
 	println("packet_recv_event_expected", "PacketRecv")
@@ -92,11 +100,30 @@ func main() {
 	println("has_ack", core.HasAcknowledgement(cross, packet))
 	ackHash := core.AcknowledgementHash(cross, packet)
 	println("ack_hash_after_recv", ackHash.String())
+	println("ack_success", ackHash == core.CommitAcks([][]byte{e2e.MustCallAck(cross)}))
+	println("mock_calls", mock.Calls(cross))
+	println("last_sender", mock.LastSender(cross))
+	println("last_calldata", mock.LastCalldata(cross))
+	println("last_relayer_msg", mock.LastRelayerMsg(cross))
+	println("last_source_channel", mock.LastSourceChannel(cross))
+	println("last_destination_channel", mock.LastDestinationChannel(cross))
+
+	assert(mock.Calls(cross) == 1, "mock call count mismatch")
+	assert(mock.LastSender(cross) == expectedSender, "mock sender mismatch")
+	assert(mock.LastCalldata(cross) == expectedCalldata, "mock calldata mismatch")
+	assert(mock.LastRelayerMsg(cross) == expectedRelayerMsg, "mock relayer msg mismatch")
+	assert(mock.LastSourceChannel(cross) == "1", "mock source channel mismatch")
+	assert(mock.LastDestinationChannel(cross) == channelID.String(), "mock destination channel mismatch")
+	assert(ackHash == core.CommitAcks([][]byte{e2e.MustCallAck(cross)}), "success acknowledgement mismatch")
 
 	core.PacketRecv(cross, msg)
 	println("has_receipt_after_duplicate", core.HasPacketReceipt(cross, packet))
 	println("has_ack_after_duplicate", core.HasAcknowledgement(cross, packet))
 	println("ack_hash_after_duplicate", core.AcknowledgementHash(cross, packet).String())
+	println("mock_calls_after_duplicate", mock.Calls(cross))
+
+	assert(mock.Calls(cross) == 1, "duplicate receive called mock")
+	assert(core.AcknowledgementHash(cross, packet) == ackHash, "duplicate receive changed acknowledgement")
 }
 
 func mustHex(s string) []byte {
@@ -108,4 +135,10 @@ func mustHex(s string) []byte {
 		panic(err)
 	}
 	return bz
+}
+
+func assert(ok bool, msg string) {
+	if !ok {
+		panic(msg)
+	}
 }

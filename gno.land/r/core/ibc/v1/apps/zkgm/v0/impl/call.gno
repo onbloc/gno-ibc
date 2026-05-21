@@ -29,7 +29,9 @@ func (v *ZkgmV1) executeCall(packet core.Packet, relayer address, relayerMsg []b
 		return callErrAck(errEurekaUnsupported), nil
 	}
 
-	receiverPath := string(call.ContractAddress)
+	sender := cloneBytes(call.Sender)
+	calldata := cloneBytes(call.ContractCalldata)
+	receiverPath := string(cloneBytes(call.ContractAddress))
 	receiver := zkgm.GetReceiver(receiverPath)
 	if receiver == nil {
 		return callErrAck(errors.New("zkgm/v1: receiver not registered: " + receiverPath)), nil
@@ -38,14 +40,14 @@ func (v *ZkgmV1) executeCall(packet core.Packet, relayer address, relayerMsg []b
 	relayerStr := string(relayer)
 	env := z.CallEnv{
 		Caller:             relayerStr,
-		ProxyAccount:       PredictCallProxyAccount(path, packet.DestinationChannelId, call.Sender),
+		ProxyAccount:       PredictCallProxyAccount(path, packet.DestinationChannelId, sender),
 		Path:               path,
 		SourceChannel:      packet.SourceChannelId.String(),
 		DestinationChannel: packet.DestinationChannelId.String(),
-		Sender:             call.Sender,
-		Calldata:           call.ContractCalldata,
+		Sender:             sender,
+		Calldata:           calldata,
 		Relayer:            []byte(relayerStr),
-		RelayerMsg:         []byte(relayerMsg),
+		RelayerMsg:         cloneBytes(relayerMsg),
 	}
 
 	err, panicked := safeCallOnZkgm(receiver, env)
@@ -78,10 +80,32 @@ func (v *ZkgmV1) timeoutCall(packet core.Packet, path *u256.Uint, call z.Call) e
 }
 
 func safeCallOnZkgm(receiver z.Zkgmable, env z.CallEnv) (err error, panicked bool) {
-	p := revive(func() {
-		err = receiver.OnZkgm(cross, env)
-	})
-	return err, p != nil
+	if canRevive() {
+		p := revive(func() {
+			err = receiver.OnZkgm(cross, env)
+		})
+		return err, p != nil
+	}
+
+	defer func() {
+		if recover() != nil {
+			err = nil
+			panicked = true
+		}
+	}()
+	err = receiver.OnZkgm(cross, env)
+	return err, false
+}
+
+func canRevive() (ok bool) {
+	ok = true
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
+	revive(func() {})
+	return ok
 }
 
 func callErrAck(err error) core.RecvPacketResult {

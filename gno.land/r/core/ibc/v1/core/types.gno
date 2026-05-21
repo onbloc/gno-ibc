@@ -39,6 +39,10 @@ func (h Height) String() string {
 
 type Bytes []byte
 
+func NewBytes(_ realm, bz []byte) Bytes {
+	return Bytes(bz)
+}
+
 func (bz Bytes) String() string {
 	return "0x" + hex.EncodeToString(bz)
 }

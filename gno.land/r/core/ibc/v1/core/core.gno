@@ -47,120 +47,6 @@ type IApp interface {
 	OnTimeoutPacket(packet Packet, relayer address)
 }
 
-func ChannelOpenInit(_ realm, msg MsgChannelOpenInit) ChannelId {
-	relayer := runtime.OriginCaller()
-	portId := msg.PortId
-	connection := ensureConnectionOpen(msg.ConnectionId)
-	channelId := st.generateChannelId()
-	st.channelOwners[channelId] = portId
-
-	st.getAppByPortId(portId).OnChannelOpenInit(msg.ConnectionId, channelId, msg.Version, relayer)
-
-	channel := Channel{
-		State:                 ChannelStateInit,
-		ConnectionId:          msg.ConnectionId,
-		CounterpartyChannelId: 0,
-		CounterpartyPortId:    msg.CounterpartyPortId,
-		Version:               msg.Version,
-	}
-	st.saveChannel(channelId, channel)
-	emitChannelEvent(ChannelOpenInitEvent, portId, channelId, channel, connection)
-	return channelId
-}
-
-func ChannelOpenTry(_ realm, msg MsgChannelOpenTry) ChannelId {
-	relayer := runtime.OriginCaller()
-	portId := msg.PortId
-	if msg.Channel.State != ChannelStateTryOpen {
-		panic(ErrInvalidChannelState)
-	}
-	connection := ensureConnectionOpen(msg.Channel.ConnectionId)
-	channelId := st.generateChannelId()
-
-	expectedChannel := Channel{
-		State:                 ChannelStateInit,
-		ConnectionId:          connection.CounterpartyConnectionId,
-		CounterpartyChannelId: 0,
-		CounterpartyPortId:    msg.PortId,
-		Version:               msg.CounterpartyVersion,
-	}
-	key := ChannelPath(msg.Channel.CounterpartyChannelId)
-	value := keccak(expectedChannel.EthAbiEncode())
-	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofInit, key[:], value[:])
-
-	st.channelOwners[channelId] = portId
-	st.getAppByPortId(portId).OnChannelOpenTry(msg.Channel.ConnectionId, channelId, msg.Channel.Version, msg.CounterpartyVersion, relayer)
-	st.saveChannel(channelId, msg.Channel)
-
-	emitChannelEvent(ChannelOpenTryEvent, portId, channelId, msg.Channel, connection)
-	return channelId
-}
-
-func ChannelOpenAck(_ realm, msg MsgChannelOpenAck) {
-	relayer := runtime.OriginCaller()
-	channel := st.getChannel(msg.ChannelId)
-	if channel.State != ChannelStateInit {
-		panic(ErrInvalidChannelState)
-	}
-	connection := ensureConnectionOpen(channel.ConnectionId)
-	portId := st.getChannelOwner(msg.ChannelId)
-
-	expectedChannel := Channel{
-		State:                 ChannelStateTryOpen,
-		ConnectionId:          connection.CounterpartyConnectionId,
-		CounterpartyChannelId: msg.ChannelId,
-		CounterpartyPortId:    portId,
-		Version:               msg.CounterpartyVersion,
-	}
-	key := ChannelPath(msg.CounterpartyChannelId)
-	value := keccak(expectedChannel.EthAbiEncode())
-	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofTry, key[:], value[:])
-
-	st.getAppByPortId(portId).OnChannelOpenAck(msg.ChannelId, msg.CounterpartyChannelId, msg.CounterpartyVersion, relayer)
-
-	channel.State = ChannelStateOpen
-	channel.Version = msg.CounterpartyVersion
-	channel.CounterpartyChannelId = msg.CounterpartyChannelId
-	st.saveChannel(msg.ChannelId, channel)
-
-	emitChannelEvent(ChannelOpenAckEvent, portId, msg.ChannelId, channel, connection)
-}
-
-func ChannelOpenConfirm(_ realm, msg MsgChannelOpenConfirm) {
-	relayer := runtime.OriginCaller()
-	channel := st.getChannel(msg.ChannelId)
-	if channel.State != ChannelStateTryOpen {
-		panic(ErrInvalidChannelState)
-	}
-	connection := ensureConnectionOpen(channel.ConnectionId)
-	portId := st.getChannelOwner(msg.ChannelId)
-
-	expectedChannel := Channel{
-		State:                 ChannelStateOpen,
-		ConnectionId:          connection.CounterpartyConnectionId,
-		CounterpartyChannelId: msg.ChannelId,
-		CounterpartyPortId:    portId,
-		Version:               channel.Version,
-	}
-	key := ChannelPath(channel.CounterpartyChannelId)
-	value := keccak(expectedChannel.EthAbiEncode())
-	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofAck, key[:], value[:])
-
-	st.getAppByPortId(portId).OnChannelOpenConfirm(msg.ChannelId, relayer)
-	channel.State = ChannelStateOpen
-	st.saveChannel(msg.ChannelId, channel)
-
-	emitChannelEvent(ChannelOpenConfirmEvent, portId, msg.ChannelId, channel, connection)
-}
-
-func ChannelCloseInit(_ realm, msg MsgChannelCloseInit) {
-	panic("channel close init unsupported: Union MsgChannelCloseInit has no channel id")
-}
-
-func ChannelCloseConfirm(_ realm, msg MsgChannelCloseConfirm) {
-	panic("channel close confirm unsupported: Union MsgChannelCloseConfirm has no channel id")
-}
-
 func PacketSend(_ realm, sourceChannelId ChannelId, timeoutHeight Height, timeoutTimestamp Timestamp, data []byte) Packet {
 	portId := st.getChannelOwner(sourceChannelId)
 	if string(portId) != runtime.PreviousRealm().PkgPath() {
@@ -428,14 +314,6 @@ func BatchAcks(_ realm, msg MsgBatchAcks) H256 {
 	return batchHash
 }
 
-func QueryChannel(channelId ChannelId) string {
-	channel, ok := st.channels[channelId]
-	if !ok {
-		return ""
-	}
-	return hexString(channel.EthAbiEncode())
-}
-
 func QueryBatchPackets(batchHash H256) string {
 	value, ok := st.batchPackets[BatchPacketsPath(batchHash)]
 	if !ok {
@@ -487,13 +365,6 @@ func RegisterApp(_ realm, portId []byte, app IApp) {
 func HasApp(portId []byte) bool {
 	_, ok := st.ports[string(portId)]
 	return ok
-}
-
-// GetChannel returns the stored channel record for channelId. Apps need this
-// to look up the counterparty channel id when constructing packets to send via
-// BatchSend (the core no longer auto-derives it from a sender-side helper).
-func GetChannel(channelId ChannelId) Channel {
-	return st.getChannel(channelId)
 }
 
 // WriteAcknowledgement commits an acknowledgement for a previously received

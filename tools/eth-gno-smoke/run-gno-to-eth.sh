@@ -10,7 +10,7 @@ trap cleanup_smoke_env EXIT
 setup_smoke_chain
 
 GNO_TO_ETH_TESTDATA_DIR="$ETH_GNO_TESTDATA_DIR/gno-to-eth"
-OUTPUT_FIXTURE="${ETH_GNO_GNO_TO_ETH_FIXTURE:-$WORKDIR/gno-to-eth.json}"
+OUTPUT_FIXTURE="${ETH_GNO_GNO_TO_ETH_FIXTURE:-$GNO_TO_ETH_TESTDATA_DIR/latest.json}"
 
 echo ">> Gno -> ETH packet extraction smoke"
 maketx_run "$GNO_TO_ETH_TESTDATA_DIR/send_packet.gno" "$WORKDIR/send_packet.log"

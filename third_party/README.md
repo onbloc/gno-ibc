@@ -58,7 +58,7 @@ The Makefile (`VENDOR_*` blocks) is the source of truth — keep this table in s
 | `gno.land/p/aib/ibc/lightclient/tendermint/`              | tendermint light client |
 | `gno.land/p/aib/ibc/lightclient/tendermint/testing/`      | tests |
 | `gno.land/p/aib/ibc/types/`                               | IBC type definitions |
-| `gno.land/r/aib/ibc/core/`                                | IBC core realm (channels, clients, packets) — consumed by ZKGM filetests as `core` |
+| `gno.land/r/aib/ibc/core/`                                | Vendored gno-realms IBC core realm (legacy/reference core; v1 ZKGM uses `gno.land/r/core/ibc/v1/core`) |
 
 ## Workflow
 

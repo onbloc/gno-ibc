@@ -62,7 +62,7 @@ func acceptRecvPacket(packet Packet, batchChannelId ChannelId, now uint64) (Chan
 	return channel, false
 }
 
-func PacketRecv(_ realm, msg MsgPacketRecv) {
+func PacketRecv(cur realm, msg MsgPacketRecv) {
 	relayer := rtunsafe.OriginCaller()
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
@@ -87,7 +87,7 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 			relayerMsg = msg.RelayerMsgs[i]
 		}
 		portId := st.getChannelOwner(packet.DestinationChannelId)
-		res := st.getAppByPortId(portId).OnRecvPacket(packet, relayer, relayerMsg)
+		res := st.getAppByPortId(portId).OnRecvPacket(cur, packet, relayer, relayerMsg)
 		switch res.Status {
 		case PacketStatusAsync:
 		case PacketStatusSuccess, PacketStatusFailure:
@@ -104,7 +104,7 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 	}
 }
 
-func IntentPacketRecv(_ realm, msg MsgIntentPacketRecv) {
+func IntentPacketRecv(cur realm, msg MsgIntentPacketRecv) {
 	marketMaker := rtunsafe.OriginCaller()
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
@@ -123,14 +123,14 @@ func IntentPacketRecv(_ realm, msg MsgIntentPacketRecv) {
 			marketMakerMsg = msg.MarketMakerMessages[i]
 		}
 		portId := st.getChannelOwner(packet.DestinationChannelId)
-		st.getAppByPortId(portId).OnIntentRecvPacket(packet, marketMaker, marketMakerMsg)
+		st.getAppByPortId(portId).OnIntentRecvPacket(cur, packet, marketMaker, marketMakerMsg)
 
 		connection := ensureConnectionOpen(channel.ConnectionId)
 		emitPacketRecvEvent(IntentPacketRecvEvent, packet, channel, connection, "market_maker_msg", marketMakerMsg)
 	}
 }
 
-func PacketAcknowledgement(_ realm, msg MsgPacketAcknowledgement) {
+func PacketAcknowledgement(cur realm, msg MsgPacketAcknowledgement) {
 	relayer := rtunsafe.OriginCaller()
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
@@ -159,7 +159,7 @@ func PacketAcknowledgement(_ realm, msg MsgPacketAcknowledgement) {
 
 		ack := msg.Acknowledgements[i]
 		portId := st.getChannelOwner(packet.SourceChannelId)
-		st.getAppByPortId(portId).OnAcknowledgementPacket(packet, ack, relayer)
+		st.getAppByPortId(portId).OnAcknowledgementPacket(cur, packet, ack, relayer)
 
 		st.deletePacketCommitment(packet)
 		processed = true
@@ -171,7 +171,7 @@ func PacketAcknowledgement(_ realm, msg MsgPacketAcknowledgement) {
 	}
 }
 
-func PacketTimeout(_ realm, msg MsgPacketTimeout) {
+func PacketTimeout(cur realm, msg MsgPacketTimeout) {
 	relayer := rtunsafe.OriginCaller()
 	packet := msg.Packet
 	if !st.hasPacketCommitment(packet) {
@@ -194,7 +194,7 @@ func PacketTimeout(_ realm, msg MsgPacketTimeout) {
 	client.VerifyNonMembership(connection.ClientId, msg.ProofHeight, msg.Proof, key[:])
 
 	portId := st.getChannelOwner(packet.SourceChannelId)
-	st.getAppByPortId(portId).OnTimeoutPacket(packet, relayer)
+	st.getAppByPortId(portId).OnTimeoutPacket(cur, packet, relayer)
 
 	st.deletePacketCommitment(packet)
 

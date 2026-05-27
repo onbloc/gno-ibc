@@ -29,16 +29,16 @@ type ILightClient interface {
 // use plain []byte (not the typed Bytes wrapper) so foreign-realm apps can
 // implement the interface without the cross(cur)-realm typed-slice pitfall.
 type IApp interface {
-	OnChannelOpenInit(connectionId ConnectionId, channelId ChannelId, version string, relayer address)
-	OnChannelOpenTry(connectionId ConnectionId, channelId ChannelId, version string, counterpartyVersion string, relayer address)
-	OnChannelOpenAck(channelId ChannelId, counterpartyChannelId ChannelId, counterpartyVersion string, relayer address)
-	OnChannelOpenConfirm(channelId ChannelId, relayer address)
-	OnChannelCloseInit(channelId ChannelId, relayer address)
-	OnChannelCloseConfirm(channelId ChannelId, relayer address)
-	OnRecvPacket(packet Packet, relayer address, relayerMsg []byte) RecvPacketResult
-	OnIntentRecvPacket(packet Packet, marketMaker address, marketMakerMsg []byte)
-	OnAcknowledgementPacket(packet Packet, acknowledgement []byte, relayer address)
-	OnTimeoutPacket(packet Packet, relayer address)
+	OnChannelOpenInit(cur realm, connectionId ConnectionId, channelId ChannelId, version string, relayer address)
+	OnChannelOpenTry(cur realm, connectionId ConnectionId, channelId ChannelId, version string, counterpartyVersion string, relayer address)
+	OnChannelOpenAck(cur realm, channelId ChannelId, counterpartyChannelId ChannelId, counterpartyVersion string, relayer address)
+	OnChannelOpenConfirm(cur realm, channelId ChannelId, relayer address)
+	OnChannelCloseInit(cur realm, channelId ChannelId, relayer address)
+	OnChannelCloseConfirm(cur realm, channelId ChannelId, relayer address)
+	OnRecvPacket(cur realm, packet Packet, relayer address, relayerMsg []byte) RecvPacketResult
+	OnIntentRecvPacket(cur realm, packet Packet, marketMaker address, marketMakerMsg []byte)
+	OnAcknowledgementPacket(cur realm, packet Packet, acknowledgement []byte, relayer address)
+	OnTimeoutPacket(cur realm, packet Packet, relayer address)
 }
 
 // RegisterApp registers an IBC application at portId.

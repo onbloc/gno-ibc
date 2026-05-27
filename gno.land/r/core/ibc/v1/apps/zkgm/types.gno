@@ -8,19 +8,19 @@ import (
 const Version = "ucs03-zkgm-0"
 
 type ZkgmImpl interface {
-	PreChannelOpenInit(channelId core.ChannelId)
-	PreChannelOpenTry(channelId core.ChannelId, counterpartyVersion string)
-	PostChannelOpenAck(channelId core.ChannelId, counterpartyChannelId core.ChannelId)
-	PostChannelOpenConfirm(channelId core.ChannelId)
-	PreChannelCloseInit(channelId core.ChannelId)
-	PostChannelCloseConfirm(channelId core.ChannelId)
+	PreChannelOpenInit(cur realm, channelId core.ChannelId)
+	PreChannelOpenTry(cur realm, channelId core.ChannelId, counterpartyVersion string)
+	PostChannelOpenAck(cur realm, channelId core.ChannelId, counterpartyChannelId core.ChannelId)
+	PostChannelOpenConfirm(cur realm, channelId core.ChannelId)
+	PreChannelCloseInit(cur realm, channelId core.ChannelId)
+	PostChannelCloseConfirm(cur realm, channelId core.ChannelId)
 
-	Recv(packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult
-	IntentRecv(packet core.Packet, marketMaker address, marketMakerMsg []byte)
-	Ack(packet core.Packet, ack []byte, relayer address)
-	Timeout(packet core.Packet, relayer address)
+	Recv(cur realm, packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult
+	IntentRecv(cur realm, packet core.Packet, marketMaker address, marketMakerMsg []byte)
+	Ack(cur realm, packet core.Packet, ack []byte, relayer address)
+	Timeout(cur realm, packet core.Packet, relayer address)
 
-	Send(req SendRequest) ([]byte, error)
+	Send(cur realm, req SendRequest) ([]byte, error)
 	Render(pkgpath string, path string) string
 }
 

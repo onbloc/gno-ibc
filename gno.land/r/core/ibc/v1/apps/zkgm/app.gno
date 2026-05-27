@@ -12,72 +12,72 @@ type App struct{}
 
 var _ core.IApp = &App{}
 
-func (a *App) OnChannelOpenInit(connectionId core.ConnectionId, channelId core.ChannelId, version string, relayer address) {
+func (a *App) OnChannelOpenInit(cur realm, connectionId core.ConnectionId, channelId core.ChannelId, version string, relayer address) {
 	ensureImpl()
 	ensureVersion(version)
-	impl.PreChannelOpenInit(channelId)
+	impl.PreChannelOpenInit(cur, channelId)
 }
 
-func (a *App) OnChannelOpenTry(connectionId core.ConnectionId, channelId core.ChannelId, version string, counterpartyVersion string, relayer address) {
+func (a *App) OnChannelOpenTry(cur realm, connectionId core.ConnectionId, channelId core.ChannelId, version string, counterpartyVersion string, relayer address) {
 	ensureImpl()
 	ensureVersion(version)
 	ensureVersion(counterpartyVersion)
-	impl.PreChannelOpenTry(channelId, counterpartyVersion)
+	impl.PreChannelOpenTry(cur, channelId, counterpartyVersion)
 }
 
-func (a *App) OnChannelOpenAck(channelId core.ChannelId, counterpartyChannelId core.ChannelId, counterpartyVersion string, relayer address) {
+func (a *App) OnChannelOpenAck(cur realm, channelId core.ChannelId, counterpartyChannelId core.ChannelId, counterpartyVersion string, relayer address) {
 	ensureImpl()
 	ensureVersion(counterpartyVersion)
-	impl.PostChannelOpenAck(channelId, counterpartyChannelId)
+	impl.PostChannelOpenAck(cur, channelId, counterpartyChannelId)
 }
 
-func (a *App) OnChannelOpenConfirm(channelId core.ChannelId, relayer address) {
+func (a *App) OnChannelOpenConfirm(cur realm, channelId core.ChannelId, relayer address) {
 	ensureImpl()
-	impl.PostChannelOpenConfirm(channelId)
+	impl.PostChannelOpenConfirm(cur, channelId)
 }
 
-func (a *App) OnChannelCloseInit(channelId core.ChannelId, relayer address) {
+func (a *App) OnChannelCloseInit(cur realm, channelId core.ChannelId, relayer address) {
 	ensureImpl()
-	impl.PreChannelCloseInit(channelId)
+	impl.PreChannelCloseInit(cur, channelId)
 }
 
-func (a *App) OnChannelCloseConfirm(channelId core.ChannelId, relayer address) {
+func (a *App) OnChannelCloseConfirm(cur realm, channelId core.ChannelId, relayer address) {
 	ensureImpl()
-	impl.PostChannelCloseConfirm(channelId)
+	impl.PostChannelCloseConfirm(cur, channelId)
 }
 
-func (a *App) OnRecvPacket(packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
+func (a *App) OnRecvPacket(cur realm, packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
 	if paused {
-		return errAck(errors.New("zkgm: paused"))
+		return errAck(cur, errors.New("zkgm: paused"))
 	}
 	if impl == nil {
-		return errAck(errors.New("zkgm: impl not set"))
+		return errAck(cur, errors.New("zkgm: impl not set"))
 	}
-	return impl.Recv(packet, relayer, relayerMsg)
+	return impl.Recv(cur, packet, relayer, relayerMsg)
 }
 
-func (a *App) OnIntentRecvPacket(packet core.Packet, marketMaker address, marketMakerMsg []byte) {
+func (a *App) OnIntentRecvPacket(cur realm, packet core.Packet, marketMaker address, marketMakerMsg []byte) {
 	if paused {
 		panic("zkgm: paused")
 	}
 	if impl == nil {
 		panic("zkgm: impl not set")
 	}
-	impl.IntentRecv(packet, marketMaker, marketMakerMsg)
+	impl.IntentRecv(cur, packet, marketMaker, marketMakerMsg)
 }
 
-func (a *App) OnAcknowledgementPacket(packet core.Packet, ack []byte, relayer address) {
+func (a *App) OnAcknowledgementPacket(cur realm, packet core.Packet, ack []byte, relayer address) {
 	if impl == nil {
 		return
 	}
-	impl.Ack(packet, ack, relayer)
+	impl.Ack(cur, packet, ack, relayer)
 }
 
-func (a *App) OnTimeoutPacket(packet core.Packet, relayer address) {
+func (a *App) OnTimeoutPacket(cur realm, packet core.Packet, relayer address) {
 	if impl == nil {
 		return
 	}
-	impl.Timeout(packet, relayer)
+	impl.Timeout(cur, packet, relayer)
 }
 
 func ensureImpl() {
@@ -92,7 +92,7 @@ func ensureVersion(version string) {
 	}
 }
 
-func errAck(err error) core.RecvPacketResult {
+func errAck(cur realm, err error) core.RecvPacketResult {
 	ackBytes, encErr := z.EncodeAck(z.Ack{
 		Tag:      u256.NewUint(0),
 		InnerAck: []byte(err.Error()),
@@ -100,5 +100,5 @@ func errAck(err error) core.RecvPacketResult {
 	if encErr != nil {
 		ackBytes = []byte(err.Error())
 	}
-	return core.RecvPacketResult{Status: core.PacketStatusFailure, Ack: ackBytes}
+	return core.NewRecvPacketResult(cur, core.PacketStatusFailure, ackBytes)
 }

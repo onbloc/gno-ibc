@@ -24,12 +24,12 @@ func main() {
 
 func z40MixedBatchPacket() core.Packet {
 	return z40BatchPacket(z.Batch{Instructions: []z.Instruction{
-		e2e.MustCallInstruction(cross, z.Call{
+		e2e.MustCallInstruction(cross(cur), z.Call{
 			Sender:           []byte("sender"),
 			ContractAddress:  []byte(mockReceiverPath),
 			ContractCalldata: []byte("batch-call"),
 		}),
-		e2e.MustTokenOrderInstruction(cross, z.TokenOrderV2{
+		e2e.MustTokenOrderInstruction(cross(cur), z.TokenOrderV2{
 			Sender:      []byte("sender"),
 			Receiver:    []byte("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"),
 			BaseToken:   []byte("ugnot"),
@@ -43,12 +43,12 @@ func z40MixedBatchPacket() core.Packet {
 
 func z40PanicBatchPacket() core.Packet {
 	return z40BatchPacket(z.Batch{Instructions: []z.Instruction{
-		e2e.MustCallInstruction(cross, z.Call{
+		e2e.MustCallInstruction(cross(cur), z.Call{
 			Sender:           []byte("sender"),
 			ContractAddress:  []byte(mockReceiverPath),
 			ContractCalldata: []byte("panic-call"),
 		}),
-		e2e.MustTokenOrderInstruction(cross, z.TokenOrderV2{
+		e2e.MustTokenOrderInstruction(cross(cur), z.TokenOrderV2{
 			Sender:      []byte("sender"),
 			Receiver:    []byte("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"),
 			BaseToken:   []byte("ugnot"),
@@ -64,7 +64,7 @@ func z40BatchPacket(batch z.Batch) core.Packet {
 	return core.Packet{
 		SourceChannelId:      core.ChannelId(2),
 		DestinationChannelId: core.ChannelId(1),
-		Data:                 e2e.MustPacketData(cross, e2e.MustBatchInstruction(cross, batch)),
+		Data:                 e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)),
 		TimeoutTimestamp:     core.Timestamp(0),
 	}
 }

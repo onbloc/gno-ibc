@@ -7,13 +7,13 @@ import (
 )
 
 func main() {
-	clientId := realcometbls.CreateSyntheticCometBLSClient(cross)
+	clientId := realcometbls.CreateSyntheticCometBLSClient(cross(cur))
 	realadapter.Adapter{}.VerifyMembership(
 		clientId,
 		core.Height(realcometbls.DevnetHeight-1),
-		realcometbls.SyntheticMembershipWrongSubrootProof(cross),
-		realcometbls.SyntheticMembershipKey(cross),
-		realcometbls.SyntheticMembershipValue(cross),
+		realcometbls.SyntheticMembershipWrongSubrootProof(cross(cur)),
+		realcometbls.SyntheticMembershipKey(cross(cur)),
+		realcometbls.SyntheticMembershipValue(cross(cur)),
 	)
 }
 

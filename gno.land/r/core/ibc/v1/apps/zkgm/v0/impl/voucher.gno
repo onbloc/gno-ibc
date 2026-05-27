@@ -25,12 +25,12 @@ func getOrCreateVoucherV2(cur realm, ibcDenom string, baseDenom string, metadata
 	}
 
 	token, ledger := grc20.NewToken(baseDenom, ibcDenom, 0)
-	grc20reg.Register(cross, token, strings.TrimPrefix(ibcDenom, ibcDenomPrefix))
+	grc20reg.Register(cross(cur), token, strings.TrimPrefix(ibcDenom, ibcDenomPrefix))
 
 	v := &voucher{token: token, ledger: ledger}
 	voucherTokens.Set(ibcDenom, v)
 
-	zkgm.SetMetadataImageOf(cross, ibcDenom, metadataImage)
+	zkgm.SetMetadataImageOf(cross(cur), ibcDenom, metadataImage)
 	return v
 }
 

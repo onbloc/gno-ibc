@@ -1,7 +1,6 @@
 package statelensics23mpt
 
 import (
-	"chain/runtime"
 	"crypto/keccak256"
 	"encoding/binary"
 	"errors"
@@ -29,8 +28,8 @@ type clientEntry struct {
 
 var entries = make(map[core.ClientId]*clientEntry)
 
-func mustBeCore() {
-	if runtime.PreviousRealm().PkgPath() != "gno.land/r/core/ibc/v1/core" {
+func mustBeCore(cur realm) {
+	if cur.Previous().PkgPath() != "gno.land/r/core/ibc/v1/core" {
 		panic("statelensics23mpt: core only")
 	}
 }
@@ -45,8 +44,8 @@ func getEntry(clientId core.ClientId) *clientEntry {
 
 type Adapter struct{}
 
-func (Adapter) CreateClient(_ realm, clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) string {
-	mustBeCore()
+func (Adapter) CreateClient(cur realm, clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) string {
+	mustBeCore(cur)
 
 	cs, err := statelensp.DecodeClientState(clientStateBytes)
 	if err != nil {
@@ -66,8 +65,8 @@ func (Adapter) CreateClient(_ realm, clientId core.ClientId, clientStateBytes, c
 	return cs.L2ChainID
 }
 
-func (Adapter) UpdateClient(_ realm, clientId core.ClientId, clientMessage []byte) core.ConsensusStateUpdate {
-	mustBeCore()
+func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []byte) core.ConsensusStateUpdate {
+	mustBeCore(cur)
 
 	e := getEntry(clientId)
 
@@ -79,7 +78,7 @@ func (Adapter) UpdateClient(_ realm, clientId core.ClientId, clientMessage []byt
 	consensusPath := core.ConsensusStatePath(core.ClientId(e.cs.L2ClientID), core.Height(header.L2Height))
 	consensusHash := keccak256.Sum256(header.L2ConsensusState)
 	core.VerifyClientMembership(
-		cross,
+		cross(cur),
 		core.ClientId(e.cs.L1ClientID),
 		core.Height(header.L1Height),
 		header.L2ConsensusStateProof,
@@ -102,11 +101,7 @@ func (Adapter) UpdateClient(_ realm, clientId core.ClientId, clientMessage []byt
 		panic("statelensics23mpt: encode consensus state: " + err.Error())
 	}
 
-	return core.ConsensusStateUpdate{
-		Height:              core.Height(header.L2Height),
-		ConsensusStateBytes: consStateBytes,
-		ClientStateBytes:    statelensp.EncodeClientState(e.cs),
-	}
+	return core.NewConsensusStateUpdate(cross(cur), core.Height(header.L2Height), consStateBytes, statelensp.EncodeClientState(e.cs))
 }
 
 func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proof, key, value []byte) {

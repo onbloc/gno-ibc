@@ -6,16 +6,16 @@ import (
 )
 
 func main() {
-	clientId := realcometbls.CreateZ35CometBLSClient(cross)
-	connectionId := core.ConnectionOpenInit(cross, core.MsgConnectionOpenInit{
+	clientId := realcometbls.CreateZ35CometBLSClient(cross(cur))
+	connectionId := core.ConnectionOpenInit(cross(cur), core.MsgConnectionOpenInit{
 		ClientId:             clientId,
 		CounterpartyClientId: core.ClientId(99),
 	})
 
-	core.ConnectionOpenAck(cross, core.MsgConnectionOpenAck{
+	core.ConnectionOpenAck(cross(cur), core.MsgConnectionOpenAck{
 		ConnectionId:             connectionId,
 		CounterpartyConnectionId: core.ConnectionId(78),
-		ProofTry:                 realcometbls.Z35ConnectionTryProof(cross),
+		ProofTry:                 realcometbls.Z35ConnectionTryProof(cross(cur)),
 		ProofHeight:              core.Height(realcometbls.DevnetHeight - 1),
 	})
 }

@@ -14,36 +14,36 @@ import (
 const mockReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
 
 func main() {
-	mock.Reset(cross)
-	pair := realcometbls.OpenZ35CometBLSChannel(cross)
+	mock.Reset(cross(cur))
+	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	packet := mixedBatchPacket(pair, receiver)
 
-	core.PacketRecv(cross, core.MsgPacketRecv{
+	core.PacketRecv(cross(cur), core.MsgPacketRecv{
 		Packets:     []core.Packet{packet},
 		RelayerMsgs: [][]byte{[]byte("batch-relay-msg")},
-		Proof:       realcometbls.Z40MixedBatchPacketCommitmentProof(cross),
+		Proof:       realcometbls.Z40MixedBatchPacketCommitmentProof(cross(cur)),
 		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
 	})
 
-	println("mock_calls", mock.Calls(cross))
-	println("last_calldata", mock.LastCalldata(cross))
-	println("last_relayer_msg", mock.LastRelayerMsg(cross))
+	println("mock_calls", mock.Calls(cross(cur)))
+	println("last_calldata", mock.LastCalldata(cross(cur)))
+	println("last_relayer_msg", mock.LastRelayerMsg(cross(cur)))
 	println("quote_balance", impl.VoucherBalanceOf("ibc/batch-quote", address(receiver)))
-	println("receipt_after_recv", core.HasPacketReceipt(cross, packet))
-	println("ack_after_recv", core.HasAcknowledgement(cross, packet))
-	println("ack_hash_matches_batch_ack", core.AcknowledgementHash(cross, packet).String() == expectedAckHash())
+	println("receipt_after_recv", core.HasPacketReceipt(cross(cur), packet))
+	println("ack_after_recv", core.HasAcknowledgement(cross(cur), packet))
+	println("ack_hash_matches_batch_ack", core.AcknowledgementHash(cross(cur), packet).String() == expectedAckHash())
 	println("recv_batch_mixed_real_cometbls", "ok")
 }
 
 func mixedBatchPacket(pair realcometbls.ChannelPair, receiver string) core.Packet {
 	batch := z.Batch{Instructions: []z.Instruction{
-		e2e.MustCallInstruction(cross, z.Call{
+		e2e.MustCallInstruction(cross(cur), z.Call{
 			Sender:           []byte("sender"),
 			ContractAddress:  []byte(mockReceiverPath),
 			ContractCalldata: []byte("batch-call"),
 		}),
-		e2e.MustTokenOrderInstruction(cross, z.TokenOrderV2{
+		e2e.MustTokenOrderInstruction(cross(cur), z.TokenOrderV2{
 			Sender:      []byte("sender"),
 			Receiver:    []byte(receiver),
 			BaseToken:   []byte("ugnot"),
@@ -56,14 +56,14 @@ func mixedBatchPacket(pair realcometbls.ChannelPair, receiver string) core.Packe
 	return core.Packet{
 		SourceChannelId:      pair.Source,
 		DestinationChannelId: pair.Destination,
-		Data:                 e2e.MustPacketData(cross, e2e.MustBatchInstruction(cross, batch)),
+		Data:                 e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)),
 		TimeoutTimestamp:     core.Timestamp(0),
 	}
 }
 
 func expectedAckHash() string {
-	ack := e2e.MustBatchAck(cross, [][]byte{
-		e2e.MustCallAck(cross),
+	ack := e2e.MustBatchAck(cross(cur), [][]byte{
+		e2e.MustCallAck(cross(cur)),
 		universalErrorAck(),
 	})
 	return core.CommitAcks([][]byte{ack}).String()

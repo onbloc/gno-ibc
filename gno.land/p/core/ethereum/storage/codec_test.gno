@@ -2,7 +2,7 @@ package storage
 
 import "testing"
 
-func TestDecodeProofBincode(t *testing.T) {
+func TestDecodeProofBincode(cur realm, t *testing.T) {
 	// Mirrors ethereum_light_client_types::StorageProof:
 	// https://github.com/unionlabs/union/blob/main/lib/ethereum-light-client-types/src/storage_proof.rs
 	//
@@ -38,7 +38,7 @@ func TestDecodeProofBincode(t *testing.T) {
 		"0000000000000000")
 }
 
-func TestDecodeProofRejectsTrailingBytes(t *testing.T) {
+func TestDecodeProofRejectsTrailingBytes(cur realm, t *testing.T) {
 	_, err := DecodeProof(mustHex(
 		"0200000000000000000000000000000000000000000000000000000000000000" +
 			"efbeadde00000000000000000000000000000000000000000000000000000000" +

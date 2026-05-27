@@ -2,14 +2,14 @@ package core
 
 import "chain"
 
-func CreateClient(_ realm, msg MsgCreateClient) ClientId {
+func CreateClient(cur realm, msg MsgCreateClient) ClientId {
 	impl, ok := st.clientRegistry[msg.ClientType]
 	if !ok {
 		panic(ErrClientTypeNotFound)
 	}
 
 	clientId := st.generateClientId()
-	impl.CreateClient(cross, clientId, msg.ClientStateBytes, msg.ConsensusStateBytes)
+	impl.CreateClient(cross(cur), clientId, msg.ClientStateBytes, msg.ConsensusStateBytes)
 	st.clientTypes[clientId] = msg.ClientType
 	st.saveClientState(clientId, msg.ClientStateBytes)
 	st.saveConsensusState(clientId, impl.GetLatestHeight(clientId), msg.ConsensusStateBytes)
@@ -21,10 +21,10 @@ func CreateClient(_ realm, msg MsgCreateClient) ClientId {
 	return clientId
 }
 
-func UpdateClient(_ realm, msg MsgUpdateClient) Height {
+func UpdateClient(cur realm, msg MsgUpdateClient) Height {
 	impl := st.getClient(msg.ClientId)
 
-	update := impl.UpdateClient(cross, msg.ClientId, msg.ClientMessage)
+	update := impl.UpdateClient(cross(cur), msg.ClientId, msg.ClientMessage)
 
 	st.saveClientState(msg.ClientId, update.ClientStateBytes)
 	st.saveConsensusState(msg.ClientId, update.Height, update.ConsensusStateBytes)

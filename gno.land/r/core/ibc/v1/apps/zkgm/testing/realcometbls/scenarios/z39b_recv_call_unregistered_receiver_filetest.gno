@@ -11,17 +11,17 @@ import (
 const missingReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/missing"
 
 func main() {
-	pair := realcometbls.OpenZ35CometBLSChannel(cross)
+	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 	packet := callPacket(pair, missingReceiverPath)
 
-	core.PacketRecv(cross, core.MsgPacketRecv{
+	core.PacketRecv(cross(cur), core.MsgPacketRecv{
 		Packets:     []core.Packet{packet},
-		Proof:       realcometbls.Z39MissingCallPacketCommitmentProof(cross),
+		Proof:       realcometbls.Z39MissingCallPacketCommitmentProof(cross(cur)),
 		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
 	})
 
-	println("receipt_after_recv", core.HasPacketReceipt(cross, packet))
-	println("ack_after_recv", core.HasAcknowledgement(cross, packet))
+	println("receipt_after_recv", core.HasPacketReceipt(cross(cur), packet))
+	println("ack_after_recv", core.HasAcknowledgement(cross(cur), packet))
 	println("recv_call_unregistered_real_cometbls", "ok")
 }
 
@@ -34,7 +34,7 @@ func callPacket(pair realcometbls.ChannelPair, receiverPath string) core.Packet 
 	return core.Packet{
 		SourceChannelId:      pair.Source,
 		DestinationChannelId: pair.Destination,
-		Data:                 e2e.MustPacketData(cross, e2e.MustCallInstruction(cross, call)),
+		Data:                 e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)),
 		TimeoutTimestamp:     core.Timestamp(0),
 	}
 }

@@ -18,7 +18,7 @@ func TestTokenOrderVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm,
 
 	sender := testAddress("v1-sender")
 	baseToken := "ibc/v1-send"
-	uassert.NoError(t, mintVoucher(cross, baseToken, baseToken, [32]byte{}, sender, u256.NewUint(50)))
+	uassert.NoError(t, mintVoucher(cross(cur), baseToken, baseToken, [32]byte{}, sender, u256.NewUint(50)))
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
 		BaseToken:   []byte(baseToken),
@@ -45,7 +45,7 @@ func TestTokenOrderAckMarketMakerEscrowWithVoucherRewardsMarketMaker(cur realm, 
 	baseToken := "ibc/v1-mm-voucher"
 	channelId := core.ChannelId(8)
 	amount := u256.NewUint(13)
-	uassert.NoError(t, mintVoucher(cross, baseToken, baseToken, [32]byte{}, sender, u256.NewUint(50)))
+	uassert.NoError(t, mintVoucher(cross(cur), baseToken, baseToken, [32]byte{}, sender, u256.NewUint(50)))
 
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
@@ -83,8 +83,8 @@ func TestTokenOrderVerifyNativeRequiresSentCoin(cur realm, t *testing.T) {
 
 func TestTokenOrderVerifyAppliesRateLimit(cur realm, t *testing.T) {
 	denom := "rate-limit-denom"
-	zkgm.SetRateLimitDisabled(cross, false)
-	zkgm.SetBucketConfig(cross, denom, u256.NewUint(10), u256.NewUint(1))
+	zkgm.SetRateLimitDisabled(cross(cur), false)
+	zkgm.SetBucketConfig(cross(cur), denom, u256.NewUint(10), u256.NewUint(1))
 	order := z.TokenOrderV2{
 		Sender:      []byte(testAddress("v1-rate-limit-sender")),
 		BaseToken:   []byte(denom),
@@ -100,8 +100,8 @@ func TestTokenOrderVerifyAppliesRateLimit(cur realm, t *testing.T) {
 	err = (&ZkgmV1{}).verifyTokenOrderV2(core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin(denom, 7)), u256.Zero(), order)
 	uassert.ErrorContains(t, err, "token bucket rate limit exceeded")
 
-	zkgm.RemoveTokenBucket(cross, denom)
-	zkgm.SetRateLimitDisabled(cross, true)
+	zkgm.RemoveTokenBucket(cross(cur), denom)
+	zkgm.SetRateLimitDisabled(cross(cur), true)
 }
 
 func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *testing.T) {
@@ -144,7 +144,7 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 
 func resetTokenOrderTest() {
 	voucherTokens = bptree.NewBPTree32()
-	zkgm.UpdateImpl(cross, zkgm.UpdateRequest{Impl: &ZkgmV1{}})
+	zkgm.UpdateImpl(cross(cur), zkgm.UpdateRequest{Impl: &ZkgmV1{}})
 }
 
 func testAddress(name string) string {

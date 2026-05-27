@@ -91,6 +91,10 @@ type Packet struct {
 	TimeoutTimestamp     Timestamp
 }
 
+func NewPacket(_ realm, sourceChannelId, destinationChannelId ChannelId, data []byte, timeoutHeight Height, timeoutTimestamp Timestamp) Packet {
+	return Packet{SourceChannelId: sourceChannelId, DestinationChannelId: destinationChannelId, Data: data, TimeoutHeight: timeoutHeight, TimeoutTimestamp: timeoutTimestamp}
+}
+
 func (p Packet) EthAbiEncode() []byte {
 	if p.TimeoutHeight != 0 {
 		panic("packet timeout height must be zero")
@@ -129,6 +133,10 @@ type RecvPacketResult struct {
 	Ack    []byte
 }
 
+func NewRecvPacketResult(_ realm, status PacketStatus, ack []byte) RecvPacketResult {
+	return RecvPacketResult{Status: status, Ack: ack}
+}
+
 type Channel struct {
 	State                 ChannelState
 	ConnectionId          ConnectionId
@@ -165,6 +173,10 @@ type Connection struct {
 	CounterpartyConnectionId ConnectionId
 }
 
+func NewConnection(_ realm, state ConnectionState, clientId, counterpartyClientId ClientId, counterpartyConnectionId ConnectionId) Connection {
+	return Connection{State: state, ClientId: clientId, CounterpartyClientId: counterpartyClientId, CounterpartyConnectionId: counterpartyConnectionId}
+}
+
 func (c Connection) EthAbiEncode() []byte {
 	schema := abi.Schema{Fields: []abi.Field{
 		{Type: abi.TypeUint8},
@@ -188,4 +200,8 @@ type ConsensusStateUpdate struct {
 	Height              Height
 	ConsensusStateBytes []byte
 	ClientStateBytes    []byte
+}
+
+func NewConsensusStateUpdate(_ realm, height Height, consensusStateBytes, clientStateBytes []byte) ConsensusStateUpdate {
+	return ConsensusStateUpdate{Height: height, ConsensusStateBytes: consensusStateBytes, ClientStateBytes: clientStateBytes}
 }

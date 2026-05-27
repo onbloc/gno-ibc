@@ -77,7 +77,7 @@ var tokenOrderAckSchema = Schema{Fields: []Field{
 	{Type: TypeBytes},
 }}
 
-func TestEncodeKnownVectors(t *testing.T) {
+func TestEncodeKnownVectors(cur realm, t *testing.T) {
 	assertEncodeHex(t, "Instruction_short_operand", instructionSchema, []any{
 		uint8(2),
 		uint8(3),
@@ -122,7 +122,7 @@ func TestEncodeKnownVectors(t *testing.T) {
 		"0102000000000000000000000000000000000000000000000000000000000000")
 }
 
-func TestDecodeKnownVectors(t *testing.T) {
+func TestDecodeKnownVectors(cur realm, t *testing.T) {
 	out, err := Decode(instructionSchema, mustHex("0000000000000000000000000000000000000000000000000000000000000002"+
 		"0000000000000000000000000000000000000000000000000000000000000003"+
 		"0000000000000000000000000000000000000000000000000000000000000060"+
@@ -153,7 +153,7 @@ func TestDecodeKnownVectors(t *testing.T) {
 	}
 }
 
-func TestRoundTripDynamicArrays(t *testing.T) {
+func TestRoundTripDynamicArrays(cur realm, t *testing.T) {
 	batchValues := []any{
 		[]any{
 			[]any{uint8(0), uint8(1), mustHex("0102")},
@@ -193,7 +193,7 @@ func TestRoundTripDynamicArrays(t *testing.T) {
 	}
 }
 
-func TestRoundTripForwardAndTokenOrder(t *testing.T) {
+func TestRoundTripForwardAndTokenOrder(cur realm, t *testing.T) {
 	callOperand, err := Encode(callSchema, []any{
 		[]byte("sender"),
 		true,
@@ -249,7 +249,7 @@ func TestRoundTripForwardAndTokenOrder(t *testing.T) {
 	}
 }
 
-func TestRejectMalformedData(t *testing.T) {
+func TestRejectMalformedData(cur realm, t *testing.T) {
 	if _, err := Decode(instructionSchema, []byte{1, 2, 3}); err == nil {
 		t.Fatalf("expected invalid data error")
 	}
@@ -261,7 +261,7 @@ func TestRejectMalformedData(t *testing.T) {
 	}
 }
 
-func TestJSONVectorLoaderShape(t *testing.T) {
+func TestJSONVectorLoaderShape(cur realm, t *testing.T) {
 	root, err := json.Unmarshal([]byte(`[{"name":"Instruction_short_operand","type":"Instruction","fields":{"version":2,"opcode":3,"operand":"0xaabbcc"},"abi_hex":"0x1234"},{"name":"RealPacket_msg_rs_259","type":"Instruction","fields":null,"abi_hex":"0xabcd"}]`))
 	if err != nil {
 		t.Fatalf("Unmarshal vector JSON: %v", err)
@@ -284,7 +284,7 @@ func TestJSONVectorLoaderShape(t *testing.T) {
 	}
 }
 
-func TestDecodeDepthLimit(t *testing.T) {
+func TestDecodeDepthLimit(cur realm, t *testing.T) {
 	data := mustHex("0000000000000000000000000000000000000000000000000000000000000020" +
 		"0000000000000000000000000000000000000000000000000000000000000000")
 	d := decoder{data: data, maxDepth: 0}

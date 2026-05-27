@@ -1,10 +1,10 @@
 package core
 
-import "chain/runtime"
+import rtunsafe "chain/runtime/unsafe"
 
 func ChannelOpenInit(_ realm, msg MsgChannelOpenInit) ChannelId {
-	relayer := runtime.OriginCaller()
-	portId := msg.PortId
+	relayer := rtunsafe.OriginCaller()
+	portId := Bytes(cloneBytes(msg.PortId))
 	connection := ensureConnectionOpen(msg.ConnectionId)
 	channelId := st.generateChannelId()
 	st.channelOwners[channelId] = portId
@@ -15,7 +15,7 @@ func ChannelOpenInit(_ realm, msg MsgChannelOpenInit) ChannelId {
 		State:                 ChannelStateInit,
 		ConnectionId:          msg.ConnectionId,
 		CounterpartyChannelId: 0,
-		CounterpartyPortId:    msg.CounterpartyPortId,
+		CounterpartyPortId:    Bytes(cloneBytes(msg.CounterpartyPortId)),
 		Version:               msg.Version,
 	}
 	st.saveChannel(channelId, channel)
@@ -24,8 +24,8 @@ func ChannelOpenInit(_ realm, msg MsgChannelOpenInit) ChannelId {
 }
 
 func ChannelOpenTry(_ realm, msg MsgChannelOpenTry) ChannelId {
-	relayer := runtime.OriginCaller()
-	portId := msg.PortId
+	relayer := rtunsafe.OriginCaller()
+	portId := Bytes(cloneBytes(msg.PortId))
 	if msg.Channel.State != ChannelStateTryOpen {
 		panic(ErrInvalidChannelState)
 	}
@@ -52,7 +52,7 @@ func ChannelOpenTry(_ realm, msg MsgChannelOpenTry) ChannelId {
 }
 
 func ChannelOpenAck(_ realm, msg MsgChannelOpenAck) {
-	relayer := runtime.OriginCaller()
+	relayer := rtunsafe.OriginCaller()
 	channel := st.getChannel(msg.ChannelId)
 	if channel.State != ChannelStateInit {
 		panic(ErrInvalidChannelState)
@@ -82,7 +82,7 @@ func ChannelOpenAck(_ realm, msg MsgChannelOpenAck) {
 }
 
 func ChannelOpenConfirm(_ realm, msg MsgChannelOpenConfirm) {
-	relayer := runtime.OriginCaller()
+	relayer := rtunsafe.OriginCaller()
 	channel := st.getChannel(msg.ChannelId)
 	if channel.State != ChannelStateTryOpen {
 		panic(ErrInvalidChannelState)

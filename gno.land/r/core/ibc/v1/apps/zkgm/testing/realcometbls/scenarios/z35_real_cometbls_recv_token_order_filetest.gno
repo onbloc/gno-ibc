@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	pair := realcometbls.OpenZ35CometBLSChannel(cross)
+	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	order := z.TokenOrderV2{
@@ -23,16 +23,16 @@ func main() {
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.Packet{SourceChannelId: pair.Source, DestinationChannelId: pair.Destination, Data: e2e.MustPacketData(cross, e2e.MustTokenOrderInstruction(cross, order)), TimeoutTimestamp: core.Timestamp(0)}
+	packet := core.Packet{SourceChannelId: pair.Source, DestinationChannelId: pair.Destination, Data: e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), TimeoutTimestamp: core.Timestamp(0)}
 
-	core.PacketRecv(cross, core.MsgPacketRecv{
+	core.PacketRecv(cross(cur), core.MsgPacketRecv{
 		Packets:     []core.Packet{packet},
-		Proof:       realcometbls.Z35PacketCommitmentProof(cross),
+		Proof:       realcometbls.Z35PacketCommitmentProof(cross(cur)),
 		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
 	})
 
 	println("quote_balance", impl.VoucherBalanceOf("ibc/quote", address(receiver)))
-	println("ack_hash_matches_failure", core.AcknowledgementHash(cross, packet).String() == expectedFailureAckHash())
+	println("ack_hash_matches_failure", core.AcknowledgementHash(cross(cur), packet).String() == expectedFailureAckHash())
 }
 
 func expectedFailureAckHash() string {

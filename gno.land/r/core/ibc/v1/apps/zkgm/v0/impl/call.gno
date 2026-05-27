@@ -80,12 +80,12 @@ func (v *ZkgmV1) timeoutCall(packet core.Packet, path *u256.Uint, call z.Call) e
 }
 
 // safeCallOnZkgm runs the receiver and reports a failure as panicked=true.
-// revive is preferred since it also catches cross-realm aborts; the recover
+// revive is preferred since it also catches cross(cur)-realm aborts; the recover
 // fallback, used only when revive is unsupported, catches ordinary panics.
 func safeCallOnZkgm(receiver z.Zkgmable, env z.CallEnv) (err error, panicked bool) {
 	if canRevive() {
 		p := revive(func() {
-			err = receiver.OnZkgm(cross, env)
+			err = receiver.OnZkgm(cross(cur), env)
 		})
 		return err, p != nil
 	}
@@ -96,7 +96,7 @@ func safeCallOnZkgm(receiver z.Zkgmable, env z.CallEnv) (err error, panicked boo
 			panicked = true
 		}
 	}()
-	err = receiver.OnZkgm(cross, env)
+	err = receiver.OnZkgm(cross(cur), env)
 	return err, false
 }
 
@@ -123,7 +123,7 @@ func callErrAck(err error) core.RecvPacketResult {
 	return failureResult(ack)
 }
 
-// cloneBytes copies cross-realm package vars (e.g. ACK_ERR_ONLY_MAKER)
+// cloneBytes copies cross(cur)-realm package vars (e.g. ACK_ERR_ONLY_MAKER)
 // before returning them, since Gno marks such slices readonly and any later
 // []byte -> string conversion (e.g. bytes.Equal) panics.
 func cloneBytes(in []byte) []byte {

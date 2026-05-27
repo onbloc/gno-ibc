@@ -6,7 +6,7 @@ import (
 )
 
 func main() {
-	pair := realcometbls.OpenZ35CometBLSChannel(cross)
+	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 
 	println("client", pair.ClientId.String())
 	println("connection", pair.ConnectionId.String())

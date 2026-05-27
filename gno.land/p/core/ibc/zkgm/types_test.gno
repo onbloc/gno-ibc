@@ -6,7 +6,7 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 )
 
-func TestZkgmPacketType(t *testing.T) {
+func TestZkgmPacketType(cur realm, t *testing.T) {
 	packet := ZkgmPacket{
 		Salt: mustSalt(0xAB),
 		Path: u256.NewUint(7),
@@ -23,7 +23,7 @@ func TestZkgmPacketType(t *testing.T) {
 	}
 }
 
-func TestInstructionContainerTypes(t *testing.T) {
+func TestInstructionContainerTypes(cur realm, t *testing.T) {
 	forward := Forward{
 		Path:             u256.NewUint(11),
 		TimeoutHeight:    12,
@@ -56,7 +56,7 @@ func TestInstructionContainerTypes(t *testing.T) {
 	}
 }
 
-func TestTokenOrderTypes(t *testing.T) {
+func TestTokenOrderTypes(cur realm, t *testing.T) {
 	v1 := TokenOrderV1{
 		Sender:            []byte("alice"),
 		Receiver:          []byte("bob"),
@@ -90,7 +90,7 @@ func TestTokenOrderTypes(t *testing.T) {
 	}
 }
 
-func TestMetadataAndAckTypes(t *testing.T) {
+func TestMetadataAndAckTypes(cur realm, t *testing.T) {
 	tokenMetadata := TokenMetadata{
 		Implementation: []byte("impl"),
 		Initializer:    []byte("init"),

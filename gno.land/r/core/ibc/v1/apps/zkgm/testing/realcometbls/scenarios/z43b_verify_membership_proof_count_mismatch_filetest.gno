@@ -7,11 +7,11 @@ import (
 )
 
 func main() {
-	clientId := realcometbls.CreateRealCometBLSClient(cross)
+	clientId := realcometbls.CreateRealCometBLSClient(cross(cur))
 	realadapter.Adapter{}.VerifyMembership(
 		clientId,
 		core.Height(realcometbls.DevnetHeight-1),
-		realcometbls.OneExistenceProofStub(cross),
+		realcometbls.OneExistenceProofStub(cross(cur)),
 		[]byte("key"),
 		[]byte("value"),
 	)

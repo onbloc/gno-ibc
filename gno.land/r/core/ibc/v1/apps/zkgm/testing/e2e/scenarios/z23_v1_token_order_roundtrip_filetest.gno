@@ -10,12 +10,12 @@ import (
 )
 
 func main() {
-	e2e.RegisterMockLightClient(cross)
-	pair := e2e.OpenE2EChannelPair(cross)
+	e2e.RegisterMockLightClient(cross(cur))
+	pair := e2e.OpenE2EChannelPair(cross(cur))
 
 	sender := "g17xpfvakm2amg962yls6f84z3kell8c5lserqta"
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
-	metaBytes := e2e.MustTokenMetadata(cross, "grc20", "roundtrip")
+	metaBytes := e2e.MustTokenMetadata(cross(cur), "grc20", "roundtrip")
 	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(pair.Destination), []byte("ugnot"), impl.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
@@ -27,22 +27,22 @@ func main() {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	instr := e2e.MustTokenOrderInstruction(cross, order)
+	instr := e2e.MustTokenOrderInstruction(cross(cur), order)
 	packet := core.Packet{
 		SourceChannelId:      pair.Source,
 		DestinationChannelId: pair.Destination,
-		Data:                 e2e.MustPacketData(cross, instr),
+		Data:                 e2e.MustPacketData(cross(cur), instr),
 		TimeoutTimestamp:     core.Timestamp(1 << 62),
 	}
-	e2e.BatchSend(cross, packet)
+	e2e.BatchSend(cross(cur), packet)
 
-	core.PacketRecv(cross, core.MsgPacketRecv{
+	core.PacketRecv(cross(cur), core.MsgPacketRecv{
 		Packets:     []core.Packet{packet},
 		ProofHeight: core.Height(1),
 	})
 
-	ack := e2e.MustSuccessAck(cross, e2e.MustProtocolTokenOrderAck(cross))
-	core.PacketAcknowledgement(cross, core.MsgPacketAcknowledgement{
+	ack := e2e.MustSuccessAck(cross(cur), e2e.MustProtocolTokenOrderAck(cross(cur)))
+	core.PacketAcknowledgement(cross(cur), core.MsgPacketAcknowledgement{
 		Packets:          []core.Packet{packet},
 		Acknowledgements: [][]byte{ack},
 		ProofHeight:      core.Height(1),

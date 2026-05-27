@@ -115,7 +115,7 @@ func encodeCommitmentNonexist(nepBytes []byte) []byte {
 
 // --- DecodeProofs tests ---
 
-func TestDecodeProofsEmpty(t *testing.T) {
+func TestDecodeProofsEmpty(cur realm, t *testing.T) {
 	proofs, err := DecodeProofs([]byte{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -125,7 +125,7 @@ func TestDecodeProofsEmpty(t *testing.T) {
 	}
 }
 
-func TestDecodeProofsExistenceProof(t *testing.T) {
+func TestDecodeProofsExistenceProof(cur realm, t *testing.T) {
 	ep := encodeExistenceProof([]byte("mykey"), []byte("myval"), nil, nil)
 	buf := encodeMerkleProof(encodeCommitmentExist(ep))
 
@@ -148,7 +148,7 @@ func TestDecodeProofsExistenceProof(t *testing.T) {
 	}
 }
 
-func TestDecodeProofsNonExistenceProof(t *testing.T) {
+func TestDecodeProofsNonExistenceProof(cur realm, t *testing.T) {
 	leftEP := encodeExistenceProof([]byte("aaa"), []byte("v"), nil, nil)
 	rightEP := encodeExistenceProof([]byte("zzz"), []byte("v"), nil, nil)
 	nep := encodeNonExistenceProof([]byte("mmm"), leftEP, rightEP)
@@ -173,7 +173,7 @@ func TestDecodeProofsNonExistenceProof(t *testing.T) {
 	}
 }
 
-func TestDecodeProofsTwoProofs(t *testing.T) {
+func TestDecodeProofsTwoProofs(cur realm, t *testing.T) {
 	ep1 := encodeExistenceProof([]byte("k1"), []byte("v1"), nil, nil)
 	ep2 := encodeExistenceProof([]byte("k2"), []byte("v2"), nil, nil)
 	buf := encodeMerkleProof(encodeCommitmentExist(ep1), encodeCommitmentExist(ep2))
@@ -193,7 +193,7 @@ func TestDecodeProofsTwoProofs(t *testing.T) {
 	}
 }
 
-func TestDecodeProofsCorruptedBuffer(t *testing.T) {
+func TestDecodeProofsCorruptedBuffer(cur realm, t *testing.T) {
 	// Truncate mid-varint
 	_, err := DecodeProofs([]byte{0x0a, 0xff})
 	if err == nil {
@@ -201,7 +201,7 @@ func TestDecodeProofsCorruptedBuffer(t *testing.T) {
 	}
 }
 
-func TestDecodeProofsUnknownFieldSkipped(t *testing.T) {
+func TestDecodeProofsUnknownFieldSkipped(cur realm, t *testing.T) {
 	// Field 9 (unknown) with wire type 2, then a real proof
 	ep := encodeExistenceProof([]byte("k"), []byte("v"), nil, nil)
 	unknown := pbBytesField(9, []byte("ignored"))
@@ -216,7 +216,7 @@ func TestDecodeProofsUnknownFieldSkipped(t *testing.T) {
 	}
 }
 
-func TestDecodeProofsEmptyCommitmentProof(t *testing.T) {
+func TestDecodeProofsEmptyCommitmentProof(cur realm, t *testing.T) {
 	// CommitmentProof with no known fields (empty bytes)
 	buf := encodeMerkleProof([]byte{})
 	_, err := DecodeProofs(buf)
@@ -225,7 +225,7 @@ func TestDecodeProofsEmptyCommitmentProof(t *testing.T) {
 	}
 }
 
-func TestDecodeProofsLeafOpAllFields(t *testing.T) {
+func TestDecodeProofsLeafOpAllFields(cur realm, t *testing.T) {
 	leaf := encodeLeafOp(
 		ics23.HashOp_SHA256,
 		ics23.HashOp_NO_HASH,
@@ -258,7 +258,7 @@ func TestDecodeProofsLeafOpAllFields(t *testing.T) {
 	}
 }
 
-func TestDecodeProofsInnerOpPrefixAndSuffix(t *testing.T) {
+func TestDecodeProofsInnerOpPrefixAndSuffix(cur realm, t *testing.T) {
 	inner := encodeInnerOp(ics23.HashOp_SHA256, []byte("pre"), []byte("suf"))
 	ep := encodeExistenceProof([]byte("k"), []byte("v"), nil, [][]byte{inner})
 	buf := encodeMerkleProof(encodeCommitmentExist(ep))
@@ -282,7 +282,7 @@ func TestDecodeProofsInnerOpPrefixAndSuffix(t *testing.T) {
 	}
 }
 
-func TestDecodeProofsMultipleInnerOps(t *testing.T) {
+func TestDecodeProofsMultipleInnerOps(cur realm, t *testing.T) {
 	ops := [][]byte{
 		encodeInnerOp(ics23.HashOp_SHA256, []byte("p1"), []byte("s1")),
 		encodeInnerOp(ics23.HashOp_SHA256, []byte("p2"), []byte("s2")),
@@ -309,7 +309,7 @@ func TestDecodeProofsMultipleInnerOps(t *testing.T) {
 	}
 }
 
-func TestDecodeProofsNonExistenceLeftOnly(t *testing.T) {
+func TestDecodeProofsNonExistenceLeftOnly(cur realm, t *testing.T) {
 	leftEP := encodeExistenceProof([]byte("aaa"), []byte("v"), nil, nil)
 	nep := encodeNonExistenceProof(nil, leftEP, nil)
 	buf := encodeMerkleProof(encodeCommitmentNonexist(nep))

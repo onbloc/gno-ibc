@@ -47,8 +47,8 @@ func (v *ZkgmV1) executeForward(packet core.Packet, path *u256.Uint, parentSalt 
 
 	// Forward children construct ZkgmPacket directly via BatchSend. Their salt
 	// is namespaced via DeriveForwardSalt, not DeriveSenderSalt.
-	zkgm.BatchSend(cross, core.MsgBatchSend{Packets: []core.Packet{childPacket}})
-	zkgm.SetInFlightPacket(cross, forwardInFlightKey(childPacket), zkgm.InFlightValue{
+	zkgm.BatchSend(cross(cur), core.MsgBatchSend{Packets: []core.Packet{childPacket}})
+	zkgm.SetInFlightPacket(cross(cur), forwardInFlightKey(childPacket), zkgm.InFlightValue{
 		ParentPacket: packet,
 	})
 
@@ -133,7 +133,7 @@ func (v *ZkgmV1) handleForwardChild(packet core.Packet, zp z.ZkgmPacket, ack []b
 		return false
 	}
 
-	zkgm.WriteForwardAck(cross, parent.ParentPacket, ack)
+	zkgm.WriteForwardAck(cross(cur), parent.ParentPacket, ack)
 	return true
 }
 
@@ -142,7 +142,7 @@ func consumeForwardChild(packet core.Packet, salt [32]byte) (zkgm.InFlightValue,
 		return zkgm.InFlightValue{}, false
 	}
 
-	return zkgm.PopInFlightPacket(cross, forwardInFlightKey(packet))
+	return zkgm.PopInFlightPacket(cross(cur), forwardInFlightKey(packet))
 }
 
 func forwardInFlightKey(packet core.Packet) zkgm.InFlightKey {

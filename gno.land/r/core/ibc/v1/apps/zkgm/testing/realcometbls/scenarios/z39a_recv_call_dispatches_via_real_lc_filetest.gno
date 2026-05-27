@@ -12,23 +12,23 @@ import (
 const mockReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
 
 func main() {
-	mock.Reset(cross)
-	pair := realcometbls.OpenZ35CometBLSChannel(cross)
+	mock.Reset(cross(cur))
+	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 	packet := callPacket(pair, mockReceiverPath)
 
-	core.PacketRecv(cross, core.MsgPacketRecv{
+	core.PacketRecv(cross(cur), core.MsgPacketRecv{
 		Packets:     []core.Packet{packet},
 		RelayerMsgs: [][]byte{[]byte("relay-msg")},
-		Proof:       realcometbls.Z39CallPacketCommitmentProof(cross),
+		Proof:       realcometbls.Z39CallPacketCommitmentProof(cross(cur)),
 		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
 	})
 
-	println("mock_calls", mock.Calls(cross))
-	println("last_sender", mock.LastSender(cross))
-	println("last_calldata", mock.LastCalldata(cross))
-	println("last_relayer_msg", mock.LastRelayerMsg(cross))
-	println("receipt_after_recv", core.HasPacketReceipt(cross, packet))
-	println("ack_after_recv", core.HasAcknowledgement(cross, packet))
+	println("mock_calls", mock.Calls(cross(cur)))
+	println("last_sender", mock.LastSender(cross(cur)))
+	println("last_calldata", mock.LastCalldata(cross(cur)))
+	println("last_relayer_msg", mock.LastRelayerMsg(cross(cur)))
+	println("receipt_after_recv", core.HasPacketReceipt(cross(cur), packet))
+	println("ack_after_recv", core.HasAcknowledgement(cross(cur), packet))
 	println("recv_call_dispatch_real_cometbls", "ok")
 }
 
@@ -41,7 +41,7 @@ func callPacket(pair realcometbls.ChannelPair, receiverPath string) core.Packet 
 	return core.Packet{
 		SourceChannelId:      pair.Source,
 		DestinationChannelId: pair.Destination,
-		Data:                 e2e.MustPacketData(cross, e2e.MustCallInstruction(cross, call)),
+		Data:                 e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)),
 		TimeoutTimestamp:     core.Timestamp(0),
 	}
 }

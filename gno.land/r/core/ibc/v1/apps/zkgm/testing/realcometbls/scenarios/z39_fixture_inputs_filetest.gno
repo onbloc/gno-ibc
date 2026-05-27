@@ -33,7 +33,7 @@ func z39CallPacket(receiverPath string) core.Packet {
 	return core.Packet{
 		SourceChannelId:      core.ChannelId(2),
 		DestinationChannelId: core.ChannelId(1),
-		Data:                 e2e.MustPacketData(cross, e2e.MustCallInstruction(cross, call)),
+		Data:                 e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)),
 		TimeoutTimestamp:     core.Timestamp(0),
 	}
 }

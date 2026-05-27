@@ -13,7 +13,7 @@ import (
 )
 
 func main() {
-	pair := realcometbls.OpenZ35CometBLSChannel(cross)
+	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 	sender := string(testutils.TestAddress("timeout-sender"))
 
 	order := z.TokenOrderV2{
@@ -28,11 +28,11 @@ func main() {
 	packet := core.Packet{
 		SourceChannelId:      pair.Destination,
 		DestinationChannelId: core.GetChannel(pair.Destination).CounterpartyChannelId,
-		Data:                 e2e.MustPacketData(cross, e2e.MustTokenOrderInstruction(cross, order)),
+		Data:                 e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)),
 		TimeoutTimestamp:     core.Timestamp(3600),
 	}
-	realcometbls.BatchSend(cross, packet)
-	ack := e2e.MustSuccessAck(cross, mustMarketMakerTokenOrderAck([]byte("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")))
+	realcometbls.BatchSend(cross(cur), packet)
+	ack := e2e.MustSuccessAck(cross(cur), mustMarketMakerTokenOrderAck([]byte("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")))
 	ackValue := core.CommitAcks([][]byte{ack})
 
 	ackKey := core.PacketAcknowledgementPath(packet)

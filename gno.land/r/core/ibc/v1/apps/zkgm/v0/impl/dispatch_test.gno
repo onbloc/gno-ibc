@@ -46,7 +46,7 @@ func TestAckUnsupportedOpcodeAborts(cur realm, t *testing.T) {
 	})
 	packet := core.Packet{SourceChannelId: core.ChannelId(1), DestinationChannelId: core.ChannelId(2), Data: data}
 
-	uassert.AbortsContains(t, "unsupported opcode", func(cur realm) {
+	uassert.AbortsContains(t, cur, "unsupported opcode", func(cur realm) {
 		(&ZkgmV1{}).Ack(packet, nil, address("g1relayer"))
 	})
 }

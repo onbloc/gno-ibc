@@ -34,7 +34,7 @@ func TestVerifyBatchPassesAllowedCallChildren(cur realm, t *testing.T) {
 }
 
 func TestExecuteBatchAggregatesChildAcks(cur realm, t *testing.T) {
-	mock.Reset(cross)
+	mock.Reset(cross(cur))
 	packet := core.Packet{SourceChannelId: core.ChannelId(7), DestinationChannelId: core.ChannelId(8)}
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustCallInstruction(batchCall("sender", "first")),
@@ -44,7 +44,7 @@ func TestExecuteBatchAggregatesChildAcks(cur realm, t *testing.T) {
 	ackBytes, err := (&ZkgmV1{}).executeBatch(packet, address("g1relayer"), nil, u256.NewUint(9), [32]byte{0xAA}, batch, false)
 
 	uassert.NoError(t, err)
-	uassert.Equal(t, 2, mock.Calls(cross))
+	uassert.Equal(t, 2, mock.Calls(cross(cur)))
 	outerAck, err := z.DecodeAck(ackBytes)
 	uassert.NoError(t, err)
 	uassert.True(t, outerAck.Tag.Eq(tagAckSuccess))
@@ -53,12 +53,12 @@ func TestExecuteBatchAggregatesChildAcks(cur realm, t *testing.T) {
 	uassert.Equal(t, 2, len(batchAck.Acknowledgements))
 	assertSuccessAck(t, batchAck.Acknowledgements[0])
 	assertSuccessAck(t, batchAck.Acknowledgements[1])
-	uassert.Equal(t, "second", mock.LastCalldata(cross))
+	uassert.Equal(t, "second", mock.LastCalldata(cross(cur)))
 }
 
 func TestExecuteBatchPanicChildPropagatesOnlyMaker(cur realm, t *testing.T) {
-	mock.Reset(cross)
-	mock.SetPanic(cross, "boom")
+	mock.Reset(cross(cur))
+	mock.SetPanic(cross(cur), "boom")
 	packet := core.Packet{SourceChannelId: core.ChannelId(7), DestinationChannelId: core.ChannelId(8)}
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustCallInstruction(batchCall("sender", "first")),
@@ -69,7 +69,7 @@ func TestExecuteBatchPanicChildPropagatesOnlyMaker(cur realm, t *testing.T) {
 
 	uassert.NoError(t, err)
 	uassert.True(t, isOnlyMakerAck(ackBytes))
-	uassert.Equal(t, 1, mock.Calls(cross))
+	uassert.Equal(t, 1, mock.Calls(cross(cur)))
 }
 
 func TestAcknowledgeBatchRejectsAckCountMismatch(cur realm, t *testing.T) {
@@ -90,8 +90,8 @@ func TestTimeoutBatchTokenOrderChildrenRefund(cur realm, t *testing.T) {
 	packet := core.Packet{SourceChannelId: core.ChannelId(7), DestinationChannelId: core.ChannelId(8)}
 	orderA := batchRefundOrder("timeout-a", "ibc/batch-timeout-a", "quote-a", 11)
 	orderB := batchRefundOrder("timeout-b", "ibc/batch-timeout-b", "quote-b", 17)
-	increaseChannelBalanceV2(cross, core.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount)
-	increaseChannelBalanceV2(cross, core.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount)
+	increaseChannelBalanceV2(cross(cur), core.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount)
+	increaseChannelBalanceV2(cross(cur), core.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount)
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(orderA),
 		batchMustOrderInstruction(orderB),

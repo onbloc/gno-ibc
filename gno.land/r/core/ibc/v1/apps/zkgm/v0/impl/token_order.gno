@@ -26,23 +26,23 @@ func (v *ZkgmV1) verifyTokenOrderV2(channelId core.ChannelId, sender string, sen
 	switch order.Kind {
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
 		baseDenom := string(order.BaseToken)
-		if err := zkgm.RateLimit(cross, baseDenom, order.BaseAmount); err != nil {
+		if err := zkgm.RateLimit(cross(cur), baseDenom, order.BaseAmount); err != nil {
 			return err
 		}
 
 		if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
-			if err := burnVoucher(cross, baseDenom, sender, order.BaseAmount); err != nil {
+			if err := burnVoucher(cross(cur), baseDenom, sender, order.BaseAmount); err != nil {
 				return err
 			}
 		} else if err := requireSentCoin(sent, baseDenom, order.BaseAmount); err != nil {
 			return err
 		}
 
-		increaseChannelBalanceV2(cross, channelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
+		increaseChannelBalanceV2(cross(cur), channelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
 		return nil
 	case z.TOKEN_ORDER_KIND_UNESCROW:
 		baseDenom := string(order.BaseToken)
-		if err := zkgm.RateLimit(cross, baseDenom, order.BaseAmount); err != nil {
+		if err := zkgm.RateLimit(cross(cur), baseDenom, order.BaseAmount); err != nil {
 			return err
 		}
 
@@ -71,7 +71,7 @@ func (v *ZkgmV1) verifyTokenOrderV2(channelId core.ChannelId, sender string, sen
 			return errInvalidUnescrow
 		}
 		if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
-			return burnVoucher(cross, baseDenom, sender, order.BaseAmount)
+			return burnVoucher(cross(cur), baseDenom, sender, order.BaseAmount)
 		}
 		return requireSentCoin(sent, baseDenom, order.BaseAmount)
 	case z.TOKEN_ORDER_KIND_SOLVE:
@@ -117,16 +117,16 @@ func (v *ZkgmV1) executeTokenOrderV2(packet core.Packet, relayer address, path *
 			return core.RecvPacketResult{}, err
 		}
 		if !order.QuoteAmount.IsZero() {
-			if err := mintVoucher(cross, ibcDenom, string(order.BaseToken), image, string(order.Receiver), order.QuoteAmount); err != nil {
+			if err := mintVoucher(cross(cur), ibcDenom, string(order.BaseToken), image, string(order.Receiver), order.QuoteAmount); err != nil {
 				return core.RecvPacketResult{}, err
 			}
 		}
 		if !fee.IsZero() {
-			if err := mintVoucher(cross, ibcDenom, string(order.BaseToken), image, string(relayer), fee); err != nil {
+			if err := mintVoucher(cross(cur), ibcDenom, string(order.BaseToken), image, string(relayer), fee); err != nil {
 				return core.RecvPacketResult{}, err
 			}
 		}
-		zkgm.SetTokenOrigin(cross, ibcDenom, nextPath)
+		zkgm.SetTokenOrigin(cross(cur), ibcDenom, nextPath)
 	case z.TOKEN_ORDER_KIND_ESCROW:
 		quoteDenom := string(order.QuoteToken)
 		image, hasImage := zkgm.GetMetadataImageOf(quoteDenom)
@@ -160,17 +160,17 @@ func (v *ZkgmV1) executeTokenOrderV2(packet core.Packet, relayer address, path *
 			}
 		}
 		if !order.QuoteAmount.IsZero() {
-			if err := mintVoucher(cross, quoteDenom, string(order.BaseToken), image, string(order.Receiver), order.QuoteAmount); err != nil {
+			if err := mintVoucher(cross(cur), quoteDenom, string(order.BaseToken), image, string(order.Receiver), order.QuoteAmount); err != nil {
 				return core.RecvPacketResult{}, err
 			}
 		}
 		if !fee.IsZero() {
-			if err := mintVoucher(cross, quoteDenom, string(order.BaseToken), image, string(relayer), fee); err != nil {
+			if err := mintVoucher(cross(cur), quoteDenom, string(order.BaseToken), image, string(relayer), fee); err != nil {
 				return core.RecvPacketResult{}, err
 			}
 		}
 		if !hasOrigin {
-			zkgm.SetTokenOrigin(cross, quoteDenom, nextPath)
+			zkgm.SetTokenOrigin(cross(cur), quoteDenom, nextPath)
 		}
 	case z.TOKEN_ORDER_KIND_UNESCROW:
 		reversedPath, err := z.ReverseChannelPath(path)
@@ -190,7 +190,7 @@ func (v *ZkgmV1) executeTokenOrderV2(packet core.Packet, relayer address, path *
 		if _, err := amountInt64(fee); err != nil {
 			return core.RecvPacketResult{}, err
 		}
-		if err := decreaseChannelBalanceV2(cross, packet.DestinationChannelId, reversedPath, order.QuoteToken, order.BaseToken, order.BaseAmount); err != nil {
+		if err := decreaseChannelBalanceV2(cross(cur), packet.DestinationChannelId, reversedPath, order.QuoteToken, order.BaseToken, order.BaseAmount); err != nil {
 			return core.RecvPacketResult{}, err
 		}
 		if !order.QuoteAmount.IsZero() {
@@ -273,7 +273,7 @@ func settleEscrowedV2(sourceChannelId core.ChannelId, path *u256.Uint, order z.T
 	if _, err := amountInt64(order.BaseAmount); err != nil {
 		return err
 	}
-	if err := decreaseChannelBalanceV2(cross, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
+	if err := decreaseChannelBalanceV2(cross(cur), sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
 		return err
 	}
 	baseDenom := string(order.BaseToken)
@@ -289,7 +289,7 @@ func settleEscrowedV2(sourceChannelId core.ChannelId, path *u256.Uint, order z.T
 func refundIBCVoucher(baseToken []byte, recipient string, amount *u256.Uint) error {
 	baseDenom := string(baseToken)
 	image, _ := zkgm.GetMetadataImageOf(baseDenom)
-	return mintVoucher(cross, baseDenom, baseDenom, image, recipient, amount)
+	return mintVoucher(cross(cur), baseDenom, baseDenom, image, recipient, amount)
 }
 
 func sendNative(denom string, receiver string, amount *u256.Uint) error {
@@ -298,6 +298,6 @@ func sendNative(denom string, receiver string, amount *u256.Uint) error {
 		return err
 	}
 
-	zkgm.ReleaseNative(cross, denom, address(receiver), n)
+	zkgm.ReleaseNative(cross(cur), denom, address(receiver), n)
 	return nil
 }

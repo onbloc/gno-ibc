@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestEncodeMisbehaviour(t *testing.T) {
+func TestEncodeMisbehaviour(cur realm, t *testing.T) {
 	m := Misbehaviour{
 		HeaderA: Header{SignedHeader: LightHeader{Height: 1}},
 		HeaderB: Header{SignedHeader: LightHeader{Height: 2}},
@@ -17,7 +17,7 @@ func TestEncodeMisbehaviour(t *testing.T) {
 	bytesEq(t, "EncodeMisbehaviour", EncodeMisbehaviour(m), want)
 }
 
-func TestDecodeMisbehaviour(t *testing.T) {
+func TestDecodeMisbehaviour(cur realm, t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		buf := []byte{
 			0x0A, 0x04, 0x0A, 0x02, 0x08, 0x01,
@@ -104,7 +104,7 @@ func TestDecodeMisbehaviour(t *testing.T) {
 	})
 }
 
-func TestEncodeDecodeMisbehaviourRoundTrip(t *testing.T) {
+func TestEncodeDecodeMisbehaviourRoundTrip(cur realm, t *testing.T) {
 	hdrHex := "0a72" +
 		"08de81b7f50d" +
 		"1204080110011a20" + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" +

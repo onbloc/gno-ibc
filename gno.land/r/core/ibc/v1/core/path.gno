@@ -125,4 +125,3 @@ func BatchReceiptsPath(batchHash H256) H256 {
 		batchHash[:],
 	}, nil))
 }
-

@@ -20,7 +20,7 @@ func baseCS() ClientState {
 
 // --- Status tests ---
 
-func TestStatusActive(t *testing.T) {
+func TestStatusActive(cur realm, t *testing.T) {
 	cs := baseCS()
 	latest := ConsensusState{Timestamp: testNow - 1_000*1_000_000_000}
 	if got := Status(cs, latest, testNow); got != StatusActive {
@@ -28,7 +28,7 @@ func TestStatusActive(t *testing.T) {
 	}
 }
 
-func TestStatusFrozen(t *testing.T) {
+func TestStatusFrozen(cur realm, t *testing.T) {
 	cs := baseCS()
 	cs.FrozenHeight = FrozenHeight
 	latest := ConsensusState{Timestamp: testNow - 1_000*1_000_000_000}
@@ -37,14 +37,14 @@ func TestStatusFrozen(t *testing.T) {
 	}
 }
 
-func TestStatusExpiredNoConsensusState(t *testing.T) {
+func TestStatusExpiredNoConsensusState(cur realm, t *testing.T) {
 	cs := baseCS()
 	if got := Status(cs, ConsensusState{}, testNow); got != StatusExpired {
 		t.Fatalf("got %q want %q", got, StatusExpired)
 	}
 }
 
-func TestStatusExpiredTrustingPeriod(t *testing.T) {
+func TestStatusExpiredTrustingPeriod(cur realm, t *testing.T) {
 	cs := baseCS()
 	latest := ConsensusState{Timestamp: testNow - cs.TrustingPeriod - 1}
 	if got := Status(cs, latest, testNow); got != StatusExpired {
@@ -52,7 +52,7 @@ func TestStatusExpiredTrustingPeriod(t *testing.T) {
 	}
 }
 
-func TestStatusFrozenTakesPrecedence(t *testing.T) {
+func TestStatusFrozenTakesPrecedence(cur realm, t *testing.T) {
 	cs := baseCS()
 	cs.FrozenHeight = FrozenHeight
 	latest := ConsensusState{Timestamp: testNow - cs.TrustingPeriod - 1}
@@ -63,7 +63,7 @@ func TestStatusFrozenTakesPrecedence(t *testing.T) {
 
 // --- ValidateInitialize tests ---
 
-func TestValidateInitializeOK(t *testing.T) {
+func TestValidateInitializeOK(cur realm, t *testing.T) {
 	cs := devnetClientState()
 	cs.LatestHeight = Height(100)
 	initial := ConsensusState{
@@ -75,7 +75,7 @@ func TestValidateInitializeOK(t *testing.T) {
 	}
 }
 
-func TestValidateInitializeEmptyChainID(t *testing.T) {
+func TestValidateInitializeEmptyChainID(cur realm, t *testing.T) {
 	cs := devnetClientState()
 	cs.ChainID = ""
 	if err := ValidateInitialize(cs, ConsensusState{Timestamp: testNow, NextValidatorsHash: devnetVH}); err == nil {
@@ -83,7 +83,7 @@ func TestValidateInitializeEmptyChainID(t *testing.T) {
 	}
 }
 
-func TestValidateInitializeZeroTrustingPeriod(t *testing.T) {
+func TestValidateInitializeZeroTrustingPeriod(cur realm, t *testing.T) {
 	cs := devnetClientState()
 	cs.TrustingPeriod = 0
 	if err := ValidateInitialize(cs, ConsensusState{Timestamp: testNow, NextValidatorsHash: devnetVH}); err == nil {
@@ -91,7 +91,7 @@ func TestValidateInitializeZeroTrustingPeriod(t *testing.T) {
 	}
 }
 
-func TestValidateInitializeZeroMaxClockDrift(t *testing.T) {
+func TestValidateInitializeZeroMaxClockDrift(cur realm, t *testing.T) {
 	cs := devnetClientState()
 	cs.MaxClockDrift = 0
 	if err := ValidateInitialize(cs, ConsensusState{Timestamp: testNow, NextValidatorsHash: devnetVH}); err == nil {
@@ -99,7 +99,7 @@ func TestValidateInitializeZeroMaxClockDrift(t *testing.T) {
 	}
 }
 
-func TestValidateInitializeZeroLatestHeight(t *testing.T) {
+func TestValidateInitializeZeroLatestHeight(cur realm, t *testing.T) {
 	cs := devnetClientState()
 	cs.LatestHeight = 0
 	if err := ValidateInitialize(cs, ConsensusState{Timestamp: testNow, NextValidatorsHash: devnetVH}); err == nil {
@@ -107,7 +107,7 @@ func TestValidateInitializeZeroLatestHeight(t *testing.T) {
 	}
 }
 
-func TestValidateInitializeZeroTimestamp(t *testing.T) {
+func TestValidateInitializeZeroTimestamp(cur realm, t *testing.T) {
 	cs := devnetClientState()
 	cs.LatestHeight = Height(100)
 	if err := ValidateInitialize(cs, ConsensusState{NextValidatorsHash: devnetVH}); err == nil {
@@ -117,7 +117,7 @@ func TestValidateInitializeZeroTimestamp(t *testing.T) {
 
 // --- Header/consensus helpers ---
 
-func TestConsensusStateFromHeader(t *testing.T) {
+func TestConsensusStateFromHeader(cur realm, t *testing.T) {
 	h := devnetHeader()
 	got := ConsensusStateFromHeader(h.SignedHeader)
 	if got.Timestamp != h.SignedHeader.Nanos() {
@@ -131,26 +131,26 @@ func TestConsensusStateFromHeader(t *testing.T) {
 	}
 }
 
-func TestHeaderHeight(t *testing.T) {
+func TestHeaderHeight(cur realm, t *testing.T) {
 	if got := HeaderHeight(devnetHeader()); got != Height(devnetHeight) {
 		t.Fatalf("got %d want %d", got, Height(devnetHeight))
 	}
 }
 
-func TestConsensusEqualsHeaderMatchingState(t *testing.T) {
+func TestConsensusEqualsHeaderMatchingState(cur realm, t *testing.T) {
 	h := devnetHeader()
 	if !ConsensusEqualsHeader(ConsensusStateFromHeader(h.SignedHeader), h.SignedHeader) {
 		t.Fatal("expected consensus state to match header")
 	}
 }
 
-func TestConsensusEqualsHeaderNoExistingState(t *testing.T) {
+func TestConsensusEqualsHeaderNoExistingState(cur realm, t *testing.T) {
 	if ConsensusEqualsHeader(ConsensusState{}, devnetHeader().SignedHeader) {
 		t.Fatal("expected zero consensus state not to match header")
 	}
 }
 
-func TestConsensusEqualsHeaderConflictingTimestamp(t *testing.T) {
+func TestConsensusEqualsHeaderConflictingTimestamp(cur realm, t *testing.T) {
 	h := devnetHeader()
 	cs := ConsensusStateFromHeader(h.SignedHeader)
 	cs.Timestamp++
@@ -159,7 +159,7 @@ func TestConsensusEqualsHeaderConflictingTimestamp(t *testing.T) {
 	}
 }
 
-func TestConsensusEqualsHeaderConflictingAppHash(t *testing.T) {
+func TestConsensusEqualsHeaderConflictingAppHash(cur realm, t *testing.T) {
 	h := devnetHeader()
 	cs := ConsensusStateFromHeader(h.SignedHeader)
 	cs.Root.Hash = []byte{0xFF}
@@ -183,14 +183,14 @@ func twoExistProofs() []ics23.CommitmentProof {
 
 // --- VerifyMembership tests ---
 
-func TestVerifyMembershipEmptyValue(t *testing.T) {
+func TestVerifyMembershipEmptyValue(cur realm, t *testing.T) {
 	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
 	if err := VerifyMembership(cs, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")), nil); err == nil {
 		t.Fatal("expected error for empty value")
 	}
 }
 
-func TestVerifyMembershipProofCountMismatch(t *testing.T) {
+func TestVerifyMembershipProofCountMismatch(cur realm, t *testing.T) {
 	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
 	oneProof := []ics23.CommitmentProof{ics23.CommitmentProof_Exist{Exist: &ics23.ExistenceProof{}}}
 	if err := VerifyMembership(cs, oneProof, twoLevelPath([]byte("ibc"), []byte("key")), []byte("v")); err == nil {
@@ -198,7 +198,7 @@ func TestVerifyMembershipProofCountMismatch(t *testing.T) {
 	}
 }
 
-func TestVerifyMembershipPathCountMismatch(t *testing.T) {
+func TestVerifyMembershipPathCountMismatch(cur realm, t *testing.T) {
 	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
 	onePath := types.MerklePath{KeyPath: [][]byte{[]byte("ibc")}}
 	if err := VerifyMembership(cs, twoExistProofs(), onePath, []byte("v")); err == nil {
@@ -206,20 +206,20 @@ func TestVerifyMembershipPathCountMismatch(t *testing.T) {
 	}
 }
 
-func TestVerifyMembershipConsensusStateNotFound(t *testing.T) {
+func TestVerifyMembershipConsensusStateNotFound(cur realm, t *testing.T) {
 	if err := VerifyMembership(ConsensusState{}, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")), []byte("v")); err == nil {
 		t.Fatal("expected error when consensus state not found")
 	}
 }
 
-func TestVerifyMembershipEmptyRoot(t *testing.T) {
+func TestVerifyMembershipEmptyRoot(cur realm, t *testing.T) {
 	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: nil}}
 	if err := VerifyMembership(cs, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")), []byte("v")); err == nil {
 		t.Fatal("expected error for empty root hash")
 	}
 }
 
-func TestVerifyMembershipProofFails(t *testing.T) {
+func TestVerifyMembershipProofFails(cur realm, t *testing.T) {
 	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
 	if err := VerifyMembership(cs, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")), []byte("v")); err == nil {
 		t.Fatal("expected error for invalid proof")
@@ -228,7 +228,7 @@ func TestVerifyMembershipProofFails(t *testing.T) {
 
 // --- VerifyNonMembership tests ---
 
-func TestVerifyNonMembershipProofCountMismatch(t *testing.T) {
+func TestVerifyNonMembershipProofCountMismatch(cur realm, t *testing.T) {
 	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
 	oneProof := []ics23.CommitmentProof{ics23.CommitmentProof_Exist{Exist: &ics23.ExistenceProof{}}}
 	if err := VerifyNonMembership(cs, oneProof, twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
@@ -236,7 +236,7 @@ func TestVerifyNonMembershipProofCountMismatch(t *testing.T) {
 	}
 }
 
-func TestVerifyNonMembershipConsensusStateNotFound(t *testing.T) {
+func TestVerifyNonMembershipConsensusStateNotFound(cur realm, t *testing.T) {
 	proofs := []ics23.CommitmentProof{
 		ics23.CommitmentProof_Nonexist{Nonexist: &ics23.NonExistenceProof{}},
 		ics23.CommitmentProof_Exist{Exist: &ics23.ExistenceProof{}},
@@ -246,7 +246,7 @@ func TestVerifyNonMembershipConsensusStateNotFound(t *testing.T) {
 	}
 }
 
-func TestVerifyNonMembershipEmptyRoot(t *testing.T) {
+func TestVerifyNonMembershipEmptyRoot(cur realm, t *testing.T) {
 	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: nil}}
 	proofs := []ics23.CommitmentProof{
 		ics23.CommitmentProof_Nonexist{Nonexist: &ics23.NonExistenceProof{}},
@@ -257,14 +257,14 @@ func TestVerifyNonMembershipEmptyRoot(t *testing.T) {
 	}
 }
 
-func TestVerifyNonMembershipFirstProofNotNonexist(t *testing.T) {
+func TestVerifyNonMembershipFirstProofNotNonexist(cur realm, t *testing.T) {
 	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
 	if err := VerifyNonMembership(cs, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
 		t.Fatal("expected error when first proof is not a non-existence proof")
 	}
 }
 
-func TestVerifyNonMembershipProofFails(t *testing.T) {
+func TestVerifyNonMembershipProofFails(cur realm, t *testing.T) {
 	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
 	proofs := []ics23.CommitmentProof{
 		ics23.CommitmentProof_Nonexist{Nonexist: &ics23.NonExistenceProof{}},

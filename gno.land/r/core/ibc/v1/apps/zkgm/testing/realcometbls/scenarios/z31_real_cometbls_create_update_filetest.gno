@@ -6,8 +6,8 @@ import (
 )
 
 func main() {
-	clientId := realcometbls.CreateRealCometBLSClient(cross)
-	height := realcometbls.UpdateRealCometBLSClient(cross, clientId)
+	clientId := realcometbls.CreateRealCometBLSClient(cross(cur))
+	height := realcometbls.UpdateRealCometBLSClient(cross(cur), clientId)
 	latestHeight := realadapter.Adapter{}.GetLatestHeight(clientId)
 	timestamp := realadapter.Adapter{}.GetTimestamp(clientId, height)
 	status := realadapter.Adapter{}.GetStatus(clientId)

@@ -41,7 +41,7 @@ func installAdapterClient(clientId core.ClientId, cs cometblsp.ClientState, cons
 	entries[clientId] = newAdapterClientEntry(cs, cons)
 }
 
-func TestWasmContractStoreKey(t *testing.T) {
+func TestWasmContractStoreKey(cur realm, t *testing.T) {
 	var contractAddress cometblsp.H256
 	for i := 0; i < len(contractAddress); i++ {
 		contractAddress[i] = byte(i)
@@ -57,22 +57,22 @@ func TestWasmContractStoreKey(t *testing.T) {
 	}
 }
 
-func TestMutatingEntrypointsRequireCoreCaller(t *testing.T) {
+func TestMutatingEntrypointsRequireCoreCaller(cur realm, t *testing.T) {
 	resetAdapterEntries()
 	adapter := Adapter{}
 
-	uassert.AbortsContains(t, "cometbls: core only", func(cur realm) {
-		adapter.CreateClient(cross, core.ClientId(1), nil, nil)
+	uassert.AbortsContains(t, cur, "cometbls: core only", func(cur realm) {
+		adapter.CreateClient(cross(cur), core.ClientId(1), nil, nil)
 	})
-	uassert.AbortsContains(t, "cometbls: core only", func(cur realm) {
-		adapter.UpdateClient(cross, core.ClientId(1), nil)
+	uassert.AbortsContains(t, cur, "cometbls: core only", func(cur realm) {
+		adapter.UpdateClient(cross(cur), core.ClientId(1), nil)
 	})
-	uassert.AbortsContains(t, "cometbls: core only", func(cur realm) {
-		adapter.Misbehaviour(cross, core.ClientId(1), nil)
+	uassert.AbortsContains(t, cur, "cometbls: core only", func(cur realm) {
+		adapter.Misbehaviour(cross(cur), core.ClientId(1), nil)
 	})
 }
 
-func TestVerifyMembershipAndNonMembershipRejectInactiveBeforeProofDecode(t *testing.T) {
+func TestVerifyMembershipAndNonMembershipRejectInactiveBeforeProofDecode(cur realm, t *testing.T) {
 	testCases := []struct {
 		name        string
 		mutate      func(*cometblsp.ClientState, *cometblsp.ConsensusState)
@@ -94,7 +94,7 @@ func TestVerifyMembershipAndNonMembershipRejectInactiveBeforeProofDecode(t *test
 			cons := activeAdapterConsensusState()
 			tc.mutate(&cs, &cons)
 			installAdapterClient(clientId, cs, cons)
-			uassert.AbortsContains(t, "cometbls: client is "+tc.statusLabel, func(cur realm) {
+			uassert.AbortsContains(t, cur, "cometbls: client is "+tc.statusLabel, func(cur realm) {
 				Adapter{}.VerifyMembership(clientId, core.Height(cs.LatestHeight), []byte{0xff}, []byte("key"), []byte("value"))
 			})
 		})
@@ -105,14 +105,14 @@ func TestVerifyMembershipAndNonMembershipRejectInactiveBeforeProofDecode(t *test
 			cons := activeAdapterConsensusState()
 			tc.mutate(&cs, &cons)
 			installAdapterClient(clientId, cs, cons)
-			uassert.AbortsContains(t, "cometbls: client is "+tc.statusLabel, func(cur realm) {
+			uassert.AbortsContains(t, cur, "cometbls: client is "+tc.statusLabel, func(cur realm) {
 				Adapter{}.VerifyNonMembership(clientId, core.Height(cs.LatestHeight), []byte{0xff}, []byte("key"))
 			})
 		})
 	}
 }
 
-func TestGetLatestHeightReturnsStoredClientStateHeight(t *testing.T) {
+func TestGetLatestHeightReturnsStoredClientStateHeight(cur realm, t *testing.T) {
 	resetAdapterEntries()
 	clientId := core.ClientId(1)
 	cs := activeAdapterClientState()
@@ -124,7 +124,7 @@ func TestGetLatestHeightReturnsStoredClientStateHeight(t *testing.T) {
 	}
 }
 
-func TestGetTimestampReturnsStoredConsensusTimestamp(t *testing.T) {
+func TestGetTimestampReturnsStoredConsensusTimestamp(cur realm, t *testing.T) {
 	resetAdapterEntries()
 	clientId := core.ClientId(1)
 	cs := activeAdapterClientState()
@@ -137,17 +137,17 @@ func TestGetTimestampReturnsStoredConsensusTimestamp(t *testing.T) {
 	}
 }
 
-func TestGetTimestampPanicsWhenConsensusStateMissing(t *testing.T) {
+func TestGetTimestampPanicsWhenConsensusStateMissing(cur realm, t *testing.T) {
 	resetAdapterEntries()
 	clientId := core.ClientId(1)
 	installAdapterClient(clientId, activeAdapterClientState(), activeAdapterConsensusState())
 
-	uassert.AbortsContains(t, "cometbls: consensus state not found at height 99", func(cur realm) {
+	uassert.AbortsContains(t, cur, "cometbls: consensus state not found at height 99", func(cur realm) {
 		Adapter{}.GetTimestamp(clientId, core.Height(99))
 	})
 }
 
-func TestGetStatusActive(t *testing.T) {
+func TestGetStatusActive(cur realm, t *testing.T) {
 	resetAdapterEntries()
 	clientId := core.ClientId(1)
 	installAdapterClient(clientId, activeAdapterClientState(), activeAdapterConsensusState())
@@ -157,7 +157,7 @@ func TestGetStatusActive(t *testing.T) {
 	}
 }
 
-func TestGetStatusFrozen(t *testing.T) {
+func TestGetStatusFrozen(cur realm, t *testing.T) {
 	resetAdapterEntries()
 	clientId := core.ClientId(1)
 	cs := activeAdapterClientState()
@@ -169,7 +169,7 @@ func TestGetStatusFrozen(t *testing.T) {
 	}
 }
 
-func TestGetStatusExpiredWhenLatestConsensusStateMissing(t *testing.T) {
+func TestGetStatusExpiredWhenLatestConsensusStateMissing(cur realm, t *testing.T) {
 	resetAdapterEntries()
 	clientId := core.ClientId(1)
 	cs := activeAdapterClientState()

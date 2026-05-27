@@ -1,7 +1,7 @@
 package core
 
 import (
-	"chain/runtime"
+	rtunsafe "chain/runtime/unsafe"
 	"time"
 )
 
@@ -9,9 +9,9 @@ import (
 // packet timeout enforcement on the receive path.
 func nowNanos() uint64 { return uint64(time.Now().UnixNano()) }
 
-func PacketSend(_ realm, sourceChannelId ChannelId, timeoutHeight Height, timeoutTimestamp Timestamp, data []byte) Packet {
+func PacketSend(cur realm, sourceChannelId ChannelId, timeoutHeight Height, timeoutTimestamp Timestamp, data []byte) Packet {
 	portId := st.getChannelOwner(sourceChannelId)
-	if string(portId) != runtime.PreviousRealm().PkgPath() {
+	if string(portId) != cur.Previous().PkgPath() {
 		panic(ErrUnauthorizedPacketSender)
 	}
 
@@ -63,7 +63,7 @@ func acceptRecvPacket(packet Packet, batchChannelId ChannelId, now uint64) (Chan
 }
 
 func PacketRecv(_ realm, msg MsgPacketRecv) {
-	relayer := runtime.OriginCaller()
+	relayer := rtunsafe.OriginCaller()
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
 	}
@@ -105,7 +105,7 @@ func PacketRecv(_ realm, msg MsgPacketRecv) {
 }
 
 func IntentPacketRecv(_ realm, msg MsgIntentPacketRecv) {
-	marketMaker := runtime.OriginCaller()
+	marketMaker := rtunsafe.OriginCaller()
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
 	}
@@ -131,7 +131,7 @@ func IntentPacketRecv(_ realm, msg MsgIntentPacketRecv) {
 }
 
 func PacketAcknowledgement(_ realm, msg MsgPacketAcknowledgement) {
-	relayer := runtime.OriginCaller()
+	relayer := rtunsafe.OriginCaller()
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
 	}
@@ -172,7 +172,7 @@ func PacketAcknowledgement(_ realm, msg MsgPacketAcknowledgement) {
 }
 
 func PacketTimeout(_ realm, msg MsgPacketTimeout) {
-	relayer := runtime.OriginCaller()
+	relayer := rtunsafe.OriginCaller()
 	packet := msg.Packet
 	if !st.hasPacketCommitment(packet) {
 		return
@@ -225,13 +225,13 @@ func AcknowledgementHash(_ realm, packet Packet) H256 {
 	return st.acknowledgementHash(packet)
 }
 
-func BatchSend(_ realm, msg MsgBatchSend) H256 {
+func BatchSend(cur realm, msg MsgBatchSend) H256 {
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
 	}
 	first := msg.Packets[0]
 	portId := st.getChannelOwner(first.SourceChannelId)
-	if string(portId) != runtime.PreviousRealm().PkgPath() {
+	if string(portId) != cur.Previous().PkgPath() {
 		panic(ErrUnauthorizedPacketSender)
 	}
 	for _, packet := range msg.Packets {
@@ -254,7 +254,7 @@ func BatchSend(_ realm, msg MsgBatchSend) H256 {
 	return batchHash
 }
 
-func BatchAcks(_ realm, msg MsgBatchAcks) H256 {
+func BatchAcks(cur realm, msg MsgBatchAcks) H256 {
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
 	}
@@ -263,7 +263,7 @@ func BatchAcks(_ realm, msg MsgBatchAcks) H256 {
 	}
 	first := msg.Packets[0]
 	portId := st.getChannelOwner(first.DestinationChannelId)
-	if string(portId) != runtime.PreviousRealm().PkgPath() {
+	if string(portId) != cur.Previous().PkgPath() {
 		panic(ErrUnauthorizedAckWriter)
 	}
 	for _, packet := range msg.Packets {
@@ -314,9 +314,9 @@ func QueryReceiptAtPath(path H256) string {
 // WriteAcknowledgement commits an acknowledgement for a previously received
 // packet. Async acknowledgement ownership is protocol-managed: core does not
 // track pending async acknowledgement state.
-func WriteAcknowledgement(_ realm, msg MsgWriteAcknowledgement) {
+func WriteAcknowledgement(cur realm, msg MsgWriteAcknowledgement) {
 	portId := st.getChannelOwner(msg.Packet.DestinationChannelId)
-	if string(portId) != runtime.PreviousRealm().PkgPath() {
+	if string(portId) != cur.Previous().PkgPath() {
 		panic(ErrUnauthorizedAckWriter)
 	}
 	if len(msg.Acknowledgement) == 0 {

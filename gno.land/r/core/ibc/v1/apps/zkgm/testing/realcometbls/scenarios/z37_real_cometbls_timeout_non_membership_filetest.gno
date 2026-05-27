@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	pair := realcometbls.OpenZ37CometBLSChannel(cross)
+	pair := realcometbls.OpenZ37CometBLSChannel(cross(cur))
 	sender := string(testutils.TestAddress("timeout-sender"))
 
 	order := z.TokenOrderV2{
@@ -27,21 +27,21 @@ func main() {
 	packet := core.Packet{
 		SourceChannelId:      pair.Destination,
 		DestinationChannelId: core.GetChannel(pair.Destination).CounterpartyChannelId,
-		Data:                 e2e.MustPacketData(cross, e2e.MustTokenOrderInstruction(cross, order)),
+		Data:                 e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)),
 		TimeoutTimestamp:     core.Timestamp(3600),
 	}
-	realcometbls.BatchSend(cross, packet)
+	realcometbls.BatchSend(cross(cur), packet)
 
-	println("commitment_before_timeout", core.HasPacketCommitment(cross, packet))
+	println("commitment_before_timeout", core.HasPacketCommitment(cross(cur), packet))
 	println("sender_balance_before_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))
 
-	core.PacketTimeout(cross, core.MsgPacketTimeout{
+	core.PacketTimeout(cross(cur), core.MsgPacketTimeout{
 		Packet:      packet,
-		Proof:       realcometbls.Z37ReceiptNonMembershipProof(cross),
+		Proof:       realcometbls.Z37ReceiptNonMembershipProof(cross(cur)),
 		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
 	})
 
-	println("commitment_after_timeout", core.HasPacketCommitment(cross, packet))
+	println("commitment_after_timeout", core.HasPacketCommitment(cross(cur), packet))
 	println("sender_balance_after_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))
 	println("timeout_real_cometbls", "ok")
 }

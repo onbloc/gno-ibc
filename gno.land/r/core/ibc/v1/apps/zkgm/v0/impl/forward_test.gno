@@ -28,7 +28,7 @@ func TestVerifyForwardPassesAllowedChildren(cur realm, t *testing.T) {
 
 	sender := testAddress("forward-sender")
 	baseToken := "ibc/v1-forward"
-	uassert.NoError(t, mintVoucher(cross, baseToken, baseToken, [32]byte{}, sender, u256.NewUint(30)))
+	uassert.NoError(t, mintVoucher(cross(cur), baseToken, baseToken, [32]byte{}, sender, u256.NewUint(30)))
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
 		BaseToken:   []byte(baseToken),
@@ -59,7 +59,7 @@ func TestVerifyForwardPassesAllowedChildren(cur realm, t *testing.T) {
 func TestBuildForwardChildPacket(cur realm, t *testing.T) {
 	// buildForwardChild now consults core.GetChannel(nextSourceChannel) to fill
 	// DestinationChannelId; open a channel under the expected source id first.
-	nextSource := openForwardTestChannel(cross, core.ChannelId(99))
+	nextSource := openForwardTestChannel(cross(cur), core.ChannelId(99))
 	parentSalt := [32]byte{0xA}
 	parent := core.Packet{SourceChannelId: core.ChannelId(0), DestinationChannelId: core.ChannelId(1)}
 
@@ -80,7 +80,7 @@ func TestBuildForwardChildPacket(cur realm, t *testing.T) {
 }
 
 func TestBuildForwardNestedRebuildsContinuation(cur realm, t *testing.T) {
-	nextSource := openForwardTestChannel(cross, core.ChannelId(99))
+	nextSource := openForwardTestChannel(cross(cur), core.ChannelId(99))
 	parent := core.Packet{SourceChannelId: core.ChannelId(0), DestinationChannelId: core.ChannelId(1)}
 
 	child, err := buildForwardChild(parent, u256.NewUint(5), [32]byte{}, z.Forward{
@@ -115,7 +115,7 @@ func TestExecuteForwardIntentReturnsOnlyMaker(cur realm, t *testing.T) {
 }
 
 func TestExecuteForwardAsyncDefersAckAndTracksChild(cur realm, t *testing.T) {
-	channelId := openForwardTestChannel(cross, core.ChannelId(12))
+	channelId := openForwardTestChannel(cross(cur), core.ChannelId(12))
 	parent := core.Packet{SourceChannelId: core.ChannelId(9), DestinationChannelId: core.ChannelId(1)}
 	forward := z.Forward{
 		Path:             forwardPath(1, uint32(channelId)),
@@ -158,7 +158,7 @@ func TestAcknowledgeForwardWithTokenOrderChildRefundsOnFailure(cur realm, t *tes
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 	path := forwardPath(1, 2)
-	increaseChannelBalanceV2(cross, core.ChannelId(3), path, order.BaseToken, order.QuoteToken, order.BaseAmount)
+	increaseChannelBalanceV2(cross(cur), core.ChannelId(3), path, order.BaseToken, order.QuoteToken, order.BaseAmount)
 	childFailAck, err := z.EncodeAck(z.Ack{Tag: tagAckFailure, InnerAck: []byte("failed")})
 	uassert.NoError(t, err)
 
@@ -178,7 +178,7 @@ func TestConsumeForwardChildClearsInFlight(cur realm, t *testing.T) {
 	packet := core.Packet{SourceChannelId: core.ChannelId(2), DestinationChannelId: core.ChannelId(3)}
 	parentPacket := core.Packet{SourceChannelId: core.ChannelId(10), DestinationChannelId: core.ChannelId(11)}
 	parent := zkgm.InFlightValue{ParentPacket: parentPacket}
-	zkgm.SetInFlightPacket(cross, forwardInFlightKey(packet), parent)
+	zkgm.SetInFlightPacket(cross(cur), forwardInFlightKey(packet), parent)
 
 	got, ok := consumeForwardChild(packet, z.DeriveForwardSalt([32]byte{0xB}))
 
@@ -231,35 +231,35 @@ func (c *forwardTestLightClient) GetStatus(clientId core.ClientId) core.Status {
 }
 
 func openForwardTestChannel(cur realm, counterpartyChannelId core.ChannelId) core.ChannelId {
-	zkgm.UpdateImpl(cross, zkgm.UpdateRequest{Impl: &ZkgmV1{}})
+	zkgm.UpdateImpl(cross(cur), zkgm.UpdateRequest{Impl: &ZkgmV1{}})
 	portId := []byte(zkgm.ProxyPkgPath())
 	if !core.HasApp(portId) {
-		core.RegisterApp(cross, portId, zkgm.AsIBCApp())
+		core.RegisterApp(cross(cur), portId, zkgm.AsIBCApp())
 	}
 	clientType := core.ClientType("forward-test")
 	if !core.HasClient(clientType) {
-		core.RegisterClient(cross, clientType, &forwardTestLightClient{})
+		core.RegisterClient(cross(cur), clientType, &forwardTestLightClient{})
 	}
 
-	clientId := core.CreateClient(cross, core.MsgCreateClient{
+	clientId := core.CreateClient(cross(cur), core.MsgCreateClient{
 		ClientType: clientType,
 	})
-	connectionId := core.ConnectionOpenInit(cross, core.MsgConnectionOpenInit{
+	connectionId := core.ConnectionOpenInit(cross(cur), core.MsgConnectionOpenInit{
 		ClientId:             clientId,
 		CounterpartyClientId: core.ClientId(99),
 	})
-	core.ConnectionOpenAck(cross, core.MsgConnectionOpenAck{
+	core.ConnectionOpenAck(cross(cur), core.MsgConnectionOpenAck{
 		ConnectionId:             connectionId,
 		CounterpartyConnectionId: core.ConnectionId(77),
 	})
 
-	channelId := core.ChannelOpenInit(cross, core.MsgChannelOpenInit{
+	channelId := core.ChannelOpenInit(cross(cur), core.MsgChannelOpenInit{
 		PortId:             portId,
 		CounterpartyPortId: portId,
 		ConnectionId:       connectionId,
 		Version:            zkgm.Version,
 	})
-	core.ChannelOpenAck(cross, core.MsgChannelOpenAck{
+	core.ChannelOpenAck(cross(cur), core.MsgChannelOpenAck{
 		ChannelId:             channelId,
 		CounterpartyVersion:   zkgm.Version,
 		CounterpartyChannelId: counterpartyChannelId,

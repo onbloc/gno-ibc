@@ -91,7 +91,7 @@ func resetZkgmForTest() {
 	adminAddressStr = ""
 }
 
-func TestAppChannelOpenInitVersion(t *testing.T) {
+func TestAppChannelOpenInitVersion(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	impl = d
@@ -106,7 +106,7 @@ func TestAppChannelOpenInitVersion(t *testing.T) {
 	})
 }
 
-func TestAppChannelOpenTryCounterpartyVersion(t *testing.T) {
+func TestAppChannelOpenTryCounterpartyVersion(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	impl = d
@@ -121,7 +121,7 @@ func TestAppChannelOpenTryCounterpartyVersion(t *testing.T) {
 	})
 }
 
-func TestAppNineMethodsDelegate(t *testing.T) {
+func TestAppNineMethodsDelegate(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	impl = d
@@ -146,7 +146,7 @@ func TestAppNineMethodsDelegate(t *testing.T) {
 	}
 }
 
-func TestAppPausedOnlyBlocksRecv(t *testing.T) {
+func TestAppPausedOnlyBlocksRecv(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	impl = d
@@ -172,7 +172,7 @@ func TestAppPausedOnlyBlocksRecv(t *testing.T) {
 	}
 }
 
-func TestAppNilImplPolicy(t *testing.T) {
+func TestAppNilImplPolicy(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	packet := core.Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: []byte("data")}
 
@@ -188,7 +188,7 @@ func TestAppNilImplPolicy(t *testing.T) {
 	(&App{}).OnTimeoutPacket(packet, address("g1relayer"))
 }
 
-func TestDecodeHexArg(t *testing.T) {
+func TestDecodeHexArg(cur realm, t *testing.T) {
 	uassert.PanicsContains(t, "invalid salt hex", func() {
 		mustDecodeHexArg("salt", "zz")
 	})

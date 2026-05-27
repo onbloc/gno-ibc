@@ -2,7 +2,7 @@ package core
 
 import "testing"
 
-func TestZ42HandshakeNegativeFixtureInputPaths(t *testing.T) {
+func TestZ42HandshakeNegativeFixtureInputPaths(cur realm, t *testing.T) {
 	connection := Connection{
 		State:                    ConnectionStateTryOpen,
 		ClientId:                 99,

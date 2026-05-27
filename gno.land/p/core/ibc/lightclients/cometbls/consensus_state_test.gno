@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestEncodeConsensusState(t *testing.T) {
+func TestEncodeConsensusState(cur realm, t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		cs := ConsensusState{
 			Timestamp:          500,
@@ -33,7 +33,7 @@ func TestEncodeConsensusState(t *testing.T) {
 	})
 }
 
-func TestDecodeConsensusState(t *testing.T) {
+func TestDecodeConsensusState(cur realm, t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		buf := mustHex(word32(500) + bytes32hex(0xAB) + bytes32hex(0xCD))
 		got, err := DecodeConsensusState(buf)
@@ -58,7 +58,7 @@ func TestDecodeConsensusState(t *testing.T) {
 	})
 }
 
-func TestEncodeDecodeConsensusStateRoundTrip(t *testing.T) {
+func TestEncodeDecodeConsensusStateRoundTrip(cur realm, t *testing.T) {
 	original := ConsensusState{
 		Timestamp:          123456789,
 		Root:               MerkleRoot{Hash: bytes.Repeat([]byte{0xAA}, 32)},

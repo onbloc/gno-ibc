@@ -7,12 +7,12 @@ import (
 )
 
 func main() {
-	clientId := realcometbls.CreateSyntheticCometBLSClient(cross)
+	clientId := realcometbls.CreateSyntheticCometBLSClient(cross(cur))
 	realadapter.Adapter{}.VerifyNonMembership(
 		clientId,
 		core.Height(realcometbls.DevnetHeight-1),
-		realcometbls.SyntheticNonMembershipProof(cross),
-		realcometbls.SyntheticNonMembershipKey(cross),
+		realcometbls.SyntheticNonMembershipProof(cross(cur)),
+		realcometbls.SyntheticNonMembershipKey(cross(cur)),
 	)
 
 	println("non_membership_fixture", "ok")

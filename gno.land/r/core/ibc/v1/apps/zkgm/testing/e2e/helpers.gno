@@ -23,28 +23,28 @@ type ChannelPair struct {
 
 func RegisterMockLightClient(cur realm) {
 	if !core.HasClient(MockClientType) {
-		core.RegisterClient(cross, MockClientType, &MockLightClient{})
+		core.RegisterClient(cross(cur), MockClientType, &MockLightClient{})
 	}
 }
 
 func CreateMockClient(cur realm) core.ClientId {
-	return core.CreateClient(cross, core.MsgCreateClient{
+	return core.CreateClient(cross(cur), core.MsgCreateClient{
 		ClientType: MockClientType,
 	})
 }
 
 func OpenE2EChannel(cur realm, counterpartyChannelId core.ChannelId) core.ChannelId {
-	clientId := CreateMockClient(cross)
-	connectionId := openConnection(clientId)
-	return openChannel(connectionId, counterpartyChannelId)
+	clientId := CreateMockClient(cross(cur))
+	connectionId := openConnection(cur, clientId)
+	return openChannel(cur, connectionId, counterpartyChannelId)
 }
 
 func OpenE2EChannelPair(cur realm) ChannelPair {
-	clientId := CreateMockClient(cross)
-	connectionId := openConnection(clientId)
+	clientId := CreateMockClient(cross(cur))
+	connectionId := openConnection(cur, clientId)
 
-	source := openChannel(connectionId, core.ChannelId(2))
-	destination := openChannel(connectionId, source)
+	source := openChannel(cur, connectionId, core.ChannelId(2))
+	destination := openChannel(cur, connectionId, source)
 	return ChannelPair{
 		ClientId:     clientId,
 		ConnectionId: connectionId,
@@ -53,12 +53,12 @@ func OpenE2EChannelPair(cur realm) ChannelPair {
 	}
 }
 
-func openConnection(clientId core.ClientId) core.ConnectionId {
-	connectionId := core.ConnectionOpenInit(cross, core.MsgConnectionOpenInit{
+func openConnection(cur realm, clientId core.ClientId) core.ConnectionId {
+	connectionId := core.ConnectionOpenInit(cross(cur), core.MsgConnectionOpenInit{
 		ClientId:             clientId,
 		CounterpartyClientId: core.ClientId(99),
 	})
-	core.ConnectionOpenAck(cross, core.MsgConnectionOpenAck{
+	core.ConnectionOpenAck(cross(cur), core.MsgConnectionOpenAck{
 		ConnectionId:             connectionId,
 		CounterpartyConnectionId: core.ConnectionId(77),
 		ProofHeight:              core.Height(1),
@@ -66,15 +66,15 @@ func openConnection(clientId core.ClientId) core.ConnectionId {
 	return connectionId
 }
 
-func openChannel(connectionId core.ConnectionId, counterpartyChannelId core.ChannelId) core.ChannelId {
+func openChannel(cur realm, connectionId core.ConnectionId, counterpartyChannelId core.ChannelId) core.ChannelId {
 	portId := []byte(zkgm.ProxyPkgPath())
-	channelId := core.ChannelOpenInit(cross, core.MsgChannelOpenInit{
+	channelId := core.ChannelOpenInit(cross(cur), core.MsgChannelOpenInit{
 		PortId:             portId,
 		CounterpartyPortId: portId,
 		ConnectionId:       connectionId,
 		Version:            zkgm.Version,
 	})
-	core.ChannelOpenAck(cross, core.MsgChannelOpenAck{
+	core.ChannelOpenAck(cross(cur), core.MsgChannelOpenAck{
 		ChannelId:             channelId,
 		CounterpartyVersion:   zkgm.Version,
 		CounterpartyChannelId: counterpartyChannelId,
@@ -84,7 +84,7 @@ func openChannel(connectionId core.ConnectionId, counterpartyChannelId core.Chan
 }
 
 func BatchSend(cur realm, packet core.Packet) core.H256 {
-	return zkgm.BatchSend(cross, core.MsgBatchSend{Packets: []core.Packet{packet}})
+	return zkgm.BatchSend(cross(cur), core.MsgBatchSend{Packets: []core.Packet{packet}})
 }
 
 func MustTokenOrderInstruction(cur realm, order z.TokenOrderV2) z.Instruction {
@@ -164,7 +164,7 @@ func MustProtocolTokenOrderAck(cur realm) []byte {
 }
 
 func MustSuccessAck(cur realm, inner []byte) []byte {
-	return MustAck(cross, tagAckSuccessU256, inner)
+	return MustAck(cross(cur), tagAckSuccessU256, inner)
 }
 
 func MustSuccessAckBytes(cur realm, inner []byte) []byte {
@@ -176,7 +176,7 @@ func MustSuccessAckBytes(cur realm, inner []byte) []byte {
 }
 
 func MustCallAck(cur realm) []byte {
-	return MustSuccessAckBytes(cross, []byte{})
+	return MustSuccessAckBytes(cross(cur), []byte{})
 }
 
 func MustBatchAck(cur realm, childAcks [][]byte) []byte {
@@ -184,5 +184,5 @@ func MustBatchAck(cur realm, childAcks [][]byte) []byte {
 	if err != nil {
 		panic(err)
 	}
-	return MustSuccessAckBytes(cross, batchAck)
+	return MustSuccessAckBytes(cross(cur), batchAck)
 }

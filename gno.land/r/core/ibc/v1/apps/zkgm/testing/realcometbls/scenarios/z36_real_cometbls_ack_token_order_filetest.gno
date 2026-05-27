@@ -12,7 +12,7 @@ import (
 )
 
 func main() {
-	pair := realcometbls.OpenZ35CometBLSChannel(cross)
+	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 	sender := string(testutils.TestAddress("timeout-sender"))
 
 	order := z.TokenOrderV2{
@@ -27,24 +27,24 @@ func main() {
 	packet := core.Packet{
 		SourceChannelId:      pair.Destination,
 		DestinationChannelId: core.GetChannel(pair.Destination).CounterpartyChannelId,
-		Data:                 e2e.MustPacketData(cross, e2e.MustTokenOrderInstruction(cross, order)),
+		Data:                 e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)),
 		TimeoutTimestamp:     core.Timestamp(3600),
 	}
-	realcometbls.BatchSend(cross, packet)
+	realcometbls.BatchSend(cross(cur), packet)
 	marketMaker := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
-	ack := e2e.MustSuccessAck(cross, mustMarketMakerTokenOrderAck([]byte(marketMaker)))
+	ack := e2e.MustSuccessAck(cross(cur), mustMarketMakerTokenOrderAck([]byte(marketMaker)))
 
-	println("commitment_before_ack", core.HasPacketCommitment(cross, packet))
+	println("commitment_before_ack", core.HasPacketCommitment(cross(cur), packet))
 	println("market_maker_balance_before_ack", impl.VoucherBalanceOf(string(order.BaseToken), address(marketMaker)))
 
-	core.PacketAcknowledgement(cross, core.MsgPacketAcknowledgement{
+	core.PacketAcknowledgement(cross(cur), core.MsgPacketAcknowledgement{
 		Packets:          []core.Packet{packet},
 		Acknowledgements: [][]byte{ack},
-		Proof:            realcometbls.Z36AckMembershipProof(cross),
+		Proof:            realcometbls.Z36AckMembershipProof(cross(cur)),
 		ProofHeight:      core.Height(realcometbls.DevnetHeight - 1),
 	})
 
-	println("commitment_after_ack", core.HasPacketCommitment(cross, packet))
+	println("commitment_after_ack", core.HasPacketCommitment(cross(cur), packet))
 	println("market_maker_balance_after_ack", impl.VoucherBalanceOf(string(order.BaseToken), address(marketMaker)))
 	println("ack_real_cometbls", "ok")
 }

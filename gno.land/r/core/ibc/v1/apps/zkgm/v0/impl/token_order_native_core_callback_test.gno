@@ -48,10 +48,10 @@ func (m *timeoutMockLightClient) GetStatus(clientId core.ClientId) core.Status {
 }
 
 func TestPacketAcknowledgementFailureRefundsNativeFromProxy(cur realm, t *testing.T) {
-	packet, order := setupNativeRefundPacket(cross, false, "ackrefund", "ucoreack", 11)
+	packet, order := setupNativeRefundPacket(cross(cur), false, "ackrefund", "ucoreack", 11)
 	ack := mustFailureAck()
 
-	core.PacketAcknowledgement(cross, core.MsgPacketAcknowledgement{
+	core.PacketAcknowledgement(cross(cur), core.MsgPacketAcknowledgement{
 		Packets:          []core.Packet{packet},
 		Acknowledgements: [][]byte{ack},
 		ProofHeight:      core.Height(1),
@@ -61,9 +61,9 @@ func TestPacketAcknowledgementFailureRefundsNativeFromProxy(cur realm, t *testin
 }
 
 func TestPacketTimeoutRefundsNativeFromProxy(cur realm, t *testing.T) {
-	packet, order := setupNativeRefundPacket(cross, true, "timerefund", "ucoretimeout", 13)
+	packet, order := setupNativeRefundPacket(cross(cur), true, "timerefund", "ucoretimeout", 13)
 
-	core.PacketTimeout(cross, core.MsgPacketTimeout{
+	core.PacketTimeout(cross(cur), core.MsgPacketTimeout{
 		Packet:      packet,
 		ProofHeight: core.Height(1),
 	})
@@ -73,17 +73,17 @@ func TestPacketTimeoutRefundsNativeFromProxy(cur realm, t *testing.T) {
 
 func setupNativeRefundPacket(cur realm, expired bool, senderName string, denom string, amount int64) (core.Packet, z.TokenOrderV2) {
 	resetTokenOrderTest()
-	zkgm.UpdateImpl(cross, zkgm.UpdateRequest{AllowedImpls: []string{
+	zkgm.UpdateImpl(cross(cur), zkgm.UpdateRequest{AllowedImpls: []string{
 		"gno.land/r/core/ibc/v1/core",
 		"gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl",
 	}})
-	ensureZkgmAppRegistered(cross)
+	ensureZkgmAppRegistered(cross(cur))
 	var pair e2e.ChannelPair
 	if expired {
-		pair = openTimeoutChannelPair(cross)
+		pair = openTimeoutChannelPair(cross(cur))
 	} else {
-		e2e.RegisterMockLightClient(cross)
-		pair = e2e.OpenE2EChannelPair(cross)
+		e2e.RegisterMockLightClient(cross(cur))
+		pair = e2e.OpenE2EChannelPair(cross(cur))
 	}
 
 	sender := testAddress(senderName)
@@ -99,61 +99,61 @@ func setupNativeRefundPacket(cur realm, expired bool, senderName string, denom s
 	packet := core.Packet{
 		SourceChannelId:      pair.Source,
 		DestinationChannelId: pair.Destination,
-		Data:                 e2e.MustPacketData(cross, e2e.MustTokenOrderInstruction(cross, order)),
+		Data:                 e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)),
 		TimeoutTimestamp:     core.Timestamp(1),
 	}
 
 	testing.IssueCoins(zkgm.ProxyAddress(), chain.NewCoins(chain.NewCoin(denom, amount)))
-	zkgm.SetChannelBalanceV2(cross, ChannelBalanceKeyV2(packet.SourceChannelId, u256.Zero(), order.BaseToken, order.QuoteToken), u256.NewUint(uint64(amount)))
-	e2e.BatchSend(cross, packet)
+	zkgm.SetChannelBalanceV2(cross(cur), ChannelBalanceKeyV2(packet.SourceChannelId, u256.Zero(), order.BaseToken, order.QuoteToken), u256.NewUint(uint64(amount)))
+	e2e.BatchSend(cross(cur), packet)
 
 	return packet, order
 }
 
 func ensureZkgmAppRegistered(cur realm) {
 	if !core.HasApp([]byte(zkgm.ProxyPkgPath())) {
-		core.RegisterApp(cross, []byte(zkgm.ProxyPkgPath()), zkgm.AsIBCApp())
+		core.RegisterApp(cross(cur), []byte(zkgm.ProxyPkgPath()), zkgm.AsIBCApp())
 	}
 }
 
 func openTimeoutChannelPair(cur realm) e2e.ChannelPair {
-	ensureZkgmAppRegistered(cross)
+	ensureZkgmAppRegistered(cross(cur))
 	if !core.HasClient(timeoutMockClientType) {
-		core.RegisterClient(cross, timeoutMockClientType, &timeoutMockLightClient{})
+		core.RegisterClient(cross(cur), timeoutMockClientType, &timeoutMockLightClient{})
 	}
-	clientId := core.CreateClient(cross, core.MsgCreateClient{
+	clientId := core.CreateClient(cross(cur), core.MsgCreateClient{
 		ClientType: timeoutMockClientType,
 	})
-	connectionId := core.ConnectionOpenInit(cross, core.MsgConnectionOpenInit{
+	connectionId := core.ConnectionOpenInit(cross(cur), core.MsgConnectionOpenInit{
 		ClientId:             clientId,
 		CounterpartyClientId: core.ClientId(99),
 	})
-	core.ConnectionOpenAck(cross, core.MsgConnectionOpenAck{
+	core.ConnectionOpenAck(cross(cur), core.MsgConnectionOpenAck{
 		ConnectionId:             connectionId,
 		CounterpartyConnectionId: core.ConnectionId(77),
 		ProofHeight:              core.Height(1),
 	})
 
 	portId := []byte(zkgm.ProxyPkgPath())
-	source := core.ChannelOpenInit(cross, core.MsgChannelOpenInit{
+	source := core.ChannelOpenInit(cross(cur), core.MsgChannelOpenInit{
 		PortId:             portId,
 		CounterpartyPortId: portId,
 		ConnectionId:       connectionId,
 		Version:            zkgm.Version,
 	})
-	destination := core.ChannelOpenInit(cross, core.MsgChannelOpenInit{
+	destination := core.ChannelOpenInit(cross(cur), core.MsgChannelOpenInit{
 		PortId:             portId,
 		CounterpartyPortId: portId,
 		ConnectionId:       connectionId,
 		Version:            zkgm.Version,
 	})
-	core.ChannelOpenAck(cross, core.MsgChannelOpenAck{
+	core.ChannelOpenAck(cross(cur), core.MsgChannelOpenAck{
 		ChannelId:             source,
 		CounterpartyVersion:   zkgm.Version,
 		CounterpartyChannelId: destination,
 		ProofHeight:           core.Height(1),
 	})
-	core.ChannelOpenAck(cross, core.MsgChannelOpenAck{
+	core.ChannelOpenAck(cross(cur), core.MsgChannelOpenAck{
 		ChannelId:             destination,
 		CounterpartyVersion:   zkgm.Version,
 		CounterpartyChannelId: source,
@@ -182,8 +182,8 @@ func assertNativeRefunded(t *testing.T, packet core.Packet, order z.TokenOrderV2
 	recipient := address(order.Sender)
 	key := ChannelBalanceKeyV2(packet.SourceChannelId, u256.Zero(), order.BaseToken, order.QuoteToken)
 
-	bk := banker.NewBanker(banker.BankerTypeReadonly)
-	uassert.Equal(t, false, core.HasPacketCommitment(cross, packet))
+	bk := banker.NewReadonlyBanker()
+	uassert.Equal(t, false, core.HasPacketCommitment(cross(cur), packet))
 	uassert.Equal(t, amount, bk.GetCoins(recipient).AmountOf(denom))
 	uassert.Equal(t, int64(0), bk.GetCoins(zkgm.ProxyAddress()).AmountOf(denom))
 

@@ -9,8 +9,8 @@ import (
 )
 
 func main() {
-	e2e.RegisterMockLightClient(cross)
-	pair := e2e.OpenE2EChannelPair(cross)
+	e2e.RegisterMockLightClient(cross(cur))
+	pair := e2e.OpenE2EChannelPair(cross(cur))
 
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
@@ -20,15 +20,15 @@ func main() {
 		QuoteToken:  []byte("quote"),
 		QuoteAmount: u256.Zero(),
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
-		Metadata:    e2e.MustTokenMetadata(cross, "grc20", "init"),
+		Metadata:    e2e.MustTokenMetadata(cross(cur), "grc20", "init"),
 	}
 	packet := core.Packet{
 		SourceChannelId:      pair.Source,
 		DestinationChannelId: pair.Destination,
-		Data:                 e2e.MustPacketData(cross, e2e.MustTokenOrderInstruction(cross, order)),
+		Data:                 e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)),
 		TimeoutTimestamp:     core.Timestamp(3600),
 	}
-	e2e.BatchSend(cross, packet)
+	e2e.BatchSend(cross(cur), packet)
 
 	println("client", pair.ClientId.String())
 	println("source_channel", pair.Source.String())

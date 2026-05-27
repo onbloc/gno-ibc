@@ -1,8 +1,6 @@
 package impl
 
 import (
-	"chain/runtime"
-
 	z "gno.land/p/gnoswap/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	core "gno.land/r/core/ibc/v1/core"
@@ -13,8 +11,8 @@ type ZkgmV1 struct{}
 
 var instance = &ZkgmV1{}
 
-func GetInstance() *ZkgmV1 {
-	if runtime.CurrentRealm().PkgPath() != "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader" {
+func GetInstance(cur realm) *ZkgmV1 {
+	if cur.Previous().PkgPath() != "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader" {
 		panic("not allowed")
 	}
 	return instance

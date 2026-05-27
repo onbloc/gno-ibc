@@ -186,8 +186,22 @@ func (Adapter) ForceUpdateClient(cur realm, clientId core.ClientId, clientStateB
 	return core.NewConsensusStateUpdate(cross(cur), height, consStateBytes, csBytes)
 }
 
-// applyForceUpdate is the authorization-free inner logic for ForceUpdateClient.
-// Factored out so adapter-level tests can exercise it without a core caller.
+// applyForceUpdate applies a force update to the client state and consensus state
+// without performing any caller authorization checks.
+//
+// This function exists so adapter-level tests can exercise the force-update
+// logic without requiring a core caller.
+//
+// SECURITY WARNING:
+//
+// applyForceUpdate performs no authorization on its own.
+//
+// The only authorization gates for force updates are:
+//   - mustBeCore() in Adapter.ForceUpdateClient
+//   - the deployer check in core.ForceUpdateClient
+//
+// Any additional caller added within this package would bypass both
+// authorization checks. Do not call applyForceUpdate from any new entrypoint.
 func applyForceUpdate(clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) (core.Height, []byte, []byte) {
 	cs, err := cometblsp.DecodeClientState(clientStateBytes)
 	if err != nil {
@@ -202,16 +216,43 @@ func applyForceUpdate(clientId core.ClientId, clientStateBytes, consensusStateBy
 	}
 
 	e := getEntry(clientId)
-	if cs.LatestHeight < e.cs.LatestHeight {
-		panic("cometbls: force-update height must not regress")
+
+	// Preserve counterparty identity fields.
+	//
+	// Force updates are recovery operations, not retargeting mechanisms.
+	// Without these checks, a privileged caller could silently redirect the
+	// client to a different chain or contract address.
+	if cs.ChainID != e.cs.ChainID {
+		panic("cometbls: force-update cannot change ChainID")
+	}
+	if cs.TrustingPeriod != e.cs.TrustingPeriod {
+		panic("cometbls: force-update cannot change TrustingPeriod")
+	}
+	if cs.MaxClockDrift != e.cs.MaxClockDrift {
+		panic("cometbls: force-update cannot change MaxClockDrift")
+	}
+	if cs.ContractAddress != e.cs.ContractAddress {
+		panic("cometbls: force-update cannot change ContractAddress")
 	}
 
-	// Unconditionally clear any frozen status — force update is a recovery operation.
+	// Strict-equal heights are rejected too — replacing an existing consensus
+	// state at the live height with different bytes would silently invalidate
+	// any membership proof previously verified at that height.
+	if cs.LatestHeight <= e.cs.LatestHeight {
+		panic("cometbls: force-update height must strictly advance")
+	}
+
+	// Clear any frozen status unconditionally.
+	//
+	// Force update is treated as an explicit recovery operation.
 	cs.FrozenHeight = 0
 	e.cs = cs
-	// All prior consensus states are discarded; proofs against old heights will
-	// no longer verify after a force update. Outstanding in-flight packets that
-	// reference those heights must be settled before calling this.
+
+	// Discard all prior consensus states.
+	//
+	// Proofs against older heights will no longer verify after a force update.
+	// Any in-flight packets referencing those heights must be resolved before
+	// invoking this operation.
 	e.consensusStates = map[cometblsp.Height]cometblsp.ConsensusState{cs.LatestHeight: consState}
 
 	encConsState, err := cometblsp.EncodeConsensusState(consState)

@@ -220,8 +220,10 @@ func TestForceUpdateClientRecoveredExpiredClient(cur realm, t *testing.T) {
 		t.Fatalf("pre-condition: expected Expired, got %s", got)
 	}
 
+	freshCs := cs
+	freshCs.LatestHeight = cs.LatestHeight + 1
 	freshCons := encodableConsensusState(nowNanos())
-	csBytes, consBytes := encodeState(t, cs, freshCons)
+	csBytes, consBytes := encodeState(t, freshCs, freshCons)
 	applyForceUpdate(clientId, csBytes, consBytes)
 
 	if got := (Adapter{}).GetStatus(clientId); got != core.StatusActive {
@@ -241,7 +243,9 @@ func TestForceUpdateClientUnfreezesFrozenClient(cur realm, t *testing.T) {
 	}
 
 	// Pass a client state that still has FrozenHeight set; applyForceUpdate must clear it.
-	csBytes, consBytes := encodeState(t, cs, encodableConsensusState(nowNanos()))
+	freshCs := cs
+	freshCs.LatestHeight = cs.LatestHeight + 1
+	csBytes, consBytes := encodeState(t, freshCs, encodableConsensusState(nowNanos()))
 	applyForceUpdate(clientId, csBytes, consBytes)
 
 	if got := (Adapter{}).GetStatus(clientId); got != core.StatusActive {
@@ -263,7 +267,7 @@ func TestForceUpdateClientPanicsOnHeightRegression(cur realm, t *testing.T) {
 	lowerCs.LatestHeight = cometblsp.Height(50)
 	csBytes, consBytes := encodeState(t, lowerCs, encodableConsensusState(nowNanos()))
 
-	uassert.AbortsContains(t, cur, "force-update height must not regress", func(cur realm) {
+	uassert.AbortsContains(t, cur, "force-update height must strictly advance", func(cur realm) {
 		applyForceUpdate(clientId, csBytes, consBytes)
 	})
 }

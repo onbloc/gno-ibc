@@ -165,17 +165,17 @@ already has `cur` in scope.
 A non-crossing function (`func F() T`) called from another realm runs in the **caller's** realm-storage-context. Persistent state owned by the function's home realm is reachable but treated as foreign:
 
 - Scalar and string fields read fine — the value is copied.
-- Slice, pointer, and map fields come back as **readonly tainted** references. Operations that touch the underlying object — reassignment, `string([]byte)`, `bytes.Equal`, `copy`, `append`, range-iteration that mutates — panic with `cannot directly modify readonly tainted object`.
+- Slice, pointer, and map fields come back as **readonly tainted** references. Operations that mutate or write through the underlying object — reassignment, `copy` into the slice, `append` that aliases, range-iteration that mutates — panic with `cannot directly modify readonly tainted object`. Read-only operations such as `string([]byte)` and `bytes.Equal` are now safe after PR 4831 (see the bytes.Equal pitfall section below).
 
 Returned structs that contain such reference fields stay tainted on the caller's side, so deep-cloning inside the getter doesn't help: the caller can't write back into the local copy either.
 
 **Rule of thumb**: any getter that exposes a reference-typed field from a realm's persistent state must be a crossing function (`cur realm`) and return immutable values — string, int, or freshly-allocated objects.
 
 ```gno
-// BAD — runs in caller's realm; conversion of tainted []byte panics.
+// BAD — exposes realm-owned reference data through a non-crossing accessor.
 func GetPayload() string { return string(state.payload) }
 
-// GOOD — runs in the owning realm; string crosses back safely.
+// GOOD — runs in the owning realm; the immutable string crosses back safely.
 func GetPayload(cur realm) string { return string(state.payload) }
 ```
 
@@ -183,15 +183,12 @@ Prefer one accessor per scalar field over a single struct-returning getter: `Get
 
 #### bytes.Equal pitfall
 
-`bytes.Equal(a, b)` is implemented as `string(a) == string(b)`, so comparing against any cross-realm `[]byte` (including package-level `[]byte` constants imported from another realm or `p/`) panics. Use a manual loop when the operand may be foreign:
-
-```gno
-func equalBytes(a, b []byte) bool {
-    if len(a) != len(b) { return false }
-    for i := range a { if a[i] != b[i] { return false } }
-    return true
-}
-```
+PR 4831 legalized `[]byte` <-> `string` conversions on realm-owned fields, so
+`bytes.Equal` is safe on readonly-tainted slices. The old `equalBytes` helper
+and `string(cloneBytes(...))` workaround are obsolete for cast-only use. Keep
+`cloneBytes` style helpers for sites that store into foreign-realm maps, mutate
+in place, or feed consumers such as ics23 internals that may `append` or `copy`
+against their inputs.
 
 #### Cross-realm struct and typed-slice allocation
 
@@ -310,8 +307,8 @@ Forward v0 is limited by the current IBC core, which always writes an acknowledg
   ```gno
   childPath := new(u256.Uint).Set(path)
   ```
-- Use `equalBytes` for `ACK_ERR_ONLY_MAKER` comparisons. Avoid `bytes.Equal` on foreign or package-level byte slices because it may convert to string internally and panic on readonly tainted slices.
-- Use `cloneBytes` before returning package-level `[]byte` values as acknowledgements.
+- Use `bytes.Equal` directly for `ACK_ERR_ONLY_MAKER` comparisons; the prior `equalBytes` workaround was removed in the PR 4831 cleanup.
+- Use `cloneBytes` before handing package-level `[]byte` acknowledgement constants to code that may persist or mutate them. It is no longer required just to make `bytes.Equal` succeed.
 
 ### ZKGM Test Guidance
 

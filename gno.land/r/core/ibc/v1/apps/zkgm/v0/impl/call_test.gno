@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"bytes"
 	"testing"
 
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -72,7 +73,7 @@ func TestExecuteCallReceiverPanicReturnsOnlyMakerAck(cur realm, t *testing.T) {
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == core.PacketStatusSuccess)
-	uassert.True(t, equalBytes(z.ACK_ERR_ONLY_MAKER, res.Ack))
+	uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Ack))
 }
 
 func TestVerifyCallRejectsInvalidSender(cur realm, t *testing.T) {

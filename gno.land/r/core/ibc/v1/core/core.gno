@@ -85,8 +85,8 @@ func commit(key H256, value H256) {
 // h256Bytes returns a fresh byte slice containing h.
 //
 // Use it when passing package-level H256 values such as COMMITMENT_MAGIC to
-// foreign-realm light clients. Passing a slice backed by readonly or externally
-// stored memory can cause ics23 bytes comparisons to panic.
+// foreign-realm light clients. ics23 may copy and append against the input, so
+// callers should pass a freshly allocated slice.
 func h256Bytes(h H256) []byte {
 	out := make([]byte, len(h))
 	copy(out, h[:])

@@ -100,5 +100,5 @@ func errAck(cur realm, err error) core.RecvPacketResult {
 	if encErr != nil {
 		ackBytes = []byte(err.Error())
 	}
-	return core.NewRecvPacketResult(cur, core.PacketStatusFailure, ackBytes)
+	return core.NewRecvPacketResult(cross(cur), core.PacketStatusFailure, ackBytes)
 }

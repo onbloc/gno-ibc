@@ -16,6 +16,7 @@ var (
 	allowedImpls    []string
 	paused          bool
 	gRealm          realm
+	gRealmSet       bool
 	adminAddressStr string
 	receivers       = bptree.NewBPTree32()
 )
@@ -140,13 +141,14 @@ func requireImplCaller(cur realm, action string) {
 }
 
 func cacheRealm(cur realm) {
-	if gRealm == (realm{}) {
+	if !gRealmSet {
 		gRealm = cur
+		gRealmSet = true
 	}
 }
 
 func cachedRealm() realm {
-	if gRealm == (realm{}) {
+	if !gRealmSet {
 		panic("zkgm: proxy realm not initialized")
 	}
 	return gRealm

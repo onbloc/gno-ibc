@@ -10,41 +10,41 @@ import (
 	core "gno.land/r/core/ibc/v1/core"
 )
 
-func (v *ZkgmV1) dispatchVerify(channelId core.ChannelId, sender string, sent chain.Coins, path *u256.Uint, salt [32]byte, instr z.Instruction) error {
+func (v *ZkgmV1) dispatchVerify(cur realm, channelId core.ChannelId, sender string, sent chain.Coins, path *u256.Uint, salt [32]byte, instr z.Instruction) error {
 	switch instr.Opcode {
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instr)
 		if err != nil {
 			return err
 		}
-		return v.verifyTokenOrderV2(channelId, sender, sent, path, order)
+		return v.verifyTokenOrderV2(cur, channelId, sender, sent, path, order)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instr)
 		if err != nil {
 			return err
 		}
-		return v.verifyCall(sender, call)
+		return v.verifyCall(cur, sender, call)
 	case z.OP_BATCH:
 		batch, err := decodeBatchInstruction(instr)
 		if err != nil {
 			return err
 		}
-		return v.verifyBatch(channelId, sender, sent, path, salt, batch)
+		return v.verifyBatch(cur, channelId, sender, sent, path, salt, batch)
 	case z.OP_FORWARD:
 		forward, err := decodeForwardInstruction(instr)
 		if err != nil {
 			return err
 		}
-		return v.verifyForward(channelId, sender, sent, path, salt, forward)
+		return v.verifyForward(cur, channelId, sender, sent, path, salt, forward)
 	default:
 		return errors.New("zkgm/v1: unsupported opcode")
 	}
 }
 
-func (v *ZkgmV1) dispatchExecute(packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, salt [32]byte, instr z.Instruction, intent bool) (result core.RecvPacketResult, err error) {
+func (v *ZkgmV1) dispatchExecute(cur realm, packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, salt [32]byte, instr z.Instruction, intent bool) (result core.RecvPacketResult, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			result = failureResult(universalErrorAck())
+			result = failureResult(cur, universalErrorAck())
 			err = nil
 		}
 	}()
@@ -53,37 +53,37 @@ func (v *ZkgmV1) dispatchExecute(packet core.Packet, relayer address, relayerMsg
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instr)
 		if err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
-		return v.executeTokenOrderV2(packet, relayer, path, order)
+		return v.executeTokenOrderV2(cur, packet, relayer, path, order)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instr)
 		if err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
-		return v.executeCall(packet, relayer, relayerMsg, path, call)
+		return v.executeCall(cur, packet, relayer, relayerMsg, path, call)
 	case z.OP_BATCH:
 		batch, err := decodeBatchInstruction(instr)
 		if err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
-		ack, err := v.executeBatch(packet, relayer, relayerMsg, path, salt, batch, intent)
+		ack, err := v.executeBatch(cur, packet, relayer, relayerMsg, path, salt, batch, intent)
 		if err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
-		return core.RecvPacketResult{Status: core.PacketStatusSuccess, Ack: ack}, nil
+		return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, ack), nil
 	case z.OP_FORWARD:
 		forward, err := decodeForwardInstruction(instr)
 		if err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
-		return v.executeForward(packet, path, salt, forward, intent)
+		return v.executeForward(cur, packet, path, salt, forward, intent)
 	default:
-		return core.RecvPacketResult{}, errors.New("zkgm/v1: unsupported opcode")
+		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), errors.New("zkgm/v1: unsupported opcode")
 	}
 }
 
-func (v *ZkgmV1) dispatchAck(packet core.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction, ack []byte) error {
+func (v *ZkgmV1) dispatchAck(cur realm, packet core.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction, ack []byte) error {
 	switch instr.Opcode {
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instr)
@@ -94,13 +94,13 @@ func (v *ZkgmV1) dispatchAck(packet core.Packet, path *u256.Uint, salt [32]byte,
 		if err != nil {
 			return err
 		}
-		return v.acknowledgeTokenOrderV2(packet.SourceChannelId, path, order, decodedAck)
+		return v.acknowledgeTokenOrderV2(cur, packet.SourceChannelId, path, order, decodedAck)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instr)
 		if err != nil {
 			return err
 		}
-		return v.acknowledgeCall(packet, path, call)
+		return v.acknowledgeCall(cur, packet, path, call)
 	case z.OP_BATCH:
 		batch, err := decodeBatchInstruction(instr)
 		if err != nil {
@@ -110,7 +110,7 @@ func (v *ZkgmV1) dispatchAck(packet core.Packet, path *u256.Uint, salt [32]byte,
 		if err != nil {
 			return err
 		}
-		return v.acknowledgeBatch(packet, path, salt, batch, outerAck)
+		return v.acknowledgeBatch(cur, packet, path, salt, batch, outerAck)
 	case z.OP_FORWARD:
 		forward, err := decodeForwardInstruction(instr)
 		if err != nil {
@@ -120,38 +120,38 @@ func (v *ZkgmV1) dispatchAck(packet core.Packet, path *u256.Uint, salt [32]byte,
 		if err != nil {
 			return err
 		}
-		return v.acknowledgeForward(packet, path, salt, forward, outerAck)
+		return v.acknowledgeForward(cur, packet, path, salt, forward, outerAck)
 	default:
 		return errors.New("zkgm/v1: unsupported opcode")
 	}
 }
 
-func (v *ZkgmV1) dispatchTimeout(packet core.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction) error {
+func (v *ZkgmV1) dispatchTimeout(cur realm, packet core.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction) error {
 	switch instr.Opcode {
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instr)
 		if err != nil {
 			return err
 		}
-		return v.refundV2(packet.SourceChannelId, path, order)
+		return v.refundV2(cur, packet.SourceChannelId, path, order)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instr)
 		if err != nil {
 			return err
 		}
-		return v.timeoutCall(packet, path, call)
+		return v.timeoutCall(cur, packet, path, call)
 	case z.OP_BATCH:
 		batch, err := decodeBatchInstruction(instr)
 		if err != nil {
 			return err
 		}
-		return v.timeoutBatch(packet, path, salt, batch)
+		return v.timeoutBatch(cur, packet, path, salt, batch)
 	case z.OP_FORWARD:
 		forward, err := decodeForwardInstruction(instr)
 		if err != nil {
 			return err
 		}
-		return v.timeoutForward(packet, path, salt, forward)
+		return v.timeoutForward(cur, packet, path, salt, forward)
 	default:
 		return errors.New("zkgm/v1: unsupported opcode")
 	}
@@ -201,8 +201,8 @@ func mustEncodeUniversalErrorAck() []byte {
 	return bz
 }
 
-func failureResult(ack []byte) core.RecvPacketResult {
-	return core.RecvPacketResult{Status: core.PacketStatusFailure, Ack: ack}
+func failureResult(cur realm, ack []byte) core.RecvPacketResult {
+	return core.NewRecvPacketResult(cross(cur), core.PacketStatusFailure, ack)
 }
 
 func universalErrorAck() []byte {

@@ -19,7 +19,7 @@ var (
 	errInvalidUnescrow  = errors.New("zkgm/v1: invalid token order unescrow")
 )
 
-func (v *ZkgmV1) verifyTokenOrderV2(channelId core.ChannelId, sender string, sent chain.Coins, path *u256.Uint, order z.TokenOrderV2) error {
+func (v *ZkgmV1) verifyTokenOrderV2(cur realm, channelId core.ChannelId, sender string, sent chain.Coins, path *u256.Uint, order z.TokenOrderV2) error {
 	if path == nil {
 		path = u256.Zero()
 	}
@@ -81,49 +81,49 @@ func (v *ZkgmV1) verifyTokenOrderV2(channelId core.ChannelId, sender string, sen
 	}
 }
 
-func (v *ZkgmV1) executeTokenOrderV2(packet core.Packet, relayer address, path *u256.Uint, order z.TokenOrderV2) (core.RecvPacketResult, error) {
+func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer address, path *u256.Uint, order z.TokenOrderV2) (core.RecvPacketResult, error) {
 	if path == nil {
 		path = u256.Zero()
 	}
 	switch order.Kind {
 	case z.TOKEN_ORDER_KIND_INITIALIZE:
 		if len(order.Metadata) == 0 {
-			return core.RecvPacketResult{}, errors.New("zkgm/v1: initialize requires metadata")
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), errors.New("zkgm/v1: initialize requires metadata")
 		}
 
 		meta, err := z.DecodeTokenMetadata(order.Metadata)
 		if err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 
 		image := MetadataImage(meta)
 		destChan, err := tokenOrderDestinationChannel(packet.DestinationChannelId)
 		if err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 		ibcDenom := PredictWrappedTokenV2(path, destChan, order.BaseToken, image)
 		if string(order.QuoteToken) != ibcDenom || order.BaseAmount.Cmp(order.QuoteAmount) < 0 {
-			return failureResult(universalErrorAck()), nil
+			return failureResult(cur, universalErrorAck()), nil
 		}
 		fee := new(u256.Uint).Sub(order.BaseAmount, order.QuoteAmount)
 		if _, err := amountInt64(order.QuoteAmount); err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 		if _, err := amountInt64(fee); err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 		nextPath, err := z.UpdateChannelPath(path, destChan)
 		if err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 		if !order.QuoteAmount.IsZero() {
 			if err := mintVoucher(cross(cur), ibcDenom, string(order.BaseToken), image, string(order.Receiver), order.QuoteAmount); err != nil {
-				return core.RecvPacketResult{}, err
+				return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 			}
 		}
 		if !fee.IsZero() {
 			if err := mintVoucher(cross(cur), ibcDenom, string(order.BaseToken), image, string(relayer), fee); err != nil {
-				return core.RecvPacketResult{}, err
+				return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 			}
 		}
 		zkgm.SetTokenOrigin(cross(cur), ibcDenom, nextPath)
@@ -132,7 +132,7 @@ func (v *ZkgmV1) executeTokenOrderV2(packet core.Packet, relayer address, path *
 		image, hasImage := zkgm.GetMetadataImageOf(quoteDenom)
 		destChan, err := tokenOrderDestinationChannel(packet.DestinationChannelId)
 		if err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 		predicted := ""
 		if hasImage {
@@ -142,31 +142,31 @@ func (v *ZkgmV1) executeTokenOrderV2(packet core.Packet, relayer address, path *
 			predicted = PredictWrappedTokenV1(path, destChan, order.BaseToken)
 		}
 		if quoteDenom != predicted || order.BaseAmount.Cmp(order.QuoteAmount) < 0 {
-			return failureResult(universalErrorAck()), nil
+			return failureResult(cur, universalErrorAck()), nil
 		}
 		fee := new(u256.Uint).Sub(order.BaseAmount, order.QuoteAmount)
 		if _, err := amountInt64(order.QuoteAmount); err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 		if _, err := amountInt64(fee); err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 		_, hasOrigin := zkgm.GetTokenOrigin(quoteDenom)
 		var nextPath *u256.Uint
 		if !hasOrigin {
 			nextPath, err = z.UpdateChannelPath(path, destChan)
 			if err != nil {
-				return core.RecvPacketResult{}, err
+				return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 			}
 		}
 		if !order.QuoteAmount.IsZero() {
 			if err := mintVoucher(cross(cur), quoteDenom, string(order.BaseToken), image, string(order.Receiver), order.QuoteAmount); err != nil {
-				return core.RecvPacketResult{}, err
+				return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 			}
 		}
 		if !fee.IsZero() {
 			if err := mintVoucher(cross(cur), quoteDenom, string(order.BaseToken), image, string(relayer), fee); err != nil {
-				return core.RecvPacketResult{}, err
+				return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 			}
 		}
 		if !hasOrigin {
@@ -175,38 +175,38 @@ func (v *ZkgmV1) executeTokenOrderV2(packet core.Packet, relayer address, path *
 	case z.TOKEN_ORDER_KIND_UNESCROW:
 		reversedPath, err := z.ReverseChannelPath(path)
 		if err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 		if order.BaseAmount.Cmp(order.QuoteAmount) < 0 {
-			return core.RecvPacketResult{}, errors.New("zkgm/v1: base amount below quote amount")
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), errors.New("zkgm/v1: base amount below quote amount")
 		}
 		fee := new(u256.Uint).Sub(order.BaseAmount, order.QuoteAmount)
 		if _, err := amountInt64(order.BaseAmount); err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 		if _, err := amountInt64(order.QuoteAmount); err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 		if _, err := amountInt64(fee); err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 		if err := decreaseChannelBalanceV2(cross(cur), packet.DestinationChannelId, reversedPath, order.QuoteToken, order.BaseToken, order.BaseAmount); err != nil {
-			return core.RecvPacketResult{}, err
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 		if !order.QuoteAmount.IsZero() {
 			if err := sendNative(string(order.QuoteToken), string(order.Receiver), order.QuoteAmount); err != nil {
-				return core.RecvPacketResult{}, err
+				return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 			}
 		}
 		if !fee.IsZero() {
 			if err := sendNative(string(order.QuoteToken), string(relayer), fee); err != nil {
-				return core.RecvPacketResult{}, err
+				return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 			}
 		}
 	case z.TOKEN_ORDER_KIND_SOLVE:
-		return core.RecvPacketResult{}, errors.New("zkgm/v1: solve recv not implemented")
+		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), errors.New("zkgm/v1: solve recv not implemented")
 	default:
-		return core.RecvPacketResult{}, errors.New("zkgm/v1: unknown token order kind")
+		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), errors.New("zkgm/v1: unknown token order kind")
 	}
 
 	innerAck, err := z.EncodeTokenOrderAck(z.TokenOrderAck{
@@ -214,20 +214,20 @@ func (v *ZkgmV1) executeTokenOrderV2(packet core.Packet, relayer address, path *
 		MarketMaker: nil,
 	})
 	if err != nil {
-		return core.RecvPacketResult{}, err
+		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 	}
 
 	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess, InnerAck: innerAck})
 	if err != nil {
-		return core.RecvPacketResult{}, err
+		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 	}
 
-	return core.RecvPacketResult{Status: core.PacketStatusSuccess, Ack: ack}, nil
+	return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, ack), nil
 }
 
-func (v *ZkgmV1) acknowledgeTokenOrderV2(sourceChannelId core.ChannelId, path *u256.Uint, order z.TokenOrderV2, ack z.Ack) error {
+func (v *ZkgmV1) acknowledgeTokenOrderV2(cur realm, sourceChannelId core.ChannelId, path *u256.Uint, order z.TokenOrderV2, ack z.Ack) error {
 	if ack.Tag.Eq(tagAckFailure) {
-		return v.refundV2(sourceChannelId, path, order)
+		return v.refundV2(cur, sourceChannelId, path, order)
 	}
 	if !ack.Tag.Eq(tagAckSuccess) {
 		return errors.New("zkgm/v1: unknown ack tag")
@@ -246,20 +246,20 @@ func (v *ZkgmV1) acknowledgeTokenOrderV2(sourceChannelId core.ChannelId, path *u
 	marketMaker := string(orderAck.MarketMaker)
 	switch order.Kind {
 	case z.TOKEN_ORDER_KIND_UNESCROW:
-		return refundIBCVoucher(order.BaseToken, marketMaker, order.BaseAmount)
+		return refundIBCVoucher(cur, order.BaseToken, marketMaker, order.BaseAmount)
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
-		return settleEscrowedV2(sourceChannelId, path, order, marketMaker)
+		return settleEscrowedV2(cur, sourceChannelId, path, order, marketMaker)
 	default:
 		return errors.New("zkgm/v1: unsupported token order kind for ack")
 	}
 }
 
-func (v *ZkgmV1) refundV2(sourceChannelId core.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
+func (v *ZkgmV1) refundV2(cur realm, sourceChannelId core.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
 	switch order.Kind {
 	case z.TOKEN_ORDER_KIND_UNESCROW:
-		return refundIBCVoucher(order.BaseToken, string(order.Sender), order.BaseAmount)
+		return refundIBCVoucher(cur, order.BaseToken, string(order.Sender), order.BaseAmount)
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
-		return settleEscrowedV2(sourceChannelId, path, order, string(order.Sender))
+		return settleEscrowedV2(cur, sourceChannelId, path, order, string(order.Sender))
 	default:
 		return errors.New("zkgm/v1: unsupported token order kind for refund")
 	}
@@ -269,7 +269,7 @@ func (v *ZkgmV1) refundV2(sourceChannelId core.ChannelId, path *u256.Uint, order
 // to recipient. It re-mints the voucher for `ibc/` denoms and releases native
 // tokens from the proxy escrow otherwise. It is shared by refundV2 and the
 // market-maker fill branch of acknowledgeTokenOrderV2.
-func settleEscrowedV2(sourceChannelId core.ChannelId, path *u256.Uint, order z.TokenOrderV2, recipient string) error {
+func settleEscrowedV2(cur realm, sourceChannelId core.ChannelId, path *u256.Uint, order z.TokenOrderV2, recipient string) error {
 	if _, err := amountInt64(order.BaseAmount); err != nil {
 		return err
 	}
@@ -278,21 +278,21 @@ func settleEscrowedV2(sourceChannelId core.ChannelId, path *u256.Uint, order z.T
 	}
 	baseDenom := string(order.BaseToken)
 	if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
-		return refundIBCVoucher(order.BaseToken, recipient, order.BaseAmount)
+		return refundIBCVoucher(cur, order.BaseToken, recipient, order.BaseAmount)
 	}
-	return sendNative(baseDenom, recipient, order.BaseAmount)
+	return sendNative(cur, baseDenom, recipient, order.BaseAmount)
 }
 
 // refundIBCVoucher re-mints an IBC voucher to recipient, recovering the stored
 // V2 metadata image so the wrapped denom identity is preserved across ack/refund
 // flows.
-func refundIBCVoucher(baseToken []byte, recipient string, amount *u256.Uint) error {
+func refundIBCVoucher(cur realm, baseToken []byte, recipient string, amount *u256.Uint) error {
 	baseDenom := string(baseToken)
 	image, _ := zkgm.GetMetadataImageOf(baseDenom)
 	return mintVoucher(cross(cur), baseDenom, baseDenom, image, recipient, amount)
 }
 
-func sendNative(denom string, receiver string, amount *u256.Uint) error {
+func sendNative(cur realm, denom string, receiver string, amount *u256.Uint) error {
 	n, err := amountInt64(amount)
 	if err != nil {
 		return err

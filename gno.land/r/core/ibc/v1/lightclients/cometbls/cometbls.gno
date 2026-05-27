@@ -180,6 +180,48 @@ func (Adapter) GetLatestHeight(clientId core.ClientId) core.Height {
 	return core.Height(getEntry(clientId).cs.LatestHeight)
 }
 
+func (Adapter) ForceUpdateClient(cur realm, clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) core.ConsensusStateUpdate {
+	mustBeCore(cur)
+	height, consStateBytes, csBytes := applyForceUpdate(clientId, clientStateBytes, consensusStateBytes)
+	return core.NewConsensusStateUpdate(cross(cur), height, consStateBytes, csBytes)
+}
+
+// applyForceUpdate is the authorization-free inner logic for ForceUpdateClient.
+// Factored out so adapter-level tests can exercise it without a core caller.
+func applyForceUpdate(clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) (core.Height, []byte, []byte) {
+	cs, err := cometblsp.DecodeClientState(clientStateBytes)
+	if err != nil {
+		panic("cometbls: invalid client state: " + err.Error())
+	}
+	consState, err := cometblsp.DecodeConsensusState(consensusStateBytes)
+	if err != nil {
+		panic("cometbls: invalid consensus state: " + err.Error())
+	}
+	if err := cometblsp.ValidateInitialize(cs, consState); err != nil {
+		panic("cometbls: invalid force-update state: " + err.Error())
+	}
+
+	e := getEntry(clientId)
+	if cs.LatestHeight < e.cs.LatestHeight {
+		panic("cometbls: force-update height must not regress")
+	}
+
+	// Unconditionally clear any frozen status — force update is a recovery operation.
+	cs.FrozenHeight = 0
+	e.cs = cs
+	// All prior consensus states are discarded; proofs against old heights will
+	// no longer verify after a force update. Outstanding in-flight packets that
+	// reference those heights must be settled before calling this.
+	e.consensusStates = map[cometblsp.Height]cometblsp.ConsensusState{cs.LatestHeight: consState}
+
+	encConsState, err := cometblsp.EncodeConsensusState(consState)
+	if err != nil {
+		panic("cometbls: encode consensus state: " + err.Error())
+	}
+
+	return core.Height(cs.LatestHeight), encConsState, cometblsp.EncodeClientState(e.cs)
+}
+
 func (Adapter) GetStatus(clientId core.ClientId) core.Status {
 	e := getEntry(clientId)
 	switch adapterStatus(e) {

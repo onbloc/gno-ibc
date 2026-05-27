@@ -25,6 +25,14 @@ type ILightClient interface {
 	GetStatus(clientId ClientId) Status
 }
 
+// IForceLightClient is an optional interface implemented by light clients that
+// support admin-initiated force updates (e.g. to recover an expired client).
+// It is separate from ILightClient because force-update is not part of the
+// standard light client spec — it is a chain-operator escape hatch.
+type IForceLightClient interface {
+	ForceUpdateClient(cur realm, clientId ClientId, clientStateBytes, consensusStateBytes []byte) ConsensusStateUpdate
+}
+
 // IApp defines the interface for IBC application callbacks. Byte parameters
 // use plain []byte (not the typed Bytes wrapper) so foreign-realm apps can
 // implement the interface without the cross(cur)-realm typed-slice pitfall.

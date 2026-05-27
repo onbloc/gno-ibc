@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"testing"
 
+	rtunsafe "chain/runtime/unsafe"
 	"gno.land/p/nt/uassert/v0"
 )
 
@@ -1384,6 +1385,89 @@ func TestGetClientStatusReturnsUnknownForMissingClient(cur realm, t *testing.T) 
 	if got := GetClientStatus(ClientId(5)); got != StatusUnknown {
 		t.Fatalf("GetClientStatus missing: got %d want %d", got, StatusUnknown)
 	}
+}
+
+// --- ForceUpdateClient ---
+
+type mockForceClient struct {
+	mockClient
+	forceHeight Height
+}
+
+func (m *mockForceClient) ForceUpdateClient(cur realm, _ ClientId, csBytes, consBytes []byte) ConsensusStateUpdate {
+	m.forceHeight++
+	return NewConsensusStateUpdate(cross(cur), m.forceHeight, consBytes, csBytes)
+}
+
+func TestForceUpdateClientUpdatesStateAndReturnsHeight(cur realm, t *testing.T) {
+	resetState()
+	deployer = rtunsafe.OriginCaller()
+	mc := &mockForceClient{}
+	st.clientRegistry[mockType] = mc
+	clientId := CreateClient(cross(cur), MsgCreateClient{
+		ClientType:          mockType,
+		ClientStateBytes:    []byte("cs-old"),
+		ConsensusStateBytes: []byte("cons-old"),
+	})
+
+	height := ForceUpdateClient(cross(cur), MsgForceUpdateClient{
+		ClientId:            clientId,
+		ClientStateBytes:    []byte("cs-new"),
+		ConsensusStateBytes: []byte("cons-new"),
+	})
+
+	if height != Height(1) {
+		t.Fatalf("ForceUpdateClient height: got %v want 1", height)
+	}
+	if got := QueryClientState(clientId); got != "0x"+hexEncodeString("cs-new") {
+		t.Fatalf("client state not updated: got %q", got)
+	}
+	if got := QueryConsensusState(clientId, height); got != "0x"+hexEncodeString("cons-new") {
+		t.Fatalf("consensus state not updated: got %q", got)
+	}
+}
+
+func TestForceUpdateClientPanicsWhenClientDoesNotSupportForceUpdate(cur realm, t *testing.T) {
+	resetState()
+	deployer = rtunsafe.OriginCaller()
+	st.clientRegistry[mockType] = &mockClient{}
+	clientId := CreateClient(cross(cur), MsgCreateClient{
+		ClientType:          mockType,
+		ClientStateBytes:    []byte("cs"),
+		ConsensusStateBytes: []byte("cons"),
+	})
+
+	uassert.AbortsContains(t, cur, "client does not support ForceUpdateClient", func(cur realm) {
+		ForceUpdateClient(cur, MsgForceUpdateClient{
+			ClientId:            clientId,
+			ClientStateBytes:    []byte("cs-new"),
+			ConsensusStateBytes: []byte("cons-new"),
+		})
+	})
+}
+
+func TestForceUpdateClientPanicsWhenCallerIsNotDeployer(cur realm, t *testing.T) {
+	resetState()
+	deployer = "gno1authorized"
+	defer func() { deployer = "" }()
+
+	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
+		ForceUpdateClient(cur, MsgForceUpdateClient{
+			ClientId:            ClientId(0),
+			ClientStateBytes:    []byte("cs"),
+			ConsensusStateBytes: []byte("cons"),
+		})
+	})
+}
+
+func hexEncodeString(s string) string {
+	const hextable = "0123456789abcdef"
+	dst := make([]byte, len(s)*2)
+	for i, c := range []byte(s) {
+		dst[i*2] = hextable[c>>4]
+		dst[i*2+1] = hextable[c&0x0f]
+	}
+	return string(dst)
 }
 
 // --- Integration: channel close ---

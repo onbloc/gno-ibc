@@ -19,6 +19,16 @@ func NewMsgUpdateClient(cur realm, clientId ClientId, clientMessage []byte) MsgU
 	return MsgUpdateClient{ClientId: clientId, ClientMessage: clientMessage}
 }
 
+type MsgForceUpdateClient struct {
+	ClientId            ClientId
+	ClientStateBytes    []byte
+	ConsensusStateBytes []byte
+}
+
+func NewMsgForceUpdateClient(cur realm, clientId ClientId, clientStateBytes, consensusStateBytes []byte) MsgForceUpdateClient {
+	return MsgForceUpdateClient{ClientId: clientId, ClientStateBytes: clientStateBytes, ConsensusStateBytes: consensusStateBytes}
+}
+
 type MsgConnectionOpenInit struct {
 	ClientId             ClientId
 	CounterpartyClientId ClientId

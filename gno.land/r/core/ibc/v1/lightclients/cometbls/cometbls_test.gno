@@ -70,6 +70,9 @@ func TestMutatingEntrypointsRequireCoreCaller(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "cometbls: core only", func(cur realm) {
 		adapter.Misbehaviour(cross(cur), core.ClientId(1), nil)
 	})
+	uassert.AbortsContains(t, cur, "cometbls: core only", func(cur realm) {
+		adapter.ForceUpdateClient(cross(cur), core.ClientId(1), nil, nil)
+	})
 }
 
 func TestVerifyMembershipAndNonMembershipRejectInactiveBeforeProofDecode(cur realm, t *testing.T) {
@@ -180,4 +183,125 @@ func TestGetStatusExpiredWhenLatestConsensusStateMissing(cur realm, t *testing.T
 	if got := (Adapter{}).GetStatus(clientId); got != core.StatusExpired {
 		t.Fatalf("got %s want %s", got, core.StatusExpired)
 	}
+}
+
+// --- ForceUpdateClient (applyForceUpdate) ---
+
+// encodableConsensusState returns a ConsensusState with a 32-byte root hash,
+// required by EncodeConsensusState.
+func encodableConsensusState(ts uint64) cometblsp.ConsensusState {
+	var hash [32]byte
+	hash[0] = 0x01
+	return cometblsp.ConsensusState{
+		Timestamp:          ts,
+		Root:               cometblsp.MerkleRoot{Hash: hash[:]},
+		NextValidatorsHash: cometblsp.H256{0x02},
+	}
+}
+
+func encodeState(t *testing.T, cs cometblsp.ClientState, cons cometblsp.ConsensusState) ([]byte, []byte) {
+	t.Helper()
+	csBytes := cometblsp.EncodeClientState(cs)
+	consBytes, err := cometblsp.EncodeConsensusState(cons)
+	if err != nil {
+		t.Fatalf("EncodeConsensusState: %v", err)
+	}
+	return csBytes, consBytes
+}
+
+func TestForceUpdateClientRecoveredExpiredClient(cur realm, t *testing.T) {
+	resetAdapterEntries()
+	clientId := core.ClientId(1)
+	cs := activeAdapterClientState()
+	expiredCons := encodableConsensusState(1) // nanosecond 1 — far in the past
+	installAdapterClient(clientId, cs, expiredCons)
+
+	if got := (Adapter{}).GetStatus(clientId); got != core.StatusExpired {
+		t.Fatalf("pre-condition: expected Expired, got %s", got)
+	}
+
+	freshCs := cs
+	freshCs.LatestHeight = cs.LatestHeight + 1
+	freshCons := encodableConsensusState(nowNanos())
+	csBytes, consBytes := encodeState(t, freshCs, freshCons)
+	applyForceUpdate(clientId, csBytes, consBytes)
+
+	if got := (Adapter{}).GetStatus(clientId); got != core.StatusActive {
+		t.Fatalf("post force-update: expected Active, got %s", got)
+	}
+}
+
+func TestForceUpdateClientUnfreezesFrozenClient(cur realm, t *testing.T) {
+	resetAdapterEntries()
+	clientId := core.ClientId(1)
+	cs := activeAdapterClientState()
+	cs.FrozenHeight = cometblsp.FrozenHeight
+	installAdapterClient(clientId, cs, encodableConsensusState(nowNanos()))
+
+	if got := (Adapter{}).GetStatus(clientId); got != core.StatusFrozen {
+		t.Fatalf("pre-condition: expected Frozen, got %s", got)
+	}
+
+	// Pass a client state that still has FrozenHeight set; applyForceUpdate must clear it.
+	freshCs := cs
+	freshCs.LatestHeight = cs.LatestHeight + 1
+	csBytes, consBytes := encodeState(t, freshCs, encodableConsensusState(nowNanos()))
+	applyForceUpdate(clientId, csBytes, consBytes)
+
+	if got := (Adapter{}).GetStatus(clientId); got != core.StatusActive {
+		t.Fatalf("post force-update: expected Active, got %s", got)
+	}
+	if entries[clientId].cs.FrozenHeight != 0 {
+		t.Fatalf("FrozenHeight not cleared: got %d", entries[clientId].cs.FrozenHeight)
+	}
+}
+
+func TestForceUpdateClientPanicsOnHeightRegression(cur realm, t *testing.T) {
+	resetAdapterEntries()
+	clientId := core.ClientId(1)
+	cs := activeAdapterClientState()
+	cs.LatestHeight = cometblsp.Height(100)
+	installAdapterClient(clientId, cs, encodableConsensusState(nowNanos()))
+
+	lowerCs := activeAdapterClientState()
+	lowerCs.LatestHeight = cometblsp.Height(50)
+	csBytes, consBytes := encodeState(t, lowerCs, encodableConsensusState(nowNanos()))
+
+	uassert.AbortsContains(t, cur, "force-update height must strictly advance", func(cur realm) {
+		applyForceUpdate(clientId, csBytes, consBytes)
+	})
+}
+
+func TestForceUpdateClientClearsHistoricalConsensusStates(cur realm, t *testing.T) {
+	resetAdapterEntries()
+	clientId := core.ClientId(1)
+	cs := activeAdapterClientState()
+	cs.LatestHeight = cometblsp.Height(10)
+	e := newAdapterClientEntry(cs, encodableConsensusState(nowNanos()))
+	// Seed an extra historical state at height 5.
+	e.consensusStates[cometblsp.Height(5)] = encodableConsensusState(1)
+	entries[clientId] = e
+
+	newCs := activeAdapterClientState()
+	newCs.LatestHeight = cometblsp.Height(20)
+	csBytes, consBytes := encodeState(t, newCs, encodableConsensusState(nowNanos()))
+	applyForceUpdate(clientId, csBytes, consBytes)
+
+	if len(entries[clientId].consensusStates) != 1 {
+		t.Fatalf("expected 1 consensus state, got %d", len(entries[clientId].consensusStates))
+	}
+	if _, ok := entries[clientId].consensusStates[cometblsp.Height(20)]; !ok {
+		t.Fatal("consensus state at new height not found")
+	}
+}
+
+func TestForceUpdateClientPanicsOnInvalidClientStateBytes(cur realm, t *testing.T) {
+	resetAdapterEntries()
+	clientId := core.ClientId(1)
+	installAdapterClient(clientId, activeAdapterClientState(), encodableConsensusState(nowNanos()))
+
+	uassert.AbortsContains(t, cur, "cometbls: invalid client state", func(cur realm) {
+		// 0xff alone is a truncated protobuf varint — guaranteed decode error.
+		applyForceUpdate(clientId, []byte{0xff}, nil)
+	})
 }

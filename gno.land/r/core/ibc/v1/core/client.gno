@@ -1,6 +1,16 @@
 package core
 
-import "chain"
+import (
+	"chain"
+	"chain/runtime"
+	rtunsafe "chain/runtime/unsafe"
+)
+
+var deployer address
+
+func init(cur realm) {
+	deployer = rtunsafe.OriginCaller()
+}
 
 func CreateClient(cur realm, msg MsgCreateClient) ClientId {
 	impl, ok := st.clientRegistry[msg.ClientType]
@@ -25,6 +35,43 @@ func UpdateClient(cur realm, msg MsgUpdateClient) Height {
 	impl := st.getClient(msg.ClientId)
 
 	update := impl.UpdateClient(cross(cur), msg.ClientId, msg.ClientMessage)
+
+	st.saveClientState(msg.ClientId, update.ClientStateBytes)
+	st.saveConsensusState(msg.ClientId, update.Height, update.ConsensusStateBytes)
+
+	chain.Emit(UpdateClientEvent,
+		"client_type", st.clientTypes[msg.ClientId].String(),
+		"client_id", msg.ClientId.String(),
+		"height", update.Height.String(),
+	)
+	return update.Height
+}
+
+// ForceUpdateClient updates the client and consensus states without verifying proofs.
+//
+// This method is restricted to the deployer and is intended only for recovering
+// expired or otherwise unrecoverable clients.
+//
+// ForceUpdateClient panics if the caller is not the deployer.
+//
+// ForceUpdateClient panics if the underlying light client does not implement
+// IForceLightClient.
+func ForceUpdateClient(cur realm, msg MsgForceUpdateClient) Height {
+	if rtunsafe.OriginCaller() != deployer {
+		panic("core: ForceUpdateClient: unauthorized")
+	}
+
+	impl, ok := st.getClient(msg.ClientId).(IForceLightClient)
+	if !ok {
+		panic("client does not support ForceUpdateClient")
+	}
+
+	// AssertOriginCall prevents re-entrancy through intermediate realms.
+	//
+	// Without this check, a contract invoked by the deployer within the same
+	// transaction could hijack this entrypoint via tx.origin phishing.
+	runtime.AssertOriginCall()
+	update := impl.ForceUpdateClient(cross(cur), msg.ClientId, msg.ClientStateBytes, msg.ConsensusStateBytes)
 
 	st.saveClientState(msg.ClientId, update.ClientStateBytes)
 	st.saveConsensusState(msg.ClientId, update.Height, update.ConsensusStateBytes)

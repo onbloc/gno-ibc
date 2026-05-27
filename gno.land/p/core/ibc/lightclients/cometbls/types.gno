@@ -14,13 +14,18 @@ type MerkleRoot struct {
 
 // ClientState tracks the state of the CometBLS light client.
 // Mirrors union.ibc.lightclients.cometbls.v1.ClientState.
+//
+// Field 3 is reserved for the historical unbonding_period field.
+// Field 16 is a Gno extension for the wasmd contract address.
+//
+//gno:protobuf
 type ClientState struct {
-	ChainID         string
-	TrustingPeriod  uint64 // nanoseconds
-	MaxClockDrift   uint64 // nanoseconds
-	FrozenHeight    Height
-	LatestHeight    Height
-	ContractAddress H256
+	ChainID         string `pb:"1,bytes"`
+	TrustingPeriod  uint64 `pb:"2,varint"` // nanoseconds
+	MaxClockDrift   uint64 `pb:"4,varint"` // nanoseconds
+	FrozenHeight    Height `pb:"5,message,enc=pbEncodeHeight,dec=pbDecodeHeight"`
+	LatestHeight    Height `pb:"6,message,enc=pbEncodeHeight,dec=pbDecodeHeight"`
+	ContractAddress H256   `pb:"16,bytes32"`
 }
 
 func (cs ClientState) IsFrozen() bool {
@@ -62,7 +67,9 @@ type Header struct {
 
 // Misbehaviour contains two conflicting headers for the same height.
 // Mirrors union.ibc.lightclients.cometbls.v1.Misbehaviour.
+//
+//gno:protobuf
 type Misbehaviour struct {
-	HeaderA Header
-	HeaderB Header
+	HeaderA Header `pb:"1,message,enc=pbEncodeHeader,dec=pbDecodeHeader"`
+	HeaderB Header `pb:"2,message,enc=pbEncodeHeader,dec=pbDecodeHeader"`
 }

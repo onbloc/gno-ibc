@@ -87,7 +87,9 @@ vendor-flags = $(if $(filter undefined,$(origin FLAGS_$(subst /,_,$(1)))),$(STD_
 # rsync only auto-creates the leaf dest dir, so mkdir -p covers intermediates.
 vendor-cmd = mkdir -p $(dir gno.land/$(2)) && rsync $(RSYNC_BASE) $(call vendor-flags,$(2)) $(1)/$(2)/ gno.land/$(2)/
 
-.PHONY: help install-gno link-stdlibs verify-gno vendor fmt test test-cover test-stdlibs test-smoke test-gnokey-query-smoke test-gnokey-qeval-smoke test-zkgm-native-refund-smoke clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios derive-sender-salt-vectors
+.PHONY: help install-gno link-stdlibs verify-gno vendor fmt test test-cover test-stdlibs test-smoke test-gnokey-query-smoke test-gnokey-qeval-smoke test-zkgm-native-refund-smoke clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios derive-sender-salt-vectors generate generate-check
+
+PROTOGEN_PKGS := gno.land/p/core/ibc/lightclients/cometbls
 
 COVERAGE_DIR := coverage
 
@@ -117,6 +119,8 @@ help:
 	@echo "  refresh-abi-vectors   — regenerate ABI ground-truth vectors via the Rust harness"
 	@echo "  refresh-zkgm-scenarios — regenerate handler/dispatch end-to-end ZKGM scenarios via the Rust harness"
 	@echo "  derive-sender-salt-vectors — print DeriveSenderSalt bootstrap vectors via the Rust harness"
+	@echo "  generate              — regenerate _pb_gen.gno codecs from //gno:protobuf-tagged structs"
+	@echo "  generate-check        — assert generated _pb_gen.gno files are up to date (CI)"
 	@echo
 	@echo "Pinned: $(GNO_REPO)@$(GNO_SHORT)  (.gno-version)"
 
@@ -239,3 +243,22 @@ derive-sender-salt-vectors:
 	@command -v cargo >/dev/null 2>&1 || { \
 		echo "ERROR: 'cargo' not found on PATH. Install Rust toolchain (rustup) to derive sender salt vectors."; exit 1; }
 	@cargo run --release --quiet -p zkgm-fixtures --bin derive_sender_salt
+
+generate:
+	@echo ">> regenerating _pb_gen.gno in $(PROTOGEN_PKGS)"
+	@cd tools/protogen && go run . $(addprefix $(CURDIR)/,$(PROTOGEN_PKGS))
+	@echo "ok: regenerated"
+
+# `git diff` misses new files, so check untracked too (adding a new
+# //gno:protobuf struct produces a new _pb_gen.gno).
+generate-check: generate
+	@modified=$$(git diff --name-only -- '*_pb_gen.gno'); \
+	untracked=$$(git ls-files --others --exclude-standard -- '*_pb_gen.gno'); \
+	if [ -n "$$modified$$untracked" ]; then \
+		echo "ERROR: generated _pb_gen.gno files are out of date. Run 'make generate' and commit."; \
+		[ -n "$$modified" ]  && { echo "modified:";  echo "$$modified";  }; \
+		[ -n "$$untracked" ] && { echo "untracked:"; echo "$$untracked"; }; \
+		git --no-pager diff -- '*_pb_gen.gno'; \
+		exit 1; \
+	fi
+	@echo "ok: generated files up to date"

@@ -74,7 +74,7 @@ VENDOR_GNOREALMS_RELS := \
 RSYNC_BASE   := -a --delete
 STD_EXCLUDES := --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.gno'
 
-FLAGS_p_gnoswap_uint256 :=
+FLAGS_p_gnoswap_uint256 := $(STD_EXCLUDES)
 FLAGS_p_onbloc_json     :=
 FLAGS_p_nt_avl_v0       := $(STD_EXCLUDES) --exclude='filetests/' --exclude='list/' --exclude='pager/' --exclude='rolist/'
 FLAGS_p_nt_bptree_v0    := --delete-excluded --exclude='list/' --exclude='pager/' --exclude='rolist/' --exclude='rotree/'

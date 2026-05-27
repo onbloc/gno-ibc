@@ -118,6 +118,8 @@ help:
 	@echo
 	@echo "Pinned: $(GNO_REPO)@$(GNO_SHORT)  (.gno-version)"
 
+# Clean the cached checkout before switching pins because older setup flows
+# left local stdlib symlink files under paths now tracked by upstream gno.
 install-gno:
 	@if [ ! -d $(GNO_CACHE)/.git ]; then \
 		mkdir -p $(dir $(GNO_CACHE)); \
@@ -127,6 +129,7 @@ install-gno:
 	@cd $(GNO_CACHE) && \
 		git cat-file -e $(GNO_COMMIT)^{commit} 2>/dev/null || git fetch --quiet origin; \
 		git reset --quiet --hard; \
+		git clean --quiet -ffdx; \
 		git checkout --quiet $(GNO_COMMIT)
 	@echo ">> installing gno @ $(GNO_SHORT)"
 	@$(MAKE) -C $(GNO_CACHE)/gnovm install

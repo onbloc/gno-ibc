@@ -71,14 +71,7 @@ func sendPacket(cur realm, channelId core.ChannelId, timeoutTimestamp core.Times
 		panic("zkgm: impl not set")
 	}
 
-	data, err := impl.Send(cur, SendRequest{
-		ChannelId:        channelId,
-		TimeoutTimestamp: timeoutTimestamp,
-		Salt:             salt,
-		Instruction:      instruction,
-		Sender:           sender,
-		SentCoins:        sentCoins,
-	})
+	data, err := impl.Send(cross(cur), NewSendRequest(cur, channelId, timeoutTimestamp, salt, instruction, sender, sentCoins))
 	if err != nil {
 		panic(err)
 	}

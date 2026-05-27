@@ -51,11 +51,7 @@ func TestPacketAcknowledgementFailureRefundsNativeFromProxy(cur realm, t *testin
 	packet, order := setupNativeRefundPacket(cross(cur), false, "ackrefund", "ucoreack", 11)
 	ack := mustFailureAck()
 
-	core.PacketAcknowledgement(cross(cur), core.MsgPacketAcknowledgement{
-		Packets:          []core.Packet{packet},
-		Acknowledgements: [][]byte{ack},
-		ProofHeight:      core.Height(1),
-	})
+	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement(cross(cur), []core.Packet{packet}, [][]byte{ack}, nil, core.Height(1)))
 
 	assertNativeRefunded(cur, t, packet, order, int64(11))
 }
@@ -63,10 +59,7 @@ func TestPacketAcknowledgementFailureRefundsNativeFromProxy(cur realm, t *testin
 func TestPacketTimeoutRefundsNativeFromProxy(cur realm, t *testing.T) {
 	packet, order := setupNativeRefundPacket(cross(cur), true, "timerefund", "ucoretimeout", 13)
 
-	core.PacketTimeout(cross(cur), core.MsgPacketTimeout{
-		Packet:      packet,
-		ProofHeight: core.Height(1),
-	})
+	core.PacketTimeout(cross(cur), core.NewMsgPacketTimeout(cross(cur), packet, nil, core.Height(1)))
 
 	assertNativeRefunded(cur, t, packet, order, int64(13))
 }
@@ -123,50 +116,16 @@ func openTimeoutChannelPair(cur realm) e2e.ChannelPair {
 	if !core.HasClient(timeoutMockClientType) {
 		core.RegisterClient(cross(cur), timeoutMockClientType, &timeoutMockLightClient{})
 	}
-	clientId := core.CreateClient(cross(cur), core.MsgCreateClient{
-		ClientType: timeoutMockClientType,
-	})
-	connectionId := core.ConnectionOpenInit(cross(cur), core.MsgConnectionOpenInit{
-		ClientId:             clientId,
-		CounterpartyClientId: core.ClientId(99),
-	})
-	core.ConnectionOpenAck(cross(cur), core.MsgConnectionOpenAck{
-		ConnectionId:             connectionId,
-		CounterpartyConnectionId: core.ConnectionId(77),
-		ProofHeight:              core.Height(1),
-	})
+	clientId := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), timeoutMockClientType, nil, nil))
+	connectionId := core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(cross(cur), clientId, core.ClientId(99)))
+	core.ConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(cross(cur), connectionId, core.ConnectionId(77), nil, core.Height(1)))
 
 	portId := []byte(zkgm.ProxyPkgPath())
-	source := core.ChannelOpenInit(cross(cur), core.MsgChannelOpenInit{
-		PortId:             portId,
-		CounterpartyPortId: portId,
-		ConnectionId:       connectionId,
-		Version:            zkgm.Version,
-	})
-	destination := core.ChannelOpenInit(cross(cur), core.MsgChannelOpenInit{
-		PortId:             portId,
-		CounterpartyPortId: portId,
-		ConnectionId:       connectionId,
-		Version:            zkgm.Version,
-	})
-	core.ChannelOpenAck(cross(cur), core.MsgChannelOpenAck{
-		ChannelId:             source,
-		CounterpartyVersion:   zkgm.Version,
-		CounterpartyChannelId: destination,
-		ProofHeight:           core.Height(1),
-	})
-	core.ChannelOpenAck(cross(cur), core.MsgChannelOpenAck{
-		ChannelId:             destination,
-		CounterpartyVersion:   zkgm.Version,
-		CounterpartyChannelId: source,
-		ProofHeight:           core.Height(1),
-	})
-	return e2e.ChannelPair{
-		ClientId:     clientId,
-		ConnectionId: connectionId,
-		Source:       source,
-		Destination:  destination,
-	}
+	source := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(cross(cur), portId, portId, connectionId, zkgm.Version))
+	destination := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(cross(cur), portId, portId, connectionId, zkgm.Version))
+	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), source, zkgm.Version, destination, nil, core.Height(1)))
+	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), destination, zkgm.Version, source, nil, core.Height(1)))
+	return e2e.NewChannelPair(cross(cur), clientId, connectionId, source, destination)
 }
 
 func mustFailureAck() []byte {

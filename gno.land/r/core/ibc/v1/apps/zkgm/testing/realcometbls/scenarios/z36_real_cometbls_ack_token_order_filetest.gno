@@ -37,12 +37,7 @@ func main() {
 	println("commitment_before_ack", core.HasPacketCommitment(cross(cur), packet))
 	println("market_maker_balance_before_ack", impl.VoucherBalanceOf(string(order.BaseToken), address(marketMaker)))
 
-	core.PacketAcknowledgement(cross(cur), core.MsgPacketAcknowledgement{
-		Packets:          []core.Packet{packet},
-		Acknowledgements: [][]byte{ack},
-		Proof:            realcometbls.Z36AckMembershipProof(cross(cur)),
-		ProofHeight:      core.Height(realcometbls.DevnetHeight - 1),
-	})
+	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement(cross(cur), []core.Packet{packet}, [][]byte{ack}, realcometbls.Z36AckMembershipProof(cross(cur)), core.Height(realcometbls.DevnetHeight - 1)))
 
 	println("commitment_after_ack", core.HasPacketCommitment(cross(cur), packet))
 	println("market_maker_balance_after_ack", impl.VoucherBalanceOf(string(order.BaseToken), address(marketMaker)))

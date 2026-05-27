@@ -36,17 +36,10 @@ func main() {
 	}
 	e2e.BatchSend(cross(cur), packet)
 
-	core.PacketRecv(cross(cur), core.MsgPacketRecv{
-		Packets:     []core.Packet{packet},
-		ProofHeight: core.Height(1),
-	})
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, nil, core.Height(1)))
 
 	ack := e2e.MustSuccessAck(cross(cur), e2e.MustProtocolTokenOrderAck(cross(cur)))
-	core.PacketAcknowledgement(cross(cur), core.MsgPacketAcknowledgement{
-		Packets:          []core.Packet{packet},
-		Acknowledgements: [][]byte{ack},
-		ProofHeight:      core.Height(1),
-	})
+	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement(cross(cur), []core.Packet{packet}, [][]byte{ack}, nil, core.Height(1)))
 
 	println("quote_balance", impl.VoucherBalanceOf(impl.PredictWrappedTokenV2(u256.Zero(), uint32(pair.Destination), order.BaseToken, impl.MetadataImage(mustDecodeTokenMetadata(order.Metadata))), address(receiver)))
 	println("ack_roundtrip", "ok")

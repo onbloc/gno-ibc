@@ -100,10 +100,7 @@ func WriteForwardAck(cur realm, parentPacket core.Packet, ack []byte) {
 	cacheRealm(cur)
 	requireImplCaller(cur, "write forward ack")
 
-	core.WriteAcknowledgement(cross(cur), core.MsgWriteAcknowledgement{
-		Packet:          parentPacket,
-		Acknowledgement: ack,
-	})
+	core.WriteAcknowledgement(cross(cur), core.NewMsgWriteAcknowledgement(cross(cur), parentPacket, ack))
 }
 
 func BatchSend(cur realm, msg core.MsgBatchSend) core.H256 {

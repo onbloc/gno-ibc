@@ -33,12 +33,7 @@ func main() {
 	realcometbls.BatchSend(cross(cur), packet)
 	marketMaker := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	ack := e2e.MustSuccessAck(cross(cur), mustMarketMakerTokenOrderAck([]byte(marketMaker)))
-	msg := core.MsgPacketAcknowledgement{
-		Packets:          []core.Packet{packet},
-		Acknowledgements: [][]byte{ack},
-		Proof:            realcometbls.Z36AckMembershipProof(cross(cur)),
-		ProofHeight:      core.Height(realcometbls.DevnetHeight - 1),
-	}
+	msg := core.NewMsgPacketAcknowledgement(cross(cur), []core.Packet{packet}, [][]byte{ack}, realcometbls.Z36AckMembershipProof(cross(cur)), core.Height(realcometbls.DevnetHeight - 1))
 
 	core.PacketAcknowledgement(cross(cur), msg)
 	println("commitment_after_first_ack", core.HasPacketCommitment(cross(cur), packet))

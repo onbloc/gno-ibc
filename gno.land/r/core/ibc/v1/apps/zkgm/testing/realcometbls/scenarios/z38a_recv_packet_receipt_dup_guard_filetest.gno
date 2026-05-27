@@ -24,11 +24,7 @@ func main() {
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 	packet := core.Packet{SourceChannelId: pair.Source, DestinationChannelId: pair.Destination, Data: e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), TimeoutTimestamp: core.Timestamp(0)}
-	msg := core.MsgPacketRecv{
-		Packets:     []core.Packet{packet},
-		Proof:       realcometbls.Z35PacketCommitmentProof(cross(cur)),
-		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
-	}
+	msg := core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, realcometbls.Z35PacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight - 1))
 
 	core.PacketRecv(cross(cur), msg)
 	println("quote_balance_after_first_recv", impl.VoucherBalanceOf("ibc/quote", address(receiver)))

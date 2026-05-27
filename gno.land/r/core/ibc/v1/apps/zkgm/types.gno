@@ -33,6 +33,17 @@ type SendRequest struct {
 	SentCoins        string
 }
 
+func NewSendRequest(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, salt [32]byte, instruction z.Instruction, sender string, sentCoins string) SendRequest {
+	return SendRequest{
+		ChannelId:        channelId,
+		TimeoutTimestamp: timeoutTimestamp,
+		Salt:             salt,
+		Instruction:      instruction,
+		Sender:           sender,
+		SentCoins:        sentCoins,
+	}
+}
+
 // InFlightKey identifies a forwarded child packet awaiting the counterparty's
 // resolution by the child packet's Union batch hash (CommitPacket result).
 type InFlightKey struct {

@@ -33,10 +33,7 @@ func main() {
 		Data:                 e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)),
 	}
 
-	core.PacketRecv(cross(cur), core.MsgPacketRecv{
-		Packets:     []core.Packet{packet},
-		ProofHeight: core.Height(1),
-	})
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, nil, core.Height(1)))
 
 	println("quote_balance", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 	println("relayer_balance", impl.VoucherBalanceOf(quoteToken, rtunsafe.OriginCaller()))

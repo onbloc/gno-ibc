@@ -87,7 +87,7 @@ func PacketRecv(cur realm, msg MsgPacketRecv) {
 			relayerMsg = msg.RelayerMsgs[i]
 		}
 		portId := st.getChannelOwner(packet.DestinationChannelId)
-		res := st.getAppByPortId(portId).OnRecvPacket(cur, packet, relayer, relayerMsg)
+		res := st.getAppByPortId(portId).OnRecvPacket(cross(cur), packet, relayer, relayerMsg)
 		switch res.Status {
 		case PacketStatusAsync:
 		case PacketStatusSuccess, PacketStatusFailure:
@@ -123,7 +123,7 @@ func IntentPacketRecv(cur realm, msg MsgIntentPacketRecv) {
 			marketMakerMsg = msg.MarketMakerMessages[i]
 		}
 		portId := st.getChannelOwner(packet.DestinationChannelId)
-		st.getAppByPortId(portId).OnIntentRecvPacket(cur, packet, marketMaker, marketMakerMsg)
+		st.getAppByPortId(portId).OnIntentRecvPacket(cross(cur), packet, marketMaker, marketMakerMsg)
 
 		connection := ensureConnectionOpen(channel.ConnectionId)
 		emitPacketRecvEvent(IntentPacketRecvEvent, packet, channel, connection, "market_maker_msg", marketMakerMsg)
@@ -159,7 +159,7 @@ func PacketAcknowledgement(cur realm, msg MsgPacketAcknowledgement) {
 
 		ack := msg.Acknowledgements[i]
 		portId := st.getChannelOwner(packet.SourceChannelId)
-		st.getAppByPortId(portId).OnAcknowledgementPacket(cur, packet, ack, relayer)
+		st.getAppByPortId(portId).OnAcknowledgementPacket(cross(cur), packet, ack, relayer)
 
 		st.deletePacketCommitment(packet)
 		processed = true
@@ -194,7 +194,7 @@ func PacketTimeout(cur realm, msg MsgPacketTimeout) {
 	client.VerifyNonMembership(connection.ClientId, msg.ProofHeight, msg.Proof, key[:])
 
 	portId := st.getChannelOwner(packet.SourceChannelId)
-	st.getAppByPortId(portId).OnTimeoutPacket(cur, packet, relayer)
+	st.getAppByPortId(portId).OnTimeoutPacket(cross(cur), packet, relayer)
 
 	st.deletePacketCommitment(packet)
 

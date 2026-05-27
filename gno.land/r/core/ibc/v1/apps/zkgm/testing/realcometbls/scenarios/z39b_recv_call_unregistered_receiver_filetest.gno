@@ -14,11 +14,7 @@ func main() {
 	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 	packet := callPacket(pair, missingReceiverPath)
 
-	core.PacketRecv(cross(cur), core.MsgPacketRecv{
-		Packets:     []core.Packet{packet},
-		Proof:       realcometbls.Z39MissingCallPacketCommitmentProof(cross(cur)),
-		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
-	})
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, realcometbls.Z39MissingCallPacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight - 1)))
 
 	println("receipt_after_recv", core.HasPacketReceipt(cross(cur), packet))
 	println("ack_after_recv", core.HasAcknowledgement(cross(cur), packet))

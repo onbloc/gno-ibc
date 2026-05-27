@@ -34,22 +34,13 @@ func main() {
 	marketMaker := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	ack := e2e.MustSuccessAck(cross(cur), mustMarketMakerTokenOrderAck([]byte(marketMaker)))
 
-	core.PacketAcknowledgement(cross(cur), core.MsgPacketAcknowledgement{
-		Packets:          []core.Packet{packet},
-		Acknowledgements: [][]byte{ack},
-		Proof:            realcometbls.Z36AckMembershipProof(cross(cur)),
-		ProofHeight:      core.Height(realcometbls.DevnetHeight - 1),
-	})
+	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement(cross(cur), []core.Packet{packet}, [][]byte{ack}, realcometbls.Z36AckMembershipProof(cross(cur)), core.Height(realcometbls.DevnetHeight - 1)))
 
 	println("commitment_after_ack", core.HasPacketCommitment(cross(cur), packet))
 	println("market_maker_balance_after_ack", impl.VoucherBalanceOf(string(order.BaseToken), address(marketMaker)))
 	println("sender_balance_before_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))
 
-	core.PacketTimeout(cross(cur), core.MsgPacketTimeout{
-		Packet:      packet,
-		Proof:       realcometbls.Z37ReceiptNonMembershipProof(cross(cur)),
-		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
-	})
+	core.PacketTimeout(cross(cur), core.NewMsgPacketTimeout(cross(cur), packet, realcometbls.Z37ReceiptNonMembershipProof(cross(cur)), core.Height(realcometbls.DevnetHeight - 1)))
 
 	println("commitment_after_timeout", core.HasPacketCommitment(cross(cur), packet))
 	println("market_maker_balance_after_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(marketMaker)))

@@ -10,33 +10,14 @@ import (
 func main() {
 	clientId := realcometbls.CreateZ42StaleCometBLSClient(cross(cur))
 	connectionId := openConnection(clientId, realcometbls.Z42StaleConnectionTryProof(cross(cur)))
-	channelId := core.ChannelOpenInit(cross(cur), core.MsgChannelOpenInit{
-		PortId:             []byte(zkgm.ProxyPkgPath()),
-		CounterpartyPortId: []byte(zkgm.ProxyPkgPath()),
-		ConnectionId:       connectionId,
-		Version:            zkgm.Version,
-	})
+	channelId := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(cross(cur), []byte(zkgm.ProxyPkgPath()), []byte(zkgm.ProxyPkgPath()), connectionId, zkgm.Version))
 
-	core.ChannelOpenAck(cross(cur), core.MsgChannelOpenAck{
-		ChannelId:             channelId,
-		CounterpartyVersion:   zkgm.Version,
-		CounterpartyChannelId: core.ChannelId(2),
-		ProofTry:              realcometbls.Z42StaleChannelTryProof(cross(cur)),
-		ProofHeight:           core.Height(realcometbls.DevnetHeight - 1),
-	})
+	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), channelId, zkgm.Version, core.ChannelId(2), realcometbls.Z42StaleChannelTryProof(cross(cur)), core.Height(realcometbls.DevnetHeight - 1)))
 }
 
 func openConnection(clientId core.ClientId, proof []byte) core.ConnectionId {
-	connectionId := core.ConnectionOpenInit(cross(cur), core.MsgConnectionOpenInit{
-		ClientId:             clientId,
-		CounterpartyClientId: core.ClientId(99),
-	})
-	core.ConnectionOpenAck(cross(cur), core.MsgConnectionOpenAck{
-		ConnectionId:             connectionId,
-		CounterpartyConnectionId: core.ConnectionId(77),
-		ProofTry:                 proof,
-		ProofHeight:              core.Height(realcometbls.DevnetHeight - 1),
-	})
+	connectionId := core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(cross(cur), clientId, core.ClientId(99)))
+	core.ConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(cross(cur), connectionId, core.ConnectionId(77), proof, core.Height(realcometbls.DevnetHeight - 1)))
 	return connectionId
 }
 

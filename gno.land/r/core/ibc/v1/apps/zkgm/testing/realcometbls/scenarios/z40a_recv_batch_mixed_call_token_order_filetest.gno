@@ -19,12 +19,7 @@ func main() {
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	packet := mixedBatchPacket(pair, receiver)
 
-	core.PacketRecv(cross(cur), core.MsgPacketRecv{
-		Packets:     []core.Packet{packet},
-		RelayerMsgs: [][]byte{[]byte("batch-relay-msg")},
-		Proof:       realcometbls.Z40MixedBatchPacketCommitmentProof(cross(cur)),
-		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
-	})
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, [][]byte{[]byte("batch-relay-msg")}, realcometbls.Z40MixedBatchPacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight - 1)))
 
 	println("mock_calls", mock.Calls(cross(cur)))
 	println("last_calldata", mock.LastCalldata(cross(cur)))

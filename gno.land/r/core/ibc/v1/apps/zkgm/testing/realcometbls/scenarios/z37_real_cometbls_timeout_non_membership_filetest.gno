@@ -35,11 +35,7 @@ func main() {
 	println("commitment_before_timeout", core.HasPacketCommitment(cross(cur), packet))
 	println("sender_balance_before_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))
 
-	core.PacketTimeout(cross(cur), core.MsgPacketTimeout{
-		Packet:      packet,
-		Proof:       realcometbls.Z37ReceiptNonMembershipProof(cross(cur)),
-		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
-	})
+	core.PacketTimeout(cross(cur), core.NewMsgPacketTimeout(cross(cur), packet, realcometbls.Z37ReceiptNonMembershipProof(cross(cur)), core.Height(realcometbls.DevnetHeight - 1)))
 
 	println("commitment_after_timeout", core.HasPacketCommitment(cross(cur), packet))
 	println("sender_balance_after_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))

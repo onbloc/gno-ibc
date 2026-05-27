@@ -15,35 +15,35 @@ var _ core.IApp = &App{}
 func (a *App) OnChannelOpenInit(cur realm, connectionId core.ConnectionId, channelId core.ChannelId, version string, relayer address) {
 	ensureImpl()
 	ensureVersion(version)
-	impl.PreChannelOpenInit(cur, channelId)
+	impl.PreChannelOpenInit(cross(cur), channelId)
 }
 
 func (a *App) OnChannelOpenTry(cur realm, connectionId core.ConnectionId, channelId core.ChannelId, version string, counterpartyVersion string, relayer address) {
 	ensureImpl()
 	ensureVersion(version)
 	ensureVersion(counterpartyVersion)
-	impl.PreChannelOpenTry(cur, channelId, counterpartyVersion)
+	impl.PreChannelOpenTry(cross(cur), channelId, counterpartyVersion)
 }
 
 func (a *App) OnChannelOpenAck(cur realm, channelId core.ChannelId, counterpartyChannelId core.ChannelId, counterpartyVersion string, relayer address) {
 	ensureImpl()
 	ensureVersion(counterpartyVersion)
-	impl.PostChannelOpenAck(cur, channelId, counterpartyChannelId)
+	impl.PostChannelOpenAck(cross(cur), channelId, counterpartyChannelId)
 }
 
 func (a *App) OnChannelOpenConfirm(cur realm, channelId core.ChannelId, relayer address) {
 	ensureImpl()
-	impl.PostChannelOpenConfirm(cur, channelId)
+	impl.PostChannelOpenConfirm(cross(cur), channelId)
 }
 
 func (a *App) OnChannelCloseInit(cur realm, channelId core.ChannelId, relayer address) {
 	ensureImpl()
-	impl.PreChannelCloseInit(cur, channelId)
+	impl.PreChannelCloseInit(cross(cur), channelId)
 }
 
 func (a *App) OnChannelCloseConfirm(cur realm, channelId core.ChannelId, relayer address) {
 	ensureImpl()
-	impl.PostChannelCloseConfirm(cur, channelId)
+	impl.PostChannelCloseConfirm(cross(cur), channelId)
 }
 
 func (a *App) OnRecvPacket(cur realm, packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
@@ -53,7 +53,7 @@ func (a *App) OnRecvPacket(cur realm, packet core.Packet, relayer address, relay
 	if impl == nil {
 		return errAck(cur, errors.New("zkgm: impl not set"))
 	}
-	return impl.Recv(cur, packet, relayer, relayerMsg)
+	return impl.Recv(cross(cur), packet, relayer, relayerMsg)
 }
 
 func (a *App) OnIntentRecvPacket(cur realm, packet core.Packet, marketMaker address, marketMakerMsg []byte) {
@@ -63,21 +63,21 @@ func (a *App) OnIntentRecvPacket(cur realm, packet core.Packet, marketMaker addr
 	if impl == nil {
 		panic("zkgm: impl not set")
 	}
-	impl.IntentRecv(cur, packet, marketMaker, marketMakerMsg)
+	impl.IntentRecv(cross(cur), packet, marketMaker, marketMakerMsg)
 }
 
 func (a *App) OnAcknowledgementPacket(cur realm, packet core.Packet, ack []byte, relayer address) {
 	if impl == nil {
 		return
 	}
-	impl.Ack(cur, packet, ack, relayer)
+	impl.Ack(cross(cur), packet, ack, relayer)
 }
 
 func (a *App) OnTimeoutPacket(cur realm, packet core.Packet, relayer address) {
 	if impl == nil {
 		return
 	}
-	impl.Timeout(cur, packet, relayer)
+	impl.Timeout(cross(cur), packet, relayer)
 }
 
 func ensureImpl() {

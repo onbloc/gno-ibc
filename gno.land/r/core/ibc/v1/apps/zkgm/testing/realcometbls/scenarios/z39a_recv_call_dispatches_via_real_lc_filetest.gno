@@ -16,12 +16,7 @@ func main() {
 	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 	packet := callPacket(pair, mockReceiverPath)
 
-	core.PacketRecv(cross(cur), core.MsgPacketRecv{
-		Packets:     []core.Packet{packet},
-		RelayerMsgs: [][]byte{[]byte("relay-msg")},
-		Proof:       realcometbls.Z39CallPacketCommitmentProof(cross(cur)),
-		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
-	})
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, [][]byte{[]byte("relay-msg")}, realcometbls.Z39CallPacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight - 1)))
 
 	println("mock_calls", mock.Calls(cross(cur)))
 	println("last_sender", mock.LastSender(cross(cur)))

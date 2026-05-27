@@ -177,7 +177,7 @@ func TestAcknowledgeForwardWithTokenOrderChildRefundsOnFailure(cur realm, t *tes
 func TestConsumeForwardChildClearsInFlight(cur realm, t *testing.T) {
 	packet := core.NewPacket(cross(cur), core.ChannelId(2), core.ChannelId(3), nil, 0, 0)
 	parentPacket := core.NewPacket(cross(cur), core.ChannelId(10), core.ChannelId(11), nil, 0, 0)
-	parent := zkgm.InFlightValue{ParentPacket: parentPacket}
+	parent := zkgm.NewInFlightValue(cross(cur), parentPacket)
 	zkgm.SetInFlightPacket(cross(cur), forwardInFlightKey(cur, packet), parent)
 
 	got, ok := consumeForwardChild(cur, packet, z.DeriveForwardSalt([32]byte{0xB}))
@@ -241,28 +241,11 @@ func openForwardTestChannel(cur realm, counterpartyChannelId core.ChannelId) cor
 		core.RegisterClient(cross(cur), clientType, &forwardTestLightClient{})
 	}
 
-	clientId := core.CreateClient(cross(cur), core.MsgCreateClient{
-		ClientType: clientType,
-	})
-	connectionId := core.ConnectionOpenInit(cross(cur), core.MsgConnectionOpenInit{
-		ClientId:             clientId,
-		CounterpartyClientId: core.ClientId(99),
-	})
-	core.ConnectionOpenAck(cross(cur), core.MsgConnectionOpenAck{
-		ConnectionId:             connectionId,
-		CounterpartyConnectionId: core.ConnectionId(77),
-	})
+	clientId := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), clientType, nil, nil))
+	connectionId := core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(cross(cur), clientId, core.ClientId(99)))
+	core.ConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(cross(cur), connectionId, core.ConnectionId(77), nil, 0))
 
-	channelId := core.ChannelOpenInit(cross(cur), core.MsgChannelOpenInit{
-		PortId:             portId,
-		CounterpartyPortId: portId,
-		ConnectionId:       connectionId,
-		Version:            zkgm.Version,
-	})
-	core.ChannelOpenAck(cross(cur), core.MsgChannelOpenAck{
-		ChannelId:             channelId,
-		CounterpartyVersion:   zkgm.Version,
-		CounterpartyChannelId: counterpartyChannelId,
-	})
+	channelId := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(cross(cur), portId, portId, connectionId, zkgm.Version))
+	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), channelId, zkgm.Version, counterpartyChannelId, nil, 0))
 	return channelId
 }

@@ -9,7 +9,7 @@ func ChannelOpenInit(cur realm, msg MsgChannelOpenInit) ChannelId {
 	channelId := st.generateChannelId()
 	st.channelOwners[channelId] = portId
 
-	st.getAppByPortId(portId).OnChannelOpenInit(cur, msg.ConnectionId, channelId, msg.Version, relayer)
+	st.getAppByPortId(portId).OnChannelOpenInit(cross(cur), msg.ConnectionId, channelId, msg.Version, relayer)
 
 	channel := Channel{
 		State:                 ChannelStateInit,
@@ -44,7 +44,7 @@ func ChannelOpenTry(cur realm, msg MsgChannelOpenTry) ChannelId {
 	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofInit, key[:], value[:])
 
 	st.channelOwners[channelId] = portId
-	st.getAppByPortId(portId).OnChannelOpenTry(cur, msg.Channel.ConnectionId, channelId, msg.Channel.Version, msg.CounterpartyVersion, relayer)
+	st.getAppByPortId(portId).OnChannelOpenTry(cross(cur), msg.Channel.ConnectionId, channelId, msg.Channel.Version, msg.CounterpartyVersion, relayer)
 	st.saveChannel(channelId, msg.Channel)
 
 	emitChannelEvent(ChannelOpenTryEvent, portId, channelId, msg.Channel, connection)
@@ -71,7 +71,7 @@ func ChannelOpenAck(cur realm, msg MsgChannelOpenAck) {
 	value := keccak(expectedChannel.EthAbiEncode())
 	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofTry, key[:], value[:])
 
-	st.getAppByPortId(portId).OnChannelOpenAck(cur, msg.ChannelId, msg.CounterpartyChannelId, msg.CounterpartyVersion, relayer)
+	st.getAppByPortId(portId).OnChannelOpenAck(cross(cur), msg.ChannelId, msg.CounterpartyChannelId, msg.CounterpartyVersion, relayer)
 
 	channel.State = ChannelStateOpen
 	channel.Version = msg.CounterpartyVersion
@@ -101,7 +101,7 @@ func ChannelOpenConfirm(cur realm, msg MsgChannelOpenConfirm) {
 	value := keccak(expectedChannel.EthAbiEncode())
 	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofAck, key[:], value[:])
 
-	st.getAppByPortId(portId).OnChannelOpenConfirm(cur, msg.ChannelId, relayer)
+	st.getAppByPortId(portId).OnChannelOpenConfirm(cross(cur), msg.ChannelId, relayer)
 	channel.State = ChannelStateOpen
 	st.saveChannel(msg.ChannelId, channel)
 

@@ -21,6 +21,13 @@ type ChannelPair struct {
 	Destination  core.ChannelId
 }
 
+// NewChannelPair allocates a ChannelPair in this realm so cross-realm callers
+// (e.g. the impl test suite) can build one without tripping the Phase 3
+// allocation guard.
+func NewChannelPair(cur realm, clientId core.ClientId, connectionId core.ConnectionId, source, destination core.ChannelId) ChannelPair {
+	return ChannelPair{ClientId: clientId, ConnectionId: connectionId, Source: source, Destination: destination}
+}
+
 func RegisterMockLightClient(cur realm) {
 	if !core.HasClient(MockClientType) {
 		core.RegisterClient(cross(cur), MockClientType, &MockLightClient{})
@@ -28,9 +35,7 @@ func RegisterMockLightClient(cur realm) {
 }
 
 func CreateMockClient(cur realm) core.ClientId {
-	return core.CreateClient(cross(cur), core.MsgCreateClient{
-		ClientType: MockClientType,
-	})
+	return core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), MockClientType, nil, nil))
 }
 
 func OpenE2EChannel(cur realm, counterpartyChannelId core.ChannelId) core.ChannelId {
@@ -54,37 +59,20 @@ func OpenE2EChannelPair(cur realm) ChannelPair {
 }
 
 func openConnection(cur realm, clientId core.ClientId) core.ConnectionId {
-	connectionId := core.ConnectionOpenInit(cross(cur), core.MsgConnectionOpenInit{
-		ClientId:             clientId,
-		CounterpartyClientId: core.ClientId(99),
-	})
-	core.ConnectionOpenAck(cross(cur), core.MsgConnectionOpenAck{
-		ConnectionId:             connectionId,
-		CounterpartyConnectionId: core.ConnectionId(77),
-		ProofHeight:              core.Height(1),
-	})
+	connectionId := core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(cross(cur), clientId, core.ClientId(99)))
+	core.ConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(cross(cur), connectionId, core.ConnectionId(77), nil, core.Height(1)))
 	return connectionId
 }
 
 func openChannel(cur realm, connectionId core.ConnectionId, counterpartyChannelId core.ChannelId) core.ChannelId {
 	portId := []byte(zkgm.ProxyPkgPath())
-	channelId := core.ChannelOpenInit(cross(cur), core.MsgChannelOpenInit{
-		PortId:             portId,
-		CounterpartyPortId: portId,
-		ConnectionId:       connectionId,
-		Version:            zkgm.Version,
-	})
-	core.ChannelOpenAck(cross(cur), core.MsgChannelOpenAck{
-		ChannelId:             channelId,
-		CounterpartyVersion:   zkgm.Version,
-		CounterpartyChannelId: counterpartyChannelId,
-		ProofHeight:           core.Height(1),
-	})
+	channelId := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(cross(cur), portId, portId, connectionId, zkgm.Version))
+	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), channelId, zkgm.Version, counterpartyChannelId, nil, core.Height(1)))
 	return channelId
 }
 
 func BatchSend(cur realm, packet core.Packet) core.H256 {
-	return zkgm.BatchSend(cross(cur), core.MsgBatchSend{Packets: []core.Packet{packet}})
+	return zkgm.BatchSend(cross(cur), core.NewMsgBatchSend(cross(cur), []core.Packet{packet}))
 }
 
 func MustTokenOrderInstruction(cur realm, order z.TokenOrderV2) z.Instruction {

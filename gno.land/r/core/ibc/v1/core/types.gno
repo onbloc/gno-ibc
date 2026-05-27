@@ -91,7 +91,7 @@ type Packet struct {
 	TimeoutTimestamp     Timestamp
 }
 
-func NewPacket(_ realm, sourceChannelId, destinationChannelId ChannelId, data []byte, timeoutHeight Height, timeoutTimestamp Timestamp) Packet {
+func NewPacket(cur realm, sourceChannelId, destinationChannelId ChannelId, data []byte, timeoutHeight Height, timeoutTimestamp Timestamp) Packet {
 	return Packet{SourceChannelId: sourceChannelId, DestinationChannelId: destinationChannelId, Data: data, TimeoutHeight: timeoutHeight, TimeoutTimestamp: timeoutTimestamp}
 }
 
@@ -133,7 +133,7 @@ type RecvPacketResult struct {
 	Ack    []byte
 }
 
-func NewRecvPacketResult(_ realm, status PacketStatus, ack []byte) RecvPacketResult {
+func NewRecvPacketResult(cur realm, status PacketStatus, ack []byte) RecvPacketResult {
 	return RecvPacketResult{Status: status, Ack: ack}
 }
 
@@ -173,7 +173,7 @@ type Connection struct {
 	CounterpartyConnectionId ConnectionId
 }
 
-func NewConnection(_ realm, state ConnectionState, clientId, counterpartyClientId ClientId, counterpartyConnectionId ConnectionId) Connection {
+func NewConnection(cur realm, state ConnectionState, clientId, counterpartyClientId ClientId, counterpartyConnectionId ConnectionId) Connection {
 	return Connection{State: state, ClientId: clientId, CounterpartyClientId: counterpartyClientId, CounterpartyConnectionId: counterpartyConnectionId}
 }
 
@@ -202,6 +202,6 @@ type ConsensusStateUpdate struct {
 	ClientStateBytes    []byte
 }
 
-func NewConsensusStateUpdate(_ realm, height Height, consensusStateBytes, clientStateBytes []byte) ConsensusStateUpdate {
+func NewConsensusStateUpdate(cur realm, height Height, consensusStateBytes, clientStateBytes []byte) ConsensusStateUpdate {
 	return ConsensusStateUpdate{Height: height, ConsensusStateBytes: consensusStateBytes, ClientStateBytes: clientStateBytes}
 }

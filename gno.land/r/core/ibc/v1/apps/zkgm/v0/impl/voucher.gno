@@ -24,7 +24,7 @@ func getOrCreateVoucherV2(cur realm, ibcDenom string, baseDenom string, metadata
 		return v.(*voucher)
 	}
 
-	token, ledger := grc20.NewToken(baseDenom, ibcDenom, 0)
+	token, ledger := grc20.NewToken(0, cur, baseDenom, ibcDenom, 0)
 	grc20reg.Register(cross(cur), token, strings.TrimPrefix(ibcDenom, ibcDenomPrefix))
 
 	v := &voucher{token: token, ledger: ledger}

@@ -194,12 +194,12 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 		if !order.QuoteAmount.IsZero() {
-			if err := sendNative(string(order.QuoteToken), string(order.Receiver), order.QuoteAmount); err != nil {
+			if err := sendNative(cur, string(order.QuoteToken), string(order.Receiver), order.QuoteAmount); err != nil {
 				return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 			}
 		}
 		if !fee.IsZero() {
-			if err := sendNative(string(order.QuoteToken), string(relayer), fee); err != nil {
+			if err := sendNative(cur, string(order.QuoteToken), string(relayer), fee); err != nil {
 				return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 			}
 		}

@@ -122,7 +122,7 @@ func buildForwardChild(cur realm, packet core.Packet, path *u256.Uint, parentSal
 }
 
 func (v *ZkgmV1) handleForwardChild(cur realm, packet core.Packet, zp z.ZkgmPacket, ack []byte) bool {
-	parent, ok := consumeForwardChild(packet, zp.Salt)
+	parent, ok := consumeForwardChild(cur, packet, zp.Salt)
 	if !ok {
 		return false
 	}
@@ -131,7 +131,7 @@ func (v *ZkgmV1) handleForwardChild(cur realm, packet core.Packet, zp z.ZkgmPack
 	return true
 }
 
-func consumeForwardChild(packet core.Packet, salt [32]byte) (zkgm.InFlightValue, bool) {
+func consumeForwardChild(cur realm, packet core.Packet, salt [32]byte) (zkgm.InFlightValue, bool) {
 	if !z.IsForwardedPacket(salt) {
 		return zkgm.InFlightValue{}, false
 	}

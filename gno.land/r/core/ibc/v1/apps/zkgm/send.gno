@@ -1,7 +1,6 @@
 package zkgm
 
 import (
-	"chain/banker"
 	"chain/runtime"
 	rtunsafe "chain/runtime/unsafe"
 	"encoding/hex"
@@ -24,11 +23,11 @@ func Send(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, 
 	// here when the caller is the EOA.
 	var sentCoins string
 	if cur.Previous().IsUserCall() {
-		sentCoins = banker.OriginSend().String()
+		sentCoins = rtunsafe.OriginSend().String()
 	}
 
 	runtime.AssertOriginCall()
-	return sendPacket(channelId, timeoutTimestamp, salt, instruction, rtunsafe.OriginCaller().String(), sentCoins)
+	return sendPacket(cur, channelId, timeoutTimestamp, salt, instruction, rtunsafe.OriginCaller().String(), sentCoins)
 }
 
 // SendRaw is a gnokey-friendly wrapper around Send. `maketx call` cannot pass
@@ -45,11 +44,12 @@ func SendRaw(cur realm, channelId uint32, timeoutTimestamp uint64, saltHex strin
 
 	var sentCoins string
 	if cur.Previous().IsUserCall() {
-		sentCoins = banker.OriginSend().String()
+		sentCoins = rtunsafe.OriginSend().String()
 	}
 
 	runtime.AssertOriginCall()
 	return sendPacket(
+		cur,
 		core.ChannelId(channelId),
 		core.Timestamp(timeoutTimestamp),
 		salt,
@@ -63,7 +63,7 @@ func SendRaw(cur realm, channelId uint32, timeoutTimestamp uint64, saltHex strin
 	)
 }
 
-func sendPacket(channelId core.ChannelId, timeoutTimestamp core.Timestamp, salt [32]byte, instruction z.Instruction, sender string, sentCoins string) core.Packet {
+func sendPacket(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, salt [32]byte, instruction z.Instruction, sender string, sentCoins string) core.Packet {
 	if paused {
 		panic("zkgm: paused")
 	}
@@ -71,7 +71,7 @@ func sendPacket(channelId core.ChannelId, timeoutTimestamp core.Timestamp, salt 
 		panic("zkgm: impl not set")
 	}
 
-	data, err := impl.Send(SendRequest{
+	data, err := impl.Send(cur, SendRequest{
 		ChannelId:        channelId,
 		TimeoutTimestamp: timeoutTimestamp,
 		Salt:             salt,

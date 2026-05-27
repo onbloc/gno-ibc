@@ -15,7 +15,7 @@ var (
 	implPath        string
 	allowedImpls    []string
 	paused          bool
-	gRealm          realm
+	gRealmAddress   address
 	gRealmSet       bool
 	adminAddressStr string
 	receivers       = bptree.NewBPTree32()
@@ -28,7 +28,10 @@ func AsIBCApp() core.IApp {
 }
 
 func ProxyAddress() address {
-	return cachedRealm().Address()
+	if !gRealmSet {
+		panic("zkgm: proxy realm not initialized")
+	}
+	return gRealmAddress
 }
 
 func ProxyPkgPath() string {
@@ -140,18 +143,16 @@ func requireImplCaller(cur realm, action string) {
 	}
 }
 
+// cacheRealm captures the proxy realm's address from the first crossing call's
+// cur. realm values are ephemeral in Phase 3 (tied to a call frame, not
+// persistable), so we extract Address() into a package-level field that
+// downstream callers (ProxyAddress, banker constructions threaded through cur)
+// can read without needing the original realm value back.
 func cacheRealm(cur realm) {
 	if !gRealmSet {
-		gRealm = cur
+		gRealmAddress = cur.Address()
 		gRealmSet = true
 	}
-}
-
-func cachedRealm() realm {
-	if !gRealmSet {
-		panic("zkgm: proxy realm not initialized")
-	}
-	return gRealm
 }
 
 func isTestingBatchSender(pkgPath string) bool {

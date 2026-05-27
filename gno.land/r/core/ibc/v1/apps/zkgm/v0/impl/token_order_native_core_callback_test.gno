@@ -57,7 +57,7 @@ func TestPacketAcknowledgementFailureRefundsNativeFromProxy(cur realm, t *testin
 		ProofHeight:      core.Height(1),
 	})
 
-	assertNativeRefunded(t, packet, order, int64(11))
+	assertNativeRefunded(cur, t, packet, order, int64(11))
 }
 
 func TestPacketTimeoutRefundsNativeFromProxy(cur realm, t *testing.T) {
@@ -68,15 +68,15 @@ func TestPacketTimeoutRefundsNativeFromProxy(cur realm, t *testing.T) {
 		ProofHeight: core.Height(1),
 	})
 
-	assertNativeRefunded(t, packet, order, int64(13))
+	assertNativeRefunded(cur, t, packet, order, int64(13))
 }
 
 func setupNativeRefundPacket(cur realm, expired bool, senderName string, denom string, amount int64) (core.Packet, z.TokenOrderV2) {
-	resetTokenOrderTest()
-	zkgm.UpdateImpl(cross(cur), zkgm.UpdateRequest{AllowedImpls: []string{
+	resetTokenOrderTest(cur)
+	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), nil, []string{
 		"gno.land/r/core/ibc/v1/core",
 		"gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl",
-	}})
+	}))
 	ensureZkgmAppRegistered(cross(cur))
 	var pair e2e.ChannelPair
 	if expired {
@@ -96,12 +96,14 @@ func setupNativeRefundPacket(cur realm, expired bool, senderName string, denom s
 		QuoteAmount: u256.NewUint(uint64(amount)),
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
-	packet := core.Packet{
-		SourceChannelId:      pair.Source,
-		DestinationChannelId: pair.Destination,
-		Data:                 e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)),
-		TimeoutTimestamp:     core.Timestamp(1),
-	}
+	packet := core.NewPacket(
+		cross(cur),
+		pair.Source,
+		pair.Destination,
+		e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)),
+		0,
+		core.Timestamp(1),
+	)
 
 	testing.IssueCoins(zkgm.ProxyAddress(), chain.NewCoins(chain.NewCoin(denom, amount)))
 	zkgm.SetChannelBalanceV2(cross(cur), ChannelBalanceKeyV2(packet.SourceChannelId, u256.Zero(), order.BaseToken, order.QuoteToken), u256.NewUint(uint64(amount)))
@@ -175,7 +177,7 @@ func mustFailureAck() []byte {
 	return ack
 }
 
-func assertNativeRefunded(t *testing.T, packet core.Packet, order z.TokenOrderV2, amount int64) {
+func assertNativeRefunded(cur realm, t *testing.T, packet core.Packet, order z.TokenOrderV2, amount int64) {
 	t.Helper()
 
 	denom := string(order.BaseToken)

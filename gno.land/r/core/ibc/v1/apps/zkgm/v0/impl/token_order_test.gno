@@ -14,7 +14,7 @@ import (
 )
 
 func TestTokenOrderVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm, t *testing.T) {
-	resetTokenOrderTest()
+	resetTokenOrderTest(cur)
 
 	sender := testAddress("v1-sender")
 	baseToken := "ibc/v1-send"
@@ -28,7 +28,7 @@ func TestTokenOrderVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm,
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 
-	err := (&ZkgmV1{}).verifyTokenOrderV2(core.ChannelId(3), sender, nil, u256.Zero(), order)
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(3), sender, nil, u256.Zero(), order)
 
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(37), VoucherBalanceOf(baseToken, address(sender)))
@@ -38,7 +38,7 @@ func TestTokenOrderVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm,
 }
 
 func TestTokenOrderAckMarketMakerEscrowWithVoucherRewardsMarketMaker(cur realm, t *testing.T) {
-	resetTokenOrderTest()
+	resetTokenOrderTest(cur)
 
 	sender := testAddress("v1-mm-voucher-sender")
 	marketMaker := testAddress("v1-mm-voucher-maker")
@@ -55,10 +55,10 @@ func TestTokenOrderAckMarketMakerEscrowWithVoucherRewardsMarketMaker(cur realm, 
 		QuoteAmount: amount,
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	uassert.NoError(t, (&ZkgmV1{}).verifyTokenOrderV2(channelId, sender, nil, u256.Zero(), order))
+	uassert.NoError(t, (&ZkgmV1{}).verifyTokenOrderV2(cur, channelId, sender, nil, u256.Zero(), order))
 	uassert.Equal(t, int64(37), VoucherBalanceOf(baseToken, address(sender)))
 
-	err := (&ZkgmV1{}).acknowledgeTokenOrderV2(channelId, u256.Zero(), order, marketMakerAck(marketMaker))
+	err := (&ZkgmV1{}).acknowledgeTokenOrderV2(cur, channelId, u256.Zero(), order, marketMakerAck(marketMaker))
 
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(13), VoucherBalanceOf(baseToken, address(marketMaker)))
@@ -76,7 +76,7 @@ func TestTokenOrderVerifyNativeRequiresSentCoin(cur realm, t *testing.T) {
 		Kind:       z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
 
-	err := (&ZkgmV1{}).verifyTokenOrderV2(core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin("ugnot", 13)), u256.Zero(), order)
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin("ugnot", 13)), u256.Zero(), order)
 
 	uassert.NoError(t, err)
 }
@@ -94,10 +94,10 @@ func TestTokenOrderVerifyAppliesRateLimit(cur realm, t *testing.T) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
 
-	err := (&ZkgmV1{}).verifyTokenOrderV2(core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin(denom, 7)), u256.Zero(), order)
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin(denom, 7)), u256.Zero(), order)
 	uassert.NoError(t, err)
 
-	err = (&ZkgmV1{}).verifyTokenOrderV2(core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin(denom, 7)), u256.Zero(), order)
+	err = (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin(denom, 7)), u256.Zero(), order)
 	uassert.ErrorContains(t, err, "token bucket rate limit exceeded")
 
 	zkgm.RemoveTokenBucket(cross(cur), denom)
@@ -105,7 +105,7 @@ func TestTokenOrderVerifyAppliesRateLimit(cur realm, t *testing.T) {
 }
 
 func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *testing.T) {
-	resetTokenOrderTest()
+	resetTokenOrderTest(cur)
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
 		Implementation: []byte("grc20"),
@@ -123,9 +123,9 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	packet := core.Packet{SourceChannelId: core.ChannelId(1), DestinationChannelId: core.ChannelId(5)}
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(5), nil, 0, 0)
 
-	res, err := (&ZkgmV1{}).executeTokenOrderV2(packet, address(testAddress("v1-relayer")), u256.NewUint(7), order)
+	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("v1-relayer")), u256.NewUint(7), order)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == core.PacketStatusSuccess)
@@ -142,9 +142,9 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	uassert.Equal(t, "21474836487", origin.ToString())
 }
 
-func resetTokenOrderTest() {
+func resetTokenOrderTest(cur realm) {
 	voucherTokens = bptree.NewBPTree32()
-	zkgm.UpdateImpl(cross(cur), zkgm.UpdateRequest{Impl: &ZkgmV1{}})
+	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), &ZkgmV1{}, nil))
 }
 
 func testAddress(name string) string {

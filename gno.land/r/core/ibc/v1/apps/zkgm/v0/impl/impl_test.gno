@@ -18,7 +18,7 @@ func TestSendAppliesSenderSalt(cur realm, t *testing.T) {
 	})
 	uassert.NoError(t, err)
 
-	data, err := (&ZkgmV1{}).Send(zkgm.SendRequest{
+	data, err := (&ZkgmV1{}).Send(cur, zkgm.SendRequest{
 		ChannelId: core.ChannelId(1),
 		Salt:      salt,
 		Instruction: z.Instruction{

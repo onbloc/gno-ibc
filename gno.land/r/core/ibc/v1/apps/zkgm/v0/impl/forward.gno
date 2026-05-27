@@ -48,9 +48,7 @@ func (v *ZkgmV1) executeForward(cur realm, packet core.Packet, path *u256.Uint, 
 	// Forward children construct ZkgmPacket directly via BatchSend. Their salt
 	// is namespaced via DeriveForwardSalt, not DeriveSenderSalt.
 	zkgm.BatchSend(cross(cur), core.MsgBatchSend{Packets: []core.Packet{childPacket}})
-	zkgm.SetInFlightPacket(cross(cur), forwardInFlightKey(childPacket), zkgm.InFlightValue{
-		ParentPacket: packet,
-	})
+	zkgm.SetInFlightPacket(cross(cur), forwardInFlightKey(cur, childPacket), zkgm.NewInFlightValue(cross(cur), packet))
 
 	return core.NewRecvPacketResult(cross(cur), core.PacketStatusAsync, nil), nil
 }
@@ -133,16 +131,14 @@ func (v *ZkgmV1) handleForwardChild(cur realm, packet core.Packet, zp z.ZkgmPack
 
 func consumeForwardChild(cur realm, packet core.Packet, salt [32]byte) (zkgm.InFlightValue, bool) {
 	if !z.IsForwardedPacket(salt) {
-		return zkgm.InFlightValue{}, false
+		return zkgm.NewInFlightValue(cross(cur), core.NewPacket(cross(cur), 0, 0, nil, 0, 0)), false
 	}
 
-	return zkgm.PopInFlightPacket(cross(cur), forwardInFlightKey(packet))
+	return zkgm.PopInFlightPacket(cross(cur), forwardInFlightKey(cur, packet))
 }
 
-func forwardInFlightKey(packet core.Packet) zkgm.InFlightKey {
-	return zkgm.InFlightKey{
-		PacketHash: core.CommitPacket(packet),
-	}
+func forwardInFlightKey(cur realm, packet core.Packet) zkgm.InFlightKey {
+	return zkgm.NewInFlightKey(cross(cur), core.CommitPacket(packet))
 }
 
 func isAllowedForwardInstruction(opcode uint8) bool {

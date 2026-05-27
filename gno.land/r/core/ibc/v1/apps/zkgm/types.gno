@@ -46,9 +46,27 @@ type InFlightValue struct {
 	ParentPacket core.Packet
 }
 
+// NewInFlightValue and NewInFlightKey are crossing constructors so callers
+// from other realms can build these structs without tripping the Phase 3
+// allocation guard.
+func NewInFlightValue(cur realm, parentPacket core.Packet) InFlightValue {
+	return InFlightValue{ParentPacket: parentPacket}
+}
+
+func NewInFlightKey(cur realm, packetHash core.H256) InFlightKey {
+	return InFlightKey{PacketHash: packetHash}
+}
+
 type UpdateRequest struct {
 	Impl         ZkgmImpl
 	AllowedImpls []string
+}
+
+// NewUpdateRequest constructs an UpdateRequest in zkgm's realm so callers from
+// other realms can build one without tripping the Phase 3 cross-realm
+// allocation guard.
+func NewUpdateRequest(cur realm, impl ZkgmImpl, allowedImpls []string) UpdateRequest {
+	return UpdateRequest{Impl: impl, AllowedImpls: allowedImpls}
 }
 
 type Config struct {

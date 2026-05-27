@@ -17,7 +17,7 @@
 
 | Gno tests | Go tests |
 |-----------|----------|
-| `gno test ./path/...` | `go test ./...` |
+| `make test` for the first-party suite; `gno test ./path/...` for focused runs | `go test ./...` |
 | Test files: `_test.gno` | Test files: `_test.go` |
 
 ---
@@ -28,7 +28,7 @@
 - For v1 light client adapters (`gno.land/r/core/ibc/v1/lightclients/...`), put an explicit status guard in the adapter's `VerifyMembership` and `VerifyNonMembership` methods before decoding or verifying proof bytes. Only `StatusActive` clients may proceed.
 - For v2 core paths (`gno.land/r/aib/ibc/core`), keep the existing core-level `lightClient.Status() == Active` checks before every `VerifyMembership` or `VerifyNonMembership` call.
 - Inner light client implementations should still enforce any status checks they can determine without caller context. For example, frozen-client checks belong in the inner client, while expiration checks that need the current block time may need to stay in the adapter or core caller.
-- New light client adapters, including future adapters such as state-lens-mpt, must include tests showing that frozen or expired clients cannot be used for membership or non-membership proof verification.
+- New light client adapters must include tests showing that frozen or expired clients cannot be used for membership or non-membership proof verification.
 
 ---
 
@@ -50,15 +50,13 @@ This documents what the AI understood so reviewers can verify assumptions and fu
 
 | Scope | Directory |
 |-------|-----------|
-| GnoVM | `gnovm/adr/` |
 | gno.land | `gno.land/adr/` |
-| Tendermint2 | `tm2/adr/` |
 
 **Naming**: `pr<number>_<description>.md`.
 Use `prxxxx_` if PR number unknown.
 
 **Include**: context, decision, alternatives considered, consequences.
-See `gnovm/adr/` for examples.
+See `gno.land/adr/` for examples.
 Match detail to complexity.
 
 Skip ADRs for: trivial bug fixes, formatting, simple tests, docs-only changes.
@@ -85,7 +83,7 @@ ref: https://github.com/allinbits/gno-realms/blob/master/AGENTS.md#gno-specific-
 
 Each package/realm has a `gnomod.toml` (not `gno.mod`):
 ```toml
-module = "gno.land/r/gnoswap/ibc/apps/zkgm/v0/impl"
+module = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl"
 gno = "0.9"
 ```
 
@@ -233,7 +231,7 @@ returns (`return Foo{}, err`) need the same treatment: use
 
 ### MsgRun vs MsgCall
 
-Most IBC functions require `MsgRun` (not `MsgCall`) because they take complex arguments (structs, slices of bytes). The IBC core realm itself lives at `gno.land/r/aib/ibc/core` (vendored from `gno-realms`); see filetests under `gno.land/r/core/ibc/apps/zkgm/v0/impl/` for working `MsgRun` examples.
+Most IBC functions require `MsgRun` (not `MsgCall`) because they take complex arguments (structs, slices of bytes). The v1 IBC core realm lives at `gno.land/r/core/ibc/v1/core`; the vendored gno-realms core still lives at `gno.land/r/aib/ibc/core`. See filetests under `gno.land/r/core/ibc/v1/apps/zkgm/` for working `MsgRun` examples.
 
 ### Gno Standard Library
 
@@ -261,16 +259,16 @@ IBC voucher tokens (minted on RecvPacket for cross-chain tokens) use **GRC20 tok
 The ZKGM port is tracked in `local_docs/zkgm/`. Before changing ZKGM code, read the relevant wave plan/review there first. The main implementation paths are:
 
 - ABI/types: `gno.land/p/core/ibc/zkgm/`
-- Proxy realm: `gno.land/r/core/ibc/apps/zkgm/`
-- v0 implementation: `gno.land/r/core/ibc/apps/zkgm/v0/impl/`
-- Mock receiver realm: `gno.land/r/core/ibc/apps/zkgm/testing/mock/`
+- Proxy realm source: `gno.land/r/core/ibc/v1/apps/zkgm/` (module/import path `gno.land/r/gnoswap/ibc/v1/apps/zkgm`)
+- v0 implementation source: `gno.land/r/core/ibc/v1/apps/zkgm/v0/impl/` (module/import path `gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl`)
+- Mock receiver realm source: `gno.land/r/core/ibc/v1/apps/zkgm/testing/mock/` (module/import path `gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock`)
 
 ### Call Handler Invariants
 
 - `CallEnv.Caller` is the tx origin / relayer identity captured by the ZKGM app request, not the deterministic proxy account.
 - `CallEnv.ProxyAccount` carries `PredictCallProxyAccount(path, destinationClient, sender)`.
-- `CallEnv.Relayer` currently mirrors `unsafe.OriginCaller().String()` as bytes (attribution, not authentication). `RelayerMsg` is empty until the IBC core exposes relayer metadata.
-- Receiver realms must register with `zkgm.RegisterReceiver(cross, receiver)` from their own realm. Tests should use the mock receiver realm instead of directly storing receiver instances from the impl package.
+- `CallEnv.Relayer` carries the core-provided relayer bytes and `RelayerMsg` carries the core-provided relayer message bytes. On direct sends, the proxy currently derives the relayer from `unsafe.OriginCaller().String()` for attribution, not authentication.
+- Receiver realms must register with `zkgm.RegisterReceiver(cross(cur), receiver)` from their own realm. Tests should use the mock receiver realm instead of directly storing receiver instances from the impl package.
 - Mock receiver getters that read stored `[]byte` fields must be crossing functions (`cur realm`) and should return strings/scalars, not structs containing slices.
 
 ### Batch Dispatcher Invariants
@@ -293,12 +291,11 @@ Batch acknowledgement rules:
 
 ### Forward Handler Invariants
 
-Forward v0 is limited by the current IBC core, which always writes an acknowledgement during `RecvPacket`. Full deferred parent acknowledgement propagation is not available yet.
+Forward v0 uses the v1 IBC core's async acknowledgement path. `executeForward` sends the child packet immediately, stores the parent packet in `inFlightPacket`, and returns `PacketStatusAsync`. Child ack/timeout later consumes the in-flight entry and writes the parent acknowledgement through the ZKGM proxy's `WriteForwardAck` wrapper, which delegates to core `WriteAcknowledgement`.
 
 - Forward children may be `OP_CALL`, `OP_TOKEN_ORDER`, or `OP_BATCH`. Direct Forward-of-Forward input is rejected by verify, but multi-hop continuation rebuilds a nested Forward internally.
-- `executeForward` sends the child packet immediately and returns a success ack for the parent. Child ack/timeout later only looks up the parent in `inFlightPacket`, emits a ZKGM event, and clears the entry. Real parent ack writing needs a future IBC core `WriteAcknowledgement` / async-ack change.
-- Numeric path channels map through the temporary `channelToClient(uint32) -> "client-<id>"` stub. Replace this with a registry before relying on real channel/client mappings.
-- Parent packet reconstruction currently sets `TimeoutTimestamp` to `0` because `RecvRequest` does not expose the original packet timeout. This is only suitable for lookup/event metadata until deferred acknowledgement handling exists.
+- Forward child packet routing uses `core.GetChannel(sourceChannelId)` to obtain the counterparty channel. Keep channel state initialized before exercising Forward paths.
+- Parent packet reconstruction preserves the parent packet by storing it in `inFlightPacket`; child packet construction uses the Forward instruction's `TimeoutTimestamp`.
 - The path helper can represent at most the uint256 channel slots it can build; do not assume a 9-hop overflow test can be constructed through `UpdateChannelPath`.
 
 ### Path and Byte Safety
@@ -405,7 +402,7 @@ Files named `z*_filetest.gno` in realm directories. These are integration tests 
 ```gno
 package main
 
-import "gno.land/r/gnoswap/ibc/core"
+import "gno.land/r/core/ibc/v1/core"
 
 func main(cur realm) {
     clientID := core.CreateClient(cross(cur), clientState, consensusState)

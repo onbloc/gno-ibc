@@ -1,0 +1,28 @@
+// gno-ibc native gas calibration rows.
+//
+// Source: gnoswap-labs/gno @ feat/ibc-stdlibs commit 808fb05c66ed1ee7a39d8d358cd86b2f3e485a16.
+// Calibrated on Apple M5 ARM64. Re-run gnovm/cmd/calibrate on the reference
+// Xeon 8168 before any consensus-relevant deployment.
+//
+// crypto/modexp is fit against len(exp) with a fixed 256-byte modulus. The
+// model overcharges small moduli and would undercharge moduli larger than
+// 256 bytes, which current IBC clients do not exercise.
+//
+// crypto/cometblszk has no native binding (pure-gno verifier on top of
+// bn254 / keccak256 / modexp), so no row is needed.
+//
+// tools/setup-stdlibs.py reads this file and inserts the entry lines into
+// <cache>/gnovm/stdlibs/native_gas.go's calibratedNativeGas slice. Comments
+// and blank lines above are stripped; only lines matching the row pattern
+// `{Pkg: "...", Fn: "..."...},` survive. Edit the rows here to change the
+// charged gas; rerun `make install-gno` to propagate.
+{Pkg: "crypto/keccak256", Fn: "sum256", Base: 344, Slope: 6729, SlopeIdx: 0, SlopeKind: SizeLenBytes},            // fit base=343.7ns slope=6.5713ns/N (=6729/1024) R²=0.999
+{Pkg: "crypto/bn254", Fn: "g1Add", Base: 2405, SlopeIdx: -1, SlopeKind: SizeFlat},                                // flat, median 2405.0ns
+{Pkg: "crypto/bn254", Fn: "g1Mul", Base: 24831, SlopeIdx: -1, SlopeKind: SizeFlat},                               // flat, median 24831.0ns
+{Pkg: "crypto/bn254", Fn: "pairingCheck", Base: 360, Slope: 1056325, SlopeIdx: 0, SlopeKind: SizeLenBytes},       // fit base=359.6ns slope=1031.5672ns/N (=1056325/1024) R²=0.935
+{Pkg: "crypto/cometbls", Fn: "verifyZKP", Base: 1320088, SlopeIdx: -1, SlopeKind: SizeFlat},                      // flat, median 1320088.0ns
+{Pkg: "crypto/merkle", Fn: "leafHash", Base: 399, Slope: 5740, SlopeIdx: 0, SlopeKind: SizeLenBytes},             // fit base=398.6ns slope=5.6055ns/N (=5740/1024) R²=1.000
+{Pkg: "crypto/merkle", Fn: "innerHash", Base: 829, SlopeIdx: -1, SlopeKind: SizeFlat},                            // flat, median 829.4ns
+{Pkg: "crypto/merkle", Fn: "hashFromByteSlices", Base: 645, Slope: 9546, SlopeIdx: 0, SlopeKind: SizeLenBytes},   // fit base=645.0ns slope=9.3225ns/N (=9546/1024) R²=1.000
+{Pkg: "crypto/merkle", Fn: "verifySimpleProof", Base: 939, Slope: 9122, SlopeIdx: 4, SlopeKind: SizeLenBytes},    // fit base=939.2ns slope=8.9084ns/N (=9122/1024) R²=0.893
+{Pkg: "crypto/modexp", Fn: "modExp", Base: 22405, Slope: 7573342, SlopeIdx: 1, SlopeKind: SizeLenBytes},          // fit base=22405.0ns slope=7395.8420ns/N (=7573342/1024) R²=0.978

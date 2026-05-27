@@ -1,4 +1,5 @@
-package main
+// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
+package scenarios
 
 import (
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -11,36 +12,27 @@ import (
 
 const mockReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
 
-func main() {
-	mock.Reset(cross)
-	mock.SetPanic(cross, "boom")
-	pair := realcometbls.OpenZ35CometBLSChannel(cross)
-	packet := callPacket(pair, mockReceiverPath)
+func main(cur realm) {
+	mock.Reset(cross(cur))
+	mock.SetPanic(cross(cur), "boom")
+	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
+	packet := callPacket(cur, pair, mockReceiverPath)
 
-	core.PacketRecv(cross, core.MsgPacketRecv{
-		Packets:     []core.Packet{packet},
-		Proof:       realcometbls.Z39CallPacketCommitmentProof(cross),
-		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
-	})
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, realcometbls.Z39CallPacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight-1)))
 
-	println("mock_calls", mock.Calls(cross))
-	println("receipt_after_recv", core.HasPacketReceipt(cross, packet))
-	println("ack_after_recv", core.HasAcknowledgement(cross, packet))
+	println("mock_calls", mock.Calls(cross(cur)))
+	println("receipt_after_recv", core.HasPacketReceipt(cross(cur), packet))
+	println("ack_after_recv", core.HasAcknowledgement(cross(cur), packet))
 	println("recv_call_panic_contained_real_cometbls", "ok")
 }
 
-func callPacket(pair realcometbls.ChannelPair, receiverPath string) core.Packet {
+func callPacket(cur realm, pair realcometbls.ChannelPair, receiverPath string) core.Packet {
 	call := z.Call{
 		Sender:           []byte("sender"),
 		ContractAddress:  []byte(receiverPath),
 		ContractCalldata: []byte("calldata"),
 	}
-	return core.Packet{
-		SourceChannelId:      pair.Source,
-		DestinationChannelId: pair.Destination,
-		Data:                 e2e.MustPacketData(cross, e2e.MustCallInstruction(cross, call)),
-		TimeoutTimestamp:     core.Timestamp(0),
-	}
+	return core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)), 0, core.Timestamp(0))
 }
 
 // Output:

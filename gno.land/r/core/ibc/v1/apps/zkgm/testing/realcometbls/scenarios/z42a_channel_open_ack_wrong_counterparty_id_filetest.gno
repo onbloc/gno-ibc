@@ -1,42 +1,24 @@
-package main
+// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
+package scenarios
 
 import (
 	core "gno.land/r/core/ibc/v1/core"
-	realcometbls "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls"
 	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+	realcometbls "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls"
 	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
 )
 
-func main() {
-	clientId := realcometbls.CreateZ35CometBLSClient(cross)
-	connectionId := openConnection(clientId, realcometbls.Z35ConnectionTryProof(cross))
-	channelId := core.ChannelOpenInit(cross, core.MsgChannelOpenInit{
-		PortId:             []byte(zkgm.ProxyPkgPath()),
-		CounterpartyPortId: []byte(zkgm.ProxyPkgPath()),
-		ConnectionId:       connectionId,
-		Version:            zkgm.Version,
-	})
+func main(cur realm) {
+	clientId := realcometbls.CreateZ35CometBLSClient(cross(cur))
+	connectionId := openConnection(cur, clientId, realcometbls.Z35ConnectionTryProof(cross(cur)))
+	channelId := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(cross(cur), []byte(zkgm.ProxyPkgPath()), []byte(zkgm.ProxyPkgPath()), connectionId, zkgm.Version))
 
-	core.ChannelOpenAck(cross, core.MsgChannelOpenAck{
-		ChannelId:             channelId,
-		CounterpartyVersion:   zkgm.Version,
-		CounterpartyChannelId: core.ChannelId(3),
-		ProofTry:              realcometbls.Z35ChannelTryProof(cross),
-		ProofHeight:           core.Height(realcometbls.DevnetHeight - 1),
-	})
+	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), channelId, zkgm.Version, core.ChannelId(3), realcometbls.Z35ChannelTryProof(cross(cur)), core.Height(realcometbls.DevnetHeight-1)))
 }
 
-func openConnection(clientId core.ClientId, proof []byte) core.ConnectionId {
-	connectionId := core.ConnectionOpenInit(cross, core.MsgConnectionOpenInit{
-		ClientId:             clientId,
-		CounterpartyClientId: core.ClientId(99),
-	})
-	core.ConnectionOpenAck(cross, core.MsgConnectionOpenAck{
-		ConnectionId:             connectionId,
-		CounterpartyConnectionId: core.ConnectionId(77),
-		ProofTry:                 proof,
-		ProofHeight:              core.Height(realcometbls.DevnetHeight - 1),
-	})
+func openConnection(cur realm, clientId core.ClientId, proof []byte) core.ConnectionId {
+	connectionId := core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(cross(cur), clientId, core.ClientId(99)))
+	core.ConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(cross(cur), connectionId, core.ConnectionId(77), proof, core.Height(realcometbls.DevnetHeight-1)))
 	return connectionId
 }
 

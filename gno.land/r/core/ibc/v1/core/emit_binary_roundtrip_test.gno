@@ -91,7 +91,7 @@ func assertRoundTrip(t *testing.T, data []byte) {
 	}
 }
 
-func TestEmitBinaryFieldsRoundTrip(t *testing.T) {
+func TestEmitBinaryFieldsRoundTrip(cur realm, t *testing.T) {
 	for _, fx := range binaryFixtures() {
 		t.Run(fx.name, func(t *testing.T) {
 			assertRoundTrip(t, fx.data)
@@ -99,7 +99,7 @@ func TestEmitBinaryFieldsRoundTrip(t *testing.T) {
 	}
 }
 
-func TestEmitBinaryFieldsBoundary(t *testing.T) {
+func TestEmitBinaryFieldsBoundary(cur realm, t *testing.T) {
 	t.Run("exact_1024", func(t *testing.T) {
 		raw := make([]byte, boundaryRawLen)
 		for i := range raw {

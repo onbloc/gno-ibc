@@ -1,8 +1,6 @@
 package impl
 
 import (
-	"chain/runtime"
-
 	z "gno.land/p/gnoswap/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	core "gno.land/r/core/ibc/v1/core"
@@ -13,61 +11,62 @@ type ZkgmV1 struct{}
 
 var instance = &ZkgmV1{}
 
-func GetInstance() *ZkgmV1 {
-	if runtime.CurrentRealm().PkgPath() != "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader" {
+func GetInstance(cur realm) *ZkgmV1 {
+	if cur.Previous().PkgPath() != "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader" {
 		panic("not allowed")
 	}
 	return instance
 }
 
-func (v *ZkgmV1) PreChannelOpenInit(channelId core.ChannelId) {}
+func (v *ZkgmV1) PreChannelOpenInit(cur realm, channelId core.ChannelId) {}
 
-func (v *ZkgmV1) PreChannelOpenTry(channelId core.ChannelId, counterpartyVersion string) {}
+func (v *ZkgmV1) PreChannelOpenTry(cur realm, channelId core.ChannelId, counterpartyVersion string) {}
 
-func (v *ZkgmV1) PostChannelOpenAck(channelId core.ChannelId, counterpartyChannelId core.ChannelId) {}
+func (v *ZkgmV1) PostChannelOpenAck(cur realm, channelId core.ChannelId, counterpartyChannelId core.ChannelId) {
+}
 
-func (v *ZkgmV1) PostChannelOpenConfirm(channelId core.ChannelId) {}
+func (v *ZkgmV1) PostChannelOpenConfirm(cur realm, channelId core.ChannelId) {}
 
-func (v *ZkgmV1) PreChannelCloseInit(channelId core.ChannelId) {}
+func (v *ZkgmV1) PreChannelCloseInit(cur realm, channelId core.ChannelId) {}
 
-func (v *ZkgmV1) PostChannelCloseConfirm(channelId core.ChannelId) {}
+func (v *ZkgmV1) PostChannelCloseConfirm(cur realm, channelId core.ChannelId) {}
 
-func (v *ZkgmV1) Recv(packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
+func (v *ZkgmV1) Recv(cur realm, packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
 	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
-		return errResult(err)
+		return errResult(cur, err)
 	}
-	res, err := v.dispatchExecute(packet, relayer, relayerMsg, zp.Path, zp.Salt, zp.Instruction, false)
+	res, err := v.dispatchExecute(cur, packet, relayer, relayerMsg, zp.Path, zp.Salt, zp.Instruction, false)
 	if err != nil {
-		return errResult(err)
+		return errResult(cur, err)
 	}
 	return res
 }
 
-func (v *ZkgmV1) Ack(packet core.Packet, ack []byte, relayer address) {
+func (v *ZkgmV1) Ack(cur realm, packet core.Packet, ack []byte, relayer address) {
 	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
 		panic(err.Error())
 	}
-	if v.handleForwardChild(packet, zp, ack) {
+	if v.handleForwardChild(cur, packet, zp, ack) {
 		return
 	}
 
-	if err := v.dispatchAck(packet, zp.Path, zp.Salt, zp.Instruction, ack); err != nil {
+	if err := v.dispatchAck(cur, packet, zp.Path, zp.Salt, zp.Instruction, ack); err != nil {
 		panic(err.Error())
 	}
 }
 
-func (v *ZkgmV1) Timeout(packet core.Packet, relayer address) {
+func (v *ZkgmV1) Timeout(cur realm, packet core.Packet, relayer address) {
 	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
 		panic(err.Error())
 	}
-	if v.handleForwardChild(packet, zp, universalErrorAck()) {
+	if v.handleForwardChild(cur, packet, zp, universalErrorAck()) {
 		return
 	}
 
-	if err := v.dispatchTimeout(packet, zp.Path, zp.Salt, zp.Instruction); err != nil {
+	if err := v.dispatchTimeout(cur, packet, zp.Path, zp.Salt, zp.Instruction); err != nil {
 		panic(err.Error())
 	}
 }
@@ -77,19 +76,19 @@ func (v *ZkgmV1) Timeout(packet core.Packet, relayer address) {
 // dispatch chain with intent=true so each opcode can render an only-maker
 // outcome where appropriate. The result is dropped because the new
 // OnIntentRecvPacket callback has no return.
-func (v *ZkgmV1) IntentRecv(packet core.Packet, marketMaker address, marketMakerMsg []byte) {
+func (v *ZkgmV1) IntentRecv(cur realm, packet core.Packet, marketMaker address, marketMakerMsg []byte) {
 	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
 		panic(err.Error())
 	}
-	if _, err := v.dispatchExecute(packet, marketMaker, marketMakerMsg, zp.Path, zp.Salt, zp.Instruction, true); err != nil {
+	if _, err := v.dispatchExecute(cur, packet, marketMaker, marketMakerMsg, zp.Path, zp.Salt, zp.Instruction, true); err != nil {
 		panic(err.Error())
 	}
 }
 
-func (v *ZkgmV1) Send(req zkgm.SendRequest) ([]byte, error) {
+func (v *ZkgmV1) Send(cur realm, req zkgm.SendRequest) ([]byte, error) {
 	// dispatchVerify uses the raw user salt; only the wire packet is namespaced.
-	if err := v.dispatchVerify(req.ChannelId, req.Sender, parseCoins(req.SentCoins), u256.Zero(), req.Salt, req.Instruction); err != nil {
+	if err := v.dispatchVerify(cur, req.ChannelId, req.Sender, parseCoins(req.SentCoins), u256.Zero(), req.Salt, req.Instruction); err != nil {
 		return nil, err
 	}
 
@@ -115,8 +114,8 @@ func (v *ZkgmV1) Render(pkgpath string, path string) string {
 	return "zkgm/v1: render path not found: " + path
 }
 
-func errResult(err error) core.RecvPacketResult {
-	return failureResult([]byte(err.Error()))
+func errResult(cur realm, err error) core.RecvPacketResult {
+	return failureResult(cur, []byte(err.Error()))
 }
 
 var _ zkgm.ZkgmImpl = &ZkgmV1{}

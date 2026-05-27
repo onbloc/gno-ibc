@@ -1,4 +1,5 @@
-package main
+// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
+package scenarios
 
 import (
 	"encoding/hex"
@@ -8,14 +9,16 @@ import (
 	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
 )
 
-const mockReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
-const missingReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/missing"
+const (
+	mockReceiverPath    = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
+	missingReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/missing"
+)
 
-func main() {
-	packet := z39CallPacket(mockReceiverPath)
+func main(cur realm) {
+	packet := z39CallPacket(cur, mockReceiverPath)
 	packetKey := core.PacketCommitmentPath(packet)
 	packetValue := core.COMMITMENT_MAGIC
-	missingPacket := z39CallPacket(missingReceiverPath)
+	missingPacket := z39CallPacket(cur, missingReceiverPath)
 	missingPacketKey := core.PacketCommitmentPath(missingPacket)
 
 	printKV("call_packet_commitment", packetKey[:], packetValue[:])
@@ -24,18 +27,13 @@ func main() {
 	println("missing_packet_data", "0x"+hex.EncodeToString(missingPacket.Data))
 }
 
-func z39CallPacket(receiverPath string) core.Packet {
+func z39CallPacket(cur realm, receiverPath string) core.Packet {
 	call := z.Call{
 		Sender:           []byte("sender"),
 		ContractAddress:  []byte(receiverPath),
 		ContractCalldata: []byte("calldata"),
 	}
-	return core.Packet{
-		SourceChannelId:      core.ChannelId(2),
-		DestinationChannelId: core.ChannelId(1),
-		Data:                 e2e.MustPacketData(cross, e2e.MustCallInstruction(cross, call)),
-		TimeoutTimestamp:     core.Timestamp(0),
-	}
+	return core.NewPacket(cross(cur), core.ChannelId(2), core.ChannelId(1), e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)), 0, core.Timestamp(0))
 }
 
 func printKV(name string, key []byte, value []byte) {

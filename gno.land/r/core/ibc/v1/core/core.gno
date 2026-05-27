@@ -14,7 +14,7 @@ func init() {
 
 // ILightClient defines the interface that light client adapters must implement.
 // Methods that modify adapter state must declare _ realm as the first parameter
-// (Gno crossing function requirement for cross-realm state writes).
+// (Gno crossing function requirement for cross(cur)-realm state writes).
 type ILightClient interface {
 	CreateClient(_ realm, clientId ClientId, clientStateBytes, consensusStateBytes []byte) string
 	UpdateClient(_ realm, clientId ClientId, clientMessage []byte) ConsensusStateUpdate
@@ -27,24 +27,24 @@ type ILightClient interface {
 
 // IApp defines the interface for IBC application callbacks. Byte parameters
 // use plain []byte (not the typed Bytes wrapper) so foreign-realm apps can
-// implement the interface without the cross-realm typed-slice pitfall.
+// implement the interface without the cross(cur)-realm typed-slice pitfall.
 type IApp interface {
-	OnChannelOpenInit(connectionId ConnectionId, channelId ChannelId, version string, relayer address)
-	OnChannelOpenTry(connectionId ConnectionId, channelId ChannelId, version string, counterpartyVersion string, relayer address)
-	OnChannelOpenAck(channelId ChannelId, counterpartyChannelId ChannelId, counterpartyVersion string, relayer address)
-	OnChannelOpenConfirm(channelId ChannelId, relayer address)
-	OnChannelCloseInit(channelId ChannelId, relayer address)
-	OnChannelCloseConfirm(channelId ChannelId, relayer address)
-	OnRecvPacket(packet Packet, relayer address, relayerMsg []byte) RecvPacketResult
-	OnIntentRecvPacket(packet Packet, marketMaker address, marketMakerMsg []byte)
-	OnAcknowledgementPacket(packet Packet, acknowledgement []byte, relayer address)
-	OnTimeoutPacket(packet Packet, relayer address)
+	OnChannelOpenInit(cur realm, connectionId ConnectionId, channelId ChannelId, version string, relayer address)
+	OnChannelOpenTry(cur realm, connectionId ConnectionId, channelId ChannelId, version string, counterpartyVersion string, relayer address)
+	OnChannelOpenAck(cur realm, channelId ChannelId, counterpartyChannelId ChannelId, counterpartyVersion string, relayer address)
+	OnChannelOpenConfirm(cur realm, channelId ChannelId, relayer address)
+	OnChannelCloseInit(cur realm, channelId ChannelId, relayer address)
+	OnChannelCloseConfirm(cur realm, channelId ChannelId, relayer address)
+	OnRecvPacket(cur realm, packet Packet, relayer address, relayerMsg []byte) RecvPacketResult
+	OnIntentRecvPacket(cur realm, packet Packet, marketMaker address, marketMakerMsg []byte)
+	OnAcknowledgementPacket(cur realm, packet Packet, acknowledgement []byte, relayer address)
+	OnTimeoutPacket(cur realm, packet Packet, relayer address)
 }
 
 // RegisterApp registers an IBC application at portId.
 //
 // Locally-owned ports must use the owning realm's package path bytes.
-// Note: portId is []byte to avoid cross-realm typed slice issues.
+// Note: portId is []byte to avoid cross(cur)-realm typed slice issues.
 func RegisterApp(_ realm, portId []byte, app IApp) {
 	key := string(portId)
 	if _, ok := st.ports[key]; ok {

@@ -2,7 +2,7 @@ package core
 
 import "testing"
 
-func TestZ35FixtureInputPaths(t *testing.T) {
+func TestZ35FixtureInputPaths(cur realm, t *testing.T) {
 	connection := Connection{
 		State:                    ConnectionStateTryOpen,
 		ClientId:                 99,

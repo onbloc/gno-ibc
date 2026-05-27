@@ -100,4 +100,3 @@ func mustBytes32(t *testing.T, h string) [32]byte {
 	copy(out[:], bz)
 	return out
 }
-

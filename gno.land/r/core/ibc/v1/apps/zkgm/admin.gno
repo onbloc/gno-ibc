@@ -2,13 +2,15 @@ package zkgm
 
 import (
 	"chain/runtime"
+	rtunsafe "chain/runtime/unsafe"
 
 	tb "gno.land/p/gnoswap/tokenbucket"
 	u256 "gno.land/p/gnoswap/uint256"
 )
 
 func SetAdmin(cur realm, admin string) {
-	if adminAddressStr != "" && runtime.OriginCaller().String() != adminAddressStr {
+	runtime.AssertOriginCall()
+	if adminAddressStr != "" && rtunsafe.OriginCaller().String() != adminAddressStr {
 		panic("zkgm: admin only")
 	}
 	adminAddressStr = admin
@@ -59,7 +61,8 @@ func mustBeAdmin() {
 	if adminAddressStr == "" {
 		return
 	}
-	if runtime.OriginCaller().String() != adminAddressStr {
+	runtime.AssertOriginCall()
+	if rtunsafe.OriginCaller().String() != adminAddressStr {
 		panic("zkgm: admin only")
 	}
 }

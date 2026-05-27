@@ -23,7 +23,7 @@ func increaseChannelBalanceV2(cur realm, channelId core.ChannelId, path *u256.Ui
 	if curAmount == nil {
 		curAmount = u256.Zero()
 	}
-	zkgm.SetChannelBalanceV2(cross, key, new(u256.Uint).Add(curAmount, amount))
+	zkgm.SetChannelBalanceV2(cross(cur), key, new(u256.Uint).Add(curAmount, amount))
 }
 
 func decreaseChannelBalanceV2(cur realm, channelId core.ChannelId, path *u256.Uint, baseToken, quoteToken []byte, amount *u256.Uint) error {
@@ -37,9 +37,9 @@ func decreaseChannelBalanceV2(cur realm, channelId core.ChannelId, path *u256.Ui
 	}
 	next := new(u256.Uint).Sub(curAmount, amount)
 	if next.IsZero() {
-		zkgm.RemoveChannelBalanceV2(cross, key)
+		zkgm.RemoveChannelBalanceV2(cross(cur), key)
 	} else {
-		zkgm.SetChannelBalanceV2(cross, key, next)
+		zkgm.SetChannelBalanceV2(cross(cur), key, next)
 	}
 	return nil
 }

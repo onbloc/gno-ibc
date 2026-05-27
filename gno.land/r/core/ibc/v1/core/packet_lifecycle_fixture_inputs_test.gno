@@ -2,7 +2,7 @@ package core
 
 import "testing"
 
-func TestPacketLifecycleFixtureInputPaths(t *testing.T) {
+func TestPacketLifecycleFixtureInputPaths(cur realm, t *testing.T) {
 	packet := Packet{
 		SourceChannelId:      1,
 		DestinationChannelId: 2,

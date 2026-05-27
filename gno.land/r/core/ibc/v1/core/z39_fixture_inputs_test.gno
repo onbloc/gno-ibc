@@ -2,7 +2,7 @@ package core
 
 import "testing"
 
-func TestZ39CallFixtureInputPaths(t *testing.T) {
+func TestZ39CallFixtureInputPaths(cur realm, t *testing.T) {
 	packet := Packet{
 		SourceChannelId:      2,
 		DestinationChannelId: 1,

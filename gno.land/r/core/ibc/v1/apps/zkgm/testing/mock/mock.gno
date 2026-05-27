@@ -1,7 +1,7 @@
 package mock
 
 import (
-	"chain/runtime"
+	rtunsafe "chain/runtime/unsafe"
 	"errors"
 
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -19,13 +19,13 @@ type Receiver struct {
 
 var receiver = &Receiver{}
 
-func init() {
-	zkgm.RegisterReceiver(cross, receiver)
+func init(cur realm) {
+	zkgm.RegisterReceiver(cross(cur), receiver)
 }
 
 // Exported funcs in this package take `cur realm` because they read or
 // write mutable package state across realms; omitting it causes Gno to
-// panic at the cross-realm boundary. Per-field accessors return scalars
+// panic at the cross(cur)-realm boundary. Per-field accessors return scalars
 // or strings to avoid exposing tainted []byte/*u256.Uint to callers (see
 // AGENT.md "Cross-Realm Reads: Tainted Slices and Pointers").
 
@@ -99,7 +99,7 @@ func (r *Receiver) OnZkgm(cur realm, env z.CallEnv) error {
 	r.Calls++
 	r.Last = env
 	if r.CaptureOrigin {
-		r.LastOriginCaller = runtime.OriginCaller().String()
+		r.LastOriginCaller = rtunsafe.OriginCaller().String()
 	}
 	if r.PanicMsg != "" {
 		panic(r.PanicMsg)

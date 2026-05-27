@@ -1,7 +1,6 @@
 package cometbls
 
 import (
-	"chain/runtime"
 	"time"
 
 	"gno.land/p/aib/ibc/types"
@@ -31,8 +30,8 @@ func wasmContractStoreKey(contractAddress cometblsp.H256, key []byte) []byte {
 	return out
 }
 
-func mustBeCore() {
-	if runtime.PreviousRealm().PkgPath() != "gno.land/r/core/ibc/v1/core" {
+func mustBeCore(cur realm) {
+	if cur.Previous().PkgPath() != "gno.land/r/core/ibc/v1/core" {
 		panic("cometbls: core only")
 	}
 }
@@ -47,8 +46,12 @@ func getEntry(clientId core.ClientId) *clientEntry {
 
 type Adapter struct{}
 
-func (Adapter) CreateClient(_ realm, clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) string {
-	mustBeCore()
+func NewAdapter(cur realm) Adapter {
+	return Adapter{}
+}
+
+func (Adapter) CreateClient(cur realm, clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) string {
+	mustBeCore(cur)
 
 	cs, err := cometblsp.DecodeClientState(clientStateBytes)
 	if err != nil {
@@ -70,8 +73,8 @@ func (Adapter) CreateClient(_ realm, clientId core.ClientId, clientStateBytes, c
 	return cs.ChainID
 }
 
-func (Adapter) UpdateClient(_ realm, clientId core.ClientId, clientMessage []byte) core.ConsensusStateUpdate {
-	mustBeCore()
+func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []byte) core.ConsensusStateUpdate {
+	mustBeCore(cur)
 
 	e := getEntry(clientId)
 
@@ -102,15 +105,11 @@ func (Adapter) UpdateClient(_ realm, clientId core.ClientId, clientMessage []byt
 	}
 	clientStateBytes := cometblsp.EncodeClientState(e.cs)
 
-	return core.ConsensusStateUpdate{
-		Height:              core.Height(newHeight),
-		ConsensusStateBytes: consStateBytes,
-		ClientStateBytes:    clientStateBytes,
-	}
+	return core.NewConsensusStateUpdate(cross(cur), core.Height(newHeight), consStateBytes, clientStateBytes)
 }
 
-func (Adapter) Misbehaviour(_ realm, clientId core.ClientId, clientMessage []byte) []byte {
-	mustBeCore()
+func (Adapter) Misbehaviour(cur realm, clientId core.ClientId, clientMessage []byte) []byte {
+	mustBeCore(cur)
 
 	e := getEntry(clientId)
 

@@ -14,27 +14,27 @@ import (
 // each child runs full dispatchExecute incl. abi decode + keccak).
 var errInvalidBatchInstruction = errors.New("zkgm/v1: invalid batch instruction")
 
-func (v *ZkgmV1) verifyBatch(channelId core.ChannelId, sender string, sentCoins chain.Coins, path *u256.Uint, parentSalt [32]byte, batch z.Batch) error {
+func (v *ZkgmV1) verifyBatch(cur realm, channelId core.ChannelId, sender string, sentCoins chain.Coins, path *u256.Uint, parentSalt [32]byte, batch z.Batch) error {
 	for i, instr := range batch.Instructions {
 		if !isAllowedBatchInstruction(instr.Opcode) {
 			return errInvalidBatchInstruction
 		}
 		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), parentSalt)
-		if err := v.dispatchVerify(channelId, sender, sentCoins, path, childSalt, instr); err != nil {
+		if err := v.dispatchVerify(cur, channelId, sender, sentCoins, path, childSalt, instr); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (v *ZkgmV1) executeBatch(packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, parentSalt [32]byte, batch z.Batch, intent bool) ([]byte, error) {
+func (v *ZkgmV1) executeBatch(cur realm, packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, parentSalt [32]byte, batch z.Batch, intent bool) ([]byte, error) {
 	acks := make([][]byte, len(batch.Instructions))
 	for i, instr := range batch.Instructions {
 		if !isAllowedBatchInstruction(instr.Opcode) {
 			return nil, errInvalidBatchInstruction
 		}
 		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), parentSalt)
-		childRes, err := v.dispatchExecute(packet, relayer, relayerMsg, path, childSalt, instr, intent)
+		childRes, err := v.dispatchExecute(cur, packet, relayer, relayerMsg, path, childSalt, instr, intent)
 		if err != nil {
 			return nil, err
 		}
@@ -42,10 +42,10 @@ func (v *ZkgmV1) executeBatch(packet core.Packet, relayer address, relayerMsg []
 		if len(childAck) == 0 {
 			panic("zkgm/v1: batch child returned empty ack")
 		}
-		// Spec: a single only-maker child aborts the entire batch — already-
-		// processed children's state mutations stand (per Union v0 spec); the
-		// outer ack signals "filled by maker, replay later" so the relayer
-		// retries against a market-maker fill.
+		// Spec: a single only-maker child aborts the entire batch. Already-processed
+		// children's state mutations stand (per Union v0 spec). The outer ack signals
+		// "filled by maker, replay later" so the relayer retries against a market-maker
+		// fill.
 		if isOnlyMakerAck(childAck) {
 			return cloneBytes(z.ACK_ERR_ONLY_MAKER), nil
 		}
@@ -58,7 +58,7 @@ func (v *ZkgmV1) executeBatch(packet core.Packet, relayer address, relayerMsg []
 	return z.EncodeAck(z.Ack{Tag: tagAckSuccess, InnerAck: batchAckBytes})
 }
 
-func (v *ZkgmV1) acknowledgeBatch(packet core.Packet, path *u256.Uint, parentSalt [32]byte, batch z.Batch, outerAck z.Ack) error {
+func (v *ZkgmV1) acknowledgeBatch(cur realm, packet core.Packet, path *u256.Uint, parentSalt [32]byte, batch z.Batch, outerAck z.Ack) error {
 	successful := outerAck.Tag != nil && outerAck.Tag.Eq(tagAckSuccess)
 	var batchAck z.BatchAck
 	if successful {
@@ -84,17 +84,17 @@ func (v *ZkgmV1) acknowledgeBatch(packet core.Packet, path *u256.Uint, parentSal
 			childAck = batchAck.Acknowledgements[i]
 		}
 		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), parentSalt)
-		if err := v.dispatchAck(packet, path, childSalt, instr, childAck); err != nil {
+		if err := v.dispatchAck(cur, packet, path, childSalt, instr, childAck); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (v *ZkgmV1) timeoutBatch(packet core.Packet, path *u256.Uint, parentSalt [32]byte, batch z.Batch) error {
+func (v *ZkgmV1) timeoutBatch(cur realm, packet core.Packet, path *u256.Uint, parentSalt [32]byte, batch z.Batch) error {
 	for i, instr := range batch.Instructions {
 		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), parentSalt)
-		if err := v.dispatchTimeout(packet, path, childSalt, instr); err != nil {
+		if err := v.dispatchTimeout(cur, packet, path, childSalt, instr); err != nil {
 			return err
 		}
 	}

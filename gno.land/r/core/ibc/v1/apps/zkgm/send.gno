@@ -1,8 +1,8 @@
 package zkgm
 
 import (
-	"chain/banker"
 	"chain/runtime"
+	rtunsafe "chain/runtime/unsafe"
 	"encoding/hex"
 
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -10,6 +10,7 @@ import (
 )
 
 func Send(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, salt [32]byte, instruction z.Instruction) core.Packet {
+	cacheRealm(cur)
 	if paused {
 		panic("zkgm: paused")
 	}
@@ -21,17 +22,19 @@ func Send(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, 
 	// but spend it elsewhere, so OriginSend only reflects coins that landed
 	// here when the caller is the EOA.
 	var sentCoins string
-	if runtime.PreviousRealm().IsUserCall() {
-		sentCoins = banker.OriginSend().String()
+	if cur.Previous().IsUserCall() {
+		sentCoins = rtunsafe.OriginSend().String()
 	}
 
-	return sendPacket(channelId, timeoutTimestamp, salt, instruction, sentCoins)
+	runtime.AssertOriginCall()
+	return sendPacket(cur, channelId, timeoutTimestamp, salt, instruction, rtunsafe.OriginCaller().String(), sentCoins)
 }
 
 // SendRaw is a gnokey-friendly wrapper around Send. `maketx call` cannot pass
 // z.Instruction or [32]byte values directly, so external smoke tests pass those
 // fields as primitive hex/string arguments instead.
 func SendRaw(cur realm, channelId uint32, timeoutTimestamp uint64, saltHex string, version uint8, opcode uint8, operandHex string) core.Packet {
+	cacheRealm(cur)
 	saltBytes := mustDecodeHexArg("salt", saltHex)
 	if len(saltBytes) != 32 {
 		panic("zkgm: salt must be 32 bytes")
@@ -40,11 +43,13 @@ func SendRaw(cur realm, channelId uint32, timeoutTimestamp uint64, saltHex strin
 	copy(salt[:], saltBytes)
 
 	var sentCoins string
-	if runtime.PreviousRealm().IsUserCall() {
-		sentCoins = banker.OriginSend().String()
+	if cur.Previous().IsUserCall() {
+		sentCoins = rtunsafe.OriginSend().String()
 	}
 
+	runtime.AssertOriginCall()
 	return sendPacket(
+		cur,
 		core.ChannelId(channelId),
 		core.Timestamp(timeoutTimestamp),
 		salt,
@@ -53,11 +58,12 @@ func SendRaw(cur realm, channelId uint32, timeoutTimestamp uint64, saltHex strin
 			Opcode:  opcode,
 			Operand: mustDecodeHexArg("operand", operandHex),
 		},
+		rtunsafe.OriginCaller().String(),
 		sentCoins,
 	)
 }
 
-func sendPacket(channelId core.ChannelId, timeoutTimestamp core.Timestamp, salt [32]byte, instruction z.Instruction, sentCoins string) core.Packet {
+func sendPacket(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, salt [32]byte, instruction z.Instruction, sender string, sentCoins string) core.Packet {
 	if paused {
 		panic("zkgm: paused")
 	}
@@ -65,19 +71,12 @@ func sendPacket(channelId core.ChannelId, timeoutTimestamp core.Timestamp, salt 
 		panic("zkgm: impl not set")
 	}
 
-	data, err := impl.Send(SendRequest{
-		ChannelId:        channelId,
-		TimeoutTimestamp: timeoutTimestamp,
-		Salt:             salt,
-		Instruction:      instruction,
-		Sender:           runtime.OriginCaller().String(),
-		SentCoins:        sentCoins,
-	})
+	data, err := impl.Send(cross(cur), NewSendRequest(cur, channelId, timeoutTimestamp, salt, instruction, sender, sentCoins))
 	if err != nil {
 		panic(err)
 	}
 
-	return core.PacketSend(cross, channelId, 0, timeoutTimestamp, data)
+	return core.PacketSend(cross(cur), channelId, 0, timeoutTimestamp, data)
 }
 
 func mustDecodeHexArg(name string, s string) []byte {

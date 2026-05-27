@@ -9,7 +9,7 @@ import (
 // ICS-04: PacketTimeout must reject proofs whose consensus timestamp has not
 // passed packet.TimeoutTimestamp.
 
-func TestPacketTimeoutRejectsProofBeforeTimeout(t *testing.T) {
+func TestPacketTimeoutRejectsProofBeforeTimeout(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	client := st.clientRegistry[mockType].(*mockClient)
@@ -22,7 +22,7 @@ func TestPacketTimeoutRejectsProofBeforeTimeout(t *testing.T) {
 	}
 	st.commitPacket(packet)
 
-	uassert.AbortsContains(t, "packet timeout not reached", func(cur realm) {
+	uassert.AbortsContains(t, cur, "packet timeout not reached", func(cur realm) {
 		PacketTimeout(cur, MsgPacketTimeout{Packet: packet})
 	})
 	if !st.hasPacketCommitment(packet) {
@@ -37,7 +37,7 @@ func TestPacketTimeoutRejectsProofBeforeTimeout(t *testing.T) {
 
 // Boundary: spec requires `proofHeight.timestamp > packet.timeoutTimestamp`,
 // so equality must also be rejected.
-func TestPacketTimeoutRejectsProofAtBoundary(t *testing.T) {
+func TestPacketTimeoutRejectsProofAtBoundary(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	client := st.clientRegistry[mockType].(*mockClient)
@@ -50,7 +50,7 @@ func TestPacketTimeoutRejectsProofAtBoundary(t *testing.T) {
 	}
 	st.commitPacket(packet)
 
-	uassert.AbortsContains(t, "packet timeout not reached", func(cur realm) {
+	uassert.AbortsContains(t, cur, "packet timeout not reached", func(cur realm) {
 		PacketTimeout(cur, MsgPacketTimeout{Packet: packet})
 	})
 	if !st.hasPacketCommitment(packet) {
@@ -60,7 +60,7 @@ func TestPacketTimeoutRejectsProofAtBoundary(t *testing.T) {
 
 // TimeoutTimestamp == 0 means "no deadline" (recv-side uses the same
 // convention), so PacketTimeout must refuse such packets outright.
-func TestPacketTimeoutRejectsZeroTimeoutPacket(t *testing.T) {
+func TestPacketTimeoutRejectsZeroTimeoutPacket(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	client := st.clientRegistry[mockType].(*mockClient)
@@ -73,7 +73,7 @@ func TestPacketTimeoutRejectsZeroTimeoutPacket(t *testing.T) {
 	}
 	st.commitPacket(packet)
 
-	uassert.AbortsContains(t, "packet timeout not reached", func(cur realm) {
+	uassert.AbortsContains(t, cur, "packet timeout not reached", func(cur realm) {
 		PacketTimeout(cur, MsgPacketTimeout{Packet: packet})
 	})
 	if !st.hasPacketCommitment(packet) {
@@ -84,7 +84,7 @@ func TestPacketTimeoutRejectsZeroTimeoutPacket(t *testing.T) {
 	}
 }
 
-func TestPacketTimeoutAcceptsProofAfterTimeout(t *testing.T) {
+func TestPacketTimeoutAcceptsProofAfterTimeout(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	client := st.clientRegistry[mockType].(*mockClient)
@@ -97,7 +97,7 @@ func TestPacketTimeoutAcceptsProofAfterTimeout(t *testing.T) {
 	}
 	st.commitPacket(packet)
 
-	uassert.NotAborts(t, func(cur realm) {
+	uassert.NotAborts(t, cur, func(cur realm) {
 		PacketTimeout(cur, MsgPacketTimeout{Packet: packet})
 	})
 	if st.hasPacketCommitment(packet) {

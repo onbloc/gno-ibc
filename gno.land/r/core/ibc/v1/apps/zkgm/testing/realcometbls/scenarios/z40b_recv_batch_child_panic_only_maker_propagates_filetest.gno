@@ -1,4 +1,5 @@
-package main
+// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
+package scenarios
 
 import (
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -13,35 +14,31 @@ import (
 
 const mockReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
 
-func main() {
-	mock.Reset(cross)
-	mock.SetPanic(cross, "boom")
-	pair := realcometbls.OpenZ35CometBLSChannel(cross)
+func main(cur realm) {
+	mock.Reset(cross(cur))
+	mock.SetPanic(cross(cur), "boom")
+	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
-	packet := panicBatchPacket(pair, receiver)
+	packet := panicBatchPacket(cur, pair, receiver)
 
-	core.PacketRecv(cross, core.MsgPacketRecv{
-		Packets:     []core.Packet{packet},
-		Proof:       realcometbls.Z40PanicBatchPacketCommitmentProof(cross),
-		ProofHeight: core.Height(realcometbls.DevnetHeight - 1),
-	})
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, realcometbls.Z40PanicBatchPacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight-1)))
 
-	println("mock_calls", mock.Calls(cross))
+	println("mock_calls", mock.Calls(cross(cur)))
 	println("quote_balance", impl.VoucherBalanceOf("ibc/batch-panic-quote", address(receiver)))
-	println("receipt_after_recv", core.HasPacketReceipt(cross, packet))
-	println("ack_after_recv", core.HasAcknowledgement(cross, packet))
-	println("ack_hash_matches_only_maker", core.AcknowledgementHash(cross, packet).String() == onlyMakerAckHash())
+	println("receipt_after_recv", core.HasPacketReceipt(cross(cur), packet))
+	println("ack_after_recv", core.HasAcknowledgement(cross(cur), packet))
+	println("ack_hash_matches_only_maker", core.AcknowledgementHash(cross(cur), packet).String() == onlyMakerAckHash())
 	println("recv_batch_child_panic_real_cometbls", "ok")
 }
 
-func panicBatchPacket(pair realcometbls.ChannelPair, receiver string) core.Packet {
+func panicBatchPacket(cur realm, pair realcometbls.ChannelPair, receiver string) core.Packet {
 	batch := z.Batch{Instructions: []z.Instruction{
-		e2e.MustCallInstruction(cross, z.Call{
+		e2e.MustCallInstruction(cross(cur), z.Call{
 			Sender:           []byte("sender"),
 			ContractAddress:  []byte(mockReceiverPath),
 			ContractCalldata: []byte("panic-call"),
 		}),
-		e2e.MustTokenOrderInstruction(cross, z.TokenOrderV2{
+		e2e.MustTokenOrderInstruction(cross(cur), z.TokenOrderV2{
 			Sender:      []byte("sender"),
 			Receiver:    []byte(receiver),
 			BaseToken:   []byte("ugnot"),
@@ -51,12 +48,7 @@ func panicBatchPacket(pair realcometbls.ChannelPair, receiver string) core.Packe
 			Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 		}),
 	}}
-	return core.Packet{
-		SourceChannelId:      pair.Source,
-		DestinationChannelId: pair.Destination,
-		Data:                 e2e.MustPacketData(cross, e2e.MustBatchInstruction(cross, batch)),
-		TimeoutTimestamp:     core.Timestamp(0),
-	}
+	return core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), 0, core.Timestamp(0))
 }
 
 func onlyMakerAckHash() string {

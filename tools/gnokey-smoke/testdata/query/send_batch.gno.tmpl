@@ -6,13 +6,15 @@ import (
 	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
 )
 
-func main() {
-	packet := core.Packet{
-		SourceChannelId:      core.ChannelId(@MOCK_SOURCE@),
-		DestinationChannelId: core.ChannelId(@MOCK_DEST@),
-		Data:                 []byte("hello"),
-		TimeoutTimestamp:     core.Timestamp(1 << 60),
-	}
-	batchHash := e2e.BatchSend(cross, packet)
+func main(cur realm) {
+	packet := core.NewPacket(
+		cross(cur),
+		core.ChannelId(@MOCK_SOURCE@),
+		core.ChannelId(@MOCK_DEST@),
+		[]byte("hello"),
+		0,
+		core.Timestamp(1<<60),
+	)
+	batchHash := e2e.BatchSend(cross(cur), packet)
 	println("batch_hash", batchHash.String())
 }

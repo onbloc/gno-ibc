@@ -13,8 +13,8 @@ import (
 const mockReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
 
 func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
-	mock.Reset(cross)
-	packet := core.Packet{SourceChannelId: core.ChannelId(7), DestinationChannelId: core.ChannelId(8)}
+	mock.Reset(cross(cur))
+	packet := core.NewPacket(cross(cur), core.ChannelId(7), core.ChannelId(8), nil, 0, 0)
 	call := z.Call{
 		Sender:           []byte("sender"),
 		ContractAddress:  []byte(mockReceiverPath),
@@ -22,31 +22,31 @@ func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
 	}
 	path := u256.NewUint(9)
 
-	res, err := (&ZkgmV1{}).executeCall(packet, address("g1relayer"), []byte("relay-msg"), path, call)
+	res, err := (&ZkgmV1{}).executeCall(cur, packet, address("g1relayer"), []byte("relay-msg"), path, call)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == core.PacketStatusSuccess)
 	ack, err := z.DecodeAck(res.Ack)
 	uassert.NoError(t, err)
 	uassert.True(t, ack.Tag.Eq(tagAckSuccess))
-	uassert.Equal(t, 1, mock.Calls(cross))
-	uassert.Equal(t, "7", mock.LastSourceChannel(cross))
-	uassert.Equal(t, "8", mock.LastDestinationChannel(cross))
-	uassert.Equal(t, "sender", mock.LastSender(cross))
-	uassert.Equal(t, "calldata", mock.LastCalldata(cross))
-	uassert.Equal(t, "g1relayer", mock.LastCaller(cross))
-	uassert.Equal(t, "g1relayer", mock.LastRelayer(cross))
-	uassert.Equal(t, "relay-msg", mock.LastRelayerMsg(cross))
-	uassert.Equal(t, "9", mock.LastPathDec(cross))
-	uassert.Equal(t, PredictCallProxyAccount(path, core.ChannelId(8), []byte("sender")), mock.LastProxyAccount(cross))
+	uassert.Equal(t, 1, mock.Calls(cross(cur)))
+	uassert.Equal(t, "7", mock.LastSourceChannel(cross(cur)))
+	uassert.Equal(t, "8", mock.LastDestinationChannel(cross(cur)))
+	uassert.Equal(t, "sender", mock.LastSender(cross(cur)))
+	uassert.Equal(t, "calldata", mock.LastCalldata(cross(cur)))
+	uassert.Equal(t, "g1relayer", mock.LastCaller(cross(cur)))
+	uassert.Equal(t, "g1relayer", mock.LastRelayer(cross(cur)))
+	uassert.Equal(t, "relay-msg", mock.LastRelayerMsg(cross(cur)))
+	uassert.Equal(t, "9", mock.LastPathDec(cross(cur)))
+	uassert.Equal(t, PredictCallProxyAccount(path, core.ChannelId(8), []byte("sender")), mock.LastProxyAccount(cross(cur)))
 }
 
 func TestExecuteCallReceiverErrorReturnsFailureAck(cur realm, t *testing.T) {
-	mock.Reset(cross)
-	mock.SetError(cross, "receiver failed")
-	packet := core.Packet{SourceChannelId: core.ChannelId(7), DestinationChannelId: core.ChannelId(8)}
+	mock.Reset(cross(cur))
+	mock.SetError(cross(cur), "receiver failed")
+	packet := core.NewPacket(cross(cur), core.ChannelId(7), core.ChannelId(8), nil, 0, 0)
 
-	res, err := (&ZkgmV1{}).executeCall(packet, address("g1relayer"), nil, u256.Zero(), z.Call{
+	res, err := (&ZkgmV1{}).executeCall(cur, packet, address("g1relayer"), nil, u256.Zero(), z.Call{
 		Sender:          []byte("sender"),
 		ContractAddress: []byte(mockReceiverPath),
 	})
@@ -61,11 +61,11 @@ func TestExecuteCallReceiverErrorReturnsFailureAck(cur realm, t *testing.T) {
 }
 
 func TestExecuteCallReceiverPanicReturnsOnlyMakerAck(cur realm, t *testing.T) {
-	mock.Reset(cross)
-	mock.SetPanic(cross, "boom")
-	packet := core.Packet{SourceChannelId: core.ChannelId(7), DestinationChannelId: core.ChannelId(8)}
+	mock.Reset(cross(cur))
+	mock.SetPanic(cross(cur), "boom")
+	packet := core.NewPacket(cross(cur), core.ChannelId(7), core.ChannelId(8), nil, 0, 0)
 
-	res, err := (&ZkgmV1{}).executeCall(packet, address("g1relayer"), nil, u256.Zero(), z.Call{
+	res, err := (&ZkgmV1{}).executeCall(cur, packet, address("g1relayer"), nil, u256.Zero(), z.Call{
 		Sender:          []byte("sender"),
 		ContractAddress: []byte(mockReceiverPath),
 	})
@@ -76,7 +76,7 @@ func TestExecuteCallReceiverPanicReturnsOnlyMakerAck(cur realm, t *testing.T) {
 }
 
 func TestVerifyCallRejectsInvalidSender(cur realm, t *testing.T) {
-	err := (&ZkgmV1{}).verifyCall("actual", z.Call{
+	err := (&ZkgmV1{}).verifyCall(cur, "actual", z.Call{
 		Sender: []byte("other"),
 	})
 

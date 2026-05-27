@@ -1,7 +1,8 @@
-package main
+// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e/scenarios
+package scenarios
 
 import (
-	"chain/runtime"
+	rtunsafe "chain/runtime/unsafe"
 
 	z "gno.land/p/gnoswap/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
@@ -12,9 +13,9 @@ import (
 	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
 )
 
-func main() {
-	e2e.RegisterMockLightClient(cross)
-	pair := e2e.OpenE2EChannelPair(cross)
+func main(cur realm) {
+	e2e.RegisterMockLightClient(cross(cur))
+	pair := e2e.OpenE2EChannelPair(cross(cur))
 
 	receiver := string(testutils.TestAddress("receiver"))
 	quoteToken := impl.PredictWrappedTokenV1(u256.Zero(), uint32(pair.Destination), []byte("ugnot"))
@@ -27,19 +28,12 @@ func main() {
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.Packet{
-		SourceChannelId:      pair.Source,
-		DestinationChannelId: pair.Destination,
-		Data:                 e2e.MustPacketData(cross, e2e.MustTokenOrderInstruction(cross, order)),
-	}
+	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), 0, 0)
 
-	core.PacketRecv(cross, core.MsgPacketRecv{
-		Packets:     []core.Packet{packet},
-		ProofHeight: core.Height(1),
-	})
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, nil, core.Height(1)))
 
 	println("quote_balance", impl.VoucherBalanceOf(quoteToken, address(receiver)))
-	println("relayer_balance", impl.VoucherBalanceOf(quoteToken, runtime.OriginCaller()))
+	println("relayer_balance", impl.VoucherBalanceOf(quoteToken, rtunsafe.OriginCaller()))
 }
 
 // Output:

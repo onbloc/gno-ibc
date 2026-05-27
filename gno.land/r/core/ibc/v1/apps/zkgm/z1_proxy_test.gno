@@ -9,8 +9,9 @@ import (
 	core "gno.land/r/core/ibc/v1/core"
 )
 
-func TestProxyConfigAndAddress(t *testing.T) {
+func TestProxyConfigAndAddress(cur realm, t *testing.T) {
 	resetZkgmForTest()
+	cacheRealm(cur)
 	if ProxyAddress() == "" {
 		t.Fatal("ProxyAddress must expose the proxy realm address")
 	}
@@ -23,42 +24,43 @@ func TestProxyConfigAndAddress(t *testing.T) {
 	}
 }
 
-func TestProxyUpdateImplAllowedEmpty(t *testing.T) {
+func TestProxyUpdateImplAllowedEmpty(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 
-	uassert.NotAborts(t, func(cur realm) {
-		UpdateImpl(cur, UpdateRequest{Impl: d})
+	uassert.NotAborts(t, cur, func(cur realm) {
+		UpdateImpl(cur, NewUpdateRequest(cur, d, nil))
 	})
 	if impl == nil || ImplPath() == "" {
 		t.Fatal("UpdateImpl must set impl and implPath")
 	}
 }
 
-func TestProxyUpdateImplDeniedAfterLock(t *testing.T) {
+func TestProxyUpdateImplDeniedAfterLock(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	allowedImpls = []string{"gno.land/r/not-this-realm"}
 
-	uassert.AbortsContains(t, "permission denied", func(cur realm) {
-		UpdateImpl(cur, UpdateRequest{Impl: d})
+	uassert.AbortsContains(t, cur, "permission denied", func(cur realm) {
+		UpdateImpl(cur, NewUpdateRequest(cur, d, nil))
 	})
 	if impl != nil {
 		t.Fatal("denied UpdateImpl must not change impl")
 	}
 }
 
-func TestWriteForwardAckRequiresRegisteredImpl(t *testing.T) {
+func TestWriteForwardAckRequiresRegisteredImpl(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	implPath = "gno.land/r/not-this-realm"
 
-	uassert.AbortsContains(t, "only registered impl", func(cur realm) {
-		WriteForwardAck(cur, core.Packet{SourceChannelId: 1, DestinationChannelId: 2}, []byte{0x01})
+	uassert.AbortsContains(t, cur, "only registered impl", func(cur realm) {
+		WriteForwardAck(cur, core.NewPacket(cross(cur), 1, 2, nil, 0, 0), []byte{0x01})
 	})
 }
 
 func TestReleaseNativeAllowsAuthorizedImplCaller(cur realm, t *testing.T) {
 	resetZkgmForTest()
+	cacheRealm(cur)
 	implPath = "gno.land/r/not-this-realm"
 	allowedImpls = []string{ProxyPkgPath()}
 
@@ -66,17 +68,18 @@ func TestReleaseNativeAllowsAuthorizedImplCaller(cur realm, t *testing.T) {
 	recipient := address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
 	testing.IssueCoins(ProxyAddress(), chain.NewCoins(chain.NewCoin(denom, 7)))
 
-	uassert.NotAborts(t, func(cur realm) {
+	uassert.NotAborts(t, cur, func(cur realm) {
 		ReleaseNative(cur, denom, recipient, 7)
 	})
 
-	bk := banker.NewBanker(banker.BankerTypeReadonly)
+	bk := banker.NewReadonlyBanker()
 	uassert.Equal(t, int64(7), bk.GetCoins(recipient).AmountOf(denom))
 	uassert.Equal(t, int64(0), bk.GetCoins(ProxyAddress()).AmountOf(denom))
 }
 
 func TestReleaseNativeRejectsUnlistedCaller(cur realm, t *testing.T) {
 	resetZkgmForTest()
+	cacheRealm(cur)
 	implPath = "gno.land/r/not-this-realm"
 	allowedImpls = []string{"gno.land/r/other-authorized-realm"}
 
@@ -84,28 +87,29 @@ func TestReleaseNativeRejectsUnlistedCaller(cur realm, t *testing.T) {
 	recipient := address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
 	testing.IssueCoins(ProxyAddress(), chain.NewCoins(chain.NewCoin(denom, 7)))
 
-	uassert.AbortsContains(t, "only registered impl", func(cur realm) {
+	uassert.AbortsContains(t, cur, "only registered impl", func(cur realm) {
 		ReleaseNative(cur, denom, recipient, 7)
 	})
 
-	bk := banker.NewBanker(banker.BankerTypeReadonly)
+	bk := banker.NewReadonlyBanker()
 	uassert.Equal(t, int64(0), bk.GetCoins(recipient).AmountOf(denom))
 	uassert.Equal(t, int64(7), bk.GetCoins(ProxyAddress()).AmountOf(denom))
 }
 
 func TestReleaseNativeRejectsCallerWhenAllowedListEmpty(cur realm, t *testing.T) {
 	resetZkgmForTest()
+	cacheRealm(cur)
 	implPath = "gno.land/r/not-this-realm"
 
 	denom := "ureleaseempty"
 	recipient := address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
 	testing.IssueCoins(ProxyAddress(), chain.NewCoins(chain.NewCoin(denom, 7)))
 
-	uassert.AbortsContains(t, "only registered impl", func(cur realm) {
+	uassert.AbortsContains(t, cur, "only registered impl", func(cur realm) {
 		ReleaseNative(cur, denom, recipient, 7)
 	})
 
-	bk := banker.NewBanker(banker.BankerTypeReadonly)
+	bk := banker.NewReadonlyBanker()
 	uassert.Equal(t, int64(0), bk.GetCoins(recipient).AmountOf(denom))
 	uassert.Equal(t, int64(7), bk.GetCoins(ProxyAddress()).AmountOf(denom))
 }

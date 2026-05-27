@@ -1,16 +1,17 @@
-package main
+// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
+package scenarios
 
 import (
 	realadapter "gno.land/r/core/ibc/v1/lightclients/cometbls"
 	realcometbls "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls"
 )
 
-func main() {
-	clientId := realcometbls.CreateRealCometBLSClient(cross)
-	height := realcometbls.UpdateRealCometBLSClient(cross, clientId)
-	latestHeight := realadapter.Adapter{}.GetLatestHeight(clientId)
-	timestamp := realadapter.Adapter{}.GetTimestamp(clientId, height)
-	status := realadapter.Adapter{}.GetStatus(clientId)
+func main(cur realm) {
+	clientId := realcometbls.CreateRealCometBLSClient(cross(cur))
+	height := realcometbls.UpdateRealCometBLSClient(cross(cur), clientId)
+	latestHeight := realadapter.NewAdapter(cross(cur)).GetLatestHeight(clientId)
+	timestamp := realadapter.NewAdapter(cross(cur)).GetTimestamp(clientId, height)
+	status := realadapter.NewAdapter(cross(cur)).GetStatus(clientId)
 
 	println("client_id", clientId.String())
 	println("updated_height", height.String())

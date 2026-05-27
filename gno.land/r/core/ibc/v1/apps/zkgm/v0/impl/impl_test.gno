@@ -18,16 +18,19 @@ func TestSendAppliesSenderSalt(cur realm, t *testing.T) {
 	})
 	uassert.NoError(t, err)
 
-	data, err := (&ZkgmV1{}).Send(zkgm.SendRequest{
-		ChannelId: core.ChannelId(1),
-		Salt:      salt,
-		Instruction: z.Instruction{
+	data, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
+		cross(cur),
+		core.ChannelId(1),
+		0,
+		salt,
+		z.Instruction{
 			Version: z.INSTR_VERSION_0,
 			Opcode:  z.OP_CALL,
 			Operand: callBytes,
 		},
-		Sender: sender,
-	})
+		sender,
+		"",
+	))
 	uassert.NoError(t, err)
 
 	packet, err := z.DecodeZkgmPacket(data)

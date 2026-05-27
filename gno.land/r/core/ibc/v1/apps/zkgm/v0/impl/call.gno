@@ -14,7 +14,7 @@ var (
 	errInvalidCallSender = errors.New("zkgm/v1: invalid call sender")
 )
 
-func (v *ZkgmV1) verifyCall(sender string, call z.Call) error {
+func (v *ZkgmV1) verifyCall(cur realm, sender string, call z.Call) error {
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
@@ -24,9 +24,9 @@ func (v *ZkgmV1) verifyCall(sender string, call z.Call) error {
 	return nil
 }
 
-func (v *ZkgmV1) executeCall(packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, call z.Call) (core.RecvPacketResult, error) {
+func (v *ZkgmV1) executeCall(cur realm, packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, call z.Call) (core.RecvPacketResult, error) {
 	if call.Eureka {
-		return callErrAck(errEurekaUnsupported), nil
+		return callErrAck(cur, errEurekaUnsupported), nil
 	}
 
 	sender := cloneBytes(call.Sender)
@@ -34,7 +34,7 @@ func (v *ZkgmV1) executeCall(packet core.Packet, relayer address, relayerMsg []b
 	receiverPath := string(cloneBytes(call.ContractAddress))
 	receiver := zkgm.GetReceiver(receiverPath)
 	if receiver == nil {
-		return callErrAck(errors.New("zkgm/v1: receiver not registered: " + receiverPath)), nil
+		return callErrAck(cur, errors.New("zkgm/v1: receiver not registered: "+receiverPath)), nil
 	}
 
 	relayerStr := string(relayer)
@@ -50,29 +50,29 @@ func (v *ZkgmV1) executeCall(packet core.Packet, relayer address, relayerMsg []b
 		RelayerMsg:         cloneBytes(relayerMsg),
 	}
 
-	err, panicked := safeCallOnZkgm(receiver, env)
+	err, panicked := safeCallOnZkgm(cur, receiver, env)
 	if panicked {
-		return core.RecvPacketResult{Status: core.PacketStatusSuccess, Ack: cloneBytes(z.ACK_ERR_ONLY_MAKER)}, nil
+		return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 	if err != nil {
-		return callErrAck(err), nil
+		return callErrAck(cur, err), nil
 	}
 
 	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess, InnerAck: []byte{}})
 	if err != nil {
-		return core.RecvPacketResult{}, err
+		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 	}
-	return core.RecvPacketResult{Status: core.PacketStatusSuccess, Ack: ack}, nil
+	return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, ack), nil
 }
 
-func (v *ZkgmV1) acknowledgeCall(packet core.Packet, path *u256.Uint, call z.Call) error {
+func (v *ZkgmV1) acknowledgeCall(cur realm, packet core.Packet, path *u256.Uint, call z.Call) error {
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
 	return nil
 }
 
-func (v *ZkgmV1) timeoutCall(packet core.Packet, path *u256.Uint, call z.Call) error {
+func (v *ZkgmV1) timeoutCall(cur realm, packet core.Packet, path *u256.Uint, call z.Call) error {
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
@@ -80,12 +80,12 @@ func (v *ZkgmV1) timeoutCall(packet core.Packet, path *u256.Uint, call z.Call) e
 }
 
 // safeCallOnZkgm runs the receiver and reports a failure as panicked=true.
-// revive is preferred since it also catches cross-realm aborts; the recover
+// revive is preferred since it also catches cross-realm aborts. The recover
 // fallback, used only when revive is unsupported, catches ordinary panics.
-func safeCallOnZkgm(receiver z.Zkgmable, env z.CallEnv) (err error, panicked bool) {
+func safeCallOnZkgm(cur realm, receiver z.Zkgmable, env z.CallEnv) (err error, panicked bool) {
 	if canRevive() {
 		p := revive(func() {
-			err = receiver.OnZkgm(cross, env)
+			err = receiver.OnZkgm(cross(cur), env)
 		})
 		return err, p != nil
 	}
@@ -96,7 +96,7 @@ func safeCallOnZkgm(receiver z.Zkgmable, env z.CallEnv) (err error, panicked boo
 			panicked = true
 		}
 	}()
-	err = receiver.OnZkgm(cross, env)
+	err = receiver.OnZkgm(cross(cur), env)
 	return err, false
 }
 
@@ -113,17 +113,17 @@ func canRevive() (ok bool) {
 	return ok
 }
 
-func callErrAck(err error) core.RecvPacketResult {
+func callErrAck(cur realm, err error) core.RecvPacketResult {
 	ack, encErr := z.EncodeAck(z.Ack{Tag: tagAckFailure, InnerAck: []byte(err.Error())})
 	if encErr != nil {
-		// EncodeAck on a 2-field schema is essentially infallible; a failure
+		// EncodeAck on a 2-field schema is essentially infallible. A failure
 		// would emit a non-Tag-prefixed ack the counterparty can't decode.
 		panic(encErr)
 	}
-	return failureResult(ack)
+	return failureResult(cur, ack)
 }
 
-// cloneBytes copies cross-realm package vars (e.g. ACK_ERR_ONLY_MAKER)
+// cloneBytes copies cross(cur)-realm package vars (e.g. ACK_ERR_ONLY_MAKER)
 // before returning them, since Gno marks such slices readonly and any later
 // []byte -> string conversion (e.g. bytes.Equal) panics.
 func cloneBytes(in []byte) []byte {

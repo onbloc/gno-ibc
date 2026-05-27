@@ -6,15 +6,12 @@ import (
 	impl "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl"
 )
 
-func init() {
-	zkgm.UpdateImpl(cross, zkgm.UpdateRequest{
-		Impl: impl.GetInstance(),
-		AllowedImpls: []string{
-			"gno.land/r/core/ibc/v1/core",
-			"gno.land/r/gnoswap/ibc/v1/apps/zkgm",
-			"gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader",
-			"gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl",
-		},
-	})
-	core.RegisterApp(cross, []byte(zkgm.ProxyPkgPath()), zkgm.AsIBCApp())
+func init(cur realm) {
+	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), impl.GetInstance(cross(cur)), []string{
+		"gno.land/r/core/ibc/v1/core",
+		"gno.land/r/gnoswap/ibc/v1/apps/zkgm",
+		"gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader",
+		"gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl",
+	}))
+	core.RegisterApp(cross(cur), []byte(zkgm.ProxyPkgPath()), zkgm.AsIBCApp())
 }

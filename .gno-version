@@ -9,4 +9,4 @@
 # this repo under stdlibs/.
 
 GNO_REPO=https://github.com/gnolang/gno.git
-GNO_COMMIT=e16676eec5f75ab563d4ade83e17d4a96ea04aee
+GNO_COMMIT=8ac234874523713913b4d8160612e655129f7cf3

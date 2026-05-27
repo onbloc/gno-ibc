@@ -12,5 +12,5 @@ func Render(path string) string {
 	if impl == nil {
 		return "zkgm: impl not set"
 	}
-	return impl.Render(gRealm.PkgPath(), path)
+	return impl.Render(ProxyPkgPath(), path)
 }

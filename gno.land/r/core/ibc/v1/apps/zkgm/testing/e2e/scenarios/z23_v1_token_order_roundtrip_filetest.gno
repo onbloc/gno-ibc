@@ -1,4 +1,5 @@
-package main
+// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e/scenarios
+package scenarios
 
 import (
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -9,13 +10,13 @@ import (
 	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
 )
 
-func main() {
-	e2e.RegisterMockLightClient(cross)
-	pair := e2e.OpenE2EChannelPair(cross)
+func main(cur realm) {
+	e2e.RegisterMockLightClient(cross(cur))
+	pair := e2e.OpenE2EChannelPair(cross(cur))
 
 	sender := "g17xpfvakm2amg962yls6f84z3kell8c5lserqta"
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
-	metaBytes := e2e.MustTokenMetadata(cross, "grc20", "roundtrip")
+	metaBytes := e2e.MustTokenMetadata(cross(cur), "grc20", "roundtrip")
 	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(pair.Destination), []byte("ugnot"), impl.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
@@ -27,26 +28,14 @@ func main() {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	instr := e2e.MustTokenOrderInstruction(cross, order)
-	packet := core.Packet{
-		SourceChannelId:      pair.Source,
-		DestinationChannelId: pair.Destination,
-		Data:                 e2e.MustPacketData(cross, instr),
-		TimeoutTimestamp:     core.Timestamp(1 << 62),
-	}
-	e2e.BatchSend(cross, packet)
+	instr := e2e.MustTokenOrderInstruction(cross(cur), order)
+	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), instr), 0, core.Timestamp(1<<62))
+	e2e.BatchSend(cross(cur), packet)
 
-	core.PacketRecv(cross, core.MsgPacketRecv{
-		Packets:     []core.Packet{packet},
-		ProofHeight: core.Height(1),
-	})
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, nil, core.Height(1)))
 
-	ack := e2e.MustSuccessAck(cross, e2e.MustProtocolTokenOrderAck(cross))
-	core.PacketAcknowledgement(cross, core.MsgPacketAcknowledgement{
-		Packets:          []core.Packet{packet},
-		Acknowledgements: [][]byte{ack},
-		ProofHeight:      core.Height(1),
-	})
+	ack := e2e.MustSuccessAck(cross(cur), e2e.MustProtocolTokenOrderAck(cross(cur)))
+	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement(cross(cur), []core.Packet{packet}, [][]byte{ack}, nil, core.Height(1)))
 
 	println("quote_balance", impl.VoucherBalanceOf(impl.PredictWrappedTokenV2(u256.Zero(), uint32(pair.Destination), order.BaseToken, impl.MetadataImage(mustDecodeTokenMetadata(order.Metadata))), address(receiver)))
 	println("ack_roundtrip", "ok")

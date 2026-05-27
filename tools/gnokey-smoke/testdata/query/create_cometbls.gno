@@ -7,7 +7,7 @@ import (
 	cometbls "gno.land/r/core/ibc/v1/lightclients/cometbls"
 )
 
-func main() {
+func main(cur realm) {
 	clientState, err := hex.DecodeString("0a11756e696f6e2d6465766e65742d31333337108080f8c2fcc798b0042080c8afa025320610bdf5fad70c8201200cf2ffe8f45a20514018173d3007644817a9767dc0fbdb246696fd9c261ce3bc")
 	if err != nil {
 		panic(err)
@@ -16,10 +16,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	id := core.CreateClient(cross, core.MsgCreateClient{
-		ClientType:          cometbls.ClientType,
-		ClientStateBytes:    clientState,
-		ConsensusStateBytes: consensusState,
-	})
+	id := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), cometbls.ClientType, clientState, consensusState))
 	println("cometbls_client_id", id.String())
 }

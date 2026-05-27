@@ -1,7 +1,6 @@
 package core
 
 import (
-	"chain/runtime"
 	"encoding/hex"
 	"testing"
 
@@ -71,44 +70,52 @@ type mockApp struct {
 	recvResult     RecvPacketResult
 }
 
-func (a *mockApp) OnChannelOpenInit(_ ConnectionId, _ ChannelId, _ string, _ address) {
+func (a *mockApp) OnChannelOpenInit(_ realm, _ ConnectionId, _ ChannelId, _ string, _ address) {
 	a.initCalled = true
 }
-func (a *mockApp) OnChannelOpenTry(_ ConnectionId, _ ChannelId, _, _ string, _ address) {}
-func (a *mockApp) OnChannelOpenAck(_ ChannelId, _ ChannelId, _ string, _ address)       {}
-func (a *mockApp) OnChannelOpenConfirm(_ ChannelId, _ address)                          {}
-func (a *mockApp) OnChannelCloseInit(ch ChannelId, _ address) {
+
+func (a *mockApp) OnChannelOpenTry(_ realm, _ ConnectionId, _ ChannelId, _, _ string, _ address) {
+}
+
+func (a *mockApp) OnChannelOpenAck(_ realm, _ ChannelId, _ ChannelId, _ string, _ address) {
+}
+func (a *mockApp) OnChannelOpenConfirm(_ realm, _ ChannelId, _ address) {}
+func (a *mockApp) OnChannelCloseInit(_ realm, ch ChannelId, _ address) {
 	a.closedChannels = append(a.closedChannels, ch)
 }
 
-func (a *mockApp) OnChannelCloseConfirm(ch ChannelId, _ address) {
+func (a *mockApp) OnChannelCloseConfirm(_ realm, ch ChannelId, _ address) {
 	a.closedChannels = append(a.closedChannels, ch)
 }
 
-func (a *mockApp) OnRecvPacket(p Packet, _ address, _ []byte) RecvPacketResult {
+func (a *mockApp) OnRecvPacket(cur realm, p Packet, _ address, _ []byte) RecvPacketResult {
 	a.recvPackets = append(a.recvPackets, p)
 	if a.recvResult.Status != PacketStatusUnknown {
 		return a.recvResult
 	}
-	return RecvPacketResult{Status: PacketStatusSuccess, Ack: []byte{0x01}}
+	return NewRecvPacketResult(cur, PacketStatusSuccess, []byte{0x01})
 }
 
-func (a *mockApp) OnIntentRecvPacket(p Packet, _ address, msg []byte) {
+func (a *mockApp) OnIntentRecvPacket(_ realm, p Packet, _ address, msg []byte) {
 	a.intentPackets = append(a.intentPackets, p)
 	a.intentMsgs = append(a.intentMsgs, msg)
 }
 
-func (a *mockApp) OnAcknowledgementPacket(p Packet, _ []byte, _ address) {
+func (a *mockApp) OnAcknowledgementPacket(_ realm, p Packet, _ []byte, _ address) {
 	a.ackPackets = append(a.ackPackets, p)
 }
 
-func (a *mockApp) OnTimeoutPacket(p Packet, _ address) {
+func (a *mockApp) OnTimeoutPacket(_ realm, p Packet, _ address) {
 	a.timeoutPackets = append(a.timeoutPackets, p)
 }
 
 // --- Helpers ---
 
-const mockType ClientType = "mock"
+const (
+	mockType        ClientType = "mock"
+	testCorePkgPath            = "gno.land/r/core/ibc/v1/core"
+	oldAddressPort             = "g1vjt8cj2s6f5w4sly0s2l0vh85k0y8jyz3f8qzss"
+)
 
 func resetState() {
 	st = newState()
@@ -194,7 +201,7 @@ func setupOpenChannel(t *testing.T) (Bytes, ConnectionId, ChannelId) {
 		CounterpartyConnectionId: ConnectionId(99),
 	})
 
-	portId := Bytes(runtime.CurrentRealm().PkgPath())
+	portId := Bytes(testCorePkgPath)
 	app := &mockApp{}
 	st.ports[portKey(portId)] = app
 
@@ -212,7 +219,7 @@ func setupOpenChannel(t *testing.T) (Bytes, ConnectionId, ChannelId) {
 
 // --- Path tests ---
 
-func TestClientStatePathUnique(t *testing.T) {
+func TestClientStatePathUnique(cur realm, t *testing.T) {
 	if ClientStatePath(1) == ClientStatePath(2) {
 		t.Error("different client IDs must produce different paths")
 	}
@@ -221,7 +228,7 @@ func TestClientStatePathUnique(t *testing.T) {
 	}
 }
 
-func TestConsensusStatePathUnique(t *testing.T) {
+func TestConsensusStatePathUnique(cur realm, t *testing.T) {
 	if ConsensusStatePath(1, 10) == ConsensusStatePath(1, 11) {
 		t.Error("different heights must produce different paths")
 	}
@@ -230,7 +237,7 @@ func TestConsensusStatePathUnique(t *testing.T) {
 	}
 }
 
-func TestConnectionChannelPathUnique(t *testing.T) {
+func TestConnectionChannelPathUnique(cur realm, t *testing.T) {
 	if ConnectionPath(1) == ConnectionPath(2) {
 		t.Error("different connection IDs must produce different paths")
 	}
@@ -242,14 +249,14 @@ func TestConnectionChannelPathUnique(t *testing.T) {
 	}
 }
 
-func TestPacketCommitmentAndAckPathsDiffer(t *testing.T) {
+func TestPacketCommitmentAndAckPathsDiffer(cur realm, t *testing.T) {
 	p := Packet{SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
 	if PacketCommitmentPath(p) == PacketAcknowledgementPath(p) {
 		t.Error("commitment and ack paths must differ for the same packet")
 	}
 }
 
-func TestPacketCommitmentPathUnique(t *testing.T) {
+func TestPacketCommitmentPathUnique(cur realm, t *testing.T) {
 	p1 := Packet{SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
 	p2 := Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: Bytes("different"), TimeoutTimestamp: 1000}
 	if PacketCommitmentPath(p1) == PacketCommitmentPath(p2) {
@@ -257,7 +264,7 @@ func TestPacketCommitmentPathUnique(t *testing.T) {
 	}
 }
 
-func TestBatchReceiptsPathDiffers(t *testing.T) {
+func TestBatchReceiptsPathDiffers(cur realm, t *testing.T) {
 	p := Packet{SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
 	if BatchReceiptsPath(CommitPacket(p)) == PacketCommitmentPath(p) {
 		t.Error("receipt and commitment paths must differ for the same packet")
@@ -267,7 +274,7 @@ func TestBatchReceiptsPathDiffers(t *testing.T) {
 	}
 }
 
-func TestUnionPathReferenceVectors(t *testing.T) {
+func TestUnionPathReferenceVectors(cur realm, t *testing.T) {
 	// Mirrors Union ibc-union-spec path keys:
 	// https://github.com/unionlabs/union/blob/main/lib/ibc-union-spec/src/path.rs
 	packet := Packet{SourceChannelId: 2, DestinationChannelId: 3, Data: Bytes("abc"), TimeoutTimestamp: 1000}
@@ -285,7 +292,7 @@ func TestUnionPathReferenceVectors(t *testing.T) {
 
 // --- Type encoding tests ---
 
-func TestConnectionEthAbiEncodeDistinct(t *testing.T) {
+func TestConnectionEthAbiEncodeDistinct(cur realm, t *testing.T) {
 	open := Connection{State: ConnectionStateOpen, ClientId: 1, CounterpartyClientId: 2, CounterpartyConnectionId: 3}
 	init := Connection{State: ConnectionStateInit, ClientId: 1, CounterpartyClientId: 2, CounterpartyConnectionId: 3}
 	if string(open.EthAbiEncode()) == string(init.EthAbiEncode()) {
@@ -293,7 +300,7 @@ func TestConnectionEthAbiEncodeDistinct(t *testing.T) {
 	}
 }
 
-func TestChannelEthAbiEncodeDistinct(t *testing.T) {
+func TestChannelEthAbiEncodeDistinct(cur realm, t *testing.T) {
 	open := Channel{State: ChannelStateOpen, ConnectionId: 1, CounterpartyChannelId: 2, Version: "v1"}
 	closed := Channel{State: ChannelStateClosed, ConnectionId: 1, CounterpartyChannelId: 2, Version: "v1"}
 	if string(open.EthAbiEncode()) == string(closed.EthAbiEncode()) {
@@ -301,7 +308,7 @@ func TestChannelEthAbiEncodeDistinct(t *testing.T) {
 	}
 }
 
-func TestUnionChannelEthABIVector(t *testing.T) {
+func TestUnionChannelEthABIVector(cur realm, t *testing.T) {
 	// Ported from Union lib/ibc-union-spec/src/types/channel.rs ethabi test.
 	channel := Channel{
 		State:                 ChannelStateInit,
@@ -323,7 +330,7 @@ func TestUnionChannelEthABIVector(t *testing.T) {
 			"76657273696f6e00000000000000000000000000000000000000000000000000")
 }
 
-func TestIntegrationCase(t *testing.T) {
+func TestIntegrationCase(cur realm, t *testing.T) {
 	channel := Channel{
 		State:                 ChannelStateInit,
 		ConnectionId:          3,
@@ -334,17 +341,17 @@ func TestIntegrationCase(t *testing.T) {
 	assertH256Hex(t, "channel commitment", keccak(channel.EthAbiEncode()), "0x00781657f014fd25772f10edb002612aa3839e958adf1aa1d2c0f7a44758da26")
 }
 
-func TestPacketEthAbiEncodeDistinct(t *testing.T) {
+func TestPacketEthAbiEncodeDistinct(cur realm, t *testing.T) {
 	p1 := Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: Bytes("a"), TimeoutTimestamp: 100}
 	p2 := Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: Bytes("b"), TimeoutTimestamp: 100}
 	if string(p1.EthAbiEncode()) == string(p2.EthAbiEncode()) {
 		t.Error("packets with different data must encode differently")
 	}
 	p3 := Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: Bytes("a"), TimeoutHeight: 1, TimeoutTimestamp: 100}
-	uassert.AbortsContains(t, "packet timeout height must be zero", func(cur realm) { p3.EthAbiEncode() })
+	uassert.AbortsContains(t, cur, "packet timeout height must be zero", func(cur realm) { p3.EthAbiEncode() })
 }
 
-func TestPacketHashUnionReferenceVector(t *testing.T) {
+func TestPacketHashUnionReferenceVector(cur realm, t *testing.T) {
 	// Ported from Union lib/ibc-union-spec/src/types/packet.rs packet_hash test.
 	packet := Packet{
 		SourceChannelId:      1,
@@ -359,7 +366,7 @@ func TestPacketHashUnionReferenceVector(t *testing.T) {
 
 // --- State: client registry ---
 
-func TestClientRegistryStoresClient(t *testing.T) {
+func TestClientRegistryStoresClient(cur realm, t *testing.T) {
 	resetState()
 	c := &mockClient{chainId: "union-1"}
 	st.registerClient(mockType, c)
@@ -368,7 +375,7 @@ func TestClientRegistryStoresClient(t *testing.T) {
 	}
 }
 
-func TestClientRegistryDuplicatePanics(t *testing.T) {
+func TestClientRegistryDuplicatePanics(cur realm, t *testing.T) {
 	resetState()
 	st.registerClient(mockType, &mockClient{})
 	mustPanic(t, func() {
@@ -376,14 +383,14 @@ func TestClientRegistryDuplicatePanics(t *testing.T) {
 	})
 }
 
-func TestGetClientNotFoundPanics(t *testing.T) {
+func TestGetClientNotFoundPanics(cur realm, t *testing.T) {
 	resetState()
 	mustPanic(t, func() {
 		st.getClient(ClientId(999))
 	})
 }
 
-func TestGetClientStateReturnsStoredBytes(t *testing.T) {
+func TestGetClientStateReturnsStoredBytes(cur realm, t *testing.T) {
 	resetState()
 	st.saveClientState(ClientId(1), []byte("client-state"))
 
@@ -393,7 +400,7 @@ func TestGetClientStateReturnsStoredBytes(t *testing.T) {
 	}
 }
 
-func TestQueryClientStateUnknownReturnsEmpty(t *testing.T) {
+func TestQueryClientStateUnknownReturnsEmpty(cur realm, t *testing.T) {
 	resetState()
 
 	got := QueryClientState(ClientId(999))
@@ -402,7 +409,7 @@ func TestQueryClientStateUnknownReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestGetClientTypeReturnsRegisteredType(t *testing.T) {
+func TestGetClientTypeReturnsRegisteredType(cur realm, t *testing.T) {
 	resetState()
 	st.clientTypes[ClientId(1)] = mockType
 
@@ -412,7 +419,7 @@ func TestGetClientTypeReturnsRegisteredType(t *testing.T) {
 	}
 }
 
-func TestGetClientTypeUnknownReturnsEmpty(t *testing.T) {
+func TestGetClientTypeUnknownReturnsEmpty(cur realm, t *testing.T) {
 	resetState()
 
 	got := GetClientType(ClientId(999))
@@ -421,7 +428,7 @@ func TestGetClientTypeUnknownReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestGetConsensusStateReturnsStoredBytes(t *testing.T) {
+func TestGetConsensusStateReturnsStoredBytes(cur realm, t *testing.T) {
 	resetState()
 	st.saveConsensusState(ClientId(1), Height(10), []byte("consensus-state"))
 
@@ -431,7 +438,7 @@ func TestGetConsensusStateReturnsStoredBytes(t *testing.T) {
 	}
 }
 
-func TestQueryConsensusStateUnknownReturnsEmpty(t *testing.T) {
+func TestQueryConsensusStateUnknownReturnsEmpty(cur realm, t *testing.T) {
 	resetState()
 	st.saveConsensusState(ClientId(1), Height(10), []byte("consensus-state"))
 
@@ -443,11 +450,11 @@ func TestQueryConsensusStateUnknownReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestCreateClientStoresInitialClientAndConsensusState(t *testing.T) {
+func TestCreateClientStoresInitialClientAndConsensusState(cur realm, t *testing.T) {
 	resetState()
 	st.clientRegistry[mockType] = &mockClient{chainId: "union-1", height: 100}
 
-	clientId := CreateClient(cross, MsgCreateClient{
+	clientId := CreateClient(cross(cur), MsgCreateClient{
 		ClientType:          mockType,
 		ClientStateBytes:    []byte("client-state"),
 		ConsensusStateBytes: []byte("consensus-state"),
@@ -463,7 +470,7 @@ func TestCreateClientStoresInitialClientAndConsensusState(t *testing.T) {
 
 // --- State: ID generation ---
 
-func TestGenerateIdsSequential(t *testing.T) {
+func TestGenerateIdsSequential(cur realm, t *testing.T) {
 	resetState()
 	c1, c2 := st.generateClientId(), st.generateClientId()
 	if c2 != c1+1 {
@@ -481,7 +488,7 @@ func TestGenerateIdsSequential(t *testing.T) {
 
 // --- State: connection ---
 
-func TestSaveAndGetConnection(t *testing.T) {
+func TestSaveAndGetConnection(cur realm, t *testing.T) {
 	resetState()
 	conn := Connection{
 		State:                    ConnectionStateOpen,
@@ -506,12 +513,12 @@ func TestSaveAndGetConnection(t *testing.T) {
 	}
 }
 
-func TestGetConnectionNotFoundPanics(t *testing.T) {
+func TestGetConnectionNotFoundPanics(cur realm, t *testing.T) {
 	resetState()
 	mustPanic(t, func() { st.getConnection(ConnectionId(999)) })
 }
 
-func TestQueryConnectionUnknownReturnsEmpty(t *testing.T) {
+func TestQueryConnectionUnknownReturnsEmpty(cur realm, t *testing.T) {
 	resetState()
 
 	got := QueryConnection(ConnectionId(999))
@@ -520,7 +527,7 @@ func TestQueryConnectionUnknownReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestConnectionStateSaved(t *testing.T) {
+func TestConnectionStateSaved(cur realm, t *testing.T) {
 	resetState()
 	id := st.generateConnectionId()
 	st.saveConnection(id, Connection{State: ConnectionStateInit})
@@ -532,7 +539,7 @@ func TestConnectionStateSaved(t *testing.T) {
 
 // --- State: channel ---
 
-func TestSaveAndGetChannel(t *testing.T) {
+func TestSaveAndGetChannel(cur realm, t *testing.T) {
 	resetState()
 	ch := Channel{
 		State:                 ChannelStateOpen,
@@ -558,12 +565,12 @@ func TestSaveAndGetChannel(t *testing.T) {
 	}
 }
 
-func TestGetChannelNotFoundPanics(t *testing.T) {
+func TestGetChannelNotFoundPanics(cur realm, t *testing.T) {
 	resetState()
 	mustPanic(t, func() { st.getChannel(ChannelId(999)) })
 }
 
-func TestQueryChannelUnknownReturnsEmpty(t *testing.T) {
+func TestQueryChannelUnknownReturnsEmpty(cur realm, t *testing.T) {
 	resetState()
 
 	got := QueryChannel(ChannelId(999))
@@ -574,7 +581,7 @@ func TestQueryChannelUnknownReturnsEmpty(t *testing.T) {
 
 // --- State: packet commitment ---
 
-func TestPacketCommitmentLifecycle(t *testing.T) {
+func TestPacketCommitmentLifecycle(cur realm, t *testing.T) {
 	resetState()
 	p := Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: Bytes("data"), TimeoutTimestamp: 1000}
 	st.commitPacket(p)
@@ -587,17 +594,17 @@ func TestPacketCommitmentLifecycle(t *testing.T) {
 	}
 }
 
-func TestAcknowledgementDoesNotPanic(t *testing.T) {
+func TestAcknowledgementDoesNotPanic(cur realm, t *testing.T) {
 	resetState()
 	p := Packet{SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
 	st.commitAcknowledgement(p, []byte("ack"))
 }
 
-func TestPacketSendCommitsPacket(t *testing.T) {
+func TestPacketSendCommitsPacket(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 
-	packet := PacketSend(cross, channelId, 0, 100, []byte("data"))
+	packet := PacketSend(cross(cur), channelId, 0, 100, []byte("data"))
 
 	if packet.SourceChannelId != channelId {
 		t.Fatal("PacketSend must preserve source channel")
@@ -610,35 +617,35 @@ func TestPacketSendCommitsPacket(t *testing.T) {
 	}
 }
 
-func TestPacketSendRejectsNonOwner(t *testing.T) {
+func TestPacketSendRejectsNonOwner(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	st.channelOwners[channelId] = Bytes("g1notchannelowner")
 
-	uassert.AbortsContains(t, "caller not authorized to send packet", func(cur realm) {
+	uassert.AbortsContains(t, cur, "caller not authorized to send packet", func(cur realm) {
 		PacketSend(cur, channelId, 0, 100, []byte("data"))
 	})
 }
 
-func TestPacketSendRejectsAddressAsPortId(t *testing.T) {
+func TestPacketSendRejectsAddressAsPortId(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	// Port registered with address (old behavior) must be rejected when caller's
 	// PkgPath is compared instead.
-	st.channelOwners[channelId] = Bytes(runtime.CurrentRealm().Address().String())
+	st.channelOwners[channelId] = Bytes(oldAddressPort)
 
-	uassert.AbortsContains(t, "caller not authorized to send packet", func(cur realm) {
+	uassert.AbortsContains(t, cur, "caller not authorized to send packet", func(cur realm) {
 		PacketSend(cur, channelId, 0, 100, []byte("data"))
 	})
 }
 
-func TestBatchSendReturnsUnionPacketCommitment(t *testing.T) {
+func TestBatchSendReturnsUnionPacketCommitment(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	p1 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
 	p2 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("b"), TimeoutTimestamp: 100}
 
-	got := BatchSend(cross, MsgBatchSend{Packets: []Packet{p1, p2}})
+	got := BatchSend(cross(cur), MsgBatchSend{Packets: []Packet{p1, p2}})
 	want := CommitPackets([]Packet{p1, p2})
 	if got != want {
 		t.Fatal("BatchSend must return Union packet batch commitment")
@@ -654,13 +661,13 @@ func TestBatchSendReturnsUnionPacketCommitment(t *testing.T) {
 	}
 }
 
-func TestBatchSendPerPacketMirrorKeyedByPath(t *testing.T) {
+func TestBatchSendPerPacketMirrorKeyedByPath(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	p1 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
 	p2 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("b"), TimeoutTimestamp: 100}
 
-	BatchSend(cross, MsgBatchSend{Packets: []Packet{p1, p2}})
+	BatchSend(cross(cur), MsgBatchSend{Packets: []Packet{p1, p2}})
 	for _, packet := range []Packet{p1, p2} {
 		path := PacketCommitmentPath(packet)
 		got, ok := st.batchPackets[path]
@@ -676,7 +683,7 @@ func TestBatchSendPerPacketMirrorKeyedByPath(t *testing.T) {
 	}
 }
 
-func TestQueryBatchPacketsUnknownReturnsEmpty(t *testing.T) {
+func TestQueryBatchPacketsUnknownReturnsEmpty(cur realm, t *testing.T) {
 	resetState()
 
 	var batchHash H256
@@ -686,13 +693,13 @@ func TestQueryBatchPacketsUnknownReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestQueryCommitmentAtPathReturnsBatchValue(t *testing.T) {
+func TestQueryCommitmentAtPathReturnsBatchValue(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	p1 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
 	p2 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("b"), TimeoutTimestamp: 100}
 
-	batchHash := BatchSend(cross, MsgBatchSend{Packets: []Packet{p1, p2}})
+	batchHash := BatchSend(cross(cur), MsgBatchSend{Packets: []Packet{p1, p2}})
 
 	if got := QueryCommitmentAtPath(BatchPacketsPath(batchHash)); got != COMMITMENT_MAGIC.String() {
 		t.Errorf("QueryCommitmentAtPath(batch path): got %s want %s", got, COMMITMENT_MAGIC)
@@ -704,7 +711,7 @@ func TestQueryCommitmentAtPathReturnsBatchValue(t *testing.T) {
 	}
 }
 
-func TestQueryCommitmentAtPathUnknownReturnsEmpty(t *testing.T) {
+func TestQueryCommitmentAtPathUnknownReturnsEmpty(cur realm, t *testing.T) {
 	resetState()
 
 	var path H256
@@ -713,31 +720,31 @@ func TestQueryCommitmentAtPathUnknownReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestBatchSendRejectsEmptyPacketList(t *testing.T) {
+func TestBatchSendRejectsEmptyPacketList(cur realm, t *testing.T) {
 	resetState()
-	uassert.AbortsContains(t, "not enough packets", func(cur realm) {
+	uassert.AbortsContains(t, cur, "not enough packets", func(cur realm) {
 		BatchSend(cur, MsgBatchSend{})
 	})
 }
 
-func TestBatchSendRejectsNonOwner(t *testing.T) {
+func TestBatchSendRejectsNonOwner(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	st.channelOwners[channelId] = Bytes("gno.land/r/not-channel-owner")
 	packet := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
 
-	uassert.AbortsContains(t, "caller not authorized to send packet", func(cur realm) {
+	uassert.AbortsContains(t, cur, "caller not authorized to send packet", func(cur realm) {
 		BatchSend(cur, MsgBatchSend{Packets: []Packet{packet}})
 	})
 }
 
-func TestBatchAcksReturnsUnionPacketCommitment(t *testing.T) {
+func TestBatchAcksReturnsUnionPacketCommitment(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	p1 := Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: 100}
 	p2 := Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: Bytes("b"), TimeoutTimestamp: 100}
 
-	got := BatchAcks(cross, MsgBatchAcks{
+	got := BatchAcks(cross(cur), MsgBatchAcks{
 		Packets: []Packet{p1, p2},
 		Acks:    [][]byte{[]byte("ack-a"), []byte("ack-b")},
 	})
@@ -757,7 +764,7 @@ func TestBatchAcksReturnsUnionPacketCommitment(t *testing.T) {
 	}
 }
 
-func TestQueryBatchReceiptsUnknownReturnsEmpty(t *testing.T) {
+func TestQueryBatchReceiptsUnknownReturnsEmpty(cur realm, t *testing.T) {
 	resetState()
 
 	var batchHash H256
@@ -767,13 +774,13 @@ func TestQueryBatchReceiptsUnknownReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestQueryReceiptAtPathReturnsBatchValue(t *testing.T) {
+func TestQueryReceiptAtPathReturnsBatchValue(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	p1 := Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: 100}
 	p2 := Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: Bytes("b"), TimeoutTimestamp: 100}
 
-	batchHash := BatchAcks(cross, MsgBatchAcks{
+	batchHash := BatchAcks(cross(cur), MsgBatchAcks{
 		Packets: []Packet{p1, p2},
 		Acks:    [][]byte{[]byte("ack-a"), []byte("ack-b")},
 	})
@@ -784,7 +791,7 @@ func TestQueryReceiptAtPathReturnsBatchValue(t *testing.T) {
 	}
 }
 
-func TestQueryReceiptAtPathUnknownReturnsEmpty(t *testing.T) {
+func TestQueryReceiptAtPathUnknownReturnsEmpty(cur realm, t *testing.T) {
 	resetState()
 
 	var path H256
@@ -793,26 +800,26 @@ func TestQueryReceiptAtPathUnknownReturnsEmpty(t *testing.T) {
 	}
 }
 
-func TestBatchAcksRejectsAckCountMismatch(t *testing.T) {
+func TestBatchAcksRejectsAckCountMismatch(cur realm, t *testing.T) {
 	resetState()
 	p := Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: Bytes("a"), TimeoutTimestamp: 100}
-	uassert.AbortsContains(t, "acknowledgement count mismatch", func(cur realm) {
+	uassert.AbortsContains(t, cur, "acknowledgement count mismatch", func(cur realm) {
 		BatchAcks(cur, MsgBatchAcks{Packets: []Packet{p}, Acks: [][]byte{}})
 	})
 }
 
-func TestBatchAcksRejectsNonOwner(t *testing.T) {
+func TestBatchAcksRejectsNonOwner(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	st.channelOwners[channelId] = Bytes("gno.land/r/not-channel-owner")
 	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: 100}
 
-	uassert.AbortsContains(t, "caller not authorized to write ack", func(cur realm) {
+	uassert.AbortsContains(t, cur, "caller not authorized to write ack", func(cur realm) {
 		BatchAcks(cur, MsgBatchAcks{Packets: []Packet{packet}, Acks: [][]byte{[]byte("ack")}})
 	})
 }
 
-func TestPacketReceiptLifecycle(t *testing.T) {
+func TestPacketReceiptLifecycle(cur realm, t *testing.T) {
 	resetState()
 	p := Packet{SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
 	if st.hasPacketReceipt(p) {
@@ -836,14 +843,14 @@ func TestPacketReceiptLifecycle(t *testing.T) {
 
 // --- ensureConnectionOpen ---
 
-func TestEnsureConnectionOpenPanicsOnInit(t *testing.T) {
+func TestEnsureConnectionOpenPanicsOnInit(cur realm, t *testing.T) {
 	resetState()
 	id := st.generateConnectionId()
 	st.saveConnection(id, Connection{State: ConnectionStateInit})
 	mustPanic(t, func() { ensureConnectionOpen(id) })
 }
 
-func TestEnsureConnectionOpenSucceeds(t *testing.T) {
+func TestEnsureConnectionOpenSucceeds(cur realm, t *testing.T) {
 	resetState()
 	id := st.generateConnectionId()
 	st.saveConnection(id, Connection{State: ConnectionStateOpen, ClientId: 1})
@@ -857,7 +864,7 @@ func TestEnsureConnectionOpenSucceeds(t *testing.T) {
 
 // --- Channel state machine ---
 
-func TestChannelStateTransitions(t *testing.T) {
+func TestChannelStateTransitions(cur realm, t *testing.T) {
 	resetState()
 	id := st.generateChannelId()
 
@@ -879,7 +886,7 @@ func TestChannelStateTransitions(t *testing.T) {
 	}
 }
 
-func TestChannelEventAttrsOmitsCounterpartyChannelIdForOpenInit(t *testing.T) {
+func TestChannelEventAttrsOmitsCounterpartyChannelIdForOpenInit(cur realm, t *testing.T) {
 	attrs := channelEventAttrs(
 		ChannelOpenInitEvent,
 		Bytes("gno.land/r/core/ibc/v1/apps/zkgm"),
@@ -912,7 +919,7 @@ func TestChannelEventAttrsOmitsCounterpartyChannelIdForOpenInit(t *testing.T) {
 	assertAttrMissing(t, attrs, "counterparty_channel_id")
 }
 
-func TestChannelEventAttrsIncludesCounterpartyChannelIdForOtherEvents(t *testing.T) {
+func TestChannelEventAttrsIncludesCounterpartyChannelIdForOtherEvents(cur realm, t *testing.T) {
 	events := []string{
 		ChannelOpenTryEvent,
 		ChannelOpenAckEvent,
@@ -954,14 +961,14 @@ func TestChannelEventAttrsIncludesCounterpartyChannelIdForOtherEvents(t *testing
 
 // --- Port / channel ownership ---
 
-func TestGetAppByPortIdPanicsWhenMissing(t *testing.T) {
+func TestGetAppByPortIdPanicsWhenMissing(cur realm, t *testing.T) {
 	resetState()
 	mustPanic(t, func() {
 		st.getAppByPortId(Bytes("g1missing"))
 	})
 }
 
-func TestGetChannelOwnerPanicsWhenMissing(t *testing.T) {
+func TestGetChannelOwnerPanicsWhenMissing(cur realm, t *testing.T) {
 	resetState()
 	mustPanic(t, func() {
 		st.getChannelOwner(ChannelId(999))
@@ -970,13 +977,13 @@ func TestGetChannelOwnerPanicsWhenMissing(t *testing.T) {
 
 // --- Integration: packet send lifecycle ---
 
-func TestPacketRecvSyncAckWritten(t *testing.T) {
+func TestPacketRecvSyncAckWritten(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
 	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	uassert.NotAborts(t, func(cur realm) {
+	uassert.NotAborts(t, cur, func(cur realm) {
 		PacketRecv(cur, MsgPacketRecv{
 			Packets: []Packet{packet},
 		})
@@ -993,7 +1000,7 @@ func TestPacketRecvSyncAckWritten(t *testing.T) {
 	}
 }
 
-func TestPacketRecvBatchUsesUnionBatchCommitment(t *testing.T) {
+func TestPacketRecvBatchUsesUnionBatchCommitment(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
@@ -1002,7 +1009,7 @@ func TestPacketRecvBatchUsesUnionBatchCommitment(t *testing.T) {
 	p2 := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("b"), TimeoutTimestamp: testFutureTimeoutNanos}
 	proof := Bytes("batch-proof")
 
-	PacketRecv(cross, MsgPacketRecv{
+	PacketRecv(cross(cur), MsgPacketRecv{
 		Packets:     []Packet{p1, p2},
 		RelayerMsgs: [][]byte{[]byte("relay-a"), []byte("relay-b")},
 		Proof:       proof,
@@ -1031,7 +1038,7 @@ func TestPacketRecvBatchUsesUnionBatchCommitment(t *testing.T) {
 	}
 }
 
-func TestPacketRecvBatchRejectsDifferentDestinationChannel(t *testing.T) {
+func TestPacketRecvBatchRejectsDifferentDestinationChannel(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	otherChannelId := st.generateChannelId()
@@ -1039,33 +1046,33 @@ func TestPacketRecvBatchRejectsDifferentDestinationChannel(t *testing.T) {
 	p1 := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: testFutureTimeoutNanos}
 	p2 := Packet{SourceChannelId: 99, DestinationChannelId: otherChannelId, Data: Bytes("b"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	uassert.AbortsContains(t, "batch must use the same channel", func(cur realm) {
+	uassert.AbortsContains(t, cur, "batch must use the same channel", func(cur realm) {
 		PacketRecv(cur, MsgPacketRecv{Packets: []Packet{p1, p2}})
 	})
 }
 
-func TestPacketRecvSyncEmptyAckRejected(t *testing.T) {
+func TestPacketRecvSyncEmptyAckRejected(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
-	app.recvResult = RecvPacketResult{Status: PacketStatusSuccess, Ack: nil}
+	app.recvResult = NewRecvPacketResult(cur, PacketStatusSuccess, nil)
 	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	uassert.AbortsContains(t, "sync ack cannot be empty", func(cur realm) {
+	uassert.AbortsContains(t, cur, "sync ack cannot be empty", func(cur realm) {
 		PacketRecv(cur, MsgPacketRecv{Packets: []Packet{packet}})
 	})
 }
 
 // --- Async acknowledgement ---
 
-func TestPacketRecvAsyncDefersAck(t *testing.T) {
+func TestPacketRecvAsyncDefersAck(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
-	app.recvResult = RecvPacketResult{Status: PacketStatusAsync}
+	app.recvResult = NewRecvPacketResult(cur, PacketStatusAsync, nil)
 	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	uassert.NotAborts(t, func(cur realm) {
+	uassert.NotAborts(t, cur, func(cur realm) {
 		PacketRecv(cur, MsgPacketRecv{Packets: []Packet{packet}})
 	})
 
@@ -1077,15 +1084,15 @@ func TestPacketRecvAsyncDefersAck(t *testing.T) {
 	}
 }
 
-func TestWriteAcknowledgementCommitsAsyncAck(t *testing.T) {
+func TestWriteAcknowledgementCommitsAsyncAck(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
-	app.recvResult = RecvPacketResult{Status: PacketStatusAsync}
+	app.recvResult = NewRecvPacketResult(cur, PacketStatusAsync, nil)
 	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
-	WriteAcknowledgement(cross, MsgWriteAcknowledgement{
+	PacketRecv(cross(cur), MsgPacketRecv{Packets: []Packet{packet}})
+	WriteAcknowledgement(cross(cur), MsgWriteAcknowledgement{
 		Packet:          packet,
 		Acknowledgement: []byte("async-ack"),
 	})
@@ -1095,17 +1102,17 @@ func TestWriteAcknowledgementCommitsAsyncAck(t *testing.T) {
 	}
 }
 
-func TestWriteAcknowledgementRejectsNonOwner(t *testing.T) {
+func TestWriteAcknowledgementRejectsNonOwner(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
-	app.recvResult = RecvPacketResult{Status: PacketStatusAsync}
+	app.recvResult = NewRecvPacketResult(cur, PacketStatusAsync, nil)
 	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
+	PacketRecv(cross(cur), MsgPacketRecv{Packets: []Packet{packet}})
 	st.channelOwners[channelId] = Bytes("g1notchannelowner")
 
-	uassert.AbortsContains(t, "caller not authorized to write ack", func(cur realm) {
+	uassert.AbortsContains(t, cur, "caller not authorized to write ack", func(cur realm) {
 		WriteAcknowledgement(cur, MsgWriteAcknowledgement{
 			Packet:          packet,
 			Acknowledgement: []byte("async-ack"),
@@ -1113,18 +1120,18 @@ func TestWriteAcknowledgementRejectsNonOwner(t *testing.T) {
 	})
 }
 
-func TestWriteAcknowledgementRejectsAddressAsPortId(t *testing.T) {
+func TestWriteAcknowledgementRejectsAddressAsPortId(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
-	app.recvResult = RecvPacketResult{Status: PacketStatusAsync}
+	app.recvResult = NewRecvPacketResult(cur, PacketStatusAsync, nil)
 	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
+	PacketRecv(cross(cur), MsgPacketRecv{Packets: []Packet{packet}})
 	// Port registered with address (old behavior) must be rejected.
-	st.channelOwners[channelId] = Bytes(runtime.CurrentRealm().Address().String())
+	st.channelOwners[channelId] = Bytes(oldAddressPort)
 
-	uassert.AbortsContains(t, "caller not authorized to write ack", func(cur realm) {
+	uassert.AbortsContains(t, cur, "caller not authorized to write ack", func(cur realm) {
 		WriteAcknowledgement(cur, MsgWriteAcknowledgement{
 			Packet:          packet,
 			Acknowledgement: []byte("async-ack"),
@@ -1132,14 +1139,14 @@ func TestWriteAcknowledgementRejectsAddressAsPortId(t *testing.T) {
 	})
 }
 
-func TestWriteAcknowledgementRejectsAlreadyAcked(t *testing.T) {
+func TestWriteAcknowledgementRejectsAlreadyAcked(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
 
 	st.commitAcknowledgement(packet, []byte("ack"))
 
-	uassert.AbortsContains(t, "acknowledgement already written", func(cur realm) {
+	uassert.AbortsContains(t, cur, "acknowledgement already written", func(cur realm) {
 		WriteAcknowledgement(cur, MsgWriteAcknowledgement{
 			Packet:          packet,
 			Acknowledgement: []byte("async-ack"),
@@ -1147,27 +1154,27 @@ func TestWriteAcknowledgementRejectsAlreadyAcked(t *testing.T) {
 	})
 }
 
-func TestPacketRecvReceiptDupRejected(t *testing.T) {
+func TestPacketRecvReceiptDupRejected(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
 	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
-	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
+	PacketRecv(cross(cur), MsgPacketRecv{Packets: []Packet{packet}})
+	PacketRecv(cross(cur), MsgPacketRecv{Packets: []Packet{packet}})
 
 	if len(app.recvPackets) != 1 {
 		t.Fatalf("duplicate recv must not call app again: got %d calls", len(app.recvPackets))
 	}
 }
 
-func TestIntentPacketRecvDispatchesAndSetsReceipt(t *testing.T) {
+func TestIntentPacketRecvDispatchesAndSetsReceipt(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
 	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("intent"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	uassert.NotAborts(t, func(cur realm) {
+	uassert.NotAborts(t, cur, func(cur realm) {
 		IntentPacketRecv(cur, MsgIntentPacketRecv{
 			Packets:             []Packet{packet},
 			MarketMakerMessages: [][]byte{[]byte("maker-msg")},
@@ -1188,21 +1195,21 @@ func TestIntentPacketRecvDispatchesAndSetsReceipt(t *testing.T) {
 	}
 }
 
-func TestIntentPacketRecvDuplicateSkipped(t *testing.T) {
+func TestIntentPacketRecvDuplicateSkipped(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
 	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("intent"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	IntentPacketRecv(cross, MsgIntentPacketRecv{Packets: []Packet{packet}})
-	IntentPacketRecv(cross, MsgIntentPacketRecv{Packets: []Packet{packet}})
+	IntentPacketRecv(cross(cur), MsgIntentPacketRecv{Packets: []Packet{packet}})
+	IntentPacketRecv(cross(cur), MsgIntentPacketRecv{Packets: []Packet{packet}})
 
 	if len(app.intentPackets) != 1 {
 		t.Fatalf("duplicate intent recv must not call app again: got %d calls", len(app.intentPackets))
 	}
 }
 
-func TestPacketAcknowledgementRoundtrip(t *testing.T) {
+func TestPacketAcknowledgementRoundtrip(cur realm, t *testing.T) {
 	resetState()
 	portId, connId, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
@@ -1217,8 +1224,8 @@ func TestPacketAcknowledgementRoundtrip(t *testing.T) {
 		Version:               "ics20-1",
 	})
 
-	PacketRecv(cross, MsgPacketRecv{Packets: []Packet{packet}})
-	PacketAcknowledgement(cross, MsgPacketAcknowledgement{
+	PacketRecv(cross(cur), MsgPacketRecv{Packets: []Packet{packet}})
+	PacketAcknowledgement(cross(cur), MsgPacketAcknowledgement{
 		Packets:          []Packet{packet},
 		Acknowledgements: [][]byte{{0x01}},
 	})
@@ -1231,7 +1238,7 @@ func TestPacketAcknowledgementRoundtrip(t *testing.T) {
 	}
 }
 
-func TestPacketAcknowledgementBatchUsesUnionBatchReceipts(t *testing.T) {
+func TestPacketAcknowledgementBatchUsesUnionBatchReceipts(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
@@ -1243,7 +1250,7 @@ func TestPacketAcknowledgementBatchUsesUnionBatchReceipts(t *testing.T) {
 	acks := [][]byte{{0x01}, {0x02}}
 	proof := Bytes("ack-proof")
 
-	PacketAcknowledgement(cross, MsgPacketAcknowledgement{
+	PacketAcknowledgement(cross(cur), MsgPacketAcknowledgement{
 		Packets:          []Packet{p1, p2},
 		Acknowledgements: acks,
 		Proof:            proof,
@@ -1273,19 +1280,19 @@ func TestPacketAcknowledgementBatchUsesUnionBatchReceipts(t *testing.T) {
 	}
 }
 
-func TestPacketAcknowledgementDeletesBatchCommitment(t *testing.T) {
+func TestPacketAcknowledgementDeletesBatchCommitment(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	p1 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
 	p2 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("b"), TimeoutTimestamp: 100}
 	acks := [][]byte{{0x01}, {0x02}}
 
-	batchHash := BatchSend(cross, MsgBatchSend{Packets: []Packet{p1, p2}})
+	batchHash := BatchSend(cross(cur), MsgBatchSend{Packets: []Packet{p1, p2}})
 	if got := QueryBatchPackets(batchHash); got != COMMITMENT_MAGIC.String() {
 		t.Fatalf("batch commitment before ack: got %q want %s", got, COMMITMENT_MAGIC)
 	}
 
-	PacketAcknowledgement(cross, MsgPacketAcknowledgement{
+	PacketAcknowledgement(cross(cur), MsgPacketAcknowledgement{
 		Packets:          []Packet{p1, p2},
 		Acknowledgements: acks,
 		ProofHeight:      Height(10),
@@ -1296,7 +1303,7 @@ func TestPacketAcknowledgementDeletesBatchCommitment(t *testing.T) {
 	}
 }
 
-func TestPacketAcknowledgementBatchRejectsDifferentSourceChannel(t *testing.T) {
+func TestPacketAcknowledgementBatchRejectsDifferentSourceChannel(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	otherChannelId := st.generateChannelId()
@@ -1306,7 +1313,7 @@ func TestPacketAcknowledgementBatchRejectsDifferentSourceChannel(t *testing.T) {
 	st.commitPacket(p1)
 	st.commitPacket(p2)
 
-	uassert.AbortsContains(t, "batch must use the same channel", func(cur realm) {
+	uassert.AbortsContains(t, cur, "batch must use the same channel", func(cur realm) {
 		PacketAcknowledgement(cur, MsgPacketAcknowledgement{
 			Packets:          []Packet{p1, p2},
 			Acknowledgements: [][]byte{{0x01}, {0x02}},
@@ -1314,14 +1321,14 @@ func TestPacketAcknowledgementBatchRejectsDifferentSourceChannel(t *testing.T) {
 	})
 }
 
-func TestPacketTimeoutReceiptPath(t *testing.T) {
+func TestPacketTimeoutReceiptPath(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	packet := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("transfer"), TimeoutTimestamp: 100}
 	st.commitPacket(packet)
 	client := st.clientRegistry[mockType].(*mockClient)
 
-	PacketTimeout(cross, MsgPacketTimeout{Packet: packet})
+	PacketTimeout(cross(cur), MsgPacketTimeout{Packet: packet})
 
 	if len(client.nonMembershipKeys) != 1 {
 		t.Fatalf("non-membership calls: got %d want 1", len(client.nonMembershipKeys))
@@ -1337,7 +1344,7 @@ func TestPacketTimeoutReceiptPath(t *testing.T) {
 	}
 }
 
-func TestVerifyClientMembershipVerifiesUnionPathValue(t *testing.T) {
+func TestVerifyClientMembershipVerifiesUnionPathValue(cur realm, t *testing.T) {
 	resetState()
 	client := &mockClient{chainId: "union-1", status: StatusActive}
 	st.clientRegistry[mockType] = client
@@ -1346,7 +1353,7 @@ func TestVerifyClientMembershipVerifiesUnionPathValue(t *testing.T) {
 	path := Bytes("clients/7/consensusStates/11")
 	value := Bytes("consensus-state")
 	proof := Bytes("membership-proof")
-	VerifyClientMembership(cross, ClientId(4), Height(10), proof, path, value)
+	VerifyClientMembership(cross(cur), ClientId(4), Height(10), proof, path, value)
 
 	if len(client.membershipKeys) != 1 {
 		t.Fatalf("membership calls: got %d want 1", len(client.membershipKeys))
@@ -1361,7 +1368,7 @@ func TestVerifyClientMembershipVerifiesUnionPathValue(t *testing.T) {
 	}
 }
 
-func TestGetClientStatusDelegatesToClient(t *testing.T) {
+func TestGetClientStatusDelegatesToClient(cur realm, t *testing.T) {
 	resetState()
 	st.clientRegistry[mockType] = &mockClient{chainId: "union-1", status: StatusFrozen}
 	st.clientTypes[ClientId(4)] = mockType
@@ -1371,7 +1378,7 @@ func TestGetClientStatusDelegatesToClient(t *testing.T) {
 	}
 }
 
-func TestGetClientStatusReturnsUnknownForMissingClient(t *testing.T) {
+func TestGetClientStatusReturnsUnknownForMissingClient(cur realm, t *testing.T) {
 	resetState()
 
 	if got := GetClientStatus(ClientId(5)); got != StatusUnknown {
@@ -1381,12 +1388,12 @@ func TestGetClientStatusReturnsUnknownForMissingClient(t *testing.T) {
 
 // --- Integration: channel close ---
 
-func TestUnionChannelCloseDatagramsUnsupported(t *testing.T) {
+func TestUnionChannelCloseDatagramsUnsupported(cur realm, t *testing.T) {
 	resetState()
-	uassert.AbortsContains(t, "Union MsgChannelCloseInit has no channel id", func(cur realm) {
+	uassert.AbortsContains(t, cur, "Union MsgChannelCloseInit has no channel id", func(cur realm) {
 		ChannelCloseInit(cur, MsgChannelCloseInit{})
 	})
-	uassert.AbortsContains(t, "Union MsgChannelCloseConfirm has no channel id", func(cur realm) {
+	uassert.AbortsContains(t, cur, "Union MsgChannelCloseConfirm has no channel id", func(cur realm) {
 		ChannelCloseConfirm(cur, MsgChannelCloseConfirm{})
 	})
 }

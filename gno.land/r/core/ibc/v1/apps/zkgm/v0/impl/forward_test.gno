@@ -11,7 +11,7 @@ import (
 )
 
 func TestVerifyForwardRejectsNestedForward(cur realm, t *testing.T) {
-	err := (&ZkgmV1{}).verifyForward(core.ChannelId(1), "sender", nil, u256.Zero(), [32]byte{}, z.Forward{
+	err := (&ZkgmV1{}).verifyForward(cur, core.ChannelId(1), "sender", nil, u256.Zero(), [32]byte{}, z.Forward{
 		Path: forwardPath(1, 2),
 		Instruction: z.Instruction{
 			Version: z.INSTR_VERSION_0,
@@ -24,11 +24,11 @@ func TestVerifyForwardRejectsNestedForward(cur realm, t *testing.T) {
 }
 
 func TestVerifyForwardPassesAllowedChildren(cur realm, t *testing.T) {
-	resetTokenOrderTest()
+	resetTokenOrderTest(cur)
 
 	sender := testAddress("forward-sender")
 	baseToken := "ibc/v1-forward"
-	uassert.NoError(t, mintVoucher(cross, baseToken, baseToken, [32]byte{}, sender, u256.NewUint(30)))
+	uassert.NoError(t, mintVoucher(cross(cur), baseToken, baseToken, [32]byte{}, sender, u256.NewUint(30)))
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
 		BaseToken:   []byte(baseToken),
@@ -48,7 +48,7 @@ func TestVerifyForwardPassesAllowedChildren(cur realm, t *testing.T) {
 		{Version: z.INSTR_VERSION_0, Opcode: z.OP_BATCH, Operand: batchBytes},
 	}
 	for _, instr := range cases {
-		err := (&ZkgmV1{}).verifyForward(core.ChannelId(1), sender, nil, u256.Zero(), [32]byte{}, z.Forward{
+		err := (&ZkgmV1{}).verifyForward(cur, core.ChannelId(1), sender, nil, u256.Zero(), [32]byte{}, z.Forward{
 			Path:        forwardPath(1, 2),
 			Instruction: instr,
 		})
@@ -59,11 +59,11 @@ func TestVerifyForwardPassesAllowedChildren(cur realm, t *testing.T) {
 func TestBuildForwardChildPacket(cur realm, t *testing.T) {
 	// buildForwardChild now consults core.GetChannel(nextSourceChannel) to fill
 	// DestinationChannelId; open a channel under the expected source id first.
-	nextSource := openForwardTestChannel(cross, core.ChannelId(99))
+	nextSource := openForwardTestChannel(cross(cur), core.ChannelId(99))
 	parentSalt := [32]byte{0xA}
-	parent := core.Packet{SourceChannelId: core.ChannelId(0), DestinationChannelId: core.ChannelId(1)}
+	parent := core.NewPacket(cross(cur), core.ChannelId(0), core.ChannelId(1), nil, 0, 0)
 
-	child, err := buildForwardChild(parent, u256.NewUint(9), parentSalt, z.Forward{
+	child, err := buildForwardChild(cur, parent, u256.NewUint(9), parentSalt, z.Forward{
 		Path:             forwardPath(1, uint32(nextSource)),
 		TimeoutTimestamp: 999,
 		Instruction:      batchMustCallInstruction(batchCall("sender", "call")),
@@ -80,10 +80,10 @@ func TestBuildForwardChildPacket(cur realm, t *testing.T) {
 }
 
 func TestBuildForwardNestedRebuildsContinuation(cur realm, t *testing.T) {
-	nextSource := openForwardTestChannel(cross, core.ChannelId(99))
-	parent := core.Packet{SourceChannelId: core.ChannelId(0), DestinationChannelId: core.ChannelId(1)}
+	nextSource := openForwardTestChannel(cross(cur), core.ChannelId(99))
+	parent := core.NewPacket(cross(cur), core.ChannelId(0), core.ChannelId(1), nil, 0, 0)
 
-	child, err := buildForwardChild(parent, u256.NewUint(5), [32]byte{}, z.Forward{
+	child, err := buildForwardChild(cur, parent, u256.NewUint(5), [32]byte{}, z.Forward{
 		Path:             forwardPath(1, uint32(nextSource), 3),
 		TimeoutTimestamp: 444,
 		Instruction:      batchMustCallInstruction(batchCall("sender", "call")),
@@ -104,7 +104,7 @@ func TestBuildForwardNestedRebuildsContinuation(cur realm, t *testing.T) {
 }
 
 func TestExecuteForwardIntentReturnsOnlyMaker(cur realm, t *testing.T) {
-	res, err := (&ZkgmV1{}).executeForward(core.Packet{}, u256.Zero(), [32]byte{}, z.Forward{
+	res, err := (&ZkgmV1{}).executeForward(cur, core.NewPacket(cross(cur), 0, 0, nil, 0, 0), u256.Zero(), [32]byte{}, z.Forward{
 		Path:        forwardPath(1, 2),
 		Instruction: batchMustCallInstruction(batchCall("sender", "")),
 	}, true)
@@ -115,29 +115,29 @@ func TestExecuteForwardIntentReturnsOnlyMaker(cur realm, t *testing.T) {
 }
 
 func TestExecuteForwardAsyncDefersAckAndTracksChild(cur realm, t *testing.T) {
-	channelId := openForwardTestChannel(cross, core.ChannelId(12))
-	parent := core.Packet{SourceChannelId: core.ChannelId(9), DestinationChannelId: core.ChannelId(1)}
+	channelId := openForwardTestChannel(cross(cur), core.ChannelId(12))
+	parent := core.NewPacket(cross(cur), core.ChannelId(9), core.ChannelId(1), nil, 0, 0)
 	forward := z.Forward{
 		Path:             forwardPath(1, uint32(channelId)),
 		TimeoutTimestamp: 333,
 		Instruction:      batchMustCallInstruction(batchCall("sender", "async")),
 	}
 
-	res, err := (&ZkgmV1{}).executeForward(parent, u256.NewUint(5), [32]byte{0xC}, forward, false)
+	res, err := (&ZkgmV1{}).executeForward(cur, parent, u256.NewUint(5), [32]byte{0xC}, forward, false)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == core.PacketStatusAsync)
 	uassert.True(t, len(res.Ack) == 0)
 	// Reconstruct the deterministic child packet to derive the same InFlightKey
 	// executeForward stored under (Union batch-hash identity).
-	expectedChild, err := buildForwardChild(parent, u256.NewUint(5), [32]byte{0xC}, forward)
+	expectedChild, err := buildForwardChild(cur, parent, u256.NewUint(5), [32]byte{0xC}, forward)
 	uassert.NoError(t, err)
-	_, ok := zkgm.GetInFlightPacket(zkgm.InFlightKey{PacketHash: core.CommitPacket(expectedChild)})
+	_, ok := zkgm.GetInFlightPacket(zkgm.NewInFlightKey(cross(cur), core.CommitPacket(expectedChild)))
 	uassert.True(t, ok)
 }
 
 func TestAcknowledgeForwardDispatchesToInnerInstruction(cur realm, t *testing.T) {
-	err := (&ZkgmV1{}).acknowledgeForward(core.Packet{}, u256.Zero(), [32]byte{}, z.Forward{
+	err := (&ZkgmV1{}).acknowledgeForward(cur, core.NewPacket(cross(cur), 0, 0, nil, 0, 0), u256.Zero(), [32]byte{}, z.Forward{
 		Path:        forwardPath(1, 2),
 		Instruction: batchMustCallInstruction(batchCall("sender", "calldata")),
 	}, z.Ack{Tag: tagAckSuccess, InnerAck: []byte{}})
@@ -146,7 +146,7 @@ func TestAcknowledgeForwardDispatchesToInnerInstruction(cur realm, t *testing.T)
 }
 
 func TestAcknowledgeForwardWithTokenOrderChildRefundsOnFailure(cur realm, t *testing.T) {
-	resetTokenOrderTest()
+	resetTokenOrderTest(cur)
 
 	sender := testAddress("forward-refund")
 	order := z.TokenOrderV2{
@@ -158,11 +158,11 @@ func TestAcknowledgeForwardWithTokenOrderChildRefundsOnFailure(cur realm, t *tes
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 	path := forwardPath(1, 2)
-	increaseChannelBalanceV2(cross, core.ChannelId(3), path, order.BaseToken, order.QuoteToken, order.BaseAmount)
+	increaseChannelBalanceV2(cross(cur), core.ChannelId(3), path, order.BaseToken, order.QuoteToken, order.BaseAmount)
 	childFailAck, err := z.EncodeAck(z.Ack{Tag: tagAckFailure, InnerAck: []byte("failed")})
 	uassert.NoError(t, err)
 
-	err = (&ZkgmV1{}).acknowledgeForward(core.Packet{SourceChannelId: core.ChannelId(3), DestinationChannelId: core.ChannelId(4)}, u256.Zero(), [32]byte{}, z.Forward{
+	err = (&ZkgmV1{}).acknowledgeForward(cur, core.NewPacket(cross(cur), core.ChannelId(3), core.ChannelId(4), nil, 0, 0), u256.Zero(), [32]byte{}, z.Forward{
 		Path:        path,
 		Instruction: batchMustOrderInstruction(order),
 	}, z.Ack{Tag: tagAckSuccess, InnerAck: childFailAck})
@@ -175,18 +175,18 @@ func TestAcknowledgeForwardWithTokenOrderChildRefundsOnFailure(cur realm, t *tes
 }
 
 func TestConsumeForwardChildClearsInFlight(cur realm, t *testing.T) {
-	packet := core.Packet{SourceChannelId: core.ChannelId(2), DestinationChannelId: core.ChannelId(3)}
-	parentPacket := core.Packet{SourceChannelId: core.ChannelId(10), DestinationChannelId: core.ChannelId(11)}
-	parent := zkgm.InFlightValue{ParentPacket: parentPacket}
-	zkgm.SetInFlightPacket(cross, forwardInFlightKey(packet), parent)
+	packet := core.NewPacket(cross(cur), core.ChannelId(2), core.ChannelId(3), nil, 0, 0)
+	parentPacket := core.NewPacket(cross(cur), core.ChannelId(10), core.ChannelId(11), nil, 0, 0)
+	parent := zkgm.NewInFlightValue(cross(cur), parentPacket)
+	zkgm.SetInFlightPacket(cross(cur), forwardInFlightKey(cur, packet), parent)
 
-	got, ok := consumeForwardChild(packet, z.DeriveForwardSalt([32]byte{0xB}))
+	got, ok := consumeForwardChild(cur, packet, z.DeriveForwardSalt([32]byte{0xB}))
 
 	uassert.True(t, ok)
 	uassert.Equal(t, uint32(parent.ParentPacket.DestinationChannelId), uint32(got.ParentPacket.DestinationChannelId))
 	uassert.Equal(t, uint32(parent.ParentPacket.SourceChannelId), uint32(got.ParentPacket.SourceChannelId))
 
-	_, ok = zkgm.GetInFlightPacket(forwardInFlightKey(packet))
+	_, ok = zkgm.GetInFlightPacket(forwardInFlightKey(cur, packet))
 	uassert.False(t, ok)
 }
 
@@ -231,38 +231,21 @@ func (c *forwardTestLightClient) GetStatus(clientId core.ClientId) core.Status {
 }
 
 func openForwardTestChannel(cur realm, counterpartyChannelId core.ChannelId) core.ChannelId {
-	zkgm.UpdateImpl(cross, zkgm.UpdateRequest{Impl: &ZkgmV1{}})
+	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), &ZkgmV1{}, nil))
 	portId := []byte(zkgm.ProxyPkgPath())
 	if !core.HasApp(portId) {
-		core.RegisterApp(cross, portId, zkgm.AsIBCApp())
+		core.RegisterApp(cross(cur), portId, zkgm.AsIBCApp())
 	}
 	clientType := core.ClientType("forward-test")
 	if !core.HasClient(clientType) {
-		core.RegisterClient(cross, clientType, &forwardTestLightClient{})
+		core.RegisterClient(cross(cur), clientType, &forwardTestLightClient{})
 	}
 
-	clientId := core.CreateClient(cross, core.MsgCreateClient{
-		ClientType: clientType,
-	})
-	connectionId := core.ConnectionOpenInit(cross, core.MsgConnectionOpenInit{
-		ClientId:             clientId,
-		CounterpartyClientId: core.ClientId(99),
-	})
-	core.ConnectionOpenAck(cross, core.MsgConnectionOpenAck{
-		ConnectionId:             connectionId,
-		CounterpartyConnectionId: core.ConnectionId(77),
-	})
+	clientId := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), clientType, nil, nil))
+	connectionId := core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(cross(cur), clientId, core.ClientId(99)))
+	core.ConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(cross(cur), connectionId, core.ConnectionId(77), nil, 0))
 
-	channelId := core.ChannelOpenInit(cross, core.MsgChannelOpenInit{
-		PortId:             portId,
-		CounterpartyPortId: portId,
-		ConnectionId:       connectionId,
-		Version:            zkgm.Version,
-	})
-	core.ChannelOpenAck(cross, core.MsgChannelOpenAck{
-		ChannelId:             channelId,
-		CounterpartyVersion:   zkgm.Version,
-		CounterpartyChannelId: counterpartyChannelId,
-	})
+	channelId := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(cross(cur), portId, portId, connectionId, zkgm.Version))
+	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), channelId, zkgm.Version, counterpartyChannelId, nil, 0))
 	return channelId
 }

@@ -9,19 +9,19 @@ import (
 
 func TestRateLimitLifecycle(cur realm, t *testing.T) {
 	denom := "v1-rate-limit-lifecycle"
-	SetRateLimitDisabled(cross, false)
-	SetBucketConfig(cross, denom, u256.NewUint(10), u256.NewUint(1))
+	SetRateLimitDisabled(cross(cur), false)
+	SetBucketConfig(cross(cur), denom, u256.NewUint(10), u256.NewUint(1))
 
-	err := RateLimit(cross, denom, u256.NewUint(7))
+	err := RateLimit(cross(cur), denom, u256.NewUint(7))
 	uassert.NoError(t, err)
 
-	err = RateLimit(cross, denom, u256.NewUint(4))
+	err = RateLimit(cross(cur), denom, u256.NewUint(4))
 	uassert.ErrorContains(t, err, "token bucket rate limit exceeded")
 
-	SetRateLimitDisabled(cross, true)
+	SetRateLimitDisabled(cross(cur), true)
 
-	err = RateLimit(cross, denom, u256.NewUint(100))
+	err = RateLimit(cross(cur), denom, u256.NewUint(100))
 	uassert.NoError(t, err)
 
-	SetRateLimitDisabled(cross, false)
+	SetRateLimitDisabled(cross(cur), false)
 }

@@ -1,21 +1,21 @@
 package core
 
-import "chain/runtime"
+import rtunsafe "chain/runtime/unsafe"
 
-func ChannelOpenInit(_ realm, msg MsgChannelOpenInit) ChannelId {
-	relayer := runtime.OriginCaller()
-	portId := msg.PortId
+func ChannelOpenInit(cur realm, msg MsgChannelOpenInit) ChannelId {
+	relayer := rtunsafe.OriginCaller()
+	portId := Bytes(cloneBytes(msg.PortId))
 	connection := ensureConnectionOpen(msg.ConnectionId)
 	channelId := st.generateChannelId()
 	st.channelOwners[channelId] = portId
 
-	st.getAppByPortId(portId).OnChannelOpenInit(msg.ConnectionId, channelId, msg.Version, relayer)
+	st.getAppByPortId(portId).OnChannelOpenInit(cross(cur), msg.ConnectionId, channelId, msg.Version, relayer)
 
 	channel := Channel{
 		State:                 ChannelStateInit,
 		ConnectionId:          msg.ConnectionId,
 		CounterpartyChannelId: 0,
-		CounterpartyPortId:    msg.CounterpartyPortId,
+		CounterpartyPortId:    Bytes(cloneBytes(msg.CounterpartyPortId)),
 		Version:               msg.Version,
 	}
 	st.saveChannel(channelId, channel)
@@ -23,9 +23,9 @@ func ChannelOpenInit(_ realm, msg MsgChannelOpenInit) ChannelId {
 	return channelId
 }
 
-func ChannelOpenTry(_ realm, msg MsgChannelOpenTry) ChannelId {
-	relayer := runtime.OriginCaller()
-	portId := msg.PortId
+func ChannelOpenTry(cur realm, msg MsgChannelOpenTry) ChannelId {
+	relayer := rtunsafe.OriginCaller()
+	portId := Bytes(cloneBytes(msg.PortId))
 	if msg.Channel.State != ChannelStateTryOpen {
 		panic(ErrInvalidChannelState)
 	}
@@ -44,15 +44,15 @@ func ChannelOpenTry(_ realm, msg MsgChannelOpenTry) ChannelId {
 	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofInit, key[:], value[:])
 
 	st.channelOwners[channelId] = portId
-	st.getAppByPortId(portId).OnChannelOpenTry(msg.Channel.ConnectionId, channelId, msg.Channel.Version, msg.CounterpartyVersion, relayer)
+	st.getAppByPortId(portId).OnChannelOpenTry(cross(cur), msg.Channel.ConnectionId, channelId, msg.Channel.Version, msg.CounterpartyVersion, relayer)
 	st.saveChannel(channelId, msg.Channel)
 
 	emitChannelEvent(ChannelOpenTryEvent, portId, channelId, msg.Channel, connection)
 	return channelId
 }
 
-func ChannelOpenAck(_ realm, msg MsgChannelOpenAck) {
-	relayer := runtime.OriginCaller()
+func ChannelOpenAck(cur realm, msg MsgChannelOpenAck) {
+	relayer := rtunsafe.OriginCaller()
 	channel := st.getChannel(msg.ChannelId)
 	if channel.State != ChannelStateInit {
 		panic(ErrInvalidChannelState)
@@ -71,7 +71,7 @@ func ChannelOpenAck(_ realm, msg MsgChannelOpenAck) {
 	value := keccak(expectedChannel.EthAbiEncode())
 	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofTry, key[:], value[:])
 
-	st.getAppByPortId(portId).OnChannelOpenAck(msg.ChannelId, msg.CounterpartyChannelId, msg.CounterpartyVersion, relayer)
+	st.getAppByPortId(portId).OnChannelOpenAck(cross(cur), msg.ChannelId, msg.CounterpartyChannelId, msg.CounterpartyVersion, relayer)
 
 	channel.State = ChannelStateOpen
 	channel.Version = msg.CounterpartyVersion
@@ -81,8 +81,8 @@ func ChannelOpenAck(_ realm, msg MsgChannelOpenAck) {
 	emitChannelEvent(ChannelOpenAckEvent, portId, msg.ChannelId, channel, connection)
 }
 
-func ChannelOpenConfirm(_ realm, msg MsgChannelOpenConfirm) {
-	relayer := runtime.OriginCaller()
+func ChannelOpenConfirm(cur realm, msg MsgChannelOpenConfirm) {
+	relayer := rtunsafe.OriginCaller()
 	channel := st.getChannel(msg.ChannelId)
 	if channel.State != ChannelStateTryOpen {
 		panic(ErrInvalidChannelState)
@@ -101,18 +101,18 @@ func ChannelOpenConfirm(_ realm, msg MsgChannelOpenConfirm) {
 	value := keccak(expectedChannel.EthAbiEncode())
 	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofAck, key[:], value[:])
 
-	st.getAppByPortId(portId).OnChannelOpenConfirm(msg.ChannelId, relayer)
+	st.getAppByPortId(portId).OnChannelOpenConfirm(cross(cur), msg.ChannelId, relayer)
 	channel.State = ChannelStateOpen
 	st.saveChannel(msg.ChannelId, channel)
 
 	emitChannelEvent(ChannelOpenConfirmEvent, portId, msg.ChannelId, channel, connection)
 }
 
-func ChannelCloseInit(_ realm, msg MsgChannelCloseInit) {
+func ChannelCloseInit(cur realm, msg MsgChannelCloseInit) {
 	panic("channel close init unsupported: Union MsgChannelCloseInit has no channel id")
 }
 
-func ChannelCloseConfirm(_ realm, msg MsgChannelCloseConfirm) {
+func ChannelCloseConfirm(cur realm, msg MsgChannelCloseConfirm) {
 	panic("channel close confirm unsupported: Union MsgChannelCloseConfirm has no channel id")
 }
 

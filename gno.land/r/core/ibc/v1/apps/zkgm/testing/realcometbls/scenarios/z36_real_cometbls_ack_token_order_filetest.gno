@@ -1,4 +1,5 @@
-package main
+// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
+package scenarios
 
 import (
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -11,8 +12,8 @@ import (
 	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
 )
 
-func main() {
-	pair := realcometbls.OpenZ35CometBLSChannel(cross)
+func main(cur realm) {
+	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 	sender := string(testutils.TestAddress("timeout-sender"))
 
 	order := z.TokenOrderV2{
@@ -24,27 +25,17 @@ func main() {
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
-	packet := core.Packet{
-		SourceChannelId:      pair.Destination,
-		DestinationChannelId: core.GetChannel(pair.Destination).CounterpartyChannelId,
-		Data:                 e2e.MustPacketData(cross, e2e.MustTokenOrderInstruction(cross, order)),
-		TimeoutTimestamp:     core.Timestamp(3600),
-	}
-	realcometbls.BatchSend(cross, packet)
+	packet := core.NewPacket(cross(cur), pair.Destination, core.GetChannel(pair.Destination).CounterpartyChannelId, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), 0, core.Timestamp(3600))
+	realcometbls.BatchSend(cross(cur), packet)
 	marketMaker := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
-	ack := e2e.MustSuccessAck(cross, mustMarketMakerTokenOrderAck([]byte(marketMaker)))
+	ack := e2e.MustSuccessAck(cross(cur), mustMarketMakerTokenOrderAck([]byte(marketMaker)))
 
-	println("commitment_before_ack", core.HasPacketCommitment(cross, packet))
+	println("commitment_before_ack", core.HasPacketCommitment(cross(cur), packet))
 	println("market_maker_balance_before_ack", impl.VoucherBalanceOf(string(order.BaseToken), address(marketMaker)))
 
-	core.PacketAcknowledgement(cross, core.MsgPacketAcknowledgement{
-		Packets:          []core.Packet{packet},
-		Acknowledgements: [][]byte{ack},
-		Proof:            realcometbls.Z36AckMembershipProof(cross),
-		ProofHeight:      core.Height(realcometbls.DevnetHeight - 1),
-	})
+	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement(cross(cur), []core.Packet{packet}, [][]byte{ack}, realcometbls.Z36AckMembershipProof(cross(cur)), core.Height(realcometbls.DevnetHeight-1)))
 
-	println("commitment_after_ack", core.HasPacketCommitment(cross, packet))
+	println("commitment_after_ack", core.HasPacketCommitment(cross(cur), packet))
 	println("market_maker_balance_after_ack", impl.VoucherBalanceOf(string(order.BaseToken), address(marketMaker)))
 	println("ack_real_cometbls", "ok")
 }

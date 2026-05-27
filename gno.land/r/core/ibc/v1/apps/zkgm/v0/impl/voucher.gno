@@ -24,13 +24,20 @@ func getOrCreateVoucherV2(cur realm, ibcDenom string, baseDenom string, metadata
 		return v.(*voucher)
 	}
 
-	token, ledger := grc20.NewToken(baseDenom, ibcDenom, 0)
-	grc20reg.Register(cross, token, strings.TrimPrefix(ibcDenom, ibcDenomPrefix))
+	// GRC20 symbols are restricted to [A-Za-z0-9_-]+ with a maximum
+	// length of 11 characters. Convert "ibc/<hex>" into a valid symbol
+	// by removing the prefix and truncating if necessary.
+	symbol := strings.TrimPrefix(ibcDenom, ibcDenomPrefix)
+	if len(symbol) > 11 {
+		symbol = symbol[:11]
+	}
+	token, ledger := grc20.NewToken(0, cur, ibcDenom, symbol, 0)
+	grc20reg.Register(cross(cur), token, strings.TrimPrefix(ibcDenom, ibcDenomPrefix))
 
 	v := &voucher{token: token, ledger: ledger}
 	voucherTokens.Set(ibcDenom, v)
 
-	zkgm.SetMetadataImageOf(cross, ibcDenom, metadataImage)
+	zkgm.SetMetadataImageOf(cross(cur), ibcDenom, metadataImage)
 	return v
 }
 

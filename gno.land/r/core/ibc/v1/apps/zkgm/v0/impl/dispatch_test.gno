@@ -22,18 +22,18 @@ func TestRecvForwardExecuteErrorReturnsFailure(cur realm, t *testing.T) {
 			},
 		}),
 	})
-	packet := core.Packet{SourceChannelId: core.ChannelId(1), DestinationChannelId: core.ChannelId(2), Data: data}
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(2), data, 0, 0)
 
-	res := (&ZkgmV1{}).Recv(packet, address("g1relayer"), nil)
+	res := (&ZkgmV1{}).Recv(cur, packet, address("g1relayer"), nil)
 
 	uassert.True(t, res.Status == core.PacketStatusFailure)
 	uassert.Equal(t, "zkgm/v1: forward missing previous destination channel", string(res.Ack))
 }
 
 func TestRecvMalformedPacketReturnsFailure(cur realm, t *testing.T) {
-	packet := core.Packet{SourceChannelId: core.ChannelId(1), DestinationChannelId: core.ChannelId(2), Data: []byte{0x01}}
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(2), []byte{0x01}, 0, 0)
 
-	res := (&ZkgmV1{}).Recv(packet, address("g1relayer"), nil)
+	res := (&ZkgmV1{}).Recv(cur, packet, address("g1relayer"), nil)
 
 	uassert.True(t, res.Status == core.PacketStatusFailure)
 	uassert.True(t, len(res.Ack) > 0)
@@ -44,10 +44,10 @@ func TestAckUnsupportedOpcodeAborts(cur realm, t *testing.T) {
 		Version: z.INSTR_VERSION_0,
 		Opcode:  0xFF,
 	})
-	packet := core.Packet{SourceChannelId: core.ChannelId(1), DestinationChannelId: core.ChannelId(2), Data: data}
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(2), data, 0, 0)
 
-	uassert.AbortsContains(t, "unsupported opcode", func(cur realm) {
-		(&ZkgmV1{}).Ack(packet, nil, address("g1relayer"))
+	uassert.AbortsContains(t, cur, "unsupported opcode", func(cur realm) {
+		(&ZkgmV1{}).Ack(cur, packet, nil, address("g1relayer"))
 	})
 }
 

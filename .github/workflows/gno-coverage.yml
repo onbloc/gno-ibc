@@ -34,8 +34,6 @@ on:
       - '**.go'
       - 'gnowork.toml'
       - 'Makefile'
-      - 'stdlibs/**'
-      - 'tools/setup-stdlibs.py'
       - 'flake.nix'
       - 'flake.lock'
       - '.github/workflows/gno-coverage.yml'
@@ -49,9 +47,9 @@ concurrency:
 
 env:
   # `inputs.*` are only set on workflow_dispatch; fall back to the same
-  # defaults so pull_request and push events use a fixed repo + SHA.
-  # setup-stdlibs.py reads both from the environment (Makefile exports
-  # them via `export GNO_COMMIT GNO_REPO`).
+  # defaults so pull_request and push events use a fixed repo + SHA. The
+  # Makefile exports GNO_COMMIT and GNO_REPO so `make install-gno` picks
+  # them up.
   GNO_REPO:   ${{ inputs.gno_repo   || 'https://github.com/notJoon/gno-core.git' }}
   GNO_COMMIT: ${{ inputs.gno_commit || '8981c2b6ca8b197e1ec191573986c68bd4c037a5' }}
 
@@ -84,7 +82,7 @@ jobs:
           path: |
             ~/go/bin/gno
             ~/.cache/gno-ibc/gno
-          key: gno-cover-${{ runner.os }}-${{ env.GNO_COMMIT }}-${{ hashFiles('stdlibs/**/*.go', 'stdlibs/**/gnomod.toml', 'stdlibs/go.mod', 'stdlibs/go.sum', 'tools/setup-stdlibs.py') }}
+          key: gno-cover-${{ runner.os }}-${{ env.GNO_COMMIT }}
           restore-keys: |
             gno-cover-${{ runner.os }}-${{ env.GNO_COMMIT }}-
 
@@ -103,10 +101,6 @@ jobs:
       - name: Install gno toolchain (coverage build)
         if: steps.gno-cache.outputs.cache-hit != 'true'
         run: make install-gno GNO_COMMIT=${{ env.GNO_COMMIT }}
-
-      - name: Refresh stdlib symlinks
-        if: steps.gno-cache.outputs.cache-hit == 'true'
-        run: make link-stdlibs GNO_COMMIT=${{ env.GNO_COMMIT }}
 
       - name: Verify gno binary
         run: make verify-gno GNO_COMMIT=${{ env.GNO_COMMIT }}

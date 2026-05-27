@@ -1,4 +1,5 @@
-package main
+// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
+package scenarios
 
 import (
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -10,7 +11,7 @@ import (
 	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
 )
 
-func main() {
+func main(cur realm) {
 	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
@@ -23,9 +24,9 @@ func main() {
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.Packet{SourceChannelId: pair.Source, DestinationChannelId: pair.Destination, Data: e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), TimeoutTimestamp: core.Timestamp(0)}
+	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), 0, core.Timestamp(0))
 
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, realcometbls.Z35PacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight - 1)))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, realcometbls.Z35PacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight-1)))
 
 	println("quote_balance", impl.VoucherBalanceOf("ibc/quote", address(receiver)))
 	println("ack_hash_matches_failure", core.AcknowledgementHash(cross(cur), packet).String() == expectedFailureAckHash())

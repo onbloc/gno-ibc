@@ -52,23 +52,25 @@ type flowApp struct {
 	recvCount int
 }
 
-func (a *flowApp) OnChannelOpenInit(_ core.ConnectionId, _ core.ChannelId, _ string, _ address) {
+func (a *flowApp) OnChannelOpenInit(_ realm, _ core.ConnectionId, _ core.ChannelId, _ string, _ address) {
 }
 
-func (a *flowApp) OnChannelOpenTry(_ core.ConnectionId, _ core.ChannelId, _, _ string, _ address) {
+func (a *flowApp) OnChannelOpenTry(_ realm, _ core.ConnectionId, _ core.ChannelId, _, _ string, _ address) {
 }
-func (a *flowApp) OnChannelOpenAck(_ core.ChannelId, _ core.ChannelId, _ string, _ address) {}
-func (a *flowApp) OnChannelOpenConfirm(_ core.ChannelId, _ address)                         {}
-func (a *flowApp) OnChannelCloseInit(_ core.ChannelId, _ address)                           {}
-func (a *flowApp) OnChannelCloseConfirm(_ core.ChannelId, _ address)                        {}
-func (a *flowApp) OnRecvPacket(_ core.Packet, _ address, _ []byte) core.RecvPacketResult {
+
+func (a *flowApp) OnChannelOpenAck(_ realm, _ core.ChannelId, _ core.ChannelId, _ string, _ address) {
+}
+func (a *flowApp) OnChannelOpenConfirm(_ realm, _ core.ChannelId, _ address)  {}
+func (a *flowApp) OnChannelCloseInit(_ realm, _ core.ChannelId, _ address)    {}
+func (a *flowApp) OnChannelCloseConfirm(_ realm, _ core.ChannelId, _ address) {}
+func (a *flowApp) OnRecvPacket(cur realm, _ core.Packet, _ address, _ []byte) core.RecvPacketResult {
 	a.recvCount++
-	return core.RecvPacketResult{Status: core.PacketStatusSuccess, Ack: []byte{0x01}}
+	return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, []byte{0x01})
 }
-func (a *flowApp) OnIntentRecvPacket(_ core.Packet, _ address, _ []byte) {}
-func (a *flowApp) OnAcknowledgementPacket(_ core.Packet, _ []byte, _ address) {
+func (a *flowApp) OnIntentRecvPacket(_ realm, _ core.Packet, _ address, _ []byte) {}
+func (a *flowApp) OnAcknowledgementPacket(_ realm, _ core.Packet, _ []byte, _ address) {
 }
-func (a *flowApp) OnTimeoutPacket(_ core.Packet, _ address) {}
+func (a *flowApp) OnTimeoutPacket(_ realm, _ core.Packet, _ address) {}
 
 type stateLensFlow struct {
 	app                   *flowApp

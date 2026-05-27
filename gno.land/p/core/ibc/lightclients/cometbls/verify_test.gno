@@ -75,12 +75,12 @@ func devnetHeader() Header {
 			Height:             devnetHeight,
 			TimeSeconds:        devnetTimeSeconds,
 			TimeNanos:          devnetTimeNanos,
-			ValidatorsHash:     devnetVH[:],
+			ValidatorsHash:     cloneBytes(devnetVH[:]),
 			NextValidatorsHash: devnetVH,
-			AppHash:            devnetAH,
+			AppHash:            cloneBytes(devnetAH),
 		},
 		TrustedHeight:      Height(devnetHeight - 1),
-		ZeroKnowledgeProof: devnetZKP,
+		ZeroKnowledgeProof: cloneBytes(devnetZKP),
 	}
 }
 

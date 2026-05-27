@@ -51,7 +51,7 @@ func createSyntheticCometBLSClient(cur realm, clientStateBytes []byte) core.Clie
 
 func createCometBLSClient(cur realm, clientStateBytes, consensusStateBytes []byte) core.ClientId {
 	if !core.HasClient(realcometbls.ClientType) {
-		core.RegisterClient(cross(cur), realcometbls.ClientType, realcometbls.Adapter{})
+		core.RegisterClient(cross(cur), realcometbls.ClientType, realcometbls.NewAdapter(cross(cur)))
 	}
 	return core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), realcometbls.ClientType, clientStateBytes, consensusStateBytes))
 }
@@ -60,7 +60,7 @@ func OpenZ35CometBLSChannel(cur realm) ChannelPair {
 	clientId := CreateZ35CometBLSClient(cross(cur))
 
 	connectionId := core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(cross(cur), clientId, core.ClientId(99)))
-	core.ConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(cross(cur), connectionId, core.ConnectionId(77), Z35ConnectionTryProof(cross(cur)), core.Height(DevnetHeight - 1)))
+	core.ConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(cross(cur), connectionId, core.ConnectionId(77), Z35ConnectionTryProof(cross(cur)), core.Height(DevnetHeight-1)))
 
 	destination := openZ35Channel(cross(cur), connectionId, core.ChannelId(2))
 	return ChannelPair{
@@ -74,7 +74,7 @@ func OpenZ35CometBLSChannel(cur realm) ChannelPair {
 func openZ35Channel(cur realm, connectionId core.ConnectionId, counterpartyChannelId core.ChannelId) core.ChannelId {
 	portId := []byte(zkgm.ProxyPkgPath())
 	channelId := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(cross(cur), portId, portId, connectionId, zkgm.Version))
-	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), channelId, zkgm.Version, counterpartyChannelId, Z35ChannelTryProof(cross(cur)), core.Height(DevnetHeight - 1)))
+	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), channelId, zkgm.Version, counterpartyChannelId, Z35ChannelTryProof(cross(cur)), core.Height(DevnetHeight-1)))
 	return channelId
 }
 
@@ -86,11 +86,11 @@ func OpenZ37CometBLSChannel(cur realm) ChannelPair {
 	clientId := CreateZ37CometBLSClient(cross(cur))
 
 	connectionId := core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(cross(cur), clientId, core.ClientId(99)))
-	core.ConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(cross(cur), connectionId, core.ConnectionId(77), Z37ConnectionTryProof(cross(cur)), core.Height(DevnetHeight - 1)))
+	core.ConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(cross(cur), connectionId, core.ConnectionId(77), Z37ConnectionTryProof(cross(cur)), core.Height(DevnetHeight-1)))
 
 	portId := []byte(zkgm.ProxyPkgPath())
 	channelId := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(cross(cur), portId, portId, connectionId, zkgm.Version))
-	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), channelId, zkgm.Version, core.ChannelId(2), Z37ChannelTryProof(cross(cur)), core.Height(DevnetHeight - 1)))
+	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), channelId, zkgm.Version, core.ChannelId(2), Z37ChannelTryProof(cross(cur)), core.Height(DevnetHeight-1)))
 	return ChannelPair{
 		ClientId:     clientId,
 		ConnectionId: connectionId,

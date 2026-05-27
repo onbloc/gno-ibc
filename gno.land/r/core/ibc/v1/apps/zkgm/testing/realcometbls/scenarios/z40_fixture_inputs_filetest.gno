@@ -1,4 +1,5 @@
-package main
+// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
+package scenarios
 
 import (
 	"encoding/hex"
@@ -11,9 +12,9 @@ import (
 
 const mockReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
 
-func main() {
-	mixedPacket := z40MixedBatchPacket()
-	panicPacket := z40PanicBatchPacket()
+func main(cur realm) {
+	mixedPacket := z40MixedBatchPacket(cur)
+	panicPacket := z40PanicBatchPacket(cur)
 	mixedPacketKey := core.PacketCommitmentPath(mixedPacket)
 	panicPacketKey := core.PacketCommitmentPath(panicPacket)
 	packetValue := core.COMMITMENT_MAGIC
@@ -22,8 +23,8 @@ func main() {
 	printKV("panic_batch_packet_commitment", panicPacketKey[:], packetValue[:])
 }
 
-func z40MixedBatchPacket() core.Packet {
-	return z40BatchPacket(z.Batch{Instructions: []z.Instruction{
+func z40MixedBatchPacket(cur realm) core.Packet {
+	return z40BatchPacket(cur, z.Batch{Instructions: []z.Instruction{
 		e2e.MustCallInstruction(cross(cur), z.Call{
 			Sender:           []byte("sender"),
 			ContractAddress:  []byte(mockReceiverPath),
@@ -41,8 +42,8 @@ func z40MixedBatchPacket() core.Packet {
 	}})
 }
 
-func z40PanicBatchPacket() core.Packet {
-	return z40BatchPacket(z.Batch{Instructions: []z.Instruction{
+func z40PanicBatchPacket(cur realm) core.Packet {
+	return z40BatchPacket(cur, z.Batch{Instructions: []z.Instruction{
 		e2e.MustCallInstruction(cross(cur), z.Call{
 			Sender:           []byte("sender"),
 			ContractAddress:  []byte(mockReceiverPath),
@@ -60,13 +61,8 @@ func z40PanicBatchPacket() core.Packet {
 	}})
 }
 
-func z40BatchPacket(batch z.Batch) core.Packet {
-	return core.Packet{
-		SourceChannelId:      core.ChannelId(2),
-		DestinationChannelId: core.ChannelId(1),
-		Data:                 e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)),
-		TimeoutTimestamp:     core.Timestamp(0),
-	}
+func z40BatchPacket(cur realm, batch z.Batch) core.Packet {
+	return core.NewPacket(cross(cur), core.ChannelId(2), core.ChannelId(1), e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), 0, core.Timestamp(0))
 }
 
 func printKV(name string, key []byte, value []byte) {

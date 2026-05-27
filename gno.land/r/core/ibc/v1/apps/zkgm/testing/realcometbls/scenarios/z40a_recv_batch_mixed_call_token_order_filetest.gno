@@ -1,4 +1,5 @@
-package main
+// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
+package scenarios
 
 import (
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -13,13 +14,13 @@ import (
 
 const mockReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
 
-func main() {
+func main(cur realm) {
 	mock.Reset(cross(cur))
 	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
-	packet := mixedBatchPacket(pair, receiver)
+	packet := mixedBatchPacket(cur, pair, receiver)
 
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, [][]byte{[]byte("batch-relay-msg")}, realcometbls.Z40MixedBatchPacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight - 1)))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, [][]byte{[]byte("batch-relay-msg")}, realcometbls.Z40MixedBatchPacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight-1)))
 
 	println("mock_calls", mock.Calls(cross(cur)))
 	println("last_calldata", mock.LastCalldata(cross(cur)))
@@ -27,11 +28,11 @@ func main() {
 	println("quote_balance", impl.VoucherBalanceOf("ibc/batch-quote", address(receiver)))
 	println("receipt_after_recv", core.HasPacketReceipt(cross(cur), packet))
 	println("ack_after_recv", core.HasAcknowledgement(cross(cur), packet))
-	println("ack_hash_matches_batch_ack", core.AcknowledgementHash(cross(cur), packet).String() == expectedAckHash())
+	println("ack_hash_matches_batch_ack", core.AcknowledgementHash(cross(cur), packet).String() == expectedAckHash(cur))
 	println("recv_batch_mixed_real_cometbls", "ok")
 }
 
-func mixedBatchPacket(pair realcometbls.ChannelPair, receiver string) core.Packet {
+func mixedBatchPacket(cur realm, pair realcometbls.ChannelPair, receiver string) core.Packet {
 	batch := z.Batch{Instructions: []z.Instruction{
 		e2e.MustCallInstruction(cross(cur), z.Call{
 			Sender:           []byte("sender"),
@@ -48,15 +49,10 @@ func mixedBatchPacket(pair realcometbls.ChannelPair, receiver string) core.Packe
 			Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 		}),
 	}}
-	return core.Packet{
-		SourceChannelId:      pair.Source,
-		DestinationChannelId: pair.Destination,
-		Data:                 e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)),
-		TimeoutTimestamp:     core.Timestamp(0),
-	}
+	return core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), 0, core.Timestamp(0))
 }
 
-func expectedAckHash() string {
+func expectedAckHash(cur realm) string {
 	ack := e2e.MustBatchAck(cross(cur), [][]byte{
 		e2e.MustCallAck(cross(cur)),
 		universalErrorAck(),

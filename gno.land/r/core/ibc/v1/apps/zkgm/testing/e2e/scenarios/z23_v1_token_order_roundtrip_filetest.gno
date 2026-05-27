@@ -1,4 +1,5 @@
-package main
+// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e/scenarios
+package scenarios
 
 import (
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -9,7 +10,7 @@ import (
 	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
 )
 
-func main() {
+func main(cur realm) {
 	e2e.RegisterMockLightClient(cross(cur))
 	pair := e2e.OpenE2EChannelPair(cross(cur))
 
@@ -28,12 +29,7 @@ func main() {
 		Metadata:    metaBytes,
 	}
 	instr := e2e.MustTokenOrderInstruction(cross(cur), order)
-	packet := core.Packet{
-		SourceChannelId:      pair.Source,
-		DestinationChannelId: pair.Destination,
-		Data:                 e2e.MustPacketData(cross(cur), instr),
-		TimeoutTimestamp:     core.Timestamp(1 << 62),
-	}
+	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), instr), 0, core.Timestamp(1<<62))
 	e2e.BatchSend(cross(cur), packet)
 
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, nil, core.Height(1)))

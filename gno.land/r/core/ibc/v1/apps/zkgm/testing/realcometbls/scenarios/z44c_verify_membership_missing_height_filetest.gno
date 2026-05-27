@@ -1,4 +1,5 @@
-package main
+// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
+package scenarios
 
 import (
 	core "gno.land/r/core/ibc/v1/core"
@@ -6,9 +7,9 @@ import (
 	realcometbls "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls"
 )
 
-func main() {
+func main(cur realm) {
 	clientId := realcometbls.CreateRealCometBLSClient(cross(cur))
-	realadapter.Adapter{}.VerifyMembership(
+	realadapter.NewAdapter(cross(cur)).VerifyMembership(
 		clientId,
 		core.Height(realcometbls.DevnetHeight),
 		realcometbls.TwoExistenceProofStubs(cross(cur)),

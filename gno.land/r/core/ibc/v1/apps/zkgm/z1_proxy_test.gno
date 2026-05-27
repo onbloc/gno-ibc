@@ -29,7 +29,7 @@ func TestProxyUpdateImplAllowedEmpty(cur realm, t *testing.T) {
 	d := &dummyImpl{}
 
 	uassert.NotAborts(t, cur, func(cur realm) {
-		UpdateImpl(cur, UpdateRequest{Impl: d})
+		UpdateImpl(cur, NewUpdateRequest(cur, d, nil))
 	})
 	if impl == nil || ImplPath() == "" {
 		t.Fatal("UpdateImpl must set impl and implPath")
@@ -42,7 +42,7 @@ func TestProxyUpdateImplDeniedAfterLock(cur realm, t *testing.T) {
 	allowedImpls = []string{"gno.land/r/not-this-realm"}
 
 	uassert.AbortsContains(t, cur, "permission denied", func(cur realm) {
-		UpdateImpl(cur, UpdateRequest{Impl: d})
+		UpdateImpl(cur, NewUpdateRequest(cur, d, nil))
 	})
 	if impl != nil {
 		t.Fatal("denied UpdateImpl must not change impl")
@@ -54,7 +54,7 @@ func TestWriteForwardAckRequiresRegisteredImpl(cur realm, t *testing.T) {
 	implPath = "gno.land/r/not-this-realm"
 
 	uassert.AbortsContains(t, cur, "only registered impl", func(cur realm) {
-		WriteForwardAck(cur, core.Packet{SourceChannelId: 1, DestinationChannelId: 2}, []byte{0x01})
+		WriteForwardAck(cur, core.NewPacket(cross(cur), 1, 2, nil, 0, 0), []byte{0x01})
 	})
 }
 

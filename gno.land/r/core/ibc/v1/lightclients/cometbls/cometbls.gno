@@ -46,6 +46,10 @@ func getEntry(clientId core.ClientId) *clientEntry {
 
 type Adapter struct{}
 
+func NewAdapter(cur realm) Adapter {
+	return Adapter{}
+}
+
 func (Adapter) CreateClient(cur realm, clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) string {
 	mustBeCore(cur)
 

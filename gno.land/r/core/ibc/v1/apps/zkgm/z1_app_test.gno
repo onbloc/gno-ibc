@@ -23,59 +23,59 @@ type dummyImpl struct {
 	lastCounterpartyVer string
 }
 
-func (d *dummyImpl) PreChannelOpenInit(channelId core.ChannelId) {
+func (d *dummyImpl) PreChannelOpenInit(_ realm, channelId core.ChannelId) {
 	d.openInitCalled = true
 	d.lastChannelId = channelId
 }
 
-func (d *dummyImpl) PreChannelOpenTry(channelId core.ChannelId, counterpartyVersion string) {
+func (d *dummyImpl) PreChannelOpenTry(_ realm, channelId core.ChannelId, counterpartyVersion string) {
 	d.openTryCalled = true
 	d.lastChannelId = channelId
 	d.lastCounterpartyVer = counterpartyVersion
 }
 
-func (d *dummyImpl) PostChannelOpenAck(channelId core.ChannelId, counterpartyChannelId core.ChannelId) {
+func (d *dummyImpl) PostChannelOpenAck(_ realm, channelId core.ChannelId, counterpartyChannelId core.ChannelId) {
 	d.openAckCalled = true
 	d.lastChannelId = channelId
 	d.lastCounterpartyId = counterpartyChannelId
 }
 
-func (d *dummyImpl) PostChannelOpenConfirm(channelId core.ChannelId) {
+func (d *dummyImpl) PostChannelOpenConfirm(_ realm, channelId core.ChannelId) {
 	d.openConfirmCalled = true
 	d.lastChannelId = channelId
 }
 
-func (d *dummyImpl) PreChannelCloseInit(channelId core.ChannelId) {
+func (d *dummyImpl) PreChannelCloseInit(_ realm, channelId core.ChannelId) {
 	d.closeInitCalled = true
 	d.lastChannelId = channelId
 }
 
-func (d *dummyImpl) PostChannelCloseConfirm(channelId core.ChannelId) {
+func (d *dummyImpl) PostChannelCloseConfirm(_ realm, channelId core.ChannelId) {
 	d.closeConfirmCalled = true
 	d.lastChannelId = channelId
 }
 
-func (d *dummyImpl) Recv(packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
+func (d *dummyImpl) Recv(cur realm, packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
 	d.recvCalled = true
 	if d.recvResult.Status != core.PacketStatusUnknown {
 		return d.recvResult
 	}
-	return core.RecvPacketResult{Status: core.PacketStatusSuccess, Ack: []byte{0x01}}
+	return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, []byte{0x01})
 }
 
-func (d *dummyImpl) IntentRecv(packet core.Packet, marketMaker address, marketMakerMsg []byte) {
+func (d *dummyImpl) IntentRecv(_ realm, packet core.Packet, marketMaker address, marketMakerMsg []byte) {
 	d.recvCalled = true
 }
 
-func (d *dummyImpl) Ack(packet core.Packet, ack []byte, relayer address) {
+func (d *dummyImpl) Ack(_ realm, packet core.Packet, ack []byte, relayer address) {
 	d.ackCalled = true
 }
 
-func (d *dummyImpl) Timeout(packet core.Packet, relayer address) {
+func (d *dummyImpl) Timeout(_ realm, packet core.Packet, relayer address) {
 	d.timeoutCalled = true
 }
 
-func (d *dummyImpl) Send(req SendRequest) ([]byte, error) {
+func (d *dummyImpl) Send(_ realm, req SendRequest) ([]byte, error) {
 	return []byte("dummy"), nil
 }
 
@@ -96,13 +96,13 @@ func TestAppChannelOpenInitVersion(cur realm, t *testing.T) {
 	d := &dummyImpl{}
 	impl = d
 
-	(&App{}).OnChannelOpenInit(1, 2, Version, address("g1relayer"))
+	(&App{}).OnChannelOpenInit(cur, 1, 2, Version, address("g1relayer"))
 	if !d.openInitCalled || d.lastChannelId != 2 {
 		t.Fatal("OnChannelOpenInit must delegate to impl")
 	}
 
-	uassert.PanicsContains(t, "unsupported channel version", func() {
-		(&App{}).OnChannelOpenInit(1, 2, "bad-version", address("g1relayer"))
+	uassert.AbortsContains(t, cur, "unsupported channel version", func(cur realm) {
+		(&App{}).OnChannelOpenInit(cur, 1, 2, "bad-version", address("g1relayer"))
 	})
 }
 
@@ -111,13 +111,13 @@ func TestAppChannelOpenTryCounterpartyVersion(cur realm, t *testing.T) {
 	d := &dummyImpl{}
 	impl = d
 
-	(&App{}).OnChannelOpenTry(1, 2, Version, Version, address("g1relayer"))
+	(&App{}).OnChannelOpenTry(cur, 1, 2, Version, Version, address("g1relayer"))
 	if !d.openTryCalled || d.lastCounterpartyVer != Version {
 		t.Fatal("OnChannelOpenTry must delegate with counterparty version")
 	}
 
-	uassert.PanicsContains(t, "unsupported channel version", func() {
-		(&App{}).OnChannelOpenTry(1, 2, Version, "bad-version", address("g1relayer"))
+	uassert.AbortsContains(t, cur, "unsupported channel version", func(cur realm) {
+		(&App{}).OnChannelOpenTry(cur, 1, 2, Version, "bad-version", address("g1relayer"))
 	})
 }
 
@@ -125,15 +125,15 @@ func TestAppNineMethodsDelegate(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	impl = d
-	packet := core.Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: []byte("data")}
+	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0, 0)
 
-	(&App{}).OnChannelOpenAck(2, 3, Version, address("g1relayer"))
-	(&App{}).OnChannelOpenConfirm(2, address("g1relayer"))
-	(&App{}).OnChannelCloseInit(2, address("g1relayer"))
-	(&App{}).OnChannelCloseConfirm(2, address("g1relayer"))
-	res := (&App{}).OnRecvPacket(packet, address("g1relayer"), nil)
-	(&App{}).OnAcknowledgementPacket(packet, []byte{0x01}, address("g1relayer"))
-	(&App{}).OnTimeoutPacket(packet, address("g1relayer"))
+	(&App{}).OnChannelOpenAck(cur, 2, 3, Version, address("g1relayer"))
+	(&App{}).OnChannelOpenConfirm(cur, 2, address("g1relayer"))
+	(&App{}).OnChannelCloseInit(cur, 2, address("g1relayer"))
+	(&App{}).OnChannelCloseConfirm(cur, 2, address("g1relayer"))
+	res := (&App{}).OnRecvPacket(cur, packet, address("g1relayer"), nil)
+	(&App{}).OnAcknowledgementPacket(cur, packet, []byte{0x01}, address("g1relayer"))
+	(&App{}).OnTimeoutPacket(cur, packet, address("g1relayer"))
 
 	if !d.openAckCalled || !d.openConfirmCalled || !d.closeInitCalled || !d.closeConfirmCalled {
 		t.Fatal("channel callbacks must delegate")
@@ -151,12 +151,12 @@ func TestAppPausedOnlyBlocksRecv(cur realm, t *testing.T) {
 	d := &dummyImpl{}
 	impl = d
 	paused = true
-	packet := core.Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: []byte("data")}
+	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0, 0)
 
-	(&App{}).OnChannelOpenInit(1, 2, Version, address("g1relayer"))
-	res := (&App{}).OnRecvPacket(packet, address("g1relayer"), nil)
-	(&App{}).OnAcknowledgementPacket(packet, []byte{0x01}, address("g1relayer"))
-	(&App{}).OnTimeoutPacket(packet, address("g1relayer"))
+	(&App{}).OnChannelOpenInit(cur, 1, 2, Version, address("g1relayer"))
+	res := (&App{}).OnRecvPacket(cur, packet, address("g1relayer"), nil)
+	(&App{}).OnAcknowledgementPacket(cur, packet, []byte{0x01}, address("g1relayer"))
+	(&App{}).OnTimeoutPacket(cur, packet, address("g1relayer"))
 
 	if !d.openInitCalled {
 		t.Fatal("paused must not block channel handshake")
@@ -174,25 +174,25 @@ func TestAppPausedOnlyBlocksRecv(cur realm, t *testing.T) {
 
 func TestAppNilImplPolicy(cur realm, t *testing.T) {
 	resetZkgmForTest()
-	packet := core.Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: []byte("data")}
+	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0, 0)
 
-	uassert.PanicsContains(t, "impl not set", func() {
-		(&App{}).OnChannelOpenInit(1, 2, Version, address("g1relayer"))
+	uassert.AbortsContains(t, cur, "impl not set", func(cur realm) {
+		(&App{}).OnChannelOpenInit(cur, 1, 2, Version, address("g1relayer"))
 	})
-	res := (&App{}).OnRecvPacket(packet, address("g1relayer"), nil)
+	res := (&App{}).OnRecvPacket(cur, packet, address("g1relayer"), nil)
 	if res.Status != core.PacketStatusFailure || len(res.Ack) == 0 {
 		t.Fatal("nil impl recv must return failure acknowledgement")
 	}
 
-	(&App{}).OnAcknowledgementPacket(packet, []byte{0x01}, address("g1relayer"))
-	(&App{}).OnTimeoutPacket(packet, address("g1relayer"))
+	(&App{}).OnAcknowledgementPacket(cur, packet, []byte{0x01}, address("g1relayer"))
+	(&App{}).OnTimeoutPacket(cur, packet, address("g1relayer"))
 }
 
 func TestDecodeHexArg(cur realm, t *testing.T) {
-	uassert.PanicsContains(t, "invalid salt hex", func() {
+	uassert.AbortsContains(t, cur, "invalid salt hex", func(cur realm) {
 		mustDecodeHexArg("salt", "zz")
 	})
-	uassert.PanicsContains(t, "invalid operand hex", func() {
+	uassert.AbortsContains(t, cur, "invalid operand hex", func(cur realm) {
 		mustDecodeHexArg("operand", "zz")
 	})
 

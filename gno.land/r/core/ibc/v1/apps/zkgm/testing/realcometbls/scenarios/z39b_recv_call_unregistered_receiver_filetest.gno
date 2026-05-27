@@ -1,4 +1,5 @@
-package main
+// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
+package scenarios
 
 import (
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -10,29 +11,24 @@ import (
 
 const missingReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/missing"
 
-func main() {
+func main(cur realm) {
 	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
-	packet := callPacket(pair, missingReceiverPath)
+	packet := callPacket(cur, pair, missingReceiverPath)
 
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, realcometbls.Z39MissingCallPacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight - 1)))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, realcometbls.Z39MissingCallPacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight-1)))
 
 	println("receipt_after_recv", core.HasPacketReceipt(cross(cur), packet))
 	println("ack_after_recv", core.HasAcknowledgement(cross(cur), packet))
 	println("recv_call_unregistered_real_cometbls", "ok")
 }
 
-func callPacket(pair realcometbls.ChannelPair, receiverPath string) core.Packet {
+func callPacket(cur realm, pair realcometbls.ChannelPair, receiverPath string) core.Packet {
 	call := z.Call{
 		Sender:           []byte("sender"),
 		ContractAddress:  []byte(receiverPath),
 		ContractCalldata: []byte("calldata"),
 	}
-	return core.Packet{
-		SourceChannelId:      pair.Source,
-		DestinationChannelId: pair.Destination,
-		Data:                 e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)),
-		TimeoutTimestamp:     core.Timestamp(0),
-	}
+	return core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)), 0, core.Timestamp(0))
 }
 
 // Output:

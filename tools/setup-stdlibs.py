@@ -1,15 +1,9 @@
 #!/usr/bin/env python3
-"""Vendor gno-ibc's native stdlibs into a pinned gno checkout, then build.
+"""Vendor gno-ibc native stdlibs into a pinned gno checkout, then build.
 
-Reads ``.gno-version`` for the upstream gno repo + commit, ensures a checkout
-under ``~/.cache/gno-ibc/gno``, symlinks every package under ``stdlibs/`` into
-``<cache>/gnovm/stdlibs/<module>/``, regenerates the native-binding dispatch
-table, and installs the resulting ``gno``, ``gnodev``, and ``gnokey`` binaries.
-
-The symlinks are the load-bearing part: the gno binary's baked-in ``_GNOROOT``
-points at the cache, so at runtime it walks the symlinked dirs to load .gno
-sources, while the regenerated ``generated.go`` (compiled into the binary)
-wires ``X_<func>`` Go bindings into the dispatch table.
+The pinned checkout comes from ``.gno-version``. Packages under ``stdlibs/``
+are linked into ``<cache>/gnovm/stdlibs/<module>/`` so regenerated binaries
+load the .gno sources and native Go bindings from this repo.
 """
 
 from __future__ import annotations
@@ -38,10 +32,7 @@ STDLIBS_DIR = REPO_ROOT / "stdlibs"
 NATIVE_GAS_CALIBRATION_FILE = STDLIBS_DIR / "native_gas_calibration.txt"
 DEFAULT_CACHE = Path.home() / ".cache" / "gno-ibc" / "gno"
 
-# Sentinel comment marking gno-ibc-injected calibration rows so that
-# inject_calibrated_natives can detect a prior injection and stay idempotent.
-# The ensure_clone scrub (`git checkout HEAD -- gnovm/stdlibs`) drops the
-# sentinel together with the rows, so each fresh-pin run reapplies cleanly.
+# Marks injected calibration rows and keeps reruns idempotent.
 _CALIBRATION_SENTINEL = "// gno-ibc:calibrated-natives"
 _CALIBRATION_SLICE_OPEN = "var calibratedNativeGas = []nativeGasEntry{"
 
@@ -93,33 +84,12 @@ def run(cmd: list[str], cwd: Path | None = None) -> None:
 
 
 def ensure_clone(version: GnoVersion, cache_dir: Path) -> None:
-    """Clone the gno repo into cache_dir if needed; fetch + checkout the pin.
+    """Clone or refresh the cached gno checkout at the pinned commit.
 
-    Uses ``--filter=blob:none`` (partial clone) so the initial network fetch
-    skips file blobs; ``git checkout`` then lazily downloads only the blobs
-    reachable from the pinned commit. Materially faster than a full clone on
-    cold CI runs while still supporting arbitrary commit checkouts.
-
-    On warm caches, scrubs leftover state from a prior run under
-    ``gnovm/stdlibs/`` — the regenerated ``generated.go`` plus untracked
-    symlink directories for stdlibs that have since been removed from this
-    repo. Without this, CI's ``restore-keys`` cache fallback resurrects
-    those stale paths on a key miss and ``go mod tidy`` chokes on the
-    dangling stdlib imports inside ``generated.go``.
-
-    The scrub is normally scoped to ``gnovm/stdlibs/``: the root
-    ``go.mod`` / ``go.sum`` carry the native-binding deps that
-    ``_inject_native_deps`` adds, and the ``make link-stdlibs`` cache-hit
-    path on CI does not re-inject them. Resetting the whole tree would
-    strip those deps and break ``go test`` against the native bindings.
-
-    Exception: when the pin moves (warm cache with prior `_inject_native_deps`
-    modifications, but a new ``version.commit``), ``git checkout`` fails on
-    the tracked root ``go.mod`` modifications. In that case we hard-reset
-    before the checkout. ``regenerate_and_install`` reapplies the deps right
-    after. Link-only callers (`--link-only`) who change the pin lose those
-    deps, but that combination has no valid use case (a pin bump requires
-    a full rebuild).
+    Warm caches are cleaned only under ``gnovm/stdlibs/`` so generated files
+    and stale symlinked packages do not leak across runs. If the pin moved, a
+    full reset is needed before checkout because prior dependency injection can
+    leave tracked ``go.mod`` files modified.
     """
     freshly_cloned = not (cache_dir / ".git").is_dir()
     if freshly_cloned:
@@ -143,21 +113,14 @@ def ensure_clone(version: GnoVersion, cache_dir: Path) -> None:
             cwd=cache_dir, capture_output=True, check=True,
         ).stdout.decode().strip()
         if head_sha != version.commit:
-            # Pin moved. Tracked root go.mod / contribs/gnodev/go.mod
-            # modifications from a prior `_inject_native_deps` block
-            # `git checkout`. Hard-reset to clear them. The deps get
-            # re-added by `regenerate_and_install` below.
+            # Prior dependency injection may block checkout after a pin move.
             run(["git", "reset", "--quiet", "--hard"], cwd=cache_dir)
             run(["git", "checkout", "--quiet", version.commit], cwd=cache_dir)
     else:
         run(["git", "checkout", "--quiet", version.commit], cwd=cache_dir)
 
     if not freshly_cloned:
-        # Drop tracked modifications inside gnovm/stdlibs (notably
-        # generated.go after a prior `go generate`) then prune untracked
-        # symlink dirs from packages that no longer exist in this repo.
-        # `link_stdlib` recreates the ones still present right after this
-        # returns.
+        # Drop generated files and stale symlink dirs from prior runs.
         run(["git", "checkout", "--quiet", "HEAD", "--",
              "gnovm/stdlibs"], cwd=cache_dir)
         run(["git", "clean", "-fd", "--quiet", "--",
@@ -179,11 +142,8 @@ def discover_stdlibs(root: Path) -> Iterator[Stdlib]:
 def link_stdlib(stdlib: Stdlib, cache_dir: Path) -> None:
     """Mirror source_dir into target as a real dir + per-file symlinks.
 
-    A directory-level symlink would be simpler, but genstd's WalkDir uses
-    os.Lstat, which does not follow symlinked directories — the package would
-    be silently skipped during native-binding generation. A real directory
-    with file-level symlinks lets WalkDir descend, and parser.ParseFile then
-    resolves each symlink to the source file under stdlibs/.
+    genstd uses ``os.Lstat`` and skips directory symlinks, so each package gets
+    a real directory containing file-level symlinks.
     """
     target = stdlib.link_target(cache_dir)
     source = stdlib.source_dir.resolve()
@@ -233,8 +193,7 @@ def _read_direct_requires(gomod_path: Path) -> dict[str, str]:
 def _native_deps() -> list[str]:
     """Return extra Go deps declared by this repo's native stdlibs."""
     requires = _read_direct_requires(REPO_ROOT / "stdlibs" / "go.mod")
-    # Deps that start with the gno module prefix are already provided by the
-    # host module; skip them and the replace-directive placeholder version.
+    # The host module already provides gno deps.
     gno_module = "github.com/gnolang/gno"
     return [
         f"{mod}@{ver}"
@@ -247,9 +206,8 @@ def _native_deps() -> list[str]:
 def _inject_native_deps(module_dir: Path) -> None:
     """Add extra stdlib native-binding deps to a Go module.
 
-    Native stdlib .go files may import third-party packages that are not yet
-    in the upstream gno go.mod. Reading the versions from stdlibs/go.mod keeps
-    this script and the IDE-support go.mod in sync automatically.
+    Versions come from ``stdlibs/go.mod`` so local tooling and this script stay
+    in sync.
     """
     deps = _native_deps()
     if not deps:
@@ -261,10 +219,8 @@ def _inject_native_deps(module_dir: Path) -> None:
 def _load_calibration_rows(path: Path) -> list[str]:
     """Read the calibration data file and return only entry-row lines.
 
-    Strips comment-only and blank lines so the data file can carry header
-    docs alongside the rows. Each surviving line is expected to be a single
-    nativeGasEntry struct literal terminated with a comma (matching the
-    format upstream produces from gen_native_table.py).
+    Comment-only and blank lines are ignored; remaining lines are inserted as
+    ``nativeGasEntry`` rows.
     """
     if not path.is_file():
         return []
@@ -281,15 +237,8 @@ def _load_calibration_rows(path: Path) -> list[str]:
 def _inject_calibrated_natives(cache_dir: Path) -> None:
     """Append gno-ibc calibration rows into upstream's calibratedNativeGas.
 
-    No-op when:
-      * gnovm/stdlibs/native_gas.go does not exist (pre-#5629 pin)
-      * the sentinel comment is already present (idempotent rerun)
-      * the calibration data file is empty or missing
-
-    Inserts the rows right before the slice's closing brace, preceded by the
-    sentinel comment. ensure_clone's scrub
-    (``git checkout HEAD -- gnovm/stdlibs``) removes both the sentinel and
-    the rows, so every fresh-pin invocation reapplies from scratch.
+    Older pins without ``native_gas.go``, empty data files, and reruns after
+    sentinel insertion are treated as no-ops.
     """
     target = cache_dir / "gnovm" / "stdlibs" / "native_gas.go"
     if not target.is_file():
@@ -345,15 +294,10 @@ def regenerate_and_install(cache_dir: Path, skip_install: bool) -> None:
     if skip_install:
         log("skipping `make install` (per --skip-install)")
         return
-    # Delegate to gnovm/Makefile so VERSION + GNOROOT_DIR ldflags match the
-    # upstream install path.
+    # Keep VERSION and GNOROOT_DIR ldflags aligned with upstream.
     run(["make", "install"], cwd=gnovm)
-    # gnoland shares the same stdlib dispatch table; rebuild it so native
-    # bindings added by this repo's stdlibs/ are included in the binary.
+    # gnoland and gnodev share the regenerated stdlib dispatch table.
     run(["make", "install.gnoland"], cwd=gnoland)
-    # gnodev embeds the same stdlib dispatch table through gnovm, so rebuild it
-    # from the same checkout after stdlib generation. Otherwise an older
-    # gnodev binary can keep looking for stdlibs removed from this repo.
     _inject_native_deps(gnodev)
     run(["go", "mod", "tidy"], cwd=gnodev)
     run(["make", "install.gnodev"], cwd=cache_dir)
@@ -390,10 +334,7 @@ def main() -> int:
         raise SystemExit(f"ERROR: {STDLIBS_DIR} not found")
 
     version = parse_gno_version(GNO_VERSION_FILE)
-    # Allow GNO_COMMIT / GNO_REPO env vars (exported by the Makefile) to
-    # override the file pin without touching .gno-version. Used by the
-    # coverage workflow to install gnolang/gno#4241 alongside the regular
-    # toolchain.
+    # Let CI override the pin without editing .gno-version.
     env_repo = os.environ.get("GNO_REPO")
     env_commit = os.environ.get("GNO_COMMIT")
     if (env_repo and env_repo != version.repo) or (env_commit and env_commit != version.commit):

@@ -24,11 +24,6 @@ A-zkgm:
           - 'gno.land/p/core/ibc/zkgm/**'
           - 'tools/zkgm-fixtures/**'
 
-A-crypto:
-  - changed-files:
-      - any-glob-to-any-file:
-          - 'stdlibs/crypto/**'
-
 A-encoding:
   - changed-files:
       - any-glob-to-any-file:
@@ -44,10 +39,6 @@ A-tooling:
           - 'Dockerfile'
           - 'flake.nix'
           - 'flake.lock'
-          - 'tools/setup-stdlibs.py'
-          - 'tools/test_setup_stdlibs.py'
-          - 'stdlibs/go.mod'
-          - 'stdlibs/go.sum'
           - 'Cargo.toml'
           - 'Cargo.lock'
           - 'gnowork.toml'

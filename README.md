@@ -5,17 +5,16 @@ Gno ↔ Union integration. CometBLS light client and UCS03 ZKGM contract ported 
 ## Development
 
 ```bash
-nix develop          # optional: pinned toolchain (Go, Python+pytest, gofumpt, ...)
-make install-gno     # required: build gno + gnodev with this repo's native stdlibs
+nix develop          # optional: pinned toolchain (Go, gofumpt, ...)
+make install-gno     # required: build gno + gnoland + gnodev + gnokey from the pinned upstream
 ```
 
-The flake supplies the supporting toolchain only — the gno and gnodev binaries' keccak256 / bn254 / cometbls native bindings come from `make install-gno`.
+The IBC crypto stdlibs (bn254, cometbls, cometblszk, keccak256, merkle, modexp) ship in the upstream gno toolchain (gnolang/gno#5725) and are not vendored locally.
 
 ## Testing
 
 ```bash
 make test          # first-party gno tests
-make test-stdlibs  # vendored stdlib tests
 ```
 
 ## Documentation

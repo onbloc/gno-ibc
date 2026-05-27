@@ -111,6 +111,30 @@ func TestDecodeHeader(t *testing.T) {
 			t.Fatal("expected error for short buffer")
 		}
 	})
+
+	t.Run("timenanos_out_of_range", func(t *testing.T) {
+		zkpPadded := make([]byte, 32)
+		buf := mustHex(
+			word32(1) +
+				word32(1000) +
+				word32(1_000_000_000) +
+				bytes32hex(0x01) +
+				bytes32hex(0x02) +
+				bytes32hex(0x03) +
+				word32(0) +
+				word32(256) +
+				word32(uint64(len(zkpPadded))) +
+				hex.EncodeToString(zkpPadded),
+		)
+		_, err := DecodeHeader(buf)
+		if err == nil {
+			t.Fatal("expected error for TimeNanos >= 1e9")
+		}
+		want := "cometbls: TimeNanos out of range"
+		if err.Error() != want {
+			t.Fatalf("error: got %q want %q", err.Error(), want)
+		}
+	})
 }
 
 // TestDecodeHeaderUnionFixture decodes a real ABI-encoded Header produced by

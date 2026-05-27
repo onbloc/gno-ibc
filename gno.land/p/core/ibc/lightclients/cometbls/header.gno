@@ -53,7 +53,10 @@ func DecodeHeader(buf []byte) (Header, error) {
 	var h Header
 	h.SignedHeader.Height = int64(vals[0].(uint64))
 	h.SignedHeader.TimeSeconds = int64(vals[1].(uint64))
-	h.SignedHeader.TimeNanos = int32(vals[2].(uint64))
+	h.SignedHeader.TimeNanos, err = validateTimeNanos(vals[2].(uint64))
+	if err != nil {
+		return Header{}, err
+	}
 	vh := vals[3].([32]byte)
 	h.SignedHeader.ValidatorsHash = vh[:]
 	nvh := vals[4].([32]byte)

@@ -61,6 +61,12 @@ type walkResult struct {
 	value []byte
 }
 
+// isBytesNode reports whether an RLP value carries a byte payload (a string or
+// single byte) rather than a nested list.
+func isBytesNode(v rlp.Value) bool {
+	return v.Kind == rlp.KindString || v.Kind == rlp.KindByte
+}
+
 func walk(root []byte, path []byte, proof [][]byte) (walkResult, error) {
 	if len(root) != keccak256.Size {
 		return walkResult{}, ErrInvalidRoot
@@ -93,17 +99,17 @@ func walk(root []byte, path []byte, proof [][]byte) (walkResult, error) {
 		case 17:
 			if pos == len(path) {
 				value := v.List[16]
-				if value.Kind != rlp.KindString && value.Kind != rlp.KindByte {
+				if !isBytesNode(value) {
 					return walkResult{}, ErrUnexpectedNode
 				}
 				if len(value.Bytes) == 0 {
-				return finishWalk(walkResult{found: false}, proofIndex, proof)
-			}
-			return finishWalk(walkResult{found: true, value: value.Bytes}, proofIndex, proof)
+					return finishWalk(walkResult{found: false}, proofIndex, proof)
+				}
+				return finishWalk(walkResult{found: true, value: value.Bytes}, proofIndex, proof)
 			}
 
 			child := v.List[path[pos]]
-			if child.Kind != rlp.KindString && child.Kind != rlp.KindByte {
+			if !isBytesNode(child) {
 				return walkResult{}, ErrUnexpectedNode
 			}
 			if len(child.Bytes) == 0 {
@@ -118,7 +124,7 @@ func walk(root []byte, path []byte, proof [][]byte) (walkResult, error) {
 			pos++
 
 		case 2:
-			if v.List[0].Kind != rlp.KindString && v.List[0].Kind != rlp.KindByte {
+			if !isBytesNode(v.List[0]) {
 				return walkResult{}, ErrUnexpectedNode
 			}
 			leaf, partial, err := compactDecode(v.List[0].Bytes)
@@ -135,14 +141,14 @@ func walk(root []byte, path []byte, proof [][]byte) (walkResult, error) {
 					return finishWalk(walkResult{found: false}, proofIndex, proof)
 				}
 				value := v.List[1]
-				if value.Kind != rlp.KindString && value.Kind != rlp.KindByte {
+				if !isBytesNode(value) {
 					return walkResult{}, ErrUnexpectedNode
 				}
 				return finishWalk(walkResult{found: true, value: value.Bytes}, proofIndex, proof)
 			}
 
 			child := v.List[1]
-			if child.Kind != rlp.KindString && child.Kind != rlp.KindByte {
+			if !isBytesNode(child) {
 				return walkResult{}, ErrUnexpectedNode
 			}
 			next, nextIndex, err := resolveReference(child.Bytes, proof, proofIndex)
@@ -220,6 +226,12 @@ func compactDecode(encoded []byte) (bool, []byte, error) {
 	}
 	for i := 1; i < len(encoded); i++ {
 		out = append(out, encoded[i]>>4, encoded[i]&0x0f)
+	}
+	// extensions nodes must contain at least one path nibble.
+	// empty extension paths are non-canonical because they admit
+	// alternative proof encoding.
+	if !leaf && len(out) == 0 {
+		return false, nil, ErrPathMismatch
 	}
 	return leaf, out, nil
 }

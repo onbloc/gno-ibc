@@ -1,0 +1,11 @@
+package main
+
+import core "gno.land/r/core/ibc/v1/core"
+
+func main() {
+	id := core.ConnectionOpenInit(cross, core.MsgConnectionOpenInit{
+		ClientId:             core.ClientId(@COMETBLS_ID@),
+		CounterpartyClientId: core.ClientId(99),
+	})
+	println("connection_id", id.String())
+}

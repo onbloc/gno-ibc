@@ -230,6 +230,7 @@ def _inject_native_deps(module_dir: Path) -> None:
 def regenerate_and_install(cache_dir: Path, skip_install: bool) -> None:
     gnovm = cache_dir / "gnovm"
     gnodev = cache_dir / "contribs" / "gnodev"
+    gnoland = cache_dir / "gno.land"
     _inject_native_deps(cache_dir)
     run(["go", "mod", "tidy"], cwd=gnovm)
     run(["go", "generate", "./stdlibs/..."], cwd=gnovm)
@@ -239,6 +240,9 @@ def regenerate_and_install(cache_dir: Path, skip_install: bool) -> None:
     # Delegate to gnovm/Makefile so VERSION + GNOROOT_DIR ldflags match the
     # upstream install path.
     run(["make", "install"], cwd=gnovm)
+    # gnoland shares the same stdlib dispatch table; rebuild it so native
+    # bindings added by this repo's stdlibs/ are included in the binary.
+    run(["make", "install.gnoland"], cwd=gnoland)
     # gnodev embeds the same stdlib dispatch table through gnovm, so rebuild it
     # from the same checkout after stdlib generation. Otherwise an older
     # gnodev binary can keep looking for stdlibs removed from this repo.
@@ -312,6 +316,7 @@ def main() -> int:
     if not args.skip_install:
         gobin = subprocess.check_output(["go", "env", "GOPATH"]).decode().strip()
         log(f"installed: {gobin}/bin/gno")
+        log(f"installed: {gobin}/bin/gnoland")
         log(f"installed: {gobin}/bin/gnodev")
         log(f"installed: {gobin}/bin/gnokey")
     return 0

@@ -203,6 +203,13 @@ func (s *State) getBatchPackets(batchHash H256) H256 {
 	return value
 }
 
+func (s *State) deleteBatchPackets(batchHash H256) {
+	var zero H256
+	path := BatchPacketsPath(batchHash)
+	delete(s.batchPackets, path)
+	commit(path, zero)
+}
+
 func (s *State) saveBatchReceipts(batchHash H256, value H256) {
 	path := BatchReceiptsPath(batchHash)
 	s.batchReceipts[path] = value

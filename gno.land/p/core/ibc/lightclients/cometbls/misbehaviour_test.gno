@@ -35,6 +35,34 @@ func TestDecodeMisbehaviour(t *testing.T) {
 		}
 	})
 
+	t.Run("timenanos_out_of_range", func(t *testing.T) {
+		var tsBuf []byte
+		tsBuf = pbAppendInt64(tsBuf, 1, 1000)
+		tsBuf = pbAppendUint64(tsBuf, 2, 1_000_000_000)
+
+		var lhBuf []byte
+		lhBuf = pbAppendInt64(lhBuf, 1, 1)
+		lhBuf = pbAppendMsg(lhBuf, 2, tsBuf)
+		lhBuf = pbAppendBytes(lhBuf, 3, bytes.Repeat([]byte{0x01}, 32))
+		lhBuf = pbAppendBytes(lhBuf, 4, bytes.Repeat([]byte{0x02}, 32))
+		lhBuf = pbAppendBytes(lhBuf, 5, bytes.Repeat([]byte{0x03}, 32))
+
+		var hBuf []byte
+		hBuf = pbAppendMsg(hBuf, 1, lhBuf)
+
+		var buf []byte
+		buf = pbAppendMsg(buf, 1, hBuf)
+
+		_, err := DecodeMisbehaviour(buf)
+		want := "cometbls: TimeNanos out of range"
+		if err == nil {
+			t.Fatal("expected error for TimeNanos >= 1e9")
+		}
+		if err.Error() != want {
+			t.Fatalf("error: got %q want %q", err.Error(), want)
+		}
+	})
+
 	t.Run("short_next_validators_hash", func(t *testing.T) {
 		var ts []byte
 		ts = pbAppendInt64(ts, 1, 1)

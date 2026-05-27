@@ -8,8 +8,8 @@
 - **Packages** (`p/`) are stateless libraries.
 - Import paths: `gno.land/p/...` or `gno.land/r/...` — **never** `github.com/...`.
 - Module config: `gnomod.toml` (not `go.mod`).
-- `cross` keyword for cross-realm calls.
-- `realm` type for realm-aware functions.
+- `cross(cur)` operator for cross-realm calls (the legacy bare `cross` / `cross1` keyword is gone).
+- `realm` type for realm-aware functions. Functions that act on their own realm's state declare `cur realm` as the first parameter.
 
 ---
 
@@ -92,17 +92,73 @@ gno = "0.9"
 - `p/` = packages (stateless, reusable libraries)
 - `r/` = realms (stateful contracts with persistent storage)
 
-### The `cur realm` and `cross` Keywords
+### The `cur realm` parameter and `cross(...)` operator
 
-Realm functions that need caller context use `cur realm` parameter:
+A function that needs to act on its own realm's state declares `cur realm`
+as its first parameter:
+
 ```gno
 func CreateClient(cur realm, clientState lightclient.ClientState, ...) string
 ```
 
-Callers pass `cross` as the argument:
+Callers wrap their own `cur` in `cross(...)` when invoking it from another
+realm:
+
 ```gno
-clientID := core.CreateClient(cross, clientState, consensusState)
+clientID := core.CreateClient(cross(cur), clientState, consensusState)
 ```
+
+The legacy bare `cross` keyword (also written `cross1`) was the Phase 2
+migration shim. It has been removed. Always use the `cross(cur)` form.
+
+**Bare `cur` vs `cross(cur)` decision rule.** Inside a function that
+already has `cur realm`, when you call another function:
+
+- **Same realm as the caller**: pass bare `cur`. Example: helpers in
+  the same package that also take `cur realm`.
+- **Different realm**: wrap with `cross(cur)`. Example: an app realm
+  calling `core.NewRecvPacketResult(cross(cur), ...)`.
+
+The compiler error for the wrong choice is
+`cannot cur-call to external realm function X from Y`. When you see it,
+add the `cross(...)` wrapper.
+
+**`realm` values are ephemeral.** A `realm` value is tied to the current
+call frame. It cannot be stored in a package-level variable (the runtime
+panics with `cannot persist realm value`). It cannot be compared against
+an empty composite literal either (`realm{}` is rejected at preprocess).
+Patterns that used to cache `runtime.CurrentRealm()` at package init
+must instead extract the address or pkg path on first call:
+
+```gno
+var (
+    gRealmAddress address
+    gRealmSet     bool
+)
+
+func cacheRealm(cur realm) {
+    if !gRealmSet {
+        gRealmAddress = cur.Address()
+        gRealmSet = true
+    }
+}
+```
+
+**Origin caller helpers split by intent.** `runtime.OriginCaller()` /
+`runtime.PreviousRealm()` / `runtime.CurrentRealm()` have moved under
+`chain/runtime/unsafe`. Use them with the correct guard for your intent:
+
+- **Attribution** (relayer reward addresses, packet `Sender` fields,
+  event metadata, any place where a wrapper realm calling on behalf of
+  a user is legitimate): bare `unsafe.OriginCaller()` with no
+  `AssertOriginCall`.
+- **Authentication** (admin gates, EOA-only permission checks): pair
+  `runtime.AssertOriginCall()` with `unsafe.OriginCaller()` so wrapper
+  realm calls fail loudly.
+
+`cur.Previous().PkgPath()` and `cur.Previous().IsUserCall()` are the
+correct replacements for `runtime.PreviousRealm()` in any function that
+already has `cur` in scope.
 
 ### Cross-Realm Reads: Tainted Slices and Pointers
 
@@ -137,23 +193,46 @@ func equalBytes(a, b []byte) bool {
 }
 ```
 
-#### Foreign typed-slice construction pitfall
+#### Cross-realm struct and typed-slice allocation
 
-Symmetric to the read-side problem: **constructing** a value of a foreign realm's typed slice in the calling realm also fails. Passing `[]byte{0x01}` to a parameter typed `core.Bytes` (where `type Bytes []byte` is defined in `core`) panics with `illegal conversion to external realm type` — the implicit `core.Bytes([]byte{...})` conversion happens in the caller's realm, which Gno forbids. `nil`, plain `[]byte`, and untyped numeric literals are unaffected; only foreign-defined typed wrappers trigger this.
+Phase 3 stamps every `*StructValue` allocation with its type's defining
+realm `PkgID`. Constructing `Foo{...}` from a realm other than where
+`Foo` is defined panics with `cannot allocate <type> in realm <caller>`.
+The same restriction applies to foreign typed wrappers like
+`core.Bytes([]byte{...})`, which trigger `illegal conversion to external
+realm type` because the implicit conversion runs in the caller's realm.
+`nil`, plain `[]byte`, and untyped numeric literals are unaffected.
 
-The owning realm must expose a `cross`-tagged constructor; callers invoke it with `cross`:
+The owning realm must expose a crossing constructor whose body runs in
+the owning realm:
 
 ```gno
 // in owning realm (e.g., r/core/ibc/v1/core/types.gno)
-func NewBytes(_ realm, b []byte) Bytes {
-    return Bytes(b) // legal: conversion runs inside the owning realm
+func NewRecvPacketResult(cur realm, status PacketStatus, ack []byte) RecvPacketResult {
+    return RecvPacketResult{Status: status, Ack: ack}
 }
 
 // in caller realm
-core.NewBytes(cross, []byte{0x01})
+return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, ack)
 ```
 
-Same pattern for other foreign typed wrappers (`NewPacket`, `NewRecvPacketResult`, …). When designing a realm that exports typed slices/structs, ship a constructor for every type external callers will need to instantiate.
+Ship a `New<Type>(cur realm, ...)` constructor for **every** type that
+foreign realms need to instantiate. In our tree the cascade required
+these constructors at minimum:
+
+- `core/types.gno`: `NewPacket`, `NewRecvPacketResult`, `NewConnection`,
+  `NewConsensusStateUpdate`.
+- `core/msg.gno`: the full `NewMsg*` family covering every
+  `MsgCreateClient`, `MsgPacketRecv`, `MsgChannelOpenInit`, etc.
+- `apps/zkgm/types.gno`: `NewUpdateRequest`, `NewInFlightValue`,
+  `NewInFlightKey`, `NewSendRequest`.
+- `apps/zkgm/testing/e2e/helpers.gno`: `NewChannelPair`.
+
+If a test mock or filetest panics with `cannot allocate <type>`, the fix
+is to add the missing constructor in the type's home realm and rewrite
+the call site through `pkg.NewX(cross(cur), ...)`. Empty zero-value
+returns (`return Foo{}, err`) need the same treatment: use
+`Foo{Status: Unknown}` field zero values via the constructor instead.
 
 ### MsgRun vs MsgCall
 
@@ -161,9 +240,9 @@ Most IBC functions require `MsgRun` (not `MsgCall`) because they take complex ar
 
 ### Gno Standard Library
 
-- `chain/banker` - coin manipulation interface
+- `chain/banker` - coin manipulation interface. `banker.NewBanker(BankerTypeRealmSend, cur)` now requires the realm capability. `banker.NewReadonlyBanker()` replaces `banker.NewBanker(BankerTypeReadonly)`.
 - `chain.Emit(eventType, kvPairs...)` - event emission
-- `runtime.OriginCaller()`, `runtime.PreviousRealm()`, `runtime.CurrentRealm()` - caller context
+- `chain/runtime/unsafe.OriginCaller()` / `unsafe.OriginSend()` - tx-origin attribution (no realm-borrow safety, pair with `runtime.AssertOriginCall()` if you need EOA-only enforcement). `cur.Previous()` is the borrow-safe equivalent of `runtime.PreviousRealm()` and is preferred wherever `cur` is in scope.
 - `gno.land/p/nt/avl/v0` - AVL tree (primary key-value storage)
 - `gno.land/p/nt/seqid/v0` - monotonic ID generation
 - `gno.land/p/nt/ufmt/v0` - string formatting
@@ -193,7 +272,7 @@ The ZKGM port is tracked in `local_docs/zkgm/`. Before changing ZKGM code, read 
 
 - `CallEnv.Caller` is the tx origin / relayer identity captured by the ZKGM app request, not the deterministic proxy account.
 - `CallEnv.ProxyAccount` carries `PredictCallProxyAccount(path, destinationClient, sender)`.
-- `CallEnv.Relayer` currently mirrors `runtime.OriginCaller().String()` as bytes. `RelayerMsg` is empty until the IBC core exposes relayer metadata.
+- `CallEnv.Relayer` currently mirrors `unsafe.OriginCaller().String()` as bytes (attribution, not authentication). `RelayerMsg` is empty until the IBC core exposes relayer metadata.
 - Receiver realms must register with `zkgm.RegisterReceiver(cross, receiver)` from their own realm. Tests should use the mock receiver realm instead of directly storing receiver instances from the impl package.
 - Mock receiver getters that read stored `[]byte` fields must be crossing functions (`cur realm`) and should return strings/scalars, not structs containing slices.
 
@@ -253,7 +332,7 @@ Operational knowledge from sending real `SendRaw` calls against a `gnodev` testn
 
 ### `Send` / `SendRaw` require an EOA caller
 
-Both `Send` and `SendRaw` in the ZKGM realm capture sent coins only when `runtime.PreviousRealm().IsUserCall()` returns true. A `gnokey maketx run` script does **not** satisfy this check — the script's package is the previous realm, not the user EOA — so `banker.OriginSend()` returns empty and `requireSentCoin` panics with `zkgm/coins: sent coin mismatch` even though `-send <denom>` was attached.
+Both `Send` and `SendRaw` in the ZKGM realm capture sent coins only when `cur.Previous().IsUserCall()` returns true. A `gnokey maketx run` script does **not** satisfy this check — the script's package is the previous realm, not the user EOA — so `unsafe.OriginSend()` returns empty and `requireSentCoin` panics with `zkgm/coins: sent coin mismatch` even though `-send <denom>` was attached.
 
 For native-token sends, always use `gnokey maketx call -func SendRaw …`. Pre-encode the operand offline using the Solidity ABI schemas in `gno.land/p/core/ibc/zkgm/abi.gno` and pass it as `operandHex`.
 
@@ -324,15 +403,15 @@ ZKGM wire bytes follow the `abi_encode_params` flavor (no top-level head-offset 
 
 ### Filetests (primary test mechanism)
 
-Files named `z*_filetest.gno` in realm directories. These are integration tests that run as standalone `package main` programs with expected output matching:
+Files named `z*_filetest.gno` in realm directories. These are integration tests that run as standalone `package main` programs with expected output matching. Filetest entrypoints take `cur realm` whenever the body needs to invoke crossing functions:
 
 ```gno
 package main
 
 import "gno.land/r/gnoswap/ibc/core"
 
-func main() {
-    clientID := core.CreateClient(cross, clientState, consensusState)
+func main(cur realm) {
+    clientID := core.CreateClient(cross(cur), clientState, consensusState)
     println("CreateClient", clientID)
 }
 
@@ -342,6 +421,8 @@ func main() {
 // Events:
 // [{"type": "create_client", "attrs": [...]}]
 ```
+
+A bare `func main()` is still valid for filetests that do not call any crossing function. If the body references `cur`, the signature must take it.
 
 Naming convention: `z{category}{letter}_{description}_filetest.gno`
 

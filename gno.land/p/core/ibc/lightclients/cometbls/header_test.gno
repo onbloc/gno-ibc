@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestEncodeHeader(cur realm, t *testing.T) {
+func TestEncodeHeader(t *testing.T) {
 	t.Run("basic_zkp_2bytes", func(t *testing.T) {
 		h := Header{
 			SignedHeader: LightHeader{
@@ -63,7 +63,7 @@ func TestEncodeHeader(cur realm, t *testing.T) {
 	})
 }
 
-func TestDecodeHeader(cur realm, t *testing.T) {
+func TestDecodeHeader(t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		zkp := []byte{0xAA, 0xBB}
 		zkpPadded := make([]byte, 32)
@@ -141,7 +141,7 @@ func TestDecodeHeader(cur realm, t *testing.T) {
 // Union and verifies every field against the known JSON output.
 //
 // Source: union-devnet chain, block 6433728 (2026-05-06T15:14:03.986205568Z)
-func TestDecodeHeaderUnionFixture(cur realm, t *testing.T) {
+func TestDecodeHeaderUnionFixture(t *testing.T) {
 	const fixtureHex = "0000000000000000000000000000000000000000000000000000000000622bc0" +
 		"0000000000000000000000000000000000000000000000000000000069fb5abb" +
 		"000000000000000000000000000000000000000000000000000000003ac84d80" +
@@ -209,7 +209,7 @@ func TestDecodeHeaderUnionFixture(cur realm, t *testing.T) {
 	}
 }
 
-func TestEncodeDecodeHeaderRoundTrip(cur realm, t *testing.T) {
+func TestEncodeDecodeHeaderRoundTrip(t *testing.T) {
 	original := Header{
 		SignedHeader: LightHeader{
 			Height:             3405691582,

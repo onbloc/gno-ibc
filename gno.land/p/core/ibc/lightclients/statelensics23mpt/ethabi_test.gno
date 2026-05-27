@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestClientStateEthABIVector(cur realm, t *testing.T) {
+func TestClientStateEthABIVector(t *testing.T) {
 	// Reference vector copied from Union's state-lens-ics23-mpt light client
 	// type tests. Keep this hardcoded: it pins the unprefixed Solidity
 	// abi_encode_params wire format expected by relayers and Solidity clients.
@@ -49,7 +49,7 @@ func TestClientStateEthABIVector(cur realm, t *testing.T) {
 	}
 }
 
-func TestConsensusStateEthABIVector(cur realm, t *testing.T) {
+func TestConsensusStateEthABIVector(t *testing.T) {
 	// Reference vector copied from Union's state-lens-ics23-mpt consensus
 	// state type tests.
 	//
@@ -87,7 +87,7 @@ func TestConsensusStateEthABIVector(cur realm, t *testing.T) {
 	}
 }
 
-func TestHeaderEthABI(cur realm, t *testing.T) {
+func TestHeaderEthABI(t *testing.T) {
 	// Header has no fixed upstream hex fixture in Union's type tests at the
 	// time this test was added. The shape is pinned against the reference type:
 	// https://github.com/unionlabs/union/blob/main/lib/state-lens-light-client-types/src/header.rs
@@ -123,7 +123,7 @@ func TestHeaderEthABI(cur realm, t *testing.T) {
 	}
 }
 
-func TestRejectInvalidClientStateOffsets(cur realm, t *testing.T) {
+func TestRejectInvalidClientStateOffsets(t *testing.T) {
 	bz := mustHex(
 		"00000000000000000000000000000000000000000000000000000000000000e0" +
 			"0000000000000000000000000000000000000000000000000000000000000001" +
@@ -140,7 +140,7 @@ func TestRejectInvalidClientStateOffsets(cur realm, t *testing.T) {
 	}
 }
 
-func TestRejectInvalidConsensusStateRoots(cur realm, t *testing.T) {
+func TestRejectInvalidConsensusStateRoots(t *testing.T) {
 	_, err := EncodeConsensusState(ConsensusState{
 		Timestamp:   1,
 		StateRoot:   []byte{1},

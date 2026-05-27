@@ -103,10 +103,48 @@ def test_warm_cache_scrubs_stale_stdlibs(setup_stdlibs, warm_cache):
     assert not stale.exists()
 
 
-def test_warm_cache_preserves_root_go_mod(setup_stdlibs, warm_cache):
-    """The scrub must leave the root go.mod alone, since _inject_native_deps
-    writes the bn254/cometbls native-binding deps there and the CI cache-hit
-    `make link-stdlibs` path does not re-inject them."""
+def test_warm_cache_pin_bump_resets_root_modifications(setup_stdlibs, upstream, tmp_path):
+    """When the pinned commit moves, prior _inject_native_deps modifications
+    to root go.mod block `git checkout <new commit>` (the CI failure mode).
+    ensure_clone must hard-reset before checkout in that case, then let
+    regenerate_and_install re-inject the deps afterwards."""
+    # First clone at the original commit.
+    cache = tmp_path / "cache"
+    initial_sha = _commit_sha(upstream)
+    v1 = setup_stdlibs.GnoVersion(repo=f"file://{upstream}", commit=initial_sha)
+    setup_stdlibs.ensure_clone(v1, cache)
+
+    # Simulate _inject_native_deps having dirtied root go.mod.
+    go_mod = cache / "go.mod"
+    go_mod.write_text(go_mod.read_text() + "// injected by prior run\n")
+
+    # Add a new commit upstream so the pin can move.
+    (upstream / "marker.txt").write_text("v2")
+    _git(upstream, "add", "marker.txt")
+    _git(upstream, "commit", "--quiet", "-m", "v2 marker")
+    new_sha = _commit_sha(upstream)
+    assert new_sha != initial_sha
+
+    # Re-run ensure_clone with the bumped pin. Without the hard-reset fix
+    # this raises CalledProcessError("Your local changes ... would be
+    # overwritten by checkout").
+    v2 = setup_stdlibs.GnoVersion(repo=f"file://{upstream}", commit=new_sha)
+    setup_stdlibs.ensure_clone(v2, cache)
+
+    # HEAD moved.
+    head = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=cache, check=True, capture_output=True,
+    ).stdout.decode().strip()
+    assert head == new_sha
+    # Root modifications were cleared (regenerate_and_install reapplies).
+    assert "injected by prior run" not in go_mod.read_text()
+
+
+def test_warm_cache_same_pin_preserves_root_go_mod(setup_stdlibs, warm_cache):
+    """The scrub must leave the root go.mod alone when the pin has not
+    changed, since _inject_native_deps writes the bn254/cometbls native-
+    binding deps there and the CI cache-hit `make link-stdlibs` path does
+    not re-inject them."""
     cache, version = warm_cache
     marker = "// injected by _inject_native_deps\n"
     go_mod = cache / "go.mod"

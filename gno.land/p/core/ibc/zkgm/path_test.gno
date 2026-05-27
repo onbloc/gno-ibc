@@ -28,7 +28,7 @@ func mustEq(t *testing.T, name string, got, want *u256.Uint) {
 	}
 }
 
-func TestMakePathFromChannel(cur realm, t *testing.T) {
+func TestMakePathFromChannel(t *testing.T) {
 	// channel 0 in any slot is 0
 	if !MakePathFromChannel(0, 0).IsZero() {
 		t.Fatal("MakePathFromChannel(0, 0) must be zero")
@@ -54,7 +54,7 @@ func TestMakePathFromChannel(cur realm, t *testing.T) {
 	mustEq(t, "make(maxU32,7)", MakePathFromChannel(0xFFFFFFFF, 7), want7)
 }
 
-func TestGetChannelFromPath(cur realm, t *testing.T) {
+func TestGetChannelFromPath(t *testing.T) {
 	// empty path returns 0 in every slot
 	for i := 0; i < 8; i++ {
 		if got := GetChannelFromPath(u256.Zero(), i); got != 0 {
@@ -86,7 +86,7 @@ func TestGetChannelFromPath(cur realm, t *testing.T) {
 	}
 }
 
-func TestMakeGetRoundTrip(cur realm, t *testing.T) {
+func TestMakeGetRoundTrip(t *testing.T) {
 	for slot := 0; slot < 8; slot++ {
 		for _, ch := range []uint32{1, 2, 7, 0xDEADBEEF, 0xFFFFFFFF} {
 			p := MakePathFromChannel(ch, slot)
@@ -97,7 +97,7 @@ func TestMakeGetRoundTrip(cur realm, t *testing.T) {
 	}
 }
 
-func TestDequeueChannelFromPath(cur realm, t *testing.T) {
+func TestDequeueChannelFromPath(t *testing.T) {
 	// empty
 	tail, head := DequeueChannelFromPath(u256.Zero())
 	if !tail.IsZero() || head != 0 {
@@ -119,7 +119,7 @@ func TestDequeueChannelFromPath(cur realm, t *testing.T) {
 	mustEq(t, "dequeue tail", tail, u256.NewUint(5))
 }
 
-func TestPopChannelFromPath(cur realm, t *testing.T) {
+func TestPopChannelFromPath(t *testing.T) {
 	// empty
 	tail, head := PopChannelFromPath(u256.Zero())
 	if !tail.IsZero() || head != 0 {
@@ -148,7 +148,7 @@ func TestPopChannelFromPath(cur realm, t *testing.T) {
 	mustEq(t, "pop tail", tail, u256.NewUint(3))
 }
 
-func TestUpdateChannelPathEmpty(cur realm, t *testing.T) {
+func TestUpdateChannelPathEmpty(t *testing.T) {
 	got, err := UpdateChannelPath(u256.Zero(), 7)
 	if err != nil {
 		t.Fatalf("update(0, 7): %v", err)
@@ -156,7 +156,7 @@ func TestUpdateChannelPathEmpty(cur realm, t *testing.T) {
 	mustEq(t, "update(0,7)", got, u256.NewUint(7))
 }
 
-func TestUpdateChannelPathAppends(cur realm, t *testing.T) {
+func TestUpdateChannelPathAppends(t *testing.T) {
 	// after [7], next slot is 1 → [7, 5] = (5 << 32) | 7
 	p := pathFromHops(t, 7, 5)
 	want := new(u256.Uint).Or(u256.NewUint(7), MakePathFromChannel(5, 1))
@@ -166,7 +166,7 @@ func TestUpdateChannelPathAppends(cur realm, t *testing.T) {
 // TestUpdateChannelPathFormulaQuirk locks in the Rust formula behaviour:
 // when the highest existing channel ID has bit 31 set, the *next* slot the
 // formula picks skips a position. This is a faithful port of contract.rs:3369.
-func TestUpdateChannelPathFormulaQuirk(cur realm, t *testing.T) {
+func TestUpdateChannelPathFormulaQuirk(t *testing.T) {
 	// path = [0xFFFFFFFF] in slot 0 → BitLen = 32 → next_hop_index = 32/32 + 1 = 2
 	// so the next channel lands in slot 2, not slot 1.
 	p, err := UpdateChannelPath(u256.NewUint(0xFFFFFFFF), 9)
@@ -184,7 +184,7 @@ func TestUpdateChannelPathFormulaQuirk(cur realm, t *testing.T) {
 	}
 }
 
-func TestUpdateChannelPathFull(cur realm, t *testing.T) {
+func TestUpdateChannelPathFull(t *testing.T) {
 	// place a channel with bit 31 set in slot 6 → BitLen = 224 → next_hop_index = 8 → full
 	p := MakePathFromChannel(0xFFFFFFFF, 6)
 	_, err := UpdateChannelPath(p, 1)
@@ -193,7 +193,7 @@ func TestUpdateChannelPathFull(cur realm, t *testing.T) {
 	}
 }
 
-func TestUpdateChannelPathSlot7Allowed(cur realm, t *testing.T) {
+func TestUpdateChannelPathSlot7Allowed(t *testing.T) {
 	// place a small channel in slot 6 → BitLen ≤ 32+192 = much less than 224
 	// so next_hop_index fits ≤ 7 and we may write at slot 7.
 	p := MakePathFromChannel(1, 6)
@@ -206,7 +206,7 @@ func TestUpdateChannelPathSlot7Allowed(cur realm, t *testing.T) {
 	}
 }
 
-func TestReverseChannelPathEmpty(cur realm, t *testing.T) {
+func TestReverseChannelPathEmpty(t *testing.T) {
 	got, err := ReverseChannelPath(u256.Zero())
 	if err != nil {
 		t.Fatalf("reverse(0): %v", err)
@@ -216,7 +216,7 @@ func TestReverseChannelPathEmpty(cur realm, t *testing.T) {
 	}
 }
 
-func TestReverseChannelPathSingle(cur realm, t *testing.T) {
+func TestReverseChannelPathSingle(t *testing.T) {
 	p := pathFromHops(t, 5)
 	got, err := ReverseChannelPath(p)
 	if err != nil {
@@ -225,7 +225,7 @@ func TestReverseChannelPathSingle(cur realm, t *testing.T) {
 	mustEq(t, "reverse([5])", got, u256.NewUint(5))
 }
 
-func TestReverseChannelPathThreeHops(cur realm, t *testing.T) {
+func TestReverseChannelPathThreeHops(t *testing.T) {
 	// [3, 5, 7] reversed → [7, 5, 3]
 	src := pathFromHops(t, 3, 5, 7)
 	want := pathFromHops(t, 7, 5, 3)
@@ -236,7 +236,7 @@ func TestReverseChannelPathThreeHops(cur realm, t *testing.T) {
 	mustEq(t, "reverse([3,5,7])", got, want)
 }
 
-func TestReverseChannelPathInvolution(cur realm, t *testing.T) {
+func TestReverseChannelPathInvolution(t *testing.T) {
 	// reverse(reverse(p)) == p for any path produced by sequential hops
 	for _, hops := range [][]uint32{
 		{1},

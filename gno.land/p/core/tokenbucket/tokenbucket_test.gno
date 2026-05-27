@@ -6,21 +6,21 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 )
 
-func TestNewRejectsZeroCapacity(cur realm, t *testing.T) {
+func TestNewRejectsZeroCapacity(t *testing.T) {
 	_, err := New(u256.Zero(), u256.NewUint(1), u256.Zero())
 	if err != ZeroCapacity {
 		t.Fatalf("New zero capacity error: got %v want %v", err, ZeroCapacity)
 	}
 }
 
-func TestNewRejectsZeroRefillRate(cur realm, t *testing.T) {
+func TestNewRejectsZeroRefillRate(t *testing.T) {
 	_, err := New(u256.NewUint(1), u256.Zero(), u256.Zero())
 	if err != ZeroRefillRate {
 		t.Fatalf("New zero refill rate error: got %v want %v", err, ZeroRefillRate)
 	}
 }
 
-func TestNewInitializesAvailableAndLastRefill(cur realm, t *testing.T) {
+func TestNewInitializesAvailableAndLastRefill(t *testing.T) {
 	tb := mustNew(t, 100, 5, 7)
 
 	assertUint(t, "capacity", tb.Capacity, 100)
@@ -29,7 +29,7 @@ func TestNewInitializesAvailableAndLastRefill(cur realm, t *testing.T) {
 	assertUint(t, "last_refill", tb.LastRefill, 7)
 }
 
-func TestRefillAddsElapsedCapacity(cur realm, t *testing.T) {
+func TestRefillAddsElapsedCapacity(t *testing.T) {
 	tb := mustNew(t, 100, 5, 10)
 	mustRateLimit(t, tb, 80, 10)
 
@@ -39,7 +39,7 @@ func TestRefillAddsElapsedCapacity(cur realm, t *testing.T) {
 	assertUint(t, "last_refill", tb.LastRefill, 13)
 }
 
-func TestRefillCapsAtCapacity(cur realm, t *testing.T) {
+func TestRefillCapsAtCapacity(t *testing.T) {
 	tb := mustNew(t, 100, 50, 10)
 	mustRateLimit(t, tb, 80, 10)
 
@@ -49,7 +49,7 @@ func TestRefillCapsAtCapacity(cur realm, t *testing.T) {
 	assertUint(t, "last_refill", tb.LastRefill, 12)
 }
 
-func TestRefillFullBucketOnlyMovesLastRefill(cur realm, t *testing.T) {
+func TestRefillFullBucketOnlyMovesLastRefill(t *testing.T) {
 	tb := mustNew(t, 100, 5, 10)
 
 	tb.Refill(u256.NewUint(20))
@@ -58,7 +58,7 @@ func TestRefillFullBucketOnlyMovesLastRefill(cur realm, t *testing.T) {
 	assertUint(t, "last_refill", tb.LastRefill, 20)
 }
 
-func TestRateLimitAllowsWithinAvailable(cur realm, t *testing.T) {
+func TestRateLimitAllowsWithinAvailable(t *testing.T) {
 	tb := mustNew(t, 100, 5, 10)
 
 	mustRateLimit(t, tb, 40, 10)
@@ -67,7 +67,7 @@ func TestRateLimitAllowsWithinAvailable(cur realm, t *testing.T) {
 	assertUint(t, "last_refill", tb.LastRefill, 10)
 }
 
-func TestRateLimitRefillsBeforeCharging(cur realm, t *testing.T) {
+func TestRateLimitRefillsBeforeCharging(t *testing.T) {
 	tb := mustNew(t, 100, 5, 10)
 	mustRateLimit(t, tb, 80, 10)
 
@@ -77,7 +77,7 @@ func TestRateLimitRefillsBeforeCharging(cur realm, t *testing.T) {
 	assertUint(t, "last_refill", tb.LastRefill, 12)
 }
 
-func TestRateLimitRejectsExceededAmount(cur realm, t *testing.T) {
+func TestRateLimitRejectsExceededAmount(t *testing.T) {
 	tb := mustNew(t, 100, 5, 10)
 
 	err := tb.RateLimit(u256.NewUint(101), u256.NewUint(10))
@@ -88,7 +88,7 @@ func TestRateLimitRejectsExceededAmount(cur realm, t *testing.T) {
 	assertUint(t, "available", tb.Available, 100)
 }
 
-func TestRateLimitZeroAmountNoop(cur realm, t *testing.T) {
+func TestRateLimitZeroAmountNoop(t *testing.T) {
 	tb := mustNew(t, 100, 5, 10)
 
 	if err := tb.RateLimit(u256.Zero(), u256.NewUint(20)); err != nil {
@@ -99,7 +99,7 @@ func TestRateLimitZeroAmountNoop(cur realm, t *testing.T) {
 	assertUint(t, "last_refill", tb.LastRefill, 10)
 }
 
-func TestUpdateRejectsZeroCapacity(cur realm, t *testing.T) {
+func TestUpdateRejectsZeroCapacity(t *testing.T) {
 	tb := mustNew(t, 100, 5, 10)
 
 	err := tb.Update(u256.Zero(), u256.NewUint(1), false)
@@ -108,7 +108,7 @@ func TestUpdateRejectsZeroCapacity(cur realm, t *testing.T) {
 	}
 }
 
-func TestUpdateRejectsZeroRefillRate(cur realm, t *testing.T) {
+func TestUpdateRejectsZeroRefillRate(t *testing.T) {
 	tb := mustNew(t, 100, 5, 10)
 
 	err := tb.Update(u256.NewUint(1), u256.Zero(), false)
@@ -117,7 +117,7 @@ func TestUpdateRejectsZeroRefillRate(cur realm, t *testing.T) {
 	}
 }
 
-func TestUpdateWithoutResetKeepsAvailable(cur realm, t *testing.T) {
+func TestUpdateWithoutResetKeepsAvailable(t *testing.T) {
 	tb := mustNew(t, 100, 5, 10)
 	mustRateLimit(t, tb, 40, 10)
 
@@ -130,7 +130,7 @@ func TestUpdateWithoutResetKeepsAvailable(cur realm, t *testing.T) {
 	assertUint(t, "refill_rate", tb.RefillRate, 7)
 }
 
-func TestUpdateWithResetRestoresAvailable(cur realm, t *testing.T) {
+func TestUpdateWithResetRestoresAvailable(t *testing.T) {
 	tb := mustNew(t, 100, 5, 10)
 	mustRateLimit(t, tb, 40, 10)
 
@@ -143,7 +143,7 @@ func TestUpdateWithResetRestoresAvailable(cur realm, t *testing.T) {
 	assertUint(t, "refill_rate", tb.RefillRate, 7)
 }
 
-func TestRefillIgnoresClockGoingBackward(cur realm, t *testing.T) {
+func TestRefillIgnoresClockGoingBackward(t *testing.T) {
 	tb := mustNew(t, 100, 5, 10)
 	mustRateLimit(t, tb, 80, 10)
 
@@ -153,7 +153,7 @@ func TestRefillIgnoresClockGoingBackward(cur realm, t *testing.T) {
 	assertUint(t, "last_refill", tb.LastRefill, 10)
 }
 
-func TestUpdateClampsAvailableWhenShrinkingCapacity(cur realm, t *testing.T) {
+func TestUpdateClampsAvailableWhenShrinkingCapacity(t *testing.T) {
 	tb := mustNew(t, 100, 5, 10)
 
 	if err := tb.Update(u256.NewUint(50), u256.NewUint(5), false); err != nil {
@@ -164,7 +164,7 @@ func TestUpdateClampsAvailableWhenShrinkingCapacity(cur realm, t *testing.T) {
 	assertUint(t, "available", tb.Available, 50)
 }
 
-func TestUpdateWhenLastRefillZeroRestoresAvailable(cur realm, t *testing.T) {
+func TestUpdateWhenLastRefillZeroRestoresAvailable(t *testing.T) {
 	tb := mustNew(t, 100, 5, 0)
 	mustRateLimit(t, tb, 40, 0)
 

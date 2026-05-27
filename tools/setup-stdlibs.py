@@ -107,11 +107,19 @@ def ensure_clone(version: GnoVersion, cache_dir: Path) -> None:
     those stale paths on a key miss and ``go mod tidy`` chokes on the
     dangling stdlib imports inside ``generated.go``.
 
-    The scrub is scoped to ``gnovm/stdlibs/`` deliberately: the root
+    The scrub is normally scoped to ``gnovm/stdlibs/``: the root
     ``go.mod`` / ``go.sum`` carry the native-binding deps that
     ``_inject_native_deps`` adds, and the ``make link-stdlibs`` cache-hit
     path on CI does not re-inject them. Resetting the whole tree would
     strip those deps and break ``go test`` against the native bindings.
+
+    Exception: when the pin moves (warm cache with prior `_inject_native_deps`
+    modifications, but a new ``version.commit``), ``git checkout`` fails on
+    the tracked root ``go.mod`` modifications. In that case we hard-reset
+    before the checkout. ``regenerate_and_install`` reapplies the deps right
+    after. Link-only callers (`--link-only`) who change the pin lose those
+    deps, but that combination has no valid use case (a pin bump requires
+    a full rebuild).
     """
     freshly_cloned = not (cache_dir / ".git").is_dir()
     if freshly_cloned:
@@ -128,7 +136,22 @@ def ensure_clone(version: GnoVersion, cache_dir: Path) -> None:
     ).returncode == 0
     if not have_commit:
         run(["git", "fetch", "--quiet", "origin"], cwd=cache_dir)
-    run(["git", "checkout", "--quiet", version.commit], cwd=cache_dir)
+
+    if not freshly_cloned:
+        head_sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            cwd=cache_dir, capture_output=True, check=True,
+        ).stdout.decode().strip()
+        if head_sha != version.commit:
+            # Pin moved. Tracked root go.mod / contribs/gnodev/go.mod
+            # modifications from a prior `_inject_native_deps` block
+            # `git checkout`. Hard-reset to clear them. The deps get
+            # re-added by `regenerate_and_install` below.
+            run(["git", "reset", "--quiet", "--hard"], cwd=cache_dir)
+            run(["git", "checkout", "--quiet", version.commit], cwd=cache_dir)
+    else:
+        run(["git", "checkout", "--quiet", version.commit], cwd=cache_dir)
+
     if not freshly_cloned:
         # Drop tracked modifications inside gnovm/stdlibs (notably
         # generated.go after a prior `go generate`) then prune untracked

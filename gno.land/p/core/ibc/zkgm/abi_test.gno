@@ -12,7 +12,7 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 )
 
-func TestFixtureVectorsJSON(cur realm, t *testing.T) {
+func TestFixtureVectorsJSON(t *testing.T) {
 	root, err := json.Unmarshal([]byte(fixtureVectorsJSON))
 	if err != nil {
 		t.Fatalf("Unmarshal fixture vectors: %v", err)
@@ -87,7 +87,7 @@ func TestFixtureVectorsJSON(cur realm, t *testing.T) {
 	}
 }
 
-func TestMetadataWrapperRoundTrip(cur realm, t *testing.T) {
+func TestMetadataWrapperRoundTrip(t *testing.T) {
 	tok := TokenMetadata{Implementation: []byte("impl"), Initializer: mustHex("cafe")}
 	tokBytes, err := EncodeTokenMetadata(tok)
 	if err != nil {

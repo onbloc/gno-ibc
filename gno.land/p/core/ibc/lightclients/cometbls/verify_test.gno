@@ -99,13 +99,13 @@ func devnetStates() map[Height]ConsensusState {
 // --- VerifyHeader tests ---
 
 // TestVerifyHeaderOK verifies a real Union devnet-1337 ZK proof passes end-to-end.
-func TestVerifyHeaderOK(cur realm, t *testing.T) {
+func TestVerifyHeaderOK(t *testing.T) {
 	if err := VerifyHeader(devnetClientState(), devnetTrusted(), devnetHeader(), devnetNow()); err != nil {
 		t.Fatalf("VerifyHeader: %v", err)
 	}
 }
 
-func TestVerifyHeaderFrozenClient(cur realm, t *testing.T) {
+func TestVerifyHeaderFrozenClient(t *testing.T) {
 	cs := devnetClientState()
 	cs.FrozenHeight = FrozenHeight
 	if err := VerifyHeader(cs, devnetTrusted(), devnetHeader(), devnetNow()); err == nil {
@@ -113,7 +113,7 @@ func TestVerifyHeaderFrozenClient(cur realm, t *testing.T) {
 	}
 }
 
-func TestVerifyHeaderHeightNotAdvancing(cur realm, t *testing.T) {
+func TestVerifyHeaderHeightNotAdvancing(t *testing.T) {
 	h := devnetHeader()
 	// Set trusted height equal to header height — must fail.
 	h.TrustedHeight = Height(devnetHeight)
@@ -125,7 +125,7 @@ func TestVerifyHeaderHeightNotAdvancing(cur realm, t *testing.T) {
 	}
 }
 
-func TestVerifyHeaderTimestampNotNewer(cur realm, t *testing.T) {
+func TestVerifyHeaderTimestampNotNewer(t *testing.T) {
 	trusted := devnetTrusted()
 	// Trusted timestamp = header timestamp → header is not strictly newer.
 	trusted.Timestamp = uint64(devnetTimeSeconds)*1_000_000_000 + uint64(devnetTimeNanos)
@@ -137,7 +137,7 @@ func TestVerifyHeaderTimestampNotNewer(cur realm, t *testing.T) {
 	}
 }
 
-func TestVerifyHeaderExpiredTrustingPeriod(cur realm, t *testing.T) {
+func TestVerifyHeaderExpiredTrustingPeriod(t *testing.T) {
 	cs := devnetClientState()
 	cs.TrustingPeriod = 1 // 1 nanosecond — always expired
 	if err := VerifyHeader(cs, devnetTrusted(), devnetHeader(), devnetNow()); err == nil {
@@ -145,7 +145,7 @@ func TestVerifyHeaderExpiredTrustingPeriod(cur realm, t *testing.T) {
 	}
 }
 
-func TestVerifyHeaderClockDrift(cur realm, t *testing.T) {
+func TestVerifyHeaderClockDrift(t *testing.T) {
 	cs := devnetClientState()
 	cs.MaxClockDrift = 0
 	// now = 1 second BEFORE the header → header is in the future beyond drift.
@@ -155,7 +155,7 @@ func TestVerifyHeaderClockDrift(cur realm, t *testing.T) {
 	}
 }
 
-func TestVerifyHeaderTamperedProof(cur realm, t *testing.T) {
+func TestVerifyHeaderTamperedProof(t *testing.T) {
 	h := devnetHeader()
 	// Flip one byte in the proof — ZKP verification must fail.
 	h.ZeroKnowledgeProof[0] ^= 0xFF
@@ -166,7 +166,7 @@ func TestVerifyHeaderTamperedProof(cur realm, t *testing.T) {
 
 // --- VerifyMisbehaviour tests ---
 
-func TestVerifyMisbehaviourFrozenClient(cur realm, t *testing.T) {
+func TestVerifyMisbehaviourFrozenClient(t *testing.T) {
 	cs := devnetClientState()
 	cs.FrozenHeight = FrozenHeight
 	if err := VerifyMisbehaviour(cs, devnetTrusted(), devnetTrusted(), Misbehaviour{HeaderA: devnetHeader(), HeaderB: devnetHeader()}, devnetNow()); err == nil {
@@ -174,7 +174,7 @@ func TestVerifyMisbehaviourFrozenClient(cur realm, t *testing.T) {
 	}
 }
 
-func TestVerifyMisbehaviourDifferentHeights(cur realm, t *testing.T) {
+func TestVerifyMisbehaviourDifferentHeights(t *testing.T) {
 	hA := devnetHeader()
 	hB := devnetHeader()
 	hB.SignedHeader.Height++ // different height
@@ -183,7 +183,7 @@ func TestVerifyMisbehaviourDifferentHeights(cur realm, t *testing.T) {
 	}
 }
 
-func TestVerifyMisbehaviourIdenticalHeaders(cur realm, t *testing.T) {
+func TestVerifyMisbehaviourIdenticalHeaders(t *testing.T) {
 	if err := VerifyMisbehaviour(devnetClientState(), devnetTrusted(), devnetTrusted(), Misbehaviour{HeaderA: devnetHeader(), HeaderB: devnetHeader()}, devnetNow()); err == nil {
 		t.Fatal("expected error for identical headers (not misbehaviour)")
 	}

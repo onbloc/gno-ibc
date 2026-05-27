@@ -8,7 +8,7 @@ import (
 	"gno.land/p/core/encoding/rlp"
 )
 
-func TestVerifySingleLeaf(cur realm, t *testing.T) {
+func TestVerifySingleLeaf(t *testing.T) {
 	value := []byte("dog")
 	leaf := node(leafPath([]byte{0x0a, 0x0b}), rlp.EncodeBytes(value))
 	root := hash(leaf)
@@ -24,7 +24,7 @@ func TestVerifySingleLeaf(cur realm, t *testing.T) {
 	}
 }
 
-func TestVerifyEmbeddedExtensionLeaf(cur realm, t *testing.T) {
+func TestVerifyEmbeddedExtensionLeaf(t *testing.T) {
 	value := []byte("ok")
 	leaf := node(leafPath([]byte{0x03, 0x04}), rlp.EncodeBytes(value))
 	ext := node(extensionPath([]byte{0x01, 0x02}), rlp.EncodeBytes(leaf))
@@ -38,7 +38,7 @@ func TestVerifyEmbeddedExtensionLeaf(cur realm, t *testing.T) {
 	}
 }
 
-func TestVerifyHashedBranchChild(cur realm, t *testing.T) {
+func TestVerifyHashedBranchChild(t *testing.T) {
 	value := bytes.Repeat([]byte{0x77}, 64)
 	leaf := node(leafPath([]byte{0x0b}), rlp.EncodeBytes(value))
 	leafHash := hash(leaf)
@@ -56,7 +56,7 @@ func TestVerifyHashedBranchChild(cur realm, t *testing.T) {
 	}
 }
 
-func TestVerifyAbsence(cur realm, t *testing.T) {
+func TestVerifyAbsence(t *testing.T) {
 	value := []byte("dog")
 	leaf := node(leafPath([]byte{0x0a, 0x0b}), rlp.EncodeBytes(value))
 	root := hash(leaf)
@@ -76,7 +76,7 @@ func TestVerifyAbsence(cur realm, t *testing.T) {
 	}
 }
 
-func TestVerifyAbsenceEmptyRoot(cur realm, t *testing.T) {
+func TestVerifyAbsenceEmptyRoot(t *testing.T) {
 	root := EmptyRoot()
 	if err := VerifyAbsence(root[:], []byte{0xab}, nil); err != nil {
 		t.Fatalf("VerifyAbsence empty root: %v", err)
@@ -86,7 +86,7 @@ func TestVerifyAbsenceEmptyRoot(cur realm, t *testing.T) {
 	}
 }
 
-func TestRejectsBadRootAndMissingHashedChild(cur realm, t *testing.T) {
+func TestRejectsBadRootAndMissingHashedChild(t *testing.T) {
 	value := bytes.Repeat([]byte{0x77}, 64)
 	leaf := node(leafPath([]byte{0x0b}), rlp.EncodeBytes(value))
 	leafHash := hash(leaf)
@@ -110,7 +110,7 @@ func TestRejectsBadRootAndMissingHashedChild(cur realm, t *testing.T) {
 	}
 }
 
-func TestCompactDecodeRejectsEmptyExtension(cur realm, t *testing.T) {
+func TestCompactDecodeRejectsEmptyExtension(t *testing.T) {
 	if _, _, err := compactDecode(extensionPath(nil)); err != ErrPathMismatch {
 		t.Fatalf("empty extension path: got %v want %v", err, ErrPathMismatch)
 	}

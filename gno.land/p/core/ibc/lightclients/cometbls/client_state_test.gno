@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestEncodeClientState(cur realm, t *testing.T) {
+func TestEncodeClientState(t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		cs := ClientState{
 			ChainID:        "abc",
@@ -55,7 +55,7 @@ func TestEncodeClientState(cur realm, t *testing.T) {
 	})
 }
 
-func TestDecodeClientState(cur realm, t *testing.T) {
+func TestDecodeClientState(t *testing.T) {
 	t.Run("basic", func(t *testing.T) {
 		buf := mustHex("0a0361626310e807206432021032820120" + bytes32hex(0xCD))
 		got, err := DecodeClientState(buf)
@@ -168,7 +168,7 @@ func TestDecodeClientState(cur realm, t *testing.T) {
 	})
 }
 
-func TestEncodeDecodeClientStateRoundTrip(cur realm, t *testing.T) {
+func TestEncodeDecodeClientStateRoundTrip(t *testing.T) {
 	maxUint64 := ^uint64(0)
 	testCases := []ClientState{
 		{

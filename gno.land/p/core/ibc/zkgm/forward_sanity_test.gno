@@ -11,7 +11,7 @@ import (
 // Forward.Instruction.Operand is raw bytes, so an outer Forward whose
 // instruction wraps another Forward must round-trip cleanly. Forward
 // continuation rebuilds depend on this.
-func TestSanityForwardOfForwardRoundTrip(cur realm, t *testing.T) {
+func TestSanityForwardOfForwardRoundTrip(t *testing.T) {
 	innerCallBytes, err := EncodeCall(Call{
 		Sender:           []byte("a"),
 		ContractAddress:  []byte("b"),
@@ -66,7 +66,7 @@ func TestSanityForwardOfForwardRoundTrip(cur realm, t *testing.T) {
 
 // Forward → Batch[Call] round-trip. A final-hop continuation may dispatch a
 // Batch as the final instruction.
-func TestSanityForwardOfBatchRoundTrip(cur realm, t *testing.T) {
+func TestSanityForwardOfBatchRoundTrip(t *testing.T) {
 	callBytes, err := EncodeCall(Call{Sender: []byte("s"), ContractAddress: []byte("r")})
 	uassert.NoError(t, err)
 

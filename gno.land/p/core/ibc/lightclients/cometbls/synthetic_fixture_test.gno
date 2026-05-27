@@ -6,7 +6,7 @@ import (
 	"gno.land/p/aib/ibc/types"
 )
 
-func TestSyntheticMembershipProofFixture(cur realm, t *testing.T) {
+func TestSyntheticMembershipProofFixture(t *testing.T) {
 	cases := []struct {
 		name     string
 		key      []byte
@@ -73,7 +73,7 @@ func TestSyntheticMembershipProofFixture(cur realm, t *testing.T) {
 	}
 }
 
-func TestSyntheticNonMembershipProofFixture(cur realm, t *testing.T) {
+func TestSyntheticNonMembershipProofFixture(t *testing.T) {
 	cases := []struct {
 		name     string
 		key      []byte

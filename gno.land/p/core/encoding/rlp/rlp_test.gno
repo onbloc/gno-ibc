@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestEncodeKnownEthereumExamples(cur realm, t *testing.T) {
+func TestEncodeKnownEthereumExamples(t *testing.T) {
 	// Vectors from ethereum.org's RLP examples:
 	// https://ethereum.org/developers/docs/data-structures-and-encoding/rlp/#examples
 	assertHex(t, "dog", EncodeString("dog"), "83646f67")
@@ -25,7 +25,7 @@ func TestEncodeKnownEthereumExamples(cur realm, t *testing.T) {
 		"b8384c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e7365637465747572206164697069736963696e6720656c6974")
 }
 
-func TestDecodeValue(cur realm, t *testing.T) {
+func TestDecodeValue(t *testing.T) {
 	v, err := DecodeValue(mustHex("c88363617483646f67"))
 	if err != nil {
 		t.Fatalf("DecodeValue: %v", err)
@@ -41,7 +41,7 @@ func TestDecodeValue(cur realm, t *testing.T) {
 	assertHex(t, "roundtrip", round, "c88363617483646f67")
 }
 
-func TestSplitHelpers(cur realm, t *testing.T) {
+func TestSplitHelpers(t *testing.T) {
 	b := append(EncodeString("dog"), EncodeUint64(1024)...)
 	content, rest, err := SplitString(b)
 	if err != nil {
@@ -67,7 +67,7 @@ func TestSplitHelpers(cur realm, t *testing.T) {
 	}
 }
 
-func TestCanonicalRejections(cur realm, t *testing.T) {
+func TestCanonicalRejections(t *testing.T) {
 	assertDecodeErr(t, "single byte encoded as string", mustHex("8100"), ErrCanonSize)
 	assertDecodeErr(t, "short string encoded as long", mustHex("b80100"), ErrCanonSize)
 	assertDecodeErr(t, "trailing bytes", mustHex("8080"), ErrTrailingBytes)
@@ -78,7 +78,7 @@ func TestCanonicalRejections(cur realm, t *testing.T) {
 	}
 }
 
-func TestLongPayloads(cur realm, t *testing.T) {
+func TestLongPayloads(t *testing.T) {
 	payload := make([]byte, 56)
 	for i := range payload {
 		payload[i] = byte(i)

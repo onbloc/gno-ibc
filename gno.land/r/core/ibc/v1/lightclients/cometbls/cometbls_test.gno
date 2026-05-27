@@ -209,7 +209,7 @@ func encodeState(t *testing.T, cs cometblsp.ClientState, cons cometblsp.Consensu
 	return csBytes, consBytes
 }
 
-func TestForceUpdateClientRecoveredExpiredClient(t *testing.T) {
+func TestForceUpdateClientRecoveredExpiredClient(cur realm, t *testing.T) {
 	resetAdapterEntries()
 	clientId := core.ClientId(1)
 	cs := activeAdapterClientState()
@@ -229,7 +229,7 @@ func TestForceUpdateClientRecoveredExpiredClient(t *testing.T) {
 	}
 }
 
-func TestForceUpdateClientUnfreezesFrozenClient(t *testing.T) {
+func TestForceUpdateClientUnfreezesFrozenClient(cur realm, t *testing.T) {
 	resetAdapterEntries()
 	clientId := core.ClientId(1)
 	cs := activeAdapterClientState()
@@ -252,7 +252,7 @@ func TestForceUpdateClientUnfreezesFrozenClient(t *testing.T) {
 	}
 }
 
-func TestForceUpdateClientPanicsOnHeightRegression(t *testing.T) {
+func TestForceUpdateClientPanicsOnHeightRegression(cur realm, t *testing.T) {
 	resetAdapterEntries()
 	clientId := core.ClientId(1)
 	cs := activeAdapterClientState()
@@ -263,12 +263,12 @@ func TestForceUpdateClientPanicsOnHeightRegression(t *testing.T) {
 	lowerCs.LatestHeight = cometblsp.Height(50)
 	csBytes, consBytes := encodeState(t, lowerCs, encodableConsensusState(nowNanos()))
 
-	uassert.AbortsContains(t, "force-update height must not regress", func(_ realm) {
+	uassert.AbortsContains(t, cur, "force-update height must not regress", func(cur realm) {
 		applyForceUpdate(clientId, csBytes, consBytes)
 	})
 }
 
-func TestForceUpdateClientClearsHistoricalConsensusStates(t *testing.T) {
+func TestForceUpdateClientClearsHistoricalConsensusStates(cur realm, t *testing.T) {
 	resetAdapterEntries()
 	clientId := core.ClientId(1)
 	cs := activeAdapterClientState()
@@ -291,12 +291,12 @@ func TestForceUpdateClientClearsHistoricalConsensusStates(t *testing.T) {
 	}
 }
 
-func TestForceUpdateClientPanicsOnInvalidClientStateBytes(t *testing.T) {
+func TestForceUpdateClientPanicsOnInvalidClientStateBytes(cur realm, t *testing.T) {
 	resetAdapterEntries()
 	clientId := core.ClientId(1)
 	installAdapterClient(clientId, activeAdapterClientState(), encodableConsensusState(nowNanos()))
 
-	uassert.AbortsContains(t, "cometbls: invalid client state", func(_ realm) {
+	uassert.AbortsContains(t, cur, "cometbls: invalid client state", func(cur realm) {
 		// 0xff alone is a truncated protobuf varint — guaranteed decode error.
 		applyForceUpdate(clientId, []byte{0xff}, nil)
 	})

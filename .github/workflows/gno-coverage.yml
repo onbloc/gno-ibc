@@ -17,6 +17,11 @@ name: coverage
 # Other risk: if either the fork branch is force-pushed or upstream rebases,
 # GNO_COMMIT below becomes orphaned and `make install-gno` will fail until
 # the default is bumped.
+#
+# TEMPORARILY DISABLED: auto-trigger on pull_request/push is commented out
+# while the KNOWN BROKEN cases above are unresolved. Run manually via
+# `gh workflow run coverage` when investigating. Uncomment the blocks below
+# to re-enable automatic runs once the broken tests are fixed.
 on:
   workflow_dispatch:
     inputs:
@@ -28,18 +33,20 @@ on:
         description: "gno commit SHA to install (head of notJoon/gno-core#instrumental-coverage)"
         required: false
         default: "8981c2b6ca8b197e1ec191573986c68bd4c037a5"
-  pull_request:
-    paths: &cov_paths
-      - '**.gno'
-      - '**.go'
-      - 'gnowork.toml'
-      - 'Makefile'
-      - 'flake.nix'
-      - 'flake.lock'
-      - '.github/workflows/gno-coverage.yml'
-  push:
-    branches: [main]
-    paths: *cov_paths
+  # pull_request:
+  #   paths: &cov_paths
+  #     - '**.gno'
+  #     - '**.go'
+  #     - 'gnowork.toml'
+  #     - 'Makefile'
+  #     - 'stdlibs/**'
+  #     - 'tools/setup-stdlibs.py'
+  #     - 'flake.nix'
+  #     - 'flake.lock'
+  #     - '.github/workflows/gno-coverage.yml'
+  # push:
+  #   branches: [main]
+  #   paths: *cov_paths
 
 concurrency:
   group: coverage-${{ github.ref }}

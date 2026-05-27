@@ -23,6 +23,16 @@ jobs:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           sync-labels: true
 
+      - name: Apply type labels from PR title
+        uses: github/issue-labeler@v3.4
+        with:
+          configuration-path: .github/pr-title-labeler.yml
+          enable-versioned-regex: 0
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          sync-labels: 0
+          include-title: 1
+          include-body: 0
+
       # Checkout out only the base branch's .github/scripts directory.
       # DO NOT check out the PR head, because pull_request_target runs with
       # elevated token permissions and PR-authored code must not be executed.

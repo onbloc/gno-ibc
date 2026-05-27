@@ -1,0 +1,17 @@
+T-feature:
+  - '(?i)^feat(\(.+\))?!?:'
+
+T-fix:
+  - '(?i)^fix(\(.+\))?!?:'
+
+T-refactor:
+  - '(?i)^refactor(\(.+\))?!?:'
+
+T-perf:
+  - '(?i)^perf(\(.+\))?!?:'
+
+T-test:
+  - '(?i)^test(\(.+\))?!?:'
+
+T-chore:
+  - '(?i)^chore(\(.+\))?!?:'

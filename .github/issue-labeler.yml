@@ -1,25 +1,20 @@
-# Regex-based issue auto-labeler config (github/issue-labeler).
-# Patterns are matched against the issue title + body (case-insensitive).
-# Mirrors the area labels in .github/labeler.yml so issues and PRs share
-# the same taxonomy.
-
 A-ci:
-  - '(?i)\b(ci|github actions?|workflow|lint(er|ing)?)\b'
+  - '/\b(ci|github actions?|workflow|lint(er|ing)?)\b/i'
 
 A-doc:
-  - '(?i)\b(docs?|documentation|readme|godoc)\b'
+  - '/\b(docs?|documentation|readme|godoc)\b/i'
 
 A-ibc:
-  - '(?i)\b(ibc|light ?clients?|cometbls|tendermint|ics-?\d+)\b'
+  - '/\b(ibc|light ?clients?|cometbls|tendermint|ics-?\d+)\b/i'
 
 A-zkgm:
-  - '(?i)\bzkgm\b'
+  - '/\bzkgm\b/i'
 
 A-crypto:
-  - '(?i)\b(crypto|keccak(256)?|bn254|bls12-?381|ed25519|secp256k1|modexp)\b'
+  - '/\b(crypto|keccak(256)?|bn254|bls12-?381|ed25519|secp256k1|modexp)\b/i'
 
 A-encoding:
-  - '(?i)\b(abi|rlp|ssz|ethereum|encoding)\b'
+  - '/\b(abi|rlp|ssz|ethereum|encoding)\b/i'
 
 A-tooling:
-  - '(?i)\b(makefile|dockerfile|nix|flake|gnowork|gno\.mod|go\.mod|cargo)\b'
+  - '/\b(makefile|dockerfile|nix|flake|gnowork|gno\.mod|go\.mod|cargo)\b/i'

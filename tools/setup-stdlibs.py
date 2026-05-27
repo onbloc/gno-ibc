@@ -35,7 +35,15 @@ except ImportError:
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GNO_VERSION_FILE = REPO_ROOT / ".gno-version"
 STDLIBS_DIR = REPO_ROOT / "stdlibs"
+NATIVE_GAS_CALIBRATION_FILE = STDLIBS_DIR / "native_gas_calibration.txt"
 DEFAULT_CACHE = Path.home() / ".cache" / "gno-ibc" / "gno"
+
+# Sentinel comment marking gno-ibc-injected calibration rows so that
+# inject_calibrated_natives can detect a prior injection and stay idempotent.
+# The ensure_clone scrub (`git checkout HEAD -- gnovm/stdlibs`) drops the
+# sentinel together with the rows, so each fresh-pin run reapplies cleanly.
+_CALIBRATION_SENTINEL = "// gno-ibc:calibrated-natives"
+_CALIBRATION_SLICE_OPEN = "var calibratedNativeGas = []nativeGasEntry{"
 
 
 @dataclass(frozen=True)
@@ -227,11 +235,88 @@ def _inject_native_deps(module_dir: Path) -> None:
     run(["go", "get"] + deps, cwd=module_dir)
 
 
+def _load_calibration_rows(path: Path) -> list[str]:
+    """Read the calibration data file and return only entry-row lines.
+
+    Strips comment-only and blank lines so the data file can carry header
+    docs alongside the rows. Each surviving line is expected to be a single
+    nativeGasEntry struct literal terminated with a comma (matching the
+    format upstream produces from gen_native_table.py).
+    """
+    if not path.is_file():
+        return []
+    rows: list[str] = []
+    for raw in path.read_text().splitlines():
+        line = raw.rstrip()
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("//"):
+            continue
+        rows.append(line)
+    return rows
+
+
+def _inject_calibrated_natives(cache_dir: Path) -> None:
+    """Append gno-ibc calibration rows into upstream's calibratedNativeGas.
+
+    No-op when:
+      * gnovm/stdlibs/native_gas.go does not exist (pre-#5629 pin)
+      * the sentinel comment is already present (idempotent rerun)
+      * the calibration data file is empty or missing
+
+    Inserts the rows right before the slice's closing brace, preceded by the
+    sentinel comment. ensure_clone's scrub
+    (``git checkout HEAD -- gnovm/stdlibs``) removes both the sentinel and
+    the rows, so every fresh-pin invocation reapplies from scratch.
+    """
+    target = cache_dir / "gnovm" / "stdlibs" / "native_gas.go"
+    if not target.is_file():
+        log(f"  skip calibration injection: {target.relative_to(cache_dir)} not in pin")
+        return
+    rows = _load_calibration_rows(NATIVE_GAS_CALIBRATION_FILE)
+    if not rows:
+        log(f"  skip calibration injection: {NATIVE_GAS_CALIBRATION_FILE.name} has no rows")
+        return
+
+    src = target.read_text()
+    if _CALIBRATION_SENTINEL in src:
+        log("  calibration injection: sentinel already present, skipping")
+        return
+
+    lines = src.splitlines(keepends=True)
+    open_idx = next(
+        (i for i, line in enumerate(lines) if line.strip() == _CALIBRATION_SLICE_OPEN),
+        -1,
+    )
+    if open_idx < 0:
+        raise SystemExit(
+            f"ERROR: {target} does not contain '{_CALIBRATION_SLICE_OPEN}' "
+            f"(upstream changed the slice declaration?)"
+        )
+    close_idx = next(
+        (i for i in range(open_idx + 1, len(lines)) if lines[i].rstrip() == "}"),
+        -1,
+    )
+    if close_idx < 0:
+        raise SystemExit(
+            f"ERROR: {target} has no closing brace after "
+            f"'{_CALIBRATION_SLICE_OPEN}'"
+        )
+
+    block = [f"\t{_CALIBRATION_SENTINEL}\n"]
+    for row in rows:
+        block.append("\t" + row.lstrip() + "\n")
+
+    new_lines = lines[:close_idx] + block + lines[close_idx:]
+    target.write_text("".join(new_lines))
+    log(f"  calibration injection: appended {len(rows)} row(s) to {target.relative_to(cache_dir)}")
+
+
 def regenerate_and_install(cache_dir: Path, skip_install: bool) -> None:
     gnovm = cache_dir / "gnovm"
     gnodev = cache_dir / "contribs" / "gnodev"
     gnoland = cache_dir / "gno.land"
     _inject_native_deps(cache_dir)
+    _inject_calibrated_natives(cache_dir)
     run(["go", "mod", "tidy"], cwd=gnovm)
     run(["go", "generate", "./stdlibs/..."], cwd=gnovm)
     if skip_install:

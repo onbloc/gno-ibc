@@ -35,6 +35,17 @@ def _commit_sha(repo: Path) -> str:
     return out.stdout.decode().strip()
 
 
+def _init_upstream_repo(repo: Path) -> None:
+    """Initialize an empty git repo with the config needed for partial clone
+    over file://. Shared by the module-scoped `upstream` fixture and tests
+    that build their own upstream payload."""
+    _git(repo, "init", "--quiet", "--initial-branch=main")
+    _git(repo, "config", "user.email", "test@example.com")
+    _git(repo, "config", "user.name", "test")
+    # Required for `git clone --filter=blob:none` against a local file:// URL.
+    _git(repo, "config", "uploadpack.allowFilter", "true")
+
+
 @pytest.fixture(scope="module")
 def setup_stdlibs():
     """Load setup-stdlibs.py as a module despite the hyphen in its filename."""
@@ -52,11 +63,7 @@ def setup_stdlibs():
 def upstream(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """A minimal git repo that mimics the upstream gno layout."""
     repo = tmp_path_factory.mktemp("upstream")
-    _git(repo, "init", "--quiet", "--initial-branch=main")
-    _git(repo, "config", "user.email", "test@example.com")
-    _git(repo, "config", "user.name", "test")
-    # Required for `git clone --filter=blob:none` against a local file:// URL.
-    _git(repo, "config", "uploadpack.allowFilter", "true")
+    _init_upstream_repo(repo)
     (repo / "go.mod").write_text("module github.com/gnolang/gno\n\ngo 1.24.0\n")
     stdlibs = repo / "gnovm" / "stdlibs"
     stdlibs.mkdir(parents=True)
@@ -110,6 +117,134 @@ def test_warm_cache_preserves_root_go_mod(setup_stdlibs, warm_cache):
     assert marker in go_mod.read_text()
 
 
+# ---------------------------------------------------------------------------
+# inject_calibrated_natives: applies post-#5629 calibration rows to upstream's
+# native_gas.go. Must be idempotent and must survive the ensure_clone scrub.
+# ---------------------------------------------------------------------------
+
+_NATIVE_GAS_TEMPLATE = """\
+package stdlibs
+
+var calibratedNativeGas = []nativeGasEntry{
+\t{Pkg: "crypto/sha256", Fn: "sum256", Base: 226, Slope: 8906, SlopeIdx: 0, SlopeKind: SizeLenBytes},
+}
+
+func init() {}
+"""
+
+
+def _write_native_gas(cache: Path) -> Path:
+    target = cache / "gnovm" / "stdlibs" / "native_gas.go"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(_NATIVE_GAS_TEMPLATE)
+    return target
+
+
+def test_inject_calibrated_natives_no_op_without_native_gas_file(setup_stdlibs, tmp_path):
+    """Pre-#5629 pins do not ship native_gas.go; injection silently skips."""
+    setup_stdlibs._inject_calibrated_natives(tmp_path)
+    # No file created; no crash.
+    assert not (tmp_path / "gnovm" / "stdlibs" / "native_gas.go").exists()
+
+
+def test_inject_calibrated_natives_appends_rows_and_sentinel(setup_stdlibs, tmp_path):
+    """Reads the real calibration data file and appends rows + sentinel into
+    the slice's interior."""
+    target = _write_native_gas(tmp_path)
+
+    setup_stdlibs._inject_calibrated_natives(tmp_path)
+
+    out = target.read_text()
+    assert setup_stdlibs._CALIBRATION_SENTINEL in out
+    # At least the IBC-marker rows from the real data file landed.
+    for fn in ("g1Add", "verifyZKP", "modExp"):
+        assert fn in out, f"expected calibration row for {fn!r}"
+    # Rows must sit inside the slice, before its closing brace.
+    sentinel_pos = out.index(setup_stdlibs._CALIBRATION_SENTINEL)
+    init_pos = out.index("func init")
+    assert sentinel_pos < init_pos
+
+
+def test_inject_calibrated_natives_is_idempotent(setup_stdlibs, tmp_path):
+    """Running injection twice does not double-insert (sentinel guards reruns)."""
+    target = _write_native_gas(tmp_path)
+
+    setup_stdlibs._inject_calibrated_natives(tmp_path)
+    once = target.read_text()
+    setup_stdlibs._inject_calibrated_natives(tmp_path)
+    twice = target.read_text()
+
+    assert once == twice
+    assert once.count(setup_stdlibs._CALIBRATION_SENTINEL) == 1
+
+
+def test_inject_calibrated_natives_survives_ensure_clone_scrub(
+    setup_stdlibs, tmp_path
+):
+    """ensure_clone's `git checkout HEAD -- gnovm/stdlibs` drops the injection;
+    re-running it reproduces the previous bytes (the scrub-survival invariant).
+
+    Builds a dedicated upstream that already ships native_gas.go so the scrub
+    has a tracked-but-modified file to reset (mirrors production: we clone a
+    pin that contains the file, inject locally, scrub back, re-inject)."""
+    upstream = tmp_path / "upstream"
+    upstream.mkdir()
+    _init_upstream_repo(upstream)
+    (upstream / "go.mod").write_text("module github.com/gnolang/gno\n\ngo 1.24.0\n")
+    _write_native_gas(upstream)
+    _git(upstream, "add", ".")
+    _git(upstream, "commit", "--quiet", "-m", "initial with native_gas.go")
+
+    cache = tmp_path / "cache"
+    version = setup_stdlibs.GnoVersion(
+        repo=f"file://{upstream}", commit=_commit_sha(upstream),
+    )
+    setup_stdlibs.ensure_clone(version, cache)
+
+    target = cache / "gnovm" / "stdlibs" / "native_gas.go"
+    setup_stdlibs._inject_calibrated_natives(cache)
+    first = target.read_text()
+    assert setup_stdlibs._CALIBRATION_SENTINEL in first
+
+    # Warm-cache rerun: ensure_clone scrubs gnovm/stdlibs back to HEAD,
+    # dropping our injection.
+    setup_stdlibs.ensure_clone(version, cache)
+    scrubbed = target.read_text()
+    assert setup_stdlibs._CALIBRATION_SENTINEL not in scrubbed
+
+    setup_stdlibs._inject_calibrated_natives(cache)
+    second = target.read_text()
+    assert second == first
+
+
+def test_inject_calibrated_natives_raises_on_missing_slice(setup_stdlibs, tmp_path):
+    """If upstream renames the slice, fail loudly rather than silently no-op."""
+    target = tmp_path / "gnovm" / "stdlibs" / "native_gas.go"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("package stdlibs\n\nvar somethingElse = []int{}\n")
+
+    with pytest.raises(SystemExit, match="does not contain"):
+        setup_stdlibs._inject_calibrated_natives(tmp_path)
+
+
+def test_regenerate_runs_calibration_injection_before_go_generate(setup_stdlibs, monkeypatch, tmp_path):
+    """Injection must run between `_inject_native_deps` and `go generate` so
+    that the regenerated dispatch table sees the appended rows."""
+    calls = []
+
+    monkeypatch.setattr(setup_stdlibs, "_inject_native_deps", lambda d: calls.append(("inject_deps", d)))
+    monkeypatch.setattr(setup_stdlibs, "_inject_calibrated_natives", lambda d: calls.append(("inject_calib", d)))
+    monkeypatch.setattr(setup_stdlibs, "run", lambda cmd, cwd=None: calls.append(("run", tuple(cmd), cwd)))
+
+    setup_stdlibs.regenerate_and_install(tmp_path, skip_install=True)
+
+    gnovm = tmp_path / "gnovm"
+    deps_idx = calls.index(("inject_deps", tmp_path))
+    calib_idx = calls.index(("inject_calib", tmp_path))
+    generate_idx = calls.index(("run", ("go", "generate", "./stdlibs/..."), gnovm))
+    assert deps_idx < calib_idx < generate_idx
+
+
 def test_regenerate_tidies_gnodev_after_injecting_native_deps(setup_stdlibs, monkeypatch, tmp_path):
     """gnodev is its own Go module, so direct deps alone are not enough on a
     clean machine; its go.sum also needs transitive checksums from go mod tidy."""
@@ -122,6 +257,7 @@ def test_regenerate_tidies_gnodev_after_injecting_native_deps(setup_stdlibs, mon
         calls.append(("run", tuple(cmd), cwd))
 
     monkeypatch.setattr(setup_stdlibs, "_inject_native_deps", fake_inject)
+    monkeypatch.setattr(setup_stdlibs, "_inject_calibrated_natives", lambda _: None)
     monkeypatch.setattr(setup_stdlibs, "run", fake_run)
 
     setup_stdlibs.regenerate_and_install(tmp_path, skip_install=False)

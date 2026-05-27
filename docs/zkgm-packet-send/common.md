@@ -104,12 +104,6 @@ curl -s -X POST http://23.20.153.250:8546/graphql/query \
   -d '{"query":"{ getTransactions(where:{success:{eq:true},response:{events:{GnoEvent:{type:{eq:\"PacketSend\"},pkg_path:{eq:\"gno.land/r/core/ibc/v1/core\"},_and:[{attrs:{key:{eq:\"packet_hash\"},value:{eq:\"0x...\"}}},{attrs:{key:{eq:\"source_channel_id\"},value:{eq:\"1\"}}},{attrs:{key:{eq:\"destination_channel_id\"},value:{eq:\"25\"}}}]}}}},order:{heightAndIndex:DESC}){ block_height hash response { events { ...on GnoEvent { type pkg_path attrs { key value } } } } } }"}'
 ```
 
-Store permanent logs under:
-
-```text
-local_docs/zkgm/sends/
-```
-
 Each send record should include:
 
 - resolved inputs

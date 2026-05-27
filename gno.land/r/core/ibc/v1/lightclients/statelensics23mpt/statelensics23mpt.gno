@@ -44,6 +44,13 @@ func getEntry(clientId core.ClientId) *clientEntry {
 
 type Adapter struct{}
 
+// NewAdapter constructs an Adapter inside this realm so cross-realm callers
+// (e.g. smoke scripts and loader realms) can build one without tripping the
+// Phase 3 cross-realm allocation guard.
+func NewAdapter(cur realm) Adapter {
+	return Adapter{}
+}
+
 func (Adapter) CreateClient(cur realm, clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) string {
 	mustBeCore(cur)
 

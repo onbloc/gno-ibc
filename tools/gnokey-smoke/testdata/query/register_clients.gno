@@ -6,12 +6,12 @@ import (
 	statelens "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
 )
 
-func main() {
+func main(cur realm) {
 	if !core.HasClient(statelens.ClientType) {
-		core.RegisterClient(cross, statelens.ClientType, statelens.Adapter{})
+		core.RegisterClient(cross(cur), statelens.ClientType, statelens.NewAdapter(cross(cur)))
 	}
 	if !core.HasClient(cometbls.ClientType) {
-		core.RegisterClient(cross, cometbls.ClientType, cometbls.Adapter{})
+		core.RegisterClient(cross(cur), cometbls.ClientType, cometbls.NewAdapter(cross(cur)))
 	}
 	println("registered_statelens", core.HasClient(statelens.ClientType))
 	println("registered_cometbls", core.HasClient(cometbls.ClientType))

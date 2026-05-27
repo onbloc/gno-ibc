@@ -8,7 +8,7 @@ import (
 	statelens "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
 )
 
-func main() {
+func main(cur realm) {
 	consensusState, err := statelensp.EncodeConsensusState(statelensp.ConsensusState{
 		Timestamp:   1,
 		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
@@ -17,9 +17,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	id := core.CreateClient(cross, core.MsgCreateClient{
-		ClientType: statelens.ClientType,
-		ClientStateBytes: statelensp.EncodeClientState(statelensp.ClientState{
+	id := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), statelens.ClientType, statelensp.EncodeClientState(statelensp.ClientState{
 			L2ChainID:         "local-l2",
 			L1ClientID:        1,
 			L2ClientID:        1,
@@ -27,8 +25,6 @@ func main() {
 			TimestampOffset:   64,
 			StateRootOffset:   0,
 			StorageRootOffset: 32,
-		}),
-		ConsensusStateBytes: consensusState,
-	})
+		}), consensusState))
 	println("statelens_client_id", id.String())
 }

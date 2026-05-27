@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"bytes"
 	"chain"
 	"errors"
 
@@ -222,19 +223,7 @@ func tokenOrderDestinationChannel(channelId core.ChannelId) (uint32, error) {
 }
 
 func isOnlyMakerAck(ack []byte) bool {
-	return equalBytes(ack, z.ACK_ERR_ONLY_MAKER)
-}
-
-func equalBytes(a []byte, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
+	return bytes.Equal(ack, z.ACK_ERR_ONLY_MAKER)
 }
 
 func extractPanicMessage(r any) string {

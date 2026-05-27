@@ -119,9 +119,9 @@ func VerifyNonMembership(cs ConsensusState, proofs []ics23.CommitmentProof, path
 	return verifyChainedMembershipProof(in, subroot, 1)
 }
 
-// prepareProofVerify clones inputs across the realm boundary: ics23 reads
-// proofs, path bytes, and the root with bytes.Equal, which panics on
-// readonly slices.
+// prepareProofVerify clones inputs across the realm boundary: ics23 internals
+// may append into intermediate buffers and persist proof-derived slices, so
+// callers must hand the verifier owned copies rather than realm-owned data.
 func prepareProofVerify(cs ConsensusState, proofs []ics23.CommitmentProof, path types.MerklePath) (*proofInputs, error) {
 	specs := ics23.GetSDKProofSpecs()
 	if len(specs) != len(proofs) {

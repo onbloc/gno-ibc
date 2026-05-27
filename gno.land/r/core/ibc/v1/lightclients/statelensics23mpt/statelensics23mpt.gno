@@ -1,6 +1,7 @@
 package statelensics23mpt
 
 import (
+	"bytes"
 	"crypto/keccak256"
 	"encoding/binary"
 	"errors"
@@ -133,7 +134,7 @@ func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proo
 	if len(value) != 32 {
 		panic(ErrInvalidCommitmentValue)
 	}
-	if !equalBytes(storageProof.Value, value) {
+	if !bytes.Equal(storageProof.Value, value) {
 		panic(ErrStoredValueMismatch)
 	}
 	if err := storage.VerifyProof(copyBytes(consState.StorageRoot), storage.Proof{
@@ -234,28 +235,14 @@ func verifyCommitmentKey(path []byte, proofKey []byte) error {
 	if err != nil {
 		return ErrInvalidCommitmentKey
 	}
-	if !equalBytes(expected[:], proofKey) {
+	if !bytes.Equal(expected[:], proofKey) {
 		return ErrInvalidCommitmentKey
 	}
 	return nil
 }
 
-func equalBytes(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 func copyBytes(b []byte) []byte {
 	out := make([]byte, len(b))
-	for i := range b {
-		out[i] = b[i]
-	}
+	copy(out, b)
 	return out
 }

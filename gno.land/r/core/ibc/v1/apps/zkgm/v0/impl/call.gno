@@ -31,7 +31,7 @@ func (v *ZkgmV1) executeCall(cur realm, packet core.Packet, relayer address, rel
 
 	sender := cloneBytes(call.Sender)
 	calldata := cloneBytes(call.ContractCalldata)
-	receiverPath := string(cloneBytes(call.ContractAddress))
+	receiverPath := string(call.ContractAddress)
 	receiver := zkgm.GetReceiver(receiverPath)
 	if receiver == nil {
 		return callErrAck(cur, errors.New("zkgm/v1: receiver not registered: "+receiverPath)), nil
@@ -123,9 +123,8 @@ func callErrAck(cur realm, err error) core.RecvPacketResult {
 	return failureResult(cur, ack)
 }
 
-// cloneBytes copies cross(cur)-realm package vars (e.g. ACK_ERR_ONLY_MAKER)
-// before returning them, since Gno marks such slices readonly and any later
-// []byte -> string conversion (e.g. bytes.Equal) panics.
+// cloneBytes copies slices before storing or passing them to code that may
+// persist or mutate them across realm boundaries.
 func cloneBytes(in []byte) []byte {
 	out := make([]byte, len(in))
 	copy(out, in)

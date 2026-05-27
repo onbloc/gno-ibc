@@ -39,7 +39,7 @@ func (mockL1Client) VerifyMembership(clientId core.ClientId, height core.Height,
 	if clientId != wantClientId || height != wantHeight {
 		panic("membership target mismatch")
 	}
-	if !equalBytes(proof, wantProof) || !equalBytes(key, wantKey) || !equalBytes(value, wantValue) {
+	if !bytes.Equal(proof, wantProof) || !bytes.Equal(key, wantKey) || !bytes.Equal(value, wantValue) {
 		panic("membership proof payload mismatch")
 	}
 }
@@ -161,8 +161,8 @@ func TestUpdateClientVerifiesL2ConsensusStateOnL1(cur realm, t *testing.T) {
 	wantClientId = l1ClientId
 	wantHeight = core.Height(header.L1Height)
 	wantProof = []byte("l1-proof")
-	wantKey = cloneBytes(wantPath[:])
-	wantValue = cloneBytes(wantValueHash[:])
+	wantKey = wantPath[:]
+	wantValue = wantValueHash[:]
 
 	height := core.UpdateClient(cross(cur), core.NewMsgUpdateClient(cross(cur), lensClientId, statelensp.EncodeHeader(header)))
 
@@ -390,12 +390,6 @@ func makeConsensusBytes(timestamp uint64, stateRoot, storageRoot []byte) []byte 
 	return out
 }
 
-func cloneBytes(b []byte) []byte {
-	out := make([]byte, len(b))
-	copy(out, b)
-	return out
-}
-
 func storageProofFixture(slot []byte, value []byte) ([32]byte, [][]byte) {
 	path, err := storage.StoragePath(slot)
 	if err != nil {
@@ -514,9 +508,9 @@ func updateLensRootForPathValue(cur realm, t *testing.T, lensClientId core.Clien
 	wantMembershipCheck = true
 	wantClientId = l1ClientId
 	wantHeight = core.Height(height)
-	wantProof = cloneBytes(header.L2ConsensusStateProof)
-	wantKey = cloneBytes(wantPath[:])
-	wantValue = cloneBytes(wantValueHash[:])
+	wantProof = header.L2ConsensusStateProof
+	wantKey = wantPath[:]
+	wantValue = wantValueHash[:]
 	core.UpdateClient(cross(cur), core.NewMsgUpdateClient(cross(cur), lensClientId, statelensp.EncodeHeader(header)))
 	return root, proof
 }

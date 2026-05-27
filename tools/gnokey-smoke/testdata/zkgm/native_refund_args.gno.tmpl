@@ -1,0 +1,33 @@
+package main
+
+import (
+	"encoding/hex"
+
+	z "gno.land/p/gnoswap/ibc/zkgm"
+	u256 "gno.land/p/gnoswap/uint256"
+	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
+	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
+)
+
+func main() {
+	e2e.RegisterMockLightClient(cross)
+	pair := e2e.OpenE2EChannelPair(cross)
+
+	order := z.TokenOrderV2{
+		Sender:      []byte("@REFUND_RECIPIENT@"),
+		Receiver:    []byte("counterparty-receiver"),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte("counterparty-projected-quote"),
+		QuoteAmount: u256.NewUint(100),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+	}
+	operand, err := z.EncodeTokenOrderV2(order)
+	if err != nil {
+		panic(err)
+	}
+
+	println("source_channel", pair.Source.String())
+	println("destination_channel", pair.Destination.String())
+	println("operand_hex", hex.EncodeToString(operand))
+}

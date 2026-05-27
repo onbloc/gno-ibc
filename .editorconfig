@@ -19,3 +19,8 @@ indent_style = tab
 [*.{graphql,gql,js,json,yml,yaml}]
 indent_style = space
 indent_size = 2
+
+# Shell scripts use 2-space indentation
+[*.{sh,bash}]
+indent_style = space
+indent_size = 2

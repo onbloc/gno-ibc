@@ -34,10 +34,10 @@ func PacketSend(cur realm, sourceChannelId ChannelId, timeoutHeight Height, time
 	return packet
 }
 
-// acceptRecvPacket validates packet against the recv-batch invariants and
-// records its receipt. It returns the destination channel and whether the packet
-// should be skipped because its receipt already exists.
-func acceptRecvPacket(packet Packet, batchChannelId ChannelId, now uint64) (Channel, bool) {
+// acceptRecvPacket validates packet against the recv-batch invariants. Proven
+// recv paths record a receipt; proofless intent paths must not, because the
+// receipt is also the source-side timeout non-membership signal.
+func acceptRecvPacket(packet Packet, batchChannelId ChannelId, now uint64, writeReceipt bool) (Channel, bool) {
 	channel := st.getChannel(packet.DestinationChannelId)
 	if channel.State != ChannelStateOpen {
 		panic(ErrInvalidChannelState)
@@ -58,7 +58,9 @@ func acceptRecvPacket(packet Packet, batchChannelId ChannelId, now uint64) (Chan
 		panic(ErrPacketTimeoutExpired)
 	}
 
-	st.setPacketReceipt(packet)
+	if writeReceipt {
+		st.setPacketReceipt(packet)
+	}
 	return channel, false
 }
 
@@ -77,7 +79,7 @@ func PacketRecv(cur realm, msg MsgPacketRecv) {
 	now := nowNanos()
 
 	for i, packet := range msg.Packets {
-		channel, skip := acceptRecvPacket(packet, first.DestinationChannelId, now)
+		channel, skip := acceptRecvPacket(packet, first.DestinationChannelId, now, true)
 		if skip {
 			continue
 		}
@@ -113,7 +115,7 @@ func IntentPacketRecv(cur realm, msg MsgIntentPacketRecv) {
 	now := nowNanos()
 
 	for i, packet := range msg.Packets {
-		channel, skip := acceptRecvPacket(packet, first.DestinationChannelId, now)
+		channel, skip := acceptRecvPacket(packet, first.DestinationChannelId, now, false)
 		if skip {
 			continue
 		}
@@ -270,6 +272,12 @@ func BatchAcks(cur realm, msg MsgBatchAcks) H256 {
 		if packet.DestinationChannelId != first.DestinationChannelId {
 			panic(ErrBatchSameChannelOnly)
 		}
+		if !st.hasPacketReceipt(packet) {
+			panic(ErrPacketReceiptNotFound)
+		}
+		if st.hasAcknowledgement(packet) {
+			panic(ErrAcknowledgementAlreadyWritten)
+		}
 	}
 	batchHash := CommitPackets(msg.Packets)
 	st.saveBatchReceipts(batchHash, CommitAcks(msg.Acks))
@@ -321,6 +329,9 @@ func WriteAcknowledgement(cur realm, msg MsgWriteAcknowledgement) {
 	}
 	if len(msg.Acknowledgement) == 0 {
 		panic(ErrAcknowledgementEmpty)
+	}
+	if !st.hasPacketReceipt(msg.Packet) {
+		panic(ErrPacketReceiptNotFound)
 	}
 	if st.hasAcknowledgement(msg.Packet) {
 		panic(ErrAcknowledgementAlreadyWritten)

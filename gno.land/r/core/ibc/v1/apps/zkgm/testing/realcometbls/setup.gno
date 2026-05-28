@@ -51,7 +51,7 @@ func createSyntheticCometBLSClient(cur realm, clientStateBytes []byte) core.Clie
 
 func createCometBLSClient(cur realm, clientStateBytes, consensusStateBytes []byte) core.ClientId {
 	if !core.HasClient(realcometbls.ClientType) {
-		core.RegisterClient(cross(cur), realcometbls.ClientType, realcometbls.NewAdapter(cross(cur)))
+		realcometbls.Register(cross(cur))
 	}
 	return core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), realcometbls.ClientType, clientStateBytes, consensusStateBytes))
 }

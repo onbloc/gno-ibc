@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"bytes"
 	"testing"
 
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -111,7 +112,7 @@ func TestExecuteForwardIntentReturnsOnlyMaker(cur realm, t *testing.T) {
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == core.PacketStatusSuccess)
-	uassert.True(t, equalBytes(z.ACK_ERR_ONLY_MAKER, res.Ack))
+	uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Ack))
 }
 
 func TestExecuteForwardAsyncDefersAckAndTracksChild(cur realm, t *testing.T) {
@@ -234,9 +235,9 @@ func openForwardTestChannel(cur realm, counterpartyChannelId core.ChannelId) cor
 	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), &ZkgmV1{}, nil))
 	portId := []byte(zkgm.ProxyPkgPath())
 	if !core.HasApp(portId) {
-		core.RegisterApp(cross(cur), portId, zkgm.AsIBCApp())
+		zkgm.RegisterCoreApp(cross(cur))
 	}
-	clientType := core.ClientType("forward-test")
+	clientType := core.ClientType("gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl/forward-test")
 	if !core.HasClient(clientType) {
 		core.RegisterClient(cross(cur), clientType, &forwardTestLightClient{})
 	}

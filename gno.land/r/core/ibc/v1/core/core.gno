@@ -2,6 +2,7 @@ package core
 
 import (
 	"chain/params"
+	"chain/runtime"
 	"crypto/keccak256"
 	"encoding/hex"
 )
@@ -25,6 +26,14 @@ type ILightClient interface {
 	GetStatus(clientId ClientId) Status
 }
 
+// IForceLightClient is an optional interface implemented by light clients that
+// support admin-initiated force updates (e.g. to recover an expired client).
+// It is separate from ILightClient because force-update is not part of the
+// standard light client spec — it is a chain-operator escape hatch.
+type IForceLightClient interface {
+	ForceUpdateClient(cur realm, clientId ClientId, clientStateBytes, consensusStateBytes []byte) ConsensusStateUpdate
+}
+
 // IApp defines the interface for IBC application callbacks. Byte parameters
 // use plain []byte (not the typed Bytes wrapper) so foreign-realm apps can
 // implement the interface without the cross(cur)-realm typed-slice pitfall.
@@ -41,11 +50,21 @@ type IApp interface {
 	OnTimeoutPacket(cur realm, packet Packet, relayer address)
 }
 
-// RegisterApp registers an IBC application at portId.
-//
-// Locally-owned ports must use the owning realm's package path bytes.
-// Note: portId is []byte to avoid cross(cur)-realm typed slice issues.
-func RegisterApp(_ realm, portId []byte, app IApp) {
+// RegisterApp registers an IBC application at the caller realm's package path.
+func RegisterApp(cur realm, app IApp) {
+	registerAppAtPort([]byte(cur.Previous().PkgPath()), app)
+}
+
+// RegisterAppForPort registers an IBC application at an explicit port id. This
+// privileged path is for deployment/loaders that install an app on behalf of
+// another realm.
+func RegisterAppForPort(_ realm, portId []byte, app IApp) {
+	assertDeployer("register port")
+	runtime.AssertOriginCall()
+	registerAppAtPort(portId, app)
+}
+
+func registerAppAtPort(portId []byte, app IApp) {
 	key := string(portId)
 	if _, ok := st.ports[key]; ok {
 		panic(ErrPortAlreadyRegistered)
@@ -85,8 +104,8 @@ func commit(key H256, value H256) {
 // h256Bytes returns a fresh byte slice containing h.
 //
 // Use it when passing package-level H256 values such as COMMITMENT_MAGIC to
-// foreign-realm light clients. Passing a slice backed by readonly or externally
-// stored memory can cause ics23 bytes comparisons to panic.
+// foreign-realm light clients. ics23 may copy and append against the input, so
+// callers should pass a freshly allocated slice.
 func h256Bytes(h H256) []byte {
 	out := make([]byte, len(h))
 	copy(out, h[:])

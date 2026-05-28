@@ -8,10 +8,10 @@ import (
 
 func main(cur realm) {
 	if !core.HasClient(statelens.ClientType) {
-		core.RegisterClient(cross(cur), statelens.ClientType, statelens.NewAdapter(cross(cur)))
+		statelens.Register(cross(cur))
 	}
 	if !core.HasClient(cometbls.ClientType) {
-		core.RegisterClient(cross(cur), cometbls.ClientType, cometbls.NewAdapter(cross(cur)))
+		cometbls.Register(cross(cur))
 	}
 	println("registered_statelens", core.HasClient(statelens.ClientType))
 	println("registered_cometbls", core.HasClient(cometbls.ClientType))

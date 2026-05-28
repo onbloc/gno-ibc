@@ -13,7 +13,10 @@ import (
 	"gno.land/r/core/ibc/v1/core"
 )
 
-const mockL1ClientType core.ClientType = "mock-state-lens-l1"
+const (
+	stateLensTestPortId                 = "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
+	mockL1ClientType    core.ClientType = stateLensTestPortId + "/mock-l1"
+)
 
 var (
 	mockL1Status        core.Status
@@ -23,6 +26,7 @@ var (
 	wantProof           []byte
 	wantKey             []byte
 	wantValue           []byte
+	stateLensTestApp    = &flowApp{}
 )
 
 type mockL1Client struct{}
@@ -94,7 +98,7 @@ func resetTestState(cur realm) {
 		core.RegisterClient(cross(cur), mockL1ClientType, mockL1Client{})
 	}
 	if !core.HasClient(ClientType) {
-		core.RegisterClient(cross(cur), ClientType, Adapter{})
+		Register(cross(cur))
 	}
 }
 
@@ -330,7 +334,7 @@ func TestVerifyMembershipRejectsWrongCommitmentKey(cur realm, t *testing.T) {
 }
 
 func TestPacketRecvUsesStateLensStorageProof(cur realm, t *testing.T) {
-	flow := setupStateLensOpenChannel(cur, t, []byte("statelens-flow-port-ok"))
+	flow := setupStateLensOpenChannel(cur, t)
 	packet := core.NewPacket(cross(cur), flow.counterpartyChannelId, flow.channelId, []byte("payload"), 0, 1<<62)
 	packetKey := core.BatchPacketsPath(core.CommitPackets([]core.Packet{packet}))
 	_, proof := updateLensRootForPathValue(cur, t, flow.lensClientId, flow.l1ClientId, flow.l2ClientId, 5, packetKey[:], core.COMMITMENT_MAGIC[:])
@@ -348,7 +352,7 @@ func TestPacketRecvUsesStateLensStorageProof(cur realm, t *testing.T) {
 }
 
 func TestPacketRecvRejectsWrongStateLensStorageProof(cur realm, t *testing.T) {
-	flow := setupStateLensOpenChannel(cur, t, []byte("statelens-flow-port-bad-proof"))
+	flow := setupStateLensOpenChannel(cur, t)
 	packet := core.NewPacket(cross(cur), flow.counterpartyChannelId, flow.channelId, []byte("payload"), 0, 101)
 	wrongPath := bytes.Repeat([]byte{0x33}, 32)
 	_, proof := updateLensRootForPathValue(cur, t, flow.lensClientId, flow.l1ClientId, flow.l2ClientId, 5, wrongPath, core.COMMITMENT_MAGIC[:])
@@ -400,19 +404,19 @@ func storageProofFixture(slot []byte, value []byte) ([32]byte, [][]byte) {
 	return root, [][]byte{leaf}
 }
 
-func setupStateLensOpenChannel(cur realm, t *testing.T, portId []byte) stateLensFlow {
+func setupStateLensOpenChannel(cur realm, t *testing.T) stateLensFlow {
 	t.Helper()
 	resetTestState(cur)
+	*stateLensTestApp = flowApp{}
+	portId := []byte(stateLensTestPortId)
 	l1ClientId := createMockL1Client(cur)
 	l2ClientId := core.ClientId(77)
 	counterpartyClientId := core.ClientId(88)
 	counterpartyConnectionId := core.ConnectionId(99)
 	counterpartyChannelId := core.ChannelId(100)
-	app := &flowApp{}
-	if core.HasApp(portId) {
-		t.Fatalf("test port already registered: %s", string(portId))
+	if !core.HasApp(portId) {
+		core.RegisterApp(cross(cur), stateLensTestApp)
 	}
-	core.RegisterApp(cross(cur), portId, app)
 
 	cs := statelensp.ClientState{
 		L2ChainID:         "l2",
@@ -453,7 +457,7 @@ func setupStateLensOpenChannel(cur realm, t *testing.T, portId []byte) stateLens
 	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), channelId, "ics-test-1", counterpartyChannelId, proof, 4))
 
 	return stateLensFlow{
-		app:                   app,
+		app:                   stateLensTestApp,
 		l1ClientId:            l1ClientId,
 		l2ClientId:            l2ClientId,
 		lensClientId:          lensClientId,

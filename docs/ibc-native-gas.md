@@ -11,6 +11,12 @@ Calibrated on Apple M5 ARM64. Both calibration sets (these rows and the
 pre-existing sha256/ed25519/etc. rows on M2) must be re-run on the reference
 Xeon 8168 before any consensus-relevant deployment.
 
+Calibrated rows are stored in
+[`stdlibs/native_gas_calibration.txt`](../stdlibs/native_gas_calibration.txt)
+and injected into the pinned Gno cache by `make install-gno`. See
+[docs/README.md](README.md#local-development) for the toolchain setup that
+performs the injection.
+
 ## Gas table
 
 | Pkg.Fn | Shape | Base (gas) | Slope (gas / 1024 N) | Slope axis | R² |

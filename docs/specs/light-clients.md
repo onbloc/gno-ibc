@@ -502,9 +502,8 @@ packages:
 | `gno.land/p/core/ethereum/storage` | State-lens Ethereum storage proof decode, membership, absence, and commitment-key derivation. |
 
 The repository currently carries these bindings under `stdlibs/` as a local
-toolchain overlay. See
-[Native Stdlibs and Toolchain](native-stdlibs-toolchain.md) for maintenance
-rules.
+toolchain overlay. See [docs/README.md](../README.md#local-development) for
+setup and Make targets.
 
 ## Implementation Rules
 

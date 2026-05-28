@@ -11,7 +11,6 @@ focused specs:
 - [ZKGM v1 App](zkgm-v1.md)
 - [Light Clients](light-clients.md)
 - [Event Catalog](events.md)
-- [Fixtures and Wire Compatibility](fixtures-and-wire-compatibility.md)
 - [Native Stdlib Overlay and Toolchain](native-stdlibs-toolchain.md)
 
 ## Realm Topology
@@ -318,9 +317,8 @@ Two cross-chain proof directions are represented in the current tree:
 - Union <-> Gno through the CometBLS client path.
 - Ethereum -> Gno through the state-lens ICS23 MPT client path.
 
-ZKGM packet bytes are Solidity ABI compatible and use the `abi_encode_params`
-flavor. Fixture generation and compatibility rules are documented in
-[Fixtures and Wire Compatibility](fixtures-and-wire-compatibility.md).
+ZKGM packet bytes are Solidity ABI compatible and use the params tuple form
+described in [ZKGM v1 App](zkgm-v1.md).
 
 ## Toolchain Boundary
 

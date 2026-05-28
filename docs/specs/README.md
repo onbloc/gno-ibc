@@ -10,7 +10,6 @@ repository. They are not roadmap documents.
 | [ZKGM v1 App](zkgm-v1.md) | ZKGM proxy, v1 implementation, instructions, SendRaw, batches, forwards, and token orders |
 | [Light Clients](light-clients.md) | v1 light-client adapter contract, CometBLS, and state-lens ICS23 MPT |
 | [Event Catalog](events.md) | IBC/ZKGM event types, attributes, stability, and encoding rules |
-| [Fixtures and Wire Compatibility](fixtures-and-wire-compatibility.md) | ABI vectors, ZKGM scenario fixtures, cross-chain smoke fixtures, and compatibility rules |
 | [Native Stdlibs and Toolchain](native-stdlibs-toolchain.md) | Pinned Gno toolchain setup, temporary local stdlib overlay, native bindings, and calibrated gas |
 
 ## Maintenance Rules

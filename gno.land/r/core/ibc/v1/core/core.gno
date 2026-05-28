@@ -2,6 +2,7 @@ package core
 
 import (
 	"chain/params"
+	"chain/runtime"
 	"crypto/keccak256"
 	"encoding/hex"
 )
@@ -59,6 +60,7 @@ func RegisterApp(cur realm, app IApp) {
 // another realm.
 func RegisterAppForPort(_ realm, portId []byte, app IApp) {
 	assertDeployer("register port")
+	runtime.AssertOriginCall()
 	registerAppAtPort(portId, app)
 }
 

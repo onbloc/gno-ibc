@@ -108,11 +108,11 @@ after the batch event.
 destination channel. It uses the same destination app ownership check as
 `WriteAcknowledgement`.
 
-`BatchAcks` writes only the aggregate batch entry under
-`BatchReceiptsPath(batchHash)`. It does not update per-packet receipt entries,
-so `HasAcknowledgement(_, packet)` for individual packets in the batch returns
-false. No event is emitted. Consumers must observe the bulk commit by querying
-batch receipt state directly.
+> **`BatchAcks` writes only the aggregate batch entry under
+> `BatchReceiptsPath(batchHash)`.** It does not update per-packet receipt
+> entries, does not emit an event, and `HasAcknowledgement(_, packet)` returns
+> `false` for individual packets in the batch. Consumers must observe the bulk
+> commit by querying batch receipt state directly.
 
 `PacketRecv` verifies the packet batch proof against the destination channel's
 client, rejects timed-out packets, skips packets that already have receipts,
@@ -275,8 +275,8 @@ stateDiagram-v2
 stateDiagram-v2
   direction LR
   [*] --> NoReceipt
-  NoReceipt --> SyncAck: PacketRecv Success/Failure
+  NoReceipt --> AckWritten: PacketRecv Success/Failure
   NoReceipt --> Receipt: PacketRecv Async or IntentPacketRecv
-  Receipt --> SyncAck: WriteAcknowledgement
-  SyncAck --> [*]
+  Receipt --> AckWritten: WriteAcknowledgement
+  AckWritten --> [*]
 ```

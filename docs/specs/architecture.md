@@ -58,9 +58,6 @@ Counterparty chains determine which light client and fixture path is involved:
 - Ethereum to Gno uses the state-lens ICS23 MPT adapter and Ethereum storage
   proof fixtures.
 
-Do not hard-code testnet channel or connection identifiers in architecture
-documentation. They can change after chain resets.
-
 ## Registration and Bootstrap
 
 Core keeps registries for light clients and apps. Registration is package-init
@@ -289,27 +286,14 @@ to its verified path, verified value, and local mutation. See
 [Connection and Channel Lifecycle](ibc-v1-core/connection-channel-lifecycle.md) for that matrix.
 
 Channel close entry points exist but currently panic as unsupported. Close
-events are defined but not emitted. See [Queries, Events, Differences](ibc-v1-core/queries-events-differences.md) for the
+events are defined but not emitted. See [Surface and Deltas](ibc-v1-core/surface-and-deltas.md) for the
 core behavior and [Event Catalog](events.md) for the event surface.
 
 ## Light-Client Adapter Contract
 
-Core calls adapters through the `ILightClient` interface:
-
-```go
-type ILightClient interface {
-    CreateClient(_ realm, clientId ClientId, clientStateBytes, consensusStateBytes []byte) string
-    UpdateClient(_ realm, clientId ClientId, clientMessage []byte) ConsensusStateUpdate
-    VerifyMembership(clientId ClientId, height Height, proof []byte, key []byte, value []byte)
-    VerifyNonMembership(clientId ClientId, height Height, proof []byte, key []byte)
-    GetTimestamp(clientId ClientId, height Height) Timestamp
-    GetLatestHeight(clientId ClientId) Height
-    GetStatus(clientId ClientId) Status
-}
-```
-
-Some adapters also implement `IForceLightClient` for deployer-only recovery
-updates.
+Core calls adapters through `core.ILightClient`. The canonical interface
+definition lives in [Light Clients](light-clients.md#adapter-contract). Some
+adapters also implement `IForceLightClient` for deployer-only recovery updates.
 
 Adapter proof verification must reject inactive clients before decoding proof
 bytes. CometBLS determines frozen and expired status from its own client state.
@@ -370,6 +354,5 @@ This architecture spec intentionally does not cover:
 
 - future-state proposals
 - proof generation internals outside this repository
-- specific testnet channel or connection ids
 - channel close lifecycle beyond the current unsupported stubs
 - local planning notes that are not part of committed documentation

@@ -19,16 +19,26 @@ stateless apart from the package-level `ZkgmV1` singleton.
 | `tokenBucket` | BPTree map | Per-denom rate-limit bucket. |
 | `rateLimitDisabled` | `bool` | Global rate-limit kill switch. |
 
-The current ledger has only `channelBalanceV2`. There is no `channelBalanceV1`
-store in committed code.
+> **The current ledger has only `channelBalanceV2`.** There is no
+> `channelBalanceV1` store in committed code, despite the V2 suffix on the
+> active store.
 
 ## Implementation Pointer
 
 The proxy can replace its active implementation through `UpdateImpl`. The call
-is allowed when `allowedImpls` is empty or the previous realm pkgpath is already
-listed in `allowedImpls`. A non-nil `AllowedImpls` value replaces the whitelist.
-A non-nil `Impl` value replaces the active implementation and records the caller
-pkgpath in `implPath`.
+is allowed when `allowedImpls` is empty (bootstrap mode) or the previous realm
+pkgpath is already listed in `allowedImpls`. A non-nil `AllowedImpls` value
+replaces the whitelist. A non-nil `Impl` value replaces the active
+implementation and records the caller pkgpath in `implPath`.
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  [*] --> Bootstrap: allowedImpls = []
+  Bootstrap --> Allowlisted: UpdateImpl(AllowedImpls = [...])
+  Allowlisted --> Allowlisted: UpdateImpl(Impl = new) by allowlisted caller
+  Allowlisted --> Allowlisted: UpdateImpl(AllowedImpls = [...]) by allowlisted caller
+```
 
 The loader seeds the proxy with allowed paths for IBC core, the proxy, the
 loader, and the v0 implementation. It then registers the proxy app with IBC

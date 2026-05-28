@@ -26,12 +26,16 @@ Defined enums are:
 execution because channel close entry points panic before mutating state.
 
 Packets contain source channel, destination channel, data, timeout height, and
-timeout timestamp. Packet identity is the Keccak hash of the ABI-encoded packet,
-not a sequence number. There is no `Sequence` field.
+timeout timestamp.
 
-`Packet.TimeoutHeight` exists for ABI shape compatibility, but it must be zero.
-Packet encoding panics if a non-zero timeout height is provided. Current timeout
-logic uses `TimeoutTimestamp`.
+> **Packet identity is the Keccak hash of the ABI-encoded packet, not a
+> sequence number.** There is no `Sequence` field. Two packets that share the
+> same channels, data, and timeout collide on this hash, and the second
+> receive observes the existing receipt.
+
+`Packet.TimeoutHeight` exists for ABI shape compatibility, but it must be
+zero. Packet encoding panics if a non-zero timeout height is provided. Current
+timeout logic uses `TimeoutTimestamp` exclusively.
 
 ## ABI Encoding
 

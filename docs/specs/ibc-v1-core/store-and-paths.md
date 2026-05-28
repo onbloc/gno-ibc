@@ -5,9 +5,9 @@ Core keeps two views of committed state:
 - in-memory maps inside the package-level `State` struct, used by core logic
 - chain `params` commitments, used by counterparty light clients
 
-Every `params` commitment key is a hex-encoded 32-byte path, and every
-commitment value is 32 bytes. The `commit` helper writes those values through
-`params.SetBytes`.
+Every `params` commitment key is a lowercase, `0x`-prefixed hex rendering
+(`H256.String()`) of a 32-byte path. Every commitment value is 32 bytes. The
+`commit` helper writes those values through `params.SetBytes`.
 
 Major in-memory stores:
 
@@ -35,23 +35,23 @@ Path namespaces:
 | `PACKETS` | `0x04` | `BatchPacketsPath`, `PacketCommitmentPath` |
 | `PACKET_ACKS` | `0x05` | `BatchReceiptsPath`, `PacketAcknowledgementPath` |
 
-Path helpers use Keccak over the namespace plus right-aligned 32-byte
-big-endian numeric ids or hashes. For example,
-`ConsensusStatePath(clientId, height)` hashes the consensus-state namespace,
-`clientId`, and `height`.
+Each path helper hashes the 32-byte namespace constant followed by 32-byte
+big-endian id, height, or hash words. For example,
+`ConsensusStatePath(clientId, height)` keccak-hashes
+`CONSENSUS_STATE || clientId_as_32_bytes || height_as_32_bytes`.
 
-Sentinel values:
+Sentinel and value catalogue for the receipt store:
 
-| Sentinel | Meaning |
-|----------|---------|
-| `COMMITMENT_MAGIC` | Pending outgoing packet or batch commitment |
-| `COMMITMENT_MAGIC_ACK` | Bare receipt with no application acknowledgement |
+| Value | Meaning |
+|-------|---------|
+| (missing key) | No receipt has been recorded for the packet. |
+| `COMMITMENT_MAGIC_ACK` | Receipt exists; no application acknowledgement has been committed yet. |
+| any other 32-byte value | Committed acknowledgement hash from `CommitAcks(...)`. |
 
-Missing receipt state means no receipt. `COMMITMENT_MAGIC_ACK` means a packet
-was received but no acknowledgement hash has been committed. Any value other
-than `COMMITMENT_MAGIC_ACK` in the receipt store is treated as an
-acknowledgement hash.
+`COMMITMENT_MAGIC` itself is used in the packet store (a pending outgoing
+packet or batch commitment), not the receipt store.
 
-Committed acknowledgement values are not sentinels. They are
-`CommitAcks(...)` hashes. `CommitAcks(...)` uses `mergeAck`, so committed
-acknowledgement hashes start with the same first byte as `COMMITMENT_MAGIC`.
+Committed acknowledgement values pass through `mergeAck`, which rewrites the
+first byte to match `COMMITMENT_MAGIC[0] = 0x01`. This lets a reader
+distinguish the bare receipt sentinel (`COMMITMENT_MAGIC_ACK[0] = 0x02`) from
+an actual ack hash by inspecting one byte.

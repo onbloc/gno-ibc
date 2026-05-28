@@ -50,10 +50,12 @@ Example emission:
 }
 ```
 
-`ForceUpdateClient` is a deployer-only operational path. It requires an origin
-call, requires the target adapter to support the force-update interface, and
-then persists the adapter-provided state update. It emits the same
-`UpdateClient` event shape as a normal client update.
+`ForceUpdateClient` is a deployer-only operational path. The deployer is the
+address captured during core init (see
+[Authorization and Errors](./authorization-and-errors.md)). The call requires
+an origin call, requires the target adapter to implement the force-update
+interface, and then persists the adapter-provided state update. It emits the
+same `UpdateClient` event shape as a normal client update.
 
 Status-sensitive proof verification is delegated to registered light-client
 adapters. V1 adapters must reject inactive clients before membership or

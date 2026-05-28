@@ -5,16 +5,14 @@ proxy realm under
 [gno.land/r/core/ibc/v1/apps/zkgm](../../../gno.land/r/core/ibc/v1/apps/zkgm),
 the active implementation under
 [gno.land/r/core/ibc/v1/apps/zkgm/v0/impl](../../../gno.land/r/core/ibc/v1/apps/zkgm/v0/impl),
-and the stateless ABI package under
-[gno.land/p/core/ibc/zkgm](../../../gno.land/p/core/ibc/zkgm).
+and the stateless ZKGM package under
+[gno.land/p/core/ibc/zkgm](../../../gno.land/p/core/ibc/zkgm), which provides
+ABI types, instruction constants, salt and path helpers, and interface
+definitions.
 
-The filesystem paths use `gno.land/*/core/...`, but the import paths published
-by `gnomod.toml` use the `gnoswap` namespace:
-
-- `gno.land/r/gnoswap/ibc/v1/apps/zkgm`
-- `gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl`
-- `gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader`
-- `gno.land/p/gnoswap/ibc/zkgm`
+ZKGM realms publish under the `gnoswap` namespace even though their filesystem
+location uses `core/`. See [Architecture](../architecture.md#realm-topology) for
+the canonical module-path table.
 
 ## Scope
 
@@ -36,42 +34,6 @@ The public app surface includes:
 The channel version is `ucs03-zkgm-0`. `OnChannelOpenInit` and
 `OnChannelOpenTry` reject any other local version. `OnChannelOpenTry` also
 checks the counterparty version.
-
-## Module Layout
-
-| Module path | Filesystem path | Role |
-|-------------|-----------------|------|
-| `gno.land/r/gnoswap/ibc/v1/apps/zkgm` | `gno.land/r/core/ibc/v1/apps/zkgm/` | Proxy realm. Owns persistent app state and registers with IBC core. |
-| `gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl` | `gno.land/r/core/ibc/v1/apps/zkgm/v0/impl/` | Active implementation. Provides dispatchers and opcode handlers. |
-| `gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader` | `gno.land/r/core/ibc/v1/apps/zkgm/v0/loader/` | Initialization glue. Installs the implementation and registers the proxy app. |
-| `gno.land/p/gnoswap/ibc/zkgm` | `gno.land/p/core/ibc/zkgm/` | Stateless ABI types, constants, path helpers, salt helpers, and event constants. |
-
-Key proxy files:
-
-| File | Purpose |
-|------|---------|
-| `proxy.gno` | Implementation pointer, receiver registry, proxy helpers, `BatchSend`, `WriteForwardAck`, and native release. |
-| `ledger.gno` | Token origin, metadata image, channel balance, in-flight packet, and token bucket stores. |
-| `admin.gno` | Admin, pause, rate-limit configuration, and global rate-limit toggle. |
-| `app.gno` | `core.IApp` implementation and callback routing. |
-| `send.gno` | Public `Send`, `SendRaw`, native coin capture, and core `PacketSend`. |
-| `query.gno` | `GetConfig` and `Render`. |
-| `types.gno` | Proxy interfaces, request types, in-flight types, update request, and config snapshot. |
-
-Key implementation files:
-
-| File | Purpose |
-|------|---------|
-| `impl.gno` | `ZkgmV1` singleton, `Send`, `Recv`, `IntentRecv`, `Ack`, `Timeout`, and rendering. |
-| `dispatch.gno` | Shared verify, execute, ack, and timeout dispatchers. |
-| `call.gno` | `OP_CALL` receiver dispatch and call acknowledgements. |
-| `token_order.gno` | `OP_TOKEN_ORDER` verify, execution, refund, and settlement logic. |
-| `batch.gno` | `OP_BATCH` child dispatch, batch acknowledgements, and child timeouts. |
-| `forward.gno` | `OP_FORWARD` child packet construction and deferred parent ack resolution. |
-| `channel_balance.gno` | Channel balance key construction and balance updates. |
-| `predict.gno` | Wrapped token and call proxy account derivation. |
-| `voucher.gno` | GRC20 voucher creation, minting, and burning. |
-| `coins.gno` | Native sent-coin parsing and exact-match checks. |
 
 ## Minimal OP_CALL Flow
 
@@ -145,21 +107,21 @@ Reading rules:
 The send phase is covered by [Sending Packets](./sending-packets.md). Receiver
 registration and `CallEnv` fields are covered by
 [Receiver Registry](./receiver-registry.md). Opcode routing is covered by
-[Instruction Dispatch](./instruction-dispatch.md) and the detailed `OP_CALL`
-semantics are covered by [Call Instructions](./call-instructions.md). Wire envelope
-layout is covered by [Wire Encoding](./wire-encoding.md).
+[Instruction Dispatch](./instruction-dispatch.md), and the detailed `OP_CALL`
+semantics are covered by [Salt, Path, and Call](./salt-path-and-call.md). Wire
+envelope layout is covered by [Wire Encoding](./wire-encoding.md).
 
 ## Module Reference
 
 | File | Topic |
 | --- | --- |
 | [Proxy and Implementation](./proxy-and-impl.md) | Proxy state, impl pointer, authorization |
-| [Sending Packets](./sending-packets.md) | Send entry point and predicted acks |
-| [Receiver Registry](./receiver-registry.md) | Receiver registration |
-| [Instruction Dispatch](./instruction-dispatch.md) | Opcode dispatch |
-| [Wire Encoding](./wire-encoding.md) | Envelope, operand, ack, path encoding |
-| [Call Instructions](./call-instructions.md) | Salt, path derivation, OP_CALL |
-| [Token Order](./token-order.md) | TokenOrderV2 and predicted denoms |
-| [Batch and Forward](./batch-and-forward.md) | Channel balance, OP_BATCH, OP_FORWARD |
-| [Rate Limiting and Admin](./rate-limiting-admin.md) | Per-channel limits, admin entry points |
-| [Events and Differences](./events-differences.md) | Queries, events, Union deltas |
+| [Sending Packets](./sending-packets.md) | Send entry point and packet construction |
+| [Receiver Registry](./receiver-registry.md) | Receiver registration and `CallEnv` |
+| [Instruction Dispatch](./instruction-dispatch.md) | Opcode dispatch helpers |
+| [Wire Encoding](./wire-encoding.md) | Envelope, operand, ack, and path encoding |
+| [Salt, Path, and Call](./salt-path-and-call.md) | Salt and path derivation, `OP_CALL` semantics |
+| [Token Order](./token-order.md) | `TokenOrderV2`, predicted denoms, and channel balances |
+| [Batch and Forward](./batch-and-forward.md) | `OP_BATCH` and `OP_FORWARD` execution |
+| [Rate Limiting and Admin](./rate-limiting-admin.md) | Per-denom buckets, admin entry points, pause semantics |
+| [Surface and Deltas](./surface-and-deltas.md) | Queries, events, and differences from Union |

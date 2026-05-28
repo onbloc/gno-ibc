@@ -31,9 +31,9 @@ func SendRaw(
 send path as `Send`.
 
 The shared send path rejects paused or uninitialized proxy state, calls
-`impl.Send` with a `SendRequest`, and forwards the returned ZKGM packet bytes to
-`core.PacketSend`. The source app realm is the IBC port owner. IBC core commits
-the packet commitment.
+`impl.Send` with a `SendRequest`, and forwards the returned ZKGM packet bytes
+to `core.PacketSend`. The ZKGM proxy realm is the port owner for the source
+channel, so IBC core accepts the send and writes the packet commitment.
 
 Example emission:
 

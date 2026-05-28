@@ -1,12 +1,12 @@
 # IBC Overview
 
 This overview is the entry point for the gno-ibc implementation specs. It
-introduces the IBC concepts used throughout the spec deck, then maps those
-concepts to the realms and packages in this repository.
+introduces the IBC concepts used throughout, then maps those concepts to the
+realms and packages in this repository.
 
 ## What is IBC
 
-IBC is a protocol for trust-minimised packet relay between sovereign chains. A
+IBC is a protocol for trust-minimized packet relay between sovereign chains. A
 chain does not need to run a full node for its counterparty. Instead, it stores
 a light client for the counterparty and verifies proofs against that light
 client before accepting cross-chain state claims.
@@ -38,16 +38,8 @@ published under `gno.land/r/gnoswap/ibc/v1/apps/zkgm`. The implementation realm
 contains the instruction dispatcher for call, token order, batch, and forward
 messages.
 
-For topology details, see [Architecture](architecture.md).
-
-| Spec | Scope |
-|------|-------|
-| Overview | IBC primer, vocabulary, component map, and reader path through the spec deck |
-| [Architecture](architecture.md) | System topology, actors, state ownership, authorization boundaries, and lifecycle sequences |
-| [IBC v1 Core](ibc-v1-core/README.md) | Clients, connections, channels, packets, acknowledgements, and core events |
-| [ZKGM v1 App](zkgm-v1/README.md) | ZKGM proxy, v1 implementation, instructions, SendRaw, batches, forwards, and token orders |
-| [Light Clients](light-clients.md) | v1 light-client adapter contract, CometBLS, and state-lens ICS23 MPT |
-| [Event Catalog](events.md) | IBC and ZKGM event types, attributes, stability, and encoding rules |
+For topology details, see [Architecture](architecture.md). The full table of
+specs lives in [docs/specs/README.md](README.md).
 
 ## Light Clients
 
@@ -62,9 +54,10 @@ gno-ibc registers light-client adapters by client type. Core stores the client
 type for each client identifier, then dispatches create, update, status, proof,
 timestamp, and height calls to the registered adapter.
 
-The status model has three values. Active clients may verify proofs. Expired
+The status model has four values. Active clients may verify proofs. Expired
 clients are outside their validity window. Frozen clients are disabled because
-misbehaviour was detected or an adapter-specific invariant failed.
+misbehaviour was detected or an adapter-specific invariant failed. Unknown is a
+sentinel returned for client identifiers that have no registered status.
 
 The implemented client types are:
 
@@ -145,9 +138,9 @@ Timeout is the source-side fallback when no destination receipt exists before
 the packet timeout. A timeout call verifies non-membership of the destination
 receipt, deletes the source commitment, and dispatches the app timeout callback.
 
-The market-maker path uses `IntentPacketRecv`. It bypasses proof verification by
-design and relies on the application callback to decide whether the intent is
-acceptable.
+The market-maker path uses `IntentPacketRecv`. Market-maker actors fill
+packets out-of-protocol, so this path bypasses proof verification by design and
+relies on the application callback to decide whether the intent is acceptable.
 
 Core also exposes batch entry points. `BatchSend` records one aggregate packet
 commitment. `BatchAcks` records one aggregate acknowledgement entry. The focused
@@ -302,7 +295,7 @@ sequences.
 | Realm | A stateful Gno contract package under `gno.land/r/...`. |
 | Registered receiver | ZKGM receiver realm registered to accept call instructions. |
 | Relayer | Off-chain actor that observes events and submits packets, acknowledgements, and timeouts. |
-| Status | Light-client state category. gno-ibc uses active, expired, and frozen. |
+| Status | Light-client state category. gno-ibc uses active, expired, frozen, and an unknown sentinel for unregistered ids. |
 | Timeout | Source-side packet completion path used when the destination receipt is absent. |
 | Trusting period | Time window during which a light client accepts counterparty consensus state. |
 | Wire packet | Encoded packet bytes used by core for commitment and proof, and by relayers for transport. |

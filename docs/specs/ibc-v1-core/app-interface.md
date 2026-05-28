@@ -68,7 +68,7 @@ type RecvPacketResult struct {
 | `PacketStatusAsync` | Ignored. | Records a receipt without committing the final acknowledgement. |
 | `PacketStatusSuccess` | Non-empty. | Commits the ack and emits `WriteAck` in the receive transaction. |
 | `PacketStatusFailure` | Non-empty. | Commits the ack and emits `WriteAck` in the receive transaction. |
-| `PacketStatusUnknown` | Any value. | Panics with `ErrUnknownPacketStatus`. |
+| `PacketStatusUnknown` | N/A. | Always panics with `ErrUnknownPacketStatus`. |
 
 `PacketStatusSuccess` and `PacketStatusFailure` with an empty `Ack` panic with
 `ErrSyncAckEmpty`. Apps that need delayed acknowledgement semantics must return

@@ -306,11 +306,12 @@ that may mutate internal proof state.
 ### CometBLS Crypto Bindings
 
 The CometBLS hot path imports `crypto/cometblszk`, not `crypto/cometbls`.
-`crypto/cometblszk.VerifyZKP` is the current realm-side Groth16 verifier. It
+`crypto/cometblszk.VerifyZKP` is the current realm-side Groth16 verifier and
 uses BN254 operations, modular exponentiation, and Keccak internally.
 
 `crypto/cometbls` exposes a parallel `VerifyZKP` API as a native reference
-binding, but `verify.gno` does not call it.
+binding. It is reserved for an upcoming migration to native verification but is
+not on the current hot path.
 
 ## State-Lens ICS23 MPT Adapter
 
@@ -432,18 +433,9 @@ sequenceDiagram
 
 ### State-Lens Status
 
-State-lens status mirrors the referenced L1 client:
-
-```go
-status := core.GetClientStatus(L1ClientID)
-if status == core.StatusUnknown {
-    return core.StatusFrozen
-}
-return status
-```
-
-The state-lens client has no independent frozen height. Missing L1 client state
-fails closed as `StatusFrozen`. Frozen or expired L1 status disables state-lens
+State-lens has no independent frozen height. `GetStatus` returns the referenced
+L1 client's status, mapping `StatusUnknown` to `StatusFrozen` so missing L1
+client state fails closed. Frozen or expired L1 status disables state-lens
 membership and non-membership proof verification.
 
 ### State-Lens Proof Verification
@@ -535,9 +527,3 @@ setup and Make targets.
 Out-of-scope behavior includes core-interface misbehaviour dispatch, ordered
 light-client proof semantics, 08-wasm host binding behavior, and multiple
 parallel L1 anchors for a single state-lens client.
-
-## Maintenance Notes
-
-This spec tracks current adapter behavior only. Keep historical design notes and
-uncommitted design material out of this document. When adapter behavior changes,
-update this spec together with the code or test that proves the new behavior.

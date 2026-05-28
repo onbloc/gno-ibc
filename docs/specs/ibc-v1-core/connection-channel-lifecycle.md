@@ -149,9 +149,9 @@ Example emission:
 }
 ```
 
-The `port_id` value above decodes to
-`gno.land/r/gnoswap/ibc/v1/apps/zkgm`, the proxy realm pkgpath used by ZKGM.
-Other apps emit their own pkgpath bytes.
+The `port_id` value above is the hex encoding of `gno.land/r/gnoswap/ibc/v1/apps/zkgm`,
+the ZKGM proxy pkgpath. The encoding rule for byte-valued identifiers is
+documented in [Event Catalog](../events.md#attribute-encoding).
 
 `ChannelOpenTry`, `ChannelOpenAck`, and `ChannelOpenConfirm` all include
 `counterparty_channel_id` and share this nine-attribute shape:
@@ -210,9 +210,8 @@ emitting close events.
 ```mermaid
 stateDiagram-v2
   direction LR
-  [*] --> Unknown
-  Unknown --> Init: OpenInit
-  Unknown --> TryOpen: OpenTry
+  [*] --> Init: OpenInit
+  [*] --> TryOpen: OpenTry
   Init --> Open: OpenAck
   TryOpen --> Open: OpenConfirm
   Open --> [*]

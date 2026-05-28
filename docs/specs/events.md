@@ -91,32 +91,95 @@ as unsupported before any close event can be emitted.
 
 ## Batch Send Event
 
-| Event type | Emitting entrypoint | Attributes | Stability | Notes |
-|------------|---------------------|------------|-----------|-------|
-| `BatchSend` | `BatchSend` | `batch_hash`, `source_channel_id`, `source_channel_version`, `source_connection_id`, `source_connection_client_id`, `destination_channel_id`, `destination_connection_id`, `destination_connection_client_id` | Stable | Emitted once for the batch before per-packet `PacketSend` events. It does not include `packet_hash`, `packet_data`, or `timeout_timestamp`. |
+### `BatchSend`
+
+- Emitted by: `BatchSend`
+- Stability: Stable
+- Attributes: `batch_hash`, `source_channel_id`, `source_channel_version`,
+  `source_connection_id`, `source_connection_client_id`,
+  `destination_channel_id`, `destination_connection_id`,
+  `destination_connection_client_id`
+
+Emitted once for the batch before the per-packet `PacketSend` events. It does
+not include `packet_hash`, `packet_data`, or `timeout_timestamp`, so consumers
+indexing batch summaries must read those from the child `PacketSend` events.
 
 ## Packet Events
 
-Shared packet attributes:
+All events in this section share the following attributes:
 
-- `packet_hash`: commitment hash for the packet
-- `packet_data`: packet data as lowercase `0x`-prefixed hex
+- `packet_hash` — commitment hash for the packet
+- `packet_data` — packet data as lowercase `0x`-prefixed hex
 - `source_channel_id`
 - `destination_channel_id`
 - `timeout_timestamp`
 
-Every event in the table below includes all shared packet attributes listed
-above. Source-side events also include source channel or connection context.
-Receive-side events include destination channel or connection context.
+Per-event attributes and notes follow.
 
-| Event type | Emitting entrypoint | Attributes in addition to shared packet attributes | Stability | Notes |
-|------------|---------------------|-----------------------------------------------------|-----------|-------|
-| `PacketSend` | `PacketSend` and per-packet emit in `BatchSend` | `source_channel_version`, `source_connection_id`, `source_connection_client_id`, `destination_connection_id`, `destination_connection_client_id` | Stable | Emitted once for a direct send and once per packet in a batch send. |
-| `PacketRecv` | `PacketRecv` | `source_connection_id`, `source_connection_client_id`, `destination_channel_version`, `destination_connection_id`, `destination_connection_client_id`, `maker_msg` | Stable | `maker_msg` is the relayer message bytes as hex. Sync receives may also emit `WriteAck` in the same transaction. Async receives do not write the final ack immediately. |
-| `IntentPacketRecv` | `IntentPacketRecv` | `source_connection_id`, `source_connection_client_id`, `destination_channel_version`, `destination_connection_id`, `destination_connection_client_id`, `market_maker_msg` | Operational | Intent receive path does not follow the normal proof and acknowledgement write flow. |
-| `WriteAck` | `PacketRecv` for sync ack and `WriteAcknowledgement` for async ack | `source_connection_id`, `source_connection_client_id`, `destination_channel_version`, `destination_connection_id`, `destination_connection_client_id`, `acknowledgement` | Stable | `acknowledgement` is hex. Async ZKGM forward completion writes the parent ack through this event. |
-| `PacketAck` | `PacketAcknowledgement` | `source_channel_version`, `source_connection_id`, `source_connection_client_id`, `destination_connection_id`, `destination_connection_client_id`, `acknowledgement` | Stable | Emitted after acknowledgement proof verification and source commitment deletion. |
-| `PacketTimeout` | `PacketTimeout` | `source_channel_version`, `source_connection_id`, `source_connection_client_id`, `destination_connection_id`, `destination_connection_client_id` | Stable | Emitted after timeout proof verification and source commitment deletion. |
+### `PacketSend`
+
+- Emitted by: `PacketSend`, plus once per child in `BatchSend`
+- Stability: Stable
+- Additional attributes: `source_channel_version`, `source_connection_id`,
+  `source_connection_client_id`, `destination_connection_id`,
+  `destination_connection_client_id`
+
+### `PacketRecv`
+
+- Emitted by: `PacketRecv`
+- Stability: Stable
+- Additional attributes: `source_connection_id`,
+  `source_connection_client_id`, `destination_channel_version`,
+  `destination_connection_id`, `destination_connection_client_id`, `maker_msg`
+
+`maker_msg` carries the relayer message bytes as hex. A sync receive emits
+`WriteAck` in the same transaction; an async receive does not write the final
+ack immediately.
+
+### `IntentPacketRecv`
+
+- Emitted by: `IntentPacketRecv`
+- Stability: Operational
+- Additional attributes: `source_connection_id`,
+  `source_connection_client_id`, `destination_channel_version`,
+  `destination_connection_id`, `destination_connection_client_id`,
+  `market_maker_msg`
+
+The intent-receive path does not follow the normal proof and ack-write flow.
+Consumers should not infer source-chain packet commitment from this event.
+
+### `WriteAck`
+
+- Emitted by: `PacketRecv` for sync acks, `WriteAcknowledgement` for async acks
+- Stability: Stable
+- Additional attributes: `source_connection_id`,
+  `source_connection_client_id`, `destination_channel_version`,
+  `destination_connection_id`, `destination_connection_client_id`,
+  `acknowledgement`
+
+`acknowledgement` is hex. Async ZKGM forward completion writes the parent ack
+through this same event type.
+
+### `PacketAck`
+
+- Emitted by: `PacketAcknowledgement`
+- Stability: Stable
+- Additional attributes: `source_channel_version`, `source_connection_id`,
+  `source_connection_client_id`, `destination_connection_id`,
+  `destination_connection_client_id`, `acknowledgement`
+
+Emitted after acknowledgement proof verification and source commitment
+deletion.
+
+### `PacketTimeout`
+
+- Emitted by: `PacketTimeout`
+- Stability: Stable
+- Additional attributes: `source_channel_version`, `source_connection_id`,
+  `source_connection_client_id`, `destination_connection_id`,
+  `destination_connection_client_id`
+
+Emitted after timeout proof verification and source commitment deletion.
 
 ## ZKGM Event Surface
 
@@ -188,7 +251,9 @@ numeric sentinel.
 
 `PacketRecv` and `IntentPacketRecv` share the same receive-side attribute
 shape. The final message attribute key differs by path: `PacketRecv` uses
-`maker_msg`, while `IntentPacketRecv` uses `market_maker_msg`.
+`maker_msg`, while `IntentPacketRecv` uses `market_maker_msg`. The distinct
+keys let indexers route market-maker activity without inspecting the event
+type itself.
 
 ## Emission Timing
 
@@ -214,7 +279,7 @@ A `BatchSend` event always precedes the per-packet `PacketSend` events it
 generates. Across transactions, consumers should use block height and
 transaction order from the chain or indexer.
 
-## Implementation Differences
+## Differences from ibc-go
 
 | Area | Current behavior |
 |------|------------------|

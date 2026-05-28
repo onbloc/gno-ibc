@@ -1,0 +1,24 @@
+{
+  // markdownlint-cli2 config — full rule list: https://github.com/DavidAnson/markdownlint/blob/main/doc/Rules.md
+  "default": true,
+
+  // Line length: technical docs (proto definitions, hex blobs, ASCII tables) regularly exceed 80 cols.
+  "MD013": false,
+
+  // Allow duplicate headings under different parents (common in READMEs with "Usage" sections per topic).
+  "MD024": { "siblings_only": true },
+
+  // Allow inline HTML tags commonly used in our docs.
+  "MD033": {
+    "allowed_elements": ["br", "details", "summary", "sub", "sup", "kbd", "img", "a", "p", "pre", "code", "table", "thead", "tbody", "tr", "th", "td"]
+  },
+
+  // Allow either dash or asterisk for unordered list markers (don't churn existing files).
+  "MD004": { "style": "consistent" },
+
+  // Ordered list numbering: allow "1." everywhere (matches how most of our docs render via renumbering).
+  "MD029": { "style": "ordered" },
+
+  // Go/gno source uses tabs; allow tabs inside fenced code blocks.
+  "MD010": { "code_blocks": false }
+}

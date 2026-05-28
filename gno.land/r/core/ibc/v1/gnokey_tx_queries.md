@@ -85,7 +85,7 @@ Run the relevant registration step once before `CreateClient`. Without it,
 Run this before creating a state-lens client. The client type follows Union's
 `STATE_LENS_ICS23_MPT` value:
 
-https://github.com/unionlabs/union/blob/6215985a5f27e24e9a34aa7259f38b0059c9a5ab/lib/voyager-primitives/src/lib.rs#L129
+<https://github.com/unionlabs/union/blob/6215985a5f27e24e9a34aa7259f38b0059c9a5ab/lib/voyager-primitives/src/lib.rs#L129>
 
 Copy-paste setup:
 

@@ -6,8 +6,8 @@ This guide covers how to use the [tx-indexer](https://github.com/gnolang/tx-inde
 
 | Item | Value |
 |------|-------|
-| GraphQL Playground | http://23.20.153.250:8546/graphql |
-| GraphQL Query Endpoint | http://23.20.153.250:8546/graphql/query |
+| GraphQL Playground | <http://23.20.153.250:8546/graphql> |
+| GraphQL Query Endpoint | <http://23.20.153.250:8546/graphql/query> |
 | DB path | /node/indexer-db |
 
 ## Management Commands
@@ -217,6 +217,6 @@ Each clause inside `_and` must be a complete `attrs:` predicate. Additional cond
 
 ## Tips
 
-- Use the GraphQL Playground at http://23.20.153.250:8546/graphql for interactive exploration and schema introspection.
+- Use the GraphQL Playground at <http://23.20.153.250:8546/graphql> for interactive exploration and schema introspection.
 - `order: { heightAndIndex: DESC }` returns the most recent transactions first.
 - Run `bash ~/reset-indexer.sh` any time the chain is restarted from genesis to clear stale index data.

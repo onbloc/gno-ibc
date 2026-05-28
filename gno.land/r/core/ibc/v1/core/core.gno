@@ -49,11 +49,20 @@ type IApp interface {
 	OnTimeoutPacket(cur realm, packet Packet, relayer address)
 }
 
-// RegisterApp registers an IBC application at portId.
-//
-// Locally-owned ports must use the owning realm's package path bytes.
-// Note: portId is []byte to avoid cross(cur)-realm typed slice issues.
-func RegisterApp(_ realm, portId []byte, app IApp) {
+// RegisterApp registers an IBC application at the caller realm's package path.
+func RegisterApp(cur realm, app IApp) {
+	registerAppAtPort([]byte(cur.Previous().PkgPath()), app)
+}
+
+// RegisterAppForPort registers an IBC application at an explicit port id. This
+// privileged path is for deployment/loaders that install an app on behalf of
+// another realm.
+func RegisterAppForPort(_ realm, portId []byte, app IApp) {
+	assertDeployer("register port")
+	registerAppAtPort(portId, app)
+}
+
+func registerAppAtPort(portId []byte, app IApp) {
 	key := string(portId)
 	if _, ok := st.ports[key]; ok {
 		panic(ErrPortAlreadyRegistered)

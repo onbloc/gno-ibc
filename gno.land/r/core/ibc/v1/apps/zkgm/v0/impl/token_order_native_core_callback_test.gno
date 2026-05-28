@@ -13,7 +13,7 @@ import (
 	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
 )
 
-const timeoutMockClientType = core.ClientType("zkgm-timeout-mock")
+const timeoutMockClientType = core.ClientType("gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl/timeout-mock")
 
 type timeoutMockLightClient struct{}
 
@@ -107,7 +107,7 @@ func setupNativeRefundPacket(cur realm, expired bool, senderName string, denom s
 
 func ensureZkgmAppRegistered(cur realm) {
 	if !core.HasApp([]byte(zkgm.ProxyPkgPath())) {
-		core.RegisterApp(cross(cur), []byte(zkgm.ProxyPkgPath()), zkgm.AsIBCApp())
+		zkgm.RegisterCoreApp(cross(cur))
 	}
 }
 

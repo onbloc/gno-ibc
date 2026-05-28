@@ -4,12 +4,37 @@ import (
 	"chain"
 	"chain/runtime"
 	rtunsafe "chain/runtime/unsafe"
+	"strings"
 )
 
 var deployer address
 
 func init(cur realm) {
 	deployer = rtunsafe.OriginCaller()
+}
+
+func isDeployer() bool {
+	return rtunsafe.OriginCaller() == deployer
+}
+
+func assertDeployer(action string) {
+	if !isDeployer() {
+		panic("caller not authorized to " + action + ": unauthorized")
+	}
+}
+
+func clientTypeOwnerPath(clientType ClientType) string {
+	switch clientType {
+	case ClientType("cometbls"):
+		return "gno.land/r/core/ibc/v1/lightclients/cometbls"
+	case ClientType("state-lens/ics23/mpt"):
+		return "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
+	}
+	return ""
+}
+
+func isScopedClientType(caller string, clientType ClientType) bool {
+	return strings.HasPrefix(string(clientType), caller+"/")
 }
 
 func CreateClient(cur realm, msg MsgCreateClient) ClientId {
@@ -57,9 +82,7 @@ func UpdateClient(cur realm, msg MsgUpdateClient) Height {
 // ForceUpdateClient panics if the underlying light client does not implement
 // IForceLightClient.
 func ForceUpdateClient(cur realm, msg MsgForceUpdateClient) Height {
-	if rtunsafe.OriginCaller() != deployer {
-		panic("core: ForceUpdateClient: unauthorized")
-	}
+	assertDeployer("ForceUpdateClient")
 
 	impl, ok := st.getClient(msg.ClientId).(IForceLightClient)
 	if !ok {
@@ -130,9 +153,28 @@ func QueryConsensusState(clientId ClientId, height Height) string {
 	return hexString(state)
 }
 
-// RegisterClient registers a light client implementation under the given
-// client type. Apps and chain operators call this from a loader realm at init.
-func RegisterClient(_ realm, clientType ClientType, client ILightClient) {
+// RegisterClient registers a light client implementation under the given client
+// type. Known production client types must be registered by their owning light
+// client realm. Other client types may only be registered under the caller
+// realm's namespace.
+func RegisterClient(cur realm, clientType ClientType, client ILightClient) {
+	caller := cur.Previous().PkgPath()
+	owner := clientTypeOwnerPath(clientType)
+	if owner != "" {
+		if caller != owner {
+			panic("caller not authorized to register client: unauthorized")
+		}
+	} else if !isScopedClientType(caller, clientType) {
+		panic("caller not authorized to register client: unauthorized")
+	}
+	st.registerClient(clientType, client)
+}
+
+// RegisterClientForType registers a light client implementation for an explicit
+// client type through a privileged deployer call.
+func RegisterClientForType(cur realm, clientType ClientType, client ILightClient) {
+	assertDeployer("register client")
+	runtime.AssertOriginCall()
 	st.registerClient(clientType, client)
 }
 

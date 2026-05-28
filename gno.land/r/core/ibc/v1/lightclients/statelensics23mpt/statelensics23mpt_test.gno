@@ -13,7 +13,7 @@ import (
 	"gno.land/r/core/ibc/v1/core"
 )
 
-const mockL1ClientType core.ClientType = "mock-state-lens-l1"
+const mockL1ClientType core.ClientType = "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt/mock-l1"
 
 var (
 	mockL1Status        core.Status
@@ -94,7 +94,7 @@ func resetTestState(cur realm) {
 		core.RegisterClient(cross(cur), mockL1ClientType, mockL1Client{})
 	}
 	if !core.HasClient(ClientType) {
-		core.RegisterClient(cross(cur), ClientType, Adapter{})
+		Register(cross(cur))
 	}
 }
 
@@ -412,7 +412,7 @@ func setupStateLensOpenChannel(cur realm, t *testing.T, portId []byte) stateLens
 	if core.HasApp(portId) {
 		t.Fatalf("test port already registered: %s", string(portId))
 	}
-	core.RegisterApp(cross(cur), portId, app)
+	core.RegisterAppForPort(cross(cur), portId, app)
 
 	cs := statelensp.ClientState{
 		L2ChainID:         "l2",

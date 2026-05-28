@@ -27,6 +27,10 @@ func AsIBCApp() core.IApp {
 	return &App{}
 }
 
+func RegisterCoreApp(cur realm) {
+	core.RegisterApp(cross(cur), AsIBCApp())
+}
+
 func ProxyAddress() address {
 	if !gRealmSet {
 		panic("zkgm: proxy realm not initialized")

@@ -744,6 +744,8 @@ func TestBatchAcksReturnsUnionPacketCommitment(cur realm, t *testing.T) {
 	_, _, channelId := setupOpenChannel(t)
 	p1 := Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: 100}
 	p2 := Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: Bytes("b"), TimeoutTimestamp: 100}
+	st.setPacketReceipt(p1)
+	st.setPacketReceipt(p2)
 
 	got := BatchAcks(cross(cur), MsgBatchAcks{
 		Packets: []Packet{p1, p2},
@@ -780,6 +782,8 @@ func TestQueryReceiptAtPathReturnsBatchValue(cur realm, t *testing.T) {
 	_, _, channelId := setupOpenChannel(t)
 	p1 := Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: 100}
 	p2 := Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: Bytes("b"), TimeoutTimestamp: 100}
+	st.setPacketReceipt(p1)
+	st.setPacketReceipt(p2)
 
 	batchHash := BatchAcks(cross(cur), MsgBatchAcks{
 		Packets: []Packet{p1, p2},
@@ -991,6 +995,9 @@ func TestGetChannelOwnerPanicsWhenMissing(cur realm, t *testing.T) {
 
 func TestRegisterClientRejectsUnauthorizedCaller(cur realm, t *testing.T) {
 	resetState()
+	oldDeployer := deployer
+	deployer = "gno1authorized"
+	defer func() { deployer = oldDeployer }()
 
 	uassert.AbortsContains(t, cur, "caller not authorized to register client", func(cur realm) {
 		RegisterClient(cur, ClientType("cometbls"), &mockClient{})
@@ -1002,13 +1009,25 @@ func TestRegisterClientRejectsUnauthorizedCaller(cur realm, t *testing.T) {
 
 func TestRegisterAppRejectsPortSquatting(cur realm, t *testing.T) {
 	resetState()
+	oldDeployer := deployer
+	deployer = "gno1authorized"
+	defer func() { deployer = oldDeployer }()
 	portId := Bytes("gno.land/r/core/ibc/v1/apps/zkgm")
 
 	uassert.AbortsContains(t, cur, "caller not authorized to register port", func(cur realm) {
-		RegisterApp(cur, portId, &mockApp{})
+		RegisterAppForPort(cur, portId, &mockApp{})
 	})
 	if HasApp(portId) {
 		t.Fatal("unauthorized RegisterApp must not reserve a foreign port")
+	}
+}
+
+func TestRegisterAppUsesCallerPackagePath(cur realm, t *testing.T) {
+	resetState()
+
+	RegisterApp(cross(cur), &mockApp{})
+	if !HasApp([]byte(testCorePkgPath)) {
+		t.Fatal("RegisterApp must register the caller package path as the port id")
 	}
 }
 
@@ -1181,6 +1200,7 @@ func TestWriteAcknowledgementRejectsAlreadyAcked(cur realm, t *testing.T) {
 	_, _, channelId := setupOpenChannel(t)
 	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: 100}
 
+	st.setPacketReceipt(packet)
 	st.commitAcknowledgement(packet, []byte("ack"))
 
 	uassert.AbortsContains(t, cur, "acknowledgement already written", func(cur realm) {
@@ -1221,7 +1241,7 @@ func TestPacketRecvReceiptDupRejected(cur realm, t *testing.T) {
 	}
 }
 
-func TestIntentPacketRecvDispatchesAndSetsReceipt(cur realm, t *testing.T) {
+func TestIntentPacketRecvDispatchesWithoutSettingReceipt(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
@@ -1240,8 +1260,8 @@ func TestIntentPacketRecvDispatchesAndSetsReceipt(cur realm, t *testing.T) {
 	if string(app.intentMsgs[0]) != "maker-msg" {
 		t.Fatalf("market maker msg: got %q", string(app.intentMsgs[0]))
 	}
-	if !st.hasPacketReceipt(packet) {
-		t.Fatal("IntentPacketRecv must set packet receipt")
+	if st.hasPacketReceipt(packet) {
+		t.Fatal("proofless IntentPacketRecv must not set packet receipt")
 	}
 	if st.hasAcknowledgement(packet) {
 		t.Fatal("IntentPacketRecv must not write an acknowledgement")
@@ -1265,7 +1285,7 @@ func TestIntentPacketRecvDoesNotBlockProvenPacketRecv(cur realm, t *testing.T) {
 	}
 }
 
-func TestIntentPacketRecvDuplicateSkipped(cur realm, t *testing.T) {
+func TestIntentPacketRecvDuplicateWithoutCoreReceiptReplaysIntent(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
@@ -1274,8 +1294,8 @@ func TestIntentPacketRecvDuplicateSkipped(cur realm, t *testing.T) {
 	IntentPacketRecv(cross(cur), MsgIntentPacketRecv{Packets: []Packet{packet}})
 	IntentPacketRecv(cross(cur), MsgIntentPacketRecv{Packets: []Packet{packet}})
 
-	if len(app.intentPackets) != 1 {
-		t.Fatalf("duplicate intent recv must not call app again: got %d calls", len(app.intentPackets))
+	if len(app.intentPackets) != 2 {
+		t.Fatalf("proofless duplicate intent recv has no core receipt replay guard: got %d calls", len(app.intentPackets))
 	}
 }
 

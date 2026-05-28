@@ -45,6 +45,13 @@ type State struct {
 	connections map[ConnectionId]Connection
 	channels    map[ChannelId]Channel
 
+	// batchPackets and batchReceipts mirror the params store so that the
+	// Query* and has* helpers have something to read from.
+	//
+	// TODO(#43): drop these once chain/params exposes a reader (e.g.
+	// params.GetBytes). With a reader, the helpers can read from params
+	// directly, and these mirrors (along with their writes in save* and
+	// delete*) can go away.
 	batchPackets  map[H256]H256
 	batchReceipts map[H256]H256
 }

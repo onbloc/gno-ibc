@@ -86,6 +86,10 @@ func keccak(bz []byte) H256 {
 	return out
 }
 
+// TODO(#39): drop the hex.EncodeToString call once chain/params accepts raw
+// byte keys. Hex-encoding the key here forces external ICS23 light clients to
+// apply Gno-specific key derivation. With a SetBytesKey-style API, the path
+// becomes prefix++raw.
 func commit(key H256, value H256) {
 	params.SetBytes(hex.EncodeToString(key[:]), value[:])
 }

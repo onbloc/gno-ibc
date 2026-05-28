@@ -1,5 +1,19 @@
 # Store Layout and Commitments
 
+<!--
+TODO(#39): commit keys are hex-rendered solely because `chain/params`
+currently accepts only string keys. When the params API accepts raw byte
+keys, `commit` will write the 32-byte path directly (prefix++raw) and the
+"lowercase, 0x-prefixed hex rendering" wording in the paragraph below
+becomes obsolete.
+
+TODO(#43): once `chain/params` exposes a reader (e.g. `params.GetBytes`),
+the `batchPackets` and `batchReceipts` in-memory mirrors are removed. After
+that, the "two views" framing collapses to a single params-backed store for
+those entries, and the matching rows in the in-memory table should be
+dropped (their values live only in the params store).
+-->
+
 Core keeps two views of committed state:
 
 - in-memory maps inside the package-level `State` struct, used by core logic

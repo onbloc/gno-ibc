@@ -120,6 +120,14 @@ are:
 | Packet commitments | packet or batch hash | commitment sentinel |
 | Packet receipts and acks | packet or batch hash | receipt sentinel or acknowledgement hash |
 
+<!--
+TODO(#43): once `chain/params` exposes a reader (e.g. `params.GetBytes`),
+the "Packet commitments" and "Packet receipts and acks" rows in the table
+above lose their in-memory mirror. After that, those entries live only in
+the `params` store and the paragraph below should note that they are read
+back from `params` rather than from in-memory maps.
+-->
+
 Core also commits selected state into chain `params` with derived path keys.
 Counterparty light clients verify those committed values rather than the
 in-memory maps directly. Path derivation is described in [Store and Paths](ibc-v1-core/store-and-paths.md).

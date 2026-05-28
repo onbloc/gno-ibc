@@ -73,6 +73,10 @@ Core intentionally departs from ibc-go in the following places:
   mutation.
 - **Receipt and acknowledgement state share one store.** Both live in
   `batchReceipts`, distinguished by sentinel values.
+  <!-- TODO(#43): after the in-memory mirror is removed, the backing store
+  becomes the chain `params` store rather than the `batchReceipts` map. The
+  "single keyspace" property and the sentinel-based discrimination still
+  hold, but the wording should be updated to point at params. -->
 - **Misbehaviour is not routed through `ILightClient`.** Adapters may still
   expose internal misbehaviour handling, but core has no entry point that
   invokes it.

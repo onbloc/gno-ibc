@@ -77,6 +77,34 @@ Port identity is package-path based. Packet operations later check that the
 calling realm's package path matches the port owner recorded during channel
 opening.
 
+The ordering from an empty core state to packet flow is:
+
+1. Register light-client adapters and app ports.
+2. Create the counterparty light client.
+3. Update the client when a proof needs a newer consensus height.
+4. Open a connection.
+5. Open a channel on the registered app port.
+6. Send, receive, acknowledge, or time out packets.
+
+Registration and protocol entry points are open unless a section states
+otherwise. `ForceUpdateClient` is the deployer-only exception in core. Normal
+safety comes from duplicate-registration checks, adapter proof verification,
+state-machine transitions, and package-path based packet authority.
+
+Key bootstrap invariants:
+
+- Numeric client, connection, and channel ids are monotonic and start at `1`.
+  The zero value is an unset sentinel, not a live identifier.
+- `HasClient` and `HasApp` are safe probes for setup realms that need to check
+  whether registration already happened.
+- Counterparty proofs verify against consensus state stored for
+  `msg.ProofHeight`. Relayers must update the client before submitting proofs
+  for heights that the local client has not learned.
+- The app realm is the channel owner. User-facing app sends call
+  `core.PacketSend(cross(cur), ...)` from the owning app realm.
+- Receive replay is handled by packet receipts. Ack and timeout replay is
+  bounded by the source packet commitment.
+
 ## State Ownership
 
 IBC core owns protocol state in one package-level state object. The major stores
@@ -255,6 +283,10 @@ Try, ack, and confirm steps verify the expected counterparty state through the
 connection's client. Channel steps also invoke app callbacks. Channel owner
 state is recorded at channel init or try so later packet authorization can use
 the source port owner.
+
+The focused core spec maps each proof-bearing handshake and packet entry point
+to its verified path, verified value, and local mutation. See
+[IBC v1 Core](ibc-v1-core.md#connection-and-channel-lifecycle) for that matrix.
 
 Channel close entry points exist but currently panic as unsupported. Close
 events are defined but not emitted. See [IBC v1 Core](ibc-v1-core.md) for the

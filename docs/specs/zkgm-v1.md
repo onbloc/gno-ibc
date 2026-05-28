@@ -238,6 +238,82 @@ Native-token sends require a direct `gnokey maketx call` transaction. A
 `IsUserCall()` is false and attached native coins are not captured as
 `SentCoins`.
 
+## Minimal OP_CALL Flow
+
+`OP_CALL` is the smallest ZKGM instruction. It carries application calldata to a
+registered receiver realm on the destination chain. It does not move tokens,
+does not batch child instructions, and does not change channel topology.
+
+A user calls the source ZKGM proxy with
+`Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: Call}`. The
+proxy delegates verification and packet encoding to the active implementation,
+then asks IBC core to commit the packet. A relayer delivers the packet to the
+destination chain. Destination core verifies the source packet commitment,
+dispatches `OnRecvPacket` to the destination ZKGM proxy, and the proxy delegates
+to `impl.Recv`. The implementation decodes the packet, executes `OP_CALL`,
+looks up the registered receiver at `Call.ContractAddress`, and invokes
+`receiver.OnZkgm`. The receiver result is wrapped in a ZKGM acknowledgement and
+committed by destination core as a synchronous ack. A relayer then returns that
+ack to source core, which calls source ZKGM `Ack`. Plain `OP_CALL` keeps no
+source-side in-flight state, so its acknowledgement handler is a no-op unless
+the rejected `Eureka` mode is present.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor User
+  participant SApp as Source ZKGM proxy
+  participant SImpl as Source impl
+  participant CoreS as Source IBC core
+  participant Rel as Relayer
+  participant CoreD as Destination IBC core
+  participant DApp as Destination ZKGM proxy
+  participant DImpl as Destination impl
+  participant Recv as Destination receiver
+
+  User->>SApp: Send(channel, timeout, salt, OP_CALL)
+  SApp->>SImpl: Send(SendRequest)
+  SImpl->>SImpl: dispatchVerify -> verifyCall
+  SImpl->>SImpl: EncodeZkgmPacket(path=0, derived salt)
+  SImpl-->>SApp: packet data bytes
+  SApp->>CoreS: PacketSend(channel, data, timeout)
+  CoreS-->>Rel: PacketSend event
+
+  Rel->>CoreD: PacketRecv(packet, proof)
+  CoreD->>DApp: OnRecvPacket(packet, relayerMsg)
+  DApp->>DImpl: Recv(packet, relayerMsg)
+  DImpl->>DImpl: DecodeZkgmPacket -> executeCall
+  DImpl->>Recv: OnZkgm(CallEnv)
+  Recv-->>DImpl: nil
+  DImpl-->>DApp: RecvPacketResult{Success, ack}
+  DApp-->>CoreD: RecvPacketResult
+  CoreD-->>Rel: WriteAck event
+
+  Rel->>CoreS: PacketAcknowledgement(packet, ack, proof)
+  CoreS->>SApp: OnAcknowledgementPacket(packet, ack)
+  SApp->>SImpl: Ack(packet, ack)
+  SImpl->>SImpl: dispatchAck -> acknowledgeCall
+```
+
+Reading rules:
+
+- Source and destination ZKGM proxies use the same module path, deployed on
+  opposite chains.
+- Source and destination implementations use the same `v0/impl` package,
+  deployed on opposite chains.
+- The destination receiver is any realm that registered itself with
+  `RegisterReceiver`.
+- Core proof verification is the standard packet flow from
+  [IBC v1 Core](ibc-v1-core.md). The sequence above focuses only on
+  ZKGM-specific dispatch.
+
+The send phase is covered by [Sending Packets](#sending-packets). Receiver
+registration and `CallEnv` fields are covered by
+[Receiver Registry](#receiver-registry). Opcode routing is covered by
+[Instruction Dispatch](#instruction-dispatch) and the detailed `OP_CALL`
+semantics are covered by [Call Instructions](#call-instructions). Wire envelope
+layout is covered by [Wire Encoding](#wire-encoding).
+
 ## Receiver Registry
 
 Receivers implement `z.Zkgmable`:

@@ -180,45 +180,95 @@ families, and packet behavior.
 
 ## Lifecycle at a Glance
 
+IBC traffic only starts after registries, clients, connections, and channels are
+in place. Each phase has a different actor and precondition.
+
+| Phase | Action | Typical actor | Precondition |
+|-------|--------|---------------|--------------|
+| 0 | `RegisterClient`, `RegisterApp` | Adapter loader realm, app loader realm | None |
+| 1 | `CreateClient` | Setup realm or chain operator | Client type registered |
+| 2 | `UpdateClient` | Relayer or operator | Client exists |
+| 3 | `ConnectionOpenInit`, `ConnectionOpenTry`, `ConnectionOpenAck`, `ConnectionOpenConfirm` | Operator and relayer | Client has consensus for proof heights |
+| 4 | `ChannelOpenInit`, `ChannelOpenTry`, `ChannelOpenAck`, `ChannelOpenConfirm` | App realm and relayer | Connection is open and app port is registered |
+| 5 | `PacketSend`, `PacketRecv`, `PacketAcknowledgement`, `PacketTimeout` | App realm and relayer | Channel is open |
+
 ```mermaid
 sequenceDiagram
   autonumber
+  participant LCL as Adapter loader
+  participant AppL as App loader
+  participant Op as Operator
   actor User
   participant App as Source app
   participant CoreS as Source IBC core
+  participant LCS as Counterparty LC on source
   participant Rel as Relayer
   participant CoreD as Destination IBC core
-  participant LC as Destination light client
+  participant LCD as Source LC on destination
   participant DApp as Destination app
 
+  LCL->>CoreS: RegisterClient(clientType, adapter)
+  AppL->>CoreS: RegisterApp(portId, app)
+  LCL->>CoreD: RegisterClient(clientType, adapter)
+  AppL->>CoreD: RegisterApp(portId, app)
+  Op->>CoreS: CreateClient(clientType, clientState, consensusState)
+  Op->>CoreD: CreateClient(clientType, clientState, consensusState)
+  Rel->>CoreS: UpdateClient(clientId, header)
+  CoreS->>LCS: UpdateClient
+  Rel->>CoreD: UpdateClient(clientId, header)
+  CoreD->>LCD: UpdateClient
+  Op->>CoreS: ConnectionOpenInit
+  Rel->>CoreD: ConnectionOpenTry(source Init proof)
+  CoreD->>LCD: VerifyMembership(connection path)
+  Rel->>CoreS: ConnectionOpenAck(counterparty TryOpen proof)
+  CoreS->>LCS: VerifyMembership(connection path)
+  Rel->>CoreD: ConnectionOpenConfirm(source Open proof)
+  CoreD->>LCD: VerifyMembership(connection path)
+  App->>CoreS: ChannelOpenInit(portId, connectionId, version)
+  CoreS->>App: OnChannelOpenInit
+  Rel->>CoreD: ChannelOpenTry(source Init proof)
+  CoreD->>LCD: VerifyMembership(channel path)
+  CoreD->>DApp: OnChannelOpenTry
+  Rel->>CoreS: ChannelOpenAck(counterparty TryOpen proof)
+  CoreS->>LCS: VerifyMembership(channel path)
+  CoreS->>App: OnChannelOpenAck
+  Rel->>CoreD: ChannelOpenConfirm(source Open proof)
+  CoreD->>LCD: VerifyMembership(channel path)
+  CoreD->>DApp: OnChannelOpenConfirm
   User->>App: send instruction
   App->>CoreS: PacketSend(packet)
   CoreS-->>Rel: PacketSend event
   Rel->>CoreD: PacketRecv(packet, proof)
-  CoreD->>LC: VerifyMembership(commitment)
-  LC-->>CoreD: ok
+  CoreD->>LCD: VerifyMembership(packet commitment path)
   CoreD->>DApp: OnRecvPacket(packet)
   DApp-->>CoreD: ack
   CoreD-->>Rel: WriteAck event
   Rel->>CoreS: PacketAcknowledgement(packet, ack, proof)
+  CoreS->>LCS: VerifyMembership(batch receipts path)
   CoreS->>App: OnAcknowledgementPacket(packet, ack)
 ```
 
-In the send phase, the user calls the source application. The application builds
-packet data and asks source core to commit the packet. Source core emits a send
-event that relayers can observe.
+In the bootstrap phase, loader and setup realms populate the registries that
+core needs before any traffic can move. Light-client adapters are registered by
+client type. Applications are registered by port id, normally the app realm
+package path bytes.
 
-In the relay phase, a relayer submits the packet and proof to destination core.
-Destination core asks the registered light client to verify the source packet
-commitment before calling the destination app.
+In the client phase, an operator or setup realm creates the light client and
+relayers keep it updated with counterparty consensus states. Later proof-bearing
+handshake and packet calls verify against those consensus states.
 
-In the receive phase, the destination app interprets the packet data and returns
-an acknowledgement result. Destination core writes the acknowledgement state and
-emits an event for relayers and indexers.
+In the handshake phase, relayers move connection and channel state through the
+init, try, ack, and confirm steps. Channel opening records the app port owner,
+which later authorizes packet sends.
 
-In the acknowledgement phase, a relayer submits the acknowledgement proof back to
-source core. Source core verifies the destination acknowledgement and calls the
-source app acknowledgement callback.
+In the packet phase, the user calls the source application. The application
+builds packet data and asks source core to commit it. Relayers submit receive
+and acknowledgement proofs across chains, and core dispatches app callbacks on
+both sides.
+
+Timeout is the alternative source-side branch when the destination receipt is
+absent after the packet timeout. It verifies receipt non-membership and calls
+the source app timeout callback.
 
 See [Architecture](architecture.md) for realm topology and detailed lifecycle
 sequences.

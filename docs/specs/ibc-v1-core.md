@@ -61,6 +61,101 @@ handshake entry points, and channel handshake entry points are not admin-gated.
 They are open protocol entry points whose safety comes from adapter
 registration, proof verification, and state-machine checks.
 
+## App Interface
+
+IBC applications register an implementation of `IApp` at their port id. Locally
+owned ports normally use the app realm package path bytes as the port id.
+
+```go
+type IApp interface {
+    OnChannelOpenInit(cur realm, connectionId ConnectionId, channelId ChannelId, version string, relayer address)
+    OnChannelOpenTry(cur realm, connectionId ConnectionId, channelId ChannelId, version string, counterpartyVersion string, relayer address)
+    OnChannelOpenAck(cur realm, channelId ChannelId, counterpartyChannelId ChannelId, counterpartyVersion string, relayer address)
+    OnChannelOpenConfirm(cur realm, channelId ChannelId, relayer address)
+    OnChannelCloseInit(cur realm, channelId ChannelId, relayer address)
+    OnChannelCloseConfirm(cur realm, channelId ChannelId, relayer address)
+    OnRecvPacket(cur realm, packet Packet, relayer address, relayerMsg []byte) RecvPacketResult
+    OnIntentRecvPacket(cur realm, packet Packet, marketMaker address, marketMakerMsg []byte)
+    OnAcknowledgementPacket(cur realm, packet Packet, acknowledgement []byte, relayer address)
+    OnTimeoutPacket(cur realm, packet Packet, relayer address)
+}
+```
+
+All callbacks take `cur realm` as the first argument. Core invokes application
+callbacks with `cross(cur)`, so the callback runs in the application realm and
+can mutate application state.
+
+An app type must satisfy the `core.IApp` interface before it can be registered
+with `RegisterApp`.
+
+Callback dispatch uses the port id registered through `RegisterApp`. Missing
+app registrations panic with `ErrPortNotFound`. For channel-owned packet paths,
+core first resolves the channel owner and then looks up the app by that port id.
+
+| Callback | Core entry point | Core has already done | Core does after |
+|----------|------------------|-----------------------|-----------------|
+| `OnChannelOpenInit` | `ChannelOpenInit` | Allocated `channelId` and recorded the channel owner. | Saves the channel in `Init` state and emits `ChannelOpenInit`. |
+| `OnChannelOpenTry` | `ChannelOpenTry` | Verified the counterparty `Init` proof, allocated `channelId`, and recorded the channel owner. | Saves the channel in `TryOpen` state and emits `ChannelOpenTry`. |
+| `OnChannelOpenAck` | `ChannelOpenAck` | Verified the counterparty `TryOpen` proof. | Transitions the channel to `Open`, stores the counterparty channel id and version, and emits `ChannelOpenAck`. |
+| `OnChannelOpenConfirm` | `ChannelOpenConfirm` | Verified the counterparty `Open` proof. | Transitions the channel to `Open` and emits `ChannelOpenConfirm`. |
+| `OnChannelCloseInit` | `ChannelCloseInit` | Nothing. The entry point panics immediately. | Unreachable. |
+| `OnChannelCloseConfirm` | `ChannelCloseConfirm` | Nothing. The entry point panics immediately. | Unreachable. |
+| `OnRecvPacket` | `PacketRecv` | Verified the packet batch membership proof, checked the channel, timeout, and replay receipt. | Handles `RecvPacketResult`, commits sync acks when needed, and emits `PacketRecv`. |
+| `OnIntentRecvPacket` | `IntentPacketRecv` | Checked the channel, timeout, and replay receipt. | Emits `IntentPacketRecv`. |
+| `OnAcknowledgementPacket` | `PacketAcknowledgement` | Verified acknowledgement membership and found an outstanding source commitment. | Deletes the source packet commitment and emits `PacketAck`. |
+| `OnTimeoutPacket` | `PacketTimeout` | Verified timeout eligibility and receipt non-membership. | Deletes the source packet commitment and emits `PacketTimeout`. |
+
+If a callback panics, the transaction aborts and core does not keep partial
+state changes from that entry point.
+
+`OnRecvPacket` returns a `RecvPacketResult`:
+
+```go
+type PacketStatus uint8
+
+const (
+    PacketStatusUnknown PacketStatus = 0
+    PacketStatusSuccess PacketStatus = 1
+    PacketStatusFailure PacketStatus = 2
+    PacketStatusAsync   PacketStatus = 3
+)
+
+type RecvPacketResult struct {
+    Status PacketStatus
+    Ack    []byte
+}
+```
+
+| Status | Ack requirement | Core action |
+|--------|-----------------|-------------|
+| `PacketStatusAsync` | Ignored. | Records a receipt without committing the final acknowledgement. |
+| `PacketStatusSuccess` | Non-empty. | Commits the ack and emits `WriteAck` in the receive transaction. |
+| `PacketStatusFailure` | Non-empty. | Commits the ack and emits `WriteAck` in the receive transaction. |
+| `PacketStatusUnknown` | Any value. | Panics with `ErrUnknownPacketStatus`. |
+
+`PacketStatusSuccess` and `PacketStatusFailure` with an empty `Ack` panic with
+`ErrSyncAckEmpty`. Apps that need delayed acknowledgement semantics must return
+`PacketStatusAsync` and later commit an acknowledgement through
+`WriteAcknowledgement` or `BatchAcks`.
+
+Apps in other realms should construct results with
+`core.NewRecvPacketResult(cross(cur), status, ack)` instead of allocating
+`RecvPacketResult` directly. This keeps the result construction inside the core
+realm crossing frame.
+
+`WriteAcknowledgement` and `BatchAcks` are the async ack writers. Both require
+the caller realm to match the destination channel owner. `WriteAcknowledgement`
+also rejects empty acknowledgements and already-written acknowledgements.
+
+`IntentPacketRecv` is asymmetric with normal receive. It does not verify a
+source-chain membership proof, does not return `RecvPacketResult`, and does not
+write an acknowledgement by itself. Its event uses `market_maker_msg` where
+normal receive uses `maker_msg`.
+
+Channel close callbacks are declared only to satisfy the interface. The current
+`ChannelCloseInit` and `ChannelCloseConfirm` entry points panic before callback
+dispatch, and no code writes `ChannelStateClosed`.
+
 ## Domain Types
 
 Core uses small wrapper types for protocol identifiers and wire values:
@@ -171,6 +266,10 @@ was received but no acknowledgement hash has been committed. Any value other
 than `COMMITMENT_MAGIC_ACK` in the receipt store is treated as an
 acknowledgement hash.
 
+Committed acknowledgement values are not sentinels. They are
+`CommitAcks(...)` hashes. `CommitAcks(...)` uses `mergeAck`, so committed
+acknowledgement hashes start with the same first byte as `COMMITMENT_MAGIC`.
+
 ## Client Lifecycle
 
 `CreateClient` allocates a client identifier for the requested client type,
@@ -233,6 +332,39 @@ adapters. V1 adapters must reject inactive clients before membership or
 non-membership proof decoding.
 
 ## Connection and Channel Lifecycle
+
+Each proof-bearing handshake and packet entry point verifies a path and value
+against the registered counterparty client at `msg.ProofHeight`.
+
+| Entry point | Proof type | Verified path | Verified value | Local mutation after proof |
+|-------------|------------|---------------|----------------|----------------------------|
+| `ConnectionOpenInit` | none | n/a | n/a | Allocates `connectionId`, saves `Connection{Init, ClientId, CounterpartyClientId, 0}`, and emits. |
+| `ConnectionOpenTry` | membership | `ConnectionPath(msg.CounterpartyConnectionId)` | `keccak(Connection{Init, msg.CounterpartyClientId, msg.ClientId, 0}.EthAbiEncode())` | Allocates `connectionId`, saves `Connection{TryOpen, ...}`, and emits. |
+| `ConnectionOpenAck` | membership | `ConnectionPath(msg.CounterpartyConnectionId)` | `keccak(Connection{TryOpen, connection.CounterpartyClientId, connection.ClientId, msg.ConnectionId}.EthAbiEncode())` | Transitions to `Open`, stores the counterparty connection id, and emits. |
+| `ConnectionOpenConfirm` | membership | `ConnectionPath(connection.CounterpartyConnectionId)` | `keccak(Connection{Open, connection.CounterpartyClientId, connection.ClientId, msg.ConnectionId}.EthAbiEncode())` | Transitions to `Open` and emits. |
+| `ChannelOpenInit` | none | n/a | n/a | Allocates `channelId`, records the port owner, calls `OnChannelOpenInit`, saves `Channel{Init, ...}`, and emits. |
+| `ChannelOpenTry` | membership | `ChannelPath(msg.Channel.CounterpartyChannelId)` | `keccak(Channel{Init, connection.CounterpartyConnectionId, 0, msg.PortId, msg.CounterpartyVersion}.EthAbiEncode())` | Allocates `channelId`, records the port owner, calls `OnChannelOpenTry`, saves `Channel{TryOpen, ...}`, and emits. |
+| `ChannelOpenAck` | membership | `ChannelPath(msg.CounterpartyChannelId)` | `keccak(Channel{TryOpen, connection.CounterpartyConnectionId, msg.ChannelId, portId, msg.CounterpartyVersion}.EthAbiEncode())` | Calls `OnChannelOpenAck`, transitions to `Open`, stores the counterparty channel id and version, and emits. |
+| `ChannelOpenConfirm` | membership | `ChannelPath(channel.CounterpartyChannelId)` | `keccak(Channel{Open, connection.CounterpartyConnectionId, msg.ChannelId, portId, channel.Version}.EthAbiEncode())` | Calls `OnChannelOpenConfirm`, transitions to `Open`, and emits. |
+| `PacketRecv` | membership | `BatchPacketsPath(CommitPackets(msg.Packets))` | `COMMITMENT_MAGIC` | Per packet, writes a receipt, calls `OnRecvPacket`, optionally commits a sync ack, and emits. |
+| `PacketAcknowledgement` | membership | `BatchReceiptsPath(CommitPackets(msg.Packets))` | `CommitAcks(msg.Acknowledgements)` | Per packet, calls `OnAcknowledgementPacket`, deletes the source commitment, and emits. |
+| `PacketTimeout` | non-membership | `BatchReceiptsPath(CommitPacket(msg.Packet))` | n/a | Calls `OnTimeoutPacket`, deletes the source commitment, and emits. |
+
+For connection and channel handshakes, the verified value is the counterparty's
+expected committed state from the opposite perspective. Core reconstructs that
+counterparty state from the local record, relayer-supplied message fields, and
+the next expected handshake state, ABI-encodes it, hashes it, and verifies the
+hash at the counterparty path.
+
+In the table, `connection` and `channel` refer to locally stored records loaded
+during the entry point. `portId` is the channel owner resolved from the local
+channel owner store.
+
+For packet flows, the verified value is a commitment sentinel or acknowledgement
+hash rather than an encoded connection or channel record. `PacketRecv` proves
+the source committed the packet batch. `PacketAcknowledgement` proves the
+destination committed the ack batch. `PacketTimeout` proves the destination
+receipt path is absent.
 
 Connections follow the standard four-step handshake:
 

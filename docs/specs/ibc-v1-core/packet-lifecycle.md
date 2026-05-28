@@ -261,6 +261,8 @@ Replay protection is hash-based. If two packets have the same source channel,
 destination channel, data, and timeout timestamp, they have the same packet hash
 and the second receive sees the existing receipt.
 
+Source-side packet state:
+
 ```mermaid
 stateDiagram-v2
   direction LR
@@ -270,6 +272,8 @@ stateDiagram-v2
   Acked --> [*]
   TimedOut --> [*]
 ```
+
+Destination-side receive state:
 
 ```mermaid
 stateDiagram-v2

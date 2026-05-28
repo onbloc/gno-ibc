@@ -224,6 +224,8 @@ failure status.
 
 In this sequence, `Hop` is the chain that receives the forwarded child packet.
 
+Phase 1, parent recv puts the forwarded packet in flight:
+
 ```mermaid
 sequenceDiagram
   autonumber
@@ -231,7 +233,6 @@ sequenceDiagram
   participant Core as IBC core
   participant Proxy as ZKGM proxy
   participant Impl as ZKGM impl
-  participant Hop as Hop chain
 
   Rel->>Core: PacketRecv(parent)
   Core->>Proxy: OnRecvPacket(parent)
@@ -242,6 +243,22 @@ sequenceDiagram
   Impl->>Proxy: SetInFlightPacket(child to parent)
   Impl-->>Proxy: PacketStatusAsync
   Proxy-->>Core: PacketStatusAsync
+```
+
+Forward execution sends a child packet immediately, stores the parent packet in
+the proxy's in-flight table, and returns `PacketStatusAsync`.
+
+Phase 2, child resolution writes the parent acknowledgement:
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Rel as Relayer
+  participant Hop as Hop chain
+  participant Core as IBC core
+  participant Proxy as ZKGM proxy
+  participant Impl as ZKGM impl
+
   Rel->>Hop: relay child
   Hop-->>Rel: child acknowledgement
   Rel->>Core: PacketAcknowledgement(child)
@@ -253,9 +270,7 @@ sequenceDiagram
   Core-->>Rel: WriteAck event for parent
 ```
 
-Forward execution sends a child packet immediately, stores the parent packet in
-the proxy's in-flight table, and returns `PacketStatusAsync`. Later child ack or
-timeout handling resolves the parent by calling core `WriteAcknowledgement`.
+Later child ack or timeout handling resolves the parent by calling core `WriteAcknowledgement`.
 
 ### Intent Receive
 

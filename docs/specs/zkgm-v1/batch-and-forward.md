@@ -126,6 +126,7 @@ send path.
 
 ```mermaid
 sequenceDiagram
+  autonumber
   participant Rel as Relayer
   participant Core as IBC core
   participant Proxy as ZKGM proxy

@@ -59,14 +59,18 @@ the rejected `Eureka` mode is present.
 sequenceDiagram
   autonumber
   actor User
-  participant SApp as Source ZKGM proxy
-  participant SImpl as Source impl
-  participant CoreS as Source IBC core
+  box rgb(232, 244, 253) Source chain
+    participant SApp as Source ZKGM proxy
+    participant SImpl as Source impl
+    participant CoreS as Source IBC core
+  end
   participant Rel as Relayer
-  participant CoreD as Destination IBC core
-  participant DApp as Destination ZKGM proxy
-  participant DImpl as Destination impl
-  participant Recv as Destination receiver
+  box rgb(253, 248, 232) Destination chain
+    participant CoreD as Destination IBC core
+    participant DApp as Destination ZKGM proxy
+    participant DImpl as Destination impl
+    participant Recv as Destination receiver
+  end
 
   User->>SApp: Send(channel, timeout, salt, OP_CALL)
   SApp->>SImpl: Send(SendRequest)

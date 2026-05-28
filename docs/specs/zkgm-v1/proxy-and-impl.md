@@ -38,8 +38,8 @@ stateDiagram-v2
   direction LR
   [*] --> Bootstrap: allowedImpls = []
   Bootstrap --> Allowlisted: UpdateImpl(AllowedImpls = [...])
-  Allowlisted --> Allowlisted: UpdateImpl(Impl = new) by allowlisted caller
-  Allowlisted --> Allowlisted: UpdateImpl(AllowedImpls = [...]) by allowlisted caller
+  Allowlisted --> Allowlisted: UpdateImpl(Impl) [allowlisted caller]
+  Allowlisted --> Allowlisted: UpdateImpl(AllowedImpls) [allowlisted caller]
 ```
 
 The loader seeds the proxy with allowed paths for IBC core, the proxy, the

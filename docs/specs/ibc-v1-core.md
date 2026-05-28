@@ -177,13 +177,56 @@ acknowledgement hash.
 delegates initialization to the registered light-client adapter, stores the
 client state and initial consensus state, and emits `CreateClient`.
 
+Example emission:
+
+```json
+{
+  "type": "CreateClient",
+  "attrs": [
+    {
+      "key": "client_id",
+      "value": "1"
+    },
+    {
+      "key": "client_type",
+      "value": "cometbls"
+    }
+  ],
+  "pkg_path": "gno.land/r/core/ibc/v1/core"
+}
+```
+
 `UpdateClient` loads the registered adapter, delegates header verification and
 state transition, persists the returned client state and consensus state, and
 emits `UpdateClient`.
 
+Example emission:
+
+```json
+{
+  "type": "UpdateClient",
+  "attrs": [
+    {
+      "key": "client_type",
+      "value": "cometbls"
+    },
+    {
+      "key": "client_id",
+      "value": "1"
+    },
+    {
+      "key": "height",
+      "value": "123"
+    }
+  ],
+  "pkg_path": "gno.land/r/core/ibc/v1/core"
+}
+```
+
 `ForceUpdateClient` is a deployer-only operational path. It requires an origin
 call, requires the target adapter to support the force-update interface, and
-then persists the adapter-provided state update.
+then persists the adapter-provided state update. It emits the same
+`UpdateClient` event shape as a normal client update.
 
 Status-sensitive proof verification is delegated to registered light-client
 adapters. V1 adapters must reject inactive clients before membership or
@@ -198,6 +241,61 @@ Connections follow the standard four-step handshake:
 - `ConnectionOpenAck`
 - `ConnectionOpenConfirm`
 
+`ConnectionOpenInit` emits before a counterparty connection id is known:
+
+Example emission:
+
+```json
+{
+  "type": "ConnectionOpenInit",
+  "attrs": [
+    {
+      "key": "connection_id",
+      "value": "1"
+    },
+    {
+      "key": "client_id",
+      "value": "1"
+    },
+    {
+      "key": "counterparty_client_id",
+      "value": "7"
+    }
+  ],
+  "pkg_path": "gno.land/r/core/ibc/v1/core"
+}
+```
+
+`ConnectionOpenTry` includes the counterparty connection id. `ConnectionOpenAck`
+and `ConnectionOpenConfirm` share this four-attribute shape:
+
+Example emission:
+
+```json
+{
+  "type": "ConnectionOpenTry",
+  "attrs": [
+    {
+      "key": "connection_id",
+      "value": "1"
+    },
+    {
+      "key": "client_id",
+      "value": "1"
+    },
+    {
+      "key": "counterparty_client_id",
+      "value": "7"
+    },
+    {
+      "key": "counterparty_connection_id",
+      "value": "3"
+    }
+  ],
+  "pkg_path": "gno.land/r/core/ibc/v1/core"
+}
+```
+
 Channels follow the same handshake shape:
 
 - `ChannelOpenInit`
@@ -208,6 +306,103 @@ Channels follow the same handshake shape:
 `ChannelOpenInit` records the calling app realm as the source port owner. The
 counterparty channel identifier is only known after later handshake steps, so
 the init event does not imply a final counterparty channel mapping.
+
+Example emission:
+
+```json
+{
+  "type": "ChannelOpenInit",
+  "attrs": [
+    {
+      "key": "port_id",
+      "value": "0x676e6f2e6c616e642f722f676e6f737761702f6962632f76312f617070732f7a6b676d"
+    },
+    {
+      "key": "channel_id",
+      "value": "1"
+    },
+    {
+      "key": "counterparty_port_id",
+      "value": "0x77617374312e2e2e"
+    },
+    {
+      "key": "connection_id",
+      "value": "1"
+    },
+    {
+      "key": "connection_client_id",
+      "value": "1"
+    },
+    {
+      "key": "connection_counterparty_client_id",
+      "value": "7"
+    },
+    {
+      "key": "connection_counterparty_connection_id",
+      "value": "3"
+    },
+    {
+      "key": "version",
+      "value": "ucs03-zkgm-0"
+    }
+  ],
+  "pkg_path": "gno.land/r/core/ibc/v1/core"
+}
+```
+
+The `port_id` value above decodes to
+`gno.land/r/gnoswap/ibc/v1/apps/zkgm`, the proxy realm pkgpath used by ZKGM.
+Other apps emit their own pkgpath bytes.
+
+`ChannelOpenTry`, `ChannelOpenAck`, and `ChannelOpenConfirm` all include
+`counterparty_channel_id` and share this nine-attribute shape:
+
+Example emission:
+
+```json
+{
+  "type": "ChannelOpenAck",
+  "attrs": [
+    {
+      "key": "port_id",
+      "value": "0x676e6f2e6c616e642f722f676e6f737761702f6962632f76312f617070732f7a6b676d"
+    },
+    {
+      "key": "channel_id",
+      "value": "1"
+    },
+    {
+      "key": "counterparty_port_id",
+      "value": "0x77617374312e2e2e"
+    },
+    {
+      "key": "counterparty_channel_id",
+      "value": "27"
+    },
+    {
+      "key": "connection_id",
+      "value": "1"
+    },
+    {
+      "key": "connection_client_id",
+      "value": "1"
+    },
+    {
+      "key": "connection_counterparty_client_id",
+      "value": "7"
+    },
+    {
+      "key": "connection_counterparty_connection_id",
+      "value": "3"
+    },
+    {
+      "key": "version",
+      "value": "ucs03-zkgm-0"
+    }
+  ],
+  "pkg_path": "gno.land/r/core/ibc/v1/core"
+}
+```
 
 Channel close entry points are present but unsupported. `ChannelCloseInit` and
 `ChannelCloseConfirm` currently panic instead of transitioning channel state or
@@ -229,8 +424,106 @@ stateDiagram-v2
 `PacketSend` validates that the caller owns the source port, verifies that the
 channel is open, commits the packet, and emits `PacketSend`.
 
+Example emission:
+
+```json
+{
+  "type": "PacketSend",
+  "attrs": [
+    {
+      "key": "packet_hash",
+      "value": "0x0000...000000"
+    },
+    {
+      "key": "packet_data",
+      "value": "0x0801..."
+    },
+    {
+      "key": "source_channel_id",
+      "value": "1"
+    },
+    {
+      "key": "source_channel_version",
+      "value": "ucs03-zkgm-0"
+    },
+    {
+      "key": "source_connection_id",
+      "value": "1"
+    },
+    {
+      "key": "source_connection_client_id",
+      "value": "1"
+    },
+    {
+      "key": "destination_channel_id",
+      "value": "27"
+    },
+    {
+      "key": "destination_connection_id",
+      "value": "3"
+    },
+    {
+      "key": "destination_connection_client_id",
+      "value": "7"
+    },
+    {
+      "key": "timeout_timestamp",
+      "value": "1750000000000000000"
+    }
+  ],
+  "pkg_path": "gno.land/r/core/ibc/v1/core"
+}
+```
+
 `BatchSend` validates a same-channel packet batch, commits all packet
 commitments, emits `BatchSend`, and emits a per-packet `PacketSend` event.
+
+Example emission:
+
+```json
+{
+  "type": "BatchSend",
+  "attrs": [
+    {
+      "key": "batch_hash",
+      "value": "0x0000...000000"
+    },
+    {
+      "key": "source_channel_id",
+      "value": "1"
+    },
+    {
+      "key": "source_channel_version",
+      "value": "ucs03-zkgm-0"
+    },
+    {
+      "key": "source_connection_id",
+      "value": "1"
+    },
+    {
+      "key": "source_connection_client_id",
+      "value": "1"
+    },
+    {
+      "key": "destination_channel_id",
+      "value": "27"
+    },
+    {
+      "key": "destination_connection_id",
+      "value": "3"
+    },
+    {
+      "key": "destination_connection_client_id",
+      "value": "7"
+    }
+  ],
+  "pkg_path": "gno.land/r/core/ibc/v1/core"
+}
+```
+
+The batch event does not include `packet_hash`, `packet_data`, or
+`timeout_timestamp`. Each child packet still emits its own `PacketSend` event
+after the batch event.
 
 `BatchAcks` commits multiple async acknowledgements for packets on the same
 destination channel. It uses the same destination app ownership check as
@@ -251,11 +544,128 @@ status:
 - `PacketStatusAsync` records receipt state without writing the final
   acknowledgement
 
+Example emission:
+
+```json
+{
+  "type": "PacketRecv",
+  "attrs": [
+    {
+      "key": "packet_hash",
+      "value": "0x0000...000000"
+    },
+    {
+      "key": "packet_data",
+      "value": "0x0801..."
+    },
+    {
+      "key": "source_channel_id",
+      "value": "27"
+    },
+    {
+      "key": "source_connection_id",
+      "value": "3"
+    },
+    {
+      "key": "source_connection_client_id",
+      "value": "7"
+    },
+    {
+      "key": "destination_channel_id",
+      "value": "1"
+    },
+    {
+      "key": "destination_channel_version",
+      "value": "ucs03-zkgm-0"
+    },
+    {
+      "key": "destination_connection_id",
+      "value": "1"
+    },
+    {
+      "key": "destination_connection_client_id",
+      "value": "1"
+    },
+    {
+      "key": "timeout_timestamp",
+      "value": "1750000000000000000"
+    },
+    {
+      "key": "maker_msg",
+      "value": "0x"
+    }
+  ],
+  "pkg_path": "gno.land/r/core/ibc/v1/core"
+}
+```
+
+`IntentPacketRecv` uses the same receive-side shape, but the final attribute key
+is `market_maker_msg` instead of `maker_msg`.
+
 `IntentPacketRecv` is the market-maker receive path. It dispatches packet
 handling without the normal proof and acknowledgement write flow.
 
 `WriteAcknowledgement` is the async acknowledgement writer. Only the destination
 app owner for the channel can write the acknowledgement.
+
+Example emission:
+
+```json
+{
+  "type": "WriteAck",
+  "attrs": [
+    {
+      "key": "packet_hash",
+      "value": "0x0000...000000"
+    },
+    {
+      "key": "packet_data",
+      "value": "0x0801..."
+    },
+    {
+      "key": "source_channel_id",
+      "value": "27"
+    },
+    {
+      "key": "source_connection_id",
+      "value": "3"
+    },
+    {
+      "key": "source_connection_client_id",
+      "value": "7"
+    },
+    {
+      "key": "destination_channel_id",
+      "value": "1"
+    },
+    {
+      "key": "destination_channel_version",
+      "value": "ucs03-zkgm-0"
+    },
+    {
+      "key": "destination_connection_id",
+      "value": "1"
+    },
+    {
+      "key": "destination_connection_client_id",
+      "value": "1"
+    },
+    {
+      "key": "timeout_timestamp",
+      "value": "1750000000000000000"
+    },
+    {
+      "key": "acknowledgement",
+      "value": "0x0a200000...000000"
+    }
+  ],
+  "pkg_path": "gno.land/r/core/ibc/v1/core"
+}
+```
+
+Sync acknowledgements come from `PacketRecv` when the app returns a non-async
+status. Async acknowledgements come from `WriteAcknowledgement`, including ZKGM
+forward parent resolution through `WriteForwardAck`.
 
 `PacketAcknowledgement` verifies acknowledgement membership, deletes the source
 packet commitment, dispatches the source app acknowledgement callback, and emits

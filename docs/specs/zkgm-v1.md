@@ -174,6 +174,62 @@ The shared send path rejects paused or uninitialized proxy state, calls
 `core.PacketSend`. The source app realm is the IBC port owner. IBC core commits
 the packet commitment.
 
+Example emission:
+
+```json
+{
+  "type": "PacketSend",
+  "attrs": [
+    {
+      "key": "packet_hash",
+      "value": "0x0000...000000"
+    },
+    {
+      "key": "packet_data",
+      "value": "0x0000...01030801..."
+    },
+    {
+      "key": "source_channel_id",
+      "value": "1"
+    },
+    {
+      "key": "source_channel_version",
+      "value": "ucs03-zkgm-0"
+    },
+    {
+      "key": "source_connection_id",
+      "value": "1"
+    },
+    {
+      "key": "source_connection_client_id",
+      "value": "1"
+    },
+    {
+      "key": "destination_channel_id",
+      "value": "27"
+    },
+    {
+      "key": "destination_connection_id",
+      "value": "3"
+    },
+    {
+      "key": "destination_connection_client_id",
+      "value": "7"
+    },
+    {
+      "key": "timeout_timestamp",
+      "value": "1750000000000000000"
+    }
+  ],
+  "pkg_path": "gno.land/r/core/ibc/v1/core"
+}
+```
+
+The `packet_data` value is the hex encoding of an ABI-encoded `ZkgmPacket`
+envelope. Realistic ZKGM packets can exceed the 1024-character event attribute
+limit, so indexers reconstruct the full packet from the transaction body rather
+than from the event. See [Event Catalog](events.md) for the limit.
+
 `impl.Send` verifies the instruction against the raw user salt. The wire packet
 then uses `DeriveSenderSalt(sender, salt)` and starts with `Path = 0`.
 
@@ -609,6 +665,66 @@ When a child acknowledgement or timeout returns, `handleForwardChild` checks
 `IsForwardedPacket`. If the salt is marked as forwarded, the implementation
 pops the in-flight parent packet and calls `WriteForwardAck(parent, ack)`, which
 routes to IBC core `WriteAcknowledgement`.
+
+Example emission:
+
+```json
+{
+  "type": "WriteAck",
+  "attrs": [
+    {
+      "key": "packet_hash",
+      "value": "0x1111...111111"
+    },
+    {
+      "key": "packet_data",
+      "value": "0x1111...0801..."
+    },
+    {
+      "key": "source_channel_id",
+      "value": "27"
+    },
+    {
+      "key": "source_connection_id",
+      "value": "3"
+    },
+    {
+      "key": "source_connection_client_id",
+      "value": "7"
+    },
+    {
+      "key": "destination_channel_id",
+      "value": "1"
+    },
+    {
+      "key": "destination_channel_version",
+      "value": "ucs03-zkgm-0"
+    },
+    {
+      "key": "destination_connection_id",
+      "value": "1"
+    },
+    {
+      "key": "destination_connection_client_id",
+      "value": "1"
+    },
+    {
+      "key": "timeout_timestamp",
+      "value": "1750000000000000000"
+    },
+    {
+      "key": "acknowledgement",
+      "value": "0x0a20...c1d0"
+    }
+  ],
+  "pkg_path": "gno.land/r/core/ibc/v1/core"
+}
+```
+
+The `acknowledgement` carries the resolved child ack, which the forward handler
+popped from the in-flight table when the child packet acknowledged or timed out.
+The packet identity in `packet_hash` and `packet_data` is the parent packet's
+identity, not the child's.
 
 On intent receive, `OP_FORWARD` returns `PacketStatusSuccess` with
 `ACK_ERR_ONLY_MAKER` and does not send a child packet.

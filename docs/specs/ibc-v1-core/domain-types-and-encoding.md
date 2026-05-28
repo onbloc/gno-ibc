@@ -13,17 +13,15 @@ Core uses small wrapper types for protocol identifiers and wire values:
 | `Bytes` | `[]byte` | Used for port ids and byte-rendered fields. |
 | `H256` | `[32]byte` | Keccak hash output and commitment value. |
 
-Defined enums are:
+Core defines `Status` for light-client lifecycle, `ConnectionState` and
+`ChannelState` for handshake state machines, and `PacketStatus` for the value
+returned by `OnRecvPacket`. The complete enum definitions and integer values
+are in
+[`gno.land/r/core/ibc/v1/core/types.gno`](../../../gno.land/r/core/ibc/v1/core/types.gno).
 
-| Enum | Values |
-|------|--------|
-| `Status` | `StatusUnknown`, `StatusActive`, `StatusExpired`, `StatusFrozen` |
-| `ConnectionState` | `ConnectionStateUnknown`, `ConnectionStateInit`, `ConnectionStateTryOpen`, `ConnectionStateOpen` |
-| `ChannelState` | `ChannelStateUnknown`, `ChannelStateInit`, `ChannelStateTryOpen`, `ChannelStateOpen`, `ChannelStateClosed` |
-| `PacketStatus` | `PacketStatusUnknown`, `PacketStatusSuccess`, `PacketStatusFailure`, `PacketStatusAsync` |
-
-`ChannelStateClosed` is defined for compatibility but unreachable in current
-execution because channel close entry points panic before mutating state.
+`ChannelState` includes a `ChannelStateClosed` value that is defined for
+compatibility but unreachable in current execution, because channel close entry
+points panic before mutating state.
 
 Packets contain source channel, destination channel, data, timeout height, and
 timeout timestamp.

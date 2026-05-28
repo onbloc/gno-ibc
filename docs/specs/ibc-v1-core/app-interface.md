@@ -3,20 +3,10 @@
 IBC applications register an implementation of `IApp` at their port id. Locally
 owned ports normally use the app realm package path bytes as the port id.
 
-```go
-type IApp interface {
-    OnChannelOpenInit(cur realm, connectionId ConnectionId, channelId ChannelId, version string, relayer address)
-    OnChannelOpenTry(cur realm, connectionId ConnectionId, channelId ChannelId, version string, counterpartyVersion string, relayer address)
-    OnChannelOpenAck(cur realm, channelId ChannelId, counterpartyChannelId ChannelId, counterpartyVersion string, relayer address)
-    OnChannelOpenConfirm(cur realm, channelId ChannelId, relayer address)
-    OnChannelCloseInit(cur realm, channelId ChannelId, relayer address)
-    OnChannelCloseConfirm(cur realm, channelId ChannelId, relayer address)
-    OnRecvPacket(cur realm, packet Packet, relayer address, relayerMsg []byte) RecvPacketResult
-    OnIntentRecvPacket(cur realm, packet Packet, marketMaker address, marketMakerMsg []byte)
-    OnAcknowledgementPacket(cur realm, packet Packet, acknowledgement []byte, relayer address)
-    OnTimeoutPacket(cur realm, packet Packet, relayer address)
-}
-```
+`core.IApp` declares callbacks for channel handshakes (open and close), packet
+receive (`OnRecvPacket` and `OnIntentRecvPacket`), acknowledgement, and timeout
+handling. The complete interface definition is in
+[`gno.land/r/core/ibc/v1/core/core.gno`](../../../gno.land/r/core/ibc/v1/core/core.gno).
 
 All callbacks take `cur realm` as the first argument. Core invokes application
 callbacks with `cross(cur)`, so the callback runs in the application realm and
@@ -45,23 +35,10 @@ core first resolves the channel owner and then looks up the app by that port id.
 If a callback panics, the transaction aborts and core does not keep partial
 state changes from that entry point.
 
-`OnRecvPacket` returns a `RecvPacketResult`:
-
-```go
-type PacketStatus uint8
-
-const (
-    PacketStatusUnknown PacketStatus = 0
-    PacketStatusSuccess PacketStatus = 1
-    PacketStatusFailure PacketStatus = 2
-    PacketStatusAsync   PacketStatus = 3
-)
-
-type RecvPacketResult struct {
-    Status PacketStatus
-    Ack    []byte
-}
-```
+`OnRecvPacket` returns a `RecvPacketResult`, which carries a `PacketStatus` and
+ack bytes. Both types are defined in
+[`gno.land/r/core/ibc/v1/core/types.gno`](../../../gno.land/r/core/ibc/v1/core/types.gno).
+The status drives core's response:
 
 | Status | Ack requirement | Core action |
 |--------|-----------------|-------------|

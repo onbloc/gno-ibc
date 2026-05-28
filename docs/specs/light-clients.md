@@ -20,19 +20,11 @@ Implemented v1 client types:
 
 ## Adapter Contract
 
-IBC core calls adapters through `core.ILightClient`:
-
-```go
-type ILightClient interface {
-    CreateClient(_ realm, clientId ClientId, clientStateBytes, consensusStateBytes []byte) string
-    UpdateClient(_ realm, clientId ClientId, clientMessage []byte) ConsensusStateUpdate
-    VerifyMembership(clientId ClientId, height Height, proof []byte, key []byte, value []byte)
-    VerifyNonMembership(clientId ClientId, height Height, proof []byte, key []byte)
-    GetTimestamp(clientId ClientId, height Height) Timestamp
-    GetLatestHeight(clientId ClientId) Height
-    GetStatus(clientId ClientId) Status
-}
-```
+IBC core calls adapters through `core.ILightClient`, defined in
+[`gno.land/r/core/ibc/v1/core/core.gno`](../../gno.land/r/core/ibc/v1/core/core.gno).
+The interface covers client creation, client updates, membership and
+non-membership proof verification, timestamp and latest-height queries, and
+status reporting.
 
 Methods that mutate adapter state take `realm` so core can call them with
 `cross(cur)`. Proof verification and query methods are read-only from the
@@ -223,9 +215,10 @@ type Misbehaviour struct {
 
 ### CometBLS Status
 
-The package-level status strings are `Active`, `Frozen`, and `Expired`.
-`GetStatus` maps them to `StatusActive`, `StatusFrozen`, and `StatusExpired`.
-Unknown package status maps to `StatusUnknown`.
+`GetStatus` maps package-level CometBLS status strings to `core.Status`, and
+falls back to `StatusUnknown` for unrecognized values. The mapping is
+implemented in the CometBLS adapter realm under
+`gno.land/r/core/ibc/v1/lightclients/cometbls`.
 
 CometBLS uses `FrozenHeight = 1` as the frozen sentinel. `ClientState.IsFrozen`
 returns true whenever `FrozenHeight != 0`. Successful misbehaviour verification

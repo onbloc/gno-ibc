@@ -3,25 +3,25 @@
 All durable ZKGM state lives in the proxy realm. The active implementation is
 stateless apart from the package-level `ZkgmV1` singleton.
 
-| State | Type | Purpose |
-|-------|------|---------|
-| `impl` | `ZkgmImpl` | Active implementation object. |
-| `implPath` | `string` | Pkgpath that installed the current implementation. |
-| `allowedImpls` | `[]string` | Whitelist for implementation and loader realms. Empty means bootstrap mode. |
-| `paused` | `bool` | Global pause flag. |
-| `gRealmAddress` | `address` | Cached proxy realm address. |
-| `adminAddressStr` | `string` | Admin address string. Empty means admin bootstrap mode. |
-| `receivers` | BPTree map | Registered `Zkgmable` receivers by pkgpath. |
-| `tokenOrigin` | BPTree map | Wrapped denom to mint path. |
-| `metadataImageOf` | BPTree map | Wrapped denom to metadata image. |
-| `channelBalanceV2` | BPTree map | Escrow balance by channel, path, base token, and quote token. |
-| `inFlightPackets` | BPTree map | Forwarded child packet hash to parent packet. |
-| `tokenBucket` | BPTree map | Per-denom rate-limit bucket. |
-| `rateLimitDisabled` | `bool` | Global rate-limit kill switch. |
+Proxy state is organized into these categories:
 
-> **The current ledger has only `channelBalanceV2`.** There is no
-> `channelBalanceV1` store in committed code, despite the V2 suffix on the
-> active store.
+- **Implementation pointer and authorization settings.** Active impl object,
+  the pkgpath that installed it, the implementation whitelist, the global pause
+  flag, the cached proxy realm address, and the admin address. Defined in
+  [`proxy.gno`](../../../gno.land/r/core/ibc/v1/apps/zkgm/proxy.gno).
+- **Receiver registry.** Maps pkgpaths to `Zkgmable` receivers. Defined in
+  [`proxy.gno`](../../../gno.land/r/core/ibc/v1/apps/zkgm/proxy.gno).
+- **Ledger maps.** Wrapped-denom origin paths, metadata image lookups, and
+  per-channel escrow balances. Defined in
+  [`ledger.gno`](../../../gno.land/r/core/ibc/v1/apps/zkgm/ledger.gno).
+- **In-flight bookkeeping.** Maps forwarded child packet hashes to parent
+  packets. Defined in
+  [`ledger.gno`](../../../gno.land/r/core/ibc/v1/apps/zkgm/ledger.gno).
+- **Rate limiting.** Per-denom token buckets and a global kill switch. Defined
+  in [`ledger.gno`](../../../gno.land/r/core/ibc/v1/apps/zkgm/ledger.gno).
+
+> **`channelBalanceV2` is the only channel-balance store.**
+> The committed codebase does not contain a channelBalanceV1 store. The V2 suffix is part of the store name and does not imply the existence of parallel V1 and V2 implementations.
 
 ## Implementation Pointer
 

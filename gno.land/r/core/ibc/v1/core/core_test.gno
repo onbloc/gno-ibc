@@ -820,6 +820,19 @@ func TestBatchAcksRejectsNonOwner(cur realm, t *testing.T) {
 	})
 }
 
+func TestBatchAcksRejectsPacketsWithoutReceipt(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	uassert.AbortsContains(t, cur, "packet receipt not found", func(cur realm) {
+		BatchAcks(cur, MsgBatchAcks{Packets: []Packet{packet}, Acks: [][]byte{[]byte("ack")}})
+	})
+	if st.hasAcknowledgement(packet) {
+		t.Fatal("BatchAcks must not commit acknowledgement for an unreceived packet")
+	}
+}
+
 func TestPacketReceiptLifecycle(cur realm, t *testing.T) {
 	resetState()
 	p := Packet{SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
@@ -974,6 +987,29 @@ func TestGetChannelOwnerPanicsWhenMissing(cur realm, t *testing.T) {
 	mustPanic(t, func() {
 		st.getChannelOwner(ChannelId(999))
 	})
+}
+
+func TestRegisterClientRejectsUnauthorizedCaller(cur realm, t *testing.T) {
+	resetState()
+
+	uassert.AbortsContains(t, cur, "caller not authorized to register client", func(cur realm) {
+		RegisterClient(cur, ClientType("cometbls"), &mockClient{})
+	})
+	if HasClient(ClientType("cometbls")) {
+		t.Fatal("unauthorized RegisterClient must not reserve the client type")
+	}
+}
+
+func TestRegisterAppRejectsPortSquatting(cur realm, t *testing.T) {
+	resetState()
+	portId := Bytes("gno.land/r/core/ibc/v1/apps/zkgm")
+
+	uassert.AbortsContains(t, cur, "caller not authorized to register port", func(cur realm) {
+		RegisterApp(cur, portId, &mockApp{})
+	})
+	if HasApp(portId) {
+		t.Fatal("unauthorized RegisterApp must not reserve a foreign port")
+	}
 }
 
 // --- Integration: packet send lifecycle ---
@@ -1155,6 +1191,22 @@ func TestWriteAcknowledgementRejectsAlreadyAcked(cur realm, t *testing.T) {
 	})
 }
 
+func TestWriteAcknowledgementRejectsPacketWithoutReceipt(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	uassert.AbortsContains(t, cur, "packet receipt not found", func(cur realm) {
+		WriteAcknowledgement(cur, MsgWriteAcknowledgement{
+			Packet:          packet,
+			Acknowledgement: []byte("forged-ack"),
+		})
+	})
+	if st.hasAcknowledgement(packet) {
+		t.Fatal("WriteAcknowledgement must not commit acknowledgement for an unreceived packet")
+	}
+}
+
 func TestPacketRecvReceiptDupRejected(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
@@ -1193,6 +1245,23 @@ func TestIntentPacketRecvDispatchesAndSetsReceipt(cur realm, t *testing.T) {
 	}
 	if st.hasAcknowledgement(packet) {
 		t.Fatal("IntentPacketRecv must not write an acknowledgement")
+	}
+}
+
+func TestIntentPacketRecvDoesNotBlockProvenPacketRecv(cur realm, t *testing.T) {
+	resetState()
+	portId, _, channelId := setupOpenChannel(t)
+	app := st.ports[portKey(portId)].(*mockApp)
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("intent"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	IntentPacketRecv(cross(cur), MsgIntentPacketRecv{Packets: []Packet{packet}})
+	PacketRecv(cross(cur), MsgPacketRecv{Packets: []Packet{packet}})
+
+	if len(app.recvPackets) != 1 {
+		t.Fatalf("proofless intent recv must not suppress proven PacketRecv: got %d recv calls", len(app.recvPackets))
+	}
+	if !st.hasAcknowledgement(packet) {
+		t.Fatal("proven PacketRecv must still be able to write the packet acknowledgement")
 	}
 }
 

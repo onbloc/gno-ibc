@@ -299,9 +299,9 @@ core behavior and [Event Catalog](events.md) for the event surface.
 
 ## Light-Client Adapter Contract
 
-Core calls adapters through `core.ILightClient`. The canonical interface
-definition lives in [Light Clients](light-clients.md#adapter-contract). Some
-adapters also implement `IForceLightClient` for deployer-only recovery updates.
+Core calls adapters through `core.ILightClient`. The canonical interface is
+documented in [Light Clients](light-clients.md#adapter-contract). Some adapters
+also implement `IForceLightClient` for deployer-only recovery updates.
 
 Adapter proof verification must reject inactive clients before decoding proof
 bytes. CometBLS determines frozen and expired status from its own client state.

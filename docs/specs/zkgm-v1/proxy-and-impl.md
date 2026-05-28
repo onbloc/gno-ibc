@@ -5,10 +5,10 @@ stateless apart from the package-level `ZkgmV1` singleton.
 
 Proxy state is organized into these categories:
 
-- **Implementation pointer and authorization settings.** Active impl object,
-  the pkgpath that installed it, the implementation whitelist, the global pause
-  flag, the cached proxy realm address, and the admin address. Defined in
-  [`proxy.gno`](../../../gno.land/r/core/ibc/v1/apps/zkgm/proxy.gno).
+- **Implementation pointer and authorization settings.** Active implementation
+  object, the package path that installed it, the implementation whitelist, the
+  global pause flag, the cached proxy realm address, and the admin address.
+  Defined in [`proxy.gno`](../../../gno.land/r/core/ibc/v1/apps/zkgm/proxy.gno).
 - **Receiver registry.** Maps pkgpaths to `Zkgmable` receivers. Defined in
   [`proxy.gno`](../../../gno.land/r/core/ibc/v1/apps/zkgm/proxy.gno).
 - **Ledger maps.** Wrapped-denom origin paths, metadata image lookups, and
@@ -21,7 +21,9 @@ Proxy state is organized into these categories:
   in [`ledger.gno`](../../../gno.land/r/core/ibc/v1/apps/zkgm/ledger.gno).
 
 > **`channelBalanceV2` is the only channel-balance store.**
-> The committed codebase does not contain a channelBalanceV1 store. The V2 suffix is part of the store name and does not imply the existence of parallel V1 and V2 implementations.
+> The committed codebase does not contain a `channelBalanceV1` store. The `V2`
+> suffix is part of the store name and does not imply parallel V1 and V2
+> implementations.
 
 ## Implementation Pointer
 

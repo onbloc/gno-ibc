@@ -75,8 +75,8 @@ All channel events except `ChannelOpenInit` also include:
 
 `ChannelOpenInit` omits `counterparty_channel_id` because the counterparty
 channel id is not known yet. This is the only conditional attribute omission in
-the current event surface. Every other event emits its full listed attribute
-set when it is emitted.
+the current event surface. Every other event emits its complete listed
+attribute set when it is emitted.
 
 | Event type | Emitting entrypoint | Stability | Notes |
 |------------|---------------------|-----------|-------|

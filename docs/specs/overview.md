@@ -38,8 +38,8 @@ published under `gno.land/r/gnoswap/ibc/v1/apps/zkgm`. The implementation realm
 contains the instruction dispatcher for call, token order, batch, and forward
 messages.
 
-For topology details, see [Architecture](architecture.md). The full table of
-specs lives in [docs/specs/README.md](README.md).
+For topology details, see [Architecture](architecture.md). The spec index is in
+[docs/specs/README.md](README.md).
 
 ## Light Clients
 

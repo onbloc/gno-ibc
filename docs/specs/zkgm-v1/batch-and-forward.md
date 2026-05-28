@@ -1,7 +1,7 @@
 # Batch and Forward
 
-Batches and forwards compose other ZKGM instructions. Channel-balance
-accounting that underlies token-order children lives in
+Batches and forwards compose other ZKGM instructions. Token-order
+channel-balance accounting is described in
 [Token Order](./token-order.md#channel-balance-accounting).
 
 ## Batch Instructions

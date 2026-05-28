@@ -26,7 +26,7 @@ ZKGM packet activity is observed through IBC core events such as `PacketSend`,
 Reserved ZKGM-specific forward-child event constants exist in the stateless
 ZKGM package, but the current implementation does not emit them.
 
-See [Event Catalog](../events.md) for the full event list and attributes.
+See [Event Catalog](../events.md) for the complete event list and attributes.
 
 ## Differences from Union
 

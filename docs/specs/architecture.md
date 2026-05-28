@@ -1,7 +1,9 @@
 # IBC v1 Stack Architecture
 
 This document explains how the IBC v1 core, light-client adapters, ZKGM app,
-fixtures, events, and toolchain fit together in this repository.
+fixtures, events, and toolchain fit together in this repository. Start with
+[IBC Overview](overview.md) if you want a primer on IBC concepts and vocabulary
+before reading the architecture details.
 
 It is written for contributors who need to understand the system boundaries
 before changing implementation code. Detailed behavioral rules remain in the
@@ -11,7 +13,6 @@ focused specs:
 - [ZKGM v1 App](zkgm-v1.md)
 - [Light Clients](light-clients.md)
 - [Event Catalog](events.md)
-- [Native Stdlib Overlay and Toolchain](native-stdlibs-toolchain.md)
 
 ## Realm Topology
 
@@ -325,10 +326,11 @@ described in [ZKGM v1 App](zkgm-v1.md).
 The repository pins an upstream Gno version and links a temporary local stdlib
 overlay into the cached Gno tree. The overlay provides native bindings needed by
 the current light-client and ZKGM code. It is expected to disappear once those
-packages and native registrations land upstream in Gno.
+packages and native registrations land upstream in Gno. The migration is
+tracked in [onbloc/gno-ibc#74](https://github.com/onbloc/gno-ibc/issues/74).
 
-See [Native Stdlib Overlay and Toolchain](native-stdlibs-toolchain.md) for the
-current setup path.
+See [docs/README.md](../README.md#local-development) for the setup path and
+Make targets.
 
 ## Out of Scope
 

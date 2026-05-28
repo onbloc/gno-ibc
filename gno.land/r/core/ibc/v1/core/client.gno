@@ -23,20 +23,7 @@ func assertDeployer(action string) {
 	}
 }
 
-func clientTypeOwnerPath(clientType ClientType) string {
-	switch clientType {
-	case ClientType("cometbls"):
-		return "gno.land/r/core/ibc/v1/lightclients/cometbls"
-	case ClientType("state-lens/ics23/mpt"):
-		return "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
-	}
-	return ""
-}
-
-func isScopedClientType(caller string, clientType ClientType) bool {
-	return strings.HasPrefix(string(clientType), caller+"/")
-}
-
+// CreateClient creates a light client and stores its initial client and consensus states.
 func CreateClient(cur realm, msg MsgCreateClient) ClientId {
 	impl, ok := st.clientRegistry[msg.ClientType]
 	if !ok {
@@ -56,6 +43,7 @@ func CreateClient(cur realm, msg MsgCreateClient) ClientId {
 	return clientId
 }
 
+// UpdateClient updates a light client using the provided client message and stores the resulting state.
 func UpdateClient(cur realm, msg MsgUpdateClient) Height {
 	impl := st.getClient(msg.ClientId)
 
@@ -74,13 +62,9 @@ func UpdateClient(cur realm, msg MsgUpdateClient) Height {
 
 // ForceUpdateClient updates the client and consensus states without verifying proofs.
 //
-// This method is restricted to the deployer and is intended only for recovering
-// expired or otherwise unrecoverable clients.
-//
-// ForceUpdateClient panics if the caller is not the deployer.
-//
-// ForceUpdateClient panics if the underlying light client does not implement
-// IForceLightClient.
+// It is restricted to the deployer and is intended for recovering expired or
+// otherwise unrecoverable clients. It panics if the caller is not the deployer
+// or if the light client does not implement IForceLightClient.
 func ForceUpdateClient(cur realm, msg MsgForceUpdateClient) Height {
 	assertDeployer("ForceUpdateClient")
 
@@ -107,56 +91,18 @@ func ForceUpdateClient(cur realm, msg MsgForceUpdateClient) Height {
 	return update.Height
 }
 
-// VerifyClientMembership verifies a membership proof against a registered
-// light client without committing the verified value into this realm's state.
-// State-lens light clients use this during UpdateClient to prove that an L2
-// consensus state is stored in the L1 state tracked by another client.
+// VerifyClientMembership verifies a membership proof against a registered light client.
+//
+// It does not commit the verified value into this realm's state.
 func VerifyClientMembership(_ realm, clientId ClientId, proofHeight Height, proof, path, value []byte) {
 	st.getClient(clientId).VerifyMembership(clientId, proofHeight, proof, path, value)
 }
 
-// GetClientStatus returns the current status reported by a registered light
-// client. Lens clients use this to mirror the status of the underlying L1
-// client they depend on.
-func GetClientStatus(clientId ClientId) Status {
-	if _, ok := st.clientTypes[clientId]; !ok {
-		return StatusUnknown
-	}
-	return st.getClient(clientId).GetStatus(clientId)
-}
-
-func QueryClientState(clientId ClientId) string {
-	state, ok := st.clientStates[clientId]
-	if !ok {
-		return ""
-	}
-	return hexString(state)
-}
-
-func GetClientType(clientId ClientId) string {
-	clientType, ok := st.clientTypes[clientId]
-	if !ok {
-		return ""
-	}
-	return clientType.String()
-}
-
-func QueryConsensusState(clientId ClientId, height Height) string {
-	byHeight, ok := st.consensusStates[clientId]
-	if !ok {
-		return ""
-	}
-	state, ok := byHeight[height]
-	if !ok {
-		return ""
-	}
-	return hexString(state)
-}
-
-// RegisterClient registers a light client implementation under the given client
-// type. Known production client types must be registered by their owning light
-// client realm. Other client types may only be registered under the caller
-// realm's namespace.
+// RegisterClient registers a light client implementation for clientType.
+//
+// Known production client types must be registered by their owning light client
+// realm. Other client types may only be registered under the caller realm's
+// namespace.
 func RegisterClient(cur realm, clientType ClientType, client ILightClient) {
 	caller := cur.Previous().PkgPath()
 	owner := clientTypeOwnerPath(clientType)
@@ -170,8 +116,9 @@ func RegisterClient(cur realm, clientType ClientType, client ILightClient) {
 	st.registerClient(clientType, client)
 }
 
-// RegisterClientForType registers a light client implementation for an explicit
-// client type through a privileged deployer call.
+// RegisterClientForType registers a light client implementation for clientType.
+//
+// It is restricted to the deployer.
 func RegisterClientForType(cur realm, clientType ClientType, client ILightClient) {
 	assertDeployer("register client")
 	runtime.AssertOriginCall()
@@ -182,4 +129,57 @@ func RegisterClientForType(cur realm, clientType ClientType, client ILightClient
 func HasClient(clientType ClientType) bool {
 	_, ok := st.clientRegistry[clientType]
 	return ok
+}
+
+// QueryClientState returns the stored client state as a hex string.
+func QueryClientState(clientId ClientId) string {
+	state, ok := st.clientStates[clientId]
+	if !ok {
+		return ""
+	}
+	return hexString(state)
+}
+
+// QueryConsensusState returns the consensus state at height as a hex string.
+func QueryConsensusState(clientId ClientId, height Height) string {
+	byHeight, ok := st.consensusStates[clientId]
+	if !ok {
+		return ""
+	}
+	state, ok := byHeight[height]
+	if !ok {
+		return ""
+	}
+	return hexString(state)
+}
+
+// GetClientStatus returns the current status reported by a registered light client.
+func GetClientStatus(clientId ClientId) Status {
+	if _, ok := st.clientTypes[clientId]; !ok {
+		return StatusUnknown
+	}
+	return st.getClient(clientId).GetStatus(clientId)
+}
+
+// GetClientType returns the registered client type for clientId.
+func GetClientType(clientId ClientId) string {
+	clientType, ok := st.clientTypes[clientId]
+	if !ok {
+		return ""
+	}
+	return clientType.String()
+}
+
+func clientTypeOwnerPath(clientType ClientType) string {
+	switch clientType {
+	case ClientType("cometbls"):
+		return "gno.land/r/core/ibc/v1/lightclients/cometbls"
+	case ClientType("state-lens/ics23/mpt"):
+		return "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
+	}
+	return ""
+}
+
+func isScopedClientType(caller string, clientType ClientType) bool {
+	return strings.HasPrefix(string(clientType), caller+"/")
 }

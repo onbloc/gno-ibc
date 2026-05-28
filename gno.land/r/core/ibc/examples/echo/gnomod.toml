@@ -1,0 +1,2 @@
+module = "gno.land/r/gnoswap/ibc/examples/echo"
+gno = "0.9"

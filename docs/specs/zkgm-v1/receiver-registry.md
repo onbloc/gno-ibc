@@ -34,30 +34,39 @@ type CallEnv struct {
 ```
 
 `IntentCallEnv` has the same shape with `MarketMaker` and `MarketMakerMsg` in
-place of `Relayer` and `RelayerMsg`. It is the parameter passed to
-`OnIntentZkgm` on the intent-settlement path.
+place of `Relayer` and `RelayerMsg`.
 
-## Minimal receiver example
+## Example
+
+A runnable receiver lives at
+[`gno.land/r/gnoswap/ibc/examples/echo`](../../../gno.land/r/core/ibc/examples/echo)
+(on disk under `gno.land/r/core/...`; published under the `gnoswap` namespace,
+see [Architecture](../architecture.md#realm-topology)). The interesting
+contract is:
 
 ```go
-import (
-    "std"
-    z "gno.land/p/gnoswap/ibc/zkgm"
-    "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
-)
-
-type echoReceiver struct{}
+func init(cur realm) {
+    zkgm.RegisterReceiver(cross(cur), receiver)
+}
 
 func (r *echoReceiver) OnZkgm(cur realm, env z.CallEnv) error {
-    // env.Calldata carries the bytes the source side packed into Call.ContractCalldata.
+    r.calls++
+    r.lastCalldata = append([]byte(nil), env.Calldata...)
     return nil
 }
 
 func (r *echoReceiver) OnIntentZkgm(cur realm, env z.IntentCallEnv) error {
-    return nil
-}
-
-func init() {
-    zkgm.RegisterReceiver(cross(cur), &echoReceiver{})
+    return errors.New("echo: intent settlement not implemented")
 }
 ```
+
+Run it end-to-end against an in-memory gnodev chain:
+
+```sh
+./tools/gnokey-smoke/run-echo-example.sh
+```
+
+The script boots gnodev, invokes the registered receiver with a sample
+`CallEnv` via `gnokey maketx run`, and reads back the captured state through
+`vm/qeval`. It exits 0 and prints `PASS: echo-receiver example end-to-end`
+when the receiver behaves as expected.

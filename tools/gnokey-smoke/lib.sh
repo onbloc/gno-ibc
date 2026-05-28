@@ -29,6 +29,21 @@ cleanup_smoke_env() {
 }
 
 run_smoke_node() {
+  # Optional extensions set by callers before setup_smoke_chain:
+  #   SMOKE_EXTRA_RESOLVERS=("local=/path/to/pkg" ...)
+  #   SMOKE_EXTRA_PATHS="gno.land/r/foo,gno.land/r/bar"
+  local extra_args=()
+  if [[ -n "${SMOKE_EXTRA_RESOLVERS[*]:-}" ]]; then
+    for r in "${SMOKE_EXTRA_RESOLVERS[@]}"; do
+      extra_args+=("-resolver" "$r")
+    done
+  fi
+  local paths="gno.land/r/core/ibc/v1/core,gno.land/r/core/ibc/v1/lightclients/cometbls,gno.land/r/core/ibc/v1/lightclients/statelensics23mpt,gno.land/r/gnoswap/ibc/v1/apps/zkgm,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader,gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
+  if [[ -n "${SMOKE_EXTRA_PATHS:-}" ]]; then
+    paths="$paths,$SMOKE_EXTRA_PATHS"
+  fi
+  # ${extra_args[@]+"${extra_args[@]}"} keeps bash 3.2 (macOS /bin/bash) happy
+  # under set -u when no SMOKE_EXTRA_RESOLVERS is set.
   gnodev local \
     -root "$GNO_ROOT" \
     -resolver "root=$GNO_IBC_ROOT" \
@@ -39,7 +54,8 @@ run_smoke_node() {
     -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm/v0/impl" \
     -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm/v0/loader" \
     -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm/testing/e2e" \
-    -paths "gno.land/r/core/ibc/v1/core,gno.land/r/core/ibc/v1/lightclients/cometbls,gno.land/r/core/ibc/v1/lightclients/statelensics23mpt,gno.land/r/gnoswap/ibc/v1/apps/zkgm,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader,gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e" \
+    ${extra_args[@]+"${extra_args[@]}"} \
+    -paths "$paths" \
     -no-web \
     -node-rpc-listener "$RPC_LISTENER"
 }
@@ -121,8 +137,25 @@ maketx_call() {
   echo "--- end maketx call ---"
 }
 
+require_log_line() {
+  local log="$1"
+  local pattern="$2"
+  local label="$3"
+  if ! grep -q "$pattern" "$log"; then
+    echo "FAIL: $label (pattern: $pattern)"
+    cat "$log"
+    exit 1
+  fi
+}
+
 extract_data() {
-  grep -E '^data:' | sed -E 's/^data: \("(.*)" [^)]+\)$/\1/'
+  # Unwrap gnokey's `data: (value kind)` rendering to the bare value.
+  sed -nE '/^data:/{
+    s/^data: //
+    s/^\((.*) [^()]+\)$/\1/
+    s/^"(.*)"$/\1/
+    p
+  }'
 }
 
 # native_balance <address> prints the bank balance string, e.g. "100ugnot".

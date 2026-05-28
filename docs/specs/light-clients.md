@@ -57,10 +57,25 @@ proof bytes. This rule applies to both membership and non-membership proofs.
 
 ## Registration and Guards
 
-Core registers adapters with:
+Core registers adapters with the ownership-scoped path:
 
 ```go
-func RegisterClient(_ realm, clientType ClientType, client ILightClient)
+func RegisterClient(cur realm, clientType ClientType, client ILightClient)
+```
+
+Known production client types are registered by their owning adapter realms.
+The implemented ownership map is:
+
+| Client type | Owning registration realm |
+|-------------|---------------------------|
+| `cometbls` | `gno.land/r/core/ibc/v1/lightclients/cometbls` |
+| `state-lens/ics23/mpt` | `gno.land/r/core/ibc/v1/lightclients/statelensics23mpt` |
+
+Custom client types must be scoped under the caller realm's package path. The
+deployer-only escape hatch is:
+
+```go
+func RegisterClientForType(cur realm, clientType ClientType, client ILightClient)
 ```
 
 `CreateClient` picks an adapter by `ClientType`, calls the adapter's

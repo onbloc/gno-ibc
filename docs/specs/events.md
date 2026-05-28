@@ -145,8 +145,9 @@ ack immediately.
   `destination_connection_id`, `destination_connection_client_id`,
   `market_maker_msg`
 
-The intent-receive path does not follow the normal proof and ack-write flow.
-Consumers should not infer source-chain packet commitment from this event.
+The intent-receive path does not follow the normal proof, receipt-write, or
+ack-write flow. Consumers should not infer source-chain packet commitment or
+destination receipt state from this event.
 
 ### `WriteAck`
 
@@ -270,6 +271,7 @@ corresponding state change occurred.
 | `BatchSend` | Core writes the batch commitment and per-packet in-memory commitments. |
 | `PacketSend` | Core writes the packet commitment. |
 | `PacketRecv` | Core saves the receipt and dispatches the app receive callback. |
+| `IntentPacketRecv` | Core dispatches the app intent callback without writing a receipt. |
 | `WriteAck` | Core commits the acknowledgement. |
 | `PacketAck` | Core deletes the source commitment after the app ack callback. |
 | `PacketTimeout` | Core deletes the source commitment after the app timeout callback. |

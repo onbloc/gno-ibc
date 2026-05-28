@@ -106,7 +106,8 @@ after the batch event.
 
 `BatchAcks` commits multiple async acknowledgements for packets on the same
 destination channel. It uses the same destination app ownership check as
-`WriteAcknowledgement`.
+`WriteAcknowledgement`, requires every packet to have a receipt from proven
+receive, and rejects packets that already have acknowledgements.
 
 > **`BatchAcks` writes only the aggregate batch entry under
 > `BatchReceiptsPath(batchHash)`.** It does not update per-packet receipt
@@ -182,10 +183,12 @@ Example emission:
 is `market_maker_msg` instead of `maker_msg`.
 
 `IntentPacketRecv` is the market-maker receive path. It dispatches packet
-handling without the normal proof and acknowledgement write flow.
+handling without the normal proof, receipt write, and acknowledgement write
+flow.
 
 `WriteAcknowledgement` is the async acknowledgement writer. Only the destination
-app owner for the channel can write the acknowledgement.
+app owner for the channel can write the acknowledgement. The packet must already
+have a receipt created by `PacketRecv`.
 
 Example emission:
 
@@ -244,7 +247,9 @@ Example emission:
 
 Sync acknowledgements come from `PacketRecv` when the app returns a non-async
 status. Async acknowledgements come from `WriteAcknowledgement`, including ZKGM
-forward parent resolution through `WriteForwardAck`.
+forward parent resolution through `WriteForwardAck`. Async acknowledgement
+writes for packets that were not proven-received panic with
+`ErrPacketReceiptNotFound`.
 
 `PacketAcknowledgement` verifies acknowledgement membership, deletes the source
 packet commitment, dispatches the source app acknowledgement callback, and emits
@@ -257,9 +262,10 @@ source app timeout callback, and emits `PacketTimeout`.
 `PacketTimeout` is a no-op when no source commitment exists for the packet,
 which makes retried timeout calls idempotent.
 
-Replay protection is hash-based. If two packets have the same source channel,
-destination channel, data, and timeout timestamp, they have the same packet hash
-and the second receive sees the existing receipt.
+Replay protection for proven receive is hash-based. If two packets have the
+same source channel, destination channel, data, and timeout timestamp, they have
+the same packet hash and the second proven receive sees the existing receipt.
+Proofless intent receive checks for existing receipts but does not create one.
 
 Source-side packet state:
 
@@ -280,7 +286,9 @@ stateDiagram-v2
   direction LR
   [*] --> NoReceipt
   NoReceipt --> AckWritten: PacketRecv Success/Failure
-  NoReceipt --> Receipt: PacketRecv Async or IntentPacketRecv
+  NoReceipt --> Receipt: PacketRecv Async
+  NoReceipt --> IntentHandled: IntentPacketRecv
   Receipt --> AckWritten: WriteAcknowledgement
   AckWritten --> [*]
+  IntentHandled --> [*]
 ```

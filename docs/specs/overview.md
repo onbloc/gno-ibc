@@ -197,7 +197,7 @@ flowchart LR
 
 | Phase | Representative actions | Typical actor | Resulting state | Proof check |
 |-------|------------------------|---------------|-----------------|-------------|
-| Bootstrap | `RegisterClient`, `RegisterApp` | Adapter loader realm, app loader realm | Registered client adapters and app ports | n/a |
+| Bootstrap | `RegisterClient`, `RegisterApp`, `RegisterClientForType`, `RegisterAppForPort` | Owning adapter/app realm, or deployer loader realm for explicit registration | Registered client adapters and app ports | n/a |
 | Clients | `CreateClient`, `UpdateClient` | Setup realm, operator, relayer | Light clients with counterparty consensus states | n/a |
 | Connections | `ConnectionOpenInit`, `ConnectionOpenTry`, `ConnectionOpenAck`, `ConnectionOpenConfirm` | Operator and relayer | Open connection | Counterparty connection state exists |
 | Channels | `ChannelOpenInit`, `ChannelOpenTry`, `ChannelOpenAck`, `ChannelOpenConfirm` | App realm and relayer | Open app-owned channel | Counterparty channel state exists |

@@ -60,15 +60,19 @@ Counterparty chains determine which light client and fixture path is involved:
 
 ## Registration and Bootstrap
 
-Core keeps registries for light clients and apps. Registration is package-init
-or setup-realm driven.
+Core keeps registries for light clients and apps. Registration is normally
+self-registration from the owning realm, with deployer-only paths for loaders
+that install an implementation on behalf of another realm.
 
-`RegisterClient` maps a client type to an `ILightClient` adapter. Adapter realms
-or setup realms call it before creating clients of that type.
+`RegisterClient` maps a client type to an `ILightClient` adapter. Known
+production client types must be registered by their owning light-client realm.
+Other client types must be scoped under the caller realm's package path.
+`RegisterClientForType` is the deployer-only explicit registration path.
 
-`RegisterApp` maps a port identifier to an `IApp`. The ZKGM loader registers
-the proxy package path as the app port and installs the current implementation
-pointer in the proxy.
+`RegisterApp` maps the caller realm's package path to an `IApp`. The
+deployer-only `RegisterAppForPort` path can register an explicit port id. The
+ZKGM loader uses that privileged path to register the proxy package path as the
+app port and installs the current implementation pointer in the proxy.
 
 Port identity is package-path based. Packet operations later check that the
 calling realm's package path matches the port owner recorded during channel
@@ -83,10 +87,12 @@ The ordering from an empty core state to packet flow is:
 5. Open a channel on the registered app port.
 6. Send, receive, acknowledge, or time out packets.
 
-Registration and protocol entry points are open unless a section states
-otherwise. `ForceUpdateClient` is the deployer-only exception in core. Normal
-safety comes from duplicate-registration checks, adapter proof verification,
-state-machine transitions, and package-path based packet authority.
+Protocol relay entry points are open unless a section states otherwise.
+Registration is ownership-scoped, with deployer-only explicit registration
+paths. `ForceUpdateClient` is also deployer-only. Normal safety comes from
+registration ownership checks, duplicate-registration checks, adapter proof
+verification, state-machine transitions, and package-path based packet
+authority.
 
 Key bootstrap invariants:
 
@@ -99,8 +105,9 @@ Key bootstrap invariants:
   for heights that the local client has not learned.
 - The app realm is the channel owner. User-facing app sends call
   `core.PacketSend(cross(cur), ...)` from the owning app realm.
-- Receive replay is handled by packet receipts. Ack and timeout replay is
-  bounded by the source packet commitment.
+- Proven receive replay is handled by packet receipts. Async ack writes require
+  an existing receipt. Ack and timeout replay is bounded by the source packet
+  commitment.
 
 ## State Ownership
 
@@ -153,9 +160,12 @@ proxy for persistent reads and writes.
 The stack relies on call-frame identity instead of a single global permission
 model.
 
-Core packet operations use `cur.Previous().PkgPath()` to ensure that the realm
-calling `PacketSend`, `BatchSend`, or `WriteAcknowledgement` owns the channel's
-registered port.
+Core registration and packet operations use call-frame identity. `RegisterApp`
+and ordinary `RegisterClient` bind implementations to the caller realm's
+authorized namespace. `PacketSend`, `BatchSend`, and `WriteAcknowledgement`
+check `cur.Previous().PkgPath()` against the channel's registered port owner.
+Privileged explicit registration paths and `ForceUpdateClient` require the
+core deployer and an origin call.
 
 Light-client adapters use a core-only guard for mutating methods. Core is the
 only realm expected to create clients, update clients, force-update clients, or
@@ -275,8 +285,9 @@ Later child ack or timeout handling resolves the parent by calling core `WriteAc
 ### Intent Receive
 
 `IntentPacketRecv` is the market-maker receive path. It does not verify packet
-membership proof and does not automatically write an acknowledgement. It sets
-the receipt, invokes the app intent callback, and emits `IntentPacketRecv`.
+membership proof, does not write a packet receipt, and does not automatically
+write an acknowledgement. It invokes the app intent callback and emits
+`IntentPacketRecv`.
 
 ### Acknowledgement and Timeout
 

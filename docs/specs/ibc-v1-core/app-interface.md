@@ -1,7 +1,9 @@
 # App Interface
 
-IBC applications register an implementation of `IApp` at their port id. Locally
-owned ports normally use the app realm package path bytes as the port id.
+IBC applications register an implementation of `IApp` at a port id. Ordinary
+registration binds the caller realm's package path bytes as the port id. Loader
+deployments that need an explicit port id use the deployer-only
+`RegisterAppForPort` path.
 
 `core.IApp` declares callbacks for channel handshakes (open and close), packet
 receive (`OnRecvPacket` and `OnIntentRecvPacket`), acknowledgement, and timeout
@@ -13,11 +15,12 @@ callbacks with `cross(cur)`, so the callback runs in the application realm and
 can mutate application state.
 
 An app type must satisfy the `core.IApp` interface before it can be registered
-with `RegisterApp`.
+with `RegisterApp` or `RegisterAppForPort`.
 
-Callback dispatch uses the port id registered through `RegisterApp`. Missing
-app registrations panic with `ErrPortNotFound`. For channel-owned packet paths,
-core first resolves the channel owner and then looks up the app by that port id.
+Callback dispatch uses the port id registered through `RegisterApp` or
+`RegisterAppForPort`. Missing app registrations panic with `ErrPortNotFound`.
+For channel-owned packet paths, core first resolves the channel owner and then
+looks up the app by that port id.
 
 | Callback | Core entry point | Core has already done | Core does after |
 |----------|------------------|-----------------------|-----------------|
@@ -28,7 +31,7 @@ core first resolves the channel owner and then looks up the app by that port id.
 | `OnChannelCloseInit` | `ChannelCloseInit` | Nothing. The entry point panics immediately. | Unreachable. |
 | `OnChannelCloseConfirm` | `ChannelCloseConfirm` | Nothing. The entry point panics immediately. | Unreachable. |
 | `OnRecvPacket` | `PacketRecv` | Verified the packet batch membership proof, checked the channel, timeout, and replay receipt. | Handles `RecvPacketResult`, commits sync acks when needed, and emits `PacketRecv`. |
-| `OnIntentRecvPacket` | `IntentPacketRecv` | Checked the channel, timeout, and replay receipt. | Emits `IntentPacketRecv`. |
+| `OnIntentRecvPacket` | `IntentPacketRecv` | Checked the channel, timeout, and any existing receipt. Does not write a new receipt. | Emits `IntentPacketRecv`. |
 | `OnAcknowledgementPacket` | `PacketAcknowledgement` | Verified acknowledgement membership and found an outstanding source commitment. | Deletes the source packet commitment and emits `PacketAck`. |
 | `OnTimeoutPacket` | `PacketTimeout` | Verified timeout eligibility and receipt non-membership. | Deletes the source packet commitment and emits `PacketTimeout`. |
 
@@ -58,13 +61,15 @@ Apps in other realms should construct results with
 realm crossing frame.
 
 `WriteAcknowledgement` and `BatchAcks` are the async ack writers. Both require
-the caller realm to match the destination channel owner. `WriteAcknowledgement`
-also rejects empty acknowledgements and already-written acknowledgements.
+the caller realm to match the destination channel owner and require a packet
+receipt that was created by proven receive. `WriteAcknowledgement` also rejects
+empty acknowledgements. Both paths reject packets that already have per-packet
+acknowledgements.
 
 `IntentPacketRecv` is asymmetric with normal receive. It does not verify a
 source-chain membership proof, does not return `RecvPacketResult`, and does not
-write an acknowledgement by itself. Its event uses `market_maker_msg` where
-normal receive uses `maker_msg`.
+write a receipt or acknowledgement by itself. Its event uses `market_maker_msg`
+where normal receive uses `maker_msg`.
 
 Channel close callbacks are declared only to satisfy the interface. The current
 `ChannelCloseInit` and `ChannelCloseConfirm` entry points panic before callback

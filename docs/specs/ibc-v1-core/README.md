@@ -19,14 +19,19 @@ The implementation is a Gno realm. Entry points that mutate core state take
 
 ## Registered Interfaces
 
-Light clients are registered by client type through `RegisterClient`. Core
-stores the adapter instance and delegates create, update, status, membership,
-and non-membership verification to it.
+Light clients are registered by client type through `RegisterClient` or the
+deployer-only `RegisterClientForType`. Ordinary registration is constrained to
+the owning light-client realm for known production client types, or to a client
+type scoped under the caller realm's package path for custom types. Core stores
+the adapter instance and delegates create, update, status, membership, and
+non-membership verification to it.
 
-Applications are registered by port path through `RegisterApp`. Channel and
-packet entry points use the previous realm package path as the application
-identity, so app realms must call core entry points directly rather than through
-unregistered helper realms.
+Applications self-register at the caller realm package path through
+`RegisterApp`. The deployer-only `RegisterAppForPort` path registers an
+explicit port id for loader-style deployments. Channel and packet entry points
+use the previous realm package path as the application identity, so app realms
+must call core entry points directly rather than through unregistered helper
+realms.
 
 The core-facing light-client interface contains create, update, membership
 verification, non-membership verification, timestamp, latest-height, and status

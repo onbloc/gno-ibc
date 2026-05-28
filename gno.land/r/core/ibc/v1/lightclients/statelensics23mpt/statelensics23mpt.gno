@@ -52,6 +52,10 @@ func NewAdapter(cur realm) Adapter {
 	return Adapter{}
 }
 
+func Register(cur realm) {
+	core.RegisterClient(cross(cur), ClientType, NewAdapter(cross(cur)))
+}
+
 func (Adapter) CreateClient(cur realm, clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) string {
 	mustBeCore(cur)
 

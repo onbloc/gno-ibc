@@ -9,8 +9,8 @@ It is written for contributors who need to understand the system boundaries
 before changing implementation code. Detailed behavioral rules remain in the
 focused specs:
 
-- [IBC v1 Core](ibc-v1-core.md)
-- [ZKGM v1 App](zkgm-v1.md)
+- [IBC v1 Core](ibc-v1-core/README.md)
+- [ZKGM v1 App](zkgm-v1/README.md)
 - [Light Clients](light-clients.md)
 - [Event Catalog](events.md)
 
@@ -125,7 +125,7 @@ are:
 
 Core also commits selected state into chain `params` with derived path keys.
 Counterparty light clients verify those committed values rather than the
-in-memory maps directly. Path derivation is described in [IBC v1 Core](ibc-v1-core.md).
+in-memory maps directly. Path derivation is described in [Store and Paths](ibc-v1-core/store-and-paths.md).
 
 Light-client adapters own their decoded per-client state. Core stores committed
 bytes and delegates client-specific interpretation to the adapter.
@@ -286,10 +286,10 @@ the source port owner.
 
 The focused core spec maps each proof-bearing handshake and packet entry point
 to its verified path, verified value, and local mutation. See
-[IBC v1 Core](ibc-v1-core.md#connection-and-channel-lifecycle) for that matrix.
+[Connection and Channel Lifecycle](ibc-v1-core/connection-channel-lifecycle.md) for that matrix.
 
 Channel close entry points exist but currently panic as unsupported. Close
-events are defined but not emitted. See [IBC v1 Core](ibc-v1-core.md) for the
+events are defined but not emitted. See [Queries, Events, Differences](ibc-v1-core/queries-events-differences.md) for the
 core behavior and [Event Catalog](events.md) for the event surface.
 
 ## Light-Client Adapter Contract
@@ -351,7 +351,7 @@ Two cross-chain proof directions are represented in the current tree:
 - Ethereum -> Gno through the state-lens ICS23 MPT client path.
 
 ZKGM packet bytes are Solidity ABI compatible and use the params tuple form
-described in [ZKGM v1 App](zkgm-v1.md).
+described in [ZKGM v1 App](zkgm-v1/README.md).
 
 ## Toolchain Boundary
 

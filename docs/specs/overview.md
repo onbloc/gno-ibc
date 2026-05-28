@@ -44,8 +44,8 @@ For topology details, see [Architecture](architecture.md).
 |------|-------|
 | Overview | IBC primer, vocabulary, component map, and reader path through the spec deck |
 | [Architecture](architecture.md) | System topology, actors, state ownership, authorization boundaries, and lifecycle sequences |
-| [IBC v1 Core](ibc-v1-core.md) | Clients, connections, channels, packets, acknowledgements, and core events |
-| [ZKGM v1 App](zkgm-v1.md) | ZKGM proxy, v1 implementation, instructions, SendRaw, batches, forwards, and token orders |
+| [IBC v1 Core](ibc-v1-core/README.md) | Clients, connections, channels, packets, acknowledgements, and core events |
+| [ZKGM v1 App](zkgm-v1/README.md) | ZKGM proxy, v1 implementation, instructions, SendRaw, batches, forwards, and token orders |
 | [Light Clients](light-clients.md) | v1 light-client adapter contract, CometBLS, and state-lens ICS23 MPT |
 | [Event Catalog](events.md) | IBC and ZKGM event types, attributes, stability, and encoding rules |
 
@@ -93,7 +93,7 @@ Connections are established through a four-step handshake:
 In gno-ibc, a connection stores the local client id, the counterparty client id,
 and the counterparty connection id. Channels later bind to opened connections.
 
-See [IBC v1 Core](ibc-v1-core.md) for connection entry points and state
+See [Connection and Channel Lifecycle](ibc-v1-core/connection-channel-lifecycle.md) for connection entry points and state
 commitments.
 
 ## Channels
@@ -115,7 +115,7 @@ Channels also use a four-step handshake:
 The IBC protocol defines channel close paths. The current gno-ibc channel close
 entry points panic as unsupported, and close events are defined but not emitted.
 
-See [IBC v1 Core](ibc-v1-core.md) for channel entry points, port ownership, and
+See [Connection and Channel Lifecycle](ibc-v1-core/connection-channel-lifecycle.md) for channel entry points, port ownership, and
 close behavior.
 
 ## Packets and Acknowledgements
@@ -153,7 +153,7 @@ Core also exposes batch entry points. `BatchSend` records one aggregate packet
 commitment. `BatchAcks` records one aggregate acknowledgement entry. The focused
 core spec explains the state layout and observability implications.
 
-See [IBC v1 Core](ibc-v1-core.md) for packet entry points and [Event Catalog](events.md)
+See [Packet Lifecycle](ibc-v1-core/packet-lifecycle.md) for packet entry points and [Event Catalog](events.md)
 for relayer and indexer observability.
 
 ## Applications
@@ -175,7 +175,7 @@ IBC as packet data, and have the destination implementation execute or route it
 according to the instruction family. Core only transports and authenticates the
 packet. ZKGM defines the packet payload and acknowledgement semantics.
 
-See [ZKGM v1 App](zkgm-v1.md) for the proxy, implementation, instruction
+See [ZKGM v1 App](zkgm-v1/README.md) for the proxy, implementation, instruction
 families, and packet behavior.
 
 ## Lifecycle at a Glance

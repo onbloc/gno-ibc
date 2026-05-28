@@ -22,7 +22,7 @@ Implemented v1 client types:
 
 IBC core calls adapters through `core.ILightClient`:
 
-```gno
+```go
 type ILightClient interface {
     CreateClient(_ realm, clientId ClientId, clientStateBytes, consensusStateBytes []byte) string
     UpdateClient(_ realm, clientId ClientId, clientMessage []byte) ConsensusStateUpdate
@@ -40,7 +40,7 @@ adapter's perspective.
 
 `core.IForceLightClient` is optional:
 
-```gno
+```go
 type IForceLightClient interface {
     ForceUpdateClient(cur realm, clientId ClientId, clientStateBytes, consensusStateBytes []byte) ConsensusStateUpdate
 }
@@ -67,7 +67,7 @@ proof bytes. This rule applies to both membership and non-membership proofs.
 
 Core registers adapters with:
 
-```gno
+```go
 func RegisterClient(_ realm, clientType ClientType, client ILightClient)
 ```
 
@@ -77,7 +77,7 @@ func RegisterClient(_ realm, clientType ClientType, client ILightClient)
 
 Both implemented adapters use a core-only guard on mutating methods:
 
-```gno
+```go
 func mustBeCore(cur realm) {
     if cur.Previous().PkgPath() != "gno.land/r/core/ibc/v1/core" {
         panic(...)
@@ -128,7 +128,7 @@ The CometBLS client type is `cometbls`.
 
 The adapter stores one entry per core client id:
 
-```gno
+```go
 type clientEntry struct {
     consensusStates map[cometbls.Height]cometbls.ConsensusState
     cs              cometbls.ClientState
@@ -166,7 +166,7 @@ client or missing consensus state.
 
 `ClientState` is protobuf encoded:
 
-```gno
+```go
 type ClientState struct {
     ChainID         string
     TrustingPeriod  uint64
@@ -182,7 +182,7 @@ to build the wasmd merkle path during proof verification.
 
 `ConsensusState` is Solidity ABI encoded:
 
-```gno
+```go
 type ConsensusState struct {
     Timestamp          uint64
     Root               MerkleRoot
@@ -195,7 +195,7 @@ that the next block height commits to.
 
 `Header` is Solidity ABI encoded:
 
-```gno
+```go
 type LightHeader struct {
     Height             int64
     TimeSeconds        int64
@@ -214,7 +214,7 @@ type Header struct {
 
 `Misbehaviour` is protobuf encoded and contains two headers:
 
-```gno
+```go
 type Misbehaviour struct {
     HeaderA Header
     HeaderB Header
@@ -324,7 +324,7 @@ storage proofs.
 
 The adapter stores one entry per core client id:
 
-```gno
+```go
 type clientEntry struct {
     consensusStates map[statelens.Height]statelens.ConsensusState
     cs              statelens.ClientState
@@ -335,7 +335,7 @@ type clientEntry struct {
 
 `ClientState` is Solidity ABI encoded:
 
-```gno
+```go
 type ClientState struct {
     L2ChainID         string
     L1ClientID        uint32
@@ -354,7 +354,7 @@ storage root from the raw L2 consensus state bytes.
 
 `ConsensusState` is Solidity ABI encoded:
 
-```gno
+```go
 type ConsensusState struct {
     Timestamp   uint64
     StateRoot   []byte
@@ -367,7 +367,7 @@ type ConsensusState struct {
 
 `Header` is Solidity ABI encoded:
 
-```gno
+```go
 type Header struct {
     L1Height              Height
     L2Height              Height
@@ -434,7 +434,7 @@ sequenceDiagram
 
 State-lens status mirrors the referenced L1 client:
 
-```gno
+```go
 status := core.GetClientStatus(L1ClientID)
 if status == core.StatusUnknown {
     return core.StatusFrozen

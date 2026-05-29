@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"bytes"
 	"chain"
 	"testing"
 
@@ -125,7 +126,7 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	}
 	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(5), nil, 0, 0)
 
-	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("v1-relayer")), u256.NewUint(7), order)
+	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("v1-relayer")), u256.NewUint(7), order, false)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == core.PacketStatusSuccess)
@@ -140,6 +141,85 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	origin, ok := zkgm.GetTokenOrigin(ibcDenom)
 	uassert.True(t, ok)
 	uassert.Equal(t, "21474836487", origin.ToString())
+}
+
+func TestTokenOrderIntentVoucherMarketMakerFillTransfersMakerFunds(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	maker := testAddress("v1-intent-maker")
+	receiver := testAddress("v1-intent-receiver")
+	quoteToken := "ibc/v1-intent-quote"
+	uassert.NoError(t, mintVoucher(cross(cur), quoteToken, "base", [32]byte{}, maker, u256.NewUint(30)))
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(receiver),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte(quoteToken),
+		QuoteAmount: u256.NewUint(12),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(5), nil, 0, 0)
+
+	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(maker), u256.Zero(), order, true)
+
+	uassert.NoError(t, err)
+	uassert.True(t, res.Status == core.PacketStatusSuccess)
+	assertMarketMakerAck(t, res.Ack, maker)
+	uassert.Equal(t, int64(18), VoucherBalanceOf(quoteToken, address(maker)))
+	uassert.Equal(t, int64(12), VoucherBalanceOf(quoteToken, address(receiver)))
+
+	if _, ok := zkgm.GetTokenOrigin(quoteToken); ok {
+		t.Fatal("market-maker fill must not set token origin")
+	}
+	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(core.ChannelId(5), u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.True(t, balance == nil || balance.IsZero())
+}
+
+func TestTokenOrderIntentUnknownQuoteReturnsOnlyMaker(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	order := z.TokenOrderV2{
+		Receiver:    []byte(testAddress("int-unknown-rx")),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(10),
+		QuoteToken:  []byte("ugnot"),
+		QuoteAmount: u256.NewUint(10),
+		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
+	}
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(5), nil, 0, 0)
+
+	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("v1-intent-maker")), u256.Zero(), order, true)
+
+	uassert.NoError(t, err)
+	uassert.True(t, res.Status == core.PacketStatusSuccess)
+	uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Ack))
+}
+
+func TestTokenOrderIntentInsufficientMakerBalanceReturnsOnlyMaker(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	maker := testAddress("v1-intent-poor-maker")
+	receiver := testAddress("int-poor-rx")
+	quoteToken := "ibc/v1-intent-poor"
+	uassert.NoError(t, mintVoucher(cross(cur), quoteToken, "base", [32]byte{}, maker, u256.NewUint(3)))
+	order := z.TokenOrderV2{
+		Receiver:    []byte(receiver),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(10),
+		QuoteToken:  []byte(quoteToken),
+		QuoteAmount: u256.NewUint(9),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(5), nil, 0, 0)
+
+	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(maker), u256.Zero(), order, true)
+
+	uassert.NoError(t, err)
+	uassert.True(t, res.Status == core.PacketStatusSuccess)
+	uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Ack))
+	uassert.Equal(t, int64(3), VoucherBalanceOf(quoteToken, address(maker)))
+	uassert.Equal(t, int64(0), VoucherBalanceOf(quoteToken, address(receiver)))
 }
 
 func resetTokenOrderTest(cur realm) {
@@ -159,6 +239,17 @@ func assertProtocolAck(t *testing.T, ackBytes []byte) {
 	orderAck, err := z.DecodeTokenOrderAck(ack.InnerAck)
 	uassert.NoError(t, err)
 	uassert.True(t, orderAck.FillType.Eq(fillTypeProtocol))
+}
+
+func assertMarketMakerAck(t *testing.T, ackBytes []byte, maker string) {
+	ack, err := z.DecodeAck(ackBytes)
+	uassert.NoError(t, err)
+	uassert.True(t, ack.Tag.Eq(tagAckSuccess))
+
+	orderAck, err := z.DecodeTokenOrderAck(ack.InnerAck)
+	uassert.NoError(t, err)
+	uassert.True(t, orderAck.FillType.Eq(fillTypeMarketMaker))
+	uassert.Equal(t, maker, string(orderAck.MarketMaker))
 }
 
 func marketMakerAck(marketMaker string) z.Ack {

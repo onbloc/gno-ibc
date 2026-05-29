@@ -71,19 +71,22 @@ func (v *ZkgmV1) Timeout(cur realm, packet core.Packet, relayer address) {
 	}
 }
 
-// IntentRecv handles a market-maker fast-path delivery. The new core spec
-// dispatches IntentPacketRecv without a relayer proof; impl reuses the same
-// dispatch chain with intent=true so each opcode can render an only-maker
-// outcome where appropriate. The result is dropped because the new
-// OnIntentRecvPacket callback has no return.
-func (v *ZkgmV1) IntentRecv(cur realm, packet core.Packet, marketMaker address, marketMakerMsg []byte) {
+// IntentRecv executes the market-maker fast path.
+// Only-maker outcomes revert the intent tx so proven recv can proceed.
+func (v *ZkgmV1) IntentRecv(cur realm, packet core.Packet, marketMaker address, marketMakerMsg []byte) core.RecvPacketResult {
 	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
-		panic(err.Error())
+		return errResult(cur, err)
 	}
-	if _, err := v.dispatchExecute(cur, packet, marketMaker, marketMakerMsg, zp.Path, zp.Salt, zp.Instruction, true); err != nil {
-		panic(err.Error())
+	res, err := v.dispatchExecute(cur, packet, marketMaker, marketMakerMsg, zp.Path, zp.Salt, zp.Instruction, true)
+	if err != nil {
+		return errResult(cur, err)
 	}
+	// Only-maker must roll back the intent receipt.
+	if isOnlyMakerAck(res.Ack) {
+		panic("zkgm: only maker")
+	}
+	return res
 }
 
 func (v *ZkgmV1) Send(cur realm, req zkgm.SendRequest) ([]byte, error) {

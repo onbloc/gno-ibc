@@ -56,7 +56,7 @@ func (v *ZkgmV1) dispatchExecute(cur realm, packet core.Packet, relayer address,
 		if err != nil {
 			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
-		return v.executeTokenOrderV2(cur, packet, relayer, path, order)
+		return v.executeTokenOrderV2(cur, packet, relayer, path, order, intent)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instr)
 		if err != nil {

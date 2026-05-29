@@ -16,7 +16,7 @@ type ZkgmImpl interface {
 	PostChannelCloseConfirm(cur realm, channelId core.ChannelId)
 
 	Recv(cur realm, packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult
-	IntentRecv(cur realm, packet core.Packet, marketMaker address, marketMakerMsg []byte)
+	IntentRecv(cur realm, packet core.Packet, marketMaker address, marketMakerMsg []byte) core.RecvPacketResult
 	Ack(cur realm, packet core.Packet, ack []byte, relayer address)
 	Timeout(cur realm, packet core.Packet, relayer address)
 

@@ -178,7 +178,10 @@ fmt:
 	echo "ok: formatted $$(echo "$$files" | wc -l | tr -d ' ') file(s)"
 
 test: verify-gno vendor
-	@gno test -v $(USER_GNO_PKGS)
+	@for pkg in $(USER_GNO_PKGS); do \
+		echo "==> gno test -v $$pkg"; \
+		gno test -v "$$pkg" || exit $$?; \
+	done
 
 # Coverage requires a gno toolchain that includes gnolang/gno#4241
 # (`-cover` / `-coverprofile`). Override GNO_COMMIT on the make command line

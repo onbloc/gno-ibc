@@ -2,8 +2,8 @@
 
 `gno-ibc` is a development workspace for bringing Union-compatible IBC
 components to Gno. It contains first-party Gno packages and realms for the v1
-IBC core, CometBLS and state-lens light clients, and the UCS03 ZKGM app, plus
-the native stdlib bindings and fixture generators needed to test them.
+IBC core, CometBLS and state-lens light clients, and the UCS03 ZKGM app, along
+with the fixture generators and tooling needed to test them.
 
 Use this repository to build and test Gno-side IBC behavior against Union wire
 formats, proof fixtures, and operational packet flows. It is intended for
@@ -16,8 +16,7 @@ light-client verification, and related tooling.
 |---|---|
 | `gno.land/p/core/` | First-party stateless Gno packages: ABI/RLP codecs, Ethereum MPT/storage helpers, ZKGM ABI/types, token bucket logic, and light-client primitives. |
 | `gno.land/r/core/ibc/v1/` | First-party stateful realms: v1 IBC core, light-client adapters, ZKGM proxy, implementation, loader, and test realms. |
-| `stdlibs/` | Native Gno stdlib packages and Go bindings for cryptographic operations used by IBC and light clients. |
-| `tools/` | Fixture generators, protocol-code generation, smoke-test scripts, and stdlib setup tooling. |
+| `tools/` | Fixture generators, protocol-code generation, and smoke-test scripts. |
 | `third_party/` | Sparse-checkout submodules mirrored into `gno.land/` by `make vendor`. |
 | `docs/` | Operational guides for tx-indexer queries, ZKGM packet sends, and native gas calibration. |
 
@@ -30,8 +29,9 @@ light-client verification, and related tooling.
 - Rust and Cargo are required only when refreshing ABI or ZKGM fixture vectors.
 
 The Gno binaries themselves are not supplied by the flake. Build them with
-`make install-gno` so `gno`, `gnodev`, and `gnokey` include this repository's
-native stdlibs and match the commit pinned in `.gno-version`.
+`make install-gno` so `gno`, `gnodev`, and `gnokey` match the commit pinned in
+`.gno-version`. The IBC crypto stdlibs ship in that upstream pin, so this repo
+no longer vendors them locally.
 
 ## Quick Start
 
@@ -49,7 +49,6 @@ ensure `$(go env GOPATH)/bin` is on `PATH`, then rerun `make install-gno`.
 ```bash
 make vendor                    # mirror sparse third-party packages into gno.land/
 make test                      # run first-party Gno package and realm tests
-make test-stdlibs              # run vendored stdlib Gno and Go tests
 make test-gnokey-query-smoke   # run the full gnokey smoke suite
 make refresh-abi-vectors       # regenerate Solidity ABI ground-truth vectors
 make refresh-zkgm-scenarios    # regenerate ZKGM handler scenario fixtures
@@ -73,8 +72,6 @@ gno test -v ./gno.land/p/core/ibc/zkgm
 - `make vendor` is idempotent and safe to run before tests. Mirrored
   third-party packages are generated workspace inputs; their submodule pins are
   the source of truth.
-- Native gas calibration rows live in `stdlibs/native_gas_calibration.txt` and
-  are injected into the pinned Gno checkout by `tools/setup-stdlibs.py`.
 
 For detailed agent and contribution conventions, see [AGENTS.md](AGENTS.md).
 

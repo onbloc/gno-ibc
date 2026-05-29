@@ -58,6 +58,16 @@ func TestWriteForwardAckRequiresRegisteredImpl(cur realm, t *testing.T) {
 	})
 }
 
+func TestBatchSendAllowsAllowedImplCaller(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	implPath = "gno.land/r/not-this-realm"
+	allowedImpls = []string{ProxyPkgPath()}
+
+	uassert.AbortsContains(t, cur, "not enough packets", func(cur realm) {
+		BatchSend(cur, core.NewMsgBatchSend(cross(cur), nil))
+	})
+}
+
 func TestReleaseNativeAllowsAuthorizedImplCaller(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	cacheRealm(cur)

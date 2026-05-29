@@ -81,10 +81,14 @@ func (v *ZkgmV1) verifyTokenOrderV2(cur realm, channelId core.ChannelId, sender 
 	}
 }
 
-func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer address, path *u256.Uint, order z.TokenOrderV2) (core.RecvPacketResult, error) {
+func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer address, path *u256.Uint, order z.TokenOrderV2, intent bool) (core.RecvPacketResult, error) {
+	if intent {
+		return v.marketMakerFillV2(cur, relayer, order)
+	}
 	if path == nil {
 		path = u256.Zero()
 	}
+
 	switch order.Kind {
 	case z.TOKEN_ORDER_KIND_INITIALIZE:
 		if len(order.Metadata) == 0 {
@@ -209,15 +213,45 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), errors.New("zkgm/v1: unknown token order kind")
 	}
 
-	innerAck, err := z.EncodeTokenOrderAck(z.TokenOrderAck{
-		FillType:    fillTypeProtocol,
-		MarketMaker: nil,
-	})
+	ack, err := encodeTokenOrderSuccessAck(fillTypeProtocol, nil)
 	if err != nil {
 		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 	}
 
-	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess, InnerAck: innerAck})
+	return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, ack), nil
+}
+
+func encodeTokenOrderSuccessAck(fillType *u256.Uint, marketMaker []byte) ([]byte, error) {
+	innerAck, err := z.EncodeTokenOrderAck(z.TokenOrderAck{
+		FillType:    fillType,
+		MarketMaker: marketMaker,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return z.EncodeAck(z.Ack{Tag: tagAckSuccess, InnerAck: innerAck})
+}
+
+// marketMakerFillV2 fills a token order from the market maker's voucher balance.
+// Native maker funding is unsupported, so non-voucher quotes fall back to proven recv.
+func (v *ZkgmV1) marketMakerFillV2(cur realm, relayer address, order z.TokenOrderV2) (core.RecvPacketResult, error) {
+	quoteDenom := string(order.QuoteToken)
+	vch := getVoucher(quoteDenom)
+	if vch == nil {
+		return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
+	}
+
+	n, err := amountInt64(order.QuoteAmount)
+	if err != nil {
+		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
+	}
+
+	if err := vch.ledger.Transfer(relayer, address(order.Receiver), n); err != nil {
+		return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
+	}
+
+	// The maker-funded voucher transfer is the quote-token assertion.
+	ack, err := encodeTokenOrderSuccessAck(fillTypeMarketMaker, []byte(relayer.String()))
 	if err != nil {
 		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 	}

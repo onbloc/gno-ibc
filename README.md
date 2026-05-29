@@ -80,6 +80,7 @@ For detailed agent and contribution conventions, see [AGENTS.md](AGENTS.md).
 - [Documentation index](docs/README.md)
 - [TX Indexer Guide](docs/tx-indexer.md)
 - [ZKGM Packet Send Guide](docs/zkgm-packet-send-guide.md)
+- [ZKGM Batch Call-Recv Pattern](docs/zkgm-batch-call-recv.md)
 - [IBC Native Function Gas Table](docs/ibc-native-gas.md)
 - [Tools overview](tools/README.md)
 - [Third-party mirror workflow](third_party/README.md)

@@ -1,10 +1,7 @@
 # Pinned gno toolchain.
 #
 # `make install-gno` clones the repo at the commit below and `go install`s
-# the gno, gnoland, gnodev, and gnokey binaries from it. The IBC crypto
-# stdlibs ship in the upstream toolchain (gnolang/gno#5725).
-#
-# Bump the commit to roll the upstream toolchain.
+# the gno, gnoland, gnodev, and gnokey binaries from it.
 
-GNO_REPO=https://github.com/moul/gno.git
-GNO_COMMIT=7e09b440bb23461423c1c28b1a3b474239c6be86
+GNO_REPO=https://github.com/gnolang/gno.git
+GNO_COMMIT=72aff5a95ec550be32de7bbaf7d34b212108725d

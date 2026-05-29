@@ -9,7 +9,7 @@ nix develop          # optional: pinned toolchain (Go, gofumpt, ...)
 make install-gno     # required: build gno + gnoland + gnodev + gnokey from the pinned upstream
 ```
 
-The IBC crypto stdlibs (bn254, cometbls, cometblszk, keccak256, merkle, modexp) ship in the upstream gno toolchain (gnolang/gno#5725) and are not vendored locally.
+The IBC crypto stdlibs (bn254, cometbls, cometblszk, keccak256, merkle, modexp) ship in the upstream gno toolchain (merged via gnolang/gno#5725) and are not vendored locally.
 
 ## Testing
 

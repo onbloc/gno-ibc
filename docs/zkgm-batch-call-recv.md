@@ -2,9 +2,29 @@
 
 > Related issue: [#86 — Implement Osmosis-style IBC Hook Equivalent via ZKGM Batch](https://github.com/onbloc/gno-ibc/issues/86)
 
-## Why this pattern?
+## What this pattern does
 
-Osmosis IBC Hooks enable "transfer tokens and execute a contract atomically" by embedding a JSON payload in the ICS-20 `memo` field. The receiving chain parses the memo and calls a CosmWasm contract alongside the token receipt.
+This pattern allows a sender to settle tokens and invoke application logic
+during the same ZKGM `PacketRecv`.
+
+A sender constructs a single `OP_BATCH` packet containing:
+
+```text
+Batch
+  ├── TOKEN_ORDER
+  └── CALL
+```
+
+The `TOKEN_ORDER` settles or mints tokens for the destination account. The
+`CALL` invokes a registered receiver realm with application-specific calldata.
+
+From a user perspective, this provides a "transfer and execute" workflow similar
+to Osmosis IBC Hooks, but without relying on ICS-20 memo parsing or middleware.
+
+## Why not use IBC Hooks?
+
+Osmosis IBC Hooks achieve a similar workflow by embedding application
+instructions in the ICS-20 `memo` field:
 
 ```json
 {
@@ -12,83 +32,167 @@ Osmosis IBC Hooks enable "transfer tokens and execute a contract atomically" by 
 }
 ```
 
-This works, but requires:
-- A memo-parsing middleware on the receiving chain
-- JSON encoding on the sender side
-- ICS-20 (IBC v1) only
+The receiving chain parses the memo and dispatches the embedded message to a
+contract.
 
-**ZKGM on IBC v2 supports this pattern natively.** Instead of embedding instructions in a memo field, the sender constructs an `OP_BATCH` packet with a `TOKEN_ORDER` and a `CALL` instruction side by side. No middleware or memo parsing is needed.
+While effective, that approach requires:
 
+- Memo-parsing middleware on the receiving chain
+- JSON payload construction on the sender side
+- Dependence on ICS-20 (IBC v1) transfer semantics
+
+With ZKGM, application execution is represented explicitly as a `CALL`
+instruction within the batch itself. No memo middleware is required, and the
+application payload is carried directly in the instruction operand.
+
+## Execution semantics
+
+Batch execution is sequential.
+
+```text
+TOKEN_ORDER
+    ↓
+CALL
 ```
-Batch
-  ├── TOKEN_ORDER  (mint wrapped tokens to receiver)
-  └── CALL         (invoke a registered realm with arbitrary calldata)
-```
 
-Both instructions execute atomically within a single `PacketRecv`. If either fails, the batch ack reflects the per-instruction result independently.
+Each child instruction executes in order during the same `PacketRecv`, and the
+batch acknowledgement contains one child acknowledgement per instruction.
+
+Importantly, a batch is **not an atomic transaction**.
+
+State changes produced by a successful child instruction remain committed even
+if a later child returns a failure acknowledgement. For example, a successful
+`TOKEN_ORDER` may mint or settle tokens even when a subsequent `CALL` fails.
+
+Applications should therefore not assume rollback semantics across batch
+boundaries.
+
+If a child panics, the panic is converted into `ACK_ERR_ONLY_MAKER`, and batch
+execution terminates according to the current ZKGM v0 execution rules.
 
 ---
 
 ## Implementing a Call receiver
 
-Any realm can receive ZKGM Call instructions by implementing the `Zkgmable` interface and registering itself.
+Any realm can receive ZKGM `CALL` instructions by implementing `Zkgmable` and
+registering itself with the ZKGM proxy.
+
+### Receiver lookup
+
+Receiver registration is keyed by the realm package path.
+
+For a `CALL` instruction to be dispatched successfully, `ContractAddress` must
+exactly match the registered realm path.
+
+```go
+ContractAddress: []byte("gno.land/r/myapp")
+```
+
+A mismatch between the registered path and the supplied `ContractAddress`
+causes receiver lookup to fail and the `CALL` instruction to return an error
+acknowledgement.
+
+### Receiver implementation
 
 ```go
 package myapp
 
 import (
-    z    "gno.land/p/gnoswap/ibc/zkgm"
-    zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+	"errors"
+
+	z "gno.land/p/gnoswap/ibc/zkgm"
+	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
 )
 
+var receiver = &MyReceiver{}
+
 func init(cur realm) {
-    zkgm.RegisterReceiver(cross(cur), &MyReceiver{})
+	zkgm.RegisterReceiver(cross(cur), receiver)
 }
 
 type MyReceiver struct{}
 
 // OnZkgm is called when a CALL instruction targeting this realm is received.
-// env.Sender   — original sender address on the source chain
-// env.Calldata — arbitrary bytes encoded by the sender (e.g. swap parameters)
+// env.Sender and env.Calldata are opaque bytes supplied by the sender.
 func (r *MyReceiver) OnZkgm(cur realm, env z.CallEnv) error {
-    // decode env.Calldata and act on it
-    return nil
+	// Decode env.Calldata and apply the requested action.
+	return nil
 }
 
 func (r *MyReceiver) OnIntentZkgm(cur realm, env z.IntentCallEnv) error {
-    return errors.New("not supported")
+	return errors.New("intent calls are not supported")
 }
 ```
+
+`CallEnv` also exposes the ZKGM-derived proxy account, source and destination
+channels, relayer bytes, and relayer message bytes. Treat `env.Calldata`,
+`env.Sender`, `env.Relayer`, and `env.RelayerMsg` as untrusted inputs. Clone
+reference-typed values before storing or mutating them across realm boundaries.
 
 ---
 
 ## Sending a batch
 
-The sender constructs a `Batch` with a `TOKEN_ORDER` and a `CALL` pointing at the registered receiver realm.
+The sender constructs a `Batch` with:
+
+1. A `TOKEN_ORDER` that settles or mints the token for the receiver.
+2. A `CALL` whose `ContractAddress` is the registered receiver realm path.
 
 ```go
 batch := z.Batch{Instructions: []z.Instruction{
-    // 1. Transfer tokens to the receiver
-    MustTokenOrderInstruction(z.TokenOrderV2{
-        Sender:      []byte("cosmos1sender"),
-        Receiver:    []byte(receiverAddress),
-        BaseToken:   []byte("ugnot"),
-        BaseAmount:  u256.NewUint(100),
-        QuoteToken:  []byte(wrappedDenom),
-        QuoteAmount: u256.NewUint(100),
-        Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
-        Metadata:    metaBytes,
-    }),
-    // 2. Invoke the receiver realm with action-specific calldata
-    MustCallInstruction(z.Call{
-        Sender:           []byte("cosmos1sender"),
-        ContractAddress:  []byte("gno.land/r/myapp"),
-        ContractCalldata: []byte("swap:ugnot:uosmo:minOut=50"),
-    }),
+	mustTokenOrderInstruction(z.TokenOrderV2{
+		Sender:      []byte("cosmos1sender"),
+		Receiver:    []byte(receiverAddress),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte(wrappedDenom),
+		QuoteAmount: u256.NewUint(100),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    metaBytes,
+	}),
+	mustCallInstruction(z.Call{
+		Sender:           []byte("cosmos1sender"),
+		ContractAddress:  []byte("gno.land/r/myapp"),
+		ContractCalldata: []byte("swap:ugnot:uosmo:minOut=50"),
+	}),
 }}
 ```
 
-The `ContractCalldata` is opaque bytes — the format is defined by the receiving realm. The sender and receiver agree on an encoding (plain string, ABI, protobuf, etc.).
+The helper functions encode each child operand and set the matching ZKGM
+instruction metadata:
+
+```go
+func mustTokenOrderInstruction(order z.TokenOrderV2) z.Instruction {
+	bz, err := z.EncodeTokenOrderV2(order)
+	if err != nil {
+		panic(err)
+	}
+	return z.Instruction{
+		Version: z.INSTR_VERSION_2,
+		Opcode:  z.OP_TOKEN_ORDER,
+		Operand: bz,
+	}
+}
+
+func mustCallInstruction(call z.Call) z.Instruction {
+	bz, err := z.EncodeCall(call)
+	if err != nil {
+		panic(err)
+	}
+	return z.Instruction{
+		Version: z.INSTR_VERSION_2,
+		Opcode:  z.OP_CALL,
+		Operand: bz,
+	}
+}
+```
+
+`ContractCalldata` is opaque to ZKGM. The sender and receiver must agree on an
+application encoding, such as a plain string, ABI payload, protobuf message, or
+another domain-specific byte format.
+
+Batch children are currently limited to `OP_TOKEN_ORDER` and `OP_CALL`.
+Nested `OP_BATCH` and direct `OP_FORWARD` children are rejected in v0.
 
 ---
 
@@ -96,5 +200,5 @@ The `ContractCalldata` is opaque bytes — the format is defined by the receivin
 
 | File | What it covers |
 |---|---|
-| `gno.land/r/core/ibc/v1/apps/zkgm/v0/impl/z_call_recv_test.gno` | Unit test: `executeBatch` with `TOKEN_ORDER_KIND_INITIALIZE` + `CALL`, asserts both acks succeed and balances are correct |
-| `gno.land/r/core/ibc/v1/apps/zkgm/testing/e2e/scenarios/z24_v1_recv_batch_token_order_and_call_filetest.gno` | E2E filetest: full `PacketRecv` with mock light client, both instructions succeed atomically |
+| `gno.land/r/core/ibc/v1/apps/zkgm/v0/impl/z_call_recv_test.gno` | Unit test for `executeBatch` with `TOKEN_ORDER_KIND_INITIALIZE` + `CALL`. It asserts a successful outer ack, two child acks, voucher balance changes, and receiver invocation. |
+| `gno.land/r/core/ibc/v1/apps/zkgm/testing/e2e/scenarios/z24_v1_recv_batch_token_order_and_call_filetest.gno` | E2E filetest for full `PacketRecv` with a mock light client. It verifies the voucher balance, receiver call count, captured calldata, packet receipt, and written acknowledgement. |

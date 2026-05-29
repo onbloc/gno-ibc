@@ -1,0 +1,35 @@
+name: Validate Dockerfile
+
+on:
+  pull_request:
+    paths:
+      - '.gno-version'
+      - 'Dockerfile'
+      - '.github/workflows/docker-validate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build gnoland image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Read GNO_COMMIT
+        id: gno_version
+        run: |
+          source .gno-version
+          echo "GNO_COMMIT=${GNO_COMMIT}" >> $GITHUB_OUTPUT
+
+      - name: Build Docker image
+        env:
+          GNO_COMMIT: ${{ steps.gno_version.outputs.GNO_COMMIT }}
+        run: |
+          docker build --no-cache \
+            --build-arg GNO_COMMIT=${GNO_COMMIT} \
+            -t gno-ibc-devnet:pr-${{ github.event.pull_request.number }} \
+            .

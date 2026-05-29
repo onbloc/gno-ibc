@@ -109,9 +109,8 @@ func WriteForwardAck(cur realm, parentPacket core.Packet, ack []byte) {
 
 func BatchSend(cur realm, msg core.MsgBatchSend) core.H256 {
 	cacheRealm(cur)
-	callerPath := cur.Previous().PkgPath()
-	if callerPath != implPath && !isTestingBatchSender(callerPath) {
-		panic(ufmt.Sprintf("zkgm: only registered impl (%s) can batch send, got %s", implPath, callerPath))
+	if !isTestingBatchSender(cur.Previous().PkgPath()) {
+		requireImplCaller(cur, "batch send")
 	}
 	return core.BatchSend(cross(cur), msg)
 }

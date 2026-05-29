@@ -76,6 +76,20 @@ func TestExecuteCallReceiverPanicReturnsOnlyMakerAck(cur realm, t *testing.T) {
 	uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Ack))
 }
 
+func TestIntentRecvOnlyMakerCallAborts(cur realm, t *testing.T) {
+	mock.Reset(cross(cur))
+	mock.SetPanic(cross(cur), "boom")
+	data := mustZkgmPacketBytes(batchMustCallInstruction(z.Call{
+		Sender:          []byte("sender"),
+		ContractAddress: []byte(mockReceiverPath),
+	}))
+	packet := core.NewPacket(cross(cur), core.ChannelId(7), core.ChannelId(8), data, 0, 0)
+
+	uassert.AbortsContains(t, cur, "zkgm: only maker", func(cur realm) {
+		(&ZkgmV1{}).IntentRecv(cur, packet, address("g1relayer"), nil)
+	})
+}
+
 func TestVerifyCallRejectsInvalidSender(cur realm, t *testing.T) {
 	err := (&ZkgmV1{}).verifyCall(cur, "actual", z.Call{
 		Sender: []byte("other"),

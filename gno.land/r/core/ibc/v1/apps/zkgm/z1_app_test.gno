@@ -63,8 +63,12 @@ func (d *dummyImpl) Recv(cur realm, packet core.Packet, relayer address, relayer
 	return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, []byte{0x01})
 }
 
-func (d *dummyImpl) IntentRecv(_ realm, packet core.Packet, marketMaker address, marketMakerMsg []byte) {
+func (d *dummyImpl) IntentRecv(cur realm, packet core.Packet, marketMaker address, marketMakerMsg []byte) core.RecvPacketResult {
 	d.recvCalled = true
+	if d.recvResult.Status != core.PacketStatusUnknown {
+		return d.recvResult
+	}
+	return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, []byte{0x02})
 }
 
 func (d *dummyImpl) Ack(_ realm, packet core.Packet, ack []byte, relayer address) {

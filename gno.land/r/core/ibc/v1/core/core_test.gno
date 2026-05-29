@@ -69,6 +69,7 @@ type mockApp struct {
 	ackPackets     []Packet
 	timeoutPackets []Packet
 	recvResult     RecvPacketResult
+	intentResult   RecvPacketResult
 }
 
 func (a *mockApp) OnChannelOpenInit(_ realm, _ ConnectionId, _ ChannelId, _ string, _ address) {
@@ -97,9 +98,13 @@ func (a *mockApp) OnRecvPacket(cur realm, p Packet, _ address, _ []byte) RecvPac
 	return NewRecvPacketResult(cur, PacketStatusSuccess, []byte{0x01})
 }
 
-func (a *mockApp) OnIntentRecvPacket(_ realm, p Packet, _ address, msg []byte) {
+func (a *mockApp) OnIntentRecvPacket(cur realm, p Packet, _ address, msg []byte) RecvPacketResult {
 	a.intentPackets = append(a.intentPackets, p)
 	a.intentMsgs = append(a.intentMsgs, msg)
+	if a.intentResult.Status != PacketStatusUnknown {
+		return a.intentResult
+	}
+	return NewRecvPacketResult(cur, PacketStatusSuccess, []byte{0x02})
 }
 
 func (a *mockApp) OnAcknowledgementPacket(_ realm, p Packet, _ []byte, _ address) {
@@ -1241,7 +1246,7 @@ func TestPacketRecvReceiptDupRejected(cur realm, t *testing.T) {
 	}
 }
 
-func TestIntentPacketRecvDispatchesWithoutSettingReceipt(cur realm, t *testing.T) {
+func TestIntentPacketRecvSetsReceiptAndCommitsAck(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
@@ -1260,15 +1265,18 @@ func TestIntentPacketRecvDispatchesWithoutSettingReceipt(cur realm, t *testing.T
 	if string(app.intentMsgs[0]) != "maker-msg" {
 		t.Fatalf("market maker msg: got %q", string(app.intentMsgs[0]))
 	}
-	if st.hasPacketReceipt(packet) {
-		t.Fatal("proofless IntentPacketRecv must not set packet receipt")
+	if !st.hasPacketReceipt(packet) {
+		t.Fatal("IntentPacketRecv must set packet receipt")
 	}
-	if st.hasAcknowledgement(packet) {
-		t.Fatal("IntentPacketRecv must not write an acknowledgement")
+	if !st.hasAcknowledgement(packet) {
+		t.Fatal("IntentPacketRecv must write an acknowledgement")
+	}
+	if st.acknowledgementHash(packet) != CommitAcks([][]byte{{0x02}}) {
+		t.Fatal("IntentPacketRecv must commit the intent acknowledgement")
 	}
 }
 
-func TestIntentPacketRecvDoesNotBlockProvenPacketRecv(cur realm, t *testing.T) {
+func TestIntentPacketRecvBlocksLaterProvenPacketRecv(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
@@ -1277,15 +1285,18 @@ func TestIntentPacketRecvDoesNotBlockProvenPacketRecv(cur realm, t *testing.T) {
 	IntentPacketRecv(cross(cur), MsgIntentPacketRecv{Packets: []Packet{packet}})
 	PacketRecv(cross(cur), MsgPacketRecv{Packets: []Packet{packet}})
 
-	if len(app.recvPackets) != 1 {
-		t.Fatalf("proofless intent recv must not suppress proven PacketRecv: got %d recv calls", len(app.recvPackets))
+	if len(app.recvPackets) != 0 {
+		t.Fatalf("intent recv receipt must suppress later proven PacketRecv: got %d recv calls", len(app.recvPackets))
 	}
 	if !st.hasAcknowledgement(packet) {
-		t.Fatal("proven PacketRecv must still be able to write the packet acknowledgement")
+		t.Fatal("intent PacketRecv must write the packet acknowledgement")
+	}
+	if st.acknowledgementHash(packet) != CommitAcks([][]byte{{0x02}}) {
+		t.Fatal("intent acknowledgement must remain committed")
 	}
 }
 
-func TestIntentPacketRecvDuplicateWithoutCoreReceiptReplaysIntent(cur realm, t *testing.T) {
+func TestIntentPacketRecvDuplicateSkippedByReceipt(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
 	app := st.ports[portKey(portId)].(*mockApp)
@@ -1294,8 +1305,8 @@ func TestIntentPacketRecvDuplicateWithoutCoreReceiptReplaysIntent(cur realm, t *
 	IntentPacketRecv(cross(cur), MsgIntentPacketRecv{Packets: []Packet{packet}})
 	IntentPacketRecv(cross(cur), MsgIntentPacketRecv{Packets: []Packet{packet}})
 
-	if len(app.intentPackets) != 2 {
-		t.Fatalf("proofless duplicate intent recv has no core receipt replay guard: got %d calls", len(app.intentPackets))
+	if len(app.intentPackets) != 1 {
+		t.Fatalf("duplicate intent recv must not call app again: got %d calls", len(app.intentPackets))
 	}
 }
 

@@ -115,6 +115,22 @@ func TestExecuteForwardIntentReturnsOnlyMaker(cur realm, t *testing.T) {
 	uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Ack))
 }
 
+func TestIntentRecvOnlyMakerForwardAborts(cur realm, t *testing.T) {
+	data := mustZkgmPacketBytes(z.Instruction{
+		Version: z.INSTR_VERSION_0,
+		Opcode:  z.OP_FORWARD,
+		Operand: mustForwardBytes(z.Forward{
+			Path:        forwardPath(1, 2),
+			Instruction: batchMustCallInstruction(batchCall("sender", "")),
+		}),
+	})
+	packet := core.NewPacket(cross(cur), core.ChannelId(7), core.ChannelId(8), data, 0, 0)
+
+	uassert.AbortsContains(t, cur, "zkgm: only maker", func(cur realm) {
+		(&ZkgmV1{}).IntentRecv(cur, packet, address("g1relayer"), nil)
+	})
+}
+
 func TestExecuteForwardAsyncDefersAckAndTracksChild(cur realm, t *testing.T) {
 	channelId := openForwardTestChannel(cross(cur), core.ChannelId(12))
 	parent := core.NewPacket(cross(cur), core.ChannelId(9), core.ChannelId(1), nil, 0, 0)

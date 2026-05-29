@@ -18,7 +18,10 @@ Use explicit authority boundaries:
 - Make ordinary app and client registration self-registration only.
 - Keep explicit deployer-only paths for loader-style registration.
 - Route known production client registration through the owning light client realm, using explicit client type ownership where the type does not map mechanically to a realm path.
-- Proofless intent receives do not write packet receipts.
+- Intent receives write a packet receipt, identical to proven receives. The
+  receipt is the replay guard and the source-side timeout non-membership signal
+  for both paths. This supersedes the original PR83 proofless-intent decision;
+  see `issue84_intent_recv_receipt.md`.
 - Acknowledgement writes require an existing packet receipt.
 
 ## Alternatives Considered
@@ -33,4 +36,6 @@ Making all registration deployer-only was rejected because it hides normal owner
 
 Core now separates self-registration from privileged loader registration. Apps cannot reserve foreign port ids through the ordinary path, and production client types cannot be registered by unrelated realms.
 
-Intent receive remains a proofless fast path, but only proven receive creates packet receipt evidence. Acknowledgements can only be written for packets that have been received.
+Intent receive remains a proofless fast path, but it creates the same packet
+receipt evidence and synchronous acknowledgement commitment as proven receive.
+Acknowledgements can only be written for packets that have been received.

@@ -137,6 +137,35 @@ func TestExecuteForwardAsyncDefersAckAndTracksChild(cur realm, t *testing.T) {
 	uassert.True(t, ok)
 }
 
+func TestExecuteForwardThroughCoreFrameAuthorizesCoreRealm(cur realm, t *testing.T) {
+	parentChannel := openForwardTestChannel(cross(cur), core.ChannelId(101))
+	childSource := openForwardTestChannel(cross(cur), core.ChannelId(102))
+	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), nil, []string{
+		"gno.land/r/core/ibc/v1/core",
+		"gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl",
+	}))
+
+	forward := z.Forward{
+		Path:             forwardPath(uint32(parentChannel), uint32(childSource)),
+		TimeoutTimestamp: 999,
+		Instruction:      batchMustCallInstruction(batchCall("sender", "core-frame")),
+	}
+	data := mustZkgmPacketBytes(z.Instruction{
+		Version: z.INSTR_VERSION_0,
+		Opcode:  z.OP_FORWARD,
+		Operand: mustForwardBytes(forward),
+	})
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), parentChannel, data, 0, core.Timestamp(0))
+
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, nil, core.Height(1)))
+
+	expectedChild, err := buildForwardChild(cur, packet, u256.Zero(), [32]byte{}, forward)
+	uassert.NoError(t, err)
+	_, ok := zkgm.GetInFlightPacket(zkgm.NewInFlightKey(cross(cur), core.CommitPacket(expectedChild)))
+	uassert.True(t, ok)
+	uassert.False(t, core.HasAcknowledgement(cross(cur), packet))
+}
+
 func TestAcknowledgeForwardDispatchesToInnerInstruction(cur realm, t *testing.T) {
 	err := (&ZkgmV1{}).acknowledgeForward(cur, core.NewPacket(cross(cur), 0, 0, nil, 0, 0), u256.Zero(), [32]byte{}, z.Forward{
 		Path:        forwardPath(1, 2),

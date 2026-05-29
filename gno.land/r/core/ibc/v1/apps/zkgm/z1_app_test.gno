@@ -158,7 +158,12 @@ func TestAppPausedOnlyBlocksRecv(cur realm, t *testing.T) {
 	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0, 0)
 
 	(&App{}).OnChannelOpenInit(cur, 1, 2, Version, address("g1relayer"))
-	res := (&App{}).OnRecvPacket(cur, packet, address("g1relayer"), nil)
+	uassert.AbortsContains(t, cur, "zkgm: paused", func(cur realm) {
+		(&App{}).OnRecvPacket(cur, packet, address("g1relayer"), nil)
+	})
+	uassert.AbortsContains(t, cur, "zkgm: paused", func(cur realm) {
+		(&App{}).OnIntentRecvPacket(cur, packet, address("g1maker"), nil)
+	})
 	(&App{}).OnAcknowledgementPacket(cur, packet, []byte{0x01}, address("g1relayer"))
 	(&App{}).OnTimeoutPacket(cur, packet, address("g1relayer"))
 
@@ -170,9 +175,6 @@ func TestAppPausedOnlyBlocksRecv(cur realm, t *testing.T) {
 	}
 	if !d.ackCalled || !d.timeoutCalled {
 		t.Fatal("paused must not block ack/timeout callbacks")
-	}
-	if res.Status != core.PacketStatusFailure || len(res.Ack) == 0 {
-		t.Fatal("paused recv must return failure acknowledgement")
 	}
 }
 

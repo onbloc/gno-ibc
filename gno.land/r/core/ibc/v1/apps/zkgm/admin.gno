@@ -52,9 +52,6 @@ func SetRateLimitDisabled(cur realm, disabled bool) {
 
 func mustBeAdmin() {
 	admin := core.GetAdmin()
-	if admin == "" {
-		return
-	}
 	runtime.AssertOriginCall()
 	if rtunsafe.OriginCaller() != admin {
 		panic("zkgm: admin only")

@@ -59,7 +59,7 @@ func RegisterApp(cur realm, app IApp) {
 // privileged path is for deployment/loaders that install an app on behalf of
 // another realm.
 func RegisterAppForPort(_ realm, portId []byte, app IApp) {
-	assertDeployer("register port")
+	assertAdmin("register port")
 	runtime.AssertOriginCall()
 	registerAppAtPort(portId, app)
 }

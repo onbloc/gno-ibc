@@ -1000,9 +1000,9 @@ func TestGetChannelOwnerPanicsWhenMissing(cur realm, t *testing.T) {
 
 func TestRegisterClientRejectsUnauthorizedCaller(cur realm, t *testing.T) {
 	resetState()
-	oldDeployer := deployer
-	deployer = "gno1authorized"
-	defer func() { deployer = oldDeployer }()
+	oldAdmin := adminAddressStr
+	adminAddressStr = "gno1authorized"
+	defer func() { adminAddressStr = oldAdmin }()
 
 	uassert.AbortsContains(t, cur, "caller not authorized to register client", func(cur realm) {
 		RegisterClient(cur, ClientType("cometbls"), &mockClient{})
@@ -1014,9 +1014,9 @@ func TestRegisterClientRejectsUnauthorizedCaller(cur realm, t *testing.T) {
 
 func TestRegisterAppRejectsPortSquatting(cur realm, t *testing.T) {
 	resetState()
-	oldDeployer := deployer
-	deployer = "gno1authorized"
-	defer func() { deployer = oldDeployer }()
+	oldAdmin := adminAddressStr
+	adminAddressStr = "gno1authorized"
+	defer func() { adminAddressStr = oldAdmin }()
 	portId := Bytes("gno.land/r/core/ibc/v1/apps/zkgm")
 
 	uassert.AbortsContains(t, cur, "caller not authorized to register port", func(cur realm) {
@@ -1501,7 +1501,7 @@ func (m *mockForceClient) ForceUpdateClient(cur realm, _ ClientId, csBytes, cons
 
 func TestForceUpdateClientUpdatesStateAndReturnsHeight(cur realm, t *testing.T) {
 	resetState()
-	deployer = rtunsafe.OriginCaller()
+	adminAddressStr = rtunsafe.OriginCaller().String()
 	mc := &mockForceClient{}
 	st.clientRegistry[mockType] = mc
 	clientId := CreateClient(cross(cur), MsgCreateClient{
@@ -1529,7 +1529,7 @@ func TestForceUpdateClientUpdatesStateAndReturnsHeight(cur realm, t *testing.T) 
 
 func TestForceUpdateClientPanicsWhenClientDoesNotSupportForceUpdate(cur realm, t *testing.T) {
 	resetState()
-	deployer = rtunsafe.OriginCaller()
+	adminAddressStr = rtunsafe.OriginCaller().String()
 	st.clientRegistry[mockType] = &mockClient{}
 	clientId := CreateClient(cross(cur), MsgCreateClient{
 		ClientType:          mockType,
@@ -1546,10 +1546,10 @@ func TestForceUpdateClientPanicsWhenClientDoesNotSupportForceUpdate(cur realm, t
 	})
 }
 
-func TestForceUpdateClientPanicsWhenCallerIsNotDeployer(cur realm, t *testing.T) {
+func TestForceUpdateClientPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetState()
-	deployer = "gno1authorized"
-	defer func() { deployer = "" }()
+	adminAddressStr = "gno1authorized"
+	defer func() { adminAddressStr = "" }()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
 		ForceUpdateClient(cur, MsgForceUpdateClient{

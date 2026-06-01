@@ -92,7 +92,6 @@ func resetZkgmForTest() {
 	implPath = ""
 	allowedImpls = nil
 	paused = false
-	adminAddressStr = ""
 }
 
 func TestAppChannelOpenInitVersion(cur realm, t *testing.T) {

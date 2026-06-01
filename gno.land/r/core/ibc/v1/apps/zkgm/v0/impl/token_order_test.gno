@@ -29,7 +29,7 @@ func TestTokenOrderVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm,
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 
-	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(3), sender, nil, u256.Zero(), order)
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(3), sender, newSentCoinBudget(nil), u256.Zero(), order)
 
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(37), VoucherBalanceOf(baseToken, address(sender)))
@@ -56,7 +56,7 @@ func TestTokenOrderAckMarketMakerEscrowWithVoucherRewardsMarketMaker(cur realm, 
 		QuoteAmount: amount,
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	uassert.NoError(t, (&ZkgmV1{}).verifyTokenOrderV2(cur, channelId, sender, nil, u256.Zero(), order))
+	uassert.NoError(t, (&ZkgmV1{}).verifyTokenOrderV2(cur, channelId, sender, newSentCoinBudget(nil), u256.Zero(), order))
 	uassert.Equal(t, int64(37), VoucherBalanceOf(baseToken, address(sender)))
 
 	err := (&ZkgmV1{}).acknowledgeTokenOrderV2(cur, channelId, u256.Zero(), order, marketMakerAck(marketMaker))
@@ -77,9 +77,29 @@ func TestTokenOrderVerifyNativeRequiresSentCoin(cur realm, t *testing.T) {
 		Kind:       z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
 
-	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin("ugnot", 13)), u256.Zero(), order)
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(4), string(order.Sender), newSentCoinBudget(chain.NewCoins(chain.NewCoin("ugnot", 13))), u256.Zero(), order)
 
 	uassert.NoError(t, err)
+}
+
+func TestTokenOrderVerifyUnescrowNativeRejectedBeforeBudgetConsume(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+	baseDenom := "native-unescrow"
+	zkgm.SetTokenOrigin(cross(cur), baseDenom, u256.Zero())
+	order := z.TokenOrderV2{
+		Sender:      []byte(testAddress("native-unescrow")),
+		BaseToken:   []byte(baseDenom),
+		BaseAmount:  u256.NewUint(13),
+		QuoteToken:  []byte("ugnot"),
+		QuoteAmount: u256.NewUint(13),
+		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
+	}
+	budget := newSentCoinBudget(chain.NewCoins(chain.NewCoin(baseDenom, 13)))
+
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(0), string(order.Sender), budget, u256.Zero(), order)
+
+	uassert.ErrorContains(t, err, "invalid token order unescrow")
+	uassert.False(t, budget.drained())
 }
 
 func TestTokenOrderVerifyAppliesRateLimit(cur realm, t *testing.T) {
@@ -95,10 +115,10 @@ func TestTokenOrderVerifyAppliesRateLimit(cur realm, t *testing.T) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
 
-	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin(denom, 7)), u256.Zero(), order)
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(4), string(order.Sender), newSentCoinBudget(chain.NewCoins(chain.NewCoin(denom, 7))), u256.Zero(), order)
 	uassert.NoError(t, err)
 
-	err = (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(4), string(order.Sender), chain.NewCoins(chain.NewCoin(denom, 7)), u256.Zero(), order)
+	err = (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(4), string(order.Sender), newSentCoinBudget(chain.NewCoins(chain.NewCoin(denom, 7))), u256.Zero(), order)
 	uassert.ErrorContains(t, err, "token bucket rate limit exceeded")
 
 	zkgm.RemoveTokenBucket(cross(cur), denom)

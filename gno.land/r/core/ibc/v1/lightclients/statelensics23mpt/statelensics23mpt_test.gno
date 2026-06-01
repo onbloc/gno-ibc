@@ -154,7 +154,11 @@ func TestUpdateClientVerifiesL2ConsensusStateOnL1(cur realm, t *testing.T) {
 	if err != nil {
 		t.Fatalf("EncodeConsensusState initial: %v", err)
 	}
-	lensClientId := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), ClientType, statelensp.EncodeClientState(cs), initialBytes))
+	csBytes, err := statelensp.EncodeClientState(cs)
+	if err != nil {
+		t.Fatalf("EncodeClientState: %v", err)
+	}
+	lensClientId := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), ClientType, csBytes, initialBytes))
 
 	l2Consensus := makeConsensusBytes(12345, bytes.Repeat([]byte{0xaa}, 32), bytes.Repeat([]byte{0xbb}, 32))
 	header := statelensp.Header{
@@ -172,7 +176,11 @@ func TestUpdateClientVerifiesL2ConsensusStateOnL1(cur realm, t *testing.T) {
 	wantKey = wantPath[:]
 	wantValue = wantValueHash[:]
 
-	height := core.UpdateClient(cross(cur), core.NewMsgUpdateClient(cross(cur), lensClientId, statelensp.EncodeHeader(header)))
+	headerBytes, err := statelensp.EncodeHeader(header)
+	if err != nil {
+		t.Fatalf("EncodeHeader: %v", err)
+	}
+	height := core.UpdateClient(cross(cur), core.NewMsgUpdateClient(cross(cur), lensClientId, headerBytes))
 
 	if height != core.Height(header.L2Height) {
 		t.Fatalf("update height: got %d want %d", height, header.L2Height)
@@ -440,7 +448,11 @@ func setupStateLensOpenChannel(cur realm, t *testing.T) stateLensFlow {
 	if err != nil {
 		t.Fatalf("EncodeConsensusState: %v", err)
 	}
-	lensClientId := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), ClientType, statelensp.EncodeClientState(cs), consBytes))
+	csBytes, err := statelensp.EncodeClientState(cs)
+	if err != nil {
+		t.Fatalf("EncodeClientState: %v", err)
+	}
+	lensClientId := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), ClientType, csBytes, consBytes))
 
 	connInit := core.NewConnection(cross(cur), core.ConnectionStateInit, counterpartyClientId, lensClientId, 0)
 	connInitKey := core.ConnectionPath(counterpartyConnectionId)
@@ -519,7 +531,11 @@ func updateLensRootForPathValue(cur realm, t *testing.T, lensClientId core.Clien
 	wantProof = header.L2ConsensusStateProof
 	wantKey = wantPath[:]
 	wantValue = wantValueHash[:]
-	core.UpdateClient(cross(cur), core.NewMsgUpdateClient(cross(cur), lensClientId, statelensp.EncodeHeader(header)))
+	headerBytes, err := statelensp.EncodeHeader(header)
+	if err != nil {
+		t.Fatalf("EncodeHeader: %v", err)
+	}
+	core.UpdateClient(cross(cur), core.NewMsgUpdateClient(cross(cur), lensClientId, headerBytes))
 	return root, proof
 }
 

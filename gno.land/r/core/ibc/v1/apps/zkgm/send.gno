@@ -64,6 +64,7 @@ func SendRaw(cur realm, channelId uint32, timeoutTimestamp uint64, saltHex strin
 }
 
 func sendPacket(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, salt [32]byte, instruction z.Instruction, sender string, sentCoins string) core.Packet {
+	assertNonZeroTimeout(timeoutTimestamp)
 	if paused {
 		panic("zkgm: paused")
 	}
@@ -77,6 +78,12 @@ func sendPacket(cur realm, channelId core.ChannelId, timeoutTimestamp core.Times
 	}
 
 	return core.PacketSend(cross(cur), channelId, 0, timeoutTimestamp, data)
+}
+
+func assertNonZeroTimeout(timeoutTimestamp core.Timestamp) {
+	if timeoutTimestamp == 0 {
+		panic("zkgm: timeout timestamp must be non-zero")
+	}
 }
 
 func mustDecodeHexArg(name string, s string) []byte {

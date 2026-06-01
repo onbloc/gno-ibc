@@ -14,7 +14,8 @@ func TestRecvForwardExecuteErrorReturnsFailure(cur realm, t *testing.T) {
 		Version: z.INSTR_VERSION_0,
 		Opcode:  z.OP_FORWARD,
 		Operand: mustForwardBytes(z.Forward{
-			Path: u256.Zero(),
+			Path:             u256.Zero(),
+			TimeoutTimestamp: 1,
 			Instruction: z.Instruction{
 				Version: z.INSTR_VERSION_0,
 				Opcode:  z.OP_CALL,

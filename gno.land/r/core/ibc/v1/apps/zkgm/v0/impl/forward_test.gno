@@ -80,6 +80,25 @@ func TestBuildForwardChildPacket(cur realm, t *testing.T) {
 	uassert.Equal(t, z.OP_CALL, packet.Instruction.Opcode)
 }
 
+func TestBuildForwardChildRejectsZeroTimeout(cur realm, t *testing.T) {
+	nextSource := openForwardTestChannel(cross(cur), core.ChannelId(99))
+	parent := core.NewPacket(cross(cur), core.ChannelId(0), core.ChannelId(1), nil, 0, 0)
+
+	child, err := buildForwardChild(cur, parent, u256.NewUint(9), [32]byte{0xA}, z.Forward{
+		Path:             forwardPath(1, uint32(nextSource)),
+		TimeoutTimestamp: 0,
+		Instruction:      batchMustCallInstruction(batchCall("sender", "call")),
+	})
+
+	uassert.Error(t, err)
+	uassert.True(t, err == errForwardZeroTimeout)
+	uassert.Equal(t, uint32(0), uint32(child.SourceChannelId))
+	uassert.Equal(t, uint32(0), uint32(child.DestinationChannelId))
+	uassert.True(t, len(child.Data) == 0)
+	uassert.True(t, child.TimeoutHeight == core.Height(0))
+	uassert.True(t, child.TimeoutTimestamp == core.Timestamp(0))
+}
+
 func TestBuildForwardNestedRebuildsContinuation(cur realm, t *testing.T) {
 	nextSource := openForwardTestChannel(cross(cur), core.ChannelId(99))
 	parent := core.NewPacket(cross(cur), core.ChannelId(0), core.ChannelId(1), nil, 0, 0)
@@ -151,6 +170,26 @@ func TestExecuteForwardAsyncDefersAckAndTracksChild(cur realm, t *testing.T) {
 	uassert.NoError(t, err)
 	_, ok := zkgm.GetInFlightPacket(zkgm.NewInFlightKey(cross(cur), core.CommitPacket(expectedChild)))
 	uassert.True(t, ok)
+}
+
+func TestExecuteForwardZeroTimeoutFailsCleanly(cur realm, t *testing.T) {
+	channelId := openForwardTestChannel(cross(cur), core.ChannelId(12))
+	parent := core.NewPacket(cross(cur), core.ChannelId(9), core.ChannelId(1), nil, 0, 0)
+	forward := z.Forward{
+		Path:             forwardPath(1, uint32(channelId)),
+		TimeoutTimestamp: 0,
+		Instruction:      batchMustCallInstruction(batchCall("sender", "async")),
+	}
+
+	res, err := (&ZkgmV1{}).executeForward(cur, parent, u256.NewUint(5), [32]byte{0xC}, forward, false)
+
+	uassert.Error(t, err)
+	uassert.True(t, err == errForwardZeroTimeout)
+	uassert.True(t, res.Status == core.PacketStatusUnknown)
+	child := core.NewPacket(cross(cur), core.ChannelId(channelId), core.ChannelId(12), nil, 0, 0)
+	_, ok := zkgm.GetInFlightPacket(zkgm.NewInFlightKey(cross(cur), core.CommitPacket(child)))
+	uassert.False(t, ok)
+	uassert.False(t, core.HasPacketCommitment(cross(cur), child))
 }
 
 func TestExecuteForwardThroughCoreFrameAuthorizesCoreRealm(cur realm, t *testing.T) {

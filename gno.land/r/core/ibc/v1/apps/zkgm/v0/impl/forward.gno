@@ -16,6 +16,7 @@ var (
 	errForwardMissingPrevDest    = errors.New("zkgm/v1: forward missing previous destination channel")
 	errForwardMissingNextSource  = errors.New("zkgm/v1: forward missing next source channel")
 	errForwardPrevDestMismatch   = errors.New("zkgm/v1: forward previous-destination mismatch")
+	errForwardZeroTimeout        = errors.New("zkgm/v1: forward timeout timestamp must be non-zero")
 )
 
 func (v *ZkgmV1) verifyForward(cur realm, channelId core.ChannelId, sender string, sent chain.Coins, path *u256.Uint, salt [32]byte, forward z.Forward) error {
@@ -62,6 +63,10 @@ func (v *ZkgmV1) timeoutForward(cur realm, packet core.Packet, path *u256.Uint, 
 }
 
 func buildForwardChild(cur realm, packet core.Packet, path *u256.Uint, parentSalt [32]byte, forward z.Forward) (core.Packet, error) {
+	if forward.TimeoutTimestamp == 0 {
+		return core.NewPacket(cross(cur), 0, 0, nil, 0, 0), errForwardZeroTimeout
+	}
+
 	tailPath, prevDestChannel := z.DequeueChannelFromPath(forward.Path)
 	if prevDestChannel == 0 {
 		return core.NewPacket(cross(cur), 0, 0, nil, 0, 0), errForwardMissingPrevDest

@@ -50,8 +50,11 @@ func (d *decoder) tupleAt(fields []Field, start, end, depth int) ([]any, error) 
 			if err != nil {
 				return nil, err
 			}
+			if offset > uint64(end-start) || offset%wordSize != 0 {
+				return nil, ErrInvalidData
+			}
 			pos := start + int(offset)
-			if pos < start || pos > end || offset%wordSize != 0 {
+			if pos < start || pos > end {
 				return nil, ErrInvalidData
 			}
 			out[i], err = d.valueAt(field, pos, end, depth)

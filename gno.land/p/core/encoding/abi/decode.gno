@@ -223,9 +223,10 @@ func (d *decoder) bytesAt(pos, end int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	padded := int(roundUp32(length))
 	start := pos + wordSize
-	if start+padded > end || uint64(padded) < length {
+	remaining := uint64(end - start)
+	padded := roundUp32(length)
+	if padded < length || length > remaining || padded > remaining {
 		return nil, ErrInvalidData
 	}
 	out := make([]byte, int(length))

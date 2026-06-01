@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"chain"
 	"errors"
 	"strings"
 
@@ -19,7 +18,7 @@ var (
 	errInvalidUnescrow  = errors.New("zkgm/v1: invalid token order unescrow")
 )
 
-func (v *ZkgmV1) verifyTokenOrderV2(cur realm, channelId core.ChannelId, sender string, sent chain.Coins, path *u256.Uint, order z.TokenOrderV2) error {
+func (v *ZkgmV1) verifyTokenOrderV2(cur realm, channelId core.ChannelId, sender string, budget *sentCoinBudget, path *u256.Uint, order z.TokenOrderV2) error {
 	if path == nil {
 		path = u256.Zero()
 	}
@@ -34,7 +33,7 @@ func (v *ZkgmV1) verifyTokenOrderV2(cur realm, channelId core.ChannelId, sender 
 			if err := burnVoucher(cross(cur), baseDenom, sender, order.BaseAmount); err != nil {
 				return err
 			}
-		} else if err := requireSentCoin(sent, baseDenom, order.BaseAmount); err != nil {
+		} else if err := budget.consume(baseDenom, order.BaseAmount); err != nil {
 			return err
 		}
 
@@ -73,7 +72,7 @@ func (v *ZkgmV1) verifyTokenOrderV2(cur realm, channelId core.ChannelId, sender 
 		if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
 			return burnVoucher(cross(cur), baseDenom, sender, order.BaseAmount)
 		}
-		return requireSentCoin(sent, baseDenom, order.BaseAmount)
+		return budget.consume(baseDenom, order.BaseAmount)
 	case z.TOKEN_ORDER_KIND_SOLVE:
 		return errors.New("zkgm/v1: solve token order not implemented")
 	default:

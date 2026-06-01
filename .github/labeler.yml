@@ -22,6 +22,8 @@ A-zkgm:
   - changed-files:
       - any-glob-to-any-file:
           - 'gno.land/p/core/ibc/zkgm/**'
+          - 'gno.land/p/onbloc/ibc/zkgm/**'
+          - 'gno.land/r/core/ibc/**/apps/zkgm/**'
           - 'tools/zkgm-fixtures/**'
 
 A-encoding:

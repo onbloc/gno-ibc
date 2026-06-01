@@ -35,12 +35,44 @@ func parseCoins(s string) chain.Coins {
 	return chain.NewCoins(coins...)
 }
 
-func requireSentCoin(sent chain.Coins, denom string, amount *u256.Uint) error {
+type sentCoinBudget struct {
+	coins []chain.Coin
+}
+
+func newSentCoinBudget(sent chain.Coins) *sentCoinBudget {
+	b := &sentCoinBudget{coins: make([]chain.Coin, len(sent))}
+	copy(b.coins, sent)
+	return b
+}
+
+func (b *sentCoinBudget) consume(denom string, amount *u256.Uint) error {
 	want, err := amountInt64(amount)
 	if err != nil {
 		return err
 	}
-	if len(sent) != 1 || sent[0].Denom != denom || sent[0].Amount != want {
+	for i := range b.coins {
+		if b.coins[i].Denom == denom {
+			if b.coins[i].Amount < want {
+				return errCoinMismatch
+			}
+			b.coins[i].Amount -= want
+			return nil
+		}
+	}
+	return errCoinMismatch
+}
+
+func (b *sentCoinBudget) drained() bool {
+	for i := range b.coins {
+		if b.coins[i].Amount != 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func (b *sentCoinBudget) assertDrained() error {
+	if !b.drained() {
 		return errCoinMismatch
 	}
 	return nil

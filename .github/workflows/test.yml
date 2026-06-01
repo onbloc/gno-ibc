@@ -9,9 +9,6 @@ on:
       - '.gno-version'
       - 'gnowork.toml'
       - 'Makefile'
-      - 'stdlibs/**'
-      - 'tools/setup-stdlibs.py'
-      - 'tools/test_setup_stdlibs.py'
       - 'flake.nix'
       - 'flake.lock'
       - '.github/actions/setup-gno/**'
@@ -32,14 +29,9 @@ jobs:
 
       - name: Setup gno
         uses: ./.github/actions/setup-gno
-        with:
-          pre-install-command: python3 -m pytest tools/test_setup_stdlibs.py -v
 
       - name: Verify gno binary
         run: make verify-gno
 
       - name: Run tests
         run: make test
-
-      - name: Run vendored stdlib tests
-        run: make test-stdlibs

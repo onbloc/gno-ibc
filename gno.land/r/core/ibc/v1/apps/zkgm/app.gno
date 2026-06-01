@@ -48,7 +48,7 @@ func (a *App) OnChannelCloseConfirm(cur realm, channelId core.ChannelId, relayer
 
 func (a *App) OnRecvPacket(cur realm, packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
 	if paused {
-		return errAck(cur, errors.New("zkgm: paused"))
+		panic("zkgm: paused")
 	}
 	if impl == nil {
 		return errAck(cur, errors.New("zkgm: impl not set"))
@@ -56,14 +56,14 @@ func (a *App) OnRecvPacket(cur realm, packet core.Packet, relayer address, relay
 	return impl.Recv(cross(cur), packet, relayer, relayerMsg)
 }
 
-func (a *App) OnIntentRecvPacket(cur realm, packet core.Packet, marketMaker address, marketMakerMsg []byte) {
+func (a *App) OnIntentRecvPacket(cur realm, packet core.Packet, marketMaker address, marketMakerMsg []byte) core.RecvPacketResult {
 	if paused {
 		panic("zkgm: paused")
 	}
 	if impl == nil {
-		panic("zkgm: impl not set")
+		return errAck(cur, errors.New("zkgm: impl not set"))
 	}
-	impl.IntentRecv(cross(cur), packet, marketMaker, marketMakerMsg)
+	return impl.IntentRecv(cross(cur), packet, marketMaker, marketMakerMsg)
 }
 
 func (a *App) OnAcknowledgementPacket(cur realm, packet core.Packet, ack []byte, relayer address) {

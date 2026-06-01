@@ -1,12 +1,7 @@
 # Pinned gno toolchain.
 #
-# `make install-gno` clones gnolang/gno at the commit below, then symlinks
-# every package under stdlibs/ into <cache>/gnovm/stdlibs/<module>/, runs
-# `go generate` to regenerate the native-binding dispatch table, and
-# `go install`s the resulting binary. See tools/setup-stdlibs.py.
-#
-# Bump the commit to roll the upstream toolchain. Stdlib sources live in
-# this repo under stdlibs/.
+# `make install-gno` clones the repo at the commit below and `go install`s
+# the gno, gnoland, gnodev, and gnokey binaries from it.
 
 GNO_REPO=https://github.com/gnolang/gno.git
-GNO_COMMIT=8ac234874523713913b4d8160612e655129f7cf3
+GNO_COMMIT=72aff5a95ec550be32de7bbaf7d34b212108725d

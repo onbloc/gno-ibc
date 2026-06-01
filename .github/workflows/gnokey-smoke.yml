@@ -9,8 +9,6 @@ on:
       - '.gno-version'
       - 'gnowork.toml'
       - 'Makefile'
-      - 'stdlibs/**'
-      - 'tools/setup-stdlibs.py'
       - 'tools/gnokey-query-smoke.sh'
       - 'tools/gnokey-smoke/**'
       - 'flake.nix'

@@ -1,9 +1,9 @@
 # gno-ibc Makefile.
 #
-# `make install-gno` runs tools/setup-stdlibs.py, which clones the pinned gno
-# repo into a per-user cache, symlinks every package under stdlibs/ into
-# <cache>/gnovm/stdlibs/<module>/, regenerates the native-binding dispatch
-# table (`go generate`), and installs the resulting `gno`, `gnodev`, and `gnokey` binaries.
+# `make install-gno` clones the pinned gno toolchain into a per-user cache
+# and installs `gno`, `gnoland`, `gnodev`, and `gnokey` from it. The IBC
+# crypto stdlibs (bn254, cometbls, cometblszk, keccak256, merkle, modexp)
+# ship in the upstream pin, so this repo no longer vendors them locally.
 #
 # Bump GNO_COMMIT in .gno-version to roll the upstream toolchain.
 
@@ -14,8 +14,8 @@ include .gno-version
 SHELL       := /bin/bash
 .SHELLFLAGS := -o pipefail -c
 
-# Exported so `make install-gno GNO_COMMIT=...` propagates the override into
-# tools/setup-stdlibs.py, which otherwise reads .gno-version directly.
+# Exported so `make install-gno GNO_COMMIT=...` overrides the pin from the
+# command line without editing .gno-version.
 export GNO_COMMIT GNO_REPO
 
 GNO_CACHE  := $(HOME)/.cache/gno-ibc/gno
@@ -87,30 +87,24 @@ vendor-flags = $(if $(filter undefined,$(origin FLAGS_$(subst /,_,$(1)))),$(STD_
 # rsync only auto-creates the leaf dest dir, so mkdir -p covers intermediates.
 vendor-cmd = mkdir -p $(dir gno.land/$(2)) && rsync $(RSYNC_BASE) $(call vendor-flags,$(2)) $(1)/$(2)/ gno.land/$(2)/
 
-.PHONY: help install-gno link-stdlibs verify-gno vendor fmt test test-cover test-stdlibs test-smoke test-gnokey-query-smoke test-gnokey-qeval-smoke test-zkgm-native-refund-smoke clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios derive-sender-salt-vectors generate generate-check
+.PHONY: help install-gno verify-gno vendor fmt test test-cover test-smoke test-gnokey-query-smoke test-gnokey-qeval-smoke test-zkgm-native-refund-smoke clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios derive-sender-salt-vectors generate generate-check
 
 PROTOGEN_PKGS := gno.land/p/core/ibc/lightclients/cometbls
 
 COVERAGE_DIR := coverage
 
-# Vendored stdlib import paths, derived from stdlibs/<path>/gnomod.toml presence.
-STDLIB_PKGS   := $(patsubst stdlibs/%/gnomod.toml,%,$(wildcard stdlibs/*/*/gnomod.toml))
-# Subset that ships a Go-side native binding (vs pure-gno). Detected via .go presence.
-STDLIB_NATIVE := $(foreach p,$(STDLIB_PKGS),$(if $(wildcard stdlibs/$(p)/*.go),$(p)))
 # First-party gno packages. Third-party mirrors under gno.land/p/{aib,gnoswap,nt,onbloc}
 # and gno.land/r/aib are dependency inputs only, so local and CI tests skip them.
 USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/core gno.land/r/core -name gnomod.toml | sort))
 
 help:
 	@echo "Targets:"
-	@echo "  install-gno           — vendor stdlibs/, regenerate, build+install gno + gnodev + gnokey"
-	@echo "  link-stdlibs          — refresh stdlib symlinks only (no rebuild)"
+	@echo "  install-gno           — clone pinned gno and install gno + gnoland + gnodev + gnokey"
 	@echo "  verify-gno            — assert the gno binary is on PATH"
 	@echo "  vendor                — mirror sparse third_party package sub-paths into gno.land/"
 	@echo "  fmt                   — gofumpt -w on uncommitted .go/.gno files (modified, staged, untracked)"
 	@echo "  test                  — verify-gno + vendor, then run first-party gno tests"
 	@echo "  test-cover            — same as test, plus -cover (needs gno PR #4241; override GNO_COMMIT)"
-	@echo "  test-stdlibs          — run the vendored stdlib's own .gno and .go tests"
 	@echo "  test-smoke            — run only the env-prep smoke tests"
 	@echo "  test-gnokey-query-smoke — run the full gnokey smoke suite"
 	@echo "  test-gnokey-qeval-smoke — run only the gnokey maketx/qeval core smoke suite"
@@ -124,15 +118,23 @@ help:
 	@echo
 	@echo "Pinned: $(GNO_REPO)@$(GNO_SHORT)  (.gno-version)"
 
+# Clean the cached checkout before switching pins because older setup flows
+# left local stdlib symlink files under paths now tracked by upstream gno.
 install-gno:
-	@python3 tools/setup-stdlibs.py
-
-# Refresh stdlib symlinks under the cached gno checkout without rebuilding
-# the binary. Used in CI when the binary cache hits but .gno files in
-# stdlibs/ may have been added/removed (edits to existing files are picked
-# up automatically since symlinks resolve to the working-tree path).
-link-stdlibs:
-	@python3 tools/setup-stdlibs.py --link-only
+	@if [ ! -d $(GNO_CACHE)/.git ]; then \
+		mkdir -p $(dir $(GNO_CACHE)); \
+		echo ">> cloning $(GNO_REPO) into $(GNO_CACHE)"; \
+		git clone --quiet --filter=blob:none $(GNO_REPO) $(GNO_CACHE); \
+	fi
+	@cd $(GNO_CACHE) && \
+		git cat-file -e $(GNO_COMMIT)^{commit} 2>/dev/null || git fetch --quiet origin; \
+		git reset --quiet --hard; \
+		git clean --quiet -ffdx; \
+		git checkout --quiet $(GNO_COMMIT)
+	@echo ">> installing gno @ $(GNO_SHORT)"
+	@$(MAKE) -C $(GNO_CACHE)/gnovm install
+	@$(MAKE) -C $(GNO_CACHE)/gno.land install.gnoland install.gnokey
+	@$(MAKE) -C $(GNO_CACHE) install.gnodev
 
 # Initialise/update the third_party submodules, ensure sparse-checkout is set,
 # and rsync the relevant subdirectories into the gno.land workspace paths.
@@ -156,7 +158,7 @@ verify-gno:
 	@gno version 2>&1 | grep -q $(GNO_SHORT) || { \
 		gno version; \
 		echo "ERROR: 'gno' on PATH does not match pinned commit $(GNO_SHORT)."; \
-		echo "       Run 'make install-gno' to rebuild against the current pin + stdlibs/."; \
+		echo "       Run 'make install-gno' to rebuild against the current pin."; \
 		exit 1; }
 	@echo "ok: gno binary matches pinned commit $(GNO_SHORT)"
 
@@ -176,7 +178,10 @@ fmt:
 	echo "ok: formatted $$(echo "$$files" | wc -l | tr -d ' ') file(s)"
 
 test: verify-gno vendor
-	@gno test -v $(USER_GNO_PKGS)
+	@for pkg in $(USER_GNO_PKGS); do \
+		echo "==> gno test -v $$pkg"; \
+		gno test -v "$$pkg" || exit $$?; \
+	done
 
 # Coverage requires a gno toolchain that includes gnolang/gno#4241
 # (`-cover` / `-coverprofile`). Override GNO_COMMIT on the make command line
@@ -187,17 +192,6 @@ test-cover: verify-gno vendor
 	@mkdir -p $(COVERAGE_DIR)
 	@gno test -cover -coverprofile=$(COVERAGE_DIR)/profile.txt -v $(USER_GNO_PKGS) 2>&1 \
 		| tee $(COVERAGE_DIR)/output.log
-
-# Stdlib sources live under stdlibs/ but their gnomod.toml declares stdlib
-# paths, so `gno test ./stdlibs/...` would reject them as user mempackages.
-# Test them by import path (gno) and via the cache (go).
-test-stdlibs: verify-gno
-	@for pkg in $(STDLIB_PKGS); do \
-		echo ">> gno test $$pkg"; \
-		gno test -v $$pkg || exit 1; \
-	done
-	@echo ">> go test (native bindings)"
-	@cd $(GNO_CACHE)/gnovm && go test $(addprefix ./stdlibs/,$(STDLIB_NATIVE))
 
 test-smoke: verify-gno
 	@gno test ./gno.land/p/core/_smoke/ -v

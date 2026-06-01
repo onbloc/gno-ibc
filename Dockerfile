@@ -1,5 +1,5 @@
 # Stage 1: Build gnoland binary
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-alpine AS builder
 
 ARG GNO_COMMIT=e16676eec5f75ab563d4ade83e17d4a96ea04aee
 

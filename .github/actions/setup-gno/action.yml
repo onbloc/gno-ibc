@@ -1,12 +1,6 @@
 name: Setup gno
 description: Install the CI shell, cache gno tooling, and prepare the pinned gno toolchain.
 
-inputs:
-  pre-install-command:
-    description: Optional command to run after the CI shell is ready and before installing gno.
-    required: false
-    default: ''
-
 runs:
   using: composite
   steps:
@@ -22,11 +16,6 @@ runs:
         nix print-dev-env .#ci > "$RUNNER_TEMP/ci-env.sh"
         echo "BASH_ENV=$RUNNER_TEMP/ci-env.sh" >> "$GITHUB_ENV"
 
-    - name: Run pre-install command
-      if: ${{ inputs.pre-install-command != '' }}
-      shell: bash
-      run: ${{ inputs.pre-install-command }}
-
     - name: Cache gno binary
       id: gno-cache
       uses: actions/cache@v4
@@ -36,7 +25,7 @@ runs:
           ~/go/bin/gnodev
           ~/go/bin/gnokey
           ~/.cache/gno-ibc/gno
-        key: gno-${{ runner.os }}-${{ hashFiles('.gno-version', 'stdlibs/**/*.go', 'stdlibs/**/gnomod.toml', 'stdlibs/go.mod', 'stdlibs/go.sum', 'tools/setup-stdlibs.py') }}
+        key: gno-${{ runner.os }}-${{ hashFiles('.gno-version') }}
         restore-keys: |
           gno-${{ runner.os }}-
 
@@ -46,7 +35,7 @@ runs:
         path: |
           ~/.cache/go-build
           ~/go/pkg/mod
-        key: gobuild-${{ runner.os }}-${{ hashFiles('.gno-version', 'stdlibs/go.sum', 'flake.lock') }}
+        key: gobuild-${{ runner.os }}-${{ hashFiles('.gno-version', 'flake.lock') }}
         restore-keys: |
           gobuild-${{ runner.os }}-
 
@@ -54,8 +43,3 @@ runs:
       if: ${{ steps.gno-cache.outputs.cache-hit != 'true' }}
       shell: bash
       run: make install-gno
-
-    - name: Refresh stdlib symlinks
-      if: ${{ steps.gno-cache.outputs.cache-hit == 'true' }}
-      shell: bash
-      run: make link-stdlibs

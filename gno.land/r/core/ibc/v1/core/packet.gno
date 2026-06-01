@@ -34,10 +34,10 @@ func PacketSend(cur realm, sourceChannelId ChannelId, timeoutHeight Height, time
 	return packet
 }
 
-// acceptRecvPacket validates packet against the recv-batch invariants. Proven
-// recv paths record a receipt; proofless intent paths must not, because the
-// receipt is also the source-side timeout non-membership signal.
-func acceptRecvPacket(packet Packet, batchChannelId ChannelId, now uint64, writeReceipt bool) (Channel, bool) {
+// acceptRecvPacket validates recv-path invariants and records a packet
+// receipt. Receipts serve as both replay protection and the source-side
+// timeout signal.
+func acceptRecvPacket(packet Packet, batchChannelId ChannelId, now uint64) (Channel, bool) {
 	channel := st.getChannel(packet.DestinationChannelId)
 	if channel.State != ChannelStateOpen {
 		panic(ErrInvalidChannelState)
@@ -46,22 +46,35 @@ func acceptRecvPacket(packet Packet, batchChannelId ChannelId, now uint64, write
 		panic(ErrBatchSameChannelOnly)
 	}
 
-	// Receipt presence is the replay-protection signal: skip silently so
-	// honest relayers can re-submit batches without aborting the whole tx.
+	// Ignore duplicate packets so batch retries remain idempotent.
 	if st.hasPacketReceipt(packet) {
 		return channel, true
 	}
 
-	// Reject a packet already past its source-side timeout so it cannot be
-	// executed on the destination after a successful source-side timeout.
+	// Do not execute packets that have already timed out on the source chain.
 	if packet.TimeoutTimestamp != 0 && now >= uint64(packet.TimeoutTimestamp) {
 		panic(ErrPacketTimeoutExpired)
 	}
 
-	if writeReceipt {
-		st.setPacketReceipt(packet)
-	}
+	st.setPacketReceipt(packet)
 	return channel, false
+}
+
+// commitSyncAck records non-async recv results as Union receipt evidence.
+// Sync success and failure results must carry a non-empty acknowledgement.
+func commitSyncAck(packet Packet, channel Channel, connection Connection, res RecvPacketResult) error {
+	switch res.Status {
+	case PacketStatusAsync:
+	case PacketStatusSuccess, PacketStatusFailure:
+		if len(res.Ack) == 0 {
+			return ErrSyncAckEmpty
+		}
+		st.commitAcknowledgement(packet, res.Ack)
+		emitWriteAckEvent(packet, channel, connection, res.Ack)
+	default:
+		return ErrUnknownPacketStatus
+	}
+	return nil
 }
 
 func PacketRecv(cur realm, msg MsgPacketRecv) {
@@ -79,7 +92,7 @@ func PacketRecv(cur realm, msg MsgPacketRecv) {
 	now := nowNanos()
 
 	for i, packet := range msg.Packets {
-		channel, skip := acceptRecvPacket(packet, first.DestinationChannelId, now, true)
+		channel, skip := acceptRecvPacket(packet, first.DestinationChannelId, now)
 		if skip {
 			continue
 		}
@@ -88,18 +101,11 @@ func PacketRecv(cur realm, msg MsgPacketRecv) {
 		if i < len(msg.RelayerMsgs) {
 			relayerMsg = msg.RelayerMsgs[i]
 		}
+
 		portId := st.getChannelOwner(packet.DestinationChannelId)
 		res := st.getAppByPortId(portId).OnRecvPacket(cross(cur), packet, relayer, relayerMsg)
-		switch res.Status {
-		case PacketStatusAsync:
-		case PacketStatusSuccess, PacketStatusFailure:
-			if len(res.Ack) == 0 {
-				panic(ErrSyncAckEmpty)
-			}
-			st.commitAcknowledgement(packet, res.Ack)
-			emitWriteAckEvent(packet, channel, firstConnection, res.Ack)
-		default:
-			panic(ErrUnknownPacketStatus)
+		if err := commitSyncAck(packet, channel, firstConnection, res); err != nil {
+			panic(err)
 		}
 
 		emitPacketRecvEvent(PacketRecvEvent, packet, channel, firstConnection, "maker_msg", relayerMsg)
@@ -111,11 +117,14 @@ func IntentPacketRecv(cur realm, msg MsgIntentPacketRecv) {
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
 	}
+
 	first := msg.Packets[0]
+	firstChannel := st.getChannel(first.DestinationChannelId)
+	firstConnection := ensureConnectionOpen(firstChannel.ConnectionId)
 	now := nowNanos()
 
 	for i, packet := range msg.Packets {
-		channel, skip := acceptRecvPacket(packet, first.DestinationChannelId, now, false)
+		channel, skip := acceptRecvPacket(packet, first.DestinationChannelId, now)
 		if skip {
 			continue
 		}
@@ -124,11 +133,14 @@ func IntentPacketRecv(cur realm, msg MsgIntentPacketRecv) {
 		if i < len(msg.MarketMakerMessages) {
 			marketMakerMsg = msg.MarketMakerMessages[i]
 		}
-		portId := st.getChannelOwner(packet.DestinationChannelId)
-		st.getAppByPortId(portId).OnIntentRecvPacket(cross(cur), packet, marketMaker, marketMakerMsg)
 
-		connection := ensureConnectionOpen(channel.ConnectionId)
-		emitPacketRecvEvent(IntentPacketRecvEvent, packet, channel, connection, "market_maker_msg", marketMakerMsg)
+		portId := st.getChannelOwner(packet.DestinationChannelId)
+		res := st.getAppByPortId(portId).OnIntentRecvPacket(cross(cur), packet, marketMaker, marketMakerMsg)
+		if err := commitSyncAck(packet, channel, firstConnection, res); err != nil {
+			panic(err)
+		}
+
+		emitPacketRecvEvent(IntentPacketRecvEvent, packet, channel, firstConnection, "market_maker_msg", marketMakerMsg)
 	}
 }
 
@@ -140,6 +152,7 @@ func PacketAcknowledgement(cur realm, msg MsgPacketAcknowledgement) {
 	if len(msg.Packets) != len(msg.Acknowledgements) {
 		panic(ErrAcknowledgementCountMismatch)
 	}
+
 	first := msg.Packets[0]
 	channel := st.getChannel(first.SourceChannelId)
 	connection := ensureConnectionOpen(channel.ConnectionId)

@@ -71,7 +71,11 @@ func (a *flowApp) OnRecvPacket(cur realm, _ core.Packet, _ address, _ []byte) co
 	a.recvCount++
 	return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, []byte{0x01})
 }
-func (a *flowApp) OnIntentRecvPacket(_ realm, _ core.Packet, _ address, _ []byte) {}
+
+func (a *flowApp) OnIntentRecvPacket(cur realm, _ core.Packet, _ address, _ []byte) core.RecvPacketResult {
+	return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, []byte{0x01})
+}
+
 func (a *flowApp) OnAcknowledgementPacket(_ realm, _ core.Packet, _ []byte, _ address) {
 }
 func (a *flowApp) OnTimeoutPacket(_ realm, _ core.Packet, _ address) {}

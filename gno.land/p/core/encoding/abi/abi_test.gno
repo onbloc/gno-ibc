@@ -286,6 +286,34 @@ func TestRejectOutOfRangeTupleOffsets(t *testing.T) {
 	}
 }
 
+func TestRejectOutOfRangeArrayOffsets(t *testing.T) {
+	cases := []struct {
+		name string
+		data []byte
+	}{
+		{
+			"overflow offset",
+			mustHex("0000000000000000000000000000000000000000000000000000000000000020" +
+				"0000000000000000000000000000000000000000000000000000000000000001" +
+				"000000000000000000000000000000000000000000000000fffffffffffffe00"),
+		},
+		{
+			"plain out-of-range offset",
+			mustHex("0000000000000000000000000000000000000000000000000000000000000020" +
+				"0000000000000000000000000000000000000000000000000000000000000001" +
+				"0000000000000000000000000000000000000000000000000000000000000040"),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Decode(batchAckSchema, tc.data)
+			if err != ErrInvalidData {
+				t.Fatalf("got %v want ErrInvalidData", err)
+			}
+		})
+	}
+}
+
 func TestJSONVectorLoaderShape(t *testing.T) {
 	root, err := json.Unmarshal([]byte(`[{"name":"Instruction_short_operand","type":"Instruction","fields":{"version":2,"opcode":3,"operand":"0xaabbcc"},"abi_hex":"0x1234"},{"name":"RealPacket_msg_rs_259","type":"Instruction","fields":null,"abi_hex":"0xabcd"}]`))
 	if err != nil {

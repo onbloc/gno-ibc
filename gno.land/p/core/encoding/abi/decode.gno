@@ -184,8 +184,11 @@ func (d *decoder) arrayAt(elem Field, pos, end, depth int) ([]any, error) {
 			if err != nil {
 				return nil, err
 			}
+			if offset > uint64(end-headStart) || offset%wordSize != 0 {
+				return nil, ErrInvalidData
+			}
 			elemPos := headStart + int(offset)
-			if elemPos < headStart || elemPos > end || offset%wordSize != 0 {
+			if elemPos < headStart || elemPos > end {
 				return nil, ErrInvalidData
 			}
 			out[i], err = d.valueAt(elem, elemPos, end, depth)

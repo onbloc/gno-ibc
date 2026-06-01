@@ -7,26 +7,26 @@ import (
 	"strings"
 )
 
-var adminAddressStr string
+var admin address
 
 func init(cur realm) {
-	adminAddressStr = rtunsafe.OriginCaller().String()
+	admin = rtunsafe.OriginCaller()
 }
 
 // GetAdmin returns the current admin address.
-func GetAdmin() string {
-	return adminAddressStr
+func GetAdmin() address {
+	return admin
 }
 
 // SetAdmin transfers admin rights to a new address. Only callable by the current admin.
-func SetAdmin(cur realm, admin string) {
+func SetAdmin(cur realm, newAdmin address) {
 	runtime.AssertOriginCall()
 	assertAdmin("set admin")
-	adminAddressStr = admin
+	admin = newAdmin
 }
 
 func assertAdmin(action string) {
-	if rtunsafe.OriginCaller().String() != adminAddressStr {
+	if rtunsafe.OriginCaller() != admin {
 		panic("caller not authorized to " + action + ": unauthorized")
 	}
 }

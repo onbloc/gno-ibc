@@ -56,7 +56,7 @@ func mustBeAdmin() {
 		return
 	}
 	runtime.AssertOriginCall()
-	if rtunsafe.OriginCaller().String() != admin {
+	if rtunsafe.OriginCaller() != admin {
 		panic("zkgm: admin only")
 	}
 }

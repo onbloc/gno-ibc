@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"chain"
 	"errors"
 
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -19,7 +18,7 @@ var (
 	errForwardZeroTimeout        = errors.New("zkgm/v1: forward timeout timestamp must be non-zero")
 )
 
-func (v *ZkgmV1) verifyForward(cur realm, channelId core.ChannelId, sender string, sent chain.Coins, path *u256.Uint, salt [32]byte, forward z.Forward) error {
+func (v *ZkgmV1) verifyForward(cur realm, channelId core.ChannelId, sender string, budget *sentCoinBudget, path *u256.Uint, salt [32]byte, forward z.Forward) error {
 	if !isAllowedForwardInstruction(forward.Instruction.Opcode) {
 		return errInvalidForwardInstruction
 	}
@@ -27,7 +26,7 @@ func (v *ZkgmV1) verifyForward(cur realm, channelId core.ChannelId, sender strin
 		return errForwardHopExceeded
 	}
 
-	return v.dispatchVerify(cur, channelId, sender, sent, forward.Path, z.DeriveForwardSalt(salt), forward.Instruction)
+	return v.dispatchVerify(cur, channelId, sender, budget, forward.Path, z.DeriveForwardSalt(salt), forward.Instruction)
 }
 
 func (v *ZkgmV1) executeForward(cur realm, packet core.Packet, path *u256.Uint, parentSalt [32]byte, forward z.Forward, intent bool) (core.RecvPacketResult, error) {

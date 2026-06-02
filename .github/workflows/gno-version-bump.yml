@@ -1,0 +1,88 @@
+name: Bump gno toolchain pin
+
+# Dependabot-like gno version bump cron schedule
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: gno-version-bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve current and upstream commits
+        id: resolve
+        run: |
+          source .gno-version
+          # Derive owner/repo for the compare link from GNO_REPO.
+          slug="${GNO_REPO#https://github.com/}"
+          slug="${slug%.git}"
+          latest="$(git ls-remote "${GNO_REPO}" refs/heads/master | cut -f1)"
+          if [ -z "${latest}" ]; then
+            echo "::error::Could not resolve master HEAD from ${GNO_REPO}"
+            exit 1
+          fi
+          echo "slug=${slug}" >> "$GITHUB_OUTPUT"
+          echo "current=${GNO_COMMIT}" >> "$GITHUB_OUTPUT"
+          echo "latest=${latest}" >> "$GITHUB_OUTPUT"
+          if [ "${GNO_COMMIT}" = "${latest}" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Already at master HEAD (${latest}); nothing to do."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open or update bump PR
+        if: steps.resolve.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT: ${{ steps.resolve.outputs.current }}
+          LATEST: ${{ steps.resolve.outputs.latest }}
+          SLUG: ${{ steps.resolve.outputs.slug }}
+        run: |
+          short="${LATEST:0:7}"
+          branch="gno-bump/${short}"
+          compare="https://github.com/${SLUG}/compare/${CURRENT}...${LATEST}"
+
+          # Deterministic branch name keyed on the target commit makes the run
+          # idempotent: a re-run for the same HEAD reuses the branch/PR.
+          if git ls-remote --exit-code --heads origin "${branch}" >/dev/null 2>&1; then
+            echo "Branch ${branch} already exists; bump PR is already open."
+            exit 0
+          fi
+
+          git config user.name  'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git checkout -b "${branch}"
+          sed -i "s/^GNO_COMMIT=.*/GNO_COMMIT=${LATEST}/" .gno-version
+          git add .gno-version
+          git commit -m "chore: bump gno toolchain pin to ${short}"
+          git push origin "${branch}"
+
+          gh pr create \
+            --base main \
+            --head "${branch}" \
+            --title "chore: bump gno toolchain pin to ${short}" \
+            --label A-deps \
+            --body "$(cat <<EOF
+          Automated bump of the pinned gno toolchain in \`.gno-version\`.
+
+          - Previous: \`${CURRENT}\`
+          - New (master HEAD): \`${LATEST}\`
+          - Changes: ${compare}
+
+          Master moves fast and some workflows pin specific commits, so this PR is **not** auto-merged. Confirm \`test\` and \`Validate Dockerfile\` pass on the new commit before merging.
+          EOF
+          )"

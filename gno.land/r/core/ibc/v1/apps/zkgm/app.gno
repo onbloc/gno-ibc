@@ -67,6 +67,9 @@ func (a *App) OnIntentRecvPacket(cur realm, packet core.Packet, marketMaker addr
 }
 
 func (a *App) OnAcknowledgementPacket(cur realm, packet core.Packet, ack []byte, relayer address) {
+	if paused {
+		panic("zkgm: paused")
+	}
 	if impl == nil {
 		return
 	}
@@ -74,6 +77,9 @@ func (a *App) OnAcknowledgementPacket(cur realm, packet core.Packet, ack []byte,
 }
 
 func (a *App) OnTimeoutPacket(cur realm, packet core.Packet, relayer address) {
+	if paused {
+		panic("zkgm: paused")
+	}
 	if impl == nil {
 		return
 	}

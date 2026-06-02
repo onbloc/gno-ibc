@@ -96,12 +96,7 @@ func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []b
 	}
 
 	newHeight := cometblsp.HeaderHeight(header)
-	consState, ok := e.consensusStates[newHeight]
-	if !ok {
-		consState = cometblsp.ConsensusStateFromHeader(header.SignedHeader)
-		e.consensusStates[newHeight] = consState
-	}
-	e.cs.LatestHeight = newHeight
+	consState := applyHeaderHeight(e, newHeight, cometblsp.ConsensusStateFromHeader(header.SignedHeader))
 
 	consStateBytes, err := cometblsp.EncodeConsensusState(consState)
 	if err != nil {
@@ -110,6 +105,18 @@ func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []b
 	clientStateBytes := cometblsp.EncodeClientState(e.cs)
 
 	return core.NewConsensusStateUpdate(cross(cur), core.Height(newHeight), consStateBytes, clientStateBytes)
+}
+
+func applyHeaderHeight(e *clientEntry, newHeight cometblsp.Height, consState cometblsp.ConsensusState) cometblsp.ConsensusState {
+	stored, ok := e.consensusStates[newHeight]
+	if !ok {
+		stored = consState
+		e.consensusStates[newHeight] = stored
+	}
+	if newHeight > e.cs.LatestHeight {
+		e.cs.LatestHeight = newHeight
+	}
+	return stored
 }
 
 func (Adapter) Misbehaviour(cur realm, clientId core.ClientId, clientMessage []byte) []byte {
@@ -139,6 +146,19 @@ func (Adapter) Misbehaviour(cur realm, clientId core.ClientId, clientMessage []b
 	return cometblsp.EncodeClientState(e.cs)
 }
 
+// consensusStateAt returns the consensus state at the given height.
+// It panics if no consensus state exists at that height.
+//
+// Proof verification must reject unknown heights rather than relying on
+// verification against a zero-value consensus state.
+func consensusStateAt(e *clientEntry, height core.Height) cometblsp.ConsensusState {
+	cs, ok := e.consensusStates[cometblsp.Height(height)]
+	if !ok {
+		panic("cometbls: consensus state not found at height " + height.String())
+	}
+	return cs
+}
+
 func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proof, key, value []byte) {
 	e := getEntry(clientId)
 	if status := adapterStatus(e); status != cometblsp.StatusActive {
@@ -149,7 +169,7 @@ func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proo
 		panic("cometbls: invalid membership proof: " + err.Error())
 	}
 	path := types.MerklePath{KeyPath: [][]byte{wasmdModuleStoreKey, wasmContractStoreKey(e.cs.ContractAddress, key)}}
-	cs := e.consensusStates[cometblsp.Height(height)]
+	cs := consensusStateAt(e, height)
 	if err := cometblsp.VerifyMembership(cs, proofs, path, value); err != nil {
 		panic("cometbls: membership verification failed: " + err.Error())
 	}
@@ -165,7 +185,7 @@ func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, p
 		panic("cometbls: invalid non-membership proof: " + err.Error())
 	}
 	path := types.MerklePath{KeyPath: [][]byte{wasmdModuleStoreKey, wasmContractStoreKey(e.cs.ContractAddress, key)}}
-	cs := e.consensusStates[cometblsp.Height(height)]
+	cs := consensusStateAt(e, height)
 	if err := cometblsp.VerifyNonMembership(cs, proofs, path); err != nil {
 		panic("cometbls: non-membership verification failed: " + err.Error())
 	}
@@ -173,10 +193,7 @@ func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, p
 
 func (Adapter) GetTimestamp(clientId core.ClientId, height core.Height) core.Timestamp {
 	e := getEntry(clientId)
-	cs, ok := e.consensusStates[cometblsp.Height(height)]
-	if !ok {
-		panic("cometbls: consensus state not found at height " + height.String())
-	}
+	cs := consensusStateAt(e, height)
 	return core.Timestamp(cs.Timestamp)
 }
 
@@ -220,6 +237,12 @@ func applyForceUpdate(clientId core.ClientId, clientStateBytes, consensusStateBy
 	}
 
 	e := getEntry(clientId)
+
+	// Force update is a recovery operation: only permit clients that are no
+	// longer usable. New status values should be denied until explicitly vetted.
+	if status := adapterStatus(e); status != cometblsp.StatusExpired && status != cometblsp.StatusFrozen {
+		panic("cometbls: force-update only allowed on expired or frozen client")
+	}
 
 	// Preserve counterparty identity fields.
 	//

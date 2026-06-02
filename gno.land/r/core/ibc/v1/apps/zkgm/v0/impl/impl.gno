@@ -91,7 +91,11 @@ func (v *ZkgmV1) IntentRecv(cur realm, packet core.Packet, marketMaker address, 
 
 func (v *ZkgmV1) Send(cur realm, req zkgm.SendRequest) ([]byte, error) {
 	// dispatchVerify uses the raw user salt; only the wire packet is namespaced.
-	if err := v.dispatchVerify(cur, req.ChannelId, req.Sender, parseCoins(req.SentCoins), u256.Zero(), req.Salt, req.Instruction); err != nil {
+	budget := newSentCoinBudget(parseCoins(req.SentCoins))
+	if err := v.dispatchVerify(cur, req.ChannelId, req.Sender, budget, u256.Zero(), req.Salt, req.Instruction); err != nil {
+		return nil, err
+	}
+	if err := budget.assertDrained(); err != nil {
 		return nil, err
 	}
 

@@ -2,7 +2,6 @@ package impl
 
 import (
 	"bytes"
-	"chain"
 	"errors"
 
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -11,14 +10,14 @@ import (
 	core "gno.land/r/core/ibc/v1/core"
 )
 
-func (v *ZkgmV1) dispatchVerify(cur realm, channelId core.ChannelId, sender string, sent chain.Coins, path *u256.Uint, salt [32]byte, instr z.Instruction) error {
+func (v *ZkgmV1) dispatchVerify(cur realm, channelId core.ChannelId, sender string, budget *sentCoinBudget, path *u256.Uint, salt [32]byte, instr z.Instruction) error {
 	switch instr.Opcode {
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instr)
 		if err != nil {
 			return err
 		}
-		return v.verifyTokenOrderV2(cur, channelId, sender, sent, path, order)
+		return v.verifyTokenOrderV2(cur, channelId, sender, budget, path, order)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instr)
 		if err != nil {
@@ -30,21 +29,32 @@ func (v *ZkgmV1) dispatchVerify(cur realm, channelId core.ChannelId, sender stri
 		if err != nil {
 			return err
 		}
-		return v.verifyBatch(cur, channelId, sender, sent, path, salt, batch)
+		return v.verifyBatch(cur, channelId, sender, budget, path, salt, batch)
 	case z.OP_FORWARD:
 		forward, err := decodeForwardInstruction(instr)
 		if err != nil {
 			return err
 		}
-		return v.verifyForward(cur, channelId, sender, sent, path, salt, forward)
+		return v.verifyForward(cur, channelId, sender, budget, path, salt, forward)
 	default:
 		return errors.New("zkgm/v1: unsupported opcode")
 	}
 }
 
+// execFatal is a sentinel panic value.
+//
+// Unlike ordinary panics, values of this type are re-panicked by the recover
+// handler so the VM can observe the failure after transaction rollback.
+type execFatal struct{ msg string }
+
+func (e execFatal) Error() string { return e.msg }
+
 func (v *ZkgmV1) dispatchExecute(cur realm, packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, salt [32]byte, instr z.Instruction, intent bool) (result core.RecvPacketResult, err error) {
 	defer func() {
 		if r := recover(); r != nil {
+			if _, ok := r.(execFatal); ok {
+				panic(r)
+			}
 			result = failureResult(cur, universalErrorAck())
 			err = nil
 		}

@@ -41,7 +41,9 @@ func (d *decoder) tupleAt(fields []Field, start, end, depth int) ([]any, error) 
 			}
 			size = s
 		}
-		if cursor+size > end {
+
+		// prevent `cursor+size` overflow
+		if size < 0 || cursor > end || size > end-cursor {
 			return nil, ErrInvalidData
 		}
 
@@ -50,10 +52,10 @@ func (d *decoder) tupleAt(fields []Field, start, end, depth int) ([]any, error) 
 			if err != nil {
 				return nil, err
 			}
-			pos := start + int(offset)
-			if pos < start || pos > end || offset%wordSize != 0 {
+			if offset > uint64(end-start) || offset%wordSize != 0 {
 				return nil, ErrInvalidData
 			}
+			pos := start + int(offset)
 			out[i], err = d.valueAt(field, pos, end, depth)
 			if err != nil {
 				return nil, err
@@ -158,9 +160,10 @@ func (d *decoder) arrayAt(elem Field, pos, end, depth int) ([]any, error) {
 	if depth > d.maxDepth {
 		return nil, ErrDepthLimit
 	}
-	if pos+wordSize > end {
+	if pos > end || wordSize > end-pos {
 		return nil, ErrInvalidData
 	}
+
 	length, err := decodeWordUint64(d.data[pos : pos+wordSize])
 	if err != nil {
 		return nil, err
@@ -173,7 +176,7 @@ func (d *decoder) arrayAt(elem Field, pos, end, depth int) ([]any, error) {
 	out := make([]any, n)
 	headStart := pos + wordSize
 	if isDynamic(elem) {
-		if headStart+n*wordSize > end {
+		if n > (end-headStart)/wordSize {
 			return nil, ErrInvalidData
 		}
 		for i := 0; i < n; i++ {
@@ -181,10 +184,10 @@ func (d *decoder) arrayAt(elem Field, pos, end, depth int) ([]any, error) {
 			if err != nil {
 				return nil, err
 			}
-			elemPos := headStart + int(offset)
-			if elemPos < headStart || elemPos > end || offset%wordSize != 0 {
+			if offset > uint64(end-headStart) || offset%wordSize != 0 {
 				return nil, ErrInvalidData
 			}
+			elemPos := headStart + int(offset)
 			out[i], err = d.valueAt(elem, elemPos, end, depth)
 			if err != nil {
 				return nil, err
@@ -197,7 +200,7 @@ func (d *decoder) arrayAt(elem Field, pos, end, depth int) ([]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if headStart+n*elemSize > end {
+	if elemSize <= 0 || n > (end-headStart)/elemSize {
 		return nil, ErrInvalidData
 	}
 	for i := 0; i < n; i++ {
@@ -217,9 +220,10 @@ func (d *decoder) bytesAt(pos, end int) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	padded := int(roundUp32(length))
 	start := pos + wordSize
-	if start+padded > end || uint64(padded) < length {
+	remaining := uint64(end - start)
+	padded := roundUp32(length)
+	if padded < length || length > remaining || padded > remaining {
 		return nil, ErrInvalidData
 	}
 	out := make([]byte, int(length))

@@ -46,6 +46,8 @@ func (v *ZkgmV1) dispatchVerify(cur realm, channelId core.ChannelId, sender stri
 // in dispatchExecute re-panics on this type so it propagates to the VM.
 type execFatal struct{ msg string }
 
+func (e execFatal) Error() string { return e.msg }
+
 func (v *ZkgmV1) dispatchExecute(cur realm, packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, salt [32]byte, instr z.Instruction, intent bool) (result core.RecvPacketResult, err error) {
 	defer func() {
 		if r := recover(); r != nil {

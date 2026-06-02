@@ -214,7 +214,7 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 
 	ack, err := encodeTokenOrderSuccessAck(fillTypeProtocol, nil)
 	if err != nil {
-		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
+		panic(execFatal{err.Error()})
 	}
 
 	return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, ack), nil

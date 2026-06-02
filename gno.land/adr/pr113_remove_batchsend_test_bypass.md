@@ -102,3 +102,11 @@ no longer implies branch coverage it does not provide.
 `GetInstance` now has a bootstrap window that is intentionally aligned with the
 current fail-open `UpdateImpl` bootstrap behavior. If `UpdateImpl` is made
 fail-closed later, the two bootstrap policies should be reviewed together.
+
+The gnokey smoke harness now uses the test loader so it can retain
+BatchSend-based qeval coverage. As a result, it no longer executes
+`v0/loader.init()` on a live dev chain. The production loader path remains
+covered by `gno test` and production-loader scenario filetests; a future
+follow-up can add a minimal production-loader smoke that qevals
+`zkgm.ImplPath()` and `zkgm.AllowedImpls()` if live-chain loader coverage is
+needed.

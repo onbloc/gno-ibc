@@ -179,6 +179,16 @@ func TestAppPausedBlocksPacketCallbacks(cur realm, t *testing.T) {
 	}
 }
 
+func TestSendRawPausedBlocks(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	impl = &dummyImpl{}
+	paused = true
+
+	uassert.AbortsContains(t, cur, "zkgm: paused", func(cur realm) {
+		SendRaw(cur, 1, 0, "0000000000000000000000000000000000000000000000000000000000000000", 0, 0, "")
+	})
+}
+
 func TestAppNilImplPolicy(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0, 0)

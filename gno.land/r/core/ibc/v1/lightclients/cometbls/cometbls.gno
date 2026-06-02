@@ -146,6 +146,19 @@ func (Adapter) Misbehaviour(cur realm, clientId core.ClientId, clientMessage []b
 	return cometblsp.EncodeClientState(e.cs)
 }
 
+// consensusStateAt returns the consensus state at the given height.
+// It panics if no consensus state exists at that height.
+//
+// Proof verification must reject unknown heights rather than relying on
+// verification against a zero-value consensus state.
+func consensusStateAt(e *clientEntry, height core.Height) cometblsp.ConsensusState {
+	cs, ok := e.consensusStates[cometblsp.Height(height)]
+	if !ok {
+		panic("cometbls: consensus state not found at height " + height.String())
+	}
+	return cs
+}
+
 func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proof, key, value []byte) {
 	e := getEntry(clientId)
 	if status := adapterStatus(e); status != cometblsp.StatusActive {
@@ -156,7 +169,7 @@ func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proo
 		panic("cometbls: invalid membership proof: " + err.Error())
 	}
 	path := types.MerklePath{KeyPath: [][]byte{wasmdModuleStoreKey, wasmContractStoreKey(e.cs.ContractAddress, key)}}
-	cs := e.consensusStates[cometblsp.Height(height)]
+	cs := consensusStateAt(e, height)
 	if err := cometblsp.VerifyMembership(cs, proofs, path, value); err != nil {
 		panic("cometbls: membership verification failed: " + err.Error())
 	}
@@ -172,7 +185,7 @@ func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, p
 		panic("cometbls: invalid non-membership proof: " + err.Error())
 	}
 	path := types.MerklePath{KeyPath: [][]byte{wasmdModuleStoreKey, wasmContractStoreKey(e.cs.ContractAddress, key)}}
-	cs := e.consensusStates[cometblsp.Height(height)]
+	cs := consensusStateAt(e, height)
 	if err := cometblsp.VerifyNonMembership(cs, proofs, path); err != nil {
 		panic("cometbls: non-membership verification failed: " + err.Error())
 	}
@@ -180,10 +193,7 @@ func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, p
 
 func (Adapter) GetTimestamp(clientId core.ClientId, height core.Height) core.Timestamp {
 	e := getEntry(clientId)
-	cs, ok := e.consensusStates[cometblsp.Height(height)]
-	if !ok {
-		panic("cometbls: consensus state not found at height " + height.String())
-	}
+	cs := consensusStateAt(e, height)
 	return core.Timestamp(cs.Timestamp)
 }
 

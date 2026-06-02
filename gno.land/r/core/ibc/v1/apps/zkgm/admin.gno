@@ -6,15 +6,8 @@ import (
 
 	tb "gno.land/p/gnoswap/tokenbucket"
 	u256 "gno.land/p/gnoswap/uint256"
+	core "gno.land/r/core/ibc/v1/core"
 )
-
-func SetAdmin(cur realm, admin string) {
-	runtime.AssertOriginCall()
-	if adminAddressStr != "" && rtunsafe.OriginCaller().String() != adminAddressStr {
-		panic("zkgm: admin only")
-	}
-	adminAddressStr = admin
-}
 
 func Pause(cur realm) {
 	mustBeAdmin()
@@ -58,11 +51,9 @@ func SetRateLimitDisabled(cur realm, disabled bool) {
 }
 
 func mustBeAdmin() {
-	if adminAddressStr == "" {
-		return
-	}
+	admin := core.GetAdmin()
 	runtime.AssertOriginCall()
-	if rtunsafe.OriginCaller().String() != adminAddressStr {
+	if rtunsafe.OriginCaller() != admin {
 		panic("zkgm: admin only")
 	}
 }

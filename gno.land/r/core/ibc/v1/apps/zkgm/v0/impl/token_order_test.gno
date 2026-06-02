@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"chain"
 	"testing"
+	"time"
 
+	tb "gno.land/p/gnoswap/tokenbucket"
 	z "gno.land/p/gnoswap/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/bptree/v0"
@@ -104,8 +106,12 @@ func TestTokenOrderVerifyUnescrowNativeRejectedBeforeBudgetConsume(cur realm, t 
 
 func TestTokenOrderVerifyAppliesRateLimit(cur realm, t *testing.T) {
 	denom := "rate-limit-denom"
-	zkgm.SetRateLimitDisabled(cross(cur), false)
-	zkgm.SetBucketConfig(cross(cur), denom, u256.NewUint(10), u256.NewUint(1))
+	now := u256.NewUint(uint64(time.Now().Unix()))
+	bucket, err := tb.New(u256.NewUint(10), u256.NewUint(1), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zkgm.SetTokenBucket(cross(cur), denom, bucket)
 	order := z.TokenOrderV2{
 		Sender:      []byte(testAddress("v1-rate-limit-sender")),
 		BaseToken:   []byte(denom),
@@ -115,14 +121,13 @@ func TestTokenOrderVerifyAppliesRateLimit(cur realm, t *testing.T) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
 
-	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(4), string(order.Sender), newSentCoinBudget(chain.NewCoins(chain.NewCoin(denom, 7))), u256.Zero(), order)
+	err = (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(4), string(order.Sender), newSentCoinBudget(chain.NewCoins(chain.NewCoin(denom, 7))), u256.Zero(), order)
 	uassert.NoError(t, err)
 
 	err = (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(4), string(order.Sender), newSentCoinBudget(chain.NewCoins(chain.NewCoin(denom, 7))), u256.Zero(), order)
 	uassert.ErrorContains(t, err, "token bucket rate limit exceeded")
 
 	zkgm.RemoveTokenBucket(cross(cur), denom)
-	zkgm.SetRateLimitDisabled(cross(cur), true)
 }
 
 func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *testing.T) {

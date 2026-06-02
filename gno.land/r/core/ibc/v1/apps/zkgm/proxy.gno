@@ -11,14 +11,13 @@ import (
 )
 
 var (
-	impl            ZkgmImpl
-	implPath        string
-	allowedImpls    []string
-	paused          bool
-	gRealmAddress   address
-	gRealmSet       bool
-	adminAddressStr string
-	receivers       = bptree.NewBPTree32()
+	impl          ZkgmImpl
+	implPath      string
+	allowedImpls  []string
+	paused        bool
+	gRealmAddress address
+	gRealmSet     bool
+	receivers     = bptree.NewBPTree32()
 )
 
 const proxyPkgPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm"

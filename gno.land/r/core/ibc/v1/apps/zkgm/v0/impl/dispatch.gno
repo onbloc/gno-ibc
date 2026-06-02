@@ -41,9 +41,17 @@ func (v *ZkgmV1) dispatchVerify(cur realm, channelId core.ChannelId, sender stri
 	}
 }
 
+// execFatal is a sentinel panic type used to signal that a state mutation has
+// already been committed and the transaction must be rolled back. The recover
+// in dispatchExecute re-panics on this type so it propagates to the VM.
+type execFatal struct{ msg string }
+
 func (v *ZkgmV1) dispatchExecute(cur realm, packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, salt [32]byte, instr z.Instruction, intent bool) (result core.RecvPacketResult, err error) {
 	defer func() {
 		if r := recover(); r != nil {
+			if _, ok := r.(execFatal); ok {
+				panic(r)
+			}
 			result = failureResult(cur, universalErrorAck())
 			err = nil
 		}

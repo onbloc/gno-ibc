@@ -113,7 +113,12 @@ func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []b
 		panic("statelensics23mpt: encode consensus state: " + err.Error())
 	}
 
-	return core.NewConsensusStateUpdate(cross(cur), core.Height(header.L2Height), consStateBytes, statelensp.EncodeClientState(e.cs))
+	clientStateBytes, err := statelensp.EncodeClientState(e.cs)
+	if err != nil {
+		panic("statelensics23mpt: encode client state: " + err.Error())
+	}
+
+	return core.NewConsensusStateUpdate(cross(cur), core.Height(header.L2Height), consStateBytes, clientStateBytes)
 }
 
 func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proof, key, value []byte) {

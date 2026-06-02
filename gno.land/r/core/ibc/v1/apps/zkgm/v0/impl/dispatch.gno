@@ -41,9 +41,20 @@ func (v *ZkgmV1) dispatchVerify(cur realm, channelId core.ChannelId, sender stri
 	}
 }
 
+// execFatal is a sentinel panic value.
+//
+// Unlike ordinary panics, values of this type are re-panicked by the recover
+// handler so the VM can observe the failure after transaction rollback.
+type execFatal struct{ msg string }
+
+func (e execFatal) Error() string { return e.msg }
+
 func (v *ZkgmV1) dispatchExecute(cur realm, packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, salt [32]byte, instr z.Instruction, intent bool) (result core.RecvPacketResult, err error) {
 	defer func() {
 		if r := recover(); r != nil {
+			if _, ok := r.(execFatal); ok {
+				panic(r)
+			}
 			result = failureResult(cur, universalErrorAck())
 			err = nil
 		}

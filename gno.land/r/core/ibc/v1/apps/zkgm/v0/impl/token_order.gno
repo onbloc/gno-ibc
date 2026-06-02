@@ -126,7 +126,7 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 		}
 		if !fee.IsZero() {
 			if err := mintVoucher(cross(cur), ibcDenom, string(order.BaseToken), image, string(relayer), fee); err != nil {
-				return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
+				panic(execFatal{err.Error()})
 			}
 		}
 		zkgm.SetTokenOrigin(cross(cur), ibcDenom, nextPath)
@@ -169,7 +169,7 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 		}
 		if !fee.IsZero() {
 			if err := mintVoucher(cross(cur), quoteDenom, string(order.BaseToken), image, string(relayer), fee); err != nil {
-				return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
+				panic(execFatal{err.Error()})
 			}
 		}
 		if !hasOrigin {
@@ -198,12 +198,12 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 		}
 		if !order.QuoteAmount.IsZero() {
 			if err := sendNative(cur, string(order.QuoteToken), string(order.Receiver), order.QuoteAmount); err != nil {
-				return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
+				panic(execFatal{err.Error()})
 			}
 		}
 		if !fee.IsZero() {
 			if err := sendNative(cur, string(order.QuoteToken), string(relayer), fee); err != nil {
-				return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
+				panic(execFatal{err.Error()})
 			}
 		}
 	case z.TOKEN_ORDER_KIND_SOLVE:
@@ -214,7 +214,7 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 
 	ack, err := encodeTokenOrderSuccessAck(fillTypeProtocol, nil)
 	if err != nil {
-		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
+		panic(execFatal{err.Error()})
 	}
 
 	return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, ack), nil

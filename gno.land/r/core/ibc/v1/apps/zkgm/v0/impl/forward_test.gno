@@ -12,7 +12,7 @@ import (
 )
 
 func TestVerifyForwardRejectsNestedForward(cur realm, t *testing.T) {
-	err := (&ZkgmV1{}).verifyForward(cur, core.ChannelId(1), "sender", nil, u256.Zero(), [32]byte{}, z.Forward{
+	err := (&ZkgmV1{}).verifyForward(cur, core.ChannelId(1), "sender", newSentCoinBudget(nil), u256.Zero(), [32]byte{}, z.Forward{
 		Path: forwardPath(1, 2),
 		Instruction: z.Instruction{
 			Version: z.INSTR_VERSION_0,
@@ -49,7 +49,7 @@ func TestVerifyForwardPassesAllowedChildren(cur realm, t *testing.T) {
 		{Version: z.INSTR_VERSION_0, Opcode: z.OP_BATCH, Operand: batchBytes},
 	}
 	for _, instr := range cases {
-		err := (&ZkgmV1{}).verifyForward(cur, core.ChannelId(1), sender, nil, u256.Zero(), [32]byte{}, z.Forward{
+		err := (&ZkgmV1{}).verifyForward(cur, core.ChannelId(1), sender, newSentCoinBudget(nil), u256.Zero(), [32]byte{}, z.Forward{
 			Path:        forwardPath(1, 2),
 			Instruction: instr,
 		})

@@ -261,6 +261,112 @@ func TestRejectMalformedData(t *testing.T) {
 	}
 }
 
+func TestRejectOutOfRangeTupleOffsets(t *testing.T) {
+	schema := Schema{Fields: []Field{{Type: TypeBytes}}}
+	cases := []struct {
+		name string
+		data []byte
+	}{
+		{
+			"overflow offset",
+			mustHex("000000000000000000000000000000000000000000000000fffffffffffffe00"),
+		},
+		{
+			"plain out-of-range offset",
+			mustHex("0000000000000000000000000000000000000000000000000000000000000040"),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Decode(schema, tc.data)
+			if err != ErrInvalidData {
+				t.Fatalf("got %v want ErrInvalidData", err)
+			}
+		})
+	}
+}
+
+func TestRejectOutOfRangeArrayOffsets(t *testing.T) {
+	cases := []struct {
+		name string
+		data []byte
+	}{
+		{
+			"overflow offset",
+			mustHex("0000000000000000000000000000000000000000000000000000000000000020" +
+				"0000000000000000000000000000000000000000000000000000000000000001" +
+				"000000000000000000000000000000000000000000000000fffffffffffffe00"),
+		},
+		{
+			"plain out-of-range offset",
+			mustHex("0000000000000000000000000000000000000000000000000000000000000020" +
+				"0000000000000000000000000000000000000000000000000000000000000001" +
+				"0000000000000000000000000000000000000000000000000000000000000040"),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Decode(batchAckSchema, tc.data)
+			if err != ErrInvalidData {
+				t.Fatalf("got %v want ErrInvalidData", err)
+			}
+		})
+	}
+}
+
+func TestRejectOutOfRangeBytesLength(t *testing.T) {
+	bytesSchema := Schema{Fields: []Field{{Type: TypeBytes}}}
+	stringSchema := Schema{Fields: []Field{{Type: TypeString}}}
+	cases := []struct {
+		name   string
+		schema Schema
+		data   []byte
+	}{
+		{
+			"bytes huge length",
+			bytesSchema,
+			mustHex("0000000000000000000000000000000000000000000000000000000000000020" +
+				"0000000000000000000000000000000000000000000000008000000000000000"),
+		},
+		{
+			"string huge length",
+			stringSchema,
+			mustHex("0000000000000000000000000000000000000000000000000000000000000020" +
+				"0000000000000000000000000000000000000000000000008000000000000000"),
+		},
+		{
+			"bytes plain out-of-range length",
+			bytesSchema,
+			mustHex("0000000000000000000000000000000000000000000000000000000000000020" +
+				"0000000000000000000000000000000000000000000000000000000000000040"),
+		},
+		{
+			"bytes roundUp32 wrap length",
+			bytesSchema,
+			mustHex("0000000000000000000000000000000000000000000000000000000000000020" +
+				"000000000000000000000000000000000000000000000000ffffffffffffffff"),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Decode(tc.schema, tc.data)
+			if err != ErrInvalidData {
+				t.Fatalf("got %v want ErrInvalidData", err)
+			}
+		})
+	}
+
+	out, err := Decode(bytesSchema, mustHex("0000000000000000000000000000000000000000000000000000000000000020"+
+		"0000000000000000000000000000000000000000000000000000000000000004"+
+		"aabbccdd00000000000000000000000000000000000000000000000000000000"))
+	if err != nil {
+		t.Fatalf("Decode valid bytes: %v", err)
+	}
+	if hex.EncodeToString(out[0].([]byte)) != "aabbccdd" {
+		t.Fatalf("decoded valid bytes mismatch")
+	}
+}
+
 func TestJSONVectorLoaderShape(t *testing.T) {
 	root, err := json.Unmarshal([]byte(`[{"name":"Instruction_short_operand","type":"Instruction","fields":{"version":2,"opcode":3,"operand":"0xaabbcc"},"abi_hex":"0x1234"},{"name":"RealPacket_msg_rs_259","type":"Instruction","fields":null,"abi_hex":"0xabcd"}]`))
 	if err != nil {

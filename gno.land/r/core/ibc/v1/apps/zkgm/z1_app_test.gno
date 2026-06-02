@@ -149,7 +149,7 @@ func TestAppNineMethodsDelegate(cur realm, t *testing.T) {
 	}
 }
 
-func TestAppPausedOnlyBlocksRecv(cur realm, t *testing.T) {
+func TestAppPausedBlocksPacketCallbacks(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	impl = d
@@ -163,18 +163,29 @@ func TestAppPausedOnlyBlocksRecv(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "zkgm: paused", func(cur realm) {
 		(&App{}).OnIntentRecvPacket(cur, packet, address("g1maker"), nil)
 	})
-	(&App{}).OnAcknowledgementPacket(cur, packet, []byte{0x01}, address("g1relayer"))
-	(&App{}).OnTimeoutPacket(cur, packet, address("g1relayer"))
+	uassert.AbortsContains(t, cur, "zkgm: paused", func(cur realm) {
+		(&App{}).OnAcknowledgementPacket(cur, packet, []byte{0x01}, address("g1relayer"))
+	})
+	uassert.AbortsContains(t, cur, "zkgm: paused", func(cur realm) {
+		(&App{}).OnTimeoutPacket(cur, packet, address("g1relayer"))
+	})
 
 	if !d.openInitCalled {
 		t.Fatal("paused must not block channel handshake")
 	}
-	if d.recvCalled {
-		t.Fatal("paused must block recv delegation")
+	if d.recvCalled || d.ackCalled || d.timeoutCalled {
+		t.Fatal("paused must block recv/ack/timeout delegation")
 	}
-	if !d.ackCalled || !d.timeoutCalled {
-		t.Fatal("paused must not block ack/timeout callbacks")
-	}
+}
+
+func TestSendRawPausedBlocks(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	impl = &dummyImpl{}
+	paused = true
+
+	uassert.AbortsContains(t, cur, "zkgm: paused", func(cur realm) {
+		SendRaw(cur, 1, 0, "0000000000000000000000000000000000000000000000000000000000000000", 0, 0, "")
+	})
 }
 
 func TestAppNilImplPolicy(cur realm, t *testing.T) {

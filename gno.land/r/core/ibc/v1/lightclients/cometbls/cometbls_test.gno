@@ -185,6 +185,58 @@ func TestGetStatusExpiredWhenLatestConsensusStateMissing(cur realm, t *testing.T
 	}
 }
 
+// --- UpdateClient height bookkeeping ---
+
+func TestUpdateClientDoesNotRegressLatestHeight(cur realm, t *testing.T) {
+	resetAdapterEntries()
+	cs := activeAdapterClientState()
+	cs.LatestHeight = cometblsp.Height(200)
+	e := newAdapterClientEntry(cs, activeAdapterConsensusState())
+
+	applyHeaderHeight(e, cometblsp.Height(150), encodableConsensusState(150))
+
+	if e.cs.LatestHeight != cometblsp.Height(200) {
+		t.Fatalf("LatestHeight regressed: got %d want %d", e.cs.LatestHeight, cometblsp.Height(200))
+	}
+	if _, ok := e.consensusStates[cometblsp.Height(150)]; !ok {
+		t.Fatal("historical consensus state at height 150 not stored")
+	}
+}
+
+func TestUpdateClientAdvancesLatestHeight(cur realm, t *testing.T) {
+	resetAdapterEntries()
+	cs := activeAdapterClientState()
+	cs.LatestHeight = cometblsp.Height(100)
+	e := newAdapterClientEntry(cs, activeAdapterConsensusState())
+
+	applyHeaderHeight(e, cometblsp.Height(250), encodableConsensusState(250))
+
+	if e.cs.LatestHeight != cometblsp.Height(250) {
+		t.Fatalf("LatestHeight: got %d want %d", e.cs.LatestHeight, cometblsp.Height(250))
+	}
+	if _, ok := e.consensusStates[cometblsp.Height(250)]; !ok {
+		t.Fatal("consensus state at height 250 not stored")
+	}
+}
+
+func TestUpdateClientEqualHeightNoChange(cur realm, t *testing.T) {
+	resetAdapterEntries()
+	cs := activeAdapterClientState()
+	cs.LatestHeight = cometblsp.Height(100)
+	original := encodableConsensusState(100)
+	e := newAdapterClientEntry(cs, original)
+
+	applyHeaderHeight(e, cometblsp.Height(100), encodableConsensusState(200))
+
+	if e.cs.LatestHeight != cometblsp.Height(100) {
+		t.Fatalf("LatestHeight: got %d want %d", e.cs.LatestHeight, cometblsp.Height(100))
+	}
+	got := e.consensusStates[cometblsp.Height(100)]
+	if got.Timestamp != original.Timestamp || !bytes.Equal(got.Root.Hash, original.Root.Hash) {
+		t.Fatal("existing consensus state at equal height was overwritten")
+	}
+}
+
 // --- ForceUpdateClient (applyForceUpdate) ---
 
 // encodableConsensusState returns a ConsensusState with a 32-byte root hash,
@@ -256,12 +308,30 @@ func TestForceUpdateClientUnfreezesFrozenClient(cur realm, t *testing.T) {
 	}
 }
 
+func TestForceUpdateClientRejectedOnActiveClient(cur realm, t *testing.T) {
+	resetAdapterEntries()
+	clientId := core.ClientId(1)
+	cs := activeAdapterClientState()
+	installAdapterClient(clientId, cs, encodableConsensusState(nowNanos()))
+
+	freshCs := cs
+	freshCs.LatestHeight = cs.LatestHeight + 1
+	csBytes, consBytes := encodeState(t, freshCs, encodableConsensusState(nowNanos()))
+
+	uassert.AbortsContains(t, cur, "force-update only allowed on expired or frozen", func(cur realm) {
+		applyForceUpdate(clientId, csBytes, consBytes)
+	})
+	if entries[clientId].cs.LatestHeight != cs.LatestHeight {
+		t.Fatalf("LatestHeight mutated after rejected force update: got %d want %d", entries[clientId].cs.LatestHeight, cs.LatestHeight)
+	}
+}
+
 func TestForceUpdateClientPanicsOnHeightRegression(cur realm, t *testing.T) {
 	resetAdapterEntries()
 	clientId := core.ClientId(1)
 	cs := activeAdapterClientState()
 	cs.LatestHeight = cometblsp.Height(100)
-	installAdapterClient(clientId, cs, encodableConsensusState(nowNanos()))
+	installAdapterClient(clientId, cs, encodableConsensusState(1))
 
 	lowerCs := activeAdapterClientState()
 	lowerCs.LatestHeight = cometblsp.Height(50)
@@ -277,7 +347,7 @@ func TestForceUpdateClientClearsHistoricalConsensusStates(cur realm, t *testing.
 	clientId := core.ClientId(1)
 	cs := activeAdapterClientState()
 	cs.LatestHeight = cometblsp.Height(10)
-	e := newAdapterClientEntry(cs, encodableConsensusState(nowNanos()))
+	e := newAdapterClientEntry(cs, encodableConsensusState(1))
 	// Seed an extra historical state at height 5.
 	e.consensusStates[cometblsp.Height(5)] = encodableConsensusState(1)
 	entries[clientId] = e

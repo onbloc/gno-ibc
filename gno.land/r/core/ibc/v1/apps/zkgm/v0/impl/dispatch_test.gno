@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"math"
 	"testing"
 
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -48,6 +49,67 @@ func TestAckUnsupportedOpcodeAborts(cur realm, t *testing.T) {
 
 	uassert.AbortsContains(t, cur, "unsupported opcode", func(cur realm) {
 		(&ZkgmV1{}).Ack(cur, packet, nil, address("g1relayer"))
+	})
+}
+
+// TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck verifies that
+// an error occurring before any state mutation produces a failure ack rather
+// than aborting the transaction. The error is returned directly from
+// executeTokenOrderV2 and converted to errResult by Recv — the recover in
+// dispatchExecute is not involved.
+func TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	order := z.TokenOrderV2{
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Sender:      []byte(testAddress("init-err-sender")),
+		Receiver:    []byte(testAddress("init-err-receiver")),
+		BaseToken:   []byte("uatom"),
+		BaseAmount:  u256.NewUint(10),
+		QuoteToken:  []byte("ibc/test"),
+		QuoteAmount: u256.NewUint(10),
+		// Metadata absent → error returned before any state mutation
+	}
+	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(1), data, 0, 0)
+
+	res := (&ZkgmV1{}).Recv(cur, packet, address("g1relayer"), nil)
+
+	uassert.True(t, res.Status == core.PacketStatusFailure)
+}
+
+// TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts verifies that an error
+// occurring after a state mutation (receiver voucher already minted) propagates
+// as execFatal and aborts the transaction rather than returning a failure ack.
+func TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	const destChan = core.ChannelId(5)
+	baseToken := []byte("uatom-fee-fatal")
+	path := u256.Zero()
+	// Pre-minting sets metadataImage=[32]byte{} for ibcDenom, so ESCROW will
+	// use PredictWrappedTokenV2 for validation — use the same function here.
+	ibcDenom := PredictWrappedTokenV2(path, uint32(destChan), baseToken, [32]byte{})
+
+	// Saturate supply to MaxInt64-1. After receiver mint (+1) total = MaxInt64.
+	// Fee mint (+1) then overflows int64 → GRC20 returns error → execFatal.
+	fillAmt := u256.NewUint(uint64(math.MaxInt64) - 1)
+	uassert.NoError(t, mintVoucher(cross(cur), ibcDenom, string(baseToken), [32]byte{}, testAddress("sat"), fillAmt))
+
+	order := z.TokenOrderV2{
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+		Sender:      []byte(testAddress("fee-fatal-sender")),
+		Receiver:    []byte(testAddress("fee-fatal-receiver")),
+		BaseToken:   baseToken,
+		BaseAmount:  u256.NewUint(2),
+		QuoteToken:  []byte(ibcDenom),
+		QuoteAmount: u256.NewUint(1),
+	}
+	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), destChan, data, 0, 0)
+
+	uassert.AbortsContains(t, cur, "mint overflow", func(cur realm) {
+		(&ZkgmV1{}).Recv(cur, packet, address(testAddress("fee-fatal-relayer")), nil)
 	})
 }
 

@@ -1,15 +1,17 @@
-// Copy area (A-), priority (P-), and type (T-) labels from issues linked
-// to a pull request onto the pull request itself.
+// Copy P- labels from issues linked to a pull request.
 //
-// "Linked" means GitHub linked the issue through a closing keyword such as
-// "Closes #N" or "Fixes #N". A plain "#N" reference does not count.
+// A- and T- labels are managed by other automation, so this script only
+// propagates priority labels.
 //
-// Invoked from .github/workflows/labeler.yml via actions/github-script.
+// Linked issues are those referenced through closing keywords such as
+// "Closes #N" or "Fixes #N".
+//
+// Invoked from .github/workflows/labeler.yml.
 
 const fs = require('fs');
 const path = require('path');
 
-const LABEL_PREFIXES = ['A-', 'P-', 'T-'];
+const LABEL_PREFIXES = ['P-'];
 
 const LINKED_ISSUES_QUERY = fs.readFileSync(
   path.join(__dirname, 'queries', 'linked-issues.graphql'),
@@ -37,7 +39,7 @@ module.exports = async ({ github, context, core }) => {
   }
 
   if (labels.size === 0) {
-    core.info('No A-/P-/T- labels found on linked issues.');
+    core.info('No P- labels found on linked issues.');
     return;
   }
 

@@ -41,9 +41,10 @@ func (v *ZkgmV1) dispatchVerify(cur realm, channelId core.ChannelId, sender stri
 	}
 }
 
-// execFatal is a sentinel panic type used to signal that a state mutation has
-// already been committed and the transaction must be rolled back. The recover
-// in dispatchExecute re-panics on this type so it propagates to the VM.
+// execFatal is a sentinel panic value.
+//
+// Unlike ordinary panics, values of this type are re-panicked by the recover
+// handler so the VM can observe the failure after transaction rollback.
 type execFatal struct{ msg string }
 
 func (e execFatal) Error() string { return e.msg }

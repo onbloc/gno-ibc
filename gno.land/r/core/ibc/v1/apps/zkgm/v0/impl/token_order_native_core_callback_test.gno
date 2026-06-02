@@ -69,6 +69,7 @@ func setupNativeRefundPacket(cur realm, expired bool, senderName string, denom s
 	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), nil, []string{
 		"gno.land/r/core/ibc/v1/core",
 		"gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl",
+		"gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e",
 	}))
 	ensureZkgmAppRegistered(cross(cur))
 	var pair e2e.ChannelPair

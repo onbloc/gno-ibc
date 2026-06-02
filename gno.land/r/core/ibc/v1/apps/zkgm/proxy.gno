@@ -108,9 +108,7 @@ func WriteForwardAck(cur realm, parentPacket core.Packet, ack []byte) {
 
 func BatchSend(cur realm, msg core.MsgBatchSend) core.H256 {
 	cacheRealm(cur)
-	if !isTestingBatchSender(cur.Previous().PkgPath()) {
-		requireImplCaller(cur, "batch send")
-	}
+	requireImplCaller(cur, "batch send")
 	return core.BatchSend(cross(cur), msg)
 }
 
@@ -152,11 +150,6 @@ func cacheRealm(cur realm) {
 		gRealmAddress = cur.Address()
 		gRealmSet = true
 	}
-}
-
-func isTestingBatchSender(pkgPath string) bool {
-	return pkgPath == "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e" ||
-		pkgPath == "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls"
 }
 
 func cloneStrings(in []string) []string {

@@ -11,8 +11,11 @@ type ZkgmV1 struct{}
 
 var instance = &ZkgmV1{}
 
+// GetInstance returns the singleton impl.
+// Only the production loader may fetch it once an impl is installed.
 func GetInstance(cur realm) *ZkgmV1 {
-	if cur.Previous().PkgPath() != "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader" {
+	caller := cur.Previous().PkgPath()
+	if caller != "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader" && zkgm.ImplPath() != "" {
 		panic("not allowed")
 	}
 	return instance

@@ -154,6 +154,9 @@ func TestExecuteForwardAsyncDefersAckAndTracksChild(cur realm, t *testing.T) {
 }
 
 func TestExecuteForwardThroughCoreFrameAuthorizesCoreRealm(cur realm, t *testing.T) {
+	// openForwardTestChannel installs the impl from this package, so this
+	// wiring smoke authorizes via implPath == impl. Scenario filetests cover
+	// the allowedImpls branch for the same forward receive frame.
 	parentChannel := openForwardTestChannel(cross(cur), core.ChannelId(101))
 	childSource := openForwardTestChannel(cross(cur), core.ChannelId(102))
 	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), nil, []string{

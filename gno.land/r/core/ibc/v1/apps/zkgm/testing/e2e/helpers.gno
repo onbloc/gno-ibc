@@ -111,6 +111,86 @@ func MustBatchInstruction(cur realm, batch z.Batch) z.Instruction {
 	}
 }
 
+func MustForwardInstruction(cur realm, forward z.Forward) z.Instruction {
+	forwardBytes, err := z.EncodeForward(forward)
+	if err != nil {
+		panic(err)
+	}
+	return z.Instruction{
+		Version: z.INSTR_VERSION_0,
+		Opcode:  z.OP_FORWARD,
+		Operand: forwardBytes,
+	}
+}
+
+func ForwardPath(cur realm, channels ...uint32) *u256.Uint {
+	path := u256.Zero()
+	for _, channel := range channels {
+		var err error
+		path, err = z.UpdateChannelPath(path, channel)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return path
+}
+
+func MustForwardChildPacket(cur realm, packet core.Packet, path *u256.Uint, parentSalt [32]byte, forward z.Forward) core.Packet {
+	forwardPath := mustCloneUint(forward.Path)
+	tailPath, prevDestChannel := z.DequeueChannelFromPath(forwardPath)
+	if prevDestChannel == 0 {
+		panic("zkgm/e2e: forward missing previous destination channel")
+	}
+	continuationPath, nextSourceChannel := z.DequeueChannelFromPath(tailPath)
+	if nextSourceChannel == 0 {
+		panic("zkgm/e2e: forward missing next source channel")
+	}
+	if packet.DestinationChannelId != core.ChannelId(prevDestChannel) {
+		panic("zkgm/e2e: forward previous-destination mismatch")
+	}
+
+	nextInstruction := forward.Instruction
+	if !continuationPath.IsZero() {
+		nextForward := z.Forward{
+			Path:             continuationPath,
+			TimeoutHeight:    0,
+			TimeoutTimestamp: forward.TimeoutTimestamp,
+			Instruction:      forward.Instruction,
+		}
+		nextInstruction = MustForwardInstruction(cross(cur), nextForward)
+	}
+
+	intermediate, err := z.UpdateChannelPath(path, prevDestChannel)
+	if err != nil {
+		panic(err)
+	}
+	nextPath, err := z.UpdateChannelPath(intermediate, nextSourceChannel)
+	if err != nil {
+		panic(err)
+	}
+
+	childBytes, err := z.EncodeZkgmPacket(z.ZkgmPacket{
+		Salt:        z.DeriveForwardSalt(parentSalt),
+		Path:        nextPath,
+		Instruction: nextInstruction,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	sourceChannelId := core.ChannelId(nextSourceChannel)
+	sourceChannel := core.GetChannel(sourceChannelId)
+	return core.NewPacket(cross(cur), sourceChannelId, sourceChannel.CounterpartyChannelId, childBytes, 0, core.Timestamp(forward.TimeoutTimestamp))
+}
+
+func mustCloneUint(in *u256.Uint) *u256.Uint {
+	out, err := u256.FromDecimal(in.Dec())
+	if err != nil {
+		panic(err)
+	}
+	return out
+}
+
 func MustPacketData(cur realm, instr z.Instruction) []byte {
 	packetBytes, err := z.EncodeZkgmPacket(z.ZkgmPacket{
 		Path:        u256.Zero(),

@@ -34,8 +34,8 @@ var (
 	}}
 )
 
-func EncodeClientState(cs ClientState) []byte {
-	buf, _ := abienc.Encode(clientStateSchema, []any{
+func EncodeClientState(cs ClientState) ([]byte, error) {
+	return abienc.Encode(clientStateSchema, []any{
 		cs.L2ChainID,
 		cs.L1ClientID,
 		cs.L2ClientID,
@@ -44,7 +44,6 @@ func EncodeClientState(cs ClientState) []byte {
 		uint32(cs.StateRootOffset),
 		uint32(cs.StorageRootOffset),
 	})
-	return buf
 }
 
 func DecodeClientState(buf []byte) (ClientState, error) {
@@ -108,14 +107,13 @@ func DecodeConsensusState(buf []byte) (ConsensusState, error) {
 	}, nil
 }
 
-func EncodeHeader(h Header) []byte {
-	buf, _ := abienc.Encode(headerSchema, []any{
+func EncodeHeader(h Header) ([]byte, error) {
+	return abienc.Encode(headerSchema, []any{
 		uint64(h.L1Height),
 		uint64(h.L2Height),
 		h.L2ConsensusStateProof,
 		h.L2ConsensusState,
 	})
-	return buf
 }
 
 func DecodeHeader(buf []byte) (Header, error) {

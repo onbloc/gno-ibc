@@ -19,4 +19,4 @@ func main(cur realm) {
 }
 
 // Error:
-// cometbls: membership verification failed: cometbls: consensus state not found at height
+// cometbls: consensus state not found at height 3405691582

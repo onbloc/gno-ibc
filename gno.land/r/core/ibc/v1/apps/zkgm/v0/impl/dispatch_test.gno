@@ -54,8 +54,9 @@ func TestAckUnsupportedOpcodeAborts(cur realm, t *testing.T) {
 
 // TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck verifies that
 // an error occurring before any state mutation produces a failure ack rather
-// than aborting the transaction. This confirms the existing recovery path is
-// preserved for pre-mutation errors.
+// than aborting the transaction. The error is returned directly from
+// executeTokenOrderV2 and converted to errResult by Recv — the recover in
+// dispatchExecute is not involved.
 func TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 
@@ -107,7 +108,7 @@ func TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts(cur realm, t *testing.T
 	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
 	packet := core.NewPacket(cross(cur), core.ChannelId(1), destChan, data, 0, 0)
 
-	uassert.AbortsContains(t, cur, "", func(cur realm) {
+	uassert.AbortsContains(t, cur, "mint overflow", func(cur realm) {
 		(&ZkgmV1{}).Recv(cur, packet, address(testAddress("fee-fatal-relayer")), nil)
 	})
 }

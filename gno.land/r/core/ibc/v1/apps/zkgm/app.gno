@@ -47,6 +47,7 @@ func (a *App) OnChannelCloseConfirm(cur realm, channelId core.ChannelId, relayer
 }
 
 func (a *App) OnRecvPacket(cur realm, packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
+	requireCoreCaller(cur, "recv")
 	if paused {
 		panic("zkgm: paused")
 	}
@@ -57,6 +58,7 @@ func (a *App) OnRecvPacket(cur realm, packet core.Packet, relayer address, relay
 }
 
 func (a *App) OnIntentRecvPacket(cur realm, packet core.Packet, marketMaker address, marketMakerMsg []byte) core.RecvPacketResult {
+	requireCoreCaller(cur, "intent recv")
 	if paused {
 		panic("zkgm: paused")
 	}
@@ -67,6 +69,7 @@ func (a *App) OnIntentRecvPacket(cur realm, packet core.Packet, marketMaker addr
 }
 
 func (a *App) OnAcknowledgementPacket(cur realm, packet core.Packet, ack []byte, relayer address) {
+	requireCoreCaller(cur, "ack")
 	if paused {
 		panic("zkgm: paused")
 	}
@@ -77,6 +80,7 @@ func (a *App) OnAcknowledgementPacket(cur realm, packet core.Packet, ack []byte,
 }
 
 func (a *App) OnTimeoutPacket(cur realm, packet core.Packet, relayer address) {
+	requireCoreCaller(cur, "timeout")
 	if paused {
 		panic("zkgm: paused")
 	}
@@ -95,6 +99,13 @@ func ensureImpl() {
 func ensureVersion(version string) {
 	if version != Version {
 		panic("zkgm: unsupported channel version")
+	}
+}
+
+func requireCoreCaller(cur realm, action string) {
+	caller := cur.Previous().PkgPath()
+	if caller != core.PkgPath(cross(cur)) && caller != "" && caller != proxyPkgPath {
+		panic("zkgm: only core can " + action + ", got " + caller)
 	}
 }
 

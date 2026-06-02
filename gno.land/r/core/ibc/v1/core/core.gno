@@ -13,6 +13,11 @@ func init() {
 	st = newState()
 }
 
+// PkgPath returns this core realm's package path.
+func PkgPath(cur realm) string {
+	return cur.PkgPath()
+}
+
 // ILightClient defines the interface that light client adapters must implement.
 // Methods that modify adapter state must declare _ realm as the first parameter
 // (Gno crossing function requirement for cross(cur)-realm state writes).

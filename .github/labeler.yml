@@ -40,8 +40,14 @@ A-tooling:
           - 'Makefile'
           - 'Dockerfile'
           - 'flake.nix'
+          - 'gnowork.toml'
+
+A-deps:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.gno-version'
+          - '**/go.mod'
+          - '**/go.sum'
           - 'flake.lock'
           - 'Cargo.toml'
           - 'Cargo.lock'
-          - 'gnowork.toml'
-          - '.gno-version'

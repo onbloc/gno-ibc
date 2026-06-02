@@ -1,5 +1,5 @@
-// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
-package scenarios
+// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls/scenarios_batchsend
+package scenarios_batchsend
 
 import (
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -7,9 +7,9 @@ import (
 	"gno.land/p/nt/testutils/v0"
 	core "gno.land/r/core/ibc/v1/core"
 	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
+	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/loader"
 	realcometbls "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls"
 	impl "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl"
-	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
 )
 
 func main(cur realm) {

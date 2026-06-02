@@ -7,18 +7,26 @@ import (
 	"strings"
 )
 
-var deployer address
+var admin address
 
 func init(cur realm) {
-	deployer = rtunsafe.OriginCaller()
+	admin = rtunsafe.OriginCaller()
 }
 
-func isDeployer() bool {
-	return rtunsafe.OriginCaller() == deployer
+// GetAdmin returns the current admin address.
+func GetAdmin() address {
+	return admin
 }
 
-func assertDeployer(action string) {
-	if !isDeployer() {
+// SetAdmin transfers admin rights to a new address. Only callable by the current admin.
+func SetAdmin(cur realm, newAdmin address) {
+	runtime.AssertOriginCall()
+	assertAdmin("set admin")
+	admin = newAdmin
+}
+
+func assertAdmin(action string) {
+	if rtunsafe.OriginCaller() != admin {
 		panic("caller not authorized to " + action + ": unauthorized")
 	}
 }
@@ -62,21 +70,17 @@ func UpdateClient(cur realm, msg MsgUpdateClient) Height {
 
 // ForceUpdateClient updates the client and consensus states without verifying proofs.
 //
-// It is restricted to the deployer and is intended for recovering expired or
-// otherwise unrecoverable clients. It panics if the caller is not the deployer
+// It is restricted to the admin and is intended for recovering expired or
+// otherwise unrecoverable clients. It panics if the caller is not the admin
 // or if the light client does not implement IForceLightClient.
 func ForceUpdateClient(cur realm, msg MsgForceUpdateClient) Height {
-	assertDeployer("ForceUpdateClient")
+	assertAdmin("ForceUpdateClient")
 
 	impl, ok := st.getClient(msg.ClientId).(IForceLightClient)
 	if !ok {
 		panic("client does not support ForceUpdateClient")
 	}
 
-	// AssertOriginCall prevents re-entrancy through intermediate realms.
-	//
-	// Without this check, a contract invoked by the deployer within the same
-	// transaction could hijack this entrypoint via tx.origin phishing.
 	runtime.AssertOriginCall()
 	update := impl.ForceUpdateClient(cross(cur), msg.ClientId, msg.ClientStateBytes, msg.ConsensusStateBytes)
 
@@ -118,9 +122,9 @@ func RegisterClient(cur realm, clientType ClientType, client ILightClient) {
 
 // RegisterClientForType registers a light client implementation for clientType.
 //
-// It is restricted to the deployer.
+// It is restricted to the admin.
 func RegisterClientForType(cur realm, clientType ClientType, client ILightClient) {
-	assertDeployer("register client")
+	assertAdmin("register client")
 	runtime.AssertOriginCall()
 	st.registerClient(clientType, client)
 }

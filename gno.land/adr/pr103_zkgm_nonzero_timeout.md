@@ -22,6 +22,11 @@ committing a child packet. The forward path returns an error instead of panickin
 `executeForward` converts malformed zero-timeout forwards into a clean receive
 failure result.
 
+Also reject `Forward.TimeoutTimestamp == 0` in `verifyForward`, which runs on the
+sender's verify path. This fails the originating send tx immediately instead of
+letting the relayer discover the malformed forward when `buildForwardChild` rejects it
+at the next hop.
+
 Do not change v1 core `PacketSend` or `BatchSend` in this PR.
 
 ## Alternatives Considered

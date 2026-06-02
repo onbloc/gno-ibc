@@ -50,11 +50,22 @@ func TestVerifyForwardPassesAllowedChildren(cur realm, t *testing.T) {
 	}
 	for _, instr := range cases {
 		err := (&ZkgmV1{}).verifyForward(cur, core.ChannelId(1), sender, newSentCoinBudget(nil), u256.Zero(), [32]byte{}, z.Forward{
-			Path:        forwardPath(1, 2),
-			Instruction: instr,
+			Path:             forwardPath(1, 2),
+			TimeoutTimestamp: 999,
+			Instruction:      instr,
 		})
 		uassert.NoError(t, err)
 	}
+}
+
+func TestVerifyForwardRejectsZeroTimeout(cur realm, t *testing.T) {
+	err := (&ZkgmV1{}).verifyForward(cur, core.ChannelId(1), "sender", newSentCoinBudget(nil), u256.Zero(), [32]byte{}, z.Forward{
+		Path:             forwardPath(1, 2),
+		TimeoutTimestamp: 0,
+		Instruction:      batchMustCallInstruction(batchCall("sender", "")),
+	})
+
+	uassert.True(t, err == errForwardZeroTimeout)
 }
 
 func TestBuildForwardChildPacket(cur realm, t *testing.T) {

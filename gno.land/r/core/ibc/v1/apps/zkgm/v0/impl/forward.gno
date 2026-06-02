@@ -25,6 +25,9 @@ func (v *ZkgmV1) verifyForward(cur realm, channelId core.ChannelId, sender strin
 	if z.HopCount(forward.Path) > z.MaxHops {
 		return errForwardHopExceeded
 	}
+	if forward.TimeoutTimestamp == 0 {
+		return errForwardZeroTimeout
+	}
 
 	return v.dispatchVerify(cur, channelId, sender, budget, forward.Path, z.DeriveForwardSalt(salt), forward.Instruction)
 }

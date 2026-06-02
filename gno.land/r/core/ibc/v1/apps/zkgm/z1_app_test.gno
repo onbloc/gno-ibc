@@ -3,6 +3,7 @@ package zkgm
 import (
 	"testing"
 
+	z "gno.land/p/gnoswap/ibc/zkgm"
 	"gno.land/p/nt/uassert/v0"
 	core "gno.land/r/core/ibc/v1/core"
 )
@@ -202,6 +203,27 @@ func TestAppNilImplPolicy(cur realm, t *testing.T) {
 
 	(&App{}).OnAcknowledgementPacket(cur, packet, []byte{0x01}, address("g1relayer"))
 	(&App{}).OnTimeoutPacket(cur, packet, address("g1relayer"))
+}
+
+func TestAssertNonZeroTimeoutRejectsZero(cur realm, t *testing.T) {
+	uassert.AbortsContains(t, cur, "zkgm: timeout timestamp must be non-zero", func(cur realm) {
+		assertNonZeroTimeout(0)
+	})
+}
+
+func TestAssertNonZeroTimeoutAcceptsNonZero(cur realm, t *testing.T) {
+	uassert.NotAborts(t, cur, func(cur realm) {
+		assertNonZeroTimeout(core.Timestamp(1))
+		assertNonZeroTimeout(core.Timestamp(3600))
+	})
+}
+
+func TestSendPacketRejectsZeroTimeout(cur realm, t *testing.T) {
+	resetZkgmForTest()
+
+	uassert.AbortsContains(t, cur, "zkgm: timeout timestamp must be non-zero", func(cur realm) {
+		sendPacket(cur, core.ChannelId(1), 0, [32]byte{}, z.Instruction{}, "g1sender", "")
+	})
 }
 
 func TestDecodeHexArg(cur realm, t *testing.T) {

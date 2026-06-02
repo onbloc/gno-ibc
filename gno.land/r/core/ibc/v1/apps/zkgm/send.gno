@@ -10,10 +10,10 @@ import (
 )
 
 func Send(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, salt [32]byte, instruction z.Instruction) core.Packet {
-	cacheRealm(cur)
 	if paused {
 		panic("zkgm: paused")
 	}
+	cacheRealm(cur)
 	if impl == nil {
 		panic("zkgm: impl not set")
 	}
@@ -34,10 +34,10 @@ func Send(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, 
 // z.Instruction or [32]byte values directly, so external smoke tests pass those
 // fields as primitive hex/string arguments instead.
 func SendRaw(cur realm, channelId uint32, timeoutTimestamp uint64, saltHex string, version uint8, opcode uint8, operandHex string) core.Packet {
-	cacheRealm(cur)
 	if paused {
 		panic("zkgm: paused")
 	}
+	cacheRealm(cur)
 	saltBytes := mustDecodeHexArg("salt", saltHex)
 	if len(saltBytes) != 32 {
 		panic("zkgm: salt must be 32 bytes")

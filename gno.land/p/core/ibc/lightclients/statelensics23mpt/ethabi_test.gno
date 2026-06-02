@@ -38,7 +38,11 @@ func TestClientStateEthABIVector(t *testing.T) {
 		StorageRootOffset: 64,
 	}
 
-	assertBytes(t, "EncodeClientState", EncodeClientState(value), bz)
+	encoded, err := EncodeClientState(value)
+	if err != nil {
+		t.Fatalf("EncodeClientState: %v", err)
+	}
+	assertBytes(t, "EncodeClientState", encoded, bz)
 
 	got, err := DecodeClientState(bz)
 	if err != nil {
@@ -108,7 +112,10 @@ func TestHeaderEthABI(t *testing.T) {
 			"0102030400000000000000000000000000000000000000000000000000000000",
 	)
 
-	encoded := EncodeHeader(value)
+	encoded, err := EncodeHeader(value)
+	if err != nil {
+		t.Fatalf("EncodeHeader: %v", err)
+	}
 	assertBytes(t, "EncodeHeader", encoded, want)
 
 	got, err := DecodeHeader(encoded)

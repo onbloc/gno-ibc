@@ -67,7 +67,7 @@ func UpdateChannelPath(path *u256.Uint, nextChannelID uint32) (*u256.Uint, error
 	if nextHopIndex > maxHopIndex {
 		return nil, ErrChannelPathFull
 	}
-	slot := MakePathFromChannel(nextChannelID, int(nextHopIndex))
+	slot := MakePathFromChannel(nextChannelID, nextHopIndex)
 	return new(u256.Uint).Or(slot, path), nil
 }
 

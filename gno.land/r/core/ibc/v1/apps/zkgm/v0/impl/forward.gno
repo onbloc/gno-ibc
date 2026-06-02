@@ -22,7 +22,7 @@ func (v *ZkgmV1) verifyForward(cur realm, channelId core.ChannelId, sender strin
 	if !isAllowedForwardInstruction(forward.Instruction.Opcode) {
 		return errInvalidForwardInstruction
 	}
-	if z.HopCount(forward.Path) > z.MaxHops {
+	if z.HopCount(forward.Path) >= z.MaxHops {
 		return errForwardHopExceeded
 	}
 	if forward.TimeoutTimestamp == 0 {

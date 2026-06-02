@@ -26,8 +26,7 @@ var channelIDMaskU256 = u256.NewUint(channelIDMask)
 // shifts the remainder right. Returns the truncated path and the popped
 // channel ID. A channel ID of 0 means the path was empty.
 //
-// Mirrors `dequeue_channel_from_path` at
-// union/cosmwasm/app/ucs03-zkgm/src/contract.rs:3333.
+// Based on Union's `dequeue_channel_from_path` path helper.
 func DequeueChannelFromPath(path *u256.Uint) (*u256.Uint, uint32) {
 	if path.IsZero() {
 		return u256.Zero(), 0
@@ -41,7 +40,7 @@ func DequeueChannelFromPath(path *u256.Uint) (*u256.Uint, uint32) {
 // the path, returning the path with that slot cleared and the popped channel
 // ID. A channel ID of 0 means the path was empty.
 //
-// Mirrors `pop_channel_from_path` at contract.rs:3351.
+// Based on Union's `pop_channel_from_path` path helper.
 func PopChannelFromPath(path *u256.Uint) (*u256.Uint, uint32) {
 	if path.IsZero() {
 		return u256.Zero(), 0
@@ -58,12 +57,13 @@ func PopChannelFromPath(path *u256.Uint) (*u256.Uint, uint32) {
 // 32-bit slot. Returns ErrChannelPathFull when the path can no longer hold
 // another hop.
 //
-// Mirrors `update_channel_path` at contract.rs:3365.
+// Uses the occupied slot count so full-width 32-bit channel IDs still append
+// to the immediately next slot instead of skipping an aligned bit boundary.
 func UpdateChannelPath(path *u256.Uint, nextChannelID uint32) (*u256.Uint, error) {
 	if path.IsZero() {
 		return u256.NewUint(uint64(nextChannelID)), nil
 	}
-	nextHopIndex := uint(path.BitLen())/channelSlotBit + 1
+	nextHopIndex := HopCount(path)
 	if nextHopIndex > maxHopIndex {
 		return nil, ErrChannelPathFull
 	}
@@ -74,7 +74,7 @@ func UpdateChannelPath(path *u256.Uint, nextChannelID uint32) (*u256.Uint, error
 // GetChannelFromPath returns the channel ID stored at the given 32-bit slot
 // (0-indexed from the LSB). Returns 0 if the slot is empty or out of range.
 //
-// Mirrors `get_channel_from_path` at contract.rs:3380.
+// Based on Union's `get_channel_from_path` path helper.
 func GetChannelFromPath(path *u256.Uint, index int) uint32 {
 	if index < 0 {
 		return 0
@@ -95,7 +95,7 @@ func HopCount(path *u256.Uint) int {
 
 // MakePathFromChannel builds a path containing channelID at the given slot.
 //
-// Mirrors `make_path_from_channel` at contract.rs:3386.
+// Based on Union's `make_path_from_channel` path helper.
 func MakePathFromChannel(channelID uint32, index int) *u256.Uint {
 	if index < 0 {
 		return u256.Zero()
@@ -107,11 +107,11 @@ func MakePathFromChannel(channelID uint32, index int) *u256.Uint {
 // order. Empty channel slots are skipped. Returns ErrChannelPathFull when the
 // reversed path would overflow.
 //
-// Mirrors `reverse_channel_path` at contract.rs:3390.
+// Based on Union's `reverse_channel_path` path helper.
 func ReverseChannelPath(path *u256.Uint) (*u256.Uint, error) {
 	reversed := u256.Zero()
 	cur := path
-	for {
+	for hops := 0; hops < MaxHops; hops++ {
 		tail, head := PopChannelFromPath(cur)
 		if head != 0 {
 			updated, err := UpdateChannelPath(reversed, head)
@@ -121,9 +121,11 @@ func ReverseChannelPath(path *u256.Uint) (*u256.Uint, error) {
 			reversed = updated
 		}
 		if tail.IsZero() {
-			break
+			return reversed, nil
 		}
 		cur = tail
 	}
-	return reversed, nil
+	// A valid uint256 path has at most MaxHops 32-bit slots. Reaching this
+	// branch means the path invariant was violated before the tail was consumed.
+	return nil, ErrChannelPathFull
 }

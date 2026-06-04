@@ -79,6 +79,22 @@ func TestRecvGateRejectsProxyCaller(cur realm, t *testing.T) {
 	})
 }
 
+func TestIntentRecvGateRejectsProxyCaller(cur realm, t *testing.T) {
+	packet := setupGateImpl(cur)
+	testing.SetRealm(testing.NewCodeRealm(proxyPkgPath))
+	uassert.AbortsContains(t, cur, "only core can intent recv", func() {
+		(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
+	})
+}
+
+func TestAckGateRejectsProxyCaller(cur realm, t *testing.T) {
+	packet := setupGateImpl(cur)
+	testing.SetRealm(testing.NewCodeRealm(proxyPkgPath))
+	uassert.AbortsContains(t, cur, "only core can ack", func() {
+		(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
+	})
+}
+
 func TestTimeoutGateRejectsProxyCaller(cur realm, t *testing.T) {
 	packet := setupGateImpl(cur)
 	testing.SetRealm(testing.NewCodeRealm(proxyPkgPath))

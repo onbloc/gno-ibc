@@ -10,6 +10,9 @@ import (
 var admin address
 
 func init(cur realm) {
+	// Use OriginCaller intentionally: when deployed through a loader realm,
+	// cur.Previous() is the loader, not the operator EOA.
+	// The admin must be the EOA that signed the deployment transaction.
 	admin = rtunsafe.OriginCaller()
 }
 
@@ -21,12 +24,12 @@ func GetAdmin() address {
 // SetAdmin transfers admin rights to a new address. Only callable by the current admin.
 func SetAdmin(cur realm, newAdmin address) {
 	runtime.AssertOriginCall()
-	assertAdmin("set admin")
+	assertAdmin(cur, "set admin")
 	admin = newAdmin
 }
 
-func assertAdmin(action string) {
-	if rtunsafe.OriginCaller() != admin {
+func assertAdmin(cur realm, action string) {
+	if cur.Previous().Address() != admin {
 		panic("caller not authorized to " + action + ": unauthorized")
 	}
 }
@@ -74,7 +77,7 @@ func UpdateClient(cur realm, msg MsgUpdateClient) Height {
 // otherwise unrecoverable clients. It panics if the caller is not the admin
 // or if the light client does not implement IForceLightClient.
 func ForceUpdateClient(cur realm, msg MsgForceUpdateClient) Height {
-	assertAdmin("ForceUpdateClient")
+	assertAdmin(cur, "ForceUpdateClient")
 
 	impl, ok := st.getClient(msg.ClientId).(IForceLightClient)
 	if !ok {
@@ -124,7 +127,7 @@ func RegisterClient(cur realm, clientType ClientType, client ILightClient) {
 //
 // It is restricted to the admin.
 func RegisterClientForType(cur realm, clientType ClientType, client ILightClient) {
-	assertAdmin("register client")
+	assertAdmin(cur, "register client")
 	runtime.AssertOriginCall()
 	st.registerClient(clientType, client)
 }

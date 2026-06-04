@@ -2,7 +2,7 @@ package main
 
 import (
 	core "gno.land/r/onbloc/unionibc/v1/core"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 )
 
 func main() {

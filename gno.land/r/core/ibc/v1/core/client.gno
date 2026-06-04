@@ -10,9 +10,9 @@ import (
 var admin address
 
 func init(cur realm) {
-	// OriginCaller is intentional: when deployed via a loader realm,
-	// cur.Previous() would yield the loader's address, not the operator EOA.
-	// Admin must always be the human operator who signs the deployment tx.
+	// Use OriginCaller intentionally: when deployed through a loader realm,
+	// cur.Previous() is the loader, not the operator EOA.
+	// The admin must be the EOA that signed the deployment transaction.
 	admin = rtunsafe.OriginCaller()
 }
 

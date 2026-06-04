@@ -2,7 +2,6 @@ package zkgm
 
 import (
 	"chain/runtime"
-	rtunsafe "chain/runtime/unsafe"
 
 	tb "gno.land/p/gnoswap/tokenbucket"
 	u256 "gno.land/p/gnoswap/uint256"
@@ -10,12 +9,12 @@ import (
 )
 
 func Pause(cur realm) {
-	mustBeAdmin()
+	mustBeAdmin(cur)
 	paused = true
 }
 
 func Unpause(cur realm) {
-	mustBeAdmin()
+	mustBeAdmin(cur)
 	paused = false
 }
 
@@ -23,7 +22,7 @@ func Unpause(cur realm) {
 // rate limiting. The bucket is anchored to block time (time.Now().Unix()), so
 // RefillRate is in tokens per second. Admin-only.
 func SetBucketConfig(cur realm, denom string, capacity *u256.Uint, refillRate *u256.Uint) {
-	mustBeAdmin()
+	mustBeAdmin(cur)
 
 	bucket := GetTokenBucket(denom)
 	if bucket == nil {
@@ -46,14 +45,14 @@ func SetBucketConfig(cur realm, denom string, capacity *u256.Uint, refillRate *u
 
 // SetRateLimitDisabled toggles the global rate-limit kill switch. Admin-only.
 func SetRateLimitDisabled(cur realm, disabled bool) {
-	mustBeAdmin()
+	mustBeAdmin(cur)
 	rateLimitDisabled = disabled
 }
 
-func mustBeAdmin() {
+func mustBeAdmin(cur realm) {
 	admin := core.GetAdmin()
 	runtime.AssertOriginCall()
-	if rtunsafe.OriginCaller() != admin {
+	if cur.Previous().Address() != admin {
 		panic("zkgm: admin only")
 	}
 }

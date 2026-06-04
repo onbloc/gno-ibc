@@ -1,7 +1,6 @@
 package core
 
 import (
-	rtunsafe "chain/runtime/unsafe"
 	"time"
 )
 
@@ -78,7 +77,7 @@ func commitSyncAck(packet Packet, channel Channel, connection Connection, res Re
 }
 
 func PacketRecv(cur realm, msg MsgPacketRecv) {
-	relayer := rtunsafe.OriginCaller()
+	relayer := cur.Previous().Address()
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
 	}
@@ -113,7 +112,7 @@ func PacketRecv(cur realm, msg MsgPacketRecv) {
 }
 
 func IntentPacketRecv(cur realm, msg MsgIntentPacketRecv) {
-	marketMaker := rtunsafe.OriginCaller()
+	marketMaker := cur.Previous().Address()
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
 	}
@@ -145,7 +144,7 @@ func IntentPacketRecv(cur realm, msg MsgIntentPacketRecv) {
 }
 
 func PacketAcknowledgement(cur realm, msg MsgPacketAcknowledgement) {
-	relayer := rtunsafe.OriginCaller()
+	relayer := cur.Previous().Address()
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
 	}
@@ -187,7 +186,7 @@ func PacketAcknowledgement(cur realm, msg MsgPacketAcknowledgement) {
 }
 
 func PacketTimeout(cur realm, msg MsgPacketTimeout) {
-	relayer := rtunsafe.OriginCaller()
+	relayer := cur.Previous().Address()
 	packet := msg.Packet
 	if !st.hasPacketCommitment(packet) {
 		return

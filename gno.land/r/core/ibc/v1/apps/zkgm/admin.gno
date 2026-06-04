@@ -58,11 +58,15 @@ func SetRateLimitDisabled(cur realm, disabled bool) {
 // allowedImpls gate, so it remains callable even when the list is sealed to a
 // broken impl. Admin-only emergency path: use only when the registered impl is
 // irrecoverable and normal upgrade governance is blocked.
-func ForceSetImpl(cur realm, newImpl ZkgmImpl, path string, newAllowedImpls []string) {
+//
+// Passing nil for newAllowedImpls clears the allowed-impls list; any
+// subsequent UpdateImpl call from the new impl will be rejected until the list
+// is repopulated, so callers should pass a non-nil slice in normal recovery.
+func ForceSetImpl(cur realm, newImpl ZkgmImpl, newImplPath string, newAllowedImpls []string) {
 	mustBeAdmin(cur)
 	runtime.AssertOriginCall()
 	impl = newImpl
-	implPath = path
+	implPath = newImplPath
 	allowedImpls = cloneStrings(newAllowedImpls)
 }
 

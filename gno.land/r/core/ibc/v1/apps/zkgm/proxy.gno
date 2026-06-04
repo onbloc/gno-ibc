@@ -154,7 +154,7 @@ func ReleaseNative(cur realm, denom string, recipient address, amount int64) {
 // funds on behalf of the proxy.
 func requireImplCaller(cur realm, action string) {
 	callerPath := cur.Previous().PkgPath()
-	if callerPath == "" || (callerPath != implPath && (len(allowedImpls) == 0 || !InAllowedImpls(callerPath))) {
+	if !isAuthorizedImpl(callerPath) {
 		panic(ufmt.Sprintf("zkgm: only registered impl (%s) can %s, got %s", implPath, action, callerPath))
 	}
 }

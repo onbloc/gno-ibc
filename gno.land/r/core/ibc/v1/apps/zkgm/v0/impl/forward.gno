@@ -11,7 +11,6 @@ import (
 
 var (
 	errInvalidForwardInstruction = errors.New("zkgm/v1: invalid forward instruction")
-	errForwardHopExceeded        = errors.New("zkgm/v1: forward hop count exceeded")
 	errForwardMissingPrevDest    = errors.New("zkgm/v1: forward missing previous destination channel")
 	errForwardMissingNextSource  = errors.New("zkgm/v1: forward missing next source channel")
 	errForwardPrevDestMismatch   = errors.New("zkgm/v1: forward previous-destination mismatch")
@@ -22,9 +21,7 @@ func (v *ZkgmV1) verifyForward(cur realm, channelId core.ChannelId, sender strin
 	if !isAllowedForwardInstruction(forward.Instruction.Opcode) {
 		return errInvalidForwardInstruction
 	}
-	if z.HopCount(forward.Path) >= z.MaxHops {
-		return errForwardHopExceeded
-	}
+
 	if forward.TimeoutTimestamp == 0 {
 		return errForwardZeroTimeout
 	}

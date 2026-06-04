@@ -53,15 +53,13 @@ func SetRateLimitDisabled(cur realm, disabled bool) {
 	rateLimitDisabled = disabled
 }
 
-// ForceSetImpl overwrites the registered impl, its package path, and the
-// allowedImpls list in a single atomic step. Bypasses UpdateImpl's
-// allowedImpls gate, so it remains callable even when the list is sealed to a
-// broken impl. Admin-only emergency path: use only when the registered impl is
-// irrecoverable and normal upgrade governance is blocked.
+// ForceSetImpl forcibly replaces the registered implementation.
 //
-// Passing nil for newAllowedImpls clears the allowed-impls list; any
-// subsequent UpdateImpl call from the new impl will be rejected until the list
-// is repopulated, so callers should pass a non-nil slice in normal recovery.
+// Unlike UpdateImpl, ForceSetImpl bypasses implementation-allowlist checks and
+// is intended only for administrative recovery when the registered
+// implementation can no longer upgrade itself.
+//
+// Passing nil for newAllowedImpls clears the allowlist.
 func ForceSetImpl(cur realm, newImpl ZkgmImpl, newImplPath string, newAllowedImpls []string) {
 	mustBeAdmin(cur)
 	runtime.AssertOriginCall()

@@ -9,6 +9,9 @@ import (
 )
 
 func TestRateLimitLifecycle(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	implPath = ProxyPkgPath()
+
 	denom := "v1-rate-limit-lifecycle"
 	rateLimitDisabled = false
 	bucket, bucketErr := tb.New(u256.NewUint(10), u256.NewUint(1), blockNow())

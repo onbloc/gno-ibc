@@ -1504,6 +1504,62 @@ func TestVerifyClientMembershipRejectsInactiveClientBeforeMembership(cur realm, 
 	}
 }
 
+// Handler-level guard: PacketRecv must reject an inactive client before it
+// verifies the batch membership proof or touches receipt/app state.
+func TestPacketRecvRejectsInactiveClient(cur realm, t *testing.T) {
+	resetState()
+	portId, _, channelId := setupOpenChannel(t)
+	app := st.ports[portKey(portId)].(*mockApp)
+	client := st.clientRegistry[mockType].(*mockClient)
+	client.status = StatusFrozen
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
+		PacketRecv(cur, MsgPacketRecv{Packets: []Packet{packet}, Proof: Bytes("proof"), ProofHeight: Height(10)})
+	})
+
+	if len(client.membershipKeys) != 0 {
+		t.Fatalf("membership calls: got %d want 0", len(client.membershipKeys))
+	}
+	if len(app.recvPackets) != 0 {
+		t.Fatalf("OnRecvPacket calls: got %d want 0", len(app.recvPackets))
+	}
+	if st.hasPacketReceipt(packet) {
+		t.Fatal("inactive client must not set packet receipt")
+	}
+	if st.hasAcknowledgement(packet) {
+		t.Fatal("inactive client must not commit acknowledgement")
+	}
+}
+
+// Handler-level guard: ChannelOpenTry must reject an inactive client before it
+// verifies the counterparty membership proof or persists the channel.
+func TestChannelOpenTryRejectsInactiveClient(cur realm, t *testing.T) {
+	resetState()
+	portId, connId, _ := setupOpenChannel(t)
+	client := st.clientRegistry[mockType].(*mockClient)
+	client.status = StatusExpired
+	channelsBefore := len(st.channelOwners)
+	channel := Channel{
+		State:                 ChannelStateTryOpen,
+		ConnectionId:          connId,
+		CounterpartyChannelId: ChannelId(99),
+		CounterpartyPortId:    Bytes("counterparty"),
+		Version:               "ics20-1",
+	}
+
+	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
+		ChannelOpenTry(cur, MsgChannelOpenTry{PortId: portId, Channel: channel, CounterpartyVersion: "ics20-1", ProofInit: Bytes("proof"), ProofHeight: Height(10)})
+	})
+
+	if len(client.membershipKeys) != 0 {
+		t.Fatalf("membership calls: got %d want 0", len(client.membershipKeys))
+	}
+	if len(st.channelOwners) != channelsBefore {
+		t.Fatal("inactive client must not persist a new channel")
+	}
+}
+
 func TestGetClientStatusDelegatesToClient(cur realm, t *testing.T) {
 	resetState()
 	st.clientRegistry[mockType] = &mockClient{chainId: "union-1", status: StatusFrozen}

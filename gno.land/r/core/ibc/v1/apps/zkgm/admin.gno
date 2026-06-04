@@ -10,11 +10,13 @@ import (
 
 func Pause(cur realm) {
 	mustBeAdmin(cur)
+	runtime.AssertOriginCall()
 	paused = true
 }
 
 func Unpause(cur realm) {
 	mustBeAdmin(cur)
+	runtime.AssertOriginCall()
 	paused = false
 }
 
@@ -23,6 +25,7 @@ func Unpause(cur realm) {
 // RefillRate is in tokens per second. Admin-only.
 func SetBucketConfig(cur realm, denom string, capacity *u256.Uint, refillRate *u256.Uint) {
 	mustBeAdmin(cur)
+	runtime.AssertOriginCall()
 
 	bucket := GetTokenBucket(denom)
 	if bucket == nil {
@@ -46,13 +49,25 @@ func SetBucketConfig(cur realm, denom string, capacity *u256.Uint, refillRate *u
 // SetRateLimitDisabled toggles the global rate-limit kill switch. Admin-only.
 func SetRateLimitDisabled(cur realm, disabled bool) {
 	mustBeAdmin(cur)
+	runtime.AssertOriginCall()
 	rateLimitDisabled = disabled
 }
 
-func mustBeAdmin(cur realm) {
-	admin := core.GetAdmin()
+// ForceSetImpl overwrites the registered impl, its package path, and the
+// allowedImpls list in a single atomic step. Bypasses UpdateImpl's
+// allowedImpls gate, so it remains callable even when the list is sealed to a
+// broken impl. Admin-only emergency path: use only when the registered impl is
+// irrecoverable and normal upgrade governance is blocked.
+func ForceSetImpl(cur realm, newImpl ZkgmImpl, path string, newAllowedImpls []string) {
+	mustBeAdmin(cur)
 	runtime.AssertOriginCall()
-	if cur.Previous().Address() != admin {
+	impl = newImpl
+	implPath = path
+	allowedImpls = cloneStrings(newAllowedImpls)
+}
+
+func mustBeAdmin(cur realm) {
+	if cur.Previous().Address() != core.GetAdmin() {
 		panic("zkgm: admin only")
 	}
 }

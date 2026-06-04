@@ -228,6 +228,33 @@ func TestReleaseNativeRejectsUnlistedCaller(cur realm, t *testing.T) {
 	uassert.Equal(t, int64(7), bk.GetCoins(ProxyAddress()).AmountOf(denom))
 }
 
+func TestForceSetImplByAdmin(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	allowedImpls = []string{"gno.land/r/not-this-realm"}
+	d := &dummyImpl{}
+
+	ForceSetImpl(cur, d, "gno.land/r/new-impl", []string{"gno.land/r/new-impl"})
+
+	if impl == nil || ImplPath() != "gno.land/r/new-impl" {
+		t.Fatal("ForceSetImpl must override impl and implPath regardless of allowedImpls lock")
+	}
+	cfg := GetConfig()
+	if len(cfg.AllowedImpls) != 1 || cfg.AllowedImpls[0] != "gno.land/r/new-impl" {
+		t.Fatal("ForceSetImpl must replace allowedImpls")
+	}
+}
+
+func TestForceSetImplDeniedForNonAdmin(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	d := &dummyImpl{}
+
+	testing.SetRealm(testing.NewUserRealm(address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")))
+
+	uassert.AbortsContains(t, cur, "zkgm: admin only", func(cur realm) {
+		ForceSetImpl(cur, d, "gno.land/r/new-impl", nil)
+	})
+}
+
 func TestReleaseNativeRejectsCallerWhenAllowedListEmpty(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	cacheRealm(cur)

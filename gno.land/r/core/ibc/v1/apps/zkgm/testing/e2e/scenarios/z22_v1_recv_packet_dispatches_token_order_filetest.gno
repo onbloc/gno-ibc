@@ -2,8 +2,6 @@
 package scenarios
 
 import (
-	rtunsafe "chain/runtime/unsafe"
-
 	z "gno.land/p/gnoswap/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
@@ -33,7 +31,7 @@ func main(cur realm) {
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, nil, core.Height(1)))
 
 	println("quote_balance", impl.VoucherBalanceOf(quoteToken, address(receiver)))
-	println("relayer_balance", impl.VoucherBalanceOf(quoteToken, rtunsafe.OriginCaller()))
+	println("relayer_balance", impl.VoucherBalanceOf(quoteToken, cur.Address()))
 }
 
 // Output:

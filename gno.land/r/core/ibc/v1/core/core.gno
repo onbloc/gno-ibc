@@ -63,8 +63,8 @@ func RegisterApp(cur realm, app IApp) {
 // RegisterAppForPort registers an IBC application at an explicit port id. This
 // privileged path is for deployment/loaders that install an app on behalf of
 // another realm.
-func RegisterAppForPort(_ realm, portId []byte, app IApp) {
-	assertAdmin("register port")
+func RegisterAppForPort(cur realm, portId []byte, app IApp) {
+	assertAdmin(cur, "register port")
 	runtime.AssertOriginCall()
 	registerAppAtPort(portId, app)
 }

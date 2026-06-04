@@ -27,7 +27,7 @@ func Send(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, 
 	}
 
 	runtime.AssertOriginCall()
-	return sendPacket(cur, channelId, timeoutTimestamp, salt, instruction, rtunsafe.OriginCaller().String(), sentCoins)
+	return sendPacket(cur, channelId, timeoutTimestamp, salt, instruction, cur.Previous().Address().String(), sentCoins)
 }
 
 // SendRaw is a gnokey-friendly wrapper around Send. `maketx call` cannot pass
@@ -61,7 +61,7 @@ func SendRaw(cur realm, channelId uint32, timeoutTimestamp uint64, saltHex strin
 			Opcode:  opcode,
 			Operand: mustDecodeHexArg("operand", operandHex),
 		},
-		rtunsafe.OriginCaller().String(),
+		cur.Previous().Address().String(),
 		sentCoins,
 	)
 }

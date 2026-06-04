@@ -102,9 +102,17 @@ func ensureVersion(version string) {
 	}
 }
 
+// requireCoreCaller panics unless the immediate caller is the core realm.
+// The recv/intent-recv/ack/timeout callbacks are reachable only through
+// core.PacketRecv/Acknowledgement/Timeout, which cross into the app with
+// cur.Previous() == core. No deployed realm, the proxy realm, or an ephemeral
+// `maketx run` caller (whose PkgPath is observed as "") has a legitimate path
+// here, so any caller other than core is rejected. Allowing "" or the proxy
+// would re-open a direct route into impl.Recv that skips core's membership-proof
+// verification and packet-receipt recording.
 func requireCoreCaller(cur realm, action string) {
 	caller := cur.Previous().PkgPath()
-	if caller != core.PkgPath(cross(cur)) && caller != "" && caller != proxyPkgPath {
+	if caller != core.PkgPath(cross(cur)) {
 		panic("zkgm: only core can " + action + ", got " + caller)
 	}
 }

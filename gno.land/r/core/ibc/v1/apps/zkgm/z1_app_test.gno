@@ -135,9 +135,13 @@ func TestAppNineMethodsDelegate(cur realm, t *testing.T) {
 	(&App{}).OnChannelOpenConfirm(cur, 2, address("g1relayer"))
 	(&App{}).OnChannelCloseInit(cur, 2, address("g1relayer"))
 	(&App{}).OnChannelCloseConfirm(cur, 2, address("g1relayer"))
-	res := (&App{}).OnRecvPacket(cur, packet, address("g1relayer"), nil)
-	(&App{}).OnAcknowledgementPacket(cur, packet, []byte{0x01}, address("g1relayer"))
-	(&App{}).OnTimeoutPacket(cur, packet, address("g1relayer"))
+
+	// Packet callbacks are gated to the core caller, so impersonate core for
+	// the legitimate delegation path.
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	res := (&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
+	(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
+	(&App{}).OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
 
 	if !d.openAckCalled || !d.openConfirmCalled || !d.closeInitCalled || !d.closeConfirmCalled {
 		t.Fatal("channel callbacks must delegate")
@@ -158,17 +162,21 @@ func TestAppPausedBlocksPacketCallbacks(cur realm, t *testing.T) {
 	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0, 0)
 
 	(&App{}).OnChannelOpenInit(cur, 1, 2, Version, address("g1relayer"))
-	uassert.AbortsContains(t, cur, "zkgm: paused", func(cur realm) {
-		(&App{}).OnRecvPacket(cur, packet, address("g1relayer"), nil)
+
+	// The caller gate runs before the paused check, so impersonate core to
+	// reach (and assert) the paused guard on each packet callback.
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+		(&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
 	})
-	uassert.AbortsContains(t, cur, "zkgm: paused", func(cur realm) {
-		(&App{}).OnIntentRecvPacket(cur, packet, address("g1maker"), nil)
+	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+		(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
 	})
-	uassert.AbortsContains(t, cur, "zkgm: paused", func(cur realm) {
-		(&App{}).OnAcknowledgementPacket(cur, packet, []byte{0x01}, address("g1relayer"))
+	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+		(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
 	})
-	uassert.AbortsContains(t, cur, "zkgm: paused", func(cur realm) {
-		(&App{}).OnTimeoutPacket(cur, packet, address("g1relayer"))
+	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+		(&App{}).OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
 	})
 
 	if !d.openInitCalled {
@@ -196,13 +204,16 @@ func TestAppNilImplPolicy(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "impl not set", func(cur realm) {
 		(&App{}).OnChannelOpenInit(cur, 1, 2, Version, address("g1relayer"))
 	})
-	res := (&App{}).OnRecvPacket(cur, packet, address("g1relayer"), nil)
+
+	// Nil-impl policy is observed past the caller gate, so impersonate core.
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	res := (&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
 	if res.Status != core.PacketStatusFailure || len(res.Ack) == 0 {
 		t.Fatal("nil impl recv must return failure acknowledgement")
 	}
 
-	(&App{}).OnAcknowledgementPacket(cur, packet, []byte{0x01}, address("g1relayer"))
-	(&App{}).OnTimeoutPacket(cur, packet, address("g1relayer"))
+	(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
+	(&App{}).OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
 }
 
 func TestAssertNonZeroTimeoutRejectsZero(cur realm, t *testing.T) {

@@ -24,9 +24,15 @@ func (v *ZkgmV1) verifyCall(cur realm, sender string, call z.Call) error {
 	return nil
 }
 
-func (v *ZkgmV1) executeCall(cur realm, packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, call z.Call) (core.RecvPacketResult, error) {
+func (v *ZkgmV1) executeCall(cur realm, packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, call z.Call, intent bool) (core.RecvPacketResult, error) {
+	// TODO: when eureka is supported, fail it closed on intent (return
+	// ACK_ERR_ONLY_MAKER) like every other opcode instead of a failure ack.
 	if call.Eureka {
 		return callErrAck(cur, errEurekaUnsupported), nil
+	}
+	if intent {
+		// Calls do not settle on the proofless market-maker fast path.
+		return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 
 	sender := cloneBytes(call.Sender)

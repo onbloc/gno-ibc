@@ -77,7 +77,7 @@ func InAllowedImpls(pkg string) bool {
 }
 
 func isAuthorizedImpl(caller string) bool {
-	return caller == implPath || InAllowedImpls(caller)
+	return caller != "" && (caller == implPath || InAllowedImpls(caller))
 }
 
 // First install is limited to subpackages of the ZKGM proxy realm. The
@@ -154,7 +154,7 @@ func ReleaseNative(cur realm, denom string, recipient address, amount int64) {
 // funds on behalf of the proxy.
 func requireImplCaller(cur realm, action string) {
 	callerPath := cur.Previous().PkgPath()
-	if callerPath != implPath && (len(allowedImpls) == 0 || !InAllowedImpls(callerPath)) {
+	if callerPath == "" || (callerPath != implPath && (len(allowedImpls) == 0 || !InAllowedImpls(callerPath))) {
 		panic(ufmt.Sprintf("zkgm: only registered impl (%s) can %s, got %s", implPath, action, callerPath))
 	}
 }

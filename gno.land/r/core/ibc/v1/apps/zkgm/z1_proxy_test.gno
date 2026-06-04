@@ -34,6 +34,20 @@ func TestInAllowedImplsFailsClosedOnEmpty(t *testing.T) {
 	}
 }
 
+func TestIsAuthorizedImplRejectsEmptyCaller(t *testing.T) {
+	resetZkgmForTest()
+
+	if isAuthorizedImpl("") {
+		t.Fatal("empty caller must not match empty implPath")
+	}
+
+	implPath = "gno.land/r/authorized"
+	allowedImpls = []string{"gno.land/r/also-authorized"}
+	if isAuthorizedImpl("") {
+		t.Fatal("empty caller must not match populated authorization state")
+	}
+}
+
 func TestProxyUpdateImplBootstrapRejectsUnpermittedCaller(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}

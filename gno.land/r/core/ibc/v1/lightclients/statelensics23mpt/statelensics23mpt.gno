@@ -7,8 +7,8 @@ import (
 	"errors"
 
 	"gno.land/p/core/ethereum/storage"
-	statelensp "gno.land/p/core/ibc/lightclients/statelensics23mpt"
-	"gno.land/r/core/ibc/v1/core"
+	statelensp "gno.land/p/onbloc/ibc/lightclients/statelensics23mpt"
+	"gno.land/r/onbloc/unionibc/v1/core"
 )
 
 // Union reference:
@@ -30,7 +30,7 @@ type clientEntry struct {
 var entries = make(map[core.ClientId]*clientEntry)
 
 func mustBeCore(cur realm) {
-	if cur.Previous().PkgPath() != "gno.land/r/core/ibc/v1/core" {
+	if cur.Previous().PkgPath() != "gno.land/r/onbloc/unionibc/v1/core" {
 		panic("statelensics23mpt: core only")
 	}
 }

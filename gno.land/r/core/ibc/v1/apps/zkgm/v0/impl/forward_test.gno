@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"testing"
 
-	z "gno.land/p/onbloc/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/core/ibc/v1/core"
-	zkgm "gno.land/r/onbloc/ibc/v1/apps/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 )
 
 func TestVerifyForwardRejectsNestedForward(cur realm, t *testing.T) {
@@ -220,8 +220,8 @@ func TestExecuteForwardThroughCoreFrameAuthorizesCoreRealm(cur realm, t *testing
 	parentChannel := openForwardTestChannel(cross(cur), core.ChannelId(101))
 	childSource := openForwardTestChannel(cross(cur), core.ChannelId(102))
 	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), nil, []string{
-		"gno.land/r/core/ibc/v1/core",
-		"gno.land/r/onbloc/ibc/v1/apps/zkgm/v0/impl",
+		"gno.land/r/onbloc/unionibc/v1/core",
+		"gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl",
 	}))
 
 	forward := z.Forward{
@@ -345,7 +345,7 @@ func openForwardTestChannel(cur realm, counterpartyChannelId core.ChannelId) cor
 	if !core.HasApp(portId) {
 		zkgm.RegisterCoreApp(cross(cur))
 	}
-	clientType := core.ClientType("gno.land/r/onbloc/ibc/v1/apps/zkgm/v0/impl/forward-test")
+	clientType := core.ClientType("gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl/forward-test")
 	if !core.HasClient(clientType) {
 		core.RegisterClient(cross(cur), clientType, &forwardTestLightClient{})
 	}

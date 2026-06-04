@@ -1,11 +1,11 @@
-// PKGPATH: gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
+// PKGPATH: gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/realcometbls/scenarios
 package scenarios
 
 import (
-	core "gno.land/r/core/ibc/v1/core"
-	zkgm "gno.land/r/onbloc/ibc/v1/apps/zkgm"
-	realcometbls "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/realcometbls"
-	_ "gno.land/r/onbloc/ibc/v1/apps/zkgm/v0/loader"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
+	realcometbls "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/realcometbls"
+	_ "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/loader"
 )
 
 func main(cur realm) {

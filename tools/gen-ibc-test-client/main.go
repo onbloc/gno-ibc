@@ -1,5 +1,5 @@
 // gen-ibc-test-client prints deterministic values used by
-// gno.land/r/core/ibc/v1/core/gnokey_tx_queries.md.
+// gno.land/r/onbloc/unionibc/v1/core/gnokey_tx_queries.md.
 //
 // Usage:
 //
@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	realmPath = "gno.land/r/core/ibc/v1/core"
+	realmPath = "gno.land/r/onbloc/unionibc/v1/core"
 
 	devnetChainID     = "union-devnet-1337"
 	devnetHeight      = uint64(3405691582)
@@ -90,8 +90,8 @@ func printCreateClientRunScript(clientStateHex, consensusStateHex string) {
 	fmt.Printf("package main\n\n")
 	fmt.Printf("import (\n")
 	fmt.Printf("\t\"encoding/hex\"\n\n")
-	fmt.Printf("\tcore \"gno.land/r/core/ibc/v1/core\"\n")
-	fmt.Printf("\tcometbls \"gno.land/r/core/ibc/v1/lightclients/cometbls\"\n")
+	fmt.Printf("\tcore \"gno.land/r/onbloc/unionibc/v1/core\"\n")
+	fmt.Printf("\tcometbls \"gno.land/r/onbloc/unionibc/v1/lightclients/cometbls\"\n")
 	fmt.Printf(")\n\n")
 	fmt.Printf("func main() {\n")
 	fmt.Printf("\tclientState, err := hex.DecodeString(\"%s\")\n", clientStateHex)

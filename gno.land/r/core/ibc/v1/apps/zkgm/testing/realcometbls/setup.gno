@@ -1,9 +1,9 @@
 package realcometbls
 
 import (
-	core "gno.land/r/core/ibc/v1/core"
-	realcometbls "gno.land/r/core/ibc/v1/lightclients/cometbls"
-	zkgm "gno.land/r/onbloc/ibc/v1/apps/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	realcometbls "gno.land/r/onbloc/unionibc/v1/lightclients/cometbls"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 )
 
 type ChannelPair struct {

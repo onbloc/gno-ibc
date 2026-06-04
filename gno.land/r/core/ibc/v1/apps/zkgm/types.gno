@@ -1,8 +1,8 @@
 package zkgm
 
 import (
-	z "gno.land/p/onbloc/ibc/zkgm"
-	core "gno.land/r/core/ibc/v1/core"
+	z "gno.land/p/onbloc/unionibc/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 const Version = "ucs03-zkgm-0"

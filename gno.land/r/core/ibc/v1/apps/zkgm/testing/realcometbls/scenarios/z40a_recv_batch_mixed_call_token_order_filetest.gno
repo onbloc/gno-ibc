@@ -1,18 +1,18 @@
-// PKGPATH: gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
+// PKGPATH: gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/realcometbls/scenarios
 package scenarios
 
 import (
-	z "gno.land/p/onbloc/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/core/ibc/v1/core"
-	e2e "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/e2e"
-	"gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/mock"
-	realcometbls "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/realcometbls"
-	impl "gno.land/r/onbloc/ibc/v1/apps/zkgm/v0/impl"
-	_ "gno.land/r/onbloc/ibc/v1/apps/zkgm/v0/loader"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
+	"gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/mock"
+	realcometbls "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/realcometbls"
+	impl "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl"
+	_ "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/loader"
 )
 
-const mockReceiverPath = "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/mock"
+const mockReceiverPath = "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/mock"
 
 func main(cur realm) {
 	mock.Reset(cross(cur))

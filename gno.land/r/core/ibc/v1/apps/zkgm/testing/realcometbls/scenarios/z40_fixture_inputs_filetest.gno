@@ -1,16 +1,16 @@
-// PKGPATH: gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
+// PKGPATH: gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/realcometbls/scenarios
 package scenarios
 
 import (
 	"encoding/hex"
 
-	z "gno.land/p/onbloc/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/core/ibc/v1/core"
-	e2e "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/e2e"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
 )
 
-const mockReceiverPath = "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/mock"
+const mockReceiverPath = "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/mock"
 
 func main(cur realm) {
 	mixedPacket := z40MixedBatchPacket(cur)
@@ -71,7 +71,7 @@ func printKV(name string, key []byte, value []byte) {
 }
 
 // Output:
-// mixed_batch_packet_commitment_key 0x8cfda3c16919b3e2624c76ed112b65a2bdf66c9558d881cd267d5ddfc9d46530
+// mixed_batch_packet_commitment_key 0xdd374ceb5016bfb0edc44e88684c07621e1aeeaa95c885f084d75b54c4a6bf41
 // mixed_batch_packet_commitment_value 0x0100000000000000000000000000000000000000000000000000000000000000
-// panic_batch_packet_commitment_key 0xe211a9dd587bf368686ec948ddff276afb804ed557f1eef352a0bf0d9ae861e8
+// panic_batch_packet_commitment_key 0x188c2ebc42b9ae5f6d2195ecc721c01dbb96906277e64a9492036fa2d73786d9
 // panic_batch_packet_commitment_value 0x0100000000000000000000000000000000000000000000000000000000000000

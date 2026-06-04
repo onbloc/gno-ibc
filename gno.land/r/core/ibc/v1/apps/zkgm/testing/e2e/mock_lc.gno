@@ -1,8 +1,8 @@
 package e2e
 
-import core "gno.land/r/core/ibc/v1/core"
+import core "gno.land/r/onbloc/unionibc/v1/core"
 
-const MockClientType = core.ClientType("gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/e2e/mock")
+const MockClientType = core.ClientType("gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e/mock")
 
 type MockLightClient struct{}
 

@@ -1,2 +1,2 @@
-module = "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/realcometbls"
+module = "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/realcometbls"
 gno = "0.9"

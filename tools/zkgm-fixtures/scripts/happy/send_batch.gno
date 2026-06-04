@@ -6,7 +6,7 @@ import (
 	"chain/runtime"
 
 	z "gno.land/p/gnoswap/ibc/zkgm"
-	core "gno.land/r/core/ibc/v1/core"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
 	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
 )

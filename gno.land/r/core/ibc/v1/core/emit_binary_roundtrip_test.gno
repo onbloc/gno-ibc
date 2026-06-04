@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	z "gno.land/p/onbloc/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 )
 
@@ -47,7 +47,7 @@ func mustEncodeRealZkgmPacket(t *testing.T) []byte {
 	t.Helper()
 	callBytes, err := z.EncodeCall(z.Call{
 		Sender:           []byte("sender"),
-		ContractAddress:  []byte("gno.land/r/core/ibc/v1/apps/zkgm/testing/mock"),
+		ContractAddress:  []byte("gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/mock"),
 		ContractCalldata: pseudoRandomBytes(0xBADC0DE, 480),
 	})
 	if err != nil {

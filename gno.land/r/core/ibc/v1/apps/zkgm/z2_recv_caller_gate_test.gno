@@ -5,7 +5,7 @@ import (
 
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/core/ibc/v1/core"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 // Packet callbacks must only be entered through the IBC core realm, so
@@ -26,7 +26,7 @@ import (
 // setupGateImpl installs a no-op implementation so a permitted caller reaches
 // the end of the callback without aborting.
 
-const coreRealmPath = "gno.land/r/core/ibc/v1/core"
+const coreRealmPath = "gno.land/r/onbloc/unionibc/v1/core"
 
 func setupGateImpl(cur realm) core.Packet {
 	resetZkgmForTest()

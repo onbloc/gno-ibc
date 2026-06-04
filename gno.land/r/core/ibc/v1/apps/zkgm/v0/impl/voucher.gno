@@ -9,7 +9,7 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/bptree/v0"
 	"gno.land/r/demo/defi/grc20reg"
-	zkgm "gno.land/r/onbloc/ibc/v1/apps/zkgm"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 )
 
 type voucher struct {

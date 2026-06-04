@@ -72,7 +72,7 @@ func (v *ZkgmV1) dispatchExecute(cur realm, packet core.Packet, relayer address,
 		if err != nil {
 			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
-		return v.executeCall(cur, packet, relayer, relayerMsg, path, call)
+		return v.executeCall(cur, packet, relayer, relayerMsg, path, call, intent)
 	case z.OP_BATCH:
 		batch, err := decodeBatchInstruction(instr)
 		if err != nil {

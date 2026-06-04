@@ -45,9 +45,14 @@ type IApp interface {
 	OnChannelCloseInit(cur realm, channelId ChannelId, relayer address)
 	OnChannelCloseConfirm(cur realm, channelId ChannelId, relayer address)
 	OnRecvPacket(cur realm, packet Packet, relayer address, relayerMsg []byte) RecvPacketResult
-	OnIntentRecvPacket(cur realm, packet Packet, marketMaker address, marketMakerMsg []byte) RecvPacketResult
 	OnAcknowledgementPacket(cur realm, packet Packet, acknowledgement []byte, relayer address)
 	OnTimeoutPacket(cur realm, packet Packet, relayer address)
+}
+
+// IIntentApp is implemented by apps that explicitly support the proofless
+// market-maker intent receive path.
+type IIntentApp interface {
+	OnIntentRecvPacket(cur realm, packet Packet, marketMaker address, marketMakerMsg []byte) RecvPacketResult
 }
 
 // RegisterApp registers an IBC application at the caller realm's package path.

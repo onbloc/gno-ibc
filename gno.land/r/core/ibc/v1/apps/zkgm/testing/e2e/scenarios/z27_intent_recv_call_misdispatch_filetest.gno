@@ -1,24 +1,16 @@
 // PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e/scenarios
 package scenarios
 
-// Reproduction for "Intent recv dispatches OP_CALL to the proven OnZkgm handler
+// Regression for "Intent recv dispatches OP_CALL to the proven OnZkgm handler
 // with no proof" (local_docs/issue_intent_recv_call_misdispatch.md).
 //
 // A forged OP_CALL is delivered through the proofless market-maker fast path
-// core.IntentPacketRecv (which performs no VerifyMembership). The intent path
-// drops the intent flag in dispatchExecute -> executeCall, so the call lands in
-// the receiver's proven-call handler OnZkgm with attacker-controlled Sender and
-// Calldata, and OnIntentZkgm is never reached.
+// core.IntentPacketRecv, which performs no VerifyMembership. Intent calls must
+// fail closed with ACK_ERR_ONLY_MAKER so IntentRecv reverts and the call waits
+// for proven recv.
 //
-// The mock's OnZkgm increments Calls and records the calldata, while its
-// OnIntentZkgm returns an error. The Output block below therefore captures the
-// CURRENT (buggy) behavior: the call is dispatched and mock_calls is non-zero.
-//
-// After a fix (route intent OP_CALL to OnIntentZkgm, or reject it with
-// ACK_ERR_ONLY_MAKER), the expected behavior is:
-//   - mock_calls 0
-//   - the receiver's OnZkgm is never reached on the intent path
-// At which point this filetest's Output must be updated to assert that.
+// The mock's OnZkgm increments Calls and records calldata. This test asserts
+// that bare OP_CALL and batched OP_CALL both revert before reaching OnZkgm.
 
 import (
 	z "gno.land/p/gnoswap/ibc/zkgm"
@@ -29,6 +21,14 @@ import (
 )
 
 const mockReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
+
+func intentRecvReverted(cur realm, packet core.Packet) (reverted bool) {
+	p := revive(func() {
+		core.IntentPacketRecv(cross(cur),
+			core.NewMsgIntentPacketRecv(cross(cur), []core.Packet{packet}, nil))
+	})
+	return p != nil
+}
 
 func main(cur realm) {
 	mock.Reset(cross(cur))
@@ -44,12 +44,8 @@ func main(cur realm) {
 	callPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination,
 		e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)), 0, core.Timestamp(0))
 
-	core.IntentPacketRecv(cross(cur),
-		core.NewMsgIntentPacketRecv(cross(cur), []core.Packet{callPacket}, nil))
-
+	println("call_reverted", intentRecvReverted(cur, callPacket))
 	println("call_mock_calls", mock.Calls(cross(cur)))
-	println("call_last_sender", mock.LastSender(cross(cur)))
-	println("call_last_calldata", mock.LastCalldata(cross(cur)))
 
 	// 2. The same hole via an OP_BATCH child call (batch on intent reuses
 	// executeCall), to confirm the acceptance criterion about batched calls.
@@ -64,16 +60,12 @@ func main(cur realm) {
 	batchPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination,
 		e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), 0, core.Timestamp(0))
 
-	core.IntentPacketRecv(cross(cur),
-		core.NewMsgIntentPacketRecv(cross(cur), []core.Packet{batchPacket}, nil))
-
+	println("batch_reverted", intentRecvReverted(cur, batchPacket))
 	println("batch_mock_calls", mock.Calls(cross(cur)))
-	println("batch_last_calldata", mock.LastCalldata(cross(cur)))
 }
 
 // Output:
-// call_mock_calls 1
-// call_last_sender attacker-sender
-// call_last_calldata forged-no-proof
-// batch_mock_calls 1
-// batch_last_calldata forged-batch-call
+// call_reverted true
+// call_mock_calls 0
+// batch_reverted true
+// batch_mock_calls 0

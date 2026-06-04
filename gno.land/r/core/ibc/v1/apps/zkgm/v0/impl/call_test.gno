@@ -23,7 +23,7 @@ func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
 	}
 	path := u256.NewUint(9)
 
-	res, err := (&ZkgmV1{}).executeCall(cur, packet, address("g1relayer"), []byte("relay-msg"), path, call)
+	res, err := (&ZkgmV1{}).executeCall(cur, packet, address("g1relayer"), []byte("relay-msg"), path, call, false)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == core.PacketStatusSuccess)
@@ -50,7 +50,7 @@ func TestExecuteCallReceiverErrorReturnsFailureAck(cur realm, t *testing.T) {
 	res, err := (&ZkgmV1{}).executeCall(cur, packet, address("g1relayer"), nil, u256.Zero(), z.Call{
 		Sender:          []byte("sender"),
 		ContractAddress: []byte(mockReceiverPath),
-	})
+	}, false)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == core.PacketStatusFailure)
@@ -69,7 +69,7 @@ func TestExecuteCallReceiverPanicReturnsOnlyMakerAck(cur realm, t *testing.T) {
 	res, err := (&ZkgmV1{}).executeCall(cur, packet, address("g1relayer"), nil, u256.Zero(), z.Call{
 		Sender:          []byte("sender"),
 		ContractAddress: []byte(mockReceiverPath),
-	})
+	}, false)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == core.PacketStatusSuccess)

@@ -85,9 +85,7 @@ func PacketRecv(cur realm, msg MsgPacketRecv) {
 	firstChannel := st.getChannel(first.DestinationChannelId)
 	firstConnection := ensureConnectionOpen(firstChannel.ConnectionId)
 	batchKey := BatchPacketsPath(CommitPackets(msg.Packets))
-	st.getClient(firstConnection.ClientId).VerifyMembership(
-		firstConnection.ClientId, msg.ProofHeight, msg.Proof, batchKey[:], h256Bytes(COMMITMENT_MAGIC),
-	)
+	verifyMembershipActive(firstConnection.ClientId, msg.ProofHeight, msg.Proof, batchKey[:], h256Bytes(COMMITMENT_MAGIC))
 	now := nowNanos()
 
 	for i, packet := range msg.Packets {
@@ -158,9 +156,7 @@ func PacketAcknowledgement(cur realm, msg MsgPacketAcknowledgement) {
 	batchHash := CommitPackets(msg.Packets)
 	key := BatchReceiptsPath(batchHash)
 	value := CommitAcks(msg.Acknowledgements)
-	st.getClient(connection.ClientId).VerifyMembership(
-		connection.ClientId, msg.ProofHeight, msg.Proof, key[:], value[:],
-	)
+	verifyMembershipActive(connection.ClientId, msg.ProofHeight, msg.Proof, key[:], value[:])
 
 	processed := false
 	for i, packet := range msg.Packets {
@@ -205,7 +201,7 @@ func PacketTimeout(cur realm, msg MsgPacketTimeout) {
 	}
 
 	key := BatchReceiptsPath(CommitPacket(packet))
-	client.VerifyNonMembership(connection.ClientId, msg.ProofHeight, msg.Proof, key[:])
+	verifyNonMembershipWithActiveClient(client, connection.ClientId, msg.ProofHeight, msg.Proof, key[:])
 
 	portId := st.getChannelOwner(packet.SourceChannelId)
 	st.getAppByPortId(portId).OnTimeoutPacket(cross(cur), packet, relayer)

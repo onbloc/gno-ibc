@@ -1445,6 +1445,26 @@ func TestPacketTimeoutReceiptPath(cur realm, t *testing.T) {
 	}
 }
 
+func TestPacketTimeoutRejectsInactiveClientBeforeNonMembership(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	st.commitPacket(packet)
+	client := st.clientRegistry[mockType].(*mockClient)
+	client.status = StatusFrozen
+
+	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
+		PacketTimeout(cur, MsgPacketTimeout{Packet: packet})
+	})
+
+	if len(client.nonMembershipKeys) != 0 {
+		t.Fatalf("non-membership calls: got %d want 0", len(client.nonMembershipKeys))
+	}
+	if !st.hasPacketCommitment(packet) {
+		t.Fatal("inactive client must not delete packet commitment")
+	}
+}
+
 func TestVerifyClientMembershipVerifiesUnionPathValue(cur realm, t *testing.T) {
 	resetState()
 	client := &mockClient{chainId: "union-1", status: StatusActive}
@@ -1466,6 +1486,21 @@ func TestVerifyClientMembershipVerifiesUnionPathValue(cur realm, t *testing.T) {
 		string(client.membershipKeys[0]) != string(path) ||
 		string(client.membershipValues[0]) != string(value) {
 		t.Fatal("VerifyClientMembership must pass proof path and value through")
+	}
+}
+
+func TestVerifyClientMembershipRejectsInactiveClientBeforeMembership(cur realm, t *testing.T) {
+	resetState()
+	client := &mockClient{chainId: "union-1", status: StatusExpired}
+	st.clientRegistry[mockType] = client
+	st.clientTypes[ClientId(4)] = mockType
+
+	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
+		VerifyClientMembership(cur, ClientId(4), Height(10), Bytes("proof"), Bytes("path"), Bytes("value"))
+	})
+
+	if len(client.membershipKeys) != 0 {
+		t.Fatalf("membership calls: got %d want 0", len(client.membershipKeys))
 	}
 }
 

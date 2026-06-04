@@ -39,7 +39,7 @@ func ChannelOpenTry(cur realm, msg MsgChannelOpenTry) ChannelId {
 	}
 	key := ChannelPath(msg.Channel.CounterpartyChannelId)
 	value := keccak(expectedChannel.EthAbiEncode())
-	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofInit, key[:], value[:])
+	verifyMembershipActive(connection.ClientId, msg.ProofHeight, msg.ProofInit, key[:], value[:])
 
 	st.channelOwners[channelId] = portId
 	st.getAppByPortId(portId).OnChannelOpenTry(cross(cur), msg.Channel.ConnectionId, channelId, msg.Channel.Version, msg.CounterpartyVersion, relayer)
@@ -67,7 +67,7 @@ func ChannelOpenAck(cur realm, msg MsgChannelOpenAck) {
 	}
 	key := ChannelPath(msg.CounterpartyChannelId)
 	value := keccak(expectedChannel.EthAbiEncode())
-	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofTry, key[:], value[:])
+	verifyMembershipActive(connection.ClientId, msg.ProofHeight, msg.ProofTry, key[:], value[:])
 
 	st.getAppByPortId(portId).OnChannelOpenAck(cross(cur), msg.ChannelId, msg.CounterpartyChannelId, msg.CounterpartyVersion, relayer)
 
@@ -97,7 +97,7 @@ func ChannelOpenConfirm(cur realm, msg MsgChannelOpenConfirm) {
 	}
 	key := ChannelPath(channel.CounterpartyChannelId)
 	value := keccak(expectedChannel.EthAbiEncode())
-	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofAck, key[:], value[:])
+	verifyMembershipActive(connection.ClientId, msg.ProofHeight, msg.ProofAck, key[:], value[:])
 
 	st.getAppByPortId(portId).OnChannelOpenConfirm(cross(cur), msg.ChannelId, relayer)
 	channel.State = ChannelStateOpen

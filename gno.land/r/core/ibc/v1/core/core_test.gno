@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"testing"
 
-	rtunsafe "chain/runtime/unsafe"
+	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
 )
 
@@ -1501,7 +1501,9 @@ func (m *mockForceClient) ForceUpdateClient(cur realm, _ ClientId, csBytes, cons
 
 func TestForceUpdateClientUpdatesStateAndReturnsHeight(cur realm, t *testing.T) {
 	resetState()
-	admin = rtunsafe.OriginCaller()
+	adminAddr := testutils.TestAddress("admin")
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	admin = adminAddr
 	mc := &mockForceClient{}
 	st.clientRegistry[mockType] = mc
 	clientId := CreateClient(cross(cur), MsgCreateClient{
@@ -1529,7 +1531,9 @@ func TestForceUpdateClientUpdatesStateAndReturnsHeight(cur realm, t *testing.T) 
 
 func TestForceUpdateClientPanicsWhenClientDoesNotSupportForceUpdate(cur realm, t *testing.T) {
 	resetState()
-	admin = rtunsafe.OriginCaller()
+	adminAddr := testutils.TestAddress("admin")
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	admin = adminAddr
 	st.clientRegistry[mockType] = &mockClient{}
 	clientId := CreateClient(cross(cur), MsgCreateClient{
 		ClientType:          mockType,

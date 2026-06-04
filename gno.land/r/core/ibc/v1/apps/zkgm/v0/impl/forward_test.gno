@@ -68,6 +68,16 @@ func TestVerifyForwardRejectsZeroTimeout(cur realm, t *testing.T) {
 	uassert.True(t, err == errForwardZeroTimeout)
 }
 
+func TestVerifyForwardAllowsMaxHopPath(cur realm, t *testing.T) {
+	err := (&ZkgmV1{}).verifyForward(cur, core.ChannelId(1), "sender", newSentCoinBudget(nil), u256.Zero(), [32]byte{}, z.Forward{
+		Path:             forwardPath(1, 2, 3, 4, 5, 6, 7, 8),
+		TimeoutTimestamp: 999,
+		Instruction:      batchMustCallInstruction(batchCall("sender", "")),
+	})
+
+	uassert.NoError(t, err)
+}
+
 func TestBuildForwardChildPacket(cur realm, t *testing.T) {
 	// buildForwardChild now consults core.GetChannel(nextSourceChannel) to fill
 	// DestinationChannelId; open a channel under the expected source id first.

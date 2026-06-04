@@ -163,12 +163,7 @@ func TestUpdateChannelPathAppends(t *testing.T) {
 	mustEq(t, "[7, 5]", p, want)
 }
 
-// TestUpdateChannelPathFormulaQuirk locks in the Rust formula behaviour:
-// when the highest existing channel ID has bit 31 set, the *next* slot the
-// formula picks skips a position. This is a faithful port of contract.rs:3369.
-func TestUpdateChannelPathFormulaQuirk(t *testing.T) {
-	// path = [0xFFFFFFFF] in slot 0 → BitLen = 32 → next_hop_index = 32/32 + 1 = 2
-	// so the next channel lands in slot 2, not slot 1.
+func TestUpdateChannelPathFullWidthChannelAppendsNextSlot(t *testing.T) {
 	p, err := UpdateChannelPath(u256.NewUint(0xFFFFFFFF), 9)
 	if err != nil {
 		t.Fatalf("update(maxU32, 9): %v", err)
@@ -176,26 +171,46 @@ func TestUpdateChannelPathFormulaQuirk(t *testing.T) {
 	if got := GetChannelFromPath(p, 0); got != 0xFFFFFFFF {
 		t.Fatalf("slot 0: got %x", got)
 	}
-	if got := GetChannelFromPath(p, 1); got != 0 {
-		t.Fatalf("slot 1 (skipped): got %d want 0", got)
+	if got := GetChannelFromPath(p, 1); got != 9 {
+		t.Fatalf("slot 1: got %d want 9", got)
 	}
-	if got := GetChannelFromPath(p, 2); got != 9 {
-		t.Fatalf("slot 2: got %d want 9", got)
+	if got := GetChannelFromPath(p, 2); got != 0 {
+		t.Fatalf("slot 2: got %d want 0", got)
 	}
 }
 
 func TestUpdateChannelPathFull(t *testing.T) {
-	// place a channel with bit 31 set in slot 6 → BitLen = 224 → next_hop_index = 8 → full
-	p := MakePathFromChannel(0xFFFFFFFF, 6)
+	p := pathFromHops(t, 1, 2, 3, 4, 5, 6, 7, 8)
 	_, err := UpdateChannelPath(p, 1)
 	if err != ErrChannelPathFull {
 		t.Fatalf("expected ErrChannelPathFull, got %v", err)
 	}
 }
 
+func TestUpdateChannelPathExactlyMaxHopsWithFullWidthChannels(t *testing.T) {
+	p := pathFromHops(t,
+		0x80000000,
+		0x80000001,
+		0x80000002,
+		0x80000003,
+		0x80000004,
+		0x80000005,
+		0x80000006,
+		0x80000007,
+	)
+	if got := HopCount(p); got != MaxHops {
+		t.Fatalf("HopCount: got %d want %d", got, MaxHops)
+	}
+	for i := 0; i < MaxHops; i++ {
+		want := uint32(0x80000000 + i)
+		if got := GetChannelFromPath(p, i); got != want {
+			t.Fatalf("slot %d: got %x want %x", i, got, want)
+		}
+	}
+}
+
 func TestUpdateChannelPathSlot7Allowed(t *testing.T) {
-	// place a small channel in slot 6 → BitLen ≤ 32+192 = much less than 224
-	// so next_hop_index fits ≤ 7 and we may write at slot 7.
+	// A path with occupied slots through slot 6 still has room for one more hop.
 	p := MakePathFromChannel(1, 6)
 	got, err := UpdateChannelPath(p, 2)
 	if err != nil {
@@ -234,6 +249,34 @@ func TestReverseChannelPathThreeHops(t *testing.T) {
 		t.Fatalf("reverse: %v", err)
 	}
 	mustEq(t, "reverse([3,5,7])", got, want)
+}
+
+func TestReverseChannelPathExactlyMaxHops(t *testing.T) {
+	src := pathFromHops(t,
+		0x80000000,
+		0x80000001,
+		0x80000002,
+		0x80000003,
+		0x80000004,
+		0x80000005,
+		0x80000006,
+		0x80000007,
+	)
+	want := pathFromHops(t,
+		0x80000007,
+		0x80000006,
+		0x80000005,
+		0x80000004,
+		0x80000003,
+		0x80000002,
+		0x80000001,
+		0x80000000,
+	)
+	got, err := ReverseChannelPath(src)
+	if err != nil {
+		t.Fatalf("reverse(max hops): %v", err)
+	}
+	mustEq(t, "reverse(max hops)", got, want)
 }
 
 func TestReverseChannelPathInvolution(t *testing.T) {

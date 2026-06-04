@@ -31,6 +31,9 @@ func main(cur realm) {
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, nil, core.Height(1)))
 
 	println("quote_balance", impl.VoucherBalanceOf(quoteToken, address(receiver)))
+	// cur.Address() is used intentionally: this realm is the direct caller of
+	// PacketRecv, so PacketRecv records cur.Address() as the relayer via
+	// cur.Previous().Address(). cur.Previous() here would be the EOA, not the relayer.
 	println("relayer_balance", impl.VoucherBalanceOf(quoteToken, cur.Address()))
 }
 

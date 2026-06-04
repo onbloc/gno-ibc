@@ -58,8 +58,8 @@ func SetCapturePrevious(cur realm, on bool) {
 	receiver.CapturePrevious = on
 }
 
-// LastPreviousCaller returns the cur.Previous().Address() captured during the
-// last OnZkgm (only populated when SetCapturePrevious was true).
+// LastPreviousCaller returns the previous caller address captured during the
+// most recent OnZkgm. Empty unless SetCapturePrevious(true) was enabled.
 func LastPreviousCaller(cur realm) string { return receiver.LastPreviousCaller }
 
 // LastCaller returns env.Caller from the last OnZkgm invocation.

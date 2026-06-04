@@ -3,6 +3,7 @@ package zkgm
 import (
 	"chain"
 	"chain/banker"
+	"strings"
 
 	z "gno.land/p/gnoswap/ibc/zkgm"
 	"gno.land/p/nt/bptree/v0"
@@ -44,7 +45,17 @@ func ProxyPkgPath() string {
 func UpdateImpl(cur realm, r UpdateRequest) {
 	cacheRealm(cur)
 	caller := cur.Previous().PkgPath()
-	if !InAllowedImpls(caller) {
+	if implPath == "" && len(allowedImpls) == 0 {
+		if !isBootstrapCaller(caller) {
+			panic("zkgm: bootstrap not permitted for caller: " + caller)
+		}
+		if r.Impl == nil {
+			panic("zkgm: bootstrap UpdateImpl must install an impl")
+		}
+		if caller == proxyPkgPath+"/v0/loader" && len(r.AllowedImpls) == 0 {
+			panic("zkgm: production loader bootstrap must install allowed impls")
+		}
+	} else if !isAuthorizedImpl(caller) {
 		panic("permission denied for prev realm: " + caller)
 	}
 	if r.AllowedImpls != nil {
@@ -57,15 +68,23 @@ func UpdateImpl(cur realm, r UpdateRequest) {
 }
 
 func InAllowedImpls(pkg string) bool {
-	if len(allowedImpls) == 0 {
-		return true
-	}
 	for _, allowed := range allowedImpls {
 		if allowed == pkg {
 			return true
 		}
 	}
 	return false
+}
+
+func isAuthorizedImpl(caller string) bool {
+	return caller == implPath || InAllowedImpls(caller)
+}
+
+// First install is limited to subpackages of the ZKGM proxy realm. The
+// gnoswap namespace is governance-granted, so the namespace owner controls
+// which ZKGM subpackages can be deployed.
+func isBootstrapCaller(caller string) bool {
+	return strings.HasPrefix(caller, proxyPkgPath+"/")
 }
 
 func AllowedImpls() []string {

@@ -5,6 +5,8 @@ import (
 	"chain/banker"
 	"testing"
 
+	tb "gno.land/p/gnoswap/tokenbucket"
+	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	core "gno.land/r/core/ibc/v1/core"
 )
@@ -24,15 +26,59 @@ func TestProxyConfigAndAddress(cur realm, t *testing.T) {
 	}
 }
 
-func TestProxyUpdateImplAllowedEmpty(cur realm, t *testing.T) {
+func TestInAllowedImplsFailsClosedOnEmpty(t *testing.T) {
+	resetZkgmForTest()
+
+	if InAllowedImpls("gno.land/r/anything") {
+		t.Fatal("empty allowedImpls must fail closed")
+	}
+}
+
+func TestProxyUpdateImplBootstrapRejectsUnpermittedCaller(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 
-	uassert.NotAborts(t, cur, func(cur realm) {
+	uassert.AbortsContains(t, cur, "bootstrap not permitted", func(cur realm) {
 		UpdateImpl(cur, NewUpdateRequest(cur, d, nil))
 	})
-	if impl == nil || ImplPath() == "" {
-		t.Fatal("UpdateImpl must set impl and implPath")
+	if impl != nil || implPath != "" || allowedImpls != nil {
+		t.Fatal("denied bootstrap UpdateImpl must not change proxy config")
+	}
+}
+
+func TestProxyBootstrapCallerUsesProxyNamespacePrefix(t *testing.T) {
+	testCases := []struct {
+		name   string
+		caller string
+		want   bool
+	}{
+		{"proxy realm itself", ProxyPkgPath(), false},
+		{"v0 loader", ProxyPkgPath() + "/v0/loader", true},
+		{"v0 impl", ProxyPkgPath() + "/v0/impl", true},
+		{"testing loader", ProxyPkgPath() + "/testing/loader", true},
+		{"similar prefix", ProxyPkgPath() + "2/v0/loader", false},
+		{"outside namespace", "gno.land/r/other/zkgm/v0/loader", false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isBootstrapCaller(tc.caller); got != tc.want {
+				t.Fatalf("isBootstrapCaller(%q) = %t, want %t", tc.caller, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestProxyUpdateImplPostBootstrapAllowsRegisteredImpl(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	d := &dummyImpl{}
+	implPath = ProxyPkgPath()
+
+	uassert.NotAborts(t, cur, func(cur realm) {
+		UpdateImpl(cur, NewUpdateRequest(cur, d, []string{ProxyPkgPath()}))
+	})
+	if impl != d || ImplPath() != ProxyPkgPath() {
+		t.Fatal("registered impl caller must be able to update impl")
 	}
 }
 
@@ -46,6 +92,68 @@ func TestProxyUpdateImplDeniedAfterLock(cur realm, t *testing.T) {
 	})
 	if impl != nil {
 		t.Fatal("denied UpdateImpl must not change impl")
+	}
+}
+
+func TestLedgerWritersFailClosedWhenUnbootstrapped(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0, 20)
+	key := NewInFlightKey(cross(cur), core.CommitPacket(packet))
+	value := NewInFlightValue(cross(cur), packet)
+	bucket, err := tb.New(u256.NewUint(10), u256.NewUint(1), blockNow())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testCases := []struct {
+		name string
+		call func(cur realm)
+	}{
+		{"SetTokenOrigin", func(cur realm) {
+			SetTokenOrigin(cross(cur), "ibc/failclosed", u256.Zero())
+		}},
+		{"SetMetadataImageOf", func(cur realm) {
+			SetMetadataImageOf(cross(cur), "ibc/failclosed", [32]byte{})
+		}},
+		{"SetChannelBalanceV2", func(cur realm) {
+			SetChannelBalanceV2(cross(cur), "balance-key", u256.NewUint(1))
+		}},
+		{"RemoveChannelBalanceV2", func(cur realm) {
+			RemoveChannelBalanceV2(cross(cur), "balance-key")
+		}},
+		{"SetInFlightPacket", func(cur realm) {
+			SetInFlightPacket(cross(cur), key, value)
+		}},
+		{"PopInFlightPacket", func(cur realm) {
+			PopInFlightPacket(cross(cur), key)
+		}},
+		{"SetTokenBucket", func(cur realm) {
+			SetTokenBucket(cross(cur), "ibc/failclosed", bucket)
+		}},
+		{"RemoveTokenBucket", func(cur realm) {
+			RemoveTokenBucket(cross(cur), "ibc/failclosed")
+		}},
+		{"RateLimit", func(cur realm) {
+			RateLimit(cross(cur), "ibc/failclosed", u256.NewUint(1))
+		}},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.AbortsContains(t, cur, "not an authorized impl", tc.call)
+		})
+	}
+}
+
+func TestLedgerWriterAllowedFromRegisteredImpl(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	implPath = ProxyPkgPath()
+
+	uassert.NotAborts(t, cur, func(cur realm) {
+		SetTokenOrigin(cross(cur), "ibc/registered", u256.Zero())
+	})
+	if _, ok := GetTokenOrigin("ibc/registered"); !ok {
+		t.Fatal("registered impl caller must be able to write ledger state")
 	}
 }
 

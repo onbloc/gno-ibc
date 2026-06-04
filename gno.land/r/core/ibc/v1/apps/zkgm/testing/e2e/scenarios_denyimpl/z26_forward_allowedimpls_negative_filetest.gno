@@ -1,11 +1,11 @@
-// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e/scenarios_denyimpl
+// PKGPATH: gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/e2e/scenarios_denyimpl
 package scenarios_denyimpl
 
 import (
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/ibc/zkgm"
 	core "gno.land/r/core/ibc/v1/core"
-	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
-	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/loader_denyimpl"
+	e2e "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/e2e"
+	_ "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/loader_denyimpl"
 )
 
 func main(cur realm) {
@@ -18,7 +18,7 @@ func main(cur realm) {
 		TimeoutTimestamp: 999,
 		Instruction: e2e.MustCallInstruction(cross(cur), z.Call{
 			Sender:           []byte("sender"),
-			ContractAddress:  []byte("gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"),
+			ContractAddress:  []byte("gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/mock"),
 			ContractCalldata: []byte("forward-core-frame"),
 		}),
 	}
@@ -29,4 +29,4 @@ func main(cur realm) {
 }
 
 // Error:
-// zkgm: only registered impl (gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/loader_denyimpl) can batch send, got gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl
+// zkgm: only registered impl (gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/loader_denyimpl) can batch send, got gno.land/r/onbloc/ibc/v1/apps/zkgm/v0/impl

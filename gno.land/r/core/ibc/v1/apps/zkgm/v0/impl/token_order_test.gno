@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	tb "gno.land/p/gnoswap/tokenbucket"
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	tb "gno.land/p/onbloc/tokenbucket"
+	z "gno.land/p/onbloc/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/bptree/v0"
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
 	core "gno.land/r/core/ibc/v1/core"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+	zkgm "gno.land/r/onbloc/ibc/v1/apps/zkgm"
 )
 
 func TestTokenOrderVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm, t *testing.T) {

@@ -4,14 +4,14 @@ import (
 	"bytes"
 	"testing"
 
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	core "gno.land/r/core/ibc/v1/core"
-	"gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
+	"gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/mock"
 )
 
-const mockReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
+const mockReceiverPath = "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/mock"
 
 func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
 	mock.Reset(cross(cur))

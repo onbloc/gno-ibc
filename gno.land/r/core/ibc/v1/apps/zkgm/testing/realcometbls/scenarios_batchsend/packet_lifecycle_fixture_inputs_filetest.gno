@@ -1,16 +1,16 @@
-// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls/scenarios_batchsend
+// PKGPATH: gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/realcometbls/scenarios_batchsend
 package scenarios_batchsend
 
 import (
 	"encoding/hex"
 
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
 	core "gno.land/r/core/ibc/v1/core"
-	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
-	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/loader"
-	realcometbls "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls"
+	e2e "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/e2e"
+	_ "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/loader"
+	realcometbls "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/realcometbls"
 )
 
 func main(cur realm) {

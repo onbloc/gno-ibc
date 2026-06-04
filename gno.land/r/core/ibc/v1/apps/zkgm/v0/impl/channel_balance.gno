@@ -6,7 +6,7 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 	core "gno.land/r/core/ibc/v1/core"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+	zkgm "gno.land/r/onbloc/ibc/v1/apps/zkgm"
 )
 
 // ChannelBalanceKeyV2 returns the storage key for a v2 channel balance entry.

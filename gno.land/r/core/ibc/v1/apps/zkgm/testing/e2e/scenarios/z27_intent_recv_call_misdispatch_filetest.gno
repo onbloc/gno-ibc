@@ -1,4 +1,4 @@
-// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e/scenarios
+// PKGPATH: gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/e2e/scenarios
 package scenarios
 
 // Regression for "Intent recv dispatches OP_CALL to the proven OnZkgm handler
@@ -13,14 +13,14 @@ package scenarios
 // that bare OP_CALL and batched OP_CALL both revert before reaching OnZkgm.
 
 import (
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/ibc/zkgm"
 	core "gno.land/r/core/ibc/v1/core"
-	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
-	"gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
-	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
+	e2e "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/e2e"
+	"gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/mock"
+	_ "gno.land/r/onbloc/ibc/v1/apps/zkgm/v0/loader"
 )
 
-const mockReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
+const mockReceiverPath = "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/mock"
 
 func intentRecvReverted(cur realm, packet core.Packet) (reverted bool) {
 	p := revive(func() {

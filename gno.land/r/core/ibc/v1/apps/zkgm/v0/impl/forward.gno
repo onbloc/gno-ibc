@@ -3,10 +3,10 @@ package impl
 import (
 	"errors"
 
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	core "gno.land/r/core/ibc/v1/core"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+	zkgm "gno.land/r/onbloc/ibc/v1/apps/zkgm"
 )
 
 var (

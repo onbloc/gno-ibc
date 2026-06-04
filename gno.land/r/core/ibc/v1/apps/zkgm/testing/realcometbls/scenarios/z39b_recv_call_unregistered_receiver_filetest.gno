@@ -1,15 +1,15 @@
-// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
+// PKGPATH: gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
 package scenarios
 
 import (
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/ibc/zkgm"
 	core "gno.land/r/core/ibc/v1/core"
-	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
-	realcometbls "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls"
-	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
+	e2e "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/e2e"
+	realcometbls "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/realcometbls"
+	_ "gno.land/r/onbloc/ibc/v1/apps/zkgm/v0/loader"
 )
 
-const missingReceiverPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/missing"
+const missingReceiverPath = "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/missing"
 
 func main(cur realm) {
 	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))

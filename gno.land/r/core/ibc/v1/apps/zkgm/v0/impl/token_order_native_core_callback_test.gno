@@ -5,15 +5,15 @@ import (
 	"chain/banker"
 	"testing"
 
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	core "gno.land/r/core/ibc/v1/core"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
-	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
+	zkgm "gno.land/r/onbloc/ibc/v1/apps/zkgm"
+	e2e "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/e2e"
 )
 
-const timeoutMockClientType = core.ClientType("gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl/timeout-mock")
+const timeoutMockClientType = core.ClientType("gno.land/r/onbloc/ibc/v1/apps/zkgm/v0/impl/timeout-mock")
 
 type timeoutMockLightClient struct{}
 
@@ -68,8 +68,8 @@ func setupNativeRefundPacket(cur realm, expired bool, senderName string, denom s
 	resetTokenOrderTest(cur)
 	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), nil, []string{
 		"gno.land/r/core/ibc/v1/core",
-		"gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl",
-		"gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e",
+		"gno.land/r/onbloc/ibc/v1/apps/zkgm/v0/impl",
+		"gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/e2e",
 	}))
 	ensureZkgmAppRegistered(cross(cur))
 	var pair e2e.ChannelPair

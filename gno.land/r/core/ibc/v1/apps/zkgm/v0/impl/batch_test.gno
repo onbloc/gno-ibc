@@ -3,12 +3,12 @@ package impl
 import (
 	"testing"
 
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	core "gno.land/r/core/ibc/v1/core"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
-	"gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
+	zkgm "gno.land/r/onbloc/ibc/v1/apps/zkgm"
+	"gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/mock"
 )
 
 func TestExecuteBatchTokenOrderAndCallBothSucceed(cur realm, t *testing.T) {

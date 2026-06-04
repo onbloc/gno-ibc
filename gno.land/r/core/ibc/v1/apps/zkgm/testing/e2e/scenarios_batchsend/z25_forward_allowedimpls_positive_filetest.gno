@@ -1,13 +1,13 @@
-// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e/scenarios_batchsend
+// PKGPATH: gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/e2e/scenarios_batchsend
 package scenarios_batchsend
 
 import (
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	core "gno.land/r/core/ibc/v1/core"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
-	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
-	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/loader"
+	zkgm "gno.land/r/onbloc/ibc/v1/apps/zkgm"
+	e2e "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/e2e"
+	_ "gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/loader"
 )
 
 func main(cur realm) {
@@ -20,7 +20,7 @@ func main(cur realm) {
 		TimeoutTimestamp: 999,
 		Instruction: e2e.MustCallInstruction(cross(cur), z.Call{
 			Sender:           []byte("sender"),
-			ContractAddress:  []byte("gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"),
+			ContractAddress:  []byte("gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/mock"),
 			ContractCalldata: []byte("forward-core-frame"),
 		}),
 	}
@@ -41,7 +41,7 @@ func main(cur realm) {
 }
 
 // Output:
-// impl_path gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/loader
+// impl_path gno.land/r/onbloc/ibc/v1/apps/zkgm/testing/loader
 // child_source 2
 // child_destination 102
 // in_flight true

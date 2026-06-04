@@ -3,13 +3,17 @@ package core
 import (
 	"chain"
 	"chain/runtime"
+	rtunsafe "chain/runtime/unsafe"
 	"strings"
 )
 
 var admin address
 
 func init(cur realm) {
-	admin = cur.Previous().Address()
+	// OriginCaller is intentional: when deployed via a loader realm,
+	// cur.Previous() would yield the loader's address, not the operator EOA.
+	// Admin must always be the human operator who signs the deployment tx.
+	admin = rtunsafe.OriginCaller()
 }
 
 // GetAdmin returns the current admin address.

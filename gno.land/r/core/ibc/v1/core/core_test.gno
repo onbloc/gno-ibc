@@ -4,8 +4,8 @@ import (
 	"encoding/hex"
 	"testing"
 
-	"gno.land/p/nt/uassert/v0"
 	"gno.land/p/nt/testutils/v0"
+	"gno.land/p/nt/uassert/v0"
 )
 
 // --- Mock implementations ---

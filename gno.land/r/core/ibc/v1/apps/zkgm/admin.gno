@@ -62,7 +62,6 @@ func SetRateLimitDisabled(cur realm, disabled bool) {
 // Passing nil for newAllowedImpls clears the allowlist.
 func ForceSetImpl(cur realm, newImpl ZkgmImpl, newImplPath string, newAllowedImpls []string) {
 	mustBeAdmin(cur)
-	runtime.AssertOriginCall()
 	impl = newImpl
 	implPath = newImplPath
 	allowedImpls = cloneStrings(newAllowedImpls)

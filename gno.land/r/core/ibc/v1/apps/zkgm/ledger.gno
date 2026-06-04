@@ -19,7 +19,7 @@ var (
 
 func mustBeAuthorizedImpl(cur realm) {
 	caller := cur.Previous().PkgPath()
-	if !InAllowedImpls(caller) {
+	if !isAuthorizedImpl(caller) {
 		panic("zkgm/ledger: caller is not an authorized impl: " + caller)
 	}
 }

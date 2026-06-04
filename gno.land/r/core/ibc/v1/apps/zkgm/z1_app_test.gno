@@ -100,13 +100,15 @@ func TestAppChannelOpenInitVersion(cur realm, t *testing.T) {
 	d := &dummyImpl{}
 	impl = d
 
-	(&App{}).OnChannelOpenInit(cur, 1, 2, Version, address("g1relayer"))
+	// Channel callbacks are gated to the core caller, so impersonate core.
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	(&App{}).OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer"))
 	if !d.openInitCalled || d.lastChannelId != 2 {
 		t.Fatal("OnChannelOpenInit must delegate to impl")
 	}
 
-	uassert.AbortsContains(t, cur, "unsupported channel version", func(cur realm) {
-		(&App{}).OnChannelOpenInit(cur, 1, 2, "bad-version", address("g1relayer"))
+	uassert.AbortsContains(t, cur, "unsupported channel version", func() {
+		(&App{}).OnChannelOpenInit(cross(cur), 1, 2, "bad-version", address("g1relayer"))
 	})
 }
 
@@ -115,13 +117,15 @@ func TestAppChannelOpenTryCounterpartyVersion(cur realm, t *testing.T) {
 	d := &dummyImpl{}
 	impl = d
 
-	(&App{}).OnChannelOpenTry(cur, 1, 2, Version, Version, address("g1relayer"))
+	// Channel callbacks are gated to the core caller, so impersonate core.
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	(&App{}).OnChannelOpenTry(cross(cur), 1, 2, Version, Version, address("g1relayer"))
 	if !d.openTryCalled || d.lastCounterpartyVer != Version {
 		t.Fatal("OnChannelOpenTry must delegate with counterparty version")
 	}
 
-	uassert.AbortsContains(t, cur, "unsupported channel version", func(cur realm) {
-		(&App{}).OnChannelOpenTry(cur, 1, 2, Version, "bad-version", address("g1relayer"))
+	uassert.AbortsContains(t, cur, "unsupported channel version", func() {
+		(&App{}).OnChannelOpenTry(cross(cur), 1, 2, Version, "bad-version", address("g1relayer"))
 	})
 }
 
@@ -131,14 +135,14 @@ func TestAppNineMethodsDelegate(cur realm, t *testing.T) {
 	impl = d
 	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0, 0)
 
-	(&App{}).OnChannelOpenAck(cur, 2, 3, Version, address("g1relayer"))
-	(&App{}).OnChannelOpenConfirm(cur, 2, address("g1relayer"))
-	(&App{}).OnChannelCloseInit(cur, 2, address("g1relayer"))
-	(&App{}).OnChannelCloseConfirm(cur, 2, address("g1relayer"))
-
-	// Packet callbacks are gated to the core caller, so impersonate core for
-	// the legitimate delegation path.
+	// Every callback is gated to the core caller, so impersonate core for the
+	// legitimate delegation path.
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	(&App{}).OnChannelOpenAck(cross(cur), 2, 3, Version, address("g1relayer"))
+	(&App{}).OnChannelOpenConfirm(cross(cur), 2, address("g1relayer"))
+	(&App{}).OnChannelCloseInit(cross(cur), 2, address("g1relayer"))
+	(&App{}).OnChannelCloseConfirm(cross(cur), 2, address("g1relayer"))
+
 	res := (&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
 	(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
 	(&App{}).OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
@@ -161,11 +165,11 @@ func TestAppPausedBlocksPacketCallbacks(cur realm, t *testing.T) {
 	paused = true
 	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0, 0)
 
-	(&App{}).OnChannelOpenInit(cur, 1, 2, Version, address("g1relayer"))
-
-	// The caller gate runs before the paused check, so impersonate core to
-	// reach (and assert) the paused guard on each packet callback.
+	// The caller gate runs before the paused check on every callback, so
+	// impersonate core to reach the channel handshake and the paused guard.
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	(&App{}).OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer"))
+
 	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
 		(&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
 	})
@@ -201,12 +205,12 @@ func TestAppNilImplPolicy(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0, 0)
 
-	uassert.AbortsContains(t, cur, "impl not set", func(cur realm) {
-		(&App{}).OnChannelOpenInit(cur, 1, 2, Version, address("g1relayer"))
-	})
-
 	// Nil-impl policy is observed past the caller gate, so impersonate core.
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	uassert.AbortsContains(t, cur, "impl not set", func() {
+		(&App{}).OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer"))
+	})
+
 	res := (&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
 	if res.Status != core.PacketStatusFailure || len(res.Ack) == 0 {
 		t.Fatal("nil impl recv must return failure acknowledgement")

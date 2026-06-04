@@ -13,12 +13,14 @@ type App struct{}
 var _ core.IApp = &App{}
 
 func (a *App) OnChannelOpenInit(cur realm, connectionId core.ConnectionId, channelId core.ChannelId, version string, relayer address) {
+	requireCoreCaller(cur, "channel open init")
 	ensureImpl()
 	ensureVersion(version)
 	impl.PreChannelOpenInit(cross(cur), channelId)
 }
 
 func (a *App) OnChannelOpenTry(cur realm, connectionId core.ConnectionId, channelId core.ChannelId, version string, counterpartyVersion string, relayer address) {
+	requireCoreCaller(cur, "channel open try")
 	ensureImpl()
 	ensureVersion(version)
 	ensureVersion(counterpartyVersion)
@@ -26,22 +28,26 @@ func (a *App) OnChannelOpenTry(cur realm, connectionId core.ConnectionId, channe
 }
 
 func (a *App) OnChannelOpenAck(cur realm, channelId core.ChannelId, counterpartyChannelId core.ChannelId, counterpartyVersion string, relayer address) {
+	requireCoreCaller(cur, "channel open ack")
 	ensureImpl()
 	ensureVersion(counterpartyVersion)
 	impl.PostChannelOpenAck(cross(cur), channelId, counterpartyChannelId)
 }
 
 func (a *App) OnChannelOpenConfirm(cur realm, channelId core.ChannelId, relayer address) {
+	requireCoreCaller(cur, "channel open confirm")
 	ensureImpl()
 	impl.PostChannelOpenConfirm(cross(cur), channelId)
 }
 
 func (a *App) OnChannelCloseInit(cur realm, channelId core.ChannelId, relayer address) {
+	requireCoreCaller(cur, "channel close init")
 	ensureImpl()
 	impl.PreChannelCloseInit(cross(cur), channelId)
 }
 
 func (a *App) OnChannelCloseConfirm(cur realm, channelId core.ChannelId, relayer address) {
+	requireCoreCaller(cur, "channel close confirm")
 	ensureImpl()
 	impl.PostChannelCloseConfirm(cross(cur), channelId)
 }
@@ -104,15 +110,9 @@ func ensureVersion(version string) {
 
 // requireCoreCaller panics unless the immediate caller is the core realm.
 //
-// Packet receive, acknowledgement, and timeout callbacks are expected to be
-// reached only through the core packet handlers, which cross into the
-// application with cur.Previous() == core. No deployed realm, proxy realm, or
-// ephemeral `maketx run` caller (PkgPath == "") has a legitimate route here.
-//
-// Rejecting all non-core callers preserves the core security boundary.
-// Allowing the proxy realm or an empty caller would permit direct entry into
-// impl.Recv, bypassing membership-proof verification and packet-receipt
-// recording.
+// App callbacks are expected to be reached only through core handlers. This
+// check prevents direct invocation from other realms and preserves the core
+// security boundary.
 func requireCoreCaller(cur realm, action string) {
 	caller := cur.Previous().PkgPath()
 	if caller != core.PkgPath(cross(cur)) {

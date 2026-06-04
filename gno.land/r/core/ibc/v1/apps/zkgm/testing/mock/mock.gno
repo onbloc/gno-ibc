@@ -53,7 +53,9 @@ func Calls(cur realm) int {
 	return receiver.Calls
 }
 
-// SetCapturePrevious toggles capture of cur.Previous().Address() inside OnZkgm.
+// SetCapturePrevious enables or disables capture of cur.Previous().Address()
+// during OnZkgm. When enabled, the captured value can be retrieved via
+// LastPreviousCaller.
 func SetCapturePrevious(cur realm, on bool) {
 	receiver.CapturePrevious = on
 }

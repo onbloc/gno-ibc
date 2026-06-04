@@ -49,7 +49,7 @@ func TestIntentRecvGateRejectsEphemeralCaller(cur realm, t *testing.T) {
 	packet := setupGateImpl(cur)
 	testing.SetRealm(testing.NewUserRealm(address(testutils.TestAddress("eoa"))))
 	uassert.AbortsContains(t, cur, "only core can intent recv", func() {
-		AsIBCApp().OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
+		(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
 	})
 }
 
@@ -83,7 +83,7 @@ func TestIntentRecvGateRejectsProxyCaller(cur realm, t *testing.T) {
 	packet := setupGateImpl(cur)
 	testing.SetRealm(testing.NewCodeRealm(proxyPkgPath))
 	uassert.AbortsContains(t, cur, "only core can intent recv", func() {
-		AsIBCApp().OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
+		(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
 	})
 }
 
@@ -117,7 +117,7 @@ func TestIntentRecvGateAllowsCoreCaller(cur realm, t *testing.T) {
 	packet := setupGateImpl(cur)
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	uassert.NotAborts(t, cur, func() {
-		AsIBCApp().OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
+		(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
 	})
 }
 

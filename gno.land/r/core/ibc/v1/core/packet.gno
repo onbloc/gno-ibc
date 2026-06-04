@@ -120,6 +120,11 @@ func IntentPacketRecv(cur realm, msg MsgIntentPacketRecv) {
 	first := msg.Packets[0]
 	firstChannel := st.getChannel(first.DestinationChannelId)
 	firstConnection := ensureConnectionOpen(firstChannel.ConnectionId)
+	portId := st.getChannelOwner(first.DestinationChannelId)
+	intentApp, ok := st.getAppByPortId(portId).(IIntentApp)
+	if !ok {
+		panic(ErrIntentNotSupported)
+	}
 	now := nowNanos()
 
 	for i, packet := range msg.Packets {
@@ -133,8 +138,7 @@ func IntentPacketRecv(cur realm, msg MsgIntentPacketRecv) {
 			marketMakerMsg = msg.MarketMakerMessages[i]
 		}
 
-		portId := st.getChannelOwner(packet.DestinationChannelId)
-		res := st.getAppByPortId(portId).OnIntentRecvPacket(cross(cur), packet, marketMaker, marketMakerMsg)
+		res := intentApp.OnIntentRecvPacket(cross(cur), packet, marketMaker, marketMakerMsg)
 		if err := commitSyncAck(packet, channel, firstConnection, res); err != nil {
 			panic(err)
 		}

@@ -10,7 +10,10 @@ import (
 
 type App struct{}
 
-var _ core.IApp = &App{}
+var (
+	_ core.IApp       = &App{}
+	_ core.IIntentApp = &App{}
+)
 
 func (a *App) OnChannelOpenInit(cur realm, connectionId core.ConnectionId, channelId core.ChannelId, version string, relayer address) {
 	requireCoreCaller(cur, "channel open init")

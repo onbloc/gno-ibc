@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	tb "gno.land/p/onbloc/tokenbucket"
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/bptree/v0"
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/onbloc/unionibc/v1/core"
+	tb "gno.land/p/onbloc/tokenbucket"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 func TestTokenOrderVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm, t *testing.T) {
@@ -247,7 +247,7 @@ func TestTokenOrderIntentInsufficientMakerBalanceReturnsOnlyMaker(cur realm, t *
 	uassert.Equal(t, int64(0), VoucherBalanceOf(quoteToken, address(receiver)))
 }
 
-func TestAckConstantConstructorsReturnIndependentInstances(t *testing.T) {
+func TestAckConstantConstructorsReturnIndependentInstances(cur realm, t *testing.T) {
 	a1, a2 := tagAckSuccess(), tagAckSuccess()
 	a1.SetAllOne()
 	uassert.True(t, !a2.Eq(a1), "tagAckSuccess: mutation propagated to second call")

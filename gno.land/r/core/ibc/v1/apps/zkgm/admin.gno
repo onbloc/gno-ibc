@@ -85,9 +85,11 @@ func ForceSetImpl(cur realm, newImpl ZkgmImpl, newAllowedImpls []string) {
 	if newImpl != nil && len(newAllowedImpls) == 0 {
 		panic("zkgm: ForceSetImpl with a non-nil impl requires a non-empty allowlist")
 	}
+	oldImplPath := implPath
 	impl = newImpl
 	implPath = ""
 	allowedImpls = cloneStrings(newAllowedImpls)
+	emitZkgmImplForceSetEvent(core.GetAdmin(), oldImplPath, newImpl == nil, allowedImpls)
 }
 
 func mustBeAdmin(cur realm) {

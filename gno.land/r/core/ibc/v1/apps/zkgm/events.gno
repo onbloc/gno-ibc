@@ -11,6 +11,7 @@ import (
 
 const (
 	ZkgmImplUpdatedEvent               = "ZkgmImplUpdated"
+	ZkgmImplForceSetEvent              = "ZkgmImplForceSet"
 	ZkgmPausedEvent                    = "ZkgmPaused"
 	ZkgmUnpausedEvent                  = "ZkgmUnpaused"
 	ZkgmRateLimitBucketConfiguredEvent = "ZkgmRateLimitBucketConfigured"
@@ -26,6 +27,15 @@ func emitZkgmImplUpdatedEvent(callerPkgPath string, oldImplPath string, newImplP
 		"caller_pkg_path", callerPkgPath,
 		"old_impl_path", oldImplPath,
 		"new_impl_path", newImplPath,
+		"allowed_impls", strings.Join(allowed, ","),
+	)
+}
+
+func emitZkgmImplForceSetEvent(admin address, oldImplPath string, implCleared bool, allowed []string) {
+	chain.Emit(ZkgmImplForceSetEvent,
+		"admin", admin.String(),
+		"old_impl_path", oldImplPath,
+		"impl_cleared", strconv.FormatBool(implCleared),
 		"allowed_impls", strings.Join(allowed, ","),
 	)
 }

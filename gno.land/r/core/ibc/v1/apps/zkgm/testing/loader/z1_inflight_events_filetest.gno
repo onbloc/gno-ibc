@@ -2,15 +2,33 @@
 package loader
 
 import (
+	"chain"
+	stdtesting "testing"
+
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 	impl "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
+type eventReceiver struct{}
+
+func (r *eventReceiver) OnZkgm(cur realm, env z.CallEnv) error {
+	return nil
+}
+
+func (r *eventReceiver) OnIntentZkgm(cur realm, env z.IntentCallEnv) error {
+	return nil
+}
+
 func main(cur realm) {
 	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), impl.GetInstance(cross(cur)), []string{
 		"gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/loader",
 	}))
+
+	zkgm.RegisterReceiver(cross(cur), &eventReceiver{})
+	stdtesting.IssueCoins(zkgm.ProxyAddress(), chain.NewCoins(chain.NewCoin("ureleaseevent", 9)))
+	zkgm.ReleaseNative(cross(cur), "ureleaseevent", address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"), 9)
 
 	parent := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(2), []byte("parent"), 0, core.Timestamp(10))
 	child := core.NewPacket(cross(cur), core.ChannelId(3), core.ChannelId(4), []byte("child"), 0, core.Timestamp(20))
@@ -51,6 +69,38 @@ func main(cur realm) {
 //       {
 //         "key": "allowed_impls",
 //         "value": "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/loader"
+//       }
+//     ],
+//     "pkg_path": "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
+//   },
+//   {
+//     "type": "ZkgmReceiverRegistered",
+//     "attrs": [
+//       {
+//         "key": "receiver_pkg_path",
+//         "value": "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/loader"
+//       }
+//     ],
+//     "pkg_path": "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
+//   },
+//   {
+//     "type": "ZkgmNativeReleased",
+//     "attrs": [
+//       {
+//         "key": "caller_pkg_path",
+//         "value": "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/loader"
+//       },
+//       {
+//         "key": "denom",
+//         "value": "ureleaseevent"
+//       },
+//       {
+//         "key": "recipient",
+//         "value": "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
+//       },
+//       {
+//         "key": "amount",
+//         "value": "9"
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/unionibc/v1/apps/zkgm"

@@ -54,11 +54,11 @@ func (v *ZkgmV1) executeBatch(cur realm, packet core.Packet, relayer address, re
 	if err != nil {
 		return nil, err
 	}
-	return z.EncodeAck(z.Ack{Tag: tagAckSuccess, InnerAck: batchAckBytes})
+	return z.EncodeAck(z.Ack{Tag: tagAckSuccess(), InnerAck: batchAckBytes})
 }
 
 func (v *ZkgmV1) acknowledgeBatch(cur realm, packet core.Packet, path *u256.Uint, parentSalt [32]byte, batch z.Batch, outerAck z.Ack) error {
-	successful := outerAck.Tag != nil && outerAck.Tag.Eq(tagAckSuccess)
+	successful := outerAck.Tag != nil && outerAck.Tag.Eq(tagAckSuccess())
 	var batchAck z.BatchAck
 	if successful {
 		decoded, err := z.DecodeBatchAck(outerAck.InnerAck)

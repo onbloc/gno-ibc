@@ -3,9 +3,9 @@ package scenarios_denyimpl
 
 import (
 	z "gno.land/p/onbloc/unionibc/zkgm"
-	core "gno.land/r/onbloc/unionibc/v1/core"
 	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
 	_ "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/loader_denyimpl"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 func main(cur realm) {
@@ -29,4 +29,4 @@ func main(cur realm) {
 }
 
 // Error:
-// zkgm: caller is not an authorized impl for batch send: gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl
+// zkgm: caller is not an authorized impl for set in-flight packet: gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl

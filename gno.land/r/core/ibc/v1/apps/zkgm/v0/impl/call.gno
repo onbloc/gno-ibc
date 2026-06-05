@@ -64,7 +64,7 @@ func (v *ZkgmV1) executeCall(cur realm, packet core.Packet, relayer address, rel
 		return callErrAck(cur, err), nil
 	}
 
-	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess, InnerAck: []byte{}})
+	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess(), InnerAck: []byte{}})
 	if err != nil {
 		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 	}
@@ -120,7 +120,7 @@ func canRevive() (ok bool) {
 }
 
 func callErrAck(cur realm, err error) core.RecvPacketResult {
-	ack, encErr := z.EncodeAck(z.Ack{Tag: tagAckFailure, InnerAck: []byte(err.Error())})
+	ack, encErr := z.EncodeAck(z.Ack{Tag: tagAckFailure(), InnerAck: []byte(err.Error())})
 	if encErr != nil {
 		// EncodeAck on a 2-field schema is essentially infallible. A failure
 		// would emit a non-Tag-prefixed ack the counterparty can't decode.

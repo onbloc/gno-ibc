@@ -92,6 +92,7 @@ func resetZkgmForTest() {
 	impl = nil
 	implPath = ""
 	allowedImpls = nil
+	bootstrapped = false
 	paused = false
 }
 

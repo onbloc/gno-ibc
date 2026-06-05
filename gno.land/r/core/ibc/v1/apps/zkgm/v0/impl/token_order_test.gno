@@ -6,14 +6,14 @@ import (
 	"testing"
 	"time"
 
-	tb "gno.land/p/onbloc/tokenbucket"
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/bptree/v0"
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/onbloc/unionibc/v1/core"
+	tb "gno.land/p/onbloc/tokenbucket"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 func TestTokenOrderVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm, t *testing.T) {
@@ -168,6 +168,59 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	uassert.Equal(t, "21474836487", origin.ToString())
 }
 
+func TestTokenOrderExecuteInitializeMintErrorDoesNotSetOrigin(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20-invalid-rx"),
+		Initializer:    []byte("init-invalid-rx"),
+	})
+
+	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	ibcDenom := PredictWrappedTokenV2(u256.NewUint(9), 7, []byte("ugnot"), image)
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte("not-a-valid-address"),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte(ibcDenom),
+		QuoteAmount: u256.NewUint(95),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    metaBytes,
+	}
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(7), nil, 0, 0)
+
+	_, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("invalid-rx-relayer")), u256.NewUint(9), order, false)
+	uassert.ErrorContains(t, err, "invalid address")
+
+	_, ok := zkgm.GetTokenOrigin(ibcDenom)
+	uassert.False(t, ok, "mint error must not set token origin")
+}
+
+func TestTokenOrderExecuteEscrowMintErrorDoesNotSetOrigin(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	path := u256.NewUint(11)
+	destChan := uint32(8)
+	quoteDenom := PredictWrappedTokenV1(path, destChan, []byte("ugnot"))
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte("not-a-valid-address"),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte(quoteDenom),
+		QuoteAmount: u256.NewUint(95),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(destChan), nil, 0, 0)
+
+	_, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("escrow-rx-relayer")), path, order, false)
+
+	uassert.ErrorContains(t, err, "invalid address")
+	_, ok := zkgm.GetTokenOrigin(quoteDenom)
+	uassert.False(t, ok, "mint error must not set token origin")
+}
+
 func TestTokenOrderIntentVoucherMarketMakerFillTransfersMakerFunds(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 
@@ -194,9 +247,9 @@ func TestTokenOrderIntentVoucherMarketMakerFillTransfersMakerFunds(cur realm, t 
 	uassert.Equal(t, int64(18), VoucherBalanceOf(quoteToken, address(maker)))
 	uassert.Equal(t, int64(12), VoucherBalanceOf(quoteToken, address(receiver)))
 
-	if _, ok := zkgm.GetTokenOrigin(quoteToken); ok {
-		t.Fatal("market-maker fill must not set token origin")
-	}
+	_, ok := zkgm.GetTokenOrigin(quoteToken)
+	uassert.False(t, ok, "market-maker fill must not set token origin")
+
 	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(core.ChannelId(5), u256.Zero(), order.BaseToken, order.QuoteToken))
 	uassert.True(t, balance == nil || balance.IsZero())
 }
@@ -247,6 +300,24 @@ func TestTokenOrderIntentInsufficientMakerBalanceReturnsOnlyMaker(cur realm, t *
 	uassert.Equal(t, int64(0), VoucherBalanceOf(quoteToken, address(receiver)))
 }
 
+func TestAckConstantConstructorsReturnIndependentInstances(cur realm, t *testing.T) {
+	a1, a2 := tagAckSuccess(), tagAckSuccess()
+	a1.SetAllOne()
+	uassert.True(t, !a2.Eq(a1), "tagAckSuccess: mutation propagated to second call")
+
+	b1, b2 := tagAckFailure(), tagAckFailure()
+	b1.SetAllOne()
+	uassert.True(t, !b2.Eq(b1), "tagAckFailure: mutation propagated to second call")
+
+	c1, c2 := fillTypeProtocol(), fillTypeProtocol()
+	c1.SetAllOne()
+	uassert.True(t, !c2.Eq(c1), "fillTypeProtocol: mutation propagated to second call")
+
+	d1, d2 := fillTypeMarketMaker(), fillTypeMarketMaker()
+	d1.SetAllOne()
+	uassert.True(t, !d2.Eq(d1), "fillTypeMarketMaker: mutation propagated to second call")
+}
+
 func resetTokenOrderTest(cur realm) {
 	voucherTokens = bptree.NewBPTree32()
 	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), &ZkgmV1{}, nil))
@@ -259,33 +330,33 @@ func testAddress(name string) string {
 func assertProtocolAck(t *testing.T, ackBytes []byte) {
 	ack, err := z.DecodeAck(ackBytes)
 	uassert.NoError(t, err)
-	uassert.True(t, ack.Tag.Eq(tagAckSuccess))
+	uassert.True(t, ack.Tag.Eq(tagAckSuccess()))
 
 	orderAck, err := z.DecodeTokenOrderAck(ack.InnerAck)
 	uassert.NoError(t, err)
-	uassert.True(t, orderAck.FillType.Eq(fillTypeProtocol))
+	uassert.True(t, orderAck.FillType.Eq(fillTypeProtocol()))
 }
 
 func assertMarketMakerAck(t *testing.T, ackBytes []byte, maker string) {
 	ack, err := z.DecodeAck(ackBytes)
 	uassert.NoError(t, err)
-	uassert.True(t, ack.Tag.Eq(tagAckSuccess))
+	uassert.True(t, ack.Tag.Eq(tagAckSuccess()))
 
 	orderAck, err := z.DecodeTokenOrderAck(ack.InnerAck)
 	uassert.NoError(t, err)
-	uassert.True(t, orderAck.FillType.Eq(fillTypeMarketMaker))
+	uassert.True(t, orderAck.FillType.Eq(fillTypeMarketMaker()))
 	uassert.Equal(t, maker, string(orderAck.MarketMaker))
 }
 
 func marketMakerAck(marketMaker string) z.Ack {
 	innerAck, err := z.EncodeTokenOrderAck(z.TokenOrderAck{
-		FillType:    fillTypeMarketMaker,
+		FillType:    fillTypeMarketMaker(),
 		MarketMaker: []byte(marketMaker),
 	})
 	if err != nil {
 		panic(err)
 	}
-	return z.Ack{Tag: tagAckSuccess, InnerAck: innerAck}
+	return z.Ack{Tag: tagAckSuccess(), InnerAck: innerAck}
 }
 
 func mustEncodeTokenMetadata(meta z.TokenMetadata) []byte {

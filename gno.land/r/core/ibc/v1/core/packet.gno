@@ -173,10 +173,9 @@ func PacketAcknowledgement(cur realm, msg MsgPacketAcknowledgement) {
 
 		ack := msg.Acknowledgements[i]
 		portId := st.getChannelOwner(packet.SourceChannelId)
-		st.getAppByPortId(portId).OnAcknowledgementPacket(cross(cur), packet, ack, relayer)
-
 		st.deletePacketCommitment(packet)
 		processed = true
+		st.getAppByPortId(portId).OnAcknowledgementPacket(cross(cur), packet, ack, relayer)
 
 		emitPacketAckEvent(packet, channel, connection, ack)
 	}
@@ -208,9 +207,8 @@ func PacketTimeout(cur realm, msg MsgPacketTimeout) {
 	verifyNonMembershipWithActiveClient(client, connection.ClientId, msg.ProofHeight, msg.Proof, key[:])
 
 	portId := st.getChannelOwner(packet.SourceChannelId)
-	st.getAppByPortId(portId).OnTimeoutPacket(cross(cur), packet, relayer)
-
 	st.deletePacketCommitment(packet)
+	st.getAppByPortId(portId).OnTimeoutPacket(cross(cur), packet, relayer)
 
 	emitPacketTimeoutEvent(packet, channel, connection)
 }

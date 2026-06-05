@@ -130,7 +130,7 @@ func openTimeoutChannelPair(cur realm) e2e.ChannelPair {
 }
 
 func mustFailureAck() []byte {
-	ack, err := z.EncodeAck(z.Ack{Tag: tagAckFailure, InnerAck: []byte("failure")})
+	ack, err := z.EncodeAck(z.Ack{Tag: tagAckFailure(), InnerAck: []byte("failure")})
 	if err != nil {
 		panic(err)
 	}

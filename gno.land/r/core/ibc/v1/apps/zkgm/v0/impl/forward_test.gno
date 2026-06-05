@@ -249,7 +249,7 @@ func TestAcknowledgeForwardDispatchesToInnerInstruction(cur realm, t *testing.T)
 	err := (&ZkgmV1{}).acknowledgeForward(cur, core.NewPacket(cross(cur), 0, 0, nil, 0, 0), u256.Zero(), [32]byte{}, z.Forward{
 		Path:        forwardPath(1, 2),
 		Instruction: batchMustCallInstruction(batchCall("sender", "calldata")),
-	}, z.Ack{Tag: tagAckSuccess, InnerAck: []byte{}})
+	}, z.Ack{Tag: tagAckSuccess(), InnerAck: []byte{}})
 
 	uassert.NoError(t, err)
 }
@@ -268,13 +268,13 @@ func TestAcknowledgeForwardWithTokenOrderChildRefundsOnFailure(cur realm, t *tes
 	}
 	path := forwardPath(1, 2)
 	increaseChannelBalanceV2(cross(cur), core.ChannelId(3), path, order.BaseToken, order.QuoteToken, order.BaseAmount)
-	childFailAck, err := z.EncodeAck(z.Ack{Tag: tagAckFailure, InnerAck: []byte("failed")})
+	childFailAck, err := z.EncodeAck(z.Ack{Tag: tagAckFailure(), InnerAck: []byte("failed")})
 	uassert.NoError(t, err)
 
 	err = (&ZkgmV1{}).acknowledgeForward(cur, core.NewPacket(cross(cur), core.ChannelId(3), core.ChannelId(4), nil, 0, 0), u256.Zero(), [32]byte{}, z.Forward{
 		Path:        path,
 		Instruction: batchMustOrderInstruction(order),
-	}, z.Ack{Tag: tagAckSuccess, InnerAck: childFailAck})
+	}, z.Ack{Tag: tagAckSuccess(), InnerAck: childFailAck})
 
 	uassert.NoError(t, err)
 

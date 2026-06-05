@@ -72,6 +72,8 @@ gno test -v ./gno.land/p/core/ibc/zkgm
 - `make vendor` is idempotent and safe to run before tests. Mirrored
   third-party packages are generated workspace inputs; their submodule pins are
   the source of truth.
+- Update `CHANGELOG.md` in the same change as any user-facing change, including
+  edits to this README or `AGENTS.md`.
 
 For detailed agent and contribution conventions, see [AGENTS.md](AGENTS.md).
 

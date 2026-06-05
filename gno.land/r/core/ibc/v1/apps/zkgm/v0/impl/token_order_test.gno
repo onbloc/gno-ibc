@@ -247,6 +247,24 @@ func TestTokenOrderIntentInsufficientMakerBalanceReturnsOnlyMaker(cur realm, t *
 	uassert.Equal(t, int64(0), VoucherBalanceOf(quoteToken, address(receiver)))
 }
 
+func TestAckConstantConstructorsReturnIndependentInstances(t *testing.T) {
+	a1, a2 := tagAckSuccess(), tagAckSuccess()
+	a1.SetAllOne()
+	uassert.True(t, !a2.Eq(a1), "tagAckSuccess: mutation propagated to second call")
+
+	b1, b2 := tagAckFailure(), tagAckFailure()
+	b1.SetAllOne()
+	uassert.True(t, !b2.Eq(b1), "tagAckFailure: mutation propagated to second call")
+
+	c1, c2 := fillTypeProtocol(), fillTypeProtocol()
+	c1.SetAllOne()
+	uassert.True(t, !c2.Eq(c1), "fillTypeProtocol: mutation propagated to second call")
+
+	d1, d2 := fillTypeMarketMaker(), fillTypeMarketMaker()
+	d1.SetAllOne()
+	uassert.True(t, !d2.Eq(d1), "fillTypeMarketMaker: mutation propagated to second call")
+}
+
 func resetTokenOrderTest(cur realm) {
 	voucherTokens = bptree.NewBPTree32()
 	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), &ZkgmV1{}, nil))
@@ -259,33 +277,33 @@ func testAddress(name string) string {
 func assertProtocolAck(t *testing.T, ackBytes []byte) {
 	ack, err := z.DecodeAck(ackBytes)
 	uassert.NoError(t, err)
-	uassert.True(t, ack.Tag.Eq(tagAckSuccess))
+	uassert.True(t, ack.Tag.Eq(tagAckSuccess()))
 
 	orderAck, err := z.DecodeTokenOrderAck(ack.InnerAck)
 	uassert.NoError(t, err)
-	uassert.True(t, orderAck.FillType.Eq(fillTypeProtocol))
+	uassert.True(t, orderAck.FillType.Eq(fillTypeProtocol()))
 }
 
 func assertMarketMakerAck(t *testing.T, ackBytes []byte, maker string) {
 	ack, err := z.DecodeAck(ackBytes)
 	uassert.NoError(t, err)
-	uassert.True(t, ack.Tag.Eq(tagAckSuccess))
+	uassert.True(t, ack.Tag.Eq(tagAckSuccess()))
 
 	orderAck, err := z.DecodeTokenOrderAck(ack.InnerAck)
 	uassert.NoError(t, err)
-	uassert.True(t, orderAck.FillType.Eq(fillTypeMarketMaker))
+	uassert.True(t, orderAck.FillType.Eq(fillTypeMarketMaker()))
 	uassert.Equal(t, maker, string(orderAck.MarketMaker))
 }
 
 func marketMakerAck(marketMaker string) z.Ack {
 	innerAck, err := z.EncodeTokenOrderAck(z.TokenOrderAck{
-		FillType:    fillTypeMarketMaker,
+		FillType:    fillTypeMarketMaker(),
 		MarketMaker: []byte(marketMaker),
 	})
 	if err != nil {
 		panic(err)
 	}
-	return z.Ack{Tag: tagAckSuccess, InnerAck: innerAck}
+	return z.Ack{Tag: tagAckSuccess(), InnerAck: innerAck}
 }
 
 func mustEncodeTokenMetadata(meta z.TokenMetadata) []byte {

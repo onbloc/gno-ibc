@@ -19,7 +19,7 @@ type voucher struct {
 
 var voucherTokens = bptree.NewBPTree32()
 
-func getOrCreateVoucherV2(cur realm, ibcDenom string, baseDenom string, metadataImage [32]byte, name, symbol string, decimals int) *voucher {
+func getOrCreateVoucherV2(cur realm, ibcDenom string, baseDenom string, metadataImage [32]byte, name, symbol string, decimals uint8) *voucher {
 	if v, ok := voucherTokens.Get(ibcDenom); ok {
 		return v.(*voucher)
 	}
@@ -32,7 +32,7 @@ func getOrCreateVoucherV2(cur realm, ibcDenom string, baseDenom string, metadata
 	}
 	symbol = sanitizeGRC20Symbol(symbol, ibcDenom)
 
-	token, ledger := grc20.NewToken(0, cur, name, symbol, decimals)
+	token, ledger := grc20.NewToken(0, cur, name, symbol, int(decimals))
 	grc20reg.Register(cross(cur), token, strings.TrimPrefix(ibcDenom, ibcDenomPrefix))
 
 	v := &voucher{token: token, ledger: ledger}
@@ -72,7 +72,7 @@ func getVoucher(ibcDenom string) *voucher {
 	return v.(*voucher)
 }
 
-func mintVoucher(cur realm, ibcDenom string, baseDenom string, metadataImage [32]byte, name, symbol string, decimals int, receiver string, amount *u256.Uint) error {
+func mintVoucher(cur realm, ibcDenom string, baseDenom string, metadataImage [32]byte, name, symbol string, decimals uint8, receiver string, amount *u256.Uint) error {
 	n, err := amountInt64(amount)
 	if err != nil {
 		return err

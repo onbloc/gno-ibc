@@ -10,9 +10,8 @@ import (
 var admin address
 
 func init(cur realm) {
-	// Use OriginCaller intentionally: when deployed through a loader realm,
-	// cur.Previous() is the loader, not the operator EOA.
-	// The admin must be the EOA that signed the deployment transaction.
+	// SAFE: admin bootstrap needs the tx signer, not a loader realm that may
+	// appear as cur.Previous().
 	admin = rtunsafe.OriginCaller()
 }
 

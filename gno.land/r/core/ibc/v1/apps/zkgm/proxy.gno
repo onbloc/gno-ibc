@@ -135,10 +135,12 @@ func BatchSend(cur realm, msg core.MsgBatchSend) core.H256 {
 	return core.BatchSend(cross(cur), msg)
 }
 
-// ReleaseNative transfers `amount` of `denom` from the proxy realm's escrow
-// to `recipient`. Only callable by the registered impl or an entry in
-// allowedImpls. Used by the impl-side `sendNative` so refunds and releases
-// are sourced from where the user's `-send` actually lands.
+// ReleaseNative transfers amount of denom from the proxy realm's escrow to
+// recipient. It may only be called by the registered implementation realm or an
+// allowed implementation realm.
+//
+// ReleaseNative is used by implementation-side sendNative calls so refunds and
+// releases are sourced from the escrow where the user's -send funds land.
 func ReleaseNative(cur realm, denom string, recipient address, amount int64) {
 	cacheRealm(cur)
 	requireImplRealm(cur, "release native")
@@ -153,9 +155,8 @@ func ReleaseNative(cur realm, denom string, recipient address, amount int64) {
 	b.SendCoins(cur.Address(), recipient, chain.NewCoins(chain.NewCoin(denom, amount)))
 }
 
-// requireImplRealm panics unless the caller is the registered impl realm or an
-// entry in allowedImpls. Used by impl-only entrypoints that move proxy state or
-// funds.
+// requireImplRealm panics unless the caller is the registered implementation
+// realm or an allowed implementation realm.
 func requireImplRealm(cur realm, action string) {
 	callerPath := cur.Previous().PkgPath()
 	if !isAuthorizedImpl(callerPath) {
@@ -163,11 +164,12 @@ func requireImplRealm(cur realm, action string) {
 	}
 }
 
-// cacheRealm captures the proxy realm's address from the first crossing call's
-// cur. realm values are ephemeral in Phase 3 (tied to a call frame, not
-// persistable), so we extract Address() into a package-level field that
-// downstream callers (ProxyAddress, banker constructions threaded through cur)
-// can read without needing the original realm value back.
+// cacheRealm records the proxy realm address for later use.
+//
+// Realm values are tied to a call frame and cannot be persisted across phases.
+// On the first proxy boundary crossing, this function extracts Address() from
+// cur and stores it in package-level state so downstream code can access the
+// proxy realm address without retaining the original realm value.
 func cacheRealm(cur realm) {
 	if !gRealmSet {
 		gRealmAddress = cur.Address()

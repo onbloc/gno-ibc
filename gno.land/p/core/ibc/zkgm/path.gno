@@ -19,8 +19,7 @@ const (
 	MaxHops = maxHopIndex + 1
 )
 
-// channelIDMaskU256 is shared across functions; bitwise ops here only read it.
-var channelIDMaskU256 = u256.NewUint(channelIDMask)
+func channelIDMaskU256() *u256.Uint { return u256.NewUint(channelIDMask) }
 
 // DequeueChannelFromPath pops the lowest 32-bit channel slot off the path and
 // shifts the remainder right. Returns the truncated path and the popped
@@ -32,7 +31,7 @@ func DequeueChannelFromPath(path *u256.Uint) (*u256.Uint, uint32) {
 		return u256.Zero(), 0
 	}
 	newPath := new(u256.Uint).Rsh(path, channelSlotBit)
-	low := new(u256.Uint).And(path, channelIDMaskU256)
+	low := new(u256.Uint).And(path, channelIDMaskU256())
 	return newPath, uint32(low.Uint64())
 }
 
@@ -48,7 +47,7 @@ func PopChannelFromPath(path *u256.Uint) (*u256.Uint, uint32) {
 	highestIndex := uint(path.BitLen()-1) / channelSlotBit
 	channelID := GetChannelFromPath(path, int(highestIndex))
 
-	slotMask := new(u256.Uint).Lsh(channelIDMaskU256, highestIndex*channelSlotBit)
+	slotMask := new(u256.Uint).Lsh(channelIDMaskU256(), highestIndex*channelSlotBit)
 	basePath := new(u256.Uint).AndNot(path, slotMask)
 	return basePath, channelID
 }
@@ -80,7 +79,7 @@ func GetChannelFromPath(path *u256.Uint, index int) uint32 {
 		return 0
 	}
 	shifted := new(u256.Uint).Rsh(path, uint(index)*channelSlotBit)
-	masked := new(u256.Uint).And(shifted, channelIDMaskU256)
+	masked := new(u256.Uint).And(shifted, channelIDMaskU256())
 	return uint32(masked.Uint64())
 }
 

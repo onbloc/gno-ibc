@@ -18,11 +18,10 @@ func Send(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, 
 		panic("zkgm: impl not set")
 	}
 
-	// An intermediate realm (or `maketx run`) can attach -send to the outer tx
-	// but spend it elsewhere, so OriginSend only reflects coins that landed
-	// here when the caller is the EOA.
 	var sentCoins string
 	if cur.Previous().IsUserCall() {
+		// SAFE: OriginSend is only trusted for direct EOA calls, where sent
+		// coins land in this realm before Send executes.
 		sentCoins = rtunsafe.OriginSend().String()
 	}
 
@@ -47,6 +46,8 @@ func SendRaw(cur realm, channelId uint32, timeoutTimestamp uint64, saltHex strin
 
 	var sentCoins string
 	if cur.Previous().IsUserCall() {
+		// SAFE: OriginSend is only trusted for direct EOA calls, where sent
+		// coins land in this realm before SendRaw executes.
 		sentCoins = rtunsafe.OriginSend().String()
 	}
 

@@ -32,7 +32,7 @@ func SetBucketConfig(cur realm, denom string, capacity *u256.Uint, refillRate *u
 			panic(err)
 		}
 
-		// Direct ledger write: SetTokenBucket gates on mustBeAuthorizedImpl, but
+		// Direct ledger write: SetTokenBucket gates on requireImplRealm, but
 		// admin is not in the allowed-impls list. v0 admin uses the same bypass.
 		tokenBucket.Set(denom, bucket)
 		return

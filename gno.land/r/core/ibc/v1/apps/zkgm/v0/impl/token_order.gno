@@ -119,7 +119,6 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 		if err != nil {
 			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
-		zkgm.SetTokenOrigin(cross(cur), ibcDenom, nextPath)
 		if !order.QuoteAmount.IsZero() {
 			if err := mintVoucher(cross(cur), ibcDenom, string(order.BaseToken), image, string(order.Receiver), order.QuoteAmount); err != nil {
 				return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
@@ -130,6 +129,7 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 				panic(execFatal{err.Error()})
 			}
 		}
+		zkgm.SetTokenOrigin(cross(cur), ibcDenom, nextPath)
 	case z.TOKEN_ORDER_KIND_ESCROW:
 		quoteDenom := string(order.QuoteToken)
 		image, hasImage := zkgm.GetMetadataImageOf(quoteDenom)
@@ -161,7 +161,6 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 			if err != nil {
 				return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 			}
-			zkgm.SetTokenOrigin(cross(cur), quoteDenom, nextPath)
 		}
 		if !order.QuoteAmount.IsZero() {
 			if err := mintVoucher(cross(cur), quoteDenom, string(order.BaseToken), image, string(order.Receiver), order.QuoteAmount); err != nil {
@@ -172,6 +171,9 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 			if err := mintVoucher(cross(cur), quoteDenom, string(order.BaseToken), image, string(relayer), fee); err != nil {
 				panic(execFatal{err.Error()})
 			}
+		}
+		if !hasOrigin {
+			zkgm.SetTokenOrigin(cross(cur), quoteDenom, nextPath)
 		}
 	case z.TOKEN_ORDER_KIND_UNESCROW:
 		reversedPath, err := z.ReverseChannelPath(path)

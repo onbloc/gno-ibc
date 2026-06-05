@@ -59,11 +59,14 @@ func SetRateLimitDisabled(cur realm, disabled bool) {
 // is intended only for administrative recovery when the registered
 // implementation can no longer upgrade itself.
 //
+// implPath is not updated here; the new impl must call UpdateImpl after this
+// to register its path via the runtime-verified caller identity. Include the
+// new impl's pkg path in newAllowedImpls so it can make that call.
+//
 // Passing nil for newAllowedImpls clears the allowlist.
-func ForceSetImpl(cur realm, newImpl ZkgmImpl, newImplPath string, newAllowedImpls []string) {
+func ForceSetImpl(cur realm, newImpl ZkgmImpl, newAllowedImpls []string) {
 	mustBeAdmin(cur)
 	impl = newImpl
-	implPath = newImplPath
 	allowedImpls = cloneStrings(newAllowedImpls)
 }
 

@@ -15,6 +15,7 @@ var (
 	impl          ZkgmImpl
 	implPath      string
 	allowedImpls  []string
+	bootstrapped  bool
 	paused        bool
 	gRealmAddress address
 	gRealmSet     bool
@@ -62,6 +63,7 @@ func UpdateImpl(cur realm, r UpdateRequest) {
 	if r.Impl != nil {
 		impl = r.Impl
 		implPath = caller
+		bootstrapped = true
 	}
 }
 
@@ -97,6 +99,10 @@ func AllowedImpls() []string {
 
 func ImplPath() string {
 	return implPath
+}
+
+func Bootstrapped() bool {
+	return bootstrapped
 }
 
 func IsPaused() bool {

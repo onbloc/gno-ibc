@@ -10,13 +10,12 @@ import (
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
-var (
-	tagAckSuccess       = u256FromBytes32(z.TAG_ACK_SUCCESS)
-	tagAckFailure       = u256FromBytes32(z.TAG_ACK_FAILURE)
-	fillTypeProtocol    = u256FromBytes32(z.FILL_TYPE_PROTOCOL)
-	fillTypeMarketMaker = u256FromBytes32(z.FILL_TYPE_MARKETMAKER)
-	errInvalidUnescrow  = errors.New("zkgm/v1: invalid token order unescrow")
-)
+var errInvalidUnescrow = errors.New("zkgm/v1: invalid token order unescrow")
+
+func tagAckSuccess() *u256.Uint       { return u256FromBytes32(z.TAG_ACK_SUCCESS) }
+func tagAckFailure() *u256.Uint       { return u256FromBytes32(z.TAG_ACK_FAILURE) }
+func fillTypeProtocol() *u256.Uint    { return u256FromBytes32(z.FILL_TYPE_PROTOCOL) }
+func fillTypeMarketMaker() *u256.Uint { return u256FromBytes32(z.FILL_TYPE_MARKETMAKER) }
 
 func (v *ZkgmV1) verifyTokenOrderV2(cur realm, channelId core.ChannelId, sender string, budget *sentCoinBudget, path *u256.Uint, order z.TokenOrderV2) error {
 	if path == nil {
@@ -212,7 +211,7 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), errors.New("zkgm/v1: unknown token order kind")
 	}
 
-	ack, err := encodeTokenOrderSuccessAck(fillTypeProtocol, nil)
+	ack, err := encodeTokenOrderSuccessAck(fillTypeProtocol(), nil)
 	if err != nil {
 		panic(execFatal{err.Error()})
 	}
@@ -228,7 +227,7 @@ func encodeTokenOrderSuccessAck(fillType *u256.Uint, marketMaker []byte) ([]byte
 	if err != nil {
 		return nil, err
 	}
-	return z.EncodeAck(z.Ack{Tag: tagAckSuccess, InnerAck: innerAck})
+	return z.EncodeAck(z.Ack{Tag: tagAckSuccess(), InnerAck: innerAck})
 }
 
 // marketMakerFillV2 fills a token order from the market maker's voucher balance.
@@ -250,7 +249,7 @@ func (v *ZkgmV1) marketMakerFillV2(cur realm, relayer address, order z.TokenOrde
 	}
 
 	// The maker-funded voucher transfer is the quote-token assertion.
-	ack, err := encodeTokenOrderSuccessAck(fillTypeMarketMaker, []byte(relayer.String()))
+	ack, err := encodeTokenOrderSuccessAck(fillTypeMarketMaker(), []byte(relayer.String()))
 	if err != nil {
 		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 	}
@@ -259,20 +258,20 @@ func (v *ZkgmV1) marketMakerFillV2(cur realm, relayer address, order z.TokenOrde
 }
 
 func (v *ZkgmV1) acknowledgeTokenOrderV2(cur realm, sourceChannelId core.ChannelId, path *u256.Uint, order z.TokenOrderV2, ack z.Ack) error {
-	if ack.Tag.Eq(tagAckFailure) {
+	if ack.Tag.Eq(tagAckFailure()) {
 		return v.refundV2(cur, sourceChannelId, path, order)
 	}
-	if !ack.Tag.Eq(tagAckSuccess) {
+	if !ack.Tag.Eq(tagAckSuccess()) {
 		return errors.New("zkgm/v1: unknown ack tag")
 	}
 	orderAck, err := z.DecodeTokenOrderAck(ack.InnerAck)
 	if err != nil {
 		return err
 	}
-	if orderAck.FillType.Eq(fillTypeProtocol) {
+	if orderAck.FillType.Eq(fillTypeProtocol()) {
 		return nil
 	}
-	if !orderAck.FillType.Eq(fillTypeMarketMaker) {
+	if !orderAck.FillType.Eq(fillTypeMarketMaker()) {
 		return errors.New("zkgm/v1: unknown fill type")
 	}
 

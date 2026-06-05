@@ -63,6 +63,10 @@ func SetRateLimitDisabled(cur realm, disabled bool) {
 // to register its path via the runtime-verified caller identity. Include the
 // new impl's pkg path in newAllowedImpls so it can make that call.
 //
+// AssertOriginCall is intentionally omitted: ZkgmImpl cannot be passed via
+// maketx, so callers must route through an ephemeral realm, which would cause
+// AssertOriginCall to always panic.
+//
 // Passing nil for newAllowedImpls clears the allowlist.
 func ForceSetImpl(cur realm, newImpl ZkgmImpl, newAllowedImpls []string) {
 	mustBeAdmin(cur)

@@ -3,9 +3,9 @@ package zkgm
 import (
 	"testing"
 
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/core/ibc/v1/core"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 type dummyImpl struct {

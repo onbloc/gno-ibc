@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"gno.land/p/aib/ibc/types"
-	cometblsp "gno.land/p/core/ibc/lightclients/cometbls"
-	"gno.land/r/core/ibc/v1/core"
+	cometblsp "gno.land/p/onbloc/ibc/lightclients/cometbls"
+	"gno.land/r/onbloc/unionibc/v1/core"
 )
 
 const ClientType core.ClientType = "cometbls"
@@ -31,7 +31,7 @@ func wasmContractStoreKey(contractAddress cometblsp.H256, key []byte) []byte {
 }
 
 func mustBeCore(cur realm) {
-	if cur.Previous().PkgPath() != "gno.land/r/core/ibc/v1/core" {
+	if cur.Previous().PkgPath() != "gno.land/r/onbloc/unionibc/v1/core" {
 		panic("cometbls: core only")
 	}
 }

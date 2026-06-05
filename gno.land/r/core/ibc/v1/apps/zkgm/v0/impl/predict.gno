@@ -5,9 +5,9 @@ import (
 	"encoding/hex"
 
 	abi "gno.land/p/core/encoding/abi"
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/core/ibc/v1/core"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 const (

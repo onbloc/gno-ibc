@@ -5,10 +5,10 @@ import (
 	"chain/banker"
 	"strings"
 
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	"gno.land/p/nt/bptree/v0"
 	"gno.land/p/nt/ufmt/v0"
-	core "gno.land/r/core/ibc/v1/core"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 var (
@@ -21,7 +21,7 @@ var (
 	receivers     = bptree.NewBPTree32()
 )
 
-const proxyPkgPath = "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+const proxyPkgPath = "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 
 func AsIBCApp() core.IApp {
 	return &App{}
@@ -81,8 +81,8 @@ func isAuthorizedImpl(caller string) bool {
 }
 
 // First install is limited to subpackages of the ZKGM proxy realm. The
-// gnoswap namespace is governance-granted, so the namespace owner controls
-// which ZKGM subpackages can be deployed.
+// onbloc/unionibc namespace is governance-granted, so the namespace owner
+// controls which ZKGM subpackages can be deployed.
 func isBootstrapCaller(caller string) bool {
 	return strings.HasPrefix(caller, proxyPkgPath+"/")
 }

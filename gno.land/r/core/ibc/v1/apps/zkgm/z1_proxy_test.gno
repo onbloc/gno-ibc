@@ -5,10 +5,10 @@ import (
 	"chain/banker"
 	"testing"
 
-	tb "gno.land/p/gnoswap/tokenbucket"
+	tb "gno.land/p/onbloc/tokenbucket"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/core/ibc/v1/core"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 func TestProxyConfigAndAddress(cur realm, t *testing.T) {

@@ -1,9 +1,9 @@
 package main
 
 import (
-	core "gno.land/r/core/ibc/v1/core"
-	cometbls "gno.land/r/core/ibc/v1/lightclients/cometbls"
-	statelens "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	cometbls "gno.land/r/onbloc/unionibc/v1/lightclients/cometbls"
+	statelens "gno.land/r/onbloc/unionibc/v1/lightclients/statelensics23mpt"
 )
 
 func main(cur realm) {

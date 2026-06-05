@@ -1,2 +1,2 @@
-module = "gno.land/p/gnoswap/ibc/zkgm"
+module = "gno.land/p/onbloc/unionibc/zkgm"
 gno = "0.9"

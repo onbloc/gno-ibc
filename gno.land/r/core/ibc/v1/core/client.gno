@@ -180,9 +180,9 @@ func GetClientType(clientId ClientId) string {
 func clientTypeOwnerPath(clientType ClientType) string {
 	switch clientType {
 	case ClientType("cometbls"):
-		return "gno.land/r/core/ibc/v1/lightclients/cometbls"
+		return "gno.land/r/onbloc/unionibc/v1/lightclients/cometbls"
 	case ClientType("state-lens/ics23/mpt"):
-		return "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
+		return "gno.land/r/onbloc/unionibc/v1/lightclients/statelensics23mpt"
 	}
 	return ""
 }

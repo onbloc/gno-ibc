@@ -5,8 +5,8 @@ import (
 	rtunsafe "chain/runtime/unsafe"
 	"encoding/hex"
 
-	z "gno.land/p/gnoswap/ibc/zkgm"
-	core "gno.land/r/core/ibc/v1/core"
+	z "gno.land/p/onbloc/unionibc/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 func Send(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, salt [32]byte, instruction z.Instruction) core.Packet {

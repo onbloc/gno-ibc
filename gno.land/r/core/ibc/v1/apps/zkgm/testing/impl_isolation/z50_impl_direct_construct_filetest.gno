@@ -1,8 +1,8 @@
-// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/impl_isolation
+// PKGPATH: gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/impl_isolation
 package impl_isolation
 
 import (
-	impl "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl"
+	impl "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl"
 )
 
 // A foreign realm cannot bypass core by constructing impl.ZkgmV1 directly and
@@ -18,4 +18,4 @@ func main(cur realm) {
 }
 
 // Error:
-// cannot allocate gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl.ZkgmV1 in realm gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/impl_isolation
+// cannot allocate gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl.ZkgmV1 in realm gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/impl_isolation

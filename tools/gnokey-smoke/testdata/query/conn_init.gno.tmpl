@@ -1,6 +1,6 @@
 package main
 
-import core "gno.land/r/core/ibc/v1/core"
+import core "gno.land/r/onbloc/unionibc/v1/core"
 
 func main(cur realm) {
 	id := core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(cross(cur), core.ClientId(@COMETBLS_ID@), core.ClientId(99)))

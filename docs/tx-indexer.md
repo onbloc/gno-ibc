@@ -171,7 +171,7 @@ query getPacketSendByMultipleAttrs {
         events: {
           GnoEvent: {
             type: { eq: "PacketSend" }
-            pkg_path: { eq: "gno.land/r/core/ibc/v1/core" }
+            pkg_path: { eq: "gno.land/r/onbloc/unionibc/v1/core" }
             _and: [
               {
                 attrs: {

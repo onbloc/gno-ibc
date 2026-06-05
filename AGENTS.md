@@ -85,7 +85,7 @@ ref: <https://github.com/allinbits/gno-realms/blob/master/AGENTS.md#gno-specific
 Each package/realm has a `gnomod.toml` (not `gno.mod`):
 
 ```toml
-module = "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl"
+module = "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl"
 gno = "0.9"
 ```
 
@@ -233,7 +233,7 @@ returns (`return Foo{}, err`) need the same treatment: use
 
 ### MsgRun vs MsgCall
 
-Most IBC functions require `MsgRun` (not `MsgCall`) because they take complex arguments (structs, slices of bytes). The v1 IBC core realm lives at `gno.land/r/core/ibc/v1/core`; the vendored gno-realms core still lives at `gno.land/r/aib/ibc/core`. See filetests under `gno.land/r/core/ibc/v1/apps/zkgm/` for working `MsgRun` examples.
+Most IBC functions require `MsgRun` (not `MsgCall`) because they take complex arguments (structs, slices of bytes). The v1 IBC core realm module path is `gno.land/r/onbloc/unionibc/v1/core`; the vendored gno-realms core still lives at `gno.land/r/aib/ibc/core`. See filetests under `gno.land/r/core/ibc/v1/apps/zkgm/` for working `MsgRun` examples.
 
 ### Gno Standard Library
 
@@ -261,9 +261,9 @@ IBC voucher tokens (minted on RecvPacket for cross-chain tokens) use **GRC20 tok
 The ZKGM port is tracked in `local_docs/zkgm/`. Before changing ZKGM code, read the relevant wave plan/review there first. The main implementation paths are:
 
 - ABI/types: `gno.land/p/core/ibc/zkgm/`
-- Proxy realm source: `gno.land/r/core/ibc/v1/apps/zkgm/` (module/import path `gno.land/r/gnoswap/ibc/v1/apps/zkgm`)
-- v0 implementation source: `gno.land/r/core/ibc/v1/apps/zkgm/v0/impl/` (module/import path `gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl`)
-- Mock receiver realm source: `gno.land/r/core/ibc/v1/apps/zkgm/testing/mock/` (module/import path `gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock`)
+- Proxy realm source: `gno.land/r/core/ibc/v1/apps/zkgm/` (module/import path `gno.land/r/onbloc/unionibc/v1/apps/zkgm`)
+- v0 implementation source: `gno.land/r/core/ibc/v1/apps/zkgm/v0/impl/` (module/import path `gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl`)
+- Mock receiver realm source: `gno.land/r/core/ibc/v1/apps/zkgm/testing/mock/` (module/import path `gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/mock`)
 
 ### Call Handler Invariants
 
@@ -373,7 +373,7 @@ A TokenOrderV2 INITIALIZE `SendRaw` consumes ~50.7M gas on the dev chain. Use `-
 
 ### Deployed realm path vs. source tree
 
-Source files live under `gno.land/r/core/ibc/v1/apps/zkgm/`, but a testnet deployment may publish them under a different namespace such as `gno.land/r/gnoswap/ibc/v1/apps/zkgm`. For `maketx call -pkgpath`, use the *deployed* path. The authoritative deployed path is the `port_id` attribute of `ChannelOpenInit` / `ChannelOpenAck` / `ChannelOpenConfirm` events surfaced by the tx-indexer.
+Source files live under `gno.land/r/core/ibc/v1/apps/zkgm/`, but a testnet deployment may publish them under a different namespace such as `gno.land/r/onbloc/unionibc/v1/apps/zkgm`. For `maketx call -pkgpath`, use the *deployed* path. The authoritative deployed path is the `port_id` attribute of `ChannelOpenInit` / `ChannelOpenAck` / `ChannelOpenConfirm` events surfaced by the tx-indexer.
 
 ### Indexer GraphQL quirks (see `docs/tx-indexer.md`)
 
@@ -406,7 +406,7 @@ Files named `z*_filetest.gno` in realm directories. These are integration tests 
 ```gno
 package main
 
-import "gno.land/r/core/ibc/v1/core"
+import "gno.land/r/onbloc/unionibc/v1/core"
 
 func main(cur realm) {
     clientID := core.CreateClient(cross(cur), clientState, consensusState)
@@ -475,7 +475,7 @@ uassert.Equal(t, expected, actual)
 `gnokey query vm/qeval -data '<expr>'` evaluates a single Gno expression against a realm package. Useful for relayer-style reads against a running node (see `gno.land/r/core/ibc/v1/gnokey_tx_queries.md` for IBC examples). Rules verified live against a `gnodev local` smoke node:
 
 - Top-level form is `gno.land/r/<path>.<Func>(<args>)`. The fully qualified package path is required for the entry function only.
-- Inside `<args>`, types and identifiers resolve in the **called package's scope**. Use unqualified names. Writing `gno.land/r/core/ibc/v1/core.H256{}` inside an arg fails with `name gno not declared` because the parser tries to read `gno` as an identifier.
+- Inside `<args>`, types and identifiers resolve in the **called package's scope**. Use unqualified names. Writing `gno.land/r/onbloc/unionibc/v1/core.H256{}` inside an arg fails with `name gno not declared` because the parser tries to read `gno` as an identifier.
 - 32-byte array aliases (e.g. `H256 [32]byte`) take a composite literal `H256{0xab,0xcd,...,0x33}` with exactly 32 entries. Bare numeric literals must include the `0x` prefix or be unsigned decimals in `byte` range.
 - Argument expressions can **compose other realm functions**. Example: `QueryCommitmentAtPath(BatchPacketsPath(H256{...}))` chains a path-derivation helper into the lookup, so callers do not need to precompute the derived hash off-chain.
 - qeval returns the result in the form `("<value>" string)` (or the appropriate type tag). Empty-string returns from query functions show as `("" string)`.

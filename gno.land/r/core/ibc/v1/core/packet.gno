@@ -290,7 +290,11 @@ func BatchAcks(cur realm, msg MsgBatchAcks) H256 {
 		}
 	}
 	batchHash := CommitPackets(msg.Packets)
-	st.saveBatchReceipts(batchHash, CommitAcks(msg.Acks))
+	ackHash := CommitAcks(msg.Acks)
+	channel := st.getChannel(first.DestinationChannelId)
+	connection := st.getConnection(channel.ConnectionId)
+	st.saveBatchReceipts(batchHash, ackHash)
+	emitBatchAcksEvent(batchHash, ackHash, first, channel, connection)
 	return batchHash
 }
 

@@ -24,7 +24,9 @@ func GetAdmin() address {
 func SetAdmin(cur realm, newAdmin address) {
 	runtime.AssertOriginCall()
 	requireAdmin(cur, "set admin")
+	oldAdmin := admin
 	admin = newAdmin
+	emitAdminChangedEvent(oldAdmin, newAdmin)
 }
 
 func requireAdmin(cur realm, action string) {
@@ -137,6 +139,7 @@ func RegisterClient(cur realm, clientType ClientType, client ILightClient) {
 		panic("caller not authorized to register client: unauthorized")
 	}
 	st.registerClient(clientType, client)
+	emitClientRegisteredEvent(clientType, caller, false)
 }
 
 // RegisterClientForType registers a light client implementation for clientType.
@@ -146,6 +149,7 @@ func RegisterClientForType(cur realm, clientType ClientType, client ILightClient
 	requireAdmin(cur, "register client")
 	runtime.AssertOriginCall()
 	st.registerClient(clientType, client)
+	emitClientRegisteredEvent(clientType, cur.Previous().PkgPath(), true)
 }
 
 // HasClient reports whether a light client is registered for clientType.

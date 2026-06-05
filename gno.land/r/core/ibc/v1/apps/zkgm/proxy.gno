@@ -5,9 +5,9 @@ import (
 	"chain/banker"
 	"strings"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	"gno.land/p/nt/bptree/v0"
 	"gno.land/p/nt/ufmt/v0"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
@@ -54,6 +54,7 @@ func ProductionLoaderPath() string {
 func UpdateImpl(cur realm, r UpdateRequest) {
 	cacheRealm(cur)
 	caller := cur.Previous().PkgPath()
+	oldImplPath := implPath
 	if implPath == "" && len(allowedImpls) == 0 {
 		requireBootstrapLoaderRealm(caller)
 		if r.Impl == nil {
@@ -73,6 +74,7 @@ func UpdateImpl(cur realm, r UpdateRequest) {
 		implPath = caller
 		bootstrapped = true
 	}
+	emitZkgmImplUpdatedEvent(caller, oldImplPath, implPath, allowedImpls)
 }
 
 func InAllowedImpls(pkg string) bool {
@@ -123,6 +125,7 @@ func RegisterReceiver(cur realm, receiver z.Zkgmable) {
 	if updated := receivers.Set(path, receiver); updated {
 		panic("zkgm: receiver already registered for " + path)
 	}
+	emitZkgmReceiverRegisteredEvent(path)
 }
 
 func GetReceiver(path string) z.Zkgmable {
@@ -167,6 +170,7 @@ func ReleaseNative(cur realm, denom string, recipient address, amount int64) {
 	}
 	b := banker.NewBanker(banker.BankerTypeRealmSend, cur)
 	b.SendCoins(cur.Address(), recipient, chain.NewCoins(chain.NewCoin(denom, amount)))
+	emitZkgmNativeReleasedEvent(cur.Previous().PkgPath(), denom, recipient, amount)
 }
 
 // requireImplRealm panics unless the caller is the registered implementation

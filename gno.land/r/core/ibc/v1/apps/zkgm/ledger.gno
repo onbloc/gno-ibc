@@ -3,9 +3,10 @@ package zkgm
 import (
 	"time"
 
-	tb "gno.land/p/onbloc/tokenbucket"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/bptree/v0"
+	tb "gno.land/p/onbloc/tokenbucket"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 var (
@@ -72,6 +73,7 @@ func GetChannelBalanceV2(key string) *u256.Uint {
 func SetInFlightPacket(cur realm, key InFlightKey, value InFlightValue) {
 	requireImplRealm(cur, "set in-flight packet")
 	inFlightPackets.Set(inFlightKeyString(key), value)
+	emitZkgmForwardInFlightSetEvent(key.PacketHash, core.CommitPacket(value.ParentPacket))
 }
 
 // GetInFlightPacket returns the parent packet for a forwarded child, if any.
@@ -88,8 +90,10 @@ func PopInFlightPacket(cur realm, key InFlightKey) (InFlightValue, bool) {
 	requireImplRealm(cur, "pop in-flight packet")
 	value, ok := inFlightPackets.Remove(inFlightKeyString(key))
 	if !ok {
+		emitZkgmForwardInFlightPoppedEvent(key.PacketHash, false)
 		return InFlightValue{}, false
 	}
+	emitZkgmForwardInFlightPoppedEvent(key.PacketHash, true)
 	return value.(InFlightValue), true
 }
 

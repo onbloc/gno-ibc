@@ -29,4 +29,4 @@ func main(cur realm) {
 }
 
 // Error:
-// zkgm: only registered impl (gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/loader_denyimpl) can batch send, got gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl
+// zkgm: caller is not an authorized impl for batch send: gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl

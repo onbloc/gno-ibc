@@ -29,7 +29,7 @@ func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
 	uassert.True(t, res.Status == core.PacketStatusSuccess)
 	ack, err := z.DecodeAck(res.Ack)
 	uassert.NoError(t, err)
-	uassert.True(t, ack.Tag.Eq(tagAckSuccess))
+	uassert.True(t, ack.Tag.Eq(tagAckSuccess()))
 	uassert.Equal(t, 1, mock.Calls(cross(cur)))
 	uassert.Equal(t, "7", mock.LastSourceChannel(cross(cur)))
 	uassert.Equal(t, "8", mock.LastDestinationChannel(cross(cur)))
@@ -57,7 +57,7 @@ func TestExecuteCallReceiverErrorReturnsFailureAck(cur realm, t *testing.T) {
 
 	ack, err := z.DecodeAck(res.Ack)
 	uassert.NoError(t, err)
-	uassert.True(t, ack.Tag.Eq(tagAckFailure))
+	uassert.True(t, ack.Tag.Eq(tagAckFailure()))
 	uassert.Equal(t, "receiver failed", string(ack.InnerAck))
 }
 

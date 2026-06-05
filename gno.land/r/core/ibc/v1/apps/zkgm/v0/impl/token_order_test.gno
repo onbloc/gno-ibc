@@ -174,6 +174,71 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	uassert.Equal(t, 6, v.token.GetDecimals())
 }
 
+func TestTokenOrderExecuteInitializeMalformedInitializerUsesDefaults(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	// Initializer is raw bytes that cannot be decoded as TokenInitializer.
+	// The protocol must fall back to ibcDenom-derived name/symbol and 0 decimals.
+	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    []byte("not-valid-abi"),
+	})
+	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	ibcDenom := PredictWrappedTokenV2(u256.NewUint(3), 4, []byte("ugnot"), image)
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(testAddress("fallback-receiver")),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(50),
+		QuoteToken:  []byte(ibcDenom),
+		QuoteAmount: u256.NewUint(50),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    metaBytes,
+	}
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(4), nil, 0, 0)
+
+	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("fallback-relayer")), u256.NewUint(3), order, false)
+
+	uassert.NoError(t, err)
+	uassert.True(t, res.Status == core.PacketStatusSuccess)
+
+	v := getVoucher(ibcDenom)
+	uassert.True(t, v != nil)
+	uassert.Equal(t, 0, v.token.GetDecimals())
+}
+
+func TestTokenOrderExecuteInitializeEmptyInitializerUsesDefaults(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	// Empty Initializer: decimals must default to 0, symbol derived from ibcDenom.
+	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    []byte{},
+	})
+	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	ibcDenom := PredictWrappedTokenV2(u256.NewUint(5), 6, []byte("ugnot"), image)
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(testAddress("empty-init-receiver")),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(20),
+		QuoteToken:  []byte(ibcDenom),
+		QuoteAmount: u256.NewUint(20),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    metaBytes,
+	}
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(6), nil, 0, 0)
+
+	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("empty-init-relayer")), u256.NewUint(5), order, false)
+
+	uassert.NoError(t, err)
+	uassert.True(t, res.Status == core.PacketStatusSuccess)
+
+	v := getVoucher(ibcDenom)
+	uassert.True(t, v != nil)
+	uassert.Equal(t, 0, v.token.GetDecimals())
+}
+
 func TestTokenOrderExecuteInitializeMintErrorDoesNotSetOrigin(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 

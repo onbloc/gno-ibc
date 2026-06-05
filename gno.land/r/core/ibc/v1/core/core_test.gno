@@ -12,7 +12,7 @@ import (
 
 const (
 	mockType        ClientType = "mock"
-	testCorePkgPath            = "gno.land/r/core/ibc/v1/core"
+	testCorePkgPath            = "gno.land/r/onbloc/unionibc/v1/core"
 	oldAddressPort             = "g1vjt8cj2s6f5w4sly0s2l0vh85k0y8jyz3f8qzss"
 )
 
@@ -805,7 +805,7 @@ func TestChannelStateTransitions(cur realm, t *testing.T) {
 func TestChannelEventAttrsOmitsCounterpartyChannelIdForOpenInit(cur realm, t *testing.T) {
 	attrs := channelEventAttrs(
 		ChannelOpenInitEvent,
-		Bytes("gno.land/r/core/ibc/v1/apps/zkgm"),
+		Bytes("gno.land/r/onbloc/unionibc/v1/apps/zkgm"),
 		ChannelId(1),
 		Channel{
 			State:                 ChannelStateInit,
@@ -822,7 +822,7 @@ func TestChannelEventAttrsOmitsCounterpartyChannelIdForOpenInit(cur realm, t *te
 	)
 
 	want := []string{
-		"port_id", "gno.land/r/core/ibc/v1/apps/zkgm",
+		"port_id", "gno.land/r/onbloc/unionibc/v1/apps/zkgm",
 		"channel_id", "1",
 		"counterparty_port_id", "0x636f756e7465727061727479",
 		"connection_id", "2",
@@ -844,7 +844,7 @@ func TestChannelEventAttrsIncludesCounterpartyChannelIdForOtherEvents(cur realm,
 	for _, eventType := range events {
 		attrs := channelEventAttrs(
 			eventType,
-			Bytes("gno.land/r/core/ibc/v1/apps/zkgm"),
+			Bytes("gno.land/r/onbloc/unionibc/v1/apps/zkgm"),
 			ChannelId(1),
 			Channel{
 				State:                 ChannelStateOpen,
@@ -862,7 +862,7 @@ func TestChannelEventAttrsIncludesCounterpartyChannelIdForOtherEvents(cur realm,
 
 		assertAttrEqual(t, attrs, "counterparty_channel_id", "7")
 		assertStringSliceEqual(t, attrs, []string{
-			"port_id", "gno.land/r/core/ibc/v1/apps/zkgm",
+			"port_id", "gno.land/r/onbloc/unionibc/v1/apps/zkgm",
 			"channel_id", "1",
 			"counterparty_port_id", "0x636f756e7465727061727479",
 			"counterparty_channel_id", "7",
@@ -910,7 +910,7 @@ func TestRegisterAppRejectsPortSquatting(cur realm, t *testing.T) {
 	oldAdmin := admin
 	admin = "gno1authorized"
 	defer func() { admin = oldAdmin }()
-	portId := Bytes("gno.land/r/core/ibc/v1/apps/zkgm")
+	portId := Bytes("gno.land/r/onbloc/unionibc/v1/apps/zkgm")
 
 	uassert.AbortsContains(t, cur, "caller not authorized to register port", func(cur realm) {
 		RegisterAppForPort(cur, portId, &mockApp{})

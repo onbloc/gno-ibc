@@ -1,13 +1,13 @@
 package attacker
 
 import (
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
-	core "gno.land/r/core/ibc/v1/core"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
-	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/loader"
-	impl "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
+	_ "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/loader"
+	impl "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl"
 )
 
 const forgedDestinationChannel = core.ChannelId(5)

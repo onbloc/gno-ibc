@@ -3,8 +3,8 @@ package mock
 import (
 	"errors"
 
-	z "gno.land/p/gnoswap/ibc/zkgm"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 )
 
 type Receiver struct {

@@ -1,9 +1,9 @@
-// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/impl_isolation
+// PKGPATH: gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/impl_isolation
 package impl_isolation
 
 import (
-	impl "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl"
-	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
+	impl "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl"
+	_ "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/loader"
 )
 
 // GetInstance is the other path to a callable *ZkgmV1. The blank import runs

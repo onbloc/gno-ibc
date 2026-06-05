@@ -8,13 +8,13 @@ import (
 	"gno.land/p/core/encoding/abi"
 	"gno.land/p/core/encoding/rlp"
 	"gno.land/p/core/ethereum/storage"
-	statelensp "gno.land/p/core/ibc/lightclients/statelensics23mpt"
+	statelensp "gno.land/p/onbloc/ibc/lightclients/statelensics23mpt"
 	"gno.land/p/nt/uassert/v0"
-	"gno.land/r/core/ibc/v1/core"
+	"gno.land/r/onbloc/unionibc/v1/core"
 )
 
 const (
-	stateLensTestPortId                 = "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
+	stateLensTestPortId                 = "gno.land/r/onbloc/unionibc/v1/lightclients/statelensics23mpt"
 	mockL1ClientType    core.ClientType = stateLensTestPortId + "/mock-l1"
 )
 

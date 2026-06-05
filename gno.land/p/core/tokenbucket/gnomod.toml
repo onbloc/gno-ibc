@@ -1,2 +1,2 @@
-module = "gno.land/p/gnoswap/tokenbucket"
+module = "gno.land/p/onbloc/tokenbucket"
 gno = "0.9"

@@ -59,18 +59,29 @@ func SetRateLimitDisabled(cur realm, disabled bool) {
 // is intended only for administrative recovery when the registered
 // implementation can no longer upgrade itself.
 //
-// implPath is not updated here; the new impl must call UpdateImpl after this
-// to register its path via the runtime-verified caller identity. Include the
-// new impl's pkg path in newAllowedImpls so it can make that call.
+// implPath is cleared, not set. The admin cannot prove which realm owns
+// newImpl, so binding implPath here would let a mistyped path grant escrow
+// rights to an arbitrary realm. Clearing it immediately deauthorizes the
+// displaced impl. The new impl rebinds implPath itself by calling UpdateImpl
+// from its own realm, and its pkg path must therefore be present in
+// newAllowedImpls. Until it runs, the new impl operates solely via
+// newAllowedImpls membership and ImplPath()/GetConfig() honestly report "".
+//
+// A non-nil impl with an empty allowlist is rejected: it would be installed for
+// dispatch yet unable to pass any fund or state gate and unable to self-register
+// unless it is a trusted proxy subpackage bootstrap caller. Pass newImpl == nil
+// to intentionally clear the impl.
 //
 // AssertOriginCall is intentionally omitted: ZkgmImpl cannot be passed via
 // maketx, so callers must route through an ephemeral realm, which would cause
 // AssertOriginCall to always panic.
-//
-// Passing nil for newAllowedImpls clears the allowlist.
 func ForceSetImpl(cur realm, newImpl ZkgmImpl, newAllowedImpls []string) {
 	mustBeAdmin(cur)
+	if newImpl != nil && len(newAllowedImpls) == 0 {
+		panic("zkgm: ForceSetImpl with a non-nil impl requires a non-empty allowlist")
+	}
 	impl = newImpl
+	implPath = ""
 	allowedImpls = cloneStrings(newAllowedImpls)
 }
 

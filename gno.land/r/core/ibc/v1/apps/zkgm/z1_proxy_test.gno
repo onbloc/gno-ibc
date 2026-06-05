@@ -87,12 +87,16 @@ func TestProxyUpdateImplPostBootstrapAllowsRegisteredImpl(cur realm, t *testing.
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	implPath = ProxyPkgPath()
+	testing.SetRealm(testing.NewCodeRealm(ProxyPkgPath()))
 
 	uassert.NotAborts(t, cur, func(cur realm) {
-		UpdateImpl(cur, NewUpdateRequest(cur, d, []string{ProxyPkgPath()}))
+		UpdateImpl(cross(cur), NewUpdateRequest(cross(cur), d, []string{ProxyPkgPath()}))
 	})
 	if impl != d || ImplPath() != ProxyPkgPath() {
 		t.Fatal("registered impl caller must be able to update impl")
+	}
+	if !Bootstrapped() {
+		t.Fatal("UpdateImpl must mark the proxy as bootstrapped when it installs an impl")
 	}
 }
 
@@ -228,23 +232,59 @@ func TestReleaseNativeRejectsUnlistedCaller(cur realm, t *testing.T) {
 	uassert.Equal(t, int64(7), bk.GetCoins(ProxyAddress()).AmountOf(denom))
 }
 
+// Conventions for exercising the admin-gated ForceSetImpl from tests.
+//
+// core.GetAdmin() is the empty address in unit tests, because core's init
+// captures OriginCaller, which is unset at import time. mustBeAdmin compares
+// cur.Previous().Address() against core.GetAdmin(), so the caller's Previous()
+// must also resolve to the empty address.
+//
+// To satisfy that, set the realm with SetRealm(NewUserRealm(core.GetAdmin()))
+// and call ForceSetImpl without crossing, as ForceSetImpl(cur, ...). A
+// non-crossing call keeps Previous() at the empty address, whereas crossing
+// with cross(cur) does not propagate the empty realm and falls back to this
+// realm's own address, which trips "admin only".
+//
+// Because the call does not cross a realm boundary, a rejection inside
+// ForceSetImpl surfaces as a local panic, so assert it with PanicsContains
+// rather than AbortsContains.
+//
+// Do not call SetRealm(NewCodeRealm(...)) before ForceSetImpl: it rebinds
+// cur.Previous() to that realm and a later NewUserRealm SetRealm does not reset
+// it. Establish bootstrapped state through the package vars instead.
+//
+// The non-admin denial path is the exception. A real, non-empty caller address
+// propagates across a cross(cur) boundary normally, so that case crosses and
+// asserts with AbortsContains; see TestForceSetImplDeniedForNonAdmin.
+
 func TestForceSetImplByAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	oldImplPath := "gno.land/r/old-impl"
+	newImplPath := "gno.land/r/new-impl"
 	implPath = oldImplPath
 	allowedImpls = []string{"gno.land/r/not-this-realm"}
 	d := &dummyImpl{}
 
-	ForceSetImpl(cur, d, []string{"gno.land/r/new-impl"})
+	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	ForceSetImpl(cur, d, []string{newImplPath})
 
-	if impl == nil {
+	if impl != d {
 		t.Fatal("ForceSetImpl must install the new impl")
 	}
-	if ImplPath() != oldImplPath {
-		t.Fatal("ForceSetImpl must not modify implPath; new impl must call UpdateImpl to register")
+	if ImplPath() != "" {
+		t.Fatal("ForceSetImpl must clear implPath until the new impl self-registers")
+	}
+	if isAuthorizedImpl(oldImplPath) {
+		t.Fatal("ForceSetImpl must deauthorize the displaced impl path")
+	}
+	if !isAuthorizedImpl(newImplPath) {
+		t.Fatal("ForceSetImpl must authorize the new impl through allowedImpls")
 	}
 	cfg := GetConfig()
-	if len(cfg.AllowedImpls) != 1 || cfg.AllowedImpls[0] != "gno.land/r/new-impl" {
+	if cfg.ImplPath != "" {
+		t.Fatal("GetConfig must report the cleared implPath")
+	}
+	if len(cfg.AllowedImpls) != 1 || cfg.AllowedImpls[0] != newImplPath {
 		t.Fatal("ForceSetImpl must replace allowedImpls")
 	}
 }
@@ -256,8 +296,135 @@ func TestForceSetImplDeniedForNonAdmin(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")))
 
 	uassert.AbortsContains(t, cur, "zkgm: admin only", func(cur realm) {
+		ForceSetImpl(cross(cur), d, nil)
+	})
+}
+
+func TestForceSetImplDeauthorizesOldFundMover(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	cacheRealm(cur)
+	implPath = ProxyPkgPath()
+	allowedImpls = []string{ProxyPkgPath()}
+	d := &dummyImpl{}
+
+	denom := "uforcesetold"
+	recipient := address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+	testing.IssueCoins(ProxyAddress(), chain.NewCoins(chain.NewCoin(denom, 7)))
+
+	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	ForceSetImpl(cur, d, []string{"gno.land/r/new-impl"})
+
+	uassert.AbortsContains(t, cur, "not an authorized impl", func(cur realm) {
+		ReleaseNative(cross(cur), denom, recipient, 7)
+	})
+
+	bk := banker.NewReadonlyBanker()
+	uassert.Equal(t, int64(0), bk.GetCoins(recipient).AmountOf(denom))
+	uassert.Equal(t, int64(7), bk.GetCoins(ProxyAddress()).AmountOf(denom))
+}
+
+func TestForceSetImplAllowsNewImplThroughAllowlist(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	d := &dummyImpl{}
+
+	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	ForceSetImpl(cur, d, []string{ProxyPkgPath()})
+
+	testing.SetRealm(testing.NewCodeRealm(ProxyPkgPath()))
+	uassert.AbortsContains(t, cur, "not enough packets", func(cur realm) {
+		BatchSend(cross(cur), core.NewMsgBatchSend(cross(cur), nil))
+	})
+}
+
+func TestForceSetImplSelfRegisters(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	d1 := &dummyImpl{}
+	d2 := &dummyImpl{}
+
+	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	ForceSetImpl(cur, d1, []string{ProxyPkgPath()})
+
+	testing.SetRealm(testing.NewCodeRealm(ProxyPkgPath()))
+	UpdateImpl(cross(cur), NewUpdateRequest(cross(cur), d2, nil))
+
+	if impl != d2 {
+		t.Fatal("allowed new impl must be able to self-register")
+	}
+	if ImplPath() != ProxyPkgPath() {
+		t.Fatal("self-registration must bind implPath to the verified caller")
+	}
+	if !Bootstrapped() {
+		t.Fatal("self-registration must preserve bootstrapped state")
+	}
+}
+
+func TestForceSetImplRejectsNonNilImplWithEmptyAllowlist(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	oldImpl := &dummyImpl{}
+	impl = oldImpl
+	implPath = "gno.land/r/old-impl"
+	allowedImpls = []string{"gno.land/r/old-impl"}
+	d := &dummyImpl{}
+
+	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	uassert.PanicsContains(t, cur, "non-empty allowlist", func() {
 		ForceSetImpl(cur, d, nil)
 	})
+	if impl != oldImpl || ImplPath() != "gno.land/r/old-impl" || len(allowedImpls) != 1 || allowedImpls[0] != "gno.land/r/old-impl" {
+		t.Fatal("rejected ForceSetImpl with nil allowlist must not mutate state")
+	}
+
+	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	uassert.PanicsContains(t, cur, "non-empty allowlist", func() {
+		ForceSetImpl(cur, d, []string{})
+	})
+	if impl != oldImpl || ImplPath() != "gno.land/r/old-impl" || len(allowedImpls) != 1 || allowedImpls[0] != "gno.land/r/old-impl" {
+		t.Fatal("rejected ForceSetImpl with empty allowlist must not mutate state")
+	}
+}
+
+func TestForceSetImplClearImplIsAllowed(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	oldImplPath := ProxyPkgPath()
+	impl = &dummyImpl{}
+	implPath = oldImplPath
+	allowedImpls = []string{oldImplPath}
+
+	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	ForceSetImpl(cur, nil, nil)
+
+	if impl != nil {
+		t.Fatal("ForceSetImpl nil impl must clear the impl")
+	}
+	if ImplPath() != "" {
+		t.Fatal("ForceSetImpl nil impl must clear implPath")
+	}
+	if isAuthorizedImpl(oldImplPath) {
+		t.Fatal("ForceSetImpl nil impl must deauthorize the old impl path")
+	}
+}
+
+func TestForceSetImplKeepsBootstrappedLock(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	d := &dummyImpl{}
+	// Stand in for a proxy that has already bootstrapped through UpdateImpl. The
+	// realistic bootstrap path is covered by TestForceSetImplSelfRegisters and
+	// TestProxyUpdateImplPostBootstrapAllowsRegisteredImpl; here we only need the
+	// bootstrapped lock set so we can assert ForceSetImpl preserves it.
+	impl = d
+	implPath = ProxyPkgPath()
+	allowedImpls = []string{ProxyPkgPath()}
+	bootstrapped = true
+	if !Bootstrapped() {
+		t.Fatal("test setup must bootstrap proxy")
+	}
+
+	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	ForceSetImpl(cur, d, []string{ProxyPkgPath()})
+
+	if !Bootstrapped() {
+		t.Fatal("ForceSetImpl must not reopen the impl singleton bootstrap lock")
+	}
 }
 
 func TestReleaseNativeRejectsCallerWhenAllowedListEmpty(cur realm, t *testing.T) {

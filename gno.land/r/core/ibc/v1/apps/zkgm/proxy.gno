@@ -46,9 +46,7 @@ func UpdateImpl(cur realm, r UpdateRequest) {
 	cacheRealm(cur)
 	caller := cur.Previous().PkgPath()
 	if implPath == "" && len(allowedImpls) == 0 {
-		if !isBootstrapCaller(caller) {
-			panic("zkgm: bootstrap not permitted for caller: " + caller)
-		}
+		requireBootstrapLoaderRealm(caller)
 		if r.Impl == nil {
 			panic("zkgm: bootstrap UpdateImpl must install an impl")
 		}
@@ -87,6 +85,12 @@ func isBootstrapCaller(caller string) bool {
 	return strings.HasPrefix(caller, proxyPkgPath+"/")
 }
 
+func requireBootstrapLoaderRealm(caller string) {
+	if !isBootstrapCaller(caller) {
+		panic("zkgm: bootstrap not permitted for caller: " + caller)
+	}
+}
+
 func AllowedImpls() []string {
 	return cloneStrings(allowedImpls)
 }
@@ -120,14 +124,14 @@ func GetReceiver(path string) z.Zkgmable {
 // dispatch time.
 func WriteForwardAck(cur realm, parentPacket core.Packet, ack []byte) {
 	cacheRealm(cur)
-	requireImplCaller(cur, "write forward ack")
+	requireImplRealm(cur, "write forward ack")
 
 	core.WriteAcknowledgement(cross(cur), core.NewMsgWriteAcknowledgement(cross(cur), parentPacket, ack))
 }
 
 func BatchSend(cur realm, msg core.MsgBatchSend) core.H256 {
 	cacheRealm(cur)
-	requireImplCaller(cur, "batch send")
+	requireImplRealm(cur, "batch send")
 	return core.BatchSend(cross(cur), msg)
 }
 
@@ -137,7 +141,7 @@ func BatchSend(cur realm, msg core.MsgBatchSend) core.H256 {
 // are sourced from where the user's `-send` actually lands.
 func ReleaseNative(cur realm, denom string, recipient address, amount int64) {
 	cacheRealm(cur)
-	requireImplCaller(cur, "release native")
+	requireImplRealm(cur, "release native")
 
 	if amount <= 0 {
 		panic("zkgm: ReleaseNative amount must be positive")
@@ -149,13 +153,13 @@ func ReleaseNative(cur realm, denom string, recipient address, amount int64) {
 	b.SendCoins(cur.Address(), recipient, chain.NewCoins(chain.NewCoin(denom, amount)))
 }
 
-// requireImplCaller panics unless the caller is the registered impl realm or
-// an entry in allowedImpls. Used by impl-only entrypoints that move state or
-// funds on behalf of the proxy.
-func requireImplCaller(cur realm, action string) {
+// requireImplRealm panics unless the caller is the registered impl realm or an
+// entry in allowedImpls. Used by impl-only entrypoints that move proxy state or
+// funds.
+func requireImplRealm(cur realm, action string) {
 	callerPath := cur.Previous().PkgPath()
 	if !isAuthorizedImpl(callerPath) {
-		panic(ufmt.Sprintf("zkgm: only registered impl (%s) can %s, got %s", implPath, action, callerPath))
+		panic(ufmt.Sprintf("zkgm: caller is not an authorized impl for %s: %s", action, callerPath))
 	}
 }
 

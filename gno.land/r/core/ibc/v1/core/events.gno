@@ -1,8 +1,14 @@
 package core
 
-import "chain"
+import (
+	"chain"
+	"strconv"
+)
 
 const (
+	AdminChangedEvent          = "AdminChanged"
+	ClientRegisteredEvent      = "ClientRegistered"
+	AppRegisteredEvent         = "AppRegistered"
 	CreateClientEvent          = "CreateClient"
 	UpdateClientEvent          = "UpdateClient"
 	ConnectionOpenInitEvent    = "ConnectionOpenInit"
@@ -17,6 +23,7 @@ const (
 	ChannelCloseConfirmEvent   = "ChannelCloseConfirm"
 	PacketSendEvent            = "PacketSend"
 	BatchSendEvent             = "BatchSend"
+	BatchAcksEvent             = "BatchAcks"
 	PacketRecvEvent            = "PacketRecv"
 	IntentPacketRecvEvent      = "IntentPacketRecv"
 	WriteAckEvent              = "WriteAck"
@@ -51,6 +58,29 @@ func emitChannelEvent(eventType string, portId Bytes, channelId ChannelId, chann
 	chain.Emit(eventType, channelEventAttrs(eventType, portId, channelId, channel, connection)...)
 }
 
+func emitAdminChangedEvent(oldAdmin address, newAdmin address) {
+	chain.Emit(AdminChangedEvent,
+		"old_admin", oldAdmin.String(),
+		"new_admin", newAdmin.String(),
+	)
+}
+
+func emitClientRegisteredEvent(clientType ClientType, registrarPkgPath string, adminOverride bool) {
+	chain.Emit(ClientRegisteredEvent,
+		"client_type", clientType.String(),
+		"registrar_pkg_path", registrarPkgPath,
+		"admin_override", strconv.FormatBool(adminOverride),
+	)
+}
+
+func emitAppRegisteredEvent(portId []byte, registrarPkgPath string, adminOverride bool) {
+	chain.Emit(AppRegisteredEvent,
+		"port_id", string(portId),
+		"registrar_pkg_path", registrarPkgPath,
+		"admin_override", strconv.FormatBool(adminOverride),
+	)
+}
+
 func emitBatchSendEvent(batchHash H256, packet Packet, sourceChannel Channel, sourceConnection Connection) {
 	chain.Emit(BatchSendEvent,
 		"batch_hash", batchHash.String(),
@@ -61,6 +91,17 @@ func emitBatchSendEvent(batchHash H256, packet Packet, sourceChannel Channel, so
 		"destination_channel_id", packet.DestinationChannelId.String(),
 		"destination_connection_id", sourceConnection.CounterpartyConnectionId.String(),
 		"destination_connection_client_id", sourceConnection.CounterpartyClientId.String(),
+	)
+}
+
+func emitBatchAcksEvent(batchHash H256, ackHash H256, packet Packet, destinationChannel Channel, destinationConnection Connection) {
+	chain.Emit(BatchAcksEvent,
+		"batch_hash", batchHash.String(),
+		"ack_hash", ackHash.String(),
+		"destination_channel_id", packet.DestinationChannelId.String(),
+		"destination_channel_version", destinationChannel.Version,
+		"destination_connection_id", destinationChannel.ConnectionId.String(),
+		"destination_connection_client_id", destinationConnection.ClientId.String(),
 	)
 }
 

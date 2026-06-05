@@ -62,7 +62,9 @@ type IIntentApp interface {
 
 // RegisterApp registers an IBC application at the caller realm's package path.
 func RegisterApp(cur realm, app IApp) {
-	registerAppAtPort([]byte(cur.Previous().PkgPath()), app)
+	portId := []byte(cur.Previous().PkgPath())
+	registerAppAtPort(portId, app)
+	emitAppRegisteredEvent(portId, cur.Previous().PkgPath(), false)
 }
 
 // RegisterAppForPort registers an IBC application at an explicit port id. This
@@ -72,6 +74,7 @@ func RegisterAppForPort(cur realm, portId []byte, app IApp) {
 	assertAdmin(cur, "register port")
 	runtime.AssertOriginCall()
 	registerAppAtPort(portId, app)
+	emitAppRegisteredEvent(portId, cur.Previous().PkgPath(), true)
 }
 
 func registerAppAtPort(portId []byte, app IApp) {

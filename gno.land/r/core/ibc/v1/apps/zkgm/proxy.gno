@@ -81,8 +81,8 @@ func isAuthorizedImpl(caller string) bool {
 }
 
 // First install is limited to subpackages of the ZKGM proxy realm. The
-// gnoswap namespace is governance-granted, so the namespace owner controls
-// which ZKGM subpackages can be deployed.
+// onbloc/unionibc namespace is governance-granted, so the namespace owner
+// controls which ZKGM subpackages can be deployed.
 func isBootstrapCaller(caller string) bool {
 	return strings.HasPrefix(caller, proxyPkgPath+"/")
 }

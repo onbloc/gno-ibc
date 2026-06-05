@@ -68,7 +68,7 @@ gno test -v ./gno.land/p/core/ibc/zkgm
 - `.gno` files are Gno, not Go. Use `gnomod.toml` module manifests and
   `gno.land/p/...` or `gno.land/r/...` import paths.
 - The ZKGM source tree lives under `gno.land/r/core/ibc/v1/apps/zkgm/`, while
-  its module/import path is `gno.land/r/gnoswap/ibc/v1/apps/zkgm`.
+  its module/import path is `gno.land/r/onbloc/unionibc/v1/apps/zkgm`.
 - `make vendor` is idempotent and safe to run before tests. Mirrored
   third-party packages are generated workspace inputs; their submodule pins are
   the source of truth.

@@ -103,7 +103,24 @@ func ForceUpdateClient(cur realm, msg MsgForceUpdateClient) Height {
 //
 // It does not commit the verified value into this realm's state.
 func VerifyClientMembership(_ realm, clientId ClientId, proofHeight Height, proof, path, value []byte) {
-	st.getClient(clientId).VerifyMembership(clientId, proofHeight, proof, path, value)
+	verifyMembershipActive(clientId, proofHeight, proof, path, value)
+}
+
+func requireActiveClient(client ILightClient, clientId ClientId) {
+	if client.GetStatus(clientId) != StatusActive {
+		panic(ErrClientNotActive)
+	}
+}
+
+func verifyMembershipActive(clientId ClientId, height Height, proof, key, value []byte) {
+	client := st.getClient(clientId)
+	requireActiveClient(client, clientId)
+	client.VerifyMembership(clientId, height, proof, key, value)
+}
+
+func verifyNonMembershipWithActiveClient(client ILightClient, clientId ClientId, height Height, proof, key []byte) {
+	requireActiveClient(client, clientId)
+	client.VerifyNonMembership(clientId, height, proof, key)
 }
 
 // RegisterClient registers a light client implementation for clientType.

@@ -168,6 +168,59 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	uassert.Equal(t, "21474836487", origin.ToString())
 }
 
+func TestTokenOrderExecuteInitializeMintErrorDoesNotSetOrigin(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20-invalid-rx"),
+		Initializer:    []byte("init-invalid-rx"),
+	})
+
+	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	ibcDenom := PredictWrappedTokenV2(u256.NewUint(9), 7, []byte("ugnot"), image)
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte("not-a-valid-address"),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte(ibcDenom),
+		QuoteAmount: u256.NewUint(95),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    metaBytes,
+	}
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(7), nil, 0, 0)
+
+	_, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("invalid-rx-relayer")), u256.NewUint(9), order, false)
+	uassert.ErrorContains(t, err, "invalid address")
+
+	_, ok := zkgm.GetTokenOrigin(ibcDenom)
+	uassert.False(t, ok, "mint error must not set token origin")
+}
+
+func TestTokenOrderExecuteEscrowMintErrorDoesNotSetOrigin(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	path := u256.NewUint(11)
+	destChan := uint32(8)
+	quoteDenom := PredictWrappedTokenV1(path, destChan, []byte("ugnot"))
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte("not-a-valid-address"),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte(quoteDenom),
+		QuoteAmount: u256.NewUint(95),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(destChan), nil, 0, 0)
+
+	_, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("escrow-rx-relayer")), path, order, false)
+
+	uassert.ErrorContains(t, err, "invalid address")
+	_, ok := zkgm.GetTokenOrigin(quoteDenom)
+	uassert.False(t, ok, "mint error must not set token origin")
+}
+
 func TestTokenOrderIntentVoucherMarketMakerFillTransfersMakerFunds(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 
@@ -194,9 +247,9 @@ func TestTokenOrderIntentVoucherMarketMakerFillTransfersMakerFunds(cur realm, t 
 	uassert.Equal(t, int64(18), VoucherBalanceOf(quoteToken, address(maker)))
 	uassert.Equal(t, int64(12), VoucherBalanceOf(quoteToken, address(receiver)))
 
-	if _, ok := zkgm.GetTokenOrigin(quoteToken); ok {
-		t.Fatal("market-maker fill must not set token origin")
-	}
+	_, ok := zkgm.GetTokenOrigin(quoteToken)
+	uassert.False(t, ok, "market-maker fill must not set token origin")
+
 	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(core.ChannelId(5), u256.Zero(), order.BaseToken, order.QuoteToken))
 	uassert.True(t, balance == nil || balance.IsZero())
 }

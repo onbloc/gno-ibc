@@ -3,12 +3,12 @@ package impl
 import (
 	"testing"
 
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/core/ibc/v1/core"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
-	"gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/mock"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
+	"gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/mock"
 )
 
 func TestExecuteBatchTokenOrderAndCallBothSucceed(cur realm, t *testing.T) {
@@ -46,7 +46,7 @@ func TestExecuteBatchTokenOrderAndCallBothSucceed(cur realm, t *testing.T) {
 	uassert.NoError(t, err)
 	outerAck, err := z.DecodeAck(ackBytes)
 	uassert.NoError(t, err)
-	uassert.True(t, outerAck.Tag.Eq(tagAckSuccess))
+	uassert.True(t, outerAck.Tag.Eq(tagAckSuccess()))
 
 	batchAck, err := z.DecodeBatchAck(outerAck.InnerAck)
 	uassert.NoError(t, err)
@@ -226,7 +226,7 @@ func TestExecuteBatchAggregatesChildAcks(cur realm, t *testing.T) {
 	uassert.Equal(t, 2, mock.Calls(cross(cur)))
 	outerAck, err := z.DecodeAck(ackBytes)
 	uassert.NoError(t, err)
-	uassert.True(t, outerAck.Tag.Eq(tagAckSuccess))
+	uassert.True(t, outerAck.Tag.Eq(tagAckSuccess()))
 	batchAck, err := z.DecodeBatchAck(outerAck.InnerAck)
 	uassert.NoError(t, err)
 	uassert.Equal(t, 2, len(batchAck.Acknowledgements))
@@ -340,11 +340,11 @@ func mustBatchOuterAck(childAcks [][]byte) z.Ack {
 	if err != nil {
 		panic(err)
 	}
-	return z.Ack{Tag: tagAckSuccess, InnerAck: batchAck}
+	return z.Ack{Tag: tagAckSuccess(), InnerAck: batchAck}
 }
 
 func mustSuccessAck() []byte {
-	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess, InnerAck: []byte{}})
+	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess(), InnerAck: []byte{}})
 	if err != nil {
 		panic(err)
 	}
@@ -354,5 +354,5 @@ func mustSuccessAck() []byte {
 func assertSuccessAck(t *testing.T, ackBytes []byte) {
 	ack, err := z.DecodeAck(ackBytes)
 	uassert.NoError(t, err)
-	uassert.True(t, ack.Tag.Eq(tagAckSuccess))
+	uassert.True(t, ack.Tag.Eq(tagAckSuccess()))
 }

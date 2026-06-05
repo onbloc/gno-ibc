@@ -3,7 +3,7 @@
 package main
 
 import (
-	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
+	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
 )
 
 func main() {

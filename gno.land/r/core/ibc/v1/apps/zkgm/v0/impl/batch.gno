@@ -3,9 +3,9 @@ package impl
 import (
 	"errors"
 
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/core/ibc/v1/core"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 // TODO: cap batch.Instructions length once the upstream Solidity reference
@@ -54,11 +54,11 @@ func (v *ZkgmV1) executeBatch(cur realm, packet core.Packet, relayer address, re
 	if err != nil {
 		return nil, err
 	}
-	return z.EncodeAck(z.Ack{Tag: tagAckSuccess, InnerAck: batchAckBytes})
+	return z.EncodeAck(z.Ack{Tag: tagAckSuccess(), InnerAck: batchAckBytes})
 }
 
 func (v *ZkgmV1) acknowledgeBatch(cur realm, packet core.Packet, path *u256.Uint, parentSalt [32]byte, batch z.Batch, outerAck z.Ack) error {
-	successful := outerAck.Tag != nil && outerAck.Tag.Eq(tagAckSuccess)
+	successful := outerAck.Tag != nil && outerAck.Tag.Eq(tagAckSuccess())
 	var batchAck z.BatchAck
 	if successful {
 		decoded, err := z.DecodeBatchAck(outerAck.InnerAck)

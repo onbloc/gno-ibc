@@ -27,6 +27,7 @@ var (
 	ErrBatchReceiptsNotFound         = errors.New("batch receipts not found")
 	ErrPacketTimeoutExpired          = errors.New("packet timeout expired")
 	ErrPacketTimeoutNotReached       = errors.New("packet timeout not reached")
+	ErrIntentNotSupported            = errors.New("intent receive not supported")
 )
 
 type State struct {

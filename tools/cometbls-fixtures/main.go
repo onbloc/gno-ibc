@@ -69,7 +69,7 @@ func main() {
 		{
 			name:  "z35_channel_try",
 			key:   mustHex("88601476d11616a71c5be67555bd1dff4b1cbf21533d2669b768b61518cfe1c3"),
-			value: mustHex("d46b19494b1692f1fff29e196f9addabe46107b503abc7f99067e40ab84ca7e5"),
+			value: mustHex("bd5f900db75b9d13176e8038e83644b68a4f8e8c5ae786d6100e3c1b358744f6"),
 		},
 		{
 			name:  "z35_packet_commitment",
@@ -83,22 +83,22 @@ func main() {
 		},
 		{
 			name:  "z39_call_packet_commitment",
-			key:   mustHex("ecfa376e2392e124e1633138b49b4ca5920159120ec4106c2a559b5b674b0b30"),
+			key:   mustHex("6c13cd6241313f41260cfba0838525b9d475eaa7095e71eb3aacda382ec109f2"),
 			value: mustHex("0100000000000000000000000000000000000000000000000000000000000000"),
 		},
 		{
 			name:  "z39_missing_call_packet_commitment",
-			key:   mustHex("5abf92c58482b9e5ccf6981e0559c5cc299a42a1f6f04a461b11a3b8a3014de5"),
+			key:   mustHex("006f36985ed5086ec21cd2e6078181f2dd0262b8765063d6013f69607e796823"),
 			value: mustHex("0100000000000000000000000000000000000000000000000000000000000000"),
 		},
 		{
 			name:  "z40_mixed_batch_packet_commitment",
-			key:   mustHex("a27e1b52c3beaeb1c4b3c6afb3bb6000536eb98562c019f0109f7b1274a3d102"),
+			key:   mustHex("dd374ceb5016bfb0edc44e88684c07621e1aeeaa95c885f084d75b54c4a6bf41"),
 			value: mustHex("0100000000000000000000000000000000000000000000000000000000000000"),
 		},
 		{
 			name:  "z40_panic_batch_packet_commitment",
-			key:   mustHex("9102811e2a4d94c7593e8711e65c4163820045992a2ab08e771615a067ca23cd"),
+			key:   mustHex("188c2ebc42b9ae5f6d2195ecc721c01dbb96906277e64a9492036fa2d73786d9"),
 			value: mustHex("0100000000000000000000000000000000000000000000000000000000000000"),
 		},
 	}
@@ -122,7 +122,7 @@ func main() {
 		{
 			name:  "z37_channel_try",
 			key:   mustHex("88601476d11616a71c5be67555bd1dff4b1cbf21533d2669b768b61518cfe1c3"),
-			value: mustHex("d46b19494b1692f1fff29e196f9addabe46107b503abc7f99067e40ab84ca7e5"),
+			value: mustHex("bd5f900db75b9d13176e8038e83644b68a4f8e8c5ae786d6100e3c1b358744f6"),
 		},
 		{
 			name:             "z37_receipt_non_membership",
@@ -143,7 +143,7 @@ func main() {
 		{
 			name:  "z42_wrong_version_channel_try",
 			key:   mustHex("88601476d11616a71c5be67555bd1dff4b1cbf21533d2669b768b61518cfe1c3"),
-			value: mustHex("36292890ea242143403d36de7bcd41fb0c77bcdc3319ba808e378f4dccb9c20b"),
+			value: mustHex("643c3c7c9b75a3a1031bd55a9c35da517adac11d8af9827efae8638affb4062e"),
 		},
 	}
 	z42StaleFixtures := []fixtureInput{
@@ -155,7 +155,7 @@ func main() {
 		{
 			name:  "z42_stale_channel_try",
 			key:   mustHex("88601476d11616a71c5be67555bd1dff4b1cbf21533d2669b768b61518cfe1c3"),
-			value: mustHex("d7103949348bc4c932bf1120eccd4374e594fd30fe8967f9d2c82e679431cdee"),
+			value: mustHex("11b65b488d81ab780466a45daae5643a4ee43e755712e449890b893bd3293027"),
 		},
 	}
 	for _, fx := range makeFixtureSet(z42WrongVersionFixtures) {

@@ -1,18 +1,16 @@
 package e2e
 
 import (
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/core/ibc/v1/core"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 )
 
-var (
-	Relayer = address("g1relayer")
+var Relayer = address("g1relayer")
 
-	tagAckSuccessU256    = new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:])
-	fillTypeProtocolU256 = new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:])
-)
+func tagAckSuccessU256() *u256.Uint    { return new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:]) }
+func fillTypeProtocolU256() *u256.Uint { return new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:]) }
 
 type ChannelPair struct {
 	ClientId     core.ClientId
@@ -223,7 +221,7 @@ func MustAck(cur realm, tag *u256.Uint, inner []byte) []byte {
 
 func MustProtocolTokenOrderAck(cur realm) []byte {
 	bz, err := z.EncodeTokenOrderAck(z.TokenOrderAck{
-		FillType: fillTypeProtocolU256,
+		FillType: fillTypeProtocolU256(),
 	})
 	if err != nil {
 		panic(err)
@@ -232,11 +230,11 @@ func MustProtocolTokenOrderAck(cur realm) []byte {
 }
 
 func MustSuccessAck(cur realm, inner []byte) []byte {
-	return MustAck(cross(cur), tagAckSuccessU256, inner)
+	return MustAck(cross(cur), tagAckSuccessU256(), inner)
 }
 
 func MustSuccessAckBytes(cur realm, inner []byte) []byte {
-	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccessU256, InnerAck: inner})
+	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccessU256(), InnerAck: inner})
 	if err != nil {
 		panic(err)
 	}

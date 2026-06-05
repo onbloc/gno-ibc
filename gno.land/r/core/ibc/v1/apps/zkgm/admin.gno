@@ -3,9 +3,9 @@ package zkgm
 import (
 	"chain/runtime"
 
-	tb "gno.land/p/gnoswap/tokenbucket"
+	tb "gno.land/p/onbloc/tokenbucket"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/core/ibc/v1/core"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 func Pause(cur realm) {
@@ -35,7 +35,7 @@ func SetBucketConfig(cur realm, denom string, capacity *u256.Uint, refillRate *u
 			panic(err)
 		}
 
-		// Direct ledger write: SetTokenBucket gates on mustBeAuthorizedImpl, but
+		// Direct ledger write: SetTokenBucket gates on requireImplRealm, but
 		// admin is not in the allowed-impls list. v0 admin uses the same bypass.
 		tokenBucket.Set(denom, bucket)
 		return

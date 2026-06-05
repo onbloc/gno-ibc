@@ -8,118 +8,11 @@ import (
 	"gno.land/p/nt/uassert/v0"
 )
 
-// --- Mock implementations ---
-
-type mockClient struct {
-	chainId                string
-	height                 Height
-	status                 Status
-	timestamp              Timestamp
-	membershipClientIds    []ClientId
-	membershipHeights      []Height
-	membershipProofs       [][]byte
-	membershipKeys         [][]byte
-	membershipValues       [][]byte
-	nonMembershipClientIds []ClientId
-	nonMembershipHeights   []Height
-	nonMembershipProofs    [][]byte
-	nonMembershipKeys      [][]byte
-}
-
-func (m *mockClient) CreateClient(_ realm, _ ClientId, _, _ []byte) string { return m.chainId }
-func (m *mockClient) UpdateClient(_ realm, _ ClientId, _ []byte) ConsensusStateUpdate {
-	m.height++
-	return ConsensusStateUpdate{
-		Height:              m.height,
-		ClientStateBytes:    []byte("cs"),
-		ConsensusStateBytes: []byte("cons"),
-	}
-}
-
-func (m *mockClient) VerifyMembership(clientId ClientId, height Height, proof []byte, key []byte, value []byte) {
-	m.membershipClientIds = append(m.membershipClientIds, clientId)
-	m.membershipHeights = append(m.membershipHeights, height)
-	m.membershipProofs = append(m.membershipProofs, proof)
-	m.membershipKeys = append(m.membershipKeys, key)
-	m.membershipValues = append(m.membershipValues, value)
-}
-
-func (m *mockClient) VerifyNonMembership(clientId ClientId, height Height, proof []byte, key []byte) {
-	m.nonMembershipClientIds = append(m.nonMembershipClientIds, clientId)
-	m.nonMembershipHeights = append(m.nonMembershipHeights, height)
-	m.nonMembershipProofs = append(m.nonMembershipProofs, proof)
-	m.nonMembershipKeys = append(m.nonMembershipKeys, key)
-}
-
-func (m *mockClient) GetTimestamp(_ ClientId, _ Height) Timestamp {
-	if m.timestamp != 0 {
-		return m.timestamp
-	}
-	return Timestamp(1e9)
-}
-func (m *mockClient) GetLatestHeight(_ ClientId) Height { return m.height }
-func (m *mockClient) GetStatus(_ ClientId) Status       { return m.status }
-
-type mockApp struct {
-	initCalled     bool
-	closedChannels []ChannelId
-	recvPackets    []Packet
-	intentPackets  []Packet
-	intentMsgs     [][]byte
-	ackPackets     []Packet
-	timeoutPackets []Packet
-	recvResult     RecvPacketResult
-	intentResult   RecvPacketResult
-}
-
-func (a *mockApp) OnChannelOpenInit(_ realm, _ ConnectionId, _ ChannelId, _ string, _ address) {
-	a.initCalled = true
-}
-
-func (a *mockApp) OnChannelOpenTry(_ realm, _ ConnectionId, _ ChannelId, _, _ string, _ address) {
-}
-
-func (a *mockApp) OnChannelOpenAck(_ realm, _ ChannelId, _ ChannelId, _ string, _ address) {
-}
-func (a *mockApp) OnChannelOpenConfirm(_ realm, _ ChannelId, _ address) {}
-func (a *mockApp) OnChannelCloseInit(_ realm, ch ChannelId, _ address) {
-	a.closedChannels = append(a.closedChannels, ch)
-}
-
-func (a *mockApp) OnChannelCloseConfirm(_ realm, ch ChannelId, _ address) {
-	a.closedChannels = append(a.closedChannels, ch)
-}
-
-func (a *mockApp) OnRecvPacket(cur realm, p Packet, _ address, _ []byte) RecvPacketResult {
-	a.recvPackets = append(a.recvPackets, p)
-	if a.recvResult.Status != PacketStatusUnknown {
-		return a.recvResult
-	}
-	return NewRecvPacketResult(cur, PacketStatusSuccess, []byte{0x01})
-}
-
-func (a *mockApp) OnIntentRecvPacket(cur realm, p Packet, _ address, msg []byte) RecvPacketResult {
-	a.intentPackets = append(a.intentPackets, p)
-	a.intentMsgs = append(a.intentMsgs, msg)
-	if a.intentResult.Status != PacketStatusUnknown {
-		return a.intentResult
-	}
-	return NewRecvPacketResult(cur, PacketStatusSuccess, []byte{0x02})
-}
-
-func (a *mockApp) OnAcknowledgementPacket(_ realm, p Packet, _ []byte, _ address) {
-	a.ackPackets = append(a.ackPackets, p)
-}
-
-func (a *mockApp) OnTimeoutPacket(_ realm, p Packet, _ address) {
-	a.timeoutPackets = append(a.timeoutPackets, p)
-}
-
 // --- Helpers ---
 
 const (
 	mockType        ClientType = "mock"
-	testCorePkgPath            = "gno.land/r/core/ibc/v1/core"
+	testCorePkgPath            = "gno.land/r/onbloc/unionibc/v1/core"
 	oldAddressPort             = "g1vjt8cj2s6f5w4sly0s2l0vh85k0y8jyz3f8qzss"
 )
 
@@ -912,7 +805,7 @@ func TestChannelStateTransitions(cur realm, t *testing.T) {
 func TestChannelEventAttrsOmitsCounterpartyChannelIdForOpenInit(cur realm, t *testing.T) {
 	attrs := channelEventAttrs(
 		ChannelOpenInitEvent,
-		Bytes("gno.land/r/core/ibc/v1/apps/zkgm"),
+		Bytes("gno.land/r/onbloc/unionibc/v1/apps/zkgm"),
 		ChannelId(1),
 		Channel{
 			State:                 ChannelStateInit,
@@ -929,7 +822,7 @@ func TestChannelEventAttrsOmitsCounterpartyChannelIdForOpenInit(cur realm, t *te
 	)
 
 	want := []string{
-		"port_id", "gno.land/r/core/ibc/v1/apps/zkgm",
+		"port_id", "gno.land/r/onbloc/unionibc/v1/apps/zkgm",
 		"channel_id", "1",
 		"counterparty_port_id", "0x636f756e7465727061727479",
 		"connection_id", "2",
@@ -951,7 +844,7 @@ func TestChannelEventAttrsIncludesCounterpartyChannelIdForOtherEvents(cur realm,
 	for _, eventType := range events {
 		attrs := channelEventAttrs(
 			eventType,
-			Bytes("gno.land/r/core/ibc/v1/apps/zkgm"),
+			Bytes("gno.land/r/onbloc/unionibc/v1/apps/zkgm"),
 			ChannelId(1),
 			Channel{
 				State:                 ChannelStateOpen,
@@ -969,7 +862,7 @@ func TestChannelEventAttrsIncludesCounterpartyChannelIdForOtherEvents(cur realm,
 
 		assertAttrEqual(t, attrs, "counterparty_channel_id", "7")
 		assertStringSliceEqual(t, attrs, []string{
-			"port_id", "gno.land/r/core/ibc/v1/apps/zkgm",
+			"port_id", "gno.land/r/onbloc/unionibc/v1/apps/zkgm",
 			"channel_id", "1",
 			"counterparty_port_id", "0x636f756e7465727061727479",
 			"counterparty_channel_id", "7",
@@ -1017,7 +910,7 @@ func TestRegisterAppRejectsPortSquatting(cur realm, t *testing.T) {
 	oldAdmin := admin
 	admin = "gno1authorized"
 	defer func() { admin = oldAdmin }()
-	portId := Bytes("gno.land/r/core/ibc/v1/apps/zkgm")
+	portId := Bytes("gno.land/r/onbloc/unionibc/v1/apps/zkgm")
 
 	uassert.AbortsContains(t, cur, "caller not authorized to register port", func(cur realm) {
 		RegisterAppForPort(cur, portId, &mockApp{})
@@ -1276,6 +1169,24 @@ func TestIntentPacketRecvSetsReceiptAndCommitsAck(cur realm, t *testing.T) {
 	}
 }
 
+func TestIntentPacketRecvRejectsNonIntentAppBeforeReceipt(cur realm, t *testing.T) {
+	resetState()
+	portId, _, channelId := setupOpenChannel(t)
+	st.ports[portKey(portId)] = &mockNonIntentApp{}
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("intent"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	uassert.AbortsContains(t, cur, "intent receive not supported", func(cur realm) {
+		IntentPacketRecv(cur, MsgIntentPacketRecv{Packets: []Packet{packet}})
+	})
+
+	if st.hasPacketReceipt(packet) {
+		t.Fatal("IntentPacketRecv must reject non-intent app before writing receipt")
+	}
+	if st.hasAcknowledgement(packet) {
+		t.Fatal("IntentPacketRecv must reject non-intent app before writing acknowledgement")
+	}
+}
+
 func TestIntentPacketRecvBlocksLaterProvenPacketRecv(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
@@ -1488,16 +1399,6 @@ func TestGetClientStatusReturnsUnknownForMissingClient(cur realm, t *testing.T) 
 }
 
 // --- ForceUpdateClient ---
-
-type mockForceClient struct {
-	mockClient
-	forceHeight Height
-}
-
-func (m *mockForceClient) ForceUpdateClient(cur realm, _ ClientId, csBytes, consBytes []byte) ConsensusStateUpdate {
-	m.forceHeight++
-	return NewConsensusStateUpdate(cross(cur), m.forceHeight, consBytes, csBytes)
-}
 
 func TestForceUpdateClientUpdatesStateAndReturnsHeight(cur realm, t *testing.T) {
 	resetState()

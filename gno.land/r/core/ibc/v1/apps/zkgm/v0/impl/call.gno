@@ -3,10 +3,10 @@ package impl
 import (
 	"errors"
 
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/core/ibc/v1/core"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 )
 
 var (
@@ -24,9 +24,15 @@ func (v *ZkgmV1) verifyCall(cur realm, sender string, call z.Call) error {
 	return nil
 }
 
-func (v *ZkgmV1) executeCall(cur realm, packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, call z.Call) (core.RecvPacketResult, error) {
+func (v *ZkgmV1) executeCall(cur realm, packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, call z.Call, intent bool) (core.RecvPacketResult, error) {
+	// TODO: when eureka is supported, fail it closed on intent (return
+	// ACK_ERR_ONLY_MAKER) like every other opcode instead of a failure ack.
 	if call.Eureka {
 		return callErrAck(cur, errEurekaUnsupported), nil
+	}
+	if intent {
+		// Calls do not settle on the proofless market-maker fast path.
+		return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 
 	sender := cloneBytes(call.Sender)
@@ -58,7 +64,7 @@ func (v *ZkgmV1) executeCall(cur realm, packet core.Packet, relayer address, rel
 		return callErrAck(cur, err), nil
 	}
 
-	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess, InnerAck: []byte{}})
+	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess(), InnerAck: []byte{}})
 	if err != nil {
 		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 	}
@@ -114,7 +120,7 @@ func canRevive() (ok bool) {
 }
 
 func callErrAck(cur realm, err error) core.RecvPacketResult {
-	ack, encErr := z.EncodeAck(z.Ack{Tag: tagAckFailure, InnerAck: []byte(err.Error())})
+	ack, encErr := z.EncodeAck(z.Ack{Tag: tagAckFailure(), InnerAck: []byte(err.Error())})
 	if encErr != nil {
 		// EncodeAck on a 2-field schema is essentially infallible. A failure
 		// would emit a non-Tag-prefixed ack the counterparty can't decode.

@@ -10,9 +10,8 @@ import (
 var admin address
 
 func init(cur realm) {
-	// Use OriginCaller intentionally: when deployed through a loader realm,
-	// cur.Previous() is the loader, not the operator EOA.
-	// The admin must be the EOA that signed the deployment transaction.
+	// SAFE: admin bootstrap needs the tx signer, not a loader realm that may
+	// appear as cur.Previous().
 	admin = rtunsafe.OriginCaller()
 }
 
@@ -24,11 +23,11 @@ func GetAdmin() address {
 // SetAdmin transfers admin rights to a new address. Only callable by the current admin.
 func SetAdmin(cur realm, newAdmin address) {
 	runtime.AssertOriginCall()
-	assertAdmin(cur, "set admin")
+	requireAdmin(cur, "set admin")
 	admin = newAdmin
 }
 
-func assertAdmin(cur realm, action string) {
+func requireAdmin(cur realm, action string) {
 	if cur.Previous().Address() != admin {
 		panic("caller not authorized to " + action + ": unauthorized")
 	}
@@ -77,7 +76,7 @@ func UpdateClient(cur realm, msg MsgUpdateClient) Height {
 // otherwise unrecoverable clients. It panics if the caller is not the admin
 // or if the light client does not implement IForceLightClient.
 func ForceUpdateClient(cur realm, msg MsgForceUpdateClient) Height {
-	assertAdmin(cur, "ForceUpdateClient")
+	requireAdmin(cur, "ForceUpdateClient")
 
 	impl, ok := st.getClient(msg.ClientId).(IForceLightClient)
 	if !ok {
@@ -127,7 +126,7 @@ func RegisterClient(cur realm, clientType ClientType, client ILightClient) {
 //
 // It is restricted to the admin.
 func RegisterClientForType(cur realm, clientType ClientType, client ILightClient) {
-	assertAdmin(cur, "register client")
+	requireAdmin(cur, "register client")
 	runtime.AssertOriginCall()
 	st.registerClient(clientType, client)
 }
@@ -180,9 +179,9 @@ func GetClientType(clientId ClientId) string {
 func clientTypeOwnerPath(clientType ClientType) string {
 	switch clientType {
 	case ClientType("cometbls"):
-		return "gno.land/r/core/ibc/v1/lightclients/cometbls"
+		return "gno.land/r/onbloc/unionibc/v1/lightclients/cometbls"
 	case ClientType("state-lens/ics23/mpt"):
-		return "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
+		return "gno.land/r/onbloc/unionibc/v1/lightclients/statelensics23mpt"
 	}
 	return ""
 }

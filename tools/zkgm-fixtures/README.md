@@ -98,30 +98,19 @@ GNOKEY_KEYNAME=test1 \
 tools/zkgm-fixtures/scripts/gen-send-script.sh recv_token_order_v2_escrow_protocol_fill --exec
 ```
 
-The rendered scripts target the module path `gno.land/r/gnoswap/ibc/v1/apps/zkgm` (the zkgm v1 realm) and reuse `gno.land/p/gnoswap/ibc/zkgm` types. Output directory (`scripts/out/`) is gitignored — re-render whenever scenarios are regenerated.
+The rendered scripts target the module path `gno.land/r/onbloc/unionibc/v1/apps/zkgm` (the zkgm v1 realm) and reuse `gno.land/p/onbloc/unionibc/zkgm` types. Output directory (`scripts/out/`) is gitignored — re-render whenever scenarios are regenerated.
 
 This only covers the **send** side. Replaying the recv/ack side would require a real IBC light-client proof and is out of scope for direct fixture replay; the `gno.land/r/core/ibc/v1/apps/zkgm/testing/e2e/` harness is the right place for that.
 
 ### Running against `gnodev local`
 
-The zkgm packages live on disk under `gno.land/{p,r}/core/...` but declare their module name as `gno.land/{p,r}/gnoswap/...` in `gnomod.toml`. The default `gnodev` `root=` resolver matches directory layout to import path, so it cannot find these aliased modules. Use `local=` resolvers (one per alias) and pre-deploy via `-paths`:
+The zkgm packages live on disk under `gno.land/{p,r}/core/...` but declare their module name as `gno.land/{p,r}/onbloc/{ibc,unionibc}/...` in `gnomod.toml`. The default `gnodev` `root=` resolver matches directory layout to import path, so it cannot find these aliased modules; a `local=` resolver is needed per aliased package. `tools/run-v1-ibc-smoke-node.sh` launches a node with the full resolver set already configured (see `tools/gnokey-smoke/lib.sh`):
 
 ```bash
-gnodev local \
-  -root "$HOME/.cache/gno-ibc/gno" \
-  -resolver "root=$PWD" \
-  -resolver "root=$HOME/.cache/gno-ibc/gno/examples" \
-  -resolver "local=$PWD/gno.land/p/core/tokenbucket" \
-  -resolver "local=$PWD/gno.land/p/core/ibc/zkgm" \
-  -resolver "local=$PWD/gno.land/r/core/ibc/v1/apps/zkgm" \
-  -resolver "local=$PWD/gno.land/r/core/ibc/v1/apps/zkgm/v0/impl" \
-  -resolver "local=$PWD/gno.land/r/core/ibc/v1/apps/zkgm/v0/loader" \
-  -paths "gno.land/r/core/ibc/v1/core,gno.land/r/core/ibc/v1/lightclients/cometbls,gno.land/r/gnoswap/ibc/v1/apps/zkgm,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader" \
-  -no-web \
-  -node-rpc-listener 0.0.0.0:26657
+RPC_LISTENER=0.0.0.0:26657 tools/run-v1-ibc-smoke-node.sh
 ```
 
-With this gnodev configuration, `--exec` against the default `gnodev` `test1` keyring works without further setup:
+With this node running, `--exec` against the default `gnodev` `test1` keyring works without further setup:
 
 ```bash
 GNOKEY_REMOTE=tcp://127.0.0.1:26657 \

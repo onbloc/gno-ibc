@@ -13,6 +13,11 @@ func init() {
 	st = newState()
 }
 
+// PkgPath returns this core realm's package path.
+func PkgPath(cur realm) string {
+	return cur.PkgPath()
+}
+
 // ILightClient defines the interface that light client adapters must implement.
 // Methods that modify adapter state must declare _ realm as the first parameter
 // (Gno crossing function requirement for cross(cur)-realm state writes).
@@ -45,9 +50,14 @@ type IApp interface {
 	OnChannelCloseInit(cur realm, channelId ChannelId, relayer address)
 	OnChannelCloseConfirm(cur realm, channelId ChannelId, relayer address)
 	OnRecvPacket(cur realm, packet Packet, relayer address, relayerMsg []byte) RecvPacketResult
-	OnIntentRecvPacket(cur realm, packet Packet, marketMaker address, marketMakerMsg []byte) RecvPacketResult
 	OnAcknowledgementPacket(cur realm, packet Packet, acknowledgement []byte, relayer address)
 	OnTimeoutPacket(cur realm, packet Packet, relayer address)
+}
+
+// IIntentApp is implemented by apps that explicitly support the proofless
+// market-maker intent receive path.
+type IIntentApp interface {
+	OnIntentRecvPacket(cur realm, packet Packet, marketMaker address, marketMakerMsg []byte) RecvPacketResult
 }
 
 // RegisterApp registers an IBC application at the caller realm's package path.
@@ -59,7 +69,7 @@ func RegisterApp(cur realm, app IApp) {
 // privileged path is for deployment/loaders that install an app on behalf of
 // another realm.
 func RegisterAppForPort(cur realm, portId []byte, app IApp) {
-	assertAdmin(cur, "register port")
+	requireAdmin(cur, "register port")
 	runtime.AssertOriginCall()
 	registerAppAtPort(portId, app)
 }

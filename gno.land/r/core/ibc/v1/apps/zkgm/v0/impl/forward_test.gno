@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"testing"
 
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/core/ibc/v1/core"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 )
 
 func TestVerifyForwardRejectsNestedForward(cur realm, t *testing.T) {
@@ -220,8 +220,8 @@ func TestExecuteForwardThroughCoreFrameAuthorizesCoreRealm(cur realm, t *testing
 	parentChannel := openForwardTestChannel(cross(cur), core.ChannelId(101))
 	childSource := openForwardTestChannel(cross(cur), core.ChannelId(102))
 	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), nil, []string{
-		"gno.land/r/core/ibc/v1/core",
-		"gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl",
+		"gno.land/r/onbloc/unionibc/v1/core",
+		"gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl",
 	}))
 
 	forward := z.Forward{
@@ -249,7 +249,7 @@ func TestAcknowledgeForwardDispatchesToInnerInstruction(cur realm, t *testing.T)
 	err := (&ZkgmV1{}).acknowledgeForward(cur, core.NewPacket(cross(cur), 0, 0, nil, 0, 0), u256.Zero(), [32]byte{}, z.Forward{
 		Path:        forwardPath(1, 2),
 		Instruction: batchMustCallInstruction(batchCall("sender", "calldata")),
-	}, z.Ack{Tag: tagAckSuccess, InnerAck: []byte{}})
+	}, z.Ack{Tag: tagAckSuccess(), InnerAck: []byte{}})
 
 	uassert.NoError(t, err)
 }
@@ -268,13 +268,13 @@ func TestAcknowledgeForwardWithTokenOrderChildRefundsOnFailure(cur realm, t *tes
 	}
 	path := forwardPath(1, 2)
 	increaseChannelBalanceV2(cross(cur), core.ChannelId(3), path, order.BaseToken, order.QuoteToken, order.BaseAmount)
-	childFailAck, err := z.EncodeAck(z.Ack{Tag: tagAckFailure, InnerAck: []byte("failed")})
+	childFailAck, err := z.EncodeAck(z.Ack{Tag: tagAckFailure(), InnerAck: []byte("failed")})
 	uassert.NoError(t, err)
 
 	err = (&ZkgmV1{}).acknowledgeForward(cur, core.NewPacket(cross(cur), core.ChannelId(3), core.ChannelId(4), nil, 0, 0), u256.Zero(), [32]byte{}, z.Forward{
 		Path:        path,
 		Instruction: batchMustOrderInstruction(order),
-	}, z.Ack{Tag: tagAckSuccess, InnerAck: childFailAck})
+	}, z.Ack{Tag: tagAckSuccess(), InnerAck: childFailAck})
 
 	uassert.NoError(t, err)
 
@@ -345,7 +345,7 @@ func openForwardTestChannel(cur realm, counterpartyChannelId core.ChannelId) cor
 	if !core.HasApp(portId) {
 		zkgm.RegisterCoreApp(cross(cur))
 	}
-	clientType := core.ClientType("gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl/forward-test")
+	clientType := core.ClientType("gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl/forward-test")
 	if !core.HasClient(clientType) {
 		core.RegisterClient(cross(cur), clientType, &forwardTestLightClient{})
 	}

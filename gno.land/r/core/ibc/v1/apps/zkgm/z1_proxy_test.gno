@@ -5,10 +5,10 @@ import (
 	"chain/banker"
 	"testing"
 
-	tb "gno.land/p/gnoswap/tokenbucket"
+	tb "gno.land/p/onbloc/tokenbucket"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/core/ibc/v1/core"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 func TestProxyConfigAndAddress(cur realm, t *testing.T) {
@@ -175,7 +175,7 @@ func TestWriteForwardAckRequiresRegisteredImpl(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	implPath = "gno.land/r/not-this-realm"
 
-	uassert.AbortsContains(t, cur, "only registered impl", func(cur realm) {
+	uassert.AbortsContains(t, cur, "not an authorized impl", func(cur realm) {
 		WriteForwardAck(cur, core.NewPacket(cross(cur), 1, 2, nil, 0, 0), []byte{0x01})
 	})
 }
@@ -219,7 +219,7 @@ func TestReleaseNativeRejectsUnlistedCaller(cur realm, t *testing.T) {
 	recipient := address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
 	testing.IssueCoins(ProxyAddress(), chain.NewCoins(chain.NewCoin(denom, 7)))
 
-	uassert.AbortsContains(t, cur, "only registered impl", func(cur realm) {
+	uassert.AbortsContains(t, cur, "not an authorized impl", func(cur realm) {
 		ReleaseNative(cur, denom, recipient, 7)
 	})
 
@@ -269,7 +269,7 @@ func TestReleaseNativeRejectsCallerWhenAllowedListEmpty(cur realm, t *testing.T)
 	recipient := address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
 	testing.IssueCoins(ProxyAddress(), chain.NewCoins(chain.NewCoin(denom, 7)))
 
-	uassert.AbortsContains(t, cur, "only registered impl", func(cur realm) {
+	uassert.AbortsContains(t, cur, "not an authorized impl", func(cur realm) {
 		ReleaseNative(cur, denom, recipient, 7)
 	})
 

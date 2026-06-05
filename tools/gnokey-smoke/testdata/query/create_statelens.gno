@@ -3,9 +3,9 @@ package main
 import (
 	"bytes"
 
-	statelensp "gno.land/p/core/ibc/lightclients/statelensics23mpt"
-	core "gno.land/r/core/ibc/v1/core"
-	statelens "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
+	statelensp "gno.land/p/onbloc/ibc/lightclients/statelensics23mpt"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	statelens "gno.land/r/onbloc/unionibc/v1/lightclients/statelensics23mpt"
 )
 
 func main(cur realm) {

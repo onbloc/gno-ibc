@@ -5,15 +5,15 @@ import (
 	"chain/banker"
 	"testing"
 
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/core/ibc/v1/core"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
-	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
+	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
 )
 
-const timeoutMockClientType = core.ClientType("gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl/timeout-mock")
+const timeoutMockClientType = core.ClientType("gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl/timeout-mock")
 
 type timeoutMockLightClient struct{}
 
@@ -67,9 +67,9 @@ func TestPacketTimeoutRefundsNativeFromProxy(cur realm, t *testing.T) {
 func setupNativeRefundPacket(cur realm, expired bool, senderName string, denom string, amount int64) (core.Packet, z.TokenOrderV2) {
 	resetTokenOrderTest(cur)
 	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), nil, []string{
-		"gno.land/r/core/ibc/v1/core",
-		"gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl",
-		"gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e",
+		"gno.land/r/onbloc/unionibc/v1/core",
+		"gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl",
+		"gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e",
 	}))
 	ensureZkgmAppRegistered(cross(cur))
 	var pair e2e.ChannelPair
@@ -130,7 +130,7 @@ func openTimeoutChannelPair(cur realm) e2e.ChannelPair {
 }
 
 func mustFailureAck() []byte {
-	ack, err := z.EncodeAck(z.Ack{Tag: tagAckFailure, InnerAck: []byte("failure")})
+	ack, err := z.EncodeAck(z.Ack{Tag: tagAckFailure(), InnerAck: []byte("failure")})
 	if err != nil {
 		panic(err)
 	}

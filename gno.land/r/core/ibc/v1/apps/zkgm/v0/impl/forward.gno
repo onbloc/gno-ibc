@@ -3,10 +3,10 @@ package impl
 import (
 	"errors"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/onbloc/unionibc/v1/core"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 var (
@@ -47,8 +47,8 @@ func (v *ZkgmV1) executeForward(cur realm, packet core.Packet, path *u256.Uint, 
 
 	// Forward children construct ZkgmPacket directly via BatchSend. Their salt
 	// is namespaced via DeriveForwardSalt, not DeriveSenderSalt.
-	zkgm.BatchSend(cross(cur), core.NewMsgBatchSend(cross(cur), []core.Packet{childPacket}))
 	zkgm.SetInFlightPacket(cross(cur), forwardInFlightKey(cur, childPacket), zkgm.NewInFlightValue(cross(cur), packet))
+	zkgm.BatchSend(cross(cur), core.NewMsgBatchSend(cross(cur), []core.Packet{childPacket}))
 
 	return core.NewRecvPacketResult(cross(cur), core.PacketStatusAsync, nil), nil
 }

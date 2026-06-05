@@ -24,6 +24,10 @@ var (
 
 const proxyPkgPath = "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 
+// productionLoaderPath is the only loader allowed to re-fetch the impl singleton
+// after bootstrap. It is the trust anchor for impl.GetInstance.
+const productionLoaderPath = proxyPkgPath + "/v0/loader"
+
 func AsIBCApp() core.IApp {
 	return &App{}
 }
@@ -43,6 +47,10 @@ func ProxyPkgPath() string {
 	return proxyPkgPath
 }
 
+func ProductionLoaderPath() string {
+	return productionLoaderPath
+}
+
 func UpdateImpl(cur realm, r UpdateRequest) {
 	cacheRealm(cur)
 	caller := cur.Previous().PkgPath()
@@ -51,7 +59,7 @@ func UpdateImpl(cur realm, r UpdateRequest) {
 		if r.Impl == nil {
 			panic("zkgm: bootstrap UpdateImpl must install an impl")
 		}
-		if caller == proxyPkgPath+"/v0/loader" && len(r.AllowedImpls) == 0 {
+		if caller == productionLoaderPath && len(r.AllowedImpls) == 0 {
 			panic("zkgm: production loader bootstrap must install allowed impls")
 		}
 	} else if !isAuthorizedImpl(caller) {

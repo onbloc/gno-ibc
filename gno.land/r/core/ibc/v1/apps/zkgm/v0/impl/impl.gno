@@ -16,7 +16,7 @@ var instance = &ZkgmV1{}
 // After bootstrap, only the production loader may fetch it again.
 func GetInstance(cur realm) *ZkgmV1 {
 	caller := cur.Previous().PkgPath()
-	if caller != "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/loader" && zkgm.Bootstrapped() {
+	if caller != zkgm.ProductionLoaderPath() && zkgm.Bootstrapped() {
 		panic("not allowed")
 	}
 	return instance

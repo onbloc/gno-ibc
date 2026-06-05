@@ -146,7 +146,8 @@ func cacheRealm(cur realm) {
 
 **Origin caller helpers split by intent.** `runtime.OriginCaller()` /
 `runtime.PreviousRealm()` / `runtime.CurrentRealm()` have moved under
-`chain/runtime/unsafe`. Use them with the correct guard for your intent:
+`chain/runtime/unsafe`. Prefer `cur.Previous()` when `cur realm` is already in
+scope, and use `unsafe` only when origin-level data is required:
 
 - **Attribution** (relayer reward addresses, packet `Sender` fields,
   event metadata, any place where a wrapper realm calling on behalf of
@@ -158,7 +159,24 @@ func cacheRealm(cur realm) {
 
 `cur.Previous().PkgPath()` and `cur.Previous().IsUserCall()` are the
 correct replacements for `runtime.PreviousRealm()` in any function that
-already has `cur` in scope.
+already has `cur` in scope. Any remaining `chain/runtime/unsafe` use should
+have a short `// SAFE:` comment explaining why `cur.Previous()` is insufficient
+or why the call is guarded by `IsUserCall()` / `AssertOriginCall()`.
+
+**Authorization helper boundaries.** Keep helper names aligned with the
+caller model they enforce, and do not merge distinct trust domains:
+
+- Core admin checks use `requireAdmin(cur, action)` for the admin address
+  comparison. Keep `runtime.AssertOriginCall()` directly in each admin
+  entrypoint; do not hide it inside a helper, because it is frame-sensitive.
+- ZKGM proxy and ledger impl-only paths should share `requireImplRealm(cur,
+  action)`, which means registered impl OR allowed impl. Do not split this
+  into registered-only / allowed-only helpers unless the behavior is
+  intentionally changing.
+- Bootstrap loader checks may have a named caller helper, but request-dependent
+  bootstrap policy should stay near `UpdateImpl`.
+- Preserve admin-only direct ledger writes such as `SetBucketConfig`; admin and
+  impl authorization are separate trust domains.
 
 ### Cross-Realm Reads: Tainted Slices and Pointers
 

@@ -21,7 +21,7 @@ func main(cur realm) {
 		QuoteToken:  []byte("quote"),
 		QuoteAmount: u256.Zero(),
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
-		Metadata:    e2e.MustTokenMetadata(cross(cur), "grc20", "init"),
+		Metadata:    e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6}),
 	}
 	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), 0, core.Timestamp(3600))
 	e2e.BatchSend(cross(cur), packet)

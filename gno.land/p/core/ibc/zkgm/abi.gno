@@ -78,6 +78,12 @@ var TokenMetadataSchema = abi.Schema{Fields: []abi.Field{
 	{Type: abi.TypeBytes},
 }}
 
+var TokenInitializerSchema = abi.Schema{Fields: []abi.Field{
+	{Type: abi.TypeString},
+	{Type: abi.TypeString},
+	{Type: abi.TypeUint8},
+}}
+
 var SolverMetadataSchema = abi.Schema{Fields: []abi.Field{
 	{Type: abi.TypeBytes},
 	{Type: abi.TypeBytes},
@@ -241,6 +247,22 @@ func DecodeTokenOrderV2(data []byte) (TokenOrderV2, error) {
 		QuoteAmount: out[5].(*u256.Uint),
 		Kind:        out[6].(uint8),
 		Metadata:    out[7].([]byte),
+	}, nil
+}
+
+func EncodeTokenInitializer(i TokenInitializer) ([]byte, error) {
+	return abi.Encode(TokenInitializerSchema, []any{i.Name, i.Symbol, i.Decimals})
+}
+
+func DecodeTokenInitializer(data []byte) (TokenInitializer, error) {
+	out, err := abi.Decode(TokenInitializerSchema, data)
+	if err != nil {
+		return TokenInitializer{}, err
+	}
+	return TokenInitializer{
+		Name:     out[0].(string),
+		Symbol:   out[1].(string),
+		Decimals: out[2].(uint8),
 	}, nil
 }
 

@@ -29,7 +29,7 @@ func TestVerifyForwardPassesAllowedChildren(cur realm, t *testing.T) {
 
 	sender := testAddress("forward-sender")
 	baseToken := "ibc/v1-forward"
-	uassert.NoError(t, mintVoucher(cross(cur), baseToken, baseToken, [32]byte{}, sender, u256.NewUint(30)))
+	uassert.NoError(t, mintVoucher(cross(cur), baseToken, baseToken, [32]byte{}, "", "", 0, sender, u256.NewUint(30)))
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
 		BaseToken:   []byte(baseToken),

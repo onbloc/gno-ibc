@@ -200,10 +200,14 @@ func MustPacketData(cur realm, instr z.Instruction) []byte {
 	return packetBytes
 }
 
-func MustTokenMetadata(cur realm, implementation string, initializer string) []byte {
+func MustTokenMetadata(cur realm, implementation string, ti z.TokenInitializer) []byte {
+	initBytes, err := z.EncodeTokenInitializer(ti)
+	if err != nil {
+		panic(err)
+	}
 	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{
 		Implementation: []byte(implementation),
-		Initializer:    []byte(initializer),
+		Initializer:    initBytes,
 	})
 	if err != nil {
 		panic(err)

@@ -38,10 +38,12 @@ func (v *ZkgmV1) PostChannelCloseConfirm(cur realm, channelId core.ChannelId) {}
 func (v *ZkgmV1) Recv(cur realm, packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
 	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
+		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
 		return failureResult(cur, universalErrorAck())
 	}
 	res, err := v.dispatchExecute(cur, packet, relayer, relayerMsg, zp.Path, zp.Salt, zp.Instruction, false)
 	if err != nil {
+		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
 		return failureResult(cur, universalErrorAck())
 	}
 	return res
@@ -80,10 +82,12 @@ func (v *ZkgmV1) Timeout(cur realm, packet core.Packet, relayer address) {
 func (v *ZkgmV1) IntentRecv(cur realm, packet core.Packet, marketMaker address, marketMakerMsg []byte) core.RecvPacketResult {
 	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
+		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
 		return failureResult(cur, universalErrorAck())
 	}
 	res, err := v.dispatchExecute(cur, packet, marketMaker, marketMakerMsg, zp.Path, zp.Salt, zp.Instruction, true)
 	if err != nil {
+		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
 		return failureResult(cur, universalErrorAck())
 	}
 	// Only-maker must roll back the intent receipt.

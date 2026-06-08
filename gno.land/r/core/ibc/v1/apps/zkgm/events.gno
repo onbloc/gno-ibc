@@ -20,6 +20,7 @@ const (
 	ZkgmNativeReleasedEvent            = "ZkgmNativeReleased"
 	ZkgmForwardInFlightSetEvent        = "ZkgmForwardInFlightSet"
 	ZkgmForwardInFlightPoppedEvent     = "ZkgmForwardInFlightPopped"
+	ZkgmRecvErrorEvent                 = "ZkgmRecvError"
 )
 
 func emitZkgmImplUpdatedEvent(callerPkgPath string, oldImplPath string, newImplPath string, allowed []string) {
@@ -94,5 +95,13 @@ func emitZkgmForwardInFlightPoppedEvent(packetHash core.H256, found bool) {
 	chain.Emit(ZkgmForwardInFlightPoppedEvent,
 		"packet_hash", packetHash.String(),
 		"found", strconv.FormatBool(found),
+	)
+}
+
+func EmitRecvError(sourceChannel core.ChannelId, destinationChannel core.ChannelId, reason string) {
+	chain.Emit(ZkgmRecvErrorEvent,
+		"source_channel", sourceChannel.String(),
+		"destination_channel", destinationChannel.String(),
+		"reason", reason,
 	)
 }

@@ -29,7 +29,7 @@ func TestRecvForwardExecuteErrorReturnsFailure(cur realm, t *testing.T) {
 	res := (&ZkgmV1{}).Recv(cur, packet, address("g1relayer"), nil)
 
 	uassert.True(t, res.Status == core.PacketStatusFailure)
-	uassert.Equal(t, "zkgm/v1: forward missing previous destination channel", string(res.Ack))
+	uassert.Equal(t, string(universalErrorAck()), string(res.Ack))
 }
 
 func TestRecvMalformedPacketReturnsFailure(cur realm, t *testing.T) {
@@ -54,10 +54,8 @@ func TestAckUnsupportedOpcodeAborts(cur realm, t *testing.T) {
 }
 
 // TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck verifies that
-// an error occurring before any state mutation produces a failure ack rather
-// than aborting the transaction. The error is returned directly from
-// executeTokenOrderV2 and converted to errResult by Recv — the recover in
-// dispatchExecute is not involved.
+// an error occurring before any state mutation produces a universalErrorAck
+// rather than aborting the transaction.
 func TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 
@@ -77,6 +75,7 @@ func TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck(cur realm, t *
 	res := (&ZkgmV1{}).Recv(cur, packet, address("g1relayer"), nil)
 
 	uassert.True(t, res.Status == core.PacketStatusFailure)
+	uassert.Equal(t, string(universalErrorAck()), string(res.Ack))
 }
 
 // TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts verifies that an error

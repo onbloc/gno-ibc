@@ -6,12 +6,14 @@ import (
 	"testing"
 	"time"
 
+	"gno.land/p/demo/tokens/grc20"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/bptree/v0"
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
 	tb "gno.land/p/onbloc/tokenbucket"
 	z "gno.land/p/onbloc/unionibc/zkgm"
+	"gno.land/r/demo/defi/grc20reg"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
@@ -82,6 +84,181 @@ func TestTokenOrderVerifyNativeRequiresSentCoin(cur realm, t *testing.T) {
 	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(4), string(order.Sender), newSentCoinBudget(chain.NewCoins(chain.NewCoin("ugnot", 13))), u256.Zero(), order)
 
 	uassert.NoError(t, err)
+}
+
+func TestTokenOrderVerifyGRC20EscrowsWithApproval(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	sender := testAddress("v1-grc20-sender")
+	denom, tok, ledger := registerImplTestGRC20(cur, "send_approved")
+	uassert.NoError(t, ledger.Mint(address(sender), 30))
+	uassert.NoError(t, ledger.Approve(address(sender), zkgm.ProxyAddress(), 13))
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(denom),
+		BaseAmount:  u256.NewUint(13),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(12),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(9), sender, newSentCoinBudget(nil), u256.Zero(), order)
+
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(17), tok.BalanceOf(address(sender)))
+	uassert.Equal(t, int64(13), tok.BalanceOf(zkgm.ProxyAddress()))
+	uassert.True(t, assetClassFor(denom) == classLocalGRC20)
+	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(core.ChannelId(9), u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.Equal(t, "13", balance.ToString())
+}
+
+func TestTokenOrderVerifyGRC20WithoutApprovalDoesNotIncreaseChannelBalance(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	sender := testAddress("v1-grc20-no-approval")
+	denom, tok, ledger := registerImplTestGRC20(cur, "send_noapproval")
+	uassert.NoError(t, ledger.Mint(address(sender), 30))
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(denom),
+		BaseAmount:  u256.NewUint(13),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(12),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(10), sender, newSentCoinBudget(nil), u256.Zero(), order)
+
+	uassert.ErrorContains(t, err, "insufficient allowance")
+	uassert.Equal(t, int64(30), tok.BalanceOf(address(sender)))
+	uassert.Equal(t, int64(0), tok.BalanceOf(zkgm.ProxyAddress()))
+	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(core.ChannelId(10), u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.True(t, balance == nil || balance.IsZero())
+}
+
+func TestTokenOrderVerifyGRC20RejectsStrayNativeCoin(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	sender := testAddress("g20-stray")
+	denom, _, ledger := registerImplTestGRC20(cur, "send_stray")
+	uassert.NoError(t, ledger.Mint(address(sender), 30))
+	uassert.NoError(t, ledger.Approve(address(sender), zkgm.ProxyAddress(), 13))
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(denom),
+		BaseAmount:  u256.NewUint(13),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(12),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	budget := newSentCoinBudget(chain.NewCoins(chain.NewCoin("ugnot", 1)))
+
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(11), sender, budget, u256.Zero(), order)
+	uassert.NoError(t, err)
+	uassert.ErrorContains(t, budget.assertDrained(), "sent coin mismatch")
+}
+
+func TestTokenOrderExecuteUnescrowReleasesLocalGRC20(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	receiver := testAddress("g20-unescrow-rx")
+	relayer := testAddress("g20-unescrow-relay")
+	denom, tok, ledger := registerImplTestGRC20(cur, "unescrow_release")
+	uassert.NoError(t, ledger.Mint(zkgm.ProxyAddress(), 20))
+	recordAssetClass(denom, classLocalGRC20)
+	path := u256.NewUint(7)
+	reversed, err := z.ReverseChannelPath(path)
+	uassert.NoError(t, err)
+	order := z.TokenOrderV2{
+		Receiver:    []byte(receiver),
+		BaseToken:   []byte("remote"),
+		BaseAmount:  u256.NewUint(20),
+		QuoteToken:  []byte(denom),
+		QuoteAmount: u256.NewUint(17),
+		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
+	}
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(12), nil, 0, 0)
+	increaseChannelBalanceV2(cross(cur), packet.DestinationChannelId, reversed, order.QuoteToken, order.BaseToken, order.BaseAmount)
+
+	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(relayer), path, order, false)
+
+	uassert.NoError(t, err)
+	uassert.True(t, res.Status == core.PacketStatusSuccess)
+	uassert.Equal(t, int64(0), tok.BalanceOf(zkgm.ProxyAddress()))
+	uassert.Equal(t, int64(17), tok.BalanceOf(address(receiver)))
+	uassert.Equal(t, int64(3), tok.BalanceOf(address(relayer)))
+}
+
+func TestTokenOrderAckFailureRefundsLocalGRC20(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	sender := testAddress("v1-grc20-ack-refund")
+	denom, tok, ledger := registerImplTestGRC20(cur, "ack_refund")
+	uassert.NoError(t, ledger.Mint(zkgm.ProxyAddress(), 13))
+	recordAssetClass(denom, classLocalGRC20)
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(denom),
+		BaseAmount:  u256.NewUint(13),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(12),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	increaseChannelBalanceV2(cross(cur), core.ChannelId(13), u256.Zero(), order.BaseToken, order.QuoteToken, order.BaseAmount)
+
+	err := (&ZkgmV1{}).acknowledgeTokenOrderV2(cur, core.ChannelId(13), u256.Zero(), order, z.Ack{Tag: tagAckFailure()})
+
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(0), tok.BalanceOf(zkgm.ProxyAddress()))
+	uassert.Equal(t, int64(13), tok.BalanceOf(address(sender)))
+}
+
+func TestTokenOrderTimeoutRefundsLocalGRC20(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	sender := testAddress("g20-timeout-refund")
+	denom, tok, ledger := registerImplTestGRC20(cur, "timeout_refund")
+	uassert.NoError(t, ledger.Mint(zkgm.ProxyAddress(), 13))
+	recordAssetClass(denom, classLocalGRC20)
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(denom),
+		BaseAmount:  u256.NewUint(13),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(12),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	increaseChannelBalanceV2(cross(cur), core.ChannelId(14), u256.Zero(), order.BaseToken, order.QuoteToken, order.BaseAmount)
+
+	err := (&ZkgmV1{}).refundV2(cur, core.ChannelId(14), u256.Zero(), order)
+
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(0), tok.BalanceOf(zkgm.ProxyAddress()))
+	uassert.Equal(t, int64(13), tok.BalanceOf(address(sender)))
+}
+
+func TestTokenOrderPersistedNativeClassSurvivesLaterGRC20Registration(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	denom := "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl.native_later_grc20"
+	recipient := testAddress("native-persist-rx")
+	order := z.TokenOrderV2{
+		Sender:      []byte(testAddress("native-persist-send")),
+		BaseToken:   []byte(denom),
+		BaseAmount:  u256.NewUint(7),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(7),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	uassert.NoError(t, (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(15), string(order.Sender), newSentCoinBudget(chain.NewCoins(chain.NewCoin(denom, 7))), u256.Zero(), order))
+	testing.IssueCoins(zkgm.ProxyAddress(), chain.NewCoins(chain.NewCoin(denom, 7)))
+	token, _ := grc20.NewToken(0, cur, "Native Later Token", "NLT", 0)
+	grc20reg.Register(cross(cur), token, "native_later_grc20")
+
+	err := settleEscrowedV2(cur, core.ChannelId(15), u256.Zero(), order, recipient)
+
+	uassert.NoError(t, err)
+	uassert.True(t, assetClassFor(denom) == classNative)
 }
 
 func TestTokenOrderVerifyUnescrowNativeRejectedBeforeBudgetConsume(cur realm, t *testing.T) {
@@ -320,7 +497,14 @@ func TestAckConstantConstructorsReturnIndependentInstances(cur realm, t *testing
 
 func resetTokenOrderTest(cur realm) {
 	voucherTokens = bptree.NewBPTree32()
+	assetClassOf = bptree.NewBPTree32()
 	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), &ZkgmV1{}, nil))
+}
+
+func registerImplTestGRC20(cur realm, slug string) (string, *grc20.Token, *grc20.PrivateLedger) {
+	token, ledger := grc20.NewToken(0, cur, "Impl Test Token", "IZT", 0)
+	grc20reg.Register(cross(cur), token, slug)
+	return "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl." + slug, token, ledger
 }
 
 func testAddress(name string) string {

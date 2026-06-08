@@ -5,9 +5,12 @@ import (
 	"chain/banker"
 	"testing"
 
+	"gno.land/p/demo/tokens/grc20"
 	tb "gno.land/p/onbloc/tokenbucket"
 	u256 "gno.land/p/gnoswap/uint256"
+	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
+	"gno.land/r/demo/defi/grc20reg"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
@@ -232,6 +235,54 @@ func TestReleaseNativeRejectsUnlistedCaller(cur realm, t *testing.T) {
 	uassert.Equal(t, int64(7), bk.GetCoins(ProxyAddress()).AmountOf(denom))
 }
 
+func TestEscrowGRC20AllowsAuthorizedImplCaller(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	cacheRealm(cur)
+	implPath = "gno.land/r/not-this-realm"
+	allowedImpls = []string{ProxyPkgPath()}
+
+	owner := address(testutilsAddress("pgrc20-owner"))
+	recipient := address(testutilsAddress("pgrc20-recipient"))
+	denom, tok, ledger := registerProxyTestGRC20(cur, "proxy_auth")
+	uassert.NoError(t, ledger.Mint(owner, 20))
+	uassert.NoError(t, ledger.Approve(owner, ProxyAddress(), 10))
+
+	testing.SetRealm(testing.NewCodeRealm(ProxyPkgPath()))
+	uassert.NoError(t, EscrowGRC20(cross(cur), denom, owner, 10))
+	uassert.Equal(t, int64(10), tok.BalanceOf(ProxyAddress()))
+	uassert.Equal(t, int64(10), tok.BalanceOf(owner))
+
+	uassert.NotAborts(t, cur, func(cur realm) {
+		uassert.NoError(t, ReleaseGRC20(cross(cur), denom, recipient, 4))
+	})
+	uassert.Equal(t, int64(6), tok.BalanceOf(ProxyAddress()))
+	uassert.Equal(t, int64(4), tok.BalanceOf(recipient))
+}
+
+func TestEscrowReleaseGRC20RejectUnlistedCaller(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	cacheRealm(cur)
+	implPath = "gno.land/r/not-this-realm"
+	allowedImpls = []string{"gno.land/r/other-authorized-realm"}
+
+	owner := address(testutilsAddress("pgrc20-deny-owner"))
+	recipient := address(testutilsAddress("pgrc20-deny-rx"))
+	denom, tok, ledger := registerProxyTestGRC20(cur, "proxy_deny")
+	uassert.NoError(t, ledger.Mint(owner, 20))
+	uassert.NoError(t, ledger.Approve(owner, ProxyAddress(), 10))
+
+	testing.SetRealm(testing.NewCodeRealm(ProxyPkgPath()))
+	uassert.AbortsContains(t, cur, "not an authorized impl", func(cur realm) {
+		_ = EscrowGRC20(cross(cur), denom, owner, 10)
+	})
+	uassert.AbortsContains(t, cur, "not an authorized impl", func(cur realm) {
+		_ = ReleaseGRC20(cross(cur), denom, recipient, 10)
+	})
+	uassert.Equal(t, int64(0), tok.BalanceOf(ProxyAddress()))
+	uassert.Equal(t, int64(20), tok.BalanceOf(owner))
+	uassert.Equal(t, int64(0), tok.BalanceOf(recipient))
+}
+
 // Conventions for exercising the admin-gated ForceSetImpl from tests.
 //
 // core.GetAdmin() is the empty address in unit tests, because core's init
@@ -443,4 +494,14 @@ func TestReleaseNativeRejectsCallerWhenAllowedListEmpty(cur realm, t *testing.T)
 	bk := banker.NewReadonlyBanker()
 	uassert.Equal(t, int64(0), bk.GetCoins(recipient).AmountOf(denom))
 	uassert.Equal(t, int64(7), bk.GetCoins(ProxyAddress()).AmountOf(denom))
+}
+
+func registerProxyTestGRC20(cur realm, slug string) (string, *grc20.Token, *grc20.PrivateLedger) {
+	token, ledger := grc20.NewToken(0, cur, "Proxy Test Token", "PZT", 0)
+	grc20reg.Register(cross(cur), token, slug)
+	return ProxyPkgPath() + "." + slug, token, ledger
+}
+
+func testutilsAddress(name string) string {
+	return string(testutils.TestAddress(name))
 }

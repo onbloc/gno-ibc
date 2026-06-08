@@ -113,6 +113,33 @@ func TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts(cur realm, t *testing.T
 	})
 }
 
+func TestRecvTokenOrderGRC20ReleaseFailureAborts(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	denom, _, _ := registerImplTestGRC20(cur, "recv_release_fail")
+	recordAssetClass(denom, classLocalGRC20)
+	path := u256.Zero()
+	reversed, err := z.ReverseChannelPath(path)
+	uassert.NoError(t, err)
+	order := z.TokenOrderV2{
+		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
+		Sender:      []byte(testAddress("g20-relfail-send")),
+		Receiver:    []byte(testAddress("g20-relfail-rx")),
+		BaseToken:   []byte("remote"),
+		BaseAmount:  u256.NewUint(20),
+		QuoteToken:  []byte(denom),
+		QuoteAmount: u256.NewUint(17),
+	}
+	destChan := core.ChannelId(16)
+	increaseChannelBalanceV2(cross(cur), destChan, reversed, order.QuoteToken, order.BaseToken, order.BaseAmount)
+	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), destChan, data, 0, 0)
+
+	uassert.AbortsContains(t, cur, "insufficient balance", func(cur realm) {
+		(&ZkgmV1{}).Recv(cur, packet, address(testAddress("g20-relfail-relay")), nil)
+	})
+}
+
 func mustZkgmPacketBytes(instr z.Instruction) []byte {
 	out, err := z.EncodeZkgmPacket(z.ZkgmPacket{
 		Salt:        [32]byte{},

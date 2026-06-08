@@ -3,11 +3,13 @@ package zkgm
 import (
 	"chain"
 	"chain/banker"
+	"errors"
 	"strings"
 
 	"gno.land/p/nt/bptree/v0"
 	"gno.land/p/nt/ufmt/v0"
 	z "gno.land/p/onbloc/unionibc/zkgm"
+	"gno.land/r/demo/defi/grc20reg"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
@@ -171,6 +173,42 @@ func ReleaseNative(cur realm, denom string, recipient address, amount int64) {
 	b := banker.NewBanker(banker.BankerTypeRealmSend, cur)
 	b.SendCoins(cur.Address(), recipient, chain.NewCoins(chain.NewCoin(denom, amount)))
 	emitZkgmNativeReleasedEvent(cur.Previous().PkgPath(), denom, recipient, amount)
+}
+
+func EscrowGRC20(cur realm, denomKey string, from address, amount int64) error {
+	cacheRealm(cur)
+	requireImplRealm(cur, "escrow grc20")
+
+	if amount <= 0 {
+		panic("zkgm: EscrowGRC20 amount must be positive")
+	}
+	if denomKey == "" {
+		panic("zkgm: EscrowGRC20 denom must not be empty")
+	}
+	tok := grc20reg.Get(denomKey)
+	if tok == nil {
+		return errors.New("zkgm: grc20 not registered: " + denomKey)
+	}
+	teller := tok.RealmTeller(0, cur)
+	return teller.TransferFrom(0, cur, from, cur.Address(), amount)
+}
+
+func ReleaseGRC20(cur realm, denomKey string, to address, amount int64) error {
+	cacheRealm(cur)
+	requireImplRealm(cur, "release grc20")
+
+	if amount <= 0 {
+		panic("zkgm: ReleaseGRC20 amount must be positive")
+	}
+	if denomKey == "" {
+		panic("zkgm: ReleaseGRC20 denom must not be empty")
+	}
+	tok := grc20reg.Get(denomKey)
+	if tok == nil {
+		panic("zkgm: grc20 not registered: " + denomKey)
+	}
+	teller := tok.RealmTeller(0, cur)
+	return teller.Transfer(0, cur, to, amount)
 }
 
 // requireImplRealm panics unless the caller is the registered implementation

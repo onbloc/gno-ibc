@@ -2,7 +2,6 @@ package impl
 
 import (
 	"errors"
-	"strings"
 
 	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/unionibc/zkgm"
@@ -28,11 +27,7 @@ func (v *ZkgmV1) verifyTokenOrderV2(cur realm, channelId core.ChannelId, sender 
 			return err
 		}
 
-		if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
-			if err := burnVoucher(cross(cur), baseDenom, sender, order.BaseAmount); err != nil {
-				return err
-			}
-		} else if err := budget.consume(baseDenom, order.BaseAmount); err != nil {
+		if err := escrowAsset(cur, baseDenom, sender, order.BaseAmount, budget); err != nil {
 			return err
 		}
 
@@ -68,7 +63,7 @@ func (v *ZkgmV1) verifyTokenOrderV2(cur realm, channelId core.ChannelId, sender 
 		if baseDenom != wrappedV1 && baseDenom != wrappedV2 {
 			return errInvalidUnescrow
 		}
-		if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
+		if classify(baseDenom) == classVoucher {
 			return burnVoucher(cross(cur), baseDenom, sender, order.BaseAmount)
 		}
 		return budget.consume(baseDenom, order.BaseAmount)
@@ -196,12 +191,12 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 		if !order.QuoteAmount.IsZero() {
-			if err := sendNative(cur, string(order.QuoteToken), string(order.Receiver), order.QuoteAmount); err != nil {
+			if err := releaseAsset(cur, string(order.QuoteToken), string(order.Receiver), order.QuoteAmount); err != nil {
 				panic(execFatal{err.Error()})
 			}
 		}
 		if !fee.IsZero() {
-			if err := sendNative(cur, string(order.QuoteToken), string(relayer), fee); err != nil {
+			if err := releaseAsset(cur, string(order.QuoteToken), string(relayer), fee); err != nil {
 				panic(execFatal{err.Error()})
 			}
 		}
@@ -309,10 +304,10 @@ func settleEscrowedV2(cur realm, sourceChannelId core.ChannelId, path *u256.Uint
 		return err
 	}
 	baseDenom := string(order.BaseToken)
-	if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
+	if assetClassFor(baseDenom) == classVoucher {
 		return refundIBCVoucher(cur, order.BaseToken, recipient, order.BaseAmount)
 	}
-	return sendNative(cur, baseDenom, recipient, order.BaseAmount)
+	return releaseAsset(cur, baseDenom, recipient, order.BaseAmount)
 }
 
 // refundIBCVoucher re-mints an IBC voucher to recipient, recovering the stored

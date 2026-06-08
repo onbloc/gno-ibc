@@ -75,6 +75,7 @@ func TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck(cur realm, t *
 	res := (&ZkgmV1{}).Recv(cur, packet, address("g1relayer"), nil)
 
 	uassert.True(t, res.Status == core.PacketStatusFailure)
+	uassert.Equal(t, string(universalErrorAck()), string(res.Ack))
 }
 
 // TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts verifies that an error

@@ -176,6 +176,9 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 			zkgm.SetTokenOrigin(cross(cur), quoteDenom, nextPath)
 		}
 	case z.TOKEN_ORDER_KIND_UNESCROW:
+		if order.BaseAmount.IsZero() {
+			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), errors.New("zkgm/v1: base amount must be positive")
+		}
 		reversedPath, err := z.ReverseChannelPath(path)
 		if err != nil {
 			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err

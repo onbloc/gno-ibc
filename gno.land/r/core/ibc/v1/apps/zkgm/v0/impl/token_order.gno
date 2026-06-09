@@ -98,6 +98,8 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 
+		ti := z.DecodeTokenInitializerFromMetadata(meta)
+
 		image := MetadataImage(meta)
 		destChan, err := tokenOrderDestinationChannel(packet.DestinationChannelId)
 		if err != nil {
@@ -119,12 +121,12 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 		if !order.QuoteAmount.IsZero() {
-			if err := mintVoucher(cross(cur), ibcDenom, string(order.BaseToken), image, string(order.Receiver), order.QuoteAmount); err != nil {
+			if err := mintVoucher(cross(cur), ibcDenom, string(order.BaseToken), image, ti.Name, ti.Symbol, ti.Decimals, string(order.Receiver), order.QuoteAmount); err != nil {
 				return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 			}
 		}
 		if !fee.IsZero() {
-			if err := mintVoucher(cross(cur), ibcDenom, string(order.BaseToken), image, string(relayer), fee); err != nil {
+			if err := mintVoucher(cross(cur), ibcDenom, string(order.BaseToken), image, ti.Name, ti.Symbol, ti.Decimals, string(relayer), fee); err != nil {
 				panic(execFatal{err.Error()})
 			}
 		}
@@ -162,12 +164,12 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 			}
 		}
 		if !order.QuoteAmount.IsZero() {
-			if err := mintVoucher(cross(cur), quoteDenom, string(order.BaseToken), image, string(order.Receiver), order.QuoteAmount); err != nil {
+			if err := mintVoucher(cross(cur), quoteDenom, string(order.BaseToken), image, "", "", 0, string(order.Receiver), order.QuoteAmount); err != nil {
 				return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 			}
 		}
 		if !fee.IsZero() {
-			if err := mintVoucher(cross(cur), quoteDenom, string(order.BaseToken), image, string(relayer), fee); err != nil {
+			if err := mintVoucher(cross(cur), quoteDenom, string(order.BaseToken), image, "", "", 0, string(relayer), fee); err != nil {
 				panic(execFatal{err.Error()})
 			}
 		}
@@ -321,7 +323,7 @@ func settleEscrowedV2(cur realm, sourceChannelId core.ChannelId, path *u256.Uint
 func refundIBCVoucher(cur realm, baseToken []byte, recipient string, amount *u256.Uint) error {
 	baseDenom := string(baseToken)
 	image, _ := zkgm.GetMetadataImageOf(baseDenom)
-	return mintVoucher(cross(cur), baseDenom, baseDenom, image, recipient, amount)
+	return mintVoucher(cross(cur), baseDenom, baseDenom, image, "", "", 0, recipient, amount)
 }
 
 func sendNative(cur realm, denom string, receiver string, amount *u256.Uint) error {

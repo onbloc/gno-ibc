@@ -19,7 +19,7 @@ func TestExecuteBatchTokenOrderAndCallBothSucceed(cur realm, t *testing.T) {
 	relayer := testAddress("batch-hook-relayer")
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
 		Implementation: []byte("grc20"),
-		Initializer:    []byte("init"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6}),
 	})
 	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
 	path := u256.NewUint(9)
@@ -153,7 +153,7 @@ func TestVerifyBatchMixedNativeAndVoucher(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 	sender := testAddress("batch-mixed-sender")
 	voucherDenom := "ibc/batch-mixed"
-	uassert.NoError(t, mintVoucher(cross(cur), voucherDenom, voucherDenom, [32]byte{}, sender, u256.NewUint(20)))
+	uassert.NoError(t, mintVoucher(cross(cur), voucherDenom, voucherDenom, [32]byte{}, "", "", 0, sender, u256.NewUint(20)))
 	instr := batchMustBatchInstruction(z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(z.TokenOrderV2{
 			Sender:      []byte(sender),

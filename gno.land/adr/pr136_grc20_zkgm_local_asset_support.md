@@ -70,3 +70,23 @@ fails send verification before channel balance is increased.
 
 Persisted class state makes refund and timeout behavior stable even if a denom
 is later registered or overwritten in `grc20reg`.
+
+## Follow-up Hardening
+
+Review found that persisting only the asset class is not enough for local GRC20
+escrow. `grc20reg.Register` can overwrite an existing key, so a release that
+re-resolves the key could transfer a different token than the one originally
+escrowed.
+
+The proxy now pins the concrete `*grc20.Token` for each local GRC20 denom the
+first time it escrows or releases that denom. Later escrow and release calls use
+the pinned token instead of re-reading `grc20reg`, so registry overwrite cannot
+substitute the escrow backend for that denom.
+
+Send verification also rejects zero base amounts before reaching the proxy
+GRC20 path, keeping local GRC20 behavior aligned with normal validation errors
+instead of proxy panics.
+
+Finally, escrow now compares the live asset class with the write-once recorded
+class. If a denom's class changes after its first escrow, verification returns
+an error instead of silently escrowing one asset type and releasing another.

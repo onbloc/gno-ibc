@@ -98,13 +98,7 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 
-		// Extract token display metadata from the initializer. If absent or
-		// not decodable (e.g. a different implementation format), the zero value
-		// ("", "", 0) is used — voucher creation derives safe fallbacks.
-		var ti z.TokenInitializer
-		if decoded, decErr := z.DecodeTokenInitializer(meta.Initializer); decErr == nil {
-			ti = decoded
-		}
+		ti := z.DecodeTokenInitializerFromMetadata(meta)
 
 		image := MetadataImage(meta)
 		destChan, err := tokenOrderDestinationChannel(packet.DestinationChannelId)

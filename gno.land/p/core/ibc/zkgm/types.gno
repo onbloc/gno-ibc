@@ -85,10 +85,7 @@ type TokenMetadata struct {
 	Initializer    []byte
 }
 
-// TokenInitializer is the ABI-encoded payload of TokenMetadata.Initializer
-// when Implementation == "grc20". Other implementations define their own
-// initializer format — the receiver decodes based on the Implementation
-// discriminator. Amounts are never scaled; decimals are metadata only.
+// TokenInitializer holds token display metadata; decimals are metadata only, never used for scaling.
 type TokenInitializer struct {
 	Name     string
 	Symbol   string

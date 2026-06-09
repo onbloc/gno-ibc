@@ -266,6 +266,21 @@ func DecodeTokenInitializer(data []byte) (TokenInitializer, error) {
 	}, nil
 }
 
+// DecodeTokenInitializerFromMetadata extracts display metadata (name, symbol,
+// decimals) from a TokenMetadata by dispatching on the Implementation field.
+// New implementation types should be added as explicit cases; unknown formats
+// return a zero-value TokenInitializer so voucher creation can proceed with
+// safe defaults derived from ibcDenom.
+func DecodeTokenInitializerFromMetadata(meta TokenMetadata) TokenInitializer {
+	switch string(meta.Implementation) {
+	case "grc20":
+		if ti, err := DecodeTokenInitializer(meta.Initializer); err == nil {
+			return ti
+		}
+	}
+	return TokenInitializer{}
+}
+
 func EncodeTokenMetadata(m TokenMetadata) ([]byte, error) {
 	return abi.Encode(TokenMetadataSchema, []any{
 		m.Implementation,

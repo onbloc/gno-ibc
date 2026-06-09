@@ -103,6 +103,15 @@ func (a *App) OnSendPacket(
 		return ufmt.Errorf("token to coin error: %v", err)
 	}
 	if token.Denom.HasPrefix(payload.SourcePort, sourceClient) {
+		if err := consumePendingVoucherSend(
+			data.Sender,
+			sourceClient,
+			token.Denom.Path(),
+			coin.Amount,
+		); err != nil {
+			return err
+		}
+
 		// Burn the voucher tokens from sender
 		inst := getVoucher(coin.Denom)
 		if inst == nil {
@@ -112,6 +121,15 @@ func (a *App) OnSendPacket(
 			return ufmt.Errorf("burn voucher %s error: %v", coin.String(), err)
 		}
 	} else if isGRC20Alias(token.Denom.Base) {
+		if err := consumePendingGRC20Send(
+			data.Sender,
+			sourceClient,
+			token.Denom.Path(),
+			coin.Amount,
+		); err != nil {
+			return err
+		}
+
 		// Non-IBC GRC20 token: escrow via TransferFrom.
 		// The caller must have approved the transfer app realm address.
 		denomKey := resolveGRC20Alias(token.Denom.Base)
@@ -153,6 +171,42 @@ func (a *App) OnSendPacket(
 		AttributeKeyAmount, token.Amount,
 		AttributeKeyMemo, data.Memo,
 	)
+	return nil
+}
+
+func consumePendingVoucherSend(sender, sourceClient, denom string, amount int64) error {
+	expected := pendingVoucherSend
+	if expected == nil {
+		return ufmt.Errorf("voucher packet must be initiated through transfer.Transfer")
+	}
+	pendingVoucherSend = nil
+
+	if err := validatePendingSend(expected, sender, sourceClient, denom, amount); err != nil {
+		return ufmt.Errorf("voucher packet %v", err)
+	}
+	return nil
+}
+
+func consumePendingGRC20Send(sender, sourceClient, denom string, amount int64) error {
+	expected := pendingGRC20Send
+	if expected == nil {
+		return ufmt.Errorf("GRC20 packet must be initiated through transfer.Transfer")
+	}
+	pendingGRC20Send = nil
+
+	if err := validatePendingSend(expected, sender, sourceClient, denom, amount); err != nil {
+		return ufmt.Errorf("GRC20 packet %v", err)
+	}
+	return nil
+}
+
+func validatePendingSend(expected *pendingSend, sender, sourceClient, denom string, amount int64) error {
+	if expected.sender != sender ||
+		expected.sourceClient != sourceClient ||
+		expected.denom != denom ||
+		expected.amount != amount {
+		return ufmt.Errorf("does not match transfer.Transfer")
+	}
 	return nil
 }
 
@@ -366,7 +420,6 @@ func (a *App) OnTimeoutPacket(
 	sequence uint64,
 	payload types.Payload,
 ) error {
-
 	data, token, err := unmarshalPayload(payload.Value)
 	if err != nil {
 		return err

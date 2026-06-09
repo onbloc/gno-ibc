@@ -26,7 +26,12 @@ func Transfer(cur realm, clientID, receiver, denom string, amount int64, timeout
 ) {
 	switch {
 	case strings.HasPrefix(denom, "ibc/"):
-		// IBC voucher: validate it exists and resolve the denom path.
+		// IBC voucher: value-moving authority must come from a direct
+		// user call because the packet sender is the tx origin.
+		if !cur.Previous().IsUserCall() {
+			panic("voucher transfer must be a direct user call (maketx call)")
+		}
+		// Validate it exists and resolve the denom path.
 		if getVoucher(denom) == nil {
 			panic(ufmt.Errorf("voucher token not found for denom %s", denom))
 		}
@@ -34,19 +39,36 @@ func Transfer(cur realm, clientID, receiver, denom string, amount int64, timeout
 		if !found {
 			panic(ufmt.Sprintf("denom %s not found in store", denom))
 		}
+		pendingVoucherSend = &pendingSend{
+			sender:       unsafe.OriginCaller().String(),
+			sourceClient: clientID,
+			denom:        d.Path(),
+			amount:       amount,
+		}
+		defer func() { pendingVoucherSend = nil }()
 		denom = d.Path()
 	case grc20reg.Get(denom) != nil:
-		// Non-IBC GRC20 token: convert to alias.
-		// Escrow via TransferFrom happens in OnSendPacket.
-		// Only catch the "stuck coins" mistake on direct user calls;
-		// when a wrapper realm calls us, OriginSend describes the outer
-		// tx envelope and the coins did not land at this realm.
-		if cur.Previous().IsUserCall() && len(unsafe.OriginSend()) > 0 {
+		// Non-IBC GRC20 token: value-moving authority must come from a
+		// direct user call before OnSendPacket spends prior approval.
+		if !cur.Previous().IsUserCall() {
+			panic("GRC20 transfer must be a direct user call (maketx call)")
+		}
+		// Escrow via TransferFrom happens in OnSendPacket. Native coins sent
+		// with a GRC20 transfer would be stuck at this realm.
+		if len(unsafe.OriginSend()) > 0 {
 			panic("GRC20 transfer must not include native coins")
 		}
 		// Replace the denom with a slash-free alias for the IBC packet.
 		// This avoids ibc-go rejecting base denoms containing slashes.
-		denom = GRC20Alias(denom)
+		alias := GRC20Alias(denom)
+		pendingGRC20Send = &pendingSend{
+			sender:       unsafe.OriginCaller().String(),
+			sourceClient: clientID,
+			denom:        alias,
+			amount:       amount,
+		}
+		defer func() { pendingGRC20Send = nil }()
+		denom = alias
 	case strings.Contains(denom, "/"):
 		// This case exists only for a better error message: a denom with
 		// slashes that isn't in grc20reg is likely a mistyped GRC20 path.
@@ -199,12 +221,34 @@ func unescrowNative(_ int, rlm realm, receiver string, coin chain.Coin) error {
 	return nil
 }
 
-// pendingNativeEscrow is set by Transfer's native branch and read by
-// OnSendPacket. It bridges the user-call boundary check (only doable from
-// Transfer, where PreviousRealm() is the EOA) to the actual escrow update
-// (done in OnSendPacket).
-//
-// Gno persists package-level vars to the realm store at end of tx, so this
-// MUST be cleared before Transfer returns to avoid leaking into the next
-// tx. Transfer uses a defer to guarantee the reset on every exit path.
-var pendingNativeEscrow *chain.Coin
+// pendingSend records the token send that Transfer authorized for OnSendPacket.
+type pendingSend struct {
+	sender       string
+	sourceClient string
+	denom        string
+	amount       int64
+}
+
+// Gno persists package-level vars to the realm store at end of tx.
+// These pending values must be cleared before Transfer returns to avoid
+// leaking state into the next tx. Transfer uses defers to guarantee the
+// reset on every exit path.
+var (
+	// pendingNativeEscrow is set by Transfer's native branch and read by
+	// OnSendPacket. It bridges the user-call boundary check, which is only
+	// possible in Transfer where PreviousRealm() is the EOA, to the actual
+	// escrow update done in OnSendPacket.
+	pendingNativeEscrow *chain.Coin
+
+	// pendingVoucherSend is set by Transfer's voucher branch after the direct
+	// user-call guard passes. OnSendPacket consumes it before burning
+	// user-owned voucher tokens, preventing direct core.SendPacket bypasses and
+	// binding the packet to the asset the user explicitly requested.
+	pendingVoucherSend *pendingSend
+
+	// pendingGRC20Send is set by Transfer's GRC20 branch after the direct
+	// user-call guard passes. OnSendPacket consumes it before escrowing
+	// user-owned GRC20 tokens, preventing direct core.SendPacket bypasses and
+	// binding the packet to the asset the user explicitly requested.
+	pendingGRC20Send *pendingSend
+)

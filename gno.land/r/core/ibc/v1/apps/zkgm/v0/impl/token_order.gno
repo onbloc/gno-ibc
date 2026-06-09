@@ -22,6 +22,9 @@ func (v *ZkgmV1) verifyTokenOrderV2(cur realm, channelId core.ChannelId, sender 
 	}
 	switch order.Kind {
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
+		if order.BaseAmount.IsZero() {
+			return errors.New("zkgm/v1: base amount must be positive")
+		}
 		baseDenom := string(order.BaseToken)
 		if err := zkgm.RateLimit(cross(cur), baseDenom, order.BaseAmount); err != nil {
 			return err
@@ -34,6 +37,9 @@ func (v *ZkgmV1) verifyTokenOrderV2(cur realm, channelId core.ChannelId, sender 
 		increaseChannelBalanceV2(cross(cur), channelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
 		return nil
 	case z.TOKEN_ORDER_KIND_UNESCROW:
+		if order.BaseAmount.IsZero() {
+			return errors.New("zkgm/v1: base amount must be positive")
+		}
 		baseDenom := string(order.BaseToken)
 		if err := zkgm.RateLimit(cross(cur), baseDenom, order.BaseAmount); err != nil {
 			return err

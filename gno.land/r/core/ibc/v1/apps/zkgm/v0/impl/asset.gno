@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"errors"
 	"strings"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -48,7 +49,14 @@ func assetClassFor(denom string) assetClass {
 }
 
 func escrowAsset(cur realm, denom string, sender string, amount *u256.Uint, budget *sentCoinBudget) error {
-	c := classify(denom)
+	liveClass := classify(denom)
+	c := liveClass
+	if value, ok := assetClassOf.Get(denom); ok {
+		c = value.(assetClass)
+		if c != liveClass {
+			return errors.New("zkgm/v1: asset class changed for " + denom)
+		}
+	}
 	switch c {
 	case classVoucher:
 		if err := burnVoucher(cross(cur), denom, sender, amount); err != nil {

@@ -6,10 +6,10 @@ import (
 	"testing"
 
 	"gno.land/p/demo/tokens/grc20"
-	tb "gno.land/p/onbloc/tokenbucket"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
+	tb "gno.land/p/onbloc/tokenbucket"
 	"gno.land/r/demo/defi/grc20reg"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
@@ -257,6 +257,33 @@ func TestEscrowGRC20AllowsAuthorizedImplCaller(cur realm, t *testing.T) {
 	})
 	uassert.Equal(t, int64(6), tok.BalanceOf(ProxyAddress()))
 	uassert.Equal(t, int64(4), tok.BalanceOf(recipient))
+}
+
+func TestReleaseGRC20UsesEscrowPinnedTokenAfterRegistryOverwrite(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	cacheRealm(cur)
+	implPath = "gno.land/r/not-this-realm"
+	allowedImpls = []string{ProxyPkgPath()}
+
+	owner := address(testutilsAddress("pgrc20-pin-owner"))
+	recipient := address(testutilsAddress("pgrc20-pin-rx"))
+	denom, tokA, ledgerA := registerProxyTestGRC20(cur, "proxy_pin")
+	uassert.NoError(t, ledgerA.Mint(owner, 20))
+	uassert.NoError(t, ledgerA.Approve(owner, ProxyAddress(), 10))
+
+	testing.SetRealm(testing.NewCodeRealm(ProxyPkgPath()))
+	uassert.NoError(t, EscrowGRC20(cross(cur), denom, owner, 10))
+	uassert.Equal(t, int64(10), tokA.BalanceOf(ProxyAddress()))
+
+	tokB, ledgerB := grc20.NewToken(0, cur, "Proxy Replacement Token", "PRT", 0)
+	uassert.NoError(t, ledgerB.Mint(ProxyAddress(), 100))
+	grc20reg.Register(cross(cur), tokB, "proxy_pin")
+
+	uassert.NoError(t, ReleaseGRC20(cross(cur), denom, recipient, 4))
+	uassert.Equal(t, int64(6), tokA.BalanceOf(ProxyAddress()))
+	uassert.Equal(t, int64(4), tokA.BalanceOf(recipient))
+	uassert.Equal(t, int64(100), tokB.BalanceOf(ProxyAddress()))
+	uassert.Equal(t, int64(0), tokB.BalanceOf(recipient))
 }
 
 func TestEscrowReleaseGRC20RejectUnlistedCaller(cur realm, t *testing.T) {

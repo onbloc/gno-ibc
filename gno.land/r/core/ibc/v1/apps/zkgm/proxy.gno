@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 
+	"gno.land/p/demo/tokens/grc20"
 	"gno.land/p/nt/bptree/v0"
 	"gno.land/p/nt/ufmt/v0"
 	z "gno.land/p/onbloc/unionibc/zkgm"
@@ -22,6 +23,7 @@ var (
 	gRealmAddress address
 	gRealmSet     bool
 	receivers     = bptree.NewBPTree32()
+	escrowedGRC20 = bptree.NewBPTree32()
 )
 
 const proxyPkgPath = "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
@@ -185,9 +187,9 @@ func EscrowGRC20(cur realm, denomKey string, from address, amount int64) error {
 	if denomKey == "" {
 		panic("zkgm: EscrowGRC20 denom must not be empty")
 	}
-	tok := grc20reg.Get(denomKey)
-	if tok == nil {
-		return errors.New("zkgm: grc20 not registered: " + denomKey)
+	tok, err := escrowedGRC20Token(denomKey)
+	if err != nil {
+		return err
 	}
 	teller := tok.RealmTeller(0, cur)
 	return teller.TransferFrom(0, cur, from, cur.Address(), amount)
@@ -203,12 +205,24 @@ func ReleaseGRC20(cur realm, denomKey string, to address, amount int64) error {
 	if denomKey == "" {
 		panic("zkgm: ReleaseGRC20 denom must not be empty")
 	}
-	tok := grc20reg.Get(denomKey)
-	if tok == nil {
-		panic("zkgm: grc20 not registered: " + denomKey)
+	tok, err := escrowedGRC20Token(denomKey)
+	if err != nil {
+		panic(err)
 	}
 	teller := tok.RealmTeller(0, cur)
 	return teller.Transfer(0, cur, to, amount)
+}
+
+func escrowedGRC20Token(denomKey string) (*grc20.Token, error) {
+	if value, ok := escrowedGRC20.Get(denomKey); ok {
+		return value.(*grc20.Token), nil
+	}
+	tok := grc20reg.Get(denomKey)
+	if tok == nil {
+		return nil, errors.New("zkgm: grc20 not registered: " + denomKey)
+	}
+	escrowedGRC20.Set(denomKey, tok)
+	return tok, nil
 }
 
 // requireImplRealm panics unless the caller is the registered implementation

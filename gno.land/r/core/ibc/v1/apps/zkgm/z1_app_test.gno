@@ -3,8 +3,9 @@ package zkgm
 import (
 	"testing"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
+	"gno.land/p/nt/bptree/v0"
 	"gno.land/p/nt/uassert/v0"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
@@ -94,6 +95,7 @@ func resetZkgmForTest() {
 	allowedImpls = nil
 	bootstrapped = false
 	paused = false
+	escrowedGRC20 = bptree.NewBPTree32()
 }
 
 func TestAppChannelOpenInitVersion(cur realm, t *testing.T) {

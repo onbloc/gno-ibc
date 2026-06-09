@@ -136,6 +136,31 @@ func TestTokenOrderVerifyGRC20WithoutApprovalDoesNotIncreaseChannelBalance(cur r
 	uassert.True(t, balance == nil || balance.IsZero())
 }
 
+func TestTokenOrderVerifyGRC20ZeroAmountReturnsError(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	sender := testAddress("v1-grc20-zero")
+	denom, tok, ledger := registerImplTestGRC20(cur, "send_zero")
+	uassert.NoError(t, ledger.Mint(address(sender), 30))
+	uassert.NoError(t, ledger.Approve(address(sender), zkgm.ProxyAddress(), 13))
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(denom),
+		BaseAmount:  u256.Zero(),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.Zero(),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(16), sender, newSentCoinBudget(nil), u256.Zero(), order)
+
+	uassert.ErrorContains(t, err, "base amount must be positive")
+	uassert.Equal(t, int64(30), tok.BalanceOf(address(sender)))
+	uassert.Equal(t, int64(0), tok.BalanceOf(zkgm.ProxyAddress()))
+	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(core.ChannelId(16), u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.True(t, balance == nil || balance.IsZero())
+}
+
 func TestTokenOrderVerifyGRC20RejectsStrayNativeCoin(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 
@@ -259,6 +284,35 @@ func TestTokenOrderPersistedNativeClassSurvivesLaterGRC20Registration(cur realm,
 
 	uassert.NoError(t, err)
 	uassert.True(t, assetClassFor(denom) == classNative)
+}
+
+func TestTokenOrderVerifyRejectsEscrowAfterRecordedClassChanges(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	sender := testAddress("native-class-change")
+	denom := "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl.native_later_grc20_escrow"
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(denom),
+		BaseAmount:  u256.NewUint(7),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(7),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	uassert.NoError(t, (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(17), sender, newSentCoinBudget(chain.NewCoins(chain.NewCoin(denom, 7))), u256.Zero(), order))
+
+	token, ledger := grc20.NewToken(0, cur, "Native Later Escrow Token", "NLE", 0)
+	uassert.NoError(t, ledger.Mint(address(sender), 7))
+	uassert.NoError(t, ledger.Approve(address(sender), zkgm.ProxyAddress(), 7))
+	grc20reg.Register(cross(cur), token, "native_later_grc20_escrow")
+
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(18), sender, newSentCoinBudget(chain.NewCoins(chain.NewCoin(denom, 7))), u256.Zero(), order)
+
+	uassert.ErrorContains(t, err, "asset class changed")
+	uassert.Equal(t, int64(7), token.BalanceOf(address(sender)))
+	uassert.Equal(t, int64(0), token.BalanceOf(zkgm.ProxyAddress()))
+	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(core.ChannelId(18), u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.True(t, balance == nil || balance.IsZero())
 }
 
 func TestTokenOrderVerifyUnescrowNativeRejectedBeforeBudgetConsume(cur realm, t *testing.T) {

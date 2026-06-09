@@ -2,6 +2,8 @@
 package scenarios_grc20
 
 import (
+	stdtesting "testing"
+
 	"gno.land/p/demo/tokens/grc20"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
@@ -27,7 +29,18 @@ func main(cur realm) {
 	denom := pkgPath + ".pin"
 	ledgerA.Mint(sender, 10)
 	ledgerA.Approve(sender, zkgm.ProxyAddress(), 10)
-	zkgm.EscrowGRC20(cross(cur), denom, sender, 10)
+
+	escrowOrder := z.TokenOrderV2{
+		Sender:      []byte(sender.String()),
+		BaseToken:   []byte(denom),
+		BaseAmount:  u256.NewUint(10),
+		QuoteToken:  []byte("remote/base"),
+		QuoteAmount: u256.NewUint(10),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	stdtesting.SetRealm(stdtesting.NewUserRealm(sender))
+	zkgm.Send(cross(cur), pair.Destination, core.Timestamp(1<<62), [32]byte{}, e2e.MustTokenOrderInstruction(cross(cur), escrowOrder))
+	stdtesting.SetRealm(stdtesting.NewCodeRealm(pkgPath))
 
 	tokB, ledgerB := newToken(cur, "Replacement Token", "RPL")
 	ledgerB.Mint(zkgm.ProxyAddress(), 100)
@@ -41,7 +54,6 @@ func main(cur realm) {
 		QuoteAmount: u256.NewUint(10),
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
-	setChannelBalance(cross(cur), pair.Destination, order.QuoteToken, order.BaseToken, order.BaseAmount)
 	packet := tokenOrderPacket(cross(cur), pair.Source, pair.Destination, order)
 
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, nil, core.Height(1)))
@@ -62,10 +74,6 @@ func tokenOrderPacket(cur realm, source core.ChannelId, destination core.Channel
 	instr := e2e.MustTokenOrderInstruction(cross(cur), order)
 	data := e2e.MustPacketData(cross(cur), instr)
 	return core.NewPacket(cross(cur), source, destination, data, 0, core.Timestamp(1<<62))
-}
-
-func setChannelBalance(cur realm, channelId core.ChannelId, baseToken []byte, quoteToken []byte, amount *u256.Uint) {
-	zkgm.SetChannelBalanceV2(cross(cur), impl.ChannelBalanceKeyV2(channelId, u256.Zero(), baseToken, quoteToken), amount)
 }
 
 func channelBalanceString(channelId core.ChannelId, baseToken []byte, quoteToken []byte) string {

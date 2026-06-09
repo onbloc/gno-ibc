@@ -12,6 +12,7 @@ func init(cur realm) {
 		"gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/loader",
 		"gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl",
 		"gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e",
+		"gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e/scenarios_grc20",
 		"gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/realcometbls",
 	}))
 	zkgm.RegisterCoreApp(cross(cur))

@@ -19,19 +19,20 @@ type voucher struct {
 
 var voucherTokens = bptree.NewBPTree32()
 
-func getOrCreateVoucherV2(cur realm, ibcDenom string, baseDenom string, metadataImage [32]byte) *voucher {
+func getOrCreateVoucherV2(cur realm, ibcDenom string, baseDenom string, metadataImage [32]byte, name, symbol string, decimals uint8) *voucher {
 	if v, ok := voucherTokens.Get(ibcDenom); ok {
 		return v.(*voucher)
 	}
 
-	// GRC20 symbols are restricted to [A-Za-z0-9_-]+ with a maximum
-	// length of 11 characters. Convert "ibc/<hex>" into a valid symbol
-	// by removing the prefix and truncating if necessary.
-	symbol := strings.TrimPrefix(ibcDenom, ibcDenomPrefix)
-	if len(symbol) > 11 {
-		symbol = symbol[:11]
+	// Fall back to ibcDenom-derived values if the caller did not supply metadata.
+	// GRC20 symbols are restricted to [A-Za-z0-9_-]+ with a maximum length of
+	// 11 characters, so sanitize whatever the source chain sent before use.
+	if name == "" {
+		name = ibcDenom
 	}
-	token, ledger := grc20.NewToken(0, cur, ibcDenom, symbol, 0)
+	symbol = sanitizeGRC20Symbol(symbol, ibcDenom)
+
+	token, ledger := grc20.NewToken(0, cur, name, symbol, int(decimals))
 	grc20reg.Register(cross(cur), token, strings.TrimPrefix(ibcDenom, ibcDenomPrefix))
 
 	v := &voucher{token: token, ledger: ledger}
@@ -39,6 +40,28 @@ func getOrCreateVoucherV2(cur realm, ibcDenom string, baseDenom string, metadata
 
 	zkgm.SetMetadataImageOf(cross(cur), ibcDenom, metadataImage)
 	return v
+}
+
+// sanitizeGRC20Symbol returns a GRC20-valid symbol derived from the supplied
+// candidate. Characters outside [A-Za-z0-9_-] are stripped, the result is
+// truncated to MaxSymbolLen, and if nothing valid remains the ibcDenom hex
+// suffix is used as a safe fallback.
+func sanitizeGRC20Symbol(candidate, ibcDenom string) string {
+	out := make([]byte, 0, grc20.MaxSymbolLen)
+	for i := 0; i < len(candidate) && len(out) < grc20.MaxSymbolLen; i++ {
+		c := candidate[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' {
+			out = append(out, c)
+		}
+	}
+	if len(out) == 0 {
+		fallback := strings.TrimPrefix(ibcDenom, ibcDenomPrefix)
+		if len(fallback) > grc20.MaxSymbolLen {
+			fallback = fallback[:grc20.MaxSymbolLen]
+		}
+		return fallback
+	}
+	return string(out)
 }
 
 func getVoucher(ibcDenom string) *voucher {
@@ -49,13 +72,13 @@ func getVoucher(ibcDenom string) *voucher {
 	return v.(*voucher)
 }
 
-func mintVoucher(cur realm, ibcDenom string, baseDenom string, metadataImage [32]byte, receiver string, amount *u256.Uint) error {
+func mintVoucher(cur realm, ibcDenom string, baseDenom string, metadataImage [32]byte, name, symbol string, decimals uint8, receiver string, amount *u256.Uint) error {
 	n, err := amountInt64(amount)
 	if err != nil {
 		return err
 	}
 
-	v := getOrCreateVoucherV2(cur, ibcDenom, baseDenom, metadataImage)
+	v := getOrCreateVoucherV2(cur, ibcDenom, baseDenom, metadataImage, name, symbol, decimals)
 	return v.ledger.Mint(address(receiver), n)
 }
 

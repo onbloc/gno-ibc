@@ -23,7 +23,7 @@ func TestTokenOrderVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm,
 
 	sender := testAddress("v1-sender")
 	baseToken := "ibc/v1-send"
-	uassert.NoError(t, mintVoucher(cross(cur), baseToken, baseToken, [32]byte{}, sender, u256.NewUint(50)))
+	uassert.NoError(t, mintVoucher(cross(cur), baseToken, baseToken, [32]byte{}, "", "", 0, sender, u256.NewUint(50)))
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
 		BaseToken:   []byte(baseToken),
@@ -50,7 +50,7 @@ func TestTokenOrderAckMarketMakerEscrowWithVoucherRewardsMarketMaker(cur realm, 
 	baseToken := "ibc/v1-mm-voucher"
 	channelId := core.ChannelId(8)
 	amount := u256.NewUint(13)
-	uassert.NoError(t, mintVoucher(cross(cur), baseToken, baseToken, [32]byte{}, sender, u256.NewUint(50)))
+	uassert.NoError(t, mintVoucher(cross(cur), baseToken, baseToken, [32]byte{}, "", "", 0, sender, u256.NewUint(50)))
 
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
@@ -366,7 +366,7 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
 		Implementation: []byte("grc20"),
-		Initializer:    []byte("init"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6}),
 	})
 	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
 	ibcDenom := PredictWrappedTokenV2(u256.NewUint(7), 5, []byte("ugnot"), image)
@@ -397,6 +397,77 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	origin, ok := zkgm.GetTokenOrigin(ibcDenom)
 	uassert.True(t, ok)
 	uassert.Equal(t, "21474836487", origin.ToString())
+
+	v := getVoucher(ibcDenom)
+	uassert.True(t, v != nil)
+	uassert.Equal(t, "Gno Token", v.token.GetName())
+	uassert.Equal(t, "GNOT", v.token.GetSymbol())
+	uassert.Equal(t, 6, v.token.GetDecimals())
+}
+
+func TestTokenOrderExecuteInitializeMalformedInitializerUsesDefaults(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	// Initializer is raw bytes that cannot be decoded as TokenInitializer.
+	// The protocol must fall back to ibcDenom-derived name/symbol and 0 decimals.
+	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    []byte("not-valid-abi"),
+	})
+	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	ibcDenom := PredictWrappedTokenV2(u256.NewUint(3), 4, []byte("ugnot"), image)
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(testAddress("fallback-receiver")),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(50),
+		QuoteToken:  []byte(ibcDenom),
+		QuoteAmount: u256.NewUint(50),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    metaBytes,
+	}
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(4), nil, 0, 0)
+
+	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("fallback-relayer")), u256.NewUint(3), order, false)
+
+	uassert.NoError(t, err)
+	uassert.True(t, res.Status == core.PacketStatusSuccess)
+
+	v := getVoucher(ibcDenom)
+	uassert.True(t, v != nil)
+	uassert.Equal(t, 0, v.token.GetDecimals())
+}
+
+func TestTokenOrderExecuteInitializeEmptyInitializerUsesDefaults(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	// Empty Initializer: decimals must default to 0, symbol derived from ibcDenom.
+	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    []byte{},
+	})
+	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	ibcDenom := PredictWrappedTokenV2(u256.NewUint(5), 6, []byte("ugnot"), image)
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(testAddress("empty-init-receiver")),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(20),
+		QuoteToken:  []byte(ibcDenom),
+		QuoteAmount: u256.NewUint(20),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    metaBytes,
+	}
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(6), nil, 0, 0)
+
+	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("empty-init-relayer")), u256.NewUint(5), order, false)
+
+	uassert.NoError(t, err)
+	uassert.True(t, res.Status == core.PacketStatusSuccess)
+
+	v := getVoucher(ibcDenom)
+	uassert.True(t, v != nil)
+	uassert.Equal(t, 0, v.token.GetDecimals())
 }
 
 func TestTokenOrderExecuteInitializeMintErrorDoesNotSetOrigin(cur realm, t *testing.T) {
@@ -458,7 +529,7 @@ func TestTokenOrderIntentVoucherMarketMakerFillTransfersMakerFunds(cur realm, t 
 	maker := testAddress("v1-intent-maker")
 	receiver := testAddress("v1-intent-receiver")
 	quoteToken := "ibc/v1-intent-quote"
-	uassert.NoError(t, mintVoucher(cross(cur), quoteToken, "base", [32]byte{}, maker, u256.NewUint(30)))
+	uassert.NoError(t, mintVoucher(cross(cur), quoteToken, "base", [32]byte{}, "", "", 0, maker, u256.NewUint(30)))
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -511,7 +582,7 @@ func TestTokenOrderIntentInsufficientMakerBalanceReturnsOnlyMaker(cur realm, t *
 	maker := testAddress("v1-intent-poor-maker")
 	receiver := testAddress("int-poor-rx")
 	quoteToken := "ibc/v1-intent-poor"
-	uassert.NoError(t, mintVoucher(cross(cur), quoteToken, "base", [32]byte{}, maker, u256.NewUint(3)))
+	uassert.NoError(t, mintVoucher(cross(cur), quoteToken, "base", [32]byte{}, "", "", 0, maker, u256.NewUint(3)))
 	order := z.TokenOrderV2{
 		Receiver:    []byte(receiver),
 		BaseToken:   []byte("ugnot"),
@@ -599,6 +670,14 @@ func marketMakerAck(marketMaker string) z.Ack {
 
 func mustEncodeTokenMetadata(meta z.TokenMetadata) []byte {
 	bz, err := z.EncodeTokenMetadata(meta)
+	if err != nil {
+		panic(err)
+	}
+	return bz
+}
+
+func mustEncodeTokenInitializer(ti z.TokenInitializer) []byte {
+	bz, err := z.EncodeTokenInitializer(ti)
 	if err != nil {
 		panic(err)
 	}

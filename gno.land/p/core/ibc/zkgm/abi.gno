@@ -78,6 +78,12 @@ var TokenMetadataSchema = abi.Schema{Fields: []abi.Field{
 	{Type: abi.TypeBytes},
 }}
 
+var TokenInitializerSchema = abi.Schema{Fields: []abi.Field{
+	{Type: abi.TypeString},
+	{Type: abi.TypeString},
+	{Type: abi.TypeUint8},
+}}
+
 var SolverMetadataSchema = abi.Schema{Fields: []abi.Field{
 	{Type: abi.TypeBytes},
 	{Type: abi.TypeBytes},
@@ -242,6 +248,37 @@ func DecodeTokenOrderV2(data []byte) (TokenOrderV2, error) {
 		Kind:        out[6].(uint8),
 		Metadata:    out[7].([]byte),
 	}, nil
+}
+
+func EncodeTokenInitializer(i TokenInitializer) ([]byte, error) {
+	return abi.Encode(TokenInitializerSchema, []any{i.Name, i.Symbol, i.Decimals})
+}
+
+func DecodeTokenInitializer(data []byte) (TokenInitializer, error) {
+	out, err := abi.Decode(TokenInitializerSchema, data)
+	if err != nil {
+		return TokenInitializer{}, err
+	}
+	return TokenInitializer{
+		Name:     out[0].(string),
+		Symbol:   out[1].(string),
+		Decimals: out[2].(uint8),
+	}, nil
+}
+
+// DecodeTokenInitializerFromMetadata extracts display metadata (name, symbol,
+// decimals) from a TokenMetadata by dispatching on the Implementation field.
+// New implementation types should be added as explicit cases; unknown formats
+// return a zero-value TokenInitializer so voucher creation can proceed with
+// safe defaults derived from ibcDenom.
+func DecodeTokenInitializerFromMetadata(meta TokenMetadata) TokenInitializer {
+	switch string(meta.Implementation) {
+	case "grc20":
+		if ti, err := DecodeTokenInitializer(meta.Initializer); err == nil {
+			return ti
+		}
+	}
+	return TokenInitializer{}
 }
 
 func EncodeTokenMetadata(m TokenMetadata) ([]byte, error) {

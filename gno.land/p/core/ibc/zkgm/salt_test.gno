@@ -85,6 +85,23 @@ func TestDeriveSenderSaltEmptySender(t *testing.T) {
 	assertHex(t, "empty sender", got[:], "7ba1a1735b06fcfe59ddb76919cbdf3afd98e1400354a9633126daa75c5510a2")
 }
 
+func TestDeriveSenderSaltDeterministicNoSequence(t *testing.T) {
+	sender := []byte("g1dedupcaller")
+	salt := mustBytes32(t, "4444444444444444444444444444444444444444444444444444444444444444")
+	otherSalt := mustBytes32(t, "4545454545454545454545454545454545454545454545454545454545454545")
+
+	first := DeriveSenderSalt(sender, salt)
+	second := DeriveSenderSalt(sender, salt)
+	other := DeriveSenderSalt(sender, otherSalt)
+
+	if first != second {
+		t.Fatal("same sender and salt derived different values")
+	}
+	if first == other {
+		t.Fatal("different salt derived the same value")
+	}
+}
+
 func mustBytes32(t *testing.T, h string) [32]byte {
 	t.Helper()
 

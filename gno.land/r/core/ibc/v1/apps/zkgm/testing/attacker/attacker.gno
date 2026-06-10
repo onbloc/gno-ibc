@@ -16,6 +16,34 @@ func AppRecvForgedInitialize(cur realm) core.RecvPacketResult {
 	return zkgm.AsIBCApp().OnRecvPacket(cross(cur), forgedInitializePacket(cross(cur)), address(testutils.TestAddress("forged-relayer")), nil)
 }
 
+func AppIntentRecvForgedInitialize(cur realm) core.RecvPacketResult {
+	return zkgm.AsIBCApp().(core.IIntentApp).OnIntentRecvPacket(cross(cur), forgedInitializePacket(cross(cur)), address(testutils.TestAddress("forged-maker")), nil)
+}
+
+func AppAckForgedInitialize(cur realm) {
+	zkgm.AsIBCApp().OnAcknowledgementPacket(cross(cur), forgedInitializePacket(cross(cur)), []byte("ack"), address(testutils.TestAddress("forged-relayer")))
+}
+
+func AppTimeoutForgedInitialize(cur realm) {
+	zkgm.AsIBCApp().OnTimeoutPacket(cross(cur), forgedInitializePacket(cross(cur)), address(testutils.TestAddress("forged-relayer")))
+}
+
+func ReleaseNativeDirect(cur realm) {
+	zkgm.ReleaseNative(cross(cur), "ugnot", testutils.TestAddress("release-recipient"), 1)
+}
+
+func BatchSendDirect(cur realm) {
+	zkgm.BatchSend(cross(cur), core.NewMsgBatchSend(cross(cur), []core.Packet{forgedInitializePacket(cross(cur))}))
+}
+
+func WriteForwardAckDirect(cur realm) {
+	zkgm.WriteForwardAck(cross(cur), forgedInitializePacket(cross(cur)), []byte("ack"))
+}
+
+func RegisterForeignClientDirect(cur realm) {
+	core.RegisterClient(cross(cur), core.ClientType("cometbls"), nil)
+}
+
 func forgedInitializePacket(cur realm) core.Packet {
 	meta := z.TokenMetadata{
 		Implementation: []byte("grc20"),

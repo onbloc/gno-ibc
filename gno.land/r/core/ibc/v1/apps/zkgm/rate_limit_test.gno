@@ -33,3 +33,19 @@ func TestRateLimitLifecycle(cur realm, t *testing.T) {
 
 	rateLimitDisabled = false
 }
+
+func TestTokenBucketRefillAllowsLaterCharge(t *testing.T) {
+	bucket, bucketErr := tb.New(u256.NewUint(10), u256.NewUint(2), u256.NewUint(100))
+	if bucketErr != nil {
+		t.Fatal(bucketErr)
+	}
+
+	err := bucket.RateLimit(u256.NewUint(10), u256.NewUint(100))
+	uassert.NoError(t, err)
+
+	err = bucket.RateLimit(u256.NewUint(1), u256.NewUint(100))
+	uassert.ErrorContains(t, err, "token bucket rate limit exceeded")
+
+	err = bucket.RateLimit(u256.NewUint(4), u256.NewUint(102))
+	uassert.NoError(t, err)
+}

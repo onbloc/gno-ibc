@@ -1,9 +1,12 @@
 package upgradeimpl
 
 import (
+	u256 "gno.land/p/gnoswap/uint256"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
+
+const pkgPath = "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/upgradeimpl"
 
 type Impl struct {
 	label string
@@ -11,6 +14,16 @@ type Impl struct {
 
 func New(cur realm, label string) zkgm.ZkgmImpl {
 	return &Impl{label: label}
+}
+
+func PkgPath() string {
+	return pkgPath
+}
+
+func MintVoucher(cur realm, ibcDenom string, receiver address, amount *u256.Uint) {
+	if err := zkgm.MintVoucher(cross(cur), ibcDenom, ibcDenom, [32]byte{}, "", "UPGRADE", 0, receiver.String(), amount); err != nil {
+		panic(err)
+	}
 }
 
 func (i *Impl) PreChannelOpenInit(cur realm, channelId core.ChannelId) {}

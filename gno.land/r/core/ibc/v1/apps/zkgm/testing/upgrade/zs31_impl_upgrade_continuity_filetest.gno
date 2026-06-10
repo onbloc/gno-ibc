@@ -13,14 +13,18 @@ func main(cur realm) {
 	oldImpl := zkgm.ProxyPkgPath() + "/testing/upgrade-old"
 	newImpl := zkgm.ProxyPkgPath() + "/testing/upgrade-new"
 	balanceKey := "upgrade-continuity/channel-balance"
+	voucherDenom := "ibc/upgrade-continuity"
+	voucherHolder := address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
 
 	println("[SCENARIO] 1. bootstrap old implementation")
 	stdtesting.SetRealm(stdtesting.NewCodeRealm(oldImpl))
 	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), upgradeimpl.New(cross(cur), "before"), []string{
 		oldImpl,
 		newImpl,
+		upgradeimpl.PkgPath(),
 	}))
 	zkgm.SetChannelBalanceV2(cross(cur), balanceKey, u256.NewUint(40))
+	upgradeimpl.MintVoucher(cross(cur), voucherDenom, voucherHolder, u256.NewUint(17))
 	println("[EXPECTED] impl_path_before", zkgm.ImplPath())
 	println("[EXPECTED] render_before", zkgm.Render(""))
 
@@ -33,6 +37,7 @@ func main(cur realm) {
 	println("[EXPECTED] impl_path_after", zkgm.ImplPath())
 	println("[EXPECTED] render_after", zkgm.Render(""))
 	println("[EXPECTED] channel_balance_after", zkgm.GetChannelBalanceV2(balanceKey).Dec())
+	println("[EXPECTED] voucher_balance_after", zkgm.VoucherBalanceOf(voucherDenom, voucherHolder))
 	println("[EXPECTED] old_impl_allowed", zkgm.InAllowedImpls(oldImpl))
 	println("[EXPECTED] new_impl_allowed", zkgm.InAllowedImpls(newImpl))
 }
@@ -46,5 +51,6 @@ func main(cur realm) {
 // [EXPECTED] impl_path_after gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/upgrade-new
 // [EXPECTED] render_after after
 // [EXPECTED] channel_balance_after 40
+// [EXPECTED] voucher_balance_after 17
 // [EXPECTED] old_impl_allowed false
 // [EXPECTED] new_impl_allowed true

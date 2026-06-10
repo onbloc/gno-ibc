@@ -5,9 +5,9 @@ import (
 	"chain/banker"
 	"testing"
 
-	tb "gno.land/p/onbloc/tokenbucket"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
+	tb "gno.land/p/onbloc/tokenbucket"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
@@ -230,6 +230,30 @@ func TestReleaseNativeRejectsUnlistedCaller(cur realm, t *testing.T) {
 	bk := banker.NewReadonlyBanker()
 	uassert.Equal(t, int64(0), bk.GetCoins(recipient).AmountOf(denom))
 	uassert.Equal(t, int64(7), bk.GetCoins(ProxyAddress()).AmountOf(denom))
+}
+
+func TestVoucherMutatorsAllowAuthorizedImplCaller(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	implPath = "gno.land/r/not-this-realm"
+	allowedImpls = []string{ProxyPkgPath()}
+	receiver := address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+
+	testing.SetRealm(testing.NewCodeRealm(ProxyPkgPath()))
+	uassert.NoError(t, MintVoucher(cross(cur), "ibc/proxy-auth", "ibc/proxy-auth", [32]byte{}, "", "PROXYAUTH", 0, receiver.String(), u256.NewUint(7)))
+
+	uassert.Equal(t, int64(7), VoucherBalanceOf("ibc/proxy-auth", receiver))
+}
+
+func TestVoucherMutatorsRejectUnlistedCaller(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	implPath = "gno.land/r/not-this-realm"
+	allowedImpls = []string{"gno.land/r/other-authorized-realm"}
+	receiver := address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+
+	testing.SetRealm(testing.NewCodeRealm(ProxyPkgPath()))
+	uassert.AbortsContains(t, cur, "not an authorized impl", func(cur realm) {
+		MintVoucher(cross(cur), "ibc/proxy-deny", "ibc/proxy-deny", [32]byte{}, "", "PROXYDENY", 0, receiver.String(), u256.NewUint(7))
+	})
 }
 
 // Conventions for exercising the admin-gated ForceSetImpl from tests.

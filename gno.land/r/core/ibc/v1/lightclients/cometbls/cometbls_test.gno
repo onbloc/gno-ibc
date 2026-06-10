@@ -326,20 +326,30 @@ func TestForceUpdateClientRejectedOnActiveClient(cur realm, t *testing.T) {
 	}
 }
 
-func TestForceUpdateClientPanicsOnHeightRegression(cur realm, t *testing.T) {
-	resetAdapterEntries()
-	clientId := core.ClientId(1)
-	cs := activeAdapterClientState()
-	cs.LatestHeight = cometblsp.Height(100)
-	installAdapterClient(clientId, cs, encodableConsensusState(1))
+func TestForceUpdateClientPanicsOnNonAdvancingHeight(cur realm, t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		newHeight cometblsp.Height
+	}{
+		{"lower", cometblsp.Height(50)},
+		{"equal", cometblsp.Height(100)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resetAdapterEntries()
+			clientId := core.ClientId(1)
+			cs := activeAdapterClientState()
+			cs.LatestHeight = cometblsp.Height(100)
+			installAdapterClient(clientId, cs, encodableConsensusState(1))
 
-	lowerCs := activeAdapterClientState()
-	lowerCs.LatestHeight = cometblsp.Height(50)
-	csBytes, consBytes := encodeState(t, lowerCs, encodableConsensusState(nowNanos()))
+			newCs := activeAdapterClientState()
+			newCs.LatestHeight = tc.newHeight
+			csBytes, consBytes := encodeState(t, newCs, encodableConsensusState(nowNanos()))
 
-	uassert.AbortsContains(t, cur, "force-update height must strictly advance", func(cur realm) {
-		applyForceUpdate(clientId, csBytes, consBytes)
-	})
+			uassert.AbortsContains(t, cur, "force-update height must strictly advance", func(cur realm) {
+				applyForceUpdate(clientId, csBytes, consBytes)
+			})
+		})
+	}
 }
 
 func TestForceUpdateClientClearsHistoricalConsensusStates(cur realm, t *testing.T) {
@@ -374,4 +384,34 @@ func TestForceUpdateClientPanicsOnInvalidClientStateBytes(cur realm, t *testing.
 		// 0xff alone is a truncated protobuf varint — guaranteed decode error.
 		applyForceUpdate(clientId, []byte{0xff}, nil)
 	})
+}
+
+func TestForceUpdateClientPanicsOnIdentityFieldChange(cur realm, t *testing.T) {
+	testCases := []struct {
+		name   string
+		mutate func(*cometblsp.ClientState)
+		errMsg string
+	}{
+		{"chain_id", func(cs *cometblsp.ClientState) { cs.ChainID = "other-chain" }, "cannot change ChainID"},
+		{"trusting_period", func(cs *cometblsp.ClientState) { cs.TrustingPeriod++ }, "cannot change TrustingPeriod"},
+		{"max_clock_drift", func(cs *cometblsp.ClientState) { cs.MaxClockDrift++ }, "cannot change MaxClockDrift"},
+		{"contract_address", func(cs *cometblsp.ClientState) { cs.ContractAddress[0] ^= 0xff }, "cannot change ContractAddress"},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetAdapterEntries()
+			clientId := core.ClientId(1)
+			cs := activeAdapterClientState()
+			installAdapterClient(clientId, cs, encodableConsensusState(1)) // expired
+
+			freshCs := cs
+			freshCs.LatestHeight = cs.LatestHeight + 1
+			tc.mutate(&freshCs)
+			csBytes, consBytes := encodeState(t, freshCs, encodableConsensusState(nowNanos()))
+
+			uassert.AbortsContains(t, cur, tc.errMsg, func(cur realm) {
+				applyForceUpdate(clientId, csBytes, consBytes)
+			})
+		})
+	}
 }

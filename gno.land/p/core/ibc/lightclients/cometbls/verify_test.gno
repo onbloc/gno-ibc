@@ -2,6 +2,7 @@ package cometbls
 
 import (
 	"encoding/hex"
+	"strings"
 	"testing"
 )
 
@@ -186,5 +187,35 @@ func TestVerifyMisbehaviourDifferentHeights(t *testing.T) {
 func TestVerifyMisbehaviourIdenticalHeaders(t *testing.T) {
 	if err := VerifyMisbehaviour(devnetClientState(), devnetTrusted(), devnetTrusted(), Misbehaviour{HeaderA: devnetHeader(), HeaderB: devnetHeader()}, devnetNow()); err == nil {
 		t.Fatal("expected error for identical headers (not misbehaviour)")
+	}
+}
+
+// TestVerifyMisbehaviourIndependentTrustedStates verifies that each header is
+// checked against its own trusted consensus state with no requirement that the
+// two trusted states be identical. The implementation calls VerifyHeader
+// independently for each header; any error must originate there, not from a
+// "trusted states must match" pre-check that does not exist today.
+func TestVerifyMisbehaviourIndependentTrustedStates(t *testing.T) {
+	hA := devnetHeader()
+	hB := devnetHeader()
+	hB.SignedHeader.AppHash[0] ^= 0xff // headers must differ
+
+	trustedA := devnetTrusted()
+	trustedB := devnetTrusted()
+	trustedB.NextValidatorsHash[0] ^= 0xff // distinct trusted state for B
+
+	err := VerifyMisbehaviour(devnetClientState(), trustedA, trustedB, Misbehaviour{HeaderA: hA, HeaderB: hB}, devnetNow())
+	if err == nil {
+		t.Fatal("expected ZKP verification error with tampered trusted state")
+	}
+	// A "trusted states must match" gate added in the future would produce an
+	// error without a "header B:" prefix. Its presence here is a regression
+	// in the independent-verification invariant.
+	//
+	// NOTE: this assertion depends on the error format in verify.gno:
+	//   errors.New("cometbls: header B: " + err.Error())
+	// If that prefix is ever renamed, this check becomes a false negative.
+	if !strings.Contains(err.Error(), "header B:") {
+		t.Fatalf("error did not originate from header B verification: %v", err)
 	}
 }

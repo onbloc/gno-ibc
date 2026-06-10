@@ -1604,12 +1604,13 @@ func TestSetAdminTransfersRights(cur realm, t *testing.T) {
 func TestSetAdminRejectsNonAdmin(cur realm, t *testing.T) {
 	old := admin
 	defer func() { admin = old }()
-	admin = "gno1authorized"
+	adminAddr := testutils.TestAddress("authorized-admin")
+	admin = adminAddr
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
 		requireAdmin(cur, "set admin")
 	})
-	if admin != "gno1authorized" {
+	if admin != adminAddr {
 		t.Error("rejected call must not change the admin")
 	}
 }

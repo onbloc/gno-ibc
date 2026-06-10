@@ -1566,6 +1566,54 @@ func hexEncodeString(s string) string {
 	return string(dst)
 }
 
+// --- Admin ---
+
+func TestGetAdminReflectsCurrentAdmin(cur realm, t *testing.T) {
+	old := admin
+	defer func() { admin = old }()
+	sentinel := testutils.TestAddress("admin-sentinel")
+	admin = sentinel
+	if got := GetAdmin(); got != sentinel {
+		t.Errorf("GetAdmin: got %v want %v", got, sentinel)
+	}
+}
+
+func TestSetAdminTransfersRights(cur realm, t *testing.T) {
+	old := admin
+	defer func() { admin = old }()
+	oldAdmin := testutils.TestAddress("old-admin")
+	newAdmin := testutils.TestAddress("new-admin")
+	admin = oldAdmin
+
+	testing.SetRealm(testing.NewUserRealm(oldAdmin))
+	SetAdmin(cross(cur), newAdmin)
+
+	if GetAdmin() != newAdmin {
+		t.Fatalf("admin not transferred; got %v want %v", GetAdmin(), newAdmin)
+	}
+
+	// After transfer admin=newAdmin; closure caller != newAdmin → rejected.
+	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
+		requireAdmin(cur, "set admin")
+	})
+	if GetAdmin() != newAdmin {
+		t.Error("rejected call must not revert the transfer")
+	}
+}
+
+func TestSetAdminRejectsNonAdmin(cur realm, t *testing.T) {
+	old := admin
+	defer func() { admin = old }()
+	admin = "gno1authorized"
+
+	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
+		requireAdmin(cur, "set admin")
+	})
+	if admin != "gno1authorized" {
+		t.Error("rejected call must not change the admin")
+	}
+}
+
 // --- Integration: channel close ---
 
 func TestUnionChannelCloseDatagramsUnsupported(cur realm, t *testing.T) {

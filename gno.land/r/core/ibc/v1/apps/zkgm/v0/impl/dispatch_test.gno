@@ -4,9 +4,10 @@ import (
 	"math"
 	"testing"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
+	z "gno.land/p/onbloc/unionibc/zkgm"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
@@ -94,7 +95,7 @@ func TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts(cur realm, t *testing.T
 	// Saturate supply to MaxInt64-1. After receiver mint (+1) total = MaxInt64.
 	// Fee mint (+1) then overflows int64 → GRC20 returns error → execFatal.
 	fillAmt := u256.NewUint(uint64(math.MaxInt64) - 1)
-	uassert.NoError(t, mintVoucher(cross(cur), ibcDenom, string(baseToken), [32]byte{}, "", "", 0, testAddress("sat"), fillAmt))
+	uassert.NoError(t, zkgm.MintVoucher(cross(cur), ibcDenom, string(baseToken), [32]byte{}, "", "", 0, testAddress("sat"), fillAmt))
 
 	order := z.TokenOrderV2{
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,

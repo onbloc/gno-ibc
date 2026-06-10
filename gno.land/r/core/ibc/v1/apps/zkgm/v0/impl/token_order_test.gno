@@ -7,7 +7,6 @@ import (
 	"time"
 
 	u256 "gno.land/p/gnoswap/uint256"
-	"gno.land/p/nt/bptree/v0"
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
 	tb "gno.land/p/onbloc/tokenbucket"
@@ -21,7 +20,7 @@ func TestTokenOrderVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm,
 
 	sender := testAddress("v1-sender")
 	baseToken := "ibc/v1-send"
-	uassert.NoError(t, mintVoucher(cross(cur), baseToken, baseToken, [32]byte{}, "", "", 0, sender, u256.NewUint(50)))
+	uassert.NoError(t, zkgm.MintVoucher(cross(cur), baseToken, baseToken, [32]byte{}, "", "", 0, sender, u256.NewUint(50)))
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
 		BaseToken:   []byte(baseToken),
@@ -48,7 +47,7 @@ func TestTokenOrderAckMarketMakerEscrowWithVoucherRewardsMarketMaker(cur realm, 
 	baseToken := "ibc/v1-mm-voucher"
 	channelId := core.ChannelId(8)
 	amount := u256.NewUint(13)
-	uassert.NoError(t, mintVoucher(cross(cur), baseToken, baseToken, [32]byte{}, "", "", 0, sender, u256.NewUint(50)))
+	uassert.NoError(t, zkgm.MintVoucher(cross(cur), baseToken, baseToken, [32]byte{}, "", "", 0, sender, u256.NewUint(50)))
 
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
@@ -167,11 +166,9 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	uassert.True(t, ok)
 	uassert.Equal(t, "21474836487", origin.ToString())
 
-	v := getVoucher(ibcDenom)
-	uassert.True(t, v != nil)
-	uassert.Equal(t, "Gno Token", v.token.GetName())
-	uassert.Equal(t, "GNOT", v.token.GetSymbol())
-	uassert.Equal(t, 6, v.token.GetDecimals())
+	uassert.Equal(t, "Gno Token", zkgm.VoucherNameOf(ibcDenom))
+	uassert.Equal(t, "GNOT", zkgm.VoucherSymbolOf(ibcDenom))
+	uassert.Equal(t, 6, zkgm.VoucherDecimalsOf(ibcDenom))
 }
 
 func TestTokenOrderExecuteInitializeMalformedInitializerUsesDefaults(cur realm, t *testing.T) {
@@ -202,9 +199,7 @@ func TestTokenOrderExecuteInitializeMalformedInitializerUsesDefaults(cur realm, 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == core.PacketStatusSuccess)
 
-	v := getVoucher(ibcDenom)
-	uassert.True(t, v != nil)
-	uassert.Equal(t, 0, v.token.GetDecimals())
+	uassert.Equal(t, 0, zkgm.VoucherDecimalsOf(ibcDenom))
 }
 
 func TestTokenOrderExecuteInitializeEmptyInitializerUsesDefaults(cur realm, t *testing.T) {
@@ -234,9 +229,7 @@ func TestTokenOrderExecuteInitializeEmptyInitializerUsesDefaults(cur realm, t *t
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == core.PacketStatusSuccess)
 
-	v := getVoucher(ibcDenom)
-	uassert.True(t, v != nil)
-	uassert.Equal(t, 0, v.token.GetDecimals())
+	uassert.Equal(t, 0, zkgm.VoucherDecimalsOf(ibcDenom))
 }
 
 func TestTokenOrderExecuteInitializeMintErrorDoesNotSetOrigin(cur realm, t *testing.T) {
@@ -298,7 +291,7 @@ func TestTokenOrderIntentVoucherMarketMakerFillTransfersMakerFunds(cur realm, t 
 	maker := testAddress("v1-intent-maker")
 	receiver := testAddress("v1-intent-receiver")
 	quoteToken := "ibc/v1-intent-quote"
-	uassert.NoError(t, mintVoucher(cross(cur), quoteToken, "base", [32]byte{}, "", "", 0, maker, u256.NewUint(30)))
+	uassert.NoError(t, zkgm.MintVoucher(cross(cur), quoteToken, "base", [32]byte{}, "", "", 0, maker, u256.NewUint(30)))
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -351,7 +344,7 @@ func TestTokenOrderIntentInsufficientMakerBalanceReturnsOnlyMaker(cur realm, t *
 	maker := testAddress("v1-intent-poor-maker")
 	receiver := testAddress("int-poor-rx")
 	quoteToken := "ibc/v1-intent-poor"
-	uassert.NoError(t, mintVoucher(cross(cur), quoteToken, "base", [32]byte{}, "", "", 0, maker, u256.NewUint(3)))
+	uassert.NoError(t, zkgm.MintVoucher(cross(cur), quoteToken, "base", [32]byte{}, "", "", 0, maker, u256.NewUint(3)))
 	order := z.TokenOrderV2{
 		Receiver:    []byte(receiver),
 		BaseToken:   []byte("ugnot"),
@@ -390,7 +383,6 @@ func TestAckConstantConstructorsReturnIndependentInstances(cur realm, t *testing
 }
 
 func resetTokenOrderTest(cur realm) {
-	voucherTokens = bptree.NewBPTree32()
 	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), &ZkgmV1{}, nil))
 }
 

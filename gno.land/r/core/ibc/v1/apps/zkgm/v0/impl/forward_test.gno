@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"testing"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/onbloc/unionibc/v1/core"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 func TestVerifyForwardRejectsNestedForward(cur realm, t *testing.T) {
@@ -29,7 +29,7 @@ func TestVerifyForwardPassesAllowedChildren(cur realm, t *testing.T) {
 
 	sender := testAddress("forward-sender")
 	baseToken := "ibc/v1-forward"
-	uassert.NoError(t, mintVoucher(cross(cur), baseToken, baseToken, [32]byte{}, "", "", 0, sender, u256.NewUint(30)))
+	uassert.NoError(t, zkgm.MintVoucher(cross(cur), baseToken, baseToken, [32]byte{}, "", "", 0, sender, u256.NewUint(30)))
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
 		BaseToken:   []byte(baseToken),

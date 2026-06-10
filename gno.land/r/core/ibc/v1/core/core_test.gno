@@ -282,6 +282,21 @@ func TestClientRegistryDuplicatePanics(cur realm, t *testing.T) {
 	})
 }
 
+func TestRegisterClientRejectsDuplicateType(cur realm, t *testing.T) {
+	resetState()
+	testing.SetRealm(testing.NewCodeRealm(testCorePkgPath))
+	clientType := ClientType(testCorePkgPath + "/testing/immutable-client")
+
+	RegisterClient(cur, clientType, &mockClient{chainId: "first"})
+	uassert.True(t, HasClient(clientType))
+
+	// Light-client implementations are immutable for a registered type. The
+	// upgrade path is a new ClientType plus channel migration, not replacement.
+	uassert.AbortsContains(t, cur, "client type already registered", func(cur realm) {
+		RegisterClient(cur, clientType, &mockClient{chainId: "second"})
+	})
+}
+
 func TestGetClientNotFoundPanics(cur realm, t *testing.T) {
 	resetState()
 	mustPanic(t, func() {
@@ -735,6 +750,19 @@ func TestBatchAcksRejectsPacketsWithoutReceipt(cur realm, t *testing.T) {
 	}
 }
 
+func TestBatchAcksRejectsAlreadyAckedPacket(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	st.setPacketReceipt(packet)
+	st.commitAcknowledgement(packet, []byte("first-ack"))
+
+	uassert.AbortsContains(t, cur, "acknowledgement already written", func(cur realm) {
+		BatchAcks(cur, MsgBatchAcks{Packets: []Packet{packet}, Acks: [][]byte{[]byte("second-ack")}})
+	})
+}
+
 func TestPacketReceiptLifecycle(cur realm, t *testing.T) {
 	resetState()
 	p := Packet{SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
@@ -1091,6 +1119,24 @@ func TestWriteAcknowledgementRejectsAddressAsPortId(cur realm, t *testing.T) {
 			Acknowledgement: []byte("async-ack"),
 		})
 	})
+}
+
+func TestWriteAcknowledgementRejectsEmptyAck(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	st.setPacketReceipt(packet)
+
+	uassert.AbortsContains(t, cur, "acknowledgement cannot be empty", func(cur realm) {
+		WriteAcknowledgement(cur, MsgWriteAcknowledgement{
+			Packet:          packet,
+			Acknowledgement: []byte{},
+		})
+	})
+	if st.hasAcknowledgement(packet) {
+		t.Fatal("WriteAcknowledgement must not commit an empty acknowledgement")
+	}
 }
 
 func TestWriteAcknowledgementRejectsAlreadyAcked(cur realm, t *testing.T) {

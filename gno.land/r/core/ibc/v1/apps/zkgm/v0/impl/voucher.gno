@@ -14,18 +14,10 @@ func VoucherBalanceOf(ibcDenom string, addr address) int64 {
 	return zkgm.VoucherBalanceOf(ibcDenom, addr)
 }
 
-func VoucherDecimalsOf(ibcDenom string) int {
-	return zkgm.VoucherDecimalsOf(ibcDenom)
-}
-
 // VoucherDecimalsOf returns the voucher token decimals for ibcDenom, or 0 if
 // no voucher exists for that denom.
 func VoucherDecimalsOf(ibcDenom string) int {
-	v := getVoucher(ibcDenom)
-	if v == nil {
-		return 0
-	}
-	return v.token.GetDecimals()
+	return zkgm.VoucherDecimalsOf(ibcDenom)
 }
 
 var errAmountOverflow = errors.New("zkgm/voucher: amount overflows int64")

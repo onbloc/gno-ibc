@@ -750,6 +750,19 @@ func TestBatchAcksRejectsPacketsWithoutReceipt(cur realm, t *testing.T) {
 	}
 }
 
+func TestBatchAcksRejectsAlreadyAckedPacket(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	st.setPacketReceipt(packet)
+	st.commitAcknowledgement(packet, []byte("first-ack"))
+
+	uassert.AbortsContains(t, cur, "acknowledgement already written", func(cur realm) {
+		BatchAcks(cur, MsgBatchAcks{Packets: []Packet{packet}, Acks: [][]byte{[]byte("second-ack")}})
+	})
+}
+
 func TestPacketReceiptLifecycle(cur realm, t *testing.T) {
 	resetState()
 	p := Packet{SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
@@ -1106,6 +1119,24 @@ func TestWriteAcknowledgementRejectsAddressAsPortId(cur realm, t *testing.T) {
 			Acknowledgement: []byte("async-ack"),
 		})
 	})
+}
+
+func TestWriteAcknowledgementRejectsEmptyAck(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	st.setPacketReceipt(packet)
+
+	uassert.AbortsContains(t, cur, "acknowledgement cannot be empty", func(cur realm) {
+		WriteAcknowledgement(cur, MsgWriteAcknowledgement{
+			Packet:          packet,
+			Acknowledgement: []byte{},
+		})
+	})
+	if st.hasAcknowledgement(packet) {
+		t.Fatal("WriteAcknowledgement must not commit an empty acknowledgement")
+	}
 }
 
 func TestWriteAcknowledgementRejectsAlreadyAcked(cur realm, t *testing.T) {

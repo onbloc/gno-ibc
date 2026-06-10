@@ -282,6 +282,21 @@ func TestClientRegistryDuplicatePanics(cur realm, t *testing.T) {
 	})
 }
 
+func TestRegisterClientRejectsDuplicateType(cur realm, t *testing.T) {
+	resetState()
+	testing.SetRealm(testing.NewCodeRealm(testCorePkgPath))
+	clientType := ClientType(testCorePkgPath + "/testing/immutable-client")
+
+	RegisterClient(cur, clientType, &mockClient{chainId: "first"})
+	uassert.True(t, HasClient(clientType))
+
+	// Light-client implementations are immutable for a registered type. The
+	// upgrade path is a new ClientType plus channel migration, not replacement.
+	uassert.AbortsContains(t, cur, "client type already registered", func(cur realm) {
+		RegisterClient(cur, clientType, &mockClient{chainId: "second"})
+	})
+}
+
 func TestGetClientNotFoundPanics(cur realm, t *testing.T) {
 	resetState()
 	mustPanic(t, func() {

@@ -5,9 +5,9 @@ import (
 	"chain/banker"
 	"testing"
 
-	tb "gno.land/p/onbloc/tokenbucket"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
+	tb "gno.land/p/onbloc/tokenbucket"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
@@ -230,6 +230,106 @@ func TestReleaseNativeRejectsUnlistedCaller(cur realm, t *testing.T) {
 	bk := banker.NewReadonlyBanker()
 	uassert.Equal(t, int64(0), bk.GetCoins(recipient).AmountOf(denom))
 	uassert.Equal(t, int64(7), bk.GetCoins(ProxyAddress()).AmountOf(denom))
+}
+
+func TestVoucherMutatorsAllowAuthorizedImplCaller(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	implPath = "gno.land/r/not-this-realm"
+	allowedImpls = []string{ProxyPkgPath()}
+	receiver := address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+
+	testing.SetRealm(testing.NewCodeRealm(ProxyPkgPath()))
+	uassert.NoError(t, MintVoucher(cross(cur), "ibc/proxy-auth", "ibc/proxy-auth", [32]byte{}, "", "PROXYAUTH", 0, receiver.String(), u256.NewUint(7)))
+
+	uassert.Equal(t, int64(7), VoucherBalanceOf("ibc/proxy-auth", receiver))
+}
+
+func TestMintVoucherSanitizesSymbolAtProxyBoundary(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	implPath = "gno.land/r/not-this-realm"
+	allowedImpls = []string{ProxyPkgPath()}
+	receiver := address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+
+	testing.SetRealm(testing.NewCodeRealm(ProxyPkgPath()))
+	uassert.NoError(t, MintVoucher(cross(cur), "ibc/proxy-raw", "ibc/proxy-raw", [32]byte{}, "", "!!!", 0, receiver.String(), u256.NewUint(7)))
+
+	uassert.Equal(t, int64(7), VoucherBalanceOf("ibc/proxy-raw", receiver))
+	uassert.Equal(t, "proxy-raw", VoucherSymbolOf("ibc/proxy-raw"))
+}
+
+func TestSanitizeVoucherSymbol(t *testing.T) {
+	ibcDenom := ibcDenomPrefix + "abcdef123456"
+
+	tests := []struct {
+		name      string
+		candidate string
+		want      string
+	}{
+		{
+			name:      "valid ascii passes through",
+			candidate: "USDC",
+			want:      "USDC",
+		},
+		{
+			name:      "truncated to 11 chars",
+			candidate: "ABCDEFGHIJKLMNOP",
+			want:      "ABCDEFGHIJK",
+		},
+		{
+			name:      "invalid chars stripped",
+			candidate: "US@D#C!",
+			want:      "USDC",
+		},
+		{
+			name:      "truncation after stripping mixed valid and invalid",
+			candidate: "AB@CD#EF$GH%IJ^KL",
+			want:      "ABCDEFGHIJK",
+		},
+		{
+			name:      "all invalid chars falls back to ibcDenom suffix",
+			candidate: "@#$%^&*()",
+			want:      "abcdef12345",
+		},
+		{
+			name:      "empty string falls back to ibcDenom suffix",
+			candidate: "",
+			want:      "abcdef12345",
+		},
+		{
+			name:      "underscore and dash are valid",
+			candidate: "my_token-v2",
+			want:      "my_token-v2",
+		},
+		{
+			name:      "unicode multi-byte chars are filtered",
+			candidate: "USD€coin",
+			want:      "USDcoin",
+		},
+		{
+			name:      "unicode-only input falls back to ibcDenom suffix",
+			candidate: "한글심볼",
+			want:      "abcdef12345",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sanitizeVoucherSymbol(tt.candidate, ibcDenom)
+			uassert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestVoucherMutatorsRejectUnlistedCaller(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	implPath = "gno.land/r/not-this-realm"
+	allowedImpls = []string{"gno.land/r/other-authorized-realm"}
+	receiver := address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+
+	testing.SetRealm(testing.NewCodeRealm(ProxyPkgPath()))
+	uassert.AbortsContains(t, cur, "not an authorized impl", func(cur realm) {
+		MintVoucher(cross(cur), "ibc/proxy-deny", "ibc/proxy-deny", [32]byte{}, "", "PROXYDENY", 0, receiver.String(), u256.NewUint(7))
+	})
 }
 
 // Conventions for exercising the admin-gated ForceSetImpl from tests.

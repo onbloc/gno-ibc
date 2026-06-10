@@ -33,8 +33,6 @@ func MintVoucher(cur realm, ibcDenom string, baseDenom string, metadataImage [32
 		return err
 	}
 
-	// Symbol policy stays in the active impl; proxy stores voucher state and
-	// expects authorized impls to pass a GRC20-valid symbol.
 	v := getOrCreateVoucher(cur, ibcDenom, metadataImage, name, symbol, decimals)
 	return v.ledger.Mint(address(receiver), n)
 }
@@ -116,6 +114,7 @@ func getOrCreateVoucher(cur realm, ibcDenom string, metadataImage [32]byte, name
 	if name == "" {
 		name = ibcDenom
 	}
+	symbol = sanitizeVoucherSymbol(symbol, ibcDenom)
 
 	token, ledger := grc20.NewToken(0, cur, name, symbol, int(decimals))
 	grc20reg.Register(cross(cur), token, strings.TrimPrefix(ibcDenom, ibcDenomPrefix))
@@ -132,6 +131,24 @@ func getVoucher(ibcDenom string) *voucher {
 		return nil
 	}
 	return v.(*voucher)
+}
+
+func sanitizeVoucherSymbol(candidate, ibcDenom string) string {
+	out := make([]byte, 0, grc20.MaxSymbolLen)
+	for i := 0; i < len(candidate) && len(out) < grc20.MaxSymbolLen; i++ {
+		c := candidate[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '-' {
+			out = append(out, c)
+		}
+	}
+	if len(out) == 0 {
+		fallback := strings.TrimPrefix(ibcDenom, ibcDenomPrefix)
+		if len(fallback) > grc20.MaxSymbolLen {
+			fallback = fallback[:grc20.MaxSymbolLen]
+		}
+		return fallback
+	}
+	return string(out)
 }
 
 func requireVoucherMutator(cur realm, action string) {

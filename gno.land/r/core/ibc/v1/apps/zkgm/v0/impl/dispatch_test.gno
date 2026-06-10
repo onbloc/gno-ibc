@@ -27,7 +27,7 @@ func TestRecvForwardExecuteErrorReturnsFailure(cur realm, t *testing.T) {
 	})
 	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(2), data, 0, 0)
 
-	res := (&ZkgmV1{}).Recv(cur, packet, address("g1relayer"), nil)
+	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("relayer")), nil)
 
 	uassert.True(t, res.Status == core.PacketStatusFailure)
 	uassert.Equal(t, string(universalErrorAck()), string(res.Ack))
@@ -36,7 +36,7 @@ func TestRecvForwardExecuteErrorReturnsFailure(cur realm, t *testing.T) {
 func TestRecvMalformedPacketReturnsFailure(cur realm, t *testing.T) {
 	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(2), []byte{0x01}, 0, 0)
 
-	res := (&ZkgmV1{}).Recv(cur, packet, address("g1relayer"), nil)
+	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("relayer")), nil)
 
 	uassert.True(t, res.Status == core.PacketStatusFailure)
 	uassert.True(t, len(res.Ack) > 0)
@@ -50,7 +50,7 @@ func TestAckUnsupportedOpcodeAborts(cur realm, t *testing.T) {
 	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(2), data, 0, 0)
 
 	uassert.AbortsContains(t, cur, "unsupported opcode", func(cur realm) {
-		(&ZkgmV1{}).Ack(cur, packet, nil, address("g1relayer"))
+		(&ZkgmV1{}).Ack(cur, packet, nil, address(testAddress("relayer")))
 	})
 }
 
@@ -73,7 +73,7 @@ func TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck(cur realm, t *
 	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
 	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(1), data, 0, 0)
 
-	res := (&ZkgmV1{}).Recv(cur, packet, address("g1relayer"), nil)
+	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("relayer")), nil)
 
 	uassert.True(t, res.Status == core.PacketStatusFailure)
 	uassert.Equal(t, string(universalErrorAck()), string(res.Ack))

@@ -18,6 +18,16 @@ func VoucherDecimalsOf(ibcDenom string) int {
 	return zkgm.VoucherDecimalsOf(ibcDenom)
 }
 
+// VoucherDecimalsOf returns the voucher token decimals for ibcDenom, or 0 if
+// no voucher exists for that denom.
+func VoucherDecimalsOf(ibcDenom string) int {
+	v := getVoucher(ibcDenom)
+	if v == nil {
+		return 0
+	}
+	return v.token.GetDecimals()
+}
+
 var errAmountOverflow = errors.New("zkgm/voucher: amount overflows int64")
 
 // amountInt64 narrows a uint256 amount to int64 for banker/grc20 APIs.

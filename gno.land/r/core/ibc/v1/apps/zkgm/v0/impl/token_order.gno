@@ -4,6 +4,7 @@ import (
 	"errors"
 	"strings"
 
+	"gno.land/p/demo/tokens/grc20"
 	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/unionibc/zkgm"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
@@ -115,6 +116,9 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 		}
 		if _, err := amountInt64(fee); err != nil {
 			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
+		}
+		if ti.Decimals > grc20.MaxDecimals {
+			return failureResult(cur, universalErrorAck()), nil
 		}
 		nextPath, err := z.UpdateChannelPath(path, destChan)
 		if err != nil {

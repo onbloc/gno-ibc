@@ -2,6 +2,8 @@
 package scenarios_grc20
 
 import (
+	stdtesting "testing"
+
 	"gno.land/p/demo/tokens/grc20"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
@@ -26,7 +28,6 @@ func main(cur realm) {
 	denom := pkgPath + ".ack_refund"
 	ledger.Mint(sender, 20)
 	ledger.Approve(sender, zkgm.ProxyAddress(), 13)
-	zkgm.EscrowGRC20(cross(cur), denom, sender, 13)
 
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender.String()),
@@ -36,9 +37,9 @@ func main(cur realm) {
 		QuoteAmount: u256.NewUint(13),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	setChannelBalance(cross(cur), pair.Source, order.BaseToken, order.QuoteToken, order.BaseAmount)
-	packet := tokenOrderPacket(cross(cur), pair.Source, pair.Destination, order)
-	e2e.BatchSend(cross(cur), packet)
+	stdtesting.SetRealm(stdtesting.NewUserRealm(sender))
+	packet := zkgm.Send(cross(cur), pair.Source, core.Timestamp(1<<62), [32]byte{}, e2e.MustTokenOrderInstruction(cross(cur), order))
+	stdtesting.SetRealm(stdtesting.NewCodeRealm(pkgPath))
 
 	ack := e2e.MustAck(cross(cur), u256.NewUint(0), []byte("UNIVERSAL_ERROR"))
 	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement(cross(cur), []core.Packet{packet}, [][]byte{ack}, nil, core.Height(1)))
@@ -51,16 +52,6 @@ func main(cur realm) {
 
 func newToken(cur realm, name string, symbol string) (*grc20.Token, *grc20.PrivateLedger) {
 	return grc20.NewToken(0, cur, name, symbol, 0)
-}
-
-func tokenOrderPacket(cur realm, source core.ChannelId, destination core.ChannelId, order z.TokenOrderV2) core.Packet {
-	instr := e2e.MustTokenOrderInstruction(cross(cur), order)
-	data := e2e.MustPacketData(cross(cur), instr)
-	return core.NewPacket(cross(cur), source, destination, data, 0, core.Timestamp(1<<62))
-}
-
-func setChannelBalance(cur realm, channelId core.ChannelId, baseToken []byte, quoteToken []byte, amount *u256.Uint) {
-	zkgm.SetChannelBalanceV2(cross(cur), impl.ChannelBalanceKeyV2(channelId, u256.Zero(), baseToken, quoteToken), amount)
 }
 
 func channelBalanceString(channelId core.ChannelId, baseToken []byte, quoteToken []byte) string {

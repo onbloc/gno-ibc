@@ -44,8 +44,12 @@ func assetClassFor(denom string) assetClass {
 		return v.(assetClass)
 	}
 	// Compatibility fallback for pre-upgrade in-flight native/voucher orders.
-	// New local-GRC20 escrow records its class before channel balance is credited.
-	return classify(denom)
+	// New local-GRC20 escrow records its class before channel balance is credited,
+	// so an unrecorded denom must not be reclassified by a later grc20reg entry.
+	if strings.HasPrefix(denom, ibcDenomPrefix) {
+		return classVoucher
+	}
+	return classNative
 }
 
 func escrowAsset(cur realm, denom string, sender string, amount *u256.Uint, budget *sentCoinBudget) error {

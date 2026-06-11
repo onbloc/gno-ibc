@@ -313,6 +313,22 @@ func TestTokenOrderPersistedNativeClassSurvivesLaterGRC20Registration(cur realm,
 	uassert.True(t, assetClassFor(denom) == classNative)
 }
 
+func TestAssetClassFallbackTreatsUnrecordedRegisteredDenomAsNative(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	denom := "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl.native_inflight"
+	token, _ := grc20.NewToken(0, cur, "Inflight Native Token", "INT", 0)
+	grc20reg.Register(cross(cur), token, "native_inflight")
+
+	uassert.True(t, assetClassFor(denom) == classNative)
+}
+
+func TestAssetClassFallbackTreatsUnrecordedIBCDenomAsVoucher(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	uassert.True(t, assetClassFor("ibc/inflight") == classVoucher)
+}
+
 func TestTokenOrderVerifyRejectsEscrowAfterRecordedClassChanges(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 

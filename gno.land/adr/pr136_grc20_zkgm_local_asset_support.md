@@ -26,8 +26,10 @@ checks `ibc/` vouchers first, then `grc20reg.Get`, and treats anything else as a
 native banker denom.
 
 Persist the asset class write-once by denom when INITIALIZE or ESCROW verifies
-and successfully escrows the asset. Refund and release paths consult the
-persisted class instead of re-reading the registry.
+and successfully escrows the asset. The class record lives in the proxy realm
+through `RecordAssetClass` and `GetAssetClass`, next to the escrow funds and the
+channel balance, so it survives implementation upgrades. Refund and release
+paths consult the persisted class instead of re-reading the registry.
 
 Keep escrow funds at the ZKGM proxy realm. Add proxy-gated `EscrowGRC20` and
 `ReleaseGRC20` functions next to `ReleaseNative`, protected by the same
@@ -90,3 +92,19 @@ instead of proxy panics.
 Finally, escrow now compares the live asset class with the write-once recorded
 class. If a denom's class changes after its first escrow, verification returns
 an error instead of silently escrowing one asset type and releasing another.
+
+The asset-class record was initially package state in the swappable
+implementation realm. `UpdateImpl` replaces that realm, so a local GRC20 order
+in flight across an upgrade would find an empty class map at release time, fall
+back to the native path, and try to release a native coin the proxy does not
+hold. The record now lives in the proxy realm alongside the pinned token and the
+channel balance, both of which already survive an implementation swap.
+
+Native release also no longer relies on a raw panic for missing escrow.
+`ReleaseNative` checks the proxy escrow balance and returns an error when it is
+insufficient, and `sendNative` propagates that error so the caller converts it
+into an `execFatal` rollback. `dispatchExecute` recovers ordinary panics into a
+failure ack without rolling back state, so a raw panic from a failed release
+would have committed an already-applied channel balance debit. The UNESCROW
+receive path now verifies the channel balance before release and debits it only
+after release succeeds, so a failed release leaves the balance intact.

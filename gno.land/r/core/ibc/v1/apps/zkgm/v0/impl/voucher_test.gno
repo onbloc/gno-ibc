@@ -1,70 +1,36 @@
 package impl
 
 import (
+	"math"
 	"testing"
 
+	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 )
 
-func TestSanitizeGRC20Symbol(t *testing.T) {
-	ibcDenom := ibcDenomPrefix + "abcdef123456"
-
-	tests := []struct {
-		name      string
-		candidate string
-		want      string
+func TestAmountInt64(t *testing.T) {
+	wide := new(u256.Uint).Lsh(u256.NewUint(1), 64)
+	cases := []struct {
+		name    string
+		input   *u256.Uint
+		want    int64
+		wantErr bool
 	}{
-		{
-			name:      "valid ascii passes through",
-			candidate: "USDC",
-			want:      "USDC",
-		},
-		{
-			name:      "truncated to 11 chars",
-			candidate: "ABCDEFGHIJKLMNOP",
-			want:      "ABCDEFGHIJK",
-		},
-		{
-			name:      "invalid chars stripped",
-			candidate: "US@D#C!",
-			want:      "USDC",
-		},
-		{
-			name:      "truncation after stripping mixed valid and invalid",
-			candidate: "AB@CD#EF$GH%IJ^KL",
-			want:      "ABCDEFGHIJK",
-		},
-		{
-			name:      "all invalid chars falls back to ibcDenom suffix",
-			candidate: "@#$%^&*()",
-			want:      "abcdef12345",
-		},
-		{
-			name:      "empty string falls back to ibcDenom suffix",
-			candidate: "",
-			want:      "abcdef12345",
-		},
-		{
-			name:      "underscore and dash are valid",
-			candidate: "my_token-v2",
-			want:      "my_token-v2",
-		},
-		{
-			name:      "unicode multi-byte chars are filtered (bytes ≥ 128 never match ASCII ranges)",
-			candidate: "USD€coin",
-			want:      "USDcoin",
-		},
-		{
-			name:      "unicode-only input falls back to ibcDenom suffix",
-			candidate: "한글심볼",
-			want:      "abcdef12345",
-		},
+		{"zero", u256.NewUint(0), 0, false},
+		{"max int64", u256.NewUint(uint64(math.MaxInt64)), math.MaxInt64, false},
+		{"max int64 + 1", u256.NewUint(uint64(math.MaxInt64) + 1), 0, true},
+		{"max uint64", u256.NewUint(math.MaxUint64), 0, true},
+		{"wide (> 64 bits)", wide, 0, true},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := sanitizeGRC20Symbol(tt.candidate, ibcDenom)
-			uassert.Equal(t, tt.want, got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := amountInt64(tc.input)
+			if tc.wantErr {
+				uassert.Error(t, err)
+			} else {
+				uassert.NoError(t, err)
+				uassert.Equal(t, tc.want, got)
+			}
 		})
 	}
 }

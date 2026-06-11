@@ -3,12 +3,12 @@ package impl
 import (
 	"testing"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/onbloc/unionibc/v1/core"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 	"gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/mock"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 func TestExecuteBatchTokenOrderAndCallBothSucceed(cur realm, t *testing.T) {
@@ -149,11 +149,65 @@ func TestVerifyBatchLeftoverNativeRejected(cur realm, t *testing.T) {
 	uassert.ErrorContains(t, err, "sent coin mismatch")
 }
 
+func TestVerifySingleOrderOversendRejected(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+	sender := testAddress("single-oversend")
+	instr := batchMustOrderInstruction(batchRefundOrder("single-oversend-o", "ugnot", "quote-oversend", 100))
+
+	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
+		cross(cur),
+		core.ChannelId(97),
+		0,
+		[32]byte{0x97},
+		instr,
+		sender,
+		"150ugnot",
+	))
+
+	uassert.ErrorContains(t, err, "sent coin mismatch")
+}
+
+func TestVerifySingleOrderUndersendRejected(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+	sender := testAddress("single-undersend")
+	instr := batchMustOrderInstruction(batchRefundOrder("single-undersend-o", "ugnot", "quote-undersend", 150))
+
+	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
+		cross(cur),
+		core.ChannelId(98),
+		0,
+		[32]byte{0x98},
+		instr,
+		sender,
+		"100ugnot",
+	))
+
+	uassert.ErrorContains(t, err, "sent coin mismatch")
+}
+
+func TestVerifySingleOrderDenomMismatchRejected(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+	sender := testAddress("denom-mismatch-sndr")
+	instr := batchMustOrderInstruction(batchRefundOrder("denom-mismatch-ord", "ugnot", "quote-mismatch", 100))
+
+	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
+		cross(cur),
+		core.ChannelId(99),
+		0,
+		[32]byte{0x99},
+		instr,
+		sender,
+		"100uatom",
+	))
+
+	uassert.ErrorContains(t, err, "sent coin mismatch")
+}
+
 func TestVerifyBatchMixedNativeAndVoucher(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 	sender := testAddress("batch-mixed-sender")
 	voucherDenom := "ibc/batch-mixed"
-	uassert.NoError(t, mintVoucher(cross(cur), voucherDenom, voucherDenom, [32]byte{}, "", "", 0, sender, u256.NewUint(20)))
+	uassert.NoError(t, zkgm.MintVoucher(cross(cur), voucherDenom, voucherDenom, [32]byte{}, "", "", 0, sender, u256.NewUint(20)))
 	instr := batchMustBatchInstruction(z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(z.TokenOrderV2{
 			Sender:      []byte(sender),

@@ -59,7 +59,7 @@ func escrowAsset(cur realm, denom string, sender string, amount *u256.Uint, budg
 	}
 	switch c {
 	case classVoucher:
-		if err := burnVoucher(cross(cur), denom, sender, amount); err != nil {
+		if err := zkgm.BurnVoucher(cross(cur), denom, sender, amount); err != nil {
 			return err
 		}
 	case classLocalGRC20:

@@ -282,6 +282,21 @@ func TestClientRegistryDuplicatePanics(cur realm, t *testing.T) {
 	})
 }
 
+func TestRegisterClientRejectsDuplicateType(cur realm, t *testing.T) {
+	resetState()
+	testing.SetRealm(testing.NewCodeRealm(testCorePkgPath))
+	clientType := ClientType(testCorePkgPath + "/testing/immutable-client")
+
+	RegisterClient(cur, clientType, &mockClient{chainId: "first"})
+	uassert.True(t, HasClient(clientType))
+
+	// Light-client implementations are immutable for a registered type. The
+	// upgrade path is a new ClientType plus channel migration, not replacement.
+	uassert.AbortsContains(t, cur, "client type already registered", func(cur realm) {
+		RegisterClient(cur, clientType, &mockClient{chainId: "second"})
+	})
+}
+
 func TestGetClientNotFoundPanics(cur realm, t *testing.T) {
 	resetState()
 	mustPanic(t, func() {
@@ -735,6 +750,19 @@ func TestBatchAcksRejectsPacketsWithoutReceipt(cur realm, t *testing.T) {
 	}
 }
 
+func TestBatchAcksRejectsAlreadyAckedPacket(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	st.setPacketReceipt(packet)
+	st.commitAcknowledgement(packet, []byte("first-ack"))
+
+	uassert.AbortsContains(t, cur, "acknowledgement already written", func(cur realm) {
+		BatchAcks(cur, MsgBatchAcks{Packets: []Packet{packet}, Acks: [][]byte{[]byte("second-ack")}})
+	})
+}
+
 func TestPacketReceiptLifecycle(cur realm, t *testing.T) {
 	resetState()
 	p := Packet{SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
@@ -905,6 +933,33 @@ func TestRegisterClientRejectsUnauthorizedCaller(cur realm, t *testing.T) {
 	}
 }
 
+func TestRegisterClientScopedNamespaceRejectsExternalType(cur realm, t *testing.T) {
+	resetState()
+	testing.SetRealm(testing.NewCodeRealm(testCorePkgPath))
+
+	uassert.AbortsContains(t, cur, "caller not authorized to register client", func(cur realm) {
+		RegisterClient(cur, ClientType("gno.land/r/other/mytype"), &mockClient{})
+	})
+}
+
+func TestRegisterClientScopedNamespaceRejectsExactCallerPath(cur realm, t *testing.T) {
+	resetState()
+	testing.SetRealm(testing.NewCodeRealm(testCorePkgPath))
+
+	uassert.AbortsContains(t, cur, "caller not authorized to register client", func(cur realm) {
+		RegisterClient(cur, ClientType(testCorePkgPath), &mockClient{})
+	})
+}
+
+func TestRegisterClientScopedNamespaceRejectsSuffixedPath(cur realm, t *testing.T) {
+	resetState()
+	testing.SetRealm(testing.NewCodeRealm(testCorePkgPath))
+
+	uassert.AbortsContains(t, cur, "caller not authorized to register client", func(cur realm) {
+		RegisterClient(cur, ClientType(testCorePkgPath+"suffix/x"), &mockClient{})
+	})
+}
+
 func TestRegisterAppRejectsPortSquatting(cur realm, t *testing.T) {
 	resetState()
 	oldAdmin := admin
@@ -927,6 +982,15 @@ func TestRegisterAppUsesCallerPackagePath(cur realm, t *testing.T) {
 	if !HasApp([]byte(testCorePkgPath)) {
 		t.Fatal("RegisterApp must register the caller package path as the port id")
 	}
+}
+
+func TestRegisterAppRejectsDuplicateRegistration(cur realm, t *testing.T) {
+	resetState()
+
+	RegisterApp(cross(cur), &mockApp{})
+	uassert.AbortsContains(t, cur, "port already registered", func(cur realm) {
+		RegisterApp(cross(cur), &mockApp{})
+	})
 }
 
 // --- Integration: packet send lifecycle ---
@@ -1091,6 +1155,24 @@ func TestWriteAcknowledgementRejectsAddressAsPortId(cur realm, t *testing.T) {
 			Acknowledgement: []byte("async-ack"),
 		})
 	})
+}
+
+func TestWriteAcknowledgementRejectsEmptyAck(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	st.setPacketReceipt(packet)
+
+	uassert.AbortsContains(t, cur, "acknowledgement cannot be empty", func(cur realm) {
+		WriteAcknowledgement(cur, MsgWriteAcknowledgement{
+			Packet:          packet,
+			Acknowledgement: []byte{},
+		})
+	})
+	if st.hasAcknowledgement(packet) {
+		t.Fatal("WriteAcknowledgement must not commit an empty acknowledgement")
+	}
 }
 
 func TestWriteAcknowledgementRejectsAlreadyAcked(cur realm, t *testing.T) {
@@ -1564,6 +1646,55 @@ func hexEncodeString(s string) string {
 		dst[i*2+1] = hextable[c&0x0f]
 	}
 	return string(dst)
+}
+
+// --- Admin ---
+
+func TestGetAdminReflectsCurrentAdmin(cur realm, t *testing.T) {
+	old := admin
+	defer func() { admin = old }()
+	sentinel := testutils.TestAddress("admin-sentinel")
+	admin = sentinel
+	if got := GetAdmin(); got != sentinel {
+		t.Errorf("GetAdmin: got %v want %v", got, sentinel)
+	}
+}
+
+func TestSetAdminTransfersRights(cur realm, t *testing.T) {
+	old := admin
+	defer func() { admin = old }()
+	oldAdmin := testutils.TestAddress("old-admin")
+	newAdmin := testutils.TestAddress("new-admin")
+	admin = oldAdmin
+
+	testing.SetRealm(testing.NewUserRealm(oldAdmin))
+	SetAdmin(cross(cur), newAdmin)
+
+	if GetAdmin() != newAdmin {
+		t.Fatalf("admin not transferred; got %v want %v", GetAdmin(), newAdmin)
+	}
+
+	// After transfer admin=newAdmin; closure caller != newAdmin → rejected.
+	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
+		requireAdmin(cur, "set admin")
+	})
+	if GetAdmin() != newAdmin {
+		t.Error("rejected call must not revert the transfer")
+	}
+}
+
+func TestSetAdminRejectsNonAdmin(cur realm, t *testing.T) {
+	old := admin
+	defer func() { admin = old }()
+	adminAddr := testutils.TestAddress("authorized-admin")
+	admin = adminAddr
+
+	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
+		requireAdmin(cur, "set admin")
+	})
+	if admin != adminAddr {
+		t.Error("rejected call must not change the admin")
+	}
 }
 
 // --- Integration: channel close ---

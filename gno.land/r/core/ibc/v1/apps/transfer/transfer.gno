@@ -100,7 +100,39 @@ func Transfer(cur realm, clientID, receiver, denom string, amount int64, timeout
 		pendingNativeEscrow = &sent[0]
 		defer func() { pendingNativeEscrow = nil }()
 	}
-	return transfer(cur, clientID, receiver, denom, amount, timeoutTimestamp, memo)
+	// unsafe.OriginCaller (tx signer) is used instead of cur.Previous()
+	// (immediate caller) so that Transfer() works correctly when invoked
+	// through a wrapper realm. cur.Previous() would be the wrapper realm's
+	// address, not the user's, causing OnSendPacket's sender == signer check
+	// to fail and misrepresenting who authorized the transfer.
+	return transfer(cur, clientID, unsafe.OriginCaller().String(), receiver, denom, amount, timeoutTimestamp, memo)
+}
+
+// Send allows the realm registered via SetHook to initiate an ICS20 voucher
+// transfer without a direct user-call requirement. Intended for adapter realms
+// that receive IBC tokens via ZKGM and forward them outbound over ICS20.
+func Send(cur realm, clientID, receiver, ibcDenom string, amount int64, timeoutTimestamp uint64, memo string) (
+	packet types.MsgSendPacket, sequence uint64,
+) {
+	if hookCaller == "" {
+		panic("transfer: hook not set")
+	}
+	if cur.Previous().Address() != hookCaller {
+		panic("transfer: Send: unauthorized caller")
+	}
+	d, found := getDenom(ibcDenom)
+	if !found {
+		panic(ufmt.Sprintf("voucher denom %s not found", ibcDenom))
+	}
+	denomPath := d.Path()
+	pendingVoucherSend = &pendingSend{
+		sender:       hookCaller.String(),
+		sourceClient: clientID,
+		denom:        denomPath,
+		amount:       amount,
+	}
+	defer func() { pendingVoucherSend = nil }()
+	return transfer(cur, clientID, hookCaller.String(), receiver, denomPath, amount, timeoutTimestamp, memo)
 }
 
 // VoucherSend is a convenience helper to send an IBC voucher token from the
@@ -129,17 +161,16 @@ func VoucherApprove(cur realm, ibcDenom string, spender address, amount int64) {
 	}
 }
 
-func transfer(cur realm, clientID, receiver, denom string, amount int64, timeoutTimestamp uint64, memo string) (
+func transfer(cur realm, clientID, sender, receiver, denom string, amount int64, timeoutTimestamp uint64, memo string) (
 	packet types.MsgSendPacket, sequence uint64,
 ) {
-	// unsafe.OriginCaller is the EOA that signed the tx; we use it as the
-	// packet Sender so Transfer can also be invoked through a wrapper realm.
-	// On the OnSendPacket side the same value is read back to verify the
-	// packet Sender matches the signing EOA.
+	if amount <= 0 {
+		panic("transfer: amount must be positive")
+	}
 	data := NewFungibleTokenPacketData(
 		denom,
 		ufmt.Sprintf("%d", amount),
-		unsafe.OriginCaller().String(),
+		sender,
 		receiver,
 		memo,
 	)

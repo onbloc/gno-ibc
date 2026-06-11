@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	u256 "gno.land/p/gnoswap/uint256"
-	"gno.land/p/nt/bptree/v0"
 	"gno.land/r/demo/defi/grc20reg"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 )
@@ -17,8 +16,6 @@ const (
 	classVoucher
 	classLocalGRC20
 )
-
-var assetClassOf = bptree.NewBPTree32()
 
 func classify(denom string) assetClass {
 	// Voucher wire denoms are `ibc/<hash>`, while their grc20reg keys use the
@@ -32,16 +29,13 @@ func classify(denom string) assetClass {
 	return classNative
 }
 
-func recordAssetClass(denom string, c assetClass) {
-	if _, ok := assetClassOf.Get(denom); ok {
-		return
-	}
-	assetClassOf.Set(denom, c)
+func recordAssetClass(cur realm, denom string, c assetClass) {
+	zkgm.RecordAssetClass(cross(cur), denom, uint8(c))
 }
 
 func assetClassFor(denom string) assetClass {
-	if v, ok := assetClassOf.Get(denom); ok {
-		return v.(assetClass)
+	if v, ok := zkgm.GetAssetClass(denom); ok {
+		return assetClass(v)
 	}
 	// Compatibility fallback for pre-upgrade in-flight native/voucher orders.
 	// New local-GRC20 escrow records its class before channel balance is credited,
@@ -55,8 +49,8 @@ func assetClassFor(denom string) assetClass {
 func escrowAsset(cur realm, denom string, sender string, amount *u256.Uint, budget *sentCoinBudget) error {
 	liveClass := classify(denom)
 	c := liveClass
-	if value, ok := assetClassOf.Get(denom); ok {
-		c = value.(assetClass)
+	if value, ok := zkgm.GetAssetClass(denom); ok {
+		c = assetClass(value)
 		if c != liveClass {
 			return errors.New("zkgm/v1: asset class changed for " + denom)
 		}
@@ -79,7 +73,7 @@ func escrowAsset(cur realm, denom string, sender string, amount *u256.Uint, budg
 			return err
 		}
 	}
-	recordAssetClass(denom, c)
+	recordAssetClass(cur, denom, c)
 	return nil
 }
 

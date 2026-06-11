@@ -5,8 +5,8 @@ import (
 	"errors"
 
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/onbloc/unionibc/v1/core"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 // ChannelBalanceKeyV2 returns the storage key for a v2 channel balance entry.
@@ -31,15 +31,23 @@ func decreaseChannelBalanceV2(cur realm, channelId core.ChannelId, path *u256.Ui
 		return nil
 	}
 	key := ChannelBalanceKeyV2(channelId, path, baseToken, quoteToken)
-	curAmount := zkgm.GetChannelBalanceV2(key)
-	if curAmount == nil || curAmount.Cmp(amount) < 0 {
-		return errors.New("zkgm/channel_balance: underflow")
+	if err := ensureChannelBalanceV2(key, amount); err != nil {
+		return err
 	}
+	curAmount := zkgm.GetChannelBalanceV2(key)
 	next := new(u256.Uint).Sub(curAmount, amount)
 	if next.IsZero() {
 		zkgm.RemoveChannelBalanceV2(cross(cur), key)
 	} else {
 		zkgm.SetChannelBalanceV2(cross(cur), key, next)
+	}
+	return nil
+}
+
+func ensureChannelBalanceV2(key string, amount *u256.Uint) error {
+	curAmount := zkgm.GetChannelBalanceV2(key)
+	if curAmount == nil || curAmount.Cmp(amount) < 0 {
+		return errors.New("zkgm/channel_balance: underflow")
 	}
 	return nil
 }

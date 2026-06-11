@@ -201,7 +201,8 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 		if _, err := amountInt64(fee); err != nil {
 			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
-		if err := decreaseChannelBalanceV2(cross(cur), packet.DestinationChannelId, reversedPath, order.QuoteToken, order.BaseToken, order.BaseAmount); err != nil {
+		balanceKey := ChannelBalanceKeyV2(packet.DestinationChannelId, reversedPath, order.QuoteToken, order.BaseToken)
+		if err := ensureChannelBalanceV2(balanceKey, order.BaseAmount); err != nil {
 			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
 		}
 		if !order.QuoteAmount.IsZero() {
@@ -213,6 +214,9 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet core.Packet, relayer addr
 			if err := releaseAsset(cur, string(order.QuoteToken), string(relayer), fee); err != nil {
 				panic(execFatal{err.Error()})
 			}
+		}
+		if err := decreaseChannelBalanceV2(cross(cur), packet.DestinationChannelId, reversedPath, order.QuoteToken, order.BaseToken, order.BaseAmount); err != nil {
+			panic(execFatal{err.Error()})
 		}
 	case z.TOKEN_ORDER_KIND_SOLVE:
 		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), errors.New("zkgm/v1: solve recv not implemented")
@@ -332,6 +336,5 @@ func sendNative(cur realm, denom string, receiver string, amount *u256.Uint) err
 		return err
 	}
 
-	zkgm.ReleaseNative(cross(cur), denom, address(receiver), n)
-	return nil
+	return zkgm.ReleaseNative(cross(cur), denom, address(receiver), n)
 }

@@ -24,6 +24,7 @@ var (
 	gRealmSet     bool
 	receivers     = bptree.NewBPTree32()
 	escrowedGRC20 = bptree.NewBPTree32()
+	assetClassOf  = bptree.NewBPTree32()
 )
 
 const proxyPkgPath = "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
@@ -162,7 +163,7 @@ func BatchSend(cur realm, msg core.MsgBatchSend) core.H256 {
 //
 // ReleaseNative is used by implementation-side sendNative calls so refunds and
 // releases are sourced from the escrow where the user's -send funds land.
-func ReleaseNative(cur realm, denom string, recipient address, amount int64) {
+func ReleaseNative(cur realm, denom string, recipient address, amount int64) error {
 	cacheRealm(cur)
 	requireImplRealm(cur, "release native")
 
@@ -172,9 +173,14 @@ func ReleaseNative(cur realm, denom string, recipient address, amount int64) {
 	if denom == "" {
 		panic("zkgm: ReleaseNative denom must not be empty")
 	}
+	rb := banker.NewReadonlyBanker()
+	if rb.GetCoins(cur.Address()).AmountOf(denom) < amount {
+		return errors.New("zkgm: insufficient native escrow balance")
+	}
 	b := banker.NewBanker(banker.BankerTypeRealmSend, cur)
 	b.SendCoins(cur.Address(), recipient, chain.NewCoins(chain.NewCoin(denom, amount)))
 	emitZkgmNativeReleasedEvent(cur.Previous().PkgPath(), denom, recipient, amount)
+	return nil
 }
 
 func EscrowGRC20(cur realm, denomKey string, from address, amount int64) error {
@@ -229,6 +235,22 @@ func escrowedGRC20Token(denomKey string) (*grc20.Token, error) {
 	}
 	escrowedGRC20.Set(denomKey, tok)
 	return tok, nil
+}
+
+func RecordAssetClass(cur realm, denom string, class uint8) {
+	requireImplRealm(cur, "record asset class")
+	if _, ok := assetClassOf.Get(denom); ok {
+		return
+	}
+	assetClassOf.Set(denom, class)
+}
+
+func GetAssetClass(denom string) (uint8, bool) {
+	value, ok := assetClassOf.Get(denom)
+	if !ok {
+		return 0, false
+	}
+	return value.(uint8), true
 }
 
 // requireImplRealm panics unless the caller is the registered implementation

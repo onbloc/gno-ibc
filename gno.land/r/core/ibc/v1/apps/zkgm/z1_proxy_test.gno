@@ -235,6 +235,20 @@ func TestReleaseNativeRejectsUnlistedCaller(cur realm, t *testing.T) {
 	uassert.Equal(t, int64(7), bk.GetCoins(ProxyAddress()).AmountOf(denom))
 }
 
+func TestReleaseNativeReturnsErrorForMissingEscrow(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	cacheRealm(cur)
+	implPath = "gno.land/r/not-this-realm"
+	allowedImpls = []string{ProxyPkgPath()}
+
+	recipient := address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+	testing.SetRealm(testing.NewCodeRealm(ProxyPkgPath()))
+	uassert.NotAborts(t, cur, func(cur realm) {
+		err := ReleaseNative(cross(cur), "unfunded-native", recipient, 7)
+		uassert.ErrorContains(t, err, "insufficient native escrow balance")
+	})
+}
+
 func TestEscrowGRC20AllowsAuthorizedImplCaller(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	cacheRealm(cur)

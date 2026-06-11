@@ -96,6 +96,7 @@ func resetZkgmForTest() {
 	bootstrapped = false
 	paused = false
 	escrowedGRC20 = bptree.NewBPTree32()
+	assetClassOf = bptree.NewBPTree32()
 }
 
 func TestAppChannelOpenInitVersion(cur realm, t *testing.T) {

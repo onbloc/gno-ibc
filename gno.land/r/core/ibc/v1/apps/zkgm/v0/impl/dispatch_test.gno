@@ -141,6 +141,15 @@ func TestRecvTokenOrderSolveReturnsFailureAck(cur realm, t *testing.T) {
 	uassert.Equal(t, string(universalErrorAck()), string(res.Ack))
 }
 
+func TestDecodeOrderInstructionRejectsV1(t *testing.T) {
+	_, err := decodeOrderInstruction(z.Instruction{
+		Version: z.INSTR_VERSION_1,
+		Opcode:  z.OP_TOKEN_ORDER,
+		Operand: []byte("anything"),
+	})
+	uassert.ErrorContains(t, err, "unsupported token order version")
+}
+
 func mustZkgmPacketBytes(instr z.Instruction) []byte {
 	out, err := z.EncodeZkgmPacket(z.ZkgmPacket{
 		Salt:        [32]byte{},

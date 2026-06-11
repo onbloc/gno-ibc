@@ -189,6 +189,9 @@ func EscrowGRC20(cur realm, denomKey string, from address, amount int64) error {
 	}
 	tok, err := escrowedGRC20Token(denomKey)
 	if err != nil {
+		// Returning an error not panic
+		// a raw panic is swallowed by dispatchExecute's
+		// breaking the error -> execFatal -> rollback contract.
 		return err
 	}
 	teller := tok.RealmTeller(0, cur)
@@ -207,7 +210,10 @@ func ReleaseGRC20(cur realm, denomKey string, to address, amount int64) error {
 	}
 	tok, err := escrowedGRC20Token(denomKey)
 	if err != nil {
-		panic(err)
+		// Returning an error not panic
+		// a raw panic is swallowed by dispatchExecute's
+		// breaking the error -> execFatal -> rollback contract.
+		return err
 	}
 	teller := tok.RealmTeller(0, cur)
 	return teller.Transfer(0, cur, to, amount)

@@ -85,8 +85,8 @@ func TestVerifyBatchRejectsDuplicateNativeConsumption(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 	sender := testAddress("batch-dup-sender")
 	instr := batchMustBatchInstruction(z.Batch{Instructions: []z.Instruction{
-		batchMustOrderInstruction(batchRefundOrder("batch-dup-a", "ugnot", "quote-dup-a", 100)),
-		batchMustOrderInstruction(batchRefundOrder("batch-dup-b", "ugnot", "quote-dup-b", 100)),
+		batchMustOrderInstruction(batchRefundOrderFromSender(sender, "ugnot", "quote-dup-a", 100)),
+		batchMustOrderInstruction(batchRefundOrderFromSender(sender, "ugnot", "quote-dup-b", 100)),
 	}})
 
 	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
@@ -105,8 +105,8 @@ func TestVerifyBatchRejectsDuplicateNativeConsumption(cur realm, t *testing.T) {
 func TestVerifyBatchExactTotalNativeConsumptionPasses(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 	sender := testAddress("batch-exact-sender")
-	orderA := batchRefundOrder("batch-exact-a", "ugnot", "quote-exact-a", 60)
-	orderB := batchRefundOrder("batch-exact-b", "ugnot", "quote-exact-b", 40)
+	orderA := batchRefundOrderFromSender(sender, "ugnot", "quote-exact-a", 60)
+	orderB := batchRefundOrderFromSender(sender, "ugnot", "quote-exact-b", 40)
 	instr := batchMustBatchInstruction(z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(orderA),
 		batchMustOrderInstruction(orderB),
@@ -133,7 +133,7 @@ func TestVerifyBatchLeftoverNativeRejected(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 	sender := testAddress("batch-left-sender")
 	instr := batchMustBatchInstruction(z.Batch{Instructions: []z.Instruction{
-		batchMustOrderInstruction(batchRefundOrder("batch-left", "ugnot", "quote-leftover", 60)),
+		batchMustOrderInstruction(batchRefundOrderFromSender(sender, "ugnot", "quote-leftover", 60)),
 	}})
 
 	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
@@ -152,7 +152,7 @@ func TestVerifyBatchLeftoverNativeRejected(cur realm, t *testing.T) {
 func TestVerifySingleOrderOversendRejected(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 	sender := testAddress("single-oversend")
-	instr := batchMustOrderInstruction(batchRefundOrder("single-oversend-o", "ugnot", "quote-oversend", 100))
+	instr := batchMustOrderInstruction(batchRefundOrderFromSender(sender, "ugnot", "quote-oversend", 100))
 
 	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
 		cross(cur),
@@ -170,7 +170,7 @@ func TestVerifySingleOrderOversendRejected(cur realm, t *testing.T) {
 func TestVerifySingleOrderUndersendRejected(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 	sender := testAddress("single-undersend")
-	instr := batchMustOrderInstruction(batchRefundOrder("single-undersend-o", "ugnot", "quote-undersend", 150))
+	instr := batchMustOrderInstruction(batchRefundOrderFromSender(sender, "ugnot", "quote-undersend", 150))
 
 	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
 		cross(cur),
@@ -188,7 +188,7 @@ func TestVerifySingleOrderUndersendRejected(cur realm, t *testing.T) {
 func TestVerifySingleOrderDenomMismatchRejected(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 	sender := testAddress("denom-mismatch-sndr")
-	instr := batchMustOrderInstruction(batchRefundOrder("denom-mismatch-ord", "ugnot", "quote-mismatch", 100))
+	instr := batchMustOrderInstruction(batchRefundOrderFromSender(sender, "ugnot", "quote-mismatch", 100))
 
 	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
 		cross(cur),
@@ -217,7 +217,7 @@ func TestVerifyBatchMixedNativeAndVoucher(cur realm, t *testing.T) {
 			QuoteAmount: u256.NewUint(7),
 			Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 		}),
-		batchMustOrderInstruction(batchRefundOrder("batch-mixed-native", "ugnot", "quote-mixed-native", 100)),
+		batchMustOrderInstruction(batchRefundOrderFromSender(sender, "ugnot", "quote-mixed-native", 100)),
 	}})
 
 	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
@@ -238,8 +238,8 @@ func TestVerifyBatchMultiDenom(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 	sender := testAddress("batch-denom-sender")
 	instr := batchMustBatchInstruction(z.Batch{Instructions: []z.Instruction{
-		batchMustOrderInstruction(batchRefundOrder("batch-denom-a", "ugnot", "quote-denom-a", 100)),
-		batchMustOrderInstruction(batchRefundOrder("batch-denom-b", "foo", "quote-denom-b", 50)),
+		batchMustOrderInstruction(batchRefundOrderFromSender(sender, "ugnot", "quote-denom-a", 100)),
+		batchMustOrderInstruction(batchRefundOrderFromSender(sender, "foo", "quote-denom-b", 50)),
 	}})
 
 	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
@@ -374,6 +374,17 @@ func batchMustBatchInstruction(batch z.Batch) z.Instruction {
 func batchRefundOrder(sender string, baseToken string, quoteToken string, amount uint64) z.TokenOrderV2 {
 	return z.TokenOrderV2{
 		Sender:      []byte(testAddress(sender)),
+		BaseToken:   []byte(baseToken),
+		BaseAmount:  u256.NewUint(amount),
+		QuoteToken:  []byte(quoteToken),
+		QuoteAmount: u256.NewUint(amount),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+}
+
+func batchRefundOrderFromSender(sender string, baseToken string, quoteToken string, amount uint64) z.TokenOrderV2 {
+	return z.TokenOrderV2{
+		Sender:      []byte(sender),
 		BaseToken:   []byte(baseToken),
 		BaseAmount:  u256.NewUint(amount),
 		QuoteToken:  []byte(quoteToken),

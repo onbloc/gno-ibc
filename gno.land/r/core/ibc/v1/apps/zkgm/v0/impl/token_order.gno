@@ -25,6 +25,9 @@ func (v *ZkgmV1) verifyTokenOrderV2(cur realm, channelId core.ChannelId, sender 
 		if order.BaseAmount.IsZero() {
 			return errors.New("zkgm/v1: base amount must be positive")
 		}
+		if string(order.Sender) != sender {
+			return errors.New("zkgm/v1: sender mismatch")
+		}
 		baseDenom := string(order.BaseToken)
 		if err := zkgm.RateLimit(cross(cur), baseDenom, order.BaseAmount); err != nil {
 			return err
@@ -302,9 +305,8 @@ func (v *ZkgmV1) refundV2(cur realm, sourceChannelId core.ChannelId, path *u256.
 }
 
 // settleEscrowedV2 releases a previously escrowed INITIALIZE/ESCROW BaseAmount
-// to recipient. It re-mints the voucher for `ibc/` denoms and releases native
-// tokens from the proxy escrow otherwise. It is shared by refundV2 and the
-// market-maker fill branch of acknowledgeTokenOrderV2.
+// to recipient through the asset-class-specific release path. It is shared by
+// refundV2 and the market-maker fill branch of acknowledgeTokenOrderV2.
 func settleEscrowedV2(cur realm, sourceChannelId core.ChannelId, path *u256.Uint, order z.TokenOrderV2, recipient string) error {
 	if _, err := amountInt64(order.BaseAmount); err != nil {
 		return err
@@ -312,11 +314,7 @@ func settleEscrowedV2(cur realm, sourceChannelId core.ChannelId, path *u256.Uint
 	if err := decreaseChannelBalanceV2(cross(cur), sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
 		return err
 	}
-	baseDenom := string(order.BaseToken)
-	if assetClassFor(baseDenom) == classVoucher {
-		return refundIBCVoucher(cur, order.BaseToken, recipient, order.BaseAmount)
-	}
-	return releaseAsset(cur, baseDenom, recipient, order.BaseAmount)
+	return releaseAsset(cur, string(order.BaseToken), recipient, order.BaseAmount)
 }
 
 // refundIBCVoucher re-mints an IBC voucher to recipient, recovering the stored

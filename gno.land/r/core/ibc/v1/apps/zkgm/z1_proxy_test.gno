@@ -286,6 +286,20 @@ func TestReleaseGRC20UsesEscrowPinnedTokenAfterRegistryOverwrite(cur realm, t *t
 	uassert.Equal(t, int64(0), tokB.BalanceOf(recipient))
 }
 
+func TestReleaseGRC20ReturnsErrorForUnregisteredToken(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	cacheRealm(cur)
+	implPath = "gno.land/r/not-this-realm"
+	allowedImpls = []string{ProxyPkgPath()}
+
+	recipient := address(testutilsAddress("pgrc20-missing-rx"))
+	testing.SetRealm(testing.NewCodeRealm(ProxyPkgPath()))
+	uassert.NotAborts(t, cur, func(cur realm) {
+		err := ReleaseGRC20(cross(cur), "missing/grc20", recipient, 4)
+		uassert.ErrorContains(t, err, "grc20 not registered")
+	})
+}
+
 func TestEscrowReleaseGRC20RejectUnlistedCaller(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	cacheRealm(cur)

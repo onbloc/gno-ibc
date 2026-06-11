@@ -113,6 +113,32 @@ func TestTokenOrderVerifyGRC20EscrowsWithApproval(cur realm, t *testing.T) {
 	uassert.Equal(t, "13", balance.ToString())
 }
 
+func TestTokenOrderVerifyEscrowRejectsSenderMismatch(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	sender := testAddress("sender-mismatch-real")
+	wireSender := testAddress("sender-mismatch-wire")
+	denom, tok, ledger := registerImplTestGRC20(cur, "sender_mismatch")
+	uassert.NoError(t, ledger.Mint(address(sender), 30))
+	uassert.NoError(t, ledger.Approve(address(sender), zkgm.ProxyAddress(), 13))
+	order := z.TokenOrderV2{
+		Sender:      []byte(wireSender),
+		BaseToken:   []byte(denom),
+		BaseAmount:  u256.NewUint(13),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(12),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(12), sender, newSentCoinBudget(nil), u256.Zero(), order)
+
+	uassert.ErrorContains(t, err, "sender mismatch")
+	uassert.Equal(t, int64(30), tok.BalanceOf(address(sender)))
+	uassert.Equal(t, int64(0), tok.BalanceOf(zkgm.ProxyAddress()))
+	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(core.ChannelId(12), u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.True(t, balance == nil)
+}
+
 func TestTokenOrderVerifyGRC20WithoutApprovalDoesNotIncreaseChannelBalance(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 

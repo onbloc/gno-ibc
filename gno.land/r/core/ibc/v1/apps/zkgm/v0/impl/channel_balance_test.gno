@@ -93,3 +93,27 @@ func TestChannelBalanceKeyV2DifferentPaths(t *testing.T) {
 		t.Fatal("different paths produced the same key")
 	}
 }
+
+func TestChannelBalanceKeyV2DifferentBaseTokens(t *testing.T) {
+	chanId := core.ChannelId(1)
+	path := u256.Zero()
+	quote := []byte("uosmo")
+
+	k1 := ChannelBalanceKeyV2(chanId, path, []byte("uatom"), quote)
+	k2 := ChannelBalanceKeyV2(chanId, path, []byte("uosmo"), quote)
+	if k1 == k2 {
+		t.Fatal("different base tokens produced the same key")
+	}
+}
+
+func TestChannelBalanceKeyV2DifferentQuoteTokens(t *testing.T) {
+	chanId := core.ChannelId(1)
+	path := u256.Zero()
+	base := []byte("uatom")
+
+	k1 := ChannelBalanceKeyV2(chanId, path, base, []byte("uosmo"))
+	k2 := ChannelBalanceKeyV2(chanId, path, base, []byte("uatom"))
+	if k1 == k2 {
+		t.Fatal("different quote tokens produced the same key")
+	}
+}

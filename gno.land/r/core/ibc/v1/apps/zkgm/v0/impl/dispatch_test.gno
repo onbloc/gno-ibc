@@ -112,6 +112,33 @@ func TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts(cur realm, t *testing.T
 	uassert.AbortsContains(t, cur, "mint overflow", func(cur realm) {
 		(&ZkgmV1{}).Recv(cur, packet, address(testAddress("fee-fatal-relayer")), nil)
 	})
+
+	// SetTokenOrigin is called after the fee mint — the abort must prevent it.
+	// (State rollback of the receiver mint is guaranteed by the VM on a real tx
+	// abort, but is not replicated in the test harness's AbortsContains.)
+	_, hasOrigin := zkgm.GetTokenOrigin(ibcDenom)
+	uassert.False(t, hasOrigin)
+}
+
+func TestRecvTokenOrderSolveReturnsFailureAck(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	order := z.TokenOrderV2{
+		Kind:        z.TOKEN_ORDER_KIND_SOLVE,
+		Sender:      []byte(testAddress("solve-recv-sndr")),
+		Receiver:    []byte(testAddress("solve-recv-rx")),
+		BaseToken:   []byte("uatom"),
+		BaseAmount:  u256.NewUint(10),
+		QuoteToken:  []byte("ibc/solve"),
+		QuoteAmount: u256.NewUint(10),
+	}
+	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
+	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(1), data, 0, 0)
+
+	res := (&ZkgmV1{}).Recv(cur, packet, address("g1relayer"), nil)
+
+	uassert.True(t, res.Status == core.PacketStatusFailure)
+	uassert.Equal(t, string(universalErrorAck()), string(res.Ack))
 }
 
 func mustZkgmPacketBytes(instr z.Instruction) []byte {

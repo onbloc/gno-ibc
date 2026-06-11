@@ -933,6 +933,33 @@ func TestRegisterClientRejectsUnauthorizedCaller(cur realm, t *testing.T) {
 	}
 }
 
+func TestRegisterClientScopedNamespaceRejectsExternalType(cur realm, t *testing.T) {
+	resetState()
+	testing.SetRealm(testing.NewCodeRealm(testCorePkgPath))
+
+	uassert.AbortsContains(t, cur, "caller not authorized to register client", func(cur realm) {
+		RegisterClient(cur, ClientType("gno.land/r/other/mytype"), &mockClient{})
+	})
+}
+
+func TestRegisterClientScopedNamespaceRejectsExactCallerPath(cur realm, t *testing.T) {
+	resetState()
+	testing.SetRealm(testing.NewCodeRealm(testCorePkgPath))
+
+	uassert.AbortsContains(t, cur, "caller not authorized to register client", func(cur realm) {
+		RegisterClient(cur, ClientType(testCorePkgPath), &mockClient{})
+	})
+}
+
+func TestRegisterClientScopedNamespaceRejectsSuffixedPath(cur realm, t *testing.T) {
+	resetState()
+	testing.SetRealm(testing.NewCodeRealm(testCorePkgPath))
+
+	uassert.AbortsContains(t, cur, "caller not authorized to register client", func(cur realm) {
+		RegisterClient(cur, ClientType(testCorePkgPath+"suffix/x"), &mockClient{})
+	})
+}
+
 func TestRegisterAppRejectsPortSquatting(cur realm, t *testing.T) {
 	resetState()
 	oldAdmin := admin
@@ -955,6 +982,15 @@ func TestRegisterAppUsesCallerPackagePath(cur realm, t *testing.T) {
 	if !HasApp([]byte(testCorePkgPath)) {
 		t.Fatal("RegisterApp must register the caller package path as the port id")
 	}
+}
+
+func TestRegisterAppRejectsDuplicateRegistration(cur realm, t *testing.T) {
+	resetState()
+
+	RegisterApp(cross(cur), &mockApp{})
+	uassert.AbortsContains(t, cur, "port already registered", func(cur realm) {
+		RegisterApp(cross(cur), &mockApp{})
+	})
 }
 
 // --- Integration: packet send lifecycle ---

@@ -101,6 +101,30 @@ func TestBuildForwardChildPacket(cur realm, t *testing.T) {
 	uassert.Equal(t, z.OP_CALL, packet.Instruction.Opcode)
 }
 
+func TestBuildForwardChildRejectsInvalidPath(cur realm, t *testing.T) {
+	cases := []struct {
+		name    string
+		destCh  core.ChannelId
+		path    *u256.Uint
+		wantErr error
+	}{
+		{"missing prev dest", core.ChannelId(1), u256.Zero(), errForwardMissingPrevDest},
+		{"missing next source", core.ChannelId(5), forwardPath(5), errForwardMissingNextSource},
+		{"prev dest mismatch", core.ChannelId(7), forwardPath(5, 99), errForwardPrevDestMismatch},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			parent := core.NewPacket(cross(cur), core.ChannelId(0), tc.destCh, nil, 0, 0)
+			_, err := buildForwardChild(cur, parent, u256.Zero(), [32]byte{}, z.Forward{
+				Path:             tc.path,
+				TimeoutTimestamp: 999,
+				Instruction:      batchMustCallInstruction(batchCall("sender", "")),
+			})
+			uassert.True(t, err == tc.wantErr)
+		})
+	}
+}
+
 func TestBuildForwardChildRejectsZeroTimeout(cur realm, t *testing.T) {
 	nextSource := openForwardTestChannel(cross(cur), core.ChannelId(99))
 	parent := core.NewPacket(cross(cur), core.ChannelId(0), core.ChannelId(1), nil, 0, 0)

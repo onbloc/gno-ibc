@@ -102,6 +102,63 @@ func TestDeriveSenderSaltDeterministicNoSequence(t *testing.T) {
 	}
 }
 
+func TestDeriveBatchSaltDifferentIndexProducesDifferentSalt(t *testing.T) {
+	salt := mustBytes32(t, "1111111111111111111111111111111111111111111111111111111111111111")
+	a := DeriveBatchSalt(u256.NewUint(1), salt)
+	b := DeriveBatchSalt(u256.NewUint(2), salt)
+	if a == b {
+		t.Fatal("different indices derived the same batch salt")
+	}
+}
+
+func TestDeriveBatchSaltDifferentSaltProducesDifferentResult(t *testing.T) {
+	salt1 := mustBytes32(t, "1111111111111111111111111111111111111111111111111111111111111111")
+	salt2 := mustBytes32(t, "2222222222222222222222222222222222222222222222222222222222222222")
+	a := DeriveBatchSalt(u256.NewUint(1), salt1)
+	b := DeriveBatchSalt(u256.NewUint(1), salt2)
+	if a == b {
+		t.Fatal("different salts derived the same batch salt")
+	}
+}
+
+func TestDeriveForwardSaltDifferentInputProducesDifferentResult(t *testing.T) {
+	salt1 := mustBytes32(t, "1111111111111111111111111111111111111111111111111111111111111111")
+	salt2 := mustBytes32(t, "2222222222222222222222222222222222222222222222222222222222222222")
+	a := DeriveForwardSalt(salt1)
+	b := DeriveForwardSalt(salt2)
+	if a == b {
+		t.Fatal("different inputs derived the same forward salt")
+	}
+}
+
+func TestDeriveSaltFunctionsDoNotCollide(t *testing.T) {
+	inputs := [][32]byte{
+		mustBytes32(t, "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"),
+		mustBytes32(t, "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"),
+	}
+	sender := []byte("g1collision")
+	for _, salt := range inputs {
+		batch := DeriveBatchSalt(u256.NewUint(1), salt)
+		forward := DeriveForwardSalt(salt)
+		sender_ := DeriveSenderSalt(sender, salt)
+		if batch == forward {
+			t.Fatal("DeriveBatchSalt and DeriveForwardSalt collide")
+		}
+		if batch == sender_ {
+			t.Fatal("DeriveBatchSalt and DeriveSenderSalt collide")
+		}
+		if forward == sender_ {
+			t.Fatal("DeriveForwardSalt and DeriveSenderSalt collide")
+		}
+		if IsForwardedPacket(batch) {
+			t.Fatal("DeriveBatchSalt must not produce a forwarded-packet salt")
+		}
+		if !IsForwardedPacket(forward) {
+			t.Fatal("DeriveForwardSalt must produce a forwarded-packet salt")
+		}
+	}
+}
+
 func mustBytes32(t *testing.T, h string) [32]byte {
 	t.Helper()
 

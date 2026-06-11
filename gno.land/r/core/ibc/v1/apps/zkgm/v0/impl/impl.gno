@@ -46,6 +46,7 @@ func (v *ZkgmV1) Recv(cur realm, packet core.Packet, relayer address, relayerMsg
 		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
 		return failureResult(cur, universalErrorAck())
 	}
+	abortOnlyMakerRecv(res)
 	return res
 }
 
@@ -90,11 +91,14 @@ func (v *ZkgmV1) IntentRecv(cur realm, packet core.Packet, marketMaker address, 
 		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
 		return failureResult(cur, universalErrorAck())
 	}
-	// Only-maker must roll back the intent receipt.
+	abortOnlyMakerRecv(res)
+	return res
+}
+
+func abortOnlyMakerRecv(res core.RecvPacketResult) {
 	if isOnlyMakerAck(res.Ack) {
 		panic("zkgm: only maker")
 	}
-	return res
 }
 
 func (v *ZkgmV1) Send(cur realm, req zkgm.SendRequest) ([]byte, error) {

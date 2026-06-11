@@ -19,11 +19,6 @@ func main(cur realm) {
 	packet := callPacket(cur, pair, mockReceiverPath)
 
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, realcometbls.Z39CallPacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight-1)))
-
-	println("mock_calls", mock.Calls(cross(cur)))
-	println("receipt_after_recv", core.HasPacketReceipt(cross(cur), packet))
-	println("ack_after_recv", core.HasAcknowledgement(cross(cur), packet))
-	println("recv_call_panic_contained_real_cometbls", "ok")
 }
 
 func callPacket(cur realm, pair realcometbls.ChannelPair, receiverPath string) core.Packet {
@@ -35,8 +30,5 @@ func callPacket(cur realm, pair realcometbls.ChannelPair, receiverPath string) c
 	return core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)), 0, core.Timestamp(0))
 }
 
-// Output:
-// mock_calls 1
-// receipt_after_recv true
-// ack_after_recv true
-// recv_call_panic_contained_real_cometbls ok
+// Error:
+// zkgm: only maker

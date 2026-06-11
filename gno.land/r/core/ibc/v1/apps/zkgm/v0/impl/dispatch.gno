@@ -117,20 +117,14 @@ func (v *ZkgmV1) dispatchAck(cur realm, packet core.Packet, path *u256.Uint, sal
 		if err != nil {
 			return err
 		}
-		outerAck, err := z.DecodeAck(ack)
-		if err != nil {
-			return err
-		}
+		outerAck := decodeOuterAckOrFailure(ack)
 		return v.acknowledgeBatch(cur, packet, path, salt, batch, outerAck)
 	case z.OP_FORWARD:
 		forward, err := decodeForwardInstruction(instr)
 		if err != nil {
 			return err
 		}
-		outerAck, err := z.DecodeAck(ack)
-		if err != nil {
-			return err
-		}
+		outerAck := decodeForwardOuterAckOrFailure(ack)
 		return v.acknowledgeForward(cur, packet, path, salt, forward, outerAck)
 	default:
 		return errors.New("zkgm/v1: unsupported opcode")
@@ -234,6 +228,28 @@ func tokenOrderDestinationChannel(channelId core.ChannelId) (uint32, error) {
 
 func isOnlyMakerAck(ack []byte) bool {
 	return bytes.Equal(ack, z.ACK_ERR_ONLY_MAKER)
+}
+
+func decodeOuterAckOrFailure(ack []byte) z.Ack {
+	if isOnlyMakerAck(ack) {
+		return z.Ack{Tag: tagAckFailure()}
+	}
+	decoded, err := z.DecodeAck(ack)
+	if err != nil {
+		return z.Ack{Tag: tagAckFailure()}
+	}
+	return decoded
+}
+
+func decodeForwardOuterAckOrFailure(ack []byte) z.Ack {
+	if isOnlyMakerAck(ack) {
+		return z.Ack{InnerAck: universalErrorAck()}
+	}
+	decoded, err := z.DecodeAck(ack)
+	if err != nil {
+		return z.Ack{InnerAck: universalErrorAck()}
+	}
+	return decoded
 }
 
 func extractPanicMessage(r any) string {

@@ -18,16 +18,6 @@ import (
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
-type filetestAssert struct{}
-
-func (t *filetestAssert) Helper()                        {}
-func (t *filetestAssert) Skip(args ...any)               { panic("skip") }
-func (t *filetestAssert) Fatalf(fmt string, args ...any) { panic(fmt) }
-func (t *filetestAssert) Errorf(fmt string, args ...any) { panic(fmt) }
-func (t *filetestAssert) Logf(fmt string, args ...any)   {}
-func (t *filetestAssert) Fail()                          { panic("assertion failed") }
-func (t *filetestAssert) FailNow()                       { panic("assertion failed") }
-
 func main(cur realm) {
 	inst := sh.InstallImpl(cross(cur))
 	sourceChannel := core.ChannelId(10)
@@ -97,7 +87,8 @@ func main(cur realm) {
 }
 
 func releaseNativeUnauthorizedCallerRejected(cur realm) bool {
-	return uassert.AbortsContains(&filetestAssert{}, cur, "not an authorized impl", func(cur realm) {
+	var tt *stdtesting.T
+	return uassert.AbortsContains(tt, cur, "not an authorized impl", func(cur realm) {
 		nonimpl.ReleaseNativeDirect(cross(cur))
 	})
 }

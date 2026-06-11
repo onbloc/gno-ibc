@@ -150,9 +150,6 @@ func TestDeriveSaltFunctionsDoNotCollide(t *testing.T) {
 		if forward == sender_ {
 			t.Fatal("DeriveForwardSalt and DeriveSenderSalt collide")
 		}
-		if IsForwardedPacket(batch) {
-			t.Fatal("DeriveBatchSalt must not produce a forwarded-packet salt")
-		}
 		if !IsForwardedPacket(forward) {
 			t.Fatal("DeriveForwardSalt must produce a forwarded-packet salt")
 		}

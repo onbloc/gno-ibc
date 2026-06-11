@@ -6,6 +6,7 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 )
 
 func TestAmountInt64(t *testing.T) {
@@ -33,4 +34,15 @@ func TestAmountInt64(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestVoucherNameFallsBackToIBCDenom(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	ibcDenom := "ibc/name-fallback"
+	rx := testAddress("name-fb-rx")
+
+	uassert.NoError(t, zkgm.MintVoucher(cross(cur), ibcDenom, "base", [32]byte{}, "", "SYM", 0, rx, u256.NewUint(1)))
+
+	uassert.Equal(t, ibcDenom, zkgm.VoucherNameOf(ibcDenom))
 }

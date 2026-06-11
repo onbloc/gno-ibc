@@ -82,6 +82,7 @@ func main(cur realm) {
 	bk := banker.NewReadonlyBanker()
 	println("source_channel_balance_after_halt", sh.ChannelBalanceStr(sourceChannel, u256.Zero(), lockOrder.BaseToken, lockOrder.QuoteToken))
 	println("proxy_native_after_halt", bk.GetCoins(zkgm.ProxyAddress()).AmountOf("ugnot"))
+	println("sender_native_after_halt", bk.GetCoins(address(sender)).AmountOf("ugnot"))
 	println("receiver_voucher_final", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 	println("release_native_unauthorized_caller_rejected", releaseNativeUnauthorizedCallerRejected(cur))
 }
@@ -108,5 +109,6 @@ func releaseNativeUnauthorizedCallerRejected(cur realm) bool {
 // [SCENARIO] origin halted: unescrow recv never delivered
 // source_channel_balance_after_halt 40
 // proxy_native_after_halt 40
+// sender_native_after_halt 0
 // receiver_voucher_final 0
 // release_native_unauthorized_caller_rejected true

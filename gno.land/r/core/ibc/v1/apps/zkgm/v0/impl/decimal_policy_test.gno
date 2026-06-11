@@ -39,9 +39,11 @@ func TestInitializeDecimalsAgnosticAccounting(cur realm, t *testing.T) {
 		res, err := (&ZkgmV1{}).executeTokenOrderV2(cur,
 			core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(tc.dest), nil, 0, 0),
 			relayer, u256.NewUint(tc.path),
-			z.TokenOrderV2{Sender: []byte("s"), Receiver: []byte(rx), BaseToken: base,
+			z.TokenOrderV2{
+				Sender: []byte("s"), Receiver: []byte(rx), BaseToken: base,
 				BaseAmount: u256.NewUint(N), QuoteToken: []byte(denom), QuoteAmount: u256.NewUint(N),
-				Kind: z.TOKEN_ORDER_KIND_INITIALIZE, Metadata: meta}, false)
+				Kind: z.TOKEN_ORDER_KIND_INITIALIZE, Metadata: meta,
+			}, false)
 		uassert.NoError(t, err)
 		uassert.True(t, res.Status == core.PacketStatusSuccess)
 		uassert.Equal(t, int64(N), VoucherBalanceOf(denom, address(rx)))

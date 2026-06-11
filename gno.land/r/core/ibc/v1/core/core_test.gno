@@ -1438,6 +1438,14 @@ func TestPacketTimeoutReceiptPath(cur realm, t *testing.T) {
 	}
 }
 
+func TestPacketTimeoutIsNoOpWhenCommitmentAbsent(cur realm, t *testing.T) {
+	resetState()
+	packet := Packet{SourceChannelId: 1, DestinationChannelId: 99, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	uassert.NotAborts(t, cur, func(cur realm) {
+		PacketTimeout(cur, MsgPacketTimeout{Packet: packet})
+	})
+}
+
 func TestPacketTimeoutRejectsInactiveClientBeforeNonMembership(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
@@ -1551,6 +1559,32 @@ func TestChannelOpenTryRejectsInactiveClient(cur realm, t *testing.T) {
 	if len(st.channelOwners) != channelsBefore {
 		t.Fatal("inactive client must not persist a new channel")
 	}
+}
+
+func TestChannelOpenAckRejectsWrongState(cur realm, t *testing.T) {
+	resetState()
+	channelId := st.generateChannelId()
+	st.saveChannel(channelId, Channel{State: ChannelStateOpen})
+
+	uassert.AbortsContains(t, cur, "invalid channel state", func(cur realm) {
+		ChannelOpenAck(cur, MsgChannelOpenAck{
+			ChannelId:             channelId,
+			CounterpartyVersion:   "ics20-1",
+			CounterpartyChannelId: ChannelId(99),
+		})
+	})
+}
+
+func TestChannelOpenConfirmRejectsWrongState(cur realm, t *testing.T) {
+	resetState()
+	channelId := st.generateChannelId()
+	st.saveChannel(channelId, Channel{State: ChannelStateOpen})
+
+	uassert.AbortsContains(t, cur, "invalid channel state", func(cur realm) {
+		ChannelOpenConfirm(cur, MsgChannelOpenConfirm{
+			ChannelId: channelId,
+		})
+	})
 }
 
 func TestGetClientStatusDelegatesToClient(cur realm, t *testing.T) {

@@ -234,6 +234,42 @@ func TestVerifyBatchMixedNativeAndVoucher(cur realm, t *testing.T) {
 	uassert.Equal(t, int64(13), VoucherBalanceOf(voucherDenom, address(sender)))
 }
 
+func TestVerifyBatchGRC20EscrowsAndFailureAckRefunds(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	sender := testAddress("batch-grc20-sender")
+	denom, tok, ledger := registerImplTestGRC20(cur, "batch_grc20")
+	uassert.NoError(t, ledger.Mint(address(sender), 25))
+	uassert.NoError(t, ledger.Approve(address(sender), zkgm.ProxyAddress(), 11))
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(denom),
+		BaseAmount:  u256.NewUint(11),
+		QuoteToken:  []byte("quote-batch-grc20"),
+		QuoteAmount: u256.NewUint(11),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	batch := z.Batch{Instructions: []z.Instruction{
+		batchMustOrderInstruction(order),
+	}}
+	parentSalt := [32]byte{0x24}
+	packet := core.NewPacket(cross(cur), core.ChannelId(24), core.ChannelId(25), nil, 0, 0)
+
+	err := (&ZkgmV1{}).verifyBatch(cur, packet.SourceChannelId, sender, newSentCoinBudget(nil), u256.Zero(), parentSalt, batch)
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(14), tok.BalanceOf(address(sender)))
+	uassert.Equal(t, int64(11), tok.BalanceOf(zkgm.ProxyAddress()))
+	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(packet.SourceChannelId, u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.Equal(t, "11", balance.ToString())
+
+	err = (&ZkgmV1{}).acknowledgeBatch(cur, packet, u256.Zero(), parentSalt, batch, z.Ack{Tag: tagAckFailure()})
+
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(25), tok.BalanceOf(address(sender)))
+	uassert.Equal(t, int64(0), tok.BalanceOf(zkgm.ProxyAddress()))
+	assertNoChannelBalance(t, packet.SourceChannelId, u256.Zero(), order)
+}
+
 func TestVerifyBatchMultiDenom(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 	sender := testAddress("batch-denom-sender")

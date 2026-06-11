@@ -73,6 +73,38 @@ func TestTokenOrderAckMarketMakerEscrowWithVoucherRewardsMarketMaker(cur realm, 
 	uassert.True(t, balance == nil || balance.IsZero())
 }
 
+func TestTokenOrderAckMarketMakerEscrowWithLocalGRC20RewardsMarketMaker(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	sender := testAddress("v1-mm-grc20-sender")
+	marketMaker := testAddress("v1-mm-grc20-maker")
+	channelId := core.ChannelId(19)
+	amount := u256.NewUint(13)
+	denom, tok, ledger := registerImplTestGRC20(cur, "mm_grc20")
+	uassert.NoError(t, ledger.Mint(address(sender), 50))
+	uassert.NoError(t, ledger.Approve(address(sender), zkgm.ProxyAddress(), 13))
+
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(denom),
+		BaseAmount:  amount,
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: amount,
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	uassert.NoError(t, (&ZkgmV1{}).verifyTokenOrderV2(cur, channelId, sender, newSentCoinBudget(nil), u256.Zero(), order))
+	uassert.Equal(t, int64(37), tok.BalanceOf(address(sender)))
+	uassert.Equal(t, int64(13), tok.BalanceOf(zkgm.ProxyAddress()))
+
+	err := (&ZkgmV1{}).acknowledgeTokenOrderV2(cur, channelId, u256.Zero(), order, marketMakerAck(marketMaker))
+
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(13), tok.BalanceOf(address(marketMaker)))
+	uassert.Equal(t, int64(0), tok.BalanceOf(zkgm.ProxyAddress()))
+	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(channelId, u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.True(t, balance == nil || balance.IsZero())
+}
+
 func TestTokenOrderVerifyNativeRequiresSentCoin(cur realm, t *testing.T) {
 	order := z.TokenOrderV2{
 		Sender:     []byte(testAddress("v1-native-sender")),
@@ -188,6 +220,31 @@ func TestTokenOrderVerifyGRC20ZeroAmountReturnsError(cur realm, t *testing.T) {
 	uassert.True(t, balance == nil || balance.IsZero())
 }
 
+func TestTokenOrderVerifyGRC20AmountOverflowDoesNotEscrow(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	sender := testAddress("v1-grc20-overflow")
+	denom, tok, ledger := registerImplTestGRC20(cur, "send_overflow")
+	uassert.NoError(t, ledger.Mint(address(sender), math.MaxInt64))
+	uassert.NoError(t, ledger.Approve(address(sender), zkgm.ProxyAddress(), math.MaxInt64))
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(denom),
+		BaseAmount:  u256.NewUint(uint64(math.MaxInt64) + 1),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(uint64(math.MaxInt64) + 1),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(22), sender, newSentCoinBudget(nil), u256.Zero(), order)
+
+	uassert.Error(t, err)
+	uassert.Equal(t, int64(math.MaxInt64), tok.BalanceOf(address(sender)))
+	uassert.Equal(t, int64(0), tok.BalanceOf(zkgm.ProxyAddress()))
+	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(core.ChannelId(22), u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.True(t, balance == nil || balance.IsZero())
+}
+
 func TestTokenOrderVerifyGRC20RejectsStrayNativeCoin(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 
@@ -263,6 +320,32 @@ func TestTokenOrderAckFailureRefundsLocalGRC20(cur realm, t *testing.T) {
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(0), tok.BalanceOf(zkgm.ProxyAddress()))
 	uassert.Equal(t, int64(13), tok.BalanceOf(address(sender)))
+}
+
+func TestTokenOrderAckProtocolSuccessKeepsLocalGRC20Escrowed(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+
+	sender := testAddress("v1-grc20-protocol-ok")
+	denom, tok, ledger := registerImplTestGRC20(cur, "protocol_success")
+	uassert.NoError(t, ledger.Mint(address(sender), 30))
+	uassert.NoError(t, ledger.Approve(address(sender), zkgm.ProxyAddress(), 13))
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(denom),
+		BaseAmount:  u256.NewUint(13),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(13),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	uassert.NoError(t, (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(23), sender, newSentCoinBudget(nil), u256.Zero(), order))
+
+	err := (&ZkgmV1{}).acknowledgeTokenOrderV2(cur, core.ChannelId(23), u256.Zero(), order, protocolAck())
+
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(17), tok.BalanceOf(address(sender)))
+	uassert.Equal(t, int64(13), tok.BalanceOf(zkgm.ProxyAddress()))
+	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(core.ChannelId(23), u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.Equal(t, "13", balance.ToString())
 }
 
 func TestTokenOrderTimeoutRefundsLocalGRC20(cur realm, t *testing.T) {
@@ -991,6 +1074,16 @@ func marketMakerAck(marketMaker string) z.Ack {
 	innerAck, err := z.EncodeTokenOrderAck(z.TokenOrderAck{
 		FillType:    fillTypeMarketMaker(),
 		MarketMaker: []byte(marketMaker),
+	})
+	if err != nil {
+		panic(err)
+	}
+	return z.Ack{Tag: tagAckSuccess(), InnerAck: innerAck}
+}
+
+func protocolAck() z.Ack {
+	innerAck, err := z.EncodeTokenOrderAck(z.TokenOrderAck{
+		FillType: fillTypeProtocol(),
 	})
 	if err != nil {
 		panic(err)

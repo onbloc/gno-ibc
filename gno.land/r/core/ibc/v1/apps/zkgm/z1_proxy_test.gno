@@ -300,6 +300,43 @@ func TestReleaseGRC20ReturnsErrorForUnregisteredToken(cur realm, t *testing.T) {
 	})
 }
 
+func TestEscrowGRC20ReturnsErrorForUnregisteredToken(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	cacheRealm(cur)
+	implPath = "gno.land/r/not-this-realm"
+	allowedImpls = []string{ProxyPkgPath()}
+
+	owner := address(testutilsAddress("pgrc20-missing-own"))
+	testing.SetRealm(testing.NewCodeRealm(ProxyPkgPath()))
+	uassert.NotAborts(t, cur, func(cur realm) {
+		err := EscrowGRC20(cross(cur), "missing/grc20", owner, 4)
+		uassert.ErrorContains(t, err, "grc20 not registered")
+	})
+}
+
+func TestEscrowReleaseGRC20RejectInvalidInputs(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	cacheRealm(cur)
+	implPath = "gno.land/r/not-this-realm"
+	allowedImpls = []string{ProxyPkgPath()}
+
+	owner := address(testutilsAddress("pgrc20-guard-own"))
+	recipient := address(testutilsAddress("pgrc20-guard-rx"))
+	testing.SetRealm(testing.NewCodeRealm(ProxyPkgPath()))
+	uassert.AbortsContains(t, cur, "EscrowGRC20 amount must be positive", func(cur realm) {
+		EscrowGRC20(cross(cur), "any/grc20", owner, 0)
+	})
+	uassert.AbortsContains(t, cur, "EscrowGRC20 denom must not be empty", func(cur realm) {
+		EscrowGRC20(cross(cur), "", owner, 1)
+	})
+	uassert.AbortsContains(t, cur, "ReleaseGRC20 amount must be positive", func(cur realm) {
+		ReleaseGRC20(cross(cur), "any/grc20", recipient, 0)
+	})
+	uassert.AbortsContains(t, cur, "ReleaseGRC20 denom must not be empty", func(cur realm) {
+		ReleaseGRC20(cross(cur), "", recipient, 1)
+	})
+}
+
 func TestEscrowReleaseGRC20RejectUnlistedCaller(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	cacheRealm(cur)
@@ -314,10 +351,10 @@ func TestEscrowReleaseGRC20RejectUnlistedCaller(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewCodeRealm(ProxyPkgPath()))
 	uassert.AbortsContains(t, cur, "not an authorized impl", func(cur realm) {
-		_ = EscrowGRC20(cross(cur), denom, owner, 10)
+		EscrowGRC20(cross(cur), denom, owner, 10)
 	})
 	uassert.AbortsContains(t, cur, "not an authorized impl", func(cur realm) {
-		_ = ReleaseGRC20(cross(cur), denom, recipient, 10)
+		ReleaseGRC20(cross(cur), denom, recipient, 10)
 	})
 	uassert.Equal(t, int64(0), tok.BalanceOf(ProxyAddress()))
 	uassert.Equal(t, int64(20), tok.BalanceOf(owner))

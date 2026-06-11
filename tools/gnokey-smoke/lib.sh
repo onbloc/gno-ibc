@@ -131,8 +131,31 @@ maketx_call() {
   echo "--- end maketx call ---"
 }
 
+# maketx_addpkg <pkgpath> <pkgdir> [log]. Deploys a package to the running
+# gnodev chain. Unlike maketx run, addpkg creates a persistent realm that
+# survives across subsequent ephemeral maketx run scripts.
+maketx_addpkg() {
+  local pkgpath="$1"
+  local pkgdir="$2"
+  local log="${3:-$WORKDIR/addpkg.log}"
+  echo "--- maketx addpkg: $pkgpath ---"
+  if ! echo "" | gnokey maketx addpkg -insecure-password-stdin \
+    -home "$KEYBASE" \
+    -pkgpath "$pkgpath" \
+    -pkgdir "$pkgdir" \
+    -gas-fee "$SMOKE_GAS_FEE" -gas-wanted "$SMOKE_GAS_WANTED" \
+    -broadcast -chainid "$CHAIN_ID" -remote "$RPC_ENDPOINT" \
+    "$SMOKE_KEY_NAME" 2>&1 | tee "$log"; then
+    echo "FAIL: maketx addpkg failed ($pkgpath)"
+    exit 1
+  fi
+  echo "--- end maketx addpkg ---"
+}
+
 extract_data() {
-  grep -E '^data:' | sed -E 's/^data: \("(.*)" [^)]+\)$/\1/'
+  grep -E '^data:' | sed -nE \
+    -e 's/^data: \("(.*)" [^)]+\)$/\1/p' \
+    -e 's/^data: \(([^ ]+) [^)]+\)$/\1/p'
 }
 
 # native_balance <address> prints the bank balance string, e.g. "100ugnot".

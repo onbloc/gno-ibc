@@ -34,3 +34,9 @@ jobs:
 
       - name: Run gnokey smoke tests
         run: make test-gnokey-query-smoke
+
+      - name: Run ZKGM native refund smoke test
+        run: make test-zkgm-native-refund-smoke
+
+      - name: Run ZKGM GRC20 refund smoke test
+        run: make test-zkgm-grc20-refund-smoke

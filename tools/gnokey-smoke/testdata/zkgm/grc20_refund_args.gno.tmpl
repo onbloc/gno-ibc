@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/hex"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
 )
 
@@ -15,7 +15,7 @@ func main(cur realm) {
 	order := z.TokenOrderV2{
 		Sender:      []byte("@SENDER@"),
 		Receiver:    []byte("counterparty-receiver"),
-		BaseToken:   []byte("ugnot"),
+		BaseToken:   []byte("@DENOM@"),
 		BaseAmount:  u256.NewUint(100),
 		QuoteToken:  []byte("counterparty-projected-quote"),
 		QuoteAmount: u256.NewUint(100),

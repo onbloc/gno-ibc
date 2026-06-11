@@ -190,11 +190,8 @@ func TestVerifyMisbehaviourIdenticalHeaders(t *testing.T) {
 	}
 }
 
-// TestVerifyMisbehaviourIndependentTrustedStates verifies that each header is
-// checked against its own trusted consensus state with no requirement that the
-// two trusted states be identical. The implementation calls VerifyHeader
-// independently for each header; any error must originate there, not from a
-// "trusted states must match" pre-check that does not exist today.
+// TestVerifyMisbehaviourIndependentTrustedStates locks in that VerifyMisbehaviour
+// passes each header's own trusted state to VerifyHeader independently.
 func TestVerifyMisbehaviourIndependentTrustedStates(t *testing.T) {
 	hA := devnetHeader()
 	hB := devnetHeader()
@@ -202,19 +199,24 @@ func TestVerifyMisbehaviourIndependentTrustedStates(t *testing.T) {
 
 	trustedA := devnetTrusted()
 	trustedB := devnetTrusted()
+	// Setting trustedB.Timestamp == header timestamp makes the "headerNanos <=
+	// trusted.Timestamp" check fire for header B. If trustedA were passed to
+	// header B instead, the timestamp check would pass and a ZKP error would
+	// appear — caught by the second assertion below.
+	trustedB.Timestamp = uint64(devnetTimeSeconds)*1_000_000_000 + uint64(devnetTimeNanos)
 
 	err := VerifyMisbehaviour(devnetClientState(), trustedA, trustedB, Misbehaviour{HeaderA: hA, HeaderB: hB}, devnetNow())
 	if err == nil {
-		t.Fatal("expected ZKP verification error with tampered trusted state")
+		t.Fatal("expected error when trustedB rejects header B")
 	}
-	// A "trusted states must match" gate added in the future would produce an
-	// error without a "header B:" prefix. Its presence here is a regression
-	// in the independent-verification invariant.
-	//
-	// NOTE: this assertion depends on the error format in verify.gno:
-	//   errors.New("cometbls: header B: " + err.Error())
-	// If that prefix is ever renamed, this check becomes a false negative.
+	// A future "trusted states must match" pre-check would fire before VerifyHeader
+	// and produce an error without a "header B:" prefix.
 	if !strings.Contains(err.Error(), "header B:") {
 		t.Fatalf("error did not originate from header B verification: %v", err)
+	}
+	// Proves trustedB was actually passed to header B: timestamp error means the
+	// timestamp check fired; ZKP error would mean trustedA (valid timestamp) was used.
+	if !strings.Contains(err.Error(), "header timestamp not newer") {
+		t.Fatalf("trustedB was not used for header B (expected timestamp error, got: %v)", err)
 	}
 }

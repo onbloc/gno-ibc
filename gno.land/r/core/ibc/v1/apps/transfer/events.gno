@@ -6,6 +6,8 @@ const (
 	EventTypePacket   = "fungible_token_packet"
 	EventTypeTransfer = "ibc_transfer"
 	EventTypeDenom    = "denomination"
+	EventTypeHookSet  = "transfer_hook_set"
+	EventTypeHookExec = "transfer_hook_exec"
 
 	AttributeKeySender         = "sender"
 	AttributeKeyReceiver       = "receiver"
@@ -18,4 +20,5 @@ const (
 	AttributeKeyAck            = "acknowledgement"
 	AttributeKeyAckError       = "error"
 	AttributeKeyMemo           = "memo"
+	AttributeKeyHookCaller     = "hook_caller"
 )

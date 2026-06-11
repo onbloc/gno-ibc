@@ -74,10 +74,12 @@ func (a *App) OnSendPacket(
 		return err
 	}
 
-	// Mirror transfer.transfer(): the packet Sender is the EOA that signed
-	// the tx. unsafe.OriginCaller is tx-level identity (no cur equivalent).
+	// For user-initiated sends (Transfer), sender must match the tx signer.
+	// For realm-initiated sends (Send), sender is the hook caller realm address;
+	// pendingVoucherSend guards against forged sender fields.
 	signer := unsafe.OriginCaller().String()
-	if data.Sender != signer {
+	realmSend := pendingVoucherSend != nil && data.Sender == pendingVoucherSend.sender
+	if data.Sender != signer && !realmSend {
 		return ufmt.Errorf("invalid FungibleTokenPacketData: sender %s is different from signer %s", data.Sender, signer)
 	}
 
@@ -177,7 +179,7 @@ func (a *App) OnSendPacket(
 func consumePendingVoucherSend(sender, sourceClient, denom string, amount int64) error {
 	expected := pendingVoucherSend
 	if expected == nil {
-		return ufmt.Errorf("voucher packet must be initiated through transfer.Transfer")
+		return ufmt.Errorf("voucher packet must be initiated through transfer.Transfer or transfer.Send")
 	}
 	pendingVoucherSend = nil
 
@@ -339,6 +341,29 @@ func (a *App) OnRecvPacket(
 			ackErr = ufmt.Errorf("mint voucher error: %v", err)
 			ack = types.NewErrorAppAcknowledgement(ackErr)
 			return types.RecvPacketResult{Status: types.PacketStatus_Failure}
+		}
+		// Hook is intentionally called on the mint path only (sender chain is
+		// source). The unescrow path returns existing tokens — no new liquidity
+		// is introduced, so no forwarding hook is needed.
+		if hook != nil {
+			if err := hook.OnTransferRecv(cross(cur), data, token.Denom); err != nil {
+				// Explicit rollback: burn the just-minted tokens before returning a
+				// failure ack. Panicking instead would leave the packet without an
+				// acknowledgement, permanently freezing escrowed assets on the source chain.
+				if burnErr := inst.ledger.Burn(address(data.Receiver), amount); burnErr != nil {
+					panic("transfer: hook failed and mint rollback failed: " + burnErr.Error())
+				}
+				ackErr = ufmt.Errorf("hook OnTransferRecv: %v", err)
+				ack = types.NewErrorAppAcknowledgement(ackErr)
+				return types.RecvPacketResult{Status: types.PacketStatus_Failure}
+			}
+			chain.Emit(EventTypeHookExec,
+				AttributeKeyHookCaller, hookCaller.String(),
+				AttributeKeySender, data.Sender,
+				AttributeKeyReceiver, data.Receiver,
+				AttributeKeyDenom, token.Denom.Path(),
+				AttributeKeyAmount, token.Amount,
+			)
 		}
 	}
 

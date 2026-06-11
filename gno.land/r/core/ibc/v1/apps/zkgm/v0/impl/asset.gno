@@ -81,6 +81,8 @@ func escrowAsset(cur realm, denom string, sender string, amount *u256.Uint, budg
 
 func releaseAsset(cur realm, denom string, recipient string, amount *u256.Uint) error {
 	switch assetClassFor(denom) {
+	case classVoucher:
+		return refundIBCVoucher(cur, []byte(denom), recipient, amount)
 	case classLocalGRC20:
 		n, err := amountInt64(amount)
 		if err != nil {

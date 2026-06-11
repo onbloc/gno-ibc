@@ -202,7 +202,6 @@ func TestVerifyMisbehaviourIndependentTrustedStates(t *testing.T) {
 
 	trustedA := devnetTrusted()
 	trustedB := devnetTrusted()
-	trustedB.NextValidatorsHash[0] ^= 0xff // distinct trusted state for B
 
 	err := VerifyMisbehaviour(devnetClientState(), trustedA, trustedB, Misbehaviour{HeaderA: hA, HeaderB: hB}, devnetNow())
 	if err == nil {

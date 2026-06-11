@@ -199,23 +199,17 @@ func TestVerifyMisbehaviourIndependentTrustedStates(t *testing.T) {
 
 	trustedA := devnetTrusted()
 	trustedB := devnetTrusted()
-	// Setting trustedB.Timestamp == header timestamp makes the "headerNanos <=
-	// trusted.Timestamp" check fire for header B. If trustedA were passed to
-	// header B instead, the timestamp check would pass and a ZKP error would
-	// appear — caught by the second assertion below.
 	trustedB.Timestamp = uint64(devnetTimeSeconds)*1_000_000_000 + uint64(devnetTimeNanos)
 
 	err := VerifyMisbehaviour(devnetClientState(), trustedA, trustedB, Misbehaviour{HeaderA: hA, HeaderB: hB}, devnetNow())
 	if err == nil {
 		t.Fatal("expected error when trustedB rejects header B")
 	}
-	// A future "trusted states must match" pre-check would fire before VerifyHeader
-	// and produce an error without a "header B:" prefix.
+
 	if !strings.Contains(err.Error(), "header B:") {
 		t.Fatalf("error did not originate from header B verification: %v", err)
 	}
-	// Proves trustedB was actually passed to header B: timestamp error means the
-	// timestamp check fired; ZKP error would mean trustedA (valid timestamp) was used.
+
 	if !strings.Contains(err.Error(), "header timestamp not newer") {
 		t.Fatalf("trustedB was not used for header B (expected timestamp error, got: %v)", err)
 	}

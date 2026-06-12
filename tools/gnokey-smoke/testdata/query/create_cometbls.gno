@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/hex"
 
-	core "gno.land/r/core/ibc/v1/core"
-	cometbls "gno.land/r/core/ibc/v1/lightclients/cometbls"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	cometbls "gno.land/r/onbloc/unionibc/v1/lightclients/cometbls"
 )
 
 func main(cur realm) {

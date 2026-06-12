@@ -29,33 +29,27 @@ cleanup_smoke_env() {
 }
 
 run_smoke_node() {
-  # Optional extensions set by callers before setup_smoke_chain:
-  #   SMOKE_EXTRA_RESOLVERS=("local=/path/to/pkg" ...)
-  #   SMOKE_EXTRA_PATHS="gno.land/r/foo,gno.land/r/bar"
-  local extra_args=()
-  if [[ -n "${SMOKE_EXTRA_RESOLVERS[*]:-}" ]]; then
-    for r in "${SMOKE_EXTRA_RESOLVERS[@]}"; do
-      extra_args+=("-resolver" "$r")
-    done
-  fi
-  local paths="gno.land/r/core/ibc/v1/core,gno.land/r/core/ibc/v1/lightclients/cometbls,gno.land/r/core/ibc/v1/lightclients/statelensics23mpt,gno.land/r/gnoswap/ibc/v1/apps/zkgm,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl,gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader,gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
-  if [[ -n "${SMOKE_EXTRA_PATHS:-}" ]]; then
-    paths="$paths,$SMOKE_EXTRA_PATHS"
-  fi
-  # ${extra_args[@]+"${extra_args[@]}"} keeps bash 3.2 (macOS /bin/bash) happy
-  # under set -u when no SMOKE_EXTRA_RESOLVERS is set.
+  # local resolvers map each on-disk gno.land/{p,r}/core/ibc directory to the
+  # onbloc/{ibc,unionibc} module path it declares; unneeded once directories
+  # match module paths, required while the directory layout is kept.
   gnodev local \
     -root "$GNO_ROOT" \
     -resolver "root=$GNO_IBC_ROOT" \
     -resolver "root=$GNO_ROOT/examples" \
     -resolver "local=$GNO_IBC_ROOT/gno.land/p/core/ibc/zkgm" \
     -resolver "local=$GNO_IBC_ROOT/gno.land/p/core/tokenbucket" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/p/core/ibc/lightclients/cometbls" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/p/core/ibc/lightclients/statelensics23mpt" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/core" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/lightclients/cometbls" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/lightclients/statelensics23mpt" \
     -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm" \
     -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm/v0/impl" \
     -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm/v0/loader" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm/testing/loader" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm/testing/realcometbls" \
     -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm/testing/e2e" \
-    ${extra_args[@]+"${extra_args[@]}"} \
-    -paths "$paths" \
+    -paths "gno.land/r/onbloc/unionibc/v1/core,gno.land/r/onbloc/unionibc/v1/lightclients/cometbls,gno.land/r/onbloc/unionibc/v1/lightclients/statelensics23mpt,gno.land/r/onbloc/unionibc/v1/apps/zkgm,gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl,gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/loader,gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e" \
     -no-web \
     -node-rpc-listener "$RPC_LISTENER"
 }

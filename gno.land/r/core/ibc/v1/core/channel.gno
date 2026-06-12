@@ -1,9 +1,7 @@
 package core
 
-import rtunsafe "chain/runtime/unsafe"
-
 func ChannelOpenInit(cur realm, msg MsgChannelOpenInit) ChannelId {
-	relayer := rtunsafe.OriginCaller()
+	relayer := cur.Previous().Address()
 	portId := Bytes(cloneBytes(msg.PortId))
 	connection := ensureConnectionOpen(msg.ConnectionId)
 	channelId := st.generateChannelId()
@@ -24,7 +22,7 @@ func ChannelOpenInit(cur realm, msg MsgChannelOpenInit) ChannelId {
 }
 
 func ChannelOpenTry(cur realm, msg MsgChannelOpenTry) ChannelId {
-	relayer := rtunsafe.OriginCaller()
+	relayer := cur.Previous().Address()
 	portId := Bytes(cloneBytes(msg.PortId))
 	if msg.Channel.State != ChannelStateTryOpen {
 		panic(ErrInvalidChannelState)
@@ -41,7 +39,7 @@ func ChannelOpenTry(cur realm, msg MsgChannelOpenTry) ChannelId {
 	}
 	key := ChannelPath(msg.Channel.CounterpartyChannelId)
 	value := keccak(expectedChannel.EthAbiEncode())
-	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofInit, key[:], value[:])
+	verifyMembershipActive(connection.ClientId, msg.ProofHeight, msg.ProofInit, key[:], value[:])
 
 	st.channelOwners[channelId] = portId
 	st.getAppByPortId(portId).OnChannelOpenTry(cross(cur), msg.Channel.ConnectionId, channelId, msg.Channel.Version, msg.CounterpartyVersion, relayer)
@@ -52,7 +50,7 @@ func ChannelOpenTry(cur realm, msg MsgChannelOpenTry) ChannelId {
 }
 
 func ChannelOpenAck(cur realm, msg MsgChannelOpenAck) {
-	relayer := rtunsafe.OriginCaller()
+	relayer := cur.Previous().Address()
 	channel := st.getChannel(msg.ChannelId)
 	if channel.State != ChannelStateInit {
 		panic(ErrInvalidChannelState)
@@ -69,7 +67,7 @@ func ChannelOpenAck(cur realm, msg MsgChannelOpenAck) {
 	}
 	key := ChannelPath(msg.CounterpartyChannelId)
 	value := keccak(expectedChannel.EthAbiEncode())
-	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofTry, key[:], value[:])
+	verifyMembershipActive(connection.ClientId, msg.ProofHeight, msg.ProofTry, key[:], value[:])
 
 	st.getAppByPortId(portId).OnChannelOpenAck(cross(cur), msg.ChannelId, msg.CounterpartyChannelId, msg.CounterpartyVersion, relayer)
 
@@ -82,7 +80,7 @@ func ChannelOpenAck(cur realm, msg MsgChannelOpenAck) {
 }
 
 func ChannelOpenConfirm(cur realm, msg MsgChannelOpenConfirm) {
-	relayer := rtunsafe.OriginCaller()
+	relayer := cur.Previous().Address()
 	channel := st.getChannel(msg.ChannelId)
 	if channel.State != ChannelStateTryOpen {
 		panic(ErrInvalidChannelState)
@@ -99,7 +97,7 @@ func ChannelOpenConfirm(cur realm, msg MsgChannelOpenConfirm) {
 	}
 	key := ChannelPath(channel.CounterpartyChannelId)
 	value := keccak(expectedChannel.EthAbiEncode())
-	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofAck, key[:], value[:])
+	verifyMembershipActive(connection.ClientId, msg.ProofHeight, msg.ProofAck, key[:], value[:])
 
 	st.getAppByPortId(portId).OnChannelOpenConfirm(cross(cur), msg.ChannelId, relayer)
 	channel.State = ChannelStateOpen

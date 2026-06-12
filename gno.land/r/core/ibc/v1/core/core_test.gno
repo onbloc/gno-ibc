@@ -4,122 +4,15 @@ import (
 	"encoding/hex"
 	"testing"
 
-	rtunsafe "chain/runtime/unsafe"
+	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
 )
-
-// --- Mock implementations ---
-
-type mockClient struct {
-	chainId                string
-	height                 Height
-	status                 Status
-	timestamp              Timestamp
-	membershipClientIds    []ClientId
-	membershipHeights      []Height
-	membershipProofs       [][]byte
-	membershipKeys         [][]byte
-	membershipValues       [][]byte
-	nonMembershipClientIds []ClientId
-	nonMembershipHeights   []Height
-	nonMembershipProofs    [][]byte
-	nonMembershipKeys      [][]byte
-}
-
-func (m *mockClient) CreateClient(_ realm, _ ClientId, _, _ []byte) string { return m.chainId }
-func (m *mockClient) UpdateClient(_ realm, _ ClientId, _ []byte) ConsensusStateUpdate {
-	m.height++
-	return ConsensusStateUpdate{
-		Height:              m.height,
-		ClientStateBytes:    []byte("cs"),
-		ConsensusStateBytes: []byte("cons"),
-	}
-}
-
-func (m *mockClient) VerifyMembership(clientId ClientId, height Height, proof []byte, key []byte, value []byte) {
-	m.membershipClientIds = append(m.membershipClientIds, clientId)
-	m.membershipHeights = append(m.membershipHeights, height)
-	m.membershipProofs = append(m.membershipProofs, proof)
-	m.membershipKeys = append(m.membershipKeys, key)
-	m.membershipValues = append(m.membershipValues, value)
-}
-
-func (m *mockClient) VerifyNonMembership(clientId ClientId, height Height, proof []byte, key []byte) {
-	m.nonMembershipClientIds = append(m.nonMembershipClientIds, clientId)
-	m.nonMembershipHeights = append(m.nonMembershipHeights, height)
-	m.nonMembershipProofs = append(m.nonMembershipProofs, proof)
-	m.nonMembershipKeys = append(m.nonMembershipKeys, key)
-}
-
-func (m *mockClient) GetTimestamp(_ ClientId, _ Height) Timestamp {
-	if m.timestamp != 0 {
-		return m.timestamp
-	}
-	return Timestamp(1e9)
-}
-func (m *mockClient) GetLatestHeight(_ ClientId) Height { return m.height }
-func (m *mockClient) GetStatus(_ ClientId) Status       { return m.status }
-
-type mockApp struct {
-	initCalled     bool
-	closedChannels []ChannelId
-	recvPackets    []Packet
-	intentPackets  []Packet
-	intentMsgs     [][]byte
-	ackPackets     []Packet
-	timeoutPackets []Packet
-	recvResult     RecvPacketResult
-	intentResult   RecvPacketResult
-}
-
-func (a *mockApp) OnChannelOpenInit(_ realm, _ ConnectionId, _ ChannelId, _ string, _ address) {
-	a.initCalled = true
-}
-
-func (a *mockApp) OnChannelOpenTry(_ realm, _ ConnectionId, _ ChannelId, _, _ string, _ address) {
-}
-
-func (a *mockApp) OnChannelOpenAck(_ realm, _ ChannelId, _ ChannelId, _ string, _ address) {
-}
-func (a *mockApp) OnChannelOpenConfirm(_ realm, _ ChannelId, _ address) {}
-func (a *mockApp) OnChannelCloseInit(_ realm, ch ChannelId, _ address) {
-	a.closedChannels = append(a.closedChannels, ch)
-}
-
-func (a *mockApp) OnChannelCloseConfirm(_ realm, ch ChannelId, _ address) {
-	a.closedChannels = append(a.closedChannels, ch)
-}
-
-func (a *mockApp) OnRecvPacket(cur realm, p Packet, _ address, _ []byte) RecvPacketResult {
-	a.recvPackets = append(a.recvPackets, p)
-	if a.recvResult.Status != PacketStatusUnknown {
-		return a.recvResult
-	}
-	return NewRecvPacketResult(cur, PacketStatusSuccess, []byte{0x01})
-}
-
-func (a *mockApp) OnIntentRecvPacket(cur realm, p Packet, _ address, msg []byte) RecvPacketResult {
-	a.intentPackets = append(a.intentPackets, p)
-	a.intentMsgs = append(a.intentMsgs, msg)
-	if a.intentResult.Status != PacketStatusUnknown {
-		return a.intentResult
-	}
-	return NewRecvPacketResult(cur, PacketStatusSuccess, []byte{0x02})
-}
-
-func (a *mockApp) OnAcknowledgementPacket(_ realm, p Packet, _ []byte, _ address) {
-	a.ackPackets = append(a.ackPackets, p)
-}
-
-func (a *mockApp) OnTimeoutPacket(_ realm, p Packet, _ address) {
-	a.timeoutPackets = append(a.timeoutPackets, p)
-}
 
 // --- Helpers ---
 
 const (
 	mockType        ClientType = "mock"
-	testCorePkgPath            = "gno.land/r/core/ibc/v1/core"
+	testCorePkgPath            = "gno.land/r/onbloc/unionibc/v1/core"
 	oldAddressPort             = "g1vjt8cj2s6f5w4sly0s2l0vh85k0y8jyz3f8qzss"
 )
 
@@ -386,6 +279,21 @@ func TestClientRegistryDuplicatePanics(cur realm, t *testing.T) {
 	st.registerClient(mockType, &mockClient{})
 	mustPanic(t, func() {
 		st.registerClient(mockType, &mockClient{})
+	})
+}
+
+func TestRegisterClientRejectsDuplicateType(cur realm, t *testing.T) {
+	resetState()
+	testing.SetRealm(testing.NewCodeRealm(testCorePkgPath))
+	clientType := ClientType(testCorePkgPath + "/testing/immutable-client")
+
+	RegisterClient(cur, clientType, &mockClient{chainId: "first"})
+	uassert.True(t, HasClient(clientType))
+
+	// Light-client implementations are immutable for a registered type. The
+	// upgrade path is a new ClientType plus channel migration, not replacement.
+	uassert.AbortsContains(t, cur, "client type already registered", func(cur realm) {
+		RegisterClient(cur, clientType, &mockClient{chainId: "second"})
 	})
 }
 
@@ -842,6 +750,19 @@ func TestBatchAcksRejectsPacketsWithoutReceipt(cur realm, t *testing.T) {
 	}
 }
 
+func TestBatchAcksRejectsAlreadyAckedPacket(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	st.setPacketReceipt(packet)
+	st.commitAcknowledgement(packet, []byte("first-ack"))
+
+	uassert.AbortsContains(t, cur, "acknowledgement already written", func(cur realm) {
+		BatchAcks(cur, MsgBatchAcks{Packets: []Packet{packet}, Acks: [][]byte{[]byte("second-ack")}})
+	})
+}
+
 func TestPacketReceiptLifecycle(cur realm, t *testing.T) {
 	resetState()
 	p := Packet{SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
@@ -912,7 +833,7 @@ func TestChannelStateTransitions(cur realm, t *testing.T) {
 func TestChannelEventAttrsOmitsCounterpartyChannelIdForOpenInit(cur realm, t *testing.T) {
 	attrs := channelEventAttrs(
 		ChannelOpenInitEvent,
-		Bytes("gno.land/r/core/ibc/v1/apps/zkgm"),
+		Bytes("gno.land/r/onbloc/unionibc/v1/apps/zkgm"),
 		ChannelId(1),
 		Channel{
 			State:                 ChannelStateInit,
@@ -929,7 +850,7 @@ func TestChannelEventAttrsOmitsCounterpartyChannelIdForOpenInit(cur realm, t *te
 	)
 
 	want := []string{
-		"port_id", "gno.land/r/core/ibc/v1/apps/zkgm",
+		"port_id", "gno.land/r/onbloc/unionibc/v1/apps/zkgm",
 		"channel_id", "1",
 		"counterparty_port_id", "0x636f756e7465727061727479",
 		"connection_id", "2",
@@ -951,7 +872,7 @@ func TestChannelEventAttrsIncludesCounterpartyChannelIdForOtherEvents(cur realm,
 	for _, eventType := range events {
 		attrs := channelEventAttrs(
 			eventType,
-			Bytes("gno.land/r/core/ibc/v1/apps/zkgm"),
+			Bytes("gno.land/r/onbloc/unionibc/v1/apps/zkgm"),
 			ChannelId(1),
 			Channel{
 				State:                 ChannelStateOpen,
@@ -969,7 +890,7 @@ func TestChannelEventAttrsIncludesCounterpartyChannelIdForOtherEvents(cur realm,
 
 		assertAttrEqual(t, attrs, "counterparty_channel_id", "7")
 		assertStringSliceEqual(t, attrs, []string{
-			"port_id", "gno.land/r/core/ibc/v1/apps/zkgm",
+			"port_id", "gno.land/r/onbloc/unionibc/v1/apps/zkgm",
 			"channel_id", "1",
 			"counterparty_port_id", "0x636f756e7465727061727479",
 			"counterparty_channel_id", "7",
@@ -1000,9 +921,9 @@ func TestGetChannelOwnerPanicsWhenMissing(cur realm, t *testing.T) {
 
 func TestRegisterClientRejectsUnauthorizedCaller(cur realm, t *testing.T) {
 	resetState()
-	oldDeployer := deployer
-	deployer = "gno1authorized"
-	defer func() { deployer = oldDeployer }()
+	oldAdmin := admin
+	admin = "gno1authorized"
+	defer func() { admin = oldAdmin }()
 
 	uassert.AbortsContains(t, cur, "caller not authorized to register client", func(cur realm) {
 		RegisterClient(cur, ClientType("cometbls"), &mockClient{})
@@ -1012,12 +933,39 @@ func TestRegisterClientRejectsUnauthorizedCaller(cur realm, t *testing.T) {
 	}
 }
 
+func TestRegisterClientScopedNamespaceRejectsExternalType(cur realm, t *testing.T) {
+	resetState()
+	testing.SetRealm(testing.NewCodeRealm(testCorePkgPath))
+
+	uassert.AbortsContains(t, cur, "caller not authorized to register client", func(cur realm) {
+		RegisterClient(cur, ClientType("gno.land/r/other/mytype"), &mockClient{})
+	})
+}
+
+func TestRegisterClientScopedNamespaceRejectsExactCallerPath(cur realm, t *testing.T) {
+	resetState()
+	testing.SetRealm(testing.NewCodeRealm(testCorePkgPath))
+
+	uassert.AbortsContains(t, cur, "caller not authorized to register client", func(cur realm) {
+		RegisterClient(cur, ClientType(testCorePkgPath), &mockClient{})
+	})
+}
+
+func TestRegisterClientScopedNamespaceRejectsSuffixedPath(cur realm, t *testing.T) {
+	resetState()
+	testing.SetRealm(testing.NewCodeRealm(testCorePkgPath))
+
+	uassert.AbortsContains(t, cur, "caller not authorized to register client", func(cur realm) {
+		RegisterClient(cur, ClientType(testCorePkgPath+"suffix/x"), &mockClient{})
+	})
+}
+
 func TestRegisterAppRejectsPortSquatting(cur realm, t *testing.T) {
 	resetState()
-	oldDeployer := deployer
-	deployer = "gno1authorized"
-	defer func() { deployer = oldDeployer }()
-	portId := Bytes("gno.land/r/core/ibc/v1/apps/zkgm")
+	oldAdmin := admin
+	admin = "gno1authorized"
+	defer func() { admin = oldAdmin }()
+	portId := Bytes("gno.land/r/onbloc/unionibc/v1/apps/zkgm")
 
 	uassert.AbortsContains(t, cur, "caller not authorized to register port", func(cur realm) {
 		RegisterAppForPort(cur, portId, &mockApp{})
@@ -1034,6 +982,15 @@ func TestRegisterAppUsesCallerPackagePath(cur realm, t *testing.T) {
 	if !HasApp([]byte(testCorePkgPath)) {
 		t.Fatal("RegisterApp must register the caller package path as the port id")
 	}
+}
+
+func TestRegisterAppRejectsDuplicateRegistration(cur realm, t *testing.T) {
+	resetState()
+
+	RegisterApp(cross(cur), &mockApp{})
+	uassert.AbortsContains(t, cur, "port already registered", func(cur realm) {
+		RegisterApp(cross(cur), &mockApp{})
+	})
 }
 
 // --- Integration: packet send lifecycle ---
@@ -1200,6 +1157,24 @@ func TestWriteAcknowledgementRejectsAddressAsPortId(cur realm, t *testing.T) {
 	})
 }
 
+func TestWriteAcknowledgementRejectsEmptyAck(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	st.setPacketReceipt(packet)
+
+	uassert.AbortsContains(t, cur, "acknowledgement cannot be empty", func(cur realm) {
+		WriteAcknowledgement(cur, MsgWriteAcknowledgement{
+			Packet:          packet,
+			Acknowledgement: []byte{},
+		})
+	})
+	if st.hasAcknowledgement(packet) {
+		t.Fatal("WriteAcknowledgement must not commit an empty acknowledgement")
+	}
+}
+
 func TestWriteAcknowledgementRejectsAlreadyAcked(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
@@ -1273,6 +1248,24 @@ func TestIntentPacketRecvSetsReceiptAndCommitsAck(cur realm, t *testing.T) {
 	}
 	if st.acknowledgementHash(packet) != CommitAcks([][]byte{{0x02}}) {
 		t.Fatal("IntentPacketRecv must commit the intent acknowledgement")
+	}
+}
+
+func TestIntentPacketRecvRejectsNonIntentAppBeforeReceipt(cur realm, t *testing.T) {
+	resetState()
+	portId, _, channelId := setupOpenChannel(t)
+	st.ports[portKey(portId)] = &mockNonIntentApp{}
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("intent"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	uassert.AbortsContains(t, cur, "intent receive not supported", func(cur realm) {
+		IntentPacketRecv(cur, MsgIntentPacketRecv{Packets: []Packet{packet}})
+	})
+
+	if st.hasPacketReceipt(packet) {
+		t.Fatal("IntentPacketRecv must reject non-intent app before writing receipt")
+	}
+	if st.hasAcknowledgement(packet) {
+		t.Fatal("IntentPacketRecv must reject non-intent app before writing acknowledgement")
 	}
 }
 
@@ -1445,6 +1438,34 @@ func TestPacketTimeoutReceiptPath(cur realm, t *testing.T) {
 	}
 }
 
+func TestPacketTimeoutIsNoOpWhenCommitmentAbsent(cur realm, t *testing.T) {
+	resetState()
+	packet := Packet{SourceChannelId: 1, DestinationChannelId: 99, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	uassert.NotAborts(t, cur, func(cur realm) {
+		PacketTimeout(cur, MsgPacketTimeout{Packet: packet})
+	})
+}
+
+func TestPacketTimeoutRejectsInactiveClientBeforeNonMembership(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("transfer"), TimeoutTimestamp: 100}
+	st.commitPacket(packet)
+	client := st.clientRegistry[mockType].(*mockClient)
+	client.status = StatusFrozen
+
+	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
+		PacketTimeout(cur, MsgPacketTimeout{Packet: packet})
+	})
+
+	if len(client.nonMembershipKeys) != 0 {
+		t.Fatalf("non-membership calls: got %d want 0", len(client.nonMembershipKeys))
+	}
+	if !st.hasPacketCommitment(packet) {
+		t.Fatal("inactive client must not delete packet commitment")
+	}
+}
+
 func TestVerifyClientMembershipVerifiesUnionPathValue(cur realm, t *testing.T) {
 	resetState()
 	client := &mockClient{chainId: "union-1", status: StatusActive}
@@ -1469,6 +1490,103 @@ func TestVerifyClientMembershipVerifiesUnionPathValue(cur realm, t *testing.T) {
 	}
 }
 
+func TestVerifyClientMembershipRejectsInactiveClientBeforeMembership(cur realm, t *testing.T) {
+	resetState()
+	client := &mockClient{chainId: "union-1", status: StatusExpired}
+	st.clientRegistry[mockType] = client
+	st.clientTypes[ClientId(4)] = mockType
+
+	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
+		VerifyClientMembership(cur, ClientId(4), Height(10), Bytes("proof"), Bytes("path"), Bytes("value"))
+	})
+
+	if len(client.membershipKeys) != 0 {
+		t.Fatalf("membership calls: got %d want 0", len(client.membershipKeys))
+	}
+}
+
+// Handler-level guard: PacketRecv must reject an inactive client before it
+// verifies the batch membership proof or touches receipt/app state.
+func TestPacketRecvRejectsInactiveClient(cur realm, t *testing.T) {
+	resetState()
+	portId, _, channelId := setupOpenChannel(t)
+	app := st.ports[portKey(portId)].(*mockApp)
+	client := st.clientRegistry[mockType].(*mockClient)
+	client.status = StatusFrozen
+	packet := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
+		PacketRecv(cur, MsgPacketRecv{Packets: []Packet{packet}, Proof: Bytes("proof"), ProofHeight: Height(10)})
+	})
+
+	if len(client.membershipKeys) != 0 {
+		t.Fatalf("membership calls: got %d want 0", len(client.membershipKeys))
+	}
+	if len(app.recvPackets) != 0 {
+		t.Fatalf("OnRecvPacket calls: got %d want 0", len(app.recvPackets))
+	}
+	if st.hasPacketReceipt(packet) {
+		t.Fatal("inactive client must not set packet receipt")
+	}
+	if st.hasAcknowledgement(packet) {
+		t.Fatal("inactive client must not commit acknowledgement")
+	}
+}
+
+// Handler-level guard: ChannelOpenTry must reject an inactive client before it
+// verifies the counterparty membership proof or persists the channel.
+func TestChannelOpenTryRejectsInactiveClient(cur realm, t *testing.T) {
+	resetState()
+	portId, connId, _ := setupOpenChannel(t)
+	client := st.clientRegistry[mockType].(*mockClient)
+	client.status = StatusExpired
+	channelsBefore := len(st.channelOwners)
+	channel := Channel{
+		State:                 ChannelStateTryOpen,
+		ConnectionId:          connId,
+		CounterpartyChannelId: ChannelId(99),
+		CounterpartyPortId:    Bytes("counterparty"),
+		Version:               "ics20-1",
+	}
+
+	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
+		ChannelOpenTry(cur, MsgChannelOpenTry{PortId: portId, Channel: channel, CounterpartyVersion: "ics20-1", ProofInit: Bytes("proof"), ProofHeight: Height(10)})
+	})
+
+	if len(client.membershipKeys) != 0 {
+		t.Fatalf("membership calls: got %d want 0", len(client.membershipKeys))
+	}
+	if len(st.channelOwners) != channelsBefore {
+		t.Fatal("inactive client must not persist a new channel")
+	}
+}
+
+func TestChannelOpenAckRejectsWrongState(cur realm, t *testing.T) {
+	resetState()
+	channelId := st.generateChannelId()
+	st.saveChannel(channelId, Channel{State: ChannelStateOpen})
+
+	uassert.AbortsContains(t, cur, "invalid channel state", func(cur realm) {
+		ChannelOpenAck(cur, MsgChannelOpenAck{
+			ChannelId:             channelId,
+			CounterpartyVersion:   "ics20-1",
+			CounterpartyChannelId: ChannelId(99),
+		})
+	})
+}
+
+func TestChannelOpenConfirmRejectsWrongState(cur realm, t *testing.T) {
+	resetState()
+	channelId := st.generateChannelId()
+	st.saveChannel(channelId, Channel{State: ChannelStateOpen})
+
+	uassert.AbortsContains(t, cur, "invalid channel state", func(cur realm) {
+		ChannelOpenConfirm(cur, MsgChannelOpenConfirm{
+			ChannelId: channelId,
+		})
+	})
+}
+
 func TestGetClientStatusDelegatesToClient(cur realm, t *testing.T) {
 	resetState()
 	st.clientRegistry[mockType] = &mockClient{chainId: "union-1", status: StatusFrozen}
@@ -1489,19 +1607,11 @@ func TestGetClientStatusReturnsUnknownForMissingClient(cur realm, t *testing.T) 
 
 // --- ForceUpdateClient ---
 
-type mockForceClient struct {
-	mockClient
-	forceHeight Height
-}
-
-func (m *mockForceClient) ForceUpdateClient(cur realm, _ ClientId, csBytes, consBytes []byte) ConsensusStateUpdate {
-	m.forceHeight++
-	return NewConsensusStateUpdate(cross(cur), m.forceHeight, consBytes, csBytes)
-}
-
 func TestForceUpdateClientUpdatesStateAndReturnsHeight(cur realm, t *testing.T) {
 	resetState()
-	deployer = rtunsafe.OriginCaller()
+	adminAddr := testutils.TestAddress("admin")
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	admin = adminAddr
 	mc := &mockForceClient{}
 	st.clientRegistry[mockType] = mc
 	clientId := CreateClient(cross(cur), MsgCreateClient{
@@ -1529,7 +1639,9 @@ func TestForceUpdateClientUpdatesStateAndReturnsHeight(cur realm, t *testing.T) 
 
 func TestForceUpdateClientPanicsWhenClientDoesNotSupportForceUpdate(cur realm, t *testing.T) {
 	resetState()
-	deployer = rtunsafe.OriginCaller()
+	adminAddr := testutils.TestAddress("admin")
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	admin = adminAddr
 	st.clientRegistry[mockType] = &mockClient{}
 	clientId := CreateClient(cross(cur), MsgCreateClient{
 		ClientType:          mockType,
@@ -1546,10 +1658,10 @@ func TestForceUpdateClientPanicsWhenClientDoesNotSupportForceUpdate(cur realm, t
 	})
 }
 
-func TestForceUpdateClientPanicsWhenCallerIsNotDeployer(cur realm, t *testing.T) {
+func TestForceUpdateClientPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetState()
-	deployer = "gno1authorized"
-	defer func() { deployer = "" }()
+	admin = "gno1authorized"
+	defer func() { admin = "" }()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
 		ForceUpdateClient(cur, MsgForceUpdateClient{
@@ -1568,6 +1680,55 @@ func hexEncodeString(s string) string {
 		dst[i*2+1] = hextable[c&0x0f]
 	}
 	return string(dst)
+}
+
+// --- Admin ---
+
+func TestGetAdminReflectsCurrentAdmin(cur realm, t *testing.T) {
+	old := admin
+	defer func() { admin = old }()
+	sentinel := testutils.TestAddress("admin-sentinel")
+	admin = sentinel
+	if got := GetAdmin(); got != sentinel {
+		t.Errorf("GetAdmin: got %v want %v", got, sentinel)
+	}
+}
+
+func TestSetAdminTransfersRights(cur realm, t *testing.T) {
+	old := admin
+	defer func() { admin = old }()
+	oldAdmin := testutils.TestAddress("old-admin")
+	newAdmin := testutils.TestAddress("new-admin")
+	admin = oldAdmin
+
+	testing.SetRealm(testing.NewUserRealm(oldAdmin))
+	SetAdmin(cross(cur), newAdmin)
+
+	if GetAdmin() != newAdmin {
+		t.Fatalf("admin not transferred; got %v want %v", GetAdmin(), newAdmin)
+	}
+
+	// After transfer admin=newAdmin; closure caller != newAdmin → rejected.
+	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
+		requireAdmin(cur, "set admin")
+	})
+	if GetAdmin() != newAdmin {
+		t.Error("rejected call must not revert the transfer")
+	}
+}
+
+func TestSetAdminRejectsNonAdmin(cur realm, t *testing.T) {
+	old := admin
+	defer func() { admin = old }()
+	adminAddr := testutils.TestAddress("authorized-admin")
+	admin = adminAddr
+
+	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
+		requireAdmin(cur, "set admin")
+	})
+	if admin != adminAddr {
+		t.Error("rejected call must not change the admin")
+	}
 }
 
 // --- Integration: channel close ---

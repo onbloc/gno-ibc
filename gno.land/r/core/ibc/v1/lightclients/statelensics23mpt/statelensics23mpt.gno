@@ -7,8 +7,8 @@ import (
 	"errors"
 
 	"gno.land/p/core/ethereum/storage"
-	statelensp "gno.land/p/core/ibc/lightclients/statelensics23mpt"
-	"gno.land/r/core/ibc/v1/core"
+	statelensp "gno.land/p/onbloc/ibc/lightclients/statelensics23mpt"
+	"gno.land/r/onbloc/unionibc/v1/core"
 )
 
 // Union reference:
@@ -30,7 +30,7 @@ type clientEntry struct {
 var entries = make(map[core.ClientId]*clientEntry)
 
 func mustBeCore(cur realm) {
-	if cur.Previous().PkgPath() != "gno.land/r/core/ibc/v1/core" {
+	if cur.Previous().PkgPath() != "gno.land/r/onbloc/unionibc/v1/core" {
 		panic("statelensics23mpt: core only")
 	}
 }
@@ -113,7 +113,12 @@ func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []b
 		panic("statelensics23mpt: encode consensus state: " + err.Error())
 	}
 
-	return core.NewConsensusStateUpdate(cross(cur), core.Height(header.L2Height), consStateBytes, statelensp.EncodeClientState(e.cs))
+	clientStateBytes, err := statelensp.EncodeClientState(e.cs)
+	if err != nil {
+		panic("statelensics23mpt: encode client state: " + err.Error())
+	}
+
+	return core.NewConsensusStateUpdate(cross(cur), core.Height(header.L2Height), consStateBytes, clientStateBytes)
 }
 
 func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proof, key, value []byte) {

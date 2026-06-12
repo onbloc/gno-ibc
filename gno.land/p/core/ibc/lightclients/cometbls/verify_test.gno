@@ -2,6 +2,7 @@ package cometbls
 
 import (
 	"encoding/hex"
+	"strings"
 	"testing"
 )
 
@@ -186,5 +187,30 @@ func TestVerifyMisbehaviourDifferentHeights(t *testing.T) {
 func TestVerifyMisbehaviourIdenticalHeaders(t *testing.T) {
 	if err := VerifyMisbehaviour(devnetClientState(), devnetTrusted(), devnetTrusted(), Misbehaviour{HeaderA: devnetHeader(), HeaderB: devnetHeader()}, devnetNow()); err == nil {
 		t.Fatal("expected error for identical headers (not misbehaviour)")
+	}
+}
+
+// TestVerifyMisbehaviourIndependentTrustedStates locks in that VerifyMisbehaviour
+// passes each header's own trusted state to VerifyHeader independently.
+func TestVerifyMisbehaviourIndependentTrustedStates(t *testing.T) {
+	hA := devnetHeader()
+	hB := devnetHeader()
+	hB.SignedHeader.AppHash[0] ^= 0xff // headers must differ
+
+	trustedA := devnetTrusted()
+	trustedB := devnetTrusted()
+	trustedB.Timestamp = uint64(devnetTimeSeconds)*1_000_000_000 + uint64(devnetTimeNanos)
+
+	err := VerifyMisbehaviour(devnetClientState(), trustedA, trustedB, Misbehaviour{HeaderA: hA, HeaderB: hB}, devnetNow())
+	if err == nil {
+		t.Fatal("expected error when trustedB rejects header B")
+	}
+
+	if !strings.Contains(err.Error(), "header B:") {
+		t.Fatalf("error did not originate from header B verification: %v", err)
+	}
+
+	if !strings.Contains(err.Error(), "header timestamp not newer") {
+		t.Fatalf("trustedB was not used for header B (expected timestamp error, got: %v)", err)
 	}
 }

@@ -85,6 +85,13 @@ type TokenMetadata struct {
 	Initializer    []byte
 }
 
+// TokenInitializer holds token display metadata; decimals are metadata only, never used for scaling.
+type TokenInitializer struct {
+	Name     string
+	Symbol   string
+	Decimals uint8
+}
+
 // SolverMetadata carries market maker solver data.
 //
 // Mirrors `SolverMetadata` at com.rs:98.

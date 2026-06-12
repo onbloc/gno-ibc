@@ -1,16 +1,14 @@
-// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e/scenarios
+// PKGPATH: gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e/scenarios
 package scenarios
 
 import (
-	rtunsafe "chain/runtime/unsafe"
-
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
-	core "gno.land/r/core/ibc/v1/core"
-	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
-	impl "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl"
-	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
+	impl "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl"
+	_ "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/loader"
 )
 
 func main(cur realm) {
@@ -33,7 +31,7 @@ func main(cur realm) {
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, nil, core.Height(1)))
 
 	println("quote_balance", impl.VoucherBalanceOf(quoteToken, address(receiver)))
-	println("relayer_balance", impl.VoucherBalanceOf(quoteToken, rtunsafe.OriginCaller()))
+	println("relayer_balance", impl.VoucherBalanceOf(quoteToken, cur.Address()))
 }
 
 // Output:

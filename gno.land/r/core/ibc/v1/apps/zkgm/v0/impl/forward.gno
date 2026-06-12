@@ -1,32 +1,32 @@
 package impl
 
 import (
-	"chain"
 	"errors"
 
-	z "gno.land/p/gnoswap/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/core/ibc/v1/core"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 var (
 	errInvalidForwardInstruction = errors.New("zkgm/v1: invalid forward instruction")
-	errForwardHopExceeded        = errors.New("zkgm/v1: forward hop count exceeded")
 	errForwardMissingPrevDest    = errors.New("zkgm/v1: forward missing previous destination channel")
 	errForwardMissingNextSource  = errors.New("zkgm/v1: forward missing next source channel")
 	errForwardPrevDestMismatch   = errors.New("zkgm/v1: forward previous-destination mismatch")
+	errForwardZeroTimeout        = errors.New("zkgm/v1: forward timeout timestamp must be non-zero")
 )
 
-func (v *ZkgmV1) verifyForward(cur realm, channelId core.ChannelId, sender string, sent chain.Coins, path *u256.Uint, salt [32]byte, forward z.Forward) error {
+func (v *ZkgmV1) verifyForward(cur realm, channelId core.ChannelId, sender string, budget *sentCoinBudget, path *u256.Uint, salt [32]byte, forward z.Forward) error {
 	if !isAllowedForwardInstruction(forward.Instruction.Opcode) {
 		return errInvalidForwardInstruction
 	}
-	if z.HopCount(forward.Path) > z.MaxHops {
-		return errForwardHopExceeded
+
+	if forward.TimeoutTimestamp == 0 {
+		return errForwardZeroTimeout
 	}
 
-	return v.dispatchVerify(cur, channelId, sender, sent, forward.Path, z.DeriveForwardSalt(salt), forward.Instruction)
+	return v.dispatchVerify(cur, channelId, sender, budget, forward.Path, z.DeriveForwardSalt(salt), forward.Instruction)
 }
 
 func (v *ZkgmV1) executeForward(cur realm, packet core.Packet, path *u256.Uint, parentSalt [32]byte, forward z.Forward, intent bool) (core.RecvPacketResult, error) {
@@ -47,8 +47,8 @@ func (v *ZkgmV1) executeForward(cur realm, packet core.Packet, path *u256.Uint, 
 
 	// Forward children construct ZkgmPacket directly via BatchSend. Their salt
 	// is namespaced via DeriveForwardSalt, not DeriveSenderSalt.
-	zkgm.BatchSend(cross(cur), core.NewMsgBatchSend(cross(cur), []core.Packet{childPacket}))
 	zkgm.SetInFlightPacket(cross(cur), forwardInFlightKey(cur, childPacket), zkgm.NewInFlightValue(cross(cur), packet))
+	zkgm.BatchSend(cross(cur), core.NewMsgBatchSend(cross(cur), []core.Packet{childPacket}))
 
 	return core.NewRecvPacketResult(cross(cur), core.PacketStatusAsync, nil), nil
 }
@@ -62,6 +62,10 @@ func (v *ZkgmV1) timeoutForward(cur realm, packet core.Packet, path *u256.Uint, 
 }
 
 func buildForwardChild(cur realm, packet core.Packet, path *u256.Uint, parentSalt [32]byte, forward z.Forward) (core.Packet, error) {
+	if forward.TimeoutTimestamp == 0 {
+		return core.NewPacket(cross(cur), 0, 0, nil, 0, 0), errForwardZeroTimeout
+	}
+
 	tailPath, prevDestChannel := z.DequeueChannelFromPath(forward.Path)
 	if prevDestChannel == 0 {
 		return core.NewPacket(cross(cur), 0, 0, nil, 0, 0), errForwardMissingPrevDest

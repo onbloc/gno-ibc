@@ -54,7 +54,9 @@ VENDOR_GNOLANG_RELS := \
 
 VENDOR_GNOSWAP_REPO := third_party/gnoswap
 VENDOR_GNOSWAP_SUB  := contract
-VENDOR_GNOSWAP_RELS := p/gnoswap/uint256
+VENDOR_GNOSWAP_RELS := \
+	p/gnoswap/uint256 \
+	p/gnoswap/int256
 
 VENDOR_GNOREALMS_REPO := third_party/gno-realms
 VENDOR_GNOREALMS_SUB  := gno.land

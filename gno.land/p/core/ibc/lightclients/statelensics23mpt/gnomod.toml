@@ -1,4 +1,4 @@
-module = "gno.land/p/core/ibc/lightclients/statelensics23mpt"
+module = "gno.land/p/onbloc/ibc/lightclients/statelensics23mpt"
 gno = "0.9"
 
 [require]

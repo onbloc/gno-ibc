@@ -3,9 +3,9 @@ package main
 import (
 	"bytes"
 
-	statelensp "gno.land/p/core/ibc/lightclients/statelensics23mpt"
-	core "gno.land/r/core/ibc/v1/core"
-	statelens "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
+	statelensp "gno.land/p/onbloc/ibc/lightclients/statelensics23mpt"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	statelens "gno.land/r/onbloc/unionibc/v1/lightclients/statelensics23mpt"
 )
 
 func main(cur realm) {
@@ -17,14 +17,18 @@ func main(cur realm) {
 	if err != nil {
 		panic(err)
 	}
-	id := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), statelens.ClientType, statelensp.EncodeClientState(statelensp.ClientState{
-			L2ChainID:         "local-l2",
-			L1ClientID:        1,
-			L2ClientID:        1,
-			L2LatestHeight:    1,
-			TimestampOffset:   64,
-			StateRootOffset:   0,
-			StorageRootOffset: 32,
-		}), consensusState))
+	clientState, err := statelensp.EncodeClientState(statelensp.ClientState{
+		L2ChainID:         "local-l2",
+		L1ClientID:        1,
+		L2ClientID:        1,
+		L2LatestHeight:    1,
+		TimestampOffset:   64,
+		StateRootOffset:   0,
+		StorageRootOffset: 32,
+	})
+	if err != nil {
+		panic(err)
+	}
+	id := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), statelens.ClientType, clientState, consensusState))
 	println("statelens_client_id", id.String())
 }

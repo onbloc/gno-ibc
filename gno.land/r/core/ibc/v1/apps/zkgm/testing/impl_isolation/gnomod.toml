@@ -1,0 +1,2 @@
+module = "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/impl_isolation"
+gno = "0.9"

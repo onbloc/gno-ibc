@@ -29,7 +29,7 @@ func ConnectionOpenTry(_ realm, msg MsgConnectionOpenTry) ConnectionId {
 	}
 	key := ConnectionPath(msg.CounterpartyConnectionId)
 	value := keccak(expectedConnection.EthAbiEncode())
-	st.getClient(msg.ClientId).VerifyMembership(msg.ClientId, msg.ProofHeight, msg.ProofInit, key[:], value[:])
+	verifyMembershipActive(msg.ClientId, msg.ProofHeight, msg.ProofInit, key[:], value[:])
 
 	st.saveConnection(connectionId, Connection{
 		State:                    ConnectionStateTryOpen,
@@ -60,7 +60,7 @@ func ConnectionOpenAck(_ realm, msg MsgConnectionOpenAck) {
 	}
 	key := ConnectionPath(msg.CounterpartyConnectionId)
 	value := keccak(expectedConnection.EthAbiEncode())
-	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofTry, key[:], value[:])
+	verifyMembershipActive(connection.ClientId, msg.ProofHeight, msg.ProofTry, key[:], value[:])
 
 	connection.State = ConnectionStateOpen
 	connection.CounterpartyConnectionId = msg.CounterpartyConnectionId
@@ -88,7 +88,7 @@ func ConnectionOpenConfirm(_ realm, msg MsgConnectionOpenConfirm) {
 	}
 	key := ConnectionPath(connection.CounterpartyConnectionId)
 	value := keccak(expectedConnection.EthAbiEncode())
-	st.getClient(connection.ClientId).VerifyMembership(connection.ClientId, msg.ProofHeight, msg.ProofAck, key[:], value[:])
+	verifyMembershipActive(connection.ClientId, msg.ProofHeight, msg.ProofAck, key[:], value[:])
 
 	connection.State = ConnectionStateOpen
 	st.saveConnection(msg.ConnectionId, connection)

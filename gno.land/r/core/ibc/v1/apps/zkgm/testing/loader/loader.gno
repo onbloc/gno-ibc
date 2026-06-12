@@ -1,0 +1,18 @@
+package loader
+
+import (
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
+	impl "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl"
+)
+
+func init(cur realm) {
+	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), impl.GetInstance(cross(cur)), []string{
+		"gno.land/r/onbloc/unionibc/v1/core",
+		"gno.land/r/onbloc/unionibc/v1/apps/zkgm",
+		"gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/loader",
+		"gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl",
+		"gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e",
+		"gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/realcometbls",
+	}))
+	zkgm.RegisterCoreApp(cross(cur))
+}

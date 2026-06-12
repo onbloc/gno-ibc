@@ -1,7 +1,6 @@
 package core
 
 import (
-	rtunsafe "chain/runtime/unsafe"
 	"time"
 )
 
@@ -78,7 +77,7 @@ func commitSyncAck(packet Packet, channel Channel, connection Connection, res Re
 }
 
 func PacketRecv(cur realm, msg MsgPacketRecv) {
-	relayer := rtunsafe.OriginCaller()
+	relayer := cur.Previous().Address()
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
 	}
@@ -86,9 +85,7 @@ func PacketRecv(cur realm, msg MsgPacketRecv) {
 	firstChannel := st.getChannel(first.DestinationChannelId)
 	firstConnection := ensureConnectionOpen(firstChannel.ConnectionId)
 	batchKey := BatchPacketsPath(CommitPackets(msg.Packets))
-	st.getClient(firstConnection.ClientId).VerifyMembership(
-		firstConnection.ClientId, msg.ProofHeight, msg.Proof, batchKey[:], h256Bytes(COMMITMENT_MAGIC),
-	)
+	verifyMembershipActive(firstConnection.ClientId, msg.ProofHeight, msg.Proof, batchKey[:], h256Bytes(COMMITMENT_MAGIC))
 	now := nowNanos()
 
 	for i, packet := range msg.Packets {
@@ -113,7 +110,7 @@ func PacketRecv(cur realm, msg MsgPacketRecv) {
 }
 
 func IntentPacketRecv(cur realm, msg MsgIntentPacketRecv) {
-	marketMaker := rtunsafe.OriginCaller()
+	marketMaker := cur.Previous().Address()
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
 	}
@@ -121,6 +118,11 @@ func IntentPacketRecv(cur realm, msg MsgIntentPacketRecv) {
 	first := msg.Packets[0]
 	firstChannel := st.getChannel(first.DestinationChannelId)
 	firstConnection := ensureConnectionOpen(firstChannel.ConnectionId)
+	portId := st.getChannelOwner(first.DestinationChannelId)
+	intentApp, ok := st.getAppByPortId(portId).(IIntentApp)
+	if !ok {
+		panic(ErrIntentNotSupported)
+	}
 	now := nowNanos()
 
 	for i, packet := range msg.Packets {
@@ -134,8 +136,7 @@ func IntentPacketRecv(cur realm, msg MsgIntentPacketRecv) {
 			marketMakerMsg = msg.MarketMakerMessages[i]
 		}
 
-		portId := st.getChannelOwner(packet.DestinationChannelId)
-		res := st.getAppByPortId(portId).OnIntentRecvPacket(cross(cur), packet, marketMaker, marketMakerMsg)
+		res := intentApp.OnIntentRecvPacket(cross(cur), packet, marketMaker, marketMakerMsg)
 		if err := commitSyncAck(packet, channel, firstConnection, res); err != nil {
 			panic(err)
 		}
@@ -145,7 +146,7 @@ func IntentPacketRecv(cur realm, msg MsgIntentPacketRecv) {
 }
 
 func PacketAcknowledgement(cur realm, msg MsgPacketAcknowledgement) {
-	relayer := rtunsafe.OriginCaller()
+	relayer := cur.Previous().Address()
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
 	}
@@ -159,9 +160,7 @@ func PacketAcknowledgement(cur realm, msg MsgPacketAcknowledgement) {
 	batchHash := CommitPackets(msg.Packets)
 	key := BatchReceiptsPath(batchHash)
 	value := CommitAcks(msg.Acknowledgements)
-	st.getClient(connection.ClientId).VerifyMembership(
-		connection.ClientId, msg.ProofHeight, msg.Proof, key[:], value[:],
-	)
+	verifyMembershipActive(connection.ClientId, msg.ProofHeight, msg.Proof, key[:], value[:])
 
 	processed := false
 	for i, packet := range msg.Packets {
@@ -174,10 +173,9 @@ func PacketAcknowledgement(cur realm, msg MsgPacketAcknowledgement) {
 
 		ack := msg.Acknowledgements[i]
 		portId := st.getChannelOwner(packet.SourceChannelId)
-		st.getAppByPortId(portId).OnAcknowledgementPacket(cross(cur), packet, ack, relayer)
-
 		st.deletePacketCommitment(packet)
 		processed = true
+		st.getAppByPortId(portId).OnAcknowledgementPacket(cross(cur), packet, ack, relayer)
 
 		emitPacketAckEvent(packet, channel, connection, ack)
 	}
@@ -187,7 +185,7 @@ func PacketAcknowledgement(cur realm, msg MsgPacketAcknowledgement) {
 }
 
 func PacketTimeout(cur realm, msg MsgPacketTimeout) {
-	relayer := rtunsafe.OriginCaller()
+	relayer := cur.Previous().Address()
 	packet := msg.Packet
 	if !st.hasPacketCommitment(packet) {
 		return
@@ -206,12 +204,11 @@ func PacketTimeout(cur realm, msg MsgPacketTimeout) {
 	}
 
 	key := BatchReceiptsPath(CommitPacket(packet))
-	client.VerifyNonMembership(connection.ClientId, msg.ProofHeight, msg.Proof, key[:])
+	verifyNonMembershipWithActiveClient(client, connection.ClientId, msg.ProofHeight, msg.Proof, key[:])
 
 	portId := st.getChannelOwner(packet.SourceChannelId)
-	st.getAppByPortId(portId).OnTimeoutPacket(cross(cur), packet, relayer)
-
 	st.deletePacketCommitment(packet)
+	st.getAppByPortId(portId).OnTimeoutPacket(cross(cur), packet, relayer)
 
 	emitPacketTimeoutEvent(packet, channel, connection)
 }
@@ -293,7 +290,11 @@ func BatchAcks(cur realm, msg MsgBatchAcks) H256 {
 		}
 	}
 	batchHash := CommitPackets(msg.Packets)
-	st.saveBatchReceipts(batchHash, CommitAcks(msg.Acks))
+	ackHash := CommitAcks(msg.Acks)
+	channel := st.getChannel(first.DestinationChannelId)
+	connection := st.getConnection(channel.ConnectionId)
+	st.saveBatchReceipts(batchHash, ackHash)
+	emitBatchAcksEvent(batchHash, ackHash, first, channel, connection)
 	return batchHash
 }
 

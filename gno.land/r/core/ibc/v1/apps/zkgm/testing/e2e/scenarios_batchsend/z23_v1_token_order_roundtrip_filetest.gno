@@ -1,13 +1,13 @@
-// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e/scenarios
-package scenarios
+// PKGPATH: gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e/scenarios_batchsend
+package scenarios_batchsend
 
 import (
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/core/ibc/v1/core"
-	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
-	impl "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl"
-	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
+	_ "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/loader"
+	impl "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl"
 )
 
 func main(cur realm) {
@@ -16,7 +16,7 @@ func main(cur realm) {
 
 	sender := "g17xpfvakm2amg962yls6f84z3kell8c5lserqta"
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
-	metaBytes := e2e.MustTokenMetadata(cross(cur), "grc20", "roundtrip")
+	metaBytes := e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
 	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(pair.Destination), []byte("ugnot"), impl.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),

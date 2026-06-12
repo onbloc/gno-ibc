@@ -1,18 +1,16 @@
 package e2e
 
 import (
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/core/ibc/v1/core"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 )
 
-var (
-	Relayer = address("g1relayer")
+var Relayer = address("g1relayer")
 
-	tagAckSuccessU256    = new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:])
-	fillTypeProtocolU256 = new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:])
-)
+func tagAckSuccessU256() *u256.Uint    { return new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:]) }
+func fillTypeProtocolU256() *u256.Uint { return new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:]) }
 
 type ChannelPair struct {
 	ClientId     core.ClientId
@@ -111,6 +109,86 @@ func MustBatchInstruction(cur realm, batch z.Batch) z.Instruction {
 	}
 }
 
+func MustForwardInstruction(cur realm, forward z.Forward) z.Instruction {
+	forwardBytes, err := z.EncodeForward(forward)
+	if err != nil {
+		panic(err)
+	}
+	return z.Instruction{
+		Version: z.INSTR_VERSION_0,
+		Opcode:  z.OP_FORWARD,
+		Operand: forwardBytes,
+	}
+}
+
+func ForwardPath(cur realm, channels ...uint32) *u256.Uint {
+	path := u256.Zero()
+	for _, channel := range channels {
+		var err error
+		path, err = z.UpdateChannelPath(path, channel)
+		if err != nil {
+			panic(err)
+		}
+	}
+	return path
+}
+
+func MustForwardChildPacket(cur realm, packet core.Packet, path *u256.Uint, parentSalt [32]byte, forward z.Forward) core.Packet {
+	forwardPath := mustCloneUint(forward.Path)
+	tailPath, prevDestChannel := z.DequeueChannelFromPath(forwardPath)
+	if prevDestChannel == 0 {
+		panic("zkgm/e2e: forward missing previous destination channel")
+	}
+	continuationPath, nextSourceChannel := z.DequeueChannelFromPath(tailPath)
+	if nextSourceChannel == 0 {
+		panic("zkgm/e2e: forward missing next source channel")
+	}
+	if packet.DestinationChannelId != core.ChannelId(prevDestChannel) {
+		panic("zkgm/e2e: forward previous-destination mismatch")
+	}
+
+	nextInstruction := forward.Instruction
+	if !continuationPath.IsZero() {
+		nextForward := z.Forward{
+			Path:             continuationPath,
+			TimeoutHeight:    0,
+			TimeoutTimestamp: forward.TimeoutTimestamp,
+			Instruction:      forward.Instruction,
+		}
+		nextInstruction = MustForwardInstruction(cross(cur), nextForward)
+	}
+
+	intermediate, err := z.UpdateChannelPath(path, prevDestChannel)
+	if err != nil {
+		panic(err)
+	}
+	nextPath, err := z.UpdateChannelPath(intermediate, nextSourceChannel)
+	if err != nil {
+		panic(err)
+	}
+
+	childBytes, err := z.EncodeZkgmPacket(z.ZkgmPacket{
+		Salt:        z.DeriveForwardSalt(parentSalt),
+		Path:        nextPath,
+		Instruction: nextInstruction,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	sourceChannelId := core.ChannelId(nextSourceChannel)
+	sourceChannel := core.GetChannel(sourceChannelId)
+	return core.NewPacket(cross(cur), sourceChannelId, sourceChannel.CounterpartyChannelId, childBytes, 0, core.Timestamp(forward.TimeoutTimestamp))
+}
+
+func mustCloneUint(in *u256.Uint) *u256.Uint {
+	out, err := u256.FromDecimal(in.Dec())
+	if err != nil {
+		panic(err)
+	}
+	return out
+}
+
 func MustPacketData(cur realm, instr z.Instruction) []byte {
 	packetBytes, err := z.EncodeZkgmPacket(z.ZkgmPacket{
 		Path:        u256.Zero(),
@@ -122,10 +200,14 @@ func MustPacketData(cur realm, instr z.Instruction) []byte {
 	return packetBytes
 }
 
-func MustTokenMetadata(cur realm, implementation string, initializer string) []byte {
+func MustTokenMetadata(cur realm, implementation string, ti z.TokenInitializer) []byte {
+	initBytes, err := z.EncodeTokenInitializer(ti)
+	if err != nil {
+		panic(err)
+	}
 	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{
 		Implementation: []byte(implementation),
-		Initializer:    []byte(initializer),
+		Initializer:    initBytes,
 	})
 	if err != nil {
 		panic(err)
@@ -143,7 +225,7 @@ func MustAck(cur realm, tag *u256.Uint, inner []byte) []byte {
 
 func MustProtocolTokenOrderAck(cur realm) []byte {
 	bz, err := z.EncodeTokenOrderAck(z.TokenOrderAck{
-		FillType: fillTypeProtocolU256,
+		FillType: fillTypeProtocolU256(),
 	})
 	if err != nil {
 		panic(err)
@@ -152,11 +234,11 @@ func MustProtocolTokenOrderAck(cur realm) []byte {
 }
 
 func MustSuccessAck(cur realm, inner []byte) []byte {
-	return MustAck(cross(cur), tagAckSuccessU256, inner)
+	return MustAck(cross(cur), tagAckSuccessU256(), inner)
 }
 
 func MustSuccessAckBytes(cur realm, inner []byte) []byte {
-	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccessU256, InnerAck: inner})
+	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccessU256(), InnerAck: inner})
 	if err != nil {
 		panic(err)
 	}

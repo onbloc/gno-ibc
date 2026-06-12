@@ -1,20 +1,19 @@
 package mock
 
 import (
-	rtunsafe "chain/runtime/unsafe"
 	"errors"
 
-	z "gno.land/p/gnoswap/ibc/zkgm"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 )
 
 type Receiver struct {
-	Calls            int
-	Last             z.CallEnv
-	LastOriginCaller string
-	CaptureOrigin    bool
-	ErrorMsg         string
-	PanicMsg         string
+	Calls               int
+	Last                z.CallEnv
+	LastPreviousCaller  string
+	CapturePrevious     bool
+	ErrorMsg            string
+	PanicMsg            string
 }
 
 var receiver = &Receiver{}
@@ -33,8 +32,8 @@ func init(cur realm) {
 func Reset(cur realm) {
 	receiver.Calls = 0
 	receiver.Last = z.CallEnv{}
-	receiver.LastOriginCaller = ""
-	receiver.CaptureOrigin = false
+	receiver.LastPreviousCaller = ""
+	receiver.CapturePrevious = false
 	receiver.ErrorMsg = ""
 	receiver.PanicMsg = ""
 }
@@ -54,14 +53,16 @@ func Calls(cur realm) int {
 	return receiver.Calls
 }
 
-// SetCaptureOrigin toggles capture of runtime.OriginCaller() inside OnZkgm.
-func SetCaptureOrigin(cur realm, on bool) {
-	receiver.CaptureOrigin = on
+// SetCapturePrevious enables or disables capture of cur.Previous().Address()
+// during OnZkgm. When enabled, the captured value can be retrieved via
+// LastPreviousCaller.
+func SetCapturePrevious(cur realm, on bool) {
+	receiver.CapturePrevious = on
 }
 
-// LastOriginCaller returns the OriginCaller captured during the last OnZkgm
-// (only populated when SetCaptureOrigin was true).
-func LastOriginCaller(cur realm) string { return receiver.LastOriginCaller }
+// LastPreviousCaller returns the previous caller address captured during the
+// most recent OnZkgm. Empty unless SetCapturePrevious(true) was enabled.
+func LastPreviousCaller(cur realm) string { return receiver.LastPreviousCaller }
 
 // LastCaller returns env.Caller from the last OnZkgm invocation.
 func LastCaller(cur realm) string { return receiver.Last.Caller }
@@ -98,8 +99,8 @@ func LastPathDec(cur realm) string {
 func (r *Receiver) OnZkgm(cur realm, env z.CallEnv) error {
 	r.Calls++
 	r.Last = env
-	if r.CaptureOrigin {
-		r.LastOriginCaller = rtunsafe.OriginCaller().String()
+	if r.CapturePrevious {
+		r.LastPreviousCaller = cur.Previous().Address().String()
 	}
 	if r.PanicMsg != "" {
 		panic(r.PanicMsg)

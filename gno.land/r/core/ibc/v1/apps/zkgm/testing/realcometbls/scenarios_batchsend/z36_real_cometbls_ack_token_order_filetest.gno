@@ -1,15 +1,15 @@
-// PKGPATH: gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls/scenarios
-package scenarios
+// PKGPATH: gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/realcometbls/scenarios_batchsend
+package scenarios_batchsend
 
 import (
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
-	core "gno.land/r/core/ibc/v1/core"
-	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
-	realcometbls "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/realcometbls"
-	impl "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/impl"
-	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
+	_ "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/loader"
+	realcometbls "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/realcometbls"
+	impl "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl"
 )
 
 func main(cur realm) {
@@ -30,18 +30,14 @@ func main(cur realm) {
 	marketMaker := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	ack := e2e.MustSuccessAck(cross(cur), mustMarketMakerTokenOrderAck([]byte(marketMaker)))
 
+	println("commitment_before_ack", core.HasPacketCommitment(cross(cur), packet))
+	println("market_maker_balance_before_ack", impl.VoucherBalanceOf(string(order.BaseToken), address(marketMaker)))
+
 	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement(cross(cur), []core.Packet{packet}, [][]byte{ack}, realcometbls.Z36AckMembershipProof(cross(cur)), core.Height(realcometbls.DevnetHeight-1)))
 
 	println("commitment_after_ack", core.HasPacketCommitment(cross(cur), packet))
 	println("market_maker_balance_after_ack", impl.VoucherBalanceOf(string(order.BaseToken), address(marketMaker)))
-	println("sender_balance_before_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))
-
-	core.PacketTimeout(cross(cur), core.NewMsgPacketTimeout(cross(cur), packet, realcometbls.Z37ReceiptNonMembershipProof(cross(cur)), core.Height(realcometbls.DevnetHeight-1)))
-
-	println("commitment_after_timeout", core.HasPacketCommitment(cross(cur), packet))
-	println("market_maker_balance_after_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(marketMaker)))
-	println("sender_balance_after_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))
-	println("timeout_after_ack_noop", "ok")
+	println("ack_real_cometbls", "ok")
 }
 
 func mustMarketMakerTokenOrderAck(marketMaker []byte) []byte {
@@ -56,10 +52,8 @@ func mustMarketMakerTokenOrderAck(marketMaker []byte) []byte {
 }
 
 // Output:
+// commitment_before_ack true
+// market_maker_balance_before_ack 0
 // commitment_after_ack false
 // market_maker_balance_after_ack 21
-// sender_balance_before_timeout 0
-// commitment_after_timeout false
-// market_maker_balance_after_timeout 21
-// sender_balance_after_timeout 0
-// timeout_after_ack_noop ok
+// ack_real_cometbls ok

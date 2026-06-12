@@ -1,0 +1,2 @@
+module = "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/attacker"
+gno = "0.9"

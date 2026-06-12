@@ -1,8 +1,7 @@
 package main
 
 import (
-	e2e "gno.land/r/gnoswap/ibc/v1/apps/zkgm/testing/e2e"
-	_ "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader"
+	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
 )
 
 func main(cur realm) {

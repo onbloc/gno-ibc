@@ -1,18 +1,22 @@
 package impl
 
 import (
-	z "gno.land/p/gnoswap/ibc/zkgm"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/core/ibc/v1/core"
-	zkgm "gno.land/r/gnoswap/ibc/v1/apps/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 )
 
 type ZkgmV1 struct{}
 
 var instance = &ZkgmV1{}
 
+// GetInstance returns the singleton impl.
+// Before the proxy has an installed impl, any bootstrap loader may fetch it.
+// After bootstrap, only the production loader may fetch it again.
 func GetInstance(cur realm) *ZkgmV1 {
-	if cur.Previous().PkgPath() != "gno.land/r/gnoswap/ibc/v1/apps/zkgm/v0/loader" {
+	caller := cur.Previous().PkgPath()
+	if caller != zkgm.ProductionLoaderPath() && zkgm.Bootstrapped() {
 		panic("not allowed")
 	}
 	return instance
@@ -34,11 +38,13 @@ func (v *ZkgmV1) PostChannelCloseConfirm(cur realm, channelId core.ChannelId) {}
 func (v *ZkgmV1) Recv(cur realm, packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
 	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
-		return errResult(cur, err)
+		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
+		return failureResult(cur, universalErrorAck())
 	}
 	res, err := v.dispatchExecute(cur, packet, relayer, relayerMsg, zp.Path, zp.Salt, zp.Instruction, false)
 	if err != nil {
-		return errResult(cur, err)
+		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
+		return failureResult(cur, universalErrorAck())
 	}
 	return res
 }
@@ -76,11 +82,13 @@ func (v *ZkgmV1) Timeout(cur realm, packet core.Packet, relayer address) {
 func (v *ZkgmV1) IntentRecv(cur realm, packet core.Packet, marketMaker address, marketMakerMsg []byte) core.RecvPacketResult {
 	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
-		return errResult(cur, err)
+		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
+		return failureResult(cur, universalErrorAck())
 	}
 	res, err := v.dispatchExecute(cur, packet, marketMaker, marketMakerMsg, zp.Path, zp.Salt, zp.Instruction, true)
 	if err != nil {
-		return errResult(cur, err)
+		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
+		return failureResult(cur, universalErrorAck())
 	}
 	// Only-maker must roll back the intent receipt.
 	if isOnlyMakerAck(res.Ack) {
@@ -91,7 +99,11 @@ func (v *ZkgmV1) IntentRecv(cur realm, packet core.Packet, marketMaker address, 
 
 func (v *ZkgmV1) Send(cur realm, req zkgm.SendRequest) ([]byte, error) {
 	// dispatchVerify uses the raw user salt; only the wire packet is namespaced.
-	if err := v.dispatchVerify(cur, req.ChannelId, req.Sender, parseCoins(req.SentCoins), u256.Zero(), req.Salt, req.Instruction); err != nil {
+	budget := newSentCoinBudget(parseCoins(req.SentCoins))
+	if err := v.dispatchVerify(cur, req.ChannelId, req.Sender, budget, u256.Zero(), req.Salt, req.Instruction); err != nil {
+		return nil, err
+	}
+	if err := budget.assertDrained(); err != nil {
 		return nil, err
 	}
 
@@ -115,10 +127,6 @@ func (v *ZkgmV1) Render(pkgpath string, path string) string {
 		return "zkgm v1"
 	}
 	return "zkgm/v1: render path not found: " + path
-}
-
-func errResult(cur realm, err error) core.RecvPacketResult {
-	return failureResult(cur, []byte(err.Error()))
 }
 
 var _ zkgm.ZkgmImpl = &ZkgmV1{}

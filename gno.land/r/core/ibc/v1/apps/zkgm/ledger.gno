@@ -3,9 +3,10 @@ package zkgm
 import (
 	"time"
 
-	tb "gno.land/p/gnoswap/tokenbucket"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/bptree/v0"
+	tb "gno.land/p/onbloc/tokenbucket"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 var (
@@ -17,16 +18,9 @@ var (
 	rateLimitDisabled = false
 )
 
-func mustBeAuthorizedImpl(cur realm) {
-	caller := cur.Previous().PkgPath()
-	if !InAllowedImpls(caller) {
-		panic("zkgm/ledger: caller is not an authorized impl: " + caller)
-	}
-}
-
 // SetTokenOrigin records the channel-path that minted ibcDenom on this chain.
 func SetTokenOrigin(cur realm, denom string, path *u256.Uint) {
-	mustBeAuthorizedImpl(cur)
+	requireImplRealm(cur, "set token origin")
 	tokenOrigin.Set(denom, path)
 }
 
@@ -41,7 +35,7 @@ func GetTokenOrigin(denom string) (*u256.Uint, bool) {
 
 // SetMetadataImageOf records the keccak metadata image associated with ibcDenom.
 func SetMetadataImageOf(cur realm, denom string, image [32]byte) {
-	mustBeAuthorizedImpl(cur)
+	requireImplRealm(cur, "set metadata image")
 	metadataImageOf.Set(denom, image)
 }
 
@@ -56,13 +50,13 @@ func GetMetadataImageOf(denom string) ([32]byte, bool) {
 
 // SetChannelBalanceV2 stores the per-(channel,path,base,quote) escrow balance.
 func SetChannelBalanceV2(cur realm, key string, amount *u256.Uint) {
-	mustBeAuthorizedImpl(cur)
+	requireImplRealm(cur, "set channel balance")
 	channelBalanceV2.Set(key, amount)
 }
 
 // RemoveChannelBalanceV2 deletes the channel balance entry once it drains to zero.
 func RemoveChannelBalanceV2(cur realm, key string) {
-	mustBeAuthorizedImpl(cur)
+	requireImplRealm(cur, "remove channel balance")
 	channelBalanceV2.Remove(key)
 }
 
@@ -77,8 +71,9 @@ func GetChannelBalanceV2(key string) *u256.Uint {
 
 // SetInFlightPacket records a forwarded child packet and its parent async packet.
 func SetInFlightPacket(cur realm, key InFlightKey, value InFlightValue) {
-	mustBeAuthorizedImpl(cur)
+	requireImplRealm(cur, "set in-flight packet")
 	inFlightPackets.Set(inFlightKeyString(key), value)
+	emitZkgmForwardInFlightSetEvent(key.PacketHash, core.CommitPacket(value.ParentPacket))
 }
 
 // GetInFlightPacket returns the parent packet for a forwarded child, if any.
@@ -92,11 +87,13 @@ func GetInFlightPacket(key InFlightKey) (InFlightValue, bool) {
 
 // PopInFlightPacket returns and removes a forwarded child mapping, if any.
 func PopInFlightPacket(cur realm, key InFlightKey) (InFlightValue, bool) {
-	mustBeAuthorizedImpl(cur)
+	requireImplRealm(cur, "pop in-flight packet")
 	value, ok := inFlightPackets.Remove(inFlightKeyString(key))
 	if !ok {
+		emitZkgmForwardInFlightPoppedEvent(key.PacketHash, false)
 		return InFlightValue{}, false
 	}
+	emitZkgmForwardInFlightPoppedEvent(key.PacketHash, true)
 	return value.(InFlightValue), true
 }
 
@@ -106,13 +103,13 @@ func inFlightKeyString(key InFlightKey) string {
 
 // SetTokenBucket stores the rate-limit bucket for denom.
 func SetTokenBucket(cur realm, denom string, bucket *tb.TokenBucket) {
-	mustBeAuthorizedImpl(cur)
+	requireImplRealm(cur, "set token bucket")
 	tokenBucket.Set(denom, bucket)
 }
 
 // RemoveTokenBucket removes the rate-limit bucket for denom.
 func RemoveTokenBucket(cur realm, denom string) {
-	mustBeAuthorizedImpl(cur)
+	requireImplRealm(cur, "remove token bucket")
 	tokenBucket.Remove(denom)
 }
 
@@ -130,7 +127,7 @@ func GetTokenBucket(denom string) *tb.TokenBucket {
 // `now` is sourced from block time (time.Now().Unix()), so RefillRate is
 // interpreted as tokens per second.
 func RateLimit(cur realm, denom string, amount *u256.Uint) error {
-	mustBeAuthorizedImpl(cur)
+	requireImplRealm(cur, "rate limit")
 
 	if rateLimitDisabled || amount == nil {
 		return nil

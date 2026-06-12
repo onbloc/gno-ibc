@@ -6,6 +6,7 @@ var (
 	ErrClientTypeAlreadyRegistered   = errors.New("client type already registered")
 	ErrClientTypeNotFound            = errors.New("client type not found")
 	ErrClientNotFound                = errors.New("client not found")
+	ErrClientNotActive               = errors.New("client is not active")
 	ErrConsensusStateNotFound        = errors.New("consensus state not found")
 	ErrConnectionNotFound            = errors.New("connection not found")
 	ErrInvalidConnectionState        = errors.New("invalid connection state")
@@ -27,6 +28,7 @@ var (
 	ErrBatchReceiptsNotFound         = errors.New("batch receipts not found")
 	ErrPacketTimeoutExpired          = errors.New("packet timeout expired")
 	ErrPacketTimeoutNotReached       = errors.New("packet timeout not reached")
+	ErrIntentNotSupported            = errors.New("intent receive not supported")
 )
 
 type State struct {

@@ -7,18 +7,30 @@ import (
 	"strings"
 )
 
-var deployer address
+var admin address
 
 func init(cur realm) {
-	deployer = rtunsafe.OriginCaller()
+	// SAFE: admin bootstrap needs the tx signer, not a loader realm that may
+	// appear as cur.Previous().
+	admin = rtunsafe.OriginCaller()
 }
 
-func isDeployer() bool {
-	return rtunsafe.OriginCaller() == deployer
+// GetAdmin returns the current admin address.
+func GetAdmin() address {
+	return admin
 }
 
-func assertDeployer(action string) {
-	if !isDeployer() {
+// SetAdmin transfers admin rights to a new address. Only callable by the current admin.
+func SetAdmin(cur realm, newAdmin address) {
+	runtime.AssertOriginCall()
+	requireAdmin(cur, "set admin")
+	oldAdmin := admin
+	admin = newAdmin
+	emitAdminChangedEvent(oldAdmin, newAdmin)
+}
+
+func requireAdmin(cur realm, action string) {
+	if cur.Previous().Address() != admin {
 		panic("caller not authorized to " + action + ": unauthorized")
 	}
 }
@@ -62,21 +74,17 @@ func UpdateClient(cur realm, msg MsgUpdateClient) Height {
 
 // ForceUpdateClient updates the client and consensus states without verifying proofs.
 //
-// It is restricted to the deployer and is intended for recovering expired or
-// otherwise unrecoverable clients. It panics if the caller is not the deployer
+// It is restricted to the admin and is intended for recovering expired or
+// otherwise unrecoverable clients. It panics if the caller is not the admin
 // or if the light client does not implement IForceLightClient.
 func ForceUpdateClient(cur realm, msg MsgForceUpdateClient) Height {
-	assertDeployer("ForceUpdateClient")
+	requireAdmin(cur, "ForceUpdateClient")
 
 	impl, ok := st.getClient(msg.ClientId).(IForceLightClient)
 	if !ok {
 		panic("client does not support ForceUpdateClient")
 	}
 
-	// AssertOriginCall prevents re-entrancy through intermediate realms.
-	//
-	// Without this check, a contract invoked by the deployer within the same
-	// transaction could hijack this entrypoint via tx.origin phishing.
 	runtime.AssertOriginCall()
 	update := impl.ForceUpdateClient(cross(cur), msg.ClientId, msg.ClientStateBytes, msg.ConsensusStateBytes)
 
@@ -95,7 +103,24 @@ func ForceUpdateClient(cur realm, msg MsgForceUpdateClient) Height {
 //
 // It does not commit the verified value into this realm's state.
 func VerifyClientMembership(_ realm, clientId ClientId, proofHeight Height, proof, path, value []byte) {
-	st.getClient(clientId).VerifyMembership(clientId, proofHeight, proof, path, value)
+	verifyMembershipActive(clientId, proofHeight, proof, path, value)
+}
+
+func requireActiveClient(client ILightClient, clientId ClientId) {
+	if client.GetStatus(clientId) != StatusActive {
+		panic(ErrClientNotActive)
+	}
+}
+
+func verifyMembershipActive(clientId ClientId, height Height, proof, key, value []byte) {
+	client := st.getClient(clientId)
+	requireActiveClient(client, clientId)
+	client.VerifyMembership(clientId, height, proof, key, value)
+}
+
+func verifyNonMembershipWithActiveClient(client ILightClient, clientId ClientId, height Height, proof, key []byte) {
+	requireActiveClient(client, clientId)
+	client.VerifyNonMembership(clientId, height, proof, key)
 }
 
 // RegisterClient registers a light client implementation for clientType.
@@ -114,15 +139,17 @@ func RegisterClient(cur realm, clientType ClientType, client ILightClient) {
 		panic("caller not authorized to register client: unauthorized")
 	}
 	st.registerClient(clientType, client)
+	emitClientRegisteredEvent(clientType, caller, false)
 }
 
 // RegisterClientForType registers a light client implementation for clientType.
 //
-// It is restricted to the deployer.
+// It is restricted to the admin.
 func RegisterClientForType(cur realm, clientType ClientType, client ILightClient) {
-	assertDeployer("register client")
+	requireAdmin(cur, "register client")
 	runtime.AssertOriginCall()
 	st.registerClient(clientType, client)
+	emitClientRegisteredEvent(clientType, cur.Previous().PkgPath(), true)
 }
 
 // HasClient reports whether a light client is registered for clientType.
@@ -173,9 +200,9 @@ func GetClientType(clientId ClientId) string {
 func clientTypeOwnerPath(clientType ClientType) string {
 	switch clientType {
 	case ClientType("cometbls"):
-		return "gno.land/r/core/ibc/v1/lightclients/cometbls"
+		return "gno.land/r/onbloc/unionibc/v1/lightclients/cometbls"
 	case ClientType("state-lens/ics23/mpt"):
-		return "gno.land/r/core/ibc/v1/lightclients/statelensics23mpt"
+		return "gno.land/r/onbloc/unionibc/v1/lightclients/statelensics23mpt"
 	}
 	return ""
 }

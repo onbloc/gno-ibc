@@ -13,7 +13,7 @@ echo ">> native TokenOrder ack-failure refund (#58 regression)"
 # zkgm.ReleaseNative. ReleaseNative's requireImplCaller must accept the core
 # realm as an authorized caller, otherwise the escrow refund panics.
 PROXY_ADDR=$(gnokey query vm/qeval -remote "$RPC_ENDPOINT" \
-  -data "gno.land/r/gnoswap/ibc/v1/apps/zkgm.ProxyAddress()" 2>&1 | extract_data)
+  -data "gno.land/r/onbloc/unionibc/v1/apps/zkgm.ProxyAddress()" 2>&1 | extract_data)
 if [[ -z "$PROXY_ADDR" ]]; then
   echo "FAIL: could not resolve zkgm proxy address"
   exit 1
@@ -42,7 +42,7 @@ echo ">> refund channel pair: source=$REFUND_SOURCE destination=$REFUND_DEST"
 # SendRaw args: channelId, timeoutTimestamp (far-future), salt (32 zero bytes),
 # version 2 (INSTR_VERSION_2), opcode 3 (OP_TOKEN_ORDER), operandHex.
 maketx_call "$WORKDIR/native_refund_send.log" \
-  -pkgpath "gno.land/r/gnoswap/ibc/v1/apps/zkgm" \
+  -pkgpath "gno.land/r/onbloc/unionibc/v1/apps/zkgm" \
   -func SendRaw \
   -args "$REFUND_SOURCE" \
   -args "2000000000000000000" \

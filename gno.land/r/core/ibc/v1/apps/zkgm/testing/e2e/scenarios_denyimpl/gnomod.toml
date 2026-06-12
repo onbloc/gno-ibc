@@ -1,0 +1,2 @@
+module = "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e/scenarios_denyimpl"
+gno = "0.9"

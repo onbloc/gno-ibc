@@ -237,6 +237,9 @@ func AcknowledgementHash(_ realm, packet Packet) H256 {
 	return st.acknowledgementHash(packet)
 }
 
+// BatchSend creates the packet commitments for this gno-ibc batch primitive.
+// Unlike Union's batchSend helper, callers pass packets that are not already
+// committed, so the duplicate guard mirrors Union sendPacket semantics.
 func BatchSend(cur realm, msg MsgBatchSend) H256 {
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
@@ -253,6 +256,8 @@ func BatchSend(cur realm, msg MsgBatchSend) H256 {
 			panic(ErrBatchSameChannelOnly)
 		}
 		packetHash := CommitPacket(packet)
+		// Repeated packets in one batch collide to the same commitment key; reject
+		// malformed batches instead of silently de-duplicating them.
 		if seen[packetHash] || st.hasPacketCommitment(packet) {
 			panic(ErrPacketCommitmentAlreadyExists)
 		}

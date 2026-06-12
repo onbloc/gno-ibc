@@ -71,6 +71,10 @@ opcode  = 3
 `SendRaw(channelId, ...)` uses the Gno source channel id. Prediction helpers on
 Union use the Union-side counterparty channel id paired with that Gno channel.
 
+Use a fresh `SALT` for every send. Reusing the same sender, salt, channel,
+instruction, and timeout produces the same packet commitment, and duplicate
+commitments are rejected while the original packet remains in flight.
+
 ## Gas
 
 Observed sends on 2026-05-20:

@@ -27,6 +27,9 @@ func PacketSend(cur realm, sourceChannelId ChannelId, timeoutHeight Height, time
 		TimeoutHeight:        timeoutHeight,
 		TimeoutTimestamp:     timeoutTimestamp,
 	}
+	if st.hasPacketCommitment(packet) {
+		panic(ErrPacketCommitmentAlreadyExists)
+	}
 	st.commitPacket(packet)
 
 	emitPacketSendEvent(packet, channel, connection)
@@ -251,6 +254,16 @@ func BatchSend(cur realm, msg MsgBatchSend) H256 {
 			panic(ErrBatchSameChannelOnly)
 		}
 	}
+
+	seen := make(map[H256]bool)
+	for _, packet := range msg.Packets {
+		packetHash := CommitPacket(packet)
+		if seen[packetHash] || st.hasPacketCommitment(packet) {
+			panic(ErrPacketCommitmentAlreadyExists)
+		}
+		seen[packetHash] = true
+	}
+
 	batchHash := CommitPackets(msg.Packets)
 	st.saveBatchPackets(batchHash, COMMITMENT_MAGIC)
 	// In-memory per-packet membership keeps HasPacketCommitment and the

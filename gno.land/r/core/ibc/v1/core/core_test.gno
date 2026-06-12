@@ -531,6 +531,20 @@ func TestPacketSendCommitsPacket(cur realm, t *testing.T) {
 	}
 }
 
+func TestPacketSendRejectsDuplicateCommitment(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+
+	packet := PacketSend(cross(cur), channelId, 0, 100, []byte("data"))
+	uassert.AbortsContains(t, cur, "packet commitment already exists", func(cur realm) {
+		PacketSend(cur, channelId, 0, 100, []byte("data"))
+	})
+
+	if !st.hasPacketCommitment(packet) {
+		t.Fatal("rejected duplicate send must not clear the original commitment")
+	}
+}
+
 func TestPacketSendRejectsNonOwner(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
@@ -595,6 +609,37 @@ func TestBatchSendPerPacketMirrorKeyedByPath(cur realm, t *testing.T) {
 			t.Fatal("BatchSend must not mirror per-packet commitment at the raw packet hash")
 		}
 	}
+}
+
+func TestBatchSendRejectsDuplicateInBatch(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
+	packets := []Packet{packet, packet}
+	batchHash := CommitPackets(packets)
+
+	uassert.AbortsContains(t, cur, "packet commitment already exists", func(cur realm) {
+		BatchSend(cur, MsgBatchSend{Packets: packets})
+	})
+
+	if got := QueryBatchPackets(batchHash); got != "" {
+		t.Fatalf("rejected duplicate batch must not commit batch: got %q", got)
+	}
+	if st.hasPacketCommitment(packet) {
+		t.Fatal("rejected duplicate batch must not commit per-packet mirror")
+	}
+}
+
+func TestBatchSendRejectsAlreadyCommittedPacket(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
+
+	BatchSend(cross(cur), MsgBatchSend{Packets: []Packet{packet}})
+
+	uassert.AbortsContains(t, cur, "packet commitment already exists", func(cur realm) {
+		BatchSend(cur, MsgBatchSend{Packets: []Packet{packet}})
+	})
 }
 
 func TestQueryBatchPacketsUnknownReturnsEmpty(cur realm, t *testing.T) {

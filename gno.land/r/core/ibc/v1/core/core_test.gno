@@ -1433,7 +1433,7 @@ func TestPacketAcknowledgementBatchUsesUnionBatchReceipts(cur realm, t *testing.
 	}
 }
 
-func TestPacketAcknowledgementDeletesBatchCommitment(cur realm, t *testing.T) {
+func TestPacketAcknowledgementMarksBatchCommitment(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	p1 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
@@ -1451,8 +1451,45 @@ func TestPacketAcknowledgementDeletesBatchCommitment(cur realm, t *testing.T) {
 		ProofHeight:      Height(10),
 	})
 
-	if got := QueryBatchPackets(batchHash); got != "" {
-		t.Fatalf("batch commitment after ack: got %q want empty", got)
+	if got := QueryBatchPackets(batchHash); got != COMMITMENT_MAGIC_ACK.String() {
+		t.Fatalf("batch commitment after ack: got %q want %s", got, COMMITMENT_MAGIC_ACK)
+	}
+	if _, ok := st.batchChildren[batchHash]; ok {
+		t.Fatal("settled batch must prune child tracking")
+	}
+	if _, ok := st.packetBatches[CommitPacket(p1)]; ok {
+		t.Fatal("settled batch must prune p1 parent tracking")
+	}
+	if _, ok := st.packetBatches[CommitPacket(p2)]; ok {
+		t.Fatal("settled batch must prune p2 parent tracking")
+	}
+}
+
+func TestPacketAcknowledgementMarksBatchAfterIndividualChildren(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	p1 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
+	p2 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("b"), TimeoutTimestamp: 100}
+	batchHash := BatchSend(cross(cur), MsgBatchSend{Packets: []Packet{p1, p2}})
+
+	PacketAcknowledgement(cross(cur), MsgPacketAcknowledgement{
+		Packets:          []Packet{p1},
+		Acknowledgements: [][]byte{{0x01}},
+		ProofHeight:      Height(10),
+	})
+
+	if got := QueryBatchPackets(batchHash); got != COMMITMENT_MAGIC.String() {
+		t.Fatalf("batch commitment after first child ack: got %q want %s", got, COMMITMENT_MAGIC)
+	}
+
+	PacketAcknowledgement(cross(cur), MsgPacketAcknowledgement{
+		Packets:          []Packet{p2},
+		Acknowledgements: [][]byte{{0x02}},
+		ProofHeight:      Height(10),
+	})
+
+	if got := QueryBatchPackets(batchHash); got != COMMITMENT_MAGIC_ACK.String() {
+		t.Fatalf("batch commitment after all child acks: got %q want %s", got, COMMITMENT_MAGIC_ACK)
 	}
 }
 
@@ -1494,6 +1531,35 @@ func TestPacketTimeoutReceiptPath(cur realm, t *testing.T) {
 	}
 	if got := QueryCommitmentAtPath(PacketCommitmentPath(packet)); got != COMMITMENT_MAGIC_ACK.String() {
 		t.Fatalf("timeout must mark source packet commitment acknowledged: got %q", got)
+	}
+}
+
+func TestPacketTimeoutMarksMultiPacketBatchAfterAllChildren(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	p1 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
+	p2 := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("b"), TimeoutTimestamp: 100}
+	batchHash := BatchSend(cross(cur), MsgBatchSend{Packets: []Packet{p1, p2}})
+
+	PacketTimeout(cross(cur), MsgPacketTimeout{Packet: p1})
+
+	if got := QueryBatchPackets(batchHash); got != COMMITMENT_MAGIC.String() {
+		t.Fatalf("batch commitment after first child timeout: got %q want %s", got, COMMITMENT_MAGIC)
+	}
+
+	PacketTimeout(cross(cur), MsgPacketTimeout{Packet: p2})
+
+	if got := QueryBatchPackets(batchHash); got != COMMITMENT_MAGIC_ACK.String() {
+		t.Fatalf("batch commitment after all child timeouts: got %q want %s", got, COMMITMENT_MAGIC_ACK)
+	}
+	if _, ok := st.batchChildren[batchHash]; ok {
+		t.Fatal("settled batch must prune child tracking")
+	}
+	if _, ok := st.packetBatches[CommitPacket(p1)]; ok {
+		t.Fatal("settled batch must prune p1 parent tracking")
+	}
+	if _, ok := st.packetBatches[CommitPacket(p2)]; ok {
+		t.Fatal("settled batch must prune p2 parent tracking")
 	}
 }
 

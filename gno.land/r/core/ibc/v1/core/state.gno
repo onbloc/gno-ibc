@@ -51,6 +51,8 @@ type State struct {
 
 	batchPackets  map[H256]H256
 	batchReceipts map[H256]H256
+	packetBatches map[H256]H256
+	batchChildren map[H256][]H256
 }
 
 func newState() State {
@@ -66,6 +68,8 @@ func newState() State {
 		channels:         make(map[ChannelId]Channel),
 		batchPackets:     make(map[H256]H256),
 		batchReceipts:    make(map[H256]H256),
+		packetBatches:    make(map[H256]H256),
+		batchChildren:    make(map[H256][]H256),
 		ports:            make(map[string]IApp),
 		channelOwners:    make(map[ChannelId]Bytes),
 	}
@@ -199,19 +203,24 @@ func (s *State) setBatchPackets(batchHash H256, value H256) {
 	s.batchPackets[BatchPacketsPath(batchHash)] = value
 }
 
+func (s *State) trackBatchChildren(batchHash H256, packetHashes []H256) {
+	if len(packetHashes) <= 1 {
+		return
+	}
+	children := make([]H256, len(packetHashes))
+	copy(children, packetHashes)
+	s.batchChildren[batchHash] = children
+	for _, packetHash := range children {
+		s.packetBatches[packetHash] = batchHash
+	}
+}
+
 func (s *State) getBatchPackets(batchHash H256) H256 {
 	value, ok := s.batchPackets[BatchPacketsPath(batchHash)]
 	if !ok {
 		panic(ErrBatchPacketsNotFound)
 	}
 	return value
-}
-
-func (s *State) deleteBatchPackets(batchHash H256) {
-	var zero H256
-	path := BatchPacketsPath(batchHash)
-	delete(s.batchPackets, path)
-	commit(path, zero)
 }
 
 func (s *State) saveBatchReceipts(batchHash H256, value H256) {
@@ -234,6 +243,24 @@ func (s *State) commitPacket(packet Packet) {
 
 func (s *State) markPacketCommitmentAcknowledged(packet Packet) {
 	s.saveBatchPackets(CommitPacket(packet), COMMITMENT_MAGIC_ACK)
+}
+
+func (s *State) markParentBatchAcknowledgedIfSettled(packet Packet) {
+	packetHash := CommitPacket(packet)
+	batchHash, ok := s.packetBatches[packetHash]
+	if !ok {
+		return
+	}
+	for _, childHash := range s.batchChildren[batchHash] {
+		if s.batchPackets[BatchPacketsPath(childHash)] == COMMITMENT_MAGIC {
+			return
+		}
+	}
+	s.saveBatchPackets(batchHash, COMMITMENT_MAGIC_ACK)
+	for _, childHash := range s.batchChildren[batchHash] {
+		delete(s.packetBatches, childHash)
+	}
+	delete(s.batchChildren, batchHash)
 }
 
 func (s *State) hasPacketCommitment(packet Packet) bool {

@@ -165,7 +165,6 @@ func PacketAcknowledgement(cur realm, msg MsgPacketAcknowledgement) {
 	value := CommitAcks(msg.Acknowledgements)
 	verifyMembershipActive(connection.ClientId, msg.ProofHeight, msg.Proof, key[:], value[:])
 
-	processed := false
 	for i, packet := range msg.Packets {
 		if !st.hasOutstandingPacketCommitment(packet) {
 			continue
@@ -177,13 +176,10 @@ func PacketAcknowledgement(cur realm, msg MsgPacketAcknowledgement) {
 		ack := msg.Acknowledgements[i]
 		portId := st.getChannelOwner(packet.SourceChannelId)
 		st.markPacketCommitmentAcknowledged(packet)
-		processed = true
+		st.markParentBatchAcknowledgedIfSettled(packet)
 		st.getAppByPortId(portId).OnAcknowledgementPacket(cross(cur), packet, ack, relayer)
 
 		emitPacketAckEvent(packet, channel, connection, ack)
-	}
-	if processed && len(msg.Packets) > 1 {
-		st.deleteBatchPackets(batchHash)
 	}
 }
 
@@ -211,6 +207,7 @@ func PacketTimeout(cur realm, msg MsgPacketTimeout) {
 
 	portId := st.getChannelOwner(packet.SourceChannelId)
 	st.markPacketCommitmentAcknowledged(packet)
+	st.markParentBatchAcknowledgedIfSettled(packet)
 	st.getAppByPortId(portId).OnTimeoutPacket(cross(cur), packet, relayer)
 
 	emitPacketTimeoutEvent(packet, channel, connection)
@@ -249,29 +246,29 @@ func BatchSend(cur realm, msg MsgBatchSend) H256 {
 	if string(portId) != cur.Previous().PkgPath() {
 		panic(ErrUnauthorizedPacketSender)
 	}
-	for _, packet := range msg.Packets {
+	packetHashes := make([]H256, len(msg.Packets))
+	seen := make(map[H256]bool)
+	for i, packet := range msg.Packets {
 		if packet.SourceChannelId != first.SourceChannelId {
 			panic(ErrBatchSameChannelOnly)
 		}
-	}
-
-	seen := make(map[H256]bool)
-	for _, packet := range msg.Packets {
 		packetHash := CommitPacket(packet)
 		if seen[packetHash] || st.hasPacketCommitment(packet) {
 			panic(ErrPacketCommitmentAlreadyExists)
 		}
 		seen[packetHash] = true
+		packetHashes[i] = packetHash
 	}
 
 	batchHash := CommitPackets(msg.Packets)
 	st.saveBatchPackets(batchHash, COMMITMENT_MAGIC)
+	st.trackBatchChildren(batchHash, packetHashes)
 	// In-memory per-packet membership keeps HasPacketCommitment and the
 	// PacketAcknowledgement / PacketTimeout settlement paths working for
 	// single-packet sends; multi-packet batches still commit at the batch
 	// path on chain.
-	for _, packet := range msg.Packets {
-		st.setBatchPackets(CommitPacket(packet), COMMITMENT_MAGIC)
+	for _, packetHash := range packetHashes {
+		st.setBatchPackets(packetHash, COMMITMENT_MAGIC)
 	}
 	channel := st.getChannel(first.SourceChannelId)
 	connection := ensureConnectionOpen(channel.ConnectionId)

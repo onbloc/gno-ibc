@@ -3,10 +3,12 @@ package scenarios
 
 import (
 	z "gno.land/p/onbloc/unionibc/zkgm"
-	core "gno.land/r/onbloc/unionibc/v1/core"
-	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
+	"gno.land/r/onbloc/unionibc/v1/core"
+
+	"gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
 	"gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/mock"
-	realcometbls "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/realcometbls"
+
+	"gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/realcometbls"
 	_ "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/loader"
 )
 
@@ -18,6 +20,7 @@ func main(cur realm) {
 	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 	packet := callPacket(cur, pair, mockReceiverPath)
 
+	// top-level CALL receiver panic reverts receive
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, realcometbls.Z39CallPacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight-1)))
 }
 

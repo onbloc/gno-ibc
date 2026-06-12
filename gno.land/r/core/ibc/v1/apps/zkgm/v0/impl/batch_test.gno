@@ -305,6 +305,36 @@ func TestExecuteBatchPanicChildPropagatesOnlyMaker(cur realm, t *testing.T) {
 	uassert.Equal(t, 1, mock.Calls(cross(cur)))
 }
 
+func TestExecuteBatchTokenOrderBeforePanicChildPropagatesOnlyMaker(cur realm, t *testing.T) {
+	resetTokenOrderTest(cur)
+	mock.Reset(cross(cur))
+	mock.SetPanic(cross(cur), "boom")
+	path := u256.Zero()
+	destChannel := core.ChannelId(8)
+	packet := core.NewPacket(cross(cur), core.ChannelId(7), destChannel, nil, 0, 0)
+	receiver := testAddress("batch-tf-rx")
+	quoteToken := PredictWrappedTokenV1(path, uint32(destChannel), []byte("ugnot"))
+	batch := z.Batch{Instructions: []z.Instruction{
+		batchMustOrderInstruction(z.TokenOrderV2{
+			Sender:      []byte("sender"),
+			Receiver:    []byte(receiver),
+			BaseToken:   []byte("ugnot"),
+			BaseAmount:  u256.NewUint(100),
+			QuoteToken:  []byte(quoteToken),
+			QuoteAmount: u256.NewUint(21),
+			Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+		}),
+		batchMustCallInstruction(batchCall("sender", "panic-call")),
+	}}
+
+	ackBytes, err := (&ZkgmV1{}).executeBatch(cur, packet, address(testAddress("batch-tf-relay")), nil, path, [32]byte{0xBC}, batch, false)
+
+	uassert.NoError(t, err)
+	uassert.True(t, isOnlyMakerAck(ackBytes))
+	uassert.Equal(t, int64(21), VoucherBalanceOf(quoteToken, address(receiver)))
+	uassert.Equal(t, 1, mock.Calls(cross(cur)))
+}
+
 func TestAcknowledgeBatchRejectsAckCountMismatch(cur realm, t *testing.T) {
 	packet := core.NewPacket(cross(cur), core.ChannelId(7), core.ChannelId(8), nil, 0, 0)
 	batch := z.Batch{Instructions: []z.Instruction{

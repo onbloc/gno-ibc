@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"errors"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/ufmt/v0"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
@@ -231,6 +231,7 @@ func isOnlyMakerAck(ack []byte) bool {
 }
 
 func decodeOuterAckOrFailure(ack []byte) z.Ack {
+	// Batch consumes the outer tag directly; failure fans out universal errors.
 	if isOnlyMakerAck(ack) {
 		return z.Ack{Tag: tagAckFailure()}
 	}
@@ -242,6 +243,7 @@ func decodeOuterAckOrFailure(ack []byte) z.Ack {
 }
 
 func decodeForwardOuterAckOrFailure(ack []byte) z.Ack {
+	// Forward ignores the outer tag and dispatches InnerAck to its child.
 	if isOnlyMakerAck(ack) {
 		return z.Ack{InnerAck: universalErrorAck()}
 	}

@@ -1,9 +1,9 @@
 package realcometbls
 
 import (
+	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 	realcometbls "gno.land/r/onbloc/unionibc/v1/lightclients/cometbls"
-	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 )
 
 type ChannelPair struct {
@@ -35,6 +35,10 @@ func CreateZ35CometBLSClient(cur realm) core.ClientId {
 
 func CreateZ37CometBLSClient(cur realm) core.ClientId {
 	return createCometBLSClient(cross(cur), ClientStateBytes(cross(cur)), Z37ConsensusStateBytes(cross(cur)))
+}
+
+func CreateZ40TokenFirstCometBLSClient(cur realm) core.ClientId {
+	return createCometBLSClient(cross(cur), ClientStateBytes(cross(cur)), Z40TokenFirstConsensusStateBytes(cross(cur)))
 }
 
 func CreateZ42WrongVersionCometBLSClient(cur realm) core.ClientId {
@@ -91,6 +95,23 @@ func OpenZ37CometBLSChannel(cur realm) ChannelPair {
 	portId := []byte(zkgm.ProxyPkgPath())
 	channelId := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(cross(cur), portId, portId, connectionId, zkgm.Version))
 	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), channelId, zkgm.Version, core.ChannelId(2), Z37ChannelTryProof(cross(cur)), core.Height(DevnetHeight-1)))
+	return ChannelPair{
+		ClientId:     clientId,
+		ConnectionId: connectionId,
+		Source:       core.ChannelId(2),
+		Destination:  channelId,
+	}
+}
+
+func OpenZ40TokenFirstCometBLSChannel(cur realm) ChannelPair {
+	clientId := CreateZ40TokenFirstCometBLSClient(cross(cur))
+
+	connectionId := core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(cross(cur), clientId, core.ClientId(99)))
+	core.ConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(cross(cur), connectionId, core.ConnectionId(77), Z40TokenFirstConnectionTryProof(cross(cur)), core.Height(DevnetHeight-1)))
+
+	portId := []byte(zkgm.ProxyPkgPath())
+	channelId := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(cross(cur), portId, portId, connectionId, zkgm.Version))
+	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), channelId, zkgm.Version, core.ChannelId(2), Z40TokenFirstChannelTryProof(cross(cur)), core.Height(DevnetHeight-1)))
 	return ChannelPair{
 		ClientId:     clientId,
 		ConnectionId: connectionId,

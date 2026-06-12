@@ -1,10 +1,10 @@
 package impl
 
 import (
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/onbloc/unionibc/v1/core"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 type ZkgmV1 struct{}
@@ -96,6 +96,7 @@ func (v *ZkgmV1) IntentRecv(cur realm, packet core.Packet, marketMaker address, 
 }
 
 func abortOnlyMakerRecv(res core.RecvPacketResult) {
+	// Only-maker results must abort receive so core rolls back the receipt.
 	if isOnlyMakerAck(res.Ack) {
 		panic("zkgm: only-maker acknowledgement requires retry")
 	}

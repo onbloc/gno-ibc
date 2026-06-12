@@ -1,2 +1,3 @@
 module = "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/loader_denyimpl"
 gno = "0.9"
+genesis_exclude = true

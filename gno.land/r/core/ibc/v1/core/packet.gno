@@ -27,6 +27,9 @@ func PacketSend(cur realm, sourceChannelId ChannelId, timeoutHeight Height, time
 		TimeoutHeight:        timeoutHeight,
 		TimeoutTimestamp:     timeoutTimestamp,
 	}
+	if st.hasPacketCommitment(packet) {
+		panic(ErrPacketCommitmentAlreadyExists)
+	}
 	st.commitPacket(packet)
 
 	emitPacketSendEvent(packet, channel, connection)
@@ -164,7 +167,7 @@ func PacketAcknowledgement(cur realm, msg MsgPacketAcknowledgement) {
 
 	processed := false
 	for i, packet := range msg.Packets {
-		if !st.hasPacketCommitment(packet) {
+		if !st.hasOutstandingPacketCommitment(packet) {
 			continue
 		}
 		if packet.SourceChannelId != first.SourceChannelId {
@@ -173,13 +176,13 @@ func PacketAcknowledgement(cur realm, msg MsgPacketAcknowledgement) {
 
 		ack := msg.Acknowledgements[i]
 		portId := st.getChannelOwner(packet.SourceChannelId)
-		st.deletePacketCommitment(packet)
+		st.markPacketCommitmentAcknowledged(packet)
 		processed = true
 		st.getAppByPortId(portId).OnAcknowledgementPacket(cross(cur), packet, ack, relayer)
 
 		emitPacketAckEvent(packet, channel, connection, ack)
 	}
-	if processed {
+	if processed && len(msg.Packets) > 1 {
 		st.deleteBatchPackets(batchHash)
 	}
 }
@@ -187,7 +190,7 @@ func PacketAcknowledgement(cur realm, msg MsgPacketAcknowledgement) {
 func PacketTimeout(cur realm, msg MsgPacketTimeout) {
 	relayer := cur.Previous().Address()
 	packet := msg.Packet
-	if !st.hasPacketCommitment(packet) {
+	if !st.hasOutstandingPacketCommitment(packet) {
 		return
 	}
 
@@ -207,7 +210,7 @@ func PacketTimeout(cur realm, msg MsgPacketTimeout) {
 	verifyNonMembershipWithActiveClient(client, connection.ClientId, msg.ProofHeight, msg.Proof, key[:])
 
 	portId := st.getChannelOwner(packet.SourceChannelId)
-	st.deletePacketCommitment(packet)
+	st.markPacketCommitmentAcknowledged(packet)
 	st.getAppByPortId(portId).OnTimeoutPacket(cross(cur), packet, relayer)
 
 	emitPacketTimeoutEvent(packet, channel, connection)
@@ -251,10 +254,20 @@ func BatchSend(cur realm, msg MsgBatchSend) H256 {
 			panic(ErrBatchSameChannelOnly)
 		}
 	}
+
+	seen := make(map[H256]bool)
+	for _, packet := range msg.Packets {
+		packetHash := CommitPacket(packet)
+		if seen[packetHash] || st.hasPacketCommitment(packet) {
+			panic(ErrPacketCommitmentAlreadyExists)
+		}
+		seen[packetHash] = true
+	}
+
 	batchHash := CommitPackets(msg.Packets)
 	st.saveBatchPackets(batchHash, COMMITMENT_MAGIC)
 	// In-memory per-packet membership keeps HasPacketCommitment and the
-	// PacketAcknowledgement / PacketTimeout cleanup paths working for
+	// PacketAcknowledgement / PacketTimeout settlement paths working for
 	// single-packet sends; multi-packet batches still commit at the batch
 	// path on chain.
 	for _, packet := range msg.Packets {

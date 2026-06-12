@@ -64,7 +64,7 @@ func main(cur realm) {
 // parent_ack_before_ack false
 //
 // [SCENARIO] 2. child ack propagates to parent
-// child_commitment_after_ack false
+// child_commitment_after_ack true
 // in_flight_after_ack false
 // parent_ack_after_ack true
 // parent_ack_matches_child_ack true

@@ -5,12 +5,12 @@ import (
 	"chain/banker"
 	"testing"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/onbloc/unionibc/v1/core"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 const timeoutMockClientType = core.ClientType("gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl/timeout-mock")
@@ -145,7 +145,7 @@ func assertNativeRefunded(cur realm, t *testing.T, packet core.Packet, order z.T
 	key := ChannelBalanceKeyV2(packet.SourceChannelId, u256.Zero(), order.BaseToken, order.QuoteToken)
 
 	bk := banker.NewReadonlyBanker()
-	uassert.Equal(t, false, core.HasPacketCommitment(cross(cur), packet))
+	uassert.Equal(t, true, core.HasPacketCommitment(cross(cur), packet))
 	uassert.Equal(t, amount, bk.GetCoins(recipient).AmountOf(denom))
 	uassert.Equal(t, int64(0), bk.GetCoins(zkgm.ProxyAddress()).AmountOf(denom))
 

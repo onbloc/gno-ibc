@@ -201,7 +201,7 @@ func MustPacketData(cur realm, instr z.Instruction) []byte {
 }
 
 func MustTokenMetadata(cur realm, implementation string, ti z.TokenInitializer) []byte {
-	initBytes, err := z.EncodeTokenInitializer(ti)
+	initBytes, err := z.EncodeGRC20Initializer(ti)
 	if err != nil {
 		panic(err)
 	}

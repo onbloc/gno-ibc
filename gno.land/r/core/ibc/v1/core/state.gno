@@ -232,16 +232,18 @@ func (s *State) commitPacket(packet Packet) {
 	s.saveBatchPackets(CommitPacket(packet), COMMITMENT_MAGIC)
 }
 
-func (s *State) deletePacketCommitment(packet Packet) {
-	var zero H256
-	path := PacketCommitmentPath(packet)
-	delete(s.batchPackets, path)
-	commit(path, zero)
+func (s *State) markPacketCommitmentAcknowledged(packet Packet) {
+	s.saveBatchPackets(CommitPacket(packet), COMMITMENT_MAGIC_ACK)
 }
 
 func (s *State) hasPacketCommitment(packet Packet) bool {
 	_, ok := s.batchPackets[PacketCommitmentPath(packet)]
 	return ok
+}
+
+func (s *State) hasOutstandingPacketCommitment(packet Packet) bool {
+	value, ok := s.batchPackets[PacketCommitmentPath(packet)]
+	return ok && value == COMMITMENT_MAGIC
 }
 
 func (s *State) commitAcknowledgement(packet Packet, ack []byte) {

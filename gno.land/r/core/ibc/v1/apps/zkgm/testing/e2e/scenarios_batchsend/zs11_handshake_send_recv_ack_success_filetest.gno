@@ -65,6 +65,6 @@ func main(cur realm) {
 // quote_balance_after_recv 21
 //
 // [SCENARIO] 3. ack success
-// commitment_after_ack false
+// commitment_after_ack true
 // receipt_after_ack true
 // ack_success_roundtrip ok

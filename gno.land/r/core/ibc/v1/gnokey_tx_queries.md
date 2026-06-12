@@ -99,9 +99,9 @@ import (
 	statelens "gno.land/r/onbloc/unionibc/v1/lightclients/statelensics23mpt"
 )
 
-func main() {
+func main(cur realm) {
 	if !core.HasClient(statelens.ClientType) {
-		core.RegisterClient(cross, statelens.ClientType, statelens.Adapter{})
+		statelens.Register(cross(cur))
 	}
 	println("registered", string(statelens.ClientType))
 }
@@ -156,9 +156,9 @@ import (
 	cometbls "gno.land/r/onbloc/unionibc/v1/lightclients/cometbls"
 )
 
-func main() {
+func main(cur realm) {
 	if !core.HasClient(cometbls.ClientType) {
-		core.RegisterClient(cross, cometbls.ClientType, cometbls.Adapter{})
+		cometbls.Register(cross(cur))
 	}
 	println("registered", string(cometbls.ClientType))
 }
@@ -310,9 +310,9 @@ import (
 	_ "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/loader"
 )
 
-func main() {
-	e2e.RegisterMockLightClient(cross)
-	pair := e2e.OpenE2EChannelPair(cross)
+func main(cur realm) {
+	e2e.RegisterMockLightClient(cross(cur))
+	pair := e2e.OpenE2EChannelPair(cross(cur))
 
 	println("mock_client", pair.ClientId.String())
 	println("connection", pair.ConnectionId.String())
@@ -344,7 +344,7 @@ import (
 	cometbls "gno.land/r/onbloc/unionibc/v1/lightclients/cometbls"
 )
 
-func main() {
+func main(cur realm) {
 	clientState, err := hex.DecodeString("756e696f6e2d6465766e65742d313333370000000000000000000000000000000000000000000000000000000000000000000000000000000460623fc85e000000000000000000000000000000000000000000000000000000000002540be400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000cafebabd0cf2ffe8f45a20514018173d3007644817a9767dc0fbdb246696fd9c261ce3bc")
 	if err != nil {
 		panic(err)
@@ -355,7 +355,7 @@ func main() {
 		panic(err)
 	}
 
-	clientID := core.CreateClient(cross, core.MsgCreateClient{
+	clientID := core.CreateClient(cross(cur), core.MsgCreateClient{
 		ClientType:          cometbls.ClientType,
 		ClientStateBytes:    clientState,
 		ConsensusStateBytes: consensusState,
@@ -396,9 +396,9 @@ import (
 	statelens "gno.land/r/onbloc/unionibc/v1/lightclients/statelensics23mpt"
 )
 
-func main() {
+func main(cur realm) {
 	if !core.HasClient(statelens.ClientType) {
-		core.RegisterClient(cross, statelens.ClientType, statelens.Adapter{})
+		statelens.Register(cross(cur))
 	}
 
 	consensusState, err := statelensp.EncodeConsensusState(statelensp.ConsensusState{
@@ -410,7 +410,7 @@ func main() {
 		panic(err)
 	}
 
-	clientID := core.CreateClient(cross, core.MsgCreateClient{
+	clientID := core.CreateClient(cross(cur), core.MsgCreateClient{
 		ClientType: statelens.ClientType,
 		ClientStateBytes: statelensp.EncodeClientState(statelensp.ClientState{
 			L2ChainID:         "local-l2",
@@ -500,13 +500,13 @@ import (
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
-func main() {
+func main(cur realm) {
 	msg, err := hex.DecodeString("00000000000000000000000000000000000000000000000000000000cafebabe00000000000000000000000000000000000000000000000000000000673f5ac3000000000000000000000000000000000000000000000000000000003b7e468e20ddfe7a0f75c65d876316091eccd494a54a2bb324c872015f73e528d53cb9c420ddfe7a0f75c65d876316091eccd494a54a2bb324c872015f73e528d53cb9c4ee7e3e58f98ac95d63ce93b270981df3ee54ca367f8d521ed1f444717595cd3600000000000000000000000000000000000000000000000000000000cafebabd0000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000018003cf56142a1e03d2445a82100feaf70c1cd95a731ed85792afff5792ec0bdd2108991bb56f9043a269f88903de616a9ab99a3c5ab778e566744b060456c5616c06bce7f1930421768c2cbd79f88d08ec3a52d7c9a867064e973064385e9c945e02951190dd7ce1662546733dd540188c96e608ca750fef36b39e2577833634c70ae6f1a6d00dc6c21446aaf285ef35d944e8782b131300574f9a889c7e708a2325e9a78013bbe869d38b19c602daf69644c77d177e99ed76398bcee13c61fdbf2e178a5ba028a36033e54d1d9a0071e82e04079a5305347ebac6d66f6ebfa48b1da1bf9dc5a51efa292e1dc7b85d26f18422eb386c48ca75434039764448bb96268ddc2cf683ddca4bd83df21c5631cf784375eebe77eabc2de77886bf1d48392c9c52e063b4a7131eab9abba12a9f26888bc37366d41ac7d4bac0bf6755acb009bf9f36f380b6d0eeaabf066503a1b6e01dcc965d968d7694e01b1755e6bdd21c7a80b41682748f9b7151714be34aa79aad48bbb2a84525f6cdf812658c6e4f")
 	if err != nil {
 		panic(err)
 	}
 
-	height := core.UpdateClient(cross, core.MsgUpdateClient{
+	height := core.UpdateClient(cross(cur), core.MsgUpdateClient{
 		ClientId:      core.ClientId(1),
 		ClientMessage: msg,
 	})
@@ -547,8 +547,8 @@ package main
 
 import core "gno.land/r/onbloc/unionibc/v1/core"
 
-func main() {
-	connectionID := core.ConnectionOpenInit(cross, core.MsgConnectionOpenInit{
+func main(cur realm) {
+	connectionID := core.ConnectionOpenInit(cross(cur), core.MsgConnectionOpenInit{
 		ClientId:             core.ClientId(1),
 		CounterpartyClientId: core.ClientId(99),
 	})
@@ -598,13 +598,13 @@ import (
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
-func main() {
+func main(cur realm) {
 	proof, err := hex.DecodeString("$UNION_CONNECTION_INIT_PROOF_HEX")
 	if err != nil {
 		panic(err)
 	}
 
-	connectionID := core.ConnectionOpenTry(cross, core.MsgConnectionOpenTry{
+	connectionID := core.ConnectionOpenTry(cross(cur), core.MsgConnectionOpenTry{
 		ClientId:                 core.ClientId($GNO_CLIENT_ID),
 		CounterpartyClientId:     core.ClientId($UNION_CLIENT_ID),
 		CounterpartyConnectionId: core.ConnectionId($UNION_CONNECTION_ID),
@@ -654,13 +654,13 @@ import (
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
-func main() {
+func main(cur realm) {
 	proof, err := hex.DecodeString("$UNION_CONNECTION_TRY_PROOF_HEX")
 	if err != nil {
 		panic(err)
 	}
 
-	core.ConnectionOpenAck(cross, core.MsgConnectionOpenAck{
+	core.ConnectionOpenAck(cross(cur), core.MsgConnectionOpenAck{
 		ConnectionId:             core.ConnectionId($GNO_CONNECTION_ID),
 		CounterpartyConnectionId: core.ConnectionId($UNION_CONNECTION_ID),
 		ProofTry:                 proof,
@@ -708,13 +708,13 @@ import (
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
-func main() {
+func main(cur realm) {
 	proof, err := hex.DecodeString("$UNION_CONNECTION_ACK_PROOF_HEX")
 	if err != nil {
 		panic(err)
 	}
 
-	core.ConnectionOpenConfirm(cross, core.MsgConnectionOpenConfirm{
+	core.ConnectionOpenConfirm(cross(cur), core.MsgConnectionOpenConfirm{
 		ConnectionId: core.ConnectionId($GNO_CONNECTION_ID),
 		ProofAck:     proof,
 		ProofHeight:  core.Height($UNION_PROOF_HEIGHT),
@@ -758,9 +758,9 @@ import (
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 )
 
-func main() {
+func main(cur realm) {
 	portID := []byte(zkgm.ProxyPkgPath())
-	channelID := core.ChannelOpenInit(cross, core.MsgChannelOpenInit{
+	channelID := core.ChannelOpenInit(cross(cur), core.MsgChannelOpenInit{
 		PortId:             portID,
 		CounterpartyPortId: portID,
 		ConnectionId:       core.ConnectionId(1),
@@ -813,14 +813,14 @@ import (
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 )
 
-func main() {
+func main(cur realm) {
 	proof, err := hex.DecodeString("$UNION_CHANNEL_INIT_PROOF_HEX")
 	if err != nil {
 		panic(err)
 	}
 
 	portID := []byte(zkgm.ProxyPkgPath())
-	channelID := core.ChannelOpenTry(cross, core.MsgChannelOpenTry{
+	channelID := core.ChannelOpenTry(cross(cur), core.MsgChannelOpenTry{
 		PortId: portID,
 		Channel: core.Channel{
 			State:                 core.ChannelStateTryOpen,
@@ -876,13 +876,13 @@ import (
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
-func main() {
+func main(cur realm) {
 	proof, err := hex.DecodeString("$UNION_CHANNEL_TRY_PROOF_HEX")
 	if err != nil {
 		panic(err)
 	}
 
-	core.ChannelOpenAck(cross, core.MsgChannelOpenAck{
+	core.ChannelOpenAck(cross(cur), core.MsgChannelOpenAck{
 		ChannelId:             core.ChannelId($GNO_CHANNEL_ID),
 		CounterpartyVersion:   "ucs03-zkgm-0",
 		CounterpartyChannelId: core.ChannelId($UNION_CHANNEL_ID),
@@ -930,13 +930,13 @@ import (
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
-func main() {
+func main(cur realm) {
 	proof, err := hex.DecodeString("$UNION_CHANNEL_ACK_PROOF_HEX")
 	if err != nil {
 		panic(err)
 	}
 
-	core.ChannelOpenConfirm(cross, core.MsgChannelOpenConfirm{
+	core.ChannelOpenConfirm(cross(cur), core.MsgChannelOpenConfirm{
 		ChannelId:   core.ChannelId($GNO_CHANNEL_ID),
 		ProofAck:    proof,
 		ProofHeight: core.Height($UNION_PROOF_HEIGHT),

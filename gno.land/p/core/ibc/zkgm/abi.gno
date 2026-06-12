@@ -250,7 +250,7 @@ func DecodeTokenOrderV2(data []byte) (TokenOrderV2, error) {
 	}, nil
 }
 
-func EncodeTokenInitializer(i TokenInitializer) ([]byte, error) {
+func EncodeGRC20Initializer(i TokenInitializer) ([]byte, error) {
 	return abi.Encode(TokenInitializerSchema, []any{i.Name, i.Symbol, i.Decimals})
 }
 

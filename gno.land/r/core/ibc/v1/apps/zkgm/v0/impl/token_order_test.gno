@@ -726,7 +726,7 @@ func mustEncodeTokenMetadata(meta z.TokenMetadata) []byte {
 }
 
 func mustEncodeTokenInitializer(ti z.TokenInitializer) []byte {
-	bz, err := z.EncodeTokenInitializer(ti)
+	bz, err := z.EncodeGRC20Initializer(ti)
 	if err != nil {
 		panic(err)
 	}

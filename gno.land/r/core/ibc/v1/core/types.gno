@@ -166,6 +166,10 @@ func (c Channel) EthAbiEncode() []byte {
 	return encodeTopLevelDynamic(bz)
 }
 
+func NewChannel(cur realm, state ChannelState, connectionId ConnectionId, counterpartyChannelId ChannelId, counterpartyPortId Bytes, version string) Channel {
+	return Channel{State: state, ConnectionId: connectionId, CounterpartyChannelId: counterpartyChannelId, CounterpartyPortId: counterpartyPortId, Version: version}
+}
+
 type Connection struct {
 	State                    ConnectionState
 	ClientId                 ClientId

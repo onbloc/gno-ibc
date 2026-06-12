@@ -22,8 +22,16 @@ func main(cur realm) {
 	mock.SetPanic(cross(cur), "boom")
 	pair := realcometbls.OpenZ40TokenFirstCometBLSChannel(cross(cur))
 	packet := tokenFirstPanicBatchPacket(cur, pair)
+	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
+	quoteToken := impl.PredictWrappedTokenV1(u256.Zero(), uint32(pair.Destination), []byte("ugnot"))
 
+	println("[SCENARIO] token-order-first batch keeps valid mint and commits call failure ack")
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, realcometbls.Z40TokenFirstPanicBatchPacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight-1)))
+	println("mock_calls", mock.Calls(cross(cur)))
+	println("quote_balance", impl.VoucherBalanceOf(quoteToken, address(receiver)))
+	println("receipt_after_recv", core.HasPacketReceipt(cross(cur), packet))
+	println("ack_after_recv", core.HasAcknowledgement(cross(cur), packet))
+	println("ack_hash_matches_batch_ack", core.AcknowledgementHash(cross(cur), packet).String() == tokenFirstPanicExpectedAckHash(cur))
 }
 
 func tokenFirstPanicBatchPacket(cur realm, pair realcometbls.ChannelPair) core.Packet {
@@ -47,5 +55,26 @@ func tokenFirstPanicBatchPacket(cur realm, pair realcometbls.ChannelPair) core.P
 	return core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), 0, core.Timestamp(0))
 }
 
-// Error:
-// zkgm: only-maker acknowledgement requires retry
+func tokenFirstPanicExpectedAckHash(cur realm) string {
+	ack := e2e.MustBatchAck(cross(cur), [][]byte{
+		e2e.MustSuccessAck(cross(cur), e2e.MustProtocolTokenOrderAck(cross(cur))),
+		tokenFirstCallFailureAck(),
+	})
+	return core.CommitAcks([][]byte{ack}).String()
+}
+
+func tokenFirstCallFailureAck() []byte {
+	ack, err := z.EncodeAck(z.Ack{Tag: u256.NewUint(0), InnerAck: []byte("zkgm/v1: receiver panicked: boom")})
+	if err != nil {
+		panic(err)
+	}
+	return ack
+}
+
+// Output:
+// [SCENARIO] token-order-first batch keeps valid mint and commits call failure ack
+// mock_calls 1
+// quote_balance 21
+// receipt_after_recv true
+// ack_after_recv true
+// ack_hash_matches_batch_ack true

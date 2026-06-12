@@ -101,10 +101,7 @@ func (v *ZkgmV1) dispatchAck(cur realm, packet core.Packet, path *u256.Uint, sal
 		if err != nil {
 			return err
 		}
-		decodedAck, err := z.DecodeAck(ack)
-		if err != nil {
-			return err
-		}
+		decodedAck := decodeAckOrFailure(ack)
 		return v.acknowledgeTokenOrderV2(cur, packet.SourceChannelId, path, order, decodedAck)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instr)
@@ -117,7 +114,7 @@ func (v *ZkgmV1) dispatchAck(cur realm, packet core.Packet, path *u256.Uint, sal
 		if err != nil {
 			return err
 		}
-		outerAck := decodeOuterAckOrFailure(ack)
+		outerAck := decodeAckOrFailure(ack)
 		return v.acknowledgeBatch(cur, packet, path, salt, batch, outerAck)
 	case z.OP_FORWARD:
 		forward, err := decodeForwardInstruction(instr)
@@ -230,13 +227,12 @@ func isOnlyMakerAck(ack []byte) bool {
 	return bytes.Equal(ack, z.ACK_ERR_ONLY_MAKER)
 }
 
-func decodeOuterAckOrFailure(ack []byte) z.Ack {
-	// Batch consumes the outer tag directly; failure fans out universal errors.
+func decodeAckOrFailure(ack []byte) z.Ack {
 	if isOnlyMakerAck(ack) {
 		return z.Ack{Tag: tagAckFailure()}
 	}
 	decoded, err := z.DecodeAck(ack)
-	if err != nil {
+	if err != nil || decoded.Tag == nil {
 		return z.Ack{Tag: tagAckFailure()}
 	}
 	return decoded

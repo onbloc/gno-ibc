@@ -1,14 +1,13 @@
 package impl
 
 import (
-	"bytes"
 	"testing"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/onbloc/unionibc/v1/core"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	"gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/mock"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 const mockReceiverPath = "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/mock"
@@ -61,7 +60,7 @@ func TestExecuteCallReceiverErrorReturnsFailureAck(cur realm, t *testing.T) {
 	uassert.Equal(t, "receiver failed", string(ack.InnerAck))
 }
 
-func TestExecuteCallReceiverPanicReturnsOnlyMakerAck(cur realm, t *testing.T) {
+func TestExecuteCallReceiverPanicReturnsFailureAck(cur realm, t *testing.T) {
 	mock.Reset(cross(cur))
 	mock.SetPanic(cross(cur), "boom")
 	packet := core.NewPacket(cross(cur), core.ChannelId(7), core.ChannelId(8), nil, 0, 0)
@@ -72,8 +71,11 @@ func TestExecuteCallReceiverPanicReturnsOnlyMakerAck(cur realm, t *testing.T) {
 	}, false)
 
 	uassert.NoError(t, err)
-	uassert.True(t, res.Status == core.PacketStatusSuccess)
-	uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Ack))
+	uassert.True(t, res.Status == core.PacketStatusFailure)
+	ack, err := z.DecodeAck(res.Ack)
+	uassert.NoError(t, err)
+	uassert.True(t, ack.Tag.Eq(tagAckFailure()))
+	uassert.Equal(t, "zkgm/v1: receiver panicked: boom", string(ack.InnerAck))
 }
 
 func TestIntentRecvOnlyMakerCallAborts(cur realm, t *testing.T) {

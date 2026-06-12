@@ -289,7 +289,7 @@ func TestExecuteBatchAggregatesChildAcks(cur realm, t *testing.T) {
 	uassert.Equal(t, "second", mock.LastCalldata(cross(cur)))
 }
 
-func TestExecuteBatchPanicChildPropagatesOnlyMaker(cur realm, t *testing.T) {
+func TestExecuteBatchPanicChildAggregatesFailureAck(cur realm, t *testing.T) {
 	mock.Reset(cross(cur))
 	mock.SetPanic(cross(cur), "boom")
 	packet := core.NewPacket(cross(cur), core.ChannelId(7), core.ChannelId(8), nil, 0, 0)
@@ -301,11 +301,18 @@ func TestExecuteBatchPanicChildPropagatesOnlyMaker(cur realm, t *testing.T) {
 	ackBytes, err := (&ZkgmV1{}).executeBatch(cur, packet, address("g1relayer"), nil, u256.Zero(), [32]byte{0xBB}, batch, false)
 
 	uassert.NoError(t, err)
-	uassert.True(t, isOnlyMakerAck(ackBytes))
-	uassert.Equal(t, 1, mock.Calls(cross(cur)))
+	outerAck, err := z.DecodeAck(ackBytes)
+	uassert.NoError(t, err)
+	uassert.True(t, outerAck.Tag.Eq(tagAckSuccess()))
+	batchAck, err := z.DecodeBatchAck(outerAck.InnerAck)
+	uassert.NoError(t, err)
+	uassert.Equal(t, 2, len(batchAck.Acknowledgements))
+	assertFailureAck(t, batchAck.Acknowledgements[0], "zkgm/v1: receiver panicked: boom")
+	assertFailureAck(t, batchAck.Acknowledgements[1], "zkgm/v1: receiver panicked: boom")
+	uassert.Equal(t, 2, mock.Calls(cross(cur)))
 }
 
-func TestExecuteBatchTokenOrderBeforePanicChildPropagatesOnlyMaker(cur realm, t *testing.T) {
+func TestExecuteBatchTokenOrderBeforePanicChildAggregatesFailureAck(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 	mock.Reset(cross(cur))
 	mock.SetPanic(cross(cur), "boom")
@@ -330,7 +337,14 @@ func TestExecuteBatchTokenOrderBeforePanicChildPropagatesOnlyMaker(cur realm, t 
 	ackBytes, err := (&ZkgmV1{}).executeBatch(cur, packet, address(testAddress("batch-tf-relay")), nil, path, [32]byte{0xBC}, batch, false)
 
 	uassert.NoError(t, err)
-	uassert.True(t, isOnlyMakerAck(ackBytes))
+	outerAck, err := z.DecodeAck(ackBytes)
+	uassert.NoError(t, err)
+	uassert.True(t, outerAck.Tag.Eq(tagAckSuccess()))
+	batchAck, err := z.DecodeBatchAck(outerAck.InnerAck)
+	uassert.NoError(t, err)
+	uassert.Equal(t, 2, len(batchAck.Acknowledgements))
+	assertProtocolAck(t, batchAck.Acknowledgements[0])
+	assertFailureAck(t, batchAck.Acknowledgements[1], "zkgm/v1: receiver panicked: boom")
 	uassert.Equal(t, int64(21), VoucherBalanceOf(quoteToken, address(receiver)))
 	uassert.Equal(t, 1, mock.Calls(cross(cur)))
 }
@@ -439,4 +453,11 @@ func assertSuccessAck(t *testing.T, ackBytes []byte) {
 	ack, err := z.DecodeAck(ackBytes)
 	uassert.NoError(t, err)
 	uassert.True(t, ack.Tag.Eq(tagAckSuccess()))
+}
+
+func assertFailureAck(t *testing.T, ackBytes []byte, msg string) {
+	ack, err := z.DecodeAck(ackBytes)
+	uassert.NoError(t, err)
+	uassert.True(t, ack.Tag.Eq(tagAckFailure()))
+	uassert.Equal(t, msg, string(ack.InnerAck))
 }

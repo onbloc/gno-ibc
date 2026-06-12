@@ -3,10 +3,10 @@ package impl
 import (
 	"errors"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/onbloc/unionibc/v1/core"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 var (
@@ -56,9 +56,9 @@ func (v *ZkgmV1) executeCall(cur realm, packet core.Packet, relayer address, rel
 		RelayerMsg:         cloneBytes(relayerMsg),
 	}
 
-	err, panicked := safeCallOnZkgm(cur, receiver, env)
-	if panicked {
-		return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
+	err, panicMsg := safeCallOnZkgm(cur, receiver, env)
+	if panicMsg != "" {
+		return callErrAck(cur, errors.New("zkgm/v1: receiver panicked: "+panicMsg)), nil
 	}
 	if err != nil {
 		return callErrAck(cur, err), nil
@@ -85,25 +85,29 @@ func (v *ZkgmV1) timeoutCall(cur realm, packet core.Packet, path *u256.Uint, cal
 	return nil
 }
 
-// safeCallOnZkgm runs the receiver and reports a failure as panicked=true.
-// revive is preferred since it also catches cross-realm aborts. The recover
-// fallback, used only when revive is unsupported, catches ordinary panics.
-func safeCallOnZkgm(cur realm, receiver z.Zkgmable, env z.CallEnv) (err error, panicked bool) {
+// safeCallOnZkgm runs the receiver and returns a non-empty panic message if the
+// receiver aborts. revive is preferred since it also catches cross-realm aborts.
+// The recover fallback, used only when revive is unsupported, catches ordinary
+// panics.
+func safeCallOnZkgm(cur realm, receiver z.Zkgmable, env z.CallEnv) (err error, panicMsg string) {
 	if canRevive() {
 		p := revive(func() {
 			err = receiver.OnZkgm(cross(cur), env)
 		})
-		return err, p != nil
+		if p != nil {
+			return nil, extractPanicMessage(p)
+		}
+		return err, ""
 	}
 
 	defer func() {
-		if recover() != nil {
+		if r := recover(); r != nil {
 			err = nil
-			panicked = true
+			panicMsg = extractPanicMessage(r)
 		}
 	}()
 	err = receiver.OnZkgm(cross(cur), env)
-	return err, false
+	return err, ""
 }
 
 // canRevive reports whether revive works in the current runtime. revive panics

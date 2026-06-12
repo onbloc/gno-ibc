@@ -55,7 +55,7 @@ func TestAckUnsupportedOpcodeAborts(cur realm, t *testing.T) {
 	})
 }
 
-func TestRecvOnlyMakerCallAborts(cur realm, t *testing.T) {
+func TestRecvCallReceiverPanicReturnsFailureAck(cur realm, t *testing.T) {
 	mock.Reset(cross(cur))
 	mock.SetPanic(cross(cur), "boom")
 	data := mustZkgmPacketBytes(batchMustCallInstruction(z.Call{
@@ -64,9 +64,40 @@ func TestRecvOnlyMakerCallAborts(cur realm, t *testing.T) {
 	}))
 	packet := core.NewPacket(cross(cur), core.ChannelId(7), core.ChannelId(8), data, 0, 0)
 
-	uassert.AbortsContains(t, cur, "zkgm: only-maker acknowledgement requires retry", func(cur realm) {
-		(&ZkgmV1{}).Recv(cur, packet, address(testAddress("relayer")), nil)
-	})
+	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("relayer")), nil)
+
+	uassert.True(t, res.Status == core.PacketStatusFailure)
+	ack, err := z.DecodeAck(res.Ack)
+	uassert.NoError(t, err)
+	uassert.True(t, ack.Tag.Eq(tagAckFailure()))
+	uassert.Equal(t, "zkgm/v1: receiver panicked: boom", string(ack.InnerAck))
+}
+
+func TestDispatchAckTokenOrderOnlyMakerOrBadAckRefunds(cur realm, t *testing.T) {
+	cases := []struct {
+		name string
+		key  string
+		ack  []byte
+	}{
+		{"only-maker", "om", cloneBytes(z.ACK_ERR_ONLY_MAKER)},
+		{"garbage", "bad", []byte{0x01, 0x02}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetTokenOrderTest(cur)
+			path := u256.NewUint(30)
+			packet := core.NewPacket(cross(cur), core.ChannelId(7), core.ChannelId(8), nil, 0, 0)
+			order := batchRefundOrder("t-"+tc.key, "ibc/t-"+tc.key, "quote", 11)
+			increaseChannelBalanceV2(cross(cur), packet.SourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
+			instr := batchMustOrderInstruction(order)
+
+			err := (&ZkgmV1{}).dispatchAck(cur, packet, path, [32]byte{0x30}, instr, tc.ack)
+
+			uassert.NoError(t, err)
+			assertNoChannelBalance(t, packet.SourceChannelId, path, order)
+			uassert.Equal(t, int64(11), VoucherBalanceOf(string(order.BaseToken), address(string(order.Sender))))
+		})
+	}
 }
 
 func TestDispatchAckBatchOnlyMakerOrBadOuterAckRefundsTokenOrder(cur realm, t *testing.T) {
@@ -128,6 +159,76 @@ func TestDispatchAckForwardOnlyMakerOrBadOuterAckRefundsTokenOrder(cur realm, t 
 			uassert.NoError(t, err)
 			assertNoChannelBalance(t, packet.SourceChannelId, path, order)
 			uassert.Equal(t, int64(17), VoucherBalanceOf(string(order.BaseToken), address(string(order.Sender))))
+		})
+	}
+}
+
+func TestDispatchAckBatchBadChildTokenOrderAckRefunds(cur realm, t *testing.T) {
+	cases := []struct {
+		name string
+		key  string
+		ack  []byte
+	}{
+		{"only-maker", "om", cloneBytes(z.ACK_ERR_ONLY_MAKER)},
+		{"garbage", "bad", []byte{0x05, 0x06}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetTokenOrderTest(cur)
+			path := u256.NewUint(33)
+			packet := core.NewPacket(cross(cur), core.ChannelId(7), core.ChannelId(8), nil, 0, 0)
+			order := batchRefundOrder("bc-"+tc.key, "ibc/bc-"+tc.key, "quote", 19)
+			increaseChannelBalanceV2(cross(cur), packet.SourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
+			instr := batchMustBatchInstruction(z.Batch{Instructions: []z.Instruction{batchMustOrderInstruction(order)}})
+			outerAck := mustAckBytes(z.Ack{
+				Tag:      tagAckSuccess(),
+				InnerAck: mustBatchAckBytes([][]byte{tc.ack}),
+			})
+
+			err := (&ZkgmV1{}).dispatchAck(cur, packet, path, [32]byte{0x33}, instr, outerAck)
+
+			uassert.NoError(t, err)
+			assertNoChannelBalance(t, packet.SourceChannelId, path, order)
+			uassert.Equal(t, int64(19), VoucherBalanceOf(string(order.BaseToken), address(string(order.Sender))))
+		})
+	}
+}
+
+func TestDispatchAckForwardBadInnerTokenOrderAckRefunds(cur realm, t *testing.T) {
+	cases := []struct {
+		name string
+		key  string
+		ack  []byte
+	}{
+		{"only-maker", "om", cloneBytes(z.ACK_ERR_ONLY_MAKER)},
+		{"garbage", "bad", []byte{0x07, 0x08}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetTokenOrderTest(cur)
+			path := forwardPath(1, 2)
+			packet := core.NewPacket(cross(cur), core.ChannelId(9), core.ChannelId(10), nil, 0, 0)
+			order := batchRefundOrder("fc-"+tc.key, "ibc/fc-"+tc.key, "quote", 23)
+			increaseChannelBalanceV2(cross(cur), packet.SourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
+			forward := z.Forward{
+				Path:        path,
+				Instruction: batchMustOrderInstruction(order),
+			}
+			instr := z.Instruction{
+				Version: z.INSTR_VERSION_0,
+				Opcode:  z.OP_FORWARD,
+				Operand: mustForwardBytes(forward),
+			}
+			outerAck := mustAckBytes(z.Ack{
+				Tag:      tagAckSuccess(),
+				InnerAck: tc.ack,
+			})
+
+			err := (&ZkgmV1{}).dispatchAck(cur, packet, u256.Zero(), [32]byte{0x34}, instr, outerAck)
+
+			uassert.NoError(t, err)
+			assertNoChannelBalance(t, packet.SourceChannelId, path, order)
+			uassert.Equal(t, int64(23), VoucherBalanceOf(string(order.BaseToken), address(string(order.Sender))))
 		})
 	}
 }
@@ -250,6 +351,22 @@ func mustCallBytes(call z.Call) []byte {
 
 func mustForwardBytes(forward z.Forward) []byte {
 	out, err := z.EncodeForward(forward)
+	if err != nil {
+		panic(err)
+	}
+	return out
+}
+
+func mustBatchAckBytes(acks [][]byte) []byte {
+	out, err := z.EncodeBatchAck(z.BatchAck{Acknowledgements: acks})
+	if err != nil {
+		panic(err)
+	}
+	return out
+}
+
+func mustAckBytes(ack z.Ack) []byte {
+	out, err := z.EncodeAck(ack)
 	if err != nil {
 		panic(err)
 	}

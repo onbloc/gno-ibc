@@ -10,6 +10,8 @@ In addition, malformed response data could affect downstream acknowledgement pro
 
 The receive handling logic was aligned so that retry-required outcomes abort processing and remain eligible for retry.
 
+CALL receiver panics now produce failure acknowledgements; only-maker receive aborts are reserved for token-order no-maker outcomes.
+
 Acknowledgement handling was also updated to treat malformed responses as failures, ensuring downstream processing behaves consistently.
 
 Existing error propagation behavior for internal handlers remains unchanged.

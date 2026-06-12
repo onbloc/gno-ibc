@@ -3,8 +3,8 @@ package impl
 import (
 	"errors"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
@@ -41,10 +41,9 @@ func (v *ZkgmV1) executeBatch(cur realm, packet core.Packet, relayer address, re
 		if len(childAck) == 0 {
 			panic("zkgm/v1: batch child returned empty ack")
 		}
-		// Spec: a single only-maker child aborts the entire batch. Already-processed
-		// children's state mutations stand (per Union v0 spec). The outer ack signals
-		// "filled by maker, replay later" so the relayer retries against a market-maker
-		// fill.
+		// Spec: a single only-maker child aborts the entire batch. The top-level
+		// receive guard then aborts the tx, rolling back prior child mutations so
+		// the relayer can retry against a market-maker fill.
 		if isOnlyMakerAck(childAck) {
 			return cloneBytes(z.ACK_ERR_ONLY_MAKER), nil
 		}

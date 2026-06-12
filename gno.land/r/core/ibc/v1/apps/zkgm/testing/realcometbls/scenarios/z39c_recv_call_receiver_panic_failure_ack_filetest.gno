@@ -2,6 +2,7 @@
 package scenarios
 
 import (
+	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/unionibc/zkgm"
 	"gno.land/r/onbloc/unionibc/v1/core"
 
@@ -20,8 +21,12 @@ func main(cur realm) {
 	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 	packet := callPacket(cur, pair, mockReceiverPath)
 
-	// top-level CALL receiver panic reverts receive
+	println("[SCENARIO] top-level CALL receiver panic commits a failure ack")
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, realcometbls.Z39CallPacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight-1)))
+	println("mock_calls", mock.Calls(cross(cur)))
+	println("receipt_after_recv", core.HasPacketReceipt(cross(cur), packet))
+	println("ack_after_recv", core.HasAcknowledgement(cross(cur), packet))
+	println("ack_hash_matches_failure", core.AcknowledgementHash(cross(cur), packet).String() == callFailureAckHash())
 }
 
 func callPacket(cur realm, pair realcometbls.ChannelPair, receiverPath string) core.Packet {
@@ -33,5 +38,17 @@ func callPacket(cur realm, pair realcometbls.ChannelPair, receiverPath string) c
 	return core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)), 0, core.Timestamp(0))
 }
 
-// Error:
-// zkgm: only-maker acknowledgement requires retry
+func callFailureAckHash() string {
+	ack, err := z.EncodeAck(z.Ack{Tag: u256.NewUint(0), InnerAck: []byte("zkgm/v1: receiver panicked: boom")})
+	if err != nil {
+		panic(err)
+	}
+	return core.CommitAcks([][]byte{ack}).String()
+}
+
+// Output:
+// [SCENARIO] top-level CALL receiver panic commits a failure ack
+// mock_calls 1
+// receipt_after_recv true
+// ack_after_recv true
+// ack_hash_matches_failure true

@@ -85,7 +85,7 @@ func TestIntentRecvOnlyMakerCallAborts(cur realm, t *testing.T) {
 	}))
 	packet := core.NewPacket(cross(cur), core.ChannelId(7), core.ChannelId(8), data, 0, 0)
 
-	uassert.AbortsContains(t, cur, "zkgm: only maker", func(cur realm) {
+	uassert.AbortsContains(t, cur, "zkgm: only-maker acknowledgement requires retry", func(cur realm) {
 		(&ZkgmV1{}).IntentRecv(cur, packet, address("g1relayer"), nil)
 	})
 }

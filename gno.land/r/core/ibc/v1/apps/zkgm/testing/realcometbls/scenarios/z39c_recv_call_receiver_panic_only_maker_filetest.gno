@@ -31,4 +31,4 @@ func callPacket(cur realm, pair realcometbls.ChannelPair, receiverPath string) c
 }
 
 // Error:
-// zkgm: only maker
+// zkgm: only-maker acknowledgement requires retry

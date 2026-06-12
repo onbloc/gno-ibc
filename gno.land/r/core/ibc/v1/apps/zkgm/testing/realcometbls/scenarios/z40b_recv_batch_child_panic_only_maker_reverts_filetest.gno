@@ -44,4 +44,4 @@ func panicBatchPacket(cur realm, pair realcometbls.ChannelPair, receiver string)
 }
 
 // Error:
-// zkgm: only maker
+// zkgm: only-maker acknowledgement requires retry

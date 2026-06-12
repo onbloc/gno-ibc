@@ -97,7 +97,7 @@ func (v *ZkgmV1) IntentRecv(cur realm, packet core.Packet, marketMaker address, 
 
 func abortOnlyMakerRecv(res core.RecvPacketResult) {
 	if isOnlyMakerAck(res.Ack) {
-		panic("zkgm: only maker")
+		panic("zkgm: only-maker acknowledgement requires retry")
 	}
 }
 

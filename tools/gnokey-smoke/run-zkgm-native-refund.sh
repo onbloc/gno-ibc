@@ -70,8 +70,8 @@ render_template "$ZKGM_TESTDATA_DIR/native_refund_ack.gno.tmpl" "$WORKDIR/native
 maketx_run "$WORKDIR/native_refund_ack.gno" "$WORKDIR/native_refund_ack.log"
 grep -q 'commitment_before_ack true' "$WORKDIR/native_refund_ack.log" \
   || { echo "FAIL: packet commitment missing before ack"; cat "$WORKDIR/native_refund_ack.log"; exit 1; }
-grep -q 'commitment_after_ack false' "$WORKDIR/native_refund_ack.log" \
-  || { echo "FAIL: packet commitment not cleared after ack"; cat "$WORKDIR/native_refund_ack.log"; exit 1; }
+grep -q 'commitment_after_ack true' "$WORKDIR/native_refund_ack.log" \
+  || { echo "FAIL: packet commitment not retained as acknowledged after ack"; cat "$WORKDIR/native_refund_ack.log"; exit 1; }
 grep -q 'RESULT native ack-failure refund succeeded' "$WORKDIR/native_refund_ack.log" \
   || { echo "FAIL: native ack-failure refund did not complete"; cat "$WORKDIR/native_refund_ack.log"; exit 1; }
 

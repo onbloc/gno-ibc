@@ -102,7 +102,10 @@ func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []b
 	if err != nil {
 		panic("cometbls: encode consensus state: " + err.Error())
 	}
-	clientStateBytes := cometblsp.EncodeClientState(e.cs)
+	clientStateBytes, err := cometblsp.EncodeClientState(e.cs)
+	if err != nil {
+		panic("cometbls: encode client state: " + err.Error())
+	}
 
 	return core.NewConsensusStateUpdate(cross(cur), core.Height(newHeight), consStateBytes, clientStateBytes)
 }
@@ -143,7 +146,11 @@ func (Adapter) Misbehaviour(cur realm, clientId core.ClientId, clientMessage []b
 	}
 	e.cs.FrozenHeight = cometblsp.FrozenHeight
 
-	return cometblsp.EncodeClientState(e.cs)
+	csBytes, err := cometblsp.EncodeClientState(e.cs)
+	if err != nil {
+		panic("cometbls: encode client state: " + err.Error())
+	}
+	return csBytes
 }
 
 // consensusStateAt returns the consensus state at the given height.
@@ -287,7 +294,11 @@ func applyForceUpdate(clientId core.ClientId, clientStateBytes, consensusStateBy
 		panic("cometbls: encode consensus state: " + err.Error())
 	}
 
-	return core.Height(cs.LatestHeight), encConsState, cometblsp.EncodeClientState(e.cs)
+	encCsState, err := cometblsp.EncodeClientState(e.cs)
+	if err != nil {
+		panic("cometbls: encode client state: " + err.Error())
+	}
+	return core.Height(cs.LatestHeight), encConsState, encCsState
 }
 
 func (Adapter) GetStatus(clientId core.ClientId) core.Status {

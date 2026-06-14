@@ -191,7 +191,7 @@ func ExpiredClientStateBytes(cur realm) []byte {
 }
 
 func clientStateBytes(trustingPeriod uint64, frozenHeight cometblsp.Height) []byte {
-	return cometblsp.EncodeClientState(cometblsp.ClientState{
+	bz, err := cometblsp.EncodeClientState(cometblsp.ClientState{
 		ChainID:         DevnetChainID,
 		TrustingPeriod:  trustingPeriod,
 		MaxClockDrift:   100 * 365 * 24 * 3600 * 1_000_000_000,
@@ -199,6 +199,10 @@ func clientStateBytes(trustingPeriod uint64, frozenHeight cometblsp.Height) []by
 		FrozenHeight:    frozenHeight,
 		ContractAddress: mustH256("0cf2ffe8f45a20514018173d3007644817a9767dc0fbdb246696fd9c261ce3bc"),
 	})
+	if err != nil {
+		panic("cometbls: encode client state: " + err.Error())
+	}
+	return bz
 }
 
 func TrustedConsensusStateBytes(cur realm) []byte {

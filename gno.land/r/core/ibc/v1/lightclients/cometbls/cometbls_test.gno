@@ -253,7 +253,10 @@ func encodableConsensusState(ts uint64) cometblsp.ConsensusState {
 
 func encodeState(t *testing.T, cs cometblsp.ClientState, cons cometblsp.ConsensusState) ([]byte, []byte) {
 	t.Helper()
-	csBytes := cometblsp.EncodeClientState(cs)
+	csBytes, err := cometblsp.EncodeClientState(cs)
+	if err != nil {
+		t.Fatalf("EncodeClientState: %v", err)
+	}
 	consBytes, err := cometblsp.EncodeConsensusState(cons)
 	if err != nil {
 		t.Fatalf("EncodeConsensusState: %v", err)

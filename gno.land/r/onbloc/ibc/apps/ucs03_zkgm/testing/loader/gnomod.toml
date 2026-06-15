@@ -1,0 +1,2 @@
+module = "gno.land/r/onbloc/ibc/apps/ucs03_zkgm/testing/loader"
+gno = "0.9"

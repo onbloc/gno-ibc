@@ -1,0 +1,7 @@
+module = "gno.land/r/onbloc/ibc/lightclients/cometbls"
+gno = "0.9"
+
+[require]
+"gno.land/p/aib/ibc/types" = "v0.0.0"
+"gno.land/p/onbloc/ibc/lightclients/cometbls" = "v0.0.0"
+"gno.land/r/onbloc/ibc/core" = "v0.0.0"

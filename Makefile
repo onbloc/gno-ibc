@@ -24,12 +24,12 @@ GNO_BIN    := $(GO_BIN_DIR)/gno
 GNO_SHORT  := $(shell echo $(GNO_COMMIT) | cut -c1-7)
 
 ABI_FIXTURES_DIR := tools/abi-fixtures
-ABI_VECTORS      := gno.land/p/core/encoding/abi/testdata/vectors.json
-ABI_VECTORS_GNO  := gno.land/p/core/ibc/zkgm/vectors_fixture_test.gno
+ABI_VECTORS      := gno.land/p/onbloc/encoding/abi/testdata/vectors.json
+ABI_VECTORS_GNO  := gno.land/p/onbloc/ibc/zkgm/vectors_fixture_test.gno
 
 ZKGM_FIXTURES_DIR     := tools/zkgm-fixtures
-ZKGM_SCENARIOS        := gno.land/p/core/ibc/zkgm/testdata/scenarios.json
-ZKGM_SCENARIOS_GNO    := gno.land/p/core/ibc/zkgm/scenarios_fixture_test.gno
+ZKGM_SCENARIOS        := gno.land/p/onbloc/ibc/zkgm/testdata/scenarios.json
+ZKGM_SCENARIOS_GNO    := gno.land/p/onbloc/ibc/zkgm/scenarios_fixture_test.gno
 
 # Submodule pins (.gitmodules + tree gitlinks) are the source of truth; the
 # gno.land/<rel>/ mirrors built by `make vendor` are .gitignored.
@@ -91,13 +91,13 @@ vendor-cmd = mkdir -p $(dir gno.land/$(2)) && rsync $(RSYNC_BASE) $(call vendor-
 
 .PHONY: help install-gno verify-gno vendor fmt test test-cover test-smoke test-gnokey-query-smoke test-gnokey-qeval-smoke test-zkgm-native-refund-smoke clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios derive-sender-salt-vectors generate generate-check
 
-PROTOGEN_PKGS := gno.land/p/core/ibc/lightclients/cometbls
+PROTOGEN_PKGS := gno.land/p/onbloc/ibc/lightclient/cometbls
 
 COVERAGE_DIR := coverage
 
 # First-party gno packages. Third-party mirrors under gno.land/p/{aib,gnoswap,nt,onbloc}
 # and gno.land/r/aib are dependency inputs only, so local and CI tests skip them.
-USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/core gno.land/r/core -name gnomod.toml | sort))
+USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/onbloc gno.land/r/onbloc -name gnomod.toml | sort))
 
 help:
 	@echo "Targets:"

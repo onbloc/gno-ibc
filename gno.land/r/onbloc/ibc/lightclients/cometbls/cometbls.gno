@@ -3,7 +3,6 @@ package cometbls
 import (
 	"time"
 
-	"gno.land/p/aib/ibc/types"
 	cometblsp "gno.land/p/onbloc/ibc/lightclient/cometbls"
 	"gno.land/r/onbloc/ibc/core"
 )
@@ -17,18 +16,7 @@ type clientEntry struct {
 
 var entries = make(map[core.ClientId]*clientEntry)
 
-var wasmdModuleStoreKey = []byte("wasm")
-
 func nowNanos() uint64 { return uint64(time.Now().UnixNano()) }
-
-func wasmContractStoreKey(contractAddress cometblsp.H256, key []byte) []byte {
-	out := make([]byte, 0, 1+32+1+len(key))
-	out = append(out, 0x03)
-	out = append(out, contractAddress[:]...)
-	out = append(out, 0x00)
-	out = append(out, key...)
-	return out
-}
 
 func mustBeCore(cur realm) {
 	if cur.Previous().PkgPath() != "gno.land/r/onbloc/ibc/core" {
@@ -168,7 +156,7 @@ func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proo
 	if err != nil {
 		panic("cometbls: invalid membership proof: " + err.Error())
 	}
-	path := types.MerklePath{KeyPath: [][]byte{wasmdModuleStoreKey, wasmContractStoreKey(e.cs.ContractAddress, key)}}
+	path := cometblsp.MembershipPath(e.cs, key)
 	cs := consensusStateAt(e, height)
 	if err := cometblsp.VerifyMembership(cs, proofs, path, value); err != nil {
 		panic("cometbls: membership verification failed: " + err.Error())
@@ -184,7 +172,7 @@ func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, p
 	if err != nil {
 		panic("cometbls: invalid non-membership proof: " + err.Error())
 	}
-	path := types.MerklePath{KeyPath: [][]byte{wasmdModuleStoreKey, wasmContractStoreKey(e.cs.ContractAddress, key)}}
+	path := cometblsp.MembershipPath(e.cs, key)
 	cs := consensusStateAt(e, height)
 	if err := cometblsp.VerifyNonMembership(cs, proofs, path); err != nil {
 		panic("cometbls: non-membership verification failed: " + err.Error())

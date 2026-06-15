@@ -82,6 +82,32 @@ type proofInputs struct {
 	path   types.MerklePath
 }
 
+// wasmdModuleStoreKey is the IBC store module key under which the CometBLS
+// (wasmd-hosted) contract commitments live.
+var wasmdModuleStoreKey = []byte("wasm")
+
+// wasmContractStoreKey builds the wasmd contract-storage key for the given
+// commitment key: 0x03 || contractAddress || 0x00 || key. This mirrors the
+// wasmd `ContractStorePrefix` layout the counterparty commits under.
+func wasmContractStoreKey(contractAddress H256, key []byte) []byte {
+	out := make([]byte, 0, 1+32+1+len(key))
+	out = append(out, 0x03)
+	out = append(out, contractAddress[:]...)
+	out = append(out, 0x00)
+	out = append(out, key...)
+	return out
+}
+
+// MembershipPath returns the two-level ICS-23 MerklePath
+// (["wasm", wasmContractStoreKey(contractAddress, key)]) that membership and
+// non-membership proofs are verified against for this client state.
+func MembershipPath(cs ClientState, key []byte) types.MerklePath {
+	return types.MerklePath{KeyPath: [][]byte{
+		wasmdModuleStoreKey,
+		wasmContractStoreKey(cs.ContractAddress, key),
+	}}
+}
+
 // VerifyMembership verifies a chained ICS-23 existence proof against a consensus state root.
 func VerifyMembership(cs ConsensusState, proofs []ics23.CommitmentProof, path types.MerklePath, value []byte) error {
 	if len(value) == 0 {

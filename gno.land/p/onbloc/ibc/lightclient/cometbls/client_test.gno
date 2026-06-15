@@ -11,6 +11,42 @@ import (
 // nowNanos = 2024-01-01 00:00:00 UTC in nanoseconds.
 const testNow = uint64(1_704_067_200) * 1_000_000_000
 
+func TestWasmContractStoreKey(t *testing.T) {
+	var contractAddress H256
+	for i := 0; i < len(contractAddress); i++ {
+		contractAddress[i] = byte(i)
+	}
+	key := []byte{0xAA, 0xBB}
+
+	got := wasmContractStoreKey(contractAddress, key)
+	want := append([]byte{0x03}, contractAddress[:]...)
+	want = append(want, 0x00)
+	want = append(want, key...)
+	if !bytes.Equal(got, want) {
+		t.Fatalf("wasmContractStoreKey: got %x want %x", got, want)
+	}
+}
+
+func TestMembershipPath(t *testing.T) {
+	var contractAddress H256
+	for i := 0; i < len(contractAddress); i++ {
+		contractAddress[i] = byte(i)
+	}
+	key := []byte{0xAA, 0xBB}
+	cs := ClientState{ContractAddress: contractAddress}
+
+	path := MembershipPath(cs, key)
+	if len(path.KeyPath) != 2 {
+		t.Fatalf("MembershipPath: got %d key segments want 2", len(path.KeyPath))
+	}
+	if !bytes.Equal(path.KeyPath[0], wasmdModuleStoreKey) {
+		t.Fatalf("MembershipPath[0]: got %x want %x", path.KeyPath[0], wasmdModuleStoreKey)
+	}
+	if !bytes.Equal(path.KeyPath[1], wasmContractStoreKey(contractAddress, key)) {
+		t.Fatalf("MembershipPath[1] mismatch")
+	}
+}
+
 func baseCS() ClientState {
 	return ClientState{
 		TrustingPeriod: 14 * 24 * 3600 * 1_000_000_000, // 14 days in ns

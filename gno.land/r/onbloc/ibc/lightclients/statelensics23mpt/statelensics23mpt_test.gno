@@ -340,7 +340,7 @@ func TestVerifyMembershipRejectsWrongCommitmentKey(cur realm, t *testing.T) {
 		Key:   storage.WordFromUint64(2),
 		Value: storage.WordFromUint64(0xdeadbeef),
 	})
-	uassert.AbortsContains(t, cur, ErrInvalidCommitmentKey.Error(), func(cur realm) {
+	uassert.AbortsContains(t, cur, statelensp.ErrInvalidCommitmentKey.Error(), func(cur realm) {
 		adapter.VerifyMembership(lensClientId, core.Height(1), proof, bytes.Repeat([]byte{0x11}, 32), storage.WordFromUint64(0xdeadbeef))
 	})
 }
@@ -369,7 +369,7 @@ func TestPacketRecvRejectsWrongStateLensStorageProof(cur realm, t *testing.T) {
 	wrongPath := bytes.Repeat([]byte{0x33}, 32)
 	_, proof := updateLensRootForPathValue(cur, t, flow.lensClientId, flow.l1ClientId, flow.l2ClientId, 5, wrongPath, core.COMMITMENT_MAGIC[:])
 
-	uassert.AbortsContains(t, cur, ErrInvalidCommitmentKey.Error(), func(cur realm) {
+	uassert.AbortsContains(t, cur, statelensp.ErrInvalidCommitmentKey.Error(), func(cur realm) {
 		core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, proof, 5))
 	})
 	if flow.app.recvCount != 0 {
@@ -377,17 +377,6 @@ func TestPacketRecvRejectsWrongStateLensStorageProof(cur realm, t *testing.T) {
 	}
 	if core.HasPacketReceipt(cross(cur), packet) {
 		t.Fatal("PacketRecv must not set packet receipt after bad state-lens proof")
-	}
-}
-
-func TestExtractConsensusStateRejectsShortData(cur realm, t *testing.T) {
-	_, err := extractConsensusState([]byte{0x01}, statelensp.ClientState{
-		TimestampOffset:   0,
-		StateRootOffset:   0,
-		StorageRootOffset: 0,
-	})
-	if err != ErrConsensusStateTooShort {
-		t.Fatalf("extractConsensusState: got %v want %v", err, ErrConsensusStateTooShort)
 	}
 }
 

@@ -3,7 +3,6 @@ package statelensics23mpt
 import (
 	"bytes"
 	"crypto/keccak256"
-	"encoding/binary"
 	"errors"
 
 	"gno.land/p/onbloc/verifier/evm/storage"
@@ -16,8 +15,6 @@ import (
 const ClientType core.ClientType = "state-lens/ics23/mpt"
 
 var (
-	ErrConsensusStateTooShort = errors.New("statelensics23mpt: l2 consensus state too short")
-	ErrInvalidCommitmentKey   = errors.New("statelensics23mpt: invalid commitment key")
 	ErrInvalidCommitmentValue = errors.New("statelensics23mpt: invalid commitment value")
 	ErrStoredValueMismatch    = errors.New("statelensics23mpt: stored value mismatch")
 )
@@ -98,7 +95,7 @@ func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []b
 		consensusHash[:],
 	)
 
-	consState, err := extractConsensusState(header.L2ConsensusState, e.cs)
+	consState, err := statelensp.ExtractConsensusState(header.L2ConsensusState, e.cs)
 	if err != nil {
 		panic(err)
 	}
@@ -137,7 +134,7 @@ func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proo
 	if err != nil {
 		panic("statelensics23mpt: invalid storage proof: " + err.Error())
 	}
-	if err := verifyCommitmentKey(key, storageProof.Key); err != nil {
+	if err := statelensp.VerifyCommitmentKey(key, storageProof.Key); err != nil {
 		panic(err)
 	}
 	if len(value) != 32 {
@@ -171,7 +168,7 @@ func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, p
 	if err != nil {
 		panic("statelensics23mpt: invalid storage proof: " + err.Error())
 	}
-	if err := verifyCommitmentKey(key, storageProof.Key); err != nil {
+	if err := statelensp.VerifyCommitmentKey(key, storageProof.Key); err != nil {
 		panic(err)
 	}
 	if err := storage.VerifyAbsence(copyBytes(consState.StorageRoot), storage.Proof{
@@ -201,53 +198,6 @@ func (Adapter) GetStatus(clientId core.ClientId) core.Status {
 		return core.StatusFrozen
 	}
 	return status
-}
-
-func extractConsensusState(data []byte, cs statelensp.ClientState) (statelensp.ConsensusState, error) {
-	timestamp, err := extractUint64(data, int(cs.TimestampOffset))
-	if err != nil {
-		return statelensp.ConsensusState{}, err
-	}
-	stateRoot, err := extractBytes32(data, int(cs.StateRootOffset))
-	if err != nil {
-		return statelensp.ConsensusState{}, err
-	}
-	storageRoot, err := extractBytes32(data, int(cs.StorageRootOffset))
-	if err != nil {
-		return statelensp.ConsensusState{}, err
-	}
-	return statelensp.ConsensusState{
-		Timestamp:   timestamp,
-		StateRoot:   stateRoot,
-		StorageRoot: storageRoot,
-	}, nil
-}
-
-func extractUint64(data []byte, offset int) (uint64, error) {
-	if offset < 0 || offset+8 > len(data) {
-		return 0, ErrConsensusStateTooShort
-	}
-	return binary.BigEndian.Uint64(data[offset : offset+8]), nil
-}
-
-func extractBytes32(data []byte, offset int) ([]byte, error) {
-	if offset < 0 || offset+32 > len(data) {
-		return nil, ErrConsensusStateTooShort
-	}
-	out := make([]byte, 32)
-	copy(out, data[offset:offset+32])
-	return out, nil
-}
-
-func verifyCommitmentKey(path []byte, proofKey []byte) error {
-	expected, err := storage.IBCCommitmentKey(path)
-	if err != nil {
-		return ErrInvalidCommitmentKey
-	}
-	if !bytes.Equal(expected[:], proofKey) {
-		return ErrInvalidCommitmentKey
-	}
-	return nil
 }
 
 func copyBytes(b []byte) []byte {

@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"gno.land/p/aib/ibc/types"
-	cometblsp "gno.land/p/onbloc/ibc/lightclients/cometbls"
+	cometblsp "gno.land/p/onbloc/ibc/lightclient/cometbls"
 	"gno.land/r/onbloc/unionibc/v1/core"
 )
 

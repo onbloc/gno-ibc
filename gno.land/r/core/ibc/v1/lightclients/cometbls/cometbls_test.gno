@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	cometblsp "gno.land/p/onbloc/ibc/lightclients/cometbls"
+	cometblsp "gno.land/p/onbloc/ibc/lightclient/cometbls"
 	"gno.land/p/nt/uassert/v0"
 	"gno.land/r/onbloc/unionibc/v1/core"
 )

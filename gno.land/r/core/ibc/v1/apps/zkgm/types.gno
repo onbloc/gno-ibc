@@ -1,7 +1,7 @@
 package zkgm
 
 import (
-	z "gno.land/p/onbloc/unionibc/zkgm"
+	z "gno.land/p/onbloc/ibc/zkgm"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 

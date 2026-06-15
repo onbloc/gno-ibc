@@ -4,7 +4,7 @@ package scenarios
 import (
 	"encoding/hex"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
+	z "gno.land/p/onbloc/ibc/zkgm"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
 )

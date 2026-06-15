@@ -5,7 +5,7 @@ import (
 	"chain"
 	stdtesting "testing"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
+	z "gno.land/p/onbloc/ibc/zkgm"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 	impl "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl"
 	core "gno.land/r/onbloc/unionibc/v1/core"

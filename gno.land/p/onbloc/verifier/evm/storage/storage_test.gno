@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"crypto/keccak256"
-	"gno.land/p/core/encoding/rlp"
+	"gno.land/p/onbloc/encoding/rlp"
 )
 
 func TestEncodeStorageValue(t *testing.T) {

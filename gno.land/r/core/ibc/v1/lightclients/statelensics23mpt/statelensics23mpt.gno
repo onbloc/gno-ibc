@@ -6,8 +6,8 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"gno.land/p/core/ethereum/storage"
-	statelensp "gno.land/p/onbloc/ibc/lightclients/statelensics23mpt"
+	"gno.land/p/onbloc/verifier/evm/storage"
+	statelensp "gno.land/p/onbloc/ibc/lightclient/statelens"
 	"gno.land/r/onbloc/unionibc/v1/core"
 )
 

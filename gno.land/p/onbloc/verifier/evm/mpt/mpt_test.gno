@@ -5,7 +5,7 @@ import (
 	"crypto/keccak256"
 	"testing"
 
-	"gno.land/p/core/encoding/rlp"
+	"gno.land/p/onbloc/encoding/rlp"
 )
 
 func TestVerifySingleLeaf(t *testing.T) {

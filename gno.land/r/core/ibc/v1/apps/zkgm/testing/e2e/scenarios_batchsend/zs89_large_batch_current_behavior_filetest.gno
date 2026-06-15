@@ -3,7 +3,7 @@ package scenarios_batchsend
 
 import (
 	u256 "gno.land/p/gnoswap/uint256"
-	z "gno.land/p/onbloc/unionibc/zkgm"
+	z "gno.land/p/onbloc/ibc/zkgm"
 	"gno.land/p/nt/testutils/v0"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"

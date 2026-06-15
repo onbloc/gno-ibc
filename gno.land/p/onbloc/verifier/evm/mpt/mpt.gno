@@ -5,7 +5,7 @@ import (
 	"crypto/keccak256"
 	"errors"
 
-	"gno.land/p/core/encoding/rlp"
+	"gno.land/p/onbloc/encoding/rlp"
 )
 
 var (

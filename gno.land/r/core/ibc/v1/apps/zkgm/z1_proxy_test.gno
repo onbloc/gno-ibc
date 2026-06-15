@@ -7,7 +7,7 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
-	tb "gno.land/p/onbloc/tokenbucket"
+	tb "gno.land/p/onbloc/ibc/zkgm/tokenbucket"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 

@@ -6,8 +6,8 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"gno.land/p/core/encoding/rlp"
-	"gno.land/p/core/ethereum/mpt"
+	"gno.land/p/onbloc/encoding/rlp"
+	"gno.land/p/onbloc/verifier/evm/mpt"
 )
 
 var (

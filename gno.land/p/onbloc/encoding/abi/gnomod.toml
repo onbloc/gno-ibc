@@ -1,4 +1,4 @@
-module = "gno.land/p/core/encoding/abi"
+module = "gno.land/p/onbloc/encoding/abi"
 gno = "0.9"
 
 [require]

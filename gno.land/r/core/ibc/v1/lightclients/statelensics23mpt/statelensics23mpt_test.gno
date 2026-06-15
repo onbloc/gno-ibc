@@ -5,10 +5,10 @@ import (
 	"crypto/keccak256"
 	"testing"
 
-	"gno.land/p/core/encoding/abi"
-	"gno.land/p/core/encoding/rlp"
-	"gno.land/p/core/ethereum/storage"
-	statelensp "gno.land/p/onbloc/ibc/lightclients/statelensics23mpt"
+	"gno.land/p/onbloc/encoding/abi"
+	"gno.land/p/onbloc/encoding/rlp"
+	"gno.land/p/onbloc/verifier/evm/storage"
+	statelensp "gno.land/p/onbloc/ibc/lightclient/statelens"
 	"gno.land/p/nt/uassert/v0"
 	"gno.land/r/onbloc/unionibc/v1/core"
 )

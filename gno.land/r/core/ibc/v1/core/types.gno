@@ -4,7 +4,7 @@ import (
 	"encoding/hex"
 	"strconv"
 
-	"gno.land/p/core/encoding/abi"
+	"gno.land/p/onbloc/encoding/abi"
 )
 
 type ClientId uint32

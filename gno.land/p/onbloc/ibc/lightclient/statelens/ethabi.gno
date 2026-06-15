@@ -3,7 +3,7 @@ package statelensics23mpt
 import (
 	"errors"
 
-	abienc "gno.land/p/core/encoding/abi"
+	abienc "gno.land/p/onbloc/encoding/abi"
 )
 
 var (

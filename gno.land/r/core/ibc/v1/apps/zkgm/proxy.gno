@@ -7,7 +7,7 @@ import (
 
 	"gno.land/p/nt/bptree/v0"
 	"gno.land/p/nt/ufmt/v0"
-	z "gno.land/p/onbloc/unionibc/zkgm"
+	z "gno.land/p/onbloc/ibc/zkgm"
 	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 

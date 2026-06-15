@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
+	z "gno.land/p/onbloc/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 )
 

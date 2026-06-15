@@ -1,4 +1,4 @@
-module = "gno.land/p/core/ethereum/storage"
+module = "gno.land/p/onbloc/verifier/evm/storage"
 gno = "0.9"
 
 [require]

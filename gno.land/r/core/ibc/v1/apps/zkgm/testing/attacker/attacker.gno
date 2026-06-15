@@ -1,7 +1,7 @@
 package attacker
 
 import (
-	z "gno.land/p/onbloc/unionibc/zkgm"
+	z "gno.land/p/onbloc/ibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
 	core "gno.land/r/onbloc/unionibc/v1/core"

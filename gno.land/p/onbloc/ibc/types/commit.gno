@@ -1,4 +1,4 @@
-package core
+package types
 
 func CommitPacket(packet Packet) H256 {
 	return CommitPackets([]Packet{packet})

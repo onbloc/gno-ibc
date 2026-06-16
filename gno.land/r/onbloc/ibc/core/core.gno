@@ -3,8 +3,9 @@ package core
 import (
 	"chain/params"
 	"chain/runtime"
-	"crypto/keccak256"
 	"encoding/hex"
+
+	"gno.land/p/onbloc/ibc/types"
 )
 
 var st State
@@ -103,12 +104,7 @@ func Render(_ string) string {
 }
 
 func keccak(bz []byte) H256 {
-	sum := keccak256.Sum256(bz)
-	var out H256
-	for i := range out {
-		out[i] = sum[i]
-	}
-	return out
+	return types.Keccak(bz)
 }
 
 func commit(key H256, value H256) {

@@ -4,7 +4,7 @@
 // (dependency inversion: app imports core, core depends only on this contract).
 package app
 
-import "gno.land/p/onbloc/ibc/types"
+import "gno.land/p/onbloc/ibc/union/types"
 
 // IApp defines the interface for IBC application callbacks. Byte parameters
 // use plain []byte (not the typed Bytes wrapper) so foreign-realm apps can

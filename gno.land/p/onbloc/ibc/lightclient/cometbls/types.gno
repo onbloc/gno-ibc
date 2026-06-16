@@ -1,5 +1,7 @@
 package cometbls
 
+const ClientType = "cometbls"
+
 // Height is a block height for ibc-union.
 // Mirrors the ibc-union spec where height is a plain uint64 (revision 0 only).
 type Height = uint64

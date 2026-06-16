@@ -1,5 +1,7 @@
 package ics23mpt
 
+const ClientType = "state-lens/ics23/mpt"
+
 // Height is an ibc-union height. Revision is always 0 in this codebase.
 type Height = uint64
 

@@ -5,7 +5,7 @@ import (
 
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/onbloc/ibc/core"
+	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 // SetHook takes a TransferHook interface and cannot be called via maketx, so

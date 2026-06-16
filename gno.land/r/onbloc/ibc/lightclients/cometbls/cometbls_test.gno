@@ -6,7 +6,7 @@ import (
 
 	cometblsp "gno.land/p/onbloc/ibc/lightclient/cometbls"
 	"gno.land/p/nt/uassert/v0"
-	"gno.land/r/onbloc/ibc/core"
+	"gno.land/r/onbloc/ibc/union/core"
 )
 
 func resetAdapterEntries() {

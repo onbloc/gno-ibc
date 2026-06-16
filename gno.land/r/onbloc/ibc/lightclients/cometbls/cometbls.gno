@@ -4,7 +4,7 @@ import (
 	"time"
 
 	cometblsp "gno.land/p/onbloc/ibc/lightclient/cometbls"
-	"gno.land/r/onbloc/ibc/core"
+	"gno.land/r/onbloc/ibc/union/core"
 )
 
 const ClientType core.ClientType = "cometbls"
@@ -19,7 +19,7 @@ var entries = make(map[core.ClientId]*clientEntry)
 func nowNanos() uint64 { return uint64(time.Now().UnixNano()) }
 
 func mustBeCore(cur realm) {
-	if cur.Previous().PkgPath() != "gno.land/r/onbloc/ibc/core" {
+	if cur.Previous().PkgPath() != "gno.land/r/onbloc/ibc/union/core" {
 		panic("cometbls: core only")
 	}
 }
@@ -92,7 +92,7 @@ func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []b
 	}
 	clientStateBytes := cometblsp.EncodeClientState(e.cs)
 
-	return core.NewConsensusStateUpdate(cross(cur), core.Height(newHeight), consStateBytes, clientStateBytes)
+	return core.NewConsensusStateUpdate(cross(cur), core.NewHeight(uint64(newHeight)), consStateBytes, clientStateBytes)
 }
 
 func applyHeaderHeight(e *clientEntry, newHeight cometblsp.Height, consState cometblsp.ConsensusState) cometblsp.ConsensusState {
@@ -140,7 +140,7 @@ func (Adapter) Misbehaviour(cur realm, clientId core.ClientId, clientMessage []b
 // Proof verification must reject unknown heights rather than relying on
 // verification against a zero-value consensus state.
 func consensusStateAt(e *clientEntry, height core.Height) cometblsp.ConsensusState {
-	cs, ok := e.consensusStates[cometblsp.Height(height)]
+	cs, ok := e.consensusStates[cometblsp.Height(height.Height)]
 	if !ok {
 		panic("cometbls: consensus state not found at height " + height.String())
 	}
@@ -186,7 +186,7 @@ func (Adapter) GetTimestamp(clientId core.ClientId, height core.Height) core.Tim
 }
 
 func (Adapter) GetLatestHeight(clientId core.ClientId) core.Height {
-	return core.Height(getEntry(clientId).cs.LatestHeight)
+	return core.NewHeight(uint64(getEntry(clientId).cs.LatestHeight))
 }
 
 func (Adapter) ForceUpdateClient(cur realm, clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) core.ConsensusStateUpdate {
@@ -275,7 +275,7 @@ func applyForceUpdate(clientId core.ClientId, clientStateBytes, consensusStateBy
 		panic("cometbls: encode consensus state: " + err.Error())
 	}
 
-	return core.Height(cs.LatestHeight), encConsState, cometblsp.EncodeClientState(e.cs)
+	return core.NewHeight(uint64(cs.LatestHeight)), encConsState, cometblsp.EncodeClientState(e.cs)
 }
 
 func (Adapter) GetStatus(clientId core.ClientId) core.Status {

@@ -7,7 +7,7 @@ import (
 
 	"gno.land/p/onbloc/verifier/evm/storage"
 	ics23mpt "gno.land/p/onbloc/ibc/lightclient/state_lens/ics23_mpt"
-	"gno.land/r/onbloc/ibc/core"
+	"gno.land/r/onbloc/ibc/union/core"
 )
 
 // Union reference:
@@ -27,7 +27,7 @@ type clientEntry struct {
 var entries = make(map[core.ClientId]*clientEntry)
 
 func mustBeCore(cur realm) {
-	if cur.Previous().PkgPath() != "gno.land/r/onbloc/ibc/core" {
+	if cur.Previous().PkgPath() != "gno.land/r/onbloc/ibc/union/core" {
 		panic("statelensics23mpt: core only")
 	}
 }
@@ -84,12 +84,12 @@ func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []b
 		panic("statelensics23mpt: invalid header: " + err.Error())
 	}
 
-	consensusPath := core.ConsensusStatePath(core.ClientId(e.cs.L2ClientID), core.Height(header.L2Height))
+	consensusPath := core.ConsensusStatePath(core.ClientId(e.cs.L2ClientID), core.NewHeight(uint64(header.L2Height)))
 	consensusHash := keccak256.Sum256(header.L2ConsensusState)
 	core.VerifyClientMembership(
 		cross(cur),
 		core.ClientId(e.cs.L1ClientID),
-		core.Height(header.L1Height),
+		core.NewHeight(uint64(header.L1Height)),
 		header.L2ConsensusStateProof,
 		consensusPath[:],
 		consensusHash[:],
@@ -115,7 +115,7 @@ func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []b
 		panic("statelensics23mpt: encode client state: " + err.Error())
 	}
 
-	return core.NewConsensusStateUpdate(cross(cur), core.Height(header.L2Height), consStateBytes, clientStateBytes)
+	return core.NewConsensusStateUpdate(cross(cur), core.NewHeight(uint64(header.L2Height)), consStateBytes, clientStateBytes)
 }
 
 func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proof, key, value []byte) {
@@ -126,7 +126,7 @@ func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proo
 	}
 
 	e := getEntry(clientId)
-	consState, ok := e.consensusStates[ics23mpt.Height(height)]
+	consState, ok := e.consensusStates[ics23mpt.Height(height.Height)]
 	if !ok {
 		panic("statelensics23mpt: consensus state not found at height " + height.String())
 	}
@@ -160,7 +160,7 @@ func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, p
 	}
 
 	e := getEntry(clientId)
-	consState, ok := e.consensusStates[ics23mpt.Height(height)]
+	consState, ok := e.consensusStates[ics23mpt.Height(height.Height)]
 	if !ok {
 		panic("statelensics23mpt: consensus state not found at height " + height.String())
 	}
@@ -180,7 +180,7 @@ func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, p
 }
 
 func (Adapter) GetTimestamp(clientId core.ClientId, height core.Height) core.Timestamp {
-	cs, ok := getEntry(clientId).consensusStates[ics23mpt.Height(height)]
+	cs, ok := getEntry(clientId).consensusStates[ics23mpt.Height(height.Height)]
 	if !ok {
 		panic("statelensics23mpt: consensus state not found at height " + height.String())
 	}
@@ -188,7 +188,7 @@ func (Adapter) GetTimestamp(clientId core.ClientId, height core.Height) core.Tim
 }
 
 func (Adapter) GetLatestHeight(clientId core.ClientId) core.Height {
-	return core.Height(getEntry(clientId).cs.L2LatestHeight)
+	return core.NewHeight(uint64(getEntry(clientId).cs.L2LatestHeight))
 }
 
 func (Adapter) GetStatus(clientId core.ClientId) core.Status {

@@ -3,7 +3,7 @@ package transfer
 import (
 	"chain"
 
-	core "gno.land/r/onbloc/ibc/core"
+	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 // SetHook registers h as the active recv hook. The hook's Address() is

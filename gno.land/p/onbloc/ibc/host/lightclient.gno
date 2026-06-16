@@ -4,7 +4,7 @@
 // without importing the core realm, and core can route to them by interface.
 package host
 
-import "gno.land/p/onbloc/ibc/types"
+import "gno.land/p/onbloc/ibc/union/types"
 
 // ILightClient defines the interface that light client adapters must implement.
 // Methods that modify adapter state must declare _ realm as the first parameter

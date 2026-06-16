@@ -1,9 +1,6 @@
 package types
 
-import (
-	"bytes"
-	"encoding/binary"
-)
+import "bytes"
 
 var (
 	// Slot constants (Ethereum-style storage layout)
@@ -43,6 +40,24 @@ var (
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x05,
 	}
+	MEMBERSHIP_PROOF [32]byte = [32]byte{
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x06,
+	}
+	NON_MEMBERSHIP_PROOF [32]byte = [32]byte{
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x07,
+	}
+	PACKET_TIMEOUTS [32]byte = [32]byte{
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08,
+	}
 	// Sentinel values stored for commitments
 	COMMITMENT_MAGIC H256 = [32]byte{
 		0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -58,18 +73,6 @@ var (
 	}
 )
 
-func u32ToH256(n uint32) []byte {
-	bz := [32]byte{}
-	binary.BigEndian.PutUint32(bz[28:], n)
-	return bz[:]
-}
-
-func u64ToH256(n uint64) []byte {
-	bz := [32]byte{}
-	binary.BigEndian.PutUint64(bz[24:], n)
-	return bz[:]
-}
-
 func ClientStatePath(clientId ClientId) H256 {
 	return keccak(bytes.Join([][]byte{
 		CLIENT_STATE[:],
@@ -77,11 +80,11 @@ func ClientStatePath(clientId ClientId) H256 {
 	}, nil))
 }
 
-func ConsensusStatePath(clientId ClientId, height Height) H256 {
+func ConsensusStatePath(clientId ClientId, height uint64) H256 {
 	return keccak(bytes.Join([][]byte{
 		CONSENSUS_STATE[:],
 		u32ToH256(uint32(clientId)),
-		u64ToH256(uint64(height)),
+		u64ToH256(height),
 	}, nil))
 }
 
@@ -104,12 +107,20 @@ func mergeAck(ack H256) H256 {
 	return ack
 }
 
-func PacketCommitmentPath(packet Packet) H256 {
-	return BatchPacketsPath(CommitPacket(packet))
+func PacketCommitmentPath(packet Packet) (H256, error) {
+	hash, err := CommitPacket(packet)
+	if err != nil {
+		return H256{}, err
+	}
+	return BatchPacketsPath(hash), nil
 }
 
-func PacketAcknowledgementPath(packet Packet) H256 {
-	return BatchReceiptsPath(CommitPacket(packet))
+func PacketAcknowledgementPath(packet Packet) (H256, error) {
+	hash, err := CommitPacket(packet)
+	if err != nil {
+		return H256{}, err
+	}
+	return BatchReceiptsPath(hash), nil
 }
 
 func BatchPacketsPath(batchHash H256) H256 {
@@ -123,5 +134,38 @@ func BatchReceiptsPath(batchHash H256) H256 {
 	return keccak(bytes.Join([][]byte{
 		PACKET_ACKS[:],
 		batchHash[:],
+	}, nil))
+}
+
+func BatchTimeoutsPath(batchHash H256) H256 {
+	return keccak(bytes.Join([][]byte{
+		PACKET_TIMEOUTS[:],
+		batchHash[:],
+	}, nil))
+}
+
+func PacketTimeoutPath(packet Packet) (H256, error) {
+	hash, err := CommitPacket(packet)
+	if err != nil {
+		return H256{}, err
+	}
+	return BatchTimeoutsPath(hash), nil
+}
+
+func MembershipProofPath(clientId ClientId, proofHeight uint64, path []byte) H256 {
+	return keccak(bytes.Join([][]byte{
+		MEMBERSHIP_PROOF[:],
+		u32ToH256(uint32(clientId)),
+		u64ToH256(proofHeight),
+		path,
+	}, nil))
+}
+
+func NonMembershipProofPath(clientId ClientId, proofHeight uint64, path []byte) H256 {
+	return keccak(bytes.Join([][]byte{
+		NON_MEMBERSHIP_PROOF[:],
+		u32ToH256(uint32(clientId)),
+		u64ToH256(proofHeight),
+		path,
 	}, nil))
 }

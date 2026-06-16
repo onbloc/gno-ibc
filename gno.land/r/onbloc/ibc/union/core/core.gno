@@ -5,6 +5,7 @@ import (
 	"chain/runtime"
 	"encoding/hex"
 
+	"gno.land/p/onbloc/ibc/host"
 	"gno.land/p/onbloc/ibc/union/app"
 	"gno.land/p/onbloc/ibc/union/types"
 )
@@ -20,10 +21,12 @@ func PkgPath(cur realm) string {
 	return cur.PkgPath()
 }
 
-// IBC interface contracts (host.ILightClient/host.IForceLightClient/app.IApp/app.IIntentApp)
-// live in the pure packages gno.land/p/onbloc/ibc/{host,app}. core re-exports
-// them as aliases in aliases.gno so adapters/apps can implement either the
-// pure contract or core.* with no change. See ROLES.md V1.
+// IBC interface contracts live in pure packages so adapters/apps can implement
+// them without importing this realm:
+//   - lightclient.ILightClient / lightclient.IForceLightClient
+//     in gno.land/p/onbloc/ibc/lightclient
+//   - app.IApp / app.IIntentApp in gno.land/p/onbloc/ibc/union/app
+// core references the pure contracts directly (no re-export aliases).
 
 // RegisterApp registers an IBC application at the caller realm's package path.
 func RegisterApp(cur realm, app app.IApp) {
@@ -93,7 +96,7 @@ func commitPacketsHash(packets []types.Packet) types.H256 {
 }
 
 func packetCommitmentPath(packet types.Packet) types.H256 {
-	h, err := types.PacketCommitmentPath(packet)
+	h, err := host.PacketCommitmentPath(packet)
 	if err != nil {
 		panic(err)
 	}
@@ -101,7 +104,7 @@ func packetCommitmentPath(packet types.Packet) types.H256 {
 }
 
 func packetAcknowledgementPath(packet types.Packet) types.H256 {
-	h, err := types.PacketAcknowledgementPath(packet)
+	h, err := host.PacketAcknowledgementPath(packet)
 	if err != nil {
 		panic(err)
 	}
@@ -124,6 +127,16 @@ func connectionValue(connection types.Connection) types.H256 {
 	return keccak(bz)
 }
 
+// commit writes an IBC commitment to chain params so the counterparty can
+// prove it via an ABCI merkle query. This is the public, provable mirror of the
+// realm's in-memory state: State.save*/delete* methods keep their own map for
+// fast local lookups and call commit so the same value is exposed under the
+// canonical commitment key (host.*Path). The two writes are a pair — local map
+// for this realm's logic, chain params for the counterparty's membership proof.
+//
+// Keys follow the ibc-union (EVM storage layout) schema owned by the host
+// package (gno.land/p/onbloc/ibc/host), not classic IBC (ICS-024) string keys,
+// so commitments stay provable against Union relayers and EVM counterparties.
 func commit(key types.H256, value types.H256) {
 	params.SetBytes(hex.EncodeToString(key[:]), value[:])
 }

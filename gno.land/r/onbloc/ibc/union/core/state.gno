@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"gno.land/p/onbloc/ibc/host"
+	"gno.land/p/onbloc/ibc/lightclient"
 	"gno.land/p/onbloc/ibc/union/app"
 	"gno.land/p/onbloc/ibc/union/types"
 )
@@ -45,7 +46,7 @@ type State struct {
 	ports         map[string]app.IApp
 	channelOwners map[types.ChannelId]types.Bytes
 
-	clientRegistry map[types.ClientType]host.ILightClient
+	clientRegistry map[types.ClientType]lightclient.ILightClient
 	clientTypes    map[types.ClientId]types.ClientType
 	clientStates   map[types.ClientId][]byte
 
@@ -63,7 +64,7 @@ func newState() State {
 		nextClientId:     types.ClientId(1),
 		nextConnectionId: types.ConnectionId(1),
 		nextChannelId:    types.ChannelId(1),
-		clientRegistry:   make(map[types.ClientType]host.ILightClient),
+		clientRegistry:   make(map[types.ClientType]lightclient.ILightClient),
 		clientTypes:      make(map[types.ClientId]types.ClientType),
 		clientStates:     make(map[types.ClientId][]byte),
 		consensusStates:  make(map[types.ClientId]map[types.Height][]byte),
@@ -94,14 +95,14 @@ func (s *State) generateChannelId() types.ChannelId {
 	return id
 }
 
-func (s *State) registerClient(clientType types.ClientType, impl host.ILightClient) {
+func (s *State) registerClient(clientType types.ClientType, impl lightclient.ILightClient) {
 	if _, ok := s.clientRegistry[clientType]; ok {
 		panic(ErrClientTypeAlreadyRegistered)
 	}
 	s.clientRegistry[clientType] = impl
 }
 
-func (s *State) getClient(clientId types.ClientId) host.ILightClient {
+func (s *State) getClient(clientId types.ClientId) lightclient.ILightClient {
 	ty, ok := s.clientTypes[clientId]
 	if !ok {
 		panic(ErrClientNotFound)
@@ -151,7 +152,7 @@ func (s *State) getChannel(channelId types.ChannelId) types.Channel {
 
 func (s *State) saveClientState(clientId types.ClientId, clientStateBytes []byte) {
 	s.clientStates[clientId] = cloneBytes(clientStateBytes)
-	commit(types.ClientStatePath(clientId), keccak(clientStateBytes))
+	commit(host.ClientStatePath(clientId), keccak(clientStateBytes))
 }
 
 func (s *State) getClientState(clientId types.ClientId) []byte {
@@ -169,7 +170,7 @@ func (s *State) saveConsensusState(clientId types.ClientId, height types.Height,
 		s.consensusStates[clientId] = byHeight
 	}
 	byHeight[height] = cloneBytes(consensusStateBytes)
-	commit(types.ConsensusStatePath(clientId, height), keccak(consensusStateBytes))
+	commit(host.ConsensusStatePath(clientId, height), keccak(consensusStateBytes))
 }
 
 func (s *State) getConsensusState(clientId types.ClientId, height types.Height) []byte {
@@ -186,26 +187,26 @@ func (s *State) getConsensusState(clientId types.ClientId, height types.Height) 
 
 func (s *State) saveConnection(connectionId types.ConnectionId, connection types.Connection) {
 	s.connections[connectionId] = connection
-	commit(types.ConnectionPath(connectionId), connectionValue(connection))
+	commit(host.ConnectionPath(connectionId), connectionValue(connection))
 }
 
 func (s *State) saveChannel(channelId types.ChannelId, channel types.Channel) {
 	s.channels[channelId] = channel
-	commit(types.ChannelPath(channelId), channelValue(channel))
+	commit(host.ChannelPath(channelId), channelValue(channel))
 }
 
 func (s *State) saveBatchPackets(batchHash types.H256, value types.H256) {
-	path := types.BatchPacketsPath(batchHash)
+	path := host.BatchPacketsPath(batchHash)
 	s.batchPackets[path] = value
 	commit(path, value)
 }
 
 func (s *State) setBatchPackets(batchHash types.H256, value types.H256) {
-	s.batchPackets[types.BatchPacketsPath(batchHash)] = value
+	s.batchPackets[host.BatchPacketsPath(batchHash)] = value
 }
 
 func (s *State) getBatchPackets(batchHash types.H256) types.H256 {
-	value, ok := s.batchPackets[types.BatchPacketsPath(batchHash)]
+	value, ok := s.batchPackets[host.BatchPacketsPath(batchHash)]
 	if !ok {
 		panic(ErrBatchPacketsNotFound)
 	}
@@ -214,19 +215,19 @@ func (s *State) getBatchPackets(batchHash types.H256) types.H256 {
 
 func (s *State) deleteBatchPackets(batchHash types.H256) {
 	var zero types.H256
-	path := types.BatchPacketsPath(batchHash)
+	path := host.BatchPacketsPath(batchHash)
 	delete(s.batchPackets, path)
 	commit(path, zero)
 }
 
 func (s *State) saveBatchReceipts(batchHash types.H256, value types.H256) {
-	path := types.BatchReceiptsPath(batchHash)
+	path := host.BatchReceiptsPath(batchHash)
 	s.batchReceipts[path] = value
 	commit(path, value)
 }
 
 func (s *State) getBatchReceipts(batchHash types.H256) types.H256 {
-	value, ok := s.batchReceipts[types.BatchReceiptsPath(batchHash)]
+	value, ok := s.batchReceipts[host.BatchReceiptsPath(batchHash)]
 	if !ok {
 		panic(ErrBatchReceiptsNotFound)
 	}

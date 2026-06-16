@@ -6,7 +6,7 @@ import (
 	rtunsafe "chain/runtime/unsafe"
 	"strings"
 
-	"gno.land/p/onbloc/ibc/host"
+	"gno.land/p/onbloc/ibc/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
@@ -79,11 +79,11 @@ func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 //
 // It is restricted to the admin and is intended for recovering expired or
 // otherwise unrecoverable clients. It panics if the caller is not the admin
-// or if the light client does not implement host.IForceLightClient.
+// or if the light client does not implement lightclient.IForceLightClient.
 func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) types.Height {
 	requireAdmin(cur, "ForceUpdateClient")
 
-	impl, ok := st.getClient(msg.ClientId).(host.IForceLightClient)
+	impl, ok := st.getClient(msg.ClientId).(lightclient.IForceLightClient)
 	if !ok {
 		panic("client does not support ForceUpdateClient")
 	}
@@ -109,7 +109,7 @@ func VerifyClientMembership(_ realm, clientId types.ClientId, proofHeight types.
 	verifyMembershipActive(clientId, proofHeight, proof, path, value)
 }
 
-func requireActiveClient(client host.ILightClient, clientId types.ClientId) {
+func requireActiveClient(client lightclient.ILightClient, clientId types.ClientId) {
 	if client.GetStatus(clientId) != types.StatusActive {
 		panic(ErrClientNotActive)
 	}
@@ -121,7 +121,7 @@ func verifyMembershipActive(clientId types.ClientId, height types.Height, proof,
 	client.VerifyMembership(clientId, height, proof, key, value)
 }
 
-func verifyNonMembershipWithActiveClient(client host.ILightClient, clientId types.ClientId, height types.Height, proof, key []byte) {
+func verifyNonMembershipWithActiveClient(client lightclient.ILightClient, clientId types.ClientId, height types.Height, proof, key []byte) {
 	requireActiveClient(client, clientId)
 	client.VerifyNonMembership(clientId, height, proof, key)
 }
@@ -131,7 +131,7 @@ func verifyNonMembershipWithActiveClient(client host.ILightClient, clientId type
 // Known production client types must be registered by their owning light client
 // realm. Other client types may only be registered under the caller realm's
 // namespace.
-func RegisterClient(cur realm, clientType types.ClientType, client host.ILightClient) {
+func RegisterClient(cur realm, clientType types.ClientType, client lightclient.ILightClient) {
 	caller := cur.Previous().PkgPath()
 	owner := clientTypeOwnerPath(clientType)
 	if owner != "" {
@@ -148,7 +148,7 @@ func RegisterClient(cur realm, clientType types.ClientType, client host.ILightCl
 // RegisterClientForType registers a light client implementation for clientType.
 //
 // It is restricted to the admin.
-func RegisterClientForType(cur realm, clientType types.ClientType, client host.ILightClient) {
+func RegisterClientForType(cur realm, clientType types.ClientType, client lightclient.ILightClient) {
 	requireAdmin(cur, "register client")
 	runtime.AssertOriginCall()
 	st.registerClient(clientType, client)

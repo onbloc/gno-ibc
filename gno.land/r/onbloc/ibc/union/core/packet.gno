@@ -3,6 +3,7 @@ package core
 import (
 	"time"
 
+	"gno.land/p/onbloc/ibc/host"
 	"gno.land/p/onbloc/ibc/union/app"
 	"gno.land/p/onbloc/ibc/union/types"
 )
@@ -90,7 +91,7 @@ func PacketRecv(cur realm, msg types.MsgPacketRecv) {
 	first := msg.Packets[0]
 	firstChannel := st.getChannel(first.DestinationChannelId)
 	firstConnection := ensureConnectionOpen(firstChannel.ConnectionId)
-	batchKey := types.BatchPacketsPath(commitPacketsHash(msg.Packets))
+	batchKey := host.BatchPacketsPath(commitPacketsHash(msg.Packets))
 	verifyMembershipActive(firstConnection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, batchKey[:], h256Bytes(types.COMMITMENT_MAGIC))
 	now := nowNanos()
 
@@ -164,7 +165,7 @@ func PacketAcknowledgement(cur realm, msg types.MsgPacketAcknowledgement) {
 	channel := st.getChannel(first.SourceChannelId)
 	connection := ensureConnectionOpen(channel.ConnectionId)
 	batchHash := commitPacketsHash(msg.Packets)
-	key := types.BatchReceiptsPath(batchHash)
+	key := host.BatchReceiptsPath(batchHash)
 	value := types.CommitAcks(msg.Acknowledgements)
 	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, key[:], value[:])
 
@@ -209,7 +210,7 @@ func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
 		panic(ErrPacketTimeoutNotReached)
 	}
 
-	key := types.BatchReceiptsPath(commitPacketHash(packet))
+	key := host.BatchReceiptsPath(commitPacketHash(packet))
 	verifyNonMembershipWithActiveClient(client, connection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, key[:])
 
 	portId := st.getChannelOwner(packet.SourceChannelId)
@@ -305,7 +306,7 @@ func BatchAcks(cur realm, msg types.MsgBatchAcks) types.H256 {
 }
 
 func QueryBatchPackets(batchHash types.H256) string {
-	value, ok := st.batchPackets[types.BatchPacketsPath(batchHash)]
+	value, ok := st.batchPackets[host.BatchPacketsPath(batchHash)]
 	if !ok {
 		return ""
 	}
@@ -313,7 +314,7 @@ func QueryBatchPackets(batchHash types.H256) string {
 }
 
 func QueryBatchReceipts(batchHash types.H256) string {
-	value, ok := st.batchReceipts[types.BatchReceiptsPath(batchHash)]
+	value, ok := st.batchReceipts[host.BatchReceiptsPath(batchHash)]
 	if !ok {
 		return ""
 	}
@@ -321,7 +322,7 @@ func QueryBatchReceipts(batchHash types.H256) string {
 }
 
 // QueryCommitmentAtPath reads st.batchPackets by an already-derived commitment
-// path (e.g. types.BatchPacketsPath or per-packet types.PacketCommitmentPath output).
+// path (e.g. host.BatchPacketsPath or per-packet host.PacketCommitmentPath output).
 func QueryCommitmentAtPath(path types.H256) string {
 	value, ok := st.batchPackets[path]
 	if !ok {

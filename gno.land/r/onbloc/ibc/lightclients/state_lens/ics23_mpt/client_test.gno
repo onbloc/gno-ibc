@@ -8,13 +8,13 @@ import (
 	"gno.land/p/onbloc/encoding/abi"
 	"gno.land/p/onbloc/encoding/rlp"
 	"gno.land/p/onbloc/verifier/evm/storage"
-	statelensp "gno.land/p/onbloc/ibc/lightclient/statelens"
+	ics23mpt "gno.land/p/onbloc/ibc/lightclient/state_lens/ics23_mpt"
 	"gno.land/p/nt/uassert/v0"
 	"gno.land/r/onbloc/ibc/core"
 )
 
 const (
-	stateLensTestPortId                 = "gno.land/r/onbloc/ibc/lightclients/statelensics23mpt"
+	stateLensTestPortId                 = "gno.land/r/onbloc/ibc/lightclients/state_lens/ics23_mpt"
 	mockL1ClientType    core.ClientType = stateLensTestPortId + "/mock-l1"
 )
 
@@ -110,9 +110,9 @@ func createMockL1Client(cur realm) core.ClientId {
 	return core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), mockL1ClientType, nil, nil))
 }
 
-func installLensClient(clientId core.ClientId, cs statelensp.ClientState, cons statelensp.ConsensusState) {
+func installLensClient(clientId core.ClientId, cs ics23mpt.ClientState, cons ics23mpt.ConsensusState) {
 	entries[clientId] = &clientEntry{
-		consensusStates: map[statelensp.Height]statelensp.ConsensusState{
+		consensusStates: map[ics23mpt.Height]ics23mpt.ConsensusState{
 			cs.L2LatestHeight: cons,
 		},
 		cs: cs,
@@ -136,7 +136,7 @@ func TestUpdateClientVerifiesL2ConsensusStateOnL1(cur realm, t *testing.T) {
 	l1ClientId := createMockL1Client(cur)
 	l2ClientId := core.ClientId(7)
 
-	cs := statelensp.ClientState{
+	cs := ics23mpt.ClientState{
 		L2ChainID:         "l2",
 		L1ClientID:        uint32(l1ClientId),
 		L2ClientID:        uint32(l2ClientId),
@@ -145,23 +145,23 @@ func TestUpdateClientVerifiesL2ConsensusStateOnL1(cur realm, t *testing.T) {
 		StateRootOffset:   0,
 		StorageRootOffset: 32,
 	}
-	initial := statelensp.ConsensusState{
+	initial := ics23mpt.ConsensusState{
 		Timestamp:   1,
 		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
 		StorageRoot: bytes.Repeat([]byte{0x02}, 32),
 	}
-	initialBytes, err := statelensp.EncodeConsensusState(initial)
+	initialBytes, err := ics23mpt.EncodeConsensusState(initial)
 	if err != nil {
 		t.Fatalf("EncodeConsensusState initial: %v", err)
 	}
-	csBytes, err := statelensp.EncodeClientState(cs)
+	csBytes, err := ics23mpt.EncodeClientState(cs)
 	if err != nil {
 		t.Fatalf("EncodeClientState: %v", err)
 	}
 	lensClientId := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), ClientType, csBytes, initialBytes))
 
 	l2Consensus := makeConsensusBytes(12345, bytes.Repeat([]byte{0xaa}, 32), bytes.Repeat([]byte{0xbb}, 32))
-	header := statelensp.Header{
+	header := ics23mpt.Header{
 		L1Height:              20,
 		L2Height:              11,
 		L2ConsensusStateProof: []byte("l1-proof"),
@@ -176,7 +176,7 @@ func TestUpdateClientVerifiesL2ConsensusStateOnL1(cur realm, t *testing.T) {
 	wantKey = wantPath[:]
 	wantValue = wantValueHash[:]
 
-	headerBytes, err := statelensp.EncodeHeader(header)
+	headerBytes, err := ics23mpt.EncodeHeader(header)
 	if err != nil {
 		t.Fatalf("EncodeHeader: %v", err)
 	}
@@ -185,7 +185,7 @@ func TestUpdateClientVerifiesL2ConsensusStateOnL1(cur realm, t *testing.T) {
 	if height != core.Height(header.L2Height) {
 		t.Fatalf("update height: got %d want %d", height, header.L2Height)
 	}
-	gotCons := getEntry(lensClientId).consensusStates[statelensp.Height(header.L2Height)]
+	gotCons := getEntry(lensClientId).consensusStates[ics23mpt.Height(header.L2Height)]
 	if gotCons.Timestamp != 12345 ||
 		!bytes.Equal(gotCons.StateRoot, bytes.Repeat([]byte{0xaa}, 32)) ||
 		!bytes.Equal(gotCons.StorageRoot, bytes.Repeat([]byte{0xbb}, 32)) {
@@ -205,8 +205,8 @@ func TestGetStatusMirrorsL1Client(cur realm, t *testing.T) {
 	l1ClientId := createMockL1Client(cur)
 	lensClientId := core.ClientId(100)
 
-	cs := statelensp.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
-	cons := statelensp.ConsensusState{
+	cs := ics23mpt.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
+	cons := ics23mpt.ConsensusState{
 		Timestamp:   1,
 		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
 		StorageRoot: bytes.Repeat([]byte{0x02}, 32),
@@ -225,8 +225,8 @@ func TestGetStatusReturnsFrozenWhenL1ClientMissing(cur realm, t *testing.T) {
 	resetTestState(cur)
 	lensClientId := core.ClientId(105)
 
-	cs := statelensp.ClientState{L2ChainID: "l2", L1ClientID: 999999, L2LatestHeight: 1}
-	cons := statelensp.ConsensusState{
+	cs := ics23mpt.ClientState{L2ChainID: "l2", L1ClientID: 999999, L2LatestHeight: 1}
+	cons := ics23mpt.ConsensusState{
 		Timestamp:   1,
 		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
 		StorageRoot: bytes.Repeat([]byte{0x02}, 32),
@@ -252,8 +252,8 @@ func TestVerifyMembershipStorageProof(cur realm, t *testing.T) {
 	}
 	root, proofNodes := storageProofFixture(slot[:], value)
 
-	cs := statelensp.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
-	cons := statelensp.ConsensusState{
+	cs := ics23mpt.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
+	cons := ics23mpt.ConsensusState{
 		Timestamp:   1,
 		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
 		StorageRoot: root[:],
@@ -306,8 +306,8 @@ func TestVerifyNonMembershipStorageProof(cur realm, t *testing.T) {
 	}
 	emptyRoot := keccak256.Sum256(rlp.EncodeBytes(nil))
 
-	cs := statelensp.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
-	cons := statelensp.ConsensusState{
+	cs := ics23mpt.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
+	cons := ics23mpt.ConsensusState{
 		Timestamp:   1,
 		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
 		StorageRoot: emptyRoot[:],
@@ -327,8 +327,8 @@ func TestVerifyMembershipRejectsWrongCommitmentKey(cur realm, t *testing.T) {
 	l1ClientId := createMockL1Client(cur)
 	lensClientId := core.ClientId(104)
 
-	cs := statelensp.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
-	cons := statelensp.ConsensusState{
+	cs := ics23mpt.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
+	cons := ics23mpt.ConsensusState{
 		Timestamp:   1,
 		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
 		StorageRoot: bytes.Repeat([]byte{0x02}, 32),
@@ -340,7 +340,7 @@ func TestVerifyMembershipRejectsWrongCommitmentKey(cur realm, t *testing.T) {
 		Key:   storage.WordFromUint64(2),
 		Value: storage.WordFromUint64(0xdeadbeef),
 	})
-	uassert.AbortsContains(t, cur, statelensp.ErrInvalidCommitmentKey.Error(), func(cur realm) {
+	uassert.AbortsContains(t, cur, ics23mpt.ErrInvalidCommitmentKey.Error(), func(cur realm) {
 		adapter.VerifyMembership(lensClientId, core.Height(1), proof, bytes.Repeat([]byte{0x11}, 32), storage.WordFromUint64(0xdeadbeef))
 	})
 }
@@ -369,7 +369,7 @@ func TestPacketRecvRejectsWrongStateLensStorageProof(cur realm, t *testing.T) {
 	wrongPath := bytes.Repeat([]byte{0x33}, 32)
 	_, proof := updateLensRootForPathValue(cur, t, flow.lensClientId, flow.l1ClientId, flow.l2ClientId, 5, wrongPath, core.COMMITMENT_MAGIC[:])
 
-	uassert.AbortsContains(t, cur, statelensp.ErrInvalidCommitmentKey.Error(), func(cur realm) {
+	uassert.AbortsContains(t, cur, ics23mpt.ErrInvalidCommitmentKey.Error(), func(cur realm) {
 		core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, proof, 5))
 	})
 	if flow.app.recvCount != 0 {
@@ -419,7 +419,7 @@ func setupStateLensOpenChannel(cur realm, t *testing.T) stateLensFlow {
 		core.RegisterApp(cross(cur), stateLensTestApp)
 	}
 
-	cs := statelensp.ClientState{
+	cs := ics23mpt.ClientState{
 		L2ChainID:         "l2",
 		L1ClientID:        uint32(l1ClientId),
 		L2ClientID:        uint32(l2ClientId),
@@ -428,16 +428,16 @@ func setupStateLensOpenChannel(cur realm, t *testing.T) stateLensFlow {
 		StateRootOffset:   0,
 		StorageRootOffset: 32,
 	}
-	cons := statelensp.ConsensusState{
+	cons := ics23mpt.ConsensusState{
 		Timestamp:   1,
 		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
 		StorageRoot: bytes.Repeat([]byte{0x02}, 32),
 	}
-	consBytes, err := statelensp.EncodeConsensusState(cons)
+	consBytes, err := ics23mpt.EncodeConsensusState(cons)
 	if err != nil {
 		t.Fatalf("EncodeConsensusState: %v", err)
 	}
-	csBytes, err := statelensp.EncodeClientState(cs)
+	csBytes, err := ics23mpt.EncodeClientState(cs)
 	if err != nil {
 		t.Fatalf("EncodeClientState: %v", err)
 	}
@@ -477,8 +477,8 @@ func createLensClientForInactiveTest(cur realm, t *testing.T) (Adapter, core.Cli
 	l1ClientId := createMockL1Client(cur)
 	lensClientId := core.ClientId(101)
 
-	cs := statelensp.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
-	cons := statelensp.ConsensusState{
+	cs := ics23mpt.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
+	cons := ics23mpt.ConsensusState{
 		Timestamp:   1,
 		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
 		StorageRoot: bytes.Repeat([]byte{0x02}, 32),
@@ -506,7 +506,7 @@ func updateLensRootForPathValue(cur realm, t *testing.T, lensClientId core.Clien
 	t.Helper()
 	root, proof := proofForPathValue(t, path, value)
 	l2Consensus := makeConsensusBytes(height, bytes.Repeat([]byte{0xaa}, 32), root[:])
-	header := statelensp.Header{
+	header := ics23mpt.Header{
 		L1Height:              height,
 		L2Height:              height,
 		L2ConsensusStateProof: []byte{byte(height)},
@@ -520,7 +520,7 @@ func updateLensRootForPathValue(cur realm, t *testing.T, lensClientId core.Clien
 	wantProof = header.L2ConsensusStateProof
 	wantKey = wantPath[:]
 	wantValue = wantValueHash[:]
-	headerBytes, err := statelensp.EncodeHeader(header)
+	headerBytes, err := ics23mpt.EncodeHeader(header)
 	if err != nil {
 		t.Fatalf("EncodeHeader: %v", err)
 	}

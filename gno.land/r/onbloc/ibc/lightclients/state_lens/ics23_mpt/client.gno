@@ -6,7 +6,7 @@ import (
 	"errors"
 
 	"gno.land/p/onbloc/verifier/evm/storage"
-	statelensp "gno.land/p/onbloc/ibc/lightclient/statelens"
+	ics23mpt "gno.land/p/onbloc/ibc/lightclient/state_lens/ics23_mpt"
 	"gno.land/r/onbloc/ibc/core"
 )
 
@@ -20,8 +20,8 @@ var (
 )
 
 type clientEntry struct {
-	consensusStates map[statelensp.Height]statelensp.ConsensusState
-	cs              statelensp.ClientState
+	consensusStates map[ics23mpt.Height]ics23mpt.ConsensusState
+	cs              ics23mpt.ClientState
 }
 
 var entries = make(map[core.ClientId]*clientEntry)
@@ -56,17 +56,17 @@ func Register(cur realm) {
 func (Adapter) CreateClient(cur realm, clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) string {
 	mustBeCore(cur)
 
-	cs, err := statelensp.DecodeClientState(clientStateBytes)
+	cs, err := ics23mpt.DecodeClientState(clientStateBytes)
 	if err != nil {
 		panic("statelensics23mpt: invalid client state: " + err.Error())
 	}
-	consState, err := statelensp.DecodeConsensusState(consensusStateBytes)
+	consState, err := ics23mpt.DecodeConsensusState(consensusStateBytes)
 	if err != nil {
 		panic("statelensics23mpt: invalid consensus state: " + err.Error())
 	}
 
 	e := &clientEntry{
-		consensusStates: make(map[statelensp.Height]statelensp.ConsensusState),
+		consensusStates: make(map[ics23mpt.Height]ics23mpt.ConsensusState),
 		cs:              cs,
 	}
 	e.consensusStates[cs.L2LatestHeight] = consState
@@ -79,7 +79,7 @@ func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []b
 
 	e := getEntry(clientId)
 
-	header, err := statelensp.DecodeHeader(clientMessage)
+	header, err := ics23mpt.DecodeHeader(clientMessage)
 	if err != nil {
 		panic("statelensics23mpt: invalid header: " + err.Error())
 	}
@@ -95,7 +95,7 @@ func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []b
 		consensusHash[:],
 	)
 
-	consState, err := statelensp.ExtractConsensusState(header.L2ConsensusState, e.cs)
+	consState, err := ics23mpt.ExtractConsensusState(header.L2ConsensusState, e.cs)
 	if err != nil {
 		panic(err)
 	}
@@ -105,12 +105,12 @@ func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []b
 		e.cs.L2LatestHeight = header.L2Height
 	}
 
-	consStateBytes, err := statelensp.EncodeConsensusState(consState)
+	consStateBytes, err := ics23mpt.EncodeConsensusState(consState)
 	if err != nil {
 		panic("statelensics23mpt: encode consensus state: " + err.Error())
 	}
 
-	clientStateBytes, err := statelensp.EncodeClientState(e.cs)
+	clientStateBytes, err := ics23mpt.EncodeClientState(e.cs)
 	if err != nil {
 		panic("statelensics23mpt: encode client state: " + err.Error())
 	}
@@ -126,7 +126,7 @@ func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proo
 	}
 
 	e := getEntry(clientId)
-	consState, ok := e.consensusStates[statelensp.Height(height)]
+	consState, ok := e.consensusStates[ics23mpt.Height(height)]
 	if !ok {
 		panic("statelensics23mpt: consensus state not found at height " + height.String())
 	}
@@ -134,7 +134,7 @@ func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proo
 	if err != nil {
 		panic("statelensics23mpt: invalid storage proof: " + err.Error())
 	}
-	if err := statelensp.VerifyCommitmentKey(key, storageProof.Key); err != nil {
+	if err := ics23mpt.VerifyCommitmentKey(key, storageProof.Key); err != nil {
 		panic(err)
 	}
 	if len(value) != 32 {
@@ -160,7 +160,7 @@ func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, p
 	}
 
 	e := getEntry(clientId)
-	consState, ok := e.consensusStates[statelensp.Height(height)]
+	consState, ok := e.consensusStates[ics23mpt.Height(height)]
 	if !ok {
 		panic("statelensics23mpt: consensus state not found at height " + height.String())
 	}
@@ -168,7 +168,7 @@ func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, p
 	if err != nil {
 		panic("statelensics23mpt: invalid storage proof: " + err.Error())
 	}
-	if err := statelensp.VerifyCommitmentKey(key, storageProof.Key); err != nil {
+	if err := ics23mpt.VerifyCommitmentKey(key, storageProof.Key); err != nil {
 		panic(err)
 	}
 	if err := storage.VerifyAbsence(copyBytes(consState.StorageRoot), storage.Proof{
@@ -180,7 +180,7 @@ func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, p
 }
 
 func (Adapter) GetTimestamp(clientId core.ClientId, height core.Height) core.Timestamp {
-	cs, ok := getEntry(clientId).consensusStates[statelensp.Height(height)]
+	cs, ok := getEntry(clientId).consensusStates[ics23mpt.Height(height)]
 	if !ok {
 		panic("statelensics23mpt: consensus state not found at height " + height.String())
 	}

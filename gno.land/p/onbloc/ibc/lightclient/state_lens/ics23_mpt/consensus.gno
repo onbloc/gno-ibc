@@ -1,4 +1,4 @@
-package statelensics23mpt
+package ics23mpt
 
 import (
 	"bytes"
@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	ErrConsensusStateTooShort = errors.New("statelensics23mpt: l2 consensus state too short")
-	ErrInvalidCommitmentKey   = errors.New("statelensics23mpt: invalid commitment key")
+	ErrConsensusStateTooShort = errors.New("ics23mpt: l2 consensus state too short")
+	ErrInvalidCommitmentKey   = errors.New("ics23mpt: invalid commitment key")
 )
 
 // ExtractConsensusState parses the L2 consensus state bytes into a

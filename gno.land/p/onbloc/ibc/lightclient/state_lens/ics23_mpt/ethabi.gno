@@ -1,4 +1,4 @@
-package statelensics23mpt
+package ics23mpt
 
 import (
 	"errors"
@@ -49,7 +49,7 @@ func EncodeClientState(cs ClientState) ([]byte, error) {
 func DecodeClientState(buf []byte) (ClientState, error) {
 	vals, err := abienc.Decode(clientStateSchema, buf)
 	if err != nil {
-		return ClientState{}, errors.New("statelensics23mpt: " + err.Error())
+		return ClientState{}, errors.New("ics23mpt: " + err.Error())
 	}
 
 	timestampOffset, err := toUint16(vals[4].(uint32), "timestamp offset")
@@ -95,7 +95,7 @@ func EncodeConsensusState(cs ConsensusState) ([]byte, error) {
 func DecodeConsensusState(buf []byte) (ConsensusState, error) {
 	vals, err := abienc.Decode(consensusStateSchema, buf)
 	if err != nil {
-		return ConsensusState{}, errors.New("statelensics23mpt: " + err.Error())
+		return ConsensusState{}, errors.New("ics23mpt: " + err.Error())
 	}
 
 	stateRoot := vals[1].([32]byte)
@@ -119,7 +119,7 @@ func EncodeHeader(h Header) ([]byte, error) {
 func DecodeHeader(buf []byte) (Header, error) {
 	vals, err := abienc.Decode(headerSchema, buf)
 	if err != nil {
-		return Header{}, errors.New("statelensics23mpt: " + err.Error())
+		return Header{}, errors.New("ics23mpt: " + err.Error())
 	}
 	return Header{
 		L1Height:              Height(vals[0].(uint64)),
@@ -131,14 +131,14 @@ func DecodeHeader(buf []byte) (Header, error) {
 
 func toUint16(v uint32, name string) (uint16, error) {
 	if v > 0xFFFF {
-		return 0, errors.New("statelensics23mpt: " + name + " exceeds uint16")
+		return 0, errors.New("ics23mpt: " + name + " exceeds uint16")
 	}
 	return uint16(v), nil
 }
 
 func toBytes32(b []byte, name string) ([32]byte, error) {
 	if len(b) != 32 {
-		return [32]byte{}, errors.New("statelensics23mpt: " + name + " must be 32 bytes")
+		return [32]byte{}, errors.New("ics23mpt: " + name + " must be 32 bytes")
 	}
 	var out [32]byte
 	copy(out[:], b)

@@ -202,7 +202,7 @@ func clientTypeOwnerPath(clientType ClientType) string {
 	case ClientType("cometbls"):
 		return "gno.land/r/onbloc/ibc/lightclients/cometbls"
 	case ClientType("state-lens/ics23/mpt"):
-		return "gno.land/r/onbloc/ibc/lightclients/statelensics23mpt"
+		return "gno.land/r/onbloc/ibc/lightclients/state_lens/ics23_mpt"
 	}
 	return ""
 }

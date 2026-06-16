@@ -8,7 +8,7 @@ import (
 	"gno.land/p/onbloc/encoding/abi"
 	"gno.land/p/onbloc/encoding/rlp"
 	"gno.land/p/onbloc/verifier/evm/storage"
-	ics23mpt "gno.land/p/onbloc/ibc/lightclient/state_lens/ics23_mpt"
+	ics23mpt "gno.land/p/onbloc/ibc/union/lightclient/state_lens/ics23_mpt"
 	"gno.land/p/nt/uassert/v0"
 	"gno.land/r/onbloc/ibc/union/core"
 )

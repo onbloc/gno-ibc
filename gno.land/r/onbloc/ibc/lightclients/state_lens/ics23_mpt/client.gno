@@ -5,8 +5,8 @@ import (
 	"crypto/keccak256"
 	"errors"
 
-	"gno.land/p/onbloc/verifier/evm/storage"
 	ics23mpt "gno.land/p/onbloc/ibc/lightclient/state_lens/ics23_mpt"
+	"gno.land/p/onbloc/verifier/evm/storage"
 	"gno.land/r/onbloc/ibc/union/core"
 )
 

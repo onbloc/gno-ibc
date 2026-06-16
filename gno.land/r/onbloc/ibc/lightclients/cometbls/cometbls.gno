@@ -3,8 +3,8 @@ package cometbls
 import (
 	"time"
 
-	cometblsp "gno.land/p/onbloc/ibc/lightclient/cometbls"
-	"gno.land/r/onbloc/ibc/union/core"
+	cometblsp "gno.land/p/onbloc/ibc/union/lightclient/cometbls"
+	"gno.land/r/onbloc/ibc/core"
 )
 
 const ClientType core.ClientType = "cometbls"

@@ -3,7 +3,7 @@ package realcometbls
 import (
 	"encoding/hex"
 
-	cometblsp "gno.land/p/onbloc/ibc/lightclient/cometbls"
+	cometblsp "gno.land/p/onbloc/ibc/union/lightclient/cometbls"
 )
 
 const (

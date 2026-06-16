@@ -1,4 +1,4 @@
-module = "gno.land/p/onbloc/ibc/lightclient/cometbls"
+module = "gno.land/p/onbloc/ibc/union/lightclient/cometbls"
 gno = "0.9"
 
 [require]

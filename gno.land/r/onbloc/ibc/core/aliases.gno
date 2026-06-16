@@ -12,7 +12,19 @@ package core
 // Per ROLES.md: the pure types package is the domain model; core owns state
 // and orchestration. core remains a thin facade over these names.
 
-import "gno.land/p/onbloc/ibc/types"
+import (
+	"gno.land/p/onbloc/ibc/app"
+	"gno.land/p/onbloc/ibc/host"
+	"gno.land/p/onbloc/ibc/types"
+)
+
+// --- interface contracts (defined in pure host/app packages) ---
+type (
+	ILightClient      = host.ILightClient
+	IForceLightClient = host.IForceLightClient
+	IApp              = app.IApp
+	IIntentApp        = app.IIntentApp
+)
 
 // --- identifier / scalar types ---
 type (

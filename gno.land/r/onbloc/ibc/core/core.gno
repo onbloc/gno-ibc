@@ -19,47 +19,10 @@ func PkgPath(cur realm) string {
 	return cur.PkgPath()
 }
 
-// ILightClient defines the interface that light client adapters must implement.
-// Methods that modify adapter state must declare _ realm as the first parameter
-// (Gno crossing function requirement for cross(cur)-realm state writes).
-type ILightClient interface {
-	CreateClient(_ realm, clientId ClientId, clientStateBytes, consensusStateBytes []byte) string
-	UpdateClient(_ realm, clientId ClientId, clientMessage []byte) ConsensusStateUpdate
-	VerifyMembership(clientId ClientId, height Height, proof []byte, key []byte, value []byte)
-	VerifyNonMembership(clientId ClientId, height Height, proof []byte, key []byte)
-	GetTimestamp(clientId ClientId, height Height) Timestamp
-	GetLatestHeight(clientId ClientId) Height
-	GetStatus(clientId ClientId) Status
-}
-
-// IForceLightClient is an optional interface implemented by light clients that
-// support admin-initiated force updates (e.g. to recover an expired client).
-// It is separate from ILightClient because force-update is not part of the
-// standard light client spec — it is a chain-operator escape hatch.
-type IForceLightClient interface {
-	ForceUpdateClient(cur realm, clientId ClientId, clientStateBytes, consensusStateBytes []byte) ConsensusStateUpdate
-}
-
-// IApp defines the interface for IBC application callbacks. Byte parameters
-// use plain []byte (not the typed Bytes wrapper) so foreign-realm apps can
-// implement the interface without the cross(cur)-realm typed-slice pitfall.
-type IApp interface {
-	OnChannelOpenInit(cur realm, connectionId ConnectionId, channelId ChannelId, version string, relayer address)
-	OnChannelOpenTry(cur realm, connectionId ConnectionId, channelId ChannelId, version string, counterpartyVersion string, relayer address)
-	OnChannelOpenAck(cur realm, channelId ChannelId, counterpartyChannelId ChannelId, counterpartyVersion string, relayer address)
-	OnChannelOpenConfirm(cur realm, channelId ChannelId, relayer address)
-	OnChannelCloseInit(cur realm, channelId ChannelId, relayer address)
-	OnChannelCloseConfirm(cur realm, channelId ChannelId, relayer address)
-	OnRecvPacket(cur realm, packet Packet, relayer address, relayerMsg []byte) RecvPacketResult
-	OnAcknowledgementPacket(cur realm, packet Packet, acknowledgement []byte, relayer address)
-	OnTimeoutPacket(cur realm, packet Packet, relayer address)
-}
-
-// IIntentApp is implemented by apps that explicitly support the proofless
-// market-maker intent receive path.
-type IIntentApp interface {
-	OnIntentRecvPacket(cur realm, packet Packet, marketMaker address, marketMakerMsg []byte) RecvPacketResult
-}
+// IBC interface contracts (ILightClient/IForceLightClient/IApp/IIntentApp)
+// live in the pure packages gno.land/p/onbloc/ibc/{host,app}. core re-exports
+// them as aliases in aliases.gno so adapters/apps can implement either the
+// pure contract or core.* with no change. See ROLES.md V1.
 
 // RegisterApp registers an IBC application at the caller realm's package path.
 func RegisterApp(cur realm, app IApp) {

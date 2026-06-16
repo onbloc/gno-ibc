@@ -3,7 +3,7 @@ package impl
 import (
 	"testing"
 
-	z "gno.land/p/onbloc/ibc/zkgm"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	"gno.land/p/nt/uassert/v0"
 	core "gno.land/r/onbloc/ibc/union/core"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"

@@ -4,11 +4,12 @@ import (
 	"testing"
 
 	"gno.land/p/nt/uassert/v0"
+	"gno.land/p/onbloc/ibc/union/types"
 )
 
 // Far in the future relative to the gno test default block time
 // (Unix=1234567890 sec ≈ 1.23e18 ns). Year ≈ 2116 in nanoseconds.
-const testFutureTimeoutNanos Timestamp = 1 << 62
+const testFutureTimeoutNanos types.Timestamp = 1 << 62
 
 // ICS-04: destination must reject a packet whose TimeoutTimestamp is at or
 // before its current block time.
@@ -16,16 +17,16 @@ func TestPacketRecvRejectsExpiredPacket(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 
-	expired := Timestamp(nowNanos() - 1)
-	packet := Packet{
+	expired := types.Timestamp(nowNanos() - 1)
+	packet := types.Packet{
 		SourceChannelId:      99,
 		DestinationChannelId: channelId,
-		Data:                 Bytes("transfer"),
+		Data:                 types.Bytes("transfer"),
 		TimeoutTimestamp:     expired,
 	}
 
 	uassert.AbortsContains(t, cur, "packet timeout expired", func(cur realm) {
-		PacketRecv(cur, MsgPacketRecv{Packets: []Packet{packet}})
+		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}})
 	})
 
 	if st.hasPacketReceipt(packet) {
@@ -40,16 +41,16 @@ func TestPacketRecvRejectsBoundaryTimeout(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 
-	boundary := Timestamp(nowNanos())
-	packet := Packet{
+	boundary := types.Timestamp(nowNanos())
+	packet := types.Packet{
 		SourceChannelId:      99,
 		DestinationChannelId: channelId,
-		Data:                 Bytes("transfer"),
+		Data:                 types.Bytes("transfer"),
 		TimeoutTimestamp:     boundary,
 	}
 
 	uassert.AbortsContains(t, cur, "packet timeout expired", func(cur realm) {
-		PacketRecv(cur, MsgPacketRecv{Packets: []Packet{packet}})
+		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}})
 	})
 }
 
@@ -57,15 +58,15 @@ func TestPacketRecvRejectsBoundaryTimeout(cur realm, t *testing.T) {
 func TestPacketRecvAcceptsZeroTimeout(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
-	packet := Packet{
+	packet := types.Packet{
 		SourceChannelId:      99,
 		DestinationChannelId: channelId,
-		Data:                 Bytes("transfer"),
+		Data:                 types.Bytes("transfer"),
 		TimeoutTimestamp:     0,
 	}
 
 	uassert.NotAborts(t, cur, func(cur realm) {
-		PacketRecv(cur, MsgPacketRecv{Packets: []Packet{packet}})
+		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}})
 	})
 	if !st.hasPacketReceipt(packet) {
 		t.Fatal("zero-timeout packet must be processed")
@@ -78,11 +79,11 @@ func TestPacketRecvAcceptsZeroTimeout(cur realm, t *testing.T) {
 func TestPacketRecvBatchRejectsIfAnyExpired(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
-	live := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("a"), TimeoutTimestamp: testFutureTimeoutNanos}
-	expired := Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: Bytes("b"), TimeoutTimestamp: Timestamp(nowNanos() - 1)}
+	live := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("a"), TimeoutTimestamp: testFutureTimeoutNanos}
+	expired := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("b"), TimeoutTimestamp: types.Timestamp(nowNanos() - 1)}
 
 	uassert.AbortsContains(t, cur, "packet timeout expired", func(cur realm) {
-		PacketRecv(cur, MsgPacketRecv{Packets: []Packet{live, expired}})
+		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{live, expired}})
 	})
 }
 
@@ -94,16 +95,16 @@ func TestPacketRecvSkipsTimeoutCheckForExistingReceipt(cur realm, t *testing.T) 
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	// Receipt already written; timeout is now in the past.
-	packet := Packet{
+	packet := types.Packet{
 		SourceChannelId:      99,
 		DestinationChannelId: channelId,
-		Data:                 Bytes("replay"),
-		TimeoutTimestamp:     Timestamp(nowNanos() - 1),
+		Data:                 types.Bytes("replay"),
+		TimeoutTimestamp:     types.Timestamp(nowNanos() - 1),
 	}
 	st.setPacketReceipt(packet)
 
 	uassert.NotAborts(t, cur, func(cur realm) {
-		PacketRecv(cur, MsgPacketRecv{Packets: []Packet{packet}})
+		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}})
 	})
 }
 
@@ -113,14 +114,14 @@ func TestPacketRecvSkipsTimeoutCheckForExistingReceipt(cur realm, t *testing.T) 
 func TestIntentPacketRecvRejectsExpiredPacket(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
-	packet := Packet{
+	packet := types.Packet{
 		SourceChannelId:      99,
 		DestinationChannelId: channelId,
-		Data:                 Bytes("intent"),
-		TimeoutTimestamp:     Timestamp(nowNanos() - 1),
+		Data:                 types.Bytes("intent"),
+		TimeoutTimestamp:     types.Timestamp(nowNanos() - 1),
 	}
 
 	uassert.AbortsContains(t, cur, "packet timeout expired", func(cur realm) {
-		IntentPacketRecv(cur, MsgIntentPacketRecv{Packets: []Packet{packet}})
+		IntentPacketRecv(cur, types.MsgIntentPacketRecv{Packets: []types.Packet{packet}})
 	})
 }

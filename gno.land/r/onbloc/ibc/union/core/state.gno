@@ -3,9 +3,8 @@ package core
 import (
 	"errors"
 
-	"gno.land/p/onbloc/ibc/host"
-	"gno.land/p/onbloc/ibc/lightclient"
 	"gno.land/p/onbloc/ibc/union/app"
+	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
@@ -152,7 +151,7 @@ func (s *State) getChannel(channelId types.ChannelId) types.Channel {
 
 func (s *State) saveClientState(clientId types.ClientId, clientStateBytes []byte) {
 	s.clientStates[clientId] = cloneBytes(clientStateBytes)
-	commit(host.ClientStatePath(clientId), keccak(clientStateBytes))
+	commit(types.ClientStatePath(clientId), keccak(clientStateBytes))
 }
 
 func (s *State) getClientState(clientId types.ClientId) []byte {
@@ -170,7 +169,7 @@ func (s *State) saveConsensusState(clientId types.ClientId, height types.Height,
 		s.consensusStates[clientId] = byHeight
 	}
 	byHeight[height] = cloneBytes(consensusStateBytes)
-	commit(host.ConsensusStatePath(clientId, height), keccak(consensusStateBytes))
+	commit(types.ConsensusStatePath(clientId, height), keccak(consensusStateBytes))
 }
 
 func (s *State) getConsensusState(clientId types.ClientId, height types.Height) []byte {
@@ -187,26 +186,26 @@ func (s *State) getConsensusState(clientId types.ClientId, height types.Height) 
 
 func (s *State) saveConnection(connectionId types.ConnectionId, connection types.Connection) {
 	s.connections[connectionId] = connection
-	commit(host.ConnectionPath(connectionId), connectionValue(connection))
+	commit(types.ConnectionPath(connectionId), connectionValue(connection))
 }
 
 func (s *State) saveChannel(channelId types.ChannelId, channel types.Channel) {
 	s.channels[channelId] = channel
-	commit(host.ChannelPath(channelId), channelValue(channel))
+	commit(types.ChannelPath(channelId), channelValue(channel))
 }
 
 func (s *State) saveBatchPackets(batchHash types.H256, value types.H256) {
-	path := host.BatchPacketsPath(batchHash)
+	path := types.BatchPacketsPath(batchHash)
 	s.batchPackets[path] = value
 	commit(path, value)
 }
 
 func (s *State) setBatchPackets(batchHash types.H256, value types.H256) {
-	s.batchPackets[host.BatchPacketsPath(batchHash)] = value
+	s.batchPackets[types.BatchPacketsPath(batchHash)] = value
 }
 
 func (s *State) getBatchPackets(batchHash types.H256) types.H256 {
-	value, ok := s.batchPackets[host.BatchPacketsPath(batchHash)]
+	value, ok := s.batchPackets[types.BatchPacketsPath(batchHash)]
 	if !ok {
 		panic(ErrBatchPacketsNotFound)
 	}
@@ -215,19 +214,19 @@ func (s *State) getBatchPackets(batchHash types.H256) types.H256 {
 
 func (s *State) deleteBatchPackets(batchHash types.H256) {
 	var zero types.H256
-	path := host.BatchPacketsPath(batchHash)
+	path := types.BatchPacketsPath(batchHash)
 	delete(s.batchPackets, path)
 	commit(path, zero)
 }
 
 func (s *State) saveBatchReceipts(batchHash types.H256, value types.H256) {
-	path := host.BatchReceiptsPath(batchHash)
+	path := types.BatchReceiptsPath(batchHash)
 	s.batchReceipts[path] = value
 	commit(path, value)
 }
 
 func (s *State) getBatchReceipts(batchHash types.H256) types.H256 {
-	value, ok := s.batchReceipts[host.BatchReceiptsPath(batchHash)]
+	value, ok := s.batchReceipts[types.BatchReceiptsPath(batchHash)]
 	if !ok {
 		panic(ErrBatchReceiptsNotFound)
 	}

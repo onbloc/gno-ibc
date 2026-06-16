@@ -3,7 +3,6 @@ package core
 import (
 	"chain"
 
-	"gno.land/p/onbloc/ibc/host"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
@@ -32,7 +31,7 @@ func ConnectionOpenTry(_ realm, msg types.MsgConnectionOpenTry) types.Connection
 		CounterpartyClientId:     msg.ClientId,
 		CounterpartyConnectionId: 0,
 	}
-	key := host.ConnectionPath(msg.CounterpartyConnectionId)
+	key := types.ConnectionPath(msg.CounterpartyConnectionId)
 	value := connectionValue(expectedConnection)
 	verifyMembershipActive(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
 
@@ -63,7 +62,7 @@ func ConnectionOpenAck(_ realm, msg types.MsgConnectionOpenAck) {
 		CounterpartyClientId:     connection.ClientId,
 		CounterpartyConnectionId: msg.ConnectionId,
 	}
-	key := host.ConnectionPath(msg.CounterpartyConnectionId)
+	key := types.ConnectionPath(msg.CounterpartyConnectionId)
 	value := connectionValue(expectedConnection)
 	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofTry, key[:], value[:])
 
@@ -91,7 +90,7 @@ func ConnectionOpenConfirm(_ realm, msg types.MsgConnectionOpenConfirm) {
 		CounterpartyClientId:     connection.ClientId,
 		CounterpartyConnectionId: msg.ConnectionId,
 	}
-	key := host.ConnectionPath(connection.CounterpartyConnectionId)
+	key := types.ConnectionPath(connection.CounterpartyConnectionId)
 	value := connectionValue(expectedConnection)
 	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofAck, key[:], value[:])
 

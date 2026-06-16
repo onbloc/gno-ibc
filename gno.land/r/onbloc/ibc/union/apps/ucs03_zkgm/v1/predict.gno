@@ -5,7 +5,7 @@ import (
 	"encoding/hex"
 
 	abi "gno.land/p/onbloc/encoding/abi"
-	z "gno.land/p/onbloc/ibc/zkgm"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	core "gno.land/r/onbloc/ibc/union/core"
 )

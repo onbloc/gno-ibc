@@ -11,7 +11,7 @@ import (
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
 	tb "gno.land/p/onbloc/ibc/zkgm/tokenbucket"
-	z "gno.land/p/onbloc/ibc/zkgm"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 )

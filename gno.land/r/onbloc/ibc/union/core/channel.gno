@@ -1,7 +1,6 @@
 package core
 
 import (
-	"gno.land/p/onbloc/ibc/host"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
@@ -42,7 +41,7 @@ func ChannelOpenTry(cur realm, msg types.MsgChannelOpenTry) types.ChannelId {
 		CounterpartyPortId:    msg.PortId,
 		Version:               msg.CounterpartyVersion,
 	}
-	key := host.ChannelPath(msg.Channel.CounterpartyChannelId)
+	key := types.ChannelPath(msg.Channel.CounterpartyChannelId)
 	value := channelValue(expectedChannel)
 	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
 
@@ -70,7 +69,7 @@ func ChannelOpenAck(cur realm, msg types.MsgChannelOpenAck) {
 		CounterpartyPortId:    portId,
 		Version:               msg.CounterpartyVersion,
 	}
-	key := host.ChannelPath(msg.CounterpartyChannelId)
+	key := types.ChannelPath(msg.CounterpartyChannelId)
 	value := channelValue(expectedChannel)
 	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofTry, key[:], value[:])
 
@@ -100,7 +99,7 @@ func ChannelOpenConfirm(cur realm, msg types.MsgChannelOpenConfirm) {
 		CounterpartyPortId:    portId,
 		Version:               channel.Version,
 	}
-	key := host.ChannelPath(channel.CounterpartyChannelId)
+	key := types.ChannelPath(channel.CounterpartyChannelId)
 	value := channelValue(expectedChannel)
 	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofAck, key[:], value[:])
 

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"gno.land/p/nt/uassert/v0"
+	"gno.land/p/onbloc/ibc/union/types"
 )
 
 // ICS-04: PacketTimeout must reject proofs whose consensus timestamp has not
@@ -13,17 +14,17 @@ func TestPacketTimeoutRejectsProofBeforeTimeout(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	client := st.clientRegistry[mockType].(*mockClient)
-	client.timestamp = Timestamp(500)
-	packet := Packet{
+	client.timestamp = types.Timestamp(500)
+	packet := types.Packet{
 		SourceChannelId:      channelId,
 		DestinationChannelId: 99,
-		Data:                 Bytes("transfer"),
-		TimeoutTimestamp:     Timestamp(1000),
+		Data:                 types.Bytes("transfer"),
+		TimeoutTimestamp:     types.Timestamp(1000),
 	}
 	st.commitPacket(packet)
 
 	uassert.AbortsContains(t, cur, "packet timeout not reached", func(cur realm) {
-		PacketTimeout(cur, MsgPacketTimeout{Packet: packet})
+		PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet})
 	})
 	if !st.hasPacketCommitment(packet) {
 		t.Fatal("rejected timeout must not delete the source commitment")
@@ -41,17 +42,17 @@ func TestPacketTimeoutRejectsProofAtBoundary(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	client := st.clientRegistry[mockType].(*mockClient)
-	client.timestamp = Timestamp(1000)
-	packet := Packet{
+	client.timestamp = types.Timestamp(1000)
+	packet := types.Packet{
 		SourceChannelId:      channelId,
 		DestinationChannelId: 99,
-		Data:                 Bytes("transfer"),
-		TimeoutTimestamp:     Timestamp(1000),
+		Data:                 types.Bytes("transfer"),
+		TimeoutTimestamp:     types.Timestamp(1000),
 	}
 	st.commitPacket(packet)
 
 	uassert.AbortsContains(t, cur, "packet timeout not reached", func(cur realm) {
-		PacketTimeout(cur, MsgPacketTimeout{Packet: packet})
+		PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet})
 	})
 	if !st.hasPacketCommitment(packet) {
 		t.Fatal("rejected timeout must not delete the source commitment")
@@ -64,17 +65,17 @@ func TestPacketTimeoutRejectsZeroTimeoutPacket(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	client := st.clientRegistry[mockType].(*mockClient)
-	client.timestamp = Timestamp(1 << 62) // any positive proof timestamp
-	packet := Packet{
+	client.timestamp = types.Timestamp(1 << 62) // any positive proof timestamp
+	packet := types.Packet{
 		SourceChannelId:      channelId,
 		DestinationChannelId: 99,
-		Data:                 Bytes("transfer"),
+		Data:                 types.Bytes("transfer"),
 		TimeoutTimestamp:     0,
 	}
 	st.commitPacket(packet)
 
 	uassert.AbortsContains(t, cur, "packet timeout not reached", func(cur realm) {
-		PacketTimeout(cur, MsgPacketTimeout{Packet: packet})
+		PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet})
 	})
 	if !st.hasPacketCommitment(packet) {
 		t.Fatal("zero-timeout packet must keep its commitment")
@@ -88,17 +89,17 @@ func TestPacketTimeoutAcceptsProofAfterTimeout(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	client := st.clientRegistry[mockType].(*mockClient)
-	client.timestamp = Timestamp(2000)
-	packet := Packet{
+	client.timestamp = types.Timestamp(2000)
+	packet := types.Packet{
 		SourceChannelId:      channelId,
 		DestinationChannelId: 99,
-		Data:                 Bytes("transfer"),
-		TimeoutTimestamp:     Timestamp(1000),
+		Data:                 types.Bytes("transfer"),
+		TimeoutTimestamp:     types.Timestamp(1000),
 	}
 	st.commitPacket(packet)
 
 	uassert.NotAborts(t, cur, func(cur realm) {
-		PacketTimeout(cur, MsgPacketTimeout{Packet: packet})
+		PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet})
 	})
 	if st.hasPacketCommitment(packet) {
 		t.Fatal("successful timeout must delete the source commitment")

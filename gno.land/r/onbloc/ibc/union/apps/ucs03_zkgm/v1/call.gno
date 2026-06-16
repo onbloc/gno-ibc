@@ -3,7 +3,7 @@ package impl
 import (
 	"errors"
 
-	z "gno.land/p/onbloc/ibc/zkgm"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	core "gno.land/r/onbloc/ibc/union/core"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"

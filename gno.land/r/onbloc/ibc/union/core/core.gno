@@ -5,7 +5,6 @@ import (
 	"chain/runtime"
 	"encoding/hex"
 
-	"gno.land/p/onbloc/ibc/host"
 	"gno.land/p/onbloc/ibc/union/app"
 	"gno.land/p/onbloc/ibc/union/types"
 )
@@ -24,7 +23,7 @@ func PkgPath(cur realm) string {
 // IBC interface contracts live in pure packages so adapters/apps can implement
 // them without importing this realm:
 //   - lightclient.ILightClient / lightclient.IForceLightClient
-//     in gno.land/p/onbloc/ibc/lightclient
+//     in gno.land/p/onbloc/ibc/union/lightclient
 //   - app.IApp / app.IIntentApp in gno.land/p/onbloc/ibc/union/app
 // core references the pure contracts directly (no re-export aliases).
 
@@ -96,7 +95,7 @@ func commitPacketsHash(packets []types.Packet) types.H256 {
 }
 
 func packetCommitmentPath(packet types.Packet) types.H256 {
-	h, err := host.PacketCommitmentPath(packet)
+	h, err := types.PacketCommitmentPath(packet)
 	if err != nil {
 		panic(err)
 	}
@@ -104,7 +103,7 @@ func packetCommitmentPath(packet types.Packet) types.H256 {
 }
 
 func packetAcknowledgementPath(packet types.Packet) types.H256 {
-	h, err := host.PacketAcknowledgementPath(packet)
+	h, err := types.PacketAcknowledgementPath(packet)
 	if err != nil {
 		panic(err)
 	}
@@ -131,7 +130,7 @@ func connectionValue(connection types.Connection) types.H256 {
 // prove it via an ABCI merkle query. This is the public, provable mirror of the
 // realm's in-memory state: State.save*/delete* methods keep their own map for
 // fast local lookups and call commit so the same value is exposed under the
-// canonical commitment key (host.*Path). The two writes are a pair — local map
+// canonical commitment key (types.*Path). The two writes are a pair — local map
 // for this realm's logic, chain params for the counterparty's membership proof.
 //
 // Keys follow the ibc-union (EVM storage layout) schema owned by the host

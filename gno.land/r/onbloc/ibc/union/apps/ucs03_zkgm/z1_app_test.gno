@@ -3,7 +3,7 @@ package zkgm
 import (
 	"testing"
 
-	z "gno.land/p/onbloc/ibc/zkgm"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	"gno.land/p/nt/uassert/v0"
 	core "gno.land/r/onbloc/ibc/union/core"
 )

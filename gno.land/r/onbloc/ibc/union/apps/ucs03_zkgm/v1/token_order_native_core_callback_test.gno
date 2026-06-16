@@ -5,7 +5,7 @@ import (
 	"chain/banker"
 	"testing"
 
-	z "gno.land/p/onbloc/ibc/zkgm"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	core "gno.land/r/onbloc/ibc/union/core"

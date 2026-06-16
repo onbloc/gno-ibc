@@ -2,7 +2,7 @@
 package scenarios_denyimpl
 
 import (
-	z "gno.land/p/onbloc/ibc/zkgm"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader_denyimpl"
 	core "gno.land/r/onbloc/ibc/union/core"

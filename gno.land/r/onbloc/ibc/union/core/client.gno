@@ -6,7 +6,7 @@ import (
 	rtunsafe "chain/runtime/unsafe"
 	"strings"
 
-	"gno.land/p/onbloc/ibc/lightclient"
+	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 

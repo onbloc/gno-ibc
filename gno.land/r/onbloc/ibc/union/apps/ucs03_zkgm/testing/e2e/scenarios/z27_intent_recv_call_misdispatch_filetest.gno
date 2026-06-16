@@ -13,7 +13,7 @@ package scenarios
 // that bare OP_CALL and batched OP_CALL both revert before reaching OnZkgm.
 
 import (
-	z "gno.land/p/onbloc/ibc/zkgm"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
 	"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"

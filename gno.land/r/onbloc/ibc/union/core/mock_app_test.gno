@@ -16,9 +16,17 @@ type mockClient struct {
 	nonMembershipHeights   []types.Height
 	nonMembershipProofs    [][]byte
 	nonMembershipKeys      [][]byte
+	createClientIds        []types.ClientId
+	createClientStates     [][]byte
+	createConsensusStates  [][]byte
 }
 
-func (m *mockClient) CreateClient(_ realm, _ types.ClientId, _, _ []byte) string { return m.chainId }
+func (m *mockClient) CreateClient(_ realm, clientId types.ClientId, clientStateBytes, consensusStateBytes []byte) string {
+	m.createClientIds = append(m.createClientIds, clientId)
+	m.createClientStates = append(m.createClientStates, clientStateBytes)
+	m.createConsensusStates = append(m.createConsensusStates, consensusStateBytes)
+	return m.chainId
+}
 func (m *mockClient) UpdateClient(_ realm, _ types.ClientId, _ []byte) types.ConsensusStateUpdate {
 	m.height = m.height.Increment()
 	return types.ConsensusStateUpdate{
@@ -49,8 +57,7 @@ func (m *mockClient) GetTimestamp(_ types.ClientId, _ types.Height) types.Timest
 	}
 	return types.Timestamp(1e9)
 }
-func (m *mockClient) GetLatestHeight(_ types.ClientId) types.Height { return m.height }
-func (m *mockClient) GetStatus(_ types.ClientId) types.Status       { return m.status }
+func (m *mockClient) GetStatus(_ types.ClientId) types.Status { return m.status }
 
 type mockForceClient struct {
 	mockClient

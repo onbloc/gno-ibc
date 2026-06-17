@@ -15,7 +15,6 @@ type ILightClient interface {
 	VerifyMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte, value []byte)
 	VerifyNonMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte)
 	GetTimestamp(clientId types.ClientId, height types.Height) types.Timestamp
-	GetLatestHeight(clientId types.ClientId) types.Height
 	GetStatus(clientId types.ClientId) types.Status
 }
 

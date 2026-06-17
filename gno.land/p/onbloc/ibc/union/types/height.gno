@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/binary"
 	"errors"
 	"strconv"
 	"strings"
@@ -111,6 +112,16 @@ func (h Height) String() string {
 		return strconv.FormatUint(h.Revision, 10) + "-" + strconv.FormatUint(h.Height, 10)
 	}
 	return strconv.FormatUint(h.Height, 10)
+}
+
+// Bytes returns a 16-byte big-endian encoding of the height (revision then
+// height), suitable as a BPTree key with correct lexicographic ordering when
+// cast to string.
+func (h Height) Bytes() []byte {
+	buf := make([]byte, 16)
+	binary.BigEndian.PutUint64(buf[:8], h.Revision)
+	binary.BigEndian.PutUint64(buf[8:], h.Height)
+	return buf
 }
 
 // ParseHeight parses a height string of the form "revision-height" or a bare

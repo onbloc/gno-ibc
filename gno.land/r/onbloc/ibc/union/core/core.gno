@@ -1,19 +1,12 @@
 package core
 
 import (
-	"chain/params"
 	"chain/runtime"
 	"encoding/hex"
 
 	"gno.land/p/onbloc/ibc/union/app"
 	"gno.land/p/onbloc/ibc/union/types"
 )
-
-var st State
-
-func init() {
-	st = newState()
-}
 
 // PkgPath returns this core realm's package path.
 func PkgPath(cur realm) string {
@@ -29,7 +22,7 @@ func PkgPath(cur realm) string {
 
 // RegisterApp registers an IBC application at the caller realm's package path.
 func RegisterApp(cur realm, app app.IApp) {
-        caller := cur.Previous().PkgPath()
+	caller := cur.Previous().PkgPath()
 	portId := []byte(caller)
 	registerAppAtPort(portId, app)
 	emitAppRegisteredEvent(portId, caller, false)
@@ -47,22 +40,22 @@ func RegisterAppForPort(cur realm, portId []byte, app app.IApp) {
 
 func registerAppAtPort(portId []byte, app app.IApp) {
 	key := string(portId)
-	if _, ok := st.ports[key]; ok {
+	if _, ok := store.ports[key]; ok {
 		panic(ErrPortAlreadyRegistered)
 	}
-	st.ports[key] = app
+	store.ports[key] = app
 }
 
 // HasApp reports whether an app is registered at portId.
 func HasApp(portId []byte) bool {
-	_, ok := st.ports[string(portId)]
+	_, ok := store.ports[string(portId)]
 	return ok
 }
 
 func Render(_ string) string {
-	s := "next client id: " + st.nextClientId.String()
+	s := "next client id: " + types.ClientId(uint32(store.clientSeq)+1).String()
 	s += "\nregistered clients: ["
-	for key := range st.clientRegistry {
+	for key := range store.clientRegistry {
 		s += " " + string(key)
 	}
 	s += " ]"
@@ -124,20 +117,6 @@ func connectionValue(connection types.Connection) types.H256 {
 		panic(err)
 	}
 	return keccak(bz)
-}
-
-// commit writes an IBC commitment to chain params so the counterparty can
-// prove it via an ABCI merkle query. This is the public, provable mirror of the
-// realm's in-memory state: State.save*/delete* methods keep their own map for
-// fast local lookups and call commit so the same value is exposed under the
-// canonical commitment key (types.*Path). The two writes are a pair — local map
-// for this realm's logic, chain params for the counterparty's membership proof.
-//
-// Keys follow the ibc-union (EVM storage layout) schema owned by the host
-// package (gno.land/p/onbloc/ibc/host), not classic IBC (ICS-024) string keys,
-// so commitments stay provable against Union relayers and EVM counterparties.
-func commit(key types.H256, value types.H256) {
-	params.SetBytes(hex.EncodeToString(key[:]), value[:])
 }
 
 // h256Bytes returns a fresh byte slice containing h.

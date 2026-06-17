@@ -38,18 +38,12 @@ func requireAdmin(cur realm, action string) {
 	}
 }
 
-// CreateClient creates a light client and stores its initial client and consensus states.
+// CreateClient creates a light client through the registered light client adapter.
 func CreateClient(cur realm, msg types.MsgCreateClient) types.ClientId {
-	impl, ok := st.clientRegistry[msg.ClientType]
-	if !ok {
-		panic(ErrClientTypeNotFound)
-	}
-
-	clientId := st.generateClientId()
-	impl.CreateClient(cross(cur), clientId, msg.ClientStateBytes, msg.ConsensusStateBytes)
-	st.clientTypes[clientId] = msg.ClientType
-	st.saveClientState(clientId, msg.ClientStateBytes)
-	st.saveConsensusState(clientId, impl.GetLatestHeight(clientId), msg.ConsensusStateBytes)
+	creator := cur.Previous().Address()
+	c := store.addClient(msg.ClientType, creator)
+	clientId := c.id
+	c.lightClient.CreateClient(cross(cur), clientId, msg.ClientStateBytes, msg.ConsensusStateBytes)
 
 	chain.Emit(CreateClientEvent,
 		"client_id", clientId.String(),
@@ -60,15 +54,17 @@ func CreateClient(cur realm, msg types.MsgCreateClient) types.ClientId {
 
 // UpdateClient updates a light client using the provided client message and stores the resulting state.
 func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
-	impl := st.getClient(msg.ClientId)
+	c := store.getClient(msg.ClientId)
+	if c == nil {
+		panic("client " + msg.ClientId.String() + " not found")
+	}
+	update := c.lightClient.UpdateClient(cross(cur), msg.ClientId, msg.ClientMessage)
 
-	update := impl.UpdateClient(cross(cur), msg.ClientId, msg.ClientMessage)
-
-	st.saveClientState(msg.ClientId, update.ClientStateBytes)
-	st.saveConsensusState(msg.ClientId, update.Height, update.ConsensusStateBytes)
+	c.saveState(update.ClientStateBytes)
+	c.saveConsensusState(update.Height, update.ConsensusStateBytes)
 
 	chain.Emit(UpdateClientEvent,
-		"client_type", st.clientTypes[msg.ClientId].String(),
+		"client_type", c.typ.String(),
 		"client_id", msg.ClientId.String(),
 		"height", update.Height.String(),
 	)
@@ -83,7 +79,11 @@ func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) types.Height {
 	requireAdmin(cur, "ForceUpdateClient")
 
-	impl, ok := st.getClient(msg.ClientId).(lightclient.IForceLightClient)
+	c := store.getClient(msg.ClientId)
+	if c == nil {
+		panic("client " + msg.ClientId.String() + " not found")
+	}
+	impl, ok := c.lightClient.(lightclient.IForceLightClient)
 	if !ok {
 		panic("client does not support ForceUpdateClient")
 	}
@@ -91,11 +91,11 @@ func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) types.Height {
 	runtime.AssertOriginCall()
 	update := impl.ForceUpdateClient(cross(cur), msg.ClientId, msg.ClientStateBytes, msg.ConsensusStateBytes)
 
-	st.saveClientState(msg.ClientId, update.ClientStateBytes)
-	st.saveConsensusState(msg.ClientId, update.Height, update.ConsensusStateBytes)
+	c.saveState(update.ClientStateBytes)
+	c.saveConsensusState(update.Height, update.ConsensusStateBytes)
 
 	chain.Emit(UpdateClientEvent,
-		"client_type", st.clientTypes[msg.ClientId].String(),
+		"client_type", c.typ.String(),
 		"client_id", msg.ClientId.String(),
 		"height", update.Height.String(),
 	)
@@ -109,21 +109,24 @@ func VerifyClientMembership(_ realm, clientId types.ClientId, proofHeight types.
 	verifyMembershipActive(clientId, proofHeight, proof, path, value)
 }
 
-func requireActiveClient(client lightclient.ILightClient, clientId types.ClientId) {
-	if client.GetStatus(clientId) != types.StatusActive {
+func requireActiveClient(impl lightclient.ILightClient, clientId types.ClientId) {
+	if impl.GetStatus(clientId) != types.StatusActive {
 		panic(ErrClientNotActive)
 	}
 }
 
 func verifyMembershipActive(clientId types.ClientId, height types.Height, proof, key, value []byte) {
-	client := st.getClient(clientId)
-	requireActiveClient(client, clientId)
-	client.VerifyMembership(clientId, height, proof, key, value)
+	c := store.getClient(clientId)
+	if c == nil {
+		panic("client " + clientId.String() + " not found")
+	}
+	requireActiveClient(c.lightClient, clientId)
+	c.lightClient.VerifyMembership(clientId, height, proof, key, value)
 }
 
-func verifyNonMembershipWithActiveClient(client lightclient.ILightClient, clientId types.ClientId, height types.Height, proof, key []byte) {
-	requireActiveClient(client, clientId)
-	client.VerifyNonMembership(clientId, height, proof, key)
+func verifyNonMembershipWithActiveClient(impl lightclient.ILightClient, clientId types.ClientId, height types.Height, proof, key []byte) {
+	requireActiveClient(impl, clientId)
+	impl.VerifyNonMembership(clientId, height, proof, key)
 }
 
 // RegisterClient registers a light client implementation for clientType.
@@ -141,7 +144,7 @@ func RegisterClient(cur realm, clientType types.ClientType, client lightclient.I
 	} else if !isScopedClientType(caller, clientType) {
 		panic("caller not authorized to register client: unauthorized")
 	}
-	st.registerClient(clientType, client)
+	store.registerClient(clientType, client)
 	emitClientRegisteredEvent(clientType, caller, false)
 }
 
@@ -151,53 +154,54 @@ func RegisterClient(cur realm, clientType types.ClientType, client lightclient.I
 func RegisterClientForType(cur realm, clientType types.ClientType, client lightclient.ILightClient) {
 	requireAdmin(cur, "register client")
 	runtime.AssertOriginCall()
-	st.registerClient(clientType, client)
+	store.registerClient(clientType, client)
 	emitClientRegisteredEvent(clientType, cur.Previous().PkgPath(), true)
 }
 
 // HasClient reports whether a light client is registered for clientType.
 func HasClient(clientType types.ClientType) bool {
-	_, ok := st.clientRegistry[clientType]
+	_, ok := store.clientRegistry[clientType]
 	return ok
 }
 
 // QueryClientState returns the stored client state as a hex string.
 func QueryClientState(clientId types.ClientId) string {
-	state, ok := st.clientStates[clientId]
-	if !ok {
+	c := store.getClient(clientId)
+	if c == nil {
 		return ""
 	}
-	return hexString(state)
+	return hexString(c.clientState)
 }
 
 // QueryConsensusState returns the consensus state at height as a hex string.
 func QueryConsensusState(clientId types.ClientId, height types.Height) string {
-	byHeight, ok := st.consensusStates[clientId]
-	if !ok {
+	c := store.getClient(clientId)
+	if c == nil {
 		return ""
 	}
-	state, ok := byHeight[height]
-	if !ok {
+	bz, found := c.getConsensusState(height)
+	if !found {
 		return ""
 	}
-	return hexString(state)
+	return hexString(bz)
 }
 
 // GetClientStatus returns the current status reported by a registered light client.
 func GetClientStatus(clientId types.ClientId) types.Status {
-	if _, ok := st.clientTypes[clientId]; !ok {
+	c := store.getClient(clientId)
+	if c == nil {
 		return types.StatusUnknown
 	}
-	return st.getClient(clientId).GetStatus(clientId)
+	return c.lightClient.GetStatus(clientId)
 }
 
 // GetClientType returns the registered client type for clientId.
 func GetClientType(clientId types.ClientId) string {
-	clientType, ok := st.clientTypes[clientId]
-	if !ok {
+	c := store.getClient(clientId)
+	if c == nil {
 		return ""
 	}
-	return clientType.String()
+	return c.typ.String()
 }
 
 func clientTypeOwnerPath(clientType types.ClientType) string {

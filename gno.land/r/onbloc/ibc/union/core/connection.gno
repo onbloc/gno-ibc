@@ -10,6 +10,7 @@ func ConnectionOpenInit(_ realm, msg types.MsgConnectionOpenInit) types.Connecti
 	requireClientId(msg.ClientId)
 	requireClientId(msg.CounterpartyClientId)
 	requireActiveClient(st.getClient(msg.ClientId), msg.ClientId)
+	connectionId := st.generateConnectionId()
 	st.saveConnection(connectionId, types.Connection{
 		State:                    types.ConnectionStateInit,
 		ClientId:                 msg.ClientId,
@@ -17,7 +18,6 @@ func ConnectionOpenInit(_ realm, msg types.MsgConnectionOpenInit) types.Connecti
 		CounterpartyConnectionId: 0,
 	})
 
-	connectionId := st.generateConnectionId()
 	chain.Emit(ConnectionOpenInitEvent,
 		"connection_id", connectionId.String(),
 		"client_id", msg.ClientId.String(),

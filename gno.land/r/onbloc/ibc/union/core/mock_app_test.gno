@@ -63,27 +63,38 @@ func (m *mockForceClient) ForceUpdateClient(cur realm, _ types.ClientId, csBytes
 }
 
 type mockApp struct {
-	initCalled     bool
-	closedChannels []types.ChannelId
-	recvPackets    []types.Packet
-	intentPackets  []types.Packet
-	intentMsgs     [][]byte
-	ackPackets     []types.Packet
-	timeoutPackets []types.Packet
-	recvResult     types.RecvPacketResult
-	intentResult   types.RecvPacketResult
+	initCalled                 bool
+	openInitObservedChannel    types.Channel
+	openTryObservedChannel     types.Channel
+	openAckObservedChannel     types.Channel
+	openConfirmObservedChannel types.Channel
+	closedChannels             []types.ChannelId
+	recvPackets                []types.Packet
+	intentPackets              []types.Packet
+	intentMsgs                 [][]byte
+	ackPackets                 []types.Packet
+	timeoutPackets             []types.Packet
+	recvResult                 types.RecvPacketResult
+	intentResult               types.RecvPacketResult
 }
 
-func (a *mockApp) OnChannelOpenInit(_ realm, _ types.ConnectionId, _ types.ChannelId, _ string, _ address) {
+func (a *mockApp) OnChannelOpenInit(_ realm, _ types.ConnectionId, channelId types.ChannelId, _ string, _ address) {
 	a.initCalled = true
+	a.openInitObservedChannel = GetChannel(channelId)
 }
 
-func (a *mockApp) OnChannelOpenTry(_ realm, _ types.ConnectionId, _ types.ChannelId, _, _ string, _ address) {
+func (a *mockApp) OnChannelOpenTry(_ realm, _ types.ConnectionId, channelId types.ChannelId, _, _ string, _ address) {
+	a.openTryObservedChannel = GetChannel(channelId)
 }
 
-func (a *mockApp) OnChannelOpenAck(_ realm, _ types.ChannelId, _ types.ChannelId, _ string, _ address) {
+func (a *mockApp) OnChannelOpenAck(_ realm, channelId types.ChannelId, _ types.ChannelId, _ string, _ address) {
+	a.openAckObservedChannel = GetChannel(channelId)
 }
-func (a *mockApp) OnChannelOpenConfirm(_ realm, _ types.ChannelId, _ address) {}
+
+func (a *mockApp) OnChannelOpenConfirm(_ realm, channelId types.ChannelId, _ address) {
+	a.openConfirmObservedChannel = GetChannel(channelId)
+}
+
 func (a *mockApp) OnChannelCloseInit(_ realm, ch types.ChannelId, _ address) {
 	a.closedChannels = append(a.closedChannels, ch)
 }

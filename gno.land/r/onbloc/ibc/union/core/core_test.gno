@@ -124,6 +124,25 @@ func setupOpenChannel(t *testing.T) (types.Bytes, types.ConnectionId, types.Chan
 	return portId, connId, channelId
 }
 
+func setupOpenConnectionWithApp(t *testing.T, app *mockApp) (types.Bytes, types.ConnectionId) {
+	t.Helper()
+	clientId := st.generateClientId()
+	st.clientTypes[clientId] = mockType
+	st.clientRegistry[mockType] = &mockClient{chainId: "union-1", height: types.NewHeight(100), status: types.StatusActive}
+
+	connId := st.generateConnectionId()
+	st.saveConnection(connId, types.Connection{
+		State:                    types.ConnectionStateOpen,
+		ClientId:                 clientId,
+		CounterpartyClientId:     types.ClientId(99),
+		CounterpartyConnectionId: types.ConnectionId(99),
+	})
+
+	portId := types.Bytes(testCorePkgPath)
+	st.ports[portKey(portId)] = app
+	return portId, connId
+}
+
 // --- Path tests ---
 
 func TestClientStatePathUnique(cur realm, t *testing.T) {
@@ -960,6 +979,131 @@ func TestChannelStateTransitions(cur realm, t *testing.T) {
 	st.saveChannel(id, types.Channel{State: types.ChannelStateClosed})
 	if st.getChannel(id).State != types.ChannelStateClosed {
 		t.Error("expected Closed")
+	}
+}
+
+// The channel handshake stores state before invoking the app callback so apps
+// can safely derive routing data from GetChannel during the callback.
+func TestChannelOpenInitCallbackObservesSavedChannel(cur realm, t *testing.T) {
+	resetState()
+	app := &mockApp{}
+	portId, connId := setupOpenConnectionWithApp(t, app)
+
+	channelId := ChannelOpenInit(cur, types.MsgChannelOpenInit{
+		PortId:             portId,
+		CounterpartyPortId: types.Bytes("counterparty"),
+		ConnectionId:       connId,
+		Version:            "ics20-1",
+	})
+
+	got := app.openInitObservedChannel
+	if got.State != types.ChannelStateInit {
+		t.Fatalf("callback channel state: got %d want %d", got.State, types.ChannelStateInit)
+	}
+	if got.ConnectionId != connId {
+		t.Fatalf("callback connection id: got %d want %d", got.ConnectionId, connId)
+	}
+	if st.getChannel(channelId).State != types.ChannelStateInit {
+		t.Fatal("ChannelOpenInit must persist the initialized channel")
+	}
+}
+
+// ChannelOpenTry should expose the newly saved TryOpen channel to the app
+// callback, matching Union's state-before-callback ordering.
+func TestChannelOpenTryCallbackObservesSavedChannel(cur realm, t *testing.T) {
+	resetState()
+	app := &mockApp{}
+	portId, connId := setupOpenConnectionWithApp(t, app)
+
+	channelId := ChannelOpenTry(cur, types.MsgChannelOpenTry{
+		PortId: portId,
+		Channel: types.Channel{
+			State:                 types.ChannelStateTryOpen,
+			ConnectionId:          connId,
+			CounterpartyChannelId: types.ChannelId(77),
+			CounterpartyPortId:    types.Bytes("counterparty"),
+			Version:               "ics20-1",
+		},
+		CounterpartyVersion: "ics20-1",
+		ProofInit:           types.Bytes("proof"),
+		ProofHeight:         10,
+	})
+
+	got := app.openTryObservedChannel
+	if got.State != types.ChannelStateTryOpen {
+		t.Fatalf("callback channel state: got %d want %d", got.State, types.ChannelStateTryOpen)
+	}
+	if got.CounterpartyChannelId != types.ChannelId(77) {
+		t.Fatalf("callback counterparty channel id: got %d want 77", got.CounterpartyChannelId)
+	}
+	if st.getChannel(channelId).State != types.ChannelStateTryOpen {
+		t.Fatal("ChannelOpenTry must persist the try-open channel")
+	}
+}
+
+// Ack transitions the local channel to Open before the callback, otherwise an
+// app observing GetChannel during OnChannelOpenAck sees stale Init state.
+func TestChannelOpenAckCallbackObservesOpenChannel(cur realm, t *testing.T) {
+	resetState()
+	app := &mockApp{}
+	portId, connId := setupOpenConnectionWithApp(t, app)
+	channelId := st.generateChannelId()
+	st.channelOwners[channelId] = portId
+	st.saveChannel(channelId, types.Channel{
+		State:              types.ChannelStateInit,
+		ConnectionId:       connId,
+		CounterpartyPortId: types.Bytes("counterparty"),
+		Version:            "local-version",
+	})
+
+	ChannelOpenAck(cur, types.MsgChannelOpenAck{
+		ChannelId:             channelId,
+		CounterpartyVersion:   "remote-version",
+		CounterpartyChannelId: types.ChannelId(88),
+		ProofTry:              types.Bytes("proof"),
+		ProofHeight:           10,
+	})
+
+	got := app.openAckObservedChannel
+	if got.State != types.ChannelStateOpen {
+		t.Fatalf("callback channel state: got %d want %d", got.State, types.ChannelStateOpen)
+	}
+	if got.CounterpartyChannelId != types.ChannelId(88) {
+		t.Fatalf("callback counterparty channel id: got %d want 88", got.CounterpartyChannelId)
+	}
+	if got.Version != "remote-version" {
+		t.Fatalf("callback version: got %q want remote-version", got.Version)
+	}
+}
+
+// Confirm also reaches Open before the callback so apps do not observe the
+// intermediate TryOpen state after proof verification succeeds.
+func TestChannelOpenConfirmCallbackObservesOpenChannel(cur realm, t *testing.T) {
+	resetState()
+	app := &mockApp{}
+	portId, connId := setupOpenConnectionWithApp(t, app)
+	channelId := st.generateChannelId()
+	st.channelOwners[channelId] = portId
+	st.saveChannel(channelId, types.Channel{
+		State:                 types.ChannelStateTryOpen,
+		ConnectionId:          connId,
+		CounterpartyChannelId: types.ChannelId(88),
+		CounterpartyPortId:    types.Bytes("counterparty"),
+		Version:               "ics20-1",
+	})
+
+	ChannelOpenConfirm(cur, types.MsgChannelOpenConfirm{
+		ChannelId:   channelId,
+		ProofAck:    types.Bytes("proof"),
+		ProofHeight: 10,
+	})
+
+	got := app.openConfirmObservedChannel
+	if got.State != types.ChannelStateOpen {
+		t.Fatalf("callback channel state: got %d want %d", got.State, types.ChannelStateOpen)
+	}
+	if got.CounterpartyChannelId != types.ChannelId(88) {
+		t.Fatalf("callback counterparty channel id: got %d want 88", got.CounterpartyChannelId)
 	}
 }
 

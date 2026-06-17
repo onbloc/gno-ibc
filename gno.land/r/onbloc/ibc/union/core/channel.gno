@@ -11,9 +11,6 @@ func ChannelOpenInit(cur realm, msg types.MsgChannelOpenInit) types.ChannelId {
 	connection := ensureConnectionOpen(msg.ConnectionId)
 	channelId := st.generateChannelId()
 	st.channelOwners[channelId] = portId
-
-	st.getAppByPortId(portId).OnChannelOpenInit(cross(cur), msg.ConnectionId, channelId, msg.Version, relayer)
-
 	channel := types.Channel{
 		State:                 types.ChannelStateInit,
 		ConnectionId:          msg.ConnectionId,
@@ -22,6 +19,8 @@ func ChannelOpenInit(cur realm, msg types.MsgChannelOpenInit) types.ChannelId {
 		Version:               msg.Version,
 	}
 	st.saveChannel(channelId, channel)
+
+	st.getAppByPortId(portId).OnChannelOpenInit(cross(cur), msg.ConnectionId, channelId, msg.Version, relayer)
 	emitChannelEvent(ChannelOpenInitEvent, portId, channelId, channel, connection)
 	return channelId
 }
@@ -49,8 +48,8 @@ func ChannelOpenTry(cur realm, msg types.MsgChannelOpenTry) types.ChannelId {
 	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
 
 	st.channelOwners[channelId] = portId
-	st.getAppByPortId(portId).OnChannelOpenTry(cross(cur), msg.Channel.ConnectionId, channelId, msg.Channel.Version, msg.CounterpartyVersion, relayer)
 	st.saveChannel(channelId, msg.Channel)
+	st.getAppByPortId(portId).OnChannelOpenTry(cross(cur), msg.Channel.ConnectionId, channelId, msg.Channel.Version, msg.CounterpartyVersion, relayer)
 
 	emitChannelEvent(ChannelOpenTryEvent, portId, channelId, msg.Channel, connection)
 	return channelId
@@ -78,12 +77,11 @@ func ChannelOpenAck(cur realm, msg types.MsgChannelOpenAck) {
 	value := channelValue(expectedChannel)
 	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofTry, key[:], value[:])
 
-	st.getAppByPortId(portId).OnChannelOpenAck(cross(cur), msg.ChannelId, msg.CounterpartyChannelId, msg.CounterpartyVersion, relayer)
-
 	channel.State = types.ChannelStateOpen
 	channel.Version = msg.CounterpartyVersion
 	channel.CounterpartyChannelId = msg.CounterpartyChannelId
 	st.saveChannel(msg.ChannelId, channel)
+	st.getAppByPortId(portId).OnChannelOpenAck(cross(cur), msg.ChannelId, msg.CounterpartyChannelId, msg.CounterpartyVersion, relayer)
 
 	emitChannelEvent(ChannelOpenAckEvent, portId, msg.ChannelId, channel, connection)
 }
@@ -109,9 +107,9 @@ func ChannelOpenConfirm(cur realm, msg types.MsgChannelOpenConfirm) {
 	value := channelValue(expectedChannel)
 	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofAck, key[:], value[:])
 
-	st.getAppByPortId(portId).OnChannelOpenConfirm(cross(cur), msg.ChannelId, relayer)
 	channel.State = types.ChannelStateOpen
 	st.saveChannel(msg.ChannelId, channel)
+	st.getAppByPortId(portId).OnChannelOpenConfirm(cross(cur), msg.ChannelId, relayer)
 
 	emitChannelEvent(ChannelOpenConfirmEvent, portId, msg.ChannelId, channel, connection)
 }

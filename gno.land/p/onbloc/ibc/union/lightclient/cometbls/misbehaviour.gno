@@ -1,370 +1,78 @@
 package cometbls
 
 import (
-	"errors"
-	"strconv"
+	"time"
+
+	"gno.land/p/nt/ufmt/v0"
+	"gno.land/p/onbloc/ibc/union/types"
 )
 
-// Codecs are generated (misbehaviour_pb_gen.gno). This file holds the
-// hand-written pb* helpers they (and Header/Height/LightHeader) call into.
+var FrozenHeight = types.NewHeightWithRevision(0, 1)
 
-func pbAppendVarint(buf []byte, v uint64) []byte {
-	for v >= 0x80 {
-		buf = append(buf, byte(v)|0x80)
-		v >>= 7
+type Misbehaviour struct {
+	Header1 *Header
+	Header2 *Header
+}
+
+func NewMisbehaviour(header1 *Header, header2 *Header) *Misbehaviour {
+	return &Misbehaviour{Header1: header1, Header2: header2}
+}
+
+func (Misbehaviour) ClientType() string {
+	return ClientType
+}
+
+// GetTime returns the timestamp at which misbehaviour occurred. It uses the
+// maximum value from both headers to prevent producing an invalid header outside
+// of the misbehaviour age range.
+func (m *Misbehaviour) GetTime() time.Time {
+	t1, t2 := m.Header1.GetTime(), m.Header2.GetTime()
+	if t1.After(t2) {
+		return t1
 	}
-	return append(buf, byte(v))
+	return t2
 }
 
-func pbAppendTag(buf []byte, fieldNum, wireType int) []byte {
-	return pbAppendVarint(buf, uint64(fieldNum<<3|wireType))
-}
-
-func pbAppendMsg(buf []byte, fieldNum int, msg []byte) []byte {
-	if len(msg) == 0 {
-		return buf
+// ValidateBasic implements Misbehaviour interface
+func (m *Misbehaviour) ValidateBasic() error {
+	if m.Header1 == nil {
+		return makeError(ErrInvalidHeader, "misbehaviour Header_1 cannot be nil")
 	}
-	buf = pbAppendTag(buf, fieldNum, 2)
-	buf = pbAppendVarint(buf, uint64(len(msg)))
-	return append(buf, msg...)
-}
 
-func pbAppendUint64(buf []byte, fieldNum int, v uint64) []byte {
-	if v == 0 {
-		return buf
+	if m.Header2 == nil {
+		return makeError(ErrInvalidHeader, "misbehaviour Header_2 cannot be nil")
 	}
-	buf = pbAppendTag(buf, fieldNum, 0)
-	return pbAppendVarint(buf, v)
-}
 
-func pbAppendInt64(buf []byte, fieldNum int, v int64) []byte {
-	return pbAppendUint64(buf, fieldNum, uint64(v))
-}
-
-func pbAppendInt32(buf []byte, fieldNum int, v int32) []byte {
-	return pbAppendUint64(buf, fieldNum, uint64(v))
-}
-
-func pbAppendBytes(buf []byte, fieldNum int, data []byte) []byte {
-	if len(data) == 0 {
-		return buf
+	if m.Header1.TrustedHeight.RevisionHeight == 0 {
+		return makeError(ErrInvalidHeaderHeight, "misbehaviour Header_1 cannot have zero revision height")
 	}
-	buf = pbAppendTag(buf, fieldNum, 2)
-	buf = pbAppendVarint(buf, uint64(len(data)))
-	return append(buf, data...)
-}
 
-func pbEncodeHeight(h Height) []byte {
-	var buf []byte
-	buf = pbAppendUint64(buf, 2, h) // ibc-union always uses revision 0; only revision_height (field 2) is emitted
-	return buf
-}
+	if m.Header2.TrustedHeight.RevisionHeight == 0 {
+		return makeError(ErrInvalidHeaderHeight, "misbehaviour Header_2 cannot have zero revision height")
+	}
 
-func pbEncodeHeader(h Header) []byte {
-	var buf, lhBuf, tsBuf []byte
-	lhBuf = pbAppendInt64(lhBuf, 1, h.SignedHeader.Height)
-	tsBuf = pbAppendInt64(tsBuf, 1, h.SignedHeader.TimeSeconds)
-	tsBuf = pbAppendInt32(tsBuf, 2, h.SignedHeader.TimeNanos)
-	lhBuf = pbAppendMsg(lhBuf, 2, tsBuf)
-	lhBuf = pbAppendBytes(lhBuf, 3, h.SignedHeader.ValidatorsHash)
-	lhBuf = pbAppendBytes(lhBuf, 4, h.SignedHeader.NextValidatorsHash[:])
-	lhBuf = pbAppendBytes(lhBuf, 5, h.SignedHeader.AppHash)
-	buf = pbAppendMsg(buf, 1, lhBuf)
-	buf = pbAppendMsg(buf, 2, pbEncodeHeight(h.TrustedHeight))
-	buf = pbAppendBytes(buf, 3, h.ZeroKnowledgeProof)
-	return buf
-}
+	// ValidateBasic on both validators
+	if err := m.Header1.ValidateBasic(); err != nil {
+		return makeError(
+			ErrInvalidMisbehaviour,
+			ufmt.Sprintf("header 1 failed validation: %v", err),
+		)
+	}
 
-func pbDecodeVarint(buf []byte, pos int) (uint64, int, error) {
-	var result uint64
-	var shift uint
-	for {
-		if pos >= len(buf) {
-			return 0, pos, errors.New("proto: buffer underflow reading varint")
-		}
-		b := buf[pos]
-		pos++
-		result |= uint64(b&0x7F) << shift
-		if b&0x80 == 0 {
-			return result, pos, nil
-		}
-		shift += 7
-		if shift >= 64 {
-			return 0, pos, errors.New("proto: varint overflow")
-		}
+	if err := m.Header2.ValidateBasic(); err != nil {
+		return makeError(
+			ErrInvalidMisbehaviour,
+			ufmt.Sprintf("header 2 failed validation: %v", err),
+		)
 	}
-}
 
-func pbDecodeTag(buf []byte, pos int) (fieldNum, wireType, newPos int, err error) {
-	tag, newPos, err := pbDecodeVarint(buf, pos)
-	if err != nil {
-		return 0, 0, pos, err
+	// Ensure that Height1 is greater than or equal to Height2
+	if m.Header1.GetHeight().LT(m.Header2.GetHeight()) {
+		return makeError(
+			ErrInvalidMisbehaviour,
+			ufmt.Sprintf("Header_1 height is less than Header_2 height (%s < %s)", m.Header1.GetHeight(), m.Header2.GetHeight()),
+		)
 	}
-	fieldNum = int(tag >> 3)
-	if fieldNum == 0 {
-		return 0, 0, pos, errors.New("proto: invalid field number 0")
-	}
-	return fieldNum, int(tag & 0x7), newPos, nil
-}
 
-func pbDecodeBytes(buf []byte, pos int) ([]byte, int, error) {
-	length, pos, err := pbDecodeVarint(buf, pos)
-	if err != nil {
-		return nil, pos, err
-	}
-	// Bounds check before any int conversion: a malformed varint length
-	// (e.g. ~uint64(0)) would overflow `pos+int(length)` and let the
-	// allocation panic with len out of range.
-	if length > uint64(len(buf)-pos) {
-		return nil, pos, errors.New("proto: buffer underflow reading bytes")
-	}
-	end := pos + int(length)
-	out := make([]byte, length)
-	copy(out, buf[pos:end])
-	return out, end, nil
-}
-
-func pbSkipField(buf []byte, pos, wireType int) (int, error) {
-	switch wireType {
-	case 0:
-		_, newPos, err := pbDecodeVarint(buf, pos)
-		return newPos, err
-	case 2:
-		length, newPos, err := pbDecodeVarint(buf, pos)
-		if err != nil {
-			return pos, err
-		}
-		if length > uint64(len(buf)-newPos) {
-			return pos, errors.New("proto: buffer underflow skipping bytes")
-		}
-		return newPos + int(length), nil
-	default:
-		return pos, errors.New("proto: unsupported wire type")
-	}
-}
-
-func pbExpectWire(fieldNum, got, want int) error {
-	if got != want {
-		return errors.New("proto: unexpected wire type for field " + strconv.Itoa(fieldNum))
-	}
 	return nil
-}
-
-func pbDecodeHeight(buf []byte) (Height, error) {
-	var h Height
-	pos := 0
-	for pos < len(buf) {
-		fieldNum, wireType, newPos, err := pbDecodeTag(buf, pos)
-		pos = newPos
-		if err != nil {
-			return h, err
-		}
-		switch fieldNum {
-		case 1: // revision_number — ibc-union always uses revision 0, skip
-			if err := pbExpectWire(fieldNum, wireType, 0); err != nil {
-				return h, err
-			}
-			_, pos, err = pbDecodeVarint(buf, pos)
-			if err != nil {
-				return h, err
-			}
-		case 2:
-			if err := pbExpectWire(fieldNum, wireType, 0); err != nil {
-				return h, err
-			}
-			v, newPos, err := pbDecodeVarint(buf, pos)
-			pos = newPos
-			if err != nil {
-				return h, err
-			}
-			h = v
-		default:
-			pos, err = pbSkipField(buf, pos, wireType)
-			if err != nil {
-				return h, err
-			}
-		}
-	}
-	return h, nil
-}
-
-func validateTimeNanos(nanos uint64) (int32, error) {
-	if nanos >= 1_000_000_000 {
-		return 0, errors.New("cometbls: TimeNanos out of range")
-	}
-	return int32(nanos), nil
-}
-
-func pbDecodeTimestamp(buf []byte) (seconds int64, nanos int32, err error) {
-	pos := 0
-	for pos < len(buf) {
-		fieldNum, wireType, newPos, decErr := pbDecodeTag(buf, pos)
-		pos = newPos
-		if decErr != nil {
-			return 0, 0, decErr
-		}
-		switch fieldNum {
-		case 1:
-			if err := pbExpectWire(fieldNum, wireType, 0); err != nil {
-				return 0, 0, err
-			}
-			v, newPos, decErr := pbDecodeVarint(buf, pos)
-			pos = newPos
-			if decErr != nil {
-				return 0, 0, decErr
-			}
-			seconds = int64(v)
-		case 2:
-			if err := pbExpectWire(fieldNum, wireType, 0); err != nil {
-				return 0, 0, err
-			}
-			v, newPos, decErr := pbDecodeVarint(buf, pos)
-			pos = newPos
-			if decErr != nil {
-				return 0, 0, decErr
-			}
-			nanos, decErr = validateTimeNanos(v)
-			if decErr != nil {
-				return 0, 0, decErr
-			}
-		default:
-			pos, decErr = pbSkipField(buf, pos, wireType)
-			if decErr != nil {
-				return 0, 0, decErr
-			}
-		}
-	}
-	return seconds, nanos, nil
-}
-
-func pbDecodeLightHeader(buf []byte) (LightHeader, error) {
-	var lh LightHeader
-	pos := 0
-	for pos < len(buf) {
-		fieldNum, wireType, newPos, err := pbDecodeTag(buf, pos)
-		pos = newPos
-		if err != nil {
-			return lh, err
-		}
-		switch fieldNum {
-		case 1:
-			if err := pbExpectWire(fieldNum, wireType, 0); err != nil {
-				return lh, err
-			}
-			v, newPos, err := pbDecodeVarint(buf, pos)
-			pos = newPos
-			if err != nil {
-				return lh, err
-			}
-			lh.Height = int64(v)
-		case 2:
-			if err := pbExpectWire(fieldNum, wireType, 2); err != nil {
-				return lh, err
-			}
-			b, newPos, err := pbDecodeBytes(buf, pos)
-			pos = newPos
-			if err != nil {
-				return lh, err
-			}
-			lh.TimeSeconds, lh.TimeNanos, err = pbDecodeTimestamp(b)
-			if err != nil {
-				return lh, err
-			}
-		case 3:
-			if err := pbExpectWire(fieldNum, wireType, 2); err != nil {
-				return lh, err
-			}
-			b, newPos, err := pbDecodeBytes(buf, pos)
-			pos = newPos
-			if err != nil {
-				return lh, err
-			}
-			lh.ValidatorsHash = b
-		case 4:
-			if err := pbExpectWire(fieldNum, wireType, 2); err != nil {
-				return lh, err
-			}
-			b, newPos, err := pbDecodeBytes(buf, pos)
-			pos = newPos
-			if err != nil {
-				return lh, err
-			}
-			if len(b) != 32 {
-				return lh, errors.New("cometbls: next validators hash must be 32 bytes")
-			}
-			copy(lh.NextValidatorsHash[:], b)
-		case 5:
-			if err := pbExpectWire(fieldNum, wireType, 2); err != nil {
-				return lh, err
-			}
-			b, newPos, err := pbDecodeBytes(buf, pos)
-			pos = newPos
-			if err != nil {
-				return lh, err
-			}
-			lh.AppHash = b
-		default:
-			pos, err = pbSkipField(buf, pos, wireType)
-			if err != nil {
-				return lh, err
-			}
-		}
-	}
-	return lh, nil
-}
-
-func pbDecodeHeader(buf []byte) (Header, error) {
-	var h Header
-	pos := 0
-	for pos < len(buf) {
-		fieldNum, wireType, newPos, err := pbDecodeTag(buf, pos)
-		pos = newPos
-		if err != nil {
-			return h, err
-		}
-		switch fieldNum {
-		case 1:
-			if err := pbExpectWire(fieldNum, wireType, 2); err != nil {
-				return h, err
-			}
-			b, newPos, err := pbDecodeBytes(buf, pos)
-			pos = newPos
-			if err != nil {
-				return h, err
-			}
-			h.SignedHeader, err = pbDecodeLightHeader(b)
-			if err != nil {
-				return h, err
-			}
-		case 2:
-			if err := pbExpectWire(fieldNum, wireType, 2); err != nil {
-				return h, err
-			}
-			b, newPos, err := pbDecodeBytes(buf, pos)
-			pos = newPos
-			if err != nil {
-				return h, err
-			}
-			h.TrustedHeight, err = pbDecodeHeight(b)
-			if err != nil {
-				return h, err
-			}
-		case 3:
-			if err := pbExpectWire(fieldNum, wireType, 2); err != nil {
-				return h, err
-			}
-			b, newPos, err := pbDecodeBytes(buf, pos)
-			pos = newPos
-			if err != nil {
-				return h, err
-			}
-			h.ZeroKnowledgeProof = b
-		default:
-			pos, err = pbSkipField(buf, pos, wireType)
-			if err != nil {
-				return h, err
-			}
-		}
-	}
-	return h, nil
 }

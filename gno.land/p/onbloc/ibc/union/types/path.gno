@@ -84,7 +84,7 @@ func ConsensusStatePath(clientId ClientId, height Height) H256 {
 	return keccak(bytes.Join([][]byte{
 		CONSENSUS_STATE[:],
 		u32ToH256(uint32(clientId)),
-		u64ToH256(height.Height),
+		u64ToH256(height.RevisionHeight),
 	}, nil))
 }
 

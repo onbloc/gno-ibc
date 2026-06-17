@@ -3,6 +3,7 @@ package cometbls
 import (
 	"time"
 
+	"gno.land/p/onbloc/ibc/union/lightclient"
 	cometblsp "gno.land/p/onbloc/ibc/union/lightclient/cometbls"
 	"gno.land/r/onbloc/ibc/core"
 )
@@ -149,7 +150,7 @@ func consensusStateAt(e *clientEntry, height core.Height) cometblsp.ConsensusSta
 
 func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proof, key, value []byte) {
 	e := getEntry(clientId)
-	if status := adapterStatus(e); status != cometblsp.StatusActive {
+	if status := adapterStatus(e); status != lightclient.Active {
 		panic("cometbls: client is " + status)
 	}
 	proofs, err := cometblsp.DecodeProofs(proof)
@@ -165,7 +166,7 @@ func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proo
 
 func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, proof, key []byte) {
 	e := getEntry(clientId)
-	if status := adapterStatus(e); status != cometblsp.StatusActive {
+	if status := adapterStatus(e); status != lightclient.Active {
 		panic("cometbls: client is " + status)
 	}
 	proofs, err := cometblsp.DecodeProofs(proof)
@@ -228,7 +229,7 @@ func applyForceUpdate(clientId core.ClientId, clientStateBytes, consensusStateBy
 
 	// Force update is a recovery operation: only permit clients that are no
 	// longer usable. New status values should be denied until explicitly vetted.
-	if status := adapterStatus(e); status != cometblsp.StatusExpired && status != cometblsp.StatusFrozen {
+	if status := adapterStatus(e); status != lightclient.Expired && status != lightclient.Frozen {
 		panic("cometbls: force-update only allowed on expired or frozen client")
 	}
 
@@ -281,11 +282,11 @@ func applyForceUpdate(clientId core.ClientId, clientStateBytes, consensusStateBy
 func (Adapter) GetStatus(clientId core.ClientId) core.Status {
 	e := getEntry(clientId)
 	switch adapterStatus(e) {
-	case cometblsp.StatusActive:
+	case lightclient.Active:
 		return core.StatusActive
-	case cometblsp.StatusFrozen:
+	case lightclient.Frozen:
 		return core.StatusFrozen
-	case cometblsp.StatusExpired:
+	case lightclient.Expired:
 		return core.StatusExpired
 	default:
 		return core.StatusUnknown

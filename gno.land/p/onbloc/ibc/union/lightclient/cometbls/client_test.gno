@@ -6,6 +6,7 @@ import (
 
 	"gno.land/p/aib/ibc/types"
 	"gno.land/p/aib/ics23"
+	"gno.land/p/onbloc/ibc/union/lightclient"
 )
 
 // nowNanos = 2024-01-01 00:00:00 UTC in nanoseconds.
@@ -59,8 +60,8 @@ func baseCS() ClientState {
 func TestStatusActive(t *testing.T) {
 	cs := baseCS()
 	latest := ConsensusState{Timestamp: testNow - 1_000*1_000_000_000}
-	if got := Status(cs, latest, testNow); got != StatusActive {
-		t.Fatalf("got %q want %q", got, StatusActive)
+	if got := Status(cs, latest, testNow); got != lightclient.Active {
+		t.Fatalf("got %q want %q", got, lightclient.Active)
 	}
 }
 
@@ -68,23 +69,23 @@ func TestStatusFrozen(t *testing.T) {
 	cs := baseCS()
 	cs.FrozenHeight = FrozenHeight
 	latest := ConsensusState{Timestamp: testNow - 1_000*1_000_000_000}
-	if got := Status(cs, latest, testNow); got != StatusFrozen {
-		t.Fatalf("got %q want %q", got, StatusFrozen)
+	if got := Status(cs, latest, testNow); got != lightclient.Frozen {
+		t.Fatalf("got %q want %q", got, lightclient.Frozen)
 	}
 }
 
 func TestStatusExpiredNoConsensusState(t *testing.T) {
 	cs := baseCS()
-	if got := Status(cs, ConsensusState{}, testNow); got != StatusExpired {
-		t.Fatalf("got %q want %q", got, StatusExpired)
+	if got := Status(cs, ConsensusState{}, testNow); got != lightclient.Expired {
+		t.Fatalf("got %q want %q", got, lightclient.Expired)
 	}
 }
 
 func TestStatusExpiredTrustingPeriod(t *testing.T) {
 	cs := baseCS()
 	latest := ConsensusState{Timestamp: testNow - cs.TrustingPeriod - 1}
-	if got := Status(cs, latest, testNow); got != StatusExpired {
-		t.Fatalf("got %q want %q", got, StatusExpired)
+	if got := Status(cs, latest, testNow); got != lightclient.Expired {
+		t.Fatalf("got %q want %q", got, lightclient.Expired)
 	}
 }
 
@@ -92,8 +93,8 @@ func TestStatusFrozenTakesPrecedence(t *testing.T) {
 	cs := baseCS()
 	cs.FrozenHeight = FrozenHeight
 	latest := ConsensusState{Timestamp: testNow - cs.TrustingPeriod - 1}
-	if got := Status(cs, latest, testNow); got != StatusFrozen {
-		t.Fatalf("got %q want %q", got, StatusFrozen)
+	if got := Status(cs, latest, testNow); got != lightclient.Frozen {
+		t.Fatalf("got %q want %q", got, lightclient.Frozen)
 	}
 }
 

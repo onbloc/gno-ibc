@@ -7,15 +7,17 @@ import (
 )
 
 func ConnectionOpenInit(_ realm, msg types.MsgConnectionOpenInit) types.ConnectionId {
+	requireClientId(msg.ClientId)
+	requireClientId(msg.CounterpartyClientId)
 	requireActiveClient(st.getClient(msg.ClientId), msg.ClientId)
-
-	connectionId := st.generateConnectionId()
 	st.saveConnection(connectionId, types.Connection{
 		State:                    types.ConnectionStateInit,
 		ClientId:                 msg.ClientId,
 		CounterpartyClientId:     msg.CounterpartyClientId,
 		CounterpartyConnectionId: 0,
 	})
+
+	connectionId := st.generateConnectionId()
 	chain.Emit(ConnectionOpenInitEvent,
 		"connection_id", connectionId.String(),
 		"client_id", msg.ClientId.String(),
@@ -25,7 +27,9 @@ func ConnectionOpenInit(_ realm, msg types.MsgConnectionOpenInit) types.Connecti
 }
 
 func ConnectionOpenTry(_ realm, msg types.MsgConnectionOpenTry) types.ConnectionId {
-	connectionId := st.generateConnectionId()
+	requireClientId(msg.ClientId)
+	requireClientId(msg.CounterpartyClientId)
+	requireConnectionId(msg.CounterpartyConnectionId)
 
 	expectedConnection := types.Connection{
 		State:                    types.ConnectionStateInit,
@@ -37,6 +41,7 @@ func ConnectionOpenTry(_ realm, msg types.MsgConnectionOpenTry) types.Connection
 	value := connectionValue(expectedConnection)
 	verifyMembershipActive(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
 
+	connectionId := st.generateConnectionId()
 	st.saveConnection(connectionId, types.Connection{
 		State:                    types.ConnectionStateTryOpen,
 		ClientId:                 msg.ClientId,
@@ -53,6 +58,8 @@ func ConnectionOpenTry(_ realm, msg types.MsgConnectionOpenTry) types.Connection
 }
 
 func ConnectionOpenAck(_ realm, msg types.MsgConnectionOpenAck) {
+	requireConnectionId(msg.ConnectionId)
+	requireConnectionId(msg.CounterpartyConnectionId)
 	connection := st.getConnection(msg.ConnectionId)
 	if connection.State != types.ConnectionStateInit {
 		panic(ErrInvalidConnectionState)
@@ -81,6 +88,7 @@ func ConnectionOpenAck(_ realm, msg types.MsgConnectionOpenAck) {
 }
 
 func ConnectionOpenConfirm(_ realm, msg types.MsgConnectionOpenConfirm) {
+	requireConnectionId(msg.ConnectionId)
 	connection := st.getConnection(msg.ConnectionId)
 	if connection.State != types.ConnectionStateTryOpen {
 		panic(ErrInvalidConnectionState)

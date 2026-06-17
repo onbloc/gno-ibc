@@ -15,6 +15,7 @@ func nowNanos() uint64 { return uint64(time.Now().UnixNano()) }
 // timeout height is always zero (types.MustBeZero); only the timeout timestamp is
 // meaningful.
 func PacketSend(cur realm, sourceChannelId types.ChannelId, timeoutTimestamp types.Timestamp, data []byte) types.Packet {
+	requireChannelId(sourceChannelId)
 	portId := st.getChannelOwner(sourceChannelId)
 	if string(portId) != cur.Previous().PkgPath() {
 		panic(ErrUnauthorizedPacketSender)
@@ -49,6 +50,8 @@ func PacketSend(cur realm, sourceChannelId types.ChannelId, timeoutTimestamp typ
 // receipt. Receipts serve as both replay protection and the source-side
 // timeout signal.
 func acceptRecvPacket(packet types.Packet, batchChannelId types.ChannelId, now uint64) (types.Channel, bool) {
+	validatePacket(packet)
+	requireChannelId(batchChannelId)
 	channel := st.getChannel(packet.DestinationChannelId)
 	if channel.State != types.ChannelStateOpen {
 		panic(ErrInvalidChannelState)
@@ -93,6 +96,9 @@ func PacketRecv(cur realm, msg types.MsgPacketRecv) {
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
 	}
+	for _, packet := range msg.Packets {
+		validatePacket(packet)
+	}
 	first := msg.Packets[0]
 	firstChannel := st.getChannel(first.DestinationChannelId)
 	firstConnection := ensureConnectionOpen(firstChannel.ConnectionId)
@@ -125,6 +131,9 @@ func IntentPacketRecv(cur realm, msg types.MsgIntentPacketRecv) {
 	marketMaker := cur.Previous().Address()
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
+	}
+	for _, packet := range msg.Packets {
+		validatePacket(packet)
 	}
 
 	first := msg.Packets[0]
@@ -165,6 +174,9 @@ func PacketAcknowledgement(cur realm, msg types.MsgPacketAcknowledgement) {
 	if len(msg.Packets) != len(msg.Acknowledgements) {
 		panic(ErrAcknowledgementCountMismatch)
 	}
+	for _, packet := range msg.Packets {
+		validatePacket(packet)
+	}
 
 	first := msg.Packets[0]
 	channel := st.getChannel(first.SourceChannelId)
@@ -199,6 +211,7 @@ func PacketAcknowledgement(cur realm, msg types.MsgPacketAcknowledgement) {
 func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
 	relayer := cur.Previous().Address()
 	packet := msg.Packet
+	validatePacket(packet)
 	if !st.hasPacketCommitment(packet) {
 		return
 	}
@@ -256,6 +269,9 @@ func BatchSend(cur realm, msg types.MsgBatchSend) types.H256 {
 	// TODO: Restrict BatchSend to true multi-packet batches once callers use
 	// PacketSend for single-packet source commitments.
 	first := msg.Packets[0]
+	for _, packet := range msg.Packets {
+		validatePacket(packet)
+	}
 	portId := st.getChannelOwner(first.SourceChannelId)
 	if string(portId) != cur.Previous().PkgPath() {
 		panic(ErrUnauthorizedPacketSender)
@@ -287,11 +303,16 @@ func BatchAcks(cur realm, msg types.MsgBatchAcks) types.H256 {
 	if len(msg.Packets) != len(msg.Acks) {
 		panic(ErrAcknowledgementCountMismatch)
 	}
+	for _, packet := range msg.Packets {
+		validatePacket(packet)
+	}
+
 	first := msg.Packets[0]
 	portId := st.getChannelOwner(first.DestinationChannelId)
 	if string(portId) != cur.Previous().PkgPath() {
 		panic(ErrUnauthorizedAckWriter)
 	}
+
 	for i, packet := range msg.Packets {
 		if packet.DestinationChannelId != first.DestinationChannelId {
 			panic(ErrBatchSameChannelOnly)
@@ -303,11 +324,13 @@ func BatchAcks(cur realm, msg types.MsgBatchAcks) types.H256 {
 			panic(ErrAcknowledgementMismatch)
 		}
 	}
+
 	batchHash := commitPacketsHash(msg.Packets)
 	ackHash := types.CommitAcks(msg.Acks)
 	channel := st.getChannel(first.DestinationChannelId)
 	connection := st.getConnection(channel.ConnectionId)
 	st.saveBatchReceipts(batchHash, ackHash)
+
 	emitBatchAcksEvent(batchHash, ackHash, first, channel, connection)
 	return batchHash
 }
@@ -351,6 +374,7 @@ func QueryReceiptAtPath(path types.H256) string {
 // packet. Async acknowledgement ownership is protocol-managed: core does not
 // track pending async acknowledgement state.
 func WriteAcknowledgement(cur realm, msg types.MsgWriteAcknowledgement) {
+	validatePacket(msg.Packet)
 	portId := st.getChannelOwner(msg.Packet.DestinationChannelId)
 	if string(portId) != cur.Previous().PkgPath() {
 		panic(ErrUnauthorizedAckWriter)

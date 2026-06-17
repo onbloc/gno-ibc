@@ -5,6 +5,7 @@ import (
 )
 
 func ChannelOpenInit(cur realm, msg types.MsgChannelOpenInit) types.ChannelId {
+	requireConnectionId(msg.ConnectionId)
 	relayer := cur.Previous().Address()
 	portId := types.Bytes(cloneBytes(msg.PortId))
 	connection := ensureConnectionOpen(msg.ConnectionId)
@@ -26,6 +27,8 @@ func ChannelOpenInit(cur realm, msg types.MsgChannelOpenInit) types.ChannelId {
 }
 
 func ChannelOpenTry(cur realm, msg types.MsgChannelOpenTry) types.ChannelId {
+	requireConnectionId(msg.Channel.ConnectionId)
+	requireChannelId(msg.Channel.CounterpartyChannelId)
 	relayer := cur.Previous().Address()
 	portId := types.Bytes(cloneBytes(msg.PortId))
 	if msg.Channel.State != types.ChannelStateTryOpen {
@@ -54,6 +57,8 @@ func ChannelOpenTry(cur realm, msg types.MsgChannelOpenTry) types.ChannelId {
 }
 
 func ChannelOpenAck(cur realm, msg types.MsgChannelOpenAck) {
+	requireChannelId(msg.ChannelId)
+	requireChannelId(msg.CounterpartyChannelId)
 	relayer := cur.Previous().Address()
 	channel := st.getChannel(msg.ChannelId)
 	if channel.State != types.ChannelStateInit {
@@ -84,6 +89,7 @@ func ChannelOpenAck(cur realm, msg types.MsgChannelOpenAck) {
 }
 
 func ChannelOpenConfirm(cur realm, msg types.MsgChannelOpenConfirm) {
+	requireChannelId(msg.ChannelId)
 	relayer := cur.Previous().Address()
 	channel := st.getChannel(msg.ChannelId)
 	if channel.State != types.ChannelStateTryOpen {

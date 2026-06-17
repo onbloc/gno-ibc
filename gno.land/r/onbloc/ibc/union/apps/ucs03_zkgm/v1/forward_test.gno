@@ -260,7 +260,9 @@ func TestExecuteForwardThroughCoreFrameAuthorizesCoreRealm(cur realm, t *testing
 		Opcode:  z.OP_FORWARD,
 		Operand: mustForwardBytes(forward),
 	})
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), parentChannel, data, types.Timestamp(0))
+
+	const farFuturePacketTimeout types.Timestamp = 1 << 62
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), parentChannel, data, farFuturePacketTimeout)
 
 	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))
 

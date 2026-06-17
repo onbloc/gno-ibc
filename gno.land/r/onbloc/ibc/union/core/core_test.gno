@@ -514,6 +514,37 @@ func TestConnectionOpenInitRejectsInactiveClient(cur realm, t *testing.T) {
 	}
 }
 
+func TestConnectionOpenInitRejectsZeroClientId(cur realm, t *testing.T) {
+	resetState()
+
+	uassert.AbortsContains(t, cur, "identifier must be non-zero", func(cur realm) {
+		ConnectionOpenInit(cur, types.MsgConnectionOpenInit{
+			ClientId:             0,
+			CounterpartyClientId: types.ClientId(99),
+		})
+	})
+	if len(st.connections) != 0 {
+		t.Fatal("ConnectionOpenInit must not save a connection for a zero client id")
+	}
+}
+
+func TestConnectionOpenAckRejectsZeroCounterpartyConnectionId(cur realm, t *testing.T) {
+	resetState()
+	_, connId, _ := setupOpenChannel(t)
+	st.saveConnection(connId, types.Connection{
+		State:                types.ConnectionStateInit,
+		ClientId:             types.ClientId(1),
+		CounterpartyClientId: types.ClientId(99),
+	})
+
+	uassert.AbortsContains(t, cur, "identifier must be non-zero", func(cur realm) {
+		ConnectionOpenAck(cur, types.MsgConnectionOpenAck{
+			ConnectionId:             connId,
+			CounterpartyConnectionId: 0,
+		})
+	})
+}
+
 // --- State: channel ---
 
 func TestSaveAndGetChannel(cur realm, t *testing.T) {
@@ -1733,6 +1764,41 @@ func TestChannelOpenTryRejectsInactiveClient(cur realm, t *testing.T) {
 	if len(st.channelOwners) != channelsBefore {
 		t.Fatal("inactive client must not persist a new channel")
 	}
+}
+
+func TestChannelOpenInitRejectsZeroConnectionId(cur realm, t *testing.T) {
+	resetState()
+	portId := types.Bytes(testCorePkgPath)
+	st.ports[portKey(portId)] = &mockApp{}
+
+	uassert.AbortsContains(t, cur, "identifier must be non-zero", func(cur realm) {
+		ChannelOpenInit(cur, types.MsgChannelOpenInit{
+			PortId:             portId,
+			CounterpartyPortId: types.Bytes("counterparty"),
+			ConnectionId:       0,
+			Version:            "ics20-1",
+		})
+	})
+}
+
+func TestChannelOpenAckRejectsZeroCounterpartyChannelId(cur realm, t *testing.T) {
+	resetState()
+	_, connId, _ := setupOpenChannel(t)
+	channelId := st.generateChannelId()
+	st.saveChannel(channelId, types.Channel{
+		State:        types.ChannelStateInit,
+		ConnectionId: connId,
+		Version:      "ics20-1",
+	})
+	st.channelOwners[channelId] = types.Bytes(testCorePkgPath)
+
+	uassert.AbortsContains(t, cur, "identifier must be non-zero", func(cur realm) {
+		ChannelOpenAck(cur, types.MsgChannelOpenAck{
+			ChannelId:             channelId,
+			CounterpartyVersion:   "ics20-1",
+			CounterpartyChannelId: 0,
+		})
+	})
 }
 
 func TestChannelOpenAckRejectsWrongState(cur realm, t *testing.T) {

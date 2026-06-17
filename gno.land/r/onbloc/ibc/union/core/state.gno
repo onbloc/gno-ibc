@@ -36,6 +36,8 @@ var (
 	ErrBatchReceiptsNotFound         = errors.New("batch receipts not found")
 	ErrPacketTimeoutExpired          = errors.New("packet timeout expired")
 	ErrPacketTimeoutNotReached       = errors.New("packet timeout not reached")
+	ErrInvalidIdentifier             = errors.New("identifier must be non-zero")
+	ErrInvalidPacket                 = errors.New("invalid packet")
 	ErrIntentNotSupported            = errors.New("intent receive not supported")
 )
 

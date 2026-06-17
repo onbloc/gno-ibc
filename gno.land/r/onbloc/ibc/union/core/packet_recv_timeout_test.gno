@@ -54,8 +54,9 @@ func TestPacketRecvRejectsBoundaryTimeout(cur realm, t *testing.T) {
 	})
 }
 
-// TestPacketRecvAcceptsZeroTimeout — TimeoutTimestamp == 0 means "no timeout".
-func TestPacketRecvAcceptsZeroTimeout(cur realm, t *testing.T) {
+// TestPacketRecvRejectsZeroTimeout — Union packets must carry a non-zero
+// timeout timestamp; "no timeout" packets are not accepted at the core boundary.
+func TestPacketRecvRejectsZeroTimeout(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	packet := types.Packet{
@@ -65,12 +66,45 @@ func TestPacketRecvAcceptsZeroTimeout(cur realm, t *testing.T) {
 		TimeoutTimestamp:     0,
 	}
 
-	uassert.NotAborts(t, cur, func(cur realm) {
+	uassert.AbortsContains(t, cur, "packet timeout not reached", func(cur realm) {
 		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}})
 	})
-	if !st.hasPacketReceipt(packet) {
-		t.Fatal("zero-timeout packet must be processed")
+	if st.hasPacketReceipt(packet) {
+		t.Fatal("zero-timeout packet must not be processed")
 	}
+}
+
+func TestPacketRecvRejectsNonZeroTimeoutHeight(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := types.Packet{
+		SourceChannelId:      99,
+		DestinationChannelId: channelId,
+		Data:                 types.Bytes("transfer"),
+		TimeoutHeight:        1,
+		TimeoutTimestamp:     testFutureTimeoutNanos,
+	}
+
+	uassert.AbortsContains(t, cur, "invalid packet", func(cur realm) {
+		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}})
+	})
+	if st.hasPacketReceipt(packet) {
+		t.Fatal("non-zero timeout height packet must not be processed")
+	}
+}
+
+func TestPacketRecvRejectsZeroChannelId(cur realm, t *testing.T) {
+	resetState()
+	packet := types.Packet{
+		SourceChannelId:      99,
+		DestinationChannelId: 0,
+		Data:                 types.Bytes("transfer"),
+		TimeoutTimestamp:     testFutureTimeoutNanos,
+	}
+
+	uassert.AbortsContains(t, cur, "invalid packet", func(cur realm) {
+		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}})
+	})
 }
 
 // TestPacketRecvBatchRejectsIfAnyExpired — a batch containing one expired

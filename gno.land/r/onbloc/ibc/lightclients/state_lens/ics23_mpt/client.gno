@@ -5,14 +5,15 @@ import (
 	"crypto/keccak256"
 	"errors"
 
-	ics23mpt "gno.land/p/onbloc/ibc/lightclient/state_lens/ics23_mpt"
+	ics23mpt "gno.land/p/onbloc/ibc/union/lightclient/state_lens/ics23_mpt"
+	"gno.land/p/onbloc/ibc/union/types"
 	"gno.land/p/onbloc/verifier/evm/storage"
 	"gno.land/r/onbloc/ibc/union/core"
 )
 
 // Union reference:
 // https://github.com/unionlabs/union/blob/6215985a5f27e24e9a34aa7259f38b0059c9a5ab/lib/voyager-primitives/src/lib.rs#L129
-const ClientType core.ClientType = "state-lens/ics23/mpt"
+const ClientType types.ClientType = "state-lens/ics23/mpt"
 
 var (
 	ErrInvalidCommitmentValue = errors.New("statelensics23mpt: invalid commitment value")
@@ -24,7 +25,7 @@ type clientEntry struct {
 	cs              ics23mpt.ClientState
 }
 
-var entries = make(map[core.ClientId]*clientEntry)
+var entries = make(map[types.ClientId]*clientEntry)
 
 func mustBeCore(cur realm) {
 	if cur.Previous().PkgPath() != "gno.land/r/onbloc/ibc/union/core" {
@@ -32,7 +33,7 @@ func mustBeCore(cur realm) {
 	}
 }
 
-func getEntry(clientId core.ClientId) *clientEntry {
+func getEntry(clientId types.ClientId) *clientEntry {
 	e, ok := entries[clientId]
 	if !ok {
 		panic("statelensics23mpt: client not found: " + clientId.String())
@@ -53,7 +54,7 @@ func Register(cur realm) {
 	core.RegisterClient(cross(cur), ClientType, NewAdapter(cross(cur)))
 }
 
-func (Adapter) CreateClient(cur realm, clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) string {
+func (Adapter) CreateClient(cur realm, clientId types.ClientId, clientStateBytes, consensusStateBytes []byte) string {
 	mustBeCore(cur)
 
 	cs, err := ics23mpt.DecodeClientState(clientStateBytes)
@@ -74,7 +75,7 @@ func (Adapter) CreateClient(cur realm, clientId core.ClientId, clientStateBytes,
 	return cs.L2ChainID
 }
 
-func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []byte) core.ConsensusStateUpdate {
+func (Adapter) UpdateClient(cur realm, clientId types.ClientId, clientMessage []byte) types.ConsensusStateUpdate {
 	mustBeCore(cur)
 
 	e := getEntry(clientId)
@@ -84,12 +85,12 @@ func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []b
 		panic("statelensics23mpt: invalid header: " + err.Error())
 	}
 
-	consensusPath := core.ConsensusStatePath(core.ClientId(e.cs.L2ClientID), core.NewHeight(uint64(header.L2Height)))
+	consensusPath := types.ConsensusStatePath(types.ClientId(e.cs.L2ClientID), types.NewHeight(uint64(header.L2Height)))
 	consensusHash := keccak256.Sum256(header.L2ConsensusState)
 	core.VerifyClientMembership(
 		cross(cur),
-		core.ClientId(e.cs.L1ClientID),
-		core.NewHeight(uint64(header.L1Height)),
+		types.ClientId(e.cs.L1ClientID),
+		types.NewHeight(uint64(header.L1Height)),
 		header.L2ConsensusStateProof,
 		consensusPath[:],
 		consensusHash[:],
@@ -115,13 +116,13 @@ func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []b
 		panic("statelensics23mpt: encode client state: " + err.Error())
 	}
 
-	return core.NewConsensusStateUpdate(cross(cur), core.NewHeight(uint64(header.L2Height)), consStateBytes, clientStateBytes)
+	return core.NewConsensusStateUpdate(cross(cur), types.NewHeight(uint64(header.L2Height)), consStateBytes, clientStateBytes)
 }
 
-func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proof, key, value []byte) {
+func (Adapter) VerifyMembership(clientId types.ClientId, height types.Height, proof, key, value []byte) {
 	a := Adapter{}
 	status := a.GetStatus(clientId)
-	if status != core.StatusActive {
+	if status != types.StatusActive {
 		panic("statelensics23mpt: client is not active")
 	}
 
@@ -152,10 +153,10 @@ func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proo
 	}
 }
 
-func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, proof, key []byte) {
+func (Adapter) VerifyNonMembership(clientId types.ClientId, height types.Height, proof, key []byte) {
 	a := Adapter{}
 	status := a.GetStatus(clientId)
-	if status != core.StatusActive {
+	if status != types.StatusActive {
 		panic("statelensics23mpt: client is not active")
 	}
 
@@ -179,23 +180,23 @@ func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, p
 	}
 }
 
-func (Adapter) GetTimestamp(clientId core.ClientId, height core.Height) core.Timestamp {
+func (Adapter) GetTimestamp(clientId types.ClientId, height types.Height) types.Timestamp {
 	cs, ok := getEntry(clientId).consensusStates[ics23mpt.Height(height.Height)]
 	if !ok {
 		panic("statelensics23mpt: consensus state not found at height " + height.String())
 	}
-	return core.Timestamp(cs.Timestamp)
+	return types.Timestamp(cs.Timestamp)
 }
 
-func (Adapter) GetLatestHeight(clientId core.ClientId) core.Height {
-	return core.NewHeight(uint64(getEntry(clientId).cs.L2LatestHeight))
+func (Adapter) GetLatestHeight(clientId types.ClientId) types.Height {
+	return types.NewHeight(uint64(getEntry(clientId).cs.L2LatestHeight))
 }
 
-func (Adapter) GetStatus(clientId core.ClientId) core.Status {
-	l1ClientId := core.ClientId(getEntry(clientId).cs.L1ClientID)
+func (Adapter) GetStatus(clientId types.ClientId) types.Status {
+	l1ClientId := types.ClientId(getEntry(clientId).cs.L1ClientID)
 	status := core.GetClientStatus(l1ClientId)
-	if status == core.StatusUnknown {
-		return core.StatusFrozen
+	if status == types.StatusUnknown {
+		return types.StatusFrozen
 	}
 	return status
 }

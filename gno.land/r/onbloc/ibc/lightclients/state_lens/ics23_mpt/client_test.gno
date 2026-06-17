@@ -5,24 +5,25 @@ import (
 	"crypto/keccak256"
 	"testing"
 
+	"gno.land/p/nt/uassert/v0"
 	"gno.land/p/onbloc/encoding/abi"
 	"gno.land/p/onbloc/encoding/rlp"
-	"gno.land/p/onbloc/verifier/evm/storage"
 	ics23mpt "gno.land/p/onbloc/ibc/union/lightclient/state_lens/ics23_mpt"
-	"gno.land/p/nt/uassert/v0"
+	"gno.land/p/onbloc/ibc/union/types"
+	"gno.land/p/onbloc/verifier/evm/storage"
 	"gno.land/r/onbloc/ibc/union/core"
 )
 
 const (
-	stateLensTestPortId                 = "gno.land/r/onbloc/ibc/lightclients/state_lens/ics23_mpt"
-	mockL1ClientType    core.ClientType = stateLensTestPortId + "/mock-l1"
+	stateLensTestPortId                  = "gno.land/r/onbloc/ibc/lightclients/state_lens/ics23_mpt"
+	mockL1ClientType    types.ClientType = stateLensTestPortId + "/mock-l1"
 )
 
 var (
-	mockL1Status        core.Status
+	mockL1Status        types.Status
 	wantMembershipCheck bool
-	wantClientId        core.ClientId
-	wantHeight          core.Height
+	wantClientId        types.ClientId
+	wantHeight          types.Height
 	wantProof           []byte
 	wantKey             []byte
 	wantValue           []byte
@@ -31,12 +32,12 @@ var (
 
 type mockL1Client struct{}
 
-func (mockL1Client) CreateClient(_ realm, _ core.ClientId, _, _ []byte) string { return "l1" }
-func (mockL1Client) UpdateClient(_ realm, _ core.ClientId, _ []byte) core.ConsensusStateUpdate {
-	return core.ConsensusStateUpdate{}
+func (mockL1Client) CreateClient(_ realm, _ types.ClientId, _, _ []byte) string { return "l1" }
+func (mockL1Client) UpdateClient(_ realm, _ types.ClientId, _ []byte) types.ConsensusStateUpdate {
+	return types.ConsensusStateUpdate{}
 }
 
-func (mockL1Client) VerifyMembership(clientId core.ClientId, height core.Height, proof, key, value []byte) {
+func (mockL1Client) VerifyMembership(clientId types.ClientId, height types.Height, proof, key, value []byte) {
 	if !wantMembershipCheck {
 		panic("unexpected membership verification")
 	}
@@ -47,54 +48,54 @@ func (mockL1Client) VerifyMembership(clientId core.ClientId, height core.Height,
 		panic("membership proof payload mismatch")
 	}
 }
-func (mockL1Client) VerifyNonMembership(_ core.ClientId, _ core.Height, _, _ []byte) {}
-func (mockL1Client) GetTimestamp(_ core.ClientId, _ core.Height) core.Timestamp      { return 0 }
-func (mockL1Client) GetLatestHeight(_ core.ClientId) core.Height                     { return 0 }
-func (mockL1Client) GetStatus(_ core.ClientId) core.Status                           { return mockL1Status }
+func (mockL1Client) VerifyNonMembership(_ types.ClientId, _ types.Height, _, _ []byte) {}
+func (mockL1Client) GetTimestamp(_ types.ClientId, _ types.Height) types.Timestamp     { return 0 }
+func (mockL1Client) GetLatestHeight(_ types.ClientId) types.Height                     { return types.Height{} }
+func (mockL1Client) GetStatus(_ types.ClientId) types.Status                           { return mockL1Status }
 
 type flowApp struct {
 	recvCount int
 }
 
-func (a *flowApp) OnChannelOpenInit(_ realm, _ core.ConnectionId, _ core.ChannelId, _ string, _ address) {
+func (a *flowApp) OnChannelOpenInit(_ realm, _ types.ConnectionId, _ types.ChannelId, _ string, _ address) {
 }
 
-func (a *flowApp) OnChannelOpenTry(_ realm, _ core.ConnectionId, _ core.ChannelId, _, _ string, _ address) {
+func (a *flowApp) OnChannelOpenTry(_ realm, _ types.ConnectionId, _ types.ChannelId, _, _ string, _ address) {
 }
 
-func (a *flowApp) OnChannelOpenAck(_ realm, _ core.ChannelId, _ core.ChannelId, _ string, _ address) {
+func (a *flowApp) OnChannelOpenAck(_ realm, _ types.ChannelId, _ types.ChannelId, _ string, _ address) {
 }
-func (a *flowApp) OnChannelOpenConfirm(_ realm, _ core.ChannelId, _ address)  {}
-func (a *flowApp) OnChannelCloseInit(_ realm, _ core.ChannelId, _ address)    {}
-func (a *flowApp) OnChannelCloseConfirm(_ realm, _ core.ChannelId, _ address) {}
-func (a *flowApp) OnRecvPacket(cur realm, _ core.Packet, _ address, _ []byte) core.RecvPacketResult {
+func (a *flowApp) OnChannelOpenConfirm(_ realm, _ types.ChannelId, _ address)  {}
+func (a *flowApp) OnChannelCloseInit(_ realm, _ types.ChannelId, _ address)    {}
+func (a *flowApp) OnChannelCloseConfirm(_ realm, _ types.ChannelId, _ address) {}
+func (a *flowApp) OnRecvPacket(cur realm, _ types.Packet, _ address, _ []byte) types.RecvPacketResult {
 	a.recvCount++
-	return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, []byte{0x01})
+	return core.NewRecvPacketResult(cross(cur), types.PacketStatusSuccess, []byte{0x01})
 }
 
-func (a *flowApp) OnIntentRecvPacket(cur realm, _ core.Packet, _ address, _ []byte) core.RecvPacketResult {
-	return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, []byte{0x01})
+func (a *flowApp) OnIntentRecvPacket(cur realm, _ types.Packet, _ address, _ []byte) types.RecvPacketResult {
+	return core.NewRecvPacketResult(cross(cur), types.PacketStatusSuccess, []byte{0x01})
 }
 
-func (a *flowApp) OnAcknowledgementPacket(_ realm, _ core.Packet, _ []byte, _ address) {
+func (a *flowApp) OnAcknowledgementPacket(_ realm, _ types.Packet, _ []byte, _ address) {
 }
-func (a *flowApp) OnTimeoutPacket(_ realm, _ core.Packet, _ address) {}
+func (a *flowApp) OnTimeoutPacket(_ realm, _ types.Packet, _ address) {}
 
 type stateLensFlow struct {
 	app                   *flowApp
-	l1ClientId            core.ClientId
-	l2ClientId            core.ClientId
-	lensClientId          core.ClientId
-	channelId             core.ChannelId
-	counterpartyChannelId core.ChannelId
+	l1ClientId            types.ClientId
+	l2ClientId            types.ClientId
+	lensClientId          types.ClientId
+	channelId             types.ChannelId
+	counterpartyChannelId types.ChannelId
 }
 
 func resetTestState(cur realm) {
-	entries = make(map[core.ClientId]*clientEntry)
-	mockL1Status = core.StatusActive
+	entries = make(map[types.ClientId]*clientEntry)
+	mockL1Status = types.StatusActive
 	wantMembershipCheck = false
 	wantClientId = 0
-	wantHeight = 0
+	wantHeight = types.Height{}
 	wantProof = nil
 	wantKey = nil
 	wantValue = nil
@@ -106,11 +107,11 @@ func resetTestState(cur realm) {
 	}
 }
 
-func createMockL1Client(cur realm) core.ClientId {
-	return core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), mockL1ClientType, nil, nil))
+func createMockL1Client(cur realm) types.ClientId {
+	return core.CreateClient(cross(cur), types.NewMsgCreateClient(mockL1ClientType, nil, nil))
 }
 
-func installLensClient(clientId core.ClientId, cs ics23mpt.ClientState, cons ics23mpt.ConsensusState) {
+func installLensClient(clientId types.ClientId, cs ics23mpt.ClientState, cons ics23mpt.ConsensusState) {
 	entries[clientId] = &clientEntry{
 		consensusStates: map[ics23mpt.Height]ics23mpt.ConsensusState{
 			cs.L2LatestHeight: cons,
@@ -124,17 +125,17 @@ func TestMutatingEntrypointsRequireCoreCaller(cur realm, t *testing.T) {
 	adapter := Adapter{}
 
 	uassert.AbortsContains(t, cur, "statelensics23mpt: core only", func(cur realm) {
-		adapter.CreateClient(cross(cur), core.ClientId(1), nil, nil)
+		adapter.CreateClient(cross(cur), types.ClientId(1), nil, nil)
 	})
 	uassert.AbortsContains(t, cur, "statelensics23mpt: core only", func(cur realm) {
-		adapter.UpdateClient(cross(cur), core.ClientId(1), nil)
+		adapter.UpdateClient(cross(cur), types.ClientId(1), nil)
 	})
 }
 
 func TestUpdateClientVerifiesL2ConsensusStateOnL1(cur realm, t *testing.T) {
 	resetTestState(cur)
 	l1ClientId := createMockL1Client(cur)
-	l2ClientId := core.ClientId(7)
+	l2ClientId := types.ClientId(7)
 
 	cs := ics23mpt.ClientState{
 		L2ChainID:         "l2",
@@ -158,7 +159,7 @@ func TestUpdateClientVerifiesL2ConsensusStateOnL1(cur realm, t *testing.T) {
 	if err != nil {
 		t.Fatalf("EncodeClientState: %v", err)
 	}
-	lensClientId := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), ClientType, csBytes, initialBytes))
+	lensClientId := core.CreateClient(cross(cur), types.NewMsgCreateClient(ClientType, csBytes, initialBytes))
 
 	l2Consensus := makeConsensusBytes(12345, bytes.Repeat([]byte{0xaa}, 32), bytes.Repeat([]byte{0xbb}, 32))
 	header := ics23mpt.Header{
@@ -167,11 +168,11 @@ func TestUpdateClientVerifiesL2ConsensusStateOnL1(cur realm, t *testing.T) {
 		L2ConsensusStateProof: []byte("l1-proof"),
 		L2ConsensusState:      l2Consensus,
 	}
-	wantPath := core.ConsensusStatePath(l2ClientId, core.Height(header.L2Height))
+	wantPath := types.ConsensusStatePath(l2ClientId, types.NewHeight(uint64(header.L2Height)))
 	wantValueHash := keccak256.Sum256(l2Consensus)
 	wantMembershipCheck = true
 	wantClientId = l1ClientId
-	wantHeight = core.Height(header.L1Height)
+	wantHeight = types.NewHeight(uint64(header.L1Height))
 	wantProof = []byte("l1-proof")
 	wantKey = wantPath[:]
 	wantValue = wantValueHash[:]
@@ -180,10 +181,10 @@ func TestUpdateClientVerifiesL2ConsensusStateOnL1(cur realm, t *testing.T) {
 	if err != nil {
 		t.Fatalf("EncodeHeader: %v", err)
 	}
-	height := core.UpdateClient(cross(cur), core.NewMsgUpdateClient(cross(cur), lensClientId, headerBytes))
+	height := core.UpdateClient(cross(cur), types.NewMsgUpdateClient(lensClientId, headerBytes))
 
-	if height != core.Height(header.L2Height) {
-		t.Fatalf("update height: got %d want %d", height, header.L2Height)
+	if height != types.NewHeight(uint64(header.L2Height)) {
+		t.Fatalf("update height: got %v want %d", height, header.L2Height)
 	}
 	gotCons := getEntry(lensClientId).consensusStates[ics23mpt.Height(header.L2Height)]
 	if gotCons.Timestamp != 12345 ||
@@ -192,10 +193,10 @@ func TestUpdateClientVerifiesL2ConsensusStateOnL1(cur realm, t *testing.T) {
 		t.Fatalf("unexpected extracted consensus state: %#v", gotCons)
 	}
 	adapter := Adapter{}
-	if adapter.GetLatestHeight(lensClientId) != core.Height(header.L2Height) {
+	if adapter.GetLatestHeight(lensClientId) != types.NewHeight(uint64(header.L2Height)) {
 		t.Fatalf("latest height not advanced")
 	}
-	if adapter.GetTimestamp(lensClientId, core.Height(header.L2Height)) != core.Timestamp(12345) {
+	if adapter.GetTimestamp(lensClientId, types.NewHeight(uint64(header.L2Height))) != types.Timestamp(12345) {
 		t.Fatalf("timestamp not stored")
 	}
 }
@@ -203,7 +204,7 @@ func TestUpdateClientVerifiesL2ConsensusStateOnL1(cur realm, t *testing.T) {
 func TestGetStatusMirrorsL1Client(cur realm, t *testing.T) {
 	resetTestState(cur)
 	l1ClientId := createMockL1Client(cur)
-	lensClientId := core.ClientId(100)
+	lensClientId := types.ClientId(100)
 
 	cs := ics23mpt.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
 	cons := ics23mpt.ConsensusState{
@@ -214,16 +215,16 @@ func TestGetStatusMirrorsL1Client(cur realm, t *testing.T) {
 	adapter := Adapter{}
 	installLensClient(lensClientId, cs, cons)
 
-	mockL1Status = core.StatusFrozen
+	mockL1Status = types.StatusFrozen
 	got := adapter.GetStatus(lensClientId)
-	if got != core.StatusFrozen {
-		t.Fatalf("GetStatus: got %d want %d", got, core.StatusFrozen)
+	if got != types.StatusFrozen {
+		t.Fatalf("GetStatus: got %d want %d", got, types.StatusFrozen)
 	}
 }
 
 func TestGetStatusReturnsFrozenWhenL1ClientMissing(cur realm, t *testing.T) {
 	resetTestState(cur)
-	lensClientId := core.ClientId(105)
+	lensClientId := types.ClientId(105)
 
 	cs := ics23mpt.ClientState{L2ChainID: "l2", L1ClientID: 999999, L2LatestHeight: 1}
 	cons := ics23mpt.ConsensusState{
@@ -235,15 +236,15 @@ func TestGetStatusReturnsFrozenWhenL1ClientMissing(cur realm, t *testing.T) {
 	installLensClient(lensClientId, cs, cons)
 
 	got := adapter.GetStatus(lensClientId)
-	if got != core.StatusFrozen {
-		t.Fatalf("GetStatus: got %d want %d", got, core.StatusFrozen)
+	if got != types.StatusFrozen {
+		t.Fatalf("GetStatus: got %d want %d", got, types.StatusFrozen)
 	}
 }
 
 func TestVerifyMembershipStorageProof(cur realm, t *testing.T) {
 	resetTestState(cur)
 	l1ClientId := createMockL1Client(cur)
-	lensClientId := core.ClientId(102)
+	lensClientId := types.ClientId(102)
 	path := bytes.Repeat([]byte{0x11}, 32)
 	value := storage.WordFromUint64(0xdeadbeef)
 	slot, err := storage.IBCCommitmentKey(path)
@@ -266,30 +267,30 @@ func TestVerifyMembershipStorageProof(cur realm, t *testing.T) {
 		Value: value,
 		Proof: proofNodes,
 	})
-	adapter.VerifyMembership(lensClientId, core.Height(1), proof, path, value)
+	adapter.VerifyMembership(lensClientId, types.NewHeight(1), proof, path, value)
 }
 
 func TestVerifyMembershipAndNonMembershipRejectInactiveBeforeProofDecode(cur realm, t *testing.T) {
 	testCases := []struct {
 		name   string
-		status core.Status
+		status types.Status
 	}{
-		{"frozen", core.StatusFrozen},
-		{"expired", core.StatusExpired},
+		{"frozen", types.StatusFrozen},
+		{"expired", types.StatusExpired},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name+"/membership", func(t *testing.T) {
 			adapter, lensClientId := createLensClientForInactiveTest(cur, t)
 			mockL1Status = tc.status
 			uassert.AbortsContains(t, cur, "statelensics23mpt: client is not active", func(cur realm) {
-				adapter.VerifyMembership(lensClientId, core.Height(1), []byte{0xff}, []byte("key"), []byte("value"))
+				adapter.VerifyMembership(lensClientId, types.NewHeight(1), []byte{0xff}, []byte("key"), []byte("value"))
 			})
 		})
 		t.Run(tc.name+"/non-membership", func(t *testing.T) {
 			adapter, lensClientId := createLensClientForInactiveTest(cur, t)
 			mockL1Status = tc.status
 			uassert.AbortsContains(t, cur, "statelensics23mpt: client is not active", func(cur realm) {
-				adapter.VerifyNonMembership(lensClientId, core.Height(1), []byte{0xff}, []byte("key"))
+				adapter.VerifyNonMembership(lensClientId, types.NewHeight(1), []byte{0xff}, []byte("key"))
 			})
 		})
 	}
@@ -298,7 +299,7 @@ func TestVerifyMembershipAndNonMembershipRejectInactiveBeforeProofDecode(cur rea
 func TestVerifyNonMembershipStorageProof(cur realm, t *testing.T) {
 	resetTestState(cur)
 	l1ClientId := createMockL1Client(cur)
-	lensClientId := core.ClientId(103)
+	lensClientId := types.ClientId(103)
 	path := bytes.Repeat([]byte{0x22}, 32)
 	slot, err := storage.IBCCommitmentKey(path)
 	if err != nil {
@@ -319,13 +320,13 @@ func TestVerifyNonMembershipStorageProof(cur realm, t *testing.T) {
 		Key:   slot[:],
 		Value: make([]byte, 32),
 	})
-	adapter.VerifyNonMembership(lensClientId, core.Height(1), proof, path)
+	adapter.VerifyNonMembership(lensClientId, types.NewHeight(1), proof, path)
 }
 
 func TestVerifyMembershipRejectsWrongCommitmentKey(cur realm, t *testing.T) {
 	resetTestState(cur)
 	l1ClientId := createMockL1Client(cur)
-	lensClientId := core.ClientId(104)
+	lensClientId := types.ClientId(104)
 
 	cs := ics23mpt.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
 	cons := ics23mpt.ConsensusState{
@@ -341,16 +342,16 @@ func TestVerifyMembershipRejectsWrongCommitmentKey(cur realm, t *testing.T) {
 		Value: storage.WordFromUint64(0xdeadbeef),
 	})
 	uassert.AbortsContains(t, cur, ics23mpt.ErrInvalidCommitmentKey.Error(), func(cur realm) {
-		adapter.VerifyMembership(lensClientId, core.Height(1), proof, bytes.Repeat([]byte{0x11}, 32), storage.WordFromUint64(0xdeadbeef))
+		adapter.VerifyMembership(lensClientId, types.NewHeight(1), proof, bytes.Repeat([]byte{0x11}, 32), storage.WordFromUint64(0xdeadbeef))
 	})
 }
 
 func TestPacketRecvUsesStateLensStorageProof(cur realm, t *testing.T) {
 	flow := setupStateLensOpenChannel(cur, t)
-	packet := core.NewPacket(cross(cur), flow.counterpartyChannelId, flow.channelId, []byte("payload"), 0, 1<<62)
-	packetKey := core.BatchPacketsPath(core.CommitPackets([]core.Packet{packet}))
-	_, proof := updateLensRootForPathValue(cur, t, flow.lensClientId, flow.l1ClientId, flow.l2ClientId, 5, packetKey[:], core.COMMITMENT_MAGIC[:])
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, proof, 5))
+	packet := core.NewPacket(cross(cur), flow.counterpartyChannelId, flow.channelId, []byte("payload"), 1<<62)
+	packetKey := types.BatchPacketsPath(mustCommitPackets([]types.Packet{packet}))
+	_, proof := updateLensRootForPathValue(cur, t, flow.lensClientId, flow.l1ClientId, flow.l2ClientId, 5, packetKey[:], types.COMMITMENT_MAGIC[:])
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, proof, 5))
 
 	if flow.app.recvCount != 1 {
 		t.Fatalf("OnRecvPacket calls: got %d want 1", flow.app.recvCount)
@@ -365,12 +366,12 @@ func TestPacketRecvUsesStateLensStorageProof(cur realm, t *testing.T) {
 
 func TestPacketRecvRejectsWrongStateLensStorageProof(cur realm, t *testing.T) {
 	flow := setupStateLensOpenChannel(cur, t)
-	packet := core.NewPacket(cross(cur), flow.counterpartyChannelId, flow.channelId, []byte("payload"), 0, 101)
+	packet := core.NewPacket(cross(cur), flow.counterpartyChannelId, flow.channelId, []byte("payload"), 101)
 	wrongPath := bytes.Repeat([]byte{0x33}, 32)
-	_, proof := updateLensRootForPathValue(cur, t, flow.lensClientId, flow.l1ClientId, flow.l2ClientId, 5, wrongPath, core.COMMITMENT_MAGIC[:])
+	_, proof := updateLensRootForPathValue(cur, t, flow.lensClientId, flow.l1ClientId, flow.l2ClientId, 5, wrongPath, types.COMMITMENT_MAGIC[:])
 
 	uassert.AbortsContains(t, cur, ics23mpt.ErrInvalidCommitmentKey.Error(), func(cur realm) {
-		core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, proof, 5))
+		core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, proof, 5))
 	})
 	if flow.app.recvCount != 0 {
 		t.Fatalf("OnRecvPacket calls after bad proof: got %d want 0", flow.app.recvCount)
@@ -411,10 +412,10 @@ func setupStateLensOpenChannel(cur realm, t *testing.T) stateLensFlow {
 	*stateLensTestApp = flowApp{}
 	portId := []byte(stateLensTestPortId)
 	l1ClientId := createMockL1Client(cur)
-	l2ClientId := core.ClientId(77)
-	counterpartyClientId := core.ClientId(88)
-	counterpartyConnectionId := core.ConnectionId(99)
-	counterpartyChannelId := core.ChannelId(100)
+	l2ClientId := types.ClientId(77)
+	counterpartyClientId := types.ClientId(88)
+	counterpartyConnectionId := types.ConnectionId(99)
+	counterpartyChannelId := types.ChannelId(100)
 	if !core.HasApp(portId) {
 		core.RegisterApp(cross(cur), stateLensTestApp)
 	}
@@ -441,25 +442,25 @@ func setupStateLensOpenChannel(cur realm, t *testing.T) stateLensFlow {
 	if err != nil {
 		t.Fatalf("EncodeClientState: %v", err)
 	}
-	lensClientId := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), ClientType, csBytes, consBytes))
+	lensClientId := core.CreateClient(cross(cur), types.NewMsgCreateClient(ClientType, csBytes, consBytes))
 
-	connInit := core.NewConnection(cross(cur), core.ConnectionStateInit, counterpartyClientId, lensClientId, 0)
-	connInitKey := core.ConnectionPath(counterpartyConnectionId)
-	connInitValue := hashBytes(connInit.EthAbiEncode())
+	connInit := core.NewConnection(cross(cur), types.ConnectionStateInit, counterpartyClientId, lensClientId, 0)
+	connInitKey := types.ConnectionPath(counterpartyConnectionId)
+	connInitValue := hashBytes(mustEncodeABI(connInit.EncodeABI()))
 	_, proof := updateLensRootForPathValue(cur, t, lensClientId, l1ClientId, l2ClientId, 2, connInitKey[:], connInitValue[:])
-	connectionId := core.ConnectionOpenTry(cross(cur), core.NewMsgConnectionOpenTry(cross(cur), lensClientId, counterpartyClientId, counterpartyConnectionId, proof, 2))
+	connectionId := core.ConnectionOpenTry(cross(cur), types.NewMsgConnectionOpenTry(lensClientId, counterpartyClientId, counterpartyConnectionId, proof, 2))
 
-	connOpen := core.NewConnection(cross(cur), core.ConnectionStateOpen, counterpartyClientId, lensClientId, connectionId)
-	connOpenValue := hashBytes(connOpen.EthAbiEncode())
+	connOpen := core.NewConnection(cross(cur), types.ConnectionStateOpen, counterpartyClientId, lensClientId, connectionId)
+	connOpenValue := hashBytes(mustEncodeABI(connOpen.EncodeABI()))
 	_, proof = updateLensRootForPathValue(cur, t, lensClientId, l1ClientId, l2ClientId, 3, connInitKey[:], connOpenValue[:])
-	core.ConnectionOpenConfirm(cross(cur), core.NewMsgConnectionOpenConfirm(cross(cur), connectionId, proof, 3))
+	core.ConnectionOpenConfirm(cross(cur), types.NewMsgConnectionOpenConfirm(connectionId, proof, 3))
 
-	channelId := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(cross(cur), portId, []byte("counterparty-port"), connectionId, "ics-test-1"))
+	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, []byte("counterparty-port"), connectionId, "ics-test-1"))
 
-	channelKey := core.ChannelPath(counterpartyChannelId)
-	channelTryValue := hashChannel(t, core.ChannelStateTryOpen, counterpartyConnectionId, channelId, portId, "ics-test-1")
+	channelKey := types.ChannelPath(counterpartyChannelId)
+	channelTryValue := hashChannel(t, types.ChannelStateTryOpen, counterpartyConnectionId, channelId, portId, "ics-test-1")
 	_, proof = updateLensRootForPathValue(cur, t, lensClientId, l1ClientId, l2ClientId, 4, channelKey[:], channelTryValue[:])
-	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), channelId, "ics-test-1", counterpartyChannelId, proof, 4))
+	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, "ics-test-1", counterpartyChannelId, proof, 4))
 
 	return stateLensFlow{
 		app:                   stateLensTestApp,
@@ -471,11 +472,11 @@ func setupStateLensOpenChannel(cur realm, t *testing.T) stateLensFlow {
 	}
 }
 
-func createLensClientForInactiveTest(cur realm, t *testing.T) (Adapter, core.ClientId) {
+func createLensClientForInactiveTest(cur realm, t *testing.T) (Adapter, types.ClientId) {
 	t.Helper()
 	resetTestState(cur)
 	l1ClientId := createMockL1Client(cur)
-	lensClientId := core.ClientId(101)
+	lensClientId := types.ClientId(101)
 
 	cs := ics23mpt.ClientState{L2ChainID: "l2", L1ClientID: uint32(l1ClientId), L2LatestHeight: 1}
 	cons := ics23mpt.ConsensusState{
@@ -502,7 +503,7 @@ func proofForPathValue(t *testing.T, path []byte, value []byte) ([32]byte, []byt
 	})
 }
 
-func updateLensRootForPathValue(cur realm, t *testing.T, lensClientId core.ClientId, l1ClientId core.ClientId, l2ClientId core.ClientId, height uint64, path []byte, value []byte) ([32]byte, []byte) {
+func updateLensRootForPathValue(cur realm, t *testing.T, lensClientId types.ClientId, l1ClientId types.ClientId, l2ClientId types.ClientId, height uint64, path []byte, value []byte) ([32]byte, []byte) {
 	t.Helper()
 	root, proof := proofForPathValue(t, path, value)
 	l2Consensus := makeConsensusBytes(height, bytes.Repeat([]byte{0xaa}, 32), root[:])
@@ -512,11 +513,11 @@ func updateLensRootForPathValue(cur realm, t *testing.T, lensClientId core.Clien
 		L2ConsensusStateProof: []byte{byte(height)},
 		L2ConsensusState:      l2Consensus,
 	}
-	wantPath := core.ConsensusStatePath(l2ClientId, core.Height(height))
+	wantPath := types.ConsensusStatePath(l2ClientId, types.NewHeight(height))
 	wantValueHash := keccak256.Sum256(l2Consensus)
 	wantMembershipCheck = true
 	wantClientId = l1ClientId
-	wantHeight = core.Height(height)
+	wantHeight = types.NewHeight(height)
 	wantProof = header.L2ConsensusStateProof
 	wantKey = wantPath[:]
 	wantValue = wantValueHash[:]
@@ -524,7 +525,7 @@ func updateLensRootForPathValue(cur realm, t *testing.T, lensClientId core.Clien
 	if err != nil {
 		t.Fatalf("EncodeHeader: %v", err)
 	}
-	core.UpdateClient(cross(cur), core.NewMsgUpdateClient(cross(cur), lensClientId, headerBytes))
+	core.UpdateClient(cross(cur), types.NewMsgUpdateClient(lensClientId, headerBytes))
 	return root, proof
 }
 
@@ -532,7 +533,22 @@ func hashBytes(b []byte) [32]byte {
 	return keccak256.Sum256(b)
 }
 
-func hashChannel(t *testing.T, state core.ChannelState, connectionId core.ConnectionId, counterpartyChannelId core.ChannelId, counterpartyPortId []byte, version string) [32]byte {
+func mustEncodeABI(b []byte, err error) []byte {
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+func mustCommitPackets(packets []types.Packet) types.H256 {
+	h, err := types.CommitPackets(packets)
+	if err != nil {
+		panic(err)
+	}
+	return h
+}
+
+func hashChannel(t *testing.T, state types.ChannelState, connectionId types.ConnectionId, counterpartyChannelId types.ChannelId, counterpartyPortId []byte, version string) [32]byte {
 	t.Helper()
 	schema := abi.Schema{Fields: []abi.Field{
 		{Type: abi.TypeUint8},

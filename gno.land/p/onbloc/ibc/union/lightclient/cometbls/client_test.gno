@@ -17,8 +17,7 @@ func newTestClient(t *testing.T) *CometblsLightClient {
 		Root:               MerkleRoot{Hash: repeat32(0xAB)},
 		NextValidatorsHash: repeat32(0xCD),
 	}
-	var owner address
-	c, err := NewCometblsLightClient(&cs, consensus, owner)
+	c, err := NewCometblsLightClient(&cs, consensus)
 	if err != nil {
 		t.Fatalf("NewCometblsLightClient: %v", err)
 	}

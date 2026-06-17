@@ -20,23 +20,20 @@ import (
 type CometblsLightClient struct {
 	clientState            *ClientState
 	consensusStateByHeight *bptree.BPTree // height:*ConsensusState
-	ownerAddress           address
 }
 
 var _ lightclient.Interface = (*CometblsLightClient)(nil)
 
-// NewCometblsLightClient builds a client from the encoded client and consensus
-// state bytes, validating the initialization invariants. This mirrors the realm
-// adapter's CreateClient path.
+// NewCometblsLightClient builds a client from the client and consensus state.
+// The membership-key owner is taken from clientState.ContractAddress, so the
+// caller (an app/bootstrap realm) only supplies the typed state.
 func NewCometblsLightClient(
 	clientState *ClientState,
 	consensusState *ConsensusState,
-	ownerAddress address,
 ) (*CometblsLightClient, error) {
 	client := &CometblsLightClient{
 		clientState:            clientState,
 		consensusStateByHeight: bptree.NewBPTree32(),
-		ownerAddress:           ownerAddress,
 	}
 
 	client.setConsensusState(clientState.LatestHeight, consensusState)
@@ -105,7 +102,7 @@ func (c *CometblsLightClient) prepareProof(height uint64, key []byte, proof []by
 		return nil, nil, merklePath, makeError(ErrInvalidProof, "failed to decode proof: "+err.Error())
 	}
 
-	merklePath = aibtypes.MerklePath{KeyPath: [][]byte{moduleKey, makeStoreKey(c.ownerAddress, key)}}
+	merklePath = aibtypes.MerklePath{KeyPath: [][]byte{moduleKey, makeStoreKey(c.clientState.ContractAddress, key)}}
 
 	specs := ics23.GetSDKProofSpecs()
 	if len(decodedProof) != len(specs) {
@@ -184,7 +181,17 @@ func (c *CometblsLightClient) updateState(header *Header) types.StateUpdate {
 	consState := header.ConsensusState()
 	c.setConsensusState(height, consState)
 
-	return types.StateUpdate{Height: height.RevisionHeight}
+	// Mirror the new state bytes so the host (core) can persist them for queries
+	// and counterparty proofs. Encoding cannot fail here (hashes are fixed-width),
+	// but stay defensive and leave a mirror empty on error.
+	update := types.StateUpdate{Height: height.RevisionHeight}
+	if consBytes, err := EncodeConsensusState(consState); err == nil {
+		update.ConsensusStateBytes = consBytes
+	}
+	if csBytes, err := EncodeClientState(c.clientState); err == nil {
+		update.ClientStateBytes = csBytes
+	}
+	return update
 }
 
 func (c *CometblsLightClient) GetTimestamp() types.Timestamp {

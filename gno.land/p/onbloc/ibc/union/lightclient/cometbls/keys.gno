@@ -8,7 +8,7 @@ const (
 
 var moduleKey = []byte("wasm")
 
-func makeStoreKey(addr address, key []byte) []byte {
+func makeStoreKey(addr H256, key []byte) []byte {
 	out := make([]byte, 0, 1+32+1+len(key))
 	out = append(out, 0x03)
 	out = append(out, addr[:]...)

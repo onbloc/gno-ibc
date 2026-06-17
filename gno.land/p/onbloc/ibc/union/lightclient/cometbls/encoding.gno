@@ -3,8 +3,8 @@ package cometbls
 import (
 	"errors"
 
-	abienc "gno.land/p/onbloc/encoding/abi"
 	"gno.land/p/aib/encoding/proto"
+	abienc "gno.land/p/onbloc/encoding/abi"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 

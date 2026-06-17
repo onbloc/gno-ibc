@@ -18,7 +18,7 @@ const (
 )
 
 func InstallImpl(cur realm) zkgm.ZkgmImpl {
-	inst := impl.GetInstance(cross(cur))
+	inst := impl.New(cross(cur))
 	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), inst, []string{ScenarioLoaderPath, ScenarioImplPath}))
 	return inst
 }

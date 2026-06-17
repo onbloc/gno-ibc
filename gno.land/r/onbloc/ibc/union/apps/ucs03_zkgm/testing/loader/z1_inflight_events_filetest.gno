@@ -25,7 +25,7 @@ func (r *eventReceiver) OnIntentZkgm(cur realm, env z.IntentCallEnv) error {
 }
 
 func main(cur realm) {
-	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), impl.GetInstance(cross(cur)), []string{
+	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), impl.New(cross(cur)), []string{
 		"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader",
 	}))
 

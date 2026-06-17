@@ -29,7 +29,7 @@ var (
 const proxyPkgPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 
 // productionImplPath is the production registrar and implementation realm.
-// It is the trust anchor for impl.GetInstance after bootstrap.
+// It is the trust anchor for impl.New after bootstrap.
 const productionImplPath = proxyPkgPath + "/v1"
 
 func AsIBCApp() app.IApp {

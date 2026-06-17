@@ -10,24 +10,22 @@ import (
 
 type ZkgmV1 struct{}
 
-var instance = &ZkgmV1{}
-
-// GetInstance returns the singleton impl.
-// Before the proxy has an installed impl, any bootstrap loader may fetch it.
-// After bootstrap, only the production impl realm may fetch it again.
-func GetInstance(cur realm) *ZkgmV1 {
+// New constructs a fresh v1 impl.
+// Before the proxy has an installed impl, any bootstrap loader may construct it.
+// After bootstrap, only the production impl realm may construct it again.
+func New(cur realm) zkgm.ZkgmImpl {
 	caller := cur.Previous().PkgPath()
 	if caller != zkgm.ProductionImplPath() && zkgm.Bootstrapped() {
 		panic("not allowed")
 	}
-	return instance
+	return &ZkgmV1{}
 }
 
 func Register(cur realm) {
 	if zkgm.Bootstrapped() {
 		panic("zkgm: already bootstrapped")
 	}
-	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), instance, []string{}))
+	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), New(cur), []string{}))
 	zkgm.RegisterCoreApp(cross(cur))
 }
 

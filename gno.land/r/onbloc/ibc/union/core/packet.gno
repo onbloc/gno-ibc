@@ -39,49 +39,6 @@ func PacketSend(cur realm, sourceChannelId types.ChannelId, timeoutTimestamp typ
 	return packet
 }
 
-// acceptRecvPacket validates recv-path invariants and records a packet
-// receipt. Receipts serve as both replay protection and the source-side
-// timeout signal.
-func acceptRecvPacket(c *client, packet types.Packet, batchChannelId types.ChannelId, now uint64) (types.Channel, bool) {
-	channel := store.getChannel(packet.DestinationChannelId)
-	if channel.State != types.ChannelStateOpen {
-		panic(ErrInvalidChannelState)
-	}
-	if packet.DestinationChannelId != batchChannelId {
-		panic(ErrBatchSameChannelOnly)
-	}
-
-	// Ignore duplicate packets so batch retries remain idempotent.
-	if c.hasPacketReceipt(packet) {
-		return channel, true
-	}
-
-	// Do not execute packets that have already timed out on the source chain.
-	if packet.TimeoutTimestamp != 0 && now >= uint64(packet.TimeoutTimestamp) {
-		panic(ErrPacketTimeoutExpired)
-	}
-
-	c.setPacketReceipt(packet)
-	return channel, false
-}
-
-// commitSyncAck records non-async recv results as Union receipt evidence.
-// Sync success and failure results must carry a non-empty acknowledgement.
-func commitSyncAck(c *client, packet types.Packet, channel types.Channel, connection types.Connection, res types.RecvPacketResult) error {
-	switch res.Status {
-	case types.PacketStatusAsync:
-	case types.PacketStatusSuccess, types.PacketStatusFailure:
-		if len(res.Acknowledgement) == 0 {
-			return ErrSyncAckEmpty
-		}
-		c.commitAcknowledgement(packet, res.Acknowledgement)
-		emitWriteAckEvent(packet, channel, connection, res.Acknowledgement)
-	default:
-		return ErrUnknownPacketStatus
-	}
-	return nil
-}
-
 func PacketRecv(cur realm, msg types.MsgPacketRecv) {
 	relayer := cur.Previous().Address()
 	if len(msg.Packets) == 0 {
@@ -214,13 +171,19 @@ func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
 
 	// ICS-04: if TimeoutTimestamp is set, reject before proof verification
 	// unless the consensus time at ProofHeight is past the timeout.
-	if packet.TimeoutTimestamp == 0 ||
-		c.lightClient.GetTimestamp(connection.ClientId, types.NewHeight(msg.ProofHeight)) <= packet.TimeoutTimestamp {
+	if packet.TimeoutTimestamp == 0 {
+		panic(ErrPacketTimeoutNotReached)
+	}
+	proofTimestamp, err := c.lightClient.GetTimestampAtHeight(msg.ProofHeight)
+	if err != nil {
+		panic(err)
+	}
+	if proofTimestamp <= packet.TimeoutTimestamp {
 		panic(ErrPacketTimeoutNotReached)
 	}
 
 	key := types.BatchReceiptsPath(commitPacketHash(packet))
-	verifyNonMembershipWithActiveClient(c.lightClient, connection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, key[:])
+	verifyNonMembershipWithActiveClient(c, types.NewHeight(msg.ProofHeight), msg.Proof, key[:])
 
 	portId := store.getChannelOwner(packet.SourceChannelId)
 	c.deletePacketCommitment(packet)
@@ -415,4 +378,47 @@ func WriteAcknowledgement(cur realm, msg types.MsgWriteAcknowledgement) {
 	c.commitAcknowledgement(msg.Packet, msg.Acknowledgement)
 
 	emitWriteAckEvent(msg.Packet, channel, connection, msg.Acknowledgement)
+}
+
+// acceptRecvPacket validates recv-path invariants and records a packet
+// receipt. Receipts serve as both replay protection and the source-side
+// timeout signal.
+func acceptRecvPacket(c *client, packet types.Packet, batchChannelId types.ChannelId, now uint64) (types.Channel, bool) {
+	channel := store.getChannel(packet.DestinationChannelId)
+	if channel.State != types.ChannelStateOpen {
+		panic(ErrInvalidChannelState)
+	}
+	if packet.DestinationChannelId != batchChannelId {
+		panic(ErrBatchSameChannelOnly)
+	}
+
+	// Ignore duplicate packets so batch retries remain idempotent.
+	if c.hasPacketReceipt(packet) {
+		return channel, true
+	}
+
+	// Do not execute packets that have already timed out on the source chain.
+	if packet.TimeoutTimestamp != 0 && now >= uint64(packet.TimeoutTimestamp) {
+		panic(ErrPacketTimeoutExpired)
+	}
+
+	c.setPacketReceipt(packet)
+	return channel, false
+}
+
+// commitSyncAck records non-async recv results as Union receipt evidence.
+// Sync success and failure results must carry a non-empty acknowledgement.
+func commitSyncAck(c *client, packet types.Packet, channel types.Channel, connection types.Connection, res types.RecvPacketResult) error {
+	switch res.Status {
+	case types.PacketStatusAsync:
+	case types.PacketStatusSuccess, types.PacketStatusFailure:
+		if len(res.Acknowledgement) == 0 {
+			return ErrSyncAckEmpty
+		}
+		c.commitAcknowledgement(packet, res.Acknowledgement)
+		emitWriteAckEvent(packet, channel, connection, res.Acknowledgement)
+	default:
+		return ErrUnknownPacketStatus
+	}
+	return nil
 }

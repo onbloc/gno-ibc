@@ -23,6 +23,12 @@ type Interface interface {
 
 	GetTimestamp() types.Timestamp
 
+	// GetTimestampAtHeight returns the consensus timestamp recorded at a specific
+	// height. Packet timeout verification needs the counterparty timestamp at the
+	// proof height, not just the latest. Returns an error when no consensus state
+	// exists at the height.
+	GetTimestampAtHeight(height uint64) (types.Timestamp, error)
+
 	GetLatestHeight() uint64
 
 	GetCounterpartyChainID() string

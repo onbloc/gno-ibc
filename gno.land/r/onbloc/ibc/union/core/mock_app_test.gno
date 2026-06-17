@@ -1,72 +1,90 @@
 package core
 
-import "gno.land/p/onbloc/ibc/union/types"
+import (
+	"errors"
 
+	"gno.land/p/onbloc/ibc/union/lightclient"
+	"gno.land/p/onbloc/ibc/union/types"
+)
+
+// mockClient is a lightclient.Interface. Tests build a mockClient and hand it
+// to core.CreateClient directly, then inspect the same object core stores and
+// calls.
 type mockClient struct {
-	chainId                string
-	height                 types.Height
-	status                 types.Status
-	timestamp              types.Timestamp
-	membershipClientIds    []types.ClientId
-	membershipHeights      []types.Height
-	membershipProofs       [][]byte
-	membershipKeys         [][]byte
-	membershipValues       [][]byte
-	nonMembershipClientIds []types.ClientId
-	nonMembershipHeights   []types.Height
-	nonMembershipProofs    [][]byte
-	nonMembershipKeys      [][]byte
-	createClientIds        []types.ClientId
-	createClientStates     [][]byte
-	createConsensusStates  [][]byte
+	chainId   string
+	height    types.Height
+	status    types.Status
+	timestamp types.Timestamp
+
+	// recorded calls
+	membershipHeights    []types.Height
+	membershipProofs     [][]byte
+	membershipKeys       [][]byte
+	membershipValues     [][]byte
+	nonMembershipHeights []types.Height
+	nonMembershipProofs  [][]byte
+	nonMembershipKeys    [][]byte
+	headerMessages       [][]byte
 }
 
-func (m *mockClient) CreateClient(_ realm, clientId types.ClientId, clientStateBytes, consensusStateBytes []byte) string {
-	m.createClientIds = append(m.createClientIds, clientId)
-	m.createClientStates = append(m.createClientStates, clientStateBytes)
-	m.createConsensusStates = append(m.createConsensusStates, consensusStateBytes)
-	return m.chainId
-}
-func (m *mockClient) UpdateClient(_ realm, _ types.ClientId, _ []byte) types.ConsensusStateUpdate {
-	m.height = m.height.Increment()
-	return types.ConsensusStateUpdate{
-		Height:              m.height,
-		ClientStateBytes:    []byte("cs"),
-		ConsensusStateBytes: []byte("cons"),
-	}
-}
-
-func (m *mockClient) VerifyMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte, value []byte) {
-	m.membershipClientIds = append(m.membershipClientIds, clientId)
-	m.membershipHeights = append(m.membershipHeights, height)
-	m.membershipProofs = append(m.membershipProofs, proof)
+func (m *mockClient) VerifyMembership(height uint64, key, proof, value []byte) error {
+	m.membershipHeights = append(m.membershipHeights, types.NewHeight(height))
 	m.membershipKeys = append(m.membershipKeys, key)
+	m.membershipProofs = append(m.membershipProofs, proof)
 	m.membershipValues = append(m.membershipValues, value)
+	return nil
 }
 
-func (m *mockClient) VerifyNonMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte) {
-	m.nonMembershipClientIds = append(m.nonMembershipClientIds, clientId)
-	m.nonMembershipHeights = append(m.nonMembershipHeights, height)
-	m.nonMembershipProofs = append(m.nonMembershipProofs, proof)
+func (m *mockClient) VerifyNonMembership(height uint64, key, proof []byte) error {
+	m.nonMembershipHeights = append(m.nonMembershipHeights, types.NewHeight(height))
 	m.nonMembershipKeys = append(m.nonMembershipKeys, key)
+	m.nonMembershipProofs = append(m.nonMembershipProofs, proof)
+	return nil
 }
 
-func (m *mockClient) GetTimestamp(_ types.ClientId, _ types.Height) types.Timestamp {
+func (m *mockClient) GetTimestamp() types.Timestamp {
 	if m.timestamp != 0 {
 		return m.timestamp
 	}
 	return types.Timestamp(1e9)
 }
-func (m *mockClient) GetStatus(_ types.ClientId) types.Status { return m.status }
 
-type mockForceClient struct {
-	mockClient
-	forceHeight types.Height
+func (m *mockClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
+	return m.GetTimestamp(), nil
 }
 
-func (m *mockForceClient) ForceUpdateClient(cur realm, _ types.ClientId, csBytes, consBytes []byte) types.ConsensusStateUpdate {
-	m.forceHeight = m.forceHeight.Increment()
-	return NewConsensusStateUpdate(cross(cur), m.forceHeight, consBytes, csBytes)
+func (m *mockClient) GetLatestHeight() uint64        { return m.height.RevisionHeight }
+func (m *mockClient) GetCounterpartyChainID() string { return m.chainId }
+
+func (m *mockClient) Status() lightclient.Status {
+	switch m.status {
+	case types.StatusActive:
+		return lightclient.Active
+	case types.StatusExpired:
+		return lightclient.Expired
+	case types.StatusFrozen:
+		return lightclient.Frozen
+	default:
+		return lightclient.Unknown
+	}
+}
+
+func (m *mockClient) VerifyHeader(_ address, header []byte, _ address) (types.StateUpdate, error) {
+	m.headerMessages = append(m.headerMessages, header)
+	m.height = m.height.Increment()
+	return types.StateUpdate{
+		Height:              m.height.RevisionHeight,
+		ClientStateBytes:    []byte("cs"),
+		ConsensusStateBytes: []byte("cons"),
+	}, nil
+}
+
+func (m *mockClient) VerifyCreation(_ address, _ address) (types.ClientCreationResult, error) {
+	return types.ClientCreationResult{}, nil
+}
+
+func (m *mockClient) Misbehaviour(_ address, _ []byte, _ address) (types.ClientState, error) {
+	return nil, errors.New("mock: misbehaviour unsupported")
 }
 
 type mockApp struct {

@@ -182,11 +182,22 @@ func (c *StateLensIcs23MptLightClient) updateState(header Header, consState *Con
 
 	c.setConsensusState(height, consState)
 
-	if height > c.clientState.L2LatestHeight {
-		c.clientState.L2LatestHeight = height
+	update := types.StateUpdate{Height: height}
+	// Mirror the new consensus state bytes so the host (core) can persist them
+	// for queries and counterparty proofs. Encoding cannot fail here (roots are
+	// fixed 32-byte words), but stay defensive and leave the mirror empty on error.
+	if consBytes, err := EncodeConsensusState(*consState); err == nil {
+		update.ConsensusStateBytes = consBytes
 	}
 
-	return types.StateUpdate{Height: height}
+	if height > c.clientState.L2LatestHeight {
+		c.clientState.L2LatestHeight = height
+		if csBytes, err := EncodeClientState(*c.clientState); err == nil {
+			update.ClientStateBytes = csBytes
+		}
+	}
+
+	return update
 }
 
 // VerifyCreation performs no creation-time state mutation; the state-lens client
@@ -211,6 +222,14 @@ func (c *StateLensIcs23MptLightClient) GetTimestamp() types.Timestamp {
 	}
 
 	return types.Timestamp(consState.Timestamp)
+}
+
+func (c *StateLensIcs23MptLightClient) GetTimestampAtHeight(height uint64) (types.Timestamp, error) {
+	consState, found := c.getConsensusState(height)
+	if !found {
+		return 0, ErrConsensusStateNotFound
+	}
+	return types.Timestamp(consState.Timestamp), nil
 }
 
 func (c *StateLensIcs23MptLightClient) GetLatestHeight() uint64 {

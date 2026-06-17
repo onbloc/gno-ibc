@@ -27,15 +27,14 @@ type Store struct {
 	channelSeq        seqid.ID
 	channelClientByID *bptree.BPTree // channelKey(ChannelId) → ClientId
 
-	clientRegistry map[types.ClientType]lightclient.ILightClient
-	ports          map[string]app.IApp
+	ports map[string]app.IApp
 }
 
 type client struct {
 	id                types.ClientId
 	typ               types.ClientType
 	creator           address
-	lightClient       lightclient.ILightClient
+	lightClient       lightclient.Interface
 	clientState       []byte
 	consensusByHeight *bptree.BPTree // string(height.Bytes()) → []byte
 
@@ -57,7 +56,6 @@ func newStore() *Store {
 		clientByID:           bptree.NewBPTree32(),
 		connectionClientByID: bptree.NewBPTree32(),
 		channelClientByID:    bptree.NewBPTree32(),
-		clientRegistry:       make(map[types.ClientType]lightclient.ILightClient),
 		ports:                make(map[string]app.IApp),
 	}
 }
@@ -248,28 +246,15 @@ func (s *Store) nextChannelId() types.ChannelId {
 	return types.ChannelId(uint32(s.channelSeq.Next()))
 }
 
-// --- Client registry ---
-
-func (s *Store) registerClient(clientType types.ClientType, impl lightclient.ILightClient) {
-	if _, ok := s.clientRegistry[clientType]; ok {
-		panic(ErrClientTypeAlreadyRegistered)
-	}
-	s.clientRegistry[clientType] = impl
-}
-
 // --- Client ---
 
-func (s *Store) addClient(typ types.ClientType, creator address) *client {
-	impl, ok := s.clientRegistry[typ]
-	if !ok {
-		panic("unhandled light client type " + string(typ))
-	}
+func (s *Store) addClient(typ types.ClientType, creator address, lc lightclient.Interface) *client {
 	clientId := types.ClientId(uint32(s.clientSeq.Next()))
 	c := &client{
 		id:                clientId,
 		typ:               typ,
 		creator:           creator,
-		lightClient:       impl,
+		lightClient:       lc,
 		consensusByHeight: bptree.NewBPTree32(),
 		connectionsByID:   bptree.NewBPTree32(),
 		channelsByID:      bptree.NewBPTree32(),
@@ -286,6 +271,14 @@ func (s *Store) getClient(clientId types.ClientId) *client {
 		return nil
 	}
 	return v.(*client)
+}
+
+func (s *Store) lightClientOf(clientId types.ClientId) (lightclient.Interface, bool) {
+	c := s.getClient(clientId)
+	if c == nil {
+		return nil, false
+	}
+	return c.lightClient, true
 }
 
 // --- App routing ---

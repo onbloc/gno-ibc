@@ -3,7 +3,6 @@ package core
 import "errors"
 
 var (
-	ErrClientTypeAlreadyRegistered   = errors.New("client type already registered")
 	ErrClientNotActive               = errors.New("client is not active")
 	ErrInvalidConnectionState        = errors.New("invalid connection state")
 	ErrInvalidChannelState           = errors.New("invalid channel state")

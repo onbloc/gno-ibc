@@ -37,6 +37,7 @@ func (m *mockL1Client) VerifyMembership(height uint64, key, proof, value []byte)
 
 func (m *mockL1Client) VerifyNonMembership(height uint64, key, proof []byte) error { return nil }
 func (m *mockL1Client) GetTimestamp() types.Timestamp                              { return 0 }
+func (m *mockL1Client) GetTimestampAtHeight(uint64) (types.Timestamp, error)       { return 0, nil }
 func (m *mockL1Client) GetLatestHeight() uint64                                    { return 0 }
 func (m *mockL1Client) GetCounterpartyChainID() string                             { return "l1" }
 func (m *mockL1Client) Status() lightclient.Status                                 { return m.status }

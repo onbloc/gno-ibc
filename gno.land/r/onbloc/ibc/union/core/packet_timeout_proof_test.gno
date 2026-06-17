@@ -13,7 +13,7 @@ import (
 func TestPacketTimeoutRejectsProofBeforeTimeout(cur realm, t *testing.T) {
 	resetStore()
 	_, _, channelId := setupOpenChannel(t)
-	client := store.clientRegistry[mockType].(*mockClient)
+	client := mockClientFor(channelId)
 	client.timestamp = types.Timestamp(500)
 	packet := types.Packet{
 		SourceChannelId:      channelId,
@@ -41,7 +41,7 @@ func TestPacketTimeoutRejectsProofBeforeTimeout(cur realm, t *testing.T) {
 func TestPacketTimeoutRejectsProofAtBoundary(cur realm, t *testing.T) {
 	resetStore()
 	_, _, channelId := setupOpenChannel(t)
-	client := store.clientRegistry[mockType].(*mockClient)
+	client := mockClientFor(channelId)
 	client.timestamp = types.Timestamp(1000)
 	packet := types.Packet{
 		SourceChannelId:      channelId,
@@ -64,7 +64,7 @@ func TestPacketTimeoutRejectsProofAtBoundary(cur realm, t *testing.T) {
 func TestPacketTimeoutRejectsZeroTimeoutPacket(cur realm, t *testing.T) {
 	resetStore()
 	_, _, channelId := setupOpenChannel(t)
-	client := store.clientRegistry[mockType].(*mockClient)
+	client := mockClientFor(channelId)
 	client.timestamp = types.Timestamp(1 << 62) // any positive proof timestamp
 	packet := types.Packet{
 		SourceChannelId:      channelId,
@@ -88,7 +88,7 @@ func TestPacketTimeoutRejectsZeroTimeoutPacket(cur realm, t *testing.T) {
 func TestPacketTimeoutAcceptsProofAfterTimeout(cur realm, t *testing.T) {
 	resetStore()
 	_, _, channelId := setupOpenChannel(t)
-	client := store.clientRegistry[mockType].(*mockClient)
+	client := mockClientFor(channelId)
 	client.timestamp = types.Timestamp(2000)
 	packet := types.Packet{
 		SourceChannelId:      channelId,

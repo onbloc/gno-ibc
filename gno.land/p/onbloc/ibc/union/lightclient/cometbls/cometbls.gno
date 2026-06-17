@@ -196,6 +196,15 @@ func (c *CometblsLightClient) GetTimestamp() types.Timestamp {
 	return types.Timestamp(lastConsState.Timestamp)
 }
 
+func (c *CometblsLightClient) GetTimestampAtHeight(height uint64) (types.Timestamp, error) {
+	consState, found := c.getConsensusState(types.NewHeight(height))
+	if !found {
+		return 0, makeError(ErrInvalidConsensus, "no consensus state at height")
+	}
+
+	return types.Timestamp(consState.Timestamp), nil
+}
+
 func (c *CometblsLightClient) GetLatestHeight() uint64 {
 	return c.clientState.LatestHeight.RevisionHeight
 }

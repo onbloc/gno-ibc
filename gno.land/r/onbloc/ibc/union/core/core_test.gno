@@ -103,12 +103,17 @@ func setChannelOwner(channelId types.ChannelId, portId string) {
 }
 
 func addMockClient(mc *mockClient) *client {
-	store.clientRegistry[mockType] = mc
-	return store.addClient(mockType, testutils.TestAddress("mock-client-creator"))
+	return store.addClient(mockType, testutils.TestAddress("mock-client-creator"), mc)
 }
 
 func registerMockClient(mc *mockClient) types.ClientId {
 	return addMockClient(mc).id
+}
+
+// mockClientFor returns the mock light client object core stored for the client
+// that owns channelId, so tests can inspect recorded calls or mutate its status.
+func mockClientFor(channelId types.ChannelId) *mockClient {
+	return store.clientForChannel(channelId).lightClient.(*mockClient)
 }
 
 func addMockConnection(state types.ConnectionState) types.ConnectionId {
@@ -295,40 +300,6 @@ func TestPacketHashUnionReferenceVector(cur realm, t *testing.T) {
 	assertH256Hex(t, "packet hash", types.MustCommit(types.CommitPacket(packet)), "0xb204ec01ba72d32b884df0ecbfea727a15c82c1e0a08dff53fde4990d3ba589f")
 }
 
-// --- State: client registry ---
-
-func TestClientRegistryStoresClient(cur realm, t *testing.T) {
-	resetStore()
-	c := &mockClient{chainId: "union-1"}
-	store.registerClient(mockType, c)
-	if _, ok := store.clientRegistry[mockType]; !ok {
-		t.Error("client not found in registry after registration")
-	}
-}
-
-func TestClientRegistryDuplicatePanics(cur realm, t *testing.T) {
-	resetStore()
-	store.registerClient(mockType, &mockClient{})
-	mustPanic(t, func() {
-		store.registerClient(mockType, &mockClient{})
-	})
-}
-
-func TestRegisterClientRejectsDuplicateType(cur realm, t *testing.T) {
-	resetStore()
-	testing.SetRealm(testing.NewCodeRealm(testCorePkgPath))
-	clientType := types.ClientType(testCorePkgPath + "/testing/immutable-client")
-
-	RegisterClient(cur, clientType, &mockClient{chainId: "first"})
-	uassert.True(t, HasClient(clientType))
-
-	// Light-client implementations are immutable for a registered type. The
-	// upgrade path is a new types.ClientType plus channel migration, not replacement.
-	uassert.AbortsContains(t, cur, "client type already registered", func(cur realm) {
-		RegisterClient(cur, clientType, &mockClient{chainId: "second"})
-	})
-}
-
 func TestGetClientNotFoundReturnsNil(cur realm, t *testing.T) {
 	resetStore()
 	if store.getClient(types.ClientId(999)) != nil {
@@ -399,16 +370,13 @@ func TestQueryConsensusStateUnknownReturnsEmpty(cur realm, t *testing.T) {
 	}
 }
 
-func TestCreateClientAddsClientBeforeCallingLightClient(cur realm, t *testing.T) {
+func TestCreateClientBuildsAndStoresObject(cur realm, t *testing.T) {
 	resetStore()
+	creatorAddr := testutils.TestAddress("client-creator")
+	testing.SetRealm(testing.NewUserRealm(creatorAddr))
 	mc := &mockClient{chainId: "union-1", height: types.NewHeight(100)}
-	store.clientRegistry[mockType] = mc
 
-	clientId := CreateClient(cross(cur), types.MsgCreateClient{
-		ClientType:          mockType,
-		ClientStateBytes:    []byte("client-state"),
-		ConsensusStateBytes: []byte("consensus-state"),
-	})
+	clientId := CreateClient(cross(cur), mockType, mc)
 
 	c := store.getClient(clientId)
 	if c == nil {
@@ -417,17 +385,11 @@ func TestCreateClientAddsClientBeforeCallingLightClient(cur realm, t *testing.T)
 	if c.lightClient != mc {
 		t.Fatalf("stored client lightClient mismatch")
 	}
-	if c.creator != cur.Previous().Address() {
-		t.Fatalf("stored client creator mismatch: got %s want %s", c.creator, cur.Previous().Address())
+	if c.creator != creatorAddr {
+		t.Fatalf("stored client creator mismatch: got %s want %s", c.creator, creatorAddr)
 	}
-	if len(mc.createClientIds) != 1 || mc.createClientIds[0] != clientId {
-		t.Fatalf("CreateClient call ids: got %v want [%v]", mc.createClientIds, clientId)
-	}
-	if len(mc.createClientStates) != 1 || string(mc.createClientStates[0]) != "client-state" {
-		t.Fatalf("CreateClient client state not forwarded")
-	}
-	if len(mc.createConsensusStates) != 1 || string(mc.createConsensusStates[0]) != "consensus-state" {
-		t.Fatalf("CreateClient consensus state not forwarded")
+	if c.typ != mockType {
+		t.Fatalf("stored client type mismatch: got %s want %s", c.typ, mockType)
 	}
 }
 
@@ -985,47 +947,6 @@ func TestGetChannelOwnerPanicsWhenMissing(cur realm, t *testing.T) {
 	})
 }
 
-func TestRegisterClientRejectsUnauthorizedCaller(cur realm, t *testing.T) {
-	resetStore()
-	oldAdmin := admin
-	admin = "gno1authorized"
-	defer func() { admin = oldAdmin }()
-
-	uassert.AbortsContains(t, cur, "caller not authorized to register client", func(cur realm) {
-		RegisterClient(cur, types.ClientType("cometbls"), &mockClient{})
-	})
-	if HasClient(types.ClientType("cometbls")) {
-		t.Fatal("unauthorized RegisterClient must not reserve the client type")
-	}
-}
-
-func TestRegisterClientScopedNamespaceRejectsExternalType(cur realm, t *testing.T) {
-	resetStore()
-	testing.SetRealm(testing.NewCodeRealm(testCorePkgPath))
-
-	uassert.AbortsContains(t, cur, "caller not authorized to register client", func(cur realm) {
-		RegisterClient(cur, types.ClientType("gno.land/r/other/mytype"), &mockClient{})
-	})
-}
-
-func TestRegisterClientScopedNamespaceRejectsExactCallerPath(cur realm, t *testing.T) {
-	resetStore()
-	testing.SetRealm(testing.NewCodeRealm(testCorePkgPath))
-
-	uassert.AbortsContains(t, cur, "caller not authorized to register client", func(cur realm) {
-		RegisterClient(cur, types.ClientType(testCorePkgPath), &mockClient{})
-	})
-}
-
-func TestRegisterClientScopedNamespaceRejectsSuffixedPath(cur realm, t *testing.T) {
-	resetStore()
-	testing.SetRealm(testing.NewCodeRealm(testCorePkgPath))
-
-	uassert.AbortsContains(t, cur, "caller not authorized to register client", func(cur realm) {
-		RegisterClient(cur, types.ClientType(testCorePkgPath+"suffix/x"), &mockClient{})
-	})
-}
-
 func TestRegisterAppRejectsPortSquatting(cur realm, t *testing.T) {
 	resetStore()
 	oldAdmin := admin
@@ -1088,7 +1009,7 @@ func TestPacketRecvBatchUsesUnionBatchCommitment(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	client := store.clientRegistry[mockType].(*mockClient)
+	client := mockClientFor(channelId)
 	p1 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("a"), TimeoutTimestamp: testFutureTimeoutNanos}
 	p2 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("b"), TimeoutTimestamp: testFutureTimeoutNanos}
 	proof := types.Bytes("batch-proof")
@@ -1401,7 +1322,7 @@ func TestPacketAcknowledgementBatchUsesUnionBatchReceipts(cur realm, t *testing.
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	client := store.clientRegistry[mockType].(*mockClient)
+	client := mockClientFor(channelId)
 	p1 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100}
 	p2 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("b"), TimeoutTimestamp: 100}
 	store.commitPacket(p1)
@@ -1485,7 +1406,7 @@ func TestPacketTimeoutReceiptPath(cur realm, t *testing.T) {
 	_, _, channelId := setupOpenChannel(t)
 	packet := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("transfer"), TimeoutTimestamp: 100}
 	store.commitPacket(packet)
-	client := store.clientRegistry[mockType].(*mockClient)
+	client := mockClientFor(channelId)
 
 	PacketTimeout(cross(cur), types.MsgPacketTimeout{Packet: packet})
 
@@ -1516,7 +1437,7 @@ func TestPacketTimeoutRejectsInactiveClientBeforeNonMembership(cur realm, t *tes
 	_, _, channelId := setupOpenChannel(t)
 	packet := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("transfer"), TimeoutTimestamp: 100}
 	store.commitPacket(packet)
-	client := store.clientRegistry[mockType].(*mockClient)
+	client := mockClientFor(channelId)
 	client.status = types.StatusFrozen
 
 	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
@@ -1544,8 +1465,8 @@ func TestVerifyClientMembershipVerifiesUnionPathValue(cur realm, t *testing.T) {
 	if len(client.membershipKeys) != 1 {
 		t.Fatalf("membership calls: got %d want 1", len(client.membershipKeys))
 	}
-	if client.membershipClientIds[0] != clientId || client.membershipHeights[0] != types.NewHeight(10) {
-		t.Fatal("VerifyClientMembership must pass client id and proof height through")
+	if client.membershipHeights[0] != types.NewHeight(10) {
+		t.Fatal("VerifyClientMembership must pass proof height through")
 	}
 	if string(client.membershipProofs[0]) != string(proof) ||
 		string(client.membershipKeys[0]) != string(path) ||
@@ -1574,7 +1495,7 @@ func TestPacketRecvRejectsInactiveClient(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	client := store.clientRegistry[mockType].(*mockClient)
+	client := mockClientFor(channelId)
 	client.status = types.StatusFrozen
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
@@ -1600,8 +1521,8 @@ func TestPacketRecvRejectsInactiveClient(cur realm, t *testing.T) {
 // verifies the counterparty membership proof or persists the channel.
 func TestChannelOpenTryRejectsInactiveClient(cur realm, t *testing.T) {
 	resetStore()
-	portId, connId, _ := setupOpenChannel(t)
-	client := store.clientRegistry[mockType].(*mockClient)
+	portId, connId, channelId := setupOpenChannel(t)
+	client := mockClientFor(channelId)
 	client.status = types.StatusExpired
 	nextChannelId := types.ChannelId(uint32(store.channelSeq) + 1)
 	channel := types.Channel{
@@ -1671,55 +1592,24 @@ func TestGetClientStatusReturnsUnknownForMissingClient(cur realm, t *testing.T) 
 
 // --- ForceUpdateClient ---
 
-func TestForceUpdateClientUpdatesStateAndReturnsHeight(cur realm, t *testing.T) {
+func TestForceUpdateClientReplacesObjectAndReturnsHeight(cur realm, t *testing.T) {
 	resetStore()
 	adminAddr := testutils.TestAddress("admin")
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	admin = adminAddr
-	mc := &mockForceClient{}
-	store.clientRegistry[mockType] = mc
-	clientId := CreateClient(cross(cur), types.MsgCreateClient{
-		ClientType:          mockType,
-		ClientStateBytes:    []byte("cs-old"),
-		ConsensusStateBytes: []byte("cons-old"),
-	})
 
-	height := ForceUpdateClient(cross(cur), types.MsgForceUpdateClient{
-		ClientId:            clientId,
-		ClientStateBytes:    []byte("cs-new"),
-		ConsensusStateBytes: []byte("cons-new"),
-	})
+	clientId := CreateClient(cross(cur), mockType, &mockClient{height: types.NewHeight(0)})
+
+	// The replacement object (built by the caller) reports latest height 1.
+	replacement := &mockClient{height: types.NewHeight(1)}
+	height := ForceUpdateClient(cross(cur), clientId, replacement)
 
 	if height != types.NewHeight(1) {
 		t.Fatalf("ForceUpdateClient height: got %v want 1", height)
 	}
-	if got := QueryClientState(clientId); got != "0x"+hexEncodeString("cs-new") {
-		t.Fatalf("client state not updated: got %q", got)
+	if store.getClient(clientId).lightClient != replacement {
+		t.Fatalf("ForceUpdateClient did not replace the stored client object")
 	}
-	if got := QueryConsensusState(clientId, height); got != "0x"+hexEncodeString("cons-new") {
-		t.Fatalf("consensus state not updated: got %q", got)
-	}
-}
-
-func TestForceUpdateClientPanicsWhenClientDoesNotSupportForceUpdate(cur realm, t *testing.T) {
-	resetStore()
-	adminAddr := testutils.TestAddress("admin")
-	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	admin = adminAddr
-	store.clientRegistry[mockType] = &mockClient{}
-	clientId := CreateClient(cross(cur), types.MsgCreateClient{
-		ClientType:          mockType,
-		ClientStateBytes:    []byte("cs"),
-		ConsensusStateBytes: []byte("cons"),
-	})
-
-	uassert.AbortsContains(t, cur, "client does not support ForceUpdateClient", func(cur realm) {
-		ForceUpdateClient(cur, types.MsgForceUpdateClient{
-			ClientId:            clientId,
-			ClientStateBytes:    []byte("cs-new"),
-			ConsensusStateBytes: []byte("cons-new"),
-		})
-	})
 }
 
 func TestForceUpdateClientPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
@@ -1728,22 +1618,8 @@ func TestForceUpdateClientPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	defer func() { admin = "" }()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		ForceUpdateClient(cur, types.MsgForceUpdateClient{
-			ClientId:            types.ClientId(0),
-			ClientStateBytes:    []byte("cs"),
-			ConsensusStateBytes: []byte("cons"),
-		})
+		ForceUpdateClient(cur, types.ClientId(0), &mockClient{})
 	})
-}
-
-func hexEncodeString(s string) string {
-	const hextable = "0123456789abcdef"
-	dst := make([]byte, len(s)*2)
-	for i, c := range []byte(s) {
-		dst[i*2] = hextable[c>>4]
-		dst[i*2+1] = hextable[c&0x0f]
-	}
-	return string(dst)
 }
 
 // --- Admin ---

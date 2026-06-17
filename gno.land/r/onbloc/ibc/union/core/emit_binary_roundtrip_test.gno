@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	z "gno.land/p/onbloc/ibc/union/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 )
 
 // Mirrors gno-core/gnovm/stdlibs/chain/emit_event.go MaxEventAttrLen.

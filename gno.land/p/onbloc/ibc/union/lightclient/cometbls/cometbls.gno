@@ -45,68 +45,22 @@ func NewCometblsLightClient(
 }
 
 func (c *CometblsLightClient) VerifyMembership(height uint64, key []byte, proof []byte, value []byte) error {
-	if c.clientState.LatestHeight.RevisionHeight < height {
-		return makeError(
-			ErrInvalidHeight,
-			ufmt.Sprintf("client state height < proof height (%d < %d), please ensure the client has been updated", c.GetLatestHeight(), height),
-		)
-	}
-
 	if len(value) == 0 {
 		return makeError(ErrInvalidProof, "empty value in membership proof")
 	}
 
-	decodedProof, err := DecodeProofs(proof)
+	consState, decodedProof, merklePath, err := c.prepareProof(height, key, proof)
 	if err != nil {
-		return makeError(ErrInvalidProof, "failed to decode proof: "+err.Error())
-	}
-
-	merklePath := aibtypes.MerklePath{KeyPath: [][]byte{moduleKey, makeStoreKey(c.ownerAddress, key)}}
-
-	ics23ProofSpecs := ics23.GetSDKProofSpecs()
-
-	if len(decodedProof) != len(ics23ProofSpecs) {
-		return makeError(
-			ErrInvalidProof,
-			ufmt.Sprintf("length of specs: %d not equal to length of proof: %d", len(ics23ProofSpecs), len(decodedProof)),
-		)
-	}
-
-	consState, found := c.getConsensusState(types.NewHeight(height))
-	if !found {
-		return makeError(ErrInvalidConsensus, "please ensure the proof was constructed against a height that exists on the client")
+		return err
 	}
 
 	return c.verifyChainedMembershipProof(consState.Root.Hash, decodedProof, merklePath, value, 0)
 }
 
 func (c *CometblsLightClient) VerifyNonMembership(height uint64, key []byte, proof []byte) error {
-	if c.clientState.LatestHeight.RevisionHeight < height {
-		return makeError(
-			ErrInvalidHeight,
-			ufmt.Sprintf("client state height < proof height (%d < %d), please ensure the client has been updated", c.GetLatestHeight(), height),
-		)
-	}
-
-	decodedProof, err := DecodeProofs(proof)
+	consState, decodedProof, merklePath, err := c.prepareProof(height, key, proof)
 	if err != nil {
-		return makeError(ErrInvalidProof, "failed to decode proof: "+err.Error())
-	}
-
-	merklePath := aibtypes.MerklePath{KeyPath: [][]byte{moduleKey, makeStoreKey(c.ownerAddress, key)}}
-
-	ics23ProofSpecs := ics23.GetSDKProofSpecs()
-
-	if len(decodedProof) != len(ics23ProofSpecs) {
-		return makeError(
-			ErrInvalidProof,
-			ufmt.Sprintf("length of specs: %d not equal to length of proof: %d", len(ics23ProofSpecs), len(decodedProof)),
-		)
-	}
-
-	consState, found := c.getConsensusState(types.NewHeight(height))
-	if !found {
-		return makeError(ErrInvalidConsensus, "please ensure the proof was constructed against a height that exists on the client")
+		return err
 	}
 
 	// VerifyNonMembership verifies the absence of the key in the lowest subtree
@@ -122,13 +76,51 @@ func (c *CometblsLightClient) VerifyNonMembership(height uint64, key []byte, pro
 	}
 
 	key0 := merklePath.KeyPath[len(merklePath.KeyPath)-1]
-	if err := nonexist.Verify(ics23ProofSpecs[0], subroot, key0); err != nil {
+	if err := nonexist.Verify(ics23.GetSDKProofSpecs()[0], subroot, key0); err != nil {
 		return makeError(ErrInvalidProof, "failed to verify non-membership proof: "+err.Error())
 	}
 
 	// Verify the chained membership proof starting from index 1 with value =
 	// subroot.
 	return c.verifyChainedMembershipProof(consState.Root.Hash, decodedProof, merklePath, subroot, 1)
+}
+
+// prepareProof performs the validation shared by VerifyMembership and
+// VerifyNonMembership: the proof height must not exceed the latest height, the
+// proof must decode, its length must match the SDK proof specs, and a consensus
+// state must exist at the height. It returns the consensus state, decoded
+// proofs and the membership path for the key.
+func (c *CometblsLightClient) prepareProof(height uint64, key []byte, proof []byte) (*ConsensusState, []ics23.CommitmentProof, aibtypes.MerklePath, error) {
+	merklePath := aibtypes.MerklePath{}
+
+	if c.clientState.LatestHeight.RevisionHeight < height {
+		return nil, nil, merklePath, makeError(
+			ErrInvalidHeight,
+			ufmt.Sprintf("client state height < proof height (%d < %d), please ensure the client has been updated", c.GetLatestHeight(), height),
+		)
+	}
+
+	decodedProof, err := DecodeProofs(proof)
+	if err != nil {
+		return nil, nil, merklePath, makeError(ErrInvalidProof, "failed to decode proof: "+err.Error())
+	}
+
+	merklePath = aibtypes.MerklePath{KeyPath: [][]byte{moduleKey, makeStoreKey(c.ownerAddress, key)}}
+
+	specs := ics23.GetSDKProofSpecs()
+	if len(decodedProof) != len(specs) {
+		return nil, nil, merklePath, makeError(
+			ErrInvalidProof,
+			ufmt.Sprintf("length of specs: %d not equal to length of proof: %d", len(specs), len(decodedProof)),
+		)
+	}
+
+	consState, found := c.getConsensusState(types.NewHeight(height))
+	if !found {
+		return nil, nil, merklePath, makeError(ErrInvalidConsensus, "please ensure the proof was constructed against a height that exists on the client")
+	}
+
+	return consState, decodedProof, merklePath, nil
 }
 
 func (c *CometblsLightClient) VerifyHeader(caller address, header []byte, relayer address) (types.StateUpdate, error) {
@@ -178,7 +170,7 @@ func (c *CometblsLightClient) Misbehaviour(caller address, misbehaviour []byte, 
 // advances the latest height when the header is newer. It mirrors Union's
 // UpdateState (11-cometbls/update.go).
 func (c *CometblsLightClient) updateState(header *Header) types.StateUpdate {
-	height := types.NewHeightWithRevision(header.TrustedHeight.RevisionNumber, uint64(header.SignedHeader.Height))
+	height := header.GetHeight()
 
 	// Duplicate update: a consensus state already exists for this height.
 	if _, found := c.getConsensusState(height); found {

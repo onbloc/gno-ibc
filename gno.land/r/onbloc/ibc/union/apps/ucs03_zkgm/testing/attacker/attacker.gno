@@ -9,12 +9,15 @@ import (
 	"gno.land/p/nt/testutils/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
-	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader"
 	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 const forgedDestinationChannel = types.ChannelId(5)
+
+func init(cur realm) {
+	impl.Register(cross(cur))
+}
 
 func AppRecvForgedInitialize(cur realm) types.RecvPacketResult {
 	return zkgm.AsIBCApp().OnRecvPacket(cross(cur), forgedInitializePacket(cross(cur)), address(testutils.TestAddress("forged-relayer")), nil)

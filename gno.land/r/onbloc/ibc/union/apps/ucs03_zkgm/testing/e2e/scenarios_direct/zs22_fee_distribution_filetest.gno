@@ -1,5 +1,5 @@
-// PKGPATH: gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader
-package loader
+// PKGPATH: gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_direct
+package scenarios_direct
 
 import (
 	"chain"
@@ -20,7 +20,7 @@ import (
 )
 
 func main(cur realm) {
-	inst := sh.InstallImpl(cross(cur))
+	inst := sh.InstallV1Harness(cross(cur))
 	relayer := testutils.TestAddress("zs22-relayer")
 	receiver := string(testutils.TestAddress("zs22-receiver"))
 	escrowChannel := types.ChannelId(21)

@@ -12,16 +12,17 @@ through `allowedImpls`: the registered `implPath` was `v1/loader`, while the
 callable implementation realm was `v1`.
 
 ADR pr113 intentionally kept test helper realms out of the production trust set
-by introducing dedicated test loaders. That isolation remains required.
+by introducing dedicated test loaders. A follow-up refactor removed those test
+loaders as well, so scenario tests now register v1 explicitly.
 
 ## Decision
 
 Move production bootstrap into `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1`
 as `Register(cur realm)`.
 
-`Register` installs the package-private singleton implementation with
-`zkgm.UpdateImpl`, registers the proxy IBC app with core, and rejects a second
-bootstrap if ZKGM is already bootstrapped.
+`Register` installs a fresh v1 implementation through `zkgm.UpdateImpl`,
+registers the proxy IBC app with core, and rejects a second bootstrap if ZKGM
+is already bootstrapped.
 
 Remove the production `v1/loader` package. Production deployment now follows
 the same shape as the light clients: add the implementation package, then call
@@ -31,10 +32,10 @@ Use `v1` as the production implementation trust anchor. `ProductionImplPath`
 returns that path, while `ProductionLoaderPath` remains only as a compatibility
 alias.
 
-Allow production bootstrap with an empty `allowedImpls` list. Since `implPath`
-is now `v1`, production v1 callbacks are authorized by the `implPath` branch.
-The `allowedImpls` branch remains for upgrades and for the dedicated test
-loaders from pr113.
+Allow bootstrap with an empty `allowedImpls` list. Since `implPath` is now
+`v1`, v1 callbacks are authorized by the `implPath` branch. The `allowedImpls`
+branch remains for upgrades and explicit recovery-style tests, not for scenario
+test loaders.
 
 ## Consequences
 
@@ -44,9 +45,9 @@ registration.
 The production trust set no longer includes `v1/loader`, and production v1
 callbacks no longer depend on `allowedImpls`.
 
-The pr113 test-loader isolation is preserved: test helper realms are still only
-authorized by `testing/loader` and `testing/loader_denyimpl`, not by production
-bootstrap.
+Scenario tests no longer rely on `testing/loader` or `testing/loader_denyimpl`.
+Tests that need low-level direct impl method calls construct a v1 harness before
+calling `v1.Register`, while normal scenarios call `v1.Register` directly.
 
 Any live-chain deployment or smoke tooling that previously added
 `v1/loader` must instead call `v1.Register`.

@@ -9,7 +9,6 @@ import (
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
-	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader"
 	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
@@ -45,6 +44,7 @@ func (m *timeoutScenarioLightClient) GetStatus(clientId types.ClientId) types.St
 }
 
 func main(cur realm) {
+	impl.Register(cross(cur))
 	pair := openTimeoutScenarioChannelPair(cross(cur))
 	sender := string(testutils.TestAddress("timeout-sender"))
 	marketMaker := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"

@@ -12,10 +12,11 @@ import (
 	"gno.land/r/onbloc/ibc/union/core"
 
 	"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
-	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader"
+	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 )
 
 func main(cur realm) {
+	impl.Register(cross(cur))
 	e2e.RegisterMockLightClient(cross(cur))
 	parentChannel := e2e.OpenE2EChannel(cross(cur), types.ChannelId(101))
 	childSource := e2e.OpenE2EChannel(cross(cur), types.ChannelId(102))
@@ -58,7 +59,7 @@ func main(cur realm) {
 
 // Output:
 // [SCENARIO] 1. forward recv creates child and defers parent ack
-// impl_path gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader
+// impl_path gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1
 // child_source 2
 // child_destination 102
 // child_commitment_before_ack true

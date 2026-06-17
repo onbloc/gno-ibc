@@ -71,7 +71,7 @@ func TestProxyBootstrapCallerUsesProxyNamespacePrefix(t *testing.T) {
 		{"proxy realm itself", ProxyPkgPath(), false},
 		{"v0 loader", ProxyPkgPath() + "/v0/loader", true},
 		{"v0 impl", ProxyPkgPath() + "/v0/impl", true},
-		{"testing loader", ProxyPkgPath() + "/testing/loader", true},
+		{"v1 impl", ProxyPkgPath() + "/v1", true},
 		{"similar prefix", ProxyPkgPath() + "2/v0/loader", false},
 		{"outside namespace", "gno.land/r/other/zkgm/v0/loader", false},
 	}

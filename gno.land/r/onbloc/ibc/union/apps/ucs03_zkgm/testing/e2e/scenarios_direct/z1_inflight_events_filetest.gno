@@ -1,5 +1,5 @@
-// PKGPATH: gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader
-package loader
+// PKGPATH: gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_direct
+package scenarios_direct
 
 import (
 	"chain"
@@ -26,7 +26,7 @@ func (r *eventReceiver) OnIntentZkgm(cur realm, env z.IntentCallEnv) error {
 
 func main(cur realm) {
 	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), impl.New(cross(cur)), []string{
-		"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader",
+		"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_direct",
 	}))
 
 	zkgm.RegisterReceiver(cross(cur), &eventReceiver{})
@@ -59,7 +59,7 @@ func main(cur realm) {
 //     "attrs": [
 //       {
 //         "key": "caller_pkg_path",
-//         "value": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader"
+//         "value": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_direct"
 //       },
 //       {
 //         "key": "old_impl_path",
@@ -67,11 +67,11 @@ func main(cur realm) {
 //       },
 //       {
 //         "key": "new_impl_path",
-//         "value": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader"
+//         "value": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_direct"
 //       },
 //       {
 //         "key": "allowed_impls",
-//         "value": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader"
+//         "value": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_direct"
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
@@ -81,7 +81,7 @@ func main(cur realm) {
 //     "attrs": [
 //       {
 //         "key": "receiver_pkg_path",
-//         "value": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader"
+//         "value": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_direct"
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
@@ -91,7 +91,7 @@ func main(cur realm) {
 //     "attrs": [
 //       {
 //         "key": "caller_pkg_path",
-//         "value": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader"
+//         "value": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_direct"
 //       },
 //       {
 //         "key": "denom",

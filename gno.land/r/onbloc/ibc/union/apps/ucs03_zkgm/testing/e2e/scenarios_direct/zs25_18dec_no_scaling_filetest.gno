@@ -1,5 +1,5 @@
-// PKGPATH: gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader
-package loader
+// PKGPATH: gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_direct
+package scenarios_direct
 
 import (
 	types "gno.land/p/onbloc/ibc/union/types"
@@ -16,7 +16,7 @@ import (
 
 func main(cur realm) {
 	const amount = uint64(1000000000000000000)
-	inst := sh.InstallImpl(cross(cur))
+	inst := sh.InstallV1Harness(cross(cur))
 	destChannel := types.ChannelId(51)
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	meta := e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: "Ether Token", Symbol: "ETH", Decimals: 18})

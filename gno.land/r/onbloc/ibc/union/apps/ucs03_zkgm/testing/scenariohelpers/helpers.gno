@@ -13,13 +13,20 @@ import (
 )
 
 const (
-	ScenarioLoaderPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader"
-	ScenarioImplPath   = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
+	ScenarioImplPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 )
 
-func InstallImpl(cur realm) zkgm.ZkgmImpl {
-	inst := impl.New(cross(cur))
-	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), inst, []string{ScenarioLoaderPath, ScenarioImplPath}))
+func NewV1Harness(cur realm) zkgm.ZkgmImpl {
+	return impl.New(cross(cur))
+}
+
+func RegisterV1(cur realm) {
+	impl.Register(cross(cur))
+}
+
+func InstallV1Harness(cur realm) zkgm.ZkgmImpl {
+	inst := NewV1Harness(cross(cur))
+	RegisterV1(cross(cur))
 	return inst
 }
 

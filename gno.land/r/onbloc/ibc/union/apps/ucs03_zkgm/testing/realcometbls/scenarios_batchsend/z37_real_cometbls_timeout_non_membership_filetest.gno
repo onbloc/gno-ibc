@@ -8,13 +8,13 @@ import (
 	"gno.land/p/nt/testutils/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
-	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader"
 	realcometbls "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/realcometbls"
 	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 func main(cur realm) {
+	impl.Register(cross(cur))
 	pair := realcometbls.OpenZ37CometBLSChannel(cross(cur))
 	sender := string(testutils.TestAddress("timeout-sender"))
 

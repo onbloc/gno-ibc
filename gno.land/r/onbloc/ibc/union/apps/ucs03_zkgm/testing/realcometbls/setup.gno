@@ -1,6 +1,8 @@
 package realcometbls
 
 import (
+	stdtesting "testing"
+
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	realcometbls "gno.land/r/onbloc/ibc/lightclients/cometbls"
@@ -81,7 +83,10 @@ func openZ35Channel(cur realm, connectionId types.ConnectionId, counterpartyChan
 }
 
 func BatchSend(cur realm, packet types.Packet) types.H256 {
-	return zkgm.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{packet}))
+	stdtesting.SetRealm(stdtesting.NewCodeRealm(zkgm.ProductionImplPath()))
+	commitment := zkgm.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{packet}))
+	stdtesting.SetRealm(stdtesting.NewCodeRealm("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/realcometbls"))
+	return commitment
 }
 
 func OpenZ37CometBLSChannel(cur realm) ChannelPair {

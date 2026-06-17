@@ -8,11 +8,12 @@ import (
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
-	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader"
+	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 func main(cur realm) {
+	impl.Register(cross(cur))
 	e2e.RegisterMockLightClient(cross(cur))
 	parentChannel := e2e.OpenE2EChannel(cross(cur), types.ChannelId(101))
 	childSource := e2e.OpenE2EChannel(cross(cur), types.ChannelId(102))
@@ -43,7 +44,7 @@ func main(cur realm) {
 }
 
 // Output:
-// impl_path gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader
+// impl_path gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1
 // child_source 2
 // child_destination 102
 // in_flight true

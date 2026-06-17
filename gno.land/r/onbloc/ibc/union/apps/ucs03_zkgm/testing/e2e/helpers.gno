@@ -1,6 +1,8 @@
 package e2e
 
 import (
+	stdtesting "testing"
+
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -72,7 +74,10 @@ func openChannel(cur realm, connectionId types.ConnectionId, counterpartyChannel
 }
 
 func BatchSend(cur realm, packet types.Packet) types.H256 {
-	return zkgm.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{packet}))
+	stdtesting.SetRealm(stdtesting.NewCodeRealm(zkgm.ProductionImplPath()))
+	commitment := zkgm.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{packet}))
+	stdtesting.SetRealm(stdtesting.NewCodeRealm("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"))
+	return commitment
 }
 
 func MustTokenOrderInstruction(cur realm, order z.TokenOrderV2) z.Instruction {

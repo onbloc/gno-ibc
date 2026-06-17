@@ -1,5 +1,5 @@
-// PKGPATH: gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader
-package loader
+// PKGPATH: gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_direct
+package scenarios_direct
 
 import (
 	types "gno.land/p/onbloc/ibc/union/types"
@@ -15,7 +15,7 @@ import (
 )
 
 func main(cur realm) {
-	inst := sh.InstallImpl(cross(cur))
+	inst := sh.InstallV1Harness(cross(cur))
 	senderRefund := string(testutils.TestAddress("zs23-refund-sender"))
 	senderSuccess := string(testutils.TestAddress("zs23-success-sender"))
 	refundBaseToken := sh.MintVoucher(cross(cur), inst, types.ChannelId(30), "base/zs23-refund", senderRefund, 100, "ZS23")

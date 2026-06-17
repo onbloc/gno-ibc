@@ -1,5 +1,5 @@
-// PKGPATH: gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader
-package loader
+// PKGPATH: gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_direct
+package scenarios_direct
 
 import (
 	"chain"
@@ -11,22 +11,24 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
+	"gno.land/p/nt/uassert/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
+	"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/nonimpl"
 	sh "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/scenariohelpers"
 	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 func main(cur realm) {
-	inst := sh.InstallImpl(cross(cur))
+	inst := sh.InstallV1Harness(cross(cur))
 	sourceChannel := types.ChannelId(10)
 	destChannel := types.ChannelId(11)
 	sender := "g17xpfvakm2amg962yls6f84z3kell8c5lserqta"
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
-	relayer := testutils.TestAddress("zs21-relayer")
-	meta := e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: "Roundtrip GNOT", Symbol: "RGNOT", Decimals: 6})
+	relayer := testutils.TestAddress("zs64-relayer")
+	meta := e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: "Halted Origin GNOT", Symbol: "HOGNOT", Decimals: 6})
 	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(destChannel), []byte("ugnot"), impl.MetadataImage(sh.DecodeTokenMetadata(meta)))
 
 	println("[SCENARIO] lock native on source")
@@ -45,7 +47,11 @@ func main(cur realm) {
 	if err != nil {
 		panic(err)
 	}
+	// inst.Send consumes sentCoinBudget bookkeeping only; this mirrors the
+	// banker escrow deposit that a real user tx would have locked in the proxy.
+	stdtesting.IssueCoins(zkgm.ProxyAddress(), chain.NewCoins(chain.NewCoin("ugnot", 40)))
 	println("source_channel_balance_after_lock", sh.ChannelBalanceStr(sourceChannel, u256.Zero(), lockOrder.BaseToken, lockOrder.QuoteToken))
+	println("proxy_native_after_lock", banker.NewReadonlyBanker().GetCoins(zkgm.ProxyAddress()).AmountOf("ugnot"))
 
 	println("")
 	println("[SCENARIO] mint voucher on destination")
@@ -66,29 +72,35 @@ func main(cur realm) {
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
 	unescrowInstr := e2e.MustTokenOrderInstruction(cross(cur), unescrowOrder)
-	unescrowData, err := inst.Send(cross(cur), zkgm.NewSendRequest(cross(cur), destChannel, types.Timestamp(101), [32]byte{}, unescrowInstr, receiver, ""))
+	_, err = inst.Send(cross(cur), zkgm.NewSendRequest(cross(cur), destChannel, types.Timestamp(101), [32]byte{}, unescrowInstr, receiver, ""))
 	if err != nil {
 		panic(err)
 	}
 	println("receiver_voucher_after_unescrow_send", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 
 	println("")
-	println("[SCENARIO] unlock native on source")
-	// inst.Send consumes sentCoinBudget bookkeeping only; this simulates the
-	// banker escrow deposit that a real user tx would have locked in the proxy.
-	stdtesting.IssueCoins(zkgm.ProxyAddress(), chain.NewCoins(chain.NewCoin("ugnot", 40)))
-	unescrowPacket := core.NewPacket(cross(cur), destChannel, sourceChannel, unescrowData, types.Timestamp(101))
-	unescrowRes := inst.Recv(cross(cur), unescrowPacket, relayer, nil)
+	println("[SCENARIO] origin halted: unescrow recv never delivered")
+	// A halted origin cannot process the unescrow packet, and timeout refund
+	// also requires a fresh non-membership proof from that halted origin.
 	bk := banker.NewReadonlyBanker()
-	println("unescrow_recv_status", int(unescrowRes.Status))
-	println("source_channel_balance_after_unlock", sh.ChannelBalanceStr(sourceChannel, u256.Zero(), lockOrder.BaseToken, lockOrder.QuoteToken))
-	println("sender_native_after_unlock", bk.GetCoins(address(sender)).AmountOf("ugnot"))
+	println("source_channel_balance_after_halt", sh.ChannelBalanceStr(sourceChannel, u256.Zero(), lockOrder.BaseToken, lockOrder.QuoteToken))
+	println("proxy_native_after_halt", bk.GetCoins(zkgm.ProxyAddress()).AmountOf("ugnot"))
+	println("sender_native_after_halt", bk.GetCoins(address(sender)).AmountOf("ugnot"))
 	println("receiver_voucher_final", impl.VoucherBalanceOf(quoteToken, address(receiver)))
+	println("release_native_unauthorized_caller_rejected", releaseNativeUnauthorizedCallerRejected(cur))
+}
+
+func releaseNativeUnauthorizedCallerRejected(cur realm) bool {
+	var tt *stdtesting.T
+	return uassert.AbortsContains(tt, cur, "not an authorized impl", func(cur realm) {
+		nonimpl.ReleaseNativeDirect(cross(cur))
+	})
 }
 
 // Output:
 // [SCENARIO] lock native on source
 // source_channel_balance_after_lock 40
+// proxy_native_after_lock 40
 //
 // [SCENARIO] mint voucher on destination
 // recv_status 1
@@ -97,8 +109,9 @@ func main(cur realm) {
 // [SCENARIO] burn voucher for unescrow send
 // receiver_voucher_after_unescrow_send 0
 //
-// [SCENARIO] unlock native on source
-// unescrow_recv_status 1
-// source_channel_balance_after_unlock 0
-// sender_native_after_unlock 40
+// [SCENARIO] origin halted: unescrow recv never delivered
+// source_channel_balance_after_halt 40
+// proxy_native_after_halt 40
+// sender_native_after_halt 0
 // receiver_voucher_final 0
+// release_native_unauthorized_caller_rejected true

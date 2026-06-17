@@ -1,7 +1,9 @@
-// PKGPATH: gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader
-package loader
+// PKGPATH: gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_direct
+package scenarios_direct
 
 import (
+	stdtesting "testing"
+
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -16,7 +18,7 @@ import (
 )
 
 func main(cur realm) {
-	inst := sh.InstallImpl(cross(cur))
+	inst := sh.InstallV1Harness(cross(cur))
 	receiver := string(testutils.TestAddress("zs88-receiver"))
 	baseToken := "rate-limited-base"
 	channelId := types.ChannelId(88)
@@ -25,7 +27,9 @@ func main(cur realm) {
 	if err != nil {
 		panic(err)
 	}
+	stdtesting.SetRealm(stdtesting.NewCodeRealm(zkgm.ProductionImplPath()))
 	zkgm.SetTokenBucket(cross(cur), baseToken, bucket)
+	stdtesting.SetRealm(stdtesting.NewCodeRealm("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_direct"))
 
 	metaBytes := e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: "Rate Limited", Symbol: "RL", Decimals: 6})
 	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte(baseToken), impl.MetadataImage(sh.DecodeTokenMetadata(metaBytes)))

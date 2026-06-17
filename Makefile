@@ -185,16 +185,6 @@ test: verify-gno vendor
 		gno test -v "$$pkg" || exit $$?; \
 	done
 
-# Coverage requires a gno toolchain that includes gnolang/gno#4241
-# (`-cover` / `-coverprofile`). Override GNO_COMMIT on the make command line
-# to point at a build that has those flags, e.g.
-#   make test-cover GNO_COMMIT=57ad9a4a35daf50bdca5617fc89725a666a9c94b
-# The .github/workflows/gno-coverage.yml workflow does this automatically.
-test-cover: verify-gno vendor
-	@mkdir -p $(COVERAGE_DIR)
-	@gno test -cover -coverprofile=$(COVERAGE_DIR)/profile.txt -v $(USER_GNO_PKGS) 2>&1 \
-		| tee $(COVERAGE_DIR)/output.log
-
 test-smoke: verify-gno
 	@gno test ./gno.land/p/core/_smoke/ -v
 

@@ -72,7 +72,7 @@ echo "" | gnokey maketx run -insecure-password-stdin ... test1 /tmp/foo.gno
 The `-insecure-password-stdin` flag is omitted from the per-section examples for
 brevity. The commands below also assume a freshly started dev chain so client
 IDs come out as `1` (cometbls) and `2` (state-lens). On a chain that already
-created clients, the IDs shift and later sections that hardcode `core.ClientId(1)`
+created clients, the IDs shift and later sections that hardcode `types.ClientId(1)`
 or refer to the state-lens `L1ClientID: 1` will not line up. Restart the smoke
 node before running this sequence end-to-end.
 
@@ -274,7 +274,7 @@ Expected formats:
 - `QueryConnection` and `QueryChannel` return ethabi-encoded struct bytes as
   `0x` hex.
 - `QueryBatchPackets` and `QueryBatchReceipts` return stored `H256` values as
-  `0x` hex. They take a `core.H256` batch hash argument and apply
+  `0x` hex. They take a `types.H256` batch hash argument and apply
   `BatchPacketsPath` / `BatchReceiptsPath` internally before the map lookup.
 - `QueryCommitmentAtPath` and `QueryReceiptAtPath` are path-keyed siblings of
   the batch queries. They take an already-derived commitment path (the output
@@ -355,7 +355,7 @@ func main() {
 		panic(err)
 	}
 
-	clientID := core.CreateClient(cross, core.MsgCreateClient{
+	clientID := core.CreateClient(cross, types.MsgCreateClient{
 		ClientType:          cometbls.ClientType,
 		ClientStateBytes:    clientState,
 		ConsensusStateBytes: consensusState,
@@ -410,7 +410,7 @@ func main() {
 		panic(err)
 	}
 
-	clientID := core.CreateClient(cross, core.MsgCreateClient{
+	clientID := core.CreateClient(cross, types.MsgCreateClient{
 		ClientType: statelens.ClientType,
 		ClientStateBytes: statelensp.EncodeClientState(statelensp.ClientState{
 			L2ChainID:         "local-l2",
@@ -449,8 +449,8 @@ package main
 import core "gno.land/r/onbloc/unionibc/v1/core"
 
 func main() {
-	clientID := core.ClientId(2)
-	println("state_lens_active", core.GetClientStatus(clientID) == core.StatusActive)
+	clientID := types.ClientId(2)
+	println("state_lens_active", core.GetClientStatus(clientID) == types.StatusActive)
 }
 EOF
 
@@ -506,8 +506,8 @@ func main() {
 		panic(err)
 	}
 
-	height := core.UpdateClient(cross, core.MsgUpdateClient{
-		ClientId:      core.ClientId(1),
+	height := core.UpdateClient(cross, types.MsgUpdateClient{
+		ClientId:      types.ClientId(1),
 		ClientMessage: msg,
 	})
 	println("UpdateClient", height.String())
@@ -548,9 +548,9 @@ package main
 import core "gno.land/r/onbloc/unionibc/v1/core"
 
 func main() {
-	connectionID := core.ConnectionOpenInit(cross, core.MsgConnectionOpenInit{
-		ClientId:             core.ClientId(1),
-		CounterpartyClientId: core.ClientId(99),
+	connectionID := core.ConnectionOpenInit(cross, types.MsgConnectionOpenInit{
+		ClientId:             types.ClientId(1),
+		CounterpartyClientId: types.ClientId(99),
 	})
 	println("ConnectionOpenInit", connectionID.String())
 }
@@ -604,12 +604,12 @@ func main() {
 		panic(err)
 	}
 
-	connectionID := core.ConnectionOpenTry(cross, core.MsgConnectionOpenTry{
-		ClientId:                 core.ClientId($GNO_CLIENT_ID),
-		CounterpartyClientId:     core.ClientId($UNION_CLIENT_ID),
-		CounterpartyConnectionId: core.ConnectionId($UNION_CONNECTION_ID),
+	connectionID := core.ConnectionOpenTry(cross, types.MsgConnectionOpenTry{
+		ClientId:                 types.ClientId($GNO_CLIENT_ID),
+		CounterpartyClientId:     types.ClientId($UNION_CLIENT_ID),
+		CounterpartyConnectionId: types.ConnectionId($UNION_CONNECTION_ID),
 		ProofInit:                proof,
-		ProofHeight:              core.Height($UNION_PROOF_HEIGHT),
+		ProofHeight:              types.NewHeight($UNION_PROOF_HEIGHT),
 	})
 	println("ConnectionOpenTry", connectionID.String())
 }
@@ -660,11 +660,11 @@ func main() {
 		panic(err)
 	}
 
-	core.ConnectionOpenAck(cross, core.MsgConnectionOpenAck{
-		ConnectionId:             core.ConnectionId($GNO_CONNECTION_ID),
-		CounterpartyConnectionId: core.ConnectionId($UNION_CONNECTION_ID),
+	core.ConnectionOpenAck(cross, types.MsgConnectionOpenAck{
+		ConnectionId:             types.ConnectionId($GNO_CONNECTION_ID),
+		CounterpartyConnectionId: types.ConnectionId($UNION_CONNECTION_ID),
 		ProofTry:                 proof,
-		ProofHeight:              core.Height($UNION_PROOF_HEIGHT),
+		ProofHeight:              types.NewHeight($UNION_PROOF_HEIGHT),
 	})
 	println("ConnectionOpenAck", "ok")
 }
@@ -714,10 +714,10 @@ func main() {
 		panic(err)
 	}
 
-	core.ConnectionOpenConfirm(cross, core.MsgConnectionOpenConfirm{
-		ConnectionId: core.ConnectionId($GNO_CONNECTION_ID),
+	core.ConnectionOpenConfirm(cross, types.MsgConnectionOpenConfirm{
+		ConnectionId: types.ConnectionId($GNO_CONNECTION_ID),
 		ProofAck:     proof,
-		ProofHeight:  core.Height($UNION_PROOF_HEIGHT),
+		ProofHeight:  types.NewHeight($UNION_PROOF_HEIGHT),
 	})
 	println("ConnectionOpenConfirm", "ok")
 }
@@ -760,10 +760,10 @@ import (
 
 func main() {
 	portID := []byte(zkgm.ProxyPkgPath())
-	channelID := core.ChannelOpenInit(cross, core.MsgChannelOpenInit{
+	channelID := core.ChannelOpenInit(cross, types.MsgChannelOpenInit{
 		PortId:             portID,
 		CounterpartyPortId: portID,
-		ConnectionId:       core.ConnectionId(1),
+		ConnectionId:       types.ConnectionId(1),
 		Version:            "ucs03-zkgm-0",
 	})
 	println("ChannelOpenInit", channelID.String())
@@ -820,18 +820,18 @@ func main() {
 	}
 
 	portID := []byte(zkgm.ProxyPkgPath())
-	channelID := core.ChannelOpenTry(cross, core.MsgChannelOpenTry{
+	channelID := core.ChannelOpenTry(cross, types.MsgChannelOpenTry{
 		PortId: portID,
-		Channel: core.Channel{
-			State:                 core.ChannelStateTryOpen,
-			ConnectionId:          core.ConnectionId($GNO_CONNECTION_ID),
-			CounterpartyChannelId: core.ChannelId($UNION_CHANNEL_ID),
-			CounterpartyPortId:    core.Bytes([]byte("$UNION_PORT_ID")),
+		Channel: types.Channel{
+			State:                 types.ChannelStateTryOpen,
+			ConnectionId:          types.ConnectionId($GNO_CONNECTION_ID),
+			CounterpartyChannelId: types.ChannelId($UNION_CHANNEL_ID),
+			CounterpartyPortId:    types.Bytes([]byte("$UNION_PORT_ID")),
 			Version:               "ucs03-zkgm-0",
 		},
 		CounterpartyVersion: "ucs03-zkgm-0",
 		ProofInit:           proof,
-		ProofHeight:         core.Height($UNION_PROOF_HEIGHT),
+		ProofHeight:         types.NewHeight($UNION_PROOF_HEIGHT),
 	})
 	println("ChannelOpenTry", channelID.String())
 }
@@ -882,12 +882,12 @@ func main() {
 		panic(err)
 	}
 
-	core.ChannelOpenAck(cross, core.MsgChannelOpenAck{
-		ChannelId:             core.ChannelId($GNO_CHANNEL_ID),
+	core.ChannelOpenAck(cross, types.MsgChannelOpenAck{
+		ChannelId:             types.ChannelId($GNO_CHANNEL_ID),
 		CounterpartyVersion:   "ucs03-zkgm-0",
-		CounterpartyChannelId: core.ChannelId($UNION_CHANNEL_ID),
+		CounterpartyChannelId: types.ChannelId($UNION_CHANNEL_ID),
 		ProofTry:              proof,
-		ProofHeight:           core.Height($UNION_PROOF_HEIGHT),
+		ProofHeight:           types.NewHeight($UNION_PROOF_HEIGHT),
 	})
 	println("ChannelOpenAck", "ok")
 }
@@ -936,10 +936,10 @@ func main() {
 		panic(err)
 	}
 
-	core.ChannelOpenConfirm(cross, core.MsgChannelOpenConfirm{
-		ChannelId:   core.ChannelId($GNO_CHANNEL_ID),
+	core.ChannelOpenConfirm(cross, types.MsgChannelOpenConfirm{
+		ChannelId:   types.ChannelId($GNO_CHANNEL_ID),
 		ProofAck:    proof,
-		ProofHeight: core.Height($UNION_PROOF_HEIGHT),
+		ProofHeight: types.NewHeight($UNION_PROOF_HEIGHT),
 	})
 	println("ChannelOpenConfirm", "ok")
 }

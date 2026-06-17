@@ -151,7 +151,7 @@ func TestConnectionChannelPathUnique(cur realm, t *testing.T) {
 
 func TestPacketCommitmentAndAckPathsDiffer(cur realm, t *testing.T) {
 	p := types.Packet{SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
-	if types.PacketCommitmentPath(p) == types.PacketAcknowledgementPath(p) {
+	if packetCommitmentPath(p) == packetAcknowledgementPath(p) {
 		t.Error("commitment and ack paths must differ for the same packet")
 	}
 }
@@ -159,17 +159,17 @@ func TestPacketCommitmentAndAckPathsDiffer(cur realm, t *testing.T) {
 func TestPacketCommitmentPathUnique(cur realm, t *testing.T) {
 	p1 := types.Packet{SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
 	p2 := types.Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: types.Bytes("different"), TimeoutTimestamp: 1000}
-	if types.PacketCommitmentPath(p1) == types.PacketCommitmentPath(p2) {
+	if packetCommitmentPath(p1) == packetCommitmentPath(p2) {
 		t.Error("packets with different Union payloads must have different commitment paths")
 	}
 }
 
 func TestBatchReceiptsPathDiffers(cur realm, t *testing.T) {
 	p := types.Packet{SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
-	if types.BatchReceiptsPath(types.CommitPacket(p)) == types.PacketCommitmentPath(p) {
+	if types.BatchReceiptsPath(commitPacketHash(p)) == packetCommitmentPath(p) {
 		t.Error("receipt and commitment paths must differ for the same packet")
 	}
-	if types.BatchReceiptsPath(types.CommitPacket(p)) != types.PacketAcknowledgementPath(p) {
+	if types.BatchReceiptsPath(commitPacketHash(p)) != packetAcknowledgementPath(p) {
 		t.Error("packet acknowledgement path must use Union batch receipts path")
 	}
 }
@@ -178,16 +178,16 @@ func TestUnionPathReferenceVectors(cur realm, t *testing.T) {
 	// Mirrors Union ibc-union-spec path keys:
 	// https://github.com/unionlabs/union/blob/main/lib/ibc-union-spec/src/path.rs
 	packet := types.Packet{SourceChannelId: 2, DestinationChannelId: 3, Data: types.Bytes("abc"), TimeoutTimestamp: 1000}
-	batchHash := types.CommitPackets([]types.Packet{packet})
+	batchHash := commitPacketsHash([]types.Packet{packet})
 
 	assertH256Hex(t, "client state", types.ClientStatePath(4), "0x17ef568e3e12ab5b9c7254a8d58478811de00f9e6eb34345acd53bf8fd09d3ec")
 	assertH256Hex(t, "consensus state", types.ConsensusStatePath(4, types.NewHeight(10)), "0xa1776da6f811742b0b6e4f3e386ffa26edc18b9096a5d56e6d8c6366d1f86b32")
 	assertH256Hex(t, "connection", types.ConnectionPath(100), "0x303c03027bd4a34f7fcda516f1651933dbc8cbe20bd53649eb722d1f989225cb")
 	assertH256Hex(t, "channel", types.ChannelPath(7), "0x3be6fd20d5acfde5b873b48692cd31f4d3c7e8ee8a813af4696af8859e5ca6c6")
 	assertH256Hex(t, "batch packets", types.BatchPacketsPath(batchHash), "0x6e9f48cf5c51df29586a27c6219e1168517e3f2dc179371cf7069796ccb01229")
-	assertH256Hex(t, "packet commitment", types.PacketCommitmentPath(packet), types.BatchPacketsPath(batchHash).String())
+	assertH256Hex(t, "packet commitment", packetCommitmentPath(packet), types.BatchPacketsPath(batchHash).String())
 	assertH256Hex(t, "batch receipts", types.BatchReceiptsPath(batchHash), "0x9989767aa720c64326bd2716f9e2b4144d6429d56e8bb523c01b46ed1d17239a")
-	assertH256Hex(t, "packet acknowledgement", types.PacketAcknowledgementPath(packet), types.BatchReceiptsPath(batchHash).String())
+	assertH256Hex(t, "packet acknowledgement", packetAcknowledgementPath(packet), types.BatchReceiptsPath(batchHash).String())
 }
 
 // --- Type encoding tests ---
@@ -195,7 +195,11 @@ func TestUnionPathReferenceVectors(cur realm, t *testing.T) {
 func TestConnectionEthAbiEncodeDistinct(cur realm, t *testing.T) {
 	open := types.Connection{State: types.ConnectionStateOpen, ClientId: 1, CounterpartyClientId: 2, CounterpartyConnectionId: 3}
 	init := types.Connection{State: types.ConnectionStateInit, ClientId: 1, CounterpartyClientId: 2, CounterpartyConnectionId: 3}
-	if string(open.EthAbiEncode()) == string(init.EthAbiEncode()) {
+	openBz, err := open.EncodeABI()
+	uassert.NoError(t, err)
+	initBz, err := init.EncodeABI()
+	uassert.NoError(t, err)
+	if string(openBz) == string(initBz) {
 		t.Error("different connection states must encode differently")
 	}
 }
@@ -203,7 +207,11 @@ func TestConnectionEthAbiEncodeDistinct(cur realm, t *testing.T) {
 func TestChannelEthAbiEncodeDistinct(cur realm, t *testing.T) {
 	open := types.Channel{State: types.ChannelStateOpen, ConnectionId: 1, CounterpartyChannelId: 2, Version: "v1"}
 	closed := types.Channel{State: types.ChannelStateClosed, ConnectionId: 1, CounterpartyChannelId: 2, Version: "v1"}
-	if string(open.EthAbiEncode()) == string(closed.EthAbiEncode()) {
+	openBz, err := open.EncodeABI()
+	uassert.NoError(t, err)
+	closedBz, err := closed.EncodeABI()
+	uassert.NoError(t, err)
+	if string(openBz) == string(closedBz) {
 		t.Error("different channel states must encode differently")
 	}
 }
@@ -217,7 +225,9 @@ func TestUnionChannelEthABIVector(cur realm, t *testing.T) {
 		CounterpartyPortId:    types.Bytes{0xde, 0xad, 0xbe, 0xef},
 		Version:               "version",
 	}
-	assertBytesHex(t, "channel ethabi", channel.EthAbiEncode(),
+	channelBz, err := channel.EncodeABI()
+	uassert.NoError(t, err)
+	assertBytesHex(t, "channel ethabi", channelBz,
 		"0000000000000000000000000000000000000000000000000000000000000020"+
 			"0000000000000000000000000000000000000000000000000000000000000001"+
 			"0000000000000000000000000000000000000000000000000000000000000001"+
@@ -238,13 +248,17 @@ func TestIntegrationCase(cur realm, t *testing.T) {
 		CounterpartyPortId:    types.Bytes(mustHex("5fbe74a283f7954f10aa04c2edf55578811aeb03")),
 		Version:               "ucs03-zkgm-0",
 	}
-	assertH256Hex(t, "channel commitment", keccak(channel.EthAbiEncode()), "0x00781657f014fd25772f10edb002612aa3839e958adf1aa1d2c0f7a44758da26")
+	assertH256Hex(t, "channel commitment", channelValue(channel), "0x00781657f014fd25772f10edb002612aa3839e958adf1aa1d2c0f7a44758da26")
 }
 
 func TestPacketEthAbiEncodeDistinct(cur realm, t *testing.T) {
 	p1 := types.Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: types.Bytes("a"), TimeoutTimestamp: 100}
 	p2 := types.Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: types.Bytes("b"), TimeoutTimestamp: 100}
-	if string(p1.EthAbiEncode()) == string(p2.EthAbiEncode()) {
+	p1Bz, err := p1.EncodeABI()
+	uassert.NoError(t, err)
+	p2Bz, err := p2.EncodeABI()
+	uassert.NoError(t, err)
+	if string(p1Bz) == string(p2Bz) {
 		t.Error("packets with different data must encode differently")
 	}
 	p3 := types.Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: types.Bytes("a"), TimeoutHeight: 1, TimeoutTimestamp: 100}
@@ -261,7 +275,7 @@ func TestPacketHashUnionReferenceVector(cur realm, t *testing.T) {
 		)),
 		TimeoutTimestamp: 9007199254740991,
 	}
-	assertH256Hex(t, "packet hash", types.CommitPacket(packet), "0xb204ec01ba72d32b884df0ecbfea727a15c82c1e0a08dff53fde4990d3ba589f")
+	assertH256Hex(t, "packet hash", commitPacketHash(packet), "0xb204ec01ba72d32b884df0ecbfea727a15c82c1e0a08dff53fde4990d3ba589f")
 }
 
 // --- State: client registry ---
@@ -422,7 +436,9 @@ func TestSaveAndGetConnection(cur realm, t *testing.T) {
 		t.Errorf("clientId: got %v want 1", got.ClientId)
 	}
 
-	want := hexString(conn.EthAbiEncode())
+	connBz, err := conn.EncodeABI()
+	uassert.NoError(t, err)
+	want := hexString(connBz)
 	if got := QueryConnection(id); got != want {
 		t.Errorf("QueryConnection: got %q want %q", got, want)
 	}
@@ -474,7 +490,9 @@ func TestSaveAndGetChannel(cur realm, t *testing.T) {
 		t.Errorf("version: got %v want ics20-1", got.Version)
 	}
 
-	want := hexString(ch.EthAbiEncode())
+	chBz, err := ch.EncodeABI()
+	uassert.NoError(t, err)
+	want := hexString(chBz)
 	if got := QueryChannel(id); got != want {
 		t.Errorf("QueryChannel: got %q want %q", got, want)
 	}
@@ -500,11 +518,11 @@ func TestPacketCommitmentLifecycle(cur realm, t *testing.T) {
 	resetState()
 	p := types.Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: types.Bytes("data"), TimeoutTimestamp: 1000}
 	st.commitPacket(p)
-	if _, ok := st.batchPackets[types.PacketCommitmentPath(p)]; !ok {
+	if _, ok := st.batchPackets[packetCommitmentPath(p)]; !ok {
 		t.Fatal("commitPacket must mirror at packet commitment path")
 	}
 	st.deletePacketCommitment(p)
-	if _, ok := st.batchPackets[types.PacketCommitmentPath(p)]; ok {
+	if _, ok := st.batchPackets[packetCommitmentPath(p)]; ok {
 		t.Fatal("deletePacketCommitment must clear packet commitment path")
 	}
 }
@@ -519,7 +537,7 @@ func TestPacketSendCommitsPacket(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 
-	packet := PacketSend(cross(cur), channelId, 0, 100, []byte("data"))
+	packet := PacketSend(cross(cur), channelId, types.Timestamp(100), []byte("data"))
 
 	if packet.SourceChannelId != channelId {
 		t.Fatal("PacketSend must preserve source channel")
@@ -538,7 +556,7 @@ func TestPacketSendRejectsNonOwner(cur realm, t *testing.T) {
 	st.channelOwners[channelId] = types.Bytes("g1notchannelowner")
 
 	uassert.AbortsContains(t, cur, "caller not authorized to send packet", func(cur realm) {
-		PacketSend(cur, channelId, 0, 100, []byte("data"))
+		PacketSend(cur, channelId, types.Timestamp(100), []byte("data"))
 	})
 }
 
@@ -550,7 +568,7 @@ func TestPacketSendRejectsAddressAsPortId(cur realm, t *testing.T) {
 	st.channelOwners[channelId] = types.Bytes(oldAddressPort)
 
 	uassert.AbortsContains(t, cur, "caller not authorized to send packet", func(cur realm) {
-		PacketSend(cur, channelId, 0, 100, []byte("data"))
+		PacketSend(cur, channelId, types.Timestamp(100), []byte("data"))
 	})
 }
 
@@ -561,7 +579,7 @@ func TestBatchSendReturnsUnionPacketCommitment(cur realm, t *testing.T) {
 	p2 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("b"), TimeoutTimestamp: 100}
 
 	got := BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
-	want := types.CommitPackets([]types.Packet{p1, p2})
+	want := commitPacketsHash([]types.Packet{p1, p2})
 	if got != want {
 		t.Fatal("BatchSend must return Union packet batch commitment")
 	}
@@ -584,7 +602,7 @@ func TestBatchSendPerPacketMirrorKeyedByPath(cur realm, t *testing.T) {
 
 	BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
 	for _, packet := range []types.Packet{p1, p2} {
-		path := types.PacketCommitmentPath(packet)
+		path := packetCommitmentPath(packet)
 		got, ok := st.batchPackets[path]
 		if !ok {
 			t.Fatal("BatchSend must mirror per-packet commitment at the packet commitment path")
@@ -592,7 +610,7 @@ func TestBatchSendPerPacketMirrorKeyedByPath(cur realm, t *testing.T) {
 		if got != types.COMMITMENT_MAGIC {
 			t.Fatalf("per-packet mirror: got %s want %s", got, types.COMMITMENT_MAGIC)
 		}
-		if _, ok := st.batchPackets[types.CommitPacket(packet)]; ok {
+		if _, ok := st.batchPackets[commitPacketHash(packet)]; ok {
 			t.Fatal("BatchSend must not mirror per-packet commitment at the raw packet hash")
 		}
 	}
@@ -620,7 +638,7 @@ func TestQueryCommitmentAtPathReturnsBatchValue(cur realm, t *testing.T) {
 		t.Errorf("QueryCommitmentAtPath(batch path): got %s want %s", got, types.COMMITMENT_MAGIC)
 	}
 	for _, packet := range []types.Packet{p1, p2} {
-		if got := QueryCommitmentAtPath(types.PacketCommitmentPath(packet)); got != types.COMMITMENT_MAGIC.String() {
+		if got := QueryCommitmentAtPath(packetCommitmentPath(packet)); got != types.COMMITMENT_MAGIC.String() {
 			t.Errorf("QueryCommitmentAtPath(per-packet path): got %s want %s", got, types.COMMITMENT_MAGIC)
 		}
 	}
@@ -665,7 +683,7 @@ func TestBatchAcksReturnsUnionPacketCommitment(cur realm, t *testing.T) {
 		Packets: []types.Packet{p1, p2},
 		Acks:    [][]byte{[]byte("ack-a"), []byte("ack-b")},
 	})
-	want := types.CommitPackets([]types.Packet{p1, p2})
+	want := commitPacketsHash([]types.Packet{p1, p2})
 	if got != want {
 		t.Fatal("BatchAcks must return Union packet batch commitment")
 	}
@@ -774,14 +792,14 @@ func TestPacketReceiptLifecycle(cur realm, t *testing.T) {
 	if !st.hasPacketReceipt(p) {
 		t.Fatal("receipt must exist after set")
 	}
-	if _, ok := st.batchReceipts[types.PacketAcknowledgementPath(p)]; !ok {
+	if _, ok := st.batchReceipts[packetAcknowledgementPath(p)]; !ok {
 		t.Fatal("setPacketReceipt must mirror at packet acknowledgement path")
 	}
 	st.deletePacketReceipt(p)
 	if st.hasPacketReceipt(p) {
 		t.Fatal("receipt must not exist after delete")
 	}
-	if _, ok := st.batchReceipts[types.PacketAcknowledgementPath(p)]; ok {
+	if _, ok := st.batchReceipts[packetAcknowledgementPath(p)]; ok {
 		t.Fatal("deletePacketReceipt must clear packet acknowledgement path")
 	}
 }
@@ -1038,7 +1056,7 @@ func TestPacketRecvBatchUsesUnionBatchCommitment(cur realm, t *testing.T) {
 	if len(client.membershipKeys) != 1 {
 		t.Fatalf("membership calls: got %d want 1", len(client.membershipKeys))
 	}
-	batchHash := types.CommitPackets([]types.Packet{p1, p2})
+	batchHash := commitPacketsHash([]types.Packet{p1, p2})
 	batchPath := types.BatchPacketsPath(batchHash)
 	if string(client.membershipKeys[0]) != string(batchPath[:]) {
 		t.Fatal("PacketRecv must verify Union batch packets path")
@@ -1355,7 +1373,7 @@ func TestPacketAcknowledgementBatchUsesUnionBatchReceipts(cur realm, t *testing.
 	if len(client.membershipKeys) != 1 {
 		t.Fatalf("membership calls: got %d want 1", len(client.membershipKeys))
 	}
-	batchHash := types.CommitPackets([]types.Packet{p1, p2})
+	batchHash := commitPacketsHash([]types.Packet{p1, p2})
 	receiptPath := types.BatchReceiptsPath(batchHash)
 	if string(client.membershipKeys[0]) != string(receiptPath[:]) {
 		t.Fatal("PacketAcknowledgement must verify Union batch receipts path")
@@ -1429,7 +1447,7 @@ func TestPacketTimeoutReceiptPath(cur realm, t *testing.T) {
 		t.Fatalf("non-membership calls: got %d want 1", len(client.nonMembershipKeys))
 	}
 	got := string(client.nonMembershipKeys[0])
-	receiptPath := types.BatchReceiptsPath(types.CommitPacket(packet))
+	receiptPath := types.BatchReceiptsPath(commitPacketHash(packet))
 	want := string(receiptPath[:])
 	if got != want {
 		t.Fatal("PacketTimeout must verify Union batch receipt non-membership")

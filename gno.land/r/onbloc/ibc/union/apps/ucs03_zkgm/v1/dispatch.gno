@@ -4,13 +4,15 @@ import (
 	"bytes"
 	"errors"
 
-	z "gno.land/p/onbloc/ibc/union/zkgm"
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/ufmt/v0"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
-func (v *ZkgmV1) dispatchVerify(cur realm, channelId core.ChannelId, sender string, budget *sentCoinBudget, path *u256.Uint, salt [32]byte, instr z.Instruction) error {
+func (v *ZkgmV1) dispatchVerify(cur realm, channelId types.ChannelId, sender string, budget *sentCoinBudget, path *u256.Uint, salt [32]byte, instr z.Instruction) error {
 	switch instr.Opcode {
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instr)
@@ -49,7 +51,7 @@ type execFatal struct{ msg string }
 
 func (e execFatal) Error() string { return e.msg }
 
-func (v *ZkgmV1) dispatchExecute(cur realm, packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, salt [32]byte, instr z.Instruction, intent bool) (result core.RecvPacketResult, err error) {
+func (v *ZkgmV1) dispatchExecute(cur realm, packet types.Packet, relayer address, relayerMsg []byte, path *u256.Uint, salt [32]byte, instr z.Instruction, intent bool) (result types.RecvPacketResult, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(execFatal); ok {
@@ -64,37 +66,37 @@ func (v *ZkgmV1) dispatchExecute(cur realm, packet core.Packet, relayer address,
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instr)
 		if err != nil {
-			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
+			return core.NewRecvPacketResult(cross(cur), types.PacketStatusUnknown, nil), err
 		}
 		return v.executeTokenOrderV2(cur, packet, relayer, path, order, intent)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instr)
 		if err != nil {
-			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
+			return core.NewRecvPacketResult(cross(cur), types.PacketStatusUnknown, nil), err
 		}
 		return v.executeCall(cur, packet, relayer, relayerMsg, path, call, intent)
 	case z.OP_BATCH:
 		batch, err := decodeBatchInstruction(instr)
 		if err != nil {
-			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
+			return core.NewRecvPacketResult(cross(cur), types.PacketStatusUnknown, nil), err
 		}
 		ack, err := v.executeBatch(cur, packet, relayer, relayerMsg, path, salt, batch, intent)
 		if err != nil {
-			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
+			return core.NewRecvPacketResult(cross(cur), types.PacketStatusUnknown, nil), err
 		}
-		return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, ack), nil
+		return core.NewRecvPacketResult(cross(cur), types.PacketStatusSuccess, ack), nil
 	case z.OP_FORWARD:
 		forward, err := decodeForwardInstruction(instr)
 		if err != nil {
-			return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
+			return core.NewRecvPacketResult(cross(cur), types.PacketStatusUnknown, nil), err
 		}
 		return v.executeForward(cur, packet, path, salt, forward, intent)
 	default:
-		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), errors.New("zkgm/v1: unsupported opcode")
+		return core.NewRecvPacketResult(cross(cur), types.PacketStatusUnknown, nil), errors.New("zkgm/v1: unsupported opcode")
 	}
 }
 
-func (v *ZkgmV1) dispatchAck(cur realm, packet core.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction, ack []byte) error {
+func (v *ZkgmV1) dispatchAck(cur realm, packet types.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction, ack []byte) error {
 	switch instr.Opcode {
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instr)
@@ -137,7 +139,7 @@ func (v *ZkgmV1) dispatchAck(cur realm, packet core.Packet, path *u256.Uint, sal
 	}
 }
 
-func (v *ZkgmV1) dispatchTimeout(cur realm, packet core.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction) error {
+func (v *ZkgmV1) dispatchTimeout(cur realm, packet types.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction) error {
 	switch instr.Opcode {
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instr)
@@ -212,8 +214,8 @@ func mustEncodeUniversalErrorAck() []byte {
 	return bz
 }
 
-func failureResult(cur realm, ack []byte) core.RecvPacketResult {
-	return core.NewRecvPacketResult(cross(cur), core.PacketStatusFailure, ack)
+func failureResult(cur realm, ack []byte) types.RecvPacketResult {
+	return core.NewRecvPacketResult(cross(cur), types.PacketStatusFailure, ack)
 }
 
 func universalErrorAck() []byte {
@@ -224,7 +226,7 @@ func universalErrorAck() []byte {
 // derived destChan is safe to feed into UpdateChannelPath / PopChannelFromPath
 // without colliding with the "no channel" slot. This mirrors the TokenOrder
 // path helper's channel-zero rejection.
-func tokenOrderDestinationChannel(channelId core.ChannelId) (uint32, error) {
+func tokenOrderDestinationChannel(channelId types.ChannelId) (uint32, error) {
 	raw := uint32(channelId)
 	if raw == 0 {
 		return 0, errors.New("zkgm/v1: invalid token order destination channel")

@@ -1,9 +1,10 @@
 package impl
 
 import (
-	z "gno.land/p/onbloc/ibc/union/zkgm"
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/onbloc/ibc/union/core"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
 
@@ -13,29 +14,38 @@ var instance = &ZkgmV1{}
 
 // GetInstance returns the singleton impl.
 // Before the proxy has an installed impl, any bootstrap loader may fetch it.
-// After bootstrap, only the production loader may fetch it again.
+// After bootstrap, only the production impl realm may fetch it again.
 func GetInstance(cur realm) *ZkgmV1 {
 	caller := cur.Previous().PkgPath()
-	if caller != zkgm.ProductionLoaderPath() && zkgm.Bootstrapped() {
+	if caller != zkgm.ProductionImplPath() && zkgm.Bootstrapped() {
 		panic("not allowed")
 	}
 	return instance
 }
 
-func (v *ZkgmV1) PreChannelOpenInit(cur realm, channelId core.ChannelId) {}
-
-func (v *ZkgmV1) PreChannelOpenTry(cur realm, channelId core.ChannelId, counterpartyVersion string) {}
-
-func (v *ZkgmV1) PostChannelOpenAck(cur realm, channelId core.ChannelId, counterpartyChannelId core.ChannelId) {
+func Register(cur realm) {
+	if zkgm.Bootstrapped() {
+		panic("zkgm: already bootstrapped")
+	}
+	zkgm.UpdateImpl(cross(cur), zkgm.NewUpdateRequest(cross(cur), instance, []string{}))
+	zkgm.RegisterCoreApp(cross(cur))
 }
 
-func (v *ZkgmV1) PostChannelOpenConfirm(cur realm, channelId core.ChannelId) {}
+func (v *ZkgmV1) PreChannelOpenInit(cur realm, channelId types.ChannelId) {}
 
-func (v *ZkgmV1) PreChannelCloseInit(cur realm, channelId core.ChannelId) {}
+func (v *ZkgmV1) PreChannelOpenTry(cur realm, channelId types.ChannelId, counterpartyVersion string) {
+}
 
-func (v *ZkgmV1) PostChannelCloseConfirm(cur realm, channelId core.ChannelId) {}
+func (v *ZkgmV1) PostChannelOpenAck(cur realm, channelId types.ChannelId, counterpartyChannelId types.ChannelId) {
+}
 
-func (v *ZkgmV1) Recv(cur realm, packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
+func (v *ZkgmV1) PostChannelOpenConfirm(cur realm, channelId types.ChannelId) {}
+
+func (v *ZkgmV1) PreChannelCloseInit(cur realm, channelId types.ChannelId) {}
+
+func (v *ZkgmV1) PostChannelCloseConfirm(cur realm, channelId types.ChannelId) {}
+
+func (v *ZkgmV1) Recv(cur realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {
 	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
 		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
@@ -49,7 +59,7 @@ func (v *ZkgmV1) Recv(cur realm, packet core.Packet, relayer address, relayerMsg
 	return res
 }
 
-func (v *ZkgmV1) Ack(cur realm, packet core.Packet, ack []byte, relayer address) {
+func (v *ZkgmV1) Ack(cur realm, packet types.Packet, ack []byte, relayer address) {
 	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
 		panic(err.Error())
@@ -63,7 +73,7 @@ func (v *ZkgmV1) Ack(cur realm, packet core.Packet, ack []byte, relayer address)
 	}
 }
 
-func (v *ZkgmV1) Timeout(cur realm, packet core.Packet, relayer address) {
+func (v *ZkgmV1) Timeout(cur realm, packet types.Packet, relayer address) {
 	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
 		panic(err.Error())
@@ -79,7 +89,7 @@ func (v *ZkgmV1) Timeout(cur realm, packet core.Packet, relayer address) {
 
 // IntentRecv executes the market-maker fast path.
 // Only-maker outcomes revert the intent tx so proven recv can proceed.
-func (v *ZkgmV1) IntentRecv(cur realm, packet core.Packet, marketMaker address, marketMakerMsg []byte) core.RecvPacketResult {
+func (v *ZkgmV1) IntentRecv(cur realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
 	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
 		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
@@ -91,7 +101,7 @@ func (v *ZkgmV1) IntentRecv(cur realm, packet core.Packet, marketMaker address, 
 		return failureResult(cur, universalErrorAck())
 	}
 	// Only-maker must roll back the intent receipt.
-	if isOnlyMakerAck(res.Ack) {
+	if isOnlyMakerAck(res.Acknowledgement) {
 		panic("zkgm: only maker")
 	}
 	return res

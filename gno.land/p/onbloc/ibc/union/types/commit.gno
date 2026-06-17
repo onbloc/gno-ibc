@@ -18,6 +18,14 @@ func CommitPackets(packets []Packet) (H256, error) {
 	return keccak(wrapABIEncode(encoded)), nil
 }
 
+// MustCommit unwraps a commitment hash or panics on encoding errors.
+func MustCommit(h H256, err error) H256 {
+	if err != nil {
+		panic(err)
+	}
+	return h
+}
+
 // CommitAck returns the Union commitment hash of a single acknowledgement.
 func CommitAck(ack []byte) H256 {
 	return CommitAcks([][]byte{ack})

@@ -3,9 +3,10 @@ package impl
 import (
 	"errors"
 
-	z "gno.land/p/onbloc/ibc/union/zkgm"
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/onbloc/ibc/union/core"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 )
 
 // TODO: cap batch.Instructions length once the upstream Solidity reference
@@ -13,7 +14,7 @@ import (
 // each child runs full dispatchExecute incl. abi decode + keccak).
 var errInvalidBatchInstruction = errors.New("zkgm/v1: invalid batch instruction")
 
-func (v *ZkgmV1) verifyBatch(cur realm, channelId core.ChannelId, sender string, budget *sentCoinBudget, path *u256.Uint, parentSalt [32]byte, batch z.Batch) error {
+func (v *ZkgmV1) verifyBatch(cur realm, channelId types.ChannelId, sender string, budget *sentCoinBudget, path *u256.Uint, parentSalt [32]byte, batch z.Batch) error {
 	for i, instr := range batch.Instructions {
 		if !isAllowedBatchInstruction(instr.Opcode) {
 			return errInvalidBatchInstruction
@@ -26,7 +27,7 @@ func (v *ZkgmV1) verifyBatch(cur realm, channelId core.ChannelId, sender string,
 	return nil
 }
 
-func (v *ZkgmV1) executeBatch(cur realm, packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, parentSalt [32]byte, batch z.Batch, intent bool) ([]byte, error) {
+func (v *ZkgmV1) executeBatch(cur realm, packet types.Packet, relayer address, relayerMsg []byte, path *u256.Uint, parentSalt [32]byte, batch z.Batch, intent bool) ([]byte, error) {
 	acks := make([][]byte, len(batch.Instructions))
 	for i, instr := range batch.Instructions {
 		if !isAllowedBatchInstruction(instr.Opcode) {
@@ -37,7 +38,7 @@ func (v *ZkgmV1) executeBatch(cur realm, packet core.Packet, relayer address, re
 		if err != nil {
 			return nil, err
 		}
-		childAck := childRes.Ack
+		childAck := childRes.Acknowledgement
 		if len(childAck) == 0 {
 			panic("zkgm/v1: batch child returned empty ack")
 		}
@@ -57,7 +58,7 @@ func (v *ZkgmV1) executeBatch(cur realm, packet core.Packet, relayer address, re
 	return z.EncodeAck(z.Ack{Tag: tagAckSuccess(), InnerAck: batchAckBytes})
 }
 
-func (v *ZkgmV1) acknowledgeBatch(cur realm, packet core.Packet, path *u256.Uint, parentSalt [32]byte, batch z.Batch, outerAck z.Ack) error {
+func (v *ZkgmV1) acknowledgeBatch(cur realm, packet types.Packet, path *u256.Uint, parentSalt [32]byte, batch z.Batch, outerAck z.Ack) error {
 	successful := outerAck.Tag != nil && outerAck.Tag.Eq(tagAckSuccess())
 	var batchAck z.BatchAck
 	if successful {
@@ -90,7 +91,7 @@ func (v *ZkgmV1) acknowledgeBatch(cur realm, packet core.Packet, path *u256.Uint
 	return nil
 }
 
-func (v *ZkgmV1) timeoutBatch(cur realm, packet core.Packet, path *u256.Uint, parentSalt [32]byte, batch z.Batch) error {
+func (v *ZkgmV1) timeoutBatch(cur realm, packet types.Packet, path *u256.Uint, parentSalt [32]byte, batch z.Batch) error {
 	for i, instr := range batch.Instructions {
 		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), parentSalt)
 		if err := v.dispatchTimeout(cur, packet, path, childSalt, instr); err != nil {

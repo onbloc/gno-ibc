@@ -3,26 +3,30 @@ package zkgm
 import (
 	"errors"
 
-	z "gno.land/p/onbloc/ibc/union/zkgm"
+	app "gno.land/p/onbloc/ibc/union/app"
+
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 type App struct{}
 
 var (
-	_ core.IApp       = &App{}
-	_ core.IIntentApp = &App{}
+	_ app.IApp       = &App{}
+	_ app.IIntentApp = &App{}
 )
 
-func (a *App) OnChannelOpenInit(cur realm, connectionId core.ConnectionId, channelId core.ChannelId, version string, relayer address) {
+func (a *App) OnChannelOpenInit(cur realm, connectionId types.ConnectionId, channelId types.ChannelId, version string, relayer address) {
 	requireCoreCaller(cur, "channel open init")
 	ensureImpl()
 	ensureVersion(version)
 	impl.PreChannelOpenInit(cross(cur), channelId)
 }
 
-func (a *App) OnChannelOpenTry(cur realm, connectionId core.ConnectionId, channelId core.ChannelId, version string, counterpartyVersion string, relayer address) {
+func (a *App) OnChannelOpenTry(cur realm, connectionId types.ConnectionId, channelId types.ChannelId, version string, counterpartyVersion string, relayer address) {
 	requireCoreCaller(cur, "channel open try")
 	ensureImpl()
 	ensureVersion(version)
@@ -30,32 +34,32 @@ func (a *App) OnChannelOpenTry(cur realm, connectionId core.ConnectionId, channe
 	impl.PreChannelOpenTry(cross(cur), channelId, counterpartyVersion)
 }
 
-func (a *App) OnChannelOpenAck(cur realm, channelId core.ChannelId, counterpartyChannelId core.ChannelId, counterpartyVersion string, relayer address) {
+func (a *App) OnChannelOpenAck(cur realm, channelId types.ChannelId, counterpartyChannelId types.ChannelId, counterpartyVersion string, relayer address) {
 	requireCoreCaller(cur, "channel open ack")
 	ensureImpl()
 	ensureVersion(counterpartyVersion)
 	impl.PostChannelOpenAck(cross(cur), channelId, counterpartyChannelId)
 }
 
-func (a *App) OnChannelOpenConfirm(cur realm, channelId core.ChannelId, relayer address) {
+func (a *App) OnChannelOpenConfirm(cur realm, channelId types.ChannelId, relayer address) {
 	requireCoreCaller(cur, "channel open confirm")
 	ensureImpl()
 	impl.PostChannelOpenConfirm(cross(cur), channelId)
 }
 
-func (a *App) OnChannelCloseInit(cur realm, channelId core.ChannelId, relayer address) {
+func (a *App) OnChannelCloseInit(cur realm, channelId types.ChannelId, relayer address) {
 	requireCoreCaller(cur, "channel close init")
 	ensureImpl()
 	impl.PreChannelCloseInit(cross(cur), channelId)
 }
 
-func (a *App) OnChannelCloseConfirm(cur realm, channelId core.ChannelId, relayer address) {
+func (a *App) OnChannelCloseConfirm(cur realm, channelId types.ChannelId, relayer address) {
 	requireCoreCaller(cur, "channel close confirm")
 	ensureImpl()
 	impl.PostChannelCloseConfirm(cross(cur), channelId)
 }
 
-func (a *App) OnRecvPacket(cur realm, packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
+func (a *App) OnRecvPacket(cur realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {
 	requireCoreCaller(cur, "recv")
 	if paused {
 		panic("zkgm: paused")
@@ -66,7 +70,7 @@ func (a *App) OnRecvPacket(cur realm, packet core.Packet, relayer address, relay
 	return impl.Recv(cross(cur), packet, relayer, relayerMsg)
 }
 
-func (a *App) OnIntentRecvPacket(cur realm, packet core.Packet, marketMaker address, marketMakerMsg []byte) core.RecvPacketResult {
+func (a *App) OnIntentRecvPacket(cur realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
 	requireCoreCaller(cur, "intent recv")
 	if paused {
 		panic("zkgm: paused")
@@ -77,7 +81,7 @@ func (a *App) OnIntentRecvPacket(cur realm, packet core.Packet, marketMaker addr
 	return impl.IntentRecv(cross(cur), packet, marketMaker, marketMakerMsg)
 }
 
-func (a *App) OnAcknowledgementPacket(cur realm, packet core.Packet, ack []byte, relayer address) {
+func (a *App) OnAcknowledgementPacket(cur realm, packet types.Packet, ack []byte, relayer address) {
 	requireCoreCaller(cur, "ack")
 	if paused {
 		panic("zkgm: paused")
@@ -88,7 +92,7 @@ func (a *App) OnAcknowledgementPacket(cur realm, packet core.Packet, ack []byte,
 	impl.Ack(cross(cur), packet, ack, relayer)
 }
 
-func (a *App) OnTimeoutPacket(cur realm, packet core.Packet, relayer address) {
+func (a *App) OnTimeoutPacket(cur realm, packet types.Packet, relayer address) {
 	requireCoreCaller(cur, "timeout")
 	if paused {
 		panic("zkgm: paused")
@@ -123,7 +127,7 @@ func requireCoreCaller(cur realm, action string) {
 	}
 }
 
-func errAck(cur realm, err error) core.RecvPacketResult {
+func errAck(cur realm, err error) types.RecvPacketResult {
 	ackBytes, encErr := z.EncodeAck(z.Ack{
 		Tag:      u256.NewUint(0),
 		InnerAck: []byte(err.Error()),
@@ -131,5 +135,5 @@ func errAck(cur realm, err error) core.RecvPacketResult {
 	if encErr != nil {
 		ackBytes = []byte(err.Error())
 	}
-	return core.NewRecvPacketResult(cross(cur), core.PacketStatusFailure, ackBytes)
+	return core.NewRecvPacketResult(cross(cur), types.PacketStatusFailure, ackBytes)
 }

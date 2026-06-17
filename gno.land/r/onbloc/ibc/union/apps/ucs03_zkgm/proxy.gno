@@ -5,6 +5,10 @@ import (
 	"chain/banker"
 	"strings"
 
+	app "gno.land/p/onbloc/ibc/union/app"
+
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	"gno.land/p/nt/bptree/v0"
 	"gno.land/p/nt/ufmt/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
@@ -24,11 +28,11 @@ var (
 
 const proxyPkgPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 
-// productionLoaderPath is the only loader allowed to re-fetch the impl singleton
-// after bootstrap. It is the trust anchor for impl.GetInstance.
-const productionLoaderPath = proxyPkgPath + "/v1/loader"
+// productionImplPath is the production registrar and implementation realm.
+// It is the trust anchor for impl.GetInstance after bootstrap.
+const productionImplPath = proxyPkgPath + "/v1"
 
-func AsIBCApp() core.IApp {
+func AsIBCApp() app.IApp {
 	return &App{}
 }
 
@@ -47,8 +51,12 @@ func ProxyPkgPath() string {
 	return proxyPkgPath
 }
 
+func ProductionImplPath() string {
+	return productionImplPath
+}
+
 func ProductionLoaderPath() string {
-	return productionLoaderPath
+	return ProductionImplPath()
 }
 
 func UpdateImpl(cur realm, r UpdateRequest) {
@@ -59,9 +67,6 @@ func UpdateImpl(cur realm, r UpdateRequest) {
 		requireBootstrapLoaderRealm(caller)
 		if r.Impl == nil {
 			panic("zkgm: bootstrap UpdateImpl must install an impl")
-		}
-		if caller == productionLoaderPath && len(r.AllowedImpls) == 0 {
-			panic("zkgm: production loader bootstrap must install allowed impls")
 		}
 	} else if !isAuthorizedImpl(caller) {
 		panic("permission denied for prev realm: " + caller)
@@ -139,14 +144,14 @@ func GetReceiver(path string) z.Zkgmable {
 // WriteForwardAck writes the parent packet acknowledgement through core. The
 // parent's identity is the full Packet captured in InFlightValue at forward
 // dispatch time.
-func WriteForwardAck(cur realm, parentPacket core.Packet, ack []byte) {
+func WriteForwardAck(cur realm, parentPacket types.Packet, ack []byte) {
 	cacheRealm(cur)
 	requireImplRealm(cur, "write forward ack")
 
-	core.WriteAcknowledgement(cross(cur), core.NewMsgWriteAcknowledgement(cross(cur), parentPacket, ack))
+	core.WriteAcknowledgement(cross(cur), types.NewMsgWriteAcknowledgement(parentPacket, ack))
 }
 
-func BatchSend(cur realm, msg core.MsgBatchSend) core.H256 {
+func BatchSend(cur realm, msg types.MsgBatchSend) types.H256 {
 	cacheRealm(cur)
 	requireImplRealm(cur, "batch send")
 	return core.BatchSend(cross(cur), msg)

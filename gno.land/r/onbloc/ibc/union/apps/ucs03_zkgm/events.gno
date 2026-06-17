@@ -5,8 +5,9 @@ import (
 	"strconv"
 	"strings"
 
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 const (
@@ -84,21 +85,21 @@ func emitZkgmNativeReleasedEvent(callerPkgPath string, denom string, recipient a
 	)
 }
 
-func emitZkgmForwardInFlightSetEvent(packetHash core.H256, parentPacketHash core.H256) {
+func emitZkgmForwardInFlightSetEvent(packetHash types.H256, parentPacketHash types.H256) {
 	chain.Emit(ZkgmForwardInFlightSetEvent,
 		"packet_hash", packetHash.String(),
 		"parent_packet_hash", parentPacketHash.String(),
 	)
 }
 
-func emitZkgmForwardInFlightPoppedEvent(packetHash core.H256, found bool) {
+func emitZkgmForwardInFlightPoppedEvent(packetHash types.H256, found bool) {
 	chain.Emit(ZkgmForwardInFlightPoppedEvent,
 		"packet_hash", packetHash.String(),
 		"found", strconv.FormatBool(found),
 	)
 }
 
-func EmitRecvError(sourceChannel core.ChannelId, destinationChannel core.ChannelId, reason string) {
+func EmitRecvError(sourceChannel types.ChannelId, destinationChannel types.ChannelId, reason string) {
 	chain.Emit(ZkgmRecvErrorEvent,
 		"source_channel", sourceChannel.String(),
 		"destination_channel", destinationChannel.String(),

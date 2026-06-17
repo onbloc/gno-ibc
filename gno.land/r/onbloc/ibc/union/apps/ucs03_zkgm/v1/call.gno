@@ -3,10 +3,12 @@ package impl
 import (
 	"errors"
 
-	z "gno.land/p/onbloc/ibc/union/zkgm"
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/onbloc/ibc/union/core"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 var (
@@ -24,7 +26,7 @@ func (v *ZkgmV1) verifyCall(cur realm, sender string, call z.Call) error {
 	return nil
 }
 
-func (v *ZkgmV1) executeCall(cur realm, packet core.Packet, relayer address, relayerMsg []byte, path *u256.Uint, call z.Call, intent bool) (core.RecvPacketResult, error) {
+func (v *ZkgmV1) executeCall(cur realm, packet types.Packet, relayer address, relayerMsg []byte, path *u256.Uint, call z.Call, intent bool) (types.RecvPacketResult, error) {
 	// TODO: when eureka is supported, fail it closed on intent (return
 	// ACK_ERR_ONLY_MAKER) like every other opcode instead of a failure ack.
 	if call.Eureka {
@@ -32,7 +34,7 @@ func (v *ZkgmV1) executeCall(cur realm, packet core.Packet, relayer address, rel
 	}
 	if intent {
 		// Calls do not settle on the proofless market-maker fast path.
-		return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
+		return core.NewRecvPacketResult(cross(cur), types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 
 	sender := cloneBytes(call.Sender)
@@ -58,7 +60,7 @@ func (v *ZkgmV1) executeCall(cur realm, packet core.Packet, relayer address, rel
 
 	err, panicked := safeCallOnZkgm(cur, receiver, env)
 	if panicked {
-		return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
+		return core.NewRecvPacketResult(cross(cur), types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 	if err != nil {
 		return callErrAck(cur, err), nil
@@ -66,19 +68,19 @@ func (v *ZkgmV1) executeCall(cur realm, packet core.Packet, relayer address, rel
 
 	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess(), InnerAck: []byte{}})
 	if err != nil {
-		return core.NewRecvPacketResult(cross(cur), core.PacketStatusUnknown, nil), err
+		return core.NewRecvPacketResult(cross(cur), types.PacketStatusUnknown, nil), err
 	}
-	return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, ack), nil
+	return core.NewRecvPacketResult(cross(cur), types.PacketStatusSuccess, ack), nil
 }
 
-func (v *ZkgmV1) acknowledgeCall(cur realm, packet core.Packet, path *u256.Uint, call z.Call) error {
+func (v *ZkgmV1) acknowledgeCall(cur realm, packet types.Packet, path *u256.Uint, call z.Call) error {
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
 	return nil
 }
 
-func (v *ZkgmV1) timeoutCall(cur realm, packet core.Packet, path *u256.Uint, call z.Call) error {
+func (v *ZkgmV1) timeoutCall(cur realm, packet types.Packet, path *u256.Uint, call z.Call) error {
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
@@ -119,7 +121,7 @@ func canRevive() (ok bool) {
 	return ok
 }
 
-func callErrAck(cur realm, err error) core.RecvPacketResult {
+func callErrAck(cur realm, err error) types.RecvPacketResult {
 	ack, encErr := z.EncodeAck(z.Ack{Tag: tagAckFailure(), InnerAck: []byte(err.Error())})
 	if encErr != nil {
 		// EncodeAck on a 2-field schema is essentially infallible. A failure

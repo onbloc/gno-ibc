@@ -4,17 +4,18 @@ import (
 	"encoding/hex"
 	"errors"
 
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/onbloc/ibc/union/core"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
 
 // ChannelBalanceKeyV2 returns the storage key for a v2 channel balance entry.
-func ChannelBalanceKeyV2(channelId core.ChannelId, path *u256.Uint, baseToken, quoteToken []byte) string {
+func ChannelBalanceKeyV2(channelId types.ChannelId, path *u256.Uint, baseToken, quoteToken []byte) string {
 	return channelId.String() + "/" + path.ToString() + "/" + hex.EncodeToString(baseToken) + "/" + hex.EncodeToString(quoteToken)
 }
 
-func increaseChannelBalanceV2(cur realm, channelId core.ChannelId, path *u256.Uint, baseToken, quoteToken []byte, amount *u256.Uint) {
+func increaseChannelBalanceV2(cur realm, channelId types.ChannelId, path *u256.Uint, baseToken, quoteToken []byte, amount *u256.Uint) {
 	if amount.IsZero() {
 		return
 	}
@@ -26,7 +27,7 @@ func increaseChannelBalanceV2(cur realm, channelId core.ChannelId, path *u256.Ui
 	zkgm.SetChannelBalanceV2(cross(cur), key, new(u256.Uint).Add(curAmount, amount))
 }
 
-func decreaseChannelBalanceV2(cur realm, channelId core.ChannelId, path *u256.Uint, baseToken, quoteToken []byte, amount *u256.Uint) error {
+func decreaseChannelBalanceV2(cur realm, channelId types.ChannelId, path *u256.Uint, baseToken, quoteToken []byte, amount *u256.Uint) error {
 	if amount.IsZero() {
 		return nil
 	}

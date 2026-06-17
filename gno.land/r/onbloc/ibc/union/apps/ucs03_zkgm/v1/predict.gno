@@ -4,10 +4,11 @@ import (
 	"crypto/keccak256"
 	"encoding/hex"
 
+	types "gno.land/p/onbloc/ibc/union/types"
+
+	u256 "gno.land/p/gnoswap/uint256"
 	abi "gno.land/p/onbloc/encoding/abi"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
-	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 const (
@@ -72,7 +73,7 @@ func u256FromBytes32(bz [32]byte) *u256.Uint {
 // PredictCallProxyAccount returns the synthetic Gno address that represents
 // the given (path, destinationChannel, sender) tuple as a callable account.
 // key = zkgm1<first-20-bytes-of-keccak(ZKGM_CALL_PROXY || path || channelId || sender)>
-func PredictCallProxyAccount(path *u256.Uint, channelId core.ChannelId, sender []byte) string {
+func PredictCallProxyAccount(path *u256.Uint, channelId types.ChannelId, sender []byte) string {
 	var pathBytes [32]byte
 	if path != nil {
 		pathBytes = z.Uint256ToBytes32(path)

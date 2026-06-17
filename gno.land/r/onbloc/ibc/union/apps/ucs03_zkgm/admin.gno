@@ -4,7 +4,7 @@ import (
 	"chain/runtime"
 
 	u256 "gno.land/p/gnoswap/uint256"
-	tb "gno.land/p/onbloc/ibc/zkgm/tokenbucket"
+	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 

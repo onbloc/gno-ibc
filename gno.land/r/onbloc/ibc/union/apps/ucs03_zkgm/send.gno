@@ -2,14 +2,17 @@ package zkgm
 
 import (
 	"chain/runtime"
-	rtunsafe "chain/runtime/unsafe"
 	"encoding/hex"
+
+	types "gno.land/p/onbloc/ibc/union/types"
+
+	rtunsafe "chain/runtime/unsafe"
 
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
-func Send(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, salt [32]byte, instruction z.Instruction) core.Packet {
+func Send(cur realm, channelId types.ChannelId, timeoutTimestamp types.Timestamp, salt [32]byte, instruction z.Instruction) types.Packet {
 	if paused {
 		panic("zkgm: paused")
 	}
@@ -32,7 +35,7 @@ func Send(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, 
 // SendRaw is a gnokey-friendly wrapper around Send. `maketx call` cannot pass
 // z.Instruction or [32]byte values directly, so external smoke tests pass those
 // fields as primitive hex/string arguments instead.
-func SendRaw(cur realm, channelId uint32, timeoutTimestamp uint64, saltHex string, version uint8, opcode uint8, operandHex string) core.Packet {
+func SendRaw(cur realm, channelId uint32, timeoutTimestamp uint64, saltHex string, version uint8, opcode uint8, operandHex string) types.Packet {
 	if paused {
 		panic("zkgm: paused")
 	}
@@ -54,8 +57,8 @@ func SendRaw(cur realm, channelId uint32, timeoutTimestamp uint64, saltHex strin
 	runtime.AssertOriginCall()
 	return sendPacket(
 		cur,
-		core.ChannelId(channelId),
-		core.Timestamp(timeoutTimestamp),
+		types.ChannelId(channelId),
+		types.Timestamp(timeoutTimestamp),
 		salt,
 		z.Instruction{
 			Version: version,
@@ -67,7 +70,7 @@ func SendRaw(cur realm, channelId uint32, timeoutTimestamp uint64, saltHex strin
 	)
 }
 
-func sendPacket(cur realm, channelId core.ChannelId, timeoutTimestamp core.Timestamp, salt [32]byte, instruction z.Instruction, sender string, sentCoins string) core.Packet {
+func sendPacket(cur realm, channelId types.ChannelId, timeoutTimestamp types.Timestamp, salt [32]byte, instruction z.Instruction, sender string, sentCoins string) types.Packet {
 	assertNonZeroTimeout(timeoutTimestamp)
 	if paused {
 		panic("zkgm: paused")
@@ -81,10 +84,10 @@ func sendPacket(cur realm, channelId core.ChannelId, timeoutTimestamp core.Times
 		panic(err)
 	}
 
-	return core.PacketSend(cross(cur), channelId, 0, timeoutTimestamp, data)
+	return core.PacketSend(cross(cur), channelId, timeoutTimestamp, data)
 }
 
-func assertNonZeroTimeout(timeoutTimestamp core.Timestamp) {
+func assertNonZeroTimeout(timeoutTimestamp types.Timestamp) {
 	if timeoutTimestamp == 0 {
 		panic("zkgm: timeout timestamp must be non-zero")
 	}

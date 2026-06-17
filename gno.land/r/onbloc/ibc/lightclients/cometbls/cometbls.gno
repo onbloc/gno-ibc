@@ -4,17 +4,18 @@ import (
 	"time"
 
 	cometblsp "gno.land/p/onbloc/ibc/union/lightclient/cometbls"
-	"gno.land/r/onbloc/ibc/core"
+	"gno.land/p/onbloc/ibc/union/types"
+	"gno.land/r/onbloc/ibc/union/core"
 )
 
-const ClientType core.ClientType = "cometbls"
+const ClientType types.ClientType = "cometbls"
 
 type clientEntry struct {
 	consensusStates map[cometblsp.Height]cometblsp.ConsensusState
 	cs              cometblsp.ClientState
 }
 
-var entries = make(map[core.ClientId]*clientEntry)
+var entries = make(map[types.ClientId]*clientEntry)
 
 func nowNanos() uint64 { return uint64(time.Now().UnixNano()) }
 
@@ -24,7 +25,7 @@ func mustBeCore(cur realm) {
 	}
 }
 
-func getEntry(clientId core.ClientId) *clientEntry {
+func getEntry(clientId types.ClientId) *clientEntry {
 	e, ok := entries[clientId]
 	if !ok {
 		panic("cometbls: client not found: " + clientId.String())
@@ -42,7 +43,7 @@ func Register(cur realm) {
 	core.RegisterClient(cross(cur), ClientType, NewAdapter(cross(cur)))
 }
 
-func (Adapter) CreateClient(cur realm, clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) string {
+func (Adapter) CreateClient(cur realm, clientId types.ClientId, clientStateBytes, consensusStateBytes []byte) string {
 	mustBeCore(cur)
 
 	cs, err := cometblsp.DecodeClientState(clientStateBytes)
@@ -65,7 +66,7 @@ func (Adapter) CreateClient(cur realm, clientId core.ClientId, clientStateBytes,
 	return cs.ChainID
 }
 
-func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []byte) core.ConsensusStateUpdate {
+func (Adapter) UpdateClient(cur realm, clientId types.ClientId, clientMessage []byte) types.ConsensusStateUpdate {
 	mustBeCore(cur)
 
 	e := getEntry(clientId)
@@ -92,7 +93,7 @@ func (Adapter) UpdateClient(cur realm, clientId core.ClientId, clientMessage []b
 	}
 	clientStateBytes := cometblsp.EncodeClientState(e.cs)
 
-	return core.NewConsensusStateUpdate(cross(cur), core.NewHeight(uint64(newHeight)), consStateBytes, clientStateBytes)
+	return core.NewConsensusStateUpdate(cross(cur), types.NewHeight(uint64(newHeight)), consStateBytes, clientStateBytes)
 }
 
 func applyHeaderHeight(e *clientEntry, newHeight cometblsp.Height, consState cometblsp.ConsensusState) cometblsp.ConsensusState {
@@ -107,7 +108,7 @@ func applyHeaderHeight(e *clientEntry, newHeight cometblsp.Height, consState com
 	return stored
 }
 
-func (Adapter) Misbehaviour(cur realm, clientId core.ClientId, clientMessage []byte) []byte {
+func (Adapter) Misbehaviour(cur realm, clientId types.ClientId, clientMessage []byte) []byte {
 	mustBeCore(cur)
 
 	e := getEntry(clientId)
@@ -139,7 +140,7 @@ func (Adapter) Misbehaviour(cur realm, clientId core.ClientId, clientMessage []b
 //
 // Proof verification must reject unknown heights rather than relying on
 // verification against a zero-value consensus state.
-func consensusStateAt(e *clientEntry, height core.Height) cometblsp.ConsensusState {
+func consensusStateAt(e *clientEntry, height types.Height) cometblsp.ConsensusState {
 	cs, ok := e.consensusStates[cometblsp.Height(height.Height)]
 	if !ok {
 		panic("cometbls: consensus state not found at height " + height.String())
@@ -147,7 +148,7 @@ func consensusStateAt(e *clientEntry, height core.Height) cometblsp.ConsensusSta
 	return cs
 }
 
-func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proof, key, value []byte) {
+func (Adapter) VerifyMembership(clientId types.ClientId, height types.Height, proof, key, value []byte) {
 	e := getEntry(clientId)
 	if status := adapterStatus(e); status != cometblsp.StatusActive {
 		panic("cometbls: client is " + status)
@@ -163,7 +164,7 @@ func (Adapter) VerifyMembership(clientId core.ClientId, height core.Height, proo
 	}
 }
 
-func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, proof, key []byte) {
+func (Adapter) VerifyNonMembership(clientId types.ClientId, height types.Height, proof, key []byte) {
 	e := getEntry(clientId)
 	if status := adapterStatus(e); status != cometblsp.StatusActive {
 		panic("cometbls: client is " + status)
@@ -179,17 +180,17 @@ func (Adapter) VerifyNonMembership(clientId core.ClientId, height core.Height, p
 	}
 }
 
-func (Adapter) GetTimestamp(clientId core.ClientId, height core.Height) core.Timestamp {
+func (Adapter) GetTimestamp(clientId types.ClientId, height types.Height) types.Timestamp {
 	e := getEntry(clientId)
 	cs := consensusStateAt(e, height)
-	return core.Timestamp(cs.Timestamp)
+	return types.Timestamp(cs.Timestamp)
 }
 
-func (Adapter) GetLatestHeight(clientId core.ClientId) core.Height {
-	return core.NewHeight(uint64(getEntry(clientId).cs.LatestHeight))
+func (Adapter) GetLatestHeight(clientId types.ClientId) types.Height {
+	return types.NewHeight(uint64(getEntry(clientId).cs.LatestHeight))
 }
 
-func (Adapter) ForceUpdateClient(cur realm, clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) core.ConsensusStateUpdate {
+func (Adapter) ForceUpdateClient(cur realm, clientId types.ClientId, clientStateBytes, consensusStateBytes []byte) types.ConsensusStateUpdate {
 	mustBeCore(cur)
 	height, consStateBytes, csBytes := applyForceUpdate(clientId, clientStateBytes, consensusStateBytes)
 	return core.NewConsensusStateUpdate(cross(cur), height, consStateBytes, csBytes)
@@ -211,7 +212,7 @@ func (Adapter) ForceUpdateClient(cur realm, clientId core.ClientId, clientStateB
 //
 // Any additional caller added within this package would bypass both
 // authorization checks. Do not call applyForceUpdate from any new entrypoint.
-func applyForceUpdate(clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) (core.Height, []byte, []byte) {
+func applyForceUpdate(clientId types.ClientId, clientStateBytes, consensusStateBytes []byte) (types.Height, []byte, []byte) {
 	cs, err := cometblsp.DecodeClientState(clientStateBytes)
 	if err != nil {
 		panic("cometbls: invalid client state: " + err.Error())
@@ -275,20 +276,20 @@ func applyForceUpdate(clientId core.ClientId, clientStateBytes, consensusStateBy
 		panic("cometbls: encode consensus state: " + err.Error())
 	}
 
-	return core.NewHeight(uint64(cs.LatestHeight)), encConsState, cometblsp.EncodeClientState(e.cs)
+	return types.NewHeight(uint64(cs.LatestHeight)), encConsState, cometblsp.EncodeClientState(e.cs)
 }
 
-func (Adapter) GetStatus(clientId core.ClientId) core.Status {
+func (Adapter) GetStatus(clientId types.ClientId) types.Status {
 	e := getEntry(clientId)
 	switch adapterStatus(e) {
 	case cometblsp.StatusActive:
-		return core.StatusActive
+		return types.StatusActive
 	case cometblsp.StatusFrozen:
-		return core.StatusFrozen
+		return types.StatusFrozen
 	case cometblsp.StatusExpired:
-		return core.StatusExpired
+		return types.StatusExpired
 	default:
-		return core.StatusUnknown
+		return types.StatusUnknown
 	}
 }
 

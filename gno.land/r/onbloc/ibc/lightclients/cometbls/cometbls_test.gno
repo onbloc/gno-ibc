@@ -6,11 +6,11 @@ import (
 
 	cometblsp "gno.land/p/onbloc/ibc/union/lightclient/cometbls"
 	"gno.land/p/nt/uassert/v0"
-	"gno.land/r/onbloc/ibc/union/core"
+	"gno.land/p/onbloc/ibc/union/types"
 )
 
 func resetAdapterEntries() {
-	entries = make(map[core.ClientId]*clientEntry)
+	entries = make(map[types.ClientId]*clientEntry)
 }
 
 func newAdapterClientEntry(cs cometblsp.ClientState, cons cometblsp.ConsensusState) *clientEntry {
@@ -37,7 +37,7 @@ func activeAdapterConsensusState() cometblsp.ConsensusState {
 	}
 }
 
-func installAdapterClient(clientId core.ClientId, cs cometblsp.ClientState, cons cometblsp.ConsensusState) {
+func installAdapterClient(clientId types.ClientId, cs cometblsp.ClientState, cons cometblsp.ConsensusState) {
 	entries[clientId] = newAdapterClientEntry(cs, cons)
 }
 
@@ -46,16 +46,16 @@ func TestMutatingEntrypointsRequireCoreCaller(cur realm, t *testing.T) {
 	adapter := Adapter{}
 
 	uassert.AbortsContains(t, cur, "cometbls: core only", func(cur realm) {
-		adapter.CreateClient(cross(cur), core.ClientId(1), nil, nil)
+		adapter.CreateClient(cross(cur), types.ClientId(1), nil, nil)
 	})
 	uassert.AbortsContains(t, cur, "cometbls: core only", func(cur realm) {
-		adapter.UpdateClient(cross(cur), core.ClientId(1), nil)
+		adapter.UpdateClient(cross(cur), types.ClientId(1), nil)
 	})
 	uassert.AbortsContains(t, cur, "cometbls: core only", func(cur realm) {
-		adapter.Misbehaviour(cross(cur), core.ClientId(1), nil)
+		adapter.Misbehaviour(cross(cur), types.ClientId(1), nil)
 	})
 	uassert.AbortsContains(t, cur, "cometbls: core only", func(cur realm) {
-		adapter.ForceUpdateClient(cross(cur), core.ClientId(1), nil, nil)
+		adapter.ForceUpdateClient(cross(cur), types.ClientId(1), nil, nil)
 	})
 }
 
@@ -76,24 +76,24 @@ func TestVerifyMembershipAndNonMembershipRejectInactiveBeforeProofDecode(cur rea
 	for _, tc := range testCases {
 		t.Run(tc.name+"/membership", func(t *testing.T) {
 			resetAdapterEntries()
-			clientId := core.ClientId(1)
+			clientId := types.ClientId(1)
 			cs := activeAdapterClientState()
 			cons := activeAdapterConsensusState()
 			tc.mutate(&cs, &cons)
 			installAdapterClient(clientId, cs, cons)
 			uassert.AbortsContains(t, cur, "cometbls: client is "+tc.statusLabel, func(cur realm) {
-				Adapter{}.VerifyMembership(clientId, core.Height(cs.LatestHeight), []byte{0xff}, []byte("key"), []byte("value"))
+				Adapter{}.VerifyMembership(clientId, types.NewHeight(uint64(cs.LatestHeight)), []byte{0xff}, []byte("key"), []byte("value"))
 			})
 		})
 		t.Run(tc.name+"/non-membership", func(t *testing.T) {
 			resetAdapterEntries()
-			clientId := core.ClientId(1)
+			clientId := types.ClientId(1)
 			cs := activeAdapterClientState()
 			cons := activeAdapterConsensusState()
 			tc.mutate(&cs, &cons)
 			installAdapterClient(clientId, cs, cons)
 			uassert.AbortsContains(t, cur, "cometbls: client is "+tc.statusLabel, func(cur realm) {
-				Adapter{}.VerifyNonMembership(clientId, core.Height(cs.LatestHeight), []byte{0xff}, []byte("key"))
+				Adapter{}.VerifyNonMembership(clientId, types.NewHeight(uint64(cs.LatestHeight)), []byte{0xff}, []byte("key"))
 			})
 		})
 	}
@@ -101,71 +101,71 @@ func TestVerifyMembershipAndNonMembershipRejectInactiveBeforeProofDecode(cur rea
 
 func TestGetLatestHeightReturnsStoredClientStateHeight(cur realm, t *testing.T) {
 	resetAdapterEntries()
-	clientId := core.ClientId(1)
+	clientId := types.ClientId(1)
 	cs := activeAdapterClientState()
 	cs.LatestHeight = cometblsp.Height(42)
 	installAdapterClient(clientId, cs, activeAdapterConsensusState())
 
-	if got := (Adapter{}).GetLatestHeight(clientId); got != core.Height(42) {
-		t.Fatalf("got %d want %d", got, core.Height(42))
+	if got := (Adapter{}).GetLatestHeight(clientId); got != types.NewHeight(42) {
+		t.Fatalf("got %v want %v", got, types.NewHeight(42))
 	}
 }
 
 func TestGetTimestampReturnsStoredConsensusTimestamp(cur realm, t *testing.T) {
 	resetAdapterEntries()
-	clientId := core.ClientId(1)
+	clientId := types.ClientId(1)
 	cs := activeAdapterClientState()
 	cons := activeAdapterConsensusState()
 	cons.Timestamp = 12345
 	installAdapterClient(clientId, cs, cons)
 
-	if got := (Adapter{}).GetTimestamp(clientId, core.Height(cs.LatestHeight)); got != core.Timestamp(12345) {
-		t.Fatalf("got %d want %d", got, core.Timestamp(12345))
+	if got := (Adapter{}).GetTimestamp(clientId, types.NewHeight(uint64(cs.LatestHeight))); got != types.Timestamp(12345) {
+		t.Fatalf("got %d want %d", got, types.Timestamp(12345))
 	}
 }
 
 func TestGetTimestampPanicsWhenConsensusStateMissing(cur realm, t *testing.T) {
 	resetAdapterEntries()
-	clientId := core.ClientId(1)
+	clientId := types.ClientId(1)
 	installAdapterClient(clientId, activeAdapterClientState(), activeAdapterConsensusState())
 
 	uassert.AbortsContains(t, cur, "cometbls: consensus state not found at height 99", func(cur realm) {
-		Adapter{}.GetTimestamp(clientId, core.Height(99))
+		Adapter{}.GetTimestamp(clientId, types.NewHeight(99))
 	})
 }
 
 func TestGetStatusActive(cur realm, t *testing.T) {
 	resetAdapterEntries()
-	clientId := core.ClientId(1)
+	clientId := types.ClientId(1)
 	installAdapterClient(clientId, activeAdapterClientState(), activeAdapterConsensusState())
 
-	if got := (Adapter{}).GetStatus(clientId); got != core.StatusActive {
-		t.Fatalf("got %s want %s", got, core.StatusActive)
+	if got := (Adapter{}).GetStatus(clientId); got != types.StatusActive {
+		t.Fatalf("got %s want %s", got, types.StatusActive)
 	}
 }
 
 func TestGetStatusFrozen(cur realm, t *testing.T) {
 	resetAdapterEntries()
-	clientId := core.ClientId(1)
+	clientId := types.ClientId(1)
 	cs := activeAdapterClientState()
 	cs.FrozenHeight = cometblsp.FrozenHeight
 	installAdapterClient(clientId, cs, activeAdapterConsensusState())
 
-	if got := (Adapter{}).GetStatus(clientId); got != core.StatusFrozen {
-		t.Fatalf("got %s want %s", got, core.StatusFrozen)
+	if got := (Adapter{}).GetStatus(clientId); got != types.StatusFrozen {
+		t.Fatalf("got %s want %s", got, types.StatusFrozen)
 	}
 }
 
 func TestGetStatusExpiredWhenLatestConsensusStateMissing(cur realm, t *testing.T) {
 	resetAdapterEntries()
-	clientId := core.ClientId(1)
+	clientId := types.ClientId(1)
 	cs := activeAdapterClientState()
 	e := newAdapterClientEntry(cs, activeAdapterConsensusState())
 	delete(e.consensusStates, cs.LatestHeight)
 	entries[clientId] = e
 
-	if got := (Adapter{}).GetStatus(clientId); got != core.StatusExpired {
-		t.Fatalf("got %s want %s", got, core.StatusExpired)
+	if got := (Adapter{}).GetStatus(clientId); got != types.StatusExpired {
+		t.Fatalf("got %s want %s", got, types.StatusExpired)
 	}
 }
 
@@ -247,12 +247,12 @@ func encodeState(t *testing.T, cs cometblsp.ClientState, cons cometblsp.Consensu
 
 func TestForceUpdateClientRecoveredExpiredClient(cur realm, t *testing.T) {
 	resetAdapterEntries()
-	clientId := core.ClientId(1)
+	clientId := types.ClientId(1)
 	cs := activeAdapterClientState()
 	expiredCons := encodableConsensusState(1) // nanosecond 1 — far in the past
 	installAdapterClient(clientId, cs, expiredCons)
 
-	if got := (Adapter{}).GetStatus(clientId); got != core.StatusExpired {
+	if got := (Adapter{}).GetStatus(clientId); got != types.StatusExpired {
 		t.Fatalf("pre-condition: expected Expired, got %s", got)
 	}
 
@@ -262,19 +262,19 @@ func TestForceUpdateClientRecoveredExpiredClient(cur realm, t *testing.T) {
 	csBytes, consBytes := encodeState(t, freshCs, freshCons)
 	applyForceUpdate(clientId, csBytes, consBytes)
 
-	if got := (Adapter{}).GetStatus(clientId); got != core.StatusActive {
+	if got := (Adapter{}).GetStatus(clientId); got != types.StatusActive {
 		t.Fatalf("post force-update: expected Active, got %s", got)
 	}
 }
 
 func TestForceUpdateClientUnfreezesFrozenClient(cur realm, t *testing.T) {
 	resetAdapterEntries()
-	clientId := core.ClientId(1)
+	clientId := types.ClientId(1)
 	cs := activeAdapterClientState()
 	cs.FrozenHeight = cometblsp.FrozenHeight
 	installAdapterClient(clientId, cs, encodableConsensusState(nowNanos()))
 
-	if got := (Adapter{}).GetStatus(clientId); got != core.StatusFrozen {
+	if got := (Adapter{}).GetStatus(clientId); got != types.StatusFrozen {
 		t.Fatalf("pre-condition: expected Frozen, got %s", got)
 	}
 
@@ -284,7 +284,7 @@ func TestForceUpdateClientUnfreezesFrozenClient(cur realm, t *testing.T) {
 	csBytes, consBytes := encodeState(t, freshCs, encodableConsensusState(nowNanos()))
 	applyForceUpdate(clientId, csBytes, consBytes)
 
-	if got := (Adapter{}).GetStatus(clientId); got != core.StatusActive {
+	if got := (Adapter{}).GetStatus(clientId); got != types.StatusActive {
 		t.Fatalf("post force-update: expected Active, got %s", got)
 	}
 	if entries[clientId].cs.FrozenHeight != 0 {
@@ -294,7 +294,7 @@ func TestForceUpdateClientUnfreezesFrozenClient(cur realm, t *testing.T) {
 
 func TestForceUpdateClientRejectedOnActiveClient(cur realm, t *testing.T) {
 	resetAdapterEntries()
-	clientId := core.ClientId(1)
+	clientId := types.ClientId(1)
 	cs := activeAdapterClientState()
 	installAdapterClient(clientId, cs, encodableConsensusState(nowNanos()))
 
@@ -320,7 +320,7 @@ func TestForceUpdateClientPanicsOnNonAdvancingHeight(cur realm, t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			resetAdapterEntries()
-			clientId := core.ClientId(1)
+			clientId := types.ClientId(1)
 			cs := activeAdapterClientState()
 			cs.LatestHeight = cometblsp.Height(100)
 			installAdapterClient(clientId, cs, encodableConsensusState(1))
@@ -338,7 +338,7 @@ func TestForceUpdateClientPanicsOnNonAdvancingHeight(cur realm, t *testing.T) {
 
 func TestForceUpdateClientClearsHistoricalConsensusStates(cur realm, t *testing.T) {
 	resetAdapterEntries()
-	clientId := core.ClientId(1)
+	clientId := types.ClientId(1)
 	cs := activeAdapterClientState()
 	cs.LatestHeight = cometblsp.Height(10)
 	e := newAdapterClientEntry(cs, encodableConsensusState(1))
@@ -361,7 +361,7 @@ func TestForceUpdateClientClearsHistoricalConsensusStates(cur realm, t *testing.
 
 func TestForceUpdateClientPanicsOnInvalidClientStateBytes(cur realm, t *testing.T) {
 	resetAdapterEntries()
-	clientId := core.ClientId(1)
+	clientId := types.ClientId(1)
 	installAdapterClient(clientId, activeAdapterClientState(), encodableConsensusState(nowNanos()))
 
 	uassert.AbortsContains(t, cur, "cometbls: invalid client state", func(cur realm) {
@@ -384,7 +384,7 @@ func TestForceUpdateClientPanicsOnIdentityFieldChange(cur realm, t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			resetAdapterEntries()
-			clientId := core.ClientId(1)
+			clientId := types.ClientId(1)
 			cs := activeAdapterClientState()
 			installAdapterClient(clientId, cs, encodableConsensusState(1)) // expired
 

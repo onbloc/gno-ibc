@@ -1,82 +1,71 @@
 package cometbls
 
 import (
-	"bytes"
 	"testing"
 )
 
-func TestEncodeConsensusState(t *testing.T) {
-	t.Run("basic", func(t *testing.T) {
+func TestConsensusStateValidateBasic(t *testing.T) {
+	t.Run("valid", func(t *testing.T) {
 		cs := ConsensusState{
-			Timestamp:          500,
-			Root:               MerkleRoot{Hash: bytes.Repeat([]byte{0xAB}, 32)},
-			NextValidatorsHash: repeatH256(0xCD),
+			Timestamp:          testNow,
+			Root:               MerkleRoot{Hash: repeat32(0xAB)},
+			NextValidatorsHash: repeat32(0xCD),
 		}
-		want := mustHex(word32(500) + bytes32hex(0xAB) + bytes32hex(0xCD))
-		got, err := EncodeConsensusState(cs)
-		if err != nil {
+		if err := cs.ValidateBasic(); err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		bytesEq(t, "EncodeConsensusState/basic", got, want)
 	})
 
-	t.Run("invalid_root_hash", func(t *testing.T) {
-		cs := ConsensusState{
-			Timestamp:          1,
-			Root:               MerkleRoot{Hash: []byte{0x01}},
-			NextValidatorsHash: repeatH256(0xFF),
+	t.Run("valid_empty_next_validators_hash", func(t *testing.T) {
+		// validateHash permits an empty hash (proto3 default).
+		cs := ConsensusState{Root: MerkleRoot{Hash: repeat32(0xAB)}}
+		if err := cs.ValidateBasic(); err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
-		_, err := EncodeConsensusState(cs)
-		if err == nil {
-			t.Fatal("expected error for non-32-byte root hash")
+	})
+
+	t.Run("nil_root", func(t *testing.T) {
+		cs := ConsensusState{Root: MerkleRoot{Hash: nil}, NextValidatorsHash: repeat32(0xCD)}
+		if err := cs.ValidateBasic(); err == nil {
+			t.Fatal("expected error for nil root hash")
+		}
+	})
+
+	t.Run("empty_root", func(t *testing.T) {
+		cs := ConsensusState{Root: MerkleRoot{Hash: []byte{}}, NextValidatorsHash: repeat32(0xCD)}
+		if err := cs.ValidateBasic(); err == nil {
+			t.Fatal("expected error for empty root hash")
+		}
+	})
+
+	t.Run("bad_next_validators_hash_length", func(t *testing.T) {
+		cs := ConsensusState{Root: MerkleRoot{Hash: repeat32(0xAB)}, NextValidatorsHash: []byte{0x01, 0x02}}
+		if err := cs.ValidateBasic(); err == nil {
+			t.Fatal("expected error for non-32-byte next validators hash")
 		}
 	})
 }
 
-func TestDecodeConsensusState(t *testing.T) {
-	t.Run("basic", func(t *testing.T) {
-		buf := mustHex(word32(500) + bytes32hex(0xAB) + bytes32hex(0xCD))
-		got, err := DecodeConsensusState(buf)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got.Timestamp != 500 {
-			t.Fatalf("Timestamp: got %d want 500", got.Timestamp)
-		}
-		bytesEq(t, "Root.Hash", got.Root.Hash, bytes.Repeat([]byte{0xAB}, 32))
-		wantNVH := repeatH256(0xCD)
-		if got.NextValidatorsHash != wantNVH {
-			t.Fatalf("NextValidatorsHash: got %x want %x", got.NextValidatorsHash[:], wantNVH[:])
-		}
-	})
+func TestConsensusStateGetters(t *testing.T) {
+	root := MerkleRoot{Hash: repeat32(0xAB)}
+	nvh := repeat32(0xCD)
+	cs := NewConsensusState(testNow, root, nvh)
 
-	t.Run("too_short", func(t *testing.T) {
-		_, err := DecodeConsensusState(make([]byte, 63))
-		if err == nil {
-			t.Fatal("expected error for short buffer")
-		}
-	})
+	if cs.GetTimestamp() != testNow {
+		t.Errorf("GetTimestamp: got %d want %d", cs.GetTimestamp(), testNow)
+	}
+	bytesEq(t, "GetRoot", cs.GetRoot().Hash, root.Hash)
+	bytesEq(t, "GetNextValidatorsHash", cs.GetNextValidatorsHash(), nvh)
+	if cs.ClientType() != ClientType {
+		t.Errorf("ClientType: got %q want %q", cs.ClientType(), ClientType)
+	}
 }
 
-func TestEncodeDecodeConsensusStateRoundTrip(t *testing.T) {
-	original := ConsensusState{
-		Timestamp:          123456789,
-		Root:               MerkleRoot{Hash: bytes.Repeat([]byte{0xAA}, 32)},
-		NextValidatorsHash: repeatH256(0xBB),
+func TestMerkleRootEmpty(t *testing.T) {
+	if !(MerkleRoot{}).Empty() {
+		t.Error("zero MerkleRoot should be empty")
 	}
-	enc, err := EncodeConsensusState(original)
-	if err != nil {
-		t.Fatalf("EncodeConsensusState: %v", err)
-	}
-	got, err := DecodeConsensusState(enc)
-	if err != nil {
-		t.Fatalf("DecodeConsensusState: %v", err)
-	}
-	if got.Timestamp != original.Timestamp {
-		t.Fatalf("Timestamp: got %d want %d", got.Timestamp, original.Timestamp)
-	}
-	bytesEq(t, "Root.Hash", got.Root.Hash, original.Root.Hash)
-	if got.NextValidatorsHash != original.NextValidatorsHash {
-		t.Fatalf("NextValidatorsHash: got %x want %x", got.NextValidatorsHash[:], original.NextValidatorsHash[:])
+	if (MerkleRoot{Hash: repeat32(0x01)}).Empty() {
+		t.Error("non-empty MerkleRoot should not be empty")
 	}
 }

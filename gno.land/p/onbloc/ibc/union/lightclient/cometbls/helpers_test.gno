@@ -6,7 +6,9 @@ import (
 	"testing"
 )
 
-const wordSize = 32
+// testNow is 2024-01-01 00:00:00 UTC in nanoseconds, used as a fixed clock for
+// tests that need a concrete timestamp.
+const testNow = uint64(1_704_067_200) * 1_000_000_000
 
 func bytesEq(t *testing.T, label string, got, want []byte) {
 	t.Helper()
@@ -15,12 +17,14 @@ func bytesEq(t *testing.T, label string, got, want []byte) {
 	}
 }
 
-func repeatH256(b byte) H256 {
-	var out H256
-	for i := range out {
-		out[i] = b
-	}
-	return out
+// repeatBytes returns an n-byte slice with every byte set to b.
+func repeatBytes(b byte, n int) []byte {
+	return bytes.Repeat([]byte{b}, n)
+}
+
+// repeat32 returns a 32-byte slice with every byte set to b.
+func repeat32(b byte) []byte {
+	return repeatBytes(b, 32)
 }
 
 func mustHex(s string) []byte {
@@ -31,6 +35,7 @@ func mustHex(s string) []byte {
 	return b
 }
 
+// word32 renders v as a big-endian 32-byte EVM word in hex.
 func word32(v uint64) string {
 	out := make([]byte, 32)
 	out[24] = byte(v >> 56)
@@ -44,6 +49,7 @@ func word32(v uint64) string {
 	return hex.EncodeToString(out)
 }
 
+// bytes32hex renders a 32-byte word with every byte set to b, in hex.
 func bytes32hex(b byte) string {
 	return hex.EncodeToString(bytes.Repeat([]byte{b}, 32))
 }

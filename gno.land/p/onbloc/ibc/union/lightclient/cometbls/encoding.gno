@@ -2,7 +2,6 @@ package cometbls
 
 import (
 	"errors"
-	"time"
 
 	abienc "gno.land/p/onbloc/encoding/abi"
 	"gno.land/p/aib/encoding/proto"
@@ -68,8 +67,8 @@ func EncodeHeader(h *Header) ([]byte, error) {
 
 	return abienc.Encode(headerSchema, []any{
 		uint64(lh.Height),
-		uint64(lh.Time.Unix()),
-		uint64(lh.Time.Nanosecond()),
+		uint64(lh.TimeSeconds),
+		uint64(lh.TimeNanos),
 		vh, nvh, ah,
 		trustedHeight,
 		h.ZeroKnowledgeProof,
@@ -98,7 +97,8 @@ func DecodeHeader(buf []byte) (*Header, error) {
 	return &Header{
 		SignedHeader: &LightHeader{
 			Height:             int64(vals[0].(uint64)),
-			Time:               time.Unix(int64(timeSeconds), int64(timeNanos)).UTC(),
+			TimeSeconds:        int64(timeSeconds),
+			TimeNanos:          int32(timeNanos),
 			ValidatorsHash:     vh[:],
 			NextValidatorsHash: nvh[:],
 			AppHash:            ah[:],

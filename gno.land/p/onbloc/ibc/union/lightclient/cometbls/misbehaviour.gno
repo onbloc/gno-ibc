@@ -30,6 +30,7 @@ func (m *Misbehaviour) GetTime() time.Time {
 	if t1.After(t2) {
 		return t1
 	}
+
 	return t2
 }
 

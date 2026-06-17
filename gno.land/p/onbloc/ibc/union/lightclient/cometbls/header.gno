@@ -1,6 +1,7 @@
 package cometbls
 
 import (
+	"crypto/cometblszk"
 	"time"
 
 	"gno.land/p/nt/ufmt/v0"
@@ -44,7 +45,7 @@ func (h *Header) GetHeight() types.Height {
 }
 
 func (h *Header) GetTime() time.Time {
-	return h.SignedHeader.Time
+	return time.Unix(h.SignedHeader.TimeSeconds, int64(h.SignedHeader.TimeNanos)).UTC()
 }
 
 // ValidateBasic calls the SignedHeader ValidateBasic function and checks
@@ -67,14 +68,19 @@ func (h *Header) ValidateBasic() error {
 	return nil
 }
 
-type LightHeader struct {
-	Height             int64
-	Time               time.Time
-	ValidatorsHash     []byte
-	NextValidatorsHash []byte
-	AppHash            []byte
-}
+// LightHeader is the bespoke CometBLS light header. It is an alias of
+// crypto/cometblszk.LightHeader so a SignedHeader feeds VerifyZKP directly
+// without re-mapping, and its TimeSeconds/TimeNanos split mirrors the ABI wire
+// format (see headerSchema in encoding.gno).
+type LightHeader = cometblszk.LightHeader
 
-func NewLightHeader(height int64, time time.Time, validatorsHash, nextValidatorsHash, appHash []byte) *LightHeader {
-	return &LightHeader{Height: height, Time: time, ValidatorsHash: validatorsHash, NextValidatorsHash: nextValidatorsHash, AppHash: appHash}
+func NewLightHeader(height, timeSeconds int64, timeNanos int32, validatorsHash, nextValidatorsHash, appHash []byte) *LightHeader {
+	return &LightHeader{
+		Height:             height,
+		TimeSeconds:        timeSeconds,
+		TimeNanos:          timeNanos,
+		ValidatorsHash:     validatorsHash,
+		NextValidatorsHash: nextValidatorsHash,
+		AppHash:            appHash,
+	}
 }

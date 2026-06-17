@@ -39,7 +39,7 @@ func (c *CometblsLightClient) verifyHeader(header *Header, now time.Time) error 
 	// so heights are compared against the trusted height's revision height.
 	signedHeight := header.SignedHeader.Height
 
-	headerTime := header.SignedHeader.Time
+	headerTime := header.GetTime()
 
 	if consState.Timestamp >= uint64(headerTime.UnixNano()) {
 		return makeError(
@@ -80,19 +80,12 @@ func (c *CometblsLightClient) verifyHeader(header *Header, now time.Time) error 
 	}
 
 	// The trusted next validators hash commits to the validator set that signed
-	// the untrusted header; the Groth16 proof attests that they did.
-	zkHeader := cometblszk.LightHeader{
-		Height:             header.SignedHeader.Height,
-		TimeSeconds:        headerTime.Unix(),
-		TimeNanos:          int32(headerTime.Nanosecond()),
-		ValidatorsHash:     header.SignedHeader.ValidatorsHash,
-		NextValidatorsHash: header.SignedHeader.NextValidatorsHash,
-		AppHash:            header.SignedHeader.AppHash,
-	}
+	// the untrusted header; the Groth16 proof attests that they did. SignedHeader
+	// is a crypto/cometblszk.LightHeader, so it feeds VerifyZKP directly.
 	if err := cometblszk.VerifyZKP(
 		c.clientState.ChainID,
 		consState.NextValidatorsHash,
-		zkHeader,
+		*header.SignedHeader,
 		header.ZeroKnowledgeProof,
 	); err != nil {
 		return makeError(ErrInvalidHeader, "zero-knowledge proof verification failed: "+err.Error())
@@ -123,7 +116,7 @@ func (c *CometblsLightClient) verifyMisbehaviour(misbehaviour *Misbehaviour, now
 			return makeError(ErrInvalidMisbehaviour, "headers are the same")
 		}
 	} else {
-		if misbehaviour.Header1.SignedHeader.Time.After(misbehaviour.Header2.SignedHeader.Time) {
+		if misbehaviour.Header1.GetTime().After(misbehaviour.Header2.GetTime()) {
 			return makeError(ErrInvalidMisbehaviour, "headers are in the correct order")
 		}
 	}
@@ -136,7 +129,7 @@ func signedHeadersEqual(a, b *LightHeader) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
-	if a.Height != b.Height || !a.Time.Equal(b.Time) {
+	if a.Height != b.Height || a.TimeSeconds != b.TimeSeconds || a.TimeNanos != b.TimeNanos {
 		return false
 	}
 	return bytes.Equal(a.ValidatorsHash, b.ValidatorsHash) &&

@@ -122,8 +122,8 @@ func (h Height) String() string {
 // cast to string.
 func (h Height) Bytes() []byte {
 	buf := make([]byte, 16)
-	binary.BigEndian.PutUint64(buf[:8], h.Revision)
-	binary.BigEndian.PutUint64(buf[8:], h.Height)
+	binary.BigEndian.PutUint64(buf[:8], h.RevisionNumber)
+	binary.BigEndian.PutUint64(buf[8:], h.RevisionHeight)
 	return buf
 }
 

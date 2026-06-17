@@ -61,6 +61,7 @@ func CreateClient(cur realm, msg types.MsgCreateClient) types.ClientId {
 // UpdateClient updates a light client using the provided client message and stores the resulting state.
 func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 	impl := st.getClient(msg.ClientId)
+	requireActiveClient(impl, msg.ClientId)
 
 	update := impl.UpdateClient(cross(cur), msg.ClientId, msg.ClientMessage)
 

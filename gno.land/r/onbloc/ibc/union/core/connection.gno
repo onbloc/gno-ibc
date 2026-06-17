@@ -7,6 +7,8 @@ import (
 )
 
 func ConnectionOpenInit(_ realm, msg types.MsgConnectionOpenInit) types.ConnectionId {
+	requireActiveClient(st.getClient(msg.ClientId), msg.ClientId)
+
 	connectionId := st.generateConnectionId()
 	st.saveConnection(connectionId, types.Connection{
 		State:                    types.ConnectionStateInit,

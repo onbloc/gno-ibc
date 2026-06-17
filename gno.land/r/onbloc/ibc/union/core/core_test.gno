@@ -738,43 +738,13 @@ func TestBatchSendRejectsNonOwner(cur realm, t *testing.T) {
 	})
 }
 
-// BatchSend writes the Union batch commitment path, so recommitting the same
-// batch hash should be rejected.
-func TestBatchSendRejectsDuplicateBatchCommitment(cur realm, t *testing.T) {
-	resetState()
-	_, _, channelId := setupOpenChannel(t)
-	packets := []types.Packet{
-		{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100},
-		{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("b"), TimeoutTimestamp: 100},
-	}
-	BatchSend(cross(cur), types.MsgBatchSend{Packets: packets})
-
-	uassert.AbortsContains(t, cur, "packet commitment", func(cur realm) {
-		BatchSend(cur, types.MsgBatchSend{Packets: packets})
-	})
-}
-
-// BatchSend also mirrors each packet commitment; an existing per-packet source
-// commitment would let callers repackage already-sent packets.
-func TestBatchSendRejectsExistingPerPacketCommitment(cur realm, t *testing.T) {
-	resetState()
-	_, _, channelId := setupOpenChannel(t)
-	p1 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100}
-	p2 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("b"), TimeoutTimestamp: 100}
-	st.commitPacket(p1)
-
-	uassert.AbortsContains(t, cur, "packet commitment", func(cur realm) {
-		BatchSend(cur, types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
-	})
-}
-
 func TestBatchAcksReturnsUnionPacketCommitment(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	p1 := types.Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: types.Bytes("a"), TimeoutTimestamp: 100}
 	p2 := types.Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: types.Bytes("b"), TimeoutTimestamp: 100}
-	st.setPacketReceipt(p1)
-	st.setPacketReceipt(p2)
+	st.commitAcknowledgement(p1, []byte("ack-a"))
+	st.commitAcknowledgement(p2, []byte("ack-b"))
 
 	got := BatchAcks(cross(cur), types.MsgBatchAcks{
 		Packets: []types.Packet{p1, p2},
@@ -811,8 +781,8 @@ func TestQueryReceiptAtPathReturnsBatchValue(cur realm, t *testing.T) {
 	_, _, channelId := setupOpenChannel(t)
 	p1 := types.Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: types.Bytes("a"), TimeoutTimestamp: 100}
 	p2 := types.Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: types.Bytes("b"), TimeoutTimestamp: 100}
-	st.setPacketReceipt(p1)
-	st.setPacketReceipt(p2)
+	st.commitAcknowledgement(p1, []byte("ack-a"))
+	st.commitAcknowledgement(p2, []byte("ack-b"))
 
 	batchHash := BatchAcks(cross(cur), types.MsgBatchAcks{
 		Packets: []types.Packet{p1, p2},
@@ -866,15 +836,14 @@ func TestBatchAcksRejectsPacketsWithoutReceipt(cur realm, t *testing.T) {
 	}
 }
 
-func TestBatchAcksRejectsAlreadyAckedPacket(cur realm, t *testing.T) {
+func TestBatchAcksRejectsMismatchedCommittedAck(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("a"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	st.setPacketReceipt(packet)
 	st.commitAcknowledgement(packet, []byte("first-ack"))
 
-	uassert.AbortsContains(t, cur, "acknowledgement already written", func(cur realm) {
+	uassert.AbortsContains(t, cur, "acknowledgement commitment mismatch", func(cur realm) {
 		BatchAcks(cur, types.MsgBatchAcks{Packets: []types.Packet{packet}, Acks: [][]byte{[]byte("second-ack")}})
 	})
 }

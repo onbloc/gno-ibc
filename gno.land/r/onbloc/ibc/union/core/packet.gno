@@ -19,6 +19,9 @@ func PacketSend(cur realm, sourceChannelId types.ChannelId, timeoutTimestamp typ
 	if string(portId) != cur.Previous().PkgPath() {
 		panic(ErrUnauthorizedPacketSender)
 	}
+	if timeoutTimestamp == 0 {
+		panic(ErrPacketTimeoutNotReached)
+	}
 
 	channel := st.getChannel(sourceChannelId)
 	if channel.State != types.ChannelStateOpen {
@@ -32,6 +35,9 @@ func PacketSend(cur realm, sourceChannelId types.ChannelId, timeoutTimestamp typ
 		Data:                 data,
 		TimeoutHeight:        0,
 		TimeoutTimestamp:     timeoutTimestamp,
+	}
+	if st.hasPacketCommitment(packet) {
+		panic(ErrPacketCommitmentExists)
 	}
 	st.commitPacket(packet)
 
@@ -247,6 +253,8 @@ func BatchSend(cur realm, msg types.MsgBatchSend) types.H256 {
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
 	}
+	// TODO: Restrict BatchSend to true multi-packet batches once callers use
+	// PacketSend for single-packet source commitments.
 	first := msg.Packets[0]
 	portId := st.getChannelOwner(first.SourceChannelId)
 	if string(portId) != cur.Previous().PkgPath() {
@@ -284,15 +292,15 @@ func BatchAcks(cur realm, msg types.MsgBatchAcks) types.H256 {
 	if string(portId) != cur.Previous().PkgPath() {
 		panic(ErrUnauthorizedAckWriter)
 	}
-	for _, packet := range msg.Packets {
+	for i, packet := range msg.Packets {
 		if packet.DestinationChannelId != first.DestinationChannelId {
 			panic(ErrBatchSameChannelOnly)
 		}
 		if !st.hasPacketReceipt(packet) {
 			panic(ErrPacketReceiptNotFound)
 		}
-		if st.hasAcknowledgement(packet) {
-			panic(ErrAcknowledgementAlreadyWritten)
+		if st.acknowledgementHash(packet) != types.CommitAcks([][]byte{msg.Acks[i]}) {
+			panic(ErrAcknowledgementMismatch)
 		}
 	}
 	batchHash := commitPacketsHash(msg.Packets)

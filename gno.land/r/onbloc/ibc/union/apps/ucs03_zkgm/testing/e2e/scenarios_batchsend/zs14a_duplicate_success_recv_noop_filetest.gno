@@ -2,6 +2,8 @@
 package scenarios_batchsend
 
 import (
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
@@ -25,8 +27,8 @@ func main(cur realm) {
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), 0, core.Timestamp(1<<62))
-	msg := core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, nil, core.Height(1))
+	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(1<<62))
+	msg := types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1)
 
 	println("quote_balance_before_recv", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 

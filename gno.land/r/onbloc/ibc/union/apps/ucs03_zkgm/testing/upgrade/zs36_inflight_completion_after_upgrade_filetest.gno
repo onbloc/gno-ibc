@@ -2,6 +2,8 @@
 package upgrade
 
 import (
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	stdtesting "testing"
 
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
@@ -12,9 +14,9 @@ import (
 func main(cur realm) {
 	oldImpl := zkgm.ProxyPkgPath() + "/testing/inflight-old"
 	newImpl := zkgm.ProxyPkgPath() + "/testing/inflight-new"
-	parent := core.NewPacket(cross(cur), core.ChannelId(10), core.ChannelId(11), []byte("parent"), 0, core.Timestamp(100))
-	child := core.NewPacket(cross(cur), core.ChannelId(12), core.ChannelId(13), []byte("child"), 0, core.Timestamp(200))
-	key := zkgm.NewInFlightKey(cross(cur), core.CommitPacket(child))
+	parent := core.NewPacket(cross(cur), types.ChannelId(10), types.ChannelId(11), []byte("parent"), types.Timestamp(100))
+	child := core.NewPacket(cross(cur), types.ChannelId(12), types.ChannelId(13), []byte("child"), types.Timestamp(200))
+	key := zkgm.NewInFlightKey(cross(cur), types.MustCommit(types.CommitPacket(child)))
 	value := zkgm.NewInFlightValue(cross(cur), parent)
 
 	println("[SCENARIO] 1. record in-flight packet before upgrade")

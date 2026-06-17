@@ -13,24 +13,27 @@ package scenarios
 // that bare OP_CALL and batched OP_CALL both revert before reaching OnZkgm.
 
 import (
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	z "gno.land/p/onbloc/ibc/union/zkgm"
-	core "gno.land/r/onbloc/ibc/union/core"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
 	"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"
-	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1/loader"
+	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
+	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 const mockReceiverPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"
 
-func intentRecvReverted(cur realm, packet core.Packet) (reverted bool) {
+func intentRecvReverted(cur realm, packet types.Packet) (reverted bool) {
 	p := revive(func() {
 		core.IntentPacketRecv(cross(cur),
-			core.NewMsgIntentPacketRecv(cross(cur), []core.Packet{packet}, nil))
+			types.NewMsgIntentPacketRecv([]types.Packet{packet}, nil))
 	})
 	return p != nil
 }
 
 func main(cur realm) {
+	impl.Register(cross(cur))
 	mock.Reset(cross(cur))
 	e2e.RegisterMockLightClient(cross(cur))
 	pair := e2e.OpenE2EChannelPair(cross(cur))
@@ -42,7 +45,7 @@ func main(cur realm) {
 		ContractCalldata: []byte("forged-no-proof"),
 	}
 	callPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination,
-		e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)), 0, core.Timestamp(0))
+		e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)), types.Timestamp(0))
 
 	println("call_reverted", intentRecvReverted(cur, callPacket))
 	println("call_mock_calls", mock.Calls(cross(cur)))
@@ -58,7 +61,7 @@ func main(cur realm) {
 		}),
 	}}
 	batchPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination,
-		e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), 0, core.Timestamp(0))
+		e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), types.Timestamp(0))
 
 	println("batch_reverted", intentRecvReverted(cur, batchPacket))
 	println("batch_mock_calls", mock.Calls(cross(cur)))

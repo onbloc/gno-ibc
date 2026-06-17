@@ -3,6 +3,8 @@ package impl
 import (
 	"testing"
 
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
@@ -23,7 +25,7 @@ func TestExecuteBatchTokenOrderAndCallBothSucceed(cur realm, t *testing.T) {
 	})
 	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
 	path := u256.NewUint(9)
-	destChannel := core.ChannelId(5)
+	destChannel := types.ChannelId(5)
 	ibcDenom := PredictWrappedTokenV2(path, uint32(destChannel), []byte("ugnot"), image)
 
 	batch := z.Batch{Instructions: []z.Instruction{
@@ -39,7 +41,7 @@ func TestExecuteBatchTokenOrderAndCallBothSucceed(cur realm, t *testing.T) {
 		}),
 		batchMustCallInstruction(batchCall("sender", "hook-calldata")),
 	}}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), destChannel, nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChannel, nil, 0)
 
 	ackBytes, err := (&ZkgmV1{}).executeBatch(cur, packet, address(relayer), []byte("relay-msg"), path, [32]byte{0xCC}, batch, false)
 
@@ -65,7 +67,7 @@ func TestVerifyBatchRejectsNestedBatch(cur realm, t *testing.T) {
 		Opcode:  z.OP_BATCH,
 	}}}
 
-	err := (&ZkgmV1{}).verifyBatch(cur, core.ChannelId(1), "sender", newSentCoinBudget(nil), u256.Zero(), [32]byte{}, batch)
+	err := (&ZkgmV1{}).verifyBatch(cur, types.ChannelId(1), "sender", newSentCoinBudget(nil), u256.Zero(), [32]byte{}, batch)
 
 	uassert.ErrorContains(t, err, "invalid batch instruction")
 }
@@ -76,7 +78,7 @@ func TestVerifyBatchPassesAllowedCallChildren(cur realm, t *testing.T) {
 		batchMustCallInstruction(batchCall("sender", "b")),
 	}}
 
-	err := (&ZkgmV1{}).verifyBatch(cur, core.ChannelId(1), "sender", newSentCoinBudget(nil), u256.Zero(), [32]byte{}, batch)
+	err := (&ZkgmV1{}).verifyBatch(cur, types.ChannelId(1), "sender", newSentCoinBudget(nil), u256.Zero(), [32]byte{}, batch)
 
 	uassert.NoError(t, err)
 }
@@ -91,7 +93,7 @@ func TestVerifyBatchRejectsDuplicateNativeConsumption(cur realm, t *testing.T) {
 
 	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
 		cross(cur),
-		core.ChannelId(91),
+		types.ChannelId(91),
 		0,
 		[32]byte{0x91},
 		instr,
@@ -114,7 +116,7 @@ func TestVerifyBatchExactTotalNativeConsumptionPasses(cur realm, t *testing.T) {
 
 	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
 		cross(cur),
-		core.ChannelId(92),
+		types.ChannelId(92),
 		0,
 		[32]byte{0x92},
 		instr,
@@ -123,9 +125,9 @@ func TestVerifyBatchExactTotalNativeConsumptionPasses(cur realm, t *testing.T) {
 	))
 
 	uassert.NoError(t, err)
-	balanceA := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(core.ChannelId(92), u256.Zero(), orderA.BaseToken, orderA.QuoteToken))
+	balanceA := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(92), u256.Zero(), orderA.BaseToken, orderA.QuoteToken))
 	uassert.Equal(t, "60", balanceA.ToString())
-	balanceB := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(core.ChannelId(92), u256.Zero(), orderB.BaseToken, orderB.QuoteToken))
+	balanceB := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(92), u256.Zero(), orderB.BaseToken, orderB.QuoteToken))
 	uassert.Equal(t, "40", balanceB.ToString())
 }
 
@@ -138,7 +140,7 @@ func TestVerifyBatchLeftoverNativeRejected(cur realm, t *testing.T) {
 
 	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
 		cross(cur),
-		core.ChannelId(93),
+		types.ChannelId(93),
 		0,
 		[32]byte{0x93},
 		instr,
@@ -156,7 +158,7 @@ func TestVerifySingleOrderOversendRejected(cur realm, t *testing.T) {
 
 	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
 		cross(cur),
-		core.ChannelId(97),
+		types.ChannelId(97),
 		0,
 		[32]byte{0x97},
 		instr,
@@ -174,7 +176,7 @@ func TestVerifySingleOrderUndersendRejected(cur realm, t *testing.T) {
 
 	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
 		cross(cur),
-		core.ChannelId(98),
+		types.ChannelId(98),
 		0,
 		[32]byte{0x98},
 		instr,
@@ -192,7 +194,7 @@ func TestVerifySingleOrderDenomMismatchRejected(cur realm, t *testing.T) {
 
 	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
 		cross(cur),
-		core.ChannelId(99),
+		types.ChannelId(99),
 		0,
 		[32]byte{0x99},
 		instr,
@@ -222,7 +224,7 @@ func TestVerifyBatchMixedNativeAndVoucher(cur realm, t *testing.T) {
 
 	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
 		cross(cur),
-		core.ChannelId(94),
+		types.ChannelId(94),
 		0,
 		[32]byte{0x94},
 		instr,
@@ -244,7 +246,7 @@ func TestVerifyBatchMultiDenom(cur realm, t *testing.T) {
 
 	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
 		cross(cur),
-		core.ChannelId(95),
+		types.ChannelId(95),
 		0,
 		[32]byte{0x95},
 		instr,
@@ -256,7 +258,7 @@ func TestVerifyBatchMultiDenom(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 	_, err = (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
 		cross(cur),
-		core.ChannelId(96),
+		types.ChannelId(96),
 		0,
 		[32]byte{0x96},
 		instr,
@@ -268,7 +270,7 @@ func TestVerifyBatchMultiDenom(cur realm, t *testing.T) {
 
 func TestExecuteBatchAggregatesChildAcks(cur realm, t *testing.T) {
 	mock.Reset(cross(cur))
-	packet := core.NewPacket(cross(cur), core.ChannelId(7), core.ChannelId(8), nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustCallInstruction(batchCall("sender", "first")),
 		batchMustCallInstruction(batchCall("sender", "second")),
@@ -292,7 +294,7 @@ func TestExecuteBatchAggregatesChildAcks(cur realm, t *testing.T) {
 func TestExecuteBatchPanicChildPropagatesOnlyMaker(cur realm, t *testing.T) {
 	mock.Reset(cross(cur))
 	mock.SetPanic(cross(cur), "boom")
-	packet := core.NewPacket(cross(cur), core.ChannelId(7), core.ChannelId(8), nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustCallInstruction(batchCall("sender", "first")),
 		batchMustCallInstruction(batchCall("sender", "second")),
@@ -306,7 +308,7 @@ func TestExecuteBatchPanicChildPropagatesOnlyMaker(cur realm, t *testing.T) {
 }
 
 func TestAcknowledgeBatchRejectsAckCountMismatch(cur realm, t *testing.T) {
-	packet := core.NewPacket(cross(cur), core.ChannelId(7), core.ChannelId(8), nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustCallInstruction(batchCall("sender", "first")),
 		batchMustCallInstruction(batchCall("sender", "second")),
@@ -320,11 +322,11 @@ func TestAcknowledgeBatchRejectsAckCountMismatch(cur realm, t *testing.T) {
 func TestTimeoutBatchTokenOrderChildrenRefund(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 	path := u256.NewUint(23)
-	packet := core.NewPacket(cross(cur), core.ChannelId(7), core.ChannelId(8), nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
 	orderA := batchRefundOrder("timeout-a", "ibc/batch-timeout-a", "quote-a", 11)
 	orderB := batchRefundOrder("timeout-b", "ibc/batch-timeout-b", "quote-b", 17)
-	increaseChannelBalanceV2(cross(cur), core.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount)
-	increaseChannelBalanceV2(cross(cur), core.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount)
+	increaseChannelBalanceV2(cross(cur), types.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount)
+	increaseChannelBalanceV2(cross(cur), types.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount)
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(orderA),
 		batchMustOrderInstruction(orderB),
@@ -333,8 +335,8 @@ func TestTimeoutBatchTokenOrderChildrenRefund(cur realm, t *testing.T) {
 	err := (&ZkgmV1{}).timeoutBatch(cur, packet, path, [32]byte{}, batch)
 
 	uassert.NoError(t, err)
-	assertNoChannelBalance(t, core.ChannelId(7), path, orderA)
-	assertNoChannelBalance(t, core.ChannelId(7), path, orderB)
+	assertNoChannelBalance(t, types.ChannelId(7), path, orderA)
+	assertNoChannelBalance(t, types.ChannelId(7), path, orderB)
 	uassert.Equal(t, int64(11), VoucherBalanceOf("ibc/batch-timeout-a", address(orderA.Sender)))
 	uassert.Equal(t, int64(17), VoucherBalanceOf("ibc/batch-timeout-b", address(orderB.Sender)))
 }
@@ -382,7 +384,7 @@ func batchRefundOrder(sender string, baseToken string, quoteToken string, amount
 	}
 }
 
-func assertNoChannelBalance(t *testing.T, channelId core.ChannelId, path *u256.Uint, order z.TokenOrderV2) {
+func assertNoChannelBalance(t *testing.T, channelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) {
 	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(channelId, path, order.BaseToken, order.QuoteToken))
 	// nil is the canonical post-drain state (decreaseChannelBalanceV2 removes
 	// the entry on zero); IsZero() defends against out-of-band zero writes.

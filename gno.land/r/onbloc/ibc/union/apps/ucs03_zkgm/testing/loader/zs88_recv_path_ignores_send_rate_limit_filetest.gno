@@ -2,10 +2,12 @@
 package loader
 
 import (
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
-	tb "gno.land/p/onbloc/ibc/zkgm/tokenbucket"
 	"gno.land/p/nt/testutils/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
 	sh "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/scenariohelpers"
@@ -17,7 +19,7 @@ func main(cur realm) {
 	inst := sh.InstallImpl(cross(cur))
 	receiver := string(testutils.TestAddress("zs88-receiver"))
 	baseToken := "rate-limited-base"
-	channelId := core.ChannelId(88)
+	channelId := types.ChannelId(88)
 
 	bucket, err := tb.New(u256.NewUint(1), u256.NewUint(1), u256.NewUint(1))
 	if err != nil {
@@ -37,7 +39,7 @@ func main(cur realm) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), channelId, sh.TokenOrderPacketData(cross(cur), order), 0, core.Timestamp(100))
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), channelId, sh.TokenOrderPacketData(cross(cur), order), types.Timestamp(100))
 
 	println("[SCENARIO] recv mint is not charged against send-side bucket")
 	res := inst.Recv(cross(cur), packet, testutils.TestAddress("zs88-relayer"), nil)

@@ -4,6 +4,8 @@ import (
 	"math"
 	"testing"
 
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
@@ -25,21 +27,21 @@ func TestRecvForwardExecuteErrorReturnsFailure(cur realm, t *testing.T) {
 			},
 		}),
 	})
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(2), data, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(2), data, 0)
 
 	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("relayer")), nil)
 
-	uassert.True(t, res.Status == core.PacketStatusFailure)
-	uassert.Equal(t, string(universalErrorAck()), string(res.Ack))
+	uassert.True(t, res.Status == types.PacketStatusFailure)
+	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
 }
 
 func TestRecvMalformedPacketReturnsFailure(cur realm, t *testing.T) {
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(2), []byte{0x01}, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(2), []byte{0x01}, 0)
 
 	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("relayer")), nil)
 
-	uassert.True(t, res.Status == core.PacketStatusFailure)
-	uassert.True(t, len(res.Ack) > 0)
+	uassert.True(t, res.Status == types.PacketStatusFailure)
+	uassert.True(t, len(res.Acknowledgement) > 0)
 }
 
 func TestAckUnsupportedOpcodeAborts(cur realm, t *testing.T) {
@@ -47,7 +49,7 @@ func TestAckUnsupportedOpcodeAborts(cur realm, t *testing.T) {
 		Version: z.INSTR_VERSION_0,
 		Opcode:  0xFF,
 	})
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(2), data, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(2), data, 0)
 
 	uassert.AbortsContains(t, cur, "unsupported opcode", func(cur realm) {
 		(&ZkgmV1{}).Ack(cur, packet, nil, address(testAddress("relayer")))
@@ -71,12 +73,12 @@ func TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck(cur realm, t *
 		// Metadata absent → error returned before any state mutation
 	}
 	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(1), data, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(1), data, 0)
 
 	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("relayer")), nil)
 
-	uassert.True(t, res.Status == core.PacketStatusFailure)
-	uassert.Equal(t, string(universalErrorAck()), string(res.Ack))
+	uassert.True(t, res.Status == types.PacketStatusFailure)
+	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
 }
 
 // TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts verifies that an error
@@ -85,7 +87,7 @@ func TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck(cur realm, t *
 func TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 
-	const destChan = core.ChannelId(5)
+	const destChan = types.ChannelId(5)
 	baseToken := []byte("uatom-fee-fatal")
 	path := u256.Zero()
 	// Pre-minting sets metadataImage=[32]byte{} for ibcDenom, so ESCROW will
@@ -107,7 +109,7 @@ func TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts(cur realm, t *testing.T
 		QuoteAmount: u256.NewUint(1),
 	}
 	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), destChan, data, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, data, 0)
 
 	uassert.AbortsContains(t, cur, "mint overflow", func(cur realm) {
 		(&ZkgmV1{}).Recv(cur, packet, address(testAddress("fee-fatal-relayer")), nil)
@@ -133,12 +135,12 @@ func TestRecvTokenOrderSolveReturnsFailureAck(cur realm, t *testing.T) {
 		QuoteAmount: u256.NewUint(10),
 	}
 	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(1), data, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(1), data, 0)
 
 	res := (&ZkgmV1{}).Recv(cur, packet, address("g1relayer"), nil)
 
-	uassert.True(t, res.Status == core.PacketStatusFailure)
-	uassert.Equal(t, string(universalErrorAck()), string(res.Ack))
+	uassert.True(t, res.Status == types.PacketStatusFailure)
+	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
 }
 
 func TestDecodeOrderInstructionRejectsV1(t *testing.T) {

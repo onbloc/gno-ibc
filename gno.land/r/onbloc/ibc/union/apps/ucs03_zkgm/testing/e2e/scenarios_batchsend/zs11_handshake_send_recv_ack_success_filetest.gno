@@ -2,6 +2,8 @@
 package scenarios_batchsend
 
 import (
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
@@ -25,7 +27,7 @@ func main(cur realm) {
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), 0, core.Timestamp(1<<62))
+	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(1<<62))
 
 	// BatchSend commits the packet directly, so this file covers the core
 	// lifecycle flags and recv-side mint. Send-side escrow is covered elsewhere.
@@ -38,7 +40,7 @@ func main(cur realm) {
 
 	println("")
 	println("[SCENARIO] 2. recv success")
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, nil, core.Height(1)))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))
 	println("receipt_after_recv", core.HasPacketReceipt(cross(cur), packet))
 	println("ack_after_recv", core.HasAcknowledgement(cross(cur), packet))
 	println("quote_balance_after_recv", impl.VoucherBalanceOf(quoteToken, address(receiver)))
@@ -46,7 +48,7 @@ func main(cur realm) {
 	println("")
 	println("[SCENARIO] 3. ack success")
 	ack := e2e.MustSuccessAck(cross(cur), e2e.MustProtocolTokenOrderAck(cross(cur)))
-	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement(cross(cur), []core.Packet{packet}, [][]byte{ack}, nil, core.Height(1)))
+	core.PacketAcknowledgement(cross(cur), types.NewMsgPacketAcknowledgement([]types.Packet{packet}, [][]byte{ack}, nil, 1))
 	println("commitment_after_ack", core.HasPacketCommitment(cross(cur), packet))
 	println("receipt_after_ack", core.HasPacketReceipt(cross(cur), packet))
 	println("ack_success_roundtrip", "ok")

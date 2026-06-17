@@ -3,9 +3,10 @@ package impl
 import (
 	"testing"
 
-	z "gno.land/p/onbloc/ibc/union/zkgm"
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/onbloc/ibc/union/core"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
 
@@ -20,7 +21,7 @@ func TestSendAppliesSenderSalt(cur realm, t *testing.T) {
 
 	data, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
 		cross(cur),
-		core.ChannelId(1),
+		types.ChannelId(1),
 		0,
 		salt,
 		z.Instruction{

@@ -2,18 +2,20 @@
 package scenarios_batchsend
 
 import (
-	z "gno.land/p/onbloc/ibc/union/zkgm"
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/onbloc/ibc/union/core"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader"
+	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 func main(cur realm) {
 	e2e.RegisterMockLightClient(cross(cur))
-	parentChannel := e2e.OpenE2EChannel(cross(cur), core.ChannelId(101))
-	childSource := e2e.OpenE2EChannel(cross(cur), core.ChannelId(102))
+	parentChannel := e2e.OpenE2EChannel(cross(cur), types.ChannelId(101))
+	childSource := e2e.OpenE2EChannel(cross(cur), types.ChannelId(102))
 
 	forward := z.Forward{
 		Path:             e2e.ForwardPath(cross(cur), uint32(parentChannel), uint32(childSource)),
@@ -24,13 +26,13 @@ func main(cur realm) {
 			ContractCalldata: []byte("forward-core-frame"),
 		}),
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), parentChannel,
-		e2e.MustPacketData(cross(cur), e2e.MustForwardInstruction(cross(cur), forward)), 0, core.Timestamp(0))
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), parentChannel,
+		e2e.MustPacketData(cross(cur), e2e.MustForwardInstruction(cross(cur), forward)), types.Timestamp(0))
 
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, nil, core.Height(1)))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))
 
 	expectedChild := e2e.MustForwardChildPacket(cross(cur), packet, u256.Zero(), [32]byte{}, forward)
-	_, inFlight := zkgm.GetInFlightPacket(zkgm.NewInFlightKey(cross(cur), core.CommitPacket(expectedChild)))
+	_, inFlight := zkgm.GetInFlightPacket(zkgm.NewInFlightKey(cross(cur), types.MustCommit(types.CommitPacket(expectedChild))))
 
 	println("impl_path", zkgm.ImplPath())
 	println("child_source", expectedChild.SourceChannelId.String())

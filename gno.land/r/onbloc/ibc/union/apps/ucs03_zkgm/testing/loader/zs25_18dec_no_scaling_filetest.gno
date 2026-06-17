@@ -2,6 +2,8 @@
 package loader
 
 import (
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
@@ -15,7 +17,7 @@ import (
 func main(cur realm) {
 	const amount = uint64(1000000000000000000)
 	inst := sh.InstallImpl(cross(cur))
-	destChannel := core.ChannelId(51)
+	destChannel := types.ChannelId(51)
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	meta := e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: "Ether Token", Symbol: "ETH", Decimals: 18})
 	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(destChannel), []byte("wei"), impl.MetadataImage(sh.DecodeTokenMetadata(meta)))
@@ -31,7 +33,7 @@ func main(cur realm) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    meta,
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(50), destChannel, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), 0, core.Timestamp(100))
+	packet := core.NewPacket(cross(cur), types.ChannelId(50), destChannel, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(100))
 	inst.Recv(cross(cur), packet, testutils.TestAddress("zs25-relayer"), nil)
 	println("voucher_decimals", impl.VoucherDecimalsOf(quoteToken))
 	println("receiver_balance", impl.VoucherBalanceOf(quoteToken, address(receiver)))
@@ -47,7 +49,7 @@ func main(cur realm) {
 		QuoteAmount: u256.NewUint(amount),
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
-	if _, err := inst.Send(cross(cur), zkgm.NewSendRequest(cross(cur), destChannel, core.Timestamp(101), [32]byte{}, e2e.MustTokenOrderInstruction(cross(cur), unescrowOrder), receiver, "")); err != nil {
+	if _, err := inst.Send(cross(cur), zkgm.NewSendRequest(cross(cur), destChannel, types.Timestamp(101), [32]byte{}, e2e.MustTokenOrderInstruction(cross(cur), unescrowOrder), receiver, "")); err != nil {
 		panic(err)
 	}
 	println("receiver_balance_after_burn", impl.VoucherBalanceOf(quoteToken, address(receiver)))

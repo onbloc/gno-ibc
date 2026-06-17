@@ -2,6 +2,8 @@
 package scenarios_batchsend
 
 import (
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
@@ -12,34 +14,34 @@ import (
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
-const timeoutScenarioClientType = core.ClientType("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_batchsend/timeout")
+const timeoutScenarioClientType = types.ClientType("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_batchsend/timeout")
 
 type timeoutScenarioLightClient struct{}
 
-func (m *timeoutScenarioLightClient) CreateClient(_ realm, clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) string {
+func (m *timeoutScenarioLightClient) CreateClient(_ realm, clientId types.ClientId, clientStateBytes, consensusStateBytes []byte) string {
 	return "timeout-scenario-chain"
 }
 
-func (m *timeoutScenarioLightClient) UpdateClient(cur realm, clientId core.ClientId, clientMessage []byte) core.ConsensusStateUpdate {
-	return core.NewConsensusStateUpdate(cross(cur), core.Height(1), clientMessage, clientMessage)
+func (m *timeoutScenarioLightClient) UpdateClient(cur realm, clientId types.ClientId, clientMessage []byte) types.ConsensusStateUpdate {
+	return core.NewConsensusStateUpdate(cross(cur), types.NewHeight(1), clientMessage, clientMessage)
 }
 
-func (m *timeoutScenarioLightClient) VerifyMembership(clientId core.ClientId, height core.Height, proof []byte, key []byte, value []byte) {
+func (m *timeoutScenarioLightClient) VerifyMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte, value []byte) {
 }
 
-func (m *timeoutScenarioLightClient) VerifyNonMembership(clientId core.ClientId, height core.Height, proof []byte, key []byte) {
+func (m *timeoutScenarioLightClient) VerifyNonMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte) {
 }
 
-func (m *timeoutScenarioLightClient) GetTimestamp(clientId core.ClientId, height core.Height) core.Timestamp {
-	return core.Timestamp(2)
+func (m *timeoutScenarioLightClient) GetTimestamp(clientId types.ClientId, height types.Height) types.Timestamp {
+	return types.Timestamp(2)
 }
 
-func (m *timeoutScenarioLightClient) GetLatestHeight(clientId core.ClientId) core.Height {
-	return core.Height(1)
+func (m *timeoutScenarioLightClient) GetLatestHeight(clientId types.ClientId) types.Height {
+	return types.NewHeight(1)
 }
 
-func (m *timeoutScenarioLightClient) GetStatus(clientId core.ClientId) core.Status {
-	return core.StatusActive
+func (m *timeoutScenarioLightClient) GetStatus(clientId types.ClientId) types.Status {
+	return types.StatusActive
 }
 
 func main(cur realm) {
@@ -56,9 +58,9 @@ func main(cur realm) {
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
-	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), 0, core.Timestamp(1))
+	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(1))
 	ack := e2e.MustSuccessAck(cross(cur), mustMarketMakerTokenOrderAck([]byte(marketMaker)))
-	ackMsg := core.NewMsgPacketAcknowledgement(cross(cur), []core.Packet{packet}, [][]byte{ack}, nil, core.Height(1))
+	ackMsg := types.NewMsgPacketAcknowledgement([]types.Packet{packet}, [][]byte{ack}, nil, 1)
 
 	// This file exercises core idempotency only. BatchSend plants the packet
 	// commitment directly and intentionally bypasses the send-side voucher burn.
@@ -76,13 +78,13 @@ func main(cur realm) {
 
 	println("")
 	println("[SCENARIO] 3. timeout after ack is skipped")
-	core.PacketTimeout(cross(cur), core.NewMsgPacketTimeout(cross(cur), packet, nil, core.Height(1)))
+	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(packet, nil, 1))
 	println("sender_after_timeout_after_ack", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))
 
 	println("")
 	println("[SCENARIO] 4. ack after timeout is skipped")
 	e2e.BatchSend(cross(cur), packet)
-	core.PacketTimeout(cross(cur), core.NewMsgPacketTimeout(cross(cur), packet, nil, core.Height(1)))
+	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(packet, nil, 1))
 	println("commitment_after_timeout", core.HasPacketCommitment(cross(cur), packet))
 	println("sender_after_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))
 
@@ -96,14 +98,14 @@ func openTimeoutScenarioChannelPair(cur realm) e2e.ChannelPair {
 	if !core.HasClient(timeoutScenarioClientType) {
 		core.RegisterClient(cross(cur), timeoutScenarioClientType, &timeoutScenarioLightClient{})
 	}
-	clientId := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), timeoutScenarioClientType, nil, nil))
-	connectionId := core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(cross(cur), clientId, core.ClientId(99)))
-	core.ConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(cross(cur), connectionId, core.ConnectionId(77), nil, core.Height(1)))
+	clientId := core.CreateClient(cross(cur), types.NewMsgCreateClient(timeoutScenarioClientType, nil, nil))
+	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
 
 	portId := []byte(zkgm.ProxyPkgPath())
-	source := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(cross(cur), portId, portId, connectionId, zkgm.Version))
-	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), source, zkgm.Version, core.ChannelId(2), nil, core.Height(1)))
-	return e2e.NewChannelPair(cross(cur), clientId, connectionId, source, core.ChannelId(2))
+	source := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version))
+	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(source, zkgm.Version, types.ChannelId(2), nil, 1))
+	return e2e.NewChannelPair(cross(cur), clientId, connectionId, source, types.ChannelId(2))
 }
 
 func mustMarketMakerTokenOrderAck(marketMaker []byte) []byte {

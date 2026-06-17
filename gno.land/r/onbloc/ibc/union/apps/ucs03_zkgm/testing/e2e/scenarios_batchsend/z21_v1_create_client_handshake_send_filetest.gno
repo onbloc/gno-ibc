@@ -2,11 +2,13 @@
 package scenarios_batchsend
 
 import (
-	z "gno.land/p/onbloc/ibc/union/zkgm"
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/onbloc/ibc/union/core"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader"
+	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 func main(cur realm) {
@@ -23,7 +25,7 @@ func main(cur realm) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6}),
 	}
-	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), 0, core.Timestamp(3600))
+	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(3600))
 	e2e.BatchSend(cross(cur), packet)
 
 	println("client", pair.ClientId.String())

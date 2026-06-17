@@ -2,48 +2,50 @@
 package scenarios_batchsend
 
 import (
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
-	core "gno.land/r/onbloc/ibc/union/core"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader"
+	core "gno.land/r/onbloc/ibc/union/core"
 )
 
-const forwardChildTimeoutClientType = core.ClientType("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_batchsend/forward-child-timeout")
+const forwardChildTimeoutClientType = types.ClientType("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_batchsend/forward-child-timeout")
 
 type forwardChildTimeoutLightClient struct{}
 
-func (m *forwardChildTimeoutLightClient) CreateClient(_ realm, clientId core.ClientId, clientStateBytes, consensusStateBytes []byte) string {
+func (m *forwardChildTimeoutLightClient) CreateClient(_ realm, clientId types.ClientId, clientStateBytes, consensusStateBytes []byte) string {
 	return "forward-child-timeout-chain"
 }
 
-func (m *forwardChildTimeoutLightClient) UpdateClient(cur realm, clientId core.ClientId, clientMessage []byte) core.ConsensusStateUpdate {
-	return core.NewConsensusStateUpdate(cross(cur), core.Height(1), clientMessage, clientMessage)
+func (m *forwardChildTimeoutLightClient) UpdateClient(cur realm, clientId types.ClientId, clientMessage []byte) types.ConsensusStateUpdate {
+	return core.NewConsensusStateUpdate(cross(cur), types.NewHeight(1), clientMessage, clientMessage)
 }
 
-func (m *forwardChildTimeoutLightClient) VerifyMembership(clientId core.ClientId, height core.Height, proof []byte, key []byte, value []byte) {
+func (m *forwardChildTimeoutLightClient) VerifyMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte, value []byte) {
 }
 
-func (m *forwardChildTimeoutLightClient) VerifyNonMembership(clientId core.ClientId, height core.Height, proof []byte, key []byte) {
+func (m *forwardChildTimeoutLightClient) VerifyNonMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte) {
 }
 
-func (m *forwardChildTimeoutLightClient) GetTimestamp(clientId core.ClientId, height core.Height) core.Timestamp {
-	return core.Timestamp(2)
+func (m *forwardChildTimeoutLightClient) GetTimestamp(clientId types.ClientId, height types.Height) types.Timestamp {
+	return types.Timestamp(2)
 }
 
-func (m *forwardChildTimeoutLightClient) GetLatestHeight(clientId core.ClientId) core.Height {
-	return core.Height(1)
+func (m *forwardChildTimeoutLightClient) GetLatestHeight(clientId types.ClientId) types.Height {
+	return types.NewHeight(1)
 }
 
-func (m *forwardChildTimeoutLightClient) GetStatus(clientId core.ClientId) core.Status {
-	return core.StatusActive
+func (m *forwardChildTimeoutLightClient) GetStatus(clientId types.ClientId) types.Status {
+	return types.StatusActive
 }
 
 func main(cur realm) {
 	connectionId := openForwardChildTimeoutConnection(cross(cur))
-	parentDestination := openForwardChildTimeoutChannel(cross(cur), connectionId, core.ChannelId(101))
-	childSource := openForwardChildTimeoutChannel(cross(cur), connectionId, core.ChannelId(102))
+	parentDestination := openForwardChildTimeoutChannel(cross(cur), connectionId, types.ChannelId(101))
+	childSource := openForwardChildTimeoutChannel(cross(cur), connectionId, types.ChannelId(102))
 
 	forward := z.Forward{
 		Path:             e2e.ForwardPath(cross(cur), uint32(parentDestination), uint32(childSource)),
@@ -58,13 +60,13 @@ func main(cur realm) {
 			Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 		}),
 	}
-	parentPacket := core.NewPacket(cross(cur), core.ChannelId(1), parentDestination,
-		e2e.MustPacketData(cross(cur), e2e.MustForwardInstruction(cross(cur), forward)), 0, core.Timestamp(0))
+	parentPacket := core.NewPacket(cross(cur), types.ChannelId(1), parentDestination,
+		e2e.MustPacketData(cross(cur), e2e.MustForwardInstruction(cross(cur), forward)), types.Timestamp(0))
 	childPacket := e2e.MustForwardChildPacket(cross(cur), parentPacket, u256.Zero(), [32]byte{}, forward)
-	childKey := zkgm.NewInFlightKey(cross(cur), core.CommitPacket(childPacket))
+	childKey := zkgm.NewInFlightKey(cross(cur), types.MustCommit(types.CommitPacket(childPacket)))
 
 	println("[SCENARIO] 1. recv forward defers parent ack and tracks child")
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{parentPacket}, nil, nil, core.Height(1)))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{parentPacket}, nil, nil, 1))
 	_, inFlight := zkgm.GetInFlightPacket(childKey)
 	println("parent_receipt_after_recv", core.HasPacketReceipt(cross(cur), parentPacket))
 	println("parent_ack_after_recv", core.HasAcknowledgement(cross(cur), parentPacket))
@@ -73,7 +75,7 @@ func main(cur realm) {
 
 	println("")
 	println("[SCENARIO] 2. child timeout writes parent failure ack")
-	core.PacketTimeout(cross(cur), core.NewMsgPacketTimeout(cross(cur), childPacket, nil, core.Height(1)))
+	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(childPacket, nil, 1))
 	_, inFlight = zkgm.GetInFlightPacket(childKey)
 	println("child_commitment_after_timeout", core.HasPacketCommitment(cross(cur), childPacket))
 	println("child_inflight_after_timeout", inFlight)
@@ -83,7 +85,7 @@ func main(cur realm) {
 
 	println("")
 	println("[SCENARIO] 3. duplicate child timeout is a no-op")
-	core.PacketTimeout(cross(cur), core.NewMsgPacketTimeout(cross(cur), childPacket, nil, core.Height(1)))
+	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(childPacket, nil, 1))
 	_, inFlight = zkgm.GetInFlightPacket(childKey)
 	println("child_commitment_after_second_timeout", core.HasPacketCommitment(cross(cur), childPacket))
 	println("child_inflight_after_second_timeout", inFlight)
@@ -92,20 +94,20 @@ func main(cur realm) {
 	println("forward_child_timeout_parent_failure_ack", "ok")
 }
 
-func openForwardChildTimeoutConnection(cur realm) core.ConnectionId {
+func openForwardChildTimeoutConnection(cur realm) types.ConnectionId {
 	if !core.HasClient(forwardChildTimeoutClientType) {
 		core.RegisterClient(cross(cur), forwardChildTimeoutClientType, &forwardChildTimeoutLightClient{})
 	}
-	clientId := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), forwardChildTimeoutClientType, nil, nil))
-	connectionId := core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(cross(cur), clientId, core.ClientId(99)))
-	core.ConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(cross(cur), connectionId, core.ConnectionId(77), nil, core.Height(1)))
+	clientId := core.CreateClient(cross(cur), types.NewMsgCreateClient(forwardChildTimeoutClientType, nil, nil))
+	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
 	return connectionId
 }
 
-func openForwardChildTimeoutChannel(cur realm, connectionId core.ConnectionId, counterpartyChannelId core.ChannelId) core.ChannelId {
+func openForwardChildTimeoutChannel(cur realm, connectionId types.ConnectionId, counterpartyChannelId types.ChannelId) types.ChannelId {
 	portId := []byte(zkgm.ProxyPkgPath())
-	channelId := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(cross(cur), portId, portId, connectionId, zkgm.Version))
-	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), channelId, zkgm.Version, counterpartyChannelId, nil, core.Height(1)))
+	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version))
+	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, counterpartyChannelId, nil, 1))
 	return channelId
 }
 
@@ -114,7 +116,7 @@ func expectedUniversalErrorAckHash(cur realm) string {
 	if err != nil {
 		panic(err)
 	}
-	return core.CommitAcks([][]byte{ack}).String()
+	return types.CommitAcks([][]byte{ack}).String()
 }
 
 // Output:

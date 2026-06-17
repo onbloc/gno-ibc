@@ -2,16 +2,18 @@
 package scenarios
 
 import (
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
-	z "gno.land/p/onbloc/ibc/union/zkgm"
 	"gno.land/p/nt/testutils/v0"
-	core "gno.land/r/onbloc/ibc/union/core"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
 	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
-	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1/loader"
+	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 func main(cur realm) {
+	impl.Register(cross(cur))
 	e2e.RegisterMockLightClient(cross(cur))
 	pair := e2e.OpenE2EChannelPair(cross(cur))
 
@@ -52,25 +54,25 @@ func main(cur realm) {
 	println("different_salt_distinct", derivedA != derivedB)
 
 	samePacket := core.NewPacket(cross(cur), pair.Source, pair.Destination,
-		mustSaltedPacketData(cross(cur), derivedA, e2e.MustTokenOrderInstruction(cross(cur), order)), 0, core.Timestamp(1<<62))
+		mustSaltedPacketData(cross(cur), derivedA, e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(1<<62))
 	samePacket2 := core.NewPacket(cross(cur), pair.Source, pair.Destination,
-		mustSaltedPacketData(cross(cur), derivedA2, e2e.MustTokenOrderInstruction(cross(cur), order)), 0, core.Timestamp(1<<62))
+		mustSaltedPacketData(cross(cur), derivedA2, e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(1<<62))
 	otherPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination,
-		mustSaltedPacketData(cross(cur), derivedB, e2e.MustTokenOrderInstruction(cross(cur), otherOrder)), 0, core.Timestamp(1<<62))
-	println("same_packet_commit_equal", core.CommitPacket(samePacket) == core.CommitPacket(samePacket2))
-	println("different_salt_commit_distinct", core.CommitPacket(samePacket) != core.CommitPacket(otherPacket))
+		mustSaltedPacketData(cross(cur), derivedB, e2e.MustTokenOrderInstruction(cross(cur), otherOrder)), types.Timestamp(1<<62))
+	println("same_packet_commit_equal", types.MustCommit(types.CommitPacket(samePacket)) == types.MustCommit(types.CommitPacket(samePacket2)))
+	println("different_salt_commit_distinct", types.MustCommit(types.CommitPacket(samePacket)) != types.MustCommit(types.CommitPacket(otherPacket)))
 
 	println("")
 	println("[SCENARIO] repeated packet is swallowed by receipt")
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{samePacket}, nil, nil, core.Height(1)))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{samePacket}, nil, nil, 1))
 	println("receipt_after_first", core.HasPacketReceipt(cross(cur), samePacket))
 	println("receiver_after_first", impl.VoucherBalanceOf(quoteToken, address(receiver)))
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{samePacket}, nil, nil, core.Height(1)))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{samePacket}, nil, nil, 1))
 	println("receiver_after_second_same", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 
 	println("")
 	println("[SCENARIO] different salt is a distinct packet")
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{otherPacket}, nil, nil, core.Height(1)))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{otherPacket}, nil, nil, 1))
 	println("other_receipt", core.HasPacketReceipt(cross(cur), otherPacket))
 	println("receiver_other_token", impl.VoucherBalanceOf(otherQuoteToken, address(receiver)))
 }

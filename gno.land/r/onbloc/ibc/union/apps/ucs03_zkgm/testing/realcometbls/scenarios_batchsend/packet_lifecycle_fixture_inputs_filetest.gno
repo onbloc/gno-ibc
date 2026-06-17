@@ -4,13 +4,15 @@ package scenarios_batchsend
 import (
 	"encoding/hex"
 
-	z "gno.land/p/onbloc/ibc/union/zkgm"
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
-	core "gno.land/r/onbloc/ibc/union/core"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader"
 	realcometbls "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/realcometbls"
+	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 func main(cur realm) {
@@ -26,13 +28,13 @@ func main(cur realm) {
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
-	packet := core.NewPacket(cross(cur), pair.Destination, core.GetChannel(pair.Destination).CounterpartyChannelId, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), 0, core.Timestamp(3600))
+	packet := core.NewPacket(cross(cur), pair.Destination, core.GetChannel(pair.Destination).CounterpartyChannelId, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(3600))
 	realcometbls.BatchSend(cross(cur), packet)
 	ack := e2e.MustSuccessAck(cross(cur), mustMarketMakerTokenOrderAck([]byte("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")))
-	ackValue := core.CommitAcks([][]byte{ack})
+	ackValue := types.CommitAcks([][]byte{ack})
 
-	ackKey := core.PacketAcknowledgementPath(packet)
-	receiptKey := core.PacketAcknowledgementPath(packet)
+	ackKey := types.MustCommit(types.PacketAcknowledgementPath(packet))
+	receiptKey := types.MustCommit(types.PacketAcknowledgementPath(packet))
 
 	printKV("ack_membership", ackKey[:], ackValue[:])
 	println("ack_bytes", "0x"+hex.EncodeToString(ack))

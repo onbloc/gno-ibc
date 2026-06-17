@@ -2,6 +2,8 @@
 package loader
 
 import (
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
@@ -16,10 +18,10 @@ func main(cur realm) {
 	inst := sh.InstallImpl(cross(cur))
 	senderRefund := string(testutils.TestAddress("zs23-refund-sender"))
 	senderSuccess := string(testutils.TestAddress("zs23-success-sender"))
-	refundBaseToken := sh.MintVoucher(cross(cur), inst, core.ChannelId(30), "base/zs23-refund", senderRefund, 100, "ZS23")
-	successBaseToken := sh.MintVoucher(cross(cur), inst, core.ChannelId(31), "base/zs23-success", senderSuccess, 100, "ZS23")
-	refundChannel := core.ChannelId(32)
-	successChannel := core.ChannelId(33)
+	refundBaseToken := sh.MintVoucher(cross(cur), inst, types.ChannelId(30), "base/zs23-refund", senderRefund, 100, "ZS23")
+	successBaseToken := sh.MintVoucher(cross(cur), inst, types.ChannelId(31), "base/zs23-success", senderSuccess, 100, "ZS23")
+	refundChannel := types.ChannelId(32)
+	successChannel := types.ChannelId(33)
 
 	println("[SCENARIO] send-side escrow for both branches")
 	refundOrder := zs23Order(senderRefund, refundBaseToken)
@@ -55,12 +57,12 @@ func zs23Order(sender string, baseToken string) z.TokenOrderV2 {
 	}
 }
 
-func zs23Send(cur realm, inst zkgm.ZkgmImpl, channelId core.ChannelId, sender string, order z.TokenOrderV2) core.Packet {
-	data, err := inst.Send(cross(cur), zkgm.NewSendRequest(cross(cur), channelId, core.Timestamp(120), [32]byte{}, e2e.MustTokenOrderInstruction(cross(cur), order), sender, ""))
+func zs23Send(cur realm, inst zkgm.ZkgmImpl, channelId types.ChannelId, sender string, order z.TokenOrderV2) types.Packet {
+	data, err := inst.Send(cross(cur), zkgm.NewSendRequest(cross(cur), channelId, types.Timestamp(120), [32]byte{}, e2e.MustTokenOrderInstruction(cross(cur), order), sender, ""))
 	if err != nil {
 		panic(err)
 	}
-	return core.NewPacket(cross(cur), channelId, core.ChannelId(99), data, 0, core.Timestamp(120))
+	return core.NewPacket(cross(cur), channelId, types.ChannelId(99), data, types.Timestamp(120))
 }
 
 func zs23FailureAckBytes() []byte {

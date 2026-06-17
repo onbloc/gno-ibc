@@ -3,8 +3,10 @@ package zkgm
 import (
 	"testing"
 
-	z "gno.land/p/onbloc/ibc/union/zkgm"
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	"gno.land/p/nt/uassert/v0"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -18,65 +20,65 @@ type dummyImpl struct {
 	recvCalled          bool
 	ackCalled           bool
 	timeoutCalled       bool
-	recvResult          core.RecvPacketResult
-	lastChannelId       core.ChannelId
-	lastCounterpartyId  core.ChannelId
+	recvResult          types.RecvPacketResult
+	lastChannelId       types.ChannelId
+	lastCounterpartyId  types.ChannelId
 	lastCounterpartyVer string
 }
 
-func (d *dummyImpl) PreChannelOpenInit(_ realm, channelId core.ChannelId) {
+func (d *dummyImpl) PreChannelOpenInit(_ realm, channelId types.ChannelId) {
 	d.openInitCalled = true
 	d.lastChannelId = channelId
 }
 
-func (d *dummyImpl) PreChannelOpenTry(_ realm, channelId core.ChannelId, counterpartyVersion string) {
+func (d *dummyImpl) PreChannelOpenTry(_ realm, channelId types.ChannelId, counterpartyVersion string) {
 	d.openTryCalled = true
 	d.lastChannelId = channelId
 	d.lastCounterpartyVer = counterpartyVersion
 }
 
-func (d *dummyImpl) PostChannelOpenAck(_ realm, channelId core.ChannelId, counterpartyChannelId core.ChannelId) {
+func (d *dummyImpl) PostChannelOpenAck(_ realm, channelId types.ChannelId, counterpartyChannelId types.ChannelId) {
 	d.openAckCalled = true
 	d.lastChannelId = channelId
 	d.lastCounterpartyId = counterpartyChannelId
 }
 
-func (d *dummyImpl) PostChannelOpenConfirm(_ realm, channelId core.ChannelId) {
+func (d *dummyImpl) PostChannelOpenConfirm(_ realm, channelId types.ChannelId) {
 	d.openConfirmCalled = true
 	d.lastChannelId = channelId
 }
 
-func (d *dummyImpl) PreChannelCloseInit(_ realm, channelId core.ChannelId) {
+func (d *dummyImpl) PreChannelCloseInit(_ realm, channelId types.ChannelId) {
 	d.closeInitCalled = true
 	d.lastChannelId = channelId
 }
 
-func (d *dummyImpl) PostChannelCloseConfirm(_ realm, channelId core.ChannelId) {
+func (d *dummyImpl) PostChannelCloseConfirm(_ realm, channelId types.ChannelId) {
 	d.closeConfirmCalled = true
 	d.lastChannelId = channelId
 }
 
-func (d *dummyImpl) Recv(cur realm, packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
+func (d *dummyImpl) Recv(cur realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {
 	d.recvCalled = true
-	if d.recvResult.Status != core.PacketStatusUnknown {
+	if d.recvResult.Status != types.PacketStatusUnknown {
 		return d.recvResult
 	}
-	return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, []byte{0x01})
+	return core.NewRecvPacketResult(cross(cur), types.PacketStatusSuccess, []byte{0x01})
 }
 
-func (d *dummyImpl) IntentRecv(cur realm, packet core.Packet, marketMaker address, marketMakerMsg []byte) core.RecvPacketResult {
+func (d *dummyImpl) IntentRecv(cur realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
 	d.recvCalled = true
-	if d.recvResult.Status != core.PacketStatusUnknown {
+	if d.recvResult.Status != types.PacketStatusUnknown {
 		return d.recvResult
 	}
-	return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, []byte{0x02})
+	return core.NewRecvPacketResult(cross(cur), types.PacketStatusSuccess, []byte{0x02})
 }
 
-func (d *dummyImpl) Ack(_ realm, packet core.Packet, ack []byte, relayer address) {
+func (d *dummyImpl) Ack(_ realm, packet types.Packet, ack []byte, relayer address) {
 	d.ackCalled = true
 }
 
-func (d *dummyImpl) Timeout(_ realm, packet core.Packet, relayer address) {
+func (d *dummyImpl) Timeout(_ realm, packet types.Packet, relayer address) {
 	d.timeoutCalled = true
 }
 
@@ -134,7 +136,7 @@ func TestAppNineMethodsDelegate(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	impl = d
-	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0, 0)
+	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0)
 
 	// Every callback is gated to the core caller, so impersonate core for the
 	// legitimate delegation path.
@@ -154,7 +156,7 @@ func TestAppNineMethodsDelegate(cur realm, t *testing.T) {
 	if !d.recvCalled || !d.ackCalled || !d.timeoutCalled {
 		t.Fatal("packet callbacks must delegate")
 	}
-	if res.Status != core.PacketStatusSuccess || len(res.Ack) == 0 {
+	if res.Status != types.PacketStatusSuccess || len(res.Acknowledgement) == 0 {
 		t.Fatal("recv result must come from impl")
 	}
 }
@@ -164,7 +166,7 @@ func TestAppPausedBlocksPacketCallbacks(cur realm, t *testing.T) {
 	d := &dummyImpl{}
 	impl = d
 	paused = true
-	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0, 0)
+	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0)
 
 	// The caller gate runs before the paused check on every callback, so
 	// impersonate core to reach the channel handshake and the paused guard.
@@ -204,7 +206,7 @@ func TestSendRawPausedBlocks(cur realm, t *testing.T) {
 
 func TestAppNilImplPolicy(cur realm, t *testing.T) {
 	resetZkgmForTest()
-	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0, 0)
+	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0)
 
 	// Nil-impl policy is observed past the caller gate, so impersonate core.
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
@@ -213,7 +215,7 @@ func TestAppNilImplPolicy(cur realm, t *testing.T) {
 	})
 
 	res := (&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
-	if res.Status != core.PacketStatusFailure || len(res.Ack) == 0 {
+	if res.Status != types.PacketStatusFailure || len(res.Acknowledgement) == 0 {
 		t.Fatal("nil impl recv must return failure acknowledgement")
 	}
 
@@ -229,8 +231,8 @@ func TestAssertNonZeroTimeoutRejectsZero(cur realm, t *testing.T) {
 
 func TestAssertNonZeroTimeoutAcceptsNonZero(cur realm, t *testing.T) {
 	uassert.NotAborts(t, cur, func(cur realm) {
-		assertNonZeroTimeout(core.Timestamp(1))
-		assertNonZeroTimeout(core.Timestamp(3600))
+		assertNonZeroTimeout(types.Timestamp(1))
+		assertNonZeroTimeout(types.Timestamp(3600))
 	})
 }
 
@@ -238,7 +240,7 @@ func TestSendPacketRejectsZeroTimeout(cur realm, t *testing.T) {
 	resetZkgmForTest()
 
 	uassert.AbortsContains(t, cur, "zkgm: timeout timestamp must be non-zero", func(cur realm) {
-		sendPacket(cur, core.ChannelId(1), 0, [32]byte{}, z.Instruction{}, "g1sender", "")
+		sendPacket(cur, types.ChannelId(1), 0, [32]byte{}, z.Instruction{}, "g1sender", "")
 	})
 }
 

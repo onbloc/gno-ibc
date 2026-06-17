@@ -2,6 +2,8 @@
 package loader
 
 import (
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
@@ -34,14 +36,14 @@ func main(cur realm) {
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 	intentPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination,
-		e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), 0, core.Timestamp(1<<62))
+		e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(1<<62))
 
 	println("[SCENARIO] fillable token order intent preempts proven recv")
-	core.IntentPacketRecv(cross(cur), core.NewMsgIntentPacketRecv(cross(cur), []core.Packet{intentPacket}, nil))
+	core.IntentPacketRecv(cross(cur), types.NewMsgIntentPacketRecv([]types.Packet{intentPacket}, nil))
 	println("maker_quote_after_intent", impl.VoucherBalanceOf(quoteToken, marketMaker))
 	println("receiver_quote_after_intent", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 	println("intent_receipt", core.HasPacketReceipt(cross(cur), intentPacket))
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{intentPacket}, nil, nil, core.Height(1)))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{intentPacket}, nil, nil, 1))
 	println("receiver_quote_after_proven_recv", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 
 	println("")
@@ -52,7 +54,7 @@ func main(cur realm) {
 			Sender:           []byte("sender"),
 			ContractAddress:  []byte(zs86MockReceiverPath),
 			ContractCalldata: []byte("intent-call"),
-		})), 0, core.Timestamp(1<<62))
+		})), types.Timestamp(1<<62))
 	println("call_intent_reverted", zs86IntentRecvReverted(cur, callPacket))
 	println("call_mock_calls", mock.Calls(cross(cur)))
 	// revive catches the panic inside this filetest transaction, so the receipt
@@ -60,9 +62,9 @@ func main(cur realm) {
 	println("call_receipt_in_recovered_harness", core.HasPacketReceipt(cross(cur), callPacket))
 }
 
-func zs86IntentRecvReverted(cur realm, packet core.Packet) (reverted bool) {
+func zs86IntentRecvReverted(cur realm, packet types.Packet) (reverted bool) {
 	p := revive(func() {
-		core.IntentPacketRecv(cross(cur), core.NewMsgIntentPacketRecv(cross(cur), []core.Packet{packet}, nil))
+		core.IntentPacketRecv(cross(cur), types.NewMsgIntentPacketRecv([]types.Packet{packet}, nil))
 	})
 	return p != nil
 }

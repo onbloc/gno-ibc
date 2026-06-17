@@ -7,11 +7,13 @@ import (
 	"testing"
 	"time"
 
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
-	tb "gno.land/p/onbloc/ibc/zkgm/tokenbucket"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
@@ -31,12 +33,12 @@ func TestTokenOrderVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm,
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 
-	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(3), sender, newSentCoinBudget(nil), u256.Zero(), order)
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, types.ChannelId(3), sender, newSentCoinBudget(nil), u256.Zero(), order)
 
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(37), VoucherBalanceOf(baseToken, address(sender)))
 
-	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(core.ChannelId(3), u256.Zero(), order.BaseToken, order.QuoteToken))
+	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(3), u256.Zero(), order.BaseToken, order.QuoteToken))
 	uassert.Equal(t, "13", balance.ToString())
 }
 
@@ -46,7 +48,7 @@ func TestTokenOrderAckMarketMakerEscrowWithVoucherRewardsMarketMaker(cur realm, 
 	sender := testAddress("v1-mm-voucher-sender")
 	marketMaker := testAddress("v1-mm-voucher-maker")
 	baseToken := "ibc/v1-mm-voucher"
-	channelId := core.ChannelId(8)
+	channelId := types.ChannelId(8)
 	amount := u256.NewUint(13)
 	uassert.NoError(t, zkgm.MintVoucher(cross(cur), baseToken, baseToken, [32]byte{}, "", "", 0, sender, u256.NewUint(50)))
 
@@ -79,7 +81,7 @@ func TestTokenOrderVerifyNativeRequiresSentCoin(cur realm, t *testing.T) {
 		Kind:       z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
 
-	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(4), string(order.Sender), newSentCoinBudget(chain.NewCoins(chain.NewCoin("ugnot", 13))), u256.Zero(), order)
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, types.ChannelId(4), string(order.Sender), newSentCoinBudget(chain.NewCoins(chain.NewCoin("ugnot", 13))), u256.Zero(), order)
 
 	uassert.NoError(t, err)
 }
@@ -88,7 +90,7 @@ func TestTokenOrderVerifyNativeEscrowConsumesBudgetAndIncreasesChannelBalance(cu
 	resetTokenOrderTest(cur)
 
 	sender := testAddress("native-escrow-sender")
-	const channelId = core.ChannelId(20)
+	const channelId = types.ChannelId(20)
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
 		BaseToken:   []byte("ugnot"),
@@ -123,7 +125,7 @@ func TestTokenOrderVerifyVoucherBurnInsufficientBalanceRejected(cur realm, t *te
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 
-	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(21), sender, newSentCoinBudget(nil), u256.Zero(), order)
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, types.ChannelId(21), sender, newSentCoinBudget(nil), u256.Zero(), order)
 
 	uassert.Error(t, err)
 	uassert.Equal(t, int64(10), VoucherBalanceOf(baseToken, address(sender)))
@@ -143,7 +145,7 @@ func TestTokenOrderVerifyUnescrowNativeRejectedBeforeBudgetConsume(cur realm, t 
 	}
 	budget := newSentCoinBudget(chain.NewCoins(chain.NewCoin(baseDenom, 13)))
 
-	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(0), string(order.Sender), budget, u256.Zero(), order)
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, types.ChannelId(0), string(order.Sender), budget, u256.Zero(), order)
 
 	uassert.ErrorContains(t, err, "invalid token order unescrow")
 	uassert.False(t, budget.drained())
@@ -166,10 +168,10 @@ func TestTokenOrderVerifyAppliesRateLimit(cur realm, t *testing.T) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
 
-	err = (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(4), string(order.Sender), newSentCoinBudget(chain.NewCoins(chain.NewCoin(denom, 7))), u256.Zero(), order)
+	err = (&ZkgmV1{}).verifyTokenOrderV2(cur, types.ChannelId(4), string(order.Sender), newSentCoinBudget(chain.NewCoins(chain.NewCoin(denom, 7))), u256.Zero(), order)
 	uassert.NoError(t, err)
 
-	err = (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(4), string(order.Sender), newSentCoinBudget(chain.NewCoins(chain.NewCoin(denom, 7))), u256.Zero(), order)
+	err = (&ZkgmV1{}).verifyTokenOrderV2(cur, types.ChannelId(4), string(order.Sender), newSentCoinBudget(chain.NewCoins(chain.NewCoin(denom, 7))), u256.Zero(), order)
 	uassert.ErrorContains(t, err, "token bucket rate limit exceeded")
 
 	zkgm.RemoveTokenBucket(cross(cur), denom)
@@ -194,13 +196,13 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(5), nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(5), nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("v1-relayer")), u256.NewUint(7), order, false)
 
 	uassert.NoError(t, err)
-	uassert.True(t, res.Status == core.PacketStatusSuccess)
-	assertProtocolAck(t, res.Ack)
+	uassert.True(t, res.Status == types.PacketStatusSuccess)
+	assertProtocolAck(t, res.Acknowledgement)
 
 	uassert.Equal(t, int64(95), VoucherBalanceOf(ibcDenom, address(order.Receiver)))
 
@@ -238,12 +240,12 @@ func TestTokenOrderExecuteInitializeMalformedInitializerUsesDefaults(cur realm, 
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(4), nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(4), nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("fallback-relayer")), u256.NewUint(3), order, false)
 
 	uassert.NoError(t, err)
-	uassert.True(t, res.Status == core.PacketStatusSuccess)
+	uassert.True(t, res.Status == types.PacketStatusSuccess)
 
 	uassert.Equal(t, 0, zkgm.VoucherDecimalsOf(ibcDenom))
 }
@@ -268,12 +270,12 @@ func TestTokenOrderExecuteInitializeEmptyInitializerUsesDefaults(cur realm, t *t
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(6), nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(6), nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("empty-init-relayer")), u256.NewUint(5), order, false)
 
 	uassert.NoError(t, err)
-	uassert.True(t, res.Status == core.PacketStatusSuccess)
+	uassert.True(t, res.Status == types.PacketStatusSuccess)
 
 	uassert.Equal(t, 0, zkgm.VoucherDecimalsOf(ibcDenom))
 }
@@ -298,7 +300,7 @@ func TestTokenOrderExecuteInitializeMintErrorDoesNotSetOrigin(cur realm, t *test
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(7), nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(7), nil, 0)
 
 	_, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("invalid-rx-relayer")), u256.NewUint(9), order, false)
 	uassert.ErrorContains(t, err, "invalid address")
@@ -322,7 +324,7 @@ func TestTokenOrderExecuteEscrowMintErrorDoesNotSetOrigin(cur realm, t *testing.
 		QuoteAmount: u256.NewUint(95),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(destChan), nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(destChan), nil, 0)
 
 	_, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("escrow-rx-relayer")), path, order, false)
 
@@ -340,7 +342,7 @@ func TestTokenOrderExecuteInitializeQuoteExceedsBaseReturnsFailure(cur realm, t 
 	})
 	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
 	path := u256.NewUint(30)
-	const destChan = core.ChannelId(30)
+	const destChan = types.ChannelId(30)
 	ibcDenom := PredictWrappedTokenV2(path, uint32(destChan), []byte("ugnot"), image)
 	receiver := testAddress("quote-exceeds-rx")
 
@@ -354,19 +356,19 @@ func TestTokenOrderExecuteInitializeQuoteExceedsBaseReturnsFailure(cur realm, t 
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), destChan, nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("quote-exceeds-rly")), path, order, false)
 
 	uassert.NoError(t, err)
-	uassert.True(t, res.Status == core.PacketStatusFailure)
+	uassert.True(t, res.Status == types.PacketStatusFailure)
 	uassert.Equal(t, int64(0), VoucherBalanceOf(ibcDenom, address(receiver)))
 }
 
 func TestTokenOrderExecuteUnescrowChannelBalanceUnderflow(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 
-	const destChan = core.ChannelId(40)
+	const destChan = types.ChannelId(40)
 	baseToken := []byte("ibc/unescrow-test")
 	quoteToken := []byte("ugnot")
 
@@ -383,7 +385,7 @@ func TestTokenOrderExecuteUnescrowChannelBalanceUnderflow(cur realm, t *testing.
 		QuoteAmount: u256.NewUint(100),
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), destChan, nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, nil, 0)
 
 	_, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("unescrow-rly")), u256.Zero(), order, false)
 
@@ -403,12 +405,12 @@ func TestTokenOrderExecuteEscrowQuoteDenomMismatchReturnsFailure(cur realm, t *t
 		QuoteAmount: u256.NewUint(95),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(50), nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(50), nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("escrow-mismatch-rly")), u256.Zero(), order, false)
 
 	uassert.NoError(t, err)
-	uassert.True(t, res.Status == core.PacketStatusFailure)
+	uassert.True(t, res.Status == types.PacketStatusFailure)
 	uassert.Equal(t, int64(0), VoucherBalanceOf("ibc/wrong-denom", address(receiver)))
 }
 
@@ -416,7 +418,7 @@ func TestTokenOrderExecuteEscrowZeroFeeSkipsRelayerMint(cur realm, t *testing.T)
 	resetTokenOrderTest(cur)
 
 	path := u256.Zero()
-	const destChan = core.ChannelId(60)
+	const destChan = types.ChannelId(60)
 	relayer := testAddress("zero-fee-relayer")
 	receiver := testAddress("zero-fee-receiver")
 	quoteDenom := PredictWrappedTokenV1(path, uint32(destChan), []byte("ugnot"))
@@ -429,12 +431,12 @@ func TestTokenOrderExecuteEscrowZeroFeeSkipsRelayerMint(cur realm, t *testing.T)
 		QuoteAmount: u256.NewUint(100), // fee = 0
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), destChan, nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(relayer), path, order, false)
 
 	uassert.NoError(t, err)
-	uassert.True(t, res.Status == core.PacketStatusSuccess)
+	uassert.True(t, res.Status == types.PacketStatusSuccess)
 	uassert.Equal(t, int64(100), VoucherBalanceOf(quoteDenom, address(receiver)))
 	uassert.Equal(t, int64(0), VoucherBalanceOf(quoteDenom, address(relayer)))
 }
@@ -443,7 +445,7 @@ func TestTokenOrderExecuteEscrowZeroQuoteSkipsReceiverMint(cur realm, t *testing
 	resetTokenOrderTest(cur)
 
 	path := u256.Zero()
-	const destChan = core.ChannelId(61)
+	const destChan = types.ChannelId(61)
 	relayer := testAddress("zero-quote-relayer")
 	receiver := testAddress("zero-quote-receiver")
 	quoteDenom := PredictWrappedTokenV1(path, uint32(destChan), []byte("ugnot"))
@@ -456,12 +458,12 @@ func TestTokenOrderExecuteEscrowZeroQuoteSkipsReceiverMint(cur realm, t *testing
 		QuoteAmount: u256.NewUint(0), // receiver gets nothing; all goes to relayer as fee
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), destChan, nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(relayer), path, order, false)
 
 	uassert.NoError(t, err)
-	uassert.True(t, res.Status == core.PacketStatusSuccess)
+	uassert.True(t, res.Status == types.PacketStatusSuccess)
 	uassert.Equal(t, int64(0), VoucherBalanceOf(quoteDenom, address(receiver)))
 	uassert.Equal(t, int64(100), VoucherBalanceOf(quoteDenom, address(relayer)))
 }
@@ -470,7 +472,7 @@ func TestTokenOrderExecuteEscrowZeroAmountSkipsBothMints(cur realm, t *testing.T
 	resetTokenOrderTest(cur)
 
 	path := u256.Zero()
-	const destChan = core.ChannelId(62)
+	const destChan = types.ChannelId(62)
 	relayer := testAddress("zero-amt-relayer")
 	receiver := testAddress("zero-amt-receiver")
 	quoteDenom := PredictWrappedTokenV1(path, uint32(destChan), []byte("ugnot"))
@@ -483,12 +485,12 @@ func TestTokenOrderExecuteEscrowZeroAmountSkipsBothMints(cur realm, t *testing.T
 		QuoteAmount: u256.NewUint(0),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), destChan, nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(relayer), path, order, false)
 
 	uassert.NoError(t, err)
-	uassert.True(t, res.Status == core.PacketStatusSuccess)
+	uassert.True(t, res.Status == types.PacketStatusSuccess)
 	uassert.Equal(t, int64(0), VoucherBalanceOf(quoteDenom, address(receiver)))
 	uassert.Equal(t, int64(0), VoucherBalanceOf(quoteDenom, address(relayer)))
 }
@@ -496,7 +498,7 @@ func TestTokenOrderExecuteEscrowZeroAmountSkipsBothMints(cur realm, t *testing.T
 func TestTokenOrderVerifyUnescrowV1PredictionPasses(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 
-	const destChan = core.ChannelId(70)
+	const destChan = types.ChannelId(70)
 	sender := testAddress("v1-predict-sender")
 	quoteToken := []byte("ugnot")
 	baseDenom := PredictWrappedTokenV1(u256.Zero(), uint32(destChan), quoteToken)
@@ -523,7 +525,7 @@ func TestTokenOrderVerifyUnescrowV1PredictionPasses(cur realm, t *testing.T) {
 func TestTokenOrderVerifyUnescrowV2PredictionWithImagePasses(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 
-	const destChan = core.ChannelId(71)
+	const destChan = types.ChannelId(71)
 	sender := testAddress("v2-predict-sender")
 	quoteToken := []byte("ugnot")
 	image := [32]byte{0x01}
@@ -554,7 +556,7 @@ func TestTokenOrderVerifyUnescrowV2PredictionWithImagePasses(cur realm, t *testi
 func TestTokenOrderVerifyUnescrowWrongImageRejected(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 
-	const destChan = core.ChannelId(72)
+	const destChan = types.ChannelId(72)
 	sender := testAddress("wrong-image-sender")
 	quoteToken := []byte("ugnot")
 	imageCorrect := [32]byte{0x01}
@@ -596,20 +598,20 @@ func TestTokenOrderIntentVoucherMarketMakerFillTransfersMakerFunds(cur realm, t 
 		QuoteAmount: u256.NewUint(12),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(5), nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(5), nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(maker), u256.Zero(), order, true)
 
 	uassert.NoError(t, err)
-	uassert.True(t, res.Status == core.PacketStatusSuccess)
-	assertMarketMakerAck(t, res.Ack, maker)
+	uassert.True(t, res.Status == types.PacketStatusSuccess)
+	assertMarketMakerAck(t, res.Acknowledgement, maker)
 	uassert.Equal(t, int64(18), VoucherBalanceOf(quoteToken, address(maker)))
 	uassert.Equal(t, int64(12), VoucherBalanceOf(quoteToken, address(receiver)))
 
 	_, ok := zkgm.GetTokenOrigin(quoteToken)
 	uassert.False(t, ok, "market-maker fill must not set token origin")
 
-	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(core.ChannelId(5), u256.Zero(), order.BaseToken, order.QuoteToken))
+	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(5), u256.Zero(), order.BaseToken, order.QuoteToken))
 	uassert.True(t, balance == nil || balance.IsZero())
 }
 
@@ -624,13 +626,13 @@ func TestTokenOrderIntentUnknownQuoteReturnsOnlyMaker(cur realm, t *testing.T) {
 		QuoteAmount: u256.NewUint(10),
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(5), nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(5), nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("v1-intent-maker")), u256.Zero(), order, true)
 
 	uassert.NoError(t, err)
-	uassert.True(t, res.Status == core.PacketStatusSuccess)
-	uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Ack))
+	uassert.True(t, res.Status == types.PacketStatusSuccess)
+	uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Acknowledgement))
 }
 
 func TestTokenOrderIntentInsufficientMakerBalanceReturnsOnlyMaker(cur realm, t *testing.T) {
@@ -648,13 +650,13 @@ func TestTokenOrderIntentInsufficientMakerBalanceReturnsOnlyMaker(cur realm, t *
 		QuoteAmount: u256.NewUint(9),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(5), nil, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(5), nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(maker), u256.Zero(), order, true)
 
 	uassert.NoError(t, err)
-	uassert.True(t, res.Status == core.PacketStatusSuccess)
-	uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Ack))
+	uassert.True(t, res.Status == types.PacketStatusSuccess)
+	uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Acknowledgement))
 	uassert.Equal(t, int64(3), VoucherBalanceOf(quoteToken, address(maker)))
 	uassert.Equal(t, int64(0), VoucherBalanceOf(quoteToken, address(receiver)))
 }
@@ -745,7 +747,7 @@ func TestTokenOrderVerifySolveReturnsError(cur realm, t *testing.T) {
 		Kind:        z.TOKEN_ORDER_KIND_SOLVE,
 	}
 
-	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, core.ChannelId(80), testAddress("solve-sender"), newSentCoinBudget(nil), u256.Zero(), order)
+	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, types.ChannelId(80), testAddress("solve-sender"), newSentCoinBudget(nil), u256.Zero(), order)
 
 	uassert.ErrorContains(t, err, "not implemented")
 }
@@ -754,8 +756,8 @@ func TestChannelBalanceKeyV2Isolation(t *testing.T) {
 	base := []byte("ugnot")
 	quote := []byte("ibc/abc")
 	path := u256.Zero()
-	chanA := core.ChannelId(1)
-	chanB := core.ChannelId(2)
+	chanA := types.ChannelId(1)
+	chanB := types.ChannelId(2)
 
 	keyRef := ChannelBalanceKeyV2(chanA, path, base, quote)
 

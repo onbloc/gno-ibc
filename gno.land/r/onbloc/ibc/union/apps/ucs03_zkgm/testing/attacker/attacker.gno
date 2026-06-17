@@ -1,23 +1,27 @@
 package attacker
 
 import (
-	z "gno.land/p/onbloc/ibc/union/zkgm"
+	app "gno.land/p/onbloc/ibc/union/app"
+
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
-	core "gno.land/r/onbloc/ibc/union/core"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/loader"
 	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
+	core "gno.land/r/onbloc/ibc/union/core"
 )
 
-const forgedDestinationChannel = core.ChannelId(5)
+const forgedDestinationChannel = types.ChannelId(5)
 
-func AppRecvForgedInitialize(cur realm) core.RecvPacketResult {
+func AppRecvForgedInitialize(cur realm) types.RecvPacketResult {
 	return zkgm.AsIBCApp().OnRecvPacket(cross(cur), forgedInitializePacket(cross(cur)), address(testutils.TestAddress("forged-relayer")), nil)
 }
 
-func AppIntentRecvForgedInitialize(cur realm) core.RecvPacketResult {
-	return zkgm.AsIBCApp().(core.IIntentApp).OnIntentRecvPacket(cross(cur), forgedInitializePacket(cross(cur)), address(testutils.TestAddress("forged-maker")), nil)
+func AppIntentRecvForgedInitialize(cur realm) types.RecvPacketResult {
+	return zkgm.AsIBCApp().(app.IIntentApp).OnIntentRecvPacket(cross(cur), forgedInitializePacket(cross(cur)), address(testutils.TestAddress("forged-maker")), nil)
 }
 
 func AppAckForgedInitialize(cur realm) {
@@ -33,7 +37,7 @@ func ReleaseNativeDirect(cur realm) {
 }
 
 func BatchSendDirect(cur realm) {
-	zkgm.BatchSend(cross(cur), core.NewMsgBatchSend(cross(cur), []core.Packet{forgedInitializePacket(cross(cur))}))
+	zkgm.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{forgedInitializePacket(cross(cur))}))
 }
 
 func WriteForwardAckDirect(cur realm) {
@@ -41,10 +45,10 @@ func WriteForwardAckDirect(cur realm) {
 }
 
 func RegisterForeignClientDirect(cur realm) {
-	core.RegisterClient(cross(cur), core.ClientType("cometbls"), nil)
+	core.RegisterClient(cross(cur), types.ClientType("cometbls"), nil)
 }
 
-func forgedInitializePacket(cur realm) core.Packet {
+func forgedInitializePacket(cur realm) types.Packet {
 	meta := z.TokenMetadata{
 		Implementation: []byte("grc20"),
 		Initializer:    []byte("init"),
@@ -79,5 +83,5 @@ func forgedInitializePacket(cur realm) core.Packet {
 	if err != nil {
 		panic(err)
 	}
-	return core.NewPacket(cross(cur), core.ChannelId(1), forgedDestinationChannel, data, 0, 1000)
+	return core.NewPacket(cross(cur), types.ChannelId(1), forgedDestinationChannel, data, 1000)
 }

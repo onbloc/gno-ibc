@@ -2,22 +2,25 @@
 package scenarios
 
 import (
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	z "gno.land/p/onbloc/ibc/union/zkgm"
-	core "gno.land/r/onbloc/ibc/union/core"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
 	"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"
 	realcometbls "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/realcometbls"
-	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1/loader"
+	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
+	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 const mockReceiverPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"
 
 func main(cur realm) {
+	impl.Register(cross(cur))
 	mock.Reset(cross(cur))
 	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 	packet := callPacket(cur, pair, mockReceiverPath)
 
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, [][]byte{[]byte("relay-msg")}, realcometbls.Z39CallPacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight-1)))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{[]byte("relay-msg")}, realcometbls.Z39CallPacketCommitmentProof(cross(cur)), uint64(realcometbls.DevnetHeight-1)))
 
 	println("mock_calls", mock.Calls(cross(cur)))
 	println("last_sender", mock.LastSender(cross(cur)))
@@ -28,13 +31,13 @@ func main(cur realm) {
 	println("recv_call_dispatch_real_cometbls", "ok")
 }
 
-func callPacket(cur realm, pair realcometbls.ChannelPair, receiverPath string) core.Packet {
+func callPacket(cur realm, pair realcometbls.ChannelPair, receiverPath string) types.Packet {
 	call := z.Call{
 		Sender:           []byte("sender"),
 		ContractAddress:  []byte(receiverPath),
 		ContractCalldata: []byte("calldata"),
 	}
-	return core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)), 0, core.Timestamp(0))
+	return core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)), types.Timestamp(0))
 }
 
 // Output:

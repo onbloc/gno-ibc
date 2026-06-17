@@ -2,6 +2,8 @@
 package loader
 
 import (
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
@@ -17,9 +19,9 @@ func main(cur realm) {
 	sender := string(testutils.TestAddress("zs24-sender"))
 	receiver := string(testutils.TestAddress("zs24-receiver"))
 	marketMaker := testutils.TestAddress("zs24-market-maker")
-	baseToken := sh.MintVoucher(cross(cur), inst, core.ChannelId(40), "base/zs24", sender, 30, "ZS24")
-	quoteToken := sh.MintVoucher(cross(cur), inst, core.ChannelId(41), "quote/zs24", marketMaker.String(), 12, "ZS24")
-	channelId := core.ChannelId(42)
+	baseToken := sh.MintVoucher(cross(cur), inst, types.ChannelId(40), "base/zs24", sender, 30, "ZS24")
+	quoteToken := sh.MintVoucher(cross(cur), inst, types.ChannelId(41), "quote/zs24", marketMaker.String(), 12, "ZS24")
+	channelId := types.ChannelId(42)
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
 		Receiver:    []byte(receiver),
@@ -31,7 +33,7 @@ func main(cur realm) {
 	}
 
 	println("[SCENARIO] market maker fills quote side")
-	intentPacket := core.NewPacket(cross(cur), core.ChannelId(99), core.ChannelId(98), e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), 0, core.Timestamp(100))
+	intentPacket := core.NewPacket(cross(cur), types.ChannelId(99), types.ChannelId(98), e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(100))
 	intentRes := inst.IntentRecv(cross(cur), intentPacket, marketMaker, nil)
 	println("intent_status", int(intentRes.Status))
 	println("market_maker_quote_after_fill", impl.VoucherBalanceOf(quoteToken, marketMaker))
@@ -39,15 +41,15 @@ func main(cur realm) {
 
 	println("")
 	println("[SCENARIO] proven ack settles recorded maker")
-	sendData, err := inst.Send(cross(cur), zkgm.NewSendRequest(cross(cur), channelId, core.Timestamp(101), [32]byte{}, e2e.MustTokenOrderInstruction(cross(cur), order), sender, ""))
+	sendData, err := inst.Send(cross(cur), zkgm.NewSendRequest(cross(cur), channelId, types.Timestamp(101), [32]byte{}, e2e.MustTokenOrderInstruction(cross(cur), order), sender, ""))
 	if err != nil {
 		panic(err)
 	}
-	sourcePacket := core.NewPacket(cross(cur), channelId, core.ChannelId(100), sendData, 0, core.Timestamp(101))
+	sourcePacket := core.NewPacket(cross(cur), channelId, types.ChannelId(100), sendData, types.Timestamp(101))
 	println("sender_base_after_send", impl.VoucherBalanceOf(baseToken, address(sender)))
 	println("channel_after_send", sh.ChannelBalanceStr(channelId, u256.Zero(), order.BaseToken, order.QuoteToken))
-	inst.Ack(cross(cur), sourcePacket, intentRes.Ack, testutils.TestAddress("zs24-relayer"))
-	println("ack_market_maker_recorded", zs24AckMarketMaker(intentRes.Ack) == marketMaker.String())
+	inst.Ack(cross(cur), sourcePacket, intentRes.Acknowledgement, testutils.TestAddress("zs24-relayer"))
+	println("ack_market_maker_recorded", zs24AckMarketMaker(intentRes.Acknowledgement) == marketMaker.String())
 	println("market_maker_base_after_ack", impl.VoucherBalanceOf(baseToken, marketMaker))
 	println("channel_after_ack", sh.ChannelBalanceStr(channelId, u256.Zero(), order.BaseToken, order.QuoteToken))
 }

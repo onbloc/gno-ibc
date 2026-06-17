@@ -4,6 +4,9 @@ package loader
 import (
 	"chain"
 	"chain/banker"
+
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	stdtesting "testing"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -18,8 +21,8 @@ import (
 
 func main(cur realm) {
 	inst := sh.InstallImpl(cross(cur))
-	sourceChannel := core.ChannelId(10)
-	destChannel := core.ChannelId(11)
+	sourceChannel := types.ChannelId(10)
+	destChannel := types.ChannelId(11)
 	sender := "g17xpfvakm2amg962yls6f84z3kell8c5lserqta"
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	relayer := testutils.TestAddress("zs21-relayer")
@@ -38,7 +41,7 @@ func main(cur realm) {
 		Metadata:    meta,
 	}
 	lockInstr := e2e.MustTokenOrderInstruction(cross(cur), lockOrder)
-	lockData, err := inst.Send(cross(cur), zkgm.NewSendRequest(cross(cur), sourceChannel, core.Timestamp(100), [32]byte{}, lockInstr, sender, "40ugnot"))
+	lockData, err := inst.Send(cross(cur), zkgm.NewSendRequest(cross(cur), sourceChannel, types.Timestamp(100), [32]byte{}, lockInstr, sender, "40ugnot"))
 	if err != nil {
 		panic(err)
 	}
@@ -46,7 +49,7 @@ func main(cur realm) {
 
 	println("")
 	println("[SCENARIO] mint voucher on destination")
-	lockPacket := core.NewPacket(cross(cur), sourceChannel, destChannel, lockData, 0, core.Timestamp(100))
+	lockPacket := core.NewPacket(cross(cur), sourceChannel, destChannel, lockData, types.Timestamp(100))
 	recvRes := inst.Recv(cross(cur), lockPacket, relayer, nil)
 	println("recv_status", int(recvRes.Status))
 	println("receiver_voucher_after_mint", impl.VoucherBalanceOf(quoteToken, address(receiver)))
@@ -63,7 +66,7 @@ func main(cur realm) {
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
 	unescrowInstr := e2e.MustTokenOrderInstruction(cross(cur), unescrowOrder)
-	unescrowData, err := inst.Send(cross(cur), zkgm.NewSendRequest(cross(cur), destChannel, core.Timestamp(101), [32]byte{}, unescrowInstr, receiver, ""))
+	unescrowData, err := inst.Send(cross(cur), zkgm.NewSendRequest(cross(cur), destChannel, types.Timestamp(101), [32]byte{}, unescrowInstr, receiver, ""))
 	if err != nil {
 		panic(err)
 	}
@@ -74,7 +77,7 @@ func main(cur realm) {
 	// inst.Send consumes sentCoinBudget bookkeeping only; this simulates the
 	// banker escrow deposit that a real user tx would have locked in the proxy.
 	stdtesting.IssueCoins(zkgm.ProxyAddress(), chain.NewCoins(chain.NewCoin("ugnot", 40)))
-	unescrowPacket := core.NewPacket(cross(cur), destChannel, sourceChannel, unescrowData, 0, core.Timestamp(101))
+	unescrowPacket := core.NewPacket(cross(cur), destChannel, sourceChannel, unescrowData, types.Timestamp(101))
 	unescrowRes := inst.Recv(cross(cur), unescrowPacket, relayer, nil)
 	bk := banker.NewReadonlyBanker()
 	println("unescrow_recv_status", int(unescrowRes.Status))

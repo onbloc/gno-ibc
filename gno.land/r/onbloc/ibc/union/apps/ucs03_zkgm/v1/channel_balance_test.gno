@@ -3,17 +3,18 @@ package impl
 import (
 	"testing"
 
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
-	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 func TestIncreaseChannelBalanceSingleWrite(cur realm, t *testing.T) {
 	baseToken := []byte("uatom-single")
 	quoteToken := []byte("uosmo")
 	path := u256.Zero()
-	chanId := core.ChannelId(21)
+	chanId := types.ChannelId(21)
 
 	increaseChannelBalanceV2(cross(cur), chanId, path, baseToken, quoteToken, u256.NewUint(500))
 
@@ -26,7 +27,7 @@ func TestIncreaseChannelBalanceZeroIsNoop(cur realm, t *testing.T) {
 	baseToken := []byte("uatom-zero-noop")
 	quoteToken := []byte("uosmo")
 	path := u256.Zero()
-	chanId := core.ChannelId(22)
+	chanId := types.ChannelId(22)
 
 	increaseChannelBalanceV2(cross(cur), chanId, path, baseToken, quoteToken, u256.Zero())
 
@@ -39,7 +40,7 @@ func TestDecreaseChannelBalanceUnderflowOnEmpty(cur realm, t *testing.T) {
 	baseToken := []byte("uatom-underflow")
 	quoteToken := []byte("uosmo")
 	path := u256.Zero()
-	chanId := core.ChannelId(23)
+	chanId := types.ChannelId(23)
 
 	err := decreaseChannelBalanceV2(cross(cur), chanId, path, baseToken, quoteToken, u256.NewUint(1))
 	uassert.Error(t, err)
@@ -49,7 +50,7 @@ func TestDecreaseChannelBalanceZeroIsNoop(cur realm, t *testing.T) {
 	baseToken := []byte("uatom-dec-zero")
 	quoteToken := []byte("uosmo")
 	path := u256.Zero()
-	chanId := core.ChannelId(24)
+	chanId := types.ChannelId(24)
 
 	err := decreaseChannelBalanceV2(cross(cur), chanId, path, baseToken, quoteToken, u256.Zero())
 	uassert.NoError(t, err)
@@ -60,7 +61,7 @@ func TestDecreaseChannelBalanceZeroIsNoop(cur realm, t *testing.T) {
 }
 
 func TestChannelBalanceKeyV2Deterministic(t *testing.T) {
-	chanId := core.ChannelId(1)
+	chanId := types.ChannelId(1)
 	path := u256.NewUint(42)
 	base := []byte("uatom")
 	quote := []byte("uosmo")
@@ -75,15 +76,15 @@ func TestChannelBalanceKeyV2DifferentChannels(t *testing.T) {
 	base := []byte("uatom")
 	quote := []byte("uosmo")
 
-	k1 := ChannelBalanceKeyV2(core.ChannelId(1), path, base, quote)
-	k2 := ChannelBalanceKeyV2(core.ChannelId(2), path, base, quote)
+	k1 := ChannelBalanceKeyV2(types.ChannelId(1), path, base, quote)
+	k2 := ChannelBalanceKeyV2(types.ChannelId(2), path, base, quote)
 	if k1 == k2 {
 		t.Fatal("different channel IDs produced the same key")
 	}
 }
 
 func TestChannelBalanceKeyV2DifferentPaths(t *testing.T) {
-	chanId := core.ChannelId(1)
+	chanId := types.ChannelId(1)
 	base := []byte("uatom")
 	quote := []byte("uosmo")
 
@@ -95,7 +96,7 @@ func TestChannelBalanceKeyV2DifferentPaths(t *testing.T) {
 }
 
 func TestChannelBalanceKeyV2DifferentBaseTokens(t *testing.T) {
-	chanId := core.ChannelId(1)
+	chanId := types.ChannelId(1)
 	path := u256.Zero()
 	quote := []byte("uosmo")
 
@@ -107,7 +108,7 @@ func TestChannelBalanceKeyV2DifferentBaseTokens(t *testing.T) {
 }
 
 func TestChannelBalanceKeyV2DifferentQuoteTokens(t *testing.T) {
-	chanId := core.ChannelId(1)
+	chanId := types.ChannelId(1)
 	path := u256.Zero()
 	base := []byte("uatom")
 

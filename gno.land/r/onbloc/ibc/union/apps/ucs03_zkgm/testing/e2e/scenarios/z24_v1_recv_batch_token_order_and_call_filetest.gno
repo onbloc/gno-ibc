@@ -2,19 +2,21 @@
 package scenarios
 
 import (
-	z "gno.land/p/onbloc/ibc/union/zkgm"
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
-	core "gno.land/r/onbloc/ibc/union/core"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
 	"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"
 	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
-	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1/loader"
+	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 const mockReceiverPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"
 
 func main(cur realm) {
+	impl.Register(cross(cur))
 	mock.Reset(cross(cur))
 	e2e.RegisterMockLightClient(cross(cur))
 	pair := e2e.OpenE2EChannelPair(cross(cur))
@@ -39,10 +41,9 @@ func main(cur realm) {
 		}),
 	}}
 	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination,
-		e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), 0, 0)
+		e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), 0)
 
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur),
-		[]core.Packet{packet}, nil, nil, core.Height(1)))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))
 
 	println("quote_balance", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 	println("mock_calls", mock.Calls(cross(cur)))

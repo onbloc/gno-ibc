@@ -5,9 +5,11 @@ import (
 	"chain/banker"
 	"testing"
 
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
-	tb "gno.land/p/onbloc/ibc/zkgm/tokenbucket"
+	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -115,8 +117,8 @@ func TestProxyUpdateImplDeniedAfterLock(cur realm, t *testing.T) {
 
 func TestLedgerWritersFailClosedWhenUnbootstrapped(cur realm, t *testing.T) {
 	resetZkgmForTest()
-	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0, 20)
-	key := NewInFlightKey(cross(cur), core.CommitPacket(packet))
+	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 20)
+	key := NewInFlightKey(cross(cur), types.MustCommit(types.CommitPacket(packet)))
 	value := NewInFlightValue(cross(cur), packet)
 	bucket, err := tb.New(u256.NewUint(10), u256.NewUint(1), blockNow())
 	if err != nil {
@@ -180,7 +182,7 @@ func TestWriteForwardAckRequiresRegisteredImpl(cur realm, t *testing.T) {
 	implPath = "gno.land/r/not-this-realm"
 
 	uassert.AbortsContains(t, cur, "not an authorized impl", func(cur realm) {
-		WriteForwardAck(cur, core.NewPacket(cross(cur), 1, 2, nil, 0, 0), []byte{0x01})
+		WriteForwardAck(cur, core.NewPacket(cross(cur), 1, 2, nil, 0), []byte{0x01})
 	})
 }
 
@@ -190,7 +192,7 @@ func TestBatchSendAllowsAllowedImplCaller(cur realm, t *testing.T) {
 	allowedImpls = []string{ProxyPkgPath()}
 
 	uassert.AbortsContains(t, cur, "not enough packets", func(cur realm) {
-		BatchSend(cur, core.NewMsgBatchSend(cross(cur), nil))
+		BatchSend(cur, types.NewMsgBatchSend(nil))
 	})
 }
 
@@ -432,7 +434,7 @@ func TestForceSetImplAllowsNewImplThroughAllowlist(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewCodeRealm(ProxyPkgPath()))
 	uassert.AbortsContains(t, cur, "not enough packets", func(cur realm) {
-		BatchSend(cross(cur), core.NewMsgBatchSend(cross(cur), nil))
+		BatchSend(cross(cur), types.NewMsgBatchSend(nil))
 	})
 }
 

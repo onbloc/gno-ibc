@@ -3,6 +3,8 @@ package zkgm
 import (
 	"testing"
 
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
 	core "gno.land/r/onbloc/ibc/union/core"
@@ -28,11 +30,11 @@ import (
 
 const coreRealmPath = "gno.land/r/onbloc/ibc/union/core"
 
-func setupGateImpl(cur realm) core.Packet {
+func setupGateImpl(cur realm) types.Packet {
 	resetZkgmForTest()
 	impl = &dummyImpl{}
 	paused = false
-	return core.NewPacket(cross(cur), 1, 2, []byte("data"), 0, 0)
+	return core.NewPacket(cross(cur), 1, 2, []byte("data"), 0)
 }
 
 // --- ephemeral (`maketx run`, PkgPath "") caller must be rejected ---

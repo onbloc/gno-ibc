@@ -5,6 +5,8 @@ import (
 	"math"
 	"testing"
 
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
@@ -37,7 +39,7 @@ func TestInitializeDecimalsAgnosticAccounting(cur realm, t *testing.T) {
 		denom := PredictWrappedTokenV2(u256.NewUint(tc.path), tc.dest, base, MetadataImage(mustDecodeTokenMetadata(meta)))
 		rx := testAddress(tc.rxSuffix)
 		res, err := (&ZkgmV1{}).executeTokenOrderV2(cur,
-			core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(tc.dest), nil, 0, 0),
+			core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(tc.dest), nil, 0),
 			relayer, u256.NewUint(tc.path),
 			z.TokenOrderV2{
 				Sender: []byte("s"), Receiver: []byte(rx), BaseToken: base,
@@ -45,7 +47,7 @@ func TestInitializeDecimalsAgnosticAccounting(cur realm, t *testing.T) {
 				Kind: z.TOKEN_ORDER_KIND_INITIALIZE, Metadata: meta,
 			}, false)
 		uassert.NoError(t, err)
-		uassert.True(t, res.Status == core.PacketStatusSuccess)
+		uassert.True(t, res.Status == types.PacketStatusSuccess)
 		uassert.Equal(t, int64(N), VoucherBalanceOf(denom, address(rx)))
 		uassert.Equal(t, int(tc.decimals), VoucherDecimalsOf(denom))
 	}
@@ -55,7 +57,7 @@ func TestBaseAmountPreservedThroughLockAndRefund(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 
 	const N = uint64(100)
-	const chanSrc = core.ChannelId(130)
+	const chanSrc = types.ChannelId(130)
 	path := u256.Zero()
 	ibcBase := "ibc/rt-base"
 	sender := testAddress("rt-sender")
@@ -66,7 +68,7 @@ func TestBaseAmountPreservedThroughLockAndRefund(cur realm, t *testing.T) {
 		Implementation: []byte("grc20"),
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "RT", Symbol: "RT", Decimals: 6}),
 	})
-	ibcDest := PredictWrappedTokenV2(path, uint32(core.ChannelId(131)), []byte(ibcBase), MetadataImage(mustDecodeTokenMetadata(metaBytes)))
+	ibcDest := PredictWrappedTokenV2(path, uint32(types.ChannelId(131)), []byte(ibcBase), MetadataImage(mustDecodeTokenMetadata(metaBytes)))
 
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
@@ -96,8 +98,8 @@ func TestBaseAmountPreservedThroughMint(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 
 	const N = uint64(100)
-	const chanSrc = core.ChannelId(132)
-	const chanDest = core.ChannelId(133)
+	const chanSrc = types.ChannelId(132)
+	const chanDest = types.ChannelId(133)
 	path := u256.Zero()
 	ibcBase := "ibc/rt-base-mint"
 	receiver := testAddress("rt-receiver-mint")
@@ -120,10 +122,10 @@ func TestBaseAmountPreservedThroughMint(cur realm, t *testing.T) {
 	}
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur,
-		core.NewPacket(cross(cur), chanSrc, chanDest, nil, 0, 0),
+		core.NewPacket(cross(cur), chanSrc, chanDest, nil, 0),
 		address(testAddress("rt-rly-mint")), path, order, false)
 	uassert.NoError(t, err)
-	uassert.True(t, res.Status == core.PacketStatusSuccess)
+	uassert.True(t, res.Status == types.PacketStatusSuccess)
 	uassert.Equal(t, int64(N), VoucherBalanceOf(ibcDest, address(receiver)))
 }
 
@@ -131,7 +133,7 @@ func TestNativeBaseAmountNotUpscaled(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 
 	const N = int64(1_000_000) // 1 ugnot (6-dec representation)
-	const chanId = core.ChannelId(140)
+	const chanId = types.ChannelId(140)
 	order := z.TokenOrderV2{
 		Sender:      []byte(testAddress("native-noscale-sndr")),
 		BaseToken:   []byte("ugnot"),
@@ -157,7 +159,7 @@ func TestInitializeOverflowAmountReturnsFailureAckNoMint(cur realm, t *testing.T
 		Implementation: []byte("grc20"),
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "OVF", Symbol: "OVF", Decimals: 18}),
 	})
-	const destChan = core.ChannelId(150)
+	const destChan = types.ChannelId(150)
 	ibcDenom := PredictWrappedTokenV2(u256.Zero(), uint32(destChan), []byte("uatom"), MetadataImage(mustDecodeTokenMetadata(metaBytes)))
 	overflowAmt := new(u256.Uint).Add(u256.NewUint(uint64(math.MaxInt64)), u256.NewUint(1))
 	receiver := testAddress("ovf-rx")
@@ -172,12 +174,12 @@ func TestInitializeOverflowAmountReturnsFailureAckNoMint(cur realm, t *testing.T
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}))
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), destChan, data, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, data, 0)
 
 	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("ovf-rly")), nil)
 
-	uassert.True(t, res.Status == core.PacketStatusFailure)
-	uassert.Equal(t, string(universalErrorAck()), string(res.Ack))
+	uassert.True(t, res.Status == types.PacketStatusFailure)
+	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
 	uassert.Equal(t, int64(0), VoucherBalanceOf(ibcDenom, address(receiver)))
 }
 
@@ -187,7 +189,7 @@ func TestSendBaseAmountInt64Boundary(cur realm, t *testing.T) {
 	maxI64 := u256.NewUint(uint64(math.MaxInt64))
 
 	senderA := testAddress("bnd-sndr-a")
-	const chanA = core.ChannelId(160)
+	const chanA = types.ChannelId(160)
 	orderA := z.TokenOrderV2{
 		Sender:      []byte(senderA),
 		BaseToken:   []byte("ugnot"),
@@ -203,7 +205,7 @@ func TestSendBaseAmountInt64Boundary(cur realm, t *testing.T) {
 	uassert.Equal(t, maxI64.ToString(), balA.ToString())
 
 	senderB := testAddress("bnd-sndr-b")
-	const chanB = core.ChannelId(161)
+	const chanB = types.ChannelId(161)
 	overAmt := new(u256.Uint).Add(maxI64, u256.NewUint(1))
 	orderB := z.TokenOrderV2{
 		Sender:      []byte(senderB),
@@ -249,7 +251,7 @@ func TestInitializeDecimalsExceedMaxReturnsFailureAck(cur realm, t *testing.T) {
 			Name: "Over", Symbol: "OVD", Decimals: 19,
 		}),
 	})
-	const destChan = core.ChannelId(180)
+	const destChan = types.ChannelId(180)
 	ibcDenom := PredictWrappedTokenV2(u256.Zero(), uint32(destChan), []byte("uatom"), MetadataImage(mustDecodeTokenMetadata(metaBytes)))
 
 	data := mustZkgmPacketBytes(batchMustOrderInstruction(z.TokenOrderV2{
@@ -262,12 +264,12 @@ func TestInitializeDecimalsExceedMaxReturnsFailureAck(cur realm, t *testing.T) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}))
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), destChan, data, 0, 0)
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, data, 0)
 
 	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("ovd-rly")), nil)
 
-	uassert.True(t, res.Status == core.PacketStatusFailure)
-	uassert.Equal(t, string(universalErrorAck()), string(res.Ack))
+	uassert.True(t, res.Status == types.PacketStatusFailure)
+	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
 	uassert.False(t, zkgm.HasVoucher(ibcDenom))
 }
 

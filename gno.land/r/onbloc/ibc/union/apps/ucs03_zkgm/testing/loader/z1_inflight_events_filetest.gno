@@ -3,6 +3,9 @@ package loader
 
 import (
 	"chain"
+
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	stdtesting "testing"
 
 	z "gno.land/p/onbloc/ibc/union/zkgm"
@@ -30,9 +33,9 @@ func main(cur realm) {
 	stdtesting.IssueCoins(zkgm.ProxyAddress(), chain.NewCoins(chain.NewCoin("ureleaseevent", 9)))
 	zkgm.ReleaseNative(cross(cur), "ureleaseevent", address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"), 9)
 
-	parent := core.NewPacket(cross(cur), core.ChannelId(1), core.ChannelId(2), []byte("parent"), 0, core.Timestamp(10))
-	child := core.NewPacket(cross(cur), core.ChannelId(3), core.ChannelId(4), []byte("child"), 0, core.Timestamp(20))
-	key := zkgm.NewInFlightKey(cross(cur), core.CommitPacket(child))
+	parent := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(2), []byte("parent"), types.Timestamp(10))
+	child := core.NewPacket(cross(cur), types.ChannelId(3), types.ChannelId(4), []byte("child"), types.Timestamp(20))
+	key := zkgm.NewInFlightKey(cross(cur), types.MustCommit(types.CommitPacket(child)))
 	value := zkgm.NewInFlightValue(cross(cur), parent)
 
 	zkgm.SetInFlightPacket(cross(cur), key, value)

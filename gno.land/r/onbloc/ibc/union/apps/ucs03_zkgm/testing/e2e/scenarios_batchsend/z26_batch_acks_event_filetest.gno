@@ -2,6 +2,8 @@
 package scenarios_batchsend
 
 import (
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
@@ -10,41 +12,41 @@ const batchAcksPort = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/s
 
 type asyncApp struct{}
 
-func (a *asyncApp) OnChannelOpenInit(cur realm, connectionId core.ConnectionId, channelId core.ChannelId, version string, relayer address) {
+func (a *asyncApp) OnChannelOpenInit(cur realm, connectionId types.ConnectionId, channelId types.ChannelId, version string, relayer address) {
 }
 
-func (a *asyncApp) OnChannelOpenTry(cur realm, connectionId core.ConnectionId, channelId core.ChannelId, version string, counterpartyVersion string, relayer address) {
+func (a *asyncApp) OnChannelOpenTry(cur realm, connectionId types.ConnectionId, channelId types.ChannelId, version string, counterpartyVersion string, relayer address) {
 }
 
-func (a *asyncApp) OnChannelOpenAck(cur realm, channelId core.ChannelId, counterpartyChannelId core.ChannelId, counterpartyVersion string, relayer address) {
+func (a *asyncApp) OnChannelOpenAck(cur realm, channelId types.ChannelId, counterpartyChannelId types.ChannelId, counterpartyVersion string, relayer address) {
 }
-func (a *asyncApp) OnChannelOpenConfirm(cur realm, channelId core.ChannelId, relayer address) {}
-func (a *asyncApp) OnChannelCloseInit(cur realm, channelId core.ChannelId, relayer address)   {}
-func (a *asyncApp) OnChannelCloseConfirm(cur realm, channelId core.ChannelId, relayer address) {
-}
-
-func (a *asyncApp) OnRecvPacket(cur realm, packet core.Packet, relayer address, relayerMsg []byte) core.RecvPacketResult {
-	return core.NewRecvPacketResult(cross(cur), core.PacketStatusAsync, nil)
+func (a *asyncApp) OnChannelOpenConfirm(cur realm, channelId types.ChannelId, relayer address) {}
+func (a *asyncApp) OnChannelCloseInit(cur realm, channelId types.ChannelId, relayer address)   {}
+func (a *asyncApp) OnChannelCloseConfirm(cur realm, channelId types.ChannelId, relayer address) {
 }
 
-func (a *asyncApp) OnAcknowledgementPacket(cur realm, packet core.Packet, acknowledgement []byte, relayer address) {
+func (a *asyncApp) OnRecvPacket(cur realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {
+	return core.NewRecvPacketResult(cross(cur), types.PacketStatusAsync, nil)
 }
-func (a *asyncApp) OnTimeoutPacket(cur realm, packet core.Packet, relayer address) {}
+
+func (a *asyncApp) OnAcknowledgementPacket(cur realm, packet types.Packet, acknowledgement []byte, relayer address) {
+}
+func (a *asyncApp) OnTimeoutPacket(cur realm, packet types.Packet, relayer address) {}
 
 func main(cur realm) {
 	e2e.RegisterMockLightClient(cross(cur))
 	core.RegisterApp(cross(cur), &asyncApp{})
 
-	clientId := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), e2e.MockClientType, nil, nil))
-	connectionId := core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(cross(cur), clientId, core.ClientId(99)))
-	core.ConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(cross(cur), connectionId, core.ConnectionId(77), nil, core.Height(1)))
-	channelId := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(cross(cur), []byte(batchAcksPort), []byte(batchAcksPort), connectionId, "async-v1"))
-	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(cross(cur), channelId, "async-v1", core.ChannelId(101), nil, core.Height(1)))
+	clientId := core.CreateClient(cross(cur), types.NewMsgCreateClient(e2e.MockClientType, nil, nil))
+	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
+	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit([]byte(batchAcksPort), []byte(batchAcksPort), connectionId, "async-v1"))
+	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, "async-v1", types.ChannelId(101), nil, 1))
 
-	packet := core.NewPacket(cross(cur), core.ChannelId(99), channelId, []byte("async-packet"), 0, core.Timestamp(1<<62))
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, nil, nil, core.Height(1)))
+	packet := core.NewPacket(cross(cur), types.ChannelId(99), channelId, []byte("async-packet"), types.Timestamp(1<<62))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))
 
-	batchHash := core.BatchAcks(cross(cur), core.NewMsgBatchAcks(cross(cur), []core.Packet{packet}, [][]byte{[]byte("ack")}))
+	batchHash := core.BatchAcks(cross(cur), types.NewMsgBatchAcks([]types.Packet{packet}, [][]byte{[]byte("ack")}))
 	println("batch_acks_hash", batchHash.String())
 	println("batch_acks_event", "ok")
 }
@@ -158,7 +160,7 @@ func main(cur realm) {
 //       },
 //       {
 //         "key": "counterparty_port_id",
-//         "value": "0x676e6f2e6c616e642f722f6f6e626c6f632f756e696f6e6962632f76312f617070732f7a6b676d2f74657374696e672f6532652f7363656e6172696f735f626174636873656e64"
+//         "value": "0x676e6f2e6c616e642f722f6f6e626c6f632f6962632f756e696f6e2f617070732f75637330335f7a6b676d2f74657374696e672f6532652f7363656e6172696f735f626174636873656e64"
 //       },
 //       {
 //         "key": "connection_id",
@@ -196,7 +198,7 @@ func main(cur realm) {
 //       },
 //       {
 //         "key": "counterparty_port_id",
-//         "value": "0x676e6f2e6c616e642f722f6f6e626c6f632f756e696f6e6962632f76312f617070732f7a6b676d2f74657374696e672f6532652f7363656e6172696f735f626174636873656e64"
+//         "value": "0x676e6f2e6c616e642f722f6f6e626c6f632f6962632f756e696f6e2f617070732f75637330335f7a6b676d2f74657374696e672f6532652f7363656e6172696f735f626174636873656e64"
 //       },
 //       {
 //         "key": "counterparty_channel_id",

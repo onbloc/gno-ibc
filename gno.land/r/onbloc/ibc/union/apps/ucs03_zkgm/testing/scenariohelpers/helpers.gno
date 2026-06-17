@@ -1,6 +1,8 @@
 package scenariohelpers
 
 import (
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
@@ -33,7 +35,7 @@ func TokenOrderPacketData(cur realm, order z.TokenOrderV2) []byte {
 	return e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order))
 }
 
-func ChannelBalanceStr(channelId core.ChannelId, path *u256.Uint, baseToken []byte, quoteToken []byte) string {
+func ChannelBalanceStr(channelId types.ChannelId, path *u256.Uint, baseToken []byte, quoteToken []byte) string {
 	balance := zkgm.GetChannelBalanceV2(impl.ChannelBalanceKeyV2(channelId, path, baseToken, quoteToken))
 	if balance == nil {
 		return "0"
@@ -41,7 +43,7 @@ func ChannelBalanceStr(channelId core.ChannelId, path *u256.Uint, baseToken []by
 	return balance.ToString()
 }
 
-func MintVoucher(cur realm, inst zkgm.ZkgmImpl, channelId core.ChannelId, base string, receiver string, amount uint64, symbol string) string {
+func MintVoucher(cur realm, inst zkgm.ZkgmImpl, channelId types.ChannelId, base string, receiver string, amount uint64, symbol string) string {
 	meta := e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: base, Symbol: symbol, Decimals: 6})
 	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte(base), impl.MetadataImage(DecodeTokenMetadata(meta)))
 	order := z.TokenOrderV2{
@@ -54,7 +56,7 @@ func MintVoucher(cur realm, inst zkgm.ZkgmImpl, channelId core.ChannelId, base s
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    meta,
 	}
-	packet := core.NewPacket(cross(cur), core.ChannelId(1), channelId, TokenOrderPacketData(cross(cur), order), 0, core.Timestamp(100))
+	packet := core.NewPacket(cross(cur), types.ChannelId(1), channelId, TokenOrderPacketData(cross(cur), order), types.Timestamp(100))
 	inst.Recv(cross(cur), packet, testutils.TestAddress("scenario-relayer"), nil)
 	return quoteToken
 }

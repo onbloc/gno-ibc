@@ -2,6 +2,8 @@
 package scenarios_batchsend
 
 import (
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
@@ -29,9 +31,9 @@ func main(cur realm) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	initPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), initialize)), 0, core.Timestamp(1<<62))
+	initPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), initialize)), types.Timestamp(1<<62))
 	println("[SCENARIO] 1. initialize voucher")
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{initPacket}, nil, nil, core.Height(1)))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{initPacket}, nil, nil, 1))
 	_, hasOriginAfterInitialize := zkgm.GetTokenOrigin(quoteToken)
 	println("voucher_balance_after_initialize", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 	println("origin_after_initialize", hasOriginAfterInitialize)
@@ -47,9 +49,9 @@ func main(cur realm) {
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	escrowPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), escrow)), 0, core.Timestamp(1<<62))
+	escrowPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), escrow)), types.Timestamp(1<<62))
 	println("[SCENARIO] 2. escrow into existing voucher")
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{escrowPacket}, nil, nil, core.Height(1)))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{escrowPacket}, nil, nil, 1))
 	_, hasOriginAfterEscrow := zkgm.GetTokenOrigin(quoteToken)
 	println("voucher_balance_after_escrow", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 	println("origin_after_escrow", hasOriginAfterEscrow)

@@ -2,25 +2,27 @@
 package scenarios
 
 import (
-	z "gno.land/p/onbloc/ibc/union/zkgm"
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/onbloc/ibc/union/core"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
 	"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"
 	realcometbls "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/realcometbls"
 	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
-	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1/loader"
+	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 const mockReceiverPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"
 
 func main(cur realm) {
+	impl.Register(cross(cur))
 	mock.Reset(cross(cur))
 	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	packet := mixedBatchPacket(cur, pair, receiver)
 
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv(cross(cur), []core.Packet{packet}, [][]byte{[]byte("batch-relay-msg")}, realcometbls.Z40MixedBatchPacketCommitmentProof(cross(cur)), core.Height(realcometbls.DevnetHeight-1)))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{[]byte("batch-relay-msg")}, realcometbls.Z40MixedBatchPacketCommitmentProof(cross(cur)), uint64(realcometbls.DevnetHeight-1)))
 
 	println("mock_calls", mock.Calls(cross(cur)))
 	println("last_calldata", mock.LastCalldata(cross(cur)))
@@ -32,7 +34,7 @@ func main(cur realm) {
 	println("recv_batch_mixed_real_cometbls", "ok")
 }
 
-func mixedBatchPacket(cur realm, pair realcometbls.ChannelPair, receiver string) core.Packet {
+func mixedBatchPacket(cur realm, pair realcometbls.ChannelPair, receiver string) types.Packet {
 	batch := z.Batch{Instructions: []z.Instruction{
 		e2e.MustCallInstruction(cross(cur), z.Call{
 			Sender:           []byte("sender"),
@@ -49,7 +51,7 @@ func mixedBatchPacket(cur realm, pair realcometbls.ChannelPair, receiver string)
 			Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 		}),
 	}}
-	return core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), 0, core.Timestamp(0))
+	return core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), types.Timestamp(0))
 }
 
 func expectedAckHash(cur realm) string {
@@ -57,7 +59,7 @@ func expectedAckHash(cur realm) string {
 		e2e.MustCallAck(cross(cur)),
 		universalErrorAck(),
 	})
-	return core.CommitAcks([][]byte{ack}).String()
+	return types.CommitAcks([][]byte{ack}).String()
 }
 
 func universalErrorAck() []byte {

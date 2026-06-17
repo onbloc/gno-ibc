@@ -388,6 +388,28 @@ func TestCreateClientStoresInitialClientAndConsensusState(cur realm, t *testing.
 	}
 }
 
+// Union requires client updates to run only against active clients; this locks
+// the guard before the light client implementation mutates local state.
+func TestUpdateClientRejectsInactiveClient(cur realm, t *testing.T) {
+	resetState()
+	clientId := types.ClientId(1)
+	client := &mockClient{chainId: "union-1", height: types.NewHeight(100), status: types.StatusFrozen}
+	st.clientRegistry[mockType] = client
+	st.clientTypes[clientId] = mockType
+	st.saveClientState(clientId, []byte("client-state"))
+	st.saveConsensusState(clientId, types.NewHeight(100), []byte("consensus-state"))
+
+	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
+		UpdateClient(cur, types.MsgUpdateClient{
+			ClientId:      clientId,
+			ClientMessage: []byte("update"),
+		})
+	})
+	if client.height != types.NewHeight(100) {
+		t.Fatalf("inactive UpdateClient must not call light client: got height %s", client.height)
+	}
+}
+
 // --- State: ID generation ---
 
 func TestGenerateIdsSequential(cur realm, t *testing.T) {
@@ -454,6 +476,41 @@ func TestConnectionStateSaved(cur realm, t *testing.T) {
 	st.saveConnection(id, types.Connection{State: types.ConnectionStateOpen})
 	if st.getConnection(id).State != types.ConnectionStateOpen {
 		t.Error("connection state must reflect latest save")
+	}
+}
+
+// ConnectionOpenInit must not create local connection state for a client id that
+// has not been registered.
+func TestConnectionOpenInitRejectsUnknownClient(cur realm, t *testing.T) {
+	resetState()
+
+	uassert.AbortsContains(t, cur, "client not found", func(cur realm) {
+		ConnectionOpenInit(cur, types.MsgConnectionOpenInit{
+			ClientId:             types.ClientId(404),
+			CounterpartyClientId: types.ClientId(99),
+		})
+	})
+	if len(st.connections) != 0 {
+		t.Fatal("ConnectionOpenInit must not save a connection for an unknown client")
+	}
+}
+
+// ConnectionOpenInit is a proof-bearing handshake root, so the selected local
+// client must already be active before the connection is saved.
+func TestConnectionOpenInitRejectsInactiveClient(cur realm, t *testing.T) {
+	resetState()
+	clientId := types.ClientId(1)
+	st.clientRegistry[mockType] = &mockClient{chainId: "union-1", height: types.NewHeight(100), status: types.StatusExpired}
+	st.clientTypes[clientId] = mockType
+
+	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
+		ConnectionOpenInit(cur, types.MsgConnectionOpenInit{
+			ClientId:             clientId,
+			CounterpartyClientId: types.ClientId(99),
+		})
+	})
+	if len(st.connections) != 0 {
+		t.Fatal("ConnectionOpenInit must not save a connection for an inactive client")
 	}
 }
 
@@ -559,6 +616,29 @@ func TestPacketSendRejectsAddressAsPortId(cur realm, t *testing.T) {
 	})
 }
 
+// Source packet commitments need a non-zero timestamp timeout; otherwise the
+// timeout invariant cannot be enforced on the counterparty.
+func TestPacketSendRejectsZeroTimeoutTimestamp(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+
+	uassert.AbortsContains(t, cur, "packet timeout", func(cur realm) {
+		PacketSend(cur, channelId, 0, []byte("data"))
+	})
+}
+
+// PacketSend must reject a second identical source commitment instead of
+// silently overwriting the existing commitment.
+func TestPacketSendRejectsDuplicateCommitment(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	PacketSend(cross(cur), channelId, 100, []byte("data"))
+
+	uassert.AbortsContains(t, cur, "packet commitment", func(cur realm) {
+		PacketSend(cur, channelId, 100, []byte("data"))
+	})
+}
+
 func TestBatchSendReturnsUnionPacketCommitment(cur realm, t *testing.T) {
 	resetState()
 	_, _, channelId := setupOpenChannel(t)
@@ -655,6 +735,36 @@ func TestBatchSendRejectsNonOwner(cur realm, t *testing.T) {
 
 	uassert.AbortsContains(t, cur, "caller not authorized to send packet", func(cur realm) {
 		BatchSend(cur, types.MsgBatchSend{Packets: []types.Packet{packet}})
+	})
+}
+
+// BatchSend writes the Union batch commitment path, so recommitting the same
+// batch hash should be rejected.
+func TestBatchSendRejectsDuplicateBatchCommitment(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packets := []types.Packet{
+		{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100},
+		{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("b"), TimeoutTimestamp: 100},
+	}
+	BatchSend(cross(cur), types.MsgBatchSend{Packets: packets})
+
+	uassert.AbortsContains(t, cur, "packet commitment", func(cur realm) {
+		BatchSend(cur, types.MsgBatchSend{Packets: packets})
+	})
+}
+
+// BatchSend also mirrors each packet commitment; an existing per-packet source
+// commitment would let callers repackage already-sent packets.
+func TestBatchSendRejectsExistingPerPacketCommitment(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	p1 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100}
+	p2 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("b"), TimeoutTimestamp: 100}
+	st.commitPacket(p1)
+
+	uassert.AbortsContains(t, cur, "packet commitment", func(cur realm) {
+		BatchSend(cur, types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
 	})
 }
 
@@ -788,6 +898,23 @@ func TestPacketReceiptLifecycle(cur realm, t *testing.T) {
 	}
 	if _, ok := st.batchReceipts[types.MustCommit(types.PacketAcknowledgementPath(p))]; ok {
 		t.Fatal("deletePacketReceipt must clear packet acknowledgement path")
+	}
+}
+
+// Union stores a recv receipt as COMMITMENT_MAGIC; COMMITMENT_MAGIC_ACK is
+// reserved for completed source commitments.
+func TestPacketReceiptUsesCommitmentMagicSentinel(cur realm, t *testing.T) {
+	resetState()
+	p := types.Packet{SourceChannelId: 1, DestinationChannelId: 2, TimeoutTimestamp: 1000}
+	st.setPacketReceipt(p)
+
+	path := types.MustCommit(types.PacketAcknowledgementPath(p))
+	got := QueryReceiptAtPath(path)
+	if got != types.COMMITMENT_MAGIC.String() {
+		t.Fatalf("recv receipt sentinel: got %q want %s", got, types.COMMITMENT_MAGIC)
+	}
+	if st.hasAcknowledgement(p) {
+		t.Fatal("received-but-not-acked receipt must not count as an acknowledgement")
 	}
 }
 
@@ -1213,6 +1340,22 @@ func TestWriteAcknowledgementRejectsPacketWithoutReceipt(cur realm, t *testing.T
 	}
 }
 
+// Async WriteAcknowledgement should only accept the "received but not acked"
+// sentinel, not the completed source-side sentinel.
+func TestWriteAcknowledgementRejectsCompletedSentinelReceipt(cur realm, t *testing.T) {
+	resetState()
+	_, _, channelId := setupOpenChannel(t)
+	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
+	st.saveBatchReceipts(types.MustCommit(types.CommitPacket(packet)), types.COMMITMENT_MAGIC_ACK)
+
+	uassert.AbortsContains(t, cur, "packet receipt", func(cur realm) {
+		WriteAcknowledgement(cur, types.MsgWriteAcknowledgement{
+			Packet:          packet,
+			Acknowledgement: []byte("async-ack"),
+		})
+	})
+}
+
 func TestPacketRecvReceiptDupRejected(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
@@ -1338,6 +1481,37 @@ func TestPacketAcknowledgementRoundtrip(cur realm, t *testing.T) {
 	}
 }
 
+// A source ack proves completion by marking the source commitment with
+// COMMITMENT_MAGIC_ACK, which also makes duplicate ack delivery a no-op.
+func TestPacketAcknowledgementMarksSourceCommitmentCompleted(cur realm, t *testing.T) {
+	resetState()
+	portId, _, channelId := setupOpenChannel(t)
+	app := st.ports[portKey(portId)].(*mockApp)
+	packet := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
+	st.commitPacket(packet)
+
+	PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{
+		Packets:          []types.Packet{packet},
+		Acknowledgements: [][]byte{{0x01}},
+	})
+
+	path := types.MustCommit(types.PacketCommitmentPath(packet))
+	if got := QueryCommitmentAtPath(path); got != types.COMMITMENT_MAGIC_ACK.String() {
+		t.Fatalf("source commitment after ack: got %q want %s", got, types.COMMITMENT_MAGIC_ACK)
+	}
+	if len(app.ackPackets) != 1 {
+		t.Fatalf("OnAcknowledgementPacket calls: got %d want 1", len(app.ackPackets))
+	}
+
+	PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{
+		Packets:          []types.Packet{packet},
+		Acknowledgements: [][]byte{{0x01}},
+	})
+	if len(app.ackPackets) != 1 {
+		t.Fatalf("duplicate ack must be a no-op: got %d calls", len(app.ackPackets))
+	}
+}
+
 func TestPacketAcknowledgementBatchUsesUnionBatchReceipts(cur realm, t *testing.T) {
 	resetState()
 	portId, _, channelId := setupOpenChannel(t)
@@ -1441,6 +1615,31 @@ func TestPacketTimeoutReceiptPath(cur realm, t *testing.T) {
 	}
 	if st.hasPacketCommitment(packet) {
 		t.Fatal("timeout must delete source packet commitment")
+	}
+}
+
+// A timeout proof completes the same source commitment state machine as ack,
+// using COMMITMENT_MAGIC_ACK instead of deleting the commitment path.
+func TestPacketTimeoutMarksSourceCommitmentCompleted(cur realm, t *testing.T) {
+	resetState()
+	portId, _, channelId := setupOpenChannel(t)
+	app := st.ports[portKey(portId)].(*mockApp)
+	packet := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("transfer"), TimeoutTimestamp: 100}
+	st.commitPacket(packet)
+
+	PacketTimeout(cross(cur), types.MsgPacketTimeout{Packet: packet})
+
+	path := types.MustCommit(types.PacketCommitmentPath(packet))
+	if got := QueryCommitmentAtPath(path); got != types.COMMITMENT_MAGIC_ACK.String() {
+		t.Fatalf("source commitment after timeout: got %q want %s", got, types.COMMITMENT_MAGIC_ACK)
+	}
+	if len(app.timeoutPackets) != 1 {
+		t.Fatalf("OnTimeoutPacket calls: got %d want 1", len(app.timeoutPackets))
+	}
+
+	PacketTimeout(cross(cur), types.MsgPacketTimeout{Packet: packet})
+	if len(app.timeoutPackets) != 1 {
+		t.Fatalf("duplicate timeout must be a no-op: got %d calls", len(app.timeoutPackets))
 	}
 }
 

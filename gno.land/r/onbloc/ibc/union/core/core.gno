@@ -5,10 +5,14 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-// PacketSend commits a packet for the caller's port. Per the ibc-union-spec the
+// SendPacket commits a packet for the caller's port. Per the ibc-union-spec the
 // timeout height is always zero (types.MustBeZero); only the timeout timestamp is
 // meaningful.
-func PacketSend(cur realm, sourceChannelId types.ChannelId, timeoutTimestamp types.Timestamp, data []byte) types.Packet {
+func SendPacket(cur realm, sourceChannelId types.ChannelId, timeoutTimestamp types.Timestamp, data []byte) types.Packet {
+	if timeoutTimestamp == 0 {
+		panic(ErrTimeoutMustBeSet)
+	}
+
 	portId := store.getChannelOwner(sourceChannelId)
 	if string(portId) != cur.Previous().PkgPath() {
 		panic(ErrUnauthorizedPacketSender)
@@ -27,7 +31,11 @@ func PacketSend(cur realm, sourceChannelId types.ChannelId, timeoutTimestamp typ
 		TimeoutHeight:        0,
 		TimeoutTimestamp:     timeoutTimestamp,
 	}
-	store.clientForChannel(sourceChannelId).commitPacket(packet)
+	c := store.clientForChannel(sourceChannelId)
+	if c.hasPacketCommitment(packet) {
+		panic(ErrPacketCommitmentAlreadyExists)
+	}
+	c.commitPacket(packet)
 
 	emitPacketSendEvent(packet, channel, connection)
 	return packet

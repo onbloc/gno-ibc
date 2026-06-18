@@ -2,6 +2,7 @@ package core
 
 import (
 	"chain/runtime"
+	rtunsafe "chain/runtime/unsafe"
 )
 
 var (
@@ -12,7 +13,7 @@ var (
 func init(cur realm) {
 	// SAFE: admin bootstrap needs the tx signer, not a loader realm that may
 	// appear as cur.Previous().
-	admin = runtime.OriginCaller()
+	admin = rtunsafe.OriginCaller()
 	packagePath = cur.PkgPath()
 }
 

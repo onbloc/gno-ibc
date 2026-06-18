@@ -12,6 +12,8 @@ var (
 	ErrAcknowledgementAlreadyWritten = errors.New("acknowledgement already written")
 	ErrAcknowledgementEmpty          = errors.New("acknowledgement cannot be empty")
 	ErrUnauthorizedPacketSender      = errors.New("caller not authorized to send packet")
+	ErrTimeoutMustBeSet              = errors.New("timeout must be set")
+	ErrPacketCommitmentAlreadyExists = errors.New("packet commitment already exists")
 	ErrPacketReceiptNotFound         = errors.New("packet receipt not found")
 	ErrNotEnoughPackets              = errors.New("not enough packets")
 	ErrBatchSameChannelOnly          = errors.New("batch must use the same channel")

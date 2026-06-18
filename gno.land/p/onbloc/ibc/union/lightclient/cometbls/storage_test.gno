@@ -8,14 +8,17 @@ import (
 )
 
 func TestHeightKeyLexicographicOrder(t *testing.T) {
+	// Union reference: consensus_state_keys_lexicographically_ordered,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/cometbls/src/storage.rs#L270.
 	heights := []types.Height{
-		{RevisionNumber: 1, RevisionHeight: 10},
-		{RevisionNumber: 0, RevisionHeight: 1000},
-		{RevisionNumber: 0, RevisionHeight: 2},
-		{RevisionNumber: 1, RevisionHeight: 2},
-		{RevisionNumber: 0, RevisionHeight: 10},
-		{RevisionNumber: 0, RevisionHeight: 1},
-		{RevisionNumber: 1, RevisionHeight: 1},
+		{RevisionNumber: 2, RevisionHeight: 22},
+		{RevisionNumber: 1, RevisionHeight: 5115},
+		{RevisionNumber: 0, RevisionHeight: 23451},
+		{RevisionNumber: 3, RevisionHeight: 1234},
+		{RevisionNumber: 1, RevisionHeight: 2123},
+		{RevisionNumber: 1, RevisionHeight: 1000},
+		{RevisionNumber: 0, RevisionHeight: 132},
+		{RevisionNumber: 0, RevisionHeight: 18446744073709551615}, // u64::MAX
 	}
 
 	keys := make([]string, len(heights))
@@ -25,13 +28,14 @@ func TestHeightKeyLexicographicOrder(t *testing.T) {
 	sort.Strings(keys)
 
 	want := []string{
-		heightKey(types.Height{RevisionNumber: 0, RevisionHeight: 1}),
-		heightKey(types.Height{RevisionNumber: 0, RevisionHeight: 2}),
-		heightKey(types.Height{RevisionNumber: 0, RevisionHeight: 10}),
-		heightKey(types.Height{RevisionNumber: 0, RevisionHeight: 1000}),
-		heightKey(types.Height{RevisionNumber: 1, RevisionHeight: 1}),
-		heightKey(types.Height{RevisionNumber: 1, RevisionHeight: 2}),
-		heightKey(types.Height{RevisionNumber: 1, RevisionHeight: 10}),
+		heightKey(types.Height{RevisionNumber: 0, RevisionHeight: 132}),
+		heightKey(types.Height{RevisionNumber: 0, RevisionHeight: 23451}),
+		heightKey(types.Height{RevisionNumber: 0, RevisionHeight: 18446744073709551615}), // u64::MAX
+		heightKey(types.Height{RevisionNumber: 1, RevisionHeight: 1000}),
+		heightKey(types.Height{RevisionNumber: 1, RevisionHeight: 2123}),
+		heightKey(types.Height{RevisionNumber: 1, RevisionHeight: 5115}),
+		heightKey(types.Height{RevisionNumber: 2, RevisionHeight: 22}),
+		heightKey(types.Height{RevisionNumber: 3, RevisionHeight: 1234}),
 	}
 	for i := range want {
 		if keys[i] != want[i] {
@@ -41,42 +45,51 @@ func TestHeightKeyLexicographicOrder(t *testing.T) {
 }
 
 func TestConsensusStateExactHeightLookup(t *testing.T) {
+	// Union reference: next_prev_consensus_state_key_works,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/cometbls/src/storage.rs#L210.
 	c := newTestClient(t)
-	c.setConsensusState(types.NewHeight(10), &ConsensusState{
-		Timestamp:          10,
-		Root:               MerkleRoot{Hash: repeat32(0x10)},
-		NextValidatorsHash: repeat32(0x11),
-	})
-	c.setConsensusState(types.NewHeight(20), &ConsensusState{
-		Timestamp:          20,
-		Root:               MerkleRoot{Hash: repeat32(0x20)},
-		NextValidatorsHash: repeat32(0x21),
-	})
-	c.setConsensusState(types.NewHeight(1000), &ConsensusState{
-		Timestamp:          1000,
-		Root:               MerkleRoot{Hash: repeat32(0x30)},
-		NextValidatorsHash: repeat32(0x31),
-	})
-
-	for _, tc := range []struct {
-		height uint64
-		want   types.Timestamp
+	// Set up consensus states matching Union's ordered_heights array:
+	// (revision_number, revision_height, timestamp)
+	orderedHeights := []struct {
+		revNum    uint64
+		revH      uint64
+		timestamp uint64
 	}{
-		{10, 10},
-		{20, 20},
-		{100, types.Timestamp(testNow)},
-		{1000, 1000},
-	} {
-		got, err := c.GetTimestampAtHeight(tc.height)
+		{0, 132, 1231238123},
+		{0, 23451, 12323},
+		{0, 18446744073709551615 - 1, 23713}, // u64::MAX - 1
+		{1, 1000, 9},
+		{1, 2123, 3781273413},
+		{1, 5115, 2377281},
+		{2, 22, 2391232},
+		{3, 1234, 238918392},
+	}
+	for _, h := range orderedHeights {
+		c.setConsensusState(types.Height{RevisionNumber: h.revNum, RevisionHeight: h.revH}, &ConsensusState{
+			Timestamp:          h.timestamp,
+			Root:               MerkleRoot{Hash: repeat32(0x10)},
+			NextValidatorsHash: repeat32(0x11),
+		})
+	}
+
+	// Test exact lookups for revision 0 heights (what GetTimestampAtHeight supports)
+	rev0Heights := []struct{ h, ts uint64 }{
+		{132, 1231238123},
+		{23451, 12323},
+		{18446744073709551615 - 1, 23713}, // u64::MAX - 1
+	}
+	for _, h := range rev0Heights {
+		got, err := c.GetTimestampAtHeight(h.h)
 		if err != nil {
-			t.Fatalf("GetTimestampAtHeight(%d): %v", tc.height, err)
+			t.Fatalf("GetTimestampAtHeight(%d): %v", h.h, err)
 		}
-		if got != tc.want {
-			t.Fatalf("GetTimestampAtHeight(%d): got %d want %d", tc.height, got, tc.want)
+		if got != types.Timestamp(h.ts) {
+			t.Fatalf("GetTimestampAtHeight(%d): got %d want %d", h.h, got, h.ts)
 		}
 	}
 
-	if _, err := c.GetTimestampAtHeight(11); err == nil {
-		t.Fatal("GetTimestampAtHeight(11): expected missing exact height error")
+	// Test missing height (between 132 and 23451, not present)
+	if _, err := c.GetTimestampAtHeight(1000); err == nil {
+		t.Fatal("GetTimestampAtHeight(1000): expected missing exact height error")
 	}
 }

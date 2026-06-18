@@ -6,6 +6,9 @@ import (
 )
 
 func TestExtractConsensusStateRejectsShortData(t *testing.T) {
+	// Union reference: extract_consensus_state reads timestamp/state root/storage
+	// root at offsets from client_state.extra,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L146.
 	_, err := ExtractConsensusState([]byte{0x01}, ClientState{
 		TimestampOffset:   0,
 		StateRootOffset:   0,
@@ -17,6 +20,9 @@ func TestExtractConsensusStateRejectsShortData(t *testing.T) {
 }
 
 func TestExtractConsensusStateAtConfiguredOffsets(t *testing.T) {
+	// Union reference: extract_consensus_state uses the configured offsets for
+	// each field,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L146.
 	stateRoot := bytes.Repeat([]byte{0x11}, 32)
 	storageRoot := bytes.Repeat([]byte{0x22}, 32)
 	data := make([]byte, 88)
@@ -44,6 +50,9 @@ func TestExtractConsensusStateAtConfiguredOffsets(t *testing.T) {
 }
 
 func TestExtractConsensusStateRejectsOutOfRangeOffsets(t *testing.T) {
+	// Union reference: extract_consensus_state performs offset-based reads of
+	// timestamp/state root/storage root,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L151.
 	testCases := []struct {
 		name  string
 		state ClientState

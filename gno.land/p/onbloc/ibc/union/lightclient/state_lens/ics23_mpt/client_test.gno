@@ -105,6 +105,8 @@ func TestClientGetTimestampNoConsensus(t *testing.T) {
 }
 
 func TestStatusMirrorsL1(t *testing.T) {
+	// Union reference: status mirrors the L1 client and falls back to Frozen,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L78.
 	cases := []struct {
 		l1   lightclient.Status
 		want lightclient.Status
@@ -136,6 +138,9 @@ func TestStatusNilL1IsFrozen(t *testing.T) {
 }
 
 func TestVerifyHeaderUpdatesState(t *testing.T) {
+	// Union reference: verify_header proves the L2 consensus state through L1
+	// membership, then stores a StateUpdate,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L98.
 	l1 := &mockL1Client{status: lightclient.Active}
 	c := newTestClient(t, l1, bytes.Repeat([]byte{0x02}, 32))
 
@@ -202,6 +207,9 @@ func TestVerifyHeaderUpdatesState(t *testing.T) {
 }
 
 func TestVerifyHeaderStoresOlderHeightWithoutRegressingLatest(t *testing.T) {
+	// Union reference: verify_header overwrites client state only when
+	// l2_latest_height advances,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L128.
 	l1 := &mockL1Client{status: lightclient.Active}
 	c := newTestClient(t, l1, bytes.Repeat([]byte{0x02}, 32))
 
@@ -239,6 +247,8 @@ func TestVerifyHeaderStoresOlderHeightWithoutRegressingLatest(t *testing.T) {
 }
 
 func TestVerifyHeaderRejectsWhenL1Fails(t *testing.T) {
+	// Union reference: verify_header maps the L1 membership failure,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L109.
 	l1 := &mockL1Client{status: lightclient.Active, membershipErr: errors.New("boom")}
 	c := newTestClient(t, l1, bytes.Repeat([]byte{0x02}, 32))
 
@@ -264,6 +274,9 @@ func TestVerifyHeaderRejectsWhenL1Fails(t *testing.T) {
 }
 
 func TestVerifyHeaderRejectsMalformedHeader(t *testing.T) {
+	// Union reference: verify_header decodes the L2 consensus-state proof before
+	// L1 verification,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L106.
 	c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
 
 	var caller, relayer address
@@ -390,6 +403,9 @@ func TestVerifyMembershipConsensusNotFound(t *testing.T) {
 }
 
 func TestVerifyNonMembershipStorageProof(t *testing.T) {
+	// Union reference: verify_non_membership reads the consensus state at height
+	// and verifies absence against its storage root,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L53.
 	path := bytes.Repeat([]byte{0x22}, 32)
 	slot, err := storage.IBCCommitmentKey(path)
 	if err != nil {
@@ -408,6 +424,9 @@ func TestVerifyNonMembershipStorageProof(t *testing.T) {
 }
 
 func TestVerifyNonMembershipRejectsWrongCommitmentKey(t *testing.T) {
+	// Union reference: verify_non_membership delegates commitment-key binding
+	// to the storage proof verifier,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L53.
 	c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
 	proof := storage.EncodeProof(storage.Proof{
 		Key:   storage.WordFromUint64(2),
@@ -419,6 +438,9 @@ func TestVerifyNonMembershipRejectsWrongCommitmentKey(t *testing.T) {
 }
 
 func TestVerifyNonMembershipRejectsInvalidProofBytes(t *testing.T) {
+	// Union reference: verify_non_membership decodes the storage proof before
+	// verification,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L57.
 	c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
 	err := c.VerifyNonMembership(10, bytes.Repeat([]byte{0x22}, 32), []byte{0x01})
 	if err == nil {

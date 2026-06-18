@@ -235,6 +235,9 @@ func TestEncodeDecodeHeaderRoundTrip(t *testing.T) {
 }
 
 func TestHeaderValidateBasic(t *testing.T) {
+	// Union reference: verify_header rejects stale heights and invalid header
+	// timing before proof verification,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/cometbls/src/client.rs#L189.
 	testCases := []struct {
 		name    string
 		setup   func(*Header)
@@ -291,6 +294,9 @@ func TestHeaderValidateBasic(t *testing.T) {
 }
 
 func TestHeaderGetHeightPreservesTrustedRevision(t *testing.T) {
+	// Union reference: update_state rebuilds the untrusted height with the
+	// trusted height revision,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/cometbls/src/client.rs#L288.
 	h := newTestHeader(42, 1000, 500, 10, []byte{0xAA})
 	h.TrustedHeight = heightPtr(types.NewHeightWithRevision(7, 10))
 
@@ -325,6 +331,8 @@ func assertVerifyHeaderErrContains(t *testing.T, err error, want string) {
 }
 
 func TestVerifyHeaderRejectsInvalidHeader(t *testing.T) {
+	// Union reference: verify_header branch checks,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/cometbls/src/client.rs#L189.
 	testCases := []struct {
 		name      string
 		malleate  func(*CometblsLightClient, *Header) time.Time
@@ -401,6 +409,9 @@ func TestVerifyHeaderRejectsInvalidHeader(t *testing.T) {
 }
 
 func TestUpdateStateStoresConsensusAndAdvancesLatestHeight(t *testing.T) {
+	// Union reference: update_state overwrites client state only when the
+	// untrusted height advances latest_height,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/cometbls/src/client.rs#L283.
 	c := newTestClient(t)
 	h := verifyHeaderTestHeader(100, 101, testNow+1_000_000_000)
 	h.SignedHeader.AppHash = repeat32(0x44)
@@ -432,6 +443,9 @@ func TestUpdateStateStoresConsensusAndAdvancesLatestHeight(t *testing.T) {
 }
 
 func TestUpdateStateStoresOlderHeightWithoutRegressingLatestHeight(t *testing.T) {
+	// Union reference: update_state returns StateUpdate without
+	// overwrite_client_state for older/non-latest headers,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/cometbls/src/client.rs#L303.
 	c := newTestClient(t)
 	h := verifyHeaderTestHeader(50, 60, testNow+1_000_000_000)
 
@@ -455,6 +469,9 @@ func TestUpdateStateStoresOlderHeightWithoutRegressingLatestHeight(t *testing.T)
 }
 
 func TestUpdateStateDuplicateHeightDoesNotRewriteStateBytes(t *testing.T) {
+	// Union reference: update_state only returns a consensus update when the
+	// untrusted height does not advance latest_height,
+	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/cometbls/src/client.rs#L303.
 	c := newTestClient(t)
 	h := verifyHeaderTestHeader(90, 100, testNow+1_000_000_000)
 

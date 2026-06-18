@@ -1,8 +1,8 @@
 package zkgm
 
 import (
-	"gno.land/p/onbloc/encoding/abi"
 	u256 "gno.land/p/gnoswap/uint256"
+	"gno.land/p/onbloc/encoding/abi"
 )
 
 var InstructionSchema = abi.Schema{Fields: []abi.Field{
@@ -87,6 +87,19 @@ var TokenInitializerSchema = abi.Schema{Fields: []abi.Field{
 var SolverMetadataSchema = abi.Schema{Fields: []abi.Field{
 	{Type: abi.TypeBytes},
 	{Type: abi.TypeBytes},
+}}
+
+var PredictV1Schema = abi.Schema{Fields: []abi.Field{
+	{Type: abi.TypeUint256},
+	{Type: abi.TypeUint32},
+	{Type: abi.TypeBytes},
+}}
+
+var PredictV2Schema = abi.Schema{Fields: []abi.Field{
+	{Type: abi.TypeUint256},
+	{Type: abi.TypeUint32},
+	{Type: abi.TypeBytes},
+	{Type: abi.TypeUint256},
 }}
 
 func EncodeZkgmPacket(p ZkgmPacket) ([]byte, error) {

@@ -174,7 +174,8 @@ func (c *CometblsLightClient) updateState(header *Header) types.StateUpdate {
 		return types.StateUpdate{Height: height.RevisionHeight}
 	}
 
-	if height.GT(c.clientState.LatestHeight) {
+	advancedLatestHeight := height.GT(c.clientState.LatestHeight)
+	if advancedLatestHeight {
 		c.clientState.LatestHeight = height
 	}
 
@@ -188,8 +189,10 @@ func (c *CometblsLightClient) updateState(header *Header) types.StateUpdate {
 	if consBytes, err := EncodeConsensusState(consState); err == nil {
 		update.ConsensusStateBytes = consBytes
 	}
-	if csBytes, err := EncodeClientState(c.clientState); err == nil {
-		update.ClientStateBytes = csBytes
+	if advancedLatestHeight {
+		if csBytes, err := EncodeClientState(c.clientState); err == nil {
+			update.ClientStateBytes = csBytes
+		}
 	}
 	return update
 }

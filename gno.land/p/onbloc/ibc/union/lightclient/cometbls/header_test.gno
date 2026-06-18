@@ -229,3 +229,84 @@ func TestEncodeDecodeHeaderRoundTrip(t *testing.T) {
 	}
 	bytesEq(t, "ZKP", got.ZeroKnowledgeProof, original.ZeroKnowledgeProof)
 }
+
+func updateStateTestHeader(trustedHeight, signedHeight uint64, timestamp uint64) *Header {
+	return newTestHeader(
+		int64(signedHeight),
+		int64(timestamp/1_000_000_000),
+		int32(timestamp%1_000_000_000),
+		trustedHeight,
+		[]byte{0x01},
+	)
+}
+
+func TestUpdateStateStoresConsensusAndAdvancesLatestHeight(t *testing.T) {
+	c := newTestClient(t)
+	h := updateStateTestHeader(100, 101, testNow+1_000_000_000)
+	h.SignedHeader.AppHash = repeat32(0x44)
+	h.SignedHeader.NextValidatorsHash = repeat32(0x45)
+
+	update := c.updateState(h)
+
+	if c.clientState.LatestHeight != types.NewHeight(101) {
+		t.Fatalf("latest height: got %s want 101", c.clientState.LatestHeight)
+	}
+	if update.Height != 101 {
+		t.Fatalf("update height: got %d want 101", update.Height)
+	}
+	if len(update.ClientStateBytes) == 0 {
+		t.Fatal("update must include client state bytes when latest height advances")
+	}
+	if len(update.ConsensusStateBytes) == 0 {
+		t.Fatal("update must include consensus state bytes for new height")
+	}
+	got, found := c.getConsensusState(types.NewHeight(101))
+	if !found {
+		t.Fatal("consensus state for height 101 not stored")
+	}
+	if got.Timestamp != testNow+1_000_000_000 {
+		t.Fatalf("stored timestamp: got %d want %d", got.Timestamp, testNow+1_000_000_000)
+	}
+	bytesEq(t, "stored app hash", got.Root.Hash, repeat32(0x44))
+	bytesEq(t, "stored next validators hash", got.NextValidatorsHash, repeat32(0x45))
+}
+
+func TestUpdateStateStoresOlderHeightWithoutRegressingLatestHeight(t *testing.T) {
+	c := newTestClient(t)
+	h := updateStateTestHeader(50, 60, testNow+1_000_000_000)
+
+	update := c.updateState(h)
+
+	if c.clientState.LatestHeight != types.NewHeight(100) {
+		t.Fatalf("latest height regressed: got %s want 100", c.clientState.LatestHeight)
+	}
+	if update.Height != 60 {
+		t.Fatalf("update height: got %d want 60", update.Height)
+	}
+	if len(update.ClientStateBytes) != 0 {
+		t.Fatal("older update must not include client state bytes")
+	}
+	if len(update.ConsensusStateBytes) == 0 {
+		t.Fatal("older update must still include consensus state bytes")
+	}
+	if _, found := c.getConsensusState(types.NewHeight(60)); !found {
+		t.Fatal("older valid consensus state should still be stored")
+	}
+}
+
+func TestUpdateStateDuplicateHeightDoesNotRewriteStateBytes(t *testing.T) {
+	c := newTestClient(t)
+	h := updateStateTestHeader(90, 100, testNow+1_000_000_000)
+
+	update := c.updateState(h)
+
+	if update.Height != 100 {
+		t.Fatalf("update height: got %d want 100", update.Height)
+	}
+	if len(update.ClientStateBytes) != 0 {
+		t.Fatal("duplicate update must not include client state bytes")
+	}
+	if len(update.ConsensusStateBytes) != 0 {
+		t.Fatal("duplicate update must not include consensus state bytes")
+	}
+}

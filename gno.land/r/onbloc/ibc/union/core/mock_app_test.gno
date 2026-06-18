@@ -1,8 +1,6 @@
 package core
 
 import (
-	"errors"
-
 	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 )
@@ -16,12 +14,16 @@ type mockClient struct {
 	status    types.Status
 	timestamp types.Timestamp
 
-	verifyHeaderErr            error
-	stateUpdate                types.StateUpdate
-	creationResult             types.ClientCreationResult
-	creationCalls              int
-	initialClientStateBytes    []byte
-	initialConsensusStateBytes []byte
+	verifyHeaderErr              error
+	stateUpdate                  types.StateUpdate
+	creationResult               types.ClientCreationResult
+	creationCalls                int
+	initialClientStateBytes      []byte
+	initialConsensusStateBytes   []byte
+	currentClientStateBytes      []byte
+	misbehaviourErr              error
+	misbehaviourClientState      types.ClientState
+	misbehaviourClientStateBytes []byte
 
 	// recorded calls
 	membershipHeights    []types.Height
@@ -32,6 +34,7 @@ type mockClient struct {
 	nonMembershipProofs  [][]byte
 	nonMembershipKeys    [][]byte
 	headerMessages       [][]byte
+	misbehaviourMessages [][]byte
 }
 
 func (m *mockClient) VerifyMembership(height uint64, key, proof, value []byte) error {
@@ -102,12 +105,25 @@ func (m *mockClient) InitialClientStateBytes() ([]byte, error) {
 	return m.initialClientStateBytes, nil
 }
 
+func (m *mockClient) ClientStateBytes() ([]byte, error) {
+	if len(m.currentClientStateBytes) != 0 {
+		return m.currentClientStateBytes, nil
+	}
+	return m.initialClientStateBytes, nil
+}
+
 func (m *mockClient) InitialConsensusStateBytes() ([]byte, error) {
 	return m.initialConsensusStateBytes, nil
 }
 
-func (m *mockClient) Misbehaviour(_ address, _ []byte, _ address) (types.ClientState, error) {
-	return nil, errors.New("mock: misbehaviour unsupported")
+func (m *mockClient) Misbehaviour(_ address, msg []byte, _ address) (types.ClientState, error) {
+	m.misbehaviourMessages = append(m.misbehaviourMessages, msg)
+	if m.misbehaviourErr != nil {
+		return nil, m.misbehaviourErr
+	}
+	m.status = types.StatusFrozen
+	m.currentClientStateBytes = m.misbehaviourClientStateBytes
+	return m.misbehaviourClientState, nil
 }
 
 type mockApp struct {

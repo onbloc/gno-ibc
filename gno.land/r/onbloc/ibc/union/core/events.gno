@@ -14,6 +14,7 @@ const (
 	CreateLensClientEvent      = "CreateLensClient"
 	UpdateClientEvent          = "UpdateClient"
 	ForceUpdateClientEvent     = "ForceUpdateClient"
+	MisbehaviourEvent          = "Misbehaviour"
 	ConnectionOpenInitEvent    = "ConnectionOpenInit"
 	ConnectionOpenTryEvent     = "ConnectionOpenTry"
 	ConnectionOpenAckEvent     = "ConnectionOpenAck"
@@ -98,6 +99,12 @@ func emitVerifyCreationEvents(clientId types.ClientId, events []types.VerifyCrea
 		default:
 			panic("unknown verify creation event kind")
 		}
+	}
+}
+
+func misbehaviourEventAttrs(clientId types.ClientId) []string {
+	return []string{
+		"client_id", clientId.String(),
 	}
 }
 

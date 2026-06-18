@@ -26,6 +26,16 @@ func NewMsgUpdateClient(clientId ClientId, clientMessage []byte) MsgUpdateClient
 	return MsgUpdateClient{ClientId: clientId, ClientMessage: clientMessage}
 }
 
+type MsgMisbehaviour struct {
+	ClientId      ClientId
+	ClientMessage []byte
+	Relayer       address
+}
+
+func NewMsgMisbehaviour(clientId ClientId, clientMessage []byte, relayer address) MsgMisbehaviour {
+	return MsgMisbehaviour{ClientId: clientId, ClientMessage: clientMessage, Relayer: relayer}
+}
+
 type MsgForceUpdateClient struct {
 	ClientId            ClientId
 	ClientStateBytes    []byte

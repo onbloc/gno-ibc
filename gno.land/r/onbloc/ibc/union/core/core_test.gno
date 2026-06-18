@@ -767,6 +767,75 @@ func TestClientStoreReturnsClones(cur realm, t *testing.T) {
 	}
 }
 
+func TestUnionMisbehaviourSpec(cur realm, t *testing.T) {
+	// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/core/src/tests/client/ibc.rs#L550
+	resetStore()
+	testing.SetRealm(testing.NewUserRealm(testutils.TestAddress("sender")))
+	mc := &mockClient{
+		chainId:                      "testchain",
+		height:                       types.NewHeight(1),
+		status:                       types.StatusActive,
+		initialClientStateBytes:      []byte{1, 2, 3},
+		initialConsensusStateBytes:   []byte{1, 2, 3},
+		misbehaviourClientStateBytes: []byte("state"),
+	}
+	clientId := CreateClient(cross(cur), mockType, mc)
+
+	Misbehaviour(cross(cur), types.NewMsgMisbehaviour(clientId, []byte("state"), testutils.TestAddress("relayer")))
+
+	if len(mc.misbehaviourMessages) != 1 || string(mc.misbehaviourMessages[0]) != "state" {
+		t.Fatalf("Misbehaviour messages: got %v want state", mc.misbehaviourMessages)
+	}
+	if got := QueryClientState(clientId); got != "0x7374617465" {
+		t.Fatalf("QueryClientState: got %q want state hex", got)
+	}
+	if got := QueryConsensusState(clientId, types.NewHeight(1)); got != "0x010203" {
+		t.Fatalf("QueryConsensusState: got %q want unchanged 0x010203", got)
+	}
+	if got := GetClientStatus(clientId); got != types.StatusFrozen {
+		t.Fatalf("GetClientStatus: got %d want frozen", got)
+	}
+}
+
+func TestMisbehaviourRejectsInactiveBeforeLightClientCall(cur realm, t *testing.T) {
+	// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/core/src/contract.rs#L1059
+	resetStore()
+	mc := &mockClient{
+		chainId:         "testchain",
+		height:          types.NewHeight(1),
+		status:          types.StatusExpired,
+		misbehaviourErr: errors.New("misbehaviour must not be called"),
+	}
+	clientId := registerMockClient(mc)
+
+	uassert.AbortsContains(t, cur, ErrClientNotActive.Error(), func(cur realm) {
+		Misbehaviour(cur, types.NewMsgMisbehaviour(clientId, []byte("state"), testutils.TestAddress("relayer")))
+	})
+	if len(mc.misbehaviourMessages) != 0 {
+		t.Fatalf("Misbehaviour calls: got %d want 0", len(mc.misbehaviourMessages))
+	}
+}
+
+func TestMisbehaviourPropagatesLightClientError(cur realm, t *testing.T) {
+	resetStore()
+	mc := &mockClient{
+		chainId:         "testchain",
+		height:          types.NewHeight(1),
+		status:          types.StatusActive,
+		misbehaviourErr: errors.New("bad misbehaviour"),
+	}
+	clientId := registerMockClient(mc)
+
+	uassert.AbortsContains(t, cur, "misbehaviour: bad misbehaviour", func(cur realm) {
+		Misbehaviour(cur, types.NewMsgMisbehaviour(clientId, []byte("state"), testutils.TestAddress("relayer")))
+	})
+}
+
+func TestMisbehaviourEventAttrs(cur realm, t *testing.T) {
+	attrs := misbehaviourEventAttrs(types.ClientId(7))
+	assertStringSliceEqual(t, attrs, []string{"client_id", "7"})
+}
+
 // --- State: ID sequences ---
 
 func TestNextIdsSequential(cur realm, t *testing.T) {

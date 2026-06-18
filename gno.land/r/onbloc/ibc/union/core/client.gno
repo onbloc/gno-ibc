@@ -104,6 +104,34 @@ func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 	return height
 }
 
+// Misbehaviour verifies a misbehaviour message and mirrors the frozen client
+// state bytes returned by the light client.
+func Misbehaviour(cur realm, msg types.MsgMisbehaviour) {
+	c := store.getClient(msg.ClientId)
+	if c == nil {
+		panic("client " + msg.ClientId.String() + " not found")
+	}
+
+	requireActiveClient(c)
+
+	caller := cur.Previous().Address()
+	if _, err := c.lightClient.Misbehaviour(caller, msg.ClientMessage, msg.Relayer); err != nil {
+		panic("misbehaviour: " + err.Error())
+	}
+
+	provider, ok := c.lightClient.(lightclient.ClientStateProvider)
+	if !ok {
+		panic("misbehaviour: client state bytes unsupported")
+	}
+	clientStateBytes, err := provider.ClientStateBytes()
+	if err != nil {
+		panic("misbehaviour client state: " + err.Error())
+	}
+	c.saveState(clientStateBytes)
+
+	chain.Emit(MisbehaviourEvent, misbehaviourEventAttrs(msg.ClientId)...)
+}
+
 // ForceUpdateClient replaces a client's object with a new one built by the
 // caller, bypassing proof verification.
 //

@@ -48,3 +48,9 @@ type InitialStateProvider interface {
 	InitialClientStateBytes() ([]byte, error)
 	InitialConsensusStateBytes() ([]byte, error)
 }
+
+// ClientStateProvider is an optional extension for object-based light clients
+// that can expose the current encoded client state for core mirrors.
+type ClientStateProvider interface {
+	ClientStateBytes() ([]byte, error)
+}

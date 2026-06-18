@@ -220,6 +220,10 @@ func (c *StateLensIcs23MptLightClient) VerifyCreation(caller address, relayer ad
 }
 
 func (c *StateLensIcs23MptLightClient) InitialClientStateBytes() ([]byte, error) {
+	return c.ClientStateBytes()
+}
+
+func (c *StateLensIcs23MptLightClient) ClientStateBytes() ([]byte, error) {
 	return EncodeClientState(*c.clientState)
 }
 

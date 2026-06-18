@@ -147,6 +147,10 @@ func (c *CometblsLightClient) VerifyCreation(caller address, relayer address) (t
 }
 
 func (c *CometblsLightClient) InitialClientStateBytes() ([]byte, error) {
+	return c.ClientStateBytes()
+}
+
+func (c *CometblsLightClient) ClientStateBytes() ([]byte, error) {
 	return EncodeClientState(c.clientState)
 }
 

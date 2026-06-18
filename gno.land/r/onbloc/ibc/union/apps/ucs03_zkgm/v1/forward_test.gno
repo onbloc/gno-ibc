@@ -184,7 +184,7 @@ func TestAcknowledgeForwardWithTokenOrderChildRefundsOnFailure(cur realm, t *tes
 	uassert.NoError(t, err)
 
 	balance, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(3), path, order.BaseToken, order.QuoteToken))
-	uassert.True(t, !ok || balance.IsZero())
+	uassert.True(t, ok && balance.IsZero())
 	uassert.Equal(t, int64(20), voucherBalanceOf(string(order.BaseToken), address(sender)))
 }
 

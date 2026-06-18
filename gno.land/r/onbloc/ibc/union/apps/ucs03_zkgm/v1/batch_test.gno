@@ -195,9 +195,7 @@ func batchRefundOrder(sender string, baseToken string, quoteToken string, amount
 
 func assertNoChannelBalance(t *testing.T, channelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) {
 	balance, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(channelId, path, order.BaseToken, order.QuoteToken))
-	// absence is the canonical post-drain state (decreaseChannelBalanceV2 removes
-	// the entry on zero); IsZero() defends against out-of-band zero writes.
-	uassert.True(t, !ok || balance.IsZero())
+	uassert.True(t, ok && balance.IsZero())
 }
 
 func mustBatchOuterAck(childAcks [][]byte) z.Ack {

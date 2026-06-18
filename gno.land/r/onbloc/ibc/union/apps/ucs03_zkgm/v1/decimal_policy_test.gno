@@ -94,7 +94,7 @@ func TestBaseAmountPreservedThroughLockAndRefund(cur realm, t *testing.T) {
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(N), voucherBalanceOf(ibcBase, address(sender)))
 	srcBalAfter, hasBal := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(chanSrc, path, order.BaseToken, order.QuoteToken))
-	uassert.True(t, !hasBal || srcBalAfter.IsZero())
+	uassert.True(t, hasBal && srcBalAfter.IsZero())
 }
 
 func TestBaseAmountPreservedThroughMint(cur realm, t *testing.T) {

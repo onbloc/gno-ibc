@@ -66,7 +66,7 @@ func TestTokenOrderAckMarketMakerEscrowWithVoucherRewardsMarketMaker(cur realm, 
 	uassert.Equal(t, int64(13), voucherBalanceOf(baseToken, address(marketMaker)))
 
 	balance, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(channelId, u256.Zero(), order.BaseToken, order.QuoteToken))
-	uassert.True(t, !ok || balance.IsZero())
+	uassert.True(t, ok && balance.IsZero())
 }
 
 func TestTokenOrderVerifyNativeRequiresSentCoin(cur realm, t *testing.T) {

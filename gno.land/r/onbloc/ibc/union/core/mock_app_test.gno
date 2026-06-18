@@ -88,15 +88,19 @@ func (m *mockClient) Misbehaviour(_ address, _ []byte, _ address) (types.ClientS
 }
 
 type mockApp struct {
-	initCalled     bool
-	closedChannels []types.ChannelId
-	recvPackets    []types.Packet
-	intentPackets  []types.Packet
-	intentMsgs     [][]byte
-	ackPackets     []types.Packet
-	timeoutPackets []types.Packet
-	recvResult     types.RecvPacketResult
-	intentResult   types.RecvPacketResult
+	initCalled           bool
+	closedChannels       []types.ChannelId
+	closeInitStates      []types.ChannelState
+	closeConfirmStates   []types.ChannelState
+	closeInitRelayers    []address
+	closeConfirmRelayers []address
+	recvPackets          []types.Packet
+	intentPackets        []types.Packet
+	intentMsgs           [][]byte
+	ackPackets           []types.Packet
+	timeoutPackets       []types.Packet
+	recvResult           types.RecvPacketResult
+	intentResult         types.RecvPacketResult
 }
 
 func (a *mockApp) OnChannelOpenInit(_ realm, _ types.ConnectionId, _ types.ChannelId, _ string, _ address) {
@@ -109,29 +113,33 @@ func (a *mockApp) OnChannelOpenTry(_ realm, _ types.ConnectionId, _ types.Channe
 func (a *mockApp) OnChannelOpenAck(_ realm, _ types.ChannelId, _ types.ChannelId, _ string, _ address) {
 }
 func (a *mockApp) OnChannelOpenConfirm(_ realm, _ types.ChannelId, _ address) {}
-func (a *mockApp) OnChannelCloseInit(_ realm, ch types.ChannelId, _ address) {
+func (a *mockApp) OnChannelCloseInit(_ realm, ch types.ChannelId, relayer address) {
 	a.closedChannels = append(a.closedChannels, ch)
+	a.closeInitStates = append(a.closeInitStates, store.getChannel(ch).State)
+	a.closeInitRelayers = append(a.closeInitRelayers, relayer)
 }
 
-func (a *mockApp) OnChannelCloseConfirm(_ realm, ch types.ChannelId, _ address) {
+func (a *mockApp) OnChannelCloseConfirm(_ realm, ch types.ChannelId, relayer address) {
 	a.closedChannels = append(a.closedChannels, ch)
+	a.closeConfirmStates = append(a.closeConfirmStates, store.getChannel(ch).State)
+	a.closeConfirmRelayers = append(a.closeConfirmRelayers, relayer)
 }
 
-func (a *mockApp) OnRecvPacket(cur realm, p types.Packet, _ address, _ []byte) types.RecvPacketResult {
+func (a *mockApp) OnRecvPacket(_ realm, p types.Packet, _ address, _ []byte) types.RecvPacketResult {
 	a.recvPackets = append(a.recvPackets, p)
 	if a.recvResult.Status != types.PacketStatusUnknown {
 		return a.recvResult
 	}
-	return NewRecvPacketResult(cur, types.PacketStatusSuccess, []byte{0x01})
+	return NewRecvPacketResult(types.PacketStatusSuccess, []byte{0x01})
 }
 
-func (a *mockApp) OnIntentRecvPacket(cur realm, p types.Packet, _ address, msg []byte) types.RecvPacketResult {
+func (a *mockApp) OnIntentRecvPacket(_ realm, p types.Packet, _ address, msg []byte) types.RecvPacketResult {
 	a.intentPackets = append(a.intentPackets, p)
 	a.intentMsgs = append(a.intentMsgs, msg)
 	if a.intentResult.Status != types.PacketStatusUnknown {
 		return a.intentResult
 	}
-	return NewRecvPacketResult(cur, types.PacketStatusSuccess, []byte{0x02})
+	return NewRecvPacketResult(types.PacketStatusSuccess, []byte{0x02})
 }
 
 func (a *mockApp) OnAcknowledgementPacket(_ realm, p types.Packet, _ []byte, _ address) {
@@ -156,8 +164,8 @@ func (*mockNonIntentApp) OnChannelOpenConfirm(_ realm, _ types.ChannelId, _ addr
 func (*mockNonIntentApp) OnChannelCloseInit(_ realm, _ types.ChannelId, _ address)    {}
 func (*mockNonIntentApp) OnChannelCloseConfirm(_ realm, _ types.ChannelId, _ address) {}
 
-func (*mockNonIntentApp) OnRecvPacket(cur realm, _ types.Packet, _ address, _ []byte) types.RecvPacketResult {
-	return NewRecvPacketResult(cur, types.PacketStatusSuccess, []byte{0x01})
+func (*mockNonIntentApp) OnRecvPacket(_ realm, _ types.Packet, _ address, _ []byte) types.RecvPacketResult {
+	return NewRecvPacketResult(types.PacketStatusSuccess, []byte{0x01})
 }
 
 func (*mockNonIntentApp) OnAcknowledgementPacket(_ realm, _ types.Packet, _ []byte, _ address) {

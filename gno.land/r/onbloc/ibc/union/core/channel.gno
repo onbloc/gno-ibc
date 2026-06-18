@@ -109,11 +109,47 @@ func ChannelOpenConfirm(cur realm, msg types.MsgChannelOpenConfirm) {
 }
 
 func ChannelCloseInit(cur realm, msg types.MsgChannelCloseInit) {
-	panic("channel close init unsupported: Union types.MsgChannelCloseInit has no channel id")
+	relayer := cur.Previous().Address()
+	channel := store.getChannel(msg.ChannelId)
+	if channel.State != types.ChannelStateOpen {
+		panic(ErrInvalidChannelState)
+	}
+	connection := ensureConnectionOpen(channel.ConnectionId)
+	portId := store.getChannelOwner(msg.ChannelId)
+
+	store.getAppByPortId(portId).OnChannelCloseInit(cross(cur), msg.ChannelId, relayer)
+
+	channel.State = types.ChannelStateClosed
+	store.saveChannel(msg.ChannelId, channel)
+
+	emitChannelEvent(ChannelCloseInitEvent, portId, msg.ChannelId, channel, connection)
 }
 
 func ChannelCloseConfirm(cur realm, msg types.MsgChannelCloseConfirm) {
-	panic("channel close confirm unsupported: Union types.MsgChannelCloseConfirm has no channel id")
+	relayer := cur.Previous().Address()
+	channel := store.getChannel(msg.ChannelId)
+	if channel.State != types.ChannelStateOpen {
+		panic(ErrInvalidChannelState)
+	}
+	connection := ensureConnectionOpen(channel.ConnectionId)
+	portId := store.getChannelOwner(msg.ChannelId)
+
+	expectedChannel := types.Channel{
+		State:                 types.ChannelStateClosed,
+		ConnectionId:          connection.CounterpartyConnectionId,
+		CounterpartyChannelId: msg.ChannelId,
+		CounterpartyPortId:    portId,
+		Version:               channel.Version,
+	}
+	key := types.ChannelPath(channel.CounterpartyChannelId)
+	value := channelValue(expectedChannel)
+	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
+
+	channel.State = types.ChannelStateClosed
+	store.saveChannel(msg.ChannelId, channel)
+
+	store.getAppByPortId(portId).OnChannelCloseConfirm(cross(cur), msg.ChannelId, relayer)
+	emitChannelEvent(ChannelCloseConfirmEvent, portId, msg.ChannelId, channel, connection)
 }
 
 func QueryChannel(channelId types.ChannelId) string {

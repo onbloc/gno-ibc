@@ -1060,7 +1060,7 @@ func TestPacketRecvSyncEmptyAckRejected(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusSuccess, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusSuccess, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.AbortsContains(t, cur, "sync ack cannot be empty", func(cur realm) {
@@ -1074,7 +1074,7 @@ func TestPacketRecvAsyncDefersAck(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusAsync, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.NotAborts(t, cur, func(cur realm) {
@@ -1093,7 +1093,7 @@ func TestWriteAcknowledgementCommitsAsyncAck(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusAsync, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})
@@ -1111,7 +1111,7 @@ func TestWriteAcknowledgementRejectsNonOwner(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusAsync, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})
@@ -1129,7 +1129,7 @@ func TestWriteAcknowledgementRejectsAddressAsPortId(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusAsync, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})
@@ -1673,12 +1673,15 @@ func TestSetAdminRejectsNonAdmin(cur realm, t *testing.T) {
 
 // --- Integration: channel close ---
 
-func TestUnionChannelCloseDatagramsUnsupported(cur realm, t *testing.T) {
+// Union reference:
+// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L1591-L1598
+func TestChannelCloseInitRejectsWrongState(cur realm, t *testing.T) {
 	resetStore()
-	uassert.AbortsContains(t, cur, "Union types.MsgChannelCloseInit has no channel id", func(cur realm) {
-		ChannelCloseInit(cur, types.MsgChannelCloseInit{})
-	})
-	uassert.AbortsContains(t, cur, "Union types.MsgChannelCloseConfirm has no channel id", func(cur realm) {
-		ChannelCloseConfirm(cur, types.MsgChannelCloseConfirm{})
+	connectionId := addMockConnection(types.ConnectionStateOpen)
+	channelId := store.nextChannelId()
+	store.createChannel(channelId, types.Channel{State: types.ChannelStateInit, ConnectionId: connectionId}, nil)
+
+	uassert.AbortsContains(t, cur, "invalid channel state", func(cur realm) {
+		ChannelCloseInit(cur, types.NewMsgChannelCloseInit(channelId, "g1msgrelayer"))
 	})
 }

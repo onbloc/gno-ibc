@@ -127,14 +127,22 @@ func NewMsgChannelOpenConfirm(channelId ChannelId, proofAck []byte, proofHeight 
 	return MsgChannelOpenConfirm{ChannelId: channelId, ProofAck: proofAck, ProofHeight: proofHeight}
 }
 
-type MsgChannelCloseInit struct{}
-
-func NewMsgChannelCloseInit() MsgChannelCloseInit {
-	return MsgChannelCloseInit{}
+type MsgChannelCloseInit struct {
+	ChannelId ChannelId
+	Relayer   string
 }
 
-type MsgChannelCloseConfirm struct{}
+func NewMsgChannelCloseInit(channelId ChannelId, relayer string) MsgChannelCloseInit {
+	return MsgChannelCloseInit{ChannelId: channelId, Relayer: relayer}
+}
 
-func NewMsgChannelCloseConfirm() MsgChannelCloseConfirm {
-	return MsgChannelCloseConfirm{}
+type MsgChannelCloseConfirm struct {
+	ChannelId   ChannelId
+	ProofInit   []byte
+	ProofHeight uint64
+	Relayer     string
+}
+
+func NewMsgChannelCloseConfirm(channelId ChannelId, proofInit []byte, proofHeight uint64, relayer string) MsgChannelCloseConfirm {
+	return MsgChannelCloseConfirm{ChannelId: channelId, ProofInit: proofInit, ProofHeight: proofHeight, Relayer: relayer}
 }

@@ -6,6 +6,9 @@ import (
 	"testing"
 
 	"gno.land/p/nt/uassert/v0"
+
+	"gno.land/p/onbloc/ibc/union/types"
+	"gno.land/r/onbloc/ibc/union/core"
 )
 
 // test_on_channel_open_init_ok
@@ -421,5 +424,85 @@ func TestVersionValidationUnionAligned(cur realm, t *testing.T) {
 
 	if !d.openInitCalled || !d.openTryCalled {
 		t.Fatal("valid versions must delegate to impl")
+	}
+}
+
+// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/tests.rs#L713-L746
+func TestOnRecvPacketOnlyIbc(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	d := &dummyImpl{}
+	impl = d
+	packet := core.NewPacket(1, 2, []byte("data"), 0)
+
+	// Non-IBC caller is rejected
+	uassert.AbortsContains(t, cur, "only core can recv", func() {
+		(&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
+	})
+
+	// IBC caller delegates to impl
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	res := (&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
+	if !d.recvCalled || res.Status != types.PacketStatusSuccess {
+		t.Fatal("OnRecvPacket must delegate to impl when called by IBC")
+	}
+}
+
+// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/contract.rs#L168-L182
+func TestOnIntentRecvPacketOnlyIbc(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	d := &dummyImpl{}
+	impl = d
+	packet := core.NewPacket(1, 2, []byte("data"), 0)
+
+	// Non-IBC caller is rejected
+	uassert.AbortsContains(t, cur, "only core can intent recv", func() {
+		(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
+	})
+
+	// IBC caller delegates to impl
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	res := (&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
+	if !d.recvCalled || res.Status != types.PacketStatusSuccess {
+		t.Fatal("OnIntentRecvPacket must delegate to impl when called by IBC")
+	}
+}
+
+// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/contract.rs#L183-L192
+func TestOnAcknowledgementPacketOnlyIbc(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	d := &dummyImpl{}
+	impl = d
+	packet := core.NewPacket(1, 2, []byte("data"), 0)
+
+	// Non-IBC caller is rejected
+	uassert.AbortsContains(t, cur, "only core can ack", func() {
+		(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
+	})
+
+	// IBC caller delegates to impl
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
+	if !d.ackCalled {
+		t.Fatal("OnAcknowledgementPacket must delegate to impl when called by IBC")
+	}
+}
+
+// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/contract.rs#L193-L201
+func TestOnTimeoutPacketOnlyIbc(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	d := &dummyImpl{}
+	impl = d
+	packet := core.NewPacket(1, 2, []byte("data"), 0)
+
+	// Non-IBC caller is rejected
+	uassert.AbortsContains(t, cur, "only core can timeout", func() {
+		(&App{}).OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
+	})
+
+	// IBC caller delegates to impl
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	(&App{}).OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
+	if !d.timeoutCalled {
+		t.Fatal("OnTimeoutPacket must delegate to impl when called by IBC")
 	}
 }

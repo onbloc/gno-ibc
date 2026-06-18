@@ -95,11 +95,3 @@ func GetCommittedMembershipProof(clientId types.ClientId, proofHeight uint64, pa
 func GetCommittedNonMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) bool {
 	return store.hasNonMembershipProof(clientId, proofHeight, path)
 }
-
-func QueryPacketTimeout(packet types.Packet) string {
-	v, found := store.getPacketTimeout(packet)
-	if !found {
-		return ""
-	}
-	return h256String(v)
-}

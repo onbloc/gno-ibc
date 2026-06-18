@@ -94,22 +94,6 @@ func NewMsgCommitNonMembershipProof(clientId ClientId, proofHeight uint64, proof
 	}
 }
 
-// MsgCommitPacketTimeout commits a packet-timeout commitment after proving the
-// packet exists on the counterparty source chain and has timed out locally.
-type MsgCommitPacketTimeout struct {
-	Packet      Packet
-	ProofHeight uint64
-	Proof       []byte
-}
-
-func NewMsgCommitPacketTimeout(packet Packet, proofHeight uint64, proof []byte) MsgCommitPacketTimeout {
-	return MsgCommitPacketTimeout{
-		Packet:      packet,
-		ProofHeight: proofHeight,
-		Proof:       proof,
-	}
-}
-
 // MsgIntentPacketRecv lets a market maker fill packets ahead of proof, carrying
 // per-packet market-maker messages instead of a membership proof.
 type MsgIntentPacketRecv struct {

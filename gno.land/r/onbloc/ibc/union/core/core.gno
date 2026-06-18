@@ -208,26 +208,6 @@ func CommitNonMembershipProof(cur realm, msg types.MsgCommitNonMembershipProof) 
 	emitCommitNonMembershipProofEvent(msg)
 }
 
-func CommitPacketTimeout(cur realm, msg types.MsgCommitPacketTimeout) {
-	packet := msg.Packet
-	if uint64(packet.TimeoutTimestamp) > nowNanos() {
-		panic(ErrPacketTimeoutNotReached)
-	}
-	if store.hasPacketReceipt(packet) {
-		panic(ErrPacketAlreadyReceived)
-	}
-
-	channel := store.getChannel(packet.DestinationChannelId)
-	if channel.State != types.ChannelStateOpen {
-		panic(ErrInvalidChannelState)
-	}
-	connection := ensureConnectionOpen(channel.ConnectionId)
-
-	key := types.BatchPacketsPath(commitPacketHash(packet))
-	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, key[:], h256Bytes(types.COMMITMENT_MAGIC))
-	store.savePacketTimeout(packet, types.COMMITMENT_MAGIC)
-}
-
 func BatchSend(cur realm, msg types.MsgBatchSend) types.H256 {
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)

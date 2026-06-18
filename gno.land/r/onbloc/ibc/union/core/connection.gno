@@ -2,6 +2,7 @@ package core
 
 import (
 	"chain"
+	"chain/runtime"
 
 	"gno.land/p/onbloc/ibc/union/types"
 )
@@ -10,10 +11,14 @@ func NewConnection(state types.ConnectionState, clientId, counterpartyClientId t
 	return types.Connection{State: state, ClientId: clientId, CounterpartyClientId: counterpartyClientId, CounterpartyConnectionId: counterpartyConnectionId}
 }
 
-func ConnectionOpenInit(_ realm, msg types.MsgConnectionOpenInit) types.ConnectionId {
+func ConnectionOpenInit(cur realm, msg types.MsgConnectionOpenInit) types.ConnectionId {
+	requireAdmin(cur, "ConnectionOpenInit")
+	runtime.AssertOriginCall()
+
 	connectionId := store.nextConnectionId()
 	store.saveConnection(connectionId, NewConnection(types.ConnectionStateInit, msg.ClientId, msg.CounterpartyClientId, 0))
-	chain.Emit(ConnectionOpenInitEvent,
+	chain.Emit(
+		ConnectionOpenInitEvent,
 		"connection_id", connectionId.String(),
 		"client_id", msg.ClientId.String(),
 		"counterparty_client_id", msg.CounterpartyClientId.String(),
@@ -21,7 +26,10 @@ func ConnectionOpenInit(_ realm, msg types.MsgConnectionOpenInit) types.Connecti
 	return connectionId
 }
 
-func ConnectionOpenTry(_ realm, msg types.MsgConnectionOpenTry) types.ConnectionId {
+func ConnectionOpenTry(cur realm, msg types.MsgConnectionOpenTry) types.ConnectionId {
+	requireAdmin(cur, "ConnectionOpenTry")
+	runtime.AssertOriginCall()
+
 	connectionId := store.nextConnectionId()
 
 	expectedConnection := NewConnection(types.ConnectionStateInit, msg.CounterpartyClientId, msg.ClientId, 0)
@@ -30,7 +38,8 @@ func ConnectionOpenTry(_ realm, msg types.MsgConnectionOpenTry) types.Connection
 	verifyMembershipActive(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
 
 	store.saveConnection(connectionId, NewConnection(types.ConnectionStateTryOpen, msg.ClientId, msg.CounterpartyClientId, msg.CounterpartyConnectionId))
-	chain.Emit(ConnectionOpenTryEvent,
+	chain.Emit(
+		ConnectionOpenTryEvent,
 		"connection_id", connectionId.String(),
 		"client_id", msg.ClientId.String(),
 		"counterparty_client_id", msg.CounterpartyClientId.String(),
@@ -39,7 +48,10 @@ func ConnectionOpenTry(_ realm, msg types.MsgConnectionOpenTry) types.Connection
 	return connectionId
 }
 
-func ConnectionOpenAck(_ realm, msg types.MsgConnectionOpenAck) {
+func ConnectionOpenAck(cur realm, msg types.MsgConnectionOpenAck) {
+	requireAdmin(cur, "ConnectionOpenAck")
+	runtime.AssertOriginCall()
+
 	connection, ok := store.getConnection(msg.ConnectionId)
 	if !ok {
 		panic("connection " + msg.ConnectionId.String() + " not found")
@@ -57,7 +69,8 @@ func ConnectionOpenAck(_ realm, msg types.MsgConnectionOpenAck) {
 	connection.CounterpartyConnectionId = msg.CounterpartyConnectionId
 	store.saveConnection(msg.ConnectionId, connection)
 
-	chain.Emit(ConnectionOpenAckEvent,
+	chain.Emit(
+		ConnectionOpenAckEvent,
 		"connection_id", msg.ConnectionId.String(),
 		"client_id", connection.ClientId.String(),
 		"counterparty_client_id", connection.CounterpartyClientId.String(),
@@ -65,7 +78,10 @@ func ConnectionOpenAck(_ realm, msg types.MsgConnectionOpenAck) {
 	)
 }
 
-func ConnectionOpenConfirm(_ realm, msg types.MsgConnectionOpenConfirm) {
+func ConnectionOpenConfirm(cur realm, msg types.MsgConnectionOpenConfirm) {
+	requireAdmin(cur, "ConnectionOpenConfirm")
+	runtime.AssertOriginCall()
+
 	connection, ok := store.getConnection(msg.ConnectionId)
 	if !ok {
 		panic("connection " + msg.ConnectionId.String() + " not found")
@@ -82,7 +98,8 @@ func ConnectionOpenConfirm(_ realm, msg types.MsgConnectionOpenConfirm) {
 	connection.State = types.ConnectionStateOpen
 	store.saveConnection(msg.ConnectionId, connection)
 
-	chain.Emit(ConnectionOpenConfirmEvent,
+	chain.Emit(
+		ConnectionOpenConfirmEvent,
 		"connection_id", msg.ConnectionId.String(),
 		"client_id", connection.ClientId.String(),
 		"counterparty_client_id", connection.CounterpartyClientId.String(),
@@ -109,6 +126,9 @@ func ensureConnectionOpen(connectionId types.ConnectionId) types.Connection {
 	}
 	if connection.State != types.ConnectionStateOpen {
 		panic(ErrInvalidConnectionState)
+	}
+	if connection.CounterpartyConnectionId == 0 {
+		panic(ErrInvalidCounterpartyConnection)
 	}
 	return connection
 }

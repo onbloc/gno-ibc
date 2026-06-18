@@ -91,6 +91,9 @@ func channelOpenAck(cur realm, msg types.MsgChannelOpenAck, verify bool) {
 	if channel.State != types.ChannelStateInit {
 		panic(ErrInvalidChannelState)
 	}
+	if msg.CounterpartyChannelId == 0 {
+		panic(ErrInvalidCounterpartyChannelId)
+	}
 	connection := ensureConnectionOpen(channel.ConnectionId)
 	portId := store.getChannelOwner(msg.ChannelId)
 
@@ -134,6 +137,9 @@ func channelOpenConfirm(cur realm, msg types.MsgChannelOpenConfirm, verify bool)
 	if channel.State != types.ChannelStateTryOpen {
 		panic(ErrInvalidChannelState)
 	}
+	if channel.CounterpartyChannelId == 0 {
+		panic(ErrInvalidCounterpartyChannelId)
+	}
 	connection := ensureConnectionOpen(channel.ConnectionId)
 	portId := store.getChannelOwner(msg.ChannelId)
 
@@ -170,6 +176,9 @@ func channelCloseInit(cur realm, msg types.MsgChannelCloseInit) {
 	if channel.State != types.ChannelStateOpen {
 		panic(ErrInvalidChannelState)
 	}
+	if channel.CounterpartyChannelId == 0 {
+		panic(ErrInvalidCounterpartyChannelId)
+	}
 	ensureConnectionOpen(channel.ConnectionId)
 	portId := store.getChannelOwner(msg.ChannelId)
 
@@ -192,6 +201,9 @@ func channelCloseConfirm(cur realm, msg types.MsgChannelCloseConfirm) {
 	channel := store.getChannel(msg.ChannelId)
 	if channel.State != types.ChannelStateOpen {
 		panic(ErrInvalidChannelState)
+	}
+	if channel.CounterpartyChannelId == 0 {
+		panic(ErrInvalidCounterpartyChannelId)
 	}
 	connection := ensureConnectionOpen(channel.ConnectionId)
 	portId := store.getChannelOwner(msg.ChannelId)

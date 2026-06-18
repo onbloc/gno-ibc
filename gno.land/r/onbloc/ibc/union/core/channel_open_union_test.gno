@@ -194,6 +194,21 @@ func TestChannelOpenAckNotFound(cur realm, t *testing.T) {
 	})
 }
 
+// Local regression for Gno's zero-as-None representation of Union counterparty_channel_id.
+func TestChannelOpenAckRejectsInvalidCounterpartyChannelId(cur realm, t *testing.T) {
+	resetStore()
+	portId, connectionId, client, _ := setupChannelOpenUnionTest()
+	channelId := store.nextChannelId()
+	store.createChannel(channelId, types.Channel{State: types.ChannelStateInit, ConnectionId: connectionId, CounterpartyPortId: types.Bytes("counterparty"), Version: "ics20-1"}, portId)
+
+	uassert.AbortsContains(t, cur, "invalid counterparty channel id", func(cur realm) {
+		channelOpenAck(cur, types.NewMsgChannelOpenAck(channelId, "ics20-1", 0, types.Bytes("proof-try"), 44, "g1msgrelayer"), true)
+	})
+	if len(client.membershipKeys) != 0 {
+		t.Fatalf("membership calls: got %d want 0", len(client.membershipKeys))
+	}
+}
+
 // Converted from Union channel_open_ack_commitment_saved.
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L652-L733
@@ -261,6 +276,21 @@ func TestChannelOpenConfirmNotFound(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "channel 1 not found", func(cur realm) {
 		channelOpenConfirm(cur, types.NewMsgChannelOpenConfirm(types.ChannelId(1), types.Bytes("proof-ack"), 44, "g1msgrelayer"), true)
 	})
+}
+
+// Local regression for Gno's zero-as-None representation of Union counterparty_channel_id.
+func TestChannelOpenConfirmRejectsInvalidCounterpartyChannelId(cur realm, t *testing.T) {
+	resetStore()
+	portId, connectionId, client, _ := setupChannelOpenUnionTest()
+	channelId := store.nextChannelId()
+	store.createChannel(channelId, types.Channel{State: types.ChannelStateTryOpen, ConnectionId: connectionId, CounterpartyChannelId: 0, CounterpartyPortId: types.Bytes("counterparty"), Version: "ics20-1"}, portId)
+
+	uassert.AbortsContains(t, cur, "invalid counterparty channel id", func(cur realm) {
+		channelOpenConfirm(cur, types.NewMsgChannelOpenConfirm(channelId, types.Bytes("proof-ack"), 44, "g1msgrelayer"), true)
+	})
+	if len(client.membershipKeys) != 0 {
+		t.Fatalf("membership calls: got %d want 0", len(client.membershipKeys))
+	}
 }
 
 // Converted from Union channel_open_confirm_commitment_saved.

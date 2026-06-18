@@ -73,6 +73,23 @@ func TestChannelCloseInitRejectsNonOpenConnection(cur realm, t *testing.T) {
 	}
 }
 
+// Local regression for Gno's zero-as-None representation of Union counterparty_channel_id.
+func TestChannelCloseInitRejectsInvalidCounterpartyChannelId(cur realm, t *testing.T) {
+	resetStore()
+	_, _, channelId := setupOpenChannel(t)
+	channel := store.getChannel(channelId)
+	channel.CounterpartyChannelId = 0
+	store.saveChannel(channelId, channel)
+
+	uassert.AbortsContains(t, cur, "invalid counterparty channel id", func(cur realm) {
+		channelCloseInit(cur, types.NewMsgChannelCloseInit(channelId, "g1msgrelayer"))
+	})
+
+	if store.getChannel(channelId).State != types.ChannelStateOpen {
+		t.Fatal("invalid counterparty channel id must not close the channel")
+	}
+}
+
 // Local regression for ChannelCloseConfirm proof verification and close effects.
 func TestChannelCloseConfirmVerifiesCounterpartyCloseAndClosesChannel(cur realm, t *testing.T) {
 	resetStore()
@@ -119,6 +136,27 @@ func TestChannelCloseConfirmVerifiesCounterpartyCloseAndClosesChannel(cur realm,
 	expectedValue := channelValue(expectedChannel)
 	if !bytes.Equal(client.membershipValues[0], expectedValue[:]) {
 		t.Fatalf("membership value: got %x want %x", client.membershipValues[0], expectedValue[:])
+	}
+}
+
+// Local regression for Gno's zero-as-None representation of Union counterparty_channel_id.
+func TestChannelCloseConfirmRejectsInvalidCounterpartyChannelIdBeforeProof(cur realm, t *testing.T) {
+	resetStore()
+	_, _, channelId := setupOpenChannel(t)
+	client := mockClientFor(channelId)
+	channel := store.getChannel(channelId)
+	channel.CounterpartyChannelId = 0
+	store.saveChannel(channelId, channel)
+
+	uassert.AbortsContains(t, cur, "invalid counterparty channel id", func(cur realm) {
+		channelCloseConfirm(cur, types.NewMsgChannelCloseConfirm(channelId, types.Bytes("close-proof"), 44, "g1msgrelayer"))
+	})
+
+	if len(client.membershipKeys) != 0 {
+		t.Fatalf("membership calls: got %d want 0", len(client.membershipKeys))
+	}
+	if store.getChannel(channelId).State != types.ChannelStateOpen {
+		t.Fatal("invalid counterparty channel id must not close the channel")
 	}
 }
 

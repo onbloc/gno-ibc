@@ -46,12 +46,17 @@ func PacketRecv(cur realm, msg types.MsgPacketRecv) {
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
 	}
+
 	first := msg.Packets[0]
-	firstChannel := store.getChannel(first.DestinationChannelId)
-	firstConnection := ensureConnectionOpen(firstChannel.ConnectionId)
-	batchKey := types.BatchPacketsPath(commitPacketsHash(msg.Packets))
-	verifyMembershipActive(firstConnection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, batchKey[:], h256Bytes(types.COMMITMENT_MAGIC))
-	c := store.clientForChannel(first.DestinationChannelId)
+	destinationChannelId := first.DestinationChannelId
+	channel := store.getChannel(destinationChannelId)
+	connection := ensureConnectionOpen(channel.ConnectionId)
+
+	proofCommitmentKey := types.BatchPacketsPath(commitPacketsHash(msg.Packets))
+	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, proofCommitmentKey[:], h256Bytes(types.COMMITMENT_MAGIC))
+
+	portId := store.getChannelOwner(destinationChannelId)
+	c := store.clientForChannel(destinationChannelId)
 	now := nowNanos()
 
 	for i, relayerMsg := range msg.RelayerMsgs {
@@ -59,18 +64,17 @@ func PacketRecv(cur realm, msg types.MsgPacketRecv) {
 			break
 		}
 		packet := msg.Packets[i]
-		channel, skip := acceptRecvPacket(c, packet, first.DestinationChannelId, now)
+		channel, skip := acceptRecvPacket(c, packet, destinationChannelId, now)
 		if skip {
 			continue
 		}
 
-		portId := store.getChannelOwner(packet.DestinationChannelId)
 		res := store.getAppByPortId(portId).OnRecvPacket(cross(cur), packet, relayer, relayerMsg)
-		if err := commitSyncAck(c, packet, channel, firstConnection, res); err != nil {
+		if err := commitSyncAck(c, packet, channel, connection, res); err != nil {
 			panic(err)
 		}
 
-		emitPacketRecvEvent(PacketRecvEvent, packet, channel, firstConnection, "maker_msg", relayerMsg)
+		emitPacketRecvEvent(PacketRecvEvent, packet, channel, connection, "maker_msg", relayerMsg)
 	}
 }
 
@@ -81,14 +85,17 @@ func IntentPacketRecv(cur realm, msg types.MsgIntentPacketRecv) {
 	}
 
 	first := msg.Packets[0]
-	firstChannel := store.getChannel(first.DestinationChannelId)
-	firstConnection := ensureConnectionOpen(firstChannel.ConnectionId)
-	portId := store.getChannelOwner(first.DestinationChannelId)
+	destinationChannelId := first.DestinationChannelId
+	channel := store.getChannel(destinationChannelId)
+	connection := ensureConnectionOpen(channel.ConnectionId)
+
+	portId := store.getChannelOwner(destinationChannelId)
 	intentApp, ok := store.getAppByPortId(portId).(app.IIntentApp)
 	if !ok {
 		panic(ErrIntentNotSupported)
 	}
-	c := store.clientForChannel(first.DestinationChannelId)
+
+	c := store.clientForChannel(destinationChannelId)
 	now := nowNanos()
 
 	for i, marketMakerMsg := range msg.MarketMakerMessages {
@@ -96,17 +103,17 @@ func IntentPacketRecv(cur realm, msg types.MsgIntentPacketRecv) {
 			break
 		}
 		packet := msg.Packets[i]
-		channel, skip := acceptRecvPacket(c, packet, first.DestinationChannelId, now)
+		channel, skip := acceptRecvPacket(c, packet, destinationChannelId, now)
 		if skip {
 			continue
 		}
 
 		res := intentApp.OnIntentRecvPacket(cross(cur), packet, marketMaker, marketMakerMsg)
-		if err := commitSyncAck(c, packet, channel, firstConnection, res); err != nil {
+		if err := commitSyncAck(c, packet, channel, connection, res); err != nil {
 			panic(err)
 		}
 
-		emitPacketRecvEvent(IntentPacketRecvEvent, packet, channel, firstConnection, "market_maker_msg", marketMakerMsg)
+		emitPacketRecvEvent(IntentPacketRecvEvent, packet, channel, connection, "market_maker_msg", marketMakerMsg)
 	}
 }
 
@@ -120,14 +127,21 @@ func PacketAcknowledgement(cur realm, msg types.MsgPacketAcknowledgement) {
 	}
 
 	first := msg.Packets[0]
-	channel := store.getChannel(first.SourceChannelId)
-	connection := ensureConnectionOpen(channel.ConnectionId)
-	batchHash := commitPacketsHash(msg.Packets)
-	key := types.BatchReceiptsPath(batchHash)
-	value := types.CommitAcks(msg.Acknowledgements)
-	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, key[:], value[:])
 
-	c := store.clientForChannel(first.SourceChannelId)
+	sourceChannelId := first.SourceChannelId
+
+	channel := store.getChannel(sourceChannelId)
+	connection := ensureConnectionOpen(channel.ConnectionId)
+
+	batchHash := commitPacketsHash(msg.Packets)
+	commitmentKey := types.BatchReceiptsPath(batchHash)
+	commitmentValue := types.CommitAcks(msg.Acknowledgements)
+
+	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, commitmentKey[:], commitmentValue[:])
+
+	portId := store.getChannelOwner(sourceChannelId)
+	c := store.clientForChannel(sourceChannelId)
+
 	for i, packet := range msg.Packets {
 		// Validate same channel before the commitment check so that a mixed-channel
 		// batch is always rejected, not silently skipped.
@@ -139,7 +153,6 @@ func PacketAcknowledgement(cur realm, msg types.MsgPacketAcknowledgement) {
 		}
 
 		ack := msg.Acknowledgements[i]
-		portId := store.getChannelOwner(packet.SourceChannelId)
 		store.getAppByPortId(portId).OnAcknowledgementPacket(cross(cur), packet, ack, relayer)
 
 		emitPacketAckEvent(packet, channel, connection, ack)
@@ -165,13 +178,13 @@ func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
 		panic(ErrTimeoutProofTimestampNotFound)
 	}
 
-	key := types.BatchReceiptsPath(commitPacketHash(packet))
-	verifyNonMembershipWithActiveClient(c, types.NewHeight(msg.ProofHeight), msg.Proof, key[:])
+	commitmentKey := types.BatchReceiptsPath(commitPacketHash(packet))
+	verifyNonMembershipWithActiveClient(c, types.NewHeight(msg.ProofHeight), msg.Proof, commitmentKey[:])
 
 	if packet.TimeoutTimestamp == 0 {
 		panic(ErrTimeoutMustBeSet)
 	}
-	if proofTimestamp < packet.TimeoutTimestamp {
+	if packet.TimeoutTimestamp > proofTimestamp {
 		panic(ErrPacketTimeoutNotReached)
 	}
 	if err := c.markPacketAcknowledged(packet); err != nil {
@@ -189,9 +202,12 @@ func BatchSend(cur realm, msg types.MsgBatchSend) types.H256 {
 		panic(ErrNotEnoughPackets)
 	}
 	first := msg.Packets[0]
-	c := store.clientForChannel(first.SourceChannelId)
+	channelId := first.SourceChannelId
+	batchHash := commitPacketsHash(msg.Packets)
+
+	c := store.clientForChannel(channelId)
 	for _, packet := range msg.Packets {
-		if packet.SourceChannelId != first.SourceChannelId {
+		if packet.SourceChannelId != channelId {
 			panic(ErrBatchSameChannelOnly)
 		}
 		commitment, ok := c.getBatchPacketsAtPath(packetCommitmentPath(packet))
@@ -201,12 +217,13 @@ func BatchSend(cur realm, msg types.MsgBatchSend) types.H256 {
 		if commitment != types.COMMITMENT_MAGIC {
 			panic(ErrPacketCommitmentNotFound)
 		}
+
+		packetHash := commitPacketsHash([]types.Packet{packet})
+		emitBatchSendEvent(channelId, packetHash, batchHash)
 	}
-	batchHash := commitPacketsHash(msg.Packets)
+
 	c.saveBatchPackets(batchHash, types.COMMITMENT_MAGIC)
-	channel := store.getChannel(first.SourceChannelId)
-	connection := ensureConnectionOpen(channel.ConnectionId)
-	emitBatchSendEvent(batchHash, first, channel, connection)
+
 	return batchHash
 }
 
@@ -214,39 +231,46 @@ func BatchAcks(cur realm, msg types.MsgBatchAcks) types.H256 {
 	if len(msg.Packets) < 2 {
 		panic(ErrNotEnoughPackets)
 	}
+
+	first := msg.Packets[0]
+	channelId := first.DestinationChannelId
+
+	batchHash := commitPacketsHash(msg.Packets)
+
 	if len(msg.Packets) != len(msg.Acks) {
 		panic(ErrAcknowledgementCountMismatch)
 	}
-	first := msg.Packets[0]
-	portId := store.getChannelOwner(first.DestinationChannelId)
+
+	portId := store.getChannelOwner(channelId)
 	if string(portId) != cur.Previous().PkgPath() {
 		panic(ErrUnauthorizedAckWriter)
 	}
-	c := store.clientForChannel(first.DestinationChannelId)
+
+	c := store.clientForChannel(channelId)
 	for i, packet := range msg.Packets {
-		if packet.DestinationChannelId != first.DestinationChannelId {
+		if packet.DestinationChannelId != channelId {
 			panic(ErrBatchSameChannelOnly)
 		}
-		ackCommitment, ok := c.getBatchReceiptsAtPath(packetAcknowledgementPath(packet))
+
+		packetHash := commitPacketsHash([]types.Packet{packet})
+		emitBatchAcksEvent(channelId, packetHash, batchHash)
+
+		commitmentKey := packetAcknowledgementPath(packet)
+		commitment, ok := c.getBatchReceiptsAtPath(commitmentKey)
 		if !ok {
 			panic(ErrPacketReceiptNotFound)
 		}
-		if ackCommitment == types.COMMITMENT_MAGIC {
+
+		if commitment == types.COMMITMENT_MAGIC {
 			panic(ErrAcknowledgementEmpty)
 		}
-		if expected := types.CommitAcks([][]byte{msg.Acks[i]}); ackCommitment != expected {
+		if expected := types.CommitAcks([][]byte{msg.Acks[i]}); commitment != expected {
 			panic(ErrAcknowledgementMismatch)
 		}
 	}
-	batchHash := commitPacketsHash(msg.Packets)
-	ackHash := types.CommitAcks(msg.Acks)
-	channel := store.getChannel(first.DestinationChannelId)
-	connection, ok := store.getConnection(channel.ConnectionId)
-	if !ok {
-		panic("connection " + channel.ConnectionId.String() + " not found")
-	}
-	c.saveBatchReceipts(batchHash, ackHash)
-	emitBatchAcksEvent(batchHash, ackHash, first, channel, connection)
+
+	c.saveBatchReceipts(batchHash, types.CommitAcks(msg.Acks))
+
 	return batchHash
 }
 
@@ -254,16 +278,18 @@ func BatchAcks(cur realm, msg types.MsgBatchAcks) types.H256 {
 // packet. Async acknowledgement ownership is protocol-managed: core does not
 // track pending async acknowledgement state.
 func WriteAcknowledgement(cur realm, msg types.MsgWriteAcknowledgement) {
-	portId := store.getChannelOwner(msg.Packet.DestinationChannelId)
-	if string(portId) != cur.Previous().PkgPath() {
-		panic(ErrUnauthorizedAckWriter)
-	}
-
 	if len(msg.Acknowledgement) == 0 {
 		panic(ErrAcknowledgementEmpty)
 	}
 
-	c := store.clientForChannel(msg.Packet.DestinationChannelId)
+	channelId := msg.Packet.DestinationChannelId
+
+	portId := store.getChannelOwner(channelId)
+	if string(portId) != cur.Previous().PkgPath() {
+		panic(ErrUnauthorizedAckWriter)
+	}
+
+	c := store.clientForChannel(channelId)
 	if !c.hasPacketReceipt(msg.Packet) {
 		panic(ErrPacketReceiptNotFound)
 	}
@@ -272,7 +298,7 @@ func WriteAcknowledgement(cur realm, msg types.MsgWriteAcknowledgement) {
 		panic(ErrAcknowledgementAlreadyWritten)
 	}
 
-	channel := store.getChannel(msg.Packet.DestinationChannelId)
+	channel := store.getChannel(channelId)
 	connection := ensureConnectionOpen(channel.ConnectionId)
 
 	c.commitAcknowledgement(msg.Packet, msg.Acknowledgement)

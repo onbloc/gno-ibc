@@ -169,14 +169,10 @@ func (c *CometblsLightClient) Misbehaviour(caller address, misbehaviour []byte, 
 func (c *CometblsLightClient) updateState(header *Header) types.StateUpdate {
 	height := header.GetHeight()
 
-	// Duplicate update: a consensus state already exists for this height.
+	// Gno keeps consensus state inside the light client and mirrors bytes in
+	// core, so duplicate heights must not rewrite the stored consensus state.
 	if _, found := c.getConsensusState(height); found {
 		return types.StateUpdate{Height: height.RevisionHeight}
-	}
-
-	advancedLatestHeight := height.GT(c.clientState.LatestHeight)
-	if advancedLatestHeight {
-		c.clientState.LatestHeight = height
 	}
 
 	consState := header.ConsensusState()
@@ -189,7 +185,8 @@ func (c *CometblsLightClient) updateState(header *Header) types.StateUpdate {
 	if consBytes, err := EncodeConsensusState(consState); err == nil {
 		update.ConsensusStateBytes = consBytes
 	}
-	if advancedLatestHeight {
+	if height.GT(c.clientState.LatestHeight) {
+		c.clientState.LatestHeight = height
 		if csBytes, err := EncodeClientState(c.clientState); err == nil {
 			update.ClientStateBytes = csBytes
 		}

@@ -16,6 +16,10 @@ type mockClient struct {
 	status    types.Status
 	timestamp types.Timestamp
 
+	verifyHeaderErr error
+	stateUpdate     types.StateUpdate
+	creationCalls   int
+
 	// recorded calls
 	membershipHeights    []types.Height
 	membershipProofs     [][]byte
@@ -71,6 +75,13 @@ func (m *mockClient) Status() lightclient.Status {
 
 func (m *mockClient) VerifyHeader(_ address, header []byte, _ address) (types.StateUpdate, error) {
 	m.headerMessages = append(m.headerMessages, header)
+	if m.verifyHeaderErr != nil {
+		return types.StateUpdate{}, m.verifyHeaderErr
+	}
+	if m.stateUpdate.Height != 0 || len(m.stateUpdate.ClientStateBytes) != 0 || len(m.stateUpdate.ConsensusStateBytes) != 0 {
+		m.height = types.NewHeight(m.stateUpdate.Height)
+		return m.stateUpdate, nil
+	}
 	m.height = m.height.Increment()
 	return types.StateUpdate{
 		Height:              m.height.RevisionHeight,
@@ -80,6 +91,7 @@ func (m *mockClient) VerifyHeader(_ address, header []byte, _ address) (types.St
 }
 
 func (m *mockClient) VerifyCreation(_ address, _ address) (types.ClientCreationResult, error) {
+	m.creationCalls++
 	return types.ClientCreationResult{}, nil
 }
 
@@ -122,7 +134,7 @@ func (a *mockApp) OnRecvPacket(cur realm, p types.Packet, _ address, _ []byte) t
 	if a.recvResult.Status != types.PacketStatusUnknown {
 		return a.recvResult
 	}
-	return NewRecvPacketResult(cur, types.PacketStatusSuccess, []byte{0x01})
+	return NewRecvPacketResult(types.PacketStatusSuccess, []byte{0x01})
 }
 
 func (a *mockApp) OnIntentRecvPacket(cur realm, p types.Packet, _ address, msg []byte) types.RecvPacketResult {
@@ -131,7 +143,7 @@ func (a *mockApp) OnIntentRecvPacket(cur realm, p types.Packet, _ address, msg [
 	if a.intentResult.Status != types.PacketStatusUnknown {
 		return a.intentResult
 	}
-	return NewRecvPacketResult(cur, types.PacketStatusSuccess, []byte{0x02})
+	return NewRecvPacketResult(types.PacketStatusSuccess, []byte{0x02})
 }
 
 func (a *mockApp) OnAcknowledgementPacket(_ realm, p types.Packet, _ []byte, _ address) {
@@ -157,7 +169,7 @@ func (*mockNonIntentApp) OnChannelCloseInit(_ realm, _ types.ChannelId, _ addres
 func (*mockNonIntentApp) OnChannelCloseConfirm(_ realm, _ types.ChannelId, _ address) {}
 
 func (*mockNonIntentApp) OnRecvPacket(cur realm, _ types.Packet, _ address, _ []byte) types.RecvPacketResult {
-	return NewRecvPacketResult(cur, types.PacketStatusSuccess, []byte{0x01})
+	return NewRecvPacketResult(types.PacketStatusSuccess, []byte{0x01})
 }
 
 func (*mockNonIntentApp) OnAcknowledgementPacket(_ realm, _ types.Packet, _ []byte, _ address) {

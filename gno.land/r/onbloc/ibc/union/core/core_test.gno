@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/hex"
+	"errors"
 	"testing"
 
 	"gno.land/p/nt/testutils/v0"
@@ -390,6 +391,69 @@ func TestCreateClientBuildsAndStoresObject(cur realm, t *testing.T) {
 	}
 	if c.typ != mockType {
 		t.Fatalf("stored client type mismatch: got %s want %s", c.typ, mockType)
+	}
+}
+
+func TestCreateClientVerifiesCreation(cur realm, t *testing.T) {
+	resetStore()
+	testing.SetRealm(testing.NewUserRealm(testutils.TestAddress("client-creator")))
+	mc := &mockClient{chainId: "union-1", height: types.NewHeight(100)}
+
+	clientId := CreateClient(cross(cur), mockType, mc)
+
+	if store.getClient(clientId) == nil {
+		t.Fatalf("CreateClient did not store client %v", clientId)
+	}
+	if mc.creationCalls != 1 {
+		t.Fatalf("VerifyCreation calls: got %d want 1", mc.creationCalls)
+	}
+}
+
+func TestUpdateClientOk(cur realm, t *testing.T) {
+	resetStore()
+	mc := &mockClient{chainId: "union-1", height: types.NewHeight(100)}
+	clientId := registerMockClient(mc)
+
+	height := UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, []byte("header")))
+
+	if height != types.NewHeight(101) {
+		t.Fatalf("UpdateClient height: got %v want 101", height)
+	}
+	if len(mc.headerMessages) != 1 || string(mc.headerMessages[0]) != "header" {
+		t.Fatalf("VerifyHeader messages: got %v want header", mc.headerMessages)
+	}
+}
+
+func TestUpdateClientPanicsOnVerifyHeaderError(cur realm, t *testing.T) {
+	resetStore()
+	clientId := registerMockClient(&mockClient{verifyHeaderErr: errors.New("bad header")})
+
+	uassert.AbortsContains(t, cur, "update client: bad header", func(cur realm) {
+		UpdateClient(cur, types.NewMsgUpdateClient(clientId, []byte("header")))
+	})
+}
+
+func TestUpdateClientCommitmentsSaved(cur realm, t *testing.T) {
+	resetStore()
+	mc := &mockClient{
+		stateUpdate: types.StateUpdate{
+			Height:              42,
+			ClientStateBytes:    []byte("client-state"),
+			ConsensusStateBytes: []byte("consensus-state"),
+		},
+	}
+	clientId := registerMockClient(mc)
+
+	height := UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, []byte("header")))
+
+	if height != types.NewHeight(42) {
+		t.Fatalf("UpdateClient height: got %v want 42", height)
+	}
+	if got := QueryClientState(clientId); got != "0x636c69656e742d7374617465" {
+		t.Fatalf("QueryClientState: got %q want client-state hex", got)
+	}
+	if got := QueryConsensusState(clientId, types.NewHeight(42)); got != "0x636f6e73656e7375732d7374617465" {
+		t.Fatalf("QueryConsensusState: got %q want consensus-state hex", got)
 	}
 }
 
@@ -1060,7 +1124,7 @@ func TestPacketRecvSyncEmptyAckRejected(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusSuccess, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusSuccess, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.AbortsContains(t, cur, "sync ack cannot be empty", func(cur realm) {
@@ -1074,7 +1138,7 @@ func TestPacketRecvAsyncDefersAck(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusAsync, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.NotAborts(t, cur, func(cur realm) {
@@ -1093,7 +1157,7 @@ func TestWriteAcknowledgementCommitsAsyncAck(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusAsync, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})
@@ -1111,7 +1175,7 @@ func TestWriteAcknowledgementRejectsNonOwner(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusAsync, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})
@@ -1129,7 +1193,7 @@ func TestWriteAcknowledgementRejectsAddressAsPortId(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusAsync, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})

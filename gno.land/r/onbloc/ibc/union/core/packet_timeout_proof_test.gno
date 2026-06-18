@@ -25,7 +25,7 @@ func TestPacketTimeoutRejectsProofBeforeTimeout(cur realm, t *testing.T) {
 	store.commitPacket(packet)
 
 	uassert.AbortsContains(t, cur, "packet timeout not reached", func(cur realm) {
-		PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet})
+		PacketTimeout(cross(cur), types.MsgPacketTimeout{Packet: packet})
 	})
 	if got, ok := store.clientForChannel(packet.SourceChannelId).getBatchPacketsAtPath(packetCommitmentPath(packet)); !ok || got != types.COMMITMENT_MAGIC {
 		t.Fatalf("rejected timeout marker: ok=%v got=%s want %s", ok, got, types.COMMITMENT_MAGIC)
@@ -49,7 +49,7 @@ func TestPacketTimeoutAcceptsProofAtBoundary(cur realm, t *testing.T) {
 	store.commitPacket(packet)
 
 	uassert.NotAborts(t, cur, func(cur realm) {
-		PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet})
+		PacketTimeout(cross(cur), types.MsgPacketTimeout{Packet: packet})
 	})
 	if got, ok := store.clientForChannel(packet.SourceChannelId).getBatchPacketsAtPath(packetCommitmentPath(packet)); !ok || got != types.COMMITMENT_MAGIC_ACK {
 		t.Fatalf("timeout boundary marker: ok=%v got=%s want %s", ok, got, types.COMMITMENT_MAGIC_ACK)
@@ -72,7 +72,7 @@ func TestPacketTimeoutRejectsZeroTimeoutPacket(cur realm, t *testing.T) {
 	store.commitPacket(packet)
 
 	uassert.AbortsContains(t, cur, "timeout must be set", func(cur realm) {
-		PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet})
+		PacketTimeout(cross(cur), types.MsgPacketTimeout{Packet: packet})
 	})
 	if got, ok := store.clientForChannel(packet.SourceChannelId).getBatchPacketsAtPath(packetCommitmentPath(packet)); !ok || got != types.COMMITMENT_MAGIC {
 		t.Fatalf("zero-timeout marker: ok=%v got=%s want %s", ok, got, types.COMMITMENT_MAGIC)
@@ -96,7 +96,7 @@ func TestPacketTimeoutAcceptsProofAfterTimeout(cur realm, t *testing.T) {
 	store.commitPacket(packet)
 
 	uassert.NotAborts(t, cur, func(cur realm) {
-		PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet})
+		PacketTimeout(cross(cur), types.MsgPacketTimeout{Packet: packet})
 	})
 	if got, ok := store.clientForChannel(packet.SourceChannelId).getBatchPacketsAtPath(packetCommitmentPath(packet)); !ok || got != types.COMMITMENT_MAGIC_ACK {
 		t.Fatalf("timeout marker: ok=%v got=%s want %s", ok, got, types.COMMITMENT_MAGIC_ACK)
@@ -117,7 +117,7 @@ func TestPacketTimeoutRejectsMissingProofTimestamp(cur realm, t *testing.T) {
 	store.commitPacket(packet)
 
 	uassert.AbortsContains(t, cur, "packet timeout proof timestamp not found", func(cur realm) {
-		PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet})
+		PacketTimeout(cross(cur), types.MsgPacketTimeout{Packet: packet})
 	})
 	if len(client.nonMembershipKeys) != 0 {
 		t.Fatalf("VerifyNonMembership calls: got %d want 0", len(client.nonMembershipKeys))

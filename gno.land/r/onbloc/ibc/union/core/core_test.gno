@@ -590,7 +590,7 @@ func TestUnionSendPacketModuleIsNotChannelOwner(cur realm, t *testing.T) {
 	setChannelOwner(channelId, "g1notchannelowner")
 
 	uassert.AbortsContains(t, cur, "caller not authorized to send packet", func(cur realm) {
-		SendPacket(cur, channelId, 1000000, []byte{0, 1, 2})
+		SendPacket(cross(cur), channelId, 1000000, []byte{0, 1, 2})
 	})
 }
 
@@ -690,7 +690,7 @@ func TestSendPacketRejectsNonOwner(cur realm, t *testing.T) {
 	setChannelOwner(channelId, "g1notchannelowner")
 
 	uassert.AbortsContains(t, cur, "caller not authorized to send packet", func(cur realm) {
-		SendPacket(cur, channelId, 100, []byte("data"))
+		SendPacket(cross(cur), channelId, 100, []byte("data"))
 	})
 }
 
@@ -702,7 +702,7 @@ func TestSendPacketRejectsAddressAsPortId(cur realm, t *testing.T) {
 	setChannelOwner(channelId, oldAddressPort)
 
 	uassert.AbortsContains(t, cur, "caller not authorized to send packet", func(cur realm) {
-		SendPacket(cur, channelId, 100, []byte("data"))
+		SendPacket(cross(cur), channelId, 100, []byte("data"))
 	})
 }
 
@@ -797,7 +797,7 @@ func TestQueryCommitmentAtPathUnknownReturnsEmpty(cur realm, t *testing.T) {
 func TestBatchSendRejectsEmptyPacketList(cur realm, t *testing.T) {
 	resetStore()
 	uassert.AbortsContains(t, cur, "not enough packets", func(cur realm) {
-		BatchSend(cur, types.MsgBatchSend{})
+		BatchSend(cross(cur), types.MsgBatchSend{})
 	})
 }
 
@@ -808,7 +808,7 @@ func TestBatchSendRejectsSinglePacket(cur realm, t *testing.T) {
 	store.commitPacket(packet)
 
 	uassert.AbortsContains(t, cur, "not enough packets", func(cur realm) {
-		BatchSend(cur, types.MsgBatchSend{Packets: []types.Packet{packet}})
+		BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{packet}})
 	})
 }
 
@@ -822,7 +822,7 @@ func TestBatchSendAllowsNonOwnerForCommittedPackets(cur realm, t *testing.T) {
 	store.commitPacket(p2)
 
 	uassert.NotAborts(t, cur, func(cur realm) {
-		BatchSend(cur, types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
+		BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
 	})
 }
 
@@ -837,7 +837,7 @@ func TestBatchSendRejectsDifferentSourceChannel(cur realm, t *testing.T) {
 	store.commitPacket(p2)
 
 	uassert.AbortsContains(t, cur, "batch must use the same channel", func(cur realm) {
-		BatchSend(cur, types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
+		BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
 	})
 }
 
@@ -853,7 +853,7 @@ func TestBatchSendRejectsAlreadyAcknowledgedPacket(cur realm, t *testing.T) {
 	}
 
 	uassert.AbortsContains(t, cur, "packet commitment not found", func(cur realm) {
-		BatchSend(cur, types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
+		BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
 	})
 }
 
@@ -955,7 +955,7 @@ func TestBatchAcksRejectsAckCountMismatch(cur realm, t *testing.T) {
 	p1 := types.Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: types.Bytes("a"), TimeoutTimestamp: 100}
 	p2 := types.Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: types.Bytes("b"), TimeoutTimestamp: 100}
 	uassert.AbortsContains(t, cur, "acknowledgement count mismatch", func(cur realm) {
-		BatchAcks(cur, types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: [][]byte{[]byte("ack-a")}})
+		BatchAcks(cross(cur), types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: [][]byte{[]byte("ack-a")}})
 	})
 }
 
@@ -965,7 +965,7 @@ func TestBatchAcksRejectsSinglePacket(cur realm, t *testing.T) {
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("a"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.AbortsContains(t, cur, "not enough packets", func(cur realm) {
-		BatchAcks(cur, types.MsgBatchAcks{Packets: []types.Packet{packet}, Acks: [][]byte{[]byte("ack")}})
+		BatchAcks(cross(cur), types.MsgBatchAcks{Packets: []types.Packet{packet}, Acks: [][]byte{[]byte("ack")}})
 	})
 }
 
@@ -977,7 +977,7 @@ func TestBatchAcksRejectsNonOwner(cur realm, t *testing.T) {
 	p2 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("b"), TimeoutTimestamp: 100}
 
 	uassert.AbortsContains(t, cur, "caller not authorized to write ack", func(cur realm) {
-		BatchAcks(cur, types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: [][]byte{[]byte("ack-a"), []byte("ack-b")}})
+		BatchAcks(cross(cur), types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: [][]byte{[]byte("ack-a"), []byte("ack-b")}})
 	})
 }
 
@@ -988,7 +988,7 @@ func TestBatchAcksRejectsPacketsWithoutReceipt(cur realm, t *testing.T) {
 	p2 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("b"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.AbortsContains(t, cur, "packet receipt not found", func(cur realm) {
-		BatchAcks(cur, types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: [][]byte{[]byte("ack-a"), []byte("ack-b")}})
+		BatchAcks(cross(cur), types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: [][]byte{[]byte("ack-a"), []byte("ack-b")}})
 	})
 	if store.hasAcknowledgement(p1) || store.hasAcknowledgement(p2) {
 		t.Fatal("BatchAcks must not commit acknowledgement for an unreceived packet")
@@ -1005,7 +1005,7 @@ func TestBatchAcksRejectsAlreadyAckedPacket(cur realm, t *testing.T) {
 	store.commitAcknowledgement(p2, []byte("second-ack"))
 
 	uassert.AbortsContains(t, cur, "acknowledgement mismatch", func(cur realm) {
-		BatchAcks(cur, types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: [][]byte{[]byte("tampered-ack"), []byte("second-ack")}})
+		BatchAcks(cross(cur), types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: [][]byte{[]byte("tampered-ack"), []byte("second-ack")}})
 	})
 }
 
@@ -1266,7 +1266,7 @@ func TestPacketRecvSyncAckWritten(cur realm, t *testing.T) {
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.NotAborts(t, cur, func(cur realm) {
-		PacketRecv(cur, types.MsgPacketRecv{
+		PacketRecv(cross(cur), types.MsgPacketRecv{
 			Packets:     []types.Packet{packet},
 			RelayerMsgs: [][]byte{nil},
 		})
@@ -1296,7 +1296,7 @@ func TestUnionRecvPacketOK(cur realm, t *testing.T) {
 	}
 
 	uassert.NotAborts(t, cur, func(cur realm) {
-		PacketRecv(cur, types.MsgPacketRecv{
+		PacketRecv(cross(cur), types.MsgPacketRecv{
 			Packets:     []types.Packet{packet},
 			RelayerMsgs: [][]byte{{1}},
 			Relayer:     testutils.TestAddress("union-relayer"),
@@ -1319,7 +1319,7 @@ func TestUnionRecvPacketInvalidChannelState(cur realm, t *testing.T) {
 	}
 
 	uassert.AbortsContains(t, cur, "channel 5 not found", func(cur realm) {
-		PacketRecv(cur, types.MsgPacketRecv{
+		PacketRecv(cross(cur), types.MsgPacketRecv{
 			Packets:     []types.Packet{packet},
 			RelayerMsgs: [][]byte{{1}},
 			Relayer:     testutils.TestAddress("union-relayer"),
@@ -1342,7 +1342,7 @@ func TestUnionRecvPacketTimeoutTimestamp(cur realm, t *testing.T) {
 	}
 
 	uassert.AbortsContains(t, cur, "packet timeout expired", func(cur realm) {
-		PacketRecv(cur, types.MsgPacketRecv{
+		PacketRecv(cross(cur), types.MsgPacketRecv{
 			Packets:     []types.Packet{packet},
 			RelayerMsgs: [][]byte{{1}},
 			Relayer:     testutils.TestAddress("union-relayer"),
@@ -1443,7 +1443,7 @@ func TestPacketRecvBatchRejectsDifferentDestinationChannel(cur realm, t *testing
 	p2 := types.Packet{SourceChannelId: 99, DestinationChannelId: otherChannelId, Data: types.Bytes("b"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.AbortsContains(t, cur, "batch must use the same channel", func(cur realm) {
-		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{p1, p2}, RelayerMsgs: [][]byte{nil, nil}})
+		PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{p1, p2}, RelayerMsgs: [][]byte{nil, nil}})
 	})
 }
 
@@ -1455,7 +1455,7 @@ func TestPacketRecvSyncEmptyAckRejected(cur realm, t *testing.T) {
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.AbortsContains(t, cur, "sync ack cannot be empty", func(cur realm) {
-		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{nil}})
+		PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{nil}})
 	})
 }
 
@@ -1469,7 +1469,7 @@ func TestPacketRecvAsyncDefersAck(cur realm, t *testing.T) {
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.NotAborts(t, cur, func(cur realm) {
-		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{nil}})
+		PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{nil}})
 	})
 
 	if !store.hasPacketReceipt(packet) {
@@ -1603,7 +1603,7 @@ func TestWriteAcknowledgementRejectsNonOwner(cur realm, t *testing.T) {
 	setChannelOwner(channelId, "g1notchannelowner")
 
 	uassert.AbortsContains(t, cur, "caller not authorized to write ack", func(cur realm) {
-		WriteAcknowledgement(cur, types.MsgWriteAcknowledgement{
+		WriteAcknowledgement(cross(cur), types.MsgWriteAcknowledgement{
 			Packet:          packet,
 			Acknowledgement: []byte("async-ack"),
 		})
@@ -1622,7 +1622,7 @@ func TestWriteAcknowledgementRejectsAddressAsPortId(cur realm, t *testing.T) {
 	setChannelOwner(channelId, oldAddressPort)
 
 	uassert.AbortsContains(t, cur, "caller not authorized to write ack", func(cur realm) {
-		WriteAcknowledgement(cur, types.MsgWriteAcknowledgement{
+		WriteAcknowledgement(cross(cur), types.MsgWriteAcknowledgement{
 			Packet:          packet,
 			Acknowledgement: []byte("async-ack"),
 		})
@@ -1637,7 +1637,7 @@ func TestWriteAcknowledgementRejectsEmptyAck(cur realm, t *testing.T) {
 	store.setPacketReceipt(packet)
 
 	uassert.AbortsContains(t, cur, "acknowledgement cannot be empty", func(cur realm) {
-		WriteAcknowledgement(cur, types.MsgWriteAcknowledgement{
+		WriteAcknowledgement(cross(cur), types.MsgWriteAcknowledgement{
 			Packet:          packet,
 			Acknowledgement: []byte{},
 		})
@@ -1656,7 +1656,7 @@ func TestWriteAcknowledgementRejectsAlreadyAcked(cur realm, t *testing.T) {
 	store.commitAcknowledgement(packet, []byte("ack"))
 
 	uassert.AbortsContains(t, cur, "acknowledgement already written", func(cur realm) {
-		WriteAcknowledgement(cur, types.MsgWriteAcknowledgement{
+		WriteAcknowledgement(cross(cur), types.MsgWriteAcknowledgement{
 			Packet:          packet,
 			Acknowledgement: []byte("async-ack"),
 		})
@@ -1669,7 +1669,7 @@ func TestWriteAcknowledgementRejectsPacketWithoutReceipt(cur realm, t *testing.T
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.AbortsContains(t, cur, "packet receipt not found", func(cur realm) {
-		WriteAcknowledgement(cur, types.MsgWriteAcknowledgement{
+		WriteAcknowledgement(cross(cur), types.MsgWriteAcknowledgement{
 			Packet:          packet,
 			Acknowledgement: []byte("forged-ack"),
 		})
@@ -1700,7 +1700,7 @@ func TestIntentPacketRecvSetsReceiptAndCommitsAck(cur realm, t *testing.T) {
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("intent"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.NotAborts(t, cur, func(cur realm) {
-		IntentPacketRecv(cur, types.MsgIntentPacketRecv{
+		IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{
 			Packets:             []types.Packet{packet},
 			MarketMakerMessages: [][]byte{[]byte("maker-msg")},
 		})
@@ -1759,7 +1759,7 @@ func TestUnionRecvIntentPacketOK(cur realm, t *testing.T) {
 	}
 
 	uassert.NotAborts(t, cur, func(cur realm) {
-		IntentPacketRecv(cur, types.MsgIntentPacketRecv{
+		IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{
 			Packets:             []types.Packet{packet},
 			MarketMakerMessages: [][]byte{{1, 2, 3}},
 			MarketMaker:         testutils.TestAddress("marketmaker"),
@@ -1780,7 +1780,7 @@ func TestUnionRecvIntentPacketTimeoutTimestamp(cur realm, t *testing.T) {
 	}
 
 	uassert.AbortsContains(t, cur, "packet timeout expired", func(cur realm) {
-		IntentPacketRecv(cur, types.MsgIntentPacketRecv{
+		IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{
 			Packets:             []types.Packet{packet},
 			MarketMakerMessages: [][]byte{{1, 2, 3}},
 			MarketMaker:         testutils.TestAddress("marketmaker"),
@@ -1816,7 +1816,7 @@ func TestIntentPacketRecvRejectsNonIntentAppBeforeReceipt(cur realm, t *testing.
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("intent"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.AbortsContains(t, cur, "intent receive not supported", func(cur realm) {
-		IntentPacketRecv(cur, types.MsgIntentPacketRecv{Packets: []types.Packet{packet}, MarketMakerMessages: [][]byte{nil}})
+		IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{Packets: []types.Packet{packet}, MarketMakerMessages: [][]byte{nil}})
 	})
 
 	if store.hasPacketReceipt(packet) {
@@ -2032,7 +2032,7 @@ func TestPacketAcknowledgementBatchRejectsDifferentSourceChannel(cur realm, t *t
 	store.commitPacket(p1)
 
 	uassert.AbortsContains(t, cur, "batch must use the same channel", func(cur realm) {
-		PacketAcknowledgement(cur, types.MsgPacketAcknowledgement{
+		PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{
 			Packets:          []types.Packet{p1, p2},
 			Acknowledgements: [][]byte{{0x01}, {0x02}},
 		})
@@ -2067,7 +2067,7 @@ func TestPacketTimeoutRejectsUnsentPacket(cur realm, t *testing.T) {
 	_, _, channelId := setupOpenChannel(t)
 	packet := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("transfer"), TimeoutTimestamp: 100}
 	uassert.AbortsContains(t, cur, "packet commitment not found", func(cur realm) {
-		PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet})
+		PacketTimeout(cross(cur), types.MsgPacketTimeout{Packet: packet})
 	})
 }
 
@@ -2080,7 +2080,7 @@ func TestPacketTimeoutRejectsInactiveClientBeforeNonMembership(cur realm, t *tes
 	client.status = types.StatusFrozen
 
 	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
-		PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet})
+		PacketTimeout(cross(cur), types.MsgPacketTimeout{Packet: packet})
 	})
 
 	if len(client.nonMembershipKeys) != 0 {
@@ -2141,7 +2141,7 @@ func TestPacketTimeoutIgnoresMsgRelayerForAppCallback(cur realm, t *testing.T) {
 	packet := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("transfer"), TimeoutTimestamp: 100}
 	store.commitPacket(packet)
 
-	PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet, Relayer: msgRelayer})
+	PacketTimeout(cross(cur), types.MsgPacketTimeout{Packet: packet, Relayer: msgRelayer})
 
 	if len(app.timeoutRelayers) != 1 {
 		t.Fatalf("OnTimeoutPacket relayers: got %d want 1", len(app.timeoutRelayers))
@@ -2199,7 +2199,7 @@ func TestPacketRecvRejectsInactiveClient(cur realm, t *testing.T) {
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
-		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}, Proof: types.Bytes("proof"), ProofHeight: 10})
+		PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}, Proof: types.Bytes("proof"), ProofHeight: 10})
 	})
 
 	if len(client.membershipKeys) != 0 {

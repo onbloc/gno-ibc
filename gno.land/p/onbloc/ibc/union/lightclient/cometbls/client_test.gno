@@ -64,6 +64,34 @@ func TestClientStatusExpiredNoConsensus(t *testing.T) {
 	}
 }
 
+func TestClientStatusExpiredTrustingPeriod(t *testing.T) {
+	// Union reference: cometbls status returns Expired when the latest
+	// consensus state exists but is older than the trusting period.
+	c := newTestClient(t)
+	c.clientState.TrustingPeriod = 1
+	c.setConsensusState(c.clientState.LatestHeight, &ConsensusState{
+		Timestamp:          1,
+		Root:               MerkleRoot{Hash: repeat32(0xAB)},
+		NextValidatorsHash: repeat32(0xCD),
+	})
+
+	if got := c.Status(); got != lightclient.Expired {
+		t.Errorf("Status: got %q want %q", got, lightclient.Expired)
+	}
+}
+
+func TestClientStatusActive(t *testing.T) {
+	// Union reference: cometbls status returns Active when the client is not
+	// frozen, has latest consensus state, and the trusting period has not
+	// expired.
+	c := newTestClient(t)
+	c.clientState.TrustingPeriod = 1_000_000_000_000_000_000
+
+	if got := c.Status(); got != lightclient.Active {
+		t.Errorf("Status: got %q want %q", got, lightclient.Active)
+	}
+}
+
 func TestVerifyCreationEmpty(t *testing.T) {
 	// Union reference: cometbls verify_creation returns ClientCreationResult::new().
 	c := newTestClient(t)

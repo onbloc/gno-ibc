@@ -101,13 +101,14 @@ func (c *CometblsLightClient) verifyHeader(header *Header, now time.Time) error 
 	return nil
 }
 
-// verifyMisbehaviour determines whether two conflicting headers at the same
-// height would have convinced the light client. It mirrors Union's
-// cometbls.verifyMisbehaviour (11-cometbls/misbehaviour_handle.go): both headers
-// must independently verify, and they must together constitute a fork (same
-// trusted height, differing signed headers) or a BFT time violation (Header1 is
-// not strictly older than Header2).
+// verifyMisbehaviour mirrors Union's cometbls verify_misbehaviour: Header1 must
+// be at least as high as Header2, both headers must independently verify, and
+// the evidence is accepted only for Union's fork/time-violation predicates.
 func (c *CometblsLightClient) verifyMisbehaviour(misbehaviour *Misbehaviour, now time.Time) error {
+	if misbehaviour.Header1.SignedHeader.Height < misbehaviour.Header2.SignedHeader.Height {
+		return makeError(ErrInvalidMisbehaviour, "invalid misbehaviour header sequence")
+	}
+
 	// Regardless of the type of misbehaviour, ensure that both headers are valid
 	// and would have been accepted by the light client.
 	if err := c.verifyHeader(misbehaviour.Header1, now); err != nil {
@@ -118,17 +119,15 @@ func (c *CometblsLightClient) verifyMisbehaviour(misbehaviour *Misbehaviour, now
 		return makeError(ErrInvalidMisbehaviour, "verifying Header_2 in Misbehaviour failed: "+err.Error())
 	}
 
-	if misbehaviour.Header1.TrustedHeight.EQ(*misbehaviour.Header2.TrustedHeight) {
+	if misbehaviour.Header1.SignedHeader.Height == misbehaviour.Header2.SignedHeader.Height {
 		if signedHeadersEqual(misbehaviour.Header1.SignedHeader, misbehaviour.Header2.SignedHeader) {
-			return makeError(ErrInvalidMisbehaviour, "headers are the same")
+			return nil
 		}
-	} else {
-		if misbehaviour.Header1.GetTime().After(misbehaviour.Header2.GetTime()) {
-			return makeError(ErrInvalidMisbehaviour, "headers are in the correct order")
-		}
+	} else if misbehaviour.Header1.GetTime().UnixNano() <= misbehaviour.Header2.GetTime().UnixNano() {
+		return nil
 	}
 
-	return nil
+	return makeError(ErrMisbehaviourNotFound)
 }
 
 // signedHeadersEqual reports whether two light headers have identical content.

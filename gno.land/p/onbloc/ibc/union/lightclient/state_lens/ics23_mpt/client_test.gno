@@ -104,6 +104,29 @@ func TestClientGetTimestampNoConsensus(t *testing.T) {
 	}
 }
 
+func TestGetTimestampAtHeight(t *testing.T) {
+	// Union reference: GetTimestamp reads the consensus state at the requested
+	// height and returns get_timestamp(consensus_state).
+	c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
+	c.setConsensusState(7, &ConsensusState{
+		Timestamp:   777,
+		StateRoot:   bytes.Repeat([]byte{0x03}, 32),
+		StorageRoot: bytes.Repeat([]byte{0x04}, 32),
+	})
+
+	got, err := c.GetTimestampAtHeight(7)
+	if err != nil {
+		t.Fatalf("GetTimestampAtHeight(7): %v", err)
+	}
+	if got != types.Timestamp(777) {
+		t.Fatalf("GetTimestampAtHeight(7): got %d want 777", got)
+	}
+
+	if _, err := c.GetTimestampAtHeight(8); err != ErrConsensusStateNotFound {
+		t.Fatalf("GetTimestampAtHeight(8): got %v want %v", err, ErrConsensusStateNotFound)
+	}
+}
+
 func TestStatusMirrorsL1(t *testing.T) {
 	// Union reference: status mirrors the L1 client and falls back to Frozen,
 	// https://github.com/unionlabs/union/blob/1bb07590230e/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L78.

@@ -26,6 +26,7 @@ var (
 	ErrInvalidProofSpecs         = "invalid proof specs"
 	ErrInvalidValidatorSet       = "invalid validator set"
 	ErrInvalidHeaderTimestamp    = "invalid header timestamp"
+	ErrMisbehaviourNotFound      = "misbehaviour not found"
 )
 
 func makeError(msgs ...string) error {

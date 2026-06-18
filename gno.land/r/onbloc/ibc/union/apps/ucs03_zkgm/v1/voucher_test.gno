@@ -37,12 +37,14 @@ func TestAmountInt64(t *testing.T) {
 }
 
 func TestVoucherNameFallsBackToIBCDenom(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
+	v := newTestImpl()
 
 	ibcDenom := "ibc/name-fallback"
 	rx := testAddress("name-fb-rx")
 
-	uassert.NoError(t, zkgm.MintVoucher(cross(cur), ibcDenom, "base", [32]byte{}, "", "SYM", 0, rx, u256.NewUint(1)))
+	uassert.NoError(t, v.mintVoucher(cur, ibcDenom, [32]byte{}, "", "SYM", 0, rx, u256.NewUint(1)))
 
-	uassert.Equal(t, ibcDenom, zkgm.VoucherNameOf(ibcDenom))
+	vou, ok := zkgm.Store().GetVoucher(ibcDenom)
+	uassert.True(t, ok)
+	uassert.Equal(t, ibcDenom, vou.Token().GetName())
 }

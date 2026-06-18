@@ -29,7 +29,7 @@ func TestRecvForwardExecuteErrorReturnsFailure(cur realm, t *testing.T) {
 	})
 	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(2), data, 0)
 
-	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("relayer")), nil)
+	res := newTestImpl().OnRecvPacket(0, cur, packet, address(testAddress("relayer")), nil)
 
 	uassert.True(t, res.Status == types.PacketStatusFailure)
 	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
@@ -38,7 +38,7 @@ func TestRecvForwardExecuteErrorReturnsFailure(cur realm, t *testing.T) {
 func TestRecvMalformedPacketReturnsFailure(cur realm, t *testing.T) {
 	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(2), []byte{0x01}, 0)
 
-	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("relayer")), nil)
+	res := newTestImpl().OnRecvPacket(0, cur, packet, address(testAddress("relayer")), nil)
 
 	uassert.True(t, res.Status == types.PacketStatusFailure)
 	uassert.True(t, len(res.Acknowledgement) > 0)
@@ -52,16 +52,14 @@ func TestAckUnsupportedOpcodeAborts(cur realm, t *testing.T) {
 	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(2), data, 0)
 
 	uassert.AbortsContains(t, cur, "unsupported opcode", func(cur realm) {
-		(&ZkgmV1{}).Ack(cur, packet, nil, address(testAddress("relayer")))
+		newTestImpl().OnAcknowledgementPacket(0, cur, packet, nil, address(testAddress("relayer")))
 	})
 }
 
-// TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck verifies that
-// an error occurring before any state mutation produces a universalErrorAck
-// rather than aborting the transaction.
+// TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck verifies that an
+// error occurring before any state mutation produces a universalErrorAck rather
+// than aborting the transaction.
 func TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
-
 	order := z.TokenOrderV2{
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Sender:      []byte(testAddress("init-err-sender")),
@@ -75,7 +73,7 @@ func TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck(cur realm, t *
 	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
 	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(1), data, 0)
 
-	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("relayer")), nil)
+	res := newTestImpl().OnRecvPacket(0, cur, packet, address(testAddress("relayer")), nil)
 
 	uassert.True(t, res.Status == types.PacketStatusFailure)
 	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
@@ -85,19 +83,19 @@ func TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck(cur realm, t *
 // occurring after a state mutation (receiver voucher already minted) propagates
 // as execFatal and aborts the transaction rather than returning a failure ack.
 func TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
+	v := newTestImpl()
 
 	const destChan = types.ChannelId(5)
 	baseToken := []byte("uatom-fee-fatal")
 	path := u256.Zero()
-	// Pre-minting sets metadataImage=[32]byte{} for ibcDenom, so ESCROW will
-	// use PredictWrappedTokenV2 for validation — use the same function here.
+	// Pre-minting sets metadataImage=[32]byte{} for ibcDenom, so ESCROW will use
+	// PredictWrappedTokenV2 for validation — use the same function here.
 	ibcDenom := PredictWrappedTokenV2(path, uint32(destChan), baseToken, [32]byte{})
 
 	// Saturate supply to MaxInt64-1. After receiver mint (+1) total = MaxInt64.
 	// Fee mint (+1) then overflows int64 → GRC20 returns error → execFatal.
 	fillAmt := u256.NewUint(uint64(math.MaxInt64) - 1)
-	uassert.NoError(t, zkgm.MintVoucher(cross(cur), ibcDenom, string(baseToken), [32]byte{}, "", "", 0, testAddress("sat"), fillAmt))
+	uassert.NoError(t, v.mintVoucher(cur, ibcDenom, [32]byte{}, "", "", 0, testAddress("sat"), fillAmt))
 
 	order := z.TokenOrderV2{
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
@@ -112,19 +110,17 @@ func TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts(cur realm, t *testing.T
 	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, data, 0)
 
 	uassert.AbortsContains(t, cur, "mint overflow", func(cur realm) {
-		(&ZkgmV1{}).Recv(cur, packet, address(testAddress("fee-fatal-relayer")), nil)
+		newTestImpl().OnRecvPacket(0, cur, packet, address(testAddress("fee-fatal-relayer")), nil)
 	})
 
 	// SetTokenOrigin is called after the fee mint — the abort must prevent it.
 	// (State rollback of the receiver mint is guaranteed by the VM on a real tx
 	// abort, but is not replicated in the test harness's AbortsContains.)
-	_, hasOrigin := zkgm.GetTokenOrigin(ibcDenom)
+	_, hasOrigin := zkgm.Store().GetTokenOrigin(ibcDenom)
 	uassert.False(t, hasOrigin)
 }
 
 func TestRecvTokenOrderSolveReturnsFailureAck(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
-
 	order := z.TokenOrderV2{
 		Kind:        z.TOKEN_ORDER_KIND_SOLVE,
 		Sender:      []byte(testAddress("solve-recv-sndr")),
@@ -137,7 +133,7 @@ func TestRecvTokenOrderSolveReturnsFailureAck(cur realm, t *testing.T) {
 	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
 	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(1), data, 0)
 
-	res := (&ZkgmV1{}).Recv(cur, packet, address("g1relayer"), nil)
+	res := newTestImpl().OnRecvPacket(0, cur, packet, address("g1relayer"), nil)
 
 	uassert.True(t, res.Status == types.PacketStatusFailure)
 	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
@@ -150,32 +146,4 @@ func TestDecodeOrderInstructionRejectsV1(t *testing.T) {
 		Operand: []byte("anything"),
 	})
 	uassert.ErrorContains(t, err, "unsupported token order version")
-}
-
-func mustZkgmPacketBytes(instr z.Instruction) []byte {
-	out, err := z.EncodeZkgmPacket(z.ZkgmPacket{
-		Salt:        [32]byte{},
-		Path:        u256.Zero(),
-		Instruction: instr,
-	})
-	if err != nil {
-		panic(err)
-	}
-	return out
-}
-
-func mustCallBytes(call z.Call) []byte {
-	out, err := z.EncodeCall(call)
-	if err != nil {
-		panic(err)
-	}
-	return out
-}
-
-func mustForwardBytes(forward z.Forward) []byte {
-	out, err := z.EncodeForward(forward)
-	if err != nil {
-		panic(err)
-	}
-	return out
 }

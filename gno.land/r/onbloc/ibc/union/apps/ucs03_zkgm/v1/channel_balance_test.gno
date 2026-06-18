@@ -11,53 +11,57 @@ import (
 )
 
 func TestIncreaseChannelBalanceSingleWrite(cur realm, t *testing.T) {
+	v := &ucs03ZkgmV1{store: zkgm.Store()}
 	baseToken := []byte("uatom-single")
 	quoteToken := []byte("uosmo")
 	path := u256.Zero()
 	chanId := types.ChannelId(21)
 
-	increaseChannelBalanceV2(cross(cur), chanId, path, baseToken, quoteToken, u256.NewUint(500))
+	v.increaseChannelBalanceV2(cur, chanId, path, baseToken, quoteToken, u256.NewUint(500))
 
 	key := ChannelBalanceKeyV2(chanId, path, baseToken, quoteToken)
-	bal := zkgm.GetChannelBalanceV2(key)
-	uassert.True(t, bal != nil && bal.Uint64() == 500)
+	bal, ok := zkgm.Store().GetChannelBalanceV2(key)
+	uassert.True(t, ok && bal != nil && bal.Uint64() == 500)
 }
 
 func TestIncreaseChannelBalanceZeroIsNoop(cur realm, t *testing.T) {
+	v := &ucs03ZkgmV1{store: zkgm.Store()}
 	baseToken := []byte("uatom-zero-noop")
 	quoteToken := []byte("uosmo")
 	path := u256.Zero()
 	chanId := types.ChannelId(22)
 
-	increaseChannelBalanceV2(cross(cur), chanId, path, baseToken, quoteToken, u256.Zero())
+	v.increaseChannelBalanceV2(cur, chanId, path, baseToken, quoteToken, u256.Zero())
 
 	key := ChannelBalanceKeyV2(chanId, path, baseToken, quoteToken)
-	bal := zkgm.GetChannelBalanceV2(key)
-	uassert.True(t, bal == nil)
+	_, ok := zkgm.Store().GetChannelBalanceV2(key)
+	uassert.False(t, ok)
 }
 
 func TestDecreaseChannelBalanceUnderflowOnEmpty(cur realm, t *testing.T) {
+	v := &ucs03ZkgmV1{store: zkgm.Store()}
 	baseToken := []byte("uatom-underflow")
 	quoteToken := []byte("uosmo")
 	path := u256.Zero()
 	chanId := types.ChannelId(23)
 
-	err := decreaseChannelBalanceV2(cross(cur), chanId, path, baseToken, quoteToken, u256.NewUint(1))
+	err := v.decreaseChannelBalanceV2(cur, chanId, path, baseToken, quoteToken, u256.NewUint(1))
 	uassert.Error(t, err)
 }
 
 func TestDecreaseChannelBalanceZeroIsNoop(cur realm, t *testing.T) {
+	v := &ucs03ZkgmV1{store: zkgm.Store()}
 	baseToken := []byte("uatom-dec-zero")
 	quoteToken := []byte("uosmo")
 	path := u256.Zero()
 	chanId := types.ChannelId(24)
 
-	err := decreaseChannelBalanceV2(cross(cur), chanId, path, baseToken, quoteToken, u256.Zero())
+	err := v.decreaseChannelBalanceV2(cur, chanId, path, baseToken, quoteToken, u256.Zero())
 	uassert.NoError(t, err)
 
 	key := ChannelBalanceKeyV2(chanId, path, baseToken, quoteToken)
-	bal := zkgm.GetChannelBalanceV2(key)
-	uassert.True(t, bal == nil)
+	_, ok := zkgm.Store().GetChannelBalanceV2(key)
+	uassert.False(t, ok)
 }
 
 func TestChannelBalanceKeyV2Deterministic(t *testing.T) {

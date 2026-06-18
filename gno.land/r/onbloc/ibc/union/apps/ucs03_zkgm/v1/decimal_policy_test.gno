@@ -1,5 +1,9 @@
 package impl
 
+// decimal_policy_test.gno exercises token_order.gno's decimal-agnostic accounting:
+// BaseAmount is preserved verbatim through lock/mint/refund regardless of the
+// wrapped token's declared decimals, and out-of-range decimals/amounts fail closed.
+
 import (
 	"chain"
 	"math"
@@ -15,7 +19,7 @@ import (
 )
 
 func TestInitializeDecimalsAgnosticAccounting(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
+	v := newTestImpl()
 
 	const N = uint64(77)
 	base := []byte("uatom")
@@ -38,7 +42,7 @@ func TestInitializeDecimalsAgnosticAccounting(cur realm, t *testing.T) {
 		})
 		denom := PredictWrappedTokenV2(u256.NewUint(tc.path), tc.dest, base, MetadataImage(mustDecodeTokenMetadata(meta)))
 		rx := testAddress(tc.rxSuffix)
-		res, err := (&ZkgmV1{}).executeTokenOrderV2(cur,
+		res, err := v.executeTokenOrderV2(cur,
 			core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(tc.dest), nil, 0),
 			relayer, u256.NewUint(tc.path),
 			z.TokenOrderV2{
@@ -48,13 +52,13 @@ func TestInitializeDecimalsAgnosticAccounting(cur realm, t *testing.T) {
 			}, false)
 		uassert.NoError(t, err)
 		uassert.True(t, res.Status == types.PacketStatusSuccess)
-		uassert.Equal(t, int64(N), VoucherBalanceOf(denom, address(rx)))
-		uassert.Equal(t, int(tc.decimals), VoucherDecimalsOf(denom))
+		uassert.Equal(t, int64(N), voucherBalanceOf(denom, address(rx)))
+		uassert.Equal(t, int(tc.decimals), voucherDecimalsOf(denom))
 	}
 }
 
 func TestBaseAmountPreservedThroughLockAndRefund(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
+	v := newTestImpl()
 
 	const N = uint64(100)
 	const chanSrc = types.ChannelId(130)
@@ -62,7 +66,7 @@ func TestBaseAmountPreservedThroughLockAndRefund(cur realm, t *testing.T) {
 	ibcBase := "ibc/rt-base"
 	sender := testAddress("rt-sender")
 
-	uassert.NoError(t, zkgm.MintVoucher(cross(cur), ibcBase, ibcBase, [32]byte{}, "", "", 0, sender, u256.NewUint(N)))
+	uassert.NoError(t, v.mintVoucher(cur, ibcBase, [32]byte{}, "", "", 0, sender, u256.NewUint(N)))
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
 		Implementation: []byte("grc20"),
@@ -81,21 +85,21 @@ func TestBaseAmountPreservedThroughLockAndRefund(cur realm, t *testing.T) {
 		Metadata:    metaBytes,
 	}
 
-	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, chanSrc, sender, newSentCoinBudget(nil), path, order)
+	err := v.verifyTokenOrderV2(cur, chanSrc, sender, newFunds(nil), path, order)
 	uassert.NoError(t, err)
-	uassert.Equal(t, int64(0), VoucherBalanceOf(ibcBase, address(sender)))
-	srcBal := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(chanSrc, path, order.BaseToken, order.QuoteToken))
+	uassert.Equal(t, int64(0), voucherBalanceOf(ibcBase, address(sender)))
+	srcBal, _ := zkgm.Store().GetChannelBalanceV2(ChannelBalanceKeyV2(chanSrc, path, order.BaseToken, order.QuoteToken))
 	uassert.Equal(t, u256.NewUint(N).ToString(), srcBal.ToString())
 
-	err = (&ZkgmV1{}).acknowledgeTokenOrderV2(cur, chanSrc, path, order, z.Ack{Tag: tagAckFailure()})
+	err = v.acknowledgeTokenOrderV2(cur, chanSrc, path, order, z.Ack{Tag: tagAckFailure()})
 	uassert.NoError(t, err)
-	uassert.Equal(t, int64(N), VoucherBalanceOf(ibcBase, address(sender)))
-	srcBalAfter := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(chanSrc, path, order.BaseToken, order.QuoteToken))
-	uassert.True(t, srcBalAfter == nil || srcBalAfter.IsZero())
+	uassert.Equal(t, int64(N), voucherBalanceOf(ibcBase, address(sender)))
+	srcBalAfter, hasBal := zkgm.Store().GetChannelBalanceV2(ChannelBalanceKeyV2(chanSrc, path, order.BaseToken, order.QuoteToken))
+	uassert.True(t, !hasBal || srcBalAfter.IsZero())
 }
 
 func TestBaseAmountPreservedThroughMint(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
+	v := newTestImpl()
 
 	const N = uint64(100)
 	const chanSrc = types.ChannelId(132)
@@ -121,16 +125,16 @@ func TestBaseAmountPreservedThroughMint(cur realm, t *testing.T) {
 		Metadata:    metaBytes,
 	}
 
-	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur,
+	res, err := v.executeTokenOrderV2(cur,
 		core.NewPacket(cross(cur), chanSrc, chanDest, nil, 0),
 		address(testAddress("rt-rly-mint")), path, order, false)
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatusSuccess)
-	uassert.Equal(t, int64(N), VoucherBalanceOf(ibcDest, address(receiver)))
+	uassert.Equal(t, int64(N), voucherBalanceOf(ibcDest, address(receiver)))
 }
 
 func TestNativeBaseAmountNotUpscaled(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
+	v := newTestImpl()
 
 	const N = int64(1_000_000) // 1 ugnot (6-dec representation)
 	const chanId = types.ChannelId(140)
@@ -142,18 +146,18 @@ func TestNativeBaseAmountNotUpscaled(cur realm, t *testing.T) {
 		QuoteAmount: u256.NewUint(uint64(N)),
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
-	budget := newSentCoinBudget(chain.NewCoins(chain.NewCoin("ugnot", N)))
+	f := newFunds(chain.NewCoins(chain.NewCoin("ugnot", N)))
 
-	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, chanId, testAddress("native-noscale-sndr"), budget, u256.Zero(), order)
+	err := v.verifyTokenOrderV2(cur, chanId, testAddress("native-noscale-sndr"), f, u256.Zero(), order)
 
 	uassert.NoError(t, err)
-	uassert.True(t, budget.drained())
-	bal := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(chanId, u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.True(t, f.isEmpty())
+	bal, _ := zkgm.Store().GetChannelBalanceV2(ChannelBalanceKeyV2(chanId, u256.Zero(), order.BaseToken, order.QuoteToken))
 	uassert.Equal(t, u256.NewUint(uint64(N)).ToString(), bal.ToString())
 }
 
 func TestInitializeOverflowAmountReturnsFailureAckNoMint(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
+	v := newTestImpl()
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
 		Implementation: []byte("grc20"),
@@ -176,15 +180,15 @@ func TestInitializeOverflowAmountReturnsFailureAckNoMint(cur realm, t *testing.T
 	}))
 	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, data, 0)
 
-	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("ovf-rly")), nil)
+	res := v.OnRecvPacket(0, cur, packet, address(testAddress("ovf-rly")), nil)
 
 	uassert.True(t, res.Status == types.PacketStatusFailure)
 	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
-	uassert.Equal(t, int64(0), VoucherBalanceOf(ibcDenom, address(receiver)))
+	uassert.Equal(t, int64(0), voucherBalanceOf(ibcDenom, address(receiver)))
 }
 
 func TestSendBaseAmountInt64Boundary(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
+	v := newTestImpl()
 
 	maxI64 := u256.NewUint(uint64(math.MaxInt64))
 
@@ -198,10 +202,10 @@ func TestSendBaseAmountInt64Boundary(cur realm, t *testing.T) {
 		QuoteAmount: maxI64,
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
-	err := (&ZkgmV1{}).verifyTokenOrderV2(cur, chanA, senderA,
-		newSentCoinBudget(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), u256.Zero(), orderA)
+	err := v.verifyTokenOrderV2(cur, chanA, senderA,
+		newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), u256.Zero(), orderA)
 	uassert.NoError(t, err)
-	balA := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(chanA, u256.Zero(), orderA.BaseToken, orderA.QuoteToken))
+	balA, _ := zkgm.Store().GetChannelBalanceV2(ChannelBalanceKeyV2(chanA, u256.Zero(), orderA.BaseToken, orderA.QuoteToken))
 	uassert.Equal(t, maxI64.ToString(), balA.ToString())
 
 	senderB := testAddress("bnd-sndr-b")
@@ -215,15 +219,15 @@ func TestSendBaseAmountInt64Boundary(cur realm, t *testing.T) {
 		QuoteAmount: overAmt,
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
-	err = (&ZkgmV1{}).verifyTokenOrderV2(cur, chanB, senderB,
-		newSentCoinBudget(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), u256.Zero(), orderB)
+	err = v.verifyTokenOrderV2(cur, chanB, senderB,
+		newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), u256.Zero(), orderB)
 	uassert.Error(t, err)
-	balB := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(chanB, u256.Zero(), orderB.BaseToken, orderB.QuoteToken))
-	uassert.True(t, balB == nil || balB.IsZero())
+	balB, hasB := zkgm.Store().GetChannelBalanceV2(ChannelBalanceKeyV2(chanB, u256.Zero(), orderB.BaseToken, orderB.QuoteToken))
+	uassert.True(t, !hasB || balB.IsZero())
 }
 
 func TestVoucherDecimalsWithinLimit(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
+	v := newTestImpl()
 
 	rx := testAddress("dec-limit-rx")
 	amt := u256.NewUint(1)
@@ -237,13 +241,13 @@ func TestVoucherDecimalsWithinLimit(cur realm, t *testing.T) {
 		{"ibc/dl-6", "T6", 6},
 		{"ibc/dl-18", "TK", 18}, // MaxDecimals; must succeed.
 	} {
-		uassert.NoError(t, zkgm.MintVoucher(cross(cur), tc.denom, "base", [32]byte{}, "T", tc.sym, tc.decimals, rx, amt))
-		uassert.Equal(t, int(tc.decimals), VoucherDecimalsOf(tc.denom))
+		uassert.NoError(t, v.mintVoucher(cur, tc.denom, [32]byte{}, "T", tc.sym, tc.decimals, rx, amt))
+		uassert.Equal(t, int(tc.decimals), voucherDecimalsOf(tc.denom))
 	}
 }
 
 func TestInitializeDecimalsExceedMaxReturnsFailureAck(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
+	v := newTestImpl()
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
 		Implementation: []byte("grc20"),
@@ -266,26 +270,26 @@ func TestInitializeDecimalsExceedMaxReturnsFailureAck(cur realm, t *testing.T) {
 	}))
 	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, data, 0)
 
-	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("ovd-rly")), nil)
+	res := v.OnRecvPacket(0, cur, packet, address(testAddress("ovd-rly")), nil)
 
 	uassert.True(t, res.Status == types.PacketStatusFailure)
 	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
-	uassert.False(t, zkgm.HasVoucher(ibcDenom))
+	uassert.False(t, zkgm.Store().HasVoucher(ibcDenom))
 }
 
 func TestReInitializeSameIBCDenomPreservesDecimals(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
+	v := newTestImpl()
 
 	ibcDenom := "ibc/reint-test"
 	rx := testAddress("reint-rx")
 	amt := u256.NewUint(10)
 
 	// First creation: decimals=18.
-	uassert.NoError(t, zkgm.MintVoucher(cross(cur), ibcDenom, "base", [32]byte{}, "Token", "TKN", 18, rx, amt))
-	uassert.Equal(t, 18, VoucherDecimalsOf(ibcDenom))
+	uassert.NoError(t, v.mintVoucher(cur, ibcDenom, [32]byte{}, "Token", "TKN", 18, rx, amt))
+	uassert.Equal(t, 18, voucherDecimalsOf(ibcDenom))
 
 	// Second call with decimals=6 must reuse the existing voucher without changing it.
-	uassert.NoError(t, zkgm.MintVoucher(cross(cur), ibcDenom, "base", [32]byte{}, "Token", "TKN", 6, rx, amt))
-	uassert.Equal(t, 18, VoucherDecimalsOf(ibcDenom))
-	uassert.Equal(t, int64(20), VoucherBalanceOf(ibcDenom, address(rx)))
+	uassert.NoError(t, v.mintVoucher(cur, ibcDenom, [32]byte{}, "Token", "TKN", 6, rx, amt))
+	uassert.Equal(t, 18, voucherDecimalsOf(ibcDenom))
+	uassert.Equal(t, int64(20), voucherBalanceOf(ibcDenom, address(rx)))
 }

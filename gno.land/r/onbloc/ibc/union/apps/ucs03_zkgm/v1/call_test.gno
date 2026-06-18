@@ -25,7 +25,7 @@ func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
 	}
 	path := u256.NewUint(9)
 
-	res, err := (&ZkgmV1{}).executeCall(cur, packet, address("g1relayer"), []byte("relay-msg"), path, call, false)
+	res, err := newTestImpl().executeCall(cur, packet, address("g1relayer"), []byte("relay-msg"), path, call, false)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatusSuccess)
@@ -49,7 +49,7 @@ func TestExecuteCallReceiverErrorReturnsFailureAck(cur realm, t *testing.T) {
 	mock.SetError(cross(cur), "receiver failed")
 	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
 
-	res, err := (&ZkgmV1{}).executeCall(cur, packet, address("g1relayer"), nil, u256.Zero(), z.Call{
+	res, err := newTestImpl().executeCall(cur, packet, address("g1relayer"), nil, u256.Zero(), z.Call{
 		Sender:          []byte("sender"),
 		ContractAddress: []byte(mockReceiverPath),
 	}, false)
@@ -68,7 +68,7 @@ func TestExecuteCallReceiverPanicReturnsOnlyMakerAck(cur realm, t *testing.T) {
 	mock.SetPanic(cross(cur), "boom")
 	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
 
-	res, err := (&ZkgmV1{}).executeCall(cur, packet, address("g1relayer"), nil, u256.Zero(), z.Call{
+	res, err := newTestImpl().executeCall(cur, packet, address("g1relayer"), nil, u256.Zero(), z.Call{
 		Sender:          []byte("sender"),
 		ContractAddress: []byte(mockReceiverPath),
 	}, false)
@@ -88,12 +88,12 @@ func TestIntentRecvOnlyMakerCallAborts(cur realm, t *testing.T) {
 	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), data, 0)
 
 	uassert.AbortsContains(t, cur, "zkgm: only maker", func(cur realm) {
-		(&ZkgmV1{}).IntentRecv(cur, packet, address("g1relayer"), nil)
+		newTestImpl().OnIntentRecvPacket(0, cur, packet, address("g1relayer"), nil)
 	})
 }
 
 func TestVerifyCallRejectsInvalidSender(cur realm, t *testing.T) {
-	err := (&ZkgmV1{}).verifyCall(cur, "actual", z.Call{
+	err := newTestImpl().verifyCall(cur, "actual", z.Call{
 		Sender: []byte("other"),
 	})
 

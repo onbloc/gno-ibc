@@ -42,11 +42,11 @@ func (i *Impl) PreChannelCloseInit(cur realm, channelId types.ChannelId) {}
 func (i *Impl) PostChannelCloseConfirm(cur realm, channelId types.ChannelId) {}
 
 func (i *Impl) Recv(cur realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {
-	return core.NewRecvPacketResult(cross(cur), types.PacketStatusSuccess, []byte(i.label))
+	return core.NewRecvPacketResult(types.PacketStatusSuccess, []byte(i.label))
 }
 
 func (i *Impl) IntentRecv(cur realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
-	return core.NewRecvPacketResult(cross(cur), types.PacketStatusSuccess, []byte(i.label))
+	return core.NewRecvPacketResult(types.PacketStatusSuccess, []byte(i.label))
 }
 
 func (i *Impl) Ack(cur realm, packet types.Packet, ack []byte, relayer address) {}

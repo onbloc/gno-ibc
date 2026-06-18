@@ -6,14 +6,13 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
+func NewConnection(state types.ConnectionState, clientId, counterpartyClientId types.ClientId, counterpartyConnectionId types.ConnectionId) types.Connection {
+	return types.Connection{State: state, ClientId: clientId, CounterpartyClientId: counterpartyClientId, CounterpartyConnectionId: counterpartyConnectionId}
+}
+
 func ConnectionOpenInit(_ realm, msg types.MsgConnectionOpenInit) types.ConnectionId {
 	connectionId := store.nextConnectionId()
-	store.saveConnection(connectionId, types.Connection{
-		State:                    types.ConnectionStateInit,
-		ClientId:                 msg.ClientId,
-		CounterpartyClientId:     msg.CounterpartyClientId,
-		CounterpartyConnectionId: 0,
-	})
+	store.saveConnection(connectionId, NewConnection(types.ConnectionStateInit, msg.ClientId, msg.CounterpartyClientId, 0))
 	chain.Emit(ConnectionOpenInitEvent,
 		"connection_id", connectionId.String(),
 		"client_id", msg.ClientId.String(),
@@ -25,22 +24,12 @@ func ConnectionOpenInit(_ realm, msg types.MsgConnectionOpenInit) types.Connecti
 func ConnectionOpenTry(_ realm, msg types.MsgConnectionOpenTry) types.ConnectionId {
 	connectionId := store.nextConnectionId()
 
-	expectedConnection := types.Connection{
-		State:                    types.ConnectionStateInit,
-		ClientId:                 msg.CounterpartyClientId,
-		CounterpartyClientId:     msg.ClientId,
-		CounterpartyConnectionId: 0,
-	}
+	expectedConnection := NewConnection(types.ConnectionStateInit, msg.CounterpartyClientId, msg.ClientId, 0)
 	key := types.ConnectionPath(msg.CounterpartyConnectionId)
 	value := connectionValue(expectedConnection)
 	verifyMembershipActive(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
 
-	store.saveConnection(connectionId, types.Connection{
-		State:                    types.ConnectionStateTryOpen,
-		ClientId:                 msg.ClientId,
-		CounterpartyClientId:     msg.CounterpartyClientId,
-		CounterpartyConnectionId: msg.CounterpartyConnectionId,
-	})
+	store.saveConnection(connectionId, NewConnection(types.ConnectionStateTryOpen, msg.ClientId, msg.CounterpartyClientId, msg.CounterpartyConnectionId))
 	chain.Emit(ConnectionOpenTryEvent,
 		"connection_id", connectionId.String(),
 		"client_id", msg.ClientId.String(),
@@ -59,12 +48,7 @@ func ConnectionOpenAck(_ realm, msg types.MsgConnectionOpenAck) {
 		panic(ErrInvalidConnectionState)
 	}
 
-	expectedConnection := types.Connection{
-		State:                    types.ConnectionStateTryOpen,
-		ClientId:                 connection.CounterpartyClientId,
-		CounterpartyClientId:     connection.ClientId,
-		CounterpartyConnectionId: msg.ConnectionId,
-	}
+	expectedConnection := NewConnection(types.ConnectionStateTryOpen, connection.CounterpartyClientId, connection.ClientId, msg.CounterpartyConnectionId)
 	key := types.ConnectionPath(msg.CounterpartyConnectionId)
 	value := connectionValue(expectedConnection)
 	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofTry, key[:], value[:])
@@ -90,12 +74,7 @@ func ConnectionOpenConfirm(_ realm, msg types.MsgConnectionOpenConfirm) {
 		panic(ErrInvalidConnectionState)
 	}
 
-	expectedConnection := types.Connection{
-		State:                    types.ConnectionStateOpen,
-		ClientId:                 connection.CounterpartyClientId,
-		CounterpartyClientId:     connection.ClientId,
-		CounterpartyConnectionId: msg.ConnectionId,
-	}
+	expectedConnection := NewConnection(types.ConnectionStateOpen, connection.CounterpartyClientId, connection.ClientId, msg.ConnectionId)
 	key := types.ConnectionPath(connection.CounterpartyConnectionId)
 	value := connectionValue(expectedConnection)
 	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofAck, key[:], value[:])

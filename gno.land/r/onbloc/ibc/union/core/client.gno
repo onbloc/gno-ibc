@@ -8,6 +8,10 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
+func NewConsensusStateUpdate(height types.Height, consensusStateBytes, clientStateBytes []byte) types.ConsensusStateUpdate {
+	return types.ConsensusStateUpdate{Height: height, ConsensusStateBytes: consensusStateBytes, ClientStateBytes: clientStateBytes}
+}
+
 // CreateClient stores a light client object built by the caller (an
 // app/bootstrap realm) and assigns it an id. The object owns its own client and
 // consensus state. This mirrors aib's model of handing core an already-built

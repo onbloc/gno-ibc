@@ -63,7 +63,7 @@ func MintVoucher(cur realm, inst zkgm.ZkgmImpl, channelId types.ChannelId, base 
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    meta,
 	}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), channelId, TokenOrderPacketData(cross(cur), order), types.Timestamp(100))
+	packet := core.NewPacket(types.ChannelId(1), channelId, TokenOrderPacketData(cross(cur), order), types.Timestamp(100))
 	inst.Recv(cross(cur), packet, testutils.TestAddress("scenario-relayer"), nil)
 	return quoteToken
 }

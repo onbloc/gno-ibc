@@ -34,7 +34,7 @@ func (v *ZkgmV1) executeCall(cur realm, packet types.Packet, relayer address, re
 	}
 	if intent {
 		// Calls do not settle on the proofless market-maker fast path.
-		return core.NewRecvPacketResult(cross(cur), types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
+		return core.NewRecvPacketResult(types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 
 	sender := cloneBytes(call.Sender)
@@ -60,7 +60,7 @@ func (v *ZkgmV1) executeCall(cur realm, packet types.Packet, relayer address, re
 
 	err, panicked := safeCallOnZkgm(cur, receiver, env)
 	if panicked {
-		return core.NewRecvPacketResult(cross(cur), types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
+		return core.NewRecvPacketResult(types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 	if err != nil {
 		return callErrAck(cur, err), nil
@@ -68,9 +68,9 @@ func (v *ZkgmV1) executeCall(cur realm, packet types.Packet, relayer address, re
 
 	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess(), InnerAck: []byte{}})
 	if err != nil {
-		return core.NewRecvPacketResult(cross(cur), types.PacketStatusUnknown, nil), err
+		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
-	return core.NewRecvPacketResult(cross(cur), types.PacketStatusSuccess, ack), nil
+	return core.NewRecvPacketResult(types.PacketStatusSuccess, ack), nil
 }
 
 func (v *ZkgmV1) acknowledgeCall(cur realm, packet types.Packet, path *u256.Uint, call z.Call) error {

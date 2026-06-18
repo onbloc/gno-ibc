@@ -36,15 +36,15 @@ func (v *ZkgmV1) executeForward(cur realm, packet types.Packet, path *u256.Uint,
 	// is the only line of defense on receive. Do not strip as redundant with
 	// verifyForward.
 	if !isAllowedForwardInstruction(forward.Instruction.Opcode) {
-		return core.NewRecvPacketResult(cross(cur), types.PacketStatusUnknown, nil), errInvalidForwardInstruction
+		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), errInvalidForwardInstruction
 	}
 	if intent {
-		return core.NewRecvPacketResult(cross(cur), types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
+		return core.NewRecvPacketResult(types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 
 	childPacket, err := buildForwardChild(cur, packet, path, parentSalt, forward)
 	if err != nil {
-		return core.NewRecvPacketResult(cross(cur), types.PacketStatusUnknown, nil), err
+		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
 	// Forward children construct ZkgmPacket directly via BatchSend. Their salt
@@ -52,7 +52,7 @@ func (v *ZkgmV1) executeForward(cur realm, packet types.Packet, path *u256.Uint,
 	zkgm.SetInFlightPacket(cross(cur), forwardInFlightKey(cur, childPacket), zkgm.NewInFlightValue(cross(cur), packet))
 	zkgm.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{childPacket}))
 
-	return core.NewRecvPacketResult(cross(cur), types.PacketStatusAsync, nil), nil
+	return core.NewRecvPacketResult(types.PacketStatusAsync, nil), nil
 }
 
 func (v *ZkgmV1) acknowledgeForward(cur realm, packet types.Packet, path *u256.Uint, salt [32]byte, forward z.Forward, ack z.Ack) error {
@@ -65,20 +65,20 @@ func (v *ZkgmV1) timeoutForward(cur realm, packet types.Packet, path *u256.Uint,
 
 func buildForwardChild(cur realm, packet types.Packet, path *u256.Uint, parentSalt [32]byte, forward z.Forward) (types.Packet, error) {
 	if forward.TimeoutTimestamp == 0 {
-		return core.NewPacket(cross(cur), 0, 0, nil, 0), errForwardZeroTimeout
+		return core.NewPacket(0, 0, nil, 0), errForwardZeroTimeout
 	}
 
 	tailPath, prevDestChannel := z.DequeueChannelFromPath(forward.Path)
 	if prevDestChannel == 0 {
-		return core.NewPacket(cross(cur), 0, 0, nil, 0), errForwardMissingPrevDest
+		return core.NewPacket(0, 0, nil, 0), errForwardMissingPrevDest
 	}
 
 	continuationPath, nextSourceChannel := z.DequeueChannelFromPath(tailPath)
 	if nextSourceChannel == 0 {
-		return core.NewPacket(cross(cur), 0, 0, nil, 0), errForwardMissingNextSource
+		return core.NewPacket(0, 0, nil, 0), errForwardMissingNextSource
 	}
 	if packet.DestinationChannelId != types.ChannelId(prevDestChannel) {
-		return core.NewPacket(cross(cur), 0, 0, nil, 0), errForwardPrevDestMismatch
+		return core.NewPacket(0, 0, nil, 0), errForwardPrevDestMismatch
 	}
 
 	nextInstruction := forward.Instruction
@@ -92,7 +92,7 @@ func buildForwardChild(cur realm, packet types.Packet, path *u256.Uint, parentSa
 
 		forwardBytes, err := z.EncodeForward(nextForward)
 		if err != nil {
-			return core.NewPacket(cross(cur), 0, 0, nil, 0), err
+			return core.NewPacket(0, 0, nil, 0), err
 		}
 
 		nextInstruction = z.Instruction{
@@ -104,11 +104,11 @@ func buildForwardChild(cur realm, packet types.Packet, path *u256.Uint, parentSa
 
 	intermediate, err := z.UpdateChannelPath(path, prevDestChannel)
 	if err != nil {
-		return core.NewPacket(cross(cur), 0, 0, nil, 0), err
+		return core.NewPacket(0, 0, nil, 0), err
 	}
 	nextPath, err := z.UpdateChannelPath(intermediate, nextSourceChannel)
 	if err != nil {
-		return core.NewPacket(cross(cur), 0, 0, nil, 0), err
+		return core.NewPacket(0, 0, nil, 0), err
 	}
 
 	childBytes, err := z.EncodeZkgmPacket(z.ZkgmPacket{
@@ -117,12 +117,12 @@ func buildForwardChild(cur realm, packet types.Packet, path *u256.Uint, parentSa
 		Instruction: nextInstruction,
 	})
 	if err != nil {
-		return core.NewPacket(cross(cur), 0, 0, nil, 0), err
+		return core.NewPacket(0, 0, nil, 0), err
 	}
 
 	sourceChannelId := types.ChannelId(nextSourceChannel)
 	sourceChannel := core.GetChannel(sourceChannelId)
-	return core.NewPacket(cross(cur), sourceChannelId, sourceChannel.CounterpartyChannelId, childBytes, types.Timestamp(forward.TimeoutTimestamp)), nil
+	return core.NewPacket(sourceChannelId, sourceChannel.CounterpartyChannelId, childBytes, types.Timestamp(forward.TimeoutTimestamp)), nil
 }
 
 func (v *ZkgmV1) handleForwardChild(cur realm, packet types.Packet, zp z.ZkgmPacket, ack []byte) bool {
@@ -137,7 +137,7 @@ func (v *ZkgmV1) handleForwardChild(cur realm, packet types.Packet, zp z.ZkgmPac
 
 func consumeForwardChild(cur realm, packet types.Packet, salt [32]byte) (zkgm.InFlightValue, bool) {
 	if !z.IsForwardedPacket(salt) {
-		return zkgm.NewInFlightValue(cross(cur), core.NewPacket(cross(cur), 0, 0, nil, 0)), false
+		return zkgm.NewInFlightValue(cross(cur), core.NewPacket(0, 0, nil, 0)), false
 	}
 
 	return zkgm.PopInFlightPacket(cross(cur), forwardInFlightKey(cur, packet))

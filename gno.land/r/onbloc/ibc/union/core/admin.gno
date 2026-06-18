@@ -2,15 +2,22 @@ package core
 
 import (
 	"chain/runtime"
-	rtunsafe "chain/runtime/unsafe"
 )
 
-var admin address
+var (
+	admin       address
+	packagePath string
+)
 
 func init(cur realm) {
 	// SAFE: admin bootstrap needs the tx signer, not a loader realm that may
 	// appear as cur.Previous().
-	admin = rtunsafe.OriginCaller()
+	admin = runtime.OriginCaller()
+	packagePath = cur.PkgPath()
+}
+
+func PackagePath() string {
+	return packagePath
 }
 
 // GetAdmin returns the current admin address.

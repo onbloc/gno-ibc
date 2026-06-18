@@ -185,7 +185,7 @@ func MustForwardChildPacket(cur realm, packet types.Packet, path *u256.Uint, par
 
 	sourceChannelId := types.ChannelId(nextSourceChannel)
 	sourceChannel := core.GetChannel(sourceChannelId)
-	return core.NewPacket(cross(cur), sourceChannelId, sourceChannel.CounterpartyChannelId, childBytes, types.Timestamp(forward.TimeoutTimestamp))
+	return core.NewPacket(sourceChannelId, sourceChannel.CounterpartyChannelId, childBytes, types.Timestamp(forward.TimeoutTimestamp))
 }
 
 func mustCloneUint(in *u256.Uint) *u256.Uint {

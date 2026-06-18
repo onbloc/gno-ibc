@@ -86,5 +86,5 @@ func forgedInitializePacket(cur realm) types.Packet {
 	if err != nil {
 		panic(err)
 	}
-	return core.NewPacket(cross(cur), types.ChannelId(1), forgedDestinationChannel, data, 1000)
+	return core.NewPacket(types.ChannelId(1), forgedDestinationChannel, data, 1000)
 }

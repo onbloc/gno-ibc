@@ -66,33 +66,33 @@ func (v *ZkgmV1) dispatchExecute(cur realm, packet types.Packet, relayer address
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instr)
 		if err != nil {
-			return core.NewRecvPacketResult(cross(cur), types.PacketStatusUnknown, nil), err
+			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 		}
 		return v.executeTokenOrderV2(cur, packet, relayer, path, order, intent)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instr)
 		if err != nil {
-			return core.NewRecvPacketResult(cross(cur), types.PacketStatusUnknown, nil), err
+			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 		}
 		return v.executeCall(cur, packet, relayer, relayerMsg, path, call, intent)
 	case z.OP_BATCH:
 		batch, err := decodeBatchInstruction(instr)
 		if err != nil {
-			return core.NewRecvPacketResult(cross(cur), types.PacketStatusUnknown, nil), err
+			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 		}
 		ack, err := v.executeBatch(cur, packet, relayer, relayerMsg, path, salt, batch, intent)
 		if err != nil {
-			return core.NewRecvPacketResult(cross(cur), types.PacketStatusUnknown, nil), err
+			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 		}
-		return core.NewRecvPacketResult(cross(cur), types.PacketStatusSuccess, ack), nil
+		return core.NewRecvPacketResult(types.PacketStatusSuccess, ack), nil
 	case z.OP_FORWARD:
 		forward, err := decodeForwardInstruction(instr)
 		if err != nil {
-			return core.NewRecvPacketResult(cross(cur), types.PacketStatusUnknown, nil), err
+			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 		}
 		return v.executeForward(cur, packet, path, salt, forward, intent)
 	default:
-		return core.NewRecvPacketResult(cross(cur), types.PacketStatusUnknown, nil), errors.New("zkgm/v1: unsupported opcode")
+		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), errors.New("zkgm/v1: unsupported opcode")
 	}
 }
 
@@ -215,7 +215,7 @@ func mustEncodeUniversalErrorAck() []byte {
 }
 
 func failureResult(cur realm, ack []byte) types.RecvPacketResult {
-	return core.NewRecvPacketResult(cross(cur), types.PacketStatusFailure, ack)
+	return core.NewRecvPacketResult(types.PacketStatusFailure, ack)
 }
 
 func universalErrorAck() []byte {

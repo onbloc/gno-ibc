@@ -121,9 +121,9 @@ func ensureVersion(version string) {
 // check prevents direct invocation from other realms and preserves the core
 // security boundary.
 func requireCoreCaller(cur realm, action string) {
-	caller := cur.Previous().PkgPath()
-	if caller != core.PkgPath(cross(cur)) {
-		panic("zkgm: only core can " + action + ", got " + caller)
+	previousPackagePath := cur.Previous().PkgPath()
+	if previousPackagePath != core.PackagePath() {
+		panic("zkgm: only core can " + action + ", got " + previousPackagePath)
 	}
 }
 
@@ -135,5 +135,5 @@ func errAck(cur realm, err error) types.RecvPacketResult {
 	if encErr != nil {
 		ackBytes = []byte(err.Error())
 	}
-	return core.NewRecvPacketResult(cross(cur), types.PacketStatusFailure, ackBytes)
+	return core.NewRecvPacketResult(types.PacketStatusFailure, ackBytes)
 }

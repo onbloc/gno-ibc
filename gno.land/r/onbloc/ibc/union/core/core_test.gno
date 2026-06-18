@@ -307,6 +307,7 @@ func TestGetClientNotFoundReturnsNil(cur realm, t *testing.T) {
 	}
 }
 
+// Union reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/client/ibc.rs#L127-L190
 func TestGetClientStateReturnsStoredBytes(cur realm, t *testing.T) {
 	resetStore()
 	c := addMockClient(&mockClient{})
@@ -314,6 +315,9 @@ func TestGetClientStateReturnsStoredBytes(cur realm, t *testing.T) {
 
 	got := QueryClientState(c.id)
 	if got != "0x636c69656e742d7374617465" {
+		t.Errorf("GetClientState: got %q want hex client-state", got)
+	}
+	if got := GetClientState(c.id); got != "0x636c69656e742d7374617465" {
 		t.Errorf("GetClientState: got %q want hex client-state", got)
 	}
 }
@@ -327,6 +331,63 @@ func TestQueryClientStateUnknownReturnsEmpty(cur realm, t *testing.T) {
 	}
 }
 
+// Union reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/client/ibc.rs#L30-L62
+func TestGetRegisteredClientTypeReturnsRegisteredType(cur realm, t *testing.T) {
+	resetStore()
+	addMockClient(&mockClient{})
+
+	if got := GetRegisteredClientType(mockType); got != string(mockType) {
+		t.Errorf("GetRegisteredClientType: got %q want %q", got, string(mockType))
+	}
+	if got := GetRegisteredClientType(types.ClientType("missing")); got != "" {
+		t.Errorf("GetRegisteredClientType missing: got %q want empty", got)
+	}
+}
+
+// Union reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/client/ibc.rs#L127-L190
+func TestGetClientImplReturnsStoredObject(cur realm, t *testing.T) {
+	resetStore()
+	mc := &mockClient{}
+	clientId := registerMockClient(mc)
+
+	impl, ok := GetClientImpl(clientId)
+	if !ok {
+		t.Fatal("GetClientImpl: expected stored implementation")
+	}
+	got, ok := impl.(*mockClient)
+	if !ok {
+		t.Fatal("GetClientImpl: expected mockClient")
+	}
+	if got != mc {
+		t.Fatal("GetClientImpl must return the stored object")
+	}
+	if _, ok := GetClientImpl(types.ClientId(999)); ok {
+		t.Fatal("GetClientImpl unknown: got ok=true want false")
+	}
+}
+
+func TestGetLatestHeightAndTimestampAtHeight(cur realm, t *testing.T) {
+	resetStore()
+	clientId := registerMockClient(&mockClient{
+		height:    types.NewHeight(42),
+		timestamp: types.Timestamp(12345),
+	})
+
+	if got := GetLatestHeight(clientId); got != 42 {
+		t.Fatalf("GetLatestHeight: got %d want 42", got)
+	}
+	if got := GetTimestampAtHeight(clientId, 42); got != types.Timestamp(12345) {
+		t.Fatalf("GetTimestampAtHeight: got %d want 12345", got)
+	}
+	if got := GetLatestHeight(types.ClientId(999)); got != 0 {
+		t.Fatalf("GetLatestHeight unknown: got %d want 0", got)
+	}
+	if got := GetTimestampAtHeight(types.ClientId(999), 42); got != 0 {
+		t.Fatalf("GetTimestampAtHeight unknown: got %d want 0", got)
+	}
+}
+
+// Union reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/client/ibc.rs#L127-L190
 func TestGetClientTypeReturnsRegisteredType(cur realm, t *testing.T) {
 	resetStore()
 	c := addMockClient(&mockClient{})
@@ -346,6 +407,7 @@ func TestGetClientTypeUnknownReturnsEmpty(cur realm, t *testing.T) {
 	}
 }
 
+// Union reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/client/ibc.rs#L127-L190
 func TestGetConsensusStateReturnsStoredBytes(cur realm, t *testing.T) {
 	resetStore()
 	c := addMockClient(&mockClient{})
@@ -353,6 +415,9 @@ func TestGetConsensusStateReturnsStoredBytes(cur realm, t *testing.T) {
 
 	got := QueryConsensusState(c.id, types.NewHeight(10))
 	if got != "0x636f6e73656e7375732d7374617465" {
+		t.Errorf("GetConsensusState: got %q want hex consensus-state", got)
+	}
+	if got := GetConsensusState(c.id, 10); got != "0x636f6e73656e7375732d7374617465" {
 		t.Errorf("GetConsensusState: got %q want hex consensus-state", got)
 	}
 }
@@ -413,6 +478,7 @@ func TestNextIdsSequential(cur realm, t *testing.T) {
 
 // --- State: connection ---
 
+// Union reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/connection/ibc.rs#L81-L104
 func TestSaveAndGetConnection(cur realm, t *testing.T) {
 	resetStore()
 	clientId := registerMockClient(&mockClient{})
@@ -435,6 +501,9 @@ func TestSaveAndGetConnection(cur realm, t *testing.T) {
 	if got.ClientId != clientId {
 		t.Errorf("clientId: got %v want %v", got.ClientId, clientId)
 	}
+	if got := GetConnection(id); got.State != types.ConnectionStateOpen {
+		t.Errorf("GetConnection state: got %v want Open", got.State)
+	}
 
 	want := hexString(mustEncodeABI(conn.EncodeABI()))
 	if got := QueryConnection(id); got != want {
@@ -447,6 +516,11 @@ func TestGetConnectionNotFoundReturnsFalse(cur realm, t *testing.T) {
 	if _, ok := store.getConnection(types.ConnectionId(999)); ok {
 		t.Fatal("unknown connection must return false")
 	}
+}
+
+func TestGetConnectionNotFoundPanics(cur realm, t *testing.T) {
+	resetStore()
+	mustPanic(t, func() { GetConnection(types.ConnectionId(999)) })
 }
 
 func TestQueryConnectionUnknownReturnsEmpty(cur realm, t *testing.T) {
@@ -475,6 +549,7 @@ func TestConnectionStateSaved(cur realm, t *testing.T) {
 
 // --- State: channel ---
 
+// Union reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L126-L176
 func TestSaveAndGetChannel(cur realm, t *testing.T) {
 	resetStore()
 	connectionId := addMockConnection(types.ConnectionStateOpen)
@@ -513,6 +588,22 @@ func TestQueryChannelUnknownReturnsEmpty(cur realm, t *testing.T) {
 	got := QueryChannel(types.ChannelId(999))
 	if got != "" {
 		t.Errorf("QueryChannel: got %q want empty", got)
+	}
+}
+
+func TestGetChannelsReturnsAppChannels(cur realm, t *testing.T) {
+	resetStore()
+	portId, _, channelId := setupOpenChannel(t)
+
+	got := GetChannels(string(portId))
+	if len(got) != 1 {
+		t.Fatalf("GetChannels: got %v want one channel", got)
+	}
+	if got[0] != uint32(channelId) {
+		t.Fatalf("GetChannels[0]: got %d want %d", got[0], channelId)
+	}
+	if missing := GetChannels("missing-port"); len(missing) != 0 {
+		t.Fatalf("GetChannels missing: got %v want empty", missing)
 	}
 }
 
@@ -592,6 +683,9 @@ func TestBatchSendReturnsUnionPacketCommitment(cur realm, t *testing.T) {
 	if got := QueryBatchPackets(channelId, want); got != types.COMMITMENT_MAGIC.String() {
 		t.Errorf("GetBatchPackets: got %s want %s", got, types.COMMITMENT_MAGIC)
 	}
+	if got := GetBatchPackets(want); got != types.COMMITMENT_MAGIC.String() {
+		t.Errorf("GetBatchPackets: got %s want %s", got, types.COMMITMENT_MAGIC)
+	}
 	if rawV, ok := store.clientForChannel(channelId).getBatchPacketsAtPath(types.BatchPacketsPath(want)); !ok || rawV != types.COMMITMENT_MAGIC {
 		t.Errorf("batch packet mirror at path: ok=%v value=%s want %s", ok, rawV, types.COMMITMENT_MAGIC)
 	}
@@ -630,6 +724,9 @@ func TestQueryBatchPacketsUnknownReturnsEmpty(cur realm, t *testing.T) {
 	got := QueryBatchPackets(types.ChannelId(0), batchHash)
 	if got != "" {
 		t.Errorf("QueryBatchPackets: got %q want empty", got)
+	}
+	if got := GetBatchPackets(batchHash); got != "" {
+		t.Errorf("GetBatchPackets: got %q want empty", got)
 	}
 }
 
@@ -698,6 +795,9 @@ func TestBatchAcksReturnsUnionPacketCommitment(cur realm, t *testing.T) {
 	if got := QueryBatchReceipts(channelId, want); got != wantAck.String() {
 		t.Errorf("GetBatchReceipts: got %s want %s", got, wantAck)
 	}
+	if got := GetBatchReceipts(want); got != wantAck.String() {
+		t.Errorf("GetBatchReceipts: got %s want %s", got, wantAck)
+	}
 	if rawV, ok := store.clientForChannel(channelId).getBatchReceiptsAtPath(types.BatchReceiptsPath(want)); !ok || rawV != wantAck {
 		t.Errorf("batch receipt mirror at path: ok=%v value=%s want %s", ok, rawV, wantAck)
 	}
@@ -713,6 +813,9 @@ func TestQueryBatchReceiptsUnknownReturnsEmpty(cur realm, t *testing.T) {
 	got := QueryBatchReceipts(types.ChannelId(0), batchHash)
 	if got != "" {
 		t.Errorf("QueryBatchReceipts: got %q want empty", got)
+	}
+	if got := GetBatchReceipts(batchHash); got != "" {
+		t.Errorf("GetBatchReceipts: got %q want empty", got)
 	}
 }
 
@@ -1579,6 +1682,9 @@ func TestGetClientStatusDelegatesToClient(cur realm, t *testing.T) {
 
 	if got := GetClientStatus(clientId); got != types.StatusFrozen {
 		t.Fatalf("GetClientStatus: got %d want %d", got, types.StatusFrozen)
+	}
+	if got := GetStatus(clientId); got != types.StatusFrozen {
+		t.Fatalf("GetStatus: got %d want %d", got, types.StatusFrozen)
 	}
 }
 

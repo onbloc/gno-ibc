@@ -90,6 +90,14 @@ func ConnectionOpenConfirm(_ realm, msg types.MsgConnectionOpenConfirm) {
 	)
 }
 
+func GetConnection(connectionId types.ConnectionId) types.Connection {
+	connection, ok := store.getConnection(connectionId)
+	if !ok {
+		panic("connection " + connectionId.String() + " not found")
+	}
+	return connection
+}
+
 func QueryConnection(connectionId types.ConnectionId) string {
 	connection, ok := store.getConnection(connectionId)
 	if !ok {

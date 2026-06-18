@@ -32,6 +32,17 @@ func CreateClient(cur realm, clientType types.ClientType, lc lightclient.Interfa
 	return c.id
 }
 
+// GetRegisteredClientType returns the registered client type identifier for a
+// client type. Union returns an implementation address here; the Gno core keeps
+// object implementations, so the stable public identifier is the registered
+// client type string.
+func GetRegisteredClientType(clientType types.ClientType) string {
+	if !store.hasClient(clientType) {
+		return ""
+	}
+	return clientType.String()
+}
+
 // UpdateClient verifies a client message against the light client object, which
 // updates its own state, and mirrors the resulting state bytes for queries and
 // counterparty proofs.
@@ -148,6 +159,43 @@ func GetLightClient(clientId types.ClientId) (lightclient.Interface, bool) {
 	return store.lightClientOf(clientId)
 }
 
+// GetClientImpl returns the stored client implementation object for clientId.
+func GetClientImpl(clientId types.ClientId) (any, bool) {
+	c := store.getClient(clientId)
+	if c == nil {
+		return nil, false
+	}
+	return c.lightClient, true
+}
+
+// GetTimestampAtHeight returns the consensus timestamp reported by a client at
+// height, or zero when the client or timestamp is unavailable.
+func GetTimestampAtHeight(clientId types.ClientId, height uint64) types.Timestamp {
+	c := store.getClient(clientId)
+	if c == nil {
+		return 0
+	}
+	ts, err := c.lightClient.GetTimestampAtHeight(height)
+	if err != nil {
+		return 0
+	}
+	return ts
+}
+
+// GetLatestHeight returns the latest height reported by a client.
+func GetLatestHeight(clientId types.ClientId) uint64 {
+	c := store.getClient(clientId)
+	if c == nil {
+		return 0
+	}
+	return c.lightClient.GetLatestHeight()
+}
+
+// GetClientState returns the stored client state as a hex string.
+func GetClientState(clientId types.ClientId) string {
+	return QueryClientState(clientId)
+}
+
 // QueryClientState returns the stored client state as a hex string.
 func QueryClientState(clientId types.ClientId) string {
 	c := store.getClient(clientId)
@@ -156,6 +204,11 @@ func QueryClientState(clientId types.ClientId) string {
 	}
 
 	return hexString(c.clientState)
+}
+
+// GetConsensusState returns the consensus state at height as a hex string.
+func GetConsensusState(clientId types.ClientId, height uint64) string {
+	return QueryConsensusState(clientId, types.NewHeight(height))
 }
 
 // QueryConsensusState returns the consensus state at height as a hex string.
@@ -171,6 +224,11 @@ func QueryConsensusState(clientId types.ClientId, height types.Height) string {
 	}
 
 	return hexString(bz)
+}
+
+// GetStatus returns the current status reported by a registered light client.
+func GetStatus(clientId types.ClientId) types.Status {
+	return GetClientStatus(clientId)
 }
 
 // GetClientStatus returns the current status reported by a registered light client.

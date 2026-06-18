@@ -128,6 +128,16 @@ func QueryChannel(channelId types.ChannelId) string {
 	return hexString(bz)
 }
 
+// GetChannels returns the channel ids owned by a registered app/port.
+func GetChannels(contract string) []uint32 {
+	ids := store.appChannels[contract]
+	out := make([]uint32, len(ids))
+	for i, id := range ids {
+		out[i] = uint32(id)
+	}
+	return out
+}
+
 // GetChannel returns the stored channel record for channelId. Apps need this
 // to look up the counterparty channel id when constructing packets to send via
 // BatchSend (the core no longer auto-derives it from a sender-side helper).

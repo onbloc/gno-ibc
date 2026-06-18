@@ -20,6 +20,8 @@ func init() {
 type Store struct {
 	clientSeq  seqid.ID
 	clientByID *bptree.BPTree // clientKey(ClientId) → *client
+	clientByType map[string]any
+	commitments  map[types.H256]types.H256
 
 	connectionSeq        seqid.ID
 	connectionClientByID *bptree.BPTree // connectionKey(ConnectionId) → ClientId
@@ -27,7 +29,8 @@ type Store struct {
 	channelSeq        seqid.ID
 	channelClientByID *bptree.BPTree // channelKey(ChannelId) → ClientId
 
-	ports map[string]app.IApp
+	ports       map[string]app.IApp
+	appChannels map[string][]types.ChannelId
 }
 
 type client struct {
@@ -54,9 +57,12 @@ type channelEntry struct {
 func newStore() *Store {
 	return &Store{
 		clientByID:           bptree.NewBPTree32(),
+		clientByType:         make(map[string]any),
+		commitments:          make(map[types.H256]types.H256),
 		connectionClientByID: bptree.NewBPTree32(),
 		channelClientByID:    bptree.NewBPTree32(),
 		ports:                make(map[string]app.IApp),
+		appChannels:          make(map[string][]types.ChannelId),
 	}
 }
 
@@ -120,12 +126,15 @@ func (c *client) findConsensusState(height types.Height) ([]byte, bool) {
 func (c *client) saveBatchPackets(hash types.H256, value types.H256) {
 	key := types.BatchPacketsPath(hash)
 	c.batchPackets[key] = value
+	store.commitments[key] = value
 	setChainParam(h256ChainParamKey(key), value[:])
 }
 
 // setBatchPackets mirrors value in memory only (no chain-param write).
 func (c *client) setBatchPackets(hash types.H256, value types.H256) {
-	c.batchPackets[types.BatchPacketsPath(hash)] = value
+	key := types.BatchPacketsPath(hash)
+	c.batchPackets[key] = value
+	store.commitments[key] = value
 }
 
 func (c *client) getBatchPackets(hash types.H256) types.H256 {
@@ -149,6 +158,7 @@ func (c *client) deleteBatchPackets(hash types.H256) {
 	var zero types.H256
 	key := types.BatchPacketsPath(hash)
 	delete(c.batchPackets, key)
+	delete(store.commitments, key)
 	setChainParam(h256ChainParamKey(key), zero[:])
 }
 
@@ -157,6 +167,7 @@ func (c *client) deleteBatchPackets(hash types.H256) {
 func (c *client) saveBatchReceipts(hash types.H256, value types.H256) {
 	key := types.BatchReceiptsPath(hash)
 	c.batchReceipts[key] = value
+	store.commitments[key] = value
 	setChainParam(h256ChainParamKey(key), value[:])
 }
 
@@ -181,6 +192,7 @@ func (c *client) deleteBatchReceipts(hash types.H256) {
 	var zero types.H256
 	key := types.BatchReceiptsPath(hash)
 	delete(c.batchReceipts, key)
+	delete(store.commitments, key)
 	setChainParam(h256ChainParamKey(key), zero[:])
 }
 
@@ -194,6 +206,7 @@ func (c *client) deletePacketCommitment(packet types.Packet) {
 	var zero types.H256
 	path := packetCommitmentPath(packet)
 	delete(c.batchPackets, path)
+	delete(store.commitments, path)
 	setChainParam(h256ChainParamKey(path), zero[:])
 }
 
@@ -233,6 +246,7 @@ func (c *client) deletePacketReceipt(packet types.Packet) {
 	var zero types.H256
 	path := packetAcknowledgementPath(packet)
 	delete(c.batchReceipts, path)
+	delete(store.commitments, path)
 	setChainParam(h256ChainParamKey(path), zero[:])
 }
 
@@ -262,7 +276,17 @@ func (s *Store) addClient(typ types.ClientType, creator address, lc lightclient.
 		batchReceipts:     make(map[types.H256]types.H256),
 	}
 	s.clientByID.Set(clientKey(clientId), c)
+	s.clientByType[clientTypeKey(typ)] = lc
 	return c
+}
+
+func clientTypeKey(typ types.ClientType) string {
+	return typ.String()
+}
+
+func (s *Store) hasClient(typ types.ClientType) bool {
+	_, found := s.clientByType[clientTypeKey(typ)]
+	return found
 }
 
 func (s *Store) getClient(clientId types.ClientId) *client {
@@ -341,6 +365,8 @@ func (s *Store) createChannel(channelId types.ChannelId, channel types.Channel, 
 	}
 	c.channelsByID.Set(channelKey(channelId), entry)
 	s.channelClientByID.Set(channelKey(channelId), conn.ClientId)
+	key := portKey(portId)
+	s.appChannels[key] = append(s.appChannels[key], channelId)
 	setChainParam(h256ChainParamKey(types.ChannelPath(channelId)), h256Bytes(channelValue(channel)))
 }
 

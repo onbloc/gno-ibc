@@ -12,6 +12,16 @@ func NewRecvPacketResult(status types.PacketStatus, acknowledgement []byte) type
 	return types.RecvPacketResult{Status: status, Acknowledgement: acknowledgement}
 }
 
+// GetBatchPackets returns the batch packet commitment for batchHash from the
+// global commitment mirror.
+func GetBatchPackets(batchHash types.H256) string {
+	v, found := store.commitments[types.BatchPacketsPath(batchHash)]
+	if !found {
+		return ""
+	}
+	return h256String(v)
+}
+
 // QueryBatchPackets returns the batch commitment value stored at
 // types.BatchPacketsPath(batchHash) for the client owning channelId.
 func QueryBatchPackets(channelId types.ChannelId, batchHash types.H256) string {
@@ -24,6 +34,16 @@ func QueryBatchPackets(channelId types.ChannelId, batchHash types.H256) string {
 		return ""
 	}
 	v, found := c.getBatchPacketsAtPath(types.BatchPacketsPath(batchHash))
+	if !found {
+		return ""
+	}
+	return h256String(v)
+}
+
+// GetBatchReceipts returns the batch receipt commitment for batchHash from the
+// global commitment mirror.
+func GetBatchReceipts(batchHash types.H256) string {
+	v, found := store.commitments[types.BatchReceiptsPath(batchHash)]
 	if !found {
 		return ""
 	}

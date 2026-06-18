@@ -65,7 +65,7 @@ func TestChannelCloseInitRejectsNonOpenConnection(cur realm, t *testing.T) {
 	channelId, _ := setupCloseChannelWithConnectionState(t, types.ConnectionStateInit)
 
 	uassert.AbortsContains(t, cur, "invalid connection state", func(cur realm) {
-		ChannelCloseInit(cur, types.NewMsgChannelCloseInit(channelId, "g1msgrelayer"))
+		channelCloseInit(cur, types.NewMsgChannelCloseInit(channelId, "g1msgrelayer"))
 	})
 
 	if store.getChannel(channelId).State != types.ChannelStateOpen {
@@ -132,7 +132,7 @@ func TestChannelCloseConfirmRejectsWrongStateBeforeProof(cur realm, t *testing.T
 	store.saveChannel(channelId, channel)
 
 	uassert.AbortsContains(t, cur, "invalid channel state", func(cur realm) {
-		ChannelCloseConfirm(cur, types.NewMsgChannelCloseConfirm(channelId, types.Bytes("close-proof"), 44, "g1msgrelayer"))
+		channelCloseConfirm(cur, types.NewMsgChannelCloseConfirm(channelId, types.Bytes("close-proof"), 44, "g1msgrelayer"))
 	})
 
 	if len(client.membershipKeys) != 0 {
@@ -146,7 +146,7 @@ func TestChannelCloseConfirmRejectsNonOpenConnectionBeforeProof(cur realm, t *te
 	channelId, client := setupCloseChannelWithConnectionState(t, types.ConnectionStateInit)
 
 	uassert.AbortsContains(t, cur, "invalid connection state", func(cur realm) {
-		ChannelCloseConfirm(cur, types.NewMsgChannelCloseConfirm(channelId, types.Bytes("close-proof"), 44, "g1msgrelayer"))
+		channelCloseConfirm(cur, types.NewMsgChannelCloseConfirm(channelId, types.Bytes("close-proof"), 44, "g1msgrelayer"))
 	})
 
 	if len(client.membershipKeys) != 0 {
@@ -165,7 +165,7 @@ func TestChannelCloseConfirmRejectsInactiveClientBeforeProof(cur realm, t *testi
 	client.status = types.StatusExpired
 
 	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
-		ChannelCloseConfirm(cur, types.NewMsgChannelCloseConfirm(channelId, types.Bytes("close-proof"), 44, "g1msgrelayer"))
+		channelCloseConfirm(cur, types.NewMsgChannelCloseConfirm(channelId, types.Bytes("close-proof"), 44, "g1msgrelayer"))
 	})
 
 	if len(client.membershipKeys) != 0 {

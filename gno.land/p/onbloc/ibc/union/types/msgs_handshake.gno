@@ -87,10 +87,11 @@ type MsgChannelOpenInit struct {
 	CounterpartyPortId []byte
 	ConnectionId       ConnectionId
 	Version            string
+	Relayer            string
 }
 
-func NewMsgChannelOpenInit(portId, counterpartyPortId []byte, connectionId ConnectionId, version string) MsgChannelOpenInit {
-	return MsgChannelOpenInit{PortId: portId, CounterpartyPortId: counterpartyPortId, ConnectionId: connectionId, Version: version}
+func NewMsgChannelOpenInit(portId, counterpartyPortId []byte, connectionId ConnectionId, version string, relayer string) MsgChannelOpenInit {
+	return MsgChannelOpenInit{PortId: portId, CounterpartyPortId: counterpartyPortId, ConnectionId: connectionId, Version: version, Relayer: relayer}
 }
 
 type MsgChannelOpenTry struct {
@@ -99,10 +100,11 @@ type MsgChannelOpenTry struct {
 	CounterpartyVersion string
 	ProofInit           []byte
 	ProofHeight         uint64
+	Relayer             string
 }
 
-func NewMsgChannelOpenTry(portId []byte, channel Channel, counterpartyVersion string, proofInit []byte, proofHeight uint64) MsgChannelOpenTry {
-	return MsgChannelOpenTry{PortId: portId, Channel: channel, CounterpartyVersion: counterpartyVersion, ProofInit: proofInit, ProofHeight: proofHeight}
+func NewMsgChannelOpenTry(portId []byte, channel Channel, counterpartyVersion string, proofInit []byte, proofHeight uint64, relayer string) MsgChannelOpenTry {
+	return MsgChannelOpenTry{PortId: portId, Channel: channel, CounterpartyVersion: counterpartyVersion, ProofInit: proofInit, ProofHeight: proofHeight, Relayer: relayer}
 }
 
 type MsgChannelOpenAck struct {
@@ -111,20 +113,22 @@ type MsgChannelOpenAck struct {
 	CounterpartyChannelId ChannelId
 	ProofTry              []byte
 	ProofHeight           uint64
+	Relayer               string
 }
 
-func NewMsgChannelOpenAck(channelId ChannelId, counterpartyVersion string, counterpartyChannelId ChannelId, proofTry []byte, proofHeight uint64) MsgChannelOpenAck {
-	return MsgChannelOpenAck{ChannelId: channelId, CounterpartyVersion: counterpartyVersion, CounterpartyChannelId: counterpartyChannelId, ProofTry: proofTry, ProofHeight: proofHeight}
+func NewMsgChannelOpenAck(channelId ChannelId, counterpartyVersion string, counterpartyChannelId ChannelId, proofTry []byte, proofHeight uint64, relayer string) MsgChannelOpenAck {
+	return MsgChannelOpenAck{ChannelId: channelId, CounterpartyVersion: counterpartyVersion, CounterpartyChannelId: counterpartyChannelId, ProofTry: proofTry, ProofHeight: proofHeight, Relayer: relayer}
 }
 
 type MsgChannelOpenConfirm struct {
 	ChannelId   ChannelId
 	ProofAck    []byte
 	ProofHeight uint64
+	Relayer     string
 }
 
-func NewMsgChannelOpenConfirm(channelId ChannelId, proofAck []byte, proofHeight uint64) MsgChannelOpenConfirm {
-	return MsgChannelOpenConfirm{ChannelId: channelId, ProofAck: proofAck, ProofHeight: proofHeight}
+func NewMsgChannelOpenConfirm(channelId ChannelId, proofAck []byte, proofHeight uint64, relayer string) MsgChannelOpenConfirm {
+	return MsgChannelOpenConfirm{ChannelId: channelId, ProofAck: proofAck, ProofHeight: proofHeight, Relayer: relayer}
 }
 
 type MsgChannelCloseInit struct {

@@ -119,11 +119,15 @@ func mockClientFor(channelId types.ChannelId) *mockClient {
 func addMockConnection(state types.ConnectionState) types.ConnectionId {
 	clientId := registerMockClient(&mockClient{status: types.StatusActive})
 	connectionId := store.nextConnectionId()
+	counterpartyConnectionId := types.ConnectionId(0)
+	if state == types.ConnectionStateOpen {
+		counterpartyConnectionId = types.ConnectionId(99)
+	}
 	store.saveConnection(connectionId, types.Connection{
 		State:                    state,
 		ClientId:                 clientId,
 		CounterpartyClientId:     types.ClientId(99),
-		CounterpartyConnectionId: types.ConnectionId(99),
+		CounterpartyConnectionId: counterpartyConnectionId,
 	})
 	return connectionId
 }
@@ -463,7 +467,7 @@ func TestConnectionStateSaved(cur realm, t *testing.T) {
 	clientId := registerMockClient(&mockClient{})
 	id := store.nextConnectionId()
 	store.saveConnection(id, types.Connection{State: types.ConnectionStateInit, ClientId: clientId})
-	store.saveConnection(id, types.Connection{State: types.ConnectionStateOpen, ClientId: clientId})
+	store.saveConnection(id, types.Connection{State: types.ConnectionStateOpen, ClientId: clientId, CounterpartyConnectionId: types.ConnectionId(99)})
 	conn, ok := store.getConnection(id)
 	if !ok {
 		t.Fatal("connection not found")
@@ -826,11 +830,22 @@ func TestEnsureConnectionOpenSucceeds(cur realm, t *testing.T) {
 	resetStore()
 	clientId := registerMockClient(&mockClient{})
 	id := store.nextConnectionId()
-	store.saveConnection(id, types.Connection{State: types.ConnectionStateOpen, ClientId: clientId})
+	store.saveConnection(id, types.Connection{State: types.ConnectionStateOpen, ClientId: clientId, CounterpartyConnectionId: types.ConnectionId(99)})
 	conn := ensureConnectionOpen(id)
 	if conn.State != types.ConnectionStateOpen {
 		t.Error("expected open connection")
 	}
+}
+
+func TestEnsureConnectionOpenRejectsMissingCounterpartyConnectionId(cur realm, t *testing.T) {
+	resetStore()
+	clientId := registerMockClient(&mockClient{})
+	id := store.nextConnectionId()
+	store.saveConnection(id, types.Connection{State: types.ConnectionStateOpen, ClientId: clientId})
+
+	uassert.AbortsContains(t, cur, "invalid counterparty connection id", func(cur realm) {
+		ensureConnectionOpen(id)
+	})
 }
 
 // --- types.Channel state machine ---
@@ -859,8 +874,7 @@ func TestChannelStateTransitions(cur realm, t *testing.T) {
 }
 
 func TestChannelEventAttrsOmitsCounterpartyChannelIdForOpenInit(cur realm, t *testing.T) {
-	attrs := channelEventAttrs(
-		ChannelOpenInitEvent,
+	attrs := channelOpenInitEventAttrs(
 		types.Bytes("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"),
 		types.ChannelId(1),
 		types.Channel{
@@ -870,11 +884,6 @@ func TestChannelEventAttrsOmitsCounterpartyChannelIdForOpenInit(cur realm, t *te
 			CounterpartyPortId:    types.Bytes("counterparty"),
 			Version:               "ucs03-zkgm-0",
 		},
-		types.Connection{
-			ClientId:                 types.ClientId(3),
-			CounterpartyClientId:     types.ClientId(4),
-			CounterpartyConnectionId: types.ConnectionId(5),
-		},
 	)
 
 	want := []string{
@@ -882,53 +891,77 @@ func TestChannelEventAttrsOmitsCounterpartyChannelIdForOpenInit(cur realm, t *te
 		"channel_id", "1",
 		"counterparty_port_id", "0x636f756e7465727061727479",
 		"connection_id", "2",
-		"connection_client_id", "3",
-		"connection_counterparty_client_id", "4",
-		"connection_counterparty_connection_id", "5",
 		"version", "ucs03-zkgm-0",
 	}
 	assertStringSliceEqual(t, attrs, want)
 	assertAttrMissing(t, attrs, "counterparty_channel_id")
 }
 
-func TestChannelEventAttrsIncludesCounterpartyChannelIdForOtherEvents(cur realm, t *testing.T) {
-	events := []string{
-		ChannelOpenTryEvent,
-		ChannelOpenAckEvent,
-		ChannelOpenConfirmEvent,
-	}
-	for _, eventType := range events {
-		attrs := channelEventAttrs(
-			eventType,
-			types.Bytes("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"),
-			types.ChannelId(1),
-			types.Channel{
-				State:                 types.ChannelStateOpen,
-				ConnectionId:          types.ConnectionId(2),
-				CounterpartyChannelId: types.ChannelId(7),
-				CounterpartyPortId:    types.Bytes("counterparty"),
-				Version:               "ucs03-zkgm-0",
-			},
-			types.Connection{
-				ClientId:                 types.ClientId(3),
-				CounterpartyClientId:     types.ClientId(4),
-				CounterpartyConnectionId: types.ConnectionId(5),
-			},
-		)
+func TestChannelOpenTryEventAttrs(cur realm, t *testing.T) {
+	attrs := channelOpenTryEventAttrs(
+		types.Bytes("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"),
+		types.ChannelId(1),
+		types.Channel{
+			State:                 types.ChannelStateOpen,
+			ConnectionId:          types.ConnectionId(2),
+			CounterpartyChannelId: types.ChannelId(7),
+			CounterpartyPortId:    types.Bytes("counterparty"),
+			Version:               "ucs03-zkgm-0",
+		},
+		"counterparty-v1",
+	)
 
-		assertAttrEqual(t, attrs, "counterparty_channel_id", "7")
-		assertStringSliceEqual(t, attrs, []string{
-			"port_id", "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
-			"channel_id", "1",
-			"counterparty_port_id", "0x636f756e7465727061727479",
-			"counterparty_channel_id", "7",
-			"connection_id", "2",
-			"connection_client_id", "3",
-			"connection_counterparty_client_id", "4",
-			"connection_counterparty_connection_id", "5",
-			"version", "ucs03-zkgm-0",
-		})
-	}
+	assertStringSliceEqual(t, attrs, []string{
+		"port_id", "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
+		"channel_id", "1",
+		"counterparty_port_id", "0x636f756e7465727061727479",
+		"counterparty_channel_id", "7",
+		"connection_id", "2",
+		"counterparty_version", "counterparty-v1",
+	})
+}
+
+func TestChannelOpenAckConfirmEventAttrs(cur realm, t *testing.T) {
+	attrs := channelOpenAckConfirmEventAttrs(
+		types.Bytes("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"),
+		types.ChannelId(1),
+		types.Channel{
+			State:                 types.ChannelStateOpen,
+			ConnectionId:          types.ConnectionId(2),
+			CounterpartyChannelId: types.ChannelId(7),
+			CounterpartyPortId:    types.Bytes("counterparty"),
+			Version:               "ucs03-zkgm-0",
+		},
+	)
+
+	assertStringSliceEqual(t, attrs, []string{
+		"port_id", "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
+		"channel_id", "1",
+		"counterparty_port_id", "0x636f756e7465727061727479",
+		"counterparty_channel_id", "7",
+		"connection_id", "2",
+	})
+}
+
+func TestChannelCloseEventAttrs(cur realm, t *testing.T) {
+	attrs := channelCloseEventAttrs(
+		types.Bytes("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"),
+		types.ChannelId(1),
+		types.Channel{
+			State:                 types.ChannelStateClosed,
+			ConnectionId:          types.ConnectionId(2),
+			CounterpartyChannelId: types.ChannelId(7),
+			CounterpartyPortId:    types.Bytes("counterparty"),
+			Version:               "ucs03-zkgm-0",
+		},
+	)
+
+	assertStringSliceEqual(t, attrs, []string{
+		"port_id", "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
+		"channel_id", "1",
+		"counterparty_port_id", "0x636f756e7465727061727479",
+		"counterparty_channel_id", "7",
+	})
 }
 
 // --- Port / channel ownership ---
@@ -1534,7 +1567,7 @@ func TestChannelOpenTryRejectsInactiveClient(cur realm, t *testing.T) {
 	}
 
 	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
-		ChannelOpenTry(cur, types.MsgChannelOpenTry{PortId: portId, Channel: channel, CounterpartyVersion: "ics20-1", ProofInit: types.Bytes("proof"), ProofHeight: 10})
+		channelOpenTry(cur, types.MsgChannelOpenTry{PortId: portId, Channel: channel, CounterpartyVersion: "ics20-1", ProofInit: types.Bytes("proof"), ProofHeight: 10}, true)
 	})
 
 	if len(client.membershipKeys) != 0 {
@@ -1552,11 +1585,11 @@ func TestChannelOpenAckRejectsWrongState(cur realm, t *testing.T) {
 	store.createChannel(channelId, types.Channel{State: types.ChannelStateOpen, ConnectionId: connectionId}, nil)
 
 	uassert.AbortsContains(t, cur, "invalid channel state", func(cur realm) {
-		ChannelOpenAck(cur, types.MsgChannelOpenAck{
+		channelOpenAck(cur, types.MsgChannelOpenAck{
 			ChannelId:             channelId,
 			CounterpartyVersion:   "ics20-1",
 			CounterpartyChannelId: types.ChannelId(99),
-		})
+		}, true)
 	})
 }
 
@@ -1567,9 +1600,9 @@ func TestChannelOpenConfirmRejectsWrongState(cur realm, t *testing.T) {
 	store.createChannel(channelId, types.Channel{State: types.ChannelStateOpen, ConnectionId: connectionId}, nil)
 
 	uassert.AbortsContains(t, cur, "invalid channel state", func(cur realm) {
-		ChannelOpenConfirm(cur, types.MsgChannelOpenConfirm{
+		channelOpenConfirm(cur, types.MsgChannelOpenConfirm{
 			ChannelId: channelId,
-		})
+		}, true)
 	})
 }
 
@@ -1681,6 +1714,6 @@ func TestChannelCloseInitRejectsWrongState(cur realm, t *testing.T) {
 	store.createChannel(channelId, types.Channel{State: types.ChannelStateInit, ConnectionId: connectionId}, nil)
 
 	uassert.AbortsContains(t, cur, "invalid channel state", func(cur realm) {
-		ChannelCloseInit(cur, types.NewMsgChannelCloseInit(channelId, "g1msgrelayer"))
+		channelCloseInit(cur, types.NewMsgChannelCloseInit(channelId, "g1msgrelayer"))
 	})
 }

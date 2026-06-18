@@ -5,7 +5,9 @@ import "errors"
 var (
 	ErrClientNotActive               = errors.New("client is not active")
 	ErrInvalidConnectionState        = errors.New("invalid connection state")
+	ErrInvalidCounterpartyConnection = errors.New("invalid counterparty connection id")
 	ErrInvalidChannelState           = errors.New("invalid channel state")
+	ErrInvalidCounterpartyChannelId  = errors.New("invalid counterparty channel id")
 	ErrSyncAckEmpty                  = errors.New("sync ack cannot be empty")
 	ErrUnknownPacketStatus           = errors.New("unknown packet status")
 	ErrUnauthorizedAckWriter         = errors.New("caller not authorized to write ack")

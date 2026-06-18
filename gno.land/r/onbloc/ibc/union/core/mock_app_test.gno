@@ -89,6 +89,12 @@ func (m *mockClient) Misbehaviour(_ address, _ []byte, _ address) (types.ClientS
 
 type mockApp struct {
 	initCalled           bool
+	openTryChannels      []types.ChannelId
+	openTryStates        []types.ChannelState
+	openAckChannels      []types.ChannelId
+	openAckStates        []types.ChannelState
+	openConfirmChannels  []types.ChannelId
+	openConfirmStates    []types.ChannelState
 	closedChannels       []types.ChannelId
 	closeInitStates      []types.ChannelState
 	closeConfirmStates   []types.ChannelState
@@ -107,12 +113,21 @@ func (a *mockApp) OnChannelOpenInit(_ realm, _ types.ConnectionId, _ types.Chann
 	a.initCalled = true
 }
 
-func (a *mockApp) OnChannelOpenTry(_ realm, _ types.ConnectionId, _ types.ChannelId, _, _ string, _ address) {
+func (a *mockApp) OnChannelOpenTry(_ realm, _ types.ConnectionId, channelId types.ChannelId, _, _ string, _ address) {
+	a.openTryChannels = append(a.openTryChannels, channelId)
+	a.openTryStates = append(a.openTryStates, store.getChannel(channelId).State)
 }
 
-func (a *mockApp) OnChannelOpenAck(_ realm, _ types.ChannelId, _ types.ChannelId, _ string, _ address) {
+func (a *mockApp) OnChannelOpenAck(_ realm, channelId types.ChannelId, _ types.ChannelId, _ string, _ address) {
+	a.openAckChannels = append(a.openAckChannels, channelId)
+	a.openAckStates = append(a.openAckStates, store.getChannel(channelId).State)
 }
-func (a *mockApp) OnChannelOpenConfirm(_ realm, _ types.ChannelId, _ address) {}
+
+func (a *mockApp) OnChannelOpenConfirm(_ realm, channelId types.ChannelId, _ address) {
+	a.openConfirmChannels = append(a.openConfirmChannels, channelId)
+	a.openConfirmStates = append(a.openConfirmStates, store.getChannel(channelId).State)
+}
+
 func (a *mockApp) OnChannelCloseInit(_ realm, ch types.ChannelId, relayer address) {
 	a.closedChannels = append(a.closedChannels, ch)
 	a.closeInitStates = append(a.closeInitStates, store.getChannel(ch).State)

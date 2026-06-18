@@ -32,42 +32,81 @@ const (
 	PacketTimeoutEvent         = "PacketTimeout"
 )
 
-func channelEventAttrs(eventType string, portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) []string {
-	attrs := []string{
+func channelOpenInitEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel) []string {
+	return []string{
 		"port_id", string(portId),
 		"channel_id", channelId.String(),
 		"counterparty_port_id", channel.CounterpartyPortId.String(),
-	}
-	// ChannelOpenInit has not learned the counterparty channel id yet.
-	// state.gno starts real channel ids at 1, so the zero value is only an unset sentinel.
-	if eventType != ChannelOpenInitEvent {
-		attrs = append(attrs,
-			"counterparty_channel_id", channel.CounterpartyChannelId.String(),
-		)
-	}
-	attrs = append(attrs,
 		"connection_id", channel.ConnectionId.String(),
-		"connection_client_id", connection.ClientId.String(),
-		"connection_counterparty_client_id", connection.CounterpartyClientId.String(),
-		"connection_counterparty_connection_id", connection.CounterpartyConnectionId.String(),
 		"version", channel.Version,
-	)
-	return attrs
+	}
 }
 
-func emitChannelEvent(eventType string, portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
-	chain.Emit(eventType, channelEventAttrs(eventType, portId, channelId, channel, connection)...)
+func channelOpenTryEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel, counterpartyVersion string) []string {
+	return []string{
+		"port_id", string(portId),
+		"channel_id", channelId.String(),
+		"counterparty_port_id", channel.CounterpartyPortId.String(),
+		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
+		"connection_id", channel.ConnectionId.String(),
+		"counterparty_version", counterpartyVersion,
+	}
+}
+
+func channelOpenAckConfirmEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel) []string {
+	return []string{
+		"port_id", string(portId),
+		"channel_id", channelId.String(),
+		"counterparty_port_id", channel.CounterpartyPortId.String(),
+		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
+		"connection_id", channel.ConnectionId.String(),
+	}
+}
+
+func channelCloseEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel) []string {
+	return []string{
+		"port_id", string(portId),
+		"channel_id", channelId.String(),
+		"counterparty_port_id", channel.CounterpartyPortId.String(),
+		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
+	}
+}
+
+func emitChannelOpenInitEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
+	chain.Emit(ChannelOpenInitEvent, channelOpenInitEventAttrs(portId, channelId, channel)...)
+}
+
+func emitChannelOpenTryEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel, counterpartyVersion string) {
+	chain.Emit(ChannelOpenTryEvent, channelOpenTryEventAttrs(portId, channelId, channel, counterpartyVersion)...)
+}
+
+func emitChannelOpenAckEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
+	chain.Emit(ChannelOpenAckEvent, channelOpenAckConfirmEventAttrs(portId, channelId, channel)...)
+}
+
+func emitChannelOpenConfirmEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
+	chain.Emit(ChannelOpenConfirmEvent, channelOpenAckConfirmEventAttrs(portId, channelId, channel)...)
+}
+
+func emitChannelCloseInitEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
+	chain.Emit(ChannelCloseInitEvent, channelCloseEventAttrs(portId, channelId, channel)...)
+}
+
+func emitChannelCloseConfirmEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
+	chain.Emit(ChannelCloseConfirmEvent, channelCloseEventAttrs(portId, channelId, channel)...)
 }
 
 func emitAdminChangedEvent(oldAdmin address, newAdmin address) {
-	chain.Emit(AdminChangedEvent,
+	chain.Emit(
+		AdminChangedEvent,
 		"old_admin", oldAdmin.String(),
 		"new_admin", newAdmin.String(),
 	)
 }
 
 func emitAppRegisteredEvent(portId []byte, registrarPkgPath string, adminOverride bool) {
-	chain.Emit(AppRegisteredEvent,
+	chain.Emit(
+		AppRegisteredEvent,
 		"port_id", string(portId),
 		"registrar_pkg_path", registrarPkgPath,
 		"admin_override", strconv.FormatBool(adminOverride),
@@ -75,7 +114,8 @@ func emitAppRegisteredEvent(portId []byte, registrarPkgPath string, adminOverrid
 }
 
 func emitBatchSendEvent(batchHash types.H256, packet types.Packet, sourceChannel types.Channel, sourceConnection types.Connection) {
-	chain.Emit(BatchSendEvent,
+	chain.Emit(
+		BatchSendEvent,
 		"batch_hash", batchHash.String(),
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_channel_version", sourceChannel.Version,
@@ -88,7 +128,8 @@ func emitBatchSendEvent(batchHash types.H256, packet types.Packet, sourceChannel
 }
 
 func emitBatchAcksEvent(batchHash types.H256, ackHash types.H256, packet types.Packet, destinationChannel types.Channel, destinationConnection types.Connection) {
-	chain.Emit(BatchAcksEvent,
+	chain.Emit(
+		BatchAcksEvent,
 		"batch_hash", batchHash.String(),
 		"ack_hash", ackHash.String(),
 		"destination_channel_id", packet.DestinationChannelId.String(),
@@ -99,7 +140,8 @@ func emitBatchAcksEvent(batchHash types.H256, ackHash types.H256, packet types.P
 }
 
 func emitPacketSendEvent(packet types.Packet, sourceChannel types.Channel, sourceConnection types.Connection) {
-	chain.Emit(PacketSendEvent,
+	chain.Emit(
+		PacketSendEvent,
 		"packet_hash", commitPacketHash(packet).String(),
 		"packet_data", hexAttr(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),
@@ -114,7 +156,8 @@ func emitPacketSendEvent(packet types.Packet, sourceChannel types.Channel, sourc
 }
 
 func emitPacketRecvEvent(eventType string, packet types.Packet, destinationChannel types.Channel, connection types.Connection, msgAttrName string, msg []byte) {
-	chain.Emit(eventType,
+	chain.Emit(
+		eventType,
 		"packet_hash", commitPacketHash(packet).String(),
 		"packet_data", hexAttr(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),
@@ -130,7 +173,8 @@ func emitPacketRecvEvent(eventType string, packet types.Packet, destinationChann
 }
 
 func emitWriteAckEvent(packet types.Packet, destinationChannel types.Channel, connection types.Connection, acknowledgement []byte) {
-	chain.Emit(WriteAckEvent,
+	chain.Emit(
+		WriteAckEvent,
 		"packet_hash", commitPacketHash(packet).String(),
 		"packet_data", hexAttr(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),
@@ -146,7 +190,8 @@ func emitWriteAckEvent(packet types.Packet, destinationChannel types.Channel, co
 }
 
 func emitPacketAckEvent(packet types.Packet, sourceChannel types.Channel, connection types.Connection, acknowledgement []byte) {
-	chain.Emit(PacketAckEvent,
+	chain.Emit(
+		PacketAckEvent,
 		"packet_hash", commitPacketHash(packet).String(),
 		"packet_data", hexAttr(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),
@@ -162,7 +207,8 @@ func emitPacketAckEvent(packet types.Packet, sourceChannel types.Channel, connec
 }
 
 func emitPacketTimeoutEvent(packet types.Packet, sourceChannel types.Channel, connection types.Connection) {
-	chain.Emit(PacketTimeoutEvent,
+	chain.Emit(
+		PacketTimeoutEvent,
 		"packet_hash", commitPacketHash(packet).String(),
 		"packet_data", hexAttr(packet.Data),
 		"source_channel_id", packet.SourceChannelId.String(),

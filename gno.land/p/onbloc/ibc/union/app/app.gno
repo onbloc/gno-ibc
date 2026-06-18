@@ -19,6 +19,8 @@ type IApp interface {
 	OnRecvPacket(cur realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult
 	OnAcknowledgementPacket(cur realm, packet types.Packet, acknowledgement []byte, relayer address)
 	OnTimeoutPacket(cur realm, packet types.Packet, relayer address)
+
+	IIntentApp
 }
 
 // IIntentApp is implemented by apps that explicitly support the proofless

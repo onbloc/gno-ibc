@@ -63,7 +63,7 @@ func (d *dummyImpl) Recv(cur realm, packet types.Packet, relayer address, relaye
 	if d.recvResult.Status != types.PacketStatusUnknown {
 		return d.recvResult
 	}
-	return core.NewRecvPacketResult(cross(cur), types.PacketStatusSuccess, []byte{0x01})
+	return core.NewRecvPacketResult(types.PacketStatusSuccess, []byte{0x01})
 }
 
 func (d *dummyImpl) IntentRecv(cur realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
@@ -71,7 +71,7 @@ func (d *dummyImpl) IntentRecv(cur realm, packet types.Packet, marketMaker addre
 	if d.recvResult.Status != types.PacketStatusUnknown {
 		return d.recvResult
 	}
-	return core.NewRecvPacketResult(cross(cur), types.PacketStatusSuccess, []byte{0x02})
+	return core.NewRecvPacketResult(types.PacketStatusSuccess, []byte{0x02})
 }
 
 func (d *dummyImpl) Ack(_ realm, packet types.Packet, ack []byte, relayer address) {
@@ -136,7 +136,7 @@ func TestAppNineMethodsDelegate(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	impl = d
-	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0)
+	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Every callback is gated to the core caller, so impersonate core for the
 	// legitimate delegation path.
@@ -166,7 +166,7 @@ func TestAppPausedBlocksPacketCallbacks(cur realm, t *testing.T) {
 	d := &dummyImpl{}
 	impl = d
 	paused = true
-	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0)
+	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// The caller gate runs before the paused check on every callback, so
 	// impersonate core to reach the channel handshake and the paused guard.
@@ -206,7 +206,7 @@ func TestSendRawPausedBlocks(cur realm, t *testing.T) {
 
 func TestAppNilImplPolicy(cur realm, t *testing.T) {
 	resetZkgmForTest()
-	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0)
+	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Nil-impl policy is observed past the caller gate, so impersonate core.
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))

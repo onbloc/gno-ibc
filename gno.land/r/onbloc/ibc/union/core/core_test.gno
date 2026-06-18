@@ -13,6 +13,7 @@ import (
 
 const (
 	mockType        types.ClientType = "mock"
+	mockClientImplPath              = "gno.land/r/onbloc/ibc/union/core/testing/mock-client"
 	testCorePkgPath                  = "gno.land/r/onbloc/ibc/union/core"
 	oldAddressPort                   = "g1vjt8cj2s6f5w4sly0s2l0vh85k0y8jyz3f8qzss"
 )
@@ -103,7 +104,7 @@ func setChannelOwner(channelId types.ChannelId, portId string) {
 }
 
 func addMockClient(mc *mockClient) *client {
-	return store.addClient(mockType, testutils.TestAddress("mock-client-creator"), mc)
+	return store.addClient(mockType, testutils.TestAddress("mock-client-creator"), mockClientImplPath, mc)
 }
 
 func registerMockClient(mc *mockClient) types.ClientId {
@@ -336,33 +337,30 @@ func TestGetRegisteredClientTypeReturnsRegisteredType(cur realm, t *testing.T) {
 	resetStore()
 	addMockClient(&mockClient{})
 
-	if got := GetRegisteredClientType(mockType); got != string(mockType) {
-		t.Errorf("GetRegisteredClientType: got %q want %q", got, string(mockType))
+	if got := GetRegisteredClientType(mockType); got != mockClientImplPath {
+		t.Errorf("GetRegisteredClientType: got %q want %q", got, mockClientImplPath)
+	}
+	if !HasClient(mockType) {
+		t.Fatal("HasClient: got false want true")
 	}
 	if got := GetRegisteredClientType(types.ClientType("missing")); got != "" {
 		t.Errorf("GetRegisteredClientType missing: got %q want empty", got)
 	}
+	if HasClient(types.ClientType("missing")) {
+		t.Fatal("HasClient missing: got true want false")
+	}
 }
 
 // Union reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/client/ibc.rs#L127-L190
-func TestGetClientImplReturnsStoredObject(cur realm, t *testing.T) {
+func TestGetClientImplReturnsIdentifier(cur realm, t *testing.T) {
 	resetStore()
-	mc := &mockClient{}
-	clientId := registerMockClient(mc)
+	clientId := registerMockClient(&mockClient{})
 
-	impl, ok := GetClientImpl(clientId)
-	if !ok {
-		t.Fatal("GetClientImpl: expected stored implementation")
+	if got := GetClientImpl(clientId); got != mockClientImplPath {
+		t.Fatalf("GetClientImpl: got %q want %q", got, mockClientImplPath)
 	}
-	got, ok := impl.(*mockClient)
-	if !ok {
-		t.Fatal("GetClientImpl: expected mockClient")
-	}
-	if got != mc {
-		t.Fatal("GetClientImpl must return the stored object")
-	}
-	if _, ok := GetClientImpl(types.ClientId(999)); ok {
-		t.Fatal("GetClientImpl unknown: got ok=true want false")
+	if got := GetClientImpl(types.ClientId(999)); got != "" {
+		t.Fatalf("GetClientImpl unknown: got %q want empty", got)
 	}
 }
 
@@ -595,14 +593,14 @@ func TestGetChannelsReturnsAppChannels(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 
-	got := GetChannels(string(portId))
+	got := GetChannels(cross(cur), string(portId))
 	if len(got) != 1 {
 		t.Fatalf("GetChannels: got %v want one channel", got)
 	}
 	if got[0] != uint32(channelId) {
 		t.Fatalf("GetChannels[0]: got %d want %d", got[0], channelId)
 	}
-	if missing := GetChannels("missing-port"); len(missing) != 0 {
+	if missing := GetChannels(cross(cur), "missing-port"); len(missing) != 0 {
 		t.Fatalf("GetChannels missing: got %v want empty", missing)
 	}
 }
@@ -1163,7 +1161,7 @@ func TestPacketRecvSyncEmptyAckRejected(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusSuccess, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusSuccess, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.AbortsContains(t, cur, "sync ack cannot be empty", func(cur realm) {
@@ -1177,7 +1175,7 @@ func TestPacketRecvAsyncDefersAck(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusAsync, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.NotAborts(t, cur, func(cur realm) {
@@ -1196,7 +1194,7 @@ func TestWriteAcknowledgementCommitsAsyncAck(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusAsync, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})
@@ -1214,7 +1212,7 @@ func TestWriteAcknowledgementRejectsNonOwner(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusAsync, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})
@@ -1232,7 +1230,7 @@ func TestWriteAcknowledgementRejectsAddressAsPortId(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusAsync, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})

@@ -55,7 +55,7 @@ func main(cur realm) {
 
 	println("")
 	println("[SCENARIO] mint voucher on destination")
-	lockPacket := core.NewPacket(cross(cur), sourceChannel, destChannel, lockData, types.Timestamp(100))
+	lockPacket := core.NewPacket(sourceChannel, destChannel, lockData, types.Timestamp(100))
 	recvRes := inst.Recv(cross(cur), lockPacket, relayer, nil)
 	println("recv_status", int(recvRes.Status))
 	println("receiver_voucher_after_mint", impl.VoucherBalanceOf(quoteToken, address(receiver)))

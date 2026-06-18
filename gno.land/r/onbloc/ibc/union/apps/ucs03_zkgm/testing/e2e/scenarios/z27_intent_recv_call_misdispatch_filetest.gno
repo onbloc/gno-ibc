@@ -44,7 +44,7 @@ func main(cur realm) {
 		ContractAddress:  []byte(mockReceiverPath),
 		ContractCalldata: []byte("forged-no-proof"),
 	}
-	callPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination,
+	callPacket := core.NewPacket(pair.Source, pair.Destination,
 		e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)), types.Timestamp(0))
 
 	println("call_reverted", intentRecvReverted(cur, callPacket))
@@ -60,7 +60,7 @@ func main(cur realm) {
 			ContractCalldata: []byte("forged-batch-call"),
 		}),
 	}}
-	batchPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination,
+	batchPacket := core.NewPacket(pair.Source, pair.Destination,
 		e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), types.Timestamp(0))
 
 	println("batch_reverted", intentRecvReverted(cur, batchPacket))

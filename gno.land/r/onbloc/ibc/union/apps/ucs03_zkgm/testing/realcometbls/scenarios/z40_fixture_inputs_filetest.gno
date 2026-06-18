@@ -64,7 +64,7 @@ func z40PanicBatchPacket(cur realm) types.Packet {
 }
 
 func z40BatchPacket(cur realm, batch z.Batch) types.Packet {
-	return core.NewPacket(cross(cur), types.ChannelId(2), types.ChannelId(1), e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), types.Timestamp(0))
+	return core.NewPacket(types.ChannelId(2), types.ChannelId(1), e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), types.Timestamp(0))
 }
 
 func printKV(name string, key []byte, value []byte) {

@@ -31,7 +31,7 @@ func callPacket(cur realm, pair realcometbls.ChannelPair, receiverPath string) t
 		ContractAddress:  []byte(receiverPath),
 		ContractCalldata: []byte("calldata"),
 	}
-	return core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)), types.Timestamp(0))
+	return core.NewPacket(pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)), types.Timestamp(0))
 }
 
 // Output:

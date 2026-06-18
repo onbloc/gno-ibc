@@ -39,7 +39,7 @@ func main(cur realm) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    meta,
 	}
-	escrowPacket := core.NewPacket(cross(cur), types.ChannelId(20), escrowChannel, sh.TokenOrderPacketData(cross(cur), escrowOrder), types.Timestamp(100))
+	escrowPacket := core.NewPacket(types.ChannelId(20), escrowChannel, sh.TokenOrderPacketData(cross(cur), escrowOrder), types.Timestamp(100))
 	inst.Recv(cross(cur), escrowPacket, relayer, nil)
 	println("receiver_voucher", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 	println("relayer_voucher_fee", impl.VoucherBalanceOf(quoteToken, relayer))
@@ -72,7 +72,7 @@ func main(cur realm) {
 	// inst.Send consumes sentCoinBudget bookkeeping only; this simulates the
 	// banker escrow deposit that a real user tx would have locked in the proxy.
 	stdtesting.IssueCoins(zkgm.ProxyAddress(), chain.NewCoins(chain.NewCoin("ufee", 55)))
-	unescrowPacket := core.NewPacket(cross(cur), types.ChannelId(23), unescrowChannel, sh.TokenOrderPacketData(cross(cur), nativeOrder), types.Timestamp(102))
+	unescrowPacket := core.NewPacket(types.ChannelId(23), unescrowChannel, sh.TokenOrderPacketData(cross(cur), nativeOrder), types.Timestamp(102))
 	inst.Recv(cross(cur), unescrowPacket, relayer, nil)
 	bk := banker.NewReadonlyBanker()
 	println("receiver_native", bk.GetCoins(address(receiver)).AmountOf("ufee"))

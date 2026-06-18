@@ -129,7 +129,7 @@ func QueryChannel(channelId types.ChannelId) string {
 }
 
 // GetChannels returns the channel ids owned by a registered app/port.
-func GetChannels(contract string) []uint32 {
+func GetChannels(_ realm, contract string) []uint32 {
 	ids := store.appChannels[contract]
 	out := make([]uint32, len(ids))
 	for i, id := range ids {

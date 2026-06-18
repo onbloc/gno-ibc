@@ -18,7 +18,7 @@ func NewConsensusStateUpdate(height types.Height, consensusStateBytes, clientSta
 // light client instead of core decoding bytes itself.
 func CreateClient(cur realm, clientType types.ClientType, lc lightclient.Interface) types.ClientId {
 	creator := cur.Previous().Address()
-	c := store.addClient(clientType, creator, lc)
+	c := store.addClient(clientType, creator, cur.Previous().PkgPath(), lc)
 
 	if _, err := lc.VerifyCreation(creator, creator); err != nil {
 		panic("create client: " + err.Error())
@@ -33,14 +33,19 @@ func CreateClient(cur realm, clientType types.ClientType, lc lightclient.Interfa
 }
 
 // GetRegisteredClientType returns the registered client type identifier for a
-// client type. Union returns an implementation address here; the Gno core keeps
-// object implementations, so the stable public identifier is the registered
-// client type string.
+// client type. Union returns an implementation address here; the Gno equivalent
+// is the package path of the realm that supplied the light client object.
 func GetRegisteredClientType(clientType types.ClientType) string {
 	if !store.hasClient(clientType) {
 		return ""
 	}
-	return clientType.String()
+	return store.clientImplForType(clientType)
+}
+
+// HasClient reports whether a client type has an implementation registered in
+// this core instance.
+func HasClient(clientType types.ClientType) bool {
+	return store.hasClient(clientType)
 }
 
 // UpdateClient verifies a client message against the light client object, which
@@ -159,13 +164,14 @@ func GetLightClient(clientId types.ClientId) (lightclient.Interface, bool) {
 	return store.lightClientOf(clientId)
 }
 
-// GetClientImpl returns the stored client implementation object for clientId.
-func GetClientImpl(clientId types.ClientId) (any, bool) {
+// GetClientImpl returns the implementation identifier for clientId. Union
+// returns a contract address; Gno exposes the implementation realm package path.
+func GetClientImpl(clientId types.ClientId) string {
 	c := store.getClient(clientId)
 	if c == nil {
-		return nil, false
+		return ""
 	}
-	return c.lightClient, true
+	return c.implPath
 }
 
 // GetTimestampAtHeight returns the consensus timestamp reported by a client at

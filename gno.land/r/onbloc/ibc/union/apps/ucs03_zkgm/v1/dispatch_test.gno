@@ -27,7 +27,7 @@ func TestRecvForwardExecuteErrorReturnsFailure(cur realm, t *testing.T) {
 			},
 		}),
 	})
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(2), data, 0)
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), data, 0)
 
 	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("relayer")), nil)
 
@@ -36,7 +36,7 @@ func TestRecvForwardExecuteErrorReturnsFailure(cur realm, t *testing.T) {
 }
 
 func TestRecvMalformedPacketReturnsFailure(cur realm, t *testing.T) {
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(2), []byte{0x01}, 0)
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), []byte{0x01}, 0)
 
 	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("relayer")), nil)
 
@@ -49,7 +49,7 @@ func TestAckUnsupportedOpcodeAborts(cur realm, t *testing.T) {
 		Version: z.INSTR_VERSION_0,
 		Opcode:  0xFF,
 	})
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(2), data, 0)
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), data, 0)
 
 	uassert.AbortsContains(t, cur, "unsupported opcode", func(cur realm) {
 		(&ZkgmV1{}).Ack(cur, packet, nil, address(testAddress("relayer")))
@@ -73,7 +73,7 @@ func TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck(cur realm, t *
 		// Metadata absent → error returned before any state mutation
 	}
 	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(1), data, 0)
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(1), data, 0)
 
 	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("relayer")), nil)
 
@@ -109,7 +109,7 @@ func TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts(cur realm, t *testing.T
 		QuoteAmount: u256.NewUint(1),
 	}
 	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, data, 0)
+	packet := core.NewPacket(types.ChannelId(1), destChan, data, 0)
 
 	uassert.AbortsContains(t, cur, "mint overflow", func(cur realm) {
 		(&ZkgmV1{}).Recv(cur, packet, address(testAddress("fee-fatal-relayer")), nil)
@@ -135,7 +135,7 @@ func TestRecvTokenOrderSolveReturnsFailureAck(cur realm, t *testing.T) {
 		QuoteAmount: u256.NewUint(10),
 	}
 	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(1), data, 0)
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(1), data, 0)
 
 	res := (&ZkgmV1{}).Recv(cur, packet, address("g1relayer"), nil)
 

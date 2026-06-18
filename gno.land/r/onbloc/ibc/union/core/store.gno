@@ -18,10 +18,10 @@ func init() {
 }
 
 type Store struct {
-	clientSeq  seqid.ID
-	clientByID *bptree.BPTree // clientKey(ClientId) → *client
-	clientByType map[string]any
-	commitments  map[types.H256]types.H256
+	clientSeq        seqid.ID
+	clientByID       *bptree.BPTree // clientKey(ClientId) → *client
+	clientImplByType map[string]string
+	commitments      map[types.H256]types.H256
 
 	connectionSeq        seqid.ID
 	connectionClientByID *bptree.BPTree // connectionKey(ConnectionId) → ClientId
@@ -37,6 +37,7 @@ type client struct {
 	id                types.ClientId
 	typ               types.ClientType
 	creator           address
+	implPath          string
 	lightClient       lightclient.Interface
 	clientState       []byte
 	consensusByHeight *bptree.BPTree // string(height.Bytes()) → []byte
@@ -57,7 +58,7 @@ type channelEntry struct {
 func newStore() *Store {
 	return &Store{
 		clientByID:           bptree.NewBPTree32(),
-		clientByType:         make(map[string]any),
+		clientImplByType:     make(map[string]string),
 		commitments:          make(map[types.H256]types.H256),
 		connectionClientByID: bptree.NewBPTree32(),
 		channelClientByID:    bptree.NewBPTree32(),
@@ -262,12 +263,13 @@ func (s *Store) nextChannelId() types.ChannelId {
 
 // --- Client ---
 
-func (s *Store) addClient(typ types.ClientType, creator address, lc lightclient.Interface) *client {
+func (s *Store) addClient(typ types.ClientType, creator address, implPath string, lc lightclient.Interface) *client {
 	clientId := types.ClientId(uint32(s.clientSeq.Next()))
 	c := &client{
 		id:                clientId,
 		typ:               typ,
 		creator:           creator,
+		implPath:          clientImplIdentifier(typ, implPath),
 		lightClient:       lc,
 		consensusByHeight: bptree.NewBPTree32(),
 		connectionsByID:   bptree.NewBPTree32(),
@@ -276,7 +278,7 @@ func (s *Store) addClient(typ types.ClientType, creator address, lc lightclient.
 		batchReceipts:     make(map[types.H256]types.H256),
 	}
 	s.clientByID.Set(clientKey(clientId), c)
-	s.clientByType[clientTypeKey(typ)] = lc
+	s.clientImplByType[clientTypeKey(typ)] = c.implPath
 	return c
 }
 
@@ -284,9 +286,20 @@ func clientTypeKey(typ types.ClientType) string {
 	return typ.String()
 }
 
+func clientImplIdentifier(typ types.ClientType, implPath string) string {
+	if implPath != "" {
+		return implPath
+	}
+	return typ.String()
+}
+
 func (s *Store) hasClient(typ types.ClientType) bool {
-	_, found := s.clientByType[clientTypeKey(typ)]
+	_, found := s.clientImplByType[clientTypeKey(typ)]
 	return found
+}
+
+func (s *Store) clientImplForType(typ types.ClientType) string {
+	return s.clientImplByType[clientTypeKey(typ)]
 }
 
 func (s *Store) getClient(clientId types.ClientId) *client {

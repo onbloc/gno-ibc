@@ -85,7 +85,7 @@ func TestBuildForwardChildPacket(cur realm, t *testing.T) {
 	// DestinationChannelId; open a channel under the expected source id first.
 	nextSource := openForwardTestChannel(cross(cur), types.ChannelId(99))
 	parentSalt := [32]byte{0xA}
-	parent := core.NewPacket(cross(cur), types.ChannelId(0), types.ChannelId(1), nil, 0)
+	parent := core.NewPacket(types.ChannelId(0), types.ChannelId(1), nil, 0)
 
 	child, err := buildForwardChild(cur, parent, u256.NewUint(9), parentSalt, z.Forward{
 		Path:             forwardPath(1, uint32(nextSource)),
@@ -116,7 +116,7 @@ func TestBuildForwardChildRejectsInvalidPath(cur realm, t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			parent := core.NewPacket(cross(cur), types.ChannelId(0), tc.destCh, nil, 0)
+			parent := core.NewPacket(types.ChannelId(0), tc.destCh, nil, 0)
 			_, err := buildForwardChild(cur, parent, u256.Zero(), [32]byte{}, z.Forward{
 				Path:             tc.path,
 				TimeoutTimestamp: 999,
@@ -129,7 +129,7 @@ func TestBuildForwardChildRejectsInvalidPath(cur realm, t *testing.T) {
 
 func TestBuildForwardChildRejectsZeroTimeout(cur realm, t *testing.T) {
 	nextSource := openForwardTestChannel(cross(cur), types.ChannelId(99))
-	parent := core.NewPacket(cross(cur), types.ChannelId(0), types.ChannelId(1), nil, 0)
+	parent := core.NewPacket(types.ChannelId(0), types.ChannelId(1), nil, 0)
 
 	child, err := buildForwardChild(cur, parent, u256.NewUint(9), [32]byte{0xA}, z.Forward{
 		Path:             forwardPath(1, uint32(nextSource)),
@@ -148,7 +148,7 @@ func TestBuildForwardChildRejectsZeroTimeout(cur realm, t *testing.T) {
 
 func TestBuildForwardNestedRebuildsContinuation(cur realm, t *testing.T) {
 	nextSource := openForwardTestChannel(cross(cur), types.ChannelId(99))
-	parent := core.NewPacket(cross(cur), types.ChannelId(0), types.ChannelId(1), nil, 0)
+	parent := core.NewPacket(types.ChannelId(0), types.ChannelId(1), nil, 0)
 
 	child, err := buildForwardChild(cur, parent, u256.NewUint(5), [32]byte{}, z.Forward{
 		Path:             forwardPath(1, uint32(nextSource), 3),
@@ -171,7 +171,7 @@ func TestBuildForwardNestedRebuildsContinuation(cur realm, t *testing.T) {
 }
 
 func TestExecuteForwardIntentReturnsOnlyMaker(cur realm, t *testing.T) {
-	res, err := (&ZkgmV1{}).executeForward(cur, core.NewPacket(cross(cur), 0, 0, nil, 0), u256.Zero(), [32]byte{}, z.Forward{
+	res, err := (&ZkgmV1{}).executeForward(cur, core.NewPacket(0, 0, nil, 0), u256.Zero(), [32]byte{}, z.Forward{
 		Path:        forwardPath(1, 2),
 		Instruction: batchMustCallInstruction(batchCall("sender", "")),
 	}, true)
@@ -190,7 +190,7 @@ func TestIntentRecvOnlyMakerForwardAborts(cur realm, t *testing.T) {
 			Instruction: batchMustCallInstruction(batchCall("sender", "")),
 		}),
 	})
-	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), data, 0)
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), data, 0)
 
 	uassert.AbortsContains(t, cur, "zkgm: only maker", func(cur realm) {
 		(&ZkgmV1{}).IntentRecv(cur, packet, address("g1relayer"), nil)
@@ -199,7 +199,7 @@ func TestIntentRecvOnlyMakerForwardAborts(cur realm, t *testing.T) {
 
 func TestExecuteForwardAsyncDefersAckAndTracksChild(cur realm, t *testing.T) {
 	channelId := openForwardTestChannel(cross(cur), types.ChannelId(12))
-	parent := core.NewPacket(cross(cur), types.ChannelId(9), types.ChannelId(1), nil, 0)
+	parent := core.NewPacket(types.ChannelId(9), types.ChannelId(1), nil, 0)
 	forward := z.Forward{
 		Path:             forwardPath(1, uint32(channelId)),
 		TimeoutTimestamp: 333,
@@ -221,7 +221,7 @@ func TestExecuteForwardAsyncDefersAckAndTracksChild(cur realm, t *testing.T) {
 
 func TestExecuteForwardZeroTimeoutFailsCleanly(cur realm, t *testing.T) {
 	channelId := openForwardTestChannel(cross(cur), types.ChannelId(12))
-	parent := core.NewPacket(cross(cur), types.ChannelId(9), types.ChannelId(1), nil, 0)
+	parent := core.NewPacket(types.ChannelId(9), types.ChannelId(1), nil, 0)
 	forward := z.Forward{
 		Path:             forwardPath(1, uint32(channelId)),
 		TimeoutTimestamp: 0,
@@ -233,7 +233,7 @@ func TestExecuteForwardZeroTimeoutFailsCleanly(cur realm, t *testing.T) {
 	uassert.Error(t, err)
 	uassert.True(t, err == errForwardZeroTimeout)
 	uassert.True(t, res.Status == types.PacketStatusUnknown)
-	child := core.NewPacket(cross(cur), types.ChannelId(channelId), types.ChannelId(12), nil, 0)
+	child := core.NewPacket(types.ChannelId(channelId), types.ChannelId(12), nil, 0)
 	_, ok := zkgm.GetInFlightPacket(zkgm.NewInFlightKey(cross(cur), types.MustCommit(types.CommitPacket(child))))
 	uassert.False(t, ok)
 	uassert.False(t, core.HasPacketCommitment(cross(cur), child))
@@ -260,7 +260,7 @@ func TestExecuteForwardThroughCoreFrameAuthorizesCoreRealm(cur realm, t *testing
 		Opcode:  z.OP_FORWARD,
 		Operand: mustForwardBytes(forward),
 	})
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), parentChannel, data, types.Timestamp(0))
+	packet := core.NewPacket(types.ChannelId(1), parentChannel, data, types.Timestamp(0))
 
 	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))
 
@@ -272,7 +272,7 @@ func TestExecuteForwardThroughCoreFrameAuthorizesCoreRealm(cur realm, t *testing
 }
 
 func TestAcknowledgeForwardDispatchesToInnerInstruction(cur realm, t *testing.T) {
-	err := (&ZkgmV1{}).acknowledgeForward(cur, core.NewPacket(cross(cur), 0, 0, nil, 0), u256.Zero(), [32]byte{}, z.Forward{
+	err := (&ZkgmV1{}).acknowledgeForward(cur, core.NewPacket(0, 0, nil, 0), u256.Zero(), [32]byte{}, z.Forward{
 		Path:        forwardPath(1, 2),
 		Instruction: batchMustCallInstruction(batchCall("sender", "calldata")),
 	}, z.Ack{Tag: tagAckSuccess(), InnerAck: []byte{}})
@@ -297,7 +297,7 @@ func TestAcknowledgeForwardWithTokenOrderChildRefundsOnFailure(cur realm, t *tes
 	childFailAck, err := z.EncodeAck(z.Ack{Tag: tagAckFailure(), InnerAck: []byte("failed")})
 	uassert.NoError(t, err)
 
-	err = (&ZkgmV1{}).acknowledgeForward(cur, core.NewPacket(cross(cur), types.ChannelId(3), types.ChannelId(4), nil, 0), u256.Zero(), [32]byte{}, z.Forward{
+	err = (&ZkgmV1{}).acknowledgeForward(cur, core.NewPacket(types.ChannelId(3), types.ChannelId(4), nil, 0), u256.Zero(), [32]byte{}, z.Forward{
 		Path:        path,
 		Instruction: batchMustOrderInstruction(order),
 	}, z.Ack{Tag: tagAckSuccess(), InnerAck: childFailAck})
@@ -310,8 +310,8 @@ func TestAcknowledgeForwardWithTokenOrderChildRefundsOnFailure(cur realm, t *tes
 }
 
 func TestConsumeForwardChildClearsInFlight(cur realm, t *testing.T) {
-	packet := core.NewPacket(cross(cur), types.ChannelId(2), types.ChannelId(3), nil, 0)
-	parentPacket := core.NewPacket(cross(cur), types.ChannelId(10), types.ChannelId(11), nil, 0)
+	packet := core.NewPacket(types.ChannelId(2), types.ChannelId(3), nil, 0)
+	parentPacket := core.NewPacket(types.ChannelId(10), types.ChannelId(11), nil, 0)
 	parent := zkgm.NewInFlightValue(cross(cur), parentPacket)
 	zkgm.SetInFlightPacket(cross(cur), forwardInFlightKey(cur, packet), parent)
 

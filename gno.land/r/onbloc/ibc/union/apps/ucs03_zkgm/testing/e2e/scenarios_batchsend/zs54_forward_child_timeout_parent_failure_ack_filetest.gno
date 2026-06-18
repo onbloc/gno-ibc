@@ -61,7 +61,7 @@ func main(cur realm) {
 			Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 		}),
 	}
-	parentPacket := core.NewPacket(cross(cur), types.ChannelId(1), parentDestination,
+	parentPacket := core.NewPacket(types.ChannelId(1), parentDestination,
 		e2e.MustPacketData(cross(cur), e2e.MustForwardInstruction(cross(cur), forward)), types.Timestamp(0))
 	childPacket := e2e.MustForwardChildPacket(cross(cur), parentPacket, u256.Zero(), [32]byte{}, forward)
 	childKey := zkgm.NewInFlightKey(cross(cur), types.MustCommit(types.CommitPacket(childPacket)))

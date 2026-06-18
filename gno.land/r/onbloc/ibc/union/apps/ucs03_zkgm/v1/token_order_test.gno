@@ -196,7 +196,7 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(5), nil, 0)
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(5), nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("v1-relayer")), u256.NewUint(7), order, false)
 
@@ -240,7 +240,7 @@ func TestTokenOrderExecuteInitializeMalformedInitializerUsesDefaults(cur realm, 
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(4), nil, 0)
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(4), nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("fallback-relayer")), u256.NewUint(3), order, false)
 
@@ -270,7 +270,7 @@ func TestTokenOrderExecuteInitializeEmptyInitializerUsesDefaults(cur realm, t *t
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(6), nil, 0)
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(6), nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("empty-init-relayer")), u256.NewUint(5), order, false)
 
@@ -300,7 +300,7 @@ func TestTokenOrderExecuteInitializeMintErrorDoesNotSetOrigin(cur realm, t *test
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(7), nil, 0)
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(7), nil, 0)
 
 	_, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("invalid-rx-relayer")), u256.NewUint(9), order, false)
 	uassert.ErrorContains(t, err, "invalid address")
@@ -324,7 +324,7 @@ func TestTokenOrderExecuteEscrowMintErrorDoesNotSetOrigin(cur realm, t *testing.
 		QuoteAmount: u256.NewUint(95),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(destChan), nil, 0)
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(destChan), nil, 0)
 
 	_, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("escrow-rx-relayer")), path, order, false)
 
@@ -356,7 +356,7 @@ func TestTokenOrderExecuteInitializeQuoteExceedsBaseReturnsFailure(cur realm, t 
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, nil, 0)
+	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("quote-exceeds-rly")), path, order, false)
 
@@ -385,7 +385,7 @@ func TestTokenOrderExecuteUnescrowChannelBalanceUnderflow(cur realm, t *testing.
 		QuoteAmount: u256.NewUint(100),
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, nil, 0)
+	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
 
 	_, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("unescrow-rly")), u256.Zero(), order, false)
 
@@ -405,7 +405,7 @@ func TestTokenOrderExecuteEscrowQuoteDenomMismatchReturnsFailure(cur realm, t *t
 		QuoteAmount: u256.NewUint(95),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(50), nil, 0)
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(50), nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("escrow-mismatch-rly")), u256.Zero(), order, false)
 
@@ -431,7 +431,7 @@ func TestTokenOrderExecuteEscrowZeroFeeSkipsRelayerMint(cur realm, t *testing.T)
 		QuoteAmount: u256.NewUint(100), // fee = 0
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, nil, 0)
+	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(relayer), path, order, false)
 
@@ -458,7 +458,7 @@ func TestTokenOrderExecuteEscrowZeroQuoteSkipsReceiverMint(cur realm, t *testing
 		QuoteAmount: u256.NewUint(0), // receiver gets nothing; all goes to relayer as fee
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, nil, 0)
+	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(relayer), path, order, false)
 
@@ -485,7 +485,7 @@ func TestTokenOrderExecuteEscrowZeroAmountSkipsBothMints(cur realm, t *testing.T
 		QuoteAmount: u256.NewUint(0),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, nil, 0)
+	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(relayer), path, order, false)
 
@@ -598,7 +598,7 @@ func TestTokenOrderIntentVoucherMarketMakerFillTransfersMakerFunds(cur realm, t 
 		QuoteAmount: u256.NewUint(12),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(5), nil, 0)
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(5), nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(maker), u256.Zero(), order, true)
 
@@ -626,7 +626,7 @@ func TestTokenOrderIntentUnknownQuoteReturnsOnlyMaker(cur realm, t *testing.T) {
 		QuoteAmount: u256.NewUint(10),
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(5), nil, 0)
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(5), nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(testAddress("v1-intent-maker")), u256.Zero(), order, true)
 
@@ -650,7 +650,7 @@ func TestTokenOrderIntentInsufficientMakerBalanceReturnsOnlyMaker(cur realm, t *
 		QuoteAmount: u256.NewUint(9),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(5), nil, 0)
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(5), nil, 0)
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur, packet, address(maker), u256.Zero(), order, true)
 

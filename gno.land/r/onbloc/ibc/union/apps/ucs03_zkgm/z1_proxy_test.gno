@@ -117,7 +117,7 @@ func TestProxyUpdateImplDeniedAfterLock(cur realm, t *testing.T) {
 
 func TestLedgerWritersFailClosedWhenUnbootstrapped(cur realm, t *testing.T) {
 	resetZkgmForTest()
-	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 20)
+	packet := core.NewPacket(1, 2, []byte("data"), 20)
 	key := NewInFlightKey(cross(cur), types.MustCommit(types.CommitPacket(packet)))
 	value := NewInFlightValue(cross(cur), packet)
 	bucket, err := tb.New(u256.NewUint(10), u256.NewUint(1), blockNow())
@@ -182,7 +182,7 @@ func TestWriteForwardAckRequiresRegisteredImpl(cur realm, t *testing.T) {
 	implPath = "gno.land/r/not-this-realm"
 
 	uassert.AbortsContains(t, cur, "not an authorized impl", func(cur realm) {
-		WriteForwardAck(cur, core.NewPacket(cross(cur), 1, 2, nil, 0), []byte{0x01})
+		WriteForwardAck(cur, core.NewPacket(1, 2, nil, 0), []byte{0x01})
 	})
 }
 

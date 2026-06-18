@@ -1673,8 +1673,7 @@ func TestSetAdminRejectsNonAdmin(cur realm, t *testing.T) {
 
 // --- Integration: channel close ---
 
-// Union reference:
-// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L1591-L1598
+// Local regression for ChannelCloseInit channel state preconditions.
 func TestChannelCloseInitRejectsWrongState(cur realm, t *testing.T) {
 	resetStore()
 	connectionId := addMockConnection(types.ConnectionStateOpen)

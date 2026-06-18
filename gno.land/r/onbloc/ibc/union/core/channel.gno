@@ -117,11 +117,10 @@ func ChannelCloseInit(cur realm, msg types.MsgChannelCloseInit) {
 	connection := ensureConnectionOpen(channel.ConnectionId)
 	portId := store.getChannelOwner(msg.ChannelId)
 
-	store.getAppByPortId(portId).OnChannelCloseInit(cross(cur), msg.ChannelId, relayer)
-
 	channel.State = types.ChannelStateClosed
 	store.saveChannel(msg.ChannelId, channel)
 
+	store.getAppByPortId(portId).OnChannelCloseInit(cross(cur), msg.ChannelId, relayer)
 	emitChannelEvent(ChannelCloseInitEvent, portId, msg.ChannelId, channel, connection)
 }
 

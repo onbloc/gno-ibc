@@ -35,8 +35,7 @@ func setupCloseChannelWithConnectionState(t *testing.T, state types.ConnectionSt
 	return channelId, client
 }
 
-// Union reference:
-// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L1585-L1625
+// Local regression for ChannelCloseInit success and callback attribution.
 func TestChannelCloseInitClosesOpenChannel(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
@@ -52,16 +51,15 @@ func TestChannelCloseInitClosesOpenChannel(cur realm, t *testing.T) {
 	if len(app.closedChannels) != 1 || app.closedChannels[0] != channelId {
 		t.Fatalf("OnChannelCloseInit calls: got %v want [%d]", app.closedChannels, channelId)
 	}
-	if len(app.closeInitStates) != 1 || app.closeInitStates[0] != types.ChannelStateOpen {
-		t.Fatalf("OnChannelCloseInit state: got %v want [%d]", app.closeInitStates, types.ChannelStateOpen)
+	if len(app.closeInitStates) != 1 || app.closeInitStates[0] != types.ChannelStateClosed {
+		t.Fatalf("OnChannelCloseInit state: got %v want [%d]", app.closeInitStates, types.ChannelStateClosed)
 	}
 	if len(app.closeInitRelayers) != 1 || app.closeInitRelayers[0] != wantRelayer {
 		t.Fatalf("OnChannelCloseInit relayer: got %v want [%s]", app.closeInitRelayers, wantRelayer)
 	}
 }
 
-// Gno local regression for Union channel-close preconditions:
-// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L1591-L1600
+// Local regression for ChannelCloseInit connection preconditions.
 func TestChannelCloseInitRejectsNonOpenConnection(cur realm, t *testing.T) {
 	resetStore()
 	channelId, _ := setupCloseChannelWithConnectionState(t, types.ConnectionStateInit)
@@ -75,8 +73,7 @@ func TestChannelCloseInitRejectsNonOpenConnection(cur realm, t *testing.T) {
 	}
 }
 
-// Union reference:
-// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L1628-L1708
+// Local regression for ChannelCloseConfirm proof verification and close effects.
 func TestChannelCloseConfirmVerifiesCounterpartyCloseAndClosesChannel(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
@@ -125,8 +122,7 @@ func TestChannelCloseConfirmVerifiesCounterpartyCloseAndClosesChannel(cur realm,
 	}
 }
 
-// Gno local regression for Union channel-close preconditions:
-// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L1636-L1645
+// Local regression for ChannelCloseConfirm state preconditions before proof verification.
 func TestChannelCloseConfirmRejectsWrongStateBeforeProof(cur realm, t *testing.T) {
 	resetStore()
 	_, _, channelId := setupOpenChannel(t)
@@ -144,8 +140,7 @@ func TestChannelCloseConfirmRejectsWrongStateBeforeProof(cur realm, t *testing.T
 	}
 }
 
-// Gno local regression for Union channel-close preconditions:
-// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L1636-L1645
+// Local regression for ChannelCloseConfirm connection preconditions before proof verification.
 func TestChannelCloseConfirmRejectsNonOpenConnectionBeforeProof(cur realm, t *testing.T) {
 	resetStore()
 	channelId, client := setupCloseChannelWithConnectionState(t, types.ConnectionStateInit)
@@ -162,8 +157,7 @@ func TestChannelCloseConfirmRejectsNonOpenConnectionBeforeProof(cur realm, t *te
 	}
 }
 
-// Union reference:
-// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L1667-L1681
+// Local regression for inactive client short-circuit before proof verification.
 func TestChannelCloseConfirmRejectsInactiveClientBeforeProof(cur realm, t *testing.T) {
 	resetStore()
 	_, _, channelId := setupOpenChannel(t)

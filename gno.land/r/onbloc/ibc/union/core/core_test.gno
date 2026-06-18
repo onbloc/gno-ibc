@@ -1930,15 +1930,16 @@ func TestPacketTimeoutReceiptPath(cur realm, t *testing.T) {
 	if got != want {
 		t.Fatal("PacketTimeout must verify Union batch receipt non-membership")
 	}
-	if store.hasPacketCommitment(packet) {
-		t.Fatal("timeout must delete source packet commitment")
+	if got, ok := store.clientForChannel(packet.SourceChannelId).getBatchPacketsAtPath(packetCommitmentPath(packet)); !ok || got != types.COMMITMENT_MAGIC_ACK {
+		t.Fatalf("timeout marker: ok=%v got=%s want %s", ok, got, types.COMMITMENT_MAGIC_ACK)
 	}
 }
 
-func TestPacketTimeoutIsNoOpWhenCommitmentAbsent(cur realm, t *testing.T) {
+func TestPacketTimeoutRejectsUnsentPacket(cur realm, t *testing.T) {
 	resetStore()
-	packet := types.Packet{SourceChannelId: 1, DestinationChannelId: 99, Data: types.Bytes("transfer"), TimeoutTimestamp: 100}
-	uassert.NotAborts(t, cur, func(cur realm) {
+	_, _, channelId := setupOpenChannel(t)
+	packet := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("transfer"), TimeoutTimestamp: 100}
+	uassert.AbortsContains(t, cur, "packet commitment not found", func(cur realm) {
 		PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet})
 	})
 }
@@ -1960,6 +1961,66 @@ func TestPacketTimeoutRejectsInactiveClientBeforeNonMembership(cur realm, t *tes
 	}
 	if !store.hasPacketCommitment(packet) {
 		t.Fatal("inactive client must not delete packet commitment")
+	}
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L943-L1029
+func TestUnionTimeoutPacketTimestampOK(cur realm, t *testing.T) {
+	resetStore()
+	_, _, channelId := setupOpenChannel(t)
+	client := mockClientFor(channelId)
+	timeout := types.Timestamp(64)
+	client.timestamp = 100000
+	packet := types.Packet{SourceChannelId: channelId, DestinationChannelId: channelId, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: timeout}
+	store.commitPacket(packet)
+
+	uassert.NotAborts(t, cur, func(cur realm) {
+		PacketTimeout(cross(cur), types.MsgPacketTimeout{
+			Packet:      packet,
+			Proof:       []byte{1},
+			ProofHeight: 11,
+			Relayer:     testutils.TestAddress("union-relayer"),
+		})
+	})
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L1031-L1115
+func TestUnionTimeoutPacketTimestampNotReached(cur realm, t *testing.T) {
+	resetStore()
+	_, _, channelId := setupOpenChannel(t)
+	client := mockClientFor(channelId)
+	timeout := types.Timestamp(248)
+	client.timestamp = 128
+	packet := types.Packet{SourceChannelId: channelId, DestinationChannelId: channelId, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: timeout}
+	store.commitPacket(packet)
+
+	uassert.AbortsContains(t, cur, "packet timeout not reached", func(cur realm) {
+		PacketTimeout(cross(cur), types.MsgPacketTimeout{
+			Packet:      packet,
+			Proof:       []byte{1},
+			ProofHeight: 11,
+			Relayer:     testutils.TestAddress("union-relayer"),
+		})
+	})
+}
+
+func TestPacketTimeoutIgnoresMsgRelayerForAppCallback(cur realm, t *testing.T) {
+	resetStore()
+	portId, _, channelId := setupOpenChannel(t)
+	app := store.ports[portKey(portId)].(*mockApp)
+	msgRelayer := testutils.TestAddress("msg-timeout-relayer")
+	packet := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("transfer"), TimeoutTimestamp: 100}
+	store.commitPacket(packet)
+
+	PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet, Relayer: msgRelayer})
+
+	if len(app.timeoutRelayers) != 1 {
+		t.Fatalf("OnTimeoutPacket relayers: got %d want 1", len(app.timeoutRelayers))
+	}
+	if app.timeoutRelayers[0] == msgRelayer {
+		t.Fatal("PacketTimeout must ignore Msg.Relayer for app callback attribution")
 	}
 }
 

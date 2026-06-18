@@ -150,37 +150,33 @@ func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
 	relayer := cur.Previous().Address()
 	packet := msg.Packet
 
-	// Safe lookup: absent channel or client means no commitment, nothing to do.
-	entry, ok := store.getChannelEntry(packet.SourceChannelId)
-	if !ok {
-		return
-	}
-	c := store.getClient(entry.clientId)
-	if c == nil || !c.hasPacketCommitment(packet) {
-		return
-	}
-
 	channel := store.getChannel(packet.SourceChannelId)
-	connection := ensureConnectionOpen(channel.ConnectionId)
-
-	// ICS-04: if TimeoutTimestamp is set, reject before proof verification
-	// unless the consensus time at ProofHeight is past the timeout.
-	if packet.TimeoutTimestamp == 0 {
-		panic(ErrPacketTimeoutNotReached)
+	if channel.State != types.ChannelStateOpen {
+		panic(ErrInvalidChannelState)
 	}
+	connection := ensureConnectionOpen(channel.ConnectionId)
+	c := store.clientForChannel(packet.SourceChannelId)
+
 	proofTimestamp, err := c.lightClient.GetTimestampAtHeight(msg.ProofHeight)
 	if err != nil {
 		panic(err)
 	}
-	if proofTimestamp <= packet.TimeoutTimestamp {
-		panic(ErrPacketTimeoutNotReached)
+	if proofTimestamp == 0 {
+		panic(ErrTimeoutProofTimestampNotFound)
 	}
 
 	key := types.BatchReceiptsPath(commitPacketHash(packet))
 	verifyNonMembershipWithActiveClient(c, types.NewHeight(msg.ProofHeight), msg.Proof, key[:])
 
+	if packet.TimeoutTimestamp == 0 {
+		panic(ErrTimeoutMustBeSet)
+	}
+	if proofTimestamp < packet.TimeoutTimestamp {
+		panic(ErrPacketTimeoutNotReached)
+	}
+	c.markPacketAcknowledged(packet)
+
 	portId := store.getChannelOwner(packet.SourceChannelId)
-	c.deletePacketCommitment(packet)
 	store.getAppByPortId(portId).OnTimeoutPacket(cross(cur), packet, relayer)
 
 	emitPacketTimeoutEvent(packet, channel, connection)

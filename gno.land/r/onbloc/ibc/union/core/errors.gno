@@ -21,6 +21,7 @@ var (
 	ErrNotEnoughPackets              = errors.New("not enough packets")
 	ErrBatchSameChannelOnly          = errors.New("batch must use the same channel")
 	ErrAcknowledgementCountMismatch  = errors.New("acknowledgement count mismatch")
+	ErrTimeoutProofTimestampNotFound = errors.New("packet timeout proof timestamp not found")
 	ErrPortAlreadyRegistered         = errors.New("port already registered")
 	ErrBatchPacketsNotFound          = errors.New("batch packets not found")
 	ErrBatchReceiptsNotFound         = errors.New("batch receipts not found")

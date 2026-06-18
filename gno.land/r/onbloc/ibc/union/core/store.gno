@@ -208,7 +208,7 @@ func (c *client) commitAcknowledgement(packet types.Packet, ack []byte) {
 
 func (c *client) hasAcknowledgement(packet types.Packet) bool {
 	v, ok := c.getBatchReceiptsAtPath(packetAcknowledgementPath(packet))
-	return ok && v != types.COMMITMENT_MAGIC_ACK
+	return ok && v != types.COMMITMENT_MAGIC
 }
 
 func (c *client) acknowledgementHash(packet types.Packet) types.H256 {
@@ -221,7 +221,7 @@ func (c *client) acknowledgementHash(packet types.Packet) types.H256 {
 }
 
 func (c *client) setPacketReceipt(packet types.Packet) {
-	c.saveBatchReceipts(commitPacketHash(packet), types.COMMITMENT_MAGIC_ACK)
+	c.saveBatchReceipts(commitPacketHash(packet), types.COMMITMENT_MAGIC)
 }
 
 func (c *client) hasPacketReceipt(packet types.Packet) bool {

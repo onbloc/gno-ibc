@@ -928,8 +928,11 @@ func TestPacketReceiptLifecycle(cur realm, t *testing.T) {
 	if !c.hasPacketReceipt(p) {
 		t.Fatal("receipt must exist after set")
 	}
-	if _, ok := c.getBatchReceiptsAtPath(packetAcknowledgementPath(p)); !ok {
-		t.Fatal("setPacketReceipt must mirror at packet acknowledgement path")
+	if got, ok := c.getBatchReceiptsAtPath(packetAcknowledgementPath(p)); !ok || got != types.COMMITMENT_MAGIC {
+		t.Fatalf("setPacketReceipt at packet acknowledgement path: ok=%v got=%s want %s", ok, got, types.COMMITMENT_MAGIC)
+	}
+	if c.hasAcknowledgement(p) {
+		t.Fatal("receipt marker must not count as acknowledgement")
 	}
 	c.deletePacketReceipt(p)
 	if c.hasPacketReceipt(p) {
@@ -1133,6 +1136,75 @@ func TestPacketRecvSyncAckWritten(cur realm, t *testing.T) {
 	}
 }
 
+// Union reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L307-L329
+func TestUnionRecvPacketOK(cur realm, t *testing.T) {
+	resetStore()
+	_, _, channelId := setupOpenChannel(t)
+	packet := types.Packet{
+		SourceChannelId:      99,
+		DestinationChannelId: channelId,
+		Data:                 types.Bytes{1, 2, 3},
+		TimeoutTimestamp:     testFutureTimeoutNanos,
+	}
+
+	uassert.NotAborts(t, cur, func(cur realm) {
+		PacketRecv(cur, types.MsgPacketRecv{
+			Packets:     []types.Packet{packet},
+			RelayerMsgs: [][]byte{{1}},
+			Relayer:     testutils.TestAddress("union-relayer"),
+			Proof:       []byte{1, 2, 3},
+			ProofHeight: 1,
+		})
+	})
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L376-L405
+func TestUnionRecvPacketInvalidChannelState(cur realm, t *testing.T) {
+	resetStore()
+	setupOpenChannel(t)
+	packet := types.Packet{
+		SourceChannelId:      99,
+		DestinationChannelId: 5,
+		Data:                 types.Bytes{1, 2, 3},
+		TimeoutTimestamp:     testFutureTimeoutNanos,
+	}
+
+	uassert.AbortsContains(t, cur, "channel 5 not found", func(cur realm) {
+		PacketRecv(cur, types.MsgPacketRecv{
+			Packets:     []types.Packet{packet},
+			RelayerMsgs: [][]byte{{1}},
+			Relayer:     testutils.TestAddress("union-relayer"),
+			Proof:       []byte{1, 2, 3},
+			ProofHeight: 1,
+		})
+	})
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L456-L478
+func TestUnionRecvPacketTimeoutTimestamp(cur realm, t *testing.T) {
+	resetStore()
+	_, _, channelId := setupOpenChannel(t)
+	packet := types.Packet{
+		SourceChannelId:      99,
+		DestinationChannelId: channelId,
+		Data:                 types.Bytes{1, 2, 3},
+		TimeoutTimestamp:     types.Timestamp(nowNanos() - 1),
+	}
+
+	uassert.AbortsContains(t, cur, "packet timeout expired", func(cur realm) {
+		PacketRecv(cur, types.MsgPacketRecv{
+			Packets:     []types.Packet{packet},
+			RelayerMsgs: [][]byte{{1}},
+			Relayer:     testutils.TestAddress("union-relayer"),
+			Proof:       []byte{1, 2, 3},
+			ProofHeight: 1,
+		})
+	})
+}
+
 func TestPacketRecvBatchUsesUnionBatchCommitment(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
@@ -1168,6 +1240,27 @@ func TestPacketRecvBatchUsesUnionBatchCommitment(cur realm, t *testing.T) {
 	}
 	if !store.hasPacketReceipt(p1) || !store.hasPacketReceipt(p2) {
 		t.Fatal("PacketRecv must set receipt for every batch packet")
+	}
+}
+
+func TestPacketRecvIgnoresMsgRelayerForAppCallback(cur realm, t *testing.T) {
+	resetStore()
+	portId, _, channelId := setupOpenChannel(t)
+	app := store.ports[portKey(portId)].(*mockApp)
+	forged := testutils.TestAddress("forged-relayer")
+	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	PacketRecv(cross(cur), types.MsgPacketRecv{
+		Packets:     []types.Packet{packet},
+		RelayerMsgs: [][]byte{[]byte("relay-msg")},
+		Relayer:     forged,
+	})
+
+	if len(app.recvRelayers) != 1 {
+		t.Fatalf("OnRecvPacket relayer calls: got %d want 1", len(app.recvRelayers))
+	}
+	if app.recvRelayers[0] == forged {
+		t.Fatal("PacketRecv must not trust Msg.Relayer for app callback attribution")
 	}
 }
 
@@ -1363,6 +1456,69 @@ func TestIntentPacketRecvSetsReceiptAndCommitsAck(cur realm, t *testing.T) {
 	}
 	if store.acknowledgementHash(packet) != types.CommitAcks([][]byte{{0x02}}) {
 		t.Fatal("IntentPacketRecv must commit the intent acknowledgement")
+	}
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L525-L547
+func TestUnionRecvIntentPacketOK(cur realm, t *testing.T) {
+	resetStore()
+	_, _, channelId := setupOpenChannel(t)
+	packet := types.Packet{
+		SourceChannelId:      99,
+		DestinationChannelId: channelId,
+		Data:                 types.Bytes{1, 2, 3},
+		TimeoutTimestamp:     testFutureTimeoutNanos,
+	}
+
+	uassert.NotAborts(t, cur, func(cur realm) {
+		IntentPacketRecv(cur, types.MsgIntentPacketRecv{
+			Packets:             []types.Packet{packet},
+			MarketMakerMessages: [][]byte{{1, 2, 3}},
+			MarketMaker:         testutils.TestAddress("marketmaker"),
+		})
+	})
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L594-L616
+func TestUnionRecvIntentPacketTimeoutTimestamp(cur realm, t *testing.T) {
+	resetStore()
+	_, _, channelId := setupOpenChannel(t)
+	packet := types.Packet{
+		SourceChannelId:      99,
+		DestinationChannelId: channelId,
+		Data:                 types.Bytes{1, 2, 3},
+		TimeoutTimestamp:     types.Timestamp(nowNanos() - 1),
+	}
+
+	uassert.AbortsContains(t, cur, "packet timeout expired", func(cur realm) {
+		IntentPacketRecv(cur, types.MsgIntentPacketRecv{
+			Packets:             []types.Packet{packet},
+			MarketMakerMessages: [][]byte{{1, 2, 3}},
+			MarketMaker:         testutils.TestAddress("marketmaker"),
+		})
+	})
+}
+
+func TestIntentPacketRecvIgnoresMsgMarketMakerForAppCallback(cur realm, t *testing.T) {
+	resetStore()
+	portId, _, channelId := setupOpenChannel(t)
+	app := store.ports[portKey(portId)].(*mockApp)
+	forged := testutils.TestAddress("forged-maker")
+	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("intent"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{
+		Packets:             []types.Packet{packet},
+		MarketMakerMessages: [][]byte{[]byte("maker-msg")},
+		MarketMaker:         forged,
+	})
+
+	if len(app.intentMakers) != 1 {
+		t.Fatalf("OnIntentRecvPacket maker calls: got %d want 1", len(app.intentMakers))
+	}
+	if app.intentMakers[0] == forged {
+		t.Fatal("IntentPacketRecv must not trust Msg.MarketMaker for app callback attribution")
 	}
 }
 

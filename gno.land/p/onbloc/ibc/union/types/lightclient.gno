@@ -27,6 +27,17 @@ type StateUpdate struct {
 	ClientStateBytes    []byte
 }
 
+type VerifyCreationEventKind string
+
+const VerifyCreationEventCreateLensClient VerifyCreationEventKind = "CreateLensClient"
+
+type VerifyCreationEvent struct {
+	Kind       VerifyCreationEventKind
+	L1ClientID ClientId
+	L2ClientID ClientId
+	L2ChainID  string
+}
+
 // ClientCreationResult is the result of lightclient.Interface.VerifyCreation.
 //
 // It mirrors the Union (Rust) ClientCreationResult{client_state: Option, ...}.
@@ -35,4 +46,5 @@ type StateUpdate struct {
 // so its result is empty; the type is kept for symmetry with other clients.
 type ClientCreationResult struct {
 	ClientStateBytes []byte
+	Events           []VerifyCreationEvent
 }

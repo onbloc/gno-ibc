@@ -20,10 +20,13 @@ func CreateClient(cur realm, clientType types.ClientType, lc lightclient.Interfa
 	creator := cur.Previous().Address()
 	c := store.addClient(clientType, creator, lc)
 
-	if _, err := lc.VerifyCreation(creator, creator); err != nil {
+	creation, err := lc.VerifyCreation(creator, creator)
+	if err != nil {
 		panic("create client: " + err.Error())
 	}
 
+	emitVerifyCreationEvents(c.id, creation.Events)
+	// Keep the core lifecycle event separate from light-client creation events.
 	chain.Emit(CreateClientEvent,
 		"client_id", c.id.String(),
 		"client_type", clientType.String(),
@@ -42,6 +45,8 @@ func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 	}
 
 	caller := cur.Previous().Address()
+
+	requireActiveClient(c)
 
 	update, err := c.lightClient.VerifyHeader(caller, msg.ClientMessage, caller)
 	if err != nil {

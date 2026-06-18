@@ -409,9 +409,46 @@ func TestCreateClientVerifiesCreation(cur realm, t *testing.T) {
 	}
 }
 
+func TestCreateClientHandlesVerifyCreationEvents(cur realm, t *testing.T) {
+	// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/core/src/contract.rs#L2243
+	resetStore()
+	testing.SetRealm(testing.NewUserRealm(testutils.TestAddress("client-creator")))
+	mc := &mockClient{
+		chainId: "union-1",
+		height:  types.NewHeight(100),
+		creationResult: types.ClientCreationResult{
+			Events: []types.VerifyCreationEvent{
+				{
+					Kind:       types.VerifyCreationEventCreateLensClient,
+					L1ClientID: types.ClientId(1),
+					L2ClientID: types.ClientId(7),
+					L2ChainID:  "l2-chain",
+				},
+			},
+		},
+	}
+
+	clientId := CreateClient(cross(cur), mockType, mc)
+	if clientId != types.ClientId(1) {
+		t.Fatalf("client id: got %v want 1", clientId)
+	}
+
+	attrs := verifyCreationEventAttrs(clientId, mc.creationResult.Events[0])
+	assertAttrEqual(t, attrs, "client_id", "1")
+	assertAttrEqual(t, attrs, "l1_client_id", "1")
+	assertAttrEqual(t, attrs, "l2_client_id", "7")
+	assertAttrEqual(t, attrs, "l2_chain_id", "l2-chain")
+}
+
+func TestVerifyCreationEventAttrsRejectsUnknownKind(cur realm, t *testing.T) {
+	uassert.AbortsContains(t, cur, "unknown verify creation event kind", func(cur realm) {
+		verifyCreationEventAttrs(types.ClientId(1), types.VerifyCreationEvent{Kind: "unknown"})
+	})
+}
+
 func TestUpdateClientOk(cur realm, t *testing.T) {
 	resetStore()
-	mc := &mockClient{chainId: "union-1", height: types.NewHeight(100)}
+	mc := &mockClient{chainId: "union-1", height: types.NewHeight(100), status: types.StatusActive}
 	clientId := registerMockClient(mc)
 
 	height := UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, []byte("header")))
@@ -426,7 +463,7 @@ func TestUpdateClientOk(cur realm, t *testing.T) {
 
 func TestUpdateClientPanicsOnVerifyHeaderError(cur realm, t *testing.T) {
 	resetStore()
-	clientId := registerMockClient(&mockClient{verifyHeaderErr: errors.New("bad header")})
+	clientId := registerMockClient(&mockClient{status: types.StatusActive, verifyHeaderErr: errors.New("bad header")})
 
 	uassert.AbortsContains(t, cur, "update client: bad header", func(cur realm) {
 		UpdateClient(cur, types.NewMsgUpdateClient(clientId, []byte("header")))
@@ -436,6 +473,7 @@ func TestUpdateClientPanicsOnVerifyHeaderError(cur realm, t *testing.T) {
 func TestUpdateClientCommitmentsSaved(cur realm, t *testing.T) {
 	resetStore()
 	mc := &mockClient{
+		status: types.StatusActive,
 		stateUpdate: types.StateUpdate{
 			Height:              42,
 			ClientStateBytes:    []byte("client-state"),

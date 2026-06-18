@@ -18,6 +18,7 @@ type mockClient struct {
 
 	verifyHeaderErr error
 	stateUpdate     types.StateUpdate
+	creationResult  types.ClientCreationResult
 	creationCalls   int
 
 	// recorded calls
@@ -92,7 +93,7 @@ func (m *mockClient) VerifyHeader(_ address, header []byte, _ address) (types.St
 
 func (m *mockClient) VerifyCreation(_ address, _ address) (types.ClientCreationResult, error) {
 	m.creationCalls++
-	return types.ClientCreationResult{}, nil
+	return m.creationResult, nil
 }
 
 func (m *mockClient) Misbehaviour(_ address, _ []byte, _ address) (types.ClientState, error) {

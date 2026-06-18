@@ -11,6 +11,7 @@ const (
 	AdminChangedEvent          = "AdminChanged"
 	AppRegisteredEvent         = "AppRegistered"
 	CreateClientEvent          = "CreateClient"
+	CreateLensClientEvent      = "CreateLensClient"
 	UpdateClientEvent          = "UpdateClient"
 	ConnectionOpenInitEvent    = "ConnectionOpenInit"
 	ConnectionOpenTryEvent     = "ConnectionOpenTry"
@@ -72,6 +73,31 @@ func emitAppRegisteredEvent(portId []byte, registrarPkgPath string, adminOverrid
 		"registrar_pkg_path", registrarPkgPath,
 		"admin_override", strconv.FormatBool(adminOverride),
 	)
+}
+
+func verifyCreationEventAttrs(clientId types.ClientId, event types.VerifyCreationEvent) []string {
+	switch event.Kind {
+	case types.VerifyCreationEventCreateLensClient:
+		return []string{
+			"client_id", clientId.String(),
+			"l1_client_id", event.L1ClientID.String(),
+			"l2_client_id", event.L2ClientID.String(),
+			"l2_chain_id", event.L2ChainID,
+		}
+	default:
+		panic("unknown verify creation event kind")
+	}
+}
+
+func emitVerifyCreationEvents(clientId types.ClientId, events []types.VerifyCreationEvent) {
+	for _, event := range events {
+		switch event.Kind {
+		case types.VerifyCreationEventCreateLensClient:
+			chain.Emit(CreateLensClientEvent, verifyCreationEventAttrs(clientId, event)...)
+		default:
+			panic("unknown verify creation event kind")
+		}
+	}
 }
 
 func emitBatchSendEvent(batchHash types.H256, packet types.Packet, sourceChannel types.Channel, sourceConnection types.Connection) {

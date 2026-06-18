@@ -204,7 +204,16 @@ func (c *StateLensIcs23MptLightClient) updateState(header Header, consState *Con
 // trusts its initial consensus state. Mirrors Union's verify_creation, which
 // only emits an event.
 func (c *StateLensIcs23MptLightClient) VerifyCreation(caller address, relayer address) (types.ClientCreationResult, error) {
-	return types.ClientCreationResult{}, nil
+	return types.ClientCreationResult{
+		Events: []types.VerifyCreationEvent{
+			{
+				Kind:       types.VerifyCreationEventCreateLensClient,
+				L1ClientID: types.ClientId(c.clientState.L1ClientID),
+				L2ClientID: types.ClientId(c.clientState.L2ClientID),
+				L2ChainID:  c.clientState.L2ChainID,
+			},
+		},
+	}, nil
 }
 
 // Misbehaviour is unsupported for state-lens clients, mirroring Union's

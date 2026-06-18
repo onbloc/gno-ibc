@@ -310,7 +310,8 @@ func TestMisbehaviourUnsupported(t *testing.T) {
 	}
 }
 
-func TestVerifyCreationEmpty(t *testing.T) {
+func TestStateLensVerifyCreationReturnsCreateLensClientEvent(t *testing.T) {
+	// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L83
 	c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
 	var caller, relayer address
 	res, err := c.VerifyCreation(caller, relayer)
@@ -319,6 +320,22 @@ func TestVerifyCreationEmpty(t *testing.T) {
 	}
 	if len(res.ClientStateBytes) != 0 {
 		t.Errorf("VerifyCreation must not write a client state")
+	}
+	if len(res.Events) != 1 {
+		t.Fatalf("VerifyCreation events: got %d want 1", len(res.Events))
+	}
+	event := res.Events[0]
+	if event.Kind != types.VerifyCreationEventCreateLensClient {
+		t.Fatalf("event kind: got %q want %q", event.Kind, types.VerifyCreationEventCreateLensClient)
+	}
+	if event.L1ClientID != types.ClientId(1) {
+		t.Fatalf("l1 client id: got %v want 1", event.L1ClientID)
+	}
+	if event.L2ClientID != types.ClientId(7) {
+		t.Fatalf("l2 client id: got %v want 7", event.L2ClientID)
+	}
+	if event.L2ChainID != "l2-chain" {
+		t.Fatalf("l2 chain id: got %q want l2-chain", event.L2ChainID)
 	}
 }
 

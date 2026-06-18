@@ -7,7 +7,6 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
-	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -16,7 +15,9 @@ var (
 	errInvalidCallSender = errors.New("zkgm/v1: invalid call sender")
 )
 
-func (v *ZkgmV1) verifyCall(cur realm, sender string, call z.Call) error {
+// verifyCall rejects eureka mode and requires the call sender to match the dispatch sender.
+// reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2997-L3019
+func (v *ucs03ZkgmV1) verifyCall(cur realm, sender string, call z.Call) error {
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
@@ -26,7 +27,9 @@ func (v *ZkgmV1) verifyCall(cur realm, sender string, call z.Call) error {
 	return nil
 }
 
-func (v *ZkgmV1) executeCall(cur realm, packet types.Packet, relayer address, relayerMsg []byte, path *u256.Uint, call z.Call, intent bool) (types.RecvPacketResult, error) {
+// executeCall dispatches an OP_CALL to the registered receiver's OnZkgm callback; failures and panics fail closed.
+// reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L1500-L1683
+func (v *ucs03ZkgmV1) executeCall(cur realm, packet types.Packet, relayer address, relayerMsg []byte, path *u256.Uint, call z.Call, intent bool) (types.RecvPacketResult, error) {
 	// TODO: when eureka is supported, fail it closed on intent (return
 	// ACK_ERR_ONLY_MAKER) like every other opcode instead of a failure ack.
 	if call.Eureka {
@@ -40,8 +43,8 @@ func (v *ZkgmV1) executeCall(cur realm, packet types.Packet, relayer address, re
 	sender := cloneBytes(call.Sender)
 	calldata := cloneBytes(call.ContractCalldata)
 	receiverPath := string(call.ContractAddress)
-	receiver := zkgm.GetReceiver(receiverPath)
-	if receiver == nil {
+	receiver, ok := v.store.GetReceiver(receiverPath)
+	if !ok || receiver == nil {
 		return callErrAck(cur, errors.New("zkgm/v1: receiver not registered: "+receiverPath)), nil
 	}
 
@@ -73,14 +76,16 @@ func (v *ZkgmV1) executeCall(cur realm, packet types.Packet, relayer address, re
 	return core.NewRecvPacketResult(types.PacketStatusSuccess, ack), nil
 }
 
-func (v *ZkgmV1) acknowledgeCall(cur realm, packet types.Packet, path *u256.Uint, call z.Call) error {
+// acknowledgeCall is a no-op for standard calls; eureka mode is unsupported.
+func (v *ucs03ZkgmV1) acknowledgeCall(cur realm, packet types.Packet, path *u256.Uint, call z.Call) error {
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
 	return nil
 }
 
-func (v *ZkgmV1) timeoutCall(cur realm, packet types.Packet, path *u256.Uint, call z.Call) error {
+// timeoutCall is a no-op for standard calls; eureka mode is unsupported.
+func (v *ucs03ZkgmV1) timeoutCall(cur realm, packet types.Packet, path *u256.Uint, call z.Call) error {
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
@@ -121,6 +126,7 @@ func canRevive() (ok bool) {
 	return ok
 }
 
+// callErrAck encodes err as a failure acknowledgement for the call.
 func callErrAck(cur realm, err error) types.RecvPacketResult {
 	ack, encErr := z.EncodeAck(z.Ack{Tag: tagAckFailure(), InnerAck: []byte(err.Error())})
 	if encErr != nil {

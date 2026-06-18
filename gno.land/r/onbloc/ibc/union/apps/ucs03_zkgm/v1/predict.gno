@@ -30,6 +30,7 @@ var predictV2Schema = abi.Schema{Fields: []abi.Field{
 }}
 
 // PredictWrappedTokenV1 derives the wrapped IBC denom for a v1 token order.
+// reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L1364-L1389
 func PredictWrappedTokenV1(path *u256.Uint, channelId uint32, baseToken []byte) string {
 	if path == nil {
 		path = u256.Zero()
@@ -43,6 +44,7 @@ func PredictWrappedTokenV1(path *u256.Uint, channelId uint32, baseToken []byte) 
 }
 
 // PredictWrappedTokenV2 derives the IBC voucher denom for a v2 token order.
+// reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L3332-L3353
 func PredictWrappedTokenV2(path *u256.Uint, channelId uint32, baseToken []byte, metadataImage [32]byte) string {
 	if path == nil {
 		path = u256.Zero()
@@ -66,6 +68,7 @@ func MetadataImage(meta z.TokenMetadata) [32]byte {
 	return keccak256.Sum256(bz)
 }
 
+// u256FromBytes32 reads a 32-byte big-endian value as a uint256.
 func u256FromBytes32(bz [32]byte) *u256.Uint {
 	return new(u256.Uint).SetBytes(bz[:])
 }

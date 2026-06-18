@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/keccak256"
 	"errors"
+	"strings"
 	"testing"
 
 	"gno.land/p/onbloc/encoding/rlp"
@@ -158,6 +159,12 @@ func TestVerifyHeaderUpdatesState(t *testing.T) {
 	if update.Height != 11 {
 		t.Errorf("update height: got %d want 11", update.Height)
 	}
+	if len(update.ClientStateBytes) == 0 {
+		t.Fatal("VerifyHeader must return client state bytes when latest height advances")
+	}
+	if len(update.ConsensusStateBytes) == 0 {
+		t.Fatal("VerifyHeader must return consensus state bytes")
+	}
 
 	// The L1 membership check must target the L2 consensus-state path at L1Height
 	// with the keccak256 of the L2 consensus blob.
@@ -194,6 +201,43 @@ func TestVerifyHeaderUpdatesState(t *testing.T) {
 	}
 }
 
+func TestVerifyHeaderStoresOlderHeightWithoutRegressingLatest(t *testing.T) {
+	l1 := &mockL1Client{status: lightclient.Active}
+	c := newTestClient(t, l1, bytes.Repeat([]byte{0x02}, 32))
+
+	l2Consensus := makeConsensusBytes(67890, bytes.Repeat([]byte{0xcc}, 32), bytes.Repeat([]byte{0xdd}, 32))
+	headerBytes, err := EncodeHeader(Header{
+		L1Height:              20,
+		L2Height:              9,
+		L2ConsensusStateProof: []byte("l1-proof"),
+		L2ConsensusState:      l2Consensus,
+	})
+	if err != nil {
+		t.Fatalf("EncodeHeader: %v", err)
+	}
+
+	var caller, relayer address
+	update, err := c.VerifyHeader(caller, headerBytes, relayer)
+	if err != nil {
+		t.Fatalf("VerifyHeader: %v", err)
+	}
+	if c.GetLatestHeight() != 10 {
+		t.Fatalf("latest height regressed: got %d want 10", c.GetLatestHeight())
+	}
+	if update.Height != 9 {
+		t.Fatalf("update height: got %d want 9", update.Height)
+	}
+	if len(update.ClientStateBytes) != 0 {
+		t.Fatal("older update must not return client state bytes")
+	}
+	if len(update.ConsensusStateBytes) == 0 {
+		t.Fatal("older update must still return consensus state bytes")
+	}
+	if _, found := c.getConsensusState(9); !found {
+		t.Fatal("older consensus state should be stored")
+	}
+}
+
 func TestVerifyHeaderRejectsWhenL1Fails(t *testing.T) {
 	l1 := &mockL1Client{status: lightclient.Active, membershipErr: errors.New("boom")}
 	c := newTestClient(t, l1, bytes.Repeat([]byte{0x02}, 32))
@@ -216,6 +260,19 @@ func TestVerifyHeaderRejectsWhenL1Fails(t *testing.T) {
 	// Latest height must not advance on failure.
 	if c.GetLatestHeight() != 10 {
 		t.Errorf("latest height advanced despite failure: got %d want 10", c.GetLatestHeight())
+	}
+}
+
+func TestVerifyHeaderRejectsMalformedHeader(t *testing.T) {
+	c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
+
+	var caller, relayer address
+	_, err := c.VerifyHeader(caller, []byte{0x00}, relayer)
+	if err == nil {
+		t.Fatal("expected malformed header error")
+	}
+	if !strings.Contains(err.Error(), "failed to decode header") {
+		t.Fatalf("VerifyHeader malformed: got %v want decode error", err)
 	}
 }
 
@@ -347,6 +404,28 @@ func TestVerifyNonMembershipStorageProof(t *testing.T) {
 	})
 	if err := c.VerifyNonMembership(10, path, proof); err != nil {
 		t.Fatalf("VerifyNonMembership: %v", err)
+	}
+}
+
+func TestVerifyNonMembershipRejectsWrongCommitmentKey(t *testing.T) {
+	c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
+	proof := storage.EncodeProof(storage.Proof{
+		Key:   storage.WordFromUint64(2),
+		Value: make([]byte, 32),
+	})
+	if err := c.VerifyNonMembership(10, bytes.Repeat([]byte{0x22}, 32), proof); err != ErrInvalidCommitmentKey {
+		t.Fatalf("VerifyNonMembership: got %v want %v", err, ErrInvalidCommitmentKey)
+	}
+}
+
+func TestVerifyNonMembershipRejectsInvalidProofBytes(t *testing.T) {
+	c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
+	err := c.VerifyNonMembership(10, bytes.Repeat([]byte{0x22}, 32), []byte{0x01})
+	if err == nil {
+		t.Fatal("expected invalid proof error")
+	}
+	if !strings.Contains(err.Error(), "invalid storage proof") {
+		t.Fatalf("VerifyNonMembership invalid proof: got %v want invalid storage proof", err)
 	}
 }
 

@@ -457,6 +457,148 @@ func TestUpdateClientCommitmentsSaved(cur realm, t *testing.T) {
 	}
 }
 
+func TestUnionUpdateClientOkVector(cur realm, t *testing.T) {
+	// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/core/src/tests/client/ibc.rs#L199
+	resetStore()
+	mc := &mockClient{
+		chainId: "testchain",
+		height:  types.NewHeight(1),
+		status:  types.StatusActive,
+		stateUpdate: types.StateUpdate{
+			Height:              2,
+			ConsensusStateBytes: []byte{3, 2, 1},
+			ClientStateBytes:    []byte{3, 2, 1},
+		},
+	}
+	clientId := registerMockClient(mc)
+
+	height := UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, []byte{3, 2, 1}))
+
+	if height != types.NewHeight(2) {
+		t.Fatalf("UpdateClient height: got %v want 2", height)
+	}
+	if len(mc.headerMessages) != 1 || string(mc.headerMessages[0]) != string([]byte{3, 2, 1}) {
+		t.Fatalf("VerifyHeader messages: got %v want [3 2 1]", mc.headerMessages)
+	}
+}
+
+func TestUnionUpdateClientKoVector(cur realm, t *testing.T) {
+	// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/core/src/tests/client/ibc.rs#L263
+	resetStore()
+	mc := &mockClient{
+		chainId:         "testchain",
+		height:          types.NewHeight(1),
+		status:          types.StatusActive,
+		verifyHeaderErr: errors.New("invalid update state response"),
+	}
+	clientId := registerMockClient(mc)
+
+	uassert.AbortsContains(t, cur, "update client: invalid update state response", func(cur realm) {
+		UpdateClient(cur, types.NewMsgUpdateClient(clientId, []byte{3, 2, 1}))
+	})
+}
+
+func TestUnionUpdateClientRejectsInactiveBeforeVerifyHeaderSpec(cur realm, t *testing.T) {
+	// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/core/src/contract.rs#L982
+	resetStore()
+	mc := &mockClient{
+		chainId:         "testchain",
+		height:          types.NewHeight(1),
+		status:          types.StatusExpired,
+		verifyHeaderErr: errors.New("verify header must not be called"),
+	}
+	clientId := registerMockClient(mc)
+
+	uassert.AbortsContains(t, cur, ErrClientNotActive.Error(), func(cur realm) {
+		UpdateClient(cur, types.NewMsgUpdateClient(clientId, []byte{3, 2, 1}))
+	})
+	if len(mc.headerMessages) != 0 {
+		t.Fatalf("VerifyHeader calls: got %d want 0", len(mc.headerMessages))
+	}
+}
+
+func TestUnionUpdateClientCommitmentsSavedVector(cur realm, t *testing.T) {
+	// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/core/src/tests/client/ibc.rs#L425
+	resetStore()
+	mc := &mockClient{
+		chainId: "testchain",
+		height:  types.NewHeight(1),
+		status:  types.StatusActive,
+		stateUpdate: types.StateUpdate{
+			Height:              2,
+			ConsensusStateBytes: []byte("new_consensus_state"),
+			ClientStateBytes:    []byte("new_client_state"),
+		},
+	}
+	clientId := registerMockClient(mc)
+
+	UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, []byte{3, 2, 1}))
+
+	if got := QueryClientState(clientId); got != "0x6e65775f636c69656e745f7374617465" {
+		t.Fatalf("QueryClientState: got %q want new_client_state hex", got)
+	}
+	if got := QueryConsensusState(clientId, types.NewHeight(2)); got != "0x6e65775f636f6e73656e7375735f7374617465" {
+		t.Fatalf("QueryConsensusState: got %q want new_consensus_state hex", got)
+	}
+}
+
+func TestUnionCreateClientCommitmentsSavedSpec(cur realm, t *testing.T) {
+	// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/core/src/tests/client/ibc.rs#L126
+	resetStore()
+	testing.SetRealm(testing.NewUserRealm(testutils.TestAddress("client-creator")))
+	mc := &mockClient{
+		chainId: "testchain",
+		height:  types.NewHeight(1),
+		status:  types.StatusActive,
+	}
+
+	clientId := CreateClient(cross(cur), mockType, mc)
+
+	if GetClientType(clientId) != string(mockType) {
+		t.Fatalf("GetClientType: got %q want %q", GetClientType(clientId), string(mockType))
+	}
+	if got := QueryClientState(clientId); got != "0x010203" {
+		t.Fatalf("QueryClientState: got %q want 0x010203", got)
+	}
+	if got := QueryConsensusState(clientId, types.NewHeight(1)); got != "0x010203" {
+		t.Fatalf("QueryConsensusState: got %q want 0x010203", got)
+	}
+}
+
+func TestUnionForceUpdateClientSpec(cur realm, t *testing.T) {
+	// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/core/src/tests/client/ibc.rs#L332
+	resetStore()
+	oldAdmin := admin
+	defer func() { admin = oldAdmin }()
+
+	adminAddr := testutils.TestAddress("admin")
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	admin = adminAddr
+
+	clientId := registerMockClient(&mockClient{
+		chainId: "testchain",
+		height:  types.NewHeight(1),
+		status:  types.StatusActive,
+	})
+	replacement := &mockClient{
+		chainId: "testchain",
+		height:  types.NewHeight(2),
+		status:  types.StatusActive,
+	}
+
+	height := ForceUpdateClient(cross(cur), clientId, replacement)
+
+	if height != types.NewHeight(2) {
+		t.Fatalf("ForceUpdateClient height: got %v want 2", height)
+	}
+	if got := QueryClientState(clientId); got != "0x6e65775f636c69656e745f7374617465" {
+		t.Fatalf("QueryClientState: got %q want new_client_state hex", got)
+	}
+	if got := QueryConsensusState(clientId, types.NewHeight(2)); got != "0x6e65775f636f6e73656e7375735f7374617465" {
+		t.Fatalf("QueryConsensusState: got %q want new_consensus_state hex", got)
+	}
+}
+
 // --- State: ID sequences ---
 
 func TestNextIdsSequential(cur realm, t *testing.T) {

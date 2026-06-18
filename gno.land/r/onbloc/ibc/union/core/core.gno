@@ -54,15 +54,14 @@ func PacketRecv(cur realm, msg types.MsgPacketRecv) {
 	c := store.clientForChannel(first.DestinationChannelId)
 	now := nowNanos()
 
-	for i, packet := range msg.Packets {
+	for i, relayerMsg := range msg.RelayerMsgs {
+		if i >= len(msg.Packets) {
+			break
+		}
+		packet := msg.Packets[i]
 		channel, skip := acceptRecvPacket(c, packet, first.DestinationChannelId, now)
 		if skip {
 			continue
-		}
-
-		var relayerMsg []byte
-		if i < len(msg.RelayerMsgs) {
-			relayerMsg = msg.RelayerMsgs[i]
 		}
 
 		portId := store.getChannelOwner(packet.DestinationChannelId)
@@ -92,15 +91,14 @@ func IntentPacketRecv(cur realm, msg types.MsgIntentPacketRecv) {
 	c := store.clientForChannel(first.DestinationChannelId)
 	now := nowNanos()
 
-	for i, packet := range msg.Packets {
+	for i, marketMakerMsg := range msg.MarketMakerMessages {
+		if i >= len(msg.Packets) {
+			break
+		}
+		packet := msg.Packets[i]
 		channel, skip := acceptRecvPacket(c, packet, first.DestinationChannelId, now)
 		if skip {
 			continue
-		}
-
-		var marketMakerMsg []byte
-		if i < len(msg.MarketMakerMessages) {
-			marketMakerMsg = msg.MarketMakerMessages[i]
 		}
 
 		res := intentApp.OnIntentRecvPacket(cross(cur), packet, marketMaker, marketMakerMsg)
@@ -290,14 +288,14 @@ func acceptRecvPacket(c *client, packet types.Packet, batchChannelId types.Chann
 		panic(ErrBatchSameChannelOnly)
 	}
 
+	// Do not execute packets that have already timed out on the source chain.
+	if now >= uint64(packet.TimeoutTimestamp) {
+		panic(ErrPacketTimeoutExpired)
+	}
+
 	// Ignore duplicate packets so batch retries remain idempotent.
 	if c.hasPacketReceipt(packet) {
 		return channel, true
-	}
-
-	// Do not execute packets that have already timed out on the source chain.
-	if packet.TimeoutTimestamp != 0 && now >= uint64(packet.TimeoutTimestamp) {
-		panic(ErrPacketTimeoutExpired)
 	}
 
 	c.setPacketReceipt(packet)

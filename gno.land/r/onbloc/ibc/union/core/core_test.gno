@@ -1265,7 +1265,8 @@ func TestPacketRecvSyncAckWritten(cur realm, t *testing.T) {
 
 	uassert.NotAborts(t, cur, func(cur realm) {
 		PacketRecv(cur, types.MsgPacketRecv{
-			Packets: []types.Packet{packet},
+			Packets:     []types.Packet{packet},
+			RelayerMsgs: [][]byte{nil},
 		})
 	})
 
@@ -1387,6 +1388,29 @@ func TestPacketRecvBatchUsesUnionBatchCommitment(cur realm, t *testing.T) {
 	}
 }
 
+func TestPacketRecvStopsAtRelayerMsgLength(cur realm, t *testing.T) {
+	resetStore()
+	portId, _, channelId := setupOpenChannel(t)
+	app := store.ports[portKey(portId)].(*mockApp)
+	p1 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("a"), TimeoutTimestamp: testFutureTimeoutNanos}
+	p2 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("b"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	PacketRecv(cross(cur), types.MsgPacketRecv{
+		Packets:     []types.Packet{p1, p2},
+		RelayerMsgs: [][]byte{[]byte("relay-a")},
+	})
+
+	if len(app.recvPackets) != 1 {
+		t.Fatalf("OnRecvPacket calls: got %d want 1", len(app.recvPackets))
+	}
+	if !store.hasPacketReceipt(p1) {
+		t.Fatal("PacketRecv must set receipt for the zipped packet")
+	}
+	if store.hasPacketReceipt(p2) {
+		t.Fatal("PacketRecv must not process packets beyond relayer msg length")
+	}
+}
+
 func TestPacketRecvIgnoresMsgRelayerForAppCallback(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
@@ -1417,7 +1441,7 @@ func TestPacketRecvBatchRejectsDifferentDestinationChannel(cur realm, t *testing
 	p2 := types.Packet{SourceChannelId: 99, DestinationChannelId: otherChannelId, Data: types.Bytes("b"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.AbortsContains(t, cur, "batch must use the same channel", func(cur realm) {
-		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{p1, p2}})
+		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{p1, p2}, RelayerMsgs: [][]byte{nil, nil}})
 	})
 }
 
@@ -1429,7 +1453,7 @@ func TestPacketRecvSyncEmptyAckRejected(cur realm, t *testing.T) {
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.AbortsContains(t, cur, "sync ack cannot be empty", func(cur realm) {
-		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}})
+		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{nil}})
 	})
 }
 
@@ -1443,7 +1467,7 @@ func TestPacketRecvAsyncDefersAck(cur realm, t *testing.T) {
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.NotAborts(t, cur, func(cur realm) {
-		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}})
+		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{nil}})
 	})
 
 	if !store.hasPacketReceipt(packet) {
@@ -1461,7 +1485,7 @@ func TestWriteAcknowledgementCommitsAsyncAck(cur realm, t *testing.T) {
 	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})
+	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{nil}})
 	WriteAcknowledgement(cross(cur), types.MsgWriteAcknowledgement{
 		Packet:          packet,
 		Acknowledgement: []byte("async-ack"),
@@ -1573,7 +1597,7 @@ func TestWriteAcknowledgementRejectsNonOwner(cur realm, t *testing.T) {
 	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})
+	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{nil}})
 	setChannelOwner(channelId, "g1notchannelowner")
 
 	uassert.AbortsContains(t, cur, "caller not authorized to write ack", func(cur realm) {
@@ -1591,7 +1615,7 @@ func TestWriteAcknowledgementRejectsAddressAsPortId(cur realm, t *testing.T) {
 	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})
+	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{nil}})
 	// Port registered with address (old behavior) must be rejected.
 	setChannelOwner(channelId, oldAddressPort)
 
@@ -1659,8 +1683,8 @@ func TestPacketRecvReceiptDupRejected(cur realm, t *testing.T) {
 	app := store.ports[portKey(portId)].(*mockApp)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})
-	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})
+	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{nil}})
+	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{nil}})
 
 	if len(app.recvPackets) != 1 {
 		t.Fatalf("duplicate recv must not call app again: got %d calls", len(app.recvPackets))
@@ -1694,6 +1718,29 @@ func TestIntentPacketRecvSetsReceiptAndCommitsAck(cur realm, t *testing.T) {
 	}
 	if store.acknowledgementHash(packet) != types.CommitAcks([][]byte{{0x02}}) {
 		t.Fatal("IntentPacketRecv must commit the intent acknowledgement")
+	}
+}
+
+func TestIntentPacketRecvStopsAtMarketMakerMsgLength(cur realm, t *testing.T) {
+	resetStore()
+	portId, _, channelId := setupOpenChannel(t)
+	app := store.ports[portKey(portId)].(*mockApp)
+	p1 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("intent-a"), TimeoutTimestamp: testFutureTimeoutNanos}
+	p2 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("intent-b"), TimeoutTimestamp: testFutureTimeoutNanos}
+
+	IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{
+		Packets:             []types.Packet{p1, p2},
+		MarketMakerMessages: [][]byte{[]byte("maker-a")},
+	})
+
+	if len(app.intentPackets) != 1 {
+		t.Fatalf("OnIntentRecvPacket calls: got %d want 1", len(app.intentPackets))
+	}
+	if !store.hasPacketReceipt(p1) {
+		t.Fatal("IntentPacketRecv must set receipt for the zipped packet")
+	}
+	if store.hasPacketReceipt(p2) {
+		t.Fatal("IntentPacketRecv must not process packets beyond maker msg length")
 	}
 }
 
@@ -1767,7 +1814,7 @@ func TestIntentPacketRecvRejectsNonIntentAppBeforeReceipt(cur realm, t *testing.
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("intent"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.AbortsContains(t, cur, "intent receive not supported", func(cur realm) {
-		IntentPacketRecv(cur, types.MsgIntentPacketRecv{Packets: []types.Packet{packet}})
+		IntentPacketRecv(cur, types.MsgIntentPacketRecv{Packets: []types.Packet{packet}, MarketMakerMessages: [][]byte{nil}})
 	})
 
 	if store.hasPacketReceipt(packet) {
@@ -1784,8 +1831,8 @@ func TestIntentPacketRecvBlocksLaterProvenPacketRecv(cur realm, t *testing.T) {
 	app := store.ports[portKey(portId)].(*mockApp)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("intent"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{Packets: []types.Packet{packet}})
-	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})
+	IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{Packets: []types.Packet{packet}, MarketMakerMessages: [][]byte{nil}})
+	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{nil}})
 
 	if len(app.recvPackets) != 0 {
 		t.Fatalf("intent recv receipt must suppress later proven PacketRecv: got %d recv calls", len(app.recvPackets))
@@ -1804,8 +1851,8 @@ func TestIntentPacketRecvDuplicateSkippedByReceipt(cur realm, t *testing.T) {
 	app := store.ports[portKey(portId)].(*mockApp)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("intent"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{Packets: []types.Packet{packet}})
-	IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{Packets: []types.Packet{packet}})
+	IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{Packets: []types.Packet{packet}, MarketMakerMessages: [][]byte{nil}})
+	IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{Packets: []types.Packet{packet}, MarketMakerMessages: [][]byte{nil}})
 
 	if len(app.intentPackets) != 1 {
 		t.Fatalf("duplicate intent recv must not call app again: got %d calls", len(app.intentPackets))
@@ -1826,7 +1873,7 @@ func TestPacketAcknowledgementRoundtrip(cur realm, t *testing.T) {
 		Version:               "ics20-1",
 	}, portId)
 
-	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})
+	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{nil}})
 	PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{
 		Packets:          []types.Packet{packet},
 		Acknowledgements: [][]byte{{0x01}},

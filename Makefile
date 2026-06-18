@@ -98,6 +98,8 @@ COVERAGE_DIR := coverage
 # First-party gno packages. Third-party mirrors under gno.land/p/{aib,gnoswap,nt,onbloc}
 # and gno.land/r/aib are dependency inputs only, so local and CI tests skip them.
 USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/onbloc gno.land/r/onbloc -name gnomod.toml | sort))
+TEST_GNO_PKGS := $(if $(PKG),$(addprefix ./,$(patsubst ./%,%,$(PKG))),$(USER_GNO_PKGS))
+GNO_TEST_FLAGS := -v$(if $(RUN), -run "$(RUN)")
 
 help:
 	@echo "Targets:"
@@ -106,6 +108,8 @@ help:
 	@echo "  vendor                — mirror sparse third_party package sub-paths into gno.land/"
 	@echo "  fmt                   — gofumpt -w on uncommitted .go/.gno files (modified, staged, untracked)"
 	@echo "  test                  — verify-gno + vendor, then run first-party gno tests"
+	@echo "    PKG=<path>          — run only one or more packages/realms (for example, PKG=gno.land/r/onbloc/ibc/union/core)"
+	@echo "    RUN=<name>          — pass a test-name regex to gno test -run"
 	@echo "  test-cover            — same as test, plus -cover (needs gno PR #4241; override GNO_COMMIT)"
 	@echo "  test-smoke            — run only the env-prep smoke tests"
 	@echo "  test-gnokey-query-smoke — run the full gnokey smoke suite"
@@ -180,9 +184,9 @@ fmt:
 	echo "ok: formatted $$(echo "$$files" | wc -l | tr -d ' ') file(s)"
 
 test: verify-gno vendor
-	@for pkg in $(USER_GNO_PKGS); do \
-		echo "==> gno test -v $$pkg"; \
-		gno test -v "$$pkg" || exit $$?; \
+	@for pkg in $(TEST_GNO_PKGS); do \
+		echo "==> gno test $(GNO_TEST_FLAGS) $$pkg"; \
+		gno test $(GNO_TEST_FLAGS) "$$pkg" || exit $$?; \
 	done
 
 test-smoke: verify-gno

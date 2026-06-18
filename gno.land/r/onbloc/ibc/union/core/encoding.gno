@@ -47,6 +47,14 @@ func packetAcknowledgementPath(packet types.Packet) types.H256 {
 	return h
 }
 
+func packetTimeoutPath(packet types.Packet) types.H256 {
+	h, err := types.PacketTimeoutPath(packet)
+	if err != nil {
+		panic(err)
+	}
+	return h
+}
+
 func channelValue(channel types.Channel) types.H256 {
 	bz, err := channel.EncodeABI()
 	if err != nil {

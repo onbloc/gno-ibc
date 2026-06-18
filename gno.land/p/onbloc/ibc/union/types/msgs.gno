@@ -56,6 +56,60 @@ func NewMsgPacketTimeout(packet Packet, proof []byte, proofHeight uint64) MsgPac
 	}
 }
 
+// MsgCommitMembershipProof verifies and commits a membership proof for later
+// counterparty proof-lens reads.
+type MsgCommitMembershipProof struct {
+	ClientId    ClientId
+	ProofHeight uint64
+	Proof       []byte
+	Path        []byte
+	Value       []byte
+}
+
+func NewMsgCommitMembershipProof(clientId ClientId, proofHeight uint64, proof, path, value []byte) MsgCommitMembershipProof {
+	return MsgCommitMembershipProof{
+		ClientId:    clientId,
+		ProofHeight: proofHeight,
+		Proof:       proof,
+		Path:        path,
+		Value:       value,
+	}
+}
+
+// MsgCommitNonMembershipProof verifies and commits a non-membership proof for
+// later counterparty proof-lens reads.
+type MsgCommitNonMembershipProof struct {
+	ClientId    ClientId
+	ProofHeight uint64
+	Proof       []byte
+	Path        []byte
+}
+
+func NewMsgCommitNonMembershipProof(clientId ClientId, proofHeight uint64, proof, path []byte) MsgCommitNonMembershipProof {
+	return MsgCommitNonMembershipProof{
+		ClientId:    clientId,
+		ProofHeight: proofHeight,
+		Proof:       proof,
+		Path:        path,
+	}
+}
+
+// MsgCommitPacketTimeout commits a packet-timeout commitment after proving the
+// packet exists on the counterparty source chain and has timed out locally.
+type MsgCommitPacketTimeout struct {
+	Packet      Packet
+	ProofHeight uint64
+	Proof       []byte
+}
+
+func NewMsgCommitPacketTimeout(packet Packet, proofHeight uint64, proof []byte) MsgCommitPacketTimeout {
+	return MsgCommitPacketTimeout{
+		Packet:      packet,
+		ProofHeight: proofHeight,
+		Proof:       proof,
+	}
+}
+
 // MsgIntentPacketRecv lets a market maker fill packets ahead of proof, carrying
 // per-packet market-maker messages instead of a membership proof.
 type MsgIntentPacketRecv struct {

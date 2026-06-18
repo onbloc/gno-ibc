@@ -1060,7 +1060,7 @@ func TestPacketRecvSyncEmptyAckRejected(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusSuccess, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusSuccess, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.AbortsContains(t, cur, "sync ack cannot be empty", func(cur realm) {
@@ -1074,7 +1074,7 @@ func TestPacketRecvAsyncDefersAck(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusAsync, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	uassert.NotAborts(t, cur, func(cur realm) {
@@ -1093,7 +1093,7 @@ func TestWriteAcknowledgementCommitsAsyncAck(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusAsync, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})
@@ -1111,7 +1111,7 @@ func TestWriteAcknowledgementRejectsNonOwner(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusAsync, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})
@@ -1129,7 +1129,7 @@ func TestWriteAcknowledgementRejectsAddressAsPortId(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	app.recvResult = NewRecvPacketResult(cur, types.PacketStatusAsync, nil)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("transfer"), TimeoutTimestamp: testFutureTimeoutNanos}
 
 	PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}})

@@ -27,6 +27,10 @@ type Store struct {
 	channelSeq        seqid.ID
 	channelClientByID *bptree.BPTree // channelKey(ChannelId) → ClientId
 
+	membershipProofs    map[types.H256]types.H256
+	nonMembershipProofs map[types.H256]types.H256
+	packetTimeouts      map[types.H256]types.H256
+
 	ports map[string]app.IApp
 }
 
@@ -56,6 +60,9 @@ func newStore() *Store {
 		clientByID:           bptree.NewBPTree32(),
 		connectionClientByID: bptree.NewBPTree32(),
 		channelClientByID:    bptree.NewBPTree32(),
+		membershipProofs:     make(map[types.H256]types.H256),
+		nonMembershipProofs:  make(map[types.H256]types.H256),
+		packetTimeouts:       make(map[types.H256]types.H256),
 		ports:                make(map[string]app.IApp),
 	}
 }
@@ -234,6 +241,49 @@ func (c *client) deletePacketReceipt(packet types.Packet) {
 	path := packetAcknowledgementPath(packet)
 	delete(c.batchReceipts, path)
 	setChainParam(h256ChainParamKey(path), zero[:])
+}
+
+// --- Committed proofs and timeout commitments (global paths) ---
+
+func (s *Store) saveMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte, value types.H256) {
+	key := types.MembershipProofPath(clientId, proofHeight, path)
+	s.membershipProofs[key] = value
+	setChainParam(h256ChainParamKey(key), value[:])
+}
+
+func (s *Store) getMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) (types.H256, bool) {
+	v, found := s.membershipProofs[types.MembershipProofPath(clientId, proofHeight, path)]
+	if !found {
+		var zero types.H256
+		return zero, false
+	}
+	return v, true
+}
+
+func (s *Store) saveNonMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte, value types.H256) {
+	key := types.NonMembershipProofPath(clientId, proofHeight, path)
+	s.nonMembershipProofs[key] = value
+	setChainParam(h256ChainParamKey(key), value[:])
+}
+
+func (s *Store) hasNonMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) bool {
+	v, found := s.nonMembershipProofs[types.NonMembershipProofPath(clientId, proofHeight, path)]
+	return found && v == types.NON_MEMBERSHIP_COMMITMENT_VALUE
+}
+
+func (s *Store) savePacketTimeout(packet types.Packet, value types.H256) {
+	key := packetTimeoutPath(packet)
+	s.packetTimeouts[key] = value
+	setChainParam(h256ChainParamKey(key), value[:])
+}
+
+func (s *Store) getPacketTimeout(packet types.Packet) (types.H256, bool) {
+	v, found := s.packetTimeouts[packetTimeoutPath(packet)]
+	if !found {
+		var zero types.H256
+		return zero, false
+	}
+	return v, true
 }
 
 // --- ID sequences ---

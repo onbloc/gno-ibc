@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"strings"
 	"testing"
 
 	types "gno.land/p/onbloc/ibc/union/types"
@@ -9,52 +10,75 @@ import (
 	"gno.land/p/nt/uassert/v0"
 )
 
-func TestPredictWrappedTokenV1Deterministic(t *testing.T) {
-	a := PredictWrappedTokenV1(u256.Zero(), 1, []byte("uatom"))
-	b := PredictWrappedTokenV1(u256.Zero(), 1, []byte("uatom"))
-	uassert.Equal(t, a, b)
-	uassert.Equal(t, ibcDenomPrefix, a[:len(ibcDenomPrefix)])
+// PredictWrappedTokenV1 is a pure keccak derivation: deterministic, ibc-prefixed,
+// and distinct for any change of path, channel, or base token. A nil path must
+// normalise to zero so callers cannot derive two denoms for the same order.
+func TestPredictWrappedTokenV1(t *testing.T) {
+	ref := PredictWrappedTokenV1(u256.Zero(), 1, []byte("uatom"))
+
+	uassert.True(t, strings.HasPrefix(ref, ibcDenomPrefix))
+	uassert.Equal(t, ref, PredictWrappedTokenV1(u256.Zero(), 1, []byte("uatom")))
+	uassert.Equal(t, ref, PredictWrappedTokenV1(nil, 1, []byte("uatom"))) // nil path == zero path
+
+	cases := []struct {
+		name  string
+		denom string
+	}{
+		{"different path", PredictWrappedTokenV1(u256.NewUint(1), 1, []byte("uatom"))},
+		{"different channel", PredictWrappedTokenV1(u256.Zero(), 2, []byte("uatom"))},
+		{"different base token", PredictWrappedTokenV1(u256.Zero(), 1, []byte("uosmo"))},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.NotEqual(t, ref, tc.denom)
+		})
+	}
 }
 
-func TestPredictWrappedTokenV1DiffersByChannel(t *testing.T) {
-	a := PredictWrappedTokenV1(u256.Zero(), 1, []byte("uatom"))
-	b := PredictWrappedTokenV1(u256.Zero(), 2, []byte("uatom"))
-	uassert.True(t, a != b)
+// PredictWrappedTokenV2 additionally binds the metadata image and must differ
+// from the V1 derivation for the same order.
+func TestPredictWrappedTokenV2(t *testing.T) {
+	ref := PredictWrappedTokenV2(u256.Zero(), 1, []byte("uatom"), [32]byte{})
+
+	uassert.True(t, strings.HasPrefix(ref, ibcDenomPrefix))
+	uassert.Equal(t, ref, PredictWrappedTokenV2(nil, 1, []byte("uatom"), [32]byte{}))
+	uassert.NotEqual(t, ref, PredictWrappedTokenV1(u256.Zero(), 1, []byte("uatom")))
+
+	cases := []struct {
+		name  string
+		denom string
+	}{
+		{"different image", PredictWrappedTokenV2(u256.Zero(), 1, []byte("uatom"), [32]byte{0x01})},
+		{"different path", PredictWrappedTokenV2(u256.NewUint(1), 1, []byte("uatom"), [32]byte{})},
+		{"different channel", PredictWrappedTokenV2(u256.Zero(), 2, []byte("uatom"), [32]byte{})},
+		{"different base token", PredictWrappedTokenV2(u256.Zero(), 1, []byte("uosmo"), [32]byte{})},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.NotEqual(t, ref, tc.denom)
+		})
+	}
 }
 
-func TestPredictWrappedTokenV1DiffersByBaseToken(t *testing.T) {
-	a := PredictWrappedTokenV1(u256.Zero(), 1, []byte("uatom"))
-	b := PredictWrappedTokenV1(u256.Zero(), 1, []byte("uosmo"))
-	uassert.True(t, a != b)
-}
+// PredictCallProxyAccount derives the synthetic zkgm1 account from (path,
+// channel, sender); a change in any component yields a distinct account.
+func TestPredictCallProxyAccount(t *testing.T) {
+	ref := PredictCallProxyAccount(u256.NewUint(9), types.ChannelId(8), []byte("sender"))
 
-func TestPredictWrappedTokenV2DiffersByImage(t *testing.T) {
-	a := PredictWrappedTokenV2(u256.Zero(), 1, []byte("uatom"), [32]byte{})
-	b := PredictWrappedTokenV2(u256.Zero(), 1, []byte("uatom"), [32]byte{0x01})
-	uassert.True(t, a != b)
-}
+	uassert.True(t, strings.HasPrefix(ref, "zkgm1"))
+	uassert.Equal(t, ref, PredictCallProxyAccount(u256.NewUint(9), types.ChannelId(8), []byte("sender")))
 
-func TestPredictWrappedTokenV1AndV2Differ(t *testing.T) {
-	v1 := PredictWrappedTokenV1(u256.Zero(), 1, []byte("uatom"))
-	v2 := PredictWrappedTokenV2(u256.Zero(), 1, []byte("uatom"), [32]byte{})
-	uassert.True(t, v1 != v2)
-}
-
-func TestPredictCallProxyAccountDeterministic(t *testing.T) {
-	a := PredictCallProxyAccount(u256.NewUint(9), types.ChannelId(8), []byte("sender"))
-	b := PredictCallProxyAccount(u256.NewUint(9), types.ChannelId(8), []byte("sender"))
-	uassert.Equal(t, a, b)
-	uassert.Equal(t, "zkgm1", a[:5])
-}
-
-func TestPredictCallProxyAccountDiffersBySender(t *testing.T) {
-	a := PredictCallProxyAccount(u256.NewUint(9), types.ChannelId(8), []byte("sender-a"))
-	b := PredictCallProxyAccount(u256.NewUint(9), types.ChannelId(8), []byte("sender-b"))
-	uassert.True(t, a != b)
-}
-
-func TestPredictCallProxyAccountDiffersByChannel(t *testing.T) {
-	a := PredictCallProxyAccount(u256.NewUint(9), types.ChannelId(8), []byte("sender"))
-	b := PredictCallProxyAccount(u256.NewUint(9), types.ChannelId(7), []byte("sender"))
-	uassert.True(t, a != b)
+	cases := []struct {
+		name string
+		acct string
+	}{
+		{"different path", PredictCallProxyAccount(u256.NewUint(10), types.ChannelId(8), []byte("sender"))},
+		{"different channel", PredictCallProxyAccount(u256.NewUint(9), types.ChannelId(7), []byte("sender"))},
+		{"different sender", PredictCallProxyAccount(u256.NewUint(9), types.ChannelId(8), []byte("sender-b"))},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.NotEqual(t, ref, tc.acct)
+		})
+	}
 }

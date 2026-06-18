@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"errors"
 	"math"
 	"testing"
 
@@ -139,11 +140,53 @@ func TestRecvTokenOrderSolveReturnsFailureAck(cur realm, t *testing.T) {
 	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
 }
 
-func TestDecodeOrderInstructionRejectsV1(t *testing.T) {
-	_, err := decodeOrderInstruction(z.Instruction{
-		Version: z.INSTR_VERSION_1,
-		Opcode:  z.OP_TOKEN_ORDER,
-		Operand: []byte("anything"),
-	})
-	uassert.ErrorContains(t, err, "unsupported token order version")
+// Each decode* helper accepts exactly one instruction version and rejects all
+// others with a version-specific error, before any operand decoding.
+func TestDecodeInstructionVersionGate(t *testing.T) {
+	cases := []struct {
+		name    string
+		version uint8
+		decode  func(z.Instruction) error
+		wantErr string
+	}{
+		{"order rejects v0", z.INSTR_VERSION_0, func(i z.Instruction) error { _, e := decodeOrderInstruction(i); return e }, "unsupported token order version"},
+		{"order rejects v1", z.INSTR_VERSION_1, func(i z.Instruction) error { _, e := decodeOrderInstruction(i); return e }, "unsupported token order version"},
+		{"call rejects v1", z.INSTR_VERSION_1, func(i z.Instruction) error { _, e := decodeCallInstruction(i); return e }, "unsupported call version"},
+		{"call rejects v2", z.INSTR_VERSION_2, func(i z.Instruction) error { _, e := decodeCallInstruction(i); return e }, "unsupported call version"},
+		{"batch rejects v1", z.INSTR_VERSION_1, func(i z.Instruction) error { _, e := decodeBatchInstruction(i); return e }, "unsupported batch version"},
+		{"batch rejects v2", z.INSTR_VERSION_2, func(i z.Instruction) error { _, e := decodeBatchInstruction(i); return e }, "unsupported batch version"},
+		{"forward rejects v1", z.INSTR_VERSION_1, func(i z.Instruction) error { _, e := decodeForwardInstruction(i); return e }, "unsupported forward version"},
+		{"forward rejects v2", z.INSTR_VERSION_2, func(i z.Instruction) error { _, e := decodeForwardInstruction(i); return e }, "unsupported forward version"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.decode(z.Instruction{Version: tc.version, Operand: []byte("anything")})
+			uassert.ErrorContains(t, err, tc.wantErr)
+		})
+	}
+}
+
+// tokenOrderDestinationChannel rejects the zero-channel sentinel and passes any
+// non-zero channel through unchanged.
+func TestTokenOrderDestinationChannel(t *testing.T) {
+	_, err := tokenOrderDestinationChannel(types.ChannelId(0))
+	uassert.ErrorContains(t, err, "invalid token order destination channel")
+
+	raw, err := tokenOrderDestinationChannel(types.ChannelId(7))
+	uassert.NoError(t, err)
+	uassert.Equal(t, uint32(7), raw)
+}
+
+// isOnlyMakerAck matches only the exact only-maker sentinel.
+func TestIsOnlyMakerAck(t *testing.T) {
+	uassert.True(t, isOnlyMakerAck(z.ACK_ERR_ONLY_MAKER))
+	uassert.False(t, isOnlyMakerAck([]byte("other")))
+	uassert.False(t, isOnlyMakerAck(nil))
+}
+
+// extractPanicMessage renders string, error, and arbitrary recovered values.
+func TestExtractPanicMessage(t *testing.T) {
+	uassert.Equal(t, "boom", extractPanicMessage("boom"))
+	uassert.Equal(t, "wrapped", extractPanicMessage(errors.New("wrapped")))
+	uassert.Equal(t, "42", extractPanicMessage(42))
 }

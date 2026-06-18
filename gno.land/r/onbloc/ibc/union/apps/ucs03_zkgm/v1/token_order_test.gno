@@ -695,8 +695,6 @@ func TestAckConstantConstructorsReturnIndependentInstances(cur realm, t *testing
 	uassert.True(t, !d2.Eq(d1), "fillTypeMarketMaker: mutation propagated to second call")
 }
 
-// --- token-order-specific encode/assert helpers -----------------------------
-
 func assertProtocolAck(t *testing.T, ackBytes []byte) {
 	ack, err := z.DecodeAck(ackBytes)
 	uassert.NoError(t, err)

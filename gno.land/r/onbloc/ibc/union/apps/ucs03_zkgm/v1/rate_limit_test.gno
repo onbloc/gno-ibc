@@ -31,6 +31,20 @@ func TestRateLimitChargesAndExhausts(cur realm, t *testing.T) {
 	uassert.Error(t, v.rateLimit(cur, denom, u256.NewUint(60)))
 }
 
+func TestRateLimitExactCapacitySucceedsThenEmpty(cur realm, t *testing.T) {
+	v := newTestImpl()
+	denom := "ratelimit-exact"
+	bucket, err := tb.New(u256.NewUint(100), u256.Zero(), blockNow())
+	uassert.NoError(t, err)
+	zkgm.Store().SetTokenBucket(0, cur, denom, bucket)
+
+	// draining exactly the capacity is allowed; the bucket is then empty.
+	uassert.NoError(t, v.rateLimit(cur, denom, u256.NewUint(100)))
+	uassert.Error(t, v.rateLimit(cur, denom, u256.NewUint(1)))
+	// a zero charge against an empty bucket is still fine.
+	uassert.NoError(t, v.rateLimit(cur, denom, u256.Zero()))
+}
+
 func TestRateLimitDisabledBypassesBucket(cur realm, t *testing.T) {
 	v := newTestImpl()
 	denom := "ratelimit-disabled"

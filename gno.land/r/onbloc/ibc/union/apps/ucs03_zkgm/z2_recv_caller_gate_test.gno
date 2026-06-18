@@ -28,8 +28,6 @@ func setupGateImpl(cur realm) types.Packet {
 	return core.NewPacket(cross(cur), 1, 2, []byte("data"), 0)
 }
 
-// --- ephemeral (`maketx run`, PkgPath "") caller must be rejected ---
-
 func TestRecvGateRejectsEphemeralCaller(cur realm, t *testing.T) {
 	packet := setupGateImpl(cur)
 	testing.SetRealm(testing.NewUserRealm(address(testutils.TestAddress("eoa"))))
@@ -62,8 +60,6 @@ func TestTimeoutGateRejectsEphemeralCaller(cur realm, t *testing.T) {
 	})
 }
 
-// --- proxy realm caller must be rejected (no legitimate self-call path) ---
-
 func TestRecvGateRejectsProxyCaller(cur realm, t *testing.T) {
 	packet := setupGateImpl(cur)
 	testing.SetRealm(testing.NewCodeRealm(proxyPkgPath))
@@ -87,8 +83,6 @@ func TestTimeoutGateRejectsProxyCaller(cur realm, t *testing.T) {
 		AsIBCApp().OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
 	})
 }
-
-// --- core caller passes the gate (positive control) ---
 
 func TestRecvGateAllowsCoreCaller(cur realm, t *testing.T) {
 	packet := setupGateImpl(cur)

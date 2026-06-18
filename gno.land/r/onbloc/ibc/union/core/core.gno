@@ -42,6 +42,8 @@ func SendPacket(cur realm, sourceChannelId types.ChannelId, timeoutTimestamp typ
 }
 
 func PacketRecv(cur realm, msg types.MsgPacketRecv) {
+	requireAdmin(cur, "packet recv")
+
 	relayer := cur.Previous().Address()
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
@@ -79,6 +81,8 @@ func PacketRecv(cur realm, msg types.MsgPacketRecv) {
 }
 
 func IntentPacketRecv(cur realm, msg types.MsgIntentPacketRecv) {
+	requireAdmin(cur, "intent packet recv")
+
 	marketMaker := cur.Previous().Address()
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
@@ -118,6 +122,8 @@ func IntentPacketRecv(cur realm, msg types.MsgIntentPacketRecv) {
 }
 
 func PacketAcknowledgement(cur realm, msg types.MsgPacketAcknowledgement) {
+	requireAdmin(cur, "packet acknowledgement")
+
 	relayer := cur.Previous().Address()
 	if len(msg.Packets) == 0 {
 		panic(ErrNotEnoughPackets)
@@ -160,6 +166,8 @@ func PacketAcknowledgement(cur realm, msg types.MsgPacketAcknowledgement) {
 }
 
 func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
+	requireAdmin(cur, "packet timeout")
+
 	relayer := cur.Previous().Address()
 	packet := msg.Packet
 
@@ -197,7 +205,9 @@ func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
 	emitPacketTimeoutEvent(packet, channel, connection)
 }
 
-func BatchSend(cur realm, msg types.MsgBatchSend) types.H256 {
+func BatchSend(cur realm, msg types.MsgBatchSend) {
+	requireAdmin(cur, "batch send")
+
 	if len(msg.Packets) < 2 {
 		panic(ErrNotEnoughPackets)
 	}
@@ -223,11 +233,11 @@ func BatchSend(cur realm, msg types.MsgBatchSend) types.H256 {
 	}
 
 	c.saveBatchPackets(batchHash, types.COMMITMENT_MAGIC)
-
-	return batchHash
 }
 
-func BatchAcks(cur realm, msg types.MsgBatchAcks) types.H256 {
+func BatchAcks(cur realm, msg types.MsgBatchAcks) {
+	requireAdmin(cur, "batch acks")
+
 	if len(msg.Packets) < 2 {
 		panic(ErrNotEnoughPackets)
 	}
@@ -265,8 +275,6 @@ func BatchAcks(cur realm, msg types.MsgBatchAcks) types.H256 {
 	}
 
 	c.saveBatchReceipts(batchHash, types.CommitAcks(msg.Acks))
-
-	return batchHash
 }
 
 // WriteAcknowledgement commits an acknowledgement for a previously received

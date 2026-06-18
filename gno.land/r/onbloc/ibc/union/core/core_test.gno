@@ -19,6 +19,7 @@ const (
 
 func resetStore() {
 	store = newStore()
+	admin = packageAddress
 }
 
 func mustPanic(t *testing.T, fn func()) {
@@ -706,7 +707,7 @@ func TestSendPacketRejectsAddressAsPortId(cur realm, t *testing.T) {
 	})
 }
 
-func TestBatchSendReturnsUnionPacketCommitment(cur realm, t *testing.T) {
+func TestBatchSendWritesUnionPacketCommitment(cur realm, t *testing.T) {
 	resetStore()
 	_, _, channelId := setupOpenChannel(t)
 	p1 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100}
@@ -714,11 +715,8 @@ func TestBatchSendReturnsUnionPacketCommitment(cur realm, t *testing.T) {
 	store.commitPacket(p1)
 	store.commitPacket(p2)
 
-	got := BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
 	want := types.MustCommit(types.CommitPackets([]types.Packet{p1, p2}))
-	if got != want {
-		t.Fatal("BatchSend must return Union packet batch commitment")
-	}
+	BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
 	if got := QueryBatchPackets(channelId, want); got != types.COMMITMENT_MAGIC.String() {
 		t.Errorf("GetBatchPackets: got %s want %s", got, types.COMMITMENT_MAGIC)
 	}
@@ -773,7 +771,8 @@ func TestQueryCommitmentAtPathReturnsBatchValue(cur realm, t *testing.T) {
 	store.commitPacket(p1)
 	store.commitPacket(p2)
 
-	batchHash := BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
+	batchHash := types.MustCommit(types.CommitPackets([]types.Packet{p1, p2}))
+	BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
 
 	if got := QueryCommitmentAtPath(channelId, types.BatchPacketsPath(batchHash)); got != types.COMMITMENT_MAGIC.String() {
 		t.Errorf("QueryCommitmentAtPath(batch path): got %s want %s", got, types.COMMITMENT_MAGIC)
@@ -884,7 +883,7 @@ func TestUnionBatchSendPacketNotSent(cur realm, t *testing.T) {
 	})
 }
 
-func TestBatchAcksReturnsUnionPacketCommitment(cur realm, t *testing.T) {
+func TestBatchAcksWritesUnionPacketCommitment(cur realm, t *testing.T) {
 	resetStore()
 	_, _, channelId := setupOpenChannel(t)
 	p1 := types.Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: types.Bytes("a"), TimeoutTimestamp: 100}
@@ -892,14 +891,11 @@ func TestBatchAcksReturnsUnionPacketCommitment(cur realm, t *testing.T) {
 	store.commitAcknowledgement(p1, []byte("ack-a"))
 	store.commitAcknowledgement(p2, []byte("ack-b"))
 
-	got := BatchAcks(cross(cur), types.MsgBatchAcks{
+	want := types.MustCommit(types.CommitPackets([]types.Packet{p1, p2}))
+	BatchAcks(cross(cur), types.MsgBatchAcks{
 		Packets: []types.Packet{p1, p2},
 		Acks:    [][]byte{[]byte("ack-a"), []byte("ack-b")},
 	})
-	want := types.MustCommit(types.CommitPackets([]types.Packet{p1, p2}))
-	if got != want {
-		t.Fatal("BatchAcks must return Union packet batch commitment")
-	}
 	wantAck := types.CommitAcks([][]byte{[]byte("ack-a"), []byte("ack-b")})
 	if got := QueryBatchReceipts(channelId, want); got != wantAck.String() {
 		t.Errorf("GetBatchReceipts: got %s want %s", got, wantAck)
@@ -930,7 +926,8 @@ func TestQueryReceiptAtPathReturnsBatchValue(cur realm, t *testing.T) {
 	store.commitAcknowledgement(p1, []byte("ack-a"))
 	store.commitAcknowledgement(p2, []byte("ack-b"))
 
-	batchHash := BatchAcks(cross(cur), types.MsgBatchAcks{
+	batchHash := types.MustCommit(types.CommitPackets([]types.Packet{p1, p2}))
+	BatchAcks(cross(cur), types.MsgBatchAcks{
 		Packets: []types.Packet{p1, p2},
 		Acks:    [][]byte{[]byte("ack-a"), []byte("ack-b")},
 	})
@@ -958,7 +955,8 @@ func TestBatchAcksAllowsAckCountMismatchLikeUnion(cur realm, t *testing.T) {
 	store.commitAcknowledgement(p1, []byte("ack-a"))
 	store.commitAcknowledgement(p2, []byte("ack-b"))
 
-	batchHash := BatchAcks(cross(cur), types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: [][]byte{[]byte("ack-a")}})
+	batchHash := types.MustCommit(types.CommitPackets([]types.Packet{p1, p2}))
+	BatchAcks(cross(cur), types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: [][]byte{[]byte("ack-a")}})
 	want := types.CommitAcks([][]byte{[]byte("ack-a")})
 	if got := QueryReceiptAtPath(channelId, types.BatchReceiptsPath(batchHash)); got != want.String() {
 		t.Errorf("QueryReceiptAtPath(batch path): got %s want %s", got, want)
@@ -1068,6 +1066,32 @@ func TestUnionBatchAcksTamperedPacket(cur realm, t *testing.T) {
 			Packets: []types.Packet{tampered1, tampered2},
 			Acks:    [][]byte{{1}, {1}},
 		})
+	})
+}
+
+func TestRestrictedPacketEntrypointsRejectNonAdmin(cur realm, t *testing.T) {
+	resetStore()
+	oldAdmin := admin
+	admin = testutils.TestAddress("non-admin-sentinel")
+	defer func() { admin = oldAdmin }()
+
+	uassert.AbortsContains(t, cur, "caller not authorized to packet recv", func(cur realm) {
+		PacketRecv(cross(cur), types.MsgPacketRecv{})
+	})
+	uassert.AbortsContains(t, cur, "caller not authorized to intent packet recv", func(cur realm) {
+		IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{})
+	})
+	uassert.AbortsContains(t, cur, "caller not authorized to packet acknowledgement", func(cur realm) {
+		PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{})
+	})
+	uassert.AbortsContains(t, cur, "caller not authorized to packet timeout", func(cur realm) {
+		PacketTimeout(cross(cur), types.MsgPacketTimeout{})
+	})
+	uassert.AbortsContains(t, cur, "caller not authorized to batch send", func(cur realm) {
+		BatchSend(cross(cur), types.MsgBatchSend{})
+	})
+	uassert.AbortsContains(t, cur, "caller not authorized to batch acks", func(cur realm) {
+		BatchAcks(cross(cur), types.MsgBatchAcks{})
 	})
 }
 
@@ -1978,7 +2002,8 @@ func TestPacketAcknowledgementPreservesBatchCommitment(cur realm, t *testing.T) 
 	store.commitPacket(p1)
 	store.commitPacket(p2)
 
-	batchHash := BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
+	batchHash := types.MustCommit(types.CommitPackets([]types.Packet{p1, p2}))
+	BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
 	if got := QueryBatchPackets(channelId, batchHash); got != types.COMMITMENT_MAGIC.String() {
 		t.Fatalf("batch commitment before ack: got %q want %s", got, types.COMMITMENT_MAGIC)
 	}

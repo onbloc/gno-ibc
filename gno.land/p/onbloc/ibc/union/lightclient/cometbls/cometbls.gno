@@ -130,6 +130,11 @@ func (c *CometblsLightClient) VerifyHeader(caller address, header []byte, relaye
 		return types.StateUpdate{}, err
 	}
 
+	height := tmHeader.GetHeight()
+	if _, found := c.getConsensusState(height); found {
+		return types.StateUpdate{Height: height.RevisionHeight}, nil
+	}
+
 	if err := c.verifyHeader(tmHeader, time.Now()); err != nil {
 		return types.StateUpdate{}, err
 	}

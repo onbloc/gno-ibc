@@ -56,6 +56,10 @@ func (h *Header) ValidateBasic() error {
 	if h.SignedHeader == nil {
 		return makeError(ErrInvalidHeader, "signed header cannot be nil")
 	}
+	
+	if len(h.ZeroKnowledgeProof) == 0 {
+		return makeError(ErrInvalidHeader, "zero-knowledge proof cannot be empty")
+	}
 
 	// TrustedHeight is less than Header for updates and misbehaviour
 	if h.TrustedHeight.GTE(h.GetHeight()) {

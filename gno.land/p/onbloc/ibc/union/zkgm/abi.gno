@@ -6,100 +6,107 @@ import (
 )
 
 var InstructionSchema = abi.Schema{Fields: []abi.Field{
-	{Type: abi.TypeUint8},
-	{Type: abi.TypeUint8},
-	{Type: abi.TypeBytes},
+	{Type: abi.TypeUint8}, // version
+	{Type: abi.TypeUint8}, // opcode
+	{Type: abi.TypeBytes}, // operand
 }}
 
 var CallSchema = abi.Schema{Fields: []abi.Field{
-	{Type: abi.TypeBytes},
-	{Type: abi.TypeBool},
-	{Type: abi.TypeBytes},
-	{Type: abi.TypeBytes},
+	{Type: abi.TypeBytes}, // sender
+	{Type: abi.TypeBool},  // eureka
+	{Type: abi.TypeBytes}, // contract_address / contractAddress
+	{Type: abi.TypeBytes}, // contract_calldata / contractCalldata
 }}
 
 var ZkgmPacketSchema = abi.Schema{Fields: []abi.Field{
-	{Type: abi.TypeBytes32},
-	{Type: abi.TypeUint256},
-	{Type: abi.TypeStruct, Sub: &InstructionSchema},
+	{Type: abi.TypeBytes32},                         // salt
+	{Type: abi.TypeUint256},                         // path
+	{Type: abi.TypeStruct, Sub: &InstructionSchema}, // instruction
 }}
 
 var ForwardSchema = abi.Schema{Fields: []abi.Field{
-	{Type: abi.TypeUint256},
-	{Type: abi.TypeUint64},
-	{Type: abi.TypeUint64},
-	{Type: abi.TypeStruct, Sub: &InstructionSchema},
+	{Type: abi.TypeUint256},                         // path
+	{Type: abi.TypeUint64},                          // timeout_height / timeoutHeight
+	{Type: abi.TypeUint64},                          // timeout_timestamp / timeoutTimestamp
+	{Type: abi.TypeStruct, Sub: &InstructionSchema}, // instruction
 }}
 
 var BatchSchema = abi.Schema{Fields: []abi.Field{
-	{Type: abi.TypeArray, Elem: &abi.Field{Type: abi.TypeStruct, Sub: &InstructionSchema}},
+	{Type: abi.TypeArray, Elem: &abi.Field{Type: abi.TypeStruct, Sub: &InstructionSchema}}, // instructions
 }}
 
 var TokenOrderV2Schema = abi.Schema{Fields: []abi.Field{
-	{Type: abi.TypeBytes},
-	{Type: abi.TypeBytes},
-	{Type: abi.TypeBytes},
-	{Type: abi.TypeUint256},
-	{Type: abi.TypeBytes},
-	{Type: abi.TypeUint256},
-	{Type: abi.TypeUint8},
-	{Type: abi.TypeBytes},
+	{Type: abi.TypeBytes},   // sender
+	{Type: abi.TypeBytes},   // receiver
+	{Type: abi.TypeBytes},   // base_token / baseToken
+	{Type: abi.TypeUint256}, // base_amount / baseAmount
+	{Type: abi.TypeBytes},   // quote_token / quoteToken
+	{Type: abi.TypeUint256}, // quote_amount / quoteAmount
+	{Type: abi.TypeUint8},   // kind
+	{Type: abi.TypeBytes},   // metadata
 }}
 
 var TokenOrderV1Schema = abi.Schema{Fields: []abi.Field{
-	{Type: abi.TypeBytes},
-	{Type: abi.TypeBytes},
-	{Type: abi.TypeBytes},
-	{Type: abi.TypeUint256},
-	{Type: abi.TypeString},
-	{Type: abi.TypeString},
-	{Type: abi.TypeUint8},
-	{Type: abi.TypeUint256},
-	{Type: abi.TypeBytes},
-	{Type: abi.TypeUint256},
+	{Type: abi.TypeBytes},   // sender
+	{Type: abi.TypeBytes},   // receiver
+	{Type: abi.TypeBytes},   // base_token / baseToken
+	{Type: abi.TypeUint256}, // base_amount / baseAmount
+	{Type: abi.TypeString},  // base_token_symbol / baseTokenSymbol
+	{Type: abi.TypeString},  // base_token_name / baseTokenName
+	{Type: abi.TypeUint8},   // base_token_decimals / baseTokenDecimals
+	{Type: abi.TypeUint256}, // base_token_path / baseTokenPath
+	{Type: abi.TypeBytes},   // quote_token / quoteToken
+	{Type: abi.TypeUint256}, // quote_amount / quoteAmount
 }}
 
 var AckSchema = abi.Schema{Fields: []abi.Field{
-	{Type: abi.TypeUint256},
-	{Type: abi.TypeBytes},
+	{Type: abi.TypeUint256}, // tag
+	{Type: abi.TypeBytes},   // inner_ack / innerAck
 }}
 
 var BatchAckSchema = abi.Schema{Fields: []abi.Field{
-	{Type: abi.TypeArray, Elem: &abi.Field{Type: abi.TypeBytes}},
+	{Type: abi.TypeArray, Elem: &abi.Field{Type: abi.TypeBytes}}, // acknowledgements
 }}
 
 var TokenOrderAckSchema = abi.Schema{Fields: []abi.Field{
-	{Type: abi.TypeUint256},
-	{Type: abi.TypeBytes},
+	{Type: abi.TypeUint256}, // fill_type / fillType
+	{Type: abi.TypeBytes},   // market_maker / marketMaker
 }}
 
 var TokenMetadataSchema = abi.Schema{Fields: []abi.Field{
-	{Type: abi.TypeBytes},
-	{Type: abi.TypeBytes},
+	{Type: abi.TypeBytes}, // implementation
+	{Type: abi.TypeBytes}, // initializer
 }}
 
+// TokenInitializerSchema is a local Gno helper for the grc20 initializer
+// payload stored inside TokenMetadata.initializer. It is not a Union ZKGM
+// top-level struct in com.rs or Types.sol.
 var TokenInitializerSchema = abi.Schema{Fields: []abi.Field{
-	{Type: abi.TypeString},
-	{Type: abi.TypeString},
-	{Type: abi.TypeUint8},
+	{Type: abi.TypeString}, // name
+	{Type: abi.TypeString}, // symbol
+	{Type: abi.TypeUint8},  // decimals
 }}
 
 var SolverMetadataSchema = abi.Schema{Fields: []abi.Field{
-	{Type: abi.TypeBytes},
-	{Type: abi.TypeBytes},
+	{Type: abi.TypeBytes}, // solverAddress / solver_address
+	{Type: abi.TypeBytes}, // metadata
 }}
 
+// PredictV1Schema mirrors abi.encode(path, channel, token) used by Union's
+// _predictWrappedToken helper.
 var PredictV1Schema = abi.Schema{Fields: []abi.Field{
-	{Type: abi.TypeUint256},
-	{Type: abi.TypeUint32},
-	{Type: abi.TypeBytes},
+	{Type: abi.TypeUint256}, // path
+	{Type: abi.TypeUint32},  // channel / channelId
+	{Type: abi.TypeBytes},   // token / baseToken
 }}
 
+// PredictV2Schema mirrors abi.encode(path, channel, token, metadataImage) used
+// by Union's _predictWrappedTokenFromMetadataImageV2 helper.
 var PredictV2Schema = abi.Schema{Fields: []abi.Field{
-	{Type: abi.TypeUint256},
-	{Type: abi.TypeUint32},
-	{Type: abi.TypeBytes},
-	{Type: abi.TypeUint256},
+	{Type: abi.TypeUint256}, // path
+	{Type: abi.TypeUint32},  // channel / channelId
+	{Type: abi.TypeBytes},   // token / baseToken
+	{Type: abi.TypeUint256}, // metadataImage
 }}
 
 func EncodeZkgmPacket(p ZkgmPacket) ([]byte, error) {

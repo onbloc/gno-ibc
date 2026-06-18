@@ -377,7 +377,8 @@ func openForwardTestChannel(cur realm, counterpartyChannelId types.ChannelId) ty
 	}
 
 	clientId := core.CreateClient(cross(cur), types.NewMsgCreateClient(clientType, nil, nil))
-	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	connectionId := core.NextConnectionId()
+	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 0))
 
 	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version))

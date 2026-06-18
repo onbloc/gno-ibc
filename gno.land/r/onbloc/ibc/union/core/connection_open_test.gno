@@ -24,7 +24,8 @@ func TestConnectionOpenTryVerifiesProof(cur realm, t *testing.T) {
 	client := &mockClient{status: types.StatusActive}
 	clientId := registerMockClient(client)
 
-	id := ConnectionOpenTry(cross(cur), types.NewMsgConnectionOpenTry(
+	id := types.ConnectionId(1)
+	ConnectionOpenTry(cross(cur), types.NewMsgConnectionOpenTry(
 		clientId,
 		types.ClientId(99),
 		types.ConnectionId(77),
@@ -56,7 +57,8 @@ func TestConnectionOpenInitSavesInitConnection(cur realm, t *testing.T) {
 
 	clientId := registerMockClient(&mockClient{status: types.StatusActive})
 
-	id := ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	id := types.ConnectionId(1)
+	ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 
 	conn, ok := store.getConnection(id)
 	if !ok {
@@ -141,7 +143,8 @@ func TestForceConnectionOpenTryBypassesProofVerification(cur realm, t *testing.T
 	client := &mockClient{status: types.StatusFrozen}
 	clientId := registerMockClient(client)
 
-	id := ForceConnectionOpenTry(cross(cur), types.NewMsgConnectionOpenTry(
+	id := types.ConnectionId(1)
+	ForceConnectionOpenTry(cross(cur), types.NewMsgConnectionOpenTry(
 		clientId,
 		types.ClientId(99),
 		types.ConnectionId(77),

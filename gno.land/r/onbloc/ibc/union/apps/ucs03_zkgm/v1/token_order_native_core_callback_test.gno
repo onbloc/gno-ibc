@@ -119,7 +119,8 @@ func openTimeoutChannelPair(cur realm) e2e.ChannelPair {
 		core.RegisterClient(cross(cur), timeoutMockClientType, &timeoutMockLightClient{})
 	}
 	clientId := core.CreateClient(cross(cur), types.NewMsgCreateClient(timeoutMockClientType, nil, nil))
-	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	connectionId := core.NextConnectionId()
+	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
 
 	portId := []byte(zkgm.ProxyPkgPath())

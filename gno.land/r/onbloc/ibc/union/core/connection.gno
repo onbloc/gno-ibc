@@ -10,7 +10,7 @@ func NewConnection(state types.ConnectionState, clientId, counterpartyClientId t
 	return types.Connection{State: state, ClientId: clientId, CounterpartyClientId: counterpartyClientId, CounterpartyConnectionId: counterpartyConnectionId}
 }
 
-func ConnectionOpenInit(cur realm, msg types.MsgConnectionOpenInit) types.ConnectionId {
+func ConnectionOpenInit(cur realm, msg types.MsgConnectionOpenInit) {
 	requireAdmin(cur, "ConnectionOpenInit")
 	runtime.AssertOriginCall()
 
@@ -18,22 +18,21 @@ func ConnectionOpenInit(cur realm, msg types.MsgConnectionOpenInit) types.Connec
 
 	store.saveConnection(connectionId, NewConnection(types.ConnectionStateInit, msg.ClientId, msg.CounterpartyClientId, 0))
 	emitConnectionOpenInitEvent(connectionId, msg.ClientId, msg.CounterpartyClientId)
-	return connectionId
 }
 
-func ConnectionOpenTry(cur realm, msg types.MsgConnectionOpenTry) types.ConnectionId {
+func ConnectionOpenTry(cur realm, msg types.MsgConnectionOpenTry) {
 	requireAdmin(cur, "ConnectionOpenTry")
 	runtime.AssertOriginCall()
-	return connectionOpenTry(msg, true)
+	connectionOpenTry(msg, true)
 }
 
-func ForceConnectionOpenTry(cur realm, msg types.MsgConnectionOpenTry) types.ConnectionId {
+func ForceConnectionOpenTry(cur realm, msg types.MsgConnectionOpenTry) {
 	requireAdmin(cur, "ForceConnectionOpenTry")
 	runtime.AssertOriginCall()
-	return connectionOpenTry(msg, false)
+	connectionOpenTry(msg, false)
 }
 
-func connectionOpenTry(msg types.MsgConnectionOpenTry, verify bool) types.ConnectionId {
+func connectionOpenTry(msg types.MsgConnectionOpenTry, verify bool) {
 	connectionId := store.nextConnectionId()
 
 	expectedConnection := NewConnection(types.ConnectionStateInit, msg.CounterpartyClientId, msg.ClientId, 0)
@@ -45,7 +44,6 @@ func connectionOpenTry(msg types.MsgConnectionOpenTry, verify bool) types.Connec
 
 	store.saveConnection(connectionId, NewConnection(types.ConnectionStateTryOpen, msg.ClientId, msg.CounterpartyClientId, msg.CounterpartyConnectionId))
 	emitConnectionOpenTryEvent(connectionId, msg.ClientId, msg.CounterpartyClientId, msg.CounterpartyConnectionId)
-	return connectionId
 }
 
 func ConnectionOpenAck(cur realm, msg types.MsgConnectionOpenAck) {
@@ -127,6 +125,10 @@ func QueryConnection(connectionId types.ConnectionId) string {
 		return ""
 	}
 	return hexString(bz)
+}
+
+func NextConnectionId() types.ConnectionId {
+	return types.ConnectionId(uint32(store.connectionSeq + 1))
 }
 
 func ensureConnectionOpen(connectionId types.ConnectionId) types.Connection {

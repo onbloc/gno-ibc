@@ -20,7 +20,8 @@ func main(cur realm) {
 }
 
 func openConnection(cur realm, clientId types.ClientId, proof []byte) types.ConnectionId {
-	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	connectionId := core.NextConnectionId()
+	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), proof, uint64(realcometbls.DevnetHeight-1)))
 	return connectionId
 }

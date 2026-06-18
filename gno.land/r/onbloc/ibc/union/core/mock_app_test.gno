@@ -16,10 +16,12 @@ type mockClient struct {
 	status    types.Status
 	timestamp types.Timestamp
 
-	verifyHeaderErr error
-	stateUpdate     types.StateUpdate
-	creationResult  types.ClientCreationResult
-	creationCalls   int
+	verifyHeaderErr            error
+	stateUpdate                types.StateUpdate
+	creationResult             types.ClientCreationResult
+	creationCalls              int
+	initialClientStateBytes    []byte
+	initialConsensusStateBytes []byte
 
 	// recorded calls
 	membershipHeights    []types.Height
@@ -94,6 +96,14 @@ func (m *mockClient) VerifyHeader(_ address, header []byte, _ address) (types.St
 func (m *mockClient) VerifyCreation(_ address, _ address) (types.ClientCreationResult, error) {
 	m.creationCalls++
 	return m.creationResult, nil
+}
+
+func (m *mockClient) InitialClientStateBytes() ([]byte, error) {
+	return m.initialClientStateBytes, nil
+}
+
+func (m *mockClient) InitialConsensusStateBytes() ([]byte, error) {
+	return m.initialConsensusStateBytes, nil
 }
 
 func (m *mockClient) Misbehaviour(_ address, _ []byte, _ address) (types.ClientState, error) {

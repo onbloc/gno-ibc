@@ -22,7 +22,10 @@ type CometblsLightClient struct {
 	consensusStateByHeight *bptree.BPTree // height:*ConsensusState
 }
 
-var _ lightclient.Interface = (*CometblsLightClient)(nil)
+var (
+	_ lightclient.Interface            = (*CometblsLightClient)(nil)
+	_ lightclient.InitialStateProvider = (*CometblsLightClient)(nil)
+)
 
 // NewCometblsLightClient builds a client from the client and consensus state.
 // The membership-key owner is taken from clientState.ContractAddress, so the
@@ -141,6 +144,18 @@ func (c *CometblsLightClient) VerifyCreation(caller address, relayer address) (t
 	// CometBLS performs no creation-time validation and writes nothing, so the
 	// result is empty (mirrors Union's verify_creation).
 	return types.ClientCreationResult{}, nil
+}
+
+func (c *CometblsLightClient) InitialClientStateBytes() ([]byte, error) {
+	return EncodeClientState(c.clientState)
+}
+
+func (c *CometblsLightClient) InitialConsensusStateBytes() ([]byte, error) {
+	consState, found := c.getConsensusState(c.clientState.LatestHeight)
+	if !found {
+		return nil, nil
+	}
+	return EncodeConsensusState(consState)
 }
 
 func (c *CometblsLightClient) Misbehaviour(caller address, misbehaviour []byte, relayer address) (types.ClientState, error) {

@@ -41,3 +41,10 @@ type Interface interface {
 
 	Misbehaviour(caller address, misbehaviour []byte, relayer address) (types.ClientState, error)
 }
+
+// InitialStateProvider is an optional extension for object-based light clients
+// that can expose the initial bytes core would receive in Union's MsgCreateClient.
+type InitialStateProvider interface {
+	InitialClientStateBytes() ([]byte, error)
+	InitialConsensusStateBytes() ([]byte, error)
+}

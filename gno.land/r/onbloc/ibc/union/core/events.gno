@@ -13,6 +13,7 @@ const (
 	CreateClientEvent          = "CreateClient"
 	CreateLensClientEvent      = "CreateLensClient"
 	UpdateClientEvent          = "UpdateClient"
+	ForceUpdateClientEvent     = "ForceUpdateClient"
 	ConnectionOpenInitEvent    = "ConnectionOpenInit"
 	ConnectionOpenTryEvent     = "ConnectionOpenTry"
 	ConnectionOpenAckEvent     = "ConnectionOpenAck"

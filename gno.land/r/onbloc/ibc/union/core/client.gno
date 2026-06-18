@@ -12,6 +12,32 @@ func NewConsensusStateUpdate(height types.Height, consensusStateBytes, clientSta
 	return types.ConsensusStateUpdate{Height: height, ConsensusStateBytes: consensusStateBytes, ClientStateBytes: clientStateBytes}
 }
 
+func mirrorInitialClientState(c *client, lc lightclient.Interface) types.Height {
+	height := types.NewHeight(lc.GetLatestHeight())
+	provider, ok := lc.(lightclient.InitialStateProvider)
+	if !ok {
+		return height
+	}
+
+	clientStateBytes, err := provider.InitialClientStateBytes()
+	if err != nil {
+		panic("initial client state: " + err.Error())
+	}
+	if len(clientStateBytes) != 0 {
+		c.saveState(clientStateBytes)
+	}
+
+	consensusStateBytes, err := provider.InitialConsensusStateBytes()
+	if err != nil {
+		panic("initial consensus state: " + err.Error())
+	}
+	if len(consensusStateBytes) != 0 {
+		c.saveConsensusState(height, consensusStateBytes)
+	}
+
+	return height
+}
+
 // CreateClient stores a light client object built by the caller (an
 // app/bootstrap realm) and assigns it an id. The object owns its own client and
 // consensus state. This mirrors aib's model of handing core an already-built
@@ -20,10 +46,16 @@ func CreateClient(cur realm, clientType types.ClientType, lc lightclient.Interfa
 	creator := cur.Previous().Address()
 	c := store.addClient(clientType, creator, lc)
 
+	mirrorInitialClientState(c, lc)
+
 	creation, err := lc.VerifyCreation(creator, creator)
 	if err != nil {
 		panic("create client: " + err.Error())
 	}
+	if len(creation.ClientStateBytes) != 0 {
+		c.saveState(creation.ClientStateBytes)
+	}
+	c.saveClientStorageWrites(creation.StorageWrites)
 
 	emitVerifyCreationEvents(c.id, creation.Events)
 	// Keep the core lifecycle event separate from light-client creation events.
@@ -61,6 +93,7 @@ func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 	if len(update.ConsensusStateBytes) != 0 {
 		c.saveConsensusState(height, update.ConsensusStateBytes)
 	}
+	c.saveClientStorageWrites(update.StorageWrites)
 
 	chain.Emit(UpdateClientEvent,
 		"client_type", c.typ.String(),
@@ -87,10 +120,21 @@ func ForceUpdateClient(cur realm, clientId types.ClientId, lc lightclient.Interf
 
 	runtime.AssertOriginCall()
 
+	caller := cur.Previous().Address()
 	c.lightClient = lc
-	height := types.NewHeight(lc.GetLatestHeight())
+	height := mirrorInitialClientState(c, lc)
 
-	chain.Emit(UpdateClientEvent,
+	creation, err := lc.VerifyCreation(caller, caller)
+	if err != nil {
+		panic("force update client: " + err.Error())
+	}
+	if len(creation.ClientStateBytes) != 0 {
+		c.saveState(creation.ClientStateBytes)
+	}
+	c.saveClientStorageWrites(creation.StorageWrites)
+	emitVerifyCreationEvents(clientId, creation.Events)
+
+	chain.Emit(ForceUpdateClientEvent,
 		"client_type", c.typ.String(),
 		"client_id", clientId.String(),
 		"height", height.String(),

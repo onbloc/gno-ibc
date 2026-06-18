@@ -37,6 +37,7 @@ type client struct {
 	lightClient       lightclient.Interface
 	clientState       []byte
 	consensusByHeight *bptree.BPTree // string(height.Bytes()) → []byte
+	clientStore       *bptree.BPTree // string(raw key) → []byte
 
 	connectionsByID *bptree.BPTree // connectionKey(ConnectionId) → types.Connection
 	channelsByID    *bptree.BPTree // channelKey(ChannelId) → *channelEntry
@@ -101,6 +102,20 @@ func (c *client) saveConsensusState(height types.Height, consensusStateBytes []b
 
 func (c *client) getConsensusState(height types.Height) ([]byte, bool) {
 	v, found := c.consensusByHeight.Get(string(height.Bytes()))
+	if !found {
+		return nil, false
+	}
+	return cloneBytes(v.([]byte)), true
+}
+
+func (c *client) saveClientStorageWrites(writes []types.StorageWrite) {
+	for _, write := range writes {
+		c.clientStore.Set(string(write.Key), cloneBytes(write.Value))
+	}
+}
+
+func (c *client) getClientStorage(key []byte) ([]byte, bool) {
+	v, found := c.clientStore.Get(string(key))
 	if !found {
 		return nil, false
 	}
@@ -256,6 +271,7 @@ func (s *Store) addClient(typ types.ClientType, creator address, lc lightclient.
 		creator:           creator,
 		lightClient:       lc,
 		consensusByHeight: bptree.NewBPTree32(),
+		clientStore:       bptree.NewBPTree32(),
 		connectionsByID:   bptree.NewBPTree32(),
 		channelsByID:      bptree.NewBPTree32(),
 		batchPackets:      make(map[types.H256]types.H256),

@@ -585,9 +585,11 @@ func TestUnionCreateClientCommitmentsSavedSpec(cur realm, t *testing.T) {
 	resetStore()
 	testing.SetRealm(testing.NewUserRealm(testutils.TestAddress("client-creator")))
 	mc := &mockClient{
-		chainId: "testchain",
-		height:  types.NewHeight(1),
-		status:  types.StatusActive,
+		chainId:                    "testchain",
+		height:                     types.NewHeight(1),
+		status:                     types.StatusActive,
+		initialClientStateBytes:    []byte{1, 2, 3},
+		initialConsensusStateBytes: []byte{1, 2, 3},
 	}
 
 	clientId := CreateClient(cross(cur), mockType, mc)
@@ -619,9 +621,11 @@ func TestUnionForceUpdateClientSpec(cur realm, t *testing.T) {
 		status:  types.StatusActive,
 	})
 	replacement := &mockClient{
-		chainId: "testchain",
-		height:  types.NewHeight(2),
-		status:  types.StatusActive,
+		chainId:                    "testchain",
+		height:                     types.NewHeight(2),
+		status:                     types.StatusActive,
+		initialClientStateBytes:    []byte("new_client_state"),
+		initialConsensusStateBytes: []byte("new_consensus_state"),
 	}
 
 	height := ForceUpdateClient(cross(cur), clientId, replacement)
@@ -634,6 +638,132 @@ func TestUnionForceUpdateClientSpec(cur realm, t *testing.T) {
 	}
 	if got := QueryConsensusState(clientId, types.NewHeight(2)); got != "0x6e65775f636f6e73656e7375735f7374617465" {
 		t.Fatalf("QueryConsensusState: got %q want new_consensus_state hex", got)
+	}
+}
+
+func TestCreateClientVerifyCreationCanOverwriteInitialClientState(cur realm, t *testing.T) {
+	resetStore()
+	testing.SetRealm(testing.NewUserRealm(testutils.TestAddress("client-creator")))
+	mc := &mockClient{
+		chainId:                 "testchain",
+		height:                  types.NewHeight(1),
+		status:                  types.StatusActive,
+		initialClientStateBytes: []byte("initial-client-state"),
+		creationResult: types.ClientCreationResult{
+			ClientStateBytes: []byte("verified-client-state"),
+		},
+	}
+
+	clientId := CreateClient(cross(cur), mockType, mc)
+
+	if got := QueryClientState(clientId); got != "0x76657269666965642d636c69656e742d7374617465" {
+		t.Fatalf("QueryClientState: got %q want verified-client-state hex", got)
+	}
+}
+
+func TestForceUpdateClientRunsVerifyCreationAndStorageWrites(cur realm, t *testing.T) {
+	resetStore()
+	oldAdmin := admin
+	defer func() { admin = oldAdmin }()
+
+	adminAddr := testutils.TestAddress("admin")
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	admin = adminAddr
+
+	clientId := registerMockClient(&mockClient{chainId: "testchain", height: types.NewHeight(1), status: types.StatusActive})
+	replacement := &mockClient{
+		chainId:                    "testchain",
+		height:                     types.NewHeight(2),
+		status:                     types.StatusActive,
+		initialClientStateBytes:    []byte("initial-force-client-state"),
+		initialConsensusStateBytes: []byte("initial-force-consensus-state"),
+		creationResult: types.ClientCreationResult{
+			ClientStateBytes: []byte("verified-force-client-state"),
+			StorageWrites: []types.StorageWrite{
+				{Key: []byte("force-key"), Value: []byte("force-value")},
+			},
+		},
+	}
+
+	ForceUpdateClient(cross(cur), clientId, replacement)
+
+	if replacement.creationCalls != 1 {
+		t.Fatalf("VerifyCreation calls: got %d want 1", replacement.creationCalls)
+	}
+	if got := QueryClientState(clientId); got != "0x76657269666965642d666f7263652d636c69656e742d7374617465" {
+		t.Fatalf("QueryClientState: got %q want verified-force-client-state hex", got)
+	}
+	c := store.getClient(clientId)
+	got, found := c.getClientStorage([]byte("force-key"))
+	if !found || string(got) != "force-value" {
+		t.Fatalf("client storage force-key: got %q found=%v want force-value", string(got), found)
+	}
+}
+
+func TestCreateClientAppliesStorageWrites(cur realm, t *testing.T) {
+	resetStore()
+	testing.SetRealm(testing.NewUserRealm(testutils.TestAddress("client-creator")))
+	mc := &mockClient{
+		chainId: "testchain",
+		height:  types.NewHeight(1),
+		status:  types.StatusActive,
+		creationResult: types.ClientCreationResult{
+			StorageWrites: []types.StorageWrite{
+				{Key: []byte("k1"), Value: []byte("v1")},
+				{Key: []byte("k2"), Value: []byte("v2")},
+			},
+		},
+	}
+
+	clientId := CreateClient(cross(cur), mockType, mc)
+	c := store.getClient(clientId)
+	if got, found := c.getClientStorage([]byte("k1")); !found || string(got) != "v1" {
+		t.Fatalf("client storage k1: got %q found=%v want v1", string(got), found)
+	}
+	if got, found := c.getClientStorage([]byte("k2")); !found || string(got) != "v2" {
+		t.Fatalf("client storage k2: got %q found=%v want v2", string(got), found)
+	}
+}
+
+func TestUpdateClientAppliesStorageWrites(cur realm, t *testing.T) {
+	resetStore()
+	mc := &mockClient{
+		chainId: "testchain",
+		height:  types.NewHeight(1),
+		status:  types.StatusActive,
+		stateUpdate: types.StateUpdate{
+			Height:              2,
+			ConsensusStateBytes: []byte("consensus"),
+			StorageWrites: []types.StorageWrite{
+				{Key: []byte("update-key"), Value: []byte("update-value")},
+			},
+		},
+	}
+	clientId := registerMockClient(mc)
+
+	UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, []byte("header")))
+
+	c := store.getClient(clientId)
+	got, found := c.getClientStorage([]byte("update-key"))
+	if !found || string(got) != "update-value" {
+		t.Fatalf("client storage update-key: got %q found=%v want update-value", string(got), found)
+	}
+}
+
+func TestClientStoreReturnsClones(cur realm, t *testing.T) {
+	resetStore()
+	c := addMockClient(&mockClient{})
+	c.saveClientStorageWrites([]types.StorageWrite{{Key: []byte("key"), Value: []byte("value")}})
+
+	got, found := c.getClientStorage([]byte("key"))
+	if !found {
+		t.Fatal("client storage key missing")
+	}
+	got[0] = 'V'
+
+	again, found := c.getClientStorage([]byte("key"))
+	if !found || string(again) != "value" {
+		t.Fatalf("client storage clone: got %q found=%v want value", string(again), found)
 	}
 }
 

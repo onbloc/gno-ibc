@@ -51,7 +51,10 @@ type StateLensIcs23MptLightClient struct {
 	l1Client lightclient.Interface
 }
 
-var _ lightclient.Interface = (*StateLensIcs23MptLightClient)(nil)
+var (
+	_ lightclient.Interface            = (*StateLensIcs23MptLightClient)(nil)
+	_ lightclient.InitialStateProvider = (*StateLensIcs23MptLightClient)(nil)
+)
 
 // NewStateLensIcs23MptLightClient builds a client from the client and consensus
 // state and the L1 client it depends on. This mirrors the realm adapter's
@@ -214,6 +217,18 @@ func (c *StateLensIcs23MptLightClient) VerifyCreation(caller address, relayer ad
 			},
 		},
 	}, nil
+}
+
+func (c *StateLensIcs23MptLightClient) InitialClientStateBytes() ([]byte, error) {
+	return EncodeClientState(*c.clientState)
+}
+
+func (c *StateLensIcs23MptLightClient) InitialConsensusStateBytes() ([]byte, error) {
+	consState, found := c.getConsensusState(c.clientState.L2LatestHeight)
+	if !found {
+		return nil, nil
+	}
+	return EncodeConsensusState(*consState)
 }
 
 // Misbehaviour is unsupported for state-lens clients, mirroring Union's

@@ -25,6 +25,12 @@ type StateUpdate struct {
 	Height              uint64
 	ConsensusStateBytes []byte
 	ClientStateBytes    []byte
+	StorageWrites       []StorageWrite
+}
+
+type StorageWrite struct {
+	Key   []byte
+	Value []byte
 }
 
 type VerifyCreationEventKind string
@@ -47,4 +53,5 @@ type VerifyCreationEvent struct {
 type ClientCreationResult struct {
 	ClientStateBytes []byte
 	Events           []VerifyCreationEvent
+	StorageWrites    []StorageWrite
 }

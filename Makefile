@@ -24,12 +24,12 @@ GNO_BIN    := $(GO_BIN_DIR)/gno
 GNO_SHORT  := $(shell echo $(GNO_COMMIT) | cut -c1-7)
 
 ABI_FIXTURES_DIR := tools/abi-fixtures
-ABI_VECTORS      := gno.land/p/core/encoding/abi/testdata/vectors.json
-ABI_VECTORS_GNO  := gno.land/p/core/ibc/zkgm/vectors_fixture_test.gno
+ABI_VECTORS      := gno.land/p/onbloc/encoding/abi/testdata/vectors.json
+ABI_VECTORS_GNO  := gno.land/p/onbloc/ibc/zkgm/vectors_fixture_test.gno
 
 ZKGM_FIXTURES_DIR     := tools/zkgm-fixtures
-ZKGM_SCENARIOS        := gno.land/p/core/ibc/zkgm/testdata/scenarios.json
-ZKGM_SCENARIOS_GNO    := gno.land/p/core/ibc/zkgm/scenarios_fixture_test.gno
+ZKGM_SCENARIOS        := gno.land/p/onbloc/ibc/zkgm/testdata/scenarios.json
+ZKGM_SCENARIOS_GNO    := gno.land/p/onbloc/ibc/zkgm/scenarios_fixture_test.gno
 
 # Submodule pins (.gitmodules + tree gitlinks) are the source of truth; the
 # gno.land/<rel>/ mirrors built by `make vendor` are .gitignored.
@@ -91,13 +91,15 @@ vendor-cmd = mkdir -p $(dir gno.land/$(2)) && rsync $(RSYNC_BASE) $(call vendor-
 
 .PHONY: help install-gno verify-gno vendor fmt test test-cover test-smoke test-gnokey-query-smoke test-gnokey-qeval-smoke test-zkgm-native-refund-smoke clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios derive-sender-salt-vectors generate generate-check
 
-PROTOGEN_PKGS := gno.land/p/core/ibc/lightclients/cometbls
+PROTOGEN_PKGS := gno.land/p/onbloc/ibc/lightclient/cometbls
 
 COVERAGE_DIR := coverage
 
 # First-party gno packages. Third-party mirrors under gno.land/p/{aib,gnoswap,nt,onbloc}
 # and gno.land/r/aib are dependency inputs only, so local and CI tests skip them.
-USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/core gno.land/r/core -name gnomod.toml | sort))
+USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/onbloc gno.land/r/onbloc -name gnomod.toml | sort))
+TEST_GNO_PKGS := $(if $(PKG),$(addprefix ./,$(patsubst ./%,%,$(PKG))),$(USER_GNO_PKGS))
+GNO_TEST_FLAGS := -v$(if $(RUN), -run "$(RUN)")
 
 help:
 	@echo "Targets:"
@@ -106,6 +108,8 @@ help:
 	@echo "  vendor                — mirror sparse third_party package sub-paths into gno.land/"
 	@echo "  fmt                   — gofumpt -w on uncommitted .go/.gno files (modified, staged, untracked)"
 	@echo "  test                  — verify-gno + vendor, then run first-party gno tests"
+	@echo "    PKG=<path>          — run only one or more packages/realms (for example, PKG=gno.land/r/onbloc/ibc/union/core)"
+	@echo "    RUN=<name>          — pass a test-name regex to gno test -run"
 	@echo "  test-cover            — same as test, plus -cover (needs gno PR #4241; override GNO_COMMIT)"
 	@echo "  test-smoke            — run only the env-prep smoke tests"
 	@echo "  test-gnokey-query-smoke — run the full gnokey smoke suite"
@@ -180,20 +184,10 @@ fmt:
 	echo "ok: formatted $$(echo "$$files" | wc -l | tr -d ' ') file(s)"
 
 test: verify-gno vendor
-	@for pkg in $(USER_GNO_PKGS); do \
-		echo "==> gno test -v $$pkg"; \
-		gno test -v "$$pkg" || exit $$?; \
+	@for pkg in $(TEST_GNO_PKGS); do \
+		echo "==> gno test $(GNO_TEST_FLAGS) $$pkg"; \
+		gno test $(GNO_TEST_FLAGS) "$$pkg" || exit $$?; \
 	done
-
-# Coverage requires a gno toolchain that includes gnolang/gno#4241
-# (`-cover` / `-coverprofile`). Override GNO_COMMIT on the make command line
-# to point at a build that has those flags, e.g.
-#   make test-cover GNO_COMMIT=57ad9a4a35daf50bdca5617fc89725a666a9c94b
-# The .github/workflows/gno-coverage.yml workflow does this automatically.
-test-cover: verify-gno vendor
-	@mkdir -p $(COVERAGE_DIR)
-	@gno test -cover -coverprofile=$(COVERAGE_DIR)/profile.txt -v $(USER_GNO_PKGS) 2>&1 \
-		| tee $(COVERAGE_DIR)/output.log
 
 test-smoke: verify-gno
 	@gno test ./gno.land/p/core/_smoke/ -v

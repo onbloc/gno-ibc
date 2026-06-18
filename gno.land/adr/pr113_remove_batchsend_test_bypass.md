@@ -1,5 +1,9 @@
 # Remove BatchSend Test Bypass
 
+> Superseded in part by `pr123_zkgm_explicit_v1_register.md`: the dedicated
+> production loader was removed, but the test-loader trust isolation described
+> here remains in force.
+
 ## Context
 
 `zkgm.BatchSend` had a production-code carve-out for two test helper realms:

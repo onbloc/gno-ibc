@@ -1,0 +1,2 @@
+module = "gno.land/r/onbloc/ibc/union/apps/transfer"
+gno = "0.9"

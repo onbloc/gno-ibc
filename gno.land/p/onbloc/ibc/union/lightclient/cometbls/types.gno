@@ -1,6 +1,10 @@
 package cometbls
 
-const ClientType = "cometbls"
+import (
+	"crypto/sha256"
+
+	"gno.land/p/nt/ufmt/v0"
+)
 
 // Height is a block height for ibc-union.
 // Mirrors the ibc-union spec where height is a plain uint64 (revision 0 only).
@@ -8,70 +12,34 @@ type Height = uint64
 
 type H256 [32]byte
 
+func (h H256) GetHash() []byte {
+	return h[:]
+}
+
 // MerkleRoot is the commitment root (app hash).
 // Mirrors ibc.core.commitment.v1.MerkleRoot.
 type MerkleRoot struct {
 	Hash []byte
 }
 
-// ClientState tracks the state of the CometBLS light client.
-// Mirrors union.ibc.lightclients.cometbls.v1.ClientState.
-//
-// Field 3 is reserved for the historical unbonding_period field.
-// Field 16 is a Gno extension for the wasmd contract address.
-//
-//gno:protobuf
-type ClientState struct {
-	ChainID         string `pb:"1,bytes"`
-	TrustingPeriod  uint64 `pb:"2,varint"` // nanoseconds
-	MaxClockDrift   uint64 `pb:"4,varint"` // nanoseconds
-	FrozenHeight    Height `pb:"5,message,enc=pbEncodeHeight,dec=pbDecodeHeight"`
-	LatestHeight    Height `pb:"6,message,enc=pbEncodeHeight,dec=pbDecodeHeight"`
-	ContractAddress H256   `pb:"16,bytes32"`
+// GetHash implements RootI interface
+func (mr MerkleRoot) GetHash() []byte {
+	return mr.Hash
 }
 
-func (cs ClientState) IsFrozen() bool {
-	return cs.FrozenHeight != 0
+// Empty returns true if the root is empty
+func (mr MerkleRoot) Empty() bool {
+	return len(mr.GetHash()) == 0
 }
 
-// ConsensusState holds the verified state at a given height.
-// Mirrors union.ibc.lightclients.cometbls.v1.ConsensusState.
-type ConsensusState struct {
-	Timestamp          uint64 // nanoseconds since Unix epoch
-	Root               MerkleRoot
-	NextValidatorsHash H256
-}
-
-// LightHeader is the minimal block header committed to by a ZK proof.
-// Mirrors union.ibc.lightclients.cometbls.v1.LightHeader.
-type LightHeader struct {
-	Height             int64
-	TimeSeconds        int64
-	TimeNanos          int32
-	ValidatorsHash     []byte
-	NextValidatorsHash H256
-	AppHash            []byte
-}
-
-// Nanos returns the header timestamp as nanoseconds since Unix epoch.
-// Callers must ensure TimeSeconds and TimeNanos are non-negative; VerifyHeader enforces this.
-func (lh LightHeader) Nanos() uint64 {
-	return uint64(lh.TimeSeconds)*1_000_000_000 + uint64(lh.TimeNanos)
-}
-
-// Header is the message used to update the CometBLS light client.
-// Mirrors union.ibc.lightclients.cometbls.v1.Header.
-type Header struct {
-	SignedHeader       LightHeader
-	TrustedHeight      Height
-	ZeroKnowledgeProof []byte
-}
-
-// Misbehaviour contains two conflicting headers for the same height.
-// Mirrors union.ibc.lightclients.cometbls.v1.Misbehaviour.
-//
-//gno:protobuf
-type Misbehaviour struct {
-	HeaderA Header `pb:"1,message,enc=pbEncodeHeader,dec=pbDecodeHeader"`
-	HeaderB Header `pb:"2,message,enc=pbEncodeHeader,dec=pbDecodeHeader"`
+// validateHash returns an error if the hash is not empty, but its
+// size != tmhash.Size.
+func validateHash(h []byte) error {
+	if len(h) > 0 && len(h) != sha256.Size {
+		return ufmt.Errorf("expected size to be %d bytes, got %d bytes",
+			sha256.Size,
+			len(h),
+		)
+	}
+	return nil
 }

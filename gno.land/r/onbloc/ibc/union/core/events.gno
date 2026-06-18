@@ -9,7 +9,6 @@ import (
 
 const (
 	AdminChangedEvent          = "AdminChanged"
-	ClientRegisteredEvent      = "ClientRegistered"
 	AppRegisteredEvent         = "AppRegistered"
 	CreateClientEvent          = "CreateClient"
 	UpdateClientEvent          = "UpdateClient"
@@ -64,14 +63,6 @@ func emitAdminChangedEvent(oldAdmin address, newAdmin address) {
 	chain.Emit(AdminChangedEvent,
 		"old_admin", oldAdmin.String(),
 		"new_admin", newAdmin.String(),
-	)
-}
-
-func emitClientRegisteredEvent(clientType types.ClientType, registrarPkgPath string, adminOverride bool) {
-	chain.Emit(ClientRegisteredEvent,
-		"client_type", clientType.String(),
-		"registrar_pkg_path", registrarPkgPath,
-		"admin_override", strconv.FormatBool(adminOverride),
 	)
 }
 

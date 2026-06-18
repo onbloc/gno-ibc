@@ -3,6 +3,7 @@ package cometbls
 import (
 	"time"
 
+	"gno.land/p/onbloc/ibc/union/lightclient"
 	cometblsp "gno.land/p/onbloc/ibc/union/lightclient/cometbls"
 	"gno.land/p/onbloc/ibc/union/types"
 	"gno.land/r/onbloc/ibc/union/core"
@@ -150,7 +151,7 @@ func consensusStateAt(e *clientEntry, height types.Height) cometblsp.ConsensusSt
 
 func (Adapter) VerifyMembership(clientId types.ClientId, height types.Height, proof, key, value []byte) {
 	e := getEntry(clientId)
-	if status := adapterStatus(e); status != cometblsp.StatusActive {
+	if status := adapterStatus(e); status != lightclient.Active {
 		panic("cometbls: client is " + status)
 	}
 	proofs, err := cometblsp.DecodeProofs(proof)
@@ -166,7 +167,7 @@ func (Adapter) VerifyMembership(clientId types.ClientId, height types.Height, pr
 
 func (Adapter) VerifyNonMembership(clientId types.ClientId, height types.Height, proof, key []byte) {
 	e := getEntry(clientId)
-	if status := adapterStatus(e); status != cometblsp.StatusActive {
+	if status := adapterStatus(e); status != lightclient.Active {
 		panic("cometbls: client is " + status)
 	}
 	proofs, err := cometblsp.DecodeProofs(proof)
@@ -229,7 +230,7 @@ func applyForceUpdate(clientId types.ClientId, clientStateBytes, consensusStateB
 
 	// Force update is a recovery operation: only permit clients that are no
 	// longer usable. New status values should be denied until explicitly vetted.
-	if status := adapterStatus(e); status != cometblsp.StatusExpired && status != cometblsp.StatusFrozen {
+	if status := adapterStatus(e); status != lightclient.Expired && status != lightclient.Frozen {
 		panic("cometbls: force-update only allowed on expired or frozen client")
 	}
 

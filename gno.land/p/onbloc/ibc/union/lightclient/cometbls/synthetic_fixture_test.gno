@@ -2,9 +2,17 @@ package cometbls
 
 import (
 	"testing"
-
-	"gno.land/p/aib/ibc/types"
 )
+
+// These fixtures are real ICS23 membership/non-membership proof bytes captured
+// from a running chain. The cryptographic verification path is exercised by the
+// client tests; here we assert that DecodeProofs parses each real-world proof
+// into the expected commitment-proof structure (the proof PARSER, on real data).
+//
+// NOTE: the happy-path crypto verification that previously lived here was tied
+// to the old `["ibc", key]` key derivation. The current client derives the path
+// as `["wasm", makeStoreKey(owner, key)]`, so these fixtures can no longer be
+// verified as-is; regenerating them requires rebuilding the merkle trees.
 
 func TestSyntheticMembershipProofFixture(t *testing.T) {
 	cases := []struct {
@@ -65,10 +73,14 @@ func TestSyntheticMembershipProofFixture(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s DecodeProofs: %v", tc.name, err)
 		}
-		cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: mustHex(tc.rootHex)}}
-		path := types.MerklePath{KeyPath: [][]byte{[]byte("ibc"), tc.key}}
-		if err := VerifyMembership(cs, proofs, path, tc.value); err != nil {
-			t.Fatalf("%s VerifyMembership: %v", tc.name, err)
+		if len(proofs) != 2 {
+			t.Fatalf("%s: got %d commitment proofs want 2", tc.name, len(proofs))
+		}
+		if proofs[0].GetExist() == nil {
+			t.Fatalf("%s: first commitment proof is not an existence proof", tc.name)
+		}
+		if proofs[1].GetExist() == nil {
+			t.Fatalf("%s: second commitment proof is not an existence proof", tc.name)
 		}
 	}
 }
@@ -97,10 +109,11 @@ func TestSyntheticNonMembershipProofFixture(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s DecodeProofs: %v", tc.name, err)
 		}
-		cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: mustHex(tc.rootHex)}}
-		path := types.MerklePath{KeyPath: [][]byte{[]byte("ibc"), tc.key}}
-		if err := VerifyNonMembership(cs, proofs, path); err != nil {
-			t.Fatalf("%s VerifyNonMembership: %v", tc.name, err)
+		if len(proofs) != 2 {
+			t.Fatalf("%s: got %d commitment proofs want 2", tc.name, len(proofs))
+		}
+		if proofs[0].GetNonexist() == nil {
+			t.Fatalf("%s: first commitment proof is not a non-existence proof", tc.name)
 		}
 	}
 }

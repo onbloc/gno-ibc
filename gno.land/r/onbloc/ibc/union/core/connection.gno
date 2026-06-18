@@ -9,15 +9,18 @@ import (
 func ConnectionOpenInit(_ realm, msg types.MsgConnectionOpenInit) types.ConnectionId {
 	requireClientId(msg.ClientId)
 	requireClientId(msg.CounterpartyClientId)
-	requireActiveClient(st.getClient(msg.ClientId), msg.ClientId)
-	connectionId := st.generateConnectionId()
-	st.saveConnection(connectionId, types.Connection{
+	c := store.getClient(msg.ClientId)
+	if c == nil {
+		panic("client " + msg.ClientId.String() + " not found")
+	}
+	requireActiveClient(c)
+	connectionId := store.nextConnectionId()
+	store.saveConnection(connectionId, types.Connection{
 		State:                    types.ConnectionStateInit,
 		ClientId:                 msg.ClientId,
 		CounterpartyClientId:     msg.CounterpartyClientId,
 		CounterpartyConnectionId: 0,
 	})
-
 	chain.Emit(ConnectionOpenInitEvent,
 		"connection_id", connectionId.String(),
 		"client_id", msg.ClientId.String(),
@@ -30,6 +33,7 @@ func ConnectionOpenTry(_ realm, msg types.MsgConnectionOpenTry) types.Connection
 	requireClientId(msg.ClientId)
 	requireClientId(msg.CounterpartyClientId)
 	requireConnectionId(msg.CounterpartyConnectionId)
+	connectionId := store.nextConnectionId()
 
 	expectedConnection := types.Connection{
 		State:                    types.ConnectionStateInit,
@@ -41,8 +45,7 @@ func ConnectionOpenTry(_ realm, msg types.MsgConnectionOpenTry) types.Connection
 	value := connectionValue(expectedConnection)
 	verifyMembershipActive(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
 
-	connectionId := st.generateConnectionId()
-	st.saveConnection(connectionId, types.Connection{
+	store.saveConnection(connectionId, types.Connection{
 		State:                    types.ConnectionStateTryOpen,
 		ClientId:                 msg.ClientId,
 		CounterpartyClientId:     msg.CounterpartyClientId,
@@ -60,7 +63,10 @@ func ConnectionOpenTry(_ realm, msg types.MsgConnectionOpenTry) types.Connection
 func ConnectionOpenAck(_ realm, msg types.MsgConnectionOpenAck) {
 	requireConnectionId(msg.ConnectionId)
 	requireConnectionId(msg.CounterpartyConnectionId)
-	connection := st.getConnection(msg.ConnectionId)
+	connection, ok := store.getConnection(msg.ConnectionId)
+	if !ok {
+		panic("connection " + msg.ConnectionId.String() + " not found")
+	}
 	if connection.State != types.ConnectionStateInit {
 		panic(ErrInvalidConnectionState)
 	}
@@ -77,7 +83,7 @@ func ConnectionOpenAck(_ realm, msg types.MsgConnectionOpenAck) {
 
 	connection.State = types.ConnectionStateOpen
 	connection.CounterpartyConnectionId = msg.CounterpartyConnectionId
-	st.saveConnection(msg.ConnectionId, connection)
+	store.saveConnection(msg.ConnectionId, connection)
 
 	chain.Emit(ConnectionOpenAckEvent,
 		"connection_id", msg.ConnectionId.String(),
@@ -89,7 +95,10 @@ func ConnectionOpenAck(_ realm, msg types.MsgConnectionOpenAck) {
 
 func ConnectionOpenConfirm(_ realm, msg types.MsgConnectionOpenConfirm) {
 	requireConnectionId(msg.ConnectionId)
-	connection := st.getConnection(msg.ConnectionId)
+	connection, ok := store.getConnection(msg.ConnectionId)
+	if !ok {
+		panic("connection " + msg.ConnectionId.String() + " not found")
+	}
 	if connection.State != types.ConnectionStateTryOpen {
 		panic(ErrInvalidConnectionState)
 	}
@@ -105,7 +114,7 @@ func ConnectionOpenConfirm(_ realm, msg types.MsgConnectionOpenConfirm) {
 	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofAck, key[:], value[:])
 
 	connection.State = types.ConnectionStateOpen
-	st.saveConnection(msg.ConnectionId, connection)
+	store.saveConnection(msg.ConnectionId, connection)
 
 	chain.Emit(ConnectionOpenConfirmEvent,
 		"connection_id", msg.ConnectionId.String(),
@@ -116,7 +125,7 @@ func ConnectionOpenConfirm(_ realm, msg types.MsgConnectionOpenConfirm) {
 }
 
 func QueryConnection(connectionId types.ConnectionId) string {
-	connection, ok := st.connections[connectionId]
+	connection, ok := store.getConnection(connectionId)
 	if !ok {
 		return ""
 	}
@@ -128,7 +137,10 @@ func QueryConnection(connectionId types.ConnectionId) string {
 }
 
 func ensureConnectionOpen(connectionId types.ConnectionId) types.Connection {
-	connection := st.getConnection(connectionId)
+	connection, ok := store.getConnection(connectionId)
+	if !ok {
+		panic("connection " + connectionId.String() + " not found")
+	}
 	if connection.State != types.ConnectionStateOpen {
 		panic(ErrInvalidConnectionState)
 	}

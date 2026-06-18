@@ -11,9 +11,9 @@ import (
 // passed packet.TimeoutTimestamp.
 
 func TestPacketTimeoutRejectsProofBeforeTimeout(cur realm, t *testing.T) {
-	resetState()
+	resetStore()
 	_, _, channelId := setupOpenChannel(t)
-	client := st.clientRegistry[mockType].(*mockClient)
+	client := mockClientFor(channelId)
 	client.timestamp = types.Timestamp(500)
 	packet := types.Packet{
 		SourceChannelId:      channelId,
@@ -21,12 +21,12 @@ func TestPacketTimeoutRejectsProofBeforeTimeout(cur realm, t *testing.T) {
 		Data:                 types.Bytes("transfer"),
 		TimeoutTimestamp:     types.Timestamp(1000),
 	}
-	st.commitPacket(packet)
+	store.commitPacket(packet)
 
 	uassert.AbortsContains(t, cur, "packet timeout not reached", func(cur realm) {
 		PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet})
 	})
-	if !st.hasPacketCommitment(packet) {
+	if !store.hasPacketCommitment(packet) {
 		t.Fatal("rejected timeout must not delete the source commitment")
 	}
 	// Cheap timestamp check must precede the proof verification so a
@@ -39,9 +39,9 @@ func TestPacketTimeoutRejectsProofBeforeTimeout(cur realm, t *testing.T) {
 // Boundary: spec requires `proofHeight.timestamp > packet.timeoutTimestamp`,
 // so equality must also be rejected.
 func TestPacketTimeoutRejectsProofAtBoundary(cur realm, t *testing.T) {
-	resetState()
+	resetStore()
 	_, _, channelId := setupOpenChannel(t)
-	client := st.clientRegistry[mockType].(*mockClient)
+	client := mockClientFor(channelId)
 	client.timestamp = types.Timestamp(1000)
 	packet := types.Packet{
 		SourceChannelId:      channelId,
@@ -49,12 +49,12 @@ func TestPacketTimeoutRejectsProofAtBoundary(cur realm, t *testing.T) {
 		Data:                 types.Bytes("transfer"),
 		TimeoutTimestamp:     types.Timestamp(1000),
 	}
-	st.commitPacket(packet)
+	store.commitPacket(packet)
 
 	uassert.AbortsContains(t, cur, "packet timeout not reached", func(cur realm) {
 		PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet})
 	})
-	if !st.hasPacketCommitment(packet) {
+	if !store.hasPacketCommitment(packet) {
 		t.Fatal("rejected timeout must not delete the source commitment")
 	}
 }
@@ -62,9 +62,9 @@ func TestPacketTimeoutRejectsProofAtBoundary(cur realm, t *testing.T) {
 // TimeoutTimestamp == 0 means "no deadline" (recv-side uses the same
 // convention), so PacketTimeout must refuse such packets outright.
 func TestPacketTimeoutRejectsZeroTimeoutPacket(cur realm, t *testing.T) {
-	resetState()
+	resetStore()
 	_, _, channelId := setupOpenChannel(t)
-	client := st.clientRegistry[mockType].(*mockClient)
+	client := mockClientFor(channelId)
 	client.timestamp = types.Timestamp(1 << 62) // any positive proof timestamp
 	packet := types.Packet{
 		SourceChannelId:      channelId,
@@ -72,12 +72,12 @@ func TestPacketTimeoutRejectsZeroTimeoutPacket(cur realm, t *testing.T) {
 		Data:                 types.Bytes("transfer"),
 		TimeoutTimestamp:     0,
 	}
-	st.commitPacket(packet)
+	store.commitPacket(packet)
 
 	uassert.AbortsContains(t, cur, "packet timeout not reached", func(cur realm) {
 		PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet})
 	})
-	if !st.hasPacketCommitment(packet) {
+	if !store.hasPacketCommitment(packet) {
 		t.Fatal("zero-timeout packet must keep its commitment")
 	}
 	if len(client.nonMembershipKeys) != 0 {
@@ -86,9 +86,9 @@ func TestPacketTimeoutRejectsZeroTimeoutPacket(cur realm, t *testing.T) {
 }
 
 func TestPacketTimeoutAcceptsProofAfterTimeout(cur realm, t *testing.T) {
-	resetState()
+	resetStore()
 	_, _, channelId := setupOpenChannel(t)
-	client := st.clientRegistry[mockType].(*mockClient)
+	client := mockClientFor(channelId)
 	client.timestamp = types.Timestamp(2000)
 	packet := types.Packet{
 		SourceChannelId:      channelId,
@@ -96,12 +96,12 @@ func TestPacketTimeoutAcceptsProofAfterTimeout(cur realm, t *testing.T) {
 		Data:                 types.Bytes("transfer"),
 		TimeoutTimestamp:     types.Timestamp(1000),
 	}
-	st.commitPacket(packet)
+	store.commitPacket(packet)
 
 	uassert.NotAborts(t, cur, func(cur realm) {
 		PacketTimeout(cur, types.MsgPacketTimeout{Packet: packet})
 	})
-	if st.hasPacketCommitment(packet) {
+	if store.hasPacketCommitment(packet) {
 		t.Fatal("successful timeout must delete the source commitment")
 	}
 }

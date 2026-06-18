@@ -3,104 +3,92 @@ package core
 import (
 	"chain"
 	"chain/runtime"
-	rtunsafe "chain/runtime/unsafe"
-	"strings"
 
 	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-var admin address
+// CreateClient stores a light client object built by the caller (an
+// app/bootstrap realm) and assigns it an id. The object owns its own client and
+// consensus state. This mirrors aib's model of handing core an already-built
+// light client instead of core decoding bytes itself.
+func CreateClient(cur realm, clientType types.ClientType, lc lightclient.Interface) types.ClientId {
+	creator := cur.Previous().Address()
+	c := store.addClient(clientType, creator, lc)
 
-func init(cur realm) {
-	// SAFE: admin bootstrap needs the tx signer, not a loader realm that may
-	// appear as cur.Previous().
-	admin = rtunsafe.OriginCaller()
-}
-
-// GetAdmin returns the current admin address.
-func GetAdmin() address {
-	return admin
-}
-
-// SetAdmin transfers admin rights to a new address. Only callable by the current admin.
-func SetAdmin(cur realm, newAdmin address) {
-	runtime.AssertOriginCall()
-	requireAdmin(cur, "set admin")
-	oldAdmin := admin
-	admin = newAdmin
-	emitAdminChangedEvent(oldAdmin, newAdmin)
-}
-
-func requireAdmin(cur realm, action string) {
-	if cur.Previous().Address() != admin {
-		panic("caller not authorized to " + action + ": unauthorized")
+	if _, err := lc.VerifyCreation(creator, creator); err != nil {
+		panic("create client: " + err.Error())
 	}
-}
-
-// CreateClient creates a light client and stores its initial client and consensus states.
-func CreateClient(cur realm, msg types.MsgCreateClient) types.ClientId {
-	impl, ok := st.clientRegistry[msg.ClientType]
-	if !ok {
-		panic(ErrClientTypeNotFound)
-	}
-
-	clientId := st.generateClientId()
-	impl.CreateClient(cross(cur), clientId, msg.ClientStateBytes, msg.ConsensusStateBytes)
-	st.clientTypes[clientId] = msg.ClientType
-	st.saveClientState(clientId, msg.ClientStateBytes)
-	st.saveConsensusState(clientId, impl.GetLatestHeight(clientId), msg.ConsensusStateBytes)
 
 	chain.Emit(CreateClientEvent,
-		"client_id", clientId.String(),
-		"client_type", msg.ClientType.String(),
+		"client_id", c.id.String(),
+		"client_type", clientType.String(),
 	)
-	return clientId
+
+	return c.id
 }
 
-// UpdateClient updates a light client using the provided client message and stores the resulting state.
+// UpdateClient verifies a client message against the light client object, which
+// updates its own state, and mirrors the resulting state bytes for queries and
+// counterparty proofs.
 func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
-	impl := st.getClient(msg.ClientId)
-	requireActiveClient(impl, msg.ClientId)
+	c := store.getClient(msg.ClientId)
+	if c == nil {
+		panic("client " + msg.ClientId.String() + " not found")
+	}
+	requireActiveClient(c)
 
-	update := impl.UpdateClient(cross(cur), msg.ClientId, msg.ClientMessage)
+	caller := cur.Previous().Address()
 
-	st.saveClientState(msg.ClientId, update.ClientStateBytes)
-	st.saveConsensusState(msg.ClientId, update.Height, update.ConsensusStateBytes)
+	update, err := c.lightClient.VerifyHeader(caller, msg.ClientMessage, caller)
+	if err != nil {
+		panic("update client: " + err.Error())
+	}
+
+	height := types.NewHeight(update.Height)
+	if len(update.ClientStateBytes) != 0 {
+		c.saveState(update.ClientStateBytes)
+	}
+
+	if len(update.ConsensusStateBytes) != 0 {
+		c.saveConsensusState(height, update.ConsensusStateBytes)
+	}
 
 	chain.Emit(UpdateClientEvent,
-		"client_type", st.clientTypes[msg.ClientId].String(),
+		"client_type", c.typ.String(),
 		"client_id", msg.ClientId.String(),
-		"height", update.Height.String(),
+		"height", height.String(),
 	)
-	return update.Height
+
+	return height
 }
 
-// ForceUpdateClient updates the client and consensus states without verifying proofs.
+// ForceUpdateClient replaces a client's object with a new one built by the
+// caller, bypassing proof verification.
 //
-// It is restricted to the admin and is intended for recovering expired or
-// otherwise unrecoverable clients. It panics if the caller is not the admin
-// or if the light client does not implement lightclient.IForceLightClient.
-func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) types.Height {
+// It is restricted to the admin and recovers expired or otherwise unrecoverable
+// clients. Replacing the object with one the caller constructed from fresh state
+// IS the recovery: the new object owns the new state.
+func ForceUpdateClient(cur realm, clientId types.ClientId, lc lightclient.Interface) types.Height {
 	requireAdmin(cur, "ForceUpdateClient")
 
-	impl, ok := st.getClient(msg.ClientId).(lightclient.IForceLightClient)
-	if !ok {
-		panic("client does not support ForceUpdateClient")
+	c := store.getClient(clientId)
+	if c == nil {
+		panic("client " + clientId.String() + " not found")
 	}
 
 	runtime.AssertOriginCall()
-	update := impl.ForceUpdateClient(cross(cur), msg.ClientId, msg.ClientStateBytes, msg.ConsensusStateBytes)
 
-	st.saveClientState(msg.ClientId, update.ClientStateBytes)
-	st.saveConsensusState(msg.ClientId, update.Height, update.ConsensusStateBytes)
+	c.lightClient = lc
+	height := types.NewHeight(lc.GetLatestHeight())
 
 	chain.Emit(UpdateClientEvent,
-		"client_type", st.clientTypes[msg.ClientId].String(),
-		"client_id", msg.ClientId.String(),
-		"height", update.Height.String(),
+		"client_type", c.typ.String(),
+		"client_id", clientId.String(),
+		"height", height.String(),
 	)
-	return update.Height
+
+	return height
 }
 
 // VerifyClientMembership verifies a membership proof against a registered light client.
@@ -110,107 +98,94 @@ func VerifyClientMembership(_ realm, clientId types.ClientId, proofHeight types.
 	verifyMembershipActive(clientId, proofHeight, proof, path, value)
 }
 
-func requireActiveClient(client lightclient.ILightClient, clientId types.ClientId) {
-	if client.GetStatus(clientId) != types.StatusActive {
+// statusToTypes maps the light client object's status (a string) to the core
+// status enum.
+func statusToTypes(s lightclient.Status) types.Status {
+	switch s {
+	case lightclient.Active:
+		return types.StatusActive
+	case lightclient.Expired:
+		return types.StatusExpired
+	case lightclient.Frozen:
+		return types.StatusFrozen
+	default:
+		return types.StatusUnknown
+	}
+}
+
+func requireActiveClient(c *client) {
+	if statusToTypes(c.lightClient.Status()) != types.StatusActive {
 		panic(ErrClientNotActive)
 	}
 }
 
 func verifyMembershipActive(clientId types.ClientId, height types.Height, proof, key, value []byte) {
-	client := st.getClient(clientId)
-	requireActiveClient(client, clientId)
-	client.VerifyMembership(clientId, height, proof, key, value)
-}
-
-func verifyNonMembershipWithActiveClient(client lightclient.ILightClient, clientId types.ClientId, height types.Height, proof, key []byte) {
-	requireActiveClient(client, clientId)
-	client.VerifyNonMembership(clientId, height, proof, key)
-}
-
-// RegisterClient registers a light client implementation for clientType.
-//
-// Known production client types must be registered by their owning light client
-// realm. Other client types may only be registered under the caller realm's
-// namespace.
-func RegisterClient(cur realm, clientType types.ClientType, client lightclient.ILightClient) {
-	caller := cur.Previous().PkgPath()
-	owner := clientTypeOwnerPath(clientType)
-	if owner != "" {
-		if caller != owner {
-			panic("caller not authorized to register client: unauthorized")
-		}
-	} else if !isScopedClientType(caller, clientType) {
-		panic("caller not authorized to register client: unauthorized")
+	c := store.getClient(clientId)
+	if c == nil {
+		panic("client " + clientId.String() + " not found")
 	}
-	st.registerClient(clientType, client)
-	emitClientRegisteredEvent(clientType, caller, false)
+
+	requireActiveClient(c)
+
+	if err := c.lightClient.VerifyMembership(height.RevisionHeight, key, proof, value); err != nil {
+		panic(err)
+	}
 }
 
-// RegisterClientForType registers a light client implementation for clientType.
-//
-// It is restricted to the admin.
-func RegisterClientForType(cur realm, clientType types.ClientType, client lightclient.ILightClient) {
-	requireAdmin(cur, "register client")
-	runtime.AssertOriginCall()
-	st.registerClient(clientType, client)
-	emitClientRegisteredEvent(clientType, cur.Previous().PkgPath(), true)
+func verifyNonMembershipWithActiveClient(c *client, height types.Height, proof, key []byte) {
+	requireActiveClient(c)
+
+	if err := c.lightClient.VerifyNonMembership(height.RevisionHeight, key, proof); err != nil {
+		panic(err)
+	}
 }
 
-// HasClient reports whether a light client is registered for clientType.
-func HasClient(clientType types.ClientType) bool {
-	_, ok := st.clientRegistry[clientType]
-	return ok
+// GetLightClient returns the stored light client object for clientId.
+func GetLightClient(clientId types.ClientId) (lightclient.Interface, bool) {
+	return store.lightClientOf(clientId)
 }
 
 // QueryClientState returns the stored client state as a hex string.
 func QueryClientState(clientId types.ClientId) string {
-	state, ok := st.clientStates[clientId]
-	if !ok {
+	c := store.getClient(clientId)
+	if c == nil {
 		return ""
 	}
-	return hexString(state)
+
+	return hexString(c.clientState)
 }
 
 // QueryConsensusState returns the consensus state at height as a hex string.
 func QueryConsensusState(clientId types.ClientId, height types.Height) string {
-	byHeight, ok := st.consensusStates[clientId]
-	if !ok {
+	c := store.getClient(clientId)
+	if c == nil {
 		return ""
 	}
-	state, ok := byHeight[height]
-	if !ok {
+
+	bz, found := c.getConsensusState(height)
+	if !found {
 		return ""
 	}
-	return hexString(state)
+
+	return hexString(bz)
 }
 
 // GetClientStatus returns the current status reported by a registered light client.
 func GetClientStatus(clientId types.ClientId) types.Status {
-	if _, ok := st.clientTypes[clientId]; !ok {
+	c := store.getClient(clientId)
+	if c == nil {
 		return types.StatusUnknown
 	}
-	return st.getClient(clientId).GetStatus(clientId)
+
+	return statusToTypes(c.lightClient.Status())
 }
 
 // GetClientType returns the registered client type for clientId.
 func GetClientType(clientId types.ClientId) string {
-	clientType, ok := st.clientTypes[clientId]
-	if !ok {
+	c := store.getClient(clientId)
+	if c == nil {
 		return ""
 	}
-	return clientType.String()
-}
 
-func clientTypeOwnerPath(clientType types.ClientType) string {
-	switch clientType {
-	case types.ClientType("cometbls"):
-		return "gno.land/r/onbloc/ibc/lightclients/cometbls"
-	case types.ClientType("state-lens/ics23/mpt"):
-		return "gno.land/r/onbloc/ibc/lightclients/state_lens/ics23_mpt"
-	}
-	return ""
-}
-
-func isScopedClientType(caller string, clientType types.ClientType) bool {
-	return strings.HasPrefix(string(clientType), caller+"/")
+	return c.typ.String()
 }

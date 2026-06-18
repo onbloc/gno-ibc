@@ -1,312 +1,142 @@
 package cometbls
 
 import (
-	"bytes"
 	"testing"
 
-	"gno.land/p/aib/ibc/types"
-	"gno.land/p/aib/ics23"
+	"gno.land/p/onbloc/ibc/union/lightclient"
+	"gno.land/p/onbloc/ibc/union/types"
 )
 
-// nowNanos = 2024-01-01 00:00:00 UTC in nanoseconds.
-const testNow = uint64(1_704_067_200) * 1_000_000_000
-
-func TestWasmContractStoreKey(t *testing.T) {
-	var contractAddress H256
-	for i := 0; i < len(contractAddress); i++ {
-		contractAddress[i] = byte(i)
-	}
-	key := []byte{0xAA, 0xBB}
-
-	got := wasmContractStoreKey(contractAddress, key)
-	want := append([]byte{0x03}, contractAddress[:]...)
-	want = append(want, 0x00)
-	want = append(want, key...)
-	if !bytes.Equal(got, want) {
-		t.Fatalf("wasmContractStoreKey: got %x want %x", got, want)
-	}
-}
-
-func TestMembershipPath(t *testing.T) {
-	var contractAddress H256
-	for i := 0; i < len(contractAddress); i++ {
-		contractAddress[i] = byte(i)
-	}
-	key := []byte{0xAA, 0xBB}
-	cs := ClientState{ContractAddress: contractAddress}
-
-	path := MembershipPath(cs, key)
-	if len(path.KeyPath) != 2 {
-		t.Fatalf("MembershipPath: got %d key segments want 2", len(path.KeyPath))
-	}
-	if !bytes.Equal(path.KeyPath[0], wasmdModuleStoreKey) {
-		t.Fatalf("MembershipPath[0]: got %x want %x", path.KeyPath[0], wasmdModuleStoreKey)
-	}
-	if !bytes.Equal(path.KeyPath[1], wasmContractStoreKey(contractAddress, key)) {
-		t.Fatalf("MembershipPath[1] mismatch")
-	}
-}
-
-func baseCS() ClientState {
-	return ClientState{
-		TrustingPeriod: 14 * 24 * 3600 * 1_000_000_000, // 14 days in ns
-		LatestHeight:   Height(100),
-	}
-}
-
-// --- Status tests ---
-
-func TestStatusActive(t *testing.T) {
-	cs := baseCS()
-	latest := ConsensusState{Timestamp: testNow - 1_000*1_000_000_000}
-	if got := Status(cs, latest, testNow); got != StatusActive {
-		t.Fatalf("got %q want %q", got, StatusActive)
-	}
-}
-
-func TestStatusFrozen(t *testing.T) {
-	cs := baseCS()
-	cs.FrozenHeight = FrozenHeight
-	latest := ConsensusState{Timestamp: testNow - 1_000*1_000_000_000}
-	if got := Status(cs, latest, testNow); got != StatusFrozen {
-		t.Fatalf("got %q want %q", got, StatusFrozen)
-	}
-}
-
-func TestStatusExpiredNoConsensusState(t *testing.T) {
-	cs := baseCS()
-	if got := Status(cs, ConsensusState{}, testNow); got != StatusExpired {
-		t.Fatalf("got %q want %q", got, StatusExpired)
-	}
-}
-
-func TestStatusExpiredTrustingPeriod(t *testing.T) {
-	cs := baseCS()
-	latest := ConsensusState{Timestamp: testNow - cs.TrustingPeriod - 1}
-	if got := Status(cs, latest, testNow); got != StatusExpired {
-		t.Fatalf("got %q want %q", got, StatusExpired)
-	}
-}
-
-func TestStatusFrozenTakesPrecedence(t *testing.T) {
-	cs := baseCS()
-	cs.FrozenHeight = FrozenHeight
-	latest := ConsensusState{Timestamp: testNow - cs.TrustingPeriod - 1}
-	if got := Status(cs, latest, testNow); got != StatusFrozen {
-		t.Fatalf("got %q want %q", got, StatusFrozen)
-	}
-}
-
-// --- ValidateInitialize tests ---
-
-func TestValidateInitializeOK(t *testing.T) {
-	cs := devnetClientState()
-	cs.LatestHeight = Height(100)
-	initial := ConsensusState{
+// newTestClient builds a CometblsLightClient with a single consensus state at
+// height 100 and a zero owner address.
+func newTestClient(t *testing.T) *CometblsLightClient {
+	t.Helper()
+	cs := validClientState()
+	consensus := &ConsensusState{
 		Timestamp:          testNow,
-		NextValidatorsHash: devnetVH,
+		Root:               MerkleRoot{Hash: repeat32(0xAB)},
+		NextValidatorsHash: repeat32(0xCD),
 	}
-	if err := ValidateInitialize(cs, initial); err != nil {
-		t.Fatalf("ValidateInitialize: %v", err)
+	c, err := NewCometblsLightClient(&cs, consensus)
+	if err != nil {
+		t.Fatalf("NewCometblsLightClient: %v", err)
+	}
+	return c
+}
+
+func TestClientAccessors(t *testing.T) {
+	c := newTestClient(t)
+
+	if c.GetLatestHeight() != 100 {
+		t.Errorf("GetLatestHeight: got %d want 100", c.GetLatestHeight())
+	}
+	if c.GetCounterpartyChainID() != "test-chain" {
+		t.Errorf("GetCounterpartyChainID: got %q want test-chain", c.GetCounterpartyChainID())
+	}
+	if c.GetTimestamp() != types.Timestamp(testNow) {
+		t.Errorf("GetTimestamp: got %d want %d", c.GetTimestamp(), testNow)
 	}
 }
 
-func TestValidateInitializeEmptyChainID(t *testing.T) {
-	cs := devnetClientState()
-	cs.ChainID = ""
-	if err := ValidateInitialize(cs, ConsensusState{Timestamp: testNow, NextValidatorsHash: devnetVH}); err == nil {
-		t.Fatal("expected error for empty chain ID")
+func TestClientGetTimestampNoConsensus(t *testing.T) {
+	c := newTestClient(t)
+	// Move latest height to one with no consensus state.
+	c.clientState.LatestHeight = types.NewHeight(999)
+	if c.GetTimestamp() != 0 {
+		t.Errorf("GetTimestamp: got %d want 0", c.GetTimestamp())
 	}
 }
 
-func TestValidateInitializeZeroTrustingPeriod(t *testing.T) {
-	cs := devnetClientState()
-	cs.TrustingPeriod = 0
-	if err := ValidateInitialize(cs, ConsensusState{Timestamp: testNow, NextValidatorsHash: devnetVH}); err == nil {
-		t.Fatal("expected error for zero trusting period")
+func TestClientStatusFrozen(t *testing.T) {
+	c := newTestClient(t)
+	c.clientState.FrozenHeight = FrozenHeight
+	if got := c.Status(); got != lightclient.Frozen {
+		t.Errorf("Status: got %q want %q", got, lightclient.Frozen)
 	}
 }
 
-func TestValidateInitializeZeroMaxClockDrift(t *testing.T) {
-	cs := devnetClientState()
-	cs.MaxClockDrift = 0
-	if err := ValidateInitialize(cs, ConsensusState{Timestamp: testNow, NextValidatorsHash: devnetVH}); err == nil {
-		t.Fatal("expected error for zero max clock drift")
+func TestClientStatusExpiredNoConsensus(t *testing.T) {
+	c := newTestClient(t)
+	// No consensus state at the latest height => expired.
+	c.clientState.LatestHeight = types.NewHeight(999)
+	if got := c.Status(); got != lightclient.Expired {
+		t.Errorf("Status: got %q want %q", got, lightclient.Expired)
 	}
 }
 
-func TestValidateInitializeZeroLatestHeight(t *testing.T) {
-	cs := devnetClientState()
-	cs.LatestHeight = 0
-	if err := ValidateInitialize(cs, ConsensusState{Timestamp: testNow, NextValidatorsHash: devnetVH}); err == nil {
-		t.Fatal("expected error for zero latest height")
-	}
+// twoExistProof returns a MerkleProof wire buffer containing two existence
+// commitment proofs (matching GetSDKProofSpecs length of 2).
+func twoExistProof() []byte {
+	ep1 := encodeExistenceProof([]byte("k1"), []byte("v1"), nil, nil)
+	ep2 := encodeExistenceProof([]byte("k2"), []byte("v2"), nil, nil)
+	return encodeMerkleProof(encodeCommitmentExist(ep1), encodeCommitmentExist(ep2))
 }
 
-func TestValidateInitializeZeroTimestamp(t *testing.T) {
-	cs := devnetClientState()
-	cs.LatestHeight = Height(100)
-	if err := ValidateInitialize(cs, ConsensusState{NextValidatorsHash: devnetVH}); err == nil {
-		t.Fatal("expected error for zero initial timestamp")
-	}
-}
-
-// --- Header/consensus helpers ---
-
-func TestConsensusStateFromHeader(t *testing.T) {
-	h := devnetHeader()
-	got := ConsensusStateFromHeader(h.SignedHeader)
-	if got.Timestamp != h.SignedHeader.Nanos() {
-		t.Fatalf("timestamp got %d want %d", got.Timestamp, h.SignedHeader.Nanos())
-	}
-	if !bytes.Equal(got.Root.Hash, h.SignedHeader.AppHash) {
-		t.Fatalf("root got %x want %x", got.Root.Hash, h.SignedHeader.AppHash)
-	}
-	if got.NextValidatorsHash != h.SignedHeader.NextValidatorsHash {
-		t.Fatalf("next validators hash got %x want %x", got.NextValidatorsHash, h.SignedHeader.NextValidatorsHash)
-	}
-}
-
-func TestHeaderHeight(t *testing.T) {
-	if got := HeaderHeight(devnetHeader()); got != Height(devnetHeight) {
-		t.Fatalf("got %d want %d", got, Height(devnetHeight))
-	}
-}
-
-func TestConsensusEqualsHeaderMatchingState(t *testing.T) {
-	h := devnetHeader()
-	if !ConsensusEqualsHeader(ConsensusStateFromHeader(h.SignedHeader), h.SignedHeader) {
-		t.Fatal("expected consensus state to match header")
-	}
-}
-
-func TestConsensusEqualsHeaderNoExistingState(t *testing.T) {
-	if ConsensusEqualsHeader(ConsensusState{}, devnetHeader().SignedHeader) {
-		t.Fatal("expected zero consensus state not to match header")
-	}
-}
-
-func TestConsensusEqualsHeaderConflictingTimestamp(t *testing.T) {
-	h := devnetHeader()
-	cs := ConsensusStateFromHeader(h.SignedHeader)
-	cs.Timestamp++
-	if ConsensusEqualsHeader(cs, h.SignedHeader) {
-		t.Fatal("expected timestamp mismatch")
-	}
-}
-
-func TestConsensusEqualsHeaderConflictingAppHash(t *testing.T) {
-	h := devnetHeader()
-	cs := ConsensusStateFromHeader(h.SignedHeader)
-	cs.Root.Hash = []byte{0xFF}
-	if ConsensusEqualsHeader(cs, h.SignedHeader) {
-		t.Fatal("expected app hash mismatch")
-	}
-}
-
-// twoLevelPath returns a MerklePath with two segments (matching GetSDKProofSpecs length).
-func twoLevelPath(store, key []byte) types.MerklePath {
-	return types.MerklePath{KeyPath: [][]byte{store, key}}
-}
-
-// twoExistProofs returns a pair of existence proof stubs (invalid, for error-path tests).
-func twoExistProofs() []ics23.CommitmentProof {
-	return []ics23.CommitmentProof{
-		ics23.CommitmentProof_Exist{Exist: &ics23.ExistenceProof{Key: []byte("k"), Value: []byte("v")}},
-		ics23.CommitmentProof_Exist{Exist: &ics23.ExistenceProof{Key: []byte("k"), Value: []byte("v")}},
-	}
-}
-
-// --- VerifyMembership tests ---
+// --- VerifyMembership error paths (no valid crypto required) ---
 
 func TestVerifyMembershipEmptyValue(t *testing.T) {
-	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
-	if err := VerifyMembership(cs, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")), nil); err == nil {
+	c := newTestClient(t)
+	if err := c.VerifyMembership(100, []byte("key"), twoExistProof(), nil); err == nil {
 		t.Fatal("expected error for empty value")
 	}
 }
 
+func TestVerifyMembershipHeightTooHigh(t *testing.T) {
+	c := newTestClient(t)
+	if err := c.VerifyMembership(200, []byte("key"), twoExistProof(), []byte("v")); err == nil {
+		t.Fatal("expected error for height above latest")
+	}
+}
+
+func TestVerifyMembershipBadProof(t *testing.T) {
+	c := newTestClient(t)
+	if err := c.VerifyMembership(100, []byte("key"), []byte{0x0a, 0xff}, []byte("v")); err == nil {
+		t.Fatal("expected error for undecodable proof")
+	}
+}
+
 func TestVerifyMembershipProofCountMismatch(t *testing.T) {
-	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
-	oneProof := []ics23.CommitmentProof{ics23.CommitmentProof_Exist{Exist: &ics23.ExistenceProof{}}}
-	if err := VerifyMembership(cs, oneProof, twoLevelPath([]byte("ibc"), []byte("key")), []byte("v")); err == nil {
-		t.Fatal("expected error for proof count mismatch")
+	c := newTestClient(t)
+	ep := encodeExistenceProof([]byte("k"), []byte("v"), nil, nil)
+	oneProof := encodeMerkleProof(encodeCommitmentExist(ep))
+	if err := c.VerifyMembership(100, []byte("key"), oneProof, []byte("v")); err == nil {
+		t.Fatal("expected error for proof count != specs")
 	}
 }
 
-func TestVerifyMembershipPathCountMismatch(t *testing.T) {
-	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
-	onePath := types.MerklePath{KeyPath: [][]byte{[]byte("ibc")}}
-	if err := VerifyMembership(cs, twoExistProofs(), onePath, []byte("v")); err == nil {
-		t.Fatal("expected error for path length mismatch")
-	}
-}
-
-func TestVerifyMembershipConsensusStateNotFound(t *testing.T) {
-	if err := VerifyMembership(ConsensusState{}, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")), []byte("v")); err == nil {
+func TestVerifyMembershipConsensusNotFound(t *testing.T) {
+	c := newTestClient(t)
+	// Height 50 <= latest 100, but no consensus state was stored there.
+	if err := c.VerifyMembership(50, []byte("key"), twoExistProof(), []byte("v")); err == nil {
 		t.Fatal("expected error when consensus state not found")
 	}
 }
 
-func TestVerifyMembershipEmptyRoot(t *testing.T) {
-	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: nil}}
-	if err := VerifyMembership(cs, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")), []byte("v")); err == nil {
-		t.Fatal("expected error for empty root hash")
-	}
-}
+// --- VerifyNonMembership error paths ---
 
-func TestVerifyMembershipProofFails(t *testing.T) {
-	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
-	if err := VerifyMembership(cs, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key")), []byte("v")); err == nil {
-		t.Fatal("expected error for invalid proof")
-	}
-}
-
-// --- VerifyNonMembership tests ---
-
-func TestVerifyNonMembershipProofCountMismatch(t *testing.T) {
-	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
-	oneProof := []ics23.CommitmentProof{ics23.CommitmentProof_Exist{Exist: &ics23.ExistenceProof{}}}
-	if err := VerifyNonMembership(cs, oneProof, twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
-		t.Fatal("expected error for proof count mismatch")
-	}
-}
-
-func TestVerifyNonMembershipConsensusStateNotFound(t *testing.T) {
-	proofs := []ics23.CommitmentProof{
-		ics23.CommitmentProof_Nonexist{Nonexist: &ics23.NonExistenceProof{}},
-		ics23.CommitmentProof_Exist{Exist: &ics23.ExistenceProof{}},
-	}
-	if err := VerifyNonMembership(ConsensusState{}, proofs, twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
+func TestVerifyNonMembershipConsensusNotFound(t *testing.T) {
+	c := newTestClient(t)
+	nep := encodeNonExistenceProof([]byte("k"), nil, nil)
+	ep := encodeExistenceProof([]byte("k"), []byte("v"), nil, nil)
+	buf := encodeMerkleProof(encodeCommitmentNonexist(nep), encodeCommitmentExist(ep))
+	if err := c.VerifyNonMembership(50, []byte("key"), buf); err == nil {
 		t.Fatal("expected error when consensus state not found")
-	}
-}
-
-func TestVerifyNonMembershipEmptyRoot(t *testing.T) {
-	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: nil}}
-	proofs := []ics23.CommitmentProof{
-		ics23.CommitmentProof_Nonexist{Nonexist: &ics23.NonExistenceProof{}},
-		ics23.CommitmentProof_Exist{Exist: &ics23.ExistenceProof{}},
-	}
-	if err := VerifyNonMembership(cs, proofs, twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
-		t.Fatal("expected error for empty root hash")
 	}
 }
 
 func TestVerifyNonMembershipFirstProofNotNonexist(t *testing.T) {
-	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
-	if err := VerifyNonMembership(cs, twoExistProofs(), twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
+	c := newTestClient(t)
+	// Consensus exists at 100, two proofs, but the first is an existence proof.
+	if err := c.VerifyNonMembership(100, []byte("key"), twoExistProof()); err == nil {
 		t.Fatal("expected error when first proof is not a non-existence proof")
 	}
 }
 
-func TestVerifyNonMembershipProofFails(t *testing.T) {
-	cs := ConsensusState{Timestamp: testNow, Root: MerkleRoot{Hash: []byte("root")}}
-	proofs := []ics23.CommitmentProof{
-		ics23.CommitmentProof_Nonexist{Nonexist: &ics23.NonExistenceProof{}},
-		ics23.CommitmentProof_Exist{Exist: &ics23.ExistenceProof{}},
-	}
-	if err := VerifyNonMembership(cs, proofs, twoLevelPath([]byte("ibc"), []byte("key"))); err == nil {
-		t.Fatal("expected error for invalid non-existence proof")
+func TestVerifyNonMembershipProofCountMismatch(t *testing.T) {
+	c := newTestClient(t)
+	nep := encodeNonExistenceProof([]byte("k"), nil, nil)
+	oneProof := encodeMerkleProof(encodeCommitmentNonexist(nep))
+	if err := c.VerifyNonMembership(100, []byte("key"), oneProof); err == nil {
+		t.Fatal("expected error for proof count != specs")
 	}
 }

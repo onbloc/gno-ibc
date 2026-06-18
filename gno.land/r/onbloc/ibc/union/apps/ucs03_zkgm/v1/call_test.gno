@@ -17,7 +17,7 @@ const mockReceiverPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mo
 
 func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
 	mock.Reset(cross(cur))
-	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
 	call := z.Call{
 		Sender:           []byte("sender"),
 		ContractAddress:  []byte(mockReceiverPath),
@@ -47,7 +47,7 @@ func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
 func TestExecuteCallReceiverErrorReturnsFailureAck(cur realm, t *testing.T) {
 	mock.Reset(cross(cur))
 	mock.SetError(cross(cur), "receiver failed")
-	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
 
 	res, err := (&ZkgmV1{}).executeCall(cur, packet, address("g1relayer"), nil, u256.Zero(), z.Call{
 		Sender:          []byte("sender"),
@@ -66,7 +66,7 @@ func TestExecuteCallReceiverErrorReturnsFailureAck(cur realm, t *testing.T) {
 func TestExecuteCallReceiverPanicReturnsOnlyMakerAck(cur realm, t *testing.T) {
 	mock.Reset(cross(cur))
 	mock.SetPanic(cross(cur), "boom")
-	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
 
 	res, err := (&ZkgmV1{}).executeCall(cur, packet, address("g1relayer"), nil, u256.Zero(), z.Call{
 		Sender:          []byte("sender"),
@@ -85,7 +85,7 @@ func TestIntentRecvOnlyMakerCallAborts(cur realm, t *testing.T) {
 		Sender:          []byte("sender"),
 		ContractAddress: []byte(mockReceiverPath),
 	}))
-	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), data, 0)
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), data, 0)
 
 	uassert.AbortsContains(t, cur, "zkgm: only maker", func(cur realm) {
 		(&ZkgmV1{}).IntentRecv(cur, packet, address("g1relayer"), nil)

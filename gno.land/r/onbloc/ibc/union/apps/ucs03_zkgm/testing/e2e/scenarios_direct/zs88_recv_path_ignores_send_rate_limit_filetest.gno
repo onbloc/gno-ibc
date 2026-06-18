@@ -43,7 +43,7 @@ func main(cur realm) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), channelId, sh.TokenOrderPacketData(cross(cur), order), types.Timestamp(100))
+	packet := core.NewPacket(types.ChannelId(1), channelId, sh.TokenOrderPacketData(cross(cur), order), types.Timestamp(100))
 
 	println("[SCENARIO] recv mint is not charged against send-side bucket")
 	res := inst.Recv(cross(cur), packet, testutils.TestAddress("zs88-relayer"), nil)

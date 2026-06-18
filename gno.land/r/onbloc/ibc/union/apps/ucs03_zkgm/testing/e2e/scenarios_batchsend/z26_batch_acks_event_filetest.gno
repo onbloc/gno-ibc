@@ -26,7 +26,7 @@ func (a *asyncApp) OnChannelCloseConfirm(cur realm, channelId types.ChannelId, r
 }
 
 func (a *asyncApp) OnRecvPacket(cur realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {
-	return core.NewRecvPacketResult(cross(cur), types.PacketStatusAsync, nil)
+	return core.NewRecvPacketResult(types.PacketStatusAsync, nil)
 }
 
 func (a *asyncApp) OnAcknowledgementPacket(cur realm, packet types.Packet, acknowledgement []byte, relayer address) {
@@ -43,7 +43,7 @@ func main(cur realm) {
 	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit([]byte(batchAcksPort), []byte(batchAcksPort), connectionId, "async-v1"))
 	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, "async-v1", types.ChannelId(101), nil, 1))
 
-	packet := core.NewPacket(cross(cur), types.ChannelId(99), channelId, []byte("async-packet"), types.Timestamp(1<<62))
+	packet := core.NewPacket(types.ChannelId(99), channelId, []byte("async-packet"), types.Timestamp(1<<62))
 	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))
 
 	batchHash := core.BatchAcks(cross(cur), types.NewMsgBatchAcks([]types.Packet{packet}, [][]byte{[]byte("ack")}))

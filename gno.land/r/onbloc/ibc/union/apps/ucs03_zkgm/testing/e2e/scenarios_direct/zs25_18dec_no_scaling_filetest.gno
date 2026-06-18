@@ -33,7 +33,7 @@ func main(cur realm) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    meta,
 	}
-	packet := core.NewPacket(cross(cur), types.ChannelId(50), destChannel, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(100))
+	packet := core.NewPacket(types.ChannelId(50), destChannel, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(100))
 	inst.Recv(cross(cur), packet, testutils.TestAddress("zs25-relayer"), nil)
 	println("voucher_decimals", impl.VoucherDecimalsOf(quoteToken))
 	println("receiver_balance", impl.VoucherBalanceOf(quoteToken, address(receiver)))

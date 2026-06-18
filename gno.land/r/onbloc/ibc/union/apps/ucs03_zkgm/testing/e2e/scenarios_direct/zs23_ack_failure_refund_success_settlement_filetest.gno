@@ -62,7 +62,7 @@ func zs23Send(cur realm, inst zkgm.ZkgmImpl, channelId types.ChannelId, sender s
 	if err != nil {
 		panic(err)
 	}
-	return core.NewPacket(cross(cur), channelId, types.ChannelId(99), data, types.Timestamp(120))
+	return core.NewPacket(channelId, types.ChannelId(99), data, types.Timestamp(120))
 }
 
 func zs23FailureAckBytes() []byte {

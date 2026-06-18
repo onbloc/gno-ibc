@@ -49,14 +49,12 @@ func (a *App) OnChannelOpenConfirm(cur realm, channelId types.ChannelId, relayer
 
 func (a *App) OnChannelCloseInit(cur realm, channelId types.ChannelId, relayer address) {
 	requireCoreCaller(cur, "channel close init")
-	ensureImpl()
-	impl.PreChannelCloseInit(cross(cur), channelId)
+	panic("the show must go on")
 }
 
 func (a *App) OnChannelCloseConfirm(cur realm, channelId types.ChannelId, relayer address) {
 	requireCoreCaller(cur, "channel close confirm")
-	ensureImpl()
-	impl.PostChannelCloseConfirm(cross(cur), channelId)
+	panic("the show must go on")
 }
 
 func (a *App) OnRecvPacket(cur realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {

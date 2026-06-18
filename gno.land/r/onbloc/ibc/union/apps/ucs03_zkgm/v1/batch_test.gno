@@ -41,7 +41,7 @@ func TestExecuteBatchTokenOrderAndCallBothSucceed(cur realm, t *testing.T) {
 		}),
 		batchMustCallInstruction(batchCall("sender", "hook-calldata")),
 	}}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChannel, nil, 0)
+	packet := core.NewPacket(types.ChannelId(1), destChannel, nil, 0)
 
 	ackBytes, err := (&ZkgmV1{}).executeBatch(cur, packet, address(relayer), []byte("relay-msg"), path, [32]byte{0xCC}, batch, false)
 
@@ -270,7 +270,7 @@ func TestVerifyBatchMultiDenom(cur realm, t *testing.T) {
 
 func TestExecuteBatchAggregatesChildAcks(cur realm, t *testing.T) {
 	mock.Reset(cross(cur))
-	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustCallInstruction(batchCall("sender", "first")),
 		batchMustCallInstruction(batchCall("sender", "second")),
@@ -294,7 +294,7 @@ func TestExecuteBatchAggregatesChildAcks(cur realm, t *testing.T) {
 func TestExecuteBatchPanicChildPropagatesOnlyMaker(cur realm, t *testing.T) {
 	mock.Reset(cross(cur))
 	mock.SetPanic(cross(cur), "boom")
-	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustCallInstruction(batchCall("sender", "first")),
 		batchMustCallInstruction(batchCall("sender", "second")),
@@ -308,7 +308,7 @@ func TestExecuteBatchPanicChildPropagatesOnlyMaker(cur realm, t *testing.T) {
 }
 
 func TestAcknowledgeBatchRejectsAckCountMismatch(cur realm, t *testing.T) {
-	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustCallInstruction(batchCall("sender", "first")),
 		batchMustCallInstruction(batchCall("sender", "second")),
@@ -322,7 +322,7 @@ func TestAcknowledgeBatchRejectsAckCountMismatch(cur realm, t *testing.T) {
 func TestTimeoutBatchTokenOrderChildrenRefund(cur realm, t *testing.T) {
 	resetTokenOrderTest(cur)
 	path := u256.NewUint(23)
-	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
 	orderA := batchRefundOrder("timeout-a", "ibc/batch-timeout-a", "quote-a", 11)
 	orderB := batchRefundOrder("timeout-b", "ibc/batch-timeout-b", "quote-b", 17)
 	increaseChannelBalanceV2(cross(cur), types.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount)

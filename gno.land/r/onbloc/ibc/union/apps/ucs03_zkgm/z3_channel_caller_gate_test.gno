@@ -9,9 +9,6 @@ import (
 
 // Channel handshake callbacks must be entered through the IBC core realm.
 //
-// The callbacks are no-ops today, but the caller gate is still enforced to
-// preserve the core-to-app security boundary for future channel logic.
-//
 // The closures are defined in this frame so they preserve the testing.SetRealm
 // context used by cur.Previous().
 
@@ -27,31 +24,33 @@ func setupChannelGate() {
 }
 
 func TestChannelGateCallerAuthorization(cur realm, t *testing.T) {
-	gates := []channelGate{
+	openGates := []channelGate{
 		{"channel open init", func() { AsIBCApp().OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer")) }},
 		{"channel open try", func() { AsIBCApp().OnChannelOpenTry(cross(cur), 1, 2, Version, Version, address("g1relayer")) }},
 		{"channel open ack", func() { AsIBCApp().OnChannelOpenAck(cross(cur), 2, 3, Version, address("g1relayer")) }},
 		{"channel open confirm", func() { AsIBCApp().OnChannelOpenConfirm(cross(cur), 2, address("g1relayer")) }},
+	}
+	closeGates := []channelGate{
 		{"channel close init", func() { AsIBCApp().OnChannelCloseInit(cross(cur), 2, address("g1relayer")) }},
 		{"channel close confirm", func() { AsIBCApp().OnChannelCloseConfirm(cross(cur), 2, address("g1relayer")) }},
 	}
 
 	// An ephemeral (`maketx run`, PkgPath "") caller must be rejected.
-	for _, g := range gates {
+	for _, g := range append(openGates, closeGates...) {
 		setupChannelGate()
 		testing.SetRealm(testing.NewUserRealm(address(testutils.TestAddress("eoa"))))
 		uassert.AbortsContains(t, cur, "only core can "+g.action, g.invoke)
 	}
 
 	// The proxy realm must be rejected: there is no legitimate self-call path.
-	for _, g := range gates {
+	for _, g := range append(openGates, closeGates...) {
 		setupChannelGate()
 		testing.SetRealm(testing.NewCodeRealm(proxyPkgPath))
 		uassert.AbortsContains(t, cur, "only core can "+g.action, g.invoke)
 	}
 
-	// The core realm passes the gate (positive control).
-	for _, g := range gates {
+	// The core realm passes the gate for open callbacks.
+	for _, g := range openGates {
 		setupChannelGate()
 		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		uassert.NotAborts(t, cur, g.invoke)

@@ -39,7 +39,7 @@ func TestInitializeDecimalsAgnosticAccounting(cur realm, t *testing.T) {
 		denom := PredictWrappedTokenV2(u256.NewUint(tc.path), tc.dest, base, MetadataImage(mustDecodeTokenMetadata(meta)))
 		rx := testAddress(tc.rxSuffix)
 		res, err := (&ZkgmV1{}).executeTokenOrderV2(cur,
-			core.NewPacket(cross(cur), types.ChannelId(1), types.ChannelId(tc.dest), nil, 0),
+			core.NewPacket(types.ChannelId(1), types.ChannelId(tc.dest), nil, 0),
 			relayer, u256.NewUint(tc.path),
 			z.TokenOrderV2{
 				Sender: []byte("s"), Receiver: []byte(rx), BaseToken: base,
@@ -122,7 +122,7 @@ func TestBaseAmountPreservedThroughMint(cur realm, t *testing.T) {
 	}
 
 	res, err := (&ZkgmV1{}).executeTokenOrderV2(cur,
-		core.NewPacket(cross(cur), chanSrc, chanDest, nil, 0),
+		core.NewPacket(chanSrc, chanDest, nil, 0),
 		address(testAddress("rt-rly-mint")), path, order, false)
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatusSuccess)
@@ -174,7 +174,7 @@ func TestInitializeOverflowAmountReturnsFailureAckNoMint(cur realm, t *testing.T
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}))
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, data, 0)
+	packet := core.NewPacket(types.ChannelId(1), destChan, data, 0)
 
 	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("ovf-rly")), nil)
 
@@ -264,7 +264,7 @@ func TestInitializeDecimalsExceedMaxReturnsFailureAck(cur realm, t *testing.T) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}))
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChan, data, 0)
+	packet := core.NewPacket(types.ChannelId(1), destChan, data, 0)
 
 	res := (&ZkgmV1{}).Recv(cur, packet, address(testAddress("ovd-rly")), nil)
 

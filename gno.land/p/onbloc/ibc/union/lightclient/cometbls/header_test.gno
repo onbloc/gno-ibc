@@ -443,6 +443,12 @@ func TestUpdateStateStoresOlderHeightWithoutRegressingLatestHeight(t *testing.T)
 	if update.Height != 60 {
 		t.Fatalf("update height: got %d want 60", update.Height)
 	}
+	if len(update.ClientStateBytes) != 0 {
+		t.Fatal("older update must not include client state bytes")
+	}
+	if len(update.ConsensusStateBytes) == 0 {
+		t.Fatal("older update must still include consensus state bytes")
+	}
 	if _, found := c.getConsensusState(types.NewHeight(60)); !found {
 		t.Fatal("older valid consensus state should still be stored")
 	}

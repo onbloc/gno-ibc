@@ -408,6 +408,60 @@ func TestVerifyHeaderRejectsInvalidHeader(t *testing.T) {
 	}
 }
 
+func TestVerifyHeaderWrapperRejectsMalformedHeader(t *testing.T) {
+	// Union reference: VerifyHeader decodes the client message before entering
+	// the typed verify_header implementation.
+	c := newTestClient(t)
+	var caller, relayer address
+
+	_, err := c.VerifyHeader(caller, []byte{0x00}, relayer)
+
+	assertVerifyHeaderErrContains(t, err, "failed to decode header")
+}
+
+func TestVerifyHeaderWrapperRejectsInvalidHeaderBasic(t *testing.T) {
+	// Union reference: verify_header only accepts a well-formed header whose
+	// trusted height is lower than the signed height.
+	c := newTestClient(t)
+	h := verifyHeaderTestHeader(100, 100, testNow+1_000_000_000)
+	headerBytes, err := EncodeHeader(h)
+	if err != nil {
+		t.Fatalf("EncodeHeader: %v", err)
+	}
+	var caller, relayer address
+
+	_, err = c.VerifyHeader(caller, headerBytes, relayer)
+
+	assertVerifyHeaderErrContains(t, err, "must be less than header height")
+}
+
+func TestVerifyHeaderWrapperDuplicateHeightNoopBeforeProofVerification(t *testing.T) {
+	// Union reference: cometbls verify_header returns the existing consensus
+	// state when the untrusted height has already been updated, before running
+	// the expensive header/proof verification path.
+	c := newTestClient(t)
+	h := verifyHeaderTestHeader(90, 100, testNow+1_000_000_000)
+	headerBytes, err := EncodeHeader(h)
+	if err != nil {
+		t.Fatalf("EncodeHeader: %v", err)
+	}
+	var caller, relayer address
+
+	update, err := c.VerifyHeader(caller, headerBytes, relayer)
+	if err != nil {
+		t.Fatalf("VerifyHeader duplicate height: %v", err)
+	}
+	if update.Height != 100 {
+		t.Fatalf("update height: got %d want 100", update.Height)
+	}
+	if len(update.ClientStateBytes) != 0 {
+		t.Fatal("duplicate update must not return client state bytes")
+	}
+	if len(update.ConsensusStateBytes) != 0 {
+		t.Fatal("duplicate update must not return consensus state bytes")
+	}
+}
+
 func TestUpdateStateStoresConsensusAndAdvancesLatestHeight(t *testing.T) {
 	// Union reference: update_state overwrites client state only when the
 	// untrusted height advances latest_height,

@@ -134,7 +134,9 @@ func PacketAcknowledgement(cur realm, msg types.MsgPacketAcknowledgement) {
 		if packet.SourceChannelId != first.SourceChannelId {
 			panic(ErrBatchSameChannelOnly)
 		}
-		c.markPacketAcknowledged(packet)
+		if err := c.markPacketAcknowledged(packet); err != nil {
+			panic(err)
+		}
 
 		ack := msg.Acknowledgements[i]
 		portId := store.getChannelOwner(packet.SourceChannelId)
@@ -172,7 +174,9 @@ func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
 	if proofTimestamp < packet.TimeoutTimestamp {
 		panic(ErrPacketTimeoutNotReached)
 	}
-	c.markPacketAcknowledged(packet)
+	if err := c.markPacketAcknowledged(packet); err != nil {
+		panic(err)
+	}
 
 	portId := store.getChannelOwner(packet.SourceChannelId)
 	store.getAppByPortId(portId).OnTimeoutPacket(cross(cur), packet, relayer)

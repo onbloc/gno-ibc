@@ -197,19 +197,20 @@ func (c *client) deletePacketCommitment(packet types.Packet) {
 	setChainParam(h256ChainParamKey(path), zero[:])
 }
 
-func (c *client) markPacketAcknowledged(packet types.Packet) {
+func (c *client) markPacketAcknowledged(packet types.Packet) error {
 	path := packetCommitmentPath(packet)
 	commitment, found := c.getBatchPacketsAtPath(path)
 	if !found {
-		panic(ErrPacketCommitmentNotFound)
+		return ErrPacketCommitmentNotFound
 	}
 	if commitment == types.COMMITMENT_MAGIC_ACK {
-		panic(ErrPacketAlreadyAcknowledged)
+		return ErrPacketAlreadyAcknowledged
 	}
 	if commitment != types.COMMITMENT_MAGIC {
-		panic(ErrPacketCommitmentNotFound)
+		return ErrPacketCommitmentNotFound
 	}
 	c.setBatchPackets(commitPacketHash(packet), types.COMMITMENT_MAGIC_ACK)
+	return nil
 }
 
 func (c *client) hasPacketCommitment(packet types.Packet) bool {

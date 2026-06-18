@@ -848,7 +848,9 @@ func TestBatchSendRejectsAlreadyAcknowledgedPacket(cur realm, t *testing.T) {
 	p2 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("b"), TimeoutTimestamp: 100}
 	store.commitPacket(p1)
 	store.commitPacket(p2)
-	store.clientForChannel(channelId).markPacketAcknowledged(p2)
+	if err := store.clientForChannel(channelId).markPacketAcknowledged(p2); err != nil {
+		t.Fatal(err)
+	}
 
 	uassert.AbortsContains(t, cur, "packet commitment not found", func(cur realm) {
 		BatchSend(cur, types.MsgBatchSend{Packets: []types.Packet{p1, p2}})

@@ -339,6 +339,13 @@ func forwardPath(channels ...uint32) *u256.Uint {
 
 type forwardTestLightClient struct{}
 
+var v1TestConnectionSeq uint32
+
+func nextV1TestConnectionId() types.ConnectionId {
+	v1TestConnectionSeq++
+	return types.ConnectionId(v1TestConnectionSeq)
+}
+
 func (c *forwardTestLightClient) CreateClient(_ realm, clientId types.ClientId, clientStateBytes, consensusStateBytes []byte) string {
 	return "forward-counterparty"
 }
@@ -377,7 +384,7 @@ func openForwardTestChannel(cur realm, counterpartyChannelId types.ChannelId) ty
 	}
 
 	clientId := core.CreateClient(cross(cur), types.NewMsgCreateClient(clientType, nil, nil))
-	connectionId := core.NextConnectionId()
+	connectionId := nextV1TestConnectionId()
 	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 0))
 

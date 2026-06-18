@@ -10,7 +10,7 @@ import (
 
 func main(cur realm) {
 	clientId := realcometbls.CreateZ35CometBLSClient(cross(cur))
-	connectionId := core.NextConnectionId()
+	connectionId := types.ConnectionId(1)
 	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(78), realcometbls.Z35ConnectionTryProof(cross(cur)), uint64(realcometbls.DevnetHeight-1)))

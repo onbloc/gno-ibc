@@ -99,7 +99,7 @@ func openTimeoutScenarioChannelPair(cur realm) e2e.ChannelPair {
 		core.RegisterClient(cross(cur), timeoutScenarioClientType, &timeoutScenarioLightClient{})
 	}
 	clientId := core.CreateClient(cross(cur), types.NewMsgCreateClient(timeoutScenarioClientType, nil, nil))
-	connectionId := core.NextConnectionId()
+	connectionId := types.ConnectionId(1)
 	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
 

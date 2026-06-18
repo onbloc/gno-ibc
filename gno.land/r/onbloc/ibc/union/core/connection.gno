@@ -127,10 +127,6 @@ func QueryConnection(connectionId types.ConnectionId) string {
 	return hexString(bz)
 }
 
-func NextConnectionId() types.ConnectionId {
-	return types.ConnectionId(uint32(store.connectionSeq + 1))
-}
-
 func ensureConnectionOpen(connectionId types.ConnectionId) types.Connection {
 	connection, ok := store.getConnection(connectionId)
 	if !ok {

@@ -130,27 +130,19 @@ func PacketAcknowledgement(cur realm, msg types.MsgPacketAcknowledgement) {
 	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, key[:], value[:])
 
 	c := store.clientForChannel(first.SourceChannelId)
-	processed := false
 	for i, packet := range msg.Packets {
 		// Validate same channel before the commitment check so that a mixed-channel
 		// batch is always rejected, not silently skipped.
 		if packet.SourceChannelId != first.SourceChannelId {
 			panic(ErrBatchSameChannelOnly)
 		}
-		if !c.hasPacketCommitment(packet) {
-			continue
-		}
+		c.markPacketAcknowledged(packet)
 
 		ack := msg.Acknowledgements[i]
 		portId := store.getChannelOwner(packet.SourceChannelId)
-		c.deletePacketCommitment(packet)
-		processed = true
 		store.getAppByPortId(portId).OnAcknowledgementPacket(cross(cur), packet, ack, relayer)
 
 		emitPacketAckEvent(packet, channel, connection, ack)
-	}
-	if processed {
-		c.deleteBatchPackets(batchHash)
 	}
 }
 

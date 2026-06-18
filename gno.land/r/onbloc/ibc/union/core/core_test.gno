@@ -1759,8 +1759,8 @@ func TestPacketAcknowledgementRoundtrip(cur realm, t *testing.T) {
 	if len(app.ackPackets) != 1 {
 		t.Fatalf("OnAcknowledgementPacket calls: got %d want 1", len(app.ackPackets))
 	}
-	if store.hasPacketCommitment(packet) {
-		t.Fatal("acknowledgement must delete source packet commitment")
+	if got, ok := store.clientForChannel(packet.SourceChannelId).getBatchPacketsAtPath(packetCommitmentPath(packet)); !ok || got != types.COMMITMENT_MAGIC_ACK {
+		t.Fatalf("acknowledgement marker: ok=%v got=%s want %s", ok, got, types.COMMITMENT_MAGIC_ACK)
 	}
 }
 
@@ -1801,12 +1801,15 @@ func TestPacketAcknowledgementBatchUsesUnionBatchReceipts(cur realm, t *testing.
 	if len(app.ackPackets) != 2 {
 		t.Fatalf("OnAcknowledgementPacket calls: got %d want 2", len(app.ackPackets))
 	}
-	if store.hasPacketCommitment(p1) || store.hasPacketCommitment(p2) {
-		t.Fatal("PacketAcknowledgement must delete every batch packet commitment")
+	if got, ok := store.clientForChannel(channelId).getBatchPacketsAtPath(packetCommitmentPath(p1)); !ok || got != types.COMMITMENT_MAGIC_ACK {
+		t.Fatalf("p1 acknowledgement marker: ok=%v got=%s want %s", ok, got, types.COMMITMENT_MAGIC_ACK)
+	}
+	if got, ok := store.clientForChannel(channelId).getBatchPacketsAtPath(packetCommitmentPath(p2)); !ok || got != types.COMMITMENT_MAGIC_ACK {
+		t.Fatalf("p2 acknowledgement marker: ok=%v got=%s want %s", ok, got, types.COMMITMENT_MAGIC_ACK)
 	}
 }
 
-func TestPacketAcknowledgementDeletesBatchCommitment(cur realm, t *testing.T) {
+func TestPacketAcknowledgementPreservesBatchCommitment(cur realm, t *testing.T) {
 	resetStore()
 	_, _, channelId := setupOpenChannel(t)
 	p1 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100}
@@ -1824,9 +1827,72 @@ func TestPacketAcknowledgementDeletesBatchCommitment(cur realm, t *testing.T) {
 		ProofHeight:      10,
 	})
 
-	if got := QueryBatchPackets(channelId, batchHash); got != "" {
-		t.Fatalf("batch commitment after ack: got %q want empty", got)
+	if got := QueryBatchPackets(channelId, batchHash); got != types.COMMITMENT_MAGIC.String() {
+		t.Fatalf("batch commitment after ack: got %q want %s", got, types.COMMITMENT_MAGIC)
 	}
+	if got, ok := store.clientForChannel(channelId).getBatchPacketsAtPath(packetCommitmentPath(p1)); !ok || got != types.COMMITMENT_MAGIC_ACK {
+		t.Fatalf("p1 acknowledgement marker after ack: ok=%v got=%s want %s", ok, got, types.COMMITMENT_MAGIC_ACK)
+	}
+	if got, ok := store.clientForChannel(channelId).getBatchPacketsAtPath(packetCommitmentPath(p2)); !ok || got != types.COMMITMENT_MAGIC_ACK {
+		t.Fatalf("p2 acknowledgement marker after ack: ok=%v got=%s want %s", ok, got, types.COMMITMENT_MAGIC_ACK)
+	}
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L706-L728
+func TestUnionAcknowledgePacketOK(cur realm, t *testing.T) {
+	resetStore()
+	_, _, channelId := setupOpenChannel(t)
+	packet := types.Packet{SourceChannelId: channelId, DestinationChannelId: channelId, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: testFutureTimeoutNanos}
+	store.commitPacket(packet)
+
+	uassert.NotAborts(t, cur, func(cur realm) {
+		PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{
+			Packets:          []types.Packet{packet},
+			Acknowledgements: [][]byte{{1, 2, 3}},
+			Proof:            []byte{1},
+			ProofHeight:      1,
+			Relayer:          testutils.TestAddress("union-relayer"),
+		})
+	})
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L818-L840
+func TestUnionAcknowledgePacketTampered(cur realm, t *testing.T) {
+	resetStore()
+	_, _, channelId := setupOpenChannel(t)
+	sent := types.Packet{SourceChannelId: channelId, DestinationChannelId: channelId, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: testFutureTimeoutNanos}
+	tampered := types.Packet{SourceChannelId: channelId, DestinationChannelId: channelId, Data: types.Bytes{4, 1, 2, 3}, TimeoutTimestamp: testFutureTimeoutNanos}
+	store.commitPacket(sent)
+
+	uassert.AbortsContains(t, cur, "packet commitment not found", func(cur realm) {
+		PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{
+			Packets:          []types.Packet{tampered},
+			Acknowledgements: [][]byte{{1, 2, 3}},
+			Proof:            []byte{1},
+			ProofHeight:      1,
+			Relayer:          testutils.TestAddress("union-relayer"),
+		})
+	})
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L917-L939
+func TestUnionAcknowledgePacketNotSent(cur realm, t *testing.T) {
+	resetStore()
+	_, _, channelId := setupOpenChannel(t)
+	packet := types.Packet{SourceChannelId: channelId, DestinationChannelId: channelId, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: testFutureTimeoutNanos}
+
+	uassert.AbortsContains(t, cur, "packet commitment not found", func(cur realm) {
+		PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{
+			Packets:          []types.Packet{packet},
+			Acknowledgements: [][]byte{{1, 2, 3}},
+			Proof:            []byte{1},
+			ProofHeight:      1,
+			Relayer:          testutils.TestAddress("union-relayer"),
+		})
+	})
 }
 
 func TestPacketAcknowledgementBatchRejectsDifferentSourceChannel(cur realm, t *testing.T) {
@@ -1836,9 +1902,8 @@ func TestPacketAcknowledgementBatchRejectsDifferentSourceChannel(cur realm, t *t
 	store.createChannel(otherChannelId, types.Channel{State: types.ChannelStateOpen, ConnectionId: connId}, nil)
 	p1 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100}
 	p2 := types.Packet{SourceChannelId: otherChannelId, DestinationChannelId: 99, Data: types.Bytes("b"), TimeoutTimestamp: 100}
+	store.commitPacket(p1)
 
-	// Channel check is validated before commitment check, so commitments are not
-	// required for the different-source-channel panic to fire.
 	uassert.AbortsContains(t, cur, "batch must use the same channel", func(cur realm) {
 		PacketAcknowledgement(cur, types.MsgPacketAcknowledgement{
 			Packets:          []types.Packet{p1, p2},

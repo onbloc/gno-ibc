@@ -16,7 +16,9 @@ func ConnectionOpenInit(cur realm, msg types.MsgConnectionOpenInit) {
 
 	connectionId := store.nextConnectionId()
 
-	store.saveConnection(connectionId, NewConnection(types.ConnectionStateInit, msg.ClientId, msg.CounterpartyClientId, 0))
+	connection := NewConnection(types.ConnectionStateInit, msg.ClientId, msg.CounterpartyClientId, 0)
+
+	store.saveConnection(connectionId, connection)
 	emitConnectionOpenInitEvent(connectionId, msg.ClientId, msg.CounterpartyClientId)
 }
 
@@ -35,14 +37,17 @@ func ForceConnectionOpenTry(cur realm, msg types.MsgConnectionOpenTry) {
 func connectionOpenTry(msg types.MsgConnectionOpenTry, verify bool) {
 	connectionId := store.nextConnectionId()
 
+	connection := NewConnection(types.ConnectionStateTryOpen, msg.ClientId, msg.CounterpartyClientId, msg.CounterpartyConnectionId)
+
 	expectedConnection := NewConnection(types.ConnectionStateInit, msg.CounterpartyClientId, msg.ClientId, 0)
+
 	if verify {
 		key := types.ConnectionPath(msg.CounterpartyConnectionId)
 		value := connectionValue(expectedConnection)
 		verifyMembershipActive(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
 	}
 
-	store.saveConnection(connectionId, NewConnection(types.ConnectionStateTryOpen, msg.ClientId, msg.CounterpartyClientId, msg.CounterpartyConnectionId))
+	store.saveConnection(connectionId, connection)
 	emitConnectionOpenTryEvent(connectionId, msg.ClientId, msg.CounterpartyClientId, msg.CounterpartyConnectionId)
 }
 
@@ -67,8 +72,8 @@ func connectionOpenAck(msg types.MsgConnectionOpenAck, verify bool) {
 		panic(ErrInvalidConnectionState)
 	}
 
-	expectedConnection := NewConnection(types.ConnectionStateTryOpen, connection.CounterpartyClientId, connection.ClientId, msg.ConnectionId)
 	if verify {
+		expectedConnection := NewConnection(types.ConnectionStateTryOpen, connection.CounterpartyClientId, connection.ClientId, msg.ConnectionId)
 		key := types.ConnectionPath(msg.CounterpartyConnectionId)
 		value := connectionValue(expectedConnection)
 		verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofTry, key[:], value[:])
@@ -103,8 +108,11 @@ func connectionOpenConfirm(msg types.MsgConnectionOpenConfirm, verify bool) {
 	}
 
 	expectedConnection := NewConnection(types.ConnectionStateOpen, connection.CounterpartyClientId, connection.ClientId, msg.ConnectionId)
+
+	counterpartyConnectionId := connection.CounterpartyConnectionId
+
 	if verify {
-		key := types.ConnectionPath(connection.CounterpartyConnectionId)
+		key := types.ConnectionPath(counterpartyConnectionId)
 		value := connectionValue(expectedConnection)
 		verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofAck, key[:], value[:])
 	}
@@ -112,7 +120,7 @@ func connectionOpenConfirm(msg types.MsgConnectionOpenConfirm, verify bool) {
 	connection.State = types.ConnectionStateOpen
 	store.saveConnection(msg.ConnectionId, connection)
 
-	emitConnectionOpenConfirmEvent(msg.ConnectionId, connection.ClientId, connection.CounterpartyClientId, connection.CounterpartyConnectionId)
+	emitConnectionOpenConfirmEvent(msg.ConnectionId, connection.ClientId, connection.CounterpartyClientId, counterpartyConnectionId)
 }
 
 func QueryConnection(connectionId types.ConnectionId) string {

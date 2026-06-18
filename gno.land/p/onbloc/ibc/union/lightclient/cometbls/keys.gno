@@ -32,12 +32,9 @@ func heightKey(height types.Height) string {
 	return zeroPadDecimalUint64(height.RevisionNumber) + "-" + zeroPadDecimalUint64(height.RevisionHeight)
 }
 
-// zeroPadDecimalUint64 converts a uint64 number into a zero-padded 20-character string.
-//
-// num (uint64): The number to encode.
-//
-// Returns:
-// A zero-padded string representation of the number.
+// heightKey encodes a height as a fixed-width B+Tree key.
+// Because ibc-union heights use a single revision, lexicographic key
+// ordering is identical to numeric height ordering.
 func zeroPadDecimalUint64(num uint64) string {
 	// Convert the value to a decimal string.
 	s := strconv.FormatUint(num, 10)

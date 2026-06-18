@@ -274,25 +274,17 @@ func (c *StateLensIcs23MptLightClient) setConsensusState(height Height, consStat
 	c.consensusStateByHeight.Set(heightKey(height), consState)
 }
 
-// heightKey renders a height as a fixed-width, lexicographically sortable bptree
-// key. ibc-union heights carry a single revision, so the numeric ordering of the
-// formatted height matches height ordering.
-func heightKey(height types.Height) string {
-	return zeroPadDecimalUint64(height.RevisionNumber) + "-" + zeroPadDecimalUint64(height.RevisionHeight)
+// heightKey encodes a height as a fixed-width B+Tree key. Because ibc-union
+// heights use a single revision, lexicographic key ordering is identical to
+// numeric height ordering.
+func heightKey(height Height) string {
+	return fixedWidthUint64Key(height)
 }
 
-// zeroPadDecimalUint64 converts a uint64 number into a zero-padded 20-character string.
-//
-// num (uint64): The number to encode.
-//
-// Returns:
-// A zero-padded string representation of the number.
-func zeroPadDecimalUint64(num uint64) string {
-	// Convert the value to a decimal string.
-	s := strconv.FormatUint(num, 10)
-
-	// Zero-pad to a total length of 20 characters.
-	zerosNeeded := 20 - len(s)
-
-	return strings.Repeat("0", zerosNeeded) + s
+func fixedWidthUint64Key(v uint64) string {
+	s := ufmt.Sprintf("%d", v)
+	for len(s) < 20 {
+		s = "0" + s
+	}
+	return s
 }

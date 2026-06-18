@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"gno.land/p/nt/uassert/v0"
+
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
@@ -230,6 +232,71 @@ func TestEncodeDecodeHeaderRoundTrip(t *testing.T) {
 		t.Fatalf("TrustedHeight: got %d want %d", got.TrustedHeight.RevisionHeight, original.TrustedHeight.RevisionHeight)
 	}
 	bytesEq(t, "ZKP", got.ZeroKnowledgeProof, original.ZeroKnowledgeProof)
+}
+
+func TestHeaderValidateBasic(t *testing.T) {
+	testCases := []struct {
+		name    string
+		setup   func(*Header)
+		wantErr string
+	}{
+		{
+			name:  "valid",
+			setup: func(*Header) {},
+		},
+		{
+			name: "nil signed header",
+			setup: func(h *Header) {
+				h.SignedHeader = nil
+			},
+			wantErr: "signed header cannot be nil",
+		},
+		{
+			name: "empty zkp",
+			setup: func(h *Header) {
+				h.ZeroKnowledgeProof = nil
+			},
+			wantErr: "zero-knowledge proof cannot be empty",
+		},
+		{
+			name: "trusted height equals header height",
+			setup: func(h *Header) {
+				h.TrustedHeight = heightPtr(types.NewHeight(uint64(h.SignedHeader.Height)))
+			},
+			wantErr: "must be less than header height",
+		},
+		{
+			name: "trusted height greater than header height",
+			setup: func(h *Header) {
+				h.TrustedHeight = heightPtr(types.NewHeight(uint64(h.SignedHeader.Height + 1)))
+			},
+			wantErr: "must be less than header height",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newTestHeader(42, 1000, 500, 10, []byte{0xAA})
+			tc.setup(h)
+
+			err := h.ValidateBasic()
+
+			if tc.wantErr == "" {
+				uassert.NoError(t, err)
+				return
+			}
+			uassert.ErrorContains(t, err, tc.wantErr)
+		})
+	}
+}
+
+func TestHeaderGetHeightPreservesTrustedRevision(t *testing.T) {
+	h := newTestHeader(42, 1000, 500, 10, []byte{0xAA})
+	h.TrustedHeight = heightPtr(types.NewHeightWithRevision(7, 10))
+
+	got := h.GetHeight()
+	uassert.Equal(t, got.RevisionNumber, uint64(7))
+	uassert.Equal(t, got.RevisionHeight, uint64(42))
 }
 
 func verifyHeaderTestHeader(trustedHeight, signedHeight uint64, timestamp uint64) *Header {

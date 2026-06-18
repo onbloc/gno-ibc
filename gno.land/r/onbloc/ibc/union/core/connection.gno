@@ -48,7 +48,7 @@ func ConnectionOpenAck(_ realm, msg types.MsgConnectionOpenAck) {
 		panic(ErrInvalidConnectionState)
 	}
 
-	expectedConnection := NewConnection(types.ConnectionStateTryOpen, connection.CounterpartyClientId, connection.ClientId, msg.CounterpartyConnectionId)
+	expectedConnection := NewConnection(types.ConnectionStateTryOpen, connection.CounterpartyClientId, connection.ClientId, msg.ConnectionId)
 	key := types.ConnectionPath(msg.CounterpartyConnectionId)
 	value := connectionValue(expectedConnection)
 	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofTry, key[:], value[:])

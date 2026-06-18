@@ -35,6 +35,13 @@ func (c *CometblsLightClient) verifyHeader(header *Header, now time.Time) error 
 		)
 	}
 
+	if c.clientState.IsExpired(consState.Timestamp, uint64(now.UnixNano())) {
+		return makeError(
+			ErrTrustingPeriodExpired,
+			ufmt.Sprintf("trusted consensus state at TrustedHeight %s has expired", header.TrustedHeight),
+		)
+	}
+
 	// The untrusted (signed) header height. CometBLS carries a single revision,
 	// so heights are compared against the trusted height's revision height.
 	signedHeight := header.SignedHeader.Height

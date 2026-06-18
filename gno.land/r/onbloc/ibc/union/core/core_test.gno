@@ -711,6 +711,8 @@ func TestBatchSendReturnsUnionPacketCommitment(cur realm, t *testing.T) {
 	_, _, channelId := setupOpenChannel(t)
 	p1 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100}
 	p2 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("b"), TimeoutTimestamp: 100}
+	store.commitPacket(p1)
+	store.commitPacket(p2)
 
 	got := BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
 	want := types.MustCommit(types.CommitPackets([]types.Packet{p1, p2}))
@@ -728,11 +730,13 @@ func TestBatchSendReturnsUnionPacketCommitment(cur realm, t *testing.T) {
 	}
 }
 
-func TestBatchSendPerPacketMirrorKeyedByPath(cur realm, t *testing.T) {
+func TestBatchSendPreservesPerPacketCommitments(cur realm, t *testing.T) {
 	resetStore()
 	_, _, channelId := setupOpenChannel(t)
 	p1 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100}
 	p2 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("b"), TimeoutTimestamp: 100}
+	store.commitPacket(p1)
+	store.commitPacket(p2)
 
 	BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
 	c := store.clientForChannel(channelId)
@@ -740,7 +744,7 @@ func TestBatchSendPerPacketMirrorKeyedByPath(cur realm, t *testing.T) {
 		path := packetCommitmentPath(packet)
 		rawV, ok := c.getBatchPacketsAtPath(path)
 		if !ok {
-			t.Fatal("BatchSend must mirror per-packet commitment at the packet commitment path")
+			t.Fatal("BatchSend must preserve per-packet commitment at the packet commitment path")
 		}
 		if rawV != types.COMMITMENT_MAGIC {
 			t.Fatalf("per-packet mirror: got %s want %s", rawV, types.COMMITMENT_MAGIC)
@@ -766,6 +770,8 @@ func TestQueryCommitmentAtPathReturnsBatchValue(cur realm, t *testing.T) {
 	_, _, channelId := setupOpenChannel(t)
 	p1 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100}
 	p2 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("b"), TimeoutTimestamp: 100}
+	store.commitPacket(p1)
+	store.commitPacket(p2)
 
 	batchHash := BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
 
@@ -795,14 +801,84 @@ func TestBatchSendRejectsEmptyPacketList(cur realm, t *testing.T) {
 	})
 }
 
-func TestBatchSendRejectsNonOwner(cur realm, t *testing.T) {
+func TestBatchSendRejectsSinglePacket(cur realm, t *testing.T) {
+	resetStore()
+	_, _, channelId := setupOpenChannel(t)
+	packet := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100}
+	store.commitPacket(packet)
+
+	uassert.AbortsContains(t, cur, "not enough packets", func(cur realm) {
+		BatchSend(cur, types.MsgBatchSend{Packets: []types.Packet{packet}})
+	})
+}
+
+func TestBatchSendAllowsNonOwnerForCommittedPackets(cur realm, t *testing.T) {
 	resetStore()
 	_, _, channelId := setupOpenChannel(t)
 	setChannelOwner(channelId, "gno.land/r/not-channel-owner")
-	packet := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100}
+	p1 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100}
+	p2 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("b"), TimeoutTimestamp: 100}
+	store.commitPacket(p1)
+	store.commitPacket(p2)
 
-	uassert.AbortsContains(t, cur, "caller not authorized to send packet", func(cur realm) {
-		BatchSend(cur, types.MsgBatchSend{Packets: []types.Packet{packet}})
+	uassert.NotAborts(t, cur, func(cur realm) {
+		BatchSend(cur, types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
+	})
+}
+
+func TestBatchSendRejectsDifferentSourceChannel(cur realm, t *testing.T) {
+	resetStore()
+	_, connId, channelId := setupOpenChannel(t)
+	otherChannelId := store.nextChannelId()
+	store.createChannel(otherChannelId, types.Channel{State: types.ChannelStateOpen, ConnectionId: connId}, nil)
+	p1 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100}
+	p2 := types.Packet{SourceChannelId: otherChannelId, DestinationChannelId: 99, Data: types.Bytes("b"), TimeoutTimestamp: 100}
+	store.commitPacket(p1)
+	store.commitPacket(p2)
+
+	uassert.AbortsContains(t, cur, "batch must use the same channel", func(cur realm) {
+		BatchSend(cur, types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
+	})
+}
+
+func TestBatchSendRejectsAlreadyAcknowledgedPacket(cur realm, t *testing.T) {
+	resetStore()
+	_, _, channelId := setupOpenChannel(t)
+	p1 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100}
+	p2 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("b"), TimeoutTimestamp: 100}
+	store.commitPacket(p1)
+	store.commitPacket(p2)
+	store.clientForChannel(channelId).markPacketAcknowledged(p2)
+
+	uassert.AbortsContains(t, cur, "packet commitment not found", func(cur realm) {
+		BatchSend(cur, types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
+	})
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L1605-L1736
+func TestUnionBatchSendOK(cur realm, t *testing.T) {
+	resetStore()
+	_, _, channelId := setupOpenChannel(t)
+	timeout := types.Timestamp(248)
+	p1 := SendPacket(cross(cur), channelId, timeout, []byte{1, 2, 3})
+	p2 := SendPacket(cross(cur), channelId, timeout, []byte{4, 5, 6})
+
+	uassert.NotAborts(t, cur, func(cur realm) {
+		BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{p2, p1}})
+	})
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L1740-L1843
+func TestUnionBatchSendPacketNotSent(cur realm, t *testing.T) {
+	resetStore()
+	_, _, channelId := setupOpenChannel(t)
+	p1 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes{4, 5, 6}, TimeoutTimestamp: 0}
+	p2 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: 0}
+
+	uassert.AbortsContains(t, cur, "packet commitment not found", func(cur realm) {
+		BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
 	})
 }
 
@@ -1815,6 +1891,8 @@ func TestPacketAcknowledgementPreservesBatchCommitment(cur realm, t *testing.T) 
 	p1 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100}
 	p2 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("b"), TimeoutTimestamp: 100}
 	acks := [][]byte{{0x01}, {0x02}}
+	store.commitPacket(p1)
+	store.commitPacket(p2)
 
 	batchHash := BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
 	if got := QueryBatchPackets(channelId, batchHash); got != types.COMMITMENT_MAGIC.String() {

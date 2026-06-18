@@ -183,29 +183,25 @@ func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
 }
 
 func BatchSend(cur realm, msg types.MsgBatchSend) types.H256 {
-	if len(msg.Packets) == 0 {
+	if len(msg.Packets) < 2 {
 		panic(ErrNotEnoughPackets)
 	}
 	first := msg.Packets[0]
-	portId := store.getChannelOwner(first.SourceChannelId)
-	if string(portId) != cur.Previous().PkgPath() {
-		panic(ErrUnauthorizedPacketSender)
-	}
+	c := store.clientForChannel(first.SourceChannelId)
 	for _, packet := range msg.Packets {
 		if packet.SourceChannelId != first.SourceChannelId {
 			panic(ErrBatchSameChannelOnly)
 		}
+		commitment, ok := c.getBatchPacketsAtPath(packetCommitmentPath(packet))
+		if !ok {
+			panic(ErrPacketCommitmentNotFound)
+		}
+		if commitment != types.COMMITMENT_MAGIC {
+			panic(ErrPacketCommitmentNotFound)
+		}
 	}
-	c := store.clientForChannel(first.SourceChannelId)
 	batchHash := commitPacketsHash(msg.Packets)
 	c.saveBatchPackets(batchHash, types.COMMITMENT_MAGIC)
-	// In-memory per-packet membership keeps HasPacketCommitment and the
-	// PacketAcknowledgement / PacketTimeout cleanup paths working for
-	// single-packet sends; multi-packet batches still commit at the batch
-	// path on chain.
-	for _, packet := range msg.Packets {
-		c.setBatchPackets(commitPacketHash(packet), types.COMMITMENT_MAGIC)
-	}
 	channel := store.getChannel(first.SourceChannelId)
 	connection := ensureConnectionOpen(channel.ConnectionId)
 	emitBatchSendEvent(batchHash, first, channel, connection)

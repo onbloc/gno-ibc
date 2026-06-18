@@ -12,6 +12,10 @@ func setCommitProofAdmin(cur realm) {
 	admin = cur.Address()
 }
 
+// Union implementation reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2259-L2297
+// Query reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2176-L2191
 func TestCommitMembershipProofStoresCommittedValue(cur realm, t *testing.T) {
 	resetStore()
 	oldAdmin := admin
@@ -46,6 +50,7 @@ func TestCommitMembershipProofStoresCommittedValue(cur realm, t *testing.T) {
 	}
 }
 
+// Gno equivalent of Union RestrictedExecuteMsg access management.
 func TestCommitMembershipProofRejectsNonAdminBeforeVerification(cur realm, t *testing.T) {
 	resetStore()
 	oldAdmin := admin
@@ -69,6 +74,8 @@ func TestCommitMembershipProofRejectsNonAdminBeforeVerification(cur realm, t *te
 	}
 }
 
+// Union implementation reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2267-L2289
 func TestCommitMembershipProofRejectsInactiveClientBeforeVerification(cur realm, t *testing.T) {
 	resetStore()
 	oldAdmin := admin
@@ -95,6 +102,43 @@ func TestCommitMembershipProofRejectsInactiveClientBeforeVerification(cur realm,
 	}
 }
 
+// Union implementation reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2176-L2191
+func TestGetCommittedMembershipProofUnknownReturnsEmpty(cur realm, t *testing.T) {
+	resetStore()
+
+	if got := GetCommittedMembershipProof(types.ClientId(1), 10, types.Bytes("path")); got != "" {
+		t.Fatalf("GetCommittedMembershipProof unknown: got %q want empty", got)
+	}
+}
+
+// Union implementation reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2181-L2189
+func TestGetCommittedMembershipProofUsesClientHeightAndPath(cur realm, t *testing.T) {
+	resetStore()
+	clientId := types.ClientId(7)
+	path := types.Bytes("clients/7/consensusStates/11")
+	value := types.Keccak(types.Bytes("consensus-state"))
+	store.saveMembershipProof(clientId, 10, path, value)
+
+	if got := GetCommittedMembershipProof(clientId, 10, path); got != value.String() {
+		t.Fatalf("GetCommittedMembershipProof exact key: got %q want %s", got, value)
+	}
+	if got := GetCommittedMembershipProof(types.ClientId(8), 10, path); got != "" {
+		t.Fatalf("GetCommittedMembershipProof wrong client: got %q want empty", got)
+	}
+	if got := GetCommittedMembershipProof(clientId, 11, path); got != "" {
+		t.Fatalf("GetCommittedMembershipProof wrong height: got %q want empty", got)
+	}
+	if got := GetCommittedMembershipProof(clientId, 10, types.Bytes("other-path")); got != "" {
+		t.Fatalf("GetCommittedMembershipProof wrong path: got %q want empty", got)
+	}
+}
+
+// Union implementation reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2300-L2336
+// Query reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2192-L2213
 func TestCommitNonMembershipProofStoresSentinel(cur realm, t *testing.T) {
 	resetStore()
 	oldAdmin := admin
@@ -126,6 +170,8 @@ func TestCommitNonMembershipProofStoresSentinel(cur realm, t *testing.T) {
 	}
 }
 
+// Union implementation reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2307-L2328
 func TestCommitNonMembershipProofRejectsInactiveClientBeforeVerification(cur realm, t *testing.T) {
 	resetStore()
 	oldAdmin := admin
@@ -148,5 +194,37 @@ func TestCommitNonMembershipProofRejectsInactiveClientBeforeVerification(cur rea
 	}
 	if GetCommittedNonMembershipProof(clientId, 10, types.Bytes("path")) {
 		t.Fatal("inactive client must not commit non-membership proof")
+	}
+}
+
+// Union implementation reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2192-L2213
+func TestGetCommittedNonMembershipProofUnknownReturnsFalse(cur realm, t *testing.T) {
+	resetStore()
+
+	if GetCommittedNonMembershipProof(types.ClientId(1), 10, types.Bytes("path")) {
+		t.Fatal("GetCommittedNonMembershipProof unknown: got true want false")
+	}
+}
+
+// Union implementation reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2197-L2210
+func TestGetCommittedNonMembershipProofUsesClientHeightAndPath(cur realm, t *testing.T) {
+	resetStore()
+	clientId := types.ClientId(7)
+	path := types.Bytes("clients/7/consensusStates/11")
+	store.saveNonMembershipProof(clientId, 10, path, types.NON_MEMBERSHIP_COMMITMENT_VALUE)
+
+	if !GetCommittedNonMembershipProof(clientId, 10, path) {
+		t.Fatal("GetCommittedNonMembershipProof exact key: got false want true")
+	}
+	if GetCommittedNonMembershipProof(types.ClientId(8), 10, path) {
+		t.Fatal("GetCommittedNonMembershipProof wrong client: got true want false")
+	}
+	if GetCommittedNonMembershipProof(clientId, 11, path) {
+		t.Fatal("GetCommittedNonMembershipProof wrong height: got true want false")
+	}
+	if GetCommittedNonMembershipProof(clientId, 10, types.Bytes("other-path")) {
+		t.Fatal("GetCommittedNonMembershipProof wrong path: got true want false")
 	}
 }

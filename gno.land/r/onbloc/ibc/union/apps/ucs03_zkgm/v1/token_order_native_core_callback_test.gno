@@ -3,8 +3,10 @@ package impl
 import (
 	"chain"
 	"chain/banker"
+	"errors"
 	"testing"
 
+	"gno.land/p/onbloc/ibc/union/lightclient"
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -19,34 +21,44 @@ const timeoutMockClientType = types.ClientType("gno.land/r/onbloc/ibc/union/apps
 
 type timeoutMockLightClient struct{}
 
-func (m *timeoutMockLightClient) CreateClient(_ realm, clientId types.ClientId, clientStateBytes, consensusStateBytes []byte) string {
-	return "timeout-mock-chain"
+func (m *timeoutMockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error {
+	return nil
 }
 
-func (m *timeoutMockLightClient) UpdateClient(_ realm, clientId types.ClientId, clientMessage []byte) types.ConsensusStateUpdate {
-	return types.ConsensusStateUpdate{
-		Height:              types.NewHeight(1),
-		ClientStateBytes:    clientMessage,
-		ConsensusStateBytes: clientMessage,
-	}
+func (m *timeoutMockLightClient) VerifyNonMembership(uint64, []byte, []byte) error {
+	return nil
 }
 
-func (m *timeoutMockLightClient) VerifyMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte, value []byte) {
-}
-
-func (m *timeoutMockLightClient) VerifyNonMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte) {
-}
-
-func (m *timeoutMockLightClient) GetTimestamp(clientId types.ClientId, height types.Height) types.Timestamp {
+func (m *timeoutMockLightClient) GetTimestamp() types.Timestamp {
 	return types.Timestamp(2)
 }
 
-func (m *timeoutMockLightClient) GetLatestHeight(clientId types.ClientId) types.Height {
-	return types.NewHeight(1)
+func (m *timeoutMockLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
+	return types.Timestamp(2), nil
 }
 
-func (m *timeoutMockLightClient) GetStatus(clientId types.ClientId) types.Status {
-	return types.StatusActive
+func (m *timeoutMockLightClient) GetLatestHeight() uint64 {
+	return 1
+}
+
+func (m *timeoutMockLightClient) GetCounterpartyChainID() string {
+	return "timeout-mock-chain"
+}
+
+func (m *timeoutMockLightClient) Status() lightclient.Status {
+	return lightclient.Active
+}
+
+func (m *timeoutMockLightClient) VerifyHeader(_ address, header []byte, _ address) (types.StateUpdate, error) {
+	return types.StateUpdate{Height: 1, ClientStateBytes: header, ConsensusStateBytes: header}, nil
+}
+
+func (m *timeoutMockLightClient) VerifyCreation(address, address) (types.ClientCreationResult, error) {
+	return types.ClientCreationResult{}, nil
+}
+
+func (m *timeoutMockLightClient) Misbehaviour(address, []byte, address) (types.ClientState, error) {
+	return nil, errors.New("mock: misbehaviour unsupported")
 }
 
 func TestPacketAcknowledgementFailureRefundsNativeFromProxy(cur realm, t *testing.T) {
@@ -115,18 +127,15 @@ func ensureZkgmAppRegistered(cur realm) {
 
 func openTimeoutChannelPair(cur realm) e2e.ChannelPair {
 	ensureZkgmAppRegistered(cross(cur))
-	if !core.HasClient(timeoutMockClientType) {
-		core.RegisterClient(cross(cur), timeoutMockClientType, &timeoutMockLightClient{})
-	}
-	clientId := core.CreateClient(cross(cur), types.NewMsgCreateClient(timeoutMockClientType, nil, nil))
+	clientId := core.CreateClient(cross(cur), timeoutMockClientType, &timeoutMockLightClient{})
 	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
 
 	portId := []byte(zkgm.ProxyPkgPath())
-	source := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version))
-	destination := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version))
-	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(source, zkgm.Version, destination, nil, 1))
-	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(destination, zkgm.Version, source, nil, 1))
+	source := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	destination := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(source, zkgm.Version, destination, nil, 1, "g1msgrelayer"))
+	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(destination, zkgm.Version, source, nil, 1, "g1msgrelayer"))
 	return e2e.NewChannelPair(cross(cur), clientId, connectionId, source, destination)
 }
 

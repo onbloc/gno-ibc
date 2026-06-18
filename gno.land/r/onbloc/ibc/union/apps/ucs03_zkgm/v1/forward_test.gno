@@ -2,8 +2,10 @@ package impl
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 
+	"gno.land/p/onbloc/ibc/union/lightclient"
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -339,30 +341,44 @@ func forwardPath(channels ...uint32) *u256.Uint {
 
 type forwardTestLightClient struct{}
 
-func (c *forwardTestLightClient) CreateClient(_ realm, clientId types.ClientId, clientStateBytes, consensusStateBytes []byte) string {
-	return "forward-counterparty"
+func (c *forwardTestLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error {
+	return nil
 }
 
-func (c *forwardTestLightClient) UpdateClient(_ realm, clientId types.ClientId, clientMessage []byte) types.ConsensusStateUpdate {
-	return types.ConsensusStateUpdate{}
+func (c *forwardTestLightClient) VerifyNonMembership(uint64, []byte, []byte) error {
+	return nil
 }
 
-func (c *forwardTestLightClient) VerifyMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte, value []byte) {
-}
-
-func (c *forwardTestLightClient) VerifyNonMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte) {
-}
-
-func (c *forwardTestLightClient) GetTimestamp(clientId types.ClientId, height types.Height) types.Timestamp {
+func (c *forwardTestLightClient) GetTimestamp() types.Timestamp {
 	return types.Timestamp(1)
 }
 
-func (c *forwardTestLightClient) GetLatestHeight(clientId types.ClientId) types.Height {
-	return types.NewHeight(1)
+func (c *forwardTestLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
+	return types.Timestamp(1), nil
 }
 
-func (c *forwardTestLightClient) GetStatus(clientId types.ClientId) types.Status {
-	return types.StatusActive
+func (c *forwardTestLightClient) GetLatestHeight() uint64 {
+	return 1
+}
+
+func (c *forwardTestLightClient) GetCounterpartyChainID() string {
+	return "forward-counterparty"
+}
+
+func (c *forwardTestLightClient) Status() lightclient.Status {
+	return lightclient.Active
+}
+
+func (c *forwardTestLightClient) VerifyHeader(address, []byte, address) (types.StateUpdate, error) {
+	return types.StateUpdate{Height: 1}, nil
+}
+
+func (c *forwardTestLightClient) VerifyCreation(address, address) (types.ClientCreationResult, error) {
+	return types.ClientCreationResult{}, nil
+}
+
+func (c *forwardTestLightClient) Misbehaviour(address, []byte, address) (types.ClientState, error) {
+	return nil, errors.New("mock: misbehaviour unsupported")
 }
 
 func openForwardTestChannel(cur realm, counterpartyChannelId types.ChannelId) types.ChannelId {
@@ -372,15 +388,12 @@ func openForwardTestChannel(cur realm, counterpartyChannelId types.ChannelId) ty
 		zkgm.RegisterCoreApp(cross(cur))
 	}
 	clientType := types.ClientType("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1/forward-test")
-	if !core.HasClient(clientType) {
-		core.RegisterClient(cross(cur), clientType, &forwardTestLightClient{})
-	}
 
-	clientId := core.CreateClient(cross(cur), types.NewMsgCreateClient(clientType, nil, nil))
+	clientId := core.CreateClient(cross(cur), clientType, &forwardTestLightClient{})
 	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 0))
 
-	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version))
-	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, counterpartyChannelId, nil, 0))
+	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, counterpartyChannelId, nil, 0, "g1msgrelayer"))
 	return channelId
 }

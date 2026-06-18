@@ -110,7 +110,7 @@ func (v *ucs03ZkgmV1) dispatchExecute(_ int, rlm realm, packet types.Packet, rel
 }
 
 // dispatchAck routes an acknowledgement to its opcode handler.
-func (v *ucs03ZkgmV1) dispatchAck(_ int, rlm realm, packet types.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction, ack []byte) error {
+func (v *ucs03ZkgmV1) dispatchAck(_ int, rlm realm, packet types.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction, successful bool, ack []byte) error {
 	switch instr.Opcode {
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instr)
@@ -118,12 +118,11 @@ func (v *ucs03ZkgmV1) dispatchAck(_ int, rlm realm, packet types.Packet, path *u
 			return err
 		}
 
-		decodedAck, err := z.DecodeAck(ack)
-		if err != nil {
-			return err
+		tag := tagAckFailure()
+		if successful {
+			tag = tagAckSuccess()
 		}
-
-		return v.acknowledgeTokenOrderV2(0, rlm, packet.SourceChannelId, path, order, decodedAck)
+		return v.acknowledgeTokenOrderV2(0, rlm, packet.SourceChannelId, path, order, z.Ack{Tag: tag, InnerAck: ack})
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instr)
 		if err != nil {
@@ -137,24 +136,18 @@ func (v *ucs03ZkgmV1) dispatchAck(_ int, rlm realm, packet types.Packet, path *u
 			return err
 		}
 
-		outerAck, err := z.DecodeAck(ack)
-		if err != nil {
-			return err
-		}
-
-		return v.acknowledgeBatch(0, rlm, packet, path, salt, batch, outerAck)
+		return v.acknowledgeBatch(0, rlm, packet, path, salt, batch, successful, ack)
 	case z.OP_FORWARD:
 		forward, err := decodeForwardInstruction(instr)
 		if err != nil {
 			return err
 		}
 
-		outerAck, err := z.DecodeAck(ack)
-		if err != nil {
-			return err
+		tag := tagAckFailure()
+		if successful {
+			tag = tagAckSuccess()
 		}
-
-		return v.acknowledgeForward(0, rlm, packet, path, salt, forward, outerAck)
+		return v.acknowledgeForward(0, rlm, packet, path, salt, forward, z.Ack{Tag: tag, InnerAck: ack})
 	default:
 		return errors.New("zkgm/v1: unsupported opcode")
 	}

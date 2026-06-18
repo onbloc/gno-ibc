@@ -59,7 +59,8 @@ func (v *ucs03ZkgmV1) executeForward(_ int, rlm realm, packet types.Packet, path
 
 // acknowledgeForward dispatches the ack to the forwarded inner instruction.
 func (v *ucs03ZkgmV1) acknowledgeForward(_ int, rlm realm, packet types.Packet, path *u256.Uint, salt [32]byte, forward z.Forward, ack z.Ack) error {
-	return v.dispatchAck(0, rlm, packet, forward.Path, salt, forward.Instruction, ack.InnerAck)
+	successful := ack.Tag != nil && ack.Tag.Eq(tagAckSuccess())
+	return v.dispatchAck(0, rlm, packet, forward.Path, salt, forward.Instruction, successful, ack.InnerAck)
 }
 
 // timeoutForward dispatches the timeout to the forwarded inner instruction.

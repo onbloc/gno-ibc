@@ -146,7 +146,8 @@ func TestAcknowledgeBatchRejectsAckCountMismatch(cur realm, t *testing.T) {
 		batchMustCallInstruction(batchCall("sender", "second")),
 	}}
 
-	err := newTestImpl().acknowledgeBatch(0, cur, packet, u256.Zero(), [32]byte{}, batch, mustBatchOuterAck([][]byte{mustSuccessAck()}))
+	outerAck := mustBatchOuterAck([][]byte{mustSuccessAck()})
+	err := newTestImpl().acknowledgeBatch(0, cur, packet, u256.Zero(), [32]byte{}, batch, true, outerAck.InnerAck)
 
 	uassert.ErrorContains(t, err, "batch ack count mismatch")
 }

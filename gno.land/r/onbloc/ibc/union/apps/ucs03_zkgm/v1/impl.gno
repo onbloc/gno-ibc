@@ -96,7 +96,12 @@ func (v *ucs03ZkgmV1) OnAcknowledgementPacket(_ int, rlm realm, packet types.Pac
 	if v.handleForwardChild(0, rlm, packet, zp, acknowledgement) {
 		return
 	}
-	if err := v.dispatchAck(0, rlm, packet, zp.Path, zp.Salt, zp.Instruction, acknowledgement); err != nil {
+	outerAck, err := z.DecodeAck(acknowledgement)
+	if err != nil {
+		panic(err.Error())
+	}
+	successful := outerAck.Tag != nil && outerAck.Tag.Eq(tagAckSuccess())
+	if err := v.dispatchAck(0, rlm, packet, zp.Path, zp.Salt, zp.Instruction, successful, outerAck.InnerAck); err != nil {
 		panic(err.Error())
 	}
 }

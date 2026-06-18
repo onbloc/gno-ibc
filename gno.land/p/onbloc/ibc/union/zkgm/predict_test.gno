@@ -15,10 +15,10 @@ func TestPredictWrappedTokenNilPathMatchesZero(t *testing.T) {
 		Initializer:    []byte("init"),
 	})
 
-	v1Nil := PredictWrappedTokenV1(nil, 7, base)
-	v1Zero := PredictWrappedTokenV1(u256.Zero(), 7, base)
+	v1Nil := PredictWrappedToken(nil, 7, base)
+	v1Zero := PredictWrappedToken(u256.Zero(), 7, base)
 	if v1Nil != v1Zero {
-		t.Fatalf("PredictWrappedTokenV1 nil path: got %q want %q", v1Nil, v1Zero)
+		t.Fatalf("PredictWrappedToken nil path: got %q want %q", v1Nil, v1Zero)
 	}
 
 	v2Nil := PredictWrappedTokenV2(nil, 7, base, image)

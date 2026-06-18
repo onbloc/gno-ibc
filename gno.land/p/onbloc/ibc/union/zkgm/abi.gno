@@ -92,9 +92,9 @@ var SolverMetadataSchema = abi.Schema{Fields: []abi.Field{
 	{Type: abi.TypeBytes}, // metadata
 }}
 
-// PredictV1Schema mirrors abi.encode(path, channel, token) used by Union's
+// PredictWrappedTokenSchema mirrors abi.encode(path, channel, token) used by Union's
 // _predictWrappedToken helper.
-var PredictV1Schema = abi.Schema{Fields: []abi.Field{
+var PredictWrappedTokenSchema = abi.Schema{Fields: []abi.Field{
 	{Type: abi.TypeUint256}, // path
 	{Type: abi.TypeUint32},  // channel / channelId
 	{Type: abi.TypeBytes},   // token / baseToken

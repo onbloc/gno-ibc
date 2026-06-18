@@ -18,7 +18,7 @@ func main() {
 	pair := e2e.OpenE2EChannelPair(cross)
 
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
-	quoteDenom := impl.PredictWrappedTokenV1(u256.Zero(), uint32(pair.Destination), []byte("ugnot"))
+	quoteDenom := impl.PredictWrappedToken(u256.Zero(), uint32(pair.Destination), []byte("ugnot"))
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),

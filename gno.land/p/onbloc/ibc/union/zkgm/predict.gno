@@ -14,12 +14,12 @@ const (
 	tagCallProxy   = "ZKGM_CALL_PROXY"
 )
 
-// PredictWrappedTokenV1 derives the legacy wrapped IBC denom for a v1 token order.
-func PredictWrappedTokenV1(path *u256.Uint, channelId uint32, baseToken []byte) string {
+// PredictWrappedToken derives the legacy wrapped IBC denom for a v1 token order.
+func PredictWrappedToken(path *u256.Uint, channelId uint32, baseToken []byte) string {
 	if path == nil {
 		path = u256.Zero()
 	}
-	bz, err := abi.Encode(PredictV1Schema, []any{path, channelId, baseToken})
+	bz, err := abi.Encode(PredictWrappedTokenSchema, []any{path, channelId, baseToken})
 	if err != nil {
 		panic(err)
 	}

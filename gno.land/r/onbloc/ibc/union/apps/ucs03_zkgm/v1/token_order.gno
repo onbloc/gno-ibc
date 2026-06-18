@@ -66,7 +66,7 @@ func (v *ZkgmV1) verifyTokenOrderV2(cur realm, channelId types.ChannelId, sender
 		if !ok {
 			image = [32]byte{}
 		}
-		wrappedV1 := PredictWrappedTokenV1(intermediatePath, destChan, order.QuoteToken)
+		wrappedV1 := PredictWrappedToken(intermediatePath, destChan, order.QuoteToken)
 		wrappedV2 := PredictWrappedTokenV2(intermediatePath, destChan, order.QuoteToken, image)
 		if baseDenom != wrappedV1 && baseDenom != wrappedV2 {
 			return errInvalidUnescrow
@@ -149,7 +149,7 @@ func (v *ZkgmV1) executeTokenOrderV2(cur realm, packet types.Packet, relayer add
 			predicted = PredictWrappedTokenV2(path, destChan, order.BaseToken, image)
 		} else {
 			image = [32]byte{}
-			predicted = PredictWrappedTokenV1(path, destChan, order.BaseToken)
+			predicted = PredictWrappedToken(path, destChan, order.BaseToken)
 		}
 		if quoteDenom != predicted || order.BaseAmount.Cmp(order.QuoteAmount) < 0 {
 			return failureResult(cur, universalErrorAck()), nil

@@ -10,9 +10,9 @@ const (
 	ibcDenomPrefix = "ibc/"
 )
 
-// PredictWrappedTokenV1 derives the wrapped IBC denom for a v1 token order.
-func PredictWrappedTokenV1(path *u256.Uint, channelId uint32, baseToken []byte) string {
-	return z.PredictWrappedTokenV1(path, channelId, baseToken)
+// PredictWrappedToken derives the wrapped IBC denom for a v1 token order.
+func PredictWrappedToken(path *u256.Uint, channelId uint32, baseToken []byte) string {
+	return z.PredictWrappedToken(path, channelId, baseToken)
 }
 
 // PredictWrappedTokenV2 derives the IBC voucher denom for a v2 token order.

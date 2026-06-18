@@ -118,11 +118,17 @@ func (v *ucs03ZkgmV1) dispatchAck(_ int, rlm realm, packet types.Packet, path *u
 			return err
 		}
 
-		tag := tagAckFailure()
+		var orderAck z.TokenOrderAck
+		hasOrderAck := false
 		if successful {
-			tag = tagAckSuccess()
+			decoded, err := z.DecodeTokenOrderAck(ack)
+			if err != nil {
+				return err
+			}
+			orderAck = decoded
+			hasOrderAck = true
 		}
-		return v.acknowledgeTokenOrderV2(0, rlm, packet.SourceChannelId, path, order, z.Ack{Tag: tag, InnerAck: ack})
+		return v.acknowledgeTokenOrderV2(0, rlm, packet.SourceChannelId, path, order, orderAck, hasOrderAck)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instr)
 		if err != nil {

@@ -60,7 +60,7 @@ func TestTokenOrderAckMarketMakerEscrowWithVoucherRewardsMarketMaker(cur realm, 
 	uassert.NoError(t, v.verifyTokenOrderV2(0, cur, channelId, sender, newFunds(nil), u256.Zero(), order))
 	uassert.Equal(t, int64(37), voucherBalanceOf(baseToken, address(sender)))
 
-	err := v.acknowledgeTokenOrderV2(0, cur, channelId, u256.Zero(), order, marketMakerAck(marketMaker))
+	err := v.acknowledgeTokenOrderV2(0, cur, channelId, u256.Zero(), order, marketMakerAck(marketMaker), true)
 
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(13), voucherBalanceOf(baseToken, address(marketMaker)))
@@ -722,15 +722,11 @@ func assertMarketMakerAck(t *testing.T, ackBytes []byte, maker string) {
 	uassert.Equal(t, maker, string(orderAck.MarketMaker))
 }
 
-func marketMakerAck(marketMaker string) z.Ack {
-	innerAck, err := z.EncodeTokenOrderAck(z.TokenOrderAck{
+func marketMakerAck(marketMaker string) z.TokenOrderAck {
+	return z.TokenOrderAck{
 		FillType:    fillTypeMarketMaker(),
 		MarketMaker: []byte(marketMaker),
-	})
-	if err != nil {
-		panic(err)
 	}
-	return z.Ack{Tag: tagAckSuccess(), InnerAck: innerAck}
 }
 
 func mustEncodeTokenMetadata(meta z.TokenMetadata) []byte {

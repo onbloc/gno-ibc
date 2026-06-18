@@ -320,16 +320,9 @@ func (v *ucs03ZkgmV1) marketMakerFillV2(_ int, rlm realm, relayer address, relay
 
 // acknowledgeTokenOrderV2 settles the ack: refund on failure, or release escrow to the market maker on a maker fill.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L974-L1072
-func (v *ucs03ZkgmV1) acknowledgeTokenOrderV2(_ int, rlm realm, sourceChannelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2, ack z.Ack) error {
-	if ack.Tag.Eq(tagAckFailure()) {
+func (v *ucs03ZkgmV1) acknowledgeTokenOrderV2(_ int, rlm realm, sourceChannelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2, orderAck z.TokenOrderAck, hasOrderAck bool) error {
+	if !hasOrderAck {
 		return v.refundV2(0, rlm, sourceChannelId, path, order)
-	}
-	if !ack.Tag.Eq(tagAckSuccess()) {
-		return errors.New("zkgm/v1: unknown ack tag")
-	}
-	orderAck, err := z.DecodeTokenOrderAck(ack.InnerAck)
-	if err != nil {
-		return err
 	}
 	if orderAck.FillType.Eq(fillTypeProtocol()) {
 		return nil

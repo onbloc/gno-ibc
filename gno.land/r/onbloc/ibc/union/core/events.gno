@@ -30,8 +30,8 @@ const (
 	WriteAckEvent              = "WriteAck"
 	PacketAckEvent             = "PacketAck"
 	PacketTimeoutEvent         = "PacketTimeout"
-	CommitMembershipProofEvent = "commit_membership_proof"
-	CommitNonMembershipEvent   = "commit_non_membership_proof"
+	CommitMembershipProofEvent = "CommitMembershipProof"
+	CommitNonMembershipEvent   = "CommitNonMembershipProof"
 )
 
 func channelEventAttrs(eventType string, portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) []string {

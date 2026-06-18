@@ -33,7 +33,7 @@ func main(cur realm) {
 	println("commitment_before_timeout", core.HasPacketCommitment(cross(cur), packet))
 	println("sender_balance_before_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))
 
-	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(packet, realcometbls.Z37ReceiptNonMembershipProof(cross(cur)), uint64(realcometbls.DevnetHeight-1)))
+	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(packet, realcometbls.Z37ReceiptNonMembershipProof(cross(cur)), uint64(realcometbls.DevnetHeight-1), address("")))
 
 	println("commitment_after_timeout", core.HasPacketCommitment(cross(cur), packet))
 	println("sender_balance_after_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))

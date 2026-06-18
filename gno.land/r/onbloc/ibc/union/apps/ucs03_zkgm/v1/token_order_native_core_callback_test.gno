@@ -53,7 +53,7 @@ func TestPacketAcknowledgementFailureRefundsNativeFromProxy(cur realm, t *testin
 	packet, order := setupNativeRefundPacket(cross(cur), false, "ackrefund", "ucoreack", 11)
 	ack := mustFailureAck()
 
-	core.PacketAcknowledgement(cross(cur), types.NewMsgPacketAcknowledgement([]types.Packet{packet}, [][]byte{ack}, nil, 1))
+	core.PacketAcknowledgement(cross(cur), types.NewMsgPacketAcknowledgement([]types.Packet{packet}, [][]byte{ack}, nil, 1, address("")))
 
 	assertNativeRefunded(cur, t, packet, order, int64(11))
 }
@@ -61,7 +61,7 @@ func TestPacketAcknowledgementFailureRefundsNativeFromProxy(cur realm, t *testin
 func TestPacketTimeoutRefundsNativeFromProxy(cur realm, t *testing.T) {
 	packet, order := setupNativeRefundPacket(cross(cur), true, "timerefund", "ucoretimeout", 13)
 
-	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(packet, nil, 1))
+	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(packet, nil, 1, address("")))
 
 	assertNativeRefunded(cur, t, packet, order, int64(13))
 }

@@ -22,7 +22,7 @@ func main(cur realm) {
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	packet := mixedBatchPacket(cur, pair, receiver)
 
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{[]byte("batch-relay-msg")}, realcometbls.Z40MixedBatchPacketCommitmentProof(cross(cur)), uint64(realcometbls.DevnetHeight-1)))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{[]byte("batch-relay-msg")}, address(""), realcometbls.Z40MixedBatchPacketCommitmentProof(cross(cur)), uint64(realcometbls.DevnetHeight-1)))
 
 	println("mock_calls", mock.Calls(cross(cur)))
 	println("last_calldata", mock.LastCalldata(cross(cur)))

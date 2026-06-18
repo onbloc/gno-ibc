@@ -30,7 +30,7 @@ func main(cur realm) {
 	packet := core.NewPacket(cross(cur), types.ChannelId(1), parentChannel,
 		e2e.MustPacketData(cross(cur), e2e.MustForwardInstruction(cross(cur), forward)), types.Timestamp(0))
 
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, address(""), nil, 1))
 
 	expectedChild := e2e.MustForwardChildPacket(cross(cur), packet, u256.Zero(), [32]byte{}, forward)
 	_, inFlight := zkgm.GetInFlightPacket(zkgm.NewInFlightKey(cross(cur), types.MustCommit(types.CommitPacket(expectedChild))))

@@ -43,7 +43,7 @@ func main(cur realm) {
 	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination,
 		e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), 0)
 
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, address(""), nil, 1))
 
 	println("quote_balance", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 	println("mock_calls", mock.Calls(cross(cur)))

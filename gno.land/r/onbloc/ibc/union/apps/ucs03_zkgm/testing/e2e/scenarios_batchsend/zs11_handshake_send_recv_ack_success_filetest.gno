@@ -40,7 +40,7 @@ func main(cur realm) {
 
 	println("")
 	println("[SCENARIO] 2. recv success")
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, address(""), nil, 1))
 	println("receipt_after_recv", core.HasPacketReceipt(cross(cur), packet))
 	println("ack_after_recv", core.HasAcknowledgement(cross(cur), packet))
 	println("quote_balance_after_recv", impl.VoucherBalanceOf(quoteToken, address(receiver)))
@@ -48,7 +48,7 @@ func main(cur realm) {
 	println("")
 	println("[SCENARIO] 3. ack success")
 	ack := e2e.MustSuccessAck(cross(cur), e2e.MustProtocolTokenOrderAck(cross(cur)))
-	core.PacketAcknowledgement(cross(cur), types.NewMsgPacketAcknowledgement([]types.Packet{packet}, [][]byte{ack}, nil, 1))
+	core.PacketAcknowledgement(cross(cur), types.NewMsgPacketAcknowledgement([]types.Packet{packet}, [][]byte{ack}, nil, 1, address("")))
 	println("commitment_after_ack", core.HasPacketCommitment(cross(cur), packet))
 	println("receipt_after_ack", core.HasPacketReceipt(cross(cur), packet))
 	println("ack_success_roundtrip", "ok")

@@ -37,11 +37,11 @@ func main(cur realm) {
 		e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(1<<62))
 
 	println("[SCENARIO] fillable token order intent preempts proven recv")
-	core.IntentPacketRecv(cross(cur), types.NewMsgIntentPacketRecv([]types.Packet{intentPacket}, nil))
+	core.IntentPacketRecv(cross(cur), types.NewMsgIntentPacketRecv([]types.Packet{intentPacket}, [][]byte{nil}, address("")))
 	println("maker_quote_after_intent", impl.VoucherBalanceOf(quoteToken, marketMaker))
 	println("receiver_quote_after_intent", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 	println("intent_receipt", core.HasPacketReceipt(cross(cur), intentPacket))
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{intentPacket}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{intentPacket}, [][]byte{nil}, address(""), nil, 1))
 	println("receiver_quote_after_proven_recv", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 
 	println("")
@@ -62,7 +62,7 @@ func main(cur realm) {
 
 func zs86IntentRecvReverted(cur realm, packet types.Packet) (reverted bool) {
 	p := revive(func() {
-		core.IntentPacketRecv(cross(cur), types.NewMsgIntentPacketRecv([]types.Packet{packet}, nil))
+		core.IntentPacketRecv(cross(cur), types.NewMsgIntentPacketRecv([]types.Packet{packet}, [][]byte{nil}, address("")))
 	})
 	return p != nil
 }

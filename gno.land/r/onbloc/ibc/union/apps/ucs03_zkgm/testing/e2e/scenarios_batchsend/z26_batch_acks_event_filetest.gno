@@ -44,7 +44,7 @@ func main(cur realm) {
 	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, "async-v1", types.ChannelId(101), nil, 1))
 
 	packet := core.NewPacket(cross(cur), types.ChannelId(99), channelId, []byte("async-packet"), types.Timestamp(1<<62))
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, address(""), nil, 1))
 
 	batchHash := core.BatchAcks(cross(cur), types.NewMsgBatchAcks([]types.Packet{packet}, [][]byte{[]byte("ack")}))
 	println("batch_acks_hash", batchHash.String())

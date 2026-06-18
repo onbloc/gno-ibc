@@ -41,7 +41,7 @@ func main(cur realm) {
 		e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), largeBatch)), types.Timestamp(1<<62))
 
 	println("[SCENARIO] flat allowlisted batch")
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{largePacket}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{largePacket}, [][]byte{nil}, address(""), nil, 1))
 	println("large_batch_receipt", core.HasPacketReceipt(cross(cur), largePacket))
 	println("large_batch_success_ack", core.AcknowledgementHash(cross(cur), largePacket).String() == zs89BatchSuccessAckHash(cross(cur), len(instructions)))
 	println("large_batch_minted_children", zs89MintedChildren(quoteTokens, address(receiver)))
@@ -53,7 +53,7 @@ func main(cur realm) {
 	}}
 	nestedPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination,
 		e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), nestedBatch)), types.Timestamp(1<<62))
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{nestedPacket}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{nestedPacket}, [][]byte{nil}, address(""), nil, 1))
 	println("nested_batch_receipt", core.HasPacketReceipt(cross(cur), nestedPacket))
 	println("nested_batch_failure_ack", core.AcknowledgementHash(cross(cur), nestedPacket).String() == zs89FailureAckHash())
 	println("minted_children_after_nested_batch", zs89MintedChildren(quoteTokens, address(receiver)))

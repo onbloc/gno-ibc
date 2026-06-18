@@ -67,7 +67,7 @@ func main(cur realm) {
 	childKey := zkgm.NewInFlightKey(cross(cur), types.MustCommit(types.CommitPacket(childPacket)))
 
 	println("[SCENARIO] 1. recv forward defers parent ack and tracks child")
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{parentPacket}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{parentPacket}, [][]byte{nil}, address(""), nil, 1))
 	_, inFlight := zkgm.GetInFlightPacket(childKey)
 	println("parent_receipt_after_recv", core.HasPacketReceipt(cross(cur), parentPacket))
 	println("parent_ack_after_recv", core.HasAcknowledgement(cross(cur), parentPacket))
@@ -76,7 +76,7 @@ func main(cur realm) {
 
 	println("")
 	println("[SCENARIO] 2. child timeout writes parent failure ack")
-	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(childPacket, nil, 1))
+	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(childPacket, nil, 1, address("")))
 	_, inFlight = zkgm.GetInFlightPacket(childKey)
 	println("child_commitment_after_timeout", core.HasPacketCommitment(cross(cur), childPacket))
 	println("child_inflight_after_timeout", inFlight)
@@ -86,7 +86,7 @@ func main(cur realm) {
 
 	println("")
 	println("[SCENARIO] 3. duplicate child timeout is a no-op")
-	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(childPacket, nil, 1))
+	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(childPacket, nil, 1, address("")))
 	_, inFlight = zkgm.GetInFlightPacket(childKey)
 	println("child_commitment_after_second_timeout", core.HasPacketCommitment(cross(cur), childPacket))
 	println("child_inflight_after_second_timeout", inFlight)

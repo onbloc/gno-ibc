@@ -36,7 +36,7 @@ func main(cur realm) {
 	childKey := zkgm.NewInFlightKey(cross(cur), types.MustCommit(types.CommitPacket(child)))
 
 	println("[SCENARIO] 1. forward recv creates child and defers parent ack")
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{parent}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{parent}, [][]byte{nil}, address(""), nil, 1))
 	_, inFlight := zkgm.GetInFlightPacket(childKey)
 	println("impl_path", zkgm.ImplPath())
 	println("child_source", child.SourceChannelId.String())
@@ -48,7 +48,7 @@ func main(cur realm) {
 	println("")
 	println("[SCENARIO] 2. child ack propagates to parent")
 	childAck := e2e.MustCallAck(cross(cur))
-	core.PacketAcknowledgement(cross(cur), types.NewMsgPacketAcknowledgement([]types.Packet{child}, [][]byte{childAck}, nil, 1))
+	core.PacketAcknowledgement(cross(cur), types.NewMsgPacketAcknowledgement([]types.Packet{child}, [][]byte{childAck}, nil, 1, address("")))
 	_, inFlight = zkgm.GetInFlightPacket(childKey)
 	println("child_commitment_after_ack", core.HasPacketCommitment(cross(cur), child))
 	println("in_flight_after_ack", inFlight)

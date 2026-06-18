@@ -60,7 +60,7 @@ func main(cur realm) {
 	}
 	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(1))
 	ack := e2e.MustSuccessAck(cross(cur), mustMarketMakerTokenOrderAck([]byte(marketMaker)))
-	ackMsg := types.NewMsgPacketAcknowledgement([]types.Packet{packet}, [][]byte{ack}, nil, 1)
+	ackMsg := types.NewMsgPacketAcknowledgement([]types.Packet{packet}, [][]byte{ack}, nil, 1, address(""))
 
 	// This file exercises core idempotency only. BatchSend plants the packet
 	// commitment directly and intentionally bypasses the send-side voucher burn.
@@ -78,13 +78,13 @@ func main(cur realm) {
 
 	println("")
 	println("[SCENARIO] 3. timeout after ack is skipped")
-	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(packet, nil, 1))
+	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(packet, nil, 1, address("")))
 	println("sender_after_timeout_after_ack", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))
 
 	println("")
 	println("[SCENARIO] 4. ack after timeout is skipped")
 	e2e.BatchSend(cross(cur), packet)
-	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(packet, nil, 1))
+	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(packet, nil, 1, address("")))
 	println("commitment_after_timeout", core.HasPacketCommitment(cross(cur), packet))
 	println("sender_after_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))
 

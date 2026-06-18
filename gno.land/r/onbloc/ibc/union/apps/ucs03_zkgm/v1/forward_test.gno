@@ -262,7 +262,7 @@ func TestExecuteForwardThroughCoreFrameAuthorizesCoreRealm(cur realm, t *testing
 	})
 	packet := core.NewPacket(cross(cur), types.ChannelId(1), parentChannel, data, types.Timestamp(0))
 
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, address(""), nil, 1))
 
 	expectedChild, err := buildForwardChild(cur, packet, u256.Zero(), [32]byte{}, forward)
 	uassert.NoError(t, err)

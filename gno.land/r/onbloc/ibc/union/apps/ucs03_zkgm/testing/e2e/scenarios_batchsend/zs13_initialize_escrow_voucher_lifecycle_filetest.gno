@@ -33,7 +33,7 @@ func main(cur realm) {
 	}
 	initPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), initialize)), types.Timestamp(1<<62))
 	println("[SCENARIO] 1. initialize voucher")
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{initPacket}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{initPacket}, [][]byte{nil}, address(""), nil, 1))
 	_, hasOriginAfterInitialize := zkgm.GetTokenOrigin(quoteToken)
 	println("voucher_balance_after_initialize", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 	println("origin_after_initialize", hasOriginAfterInitialize)
@@ -51,7 +51,7 @@ func main(cur realm) {
 	}
 	escrowPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), escrow)), types.Timestamp(1<<62))
 	println("[SCENARIO] 2. escrow into existing voucher")
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{escrowPacket}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{escrowPacket}, [][]byte{nil}, address(""), nil, 1))
 	_, hasOriginAfterEscrow := zkgm.GetTokenOrigin(quoteToken)
 	println("voucher_balance_after_escrow", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 	println("origin_after_escrow", hasOriginAfterEscrow)

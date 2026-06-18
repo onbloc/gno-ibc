@@ -35,7 +35,7 @@ func main(cur realm) {
 	println("commitment_before_ack", core.HasPacketCommitment(cross(cur), packet))
 	println("market_maker_balance_before_ack", impl.VoucherBalanceOf(string(order.BaseToken), address(marketMaker)))
 
-	core.PacketAcknowledgement(cross(cur), types.NewMsgPacketAcknowledgement([]types.Packet{packet}, [][]byte{ack}, realcometbls.Z36AckMembershipProof(cross(cur)), uint64(realcometbls.DevnetHeight-1)))
+	core.PacketAcknowledgement(cross(cur), types.NewMsgPacketAcknowledgement([]types.Packet{packet}, [][]byte{ack}, realcometbls.Z36AckMembershipProof(cross(cur)), uint64(realcometbls.DevnetHeight-1), address("")))
 
 	println("commitment_after_ack", core.HasPacketCommitment(cross(cur), packet))
 	println("market_maker_balance_after_ack", impl.VoucherBalanceOf(string(order.BaseToken), address(marketMaker)))

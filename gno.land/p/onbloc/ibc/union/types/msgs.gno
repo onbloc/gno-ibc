@@ -14,10 +14,11 @@ type MsgPacketRecv struct {
 	ProofHeight uint64
 }
 
-func NewMsgPacketRecv(packets []Packet, relayerMsgs [][]byte, proof []byte, proofHeight uint64) MsgPacketRecv {
+func NewMsgPacketRecv(packets []Packet, relayerMsgs [][]byte, relayer address, proof []byte, proofHeight uint64) MsgPacketRecv {
 	return MsgPacketRecv{
 		Packets:     packets,
 		RelayerMsgs: relayerMsgs,
+		Relayer:     relayer,
 		Proof:       proof,
 		ProofHeight: proofHeight,
 	}
@@ -33,12 +34,13 @@ type MsgPacketAcknowledgement struct {
 	Relayer          address
 }
 
-func NewMsgPacketAcknowledgement(packets []Packet, acknowledgements [][]byte, proof []byte, proofHeight uint64) MsgPacketAcknowledgement {
+func NewMsgPacketAcknowledgement(packets []Packet, acknowledgements [][]byte, proof []byte, proofHeight uint64, relayer address) MsgPacketAcknowledgement {
 	return MsgPacketAcknowledgement{
 		Packets:          packets,
 		Acknowledgements: acknowledgements,
 		Proof:            proof,
 		ProofHeight:      proofHeight,
+		Relayer:          relayer,
 	}
 }
 
@@ -51,11 +53,12 @@ type MsgPacketTimeout struct {
 	Relayer     address
 }
 
-func NewMsgPacketTimeout(packet Packet, proof []byte, proofHeight uint64) MsgPacketTimeout {
+func NewMsgPacketTimeout(packet Packet, proof []byte, proofHeight uint64, relayer address) MsgPacketTimeout {
 	return MsgPacketTimeout{
 		Packet:      packet,
 		Proof:       proof,
 		ProofHeight: proofHeight,
+		Relayer:     relayer,
 	}
 }
 
@@ -67,10 +70,11 @@ type MsgIntentPacketRecv struct {
 	MarketMaker         address
 }
 
-func NewMsgIntentPacketRecv(packets []Packet, marketMakerMessages [][]byte) MsgIntentPacketRecv {
+func NewMsgIntentPacketRecv(packets []Packet, marketMakerMessages [][]byte, marketMaker address) MsgIntentPacketRecv {
 	return MsgIntentPacketRecv{
 		Packets:             packets,
 		MarketMakerMessages: marketMakerMessages,
+		MarketMaker:         marketMaker,
 	}
 }
 

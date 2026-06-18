@@ -36,7 +36,7 @@ func main(cur realm) {
 	packet := core.NewPacket(cross(cur), types.ChannelId(1), parentChannel,
 		e2e.MustPacketData(cross(cur), e2e.MustForwardInstruction(cross(cur), forward)), types.Timestamp(0))
 
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, address(""), nil, 1))
 }
 
 // Error:

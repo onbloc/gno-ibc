@@ -261,10 +261,3 @@ func (c *CometblsLightClient) getConsensusState(height types.Height) (*Consensus
 func (c *CometblsLightClient) setConsensusState(height types.Height, consState *ConsensusState) {
 	c.consensusStateByHeight.Set(heightKey(height), consState)
 }
-
-// heightKey renders a height as a fixed-width, lexicographically sortable bptree
-// key. CometBLS uses a single revision, so the revision-height ordering matches
-// numeric ordering.
-func heightKey(height types.Height) string {
-	return ufmt.Sprintf("%020d-%020d", height.RevisionNumber, height.RevisionHeight)
-}

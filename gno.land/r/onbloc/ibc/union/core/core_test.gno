@@ -1328,6 +1328,100 @@ func TestWriteAcknowledgementCommitsAsyncAck(cur realm, t *testing.T) {
 	}
 }
 
+// Union reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L1119-L1238
+func TestUnionWriteAcknowledgementOK(cur realm, t *testing.T) {
+	resetStore()
+	portId, _, channelId := setupOpenChannel(t)
+	app := store.ports[portKey(portId)].(*mockApp)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
+	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: testFutureTimeoutNanos}
+
+	PacketRecv(cross(cur), types.MsgPacketRecv{
+		Packets:     []types.Packet{packet},
+		RelayerMsgs: [][]byte{{1}},
+		Relayer:     testutils.TestAddress("union-relayer"),
+		Proof:       []byte{1, 2, 3},
+		ProofHeight: 1,
+	})
+	uassert.NotAborts(t, cur, func(cur realm) {
+		WriteAcknowledgement(cross(cur), types.MsgWriteAcknowledgement{
+			Packet:          packet,
+			Acknowledgement: []byte{1},
+		})
+	})
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L1242-L1361
+func TestUnionWriteAcknowledgementModuleIsNotChannelOwner(cur realm, t *testing.T) {
+	resetStore()
+	portId, _, channelId := setupOpenChannel(t)
+	app := store.ports[portKey(portId)].(*mockApp)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
+	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: testFutureTimeoutNanos}
+
+	PacketRecv(cross(cur), types.MsgPacketRecv{
+		Packets:     []types.Packet{packet},
+		RelayerMsgs: [][]byte{{1}},
+		Relayer:     testutils.TestAddress("union-relayer"),
+		Proof:       []byte{1, 2, 3},
+		ProofHeight: 1,
+	})
+	setChannelOwner(channelId, "gno.land/r/not/channel-owner")
+
+	uassert.AbortsContains(t, cur, "caller not authorized to write ack", func(cur realm) {
+		WriteAcknowledgement(cross(cur), types.MsgWriteAcknowledgement{
+			Packet:          packet,
+			Acknowledgement: []byte{1},
+		})
+	})
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L1365-L1459
+func TestUnionWriteAcknowledgementPacketNotReceived(cur realm, t *testing.T) {
+	resetStore()
+	_, _, channelId := setupOpenChannel(t)
+	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: testFutureTimeoutNanos}
+
+	uassert.AbortsContains(t, cur, "packet receipt not found", func(cur realm) {
+		WriteAcknowledgement(cross(cur), types.MsgWriteAcknowledgement{
+			Packet:          packet,
+			Acknowledgement: []byte{1},
+		})
+	})
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L1463-L1601
+func TestUnionWriteAcknowledgementAlreadyExists(cur realm, t *testing.T) {
+	resetStore()
+	portId, _, channelId := setupOpenChannel(t)
+	app := store.ports[portKey(portId)].(*mockApp)
+	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
+	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: testFutureTimeoutNanos}
+
+	PacketRecv(cross(cur), types.MsgPacketRecv{
+		Packets:     []types.Packet{packet},
+		RelayerMsgs: [][]byte{{1}},
+		Relayer:     testutils.TestAddress("union-relayer"),
+		Proof:       []byte{1, 2, 3},
+		ProofHeight: 1,
+	})
+	WriteAcknowledgement(cross(cur), types.MsgWriteAcknowledgement{
+		Packet:          packet,
+		Acknowledgement: []byte{1},
+	})
+
+	uassert.AbortsContains(t, cur, "acknowledgement already written", func(cur realm) {
+		WriteAcknowledgement(cross(cur), types.MsgWriteAcknowledgement{
+			Packet:          packet,
+			Acknowledgement: []byte{1},
+		})
+	})
+}
+
 func TestWriteAcknowledgementRejectsNonOwner(cur realm, t *testing.T) {
 	resetStore()
 	portId, _, channelId := setupOpenChannel(t)

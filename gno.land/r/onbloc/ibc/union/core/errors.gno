@@ -11,6 +11,7 @@ var (
 	ErrUnauthorizedAckWriter         = errors.New("caller not authorized to write ack")
 	ErrAcknowledgementAlreadyWritten = errors.New("acknowledgement already written")
 	ErrAcknowledgementEmpty          = errors.New("acknowledgement cannot be empty")
+	ErrAcknowledgementMismatch       = errors.New("acknowledgement mismatch")
 	ErrUnauthorizedPacketSender      = errors.New("caller not authorized to send packet")
 	ErrTimeoutMustBeSet              = errors.New("timeout must be set")
 	ErrPacketCommitmentAlreadyExists = errors.New("packet commitment already exists")

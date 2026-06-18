@@ -225,7 +225,7 @@ func BatchSend(cur realm, msg types.MsgBatchSend) types.H256 {
 }
 
 func BatchAcks(cur realm, msg types.MsgBatchAcks) types.H256 {
-	if len(msg.Packets) == 0 {
+	if len(msg.Packets) < 2 {
 		panic(ErrNotEnoughPackets)
 	}
 	if len(msg.Packets) != len(msg.Acks) {
@@ -237,15 +237,19 @@ func BatchAcks(cur realm, msg types.MsgBatchAcks) types.H256 {
 		panic(ErrUnauthorizedAckWriter)
 	}
 	c := store.clientForChannel(first.DestinationChannelId)
-	for _, packet := range msg.Packets {
+	for i, packet := range msg.Packets {
 		if packet.DestinationChannelId != first.DestinationChannelId {
 			panic(ErrBatchSameChannelOnly)
 		}
-		if !c.hasPacketReceipt(packet) {
+		ackCommitment, ok := c.getBatchReceiptsAtPath(packetAcknowledgementPath(packet))
+		if !ok {
 			panic(ErrPacketReceiptNotFound)
 		}
-		if c.hasAcknowledgement(packet) {
-			panic(ErrAcknowledgementAlreadyWritten)
+		if ackCommitment == types.COMMITMENT_MAGIC {
+			panic(ErrAcknowledgementEmpty)
+		}
+		if expected := types.CommitAcks([][]byte{msg.Acks[i]}); ackCommitment != expected {
+			panic(ErrAcknowledgementMismatch)
 		}
 	}
 	batchHash := commitPacketsHash(msg.Packets)

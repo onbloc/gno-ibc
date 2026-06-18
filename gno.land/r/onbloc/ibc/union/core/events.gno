@@ -129,19 +129,11 @@ func emitPacketRecvEvent(eventType string, packet types.Packet, destinationChann
 	)
 }
 
-func emitWriteAckEvent(packet types.Packet, destinationChannel types.Channel, connection types.Connection, acknowledgement []byte) {
+func emitWriteAckEvent(channelId types.ChannelId, packet types.Packet, acknowledgement []byte) {
 	chain.Emit(
 		WriteAckEvent,
+		"channel_id", channelId.String(),
 		"packet_hash", commitPacketHash(packet).String(),
-		"packet_data", hexAttr(packet.Data),
-		"source_channel_id", packet.SourceChannelId.String(),
-		"source_connection_id", connection.CounterpartyConnectionId.String(),
-		"source_connection_client_id", connection.CounterpartyClientId.String(),
-		"destination_channel_id", packet.DestinationChannelId.String(),
-		"destination_channel_version", destinationChannel.Version,
-		"destination_connection_id", destinationChannel.ConnectionId.String(),
-		"destination_connection_client_id", connection.ClientId.String(),
-		"timeout_timestamp", packet.TimeoutTimestamp.String(),
 		"acknowledgement", hexAttr(acknowledgement),
 	)
 }

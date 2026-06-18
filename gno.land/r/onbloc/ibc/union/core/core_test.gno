@@ -950,13 +950,19 @@ func TestQueryReceiptAtPathUnknownReturnsEmpty(cur realm, t *testing.T) {
 	}
 }
 
-func TestBatchAcksRejectsAckCountMismatch(cur realm, t *testing.T) {
+func TestBatchAcksAllowsAckCountMismatchLikeUnion(cur realm, t *testing.T) {
 	resetStore()
-	p1 := types.Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: types.Bytes("a"), TimeoutTimestamp: 100}
-	p2 := types.Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: types.Bytes("b"), TimeoutTimestamp: 100}
-	uassert.AbortsContains(t, cur, "acknowledgement count mismatch", func(cur realm) {
-		BatchAcks(cross(cur), types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: [][]byte{[]byte("ack-a")}})
-	})
+	_, _, channelId := setupOpenChannel(t)
+	p1 := types.Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: types.Bytes("a"), TimeoutTimestamp: 100}
+	p2 := types.Packet{SourceChannelId: 1, DestinationChannelId: channelId, Data: types.Bytes("b"), TimeoutTimestamp: 100}
+	store.commitAcknowledgement(p1, []byte("ack-a"))
+	store.commitAcknowledgement(p2, []byte("ack-b"))
+
+	batchHash := BatchAcks(cross(cur), types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: [][]byte{[]byte("ack-a")}})
+	want := types.CommitAcks([][]byte{[]byte("ack-a")})
+	if got := QueryReceiptAtPath(channelId, types.BatchReceiptsPath(batchHash)); got != want.String() {
+		t.Errorf("QueryReceiptAtPath(batch path): got %s want %s", got, want)
+	}
 }
 
 func TestBatchAcksRejectsSinglePacket(cur realm, t *testing.T) {
@@ -969,14 +975,16 @@ func TestBatchAcksRejectsSinglePacket(cur realm, t *testing.T) {
 	})
 }
 
-func TestBatchAcksRejectsNonOwner(cur realm, t *testing.T) {
+func TestBatchAcksAllowsNonOwnerLikeUnion(cur realm, t *testing.T) {
 	resetStore()
 	_, _, channelId := setupOpenChannel(t)
 	setChannelOwner(channelId, "gno.land/r/not-channel-owner")
 	p1 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("a"), TimeoutTimestamp: 100}
 	p2 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("b"), TimeoutTimestamp: 100}
+	store.commitAcknowledgement(p1, []byte("ack-a"))
+	store.commitAcknowledgement(p2, []byte("ack-b"))
 
-	uassert.AbortsContains(t, cur, "caller not authorized to write ack", func(cur realm) {
+	uassert.NotAborts(t, cur, func(cur realm) {
 		BatchAcks(cross(cur), types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: [][]byte{[]byte("ack-a"), []byte("ack-b")}})
 	})
 }
@@ -987,7 +995,7 @@ func TestBatchAcksRejectsPacketsWithoutReceipt(cur realm, t *testing.T) {
 	p1 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("a"), TimeoutTimestamp: testFutureTimeoutNanos}
 	p2 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("b"), TimeoutTimestamp: testFutureTimeoutNanos}
 
-	uassert.AbortsContains(t, cur, "packet receipt not found", func(cur realm) {
+	uassert.AbortsContains(t, cur, "packet commitment not found", func(cur realm) {
 		BatchAcks(cross(cur), types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: [][]byte{[]byte("ack-a"), []byte("ack-b")}})
 	})
 	if store.hasAcknowledgement(p1) || store.hasAcknowledgement(p2) {
@@ -1035,7 +1043,7 @@ func TestUnionBatchAcksPacketNotReceived(cur realm, t *testing.T) {
 	p1 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: testFutureTimeoutNanos}
 	p2 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes{3, 4, 5}, TimeoutTimestamp: testFutureTimeoutNanos}
 
-	uassert.AbortsContains(t, cur, "packet receipt not found", func(cur realm) {
+	uassert.AbortsContains(t, cur, "packet commitment not found", func(cur realm) {
 		BatchAcks(cross(cur), types.MsgBatchAcks{
 			Packets: []types.Packet{p1, p2},
 			Acks:    [][]byte{{1}, {1}},
@@ -1055,7 +1063,7 @@ func TestUnionBatchAcksTamperedPacket(cur realm, t *testing.T) {
 	store.commitAcknowledgement(p1, []byte{1})
 	store.commitAcknowledgement(p2, []byte{1})
 
-	uassert.AbortsContains(t, cur, "packet receipt not found", func(cur realm) {
+	uassert.AbortsContains(t, cur, "packet commitment not found", func(cur realm) {
 		BatchAcks(cross(cur), types.MsgBatchAcks{
 			Packets: []types.Packet{tampered1, tampered2},
 			Acks:    [][]byte{{1}, {1}},
@@ -1931,6 +1939,33 @@ func TestPacketAcknowledgementBatchUsesUnionBatchReceipts(cur realm, t *testing.
 	}
 	if got, ok := store.clientForChannel(channelId).getBatchPacketsAtPath(packetCommitmentPath(p2)); !ok || got != types.COMMITMENT_MAGIC_ACK {
 		t.Fatalf("p2 acknowledgement marker: ok=%v got=%s want %s", ok, got, types.COMMITMENT_MAGIC_ACK)
+	}
+}
+
+func TestPacketAcknowledgementAllowsAckCountMismatchLikeUnion(cur realm, t *testing.T) {
+	resetStore()
+	portId, _, channelId := setupOpenChannel(t)
+	app := store.ports[portKey(portId)].(*mockApp)
+	p1 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("a"), TimeoutTimestamp: 100}
+	p2 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes("b"), TimeoutTimestamp: 100}
+	store.commitPacket(p1)
+	store.commitPacket(p2)
+
+	PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{
+		Packets:          []types.Packet{p1, p2},
+		Acknowledgements: [][]byte{{0x01}},
+		Proof:            []byte("ack-proof"),
+		ProofHeight:      10,
+	})
+
+	if len(app.ackPackets) != 1 {
+		t.Fatalf("OnAcknowledgementPacket calls: got %d want 1", len(app.ackPackets))
+	}
+	if got, ok := store.clientForChannel(channelId).getBatchPacketsAtPath(packetCommitmentPath(p1)); !ok || got != types.COMMITMENT_MAGIC_ACK {
+		t.Fatalf("p1 acknowledgement marker: ok=%v got=%s want %s", ok, got, types.COMMITMENT_MAGIC_ACK)
+	}
+	if got, ok := store.clientForChannel(channelId).getBatchPacketsAtPath(packetCommitmentPath(p2)); !ok || got != types.COMMITMENT_MAGIC {
+		t.Fatalf("p2 acknowledgement marker: ok=%v got=%s want %s", ok, got, types.COMMITMENT_MAGIC)
 	}
 }
 

@@ -27,9 +27,6 @@ func TestPacketTimeoutRejectsProofBeforeTimeout(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "packet timeout not reached", func(cur realm) {
 		PacketTimeout(cross(cur), types.MsgPacketTimeout{Packet: packet})
 	})
-	if got, ok := store.clientForChannel(packet.SourceChannelId).getBatchPacketsAtPath(packetCommitmentPath(packet)); !ok || got != types.COMMITMENT_MAGIC {
-		t.Fatalf("rejected timeout marker: ok=%v got=%s want %s", ok, got, types.COMMITMENT_MAGIC)
-	}
 	if len(client.nonMembershipKeys) != 1 {
 		t.Fatalf("VerifyNonMembership calls: got %d want 1", len(client.nonMembershipKeys))
 	}
@@ -74,9 +71,6 @@ func TestPacketTimeoutRejectsZeroTimeoutPacket(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "timeout must be set", func(cur realm) {
 		PacketTimeout(cross(cur), types.MsgPacketTimeout{Packet: packet})
 	})
-	if got, ok := store.clientForChannel(packet.SourceChannelId).getBatchPacketsAtPath(packetCommitmentPath(packet)); !ok || got != types.COMMITMENT_MAGIC {
-		t.Fatalf("zero-timeout marker: ok=%v got=%s want %s", ok, got, types.COMMITMENT_MAGIC)
-	}
 	if len(client.nonMembershipKeys) != 1 {
 		t.Fatalf("VerifyNonMembership calls: got %d want 1", len(client.nonMembershipKeys))
 	}

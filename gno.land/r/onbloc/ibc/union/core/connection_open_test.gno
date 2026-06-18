@@ -48,8 +48,6 @@ func TestConnectionOpenTryVerifiesProof(cur realm, t *testing.T) {
 	}
 }
 
-// Converted from Union connection_open_init_ok:
-// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/connection/ibc.rs#L18-L66
 func TestConnectionOpenInitSavesInitConnection(cur realm, t *testing.T) {
 	resetStore()
 	cleanup := setAdminForTest(cur)
@@ -72,8 +70,6 @@ func TestConnectionOpenInitSavesInitConnection(cur realm, t *testing.T) {
 	}
 }
 
-// Converted from Union connection_open_ack_ok:
-// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/connection/ibc.rs#L298-L353
 func TestConnectionOpenAckVerifiesProofAndOpensConnection(cur realm, t *testing.T) {
 	resetStore()
 	cleanup := setAdminForTest(cur)
@@ -102,8 +98,6 @@ func TestConnectionOpenAckVerifiesProofAndOpensConnection(cur realm, t *testing.
 	}
 }
 
-// Converted from Union connection_open_confirm_ok:
-// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/connection/ibc.rs#L425-L479
 func TestConnectionOpenConfirmVerifiesProofAndOpensConnection(cur realm, t *testing.T) {
 	resetStore()
 	cleanup := setAdminForTest(cur)

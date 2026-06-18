@@ -128,7 +128,9 @@ func QueryChannel(channelId types.ChannelId) string {
 	return hexString(bz)
 }
 
-// GetChannels returns the channel ids owned by a registered app/port.
+// GetChannels returns the channel ids owned by a registered app/port. It takes
+// cur realm so cross-realm callers read core-owned slice state inside core, then
+// receive a freshly allocated result slice.
 func GetChannels(_ realm, contract string) []uint32 {
 	ids := store.appChannels[contract]
 	out := make([]uint32, len(ids))

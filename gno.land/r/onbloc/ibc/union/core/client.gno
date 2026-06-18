@@ -42,12 +42,6 @@ func GetRegisteredClientType(clientType types.ClientType) string {
 	return store.clientImplForType(clientType)
 }
 
-// HasClient reports whether a client type has an implementation registered in
-// this core instance.
-func HasClient(clientType types.ClientType) bool {
-	return store.hasClient(clientType)
-}
-
 // UpdateClient verifies a client message against the light client object, which
 // updates its own state, and mirrors the resulting state bytes for queries and
 // counterparty proofs.

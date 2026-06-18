@@ -340,14 +340,8 @@ func TestGetRegisteredClientTypeReturnsRegisteredType(cur realm, t *testing.T) {
 	if got := GetRegisteredClientType(mockType); got != mockClientImplPath {
 		t.Errorf("GetRegisteredClientType: got %q want %q", got, mockClientImplPath)
 	}
-	if !HasClient(mockType) {
-		t.Fatal("HasClient: got false want true")
-	}
 	if got := GetRegisteredClientType(types.ClientType("missing")); got != "" {
 		t.Errorf("GetRegisteredClientType missing: got %q want empty", got)
-	}
-	if HasClient(types.ClientType("missing")) {
-		t.Fatal("HasClient missing: got true want false")
 	}
 }
 

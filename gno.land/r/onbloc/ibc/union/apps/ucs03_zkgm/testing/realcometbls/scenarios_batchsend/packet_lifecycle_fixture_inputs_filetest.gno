@@ -10,8 +10,8 @@ import (
 	"gno.land/p/nt/testutils/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
-	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	realcometbls "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/realcometbls"
+	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -29,7 +29,7 @@ func main(cur realm) {
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
-	packet := core.NewPacket(cross(cur), pair.Destination, core.GetChannel(pair.Destination).CounterpartyChannelId, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(3600))
+	packet := core.NewPacket(pair.Destination, core.GetChannel(pair.Destination).CounterpartyChannelId, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(3600))
 	realcometbls.BatchSend(cross(cur), packet)
 	ack := e2e.MustSuccessAck(cross(cur), mustMarketMakerTokenOrderAck([]byte("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")))
 	ackValue := types.CommitAcks([][]byte{ack})

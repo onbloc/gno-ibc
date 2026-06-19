@@ -34,37 +34,73 @@ const (
 	CommitNonMembershipEvent   = "CommitNonMembershipProof"
 )
 
-func channelEventAttrs(eventType string, portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) []string {
-	attrs := []string{
+func channelOpenInitEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel) []string {
+	return []string{
 		"port_id", string(portId),
 		"channel_id", channelId.String(),
 		"counterparty_port_id", channel.CounterpartyPortId.String(),
-	}
-	// ChannelOpenInit has not learned the counterparty channel id yet.
-	// state.gno starts real channel ids at 1, so the zero value is only an unset sentinel.
-	if eventType != ChannelOpenInitEvent {
-		attrs = append(
-			attrs,
-			"counterparty_channel_id", channel.CounterpartyChannelId.String(),
-		)
-	}
-	attrs = append(
-		attrs,
 		"connection_id", channel.ConnectionId.String(),
-		"connection_client_id", connection.ClientId.String(),
-		"connection_counterparty_client_id", connection.CounterpartyClientId.String(),
-		"connection_counterparty_connection_id", connection.CounterpartyConnectionId.String(),
 		"version", channel.Version,
-	)
-	return attrs
+	}
 }
 
-func emitChannelEvent(eventType string, portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
-	chain.Emit(eventType, channelEventAttrs(eventType, portId, channelId, channel, connection)...)
+func channelOpenTryEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel, counterpartyVersion string) []string {
+	return []string{
+		"port_id", string(portId),
+		"channel_id", channelId.String(),
+		"counterparty_port_id", channel.CounterpartyPortId.String(),
+		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
+		"connection_id", channel.ConnectionId.String(),
+		"counterparty_version", counterpartyVersion,
+	}
+}
+
+func channelOpenAckConfirmEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel) []string {
+	return []string{
+		"port_id", string(portId),
+		"channel_id", channelId.String(),
+		"counterparty_port_id", channel.CounterpartyPortId.String(),
+		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
+		"connection_id", channel.ConnectionId.String(),
+	}
+}
+
+func channelCloseEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel) []string {
+	return []string{
+		"port_id", string(portId),
+		"channel_id", channelId.String(),
+		"counterparty_port_id", channel.CounterpartyPortId.String(),
+		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
+	}
+}
+
+func emitChannelOpenInitEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
+	chain.Emit(ChannelOpenInitEvent, channelOpenInitEventAttrs(portId, channelId, channel)...)
+}
+
+func emitChannelOpenTryEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel, counterpartyVersion string) {
+	chain.Emit(ChannelOpenTryEvent, channelOpenTryEventAttrs(portId, channelId, channel, counterpartyVersion)...)
+}
+
+func emitChannelOpenAckEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
+	chain.Emit(ChannelOpenAckEvent, channelOpenAckConfirmEventAttrs(portId, channelId, channel)...)
+}
+
+func emitChannelOpenConfirmEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
+	chain.Emit(ChannelOpenConfirmEvent, channelOpenAckConfirmEventAttrs(portId, channelId, channel)...)
+}
+
+func emitChannelCloseInitEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
+	chain.Emit(ChannelCloseInitEvent, channelCloseEventAttrs(portId, channelId, channel)...)
+}
+
+func emitChannelCloseConfirmEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
+	chain.Emit(ChannelCloseConfirmEvent, channelCloseEventAttrs(portId, channelId, channel)...)
 }
 
 func emitConnectionOpenInitEvent(connectionId types.ConnectionId, clientId types.ClientId, counterpartyClientId types.ClientId) {
-	chain.Emit(ConnectionOpenInitEvent,
+	chain.Emit(
+		ConnectionOpenInitEvent,
 		"connection_id", connectionId.String(),
 		"client_id", clientId.String(),
 		"counterparty_client_id", counterpartyClientId.String(),

@@ -1,5 +1,6 @@
 // Test vectors and cases are based on the following references:
-//   https://github.com/ethereum/go-ethereum/blob/master/accounts/abi/packing_test.go
+//
+//	https://github.com/ethereum/go-ethereum/blob/master/accounts/abi/packing_test.go
 package abi
 
 import (

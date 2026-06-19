@@ -1,5 +1,6 @@
 // Test vectors and cases are based on the following references:
-//   https://github.com/unionlabs/union/blob/main/lib/ucs03-zkgm-packet/src/lib.rs
+//
+//	https://github.com/unionlabs/union/blob/main/lib/ucs03-zkgm-packet/src/lib.rs
 package zkgm
 
 import (

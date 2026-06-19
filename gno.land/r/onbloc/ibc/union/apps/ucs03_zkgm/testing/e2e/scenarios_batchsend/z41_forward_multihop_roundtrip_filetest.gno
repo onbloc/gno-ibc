@@ -30,7 +30,7 @@ func main(cur realm) {
 			ContractCalldata: []byte("forward-roundtrip"),
 		}),
 	}
-	parent := core.NewPacket(cross(cur), parentChannel, parentChannel,
+	parent := core.NewPacket(parentChannel, parentChannel,
 		e2e.MustPacketData(cross(cur), e2e.MustForwardInstruction(cross(cur), forward)), types.Timestamp(0))
 	child := e2e.MustForwardChildPacket(cross(cur), parent, u256.Zero(), [32]byte{}, forward)
 	childKey := zkgm.NewInFlightKey(cross(cur), types.MustCommit(types.CommitPacket(child)))

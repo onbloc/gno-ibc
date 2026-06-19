@@ -17,7 +17,7 @@ func setAdminForTest(cur realm) func() {
 }
 
 func TestConnectionOpenTryVerifiesProof(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setAdminForTest(cur)
 	defer cleanup()
 
@@ -49,7 +49,7 @@ func TestConnectionOpenTryVerifiesProof(cur realm, t *testing.T) {
 }
 
 func TestConnectionOpenInitSavesInitConnection(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setAdminForTest(cur)
 	defer cleanup()
 
@@ -71,7 +71,7 @@ func TestConnectionOpenInitSavesInitConnection(cur realm, t *testing.T) {
 }
 
 func TestConnectionOpenAckVerifiesProofAndOpensConnection(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setAdminForTest(cur)
 	defer cleanup()
 
@@ -99,7 +99,7 @@ func TestConnectionOpenAckVerifiesProofAndOpensConnection(cur realm, t *testing.
 }
 
 func TestConnectionOpenConfirmVerifiesProofAndOpensConnection(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setAdminForTest(cur)
 	defer cleanup()
 
@@ -130,7 +130,7 @@ func TestConnectionOpenConfirmVerifiesProofAndOpensConnection(cur realm, t *test
 // Converted from Union force_connection_open_try dispatch:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L195-L208
 func TestForceConnectionOpenTryBypassesProofVerification(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setAdminForTest(cur)
 	defer cleanup()
 
@@ -164,7 +164,7 @@ func TestForceConnectionOpenTryBypassesProofVerification(cur realm, t *testing.T
 // Converted from Union force_connection_open_ack dispatch:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L223-L234
 func TestForceConnectionOpenAckBypassesProofVerification(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setAdminForTest(cur)
 	defer cleanup()
 
@@ -202,7 +202,7 @@ func TestForceConnectionOpenAckBypassesProofVerification(cur realm, t *testing.T
 // Converted from Union force_connection_open_confirm dispatch:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L247-L258
 func TestForceConnectionOpenConfirmBypassesProofVerification(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setAdminForTest(cur)
 	defer cleanup()
 
@@ -235,7 +235,7 @@ func TestForceConnectionOpenConfirmBypassesProofVerification(cur realm, t *testi
 }
 
 func TestForceConnectionOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	admin = testutils.TestAddress("authorized-admin")
 	defer func() { admin = "" }()
 

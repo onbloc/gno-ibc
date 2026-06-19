@@ -2,9 +2,12 @@
 package scenarios_batchsend
 
 import (
+	"errors"
+
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	u256 "gno.land/p/gnoswap/uint256"
+	"gno.land/p/onbloc/ibc/union/lightclient"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
@@ -16,30 +19,44 @@ const forwardChildTimeoutClientType = types.ClientType("gno.land/r/onbloc/ibc/un
 
 type forwardChildTimeoutLightClient struct{}
 
-func (m *forwardChildTimeoutLightClient) CreateClient(_ realm, clientId types.ClientId, clientStateBytes, consensusStateBytes []byte) string {
-	return "forward-child-timeout-chain"
+func (m *forwardChildTimeoutLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error {
+	return nil
 }
 
-func (m *forwardChildTimeoutLightClient) UpdateClient(cur realm, clientId types.ClientId, clientMessage []byte) types.ConsensusStateUpdate {
-	return core.NewConsensusStateUpdate(cross(cur), types.NewHeight(1), clientMessage, clientMessage)
+func (m *forwardChildTimeoutLightClient) VerifyNonMembership(uint64, []byte, []byte) error {
+	return nil
 }
 
-func (m *forwardChildTimeoutLightClient) VerifyMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte, value []byte) {
-}
-
-func (m *forwardChildTimeoutLightClient) VerifyNonMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte) {
-}
-
-func (m *forwardChildTimeoutLightClient) GetTimestamp(clientId types.ClientId, height types.Height) types.Timestamp {
+func (m *forwardChildTimeoutLightClient) GetTimestamp() types.Timestamp {
 	return types.Timestamp(2)
 }
 
-func (m *forwardChildTimeoutLightClient) GetLatestHeight(clientId types.ClientId) types.Height {
-	return types.NewHeight(1)
+func (m *forwardChildTimeoutLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
+	return types.Timestamp(2), nil
 }
 
-func (m *forwardChildTimeoutLightClient) GetStatus(clientId types.ClientId) types.Status {
-	return types.StatusActive
+func (m *forwardChildTimeoutLightClient) GetLatestHeight() uint64 {
+	return 1
+}
+
+func (m *forwardChildTimeoutLightClient) GetCounterpartyChainID() string {
+	return "forward-child-timeout-chain"
+}
+
+func (m *forwardChildTimeoutLightClient) Status() lightclient.Status {
+	return lightclient.Active
+}
+
+func (m *forwardChildTimeoutLightClient) VerifyHeader(_ address, header []byte, _ address) (types.StateUpdate, error) {
+	return types.StateUpdate{Height: 1, ClientStateBytes: header, ConsensusStateBytes: header}, nil
+}
+
+func (m *forwardChildTimeoutLightClient) VerifyCreation(address, address) (types.ClientCreationResult, error) {
+	return types.ClientCreationResult{}, nil
+}
+
+func (m *forwardChildTimeoutLightClient) Misbehaviour(address, []byte, address) (types.ClientState, error) {
+	return nil, errors.New("mock: misbehaviour unsupported")
 }
 
 func main(cur realm) {
@@ -61,7 +78,7 @@ func main(cur realm) {
 			Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 		}),
 	}
-	parentPacket := core.NewPacket(cross(cur), types.ChannelId(1), parentDestination,
+	parentPacket := core.NewPacket(types.ChannelId(1), parentDestination,
 		e2e.MustPacketData(cross(cur), e2e.MustForwardInstruction(cross(cur), forward)), types.Timestamp(0))
 	childPacket := e2e.MustForwardChildPacket(cross(cur), parentPacket, u256.Zero(), [32]byte{}, forward)
 	childKey := zkgm.NewInFlightKey(cross(cur), types.MustCommit(types.CommitPacket(childPacket)))
@@ -108,8 +125,8 @@ func openForwardChildTimeoutConnection(cur realm) types.ConnectionId {
 
 func openForwardChildTimeoutChannel(cur realm, connectionId types.ConnectionId, counterpartyChannelId types.ChannelId) types.ChannelId {
 	portId := []byte(zkgm.ProxyPkgPath())
-	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version))
-	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, counterpartyChannelId, nil, 1))
+	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, counterpartyChannelId, nil, 1, "g1msgrelayer"))
 	return channelId
 }
 

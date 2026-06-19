@@ -37,7 +37,7 @@ func main(cur realm) {
 		})
 	}
 	largeBatch := z.Batch{Instructions: instructions}
-	largePacket := core.NewPacket(cross(cur), pair.Source, pair.Destination,
+	largePacket := core.NewPacket(pair.Source, pair.Destination,
 		e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), largeBatch)), types.Timestamp(1<<62))
 
 	println("[SCENARIO] flat allowlisted batch")
@@ -51,7 +51,7 @@ func main(cur realm) {
 	nestedBatch := z.Batch{Instructions: []z.Instruction{
 		e2e.MustBatchInstruction(cross(cur), z.Batch{}),
 	}}
-	nestedPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination,
+	nestedPacket := core.NewPacket(pair.Source, pair.Destination,
 		e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), nestedBatch)), types.Timestamp(1<<62))
 	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{nestedPacket}, nil, nil, 1))
 	println("nested_batch_receipt", core.HasPacketReceipt(cross(cur), nestedPacket))

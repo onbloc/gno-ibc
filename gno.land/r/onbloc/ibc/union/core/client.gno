@@ -24,7 +24,8 @@ func CreateClient(cur realm, clientType types.ClientType, lc lightclient.Interfa
 		panic("create client: " + err.Error())
 	}
 
-	chain.Emit(CreateClientEvent,
+	chain.Emit(
+		CreateClientEvent,
 		"client_id", c.id.String(),
 		"client_type", clientType.String(),
 	)
@@ -57,7 +58,8 @@ func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 		c.saveConsensusState(height, update.ConsensusStateBytes)
 	}
 
-	chain.Emit(UpdateClientEvent,
+	chain.Emit(
+		UpdateClientEvent,
 		"client_type", c.typ.String(),
 		"client_id", msg.ClientId.String(),
 		"height", height.String(),
@@ -85,7 +87,8 @@ func ForceUpdateClient(cur realm, clientId types.ClientId, lc lightclient.Interf
 	c.lightClient = lc
 	height := types.NewHeight(lc.GetLatestHeight())
 
-	chain.Emit(UpdateClientEvent,
+	chain.Emit(
+		UpdateClientEvent,
 		"client_type", c.typ.String(),
 		"client_id", clientId.String(),
 		"height", height.String(),

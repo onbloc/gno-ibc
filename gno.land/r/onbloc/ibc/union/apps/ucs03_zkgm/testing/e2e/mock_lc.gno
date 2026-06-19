@@ -1,37 +1,56 @@
 package e2e
 
-import types "gno.land/p/onbloc/ibc/union/types"
+import (
+	"errors"
+
+	"gno.land/p/onbloc/ibc/union/lightclient"
+	types "gno.land/p/onbloc/ibc/union/types"
+)
 
 const MockClientType = types.ClientType("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/mock")
 
 type MockLightClient struct{}
 
-func (m *MockLightClient) CreateClient(_ realm, clientId types.ClientId, clientStateBytes, consensusStateBytes []byte) string {
-	return "mock-chain"
+func (m *MockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error {
+	return nil
 }
 
-func (m *MockLightClient) UpdateClient(_ realm, clientId types.ClientId, clientMessage []byte) types.ConsensusStateUpdate {
-	return types.ConsensusStateUpdate{
-		Height:              types.NewHeight(1),
-		ClientStateBytes:    clientMessage,
-		ConsensusStateBytes: clientMessage,
-	}
+func (m *MockLightClient) VerifyNonMembership(uint64, []byte, []byte) error {
+	return nil
 }
 
-func (m *MockLightClient) VerifyMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte, value []byte) {
-}
-
-func (m *MockLightClient) VerifyNonMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte) {
-}
-
-func (m *MockLightClient) GetTimestamp(clientId types.ClientId, height types.Height) types.Timestamp {
+func (m *MockLightClient) GetTimestamp() types.Timestamp {
 	return types.Timestamp(1)
 }
 
-func (m *MockLightClient) GetLatestHeight(clientId types.ClientId) types.Height {
-	return types.NewHeight(1)
+func (m *MockLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
+	return types.Timestamp(1), nil
 }
 
-func (m *MockLightClient) GetStatus(clientId types.ClientId) types.Status {
-	return types.StatusActive
+func (m *MockLightClient) GetLatestHeight() uint64 {
+	return 1
+}
+
+func (m *MockLightClient) GetCounterpartyChainID() string {
+	return "mock-chain"
+}
+
+func (m *MockLightClient) Status() lightclient.Status {
+	return lightclient.Active
+}
+
+func (m *MockLightClient) VerifyHeader(_ address, header []byte, _ address) (types.StateUpdate, error) {
+	return types.StateUpdate{
+		Height:              1,
+		ClientStateBytes:    header,
+		ConsensusStateBytes: header,
+	}, nil
+}
+
+func (m *MockLightClient) VerifyCreation(address, address) (types.ClientCreationResult, error) {
+	return types.ClientCreationResult{}, nil
+}
+
+func (m *MockLightClient) Misbehaviour(address, []byte, address) (types.ClientState, error) {
+	return nil, errors.New("mock: misbehaviour unsupported")
 }

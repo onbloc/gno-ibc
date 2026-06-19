@@ -8,7 +8,7 @@ import (
 )
 
 func setupUnionConnectionTest(cur realm) (types.ClientId, *mockClient, func()) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setAdminForTest(cur)
 	client := &mockClient{status: types.StatusActive}
 	return registerMockClient(client), client, cleanup
@@ -95,7 +95,7 @@ func TestUnionConnectionOpenTryOk(cur realm, t *testing.T) {
 // Converted from Union connection_open_try_client_not_found:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/connection/ibc.rs#L170-L226
 func TestUnionConnectionOpenTryClientNotFound(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setAdminForTest(cur)
 	defer cleanup()
 

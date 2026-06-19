@@ -91,9 +91,6 @@ func channelOpenAck(cur realm, msg types.MsgChannelOpenAck, verify bool) {
 	if channel.State != types.ChannelStateInit {
 		panic(ErrInvalidChannelState)
 	}
-	if msg.CounterpartyChannelId == 0 {
-		panic(ErrInvalidCounterpartyChannelId)
-	}
 	connection := ensureConnectionOpen(channel.ConnectionId)
 	portId := store.getChannelOwner(msg.ChannelId)
 

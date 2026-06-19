@@ -194,18 +194,19 @@ func TestChannelOpenAckNotFound(cur realm, t *testing.T) {
 	})
 }
 
-// Local regression for Gno's zero-as-None representation of Union counterparty_channel_id.
-func TestChannelOpenAckRejectsInvalidCounterpartyChannelId(cur realm, t *testing.T) {
+// Local regression: Union MsgChannelOpenAck carries a concrete ChannelId, not
+// an Option, so core must not reject zero before proof verification.
+func TestChannelOpenAckAllowsZeroCounterpartyChannelId(cur realm, t *testing.T) {
 	resetStore()
-	portId, connectionId, client, _ := setupChannelOpenUnionTest()
+	portId, connectionId, _, _ := setupChannelOpenUnionTest()
 	channelId := store.nextChannelId()
 	store.createChannel(channelId, types.Channel{State: types.ChannelStateInit, ConnectionId: connectionId, CounterpartyPortId: types.Bytes("counterparty"), Version: "ics20-1"}, portId)
 
-	uassert.AbortsContains(t, cur, "invalid counterparty channel id", func(cur realm) {
-		channelOpenAck(cur, types.NewMsgChannelOpenAck(channelId, "ics20-1", 0, types.Bytes("proof-try"), 44, "g1msgrelayer"), true)
-	})
-	if len(client.membershipKeys) != 0 {
-		t.Fatalf("membership calls: got %d want 0", len(client.membershipKeys))
+	channelOpenAck(cur, types.NewMsgChannelOpenAck(channelId, "ics20-1", 0, types.Bytes("proof-try"), 44, "g1msgrelayer"), false)
+
+	channel := store.getChannel(channelId)
+	if channel.State != types.ChannelStateOpen || channel.CounterpartyChannelId != 0 {
+		t.Fatalf("channel: got %+v", channel)
 	}
 }
 

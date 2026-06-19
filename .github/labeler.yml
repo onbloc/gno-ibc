@@ -31,7 +31,6 @@ A-encoding:
       - any-glob-to-any-file:
           - 'gno.land/p/core/encoding/**'
           - 'gno.land/p/core/ethereum/**'
-          - 'tools/abi-fixtures/**'
           - 'tools/gen-ethereum-storage-proof-fixture/**'
 
 A-tooling:

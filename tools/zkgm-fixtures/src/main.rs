@@ -14,14 +14,11 @@
 //! This is wire-level ground truth; state-dependent handler effects
 //! (escrow balance, voucher mint, rate-limit bucket state, event emission)
 //! stay in the pure gno handler tests since they require gno-side state.
-//! Together with `abi-fixtures` (which pins per-struct encoding correctness
-//! for each isolated body), these scenarios pin the full envelope shape +
-//! the ack pairing convention.
+//! These scenarios pin the full envelope shape and the ack pairing convention.
 //!
 //! The `sol!` block, constants, and `_params` flavor convention are a
-//! verbatim copy of `union/cosmwasm/app/ucs03-zkgm/src/com.rs` — the same
-//! source `abi-fixtures` keeps in sync. If Union ever changes the wire
-//! format, regenerate both fixtures.
+//! verbatim copy of `union/cosmwasm/app/ucs03-zkgm/src/com.rs`.
+//! If Union ever changes the wire format, regenerate these fixtures.
 //!
 //! Output: a JSON array of `Scenario` records on stdout.
 //! Regenerate with `make refresh-zkgm-scenarios` from the repo root.
@@ -147,9 +144,9 @@ fn hex0x(bytes: &[u8]) -> String {
     format!("0x{}", hex::encode(bytes))
 }
 
-// `abi_encode_params` (not plain `abi_encode`) — see abi-fixtures README:
-// Union encodes ZKGM wire bytes via the _params flavor. The two differ by
-// a 32-byte head_offset prefix; every gno encoder/decoder uses _params.
+// Union encodes ZKGM wire bytes via `abi_encode_params` (not plain `abi_encode`).
+// The two differ by a 32-byte head_offset prefix; every gno encoder/decoder
+// uses _params.
 fn encode_params<T>(value: &T) -> Vec<u8>
 where
     T: SolValue,
@@ -224,8 +221,8 @@ struct Scenario {
     destination_channel: u64,
     /// The ZkgmPacket envelope, decoded form.
     packet: Value,
-    /// The decoded inner instruction body. Schema matches abi-fixtures field
-    /// conventions: bytes → "0x..", uint256 → decimal string, etc.
+    /// The decoded inner instruction body. Field encoding conventions:
+    /// bytes → "0x..", uint256 → decimal string, etc.
     decoded: Value,
     /// Canonical `abi_encode_params(ZkgmPacket)` — the bytes carried as
     /// `packet.Data` over IBC.

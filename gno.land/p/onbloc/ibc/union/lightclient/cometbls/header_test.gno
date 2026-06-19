@@ -2,7 +2,9 @@ package cometbls
 
 import (
 	"encoding/hex"
+	"strings"
 	"testing"
+	"time"
 
 	"gno.land/p/onbloc/ibc/union/types"
 )
@@ -242,11 +244,15 @@ func updateStateTestHeader(trustedHeight, signedHeight uint64, timestamp uint64)
 
 func TestUpdateStateStoresConsensusAndAdvancesLatestHeight(t *testing.T) {
 	c := newTestClient(t)
+	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
+	if !found {
+		t.Fatal("trusted consensus state missing")
+	}
 	h := updateStateTestHeader(100, 101, testNow+1_000_000_000)
 	h.SignedHeader.AppHash = repeat32(0x44)
 	h.SignedHeader.NextValidatorsHash = repeat32(0x45)
 
-	update := c.updateState(h)
+	update := c.updateState(c.clientState, trustedConsensusState, h)
 
 	if c.clientState.LatestHeight != types.NewHeight(101) {
 		t.Fatalf("latest height: got %s want 101", c.clientState.LatestHeight)
@@ -273,9 +279,13 @@ func TestUpdateStateStoresConsensusAndAdvancesLatestHeight(t *testing.T) {
 
 func TestUpdateStateStoresOlderHeightWithoutRegressingLatestHeight(t *testing.T) {
 	c := newTestClient(t)
+	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
+	if !found {
+		t.Fatal("trusted consensus state missing")
+	}
 	h := updateStateTestHeader(50, 60, testNow+1_000_000_000)
 
-	update := c.updateState(h)
+	update := c.updateState(c.clientState, trustedConsensusState, h)
 
 	if c.clientState.LatestHeight != types.NewHeight(100) {
 		t.Fatalf("latest height regressed: got %s want 100", c.clientState.LatestHeight)
@@ -294,19 +304,76 @@ func TestUpdateStateStoresOlderHeightWithoutRegressingLatestHeight(t *testing.T)
 	}
 }
 
-func TestUpdateStateDuplicateHeightDoesNotRewriteStateBytes(t *testing.T) {
+func TestVerifyHeaderDuplicateHeightShortCircuitsBeforeZKP(t *testing.T) {
 	c := newTestClient(t)
-	h := updateStateTestHeader(90, 100, testNow+1_000_000_000)
+	h := updateStateTestHeader(100, 100, testNow)
+	h.ZeroKnowledgeProof = nil
 
-	update := c.updateState(h)
+	headerBytes, err := EncodeHeader(h)
+	if err != nil {
+		t.Fatalf("EncodeHeader: %v", err)
+	}
+	update, err := c.VerifyHeader("", headerBytes, "")
+	if err != nil {
+		t.Fatalf("VerifyHeader duplicate: %v", err)
+	}
 
 	if update.Height != 100 {
 		t.Fatalf("update height: got %d want 100", update.Height)
 	}
 	if len(update.ClientStateBytes) != 0 {
-		t.Fatal("duplicate update must not include client state bytes")
+		t.Fatal("duplicate VerifyHeader must not include client state bytes")
 	}
-	if len(update.ConsensusStateBytes) != 0 {
-		t.Fatal("duplicate update must not include consensus state bytes")
+	if len(update.ConsensusStateBytes) == 0 {
+		t.Fatal("duplicate VerifyHeader must include existing consensus state bytes")
+	}
+}
+
+func TestVerifyHeaderChecksHeightBeforeExpiry(t *testing.T) {
+	c := newTestClient(t)
+	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
+	if !found {
+		t.Fatal("trusted consensus state missing")
+	}
+	h := updateStateTestHeader(100, 100, testNow+1)
+	now := time.Unix(0, int64(testNow+c.clientState.TrustingPeriod+1))
+
+	err := c.verifyHeader(c.clientState, trustedConsensusState, h, now)
+	requireErrorContains(t, err, "header height <= consensus state height")
+}
+
+func TestVerifyHeaderChecksTimestampBeforeExpiry(t *testing.T) {
+	c := newTestClient(t)
+	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
+	if !found {
+		t.Fatal("trusted consensus state missing")
+	}
+	h := updateStateTestHeader(100, 101, testNow)
+	now := time.Unix(0, int64(testNow+c.clientState.TrustingPeriod+1))
+
+	err := c.verifyHeader(c.clientState, trustedConsensusState, h, now)
+	requireErrorContains(t, err, ErrInvalidHeaderTimestamp)
+}
+
+func TestVerifyHeaderExpiryBoundaryMatchesUnion(t *testing.T) {
+	c := newTestClient(t)
+	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
+	if !found {
+		t.Fatal("trusted consensus state missing")
+	}
+	h := updateStateTestHeader(100, 101, testNow+1)
+	now := time.Unix(0, int64(testNow+c.clientState.TrustingPeriod))
+
+	err := c.verifyHeader(c.clientState, trustedConsensusState, h, now)
+	requireErrorContains(t, err, "the validators hash")
+}
+
+func requireErrorContains(t *testing.T, err error, want string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("expected error containing %q", want)
+	}
+	if !strings.Contains(err.Error(), want) {
+		t.Fatalf("error: got %q want substring %q", err.Error(), want)
 	}
 }

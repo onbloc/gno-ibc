@@ -70,27 +70,6 @@ func TestUpdateClientVerifyHeaderFailureAborts(cur realm, t *testing.T) {
 	})
 }
 
-func TestForceUpdateClientReplacesLightClient(cur realm, t *testing.T) {
-	v := newTestImpl()
-	clientId := v.CreateClient(0, cur, types.ClientType("cometbls"), &mockLightClient{})
-
-	replacement := &mockLightClient{latestHeight: 42}
-	height := v.ForceUpdateClient(0, cur, clientId, replacement)
-
-	uassert.Equal(t, uint64(42), height.RevisionHeight)
-	got, ok := v.store.GetLightClient(clientId)
-	uassert.True(t, ok)
-	uassert.True(t, got == lightclient.Interface(replacement))
-}
-
-func TestForceUpdateClientUnknownAborts(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	uassert.AbortsContains(t, cur, "not found", func(cur realm) {
-		v.ForceUpdateClient(0, cur, types.ClientId(99), &mockLightClient{})
-	})
-}
-
 func TestVerifyClientMembershipActivePasses(cur realm, t *testing.T) {
 	v := newTestImpl()
 	clientId := v.CreateClient(0, cur, types.ClientType("cometbls"), &mockLightClient{})

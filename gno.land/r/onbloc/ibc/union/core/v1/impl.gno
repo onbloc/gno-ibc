@@ -20,6 +20,11 @@ type coreV1 struct {
 
 var _ core.ICore = (*coreV1)(nil)
 
+// errNotMigrated marks an ICore method whose logic still lives on the core proxy.
+// Each subsystem replaces its stubs with real impl logic (and moves its tests
+// here) as it is migrated; until then these guard against accidental delegation.
+const errNotMigrated = "core/v1: subsystem not yet migrated"
+
 // New constructs a fresh v1 impl. The store is injected by the proxy at install
 // time via SetStore, so it is nil until installed.
 func New() *coreV1 {

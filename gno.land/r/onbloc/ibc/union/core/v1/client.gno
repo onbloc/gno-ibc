@@ -48,22 +48,6 @@ func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) types
 	return height
 }
 
-// ForceUpdateClient replaces a client's light client object with a fresh one,
-// bypassing proof verification, to recover an expired or unrecoverable client.
-// The admin gate and origin-call assertion are enforced by the proxy entrypoint
-// before delegation.
-func (c *coreV1) ForceUpdateClient(_ int, rlm realm, clientId types.ClientId, lc lightclient.Interface) types.Height {
-	if !c.store.SetLightClient(0, rlm, clientId, lc) {
-		panic("client " + clientId.String() + " not found")
-	}
-
-	height := types.NewHeight(lc.GetLatestHeight())
-
-	clientType, _ := c.store.ClientType(clientId)
-	core.EmitUpdateClient(clientType, clientId, height)
-	return height
-}
-
 // VerifyClientMembership verifies a membership proof against a registered, active
 // light client. It does not commit the verified value into the host state.
 func (c *coreV1) VerifyClientMembership(_ int, rlm realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {

@@ -63,7 +63,7 @@ func main(cur realm) {
 	ackMsg := types.NewMsgPacketAcknowledgement([]types.Packet{packet}, [][]byte{ack}, nil, 1)
 
 	// This file exercises core idempotency only. BatchSend plants the packet
-	// commitment directly and intentionally bypasses the send-side voucher burn.
+	// commitment directly and intentionally bypasses the send-side voucher escrow.
 	println("[SCENARIO] 1. first ack settles")
 	e2e.BatchSend(cross(cur), packet)
 	core.PacketAcknowledgement(cross(cur), ackMsg)

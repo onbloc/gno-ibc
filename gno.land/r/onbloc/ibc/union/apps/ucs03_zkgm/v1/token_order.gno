@@ -20,7 +20,8 @@ func tagAckFailure() *u256.Uint       { return u256FromBytes32(z.TAG_ACK_FAILURE
 func fillTypeProtocol() *u256.Uint    { return u256FromBytes32(z.FILL_TYPE_PROTOCOL) }
 func fillTypeMarketMaker() *u256.Uint { return u256FromBytes32(z.FILL_TYPE_MARKETMAKER) }
 
-// verifyTokenOrderV2 validates a token order on send: rate-limit, burn voucher or consume native funds, then escrow the channel balance.
+// verifyTokenOrderV2 validates a token order on send: rate-limit, escrow voucher
+// or consume native funds, then escrow the channel balance.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L419-L547
 func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, channelId types.ChannelId, sender string, funds *funds, path *u256.Uint, order z.TokenOrderV2) error {
 	if path == nil {
@@ -33,11 +34,7 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, channelId types.Chann
 			return err
 		}
 
-		if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
-			if err := v.burnVoucher(0, rlm, baseDenom, sender, order.BaseAmount); err != nil {
-				return err
-			}
-		} else if err := funds.sub(baseDenom, order.BaseAmount); err != nil {
+		if err := v.localTokenEscrow(0, rlm, baseDenom, sender, funds, order.BaseAmount); err != nil {
 			return err
 		}
 
@@ -225,9 +222,9 @@ func (v *ucs03ZkgmV1) protocolFillMintV2(_ int, rlm realm, destChan uint32, path
 	return core.NewRecvPacketResult(types.PacketStatusSuccess, ack), nil
 }
 
-// protocolFillUnescrowV2 releases an escrowed native asset for an unwrap order:
-// decrease the channel balance, then send the quote to the receiver and the fee to
-// the relayer from the proxy escrow.
+// protocolFillUnescrowV2 releases an escrowed local asset for an unwrap order:
+// send the quote to the receiver and the fee to the relayer from the proxy
+// escrow, then decrease the channel balance.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2415-L2488
 func (v *ucs03ZkgmV1) protocolFillUnescrowV2(_ int, rlm realm, packet types.Packet, path *u256.Uint, order z.TokenOrderV2, relayer address) (types.RecvPacketResult, error) {
 	reversedPath, err := z.ReverseChannelPath(path)
@@ -244,18 +241,27 @@ func (v *ucs03ZkgmV1) protocolFillUnescrowV2(_ int, rlm realm, packet types.Pack
 	if _, err := amountInt64(fee); err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
-	if err := v.decreaseChannelBalanceV2(0, rlm, packet.DestinationChannelId, reversedPath, order.QuoteToken, order.BaseToken, order.BaseAmount); err != nil {
-		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
+
+	key := ChannelBalanceKeyV2(packet.DestinationChannelId, reversedPath, order.QuoteToken, order.BaseToken)
+	curAmount, ok := v.store.GetChannelBalanceV2(key)
+	if !ok || curAmount == nil || curAmount.Cmp(order.BaseAmount) < 0 {
+		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), errors.New("zkgm/channel_balance: underflow")
 	}
+
+	quoteDenom := string(order.QuoteToken)
 	if !order.QuoteAmount.IsZero() {
-		if err := v.sendNative(0, rlm, string(order.QuoteToken), string(order.Receiver), order.QuoteAmount); err != nil {
+		if err := v.localTokenUnescrow(0, rlm, quoteDenom, string(order.Receiver), order.QuoteAmount); err != nil {
 			panic(execFatal{err.Error()})
 		}
 	}
 	if !fee.IsZero() {
-		if err := v.sendNative(0, rlm, string(order.QuoteToken), string(relayer), fee); err != nil {
+		if err := v.localTokenUnescrow(0, rlm, quoteDenom, string(relayer), fee); err != nil {
 			panic(execFatal{err.Error()})
 		}
+	}
+
+	if err := v.decreaseChannelBalanceV2(0, rlm, packet.DestinationChannelId, reversedPath, order.QuoteToken, order.BaseToken, order.BaseAmount); err != nil {
+		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
 	ack, err := encodeTokenOrderSuccessAck(fillTypeProtocol(), nil)
@@ -354,26 +360,42 @@ func (v *ucs03ZkgmV1) refundV2(_ int, rlm realm, sourceChannelId types.ChannelId
 }
 
 // settleEscrowedV2 releases a previously escrowed INITIALIZE/ESCROW BaseAmount to
-// recipient: it re-mints the voucher for `ibc/` denoms and releases native tokens
-// from the proxy escrow otherwise. Shared by refundV2 and the market-maker fill
-// branch of acknowledgeTokenOrderV2.
-// settleEscrowedV2 releases a settled escrow to recipient: re-mint for ibc denoms, native release otherwise.
+// recipient: it transfers `ibc/` vouchers from the proxy escrow address and
+// releases native tokens from the proxy escrow otherwise. Shared by refundV2 and
+// the market-maker fill branch of acknowledgeTokenOrderV2.
 func (v *ucs03ZkgmV1) settleEscrowedV2(_ int, rlm realm, sourceChannelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2, recipient string) error {
 	if _, err := amountInt64(order.BaseAmount); err != nil {
 		return err
 	}
-	if err := v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
+
+	key := ChannelBalanceKeyV2(sourceChannelId, path, order.BaseToken, order.QuoteToken)
+	curAmount, ok := v.store.GetChannelBalanceV2(key)
+	if !ok || curAmount == nil || curAmount.Cmp(order.BaseAmount) < 0 {
+		return errors.New("zkgm/channel_balance: underflow")
+	}
+
+	baseDenom := string(order.BaseToken)
+	if err := v.localTokenUnescrow(0, rlm, baseDenom, recipient, order.BaseAmount); err != nil {
 		return err
 	}
-	baseDenom := string(order.BaseToken)
-	if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
-		return v.refundIBCVoucher(0, rlm, order.BaseToken, recipient, order.BaseAmount)
-	}
-	return v.sendNative(0, rlm, baseDenom, recipient, order.BaseAmount)
+
+	return v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
 }
 
-// refundIBCVoucher re-mints an IBC voucher to recipient, recovering the stored V2
-// metadata image so the wrapped denom identity is preserved across ack/refund.
+func (v *ucs03ZkgmV1) localTokenEscrow(_ int, rlm realm, denom, sender string, funds *funds, amount *u256.Uint) error {
+	if strings.HasPrefix(denom, ibcDenomPrefix) {
+		return v.transferVoucher(0, rlm, denom, address(sender), rlm.Address(), amount)
+	}
+	return funds.sub(denom, amount)
+}
+
+func (v *ucs03ZkgmV1) localTokenUnescrow(_ int, rlm realm, denom, recipient string, amount *u256.Uint) error {
+	if strings.HasPrefix(denom, ibcDenomPrefix) {
+		return v.transferVoucher(0, rlm, denom, rlm.Address(), address(recipient), amount)
+	}
+	return v.sendNative(0, rlm, denom, recipient, amount)
+}
+
 // refundIBCVoucher re-mints an IBC voucher to recipient, preserving the stored metadata image.
 func (v *ucs03ZkgmV1) refundIBCVoucher(_ int, rlm realm, baseToken []byte, recipient string, amount *u256.Uint) error {
 	baseDenom := string(baseToken)

@@ -15,7 +15,7 @@ import (
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
-func TestTokenOrderVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm, t *testing.T) {
+func TestTokenOrderVerifyEscrowTransfersVoucherToProxyAndIncreasesChannelBalance(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	sender := testAddress("v1-sender")
@@ -34,6 +34,7 @@ func TestTokenOrderVerifyEscrowBurnsVoucherAndIncreasesChannelBalance(cur realm,
 
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(37), voucherBalanceOf(baseToken, address(sender)))
+	uassert.Equal(t, int64(13), voucherBalanceOf(baseToken, cur.Address()))
 
 	balance, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(3), u256.Zero(), order.BaseToken, order.QuoteToken))
 	uassert.Equal(t, "13", balance.ToString())
@@ -59,14 +60,72 @@ func TestTokenOrderAckMarketMakerEscrowWithVoucherRewardsMarketMaker(cur realm, 
 	}
 	uassert.NoError(t, v.verifyTokenOrderV2(0, cur, channelId, sender, newFunds(nil), u256.Zero(), order))
 	uassert.Equal(t, int64(37), voucherBalanceOf(baseToken, address(sender)))
+	uassert.Equal(t, int64(13), voucherBalanceOf(baseToken, cur.Address()))
 
 	err := v.acknowledgeTokenOrderV2(0, cur, channelId, u256.Zero(), order, marketMakerAck(marketMaker), true)
 
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(13), voucherBalanceOf(baseToken, address(marketMaker)))
+	uassert.Equal(t, int64(0), voucherBalanceOf(baseToken, cur.Address()))
 
 	balance, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(channelId, u256.Zero(), order.BaseToken, order.QuoteToken))
 	uassert.True(t, ok && balance.IsZero())
+}
+
+func TestTokenOrderAckFailureRefundsEscrowedVoucherFromProxy(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	sender := testAddress("v1-refund-voucher-sender")
+	baseToken := "ibc/v1-refund-voucher"
+	channelId := types.ChannelId(9)
+	amount := u256.NewUint(13)
+	uassert.NoError(t, v.mintVoucher(0, cur, baseToken, [32]byte{}, "", "", 0, sender, u256.NewUint(50)))
+
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(baseToken),
+		BaseAmount:  amount,
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: amount,
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	uassert.NoError(t, v.verifyTokenOrderV2(0, cur, channelId, sender, newFunds(nil), u256.Zero(), order))
+	uassert.Equal(t, int64(37), voucherBalanceOf(baseToken, address(sender)))
+	uassert.Equal(t, int64(13), voucherBalanceOf(baseToken, cur.Address()))
+
+	err := v.acknowledgeTokenOrderV2(0, cur, channelId, u256.Zero(), order, z.TokenOrderAck{}, false)
+
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(50), voucherBalanceOf(baseToken, address(sender)))
+	uassert.Equal(t, int64(0), voucherBalanceOf(baseToken, cur.Address()))
+
+	balance, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(channelId, u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.True(t, ok && balance.IsZero())
+}
+
+func TestTokenOrderAckFailureUnderflowDoesNotReleaseEscrowedVoucher(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	sender := testAddress("v1-underflow-voucher-sender")
+	baseToken := "ibc/v1-underflow-voucher"
+	channelId := types.ChannelId(10)
+	amount := u256.NewUint(13)
+	uassert.NoError(t, v.mintVoucher(0, cur, baseToken, [32]byte{}, "", "", 0, cur.Address().String(), amount))
+
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(baseToken),
+		BaseAmount:  amount,
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: amount,
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+
+	err := v.acknowledgeTokenOrderV2(0, cur, channelId, u256.Zero(), order, z.TokenOrderAck{}, false)
+
+	uassert.ErrorContains(t, err, "underflow")
+	uassert.Equal(t, int64(0), voucherBalanceOf(baseToken, address(sender)))
+	uassert.Equal(t, int64(13), voucherBalanceOf(baseToken, cur.Address()))
 }
 
 func TestTokenOrderVerifyNativeRequiresSentCoin(cur realm, t *testing.T) {

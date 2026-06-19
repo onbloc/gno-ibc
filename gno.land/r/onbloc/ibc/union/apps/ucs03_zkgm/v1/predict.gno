@@ -75,18 +75,23 @@ func u256FromBytes32(bz [32]byte) *u256.Uint {
 
 // PredictCallProxyAccount returns the synthetic Gno address that represents
 // the given (path, destinationChannel, sender) tuple as a callable account.
-// key = zkgm1<first-20-bytes-of-keccak(ZKGM_CALL_PROXY || path || channelId || sender)>
+// key = zkgm1<first-20-bytes-of-keccak(ZKGM_CALL_PROXY || abi.encode(path, channelId, sender))>
+//
+// The ABI-encoding of the (uint256, uint32, bytes) tuple mirrors union's
+// proxy_account_salt preimage and, being length-prefixed/offset-encoded, is
+// injective in all three components (unlike a raw concatenation). The fixed
+// ZKGM_CALL_PROXY tag domain-separates it from the wrapped-token derivations.
 func PredictCallProxyAccount(path *u256.Uint, channelId types.ChannelId, sender []byte) string {
-	var pathBytes [32]byte
-	if path != nil {
-		pathBytes = z.Uint256ToBytes32(path)
+	if path == nil {
+		path = u256.Zero()
 	}
-	channel := channelId.String()
-	buf := make([]byte, 0, len(tagCallProxy)+len(pathBytes)+len(channel)+len(sender))
+	bz, err := abi.Encode(predictV1Schema, []any{path, uint32(channelId), sender})
+	if err != nil {
+		panic(err)
+	}
+	buf := make([]byte, 0, len(tagCallProxy)+len(bz))
 	buf = append(buf, tagCallProxy...)
-	buf = append(buf, pathBytes[:]...)
-	buf = append(buf, channel...)
-	buf = append(buf, sender...)
+	buf = append(buf, bz...)
 
 	h := keccak256.Sum256(buf)
 	return "zkgm1" + hex.EncodeToString(h[:20])

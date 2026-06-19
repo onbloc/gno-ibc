@@ -15,6 +15,7 @@ type mockClient struct {
 	height    types.Height
 	status    types.Status
 	timestamp types.Timestamp
+	zeroTime  bool
 
 	// recorded calls
 	membershipHeights    []types.Height
@@ -43,6 +44,9 @@ func (m *mockClient) VerifyNonMembership(height uint64, key, proof []byte) error
 }
 
 func (m *mockClient) GetTimestamp() types.Timestamp {
+	if m.zeroTime {
+		return 0
+	}
 	if m.timestamp != 0 {
 		return m.timestamp
 	}
@@ -88,15 +92,18 @@ func (m *mockClient) Misbehaviour(_ address, _ []byte, _ address) (types.ClientS
 }
 
 type mockApp struct {
-	initCalled     bool
-	closedChannels []types.ChannelId
-	recvPackets    []types.Packet
-	intentPackets  []types.Packet
-	intentMsgs     [][]byte
-	ackPackets     []types.Packet
-	timeoutPackets []types.Packet
-	recvResult     types.RecvPacketResult
-	intentResult   types.RecvPacketResult
+	initCalled      bool
+	closedChannels  []types.ChannelId
+	recvPackets     []types.Packet
+	recvRelayers    []address
+	intentPackets   []types.Packet
+	intentMakers    []address
+	intentMsgs      [][]byte
+	ackPackets      []types.Packet
+	timeoutPackets  []types.Packet
+	timeoutRelayers []address
+	recvResult      types.RecvPacketResult
+	intentResult    types.RecvPacketResult
 }
 
 func (a *mockApp) OnChannelOpenInit(_ realm, _ types.ConnectionId, _ types.ChannelId, _ string, _ address) {
@@ -117,29 +124,32 @@ func (a *mockApp) OnChannelCloseConfirm(_ realm, ch types.ChannelId, _ address) 
 	a.closedChannels = append(a.closedChannels, ch)
 }
 
-func (a *mockApp) OnRecvPacket(cur realm, p types.Packet, _ address, _ []byte) types.RecvPacketResult {
+func (a *mockApp) OnRecvPacket(_ realm, p types.Packet, relayer address, _ []byte) types.RecvPacketResult {
 	a.recvPackets = append(a.recvPackets, p)
+	a.recvRelayers = append(a.recvRelayers, relayer)
 	if a.recvResult.Status != types.PacketStatusUnknown {
 		return a.recvResult
 	}
-	return NewRecvPacketResult(cur, types.PacketStatusSuccess, []byte{0x01})
+	return NewRecvPacketResult(types.PacketStatusSuccess, []byte{0x01})
 }
 
-func (a *mockApp) OnIntentRecvPacket(cur realm, p types.Packet, _ address, msg []byte) types.RecvPacketResult {
+func (a *mockApp) OnIntentRecvPacket(_ realm, p types.Packet, maker address, msg []byte) types.RecvPacketResult {
 	a.intentPackets = append(a.intentPackets, p)
+	a.intentMakers = append(a.intentMakers, maker)
 	a.intentMsgs = append(a.intentMsgs, msg)
 	if a.intentResult.Status != types.PacketStatusUnknown {
 		return a.intentResult
 	}
-	return NewRecvPacketResult(cur, types.PacketStatusSuccess, []byte{0x02})
+	return NewRecvPacketResult(types.PacketStatusSuccess, []byte{0x02})
 }
 
 func (a *mockApp) OnAcknowledgementPacket(_ realm, p types.Packet, _ []byte, _ address) {
 	a.ackPackets = append(a.ackPackets, p)
 }
 
-func (a *mockApp) OnTimeoutPacket(_ realm, p types.Packet, _ address) {
+func (a *mockApp) OnTimeoutPacket(_ realm, p types.Packet, relayer address) {
 	a.timeoutPackets = append(a.timeoutPackets, p)
+	a.timeoutRelayers = append(a.timeoutRelayers, relayer)
 }
 
 type mockNonIntentApp struct{}
@@ -156,8 +166,8 @@ func (*mockNonIntentApp) OnChannelOpenConfirm(_ realm, _ types.ChannelId, _ addr
 func (*mockNonIntentApp) OnChannelCloseInit(_ realm, _ types.ChannelId, _ address)    {}
 func (*mockNonIntentApp) OnChannelCloseConfirm(_ realm, _ types.ChannelId, _ address) {}
 
-func (*mockNonIntentApp) OnRecvPacket(cur realm, _ types.Packet, _ address, _ []byte) types.RecvPacketResult {
-	return NewRecvPacketResult(cur, types.PacketStatusSuccess, []byte{0x01})
+func (*mockNonIntentApp) OnRecvPacket(_ realm, _ types.Packet, _ address, _ []byte) types.RecvPacketResult {
+	return NewRecvPacketResult(types.PacketStatusSuccess, []byte{0x01})
 }
 
 func (*mockNonIntentApp) OnAcknowledgementPacket(_ realm, _ types.Packet, _ []byte, _ address) {

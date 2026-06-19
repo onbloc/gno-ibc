@@ -9,6 +9,7 @@ package types
 type MsgPacketRecv struct {
 	Packets     []Packet
 	RelayerMsgs [][]byte
+	Relayer     address
 	Proof       []byte
 	ProofHeight uint64
 }
@@ -29,6 +30,7 @@ type MsgPacketAcknowledgement struct {
 	Acknowledgements [][]byte
 	Proof            []byte
 	ProofHeight      uint64
+	Relayer          address
 }
 
 func NewMsgPacketAcknowledgement(packets []Packet, acknowledgements [][]byte, proof []byte, proofHeight uint64) MsgPacketAcknowledgement {
@@ -46,6 +48,7 @@ type MsgPacketTimeout struct {
 	Packet      Packet
 	Proof       []byte
 	ProofHeight uint64
+	Relayer     address
 }
 
 func NewMsgPacketTimeout(packet Packet, proof []byte, proofHeight uint64) MsgPacketTimeout {
@@ -61,6 +64,7 @@ func NewMsgPacketTimeout(packet Packet, proof []byte, proofHeight uint64) MsgPac
 type MsgIntentPacketRecv struct {
 	Packets             []Packet
 	MarketMakerMessages [][]byte
+	MarketMaker         address
 }
 
 func NewMsgIntentPacketRecv(packets []Packet, marketMakerMessages [][]byte) MsgIntentPacketRecv {

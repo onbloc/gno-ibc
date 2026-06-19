@@ -84,7 +84,7 @@ func sendPacket(cur realm, channelId types.ChannelId, timeoutTimestamp types.Tim
 		panic(err)
 	}
 
-	return core.PacketSend(cross(cur), channelId, timeoutTimestamp, data)
+	return core.SendPacket(cross(cur), channelId, timeoutTimestamp, data)
 }
 
 func assertNonZeroTimeout(timeoutTimestamp types.Timestamp) {

@@ -151,10 +151,10 @@ func WriteForwardAck(cur realm, parentPacket types.Packet, ack []byte) {
 	core.WriteAcknowledgement(cross(cur), types.NewMsgWriteAcknowledgement(parentPacket, ack))
 }
 
-func BatchSend(cur realm, msg types.MsgBatchSend) types.H256 {
+func BatchSend(cur realm, msg types.MsgBatchSend) {
 	cacheRealm(cur)
 	requireImplRealm(cur, "batch send")
-	return core.BatchSend(cross(cur), msg)
+	core.BatchSend(cross(cur), msg)
 }
 
 // ReleaseNative transfers amount of denom from the proxy realm's escrow to

@@ -26,7 +26,7 @@ func TestPacketRecvRejectsExpiredPacket(cur realm, t *testing.T) {
 	}
 
 	uassert.AbortsContains(t, cur, "packet timeout expired", func(cur realm) {
-		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}})
+		PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{nil}})
 	})
 
 	if store.hasPacketReceipt(packet) {
@@ -50,12 +50,11 @@ func TestPacketRecvRejectsBoundaryTimeout(cur realm, t *testing.T) {
 	}
 
 	uassert.AbortsContains(t, cur, "packet timeout expired", func(cur realm) {
-		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}})
+		PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{nil}})
 	})
 }
 
-// TestPacketRecvAcceptsZeroTimeout — TimeoutTimestamp == 0 means "no timeout".
-func TestPacketRecvAcceptsZeroTimeout(cur realm, t *testing.T) {
+func TestPacketRecvRejectsZeroTimeout(cur realm, t *testing.T) {
 	resetStore()
 	_, _, channelId := setupOpenChannel(t)
 	packet := types.Packet{
@@ -65,11 +64,11 @@ func TestPacketRecvAcceptsZeroTimeout(cur realm, t *testing.T) {
 		TimeoutTimestamp:     0,
 	}
 
-	uassert.NotAborts(t, cur, func(cur realm) {
-		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}})
+	uassert.AbortsContains(t, cur, "packet timeout expired", func(cur realm) {
+		PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{nil}})
 	})
-	if !store.hasPacketReceipt(packet) {
-		t.Fatal("zero-timeout packet must be processed")
+	if store.hasPacketReceipt(packet) {
+		t.Fatal("zero-timeout packet must not set a receipt")
 	}
 }
 
@@ -83,15 +82,11 @@ func TestPacketRecvBatchRejectsIfAnyExpired(cur realm, t *testing.T) {
 	expired := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes("b"), TimeoutTimestamp: types.Timestamp(nowNanos() - 1)}
 
 	uassert.AbortsContains(t, cur, "packet timeout expired", func(cur realm) {
-		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{live, expired}})
+		PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{live, expired}, RelayerMsgs: [][]byte{nil, nil}})
 	})
 }
 
-// TestPacketRecvSkipsTimeoutCheckForExistingReceipt — if a receipt is already
-// present (replay path), the recv loop must continue silently instead of
-// aborting on a now-expired timestamp. Honest relayers re-submitting a batch
-// after the timeout passes should not break.
-func TestPacketRecvSkipsTimeoutCheckForExistingReceipt(cur realm, t *testing.T) {
+func TestPacketRecvChecksTimeoutBeforeExistingReceiptSkip(cur realm, t *testing.T) {
 	resetStore()
 	_, _, channelId := setupOpenChannel(t)
 	// Receipt already written; timeout is now in the past.
@@ -103,8 +98,8 @@ func TestPacketRecvSkipsTimeoutCheckForExistingReceipt(cur realm, t *testing.T) 
 	}
 	store.setPacketReceipt(packet)
 
-	uassert.NotAborts(t, cur, func(cur realm) {
-		PacketRecv(cur, types.MsgPacketRecv{Packets: []types.Packet{packet}})
+	uassert.AbortsContains(t, cur, "packet timeout expired", func(cur realm) {
+		PacketRecv(cross(cur), types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{nil}})
 	})
 }
 
@@ -122,6 +117,6 @@ func TestIntentPacketRecvRejectsExpiredPacket(cur realm, t *testing.T) {
 	}
 
 	uassert.AbortsContains(t, cur, "packet timeout expired", func(cur realm) {
-		IntentPacketRecv(cur, types.MsgIntentPacketRecv{Packets: []types.Packet{packet}})
+		IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{Packets: []types.Packet{packet}, MarketMakerMessages: [][]byte{nil}})
 	})
 }

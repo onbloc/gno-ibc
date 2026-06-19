@@ -92,9 +92,9 @@ func openZ35Channel(cur realm, connectionId types.ConnectionId, counterpartyChan
 
 func BatchSend(cur realm, packet types.Packet) types.H256 {
 	stdtesting.SetRealm(stdtesting.NewCodeRealm(zkgm.ProductionImplPath()))
-	commitment := zkgm.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{packet}))
+	zkgm.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{packet}))
 	stdtesting.SetRealm(stdtesting.NewCodeRealm("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/realcometbls"))
-	return commitment
+	return types.MustCommit(types.CommitPackets([]types.Packet{packet}))
 }
 
 func OpenZ37CometBLSChannel(cur realm) ChannelPair {

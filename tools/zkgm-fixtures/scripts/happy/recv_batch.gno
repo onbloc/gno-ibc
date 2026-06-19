@@ -20,8 +20,8 @@ func main() {
 	receiverB := receiverA
 	baseA := []byte("ugnot-alpha")
 	baseB := []byte("ugnot-beta")
-	quoteA := impl.PredictWrappedTokenV1(u256.Zero(), uint32(pair.Destination), baseA)
-	quoteB := impl.PredictWrappedTokenV1(u256.Zero(), uint32(pair.Destination), baseB)
+	quoteA := impl.PredictWrappedToken(u256.Zero(), uint32(pair.Destination), baseA)
+	quoteB := impl.PredictWrappedToken(u256.Zero(), uint32(pair.Destination), baseB)
 
 	orderA := z.TokenOrderV2{
 		Sender:      []byte("counterparty"),

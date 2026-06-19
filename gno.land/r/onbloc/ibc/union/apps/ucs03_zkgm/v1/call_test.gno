@@ -17,7 +17,8 @@ const mockReceiverPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mo
 
 func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
 	mock.Reset(cross(cur))
-	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
+	testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
 	call := z.Call{
 		Sender:           []byte("sender"),
 		ContractAddress:  []byte(mockReceiverPath),
@@ -25,7 +26,7 @@ func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
 	}
 	path := u256.NewUint(9)
 
-	res, err := newTestImpl().executeCall(cur, packet, address("g1relayer"), []byte("relay-msg"), path, call, false)
+	res, err := newTestImpl().executeCall(0, cur, packet, address("g1relayer"), []byte("relay-msg"), path, call, false)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatusSuccess)
@@ -46,10 +47,11 @@ func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
 
 func TestExecuteCallReceiverErrorReturnsFailureAck(cur realm, t *testing.T) {
 	mock.Reset(cross(cur))
+	testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
 	mock.SetError(cross(cur), "receiver failed")
-	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
 
-	res, err := newTestImpl().executeCall(cur, packet, address("g1relayer"), nil, u256.Zero(), z.Call{
+	res, err := newTestImpl().executeCall(0, cur, packet, address("g1relayer"), nil, u256.Zero(), z.Call{
 		Sender:          []byte("sender"),
 		ContractAddress: []byte(mockReceiverPath),
 	}, false)
@@ -65,10 +67,11 @@ func TestExecuteCallReceiverErrorReturnsFailureAck(cur realm, t *testing.T) {
 
 func TestExecuteCallReceiverPanicReturnsOnlyMakerAck(cur realm, t *testing.T) {
 	mock.Reset(cross(cur))
+	testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
 	mock.SetPanic(cross(cur), "boom")
-	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
 
-	res, err := newTestImpl().executeCall(cur, packet, address("g1relayer"), nil, u256.Zero(), z.Call{
+	res, err := newTestImpl().executeCall(0, cur, packet, address("g1relayer"), nil, u256.Zero(), z.Call{
 		Sender:          []byte("sender"),
 		ContractAddress: []byte(mockReceiverPath),
 	}, false)
@@ -80,12 +83,13 @@ func TestExecuteCallReceiverPanicReturnsOnlyMakerAck(cur realm, t *testing.T) {
 
 func TestIntentRecvOnlyMakerCallAborts(cur realm, t *testing.T) {
 	mock.Reset(cross(cur))
+	testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
 	mock.SetPanic(cross(cur), "boom")
 	data := mustZkgmPacketBytes(batchMustCallInstruction(z.Call{
 		Sender:          []byte("sender"),
 		ContractAddress: []byte(mockReceiverPath),
 	}))
-	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), data, 0)
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), data, 0)
 
 	uassert.AbortsContains(t, cur, "zkgm: only maker", func(cur realm) {
 		newTestImpl().OnIntentRecvPacket(0, cur, packet, address("g1relayer"), nil)
@@ -93,7 +97,7 @@ func TestIntentRecvOnlyMakerCallAborts(cur realm, t *testing.T) {
 }
 
 func TestVerifyCallRejectsInvalidSender(cur realm, t *testing.T) {
-	err := newTestImpl().verifyCall(cur, "actual", z.Call{
+	err := newTestImpl().verifyCall(0, cur, "actual", z.Call{
 		Sender: []byte("other"),
 	})
 

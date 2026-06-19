@@ -6,7 +6,6 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
-	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
 
 // amountInt64 narrows uint256 to int64 for the banker/grc20 APIs; anything above
@@ -72,15 +71,15 @@ func TestMintVoucher(cur realm, t *testing.T) {
 	denom := "ibc/mint-basic"
 	rx := address(testAddress("mint-rx"))
 
-	uassert.NoError(t, v.mintVoucher(cur, denom, [32]byte{}, "Wrapped", "WRAP", 6, string(rx), u256.NewUint(100)))
+	uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, "Wrapped", "WRAP", 6, string(rx), u256.NewUint(100)))
 	uassert.Equal(t, int64(100), voucherBalanceOf(denom, rx))
 	uassert.Equal(t, 6, voucherDecimalsOf(denom))
 
-	uassert.NoError(t, v.mintVoucher(cur, denom, [32]byte{}, "Wrapped", "WRAP", 6, string(rx), u256.NewUint(50)))
+	uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, "Wrapped", "WRAP", 6, string(rx), u256.NewUint(50)))
 	uassert.Equal(t, int64(150), voucherBalanceOf(denom, rx))
 
 	wide := new(u256.Uint).Lsh(u256.NewUint(1), 64)
-	uassert.Error(t, v.mintVoucher(cur, "ibc/mint-overflow", [32]byte{}, "X", "X", 0, string(rx), wide))
+	uassert.Error(t, v.mintVoucher(0, cur, "ibc/mint-overflow", [32]byte{}, "X", "X", 0, string(rx), wide))
 }
 
 // burnVoucher / transferVoucher must reject an unknown denom up front, and an
@@ -91,23 +90,23 @@ func TestBurnAndTransferVoucher(cur realm, t *testing.T) {
 	holder := address(testAddress("burn-holder"))
 	other := address(testAddress("burn-other"))
 
-	uassert.NoError(t, v.mintVoucher(cur, denom, [32]byte{}, "B", "B", 0, string(holder), u256.NewUint(100)))
+	uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, "B", "B", 0, string(holder), u256.NewUint(100)))
 
 	// burn reduces the holder's balance.
-	uassert.NoError(t, v.burnVoucher(cur, denom, string(holder), u256.NewUint(40)))
+	uassert.NoError(t, v.burnVoucher(0, cur, denom, string(holder), u256.NewUint(40)))
 	uassert.Equal(t, int64(60), voucherBalanceOf(denom, holder))
 
 	// burning more than held is rejected by the ledger.
-	uassert.Error(t, v.burnVoucher(cur, denom, string(holder), u256.NewUint(1000)))
+	uassert.Error(t, v.burnVoucher(0, cur, denom, string(holder), u256.NewUint(1000)))
 
 	// transfer moves balance between holders (market-maker fill path).
-	uassert.NoError(t, v.transferVoucher(cur, denom, holder, other, u256.NewUint(10)))
+	uassert.NoError(t, v.transferVoucher(0, cur, denom, holder, other, u256.NewUint(10)))
 	uassert.Equal(t, int64(50), voucherBalanceOf(denom, holder))
 	uassert.Equal(t, int64(10), voucherBalanceOf(denom, other))
 
 	// unknown denom is rejected before any ledger access.
-	uassert.Error(t, v.burnVoucher(cur, "ibc/missing", string(holder), u256.NewUint(1)))
-	uassert.Error(t, v.transferVoucher(cur, "ibc/missing", holder, other, u256.NewUint(1)))
+	uassert.Error(t, v.burnVoucher(0, cur, "ibc/missing", string(holder), u256.NewUint(1)))
+	uassert.Error(t, v.transferVoucher(0, cur, "ibc/missing", holder, other, u256.NewUint(1)))
 }
 
 // getOrCreateVoucher falls back to the IBC denom for an empty name, and reuses
@@ -117,9 +116,9 @@ func TestVoucherNameFallsBackToIBCDenom(cur realm, t *testing.T) {
 	denom := "ibc/name-fallback"
 	rx := testAddress("name-fb-rx")
 
-	uassert.NoError(t, v.mintVoucher(cur, denom, [32]byte{}, "", "SYM", 0, rx, u256.NewUint(1)))
+	uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, "", "SYM", 0, rx, u256.NewUint(1)))
 
-	vou, ok := zkgm.Store().GetVoucher(denom)
+	vou, ok := testStore.GetVoucher(denom)
 	uassert.True(t, ok)
 	uassert.Equal(t, denom, vou.Token().GetName())
 }

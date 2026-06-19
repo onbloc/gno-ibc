@@ -7,13 +7,12 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
-	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
 
 // balanceOf reads the current escrow balance, normalising a missing entry to 0.
 func balanceOf(chanId types.ChannelId, path *u256.Uint, base, quote []byte) (uint64, bool) {
 	key := ChannelBalanceKeyV2(chanId, path, base, quote)
-	bal, ok := zkgm.Store().GetChannelBalanceV2(key)
+	bal, ok := testStore.GetChannelBalanceV2(key)
 	if !ok || bal == nil {
 		return 0, ok
 	}
@@ -43,7 +42,7 @@ func TestIncreaseChannelBalanceV2(cur realm, t *testing.T) {
 			chanId := types.ChannelId(100 + i)
 			base := []byte("inc-" + tc.name)
 			for _, d := range tc.deposits {
-				v.increaseChannelBalanceV2(cur, chanId, path, base, quote, u256.NewUint(d))
+				v.increaseChannelBalanceV2(0, cur, chanId, path, base, quote, u256.NewUint(d))
 			}
 			bal, ok := balanceOf(chanId, path, base, quote)
 			uassert.Equal(t, tc.wantSet, ok)
@@ -81,9 +80,9 @@ func TestDecreaseChannelBalanceV2(cur realm, t *testing.T) {
 			chanId := types.ChannelId(200 + i)
 			base := []byte("dec-" + tc.name)
 			if tc.seed != 0 {
-				v.increaseChannelBalanceV2(cur, chanId, path, base, quote, u256.NewUint(tc.seed))
+				v.increaseChannelBalanceV2(0, cur, chanId, path, base, quote, u256.NewUint(tc.seed))
 			}
-			err := v.decreaseChannelBalanceV2(cur, chanId, path, base, quote, u256.NewUint(tc.spend))
+			err := v.decreaseChannelBalanceV2(0, cur, chanId, path, base, quote, u256.NewUint(tc.spend))
 			if tc.wantErr {
 				uassert.Error(t, err)
 			} else {

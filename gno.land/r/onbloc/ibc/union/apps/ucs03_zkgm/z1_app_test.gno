@@ -18,7 +18,7 @@ func TestAppDelegatesAllReceiversToImpl(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	impl = d
-	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0)
+	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Callbacks are gated to the core caller, so impersonate core.
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
@@ -52,7 +52,7 @@ func TestAppPausedBlocksPacketCallbacksNotHandshake(cur realm, t *testing.T) {
 	d := &dummyImpl{}
 	impl = d
 	paused = true
-	packet := core.NewPacket(cross(cur), 1, 2, []byte("data"), 0)
+	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 

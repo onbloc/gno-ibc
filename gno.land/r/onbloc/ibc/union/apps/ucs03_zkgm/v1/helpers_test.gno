@@ -1,20 +1,33 @@
 package impl
 
 import (
+	"time"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
-	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
+
+// blockNow returns the current block time as the uint256 the token bucket uses
+// as its refill anchor, matching rate_limit.gno's internal time.Now().Unix().
+func blockNow() *u256.Uint {
+	return u256.NewUint(uint64(time.Now().Unix()))
+}
 
 // helpers_test.gno holds test fixtures shared across the per-file test suites.
 // Each *_test.gno file tests only the functions of its matching implementation
 // file; the construction/encoding helpers used by several of them live here.
 
-// newTestImpl builds a v1 impl bound to the proxy state singleton, the way the
-// proxy injects it at Register time.
+// testStore is the in-memory IStore mock injected into the impl under test. The
+// proxy keeps its real Store private (no exported getter) and its borrow-rule
+// setters can only be driven from the proxy realm, so the unit tests inject this
+// test-realm-owned mock instead (see mockstore_test.gno).
+var testStore = newMockStore()
+
+// newTestImpl builds a v1 impl bound to the test-owned store, the way the proxy
+// injects its singleton at Register time.
 func newTestImpl() *ucs03ZkgmV1 {
-	return &ucs03ZkgmV1{store: zkgm.Store()}
+	return &ucs03ZkgmV1{store: testStore}
 }
 
 func testAddress(name string) string {
@@ -25,7 +38,7 @@ func testAddress(name string) string {
 // through the store rather than a removed package-level getter.
 
 func voucherBalanceOf(ibcDenom string, addr address) int64 {
-	vou, ok := zkgm.Store().GetVoucher(ibcDenom)
+	vou, ok := testStore.GetVoucher(ibcDenom)
 	if !ok {
 		return 0
 	}
@@ -33,7 +46,7 @@ func voucherBalanceOf(ibcDenom string, addr address) int64 {
 }
 
 func voucherNameOf(ibcDenom string) string {
-	vou, ok := zkgm.Store().GetVoucher(ibcDenom)
+	vou, ok := testStore.GetVoucher(ibcDenom)
 	if !ok {
 		return ""
 	}
@@ -41,7 +54,7 @@ func voucherNameOf(ibcDenom string) string {
 }
 
 func voucherSymbolOf(ibcDenom string) string {
-	vou, ok := zkgm.Store().GetVoucher(ibcDenom)
+	vou, ok := testStore.GetVoucher(ibcDenom)
 	if !ok {
 		return ""
 	}
@@ -49,7 +62,7 @@ func voucherSymbolOf(ibcDenom string) string {
 }
 
 func voucherDecimalsOf(ibcDenom string) int {
-	vou, ok := zkgm.Store().GetVoucher(ibcDenom)
+	vou, ok := testStore.GetVoucher(ibcDenom)
 	if !ok {
 		return 0
 	}

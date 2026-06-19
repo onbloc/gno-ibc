@@ -60,7 +60,7 @@ func TestUnionVerifyForward(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		err := v.verifyForward(cur, types.ChannelId(1), sender, newFunds(nil), u256.Zero(), [32]byte{}, tc.forward)
+		err := v.verifyForward(0, cur, types.ChannelId(1), sender, newFunds(nil), u256.Zero(), [32]byte{}, tc.forward)
 		if tc.wantErr == "" {
 			uassert.NoError(t, err)
 		} else {

@@ -33,7 +33,7 @@ func TestUnionVerifyCall(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		err := v.verifyCall(cur, tc.sender, tc.call)
+		err := v.verifyCall(0, cur, tc.sender, tc.call)
 		if tc.wantErr == "" {
 			uassert.NoError(t, err)
 		} else {

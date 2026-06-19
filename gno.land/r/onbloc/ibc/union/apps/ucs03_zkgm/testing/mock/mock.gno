@@ -8,18 +8,25 @@ import (
 )
 
 type Receiver struct {
-	Calls               int
-	Last                z.CallEnv
-	LastPreviousCaller  string
-	CapturePrevious     bool
-	ErrorMsg            string
-	PanicMsg            string
+	Calls              int
+	Last               z.CallEnv
+	LastPreviousCaller string
+	CapturePrevious    bool
+	ErrorMsg           string
+	PanicMsg           string
 }
 
 var receiver = &Receiver{}
 
 func init(cur realm) {
 	zkgm.RegisterReceiver(cross(cur), receiver)
+}
+
+// Zkgmable exposes the singleton receiver as a z.Zkgmable so unit tests that
+// inject a mock store can register it directly, rather than relying on the
+// proxy's real receiver registry populated by init.
+func Zkgmable(cur realm) z.Zkgmable {
+	return receiver
 }
 
 // Exported funcs in this package take `cur realm` because they read or

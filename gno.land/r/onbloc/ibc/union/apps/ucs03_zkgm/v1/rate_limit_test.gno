@@ -6,53 +6,53 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
-	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
 
 func TestRateLimitNoBucketIsUnlimited(cur realm, t *testing.T) {
 	v := newTestImpl()
-	uassert.NoError(t, v.rateLimit(cur, "ratelimit-none", u256.NewUint(1_000_000)))
+	uassert.NoError(t, v.rateLimit(0, cur, "ratelimit-none", u256.NewUint(1_000_000)))
 }
 
 func TestRateLimitNilAmountIsNoop(cur realm, t *testing.T) {
 	v := newTestImpl()
-	uassert.NoError(t, v.rateLimit(cur, "ratelimit-nil", nil))
+	uassert.NoError(t, v.rateLimit(0, cur, "ratelimit-nil", nil))
 }
 
 func TestRateLimitChargesAndExhausts(cur realm, t *testing.T) {
 	v := newTestImpl()
 	denom := "ratelimit-charge"
-	// refillRate 0 → fixed capacity, no time-based refill.
-	bucket, err := tb.New(u256.NewUint(100), u256.Zero(), blockNow())
+	// refillRate 1/s with same-block now means no meaningful refill, so the
+	// bucket behaves as a fixed capacity over the test's window.
+	bucket, err := tb.New(u256.NewUint(100), u256.NewUint(1), blockNow())
 	uassert.NoError(t, err)
-	zkgm.Store().SetTokenBucket(0, cur, denom, bucket)
+	testStore.SetTokenBucket(0, cur, denom, bucket)
 
-	uassert.NoError(t, v.rateLimit(cur, denom, u256.NewUint(60)))
-	uassert.Error(t, v.rateLimit(cur, denom, u256.NewUint(60)))
+	uassert.NoError(t, v.rateLimit(0, cur, denom, u256.NewUint(60)))
+	uassert.Error(t, v.rateLimit(0, cur, denom, u256.NewUint(60)))
 }
 
 func TestRateLimitExactCapacitySucceedsThenEmpty(cur realm, t *testing.T) {
 	v := newTestImpl()
 	denom := "ratelimit-exact"
-	bucket, err := tb.New(u256.NewUint(100), u256.Zero(), blockNow())
+	bucket, err := tb.New(u256.NewUint(100), u256.NewUint(1), blockNow())
 	uassert.NoError(t, err)
-	zkgm.Store().SetTokenBucket(0, cur, denom, bucket)
+	testStore.SetTokenBucket(0, cur, denom, bucket)
 
-	// draining exactly the capacity is allowed; the bucket is then empty.
-	uassert.NoError(t, v.rateLimit(cur, denom, u256.NewUint(100)))
-	uassert.Error(t, v.rateLimit(cur, denom, u256.NewUint(1)))
+	// draining exactly the capacity is allowed; a full re-charge then exceeds.
+	uassert.NoError(t, v.rateLimit(0, cur, denom, u256.NewUint(100)))
+	uassert.Error(t, v.rateLimit(0, cur, denom, u256.NewUint(100)))
 	// a zero charge against an empty bucket is still fine.
-	uassert.NoError(t, v.rateLimit(cur, denom, u256.Zero()))
+	uassert.NoError(t, v.rateLimit(0, cur, denom, u256.Zero()))
 }
 
 func TestRateLimitDisabledBypassesBucket(cur realm, t *testing.T) {
 	v := newTestImpl()
 	denom := "ratelimit-disabled"
-	bucket, err := tb.New(u256.NewUint(1), u256.Zero(), blockNow())
+	bucket, err := tb.New(u256.NewUint(1), u256.NewUint(1), blockNow())
 	uassert.NoError(t, err)
-	zkgm.Store().SetTokenBucket(0, cur, denom, bucket)
+	testStore.SetTokenBucket(0, cur, denom, bucket)
 
-	zkgm.Store().SetRateLimitDisabled(0, cur, true)
-	uassert.NoError(t, v.rateLimit(cur, denom, u256.NewUint(1_000_000)))
-	zkgm.Store().SetRateLimitDisabled(0, cur, false)
+	testStore.SetRateLimitDisabled(0, cur, true)
+	uassert.NoError(t, v.rateLimit(0, cur, denom, u256.NewUint(1_000_000)))
+	testStore.SetRateLimitDisabled(0, cur, false)
 }

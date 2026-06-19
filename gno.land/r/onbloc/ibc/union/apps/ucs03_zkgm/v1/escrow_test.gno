@@ -16,7 +16,7 @@ func TestSendNativeRejectsOverflowAmount(cur realm, t *testing.T) {
 	v := newTestImpl()
 	wide := new(u256.Uint).Lsh(u256.NewUint(1), 64) // > int64, > uint64
 
-	err := v.sendNative(cur, "ugnot", testAddress("escrow-overflow-rx"), wide)
+	err := v.sendNative(0, cur, "ugnot", testAddress("escrow-overflow-rx"), wide)
 
 	uassert.Error(t, err)
 }

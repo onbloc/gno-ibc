@@ -25,7 +25,7 @@ func setupGateImpl(cur realm) types.Packet {
 	resetZkgmForTest()
 	impl = &dummyImpl{}
 	paused = false
-	return core.NewPacket(cross(cur), 1, 2, []byte("data"), 0)
+	return core.NewPacket(1, 2, []byte("data"), 0)
 }
 
 func TestRecvGateRejectsEphemeralCaller(cur realm, t *testing.T) {

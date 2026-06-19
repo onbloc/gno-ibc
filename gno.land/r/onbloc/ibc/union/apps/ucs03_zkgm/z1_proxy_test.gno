@@ -26,8 +26,10 @@ func TestUpdateImplRejectsNonAdmin(cur realm, t *testing.T) {
 func TestUpdateImplRejectsNilTarget(cur realm, t *testing.T) {
 	resetZkgmForTest()
 
+	// Call with the outer (admin) cur, not the closure's crossing param, so the
+	// admin gate passes and the nil-target validation is what aborts.
 	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
-	uassert.AbortsContains(t, cur, "impl cannot be nil", func(cur realm) {
+	uassert.AbortsContains(t, cur, "impl cannot be nil", func(_ realm) {
 		UpdateImpl(cur, nil)
 	})
 }
@@ -47,7 +49,7 @@ func TestUpdateImplSwapsToLatestTarget(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	first := &dummyImpl{}
 	second := &dummyImpl{}
-	packet := core.NewPacket(cross(cur), 1, 2, []byte("d"), 0)
+	packet := core.NewPacket(1, 2, []byte("d"), 0)
 
 	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
 	UpdateImpl(cur, first)

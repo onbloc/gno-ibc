@@ -124,3 +124,15 @@ func (s *Store) GetAppByPortId(portId types.Bytes) (app.IApp, bool) {
 	a, ok := s.ports[portKey(portId)]
 	return a, ok
 }
+
+// HasApp reports whether an app is registered at portId.
+func (s *Store) HasApp(portId types.Bytes) bool {
+	_, ok := s.ports[portKey(portId)]
+	return ok
+}
+
+// RegisterAppAtPort installs an app at portId, panicking if one is already
+// registered there.
+func (s *Store) RegisterAppAtPort(_ int, rlm realm, portId types.Bytes, a app.IApp) {
+	registerAppAtPort([]byte(portId), a)
+}

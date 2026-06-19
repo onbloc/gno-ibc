@@ -151,3 +151,15 @@ func (m *mockStore) GetAppByPortId(portId types.Bytes) (app.IApp, bool) {
 	a, ok := m.ports[string(portId)]
 	return a, ok
 }
+
+func (m *mockStore) HasApp(portId types.Bytes) bool {
+	_, ok := m.ports[string(portId)]
+	return ok
+}
+
+func (m *mockStore) RegisterAppAtPort(_ int, rlm realm, portId types.Bytes, a app.IApp) {
+	if _, ok := m.ports[string(portId)]; ok {
+		panic("port already registered")
+	}
+	m.ports[string(portId)] = a
+}

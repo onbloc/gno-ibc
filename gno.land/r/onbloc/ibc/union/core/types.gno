@@ -91,4 +91,6 @@ type IStore interface {
 
 	// --- App registry ---
 	GetAppByPortId(portId types.Bytes) (app.IApp, bool)
+	HasApp(portId types.Bytes) bool
+	RegisterAppAtPort(_ int, rlm realm, portId types.Bytes, a app.IApp)
 }

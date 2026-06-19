@@ -91,3 +91,8 @@ func EmitChannelCloseInit(portId types.Bytes, channelId types.ChannelId, channel
 func EmitChannelCloseConfirm(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
 	emitChannelCloseConfirmEvent(portId, channelId, channel)
 }
+
+// EmitAppRegistered emits the AppRegistered host event.
+func EmitAppRegistered(portId []byte, registrarPkgPath string, adminOverride bool) {
+	emitAppRegisteredEvent(portId, registrarPkgPath, adminOverride)
+}

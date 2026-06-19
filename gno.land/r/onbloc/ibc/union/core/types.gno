@@ -76,4 +76,9 @@ type IStore interface {
 	SetLightClient(_ int, rlm realm, clientId types.ClientId, lc lightclient.Interface) bool
 	SaveClientState(_ int, rlm realm, clientId types.ClientId, clientStateBytes []byte) bool
 	SaveConsensusState(_ int, rlm realm, clientId types.ClientId, height types.Height, consensusStateBytes []byte) bool
+
+	// --- Connection ---
+	NextConnectionId(_ int, rlm realm) types.ConnectionId
+	SaveConnection(_ int, rlm realm, connectionId types.ConnectionId, connection types.Connection)
+	GetConnection(connectionId types.ConnectionId) (types.Connection, bool)
 }

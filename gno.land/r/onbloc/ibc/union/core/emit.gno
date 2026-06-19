@@ -29,3 +29,29 @@ func EmitUpdateClient(clientType types.ClientType, clientId types.ClientId, heig
 		"height", height.String(),
 	)
 }
+
+// EmitConnectionOpenInit emits the ConnectionOpenInit host event.
+func EmitConnectionOpenInit(connectionId types.ConnectionId, clientId, counterpartyClientId types.ClientId) {
+	emitConnectionOpenInitEvent(connectionId, clientId, counterpartyClientId)
+}
+
+// EmitConnectionOpenTry emits the ConnectionOpenTry host event.
+func EmitConnectionOpenTry(connectionId types.ConnectionId, clientId, counterpartyClientId types.ClientId, counterpartyConnectionId types.ConnectionId) {
+	emitConnectionOpenTryEvent(connectionId, clientId, counterpartyClientId, counterpartyConnectionId)
+}
+
+// EmitConnectionOpenAck emits the ConnectionOpenAck host event.
+func EmitConnectionOpenAck(connectionId types.ConnectionId, clientId, counterpartyClientId types.ClientId, counterpartyConnectionId types.ConnectionId) {
+	emitConnectionOpenAckEvent(connectionId, clientId, counterpartyClientId, counterpartyConnectionId)
+}
+
+// EmitConnectionOpenConfirm emits the ConnectionOpenConfirm host event.
+func EmitConnectionOpenConfirm(connectionId types.ConnectionId, clientId, counterpartyClientId types.ClientId, counterpartyConnectionId types.ConnectionId) {
+	emitConnectionOpenConfirmEvent(connectionId, clientId, counterpartyClientId, counterpartyConnectionId)
+}
+
+// ConnectionValue returns the H256 commitment value of a connection, exposed so
+// the impl can build the expected counterparty value for membership proofs.
+func ConnectionValue(connection types.Connection) types.H256 {
+	return connectionValue(connection)
+}

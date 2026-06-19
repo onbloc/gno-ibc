@@ -20,14 +20,19 @@ type mockClient struct {
 }
 
 type mockStore struct {
-	seq     uint32
-	clients map[uint32]*mockClient
+	seq         uint32
+	clients     map[uint32]*mockClient
+	connSeq     uint32
+	connections map[uint32]types.Connection
 }
 
 var _ core.IStore = (*mockStore)(nil)
 
 func newMockStore() *mockStore {
-	return &mockStore{clients: map[uint32]*mockClient{}}
+	return &mockStore{
+		clients:     map[uint32]*mockClient{},
+		connections: map[uint32]types.Connection{},
+	}
 }
 
 // newTestImpl builds a v1 impl bound to a fresh mock store, the way the proxy
@@ -89,4 +94,18 @@ func (m *mockStore) SaveConsensusState(_ int, rlm realm, clientId types.ClientId
 	}
 	c.consensus[height.String()] = consensusStateBytes
 	return true
+}
+
+func (m *mockStore) NextConnectionId(_ int, rlm realm) types.ConnectionId {
+	m.connSeq++
+	return types.ConnectionId(m.connSeq)
+}
+
+func (m *mockStore) SaveConnection(_ int, rlm realm, connectionId types.ConnectionId, connection types.Connection) {
+	m.connections[uint32(connectionId)] = connection
+}
+
+func (m *mockStore) GetConnection(connectionId types.ConnectionId) (types.Connection, bool) {
+	conn, ok := m.connections[uint32(connectionId)]
+	return conn, ok
 }

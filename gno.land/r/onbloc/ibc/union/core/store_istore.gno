@@ -69,3 +69,18 @@ func (s *Store) SaveConsensusState(_ int, rlm realm, clientId types.ClientId, he
 	c.saveConsensusState(height, consensusStateBytes)
 	return true
 }
+
+// NextConnectionId allocates the next connection id from the sequence.
+func (s *Store) NextConnectionId(_ int, rlm realm) types.ConnectionId {
+	return s.nextConnectionId()
+}
+
+// SaveConnection persists a connection and mirrors its commitment.
+func (s *Store) SaveConnection(_ int, rlm realm, connectionId types.ConnectionId, connection types.Connection) {
+	s.saveConnection(connectionId, connection)
+}
+
+// GetConnection returns the stored connection for connectionId.
+func (s *Store) GetConnection(connectionId types.ConnectionId) (types.Connection, bool) {
+	return s.getConnection(connectionId)
+}

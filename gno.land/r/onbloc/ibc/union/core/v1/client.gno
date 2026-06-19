@@ -51,6 +51,12 @@ func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) types
 // VerifyClientMembership verifies a membership proof against a registered, active
 // light client. It does not commit the verified value into the host state.
 func (c *coreV1) VerifyClientMembership(_ int, rlm realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {
+	c.verifyMembership(clientId, proofHeight, proof, path, value)
+}
+
+// verifyMembership checks a membership proof against a registered, active light
+// client. Shared by VerifyClientMembership and the connection/channel handshakes.
+func (c *coreV1) verifyMembership(clientId types.ClientId, height types.Height, proof, key, value []byte) {
 	lc, ok := c.store.GetLightClient(clientId)
 	if !ok {
 		panic("client " + clientId.String() + " not found")
@@ -58,7 +64,7 @@ func (c *coreV1) VerifyClientMembership(_ int, rlm realm, clientId types.ClientI
 	if lc.Status() != lightclient.Active {
 		panic(core.ErrClientNotActive)
 	}
-	if err := lc.VerifyMembership(proofHeight.RevisionHeight, path, proof, value); err != nil {
+	if err := lc.VerifyMembership(height.RevisionHeight, key, proof, value); err != nil {
 		panic(err)
 	}
 }

@@ -314,7 +314,7 @@ func TestTokenOrderExecuteEscrowMintErrorDoesNotSetOrigin(cur realm, t *testing.
 
 	path := u256.NewUint(11)
 	destChan := uint32(8)
-	quoteDenom := PredictWrappedTokenV1(path, destChan, []byte("ugnot"))
+	quoteDenom := PredictWrappedToken(path, destChan, []byte("ugnot"))
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte("not-a-valid-address"),
@@ -421,7 +421,7 @@ func TestTokenOrderExecuteEscrowZeroFeeSkipsRelayerMint(cur realm, t *testing.T)
 	const destChan = types.ChannelId(60)
 	relayer := testAddress("zero-fee-relayer")
 	receiver := testAddress("zero-fee-receiver")
-	quoteDenom := PredictWrappedTokenV1(path, uint32(destChan), []byte("ugnot"))
+	quoteDenom := PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -448,7 +448,7 @@ func TestTokenOrderExecuteEscrowZeroQuoteSkipsReceiverMint(cur realm, t *testing
 	const destChan = types.ChannelId(61)
 	relayer := testAddress("zero-quote-relayer")
 	receiver := testAddress("zero-quote-receiver")
-	quoteDenom := PredictWrappedTokenV1(path, uint32(destChan), []byte("ugnot"))
+	quoteDenom := PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -475,7 +475,7 @@ func TestTokenOrderExecuteEscrowZeroAmountSkipsBothMints(cur realm, t *testing.T
 	const destChan = types.ChannelId(62)
 	relayer := testAddress("zero-amt-relayer")
 	receiver := testAddress("zero-amt-receiver")
-	quoteDenom := PredictWrappedTokenV1(path, uint32(destChan), []byte("ugnot"))
+	quoteDenom := PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -501,7 +501,7 @@ func TestTokenOrderVerifyUnescrowV1PredictionPasses(cur realm, t *testing.T) {
 	const destChan = types.ChannelId(70)
 	sender := testAddress("v1-predict-sender")
 	quoteToken := []byte("ugnot")
-	baseDenom := PredictWrappedTokenV1(u256.Zero(), uint32(destChan), quoteToken)
+	baseDenom := PredictWrappedToken(u256.Zero(), uint32(destChan), quoteToken)
 	origin, err := z.UpdateChannelPath(u256.Zero(), uint32(destChan))
 	uassert.NoError(t, err)
 	zkgm.SetTokenOrigin(cross(cur), baseDenom, origin)

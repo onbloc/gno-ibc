@@ -6,7 +6,7 @@ import (
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 )
 
-const Version = "ucs03-zkgm-0"
+const Version = z.PROTOCOL_VERSION
 
 type ZkgmImpl interface {
 	PreChannelOpenInit(cur realm, channelId types.ChannelId)

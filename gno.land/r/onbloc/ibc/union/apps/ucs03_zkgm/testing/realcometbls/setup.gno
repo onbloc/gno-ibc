@@ -17,6 +17,13 @@ type ChannelPair struct {
 	Destination  types.ChannelId
 }
 
+var testConnectionSeq uint32
+
+func nextTestConnectionId() types.ConnectionId {
+	testConnectionSeq++
+	return types.ConnectionId(testConnectionSeq)
+}
+
 func CreateRealCometBLSClient(cur realm) types.ClientId {
 	return createCometBLSClient(cross(cur), ClientStateBytes(cross(cur)), TrustedConsensusStateBytes(cross(cur)))
 }
@@ -63,7 +70,8 @@ func createCometBLSClient(cur realm, clientStateBytes, consensusStateBytes []byt
 func OpenZ35CometBLSChannel(cur realm) ChannelPair {
 	clientId := CreateZ35CometBLSClient(cross(cur))
 
-	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	connectionId := nextTestConnectionId()
+	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), Z35ConnectionTryProof(cross(cur)), uint64(DevnetHeight-1)))
 
 	destination := openZ35Channel(cross(cur), connectionId, types.ChannelId(2))
@@ -92,7 +100,8 @@ func BatchSend(cur realm, packet types.Packet) types.H256 {
 func OpenZ37CometBLSChannel(cur realm) ChannelPair {
 	clientId := CreateZ37CometBLSClient(cross(cur))
 
-	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	connectionId := nextTestConnectionId()
+	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), Z37ConnectionTryProof(cross(cur)), uint64(DevnetHeight-1)))
 
 	portId := []byte(zkgm.ProxyPkgPath())

@@ -10,23 +10,23 @@ import (
 	"gno.land/p/nt/uassert/v0"
 )
 
-// PredictWrappedTokenV1 is a pure keccak derivation: deterministic, ibc-prefixed,
+// PredictWrappedToken is a pure keccak derivation: deterministic, ibc-prefixed,
 // and distinct for any change of path, channel, or base token. A nil path must
 // normalise to zero so callers cannot derive two denoms for the same order.
-func TestPredictWrappedTokenV1(t *testing.T) {
-	ref := PredictWrappedTokenV1(u256.Zero(), 1, []byte("uatom"))
+func TestPredictWrappedToken(t *testing.T) {
+	ref := PredictWrappedToken(u256.Zero(), 1, []byte("uatom"))
 
 	uassert.True(t, strings.HasPrefix(ref, ibcDenomPrefix))
-	uassert.Equal(t, ref, PredictWrappedTokenV1(u256.Zero(), 1, []byte("uatom")))
-	uassert.Equal(t, ref, PredictWrappedTokenV1(nil, 1, []byte("uatom"))) // nil path == zero path
+	uassert.Equal(t, ref, PredictWrappedToken(u256.Zero(), 1, []byte("uatom")))
+	uassert.Equal(t, ref, PredictWrappedToken(nil, 1, []byte("uatom"))) // nil path == zero path
 
 	cases := []struct {
 		name  string
 		denom string
 	}{
-		{"different path", PredictWrappedTokenV1(u256.NewUint(1), 1, []byte("uatom"))},
-		{"different channel", PredictWrappedTokenV1(u256.Zero(), 2, []byte("uatom"))},
-		{"different base token", PredictWrappedTokenV1(u256.Zero(), 1, []byte("uosmo"))},
+		{"different path", PredictWrappedToken(u256.NewUint(1), 1, []byte("uatom"))},
+		{"different channel", PredictWrappedToken(u256.Zero(), 2, []byte("uatom"))},
+		{"different base token", PredictWrappedToken(u256.Zero(), 1, []byte("uosmo"))},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -36,13 +36,13 @@ func TestPredictWrappedTokenV1(t *testing.T) {
 }
 
 // PredictWrappedTokenV2 additionally binds the metadata image and must differ
-// from the V1 derivation for the same order.
+// from the legacy derivation for the same order.
 func TestPredictWrappedTokenV2(t *testing.T) {
 	ref := PredictWrappedTokenV2(u256.Zero(), 1, []byte("uatom"), [32]byte{})
 
 	uassert.True(t, strings.HasPrefix(ref, ibcDenomPrefix))
 	uassert.Equal(t, ref, PredictWrappedTokenV2(nil, 1, []byte("uatom"), [32]byte{}))
-	uassert.NotEqual(t, ref, PredictWrappedTokenV1(u256.Zero(), 1, []byte("uatom")))
+	uassert.NotEqual(t, ref, PredictWrappedToken(u256.Zero(), 1, []byte("uatom")))
 
 	cases := []struct {
 		name  string

@@ -198,7 +198,7 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	}
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(5), nil, 0)
 
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("v1-relayer")), u256.NewUint(7), order, false)
+	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("v1-relayer")), nil, u256.NewUint(7), order, false)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatusSuccess)
@@ -242,7 +242,7 @@ func TestTokenOrderExecuteInitializeMalformedInitializerUsesDefaults(cur realm, 
 	}
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(4), nil, 0)
 
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("fallback-relayer")), u256.NewUint(3), order, false)
+	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("fallback-relayer")), nil, u256.NewUint(3), order, false)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatusSuccess)
@@ -272,7 +272,7 @@ func TestTokenOrderExecuteInitializeEmptyInitializerUsesDefaults(cur realm, t *t
 	}
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(6), nil, 0)
 
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("empty-init-relayer")), u256.NewUint(5), order, false)
+	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("empty-init-relayer")), nil, u256.NewUint(5), order, false)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatusSuccess)
@@ -302,7 +302,7 @@ func TestTokenOrderExecuteInitializeMintErrorDoesNotSetOrigin(cur realm, t *test
 	}
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(7), nil, 0)
 
-	_, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("invalid-rx-relayer")), u256.NewUint(9), order, false)
+	_, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("invalid-rx-relayer")), nil, u256.NewUint(9), order, false)
 	uassert.ErrorContains(t, err, "invalid address")
 
 	_, ok := testStore.GetTokenOrigin(ibcDenom)
@@ -326,14 +326,14 @@ func TestTokenOrderExecuteEscrowMintErrorDoesNotSetOrigin(cur realm, t *testing.
 	}
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(destChan), nil, 0)
 
-	_, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("escrow-rx-relayer")), path, order, false)
+	_, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("escrow-rx-relayer")), nil, path, order, false)
 
 	uassert.ErrorContains(t, err, "invalid address")
 	_, ok := testStore.GetTokenOrigin(quoteDenom)
 	uassert.False(t, ok, "mint error must not set token origin")
 }
 
-func TestTokenOrderExecuteInitializeQuoteExceedsBaseReturnsFailure(cur realm, t *testing.T) {
+func TestTokenOrderExecuteInitializeUnderQuoteFallsBackToMarketMaker(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
@@ -358,10 +358,13 @@ func TestTokenOrderExecuteInitializeQuoteExceedsBaseReturnsFailure(cur realm, t 
 	}
 	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
 
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("quote-exceeds-rly")), path, order, false)
+	// base < quote with a matching quote denom: union does not hard-fail, it falls
+	// back to a market-maker fill. No voucher exists yet, so it is maker-only.
+	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("quote-exceeds-rly")), nil, path, order, false)
 
 	uassert.NoError(t, err)
-	uassert.True(t, res.Status == types.PacketStatusFailure)
+	uassert.True(t, res.Status == types.PacketStatusSuccess)
+	uassert.Equal(t, string(z.ACK_ERR_ONLY_MAKER), string(res.Acknowledgement))
 	uassert.Equal(t, int64(0), voucherBalanceOf(ibcDenom, address(receiver)))
 }
 
@@ -388,12 +391,12 @@ func TestTokenOrderExecuteUnescrowChannelBalanceUnderflow(cur realm, t *testing.
 	}
 	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
 
-	_, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("unescrow-rly")), u256.Zero(), order, false)
+	_, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("unescrow-rly")), nil, u256.Zero(), order, false)
 
 	uassert.ErrorContains(t, err, "underflow")
 }
 
-func TestTokenOrderExecuteEscrowQuoteDenomMismatchReturnsFailure(cur realm, t *testing.T) {
+func TestTokenOrderExecuteEscrowQuoteDenomMismatchFallsBackToMarketMaker(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	receiver := testAddress("escrow-mismatch-rx")
@@ -408,10 +411,13 @@ func TestTokenOrderExecuteEscrowQuoteDenomMismatchReturnsFailure(cur realm, t *t
 	}
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(50), nil, 0)
 
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("escrow-mismatch-rly")), u256.Zero(), order, false)
+	// quote != predicted wrapped denom: the order falls back to a market-maker
+	// fill rather than hard-failing. No voucher exists, so it is maker-only.
+	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("escrow-mismatch-rly")), nil, u256.Zero(), order, false)
 
 	uassert.NoError(t, err)
-	uassert.True(t, res.Status == types.PacketStatusFailure)
+	uassert.True(t, res.Status == types.PacketStatusSuccess)
+	uassert.Equal(t, string(z.ACK_ERR_ONLY_MAKER), string(res.Acknowledgement))
 	uassert.Equal(t, int64(0), voucherBalanceOf("ibc/wrong-denom", address(receiver)))
 }
 
@@ -434,7 +440,7 @@ func TestTokenOrderExecuteEscrowZeroFeeSkipsRelayerMint(cur realm, t *testing.T)
 	}
 	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
 
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(relayer), path, order, false)
+	res, err := v.executeTokenOrderV2(0, cur, packet, address(relayer), nil, path, order, false)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatusSuccess)
@@ -461,7 +467,7 @@ func TestTokenOrderExecuteEscrowZeroQuoteSkipsReceiverMint(cur realm, t *testing
 	}
 	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
 
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(relayer), path, order, false)
+	res, err := v.executeTokenOrderV2(0, cur, packet, address(relayer), nil, path, order, false)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatusSuccess)
@@ -488,7 +494,7 @@ func TestTokenOrderExecuteEscrowZeroAmountSkipsBothMints(cur realm, t *testing.T
 	}
 	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
 
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(relayer), path, order, false)
+	res, err := v.executeTokenOrderV2(0, cur, packet, address(relayer), nil, path, order, false)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatusSuccess)
@@ -599,7 +605,7 @@ func TestTokenOrderIntentVoucherMarketMakerFillTransfersMakerFunds(cur realm, t 
 	}
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(5), nil, 0)
 
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(maker), u256.Zero(), order, true)
+	res, err := v.executeTokenOrderV2(0, cur, packet, address(maker), nil, u256.Zero(), order, true)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatusSuccess)
@@ -627,7 +633,7 @@ func TestTokenOrderIntentUnknownQuoteReturnsOnlyMaker(cur realm, t *testing.T) {
 	}
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(5), nil, 0)
 
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("v1-intent-maker")), u256.Zero(), order, true)
+	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("v1-intent-maker")), nil, u256.Zero(), order, true)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatusSuccess)
@@ -651,7 +657,7 @@ func TestTokenOrderIntentInsufficientMakerBalanceReturnsOnlyMaker(cur realm, t *
 	}
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(5), nil, 0)
 
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(maker), u256.Zero(), order, true)
+	res, err := v.executeTokenOrderV2(0, cur, packet, address(maker), nil, u256.Zero(), order, true)
 
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatusSuccess)

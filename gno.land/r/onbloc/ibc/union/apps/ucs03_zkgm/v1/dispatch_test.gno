@@ -88,14 +88,16 @@ func TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts(cur realm, t *testing.T
 	const destChan = types.ChannelId(5)
 	baseToken := []byte("uatom-fee-fatal")
 	path := u256.Zero()
-	// Pre-minting sets metadataImage=[32]byte{} for ibcDenom, so ESCROW will use
-	// PredictWrappedTokenV2 for validation — use the same function here.
-	ibcDenom := PredictWrappedTokenV2(path, uint32(destChan), baseToken, [32]byte{})
+	// Pre-minting sets a non-zero metadataImage for ibcDenom, so ESCROW takes the
+	// V2 prediction path (union uses V1 only when the image is zero) and the quote
+	// denom matches — use the same image + function here.
+	image := [32]byte{0x01}
+	ibcDenom := PredictWrappedTokenV2(path, uint32(destChan), baseToken, image)
 
 	// Saturate supply to MaxInt64-1. After receiver mint (+1) total = MaxInt64.
 	// Fee mint (+1) then overflows int64 → GRC20 returns error → execFatal.
 	fillAmt := u256.NewUint(uint64(math.MaxInt64) - 1)
-	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "", "", 0, testAddress("sat"), fillAmt))
+	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, image, "", "", 0, testAddress("sat"), fillAmt))
 
 	order := z.TokenOrderV2{
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
@@ -120,7 +122,9 @@ func TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts(cur realm, t *testing.T
 	uassert.False(t, hasOrigin)
 }
 
-func TestRecvTokenOrderSolveReturnsFailureAck(cur realm, t *testing.T) {
+func TestRecvTokenOrderSolveFallsBackToMarketMaker(cur realm, t *testing.T) {
+	// A solve order is maker-only (union routes it to market_maker_fill_v2). With
+	// no voucher for the quote denom, the fill is maker-only.
 	order := z.TokenOrderV2{
 		Kind:        z.TOKEN_ORDER_KIND_SOLVE,
 		Sender:      []byte(testAddress("solve-recv-sndr")),
@@ -135,8 +139,8 @@ func TestRecvTokenOrderSolveReturnsFailureAck(cur realm, t *testing.T) {
 
 	res := newTestImpl().OnRecvPacket(0, cur, packet, address("g1relayer"), nil)
 
-	uassert.True(t, res.Status == types.PacketStatusFailure)
-	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
+	uassert.True(t, res.Status == types.PacketStatusSuccess)
+	uassert.Equal(t, string(z.ACK_ERR_ONLY_MAKER), string(res.Acknowledgement))
 }
 
 // Each decode* helper accepts exactly one instruction version and rejects all

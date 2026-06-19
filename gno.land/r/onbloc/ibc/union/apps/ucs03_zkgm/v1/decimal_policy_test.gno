@@ -43,7 +43,7 @@ func TestInitializeDecimalsAgnosticAccounting(cur realm, t *testing.T) {
 		rx := testAddress(tc.rxSuffix)
 		res, err := v.executeTokenOrderV2(0, cur,
 			core.NewPacket(types.ChannelId(1), types.ChannelId(tc.dest), nil, 0),
-			relayer, u256.NewUint(tc.path),
+			relayer, nil, u256.NewUint(tc.path),
 			z.TokenOrderV2{
 				Sender: []byte("s"), Receiver: []byte(rx), BaseToken: base,
 				BaseAmount: u256.NewUint(N), QuoteToken: []byte(denom), QuoteAmount: u256.NewUint(N),
@@ -126,7 +126,7 @@ func TestBaseAmountPreservedThroughMint(cur realm, t *testing.T) {
 
 	res, err := v.executeTokenOrderV2(0, cur,
 		core.NewPacket(chanSrc, chanDest, nil, 0),
-		address(testAddress("rt-rly-mint")), path, order, false)
+		address(testAddress("rt-rly-mint")), nil, path, order, false)
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatusSuccess)
 	uassert.Equal(t, int64(N), voucherBalanceOf(ibcDest, address(receiver)))

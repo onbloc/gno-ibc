@@ -77,7 +77,7 @@ func (v *ucs03ZkgmV1) dispatchExecute(_ int, rlm realm, packet types.Packet, rel
 			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 		}
 
-		return v.executeTokenOrderV2(0, rlm, packet, relayer, path, order, intent)
+		return v.executeTokenOrderV2(0, rlm, packet, relayer, relayerMsg, path, order, intent)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instr)
 		if err != nil {

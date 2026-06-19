@@ -46,7 +46,8 @@ func main(cur realm) {
 	packet := core.NewPacket(types.ChannelId(99), channelId, []byte("async-packet"), types.Timestamp(1<<62))
 	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))
 
-	batchHash := core.BatchAcks(cross(cur), types.NewMsgBatchAcks([]types.Packet{packet}, [][]byte{[]byte("ack")}))
+	batchHash := types.MustCommit(types.CommitPackets([]types.Packet{packet}))
+	core.BatchAcks(cross(cur), types.NewMsgBatchAcks([]types.Packet{packet}, [][]byte{[]byte("ack")}))
 	println("batch_acks_hash", batchHash.String())
 	println("batch_acks_event", "ok")
 }

@@ -6,252 +6,77 @@ import (
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	"gno.land/p/nt/uassert/v0"
-	z "gno.land/p/onbloc/ibc/union/zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
-type dummyImpl struct {
-	openInitCalled      bool
-	openTryCalled       bool
-	openAckCalled       bool
-	openConfirmCalled   bool
-	closeInitCalled     bool
-	closeConfirmCalled  bool
-	recvCalled          bool
-	ackCalled           bool
-	timeoutCalled       bool
-	recvResult          types.RecvPacketResult
-	lastChannelId       types.ChannelId
-	lastCounterpartyId  types.ChannelId
-	lastCounterpartyVer string
-}
+// z1_app_test covers app.gno's receiver surface: every callback delegates to the
+// installed impl, and the pause gate blocks the packet callbacks while leaving
+// channel handshake available. Version enforcement now lives in the impl
+// (v1/impl_test), and the caller gate is covered by z2/z3.
 
-func (d *dummyImpl) PreChannelOpenInit(_ realm, channelId types.ChannelId) {
-	d.openInitCalled = true
-	d.lastChannelId = channelId
-}
-
-func (d *dummyImpl) PreChannelOpenTry(_ realm, channelId types.ChannelId, counterpartyVersion string) {
-	d.openTryCalled = true
-	d.lastChannelId = channelId
-	d.lastCounterpartyVer = counterpartyVersion
-}
-
-func (d *dummyImpl) PostChannelOpenAck(_ realm, channelId types.ChannelId, counterpartyChannelId types.ChannelId) {
-	d.openAckCalled = true
-	d.lastChannelId = channelId
-	d.lastCounterpartyId = counterpartyChannelId
-}
-
-func (d *dummyImpl) PostChannelOpenConfirm(_ realm, channelId types.ChannelId) {
-	d.openConfirmCalled = true
-	d.lastChannelId = channelId
-}
-
-func (d *dummyImpl) PreChannelCloseInit(_ realm, channelId types.ChannelId) {
-	d.closeInitCalled = true
-	d.lastChannelId = channelId
-}
-
-func (d *dummyImpl) PostChannelCloseConfirm(_ realm, channelId types.ChannelId) {
-	d.closeConfirmCalled = true
-	d.lastChannelId = channelId
-}
-
-func (d *dummyImpl) Recv(_ realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {
-	d.recvCalled = true
-	if d.recvResult.Status != types.PacketStatusUnknown {
-		return d.recvResult
-	}
-	return core.NewRecvPacketResult(types.PacketStatusSuccess, []byte{0x01})
-}
-
-func (d *dummyImpl) IntentRecv(_ realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
-	d.recvCalled = true
-	if d.recvResult.Status != types.PacketStatusUnknown {
-		return d.recvResult
-	}
-	return core.NewRecvPacketResult(types.PacketStatusSuccess, []byte{0x02})
-}
-
-func (d *dummyImpl) Ack(_ realm, packet types.Packet, ack []byte, relayer address) {
-	d.ackCalled = true
-}
-
-func (d *dummyImpl) Timeout(_ realm, packet types.Packet, relayer address) {
-	d.timeoutCalled = true
-}
-
-func (d *dummyImpl) Send(_ realm, req SendRequest) ([]byte, error) {
-	return []byte("dummy"), nil
-}
-
-func (d *dummyImpl) Render(pkgpath string, path string) string {
-	return "dummy"
-}
-
-func resetZkgmForTest() {
-	impl = nil
-	implPath = ""
-	allowedImpls = nil
-	bootstrapped = false
-	paused = false
-}
-
-func TestAppChannelOpenInitVersion(cur realm, t *testing.T) {
-	resetZkgmForTest()
-	d := &dummyImpl{}
-	impl = d
-
-	// Channel callbacks are gated to the core caller, so impersonate core.
-	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-	(&App{}).OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer"))
-	if !d.openInitCalled || d.lastChannelId != 2 {
-		t.Fatal("OnChannelOpenInit must delegate to impl")
-	}
-
-	uassert.AbortsContains(t, cur, "unsupported channel version", func() {
-		(&App{}).OnChannelOpenInit(cross(cur), 1, 2, "bad-version", address("g1relayer"))
-	})
-}
-
-func TestAppChannelOpenTryCounterpartyVersion(cur realm, t *testing.T) {
-	resetZkgmForTest()
-	d := &dummyImpl{}
-	impl = d
-
-	// Channel callbacks are gated to the core caller, so impersonate core.
-	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-	(&App{}).OnChannelOpenTry(cross(cur), 1, 2, Version, Version, address("g1relayer"))
-	if !d.openTryCalled || d.lastCounterpartyVer != Version {
-		t.Fatal("OnChannelOpenTry must delegate with counterparty version")
-	}
-
-	uassert.AbortsContains(t, cur, "unsupported channel version", func() {
-		(&App{}).OnChannelOpenTry(cross(cur), 1, 2, Version, "bad-version", address("g1relayer"))
-	})
-}
-
-func TestAppSevenMethodsDelegate(cur realm, t *testing.T) {
+func TestAppDelegatesAllReceiversToImpl(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	impl = d
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
-	// Every callback is gated to the core caller, so impersonate core for the
-	// legitimate delegation path.
+	// Callbacks are gated to the core caller, so impersonate core.
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-	(&App{}).OnChannelOpenAck(cross(cur), 2, 3, Version, address("g1relayer"))
-	(&App{}).OnChannelOpenConfirm(cross(cur), 2, address("g1relayer"))
+	AsIBCApp().OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer"))
+	AsIBCApp().OnChannelOpenTry(cross(cur), 1, 2, Version, Version, address("g1relayer"))
+	AsIBCApp().OnChannelOpenAck(cross(cur), 2, 3, Version, address("g1relayer"))
+	AsIBCApp().OnChannelOpenConfirm(cross(cur), 2, address("g1relayer"))
+	AsIBCApp().OnChannelCloseInit(cross(cur), 2, address("g1relayer"))
+	AsIBCApp().OnChannelCloseConfirm(cross(cur), 2, address("g1relayer"))
+	res := AsIBCApp().OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
+	AsIBCApp().OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
+	AsIBCApp().OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
+	(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
 
-	res := (&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
-	(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
-	(&App{}).OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
-
-	if !d.openAckCalled || !d.openConfirmCalled {
-		t.Fatal("channel callbacks must delegate")
+	if !d.openInitCalled || !d.openTryCalled || !d.openAckCalled || !d.openConfirmCalled || !d.closeInitCalled || !d.closeConfirmCalled {
+		t.Fatal("channel callbacks must delegate to impl")
 	}
-	if !d.recvCalled || !d.ackCalled || !d.timeoutCalled {
-		t.Fatal("packet callbacks must delegate")
+	if !d.recvCalled || !d.ackCalled || !d.timeoutCalled || !d.intentRecvCalled {
+		t.Fatal("packet callbacks must delegate to impl")
+	}
+	if d.lastCounterpartyVer != Version {
+		t.Fatal("counterparty version must be threaded to impl")
 	}
 	if res.Status != types.PacketStatusSuccess || len(res.Acknowledgement) == 0 {
 		t.Fatal("recv result must come from impl")
 	}
 }
 
-func TestAppPausedBlocksPacketCallbacks(cur realm, t *testing.T) {
+func TestAppPausedBlocksPacketCallbacksNotHandshake(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	impl = d
 	paused = true
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
-	// The caller gate runs before the paused check on every callback, so
-	// impersonate core to reach the channel handshake and the paused guard.
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-	(&App{}).OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer"))
+
+	// Handshake remains available while paused.
+	AsIBCApp().OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer"))
+	if !d.openInitCalled {
+		t.Fatal("paused must not block channel handshake")
+	}
 
 	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
-		(&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
+		AsIBCApp().OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
 	})
 	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
 		(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
 	})
 	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
-		(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
+		AsIBCApp().OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
 	})
 	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
-		(&App{}).OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
+		AsIBCApp().OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
 	})
 
-	if !d.openInitCalled {
-		t.Fatal("paused must not block channel handshake")
-	}
 	if d.recvCalled || d.ackCalled || d.timeoutCalled {
-		t.Fatal("paused must block recv/ack/timeout delegation")
+		t.Fatal("paused must block packet-callback delegation")
 	}
-}
-
-func TestSendRawPausedBlocks(cur realm, t *testing.T) {
-	resetZkgmForTest()
-	impl = &dummyImpl{}
-	paused = true
-
-	uassert.AbortsContains(t, cur, "zkgm: paused", func(cur realm) {
-		SendRaw(cur, 1, 0, "0000000000000000000000000000000000000000000000000000000000000000", 0, 0, "")
-	})
-}
-
-func TestAppNilImplPolicy(cur realm, t *testing.T) {
-	resetZkgmForTest()
-	packet := core.NewPacket(1, 2, []byte("data"), 0)
-
-	// Nil-impl policy is observed past the caller gate, so impersonate core.
-	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-	uassert.AbortsContains(t, cur, "impl not set", func() {
-		(&App{}).OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer"))
-	})
-
-	res := (&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
-	if res.Status != types.PacketStatusFailure || len(res.Acknowledgement) == 0 {
-		t.Fatal("nil impl recv must return failure acknowledgement")
-	}
-
-	(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
-	(&App{}).OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
-}
-
-func TestAssertNonZeroTimeoutRejectsZero(cur realm, t *testing.T) {
-	uassert.AbortsContains(t, cur, "zkgm: timeout timestamp must be non-zero", func(cur realm) {
-		assertNonZeroTimeout(0)
-	})
-}
-
-func TestAssertNonZeroTimeoutAcceptsNonZero(cur realm, t *testing.T) {
-	uassert.NotAborts(t, cur, func(cur realm) {
-		assertNonZeroTimeout(types.Timestamp(1))
-		assertNonZeroTimeout(types.Timestamp(3600))
-	})
-}
-
-func TestSendPacketRejectsZeroTimeout(cur realm, t *testing.T) {
-	resetZkgmForTest()
-
-	uassert.AbortsContains(t, cur, "zkgm: timeout timestamp must be non-zero", func(cur realm) {
-		sendPacket(cur, types.ChannelId(1), 0, [32]byte{}, z.Instruction{}, "g1sender", "")
-	})
-}
-
-func TestDecodeHexArg(cur realm, t *testing.T) {
-	uassert.AbortsContains(t, cur, "invalid salt hex", func(cur realm) {
-		mustDecodeHexArg("salt", "zz")
-	})
-	uassert.AbortsContains(t, cur, "invalid operand hex", func(cur realm) {
-		mustDecodeHexArg("operand", "zz")
-	})
-
-	got := mustDecodeHexArg("operand", "0xCAFE")
-	if len(got) != 2 || got[0] != 0xCA || got[1] != 0xFE {
-		t.Fatal("mustDecodeHexArg must accept 0x-prefixed hex")
-	}
+	paused = false
 }

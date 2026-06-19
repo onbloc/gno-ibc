@@ -27,6 +27,9 @@ type Store struct {
 	channelSeq        seqid.ID
 	channelClientByID *bptree.BPTree // channelKey(ChannelId) → ClientId
 
+	membershipProofs    map[types.H256]types.H256
+	nonMembershipProofs map[types.H256]types.H256
+
 	ports map[string]app.IApp
 }
 
@@ -56,6 +59,8 @@ func newStore() *Store {
 		clientByID:           bptree.NewBPTree32(),
 		connectionClientByID: bptree.NewBPTree32(),
 		channelClientByID:    bptree.NewBPTree32(),
+		membershipProofs:     make(map[types.H256]types.H256),
+		nonMembershipProofs:  make(map[types.H256]types.H256),
 		ports:                make(map[string]app.IApp),
 	}
 }
@@ -197,6 +202,22 @@ func (c *client) deletePacketCommitment(packet types.Packet) {
 	setChainParam(h256ChainParamKey(path), zero[:])
 }
 
+func (c *client) markPacketAcknowledged(packet types.Packet) error {
+	path := packetCommitmentPath(packet)
+	commitment, found := c.getBatchPacketsAtPath(path)
+	if !found {
+		return ErrPacketCommitmentNotFound
+	}
+	if commitment == types.COMMITMENT_MAGIC_ACK {
+		return ErrPacketAlreadyAcknowledged
+	}
+	if commitment != types.COMMITMENT_MAGIC {
+		return ErrPacketCommitmentNotFound
+	}
+	c.setBatchPackets(commitPacketHash(packet), types.COMMITMENT_MAGIC_ACK)
+	return nil
+}
+
 func (c *client) hasPacketCommitment(packet types.Packet) bool {
 	_, found := c.getBatchPacketsAtPath(packetCommitmentPath(packet))
 	return found
@@ -208,7 +229,7 @@ func (c *client) commitAcknowledgement(packet types.Packet, ack []byte) {
 
 func (c *client) hasAcknowledgement(packet types.Packet) bool {
 	v, ok := c.getBatchReceiptsAtPath(packetAcknowledgementPath(packet))
-	return ok && v != types.COMMITMENT_MAGIC_ACK
+	return ok && v != types.COMMITMENT_MAGIC
 }
 
 func (c *client) acknowledgementHash(packet types.Packet) types.H256 {
@@ -221,7 +242,7 @@ func (c *client) acknowledgementHash(packet types.Packet) types.H256 {
 }
 
 func (c *client) setPacketReceipt(packet types.Packet) {
-	c.saveBatchReceipts(commitPacketHash(packet), types.COMMITMENT_MAGIC_ACK)
+	c.saveBatchReceipts(commitPacketHash(packet), types.COMMITMENT_MAGIC)
 }
 
 func (c *client) hasPacketReceipt(packet types.Packet) bool {
@@ -234,6 +255,34 @@ func (c *client) deletePacketReceipt(packet types.Packet) {
 	path := packetAcknowledgementPath(packet)
 	delete(c.batchReceipts, path)
 	setChainParam(h256ChainParamKey(path), zero[:])
+}
+
+// --- Committed proofs and timeout commitments (global paths) ---
+
+func (s *Store) saveMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte, value types.H256) {
+	key := types.MembershipProofPath(clientId, proofHeight, path)
+	s.membershipProofs[key] = value
+	setChainParam(h256ChainParamKey(key), value[:])
+}
+
+func (s *Store) getMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) (types.H256, bool) {
+	v, found := s.membershipProofs[types.MembershipProofPath(clientId, proofHeight, path)]
+	if !found {
+		var zero types.H256
+		return zero, false
+	}
+	return v, true
+}
+
+func (s *Store) saveNonMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte, value types.H256) {
+	key := types.NonMembershipProofPath(clientId, proofHeight, path)
+	s.nonMembershipProofs[key] = value
+	setChainParam(h256ChainParamKey(key), value[:])
+}
+
+func (s *Store) hasNonMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) bool {
+	v, found := s.nonMembershipProofs[types.NonMembershipProofPath(clientId, proofHeight, path)]
+	return found && v == types.NON_MEMBERSHIP_COMMITMENT_VALUE
 }
 
 // --- ID sequences ---

@@ -37,12 +37,12 @@ func setupCloseChannelWithConnectionState(t *testing.T, state types.ConnectionSt
 
 // Local regression for ChannelCloseInit success and callback attribution.
 func TestChannelCloseInitClosesOpenChannel(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
-	wantRelayer := cur.Previous().Address()
+	wantRelayer := cur.Address()
 
-	ChannelCloseInit(cur, types.NewMsgChannelCloseInit(channelId, "g1msgrelayer"))
+	ChannelCloseInit(cross(cur), types.NewMsgChannelCloseInit(channelId, "g1msgrelayer"))
 
 	channel := store.getChannel(channelId)
 	if channel.State != types.ChannelStateClosed {
@@ -61,7 +61,7 @@ func TestChannelCloseInitClosesOpenChannel(cur realm, t *testing.T) {
 
 // Local regression for ChannelCloseInit connection preconditions.
 func TestChannelCloseInitRejectsNonOpenConnection(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	channelId, _ := setupCloseChannelWithConnectionState(t, types.ConnectionStateInit)
 
 	uassert.AbortsContains(t, cur, "invalid connection state", func(cur realm) {
@@ -75,7 +75,7 @@ func TestChannelCloseInitRejectsNonOpenConnection(cur realm, t *testing.T) {
 
 // Local regression for Gno's zero-as-None representation of Union counterparty_channel_id.
 func TestChannelCloseInitRejectsInvalidCounterpartyChannelId(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	channel := store.getChannel(channelId)
 	channel.CounterpartyChannelId = 0
@@ -92,13 +92,13 @@ func TestChannelCloseInitRejectsInvalidCounterpartyChannelId(cur realm, t *testi
 
 // Local regression for ChannelCloseConfirm proof verification and close effects.
 func TestChannelCloseConfirmVerifiesCounterpartyCloseAndClosesChannel(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, _, channelId := setupOpenChannel(t)
 	client := mockClientFor(channelId)
 	app := store.ports[portKey(portId)].(*mockApp)
-	wantRelayer := cur.Previous().Address()
+	wantRelayer := cur.Address()
 
-	ChannelCloseConfirm(cur, types.NewMsgChannelCloseConfirm(channelId, types.Bytes("close-proof"), 44, "g1msgrelayer"))
+	ChannelCloseConfirm(cross(cur), types.NewMsgChannelCloseConfirm(channelId, types.Bytes("close-proof"), 44, "g1msgrelayer"))
 
 	channel := store.getChannel(channelId)
 	if channel.State != types.ChannelStateClosed {
@@ -141,7 +141,7 @@ func TestChannelCloseConfirmVerifiesCounterpartyCloseAndClosesChannel(cur realm,
 
 // Local regression for Gno's zero-as-None representation of Union counterparty_channel_id.
 func TestChannelCloseConfirmRejectsInvalidCounterpartyChannelIdBeforeProof(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	client := mockClientFor(channelId)
 	channel := store.getChannel(channelId)
@@ -162,7 +162,7 @@ func TestChannelCloseConfirmRejectsInvalidCounterpartyChannelIdBeforeProof(cur r
 
 // Local regression for ChannelCloseConfirm state preconditions before proof verification.
 func TestChannelCloseConfirmRejectsWrongStateBeforeProof(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	client := mockClientFor(channelId)
 	channel := store.getChannel(channelId)
@@ -180,7 +180,7 @@ func TestChannelCloseConfirmRejectsWrongStateBeforeProof(cur realm, t *testing.T
 
 // Local regression for ChannelCloseConfirm connection preconditions before proof verification.
 func TestChannelCloseConfirmRejectsNonOpenConnectionBeforeProof(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	channelId, client := setupCloseChannelWithConnectionState(t, types.ConnectionStateInit)
 
 	uassert.AbortsContains(t, cur, "invalid connection state", func(cur realm) {
@@ -197,7 +197,7 @@ func TestChannelCloseConfirmRejectsNonOpenConnectionBeforeProof(cur realm, t *te
 
 // Local regression for inactive client short-circuit before proof verification.
 func TestChannelCloseConfirmRejectsInactiveClientBeforeProof(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	client := mockClientFor(channelId)
 	client.status = types.StatusExpired

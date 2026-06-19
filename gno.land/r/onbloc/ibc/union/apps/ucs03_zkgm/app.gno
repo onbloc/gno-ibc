@@ -1,17 +1,19 @@
 package zkgm
 
 import (
-	"errors"
-
 	app "gno.land/p/onbloc/ibc/union/app"
-
 	types "gno.land/p/onbloc/ibc/union/types"
-
-	u256 "gno.land/p/gnoswap/uint256"
-	z "gno.land/p/onbloc/ibc/union/zkgm"
-	core "gno.land/r/onbloc/ibc/union/core"
 )
 
+// app.gno is the App receiver surface: the core-driven half of the proxy. core
+// holds this App reference permanently (its port is keyed by the proxy pkgpath
+// and re-registration is rejected), so App is the stable IBC identity and must
+// never carry business logic. Every receiver gates on assertIsIBCHost and then
+// delegates to the installed impl; the packet callbacks (recv/intent/ack/timeout)
+// additionally check assertNotPaused. Channel handshake is intentionally allowed
+// while paused so channels can still be managed. Logic lives in the impl realm;
+// authority and funds live in the proxy. See assert.gno for the gates and
+// upgrade.gno for the swap point.
 type App struct{}
 
 var (
@@ -20,118 +22,55 @@ var (
 )
 
 func (a *App) OnChannelOpenInit(cur realm, connectionId types.ConnectionId, channelId types.ChannelId, version string, relayer address) {
-	requireCoreCaller(cur, "channel open init")
-	ensureImpl()
-	ensureVersion(version)
-	impl.PreChannelOpenInit(cross(cur), channelId)
+	assertIsIBCHost(cur)
+	impl.OnChannelOpenInit(0, cur, connectionId, channelId, version, relayer)
 }
 
 func (a *App) OnChannelOpenTry(cur realm, connectionId types.ConnectionId, channelId types.ChannelId, version string, counterpartyVersion string, relayer address) {
-	requireCoreCaller(cur, "channel open try")
-	ensureImpl()
-	ensureVersion(version)
-	ensureVersion(counterpartyVersion)
-	impl.PreChannelOpenTry(cross(cur), channelId, counterpartyVersion)
+	assertIsIBCHost(cur)
+	impl.OnChannelOpenTry(0, cur, connectionId, channelId, version, counterpartyVersion, relayer)
 }
 
 func (a *App) OnChannelOpenAck(cur realm, channelId types.ChannelId, counterpartyChannelId types.ChannelId, counterpartyVersion string, relayer address) {
-	requireCoreCaller(cur, "channel open ack")
-	ensureImpl()
-	ensureVersion(counterpartyVersion)
-	impl.PostChannelOpenAck(cross(cur), channelId, counterpartyChannelId)
+	assertIsIBCHost(cur)
+	impl.OnChannelOpenAck(0, cur, channelId, counterpartyChannelId, counterpartyVersion, relayer)
 }
 
 func (a *App) OnChannelOpenConfirm(cur realm, channelId types.ChannelId, relayer address) {
-	requireCoreCaller(cur, "channel open confirm")
-	ensureImpl()
-	impl.PostChannelOpenConfirm(cross(cur), channelId)
+	assertIsIBCHost(cur)
+	impl.OnChannelOpenConfirm(0, cur, channelId, relayer)
 }
 
 func (a *App) OnChannelCloseInit(cur realm, channelId types.ChannelId, relayer address) {
-	requireCoreCaller(cur, "channel close init")
-	panic("the show must go on")
+	assertIsIBCHost(cur)
+	impl.OnChannelCloseInit(0, cur, channelId, relayer)
 }
 
 func (a *App) OnChannelCloseConfirm(cur realm, channelId types.ChannelId, relayer address) {
-	requireCoreCaller(cur, "channel close confirm")
-	panic("the show must go on")
+	assertIsIBCHost(cur)
+	impl.OnChannelCloseConfirm(0, cur, channelId, relayer)
 }
 
 func (a *App) OnRecvPacket(cur realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {
-	requireCoreCaller(cur, "recv")
-	if paused {
-		panic("zkgm: paused")
-	}
-	if impl == nil {
-		return errAck(cur, errors.New("zkgm: impl not set"))
-	}
-	return impl.Recv(cross(cur), packet, relayer, relayerMsg)
+	assertIsIBCHost(cur)
+	assertNotPaused()
+	return impl.OnRecvPacket(0, cur, packet, relayer, relayerMsg)
 }
 
-func (a *App) OnIntentRecvPacket(cur realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
-	requireCoreCaller(cur, "intent recv")
-	if paused {
-		panic("zkgm: paused")
-	}
-	if impl == nil {
-		return errAck(cur, errors.New("zkgm: impl not set"))
-	}
-	return impl.IntentRecv(cross(cur), packet, marketMaker, marketMakerMsg)
-}
-
-func (a *App) OnAcknowledgementPacket(cur realm, packet types.Packet, ack []byte, relayer address) {
-	requireCoreCaller(cur, "ack")
-	if paused {
-		panic("zkgm: paused")
-	}
-	if impl == nil {
-		return
-	}
-	impl.Ack(cross(cur), packet, ack, relayer)
+func (a *App) OnAcknowledgementPacket(cur realm, packet types.Packet, acknowledgement []byte, relayer address) {
+	assertIsIBCHost(cur)
+	assertNotPaused()
+	impl.OnAcknowledgementPacket(0, cur, packet, acknowledgement, relayer)
 }
 
 func (a *App) OnTimeoutPacket(cur realm, packet types.Packet, relayer address) {
-	requireCoreCaller(cur, "timeout")
-	if paused {
-		panic("zkgm: paused")
-	}
-	if impl == nil {
-		return
-	}
-	impl.Timeout(cross(cur), packet, relayer)
+	assertIsIBCHost(cur)
+	assertNotPaused()
+	impl.OnTimeoutPacket(0, cur, packet, relayer)
 }
 
-func ensureImpl() {
-	if impl == nil {
-		panic("zkgm: impl not set")
-	}
-}
-
-func ensureVersion(version string) {
-	if version != Version {
-		panic("zkgm: unsupported channel version")
-	}
-}
-
-// requireCoreCaller panics unless the immediate caller is the core realm.
-//
-// App callbacks are expected to be reached only through core handlers. This
-// check prevents direct invocation from other realms and preserves the core
-// security boundary.
-func requireCoreCaller(cur realm, action string) {
-	previousPackagePath := cur.Previous().PkgPath()
-	if previousPackagePath != core.PackagePath() {
-		panic("zkgm: only core can " + action + ", got " + previousPackagePath)
-	}
-}
-
-func errAck(cur realm, err error) types.RecvPacketResult {
-	ackBytes, encErr := z.EncodeAck(z.Ack{
-		Tag:      u256.NewUint(0),
-		InnerAck: []byte(err.Error()),
-	})
-	if encErr != nil {
-		ackBytes = []byte(err.Error())
-	}
-	return core.NewRecvPacketResult(types.PacketStatusFailure, ackBytes)
+func (a *App) OnIntentRecvPacket(cur realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
+	assertIsIBCHost(cur)
+	assertNotPaused()
+	return impl.OnIntentRecvPacket(0, cur, packet, marketMaker, marketMakerMsg)
 }

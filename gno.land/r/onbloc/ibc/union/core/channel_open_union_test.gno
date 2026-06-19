@@ -29,10 +29,10 @@ func setupChannelOpenUnionTest() (types.Bytes, types.ConnectionId, *mockClient, 
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L23-L78
 func TestChannelOpenInitOK(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, connectionId, _, _ := setupChannelOpenUnionTest()
 
-	channelId := ChannelOpenInit(cur, types.NewMsgChannelOpenInit(portId, types.Bytes("counterparty"), connectionId, "ics20-1", "g1msgrelayer"))
+	channelId := ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, types.Bytes("counterparty"), connectionId, "ics20-1", "g1msgrelayer"))
 
 	if channelId != types.ChannelId(1) {
 		t.Fatalf("channel id: got %d want 1", channelId)
@@ -43,10 +43,10 @@ func TestChannelOpenInitOK(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L80-L124
 func TestChannelOpenInitChannelClaimed(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, connectionId, _, _ := setupChannelOpenUnionTest()
 
-	channelId := ChannelOpenInit(cur, types.NewMsgChannelOpenInit(portId, types.Bytes("counterparty"), connectionId, "ics20-1", "g1msgrelayer"))
+	channelId := ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, types.Bytes("counterparty"), connectionId, "ics20-1", "g1msgrelayer"))
 
 	if got := store.getChannelOwner(channelId); !bytes.Equal(got, portId) {
 		t.Fatalf("channel owner: got %q want %q", string(got), string(portId))
@@ -57,10 +57,10 @@ func TestChannelOpenInitChannelClaimed(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L126-L176
 func TestChannelOpenInitCommitmentSaved(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, connectionId, _, _ := setupChannelOpenUnionTest()
 
-	channelId := ChannelOpenInit(cur, types.NewMsgChannelOpenInit(portId, types.Bytes("counterparty"), connectionId, "ics20-1", "g1msgrelayer"))
+	channelId := ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, types.Bytes("counterparty"), connectionId, "ics20-1", "g1msgrelayer"))
 
 	channel := store.getChannel(channelId)
 	if channel.State != types.ChannelStateInit || channel.ConnectionId != connectionId || channel.CounterpartyChannelId != 0 || channel.Version != "ics20-1" {
@@ -75,7 +75,7 @@ func TestChannelOpenInitCommitmentSaved(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L178-L273
 func TestChannelOpenTryOK(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, connectionId, client, app := setupChannelOpenUnionTest()
 	msgChannel := types.Channel{
 		State:                 types.ChannelStateTryOpen,
@@ -85,7 +85,7 @@ func TestChannelOpenTryOK(cur realm, t *testing.T) {
 		Version:               "ics20-1",
 	}
 
-	channelId := ChannelOpenTry(cur, types.NewMsgChannelOpenTry(portId, msgChannel, "ics20-1", types.Bytes("proof-init"), 44, "g1msgrelayer"))
+	channelId := ChannelOpenTry(cross(cur), types.NewMsgChannelOpenTry(portId, msgChannel, "ics20-1", types.Bytes("proof-init"), 44, "g1msgrelayer"))
 
 	if channelId != types.ChannelId(1) {
 		t.Fatalf("channel id: got %d want 1", channelId)
@@ -102,7 +102,7 @@ func TestChannelOpenTryOK(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L275-L346
 func TestChannelOpenTryInvalidState(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, connectionId, _, _ := setupChannelOpenUnionTest()
 	msgChannel := types.Channel{
 		State:                 types.ChannelStateOpen,
@@ -121,7 +121,7 @@ func TestChannelOpenTryInvalidState(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L348-L413
 func TestChannelOpenTryChannelClaimed(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, connectionId, _, _ := setupChannelOpenUnionTest()
 	msgChannel := types.Channel{
 		State:                 types.ChannelStateTryOpen,
@@ -131,7 +131,7 @@ func TestChannelOpenTryChannelClaimed(cur realm, t *testing.T) {
 		Version:               "ics20-1",
 	}
 
-	channelId := ChannelOpenTry(cur, types.NewMsgChannelOpenTry(portId, msgChannel, "ics20-1", types.Bytes("proof-init"), 44, "g1msgrelayer"))
+	channelId := ChannelOpenTry(cross(cur), types.NewMsgChannelOpenTry(portId, msgChannel, "ics20-1", types.Bytes("proof-init"), 44, "g1msgrelayer"))
 
 	if got := store.getChannelOwner(channelId); !bytes.Equal(got, portId) {
 		t.Fatalf("channel owner: got %q want %q", string(got), string(portId))
@@ -142,7 +142,7 @@ func TestChannelOpenTryChannelClaimed(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L415-L486
 func TestChannelOpenTryCommitmentSaved(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, connectionId, _, _ := setupChannelOpenUnionTest()
 	msgChannel := types.Channel{
 		State:                 types.ChannelStateTryOpen,
@@ -152,7 +152,7 @@ func TestChannelOpenTryCommitmentSaved(cur realm, t *testing.T) {
 		Version:               "ics20-1",
 	}
 
-	channelId := ChannelOpenTry(cur, types.NewMsgChannelOpenTry(portId, msgChannel, "ics20-1", types.Bytes("proof-init"), 44, "g1msgrelayer"))
+	channelId := ChannelOpenTry(cross(cur), types.NewMsgChannelOpenTry(portId, msgChannel, "ics20-1", types.Bytes("proof-init"), 44, "g1msgrelayer"))
 
 	channel := store.getChannel(channelId)
 	if channel.State != types.ChannelStateTryOpen || channel.ConnectionId != connectionId || channel.CounterpartyChannelId != types.ChannelId(123) || channel.Version != "ics20-1" {
@@ -164,12 +164,12 @@ func TestChannelOpenTryCommitmentSaved(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L488-L589
 func TestChannelOpenAckOK(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, connectionId, client, app := setupChannelOpenUnionTest()
 	channelId := store.nextChannelId()
 	store.createChannel(channelId, types.Channel{State: types.ChannelStateInit, ConnectionId: connectionId, CounterpartyPortId: types.Bytes("counterparty"), Version: "ics20-1"}, portId)
 
-	ChannelOpenAck(cur, types.NewMsgChannelOpenAck(channelId, "ics20-1", types.ChannelId(123), types.Bytes("proof-try"), 44, "g1msgrelayer"))
+	ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, "ics20-1", types.ChannelId(123), types.Bytes("proof-try"), 44, "g1msgrelayer"))
 
 	channel := store.getChannel(channelId)
 	if channel.State != types.ChannelStateOpen || channel.CounterpartyChannelId != types.ChannelId(123) {
@@ -187,7 +187,7 @@ func TestChannelOpenAckOK(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L591-L650
 func TestChannelOpenAckNotFound(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 
 	uassert.AbortsContains(t, cur, "channel 1 not found", func(cur realm) {
 		channelOpenAck(cur, types.NewMsgChannelOpenAck(types.ChannelId(1), "ics20-1", types.ChannelId(123), types.Bytes("proof-try"), 44, "g1msgrelayer"), true)
@@ -197,7 +197,7 @@ func TestChannelOpenAckNotFound(cur realm, t *testing.T) {
 // Local regression: Union MsgChannelOpenAck carries a concrete ChannelId, not
 // an Option, so core must not reject zero before proof verification.
 func TestChannelOpenAckAllowsZeroCounterpartyChannelId(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, connectionId, _, _ := setupChannelOpenUnionTest()
 	channelId := store.nextChannelId()
 	store.createChannel(channelId, types.Channel{State: types.ChannelStateInit, ConnectionId: connectionId, CounterpartyPortId: types.Bytes("counterparty"), Version: "ics20-1"}, portId)
@@ -214,12 +214,12 @@ func TestChannelOpenAckAllowsZeroCounterpartyChannelId(cur realm, t *testing.T) 
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L652-L733
 func TestChannelOpenAckCommitmentSaved(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, connectionId, _, _ := setupChannelOpenUnionTest()
 	channelId := store.nextChannelId()
 	store.createChannel(channelId, types.Channel{State: types.ChannelStateInit, ConnectionId: connectionId, CounterpartyPortId: types.Bytes("counterparty"), Version: "ics20-1"}, portId)
 
-	ChannelOpenAck(cur, types.NewMsgChannelOpenAck(channelId, "counterparty-v1", types.ChannelId(123), types.Bytes("proof-try"), 44, "g1msgrelayer"))
+	ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, "counterparty-v1", types.ChannelId(123), types.Bytes("proof-try"), 44, "g1msgrelayer"))
 
 	channel := store.getChannel(channelId)
 	if channel.State != types.ChannelStateOpen || channel.Version != "counterparty-v1" || channel.CounterpartyChannelId != types.ChannelId(123) {
@@ -231,12 +231,12 @@ func TestChannelOpenAckCommitmentSaved(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L735-L813
 func TestChannelOpenConfirmOK(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, connectionId, client, app := setupChannelOpenUnionTest()
 	channelId := store.nextChannelId()
 	store.createChannel(channelId, types.Channel{State: types.ChannelStateTryOpen, ConnectionId: connectionId, CounterpartyChannelId: types.ChannelId(123), CounterpartyPortId: types.Bytes("counterparty"), Version: "ics20-1"}, portId)
 
-	ChannelOpenConfirm(cur, types.NewMsgChannelOpenConfirm(channelId, types.Bytes("proof-ack"), 44, "g1msgrelayer"))
+	ChannelOpenConfirm(cross(cur), types.NewMsgChannelOpenConfirm(channelId, types.Bytes("proof-ack"), 44, "g1msgrelayer"))
 
 	channel := store.getChannel(channelId)
 	if channel.State != types.ChannelStateOpen {
@@ -254,7 +254,7 @@ func TestChannelOpenConfirmOK(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L815-L878
 func TestChannelOpenTryInvalidCounterparty(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, connectionId, _, _ := setupChannelOpenUnionTest()
 	msgChannel := types.Channel{
 		State:              types.ChannelStateTryOpen,
@@ -272,7 +272,7 @@ func TestChannelOpenTryInvalidCounterparty(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L879-L938
 func TestChannelOpenConfirmNotFound(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 
 	uassert.AbortsContains(t, cur, "channel 1 not found", func(cur realm) {
 		channelOpenConfirm(cur, types.NewMsgChannelOpenConfirm(types.ChannelId(1), types.Bytes("proof-ack"), 44, "g1msgrelayer"), true)
@@ -281,7 +281,7 @@ func TestChannelOpenConfirmNotFound(cur realm, t *testing.T) {
 
 // Local regression for Gno's zero-as-None representation of Union counterparty_channel_id.
 func TestChannelOpenConfirmRejectsInvalidCounterpartyChannelId(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, connectionId, client, _ := setupChannelOpenUnionTest()
 	channelId := store.nextChannelId()
 	store.createChannel(channelId, types.Channel{State: types.ChannelStateTryOpen, ConnectionId: connectionId, CounterpartyChannelId: 0, CounterpartyPortId: types.Bytes("counterparty"), Version: "ics20-1"}, portId)
@@ -298,12 +298,12 @@ func TestChannelOpenConfirmRejectsInvalidCounterpartyChannelId(cur realm, t *tes
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L940-L1013
 func TestChannelOpenConfirmCommitmentSaved(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, connectionId, _, _ := setupChannelOpenUnionTest()
 	channelId := store.nextChannelId()
 	store.createChannel(channelId, types.Channel{State: types.ChannelStateTryOpen, ConnectionId: connectionId, CounterpartyChannelId: types.ChannelId(123), CounterpartyPortId: types.Bytes("counterparty"), Version: "ics20-1"}, portId)
 
-	ChannelOpenConfirm(cur, types.NewMsgChannelOpenConfirm(channelId, types.Bytes("proof-ack"), 44, "g1msgrelayer"))
+	ChannelOpenConfirm(cross(cur), types.NewMsgChannelOpenConfirm(channelId, types.Bytes("proof-ack"), 44, "g1msgrelayer"))
 
 	channel := store.getChannel(channelId)
 	if channel.State != types.ChannelStateOpen {

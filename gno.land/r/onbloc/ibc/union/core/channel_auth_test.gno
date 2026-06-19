@@ -17,7 +17,7 @@ func setNonAdminForTest() func() {
 }
 
 func TestChannelOpenInitPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setNonAdminForTest()
 	defer cleanup()
 
@@ -27,7 +27,7 @@ func TestChannelOpenInitPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 }
 
 func TestChannelOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setNonAdminForTest()
 	defer cleanup()
 
@@ -37,7 +37,7 @@ func TestChannelOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 }
 
 func TestForceChannelOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setNonAdminForTest()
 	defer cleanup()
 
@@ -47,7 +47,7 @@ func TestForceChannelOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) 
 }
 
 func TestChannelOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setNonAdminForTest()
 	defer cleanup()
 
@@ -57,7 +57,7 @@ func TestChannelOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 }
 
 func TestForceChannelOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setNonAdminForTest()
 	defer cleanup()
 
@@ -67,7 +67,7 @@ func TestForceChannelOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) 
 }
 
 func TestChannelOpenConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setNonAdminForTest()
 	defer cleanup()
 
@@ -77,7 +77,7 @@ func TestChannelOpenConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 }
 
 func TestForceChannelOpenConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setNonAdminForTest()
 	defer cleanup()
 
@@ -87,7 +87,7 @@ func TestForceChannelOpenConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *testing
 }
 
 func TestChannelCloseInitPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setNonAdminForTest()
 	defer cleanup()
 
@@ -97,7 +97,7 @@ func TestChannelCloseInitPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 }
 
 func TestChannelCloseConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setNonAdminForTest()
 	defer cleanup()
 

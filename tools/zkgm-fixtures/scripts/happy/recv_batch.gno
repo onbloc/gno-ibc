@@ -5,11 +5,11 @@
 package main
 
 import (
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/onbloc/unionibc/v1/core"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
 	impl "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 func main() {
@@ -20,8 +20,8 @@ func main() {
 	receiverB := receiverA
 	baseA := []byte("ugnot-alpha")
 	baseB := []byte("ugnot-beta")
-	quoteA := impl.PredictWrappedTokenV1(u256.Zero(), uint32(pair.Destination), baseA)
-	quoteB := impl.PredictWrappedTokenV1(u256.Zero(), uint32(pair.Destination), baseB)
+	quoteA := impl.PredictWrappedToken(u256.Zero(), uint32(pair.Destination), baseA)
+	quoteB := impl.PredictWrappedToken(u256.Zero(), uint32(pair.Destination), baseB)
 
 	orderA := z.TokenOrderV2{
 		Sender:      []byte("counterparty"),

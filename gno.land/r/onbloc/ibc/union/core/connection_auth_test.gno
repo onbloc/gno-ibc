@@ -8,7 +8,7 @@ import (
 )
 
 func TestConnectionOpenInitPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setNonAdminForTest()
 	defer cleanup()
 
@@ -18,7 +18,7 @@ func TestConnectionOpenInitPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 }
 
 func TestConnectionOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setNonAdminForTest()
 	defer cleanup()
 
@@ -34,7 +34,7 @@ func TestConnectionOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 }
 
 func TestConnectionOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setNonAdminForTest()
 	defer cleanup()
 
@@ -49,7 +49,7 @@ func TestConnectionOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 }
 
 func TestConnectionOpenConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	cleanup := setNonAdminForTest()
 	defer cleanup()
 

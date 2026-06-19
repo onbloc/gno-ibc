@@ -7,7 +7,7 @@ import (
 )
 
 func TestForceChannelOpenTrySkipsProofVerification(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, connectionId, client, app := setupChannelOpenUnionTest()
 	client.status = types.StatusExpired
 	msgChannel := types.Channel{
@@ -18,7 +18,7 @@ func TestForceChannelOpenTrySkipsProofVerification(cur realm, t *testing.T) {
 		Version:               "ics20-1",
 	}
 
-	channelId := ForceChannelOpenTry(cur, types.NewMsgChannelOpenTry(portId, msgChannel, "ics20-1", types.Bytes("proof-init"), 44, "g1msgrelayer"))
+	channelId := ForceChannelOpenTry(cross(cur), types.NewMsgChannelOpenTry(portId, msgChannel, "ics20-1", types.Bytes("proof-init"), 44, "g1msgrelayer"))
 
 	if channelId != types.ChannelId(1) {
 		t.Fatalf("channel id: got %d want 1", channelId)
@@ -32,7 +32,7 @@ func TestForceChannelOpenTrySkipsProofVerification(cur realm, t *testing.T) {
 }
 
 func TestForceChannelOpenAckSkipsProofVerification(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, connectionId, client, app := setupChannelOpenUnionTest()
 	client.status = types.StatusExpired
 	channelId := store.nextChannelId()
@@ -43,7 +43,7 @@ func TestForceChannelOpenAckSkipsProofVerification(cur realm, t *testing.T) {
 		Version:            "ics20-1",
 	}, portId)
 
-	ForceChannelOpenAck(cur, types.NewMsgChannelOpenAck(channelId, "counterparty-v1", types.ChannelId(123), types.Bytes("proof-try"), 44, "g1msgrelayer"))
+	ForceChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, "counterparty-v1", types.ChannelId(123), types.Bytes("proof-try"), 44, "g1msgrelayer"))
 
 	channel := store.getChannel(channelId)
 	if channel.State != types.ChannelStateOpen || channel.Version != "counterparty-v1" || channel.CounterpartyChannelId != types.ChannelId(123) {
@@ -58,7 +58,7 @@ func TestForceChannelOpenAckSkipsProofVerification(cur realm, t *testing.T) {
 }
 
 func TestForceChannelOpenConfirmSkipsProofVerification(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, connectionId, client, app := setupChannelOpenUnionTest()
 	client.status = types.StatusExpired
 	channelId := store.nextChannelId()
@@ -70,7 +70,7 @@ func TestForceChannelOpenConfirmSkipsProofVerification(cur realm, t *testing.T) 
 		Version:               "ics20-1",
 	}, portId)
 
-	ForceChannelOpenConfirm(cur, types.NewMsgChannelOpenConfirm(channelId, types.Bytes("proof-ack"), 44, "g1msgrelayer"))
+	ForceChannelOpenConfirm(cross(cur), types.NewMsgChannelOpenConfirm(channelId, types.Bytes("proof-ack"), 44, "g1msgrelayer"))
 
 	channel := store.getChannel(channelId)
 	if channel.State != types.ChannelStateOpen {

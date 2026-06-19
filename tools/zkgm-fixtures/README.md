@@ -4,13 +4,13 @@ A small Rust tool that emits canonical handler/dispatch end-to-end **scenario** 
 
 ## Why
 
-`abi-fixtures` pins per-struct encoding correctness for each ZKGM body in isolation. `zkgm-fixtures` complements that by pinning the full **envelope** shape and the **packet + ack pairing** — i.e. exactly what arrives on the IBC wire and exactly what should go back. The gno handler/dispatch tests build the same `ZkgmPacket` via in-tree types, encode it, and assert byte-equality with `packet_data_hex`; they also build the matching success/failure `Ack` and assert byte-equality with `success_ack_hex` / `failure_ack_hex`.
+`zkgm-fixtures` pins the full **envelope** shape and the **packet + ack pairing** — i.e. exactly what arrives on the IBC wire and exactly what should go back. The gno handler/dispatch tests build the same `ZkgmPacket` via in-tree types, encode it, and assert byte-equality with `packet_data_hex`; they also build the matching success/failure `Ack` and assert byte-equality with `success_ack_hex` / `failure_ack_hex`.
 
 State-dependent handler effects (voucher mints, channel-balance updates, rate-limit buckets, event emission) stay in pure gno handler tests because they require gno-side state. The scenarios pin only what's wire-determined.
 
 ## Wire flavor: `abi_encode_params`
 
-Same convention as `abi-fixtures` — Union encodes ZKGM wire bytes via `abi_encode_params` / decodes via `abi_decode_params_validate`. Every gno encoder/decoder uses this flavor, and every byte string emitted here is produced via `abi_encode_params`. See `tools/abi-fixtures/README.md` for the full reasoning.
+Union encodes ZKGM wire bytes via `abi_encode_params` / decodes via `abi_decode_params_validate`. Every gno encoder/decoder uses this flavor, and every byte string emitted here is produced via `abi_encode_params`.
 
 ## Output schema
 
@@ -34,7 +34,7 @@ Same convention as `abi-fixtures` — Union encodes ZKGM wire bytes via `abi_enc
 }
 ```
 
-Field encoding conventions inside `decoded` and `packet` follow the same rules as the `abi-fixtures` README:
+Field encoding conventions inside `decoded` and `packet`:
 
 | Solidity type | JSON form |
 |---|---|
@@ -70,8 +70,6 @@ This runs `cargo run --release -p zkgm-fixtures`, captures stdout, and writes th
 
 - `gno.land/p/core/ibc/zkgm/testdata/scenarios.json` (canonical JSON)
 - `gno.land/p/core/ibc/zkgm/scenarios_fixture_test.gno` (raw-string embedding for gno tests, mirroring `vectors_fixture_test.gno`)
-
-The `abi-fixtures` CI workflow should be extended to also re-run this generator on every PR that touches the harness or the committed scenarios and assert the result matches what's checked in.
 
 ## Adding a scenario
 
@@ -123,7 +121,7 @@ The fixtures carry toy values in the inner instruction (e.g. `sender = "alice"`,
 
 ## Sync with Union
 
-The `sol!` struct block, opcode constants, fill-type constants, ack-tag constants, and token-order-kind constants are a verbatim copy of `union/cosmwasm/app/ucs03-zkgm/src/com.rs` — the same source `abi-fixtures` keeps in sync. If Union ever changes the wire format, regenerate **both** fixtures.
+The `sol!` struct block, opcode constants, fill-type constants, ack-tag constants, and token-order-kind constants are a verbatim copy of `union/cosmwasm/app/ucs03-zkgm/src/com.rs`. If Union ever changes the wire format, regenerate these fixtures.
 
 ## Toolchain
 

@@ -23,10 +23,6 @@ GO_BIN_DIR := $(shell go env GOPATH)/bin
 GNO_BIN    := $(GO_BIN_DIR)/gno
 GNO_SHORT  := $(shell echo $(GNO_COMMIT) | cut -c1-7)
 
-ABI_FIXTURES_DIR := tools/abi-fixtures
-ABI_VECTORS      := gno.land/p/onbloc/encoding/abi/testdata/vectors.json
-ABI_VECTORS_GNO  := gno.land/p/onbloc/ibc/zkgm/vectors_fixture_test.gno
-
 ZKGM_FIXTURES_DIR     := tools/zkgm-fixtures
 ZKGM_SCENARIOS        := gno.land/p/onbloc/ibc/zkgm/testdata/scenarios.json
 ZKGM_SCENARIOS_GNO    := gno.land/p/onbloc/ibc/zkgm/scenarios_fixture_test.gno
@@ -89,9 +85,9 @@ vendor-flags = $(if $(filter undefined,$(origin FLAGS_$(subst /,_,$(1)))),$(STD_
 # rsync only auto-creates the leaf dest dir, so mkdir -p covers intermediates.
 vendor-cmd = mkdir -p $(dir gno.land/$(2)) && rsync $(RSYNC_BASE) $(call vendor-flags,$(2)) $(1)/$(2)/ gno.land/$(2)/
 
-.PHONY: help install-gno verify-gno vendor fmt test test-cover test-smoke test-gnokey-query-smoke test-gnokey-qeval-smoke test-zkgm-native-refund-smoke clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios derive-sender-salt-vectors generate generate-check
+.PHONY: help install-gno verify-gno vendor fmt test test-cover test-smoke test-gnokey-query-smoke test-gnokey-qeval-smoke test-zkgm-native-refund-smoke clean-gno-cache refresh-zkgm-scenarios derive-sender-salt-vectors generate generate-check
 
-PROTOGEN_PKGS := gno.land/p/onbloc/ibc/lightclient/cometbls
+PROTOGEN_PKGS := gno.land/p/onbloc/ibc/union/lightclient/cometbls
 
 COVERAGE_DIR := coverage
 
@@ -116,7 +112,6 @@ help:
 	@echo "  test-gnokey-qeval-smoke — run only the gnokey maketx/qeval core smoke suite"
 	@echo "  test-zkgm-native-refund-smoke — run only the ZKGM native refund gnokey smoke suite"
 	@echo "  clean-gno-cache       — remove the cloned gno repo (forces re-clone next install)"
-	@echo "  refresh-abi-vectors   — regenerate ABI ground-truth vectors via the Rust harness"
 	@echo "  refresh-zkgm-scenarios — regenerate handler/dispatch end-to-end ZKGM scenarios via the Rust harness"
 	@echo "  derive-sender-salt-vectors — print DeriveSenderSalt bootstrap vectors via the Rust harness"
 	@echo "  generate              — regenerate _pb_gen.gno codecs from //gno:protobuf-tagged structs"
@@ -204,17 +199,6 @@ test-zkgm-native-refund-smoke: verify-gno vendor
 clean-gno-cache:
 	@rm -rf $(GNO_CACHE)
 	@echo "removed $(GNO_CACHE)"
-
-# Regenerates ABI test vectors against Union's `sol!` macro definitions.
-# Single canonical fixture lives next to the gno tests that consume it.
-# CI re-runs this and asserts the committed bytes match.
-refresh-abi-vectors:
-	@command -v cargo >/dev/null 2>&1 || { \
-		echo "ERROR: 'cargo' not found on PATH. Install Rust toolchain (rustup) to refresh ABI vectors."; exit 1; }
-	@echo ">> regenerating $(ABI_VECTORS)"
-	@cargo run --release --quiet -p abi-fixtures > $(ABI_VECTORS)
-	@python3 -c 'from pathlib import Path; src = Path("$(ABI_VECTORS)").read_text(); assert "\x60" not in src, "vectors.json contains a backtick; cannot embed in Gno raw string"; Path("$(ABI_VECTORS_GNO)").write_text("package zkgm\n\nconst fixtureVectorsJSON = `" + src + "`\n")'
-	@echo "ok: vectors written to $(ABI_VECTORS) and $(ABI_VECTORS_GNO) ($$(grep -c '"name":' $(ABI_VECTORS)) scenarios)"
 
 # Regenerates handler/dispatch end-to-end ZKGM scenarios (full ZkgmPacket
 # envelopes + matching Ack pairs) against Union's `sol!` macro definitions.

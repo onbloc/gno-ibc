@@ -81,6 +81,29 @@ func TestExecuteCallReceiverPanicReturnsOnlyMakerAck(cur realm, t *testing.T) {
 	uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Acknowledgement))
 }
 
+func TestExecuteCallIntentDispatchesOnIntentZkgm(cur realm, t *testing.T) {
+	mock.Reset(cross(cur))
+	testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
+
+	res, err := newTestImpl().executeCall(0, cur, packet, address("g1maker"), []byte("mm-msg"), u256.NewUint(9), z.Call{
+		Sender:           []byte("sender"),
+		ContractAddress:  []byte(mockReceiverPath),
+		ContractCalldata: []byte("calldata"),
+	}, true)
+
+	uassert.NoError(t, err)
+	uassert.True(t, res.Status == types.PacketStatusSuccess)
+	ack, err := z.DecodeAck(res.Acknowledgement)
+	uassert.NoError(t, err)
+	uassert.True(t, ack.Tag.Eq(tagAckSuccess()))
+	// The receiver's intent callback ran (not the standard OnZkgm), and saw the env.
+	uassert.Equal(t, 1, mock.IntentCalls(cross(cur)))
+	uassert.Equal(t, 0, mock.Calls(cross(cur)))
+	uassert.Equal(t, "calldata", mock.LastIntentCalldata(cross(cur)))
+	uassert.Equal(t, "g1maker", mock.LastIntentMarketMaker(cross(cur)))
+}
+
 func TestIntentRecvOnlyMakerCallAborts(cur realm, t *testing.T) {
 	mock.Reset(cross(cur))
 	testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))

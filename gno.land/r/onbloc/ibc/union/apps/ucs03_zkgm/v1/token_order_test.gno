@@ -150,6 +150,7 @@ func TestTokenOrderVerifyUnescrowNativeRejectedBeforeFundsConsume(cur realm, t *
 }
 
 func TestTokenOrderVerifyAppliesRateLimit(cur realm, t *testing.T) {
+	defer enableRateLimit(cur)()
 	v := newTestImpl()
 	denom := "rate-limit-denom"
 	now := u256.NewUint(uint64(time.Now().Unix()))

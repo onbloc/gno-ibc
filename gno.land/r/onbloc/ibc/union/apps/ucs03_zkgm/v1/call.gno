@@ -35,10 +35,6 @@ func (v *ucs03ZkgmV1) executeCall(_ int, rlm realm, packet types.Packet, relayer
 	if call.Eureka {
 		return callErrAck(0, rlm, errEurekaUnsupported), nil
 	}
-	if intent {
-		// Calls do not settle on the proofless market-maker fast path.
-		return core.NewRecvPacketResult(types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
-	}
 
 	sender := cloneBytes(call.Sender)
 	calldata := cloneBytes(call.ContractCalldata)
@@ -49,9 +45,32 @@ func (v *ucs03ZkgmV1) executeCall(_ int, rlm realm, packet types.Packet, relayer
 	}
 
 	relayerStr := string(relayer)
+	proxyAccount := PredictCallProxyAccount(path, packet.DestinationChannelId, sender)
+
+	// Intent settlement dispatches OnIntentZkgm to the receiver (union execute_call
+	// intent arm), and is maker-only: any receiver failure reverts to ACK_ERR_ONLY_MAKER
+	// so the proven recv can settle instead.
+	if intent {
+		env := z.IntentCallEnv{
+			Caller:             relayerStr,
+			ProxyAccount:       proxyAccount,
+			Path:               path,
+			SourceChannel:      packet.SourceChannelId.String(),
+			DestinationChannel: packet.DestinationChannelId.String(),
+			Sender:             sender,
+			Calldata:           calldata,
+			MarketMaker:        []byte(relayerStr),
+			MarketMakerMsg:     cloneBytes(relayerMsg),
+		}
+		if err, panicked := safeCallOnIntentZkgm(0, rlm, receiver, env); panicked || err != nil {
+			return core.NewRecvPacketResult(types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
+		}
+		return callSuccessAck()
+	}
+
 	env := z.CallEnv{
 		Caller:             relayerStr,
-		ProxyAccount:       PredictCallProxyAccount(path, packet.DestinationChannelId, sender),
+		ProxyAccount:       proxyAccount,
 		Path:               path,
 		SourceChannel:      packet.SourceChannelId.String(),
 		DestinationChannel: packet.DestinationChannelId.String(),
@@ -68,7 +87,11 @@ func (v *ucs03ZkgmV1) executeCall(_ int, rlm realm, packet types.Packet, relayer
 	if err != nil {
 		return callErrAck(0, rlm, err), nil
 	}
+	return callSuccessAck()
+}
 
+// callSuccessAck builds the empty success acknowledgement a completed call writes.
+func callSuccessAck() (types.RecvPacketResult, error) {
 	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess(), InnerAck: []byte{}})
 	if err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
@@ -110,6 +133,26 @@ func safeCallOnZkgm(_ int, rlm realm, receiver z.Zkgmable, env z.CallEnv) (err e
 		}
 	}()
 	err = receiver.OnZkgm(cross(rlm), env)
+	return err, false
+}
+
+// safeCallOnIntentZkgm runs the receiver's intent callback and reports a failure
+// as panicked=true, mirroring safeCallOnZkgm for the OnIntentZkgm path.
+func safeCallOnIntentZkgm(_ int, rlm realm, receiver z.Zkgmable, env z.IntentCallEnv) (err error, panicked bool) {
+	if canRevive() {
+		p := revive(func() {
+			err = receiver.OnIntentZkgm(cross(rlm), env)
+		})
+		return err, p != nil
+	}
+
+	defer func() {
+		if recover() != nil {
+			err = nil
+			panicked = true
+		}
+	}()
+	err = receiver.OnIntentZkgm(cross(rlm), env)
 	return err, false
 }
 

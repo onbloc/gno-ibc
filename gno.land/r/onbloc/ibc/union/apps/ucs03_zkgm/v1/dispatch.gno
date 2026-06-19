@@ -232,13 +232,15 @@ func decodeForwardInstruction(instr z.Instruction) (z.Forward, error) {
 	return z.DecodeForward(instr.Operand)
 }
 
-// universalErrorAckBytes is the cached ABI-encoded `z.Ack{Tag:0, InnerAck:"UNIVERSAL_ERROR"}`
-// that zkgm-internal recv failures emit. Built once at package init so the per-packet
-// `failureResult(universalErrorAck())` paths do not re-encode the same constant payload.
+// mustEncodeUniversalErrorAck returns the ABI-encoded failure acknowledgement
+// `z.Ack{Tag: TAG_ACK_FAILURE, InnerAck: empty}` that zkgm-internal recv failures
+// emit. The empty inner ack matches union's `Ack{tag: TAG_ACK_FAILURE, inner_ack:
+// Default::default()}`; the encoded Ack itself is non-empty, satisfying core's
+// non-empty acknowledgement requirement.
 func mustEncodeUniversalErrorAck() []byte {
 	bz, err := z.EncodeAck(z.Ack{
 		Tag:      u256.NewUint(0),
-		InnerAck: []byte("UNIVERSAL_ERROR"),
+		InnerAck: []byte{},
 	})
 	if err != nil {
 		panic(err)

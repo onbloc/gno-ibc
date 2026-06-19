@@ -63,6 +63,11 @@ func NewStore() *Store {
 		tokenBucket:        bptree.NewBPTree32(),
 		vouchers:           bptree.NewBPTree32(),
 		receivers:          bptree.NewBPTree32(),
+		// Rate limiting is opt-in: enabled per-denom by an admin who first
+		// configures a token bucket (see SetBucketConfig). With it enabled, a denom
+		// without a bucket is rejected (union TokenBucketIsAbsent), so it must stay
+		// disabled by default to avoid bricking every unconfigured denom.
+		rateLimitDisabled: true,
 	}
 }
 

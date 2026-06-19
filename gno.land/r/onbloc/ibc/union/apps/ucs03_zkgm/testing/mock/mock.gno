@@ -10,6 +10,8 @@ import (
 type Receiver struct {
 	Calls              int
 	Last               z.CallEnv
+	IntentCalls        int
+	LastIntent         z.IntentCallEnv
 	LastPreviousCaller string
 	CapturePrevious    bool
 	ErrorMsg           string
@@ -39,10 +41,27 @@ func Zkgmable(cur realm) z.Zkgmable {
 func Reset(cur realm) {
 	receiver.Calls = 0
 	receiver.Last = z.CallEnv{}
+	receiver.IntentCalls = 0
+	receiver.LastIntent = z.IntentCallEnv{}
 	receiver.LastPreviousCaller = ""
 	receiver.CapturePrevious = false
 	receiver.ErrorMsg = ""
 	receiver.PanicMsg = ""
+}
+
+// IntentCalls returns the number of OnIntentZkgm invocations since the last Reset.
+func IntentCalls(cur realm) int {
+	return receiver.IntentCalls
+}
+
+// LastIntentCalldata returns env.Calldata from the last OnIntentZkgm invocation.
+func LastIntentCalldata(cur realm) string {
+	return string(receiver.LastIntent.Calldata)
+}
+
+// LastIntentMarketMaker returns env.MarketMaker (as a string) from the last OnIntentZkgm.
+func LastIntentMarketMaker(cur realm) string {
+	return string(receiver.LastIntent.MarketMaker)
 }
 
 // SetError configures OnZkgm to return an error with the given message.
@@ -119,5 +138,16 @@ func (r *Receiver) OnZkgm(cur realm, env z.CallEnv) error {
 }
 
 func (r *Receiver) OnIntentZkgm(cur realm, env z.IntentCallEnv) error {
-	return errors.New("intent not implemented")
+	r.IntentCalls++
+	r.LastIntent = env
+	if r.CapturePrevious {
+		r.LastPreviousCaller = cur.Previous().Address().String()
+	}
+	if r.PanicMsg != "" {
+		panic(r.PanicMsg)
+	}
+	if r.ErrorMsg != "" {
+		return errors.New(r.ErrorMsg)
+	}
+	return nil
 }

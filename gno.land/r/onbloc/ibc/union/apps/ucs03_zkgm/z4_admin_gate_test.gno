@@ -59,10 +59,11 @@ func TestSetBucketConfigSucceedsByAdmin(cur realm, t *testing.T) {
 func TestSetRateLimitDisabledRejectsNonAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest()
 
+	// Default is disabled (true); a rejected non-admin toggle to false must not stick.
 	uassert.AbortsContains(t, cur, "zkgm: admin only", func(cur realm) {
-		SetRateLimitDisabled(cross(cur), true)
+		SetRateLimitDisabled(cross(cur), false)
 	})
-	if store.RateLimitDisabled() {
+	if !store.RateLimitDisabled() {
 		t.Error("rejected SetRateLimitDisabled must not toggle the kill-switch")
 	}
 }
@@ -70,12 +71,13 @@ func TestSetRateLimitDisabledRejectsNonAdmin(cur realm, t *testing.T) {
 func TestSetRateLimitDisabledSucceedsByAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest()
 
+	// Default is disabled (true); admin enables rate limiting by setting false.
 	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
-	SetRateLimitDisabled(cur, true)
-	if !store.RateLimitDisabled() {
-		t.Error("SetRateLimitDisabled by admin must set the kill-switch")
+	SetRateLimitDisabled(cur, false)
+	if store.RateLimitDisabled() {
+		t.Error("SetRateLimitDisabled by admin must clear the kill-switch")
 	}
 
 	// Reset the shared singleton flag so later tests see the default.
-	SetRateLimitDisabled(cur, false)
+	resetZkgmForTest()
 }

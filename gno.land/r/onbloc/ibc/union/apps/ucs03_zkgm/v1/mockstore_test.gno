@@ -39,6 +39,8 @@ func newMockStore() *mockStore {
 		tokenBucket:      map[string]*tb.TokenBucket{},
 		vouchers:         map[string]*zkgm.Voucher{},
 		receivers:        map[string]z.Zkgmable{},
+		// Match NewStore: rate limiting is opt-in (disabled by default).
+		rateLimitDisabled: true,
 	}
 }
 

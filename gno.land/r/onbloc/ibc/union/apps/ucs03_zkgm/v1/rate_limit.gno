@@ -1,14 +1,20 @@
 package impl
 
 import (
+	"errors"
 	"time"
 
 	u256 "gno.land/p/gnoswap/uint256"
 )
 
+// errTokenBucketAbsent rejects a rate-limited denom that has no configured bucket,
+// matching union's ContractError::TokenBucketIsAbsent.
+var errTokenBucketAbsent = errors.New("zkgm/v1: token bucket is absent")
+
 // rateLimit charges `amount` from denom's token bucket when rate limiting is
 // enabled. The bucket is anchored to block time, so its RefillRate is tokens per
-// second. A missing bucket means the denom is unlimited.
+// second. When rate limiting is enabled, a denom with no configured bucket is
+// rejected (union TokenBucketIsAbsent) rather than passing unlimited.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L3218-L3237
 func (v *ucs03ZkgmV1) rateLimit(_ int, rlm realm, denom string, amount *u256.Uint) error {
 	if v.store.RateLimitDisabled() || amount == nil {
@@ -17,7 +23,7 @@ func (v *ucs03ZkgmV1) rateLimit(_ int, rlm realm, denom string, amount *u256.Uin
 
 	bucket, ok := v.store.GetTokenBucket(denom)
 	if !ok || bucket == nil {
-		return nil
+		return errors.New(errTokenBucketAbsent.Error() + ": " + denom)
 	}
 
 	now := time.Now().Unix()

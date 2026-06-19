@@ -103,4 +103,6 @@ func (d *dummyImpl) Send(_ int, rlm realm, channelId types.ChannelId, timeoutTim
 func resetZkgmForTest() {
 	impl = nil
 	paused = false
+	// Restore the opt-in rate-limit default (disabled) on the shared singleton.
+	store.rateLimitDisabled = true
 }

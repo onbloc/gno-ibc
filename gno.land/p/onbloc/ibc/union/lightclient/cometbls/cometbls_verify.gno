@@ -54,14 +54,18 @@ func (c *CometblsLightClient) verifyHeader(clientState *ClientState, trustedCons
 		)
 	}
 
-	if isClientExpiredAt(trustedTimestamp, clientState.TrustingPeriod, uint64(now.UnixNano())) {
+	currentBlockTime := uint64(now.UnixNano())
+	if isClientExpiredAt(trustedTimestamp, clientState.TrustingPeriod, currentBlockTime) {
 		return makeError(
 			ErrTrustingPeriodExpired,
 			ufmt.Sprintf("trusted consensus state at TrustedHeight %s has expired", header.TrustedHeight),
 		)
 	}
 
-	maxClockDriftTimestamp := uint64(now.UnixNano()) + clientState.MaxClockDrift
+	maxClockDriftTimestamp, overflow := checkedAddUint64(currentBlockTime, clientState.MaxClockDrift)
+	if overflow {
+		return makeError(ErrMathOverflow)
+	}
 	if untrustedTimestamp >= maxClockDriftTimestamp {
 		return makeError(
 			ErrInvalidHeader,
@@ -99,7 +103,19 @@ func (c *CometblsLightClient) verifyHeader(clientState *ClientState, trustedCons
 }
 
 func isClientExpiredAt(consensusStateTimestamp uint64, trustingPeriod uint64, now uint64) bool {
-	return consensusStateTimestamp+trustingPeriod < now
+	expiresAt, overflow := checkedAddUint64(consensusStateTimestamp, trustingPeriod)
+	if overflow {
+		return true
+	}
+	return expiresAt < now
+}
+
+func checkedAddUint64(a uint64, b uint64) (uint64, bool) {
+	sum := a + b
+	if sum < a {
+		return 0, true
+	}
+	return sum, false
 }
 
 // verifyMisbehaviour mirrors Union's cometbls.verifyMisbehaviour

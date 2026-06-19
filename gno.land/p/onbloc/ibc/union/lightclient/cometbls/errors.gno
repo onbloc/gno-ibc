@@ -27,6 +27,7 @@ var (
 	ErrInvalidValidatorSet               = "invalid validator set"
 	ErrInvalidHeaderTimestamp            = "invalid header timestamp"
 	ErrInvalidMisbehaviourHeaderSequence = "invalid misbehaviour header sequence"
+	ErrMathOverflow                      = "math operation with overflow"
 	ErrMisbehaviourNotFound              = "misbehaviour not found"
 )
 

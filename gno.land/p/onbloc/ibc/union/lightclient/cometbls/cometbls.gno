@@ -44,10 +44,6 @@ func NewCometblsLightClient(
 // Union reference:
 // https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/cometbls/src/client.rs#L48-L72
 func (c *CometblsLightClient) VerifyMembership(height uint64, key []byte, proof []byte, value []byte) error {
-	if len(value) == 0 {
-		return makeError(ErrInvalidProof, "empty value in membership proof")
-	}
-
 	clientState := c.clientState
 	consensusState, storageProof, merklePath, err := c.prepareProof(clientState, height, key, proof)
 	if err != nil {
@@ -128,30 +124,30 @@ func (c *CometblsLightClient) prepareProof(clientState *ClientState, height uint
 
 // Union reference:
 // https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/cometbls/src/client.rs#L143-L160
-func (c *CometblsLightClient) VerifyHeader(caller address, header []byte, relayer address) (types.StateUpdate, error) {
-	tmHeader, err := DecodeHeader(header)
+func (c *CometblsLightClient) VerifyHeader(caller address, headerBytes []byte, relayer address) (types.StateUpdate, error) {
+	header, err := DecodeHeader(headerBytes)
 	if err != nil {
 		return types.StateUpdate{}, makeError(ErrInvalidHeader, "failed to decode header: "+err.Error())
 	}
 
-	trustedConsensusState, found := c.getConsensusState(*tmHeader.TrustedHeight)
+	consensusState, found := c.getConsensusState(*header.TrustedHeight)
 	if !found {
 		return types.StateUpdate{}, makeError(
 			ErrInvalidConsensus,
-			ufmt.Sprintf("could not get trusted consensus state for Header at TrustedHeight: %s", tmHeader.TrustedHeight),
+			ufmt.Sprintf("could not get trusted consensus state for Header at TrustedHeight: %s", header.TrustedHeight),
 		)
 	}
 
-	height := tmHeader.GetHeight()
-	if existingConsensusState, found := c.getConsensusState(height); found {
-		return makeStateUpdate(height, existingConsensusState), nil
+	headerHeight := header.GetHeight()
+	if consensusState, found := c.getConsensusState(headerHeight); found {
+		return makeStateUpdate(headerHeight, consensusState), nil
 	}
 
-	if err := c.verifyHeader(c.clientState, trustedConsensusState, tmHeader, time.Now()); err != nil {
+	if err := c.verifyHeader(c.clientState, consensusState, header, time.Now()); err != nil {
 		return types.StateUpdate{}, err
 	}
 
-	return c.updateState(c.clientState, trustedConsensusState, tmHeader), nil
+	return c.updateState(c.clientState, consensusState, header), nil
 }
 
 func (c *CometblsLightClient) VerifyCreation(caller address, relayer address) (types.ClientCreationResult, error) {
@@ -186,7 +182,7 @@ func (c *CometblsLightClient) Misbehaviour(caller address, misbehaviour []byte, 
 // Union reference:
 // https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/cometbls/src/client.rs#L283-L309
 func (c *CometblsLightClient) updateState(clientState *ClientState, trustedConsensusState *ConsensusState, header *Header) types.StateUpdate {
-	height := header.GetHeight()
+	untrustedHeight := header.GetHeight()
 
 	consensusState := &ConsensusState{
 		Timestamp:          trustedConsensusState.Timestamp,
@@ -199,16 +195,16 @@ func (c *CometblsLightClient) updateState(clientState *ClientState, trustedConse
 	// Normalized to nanoseconds to follow tendermint convention
 	consensusState.Timestamp = uint64(header.GetTime().UnixNano())
 
-	c.setConsensusState(height, consensusState)
+	c.setConsensusState(untrustedHeight, consensusState)
 
-	update := makeStateUpdate(height, consensusState)
-	if height.GT(clientState.LatestHeight) {
-		clientState.LatestHeight = height
+	stateUpdate := makeStateUpdate(untrustedHeight, consensusState)
+	if untrustedHeight.GT(clientState.LatestHeight) {
+		clientState.LatestHeight = untrustedHeight
 		if csBytes, err := EncodeClientState(clientState); err == nil {
-			update.ClientStateBytes = csBytes
+			stateUpdate.ClientStateBytes = csBytes
 		}
 	}
-	return update
+	return stateUpdate
 }
 
 func makeStateUpdate(height types.Height, consensusState *ConsensusState) types.StateUpdate {

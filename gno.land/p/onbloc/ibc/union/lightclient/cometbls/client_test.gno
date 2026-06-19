@@ -74,13 +74,6 @@ func twoExistProof() []byte {
 
 // --- VerifyMembership error paths (no valid crypto required) ---
 
-func TestVerifyMembershipEmptyValue(t *testing.T) {
-	c := newTestClient(t)
-	if err := c.VerifyMembership(100, []byte("key"), twoExistProof(), nil); err == nil {
-		t.Fatal("expected error for empty value")
-	}
-}
-
 func TestVerifyMembershipHeightTooHigh(t *testing.T) {
 	c := newTestClient(t)
 	if err := c.VerifyMembership(200, []byte("key"), twoExistProof(), []byte("v")); err == nil {

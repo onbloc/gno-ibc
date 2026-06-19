@@ -87,11 +87,17 @@ func TestClientStateValidate(t *testing.T) {
 func TestClientStateIsExpired(t *testing.T) {
 	cs := validClientState() // TrustingPeriod = 1000
 
-	if !cs.IsExpired(testNow-1000, testNow) {
-		t.Error("expected expired when latestTimestamp + trustingPeriod == now")
+	if cs.IsExpired(testNow-1000, testNow) {
+		t.Error("expected not expired when latestTimestamp + trustingPeriod == now")
 	}
 	if cs.IsExpired(testNow-999, testNow) {
 		t.Error("expected not expired when latestTimestamp + trustingPeriod > now")
+	}
+	if !cs.IsExpired(testNow-1001, testNow) {
+		t.Error("expected expired when latestTimestamp + trustingPeriod < now")
+	}
+	if !cs.IsExpired(^uint64(0)-999, testNow) {
+		t.Error("expected expired when latestTimestamp + trustingPeriod overflows")
 	}
 }
 

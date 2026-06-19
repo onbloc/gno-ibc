@@ -368,6 +368,20 @@ func TestVerifyHeaderExpiryBoundaryMatchesUnion(t *testing.T) {
 	requireErrorContains(t, err, "the validators hash")
 }
 
+func TestVerifyHeaderMaxClockDriftOverflowMatchesUnion(t *testing.T) {
+	c := newTestClient(t)
+	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
+	if !found {
+		t.Fatal("trusted consensus state missing")
+	}
+	c.clientState.MaxClockDrift = ^uint64(0) - testNow + 1
+	h := updateStateTestHeader(100, 101, testNow+1)
+	now := time.Unix(0, int64(testNow))
+
+	err := c.verifyHeader(c.clientState, trustedConsensusState, h, now)
+	requireErrorContains(t, err, ErrMathOverflow)
+}
+
 func requireErrorContains(t *testing.T, err error, want string) {
 	t.Helper()
 	if err == nil {

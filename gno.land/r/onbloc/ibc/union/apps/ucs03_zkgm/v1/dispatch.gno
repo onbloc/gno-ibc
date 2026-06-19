@@ -149,11 +149,7 @@ func (v *ucs03ZkgmV1) dispatchAck(_ int, rlm realm, packet types.Packet, path *u
 			return err
 		}
 
-		tag := tagAckFailure()
-		if successful {
-			tag = tagAckSuccess()
-		}
-		return v.acknowledgeForward(0, rlm, packet, path, salt, forward, z.Ack{Tag: tag, InnerAck: ack})
+		return v.acknowledgeForward(0, rlm, packet, path, salt, forward, successful, ack)
 	default:
 		return errors.New("zkgm/v1: unsupported opcode")
 	}

@@ -30,6 +30,8 @@ const (
 	WriteAckEvent              = "WriteAck"
 	PacketAckEvent             = "PacketAck"
 	PacketTimeoutEvent         = "PacketTimeout"
+	CommitMembershipProofEvent = "CommitMembershipProof"
+	CommitNonMembershipEvent   = "CommitNonMembershipProof"
 )
 
 func channelEventAttrs(eventType string, portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) []string {
@@ -168,5 +170,24 @@ func emitPacketTimeoutEvent(packet types.Packet, sourceChannel types.Channel, co
 		"destination_connection_id", connection.CounterpartyConnectionId.String(),
 		"destination_connection_client_id", connection.CounterpartyClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
+	)
+}
+
+func emitCommitMembershipProofEvent(msg types.MsgCommitMembershipProof) {
+	chain.Emit(
+		CommitMembershipProofEvent,
+		"client_id", msg.ClientId.String(),
+		"proof_height", strconv.FormatUint(msg.ProofHeight, 10),
+		"path", hexAttr(msg.Path),
+		"value", hexAttr(msg.Value),
+	)
+}
+
+func emitCommitNonMembershipProofEvent(msg types.MsgCommitNonMembershipProof) {
+	chain.Emit(
+		CommitNonMembershipEvent,
+		"client_id", msg.ClientId.String(),
+		"proof_height", strconv.FormatUint(msg.ProofHeight, 10),
+		"path", hexAttr(msg.Path),
 	)
 }

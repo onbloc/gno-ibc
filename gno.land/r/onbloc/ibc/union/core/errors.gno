@@ -25,6 +25,7 @@ var (
 	ErrPortAlreadyRegistered         = errors.New("port already registered")
 	ErrBatchPacketsNotFound          = errors.New("batch packets not found")
 	ErrBatchReceiptsNotFound         = errors.New("batch receipts not found")
+	ErrPacketAlreadyReceived         = errors.New("packet already received")
 	ErrPacketTimeoutExpired          = errors.New("packet timeout expired")
 	ErrPacketTimeoutNotReached       = errors.New("packet timeout not reached")
 	ErrIntentNotSupported            = errors.New("intent receive not supported")

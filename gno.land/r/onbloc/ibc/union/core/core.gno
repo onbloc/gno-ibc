@@ -205,6 +205,28 @@ func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
 	emitPacketTimeoutEvent(packet, channel, connection)
 }
 
+func CommitMembershipProof(cur realm, msg types.MsgCommitMembershipProof) {
+	requireAdmin(cur, "commit membership proof")
+
+	verifyMembershipActive(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, msg.Path, msg.Value)
+	store.saveMembershipProof(msg.ClientId, msg.ProofHeight, msg.Path, types.Keccak(msg.Value))
+
+	emitCommitMembershipProofEvent(msg)
+}
+
+func CommitNonMembershipProof(cur realm, msg types.MsgCommitNonMembershipProof) {
+	requireAdmin(cur, "commit non-membership proof")
+
+	c := store.getClient(msg.ClientId)
+	if c == nil {
+		panic("client " + msg.ClientId.String() + " not found")
+	}
+	verifyNonMembershipWithActiveClient(c, types.NewHeight(msg.ProofHeight), msg.Proof, msg.Path)
+	store.saveNonMembershipProof(msg.ClientId, msg.ProofHeight, msg.Path, types.NON_MEMBERSHIP_COMMITMENT_VALUE)
+
+	emitCommitNonMembershipProofEvent(msg)
+}
+
 func BatchSend(cur realm, msg types.MsgBatchSend) {
 	requireAdmin(cur, "batch send")
 

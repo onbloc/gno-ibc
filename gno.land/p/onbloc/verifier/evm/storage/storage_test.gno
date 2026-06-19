@@ -15,6 +15,34 @@ func TestEncodeStorageValue(t *testing.T) {
 	assertHex(t, "two bytes", mustEncode(t, WordFromUint64(0x0100)), "820100")
 }
 
+func TestEncodeStorageValueBoundaries(t *testing.T) {
+	tests := []struct {
+		name string
+		word []byte
+		want string
+		err  error
+	}{
+		{name: "invalid short word", word: make([]byte, 31), err: ErrInvalidValueLength},
+		{name: "all zeroes", word: make([]byte, 32), want: "80"},
+		{name: "all ones", word: bytesRepeat(0xff, 32), want: "a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"},
+		{name: "leading zeroes trimmed", word: append(bytesRepeat(0x00, 30), 0x01, 0x02), want: "820102"},
+		{name: "first byte nonzero keeps full word", word: append([]byte{0x01}, bytesRepeat(0x00, 31)...), want: "a00100000000000000000000000000000000000000000000000000000000000000"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := EncodeStorageValue(tt.word)
+			if err != tt.err {
+				t.Fatalf("EncodeStorageValue: got err %v want %v", err, tt.err)
+			}
+			if err != nil {
+				return
+			}
+			assertHex(t, "EncodeStorageValue", got, tt.want)
+		})
+	}
+}
+
 func TestVerifyStorageProof(t *testing.T) {
 	slot := wordWithLastByte(0x01)
 	value := WordFromUint64(0x1234)
@@ -89,6 +117,33 @@ func TestVerifyGethStorageProofFixture(t *testing.T) {
 	}
 }
 
+func TestStoragePath(t *testing.T) {
+	tests := []struct {
+		name string
+		slot []byte
+		want string
+		err  error
+	}{
+		{name: "invalid short slot", slot: make([]byte, 31), err: ErrInvalidKeyLength},
+		{name: "zero slot", slot: make([]byte, 32), want: "290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563"},
+		{name: "slot two", slot: WordFromUint64(2), want: "405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace"},
+		{name: "all ones", slot: bytesRepeat(0xff, 32), want: "a9c584056064687e149968cbab758a3376d22aedc6a55823d1b3ecbee81b8fb9"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := StoragePath(tt.slot)
+			if err != tt.err {
+				t.Fatalf("StoragePath: got err %v want %v", err, tt.err)
+			}
+			if err != nil {
+				return
+			}
+			assertHex(t, "StoragePath", got[:], tt.want)
+		})
+	}
+}
+
 func TestIBCCommitmentKey(t *testing.T) {
 	// These vectors intentionally pin both sides of the contract:
 	// - Union: ethereum::ibc_commitment_key(path), fixed commitments slot 0.
@@ -137,6 +192,64 @@ func TestIBCCommitmentKey(t *testing.T) {
 	}
 }
 
+func TestWordHelpers(t *testing.T) {
+	t.Run("WordFromUint64", func(t *testing.T) {
+		tests := []struct {
+			name string
+			v    uint64
+			want string
+		}{
+			{name: "zero", v: 0, want: "0000000000000000000000000000000000000000000000000000000000000000"},
+			{name: "one", v: 1, want: "0000000000000000000000000000000000000000000000000000000000000001"},
+			{name: "max", v: ^uint64(0), want: "000000000000000000000000000000000000000000000000ffffffffffffffff"},
+		}
+
+		for _, tt := range tests {
+			assertHex(t, tt.name, WordFromUint64(tt.v), tt.want)
+		}
+	})
+
+	t.Run("validateWord", func(t *testing.T) {
+		sentinel := ErrInvalidKeyLength
+		tests := []struct {
+			name string
+			word []byte
+			err  error
+		}{
+			{name: "nil", word: nil, err: sentinel},
+			{name: "short", word: make([]byte, 31), err: sentinel},
+			{name: "exact", word: make([]byte, 32)},
+			{name: "long", word: make([]byte, 33), err: sentinel},
+		}
+
+		for _, tt := range tests {
+			if err := validateWord(tt.word, sentinel); err != tt.err {
+				t.Fatalf("%s: got %v want %v", tt.name, err, tt.err)
+			}
+		}
+	})
+
+	t.Run("trimLeadingZeroes", func(t *testing.T) {
+		tests := []struct {
+			name string
+			word []byte
+			want []byte
+		}{
+			{name: "nil", word: nil, want: nil},
+			{name: "all zeroes", word: []byte{0x00, 0x00}, want: []byte{}},
+			{name: "all ones", word: []byte{0xff, 0xff}, want: []byte{0xff, 0xff}},
+			{name: "leading zeroes", word: []byte{0x00, 0x00, 0x01, 0x02}, want: []byte{0x01, 0x02}},
+			{name: "first byte nonzero", word: []byte{0x01, 0x00}, want: []byte{0x01, 0x00}},
+		}
+
+		for _, tt := range tests {
+			if got := trimLeadingZeroes(tt.word); !bytesEqual(got, tt.want) {
+				t.Fatalf("%s: got %x want %x", tt.name, got, tt.want)
+			}
+		}
+	})
+}
+
 func TestRejectInvalidWordLengths(t *testing.T) {
 	root := make([]byte, 32)
 	slot := make([]byte, 32)
@@ -154,6 +267,26 @@ func TestRejectInvalidWordLengths(t *testing.T) {
 	if _, err := StoragePath(slot[:31]); err != ErrInvalidKeyLength {
 		t.Fatalf("StoragePath length: got %v want %v", err, ErrInvalidKeyLength)
 	}
+}
+
+func bytesRepeat(b byte, n int) []byte {
+	out := make([]byte, n)
+	for i := range out {
+		out[i] = b
+	}
+	return out
+}
+
+func bytesEqual(a []byte, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func mustEncode(t *testing.T, word []byte) []byte {

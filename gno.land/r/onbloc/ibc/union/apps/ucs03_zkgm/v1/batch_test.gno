@@ -1,5 +1,11 @@
 package impl
 
+// batch_test.gno covers batch.gno's verify/acknowledge/timeout logic and the
+// funds-accounting it drives. The send-path native funds checks are exercised
+// here directly against verifyBatch + funds.assertEmpty (the Send entry point
+// itself is integration-tested in the e2e suite). executeBatch's call-dispatch
+// (mock receiver) likewise lives in e2e since it needs a registered receiver.
+
 import (
 	"testing"
 
@@ -8,58 +14,8 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
-	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
-	"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
-
-func TestExecuteBatchTokenOrderAndCallBothSucceed(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
-	mock.Reset(cross(cur))
-
-	receiver := testAddress("batch-hook-receiver")
-	relayer := testAddress("batch-hook-relayer")
-	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
-		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6}),
-	})
-	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	path := u256.NewUint(9)
-	destChannel := types.ChannelId(5)
-	ibcDenom := PredictWrappedTokenV2(path, uint32(destChannel), []byte("ugnot"), image)
-
-	batch := z.Batch{Instructions: []z.Instruction{
-		batchMustOrderInstruction(z.TokenOrderV2{
-			Sender:      []byte("sender"),
-			Receiver:    []byte(receiver),
-			BaseToken:   []byte("ugnot"),
-			BaseAmount:  u256.NewUint(100),
-			QuoteToken:  []byte(ibcDenom),
-			QuoteAmount: u256.NewUint(100),
-			Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
-			Metadata:    metaBytes,
-		}),
-		batchMustCallInstruction(batchCall("sender", "hook-calldata")),
-	}}
-	packet := core.NewPacket(cross(cur), types.ChannelId(1), destChannel, nil, 0)
-
-	ackBytes, err := (&ZkgmV1{}).executeBatch(cur, packet, address(relayer), []byte("relay-msg"), path, [32]byte{0xCC}, batch, false)
-
-	uassert.NoError(t, err)
-	outerAck, err := z.DecodeAck(ackBytes)
-	uassert.NoError(t, err)
-	uassert.True(t, outerAck.Tag.Eq(tagAckSuccess()))
-
-	batchAck, err := z.DecodeBatchAck(outerAck.InnerAck)
-	uassert.NoError(t, err)
-	uassert.Equal(t, 2, len(batchAck.Acknowledgements))
-	assertProtocolAck(t, batchAck.Acknowledgements[0])
-	assertSuccessAck(t, batchAck.Acknowledgements[1])
-
-	uassert.Equal(t, int64(100), VoucherBalanceOf(ibcDenom, address(receiver)))
-	uassert.Equal(t, 1, mock.Calls(cross(cur)))
-	uassert.Equal(t, "hook-calldata", mock.LastCalldata(cross(cur)))
-}
 
 func TestVerifyBatchRejectsNestedBatch(cur realm, t *testing.T) {
 	batch := z.Batch{Instructions: []z.Instruction{{
@@ -67,7 +23,7 @@ func TestVerifyBatchRejectsNestedBatch(cur realm, t *testing.T) {
 		Opcode:  z.OP_BATCH,
 	}}}
 
-	err := (&ZkgmV1{}).verifyBatch(cur, types.ChannelId(1), "sender", newSentCoinBudget(nil), u256.Zero(), [32]byte{}, batch)
+	err := newTestImpl().verifyBatch(0, cur, types.ChannelId(1), "sender", newFunds(nil), u256.Zero(), [32]byte{}, batch)
 
 	uassert.ErrorContains(t, err, "invalid batch instruction")
 }
@@ -78,139 +34,93 @@ func TestVerifyBatchPassesAllowedCallChildren(cur realm, t *testing.T) {
 		batchMustCallInstruction(batchCall("sender", "b")),
 	}}
 
-	err := (&ZkgmV1{}).verifyBatch(cur, types.ChannelId(1), "sender", newSentCoinBudget(nil), u256.Zero(), [32]byte{}, batch)
+	err := newTestImpl().verifyBatch(0, cur, types.ChannelId(1), "sender", newFunds(nil), u256.Zero(), [32]byte{}, batch)
 
 	uassert.NoError(t, err)
-}
-
-func TestVerifyBatchRejectsDuplicateNativeConsumption(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
-	sender := testAddress("batch-dup-sender")
-	instr := batchMustBatchInstruction(z.Batch{Instructions: []z.Instruction{
-		batchMustOrderInstruction(batchRefundOrder("batch-dup-a", "ugnot", "quote-dup-a", 100)),
-		batchMustOrderInstruction(batchRefundOrder("batch-dup-b", "ugnot", "quote-dup-b", 100)),
-	}})
-
-	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
-		cross(cur),
-		types.ChannelId(91),
-		0,
-		[32]byte{0x91},
-		instr,
-		sender,
-		"100ugnot",
-	))
-
-	uassert.ErrorContains(t, err, "sent coin mismatch")
 }
 
 func TestVerifyBatchExactTotalNativeConsumptionPasses(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
+	v := newTestImpl()
 	sender := testAddress("batch-exact-sender")
+	const channelId = types.ChannelId(92)
 	orderA := batchRefundOrder("batch-exact-a", "ugnot", "quote-exact-a", 60)
 	orderB := batchRefundOrder("batch-exact-b", "ugnot", "quote-exact-b", 40)
-	instr := batchMustBatchInstruction(z.Batch{Instructions: []z.Instruction{
+	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(orderA),
 		batchMustOrderInstruction(orderB),
-	}})
+	}}
+	f := newFunds(parseCoins("100ugnot"))
 
-	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
-		cross(cur),
-		types.ChannelId(92),
-		0,
-		[32]byte{0x92},
-		instr,
-		sender,
-		"100ugnot",
-	))
-
+	err := v.verifyBatch(0, cur, channelId, sender, f, u256.Zero(), [32]byte{}, batch)
 	uassert.NoError(t, err)
-	balanceA := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(92), u256.Zero(), orderA.BaseToken, orderA.QuoteToken))
+	uassert.NoError(t, f.assertEmpty())
+
+	balanceA, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(channelId, u256.Zero(), orderA.BaseToken, orderA.QuoteToken))
 	uassert.Equal(t, "60", balanceA.ToString())
-	balanceB := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(92), u256.Zero(), orderB.BaseToken, orderB.QuoteToken))
+	balanceB, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(channelId, u256.Zero(), orderB.BaseToken, orderB.QuoteToken))
 	uassert.Equal(t, "40", balanceB.ToString())
 }
 
+func TestVerifyBatchDuplicateNativeConsumptionRejected(cur realm, t *testing.T) {
+	v := newTestImpl()
+	sender := testAddress("batch-dup-sender")
+	batch := z.Batch{Instructions: []z.Instruction{
+		batchMustOrderInstruction(batchRefundOrder("batch-dup-a", "ugnot", "quote-dup-a", 100)),
+		batchMustOrderInstruction(batchRefundOrder("batch-dup-b", "ugnot", "quote-dup-b", 100)),
+	}}
+
+	err := v.verifyBatch(0, cur, types.ChannelId(91), sender, newFunds(parseCoins("100ugnot")), u256.Zero(), [32]byte{}, batch)
+
+	uassert.ErrorContains(t, err, "sent coin mismatch")
+}
+
 func TestVerifyBatchLeftoverNativeRejected(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
+	v := newTestImpl()
 	sender := testAddress("batch-left-sender")
-	instr := batchMustBatchInstruction(z.Batch{Instructions: []z.Instruction{
+	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(batchRefundOrder("batch-left", "ugnot", "quote-leftover", 60)),
-	}})
+	}}
+	f := newFunds(parseCoins("100ugnot"))
 
-	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
-		cross(cur),
-		types.ChannelId(93),
-		0,
-		[32]byte{0x93},
-		instr,
-		sender,
-		"100ugnot",
-	))
-
-	uassert.ErrorContains(t, err, "sent coin mismatch")
+	err := v.verifyBatch(0, cur, types.ChannelId(93), sender, f, u256.Zero(), [32]byte{}, batch)
+	uassert.NoError(t, err)
+	// 40ugnot left unconsumed → the send-path drain check must reject it.
+	uassert.ErrorContains(t, f.assertEmpty(), "sent coin mismatch")
 }
 
-func TestVerifySingleOrderOversendRejected(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
-	sender := testAddress("single-oversend")
-	instr := batchMustOrderInstruction(batchRefundOrder("single-oversend-o", "ugnot", "quote-oversend", 100))
+func TestVerifyBatchMultiDenomExactPasses(cur realm, t *testing.T) {
+	v := newTestImpl()
+	sender := testAddress("batch-denom-sender")
+	batch := z.Batch{Instructions: []z.Instruction{
+		batchMustOrderInstruction(batchRefundOrder("batch-denom-a", "ugnot", "quote-denom-a", 100)),
+		batchMustOrderInstruction(batchRefundOrder("batch-denom-b", "foo", "quote-denom-b", 50)),
+	}}
+	f := newFunds(parseCoins("100ugnot,50foo"))
 
-	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
-		cross(cur),
-		types.ChannelId(97),
-		0,
-		[32]byte{0x97},
-		instr,
-		sender,
-		"150ugnot",
-	))
-
-	uassert.ErrorContains(t, err, "sent coin mismatch")
+	err := v.verifyBatch(0, cur, types.ChannelId(95), sender, f, u256.Zero(), [32]byte{}, batch)
+	uassert.NoError(t, err)
+	uassert.NoError(t, f.assertEmpty())
 }
 
-func TestVerifySingleOrderUndersendRejected(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
-	sender := testAddress("single-undersend")
-	instr := batchMustOrderInstruction(batchRefundOrder("single-undersend-o", "ugnot", "quote-undersend", 150))
+func TestVerifyBatchMultiDenomShortfallRejected(cur realm, t *testing.T) {
+	v := newTestImpl()
+	sender := testAddress("batch-short-sender")
+	batch := z.Batch{Instructions: []z.Instruction{
+		batchMustOrderInstruction(batchRefundOrder("batch-denom-sa", "ugnot", "quote-denom-sa", 100)),
+		batchMustOrderInstruction(batchRefundOrder("batch-denom-sb", "foo", "quote-denom-sb", 50)),
+	}}
 
-	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
-		cross(cur),
-		types.ChannelId(98),
-		0,
-		[32]byte{0x98},
-		instr,
-		sender,
-		"100ugnot",
-	))
-
-	uassert.ErrorContains(t, err, "sent coin mismatch")
-}
-
-func TestVerifySingleOrderDenomMismatchRejected(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
-	sender := testAddress("denom-mismatch-sndr")
-	instr := batchMustOrderInstruction(batchRefundOrder("denom-mismatch-ord", "ugnot", "quote-mismatch", 100))
-
-	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
-		cross(cur),
-		types.ChannelId(99),
-		0,
-		[32]byte{0x99},
-		instr,
-		sender,
-		"100uatom",
-	))
+	err := v.verifyBatch(0, cur, types.ChannelId(96), sender, newFunds(parseCoins("100ugnot,40foo")), u256.Zero(), [32]byte{}, batch)
 
 	uassert.ErrorContains(t, err, "sent coin mismatch")
 }
 
 func TestVerifyBatchMixedNativeAndVoucher(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
+	v := newTestImpl()
 	sender := testAddress("batch-mixed-sender")
 	voucherDenom := "ibc/batch-mixed"
-	uassert.NoError(t, zkgm.MintVoucher(cross(cur), voucherDenom, voucherDenom, [32]byte{}, "", "", 0, sender, u256.NewUint(20)))
-	instr := batchMustBatchInstruction(z.Batch{Instructions: []z.Instruction{
+	uassert.NoError(t, v.mintVoucher(0, cur, voucherDenom, [32]byte{}, "", "", 0, sender, u256.NewUint(20)))
+	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(z.TokenOrderV2{
 			Sender:      []byte(sender),
 			BaseToken:   []byte(voucherDenom),
@@ -220,125 +130,47 @@ func TestVerifyBatchMixedNativeAndVoucher(cur realm, t *testing.T) {
 			Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 		}),
 		batchMustOrderInstruction(batchRefundOrder("batch-mixed-native", "ugnot", "quote-mixed-native", 100)),
-	}})
-
-	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
-		cross(cur),
-		types.ChannelId(94),
-		0,
-		[32]byte{0x94},
-		instr,
-		sender,
-		"100ugnot",
-	))
-
-	uassert.NoError(t, err)
-	uassert.Equal(t, int64(13), VoucherBalanceOf(voucherDenom, address(sender)))
-}
-
-func TestVerifyBatchMultiDenom(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
-	sender := testAddress("batch-denom-sender")
-	instr := batchMustBatchInstruction(z.Batch{Instructions: []z.Instruction{
-		batchMustOrderInstruction(batchRefundOrder("batch-denom-a", "ugnot", "quote-denom-a", 100)),
-		batchMustOrderInstruction(batchRefundOrder("batch-denom-b", "foo", "quote-denom-b", 50)),
-	}})
-
-	_, err := (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
-		cross(cur),
-		types.ChannelId(95),
-		0,
-		[32]byte{0x95},
-		instr,
-		sender,
-		"100ugnot,50foo",
-	))
-	uassert.NoError(t, err)
-
-	resetTokenOrderTest(cur)
-	_, err = (&ZkgmV1{}).Send(cur, zkgm.NewSendRequest(
-		cross(cur),
-		types.ChannelId(96),
-		0,
-		[32]byte{0x96},
-		instr,
-		sender,
-		"100ugnot,40foo",
-	))
-	uassert.ErrorContains(t, err, "sent coin mismatch")
-}
-
-func TestExecuteBatchAggregatesChildAcks(cur realm, t *testing.T) {
-	mock.Reset(cross(cur))
-	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
-	batch := z.Batch{Instructions: []z.Instruction{
-		batchMustCallInstruction(batchCall("sender", "first")),
-		batchMustCallInstruction(batchCall("sender", "second")),
 	}}
+	f := newFunds(parseCoins("100ugnot"))
 
-	ackBytes, err := (&ZkgmV1{}).executeBatch(cur, packet, address("g1relayer"), nil, u256.NewUint(9), [32]byte{0xAA}, batch, false)
-
+	err := v.verifyBatch(0, cur, types.ChannelId(94), sender, f, u256.Zero(), [32]byte{}, batch)
 	uassert.NoError(t, err)
-	uassert.Equal(t, 2, mock.Calls(cross(cur)))
-	outerAck, err := z.DecodeAck(ackBytes)
-	uassert.NoError(t, err)
-	uassert.True(t, outerAck.Tag.Eq(tagAckSuccess()))
-	batchAck, err := z.DecodeBatchAck(outerAck.InnerAck)
-	uassert.NoError(t, err)
-	uassert.Equal(t, 2, len(batchAck.Acknowledgements))
-	assertSuccessAck(t, batchAck.Acknowledgements[0])
-	assertSuccessAck(t, batchAck.Acknowledgements[1])
-	uassert.Equal(t, "second", mock.LastCalldata(cross(cur)))
-}
-
-func TestExecuteBatchPanicChildPropagatesOnlyMaker(cur realm, t *testing.T) {
-	mock.Reset(cross(cur))
-	mock.SetPanic(cross(cur), "boom")
-	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
-	batch := z.Batch{Instructions: []z.Instruction{
-		batchMustCallInstruction(batchCall("sender", "first")),
-		batchMustCallInstruction(batchCall("sender", "second")),
-	}}
-
-	ackBytes, err := (&ZkgmV1{}).executeBatch(cur, packet, address("g1relayer"), nil, u256.Zero(), [32]byte{0xBB}, batch, false)
-
-	uassert.NoError(t, err)
-	uassert.True(t, isOnlyMakerAck(ackBytes))
-	uassert.Equal(t, 1, mock.Calls(cross(cur)))
+	uassert.NoError(t, f.assertEmpty())
+	uassert.Equal(t, int64(13), voucherBalanceOf(voucherDenom, address(sender)))
 }
 
 func TestAcknowledgeBatchRejectsAckCountMismatch(cur realm, t *testing.T) {
-	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustCallInstruction(batchCall("sender", "first")),
 		batchMustCallInstruction(batchCall("sender", "second")),
 	}}
 
-	err := (&ZkgmV1{}).acknowledgeBatch(cur, packet, u256.Zero(), [32]byte{}, batch, mustBatchOuterAck([][]byte{mustSuccessAck()}))
+	err := newTestImpl().acknowledgeBatch(0, cur, packet, u256.Zero(), [32]byte{}, batch, mustBatchOuterAck([][]byte{mustSuccessAck()}))
 
 	uassert.ErrorContains(t, err, "batch ack count mismatch")
 }
 
 func TestTimeoutBatchTokenOrderChildrenRefund(cur realm, t *testing.T) {
-	resetTokenOrderTest(cur)
+	v := newTestImpl()
 	path := u256.NewUint(23)
-	packet := core.NewPacket(cross(cur), types.ChannelId(7), types.ChannelId(8), nil, 0)
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
 	orderA := batchRefundOrder("timeout-a", "ibc/batch-timeout-a", "quote-a", 11)
 	orderB := batchRefundOrder("timeout-b", "ibc/batch-timeout-b", "quote-b", 17)
-	increaseChannelBalanceV2(cross(cur), types.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount)
-	increaseChannelBalanceV2(cross(cur), types.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount)
+	v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount)
+	v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount)
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(orderA),
 		batchMustOrderInstruction(orderB),
 	}}
 
-	err := (&ZkgmV1{}).timeoutBatch(cur, packet, path, [32]byte{}, batch)
+	err := v.timeoutBatch(0, cur, packet, path, [32]byte{}, batch)
 
 	uassert.NoError(t, err)
 	assertNoChannelBalance(t, types.ChannelId(7), path, orderA)
 	assertNoChannelBalance(t, types.ChannelId(7), path, orderB)
-	uassert.Equal(t, int64(11), VoucherBalanceOf("ibc/batch-timeout-a", address(orderA.Sender)))
-	uassert.Equal(t, int64(17), VoucherBalanceOf("ibc/batch-timeout-b", address(orderB.Sender)))
+	uassert.Equal(t, int64(11), voucherBalanceOf("ibc/batch-timeout-a", address(orderA.Sender)))
+	uassert.Equal(t, int64(17), voucherBalanceOf("ibc/batch-timeout-b", address(orderB.Sender)))
 }
 
 func batchCall(sender string, calldata string) z.Call {
@@ -347,30 +179,6 @@ func batchCall(sender string, calldata string) z.Call {
 		ContractAddress:  []byte(mockReceiverPath),
 		ContractCalldata: []byte(calldata),
 	}
-}
-
-func batchMustCallInstruction(call z.Call) z.Instruction {
-	bz, err := z.EncodeCall(call)
-	if err != nil {
-		panic(err)
-	}
-	return z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_CALL, Operand: bz}
-}
-
-func batchMustOrderInstruction(order z.TokenOrderV2) z.Instruction {
-	bz, err := z.EncodeTokenOrderV2(order)
-	if err != nil {
-		panic(err)
-	}
-	return z.Instruction{Version: z.INSTR_VERSION_2, Opcode: z.OP_TOKEN_ORDER, Operand: bz}
-}
-
-func batchMustBatchInstruction(batch z.Batch) z.Instruction {
-	bz, err := z.EncodeBatch(batch)
-	if err != nil {
-		panic(err)
-	}
-	return z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_BATCH, Operand: bz}
 }
 
 func batchRefundOrder(sender string, baseToken string, quoteToken string, amount uint64) z.TokenOrderV2 {
@@ -385,10 +193,10 @@ func batchRefundOrder(sender string, baseToken string, quoteToken string, amount
 }
 
 func assertNoChannelBalance(t *testing.T, channelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) {
-	balance := zkgm.GetChannelBalanceV2(ChannelBalanceKeyV2(channelId, path, order.BaseToken, order.QuoteToken))
-	// nil is the canonical post-drain state (decreaseChannelBalanceV2 removes
+	balance, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(channelId, path, order.BaseToken, order.QuoteToken))
+	// absence is the canonical post-drain state (decreaseChannelBalanceV2 removes
 	// the entry on zero); IsZero() defends against out-of-band zero writes.
-	uassert.True(t, balance == nil || balance.IsZero())
+	uassert.True(t, !ok || balance.IsZero())
 }
 
 func mustBatchOuterAck(childAcks [][]byte) z.Ack {
@@ -405,10 +213,4 @@ func mustSuccessAck() []byte {
 		panic(err)
 	}
 	return ack
-}
-
-func assertSuccessAck(t *testing.T, ackBytes []byte) {
-	ack, err := z.DecodeAck(ackBytes)
-	uassert.NoError(t, err)
-	uassert.True(t, ack.Tag.Eq(tagAckSuccess()))
 }

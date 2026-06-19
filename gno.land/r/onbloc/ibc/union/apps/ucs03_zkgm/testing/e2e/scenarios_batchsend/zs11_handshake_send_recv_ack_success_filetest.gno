@@ -17,7 +17,7 @@ func main(cur realm) {
 	pair := e2e.OpenE2EChannelPair(cross(cur))
 
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
-	quoteToken := impl.PredictWrappedTokenV1(u256.Zero(), uint32(pair.Destination), []byte("ugnot"))
+	quoteToken := impl.PredictWrappedToken(u256.Zero(), uint32(pair.Destination), []byte("ugnot"))
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),

@@ -20,7 +20,7 @@ func main() {
 
 	sender := runtime.OriginCaller().String()
 	baseToken := []byte("ugnot-ack")
-	voucherDenom := impl.PredictWrappedTokenV1(
+	voucherDenom := impl.PredictWrappedToken(
 		u256.Zero(),
 		uint32(pair.Destination),
 		baseToken,

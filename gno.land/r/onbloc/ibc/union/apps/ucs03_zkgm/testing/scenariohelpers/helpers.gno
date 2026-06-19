@@ -16,15 +16,15 @@ const (
 	ScenarioImplPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 )
 
-func NewV1Harness(cur realm) zkgm.ZkgmImpl {
-	return impl.New(cross(cur))
+func NewV1Harness(cur realm) zkgm.IApp {
+	return impl.NewUCS03ZkgmV1(zkgm.Store())
 }
 
 func RegisterV1(cur realm) {
 	impl.Register(cross(cur))
 }
 
-func InstallV1Harness(cur realm) zkgm.ZkgmImpl {
+func InstallV1Harness(cur realm) zkgm.IApp {
 	inst := NewV1Harness(cross(cur))
 	RegisterV1(cross(cur))
 	return inst
@@ -43,14 +43,14 @@ func TokenOrderPacketData(cur realm, order z.TokenOrderV2) []byte {
 }
 
 func ChannelBalanceStr(channelId types.ChannelId, path *u256.Uint, baseToken []byte, quoteToken []byte) string {
-	balance := zkgm.GetChannelBalanceV2(impl.ChannelBalanceKeyV2(channelId, path, baseToken, quoteToken))
-	if balance == nil {
+	balance, ok := zkgm.Store().GetChannelBalanceV2(impl.ChannelBalanceKeyV2(channelId, path, baseToken, quoteToken))
+	if !ok || balance == nil {
 		return "0"
 	}
 	return balance.ToString()
 }
 
-func MintVoucher(cur realm, inst zkgm.ZkgmImpl, channelId types.ChannelId, base string, receiver string, amount uint64, symbol string) string {
+func MintVoucher(cur realm, inst zkgm.IApp, channelId types.ChannelId, base string, receiver string, amount uint64, symbol string) string {
 	meta := e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: base, Symbol: symbol, Decimals: 6})
 	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte(base), impl.MetadataImage(DecodeTokenMetadata(meta)))
 	order := z.TokenOrderV2{
@@ -64,6 +64,6 @@ func MintVoucher(cur realm, inst zkgm.ZkgmImpl, channelId types.ChannelId, base 
 		Metadata:    meta,
 	}
 	packet := core.NewPacket(types.ChannelId(1), channelId, TokenOrderPacketData(cross(cur), order), types.Timestamp(100))
-	inst.Recv(cross(cur), packet, testutils.TestAddress("scenario-relayer"), nil)
+	inst.OnRecvPacket(0, cur, packet, testutils.TestAddress("scenario-relayer"), nil)
 	return quoteToken
 }

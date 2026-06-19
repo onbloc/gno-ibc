@@ -13,6 +13,13 @@ import (
 
 var Relayer = address("g1relayer")
 
+var testConnectionSeq uint32
+
+func nextTestConnectionId() types.ConnectionId {
+	testConnectionSeq++
+	return types.ConnectionId(testConnectionSeq)
+}
+
 func tagAckSuccessU256() *u256.Uint    { return new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:]) }
 func fillTypeProtocolU256() *u256.Uint { return new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:]) }
 
@@ -58,7 +65,8 @@ func OpenE2EChannelPair(cur realm) ChannelPair {
 }
 
 func openConnection(cur realm, clientId types.ClientId) types.ConnectionId {
-	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	connectionId := nextTestConnectionId()
+	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
 	return connectionId
 }

@@ -37,8 +37,9 @@ func main(cur realm) {
 	e2e.RegisterMockLightClient(cross(cur))
 	core.RegisterApp(cross(cur), &asyncApp{})
 
-	clientId := e2e.CreateMockClient(cross(cur))
-	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	clientId := core.CreateClient(cross(cur), types.NewMsgCreateClient(e2e.MockClientType, nil, nil))
+	connectionId := types.ConnectionId(1)
+	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
 	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit([]byte(batchAcksPort), []byte(batchAcksPort), connectionId, "async-v1", "g1msgrelayer"))
 	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, "async-v1", types.ChannelId(101), nil, 1, "g1msgrelayer"))

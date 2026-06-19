@@ -1010,15 +1010,16 @@ func TestEnsureConnectionOpenSucceeds(cur realm, t *testing.T) {
 	}
 }
 
-func TestEnsureConnectionOpenRejectsMissingCounterpartyConnectionId(cur realm, t *testing.T) {
+func TestEnsureConnectionOpenAllowsMissingCounterpartyConnectionId(cur realm, t *testing.T) {
 	resetStore(cur)
 	clientId := registerMockClient(&mockClient{})
 	id := store.nextConnectionId()
 	store.saveConnection(id, types.Connection{State: types.ConnectionStateOpen, ClientId: clientId})
 
-	uassert.AbortsContains(t, cur, "invalid counterparty connection id", func(cur realm) {
-		ensureConnectionOpen(id)
-	})
+	conn := ensureConnectionOpen(id)
+	if conn.State != types.ConnectionStateOpen {
+		t.Error("expected open connection")
+	}
 }
 
 // --- types.Channel state machine ---

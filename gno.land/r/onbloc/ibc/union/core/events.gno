@@ -98,6 +98,36 @@ func emitChannelCloseConfirmEvent(portId types.Bytes, channelId types.ChannelId,
 	chain.Emit(ChannelCloseConfirmEvent, channelCloseEventAttrs(portId, channelId, channel)...)
 }
 
+func emitConnectionOpenInitEvent(connectionId types.ConnectionId, clientId types.ClientId, counterpartyClientId types.ClientId) {
+	chain.Emit(
+		ConnectionOpenInitEvent,
+		"connection_id", connectionId.String(),
+		"client_id", clientId.String(),
+		"counterparty_client_id", counterpartyClientId.String(),
+	)
+}
+
+func emitConnectionOpenTryEvent(connectionId types.ConnectionId, clientId types.ClientId, counterpartyClientId types.ClientId, counterpartyConnectionId types.ConnectionId) {
+	chain.Emit(ConnectionOpenTryEvent, connectionOpenEventAttrs(connectionId, clientId, counterpartyClientId, counterpartyConnectionId)...)
+}
+
+func emitConnectionOpenAckEvent(connectionId types.ConnectionId, clientId types.ClientId, counterpartyClientId types.ClientId, counterpartyConnectionId types.ConnectionId) {
+	chain.Emit(ConnectionOpenAckEvent, connectionOpenEventAttrs(connectionId, clientId, counterpartyClientId, counterpartyConnectionId)...)
+}
+
+func emitConnectionOpenConfirmEvent(connectionId types.ConnectionId, clientId types.ClientId, counterpartyClientId types.ClientId, counterpartyConnectionId types.ConnectionId) {
+	chain.Emit(ConnectionOpenConfirmEvent, connectionOpenEventAttrs(connectionId, clientId, counterpartyClientId, counterpartyConnectionId)...)
+}
+
+func connectionOpenEventAttrs(connectionId types.ConnectionId, clientId types.ClientId, counterpartyClientId types.ClientId, counterpartyConnectionId types.ConnectionId) []string {
+	return []string{
+		"connection_id", connectionId.String(),
+		"client_id", clientId.String(),
+		"counterparty_client_id", counterpartyClientId.String(),
+		"counterparty_connection_id", counterpartyConnectionId.String(),
+	}
+}
+
 func emitAdminChangedEvent(oldAdmin address, newAdmin address) {
 	chain.Emit(
 		AdminChangedEvent,

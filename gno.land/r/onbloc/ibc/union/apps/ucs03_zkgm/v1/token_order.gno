@@ -68,7 +68,7 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, channelId types.Chann
 		if !ok {
 			image = [32]byte{}
 		}
-		wrappedV1 := PredictWrappedTokenV1(intermediatePath, destChan, order.QuoteToken)
+		wrappedV1 := PredictWrappedToken(intermediatePath, destChan, order.QuoteToken)
 		wrappedV2 := PredictWrappedTokenV2(intermediatePath, destChan, order.QuoteToken, image)
 		if baseDenom != wrappedV1 && baseDenom != wrappedV2 {
 			return errInvalidUnescrow
@@ -127,7 +127,8 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 			image = img
 			wrapped = PredictWrappedTokenV2(path, destChan, order.BaseToken, image)
 		} else {
-			wrapped = PredictWrappedTokenV1(path, destChan, order.BaseToken)
+			image = [32]byte{}
+			wrapped = PredictWrappedToken(path, destChan, order.BaseToken)
 		}
 		hasWrapped = true
 	case z.TOKEN_ORDER_KIND_INITIALIZE:

@@ -22,7 +22,7 @@ func main() {
 	sender := runtime.OriginCaller().String()
 	marketMaker := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	baseToken := []byte("ugnot-mm-ack")
-	voucherDenom := impl.PredictWrappedTokenV1(
+	voucherDenom := impl.PredictWrappedToken(
 		u256.Zero(),
 		uint32(pair.Destination),
 		baseToken,

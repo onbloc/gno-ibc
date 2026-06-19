@@ -12,8 +12,7 @@ func DecodeValue(b []byte) (Value, error) {
 	return v, nil
 }
 
-// Split returns the kind, content, and remaining bytes for the first RLP item.
-func Split(b []byte) (Kind, []byte, []byte, error) {
+func split(b []byte) (Kind, []byte, []byte, error) {
 	k, tagSize, contentSize, err := readKind(b)
 	if err != nil {
 		return 0, nil, b, err
@@ -22,81 +21,11 @@ func Split(b []byte) (Kind, []byte, []byte, error) {
 	return k, b[tagSize:end], b[end:], nil
 }
 
-// SplitString splits the first RLP string item from b.
-func SplitString(b []byte) ([]byte, []byte, error) {
-	k, content, rest, err := Split(b)
-	if err != nil {
-		return nil, b, err
-	}
-	if k == KindList {
-		return nil, b, ErrExpectedString
-	}
-	return content, rest, nil
-}
-
-// SplitUint64 decodes the first RLP string item as a canonical uint64.
-func SplitUint64(b []byte) (uint64, []byte, error) {
-	content, rest, err := SplitString(b)
-	if err != nil {
-		return 0, b, err
-	}
-	x, err := uint64FromContent(content)
-	if err != nil {
-		return 0, b, err
-	}
-	return x, rest, nil
-}
-
-// SplitList splits the first RLP list item from b.
-func SplitList(b []byte) ([]byte, []byte, error) {
-	k, content, rest, err := Split(b)
-	if err != nil {
-		return nil, b, err
-	}
-	if k != KindList {
-		return nil, b, ErrExpectedList
-	}
-	return content, rest, nil
-}
-
-// CountValues counts the number of complete RLP items in b.
-func CountValues(b []byte) (int, error) {
-	n := 0
-	for len(b) > 0 {
-		_, tagSize, contentSize, err := readKind(b)
-		if err != nil {
-			return n, err
-		}
-		b = b[tagSize+contentSize:]
-		n++
-	}
-	return n, nil
-}
-
-// SplitListValues returns the raw encoded elements inside an encoded RLP list.
-func SplitListValues(b []byte) ([][]byte, error) {
-	content, _, err := SplitList(b)
-	if err != nil {
-		return nil, err
-	}
-	var out [][]byte
-	for len(content) > 0 {
-		_, tagSize, contentSize, err := readKind(content)
-		if err != nil {
-			return nil, err
-		}
-		end := tagSize + contentSize
-		out = append(out, content[:end])
-		content = content[end:]
-	}
-	return out, nil
-}
-
 func decodeValue(b []byte, depth int) (Value, []byte, error) {
 	if depth > maxDecodeDepth {
 		return Value{}, b, ErrDepthLimit
 	}
-	k, content, rest, err := Split(b)
+	k, content, rest, err := split(b)
 	if err != nil {
 		return Value{}, b, err
 	}
@@ -175,21 +104,4 @@ func readSize(b []byte, sizeLen int) (int, error) {
 		return 0, ErrValueTooLarge
 	}
 	return int(size), nil
-}
-
-func uint64FromContent(content []byte) (uint64, error) {
-	if len(content) == 0 {
-		return 0, nil
-	}
-	if len(content) > 8 {
-		return 0, ErrValueTooLarge
-	}
-	if content[0] == 0 {
-		return 0, ErrCanonInt
-	}
-	var x uint64
-	for _, b := range content {
-		x = (x << 8) | uint64(b)
-	}
-	return x, nil
 }

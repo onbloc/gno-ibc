@@ -123,6 +123,99 @@ func TestStaticElementArray(t *testing.T) {
 			"0000000000000000000000000000000000000000000000000000000000000000")
 }
 
+func TestEncodeBoundaryCases(t *testing.T) {
+	maxUint256 := new(u256.Uint).SetAllOne()
+	var zeroBytes32 [32]byte
+
+	cases := []struct {
+		name    string
+		schema  Schema
+		values  []any
+		wantHex string
+		wantErr error
+	}{
+		{
+			name:    "empty schema with nil values",
+			schema:  Schema{},
+			values:  nil,
+			wantHex: "",
+		},
+		{
+			name:    "uint256 zero",
+			schema:  Schema{Fields: []Field{{Type: TypeUint256}}},
+			values:  []any{u256.Zero()},
+			wantHex: "0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			name:    "uint256 max",
+			schema:  Schema{Fields: []Field{{Type: TypeUint256}}},
+			values:  []any{maxUint256},
+			wantHex: "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+		},
+		{
+			name:    "bytes32 zero value",
+			schema:  Schema{Fields: []Field{{Type: TypeBytes32}}},
+			values:  []any{zeroBytes32},
+			wantHex: "0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			name:   "bytes nil slice",
+			schema: Schema{Fields: []Field{{Type: TypeBytes}}},
+			values: []any{([]byte)(nil)},
+			wantHex: "0000000000000000000000000000000000000000000000000000000000000020" +
+				"0000000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			name:   "single element dynamic array",
+			schema: Schema{Fields: []Field{{Type: TypeArray, Elem: &Field{Type: TypeBytes}}}},
+			values: []any{[]any{[]byte{0xab}}},
+			wantHex: "0000000000000000000000000000000000000000000000000000000000000020" +
+				"0000000000000000000000000000000000000000000000000000000000000001" +
+				"0000000000000000000000000000000000000000000000000000000000000020" +
+				"0000000000000000000000000000000000000000000000000000000000000001" +
+				"ab00000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			name:    "uint256 nil pointer",
+			schema:  Schema{Fields: []Field{{Type: TypeUint256}}},
+			values:  []any{(*u256.Uint)(nil)},
+			wantErr: ErrInvalidValue,
+		},
+		{
+			name:    "address nil slice",
+			schema:  Schema{Fields: []Field{{Type: TypeAddress}}},
+			values:  []any{([]byte)(nil)},
+			wantErr: ErrInvalidValue,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Encode(tc.schema, tc.values)
+			if err != tc.wantErr {
+				t.Fatalf("Encode error = %v, want %v", err, tc.wantErr)
+			}
+			if tc.wantErr != nil {
+				return
+			}
+			if hex.EncodeToString(got) != tc.wantHex {
+				t.Fatalf("Encode hex = %s, want %s", hex.EncodeToString(got), tc.wantHex)
+			}
+			decoded, err := Decode(tc.schema, got)
+			if err != nil {
+				t.Fatalf("Decode(encoded): %v", err)
+			}
+			encodedAgain, err := Encode(tc.schema, decoded)
+			if err != nil {
+				t.Fatalf("Encode(decoded): %v", err)
+			}
+			if hex.EncodeToString(encodedAgain) != tc.wantHex {
+				t.Fatalf("round-trip hex = %s, want %s", hex.EncodeToString(encodedAgain), tc.wantHex)
+			}
+		})
+	}
+}
+
 func TestEmptyDynamicEncoding(t *testing.T) {
 	// encodeBytes with len=0: (32-0%32)%32 == 0, so no padding word appended
 	assertEncodeHex(t, "bytes_empty", Schema{Fields: []Field{{Type: TypeBytes}}}, []any{[]byte{}},
@@ -169,14 +262,55 @@ func TestEncodeErrors(t *testing.T) {
 }
 
 func TestRejectMalformedData(t *testing.T) {
-	if _, err := Decode(Schema{Fields: []Field{{Type: TypeUint256}}}, []byte{1, 2, 3}); err == nil {
-		t.Fatalf("expected invalid data error")
+	cases := []struct {
+		name   string
+		schema Schema
+		data   []byte
+	}{
+		{
+			name:   "data length is not word aligned",
+			schema: Schema{Fields: []Field{{Type: TypeUint256}}},
+			data:   []byte{1, 2, 3},
+		},
+		{
+			name:   "bool value greater than one",
+			schema: Schema{Fields: []Field{{Type: TypeBool}}},
+			data:   mustHex("0000000000000000000000000000000000000000000000000000000000000002"),
+		},
+		{
+			name:   "uint64 high padding is non-zero",
+			schema: Schema{Fields: []Field{{Type: TypeUint64}}},
+			data:   mustHex("0000000000000000000000000000000000000000000000010000000000000000"),
+		},
+		{
+			name:   "address left padding is non-zero",
+			schema: Schema{Fields: []Field{{Type: TypeAddress}}},
+			data:   mustHex("0000000000000000000000ff0101010101010101010101010101010101010101"),
+		},
+		{
+			name:   "empty string",
+			schema: Schema{Fields: []Field{{Type: TypeString}}},
+			data: mustHex("0000000000000000000000000000000000000000000000000000000000000020" +
+				"0000000000000000000000000000000000000000000000000000000000000000"),
+		},
 	}
 
-	badBool := make([]byte, 32)
-	badBool[31] = 2
-	if _, err := Decode(Schema{Fields: []Field{{Type: TypeBool}}}, badBool); err == nil {
-		t.Fatalf("expected invalid bool error")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Decode(tc.schema, tc.data)
+			if tc.name == "empty string" {
+				if err != nil {
+					t.Fatalf("Decode empty string: %v", err)
+				}
+				if got[0].(string) != "" {
+					t.Fatalf("empty string decoded as %q", got[0].(string))
+				}
+				return
+			}
+			if err != ErrInvalidData {
+				t.Fatalf("got %v want ErrInvalidData", err)
+			}
+		})
 	}
 }
 
@@ -294,6 +428,90 @@ func TestDecodeDepthLimit(t *testing.T) {
 	_, err := d.tupleAt([]Field{{Type: TypeBytes}}, 0, len(data), 0)
 	if err != ErrDepthLimit {
 		t.Fatalf("got %v want ErrDepthLimit", err)
+	}
+}
+
+func TestInternalBoundaryHelpers(t *testing.T) {
+	dynamicCases := []struct {
+		name  string
+		field Field
+		want  bool
+	}{
+		{"bytes is dynamic", Field{Type: TypeBytes}, true},
+		{"array is dynamic", Field{Type: TypeArray, Elem: &Field{Type: TypeUint8}}, true},
+		{"struct with nil schema is treated dynamic", Field{Type: TypeStruct}, true},
+		{"static nested struct", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeUint32}}}}, false},
+		{"struct with dynamic child", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeString}}}}, true},
+	}
+	for _, tc := range dynamicCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isDynamic(tc.field); got != tc.want {
+				t.Fatalf("isDynamic = %v, want %v", got, tc.want)
+			}
+		})
+	}
+
+	sizeCases := []struct {
+		name    string
+		field   Field
+		want    int
+		wantErr error
+	}{
+		{"single static field", Field{Type: TypeUint8}, wordSize, nil},
+		{"dynamic field head size", Field{Type: TypeBytes}, wordSize, nil},
+		{"nested static struct", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint32}, {Type: TypeBool}}}}}}}, wordSize * 3, nil},
+		{"nil struct schema", Field{Type: TypeStruct, Sub: nil}, wordSize, nil},
+	}
+	for _, tc := range sizeCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := staticHeadSize(tc.field)
+			if err != tc.wantErr {
+				t.Fatalf("staticHeadSize error = %v, want %v", err, tc.wantErr)
+			}
+			if got != tc.want {
+				t.Fatalf("staticHeadSize = %d, want %d", got, tc.want)
+			}
+		})
+	}
+
+	roundCases := []struct {
+		in   uint64
+		want uint64
+	}{
+		{0, 0},
+		{1, 32},
+		{32, 32},
+		{33, 64},
+	}
+	for _, tc := range roundCases {
+		t.Run("roundUp32", func(t *testing.T) {
+			if got := roundUp32(tc.in); got != tc.want {
+				t.Fatalf("roundUp32(%d) = %d, want %d", tc.in, got, tc.want)
+			}
+		})
+	}
+
+	wordCases := []struct {
+		name    string
+		word    []byte
+		want    uint64
+		wantErr error
+	}{
+		{"valid zero", make([]byte, wordSize), 0, nil},
+		{"valid low word", mustHex("000000000000000000000000000000000000000000000000000000000000002a"), 42, nil},
+		{"non-zero high padding", mustHex("0000000000000000000000000000000000000000000000010000000000000000"), 0, ErrInvalidData},
+		{"short word", []byte{0}, 0, ErrInvalidData},
+	}
+	for _, tc := range wordCases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := decodeWordUint64(tc.word)
+			if err != tc.wantErr {
+				t.Fatalf("decodeWordUint64 error = %v, want %v", err, tc.wantErr)
+			}
+			if got != tc.want {
+				t.Fatalf("decodeWordUint64 = %d, want %d", got, tc.want)
+			}
+		})
 	}
 }
 

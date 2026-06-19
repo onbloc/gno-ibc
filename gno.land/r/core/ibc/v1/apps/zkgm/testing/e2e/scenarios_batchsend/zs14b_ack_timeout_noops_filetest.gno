@@ -49,7 +49,7 @@ func main(cur realm) {
 
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
-		Receiver:    []byte("timeout-only-receiver"),
+		Receiver:    []byte(marketMaker),
 		BaseToken:   []byte("ibc/base"),
 		BaseAmount:  u256.NewUint(21),
 		QuoteToken:  []byte("ugnot"),
@@ -81,21 +81,12 @@ func main(cur realm) {
 
 	println("")
 	println("[SCENARIO] 4. ack after timeout is skipped")
-	timeoutPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), z.TokenOrderV2{
-		Sender:      []byte(sender),
-		Receiver:    []byte(marketMaker),
-		BaseToken:   []byte("ibc/base"),
-		BaseAmount:  u256.NewUint(21),
-		QuoteToken:  []byte("ugnot"),
-		QuoteAmount: u256.NewUint(21),
-		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
-	})), 0, core.Timestamp(1))
-	e2e.BatchSend(cross(cur), timeoutPacket)
-	core.PacketTimeout(cross(cur), core.NewMsgPacketTimeout(cross(cur), timeoutPacket, nil, core.Height(1)))
-	println("commitment_after_timeout", core.HasPacketCommitment(cross(cur), timeoutPacket))
+	e2e.BatchSend(cross(cur), packet)
+	core.PacketTimeout(cross(cur), core.NewMsgPacketTimeout(cross(cur), packet, nil, core.Height(1)))
+	println("commitment_after_timeout", core.HasPacketCommitment(cross(cur), packet))
 	println("sender_after_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))
 
-	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement(cross(cur), []core.Packet{timeoutPacket}, [][]byte{ack}, nil, core.Height(1)))
+	core.PacketAcknowledgement(cross(cur), ackMsg)
 	println("market_maker_after_ack_after_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(marketMaker)))
 	println("sender_after_ack_after_timeout", impl.VoucherBalanceOf(string(order.BaseToken), address(sender)))
 	println("ack_timeout_noops", "ok")
@@ -128,18 +119,18 @@ func mustMarketMakerTokenOrderAck(marketMaker []byte) []byte {
 
 // Output:
 // [SCENARIO] 1. first ack settles
-// commitment_after_first_ack true
+// commitment_after_first_ack false
 // market_maker_after_first_ack 21
 //
 // [SCENARIO] 2. duplicate ack is skipped
-// commitment_after_second_ack true
+// commitment_after_second_ack false
 // market_maker_after_second_ack 21
 //
 // [SCENARIO] 3. timeout after ack is skipped
 // sender_after_timeout_after_ack 0
 //
 // [SCENARIO] 4. ack after timeout is skipped
-// commitment_after_timeout true
+// commitment_after_timeout false
 // sender_after_timeout 21
 // market_maker_after_ack_after_timeout 21
 // sender_after_ack_after_timeout 21

@@ -2,14 +2,14 @@
 package scenarios_batchsend
 
 import (
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
-	z "gno.land/p/onbloc/unionibc/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
 	_ "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/loader"
 	realcometbls "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/realcometbls"
 	impl "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl"
-	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 func main(cur realm) {
@@ -56,10 +56,10 @@ func mustMarketMakerTokenOrderAck(marketMaker []byte) []byte {
 }
 
 // Output:
-// commitment_after_ack true
+// commitment_after_ack false
 // market_maker_balance_after_ack 21
 // sender_balance_before_timeout 0
-// commitment_after_timeout true
+// commitment_after_timeout false
 // market_maker_balance_after_timeout 21
 // sender_balance_after_timeout 0
 // timeout_after_ack_noop ok

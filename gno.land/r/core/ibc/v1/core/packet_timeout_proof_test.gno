@@ -100,7 +100,7 @@ func TestPacketTimeoutAcceptsProofAfterTimeout(cur realm, t *testing.T) {
 	uassert.NotAborts(t, cur, func(cur realm) {
 		PacketTimeout(cur, MsgPacketTimeout{Packet: packet})
 	})
-	if got := QueryCommitmentAtPath(PacketCommitmentPath(packet)); got != COMMITMENT_MAGIC_ACK.String() {
-		t.Fatalf("successful timeout must mark the source commitment acknowledged: got %q", got)
+	if st.hasPacketCommitment(packet) {
+		t.Fatal("successful timeout must delete the source commitment")
 	}
 }

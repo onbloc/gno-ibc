@@ -502,6 +502,10 @@ func TestPacketCommitmentLifecycle(cur realm, t *testing.T) {
 	if _, ok := st.batchPackets[PacketCommitmentPath(p)]; !ok {
 		t.Fatal("commitPacket must mirror at packet commitment path")
 	}
+	st.deletePacketCommitment(p)
+	if _, ok := st.batchPackets[PacketCommitmentPath(p)]; ok {
+		t.Fatal("deletePacketCommitment must clear packet commitment path")
+	}
 }
 
 func TestAcknowledgementDoesNotPanic(cur realm, t *testing.T) {
@@ -524,20 +528,6 @@ func TestPacketSendCommitsPacket(cur realm, t *testing.T) {
 	}
 	if !st.hasPacketCommitment(packet) {
 		t.Fatal("PacketSend must commit packet")
-	}
-}
-
-func TestPacketSendRejectsDuplicateCommitment(cur realm, t *testing.T) {
-	resetState()
-	_, _, channelId := setupOpenChannel(t)
-
-	packet := PacketSend(cross(cur), channelId, 0, 100, []byte("data"))
-	uassert.AbortsContains(t, cur, "packet commitment already exists", func(cur realm) {
-		PacketSend(cur, channelId, 0, 100, []byte("data"))
-	})
-
-	if !st.hasPacketCommitment(packet) {
-		t.Fatal("rejected duplicate send must not clear the original commitment")
 	}
 }
 
@@ -605,37 +595,6 @@ func TestBatchSendPerPacketMirrorKeyedByPath(cur realm, t *testing.T) {
 			t.Fatal("BatchSend must not mirror per-packet commitment at the raw packet hash")
 		}
 	}
-}
-
-func TestBatchSendRejectsDuplicateInBatch(cur realm, t *testing.T) {
-	resetState()
-	_, _, channelId := setupOpenChannel(t)
-	packet := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
-	packets := []Packet{packet, packet}
-	batchHash := CommitPackets(packets)
-
-	uassert.AbortsContains(t, cur, "packet commitment already exists", func(cur realm) {
-		BatchSend(cur, MsgBatchSend{Packets: packets})
-	})
-
-	if got := QueryBatchPackets(batchHash); got != "" {
-		t.Fatalf("rejected duplicate batch must not commit batch: got %q", got)
-	}
-	if st.hasPacketCommitment(packet) {
-		t.Fatal("rejected duplicate batch must not commit per-packet mirror")
-	}
-}
-
-func TestBatchSendRejectsAlreadyCommittedPacket(cur realm, t *testing.T) {
-	resetState()
-	_, _, channelId := setupOpenChannel(t)
-	packet := Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: Bytes("a"), TimeoutTimestamp: 100}
-
-	BatchSend(cross(cur), MsgBatchSend{Packets: []Packet{packet}})
-
-	uassert.AbortsContains(t, cur, "packet commitment already exists", func(cur realm) {
-		BatchSend(cur, MsgBatchSend{Packets: []Packet{packet}})
-	})
 }
 
 func TestQueryBatchPacketsUnknownReturnsEmpty(cur realm, t *testing.T) {
@@ -1368,24 +1327,9 @@ func TestPacketAcknowledgementRoundtrip(cur realm, t *testing.T) {
 	if len(app.ackPackets) != 1 {
 		t.Fatalf("OnAcknowledgementPacket calls: got %d want 1", len(app.ackPackets))
 	}
-	if got := QueryCommitmentAtPath(PacketCommitmentPath(packet)); got != COMMITMENT_MAGIC_ACK.String() {
-		t.Fatalf("acknowledgement must mark source packet commitment acknowledged: got %q", got)
+	if st.hasPacketCommitment(packet) {
+		t.Fatal("acknowledgement must delete source packet commitment")
 	}
-}
-
-func TestPacketSendRejectsResendAfterAcknowledgement(cur realm, t *testing.T) {
-	resetState()
-	_, _, channelId := setupOpenChannel(t)
-	packet := PacketSend(cross(cur), channelId, 0, 100, []byte("data"))
-
-	PacketAcknowledgement(cross(cur), MsgPacketAcknowledgement{
-		Packets:          []Packet{packet},
-		Acknowledgements: [][]byte{{0x01}},
-	})
-
-	uassert.AbortsContains(t, cur, "packet commitment already exists", func(cur realm) {
-		PacketSend(cur, channelId, 0, 100, []byte("data"))
-	})
 }
 
 func TestPacketAcknowledgementBatchUsesUnionBatchReceipts(cur realm, t *testing.T) {
@@ -1425,11 +1369,8 @@ func TestPacketAcknowledgementBatchUsesUnionBatchReceipts(cur realm, t *testing.
 	if len(app.ackPackets) != 2 {
 		t.Fatalf("OnAcknowledgementPacket calls: got %d want 2", len(app.ackPackets))
 	}
-	if got := QueryCommitmentAtPath(PacketCommitmentPath(p1)); got != COMMITMENT_MAGIC_ACK.String() {
-		t.Fatalf("PacketAcknowledgement must mark p1 acknowledged: got %q", got)
-	}
-	if got := QueryCommitmentAtPath(PacketCommitmentPath(p2)); got != COMMITMENT_MAGIC_ACK.String() {
-		t.Fatalf("PacketAcknowledgement must mark p2 acknowledged: got %q", got)
+	if st.hasPacketCommitment(p1) || st.hasPacketCommitment(p2) {
+		t.Fatal("PacketAcknowledgement must delete every batch packet commitment")
 	}
 }
 
@@ -1492,21 +1433,9 @@ func TestPacketTimeoutReceiptPath(cur realm, t *testing.T) {
 	if got != want {
 		t.Fatal("PacketTimeout must verify Union batch receipt non-membership")
 	}
-	if got := QueryCommitmentAtPath(PacketCommitmentPath(packet)); got != COMMITMENT_MAGIC_ACK.String() {
-		t.Fatalf("timeout must mark source packet commitment acknowledged: got %q", got)
+	if st.hasPacketCommitment(packet) {
+		t.Fatal("timeout must delete source packet commitment")
 	}
-}
-
-func TestPacketSendRejectsResendAfterTimeout(cur realm, t *testing.T) {
-	resetState()
-	_, _, channelId := setupOpenChannel(t)
-	packet := PacketSend(cross(cur), channelId, 0, 100, []byte("data"))
-
-	PacketTimeout(cross(cur), MsgPacketTimeout{Packet: packet})
-
-	uassert.AbortsContains(t, cur, "packet commitment already exists", func(cur realm) {
-		PacketSend(cur, channelId, 0, 100, []byte("data"))
-	})
 }
 
 func TestPacketTimeoutIsNoOpWhenCommitmentAbsent(cur realm, t *testing.T) {

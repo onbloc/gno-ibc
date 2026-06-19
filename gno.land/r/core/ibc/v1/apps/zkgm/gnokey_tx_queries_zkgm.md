@@ -272,7 +272,7 @@ Verify:
 ```txt
 commitment_before_ack true
 sender_balance_before_ack 0
-commitment_after_ack true
+commitment_after_ack false
 sender_balance_after_ack 21
 OK!
 ```
@@ -299,7 +299,7 @@ Verify:
 ```txt
 commitment_before_timeout true
 sender_balance_before_timeout 0
-commitment_after_timeout true
+commitment_after_timeout false
 sender_balance_after_timeout 21
 OK!
 ```
@@ -327,7 +327,7 @@ Verify:
 commitment_before_ack true
 sender_balance_before_ack 0
 market_maker_balance_before_ack 0
-commitment_after_ack true
+commitment_after_ack false
 sender_balance_after_ack 0
 market_maker_balance_after_ack 21
 OK!

@@ -4,10 +4,10 @@ package scenarios_batchsend
 import (
 	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/unionibc/zkgm"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
 	_ "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/loader"
-	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 const forwardChildTimeoutClientType = core.ClientType("gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e/scenarios_batchsend/forward-child-timeout")
@@ -125,13 +125,13 @@ func expectedUniversalErrorAckHash(cur realm) string {
 // child_inflight_after_recv true
 //
 // [SCENARIO] 2. child timeout writes parent failure ack
-// child_commitment_after_timeout true
+// child_commitment_after_timeout false
 // child_inflight_after_timeout false
 // parent_ack_after_timeout true
 // parent_ack_is_universal_error true
 //
 // [SCENARIO] 3. duplicate child timeout is a no-op
-// child_commitment_after_second_timeout true
+// child_commitment_after_second_timeout false
 // child_inflight_after_second_timeout false
 // parent_ack_after_second_timeout true
 // parent_ack_hash_unchanged_after_second_timeout true

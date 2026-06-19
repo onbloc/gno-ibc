@@ -87,7 +87,7 @@ vendor-cmd = mkdir -p $(dir gno.land/$(2)) && rsync $(RSYNC_BASE) $(call vendor-
 
 .PHONY: help install-gno verify-gno vendor fmt test test-cover test-smoke test-gnokey-query-smoke test-gnokey-qeval-smoke test-zkgm-native-refund-smoke clean-gno-cache refresh-zkgm-scenarios derive-sender-salt-vectors generate generate-check
 
-PROTOGEN_PKGS := gno.land/p/onbloc/ibc/lightclient/cometbls
+PROTOGEN_PKGS := gno.land/p/onbloc/ibc/union/lightclient/cometbls
 
 COVERAGE_DIR := coverage
 

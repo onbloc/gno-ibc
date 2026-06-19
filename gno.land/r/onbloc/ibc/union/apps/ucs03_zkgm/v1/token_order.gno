@@ -290,12 +290,21 @@ func encodeTokenOrderSuccessAck(fillType *u256.Uint, marketMaker []byte) ([]byte
 }
 
 // marketMakerFillV2 fills a token order from the market maker's voucher balance.
-// Native maker funding is unsupported, so non-voucher quotes fall back to proven
-// recv (ACK_ERR_ONLY_MAKER). The success ack carries the relayer-supplied
-// market_maker settlement target (relayer_msg), defaulting to the relayer address.
+// Native maker funding is intentionally unsupported in v1 because Gno does not
+// yet plumb unsafe.OriginSend() funds through recv/intent dispatch. Non-voucher
+// quotes therefore return ACK_ERR_ONLY_MAKER; OnIntentRecvPacket turns that into
+// an explicit panic so the proven recv path can handle the packet.
+//
+// TODO(market-maker): add funds plumbing and native quote-token fills in the next
+// version, then align this path with Union's LocalTokenMsg handling.
+//
+// reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L1791-L1861
 func (v *ucs03ZkgmV1) marketMakerFillV2(_ int, rlm realm, relayer address, relayerMsg []byte, order z.TokenOrderV2) (types.RecvPacketResult, error) {
 	quoteDenom := string(order.QuoteToken)
 	if !v.store.HasVoucher(quoteDenom) {
+		// Union can fill local/native quote tokens from the maker's funds. This
+		// implementation cannot observe those funds here yet, so only voucher
+		// quote tokens are eligible for the market-maker fast path.
 		return core.NewRecvPacketResult(types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 

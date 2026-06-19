@@ -69,7 +69,9 @@ func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relaye
 }
 
 // OnIntentRecvPacket executes the market-maker fast path. Only-maker outcomes
-// revert the intent tx so proven recv can proceed.
+// abort the intent tx so proven recv can proceed instead. This is also the
+// explicit stop point for market-maker fills that require unsupported native
+// maker funding.
 func (v *ucs03ZkgmV1) OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
 	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
@@ -82,6 +84,9 @@ func (v *ucs03ZkgmV1) OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, 
 		return failureResult(universalErrorAck())
 	}
 	if isOnlyMakerAck(res.Acknowledgement) {
+		// Intent recv must not silently succeed without a maker fill. Panicking
+		// preserves the proven recv fallback path and makes unsupported native
+		// market-maker funding fail explicitly until funds plumbing is added.
 		panic("zkgm: only maker")
 	}
 	return res

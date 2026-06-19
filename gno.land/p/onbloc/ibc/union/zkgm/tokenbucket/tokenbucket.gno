@@ -23,6 +23,7 @@ func New(capacity *u256.Uint, refillRate *u256.Uint, now *u256.Uint) (*TokenBuck
 	if capacity.IsZero() {
 		return nil, ZeroCapacity
 	}
+
 	if refillRate.IsZero() {
 		return nil, ZeroRefillRate
 	}

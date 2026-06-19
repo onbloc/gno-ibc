@@ -9,6 +9,7 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 )
 
+// parseCoins parses a comma-separated <amount><denom> string into Coins.
 func parseCoins(s string) chain.Coins {
 	if s == "" {
 		return nil
@@ -35,44 +36,52 @@ func parseCoins(s string) chain.Coins {
 	return chain.NewCoins(coins...)
 }
 
-type sentCoinBudget struct {
+// funds is the gno analog of the reference contract's threaded `funds: &mut Coins`
+// (the message's attached coins). It is decremented as each token order consumes
+// its BaseAmount during verification.
+type funds struct {
 	coins []chain.Coin
 }
 
-func newSentCoinBudget(sent chain.Coins) *sentCoinBudget {
-	b := &sentCoinBudget{coins: make([]chain.Coin, len(sent))}
-	copy(b.coins, sent)
-	return b
+// newFunds snapshots the attached coins into a mutable spend budget.
+func newFunds(sent chain.Coins) *funds {
+	f := &funds{coins: make([]chain.Coin, len(sent))}
+	copy(f.coins, sent)
+	return f
 }
 
-func (b *sentCoinBudget) consume(denom string, amount *u256.Uint) error {
+// sub deducts amount of denom from the attached funds, mirroring funds.sub(coin)
+// in the reference contract. It errors when the funds do not cover the amount.
+func (f *funds) sub(denom string, amount *u256.Uint) error {
 	want, err := amountInt64(amount)
 	if err != nil {
 		return err
 	}
-	for i := range b.coins {
-		if b.coins[i].Denom == denom {
-			if b.coins[i].Amount < want {
+	for i := range f.coins {
+		if f.coins[i].Denom == denom {
+			if f.coins[i].Amount < want {
 				return errCoinMismatch
 			}
-			b.coins[i].Amount -= want
+			f.coins[i].Amount -= want
 			return nil
 		}
 	}
 	return errCoinMismatch
 }
 
-func (b *sentCoinBudget) drained() bool {
-	for i := range b.coins {
-		if b.coins[i].Amount != 0 {
+// isEmpty reports whether every attached coin has been fully consumed.
+func (f *funds) isEmpty() bool {
+	for i := range f.coins {
+		if f.coins[i].Amount != 0 {
 			return false
 		}
 	}
 	return true
 }
 
-func (b *sentCoinBudget) assertDrained() error {
-	if !b.drained() {
+// assertEmpty errors when any attached coin is left unconsumed.
+func (f *funds) assertEmpty() error {
+	if !f.isEmpty() {
 		return errCoinMismatch
 	}
 	return nil

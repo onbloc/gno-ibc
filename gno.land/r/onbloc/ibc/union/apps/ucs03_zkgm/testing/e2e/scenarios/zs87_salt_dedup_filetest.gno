@@ -53,11 +53,11 @@ func main(cur realm) {
 	println("same_sender_salt_equal", derivedA == derivedA2)
 	println("different_salt_distinct", derivedA != derivedB)
 
-	samePacket := core.NewPacket(cross(cur), pair.Source, pair.Destination,
+	samePacket := core.NewPacket(pair.Source, pair.Destination,
 		mustSaltedPacketData(cross(cur), derivedA, e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(1<<62))
-	samePacket2 := core.NewPacket(cross(cur), pair.Source, pair.Destination,
+	samePacket2 := core.NewPacket(pair.Source, pair.Destination,
 		mustSaltedPacketData(cross(cur), derivedA2, e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(1<<62))
-	otherPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination,
+	otherPacket := core.NewPacket(pair.Source, pair.Destination,
 		mustSaltedPacketData(cross(cur), derivedB, e2e.MustTokenOrderInstruction(cross(cur), otherOrder)), types.Timestamp(1<<62))
 	println("same_packet_commit_equal", types.MustCommit(types.CommitPacket(samePacket)) == types.MustCommit(types.CommitPacket(samePacket2)))
 	println("different_salt_commit_distinct", types.MustCommit(types.CommitPacket(samePacket)) != types.MustCommit(types.CommitPacket(otherPacket)))

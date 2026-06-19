@@ -143,7 +143,7 @@ func (v *ucs03ZkgmV1) Send(_ int, rlm realm, channelId types.ChannelId, timeoutT
 		panic(err)
 	}
 
-	return core.PacketSend(cross(rlm), channelId, timeoutTimestamp, data)
+	return core.SendPacket(cross(rlm), channelId, timeoutTimestamp, data)
 }
 
 // enforceVersion rejects channels that do not speak the zkgm protocol version.

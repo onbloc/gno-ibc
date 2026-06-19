@@ -40,7 +40,7 @@ func main(cur realm) {
 			ContractCalldata: []byte("post-transfer-action"),
 		}),
 	}}
-	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination,
+	packet := core.NewPacket(pair.Source, pair.Destination,
 		e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), 0)
 
 	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))

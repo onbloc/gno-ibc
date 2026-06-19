@@ -26,7 +26,7 @@ func main(cur realm) {
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(0))
+	packet := core.NewPacket(pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(0))
 
 	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, realcometbls.Z35PacketCommitmentProof(cross(cur)), uint64(realcometbls.DevnetHeight-1)))
 

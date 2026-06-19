@@ -31,7 +31,7 @@ func main(cur realm) {
 		Metadata:    metaBytes,
 	}
 	instr := e2e.MustTokenOrderInstruction(cross(cur), order)
-	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), instr), types.Timestamp(1<<62))
+	packet := core.NewPacket(pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), instr), types.Timestamp(1<<62))
 	e2e.BatchSend(cross(cur), packet)
 
 	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))

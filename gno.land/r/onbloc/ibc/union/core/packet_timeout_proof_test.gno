@@ -12,7 +12,7 @@ import (
 // packet.TimeoutTimestamp.
 
 func TestPacketTimeoutRejectsProofBeforeTimeout(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	client := mockClientFor(channelId)
 	client.timestamp = types.Timestamp(500)
@@ -33,7 +33,7 @@ func TestPacketTimeoutRejectsProofBeforeTimeout(cur realm, t *testing.T) {
 }
 
 func TestPacketTimeoutAcceptsProofAtBoundary(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	client := mockClientFor(channelId)
 	client.timestamp = types.Timestamp(1000)
@@ -56,7 +56,7 @@ func TestPacketTimeoutAcceptsProofAtBoundary(cur realm, t *testing.T) {
 // TimeoutTimestamp == 0 means "no deadline" (recv-side uses the same
 // convention), so PacketTimeout must refuse such packets outright.
 func TestPacketTimeoutRejectsZeroTimeoutPacket(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	client := mockClientFor(channelId)
 	client.timestamp = types.Timestamp(1 << 62) // any positive proof timestamp
@@ -77,7 +77,7 @@ func TestPacketTimeoutRejectsZeroTimeoutPacket(cur realm, t *testing.T) {
 }
 
 func TestPacketTimeoutAcceptsProofAfterTimeout(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	client := mockClientFor(channelId)
 	client.timestamp = types.Timestamp(2000)
@@ -98,7 +98,7 @@ func TestPacketTimeoutAcceptsProofAfterTimeout(cur realm, t *testing.T) {
 }
 
 func TestPacketTimeoutRejectsMissingProofTimestamp(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	client := mockClientFor(channelId)
 	client.zeroTime = true

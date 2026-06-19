@@ -27,7 +27,7 @@ func main(cur realm) {
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	packet := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(1<<62))
+	packet := core.NewPacket(pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(1<<62))
 	msg := types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1)
 
 	println("quote_balance_before_recv", impl.VoucherBalanceOf(quoteToken, address(receiver)))

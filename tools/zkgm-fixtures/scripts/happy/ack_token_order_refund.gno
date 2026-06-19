@@ -6,12 +6,12 @@ package main
 import (
 	"chain/runtime"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/onbloc/unionibc/v1/core"
-	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
+	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
 	impl "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 func main() {

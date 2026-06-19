@@ -33,7 +33,7 @@ func main(cur realm) {
 		QuoteAmount: u256.NewUint(12),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	intentPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination,
+	intentPacket := core.NewPacket(pair.Source, pair.Destination,
 		e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(1<<62))
 
 	println("[SCENARIO] fillable token order intent preempts proven recv")
@@ -47,7 +47,7 @@ func main(cur realm) {
 	println("")
 	println("[SCENARIO] op call intent fails closed before receiver")
 	mock.Reset(cross(cur))
-	callPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination,
+	callPacket := core.NewPacket(pair.Source, pair.Destination,
 		e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), z.Call{
 			Sender:           []byte("sender"),
 			ContractAddress:  []byte(zs86MockReceiverPath),

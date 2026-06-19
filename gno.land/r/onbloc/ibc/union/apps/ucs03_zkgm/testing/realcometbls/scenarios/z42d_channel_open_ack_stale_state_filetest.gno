@@ -14,13 +14,14 @@ func main(cur realm) {
 	impl.Register(cross(cur))
 	clientId := realcometbls.CreateZ42StaleCometBLSClient(cross(cur))
 	connectionId := openConnection(cur, clientId, realcometbls.Z42StaleConnectionTryProof(cross(cur)))
-	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit([]byte(zkgm.ProxyPkgPath()), []byte(zkgm.ProxyPkgPath()), connectionId, zkgm.Version))
+	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit([]byte(zkgm.ProxyPkgPath()), []byte(zkgm.ProxyPkgPath()), connectionId, zkgm.Version, "g1msgrelayer"))
 
-	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, types.ChannelId(2), realcometbls.Z42StaleChannelTryProof(cross(cur)), uint64(realcometbls.DevnetHeight-1)))
+	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, types.ChannelId(2), realcometbls.Z42StaleChannelTryProof(cross(cur)), uint64(realcometbls.DevnetHeight-1), "g1msgrelayer"))
 }
 
 func openConnection(cur realm, clientId types.ClientId, proof []byte) types.ConnectionId {
-	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	connectionId := types.ConnectionId(1)
+	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), proof, uint64(realcometbls.DevnetHeight-1)))
 	return connectionId
 }

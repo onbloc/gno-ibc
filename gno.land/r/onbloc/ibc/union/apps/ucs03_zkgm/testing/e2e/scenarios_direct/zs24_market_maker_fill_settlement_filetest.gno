@@ -33,7 +33,7 @@ func main(cur realm) {
 	}
 
 	println("[SCENARIO] market maker fills quote side")
-	intentPacket := core.NewPacket(cross(cur), types.ChannelId(99), types.ChannelId(98), e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(100))
+	intentPacket := core.NewPacket(types.ChannelId(99), types.ChannelId(98), e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(100))
 	intentRes := inst.IntentRecv(cross(cur), intentPacket, marketMaker, nil)
 	println("intent_status", int(intentRes.Status))
 	println("market_maker_quote_after_fill", impl.VoucherBalanceOf(quoteToken, marketMaker))
@@ -45,7 +45,7 @@ func main(cur realm) {
 	if err != nil {
 		panic(err)
 	}
-	sourcePacket := core.NewPacket(cross(cur), channelId, types.ChannelId(100), sendData, types.Timestamp(101))
+	sourcePacket := core.NewPacket(channelId, types.ChannelId(100), sendData, types.Timestamp(101))
 	println("sender_base_after_send", impl.VoucherBalanceOf(baseToken, address(sender)))
 	println("channel_after_send", sh.ChannelBalanceStr(channelId, u256.Zero(), order.BaseToken, order.QuoteToken))
 	inst.Ack(cross(cur), sourcePacket, intentRes.Acknowledgement, testutils.TestAddress("zs24-relayer"))

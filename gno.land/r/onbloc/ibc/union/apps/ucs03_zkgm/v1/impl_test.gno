@@ -4,7 +4,7 @@ package impl
 // version enforcement and the closed-channel policy. The packet lifecycle
 // (OnRecvPacket / OnAcknowledgementPacket / OnTimeoutPacket) is covered by
 // dispatch_test and the per-opcode suites; the user-initiated Send drives
-// core.PacketSend and is integration-tested in the e2e suite.
+// core.SendPacket and is integration-tested in the e2e suite.
 
 import (
 	"testing"

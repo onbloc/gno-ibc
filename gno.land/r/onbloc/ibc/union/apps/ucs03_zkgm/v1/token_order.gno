@@ -165,9 +165,9 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 }
 
 // protocolFillMintV2 mints the wrapped voucher for an escrow/initialize order:
-// quote to the receiver, fee to the relayer, then records the token origin (and,
-// for a deployable initialize, the foreign token). State is written only after the
-// mint succeeds so a recovered failure cannot leave orphan origin state.
+// quote to the receiver, fee to the relayer, then records deploy-time wrapped
+// token metadata. State is written only after the mint succeeds so a recovered
+// failure cannot leave orphan origin state.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2309-L2413
 func (v *ucs03ZkgmV1) protocolFillMintV2(_ int, rlm realm, destChan uint32, path *u256.Uint, order z.TokenOrderV2, wrappedDenom string, image [32]byte, meta z.TokenMetadata, metaPresent bool, relayer address, canDeploy bool) (types.RecvPacketResult, error) {
 	fee := new(u256.Uint).Sub(order.BaseAmount, order.QuoteAmount)
@@ -190,11 +190,10 @@ func (v *ucs03ZkgmV1) protocolFillMintV2(_ int, rlm realm, destChan uint32, path
 		name, symbol, decimals = ti.Name, ti.Symbol, ti.Decimals
 	}
 
-	// Compute the origin update before minting so a path error fails closed
-	// pre-mutation.
-	_, hasOrigin := v.store.GetTokenOrigin(wrappedDenom)
+	_, hasForeignToken := v.store.GetForeignToken(wrappedDenom)
+	shouldDeploy := canDeploy && metaPresent && !hasForeignToken
 	var nextPath *u256.Uint
-	if !hasOrigin {
+	if shouldDeploy {
 		np, err := z.UpdateChannelPath(path, destChan)
 		if err != nil {
 			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
@@ -213,11 +212,10 @@ func (v *ucs03ZkgmV1) protocolFillMintV2(_ int, rlm realm, destChan uint32, path
 		}
 	}
 
-	if !hasOrigin {
+	if shouldDeploy {
+		v.store.SetForeignToken(0, rlm, wrappedDenom, order.BaseToken)
 		v.store.SetTokenOrigin(0, rlm, wrappedDenom, nextPath)
-		if canDeploy {
-			v.store.SetForeignToken(0, rlm, wrappedDenom, order.BaseToken)
-		}
+		v.store.SetMetadataImageOf(0, rlm, wrappedDenom, image)
 	}
 
 	ack, err := encodeTokenOrderSuccessAck(fillTypeProtocol(), nil)

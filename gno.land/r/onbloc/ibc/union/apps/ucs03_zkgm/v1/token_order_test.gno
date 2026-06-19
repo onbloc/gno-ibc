@@ -214,6 +214,10 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	uassert.True(t, ok)
 	uassert.Equal(t, "21474836487", origin.ToString())
 
+	foreignToken, ok := testStore.GetForeignToken(ibcDenom)
+	uassert.True(t, ok)
+	uassert.Equal(t, "ugnot", string(foreignToken))
+
 	uassert.Equal(t, "Gno Token", voucherNameOf(ibcDenom))
 	uassert.Equal(t, "GNOT", voucherSymbolOf(ibcDenom))
 	uassert.Equal(t, 6, voucherDecimalsOf(ibcDenom))
@@ -307,6 +311,10 @@ func TestTokenOrderExecuteInitializeMintErrorDoesNotSetOrigin(cur realm, t *test
 
 	_, ok := testStore.GetTokenOrigin(ibcDenom)
 	uassert.False(t, ok, "mint error must not set token origin")
+	_, ok = testStore.GetForeignToken(ibcDenom)
+	uassert.False(t, ok, "mint error must not set foreign token")
+	_, ok = testStore.GetMetadataImageOf(ibcDenom)
+	uassert.False(t, ok, "mint error must not set metadata image")
 }
 
 func TestTokenOrderExecuteEscrowMintErrorDoesNotSetOrigin(cur realm, t *testing.T) {
@@ -446,6 +454,13 @@ func TestTokenOrderExecuteEscrowZeroFeeSkipsRelayerMint(cur realm, t *testing.T)
 	uassert.True(t, res.Status == types.PacketStatusSuccess)
 	uassert.Equal(t, int64(100), voucherBalanceOf(quoteDenom, address(receiver)))
 	uassert.Equal(t, int64(0), voucherBalanceOf(quoteDenom, address(relayer)))
+
+	_, ok := testStore.GetTokenOrigin(quoteDenom)
+	uassert.False(t, ok, "escrow protocol fill must not set token origin")
+	_, ok = testStore.GetForeignToken(quoteDenom)
+	uassert.False(t, ok, "escrow protocol fill must not set foreign token")
+	_, ok = testStore.GetMetadataImageOf(quoteDenom)
+	uassert.False(t, ok, "escrow protocol fill must not set metadata image")
 }
 
 func TestTokenOrderExecuteEscrowZeroQuoteSkipsReceiverMint(cur realm, t *testing.T) {
@@ -540,7 +555,7 @@ func TestTokenOrderVerifyUnescrowV2PredictionWithImagePasses(cur realm, t *testi
 	origin, err := z.UpdateChannelPath(u256.Zero(), uint32(destChan))
 	uassert.NoError(t, err)
 	testStore.SetTokenOrigin(0, cur, baseDenom, origin)
-	// Let mintVoucher set the metadata image internally.
+	testStore.SetMetadataImageOf(0, cur, baseDenom, image)
 	uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, image, "", "", 0, sender, u256.NewUint(100)))
 
 	order := z.TokenOrderV2{
@@ -570,6 +585,7 @@ func TestTokenOrderVerifyUnescrowWrongImageRejected(cur realm, t *testing.T) {
 	origin, err := z.UpdateChannelPath(u256.Zero(), uint32(destChan))
 	uassert.NoError(t, err)
 	testStore.SetTokenOrigin(0, cur, baseDenom, origin)
+	testStore.SetMetadataImageOf(0, cur, baseDenom, imageWrong)
 	// imageWrong diverges from imageCorrect used to hash baseDenom — prediction will not match.
 	uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, imageWrong, "", "", 0, sender, u256.NewUint(100)))
 

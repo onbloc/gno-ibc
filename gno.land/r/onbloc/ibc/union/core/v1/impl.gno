@@ -43,3 +43,14 @@ func (c *coreV1) SetStore(_ int, rlm realm, store core.IStore) {
 func Register(cur realm) {
 	core.UpdateImpl(cross(cur), New())
 }
+
+// cloneBytes returns a fresh copy of b, used to detach caller- or store-owned
+// byte slices before persisting or rebuilding records.
+func cloneBytes(b []byte) []byte {
+	if b == nil {
+		return nil
+	}
+	out := make([]byte, len(b))
+	copy(out, b)
+	return out
+}

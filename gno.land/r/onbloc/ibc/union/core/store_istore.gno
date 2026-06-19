@@ -1,6 +1,7 @@
 package core
 
 import (
+	"gno.land/p/onbloc/ibc/union/app"
 	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 )
@@ -83,4 +84,43 @@ func (s *Store) SaveConnection(_ int, rlm realm, connectionId types.ConnectionId
 // GetConnection returns the stored connection for connectionId.
 func (s *Store) GetConnection(connectionId types.ConnectionId) (types.Connection, bool) {
 	return s.getConnection(connectionId)
+}
+
+// NextChannelId allocates the next channel id from the sequence.
+func (s *Store) NextChannelId(_ int, rlm realm) types.ChannelId {
+	return s.nextChannelId()
+}
+
+// CreateChannel persists a new channel owned by portId and mirrors its commitment.
+func (s *Store) CreateChannel(_ int, rlm realm, channelId types.ChannelId, channel types.Channel, portId types.Bytes) {
+	s.createChannel(channelId, channel, portId)
+}
+
+// SaveChannel updates a stored channel and mirrors its commitment.
+func (s *Store) SaveChannel(_ int, rlm realm, channelId types.ChannelId, channel types.Channel) {
+	s.saveChannel(channelId, channel)
+}
+
+// GetChannel returns the stored channel for channelId.
+func (s *Store) GetChannel(channelId types.ChannelId) (types.Channel, bool) {
+	entry, ok := s.getChannelEntry(channelId)
+	if !ok {
+		return types.Channel{}, false
+	}
+	return entry.channel, true
+}
+
+// GetChannelOwner returns the port id that owns channelId.
+func (s *Store) GetChannelOwner(channelId types.ChannelId) (types.Bytes, bool) {
+	entry, ok := s.getChannelEntry(channelId)
+	if !ok {
+		return nil, false
+	}
+	return entry.portId, true
+}
+
+// GetAppByPortId returns the IBC app registered at portId.
+func (s *Store) GetAppByPortId(portId types.Bytes) (app.IApp, bool) {
+	a, ok := s.ports[portKey(portId)]
+	return a, ok
 }

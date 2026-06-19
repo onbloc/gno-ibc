@@ -81,4 +81,14 @@ type IStore interface {
 	NextConnectionId(_ int, rlm realm) types.ConnectionId
 	SaveConnection(_ int, rlm realm, connectionId types.ConnectionId, connection types.Connection)
 	GetConnection(connectionId types.ConnectionId) (types.Connection, bool)
+
+	// --- Channel ---
+	NextChannelId(_ int, rlm realm) types.ChannelId
+	CreateChannel(_ int, rlm realm, channelId types.ChannelId, channel types.Channel, portId types.Bytes)
+	SaveChannel(_ int, rlm realm, channelId types.ChannelId, channel types.Channel)
+	GetChannel(channelId types.ChannelId) (types.Channel, bool)
+	GetChannelOwner(channelId types.ChannelId) (types.Bytes, bool)
+
+	// --- App registry ---
+	GetAppByPortId(portId types.Bytes) (app.IApp, bool)
 }

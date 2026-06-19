@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"gno.land/p/onbloc/ibc/union/app"
 	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 	core "gno.land/r/onbloc/ibc/union/core"
@@ -20,19 +21,31 @@ type mockClient struct {
 }
 
 type mockStore struct {
-	seq         uint32
-	clients     map[uint32]*mockClient
-	connSeq     uint32
-	connections map[uint32]types.Connection
+	seq           uint32
+	clients       map[uint32]*mockClient
+	connSeq       uint32
+	connections   map[uint32]types.Connection
+	chanSeq       uint32
+	channels      map[uint32]types.Channel
+	channelOwners map[uint32]types.Bytes
+	ports         map[string]app.IApp
 }
 
 var _ core.IStore = (*mockStore)(nil)
 
 func newMockStore() *mockStore {
 	return &mockStore{
-		clients:     map[uint32]*mockClient{},
-		connections: map[uint32]types.Connection{},
+		clients:       map[uint32]*mockClient{},
+		connections:   map[uint32]types.Connection{},
+		channels:      map[uint32]types.Channel{},
+		channelOwners: map[uint32]types.Bytes{},
+		ports:         map[string]app.IApp{},
 	}
+}
+
+// registerApp is a test helper that installs an app at a port id.
+func (m *mockStore) registerApp(portId types.Bytes, a app.IApp) {
+	m.ports[string(portId)] = a
 }
 
 // newTestImpl builds a v1 impl bound to a fresh mock store, the way the proxy
@@ -108,4 +121,33 @@ func (m *mockStore) SaveConnection(_ int, rlm realm, connectionId types.Connecti
 func (m *mockStore) GetConnection(connectionId types.ConnectionId) (types.Connection, bool) {
 	conn, ok := m.connections[uint32(connectionId)]
 	return conn, ok
+}
+
+func (m *mockStore) NextChannelId(_ int, rlm realm) types.ChannelId {
+	m.chanSeq++
+	return types.ChannelId(m.chanSeq)
+}
+
+func (m *mockStore) CreateChannel(_ int, rlm realm, channelId types.ChannelId, channel types.Channel, portId types.Bytes) {
+	m.channels[uint32(channelId)] = channel
+	m.channelOwners[uint32(channelId)] = portId
+}
+
+func (m *mockStore) SaveChannel(_ int, rlm realm, channelId types.ChannelId, channel types.Channel) {
+	m.channels[uint32(channelId)] = channel
+}
+
+func (m *mockStore) GetChannel(channelId types.ChannelId) (types.Channel, bool) {
+	ch, ok := m.channels[uint32(channelId)]
+	return ch, ok
+}
+
+func (m *mockStore) GetChannelOwner(channelId types.ChannelId) (types.Bytes, bool) {
+	p, ok := m.channelOwners[uint32(channelId)]
+	return p, ok
+}
+
+func (m *mockStore) GetAppByPortId(portId types.Bytes) (app.IApp, bool) {
+	a, ok := m.ports[string(portId)]
+	return a, ok
 }

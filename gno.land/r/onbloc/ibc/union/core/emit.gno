@@ -55,3 +55,39 @@ func EmitConnectionOpenConfirm(connectionId types.ConnectionId, clientId, counte
 func ConnectionValue(connection types.Connection) types.H256 {
 	return connectionValue(connection)
 }
+
+// ChannelValue returns the H256 commitment value of a channel, exposed so the
+// impl can build the expected counterparty value for membership proofs.
+func ChannelValue(channel types.Channel) types.H256 {
+	return channelValue(channel)
+}
+
+// EmitChannelOpenInit emits the ChannelOpenInit host event.
+func EmitChannelOpenInit(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
+	emitChannelOpenInitEvent(portId, channelId, channel)
+}
+
+// EmitChannelOpenTry emits the ChannelOpenTry host event.
+func EmitChannelOpenTry(portId types.Bytes, channelId types.ChannelId, channel types.Channel, counterpartyVersion string) {
+	emitChannelOpenTryEvent(portId, channelId, channel, counterpartyVersion)
+}
+
+// EmitChannelOpenAck emits the ChannelOpenAck host event.
+func EmitChannelOpenAck(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
+	emitChannelOpenAckEvent(portId, channelId, channel)
+}
+
+// EmitChannelOpenConfirm emits the ChannelOpenConfirm host event.
+func EmitChannelOpenConfirm(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
+	emitChannelOpenConfirmEvent(portId, channelId, channel)
+}
+
+// EmitChannelCloseInit emits the ChannelCloseInit host event.
+func EmitChannelCloseInit(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
+	emitChannelCloseInitEvent(portId, channelId, channel)
+}
+
+// EmitChannelCloseConfirm emits the ChannelCloseConfirm host event.
+func EmitChannelCloseConfirm(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
+	emitChannelCloseConfirmEvent(portId, channelId, channel)
+}

@@ -112,6 +112,10 @@ func (c *CometblsLightClient) verifyMisbehaviour(misbehaviour *Misbehaviour, now
 	headerA := misbehaviour.Header1
 	headerB := misbehaviour.Header2
 
+	if headerA.SignedHeader.Height < headerB.SignedHeader.Height {
+		return makeError(ErrInvalidMisbehaviourHeaderSequence)
+	}
+
 	// Regardless of the type of misbehaviour, ensure that both headers are valid
 	// and would have been accepted by the light client.
 	if err := c.verifyMisbehaviourHeader("Header_1", headerA, now); err != nil {
@@ -129,7 +133,7 @@ func (c *CometblsLightClient) verifyMisbehaviour(misbehaviour *Misbehaviour, now
 		return nil
 	}
 
-	return makeError(ErrInvalidMisbehaviour, "misbehaviour not found")
+	return makeError(ErrMisbehaviourNotFound)
 }
 
 func (c *CometblsLightClient) verifyMisbehaviourHeader(label string, header *Header, now time.Time) error {

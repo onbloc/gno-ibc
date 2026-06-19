@@ -1533,7 +1533,7 @@ func TestIntentPacketRecvIgnoresMsgMarketMakerForAppCallback(cur realm, t *testi
 	}
 }
 
-func TestIntentPacketRecvRejectsNonIntentAppBeforeReceipt(cur realm, t *testing.T) {
+func TestIntentPacketRecvPropagatesUnsupportedIntentCallback(cur realm, t *testing.T) {
 	resetStore(cur)
 	portId, _, channelId := setupOpenChannel(t)
 	store.ports[portKey(portId)] = &mockNonIntentApp{}
@@ -1543,11 +1543,11 @@ func TestIntentPacketRecvRejectsNonIntentAppBeforeReceipt(cur realm, t *testing.
 		IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{Packets: []types.Packet{packet}, MarketMakerMessages: [][]byte{nil}})
 	})
 
-	if store.hasPacketReceipt(packet) {
-		t.Fatal("IntentPacketRecv must reject non-intent app before writing receipt")
+	if !store.hasPacketReceipt(packet) {
+		t.Fatal("IntentPacketRecv must write receipt before app callback")
 	}
 	if store.hasAcknowledgement(packet) {
-		t.Fatal("IntentPacketRecv must reject non-intent app before writing acknowledgement")
+		t.Fatal("unsupported intent callback must not write acknowledgement")
 	}
 }
 

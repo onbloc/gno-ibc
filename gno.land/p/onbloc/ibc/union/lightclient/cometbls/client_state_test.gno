@@ -43,6 +43,14 @@ func TestClientStateValidate(t *testing.T) {
 		}
 	})
 
+	t.Run("chain_id_max_length", func(t *testing.T) {
+		cs := validClientState()
+		cs.ChainID = strings.Repeat("x", MaxChainIDLen)
+		if err := cs.Validate(); err != nil {
+			t.Fatalf("unexpected error for max-length chain id: %v", err)
+		}
+	})
+
 	t.Run("zero_trusting_period", func(t *testing.T) {
 		cs := validClientState()
 		cs.TrustingPeriod = 0

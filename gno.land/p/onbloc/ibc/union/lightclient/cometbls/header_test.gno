@@ -232,6 +232,95 @@ func TestEncodeDecodeHeaderRoundTrip(t *testing.T) {
 	bytesEq(t, "ZKP", got.ZeroKnowledgeProof, original.ZeroKnowledgeProof)
 }
 
+func TestHeaderValidateBasic(t *testing.T) {
+	// Union reference: verify_header rejects stale heights and invalid header
+	// timing before proof verification.
+	testCases := []struct {
+		name    string
+		setup   func(*Header)
+		wantErr string
+	}{
+		{
+			name:  "valid",
+			setup: func(*Header) {},
+		},
+		{
+			name: "nil signed header",
+			setup: func(h *Header) {
+				h.SignedHeader = nil
+			},
+			wantErr: "signed header cannot be nil",
+		},
+		{
+			name: "empty zkp",
+			setup: func(h *Header) {
+				h.ZeroKnowledgeProof = nil
+			},
+			wantErr: "zero-knowledge proof cannot be empty",
+		},
+		{
+			name: "trusted height equals header height",
+			setup: func(h *Header) {
+				h.TrustedHeight = heightPtr(types.NewHeight(uint64(h.SignedHeader.Height)))
+			},
+			wantErr: "must be less than header height",
+		},
+		{
+			name: "trusted height greater than header height",
+			setup: func(h *Header) {
+				h.TrustedHeight = heightPtr(types.NewHeight(uint64(h.SignedHeader.Height + 1)))
+			},
+			wantErr: "must be less than header height",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newTestHeader(42, 1000, 500, 10, []byte{0xAA})
+			tc.setup(h)
+
+			err := h.ValidateBasic()
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("ValidateBasic: %v", err)
+				}
+				return
+			}
+			requireErrorContains(t, err, tc.wantErr)
+		})
+	}
+}
+
+func TestHeaderGetHeightPreservesTrustedRevision(t *testing.T) {
+	// Union reference: update_state rebuilds the untrusted height with the
+	// trusted height revision.
+	h := newTestHeader(42, 1000, 500, 10, []byte{0xAA})
+	h.TrustedHeight = heightPtr(types.NewHeightWithRevision(7, 10))
+
+	got := h.GetHeight()
+	if got.RevisionNumber != 7 {
+		t.Fatalf("revision number: got %d want 7", got.RevisionNumber)
+	}
+	if got.RevisionHeight != 42 {
+		t.Fatalf("revision height: got %d want 42", got.RevisionHeight)
+	}
+}
+
+func TestVerifyHeaderWrapperRejectsMalformedHeader(t *testing.T) {
+	// Union reference: VerifyHeader decodes the client message before entering
+	// the typed verify_header implementation.
+	c := newTestClient(t)
+	var caller, relayer address
+
+	_, err := c.VerifyHeader(caller, []byte{0x00}, relayer)
+
+	requireErrorContains(t, err, "failed to decode header")
+}
+
+func heightPtr(height types.Height) *types.Height {
+	return &height
+}
+
 func updateStateTestHeader(trustedHeight, signedHeight uint64, timestamp uint64) *Header {
 	return newTestHeader(
 		int64(signedHeight),

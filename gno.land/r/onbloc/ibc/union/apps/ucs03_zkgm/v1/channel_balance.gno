@@ -16,7 +16,7 @@ func ChannelBalanceKeyV2(channelId types.ChannelId, path *u256.Uint, baseToken, 
 
 // increaseChannelBalanceV2 adds amount to the (channel, path, base, quote) escrow balance.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L3272-L3299
-func (v *ucs03ZkgmV1) increaseChannelBalanceV2(cur realm, channelId types.ChannelId, path *u256.Uint, baseToken, quoteToken []byte, amount *u256.Uint) {
+func (v *ucs03ZkgmV1) increaseChannelBalanceV2(_ int, rlm realm, channelId types.ChannelId, path *u256.Uint, baseToken, quoteToken []byte, amount *u256.Uint) {
 	if amount.IsZero() {
 		return
 	}
@@ -25,12 +25,12 @@ func (v *ucs03ZkgmV1) increaseChannelBalanceV2(cur realm, channelId types.Channe
 	if !ok || curAmount == nil {
 		curAmount = u256.Zero()
 	}
-	v.store.SetChannelBalanceV2(0, cur, key, new(u256.Uint).Add(curAmount, amount))
+	v.store.SetChannelBalanceV2(0, rlm, key, new(u256.Uint).Add(curAmount, amount))
 }
 
 // decreaseChannelBalanceV2 subtracts from the escrow balance, erroring on underflow and clearing the entry on zero.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L3241-L3268
-func (v *ucs03ZkgmV1) decreaseChannelBalanceV2(cur realm, channelId types.ChannelId, path *u256.Uint, baseToken, quoteToken []byte, amount *u256.Uint) error {
+func (v *ucs03ZkgmV1) decreaseChannelBalanceV2(_ int, rlm realm, channelId types.ChannelId, path *u256.Uint, baseToken, quoteToken []byte, amount *u256.Uint) error {
 	if amount.IsZero() {
 		return nil
 	}
@@ -41,9 +41,9 @@ func (v *ucs03ZkgmV1) decreaseChannelBalanceV2(cur realm, channelId types.Channe
 	}
 	next := new(u256.Uint).Sub(curAmount, amount)
 	if next.IsZero() {
-		v.store.RemoveChannelBalanceV2(0, cur, key)
+		v.store.RemoveChannelBalanceV2(0, rlm, key)
 	} else {
-		v.store.SetChannelBalanceV2(0, cur, key, next)
+		v.store.SetChannelBalanceV2(0, rlm, key, next)
 	}
 	return nil
 }

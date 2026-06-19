@@ -17,7 +17,7 @@ var (
 
 // verifyCall rejects eureka mode and requires the call sender to match the dispatch sender.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2997-L3019
-func (v *ucs03ZkgmV1) verifyCall(cur realm, sender string, call z.Call) error {
+func (v *ucs03ZkgmV1) verifyCall(_ int, rlm realm, sender string, call z.Call) error {
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
@@ -29,11 +29,11 @@ func (v *ucs03ZkgmV1) verifyCall(cur realm, sender string, call z.Call) error {
 
 // executeCall dispatches an OP_CALL to the registered receiver's OnZkgm callback; failures and panics fail closed.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L1500-L1683
-func (v *ucs03ZkgmV1) executeCall(cur realm, packet types.Packet, relayer address, relayerMsg []byte, path *u256.Uint, call z.Call, intent bool) (types.RecvPacketResult, error) {
+func (v *ucs03ZkgmV1) executeCall(_ int, rlm realm, packet types.Packet, relayer address, relayerMsg []byte, path *u256.Uint, call z.Call, intent bool) (types.RecvPacketResult, error) {
 	// TODO: when eureka is supported, fail it closed on intent (return
 	// ACK_ERR_ONLY_MAKER) like every other opcode instead of a failure ack.
 	if call.Eureka {
-		return callErrAck(cur, errEurekaUnsupported), nil
+		return callErrAck(0, rlm, errEurekaUnsupported), nil
 	}
 	if intent {
 		// Calls do not settle on the proofless market-maker fast path.
@@ -45,7 +45,7 @@ func (v *ucs03ZkgmV1) executeCall(cur realm, packet types.Packet, relayer addres
 	receiverPath := string(call.ContractAddress)
 	receiver, ok := v.store.GetReceiver(receiverPath)
 	if !ok || receiver == nil {
-		return callErrAck(cur, errors.New("zkgm/v1: receiver not registered: "+receiverPath)), nil
+		return callErrAck(0, rlm, errors.New("zkgm/v1: receiver not registered: "+receiverPath)), nil
 	}
 
 	relayerStr := string(relayer)
@@ -61,12 +61,12 @@ func (v *ucs03ZkgmV1) executeCall(cur realm, packet types.Packet, relayer addres
 		RelayerMsg:         cloneBytes(relayerMsg),
 	}
 
-	err, panicked := safeCallOnZkgm(cur, receiver, env)
+	err, panicked := safeCallOnZkgm(0, rlm, receiver, env)
 	if panicked {
 		return core.NewRecvPacketResult(types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 	if err != nil {
-		return callErrAck(cur, err), nil
+		return callErrAck(0, rlm, err), nil
 	}
 
 	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess(), InnerAck: []byte{}})
@@ -77,7 +77,7 @@ func (v *ucs03ZkgmV1) executeCall(cur realm, packet types.Packet, relayer addres
 }
 
 // acknowledgeCall is a no-op for standard calls; eureka mode is unsupported.
-func (v *ucs03ZkgmV1) acknowledgeCall(cur realm, packet types.Packet, path *u256.Uint, call z.Call) error {
+func (v *ucs03ZkgmV1) acknowledgeCall(_ int, rlm realm, packet types.Packet, path *u256.Uint, call z.Call) error {
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
@@ -85,7 +85,7 @@ func (v *ucs03ZkgmV1) acknowledgeCall(cur realm, packet types.Packet, path *u256
 }
 
 // timeoutCall is a no-op for standard calls; eureka mode is unsupported.
-func (v *ucs03ZkgmV1) timeoutCall(cur realm, packet types.Packet, path *u256.Uint, call z.Call) error {
+func (v *ucs03ZkgmV1) timeoutCall(_ int, rlm realm, packet types.Packet, path *u256.Uint, call z.Call) error {
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
@@ -95,10 +95,10 @@ func (v *ucs03ZkgmV1) timeoutCall(cur realm, packet types.Packet, path *u256.Uin
 // safeCallOnZkgm runs the receiver and reports a failure as panicked=true.
 // revive is preferred since it also catches cross-realm aborts. The recover
 // fallback, used only when revive is unsupported, catches ordinary panics.
-func safeCallOnZkgm(cur realm, receiver z.Zkgmable, env z.CallEnv) (err error, panicked bool) {
+func safeCallOnZkgm(_ int, rlm realm, receiver z.Zkgmable, env z.CallEnv) (err error, panicked bool) {
 	if canRevive() {
 		p := revive(func() {
-			err = receiver.OnZkgm(cross(cur), env)
+			err = receiver.OnZkgm(cross(rlm), env)
 		})
 		return err, p != nil
 	}
@@ -109,7 +109,7 @@ func safeCallOnZkgm(cur realm, receiver z.Zkgmable, env z.CallEnv) (err error, p
 			panicked = true
 		}
 	}()
-	err = receiver.OnZkgm(cross(cur), env)
+	err = receiver.OnZkgm(cross(rlm), env)
 	return err, false
 }
 
@@ -127,14 +127,14 @@ func canRevive() (ok bool) {
 }
 
 // callErrAck encodes err as a failure acknowledgement for the call.
-func callErrAck(cur realm, err error) types.RecvPacketResult {
+func callErrAck(_ int, rlm realm, err error) types.RecvPacketResult {
 	ack, encErr := z.EncodeAck(z.Ack{Tag: tagAckFailure(), InnerAck: []byte(err.Error())})
 	if encErr != nil {
 		// EncodeAck on a 2-field schema is essentially infallible. A failure
 		// would emit a non-Tag-prefixed ack the counterparty can't decode.
 		panic(encErr)
 	}
-	return failureResult(cur, ack)
+	return failureResult(ack)
 }
 
 // cloneBytes copies slices before storing or passing them to code that may

@@ -58,12 +58,12 @@ func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relaye
 	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
 		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
-		return failureResult(rlm, universalErrorAck())
+		return failureResult(universalErrorAck())
 	}
-	res, err := v.dispatchExecute(rlm, packet, relayer, relayerMsg, zp.Path, zp.Salt, zp.Instruction, false)
+	res, err := v.dispatchExecute(0, rlm, packet, relayer, relayerMsg, zp.Path, zp.Salt, zp.Instruction, false)
 	if err != nil {
 		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
-		return failureResult(rlm, universalErrorAck())
+		return failureResult(universalErrorAck())
 	}
 	return res
 }
@@ -74,12 +74,12 @@ func (v *ucs03ZkgmV1) OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, 
 	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
 		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
-		return failureResult(rlm, universalErrorAck())
+		return failureResult(universalErrorAck())
 	}
-	res, err := v.dispatchExecute(rlm, packet, marketMaker, marketMakerMsg, zp.Path, zp.Salt, zp.Instruction, true)
+	res, err := v.dispatchExecute(0, rlm, packet, marketMaker, marketMakerMsg, zp.Path, zp.Salt, zp.Instruction, true)
 	if err != nil {
 		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
-		return failureResult(rlm, universalErrorAck())
+		return failureResult(universalErrorAck())
 	}
 	if isOnlyMakerAck(res.Acknowledgement) {
 		panic("zkgm: only maker")
@@ -93,10 +93,10 @@ func (v *ucs03ZkgmV1) OnAcknowledgementPacket(_ int, rlm realm, packet types.Pac
 	if err != nil {
 		panic(err.Error())
 	}
-	if v.handleForwardChild(rlm, packet, zp, acknowledgement) {
+	if v.handleForwardChild(0, rlm, packet, zp, acknowledgement) {
 		return
 	}
-	if err := v.dispatchAck(rlm, packet, zp.Path, zp.Salt, zp.Instruction, acknowledgement); err != nil {
+	if err := v.dispatchAck(0, rlm, packet, zp.Path, zp.Salt, zp.Instruction, acknowledgement); err != nil {
 		panic(err.Error())
 	}
 }
@@ -107,10 +107,10 @@ func (v *ucs03ZkgmV1) OnTimeoutPacket(_ int, rlm realm, packet types.Packet, rel
 	if err != nil {
 		panic(err.Error())
 	}
-	if v.handleForwardChild(rlm, packet, zp, universalErrorAck()) {
+	if v.handleForwardChild(0, rlm, packet, zp, universalErrorAck()) {
 		return
 	}
-	if err := v.dispatchTimeout(rlm, packet, zp.Path, zp.Salt, zp.Instruction); err != nil {
+	if err := v.dispatchTimeout(0, rlm, packet, zp.Path, zp.Salt, zp.Instruction); err != nil {
 		panic(err.Error())
 	}
 }
@@ -124,7 +124,7 @@ func (v *ucs03ZkgmV1) Send(_ int, rlm realm, channelId types.ChannelId, timeoutT
 	// the impl no longer receives it; wiring the escrow envelope from the proxy
 	// is the open migration item (see VOUCHER_ANALYSIS.md / migration plan).
 	funds := newFunds(parseCoins(""))
-	if err := v.dispatchVerify(rlm, channelId, sender, funds, u256.Zero(), salt, instruction); err != nil {
+	if err := v.dispatchVerify(0, rlm, channelId, sender, funds, u256.Zero(), salt, instruction); err != nil {
 		panic(err)
 	}
 	if err := funds.assertEmpty(); err != nil {

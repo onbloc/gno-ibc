@@ -90,11 +90,11 @@ func TestBaseAmountPreservedThroughLockAndRefund(cur realm, t *testing.T) {
 	srcBal, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(chanSrc, path, order.BaseToken, order.QuoteToken))
 	uassert.Equal(t, u256.NewUint(N).ToString(), srcBal.ToString())
 
-	err = v.acknowledgeTokenOrderV2(0, cur, chanSrc, path, order, z.Ack{Tag: tagAckFailure()})
+	err = v.acknowledgeTokenOrderV2(0, cur, chanSrc, path, order, z.TokenOrderAck{}, false)
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(N), voucherBalanceOf(ibcBase, address(sender)))
 	srcBalAfter, hasBal := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(chanSrc, path, order.BaseToken, order.QuoteToken))
-	uassert.True(t, !hasBal || srcBalAfter.IsZero())
+	uassert.True(t, hasBal && srcBalAfter.IsZero())
 }
 
 func TestBaseAmountPreservedThroughMint(cur realm, t *testing.T) {

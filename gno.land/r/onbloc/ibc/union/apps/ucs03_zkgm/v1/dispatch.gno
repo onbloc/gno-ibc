@@ -14,7 +14,7 @@ import (
 
 // dispatchVerify routes an instruction to its opcode-specific verifier (the send-side validation entry point).
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2742-L2796
-func (v *ucs03ZkgmV1) dispatchVerify(_ int, rlm realm, channelId types.ChannelId, sender string, funds *funds, path *u256.Uint, salt [32]byte, instr z.Instruction) error {
+func (v *ucs03ZkgmV1) dispatchVerify(_ int, rlm realm, channelId types.ChannelId, sender string, funds *funds, path *u256.Uint, instr z.Instruction) error {
 	switch instr.Opcode {
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instr)
@@ -36,14 +36,14 @@ func (v *ucs03ZkgmV1) dispatchVerify(_ int, rlm realm, channelId types.ChannelId
 			return err
 		}
 
-		return v.verifyBatch(0, rlm, channelId, sender, funds, path, salt, batch)
+		return v.verifyBatch(0, rlm, channelId, sender, funds, path, batch)
 	case z.OP_FORWARD:
 		forward, err := decodeForwardInstruction(instr)
 		if err != nil {
 			return err
 		}
 
-		return v.verifyForward(0, rlm, channelId, sender, funds, path, salt, forward)
+		return v.verifyForward(0, rlm, channelId, sender, funds, path, forward)
 	default:
 		return errors.New("zkgm/v1: unsupported opcode")
 	}
@@ -110,7 +110,7 @@ func (v *ucs03ZkgmV1) dispatchExecute(_ int, rlm realm, packet types.Packet, rel
 }
 
 // dispatchAck routes an acknowledgement to its opcode handler.
-func (v *ucs03ZkgmV1) dispatchAck(_ int, rlm realm, packet types.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction, ack []byte) error {
+func (v *ucs03ZkgmV1) dispatchAck(_ int, rlm realm, packet types.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction, successful bool, ack []byte) error {
 	switch instr.Opcode {
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instr)
@@ -118,12 +118,17 @@ func (v *ucs03ZkgmV1) dispatchAck(_ int, rlm realm, packet types.Packet, path *u
 			return err
 		}
 
-		decodedAck, err := z.DecodeAck(ack)
-		if err != nil {
-			return err
+		var orderAck z.TokenOrderAck
+		hasOrderAck := false
+		if successful {
+			decoded, err := z.DecodeTokenOrderAck(ack)
+			if err != nil {
+				return err
+			}
+			orderAck = decoded
+			hasOrderAck = true
 		}
-
-		return v.acknowledgeTokenOrderV2(0, rlm, packet.SourceChannelId, path, order, decodedAck)
+		return v.acknowledgeTokenOrderV2(0, rlm, packet.SourceChannelId, path, order, orderAck, hasOrderAck)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instr)
 		if err != nil {
@@ -137,24 +142,14 @@ func (v *ucs03ZkgmV1) dispatchAck(_ int, rlm realm, packet types.Packet, path *u
 			return err
 		}
 
-		outerAck, err := z.DecodeAck(ack)
-		if err != nil {
-			return err
-		}
-
-		return v.acknowledgeBatch(0, rlm, packet, path, salt, batch, outerAck)
+		return v.acknowledgeBatch(0, rlm, packet, path, salt, batch, successful, ack)
 	case z.OP_FORWARD:
 		forward, err := decodeForwardInstruction(instr)
 		if err != nil {
 			return err
 		}
 
-		outerAck, err := z.DecodeAck(ack)
-		if err != nil {
-			return err
-		}
-
-		return v.acknowledgeForward(0, rlm, packet, path, salt, forward, outerAck)
+		return v.acknowledgeForward(0, rlm, packet, path, salt, forward, successful, ack)
 	default:
 		return errors.New("zkgm/v1: unsupported opcode")
 	}

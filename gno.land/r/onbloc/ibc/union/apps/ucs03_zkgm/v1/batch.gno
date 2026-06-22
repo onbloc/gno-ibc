@@ -16,13 +16,12 @@ var errInvalidBatchInstruction = errors.New("zkgm/v1: invalid batch instruction"
 
 // verifyBatch verifies each allowed child instruction against the shared funds budget.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2941-L2967
-func (v *ucs03ZkgmV1) verifyBatch(_ int, rlm realm, channelId types.ChannelId, sender string, funds *funds, path *u256.Uint, parentSalt [32]byte, batch z.Batch) error {
-	for i, instr := range batch.Instructions {
+func (v *ucs03ZkgmV1) verifyBatch(_ int, rlm realm, channelId types.ChannelId, sender string, funds *funds, path *u256.Uint, batch z.Batch) error {
+	for _, instr := range batch.Instructions {
 		if !isAllowedBatchInstruction(instr.Opcode) {
 			return errInvalidBatchInstruction
 		}
-		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), parentSalt)
-		if err := v.dispatchVerify(0, rlm, channelId, sender, funds, path, childSalt, instr); err != nil {
+		if err := v.dispatchVerify(0, rlm, channelId, sender, funds, path, instr); err != nil {
 			return err
 		}
 	}
@@ -63,11 +62,10 @@ func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relaye
 }
 
 // acknowledgeBatch fans the outer ack out to each child instruction.
-func (v *ucs03ZkgmV1) acknowledgeBatch(_ int, rlm realm, packet types.Packet, path *u256.Uint, parentSalt [32]byte, batch z.Batch, outerAck z.Ack) error {
-	successful := outerAck.Tag != nil && outerAck.Tag.Eq(tagAckSuccess())
+func (v *ucs03ZkgmV1) acknowledgeBatch(_ int, rlm realm, packet types.Packet, path *u256.Uint, parentSalt [32]byte, batch z.Batch, successful bool, ack []byte) error {
 	var batchAck z.BatchAck
 	if successful {
-		decoded, err := z.DecodeBatchAck(outerAck.InnerAck)
+		decoded, err := z.DecodeBatchAck(ack)
 		if err != nil {
 			return err
 		}
@@ -76,20 +74,19 @@ func (v *ucs03ZkgmV1) acknowledgeBatch(_ int, rlm realm, packet types.Packet, pa
 			return errors.New("zkgm/v1: batch ack count mismatch")
 		}
 	}
-	// On outer-failure, per-child acks may be absent or untrusted; surface
-	// universalErrorAck to every child so each handler takes its failure path
-	// (e.g. token-order refund). Compute once, share the slice.
-	var ueAck []byte
-	if !successful {
-		ueAck = universalErrorAck()
-	}
 	for i, instr := range batch.Instructions {
-		childAck := ueAck
+		var childAck []byte
+		childSuccessful := successful
 		if successful {
-			childAck = batchAck.Acknowledgements[i]
+			decodedChildAck, err := z.DecodeAck(batchAck.Acknowledgements[i])
+			if err != nil {
+				return err
+			}
+			childSuccessful = decodedChildAck.Tag != nil && decodedChildAck.Tag.Eq(tagAckSuccess())
+			childAck = decodedChildAck.InnerAck
 		}
 		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), parentSalt)
-		if err := v.dispatchAck(0, rlm, packet, path, childSalt, instr, childAck); err != nil {
+		if err := v.dispatchAck(0, rlm, packet, path, childSalt, instr, childSuccessful, childAck); err != nil {
 			return err
 		}
 	}

@@ -181,11 +181,6 @@ func verifyNonMembershipWithActiveClient(c *client, height types.Height, proof, 
 	}
 }
 
-// GetLightClient returns the stored light client object for clientId.
-func GetLightClient(clientId types.ClientId) (lightclient.Interface, bool) {
-	return store.lightClientOf(clientId)
-}
-
 // GetClientState returns the stored client state bytes.
 func GetClientState(clientId types.ClientId) []byte {
 	c := store.getClient(clientId)

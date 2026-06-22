@@ -39,7 +39,7 @@ func TestUnionVerifyBatch(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		err := v.verifyBatch(0, cur, types.ChannelId(1), sender, newFunds(nil), u256.Zero(), [32]byte{}, tc.batch)
+		err := v.verifyBatch(0, cur, types.ChannelId(1), sender, newFunds(nil), u256.Zero(), tc.batch)
 		if tc.wantErr == "" {
 			uassert.NoError(t, err)
 		} else {

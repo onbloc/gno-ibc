@@ -8,10 +8,6 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-func setCommitProofAdmin(cur realm) {
-	admin = cur.Address()
-}
-
 // Gno equivalent of Union RestrictedExecuteMsg access management.
 func TestCommitMembershipProofRejectsNonAdminBeforeVerification(cur realm, t *testing.T) {
 	resetStore(cur)

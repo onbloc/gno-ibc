@@ -6,8 +6,8 @@ import (
 
 	types "gno.land/p/onbloc/ibc/union/types"
 
+	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
-	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -35,7 +35,30 @@ func z39CallPacket(cur realm, receiverPath string) types.Packet {
 		ContractAddress:  []byte(receiverPath),
 		ContractCalldata: []byte("calldata"),
 	}
-	return core.NewPacket(types.ChannelId(2), types.ChannelId(1), e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)), types.Timestamp(0))
+	return core.NewPacket(types.ChannelId(2), types.ChannelId(1), mustRealcometZkgmPacketData(mustRealcometCallInstruction(call)), types.Timestamp(0))
+}
+
+func mustRealcometCallInstruction(call z.Call) z.Instruction {
+	callBytes, err := z.EncodeCall(call)
+	if err != nil {
+		panic(err)
+	}
+	return z.Instruction{
+		Version: z.INSTR_VERSION_0,
+		Opcode:  z.OP_CALL,
+		Operand: callBytes,
+	}
+}
+
+func mustRealcometZkgmPacketData(instr z.Instruction) []byte {
+	packetBytes, err := z.EncodeZkgmPacket(z.ZkgmPacket{
+		Path:        u256.Zero(),
+		Instruction: instr,
+	})
+	if err != nil {
+		panic(err)
+	}
+	return packetBytes
 }
 
 func printKV(name string, key []byte, value []byte) {

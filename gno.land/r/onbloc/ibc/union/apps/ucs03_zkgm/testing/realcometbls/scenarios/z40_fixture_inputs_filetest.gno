@@ -8,7 +8,6 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
-	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -27,12 +26,12 @@ func main(cur realm) {
 
 func z40MixedBatchPacket(cur realm) types.Packet {
 	return z40BatchPacket(cur, z.Batch{Instructions: []z.Instruction{
-		e2e.MustCallInstruction(cross(cur), z.Call{
+		mustRealcometCallInstruction(z.Call{
 			Sender:           []byte("sender"),
 			ContractAddress:  []byte(mockReceiverPath),
 			ContractCalldata: []byte("batch-call"),
 		}),
-		e2e.MustTokenOrderInstruction(cross(cur), z.TokenOrderV2{
+		mustRealcometTokenOrderInstruction(z.TokenOrderV2{
 			Sender:      []byte("sender"),
 			Receiver:    []byte("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"),
 			BaseToken:   []byte("ugnot"),
@@ -46,12 +45,12 @@ func z40MixedBatchPacket(cur realm) types.Packet {
 
 func z40PanicBatchPacket(cur realm) types.Packet {
 	return z40BatchPacket(cur, z.Batch{Instructions: []z.Instruction{
-		e2e.MustCallInstruction(cross(cur), z.Call{
+		mustRealcometCallInstruction(z.Call{
 			Sender:           []byte("sender"),
 			ContractAddress:  []byte(mockReceiverPath),
 			ContractCalldata: []byte("panic-call"),
 		}),
-		e2e.MustTokenOrderInstruction(cross(cur), z.TokenOrderV2{
+		mustRealcometTokenOrderInstruction(z.TokenOrderV2{
 			Sender:      []byte("sender"),
 			Receiver:    []byte("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"),
 			BaseToken:   []byte("ugnot"),
@@ -64,7 +63,54 @@ func z40PanicBatchPacket(cur realm) types.Packet {
 }
 
 func z40BatchPacket(cur realm, batch z.Batch) types.Packet {
-	return core.NewPacket(types.ChannelId(2), types.ChannelId(1), e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), types.Timestamp(0))
+	return core.NewPacket(types.ChannelId(2), types.ChannelId(1), mustRealcometZkgmPacketData(mustRealcometBatchInstruction(batch)), types.Timestamp(0))
+}
+
+func mustRealcometCallInstruction(call z.Call) z.Instruction {
+	callBytes, err := z.EncodeCall(call)
+	if err != nil {
+		panic(err)
+	}
+	return z.Instruction{
+		Version: z.INSTR_VERSION_0,
+		Opcode:  z.OP_CALL,
+		Operand: callBytes,
+	}
+}
+
+func mustRealcometTokenOrderInstruction(order z.TokenOrderV2) z.Instruction {
+	orderBytes, err := z.EncodeTokenOrderV2(order)
+	if err != nil {
+		panic(err)
+	}
+	return z.Instruction{
+		Version: z.INSTR_VERSION_2,
+		Opcode:  z.OP_TOKEN_ORDER,
+		Operand: orderBytes,
+	}
+}
+
+func mustRealcometBatchInstruction(batch z.Batch) z.Instruction {
+	batchBytes, err := z.EncodeBatch(batch)
+	if err != nil {
+		panic(err)
+	}
+	return z.Instruction{
+		Version: z.INSTR_VERSION_0,
+		Opcode:  z.OP_BATCH,
+		Operand: batchBytes,
+	}
+}
+
+func mustRealcometZkgmPacketData(instr z.Instruction) []byte {
+	packetBytes, err := z.EncodeZkgmPacket(z.ZkgmPacket{
+		Path:        u256.Zero(),
+		Instruction: instr,
+	})
+	if err != nil {
+		panic(err)
+	}
+	return packetBytes
 }
 
 func printKV(name string, key []byte, value []byte) {

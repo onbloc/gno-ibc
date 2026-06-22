@@ -290,6 +290,96 @@ func TestChannelOpenConfirmWrongStateAborts(cur realm, t *testing.T) {
 	})
 }
 
+func TestChannelOpenRejectsMissingPortApp(cur realm, t *testing.T) {
+	tests := []struct {
+		name string
+		want string
+		run  func(cur realm)
+	}{
+		{
+			name: "open init missing app",
+			want: "port missing-port not found",
+			run: func(cur realm) {
+				v := newTestImpl()
+				ms := v.store.(*mockStore)
+				clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
+				ms.SaveConnection(0, cur, types.ConnectionId(1),
+					core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+				v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{
+					PortId:       types.Bytes("missing-port"),
+					ConnectionId: types.ConnectionId(1),
+					Version:      "v1",
+				})
+			},
+		},
+		{
+			name: "open try missing app",
+			want: "port missing-port not found",
+			run: func(cur realm) {
+				v := newTestImpl()
+				ms := v.store.(*mockStore)
+				clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
+				ms.SaveConnection(0, cur, types.ConnectionId(1),
+					core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+				v.ChannelOpenTry(0, cur, openTryMsg(types.Bytes("missing-port")))
+			},
+		},
+		{
+			name: "open ack missing app",
+			want: "port missing-port not found",
+			run: func(cur realm) {
+				v := newTestImpl()
+				ms := v.store.(*mockStore)
+				clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
+				ms.SaveConnection(0, cur, types.ConnectionId(1),
+					core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+				chId := v.store.NextChannelId(0, cur)
+				v.store.CreateChannel(0, cur, chId, types.Channel{
+					State:        types.ChannelStateInit,
+					ConnectionId: types.ConnectionId(1),
+					Version:      "v1",
+				}, types.Bytes("missing-port"))
+				v.ChannelOpenAck(0, cur, types.MsgChannelOpenAck{
+					ChannelId:             chId,
+					CounterpartyChannelId: types.ChannelId(9),
+					CounterpartyVersion:   "v1",
+					ProofHeight:           10,
+					ProofTry:              []byte("proof"),
+				})
+			},
+		},
+		{
+			name: "open confirm missing app",
+			want: "port missing-port not found",
+			run: func(cur realm) {
+				v := newTestImpl()
+				ms := v.store.(*mockStore)
+				clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
+				ms.SaveConnection(0, cur, types.ConnectionId(1),
+					core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+				chId := v.store.NextChannelId(0, cur)
+				v.store.CreateChannel(0, cur, chId, types.Channel{
+					State:                 types.ChannelStateTryOpen,
+					ConnectionId:          types.ConnectionId(1),
+					CounterpartyChannelId: types.ChannelId(9),
+					Version:               "v1",
+				}, types.Bytes("missing-port"))
+				v.ChannelOpenConfirm(0, cur, types.MsgChannelOpenConfirm{
+					ChannelId:   chId,
+					ProofHeight: 11,
+					ProofAck:    []byte("proof"),
+				})
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.AbortsContains(t, cur, tc.want, tc.run)
+		})
+	}
+}
+
 func TestChannelCloseInit(cur realm, t *testing.T) {
 	v := newTestImpl()
 	portId, mApp := setupChannelEnv(cur, v)

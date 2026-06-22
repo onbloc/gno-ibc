@@ -39,6 +39,21 @@ func recvPacket(chId types.ChannelId, data string) types.Packet {
 	}
 }
 
+func setupOpenChannelWithoutApp(cur realm, v *coreV1, portId types.Bytes) types.ChannelId {
+	ms := v.store.(*mockStore)
+	clientId := createClient(cur, v, &mockLightClient{timestampAtHt: farFuture}, nil, nil)
+	ms.SaveConnection(0, cur, types.ConnectionId(1),
+		core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+	chId := v.store.NextChannelId(0, cur)
+	v.store.CreateChannel(0, cur, chId, types.Channel{
+		State:                 types.ChannelStateOpen,
+		ConnectionId:          types.ConnectionId(1),
+		CounterpartyChannelId: types.ChannelId(9),
+		Version:               "v1",
+	}, portId)
+	return chId
+}
+
 func TestSendPacketCommits(cur realm, t *testing.T) {
 	v := newTestImpl()
 	chId, _, _ := setupOpenChannel(cur, v)
@@ -204,6 +219,39 @@ func TestPacketRecvRejectsInvalidMessages(cur realm, t *testing.T) {
 	}
 }
 
+func TestPacketRecvRelayerMessageLengthMismatchIsPartial(cur realm, t *testing.T) {
+	tests := []struct {
+		name      string
+		msgs      [][]byte
+		wantCalls int
+		wantP1    bool
+		wantP2    bool
+	}{
+		{"fewer relayer messages than packets", [][]byte{[]byte("rm1")}, 1, true, false},
+		{"more relayer messages than packets", [][]byte{[]byte("rm1"), []byte("rm2"), []byte("extra")}, 2, true, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			chId, _, mApp := setupOpenChannel(cur, v)
+			p1 := recvPacket(chId, "recv-len-1")
+			p2 := recvPacket(chId, "recv-len-2")
+
+			v.PacketRecv(0, cur, types.MsgPacketRecv{
+				Packets:     []types.Packet{p1, p2},
+				RelayerMsgs: tc.msgs,
+				Proof:       []byte("p"),
+				ProofHeight: 10,
+			})
+
+			uassert.Equal(t, tc.wantCalls, mApp.recvCalls)
+			uassert.Equal(t, tc.wantP1, v.store.HasPacketReceipt(p1))
+			uassert.Equal(t, tc.wantP2, v.store.HasPacketReceipt(p2))
+		})
+	}
+}
+
 func TestPacketRecvAsyncLeavesMagicReceipt(cur realm, t *testing.T) {
 	v := newTestImpl()
 	chId, _, mApp := setupOpenChannel(cur, v)
@@ -237,6 +285,37 @@ func TestIntentPacketRecvDispatchesAndReceipts(cur realm, t *testing.T) {
 	receipt, ok := v.store.AcknowledgementReceipt(chId, packet)
 	uassert.True(t, ok)
 	uassert.True(t, receipt == types.CommitAcks([][]byte{[]byte("ack")}))
+}
+
+func TestIntentPacketRecvMarketMakerMessageLengthMismatchIsPartial(cur realm, t *testing.T) {
+	tests := []struct {
+		name      string
+		msgs      [][]byte
+		wantCalls int
+		wantP1    bool
+		wantP2    bool
+	}{
+		{"fewer market maker messages than packets", [][]byte{[]byte("mm1")}, 1, true, false},
+		{"more market maker messages than packets", [][]byte{[]byte("mm1"), []byte("mm2"), []byte("extra")}, 2, true, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			chId, _, mApp := setupOpenChannel(cur, v)
+			p1 := recvPacket(chId, "intent-len-1")
+			p2 := recvPacket(chId, "intent-len-2")
+
+			v.IntentPacketRecv(0, cur, types.MsgIntentPacketRecv{
+				Packets:             []types.Packet{p1, p2},
+				MarketMakerMessages: tc.msgs,
+			})
+
+			uassert.Equal(t, tc.wantCalls, mApp.intentRecvCalls)
+			uassert.Equal(t, tc.wantP1, v.store.HasPacketReceipt(p1))
+			uassert.Equal(t, tc.wantP2, v.store.HasPacketReceipt(p2))
+		})
+	}
 }
 
 func TestIntentPacketRecvDuplicateSkipped(cur realm, t *testing.T) {
@@ -300,6 +379,34 @@ func TestPacketRecvProofFailureAborts(cur realm, t *testing.T) {
 	packet := types.Packet{SourceChannelId: types.ChannelId(9), DestinationChannelId: chId, Data: []byte("d"), TimeoutTimestamp: farFuture}
 	uassert.AbortsContains(t, cur, "bad proof", func(cur realm) {
 		v.PacketRecv(0, cur, types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{[]byte("rm")}, Proof: []byte("p"), ProofHeight: 10})
+	})
+}
+
+func TestPacketRecvRejectsMissingPortApp(cur realm, t *testing.T) {
+	v := newTestImpl()
+	chId := setupOpenChannelWithoutApp(cur, v, types.Bytes("missing-port"))
+	packet := recvPacket(chId, "missing-port-recv")
+
+	uassert.AbortsContains(t, cur, "port missing-port not found", func(cur realm) {
+		v.PacketRecv(0, cur, types.MsgPacketRecv{
+			Packets:     []types.Packet{packet},
+			RelayerMsgs: [][]byte{[]byte("rm")},
+			Proof:       []byte("p"),
+			ProofHeight: 10,
+		})
+	})
+}
+
+func TestIntentPacketRecvRejectsMissingPortApp(cur realm, t *testing.T) {
+	v := newTestImpl()
+	chId := setupOpenChannelWithoutApp(cur, v, types.Bytes("missing-port"))
+	packet := recvPacket(chId, "missing-port-intent")
+
+	uassert.AbortsContains(t, cur, "port missing-port not found", func(cur realm) {
+		v.IntentPacketRecv(0, cur, types.MsgIntentPacketRecv{
+			Packets:             []types.Packet{packet},
+			MarketMakerMessages: [][]byte{[]byte("mm")},
+		})
 	})
 }
 
@@ -395,6 +502,41 @@ func TestPacketAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
 	}
 }
 
+func TestPacketAcknowledgementLengthMismatchIsPartial(cur realm, t *testing.T) {
+	tests := []struct {
+		name      string
+		acks      [][]byte
+		wantCalls int
+		wantP1Ack bool
+		wantP2Ack bool
+	}{
+		{"fewer acknowledgements than packets", [][]byte{[]byte("ack1")}, 1, true, false},
+		{"more acknowledgements than packets", [][]byte{[]byte("ack1"), []byte("ack2"), []byte("extra")}, 2, true, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			chId, _, mApp := setupOpenChannel(cur, v)
+			p1 := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("ack-len-1"))
+			p2 := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("ack-len-2"))
+
+			v.PacketAcknowledgement(0, cur, types.MsgPacketAcknowledgement{
+				Packets:          []types.Packet{p1, p2},
+				Acknowledgements: tc.acks,
+				Proof:            []byte("proof"),
+				ProofHeight:      10,
+			})
+
+			uassert.Equal(t, tc.wantCalls, mApp.ackCalls)
+			p1Commitment, _ := v.store.PacketCommitment(chId, p1)
+			p2Commitment, _ := v.store.PacketCommitment(chId, p2)
+			uassert.Equal(t, tc.wantP1Ack, p1Commitment == types.COMMITMENT_MAGIC_ACK)
+			uassert.Equal(t, tc.wantP2Ack, p2Commitment == types.COMMITMENT_MAGIC_ACK)
+		})
+	}
+}
+
 func TestPacketTimeoutRefunds(cur realm, t *testing.T) {
 	v := newTestImpl()
 	chId, _, mApp := setupOpenChannel(cur, v)
@@ -415,6 +557,34 @@ func TestPacketTimeoutRejectsInvalidMessages(cur realm, t *testing.T) {
 		want string
 		run  func(cur realm)
 	}{
+		{
+			name: "missing channel",
+			want: "channel 777 not found",
+			run: func(cur realm) {
+				v := newTestImpl()
+				packet := types.Packet{SourceChannelId: types.ChannelId(777), DestinationChannelId: types.ChannelId(9), Data: []byte("timeout-missing-channel"), TimeoutTimestamp: types.Timestamp(1000)}
+				v.PacketTimeout(0, cur, types.MsgPacketTimeout{Packet: packet, Proof: []byte("proof"), ProofHeight: 5})
+			},
+		},
+		{
+			name: "missing client",
+			want: "client 99 not found",
+			run: func(cur realm) {
+				v := newTestImpl()
+				ms := v.store.(*mockStore)
+				chId := types.ChannelId(1)
+				ms.SaveConnection(0, cur, types.ConnectionId(1),
+					core.NewConnection(types.ConnectionStateOpen, types.ClientId(99), types.ClientId(7), types.ConnectionId(2)))
+				ms.CreateChannel(0, cur, chId, types.Channel{
+					State:                 types.ChannelStateOpen,
+					ConnectionId:          types.ConnectionId(1),
+					CounterpartyChannelId: types.ChannelId(9),
+					Version:               "v1",
+				}, types.Bytes(cur.Previous().PkgPath()))
+				packet := types.Packet{SourceChannelId: chId, DestinationChannelId: types.ChannelId(9), Data: []byte("timeout-missing-client"), TimeoutTimestamp: types.Timestamp(1000)}
+				v.PacketTimeout(0, cur, types.MsgPacketTimeout{Packet: packet, Proof: []byte("proof"), ProofHeight: 5})
+			},
+		},
 		{
 			name: "zero proof timestamp",
 			want: "packet timeout proof timestamp not found",
@@ -551,6 +721,15 @@ func TestWriteAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
 			},
 		},
 		{
+			name: "missing channel",
+			want: "channel 777 not found",
+			run: func(cur realm) {
+				v := newTestImpl()
+				packet := recvPacket(types.ChannelId(777), "missing-write-channel")
+				v.WriteAcknowledgement(0, cur, types.MsgWriteAcknowledgement{Packet: packet, Acknowledgement: []byte("ack")})
+			},
+		},
+		{
 			name: "missing receipt",
 			want: "packet receipt not found",
 			run: func(cur realm) {
@@ -586,6 +765,25 @@ func TestSendPacketRejectsInvalidState(cur realm, t *testing.T) {
 		want string
 		run  func(cur realm)
 	}{
+		{
+			name: "missing channel owner",
+			want: "channel 777 not found",
+			run: func(cur realm) {
+				v := newTestImpl()
+				v.SendPacket(0, cur, types.ChannelId(777), types.Timestamp(1000), []byte("missing-owner-send"))
+			},
+		},
+		{
+			name: "missing channel record",
+			want: "channel 77 not found",
+			run: func(cur realm) {
+				v := newTestImpl()
+				ms := v.store.(*mockStore)
+				chId := types.ChannelId(77)
+				ms.channelOwners[uint32(chId)] = types.Bytes(cur.Previous().PkgPath())
+				v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("missing-channel-send"))
+			},
+		},
 		{
 			name: "closed channel",
 			want: "invalid channel state",
@@ -740,6 +938,38 @@ func TestBatchAcksRejectsInvalidMessages(cur realm, t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			uassert.AbortsContains(t, cur, tc.want, tc.run)
+		})
+	}
+}
+
+func TestBatchAcksLengthMismatchPersistsProvidedAcks(cur realm, t *testing.T) {
+	tests := []struct {
+		name string
+		acks [][]byte
+	}{
+		{"fewer acks than packets", [][]byte{[]byte("ack")}},
+		{"more acks than packets", [][]byte{[]byte("ack"), []byte("ack"), []byte("extra")}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			chId, _, _ := setupOpenChannel(cur, v)
+			p1 := recvPacket(chId, "batch-len-1")
+			p2 := recvPacket(chId, "batch-len-2")
+			v.PacketRecv(0, cur, types.MsgPacketRecv{
+				Packets:     []types.Packet{p1, p2},
+				RelayerMsgs: [][]byte{[]byte("rm1"), []byte("rm2")},
+				Proof:       []byte("p"),
+				ProofHeight: 10,
+			})
+
+			v.BatchAcks(0, cur, types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: tc.acks})
+
+			batchHash := core.CommitPacketsHash([]types.Packet{p1, p2})
+			receipt, ok := v.store.BatchReceiptsAt(chId, batchHash)
+			uassert.True(t, ok)
+			uassert.True(t, receipt == types.CommitAcks(tc.acks))
 		})
 	}
 }

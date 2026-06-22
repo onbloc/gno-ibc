@@ -9,7 +9,7 @@ import (
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
-func TestQueryClientGetters(cur realm, t *testing.T) {
+func TestGetClientGetters(cur realm, t *testing.T) {
 	v := newTestImpl()
 	lc := &mockLightClient{latestHeight: 42, timestampAtHt: types.Timestamp(123)}
 	clientId := createClient(cur, v, lc, nil, nil)
@@ -48,7 +48,7 @@ func TestQueryClientGetters(cur realm, t *testing.T) {
 	uassert.Equal(t, uint64(123), uint64(ts))
 }
 
-func TestQueryMissingClient(cur realm, t *testing.T) {
+func TestGetMissingClient(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	uassert.True(t, v.GetStatus(types.ClientId(99)) == types.StatusUnknown)
@@ -60,14 +60,14 @@ func TestQueryMissingClient(cur realm, t *testing.T) {
 	uassert.False(t, ok)
 }
 
-func TestQueryFrozenStatus(cur realm, t *testing.T) {
+func TestGetFrozenStatus(cur realm, t *testing.T) {
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{status: lightclient.Frozen}, nil, nil)
 
 	uassert.True(t, v.GetStatus(clientId) == types.StatusFrozen)
 }
 
-func TestQueryBestEffortGetters(cur realm, t *testing.T) {
+func TestGetBestEffortGetters(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	// gno has no client-type registry and no per-app channel set.
@@ -75,7 +75,7 @@ func TestQueryBestEffortGetters(cur realm, t *testing.T) {
 	uassert.Equal(t, 0, len(v.GetChannels("some-app")))
 }
 
-func TestQueryConnectionAndChannel(cur realm, t *testing.T) {
+func TestGetConnectionAndChannel(cur realm, t *testing.T) {
 	v := newTestImpl()
 	ms := v.store.(*mockStore)
 	ms.SaveConnection(0, cur, types.ConnectionId(1),

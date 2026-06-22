@@ -1,5 +1,5 @@
 // Recv-side happy path: open a channel pair, then submit a TokenOrderV2
-// {Kind=ESCROW} packet via core.PacketRecv. dispatchExecute → executeTokenOrderV2
+// {Kind=ESCROW} packet via core.PacketRecv. dispatchExecutePacket → executeTokenOrderV2
 // mints the quote-token voucher on the destination side; we read the resulting
 // balance via impl.VoucherBalanceOf to confirm the handler/dispatch path ran
 // end-to-end (not just verifyXxx).

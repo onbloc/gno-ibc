@@ -13,7 +13,7 @@ import (
 func (c *coreV1) ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit) types.ChannelId {
 	relayer := rlm.Previous().Address()
 	portId := types.Bytes(cloneBytes(msg.PortId))
-	c.ensureConnectionOpen(msg.ConnectionId)
+	c.ensureConnectionState(msg.ConnectionId)
 	channelId := c.store.NextChannelId(0, rlm)
 
 	channel := core.NewChannel(
@@ -55,7 +55,7 @@ func (c *coreV1) channelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry, v
 	if msg.Channel.CounterpartyChannelId == 0 {
 		panic(core.ErrInvalidCounterpartyChannelId)
 	}
-	connection := c.ensureConnectionOpen(msg.Channel.ConnectionId)
+	connection := c.ensureConnectionState(msg.Channel.ConnectionId)
 	channelId := c.store.NextChannelId(0, rlm)
 
 	if verify {
@@ -106,7 +106,7 @@ func (c *coreV1) channelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck, v
 	if channel.State != types.ChannelStateInit {
 		panic(core.ErrInvalidChannelState)
 	}
-	connection := c.ensureConnectionOpen(channel.ConnectionId)
+	connection := c.ensureConnectionState(channel.ConnectionId)
 	portId, _ := c.store.GetChannelOwner(msg.ChannelId)
 
 	if verify {
@@ -168,7 +168,7 @@ func (c *coreV1) channelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenCo
 		panic(core.ErrInvalidCounterpartyChannelId)
 	}
 
-	connection := c.ensureConnectionOpen(channel.ConnectionId)
+	connection := c.ensureConnectionState(channel.ConnectionId)
 	portId, _ := c.store.GetChannelOwner(msg.ChannelId)
 
 	if verify {
@@ -219,7 +219,7 @@ func (c *coreV1) ChannelCloseInit(_ int, rlm realm, msg types.MsgChannelCloseIni
 		panic(core.ErrInvalidCounterpartyChannelId)
 	}
 
-	c.ensureConnectionOpen(channel.ConnectionId)
+	c.ensureConnectionState(channel.ConnectionId)
 	portId, _ := c.store.GetChannelOwner(msg.ChannelId)
 
 	updated := c.closedChannel(channel)
@@ -247,7 +247,7 @@ func (c *coreV1) ChannelCloseConfirm(_ int, rlm realm, msg types.MsgChannelClose
 		panic(core.ErrInvalidCounterpartyChannelId)
 	}
 
-	connection := c.ensureConnectionOpen(channel.ConnectionId)
+	connection := c.ensureConnectionState(channel.ConnectionId)
 	portId, _ := c.store.GetChannelOwner(msg.ChannelId)
 
 	expectedChannel := core.NewChannel(

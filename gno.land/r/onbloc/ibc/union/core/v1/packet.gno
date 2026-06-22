@@ -33,7 +33,7 @@ func (c *coreV1) SendPacket(_ int, rlm realm, sourceChannelId types.ChannelId, t
 	if channel.State != types.ChannelStateOpen {
 		panic(core.ErrInvalidChannelState)
 	}
-	connection := c.ensureConnectionOpen(channel.ConnectionId)
+	connection := c.ensureConnectionState(channel.ConnectionId)
 
 	packet := types.Packet{
 		SourceChannelId:      sourceChannelId,
@@ -64,7 +64,7 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 	if !ok {
 		panic("channel " + destinationChannelId.String() + " not found")
 	}
-	connection := c.ensureConnectionOpen(channel.ConnectionId)
+	connection := c.ensureConnectionState(channel.ConnectionId)
 
 	proofKey := types.BatchPacketsPath(core.CommitPacketsHash(msg.Packets))
 	magic := types.COMMITMENT_MAGIC
@@ -107,7 +107,7 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 	if !ok {
 		panic("channel " + destinationChannelId.String() + " not found")
 	}
-	connection := c.ensureConnectionOpen(channel.ConnectionId)
+	connection := c.ensureConnectionState(channel.ConnectionId)
 
 	portId, _ := c.store.GetChannelOwner(destinationChannelId)
 	a, ok := c.store.GetAppByPortId(portId)
@@ -151,7 +151,7 @@ func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAckn
 	if !ok {
 		panic("channel " + sourceChannelId.String() + " not found")
 	}
-	connection := c.ensureConnectionOpen(channel.ConnectionId)
+	connection := c.ensureConnectionState(channel.ConnectionId)
 
 	commitmentKey := types.BatchReceiptsPath(core.CommitPacketsHash(msg.Packets))
 	commitmentValue := types.CommitAcks(msg.Acknowledgements)
@@ -188,7 +188,7 @@ func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 	if channel.State != types.ChannelStateOpen {
 		panic(core.ErrInvalidChannelState)
 	}
-	connection := c.ensureConnectionOpen(channel.ConnectionId)
+	connection := c.ensureConnectionState(channel.ConnectionId)
 
 	lc, ok := c.store.GetLightClient(connection.ClientId)
 	if !ok {

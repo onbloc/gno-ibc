@@ -1,6 +1,6 @@
 // Recv-side probe for OP_CALL: with no Zkgmable receiver registered for the
 // target contract path, executeCall short-circuits with callErrAck("receiver
-// not registered: ..."). dispatchExecute commits a failure-tag Ack via
+// not registered: ..."). dispatchExecutePacket commits a failure-tag Ack via
 // WriteAck — the tx succeeds, proving the Call dispatch path runs end-to-end
 // without crashing on a cold registry. To exercise the success branch,
 // register a Zkgmable receiver via zkgm.RegisterReceiver from a dedicated
@@ -11,8 +11,8 @@ import (
 	"chain/runtime"
 
 	z "gno.land/p/onbloc/unionibc/zkgm"
-	core "gno.land/r/onbloc/unionibc/v1/core"
 	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 func main() {

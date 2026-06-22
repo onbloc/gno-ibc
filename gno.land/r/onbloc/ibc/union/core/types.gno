@@ -26,6 +26,7 @@ type ICore interface {
 	CreateClient(_ int, rlm realm, msg types.MsgCreateClient)
 	UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient)
 	ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateClient)
+	Misbehaviour(_ int, rlm realm, msg types.MsgMisbehaviour)
 	VerifyClientMembership(_ int, rlm realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte)
 
 	// --- Connection handshake ---

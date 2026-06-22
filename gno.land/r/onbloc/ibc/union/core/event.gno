@@ -14,6 +14,7 @@ const (
 	CreateClientEvent          = "CreateClient"
 	UpdateClientEvent          = "UpdateClient"
 	ForceUpdateClientEvent     = "ForceUpdateClient"
+	MisbehaviourEvent          = "Misbehaviour"
 	ConnectionOpenInitEvent    = "ConnectionOpenInit"
 	ConnectionOpenTryEvent     = "ConnectionOpenTry"
 	ConnectionOpenAckEvent     = "ConnectionOpenAck"
@@ -159,6 +160,13 @@ func emitForceUpdateClientEvent(clientId types.ClientId, counterpartyHeight type
 		ForceUpdateClientEvent,
 		"client_id", clientId.String(),
 		"counterparty_height", counterpartyHeight.String(),
+	)
+}
+
+func emitMisbehaviourEvent(clientId types.ClientId) {
+	chain.Emit(
+		MisbehaviourEvent,
+		"client_id", clientId.String(),
 	)
 }
 

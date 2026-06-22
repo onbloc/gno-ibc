@@ -28,6 +28,11 @@ func EmitForceUpdateClient(clientId types.ClientId, height types.Height) {
 	emitForceUpdateClientEvent(clientId, height)
 }
 
+// EmitMisbehaviour emits the Misbehaviour host event.
+func EmitMisbehaviour(clientId types.ClientId) {
+	emitMisbehaviourEvent(clientId)
+}
+
 // EmitConnectionOpenInit emits the ConnectionOpenInit host event.
 func EmitConnectionOpenInit(connectionId types.ConnectionId, clientId, counterpartyClientId types.ClientId) {
 	emitConnectionOpenInitEvent(connectionId, clientId, counterpartyClientId)

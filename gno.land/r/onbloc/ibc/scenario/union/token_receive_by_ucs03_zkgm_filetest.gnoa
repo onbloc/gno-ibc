@@ -1,0 +1,6 @@
+package main
+
+// PKGPATH: gno.land/r/onbloc/ibc/scenario/union
+
+func main(cur realm) {
+}

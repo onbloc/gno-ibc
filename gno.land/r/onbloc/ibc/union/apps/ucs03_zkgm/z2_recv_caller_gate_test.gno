@@ -23,7 +23,7 @@ import (
 
 func setupGateImpl(cur realm) types.Packet {
 	resetZkgmForTest(cur)
-	impl = &dummyImpl{}
+	currentImpl = &dummyImpl{}
 	paused = false
 	return core.NewPacket(1, 2, []byte("data"), 0)
 }

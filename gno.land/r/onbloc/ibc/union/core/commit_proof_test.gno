@@ -7,15 +7,12 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-func setCommitProofAdmin(cur realm) {
-	admin = cur.Address()
-	resetAccess(cur, admin)
-}
-
 // Gno equivalent of Union RestrictedExecuteMsg access management.
 func TestCommitMembershipProofRejectsNonAdminBeforeVerification(cur realm, t *testing.T) {
 	resetStore(cur)
 	previousRole := denySelectorForTest(cur, SelectorCommitMembershipProof)
+	defer restoreSelectorForTest(cur, SelectorCommitMembershipProof, previousRole)
+
 	client := &mockClient{chainId: "union-1", status: types.StatusActive}
 	clientId := registerMockClient(client)
 
@@ -32,5 +29,4 @@ func TestCommitMembershipProofRejectsNonAdminBeforeVerification(cur realm, t *te
 	if len(client.membershipKeys) != 0 {
 		t.Fatalf("membership calls: got %d want 0", len(client.membershipKeys))
 	}
-	restoreSelectorForTest(cur, SelectorCommitMembershipProof, previousRole)
 }

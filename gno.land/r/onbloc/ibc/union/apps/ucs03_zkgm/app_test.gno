@@ -16,7 +16,7 @@ import (
 func TestOnChannelOpenInitOk(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 
 	// Channel callbacks are gated to the core caller, so impersonate core.
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
@@ -32,7 +32,7 @@ func TestOnChannelOpenInitOk(cur realm, t *testing.T) {
 func TestOnChannelOpenInitDelegatesVersionToImpl(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
@@ -48,7 +48,7 @@ func TestOnChannelOpenInitDelegatesVersionToImpl(cur realm, t *testing.T) {
 func TestOnChannelOpenInitOnlyIbc(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 
 	// Do NOT impersonate core - call from a non-core realm
 	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
@@ -66,7 +66,7 @@ func TestOnChannelOpenInitOnlyIbc(cur realm, t *testing.T) {
 func TestOnChannelOpenTryOk(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	(&App{}).OnChannelOpenTry(cross(cur), 1, 2, Version, Version, address("g1relayer"))
@@ -79,7 +79,7 @@ func TestOnChannelOpenTryOk(cur realm, t *testing.T) {
 func TestOnChannelOpenTryDelegatesVersionToImpl(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
@@ -93,7 +93,7 @@ func TestOnChannelOpenTryDelegatesVersionToImpl(cur realm, t *testing.T) {
 func TestOnChannelOpenTryDelegatesCounterpartyVersionToImpl(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
@@ -109,7 +109,7 @@ func TestOnChannelOpenTryDelegatesCounterpartyVersionToImpl(cur realm, t *testin
 func TestOnChannelOpenTryOnlyIbc(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 
 	// Do NOT impersonate core - call from a non-core realm
 	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
@@ -127,7 +127,7 @@ func TestOnChannelOpenTryOnlyIbc(cur realm, t *testing.T) {
 func TestOnChannelOpenAckAndConfirmNoop(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
@@ -150,7 +150,7 @@ func TestOnChannelOpenAckAndConfirmNoop(cur realm, t *testing.T) {
 func TestOnChannelCloseInitImpossible(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
@@ -170,7 +170,7 @@ func TestOnChannelCloseInitImpossible(cur realm, t *testing.T) {
 func TestOnChannelCloseInitOnlyIbc(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 
 	// Do NOT impersonate core - call from a non-core realm
 	// The caller gate runs before the close rejection
@@ -190,7 +190,7 @@ func TestOnChannelCloseInitOnlyIbc(cur realm, t *testing.T) {
 func TestOnChannelCloseConfirmImpossible(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
@@ -210,7 +210,7 @@ func TestOnChannelCloseConfirmImpossible(cur realm, t *testing.T) {
 func TestOnChannelCloseConfirmOnlyIbc(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 
 	// Do NOT impersonate core - call from a non-core realm
 	// The caller gate runs before the close rejection
@@ -232,7 +232,7 @@ func TestOnChannelCloseConfirmOnlyIbc(cur realm, t *testing.T) {
 func TestOnChannelOpenInitPausedBlocks(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 	paused = true
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
@@ -252,7 +252,7 @@ func TestOnChannelOpenInitPausedBlocks(cur realm, t *testing.T) {
 func TestOnChannelOpenTryPausedBlocks(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 	paused = true
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
@@ -271,7 +271,7 @@ func TestOnChannelOpenTryPausedBlocks(cur realm, t *testing.T) {
 func TestOnChannelOpenAckPausedBlocks(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 	paused = true
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
@@ -290,7 +290,7 @@ func TestOnChannelOpenAckPausedBlocks(cur realm, t *testing.T) {
 func TestOnChannelOpenConfirmPausedBlocks(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 	paused = true
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
@@ -309,7 +309,7 @@ func TestOnChannelOpenConfirmPausedBlocks(cur realm, t *testing.T) {
 func TestOnChannelCloseInitPausedBlocks(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 	paused = true
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
@@ -328,7 +328,7 @@ func TestOnChannelCloseInitPausedBlocks(cur realm, t *testing.T) {
 func TestOnChannelCloseConfirmPausedBlocks(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 	paused = true
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
@@ -353,7 +353,7 @@ func TestOnChannelCloseConfirmPausedBlocks(cur realm, t *testing.T) {
 func TestAllChannelCallbacksRequireIbcHost(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 
 	// Test each channel callback without impersonating core
 	callbacks := []func(){
@@ -367,7 +367,7 @@ func TestAllChannelCallbacksRequireIbcHost(cur realm, t *testing.T) {
 
 	for i, cb := range callbacks {
 		resetZkgmForTest(cur)
-		impl = d
+		currentImpl = d
 		uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() { cb() })
 
 		// Verify no delegation happened
@@ -380,7 +380,7 @@ func TestAllChannelCallbacksRequireIbcHost(cur realm, t *testing.T) {
 func TestAppDelegatesVersionValidationToImpl(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
@@ -395,7 +395,7 @@ func TestAppDelegatesVersionValidationToImpl(cur realm, t *testing.T) {
 	// Valid versions should succeed
 	resetZkgmForTest(cur)
 	d = &dummyImpl{}
-	impl = d
+	currentImpl = d
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	(&App{}).OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer"))
 	(&App{}).OnChannelOpenTry(cross(cur), 1, 2, Version, Version, address("g1relayer"))
@@ -409,7 +409,7 @@ func TestAppDelegatesVersionValidationToImpl(cur realm, t *testing.T) {
 func TestOnRecvPacketOnlyIbc(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Non-IBC caller is rejected
@@ -429,7 +429,7 @@ func TestOnRecvPacketOnlyIbc(cur realm, t *testing.T) {
 func TestOnIntentRecvPacketOnlyIbc(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Non-IBC caller is rejected
@@ -449,7 +449,7 @@ func TestOnIntentRecvPacketOnlyIbc(cur realm, t *testing.T) {
 func TestOnAcknowledgementPacketOnlyIbc(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Non-IBC caller is rejected
@@ -469,7 +469,7 @@ func TestOnAcknowledgementPacketOnlyIbc(cur realm, t *testing.T) {
 func TestOnTimeoutPacketOnlyIbc(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
-	impl = d
+	currentImpl = d
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Non-IBC caller is rejected

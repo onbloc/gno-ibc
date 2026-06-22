@@ -1,373 +1,69 @@
 package core
 
 import (
-	"gno.land/p/onbloc/ibc/union/app"
 	"gno.land/p/onbloc/ibc/union/types"
 	"gno.land/r/onbloc/ibc/union/access"
 )
 
-// SendPacket commits a packet for the caller's port. Per the ibc-union-spec the
-// timeout height is always zero (types.MustBeZero); only the timeout timestamp is
-// meaningful.
+// core.gno is the packet-lifecycle entrypoint surface. Each function delegates
+// its logic to the installed impl; the admin-gated entrypoints keep their admin
+// gate on the proxy. SendPacket and WriteAcknowledgement are caller/port-owner
+// authorized inside the mustGetImpl().
+
+// SendPacket commits a packet for the caller's port.
 func SendPacket(cur realm, sourceChannelId types.ChannelId, timeoutTimestamp types.Timestamp, data []byte) types.Packet {
-	if timeoutTimestamp == 0 {
-		panic(ErrTimeoutMustBeSet)
-	}
-
-	portId := store.getChannelOwner(sourceChannelId)
-	if string(portId) != cur.Previous().PkgPath() {
-		panic(ErrUnauthorizedPacketSender)
-	}
-
-	channel := store.getChannel(sourceChannelId)
-	if channel.State != types.ChannelStateOpen {
-		panic(ErrInvalidChannelState)
-	}
-	connection := ensureConnectionOpen(channel.ConnectionId)
-
-	packet := types.Packet{
-		SourceChannelId:      sourceChannelId,
-		DestinationChannelId: channel.CounterpartyChannelId,
-		Data:                 data,
-		TimeoutHeight:        0,
-		TimeoutTimestamp:     timeoutTimestamp,
-	}
-	c := store.clientForChannel(sourceChannelId)
-	if c.hasPacketCommitment(packet) {
-		panic(ErrPacketCommitmentAlreadyExists)
-	}
-	c.commitPacket(packet)
-
-	emitPacketSendEvent(packet, channel, connection)
-	return packet
+	return mustGetImpl().SendPacket(0, cur, sourceChannelId, timeoutTimestamp, data)
 }
 
+// PacketRecv proves and dispatches a batch of received packets.
 func PacketRecv(cur realm, msg types.MsgPacketRecv) {
 	access.AssertCanCall(cross(cur), SelectorPacketRecv, cur.Previous().Address())
-
-	relayer := cur.Previous().Address()
-	if len(msg.Packets) == 0 {
-		panic(ErrNotEnoughPackets)
-	}
-
-	first := msg.Packets[0]
-	destinationChannelId := first.DestinationChannelId
-	channel := store.getChannel(destinationChannelId)
-	connection := ensureConnectionOpen(channel.ConnectionId)
-
-	proofCommitmentKey := types.BatchPacketsPath(commitPacketsHash(msg.Packets))
-	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, proofCommitmentKey[:], h256Bytes(types.COMMITMENT_MAGIC))
-
-	portId := store.getChannelOwner(destinationChannelId)
-	c := store.clientForChannel(destinationChannelId)
-	now := nowNanos()
-
-	for i, relayerMsg := range msg.RelayerMsgs {
-		if i >= len(msg.Packets) {
-			break
-		}
-		packet := msg.Packets[i]
-		channel, skip := acceptRecvPacket(c, packet, destinationChannelId, now)
-		if skip {
-			continue
-		}
-
-		res := store.getAppByPortId(portId).OnRecvPacket(cross(cur), packet, relayer, relayerMsg)
-		if err := commitSyncAck(c, packet, res); err != nil {
-			panic(err)
-		}
-
-		emitPacketRecvEvent(PacketRecvEvent, packet, channel, connection, "maker_msg", relayerMsg)
-	}
+	mustGetImpl().PacketRecv(0, cur, msg)
 }
 
+// IntentPacketRecv settles packets on the proofless market-maker fast path.
 func IntentPacketRecv(cur realm, msg types.MsgIntentPacketRecv) {
 	access.AssertCanCall(cross(cur), SelectorIntentPacketRecv, cur.Previous().Address())
-
-	marketMaker := cur.Previous().Address()
-	if len(msg.Packets) == 0 {
-		panic(ErrNotEnoughPackets)
-	}
-
-	first := msg.Packets[0]
-	destinationChannelId := first.DestinationChannelId
-	channel := store.getChannel(destinationChannelId)
-	connection := ensureConnectionOpen(channel.ConnectionId)
-
-	portId := store.getChannelOwner(destinationChannelId)
-	intentApp, ok := store.getAppByPortId(portId).(app.IIntentApp)
-	if !ok {
-		panic(ErrIntentNotSupported)
-	}
-
-	c := store.clientForChannel(destinationChannelId)
-	now := nowNanos()
-
-	for i, marketMakerMsg := range msg.MarketMakerMessages {
-		if i >= len(msg.Packets) {
-			break
-		}
-		packet := msg.Packets[i]
-		channel, skip := acceptRecvPacket(c, packet, destinationChannelId, now)
-		if skip {
-			continue
-		}
-
-		res := intentApp.OnIntentRecvPacket(cross(cur), packet, marketMaker, marketMakerMsg)
-		if err := commitSyncAck(c, packet, res); err != nil {
-			panic(err)
-		}
-
-		emitPacketRecvEvent(IntentPacketRecvEvent, packet, channel, connection, "market_maker_msg", marketMakerMsg)
-	}
+	mustGetImpl().IntentPacketRecv(0, cur, msg)
 }
 
+// PacketAcknowledgement proves the counterparty acks and notifies the app.
 func PacketAcknowledgement(cur realm, msg types.MsgPacketAcknowledgement) {
 	access.AssertCanCall(cross(cur), SelectorPacketAck, cur.Previous().Address())
-
-	relayer := cur.Previous().Address()
-	if len(msg.Packets) == 0 {
-		panic(ErrNotEnoughPackets)
-	}
-
-	first := msg.Packets[0]
-
-	sourceChannelId := first.SourceChannelId
-
-	channel := store.getChannel(sourceChannelId)
-	connection := ensureConnectionOpen(channel.ConnectionId)
-
-	batchHash := commitPacketsHash(msg.Packets)
-	commitmentKey := types.BatchReceiptsPath(batchHash)
-	commitmentValue := types.CommitAcks(msg.Acknowledgements)
-
-	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, commitmentKey[:], commitmentValue[:])
-
-	portId := store.getChannelOwner(sourceChannelId)
-	c := store.clientForChannel(sourceChannelId)
-
-	for i, ack := range msg.Acknowledgements {
-		if i >= len(msg.Packets) {
-			break
-		}
-		packet := msg.Packets[i]
-		// Validate same channel before the commitment check so that a mixed-channel
-		// batch is always rejected, not silently skipped.
-		if packet.SourceChannelId != first.SourceChannelId {
-			panic(ErrBatchSameChannelOnly)
-		}
-		if err := c.markPacketAcknowledged(packet); err != nil {
-			panic(err)
-		}
-
-		store.getAppByPortId(portId).OnAcknowledgementPacket(cross(cur), packet, ack, relayer)
-
-		emitPacketAckEvent(packet, channel, connection, ack)
-	}
+	mustGetImpl().PacketAcknowledgement(0, cur, msg)
 }
 
+// PacketTimeout proves a packet was never received and notifies the app.
 func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
 	access.AssertCanCall(cross(cur), SelectorPacketTimeout, cur.Previous().Address())
-
-	relayer := cur.Previous().Address()
-	packet := msg.Packet
-
-	channel := store.getChannel(packet.SourceChannelId)
-	if channel.State != types.ChannelStateOpen {
-		panic(ErrInvalidChannelState)
-	}
-	connection := ensureConnectionOpen(channel.ConnectionId)
-	c := store.clientForChannel(packet.SourceChannelId)
-
-	proofTimestamp, err := c.lightClient.GetTimestampAtHeight(msg.ProofHeight)
-	if err != nil {
-		panic(err)
-	}
-	if proofTimestamp == 0 {
-		panic(ErrTimeoutProofTimestampNotFound)
-	}
-
-	commitmentKey := types.BatchReceiptsPath(commitPacketHash(packet))
-	verifyNonMembershipWithActiveClient(c, types.NewHeight(msg.ProofHeight), msg.Proof, commitmentKey[:])
-
-	if err := c.markPacketAcknowledged(packet); err != nil {
-		panic(err)
-	}
-	if packet.TimeoutTimestamp == 0 {
-		panic(ErrTimeoutMustBeSet)
-	}
-	if packet.TimeoutTimestamp > proofTimestamp {
-		panic(ErrPacketTimeoutNotReached)
-	}
-
-	portId := store.getChannelOwner(packet.SourceChannelId)
-	store.getAppByPortId(portId).OnTimeoutPacket(cross(cur), packet, relayer)
-
-	emitPacketTimeoutEvent(packet, channel, connection)
+	mustGetImpl().PacketTimeout(0, cur, msg)
 }
 
+// CommitMembershipProof verifies and records a membership proof.
 func CommitMembershipProof(cur realm, msg types.MsgCommitMembershipProof) {
 	access.AssertCanCall(cross(cur), SelectorCommitMembershipProof, cur.Previous().Address())
-
-	verifyMembershipActive(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, msg.Path, msg.Value)
-	store.saveMembershipProof(msg.ClientId, msg.ProofHeight, msg.Path, types.Keccak(msg.Value))
-
-	emitCommitMembershipProofEvent(msg)
+	mustGetImpl().CommitMembershipProof(0, cur, msg)
 }
 
+// CommitNonMembershipProof verifies and records a non-membership proof.
 func CommitNonMembershipProof(cur realm, msg types.MsgCommitNonMembershipProof) {
 	access.AssertCanCall(cross(cur), SelectorCommitNonMembershipProof, cur.Previous().Address())
-
-	c := store.getClient(msg.ClientId)
-	if c == nil {
-		panic("client " + msg.ClientId.String() + " not found")
-	}
-	verifyNonMembershipWithActiveClient(c, types.NewHeight(msg.ProofHeight), msg.Proof, msg.Path)
-	store.saveNonMembershipProof(msg.ClientId, msg.ProofHeight, msg.Path, types.NON_MEMBERSHIP_COMMITMENT_VALUE)
-
-	emitCommitNonMembershipProofEvent(msg)
+	mustGetImpl().CommitNonMembershipProof(0, cur, msg)
 }
 
+// BatchSend aggregates already-committed packets into a batch commitment.
 func BatchSend(cur realm, msg types.MsgBatchSend) {
 	access.AssertCanCall(cross(cur), SelectorBatchSend, cur.Previous().Address())
-
-	if len(msg.Packets) < 2 {
-		panic(ErrNotEnoughPackets)
-	}
-	first := msg.Packets[0]
-	channelId := first.SourceChannelId
-	batchHash := commitPacketsHash(msg.Packets)
-
-	c := store.clientForChannel(channelId)
-	for _, packet := range msg.Packets {
-		if packet.SourceChannelId != channelId {
-			panic(ErrBatchSameChannelOnly)
-		}
-		commitment, ok := c.getBatchPacketsAtPath(packetCommitmentPath(packet))
-		if !ok {
-			panic(ErrPacketCommitmentNotFound)
-		}
-		if commitment != types.COMMITMENT_MAGIC {
-			panic(ErrPacketCommitmentNotFound)
-		}
-
-		packetHash := commitPacketsHash([]types.Packet{packet})
-		emitBatchSendEvent(channelId, packetHash, batchHash)
-	}
-
-	c.saveBatchPackets(batchHash, types.COMMITMENT_MAGIC)
+	mustGetImpl().BatchSend(0, cur, msg)
 }
 
+// BatchAcks aggregates the acks of received packets into a batch receipt.
 func BatchAcks(cur realm, msg types.MsgBatchAcks) {
 	access.AssertCanCall(cross(cur), SelectorBatchAcks, cur.Previous().Address())
-
-	if len(msg.Packets) < 2 {
-		panic(ErrNotEnoughPackets)
-	}
-
-	first := msg.Packets[0]
-	channelId := first.DestinationChannelId
-
-	batchHash := commitPacketsHash(msg.Packets)
-
-	c := store.clientForChannel(channelId)
-	for i, ack := range msg.Acks {
-		if i >= len(msg.Packets) {
-			break
-		}
-		packet := msg.Packets[i]
-		if packet.DestinationChannelId != channelId {
-			panic(ErrBatchSameChannelOnly)
-		}
-
-		packetHash := commitPacketsHash([]types.Packet{packet})
-		emitBatchAcksEvent(channelId, packetHash, batchHash)
-
-		commitmentKey := packetAcknowledgementPath(packet)
-		commitment, ok := c.getBatchReceiptsAtPath(commitmentKey)
-		if !ok {
-			panic(ErrPacketCommitmentNotFound)
-		}
-
-		if commitment == types.COMMITMENT_MAGIC {
-			panic(ErrAcknowledgementEmpty)
-		}
-		if expected := types.CommitAcks([][]byte{ack}); commitment != expected {
-			panic(ErrAcknowledgementMismatch)
-		}
-	}
-
-	c.saveBatchReceipts(batchHash, types.CommitAcks(msg.Acks))
+	mustGetImpl().BatchAcks(0, cur, msg)
 }
 
-// WriteAcknowledgement commits an acknowledgement for a previously received
-// packet. Async acknowledgement ownership is protocol-managed: core does not
-// track pending async acknowledgement state.
+// WriteAcknowledgement commits a deferred acknowledgement for a received packet.
 func WriteAcknowledgement(cur realm, msg types.MsgWriteAcknowledgement) {
-	if len(msg.Acknowledgement) == 0 {
-		panic(ErrAcknowledgementEmpty)
-	}
-
-	channelId := msg.Packet.DestinationChannelId
-
-	portId := store.getChannelOwner(channelId)
-	if string(portId) != cur.Previous().PkgPath() {
-		panic(ErrUnauthorizedAckWriter)
-	}
-
-	c := store.clientForChannel(channelId)
-	commitment, ok := c.getBatchReceiptsAtPath(packetAcknowledgementPath(msg.Packet))
-	if !ok {
-		panic(ErrPacketReceiptNotFound)
-	}
-	if commitment != types.COMMITMENT_MAGIC {
-		panic(ErrAcknowledgementAlreadyWritten)
-	}
-
-	c.commitAcknowledgement(msg.Packet, msg.Acknowledgement)
-
-	emitWriteAckEvent(channelId, msg.Packet, msg.Acknowledgement)
-}
-
-// acceptRecvPacket validates recv-path invariants and records a packet
-// receipt. Receipts serve as both replay protection and the source-side
-// timeout signal.
-func acceptRecvPacket(c *client, packet types.Packet, batchChannelId types.ChannelId, now uint64) (types.Channel, bool) {
-	if packet.DestinationChannelId != batchChannelId {
-		panic(ErrBatchSameChannelOnly)
-	}
-	channel := store.getChannel(packet.DestinationChannelId)
-	if channel.State != types.ChannelStateOpen {
-		panic(ErrInvalidChannelState)
-	}
-
-	// Do not execute packets that have already timed out on the source chain.
-	if now >= uint64(packet.TimeoutTimestamp) {
-		panic(ErrPacketTimeoutExpired)
-	}
-
-	// Ignore duplicate packets so batch retries remain idempotent.
-	if c.hasPacketReceipt(packet) {
-		return channel, true
-	}
-
-	c.setPacketReceipt(packet)
-	return channel, false
-}
-
-// commitSyncAck records non-async recv results as Union receipt evidence.
-// Sync success and failure results must carry a non-empty acknowledgement.
-func commitSyncAck(c *client, packet types.Packet, res types.RecvPacketResult) error {
-	switch res.Status {
-	case types.PacketStatusAsync:
-	case types.PacketStatusSuccess, types.PacketStatusFailure:
-		if len(res.Acknowledgement) == 0 {
-			return ErrSyncAckEmpty
-		}
-		c.commitAcknowledgement(packet, res.Acknowledgement)
-		emitWriteAckEvent(packet.DestinationChannelId, packet, res.Acknowledgement)
-	default:
-		return ErrUnknownPacketStatus
-	}
-	return nil
+	mustGetImpl().WriteAcknowledgement(0, cur, msg)
 }

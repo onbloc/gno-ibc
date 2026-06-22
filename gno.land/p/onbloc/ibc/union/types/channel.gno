@@ -43,7 +43,7 @@ func (c Channel) EncodeABI() ([]byte, error) {
 		uint8(c.State),
 		uint32(c.ConnectionId),
 		uint32(c.CounterpartyChannelId),
-		[]byte(c.CounterpartyPortId),
+		c.CounterpartyPortId.Bytes(),
 		c.Version,
 	})
 	if err != nil {

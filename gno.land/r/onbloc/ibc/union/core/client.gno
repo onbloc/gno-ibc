@@ -98,9 +98,7 @@ func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 		c.saveClientState(update.ClientStateBytes)
 	}
 
-	if len(update.ConsensusStateBytes) != 0 {
-		c.saveConsensusState(height, update.ConsensusStateBytes)
-	}
+	c.saveConsensusState(height, update.ConsensusStateBytes)
 	for k, v := range update.StorageWrites {
 		c.saveClientStore(k, v)
 	}

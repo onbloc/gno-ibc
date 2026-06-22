@@ -139,6 +139,33 @@ func TestUpdateClientUnionMirrorsStateUpdate(cur realm, t *testing.T) {
 	}
 }
 
+// Union implementation reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L1022-L1035
+func TestUpdateClientUnionStoresEmptyConsensusState(cur realm, t *testing.T) {
+	resetStore(cur)
+	lc := &mockClient{
+		chainId:                   "union-1",
+		height:                    types.NewHeight(1),
+		status:                    types.StatusActive,
+		updateConsensusStateBytes: []byte{},
+	}
+	RegisterClient(cross(cur), mockType, lc)
+	clientId := CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("old-client"), []byte("old-consensus")))
+
+	height := UpdateClient(cross(cur), types.MsgUpdateClient{
+		ClientId:      clientId,
+		ClientMessage: []byte("header"),
+	})
+
+	bz, ok := store.getClient(clientId).getConsensusState(height)
+	if !ok {
+		t.Fatalf("empty consensus state was not stored")
+	}
+	if len(bz) != 0 {
+		t.Fatalf("empty consensus state: got %q want empty", string(bz))
+	}
+}
+
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L333-L446
 func TestForceUpdateClientUnionMirrorsSubmittedState(cur realm, t *testing.T) {

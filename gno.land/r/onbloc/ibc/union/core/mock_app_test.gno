@@ -17,18 +17,19 @@ type mockClient struct {
 	zeroTime  bool
 
 	// recorded calls
-	membershipHeights    []types.Height
-	membershipProofs     [][]byte
-	membershipKeys       [][]byte
-	membershipValues     [][]byte
-	nonMembershipHeights []types.Height
-	nonMembershipProofs  [][]byte
-	nonMembershipKeys    [][]byte
-	headerMessages       [][]byte
-	headerRelayers       []address
-	creationRelayers     []address
-	creationStorage      map[string][]byte
-	updateStorage        map[string][]byte
+	membershipHeights         []types.Height
+	membershipProofs          [][]byte
+	membershipKeys            [][]byte
+	membershipValues          [][]byte
+	nonMembershipHeights      []types.Height
+	nonMembershipProofs       [][]byte
+	nonMembershipKeys         [][]byte
+	headerMessages            [][]byte
+	headerRelayers            []address
+	creationRelayers          []address
+	creationStorage           map[string][]byte
+	updateStorage             map[string][]byte
+	updateConsensusStateBytes []byte
 }
 
 func (m *mockClient) VerifyMembership(height uint64, key, proof, value []byte) error {
@@ -80,10 +81,14 @@ func (m *mockClient) VerifyHeader(_ address, header []byte, relayer address) (ty
 	m.headerMessages = append(m.headerMessages, header)
 	m.headerRelayers = append(m.headerRelayers, relayer)
 	m.height = m.height.Increment()
+	consensusStateBytes := []byte("cons")
+	if m.updateConsensusStateBytes != nil {
+		consensusStateBytes = m.updateConsensusStateBytes
+	}
 	return types.StateUpdate{
 		Height:              m.height.RevisionHeight,
 		ClientStateBytes:    []byte("cs"),
-		ConsensusStateBytes: []byte("cons"),
+		ConsensusStateBytes: consensusStateBytes,
 		StorageWrites:       m.updateStorage,
 	}, nil
 }

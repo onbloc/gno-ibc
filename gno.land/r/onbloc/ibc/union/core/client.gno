@@ -7,10 +7,19 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
+// NewConsensusStateUpdate constructs the height-stamped state update shape used
+// by light client updates.
+//
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/msg/src/lightclient.rs#L162-L174
 func NewConsensusStateUpdate(height types.Height, consensusStateBytes, clientStateBytes []byte) types.ConsensusStateUpdate {
 	return types.ConsensusStateUpdate{Height: height, ConsensusStateBytes: consensusStateBytes, ClientStateBytes: clientStateBytes}
 }
 
+// RegisterClient registers a light client implementation for a client type.
+//
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L849-L865
 func RegisterClient(cur realm, clientType types.ClientType, lc lightclient.Interface) {
 	if lc == nil {
 		panic("caller not authorized to register client: unauthorized")
@@ -26,6 +35,10 @@ func HasClient(clientType types.ClientType) bool {
 // CreateClient assigns a client id for a registered light client type, stores
 // the submitted state bytes, then lets the light client verify creation against
 // that freshly stored state.
+//
+// Union references:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L867-L903
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L905-L972
 func CreateClient(cur realm, msg types.MsgCreateClient) types.ClientId {
 	creator := cur.Previous().Address()
 	lc, ok := store.registeredClient(msg.ClientType)
@@ -74,6 +87,9 @@ func initClient(caller address, clientStateBytes, consensusStateBytes []byte, re
 // UpdateClient verifies a client message against the light client object, which
 // updates its own state, and mirrors the resulting state bytes for queries and
 // counterparty proofs.
+//
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L975-L1046
 func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 	c := store.getClient(msg.ClientId)
 	if c == nil {
@@ -113,6 +129,10 @@ func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 //
 // It is restricted to the admin and recovers expired or otherwise unrecoverable
 // clients. The registered light client type for the existing client is reused.
+//
+// Union references:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L146-L166
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L905-L972
 func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) types.Height {
 	requireAdmin(cur, "ForceUpdateClient")
 
@@ -130,9 +150,6 @@ func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) types.Height {
 	return height
 }
 
-// VerifyClientMembership verifies a membership proof against a registered light client.
-//
-// It does not commit the verified value into this realm's state.
 func VerifyClientMembership(_ realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {
 	verifyMembershipActive(clientId, proofHeight, proof, path, value)
 }
@@ -180,6 +197,9 @@ func verifyNonMembershipWithActiveClient(c *client, height types.Height, proof, 
 }
 
 // GetClientState returns the stored client state bytes.
+//
+// Union query reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L2138-L2140
 func GetClientState(clientId types.ClientId) []byte {
 	c := store.getClient(clientId)
 	if c == nil {
@@ -190,6 +210,9 @@ func GetClientState(clientId types.ClientId) []byte {
 }
 
 // GetConsensusState returns the consensus state bytes at height.
+//
+// Union query reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L2141-L2145
 func GetConsensusState(clientId types.ClientId, height uint64) []byte {
 	c := store.getClient(clientId)
 	if c == nil {
@@ -204,6 +227,10 @@ func GetConsensusState(clientId types.ClientId, height uint64) []byte {
 	return cloneBytes(bz)
 }
 
+// GetLatestHeight returns the latest height reported by the light client.
+//
+// Union query reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L2129-L2137
 func GetLatestHeight(clientId types.ClientId) uint64 {
 	c := store.getClient(clientId)
 	if c == nil {
@@ -213,6 +240,11 @@ func GetLatestHeight(clientId types.ClientId) uint64 {
 	return c.lightClient.GetLatestHeight()
 }
 
+// GetTimestampAtHeight returns the light client's timestamp at a height.
+//
+// Union query references:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L2100-L2111
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L2126-L2128
 func GetTimestampAtHeight(clientId types.ClientId, height uint64) types.Timestamp {
 	c := store.getClient(clientId)
 	if c == nil {
@@ -228,6 +260,9 @@ func GetTimestampAtHeight(clientId types.ClientId, height uint64) types.Timestam
 }
 
 // GetStatus returns the current status reported by a registered light client.
+//
+// Union query reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L2146-L2154
 func GetStatus(clientId types.ClientId) types.Status {
 	c := store.getClient(clientId)
 	if c == nil {
@@ -238,6 +273,9 @@ func GetStatus(clientId types.ClientId) types.Status {
 }
 
 // GetClientType returns the registered client type for clientId.
+//
+// Union query reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L2117-L2119
 func GetClientType(clientId types.ClientId) string {
 	c := store.getClient(clientId)
 	if c == nil {

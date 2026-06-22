@@ -5,8 +5,10 @@
 # subsequent runs.  Use --reset to wipe state and start a fresh chain.
 #
 # Usage:
-#   ./run-v1-ibc-smoke-node-gnoland.sh          # resume or fresh start
-#   ./run-v1-ibc-smoke-node-gnoland.sh --reset  # wipe state, start from block 0
+#   ./run-v1-ibc-smoke-node-gnoland.sh                              # resume or fresh start
+#   ./run-v1-ibc-smoke-node-gnoland.sh --reset                      # wipe state, start from block 0
+#   ./run-v1-ibc-smoke-node-gnoland.sh --chainid mychain --reset     # custom chain ID
+#   ./run-v1-ibc-smoke-node-gnoland.sh --exclude gno.land/r/foo/bar # exclude a package from genesis
 #
 # Logs are written to $CACHE_DIR/gnoland.log and also printed to the terminal.
 # To follow logs in another terminal:
@@ -38,10 +40,13 @@ fi
 
 # ── flags ─────────────────────────────────────────────────────────────────────
 RESET=false
-for arg in "$@"; do
-  case "$arg" in
-    --reset) RESET=true ;;
-    *) echo "unknown flag: $arg"; exit 1 ;;
+EXCLUDE_ARGS=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --reset) RESET=true; shift ;;
+    --chainid) CHAIN_ID="$2"; shift 2 ;;
+    --exclude) EXCLUDE_ARGS+=(--exclude "$2"); shift 2 ;;
+    *) echo "unknown flag: $1"; exit 1 ;;
   esac
 done
 
@@ -59,7 +64,8 @@ if [ ! -f "$GENESIS_TXS" ]; then
   python3 "$GNO_IBC_ROOT/tools/gen-ibc-genesis-txs.py" \
     --ibc-root "$GNO_IBC_ROOT" \
     --gno-root "$GNO_ROOT" \
-    --output "$GENESIS_TXS"
+    --output "$GENESIS_TXS" \
+    "${EXCLUDE_ARGS[@]+"${EXCLUDE_ARGS[@]}"}"
 fi
 
 # ── 2. Prepare config (idempotent) ───────────────────────────────────────────

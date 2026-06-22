@@ -22,16 +22,10 @@ var _ core.ICore = (*coreV1)(nil)
 
 // New constructs a fresh v1 impl. The store is injected by the proxy at install
 // time via SetStore, so it is nil until installed.
-func New(s core.IStore) *coreV1 {
+func NewCoreV1(s core.IStore) core.ICore {
 	return &coreV1{
 		store: s,
 	}
-}
-
-// Register installs this impl as the active core host implementation. Gated by
-// core.UpdateImpl (admin only).
-func Register(cur realm, s core.IStore) {
-	core.UpdateImpl(cross(cur), New(s))
 }
 
 // cloneBytes returns a fresh copy of b, used to detach caller- or store-owned

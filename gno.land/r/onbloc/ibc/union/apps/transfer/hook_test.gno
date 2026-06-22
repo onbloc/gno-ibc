@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	"chain"
 	"gno.land/p/aib/ibc/types"
 	"gno.land/p/nt/testutils/v0"
+	"chain"
 )
 
 // dummyHook is a test-only TransferHook implementation.

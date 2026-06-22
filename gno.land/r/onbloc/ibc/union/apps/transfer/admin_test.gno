@@ -5,8 +5,6 @@ import (
 
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
-	manager "gno.land/p/onbloc/access/manager"
-	"gno.land/r/onbloc/ibc/union/access"
 )
 
 // SetHook takes a TransferHook interface and cannot be called via maketx, so
@@ -20,12 +18,7 @@ func transferAdminForTest() address {
 	return address("")
 }
 
-func resetAccess(cur realm, initialAdmin address) {
-	access.SetFunctionRole(cross(cur), SelectorSetHook, manager.AdminRole)
-}
-
 func TestSetHookAllowedForAdmin(cur realm, t *testing.T) {
-	resetAccess(cur, transferAdminForTest())
 	hook = nil
 	hookCaller = address("")
 
@@ -44,7 +37,6 @@ func TestSetHookAllowedForAdmin(cur realm, t *testing.T) {
 }
 
 func TestSetHookClearsWithNil(cur realm, t *testing.T) {
-	resetAccess(cur, transferAdminForTest())
 	hook = &dummyHook{addr: address("g1existing000000000000000000000000000000")}
 	hookCaller = address("g1existing000000000000000000000000000000")
 
@@ -60,7 +52,6 @@ func TestSetHookClearsWithNil(cur realm, t *testing.T) {
 }
 
 func TestSetHookInvalidAddressIsRejected(cur realm, t *testing.T) {
-	resetAccess(cur, transferAdminForTest())
 	hook = nil
 	hookCaller = address("")
 
@@ -76,13 +67,12 @@ func TestSetHookInvalidAddressIsRejected(cur realm, t *testing.T) {
 }
 
 func TestSetHookDeniedForNonAdmin(cur realm, t *testing.T) {
-	resetAccess(cur, transferAdminForTest())
 	hook = nil
 	hookCaller = address("")
 
 	testing.SetRealm(testing.NewUserRealm(address("g1notadmin0000000000000000000000000000000")))
 
-	uassert.AbortsContains(t, cur, "caller not authorized to set_hook", func(cur realm) {
+	uassert.AbortsContains(t, cur, "AccessManagerUnauthorizedCall", func(cur realm) {
 		SetHook(cur, nil)
 	})
 

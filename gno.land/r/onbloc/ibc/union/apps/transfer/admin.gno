@@ -3,8 +3,11 @@ package transfer
 import (
 	"chain"
 
+	manager "gno.land/p/onbloc/access/manager"
 	"gno.land/r/onbloc/ibc/union/access"
 )
+
+const SelectorSetHook manager.Selector = "set_hook"
 
 // SetHook registers h as the active recv hook. The hook's Address() is
 // automatically authorized to call Send(). Admin-only. Pass nil to clear.

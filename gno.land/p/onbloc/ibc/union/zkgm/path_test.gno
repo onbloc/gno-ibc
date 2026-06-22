@@ -6,52 +6,33 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 )
 
-// pathFromHops builds a path by sequentially appending hops via
-// UpdateChannelPath, mirroring the Rust call sequence used in production.
-func pathFromHops(t *testing.T, hops ...uint32) *u256.Uint {
-	t.Helper()
-	p := u256.Zero()
-	for i, h := range hops {
-		updated, err := UpdateChannelPath(p, h)
-		if err != nil {
-			t.Fatalf("UpdateChannelPath(hop %d=%d): %v", i, h, err)
-		}
-		p = updated
-	}
-	return p
-}
-
-func mustEq(t *testing.T, name string, got, want *u256.Uint) {
-	t.Helper()
-	if !got.Eq(want) {
-		t.Fatalf("%s: got %s want %s", name, got.Dec(), want.Dec())
-	}
-}
-
 func TestMakePathFromChannel(t *testing.T) {
-	// channel 0 in any slot is 0
-	if !MakePathFromChannel(0, 0).IsZero() {
-		t.Fatal("MakePathFromChannel(0, 0) must be zero")
+	tests := []struct {
+		name     string
+		channel  uint32
+		slot     int
+		want     *u256.Uint
+		wantZero bool // true if result must be zero
+	}{
+		{"ch0 slot0", 0, 0, nil, true},
+		{"ch0 slot5", 0, 5, nil, true},
+		{"ch7 slot0 identity", 7, 0, u256.NewUint(7), false},
+		{"ch7 slot1", 7, 1, u256.NewUint(7 << 32), false},
+		{"ch11 slot2", 11, 2, new(u256.Uint).Lsh(u256.NewUint(11), 64), false},
+		{"maxU32 slot7", 0xFFFFFFFF, 7, new(u256.Uint).Lsh(u256.NewUint(0xFFFFFFFF), 224), false},
 	}
-	if !MakePathFromChannel(0, 5).IsZero() {
-		t.Fatal("MakePathFromChannel(0, 5) must be zero")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := MakePathFromChannel(tt.channel, tt.slot)
+			if tt.wantZero {
+				if !got.IsZero() {
+					t.Fatalf("got %s want zero", got.Dec())
+				}
+			} else {
+				mustEq(t, tt.name, got, tt.want)
+			}
+		})
 	}
-
-	// slot 0: identity
-	mustEq(t, "make(7,0)", MakePathFromChannel(7, 0), u256.NewUint(7))
-
-	// slot 1: 7 << 32 = 0x7_00000000
-	mustEq(t, "make(7,1)", MakePathFromChannel(7, 1),
-		u256.NewUint(7<<32))
-
-	// slot 2: 11 << 64 — verify via shift
-	want := new(u256.Uint).Lsh(u256.NewUint(11), 64)
-	mustEq(t, "make(11,2)", MakePathFromChannel(11, 2), want)
-
-	// slot 7 (highest): 0xFFFFFFFF << 224
-	maxU32 := u256.NewUint(0xFFFFFFFF)
-	want7 := new(u256.Uint).Lsh(maxU32, 224)
-	mustEq(t, "make(maxU32,7)", MakePathFromChannel(0xFFFFFFFF, 7), want7)
 }
 
 func TestGetChannelFromPath(t *testing.T) {
@@ -86,6 +67,20 @@ func TestGetChannelFromPath(t *testing.T) {
 	}
 }
 
+func TestHopCountNilAndSparsePath(t *testing.T) {
+	if got := HopCount(nil); got != 0 {
+		t.Fatalf("HopCount(nil): got %d want 0", got)
+	}
+	if got := HopCount(u256.Zero()); got != 0 {
+		t.Fatalf("HopCount(0): got %d want 0", got)
+	}
+
+	path := MakePathFromChannel(1, 6)
+	if got := HopCount(path); got != 7 {
+		t.Fatalf("HopCount(slot 6): got %d want 7", got)
+	}
+}
+
 func TestMakeGetRoundTrip(t *testing.T) {
 	for slot := 0; slot < 8; slot++ {
 		for _, ch := range []uint32{1, 2, 7, 0xDEADBEEF, 0xFFFFFFFF} {
@@ -98,54 +93,78 @@ func TestMakeGetRoundTrip(t *testing.T) {
 }
 
 func TestDequeueChannelFromPath(t *testing.T) {
-	// empty
-	tail, head := DequeueChannelFromPath(u256.Zero())
-	if !tail.IsZero() || head != 0 {
-		t.Fatalf("dequeue(0): got (%s, %d) want (0, 0)", tail.Dec(), head)
+	tests := []struct {
+		name      string
+		path      *u256.Uint
+		wantHead  uint32
+		wantTail  *u256.Uint
+	}{
+		{"empty", u256.Zero(), 0, u256.Zero()},
+		{"single hop", u256.NewUint(7), 7, u256.Zero()},
 	}
-
-	// single hop in slot 0
-	tail, head = DequeueChannelFromPath(u256.NewUint(7))
-	if !tail.IsZero() || head != 7 {
-		t.Fatalf("dequeue([7]): got (%s, %d) want (0, 7)", tail.Dec(), head)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tail, head := DequeueChannelFromPath(tt.path)
+			if head != tt.wantHead {
+				t.Fatalf("head: got %d want %d", head, tt.wantHead)
+			}
+			mustEq(t, tt.name+" tail", tail, tt.wantTail)
+		})
 	}
 
 	// two hops [3, 5] (slot 0 = 3, slot 1 = 5) → after dequeue path = [5]
 	path := pathFromHops(t, 3, 5)
-	tail, head = DequeueChannelFromPath(path)
+	tail, head := DequeueChannelFromPath(path)
 	if head != 3 {
-		t.Fatalf("dequeue head: got %d want 3", head)
+		t.Fatalf("head: got %d want 3", head)
 	}
-	mustEq(t, "dequeue tail", tail, u256.NewUint(5))
+	mustEq(t, "two hops tail", tail, u256.NewUint(5))
+}
+
+func TestDequeueChannelFromPathDoesNotMutateInput(t *testing.T) {
+	path := pathFromHops(t, 3, 5, 7)
+	before := new(u256.Uint).Set(path)
+
+	_, _ = DequeueChannelFromPath(path)
+	mustEq(t, "dequeue input", path, before)
 }
 
 func TestPopChannelFromPath(t *testing.T) {
-	// empty
-	tail, head := PopChannelFromPath(u256.Zero())
-	if !tail.IsZero() || head != 0 {
-		t.Fatalf("pop(0): got (%s, %d) want (0, 0)", tail.Dec(), head)
+	tests := []struct {
+		name     string
+		path     *u256.Uint
+		wantHead uint32
+		wantTail *u256.Uint
+	}{
+		{"empty", u256.Zero(), 0, u256.Zero()},
+		{"single hop", u256.NewUint(7), 7, u256.Zero()},
+		{"slot5 only", MakePathFromChannel(0xDEADBEEF, 5), 0xDEADBEEF, u256.Zero()},
 	}
-
-	// single hop in slot 0 → pop returns (0, ch)
-	tail, head = PopChannelFromPath(u256.NewUint(7))
-	if !tail.IsZero() || head != 7 {
-		t.Fatalf("pop([7]): got (%s, %d) want (0, 7)", tail.Dec(), head)
-	}
-
-	// channel placed directly in slot 5: pop returns (0, ch)
-	p5 := MakePathFromChannel(0xDEADBEEF, 5)
-	tail, head = PopChannelFromPath(p5)
-	if !tail.IsZero() || head != 0xDEADBEEF {
-		t.Fatalf("pop(slot5): got (%s, %x) want (0, deadbeef)", tail.Dec(), head)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tail, head := PopChannelFromPath(tt.path)
+			if head != tt.wantHead {
+				t.Fatalf("head: got %d want %d", head, tt.wantHead)
+			}
+			mustEq(t, tt.name+" tail", tail, tt.wantTail)
+		})
 	}
 
 	// two hops [3, 5]: pop highest = 5, tail = [3]
 	path := pathFromHops(t, 3, 5)
-	tail, head = PopChannelFromPath(path)
+	tail, head := PopChannelFromPath(path)
 	if head != 5 {
-		t.Fatalf("pop head: got %d want 5", head)
+		t.Fatalf("two hops head: got %d want 5", head)
 	}
-	mustEq(t, "pop tail", tail, u256.NewUint(3))
+	mustEq(t, "two hops tail", tail, u256.NewUint(3))
+}
+
+func TestPopChannelFromPathDoesNotMutateInput(t *testing.T) {
+	path := pathFromHops(t, 3, 5, 7)
+	before := new(u256.Uint).Set(path)
+
+	_, _ = PopChannelFromPath(path)
+	mustEq(t, "pop input", path, before)
 }
 
 func TestUpdateChannelPathEmpty(t *testing.T) {
@@ -221,34 +240,36 @@ func TestUpdateChannelPathSlot7Allowed(t *testing.T) {
 	}
 }
 
-func TestReverseChannelPathEmpty(t *testing.T) {
-	got, err := ReverseChannelPath(u256.Zero())
-	if err != nil {
-		t.Fatalf("reverse(0): %v", err)
+func TestReverseChannelPath(t *testing.T) {
+	tests := []struct {
+		name    string
+		hops    []uint32
+		wantHops []uint32
+	}{
+		{"empty", []uint32{}, []uint32{}},
+		{"single", []uint32{5}, []uint32{5}},
+		{"three hops", []uint32{3, 5, 7}, []uint32{7, 5, 3}},
 	}
-	if !got.IsZero() {
-		t.Fatalf("reverse(0): got %s want 0", got.Dec())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var src, want *u256.Uint
+			if len(tt.hops) > 0 {
+				src = pathFromHops(t, tt.hops...)
+			} else {
+				src = u256.Zero()
+			}
+			if len(tt.wantHops) > 0 {
+				want = pathFromHops(t, tt.wantHops...)
+			} else {
+				want = u256.Zero()
+			}
+			got, err := ReverseChannelPath(src)
+			if err != nil {
+				t.Fatalf("reverse: %v", err)
+			}
+			mustEq(t, tt.name, got, want)
+		})
 	}
-}
-
-func TestReverseChannelPathSingle(t *testing.T) {
-	p := pathFromHops(t, 5)
-	got, err := ReverseChannelPath(p)
-	if err != nil {
-		t.Fatalf("reverse([5]): %v", err)
-	}
-	mustEq(t, "reverse([5])", got, u256.NewUint(5))
-}
-
-func TestReverseChannelPathThreeHops(t *testing.T) {
-	// [3, 5, 7] reversed → [7, 5, 3]
-	src := pathFromHops(t, 3, 5, 7)
-	want := pathFromHops(t, 7, 5, 3)
-	got, err := ReverseChannelPath(src)
-	if err != nil {
-		t.Fatalf("reverse: %v", err)
-	}
-	mustEq(t, "reverse([3,5,7])", got, want)
 }
 
 func TestReverseChannelPathExactlyMaxHops(t *testing.T) {
@@ -297,5 +318,27 @@ func TestReverseChannelPathInvolution(t *testing.T) {
 			t.Fatalf("reverse(reverse(%v)): %v", hops, err)
 		}
 		mustEq(t, "double reverse", twice, src)
+	}
+}
+
+// pathFromHops builds a path by sequentially appending hops via
+// UpdateChannelPath, mirroring the Rust call sequence used in production.
+func pathFromHops(t *testing.T, hops ...uint32) *u256.Uint {
+	t.Helper()
+	p := u256.Zero()
+	for i, h := range hops {
+		updated, err := UpdateChannelPath(p, h)
+		if err != nil {
+			t.Fatalf("UpdateChannelPath(hop %d=%d): %v", i, h, err)
+		}
+		p = updated
+	}
+	return p
+}
+
+func mustEq(t *testing.T, name string, got, want *u256.Uint) {
+	t.Helper()
+	if !got.Eq(want) {
+		t.Fatalf("%s: got %s want %s", name, got.Dec(), want.Dec())
 	}
 }

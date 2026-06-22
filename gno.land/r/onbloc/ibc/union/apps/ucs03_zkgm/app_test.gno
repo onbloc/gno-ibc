@@ -27,22 +27,19 @@ func TestOnChannelOpenInitOk(cur realm, t *testing.T) {
 	}
 }
 
-// test_on_channel_open_init_invalid_version
-// Reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/tests.rs#L3405-L3435
-func TestOnChannelOpenInitInvalidVersion(cur realm, t *testing.T) {
+// Version enforcement lives in the installed impl; the proxy only gates caller
+// and pause state before delegating.
+func TestOnChannelOpenInitDelegatesVersionToImpl(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	impl = d
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
-	uassert.AbortsContains(t, cur, "unsupported channel version", func() {
-		(&App{}).OnChannelOpenInit(cross(cur), 1, 2, "im-invalid", address("g1relayer"))
-	})
+	(&App{}).OnChannelOpenInit(cross(cur), 1, 2, "im-invalid", address("g1relayer"))
 
-	// impl should not be called for invalid version
-	if d.openInitCalled {
-		t.Fatal("OnChannelOpenInit must not delegate for invalid version")
+	if !d.openInitCalled {
+		t.Fatal("OnChannelOpenInit must delegate version validation to impl")
 	}
 }
 
@@ -54,7 +51,7 @@ func TestOnChannelOpenInitOnlyIbc(cur realm, t *testing.T) {
 	impl = d
 
 	// Do NOT impersonate core - call from a non-core realm
-	uassert.AbortsContains(t, cur, "only core can", func() {
+	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
 		(&App{}).OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer"))
 	})
 
@@ -79,41 +76,31 @@ func TestOnChannelOpenTryOk(cur realm, t *testing.T) {
 	}
 }
 
-// test_on_channel_open_try_invalid_version
-// Reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/tests.rs#L3495-L3526
-func TestOnChannelOpenTryInvalidVersion(cur realm, t *testing.T) {
+func TestOnChannelOpenTryDelegatesVersionToImpl(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	impl = d
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
-	uassert.AbortsContains(t, cur, "unsupported channel version", func() {
-		(&App{}).OnChannelOpenTry(cross(cur), 1, 2, "im-invalid", Version, address("g1relayer"))
-	})
+	(&App{}).OnChannelOpenTry(cross(cur), 1, 2, "im-invalid", Version, address("g1relayer"))
 
-	// impl should not be called for invalid version
-	if d.openTryCalled {
-		t.Fatal("OnChannelOpenTry must not delegate for invalid version")
+	if !d.openTryCalled {
+		t.Fatal("OnChannelOpenTry must delegate version validation to impl")
 	}
 }
 
-// test_on_channel_open_try_invalid_counterparty_version
-// Reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/tests.rs#L3529-L3560
-func TestOnChannelOpenTryInvalidCounterpartyVersion(cur realm, t *testing.T) {
+func TestOnChannelOpenTryDelegatesCounterpartyVersionToImpl(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	impl = d
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
-	uassert.AbortsContains(t, cur, "unsupported channel version", func() {
-		(&App{}).OnChannelOpenTry(cross(cur), 1, 2, Version, "im-invalid", address("g1relayer"))
-	})
+	(&App{}).OnChannelOpenTry(cross(cur), 1, 2, Version, "im-invalid", address("g1relayer"))
 
-	// impl should not be called for invalid counterparty version
-	if d.openTryCalled {
-		t.Fatal("OnChannelOpenTry must not delegate for invalid counterparty version")
+	if !d.openTryCalled || d.lastCounterpartyVer != "im-invalid" {
+		t.Fatal("OnChannelOpenTry must delegate counterparty version validation to impl")
 	}
 }
 
@@ -125,7 +112,7 @@ func TestOnChannelOpenTryOnlyIbc(cur realm, t *testing.T) {
 	impl = d
 
 	// Do NOT impersonate core - call from a non-core realm
-	uassert.AbortsContains(t, cur, "only core can", func() {
+	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
 		(&App{}).OnChannelOpenTry(cross(cur), 1, 2, Version, Version, address("g1relayer"))
 	})
 
@@ -187,7 +174,7 @@ func TestOnChannelCloseInitOnlyIbc(cur realm, t *testing.T) {
 
 	// Do NOT impersonate core - call from a non-core realm
 	// The caller gate runs before the close rejection
-	uassert.AbortsContains(t, cur, "only core can", func() {
+	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
 		(&App{}).OnChannelCloseInit(cross(cur), 2, address("g1relayer"))
 	})
 
@@ -227,7 +214,7 @@ func TestOnChannelCloseConfirmOnlyIbc(cur realm, t *testing.T) {
 
 	// Do NOT impersonate core - call from a non-core realm
 	// The caller gate runs before the close rejection
-	uassert.AbortsContains(t, cur, "only core can", func() {
+	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
 		(&App{}).OnChannelCloseConfirm(cross(cur), 2, address("g1relayer"))
 	})
 
@@ -381,7 +368,7 @@ func TestAllChannelCallbacksRequireIbcHost(cur realm, t *testing.T) {
 	for i, cb := range callbacks {
 		resetZkgmForTest()
 		impl = d
-		uassert.AbortsContains(t, cur, "only core can", func() { cb() })
+		uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() { cb() })
 
 		// Verify no delegation happened
 		if d.openInitCalled || d.openTryCalled || d.openAckCalled || d.openConfirmCalled || d.closeInitCalled || d.closeConfirmCalled {
@@ -390,35 +377,26 @@ func TestAllChannelCallbacksRequireIbcHost(cur realm, t *testing.T) {
 	}
 }
 
-// Test that version validation works correctly for all versioned callbacks
-func TestVersionValidationUnionAligned(cur realm, t *testing.T) {
+func TestAppDelegatesVersionValidationToImpl(cur realm, t *testing.T) {
 	resetZkgmForTest()
 	d := &dummyImpl{}
 	impl = d
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
-	// OnChannelOpenInit with invalid version
-	uassert.AbortsContains(t, cur, "unsupported channel version", func() {
-		(&App{}).OnChannelOpenInit(cross(cur), 1, 2, "wrong-version", address("g1relayer"))
-	})
+	(&App{}).OnChannelOpenInit(cross(cur), 1, 2, "wrong-version", address("g1relayer"))
+	(&App{}).OnChannelOpenTry(cross(cur), 1, 2, "wrong-version", Version, address("g1relayer"))
+	(&App{}).OnChannelOpenTry(cross(cur), 1, 2, Version, "wrong-version", address("g1relayer"))
 
-	// OnChannelOpenTry with invalid local version
-	uassert.AbortsContains(t, cur, "unsupported channel version", func() {
-		(&App{}).OnChannelOpenTry(cross(cur), 1, 2, "wrong-version", Version, address("g1relayer"))
-	})
-
-	// OnChannelOpenTry with invalid counterparty version
-	uassert.AbortsContains(t, cur, "unsupported channel version", func() {
-		(&App{}).OnChannelOpenTry(cross(cur), 1, 2, Version, "wrong-version", address("g1relayer"))
-	})
-
-	// Verify no delegation happened for any invalid version calls
-	if d.openInitCalled || d.openTryCalled {
-		t.Fatal("version validation must prevent delegation")
+	if !d.openInitCalled || !d.openTryCalled || d.lastCounterpartyVer != "wrong-version" {
+		t.Fatal("app must delegate version validation to impl")
 	}
 
 	// Valid versions should succeed
+	resetZkgmForTest()
+	d = &dummyImpl{}
+	impl = d
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	(&App{}).OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer"))
 	(&App{}).OnChannelOpenTry(cross(cur), 1, 2, Version, Version, address("g1relayer"))
 
@@ -435,7 +413,7 @@ func TestOnRecvPacketOnlyIbc(cur realm, t *testing.T) {
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Non-IBC caller is rejected
-	uassert.AbortsContains(t, cur, "only core can recv", func() {
+	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
 		(&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
 	})
 
@@ -455,14 +433,14 @@ func TestOnIntentRecvPacketOnlyIbc(cur realm, t *testing.T) {
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Non-IBC caller is rejected
-	uassert.AbortsContains(t, cur, "only core can intent recv", func() {
+	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
 		(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
 	})
 
 	// IBC caller delegates to impl
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	res := (&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
-	if !d.recvCalled || res.Status != types.PacketStatusSuccess {
+	if !d.intentRecvCalled || res.Status != types.PacketStatusSuccess {
 		t.Fatal("OnIntentRecvPacket must delegate to impl when called by IBC")
 	}
 }
@@ -475,7 +453,7 @@ func TestOnAcknowledgementPacketOnlyIbc(cur realm, t *testing.T) {
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Non-IBC caller is rejected
-	uassert.AbortsContains(t, cur, "only core can ack", func() {
+	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
 		(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
 	})
 
@@ -495,7 +473,7 @@ func TestOnTimeoutPacketOnlyIbc(cur realm, t *testing.T) {
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Non-IBC caller is rejected
-	uassert.AbortsContains(t, cur, "only core can timeout", func() {
+	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
 		(&App{}).OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
 	})
 

@@ -306,6 +306,36 @@ func TestHeaderGetHeightPreservesTrustedRevision(t *testing.T) {
 	}
 }
 
+func TestHeaderConsensusState(t *testing.T) {
+	h := newTestHeader(42, 1000, 500, 10, []byte{0xAA})
+	h.SignedHeader.AppHash = repeat32(0x44)
+	h.SignedHeader.NextValidatorsHash = repeat32(0x45)
+
+	got := h.ConsensusState()
+
+	if got.Timestamp != uint64(h.GetTime().UnixNano()) {
+		t.Fatalf("timestamp: got %d want %d", got.Timestamp, h.GetTime().UnixNano())
+	}
+	bytesEq(t, "root hash", got.Root.Hash, h.SignedHeader.AppHash)
+	bytesEq(t, "next validators hash", got.NextValidatorsHash, h.SignedHeader.NextValidatorsHash)
+}
+
+func TestHeaderGetTimeUsesSecondsAndNanosUTC(t *testing.T) {
+	h := newTestHeader(42, 1704067200, 123456789, 10, []byte{0xAA})
+
+	got := h.GetTime()
+
+	if got.Unix() != 1704067200 {
+		t.Fatalf("Unix seconds: got %d want 1704067200", got.Unix())
+	}
+	if got.Nanosecond() != 123456789 {
+		t.Fatalf("nanoseconds: got %d want 123456789", got.Nanosecond())
+	}
+	if got.Location() != time.UTC {
+		t.Fatalf("location: got %s want UTC", got.Location())
+	}
+}
+
 func TestVerifyHeaderWrapperRejectsMalformedHeader(t *testing.T) {
 	// Union reference: VerifyHeader decodes the client message before entering
 	// the typed verify_header implementation.

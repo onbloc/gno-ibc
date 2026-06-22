@@ -74,6 +74,91 @@ func TestDecodeMisbehaviourBadHeaderBytes(t *testing.T) {
 	}
 }
 
+func TestMisbehaviourGetTimeReturnsLatestHeaderTime(t *testing.T) {
+	cases := []struct {
+		name string
+		h1   *Header
+		h2   *Header
+		want time.Time
+	}{
+		{
+			name: "header1 later",
+			h1:   newTestHeader(100, 2001, 0, 90, []byte{0x01}),
+			h2:   newTestHeader(99, 2000, 999, 89, []byte{0x02}),
+			want: time.Unix(2001, 0).UTC(),
+		},
+		{
+			name: "header2 later",
+			h1:   newTestHeader(100, 2000, 0, 90, []byte{0x01}),
+			h2:   newTestHeader(99, 2000, 1, 89, []byte{0x02}),
+			want: time.Unix(2000, 1).UTC(),
+		},
+		{
+			name: "equal returns header2 time",
+			h1:   newTestHeader(100, 2000, 7, 90, []byte{0x01}),
+			h2:   newTestHeader(99, 2000, 7, 89, []byte{0x02}),
+			want: time.Unix(2000, 7).UTC(),
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := &Misbehaviour{Header1: tc.h1, Header2: tc.h2}
+			if got := m.GetTime(); !got.Equal(tc.want) {
+				t.Fatalf("GetTime: got %s want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSignedHeadersEqual(t *testing.T) {
+	base := newTestHeader(100, 2000, 7, 90, []byte{0x01}).SignedHeader
+
+	cases := []struct {
+		name string
+		a    *LightHeader
+		b    *LightHeader
+		want bool
+	}{
+		{"both nil", nil, nil, true},
+		{"left nil", nil, cloneLightHeader(base), false},
+		{"right nil", cloneLightHeader(base), nil, false},
+		{"identical", cloneLightHeader(base), cloneLightHeader(base), true},
+		{"height differs", cloneLightHeaderWith(base, func(h *LightHeader) { h.Height++ }), cloneLightHeader(base), false},
+		{"seconds differ", cloneLightHeaderWith(base, func(h *LightHeader) { h.TimeSeconds++ }), cloneLightHeader(base), false},
+		{"nanos differ", cloneLightHeaderWith(base, func(h *LightHeader) { h.TimeNanos++ }), cloneLightHeader(base), false},
+		{"validators hash differs", cloneLightHeaderWith(base, func(h *LightHeader) { h.ValidatorsHash[0] ^= 0xff }), cloneLightHeader(base), false},
+		{"next validators hash differs", cloneLightHeaderWith(base, func(h *LightHeader) { h.NextValidatorsHash[0] ^= 0xff }), cloneLightHeader(base), false},
+		{"app hash differs", cloneLightHeaderWith(base, func(h *LightHeader) { h.AppHash[0] ^= 0xff }), cloneLightHeader(base), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := signedHeadersEqual(tc.a, tc.b); got != tc.want {
+				t.Fatalf("signedHeadersEqual: got %v want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func cloneLightHeaderWith(h *LightHeader, mutate func(*LightHeader)) *LightHeader {
+	out := cloneLightHeader(h)
+	mutate(out)
+	return out
+}
+
+func cloneLightHeader(h *LightHeader) *LightHeader {
+	if h == nil {
+		return nil
+	}
+	return &LightHeader{
+		Height:             h.Height,
+		TimeSeconds:        h.TimeSeconds,
+		TimeNanos:          h.TimeNanos,
+		ValidatorsHash:     append([]byte(nil), h.ValidatorsHash...),
+		NextValidatorsHash: append([]byte(nil), h.NextValidatorsHash...),
+		AppHash:            append([]byte(nil), h.AppHash...),
+	}
+}
+
 func TestVerifyMisbehaviourRejectsInvalidHeaderSequenceBeforeProofVerification(t *testing.T) {
 	// Union reference: verify_misbehaviour first rejects HeaderA lower than
 	// HeaderB before running header/proof verification.

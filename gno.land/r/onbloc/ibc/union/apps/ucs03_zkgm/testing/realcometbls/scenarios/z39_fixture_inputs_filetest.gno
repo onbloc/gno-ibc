@@ -35,7 +35,7 @@ func z39CallPacket(cur realm, receiverPath string) types.Packet {
 		ContractAddress:  []byte(receiverPath),
 		ContractCalldata: []byte("calldata"),
 	}
-	return core.NewPacket(cross(cur), types.ChannelId(2), types.ChannelId(1), e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)), types.Timestamp(0))
+	return core.NewPacket(types.ChannelId(2), types.ChannelId(1), e2e.MustPacketData(cross(cur), e2e.MustCallInstruction(cross(cur), call)), types.Timestamp(0))
 }
 
 func printKV(name string, key []byte, value []byte) {

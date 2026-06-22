@@ -49,7 +49,7 @@ func main(cur realm) {
 
 	println("")
 	println("[SCENARIO] mint voucher on destination")
-	lockPacket := core.NewPacket(cross(cur), sourceChannel, destChannel, lockData, types.Timestamp(100))
+	lockPacket := core.NewPacket(sourceChannel, destChannel, lockData, types.Timestamp(100))
 	recvRes := inst.Recv(cross(cur), lockPacket, relayer, nil)
 	println("recv_status", int(recvRes.Status))
 	println("receiver_voucher_after_mint", impl.VoucherBalanceOf(quoteToken, address(receiver)))
@@ -77,7 +77,7 @@ func main(cur realm) {
 	// inst.Send consumes sentCoinBudget bookkeeping only; this simulates the
 	// banker escrow deposit that a real user tx would have locked in the proxy.
 	stdtesting.IssueCoins(zkgm.ProxyAddress(), chain.NewCoins(chain.NewCoin("ugnot", 40)))
-	unescrowPacket := core.NewPacket(cross(cur), destChannel, sourceChannel, unescrowData, types.Timestamp(101))
+	unescrowPacket := core.NewPacket(destChannel, sourceChannel, unescrowData, types.Timestamp(101))
 	unescrowRes := inst.Recv(cross(cur), unescrowPacket, relayer, nil)
 	bk := banker.NewReadonlyBanker()
 	println("unescrow_recv_status", int(unescrowRes.Status))

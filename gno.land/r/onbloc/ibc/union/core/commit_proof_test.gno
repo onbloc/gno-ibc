@@ -14,7 +14,7 @@ func setCommitProofAdmin(cur realm) {
 
 // Gno equivalent of Union RestrictedExecuteMsg access management.
 func TestCommitMembershipProofRejectsNonAdminBeforeVerification(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	oldAdmin := admin
 	defer func() { admin = oldAdmin }()
 	admin = testutils.TestAddress("different-admin")

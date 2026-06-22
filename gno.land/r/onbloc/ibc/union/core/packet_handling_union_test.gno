@@ -13,7 +13,7 @@ import (
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L20-L76
 func TestUnionSendPacketOK(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 
 	data := []byte{0, 1, 2}
@@ -28,7 +28,7 @@ func TestUnionSendPacketOK(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L79-L136
 func TestUnionSendPacketMissingTimeout(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 
 	uassert.AbortsContains(t, cur, "timeout must be set", func(cur realm) {
@@ -41,7 +41,7 @@ func TestUnionSendPacketMissingTimeout(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L139-L201
 func TestUnionSendPacketChannelDoesNotExist(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	setupOpenChannel(t)
 
 	uassert.AbortsContains(t, cur, "channel 3 not found", func(cur realm) {
@@ -54,7 +54,7 @@ func TestUnionSendPacketChannelDoesNotExist(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L204-L261
 func TestUnionSendPacketModuleIsNotChannelOwner(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	setChannelOwner(channelId, "g1notchannelowner")
 
@@ -66,7 +66,7 @@ func TestUnionSendPacketModuleIsNotChannelOwner(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L1605-L1736
 func TestUnionBatchSendOK(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	timeout := types.Timestamp(248)
 	p1 := SendPacket(cross(cur), channelId, timeout, []byte{1, 2, 3})
@@ -80,7 +80,7 @@ func TestUnionBatchSendOK(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L1740-L1843
 func TestUnionBatchSendPacketNotSent(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	p1 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes{4, 5, 6}, TimeoutTimestamp: 0}
 	p2 := types.Packet{SourceChannelId: channelId, DestinationChannelId: 99, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: 0}
@@ -93,7 +93,7 @@ func TestUnionBatchSendPacketNotSent(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L1846-L2027
 func TestUnionBatchAcksOK(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	p1 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: testFutureTimeoutNanos}
 	p2 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes{3, 4, 5}, TimeoutTimestamp: testFutureTimeoutNanos}
@@ -111,7 +111,7 @@ func TestUnionBatchAcksOK(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L2031-L2134
 func TestUnionBatchAcksPacketNotReceived(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	p1 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: testFutureTimeoutNanos}
 	p2 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes{3, 4, 5}, TimeoutTimestamp: testFutureTimeoutNanos}
@@ -127,7 +127,7 @@ func TestUnionBatchAcksPacketNotReceived(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L2138-L2319
 func TestUnionBatchAcksTamperedPacket(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	p1 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: testFutureTimeoutNanos}
 	p2 := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes{3, 4, 5}, TimeoutTimestamp: testFutureTimeoutNanos}
@@ -147,7 +147,7 @@ func TestUnionBatchAcksTamperedPacket(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L307-L329
 func TestUnionRecvPacketOK(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	packet := types.Packet{
 		SourceChannelId:      99,
@@ -170,7 +170,7 @@ func TestUnionRecvPacketOK(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L376-L405
 func TestUnionRecvPacketInvalidChannelState(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	setupOpenChannel(t)
 	packet := types.Packet{
 		SourceChannelId:      99,
@@ -193,7 +193,7 @@ func TestUnionRecvPacketInvalidChannelState(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L456-L478
 func TestUnionRecvPacketTimeoutTimestamp(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	packet := types.Packet{
 		SourceChannelId:      99,
@@ -216,7 +216,7 @@ func TestUnionRecvPacketTimeoutTimestamp(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L1119-L1238
 func TestUnionWriteAcknowledgementOK(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
 	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
@@ -240,7 +240,7 @@ func TestUnionWriteAcknowledgementOK(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L1242-L1361
 func TestUnionWriteAcknowledgementModuleIsNotChannelOwner(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
 	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
@@ -266,7 +266,7 @@ func TestUnionWriteAcknowledgementModuleIsNotChannelOwner(cur realm, t *testing.
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L1365-L1459
 func TestUnionWriteAcknowledgementPacketNotReceived(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	packet := types.Packet{SourceChannelId: 99, DestinationChannelId: channelId, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: testFutureTimeoutNanos}
 
@@ -281,7 +281,7 @@ func TestUnionWriteAcknowledgementPacketNotReceived(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L1463-L1601
 func TestUnionWriteAcknowledgementAlreadyExists(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	portId, _, channelId := setupOpenChannel(t)
 	app := store.ports[portKey(portId)].(*mockApp)
 	app.recvResult = NewRecvPacketResult(types.PacketStatusAsync, nil)
@@ -310,7 +310,7 @@ func TestUnionWriteAcknowledgementAlreadyExists(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L525-L547
 func TestUnionRecvIntentPacketOK(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	packet := types.Packet{
 		SourceChannelId:      99,
@@ -331,7 +331,7 @@ func TestUnionRecvIntentPacketOK(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L594-L616
 func TestUnionRecvIntentPacketTimeoutTimestamp(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	packet := types.Packet{
 		SourceChannelId:      99,
@@ -352,7 +352,7 @@ func TestUnionRecvIntentPacketTimeoutTimestamp(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L706-L728
 func TestUnionAcknowledgePacketOK(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	packet := types.Packet{SourceChannelId: channelId, DestinationChannelId: channelId, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: testFutureTimeoutNanos}
 	store.commitPacket(packet)
@@ -371,7 +371,7 @@ func TestUnionAcknowledgePacketOK(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L818-L840
 func TestUnionAcknowledgePacketTampered(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	sent := types.Packet{SourceChannelId: channelId, DestinationChannelId: channelId, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: testFutureTimeoutNanos}
 	tampered := types.Packet{SourceChannelId: channelId, DestinationChannelId: channelId, Data: types.Bytes{4, 1, 2, 3}, TimeoutTimestamp: testFutureTimeoutNanos}
@@ -391,7 +391,7 @@ func TestUnionAcknowledgePacketTampered(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L917-L939
 func TestUnionAcknowledgePacketNotSent(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	packet := types.Packet{SourceChannelId: channelId, DestinationChannelId: channelId, Data: types.Bytes{1, 2, 3}, TimeoutTimestamp: testFutureTimeoutNanos}
 
@@ -409,7 +409,7 @@ func TestUnionAcknowledgePacketNotSent(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L943-L1029
 func TestUnionTimeoutPacketTimestampOK(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	client := mockClientFor(channelId)
 	timeout := types.Timestamp(64)
@@ -430,7 +430,7 @@ func TestUnionTimeoutPacketTimestampOK(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/tests/channel/ibc_packet.rs#L1031-L1115
 func TestUnionTimeoutPacketTimestampNotReached(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 	client := mockClientFor(channelId)
 	timeout := types.Timestamp(248)

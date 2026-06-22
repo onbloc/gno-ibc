@@ -13,6 +13,13 @@ import (
 
 var Relayer = address("g1relayer")
 
+var testConnectionSeq uint32
+
+func nextTestConnectionId() types.ConnectionId {
+	testConnectionSeq++
+	return types.ConnectionId(testConnectionSeq)
+}
+
 func tagAckSuccessU256() *u256.Uint    { return new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:]) }
 func fillTypeProtocolU256() *u256.Uint { return new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:]) }
 
@@ -31,13 +38,10 @@ func NewChannelPair(cur realm, clientId types.ClientId, connectionId types.Conne
 }
 
 func RegisterMockLightClient(cur realm) {
-	if !core.HasClient(MockClientType) {
-		core.RegisterClient(cross(cur), MockClientType, &MockLightClient{})
-	}
 }
 
 func CreateMockClient(cur realm) types.ClientId {
-	return core.CreateClient(cross(cur), types.NewMsgCreateClient(MockClientType, nil, nil))
+	return core.CreateClient(cross(cur), MockClientType, &MockLightClient{})
 }
 
 func OpenE2EChannel(cur realm, counterpartyChannelId types.ChannelId) types.ChannelId {
@@ -61,15 +65,16 @@ func OpenE2EChannelPair(cur realm) ChannelPair {
 }
 
 func openConnection(cur realm, clientId types.ClientId) types.ConnectionId {
-	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	connectionId := nextTestConnectionId()
+	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
 	return connectionId
 }
 
 func openChannel(cur realm, connectionId types.ConnectionId, counterpartyChannelId types.ChannelId) types.ChannelId {
 	portId := []byte(zkgm.ProxyPkgPath())
-	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version))
-	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, counterpartyChannelId, nil, 1))
+	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, counterpartyChannelId, nil, 1, "g1msgrelayer"))
 	return channelId
 }
 

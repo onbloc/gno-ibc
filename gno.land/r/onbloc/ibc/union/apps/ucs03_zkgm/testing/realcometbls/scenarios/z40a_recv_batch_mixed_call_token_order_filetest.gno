@@ -51,7 +51,7 @@ func mixedBatchPacket(cur realm, pair realcometbls.ChannelPair, receiver string)
 			Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 		}),
 	}}
-	return core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), types.Timestamp(0))
+	return core.NewPacket(pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustBatchInstruction(cross(cur), batch)), types.Timestamp(0))
 }
 
 func expectedAckHash(cur realm) string {

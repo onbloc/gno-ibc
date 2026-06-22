@@ -31,7 +31,7 @@ func main(cur realm) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    metaBytes,
 	}
-	initPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), initialize)), types.Timestamp(1<<62))
+	initPacket := core.NewPacket(pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), initialize)), types.Timestamp(1<<62))
 	println("[SCENARIO] 1. initialize voucher")
 	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{initPacket}, nil, nil, 1))
 	_, hasOriginAfterInitialize := zkgm.GetTokenOrigin(quoteToken)
@@ -49,7 +49,7 @@ func main(cur realm) {
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	escrowPacket := core.NewPacket(cross(cur), pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), escrow)), types.Timestamp(1<<62))
+	escrowPacket := core.NewPacket(pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), escrow)), types.Timestamp(1<<62))
 	println("[SCENARIO] 2. escrow into existing voucher")
 	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{escrowPacket}, nil, nil, 1))
 	_, hasOriginAfterEscrow := zkgm.GetTokenOrigin(quoteToken)

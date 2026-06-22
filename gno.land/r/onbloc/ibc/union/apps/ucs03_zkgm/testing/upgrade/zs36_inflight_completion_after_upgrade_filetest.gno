@@ -14,8 +14,8 @@ import (
 func main(cur realm) {
 	oldImpl := zkgm.ProxyPkgPath() + "/testing/inflight-old"
 	newImpl := zkgm.ProxyPkgPath() + "/testing/inflight-new"
-	parent := core.NewPacket(cross(cur), types.ChannelId(10), types.ChannelId(11), []byte("parent"), types.Timestamp(100))
-	child := core.NewPacket(cross(cur), types.ChannelId(12), types.ChannelId(13), []byte("child"), types.Timestamp(200))
+	parent := core.NewPacket(types.ChannelId(10), types.ChannelId(11), []byte("parent"), types.Timestamp(100))
+	child := core.NewPacket(types.ChannelId(12), types.ChannelId(13), []byte("child"), types.Timestamp(200))
 	key := zkgm.NewInFlightKey(cross(cur), types.MustCommit(types.CommitPacket(child)))
 	value := zkgm.NewInFlightValue(cross(cur), parent)
 

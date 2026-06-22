@@ -12,7 +12,7 @@ import (
 // Query reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2176-L2191
 func TestCommitMembershipProofStoresCommittedValue(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	oldAdmin := admin
 	defer func() { admin = oldAdmin }()
 	setCommitProofAdmin(cur)
@@ -48,7 +48,7 @@ func TestCommitMembershipProofStoresCommittedValue(cur realm, t *testing.T) {
 // Union implementation reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2267-L2289
 func TestCommitMembershipProofRejectsInactiveClientBeforeVerification(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	oldAdmin := admin
 	defer func() { admin = oldAdmin }()
 	setCommitProofAdmin(cur)
@@ -76,7 +76,7 @@ func TestCommitMembershipProofRejectsInactiveClientBeforeVerification(cur realm,
 // Union implementation reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2176-L2191
 func TestGetCommittedMembershipProofUnknownReturnsEmpty(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 
 	if got := GetCommittedMembershipProof(types.ClientId(1), 10, types.Bytes("path")); got != "" {
 		t.Fatalf("GetCommittedMembershipProof unknown: got %q want empty", got)
@@ -86,7 +86,7 @@ func TestGetCommittedMembershipProofUnknownReturnsEmpty(cur realm, t *testing.T)
 // Union implementation reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2181-L2189
 func TestGetCommittedMembershipProofUsesClientHeightAndPath(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	clientId := types.ClientId(7)
 	path := types.Bytes("clients/7/consensusStates/11")
 	value := types.Keccak(types.Bytes("consensus-state"))
@@ -111,7 +111,7 @@ func TestGetCommittedMembershipProofUsesClientHeightAndPath(cur realm, t *testin
 // Query reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2192-L2213
 func TestCommitNonMembershipProofStoresSentinel(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	oldAdmin := admin
 	defer func() { admin = oldAdmin }()
 	setCommitProofAdmin(cur)
@@ -144,7 +144,7 @@ func TestCommitNonMembershipProofStoresSentinel(cur realm, t *testing.T) {
 // Union implementation reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2307-L2328
 func TestCommitNonMembershipProofRejectsInactiveClientBeforeVerification(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	oldAdmin := admin
 	defer func() { admin = oldAdmin }()
 	setCommitProofAdmin(cur)
@@ -171,7 +171,7 @@ func TestCommitNonMembershipProofRejectsInactiveClientBeforeVerification(cur rea
 // Union implementation reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2192-L2213
 func TestGetCommittedNonMembershipProofUnknownReturnsFalse(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 
 	if GetCommittedNonMembershipProof(types.ClientId(1), 10, types.Bytes("path")) {
 		t.Fatal("GetCommittedNonMembershipProof unknown: got true want false")
@@ -181,7 +181,7 @@ func TestGetCommittedNonMembershipProofUnknownReturnsFalse(cur realm, t *testing
 // Union implementation reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2197-L2210
 func TestGetCommittedNonMembershipProofUsesClientHeightAndPath(cur realm, t *testing.T) {
-	resetStore()
+	resetStore(cur)
 	clientId := types.ClientId(7)
 	path := types.Bytes("clients/7/consensusStates/11")
 	store.saveNonMembershipProof(clientId, 10, path, types.NON_MEMBERSHIP_COMMITMENT_VALUE)

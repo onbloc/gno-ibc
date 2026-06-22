@@ -457,6 +457,20 @@ func TestVerifyHeaderExpiryBoundaryMatchesUnion(t *testing.T) {
 	requireErrorContains(t, err, "the validators hash")
 }
 
+func TestVerifyHeaderRejectsInvalidZKP(t *testing.T) {
+	c := newTestClient(t)
+	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
+	if !found {
+		t.Fatal("trusted consensus state missing")
+	}
+	h := updateStateTestHeader(100, 101, testNow+1)
+	h.SignedHeader.ValidatorsHash = trustedConsensusState.NextValidatorsHash
+	now := time.Unix(0, int64(testNow))
+
+	err := c.verifyHeader(c.clientState, trustedConsensusState, h, now)
+	requireErrorContains(t, err, "zero-knowledge proof verification failed")
+}
+
 func TestVerifyHeaderMaxClockDriftOverflowMatchesUnion(t *testing.T) {
 	c := newTestClient(t)
 	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))

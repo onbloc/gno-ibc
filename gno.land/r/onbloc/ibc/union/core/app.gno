@@ -6,12 +6,10 @@ import (
 	"gno.land/p/onbloc/ibc/union/app"
 )
 
-// RegisterApp registers an IBC application at the caller realm's package path.
+// RegisterApp registers an IBC application at the caller realm's package path,
+// delegating to the installed impl.
 func RegisterApp(cur realm, app app.IApp) {
-	caller := cur.Previous().PkgPath()
-	portId := []byte(caller)
-	registerAppAtPort(portId, app)
-	emitAppRegisteredEvent(portId, caller, false)
+	requireImpl().RegisterApp(0, cur, app)
 }
 
 // RegisterAppForPort registers an IBC application at an explicit port id. This

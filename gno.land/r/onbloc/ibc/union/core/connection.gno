@@ -13,19 +13,13 @@ func NewConnection(state types.ConnectionState, clientId, counterpartyClientId t
 func ConnectionOpenInit(cur realm, msg types.MsgConnectionOpenInit) {
 	requireAdmin(cur, "ConnectionOpenInit")
 	runtime.AssertOriginCall()
-
-	connectionId := store.nextConnectionId()
-
-	connection := NewConnection(types.ConnectionStateInit, msg.ClientId, msg.CounterpartyClientId, 0)
-
-	store.saveConnection(connectionId, connection)
-	emitConnectionOpenInitEvent(connectionId, msg.ClientId, msg.CounterpartyClientId)
+	requireImpl().ConnectionOpenInit(0, cur, msg)
 }
 
 func ConnectionOpenTry(cur realm, msg types.MsgConnectionOpenTry) {
 	requireAdmin(cur, "ConnectionOpenTry")
 	runtime.AssertOriginCall()
-	connectionOpenTry(msg, true)
+	requireImpl().ConnectionOpenTry(0, cur, msg)
 }
 
 func ForceConnectionOpenTry(cur realm, msg types.MsgConnectionOpenTry) {
@@ -54,7 +48,7 @@ func connectionOpenTry(msg types.MsgConnectionOpenTry, verify bool) {
 func ConnectionOpenAck(cur realm, msg types.MsgConnectionOpenAck) {
 	requireAdmin(cur, "ConnectionOpenAck")
 	runtime.AssertOriginCall()
-	connectionOpenAck(msg, true)
+	requireImpl().ConnectionOpenAck(0, cur, msg)
 }
 
 func ForceConnectionOpenAck(cur realm, msg types.MsgConnectionOpenAck) {
@@ -89,7 +83,7 @@ func connectionOpenAck(msg types.MsgConnectionOpenAck, verify bool) {
 func ConnectionOpenConfirm(cur realm, msg types.MsgConnectionOpenConfirm) {
 	requireAdmin(cur, "ConnectionOpenConfirm")
 	runtime.AssertOriginCall()
-	connectionOpenConfirm(msg, true)
+	requireImpl().ConnectionOpenConfirm(0, cur, msg)
 }
 
 func ForceConnectionOpenConfirm(cur realm, msg types.MsgConnectionOpenConfirm) {

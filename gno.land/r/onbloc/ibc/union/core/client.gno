@@ -17,55 +17,14 @@ func NewConsensusStateUpdate(height types.Height, consensusStateBytes, clientSta
 // consensus state. This mirrors aib's model of handing core an already-built
 // light client instead of core decoding bytes itself.
 func CreateClient(cur realm, clientType types.ClientType, lc lightclient.Interface) types.ClientId {
-	creator := cur.Previous().Address()
-	c := store.addClient(clientType, creator, lc)
-
-	if _, err := lc.VerifyCreation(creator, creator); err != nil {
-		panic("create client: " + err.Error())
-	}
-
-	chain.Emit(
-		CreateClientEvent,
-		"client_id", c.id.String(),
-		"client_type", clientType.String(),
-	)
-
-	return c.id
+	return requireImpl().CreateClient(0, cur, clientType, lc)
 }
 
 // UpdateClient verifies a client message against the light client object, which
 // updates its own state, and mirrors the resulting state bytes for queries and
 // counterparty proofs.
 func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
-	c := store.getClient(msg.ClientId)
-	if c == nil {
-		panic("client " + msg.ClientId.String() + " not found")
-	}
-
-	caller := cur.Previous().Address()
-
-	update, err := c.lightClient.VerifyHeader(caller, msg.ClientMessage, caller)
-	if err != nil {
-		panic("update client: " + err.Error())
-	}
-
-	height := types.NewHeight(update.Height)
-	if len(update.ClientStateBytes) != 0 {
-		c.saveState(update.ClientStateBytes)
-	}
-
-	if len(update.ConsensusStateBytes) != 0 {
-		c.saveConsensusState(height, update.ConsensusStateBytes)
-	}
-
-	chain.Emit(
-		UpdateClientEvent,
-		"client_type", c.typ.String(),
-		"client_id", msg.ClientId.String(),
-		"height", height.String(),
-	)
-
-	return height
+	return requireImpl().UpdateClient(0, cur, msg)
 }
 
 // ForceUpdateClient replaces a client's object with a new one built by the
@@ -100,8 +59,8 @@ func ForceUpdateClient(cur realm, clientId types.ClientId, lc lightclient.Interf
 // VerifyClientMembership verifies a membership proof against a registered light client.
 //
 // It does not commit the verified value into this realm's state.
-func VerifyClientMembership(_ realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {
-	verifyMembershipActive(clientId, proofHeight, proof, path, value)
+func VerifyClientMembership(cur realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {
+	requireImpl().VerifyClientMembership(0, cur, clientId, proofHeight, proof, path, value)
 }
 
 // statusToTypes maps the light client object's status (a string) to the core

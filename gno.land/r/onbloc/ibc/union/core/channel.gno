@@ -9,30 +9,13 @@ import (
 func ChannelOpenInit(cur realm, msg types.MsgChannelOpenInit) types.ChannelId {
 	requireAdmin(cur, "ChannelOpenInit")
 	runtime.AssertOriginCall()
-
-	relayer := cur.Previous().Address()
-	portId := types.Bytes(cloneBytes(msg.PortId))
-	ensureConnectionOpen(msg.ConnectionId)
-	channelId := store.nextChannelId()
-
-	channel := types.Channel{
-		State:                 types.ChannelStateInit,
-		ConnectionId:          msg.ConnectionId,
-		CounterpartyChannelId: 0,
-		CounterpartyPortId:    types.Bytes(cloneBytes(msg.CounterpartyPortId)),
-		Version:               msg.Version,
-	}
-	store.createChannel(channelId, channel, portId)
-
-	store.getAppByPortId(portId).OnChannelOpenInit(cross(cur), msg.ConnectionId, channelId, msg.Version, relayer)
-	emitChannelOpenInitEvent(portId, channelId, channel)
-	return channelId
+	return requireImpl().ChannelOpenInit(0, cur, msg)
 }
 
 func ChannelOpenTry(cur realm, msg types.MsgChannelOpenTry) types.ChannelId {
 	requireAdmin(cur, "ChannelOpenTry")
 	runtime.AssertOriginCall()
-	return channelOpenTry(cur, msg, true)
+	return requireImpl().ChannelOpenTry(0, cur, msg)
 }
 
 func ForceChannelOpenTry(cur realm, msg types.MsgChannelOpenTry) types.ChannelId {
@@ -76,7 +59,7 @@ func channelOpenTry(cur realm, msg types.MsgChannelOpenTry, verify bool) types.C
 func ChannelOpenAck(cur realm, msg types.MsgChannelOpenAck) {
 	requireAdmin(cur, "ChannelOpenAck")
 	runtime.AssertOriginCall()
-	channelOpenAck(cur, msg, true)
+	requireImpl().ChannelOpenAck(0, cur, msg)
 }
 
 func ForceChannelOpenAck(cur realm, msg types.MsgChannelOpenAck) {
@@ -119,7 +102,7 @@ func channelOpenAck(cur realm, msg types.MsgChannelOpenAck, verify bool) {
 func ChannelOpenConfirm(cur realm, msg types.MsgChannelOpenConfirm) {
 	requireAdmin(cur, "ChannelOpenConfirm")
 	runtime.AssertOriginCall()
-	channelOpenConfirm(cur, msg, true)
+	requireImpl().ChannelOpenConfirm(0, cur, msg)
 }
 
 func ForceChannelOpenConfirm(cur realm, msg types.MsgChannelOpenConfirm) {
@@ -163,64 +146,13 @@ func channelOpenConfirm(cur realm, msg types.MsgChannelOpenConfirm, verify bool)
 func ChannelCloseInit(cur realm, msg types.MsgChannelCloseInit) {
 	requireAdmin(cur, "ChannelCloseInit")
 	runtime.AssertOriginCall()
-
-	channelCloseInit(cur, msg)
-}
-
-func channelCloseInit(cur realm, msg types.MsgChannelCloseInit) {
-	relayer := cur.Previous().Address()
-	channel := store.getChannel(msg.ChannelId)
-	if channel.State != types.ChannelStateOpen {
-		panic(ErrInvalidChannelState)
-	}
-	if channel.CounterpartyChannelId == 0 {
-		panic(ErrInvalidCounterpartyChannelId)
-	}
-	ensureConnectionOpen(channel.ConnectionId)
-	portId := store.getChannelOwner(msg.ChannelId)
-
-	channel.State = types.ChannelStateClosed
-	store.saveChannel(msg.ChannelId, channel)
-
-	store.getAppByPortId(portId).OnChannelCloseInit(cross(cur), msg.ChannelId, relayer)
-	emitChannelCloseInitEvent(portId, msg.ChannelId, channel)
+	requireImpl().ChannelCloseInit(0, cur, msg)
 }
 
 func ChannelCloseConfirm(cur realm, msg types.MsgChannelCloseConfirm) {
 	requireAdmin(cur, "ChannelCloseConfirm")
 	runtime.AssertOriginCall()
-
-	channelCloseConfirm(cur, msg)
-}
-
-func channelCloseConfirm(cur realm, msg types.MsgChannelCloseConfirm) {
-	relayer := cur.Previous().Address()
-	channel := store.getChannel(msg.ChannelId)
-	if channel.State != types.ChannelStateOpen {
-		panic(ErrInvalidChannelState)
-	}
-	if channel.CounterpartyChannelId == 0 {
-		panic(ErrInvalidCounterpartyChannelId)
-	}
-	connection := ensureConnectionOpen(channel.ConnectionId)
-	portId := store.getChannelOwner(msg.ChannelId)
-
-	expectedChannel := types.Channel{
-		State:                 types.ChannelStateClosed,
-		ConnectionId:          connection.CounterpartyConnectionId,
-		CounterpartyChannelId: msg.ChannelId,
-		CounterpartyPortId:    portId,
-		Version:               channel.Version,
-	}
-	key := types.ChannelPath(channel.CounterpartyChannelId)
-	value := channelValue(expectedChannel)
-	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
-
-	channel.State = types.ChannelStateClosed
-	store.saveChannel(msg.ChannelId, channel)
-
-	store.getAppByPortId(portId).OnChannelCloseConfirm(cross(cur), msg.ChannelId, relayer)
-	emitChannelCloseConfirmEvent(portId, msg.ChannelId, channel)
+	requireImpl().ChannelCloseConfirm(0, cur, msg)
 }
 
 func QueryChannel(channelId types.ChannelId) string {

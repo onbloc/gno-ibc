@@ -7,6 +7,10 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
+const (
+	coreRealmPath = "gno.land/r/onbloc/ibc/union/core"
+)
+
 func TestRegisterApp(cur realm, t *testing.T) {
 	v := newTestImpl()
 

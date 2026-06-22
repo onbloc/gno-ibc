@@ -1,8 +1,6 @@
 package core
 
 import (
-	"chain"
-
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
@@ -11,23 +9,24 @@ import (
 // stable event source across impl upgrades. Mirrors EmitRecvError used by the
 // ucs03_zkgm getImpl().
 
+// EmitRegisterClient emits the RegisterClient host event.
+func EmitRegisterClient(clientType types.ClientType) {
+	emitRegisterClientEvent(clientType)
+}
+
 // EmitCreateClient emits the CreateClient host event.
-func EmitCreateClient(clientId types.ClientId, clientType types.ClientType) {
-	chain.Emit(
-		CreateClientEvent,
-		"client_id", clientId.String(),
-		"client_type", clientType.String(),
-	)
+func EmitCreateClient(clientId types.ClientId, clientType types.ClientType, counterpartyChainId string) {
+	emitCreateClientEvent(clientId, clientType, counterpartyChainId)
 }
 
 // EmitUpdateClient emits the UpdateClient host event.
-func EmitUpdateClient(clientType types.ClientType, clientId types.ClientId, height types.Height) {
-	chain.Emit(
-		UpdateClientEvent,
-		"client_type", clientType.String(),
-		"client_id", clientId.String(),
-		"height", height.String(),
-	)
+func EmitUpdateClient(clientId types.ClientId, height types.Height) {
+	emitUpdateClientEvent(clientId, height)
+}
+
+// EmitForceUpdateClient emits the ForceUpdateClient host event.
+func EmitForceUpdateClient(clientId types.ClientId, height types.Height) {
+	emitForceUpdateClientEvent(clientId, height)
 }
 
 // EmitConnectionOpenInit emits the ConnectionOpenInit host event.

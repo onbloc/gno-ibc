@@ -4,14 +4,6 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-func NewPacket(sourceChannelId, destinationChannelId types.ChannelId, data []byte, timeoutTimestamp types.Timestamp) types.Packet {
-	return types.Packet{SourceChannelId: sourceChannelId, DestinationChannelId: destinationChannelId, Data: data, TimeoutHeight: 0, TimeoutTimestamp: timeoutTimestamp}
-}
-
-func NewRecvPacketResult(status types.PacketStatus, acknowledgement []byte) types.RecvPacketResult {
-	return types.RecvPacketResult{Status: status, Acknowledgement: acknowledgement}
-}
-
 // QueryBatchPackets returns the batch commitment value stored at
 // types.BatchPacketsPath(batchHash). Commitments are keyed by their global path,
 // so channelId is accepted for API compatibility but no longer routes the read.

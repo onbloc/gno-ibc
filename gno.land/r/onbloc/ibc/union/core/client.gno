@@ -62,36 +62,3 @@ func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) types.Height {
 func VerifyClientMembership(cur realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {
 	getImpl().VerifyClientMembership(0, cur, clientId, proofHeight, proof, path, value)
 }
-
-// requireActiveClient panics unless the client's light client reports Active.
-// Used by the proxy-resident admin recovery (Force*) handshake paths.
-func requireActiveClient(c *client) {
-	if c.lightClient.Status().ToType() != types.StatusActive {
-		panic(ErrClientNotActive)
-	}
-}
-
-// verifyMembershipActive verifies a membership proof against an active client,
-// used by the proxy-resident Force* connection/channel handshake paths.
-func verifyMembershipActive(clientId types.ClientId, height types.Height, proof, key, value []byte) {
-	c := store.getClient(clientId)
-	if c == nil {
-		panic("client " + clientId.String() + " not found")
-	}
-
-	requireActiveClient(c)
-
-	if err := c.lightClient.VerifyMembership(height.RevisionHeight, key, proof, value); err != nil {
-		panic(err)
-	}
-}
-
-// verifyNonMembershipWithActiveClient verifies a non-membership proof against an
-// already-fetched active client, used by the proxy-resident Force* paths.
-func verifyNonMembershipWithActiveClient(c *client, height types.Height, proof, key []byte) {
-	requireActiveClient(c)
-
-	if err := c.lightClient.VerifyNonMembership(height.RevisionHeight, key, proof); err != nil {
-		panic(err)
-	}
-}

@@ -14,7 +14,7 @@ const farFuture = types.Timestamp(1 << 62)
 // caller's own port, and opens a channel (id 1) owned by that port.
 func setupOpenChannel(cur realm, v *coreV1) (types.ChannelId, types.Bytes, *mockApp) {
 	ms := v.store.(*mockStore)
-	clientId := v.CreateClient(0, cur, types.ClientType("cometbls"), &mockLightClient{timestampAtHt: farFuture})
+	clientId := createClient(cur, v, &mockLightClient{timestampAtHt: farFuture}, nil, nil)
 	ms.SaveConnection(0, cur, types.ConnectionId(1),
 		core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
 	port := types.Bytes(cur.Previous().PkgPath())
@@ -48,7 +48,7 @@ func TestSendPacketTimeoutMustBeSet(cur realm, t *testing.T) {
 func TestSendPacketUnauthorizedSender(cur realm, t *testing.T) {
 	v := newTestImpl()
 	ms := v.store.(*mockStore)
-	clientId := v.CreateClient(0, cur, types.ClientType("cometbls"), &mockLightClient{})
+	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
 	ms.SaveConnection(0, cur, types.ConnectionId(1),
 		core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
 	// Channel owned by a port other than the caller.
@@ -103,7 +103,7 @@ func TestPacketRecvDuplicateSkipped(cur realm, t *testing.T) {
 func TestPacketRecvProofFailureAborts(cur realm, t *testing.T) {
 	v := newTestImpl()
 	ms := v.store.(*mockStore)
-	clientId := v.CreateClient(0, cur, types.ClientType("cometbls"), &mockLightClient{membershipErr: "bad proof"})
+	clientId := createClient(cur, v, &mockLightClient{membershipErr: "bad proof"}, nil, nil)
 	ms.SaveConnection(0, cur, types.ConnectionId(1),
 		core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
 	port := types.Bytes(cur.Previous().PkgPath())
@@ -154,7 +154,7 @@ func TestPacketTimeoutRefunds(cur realm, t *testing.T) {
 
 func TestCommitMembershipProof(cur realm, t *testing.T) {
 	v := newTestImpl()
-	clientId := v.CreateClient(0, cur, types.ClientType("cometbls"), &mockLightClient{})
+	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
 
 	uassert.NotAborts(t, cur, func() {
 		v.CommitMembershipProof(0, cur, types.MsgCommitMembershipProof{
@@ -165,7 +165,7 @@ func TestCommitMembershipProof(cur realm, t *testing.T) {
 
 func TestCommitNonMembershipProof(cur realm, t *testing.T) {
 	v := newTestImpl()
-	clientId := v.CreateClient(0, cur, types.ClientType("cometbls"), &mockLightClient{})
+	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
 
 	uassert.NotAborts(t, cur, func() {
 		v.CommitNonMembershipProof(0, cur, types.MsgCommitNonMembershipProof{

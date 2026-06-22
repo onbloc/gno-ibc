@@ -21,8 +21,11 @@ import (
 // remaining methods are present on ICore and stubbed in the impl until migrated.
 type ICore interface {
 	// --- Client ---
-	CreateClient(_ int, rlm realm, clientType types.ClientType, lc lightclient.Interface) types.ClientId
+	RegisterClient(_ int, rlm realm, clientType types.ClientType, lc lightclient.Interface)
+	HasClient(clientType types.ClientType) bool
+	CreateClient(_ int, rlm realm, msg types.MsgCreateClient) types.ClientId
 	UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) types.Height
+	ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateClient) types.Height
 	VerifyClientMembership(_ int, rlm realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte)
 
 	// --- Connection handshake ---
@@ -30,6 +33,11 @@ type ICore interface {
 	ConnectionOpenTry(_ int, rlm realm, msg types.MsgConnectionOpenTry)
 	ConnectionOpenAck(_ int, rlm realm, msg types.MsgConnectionOpenAck)
 	ConnectionOpenConfirm(_ int, rlm realm, msg types.MsgConnectionOpenConfirm)
+	// Force* are the admin recovery variants that skip counterparty proof
+	// verification. The admin gate stays on the proxy.
+	ForceConnectionOpenTry(_ int, rlm realm, msg types.MsgConnectionOpenTry)
+	ForceConnectionOpenAck(_ int, rlm realm, msg types.MsgConnectionOpenAck)
+	ForceConnectionOpenConfirm(_ int, rlm realm, msg types.MsgConnectionOpenConfirm)
 
 	// --- Channel handshake ---
 	ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit) types.ChannelId
@@ -38,6 +46,11 @@ type ICore interface {
 	ChannelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenConfirm)
 	ChannelCloseInit(_ int, rlm realm, msg types.MsgChannelCloseInit)
 	ChannelCloseConfirm(_ int, rlm realm, msg types.MsgChannelCloseConfirm)
+	// Force* are the admin recovery variants that skip counterparty proof
+	// verification. The admin gate stays on the proxy.
+	ForceChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry) types.ChannelId
+	ForceChannelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck)
+	ForceChannelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenConfirm)
 
 	// --- Packet lifecycle ---
 	SendPacket(_ int, rlm realm, sourceChannelId types.ChannelId, timeoutTimestamp types.Timestamp, data []byte) types.Packet
@@ -89,6 +102,9 @@ type ICoreGetter interface {
 // connection/channel/packet/app operations are added as those subsystems migrate.
 type IStore interface {
 	// --- Client ---
+	RegisterClient(_ int, rlm realm, typ types.ClientType, lc lightclient.Interface)
+	RegisteredClient(typ types.ClientType) (lightclient.Interface, bool)
+	HasRegisteredClient(typ types.ClientType) bool
 	AddClient(_ int, rlm realm, typ types.ClientType, creator address, lc lightclient.Interface) types.ClientId
 	ClientExists(clientId types.ClientId) bool
 	ClientType(clientId types.ClientId) (types.ClientType, bool)
@@ -96,6 +112,7 @@ type IStore interface {
 	SetLightClient(_ int, rlm realm, clientId types.ClientId, lc lightclient.Interface) bool
 	SaveClientState(_ int, rlm realm, clientId types.ClientId, clientStateBytes []byte) bool
 	SaveConsensusState(_ int, rlm realm, clientId types.ClientId, height types.Height, consensusStateBytes []byte) bool
+	SaveClientStore(_ int, rlm realm, clientId types.ClientId, key string, value []byte) bool
 
 	// --- Connection ---
 	NextConnectionId(_ int, rlm realm) types.ConnectionId
@@ -142,4 +159,70 @@ type IStore interface {
 	ConsensusStateBytes(clientId types.ClientId, height types.Height) ([]byte, bool)
 	BatchPacketsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool)
 	BatchReceiptsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool)
+}
+
+func NewChannel(
+	state types.ChannelState,
+	connectionId types.ConnectionId,
+	counterpartyChannelId types.ChannelId,
+	counterpartyPortId types.Bytes,
+	version string,
+) types.Channel {
+	return types.NewChannel(
+		state,
+		connectionId,
+		counterpartyChannelId,
+		counterpartyPortId,
+		version,
+	)
+}
+
+func NewConnection(
+	state types.ConnectionState,
+	clientId,
+	counterpartyClientId types.ClientId,
+	counterpartyConnectionId types.ConnectionId,
+) types.Connection {
+	return types.NewConnection(
+		state,
+		clientId,
+		counterpartyClientId,
+		counterpartyConnectionId,
+	)
+}
+
+func NewPacket(
+	sourceChannelId,
+	destinationChannelId types.ChannelId,
+	data []byte,
+	timeoutTimestamp types.Timestamp,
+) types.Packet {
+	return types.NewPacket(
+		sourceChannelId,
+		destinationChannelId,
+		data,
+		timeoutTimestamp,
+	)
+}
+
+func NewRecvPacketResult(status types.PacketStatus, acknowledgement []byte) types.RecvPacketResult {
+	return types.NewRecvPacketResult(status, acknowledgement)
+}
+
+func NewMsgChannelOpenTry(
+	portId []byte,
+	channel types.Channel,
+	counterpartyVersion string,
+	proofInit []byte,
+	proofHeight uint64,
+	relayer string,
+) types.MsgChannelOpenTry {
+	return types.NewMsgChannelOpenTry(
+		portId,
+		channel,
+		counterpartyVersion,
+		proofInit,
+		proofHeight,
+		relayer,
+	)
 }

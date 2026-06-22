@@ -20,13 +20,25 @@ func (c *coreV1) ConnectionOpenInit(_ int, rlm realm, msg types.MsgConnectionOpe
 // ConnectionOpenTry acknowledges a counterparty Init by proving it and moving to
 // TryOpen.
 func (c *coreV1) ConnectionOpenTry(_ int, rlm realm, msg types.MsgConnectionOpenTry) {
+	c.connectionOpenTry(0, rlm, msg, true)
+}
+
+// ForceConnectionOpenTry is the admin recovery variant of ConnectionOpenTry that
+// skips counterparty proof verification.
+func (c *coreV1) ForceConnectionOpenTry(_ int, rlm realm, msg types.MsgConnectionOpenTry) {
+	c.connectionOpenTry(0, rlm, msg, false)
+}
+
+func (c *coreV1) connectionOpenTry(_ int, rlm realm, msg types.MsgConnectionOpenTry, verify bool) {
 	connectionId := c.store.NextConnectionId(0, rlm)
 	connection := core.NewConnection(types.ConnectionStateTryOpen, msg.ClientId, msg.CounterpartyClientId, msg.CounterpartyConnectionId)
 
-	expectedConnection := core.NewConnection(types.ConnectionStateInit, msg.CounterpartyClientId, msg.ClientId, 0)
-	key := types.ConnectionPath(msg.CounterpartyConnectionId)
-	value := core.ConnectionValue(expectedConnection)
-	c.verifyMembership(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
+	if verify {
+		expectedConnection := core.NewConnection(types.ConnectionStateInit, msg.CounterpartyClientId, msg.ClientId, 0)
+		key := types.ConnectionPath(msg.CounterpartyConnectionId)
+		value := core.ConnectionValue(expectedConnection)
+		c.verifyMembership(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
+	}
 
 	c.store.SaveConnection(0, rlm, connectionId, connection)
 	core.EmitConnectionOpenTry(connectionId, msg.ClientId, msg.CounterpartyClientId, msg.CounterpartyConnectionId)
@@ -35,6 +47,16 @@ func (c *coreV1) ConnectionOpenTry(_ int, rlm realm, msg types.MsgConnectionOpen
 // ConnectionOpenAck proves the counterparty TryOpen and moves the local Init
 // connection to Open.
 func (c *coreV1) ConnectionOpenAck(_ int, rlm realm, msg types.MsgConnectionOpenAck) {
+	c.connectionOpenAck(0, rlm, msg, true)
+}
+
+// ForceConnectionOpenAck is the admin recovery variant of ConnectionOpenAck that
+// skips counterparty proof verification.
+func (c *coreV1) ForceConnectionOpenAck(_ int, rlm realm, msg types.MsgConnectionOpenAck) {
+	c.connectionOpenAck(0, rlm, msg, false)
+}
+
+func (c *coreV1) connectionOpenAck(_ int, rlm realm, msg types.MsgConnectionOpenAck, verify bool) {
 	connection, ok := c.store.GetConnection(msg.ConnectionId)
 	if !ok {
 		panic("connection " + msg.ConnectionId.String() + " not found")
@@ -43,10 +65,12 @@ func (c *coreV1) ConnectionOpenAck(_ int, rlm realm, msg types.MsgConnectionOpen
 		panic(core.ErrInvalidConnectionState)
 	}
 
-	expectedConnection := core.NewConnection(types.ConnectionStateTryOpen, connection.CounterpartyClientId, connection.ClientId, msg.ConnectionId)
-	key := types.ConnectionPath(msg.CounterpartyConnectionId)
-	value := core.ConnectionValue(expectedConnection)
-	c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofTry, key[:], value[:])
+	if verify {
+		expectedConnection := core.NewConnection(types.ConnectionStateTryOpen, connection.CounterpartyClientId, connection.ClientId, msg.ConnectionId)
+		key := types.ConnectionPath(msg.CounterpartyConnectionId)
+		value := core.ConnectionValue(expectedConnection)
+		c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofTry, key[:], value[:])
+	}
 
 	// Build a fresh connection rather than mutating the store-owned one (the
 	// retrieved value is read-only under the borrow rule).
@@ -59,6 +83,16 @@ func (c *coreV1) ConnectionOpenAck(_ int, rlm realm, msg types.MsgConnectionOpen
 // ConnectionOpenConfirm proves the counterparty Open and moves the local TryOpen
 // connection to Open.
 func (c *coreV1) ConnectionOpenConfirm(_ int, rlm realm, msg types.MsgConnectionOpenConfirm) {
+	c.connectionOpenConfirm(0, rlm, msg, true)
+}
+
+// ForceConnectionOpenConfirm is the admin recovery variant of
+// ConnectionOpenConfirm that skips counterparty proof verification.
+func (c *coreV1) ForceConnectionOpenConfirm(_ int, rlm realm, msg types.MsgConnectionOpenConfirm) {
+	c.connectionOpenConfirm(0, rlm, msg, false)
+}
+
+func (c *coreV1) connectionOpenConfirm(_ int, rlm realm, msg types.MsgConnectionOpenConfirm, verify bool) {
 	connection, ok := c.store.GetConnection(msg.ConnectionId)
 	if !ok {
 		panic("connection " + msg.ConnectionId.String() + " not found")
@@ -67,11 +101,13 @@ func (c *coreV1) ConnectionOpenConfirm(_ int, rlm realm, msg types.MsgConnection
 		panic(core.ErrInvalidConnectionState)
 	}
 
-	expectedConnection := core.NewConnection(types.ConnectionStateOpen, connection.CounterpartyClientId, connection.ClientId, msg.ConnectionId)
 	counterpartyConnectionId := connection.CounterpartyConnectionId
-	key := types.ConnectionPath(counterpartyConnectionId)
-	value := core.ConnectionValue(expectedConnection)
-	c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofAck, key[:], value[:])
+	if verify {
+		expectedConnection := core.NewConnection(types.ConnectionStateOpen, connection.CounterpartyClientId, connection.ClientId, msg.ConnectionId)
+		key := types.ConnectionPath(counterpartyConnectionId)
+		value := core.ConnectionValue(expectedConnection)
+		c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofAck, key[:], value[:])
+	}
 
 	// Build a fresh connection rather than mutating the store-owned one.
 	updated := core.NewConnection(types.ConnectionStateOpen, connection.ClientId, connection.CounterpartyClientId, counterpartyConnectionId)

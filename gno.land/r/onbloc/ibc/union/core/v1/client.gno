@@ -6,18 +6,65 @@ import (
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
-// CreateClient registers a new light client object and verifies its creation.
-// The creator is the realm that invoked the host (proxy) entrypoint.
-func (c *coreV1) CreateClient(_ int, rlm realm, clientType types.ClientType, lc lightclient.Interface) types.ClientId {
-	creator := rlm.Previous().Address()
-	clientId := c.store.AddClient(0, rlm, clientType, creator, lc)
+// RegisterClient records a light client object under a client type so it can be
+// instantiated later by CreateClient. The caller must supply a non-nil object.
+func (c *coreV1) RegisterClient(_ int, rlm realm, clientType types.ClientType, lc lightclient.Interface) {
+	if lc == nil {
+		panic("caller not authorized to register client: unauthorized")
+	}
+	c.store.RegisterClient(0, rlm, clientType, lc)
+	core.EmitRegisterClient(clientType)
+}
 
-	if _, err := lc.VerifyCreation(creator, creator); err != nil {
+// HasClient reports whether a light client is registered for a client type.
+func (c *coreV1) HasClient(clientType types.ClientType) bool {
+	return c.store.HasRegisteredClient(clientType)
+}
+
+// CreateClient assigns a client id for a registered light client type, stores
+// the submitted state bytes, then lets the light client verify creation against
+// that freshly stored state.
+func (c *coreV1) CreateClient(_ int, rlm realm, msg types.MsgCreateClient) types.ClientId {
+	creator := rlm.Previous().Address()
+	lc, ok := c.store.RegisteredClient(msg.ClientType)
+	if !ok {
+		panic("client type not found")
+	}
+
+	clientId := c.store.AddClient(0, rlm, msg.ClientType, creator, lc)
+	c.initClient(0, rlm, clientId, msg.ClientStateBytes, msg.ConsensusStateBytes, creator)
+
+	core.EmitCreateClient(clientId, msg.ClientType, lc.GetCounterpartyChainID())
+	return clientId
+}
+
+// initClient mirrors the submitted client/consensus state for a stored client,
+// runs the light client's creation verification, then persists any state
+// overwrite and storage writes the verification returns. It returns the height
+// the consensus state was stored at.
+func (c *coreV1) initClient(_ int, rlm realm, clientId types.ClientId, clientStateBytes, consensusStateBytes []byte, relayer address) types.Height {
+	lc, ok := c.store.GetLightClient(clientId)
+	if !ok {
+		panic("client " + clientId.String() + " not found")
+	}
+
+	c.store.SaveClientState(0, rlm, clientId, clientStateBytes)
+	height := types.NewHeight(lc.GetLatestHeight())
+	c.store.SaveConsensusState(0, rlm, clientId, height, consensusStateBytes)
+
+	result, err := lc.VerifyCreation(relayer, relayer)
+	if err != nil {
 		panic("create client: " + err.Error())
 	}
 
-	core.EmitCreateClient(clientId, clientType)
-	return clientId
+	if len(result.ClientStateBytes) != 0 {
+		c.store.SaveClientState(0, rlm, clientId, result.ClientStateBytes)
+	}
+	for k, v := range result.StorageWrites {
+		c.store.SaveClientStore(0, rlm, clientId, k, v)
+	}
+
+	return height
 }
 
 // UpdateClient verifies a client message against the light client object, which
@@ -27,6 +74,9 @@ func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) types
 	lc, ok := c.store.GetLightClient(msg.ClientId)
 	if !ok {
 		panic("client " + msg.ClientId.String() + " not found")
+	}
+	if lc.Status() != lightclient.Active {
+		panic(core.ErrClientNotActive)
 	}
 
 	caller := rlm.Previous().Address()
@@ -39,12 +89,29 @@ func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) types
 	if len(update.ClientStateBytes) != 0 {
 		c.store.SaveClientState(0, rlm, msg.ClientId, update.ClientStateBytes)
 	}
-	if len(update.ConsensusStateBytes) != 0 {
-		c.store.SaveConsensusState(0, rlm, msg.ClientId, height, update.ConsensusStateBytes)
+	// Union stores consensus_state_bytes unconditionally because the field is not
+	// optional in the update response.
+	c.store.SaveConsensusState(0, rlm, msg.ClientId, height, update.ConsensusStateBytes)
+	for k, v := range update.StorageWrites {
+		c.store.SaveClientStore(0, rlm, msg.ClientId, k, v)
 	}
 
-	clientType, _ := c.store.ClientType(msg.ClientId)
-	core.EmitUpdateClient(clientType, msg.ClientId, height)
+	core.EmitUpdateClient(msg.ClientId, height)
+	return height
+}
+
+// ForceUpdateClient re-initializes a client from submitted state bytes,
+// bypassing header proof verification. The admin gate lives on the proxy; the
+// registered light client object for the existing client is reused.
+func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateClient) types.Height {
+	if !c.store.ClientExists(msg.ClientId) {
+		panic("client " + msg.ClientId.String() + " not found")
+	}
+
+	caller := rlm.Previous().Address()
+	height := c.initClient(0, rlm, msg.ClientId, msg.ClientStateBytes, msg.ConsensusStateBytes, caller)
+
+	core.EmitForceUpdateClient(msg.ClientId, height)
 	return height
 }
 

@@ -9,25 +9,31 @@ var accessState manager.State
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L65
 const RelayerRole manager.RoleId = 1
 
+const (
+	selectorGrantRole             manager.Selector = "grant_role"
+	selectorRevokeRole            manager.Selector = "revoke_role"
+	selectorSetTargetFunctionRole manager.Selector = "set_target_function_role"
+)
+
 func GrantRole(cur realm, role manager.RoleId, account address) {
-	requireRoleAdmin(cur, role, SelectorGrantRole)
+	requireRoleAdmin(cur, role, selectorGrantRole)
 	grantRoleUnchecked(role, account)
 }
 
 func RevokeRole(cur realm, role manager.RoleId, account address) {
-	requireRoleAdmin(cur, role, SelectorRevokeRole)
+	requireRoleAdmin(cur, role, selectorRevokeRole)
 	revokeRoleUnchecked(role, account)
 }
 
 func SetFunctionRole(cur realm, selector manager.Selector, role manager.RoleId) {
 	target := cur.Previous().PkgPath()
-	requireCanManageTarget(cur, target, SelectorSetTargetFunctionRole)
+	requireCanManageTarget(cur, target, selectorSetTargetFunctionRole)
 	accessState.SetTargetFunctionRole(target, selector, role)
 }
 
 func SetFunctionRoles(cur realm, selectors []manager.Selector, role manager.RoleId) {
 	target := cur.Previous().PkgPath()
-	requireCanManageTarget(cur, target, SelectorSetTargetFunctionRole)
+	requireCanManageTarget(cur, target, selectorSetTargetFunctionRole)
 	accessState.SetTargetFunctionRoles(target, selectors, role)
 }
 

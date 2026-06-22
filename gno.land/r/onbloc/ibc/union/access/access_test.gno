@@ -6,6 +6,7 @@ import (
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
 	manager "gno.land/p/onbloc/access/manager"
+	"gno.land/p/onbloc/ibc/union/types"
 )
 
 func TestGrantRoleDirectManagement(cur realm, t *testing.T) {
@@ -67,5 +68,22 @@ func TestSetFunctionRoleRejectsNonAdmin(cur realm, t *testing.T) {
 	})
 	if GetFunctionRole(cross(cur), "set_hook") != manager.AdminRole {
 		t.Fatal("rejected role update must not change selector role")
+	}
+}
+
+func TestUnionDeployerRelayerSelectorSetup(cur realm, t *testing.T) {
+	admin := testutils.TestAddress("access-admin")
+	ResetForTest(cur, admin)
+
+	for _, selector := range types.RelayerSelectors() {
+		if accessState.GetTargetFunctionRole(CoreRealmPath, selector) != RelayerRole {
+			t.Fatalf("%s must be initialized with relayer role", selector)
+		}
+	}
+	if accessState.GetTargetFunctionRole(CoreRealmPath, "grant_role") != manager.AdminRole {
+		t.Fatal("grant_role must not be initialized with relayer role")
+	}
+	if accessState.GetTargetFunctionRole(CoreRealmPath, "revoke_role") != manager.AdminRole {
+		t.Fatal("revoke_role must not be initialized with relayer role")
 	}
 }

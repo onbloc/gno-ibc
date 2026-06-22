@@ -30,6 +30,7 @@ type mockClient struct {
 	creationStorage           map[string][]byte
 	updateStorage             map[string][]byte
 	updateConsensusStateBytes []byte
+	updateErr                 error
 }
 
 func (m *mockClient) VerifyMembership(height uint64, key, proof, value []byte) error {
@@ -80,6 +81,9 @@ func (m *mockClient) Status() lightclient.Status {
 func (m *mockClient) VerifyHeader(_ address, header []byte, relayer address) (types.StateUpdate, error) {
 	m.headerMessages = append(m.headerMessages, header)
 	m.headerRelayers = append(m.headerRelayers, relayer)
+	if m.updateErr != nil {
+		return types.StateUpdate{}, m.updateErr
+	}
 	m.height = m.height.Increment()
 	consensusStateBytes := []byte("cons")
 	if m.updateConsensusStateBytes != nil {

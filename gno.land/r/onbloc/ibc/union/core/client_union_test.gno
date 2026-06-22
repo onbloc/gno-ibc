@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"testing"
 
 	"gno.land/p/nt/testutils/v0"
@@ -131,6 +132,28 @@ func TestUpdateClientUnionMirrorsStateUpdate(cur realm, t *testing.T) {
 	if !ok || string(value) != "update-value" {
 		t.Fatalf("update storage write not saved: got %q found=%v", string(value), ok)
 	}
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L267-L330
+func TestUpdateClientUnionRejectsLightClientUpdateError(cur realm, t *testing.T) {
+	resetStore(cur)
+	lc := &mockClient{
+		chainId: "union-1",
+		height:  types.NewHeight(1),
+		status:  types.StatusActive,
+	}
+	RegisterClient(cross(cur), mockType, lc)
+	clientId := CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("old-client"), []byte("old-consensus")))
+
+	lc.updateErr = errors.New("union update failed")
+
+	uassert.AbortsContains(t, cur, "update client: union update failed", func(cur realm) {
+		UpdateClient(cross(cur), types.MsgUpdateClient{
+			ClientId:      clientId,
+			ClientMessage: []byte("header"),
+		})
+	})
 }
 
 // Union reference:

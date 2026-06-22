@@ -102,7 +102,7 @@ func (v *ucs03ZkgmV1) acknowledgeBatch(_ int, rlm realm, packet types.Packet, re
 		}
 
 		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), salt)
-		if err := v.dispatchAck(0, rlm, packet, relayer, childSalt, path, instruction, childSuccessful, childAck); err != nil {
+		if err := v.acknowledgeInternal(0, rlm, packet, relayer, childSalt, path, instruction, childSuccessful, childAck); err != nil {
 			return err
 		}
 	}
@@ -114,7 +114,7 @@ func (v *ucs03ZkgmV1) acknowledgeBatch(_ int, rlm realm, packet types.Packet, re
 func (v *ucs03ZkgmV1) timeoutBatch(_ int, rlm realm, packet types.Packet, salt [32]byte, path *u256.Uint, batch z.Batch) error {
 	for i, instruction := range batch.Instructions {
 		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), salt)
-		if err := v.dispatchTimeout(0, rlm, packet, childSalt, path, instruction); err != nil {
+		if err := v.timeoutInternal(0, rlm, packet, childSalt, path, instruction); err != nil {
 			return err
 		}
 	}

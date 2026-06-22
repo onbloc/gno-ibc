@@ -118,8 +118,8 @@ func (v *ucs03ZkgmV1) dispatchExecutePacket(
 	}
 }
 
-// dispatchAck routes an acknowledgement to its opcode handler.
-func (v *ucs03ZkgmV1) dispatchAck(_ int, rlm realm, packet types.Packet, relayer address, salt [32]byte, path *u256.Uint, instruction z.Instruction, successful bool, ack []byte) error {
+// acknowledgeInternal routes an acknowledgement to its opcode handler.
+func (v *ucs03ZkgmV1) acknowledgeInternal(_ int, rlm realm, packet types.Packet, relayer address, salt [32]byte, path *u256.Uint, instruction z.Instruction, successful bool, ack []byte) error {
 	switch instruction.Opcode {
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instruction)
@@ -161,8 +161,8 @@ func (v *ucs03ZkgmV1) dispatchAck(_ int, rlm realm, packet types.Packet, relayer
 	}
 }
 
-// dispatchTimeout routes a timeout to its opcode handler.
-func (v *ucs03ZkgmV1) dispatchTimeout(_ int, rlm realm, packet types.Packet, salt [32]byte, path *u256.Uint, instruction z.Instruction) error {
+// timeoutInternal routes a timeout to its opcode handler.
+func (v *ucs03ZkgmV1) timeoutInternal(_ int, rlm realm, packet types.Packet, salt [32]byte, path *u256.Uint, instruction z.Instruction) error {
 	switch instruction.Opcode {
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instruction)

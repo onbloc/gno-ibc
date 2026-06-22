@@ -114,7 +114,7 @@ func (v *ucs03ZkgmV1) OnAcknowledgementPacket(_ int, rlm realm, packet types.Pac
 	}
 
 	successful := outerAck.Tag != nil && outerAck.Tag.Eq(tagAckSuccess())
-	if err := v.dispatchAck(0, rlm, packet, relayer, zp.Salt, zp.Path, zp.Instruction, successful, outerAck.InnerAck); err != nil {
+	if err := v.acknowledgeInternal(0, rlm, packet, relayer, zp.Salt, zp.Path, zp.Instruction, successful, outerAck.InnerAck); err != nil {
 		panic(err.Error())
 	}
 }
@@ -130,7 +130,7 @@ func (v *ucs03ZkgmV1) OnTimeoutPacket(_ int, rlm realm, packet types.Packet, rel
 		return
 	}
 
-	if err := v.dispatchTimeout(0, rlm, packet, zp.Salt, zp.Path, zp.Instruction); err != nil {
+	if err := v.timeoutInternal(0, rlm, packet, zp.Salt, zp.Path, zp.Instruction); err != nil {
 		panic(err.Error())
 	}
 }

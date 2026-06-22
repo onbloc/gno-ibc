@@ -11,58 +11,58 @@ import (
 
 // SendPacket commits a packet for the caller's port.
 func SendPacket(cur realm, sourceChannelId types.ChannelId, timeoutTimestamp types.Timestamp, data []byte) types.Packet {
-	return requireImpl().SendPacket(0, cur, sourceChannelId, timeoutTimestamp, data)
+	return impl.SendPacket(0, cur, sourceChannelId, timeoutTimestamp, data)
 }
 
 // PacketRecv proves and dispatches a batch of received packets.
 func PacketRecv(cur realm, msg types.MsgPacketRecv) {
 	requireAdmin(cur, "packet recv")
-	requireImpl().PacketRecv(0, cur, msg)
+	impl.PacketRecv(0, cur, msg)
 }
 
 // IntentPacketRecv settles packets on the proofless market-maker fast path.
 func IntentPacketRecv(cur realm, msg types.MsgIntentPacketRecv) {
 	requireAdmin(cur, "intent packet recv")
-	requireImpl().IntentPacketRecv(0, cur, msg)
+	impl.IntentPacketRecv(0, cur, msg)
 }
 
 // PacketAcknowledgement proves the counterparty acks and notifies the app.
 func PacketAcknowledgement(cur realm, msg types.MsgPacketAcknowledgement) {
 	requireAdmin(cur, "packet acknowledgement")
-	requireImpl().PacketAcknowledgement(0, cur, msg)
+	impl.PacketAcknowledgement(0, cur, msg)
 }
 
 // PacketTimeout proves a packet was never received and notifies the app.
 func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
 	requireAdmin(cur, "packet timeout")
-	requireImpl().PacketTimeout(0, cur, msg)
+	impl.PacketTimeout(0, cur, msg)
 }
 
 // CommitMembershipProof verifies and records a membership proof.
 func CommitMembershipProof(cur realm, msg types.MsgCommitMembershipProof) {
 	requireAdmin(cur, "commit membership proof")
-	requireImpl().CommitMembershipProof(0, cur, msg)
+	impl.CommitMembershipProof(0, cur, msg)
 }
 
 // CommitNonMembershipProof verifies and records a non-membership proof.
 func CommitNonMembershipProof(cur realm, msg types.MsgCommitNonMembershipProof) {
 	requireAdmin(cur, "commit non-membership proof")
-	requireImpl().CommitNonMembershipProof(0, cur, msg)
+	impl.CommitNonMembershipProof(0, cur, msg)
 }
 
 // BatchSend aggregates already-committed packets into a batch commitment.
 func BatchSend(cur realm, msg types.MsgBatchSend) {
 	requireAdmin(cur, "batch send")
-	requireImpl().BatchSend(0, cur, msg)
+	impl.BatchSend(0, cur, msg)
 }
 
 // BatchAcks aggregates the acks of received packets into a batch receipt.
 func BatchAcks(cur realm, msg types.MsgBatchAcks) {
 	requireAdmin(cur, "batch acks")
-	requireImpl().BatchAcks(0, cur, msg)
+	impl.BatchAcks(0, cur, msg)
 }
 
 // WriteAcknowledgement commits a deferred acknowledgement for a received packet.
 func WriteAcknowledgement(cur realm, msg types.MsgWriteAcknowledgement) {
-	requireImpl().WriteAcknowledgement(0, cur, msg)
+	impl.WriteAcknowledgement(0, cur, msg)
 }

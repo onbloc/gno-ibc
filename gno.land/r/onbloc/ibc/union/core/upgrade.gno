@@ -26,13 +26,3 @@ func UpdateImpl(cur realm, target ICore) {
 func Impl() bool {
 	return impl != nil
 }
-
-// requireImpl returns the installed implementation, panicking if none is
-// installed. The public entrypoints delegate their logic through it; the host is
-// non-functional until an admin installs the impl via UpdateImpl (v1.Register).
-func requireImpl() ICore {
-	if impl == nil {
-		panic("core: implementation not installed")
-	}
-	return impl
-}

@@ -17,14 +17,14 @@ func NewConsensusStateUpdate(height types.Height, consensusStateBytes, clientSta
 // consensus state. This mirrors aib's model of handing core an already-built
 // light client instead of core decoding bytes itself.
 func CreateClient(cur realm, clientType types.ClientType, lc lightclient.Interface) types.ClientId {
-	return requireImpl().CreateClient(0, cur, clientType, lc)
+	return impl.CreateClient(0, cur, clientType, lc)
 }
 
 // UpdateClient verifies a client message against the light client object, which
 // updates its own state, and mirrors the resulting state bytes for queries and
 // counterparty proofs.
 func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
-	return requireImpl().UpdateClient(0, cur, msg)
+	return impl.UpdateClient(0, cur, msg)
 }
 
 // ForceUpdateClient replaces a client's object with a new one built by the
@@ -60,7 +60,7 @@ func ForceUpdateClient(cur realm, clientId types.ClientId, lc lightclient.Interf
 //
 // It does not commit the verified value into this realm's state.
 func VerifyClientMembership(cur realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {
-	requireImpl().VerifyClientMembership(0, cur, clientId, proofHeight, proof, path, value)
+	impl.VerifyClientMembership(0, cur, clientId, proofHeight, proof, path, value)
 }
 
 // statusToTypes maps the light client object's status (a string) to the core

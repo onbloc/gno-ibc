@@ -9,7 +9,7 @@ import (
 // RegisterApp registers an IBC application at the caller realm's package path,
 // delegating to the installed impl.
 func RegisterApp(cur realm, app app.IApp) {
-	requireImpl().RegisterApp(0, cur, app)
+	impl.RegisterApp(0, cur, app)
 }
 
 // RegisterAppForPort registers an IBC application at an explicit port id. This

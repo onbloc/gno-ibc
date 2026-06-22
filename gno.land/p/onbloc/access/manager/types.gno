@@ -21,24 +21,20 @@ type RoleConfig struct {
 }
 
 type Access struct {
-	Since          Timepoint
-	ExecutionDelay Delay
+	Since Timepoint
 }
 
 type TargetConfig struct {
 	FunctionRoles map[Selector]RoleId
-	AdminDelay    Delay
 	Closed        bool
 }
 
 type CanCallResult struct {
 	Immediate bool
-	Delay     Delay
 }
 
 type HasRoleResult struct {
-	IsMember       bool
-	ExecutionDelay Delay
+	IsMember bool
 }
 
 func NewRoleId(id uint64) RoleId {
@@ -68,31 +64,27 @@ func NewRoleConfig(admin RoleId, grantDelay Delay) *RoleConfig {
 	}
 }
 
-func NewAccess(since Timepoint, executionDelay Delay) Access {
+func NewAccess(since Timepoint) Access {
 	return Access{
-		Since:          since,
-		ExecutionDelay: executionDelay,
+		Since: since,
 	}
 }
 
-func NewTargetConfig(adminDelay Delay, closed bool) *TargetConfig {
+func NewTargetConfig(closed bool) *TargetConfig {
 	return &TargetConfig{
 		FunctionRoles: make(map[Selector]RoleId),
-		AdminDelay:    adminDelay,
 		Closed:        closed,
 	}
 }
 
-func NewCanCallResult(immediate bool, delay Delay) CanCallResult {
+func NewCanCallResult(immediate bool) CanCallResult {
 	return CanCallResult{
 		Immediate: immediate,
-		Delay:     delay,
 	}
 }
 
-func NewHasRoleResult(isMember bool, executionDelay Delay) HasRoleResult {
+func NewHasRoleResult(isMember bool) HasRoleResult {
 	return HasRoleResult{
-		IsMember:       isMember,
-		ExecutionDelay: executionDelay,
+		IsMember: isMember,
 	}
 }

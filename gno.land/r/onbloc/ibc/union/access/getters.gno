@@ -23,11 +23,6 @@ func GetTargetFunctionRole(cur realm, selector manager.Selector) manager.RoleId 
 	return accessState.GetTargetFunctionRole(target, selector)
 }
 
-func GetTargetAdminDelay(cur realm) manager.Delay {
-	target := cur.Previous().PkgPath()
-	return accessState.GetTargetAdminDelay(target)
-}
-
 func IsTargetClosed(cur realm) bool {
 	target := cur.Previous().PkgPath()
 	return accessState.IsTargetClosed(target)

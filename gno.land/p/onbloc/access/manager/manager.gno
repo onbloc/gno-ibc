@@ -1,17 +1,15 @@
 package manager
 
-func (state *State) GrantRole(role RoleId, account address, executionDelay Delay) bool {
+func (state *State) GrantRole(role RoleId, account address) bool {
 	if role == PublicRole {
 		panic(AccessManagerLockedRoleError(role))
 	}
 	roleConfig := state.ensureRole(role)
-	access, found := roleConfig.Members[account]
+	_, found := roleConfig.Members[account]
 	if found {
-		access.ExecutionDelay = executionDelay
-		roleConfig.Members[account] = access
 		return false
 	}
-	roleConfig.Members[account] = NewAccess(timepointAvailableAt(CurrentTimepoint(), roleConfig.GrantDelay), executionDelay)
+	roleConfig.Members[account] = NewAccess(timepointAvailableAt(CurrentTimepoint(), roleConfig.GrantDelay))
 	return true
 }
 
@@ -36,20 +34,20 @@ func (state *State) RenounceRole(role RoleId, account address, callerConfirmatio
 
 func (state *State) HasRole(role RoleId, account address) HasRoleResult {
 	if role == PublicRole {
-		return NewHasRoleResult(true, 0)
+		return NewHasRoleResult(true)
 	}
 	roleConfig := state.getRole(role)
 	if roleConfig == nil {
-		return NewHasRoleResult(false, 0)
+		return NewHasRoleResult(false)
 	}
 	access, found := roleConfig.Members[account]
 	if !found || access.Since.IsZero() {
-		return NewHasRoleResult(false, 0)
+		return NewHasRoleResult(false)
 	}
 	if access.Since.After(CurrentTimepoint()) {
-		return NewHasRoleResult(false, access.ExecutionDelay)
+		return NewHasRoleResult(false)
 	}
-	return NewHasRoleResult(true, access.ExecutionDelay)
+	return NewHasRoleResult(true)
 }
 
 func (state *State) SetRoleAdmin(role RoleId, admin RoleId) {
@@ -102,18 +100,6 @@ func (state *State) GetTargetFunctionRole(target string, selector Selector) Role
 	return role
 }
 
-func (state *State) SetTargetAdminDelay(target string, delay Delay) {
-	state.ensureTarget(target).AdminDelay = delay
-}
-
-func (state *State) GetTargetAdminDelay(target string) Delay {
-	targetConfig := state.getTarget(target)
-	if targetConfig == nil {
-		return 0
-	}
-	return targetConfig.AdminDelay
-}
-
 func (state *State) SetTargetClosed(target string, closed bool) {
 	state.ensureTarget(target).Closed = closed
 }
@@ -125,14 +111,14 @@ func (state *State) IsTargetClosed(target string) bool {
 
 func (state *State) CanCall(caller address, target string, selector Selector) CanCallResult {
 	if state.IsTargetClosed(target) {
-		return NewCanCallResult(false, 0)
+		return NewCanCallResult(false)
 	}
 	role := state.GetTargetFunctionRole(target, selector)
 	membership := state.HasRole(role, caller)
 	if !membership.IsMember {
-		return NewCanCallResult(false, 0)
+		return NewCanCallResult(false)
 	}
-	return NewCanCallResult(membership.ExecutionDelay == 0, membership.ExecutionDelay)
+	return NewCanCallResult(true)
 }
 
 func (state *State) IsAuthorized(caller address, target string, selector Selector) bool {
@@ -143,17 +129,17 @@ func (state *State) CanAdminRole(role RoleId, caller address) CanCallResult {
 	adminRole := state.GetRoleAdmin(role)
 	membership := state.HasRole(adminRole, caller)
 	if !membership.IsMember {
-		return NewCanCallResult(false, 0)
+		return NewCanCallResult(false)
 	}
-	return NewCanCallResult(membership.ExecutionDelay == 0, membership.ExecutionDelay)
+	return NewCanCallResult(true)
 }
 
 func (state *State) CanManageTarget(caller address) CanCallResult {
 	membership := state.HasRole(AdminRole, caller)
 	if !membership.IsMember {
-		return NewCanCallResult(false, 0)
+		return NewCanCallResult(false)
 	}
-	return NewCanCallResult(membership.ExecutionDelay == 0, membership.ExecutionDelay)
+	return NewCanCallResult(true)
 }
 
 func (state *State) getRole(role RoleId) *RoleConfig {
@@ -180,7 +166,7 @@ func (state *State) ensureTarget(target string) *TargetConfig {
 	state.ensureInitialized()
 	targetConfig := state.Targets[target]
 	if targetConfig == nil {
-		targetConfig = NewTargetConfig(0, false)
+		targetConfig = NewTargetConfig(false)
 		state.Targets[target] = targetConfig
 	}
 	return targetConfig

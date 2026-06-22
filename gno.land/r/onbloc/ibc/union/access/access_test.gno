@@ -15,7 +15,7 @@ func TestGrantRoleDirectManagement(cur realm, t *testing.T) {
 	ResetForTest(cur, admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
-	GrantRole(cross(cur), RelayerRole, relayer, 0)
+	GrantRole(cross(cur), RelayerRole, relayer)
 	if !HasRole(cur, RelayerRole, relayer).IsMember {
 		t.Fatal("admin must be able to grant role through shared access")
 	}
@@ -34,7 +34,7 @@ func TestGrantRoleRejectsNonAdmin(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(caller))
 	uassert.AbortsContains(t, cur, ErrorAccessManagerUnauthorizedAccount, func(cur realm) {
-		GrantRole(cross(cur), RelayerRole, relayer, 0)
+		GrantRole(cross(cur), RelayerRole, relayer)
 	})
 	if HasRole(cur, RelayerRole, relayer).IsMember {
 		t.Fatal("rejected grant must not add the relayer")
@@ -93,7 +93,7 @@ func TestRoleConfigurationSurface(cur realm, t *testing.T) {
 	ResetForTest(cur, admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
-	GrantRole(cross(cur), roleAdminRole, roleAdmin, 0)
+	GrantRole(cross(cur), roleAdminRole, roleAdmin)
 	SetRoleAdmin(cross(cur), RelayerRole, roleAdminRole)
 	SetGrantDelay(cross(cur), RelayerRole, 5)
 
@@ -109,13 +109,10 @@ func TestRoleConfigurationSurface(cur realm, t *testing.T) {
 
 	SetGrantDelay(cross(cur), RelayerRole, 0)
 	testing.SetRealm(testing.NewUserRealm(roleAdmin))
-	GrantRole(cross(cur), RelayerRole, relayer, 3)
+	GrantRole(cross(cur), RelayerRole, relayer)
 	membership := HasRole(cur, RelayerRole, relayer)
 	if !membership.IsMember {
 		t.Fatal("GrantRole must add active relayer when grant delay is zero")
-	}
-	if membership.ExecutionDelay != 3 {
-		t.Fatal("GrantRole must store execution delay")
 	}
 }
 
@@ -125,7 +122,7 @@ func TestRenounceRoleSurface(cur realm, t *testing.T) {
 	ResetForTest(cur, admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
-	GrantRole(cross(cur), RelayerRole, relayer, 0)
+	GrantRole(cross(cur), RelayerRole, relayer)
 
 	testing.SetRealm(testing.NewUserRealm(relayer))
 	uassert.AbortsContains(t, cur, manager.ErrorAccessManagerBadConfirmation, func(cur realm) {
@@ -144,13 +141,9 @@ func TestTargetConfigurationSurface(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(admin))
 	SetFunctionRole(cross(cur), "set_hook", manager.PublicRole)
-	SetTargetAdminDelay(cross(cur), 9)
 
 	if GetTargetFunctionRole(cross(cur), "set_hook") != manager.PublicRole {
 		t.Fatal("SetFunctionRole must update inferred target selector role")
-	}
-	if GetTargetAdminDelay(cross(cur)) != 9 {
-		t.Fatal("SetTargetAdminDelay must update inferred target delay")
 	}
 	if !CanManageTarget(cur, admin).Immediate {
 		t.Fatal("admin role member must be able to manage targets")

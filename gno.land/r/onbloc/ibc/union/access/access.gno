@@ -15,16 +15,15 @@ const (
 	selectorRevokeRole            manager.Selector = "revoke_role"
 	selectorSetGrantDelay         manager.Selector = "set_grant_delay"
 	selectorSetRoleAdmin          manager.Selector = "set_role_admin"
-	selectorSetTargetAdminDelay   manager.Selector = "set_target_admin_delay"
 	selectorSetTargetClosed       manager.Selector = "set_target_closed"
 	selectorSetTargetFunctionRole manager.Selector = "set_target_function_role"
 )
 
-func GrantRole(cur realm, role manager.RoleId, account address, executionDelay manager.Delay) bool {
+func GrantRole(cur realm, role manager.RoleId, account address) bool {
 	requireRoleAdmin(cur, role, selectorGrantRole)
-	newMember := accessState.GrantRole(role, account, executionDelay)
+	newMember := accessState.GrantRole(role, account)
 	access := accessState.Roles[role].Members[account]
-	emitRoleGrantedEvent(role, account, executionDelay, access.Since, newMember)
+	emitRoleGrantedEvent(role, account, access.Since, newMember)
 	return newMember
 }
 
@@ -78,13 +77,6 @@ func SetFunctionRoles(cur realm, selectors []manager.Selector, role manager.Role
 	for i := range selectors {
 		emitTargetFunctionRoleUpdatedEvent(target, selectors[i], role)
 	}
-}
-
-func SetTargetAdminDelay(cur realm, delay manager.Delay) {
-	target := cur.Previous().PkgPath()
-	requireManagerAdmin(cur, selectorSetTargetAdminDelay)
-	accessState.SetTargetAdminDelay(target, delay)
-	emitTargetAdminDelayUpdatedEvent(target, delay, manager.CurrentTimepoint())
 }
 
 func SetTargetClosed(cur realm, closed bool) {

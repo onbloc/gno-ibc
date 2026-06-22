@@ -66,12 +66,13 @@ selector groups and tests.
 - `SetGrantDelay`
 - `SetFunctionRole`
 - `SetFunctionRoles`
-- `SetTargetAdminDelay`
 - `SetTargetClosed`
 
 This realm emits management events after successful state transitions. Event
 type and attribute key constants live in the pure manager package, but emission
 stays here so events are attributed to the state-owning realm.
 
-Guardian role configuration is intentionally not exposed yet because the
-scheduling and cancellation surface is not implemented.
+Only `GrantDelay` is retained from the OpenZeppelin delay model. Account
+execution delay, target admin delay, guardian role configuration, scheduling,
+execution, and cancellation are intentionally not exposed yet because the
+delayed operation surface is not implemented.

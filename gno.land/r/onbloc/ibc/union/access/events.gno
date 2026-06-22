@@ -15,12 +15,11 @@ func emitRoleLabelEvent(role manager.RoleId, label string) {
 	)
 }
 
-func emitRoleGrantedEvent(role manager.RoleId, account address, delay manager.Delay, since manager.Timepoint, newMember bool) {
+func emitRoleGrantedEvent(role manager.RoleId, account address, since manager.Timepoint, newMember bool) {
 	chain.Emit(
 		manager.EventTypeRoleGranted,
 		manager.AttributeKeyRoleID, formatRoleID(role),
 		manager.AttributeKeyAccount, account.String(),
-		manager.AttributeKeyDelay, formatDelay(delay),
 		manager.AttributeKeySince, formatTimepoint(since),
 		manager.AttributeKeyNewMember, strconv.FormatBool(newMember),
 	)
@@ -65,15 +64,6 @@ func emitTargetFunctionRoleUpdatedEvent(target string, selector manager.Selector
 		manager.AttributeKeyTarget, target,
 		manager.AttributeKeySelector, string(selector),
 		manager.AttributeKeyRoleID, formatRoleID(role),
-	)
-}
-
-func emitTargetAdminDelayUpdatedEvent(target string, delay manager.Delay, since manager.Timepoint) {
-	chain.Emit(
-		manager.EventTypeTargetAdminDelayUpdated,
-		manager.AttributeKeyTarget, target,
-		manager.AttributeKeyDelay, formatDelay(delay),
-		manager.AttributeKeySince, formatTimepoint(since),
 	)
 }
 

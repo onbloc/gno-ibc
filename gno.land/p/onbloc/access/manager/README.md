@@ -27,11 +27,10 @@ The model follows OpenZeppelin's `AccessManager` shape:
 - an unset target function role defaults to `AdminRole`;
 - a target can be closed, rejecting calls even when the function is public;
 - each role has an admin role, grant delay, and member access records;
-- a member access record has an activation timepoint and execution delay;
+- a member access record has an activation timepoint;
 - current timepoint is represented as `time.Time` and read from Gno block time
   with `time.Now()`;
-- `CanCall` returns whether a call is immediately executable and the delay if it
-  is not immediate.
+- `CanCall` returns whether a call is immediately executable.
 
 Role labels follow OpenZeppelin's event-only model from the pure package's
 perspective: labels are not stored in `State`. This package only defines the
@@ -62,7 +61,7 @@ var accessState manager.State
 
 func init(cur realm) {
 	accessState = manager.NewState()
-	accessState.GrantRole(manager.AdminRole, cur.Previous().Address(), 0)
+	accessState.GrantRole(manager.AdminRole, cur.Previous().Address())
 }
 ```
 
@@ -152,8 +151,6 @@ Target configuration:
 - `SetTargetFunctionRole`
 - `SetTargetFunctionRoles`
 - `GetTargetFunctionRole`
-- `SetTargetAdminDelay`
-- `GetTargetAdminDelay`
 - `SetTargetClosed`
 - `IsTargetClosed`
 
@@ -166,9 +163,6 @@ Authorization:
 
 Event schema:
 
-- `OperationScheduled`
-- `OperationExecuted`
-- `OperationCanceled`
 - `RoleLabel`
 - `RoleGranted`
 - `RoleRevoked`
@@ -176,12 +170,11 @@ Event schema:
 - `RoleGrantDelayChanged`
 - `TargetClosed`
 - `TargetFunctionRoleUpdated`
-- `TargetAdminDelayUpdated`
 
 ## Not Implemented
 
 This package intentionally does not implement OpenZeppelin's delayed operation
-execution surface:
+execution surface or the configuration that only becomes meaningful with it:
 
 - `schedule`
 - `execute`
@@ -190,12 +183,17 @@ execution surface:
 - `hashOperation`
 - operation nonce storage
 - execution-id tracking
+- account execution delay
+- target admin delay
 - ABI calldata selector extraction
 - guardian role configuration
 
 Those functions depend on EVM calldata, low-level target calls, operation hashes,
 and execution context. In Gno, those concerns should be implemented by the
 realm that owns the callable surface if delayed execution is needed.
+
+`GrantDelay` is intentionally retained. It gates when a newly granted role
+becomes active and does not require the delayed execution scheduler.
 
 The pure package does not call `chain.Emit`. A consuming realm should emit the
 currently implemented management events after the matching state transition

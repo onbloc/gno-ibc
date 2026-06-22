@@ -13,6 +13,9 @@ const (
 	ozSelector  Selector = "0x12345678"
 )
 
+// OpenZeppelin tests for account execution delay and target admin delay are
+// intentionally not ported while the Gno manager excludes delayed execution.
+
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L369-L378
 func TestOZGetTargetFunctionRoleReturnsConfiguredRoleOrAdminDefault(t *testing.T) {
@@ -25,21 +28,6 @@ func TestOZGetTargetFunctionRoleReturnsConfiguredRoleOrAdminDefault(t *testing.T
 	state.SetTargetFunctionRole(ozTarget, ozSelector, ozRole)
 	if state.GetTargetFunctionRole(ozTarget, ozSelector) != ozRole {
 		t.Fatal("target function role must return the configured role")
-	}
-}
-
-// OpenZeppelin reference:
-// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L381-L410
-func TestOZGetTargetAdminDelayReturnsConfiguredDelayOrZeroDefault(t *testing.T) {
-	state := NewState()
-
-	if state.GetTargetAdminDelay(ozTarget) != 0 {
-		t.Fatal("unset target admin delay must default to zero")
-	}
-
-	state.SetTargetAdminDelay(ozTarget, 10)
-	if state.GetTargetAdminDelay(ozTarget) != 10 {
-		t.Fatal("target admin delay must return the configured delay")
 	}
 }
 
@@ -75,7 +63,7 @@ func TestOZGetRoleGrantDelayReturnsConfiguredDelayOrZeroDefault(t *testing.T) {
 
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L139-L149
-func TestOZCanCallClosedTargetReturnsFalseAndZeroDelay(t *testing.T) {
+func TestOZCanCallClosedTargetReturnsFalse(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
 	state.SetTargetFunctionRole(ozTarget, ozSelector, PublicRole)
@@ -85,14 +73,11 @@ func TestOZCanCallClosedTargetReturnsFalseAndZeroDelay(t *testing.T) {
 	if result.Immediate {
 		t.Fatal("closed target must not be callable")
 	}
-	if result.Delay != 0 {
-		t.Fatal("closed target must return zero delay")
-	}
 }
 
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L177-L186
-func TestOZCanCallPublicRoleReturnsTrueAndZeroDelay(t *testing.T) {
+func TestOZCanCallPublicRoleReturnsTrue(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
 	state.SetTargetFunctionRole(ozTarget, ozSelector, PublicRole)
@@ -101,31 +86,11 @@ func TestOZCanCallPublicRoleReturnsTrueAndZeroDelay(t *testing.T) {
 	if !result.Immediate {
 		t.Fatal("public role target must be callable immediately")
 	}
-	if result.Delay != 0 {
-		t.Fatal("public role target must return zero delay")
-	}
-}
-
-// OpenZeppelin reference:
-// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L298-L307
-func TestOZCanCallGrantedRoleWithExecutionDelayReturnsFalseAndDelay(t *testing.T) {
-	caller := testutils.TestAddress("caller")
-	state := NewState()
-	state.GrantRole(ozRole, caller, 6)
-	state.SetTargetFunctionRole(ozTarget, ozSelector, ozRole)
-
-	result := state.CanCall(caller, ozTarget, ozSelector)
-	if result.Immediate {
-		t.Fatal("execution delay must prevent immediate call")
-	}
-	if result.Delay != 6 {
-		t.Fatalf("execution delay: got %d want 6", result.Delay)
-	}
 }
 
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L591-L604
-func TestOZHasRolePublicRoleReturnsTrueAndZeroDelay(t *testing.T) {
+func TestOZHasRolePublicRoleReturnsTrue(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
 
@@ -133,56 +98,44 @@ func TestOZHasRolePublicRoleReturnsTrueAndZeroDelay(t *testing.T) {
 	if !result.IsMember {
 		t.Fatal("public role must be held by every account")
 	}
-	if result.ExecutionDelay != 0 {
-		t.Fatal("public role must have zero execution delay")
-	}
 }
 
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L613-L617
-func TestOZHasRolePendingGrantReturnsFalseWithStoredExecutionDelay(t *testing.T) {
+func TestOZHasRolePendingGrantReturnsFalse(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
 	state.SetGrantDelay(ozRole, 10)
-	state.GrantRole(ozRole, caller, 3)
+	state.GrantRole(ozRole, caller)
 
 	result := state.HasRole(ozRole, caller)
 	if result.IsMember {
 		t.Fatal("grant delay must keep role inactive before effect")
 	}
-	if result.ExecutionDelay != 3 {
-		t.Fatalf("execution delay: got %d want 3", result.ExecutionDelay)
-	}
 }
 
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L650-L663
-func TestOZHasRoleGrantedRoleReturnsExecutionDelay(t *testing.T) {
+func TestOZHasRoleGrantedRoleReturnsTrue(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
-	state.GrantRole(ozRole, caller, 7)
+	state.GrantRole(ozRole, caller)
 
 	result := state.HasRole(ozRole, caller)
 	if !result.IsMember {
 		t.Fatal("granted role must be active without grant delay")
 	}
-	if result.ExecutionDelay != 7 {
-		t.Fatalf("execution delay: got %d want 7", result.ExecutionDelay)
-	}
 }
 
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L667-L672
-func TestOZHasRoleMissingRoleReturnsFalseAndZeroDelay(t *testing.T) {
+func TestOZHasRoleMissingRoleReturnsFalse(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
 
 	result := state.HasRole(ozRole, caller)
 	if result.IsMember {
 		t.Fatal("missing role must not be active")
-	}
-	if result.ExecutionDelay != 0 {
-		t.Fatal("missing role must return zero execution delay")
 	}
 }
 
@@ -221,7 +174,7 @@ func TestOZGrantRoleRejectsPublicRole(t *testing.T) {
 	state := NewState()
 
 	mustPanic(t, func() {
-		state.GrantRole(PublicRole, caller, 0)
+		state.GrantRole(PublicRole, caller)
 	})
 }
 
@@ -232,7 +185,7 @@ func TestOZGrantRoleWithGrantDelayDefersNewMember(t *testing.T) {
 	state := NewState()
 	state.SetGrantDelay(ozRole, 10)
 
-	if !state.GrantRole(ozRole, caller, 3) {
+	if !state.GrantRole(ozRole, caller) {
 		t.Fatal("new grant must report a new member")
 	}
 
@@ -245,9 +198,6 @@ func TestOZGrantRoleWithGrantDelayDefersNewMember(t *testing.T) {
 	if result.IsMember {
 		t.Fatal("new member must not be active before grant delay")
 	}
-	if result.ExecutionDelay != 3 {
-		t.Fatalf("execution delay: got %d want 3", result.ExecutionDelay)
-	}
 }
 
 // OpenZeppelin reference:
@@ -256,43 +206,13 @@ func TestOZGrantRoleWithoutGrantDelayActivatesNewMember(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
 
-	if !state.GrantRole(ozRole, caller, 6) {
+	if !state.GrantRole(ozRole, caller) {
 		t.Fatal("new grant must report a new member")
 	}
 
 	result := state.HasRole(ozRole, caller)
 	if !result.IsMember {
 		t.Fatal("new member must be active without grant delay")
-	}
-	if result.ExecutionDelay != 6 {
-		t.Fatalf("execution delay: got %d want 6", result.ExecutionDelay)
-	}
-}
-
-// OpenZeppelin reference:
-// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L1312-L1363
-func TestOZGrantRoleForExistingMemberPreservesMembership(t *testing.T) {
-	caller := testutils.TestAddress("caller")
-	state := NewState()
-	state.GrantRole(ozRole, caller, 6)
-	previousSince := state.Roles[ozRole].Members[caller].Since
-	state.SetGrantDelay(ozRole, 10)
-
-	if state.GrantRole(ozRole, caller, 11) {
-		t.Fatal("existing grant must not report a new member")
-	}
-
-	access := state.Roles[ozRole].Members[caller]
-	if !access.Since.Equal(previousSince) {
-		t.Fatal("grant delay must not reset an existing member effective timepoint")
-	}
-
-	result := state.HasRole(ozRole, caller)
-	if !result.IsMember {
-		t.Fatal("existing member must remain active after grant role update")
-	}
-	if result.ExecutionDelay != 11 {
-		t.Fatalf("execution delay: got %d want 11", result.ExecutionDelay)
 	}
 }
 
@@ -302,7 +222,7 @@ func TestOZRevokeRoleRemovesPendingGrant(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
 	state.SetGrantDelay(ozRole, 10)
-	state.GrantRole(ozRole, caller, 0)
+	state.GrantRole(ozRole, caller)
 
 	if !state.RevokeRole(ozRole, caller) {
 		t.Fatal("revoke must report a previously granted pending member")
@@ -311,9 +231,6 @@ func TestOZRevokeRoleRemovesPendingGrant(t *testing.T) {
 	result := state.HasRole(ozRole, caller)
 	if result.IsMember {
 		t.Fatal("revoked role must not be active")
-	}
-	if result.ExecutionDelay != 0 {
-		t.Fatal("revoked role must return zero execution delay")
 	}
 }
 
@@ -330,9 +247,6 @@ func TestOZRevokeRoleMissingRoleHasNoEffect(t *testing.T) {
 	result := state.HasRole(ozRole, caller)
 	if result.IsMember {
 		t.Fatal("missing role must remain inactive")
-	}
-	if result.ExecutionDelay != 0 {
-		t.Fatal("missing role must keep zero execution delay")
 	}
 }
 
@@ -353,7 +267,7 @@ func TestOZRenounceRoleRevokesAndRejectsBadConfirmation(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	other := testutils.TestAddress("other")
 	state := NewState()
-	state.GrantRole(ozRole, caller, 0)
+	state.GrantRole(ozRole, caller)
 
 	if !state.RenounceRole(ozRole, caller, caller) {
 		t.Fatal("renounce must report a previously granted member")
@@ -362,7 +276,7 @@ func TestOZRenounceRoleRevokesAndRejectsBadConfirmation(t *testing.T) {
 		t.Fatal("renounced role must be inactive")
 	}
 
-	state.GrantRole(ozRole, caller, 0)
+	state.GrantRole(ozRole, caller)
 	mustPanic(t, func() {
 		state.RenounceRole(ozRole, caller, other)
 	})

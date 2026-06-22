@@ -22,7 +22,7 @@ func TestCanCallDefaultsTargetFunctionToAdminRole(t *testing.T) {
 	admin := testutils.TestAddress("admin")
 	other := testutils.TestAddress("other")
 	state := NewState()
-	state.GrantRole(AdminRole, admin, 0)
+	state.GrantRole(AdminRole, admin)
 
 	if !state.CanCall(admin, "target", "selector").Immediate {
 		t.Fatal("admin must be authorized for an unset target function role")
@@ -57,13 +57,13 @@ func TestGrantAndRevokeRole(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
 
-	if !state.GrantRole(testRole, caller, 0) {
+	if !state.GrantRole(testRole, caller) {
 		t.Fatal("first grant must report a new member")
 	}
 	if !state.HasRole(testRole, caller).IsMember {
 		t.Fatal("grant role must add the account")
 	}
-	if state.GrantRole(testRole, caller, 0) {
+	if state.GrantRole(testRole, caller) {
 		t.Fatal("second grant must not report a new member")
 	}
 
@@ -82,7 +82,7 @@ func TestGrantDelayDefersMembership(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
 	state.SetGrantDelay(testRole, 10)
-	state.GrantRole(testRole, caller, 0)
+	state.GrantRole(testRole, caller)
 
 	if state.HasRole(testRole, caller).IsMember {
 		t.Fatal("role must not be active before grant delay")
@@ -92,18 +92,34 @@ func TestGrantDelayDefersMembership(t *testing.T) {
 	}
 }
 
-func TestExecutionDelayMakesCanCallNonImmediate(t *testing.T) {
+func TestActiveMemberCanCallImmediately(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
-	state.GrantRole(testRole, caller, 7)
+	state.GrantRole(testRole, caller)
 	state.SetTargetFunctionRole("target", "selector", testRole)
 
-	result := state.CanCall(caller, "target", "selector")
-	if result.Immediate {
-		t.Fatal("execution delay must make canCall non-immediate")
+	if !state.CanCall(caller, "target", "selector").Immediate {
+		t.Fatal("active member must be able to call immediately")
 	}
-	if result.Delay != 7 {
-		t.Fatalf("delay: got %d want 7", result.Delay)
+}
+
+func TestGrantRoleForExistingMemberPreservesEffectiveTimepoint(t *testing.T) {
+	caller := testutils.TestAddress("caller")
+	state := NewState()
+	state.GrantRole(testRole, caller)
+	previousSince := state.Roles[testRole].Members[caller].Since
+	state.SetGrantDelay(testRole, 10)
+
+	if state.GrantRole(testRole, caller) {
+		t.Fatal("existing grant must not report a new member")
+	}
+
+	access := state.Roles[testRole].Members[caller]
+	if !access.Since.Equal(previousSince) {
+		t.Fatal("grant delay must not reset an existing member effective timepoint")
+	}
+	if !state.HasRole(testRole, caller).IsMember {
+		t.Fatal("existing member must remain active after repeated grant")
 	}
 }
 
@@ -119,9 +135,9 @@ func TestCanAdminRoleUsesRoleAdmin(t *testing.T) {
 	admin := testutils.TestAddress("admin")
 	roleAdmin := testutils.TestAddress("role-admin")
 	state := NewState()
-	state.GrantRole(AdminRole, admin, 0)
+	state.GrantRole(AdminRole, admin)
 	state.SetRoleAdmin(testRole, 2)
-	state.GrantRole(2, roleAdmin, 0)
+	state.GrantRole(2, roleAdmin)
 
 	if state.CanAdminRole(testRole, admin).Immediate {
 		t.Fatal("global admin must not administer roles after a custom role admin is configured")
@@ -158,7 +174,7 @@ func TestLockedPublicRoleCannotBeGrantedOrRevoked(t *testing.T) {
 	state := NewState()
 
 	mustPanic(t, func() {
-		state.GrantRole(PublicRole, caller, 0)
+		state.GrantRole(PublicRole, caller)
 	})
 	mustPanic(t, func() {
 		state.RevokeRole(PublicRole, caller)

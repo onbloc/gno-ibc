@@ -1,9 +1,6 @@
 package manager
 
 const (
-	EventTypeOperationScheduled         = "OperationScheduled"
-	EventTypeOperationExecuted          = "OperationExecuted"
-	EventTypeOperationCanceled          = "OperationCanceled"
 	EventTypeRoleLabel                  = "RoleLabel"
 	EventTypeRoleGranted                = "RoleGranted"
 	EventTypeRoleRevoked                = "RoleRevoked"
@@ -11,16 +8,10 @@ const (
 	EventTypeRoleGrantDelayChanged      = "RoleGrantDelayChanged"
 	EventTypeTargetClosed               = "TargetClosed"
 	EventTypeTargetFunctionRoleUpdated  = "TargetFunctionRoleUpdated"
-	EventTypeTargetAdminDelayUpdated    = "TargetAdminDelayUpdated"
 )
 
 const (
-	AttributeKeyOperationID = "operation_id"
-	AttributeKeyNonce       = "nonce"
-	AttributeKeySchedule    = "schedule"
-	AttributeKeyCaller      = "caller"
 	AttributeKeyTarget      = "target"
-	AttributeKeyData        = "data"
 	AttributeKeyRoleID      = "role_id"
 	AttributeKeyLabel       = "label"
 	AttributeKeyAccount     = "account"

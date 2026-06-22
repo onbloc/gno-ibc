@@ -57,6 +57,30 @@ type ICore interface {
 
 	// --- App registry ---
 	RegisterApp(_ int, rlm realm, app app.IApp)
+
+	// Read-only relayer/tooling query surface.
+	IQuery
+}
+
+// IQuery is the read-only query surface, implemented by the impl and exposed by
+// the proxy's getters.gno. It mirrors union's relayer-facing get queries; results
+// for missing state are signalled by the bool return (no panic). The best-effort
+// methods (GetRegisteredClientType, GetClientImpl, GetChannels) have no direct
+// gno equivalent — see getters.gno for the adaptation notes.
+type IQuery interface {
+	GetStatus(clientId types.ClientId) types.Status
+	GetClientType(clientId types.ClientId) (types.ClientType, bool)
+	GetClientImpl(clientId types.ClientId) (string, bool)
+	GetRegisteredClientType(clientType types.ClientType) bool
+	GetClientStateBytes(clientId types.ClientId) ([]byte, bool)
+	GetConsensusStateBytes(clientId types.ClientId, height types.Height) ([]byte, bool)
+	GetLatestHeight(clientId types.ClientId) (uint64, bool)
+	GetTimestampAtHeight(clientId types.ClientId, height uint64) (types.Timestamp, bool)
+	GetConnectionTyped(connectionId types.ConnectionId) (types.Connection, bool)
+	GetChannelTyped(channelId types.ChannelId) (types.Channel, bool)
+	GetChannels(contract string) []types.ChannelId
+	GetBatchPacketsCommitment(channelId types.ChannelId, batchHash types.H256) (types.H256, bool)
+	GetBatchReceiptsCommitment(channelId types.ChannelId, batchHash types.H256) (types.H256, bool)
 }
 
 // IStore is the proxy-owned persistent state injected into the impl. Setters take
@@ -113,4 +137,10 @@ type IStore interface {
 	// --- Committed proofs ---
 	SaveMembershipProof(_ int, rlm realm, clientId types.ClientId, proofHeight uint64, path []byte, value types.H256)
 	SaveNonMembershipProof(_ int, rlm realm, clientId types.ClientId, proofHeight uint64, path []byte, value types.H256)
+
+	// --- Read-only query support ---
+	ClientStateBytes(clientId types.ClientId) ([]byte, bool)
+	ConsensusStateBytes(clientId types.ClientId, height types.Height) ([]byte, bool)
+	BatchPacketsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool)
+	BatchReceiptsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool)
 }

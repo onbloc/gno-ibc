@@ -267,6 +267,53 @@ func (s *Store) SaveNonMembershipProof(_ int, rlm realm, clientId types.ClientId
 	s.saveNonMembershipProof(clientId, proofHeight, path, value)
 }
 
+// ClientStateBytes returns the mirrored client state bytes for a client.
+func (s *Store) ClientStateBytes(clientId types.ClientId) ([]byte, bool) {
+	c := s.getClient(clientId)
+	if c == nil || len(c.clientState) == 0 {
+		return nil, false
+	}
+	return cloneBytes(c.clientState), true
+}
+
+// ConsensusStateBytes returns the consensus state bytes at a height.
+func (s *Store) ConsensusStateBytes(clientId types.ClientId, height types.Height) ([]byte, bool) {
+	c := s.getClient(clientId)
+	if c == nil {
+		return nil, false
+	}
+	return c.getConsensusState(height)
+}
+
+// BatchPacketsAt returns the batch packet commitment for a batch hash.
+func (s *Store) BatchPacketsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool) {
+	c := s.clientForChannelSafe(channelId)
+	if c == nil {
+		var zero types.H256
+		return zero, false
+	}
+	return c.getBatchPacketsAtPath(types.BatchPacketsPath(batchHash))
+}
+
+// BatchReceiptsAt returns the batch receipt commitment for a batch hash.
+func (s *Store) BatchReceiptsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool) {
+	c := s.clientForChannelSafe(channelId)
+	if c == nil {
+		var zero types.H256
+		return zero, false
+	}
+	return c.getBatchReceiptsAtPath(types.BatchReceiptsPath(batchHash))
+}
+
+// clientForChannelSafe resolves a channel's client without panicking.
+func (s *Store) clientForChannelSafe(channelId types.ChannelId) *client {
+	entry, ok := s.getChannelEntry(channelId)
+	if !ok {
+		return nil
+	}
+	return s.getClient(entry.clientId)
+}
+
 // --- Key helpers ---
 
 func clientKey(id types.ClientId) string {

@@ -122,6 +122,33 @@ func (m *mockStore) SaveMembershipProof(_ int, rlm realm, clientId types.ClientI
 func (m *mockStore) SaveNonMembershipProof(_ int, rlm realm, clientId types.ClientId, proofHeight uint64, path []byte, value types.H256) {
 }
 
+func (m *mockStore) ClientStateBytes(clientId types.ClientId) ([]byte, bool) {
+	c, ok := m.clients[uint32(clientId)]
+	if !ok || len(c.clientState) == 0 {
+		return nil, false
+	}
+	return c.clientState, true
+}
+
+func (m *mockStore) ConsensusStateBytes(clientId types.ClientId, height types.Height) ([]byte, bool) {
+	c, ok := m.clients[uint32(clientId)]
+	if !ok {
+		return nil, false
+	}
+	v, ok := c.consensus[height.String()]
+	return v, ok
+}
+
+func (m *mockStore) BatchPacketsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool) {
+	v, ok := m.batchPackets[channelId.String()+"|"+string(batchHash[:])]
+	return v, ok
+}
+
+func (m *mockStore) BatchReceiptsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool) {
+	v, ok := m.batchReceipts[channelId.String()+"|"+string(batchHash[:])]
+	return v, ok
+}
+
 // registerApp is a test helper that installs an app at a port id.
 func (m *mockStore) registerApp(portId types.Bytes, a app.IApp) {
 	m.ports[string(portId)] = a

@@ -57,19 +57,6 @@ func (state *State) GetRoleAdmin(role RoleId) RoleId {
 	return roleConfig.Admin
 }
 
-func (state *State) SetRoleGuardian(role RoleId, guardian RoleId) {
-	RequireUnlockedConfigRole(role)
-	state.ensureRole(role).Guardian = guardian
-}
-
-func (state *State) GetRoleGuardian(role RoleId) RoleId {
-	roleConfig := state.getRole(role)
-	if roleConfig == nil {
-		return AdminRole
-	}
-	return roleConfig.Guardian
-}
-
 func (state *State) SetGrantDelay(role RoleId, delay Delay) {
 	if role == PublicRole {
 		panic(AccessManagerLockedRoleError(role))
@@ -170,7 +157,7 @@ func (state *State) ensureRole(role RoleId) *RoleConfig {
 	state.ensureInitialized()
 	roleConfig := state.Roles[role]
 	if roleConfig == nil {
-		roleConfig = NewRoleConfig(AdminRole, 0, 0)
+		roleConfig = NewRoleConfig(AdminRole, 0)
 		state.Roles[role] = roleConfig
 	}
 	return roleConfig

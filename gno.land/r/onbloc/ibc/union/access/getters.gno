@@ -10,10 +10,6 @@ func GetRoleAdmin(cur realm, role manager.RoleId) manager.RoleId {
 	return accessState.GetRoleAdmin(role)
 }
 
-func GetRoleGuardian(cur realm, role manager.RoleId) manager.RoleId {
-	return accessState.GetRoleGuardian(role)
-}
-
 func GetRoleGrantDelay(cur realm, role manager.RoleId) manager.Delay {
 	return accessState.GetRoleGrantDelay(role)
 }

@@ -17,7 +17,6 @@ type State struct {
 type RoleConfig struct {
 	Members    map[address]Access
 	Admin      RoleId
-	Guardian   RoleId
 	GrantDelay Delay
 }
 
@@ -61,11 +60,10 @@ func NewState() State {
 	}
 }
 
-func NewRoleConfig(admin RoleId, guardian RoleId, grantDelay Delay) *RoleConfig {
+func NewRoleConfig(admin RoleId, grantDelay Delay) *RoleConfig {
 	return &RoleConfig{
 		Members:    make(map[address]Access),
 		Admin:      admin,
-		Guardian:   guardian,
 		GrantDelay: grantDelay,
 	}
 }

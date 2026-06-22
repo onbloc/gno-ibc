@@ -42,14 +42,6 @@ func emitRoleAdminChangedEvent(role manager.RoleId, admin manager.RoleId) {
 	)
 }
 
-func emitRoleGuardianChangedEvent(role manager.RoleId, guardian manager.RoleId) {
-	chain.Emit(
-		manager.EventTypeRoleGuardianChanged,
-		manager.AttributeKeyRoleID, formatRoleID(role),
-		manager.AttributeKeyGuardian, formatRoleID(guardian),
-	)
-}
-
 func emitRoleGrantDelayChangedEvent(role manager.RoleId, delay manager.Delay, since manager.Timepoint) {
 	chain.Emit(
 		manager.EventTypeRoleGrantDelayChanged,

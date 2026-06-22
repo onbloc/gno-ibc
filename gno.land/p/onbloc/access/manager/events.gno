@@ -8,7 +8,6 @@ const (
 	EventTypeRoleGranted                = "RoleGranted"
 	EventTypeRoleRevoked                = "RoleRevoked"
 	EventTypeRoleAdminChanged           = "RoleAdminChanged"
-	EventTypeRoleGuardianChanged        = "RoleGuardianChanged"
 	EventTypeRoleGrantDelayChanged      = "RoleGrantDelayChanged"
 	EventTypeTargetClosed               = "TargetClosed"
 	EventTypeTargetFunctionRoleUpdated  = "TargetFunctionRoleUpdated"
@@ -29,7 +28,6 @@ const (
 	AttributeKeySince       = "since"
 	AttributeKeyNewMember   = "new_member"
 	AttributeKeyAdmin       = "admin"
-	AttributeKeyGuardian    = "guardian"
 	AttributeKeyClosed      = "closed"
 	AttributeKeySelector    = "selector"
 )

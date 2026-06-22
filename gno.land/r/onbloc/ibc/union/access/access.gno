@@ -15,7 +15,6 @@ const (
 	selectorRevokeRole            manager.Selector = "revoke_role"
 	selectorSetGrantDelay         manager.Selector = "set_grant_delay"
 	selectorSetRoleAdmin          manager.Selector = "set_role_admin"
-	selectorSetRoleGuardian       manager.Selector = "set_role_guardian"
 	selectorSetTargetAdminDelay   manager.Selector = "set_target_admin_delay"
 	selectorSetTargetClosed       manager.Selector = "set_target_closed"
 	selectorSetTargetFunctionRole manager.Selector = "set_target_function_role"
@@ -57,12 +56,6 @@ func SetRoleAdmin(cur realm, role manager.RoleId, admin manager.RoleId) {
 	requireManagerAdmin(cur, selectorSetRoleAdmin)
 	accessState.SetRoleAdmin(role, admin)
 	emitRoleAdminChangedEvent(role, admin)
-}
-
-func SetRoleGuardian(cur realm, role manager.RoleId, guardian manager.RoleId) {
-	requireManagerAdmin(cur, selectorSetRoleGuardian)
-	accessState.SetRoleGuardian(role, guardian)
-	emitRoleGuardianChangedEvent(role, guardian)
 }
 
 func SetGrantDelay(cur realm, role manager.RoleId, delay manager.Delay) {

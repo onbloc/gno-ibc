@@ -95,14 +95,10 @@ func TestRoleConfigurationSurface(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(admin))
 	GrantRole(cross(cur), roleAdminRole, roleAdmin, 0)
 	SetRoleAdmin(cross(cur), RelayerRole, roleAdminRole)
-	SetRoleGuardian(cross(cur), RelayerRole, roleAdminRole)
 	SetGrantDelay(cross(cur), RelayerRole, 5)
 
 	if GetRoleAdmin(cur, RelayerRole) != roleAdminRole {
 		t.Fatal("SetRoleAdmin must update role admin")
-	}
-	if GetRoleGuardian(cur, RelayerRole) != roleAdminRole {
-		t.Fatal("SetRoleGuardian must update role guardian")
 	}
 	if GetRoleGrantDelay(cur, RelayerRole) != 5 {
 		t.Fatal("SetGrantDelay must update role grant delay")

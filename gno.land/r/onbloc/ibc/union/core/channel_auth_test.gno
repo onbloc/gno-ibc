@@ -8,17 +8,19 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-func setNonAdminForTest() func() {
+func setNonAdminForTest(cur realm) func() {
 	oldAdmin := admin
 	admin = testutils.TestAddress("authorized-admin")
+	resetAccess(cur, admin)
 	return func() {
 		admin = oldAdmin
+		resetAccess(cur, admin)
 	}
 }
 
 func TestChannelOpenInitPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest()
+	cleanup := setNonAdminForTest(cur)
 	defer cleanup()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
@@ -28,7 +30,7 @@ func TestChannelOpenInitPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 
 func TestChannelOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest()
+	cleanup := setNonAdminForTest(cur)
 	defer cleanup()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
@@ -38,7 +40,7 @@ func TestChannelOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 
 func TestForceChannelOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest()
+	cleanup := setNonAdminForTest(cur)
 	defer cleanup()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
@@ -48,7 +50,7 @@ func TestForceChannelOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) 
 
 func TestChannelOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest()
+	cleanup := setNonAdminForTest(cur)
 	defer cleanup()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
@@ -58,7 +60,7 @@ func TestChannelOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 
 func TestForceChannelOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest()
+	cleanup := setNonAdminForTest(cur)
 	defer cleanup()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
@@ -68,7 +70,7 @@ func TestForceChannelOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) 
 
 func TestChannelOpenConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest()
+	cleanup := setNonAdminForTest(cur)
 	defer cleanup()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
@@ -78,7 +80,7 @@ func TestChannelOpenConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 
 func TestForceChannelOpenConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest()
+	cleanup := setNonAdminForTest(cur)
 	defer cleanup()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
@@ -88,7 +90,7 @@ func TestForceChannelOpenConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *testing
 
 func TestChannelCloseInitPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest()
+	cleanup := setNonAdminForTest(cur)
 	defer cleanup()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
@@ -98,7 +100,7 @@ func TestChannelCloseInitPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 
 func TestChannelCloseConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest()
+	cleanup := setNonAdminForTest(cur)
 	defer cleanup()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {

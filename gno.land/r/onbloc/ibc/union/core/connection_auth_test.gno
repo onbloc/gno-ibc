@@ -9,7 +9,7 @@ import (
 
 func TestConnectionOpenInitPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest()
+	cleanup := setNonAdminForTest(cur)
 	defer cleanup()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
@@ -19,7 +19,7 @@ func TestConnectionOpenInitPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 
 func TestConnectionOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest()
+	cleanup := setNonAdminForTest(cur)
 	defer cleanup()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
@@ -35,7 +35,7 @@ func TestConnectionOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 
 func TestConnectionOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest()
+	cleanup := setNonAdminForTest(cur)
 	defer cleanup()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
@@ -50,7 +50,7 @@ func TestConnectionOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 
 func TestConnectionOpenConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest()
+	cleanup := setNonAdminForTest(cur)
 	defer cleanup()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {

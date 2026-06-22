@@ -13,9 +13,9 @@ import (
 // ForceSetImpl tiers were removed in favour of this simpler admin-only swap.)
 
 func TestUpdateImplRejectsNonAdmin(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 
-	uassert.AbortsContains(t, cur, "zkgm: admin only", func(cur realm) {
+	uassert.AbortsContains(t, cur, "caller not authorized to update_impl", func(cur realm) {
 		UpdateImpl(cross(cur), &dummyImpl{})
 	})
 	if impl != nil {
@@ -24,20 +24,20 @@ func TestUpdateImplRejectsNonAdmin(cur realm, t *testing.T) {
 }
 
 func TestUpdateImplRejectsNilTarget(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 
 	// Call with the outer (admin) cur, not the closure's crossing param, so the
 	// admin gate passes and the nil-target validation is what aborts.
-	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	testing.SetRealm(testing.NewUserRealm(zkgmAdminForTest()))
 	uassert.AbortsContains(t, cur, "impl cannot be nil", func(_ realm) {
 		UpdateImpl(cur, nil)
 	})
 }
 
 func TestUpdateImplByAdminInstallsImpl(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 
-	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	testing.SetRealm(testing.NewUserRealm(zkgmAdminForTest()))
 	UpdateImpl(cur, &dummyImpl{})
 
 	if impl == nil {
@@ -46,12 +46,12 @@ func TestUpdateImplByAdminInstallsImpl(cur realm, t *testing.T) {
 }
 
 func TestUpdateImplSwapsToLatestTarget(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	first := &dummyImpl{}
 	second := &dummyImpl{}
 	packet := core.NewPacket(1, 2, []byte("d"), 0)
 
-	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	testing.SetRealm(testing.NewUserRealm(zkgmAdminForTest()))
 	UpdateImpl(cur, first)
 	UpdateImpl(cur, second)
 

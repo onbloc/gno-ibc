@@ -5,7 +5,6 @@ import (
 
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 // SetHook takes a TransferHook interface and cannot be called via maketx, so
@@ -13,9 +12,8 @@ import (
 // without crossing (Previous() = the user realm we set), and the non-admin
 // denial crosses so the abort propagates back through AbortsContains.
 //
-// core.GetAdmin() returns the empty address in unit tests because core's init
-// captures OriginCaller, which is unset at import time. The same pattern is
-// used in zkgm's ForceSetImpl admin tests.
+// transferAdminForTest returns the empty address in unit tests because app init
+// captures OriginCaller, which is unset at import time.
 
 func TestSetHookAllowedForAdmin(cur realm, t *testing.T) {
 	hook = nil
@@ -24,7 +22,7 @@ func TestSetHookAllowedForAdmin(cur realm, t *testing.T) {
 	hookAddr := address(testutils.TestAddress("hook-owner"))
 	h := &dummyHook{addr: hookAddr}
 
-	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	testing.SetRealm(testing.NewUserRealm(transferAdminForTest()))
 	SetHook(cur, h)
 
 	if hook != h {
@@ -39,7 +37,7 @@ func TestSetHookClearsWithNil(cur realm, t *testing.T) {
 	hook = &dummyHook{addr: address("g1existing000000000000000000000000000000")}
 	hookCaller = address("g1existing000000000000000000000000000000")
 
-	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	testing.SetRealm(testing.NewUserRealm(transferAdminForTest()))
 	SetHook(cur, nil)
 
 	if hook != nil {
@@ -54,7 +52,7 @@ func TestSetHookInvalidAddressIsRejected(cur realm, t *testing.T) {
 	hook = nil
 	hookCaller = address("")
 
-	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	testing.SetRealm(testing.NewUserRealm(transferAdminForTest()))
 
 	uassert.AbortsContains(t, cur, "transfer: hook address is invalid", func(_ realm) {
 		SetHook(cur, &dummyHook{addr: address("")})
@@ -71,7 +69,7 @@ func TestSetHookDeniedForNonAdmin(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(address("g1notadmin0000000000000000000000000000000")))
 
-	uassert.AbortsContains(t, cur, "transfer: admin only", func(cur realm) {
+	uassert.AbortsContains(t, cur, "caller not authorized to set_hook", func(cur realm) {
 		SetHook(cross(cur), nil)
 	})
 

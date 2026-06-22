@@ -11,8 +11,10 @@ import (
 func setAdminForTest(cur realm) func() {
 	oldAdmin := admin
 	admin = cur.Address()
+	resetAccess(cur, admin)
 	return func() {
 		admin = oldAdmin
+		resetAccess(cur, admin)
 	}
 }
 
@@ -236,8 +238,13 @@ func TestForceConnectionOpenConfirmBypassesProofVerification(cur realm, t *testi
 
 func TestForceConnectionOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
+	oldAdmin := admin
 	admin = testutils.TestAddress("authorized-admin")
-	defer func() { admin = "" }()
+	resetAccess(cur, admin)
+	defer func() {
+		admin = oldAdmin
+		resetAccess(cur, admin)
+	}()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
 		ForceConnectionOpenTry(cur, types.NewMsgConnectionOpenTry(

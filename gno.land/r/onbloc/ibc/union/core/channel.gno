@@ -1,14 +1,11 @@
 package core
 
 import (
-	"chain/runtime"
-
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
 func ChannelOpenInit(cur realm, msg types.MsgChannelOpenInit) types.ChannelId {
-	requireAdmin(cur, "ChannelOpenInit")
-	runtime.AssertOriginCall()
+	requireCanCall(0, cur, SelectorChannelOpenInit)
 
 	relayer := cur.Previous().Address()
 	portId := types.Bytes(cloneBytes(msg.PortId))
@@ -30,14 +27,12 @@ func ChannelOpenInit(cur realm, msg types.MsgChannelOpenInit) types.ChannelId {
 }
 
 func ChannelOpenTry(cur realm, msg types.MsgChannelOpenTry) types.ChannelId {
-	requireAdmin(cur, "ChannelOpenTry")
-	runtime.AssertOriginCall()
+	requireCanCall(0, cur, SelectorChannelOpenTry)
 	return channelOpenTry(cur, msg, true)
 }
 
 func ForceChannelOpenTry(cur realm, msg types.MsgChannelOpenTry) types.ChannelId {
-	requireAdmin(cur, "ForceChannelOpenTry")
-	runtime.AssertOriginCall()
+	requireCanCall(0, cur, SelectorForceChannelTry)
 	return channelOpenTry(cur, msg, false)
 }
 
@@ -74,14 +69,12 @@ func channelOpenTry(cur realm, msg types.MsgChannelOpenTry, verify bool) types.C
 }
 
 func ChannelOpenAck(cur realm, msg types.MsgChannelOpenAck) {
-	requireAdmin(cur, "ChannelOpenAck")
-	runtime.AssertOriginCall()
+	requireCanCall(0, cur, SelectorChannelOpenAck)
 	channelOpenAck(cur, msg, true)
 }
 
 func ForceChannelOpenAck(cur realm, msg types.MsgChannelOpenAck) {
-	requireAdmin(cur, "ForceChannelOpenAck")
-	runtime.AssertOriginCall()
+	requireCanCall(0, cur, SelectorForceChannelAck)
 	channelOpenAck(cur, msg, false)
 }
 
@@ -117,14 +110,12 @@ func channelOpenAck(cur realm, msg types.MsgChannelOpenAck, verify bool) {
 }
 
 func ChannelOpenConfirm(cur realm, msg types.MsgChannelOpenConfirm) {
-	requireAdmin(cur, "ChannelOpenConfirm")
-	runtime.AssertOriginCall()
+	requireCanCall(0, cur, SelectorChannelOpenConfirm)
 	channelOpenConfirm(cur, msg, true)
 }
 
 func ForceChannelOpenConfirm(cur realm, msg types.MsgChannelOpenConfirm) {
-	requireAdmin(cur, "ForceChannelOpenConfirm")
-	runtime.AssertOriginCall()
+	requireCanCall(0, cur, SelectorForceChannelConfirm)
 	channelOpenConfirm(cur, msg, false)
 }
 
@@ -161,8 +152,7 @@ func channelOpenConfirm(cur realm, msg types.MsgChannelOpenConfirm, verify bool)
 }
 
 func ChannelCloseInit(cur realm, msg types.MsgChannelCloseInit) {
-	requireAdmin(cur, "ChannelCloseInit")
-	runtime.AssertOriginCall()
+	requireCanCall(0, cur, SelectorChannelCloseInit)
 
 	channelCloseInit(cur, msg)
 }
@@ -187,8 +177,7 @@ func channelCloseInit(cur realm, msg types.MsgChannelCloseInit) {
 }
 
 func ChannelCloseConfirm(cur realm, msg types.MsgChannelCloseConfirm) {
-	requireAdmin(cur, "ChannelCloseConfirm")
-	runtime.AssertOriginCall()
+	requireCanCall(0, cur, SelectorChannelCloseConfirm)
 
 	channelCloseConfirm(cur, msg)
 }

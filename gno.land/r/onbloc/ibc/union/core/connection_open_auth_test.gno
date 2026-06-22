@@ -9,7 +9,7 @@ import (
 
 func TestForceConnectionOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest()
+	cleanup := setNonAdminForTest(cur)
 	defer cleanup()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
@@ -24,7 +24,7 @@ func TestForceConnectionOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.
 
 func TestForceConnectionOpenConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest()
+	cleanup := setNonAdminForTest(cur)
 	defer cleanup()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {

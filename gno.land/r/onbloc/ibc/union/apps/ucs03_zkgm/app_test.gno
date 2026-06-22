@@ -14,7 +14,7 @@ import (
 // test_on_channel_open_init_ok
 // Reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/tests.rs#L3380-L3402
 func TestOnChannelOpenInitOk(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 
@@ -30,7 +30,7 @@ func TestOnChannelOpenInitOk(cur realm, t *testing.T) {
 // Version enforcement lives in the installed impl; the proxy only gates caller
 // and pause state before delegating.
 func TestOnChannelOpenInitDelegatesVersionToImpl(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 
@@ -46,7 +46,7 @@ func TestOnChannelOpenInitDelegatesVersionToImpl(cur realm, t *testing.T) {
 // test_on_channel_open_init_only_ibc
 // Reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/tests.rs#L3438-L3466
 func TestOnChannelOpenInitOnlyIbc(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 
@@ -64,7 +64,7 @@ func TestOnChannelOpenInitOnlyIbc(cur realm, t *testing.T) {
 // test_on_channel_open_try_ok
 // Reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/tests.rs#L3469-L3492
 func TestOnChannelOpenTryOk(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 
@@ -77,7 +77,7 @@ func TestOnChannelOpenTryOk(cur realm, t *testing.T) {
 }
 
 func TestOnChannelOpenTryDelegatesVersionToImpl(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 
@@ -91,7 +91,7 @@ func TestOnChannelOpenTryDelegatesVersionToImpl(cur realm, t *testing.T) {
 }
 
 func TestOnChannelOpenTryDelegatesCounterpartyVersionToImpl(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 
@@ -107,7 +107,7 @@ func TestOnChannelOpenTryDelegatesCounterpartyVersionToImpl(cur realm, t *testin
 // test_on_channel_open_try_only_ibc
 // Reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/tests.rs#L3563-L3592
 func TestOnChannelOpenTryOnlyIbc(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 
@@ -125,7 +125,7 @@ func TestOnChannelOpenTryOnlyIbc(cur realm, t *testing.T) {
 // test_on_channel_open_ack_and_confirm_noop
 // Reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/tests.rs#L3595-L3640
 func TestOnChannelOpenAckAndConfirmNoop(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 
@@ -148,7 +148,7 @@ func TestOnChannelOpenAckAndConfirmNoop(cur realm, t *testing.T) {
 // Reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/tests.rs#L3643-L3669
 // Union implementation: "the show must go on" error for all close callbacks
 func TestOnChannelCloseInitImpossible(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 
@@ -168,7 +168,7 @@ func TestOnChannelCloseInitImpossible(cur realm, t *testing.T) {
 // test_on_channel_close_init_only_ibc
 // Reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/tests.rs#L3672-L3698
 func TestOnChannelCloseInitOnlyIbc(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 
@@ -188,7 +188,7 @@ func TestOnChannelCloseInitOnlyIbc(cur realm, t *testing.T) {
 // Reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/tests.rs#L3701-L3727
 // Union implementation: "the show must go on" error for all close callbacks
 func TestOnChannelCloseConfirmImpossible(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 
@@ -208,7 +208,7 @@ func TestOnChannelCloseConfirmImpossible(cur realm, t *testing.T) {
 // test_on_channel_close_confirm_only_ibc
 // Reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/tests.rs#L3730-L3756
 func TestOnChannelCloseConfirmOnlyIbc(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 
@@ -230,7 +230,7 @@ func TestOnChannelCloseConfirmOnlyIbc(cur realm, t *testing.T) {
 // Test that paused blocks OnChannelOpenInit
 // Union behavior: ensure_not_paused is called for all IbcUnionMsg variants
 func TestOnChannelOpenInitPausedBlocks(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 	paused = true
@@ -250,7 +250,7 @@ func TestOnChannelOpenInitPausedBlocks(cur realm, t *testing.T) {
 
 // Test that paused blocks OnChannelOpenTry
 func TestOnChannelOpenTryPausedBlocks(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 	paused = true
@@ -269,7 +269,7 @@ func TestOnChannelOpenTryPausedBlocks(cur realm, t *testing.T) {
 
 // Test that paused blocks OnChannelOpenAck
 func TestOnChannelOpenAckPausedBlocks(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 	paused = true
@@ -288,7 +288,7 @@ func TestOnChannelOpenAckPausedBlocks(cur realm, t *testing.T) {
 
 // Test that paused blocks OnChannelOpenConfirm
 func TestOnChannelOpenConfirmPausedBlocks(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 	paused = true
@@ -307,7 +307,7 @@ func TestOnChannelOpenConfirmPausedBlocks(cur realm, t *testing.T) {
 
 // Test that close callbacks are also blocked by pause (though they would panic anyway)
 func TestOnChannelCloseInitPausedBlocks(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 	paused = true
@@ -326,7 +326,7 @@ func TestOnChannelCloseInitPausedBlocks(cur realm, t *testing.T) {
 }
 
 func TestOnChannelCloseConfirmPausedBlocks(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 	paused = true
@@ -351,7 +351,7 @@ func TestOnChannelCloseConfirmPausedBlocks(cur realm, t *testing.T) {
 // Test all IBC host caller validation for channel callbacks
 // Ensures only core realm can call channel handshake methods
 func TestAllChannelCallbacksRequireIbcHost(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 
@@ -366,7 +366,7 @@ func TestAllChannelCallbacksRequireIbcHost(cur realm, t *testing.T) {
 	}
 
 	for i, cb := range callbacks {
-		resetZkgmForTest()
+		resetZkgmForTest(cur)
 		impl = d
 		uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() { cb() })
 
@@ -378,7 +378,7 @@ func TestAllChannelCallbacksRequireIbcHost(cur realm, t *testing.T) {
 }
 
 func TestAppDelegatesVersionValidationToImpl(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 
@@ -393,7 +393,7 @@ func TestAppDelegatesVersionValidationToImpl(cur realm, t *testing.T) {
 	}
 
 	// Valid versions should succeed
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d = &dummyImpl{}
 	impl = d
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
@@ -407,7 +407,7 @@ func TestAppDelegatesVersionValidationToImpl(cur realm, t *testing.T) {
 
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/tests.rs#L713-L746
 func TestOnRecvPacketOnlyIbc(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
@@ -427,7 +427,7 @@ func TestOnRecvPacketOnlyIbc(cur realm, t *testing.T) {
 
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/contract.rs#L168-L182
 func TestOnIntentRecvPacketOnlyIbc(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
@@ -447,7 +447,7 @@ func TestOnIntentRecvPacketOnlyIbc(cur realm, t *testing.T) {
 
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/contract.rs#L183-L192
 func TestOnAcknowledgementPacketOnlyIbc(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
@@ -467,7 +467,7 @@ func TestOnAcknowledgementPacketOnlyIbc(cur realm, t *testing.T) {
 
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/contract.rs#L193-L201
 func TestOnTimeoutPacketOnlyIbc(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	impl = d
 	packet := core.NewPacket(1, 2, []byte("data"), 0)

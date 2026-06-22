@@ -1,8 +1,6 @@
 package core
 
 import (
-	"chain/runtime"
-
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
@@ -11,8 +9,7 @@ func NewConnection(state types.ConnectionState, clientId, counterpartyClientId t
 }
 
 func ConnectionOpenInit(cur realm, msg types.MsgConnectionOpenInit) {
-	requireAdmin(cur, "ConnectionOpenInit")
-	runtime.AssertOriginCall()
+	requireCanCall(0, cur, SelectorConnectionOpenInit)
 
 	connectionId := store.nextConnectionId()
 
@@ -23,14 +20,12 @@ func ConnectionOpenInit(cur realm, msg types.MsgConnectionOpenInit) {
 }
 
 func ConnectionOpenTry(cur realm, msg types.MsgConnectionOpenTry) {
-	requireAdmin(cur, "ConnectionOpenTry")
-	runtime.AssertOriginCall()
+	requireCanCall(0, cur, SelectorConnectionOpenTry)
 	connectionOpenTry(msg, true)
 }
 
 func ForceConnectionOpenTry(cur realm, msg types.MsgConnectionOpenTry) {
-	requireAdmin(cur, "ForceConnectionOpenTry")
-	runtime.AssertOriginCall()
+	requireCanCall(0, cur, SelectorForceConnectionTry)
 	connectionOpenTry(msg, false)
 }
 
@@ -52,14 +47,12 @@ func connectionOpenTry(msg types.MsgConnectionOpenTry, verify bool) {
 }
 
 func ConnectionOpenAck(cur realm, msg types.MsgConnectionOpenAck) {
-	requireAdmin(cur, "ConnectionOpenAck")
-	runtime.AssertOriginCall()
+	requireCanCall(0, cur, SelectorConnectionOpenAck)
 	connectionOpenAck(msg, true)
 }
 
 func ForceConnectionOpenAck(cur realm, msg types.MsgConnectionOpenAck) {
-	requireAdmin(cur, "ForceConnectionOpenAck")
-	runtime.AssertOriginCall()
+	requireCanCall(0, cur, SelectorForceConnectionAck)
 	connectionOpenAck(msg, false)
 }
 
@@ -87,14 +80,12 @@ func connectionOpenAck(msg types.MsgConnectionOpenAck, verify bool) {
 }
 
 func ConnectionOpenConfirm(cur realm, msg types.MsgConnectionOpenConfirm) {
-	requireAdmin(cur, "ConnectionOpenConfirm")
-	runtime.AssertOriginCall()
+	requireCanCall(0, cur, SelectorConnectionOpenConfirm)
 	connectionOpenConfirm(msg, true)
 }
 
 func ForceConnectionOpenConfirm(cur realm, msg types.MsgConnectionOpenConfirm) {
-	requireAdmin(cur, "ForceConnectionOpenConfirm")
-	runtime.AssertOriginCall()
+	requireCanCall(0, cur, SelectorForceConnectionConfirm)
 	connectionOpenConfirm(msg, false)
 }
 

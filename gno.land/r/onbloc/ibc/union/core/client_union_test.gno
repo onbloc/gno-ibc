@@ -50,7 +50,6 @@ func TestCreateClientUnionUsesRegisteredClient(cur realm, t *testing.T) {
 	resetStore(cur)
 	creator := testutils.TestAddress("union-client-creator")
 	ignoredRelayer := testutils.TestAddress("ignored-relayer")
-	testing.SetRealm(testing.NewUserRealm(creator))
 	lc := &mockClient{
 		chainId: "union-1",
 		height:  types.NewHeight(1),
@@ -60,6 +59,8 @@ func TestCreateClientUnionUsesRegisteredClient(cur realm, t *testing.T) {
 		},
 	}
 	RegisterClient(cross(cur), mockType, lc)
+	GrantRole(0, cur, RelayerRole, creator)
+	testing.SetRealm(testing.NewUserRealm(creator))
 
 	CreateClient(cross(cur), types.MsgCreateClient{
 		ClientType:          mockType,
@@ -175,6 +176,7 @@ func TestForceUpdateClientUnionMirrorsSubmittedState(cur realm, t *testing.T) {
 	adminAddr := testutils.TestAddress("admin")
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	admin = adminAddr
+	resetAccess(cur, admin)
 
 	lc := &mockClient{
 		chainId: "union-1",

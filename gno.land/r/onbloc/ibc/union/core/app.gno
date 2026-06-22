@@ -1,8 +1,6 @@
 package core
 
 import (
-	"chain/runtime"
-
 	"gno.land/p/onbloc/ibc/union/app"
 )
 
@@ -18,8 +16,7 @@ func RegisterApp(cur realm, app app.IApp) {
 // privileged path is for deployment/loaders that install an app on behalf of
 // another realm.
 func RegisterAppForPort(cur realm, portId []byte, app app.IApp) {
-	requireAdmin(cur, "register port")
-	runtime.AssertOriginCall()
+	requireCanCall(0, cur, SelectorRegisterPort)
 	registerAppAtPort(portId, app)
 	emitAppRegisteredEvent(portId, cur.Previous().PkgPath(), true)
 }

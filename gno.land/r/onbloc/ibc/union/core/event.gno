@@ -8,7 +8,6 @@ import (
 )
 
 const (
-	AdminChangedEvent          = "AdminChanged"
 	AppRegisteredEvent         = "AppRegistered"
 	RegisterClientEvent        = "RegisterClient"
 	CreateClientEvent          = "CreateClient"
@@ -159,14 +158,6 @@ func emitForceUpdateClientEvent(clientId types.ClientId, counterpartyHeight type
 		ForceUpdateClientEvent,
 		"client_id", clientId.String(),
 		"counterparty_height", counterpartyHeight.String(),
-	)
-}
-
-func emitAdminChangedEvent(oldAdmin address, newAdmin address) {
-	chain.Emit(
-		AdminChangedEvent,
-		"old_admin", oldAdmin.String(),
-		"new_admin", newAdmin.String(),
 	)
 }
 

@@ -42,7 +42,7 @@ func SendPacket(cur realm, sourceChannelId types.ChannelId, timeoutTimestamp typ
 }
 
 func PacketRecv(cur realm, msg types.MsgPacketRecv) {
-	requireAdmin(cur, "packet recv")
+	requireCanCall(0, cur, SelectorPacketRecv)
 
 	relayer := cur.Previous().Address()
 	if len(msg.Packets) == 0 {
@@ -81,7 +81,7 @@ func PacketRecv(cur realm, msg types.MsgPacketRecv) {
 }
 
 func IntentPacketRecv(cur realm, msg types.MsgIntentPacketRecv) {
-	requireAdmin(cur, "intent packet recv")
+	requireCanCall(0, cur, SelectorIntentPacketRecv)
 
 	marketMaker := cur.Previous().Address()
 	if len(msg.Packets) == 0 {
@@ -122,7 +122,7 @@ func IntentPacketRecv(cur realm, msg types.MsgIntentPacketRecv) {
 }
 
 func PacketAcknowledgement(cur realm, msg types.MsgPacketAcknowledgement) {
-	requireAdmin(cur, "packet acknowledgement")
+	requireCanCall(0, cur, SelectorPacketAck)
 
 	relayer := cur.Previous().Address()
 	if len(msg.Packets) == 0 {
@@ -166,7 +166,7 @@ func PacketAcknowledgement(cur realm, msg types.MsgPacketAcknowledgement) {
 }
 
 func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
-	requireAdmin(cur, "packet timeout")
+	requireCanCall(0, cur, SelectorPacketTimeout)
 
 	relayer := cur.Previous().Address()
 	packet := msg.Packet
@@ -206,7 +206,7 @@ func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
 }
 
 func CommitMembershipProof(cur realm, msg types.MsgCommitMembershipProof) {
-	requireAdmin(cur, "commit membership proof")
+	requireCanCall(0, cur, SelectorCommitMembershipProof)
 
 	verifyMembershipActive(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, msg.Path, msg.Value)
 	store.saveMembershipProof(msg.ClientId, msg.ProofHeight, msg.Path, types.Keccak(msg.Value))
@@ -215,7 +215,7 @@ func CommitMembershipProof(cur realm, msg types.MsgCommitMembershipProof) {
 }
 
 func CommitNonMembershipProof(cur realm, msg types.MsgCommitNonMembershipProof) {
-	requireAdmin(cur, "commit non-membership proof")
+	requireCanCall(0, cur, SelectorCommitNonMembershipProof)
 
 	c := store.getClient(msg.ClientId)
 	if c == nil {
@@ -228,7 +228,7 @@ func CommitNonMembershipProof(cur realm, msg types.MsgCommitNonMembershipProof) 
 }
 
 func BatchSend(cur realm, msg types.MsgBatchSend) {
-	requireAdmin(cur, "batch send")
+	requireCanCall(0, cur, SelectorBatchSend)
 
 	if len(msg.Packets) < 2 {
 		panic(ErrNotEnoughPackets)
@@ -258,7 +258,7 @@ func BatchSend(cur realm, msg types.MsgBatchSend) {
 }
 
 func BatchAcks(cur realm, msg types.MsgBatchAcks) {
-	requireAdmin(cur, "batch acks")
+	requireCanCall(0, cur, SelectorBatchAcks)
 
 	if len(msg.Packets) < 2 {
 		panic(ErrNotEnoughPackets)

@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	"gno.land/p/aib/encoding/proto"
-	"gno.land/p/nt/ufmt/v0"
 	"gno.land/p/gnoswap/int256"
+	"gno.land/p/nt/ufmt/v0"
 )
 
 // FungibleTokenPacketData defines a struct for the packet payload

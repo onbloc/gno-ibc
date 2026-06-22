@@ -6,6 +6,7 @@ import (
 
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
+	manager "gno.land/p/onbloc/access/manager"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
@@ -17,9 +18,25 @@ const (
 	oldAddressPort                   = "g1vjt8cj2s6f5w4sly0s2l0vh85k0y8jyz3f8qzss"
 )
 
+var admin address
+
+func resetAccess(cur realm, initialAdmin address) {
+	testing.SetRealm(testing.NewUserRealm(address("")))
+	GrantRole(0, cur, manager.AdminRole, initialAdmin)
+	GrantRole(0, cur, RelayerRole, initialAdmin)
+	SetFunctionRole(0, cur, SelectorRegisterClient, manager.AdminRole)
+	SetFunctionRole(0, cur, SelectorForceUpdateClient, manager.AdminRole)
+	SetFunctionRole(0, cur, SelectorCommitMembershipProof, manager.AdminRole)
+	SetFunctionRole(0, cur, SelectorCommitNonMembershipProof, manager.AdminRole)
+	SetFunctionRole(0, cur, SelectorRegisterPort, manager.AdminRole)
+	testing.SetRealm(testing.NewUserRealm(initialAdmin))
+}
+
 func resetStore(cur realm) {
 	store = newStore()
 	admin = cur.Address()
+	resetAccess(cur, admin)
+	testing.SetRealm(testing.NewUserRealm(admin))
 }
 
 func mustPanic(t *testing.T, fn func()) {
@@ -412,10 +429,11 @@ func TestGetTimestampAtHeightUnknownReturnsZero(cur realm, t *testing.T) {
 func TestCreateClientBuildsAndStoresObject(cur realm, t *testing.T) {
 	resetStore(cur)
 	creatorAddr := testutils.TestAddress("client-creator")
-	testing.SetRealm(testing.NewUserRealm(creatorAddr))
 	mc := &mockClient{chainId: "union-1", height: types.NewHeight(100)}
 
 	RegisterClient(cross(cur), mockType, mc)
+	GrantRole(0, cur, RelayerRole, creatorAddr)
+	testing.SetRealm(testing.NewUserRealm(creatorAddr))
 	CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("client-state"), []byte("consensus-state")))
 	clientId := types.ClientId(1)
 
@@ -983,24 +1001,28 @@ func TestRestrictedPacketEntrypointsRejectNonAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
 	oldAdmin := admin
 	admin = testutils.TestAddress("non-admin-sentinel")
-	defer func() { admin = oldAdmin }()
+	resetAccess(cur, admin)
+	defer func() {
+		admin = oldAdmin
+		resetAccess(cur, admin)
+	}()
 
-	uassert.AbortsContains(t, cur, "caller not authorized to packet recv", func(cur realm) {
+	uassert.AbortsContains(t, cur, "caller not authorized to packet_recv", func(cur realm) {
 		PacketRecv(cross(cur), types.MsgPacketRecv{})
 	})
-	uassert.AbortsContains(t, cur, "caller not authorized to intent packet recv", func(cur realm) {
+	uassert.AbortsContains(t, cur, "caller not authorized to intent_packet_recv", func(cur realm) {
 		IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{})
 	})
-	uassert.AbortsContains(t, cur, "caller not authorized to packet acknowledgement", func(cur realm) {
+	uassert.AbortsContains(t, cur, "caller not authorized to packet_ack", func(cur realm) {
 		PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{})
 	})
-	uassert.AbortsContains(t, cur, "caller not authorized to packet timeout", func(cur realm) {
+	uassert.AbortsContains(t, cur, "caller not authorized to packet_timeout", func(cur realm) {
 		PacketTimeout(cross(cur), types.MsgPacketTimeout{})
 	})
-	uassert.AbortsContains(t, cur, "caller not authorized to batch send", func(cur realm) {
+	uassert.AbortsContains(t, cur, "caller not authorized to batch_send", func(cur realm) {
 		BatchSend(cross(cur), types.MsgBatchSend{})
 	})
-	uassert.AbortsContains(t, cur, "caller not authorized to batch acks", func(cur realm) {
+	uassert.AbortsContains(t, cur, "caller not authorized to batch_acks", func(cur realm) {
 		BatchAcks(cross(cur), types.MsgBatchAcks{})
 	})
 }
@@ -1200,10 +1222,14 @@ func TestRegisterAppRejectsPortSquatting(cur realm, t *testing.T) {
 	resetStore(cur)
 	oldAdmin := admin
 	admin = "gno1authorized"
-	defer func() { admin = oldAdmin }()
+	resetAccess(cur, admin)
+	defer func() {
+		admin = oldAdmin
+		resetAccess(cur, admin)
+	}()
 	portId := types.Bytes("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm")
 
-	uassert.AbortsContains(t, cur, "caller not authorized to register port", func(cur realm) {
+	uassert.AbortsContains(t, cur, "caller not authorized to register_port", func(cur realm) {
 		RegisterAppForPort(cur, portId, &mockApp{})
 	})
 	if HasApp(portId) {
@@ -1992,6 +2018,7 @@ func TestForceUpdateClientReinitializesSubmittedState(cur realm, t *testing.T) {
 	adminAddr := testutils.TestAddress("admin")
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	admin = adminAddr
+	resetAccess(cur, admin)
 
 	mc := &mockClient{height: types.NewHeight(0)}
 	RegisterClient(cross(cur), mockType, mc)
@@ -2015,60 +2042,15 @@ func TestForceUpdateClientReinitializesSubmittedState(cur realm, t *testing.T) {
 func TestForceUpdateClientPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
 	admin = "gno1authorized"
-	defer func() { admin = "" }()
+	resetAccess(cur, admin)
+	defer func() {
+		admin = ""
+		resetAccess(cur, admin)
+	}()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
 		ForceUpdateClient(cur, types.NewMsgForceUpdateClient(types.ClientId(0), nil, nil))
 	})
-}
-
-// --- Admin ---
-
-func TestGetAdminReflectsCurrentAdmin(cur realm, t *testing.T) {
-	old := admin
-	defer func() { admin = old }()
-	sentinel := testutils.TestAddress("admin-sentinel")
-	admin = sentinel
-	if got := GetAdmin(); got != sentinel {
-		t.Errorf("GetAdmin: got %v want %v", got, sentinel)
-	}
-}
-
-func TestSetAdminTransfersRights(cur realm, t *testing.T) {
-	old := admin
-	defer func() { admin = old }()
-	oldAdmin := testutils.TestAddress("old-admin")
-	newAdmin := testutils.TestAddress("new-admin")
-	admin = oldAdmin
-
-	testing.SetRealm(testing.NewUserRealm(oldAdmin))
-	SetAdmin(cross(cur), newAdmin)
-
-	if GetAdmin() != newAdmin {
-		t.Fatalf("admin not transferred; got %v want %v", GetAdmin(), newAdmin)
-	}
-
-	// After transfer admin=newAdmin; closure caller != newAdmin → rejected.
-	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		requireAdmin(cur, "set admin")
-	})
-	if GetAdmin() != newAdmin {
-		t.Error("rejected call must not revert the transfer")
-	}
-}
-
-func TestSetAdminRejectsNonAdmin(cur realm, t *testing.T) {
-	old := admin
-	defer func() { admin = old }()
-	adminAddr := testutils.TestAddress("authorized-admin")
-	admin = adminAddr
-
-	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		requireAdmin(cur, "set admin")
-	})
-	if admin != adminAddr {
-		t.Error("rejected call must not change the admin")
-	}
 }
 
 // --- Integration: channel close ---

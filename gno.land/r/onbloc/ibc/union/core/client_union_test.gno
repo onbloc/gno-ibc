@@ -1,0 +1,180 @@
+package core
+
+import (
+	"testing"
+
+	"gno.land/p/nt/testutils/v0"
+	"gno.land/p/nt/uassert/v0"
+	"gno.land/p/onbloc/ibc/union/types"
+)
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L31-L63
+func TestRegisterClientUnionOk(cur realm, t *testing.T) {
+	resetStore(cur)
+	lc := &mockClient{chainId: "union-1", height: types.NewHeight(1)}
+
+	RegisterClient(cross(cur), mockType, lc)
+
+	if !HasClient(mockType) {
+		t.Fatalf("registered client type not found")
+	}
+	got, ok := store.registeredClient(mockType)
+	if !ok {
+		t.Fatalf("registered client missing from store")
+	}
+	if got != lc {
+		t.Fatalf("registered light client mismatch")
+	}
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L65-L89
+func TestRegisterClientUnionRejectsDuplicate(cur realm, t *testing.T) {
+	resetStore(cur)
+	RegisterClient(cross(cur), mockType, &mockClient{})
+
+	uassert.AbortsContains(t, cur, "client type already exists", func(cur realm) {
+		RegisterClient(cross(cur), mockType, &mockClient{})
+	})
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L91-L125
+func TestCreateClientUnionUsesRegisteredClient(cur realm, t *testing.T) {
+	resetStore(cur)
+	creator := testutils.TestAddress("union-client-creator")
+	relayer := testutils.TestAddress("union-client-relayer")
+	testing.SetRealm(testing.NewUserRealm(creator))
+	lc := &mockClient{
+		chainId: "union-1",
+		height:  types.NewHeight(1),
+		status:  types.StatusActive,
+		creationStorage: map[string][]byte{
+			"create-key": []byte("create-value"),
+		},
+	}
+	RegisterClient(cross(cur), mockType, lc)
+
+	clientId := CreateClient(cross(cur), types.MsgCreateClient{
+		ClientType:          mockType,
+		ClientStateBytes:    []byte("client"),
+		ConsensusStateBytes: []byte("consensus"),
+		Relayer:             relayer.String(),
+	})
+
+	c := store.getClient(clientId)
+	if c == nil {
+		t.Fatalf("client not stored")
+	}
+	if c.creator != creator {
+		t.Fatalf("creator: got %s want %s", c.creator, creator)
+	}
+	if c.lightClient != lc {
+		t.Fatalf("stored light client mismatch")
+	}
+	if QueryClientState(clientId) != "0x636c69656e74" {
+		t.Fatalf("client state not stored")
+	}
+	if QueryConsensusState(clientId, types.NewHeight(1)) != "0x636f6e73656e737573" {
+		t.Fatalf("consensus state not stored at latest height")
+	}
+	if len(lc.creationRelayers) != 1 || lc.creationRelayers[0] != relayer {
+		t.Fatalf("VerifyCreation relayer: got %v want %s", lc.creationRelayers, relayer)
+	}
+	value, ok := c.getClientStore("create-key")
+	if !ok || string(value) != "create-value" {
+		t.Fatalf("creation storage write not saved: got %q found=%v", string(value), ok)
+	}
+}
+
+func TestCreateClientRejectsUnregisteredType(cur realm, t *testing.T) {
+	resetStore(cur)
+
+	uassert.AbortsContains(t, cur, "client type not found", func(cur realm) {
+		CreateClient(cross(cur), types.NewMsgCreateClient(mockType, nil, nil))
+	})
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L194-L265
+func TestUpdateClientUnionMirrorsStateUpdate(cur realm, t *testing.T) {
+	resetStore(cur)
+	relayer := testutils.TestAddress("union-update-relayer")
+	lc := &mockClient{
+		chainId: "union-1",
+		height:  types.NewHeight(1),
+		status:  types.StatusActive,
+		updateStorage: map[string][]byte{
+			"update-key": []byte("update-value"),
+		},
+	}
+	RegisterClient(cross(cur), mockType, lc)
+	clientId := CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("old-client"), []byte("old-consensus")))
+
+	height := UpdateClient(cross(cur), types.MsgUpdateClient{
+		ClientId:      clientId,
+		ClientMessage: []byte("header"),
+		Relayer:       relayer.String(),
+	})
+
+	if height != types.NewHeight(2) {
+		t.Fatalf("updated height: got %s want 2", height.String())
+	}
+	if QueryClientState(clientId) != "0x6373" {
+		t.Fatalf("updated client state not mirrored")
+	}
+	if QueryConsensusState(clientId, types.NewHeight(2)) != "0x636f6e73" {
+		t.Fatalf("updated consensus state not mirrored")
+	}
+	if len(lc.headerMessages) != 1 || string(lc.headerMessages[0]) != "header" {
+		t.Fatalf("header not passed to light client")
+	}
+	if len(lc.headerRelayers) != 1 || lc.headerRelayers[0] != relayer {
+		t.Fatalf("VerifyHeader relayer: got %v want %s", lc.headerRelayers, relayer)
+	}
+	value, ok := store.getClient(clientId).getClientStore("update-key")
+	if !ok || string(value) != "update-value" {
+		t.Fatalf("update storage write not saved: got %q found=%v", string(value), ok)
+	}
+}
+
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L333-L446
+func TestForceUpdateClientUnionMirrorsSubmittedState(cur realm, t *testing.T) {
+	resetStore(cur)
+	adminAddr := testutils.TestAddress("admin")
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	admin = adminAddr
+
+	lc := &mockClient{
+		chainId: "union-1",
+		height:  types.NewHeight(1),
+		status:  types.StatusActive,
+		creationStorage: map[string][]byte{
+			"force-key": []byte("old-force-value"),
+		},
+	}
+	RegisterClient(cross(cur), mockType, lc)
+	clientId := CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("old-client"), []byte("old-consensus")))
+
+	lc.height = types.NewHeight(3)
+	lc.creationStorage = map[string][]byte{
+		"force-key": []byte("force-value"),
+	}
+	height := ForceUpdateClient(cross(cur), types.NewMsgForceUpdateClient(clientId, []byte("force-client"), []byte("force-consensus")))
+
+	if height != types.NewHeight(3) {
+		t.Fatalf("force update height: got %s want 3", height.String())
+	}
+	if QueryClientState(clientId) != "0x666f7263652d636c69656e74" {
+		t.Fatalf("force client state not mirrored")
+	}
+	if QueryConsensusState(clientId, types.NewHeight(3)) != "0x666f7263652d636f6e73656e737573" {
+		t.Fatalf("force consensus state not mirrored")
+	}
+	value, ok := store.getClient(clientId).getClientStore("force-key")
+	if !ok || string(value) != "force-value" {
+		t.Fatalf("force storage write not saved: got %q found=%v", string(value), ok)
+	}
+}

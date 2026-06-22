@@ -10,8 +10,10 @@ import (
 const (
 	AdminChangedEvent          = "AdminChanged"
 	AppRegisteredEvent         = "AppRegistered"
+	RegisterClientEvent        = "RegisterClient"
 	CreateClientEvent          = "CreateClient"
 	UpdateClientEvent          = "UpdateClient"
+	ForceUpdateClientEvent     = "ForceUpdateClient"
 	ConnectionOpenInitEvent    = "ConnectionOpenInit"
 	ConnectionOpenTryEvent     = "ConnectionOpenTry"
 	ConnectionOpenAckEvent     = "ConnectionOpenAck"

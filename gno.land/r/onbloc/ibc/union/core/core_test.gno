@@ -104,7 +104,7 @@ func setChannelOwner(channelId types.ChannelId, portId string) {
 }
 
 func addMockClient(mc *mockClient) *client {
-	return store.addClient(mockType, testutils.TestAddress("mock-client-creator"), mc)
+	return store.addClient(store.nextClientId(), mockType, testutils.TestAddress("mock-client-creator"), mc)
 }
 
 func registerMockClient(mc *mockClient) types.ClientId {
@@ -315,7 +315,7 @@ func TestGetClientNotFoundReturnsNil(cur realm, t *testing.T) {
 func TestGetClientStateReturnsStoredBytes(cur realm, t *testing.T) {
 	resetStore(cur)
 	c := addMockClient(&mockClient{})
-	c.saveState([]byte("client-state"))
+	c.saveClientState([]byte("client-state"))
 
 	got := QueryClientState(c.id)
 	if got != "0x636c69656e742d7374617465" {
@@ -381,7 +381,8 @@ func TestCreateClientBuildsAndStoresObject(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(creatorAddr))
 	mc := &mockClient{chainId: "union-1", height: types.NewHeight(100)}
 
-	clientId := CreateClient(cross(cur), mockType, mc)
+	RegisterClient(cross(cur), mockType, mc)
+	clientId := CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("client-state"), []byte("consensus-state")))
 
 	c := store.getClient(clientId)
 	if c == nil {
@@ -395,6 +396,12 @@ func TestCreateClientBuildsAndStoresObject(cur realm, t *testing.T) {
 	}
 	if c.typ != mockType {
 		t.Fatalf("stored client type mismatch: got %s want %s", c.typ, mockType)
+	}
+	if QueryClientState(clientId) != "0x636c69656e742d7374617465" {
+		t.Fatalf("client state not mirrored from create msg")
+	}
+	if QueryConsensusState(clientId, types.NewHeight(100)) != "0x636f6e73656e7375732d7374617465" {
+		t.Fatalf("consensus state not mirrored at latest height")
 	}
 }
 
@@ -1951,17 +1958,21 @@ func TestForceUpdateClientReplacesObjectAndReturnsHeight(cur realm, t *testing.T
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	admin = adminAddr
 
-	clientId := CreateClient(cross(cur), mockType, &mockClient{height: types.NewHeight(0)})
+	mc := &mockClient{height: types.NewHeight(0)}
+	RegisterClient(cross(cur), mockType, mc)
+	clientId := CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("old-client"), []byte("old-consensus")))
 
-	// The replacement object (built by the caller) reports latest height 1.
-	replacement := &mockClient{height: types.NewHeight(1)}
-	height := ForceUpdateClient(cross(cur), clientId, replacement)
+	mc.height = types.NewHeight(1)
+	height := ForceUpdateClient(cross(cur), types.NewMsgForceUpdateClient(clientId, []byte("new-client"), []byte("new-consensus")))
 
 	if height != types.NewHeight(1) {
 		t.Fatalf("ForceUpdateClient height: got %v want 1", height)
 	}
-	if store.getClient(clientId).lightClient != replacement {
-		t.Fatalf("ForceUpdateClient did not replace the stored client object")
+	if QueryClientState(clientId) != "0x6e65772d636c69656e74" {
+		t.Fatalf("ForceUpdateClient did not mirror replacement client state")
+	}
+	if QueryConsensusState(clientId, types.NewHeight(1)) != "0x6e65772d636f6e73656e737573" {
+		t.Fatalf("ForceUpdateClient did not mirror replacement consensus state")
 	}
 }
 
@@ -1971,7 +1982,7 @@ func TestForceUpdateClientPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	defer func() { admin = "" }()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		ForceUpdateClient(cur, types.ClientId(0), &mockClient{})
+		ForceUpdateClient(cur, types.NewMsgForceUpdateClient(types.ClientId(0), nil, nil))
 	})
 }
 

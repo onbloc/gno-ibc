@@ -7,9 +7,8 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-// mockClient is a lightclient.Interface. Tests build a mockClient and hand it
-// to core.CreateClient directly, then inspect the same object core stores and
-// calls.
+// mockClient is a lightclient.Interface. Tests register a mockClient by type,
+// then inspect the same object core stores and calls.
 type mockClient struct {
 	chainId   string
 	height    types.Height
@@ -26,6 +25,10 @@ type mockClient struct {
 	nonMembershipProofs  [][]byte
 	nonMembershipKeys    [][]byte
 	headerMessages       [][]byte
+	headerRelayers       []address
+	creationRelayers     []address
+	creationStorage      map[string][]byte
+	updateStorage        map[string][]byte
 }
 
 func (m *mockClient) VerifyMembership(height uint64, key, proof, value []byte) error {
@@ -73,18 +76,21 @@ func (m *mockClient) Status() lightclient.Status {
 	}
 }
 
-func (m *mockClient) VerifyHeader(_ address, header []byte, _ address) (types.StateUpdate, error) {
+func (m *mockClient) VerifyHeader(_ address, header []byte, relayer address) (types.StateUpdate, error) {
 	m.headerMessages = append(m.headerMessages, header)
+	m.headerRelayers = append(m.headerRelayers, relayer)
 	m.height = m.height.Increment()
 	return types.StateUpdate{
 		Height:              m.height.RevisionHeight,
 		ClientStateBytes:    []byte("cs"),
 		ConsensusStateBytes: []byte("cons"),
+		StorageWrites:       m.updateStorage,
 	}, nil
 }
 
-func (m *mockClient) VerifyCreation(_ address, _ address) (types.ClientCreationResult, error) {
-	return types.ClientCreationResult{}, nil
+func (m *mockClient) VerifyCreation(_ address, relayer address) (types.ClientCreationResult, error) {
+	m.creationRelayers = append(m.creationRelayers, relayer)
+	return types.ClientCreationResult{StorageWrites: m.creationStorage}, nil
 }
 
 func (m *mockClient) Misbehaviour(_ address, _ []byte, _ address) (types.ClientState, error) {

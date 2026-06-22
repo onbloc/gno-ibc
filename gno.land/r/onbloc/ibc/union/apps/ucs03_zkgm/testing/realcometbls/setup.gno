@@ -73,7 +73,11 @@ func createCometBLSClient(cur realm, clientStateBytes, consensusStateBytes []byt
 	if err != nil {
 		panic(err)
 	}
-	return core.CreateClient(cross(cur), types.ClientType(realcometbls.ClientType), lightClient)
+	clientType := types.ClientType(realcometbls.ClientType)
+	if !core.HasClient(clientType) {
+		core.RegisterClient(cross(cur), clientType, lightClient)
+	}
+	return core.CreateClient(cross(cur), types.NewMsgCreateClient(clientType, clientStateBytes, consensusStateBytes))
 }
 
 func OpenZ35CometBLSChannel(cur realm) ChannelPair {

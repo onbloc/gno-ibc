@@ -38,10 +38,14 @@ func NewChannelPair(cur realm, clientId types.ClientId, connectionId types.Conne
 }
 
 func RegisterMockLightClient(cur realm) {
+	if !core.HasClient(MockClientType) {
+		core.RegisterClient(cross(cur), MockClientType, &MockLightClient{})
+	}
 }
 
 func CreateMockClient(cur realm) types.ClientId {
-	return core.CreateClient(cross(cur), MockClientType, &MockLightClient{})
+	RegisterMockLightClient(cross(cur))
+	return core.CreateClient(cross(cur), types.NewMsgCreateClient(MockClientType, nil, nil))
 }
 
 func OpenE2EChannel(cur realm, counterpartyChannelId types.ChannelId) types.ChannelId {

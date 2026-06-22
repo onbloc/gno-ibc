@@ -12,25 +12,69 @@ func NewConsensusStateUpdate(height types.Height, consensusStateBytes, clientSta
 	return types.ConsensusStateUpdate{Height: height, ConsensusStateBytes: consensusStateBytes, ClientStateBytes: clientStateBytes}
 }
 
-// CreateClient stores a light client object built by the caller (an
-// app/bootstrap realm) and assigns it an id. The object owns its own client and
-// consensus state. This mirrors aib's model of handing core an already-built
-// light client instead of core decoding bytes itself.
-func CreateClient(cur realm, clientType types.ClientType, lc lightclient.Interface) types.ClientId {
-	creator := cur.Previous().Address()
-	c := store.addClient(clientType, creator, lc)
-
-	if _, err := lc.VerifyCreation(creator, creator); err != nil {
-		panic("create client: " + err.Error())
+func RegisterClient(cur realm, clientType types.ClientType, lc lightclient.Interface) {
+	if lc == nil {
+		panic("caller not authorized to register client: unauthorized")
 	}
+	store.registerClient(clientType, lc)
+	chain.Emit(RegisterClientEvent, "client_type", clientType.String())
+}
+
+func HasClient(clientType types.ClientType) bool {
+	return store.hasRegisteredClient(clientType)
+}
+
+// CreateClient assigns a client id for a registered light client type, stores
+// the submitted state bytes, then lets the light client verify creation against
+// that freshly stored state.
+func CreateClient(cur realm, msg types.MsgCreateClient) types.ClientId {
+	creator := cur.Previous().Address()
+	lc, ok := store.registeredClient(msg.ClientType)
+	if !ok {
+		panic("client type not found")
+	}
+	relayer := creator
+	if msg.Relayer != "" {
+		relayer = address(msg.Relayer)
+	}
+
+	clientId := store.nextClientId()
+	c := store.addClient(clientId, msg.ClientType, creator, lc)
+	initClient(creator, msg.ClientStateBytes, msg.ConsensusStateBytes, relayer, clientId)
 
 	chain.Emit(
 		CreateClientEvent,
 		"client_id", c.id.String(),
-		"client_type", clientType.String(),
+		"client_type", msg.ClientType.String(),
+		"counterparty_chain_id", lc.GetCounterpartyChainID(),
 	)
 
 	return c.id
+}
+
+func initClient(caller address, clientStateBytes, consensusStateBytes []byte, relayer address, clientId types.ClientId) types.Height {
+	c := store.getClient(clientId)
+	if c == nil {
+		panic("client " + clientId.String() + " not found")
+	}
+
+	c.saveClientState(clientStateBytes)
+	height := types.NewHeight(c.lightClient.GetLatestHeight())
+	c.saveConsensusState(height, consensusStateBytes)
+
+	result, err := c.lightClient.VerifyCreation(caller, relayer)
+	if err != nil {
+		panic("create client: " + err.Error())
+	}
+
+	if len(result.ClientStateBytes) != 0 {
+		c.saveClientState(result.ClientStateBytes)
+	}
+	for k, v := range result.StorageWrites {
+		c.saveClientStore(k, v)
+	}
+
+	return height
 }
 
 // UpdateClient verifies a client message against the light client object, which
@@ -42,56 +86,61 @@ func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 		panic("client " + msg.ClientId.String() + " not found")
 	}
 
-	caller := cur.Previous().Address()
+	requireActiveClient(c)
 
-	update, err := c.lightClient.VerifyHeader(caller, msg.ClientMessage, caller)
+	caller := cur.Previous().Address()
+	relayer := caller
+	if msg.Relayer != "" {
+		relayer = address(msg.Relayer)
+	}
+
+	update, err := c.lightClient.VerifyHeader(caller, msg.ClientMessage, relayer)
 	if err != nil {
 		panic("update client: " + err.Error())
 	}
 
 	height := types.NewHeight(update.Height)
 	if len(update.ClientStateBytes) != 0 {
-		c.saveState(update.ClientStateBytes)
+		c.saveClientState(update.ClientStateBytes)
 	}
 
 	if len(update.ConsensusStateBytes) != 0 {
 		c.saveConsensusState(height, update.ConsensusStateBytes)
 	}
+	for k, v := range update.StorageWrites {
+		c.saveClientStore(k, v)
+	}
 
 	chain.Emit(
 		UpdateClientEvent,
-		"client_type", c.typ.String(),
 		"client_id", msg.ClientId.String(),
-		"height", height.String(),
+		"counterparty_height", height.String(),
 	)
 
 	return height
 }
 
-// ForceUpdateClient replaces a client's object with a new one built by the
-// caller, bypassing proof verification.
+// ForceUpdateClient re-initializes a client from submitted state bytes,
+// bypassing header proof verification.
 //
 // It is restricted to the admin and recovers expired or otherwise unrecoverable
-// clients. Replacing the object with one the caller constructed from fresh state
-// IS the recovery: the new object owns the new state.
-func ForceUpdateClient(cur realm, clientId types.ClientId, lc lightclient.Interface) types.Height {
+// clients. The registered light client type for the existing client is reused.
+func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) types.Height {
 	requireAdmin(cur, "ForceUpdateClient")
 
-	c := store.getClient(clientId)
+	c := store.getClient(msg.ClientId)
 	if c == nil {
-		panic("client " + clientId.String() + " not found")
+		panic("client " + msg.ClientId.String() + " not found")
 	}
 
 	runtime.AssertOriginCall()
-
-	c.lightClient = lc
-	height := types.NewHeight(lc.GetLatestHeight())
+	caller := cur.Previous().Address()
+	height := initClient(caller, msg.ClientStateBytes, msg.ConsensusStateBytes, caller, msg.ClientId)
 
 	chain.Emit(
-		UpdateClientEvent,
-		"client_type", c.typ.String(),
-		"client_id", clientId.String(),
-		"height", height.String(),
+		ForceUpdateClientEvent,
+		"client_id", msg.ClientId.String(),
+		"counterparty_height", height.String(),
 	)
 
 	return height

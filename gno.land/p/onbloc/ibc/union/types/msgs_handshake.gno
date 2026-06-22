@@ -11,6 +11,7 @@ type MsgCreateClient struct {
 	ClientType          ClientType
 	ClientStateBytes    []byte
 	ConsensusStateBytes []byte
+	Relayer             string
 }
 
 func NewMsgCreateClient(clientType ClientType, clientStateBytes, consensusStateBytes []byte) MsgCreateClient {
@@ -20,6 +21,7 @@ func NewMsgCreateClient(clientType ClientType, clientStateBytes, consensusStateB
 type MsgUpdateClient struct {
 	ClientId      ClientId
 	ClientMessage []byte
+	Relayer       string
 }
 
 func NewMsgUpdateClient(clientId ClientId, clientMessage []byte) MsgUpdateClient {

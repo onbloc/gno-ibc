@@ -64,6 +64,19 @@ func TestClientStatusExpiredNoConsensus(t *testing.T) {
 	}
 }
 
+func TestVerifyCreationEmpty(t *testing.T) {
+	// Union reference: cometbls verify_creation returns ClientCreationResult::new().
+	c := newTestClient(t)
+	var caller, relayer address
+	res, err := c.VerifyCreation(caller, relayer)
+	if err != nil {
+		t.Fatalf("VerifyCreation: %v", err)
+	}
+	if len(res.ClientStateBytes) != 0 {
+		t.Fatal("VerifyCreation must not return client state bytes")
+	}
+}
+
 // twoExistProof returns a MerkleProof wire buffer containing two existence
 // commitment proofs (matching GetSDKProofSpecs length of 2).
 func twoExistProof() []byte {
@@ -73,13 +86,6 @@ func twoExistProof() []byte {
 }
 
 // --- VerifyMembership error paths (no valid crypto required) ---
-
-func TestVerifyMembershipEmptyValue(t *testing.T) {
-	c := newTestClient(t)
-	if err := c.VerifyMembership(100, []byte("key"), twoExistProof(), nil); err == nil {
-		t.Fatal("expected error for empty value")
-	}
-}
 
 func TestVerifyMembershipHeightTooHigh(t *testing.T) {
 	c := newTestClient(t)

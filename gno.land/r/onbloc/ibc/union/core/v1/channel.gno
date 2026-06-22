@@ -16,13 +16,13 @@ func (c *coreV1) ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit)
 	c.ensureConnectionOpen(msg.ConnectionId)
 	channelId := c.store.NextChannelId(0, rlm)
 
-	channel := types.Channel{
-		State:                 types.ChannelStateInit,
-		ConnectionId:          msg.ConnectionId,
-		CounterpartyChannelId: 0,
-		CounterpartyPortId:    types.Bytes(cloneBytes(msg.CounterpartyPortId)),
-		Version:               msg.Version,
-	}
+	channel := core.NewChannel(
+		types.ChannelStateInit,
+		msg.ConnectionId,
+		0,
+		types.Bytes(cloneBytes(msg.CounterpartyPortId)),
+		msg.Version,
+	)
 	c.store.CreateChannel(0, rlm, channelId, channel, portId)
 
 	a, ok := c.store.GetAppByPortId(portId)
@@ -37,6 +37,16 @@ func (c *coreV1) ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit)
 // ChannelOpenTry proves a counterparty Init and opens the local channel in
 // TryOpen, notifying its app.
 func (c *coreV1) ChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry) types.ChannelId {
+	return c.channelOpenTry(0, rlm, msg, true)
+}
+
+// ForceChannelOpenTry is the admin recovery variant of ChannelOpenTry that skips
+// counterparty proof verification.
+func (c *coreV1) ForceChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry) types.ChannelId {
+	return c.channelOpenTry(0, rlm, msg, false)
+}
+
+func (c *coreV1) channelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry, verify bool) types.ChannelId {
 	relayer := rlm.Previous().Address()
 	portId := types.Bytes(cloneBytes(msg.PortId))
 	if msg.Channel.State != types.ChannelStateTryOpen {
@@ -48,16 +58,18 @@ func (c *coreV1) ChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry) t
 	connection := c.ensureConnectionOpen(msg.Channel.ConnectionId)
 	channelId := c.store.NextChannelId(0, rlm)
 
-	expectedChannel := types.Channel{
-		State:                 types.ChannelStateInit,
-		ConnectionId:          connection.CounterpartyConnectionId,
-		CounterpartyChannelId: 0,
-		CounterpartyPortId:    portId,
-		Version:               msg.CounterpartyVersion,
+	if verify {
+		expectedChannel := core.NewChannel(
+			types.ChannelStateInit,
+			connection.CounterpartyConnectionId,
+			0,
+			portId,
+			msg.CounterpartyVersion,
+		)
+		key := types.ChannelPath(msg.Channel.CounterpartyChannelId)
+		value := core.ChannelValue(expectedChannel)
+		c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
 	}
-	key := types.ChannelPath(msg.Channel.CounterpartyChannelId)
-	value := core.ChannelValue(expectedChannel)
-	c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
 
 	c.store.CreateChannel(0, rlm, channelId, msg.Channel, portId)
 
@@ -65,14 +77,27 @@ func (c *coreV1) ChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry) t
 	if !ok {
 		panic("port " + string(portId) + " not found")
 	}
+
 	a.OnChannelOpenTry(cross(rlm), msg.Channel.ConnectionId, channelId, msg.Channel.Version, msg.CounterpartyVersion, relayer)
+
 	core.EmitChannelOpenTry(portId, channelId, msg.Channel, msg.CounterpartyVersion)
+
 	return channelId
 }
 
 // ChannelOpenAck proves the counterparty TryOpen and moves the local Init
 // channel to Open, notifying its app.
 func (c *coreV1) ChannelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck) {
+	c.channelOpenAck(0, rlm, msg, true)
+}
+
+// ForceChannelOpenAck is the admin recovery variant of ChannelOpenAck that skips
+// counterparty proof verification.
+func (c *coreV1) ForceChannelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck) {
+	c.channelOpenAck(0, rlm, msg, false)
+}
+
+func (c *coreV1) channelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck, verify bool) {
 	relayer := rlm.Previous().Address()
 	channel, ok := c.store.GetChannel(msg.ChannelId)
 	if !ok {
@@ -84,70 +109,97 @@ func (c *coreV1) ChannelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck) {
 	connection := c.ensureConnectionOpen(channel.ConnectionId)
 	portId, _ := c.store.GetChannelOwner(msg.ChannelId)
 
-	expectedChannel := types.Channel{
-		State:                 types.ChannelStateTryOpen,
-		ConnectionId:          connection.CounterpartyConnectionId,
-		CounterpartyChannelId: msg.ChannelId,
-		CounterpartyPortId:    portId,
-		Version:               msg.CounterpartyVersion,
+	if verify {
+		expectedChannel := core.NewChannel(
+			types.ChannelStateTryOpen,
+			connection.CounterpartyConnectionId,
+			msg.ChannelId,
+			portId,
+			msg.CounterpartyVersion,
+		)
+		key := types.ChannelPath(msg.CounterpartyChannelId)
+		value := core.ChannelValue(expectedChannel)
+		c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofTry, key[:], value[:])
 	}
-	key := types.ChannelPath(msg.CounterpartyChannelId)
-	value := core.ChannelValue(expectedChannel)
-	c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofTry, key[:], value[:])
 
-	updated := types.Channel{
-		State:                 types.ChannelStateOpen,
-		ConnectionId:          channel.ConnectionId,
-		CounterpartyChannelId: msg.CounterpartyChannelId,
-		CounterpartyPortId:    types.Bytes(cloneBytes(channel.CounterpartyPortId)),
-		Version:               msg.CounterpartyVersion,
-	}
+	updated := core.NewChannel(
+		types.ChannelStateOpen,
+		channel.ConnectionId,
+		msg.CounterpartyChannelId,
+		types.Bytes(cloneBytes(channel.CounterpartyPortId)),
+		msg.CounterpartyVersion,
+	)
 	c.store.SaveChannel(0, rlm, msg.ChannelId, updated)
 
-	a, _ := c.store.GetAppByPortId(portId)
+	a, ok := c.store.GetAppByPortId(portId)
+	if !ok {
+		panic("port " + string(portId) + " not found")
+	}
+
 	a.OnChannelOpenAck(cross(rlm), msg.ChannelId, msg.CounterpartyChannelId, msg.CounterpartyVersion, relayer)
+
 	core.EmitChannelOpenAck(portId, msg.ChannelId, updated)
 }
 
 // ChannelOpenConfirm proves the counterparty Open and moves the local TryOpen
 // channel to Open, notifying its app.
 func (c *coreV1) ChannelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenConfirm) {
+	c.channelOpenConfirm(0, rlm, msg, true)
+}
+
+// ForceChannelOpenConfirm is the admin recovery variant of ChannelOpenConfirm
+// that skips counterparty proof verification.
+func (c *coreV1) ForceChannelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenConfirm) {
+	c.channelOpenConfirm(0, rlm, msg, false)
+}
+
+func (c *coreV1) channelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenConfirm, verify bool) {
 	relayer := rlm.Previous().Address()
 	channel, ok := c.store.GetChannel(msg.ChannelId)
 	if !ok {
 		panic("channel " + msg.ChannelId.String() + " not found")
 	}
+
 	if channel.State != types.ChannelStateTryOpen {
 		panic(core.ErrInvalidChannelState)
 	}
+
 	if channel.CounterpartyChannelId == 0 {
 		panic(core.ErrInvalidCounterpartyChannelId)
 	}
+
 	connection := c.ensureConnectionOpen(channel.ConnectionId)
 	portId, _ := c.store.GetChannelOwner(msg.ChannelId)
 
-	expectedChannel := types.Channel{
-		State:                 types.ChannelStateOpen,
-		ConnectionId:          connection.CounterpartyConnectionId,
-		CounterpartyChannelId: msg.ChannelId,
-		CounterpartyPortId:    portId,
-		Version:               channel.Version,
+	if verify {
+		expectedChannel := core.NewChannel(
+			types.ChannelStateOpen,
+			connection.CounterpartyConnectionId,
+			msg.ChannelId,
+			portId,
+			channel.Version,
+		)
+		key := types.ChannelPath(channel.CounterpartyChannelId)
+		value := core.ChannelValue(expectedChannel)
+		c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofAck, key[:], value[:])
 	}
-	key := types.ChannelPath(channel.CounterpartyChannelId)
-	value := core.ChannelValue(expectedChannel)
-	c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofAck, key[:], value[:])
 
-	updated := types.Channel{
-		State:                 types.ChannelStateOpen,
-		ConnectionId:          channel.ConnectionId,
-		CounterpartyChannelId: channel.CounterpartyChannelId,
-		CounterpartyPortId:    types.Bytes(cloneBytes(channel.CounterpartyPortId)),
-		Version:               channel.Version,
-	}
+	updated := core.NewChannel(
+		types.ChannelStateOpen,
+		channel.ConnectionId,
+		channel.CounterpartyChannelId,
+		types.Bytes(cloneBytes(channel.CounterpartyPortId)),
+		channel.Version,
+	)
 	c.store.SaveChannel(0, rlm, msg.ChannelId, updated)
 
-	a, _ := c.store.GetAppByPortId(portId)
+	a, ok := c.store.GetAppByPortId(portId)
+	if !ok {
+		panic("port " + string(portId) + " not found")
+	}
+
 	a.OnChannelOpenConfirm(cross(rlm), msg.ChannelId, relayer)
+
 	core.EmitChannelOpenConfirm(portId, msg.ChannelId, updated)
 }
 
@@ -158,12 +210,15 @@ func (c *coreV1) ChannelCloseInit(_ int, rlm realm, msg types.MsgChannelCloseIni
 	if !ok {
 		panic("channel " + msg.ChannelId.String() + " not found")
 	}
+
 	if channel.State != types.ChannelStateOpen {
 		panic(core.ErrInvalidChannelState)
 	}
+
 	if channel.CounterpartyChannelId == 0 {
 		panic(core.ErrInvalidCounterpartyChannelId)
 	}
+
 	c.ensureConnectionOpen(channel.ConnectionId)
 	portId, _ := c.store.GetChannelOwner(msg.ChannelId)
 
@@ -183,22 +238,25 @@ func (c *coreV1) ChannelCloseConfirm(_ int, rlm realm, msg types.MsgChannelClose
 	if !ok {
 		panic("channel " + msg.ChannelId.String() + " not found")
 	}
+
 	if channel.State != types.ChannelStateOpen {
 		panic(core.ErrInvalidChannelState)
 	}
+
 	if channel.CounterpartyChannelId == 0 {
 		panic(core.ErrInvalidCounterpartyChannelId)
 	}
+
 	connection := c.ensureConnectionOpen(channel.ConnectionId)
 	portId, _ := c.store.GetChannelOwner(msg.ChannelId)
 
-	expectedChannel := types.Channel{
-		State:                 types.ChannelStateClosed,
-		ConnectionId:          connection.CounterpartyConnectionId,
-		CounterpartyChannelId: msg.ChannelId,
-		CounterpartyPortId:    portId,
-		Version:               channel.Version,
-	}
+	expectedChannel := core.NewChannel(
+		types.ChannelStateClosed,
+		connection.CounterpartyConnectionId,
+		msg.ChannelId,
+		portId,
+		channel.Version,
+	)
 	key := types.ChannelPath(channel.CounterpartyChannelId)
 	value := core.ChannelValue(expectedChannel)
 	c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
@@ -214,11 +272,11 @@ func (c *coreV1) ChannelCloseConfirm(_ int, rlm realm, msg types.MsgChannelClose
 // closedChannel returns a Closed copy of channel without mutating the store-owned
 // value.
 func (c *coreV1) closedChannel(channel types.Channel) types.Channel {
-	return types.Channel{
-		State:                 types.ChannelStateClosed,
-		ConnectionId:          channel.ConnectionId,
-		CounterpartyChannelId: channel.CounterpartyChannelId,
-		CounterpartyPortId:    types.Bytes(cloneBytes(channel.CounterpartyPortId)),
-		Version:               channel.Version,
-	}
+	return core.NewChannel(
+		types.ChannelStateClosed,
+		channel.ConnectionId,
+		channel.CounterpartyChannelId,
+		types.Bytes(cloneBytes(channel.CounterpartyPortId)),
+		channel.Version,
+	)
 }

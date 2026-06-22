@@ -17,7 +17,13 @@ type ChannelPair struct {
 	Destination  types.ChannelId
 }
 
+var testClientSeq uint32
 var testConnectionSeq uint32
+
+func nextTestClientId() types.ClientId {
+	testClientSeq++
+	return types.ClientId(testClientSeq)
+}
 
 func nextTestConnectionId() types.ConnectionId {
 	testConnectionSeq++
@@ -73,7 +79,13 @@ func createCometBLSClient(cur realm, clientStateBytes, consensusStateBytes []byt
 	if err != nil {
 		panic(err)
 	}
-	return core.CreateClient(cross(cur), types.ClientType(realcometbls.ClientType), lightClient)
+	clientType := types.ClientType(realcometbls.ClientType)
+	if !core.HasClient(clientType) {
+		core.RegisterClient(cross(cur), clientType, lightClient)
+	}
+	clientId := nextTestClientId()
+	core.CreateClient(cross(cur), types.NewMsgCreateClient(clientType, clientStateBytes, consensusStateBytes))
+	return clientId
 }
 
 func OpenZ35CometBLSChannel(cur realm) ChannelPair {
@@ -125,9 +137,11 @@ func OpenZ37CometBLSChannel(cur realm) ChannelPair {
 }
 
 func UpdateRealCometBLSClient(cur realm, clientId types.ClientId) types.Height {
-	return core.UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, HeaderBytes(cross(cur))))
+	core.UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, HeaderBytes(cross(cur))))
+	return types.NewHeight(core.GetLatestHeight(clientId))
 }
 
 func UpdateRealCometBLSClientWithTamperedHeader(cur realm, clientId types.ClientId) types.Height {
-	return core.UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, TamperedHeaderBytes(cross(cur))))
+	core.UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, TamperedHeaderBytes(cross(cur))))
+	return types.NewHeight(core.GetLatestHeight(clientId))
 }

@@ -80,7 +80,7 @@ func main(cur realm) {
 	ackMsg := types.NewMsgPacketAcknowledgement([]types.Packet{packet}, [][]byte{ack}, nil, 1)
 
 	// This file exercises core idempotency only. BatchSend plants the packet
-	// commitment directly and intentionally bypasses the send-side voucher burn.
+	// commitment directly and intentionally bypasses the send-side voucher escrow.
 	println("[SCENARIO] 1. first ack settles")
 	e2e.BatchSend(cross(cur), packet)
 	core.PacketAcknowledgement(cross(cur), ackMsg)
@@ -115,7 +115,8 @@ func openTimeoutScenarioChannelPair(cur realm) e2e.ChannelPair {
 	if !core.HasClient(timeoutScenarioClientType) {
 		core.RegisterClient(cross(cur), timeoutScenarioClientType, &timeoutScenarioLightClient{})
 	}
-	clientId := core.CreateClient(cross(cur), types.NewMsgCreateClient(timeoutScenarioClientType, nil, nil))
+	core.CreateClient(cross(cur), types.NewMsgCreateClient(timeoutScenarioClientType, nil, nil))
+	clientId := types.ClientId(1)
 	connectionId := types.ConnectionId(1)
 	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))

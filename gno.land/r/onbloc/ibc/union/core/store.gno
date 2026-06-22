@@ -25,8 +25,9 @@ func init() {
 // retrieves, mirroring commitment values into chain params so counterparties
 // can prove them.
 type Store struct {
-	clientSeq  seqid.ID
-	clientByID *bptree.BPTree // clientKey(ClientId) → *client
+	clientSeq          seqid.ID
+	clientByID         *bptree.BPTree // clientKey(ClientId) → *client
+	clientRegistryByTy map[string]lightclient.Interface
 
 	connectionSeq seqid.ID
 	connections   *bptree.BPTree // connectionKey(ConnectionId) → types.Connection
@@ -53,6 +54,11 @@ type client struct {
 	lightClient       lightclient.Interface
 	clientState       []byte
 	consensusByHeight *bptree.BPTree // string(height.Bytes()) → []byte
+	// clientStore holds the light client's own key/value storage writes
+	// (lightclient result StorageWrites). It stays per-client because the keys
+	// are opaque to the host; the flat commitment map only covers host-derived
+	// commitment paths.
+	clientStore map[string][]byte
 }
 
 type channelEntry struct {
@@ -63,6 +69,7 @@ type channelEntry struct {
 func newStore() *Store {
 	return &Store{
 		clientByID:          bptree.NewBPTree32(),
+		clientRegistryByTy:  make(map[string]lightclient.Interface),
 		connections:         bptree.NewBPTree32(),
 		channels:            bptree.NewBPTree32(),
 		commitments:         make(map[types.H256]types.H256),
@@ -79,9 +86,39 @@ func newStore() *Store {
 // context.
 var _ IStore = (*Store)(nil)
 
-// AddClient allocates a new client for the light client object and returns its id.
+// RegisterClient records the light client object for a client type, panicking
+// when the type is already registered.
+func (s *Store) RegisterClient(_ int, rlm realm, typ types.ClientType, lc lightclient.Interface) {
+	s.registerClient(typ, lc)
+}
+
+// RegisteredClient returns the light client object registered for a client type.
+func (s *Store) RegisteredClient(typ types.ClientType) (lightclient.Interface, bool) {
+	return s.registeredClient(typ)
+}
+
+// HasRegisteredClient reports whether a light client is registered for a type.
+func (s *Store) HasRegisteredClient(typ types.ClientType) bool {
+	return s.hasRegisteredClient(typ)
+}
+
+// AddClient allocates a new client id and stores the light client object,
+// returning the assigned id.
 func (s *Store) AddClient(_ int, rlm realm, typ types.ClientType, creator address, lc lightclient.Interface) types.ClientId {
-	return s.addClient(typ, creator, lc).id
+	return s.addClient(s.nextClientId(), typ, creator, lc).id
+}
+
+// SaveClientStore records a light client storage write (result StorageWrites),
+// returning false when the client is unknown.
+func (s *Store) SaveClientStore(_ int, rlm realm, clientId types.ClientId, key string, value []byte) bool {
+	c := s.getClient(clientId)
+	if c == nil {
+		return false
+	}
+
+	c.saveClientStore(key, value)
+
+	return true
 }
 
 // ClientExists reports whether a client is registered under clientId.
@@ -125,7 +162,7 @@ func (s *Store) SaveClientState(_ int, rlm realm, clientId types.ClientId, clien
 		return false
 	}
 
-	c.saveState(clientStateBytes)
+	c.saveClientState(clientStateBytes)
 
 	return true
 }
@@ -210,7 +247,11 @@ func (s *Store) HasApp(portId types.Bytes) bool {
 // RegisterAppAtPort installs an app at portId, panicking if one is already
 // registered there.
 func (s *Store) RegisterAppAtPort(_ int, rlm realm, portId types.Bytes, a app.IApp) {
-	registerAppAtPort([]byte(portId), a)
+	key := portKey(portId)
+	if _, ok := s.ports[key]; ok {
+		panic("port " + string(portId) + " already registered")
+	}
+	s.ports[key] = a
 }
 
 // HasPacketCommitment reports whether the source-side packet commitment exists.
@@ -361,7 +402,7 @@ func (s *Store) getCommitment(path types.H256) (types.H256, bool) {
 
 // --- Client state ---
 
-func (c *client) saveState(clientStateBytes []byte) {
+func (c *client) saveClientState(clientStateBytes []byte) {
 	c.clientState = cloneBytes(clientStateBytes)
 	setChainParam(h256ChainParamKey(types.ClientStatePath(c.id)), h256Bytes(keccak(clientStateBytes)))
 }
@@ -377,6 +418,20 @@ func (c *client) getConsensusState(height types.Height) ([]byte, bool) {
 		return nil, false
 	}
 	return cloneBytes(v.([]byte)), true
+}
+
+// --- Client store (light client storage writes) ---
+
+func (c *client) saveClientStore(key string, value []byte) {
+	c.clientStore[key] = cloneBytes(value)
+}
+
+func (c *client) getClientStore(key string) ([]byte, bool) {
+	v, found := c.clientStore[key]
+	if !found {
+		return nil, false
+	}
+	return cloneBytes(v), true
 }
 
 // --- Committed proofs (global paths) ---
@@ -417,19 +472,41 @@ func (s *Store) nextChannelId() types.ChannelId {
 	return types.ChannelId(uint32(s.channelSeq.Next()))
 }
 
+func (s *Store) nextClientId() types.ClientId {
+	return types.ClientId(uint32(s.clientSeq.Next()))
+}
+
 // --- Client ---
 
-func (s *Store) addClient(typ types.ClientType, creator address, lc lightclient.Interface) *client {
-	clientId := types.ClientId(uint32(s.clientSeq.Next()))
+func (s *Store) addClient(clientId types.ClientId, typ types.ClientType, creator address, lc lightclient.Interface) *client {
 	c := &client{
 		id:                clientId,
 		typ:               typ,
 		creator:           creator,
 		lightClient:       lc,
 		consensusByHeight: bptree.NewBPTree32(),
+		clientStore:       make(map[string][]byte),
 	}
 	s.clientByID.Set(clientKey(clientId), c)
 	return c
+}
+
+func (s *Store) registerClient(typ types.ClientType, lc lightclient.Interface) {
+	key := typ.String()
+	if _, ok := s.clientRegistryByTy[key]; ok {
+		panic("client type already exists")
+	}
+	s.clientRegistryByTy[key] = lc
+}
+
+func (s *Store) registeredClient(typ types.ClientType) (lightclient.Interface, bool) {
+	lc, ok := s.clientRegistryByTy[typ.String()]
+	return lc, ok
+}
+
+func (s *Store) hasRegisteredClient(typ types.ClientType) bool {
+	_, ok := s.clientRegistryByTy[typ.String()]
+	return ok
 }
 
 func (s *Store) getClient(clientId types.ClientId) *client {

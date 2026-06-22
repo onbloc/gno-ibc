@@ -29,6 +29,12 @@ func (bz Bytes) String() string {
 	return "0x" + hex.EncodeToString(bz)
 }
 
+func (bz Bytes) Bytes() []byte {
+	out := make([]byte, len(bz))
+	copy(out, bz)
+	return []byte(out)
+}
+
 type H256 [32]byte
 
 func (h H256) String() string {

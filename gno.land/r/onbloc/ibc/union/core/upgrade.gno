@@ -17,7 +17,7 @@ func UpdateImpl(cur realm, target ICore) {
 	if target == nil {
 		panic("core: impl cannot be nil")
 	}
-	target.SetStore(0, cur, store)
+
 	impl = target
 }
 

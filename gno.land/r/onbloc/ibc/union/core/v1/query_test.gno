@@ -12,7 +12,7 @@ import (
 func TestQueryClientGetters(cur realm, t *testing.T) {
 	v := newTestImpl()
 	lc := &mockLightClient{latestHeight: 42, timestampAtHt: types.Timestamp(123)}
-	clientId := v.CreateClient(0, cur, types.ClientType("cometbls"), lc)
+	clientId := createClient(cur, v, lc, nil, nil)
 	v.UpdateClient(0, cur, types.MsgUpdateClient{
 		ClientId:      clientId,
 		ClientMessage: []byte("h"),
@@ -62,7 +62,7 @@ func TestQueryMissingClient(cur realm, t *testing.T) {
 
 func TestQueryFrozenStatus(cur realm, t *testing.T) {
 	v := newTestImpl()
-	clientId := v.CreateClient(0, cur, types.ClientType("cometbls"), &mockLightClient{status: lightclient.Frozen})
+	clientId := createClient(cur, v, &mockLightClient{status: lightclient.Frozen}, nil, nil)
 
 	uassert.True(t, v.GetStatus(clientId) == types.StatusFrozen)
 }

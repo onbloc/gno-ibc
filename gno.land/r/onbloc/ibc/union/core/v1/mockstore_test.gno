@@ -18,11 +18,13 @@ type mockClient struct {
 	lc          lightclient.Interface
 	clientState []byte
 	consensus   map[string][]byte // height.String() -> consensus bytes
+	clientStore map[string][]byte // light client storage writes
 }
 
 type mockStore struct {
 	seq           uint32
 	clients       map[uint32]*mockClient
+	registry      map[string]lightclient.Interface // client type -> registered light client
 	connSeq       uint32
 	connections   map[uint32]types.Connection
 	chanSeq       uint32
@@ -40,6 +42,7 @@ var _ core.IStore = (*mockStore)(nil)
 func newMockStore() *mockStore {
 	return &mockStore{
 		clients:       map[uint32]*mockClient{},
+		registry:      map[string]lightclient.Interface{},
 		connections:   map[uint32]types.Connection{},
 		channels:      map[uint32]types.Channel{},
 		channelOwners: map[uint32]types.Bytes{},
@@ -148,11 +151,38 @@ func newTestImpl() *coreV1 {
 	return &coreV1{store: newMockStore()}
 }
 
+func (m *mockStore) RegisterClient(_ int, rlm realm, typ types.ClientType, lc lightclient.Interface) {
+	key := typ.String()
+	if _, ok := m.registry[key]; ok {
+		panic("client type already exists")
+	}
+	m.registry[key] = lc
+}
+
+func (m *mockStore) RegisteredClient(typ types.ClientType) (lightclient.Interface, bool) {
+	lc, ok := m.registry[typ.String()]
+	return lc, ok
+}
+
+func (m *mockStore) HasRegisteredClient(typ types.ClientType) bool {
+	_, ok := m.registry[typ.String()]
+	return ok
+}
+
 func (m *mockStore) AddClient(_ int, rlm realm, typ types.ClientType, creator address, lc lightclient.Interface) types.ClientId {
 	m.seq++
 	id := m.seq
-	m.clients[id] = &mockClient{typ: typ, creator: creator, lc: lc, consensus: map[string][]byte{}}
+	m.clients[id] = &mockClient{typ: typ, creator: creator, lc: lc, consensus: map[string][]byte{}, clientStore: map[string][]byte{}}
 	return types.ClientId(id)
+}
+
+func (m *mockStore) SaveClientStore(_ int, rlm realm, clientId types.ClientId, key string, value []byte) bool {
+	c, ok := m.clients[uint32(clientId)]
+	if !ok {
+		return false
+	}
+	c.clientStore[key] = value
+	return true
 }
 
 func (m *mockStore) ClientExists(clientId types.ClientId) bool {

@@ -61,12 +61,13 @@ func TestCreateClientUnionUsesRegisteredClient(cur realm, t *testing.T) {
 	}
 	RegisterClient(cross(cur), mockType, lc)
 
-	clientId := CreateClient(cross(cur), types.MsgCreateClient{
+	CreateClient(cross(cur), types.MsgCreateClient{
 		ClientType:          mockType,
 		ClientStateBytes:    []byte("client"),
 		ConsensusStateBytes: []byte("consensus"),
 		Relayer:             ignoredRelayer.String(),
 	})
+	clientId := types.ClientId(1)
 
 	c := store.getClient(clientId)
 	if c == nil {
@@ -112,16 +113,17 @@ func TestUpdateClientUnionMirrorsStateUpdate(cur realm, t *testing.T) {
 		},
 	}
 	RegisterClient(cross(cur), mockType, lc)
-	clientId := CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("old-client"), []byte("old-consensus")))
+	CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("old-client"), []byte("old-consensus")))
+	clientId := types.ClientId(1)
 
-	height := UpdateClient(cross(cur), types.MsgUpdateClient{
+	UpdateClient(cross(cur), types.MsgUpdateClient{
 		ClientId:      clientId,
 		ClientMessage: []byte("header"),
 		Relayer:       ignoredRelayer.String(),
 	})
 
-	if height != types.NewHeight(2) {
-		t.Fatalf("updated height: got %s want 2", height.String())
+	if got := GetLatestHeight(clientId); got != 2 {
+		t.Fatalf("updated height: got %d want 2", got)
 	}
 	if queryClientStateHex(clientId) != "0x6373" {
 		t.Fatalf("updated client state not mirrored")
@@ -151,7 +153,8 @@ func TestUpdateClientUnionRejectsLightClientUpdateError(cur realm, t *testing.T)
 		status:  types.StatusActive,
 	}
 	RegisterClient(cross(cur), mockType, lc)
-	clientId := CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("old-client"), []byte("old-consensus")))
+	CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("old-client"), []byte("old-consensus")))
+	clientId := types.ClientId(1)
 
 	lc.updateErr = errors.New("union update failed")
 
@@ -182,16 +185,17 @@ func TestForceUpdateClientUnionMirrorsSubmittedState(cur realm, t *testing.T) {
 		},
 	}
 	RegisterClient(cross(cur), mockType, lc)
-	clientId := CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("old-client"), []byte("old-consensus")))
+	CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("old-client"), []byte("old-consensus")))
+	clientId := types.ClientId(1)
 
 	lc.height = types.NewHeight(3)
 	lc.creationStorage = map[string][]byte{
 		"force-key": []byte("force-value"),
 	}
-	height := ForceUpdateClient(cross(cur), types.NewMsgForceUpdateClient(clientId, []byte("force-client"), []byte("force-consensus")))
+	ForceUpdateClient(cross(cur), types.NewMsgForceUpdateClient(clientId, []byte("force-client"), []byte("force-consensus")))
 
-	if height != types.NewHeight(3) {
-		t.Fatalf("force update height: got %s want 3", height.String())
+	if got := GetLatestHeight(clientId); got != 3 {
+		t.Fatalf("force update height: got %d want 3", got)
 	}
 	if queryClientStateHex(clientId) != "0x666f7263652d636c69656e74" {
 		t.Fatalf("force client state not mirrored")

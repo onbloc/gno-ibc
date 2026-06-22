@@ -30,7 +30,7 @@ func HasClient(clientType types.ClientType) bool {
 // Union references:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L867-L903
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L905-L972
-func CreateClient(cur realm, msg types.MsgCreateClient) types.ClientId {
+func CreateClient(cur realm, msg types.MsgCreateClient) {
 	creator := cur.Previous().Address()
 	lc, ok := store.registeredClient(msg.ClientType)
 	if !ok {
@@ -42,8 +42,6 @@ func CreateClient(cur realm, msg types.MsgCreateClient) types.ClientId {
 	initClient(creator, msg.ClientStateBytes, msg.ConsensusStateBytes, creator, clientId)
 
 	emitCreateClientEvent(c.id, msg.ClientType, lc.GetCounterpartyChainID())
-
-	return c.id
 }
 
 func initClient(caller address, clientStateBytes, consensusStateBytes []byte, relayer address, clientId types.ClientId) types.Height {
@@ -77,7 +75,7 @@ func initClient(caller address, clientStateBytes, consensusStateBytes []byte, re
 //
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L975-L1046
-func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
+func UpdateClient(cur realm, msg types.MsgUpdateClient) {
 	c := store.getClient(msg.ClientId)
 	if c == nil {
 		panic("client " + msg.ClientId.String() + " not found")
@@ -102,8 +100,6 @@ func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 	}
 
 	emitUpdateClientEvent(msg.ClientId, height)
-
-	return height
 }
 
 // ForceUpdateClient re-initializes a client from submitted state bytes,
@@ -115,7 +111,7 @@ func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 // Union references:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L146-L166
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L905-L972
-func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) types.Height {
+func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) {
 	requireAdmin(cur, "ForceUpdateClient")
 
 	c := store.getClient(msg.ClientId)
@@ -128,8 +124,6 @@ func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) types.Height {
 	height := initClient(caller, msg.ClientStateBytes, msg.ConsensusStateBytes, caller, msg.ClientId)
 
 	emitForceUpdateClientEvent(msg.ClientId, height)
-
-	return height
 }
 
 func requireActiveClient(c *client) {

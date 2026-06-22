@@ -354,11 +354,12 @@ func main() {
 		panic(err)
 	}
 
-	clientID := core.CreateClient(cross, types.MsgCreateClient{
+	core.CreateClient(cross, types.MsgCreateClient{
 		ClientType:          cometbls.ClientType,
 		ClientStateBytes:    clientState,
 		ConsensusStateBytes: consensusState,
 	})
+	clientID := types.ClientId(1)
 	println("CreateClient", clientID.String())
 }
 EOF
@@ -409,7 +410,7 @@ func main() {
 		panic(err)
 	}
 
-	clientID := core.CreateClient(cross, types.MsgCreateClient{
+	core.CreateClient(cross, types.MsgCreateClient{
 		ClientType: statelens.ClientType,
 		ClientStateBytes: statelensp.EncodeClientState(statelensp.ClientState{
 			L2ChainID:         "local-l2",
@@ -422,6 +423,7 @@ func main() {
 		}),
 		ConsensusStateBytes: consensusState,
 	})
+	clientID := types.ClientId(1)
 	println("CreateStateLensClient", clientID.String())
 }
 EOF
@@ -506,11 +508,11 @@ func main() {
 		panic(err)
 	}
 
-	height := core.UpdateClient(cross, types.MsgUpdateClient{
+	core.UpdateClient(cross, types.MsgUpdateClient{
 		ClientId:      types.ClientId(1),
 		ClientMessage: msg,
 	})
-	println("UpdateClient", height.String())
+	println("UpdateClient", core.GetLatestHeight(types.ClientId(1)))
 }
 EOF
 

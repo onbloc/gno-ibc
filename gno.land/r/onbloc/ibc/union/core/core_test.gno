@@ -416,7 +416,8 @@ func TestCreateClientBuildsAndStoresObject(cur realm, t *testing.T) {
 	mc := &mockClient{chainId: "union-1", height: types.NewHeight(100)}
 
 	RegisterClient(cross(cur), mockType, mc)
-	clientId := CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("client-state"), []byte("consensus-state")))
+	CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("client-state"), []byte("consensus-state")))
+	clientId := types.ClientId(1)
 
 	c := store.getClient(clientId)
 	if c == nil {
@@ -1986,7 +1987,7 @@ func TestGetStatusReturnsUnknownForMissingClient(cur realm, t *testing.T) {
 
 // --- ForceUpdateClient ---
 
-func TestForceUpdateClientReplacesObjectAndReturnsHeight(cur realm, t *testing.T) {
+func TestForceUpdateClientReinitializesSubmittedState(cur realm, t *testing.T) {
 	resetStore(cur)
 	adminAddr := testutils.TestAddress("admin")
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
@@ -1994,13 +1995,14 @@ func TestForceUpdateClientReplacesObjectAndReturnsHeight(cur realm, t *testing.T
 
 	mc := &mockClient{height: types.NewHeight(0)}
 	RegisterClient(cross(cur), mockType, mc)
-	clientId := CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("old-client"), []byte("old-consensus")))
+	CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("old-client"), []byte("old-consensus")))
+	clientId := types.ClientId(1)
 
 	mc.height = types.NewHeight(1)
-	height := ForceUpdateClient(cross(cur), types.NewMsgForceUpdateClient(clientId, []byte("new-client"), []byte("new-consensus")))
+	ForceUpdateClient(cross(cur), types.NewMsgForceUpdateClient(clientId, []byte("new-client"), []byte("new-consensus")))
 
-	if height != types.NewHeight(1) {
-		t.Fatalf("ForceUpdateClient height: got %v want 1", height)
+	if got := GetLatestHeight(clientId); got != 1 {
+		t.Fatalf("ForceUpdateClient height: got %d want 1", got)
 	}
 	if queryClientStateHex(clientId) != "0x6e65772d636c69656e74" {
 		t.Fatalf("ForceUpdateClient did not mirror replacement client state")

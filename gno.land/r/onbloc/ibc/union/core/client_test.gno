@@ -26,14 +26,15 @@ func TestUpdateClientStoresEmptyConsensusState(cur realm, t *testing.T) {
 		updateConsensusStateBytes: []byte{},
 	}
 	RegisterClient(cross(cur), mockType, lc)
-	clientId := CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("old-client"), []byte("old-consensus")))
+	CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("old-client"), []byte("old-consensus")))
+	clientId := types.ClientId(1)
 
-	height := UpdateClient(cross(cur), types.MsgUpdateClient{
+	UpdateClient(cross(cur), types.MsgUpdateClient{
 		ClientId:      clientId,
 		ClientMessage: []byte("header"),
 	})
 
-	bz, ok := store.getClient(clientId).getConsensusState(height)
+	bz, ok := store.getClient(clientId).getConsensusState(types.NewHeight(2))
 	if !ok {
 		t.Fatalf("empty consensus state was not stored")
 	}

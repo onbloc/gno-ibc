@@ -13,7 +13,13 @@ import (
 
 var Relayer = address("g1relayer")
 
+var testClientSeq uint32
 var testConnectionSeq uint32
+
+func nextTestClientId() types.ClientId {
+	testClientSeq++
+	return types.ClientId(testClientSeq)
+}
 
 func nextTestConnectionId() types.ConnectionId {
 	testConnectionSeq++
@@ -45,7 +51,9 @@ func RegisterMockLightClient(cur realm) {
 
 func CreateMockClient(cur realm) types.ClientId {
 	RegisterMockLightClient(cross(cur))
-	return core.CreateClient(cross(cur), types.NewMsgCreateClient(MockClientType, nil, nil))
+	clientId := nextTestClientId()
+	core.CreateClient(cross(cur), types.NewMsgCreateClient(MockClientType, nil, nil))
+	return clientId
 }
 
 func OpenE2EChannel(cur realm, counterpartyChannelId types.ChannelId) types.ChannelId {

@@ -130,6 +130,38 @@ func connectionOpenEventAttrs(connectionId types.ConnectionId, clientId types.Cl
 	}
 }
 
+func emitRegisterClientEvent(clientType types.ClientType) {
+	chain.Emit(
+		RegisterClientEvent,
+		"client_type", clientType.String(),
+	)
+}
+
+func emitCreateClientEvent(clientId types.ClientId, clientType types.ClientType, counterpartyChainId string) {
+	chain.Emit(
+		CreateClientEvent,
+		"client_id", clientId.String(),
+		"client_type", clientType.String(),
+		"counterparty_chain_id", counterpartyChainId,
+	)
+}
+
+func emitUpdateClientEvent(clientId types.ClientId, counterpartyHeight types.Height) {
+	chain.Emit(
+		UpdateClientEvent,
+		"client_id", clientId.String(),
+		"counterparty_height", counterpartyHeight.String(),
+	)
+}
+
+func emitForceUpdateClientEvent(clientId types.ClientId, counterpartyHeight types.Height) {
+	chain.Emit(
+		ForceUpdateClientEvent,
+		"client_id", clientId.String(),
+		"counterparty_height", counterpartyHeight.String(),
+	)
+}
+
 func emitAdminChangedEvent(oldAdmin address, newAdmin address) {
 	chain.Emit(
 		AdminChangedEvent,

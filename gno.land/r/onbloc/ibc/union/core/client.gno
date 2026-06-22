@@ -1,7 +1,6 @@
 package core
 
 import (
-	"chain"
 	"chain/runtime"
 
 	"gno.land/p/onbloc/ibc/union/lightclient"
@@ -17,7 +16,7 @@ func RegisterClient(cur realm, clientType types.ClientType, lc lightclient.Inter
 		panic("caller not authorized to register client: unauthorized")
 	}
 	store.registerClient(clientType, lc)
-	chain.Emit(RegisterClientEvent, "client_type", clientType.String())
+	emitRegisterClientEvent(clientType)
 }
 
 func HasClient(clientType types.ClientType) bool {
@@ -42,12 +41,7 @@ func CreateClient(cur realm, msg types.MsgCreateClient) types.ClientId {
 	c := store.addClient(clientId, msg.ClientType, creator, lc)
 	initClient(creator, msg.ClientStateBytes, msg.ConsensusStateBytes, relayer, clientId)
 
-	chain.Emit(
-		CreateClientEvent,
-		"client_id", c.id.String(),
-		"client_type", msg.ClientType.String(),
-		"counterparty_chain_id", lc.GetCounterpartyChainID(),
-	)
+	emitCreateClientEvent(c.id, msg.ClientType, lc.GetCounterpartyChainID())
 
 	return c.id
 }
@@ -111,11 +105,7 @@ func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 		c.saveClientStore(k, v)
 	}
 
-	chain.Emit(
-		UpdateClientEvent,
-		"client_id", msg.ClientId.String(),
-		"counterparty_height", height.String(),
-	)
+	emitUpdateClientEvent(msg.ClientId, height)
 
 	return height
 }
@@ -137,11 +127,7 @@ func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) types.Height {
 	caller := cur.Previous().Address()
 	height := initClient(caller, msg.ClientStateBytes, msg.ConsensusStateBytes, caller, msg.ClientId)
 
-	chain.Emit(
-		ForceUpdateClientEvent,
-		"client_id", msg.ClientId.String(),
-		"counterparty_height", height.String(),
-	)
+	emitForceUpdateClientEvent(msg.ClientId, height)
 
 	return height
 }

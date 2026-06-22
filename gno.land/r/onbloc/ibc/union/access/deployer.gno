@@ -26,7 +26,7 @@ func resetAccess(initialAdmin address) {
 	// RELAYER membership is separate deployer policy in Union and is granted by
 	// GrantRole, not by AccessManager initialization:
 	// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L1143-L1152
-	grantRoleUnchecked(manager.AdminRole, initialAdmin)
+	accessState.GrantRole(manager.AdminRole, initialAdmin, 0)
 	setupRoles()
 }
 

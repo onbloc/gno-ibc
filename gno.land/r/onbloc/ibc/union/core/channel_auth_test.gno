@@ -9,16 +9,15 @@ import (
 	"gno.land/r/onbloc/ibc/union/access"
 )
 
-const deniedRole manager.RoleId = 99
-
 func denySelectorForTest(cur realm, selector manager.Selector) manager.RoleId {
 	previousRole := access.GetFunctionRole(cross(cur), selector)
-	access.SetFunctionRole(cross(cur), selector, deniedRole)
+	if previousRole == manager.PublicRole {
+		panic("test selector must not be public")
+	}
 	return previousRole
 }
 
 func restoreSelectorForTest(cur realm, selector manager.Selector, role manager.RoleId) {
-	access.SetFunctionRole(cross(cur), selector, role)
 }
 
 func TestChannelOpenInitPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {

@@ -132,23 +132,8 @@ func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) types.Height {
 	return height
 }
 
-// statusToTypes maps the light client object's status (a string) to the core
-// status enum.
-func statusToTypes(s lightclient.Status) types.Status {
-	switch s {
-	case lightclient.Active:
-		return types.StatusActive
-	case lightclient.Expired:
-		return types.StatusExpired
-	case lightclient.Frozen:
-		return types.StatusFrozen
-	default:
-		return types.StatusUnknown
-	}
-}
-
 func requireActiveClient(c *client) {
-	if statusToTypes(c.lightClient.Status()) != types.StatusActive {
+	if c.lightClient.Status().ToType() != types.StatusActive {
 		panic(ErrClientNotActive)
 	}
 }
@@ -247,7 +232,7 @@ func GetStatus(clientId types.ClientId) types.Status {
 		return types.StatusUnknown
 	}
 
-	return statusToTypes(c.lightClient.Status())
+	return c.lightClient.Status().ToType()
 }
 
 // GetClientType returns the registered client type for clientId.

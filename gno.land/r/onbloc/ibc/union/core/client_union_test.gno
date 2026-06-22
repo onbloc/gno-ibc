@@ -44,6 +44,8 @@ func TestRegisterClientUnionRejectsDuplicate(cur realm, t *testing.T) {
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L91-L125
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L127-L190
 // Gno intentionally ignores msg.Relayer and passes the caller as relayer.
+// The mock storage write exercises Union core's generic storage_writes loop;
+// current CometBLS and StateLens clients do not emit these writes.
 func TestCreateClientUnionUsesRegisteredClient(cur realm, t *testing.T) {
 	resetStore(cur)
 	creator := testutils.TestAddress("union-client-creator")
@@ -95,6 +97,8 @@ func TestCreateClientUnionUsesRegisteredClient(cur realm, t *testing.T) {
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L194-L265
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L448-L548
 // Gno intentionally ignores msg.Relayer and passes the caller as relayer.
+// The mock storage write exercises Union core's generic storage_writes loop;
+// current CometBLS and StateLens clients do not emit these writes.
 func TestUpdateClientUnionMirrorsStateUpdate(cur realm, t *testing.T) {
 	resetStore(cur)
 	ignoredRelayer := testutils.TestAddress("ignored-relayer")
@@ -161,6 +165,8 @@ func TestUpdateClientUnionRejectsLightClientUpdateError(cur realm, t *testing.T)
 
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L333-L446
+// The mock storage write exercises Union core's generic storage_writes loop;
+// current CometBLS and StateLens clients do not emit these writes.
 func TestForceUpdateClientUnionMirrorsSubmittedState(cur realm, t *testing.T) {
 	resetStore(cur)
 	adminAddr := testutils.TestAddress("admin")

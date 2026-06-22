@@ -2,7 +2,7 @@ package lightclient
 
 import "gno.land/p/onbloc/ibc/union/types"
 
-type Status = string
+type Status string
 
 const (
 	Active Status = "Active"
@@ -15,6 +15,19 @@ const (
 
 	Unauthorized Status = "Unauthorized"
 )
+
+func (s Status) ToType() types.Status {
+	switch s {
+	case Active:
+		return types.StatusActive
+	case Expired:
+		return types.StatusExpired
+	case Frozen:
+		return types.StatusFrozen
+	default:
+		return types.StatusUnknown
+	}
+}
 
 type Interface interface {
 	VerifyMembership(height uint64, key []byte, proof []byte, value []byte) error

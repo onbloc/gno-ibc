@@ -16,14 +16,18 @@ type mockLightClient struct {
 	headerErr        string
 	membershipErr    string
 	nonMembershipErr string
+	timestampErr     string
 	timestampAtHt    types.Timestamp
 	update           types.StateUpdate
-	creationWrites   map[string][]byte
+	creationWrites     map[string][]byte
+	membershipCalls    int
+	nonMembershipCalls int
 }
 
 var _ lightclient.Interface = (*mockLightClient)(nil)
 
 func (l *mockLightClient) VerifyMembership(height uint64, key, proof, value []byte) error {
+	l.membershipCalls++
 	if l.membershipErr != "" {
 		return errors.New(l.membershipErr)
 	}
@@ -31,6 +35,7 @@ func (l *mockLightClient) VerifyMembership(height uint64, key, proof, value []by
 }
 
 func (l *mockLightClient) VerifyNonMembership(height uint64, key, proof []byte) error {
+	l.nonMembershipCalls++
 	if l.nonMembershipErr != "" {
 		return errors.New(l.nonMembershipErr)
 	}
@@ -40,6 +45,9 @@ func (l *mockLightClient) VerifyNonMembership(height uint64, key, proof []byte) 
 func (l *mockLightClient) GetTimestamp() types.Timestamp { return 0 }
 
 func (l *mockLightClient) GetTimestampAtHeight(height uint64) (types.Timestamp, error) {
+	if l.timestampErr != "" {
+		return 0, errors.New(l.timestampErr)
+	}
 	return l.timestampAtHt, nil
 }
 

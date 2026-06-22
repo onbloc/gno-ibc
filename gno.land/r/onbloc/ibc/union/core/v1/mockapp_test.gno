@@ -22,6 +22,7 @@ type mockApp struct {
 
 	recvStatus types.PacketStatus // zero -> Success
 	recvAck    []byte             // empty -> "ack" for sync results
+	recvAckSet bool               // true lets tests force an empty sync ack
 }
 
 func (a *mockApp) recvResult() types.RecvPacketResult {
@@ -30,7 +31,7 @@ func (a *mockApp) recvResult() types.RecvPacketResult {
 		status = types.PacketStatusSuccess
 	}
 	ack := a.recvAck
-	if len(ack) == 0 && status != types.PacketStatusAsync {
+	if len(ack) == 0 && !a.recvAckSet && status != types.PacketStatusAsync {
 		ack = []byte("ack")
 	}
 	return types.RecvPacketResult{Status: status, Acknowledgement: ack}

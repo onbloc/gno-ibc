@@ -505,6 +505,48 @@ func TestPacketAcknowledgementLengthMismatchIsPartial(cur realm, t *testing.T) {
 	}
 }
 
+func TestZ38PacketLifecycleRejectsSecondAck(cur realm, t *testing.T) {
+	v := newTestImpl()
+	chId, _, mApp := setupOpenChannel(cur, v)
+	packet := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("z38-double-ack"))
+	msg := types.MsgPacketAcknowledgement{
+		Packets:          []types.Packet{packet},
+		Acknowledgements: [][]byte{[]byte("ack")},
+		Proof:            []byte("proof"),
+		ProofHeight:      10,
+	}
+
+	v.PacketAcknowledgement(0, cur, msg)
+
+	uassert.Equal(t, 1, mApp.ackCalls)
+	uassert.AbortsContains(t, cur, "packet already acknowledged", func(cur realm) {
+		v.PacketAcknowledgement(0, cur, msg)
+	})
+	uassert.Equal(t, 1, mApp.ackCalls)
+}
+
+func TestZ38PacketLifecycleRejectsTimeoutAfterAck(cur realm, t *testing.T) {
+	v := newTestImpl()
+	chId, _, mApp := setupOpenChannel(cur, v)
+	packet := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("z38-timeout-after-ack"))
+	v.PacketAcknowledgement(0, cur, types.MsgPacketAcknowledgement{
+		Packets:          []types.Packet{packet},
+		Acknowledgements: [][]byte{[]byte("ack")},
+		Proof:            []byte("proof"),
+		ProofHeight:      10,
+	})
+
+	uassert.AbortsContains(t, cur, "packet already acknowledged", func(cur realm) {
+		v.PacketTimeout(0, cur, types.MsgPacketTimeout{
+			Packet:      packet,
+			Proof:       []byte("proof"),
+			ProofHeight: 5,
+		})
+	})
+	uassert.Equal(t, 1, mApp.ackCalls)
+	uassert.Equal(t, 0, mApp.timeoutCalls)
+}
+
 func TestPacketTimeoutRefunds(cur realm, t *testing.T) {
 	v := newTestImpl()
 	lc := &mockLightClient{timestampAtHt: farFuture}

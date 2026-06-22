@@ -24,7 +24,7 @@ func (c *coreV1) HasClient(clientType types.ClientType) bool {
 // CreateClient assigns a client id for a registered light client type, stores
 // the submitted state bytes, then lets the light client verify creation against
 // that freshly stored state.
-func (c *coreV1) CreateClient(_ int, rlm realm, msg types.MsgCreateClient) types.ClientId {
+func (c *coreV1) CreateClient(_ int, rlm realm, msg types.MsgCreateClient) {
 	creator := rlm.Previous().Address()
 	lc, ok := c.store.RegisteredClient(msg.ClientType)
 	if !ok {
@@ -35,7 +35,6 @@ func (c *coreV1) CreateClient(_ int, rlm realm, msg types.MsgCreateClient) types
 	c.initClient(0, rlm, clientId, msg.ClientStateBytes, msg.ConsensusStateBytes, creator)
 
 	core.EmitCreateClient(clientId, msg.ClientType, lc.GetCounterpartyChainID())
-	return clientId
 }
 
 // initClient mirrors the submitted client/consensus state for a stored client,
@@ -70,7 +69,7 @@ func (c *coreV1) initClient(_ int, rlm realm, clientId types.ClientId, clientSta
 // UpdateClient verifies a client message against the light client object, which
 // updates its own state, and mirrors the resulting state bytes for queries and
 // counterparty proofs.
-func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) types.Height {
+func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) {
 	lc, ok := c.store.GetLightClient(msg.ClientId)
 	if !ok {
 		panic("client " + msg.ClientId.String() + " not found")
@@ -97,13 +96,12 @@ func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) types
 	}
 
 	core.EmitUpdateClient(msg.ClientId, height)
-	return height
 }
 
 // ForceUpdateClient re-initializes a client from submitted state bytes,
 // bypassing header proof verification. The admin gate lives on the proxy; the
 // registered light client object for the existing client is reused.
-func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateClient) types.Height {
+func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateClient) {
 	if !c.store.ClientExists(msg.ClientId) {
 		panic("client " + msg.ClientId.String() + " not found")
 	}
@@ -112,7 +110,6 @@ func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateCli
 	height := c.initClient(0, rlm, msg.ClientId, msg.ClientStateBytes, msg.ConsensusStateBytes, caller)
 
 	core.EmitForceUpdateClient(msg.ClientId, height)
-	return height
 }
 
 // VerifyClientMembership verifies a membership proof against a registered, active

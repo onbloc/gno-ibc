@@ -35,8 +35,11 @@ The model follows OpenZeppelin's `AccessManager` shape:
 - `CanCall` returns whether a call is immediately executable and the delay if it
   is not immediate.
 
-`LabelRole` follows OpenZeppelin's event-only model: labels are emitted as
-`RoleLabel` events and are not stored in `State`.
+Role labels follow OpenZeppelin's event-only model from the pure package's
+perspective: labels are not stored in `State`. This package only defines the
+Union/OZ event type and attribute names plus role-lock validation; the consuming
+realm must emit `RoleLabel` so the event is attributed to the state-owning
+realm.
 
 ## Reference Map
 
@@ -178,7 +181,7 @@ Role configuration:
 - `GetRoleGuardian`
 - `SetGrantDelay`
 - `GetRoleGrantDelay`
-- `LabelRole`
+- `RequireUnlockedConfigRole`
 
 Target configuration:
 
@@ -197,9 +200,20 @@ Authorization:
 - `CanAdminRole`
 - `CanManageTarget`
 
-Events:
+Event schema:
 
+- `OperationScheduled`
+- `OperationExecuted`
+- `OperationCanceled`
 - `RoleLabel`
+- `RoleGranted`
+- `RoleRevoked`
+- `RoleAdminChanged`
+- `RoleGuardianChanged`
+- `RoleGrantDelayChanged`
+- `TargetClosed`
+- `TargetFunctionRoleUpdated`
+- `TargetAdminDelayUpdated`
 
 ## Union Role Coverage
 
@@ -236,5 +250,6 @@ Those functions depend on EVM calldata, low-level target calls, operation hashes
 and execution context. In Gno, those concerns should be implemented by the
 realm that owns the callable surface if delayed execution is needed.
 
-The rest of OpenZeppelin's management events are not emitted yet. They should be
-added alongside the matching state transitions as the port expands.
+The pure package does not call `chain.Emit`. In this repository, the shared
+Union access realm emits the currently implemented management events after the
+matching state transition succeeds.

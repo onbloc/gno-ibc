@@ -45,7 +45,7 @@ func (state *State) HasRole(role RoleId, account address) HasRoleResult {
 }
 
 func (state *State) SetRoleAdmin(role RoleId, admin RoleId) {
-	requireUnlockedConfigRole(role)
+	RequireUnlockedConfigRole(role)
 	state.ensureRole(role).Admin = admin
 }
 
@@ -58,7 +58,7 @@ func (state *State) GetRoleAdmin(role RoleId) RoleId {
 }
 
 func (state *State) SetRoleGuardian(role RoleId, guardian RoleId) {
-	requireUnlockedConfigRole(role)
+	RequireUnlockedConfigRole(role)
 	state.ensureRole(role).Guardian = guardian
 }
 
@@ -83,11 +83,6 @@ func (state *State) GetRoleGrantDelay(role RoleId) Delay {
 		return 0
 	}
 	return roleConfig.GrantDelay
-}
-
-func (state *State) LabelRole(role RoleId, label string) {
-	requireUnlockedConfigRole(role)
-	emitRoleLabelEvent(role, label)
 }
 
 func (state *State) SetTargetFunctionRole(target string, selector Selector, role RoleId) {
@@ -205,7 +200,11 @@ func (state *State) ensureInitialized() {
 	}
 }
 
-func requireUnlockedConfigRole(role RoleId) {
+// RequireUnlockedConfigRole rejects role ids whose configuration is locked.
+// Use this before emitting LabelRole metadata from a realm.
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v5.6.1/contracts/access/manager/AccessManager.sol#L226-L230
+func RequireUnlockedConfigRole(role RoleId) {
 	if role == AdminRole || role == PublicRole {
 		panic(AccessManagerLockedRoleError(role))
 	}

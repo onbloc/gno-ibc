@@ -27,6 +27,8 @@ func resetAccess(initialAdmin address) {
 	// GrantRole, not by AccessManager initialization:
 	// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L1143-L1152
 	accessState.GrantRole(manager.AdminRole, initialAdmin, 0)
+	access := accessState.Roles[manager.AdminRole].Members[initialAdmin]
+	emitRoleGrantedEvent(manager.AdminRole, initialAdmin, 0, access.Since, true)
 	setupRoles()
 }
 
@@ -34,8 +36,12 @@ func resetAccess(initialAdmin address) {
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L1779
 func setupRoles() {
 	accessState.SetTargetFunctionRoles(CoreRealmPath, types.RelayerSelectors(), RelayerRole)
+	for _, selector := range types.RelayerSelectors() {
+		emitTargetFunctionRoleUpdatedEvent(CoreRealmPath, selector, RelayerRole)
+	}
 	// Union deployer labels all production roles. We only bootstrap RELAYER for
 	// now; PAUSER/UNPAUSER/RATE_LIMITER are added when their roles are adopted.
 	// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L1871-L1908
-	accessState.LabelRole(RelayerRole, "RELAYER")
+	manager.RequireUnlockedConfigRole(RelayerRole)
+	emitRoleLabelEvent(RelayerRole, "RELAYER")
 }

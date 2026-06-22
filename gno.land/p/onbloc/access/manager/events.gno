@@ -1,16 +1,35 @@
 package manager
 
-import (
-	"chain"
-	"strconv"
+const (
+	EventTypeOperationScheduled         = "OperationScheduled"
+	EventTypeOperationExecuted          = "OperationExecuted"
+	EventTypeOperationCanceled          = "OperationCanceled"
+	EventTypeRoleLabel                  = "RoleLabel"
+	EventTypeRoleGranted                = "RoleGranted"
+	EventTypeRoleRevoked                = "RoleRevoked"
+	EventTypeRoleAdminChanged           = "RoleAdminChanged"
+	EventTypeRoleGuardianChanged        = "RoleGuardianChanged"
+	EventTypeRoleGrantDelayChanged      = "RoleGrantDelayChanged"
+	EventTypeTargetClosed               = "TargetClosed"
+	EventTypeTargetFunctionRoleUpdated  = "TargetFunctionRoleUpdated"
+	EventTypeTargetAdminDelayUpdated    = "TargetAdminDelayUpdated"
 )
 
-const RoleLabelEvent = "RoleLabel"
-
-func emitRoleLabelEvent(role RoleId, label string) {
-	chain.Emit(
-		RoleLabelEvent,
-		"role_id", strconv.FormatUint(uint64(role), 10),
-		"label", label,
-	)
-}
+const (
+	AttributeKeyOperationID = "operation_id"
+	AttributeKeyNonce       = "nonce"
+	AttributeKeySchedule    = "schedule"
+	AttributeKeyCaller      = "caller"
+	AttributeKeyTarget      = "target"
+	AttributeKeyData        = "data"
+	AttributeKeyRoleID      = "role_id"
+	AttributeKeyLabel       = "label"
+	AttributeKeyAccount     = "account"
+	AttributeKeyDelay       = "delay"
+	AttributeKeySince       = "since"
+	AttributeKeyNewMember   = "new_member"
+	AttributeKeyAdmin       = "admin"
+	AttributeKeyGuardian    = "guardian"
+	AttributeKeyClosed      = "closed"
+	AttributeKeySelector    = "selector"
+)

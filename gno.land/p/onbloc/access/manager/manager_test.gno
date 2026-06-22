@@ -143,23 +143,13 @@ func TestSetTargetFunctionRoles(t *testing.T) {
 	}
 }
 
-func TestLabelRoleEmitsOnly(t *testing.T) {
-	state := NewState()
-	state.LabelRole(testRole, "Relayer")
-
-	if state.getRole(testRole) != nil {
-		t.Fatal("label role must not store label metadata")
-	}
-}
-
-func TestLockedRolesCannotBeLabeled(t *testing.T) {
-	state := NewState()
-
+func TestRequireUnlockedConfigRole(t *testing.T) {
+	RequireUnlockedConfigRole(testRole)
 	mustPanic(t, func() {
-		state.LabelRole(AdminRole, "Admin")
+		RequireUnlockedConfigRole(AdminRole)
 	})
 	mustPanic(t, func() {
-		state.LabelRole(PublicRole, "Public")
+		RequireUnlockedConfigRole(PublicRole)
 	})
 }
 

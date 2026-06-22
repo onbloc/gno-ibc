@@ -23,58 +23,80 @@ const (
 
 func GrantRole(cur realm, role manager.RoleId, account address, executionDelay manager.Delay) bool {
 	requireRoleAdmin(cur, role, selectorGrantRole)
-	return accessState.GrantRole(role, account, executionDelay)
+	newMember := accessState.GrantRole(role, account, executionDelay)
+	access := accessState.Roles[role].Members[account]
+	emitRoleGrantedEvent(role, account, executionDelay, access.Since, newMember)
+	return newMember
 }
 
 func RevokeRole(cur realm, role manager.RoleId, account address) bool {
 	requireRoleAdmin(cur, role, selectorRevokeRole)
-	return accessState.RevokeRole(role, account)
+	revoked := accessState.RevokeRole(role, account)
+	if revoked {
+		emitRoleRevokedEvent(role, account)
+	}
+	return revoked
 }
 
 func RenounceRole(cur realm, role manager.RoleId, callerConfirmation address) bool {
-	return accessState.RenounceRole(role, cur.Previous().Address(), callerConfirmation)
+	account := cur.Previous().Address()
+	revoked := accessState.RenounceRole(role, account, callerConfirmation)
+	if revoked {
+		emitRoleRevokedEvent(role, account)
+	}
+	return revoked
 }
 
 func LabelRole(cur realm, role manager.RoleId, label string) {
 	requireManagerAdmin(cur, selectorLabelRole)
-	accessState.LabelRole(role, label)
+	manager.RequireUnlockedConfigRole(role)
+	emitRoleLabelEvent(role, label)
 }
 
 func SetRoleAdmin(cur realm, role manager.RoleId, admin manager.RoleId) {
 	requireManagerAdmin(cur, selectorSetRoleAdmin)
 	accessState.SetRoleAdmin(role, admin)
+	emitRoleAdminChangedEvent(role, admin)
 }
 
 func SetRoleGuardian(cur realm, role manager.RoleId, guardian manager.RoleId) {
 	requireManagerAdmin(cur, selectorSetRoleGuardian)
 	accessState.SetRoleGuardian(role, guardian)
+	emitRoleGuardianChangedEvent(role, guardian)
 }
 
 func SetGrantDelay(cur realm, role manager.RoleId, delay manager.Delay) {
 	requireManagerAdmin(cur, selectorSetGrantDelay)
 	accessState.SetGrantDelay(role, delay)
+	emitRoleGrantDelayChangedEvent(role, delay, manager.CurrentTimepoint())
 }
 
 func SetFunctionRole(cur realm, selector manager.Selector, role manager.RoleId) {
 	target := cur.Previous().PkgPath()
 	requireManagerAdmin(cur, selectorSetTargetFunctionRole)
 	accessState.SetTargetFunctionRole(target, selector, role)
+	emitTargetFunctionRoleUpdatedEvent(target, selector, role)
 }
 
 func SetFunctionRoles(cur realm, selectors []manager.Selector, role manager.RoleId) {
 	target := cur.Previous().PkgPath()
 	requireManagerAdmin(cur, selectorSetTargetFunctionRole)
 	accessState.SetTargetFunctionRoles(target, selectors, role)
+	for i := range selectors {
+		emitTargetFunctionRoleUpdatedEvent(target, selectors[i], role)
+	}
 }
 
 func SetTargetAdminDelay(cur realm, delay manager.Delay) {
 	target := cur.Previous().PkgPath()
 	requireManagerAdmin(cur, selectorSetTargetAdminDelay)
 	accessState.SetTargetAdminDelay(target, delay)
+	emitTargetAdminDelayUpdatedEvent(target, delay, manager.CurrentTimepoint())
 }
 
 func SetTargetClosed(cur realm, closed bool) {
 	target := cur.Previous().PkgPath()
 	requireManagerAdmin(cur, selectorSetTargetClosed)
 	accessState.SetTargetClosed(target, closed)
+	emitTargetClosedEvent(target, closed)
 }

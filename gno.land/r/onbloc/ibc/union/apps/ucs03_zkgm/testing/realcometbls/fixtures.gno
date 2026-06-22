@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 
 	cometblsp "gno.land/p/onbloc/ibc/union/lightclient/cometbls"
+	"gno.land/p/onbloc/ibc/union/types"
 )
 
 const (
@@ -179,7 +180,7 @@ var (
 )
 
 func ClientStateBytes(cur realm) []byte {
-	return clientStateBytes(longTrustingPeriod, 0)
+	return clientStateBytes(longTrustingPeriod, types.NewHeight(0))
 }
 
 func FrozenClientStateBytes(cur realm) []byte {
@@ -187,18 +188,22 @@ func FrozenClientStateBytes(cur realm) []byte {
 }
 
 func ExpiredClientStateBytes(cur realm) []byte {
-	return clientStateBytes(1, 0)
+	return clientStateBytes(1, types.NewHeight(0))
 }
 
-func clientStateBytes(trustingPeriod uint64, frozenHeight cometblsp.Height) []byte {
-	return cometblsp.EncodeClientState(cometblsp.ClientState{
+func clientStateBytes(trustingPeriod uint64, frozenHeight types.Height) []byte {
+	bz, err := cometblsp.EncodeClientState(&cometblsp.ClientState{
 		ChainID:         DevnetChainID,
 		TrustingPeriod:  trustingPeriod,
 		MaxClockDrift:   100 * 365 * 24 * 3600 * 1_000_000_000,
-		LatestHeight:    cometblsp.Height(DevnetHeight - 1),
+		LatestHeight:    types.NewHeight(uint64(DevnetHeight - 1)),
 		FrozenHeight:    frozenHeight,
 		ContractAddress: mustH256("0cf2ffe8f45a20514018173d3007644817a9767dc0fbdb246696fd9c261ce3bc"),
 	})
+	if err != nil {
+		panic(err)
+	}
+	return bz
 }
 
 func TrustedConsensusStateBytes(cur realm) []byte {
@@ -230,9 +235,9 @@ func Z42StaleConsensusStateBytes(cur realm) []byte {
 }
 
 func consensusStateBytes(root []byte, timestamp uint64) []byte {
-	bz, err := cometblsp.EncodeConsensusState(cometblsp.ConsensusState{
+	bz, err := cometblsp.EncodeConsensusState(&cometblsp.ConsensusState{
 		Timestamp:          timestamp,
-		NextValidatorsHash: devnetValidatorsHash,
+		NextValidatorsHash: h256Bytes(devnetValidatorsHash),
 		Root: cometblsp.MerkleRoot{
 			Hash: cloneBytes(root),
 		},
@@ -418,22 +423,24 @@ func OneExistenceProofStub(cur realm) []byte {
 	)
 }
 
-func devnetHeader(proof []byte) cometblsp.Header {
-	return cometblsp.Header{
-		SignedHeader: cometblsp.LightHeader{
-			Height:             DevnetHeight,
-			TimeSeconds:        DevnetTimeSeconds,
-			TimeNanos:          DevnetTimeNanos,
-			ValidatorsHash:     cloneBytes(devnetValidatorsHash[:]),
-			NextValidatorsHash: devnetValidatorsHash,
-			AppHash:            cloneBytes(devnetAppHash),
-		},
-		TrustedHeight:      cometblsp.Height(DevnetHeight - 1),
+func devnetHeader(proof []byte) *cometblsp.Header {
+	signedHeader := cometblsp.LightHeader{
+		Height:             DevnetHeight,
+		TimeSeconds:        DevnetTimeSeconds,
+		TimeNanos:          DevnetTimeNanos,
+		ValidatorsHash:     cloneBytes(devnetValidatorsHash[:]),
+		NextValidatorsHash: h256Bytes(devnetValidatorsHash),
+		AppHash:            cloneBytes(devnetAppHash),
+	}
+	trustedHeight := types.NewHeight(uint64(DevnetHeight - 1))
+	return &cometblsp.Header{
+		SignedHeader:       &signedHeader,
+		TrustedHeight:      &trustedHeight,
 		ZeroKnowledgeProof: proof,
 	}
 }
 
-func encodeHeader(h cometblsp.Header) []byte {
+func encodeHeader(h *cometblsp.Header) []byte {
 	bz, err := cometblsp.EncodeHeader(h)
 	if err != nil {
 		panic(err)
@@ -462,6 +469,12 @@ func mustH256(s string) cometblsp.H256 {
 func cloneBytes(in []byte) []byte {
 	out := make([]byte, len(in))
 	copy(out, in)
+	return out
+}
+
+func h256Bytes(in cometblsp.H256) []byte {
+	out := make([]byte, len(in))
+	copy(out, in[:])
 	return out
 }
 

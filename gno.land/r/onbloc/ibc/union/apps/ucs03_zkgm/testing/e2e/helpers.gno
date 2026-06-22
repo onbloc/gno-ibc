@@ -1,8 +1,6 @@
 package e2e
 
 import (
-	stdtesting "testing"
-
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -13,8 +11,10 @@ import (
 
 var Relayer = address("g1relayer")
 
-var testClientSeq uint32
-var testConnectionSeq uint32
+var (
+	testClientSeq     uint32
+	testConnectionSeq uint32
+)
 
 func nextTestClientId() types.ClientId {
 	testClientSeq++
@@ -88,13 +88,6 @@ func openChannel(cur realm, connectionId types.ConnectionId, counterpartyChannel
 	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
 	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, counterpartyChannelId, nil, 1, "g1msgrelayer"))
 	return channelId
-}
-
-func BatchSend(cur realm, packet types.Packet) types.H256 {
-	stdtesting.SetRealm(stdtesting.NewCodeRealm(zkgm.ProductionImplPath()))
-	zkgm.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{packet}))
-	stdtesting.SetRealm(stdtesting.NewCodeRealm("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"))
-	return types.MustCommit(types.CommitPackets([]types.Packet{packet}))
 }
 
 func MustTokenOrderInstruction(cur realm, order z.TokenOrderV2) z.Instruction {

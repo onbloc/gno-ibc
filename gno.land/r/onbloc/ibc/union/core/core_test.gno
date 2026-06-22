@@ -433,6 +433,38 @@ func TestRestrictedPacketEntrypointsRejectNonAdmin(cur realm, t *testing.T) {
 	})
 }
 
+func TestRestrictedPacketEntrypointsAllowAdminRealmCallToReachImpl(cur realm, t *testing.T) {
+	resetStore(cur)
+	oldAdmin := admin
+	oldImpl := currentImpl
+	admin = cur.Address()
+	currentImpl = nil
+	defer func() {
+		admin = oldAdmin
+		currentImpl = oldImpl
+	}()
+
+	tests := []struct {
+		name string
+		run  func(cur realm)
+	}{
+		{"packet recv", func(cur realm) { PacketRecv(cross(cur), types.MsgPacketRecv{}) }},
+		{"intent packet recv", func(cur realm) { IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{}) }},
+		{"packet acknowledgement", func(cur realm) { PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{}) }},
+		{"packet timeout", func(cur realm) { PacketTimeout(cross(cur), types.MsgPacketTimeout{}) }},
+		{"commit membership proof", func(cur realm) { CommitMembershipProof(cross(cur), types.MsgCommitMembershipProof{}) }},
+		{"commit non-membership proof", func(cur realm) { CommitNonMembershipProof(cross(cur), types.MsgCommitNonMembershipProof{}) }},
+		{"batch send", func(cur realm) { BatchSend(cross(cur), types.MsgBatchSend{}) }},
+		{"batch acks", func(cur realm) { BatchAcks(cross(cur), types.MsgBatchAcks{}) }},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.AbortsContains(t, cur, "core: implementation not installed", tc.run)
+		})
+	}
+}
+
 // --- types.Channel state machine ---
 
 func TestChannelStateTransitions(cur realm, t *testing.T) {

@@ -15,10 +15,6 @@ import (
 
 const forgedDestinationChannel = types.ChannelId(5)
 
-func init(cur realm) {
-	impl.Register(cross(cur))
-}
-
 func AppRecvForgedInitialize(cur realm) types.RecvPacketResult {
 	return zkgm.AsIBCApp().OnRecvPacket(cross(cur), forgedInitializePacket(cross(cur)), address(testutils.TestAddress("forged-relayer")), nil)
 }
@@ -35,16 +31,16 @@ func AppTimeoutForgedInitialize(cur realm) {
 	zkgm.AsIBCApp().OnTimeoutPacket(cross(cur), forgedInitializePacket(cross(cur)), address(testutils.TestAddress("forged-relayer")))
 }
 
-func ReleaseNativeDirect(cur realm) {
-	zkgm.ReleaseNative(cross(cur), "ugnot", testutils.TestAddress("release-recipient"), 1)
+func SetRateLimitDisabledDirect(cur realm) {
+	zkgm.SetRateLimitDisabled(cross(cur), false)
 }
 
 func BatchSendDirect(cur realm) {
-	zkgm.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{forgedInitializePacket(cross(cur))}))
+	core.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{forgedInitializePacket(cross(cur))}))
 }
 
 func WriteForwardAckDirect(cur realm) {
-	zkgm.WriteForwardAck(cross(cur), forgedInitializePacket(cross(cur)), []byte("ack"))
+	core.WriteAcknowledgement(cross(cur), types.NewMsgWriteAcknowledgement(forgedInitializePacket(cross(cur)), []byte("ack")))
 }
 
 func RegisterForeignClientDirect(cur realm) {

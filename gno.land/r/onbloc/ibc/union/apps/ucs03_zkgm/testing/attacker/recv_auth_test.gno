@@ -7,37 +7,37 @@ import (
 )
 
 func TestAppRecvRejectsExternalForgedPacket(cur realm, t *testing.T) {
-	uassert.AbortsContains(t, cur, "only core can recv", func() {
+	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
 		AppRecvForgedInitialize(cur)
 	})
 }
 
 func TestAppCallbacksRejectExternalCalls(cur realm, t *testing.T) {
-	uassert.AbortsContains(t, cur, "only core can intent recv", func() {
+	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
 		AppIntentRecvForgedInitialize(cur)
 	})
-	uassert.AbortsContains(t, cur, "only core can ack", func() {
+	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
 		AppAckForgedInitialize(cur)
 	})
-	uassert.AbortsContains(t, cur, "only core can timeout", func() {
+	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
 		AppTimeoutForgedInitialize(cur)
 	})
 }
 
-func TestProxyMutatorsRejectExternalCalls(cur realm, t *testing.T) {
-	uassert.AbortsContains(t, cur, "is not an authorized impl for release native", func() {
-		ReleaseNativeDirect(cur)
+func TestPrivilegedEntrypointsRejectExternalCalls(cur realm, t *testing.T) {
+	uassert.AbortsContains(t, cur, "zkgm: admin only", func() {
+		SetRateLimitDisabledDirect(cur)
 	})
-	uassert.AbortsContains(t, cur, "is not an authorized impl for batch send", func() {
+	uassert.AbortsContains(t, cur, "caller not authorized to batch send", func() {
 		BatchSendDirect(cur)
 	})
-	uassert.AbortsContains(t, cur, "is not an authorized impl for write forward ack", func() {
+	uassert.AbortsContains(t, cur, "core: implementation not installed", func() {
 		WriteForwardAckDirect(cur)
 	})
 }
 
 func TestRegisterClientRejectsForeignNamespace(cur realm, t *testing.T) {
-	uassert.AbortsContains(t, cur, "caller not authorized to register client: unauthorized", func() {
+	uassert.AbortsContains(t, cur, "core: implementation not installed", func() {
 		RegisterForeignClientDirect(cur)
 	})
 }

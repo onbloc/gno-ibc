@@ -172,6 +172,7 @@ func TestAcknowledgeForwardWithTokenOrderChildRefundsOnFailure(cur realm, t *tes
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 	path := forwardPath(1, 2)
+	uassert.NoError(t, v.mintVoucher(0, cur, string(order.BaseToken), [32]byte{}, "", "", 0, cur.Address().String(), order.BaseAmount))
 	v.increaseChannelBalanceV2(0, cur, types.ChannelId(3), path, order.BaseToken, order.QuoteToken, order.BaseAmount)
 
 	err := v.acknowledgeForward(0, cur, core.NewPacket(types.ChannelId(3), types.ChannelId(4), nil, 0), u256.Zero(), [32]byte{}, z.Forward{

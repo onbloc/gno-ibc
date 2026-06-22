@@ -75,7 +75,7 @@ func TestTokenOrderAckMarketMakerEscrowWithVoucherRewardsMarketMaker(cur realm, 
 func TestTokenOrderAckFailureRefundsEscrowedVoucherFromProxy(cur realm, t *testing.T) {
 	v := newTestImpl()
 
-	sender := testAddress("v1-refund-voucher-sender")
+	sender := testAddress("refund-vch-sndr")
 	baseToken := "ibc/v1-refund-voucher"
 	channelId := types.ChannelId(9)
 	amount := u256.NewUint(13)
@@ -106,7 +106,7 @@ func TestTokenOrderAckFailureRefundsEscrowedVoucherFromProxy(cur realm, t *testi
 func TestTokenOrderAckFailureUnderflowDoesNotReleaseEscrowedVoucher(cur realm, t *testing.T) {
 	v := newTestImpl()
 
-	sender := testAddress("v1-underflow-voucher-sender")
+	sender := testAddress("underflow-vch-sndr")
 	baseToken := "ibc/v1-underflow-voucher"
 	channelId := types.ChannelId(10)
 	amount := u256.NewUint(13)

@@ -70,7 +70,14 @@ func TestChannelOpenInitRequiresOpenConnection(cur realm, t *testing.T) {
 
 func TestChannelOpenTry(cur realm, t *testing.T) {
 	v := newTestImpl()
-	portId, mApp := setupChannelEnv(cur, v)
+	ms := v.store.(*mockStore)
+	lc := &mockLightClient{}
+	clientId := createClient(cur, v, lc, nil, nil)
+	ms.SaveConnection(0, cur, types.ConnectionId(1),
+		core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+	portId := types.Bytes("app-port")
+	mApp := &mockApp{}
+	ms.registerApp(portId, mApp)
 
 	chId := v.ChannelOpenTry(0, cur, openTryMsg(portId))
 
@@ -78,6 +85,7 @@ func TestChannelOpenTry(cur realm, t *testing.T) {
 	uassert.True(t, ok)
 	uassert.True(t, ch.State == types.ChannelStateTryOpen)
 	uassert.Equal(t, 1, mApp.openTry)
+	uassert.Equal(t, 1, lc.membershipCalls)
 }
 
 func TestChannelOpenTryProofFailureAborts(cur realm, t *testing.T) {
@@ -145,7 +153,14 @@ func TestChannelOpenTryRejectsInactiveClient(cur realm, t *testing.T) {
 
 func TestChannelOpenAckMovesInitToOpen(cur realm, t *testing.T) {
 	v := newTestImpl()
-	portId, mApp := setupChannelEnv(cur, v)
+	ms := v.store.(*mockStore)
+	lc := &mockLightClient{}
+	clientId := createClient(cur, v, lc, nil, nil)
+	ms.SaveConnection(0, cur, types.ConnectionId(1),
+		core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+	portId := types.Bytes("app-port")
+	mApp := &mockApp{}
+	ms.registerApp(portId, mApp)
 	chId := v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{
 		PortId: portId, ConnectionId: types.ConnectionId(1), Version: "v1",
 	})
@@ -162,6 +177,7 @@ func TestChannelOpenAckMovesInitToOpen(cur realm, t *testing.T) {
 	uassert.True(t, ch.State == types.ChannelStateOpen)
 	uassert.Equal(t, uint32(9), uint32(ch.CounterpartyChannelId))
 	uassert.Equal(t, 1, mApp.openAck)
+	uassert.Equal(t, 1, lc.membershipCalls)
 }
 
 // Converted from Union channel_open_ack_not_found.

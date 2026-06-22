@@ -1,8 +1,6 @@
 package realcometbls
 
 import (
-	stdtesting "testing"
-
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	realcometbls "gno.land/p/onbloc/ibc/union/lightclient/cometbls"
@@ -111,13 +109,6 @@ func openZ35Channel(cur realm, connectionId types.ConnectionId, counterpartyChan
 	return channelId
 }
 
-func BatchSend(cur realm, packet types.Packet) types.H256 {
-	stdtesting.SetRealm(stdtesting.NewCodeRealm(zkgm.ProductionImplPath()))
-	zkgm.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{packet}))
-	stdtesting.SetRealm(stdtesting.NewCodeRealm("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/realcometbls"))
-	return types.MustCommit(types.CommitPackets([]types.Packet{packet}))
-}
-
 func OpenZ37CometBLSChannel(cur realm) ChannelPair {
 	clientId := CreateZ37CometBLSClient(cross(cur))
 
@@ -138,10 +129,18 @@ func OpenZ37CometBLSChannel(cur realm) ChannelPair {
 
 func UpdateRealCometBLSClient(cur realm, clientId types.ClientId) types.Height {
 	core.UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, HeaderBytes(cross(cur))))
-	return types.NewHeight(core.GetLatestHeight(clientId))
+	height, ok := core.GetLatestHeight(clientId)
+	if !ok {
+		panic("realcometbls: missing latest height")
+	}
+	return types.NewHeight(height)
 }
 
 func UpdateRealCometBLSClientWithTamperedHeader(cur realm, clientId types.ClientId) types.Height {
 	core.UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, TamperedHeaderBytes(cross(cur))))
-	return types.NewHeight(core.GetLatestHeight(clientId))
+	height, ok := core.GetLatestHeight(clientId)
+	if !ok {
+		panic("realcometbls: missing latest height")
+	}
+	return types.NewHeight(height)
 }

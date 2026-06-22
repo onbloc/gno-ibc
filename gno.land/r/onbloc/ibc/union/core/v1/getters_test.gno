@@ -58,6 +58,17 @@ func TestGetMissingClient(cur realm, t *testing.T) {
 	uassert.False(t, ok)
 	_, ok = v.GetClientStateBytes(types.ClientId(99))
 	uassert.False(t, ok)
+	_, ok = v.GetConsensusStateBytes(types.ClientId(99), types.NewHeight(1))
+	uassert.False(t, ok)
+}
+
+func TestGetTimestampAtHeightErrorReturnsFalse(cur realm, t *testing.T) {
+	v := newTestImpl()
+	clientId := createClient(cur, v, &mockLightClient{timestampErr: "timestamp unavailable"}, nil, nil)
+
+	ts, ok := v.GetTimestampAtHeight(clientId, 5)
+	uassert.False(t, ok)
+	uassert.Equal(t, uint64(0), uint64(ts))
 }
 
 func TestGetFrozenStatus(cur realm, t *testing.T) {
@@ -91,5 +102,29 @@ func TestGetConnectionAndChannel(cur realm, t *testing.T) {
 	uassert.True(t, ch.State == types.ChannelStateOpen)
 
 	_, ok = v.GetConnectionTyped(types.ConnectionId(99))
+	uassert.False(t, ok)
+}
+
+func TestGetBatchPacketAndReceiptCommitments(cur realm, t *testing.T) {
+	v := newTestImpl()
+	chId := types.ChannelId(7)
+	batchHash := types.Keccak([]byte("batch"))
+	packetValue := types.Keccak([]byte("packets"))
+	receiptValue := types.Keccak([]byte("receipts"))
+
+	v.store.SaveBatchPackets(0, cur, chId, batchHash, packetValue)
+	v.store.SaveBatchReceipts(0, cur, chId, batchHash, receiptValue)
+
+	gotPacket, ok := v.GetBatchPacketsCommitment(chId, batchHash)
+	uassert.True(t, ok)
+	uassert.True(t, gotPacket == packetValue)
+
+	gotReceipt, ok := v.GetBatchReceiptsCommitment(chId, batchHash)
+	uassert.True(t, ok)
+	uassert.True(t, gotReceipt == receiptValue)
+
+	_, ok = v.GetBatchPacketsCommitment(chId, types.Keccak([]byte("missing")))
+	uassert.False(t, ok)
+	_, ok = v.GetBatchReceiptsCommitment(chId, types.Keccak([]byte("missing")))
 	uassert.False(t, ok)
 }

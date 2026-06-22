@@ -2,6 +2,7 @@ package cometbls
 
 import (
 	"testing"
+	"time"
 
 	"gno.land/p/aib/encoding/proto"
 )
@@ -71,4 +72,19 @@ func TestDecodeMisbehaviourBadHeaderBytes(t *testing.T) {
 	if _, err := DecodeMisbehaviour(buf); err == nil {
 		t.Fatal("expected error for undecodable header bytes")
 	}
+}
+
+func TestVerifyMisbehaviourRejectsInvalidHeaderSequenceBeforeProofVerification(t *testing.T) {
+	// Union reference: verify_misbehaviour first rejects HeaderA lower than
+	// HeaderB before running header/proof verification.
+	c := newTestClient(t)
+	c.clientState.TrustingPeriod = 10_000_000_000
+	m := &Misbehaviour{
+		Header1: updateStateTestHeader(100, 101, testNow+1_000_000_000),
+		Header2: updateStateTestHeader(100, 102, testNow+2_000_000_000),
+	}
+
+	err := c.verifyMisbehaviour(m, time.Unix(int64(testNow/1_000_000_000)+3, 0))
+
+	requireErrorContains(t, err, ErrInvalidMisbehaviourHeaderSequence)
 }

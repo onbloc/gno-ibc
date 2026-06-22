@@ -11,7 +11,7 @@ func (state *State) GrantRole(role RoleId, account address, executionDelay Delay
 		roleConfig.Members[account] = access
 		return false
 	}
-	roleConfig.Members[account] = NewAccess(CurrentTimepoint().availableAt(roleConfig.GrantDelay), executionDelay)
+	roleConfig.Members[account] = NewAccess(timepointAvailableAt(CurrentTimepoint(), roleConfig.GrantDelay), executionDelay)
 	return true
 }
 
@@ -43,10 +43,10 @@ func (state *State) HasRole(role RoleId, account address) HasRoleResult {
 		return NewHasRoleResult(false, 0)
 	}
 	access, found := roleConfig.Members[account]
-	if !found || access.Since == 0 {
+	if !found || access.Since.IsZero() {
 		return NewHasRoleResult(false, 0)
 	}
-	if access.Since > CurrentTimepoint() {
+	if access.Since.After(CurrentTimepoint()) {
 		return NewHasRoleResult(false, access.ExecutionDelay)
 	}
 	return NewHasRoleResult(true, access.ExecutionDelay)

@@ -86,5 +86,5 @@ func formatDelay(delay manager.Delay) string {
 }
 
 func formatTimepoint(timepoint manager.Timepoint) string {
-	return strconv.FormatInt(int64(timepoint), 10)
+	return strconv.FormatInt(timepoint.Unix(), 10)
 }

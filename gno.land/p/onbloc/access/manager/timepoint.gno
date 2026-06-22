@@ -2,20 +2,19 @@ package manager
 
 import "time"
 
-type Timepoint int64
+type Timepoint = time.Time
 
 func NewTimepoint(timepoint int64) Timepoint {
-	return Timepoint(timepoint)
+	return time.Unix(timepoint, 0).UTC()
 }
 
 func CurrentTimepoint() Timepoint {
-	return NewTimepoint(time.Now().Unix())
+	return time.Now()
 }
 
-func (t Timepoint) availableAt(delay Delay) Timepoint {
-	since := t + Timepoint(delay)
-	if since == 0 {
-		return NewTimepoint(1)
+func timepointAvailableAt(timepoint Timepoint, delay Delay) Timepoint {
+	if timepoint.IsZero() {
+		return timepoint
 	}
-	return since
+	return timepoint.Add(time.Duration(delay) * time.Second)
 }

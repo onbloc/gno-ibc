@@ -87,7 +87,7 @@ func TestGrantDelayDefersMembership(t *testing.T) {
 	if state.HasRole(testRole, caller).IsMember {
 		t.Fatal("role must not be active before grant delay")
 	}
-	if state.Roles[testRole].Members[caller].Since <= CurrentTimepoint() {
+	if !state.Roles[testRole].Members[caller].Since.After(CurrentTimepoint()) {
 		t.Fatal("grant delay must set activation after the current timepoint")
 	}
 }

@@ -237,7 +237,7 @@ func TestOZGrantRoleWithGrantDelayDefersNewMember(t *testing.T) {
 	}
 
 	access := state.Roles[ozRole].Members[caller]
-	if access.Since <= CurrentTimepoint() {
+	if !access.Since.After(CurrentTimepoint()) {
 		t.Fatal("grant delay must store a future effective timepoint")
 	}
 
@@ -283,7 +283,7 @@ func TestOZGrantRoleForExistingMemberPreservesMembership(t *testing.T) {
 	}
 
 	access := state.Roles[ozRole].Members[caller]
-	if access.Since != previousSince {
+	if !access.Since.Equal(previousSince) {
 		t.Fatal("grant delay must not reset an existing member effective timepoint")
 	}
 

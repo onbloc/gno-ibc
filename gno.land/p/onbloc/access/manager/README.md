@@ -28,7 +28,8 @@ The model follows OpenZeppelin's `AccessManager` shape:
 - a target can be closed, rejecting calls even when the function is public;
 - each role has an admin role, grant delay, and member access records;
 - a member access record has an activation timepoint and execution delay;
-- current timepoint is read from Gno block time with `time.Now().Unix()`;
+- current timepoint is represented as `time.Time` and read from Gno block time
+  with `time.Now()`;
 - `CanCall` returns whether a call is immediately executable and the delay if it
   is not immediate.
 

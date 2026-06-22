@@ -10,20 +10,24 @@ import (
 // mockLightClient is a configurable lightclient.Interface for the client tests.
 // Zero value is an Active client whose verifications succeed.
 type mockLightClient struct {
-	status           lightclient.Status
-	latestHeight     uint64
-	createErr        string
-	headerErr        string
-	membershipErr    string
-	nonMembershipErr string
-	timestampAtHt    types.Timestamp
-	update           types.StateUpdate
-	creationWrites   map[string][]byte
+	status             lightclient.Status
+	latestHeight       uint64
+	createErr          string
+	headerErr          string
+	membershipErr      string
+	nonMembershipErr   string
+	timestampErr       string
+	timestampAtHt      types.Timestamp
+	membershipCalls    int
+	nonMembershipCalls int
+	update             types.StateUpdate
+	creationWrites     map[string][]byte
 }
 
 var _ lightclient.Interface = (*mockLightClient)(nil)
 
 func (l *mockLightClient) VerifyMembership(height uint64, key, proof, value []byte) error {
+	l.membershipCalls++
 	if l.membershipErr != "" {
 		return errors.New(l.membershipErr)
 	}
@@ -31,6 +35,7 @@ func (l *mockLightClient) VerifyMembership(height uint64, key, proof, value []by
 }
 
 func (l *mockLightClient) VerifyNonMembership(height uint64, key, proof []byte) error {
+	l.nonMembershipCalls++
 	if l.nonMembershipErr != "" {
 		return errors.New(l.nonMembershipErr)
 	}
@@ -40,6 +45,9 @@ func (l *mockLightClient) VerifyNonMembership(height uint64, key, proof []byte) 
 func (l *mockLightClient) GetTimestamp() types.Timestamp { return 0 }
 
 func (l *mockLightClient) GetTimestampAtHeight(height uint64) (types.Timestamp, error) {
+	if l.timestampErr != "" {
+		return 0, errors.New(l.timestampErr)
+	}
 	return l.timestampAtHt, nil
 }
 

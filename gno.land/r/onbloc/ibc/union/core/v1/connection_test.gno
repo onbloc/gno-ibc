@@ -118,6 +118,40 @@ func TestConnectionOpenConfirmMovesTryOpenToOpen(cur realm, t *testing.T) {
 	uassert.True(t, conn.State == types.ConnectionStateOpen)
 }
 
+func TestConnectionOpenConfirmRejectsInvalidMessages(cur realm, t *testing.T) {
+	testCases := []struct {
+		name string
+		want string
+		run  func(cur realm)
+	}{
+		{
+			name: "unknown connection",
+			want: "connection 99 not found",
+			run: func(cur realm) {
+				v := newTestImpl()
+				v.ConnectionOpenConfirm(0, cur, types.MsgConnectionOpenConfirm{ConnectionId: types.ConnectionId(99), ProofHeight: 11, ProofAck: []byte("proof")})
+			},
+		},
+		{
+			name: "wrong state",
+			want: "invalid connection state",
+			run: func(cur realm) {
+				v := newTestImpl()
+				clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
+				v.store.SaveConnection(0, cur, types.ConnectionId(1),
+					core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+				v.ConnectionOpenConfirm(0, cur, types.MsgConnectionOpenConfirm{ConnectionId: types.ConnectionId(1), ProofHeight: 11, ProofAck: []byte("proof")})
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.AbortsContains(t, cur, tc.want, tc.run)
+		})
+	}
+}
+
 func TestConnectionOpenAckUnknownAborts(cur realm, t *testing.T) {
 	v := newTestImpl()
 

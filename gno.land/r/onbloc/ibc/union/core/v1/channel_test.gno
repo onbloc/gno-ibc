@@ -319,6 +319,106 @@ func TestChannelCloseConfirm(cur realm, t *testing.T) {
 	uassert.Equal(t, 1, mApp.closeConfirm)
 }
 
+func TestChannelCloseRejectsInvalidMessages(cur realm, t *testing.T) {
+	testCases := []struct {
+		name string
+		want string
+		run  func(cur realm)
+	}{
+		{
+			name: "close init missing channel",
+			want: "channel 1 not found",
+			run: func(cur realm) {
+				v := newTestImpl()
+				v.ChannelCloseInit(0, cur, types.MsgChannelCloseInit{ChannelId: types.ChannelId(1)})
+			},
+		},
+		{
+			name: "close init invalid counterparty channel",
+			want: "invalid counterparty channel id",
+			run: func(cur realm) {
+				v := newTestImpl()
+				portId, _ := setupChannelEnv(cur, v)
+				chId := v.store.NextChannelId(0, cur)
+				v.store.CreateChannel(0, cur, chId, types.Channel{
+					State:        types.ChannelStateOpen,
+					ConnectionId: types.ConnectionId(1),
+					Version:      "v1",
+				}, portId)
+				v.ChannelCloseInit(0, cur, types.MsgChannelCloseInit{ChannelId: chId})
+			},
+		},
+		{
+			name: "close confirm missing channel",
+			want: "channel 1 not found",
+			run: func(cur realm) {
+				v := newTestImpl()
+				v.ChannelCloseConfirm(0, cur, types.MsgChannelCloseConfirm{ChannelId: types.ChannelId(1), ProofHeight: 12, ProofInit: []byte("proof")})
+			},
+		},
+		{
+			name: "close confirm wrong state",
+			want: "invalid channel state",
+			run: func(cur realm) {
+				v := newTestImpl()
+				portId, _ := setupChannelEnv(cur, v)
+				chId := v.store.NextChannelId(0, cur)
+				v.store.CreateChannel(0, cur, chId, types.Channel{
+					State:                 types.ChannelStateClosed,
+					ConnectionId:          types.ConnectionId(1),
+					CounterpartyChannelId: types.ChannelId(9),
+					CounterpartyPortId:    types.Bytes("cp-port"),
+					Version:               "v1",
+				}, portId)
+				v.ChannelCloseConfirm(0, cur, types.MsgChannelCloseConfirm{ChannelId: chId, ProofHeight: 12, ProofInit: []byte("proof")})
+			},
+		},
+		{
+			name: "close confirm invalid counterparty channel",
+			want: "invalid counterparty channel id",
+			run: func(cur realm) {
+				v := newTestImpl()
+				portId, _ := setupChannelEnv(cur, v)
+				chId := v.store.NextChannelId(0, cur)
+				v.store.CreateChannel(0, cur, chId, types.Channel{
+					State:        types.ChannelStateOpen,
+					ConnectionId: types.ConnectionId(1),
+					Version:      "v1",
+				}, portId)
+				v.ChannelCloseConfirm(0, cur, types.MsgChannelCloseConfirm{ChannelId: chId, ProofHeight: 12, ProofInit: []byte("proof")})
+			},
+		},
+		{
+			name: "close confirm proof failure",
+			want: "bad close proof",
+			run: func(cur realm) {
+				v := newTestImpl()
+				ms := v.store.(*mockStore)
+				clientId := createClient(cur, v, &mockLightClient{membershipErr: "bad close proof"}, nil, nil)
+				ms.SaveConnection(0, cur, types.ConnectionId(1),
+					core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+				portId := types.Bytes("app-port")
+				ms.registerApp(portId, &mockApp{})
+				chId := v.store.NextChannelId(0, cur)
+				v.store.CreateChannel(0, cur, chId, types.Channel{
+					State:                 types.ChannelStateOpen,
+					ConnectionId:          types.ConnectionId(1),
+					CounterpartyChannelId: types.ChannelId(9),
+					CounterpartyPortId:    types.Bytes("cp-port"),
+					Version:               "v1",
+				}, portId)
+				v.ChannelCloseConfirm(0, cur, types.MsgChannelCloseConfirm{ChannelId: chId, ProofHeight: 12, ProofInit: []byte("proof")})
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.AbortsContains(t, cur, tc.want, tc.run)
+		})
+	}
+}
+
 // setupFrozenChannelEnv mirrors setupChannelEnv but registers a frozen client, so
 // the proof-verifying handshake path would abort ("client is not active"). The
 // Force* variants must skip verification and still succeed.

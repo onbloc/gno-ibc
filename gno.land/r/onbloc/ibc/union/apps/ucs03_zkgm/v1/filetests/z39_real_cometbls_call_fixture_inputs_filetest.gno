@@ -1,44 +1,42 @@
-// PKGPATH: gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/realcometbls/scenarios
-package scenarios
+// PKGPATH: gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1/main
+package main
 
 import (
 	"encoding/hex"
 
-	types "gno.land/p/onbloc/ibc/union/types"
-
 	u256 "gno.land/p/gnoswap/uint256"
+	types "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
-	core "gno.land/r/onbloc/ibc/union/core"
 )
 
 const (
-	mockReceiverPath    = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"
-	missingReceiverPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/missing"
+	z39MockReceiverPath    = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"
+	z39MissingReceiverPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/missing"
 )
 
-func main(cur realm) {
-	packet := z39CallPacket(cur, mockReceiverPath)
+func main() {
+	packet := z39CallPacket(z39MockReceiverPath)
 	packetKey := types.MustCommit(types.PacketCommitmentPath(packet))
 	packetValue := types.COMMITMENT_MAGIC
-	missingPacket := z39CallPacket(cur, missingReceiverPath)
+	missingPacket := z39CallPacket(z39MissingReceiverPath)
 	missingPacketKey := types.MustCommit(types.PacketCommitmentPath(missingPacket))
 
-	printKV("call_packet_commitment", packetKey[:], packetValue[:])
+	printZ39KV("call_packet_commitment", packetKey[:], packetValue[:])
 	println("packet_data", "0x"+hex.EncodeToString(packet.Data))
-	printKV("missing_call_packet_commitment", missingPacketKey[:], packetValue[:])
+	printZ39KV("missing_call_packet_commitment", missingPacketKey[:], packetValue[:])
 	println("missing_packet_data", "0x"+hex.EncodeToString(missingPacket.Data))
 }
 
-func z39CallPacket(cur realm, receiverPath string) types.Packet {
+func z39CallPacket(receiverPath string) types.Packet {
 	call := z.Call{
 		Sender:           []byte("sender"),
 		ContractAddress:  []byte(receiverPath),
 		ContractCalldata: []byte("calldata"),
 	}
-	return core.NewPacket(types.ChannelId(2), types.ChannelId(1), mustRealcometZkgmPacketData(mustRealcometCallInstruction(call)), types.Timestamp(0))
+	return types.NewPacket(types.ChannelId(2), types.ChannelId(1), mustZ39PacketData(mustZ39CallInstruction(call)), types.Timestamp(0))
 }
 
-func mustRealcometCallInstruction(call z.Call) z.Instruction {
+func mustZ39CallInstruction(call z.Call) z.Instruction {
 	callBytes, err := z.EncodeCall(call)
 	if err != nil {
 		panic(err)
@@ -50,7 +48,7 @@ func mustRealcometCallInstruction(call z.Call) z.Instruction {
 	}
 }
 
-func mustRealcometZkgmPacketData(instr z.Instruction) []byte {
+func mustZ39PacketData(instr z.Instruction) []byte {
 	packetBytes, err := z.EncodeZkgmPacket(z.ZkgmPacket{
 		Path:        u256.Zero(),
 		Instruction: instr,
@@ -61,7 +59,7 @@ func mustRealcometZkgmPacketData(instr z.Instruction) []byte {
 	return packetBytes
 }
 
-func printKV(name string, key []byte, value []byte) {
+func printZ39KV(name string, key []byte, value []byte) {
 	println(name+"_key", "0x"+hex.EncodeToString(key))
 	println(name+"_value", "0x"+hex.EncodeToString(value))
 }

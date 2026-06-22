@@ -1,37 +1,35 @@
-// PKGPATH: gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/realcometbls/scenarios
-package scenarios
+// PKGPATH: gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1/main
+package main
 
 import (
 	"encoding/hex"
 
-	types "gno.land/p/onbloc/ibc/union/types"
-
 	u256 "gno.land/p/gnoswap/uint256"
+	types "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
-	core "gno.land/r/onbloc/ibc/union/core"
 )
 
-const mockReceiverPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"
+const z40MockReceiverPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"
 
-func main(cur realm) {
-	mixedPacket := z40MixedBatchPacket(cur)
-	panicPacket := z40PanicBatchPacket(cur)
+func main() {
+	mixedPacket := z40MixedBatchPacket()
+	panicPacket := z40PanicBatchPacket()
 	mixedPacketKey := types.MustCommit(types.PacketCommitmentPath(mixedPacket))
 	panicPacketKey := types.MustCommit(types.PacketCommitmentPath(panicPacket))
 	packetValue := types.COMMITMENT_MAGIC
 
-	printKV("mixed_batch_packet_commitment", mixedPacketKey[:], packetValue[:])
-	printKV("panic_batch_packet_commitment", panicPacketKey[:], packetValue[:])
+	printZ40KV("mixed_batch_packet_commitment", mixedPacketKey[:], packetValue[:])
+	printZ40KV("panic_batch_packet_commitment", panicPacketKey[:], packetValue[:])
 }
 
-func z40MixedBatchPacket(cur realm) types.Packet {
-	return z40BatchPacket(cur, z.Batch{Instructions: []z.Instruction{
-		mustRealcometCallInstruction(z.Call{
+func z40MixedBatchPacket() types.Packet {
+	return z40BatchPacket(z.Batch{Instructions: []z.Instruction{
+		mustZ40CallInstruction(z.Call{
 			Sender:           []byte("sender"),
-			ContractAddress:  []byte(mockReceiverPath),
+			ContractAddress:  []byte(z40MockReceiverPath),
 			ContractCalldata: []byte("batch-call"),
 		}),
-		mustRealcometTokenOrderInstruction(z.TokenOrderV2{
+		mustZ40TokenOrderInstruction(z.TokenOrderV2{
 			Sender:      []byte("sender"),
 			Receiver:    []byte("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"),
 			BaseToken:   []byte("ugnot"),
@@ -43,14 +41,14 @@ func z40MixedBatchPacket(cur realm) types.Packet {
 	}})
 }
 
-func z40PanicBatchPacket(cur realm) types.Packet {
-	return z40BatchPacket(cur, z.Batch{Instructions: []z.Instruction{
-		mustRealcometCallInstruction(z.Call{
+func z40PanicBatchPacket() types.Packet {
+	return z40BatchPacket(z.Batch{Instructions: []z.Instruction{
+		mustZ40CallInstruction(z.Call{
 			Sender:           []byte("sender"),
-			ContractAddress:  []byte(mockReceiverPath),
+			ContractAddress:  []byte(z40MockReceiverPath),
 			ContractCalldata: []byte("panic-call"),
 		}),
-		mustRealcometTokenOrderInstruction(z.TokenOrderV2{
+		mustZ40TokenOrderInstruction(z.TokenOrderV2{
 			Sender:      []byte("sender"),
 			Receiver:    []byte("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"),
 			BaseToken:   []byte("ugnot"),
@@ -62,11 +60,11 @@ func z40PanicBatchPacket(cur realm) types.Packet {
 	}})
 }
 
-func z40BatchPacket(cur realm, batch z.Batch) types.Packet {
-	return core.NewPacket(types.ChannelId(2), types.ChannelId(1), mustRealcometZkgmPacketData(mustRealcometBatchInstruction(batch)), types.Timestamp(0))
+func z40BatchPacket(batch z.Batch) types.Packet {
+	return types.NewPacket(types.ChannelId(2), types.ChannelId(1), mustZ40PacketData(mustZ40BatchInstruction(batch)), types.Timestamp(0))
 }
 
-func mustRealcometCallInstruction(call z.Call) z.Instruction {
+func mustZ40CallInstruction(call z.Call) z.Instruction {
 	callBytes, err := z.EncodeCall(call)
 	if err != nil {
 		panic(err)
@@ -78,7 +76,7 @@ func mustRealcometCallInstruction(call z.Call) z.Instruction {
 	}
 }
 
-func mustRealcometTokenOrderInstruction(order z.TokenOrderV2) z.Instruction {
+func mustZ40TokenOrderInstruction(order z.TokenOrderV2) z.Instruction {
 	orderBytes, err := z.EncodeTokenOrderV2(order)
 	if err != nil {
 		panic(err)
@@ -90,7 +88,7 @@ func mustRealcometTokenOrderInstruction(order z.TokenOrderV2) z.Instruction {
 	}
 }
 
-func mustRealcometBatchInstruction(batch z.Batch) z.Instruction {
+func mustZ40BatchInstruction(batch z.Batch) z.Instruction {
 	batchBytes, err := z.EncodeBatch(batch)
 	if err != nil {
 		panic(err)
@@ -102,7 +100,7 @@ func mustRealcometBatchInstruction(batch z.Batch) z.Instruction {
 	}
 }
 
-func mustRealcometZkgmPacketData(instr z.Instruction) []byte {
+func mustZ40PacketData(instr z.Instruction) []byte {
 	packetBytes, err := z.EncodeZkgmPacket(z.ZkgmPacket{
 		Path:        u256.Zero(),
 		Instruction: instr,
@@ -113,7 +111,7 @@ func mustRealcometZkgmPacketData(instr z.Instruction) []byte {
 	return packetBytes
 }
 
-func printKV(name string, key []byte, value []byte) {
+func printZ40KV(name string, key []byte, value []byte) {
 	println(name+"_key", "0x"+hex.EncodeToString(key))
 	println(name+"_value", "0x"+hex.EncodeToString(value))
 }

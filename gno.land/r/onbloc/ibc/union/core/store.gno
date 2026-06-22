@@ -18,8 +18,9 @@ func init() {
 }
 
 type Store struct {
-	clientSeq  seqid.ID
-	clientByID *bptree.BPTree // clientKey(ClientId) → *client
+	clientSeq          seqid.ID
+	clientByID         *bptree.BPTree // clientKey(ClientId) → *client
+	clientRegistryByTy map[string]lightclient.Interface
 
 	connectionSeq        seqid.ID
 	connectionClientByID *bptree.BPTree // connectionKey(ConnectionId) → ClientId
@@ -40,6 +41,7 @@ type client struct {
 	lightClient       lightclient.Interface
 	clientState       []byte
 	consensusByHeight *bptree.BPTree // string(height.Bytes()) → []byte
+	clientStore       map[string][]byte
 
 	connectionsByID *bptree.BPTree // connectionKey(ConnectionId) → types.Connection
 	channelsByID    *bptree.BPTree // channelKey(ChannelId) → *channelEntry
@@ -57,6 +59,7 @@ type channelEntry struct {
 func newStore() *Store {
 	return &Store{
 		clientByID:           bptree.NewBPTree32(),
+		clientRegistryByTy:   make(map[string]lightclient.Interface),
 		connectionClientByID: bptree.NewBPTree32(),
 		channelClientByID:    bptree.NewBPTree32(),
 		membershipProofs:     make(map[types.H256]types.H256),
@@ -94,7 +97,7 @@ func h256ChainParamKey(key types.H256) string {
 
 // --- Client state ---
 
-func (c *client) saveState(clientStateBytes []byte) {
+func (c *client) saveClientState(clientStateBytes []byte) {
 	c.clientState = cloneBytes(clientStateBytes)
 	setChainParam(h256ChainParamKey(types.ClientStatePath(c.id)), h256Bytes(keccak(clientStateBytes)))
 }
@@ -118,6 +121,18 @@ func (c *client) findConsensusState(height types.Height) ([]byte, bool) {
 		return nil, false
 	}
 	return cloneBytes(v.([]byte)), true
+}
+
+func (c *client) saveClientStore(key string, value []byte) {
+	c.clientStore[key] = cloneBytes(value)
+}
+
+func (c *client) getClientStore(key string) ([]byte, bool) {
+	v, found := c.clientStore[key]
+	if !found {
+		return nil, false
+	}
+	return cloneBytes(v), true
 }
 
 // --- Batch packets (per client) ---
@@ -295,16 +310,20 @@ func (s *Store) nextChannelId() types.ChannelId {
 	return types.ChannelId(uint32(s.channelSeq.Next()))
 }
 
+func (s *Store) nextClientId() types.ClientId {
+	return types.ClientId(uint32(s.clientSeq.Next()))
+}
+
 // --- Client ---
 
-func (s *Store) addClient(typ types.ClientType, creator address, lc lightclient.Interface) *client {
-	clientId := types.ClientId(uint32(s.clientSeq.Next()))
+func (s *Store) addClient(clientId types.ClientId, typ types.ClientType, creator address, lc lightclient.Interface) *client {
 	c := &client{
 		id:                clientId,
 		typ:               typ,
 		creator:           creator,
 		lightClient:       lc,
 		consensusByHeight: bptree.NewBPTree32(),
+		clientStore:       make(map[string][]byte),
 		connectionsByID:   bptree.NewBPTree32(),
 		channelsByID:      bptree.NewBPTree32(),
 		batchPackets:      make(map[types.H256]types.H256),
@@ -312,6 +331,24 @@ func (s *Store) addClient(typ types.ClientType, creator address, lc lightclient.
 	}
 	s.clientByID.Set(clientKey(clientId), c)
 	return c
+}
+
+func (s *Store) registerClient(typ types.ClientType, lc lightclient.Interface) {
+	key := typ.String()
+	if _, ok := s.clientRegistryByTy[key]; ok {
+		panic("client type already exists")
+	}
+	s.clientRegistryByTy[key] = lc
+}
+
+func (s *Store) registeredClient(typ types.ClientType) (lightclient.Interface, bool) {
+	lc, ok := s.clientRegistryByTy[typ.String()]
+	return lc, ok
+}
+
+func (s *Store) hasRegisteredClient(typ types.ClientType) bool {
+	_, ok := s.clientRegistryByTy[typ.String()]
+	return ok
 }
 
 func (s *Store) getClient(clientId types.ClientId) *client {

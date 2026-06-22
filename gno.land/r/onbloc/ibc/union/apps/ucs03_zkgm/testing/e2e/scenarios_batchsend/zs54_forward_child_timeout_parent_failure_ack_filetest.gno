@@ -116,7 +116,8 @@ func openForwardChildTimeoutConnection(cur realm) types.ConnectionId {
 	if !core.HasClient(forwardChildTimeoutClientType) {
 		core.RegisterClient(cross(cur), forwardChildTimeoutClientType, &forwardChildTimeoutLightClient{})
 	}
-	clientId := core.CreateClient(cross(cur), types.NewMsgCreateClient(forwardChildTimeoutClientType, nil, nil))
+	core.CreateClient(cross(cur), types.NewMsgCreateClient(forwardChildTimeoutClientType, nil, nil))
+	clientId := types.ClientId(1)
 	connectionId := types.ConnectionId(1)
 	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))

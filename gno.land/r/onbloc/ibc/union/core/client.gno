@@ -1,49 +1,89 @@
 package core
 
 import (
-	"chain"
 	"chain/runtime"
 
 	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-func NewConsensusStateUpdate(height types.Height, consensusStateBytes, clientStateBytes []byte) types.ConsensusStateUpdate {
-	return types.ConsensusStateUpdate{Height: height, ConsensusStateBytes: consensusStateBytes, ClientStateBytes: clientStateBytes}
+// RegisterClient registers a light client implementation for a client type.
+//
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L849-L865
+func RegisterClient(cur realm, clientType types.ClientType, lc lightclient.Interface) {
+	if lc == nil {
+		panic("caller not authorized to register client: unauthorized")
+	}
+	store.registerClient(clientType, lc)
+	emitRegisterClientEvent(clientType)
 }
 
-// CreateClient stores a light client object built by the caller (an
-// app/bootstrap realm) and assigns it an id. The object owns its own client and
-// consensus state. This mirrors aib's model of handing core an already-built
-// light client instead of core decoding bytes itself.
-func CreateClient(cur realm, clientType types.ClientType, lc lightclient.Interface) types.ClientId {
-	creator := cur.Previous().Address()
-	c := store.addClient(clientType, creator, lc)
+func HasClient(clientType types.ClientType) bool {
+	return store.hasRegisteredClient(clientType)
+}
 
-	if _, err := lc.VerifyCreation(creator, creator); err != nil {
+// CreateClient assigns a client id for a registered light client type, stores
+// the submitted state bytes, then lets the light client verify creation against
+// that freshly stored state.
+//
+// Union references:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L867-L903
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L905-L972
+func CreateClient(cur realm, msg types.MsgCreateClient) {
+	creator := cur.Previous().Address()
+	lc, ok := store.registeredClient(msg.ClientType)
+	if !ok {
+		panic("client type not found")
+	}
+
+	clientId := store.nextClientId()
+	c := store.addClient(clientId, msg.ClientType, creator, lc)
+	initClient(creator, msg.ClientStateBytes, msg.ConsensusStateBytes, creator, clientId)
+
+	emitCreateClientEvent(c.id, msg.ClientType, lc.GetCounterpartyChainID())
+}
+
+func initClient(caller address, clientStateBytes, consensusStateBytes []byte, relayer address, clientId types.ClientId) types.Height {
+	c := store.getClient(clientId)
+	if c == nil {
+		panic("client " + clientId.String() + " not found")
+	}
+
+	c.saveClientState(clientStateBytes)
+	height := types.NewHeight(c.lightClient.GetLatestHeight())
+	c.saveConsensusState(height, consensusStateBytes)
+
+	result, err := c.lightClient.VerifyCreation(caller, relayer)
+	if err != nil {
 		panic("create client: " + err.Error())
 	}
 
-	chain.Emit(
-		CreateClientEvent,
-		"client_id", c.id.String(),
-		"client_type", clientType.String(),
-	)
+	if len(result.ClientStateBytes) != 0 {
+		c.saveClientState(result.ClientStateBytes)
+	}
+	for k, v := range result.StorageWrites {
+		c.saveClientStore(k, v)
+	}
 
-	return c.id
+	return height
 }
 
 // UpdateClient verifies a client message against the light client object, which
 // updates its own state, and mirrors the resulting state bytes for queries and
 // counterparty proofs.
-func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
+//
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L975-L1046
+func UpdateClient(cur realm, msg types.MsgUpdateClient) {
 	c := store.getClient(msg.ClientId)
 	if c == nil {
 		panic("client " + msg.ClientId.String() + " not found")
 	}
 
-	caller := cur.Previous().Address()
+	requireActiveClient(c)
 
+	caller := cur.Previous().Address()
 	update, err := c.lightClient.VerifyHeader(caller, msg.ClientMessage, caller)
 	if err != nil {
 		panic("update client: " + err.Error())
@@ -51,76 +91,43 @@ func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 
 	height := types.NewHeight(update.Height)
 	if len(update.ClientStateBytes) != 0 {
-		c.saveState(update.ClientStateBytes)
+		c.saveClientState(update.ClientStateBytes)
 	}
 
-	if len(update.ConsensusStateBytes) != 0 {
-		c.saveConsensusState(height, update.ConsensusStateBytes)
+	c.saveConsensusState(height, update.ConsensusStateBytes)
+	for k, v := range update.StorageWrites {
+		c.saveClientStore(k, v)
 	}
 
-	chain.Emit(
-		UpdateClientEvent,
-		"client_type", c.typ.String(),
-		"client_id", msg.ClientId.String(),
-		"height", height.String(),
-	)
-
-	return height
+	emitUpdateClientEvent(msg.ClientId, height)
 }
 
-// ForceUpdateClient replaces a client's object with a new one built by the
-// caller, bypassing proof verification.
+// ForceUpdateClient re-initializes a client from submitted state bytes,
+// bypassing header proof verification.
 //
 // It is restricted to the admin and recovers expired or otherwise unrecoverable
-// clients. Replacing the object with one the caller constructed from fresh state
-// IS the recovery: the new object owns the new state.
-func ForceUpdateClient(cur realm, clientId types.ClientId, lc lightclient.Interface) types.Height {
+// clients. The registered light client type for the existing client is reused.
+//
+// Union references:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L146-L166
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L905-L972
+func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) {
 	requireAdmin(cur, "ForceUpdateClient")
 
-	c := store.getClient(clientId)
+	c := store.getClient(msg.ClientId)
 	if c == nil {
-		panic("client " + clientId.String() + " not found")
+		panic("client " + msg.ClientId.String() + " not found")
 	}
 
 	runtime.AssertOriginCall()
+	caller := cur.Previous().Address()
+	height := initClient(caller, msg.ClientStateBytes, msg.ConsensusStateBytes, caller, msg.ClientId)
 
-	c.lightClient = lc
-	height := types.NewHeight(lc.GetLatestHeight())
-
-	chain.Emit(
-		UpdateClientEvent,
-		"client_type", c.typ.String(),
-		"client_id", clientId.String(),
-		"height", height.String(),
-	)
-
-	return height
-}
-
-// VerifyClientMembership verifies a membership proof against a registered light client.
-//
-// It does not commit the verified value into this realm's state.
-func VerifyClientMembership(_ realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {
-	verifyMembershipActive(clientId, proofHeight, proof, path, value)
-}
-
-// statusToTypes maps the light client object's status (a string) to the core
-// status enum.
-func statusToTypes(s lightclient.Status) types.Status {
-	switch s {
-	case lightclient.Active:
-		return types.StatusActive
-	case lightclient.Expired:
-		return types.StatusExpired
-	case lightclient.Frozen:
-		return types.StatusFrozen
-	default:
-		return types.StatusUnknown
-	}
+	emitForceUpdateClientEvent(msg.ClientId, height)
 }
 
 func requireActiveClient(c *client) {
-	if statusToTypes(c.lightClient.Status()) != types.StatusActive {
+	if c.lightClient.Status().ToType() != types.StatusActive {
 		panic(ErrClientNotActive)
 	}
 }
@@ -146,47 +153,86 @@ func verifyNonMembershipWithActiveClient(c *client, height types.Height, proof, 
 	}
 }
 
-// GetLightClient returns the stored light client object for clientId.
-func GetLightClient(clientId types.ClientId) (lightclient.Interface, bool) {
-	return store.lightClientOf(clientId)
-}
-
-// QueryClientState returns the stored client state as a hex string.
-func QueryClientState(clientId types.ClientId) string {
+// GetClientState returns the stored client state bytes.
+//
+// Union query reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L2138-L2140
+func GetClientState(clientId types.ClientId) []byte {
 	c := store.getClient(clientId)
 	if c == nil {
-		return ""
+		return nil
 	}
 
-	return hexString(c.clientState)
+	return cloneBytes(c.clientState)
 }
 
-// QueryConsensusState returns the consensus state at height as a hex string.
-func QueryConsensusState(clientId types.ClientId, height types.Height) string {
+// GetConsensusState returns the consensus state bytes at height.
+//
+// Union query reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L2141-L2145
+func GetConsensusState(clientId types.ClientId, height uint64) []byte {
 	c := store.getClient(clientId)
 	if c == nil {
-		return ""
+		return nil
 	}
 
-	bz, found := c.getConsensusState(height)
+	bz, found := c.getConsensusState(types.NewHeight(height))
 	if !found {
-		return ""
+		return nil
 	}
 
-	return hexString(bz)
+	return cloneBytes(bz)
 }
 
-// GetClientStatus returns the current status reported by a registered light client.
-func GetClientStatus(clientId types.ClientId) types.Status {
+// GetLatestHeight returns the latest height reported by the light client.
+//
+// Union query reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L2129-L2137
+func GetLatestHeight(clientId types.ClientId) uint64 {
+	c := store.getClient(clientId)
+	if c == nil {
+		return 0
+	}
+
+	return c.lightClient.GetLatestHeight()
+}
+
+// GetTimestampAtHeight returns the light client's timestamp at a height.
+//
+// Union query references:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L2100-L2111
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L2126-L2128
+func GetTimestampAtHeight(clientId types.ClientId, height uint64) types.Timestamp {
+	c := store.getClient(clientId)
+	if c == nil {
+		return 0
+	}
+
+	timestamp, err := c.lightClient.GetTimestampAtHeight(height)
+	if err != nil {
+		return 0
+	}
+
+	return timestamp
+}
+
+// GetStatus returns the current status reported by a registered light client.
+//
+// Union query reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L2146-L2154
+func GetStatus(clientId types.ClientId) types.Status {
 	c := store.getClient(clientId)
 	if c == nil {
 		return types.StatusUnknown
 	}
 
-	return statusToTypes(c.lightClient.Status())
+	return c.lightClient.Status().ToType()
 }
 
 // GetClientType returns the registered client type for clientId.
+//
+// Union query reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L2117-L2119
 func GetClientType(clientId types.ClientId) string {
 	c := store.getClient(clientId)
 	if c == nil {

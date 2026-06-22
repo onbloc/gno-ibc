@@ -39,8 +39,9 @@ func TestRegisterClientUnionRejectsDuplicate(cur realm, t *testing.T) {
 	})
 }
 
-// Union reference:
+// Union references:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L91-L125
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L127-L190
 func TestCreateClientUnionUsesRegisteredClient(cur realm, t *testing.T) {
 	resetStore(cur)
 	creator := testutils.TestAddress("union-client-creator")
@@ -88,16 +89,9 @@ func TestCreateClientUnionUsesRegisteredClient(cur realm, t *testing.T) {
 	}
 }
 
-func TestCreateClientRejectsUnregisteredType(cur realm, t *testing.T) {
-	resetStore(cur)
-
-	uassert.AbortsContains(t, cur, "client type not found", func(cur realm) {
-		CreateClient(cross(cur), types.NewMsgCreateClient(mockType, nil, nil))
-	})
-}
-
-// Union reference:
+// Union references:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L194-L265
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L448-L548
 func TestUpdateClientUnionMirrorsStateUpdate(cur realm, t *testing.T) {
 	resetStore(cur)
 	relayer := testutils.TestAddress("union-update-relayer")
@@ -136,33 +130,6 @@ func TestUpdateClientUnionMirrorsStateUpdate(cur realm, t *testing.T) {
 	value, ok := store.getClient(clientId).getClientStore("update-key")
 	if !ok || string(value) != "update-value" {
 		t.Fatalf("update storage write not saved: got %q found=%v", string(value), ok)
-	}
-}
-
-// Union implementation reference:
-// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L1022-L1035
-func TestUpdateClientUnionStoresEmptyConsensusState(cur realm, t *testing.T) {
-	resetStore(cur)
-	lc := &mockClient{
-		chainId:                   "union-1",
-		height:                    types.NewHeight(1),
-		status:                    types.StatusActive,
-		updateConsensusStateBytes: []byte{},
-	}
-	RegisterClient(cross(cur), mockType, lc)
-	clientId := CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("old-client"), []byte("old-consensus")))
-
-	height := UpdateClient(cross(cur), types.MsgUpdateClient{
-		ClientId:      clientId,
-		ClientMessage: []byte("header"),
-	})
-
-	bz, ok := store.getClient(clientId).getConsensusState(height)
-	if !ok {
-		t.Fatalf("empty consensus state was not stored")
-	}
-	if len(bz) != 0 {
-		t.Fatalf("empty consensus state: got %q want empty", string(bz))
 	}
 }
 

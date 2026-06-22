@@ -3,6 +3,7 @@ package impl
 import (
 	"bytes"
 	"chain"
+	"chain/banker"
 	"testing"
 	"time"
 
@@ -461,6 +462,40 @@ func TestTokenOrderExecuteUnescrowChannelBalanceUnderflow(cur realm, t *testing.
 	_, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("unescrow-rly")), nil, u256.Zero(), order, false)
 
 	uassert.ErrorContains(t, err, "underflow")
+}
+
+func TestTokenOrderExecuteUnescrowNativeFeeDistribution(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	const destChan = types.ChannelId(41)
+	relayer := testAddress("unescrow-fee-rly")
+	receiver := testAddress("unescrow-fee-rx")
+	baseToken := []byte("ibc/unescrow-fee")
+	quoteToken := []byte("ufee")
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(receiver),
+		BaseToken:   baseToken,
+		BaseAmount:  u256.NewUint(55),
+		QuoteToken:  quoteToken,
+		QuoteAmount: u256.NewUint(50),
+		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
+	}
+	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
+	key := ChannelBalanceKeyV2(destChan, u256.Zero(), quoteToken, baseToken)
+	testStore.SetChannelBalanceV2(0, cur, key, order.BaseAmount)
+	testing.IssueCoins(cur.Address(), chain.NewCoins(chain.NewCoin(string(quoteToken), 55)))
+
+	res, err := v.executeTokenOrderV2(0, cur, packet, address(relayer), nil, u256.Zero(), order, false)
+
+	uassert.NoError(t, err)
+	uassert.True(t, res.Status == types.PacketStatusSuccess)
+	bk := banker.NewReadonlyBanker()
+	uassert.Equal(t, int64(50), bk.GetCoins(address(receiver)).AmountOf(string(quoteToken)))
+	uassert.Equal(t, int64(5), bk.GetCoins(address(relayer)).AmountOf(string(quoteToken)))
+	balance, ok := testStore.GetChannelBalanceV2(key)
+	uassert.True(t, ok)
+	uassert.True(t, balance.IsZero())
 }
 
 func TestTokenOrderExecuteEscrowQuoteDenomMismatchFallsBackToMarketMaker(cur realm, t *testing.T) {

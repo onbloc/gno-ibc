@@ -3,6 +3,7 @@ package zkgm
 import (
 	"testing"
 
+	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
@@ -78,6 +79,34 @@ func TestUpdateImplSwapsToLatestTarget(cur realm, t *testing.T) {
 	if !second.recvCalled {
 		t.Fatal("latest impl must be the active swap target")
 	}
+}
+
+func TestUpdateImplPreservesProxyStoreState(cur realm, t *testing.T) {
+	resetZkgmForTest()
+	first := &dummyImpl{}
+	second := &dummyImpl{}
+	implConstructors[testImplPathA] = func(store IStore) IApp { return first }
+	implConstructors[testImplPathB] = func(store IStore) IApp { return second }
+
+	channelKey := "upgrade-continuity/channel-balance"
+	inFlightKey := "upgrade-continuity/in-flight"
+	parent := core.NewPacket(10, 11, []byte("parent"), 100)
+
+	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	UpdateImpl(cur, testImplPathA)
+	store.SetChannelBalanceV2(0, cur, channelKey, u256.NewUint(40))
+	store.SetInFlightPacket(0, cur, inFlightKey, parent)
+	UpdateImpl(cur, testImplPathB)
+
+	balance, ok := store.GetChannelBalanceV2(channelKey)
+	uassert.True(t, ok)
+	uassert.Equal(t, "40", balance.ToString())
+
+	popped, ok := store.GetInFlightPacket(inFlightKey)
+	uassert.True(t, ok)
+	uassert.Equal(t, "parent", string(popped.Data))
+	uassert.True(t, currentImpl == second)
+	uassert.True(t, currentImpl != first)
 }
 
 func TestProxyAddressIsCaptured(cur realm, t *testing.T) {

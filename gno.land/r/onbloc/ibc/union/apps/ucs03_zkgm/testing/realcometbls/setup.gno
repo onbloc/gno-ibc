@@ -5,7 +5,7 @@ import (
 
 	types "gno.land/p/onbloc/ibc/union/types"
 
-	realcometbls "gno.land/r/onbloc/ibc/lightclients/cometbls"
+	realcometbls "gno.land/p/onbloc/ibc/union/lightclient/cometbls"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
@@ -15,6 +15,13 @@ type ChannelPair struct {
 	ConnectionId types.ConnectionId
 	Source       types.ChannelId
 	Destination  types.ChannelId
+}
+
+var testConnectionSeq uint32
+
+func nextTestConnectionId() types.ConnectionId {
+	testConnectionSeq++
+	return types.ConnectionId(testConnectionSeq)
 }
 
 func CreateRealCometBLSClient(cur realm) types.ClientId {
@@ -54,16 +61,26 @@ func createSyntheticCometBLSClient(cur realm, clientStateBytes []byte) types.Cli
 }
 
 func createCometBLSClient(cur realm, clientStateBytes, consensusStateBytes []byte) types.ClientId {
-	if !core.HasClient(realcometbls.ClientType) {
-		realcometbls.Register(cross(cur))
+	clientState, err := realcometbls.DecodeClientState(clientStateBytes)
+	if err != nil {
+		panic(err)
 	}
-	return core.CreateClient(cross(cur), types.NewMsgCreateClient(realcometbls.ClientType, clientStateBytes, consensusStateBytes))
+	consensusState, err := realcometbls.DecodeConsensusState(consensusStateBytes)
+	if err != nil {
+		panic(err)
+	}
+	lightClient, err := realcometbls.NewCometblsLightClient(clientState, consensusState)
+	if err != nil {
+		panic(err)
+	}
+	return core.CreateClient(cross(cur), types.ClientType(realcometbls.ClientType), lightClient)
 }
 
 func OpenZ35CometBLSChannel(cur realm) ChannelPair {
 	clientId := CreateZ35CometBLSClient(cross(cur))
 
-	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	connectionId := nextTestConnectionId()
+	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), Z35ConnectionTryProof(cross(cur)), uint64(DevnetHeight-1)))
 
 	destination := openZ35Channel(cross(cur), connectionId, types.ChannelId(2))
@@ -77,27 +94,28 @@ func OpenZ35CometBLSChannel(cur realm) ChannelPair {
 
 func openZ35Channel(cur realm, connectionId types.ConnectionId, counterpartyChannelId types.ChannelId) types.ChannelId {
 	portId := []byte(zkgm.ProxyPkgPath())
-	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version))
-	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, counterpartyChannelId, Z35ChannelTryProof(cross(cur)), uint64(DevnetHeight-1)))
+	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, counterpartyChannelId, Z35ChannelTryProof(cross(cur)), uint64(DevnetHeight-1), "g1msgrelayer"))
 	return channelId
 }
 
 func BatchSend(cur realm, packet types.Packet) types.H256 {
 	stdtesting.SetRealm(stdtesting.NewCodeRealm(zkgm.ProductionImplPath()))
-	commitment := zkgm.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{packet}))
+	zkgm.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{packet}))
 	stdtesting.SetRealm(stdtesting.NewCodeRealm("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/realcometbls"))
-	return commitment
+	return types.MustCommit(types.CommitPackets([]types.Packet{packet}))
 }
 
 func OpenZ37CometBLSChannel(cur realm) ChannelPair {
 	clientId := CreateZ37CometBLSClient(cross(cur))
 
-	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	connectionId := nextTestConnectionId()
+	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), Z37ConnectionTryProof(cross(cur)), uint64(DevnetHeight-1)))
 
 	portId := []byte(zkgm.ProxyPkgPath())
-	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version))
-	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, types.ChannelId(2), Z37ChannelTryProof(cross(cur)), uint64(DevnetHeight-1)))
+	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, types.ChannelId(2), Z37ChannelTryProof(cross(cur)), uint64(DevnetHeight-1), "g1msgrelayer"))
 	return ChannelPair{
 		ClientId:     clientId,
 		ConnectionId: connectionId,

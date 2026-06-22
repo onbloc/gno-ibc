@@ -38,15 +38,17 @@ func main(cur realm) {
 	core.RegisterApp(cross(cur), &asyncApp{})
 
 	clientId := core.CreateClient(cross(cur), types.NewMsgCreateClient(e2e.MockClientType, nil, nil))
-	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	connectionId := types.ConnectionId(1)
+	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
-	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit([]byte(batchAcksPort), []byte(batchAcksPort), connectionId, "async-v1"))
-	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, "async-v1", types.ChannelId(101), nil, 1))
+	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit([]byte(batchAcksPort), []byte(batchAcksPort), connectionId, "async-v1", "g1msgrelayer"))
+	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, "async-v1", types.ChannelId(101), nil, 1, "g1msgrelayer"))
 
 	packet := core.NewPacket(types.ChannelId(99), channelId, []byte("async-packet"), types.Timestamp(1<<62))
 	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))
 
-	batchHash := core.BatchAcks(cross(cur), types.NewMsgBatchAcks([]types.Packet{packet}, [][]byte{[]byte("ack")}))
+	batchHash := types.MustCommit(types.CommitPackets([]types.Packet{packet}))
+	core.BatchAcks(cross(cur), types.NewMsgBatchAcks([]types.Packet{packet}, [][]byte{[]byte("ack")}))
 	println("batch_acks_hash", batchHash.String())
 	println("batch_acks_event", "ok")
 }

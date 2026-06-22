@@ -2,6 +2,9 @@
 package scenarios_batchsend
 
 import (
+	"errors"
+
+	"gno.land/p/onbloc/ibc/union/lightclient"
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -17,30 +20,44 @@ const timeoutScenarioClientType = types.ClientType("gno.land/r/onbloc/ibc/union/
 
 type timeoutScenarioLightClient struct{}
 
-func (m *timeoutScenarioLightClient) CreateClient(_ realm, clientId types.ClientId, clientStateBytes, consensusStateBytes []byte) string {
-	return "timeout-scenario-chain"
+func (m *timeoutScenarioLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error {
+	return nil
 }
 
-func (m *timeoutScenarioLightClient) UpdateClient(cur realm, clientId types.ClientId, clientMessage []byte) types.ConsensusStateUpdate {
-	return core.NewConsensusStateUpdate(cross(cur), types.NewHeight(1), clientMessage, clientMessage)
+func (m *timeoutScenarioLightClient) VerifyNonMembership(uint64, []byte, []byte) error {
+	return nil
 }
 
-func (m *timeoutScenarioLightClient) VerifyMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte, value []byte) {
-}
-
-func (m *timeoutScenarioLightClient) VerifyNonMembership(clientId types.ClientId, height types.Height, proof []byte, key []byte) {
-}
-
-func (m *timeoutScenarioLightClient) GetTimestamp(clientId types.ClientId, height types.Height) types.Timestamp {
+func (m *timeoutScenarioLightClient) GetTimestamp() types.Timestamp {
 	return types.Timestamp(2)
 }
 
-func (m *timeoutScenarioLightClient) GetLatestHeight(clientId types.ClientId) types.Height {
-	return types.NewHeight(1)
+func (m *timeoutScenarioLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
+	return types.Timestamp(2), nil
 }
 
-func (m *timeoutScenarioLightClient) GetStatus(clientId types.ClientId) types.Status {
-	return types.StatusActive
+func (m *timeoutScenarioLightClient) GetLatestHeight() uint64 {
+	return 1
+}
+
+func (m *timeoutScenarioLightClient) GetCounterpartyChainID() string {
+	return "timeout-scenario-chain"
+}
+
+func (m *timeoutScenarioLightClient) Status() lightclient.Status {
+	return lightclient.Active
+}
+
+func (m *timeoutScenarioLightClient) VerifyHeader(_ address, header []byte, _ address) (types.StateUpdate, error) {
+	return types.StateUpdate{Height: 1, ClientStateBytes: header, ConsensusStateBytes: header}, nil
+}
+
+func (m *timeoutScenarioLightClient) VerifyCreation(address, address) (types.ClientCreationResult, error) {
+	return types.ClientCreationResult{}, nil
+}
+
+func (m *timeoutScenarioLightClient) Misbehaviour(address, []byte, address) (types.ClientState, error) {
+	return nil, errors.New("mock: misbehaviour unsupported")
 }
 
 func main(cur realm) {
@@ -99,12 +116,13 @@ func openTimeoutScenarioChannelPair(cur realm) e2e.ChannelPair {
 		core.RegisterClient(cross(cur), timeoutScenarioClientType, &timeoutScenarioLightClient{})
 	}
 	clientId := core.CreateClient(cross(cur), types.NewMsgCreateClient(timeoutScenarioClientType, nil, nil))
-	connectionId := core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	connectionId := types.ConnectionId(1)
+	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
 
 	portId := []byte(zkgm.ProxyPkgPath())
-	source := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version))
-	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(source, zkgm.Version, types.ChannelId(2), nil, 1))
+	source := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(source, zkgm.Version, types.ChannelId(2), nil, 1, "g1msgrelayer"))
 	return e2e.NewChannelPair(cross(cur), clientId, connectionId, source, types.ChannelId(2))
 }
 

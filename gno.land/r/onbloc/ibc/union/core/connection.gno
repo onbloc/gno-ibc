@@ -1,7 +1,7 @@
 package core
 
 import (
-	"chain"
+	"chain/runtime"
 
 	"gno.land/p/onbloc/ibc/union/types"
 )
@@ -10,36 +10,54 @@ func NewConnection(state types.ConnectionState, clientId, counterpartyClientId t
 	return types.Connection{State: state, ClientId: clientId, CounterpartyClientId: counterpartyClientId, CounterpartyConnectionId: counterpartyConnectionId}
 }
 
-func ConnectionOpenInit(_ realm, msg types.MsgConnectionOpenInit) types.ConnectionId {
-	connectionId := store.nextConnectionId()
-	store.saveConnection(connectionId, NewConnection(types.ConnectionStateInit, msg.ClientId, msg.CounterpartyClientId, 0))
-	chain.Emit(ConnectionOpenInitEvent,
-		"connection_id", connectionId.String(),
-		"client_id", msg.ClientId.String(),
-		"counterparty_client_id", msg.CounterpartyClientId.String(),
-	)
-	return connectionId
+func ConnectionOpenInit(cur realm, msg types.MsgConnectionOpenInit) {
+	requireAdmin(cur, "ConnectionOpenInit")
+	runtime.AssertOriginCall()
+	getImpl().ConnectionOpenInit(0, cur, msg)
 }
 
-func ConnectionOpenTry(_ realm, msg types.MsgConnectionOpenTry) types.ConnectionId {
+func ConnectionOpenTry(cur realm, msg types.MsgConnectionOpenTry) {
+	requireAdmin(cur, "ConnectionOpenTry")
+	runtime.AssertOriginCall()
+	getImpl().ConnectionOpenTry(0, cur, msg)
+}
+
+func ForceConnectionOpenTry(cur realm, msg types.MsgConnectionOpenTry) {
+	requireAdmin(cur, "ForceConnectionOpenTry")
+	runtime.AssertOriginCall()
+	connectionOpenTry(msg, false)
+}
+
+func connectionOpenTry(msg types.MsgConnectionOpenTry, verify bool) {
 	connectionId := store.nextConnectionId()
+
+	connection := NewConnection(types.ConnectionStateTryOpen, msg.ClientId, msg.CounterpartyClientId, msg.CounterpartyConnectionId)
 
 	expectedConnection := NewConnection(types.ConnectionStateInit, msg.CounterpartyClientId, msg.ClientId, 0)
-	key := types.ConnectionPath(msg.CounterpartyConnectionId)
-	value := connectionValue(expectedConnection)
-	verifyMembershipActive(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
 
-	store.saveConnection(connectionId, NewConnection(types.ConnectionStateTryOpen, msg.ClientId, msg.CounterpartyClientId, msg.CounterpartyConnectionId))
-	chain.Emit(ConnectionOpenTryEvent,
-		"connection_id", connectionId.String(),
-		"client_id", msg.ClientId.String(),
-		"counterparty_client_id", msg.CounterpartyClientId.String(),
-		"counterparty_connection_id", msg.CounterpartyConnectionId.String(),
-	)
-	return connectionId
+	if verify {
+		key := types.ConnectionPath(msg.CounterpartyConnectionId)
+		value := connectionValue(expectedConnection)
+		verifyMembershipActive(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
+	}
+
+	store.saveConnection(connectionId, connection)
+	emitConnectionOpenTryEvent(connectionId, msg.ClientId, msg.CounterpartyClientId, msg.CounterpartyConnectionId)
 }
 
-func ConnectionOpenAck(_ realm, msg types.MsgConnectionOpenAck) {
+func ConnectionOpenAck(cur realm, msg types.MsgConnectionOpenAck) {
+	requireAdmin(cur, "ConnectionOpenAck")
+	runtime.AssertOriginCall()
+	getImpl().ConnectionOpenAck(0, cur, msg)
+}
+
+func ForceConnectionOpenAck(cur realm, msg types.MsgConnectionOpenAck) {
+	requireAdmin(cur, "ForceConnectionOpenAck")
+	runtime.AssertOriginCall()
+	connectionOpenAck(msg, false)
+}
+
+func connectionOpenAck(msg types.MsgConnectionOpenAck, verify bool) {
 	connection, ok := store.getConnection(msg.ConnectionId)
 	if !ok {
 		panic("connection " + msg.ConnectionId.String() + " not found")
@@ -48,24 +66,33 @@ func ConnectionOpenAck(_ realm, msg types.MsgConnectionOpenAck) {
 		panic(ErrInvalidConnectionState)
 	}
 
-	expectedConnection := NewConnection(types.ConnectionStateTryOpen, connection.CounterpartyClientId, connection.ClientId, msg.ConnectionId)
-	key := types.ConnectionPath(msg.CounterpartyConnectionId)
-	value := connectionValue(expectedConnection)
-	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofTry, key[:], value[:])
+	if verify {
+		expectedConnection := NewConnection(types.ConnectionStateTryOpen, connection.CounterpartyClientId, connection.ClientId, msg.ConnectionId)
+		key := types.ConnectionPath(msg.CounterpartyConnectionId)
+		value := connectionValue(expectedConnection)
+		verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofTry, key[:], value[:])
+	}
 
 	connection.State = types.ConnectionStateOpen
 	connection.CounterpartyConnectionId = msg.CounterpartyConnectionId
 	store.saveConnection(msg.ConnectionId, connection)
 
-	chain.Emit(ConnectionOpenAckEvent,
-		"connection_id", msg.ConnectionId.String(),
-		"client_id", connection.ClientId.String(),
-		"counterparty_client_id", connection.CounterpartyClientId.String(),
-		"counterparty_connection_id", msg.CounterpartyConnectionId.String(),
-	)
+	emitConnectionOpenAckEvent(msg.ConnectionId, connection.ClientId, connection.CounterpartyClientId, msg.CounterpartyConnectionId)
 }
 
-func ConnectionOpenConfirm(_ realm, msg types.MsgConnectionOpenConfirm) {
+func ConnectionOpenConfirm(cur realm, msg types.MsgConnectionOpenConfirm) {
+	requireAdmin(cur, "ConnectionOpenConfirm")
+	runtime.AssertOriginCall()
+	getImpl().ConnectionOpenConfirm(0, cur, msg)
+}
+
+func ForceConnectionOpenConfirm(cur realm, msg types.MsgConnectionOpenConfirm) {
+	requireAdmin(cur, "ForceConnectionOpenConfirm")
+	runtime.AssertOriginCall()
+	connectionOpenConfirm(msg, false)
+}
+
+func connectionOpenConfirm(msg types.MsgConnectionOpenConfirm, verify bool) {
 	connection, ok := store.getConnection(msg.ConnectionId)
 	if !ok {
 		panic("connection " + msg.ConnectionId.String() + " not found")
@@ -75,27 +102,19 @@ func ConnectionOpenConfirm(_ realm, msg types.MsgConnectionOpenConfirm) {
 	}
 
 	expectedConnection := NewConnection(types.ConnectionStateOpen, connection.CounterpartyClientId, connection.ClientId, msg.ConnectionId)
-	key := types.ConnectionPath(connection.CounterpartyConnectionId)
-	value := connectionValue(expectedConnection)
-	verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofAck, key[:], value[:])
+
+	counterpartyConnectionId := connection.CounterpartyConnectionId
+
+	if verify {
+		key := types.ConnectionPath(counterpartyConnectionId)
+		value := connectionValue(expectedConnection)
+		verifyMembershipActive(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofAck, key[:], value[:])
+	}
 
 	connection.State = types.ConnectionStateOpen
 	store.saveConnection(msg.ConnectionId, connection)
 
-	chain.Emit(ConnectionOpenConfirmEvent,
-		"connection_id", msg.ConnectionId.String(),
-		"client_id", connection.ClientId.String(),
-		"counterparty_client_id", connection.CounterpartyClientId.String(),
-		"counterparty_connection_id", connection.CounterpartyConnectionId.String(),
-	)
-}
-
-func GetConnection(connectionId types.ConnectionId) types.Connection {
-	connection, ok := store.getConnection(connectionId)
-	if !ok {
-		panic("connection " + connectionId.String() + " not found")
-	}
-	return connection
+	emitConnectionOpenConfirmEvent(msg.ConnectionId, connection.ClientId, connection.CounterpartyClientId, counterpartyConnectionId)
 }
 
 func QueryConnection(connectionId types.ConnectionId) string {

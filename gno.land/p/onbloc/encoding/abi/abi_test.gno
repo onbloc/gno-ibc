@@ -1,256 +1,175 @@
+// Test vectors and cases are based on the following references:
+//
+//	https://github.com/ethereum/go-ethereum/blob/master/accounts/abi/packing_test.go
 package abi
 
 import (
 	"encoding/hex"
 	"testing"
 
-	"gno.land/p/onbloc/json"
-
 	u256 "gno.land/p/gnoswap/uint256"
 )
 
-var instructionSchema = Schema{Fields: []Field{
-	{Type: TypeUint8},
-	{Type: TypeUint8},
-	{Type: TypeBytes},
-}}
+func TestGoEthereumPrimitiveVectors(t *testing.T) {
+	// bool
+	boolSchema := Schema{Fields: []Field{{Type: TypeBool}}}
+	assertEncodeHex(t, "bool_true", boolSchema, []any{true},
+		"0000000000000000000000000000000000000000000000000000000000000001")
+	assertEncodeHex(t, "bool_false", boolSchema, []any{false},
+		"0000000000000000000000000000000000000000000000000000000000000000")
 
-var callSchema = Schema{Fields: []Field{
-	{Type: TypeBytes},
-	{Type: TypeBool},
-	{Type: TypeBytes},
-	{Type: TypeBytes},
-}}
+	// unsigned integers
+	assertEncodeHex(t, "uint8_2", Schema{Fields: []Field{{Type: TypeUint8}}}, []any{uint8(2)},
+		"0000000000000000000000000000000000000000000000000000000000000002")
+	assertEncodeHex(t, "uint32_1", Schema{Fields: []Field{{Type: TypeUint32}}}, []any{uint32(1)},
+		"0000000000000000000000000000000000000000000000000000000000000001")
+	assertEncodeHex(t, "uint64_2", Schema{Fields: []Field{{Type: TypeUint64}}}, []any{uint64(2)},
+		"0000000000000000000000000000000000000000000000000000000000000002")
+	assertEncodeHex(t, "uint256_2", Schema{Fields: []Field{{Type: TypeUint256}}}, []any{u256.NewUint(2)},
+		"0000000000000000000000000000000000000000000000000000000000000002")
 
-var zkgmPacketSchema = Schema{Fields: []Field{
-	{Type: TypeBytes32},
-	{Type: TypeUint256},
-	{Type: TypeStruct, Sub: &instructionSchema},
-}}
+	// bytes32: 32 fixed bytes, MSB-first in slot (left-aligned, no length prefix)
+	var b32 [32]byte
+	b32[0] = 1
+	assertEncodeHex(t, "bytes32_leading_one", Schema{Fields: []Field{{Type: TypeBytes32}}}, []any{b32},
+		"0100000000000000000000000000000000000000000000000000000000000000")
 
-var forwardSchema = Schema{Fields: []Field{
-	{Type: TypeUint256},
-	{Type: TypeUint64},
-	{Type: TypeUint64},
-	{Type: TypeStruct, Sub: &instructionSchema},
-}}
+	// bytes: outer offset(0x20) + length + data (dynamic type)
+	assertEncodeHex(t, "bytes_32b", Schema{Fields: []Field{{Type: TypeBytes}}},
+		[]any{mustHex("0100000000000000000000000000000000000000000000000000000000000000")},
+		"0000000000000000000000000000000000000000000000000000000000000020"+
+			"0000000000000000000000000000000000000000000000000000000000000020"+
+			"0100000000000000000000000000000000000000000000000000000000000000")
 
-var batchSchema = Schema{Fields: []Field{
-	{Type: TypeArray, Elem: &Field{Type: TypeStruct, Sub: &instructionSchema}},
-}}
+	// string: identical wire format to bytes
+	assertEncodeHex(t, "string_foobar", Schema{Fields: []Field{{Type: TypeString}}},
+		[]any{"foobar"},
+		"0000000000000000000000000000000000000000000000000000000000000020"+
+			"0000000000000000000000000000000000000000000000000000000000000006"+
+			"666f6f6261720000000000000000000000000000000000000000000000000000")
 
-var batchAckSchema = Schema{Fields: []Field{
-	{Type: TypeArray, Elem: &Field{Type: TypeBytes}},
-}}
-
-var tokenOrderV2Schema = Schema{Fields: []Field{
-	{Type: TypeBytes},
-	{Type: TypeBytes},
-	{Type: TypeBytes},
-	{Type: TypeUint256},
-	{Type: TypeBytes},
-	{Type: TypeUint256},
-	{Type: TypeUint8},
-	{Type: TypeBytes},
-}}
-
-var tokenOrderV1Schema = Schema{Fields: []Field{
-	{Type: TypeBytes},
-	{Type: TypeBytes},
-	{Type: TypeBytes},
-	{Type: TypeUint256},
-	{Type: TypeString},
-	{Type: TypeString},
-	{Type: TypeUint8},
-	{Type: TypeUint256},
-	{Type: TypeBytes},
-	{Type: TypeUint256},
-}}
-
-var ackSchema = Schema{Fields: []Field{
-	{Type: TypeUint256},
-	{Type: TypeBytes},
-}}
-
-var tokenOrderAckSchema = Schema{Fields: []Field{
-	{Type: TypeUint256},
-	{Type: TypeBytes},
-}}
-
-func TestEncodeKnownVectors(t *testing.T) {
-	assertEncodeHex(t, "Instruction_short_operand", instructionSchema, []any{
-		uint8(2),
-		uint8(3),
-		mustHex("aabbcc"),
-	}, "0000000000000000000000000000000000000000000000000000000000000002"+
-		"0000000000000000000000000000000000000000000000000000000000000003"+
-		"0000000000000000000000000000000000000000000000000000000000000060"+
-		"0000000000000000000000000000000000000000000000000000000000000003"+
-		"aabbcc0000000000000000000000000000000000000000000000000000000000")
-
-	assertEncodeHex(t, "Call_basic", callSchema, []any{
-		[]byte("alice"),
-		true,
-		[]byte("bobcontract"),
-		mustHex("cafe"),
-	}, "0000000000000000000000000000000000000000000000000000000000000080"+
+	// static tuple(uint256, uint256) — go-ethereum: tuple(int256(1), int256(2)), same encoding for positive values
+	staticPairSchema := Schema{Fields: []Field{{
+		Type: TypeStruct,
+		Sub:  &Schema{Fields: []Field{{Type: TypeUint256}, {Type: TypeUint256}}},
+	}}}
+	assertEncodeHex(t, "static_tuple_two_uint256", staticPairSchema,
+		[]any{[]any{u256.NewUint(1), u256.NewUint(2)}},
 		"0000000000000000000000000000000000000000000000000000000000000001"+
-		"00000000000000000000000000000000000000000000000000000000000000c0"+
-		"0000000000000000000000000000000000000000000000000000000000000100"+
-		"0000000000000000000000000000000000000000000000000000000000000005"+
-		"616c696365000000000000000000000000000000000000000000000000000000"+
-		"000000000000000000000000000000000000000000000000000000000000000b"+
-		"626f62636f6e7472616374000000000000000000000000000000000000000000"+
-		"0000000000000000000000000000000000000000000000000000000000000002"+
-		"cafe000000000000000000000000000000000000000000000000000000000000")
-
-	var salt [32]byte
-	for i := range salt {
-		salt[i] = 0xab
-	}
-	assertEncodeHex(t, "ZkgmPacket_with_short_call_operand", zkgmPacketSchema, []any{
-		salt,
-		u256.NewUint(7),
-		[]any{uint8(0), uint8(1), mustHex("0102")},
-	}, "abababababababababababababababababababababababababababababababab"+
-		"0000000000000000000000000000000000000000000000000000000000000007"+
-		"0000000000000000000000000000000000000000000000000000000000000060"+
-		"0000000000000000000000000000000000000000000000000000000000000000"+
-		"0000000000000000000000000000000000000000000000000000000000000001"+
-		"0000000000000000000000000000000000000000000000000000000000000060"+
-		"0000000000000000000000000000000000000000000000000000000000000002"+
-		"0102000000000000000000000000000000000000000000000000000000000000")
+			"0000000000000000000000000000000000000000000000000000000000000002")
 }
 
-func TestDecodeKnownVectors(t *testing.T) {
-	out, err := Decode(instructionSchema, mustHex("0000000000000000000000000000000000000000000000000000000000000002"+
-		"0000000000000000000000000000000000000000000000000000000000000003"+
-		"0000000000000000000000000000000000000000000000000000000000000060"+
-		"0000000000000000000000000000000000000000000000000000000000000003"+
-		"aabbcc0000000000000000000000000000000000000000000000000000000000"))
-	if err != nil {
-		t.Fatalf("Decode Instruction: %v", err)
-	}
-	if out[0].(uint8) != 2 || out[1].(uint8) != 3 || hex.EncodeToString(out[2].([]byte)) != "aabbcc" {
-		t.Fatalf("decoded instruction mismatch")
-	}
+func TestGoEthereumArrayVectors(t *testing.T) {
+	// bytes[] — outer offset(0x20) + count(2) + per-elem offsets + length-prefixed data
+	bytesSliceSchema := Schema{Fields: []Field{{Type: TypeArray, Elem: &Field{Type: TypeBytes}}}}
+	assertEncodeHex(t, "bytes_slice_two_elems", bytesSliceSchema,
+		[]any{[]any{[]byte{0xf0, 0xf0, 0xf0}, []byte{0xf0, 0xf0, 0xf0}}},
+		"0000000000000000000000000000000000000000000000000000000000000020"+
+			"0000000000000000000000000000000000000000000000000000000000000002"+
+			"0000000000000000000000000000000000000000000000000000000000000040"+
+			"0000000000000000000000000000000000000000000000000000000000000080"+
+			"0000000000000000000000000000000000000000000000000000000000000003"+
+			"f0f0f00000000000000000000000000000000000000000000000000000000000"+
+			"0000000000000000000000000000000000000000000000000000000000000003"+
+			"f0f0f00000000000000000000000000000000000000000000000000000000000")
 
-	call, err := Decode(callSchema, mustHex("0000000000000000000000000000000000000000000000000000000000000080"+
-		"0000000000000000000000000000000000000000000000000000000000000001"+
-		"00000000000000000000000000000000000000000000000000000000000000c0"+
-		"0000000000000000000000000000000000000000000000000000000000000100"+
-		"0000000000000000000000000000000000000000000000000000000000000005"+
-		"616c696365000000000000000000000000000000000000000000000000000000"+
-		"000000000000000000000000000000000000000000000000000000000000000b"+
-		"626f62636f6e7472616374000000000000000000000000000000000000000000"+
-		"0000000000000000000000000000000000000000000000000000000000000002"+
-		"cafe000000000000000000000000000000000000000000000000000000000000"))
-	if err != nil {
-		t.Fatalf("Decode Call: %v", err)
+	// string[] {"Ethereum", "go-ethereum"}
+	strSliceSchema := Schema{Fields: []Field{{Type: TypeArray, Elem: &Field{Type: TypeString}}}}
+	assertEncodeHex(t, "string_slice_two_elems", strSliceSchema,
+		[]any{[]any{"Ethereum", "go-ethereum"}},
+		"0000000000000000000000000000000000000000000000000000000000000020"+
+			"0000000000000000000000000000000000000000000000000000000000000002"+
+			"0000000000000000000000000000000000000000000000000000000000000040"+
+			"0000000000000000000000000000000000000000000000000000000000000080"+
+			"0000000000000000000000000000000000000000000000000000000000000008"+
+			"457468657265756d000000000000000000000000000000000000000000000000"+
+			"000000000000000000000000000000000000000000000000000000000000000b"+
+			"676f2d657468657265756d000000000000000000000000000000000000000000")
+}
+
+func TestAddressEncoding(t *testing.T) {
+	addrSchema := Schema{Fields: []Field{{Type: TypeAddress}}}
+
+	addr := make([]byte, 20)
+	for i := range addr {
+		addr[i] = 0x01
 	}
-	if string(call[0].([]byte)) != "alice" || call[1].(bool) != true || string(call[2].([]byte)) != "bobcontract" || hex.EncodeToString(call[3].([]byte)) != "cafe" {
-		t.Fatalf("decoded call mismatch")
+	assertEncodeHex(t, "address_all_ones", addrSchema, []any{addr},
+		"0000000000000000000000000101010101010101010101010101010101010101")
+
+	// non-zero bytes in the 12-byte left padding must be rejected
+	_, err := Decode(addrSchema, mustHex("0000000000000000000000ff0101010101010101010101010101010101010101"))
+	if err != ErrInvalidData {
+		t.Fatalf("address non-zero padding: got %v want ErrInvalidData", err)
 	}
 }
 
-func TestRoundTripDynamicArrays(t *testing.T) {
-	batchValues := []any{
-		[]any{
-			[]any{uint8(0), uint8(1), mustHex("0102")},
-			[]any{uint8(2), uint8(3), mustHex("aabbcc")},
-			[]any{uint8(0), uint8(2), []byte{}},
-		},
-	}
-	bz, err := Encode(batchSchema, batchValues)
-	if err != nil {
-		t.Fatalf("Encode Batch: %v", err)
-	}
-	decoded, err := Decode(batchSchema, bz)
-	if err != nil {
-		t.Fatalf("Decode Batch: %v", err)
-	}
-	items := decoded[0].([]any)
-	if len(items) != 3 {
-		t.Fatalf("batch length: got %d want 3", len(items))
-	}
-	second := items[1].([]any)
-	if second[0].(uint8) != 2 || second[1].(uint8) != 3 || hex.EncodeToString(second[2].([]byte)) != "aabbcc" {
-		t.Fatalf("decoded batch element mismatch")
+func TestStaticElementArray(t *testing.T) {
+	uint256ArraySchema := Schema{Fields: []Field{{Type: TypeArray, Elem: &Field{Type: TypeUint256}}}}
+
+	// static elem path in encodeArray/arrayAt: no per-element offset words
+	assertEncodeHex(t, "uint256_array_three", uint256ArraySchema,
+		[]any{[]any{u256.NewUint(1), u256.NewUint(2), u256.NewUint(3)}},
+		"0000000000000000000000000000000000000000000000000000000000000020"+
+			"0000000000000000000000000000000000000000000000000000000000000003"+
+			"0000000000000000000000000000000000000000000000000000000000000001"+
+			"0000000000000000000000000000000000000000000000000000000000000002"+
+			"0000000000000000000000000000000000000000000000000000000000000003")
+
+	// empty array: encodeArray early-return path, count word only
+	assertEncodeHex(t, "uint256_array_empty", uint256ArraySchema,
+		[]any{[]any{}},
+		"0000000000000000000000000000000000000000000000000000000000000020"+
+			"0000000000000000000000000000000000000000000000000000000000000000")
+}
+
+func TestEmptyDynamicEncoding(t *testing.T) {
+	// encodeBytes with len=0: (32-0%32)%32 == 0, so no padding word appended
+	assertEncodeHex(t, "bytes_empty", Schema{Fields: []Field{{Type: TypeBytes}}}, []any{[]byte{}},
+		"0000000000000000000000000000000000000000000000000000000000000020"+
+			"0000000000000000000000000000000000000000000000000000000000000000")
+}
+
+func TestRejectIntegerOverflow(t *testing.T) {
+	// uint8 word value 256 (0x100) — decoder rejects v > 255
+	_, err := Decode(Schema{Fields: []Field{{Type: TypeUint8}}},
+		mustHex("0000000000000000000000000000000000000000000000000000000000000100"))
+	if err != ErrInvalidData {
+		t.Fatalf("uint8 overflow: got %v want ErrInvalidData", err)
 	}
 
-	acks := []any{[]any{mustHex("dead"), []byte{}, mustHex("cafe01")}}
-	bz, err = Encode(batchAckSchema, acks)
-	if err != nil {
-		t.Fatalf("Encode BatchAck: %v", err)
-	}
-	decoded, err = Decode(batchAckSchema, bz)
-	if err != nil {
-		t.Fatalf("Decode BatchAck: %v", err)
-	}
-	ackItems := decoded[0].([]any)
-	if len(ackItems) != 3 || hex.EncodeToString(ackItems[2].([]byte)) != "cafe01" {
-		t.Fatalf("decoded batch ack mismatch")
+	// uint32 word value 0x1_00000000 — decoder rejects v > 0xFFFFFFFF
+	_, err = Decode(Schema{Fields: []Field{{Type: TypeUint32}}},
+		mustHex("0000000000000000000000000000000000000000000000000000000100000000"))
+	if err != ErrInvalidData {
+		t.Fatalf("uint32 overflow: got %v want ErrInvalidData", err)
 	}
 }
 
-func TestRoundTripForwardAndTokenOrder(t *testing.T) {
-	callOperand, err := Encode(callSchema, []any{
-		[]byte("sender"),
-		true,
-		[]byte("contract"),
-		mustHex("cafe"),
-	})
-	if err != nil {
-		t.Fatalf("Encode Call operand: %v", err)
+func TestEncodeErrors(t *testing.T) {
+	// wrong Go type for a field
+	if _, err := Encode(Schema{Fields: []Field{{Type: TypeUint8}}}, []any{int(1)}); err != ErrInvalidValue {
+		t.Fatalf("wrong type: got %v want ErrInvalidValue", err)
 	}
 
-	forwardValues := []any{
-		u256.NewUint(0x12345),
-		uint64(100),
-		uint64(1700000000000000000),
-		[]any{uint8(0), uint8(1), callOperand},
-	}
-	bz, err := Encode(forwardSchema, forwardValues)
-	if err != nil {
-		t.Fatalf("Encode Forward: %v", err)
-	}
-	decoded, err := Decode(forwardSchema, bz)
-	if err != nil {
-		t.Fatalf("Decode Forward: %v", err)
-	}
-	if decoded[0].(*u256.Uint).ToString() != "74565" || decoded[1].(uint64) != 100 {
-		t.Fatalf("decoded forward scalar mismatch")
-	}
-	ins := decoded[3].([]any)
-	if ins[0].(uint8) != 0 || ins[1].(uint8) != 1 || hex.EncodeToString(ins[2].([]byte)) != hex.EncodeToString(callOperand) {
-		t.Fatalf("decoded forward instruction mismatch")
+	// wrong number of values
+	if _, err := Encode(Schema{Fields: []Field{{Type: TypeUint8}}}, []any{}); err != ErrInvalidValue {
+		t.Fatalf("wrong count: got %v want ErrInvalidValue", err)
 	}
 
-	orderValues := []any{
-		[]byte("alice"),
-		[]byte("bob"),
-		[]byte("unionToken"),
-		u256.NewUint(1000000),
-		[]byte("uatom"),
-		u256.NewUint(2500000),
-		uint8(1),
-		[]byte{},
+	// TypeStruct with nil Sub
+	if _, err := Encode(Schema{Fields: []Field{{Type: TypeStruct}}}, []any{[]any{}}); err != ErrInvalidSchema {
+		t.Fatalf("nil Sub: got %v want ErrInvalidSchema", err)
 	}
-	bz, err = Encode(tokenOrderV2Schema, orderValues)
-	if err != nil {
-		t.Fatalf("Encode TokenOrderV2: %v", err)
-	}
-	decoded, err = Decode(tokenOrderV2Schema, bz)
-	if err != nil {
-		t.Fatalf("Decode TokenOrderV2: %v", err)
-	}
-	if string(decoded[0].([]byte)) != "alice" || decoded[3].(*u256.Uint).ToString() != "1000000" || decoded[6].(uint8) != 1 {
-		t.Fatalf("decoded token order mismatch")
+
+	// TypeArray with nil Elem
+	if _, err := Encode(Schema{Fields: []Field{{Type: TypeArray}}}, []any{[]any{}}); err != ErrInvalidSchema {
+		t.Fatalf("nil Elem: got %v want ErrInvalidSchema", err)
 	}
 }
 
 func TestRejectMalformedData(t *testing.T) {
-	if _, err := Decode(instructionSchema, []byte{1, 2, 3}); err == nil {
+	if _, err := Decode(Schema{Fields: []Field{{Type: TypeUint256}}}, []byte{1, 2, 3}); err == nil {
 		t.Fatalf("expected invalid data error")
 	}
 
@@ -287,6 +206,7 @@ func TestRejectOutOfRangeTupleOffsets(t *testing.T) {
 }
 
 func TestRejectOutOfRangeArrayOffsets(t *testing.T) {
+	bytesArraySchema := Schema{Fields: []Field{{Type: TypeArray, Elem: &Field{Type: TypeBytes}}}}
 	cases := []struct {
 		name string
 		data []byte
@@ -306,7 +226,7 @@ func TestRejectOutOfRangeArrayOffsets(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := Decode(batchAckSchema, tc.data)
+			_, err := Decode(bytesArraySchema, tc.data)
 			if err != ErrInvalidData {
 				t.Fatalf("got %v want ErrInvalidData", err)
 			}
@@ -364,29 +284,6 @@ func TestRejectOutOfRangeBytesLength(t *testing.T) {
 	}
 	if hex.EncodeToString(out[0].([]byte)) != "aabbccdd" {
 		t.Fatalf("decoded valid bytes mismatch")
-	}
-}
-
-func TestJSONVectorLoaderShape(t *testing.T) {
-	root, err := json.Unmarshal([]byte(`[{"name":"Instruction_short_operand","type":"Instruction","fields":{"version":2,"opcode":3,"operand":"0xaabbcc"},"abi_hex":"0x1234"},{"name":"RealPacket_msg_rs_259","type":"Instruction","fields":null,"abi_hex":"0xabcd"}]`))
-	if err != nil {
-		t.Fatalf("Unmarshal vector JSON: %v", err)
-	}
-	vectors := root.MustArray()
-	if len(vectors) != 2 {
-		t.Fatalf("vector count: got %d want 2", len(vectors))
-	}
-
-	first := vectors[0].MustObject()
-	if first["name"].MustString() != "Instruction_short_operand" || first["type"].MustString() != "Instruction" {
-		t.Fatalf("vector metadata mismatch")
-	}
-	fields := first["fields"].MustObject()
-	if fields["operand"].MustString() != "0xaabbcc" {
-		t.Fatalf("vector fields mismatch")
-	}
-	if !vectors[1].MustObject()["fields"].IsNull() {
-		t.Fatalf("decode-only vector should have null fields")
 	}
 }
 

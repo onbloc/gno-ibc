@@ -12,38 +12,11 @@ func NewRecvPacketResult(status types.PacketStatus, acknowledgement []byte) type
 	return types.RecvPacketResult{Status: status, Acknowledgement: acknowledgement}
 }
 
-// GetBatchPackets returns the batch packet commitment for batchHash from the
-// global commitment mirror.
-func GetBatchPackets(batchHash types.H256) string {
-	v, found := store.commitments[types.BatchPacketsPath(batchHash)]
-	if !found {
-		return ""
-	}
-	return h256String(v)
-}
-
 // QueryBatchPackets returns the batch commitment value stored at
-// types.BatchPacketsPath(batchHash) for the client owning channelId.
+// types.BatchPacketsPath(batchHash). Commitments are keyed by their global path,
+// so channelId is accepted for API compatibility but no longer routes the read.
 func QueryBatchPackets(channelId types.ChannelId, batchHash types.H256) string {
-	entry, ok := store.getChannelEntry(channelId)
-	if !ok {
-		return ""
-	}
-	c := store.getClient(entry.clientId)
-	if c == nil {
-		return ""
-	}
-	v, found := c.getBatchPacketsAtPath(types.BatchPacketsPath(batchHash))
-	if !found {
-		return ""
-	}
-	return h256String(v)
-}
-
-// GetBatchReceipts returns the batch receipt commitment for batchHash from the
-// global commitment mirror.
-func GetBatchReceipts(batchHash types.H256) string {
-	v, found := store.commitments[types.BatchReceiptsPath(batchHash)]
+	v, found := store.getCommitment(types.BatchPacketsPath(batchHash))
 	if !found {
 		return ""
 	}
@@ -51,55 +24,41 @@ func GetBatchReceipts(batchHash types.H256) string {
 }
 
 // QueryBatchReceipts returns the batch receipt value stored at
-// types.BatchReceiptsPath(batchHash) for the client owning channelId.
+// types.BatchReceiptsPath(batchHash).
 func QueryBatchReceipts(channelId types.ChannelId, batchHash types.H256) string {
-	entry, ok := store.getChannelEntry(channelId)
-	if !ok {
-		return ""
-	}
-	c := store.getClient(entry.clientId)
-	if c == nil {
-		return ""
-	}
-	v, found := c.getBatchReceiptsAtPath(types.BatchReceiptsPath(batchHash))
+	v, found := store.getCommitment(types.BatchReceiptsPath(batchHash))
 	if !found {
 		return ""
 	}
 	return h256String(v)
 }
 
-// QueryCommitmentAtPath reads the client's batchPackets map by an
-// already-derived commitment path for channelId's owning client.
+// QueryCommitmentAtPath reads the commitment stored at an already-derived path.
 func QueryCommitmentAtPath(channelId types.ChannelId, path types.H256) string {
-	entry, ok := store.getChannelEntry(channelId)
-	if !ok {
-		return ""
-	}
-	c := store.getClient(entry.clientId)
-	if c == nil {
-		return ""
-	}
-	v, found := c.getBatchPacketsAtPath(path)
+	v, found := store.getCommitment(path)
 	if !found {
 		return ""
 	}
 	return h256String(v)
 }
 
-// QueryReceiptAtPath reads the client's batchReceipts map by an
-// already-derived commitment path for channelId's owning client.
+// QueryReceiptAtPath reads the receipt commitment stored at an already-derived path.
 func QueryReceiptAtPath(channelId types.ChannelId, path types.H256) string {
-	entry, ok := store.getChannelEntry(channelId)
-	if !ok {
-		return ""
-	}
-	c := store.getClient(entry.clientId)
-	if c == nil {
-		return ""
-	}
-	v, found := c.getBatchReceiptsAtPath(path)
+	v, found := store.getCommitment(path)
 	if !found {
 		return ""
 	}
 	return h256String(v)
+}
+
+func GetCommittedMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) string {
+	v, found := store.getMembershipProof(clientId, proofHeight, path)
+	if !found {
+		return ""
+	}
+	return h256String(v)
+}
+
+func GetCommittedNonMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) bool {
+	return store.hasNonMembershipProof(clientId, proofHeight, path)
 }

@@ -17,63 +17,14 @@ func NewConsensusStateUpdate(height types.Height, consensusStateBytes, clientSta
 // consensus state. This mirrors aib's model of handing core an already-built
 // light client instead of core decoding bytes itself.
 func CreateClient(cur realm, clientType types.ClientType, lc lightclient.Interface) types.ClientId {
-	creator := cur.Previous().Address()
-	c := store.addClient(clientType, creator, cur.Previous().PkgPath(), lc)
-
-	if _, err := lc.VerifyCreation(creator, creator); err != nil {
-		panic("create client: " + err.Error())
-	}
-
-	chain.Emit(CreateClientEvent,
-		"client_id", c.id.String(),
-		"client_type", clientType.String(),
-	)
-
-	return c.id
-}
-
-// GetRegisteredClientType returns the registered client type identifier for a
-// client type. Union returns an implementation address here; the Gno equivalent
-// is the package path of the realm that supplied the light client object.
-func GetRegisteredClientType(clientType types.ClientType) string {
-	if !store.hasClient(clientType) {
-		return ""
-	}
-	return store.clientImplForType(clientType)
+	return getImpl().CreateClient(0, cur, clientType, lc)
 }
 
 // UpdateClient verifies a client message against the light client object, which
 // updates its own state, and mirrors the resulting state bytes for queries and
 // counterparty proofs.
 func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
-	c := store.getClient(msg.ClientId)
-	if c == nil {
-		panic("client " + msg.ClientId.String() + " not found")
-	}
-
-	caller := cur.Previous().Address()
-
-	update, err := c.lightClient.VerifyHeader(caller, msg.ClientMessage, caller)
-	if err != nil {
-		panic("update client: " + err.Error())
-	}
-
-	height := types.NewHeight(update.Height)
-	if len(update.ClientStateBytes) != 0 {
-		c.saveState(update.ClientStateBytes)
-	}
-
-	if len(update.ConsensusStateBytes) != 0 {
-		c.saveConsensusState(height, update.ConsensusStateBytes)
-	}
-
-	chain.Emit(UpdateClientEvent,
-		"client_type", c.typ.String(),
-		"client_id", msg.ClientId.String(),
-		"height", height.String(),
-	)
-
-	return height
+	return getImpl().UpdateClient(0, cur, msg)
 }
 
 // ForceUpdateClient replaces a client's object with a new one built by the
@@ -95,7 +46,8 @@ func ForceUpdateClient(cur realm, clientId types.ClientId, lc lightclient.Interf
 	c.lightClient = lc
 	height := types.NewHeight(lc.GetLatestHeight())
 
-	chain.Emit(UpdateClientEvent,
+	chain.Emit(
+		UpdateClientEvent,
 		"client_type", c.typ.String(),
 		"client_id", clientId.String(),
 		"height", height.String(),
@@ -107,8 +59,8 @@ func ForceUpdateClient(cur realm, clientId types.ClientId, lc lightclient.Interf
 // VerifyClientMembership verifies a membership proof against a registered light client.
 //
 // It does not commit the verified value into this realm's state.
-func VerifyClientMembership(_ realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {
-	verifyMembershipActive(clientId, proofHeight, proof, path, value)
+func VerifyClientMembership(cur realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {
+	getImpl().VerifyClientMembership(0, cur, clientId, proofHeight, proof, path, value)
 }
 
 // statusToTypes maps the light client object's status (a string) to the core
@@ -158,44 +110,6 @@ func GetLightClient(clientId types.ClientId) (lightclient.Interface, bool) {
 	return store.lightClientOf(clientId)
 }
 
-// GetClientImpl returns the implementation identifier for clientId. Union
-// returns a contract address; Gno exposes the implementation realm package path.
-func GetClientImpl(clientId types.ClientId) string {
-	c := store.getClient(clientId)
-	if c == nil {
-		return ""
-	}
-	return c.implPath
-}
-
-// GetTimestampAtHeight returns the consensus timestamp reported by a client at
-// height, or zero when the client or timestamp is unavailable.
-func GetTimestampAtHeight(clientId types.ClientId, height uint64) types.Timestamp {
-	c := store.getClient(clientId)
-	if c == nil {
-		return 0
-	}
-	ts, err := c.lightClient.GetTimestampAtHeight(height)
-	if err != nil {
-		return 0
-	}
-	return ts
-}
-
-// GetLatestHeight returns the latest height reported by a client.
-func GetLatestHeight(clientId types.ClientId) uint64 {
-	c := store.getClient(clientId)
-	if c == nil {
-		return 0
-	}
-	return c.lightClient.GetLatestHeight()
-}
-
-// GetClientState returns the stored client state as a hex string.
-func GetClientState(clientId types.ClientId) string {
-	return QueryClientState(clientId)
-}
-
 // QueryClientState returns the stored client state as a hex string.
 func QueryClientState(clientId types.ClientId) string {
 	c := store.getClient(clientId)
@@ -204,11 +118,6 @@ func QueryClientState(clientId types.ClientId) string {
 	}
 
 	return hexString(c.clientState)
-}
-
-// GetConsensusState returns the consensus state at height as a hex string.
-func GetConsensusState(clientId types.ClientId, height uint64) string {
-	return QueryConsensusState(clientId, types.NewHeight(height))
 }
 
 // QueryConsensusState returns the consensus state at height as a hex string.
@@ -224,11 +133,6 @@ func QueryConsensusState(clientId types.ClientId, height types.Height) string {
 	}
 
 	return hexString(bz)
-}
-
-// GetStatus returns the current status reported by a registered light client.
-func GetStatus(clientId types.ClientId) types.Status {
-	return GetClientStatus(clientId)
 }
 
 // GetClientStatus returns the current status reported by a registered light client.

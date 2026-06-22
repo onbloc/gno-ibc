@@ -98,11 +98,23 @@ func (d *dummyImpl) Send(_ int, rlm realm, channelId types.ChannelId, timeoutTim
 	return types.Packet{}
 }
 
-// resetZkgmForTest returns the proxy package state to a clean baseline. The new
-// upgrade model holds only the single `impl` swap pointer and the `paused` gate.
+// resetZkgmForTest returns the proxy package state to a clean baseline. The
+// upgrade model holds the registered impl constructors, the active impl pointer,
+// and the `paused` gate.
 func resetZkgmForTest() {
-	impl = nil
+	currentImpl = nil
+	currentImplPath = ""
+	implConstructors = make(map[string]func(store IStore) IApp)
 	paused = false
 	// Restore the opt-in rate-limit default (disabled) on the shared singleton.
 	store.rateLimitDisabled = true
+}
+
+// installImplForTest registers a constructor under path and activates it, driving
+// the same RegisterImpl -> UpdateImpl flow used in production but without the
+// prefix gate, so package-internal tests can install a recording dummy impl.
+func installImplForTest(path string, target IApp) {
+	implConstructors[path] = func(store IStore) IApp { return target }
+	currentImplPath = path
+	currentImpl = target
 }

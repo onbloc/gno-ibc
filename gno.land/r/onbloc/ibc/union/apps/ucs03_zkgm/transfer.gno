@@ -7,5 +7,5 @@ import (
 )
 
 func Send(cur realm, channelId types.ChannelId, timeoutTimestamp types.Timestamp, salt [32]byte, instruction z.Instruction) types.Packet {
-	return impl.Send(0, cur, channelId, timeoutTimestamp, salt, instruction)
+	return mustGetImpl().Send(0, cur, channelId, timeoutTimestamp, salt, instruction)
 }

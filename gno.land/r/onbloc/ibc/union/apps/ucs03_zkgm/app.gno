@@ -26,7 +26,7 @@ func (a *App) OnChannelOpenInit(cur realm, connectionId types.ConnectionId, chan
 	if paused {
 		panic("zkgm: paused")
 	}
-	impl.OnChannelOpenInit(0, cur, connectionId, channelId, version, relayer)
+	mustGetImpl().OnChannelOpenInit(0, cur, connectionId, channelId, version, relayer)
 }
 
 func (a *App) OnChannelOpenTry(cur realm, connectionId types.ConnectionId, channelId types.ChannelId, version string, counterpartyVersion string, relayer address) {
@@ -34,7 +34,7 @@ func (a *App) OnChannelOpenTry(cur realm, connectionId types.ConnectionId, chann
 	if paused {
 		panic("zkgm: paused")
 	}
-	impl.OnChannelOpenTry(0, cur, connectionId, channelId, version, counterpartyVersion, relayer)
+	mustGetImpl().OnChannelOpenTry(0, cur, connectionId, channelId, version, counterpartyVersion, relayer)
 }
 
 func (a *App) OnChannelOpenAck(cur realm, channelId types.ChannelId, counterpartyChannelId types.ChannelId, counterpartyVersion string, relayer address) {
@@ -42,7 +42,7 @@ func (a *App) OnChannelOpenAck(cur realm, channelId types.ChannelId, counterpart
 	if paused {
 		panic("zkgm: paused")
 	}
-	impl.OnChannelOpenAck(0, cur, channelId, counterpartyChannelId, counterpartyVersion, relayer)
+	mustGetImpl().OnChannelOpenAck(0, cur, channelId, counterpartyChannelId, counterpartyVersion, relayer)
 }
 
 func (a *App) OnChannelOpenConfirm(cur realm, channelId types.ChannelId, relayer address) {
@@ -50,7 +50,7 @@ func (a *App) OnChannelOpenConfirm(cur realm, channelId types.ChannelId, relayer
 	if paused {
 		panic("zkgm: paused")
 	}
-	impl.OnChannelOpenConfirm(0, cur, channelId, relayer)
+	mustGetImpl().OnChannelOpenConfirm(0, cur, channelId, relayer)
 }
 
 func (a *App) OnChannelCloseInit(cur realm, channelId types.ChannelId, relayer address) {
@@ -72,23 +72,23 @@ func (a *App) OnChannelCloseConfirm(cur realm, channelId types.ChannelId, relaye
 func (a *App) OnRecvPacket(cur realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {
 	assertIsIBCHost(cur)
 	assertNotPaused()
-	return impl.OnRecvPacket(0, cur, packet, relayer, relayerMsg)
+	return mustGetImpl().OnRecvPacket(0, cur, packet, relayer, relayerMsg)
 }
 
 func (a *App) OnAcknowledgementPacket(cur realm, packet types.Packet, acknowledgement []byte, relayer address) {
 	assertIsIBCHost(cur)
 	assertNotPaused()
-	impl.OnAcknowledgementPacket(0, cur, packet, acknowledgement, relayer)
+	mustGetImpl().OnAcknowledgementPacket(0, cur, packet, acknowledgement, relayer)
 }
 
 func (a *App) OnTimeoutPacket(cur realm, packet types.Packet, relayer address) {
 	assertIsIBCHost(cur)
 	assertNotPaused()
-	impl.OnTimeoutPacket(0, cur, packet, relayer)
+	mustGetImpl().OnTimeoutPacket(0, cur, packet, relayer)
 }
 
 func (a *App) OnIntentRecvPacket(cur realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
 	assertIsIBCHost(cur)
 	assertNotPaused()
-	return impl.OnIntentRecvPacket(0, cur, packet, marketMaker, marketMakerMsg)
+	return mustGetImpl().OnIntentRecvPacket(0, cur, packet, marketMaker, marketMakerMsg)
 }

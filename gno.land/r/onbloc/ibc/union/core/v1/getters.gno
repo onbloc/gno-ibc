@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
@@ -14,7 +13,8 @@ func (c *coreV1) GetStatus(clientId types.ClientId) types.Status {
 	if !ok {
 		return types.StatusUnknown
 	}
-	return mapStatus(lc.Status())
+
+	return lc.Status().ToType()
 }
 
 // GetClientType returns the registered client type for a client.
@@ -95,18 +95,4 @@ func (c *coreV1) GetBatchPacketsCommitment(channelId types.ChannelId, batchHash 
 // GetBatchReceiptsCommitment returns the batch receipt commitment for a batch hash.
 func (c *coreV1) GetBatchReceiptsCommitment(channelId types.ChannelId, batchHash types.H256) (types.H256, bool) {
 	return c.store.BatchReceiptsAt(channelId, batchHash)
-}
-
-// mapStatus maps a light client status to the core status enum.
-func mapStatus(s lightclient.Status) types.Status {
-	switch s {
-	case lightclient.Active:
-		return types.StatusActive
-	case lightclient.Expired:
-		return types.StatusExpired
-	case lightclient.Frozen:
-		return types.StatusFrozen
-	default:
-		return types.StatusUnknown
-	}
 }

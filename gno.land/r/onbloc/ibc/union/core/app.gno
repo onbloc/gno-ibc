@@ -5,9 +5,9 @@ import (
 )
 
 // RegisterApp registers an IBC application at the caller realm's package path,
-// delegating to the installed getImpl().
+// delegating to the installed mustGetImpl().
 func RegisterApp(cur realm, app app.IApp) {
-	getImpl().RegisterApp(0, cur, app)
+	mustGetImpl().RegisterApp(0, cur, app)
 }
 
 // HasApp reports whether an app is registered at portId.

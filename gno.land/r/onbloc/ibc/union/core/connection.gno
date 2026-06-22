@@ -9,43 +9,43 @@ import (
 func ConnectionOpenInit(cur realm, msg types.MsgConnectionOpenInit) {
 	requireAdmin(cur, "ConnectionOpenInit")
 	runtime.AssertOriginCall()
-	getImpl().ConnectionOpenInit(0, cur, msg)
+	mustGetImpl().ConnectionOpenInit(0, cur, msg)
 }
 
 func ConnectionOpenTry(cur realm, msg types.MsgConnectionOpenTry) {
 	requireAdmin(cur, "ConnectionOpenTry")
 	runtime.AssertOriginCall()
-	getImpl().ConnectionOpenTry(0, cur, msg)
+	mustGetImpl().ConnectionOpenTry(0, cur, msg)
 }
 
 func ForceConnectionOpenTry(cur realm, msg types.MsgConnectionOpenTry) {
 	requireAdmin(cur, "ForceConnectionOpenTry")
 	runtime.AssertOriginCall()
-	getImpl().ForceConnectionOpenTry(0, cur, msg)
+	mustGetImpl().ForceConnectionOpenTry(0, cur, msg)
 }
 
 func ConnectionOpenAck(cur realm, msg types.MsgConnectionOpenAck) {
 	requireAdmin(cur, "ConnectionOpenAck")
 	runtime.AssertOriginCall()
-	getImpl().ConnectionOpenAck(0, cur, msg)
+	mustGetImpl().ConnectionOpenAck(0, cur, msg)
 }
 
 func ForceConnectionOpenAck(cur realm, msg types.MsgConnectionOpenAck) {
 	requireAdmin(cur, "ForceConnectionOpenAck")
 	runtime.AssertOriginCall()
-	getImpl().ForceConnectionOpenAck(0, cur, msg)
+	mustGetImpl().ForceConnectionOpenAck(0, cur, msg)
 }
 
 func ConnectionOpenConfirm(cur realm, msg types.MsgConnectionOpenConfirm) {
 	requireAdmin(cur, "ConnectionOpenConfirm")
 	runtime.AssertOriginCall()
-	getImpl().ConnectionOpenConfirm(0, cur, msg)
+	mustGetImpl().ConnectionOpenConfirm(0, cur, msg)
 }
 
 func ForceConnectionOpenConfirm(cur realm, msg types.MsgConnectionOpenConfirm) {
 	requireAdmin(cur, "ForceConnectionOpenConfirm")
 	runtime.AssertOriginCall()
-	getImpl().ForceConnectionOpenConfirm(0, cur, msg)
+	mustGetImpl().ForceConnectionOpenConfirm(0, cur, msg)
 }
 
 func QueryConnection(connectionId types.ConnectionId) string {

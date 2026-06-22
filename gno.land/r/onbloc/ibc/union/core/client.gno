@@ -13,12 +13,12 @@ import (
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L849-L865
 func RegisterClient(cur realm, clientType types.ClientType, lc lightclient.Interface) {
-	getImpl().RegisterClient(0, cur, clientType, lc)
+	mustGetImpl().RegisterClient(0, cur, clientType, lc)
 }
 
 // HasClient reports whether a light client is registered for a client type.
 func HasClient(clientType types.ClientType) bool {
-	return getImpl().HasClient(clientType)
+	return mustGetImpl().HasClient(clientType)
 }
 
 // CreateClient assigns a client id for a registered light client type, stores
@@ -28,8 +28,8 @@ func HasClient(clientType types.ClientType) bool {
 // Union references:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L867-L903
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L905-L972
-func CreateClient(cur realm, msg types.MsgCreateClient) types.ClientId {
-	return getImpl().CreateClient(0, cur, msg)
+func CreateClient(cur realm, msg types.MsgCreateClient) {
+	mustGetImpl().CreateClient(0, cur, msg)
 }
 
 // UpdateClient verifies a client message against the light client object, which
@@ -38,8 +38,8 @@ func CreateClient(cur realm, msg types.MsgCreateClient) types.ClientId {
 //
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L975-L1046
-func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
-	return getImpl().UpdateClient(0, cur, msg)
+func UpdateClient(cur realm, msg types.MsgUpdateClient) {
+	mustGetImpl().UpdateClient(0, cur, msg)
 }
 
 // ForceUpdateClient re-initializes a client from submitted state bytes,
@@ -51,14 +51,14 @@ func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 // Union references:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L146-L166
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L905-L972
-func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) types.Height {
+func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) {
 	requireAdmin(cur, "ForceUpdateClient")
 	runtime.AssertOriginCall()
-	return getImpl().ForceUpdateClient(0, cur, msg)
+	mustGetImpl().ForceUpdateClient(0, cur, msg)
 }
 
 // VerifyClientMembership verifies a membership proof against a registered light
 // client. It does not commit the verified value into this realm's state.
 func VerifyClientMembership(cur realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {
-	getImpl().VerifyClientMembership(0, cur, clientId, proofHeight, proof, path, value)
+	mustGetImpl().VerifyClientMembership(0, cur, clientId, proofHeight, proof, path, value)
 }

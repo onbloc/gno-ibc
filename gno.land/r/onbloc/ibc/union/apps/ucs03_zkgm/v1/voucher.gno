@@ -34,10 +34,12 @@ func (v *ucs03ZkgmV1) burnVoucher(_ int, rlm realm, ibcDenom, sender string, amo
 	if err != nil {
 		return err
 	}
+
 	vou, ok := v.store.GetVoucher(ibcDenom)
 	if !ok {
 		return errors.New(errVoucherNotFound.Error() + ": " + ibcDenom)
 	}
+
 	return vou.Ledger().Burn(address(sender), n)
 }
 
@@ -47,10 +49,12 @@ func (v *ucs03ZkgmV1) transferVoucher(_ int, rlm realm, ibcDenom string, from, t
 	if err != nil {
 		return err
 	}
+
 	vou, ok := v.store.GetVoucher(ibcDenom)
 	if !ok {
 		return errors.New(errVoucherNotFound.Error() + ": " + ibcDenom)
 	}
+
 	return vou.Ledger().Transfer(from, to, n)
 }
 

@@ -12,10 +12,12 @@ const testClientType = types.ClientType("cometbls")
 
 // createClient registers lc under the test client type and creates a client from
 // the given state bytes, returning the assigned id. It mirrors the proxy's
-// RegisterClient -> CreateClient flow used by the host entrypoints.
+// RegisterClient -> CreateClient flow used by the host entrypoints. CreateClient
+// no longer returns the id, so the id is read back from the mock store's sequence.
 func createClient(cur realm, v *coreV1, lc lightclient.Interface, clientState, consensusState []byte) types.ClientId {
 	v.RegisterClient(0, cur, testClientType, lc)
-	return v.CreateClient(0, cur, types.NewMsgCreateClient(testClientType, clientState, consensusState))
+	v.CreateClient(0, cur, types.NewMsgCreateClient(testClientType, clientState, consensusState))
+	return types.ClientId(v.store.(*mockStore).seq)
 }
 
 func TestRegisterClientRejectsNil(cur realm, t *testing.T) {
@@ -91,12 +93,12 @@ func TestUpdateClientSavesStateAndConsensus(cur realm, t *testing.T) {
 	}}
 	clientId := createClient(cur, v, lc, nil, nil)
 
-	height := v.UpdateClient(0, cur, types.MsgUpdateClient{
+	v.UpdateClient(0, cur, types.MsgUpdateClient{
 		ClientId:      clientId,
 		ClientMessage: []byte("header"),
 	})
 
-	uassert.Equal(t, uint64(7), height.RevisionHeight)
+	height := types.NewHeight(7)
 	mc := v.store.(*mockStore).clients[uint32(clientId)]
 	uassert.Equal(t, "client-state", string(mc.clientState))
 	uassert.Equal(t, "consensus-state", string(mc.consensus[height.String()]))
@@ -137,9 +139,8 @@ func TestForceUpdateClientReinitializesSubmittedState(cur realm, t *testing.T) {
 	clientId := createClient(cur, v, lc, []byte("old-client"), []byte("old-consensus"))
 
 	lc.latestHeight = 3
-	height := v.ForceUpdateClient(0, cur, types.NewMsgForceUpdateClient(clientId, []byte("new-client"), []byte("new-consensus")))
+	v.ForceUpdateClient(0, cur, types.NewMsgForceUpdateClient(clientId, []byte("new-client"), []byte("new-consensus")))
 
-	uassert.Equal(t, uint64(3), height.RevisionHeight)
 	mc := v.store.(*mockStore).clients[uint32(clientId)]
 	uassert.Equal(t, "new-client", string(mc.clientState))
 	uassert.Equal(t, "new-consensus", string(mc.consensus[types.NewHeight(3).String()]))

@@ -9,7 +9,7 @@ import (
 // types.gno declares the upgradeable-proxy contracts for the IBC host, mirroring
 // the apps/ucs03_zkgm split. core is the proxy: it owns the stable identity
 // (admin, package address/path), the Store, and the app registry, and delegates
-// its logic to the installed getImpl().
+// its logic to the installed mustGetImpl().
 //
 // ICore is the swappable logic surface: it carries every non-admin entrypoint
 // (client, connection, channel, packet, app registration). The admin/recovery
@@ -23,9 +23,9 @@ type ICore interface {
 	// --- Client ---
 	RegisterClient(_ int, rlm realm, clientType types.ClientType, lc lightclient.Interface)
 	HasClient(clientType types.ClientType) bool
-	CreateClient(_ int, rlm realm, msg types.MsgCreateClient) types.ClientId
-	UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) types.Height
-	ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateClient) types.Height
+	CreateClient(_ int, rlm realm, msg types.MsgCreateClient)
+	UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient)
+	ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateClient)
 	VerifyClientMembership(_ int, rlm realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte)
 
 	// --- Connection handshake ---
@@ -92,7 +92,7 @@ type ICoreGetter interface {
 	GetBatchReceiptsCommitment(channelId types.ChannelId, batchHash types.H256) (types.H256, bool)
 }
 
-// IStore is the proxy-owned persistent state injected into the getImpl(). Setters take
+// IStore is the proxy-owned persistent state injected into the mustGetImpl(). Setters take
 // the borrow-rule (_ int, rlm realm, ...) form; getters are plain. The nested
 // per-client structure (consensus/connection/channel/batch trees, chain-param
 // commitment mirror) stays private to the Store — the impl operates by id, so the
@@ -136,7 +136,7 @@ type IStore interface {
 	CommitPacket(_ int, rlm realm, packet types.Packet)
 	// SetPacketAcknowledged flips a packet's source commitment to the acknowledged
 	// marker. The acknowledge/timeout state machine (the read-check that the
-	// commitment exists and is not already acknowledged) lives in the getImpl().
+	// commitment exists and is not already acknowledged) lives in the mustGetImpl().
 	SetPacketAcknowledged(_ int, rlm realm, packet types.Packet)
 
 	// --- Packet receipt / acknowledgement (destination side) ---

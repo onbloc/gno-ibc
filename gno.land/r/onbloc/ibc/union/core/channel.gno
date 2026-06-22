@@ -9,55 +9,55 @@ import (
 func ChannelOpenInit(cur realm, msg types.MsgChannelOpenInit) types.ChannelId {
 	requireAdmin(cur, "ChannelOpenInit")
 	runtime.AssertOriginCall()
-	return getImpl().ChannelOpenInit(0, cur, msg)
+	return mustGetImpl().ChannelOpenInit(0, cur, msg)
 }
 
 func ChannelOpenTry(cur realm, msg types.MsgChannelOpenTry) types.ChannelId {
 	requireAdmin(cur, "ChannelOpenTry")
 	runtime.AssertOriginCall()
-	return getImpl().ChannelOpenTry(0, cur, msg)
+	return mustGetImpl().ChannelOpenTry(0, cur, msg)
 }
 
 func ForceChannelOpenTry(cur realm, msg types.MsgChannelOpenTry) types.ChannelId {
 	requireAdmin(cur, "ForceChannelOpenTry")
 	runtime.AssertOriginCall()
-	return getImpl().ForceChannelOpenTry(0, cur, msg)
+	return mustGetImpl().ForceChannelOpenTry(0, cur, msg)
 }
 
 func ChannelOpenAck(cur realm, msg types.MsgChannelOpenAck) {
 	requireAdmin(cur, "ChannelOpenAck")
 	runtime.AssertOriginCall()
-	getImpl().ChannelOpenAck(0, cur, msg)
+	mustGetImpl().ChannelOpenAck(0, cur, msg)
 }
 
 func ForceChannelOpenAck(cur realm, msg types.MsgChannelOpenAck) {
 	requireAdmin(cur, "ForceChannelOpenAck")
 	runtime.AssertOriginCall()
-	getImpl().ForceChannelOpenAck(0, cur, msg)
+	mustGetImpl().ForceChannelOpenAck(0, cur, msg)
 }
 
 func ChannelOpenConfirm(cur realm, msg types.MsgChannelOpenConfirm) {
 	requireAdmin(cur, "ChannelOpenConfirm")
 	runtime.AssertOriginCall()
-	getImpl().ChannelOpenConfirm(0, cur, msg)
+	mustGetImpl().ChannelOpenConfirm(0, cur, msg)
 }
 
 func ForceChannelOpenConfirm(cur realm, msg types.MsgChannelOpenConfirm) {
 	requireAdmin(cur, "ForceChannelOpenConfirm")
 	runtime.AssertOriginCall()
-	getImpl().ForceChannelOpenConfirm(0, cur, msg)
+	mustGetImpl().ForceChannelOpenConfirm(0, cur, msg)
 }
 
 func ChannelCloseInit(cur realm, msg types.MsgChannelCloseInit) {
 	requireAdmin(cur, "ChannelCloseInit")
 	runtime.AssertOriginCall()
-	getImpl().ChannelCloseInit(0, cur, msg)
+	mustGetImpl().ChannelCloseInit(0, cur, msg)
 }
 
 func ChannelCloseConfirm(cur realm, msg types.MsgChannelCloseConfirm) {
 	requireAdmin(cur, "ChannelCloseConfirm")
 	runtime.AssertOriginCall()
-	getImpl().ChannelCloseConfirm(0, cur, msg)
+	mustGetImpl().ChannelCloseConfirm(0, cur, msg)
 }
 
 func QueryChannel(channelId types.ChannelId) string {

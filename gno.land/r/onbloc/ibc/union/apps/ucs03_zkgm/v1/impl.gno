@@ -61,7 +61,7 @@ func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relaye
 		return failureResult(universalErrorAck())
 	}
 
-	res, err := v.dispatchExecute(0, rlm, packet, relayer, relayerMsg, zp.Salt, zp.Path, zp.Instruction, false)
+	res, err := v.dispatchExecutePacket(0, rlm, packet, relayer, relayerMsg, zp.Salt, zp.Path, zp.Instruction, false)
 	if err != nil {
 		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
 		return failureResult(universalErrorAck())
@@ -81,7 +81,7 @@ func (v *ucs03ZkgmV1) OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, 
 		return failureResult(universalErrorAck())
 	}
 
-	res, err := v.dispatchExecute(0, rlm, packet, marketMaker, marketMakerMsg, zp.Salt, zp.Path, zp.Instruction, true)
+	res, err := v.dispatchExecutePacket(0, rlm, packet, marketMaker, marketMakerMsg, zp.Salt, zp.Path, zp.Instruction, true)
 	if err != nil {
 		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
 		return failureResult(universalErrorAck())

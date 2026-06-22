@@ -11,7 +11,7 @@ import (
 
 // TODO: cap batch.Instructions length once the upstream Solidity reference
 // confirms a value (Reviewer flagged unbounded recursion as a DoS vector —
-// each child runs full dispatchExecute incl. abi decode + keccak).
+// each child runs full dispatchExecutePacket incl. abi decode + keccak).
 var errInvalidBatchInstruction = errors.New("zkgm/v1: invalid batch instruction")
 
 // verifyBatch verifies each allowed child instruction against the shared funds budget.
@@ -42,7 +42,7 @@ func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relaye
 
 		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), salt)
 
-		childRes, err := v.dispatchExecute(0, rlm, packet, relayer, relayerMsg, childSalt, path, instruction, intent)
+		childRes, err := v.dispatchExecutePacket(0, rlm, packet, relayer, relayerMsg, childSalt, path, instruction, intent)
 		if err != nil {
 			return nil, err
 		}

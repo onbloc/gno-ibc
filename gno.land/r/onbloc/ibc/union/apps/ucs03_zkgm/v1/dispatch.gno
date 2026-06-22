@@ -57,8 +57,17 @@ type execFatal struct{ msg string }
 
 func (e execFatal) Error() string { return e.msg }
 
-// dispatchExecute routes a received instruction to its opcode handler, turning non-fatal errors into a failure ack.
-func (v *ucs03ZkgmV1) dispatchExecute(_ int, rlm realm, packet types.Packet, relayer address, relayerMsg []byte, salt [32]byte, path *u256.Uint, instruction z.Instruction, intent bool) (result types.RecvPacketResult, err error) {
+// dispatchExecutePacket routes a received instruction to its opcode handler, turning non-fatal errors into a failure ack.
+func (v *ucs03ZkgmV1) dispatchExecutePacket(
+	_ int, rlm realm,
+	packet types.Packet,
+	relayer address,
+	relayerMsg []byte,
+	salt [32]byte,
+	path *u256.Uint,
+	instruction z.Instruction,
+	intent bool,
+) (result types.RecvPacketResult, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(execFatal); ok {

@@ -36,14 +36,10 @@ func CreateClient(cur realm, msg types.MsgCreateClient) types.ClientId {
 	if !ok {
 		panic("client type not found")
 	}
-	relayer := creator
-	if msg.Relayer != "" {
-		relayer = address(msg.Relayer)
-	}
 
 	clientId := store.nextClientId()
 	c := store.addClient(clientId, msg.ClientType, creator, lc)
-	initClient(creator, msg.ClientStateBytes, msg.ConsensusStateBytes, relayer, clientId)
+	initClient(creator, msg.ClientStateBytes, msg.ConsensusStateBytes, creator, clientId)
 
 	emitCreateClientEvent(c.id, msg.ClientType, lc.GetCounterpartyChainID())
 
@@ -90,12 +86,7 @@ func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 	requireActiveClient(c)
 
 	caller := cur.Previous().Address()
-	relayer := caller
-	if msg.Relayer != "" {
-		relayer = address(msg.Relayer)
-	}
-
-	update, err := c.lightClient.VerifyHeader(caller, msg.ClientMessage, relayer)
+	update, err := c.lightClient.VerifyHeader(caller, msg.ClientMessage, caller)
 	if err != nil {
 		panic("update client: " + err.Error())
 	}

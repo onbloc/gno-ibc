@@ -43,10 +43,11 @@ func TestRegisterClientUnionRejectsDuplicate(cur realm, t *testing.T) {
 // Union references:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L91-L125
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L127-L190
+// Gno intentionally ignores msg.Relayer and passes the caller as relayer.
 func TestCreateClientUnionUsesRegisteredClient(cur realm, t *testing.T) {
 	resetStore(cur)
 	creator := testutils.TestAddress("union-client-creator")
-	relayer := testutils.TestAddress("union-client-relayer")
+	ignoredRelayer := testutils.TestAddress("ignored-relayer")
 	testing.SetRealm(testing.NewUserRealm(creator))
 	lc := &mockClient{
 		chainId: "union-1",
@@ -62,7 +63,7 @@ func TestCreateClientUnionUsesRegisteredClient(cur realm, t *testing.T) {
 		ClientType:          mockType,
 		ClientStateBytes:    []byte("client"),
 		ConsensusStateBytes: []byte("consensus"),
-		Relayer:             relayer.String(),
+		Relayer:             ignoredRelayer.String(),
 	})
 
 	c := store.getClient(clientId)
@@ -81,8 +82,8 @@ func TestCreateClientUnionUsesRegisteredClient(cur realm, t *testing.T) {
 	if queryConsensusStateHex(clientId, 1) != "0x636f6e73656e737573" {
 		t.Fatalf("consensus state not stored at latest height")
 	}
-	if len(lc.creationRelayers) != 1 || lc.creationRelayers[0] != relayer {
-		t.Fatalf("VerifyCreation relayer: got %v want %s", lc.creationRelayers, relayer)
+	if len(lc.creationRelayers) != 1 || lc.creationRelayers[0] != creator {
+		t.Fatalf("VerifyCreation relayer: got %v want %s", lc.creationRelayers, creator)
 	}
 	value, ok := c.getClientStore("create-key")
 	if !ok || string(value) != "create-value" {
@@ -93,9 +94,11 @@ func TestCreateClientUnionUsesRegisteredClient(cur realm, t *testing.T) {
 // Union references:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L194-L265
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/tests/client/ibc.rs#L448-L548
+// Gno intentionally ignores msg.Relayer and passes the caller as relayer.
 func TestUpdateClientUnionMirrorsStateUpdate(cur realm, t *testing.T) {
 	resetStore(cur)
-	relayer := testutils.TestAddress("union-update-relayer")
+	ignoredRelayer := testutils.TestAddress("ignored-relayer")
+	wantRelayer := cur.Address()
 	lc := &mockClient{
 		chainId: "union-1",
 		height:  types.NewHeight(1),
@@ -110,7 +113,7 @@ func TestUpdateClientUnionMirrorsStateUpdate(cur realm, t *testing.T) {
 	height := UpdateClient(cross(cur), types.MsgUpdateClient{
 		ClientId:      clientId,
 		ClientMessage: []byte("header"),
-		Relayer:       relayer.String(),
+		Relayer:       ignoredRelayer.String(),
 	})
 
 	if height != types.NewHeight(2) {
@@ -125,8 +128,8 @@ func TestUpdateClientUnionMirrorsStateUpdate(cur realm, t *testing.T) {
 	if len(lc.headerMessages) != 1 || string(lc.headerMessages[0]) != "header" {
 		t.Fatalf("header not passed to light client")
 	}
-	if len(lc.headerRelayers) != 1 || lc.headerRelayers[0] != relayer {
-		t.Fatalf("VerifyHeader relayer: got %v want %s", lc.headerRelayers, relayer)
+	if len(lc.headerRelayers) != 1 || lc.headerRelayers[0] != wantRelayer {
+		t.Fatalf("VerifyHeader relayer: got %v want %s", lc.headerRelayers, wantRelayer)
 	}
 	value, ok := store.getClient(clientId).getClientStore("update-key")
 	if !ok || string(value) != "update-value" {

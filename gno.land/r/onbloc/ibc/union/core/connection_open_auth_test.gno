@@ -11,7 +11,7 @@ func TestForceConnectionOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.
 	resetStore(cur)
 	previousRole := denySelectorForTest(cur, SelectorForceConnectionAck)
 
-	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		ForceConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(
 			types.ConnectionId(1),
 			types.ConnectionId(77),
@@ -26,7 +26,7 @@ func TestForceConnectionOpenConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *test
 	resetStore(cur)
 	previousRole := denySelectorForTest(cur, SelectorForceConnectionConfirm)
 
-	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		ForceConnectionOpenConfirm(cross(cur), types.NewMsgConnectionOpenConfirm(types.ConnectionId(1), nil, 10))
 	})
 	restoreSelectorForTest(cur, SelectorForceConnectionConfirm, previousRole)

@@ -14,7 +14,7 @@ func TestForceConnectionOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.
 	previousRole := denySelectorForTest(cur, SelectorForceConnectionTry)
 	defer restoreSelectorForTest(cur, SelectorForceConnectionTry, previousRole)
 
-	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		ForceConnectionOpenTry(cross(cur), types.NewMsgConnectionOpenTry(
 			types.ClientId(1),
 			types.ClientId(99),

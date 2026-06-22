@@ -16,7 +16,7 @@ func TestCommitMembershipProofRejectsNonAdminBeforeVerification(cur realm, t *te
 	client := &mockClient{chainId: "union-1", status: types.StatusActive}
 	clientId := registerMockClient(client)
 
-	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		CommitMembershipProof(cross(cur), types.MsgCommitMembershipProof{
 			ClientId:    clientId,
 			ProofHeight: 10,

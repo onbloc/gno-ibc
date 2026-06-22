@@ -33,7 +33,7 @@ func TestGrantRoleRejectsNonAdmin(cur realm, t *testing.T) {
 	ResetForTest(cur, admin)
 
 	testing.SetRealm(testing.NewUserRealm(caller))
-	uassert.AbortsContains(t, cur, "caller not authorized to grant_role", func(cur realm) {
+	uassert.AbortsContains(t, cur, ErrorAccessManagerUnauthorizedAccount, func(cur realm) {
 		GrantRole(cross(cur), RelayerRole, relayer, 0)
 	})
 	if HasRole(cur, RelayerRole, relayer).IsMember {
@@ -63,7 +63,7 @@ func TestSetFunctionRoleRejectsNonAdmin(cur realm, t *testing.T) {
 	ResetForTest(cur, admin)
 
 	testing.SetRealm(testing.NewUserRealm(caller))
-	uassert.AbortsContains(t, cur, "caller not authorized to set_target_function_role", func(cur realm) {
+	uassert.AbortsContains(t, cur, ErrorAccessManagerUnauthorizedAccount, func(cur realm) {
 		SetFunctionRole(cur, "set_hook", manager.PublicRole)
 	})
 	if GetFunctionRole(cross(cur), "set_hook") != manager.AdminRole {
@@ -80,7 +80,7 @@ func TestLabelRoleRequiresManagerAdmin(cur realm, t *testing.T) {
 	LabelRole(cross(cur), RelayerRole, "RELAYER")
 
 	testing.SetRealm(testing.NewUserRealm(caller))
-	uassert.AbortsContains(t, cur, "caller not authorized to label_role", func(cur realm) {
+	uassert.AbortsContains(t, cur, ErrorAccessManagerUnauthorizedAccount, func(cur realm) {
 		LabelRole(cross(cur), RelayerRole, "RELAYER")
 	})
 }
@@ -132,7 +132,7 @@ func TestRenounceRoleSurface(cur realm, t *testing.T) {
 	GrantRole(cross(cur), RelayerRole, relayer, 0)
 
 	testing.SetRealm(testing.NewUserRealm(relayer))
-	uassert.AbortsContains(t, cur, "access: bad confirmation", func(cur realm) {
+	uassert.AbortsContains(t, cur, manager.ErrorAccessManagerBadConfirmation, func(cur realm) {
 		RenounceRole(cross(cur), RelayerRole, admin)
 	})
 	RenounceRole(cross(cur), RelayerRole, relayer)

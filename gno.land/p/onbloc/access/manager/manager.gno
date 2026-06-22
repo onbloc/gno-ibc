@@ -2,7 +2,7 @@ package manager
 
 func (state *State) GrantRole(role RoleId, account address, executionDelay Delay) bool {
 	if role == PublicRole {
-		panic("access: locked role")
+		panic(AccessManagerLockedRoleError(role))
 	}
 	roleConfig := state.ensureRole(role)
 	_, found := roleConfig.Members[account]
@@ -12,7 +12,7 @@ func (state *State) GrantRole(role RoleId, account address, executionDelay Delay
 
 func (state *State) RevokeRole(role RoleId, account address) bool {
 	if role == PublicRole {
-		panic("access: locked role")
+		panic(AccessManagerLockedRoleError(role))
 	}
 	roleConfig := state.ensureRole(role)
 	_, found := roleConfig.Members[account]
@@ -24,7 +24,7 @@ func (state *State) RevokeRole(role RoleId, account address) bool {
 
 func (state *State) RenounceRole(role RoleId, account address, callerConfirmation address) bool {
 	if account != callerConfirmation {
-		panic("access: bad confirmation")
+		panic(ErrorAccessManagerBadConfirmation)
 	}
 	return state.RevokeRole(role, account)
 }
@@ -72,7 +72,7 @@ func (state *State) GetRoleGuardian(role RoleId) RoleId {
 
 func (state *State) SetGrantDelay(role RoleId, delay Delay) {
 	if role == PublicRole {
-		panic("access: locked role")
+		panic(AccessManagerLockedRoleError(role))
 	}
 	state.ensureRole(role).GrantDelay = delay
 }
@@ -207,6 +207,6 @@ func (state *State) ensureInitialized() {
 
 func requireUnlockedConfigRole(role RoleId) {
 	if role == AdminRole || role == PublicRole {
-		panic("access: locked role")
+		panic(AccessManagerLockedRoleError(role))
 	}
 }

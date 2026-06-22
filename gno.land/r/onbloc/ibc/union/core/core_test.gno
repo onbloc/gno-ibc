@@ -410,37 +410,37 @@ func TestRestrictedPacketEntrypointsRejectNonAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
 
 	prevPacketRecv := denySelectorForTest(cur, SelectorPacketRecv)
-	uassert.AbortsContains(t, cur, "caller not authorized to packet_recv", func(cur realm) {
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		PacketRecv(cross(cur), types.MsgPacketRecv{})
 	})
 	restoreSelectorForTest(cur, SelectorPacketRecv, prevPacketRecv)
 
 	prevIntentPacketRecv := denySelectorForTest(cur, SelectorIntentPacketRecv)
-	uassert.AbortsContains(t, cur, "caller not authorized to intent_packet_recv", func(cur realm) {
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{})
 	})
 	restoreSelectorForTest(cur, SelectorIntentPacketRecv, prevIntentPacketRecv)
 
 	prevPacketAck := denySelectorForTest(cur, SelectorPacketAck)
-	uassert.AbortsContains(t, cur, "caller not authorized to packet_ack", func(cur realm) {
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{})
 	})
 	restoreSelectorForTest(cur, SelectorPacketAck, prevPacketAck)
 
 	prevPacketTimeout := denySelectorForTest(cur, SelectorPacketTimeout)
-	uassert.AbortsContains(t, cur, "caller not authorized to packet_timeout", func(cur realm) {
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		PacketTimeout(cross(cur), types.MsgPacketTimeout{})
 	})
 	restoreSelectorForTest(cur, SelectorPacketTimeout, prevPacketTimeout)
 
 	prevBatchSend := denySelectorForTest(cur, SelectorBatchSend)
-	uassert.AbortsContains(t, cur, "caller not authorized to batch_send", func(cur realm) {
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		BatchSend(cross(cur), types.MsgBatchSend{})
 	})
 	restoreSelectorForTest(cur, SelectorBatchSend, prevBatchSend)
 
 	prevBatchAcks := denySelectorForTest(cur, SelectorBatchAcks)
-	uassert.AbortsContains(t, cur, "caller not authorized to batch_acks", func(cur realm) {
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		BatchAcks(cross(cur), types.MsgBatchAcks{})
 	})
 	restoreSelectorForTest(cur, SelectorBatchAcks, prevBatchAcks)
@@ -584,7 +584,7 @@ func TestForceUpdateClientPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
 	previousRole := denySelectorForTest(cur, SelectorForceUpdateClient)
 
-	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		ForceUpdateClient(cross(cur), types.NewMsgForceUpdateClient(types.ClientId(0), nil, nil))
 	})
 	restoreSelectorForTest(cur, SelectorForceUpdateClient, previousRole)

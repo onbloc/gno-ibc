@@ -12,38 +12,38 @@ import (
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
-// dispatchVerify routes an instruction to its opcode-specific verifier (the send-side validation entry point).
+// verifyInternal routes an instruction to its opcode-specific verifier (the send-side validation entry point).
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2742-L2796
-func (v *ucs03ZkgmV1) dispatchVerify(_ int, rlm realm, channelId types.ChannelId, sender string, funds *funds, path *u256.Uint, instr z.Instruction) error {
-	switch instr.Opcode {
+func (v *ucs03ZkgmV1) verifyInternal(_ int, rlm realm, info MessageInfo, funds *funds, channelId types.ChannelId, path *u256.Uint, instruction z.Instruction) error {
+	switch instruction.Opcode {
 	case z.OP_TOKEN_ORDER:
-		order, err := decodeOrderInstruction(instr)
+		order, err := decodeOrderInstruction(instruction)
 		if err != nil {
 			return err
 		}
 
-		return v.verifyTokenOrderV2(0, rlm, channelId, sender, funds, path, order)
-	case z.OP_CALL:
-		call, err := decodeCallInstruction(instr)
-		if err != nil {
-			return err
-		}
-
-		return v.verifyCall(0, rlm, sender, call)
+		return v.verifyTokenOrderV2(0, rlm, info, funds, channelId, path, order)
 	case z.OP_BATCH:
-		batch, err := decodeBatchInstruction(instr)
+		batch, err := decodeBatchInstruction(instruction)
 		if err != nil {
 			return err
 		}
 
-		return v.verifyBatch(0, rlm, channelId, sender, funds, path, batch)
+		return v.verifyBatch(0, rlm, info, funds, channelId, path, batch)
 	case z.OP_FORWARD:
-		forward, err := decodeForwardInstruction(instr)
+		forward, err := decodeForwardInstruction(instruction)
 		if err != nil {
 			return err
 		}
 
-		return v.verifyForward(0, rlm, channelId, sender, funds, path, forward)
+		return v.verifyForward(0, rlm, info, funds, channelId, forward)
+	case z.OP_CALL:
+		call, err := decodeCallInstruction(instruction)
+		if err != nil {
+			return err
+		}
+
+		return v.verifyCall(0, rlm, call, info.Sender)
 	default:
 		return errors.New("zkgm/v1: unsupported opcode")
 	}
@@ -57,8 +57,17 @@ type execFatal struct{ msg string }
 
 func (e execFatal) Error() string { return e.msg }
 
-// dispatchExecute routes a received instruction to its opcode handler, turning non-fatal errors into a failure ack.
-func (v *ucs03ZkgmV1) dispatchExecute(_ int, rlm realm, packet types.Packet, relayer address, relayerMsg []byte, path *u256.Uint, salt [32]byte, instr z.Instruction, intent bool) (result types.RecvPacketResult, err error) {
+// dispatchExecutePacket routes a received instruction to its opcode handler, turning non-fatal errors into a failure ack.
+func (v *ucs03ZkgmV1) dispatchExecutePacket(
+	_ int, rlm realm,
+	packet types.Packet,
+	relayer address,
+	relayerMsg []byte,
+	salt [32]byte,
+	path *u256.Uint,
+	instruction z.Instruction,
+	intent bool,
+) (result types.RecvPacketResult, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			if _, ok := r.(execFatal); ok {
@@ -70,161 +79,151 @@ func (v *ucs03ZkgmV1) dispatchExecute(_ int, rlm realm, packet types.Packet, rel
 		}
 	}()
 
-	switch instr.Opcode {
+	switch instruction.Opcode {
 	case z.OP_TOKEN_ORDER:
-		order, err := decodeOrderInstruction(instr)
+		order, err := decodeOrderInstruction(instruction)
 		if err != nil {
 			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 		}
 
-		return v.executeTokenOrderV2(0, rlm, packet, relayer, relayerMsg, path, order, intent)
-	case z.OP_CALL:
-		call, err := decodeCallInstruction(instr)
-		if err != nil {
-			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
-		}
-
-		return v.executeCall(0, rlm, packet, relayer, relayerMsg, path, call, intent)
+		return v.executeTokenOrderV2(0, rlm, packet, relayer, relayerMsg, salt, path, order, intent)
 	case z.OP_BATCH:
-		batch, err := decodeBatchInstruction(instr)
+		batch, err := decodeBatchInstruction(instruction)
 		if err != nil {
 			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 		}
 
-		ack, err := v.executeBatch(0, rlm, packet, relayer, relayerMsg, path, salt, batch, intent)
+		ack, err := v.executeBatch(0, rlm, packet, relayer, relayerMsg, salt, path, batch, intent)
 		if err != nil {
 			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 		}
 
 		return core.NewRecvPacketResult(types.PacketStatusSuccess, ack), nil
-	case z.OP_FORWARD:
-		forward, err := decodeForwardInstruction(instr)
+	case z.OP_CALL:
+		call, err := decodeCallInstruction(instruction)
 		if err != nil {
 			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 		}
 
-		return v.executeForward(0, rlm, packet, path, salt, forward, intent)
+		return v.executeCall(0, rlm, packet, relayer, relayerMsg, path, call, intent)
+	case z.OP_FORWARD:
+		forward, err := decodeForwardInstruction(instruction)
+		if err != nil {
+			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
+		}
+
+		return v.executeForward(0, rlm, packet, salt, path, forward, intent)
 	default:
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), errors.New("zkgm/v1: unsupported opcode")
 	}
 }
 
-// dispatchAck routes an acknowledgement to its opcode handler.
-func (v *ucs03ZkgmV1) dispatchAck(_ int, rlm realm, packet types.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction, successful bool, ack []byte) error {
-	switch instr.Opcode {
+// acknowledgeInternal routes an acknowledgement to its opcode handler.
+func (v *ucs03ZkgmV1) acknowledgeInternal(_ int, rlm realm, packet types.Packet, relayer address, salt [32]byte, path *u256.Uint, instruction z.Instruction, successful bool, ack []byte) error {
+	switch instruction.Opcode {
 	case z.OP_TOKEN_ORDER:
-		order, err := decodeOrderInstruction(instr)
+		order, err := decodeOrderInstruction(instruction)
 		if err != nil {
 			return err
 		}
 
 		var orderAck z.TokenOrderAck
+
 		hasOrderAck := false
+
 		if successful {
 			decoded, err := z.DecodeTokenOrderAck(ack)
 			if err != nil {
 				return err
 			}
+
 			orderAck = decoded
 			hasOrderAck = true
 		}
-		return v.acknowledgeTokenOrderV2(0, rlm, packet.SourceChannelId, path, order, orderAck, hasOrderAck)
+
+		return v.acknowledgeTokenOrderV2(0, rlm, packet, relayer, salt, path, order, orderAck, hasOrderAck)
+	case z.OP_BATCH:
+		batch, err := decodeBatchInstruction(instruction)
+		if err != nil {
+			return err
+		}
+
+		return v.acknowledgeBatch(0, rlm, packet, relayer, salt, path, batch, successful, ack)
 	case z.OP_CALL:
-		call, err := decodeCallInstruction(instr)
+		call, err := decodeCallInstruction(instruction)
 		if err != nil {
 			return err
 		}
 
 		return v.acknowledgeCall(0, rlm, packet, path, call)
-	case z.OP_BATCH:
-		batch, err := decodeBatchInstruction(instr)
-		if err != nil {
-			return err
-		}
-
-		return v.acknowledgeBatch(0, rlm, packet, path, salt, batch, successful, ack)
-	case z.OP_FORWARD:
-		forward, err := decodeForwardInstruction(instr)
-		if err != nil {
-			return err
-		}
-
-		return v.acknowledgeForward(0, rlm, packet, path, salt, forward, successful, ack)
 	default:
 		return errors.New("zkgm/v1: unsupported opcode")
 	}
 }
 
-// dispatchTimeout routes a timeout to its opcode handler.
-func (v *ucs03ZkgmV1) dispatchTimeout(_ int, rlm realm, packet types.Packet, path *u256.Uint, salt [32]byte, instr z.Instruction) error {
-	switch instr.Opcode {
+// timeoutInternal routes a timeout to its opcode handler.
+func (v *ucs03ZkgmV1) timeoutInternal(_ int, rlm realm, packet types.Packet, salt [32]byte, path *u256.Uint, instruction z.Instruction) error {
+	switch instruction.Opcode {
 	case z.OP_TOKEN_ORDER:
-		order, err := decodeOrderInstruction(instr)
+		order, err := decodeOrderInstruction(instruction)
 		if err != nil {
 			return err
 		}
 
-		return v.refundV2(0, rlm, packet.SourceChannelId, path, order)
+		return v.refundV2(0, rlm, path, packet.SourceChannelId, order)
+	case z.OP_BATCH:
+		batch, err := decodeBatchInstruction(instruction)
+		if err != nil {
+			return err
+		}
+
+		return v.timeoutBatch(0, rlm, packet, salt, path, batch)
 	case z.OP_CALL:
-		call, err := decodeCallInstruction(instr)
+		call, err := decodeCallInstruction(instruction)
 		if err != nil {
 			return err
 		}
 
 		return v.timeoutCall(0, rlm, packet, path, call)
-	case z.OP_BATCH:
-		batch, err := decodeBatchInstruction(instr)
-		if err != nil {
-			return err
-		}
-
-		return v.timeoutBatch(0, rlm, packet, path, salt, batch)
-	case z.OP_FORWARD:
-		forward, err := decodeForwardInstruction(instr)
-		if err != nil {
-			return err
-		}
-
-		return v.timeoutForward(0, rlm, packet, path, salt, forward)
 	default:
 		return errors.New("zkgm/v1: unsupported opcode")
 	}
 }
 
 // decodeOrderInstruction decodes a v2 token order, rejecting unsupported instruction versions.
-func decodeOrderInstruction(instr z.Instruction) (z.TokenOrderV2, error) {
-	if instr.Version != z.INSTR_VERSION_2 {
+func decodeOrderInstruction(instruction z.Instruction) (z.TokenOrderV2, error) {
+	if instruction.Version != z.INSTR_VERSION_2 {
 		return z.TokenOrderV2{}, errors.New("zkgm/v1: unsupported token order version")
 	}
 
-	return z.DecodeTokenOrderV2(instr.Operand)
+	return z.DecodeTokenOrderV2(instruction.Operand)
 }
 
 // decodeCallInstruction decodes a call, rejecting unsupported instruction versions.
-func decodeCallInstruction(instr z.Instruction) (z.Call, error) {
-	if instr.Version != z.INSTR_VERSION_0 {
+func decodeCallInstruction(instruction z.Instruction) (z.Call, error) {
+	if instruction.Version != z.INSTR_VERSION_0 {
 		return z.Call{}, errors.New("zkgm/v1: unsupported call version")
 	}
 
-	return z.DecodeCall(instr.Operand)
+	return z.DecodeCall(instruction.Operand)
 }
 
 // decodeBatchInstruction decodes a batch, rejecting unsupported instruction versions.
-func decodeBatchInstruction(instr z.Instruction) (z.Batch, error) {
-	if instr.Version != z.INSTR_VERSION_0 {
+func decodeBatchInstruction(instruction z.Instruction) (z.Batch, error) {
+	if instruction.Version != z.INSTR_VERSION_0 {
 		return z.Batch{}, errors.New("zkgm/v1: unsupported batch version")
 	}
 
-	return z.DecodeBatch(instr.Operand)
+	return z.DecodeBatch(instruction.Operand)
 }
 
 // decodeForwardInstruction decodes a forward, rejecting unsupported instruction versions.
-func decodeForwardInstruction(instr z.Instruction) (z.Forward, error) {
-	if instr.Version != z.INSTR_VERSION_0 {
+func decodeForwardInstruction(instruction z.Instruction) (z.Forward, error) {
+	if instruction.Version != z.INSTR_VERSION_0 {
 		return z.Forward{}, errors.New("zkgm/v1: unsupported forward version")
 	}
 
-	return z.DecodeForward(instr.Operand)
+	return z.DecodeForward(instruction.Operand)
 }
 
 // mustEncodeUniversalErrorAck returns the ABI-encoded failure acknowledgement

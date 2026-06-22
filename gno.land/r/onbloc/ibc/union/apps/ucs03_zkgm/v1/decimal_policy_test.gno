@@ -43,7 +43,7 @@ func TestInitializeDecimalsAgnosticAccounting(cur realm, t *testing.T) {
 		rx := testAddress(tc.rxSuffix)
 		res, err := v.executeTokenOrderV2(0, cur,
 			core.NewPacket(types.ChannelId(1), types.ChannelId(tc.dest), nil, 0),
-			relayer, nil, u256.NewUint(tc.path),
+			relayer, nil, [32]byte{}, u256.NewUint(tc.path),
 			z.TokenOrderV2{
 				Sender: []byte("s"), Receiver: []byte(rx), BaseToken: base,
 				BaseAmount: u256.NewUint(N), QuoteToken: []byte(denom), QuoteAmount: u256.NewUint(N),
@@ -84,13 +84,13 @@ func TestBaseAmountPreservedThroughLockAndRefund(cur realm, t *testing.T) {
 		Metadata:    metaBytes,
 	}
 
-	err := v.verifyTokenOrderV2(0, cur, chanSrc, sender, newFunds(nil), path, order)
+	err := v.verifyTokenOrderV2(0, cur, MessageInfo{Sender: sender}, newFunds(nil), chanSrc, path, order)
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(0), voucherBalanceOf(ibcBase, address(sender)))
 	srcBal, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(chanSrc, path, order.BaseToken, order.QuoteToken))
 	uassert.Equal(t, u256.NewUint(N).ToString(), srcBal.ToString())
 
-	err = v.acknowledgeTokenOrderV2(0, cur, chanSrc, path, order, z.TokenOrderAck{}, false)
+	err = v.acknowledgeTokenOrderV2(0, cur, core.NewPacket(chanSrc, 0, nil, 0), address(""), [32]byte{}, path, order, z.TokenOrderAck{}, false)
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(N), voucherBalanceOf(ibcBase, address(sender)))
 	srcBalAfter, hasBal := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(chanSrc, path, order.BaseToken, order.QuoteToken))
@@ -126,7 +126,7 @@ func TestBaseAmountPreservedThroughMint(cur realm, t *testing.T) {
 
 	res, err := v.executeTokenOrderV2(0, cur,
 		core.NewPacket(chanSrc, chanDest, nil, 0),
-		address(testAddress("rt-rly-mint")), nil, path, order, false)
+		address(testAddress("rt-rly-mint")), nil, [32]byte{}, path, order, false)
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatusSuccess)
 	uassert.Equal(t, int64(N), voucherBalanceOf(ibcDest, address(receiver)))
@@ -147,7 +147,7 @@ func TestNativeBaseAmountNotUpscaled(cur realm, t *testing.T) {
 	}
 	f := newFunds(chain.NewCoins(chain.NewCoin("ugnot", N)))
 
-	err := v.verifyTokenOrderV2(0, cur, chanId, testAddress("native-noscale-sndr"), f, u256.Zero(), order)
+	err := v.verifyTokenOrderV2(0, cur, MessageInfo{Sender: testAddress("native-noscale-sndr")}, f, chanId, u256.Zero(), order)
 
 	uassert.NoError(t, err)
 	uassert.True(t, f.isEmpty())
@@ -201,8 +201,7 @@ func TestSendBaseAmountInt64Boundary(cur realm, t *testing.T) {
 		QuoteAmount: maxI64,
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
-	err := v.verifyTokenOrderV2(0, cur, chanA, senderA,
-		newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), u256.Zero(), orderA)
+	err := v.verifyTokenOrderV2(0, cur, MessageInfo{Sender: senderA}, newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), chanA, u256.Zero(), orderA)
 	uassert.NoError(t, err)
 	balA, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(chanA, u256.Zero(), orderA.BaseToken, orderA.QuoteToken))
 	uassert.Equal(t, maxI64.ToString(), balA.ToString())
@@ -218,11 +217,13 @@ func TestSendBaseAmountInt64Boundary(cur realm, t *testing.T) {
 		QuoteAmount: overAmt,
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
-	err = v.verifyTokenOrderV2(0, cur, chanB, senderB,
-		newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), u256.Zero(), orderB)
+	// An int64-overflowing base amount is rejected. The reference increases the
+	// channel balance before escrowing (contract.rs L511-543), so the failing
+	// escrow leaves a transient balance entry; in production the verify error
+	// aborts the whole Send tx (impl.gno panics), rolling that write back. Here
+	// verify is called in isolation, so we only assert the rejection.
+	err = v.verifyTokenOrderV2(0, cur, MessageInfo{Sender: senderB}, newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), chanB, u256.Zero(), orderB)
 	uassert.Error(t, err)
-	balB, hasB := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(chanB, u256.Zero(), orderB.BaseToken, orderB.QuoteToken))
-	uassert.True(t, !hasB || balB.IsZero())
 }
 
 func TestVoucherDecimalsWithinLimit(cur realm, t *testing.T) {

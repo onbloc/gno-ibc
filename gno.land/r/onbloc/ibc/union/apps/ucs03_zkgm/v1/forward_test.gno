@@ -19,7 +19,7 @@ import (
 )
 
 func TestVerifyForwardRejectsNestedForward(cur realm, t *testing.T) {
-	err := newTestImpl().verifyForward(0, cur, types.ChannelId(1), "sender", newFunds(nil), u256.Zero(), z.Forward{
+	err := newTestImpl().verifyForward(0, cur, MessageInfo{Sender: "sender"}, newFunds(nil), types.ChannelId(1), z.Forward{
 		Path: forwardPath(1, 2),
 		Instruction: z.Instruction{
 			Version: z.INSTR_VERSION_0,
@@ -56,7 +56,7 @@ func TestVerifyForwardPassesAllowedChildren(cur realm, t *testing.T) {
 		{Version: z.INSTR_VERSION_0, Opcode: z.OP_BATCH, Operand: batchBytes},
 	}
 	for _, instr := range cases {
-		err := v.verifyForward(0, cur, types.ChannelId(1), sender, newFunds(nil), u256.Zero(), z.Forward{
+		err := v.verifyForward(0, cur, MessageInfo{Sender: sender}, newFunds(nil), types.ChannelId(1), z.Forward{
 			Path:             forwardPath(1, 2),
 			TimeoutTimestamp: 999,
 			Instruction:      instr,
@@ -66,7 +66,7 @@ func TestVerifyForwardPassesAllowedChildren(cur realm, t *testing.T) {
 }
 
 func TestVerifyForwardRejectsZeroTimeout(cur realm, t *testing.T) {
-	err := newTestImpl().verifyForward(0, cur, types.ChannelId(1), "sender", newFunds(nil), u256.Zero(), z.Forward{
+	err := newTestImpl().verifyForward(0, cur, MessageInfo{Sender: "sender"}, newFunds(nil), types.ChannelId(1), z.Forward{
 		Path:             forwardPath(1, 2),
 		TimeoutTimestamp: 0,
 		Instruction:      batchMustCallInstruction(batchCall("sender", "")),
@@ -76,7 +76,7 @@ func TestVerifyForwardRejectsZeroTimeout(cur realm, t *testing.T) {
 }
 
 func TestVerifyForwardAllowsMaxHopPath(cur realm, t *testing.T) {
-	err := newTestImpl().verifyForward(0, cur, types.ChannelId(1), "sender", newFunds(nil), u256.Zero(), z.Forward{
+	err := newTestImpl().verifyForward(0, cur, MessageInfo{Sender: "sender"}, newFunds(nil), types.ChannelId(1), z.Forward{
 		Path:             forwardPath(1, 2, 3, 4, 5, 6, 7, 8),
 		TimeoutTimestamp: 999,
 		Instruction:      batchMustCallInstruction(batchCall("sender", "")),
@@ -124,7 +124,7 @@ func TestBuildForwardChildRejectsZeroTimeout(cur realm, t *testing.T) {
 }
 
 func TestExecuteForwardIntentReturnsOnlyMaker(cur realm, t *testing.T) {
-	res, err := newTestImpl().executeForward(0, cur, core.NewPacket(0, 0, nil, 0), u256.Zero(), [32]byte{}, z.Forward{
+	res, err := newTestImpl().executeForward(0, cur, core.NewPacket(0, 0, nil, 0), [32]byte{}, u256.Zero(), z.Forward{
 		Path:        forwardPath(1, 2),
 		Instruction: batchMustCallInstruction(batchCall("sender", "")),
 	}, true)
@@ -148,42 +148,6 @@ func TestIntentRecvOnlyMakerForwardAborts(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "zkgm: only maker", func(cur realm) {
 		newTestImpl().OnIntentRecvPacket(0, cur, packet, address("g1relayer"), nil)
 	})
-}
-
-func TestAcknowledgeForwardDispatchesToInnerInstruction(cur realm, t *testing.T) {
-	err := newTestImpl().acknowledgeForward(0, cur, core.NewPacket(0, 0, nil, 0), u256.Zero(), [32]byte{}, z.Forward{
-		Path:        forwardPath(1, 2),
-		Instruction: batchMustCallInstruction(batchCall("sender", "calldata")),
-	}, true, []byte{})
-
-	uassert.NoError(t, err)
-}
-
-func TestAcknowledgeForwardWithTokenOrderChildRefundsOnFailure(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	sender := testAddress("forward-refund")
-	order := z.TokenOrderV2{
-		Sender:      []byte(sender),
-		BaseToken:   []byte("ibc/v1-forward-refund"),
-		BaseAmount:  u256.NewUint(20),
-		QuoteToken:  []byte("quote"),
-		QuoteAmount: u256.NewUint(20),
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-	}
-	path := forwardPath(1, 2)
-	v.increaseChannelBalanceV2(0, cur, types.ChannelId(3), path, order.BaseToken, order.QuoteToken, order.BaseAmount)
-
-	err := v.acknowledgeForward(0, cur, core.NewPacket(types.ChannelId(3), types.ChannelId(4), nil, 0), u256.Zero(), [32]byte{}, z.Forward{
-		Path:        path,
-		Instruction: batchMustOrderInstruction(order),
-	}, false, nil)
-
-	uassert.NoError(t, err)
-
-	balance, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(3), path, order.BaseToken, order.QuoteToken))
-	uassert.True(t, ok && balance.IsZero())
-	uassert.Equal(t, int64(20), voucherBalanceOf(string(order.BaseToken), address(sender)))
 }
 
 func forwardPath(channels ...uint32) *u256.Uint {

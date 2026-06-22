@@ -22,5 +22,6 @@ func (v *ucs03ZkgmV1) sendNative(_ int, rlm realm, denom, receiver string, amoun
 	// draws from the proxy balance where the user's -send funds landed.
 	b := banker.NewBanker(banker.BankerTypeRealmSend, rlm)
 	b.SendCoins(rlm.Address(), address(receiver), chain.NewCoins(chain.NewCoin(denom, n)))
+
 	return nil
 }

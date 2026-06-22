@@ -27,6 +27,7 @@ func RegisterV1(cur realm) {
 func InstallV1Harness(cur realm) zkgm.IApp {
 	inst := NewV1Harness(cross(cur))
 	RegisterV1(cross(cur))
+
 	return inst
 }
 
@@ -35,6 +36,7 @@ func DecodeTokenMetadata(bz []byte) z.TokenMetadata {
 	if err != nil {
 		panic(err)
 	}
+
 	return meta
 }
 
@@ -47,6 +49,7 @@ func ChannelBalanceStr(channelId types.ChannelId, path *u256.Uint, baseToken []b
 	if !ok || balance == nil {
 		return "0"
 	}
+
 	return balance.ToString()
 }
 
@@ -65,5 +68,6 @@ func MintVoucher(cur realm, inst zkgm.IApp, channelId types.ChannelId, base stri
 	}
 	packet := core.NewPacket(types.ChannelId(1), channelId, TokenOrderPacketData(cross(cur), order), types.Timestamp(100))
 	inst.OnRecvPacket(0, cur, packet, testutils.TestAddress("scenario-relayer"), nil)
+
 	return quoteToken
 }

@@ -240,6 +240,7 @@ func consensusStateBytes(root []byte, timestamp uint64) []byte {
 	if err != nil {
 		panic(err)
 	}
+
 	return bz
 }
 
@@ -402,6 +403,7 @@ func HeaderBytes(cur realm) []byte {
 func TamperedHeaderBytes(cur realm) []byte {
 	proof := cloneBytes(devnetZKP)
 	proof[0] ^= 0xFF
+
 	return encodeHeader(devnetHeader(proof))
 }
 
@@ -438,6 +440,7 @@ func encodeHeader(h cometblsp.Header) []byte {
 	if err != nil {
 		panic(err)
 	}
+
 	return bz
 }
 
@@ -446,6 +449,7 @@ func mustHex(s string) []byte {
 	if err != nil {
 		panic(err)
 	}
+
 	return bz
 }
 
@@ -454,14 +458,18 @@ func mustH256(s string) cometblsp.H256 {
 	if len(bz) != 32 {
 		panic("realcometbls: H256 must be 32 bytes")
 	}
+
 	var out cometblsp.H256
+
 	copy(out[:], bz)
+
 	return out
 }
 
 func cloneBytes(in []byte) []byte {
 	out := make([]byte, len(in))
 	copy(out, in)
+
 	return out
 }
 
@@ -471,6 +479,7 @@ func pbVarint(v uint64) []byte {
 		out = append(out, byte(v)|0x80)
 		v >>= 7
 	}
+
 	return append(out, byte(v))
 }
 
@@ -481,6 +490,7 @@ func pbTag(fieldNum, wireType int) []byte {
 func pbBytesField(fieldNum int, data []byte) []byte {
 	out := pbTag(fieldNum, 2)
 	out = append(out, pbVarint(uint64(len(data)))...)
+
 	return append(out, data...)
 }
 
@@ -489,9 +499,11 @@ func encodeExistenceProof(key, value []byte) []byte {
 	if len(key) > 0 {
 		out = append(out, pbBytesField(1, key)...)
 	}
+
 	if len(value) > 0 {
 		out = append(out, pbBytesField(2, value)...)
 	}
+
 	return out
 }
 
@@ -504,5 +516,6 @@ func encodeMerkleProof(proofs ...[]byte) []byte {
 	for _, proof := range proofs {
 		out = append(out, pbBytesField(1, proof)...)
 	}
+
 	return out
 }

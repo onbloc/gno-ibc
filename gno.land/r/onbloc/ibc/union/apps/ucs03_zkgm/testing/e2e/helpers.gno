@@ -51,14 +51,18 @@ func RegisterMockLightClient(cur realm) {
 
 func CreateMockClient(cur realm) types.ClientId {
 	RegisterMockLightClient(cross(cur))
+
 	clientId := nextTestClientId()
+
 	core.CreateClient(cross(cur), types.NewMsgCreateClient(MockClientType, nil, nil))
+
 	return clientId
 }
 
 func OpenE2EChannel(cur realm, counterpartyChannelId types.ChannelId) types.ChannelId {
 	clientId := CreateMockClient(cross(cur))
 	connectionId := openConnection(cur, clientId)
+
 	return openChannel(cur, connectionId, counterpartyChannelId)
 }
 
@@ -68,6 +72,7 @@ func OpenE2EChannelPair(cur realm) ChannelPair {
 
 	source := openChannel(cur, connectionId, types.ChannelId(2))
 	destination := openChannel(cur, connectionId, source)
+
 	return ChannelPair{
 		ClientId:     clientId,
 		ConnectionId: connectionId,
@@ -78,8 +83,10 @@ func OpenE2EChannelPair(cur realm) ChannelPair {
 
 func openConnection(cur realm, clientId types.ClientId) types.ConnectionId {
 	connectionId := nextTestConnectionId()
+
 	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
+
 	return connectionId
 }
 
@@ -87,13 +94,15 @@ func openChannel(cur realm, connectionId types.ConnectionId, counterpartyChannel
 	portId := []byte(zkgm.ProxyPkgPath())
 	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
 	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, counterpartyChannelId, nil, 1, "g1msgrelayer"))
+
 	return channelId
 }
 
 func BatchSend(cur realm, packet types.Packet) types.H256 {
 	stdtesting.SetRealm(stdtesting.NewCodeRealm(zkgm.ProductionImplPath()))
-	zkgm.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{packet}))
+	core.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{packet}))
 	stdtesting.SetRealm(stdtesting.NewCodeRealm("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"))
+
 	return types.MustCommit(types.CommitPackets([]types.Packet{packet}))
 }
 
@@ -102,6 +111,7 @@ func MustTokenOrderInstruction(cur realm, order z.TokenOrderV2) z.Instruction {
 	if err != nil {
 		panic(err)
 	}
+
 	return z.Instruction{
 		Version: z.INSTR_VERSION_2,
 		Opcode:  z.OP_TOKEN_ORDER,
@@ -114,6 +124,7 @@ func MustCallInstruction(cur realm, call z.Call) z.Instruction {
 	if err != nil {
 		panic(err)
 	}
+
 	return z.Instruction{
 		Version: z.INSTR_VERSION_0,
 		Opcode:  z.OP_CALL,
@@ -126,6 +137,7 @@ func MustBatchInstruction(cur realm, batch z.Batch) z.Instruction {
 	if err != nil {
 		panic(err)
 	}
+
 	return z.Instruction{
 		Version: z.INSTR_VERSION_0,
 		Opcode:  z.OP_BATCH,
@@ -138,6 +150,7 @@ func MustForwardInstruction(cur realm, forward z.Forward) z.Instruction {
 	if err != nil {
 		panic(err)
 	}
+
 	return z.Instruction{
 		Version: z.INSTR_VERSION_0,
 		Opcode:  z.OP_FORWARD,
@@ -147,31 +160,38 @@ func MustForwardInstruction(cur realm, forward z.Forward) z.Instruction {
 
 func ForwardPath(cur realm, channels ...uint32) *u256.Uint {
 	path := u256.Zero()
+
 	for _, channel := range channels {
 		var err error
+
 		path, err = z.UpdateChannelPath(path, channel)
 		if err != nil {
 			panic(err)
 		}
 	}
+
 	return path
 }
 
 func MustForwardChildPacket(cur realm, packet types.Packet, path *u256.Uint, parentSalt [32]byte, forward z.Forward) types.Packet {
 	forwardPath := mustCloneUint(forward.Path)
+
 	tailPath, prevDestChannel := z.DequeueChannelFromPath(forwardPath)
 	if prevDestChannel == 0 {
 		panic("zkgm/e2e: forward missing previous destination channel")
 	}
+
 	continuationPath, nextSourceChannel := z.DequeueChannelFromPath(tailPath)
 	if nextSourceChannel == 0 {
 		panic("zkgm/e2e: forward missing next source channel")
 	}
+
 	if packet.DestinationChannelId != types.ChannelId(prevDestChannel) {
 		panic("zkgm/e2e: forward previous-destination mismatch")
 	}
 
 	nextInstruction := forward.Instruction
+
 	if !continuationPath.IsZero() {
 		nextForward := z.Forward{
 			Path:             continuationPath,
@@ -186,6 +206,7 @@ func MustForwardChildPacket(cur realm, packet types.Packet, path *u256.Uint, par
 	if err != nil {
 		panic(err)
 	}
+
 	nextPath, err := z.UpdateChannelPath(intermediate, nextSourceChannel)
 	if err != nil {
 		panic(err)
@@ -202,6 +223,7 @@ func MustForwardChildPacket(cur realm, packet types.Packet, path *u256.Uint, par
 
 	sourceChannelId := types.ChannelId(nextSourceChannel)
 	sourceChannel := core.GetChannel(sourceChannelId)
+
 	return core.NewPacket(sourceChannelId, sourceChannel.CounterpartyChannelId, childBytes, types.Timestamp(forward.TimeoutTimestamp))
 }
 
@@ -210,6 +232,7 @@ func mustCloneUint(in *u256.Uint) *u256.Uint {
 	if err != nil {
 		panic(err)
 	}
+
 	return out
 }
 
@@ -221,6 +244,7 @@ func MustPacketData(cur realm, instr z.Instruction) []byte {
 	if err != nil {
 		panic(err)
 	}
+
 	return packetBytes
 }
 
@@ -229,6 +253,7 @@ func MustTokenMetadata(cur realm, implementation string, ti z.TokenInitializer) 
 	if err != nil {
 		panic(err)
 	}
+
 	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{
 		Implementation: []byte(implementation),
 		Initializer:    initBytes,
@@ -236,6 +261,7 @@ func MustTokenMetadata(cur realm, implementation string, ti z.TokenInitializer) 
 	if err != nil {
 		panic(err)
 	}
+
 	return meta
 }
 
@@ -244,6 +270,7 @@ func MustAck(cur realm, tag *u256.Uint, inner []byte) []byte {
 	if err != nil {
 		panic(err)
 	}
+
 	return ack
 }
 
@@ -254,6 +281,7 @@ func MustProtocolTokenOrderAck(cur realm) []byte {
 	if err != nil {
 		panic(err)
 	}
+
 	return bz
 }
 
@@ -266,6 +294,7 @@ func MustSuccessAckBytes(cur realm, inner []byte) []byte {
 	if err != nil {
 		panic(err)
 	}
+
 	return ack
 }
 
@@ -278,5 +307,6 @@ func MustBatchAck(cur realm, childAcks [][]byte) []byte {
 	if err != nil {
 		panic(err)
 	}
+
 	return MustSuccessAckBytes(cross(cur), batchAck)
 }

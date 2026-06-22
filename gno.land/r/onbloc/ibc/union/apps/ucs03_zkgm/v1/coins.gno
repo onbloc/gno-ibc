@@ -14,26 +14,42 @@ func parseCoins(s string) chain.Coins {
 	if s == "" {
 		return nil
 	}
+
 	parts := strings.Split(s, ",")
 	coins := make([]chain.Coin, 0, len(parts))
+
 	for _, part := range parts {
 		if part == "" {
 			continue
 		}
+
 		i := 0
 		for i < len(part) && part[i] >= '0' && part[i] <= '9' {
 			i++
 		}
+
 		if i == 0 || i == len(part) {
 			panic("zkgm/coins: invalid coin " + part)
 		}
+
 		amount, err := strconv.ParseInt(part[:i], 10, 64)
 		if err != nil {
 			panic(err)
 		}
+
 		coins = append(coins, chain.NewCoin(part[i:], amount))
 	}
+
 	return chain.NewCoins(coins...)
+}
+
+// MessageInfo is the gno analog of the reference contract's `info: MessageInfo`
+// (cosmwasm_std::MessageInfo): the message sender plus the coins attached to it.
+// The verify chain threads it alongside the mutable `funds` spend budget, mirroring
+// the reference contract's `(info, funds)` parameter pair.
+type MessageInfo struct {
+	Sender string
+	Funds  *funds
 }
 
 // funds is the gno analog of the reference contract's threaded `funds: &mut Coins`
@@ -47,6 +63,7 @@ type funds struct {
 func newFunds(sent chain.Coins) *funds {
 	f := &funds{coins: make([]chain.Coin, len(sent))}
 	copy(f.coins, sent)
+
 	return f
 }
 
@@ -57,15 +74,19 @@ func (f *funds) sub(denom string, amount *u256.Uint) error {
 	if err != nil {
 		return err
 	}
+
 	for i := range f.coins {
 		if f.coins[i].Denom == denom {
 			if f.coins[i].Amount < want {
 				return errCoinMismatch
 			}
+
 			f.coins[i].Amount -= want
+
 			return nil
 		}
 	}
+
 	return errCoinMismatch
 }
 
@@ -76,6 +97,7 @@ func (f *funds) isEmpty() bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -84,6 +106,7 @@ func (f *funds) assertEmpty() error {
 	if !f.isEmpty() {
 		return errCoinMismatch
 	}
+
 	return nil
 }
 

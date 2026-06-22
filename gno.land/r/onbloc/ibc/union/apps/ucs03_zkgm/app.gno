@@ -23,55 +23,68 @@ var (
 
 func (a *App) OnChannelOpenInit(cur realm, connectionId types.ConnectionId, channelId types.ChannelId, version string, relayer address) {
 	assertIsIBCHost(cur)
+
 	if paused {
 		panic("zkgm: paused")
 	}
+
 	mustGetImpl().OnChannelOpenInit(0, cur, connectionId, channelId, version, relayer)
 }
 
 func (a *App) OnChannelOpenTry(cur realm, connectionId types.ConnectionId, channelId types.ChannelId, version string, counterpartyVersion string, relayer address) {
 	assertIsIBCHost(cur)
+
 	if paused {
 		panic("zkgm: paused")
 	}
+
 	mustGetImpl().OnChannelOpenTry(0, cur, connectionId, channelId, version, counterpartyVersion, relayer)
 }
 
 func (a *App) OnChannelOpenAck(cur realm, channelId types.ChannelId, counterpartyChannelId types.ChannelId, counterpartyVersion string, relayer address) {
 	assertIsIBCHost(cur)
+
 	if paused {
 		panic("zkgm: paused")
 	}
+
 	mustGetImpl().OnChannelOpenAck(0, cur, channelId, counterpartyChannelId, counterpartyVersion, relayer)
 }
 
 func (a *App) OnChannelOpenConfirm(cur realm, channelId types.ChannelId, relayer address) {
 	assertIsIBCHost(cur)
+
 	if paused {
 		panic("zkgm: paused")
 	}
+
 	mustGetImpl().OnChannelOpenConfirm(0, cur, channelId, relayer)
 }
 
 func (a *App) OnChannelCloseInit(cur realm, channelId types.ChannelId, relayer address) {
 	assertIsIBCHost(cur)
+
 	if paused {
 		panic("zkgm: paused")
 	}
+
 	panic("zkgm: the show must go on")
 }
 
 func (a *App) OnChannelCloseConfirm(cur realm, channelId types.ChannelId, relayer address) {
 	assertIsIBCHost(cur)
+
 	if paused {
 		panic("zkgm: paused")
 	}
+
 	panic("zkgm: the show must go on")
 }
 
 func (a *App) OnRecvPacket(cur realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {
 	assertIsIBCHost(cur)
 	assertNotPaused()
+
 	return mustGetImpl().OnRecvPacket(0, cur, packet, relayer, relayerMsg)
 }
 
@@ -90,5 +103,6 @@ func (a *App) OnTimeoutPacket(cur realm, packet types.Packet, relayer address) {
 func (a *App) OnIntentRecvPacket(cur realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
 	assertIsIBCHost(cur)
 	assertNotPaused()
+
 	return mustGetImpl().OnIntentRecvPacket(0, cur, packet, marketMaker, marketMakerMsg)
 }

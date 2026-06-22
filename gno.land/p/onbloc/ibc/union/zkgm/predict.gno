@@ -19,11 +19,14 @@ func PredictWrappedToken(path *u256.Uint, channelId uint32, baseToken []byte) st
 	if path == nil {
 		path = u256.Zero()
 	}
+
 	bz, err := abi.Encode(PredictWrappedTokenSchema, []any{path, channelId, baseToken})
 	if err != nil {
 		panic(err)
 	}
+
 	h := keccak256.Sum256(bz)
+
 	return ibcDenomPrefix + hex.EncodeToString(h[:20])
 }
 
@@ -32,12 +35,16 @@ func PredictWrappedTokenV2(path *u256.Uint, channelId uint32, baseToken []byte, 
 	if path == nil {
 		path = u256.Zero()
 	}
+
 	image := new(u256.Uint).SetBytes(metadataImage[:])
+
 	bz, err := abi.Encode(PredictV2Schema, []any{path, channelId, baseToken, image})
 	if err != nil {
 		panic(err)
 	}
+
 	h := keccak256.Sum256(bz)
+
 	return ibcDenomPrefix + hex.EncodeToString(h[:20])
 }
 
@@ -48,6 +55,7 @@ func MetadataImage(meta TokenMetadata) [32]byte {
 	if err != nil {
 		panic(err)
 	}
+
 	return keccak256.Sum256(bz)
 }
 
@@ -65,6 +73,7 @@ func PredictCallProxyAccount(path *u256.Uint, channelId types.ChannelId, sender 
 	if path != nil {
 		pathBytes = Uint256ToBytes32(path)
 	}
+
 	channel := channelId.String()
 	buf := make([]byte, 0, len(tagCallProxy)+len(pathBytes)+len(channel)+len(sender))
 	buf = append(buf, tagCallProxy...)
@@ -73,5 +82,6 @@ func PredictCallProxyAccount(path *u256.Uint, channelId types.ChannelId, sender 
 	buf = append(buf, sender...)
 
 	h := keccak256.Sum256(buf)
+
 	return "zkgm1" + hex.EncodeToString(h[:20])
 }

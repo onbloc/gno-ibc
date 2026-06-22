@@ -71,20 +71,26 @@ func createCometBLSClient(cur realm, clientStateBytes, consensusStateBytes []byt
 	if err != nil {
 		panic(err)
 	}
+
 	consensusState, err := realcometbls.DecodeConsensusState(consensusStateBytes)
 	if err != nil {
 		panic(err)
 	}
+
 	lightClient, err := realcometbls.NewCometblsLightClient(clientState, consensusState)
 	if err != nil {
 		panic(err)
 	}
+
 	clientType := types.ClientType(realcometbls.ClientType)
 	if !core.HasClient(clientType) {
 		core.RegisterClient(cross(cur), clientType, lightClient)
 	}
+
 	clientId := nextTestClientId()
+
 	core.CreateClient(cross(cur), types.NewMsgCreateClient(clientType, clientStateBytes, consensusStateBytes))
+
 	return clientId
 }
 
@@ -92,10 +98,12 @@ func OpenZ35CometBLSChannel(cur realm) ChannelPair {
 	clientId := CreateZ35CometBLSClient(cross(cur))
 
 	connectionId := nextTestConnectionId()
+
 	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), Z35ConnectionTryProof(cross(cur)), uint64(DevnetHeight-1)))
 
 	destination := openZ35Channel(cross(cur), connectionId, types.ChannelId(2))
+
 	return ChannelPair{
 		ClientId:     clientId,
 		ConnectionId: connectionId,
@@ -108,13 +116,15 @@ func openZ35Channel(cur realm, connectionId types.ConnectionId, counterpartyChan
 	portId := []byte(zkgm.ProxyPkgPath())
 	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
 	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, counterpartyChannelId, Z35ChannelTryProof(cross(cur)), uint64(DevnetHeight-1), "g1msgrelayer"))
+
 	return channelId
 }
 
 func BatchSend(cur realm, packet types.Packet) types.H256 {
 	stdtesting.SetRealm(stdtesting.NewCodeRealm(zkgm.ProductionImplPath()))
-	zkgm.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{packet}))
+	core.BatchSend(cross(cur), types.NewMsgBatchSend([]types.Packet{packet}))
 	stdtesting.SetRealm(stdtesting.NewCodeRealm("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/realcometbls"))
+
 	return types.MustCommit(types.CommitPackets([]types.Packet{packet}))
 }
 
@@ -122,12 +132,14 @@ func OpenZ37CometBLSChannel(cur realm) ChannelPair {
 	clientId := CreateZ37CometBLSClient(cross(cur))
 
 	connectionId := nextTestConnectionId()
+
 	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), Z37ConnectionTryProof(cross(cur)), uint64(DevnetHeight-1)))
 
 	portId := []byte(zkgm.ProxyPkgPath())
 	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
 	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, types.ChannelId(2), Z37ChannelTryProof(cross(cur)), uint64(DevnetHeight-1), "g1msgrelayer"))
+
 	return ChannelPair{
 		ClientId:     clientId,
 		ConnectionId: connectionId,

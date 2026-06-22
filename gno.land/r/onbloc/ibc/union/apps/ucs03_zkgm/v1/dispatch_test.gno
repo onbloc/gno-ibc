@@ -51,8 +51,10 @@ func TestAckUnsupportedOpcodeAborts(cur realm, t *testing.T) {
 	})
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), data, 0)
 
+	// Provide a decodable ack so dispatch reaches the opcode switch; the unknown
+	// opcode (0xFF) is what must abort, not the ack decoding.
 	uassert.AbortsContains(t, cur, "unsupported opcode", func(cur realm) {
-		newTestImpl().OnAcknowledgementPacket(0, cur, packet, nil, address(testAddress("relayer")))
+		newTestImpl().OnAcknowledgementPacket(0, cur, packet, mustSuccessAck(), address(testAddress("relayer")))
 	})
 }
 

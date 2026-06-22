@@ -39,5 +39,6 @@ func SetRateLimitDisabled(cur realm, disabled bool) {
 // Pausable toggles the global pause gate checked by every App receiver.
 func Pausable(cur realm, p bool) {
 	assertIsAdmin(cur)
+
 	paused = p
 }

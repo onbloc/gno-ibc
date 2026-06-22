@@ -23,7 +23,7 @@ func TestVerifyBatchRejectsNestedBatch(cur realm, t *testing.T) {
 		Opcode:  z.OP_BATCH,
 	}}}
 
-	err := newTestImpl().verifyBatch(0, cur, types.ChannelId(1), "sender", newFunds(nil), u256.Zero(), batch)
+	err := newTestImpl().verifyBatch(0, cur, MessageInfo{Sender: "sender"}, newFunds(nil), types.ChannelId(1), u256.Zero(), batch)
 
 	uassert.ErrorContains(t, err, "invalid batch instruction")
 }
@@ -34,7 +34,7 @@ func TestVerifyBatchPassesAllowedCallChildren(cur realm, t *testing.T) {
 		batchMustCallInstruction(batchCall("sender", "b")),
 	}}
 
-	err := newTestImpl().verifyBatch(0, cur, types.ChannelId(1), "sender", newFunds(nil), u256.Zero(), batch)
+	err := newTestImpl().verifyBatch(0, cur, MessageInfo{Sender: "sender"}, newFunds(nil), types.ChannelId(1), u256.Zero(), batch)
 
 	uassert.NoError(t, err)
 }
@@ -51,7 +51,7 @@ func TestVerifyBatchExactTotalNativeConsumptionPasses(cur realm, t *testing.T) {
 	}}
 	f := newFunds(parseCoins("100ugnot"))
 
-	err := v.verifyBatch(0, cur, channelId, sender, f, u256.Zero(), batch)
+	err := v.verifyBatch(0, cur, MessageInfo{Sender: sender}, f, channelId, u256.Zero(), batch)
 	uassert.NoError(t, err)
 	uassert.NoError(t, f.assertEmpty())
 
@@ -69,7 +69,7 @@ func TestVerifyBatchDuplicateNativeConsumptionRejected(cur realm, t *testing.T) 
 		batchMustOrderInstruction(batchRefundOrder("batch-dup-b", "ugnot", "quote-dup-b", 100)),
 	}}
 
-	err := v.verifyBatch(0, cur, types.ChannelId(91), sender, newFunds(parseCoins("100ugnot")), u256.Zero(), batch)
+	err := v.verifyBatch(0, cur, MessageInfo{Sender: sender}, newFunds(parseCoins("100ugnot")), types.ChannelId(91), u256.Zero(), batch)
 
 	uassert.ErrorContains(t, err, "sent coin mismatch")
 }
@@ -82,7 +82,7 @@ func TestVerifyBatchLeftoverNativeRejected(cur realm, t *testing.T) {
 	}}
 	f := newFunds(parseCoins("100ugnot"))
 
-	err := v.verifyBatch(0, cur, types.ChannelId(93), sender, f, u256.Zero(), batch)
+	err := v.verifyBatch(0, cur, MessageInfo{Sender: sender}, f, types.ChannelId(93), u256.Zero(), batch)
 	uassert.NoError(t, err)
 	// 40ugnot left unconsumed → the send-path drain check must reject it.
 	uassert.ErrorContains(t, f.assertEmpty(), "sent coin mismatch")
@@ -97,7 +97,7 @@ func TestVerifyBatchMultiDenomExactPasses(cur realm, t *testing.T) {
 	}}
 	f := newFunds(parseCoins("100ugnot,50foo"))
 
-	err := v.verifyBatch(0, cur, types.ChannelId(95), sender, f, u256.Zero(), batch)
+	err := v.verifyBatch(0, cur, MessageInfo{Sender: sender}, f, types.ChannelId(95), u256.Zero(), batch)
 	uassert.NoError(t, err)
 	uassert.NoError(t, f.assertEmpty())
 }
@@ -110,7 +110,7 @@ func TestVerifyBatchMultiDenomShortfallRejected(cur realm, t *testing.T) {
 		batchMustOrderInstruction(batchRefundOrder("batch-denom-sb", "foo", "quote-denom-sb", 50)),
 	}}
 
-	err := v.verifyBatch(0, cur, types.ChannelId(96), sender, newFunds(parseCoins("100ugnot,40foo")), u256.Zero(), batch)
+	err := v.verifyBatch(0, cur, MessageInfo{Sender: sender}, newFunds(parseCoins("100ugnot,40foo")), types.ChannelId(96), u256.Zero(), batch)
 
 	uassert.ErrorContains(t, err, "sent coin mismatch")
 }
@@ -133,7 +133,7 @@ func TestVerifyBatchMixedNativeAndVoucher(cur realm, t *testing.T) {
 	}}
 	f := newFunds(parseCoins("100ugnot"))
 
-	err := v.verifyBatch(0, cur, types.ChannelId(94), sender, f, u256.Zero(), batch)
+	err := v.verifyBatch(0, cur, MessageInfo{Sender: sender}, f, types.ChannelId(94), u256.Zero(), batch)
 	uassert.NoError(t, err)
 	uassert.NoError(t, f.assertEmpty())
 	uassert.Equal(t, int64(13), voucherBalanceOf(voucherDenom, address(sender)))
@@ -147,7 +147,7 @@ func TestAcknowledgeBatchRejectsAckCountMismatch(cur realm, t *testing.T) {
 	}}
 
 	outerAck := mustBatchOuterAck([][]byte{mustSuccessAck()})
-	err := newTestImpl().acknowledgeBatch(0, cur, packet, u256.Zero(), [32]byte{}, batch, true, outerAck.InnerAck)
+	err := newTestImpl().acknowledgeBatch(0, cur, packet, address(""), [32]byte{}, u256.Zero(), batch, true, outerAck.InnerAck)
 
 	uassert.ErrorContains(t, err, "batch ack count mismatch")
 }
@@ -169,7 +169,7 @@ func TestTimeoutBatchTokenOrderChildrenRefund(cur realm, t *testing.T) {
 		batchMustOrderInstruction(orderB),
 	}}
 
-	err := v.timeoutBatch(0, cur, packet, path, [32]byte{}, batch)
+	err := v.timeoutBatch(0, cur, packet, [32]byte{}, path, batch)
 
 	uassert.NoError(t, err)
 	assertNoChannelBalance(t, types.ChannelId(7), path, orderA)

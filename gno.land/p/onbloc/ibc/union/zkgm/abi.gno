@@ -122,6 +122,7 @@ func DecodeZkgmPacket(data []byte) (ZkgmPacket, error) {
 	if err != nil {
 		return ZkgmPacket{}, err
 	}
+
 	return ZkgmPacket{
 		Salt:        out[0].([32]byte),
 		Path:        out[1].(*u256.Uint),
@@ -138,6 +139,7 @@ func DecodeInstruction(data []byte) (Instruction, error) {
 	if err != nil {
 		return Instruction{}, err
 	}
+
 	return instructionFromValues(out), nil
 }
 
@@ -155,6 +157,7 @@ func DecodeForward(data []byte) (Forward, error) {
 	if err != nil {
 		return Forward{}, err
 	}
+
 	return Forward{
 		Path:             out[0].(*u256.Uint),
 		TimeoutHeight:    out[1].(uint64),
@@ -177,6 +180,7 @@ func DecodeCall(data []byte) (Call, error) {
 	if err != nil {
 		return Call{}, err
 	}
+
 	return Call{
 		Sender:           out[0].([]byte),
 		Eureka:           out[1].(bool),
@@ -190,6 +194,7 @@ func EncodeBatch(b Batch) ([]byte, error) {
 	for i, ins := range b.Instructions {
 		items[i] = instructionValues(ins)
 	}
+
 	return abi.Encode(BatchSchema, []any{items})
 }
 
@@ -198,11 +203,14 @@ func DecodeBatch(data []byte) (Batch, error) {
 	if err != nil {
 		return Batch{}, err
 	}
+
 	items := out[0].([]any)
 	instructions := make([]Instruction, len(items))
+
 	for i, item := range items {
 		instructions[i] = instructionFromValues(item.([]any))
 	}
+
 	return Batch{Instructions: instructions}, nil
 }
 
@@ -226,6 +234,7 @@ func DecodeTokenOrderV1(data []byte) (TokenOrderV1, error) {
 	if err != nil {
 		return TokenOrderV1{}, err
 	}
+
 	return TokenOrderV1{
 		Sender:            out[0].([]byte),
 		Receiver:          out[1].([]byte),
@@ -258,6 +267,7 @@ func DecodeTokenOrderV2(data []byte) (TokenOrderV2, error) {
 	if err != nil {
 		return TokenOrderV2{}, err
 	}
+
 	return TokenOrderV2{
 		Sender:      out[0].([]byte),
 		Receiver:    out[1].([]byte),
@@ -279,6 +289,7 @@ func DecodeTokenInitializer(data []byte) (TokenInitializer, error) {
 	if err != nil {
 		return TokenInitializer{}, err
 	}
+
 	return TokenInitializer{
 		Name:     out[0].(string),
 		Symbol:   out[1].(string),
@@ -298,6 +309,7 @@ func DecodeTokenInitializerFromMetadata(meta TokenMetadata) TokenInitializer {
 			return ti
 		}
 	}
+
 	return TokenInitializer{}
 }
 
@@ -313,6 +325,7 @@ func DecodeTokenMetadata(data []byte) (TokenMetadata, error) {
 	if err != nil {
 		return TokenMetadata{}, err
 	}
+
 	return TokenMetadata{
 		Implementation: out[0].([]byte),
 		Initializer:    out[1].([]byte),
@@ -331,6 +344,7 @@ func DecodeSolverMetadata(data []byte) (SolverMetadata, error) {
 	if err != nil {
 		return SolverMetadata{}, err
 	}
+
 	return SolverMetadata{
 		SolverAddress: out[0].([]byte),
 		Metadata:      out[1].([]byte),
@@ -349,6 +363,7 @@ func DecodeAck(data []byte) (Ack, error) {
 	if err != nil {
 		return Ack{}, err
 	}
+
 	return Ack{
 		Tag:      out[0].(*u256.Uint),
 		InnerAck: out[1].([]byte),
@@ -360,6 +375,7 @@ func EncodeBatchAck(a BatchAck) ([]byte, error) {
 	for i, ack := range a.Acknowledgements {
 		items[i] = ack
 	}
+
 	return abi.Encode(BatchAckSchema, []any{items})
 }
 
@@ -368,11 +384,14 @@ func DecodeBatchAck(data []byte) (BatchAck, error) {
 	if err != nil {
 		return BatchAck{}, err
 	}
+
 	items := out[0].([]any)
 	acks := make([][]byte, len(items))
+
 	for i, item := range items {
 		acks[i] = item.([]byte)
 	}
+
 	return BatchAck{Acknowledgements: acks}, nil
 }
 
@@ -388,6 +407,7 @@ func DecodeTokenOrderAck(data []byte) (TokenOrderAck, error) {
 	if err != nil {
 		return TokenOrderAck{}, err
 	}
+
 	return TokenOrderAck{
 		FillType:    out[0].(*u256.Uint),
 		MarketMaker: out[1].([]byte),

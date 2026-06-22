@@ -40,6 +40,7 @@ func (tb *TokenBucket) Refill(now *u256.Uint) {
 	if now.Lte(tb.LastRefill) {
 		return
 	}
+
 	if tb.Available.Gte(tb.Capacity) {
 		tb.LastRefill.Set(now)
 		return
@@ -57,11 +58,13 @@ func (tb *TokenBucket) RateLimit(amount *u256.Uint, now *u256.Uint) error {
 	}
 
 	tb.Refill(now)
+
 	if tb.Available.Lt(amount) {
 		return RateLimitExceeded
 	}
 
 	tb.Available.Sub(tb.Available, amount)
+
 	return nil
 }
 
@@ -69,17 +72,20 @@ func (tb *TokenBucket) Update(capacity *u256.Uint, refillRate *u256.Uint, reset 
 	if capacity.IsZero() {
 		return ZeroCapacity
 	}
+
 	if refillRate.IsZero() {
 		return ZeroRefillRate
 	}
 
 	tb.Capacity = capacity.Clone()
 	tb.RefillRate = refillRate.Clone()
+
 	if tb.LastRefill.IsZero() || reset {
 		tb.Available = tb.Capacity.Clone()
 	} else if tb.Available.Gt(tb.Capacity) {
 		tb.Available = tb.Capacity.Clone()
 	}
+
 	return nil
 }
 
@@ -88,6 +94,7 @@ func saturatingAdd(x *u256.Uint, y *u256.Uint) *u256.Uint {
 	if overflow {
 		return new(u256.Uint).SetAllOne()
 	}
+
 	return z
 }
 
@@ -96,6 +103,7 @@ func saturatingMul(x *u256.Uint, y *u256.Uint) *u256.Uint {
 	if overflow {
 		return new(u256.Uint).SetAllOne()
 	}
+
 	return z
 }
 
@@ -103,5 +111,6 @@ func min(x *u256.Uint, y *u256.Uint) *u256.Uint {
 	if x.Lte(y) {
 		return x.Clone()
 	}
+
 	return y.Clone()
 }

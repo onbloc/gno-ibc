@@ -119,35 +119,44 @@ func LastPathDec(cur realm) string {
 	if receiver.Last.Path == nil {
 		return ""
 	}
+
 	return receiver.Last.Path.Dec()
 }
 
 func (r *Receiver) OnZkgm(cur realm, env z.CallEnv) error {
 	r.Calls++
+
 	r.Last = env
 	if r.CapturePrevious {
 		r.LastPreviousCaller = cur.Previous().Address().String()
 	}
+
 	if r.PanicMsg != "" {
 		panic(r.PanicMsg)
 	}
+
 	if r.ErrorMsg != "" {
 		return errors.New(r.ErrorMsg)
 	}
+
 	return nil
 }
 
 func (r *Receiver) OnIntentZkgm(cur realm, env z.IntentCallEnv) error {
 	r.IntentCalls++
+
 	r.LastIntent = env
 	if r.CapturePrevious {
 		r.LastPreviousCaller = cur.Previous().Address().String()
 	}
+
 	if r.PanicMsg != "" {
 		panic(r.PanicMsg)
 	}
+
 	if r.ErrorMsg != "" {
 		return errors.New(r.ErrorMsg)
 	}
+
 	return nil
 }

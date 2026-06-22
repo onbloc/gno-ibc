@@ -74,9 +74,36 @@ func h256Bytes(h types.H256) []byte {
 	return out
 }
 
+// cloneChannel returns a core-realm-owned copy of c with its byte field laundered,
+// so persisting the copy does not taint the caller's channel (and vice versa).
+// Without this, storing the channel makes its shared CounterpartyPortId slice
+// externally stored, and the caller's later use (e.g. event emission) panics with
+// "illegal conversion of readonly or externally stored value". Bytes.Clone copies
+// the bytes element-wise (the only laundering gno's borrow rules permit on a
+// foreign slice).
+func cloneChannel(c types.Channel) types.Channel {
+	return types.Channel{
+		State:                 c.State,
+		ConnectionId:          c.ConnectionId,
+		CounterpartyChannelId: c.CounterpartyChannelId,
+		CounterpartyPortId:    c.CounterpartyPortId.Clone(),
+		Version:               c.Version,
+	}
+}
+
+// cloneBytes returns a fresh core-realm-owned copy of b, detaching any
+// external/readonly realm ownership a slice picked up crossing the proxy/impl
+// boundary. copy is an element-wise read (not a conversion), so it is permitted
+// on a readonly source; a slice->slice conversion or a []byte->string->[]byte
+// round-trip (which gno elides) would instead keep the foreign ownership and
+// later panic with "illegal conversion of readonly or externally stored value".
 func cloneBytes(b []byte) []byte {
+	if b == nil {
+		return nil
+	}
 	out := make([]byte, len(b))
 	copy(out, b)
+
 	return out
 }
 

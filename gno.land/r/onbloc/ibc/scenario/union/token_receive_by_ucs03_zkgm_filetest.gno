@@ -1,9 +1,11 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union
 package union
 
-// token_send_by_ucs03_zkgm_filetest walks a full ucs03-zkgm token send through the
-// upgradeable union IBC host (permissive mock light client) and asserts the escrowed
-// token stays locked in the proxy after the acknowledgement.
+// token_receive_by_ucs03_zkgm_filetest receives ucs03-zkgm token packets through the
+// upgradeable union IBC host (permissive mock light client) and asserts a wrapped
+// voucher is minted to the local receiver on each received packet: an INITIALIZE
+// order deploys and mints the wrapped token, a following ESCROW order mints more of
+// the same token to another receiver.
 
 import (
 	"testing"
@@ -26,7 +28,8 @@ const (
 	zkgmImplPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 
 	adminAddr      = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
-	senderAddr     = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+	receiverAAddr  = address("g1dyxy88p94acjnm8dmu9tfj2mv2ncvx83cagllu")
+	receiverBAddr  = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
 	mockClientType = types.ClientType("scenario-mock-lc")
 )
 
@@ -56,14 +59,16 @@ func main(cur realm) {
 	ufmt.Println("[EXPECTED] connection should be 1")
 	ufmt.Println("[EXPECTED] channel should be 1")
 
-	// --- SCENARIO 2: fund the sender with a wrapped voucher via an INITIALIZE recv ---
-	ufmt.Println("")
-	ufmt.Println("[SCENARIO] 2. Fund sender with wrapped voucher via INITIALIZE recv (amount 100)")
+	// The wrapped denom is deterministic for (path=0, channel, base=ugnot, image).
 	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
 	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), impl.MetadataImage(mustDecodeMeta(meta)))
+
+	// --- SCENARIO 2: receive an INITIALIZE order, minting to receiver A ---
+	ufmt.Println("")
+	ufmt.Println("[SCENARIO] 2. Receive INITIALIZE order: deploy wrapped token and mint 100 to receiver A")
 	initOrder := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
-		Receiver:    []byte(senderAddr.String()),
+		Receiver:    []byte(receiverAAddr.String()),
 		BaseToken:   []byte("ugnot"),
 		BaseAmount:  u256.NewUint(100),
 		QuoteToken:  []byte(quoteToken),
@@ -76,51 +81,35 @@ func main(cur realm) {
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{initPacket}, nil, nil, 1))
 
-	// Balances are read back through the proxy's VoucherBalanceOf, the stable public
-	// surface for wrapped-voucher balances (proxy-owned escrow amount).
 	ufmt.Printf("[INFO] minted token (wrapped voucher): %s\n", quoteToken)
 	ufmt.Println("[INFO] minted token wraps base token: ugnot")
-	ufmt.Printf("[INFO] minted to sender %s, balance: %d\n", senderAddr.String(), zkgm.VoucherBalanceOf(quoteToken, senderAddr))
+	ufmt.Printf("[INFO] receiver A balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, receiverAAddr))
 	ufmt.Println("[EXPECTED] minted token should be the ibc/ wrapped voucher of base ugnot")
-	ufmt.Println("[EXPECTED] sender voucher balance should be 100 (full INITIALIZE amount minted)")
+	ufmt.Println("[EXPECTED] receiver A balance should be 100 (full INITIALIZE amount minted)")
 
-	// --- SCENARIO 3: send the ESCROW order that locks 40 of the voucher ---
+	// --- SCENARIO 3: receive an ESCROW order for the same asset, minting to receiver B ---
 	ufmt.Println("")
-	ufmt.Println("[SCENARIO] 3. Send ESCROW order locking 40 of the voucher")
+	ufmt.Println("[SCENARIO] 3. Receive ESCROW order: mint 50 of the same wrapped token to receiver B")
 	escrowOrder := z.TokenOrderV2{
-		Sender:      []byte(senderAddr.String()),
-		Receiver:    []byte("remote-receiver"),
-		BaseToken:   []byte(quoteToken),
-		BaseAmount:  u256.NewUint(40),
-		QuoteToken:  []byte("ugnot"),
-		QuoteAmount: u256.NewUint(40),
+		Sender:      []byte("remote-sender"),
+		Receiver:    []byte(receiverBAddr.String()),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(50),
+		QuoteToken:  []byte(quoteToken),
+		QuoteAmount: u256.NewUint(50),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-
-	testing.SetRealm(testing.NewUserRealm(senderAddr))
-	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(escrowOrder))
-
-	ufmt.Printf("[INFO] locked token (escrowed into proxy): %s\n", quoteToken)
-	ufmt.Printf("[INFO] locked into proxy escrow %s\n", zkgm.ProxyAddress().String())
-	ufmt.Printf("[INFO] sender voucher balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, senderAddr))
-	ufmt.Printf("[INFO] proxy escrow balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, zkgm.ProxyAddress()))
-	ufmt.Println("[EXPECTED] locked token should be the same ibc/ voucher (moved from sender to proxy)")
-	ufmt.Println("[EXPECTED] sender voucher balance should be 60 (100 - 40 escrowed)")
-	ufmt.Println("[EXPECTED] proxy escrow balance should be 40 (locked)")
-
-	// --- SCENARIO 4: ack — protocol-fill success is a no-op for an escrow, so the lock holds ---
-	ufmt.Println("")
-	ufmt.Println("[SCENARIO] 4. Acknowledge with protocol-fill success (no-op for escrow)")
-	ack := mustSuccessAck(mustProtocolTokenOrderAck())
+	escrowPacket := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(escrowOrder)), types.Timestamp(1<<62))
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{ack}, nil, 1))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{escrowPacket}, nil, nil, 1))
 
-	ufmt.Printf("[INFO] locked token still held by proxy: %s\n", quoteToken)
-	ufmt.Printf("[INFO] sender voucher balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, senderAddr))
-	ufmt.Printf("[INFO] proxy escrow balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, zkgm.ProxyAddress()))
-	ufmt.Println("[EXPECTED] sender voucher balance should be 60 (unchanged: escrow stays locked)")
-	ufmt.Println("[EXPECTED] proxy escrow balance should be 40 (unchanged: escrow stays locked)")
+	ufmt.Printf("[INFO] minted token (same wrapped voucher): %s\n", quoteToken)
+	ufmt.Printf("[INFO] receiver B balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, receiverBAddr))
+	ufmt.Printf("[INFO] receiver A balance (unchanged): %d\n", zkgm.VoucherBalanceOf(quoteToken, receiverAAddr))
+	ufmt.Println("[EXPECTED] minted token should be the same ibc/ voucher as receive #1")
+	ufmt.Println("[EXPECTED] receiver B balance should be 50 (ESCROW amount minted)")
+	ufmt.Println("[EXPECTED] receiver A balance should be 100 (unchanged by receive #2)")
 }
 
 // --- encoding helpers (pure z calls, mirroring the e2e harness) ---
@@ -159,22 +148,6 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 		panic(err)
 	}
 	return meta
-}
-
-func mustProtocolTokenOrderAck() []byte {
-	bz, err := z.EncodeTokenOrderAck(z.TokenOrderAck{FillType: new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:])})
-	if err != nil {
-		panic(err)
-	}
-	return bz
-}
-
-func mustSuccessAck(inner []byte) []byte {
-	ack, err := z.EncodeAck(z.Ack{Tag: new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:]), InnerAck: inner})
-	if err != nil {
-		panic(err)
-	}
-	return ack
 }
 
 // --- permissive mock light client (accepts any proof) ---
@@ -216,25 +189,17 @@ func (e mockError) Error() string { return string(e) }
 // [EXPECTED] connection should be 1
 // [EXPECTED] channel should be 1
 //
-// [SCENARIO] 2. Fund sender with wrapped voucher via INITIALIZE recv (amount 100)
+// [SCENARIO] 2. Receive INITIALIZE order: deploy wrapped token and mint 100 to receiver A
 // [INFO] minted token (wrapped voucher): ibc/e03a8753fa7f41c282b15cdc0343f660e6e65845
 // [INFO] minted token wraps base token: ugnot
-// [INFO] minted to sender g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm, balance: 100
+// [INFO] receiver A balance: 100
 // [EXPECTED] minted token should be the ibc/ wrapped voucher of base ugnot
-// [EXPECTED] sender voucher balance should be 100 (full INITIALIZE amount minted)
+// [EXPECTED] receiver A balance should be 100 (full INITIALIZE amount minted)
 //
-// [SCENARIO] 3. Send ESCROW order locking 40 of the voucher
-// [INFO] locked token (escrowed into proxy): ibc/e03a8753fa7f41c282b15cdc0343f660e6e65845
-// [INFO] locked into proxy escrow g182p37d0cyvsvqpv49lqtphpj3jswwqtuyl4qyy
-// [INFO] sender voucher balance: 60
-// [INFO] proxy escrow balance: 40
-// [EXPECTED] locked token should be the same ibc/ voucher (moved from sender to proxy)
-// [EXPECTED] sender voucher balance should be 60 (100 - 40 escrowed)
-// [EXPECTED] proxy escrow balance should be 40 (locked)
-//
-// [SCENARIO] 4. Acknowledge with protocol-fill success (no-op for escrow)
-// [INFO] locked token still held by proxy: ibc/e03a8753fa7f41c282b15cdc0343f660e6e65845
-// [INFO] sender voucher balance: 60
-// [INFO] proxy escrow balance: 40
-// [EXPECTED] sender voucher balance should be 60 (unchanged: escrow stays locked)
-// [EXPECTED] proxy escrow balance should be 40 (unchanged: escrow stays locked)
+// [SCENARIO] 3. Receive ESCROW order: mint 50 of the same wrapped token to receiver B
+// [INFO] minted token (same wrapped voucher): ibc/e03a8753fa7f41c282b15cdc0343f660e6e65845
+// [INFO] receiver B balance: 50
+// [INFO] receiver A balance (unchanged): 100
+// [EXPECTED] minted token should be the same ibc/ voucher as receive #1
+// [EXPECTED] receiver B balance should be 50 (ESCROW amount minted)
+// [EXPECTED] receiver A balance should be 100 (unchanged by receive #2)

@@ -1,0 +1,348 @@
+// PKGPATH: gno.land/r/onbloc/ibc/scenario/union
+package union
+
+// token_send_by_statelens_filetest funds a sender, escrows (locks) a ucs03-zkgm
+// voucher, then acknowledges the sent packet with an acknowledgement proven by the
+// real state-lens/ics23-mpt light client, asserting the escrow stays locked. The
+// funding recv and the ack prove different commitments, so they use two consensus
+// heights: the fund height is seeded at client creation and the ack height is added
+// with a crafted UpdateClient header. Both MPT proofs are built inline.
+
+import (
+	"crypto/keccak256"
+	"testing"
+
+	"gno.land/p/onbloc/encoding/rlp"
+	"gno.land/p/onbloc/ibc/union/lightclient"
+	ics23mpt "gno.land/p/onbloc/ibc/union/lightclient/state_lens/ics23_mpt"
+	types "gno.land/p/onbloc/ibc/union/types"
+	"gno.land/p/onbloc/verifier/evm/storage"
+
+	u256 "gno.land/p/gnoswap/uint256"
+	"gno.land/p/nt/ufmt/v0"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
+
+	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
+	core "gno.land/r/onbloc/ibc/union/core"
+	_ "gno.land/r/onbloc/ibc/union/core/v1"
+)
+
+const (
+	coreImplPath = "gno.land/r/onbloc/ibc/union/core/v1"
+	zkgmImplPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
+
+	adminAddr  = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
+	senderAddr = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+
+	fundHeight = uint64(100)
+	ackHeight  = uint64(200)
+)
+
+func main(cur realm) {
+	// --- SCENARIO 1: open a state-lens channel and fund the sender ---
+	ufmt.Println("[SCENARIO] 1. Open a state-lens-backed channel and fund the sender via a proven recv")
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	core.UpdateImpl(cross(cur), coreImplPath)
+	zkgm.UpdateImpl(cross(cur), zkgmImplPath)
+	zkgm.SetRateLimitDisabled(cross(cur), true)
+	zkgm.RegisterCoreApp(cross(cur))
+
+	channelId := types.ChannelId(1)
+	counterpartyChannel := types.ChannelId(2)
+	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
+	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), impl.MetadataImage(mustDecodeMeta(meta)))
+	initOrder := z.TokenOrderV2{
+		Sender:      []byte("remote-sender"),
+		Receiver:    []byte(senderAddr.String()),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte(quoteToken),
+		QuoteAmount: u256.NewUint(100),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    meta,
+	}
+	initPacket := core.NewPacket(counterpartyChannel, channelId, mustPacketData(mustOrderInstruction(initOrder)), types.Timestamp(1<<62))
+
+	// Seed the client's (fund-height) consensus with the storage root that commits
+	// the funding packet, then open the channel.
+	fundRoot, fundProof := buildMembershipProof(types.BatchPacketsPath(core.CommitPacketsHash([]types.Packet{initPacket})), commitmentMagic())
+
+	clientState := &ics23mpt.ClientState{
+		L2ChainID:         "l2-chain",
+		L1ClientID:        1,
+		L2ClientID:        7,
+		L2LatestHeight:    fundHeight,
+		TimestampOffset:   64,
+		StateRootOffset:   0,
+		StorageRootOffset: 32,
+	}
+	consensusState := &ics23mpt.ConsensusState{Timestamp: 1, StateRoot: make([]byte, 32), StorageRoot: fundRoot}
+	lc, err := ics23mpt.NewStateLensIcs23MptLightClient(clientState, consensusState, &mockL1Client{})
+	if err != nil {
+		panic(err)
+	}
+
+	clientStateBytes, err := ics23mpt.EncodeClientState(*clientState)
+	if err != nil {
+		panic(err)
+	}
+	consensusStateBytes, err := ics23mpt.EncodeConsensusState(*consensusState)
+	if err != nil {
+		panic(err)
+	}
+
+	clientType := types.ClientType(ics23mpt.ClientType)
+	core.RegisterClient(cross(cur), clientType, lc)
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(clientType, clientStateBytes, consensusStateBytes))
+	clientId := types.ClientId(1)
+
+	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	connectionId := types.ConnectionId(1)
+	core.ForceConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 0))
+
+	portId := []byte(zkgm.ProxyPkgPath())
+	opened := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1relayer"))
+	core.ForceChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(opened, zkgm.Version, counterpartyChannel, nil, 0, "g1relayer"))
+
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{initPacket}, nil, fundProof, fundHeight))
+	ufmt.Printf("[INFO] sender voucher balance after fund: %d\n", zkgm.VoucherBalanceOf(quoteToken, senderAddr))
+	ufmt.Println("[EXPECTED] sender voucher balance after fund should be 100")
+
+	// --- SCENARIO 2: send (escrow/lock) 40 of the voucher ---
+	ufmt.Println("")
+	ufmt.Println("[SCENARIO] 2. Send ESCROW order locking 40 of the voucher")
+	escrowOrder := z.TokenOrderV2{
+		Sender:      []byte(senderAddr.String()),
+		Receiver:    []byte("remote-receiver"),
+		BaseToken:   []byte(quoteToken),
+		BaseAmount:  u256.NewUint(40),
+		QuoteToken:  []byte("ugnot"),
+		QuoteAmount: u256.NewUint(40),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+
+	testing.SetRealm(testing.NewUserRealm(senderAddr))
+	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(escrowOrder))
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
+
+	ufmt.Printf("[INFO] sender voucher balance after send: %d\n", zkgm.VoucherBalanceOf(quoteToken, senderAddr))
+	ufmt.Printf("[INFO] proxy escrow balance after send: %d\n", zkgm.VoucherBalanceOf(quoteToken, zkgm.ProxyAddress()))
+	ufmt.Println("[EXPECTED] sender voucher balance after send should be 60 (100 - 40 escrowed)")
+	ufmt.Println("[EXPECTED] proxy escrow balance after send should be 40 (locked)")
+
+	// --- SCENARIO 3: acknowledge the sent packet, proven by the state-lens client ---
+	ufmt.Println("")
+	ufmt.Println("[SCENARIO] 3. Acknowledge the sent packet with a state-lens MPT proof (escrow no-op)")
+	ack := mustSuccessAck(mustProtocolTokenOrderAck())
+	ackCommitment := types.CommitAcks([][]byte{ack})
+	ackRoot, ackProof := buildMembershipProof(types.BatchReceiptsPath(core.CommitPacketsHash([]types.Packet{sendPacket})), ackCommitment[:])
+
+	// Add the ack-height consensus state via a crafted UpdateClient header.
+	header := ics23mpt.Header{
+		L1Height:              fundHeight,
+		L2Height:              ackHeight,
+		L2ConsensusStateProof: []byte("l1-proof"),
+		L2ConsensusState:      makeConsensusBytes(2, make([]byte, 32), ackRoot),
+	}
+	headerBytes, err := ics23mpt.EncodeHeader(header)
+	if err != nil {
+		panic(err)
+	}
+	core.UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, headerBytes))
+
+	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{ack}, ackProof, ackHeight))
+
+	ufmt.Printf("[INFO] sender voucher balance after ack: %d\n", zkgm.VoucherBalanceOf(quoteToken, senderAddr))
+	ufmt.Printf("[INFO] proxy escrow balance after ack: %d\n", zkgm.VoucherBalanceOf(quoteToken, zkgm.ProxyAddress()))
+	ufmt.Println("[EXPECTED] sender voucher balance after ack should be 60 (unchanged: escrow stays locked)")
+	ufmt.Println("[EXPECTED] proxy escrow balance after ack should be 40 (unchanged: escrow stays locked)")
+}
+
+func commitmentMagic() []byte {
+	magic := types.COMMITMENT_MAGIC
+	return magic[:]
+}
+
+// buildMembershipProof returns (storageRoot, encodedProof) for a single-leaf
+// EVM-MPT proving that commitmentPath stores value. Mirrors storageProofFixture
+// in the state-lens client's client_test.gno.
+func buildMembershipProof(commitmentPath types.H256, value []byte) ([]byte, []byte) {
+	slot, err := storage.IBCCommitmentKey(commitmentPath[:])
+	if err != nil {
+		panic(err)
+	}
+
+	storedValue, err := storage.EncodeStorageValue(value)
+	if err != nil {
+		panic(err)
+	}
+
+	storagePath, err := storage.StoragePath(slot[:])
+	if err != nil {
+		panic(err)
+	}
+
+	leaf := rlp.EncodeList(rlp.EncodeBytes(compactEncode(true, nibbles(storagePath[:]))), rlp.EncodeBytes(storedValue))
+	root := keccak256.Sum256(leaf)
+
+	proof := storage.EncodeProof(storage.Proof{Key: slot[:], Value: value, Proof: [][]byte{leaf}})
+
+	return root[:], proof
+}
+
+// makeConsensusBytes lays out an L2 consensus blob matching the client offsets
+// (state_root@0, storage_root@32, big-endian timestamp@64). Copied from the
+// state-lens client_test.gno helper.
+func makeConsensusBytes(timestamp uint64, stateRoot, storageRoot []byte) []byte {
+	out := make([]byte, 72)
+	copy(out[0:32], stateRoot)
+	copy(out[32:64], storageRoot)
+	out[64] = byte(timestamp >> 56)
+	out[65] = byte(timestamp >> 48)
+	out[66] = byte(timestamp >> 40)
+	out[67] = byte(timestamp >> 32)
+	out[68] = byte(timestamp >> 24)
+	out[69] = byte(timestamp >> 16)
+	out[70] = byte(timestamp >> 8)
+	out[71] = byte(timestamp)
+
+	return out
+}
+
+// nibbles and compactEncode are copied verbatim from the state-lens client's
+// client_test.gno (test-only, unexported); they build the MPT leaf path.
+func nibbles(key []byte) []byte {
+	out := make([]byte, 0, len(key)*2)
+	for _, b := range key {
+		out = append(out, b>>4, b&0x0f)
+	}
+
+	return out
+}
+
+func compactEncode(leaf bool, ns []byte) []byte {
+	flag := byte(0)
+	if leaf {
+		flag = 2
+	}
+
+	odd := len(ns)%2 == 1
+	out := make([]byte, 0, (len(ns)+2)/2)
+
+	if odd {
+		out = append(out, (flag+1)<<4|ns[0])
+		ns = ns[1:]
+	} else {
+		out = append(out, flag<<4)
+	}
+
+	for i := 0; i < len(ns); i += 2 {
+		out = append(out, ns[i]<<4|ns[i+1])
+	}
+
+	return out
+}
+
+// --- encoding helpers ---
+
+func mustOrderInstruction(order z.TokenOrderV2) z.Instruction {
+	operand, err := z.EncodeTokenOrderV2(order)
+	if err != nil {
+		panic(err)
+	}
+	return z.Instruction{Version: z.INSTR_VERSION_2, Opcode: z.OP_TOKEN_ORDER, Operand: operand}
+}
+
+func mustPacketData(instr z.Instruction) []byte {
+	data, err := z.EncodeZkgmPacket(z.ZkgmPacket{Path: u256.Zero(), Instruction: instr})
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
+func mustTokenMetadata(implementation string, ti z.TokenInitializer) []byte {
+	initBytes, err := z.EncodeTokenInitializer(ti)
+	if err != nil {
+		panic(err)
+	}
+	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes})
+	if err != nil {
+		panic(err)
+	}
+	return meta
+}
+
+func mustDecodeMeta(bz []byte) z.TokenMetadata {
+	meta, err := z.DecodeTokenMetadata(bz)
+	if err != nil {
+		panic(err)
+	}
+	return meta
+}
+
+func mustProtocolTokenOrderAck() []byte {
+	bz, err := z.EncodeTokenOrderAck(z.TokenOrderAck{FillType: new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:])})
+	if err != nil {
+		panic(err)
+	}
+	return bz
+}
+
+func mustSuccessAck(inner []byte) []byte {
+	ack, err := z.EncodeAck(z.Ack{Tag: new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:]), InnerAck: inner})
+	if err != nil {
+		panic(err)
+	}
+	return ack
+}
+
+// --- minimal L1 light client stub ---
+
+type mockL1Client struct{}
+
+func (m *mockL1Client) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
+func (m *mockL1Client) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
+func (m *mockL1Client) GetTimestamp() types.Timestamp                         { return types.Timestamp(1) }
+func (m *mockL1Client) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
+	return types.Timestamp(1), nil
+}
+func (m *mockL1Client) GetLatestHeight() uint64        { return ackHeight }
+func (m *mockL1Client) GetCounterpartyChainID() string { return "l1" }
+func (m *mockL1Client) Status() lightclient.Status     { return lightclient.Active }
+
+func (m *mockL1Client) VerifyHeader(_ address, header []byte, _ address) (types.StateUpdate, error) {
+	return types.StateUpdate{Height: ackHeight}, nil
+}
+
+func (m *mockL1Client) VerifyCreation(address, address) (types.ClientCreationResult, error) {
+	return types.ClientCreationResult{}, nil
+}
+
+func (m *mockL1Client) Misbehaviour(address, []byte, address) (types.ClientState, error) {
+	return nil, errL1Unsupported
+}
+
+var errL1Unsupported = mockError("mock l1: unsupported")
+
+type mockError string
+
+func (e mockError) Error() string { return string(e) }
+
+// Output:
+// [SCENARIO] 1. Open a state-lens-backed channel and fund the sender via a proven recv
+// [INFO] sender voucher balance after fund: 100
+// [EXPECTED] sender voucher balance after fund should be 100
+//
+// [SCENARIO] 2. Send ESCROW order locking 40 of the voucher
+// [INFO] sender voucher balance after send: 60
+// [INFO] proxy escrow balance after send: 40
+// [EXPECTED] sender voucher balance after send should be 60 (100 - 40 escrowed)
+// [EXPECTED] proxy escrow balance after send should be 40 (locked)
+//
+// [SCENARIO] 3. Acknowledge the sent packet with a state-lens MPT proof (escrow no-op)
+// [INFO] sender voucher balance after ack: 60
+// [INFO] proxy escrow balance after ack: 40
+// [EXPECTED] sender voucher balance after ack should be 60 (unchanged: escrow stays locked)
+// [EXPECTED] proxy escrow balance after ack should be 40 (unchanged: escrow stays locked)

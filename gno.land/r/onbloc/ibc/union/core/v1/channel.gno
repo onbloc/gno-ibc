@@ -126,7 +126,7 @@ func (c *coreV1) channelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck, v
 		types.ChannelStateOpen,
 		channel.ConnectionId,
 		msg.CounterpartyChannelId,
-		types.Bytes(cloneBytes(channel.CounterpartyPortId)),
+		channel.CounterpartyPortId.Clone(),
 		msg.CounterpartyVersion,
 	)
 	c.store.SaveChannel(0, rlm, msg.ChannelId, updated)
@@ -188,7 +188,7 @@ func (c *coreV1) channelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenCo
 		types.ChannelStateOpen,
 		channel.ConnectionId,
 		channel.CounterpartyChannelId,
-		types.Bytes(cloneBytes(channel.CounterpartyPortId)),
+		channel.CounterpartyPortId.Clone(),
 		channel.Version,
 	)
 	c.store.SaveChannel(0, rlm, msg.ChannelId, updated)
@@ -276,7 +276,7 @@ func (c *coreV1) closedChannel(channel types.Channel) types.Channel {
 		types.ChannelStateClosed,
 		channel.ConnectionId,
 		channel.CounterpartyChannelId,
-		types.Bytes(cloneBytes(channel.CounterpartyPortId)),
+		channel.CounterpartyPortId.Clone(),
 		channel.Version,
 	)
 }

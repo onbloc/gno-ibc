@@ -139,7 +139,6 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 			image = [32]byte{}
 			wrapped = PredictWrappedToken(path, destChan, order.BaseToken)
 		}
-
 		hasWrapped = true
 	case z.TOKEN_ORDER_KIND_INITIALIZE:
 		// gno requires the metadata preimage to initialize a new wrapped token.

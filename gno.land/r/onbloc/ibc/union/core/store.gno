@@ -558,8 +558,8 @@ func (s *Store) getConnection(connectionId types.ConnectionId) (types.Connection
 
 func (s *Store) createChannel(channelId types.ChannelId, channel types.Channel, portId types.Bytes) {
 	entry := &channelEntry{
-		channel: channel,
-		portId:  cloneBytes(portId),
+		channel: cloneChannel(channel),
+		portId:  portId.Clone(),
 	}
 	s.channels.Set(channelKey(channelId), entry)
 	setChainParam(h256ChainParamKey(types.ChannelPath(channelId)), h256Bytes(channelValue(channel)))
@@ -570,7 +570,7 @@ func (s *Store) saveChannel(channelId types.ChannelId, channel types.Channel) {
 	if !found {
 		panic("channel " + channelId.String() + " not found")
 	}
-	entry.channel = channel
+	entry.channel = cloneChannel(channel)
 	setChainParam(h256ChainParamKey(types.ChannelPath(channelId)), h256Bytes(channelValue(channel)))
 }
 

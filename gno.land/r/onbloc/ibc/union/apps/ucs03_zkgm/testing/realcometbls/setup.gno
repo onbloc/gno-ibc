@@ -150,10 +150,12 @@ func OpenZ37CometBLSChannel(cur realm) ChannelPair {
 
 func UpdateRealCometBLSClient(cur realm, clientId types.ClientId) types.Height {
 	core.UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, HeaderBytes(cross(cur))))
-	return types.NewHeight(core.GetLatestHeight(clientId))
+	height, _ := core.GetLatestHeight(clientId)
+	return types.NewHeight(height)
 }
 
 func UpdateRealCometBLSClientWithTamperedHeader(cur realm, clientId types.ClientId) types.Height {
 	core.UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, TamperedHeaderBytes(cross(cur))))
-	return types.NewHeight(core.GetLatestHeight(clientId))
+	height, _ := core.GetLatestHeight(clientId)
+	return types.NewHeight(height)
 }

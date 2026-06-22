@@ -227,3 +227,37 @@ func NewMsgChannelOpenTry(
 		relayer,
 	)
 }
+
+// The remaining message constructors are wrapped here (rather than calling
+// types.NewMsgXXX directly) so the datagram is allocated in core's realm. Under
+// the InterRealm v2 ownership rules an object built in the caller's realm and
+// then handed to a core entrypoint is read-only (taint); constructing it through
+// the owning (core) realm avoids that.
+
+func NewMsgCreateClient(clientType types.ClientType, clientStateBytes, consensusStateBytes []byte) types.MsgCreateClient {
+	return types.NewMsgCreateClient(clientType, clientStateBytes, consensusStateBytes)
+}
+
+func NewMsgConnectionOpenInit(clientId, counterpartyClientId types.ClientId) types.MsgConnectionOpenInit {
+	return types.NewMsgConnectionOpenInit(clientId, counterpartyClientId)
+}
+
+func NewMsgConnectionOpenAck(connectionId, counterpartyConnectionId types.ConnectionId, proofTry []byte, proofHeight uint64) types.MsgConnectionOpenAck {
+	return types.NewMsgConnectionOpenAck(connectionId, counterpartyConnectionId, proofTry, proofHeight)
+}
+
+func NewMsgChannelOpenInit(portId, counterpartyPortId []byte, connectionId types.ConnectionId, version string, relayer string) types.MsgChannelOpenInit {
+	return types.NewMsgChannelOpenInit(portId, counterpartyPortId, connectionId, version, relayer)
+}
+
+func NewMsgChannelOpenAck(channelId types.ChannelId, counterpartyVersion string, counterpartyChannelId types.ChannelId, proofTry []byte, proofHeight uint64, relayer string) types.MsgChannelOpenAck {
+	return types.NewMsgChannelOpenAck(channelId, counterpartyVersion, counterpartyChannelId, proofTry, proofHeight, relayer)
+}
+
+func NewMsgPacketRecv(packets []types.Packet, relayerMsgs [][]byte, proof []byte, proofHeight uint64) types.MsgPacketRecv {
+	return types.NewMsgPacketRecv(packets, relayerMsgs, proof, proofHeight)
+}
+
+func NewMsgPacketAcknowledgement(packets []types.Packet, acknowledgements [][]byte, proof []byte, proofHeight uint64) types.MsgPacketAcknowledgement {
+	return types.NewMsgPacketAcknowledgement(packets, acknowledgements, proof, proofHeight)
+}

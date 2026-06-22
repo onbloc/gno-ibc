@@ -431,8 +431,8 @@ func TestDecodeDepthLimit(t *testing.T) {
 	}
 }
 
-func TestInternalBoundaryHelpers(t *testing.T) {
-	dynamicCases := []struct {
+func TestIsDynamic(t *testing.T) {
+	cases := []struct {
 		name  string
 		field Field
 		want  bool
@@ -443,15 +443,17 @@ func TestInternalBoundaryHelpers(t *testing.T) {
 		{"static nested struct", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeUint32}}}}, false},
 		{"struct with dynamic child", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeString}}}}, true},
 	}
-	for _, tc := range dynamicCases {
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := isDynamic(tc.field); got != tc.want {
 				t.Fatalf("isDynamic = %v, want %v", got, tc.want)
 			}
 		})
 	}
+}
 
-	sizeCases := []struct {
+func TestStaticHeadSize(t *testing.T) {
+	cases := []struct {
 		name    string
 		field   Field
 		want    int
@@ -462,7 +464,7 @@ func TestInternalBoundaryHelpers(t *testing.T) {
 		{"nested static struct", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint32}, {Type: TypeBool}}}}}}}, wordSize * 3, nil},
 		{"nil struct schema", Field{Type: TypeStruct, Sub: nil}, wordSize, nil},
 	}
-	for _, tc := range sizeCases {
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := staticHeadSize(tc.field)
 			if err != tc.wantErr {
@@ -473,8 +475,10 @@ func TestInternalBoundaryHelpers(t *testing.T) {
 			}
 		})
 	}
+}
 
-	roundCases := []struct {
+func TestRoundUp32(t *testing.T) {
+	cases := []struct {
 		in   uint64
 		want uint64
 	}{
@@ -483,15 +487,17 @@ func TestInternalBoundaryHelpers(t *testing.T) {
 		{32, 32},
 		{33, 64},
 	}
-	for _, tc := range roundCases {
-		t.Run("roundUp32", func(t *testing.T) {
+	for _, tc := range cases {
+		t.Run("", func(t *testing.T) {
 			if got := roundUp32(tc.in); got != tc.want {
 				t.Fatalf("roundUp32(%d) = %d, want %d", tc.in, got, tc.want)
 			}
 		})
 	}
+}
 
-	wordCases := []struct {
+func TestDecodeWordUint64(t *testing.T) {
+	cases := []struct {
 		name    string
 		word    []byte
 		want    uint64
@@ -502,7 +508,7 @@ func TestInternalBoundaryHelpers(t *testing.T) {
 		{"non-zero high padding", mustHex("0000000000000000000000000000000000000000000000010000000000000000"), 0, ErrInvalidData},
 		{"short word", []byte{0}, 0, ErrInvalidData},
 	}
-	for _, tc := range wordCases {
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := decodeWordUint64(tc.word)
 			if err != tc.wantErr {

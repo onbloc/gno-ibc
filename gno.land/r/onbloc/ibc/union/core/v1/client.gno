@@ -33,7 +33,7 @@ func (c *coreV1) CreateClient(_ int, rlm realm, msg types.MsgCreateClient) {
 	}
 
 	clientId := c.store.AddClient(0, rlm, msg.ClientType, caller, lc)
-	c.initClient(0, rlm, caller, msg.ClientStateBytes, msg.ConsensusStateBytes, relayer, lc, clientId)
+	c.initClient(0, rlm, msg.ClientStateBytes, msg.ConsensusStateBytes, relayer, lc, clientId)
 
 	core.EmitCreateClient(clientId, msg.ClientType, lc.GetCounterpartyChainID())
 }
@@ -42,12 +42,14 @@ func (c *coreV1) CreateClient(_ int, rlm realm, msg types.MsgCreateClient) {
 // runs the light client's creation verification, then persists any state
 // overwrite and storage writes the verification returns. It returns the height
 // the consensus state was stored at.
-func (c *coreV1) initClient(_ int, rlm realm, caller address, clientStateBytes, consensusStateBytes []byte, relayer address, lc lightclient.Interface, clientId types.ClientId) types.Height {
+func (c *coreV1) initClient(_ int, rlm realm, clientStateBytes, consensusStateBytes []byte, relayer address, lc lightclient.Interface, clientId types.ClientId) types.Height {
 	c.store.SaveClientState(0, rlm, clientId, clientStateBytes)
 	height := types.NewHeight(lc.GetLatestHeight())
 	c.store.SaveConsensusState(0, rlm, clientId, height, consensusStateBytes)
 
-	result, err := lc.VerifyCreation(caller, relayer)
+	// union threads info.sender as the caller; gno derives the authenticated
+	// caller from the realm (internal calls preserve the entry frame).
+	result, err := lc.VerifyCreation(rlm.Previous().Address(), relayer)
 	if err != nil {
 		panic("create client: " + err.Error())
 	}
@@ -106,8 +108,8 @@ func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateCli
 
 	// Union reuses info.sender as both caller and relayer for the force path
 	// (contract.rs L150-159: init_client(.., info.sender, client_impl, client_id)).
-	caller := rlm.Previous().Address()
-	height := c.initClient(0, rlm, caller, msg.ClientStateBytes, msg.ConsensusStateBytes, caller, lc, msg.ClientId)
+	relayer := rlm.Previous().Address()
+	height := c.initClient(0, rlm, msg.ClientStateBytes, msg.ConsensusStateBytes, relayer, lc, msg.ClientId)
 
 	core.EmitForceUpdateClient(msg.ClientId, height)
 }

@@ -43,15 +43,6 @@ func parseCoins(s string) chain.Coins {
 	return chain.NewCoins(coins...)
 }
 
-// MessageInfo is the gno analog of the reference contract's `info: MessageInfo`
-// (cosmwasm_std::MessageInfo): the message sender plus the coins attached to it.
-// The verify chain threads it alongside the mutable `funds` spend budget, mirroring
-// the reference contract's `(info, funds)` parameter pair.
-type MessageInfo struct {
-	Sender string
-	Funds  *funds
-}
-
 // funds is the gno analog of the reference contract's threaded `funds: &mut Coins`
 // (the message's attached coins). It is decremented as each token order consumes
 // its BaseAmount during verification.

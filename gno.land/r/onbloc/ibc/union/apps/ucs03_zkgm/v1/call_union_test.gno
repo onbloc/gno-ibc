@@ -13,27 +13,30 @@ import (
 func TestUnionVerifyCall(cur realm, t *testing.T) {
 	v := newTestImpl()
 
+	// The verify path reads the sender from rlm.Previous() (MessageInfo removed),
+	// so the caller is driven through testing.SetRealm + the verifyCallX crossing
+	// shim. A matching call sender passes; any mismatch is rejected.
+	caller := testAddress("union-vc-caller")
+
 	cases := []struct {
 		name    string
-		sender  string
 		call    z.Call
 		wantErr string // empty = expect Ok
 	}{
 		{
-			name:   "matching sender ok",
-			sender: "sender",
-			call:   z.Call{Sender: []byte("sender"), ContractAddress: []byte("contract")},
+			name: "matching sender ok",
+			call: z.Call{Sender: []byte(caller), ContractAddress: []byte("contract")},
 		},
 		{
 			name:    "wrong sender rejected",
-			sender:  "wrong_sender",
-			call:    z.Call{Sender: []byte("sender"), ContractAddress: []byte("contract")},
+			call:    z.Call{Sender: []byte("wrong_sender"), ContractAddress: []byte("contract")},
 			wantErr: "invalid call sender",
 		},
 	}
 
 	for _, tc := range cases {
-		err := v.verifyCall(0, cur, tc.call, tc.sender)
+		testing.SetRealm(testing.NewUserRealm(address(caller)))
+		err := v.verifyCallX(cross(cur), tc.call)
 		if tc.wantErr == "" {
 			uassert.NoError(t, err)
 		} else {

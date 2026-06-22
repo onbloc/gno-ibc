@@ -23,7 +23,7 @@ func fillTypeMarketMaker() *u256.Uint { return u256FromBytes32(z.FILL_TYPE_MARKE
 // verifyTokenOrderV2 validates a token order on send: rate-limit, escrow voucher
 // or consume native funds, then escrow the channel balance.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L419-L547
-func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, info MessageInfo, funds *funds, channelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
+func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
 	if path == nil {
 		path = u256.Zero()
 	}
@@ -36,7 +36,7 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, info MessageInfo, fun
 		// on the receive/execute side, never here.
 		v.increaseChannelBalanceV2(0, rlm, channelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
 
-		if err := v.localTokenEscrow(0, rlm, baseDenom, info.Sender, funds, order.BaseAmount); err != nil {
+		if err := v.localTokenEscrow(0, rlm, baseDenom, rlm.Previous().Address().String(), funds, order.BaseAmount); err != nil {
 			return err
 		}
 
@@ -79,7 +79,7 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, info MessageInfo, fun
 		}
 
 		if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
-			return v.burnVoucher(0, rlm, baseDenom, info.Sender, order.BaseAmount)
+			return v.burnVoucher(0, rlm, baseDenom, rlm.Previous().Address().String(), order.BaseAmount)
 		}
 
 		return funds.sub(baseDenom, order.BaseAmount)

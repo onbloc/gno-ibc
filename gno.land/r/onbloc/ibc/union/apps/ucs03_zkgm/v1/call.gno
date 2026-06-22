@@ -17,12 +17,12 @@ var (
 
 // verifyCall rejects eureka mode and requires the call sender to match the dispatch sender.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2997-L3019
-func (v *ucs03ZkgmV1) verifyCall(_ int, rlm realm, call z.Call, sender string) error {
+func (v *ucs03ZkgmV1) verifyCall(_ int, rlm realm, call z.Call) error {
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
 
-	if string(call.Sender) != sender {
+	if string(call.Sender) != rlm.Previous().Address().String() {
 		return errInvalidCallSender
 	}
 

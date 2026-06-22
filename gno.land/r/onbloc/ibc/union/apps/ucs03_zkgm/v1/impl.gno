@@ -144,9 +144,8 @@ func (v *ucs03ZkgmV1) Send(_ int, rlm realm, channelId types.ChannelId, timeoutT
 	// the impl no longer receives it; wiring the escrow envelope from the proxy
 	// is the open migration item (see VOUCHER_ANALYSIS.md / migration plan).
 	funds := newFunds(parseCoins(""))
-	info := MessageInfo{Sender: sender, Funds: funds}
 
-	if err := v.verifyInternal(0, rlm, info, funds, channelId, u256.Zero(), instruction); err != nil {
+	if err := v.verifyInternal(0, rlm, funds, channelId, u256.Zero(), instruction); err != nil {
 		panic(err)
 	}
 

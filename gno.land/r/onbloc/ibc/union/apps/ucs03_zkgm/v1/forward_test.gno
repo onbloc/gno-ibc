@@ -19,7 +19,7 @@ import (
 )
 
 func TestVerifyForwardRejectsNestedForward(cur realm, t *testing.T) {
-	err := newTestImpl().verifyForward(0, cur, MessageInfo{Sender: "sender"}, newFunds(nil), types.ChannelId(1), z.Forward{
+	err := newTestImpl().verifyForward(0, cur, newFunds(nil), types.ChannelId(1), z.Forward{
 		Path: forwardPath(1, 2),
 		Instruction: z.Instruction{
 			Version: z.INSTR_VERSION_0,
@@ -34,12 +34,14 @@ func TestVerifyForwardRejectsNestedForward(cur realm, t *testing.T) {
 func TestVerifyForwardPassesAllowedChildren(cur realm, t *testing.T) {
 	v := newTestImpl()
 
+	// verify reads the send-side sender from rlm.Previous(); it is driven via
+	// SetRealm + the verifyForwardX crossing shim. A native ESCROW order keeps the
+	// escrow a funds.sub (no realm-dependent voucher transfer), so the order child
+	// can be verified at the unit level (voucher escrow is integration-tested).
 	sender := testAddress("forward-sender")
-	baseToken := "ibc/v1-forward"
-	uassert.NoError(t, v.mintVoucher(0, cur, baseToken, [32]byte{}, "", "", 0, sender, u256.NewUint(30)))
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
-		BaseToken:   []byte(baseToken),
+		BaseToken:   []byte("ugnot"),
 		BaseAmount:  u256.NewUint(10),
 		QuoteToken:  []byte("quote"),
 		QuoteAmount: u256.NewUint(10),
@@ -50,23 +52,27 @@ func TestVerifyForwardPassesAllowedChildren(cur realm, t *testing.T) {
 	}})
 	uassert.NoError(t, err)
 
-	cases := []z.Instruction{
-		batchMustCallInstruction(batchCall(sender, "")),
-		batchMustOrderInstruction(order),
-		{Version: z.INSTR_VERSION_0, Opcode: z.OP_BATCH, Operand: batchBytes},
+	cases := []struct {
+		instr z.Instruction
+		funds *funds
+	}{
+		{batchMustCallInstruction(batchCall(sender, "")), newFunds(nil)},
+		{batchMustOrderInstruction(order), newFunds(parseCoins("10ugnot"))},
+		{z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_BATCH, Operand: batchBytes}, newFunds(nil)},
 	}
-	for _, instr := range cases {
-		err := v.verifyForward(0, cur, MessageInfo{Sender: sender}, newFunds(nil), types.ChannelId(1), z.Forward{
+	for _, tc := range cases {
+		testing.SetRealm(testing.NewUserRealm(address(sender)))
+		err := v.verifyForwardX(cross(cur), tc.funds, types.ChannelId(1), z.Forward{
 			Path:             forwardPath(1, 2),
 			TimeoutTimestamp: 999,
-			Instruction:      instr,
+			Instruction:      tc.instr,
 		})
 		uassert.NoError(t, err)
 	}
 }
 
 func TestVerifyForwardRejectsZeroTimeout(cur realm, t *testing.T) {
-	err := newTestImpl().verifyForward(0, cur, MessageInfo{Sender: "sender"}, newFunds(nil), types.ChannelId(1), z.Forward{
+	err := newTestImpl().verifyForward(0, cur, newFunds(nil), types.ChannelId(1), z.Forward{
 		Path:             forwardPath(1, 2),
 		TimeoutTimestamp: 0,
 		Instruction:      batchMustCallInstruction(batchCall("sender", "")),
@@ -76,10 +82,12 @@ func TestVerifyForwardRejectsZeroTimeout(cur realm, t *testing.T) {
 }
 
 func TestVerifyForwardAllowsMaxHopPath(cur realm, t *testing.T) {
-	err := newTestImpl().verifyForward(0, cur, MessageInfo{Sender: "sender"}, newFunds(nil), types.ChannelId(1), z.Forward{
+	sender := testAddress("fwd-maxhop-caller")
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	err := newTestImpl().verifyForwardX(cross(cur), newFunds(nil), types.ChannelId(1), z.Forward{
 		Path:             forwardPath(1, 2, 3, 4, 5, 6, 7, 8),
 		TimeoutTimestamp: 999,
-		Instruction:      batchMustCallInstruction(batchCall("sender", "")),
+		Instruction:      batchMustCallInstruction(batchCall(sender, "")),
 	})
 
 	uassert.NoError(t, err)

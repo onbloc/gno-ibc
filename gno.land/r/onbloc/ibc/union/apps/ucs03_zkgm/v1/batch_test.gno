@@ -23,25 +23,26 @@ func TestVerifyBatchRejectsNestedBatch(cur realm, t *testing.T) {
 		Opcode:  z.OP_BATCH,
 	}}}
 
-	err := newTestImpl().verifyBatch(0, cur, MessageInfo{Sender: "sender"}, newFunds(nil), types.ChannelId(1), u256.Zero(), batch)
+	err := newTestImpl().verifyBatch(0, cur, newFunds(nil), types.ChannelId(1), u256.Zero(), batch)
 
 	uassert.ErrorContains(t, err, "invalid batch instruction")
 }
 
 func TestVerifyBatchPassesAllowedCallChildren(cur realm, t *testing.T) {
+	sender := testAddress("batch-call-caller")
 	batch := z.Batch{Instructions: []z.Instruction{
-		batchMustCallInstruction(batchCall("sender", "a")),
-		batchMustCallInstruction(batchCall("sender", "b")),
+		batchMustCallInstruction(batchCall(sender, "a")),
+		batchMustCallInstruction(batchCall(sender, "b")),
 	}}
 
-	err := newTestImpl().verifyBatch(0, cur, MessageInfo{Sender: "sender"}, newFunds(nil), types.ChannelId(1), u256.Zero(), batch)
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	err := newTestImpl().verifyBatchX(cross(cur), newFunds(nil), types.ChannelId(1), u256.Zero(), batch)
 
 	uassert.NoError(t, err)
 }
 
 func TestVerifyBatchExactTotalNativeConsumptionPasses(cur realm, t *testing.T) {
 	v := newTestImpl()
-	sender := testAddress("batch-exact-sender")
 	const channelId = types.ChannelId(92)
 	orderA := batchRefundOrder("batch-exact-a", "ugnot", "quote-exact-a", 60)
 	orderB := batchRefundOrder("batch-exact-b", "ugnot", "quote-exact-b", 40)
@@ -51,7 +52,7 @@ func TestVerifyBatchExactTotalNativeConsumptionPasses(cur realm, t *testing.T) {
 	}}
 	f := newFunds(parseCoins("100ugnot"))
 
-	err := v.verifyBatch(0, cur, MessageInfo{Sender: sender}, f, channelId, u256.Zero(), batch)
+	err := v.verifyBatch(0, cur, f, channelId, u256.Zero(), batch)
 	uassert.NoError(t, err)
 	uassert.NoError(t, f.assertEmpty())
 
@@ -63,26 +64,24 @@ func TestVerifyBatchExactTotalNativeConsumptionPasses(cur realm, t *testing.T) {
 
 func TestVerifyBatchDuplicateNativeConsumptionRejected(cur realm, t *testing.T) {
 	v := newTestImpl()
-	sender := testAddress("batch-dup-sender")
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(batchRefundOrder("batch-dup-a", "ugnot", "quote-dup-a", 100)),
 		batchMustOrderInstruction(batchRefundOrder("batch-dup-b", "ugnot", "quote-dup-b", 100)),
 	}}
 
-	err := v.verifyBatch(0, cur, MessageInfo{Sender: sender}, newFunds(parseCoins("100ugnot")), types.ChannelId(91), u256.Zero(), batch)
+	err := v.verifyBatch(0, cur, newFunds(parseCoins("100ugnot")), types.ChannelId(91), u256.Zero(), batch)
 
 	uassert.ErrorContains(t, err, "sent coin mismatch")
 }
 
 func TestVerifyBatchLeftoverNativeRejected(cur realm, t *testing.T) {
 	v := newTestImpl()
-	sender := testAddress("batch-left-sender")
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(batchRefundOrder("batch-left", "ugnot", "quote-leftover", 60)),
 	}}
 	f := newFunds(parseCoins("100ugnot"))
 
-	err := v.verifyBatch(0, cur, MessageInfo{Sender: sender}, f, types.ChannelId(93), u256.Zero(), batch)
+	err := v.verifyBatch(0, cur, f, types.ChannelId(93), u256.Zero(), batch)
 	uassert.NoError(t, err)
 	// 40ugnot left unconsumed → the send-path drain check must reject it.
 	uassert.ErrorContains(t, f.assertEmpty(), "sent coin mismatch")
@@ -90,53 +89,27 @@ func TestVerifyBatchLeftoverNativeRejected(cur realm, t *testing.T) {
 
 func TestVerifyBatchMultiDenomExactPasses(cur realm, t *testing.T) {
 	v := newTestImpl()
-	sender := testAddress("batch-denom-sender")
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(batchRefundOrder("batch-denom-a", "ugnot", "quote-denom-a", 100)),
 		batchMustOrderInstruction(batchRefundOrder("batch-denom-b", "foo", "quote-denom-b", 50)),
 	}}
 	f := newFunds(parseCoins("100ugnot,50foo"))
 
-	err := v.verifyBatch(0, cur, MessageInfo{Sender: sender}, f, types.ChannelId(95), u256.Zero(), batch)
+	err := v.verifyBatch(0, cur, f, types.ChannelId(95), u256.Zero(), batch)
 	uassert.NoError(t, err)
 	uassert.NoError(t, f.assertEmpty())
 }
 
 func TestVerifyBatchMultiDenomShortfallRejected(cur realm, t *testing.T) {
 	v := newTestImpl()
-	sender := testAddress("batch-short-sender")
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(batchRefundOrder("batch-denom-sa", "ugnot", "quote-denom-sa", 100)),
 		batchMustOrderInstruction(batchRefundOrder("batch-denom-sb", "foo", "quote-denom-sb", 50)),
 	}}
 
-	err := v.verifyBatch(0, cur, MessageInfo{Sender: sender}, newFunds(parseCoins("100ugnot,40foo")), types.ChannelId(96), u256.Zero(), batch)
+	err := v.verifyBatch(0, cur, newFunds(parseCoins("100ugnot,40foo")), types.ChannelId(96), u256.Zero(), batch)
 
 	uassert.ErrorContains(t, err, "sent coin mismatch")
-}
-
-func TestVerifyBatchMixedNativeAndVoucher(cur realm, t *testing.T) {
-	v := newTestImpl()
-	sender := testAddress("batch-mixed-sender")
-	voucherDenom := "ibc/batch-mixed"
-	uassert.NoError(t, v.mintVoucher(0, cur, voucherDenom, [32]byte{}, "", "", 0, sender, u256.NewUint(20)))
-	batch := z.Batch{Instructions: []z.Instruction{
-		batchMustOrderInstruction(z.TokenOrderV2{
-			Sender:      []byte(sender),
-			BaseToken:   []byte(voucherDenom),
-			BaseAmount:  u256.NewUint(7),
-			QuoteToken:  []byte("quote-mixed-voucher"),
-			QuoteAmount: u256.NewUint(7),
-			Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-		}),
-		batchMustOrderInstruction(batchRefundOrder("batch-mixed-native", "ugnot", "quote-mixed-native", 100)),
-	}}
-	f := newFunds(parseCoins("100ugnot"))
-
-	err := v.verifyBatch(0, cur, MessageInfo{Sender: sender}, f, types.ChannelId(94), u256.Zero(), batch)
-	uassert.NoError(t, err)
-	uassert.NoError(t, f.assertEmpty())
-	uassert.Equal(t, int64(13), voucherBalanceOf(voucherDenom, address(sender)))
 }
 
 func TestAcknowledgeBatchRejectsAckCountMismatch(cur realm, t *testing.T) {

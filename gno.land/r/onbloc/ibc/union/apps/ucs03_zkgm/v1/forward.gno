@@ -20,7 +20,7 @@ var (
 
 // verifyForward checks the forwarded instruction is allowed and the timeout is set, then verifies the inner instruction.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2969-L2995
-func (v *ucs03ZkgmV1) verifyForward(_ int, rlm realm, info MessageInfo, funds *funds, channelId types.ChannelId, forward z.Forward) error {
+func (v *ucs03ZkgmV1) verifyForward(_ int, rlm realm, funds *funds, channelId types.ChannelId, forward z.Forward) error {
 	if !isAllowedForwardInstruction(forward.Instruction.Opcode) {
 		return errInvalidForwardInstruction
 	}
@@ -29,7 +29,7 @@ func (v *ucs03ZkgmV1) verifyForward(_ int, rlm realm, info MessageInfo, funds *f
 		return errForwardZeroTimeout
 	}
 
-	return v.verifyInternal(0, rlm, info, funds, channelId, forward.Path, forward.Instruction)
+	return v.verifyInternal(0, rlm, funds, channelId, forward.Path, forward.Instruction)
 }
 
 // executeForward builds and dispatches the next-hop packet, recording the parent for async ack settlement.

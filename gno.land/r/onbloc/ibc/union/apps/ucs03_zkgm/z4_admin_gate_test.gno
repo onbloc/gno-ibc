@@ -23,12 +23,12 @@ func TestPausableSetByAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest()
 
 	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
-	Pausable(cur, true)
+	Pausable(cross(cur), true)
 	if !paused {
 		t.Error("Pausable(true) by admin must set paused=true")
 	}
 
-	Pausable(cur, false)
+	Pausable(cross(cur), false)
 	if paused {
 		t.Error("Pausable(false) by admin must set paused=false")
 	}
@@ -49,7 +49,7 @@ func TestSetBucketConfigSucceedsByAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest()
 
 	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
-	SetBucketConfig(cur, "ugnot-admin", u256.NewUint(100), u256.NewUint(10))
+	SetBucketConfig(cross(cur), "ugnot-admin", u256.NewUint(100), u256.NewUint(10))
 
 	if _, ok := store.GetTokenBucket("ugnot-admin"); !ok {
 		t.Error("SetBucketConfig by admin must create a bucket")
@@ -73,7 +73,7 @@ func TestSetRateLimitDisabledSucceedsByAdmin(cur realm, t *testing.T) {
 
 	// Default is disabled (true); admin enables rate limiting by setting false.
 	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
-	SetRateLimitDisabled(cur, false)
+	SetRateLimitDisabled(cross(cur), false)
 	if store.RateLimitDisabled() {
 		t.Error("SetRateLimitDisabled by admin must clear the kill-switch")
 	}

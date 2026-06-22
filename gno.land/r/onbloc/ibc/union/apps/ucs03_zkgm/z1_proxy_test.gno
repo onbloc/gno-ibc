@@ -33,11 +33,12 @@ func TestUpdateImplRejectsNonAdmin(cur realm, t *testing.T) {
 func TestUpdateImplRejectsUnregisteredPath(cur realm, t *testing.T) {
 	resetZkgmForTest()
 
-	// Call with the outer (admin) cur, not the closure's crossing param, so the
-	// admin gate passes and the unregistered-path validation is what aborts.
-	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
-	uassert.AbortsContains(t, cur, "impl constructor not found", func(_ realm) {
-		UpdateImpl(cur, testImplPathA)
+	// Set the admin realm inside the abort closure so the admin gate's
+	// cur.Previous() resolves to the admin user realm; the unregistered-path
+	// validation is then what aborts.
+	uassert.AbortsContains(t, cur, "impl constructor not found", func(cur realm) {
+		testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+		UpdateImpl(cross(cur), testImplPathA)
 	})
 }
 
@@ -46,7 +47,7 @@ func TestUpdateImplByAdminInstallsImpl(cur realm, t *testing.T) {
 	implConstructors[testImplPathA] = func(store IStore) IApp { return &dummyImpl{} }
 
 	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
-	UpdateImpl(cur, testImplPathA)
+	UpdateImpl(cross(cur), testImplPathA)
 
 	if currentImpl == nil {
 		t.Fatal("UpdateImpl by admin must install the impl")
@@ -65,8 +66,8 @@ func TestUpdateImplSwapsToLatestTarget(cur realm, t *testing.T) {
 	packet := core.NewPacket(1, 2, []byte("d"), 0)
 
 	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
-	UpdateImpl(cur, testImplPathA)
-	UpdateImpl(cur, testImplPathB)
+	UpdateImpl(cross(cur), testImplPathA)
+	UpdateImpl(cross(cur), testImplPathB)
 
 	// Drive a packet through the proxy; only the latest impl must receive it.
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))

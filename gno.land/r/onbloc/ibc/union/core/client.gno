@@ -150,10 +150,6 @@ func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) types.Height {
 	return height
 }
 
-func VerifyClientMembership(_ realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {
-	verifyMembershipActive(clientId, proofHeight, proof, path, value)
-}
-
 // statusToTypes maps the light client object's status (a string) to the core
 // status enum.
 func statusToTypes(s lightclient.Status) types.Status {

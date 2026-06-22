@@ -17,3 +17,7 @@ func queryConsensusStateHex(clientId types.ClientId, height uint64) string {
 	}
 	return hexString(bz)
 }
+
+func VerifyClientMembership(_ realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {
+	verifyMembershipActive(clientId, proofHeight, proof, path, value)
+}

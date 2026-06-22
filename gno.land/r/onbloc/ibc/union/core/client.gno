@@ -7,15 +7,6 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-// NewConsensusStateUpdate constructs the height-stamped state update shape used
-// by light client updates.
-//
-// Union reference:
-// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/msg/src/lightclient.rs#L162-L174
-func NewConsensusStateUpdate(height types.Height, consensusStateBytes, clientStateBytes []byte) types.ConsensusStateUpdate {
-	return types.ConsensusStateUpdate{Height: height, ConsensusStateBytes: consensusStateBytes, ClientStateBytes: clientStateBytes}
-}
-
 // RegisterClient registers a light client implementation for a client type.
 //
 // Union reference:

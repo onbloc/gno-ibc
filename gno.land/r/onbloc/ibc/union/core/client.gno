@@ -186,33 +186,56 @@ func GetLightClient(clientId types.ClientId) (lightclient.Interface, bool) {
 	return store.lightClientOf(clientId)
 }
 
-// QueryClientState returns the stored client state as a hex string.
-func QueryClientState(clientId types.ClientId) string {
+// GetClientState returns the stored client state bytes.
+func GetClientState(clientId types.ClientId) []byte {
 	c := store.getClient(clientId)
 	if c == nil {
-		return ""
+		return nil
 	}
 
-	return hexString(c.clientState)
+	return cloneBytes(c.clientState)
 }
 
-// QueryConsensusState returns the consensus state at height as a hex string.
-func QueryConsensusState(clientId types.ClientId, height types.Height) string {
+// GetConsensusState returns the consensus state bytes at height.
+func GetConsensusState(clientId types.ClientId, height uint64) []byte {
 	c := store.getClient(clientId)
 	if c == nil {
-		return ""
+		return nil
 	}
 
-	bz, found := c.getConsensusState(height)
+	bz, found := c.getConsensusState(types.NewHeight(height))
 	if !found {
-		return ""
+		return nil
 	}
 
-	return hexString(bz)
+	return cloneBytes(bz)
 }
 
-// GetClientStatus returns the current status reported by a registered light client.
-func GetClientStatus(clientId types.ClientId) types.Status {
+func GetLatestHeight(clientId types.ClientId) uint64 {
+	c := store.getClient(clientId)
+	if c == nil {
+		return 0
+	}
+
+	return c.lightClient.GetLatestHeight()
+}
+
+func GetTimestampAtHeight(clientId types.ClientId, height uint64) types.Timestamp {
+	c := store.getClient(clientId)
+	if c == nil {
+		return 0
+	}
+
+	timestamp, err := c.lightClient.GetTimestampAtHeight(height)
+	if err != nil {
+		return 0
+	}
+
+	return timestamp
+}
+
+// GetStatus returns the current status reported by a registered light client.
+func GetStatus(clientId types.ClientId) types.Status {
 	c := store.getClient(clientId)
 	if c == nil {
 		return types.StatusUnknown

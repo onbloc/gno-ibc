@@ -243,10 +243,10 @@ gnokey query vm/qeval -remote tcp://127.0.0.1:26657 \
   -data 'gno.land/r/onbloc/unionibc/v1/core.GetClientType(1)'
 
 gnokey query vm/qeval -remote tcp://127.0.0.1:26657 \
-  -data 'gno.land/r/onbloc/unionibc/v1/core.QueryClientState(1)'
+  -data 'gno.land/r/onbloc/unionibc/v1/core.GetClientState(1)'
 
 gnokey query vm/qeval -remote tcp://127.0.0.1:26657 \
-  -data 'gno.land/r/onbloc/unionibc/v1/core.QueryConsensusState(1, 100)'
+  -data 'gno.land/r/onbloc/unionibc/v1/core.GetConsensusState(1, 100)'
 
 gnokey query vm/qeval -remote tcp://127.0.0.1:26657 \
   -data 'gno.land/r/onbloc/unionibc/v1/core.QueryConnection(1)'
@@ -269,8 +269,7 @@ gnokey query vm/qeval -remote tcp://127.0.0.1:26657 \
 Expected formats:
 
 - `GetClientType` returns the registered client type string.
-- `QueryClientState` and `QueryConsensusState` return the stored client bytes as
-  `0x` hex.
+- `GetClientState` and `GetConsensusState` return the stored client bytes.
 - `QueryConnection` and `QueryChannel` return ethabi-encoded struct bytes as
   `0x` hex.
 - `QueryBatchPackets` and `QueryBatchReceipts` return stored `H256` values as
@@ -447,10 +446,11 @@ cat >/tmp/check_statelens_client.gno <<'EOF'
 package main
 
 import core "gno.land/r/onbloc/unionibc/v1/core"
+import "gno.land/p/onbloc/ibc/union/types"
 
 func main() {
 	clientID := types.ClientId(2)
-	println("state_lens_active", core.GetClientStatus(clientID) == types.StatusActive)
+	println("state_lens_active", core.GetStatus(clientID) == types.StatusActive)
 }
 EOF
 

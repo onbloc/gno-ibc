@@ -73,10 +73,10 @@ func TestCreateClientUnionUsesRegisteredClient(cur realm, t *testing.T) {
 	if c.lightClient != lc {
 		t.Fatalf("stored light client mismatch")
 	}
-	if QueryClientState(clientId) != "0x636c69656e74" {
+	if queryClientStateHex(clientId) != "0x636c69656e74" {
 		t.Fatalf("client state not stored")
 	}
-	if QueryConsensusState(clientId, types.NewHeight(1)) != "0x636f6e73656e737573" {
+	if queryConsensusStateHex(clientId, 1) != "0x636f6e73656e737573" {
 		t.Fatalf("consensus state not stored at latest height")
 	}
 	if len(lc.creationRelayers) != 1 || lc.creationRelayers[0] != relayer {
@@ -121,10 +121,10 @@ func TestUpdateClientUnionMirrorsStateUpdate(cur realm, t *testing.T) {
 	if height != types.NewHeight(2) {
 		t.Fatalf("updated height: got %s want 2", height.String())
 	}
-	if QueryClientState(clientId) != "0x6373" {
+	if queryClientStateHex(clientId) != "0x6373" {
 		t.Fatalf("updated client state not mirrored")
 	}
-	if QueryConsensusState(clientId, types.NewHeight(2)) != "0x636f6e73" {
+	if queryConsensusStateHex(clientId, 2) != "0x636f6e73" {
 		t.Fatalf("updated consensus state not mirrored")
 	}
 	if len(lc.headerMessages) != 1 || string(lc.headerMessages[0]) != "header" {
@@ -167,10 +167,10 @@ func TestForceUpdateClientUnionMirrorsSubmittedState(cur realm, t *testing.T) {
 	if height != types.NewHeight(3) {
 		t.Fatalf("force update height: got %s want 3", height.String())
 	}
-	if QueryClientState(clientId) != "0x666f7263652d636c69656e74" {
+	if queryClientStateHex(clientId) != "0x666f7263652d636c69656e74" {
 		t.Fatalf("force client state not mirrored")
 	}
-	if QueryConsensusState(clientId, types.NewHeight(3)) != "0x666f7263652d636f6e73656e737573" {
+	if queryConsensusStateHex(clientId, 3) != "0x666f7263652d636f6e73656e737573" {
 		t.Fatalf("force consensus state not mirrored")
 	}
 	value, ok := store.getClient(clientId).getClientStore("force-key")

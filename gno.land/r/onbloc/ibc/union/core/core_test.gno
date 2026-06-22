@@ -317,18 +317,18 @@ func TestGetClientStateReturnsStoredBytes(cur realm, t *testing.T) {
 	c := addMockClient(&mockClient{})
 	c.saveClientState([]byte("client-state"))
 
-	got := QueryClientState(c.id)
-	if got != "0x636c69656e742d7374617465" {
-		t.Errorf("GetClientState: got %q want hex client-state", got)
+	got := GetClientState(c.id)
+	if string(got) != "client-state" {
+		t.Errorf("GetClientState: got %q want client-state", string(got))
 	}
 }
 
-func TestQueryClientStateUnknownReturnsEmpty(cur realm, t *testing.T) {
+func TestGetClientStateUnknownReturnsNil(cur realm, t *testing.T) {
 	resetStore(cur)
 
-	got := QueryClientState(types.ClientId(999))
-	if got != "" {
-		t.Errorf("QueryClientState: got %q want empty", got)
+	got := GetClientState(types.ClientId(999))
+	if got != nil {
+		t.Errorf("GetClientState: got %q want nil", string(got))
 	}
 }
 
@@ -356,22 +356,56 @@ func TestGetConsensusStateReturnsStoredBytes(cur realm, t *testing.T) {
 	c := addMockClient(&mockClient{})
 	c.saveConsensusState(types.NewHeight(10), []byte("consensus-state"))
 
-	got := QueryConsensusState(c.id, types.NewHeight(10))
-	if got != "0x636f6e73656e7375732d7374617465" {
-		t.Errorf("GetConsensusState: got %q want hex consensus-state", got)
+	got := GetConsensusState(c.id, 10)
+	if string(got) != "consensus-state" {
+		t.Errorf("GetConsensusState: got %q want consensus-state", string(got))
 	}
 }
 
-func TestQueryConsensusStateUnknownReturnsEmpty(cur realm, t *testing.T) {
+func TestGetConsensusStateUnknownReturnsNil(cur realm, t *testing.T) {
 	resetStore(cur)
 	c := addMockClient(&mockClient{})
 	c.saveConsensusState(types.NewHeight(10), []byte("consensus-state"))
 
-	if got := QueryConsensusState(types.ClientId(999), types.NewHeight(10)); got != "" {
-		t.Errorf("QueryConsensusState unknown client: got %q want empty", got)
+	if got := GetConsensusState(types.ClientId(999), 10); got != nil {
+		t.Errorf("GetConsensusState unknown client: got %q want nil", string(got))
 	}
-	if got := QueryConsensusState(c.id, types.NewHeight(999)); got != "" {
-		t.Errorf("QueryConsensusState unknown height: got %q want empty", got)
+	if got := GetConsensusState(c.id, 999); got != nil {
+		t.Errorf("GetConsensusState unknown height: got %q want nil", string(got))
+	}
+}
+
+func TestGetLatestHeightDelegatesToClient(cur realm, t *testing.T) {
+	resetStore(cur)
+	clientId := registerMockClient(&mockClient{chainId: "union-1", height: types.NewHeight(42)})
+
+	if got := GetLatestHeight(clientId); got != 42 {
+		t.Fatalf("GetLatestHeight: got %d want 42", got)
+	}
+}
+
+func TestGetLatestHeightUnknownReturnsZero(cur realm, t *testing.T) {
+	resetStore(cur)
+
+	if got := GetLatestHeight(types.ClientId(999)); got != 0 {
+		t.Fatalf("GetLatestHeight missing: got %d want 0", got)
+	}
+}
+
+func TestGetTimestampAtHeightDelegatesToClient(cur realm, t *testing.T) {
+	resetStore(cur)
+	clientId := registerMockClient(&mockClient{chainId: "union-1", timestamp: types.Timestamp(123)})
+
+	if got := GetTimestampAtHeight(clientId, 10); got != types.Timestamp(123) {
+		t.Fatalf("GetTimestampAtHeight: got %d want 123", got)
+	}
+}
+
+func TestGetTimestampAtHeightUnknownReturnsZero(cur realm, t *testing.T) {
+	resetStore(cur)
+
+	if got := GetTimestampAtHeight(types.ClientId(999), 10); got != 0 {
+		t.Fatalf("GetTimestampAtHeight missing: got %d want 0", got)
 	}
 }
 
@@ -397,10 +431,10 @@ func TestCreateClientBuildsAndStoresObject(cur realm, t *testing.T) {
 	if c.typ != mockType {
 		t.Fatalf("stored client type mismatch: got %s want %s", c.typ, mockType)
 	}
-	if QueryClientState(clientId) != "0x636c69656e742d7374617465" {
+	if queryClientStateHex(clientId) != "0x636c69656e742d7374617465" {
 		t.Fatalf("client state not mirrored from create msg")
 	}
-	if QueryConsensusState(clientId, types.NewHeight(100)) != "0x636f6e73656e7375732d7374617465" {
+	if queryConsensusStateHex(clientId, 100) != "0x636f6e73656e7375732d7374617465" {
 		t.Fatalf("consensus state not mirrored at latest height")
 	}
 }
@@ -1933,20 +1967,20 @@ func TestChannelOpenConfirmRejectsWrongState(cur realm, t *testing.T) {
 	})
 }
 
-func TestGetClientStatusDelegatesToClient(cur realm, t *testing.T) {
+func TestGetStatusDelegatesToClient(cur realm, t *testing.T) {
 	resetStore(cur)
 	clientId := registerMockClient(&mockClient{chainId: "union-1", status: types.StatusFrozen})
 
-	if got := GetClientStatus(clientId); got != types.StatusFrozen {
-		t.Fatalf("GetClientStatus: got %d want %d", got, types.StatusFrozen)
+	if got := GetStatus(clientId); got != types.StatusFrozen {
+		t.Fatalf("GetStatus: got %d want %d", got, types.StatusFrozen)
 	}
 }
 
-func TestGetClientStatusReturnsUnknownForMissingClient(cur realm, t *testing.T) {
+func TestGetStatusReturnsUnknownForMissingClient(cur realm, t *testing.T) {
 	resetStore(cur)
 
-	if got := GetClientStatus(types.ClientId(5)); got != types.StatusUnknown {
-		t.Fatalf("GetClientStatus missing: got %d want %d", got, types.StatusUnknown)
+	if got := GetStatus(types.ClientId(5)); got != types.StatusUnknown {
+		t.Fatalf("GetStatus missing: got %d want %d", got, types.StatusUnknown)
 	}
 }
 
@@ -1968,10 +2002,10 @@ func TestForceUpdateClientReplacesObjectAndReturnsHeight(cur realm, t *testing.T
 	if height != types.NewHeight(1) {
 		t.Fatalf("ForceUpdateClient height: got %v want 1", height)
 	}
-	if QueryClientState(clientId) != "0x6e65772d636c69656e74" {
+	if queryClientStateHex(clientId) != "0x6e65772d636c69656e74" {
 		t.Fatalf("ForceUpdateClient did not mirror replacement client state")
 	}
-	if QueryConsensusState(clientId, types.NewHeight(1)) != "0x6e65772d636f6e73656e737573" {
+	if queryConsensusStateHex(clientId, 1) != "0x6e65772d636f6e73656e737573" {
 		t.Fatalf("ForceUpdateClient did not mirror replacement consensus state")
 	}
 }

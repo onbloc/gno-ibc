@@ -5,15 +5,18 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-const CoreRealmPath = "gno.land/r/onbloc/ibc/union/core"
+const (
+	CoreRealmPath       = "gno.land/r/onbloc/ibc/union/core"
+	DefaultAdminAddress = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
+)
 
-func init(cur realm) {
-	resetAccess(cur.Previous().Address())
+func init() {
+	resetAccess(DefaultAdminAddress)
 }
 
 // resetAccess mirrors the deploy-time setup that Union performs through its
 // deployer after instantiating AccessManager. Gno has no instantiate message, so
-// this realm applies that setup during init.
+// this realm uses DefaultAdminAddress as its initial admin during init.
 func resetAccess(initialAdmin address) {
 	accessState = manager.NewState()
 

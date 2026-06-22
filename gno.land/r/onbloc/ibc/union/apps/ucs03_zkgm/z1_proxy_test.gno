@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"gno.land/p/nt/uassert/v0"
+	"gno.land/r/onbloc/ibc/union/access"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -22,7 +23,7 @@ func TestUpdateImplRejectsNonAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	implConstructors[testImplPathA] = func(store IStore) IApp { return &dummyImpl{} }
 
-	uassert.AbortsContains(t, cur, "caller not authorized to update_impl", func(cur realm) {
+	uassert.AbortsContains(t, cur, "AccessManagerUnauthorizedCall", func(cur realm) {
 		UpdateImpl(cross(cur), testImplPathA)
 	})
 	if currentImpl != nil {
@@ -35,9 +36,9 @@ func TestUpdateImplRejectsUnregisteredPath(cur realm, t *testing.T) {
 
 	// Call with the outer (admin) cur, not the closure's crossing param, so the
 	// admin gate passes and the unregistered-path validation is what aborts.
-	testing.SetRealm(testing.NewUserRealm(zkgmAdminForTest()))
-	uassert.AbortsContains(t, cur, "impl constructor not found", func(_ realm) {
-		UpdateImpl(cur, testImplPathA)
+	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+	uassert.AbortsContains(t, cur, "impl constructor not found", func() {
+		UpdateImpl(cross(cur), testImplPathA)
 	})
 }
 
@@ -45,8 +46,8 @@ func TestUpdateImplByAdminInstallsImpl(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	implConstructors[testImplPathA] = func(store IStore) IApp { return &dummyImpl{} }
 
-	testing.SetRealm(testing.NewUserRealm(zkgmAdminForTest()))
-	UpdateImpl(cur, testImplPathA)
+	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+	UpdateImpl(cross(cur), testImplPathA)
 
 	if currentImpl == nil {
 		t.Fatal("UpdateImpl by admin must install the impl")
@@ -64,9 +65,9 @@ func TestUpdateImplSwapsToLatestTarget(cur realm, t *testing.T) {
 	implConstructors[testImplPathB] = func(store IStore) IApp { return second }
 	packet := core.NewPacket(1, 2, []byte("d"), 0)
 
-	testing.SetRealm(testing.NewUserRealm(zkgmAdminForTest()))
-	UpdateImpl(cur, testImplPathA)
-	UpdateImpl(cur, testImplPathB)
+	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+	UpdateImpl(cross(cur), testImplPathA)
+	UpdateImpl(cross(cur), testImplPathB)
 
 	// Drive a packet through the proxy; only the latest impl must receive it.
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))

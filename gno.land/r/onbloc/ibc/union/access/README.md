@@ -34,7 +34,7 @@ directly so the access realm can infer the managed target from
 Union passes `initial_admin` and `initial_authority` through instantiate or
 migrate messages. Gno realms in this repository do not have that instantiate
 message surface, so this realm bootstraps `AdminRole` from
-`cur.Previous().Address()` in `init`.
+`DefaultAdminAddress` in `init`.
 
 The bootstrap also wires Union core relayer selectors to `RelayerRole` in
 `deployer.gno`. This wiring is deployment policy, not an AccessManager default.

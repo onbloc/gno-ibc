@@ -5,7 +5,8 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-// mockApp records the channel callbacks the host dispatches to a registered app.
+// mockApp records the callbacks the host dispatches to a registered app and lets
+// tests configure the recv result.
 type mockApp struct {
 	openInit     int
 	openTry      int
@@ -13,6 +14,26 @@ type mockApp struct {
 	openConfirm  int
 	closeInit    int
 	closeConfirm int
+
+	recvCalls       int
+	intentRecvCalls int
+	ackCalls        int
+	timeoutCalls    int
+
+	recvStatus types.PacketStatus // zero -> Success
+	recvAck    []byte             // empty -> "ack" for sync results
+}
+
+func (a *mockApp) recvResult() types.RecvPacketResult {
+	status := a.recvStatus
+	if status == 0 {
+		status = types.PacketStatusSuccess
+	}
+	ack := a.recvAck
+	if len(ack) == 0 && status != types.PacketStatusAsync {
+		ack = []byte("ack")
+	}
+	return types.RecvPacketResult{Status: status, Acknowledgement: ack}
 }
 
 var (
@@ -45,14 +66,19 @@ func (a *mockApp) OnChannelCloseConfirm(cur realm, channelId types.ChannelId, re
 }
 
 func (a *mockApp) OnRecvPacket(cur realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {
-	return types.RecvPacketResult{}
+	a.recvCalls++
+	return a.recvResult()
 }
 
 func (a *mockApp) OnAcknowledgementPacket(cur realm, packet types.Packet, acknowledgement []byte, relayer address) {
+	a.ackCalls++
 }
 
-func (a *mockApp) OnTimeoutPacket(cur realm, packet types.Packet, relayer address) {}
+func (a *mockApp) OnTimeoutPacket(cur realm, packet types.Packet, relayer address) {
+	a.timeoutCalls++
+}
 
 func (a *mockApp) OnIntentRecvPacket(cur realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
-	return types.RecvPacketResult{}
+	a.intentRecvCalls++
+	return a.recvResult()
 }

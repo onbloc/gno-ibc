@@ -96,3 +96,70 @@ func EmitChannelCloseConfirm(portId types.Bytes, channelId types.ChannelId, chan
 func EmitAppRegistered(portId []byte, registrarPkgPath string, adminOverride bool) {
 	emitAppRegisteredEvent(portId, registrarPkgPath, adminOverride)
 }
+
+// --- Packet lifecycle: pure helpers and event emitters exposed to the impl ---
+
+// CommitPacketHash returns the union commitment hash of a single packet.
+func CommitPacketHash(packet types.Packet) types.H256 {
+	return commitPacketHash(packet)
+}
+
+// CommitPacketsHash returns the union commitment hash of a packet batch.
+func CommitPacketsHash(packets []types.Packet) types.H256 {
+	return commitPacketsHash(packets)
+}
+
+// NowNanos returns the current block time in nanoseconds (the recv-timeout clock).
+func NowNanos() uint64 {
+	return nowNanos()
+}
+
+// EmitPacketSend emits the PacketSend host event.
+func EmitPacketSend(packet types.Packet, sourceChannel types.Channel, sourceConnection types.Connection) {
+	emitPacketSendEvent(packet, sourceChannel, sourceConnection)
+}
+
+// EmitPacketRecv emits the PacketRecv host event.
+func EmitPacketRecv(packet types.Packet, channel types.Channel, connection types.Connection, relayerMsg []byte) {
+	emitPacketRecvEvent(PacketRecvEvent, packet, channel, connection, "maker_msg", relayerMsg)
+}
+
+// EmitIntentPacketRecv emits the IntentPacketRecv host event.
+func EmitIntentPacketRecv(packet types.Packet, channel types.Channel, connection types.Connection, marketMakerMsg []byte) {
+	emitPacketRecvEvent(IntentPacketRecvEvent, packet, channel, connection, "market_maker_msg", marketMakerMsg)
+}
+
+// EmitPacketAck emits the PacketAck host event.
+func EmitPacketAck(packet types.Packet, sourceChannel types.Channel, connection types.Connection, acknowledgement []byte) {
+	emitPacketAckEvent(packet, sourceChannel, connection, acknowledgement)
+}
+
+// EmitPacketTimeout emits the PacketTimeout host event.
+func EmitPacketTimeout(packet types.Packet, sourceChannel types.Channel, connection types.Connection) {
+	emitPacketTimeoutEvent(packet, sourceChannel, connection)
+}
+
+// EmitWriteAck emits the WriteAck host event.
+func EmitWriteAck(channelId types.ChannelId, packet types.Packet, acknowledgement []byte) {
+	emitWriteAckEvent(channelId, packet, acknowledgement)
+}
+
+// EmitBatchSend emits the BatchSend host event.
+func EmitBatchSend(channelId types.ChannelId, packetHash, batchHash types.H256) {
+	emitBatchSendEvent(channelId, packetHash, batchHash)
+}
+
+// EmitBatchAcks emits the BatchAcks host event.
+func EmitBatchAcks(channelId types.ChannelId, packetHash, batchHash types.H256) {
+	emitBatchAcksEvent(channelId, packetHash, batchHash)
+}
+
+// EmitCommitMembershipProof emits the CommitMembershipProof host event.
+func EmitCommitMembershipProof(msg types.MsgCommitMembershipProof) {
+	emitCommitMembershipProofEvent(msg)
+}
+
+// EmitCommitNonMembershipProof emits the CommitNonMembershipProof host event.
+func EmitCommitNonMembershipProof(msg types.MsgCommitNonMembershipProof) {
+	emitCommitNonMembershipProofEvent(msg)
+}

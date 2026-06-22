@@ -29,6 +29,10 @@ type mockStore struct {
 	channels      map[uint32]types.Channel
 	channelOwners map[uint32]types.Bytes
 	ports         map[string]app.IApp
+	commitments   map[string]types.H256 // per-packet source commitment
+	receipts      map[string]types.H256 // per-packet destination receipt / ack
+	batchPackets  map[string]types.H256
+	batchReceipts map[string]types.H256
 }
 
 var _ core.IStore = (*mockStore)(nil)
@@ -40,7 +44,82 @@ func newMockStore() *mockStore {
 		channels:      map[uint32]types.Channel{},
 		channelOwners: map[uint32]types.Bytes{},
 		ports:         map[string]app.IApp{},
+		commitments:   map[string]types.H256{},
+		receipts:      map[string]types.H256{},
+		batchPackets:  map[string]types.H256{},
+		batchReceipts: map[string]types.H256{},
 	}
+}
+
+// packetKey is a deterministic per-packet key mirroring the store's per-packet
+// commitment/receipt paths (which are derived from the packet hash).
+func packetKey(packet types.Packet) string {
+	return packet.SourceChannelId.String() + "|" +
+		packet.DestinationChannelId.String() + "|" +
+		string(packet.Data) + "|" +
+		packet.TimeoutTimestamp.String()
+}
+
+func (m *mockStore) HasPacketCommitment(packet types.Packet) bool {
+	_, ok := m.commitments[packetKey(packet)]
+	return ok
+}
+
+func (m *mockStore) CommitPacket(_ int, rlm realm, packet types.Packet) {
+	m.commitments[packetKey(packet)] = types.COMMITMENT_MAGIC
+}
+
+func (m *mockStore) MarkPacketAcknowledged(_ int, rlm realm, packet types.Packet) error {
+	key := packetKey(packet)
+	commitment, ok := m.commitments[key]
+	if !ok {
+		return core.ErrPacketCommitmentNotFound
+	}
+	if commitment == types.COMMITMENT_MAGIC_ACK {
+		return core.ErrPacketAlreadyAcknowledged
+	}
+	if commitment != types.COMMITMENT_MAGIC {
+		return core.ErrPacketCommitmentNotFound
+	}
+	m.commitments[key] = types.COMMITMENT_MAGIC_ACK
+	return nil
+}
+
+func (m *mockStore) HasPacketReceipt(packet types.Packet) bool {
+	_, ok := m.receipts[packetKey(packet)]
+	return ok
+}
+
+func (m *mockStore) SetPacketReceipt(_ int, rlm realm, packet types.Packet) {
+	m.receipts[packetKey(packet)] = types.COMMITMENT_MAGIC
+}
+
+func (m *mockStore) CommitAcknowledgement(_ int, rlm realm, packet types.Packet, ack []byte) {
+	m.receipts[packetKey(packet)] = types.CommitAcks([][]byte{ack})
+}
+
+func (m *mockStore) AcknowledgementReceipt(channelId types.ChannelId, packet types.Packet) (types.H256, bool) {
+	v, ok := m.receipts[packetKey(packet)]
+	return v, ok
+}
+
+func (m *mockStore) PacketCommitment(channelId types.ChannelId, packet types.Packet) (types.H256, bool) {
+	v, ok := m.commitments[packetKey(packet)]
+	return v, ok
+}
+
+func (m *mockStore) SaveBatchPackets(_ int, rlm realm, channelId types.ChannelId, batchHash, value types.H256) {
+	m.batchPackets[channelId.String()+"|"+string(batchHash[:])] = value
+}
+
+func (m *mockStore) SaveBatchReceipts(_ int, rlm realm, channelId types.ChannelId, batchHash, value types.H256) {
+	m.batchReceipts[channelId.String()+"|"+string(batchHash[:])] = value
+}
+
+func (m *mockStore) SaveMembershipProof(_ int, rlm realm, clientId types.ClientId, proofHeight uint64, path []byte, value types.H256) {
+}
+
+func (m *mockStore) SaveNonMembershipProof(_ int, rlm realm, clientId types.ClientId, proofHeight uint64, path []byte, value types.H256) {
 }
 
 // registerApp is a test helper that installs an app at a port id.

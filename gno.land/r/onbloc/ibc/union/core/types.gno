@@ -93,4 +93,24 @@ type IStore interface {
 	GetAppByPortId(portId types.Bytes) (app.IApp, bool)
 	HasApp(portId types.Bytes) bool
 	RegisterAppAtPort(_ int, rlm realm, portId types.Bytes, a app.IApp)
+
+	// --- Packet commitment (source side) ---
+	HasPacketCommitment(packet types.Packet) bool
+	CommitPacket(_ int, rlm realm, packet types.Packet)
+	MarkPacketAcknowledged(_ int, rlm realm, packet types.Packet) error
+
+	// --- Packet receipt / acknowledgement (destination side) ---
+	HasPacketReceipt(packet types.Packet) bool
+	SetPacketReceipt(_ int, rlm realm, packet types.Packet)
+	CommitAcknowledgement(_ int, rlm realm, packet types.Packet, ack []byte)
+	AcknowledgementReceipt(channelId types.ChannelId, packet types.Packet) (types.H256, bool)
+
+	// --- Batch ---
+	PacketCommitment(channelId types.ChannelId, packet types.Packet) (types.H256, bool)
+	SaveBatchPackets(_ int, rlm realm, channelId types.ChannelId, batchHash, value types.H256)
+	SaveBatchReceipts(_ int, rlm realm, channelId types.ChannelId, batchHash, value types.H256)
+
+	// --- Committed proofs ---
+	SaveMembershipProof(_ int, rlm realm, clientId types.ClientId, proofHeight uint64, path []byte, value types.H256)
+	SaveNonMembershipProof(_ int, rlm realm, clientId types.ClientId, proofHeight uint64, path []byte, value types.H256)
 }

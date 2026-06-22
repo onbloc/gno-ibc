@@ -136,3 +136,63 @@ func (s *Store) HasApp(portId types.Bytes) bool {
 func (s *Store) RegisterAppAtPort(_ int, rlm realm, portId types.Bytes, a app.IApp) {
 	registerAppAtPort([]byte(portId), a)
 }
+
+// HasPacketCommitment reports whether the source-side packet commitment exists.
+func (s *Store) HasPacketCommitment(packet types.Packet) bool {
+	return s.hasPacketCommitment(packet)
+}
+
+// CommitPacket records the source-side commitment for a sent packet.
+func (s *Store) CommitPacket(_ int, rlm realm, packet types.Packet) {
+	s.commitPacket(packet)
+}
+
+// MarkPacketAcknowledged flips a source-side commitment to acknowledged.
+func (s *Store) MarkPacketAcknowledged(_ int, rlm realm, packet types.Packet) error {
+	return s.clientForChannel(packet.SourceChannelId).markPacketAcknowledged(packet)
+}
+
+// HasPacketReceipt reports whether a destination-side receipt exists.
+func (s *Store) HasPacketReceipt(packet types.Packet) bool {
+	return s.hasPacketReceipt(packet)
+}
+
+// SetPacketReceipt records a destination-side receipt (replay protection).
+func (s *Store) SetPacketReceipt(_ int, rlm realm, packet types.Packet) {
+	s.setPacketReceipt(packet)
+}
+
+// CommitAcknowledgement records the acknowledgement for a received packet.
+func (s *Store) CommitAcknowledgement(_ int, rlm realm, packet types.Packet, ack []byte) {
+	s.commitAcknowledgement(packet, ack)
+}
+
+// AcknowledgementReceipt returns the receipt stored at a packet's ack path.
+func (s *Store) AcknowledgementReceipt(channelId types.ChannelId, packet types.Packet) (types.H256, bool) {
+	return s.clientForChannel(channelId).getBatchReceiptsAtPath(packetAcknowledgementPath(packet))
+}
+
+// PacketCommitment returns the commitment stored at a packet's commitment path.
+func (s *Store) PacketCommitment(channelId types.ChannelId, packet types.Packet) (types.H256, bool) {
+	return s.clientForChannel(channelId).getBatchPacketsAtPath(packetCommitmentPath(packet))
+}
+
+// SaveBatchPackets records a batch commitment under batchHash.
+func (s *Store) SaveBatchPackets(_ int, rlm realm, channelId types.ChannelId, batchHash, value types.H256) {
+	s.clientForChannel(channelId).saveBatchPackets(batchHash, value)
+}
+
+// SaveBatchReceipts records a batch receipt under batchHash.
+func (s *Store) SaveBatchReceipts(_ int, rlm realm, channelId types.ChannelId, batchHash, value types.H256) {
+	s.clientForChannel(channelId).saveBatchReceipts(batchHash, value)
+}
+
+// SaveMembershipProof records a verified membership commitment.
+func (s *Store) SaveMembershipProof(_ int, rlm realm, clientId types.ClientId, proofHeight uint64, path []byte, value types.H256) {
+	s.saveMembershipProof(clientId, proofHeight, path, value)
+}
+
+// SaveNonMembershipProof records a verified non-membership commitment.
+func (s *Store) SaveNonMembershipProof(_ int, rlm realm, clientId types.ClientId, proofHeight uint64, path []byte, value types.H256) {
+	s.saveNonMembershipProof(clientId, proofHeight, path, value)
+}

@@ -5,9 +5,14 @@ func (state *State) GrantRole(role RoleId, account address, executionDelay Delay
 		panic(AccessManagerLockedRoleError(role))
 	}
 	roleConfig := state.ensureRole(role)
-	_, found := roleConfig.Members[account]
+	access, found := roleConfig.Members[account]
+	if found {
+		access.ExecutionDelay = executionDelay
+		roleConfig.Members[account] = access
+		return false
+	}
 	roleConfig.Members[account] = NewAccess(CurrentTimepoint().availableAt(roleConfig.GrantDelay), executionDelay)
-	return !found
+	return true
 }
 
 func (state *State) RevokeRole(role RoleId, account address) bool {
@@ -38,8 +43,11 @@ func (state *State) HasRole(role RoleId, account address) HasRoleResult {
 		return NewHasRoleResult(false, 0)
 	}
 	access, found := roleConfig.Members[account]
-	if !found || access.Since == 0 || access.Since > CurrentTimepoint() {
+	if !found || access.Since == 0 {
 		return NewHasRoleResult(false, 0)
+	}
+	if access.Since > CurrentTimepoint() {
+		return NewHasRoleResult(false, access.ExecutionDelay)
 	}
 	return NewHasRoleResult(true, access.ExecutionDelay)
 }
@@ -190,7 +198,7 @@ func (state *State) ensureInitialized() {
 // RequireUnlockedConfigRole rejects role ids whose configuration is locked.
 // Use this before emitting LabelRole metadata from a realm.
 // OpenZeppelin reference:
-// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v5.6.1/contracts/access/manager/AccessManager.sol#L226-L230
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L226-L230
 func RequireUnlockedConfigRole(role RoleId) {
 	if role == AdminRole || role == PublicRole {
 		panic(AccessManagerLockedRoleError(role))

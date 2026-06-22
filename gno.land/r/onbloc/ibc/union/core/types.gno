@@ -121,7 +121,10 @@ type IStore interface {
 	// --- Packet commitment (source side) ---
 	HasPacketCommitment(packet types.Packet) bool
 	CommitPacket(_ int, rlm realm, packet types.Packet)
-	MarkPacketAcknowledged(_ int, rlm realm, packet types.Packet) error
+	// SetPacketAcknowledged flips a packet's source commitment to the acknowledged
+	// marker. The acknowledge/timeout state machine (the read-check that the
+	// commitment exists and is not already acknowledged) lives in the impl.
+	SetPacketAcknowledged(_ int, rlm realm, packet types.Packet)
 
 	// --- Packet receipt / acknowledgement (destination side) ---
 	HasPacketReceipt(packet types.Packet) bool

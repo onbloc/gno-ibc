@@ -131,8 +131,11 @@ func TestPacketAcknowledgementMarksAndNotifies(cur realm, t *testing.T) {
 	})
 
 	uassert.Equal(t, 1, mApp.ackCalls)
-	// A second ack of the same packet is now rejected (already acknowledged).
-	uassert.Error(t, v.store.MarkPacketAcknowledged(0, cur, packet))
+	// A second ack of the same packet is now rejected (already acknowledged):
+	// the impl owns the state machine and aborts before re-flipping the commitment.
+	uassert.AbortsContains(t, cur, "already acknowledged", func(cur realm) {
+		v.markPacketAcknowledged(0, cur, packet)
+	})
 }
 
 func TestPacketTimeoutRefunds(cur realm, t *testing.T) {

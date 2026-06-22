@@ -17,16 +17,29 @@ func init() {
 	store = newStore()
 }
 
+// Store is the proxy-owned persistent state. It is a flat data layer: clients,
+// connections, channels, and commitments are keyed directly by their globally
+// allocated id or storage path, with no cross-entity indirection. All protocol
+// logic — handshake state machines, the acknowledge/timeout flow, proof
+// verification — lives in the impl (core/v1). The Store only stores and
+// retrieves, mirroring commitment values into chain params so counterparties
+// can prove them.
 type Store struct {
 	clientSeq  seqid.ID
 	clientByID *bptree.BPTree // clientKey(ClientId) → *client
 
-	connectionSeq        seqid.ID
-	connectionClientByID *bptree.BPTree // connectionKey(ConnectionId) → ClientId
+	connectionSeq seqid.ID
+	connections   *bptree.BPTree // connectionKey(ConnectionId) → types.Connection
 
-	channelSeq        seqid.ID
-	channelClientByID *bptree.BPTree // channelKey(ChannelId) → ClientId
+	channelSeq seqid.ID
+	channels   *bptree.BPTree // channelKey(ChannelId) → *channelEntry
 
+	// commitments holds every packet/batch commitment keyed by its global storage
+	// path. The path derivations (packet commitment, packet receipt, batch packets,
+	// batch receipts) are namespaced so they never collide, so a single flat map
+	// replaces the former per-client batch trees. Membership proofs keep their own
+	// maps because they are read back by a different key shape.
+	commitments         map[types.H256]types.H256
 	membershipProofs    map[types.H256]types.H256
 	nonMembershipProofs map[types.H256]types.H256
 
@@ -40,37 +53,30 @@ type client struct {
 	lightClient       lightclient.Interface
 	clientState       []byte
 	consensusByHeight *bptree.BPTree // string(height.Bytes()) → []byte
-
-	connectionsByID *bptree.BPTree // connectionKey(ConnectionId) → types.Connection
-	channelsByID    *bptree.BPTree // channelKey(ChannelId) → *channelEntry
-
-	batchPackets  map[types.H256]types.H256
-	batchReceipts map[types.H256]types.H256
 }
 
 type channelEntry struct {
-	channel  types.Channel
-	portId   types.Bytes
-	clientId types.ClientId // cached from connection at channel creation
+	channel types.Channel
+	portId  types.Bytes
 }
 
 func newStore() *Store {
 	return &Store{
-		clientByID:           bptree.NewBPTree32(),
-		connectionClientByID: bptree.NewBPTree32(),
-		channelClientByID:    bptree.NewBPTree32(),
-		membershipProofs:     make(map[types.H256]types.H256),
-		nonMembershipProofs:  make(map[types.H256]types.H256),
-		ports:                make(map[string]app.IApp),
+		clientByID:          bptree.NewBPTree32(),
+		connections:         bptree.NewBPTree32(),
+		channels:            bptree.NewBPTree32(),
+		commitments:         make(map[types.H256]types.H256),
+		membershipProofs:    make(map[types.H256]types.H256),
+		nonMembershipProofs: make(map[types.H256]types.H256),
+		ports:               make(map[string]app.IApp),
 	}
 }
 
-// store_istore.gno adapts the proxy-private Store to the IStore interface the
-// impl is injected with. Each method routes to the existing client operations,
-// keeping the nested *client structure and the chain-param commitment mirror
-// private to the proxy. Setters take the borrow-rule (_ int, rlm realm, ...)
-// form; the realm token is threaded by the caller and unused here because the
-// underlying writes already run in the proxy's ownership context.
+// The Store satisfies the IStore interface the impl is injected with. Each
+// adapter routes to the flat data primitives below. Setters take the borrow-rule
+// (_ int, rlm realm, ...) form; the realm token is threaded by the caller and
+// unused here because the underlying writes already run in the proxy's ownership
+// context.
 var _ IStore = (*Store)(nil)
 
 // AddClient allocates a new client for the light client object and returns its id.
@@ -209,52 +215,58 @@ func (s *Store) RegisterAppAtPort(_ int, rlm realm, portId types.Bytes, a app.IA
 
 // HasPacketCommitment reports whether the source-side packet commitment exists.
 func (s *Store) HasPacketCommitment(packet types.Packet) bool {
-	return s.hasPacketCommitment(packet)
+	_, found := s.getCommitment(packetCommitmentPath(packet))
+	return found
 }
 
 // CommitPacket records the source-side commitment for a sent packet.
 func (s *Store) CommitPacket(_ int, rlm realm, packet types.Packet) {
-	s.commitPacket(packet)
+	s.setCommitment(packetCommitmentPath(packet), types.COMMITMENT_MAGIC)
 }
 
-// MarkPacketAcknowledged flips a source-side commitment to acknowledged.
-func (s *Store) MarkPacketAcknowledged(_ int, rlm realm, packet types.Packet) error {
-	return s.clientForChannel(packet.SourceChannelId).markPacketAcknowledged(packet)
+// SetPacketAcknowledged flips a source-side commitment to the acknowledged
+// marker. It is a pure write: the impl owns the state machine (verifying the
+// commitment exists and is not already acknowledged) before calling this. The
+// flip stays in memory only — the chain-param commitment keeps recording that
+// the packet was sent.
+func (s *Store) SetPacketAcknowledged(_ int, rlm realm, packet types.Packet) {
+	s.setCommitmentMem(packetCommitmentPath(packet), types.COMMITMENT_MAGIC_ACK)
 }
 
 // HasPacketReceipt reports whether a destination-side receipt exists.
 func (s *Store) HasPacketReceipt(packet types.Packet) bool {
-	return s.hasPacketReceipt(packet)
+	_, found := s.getCommitment(packetAcknowledgementPath(packet))
+	return found
 }
 
 // SetPacketReceipt records a destination-side receipt (replay protection).
 func (s *Store) SetPacketReceipt(_ int, rlm realm, packet types.Packet) {
-	s.setPacketReceipt(packet)
+	s.setCommitment(packetAcknowledgementPath(packet), types.COMMITMENT_MAGIC)
 }
 
 // CommitAcknowledgement records the acknowledgement for a received packet.
 func (s *Store) CommitAcknowledgement(_ int, rlm realm, packet types.Packet, ack []byte) {
-	s.commitAcknowledgement(packet, ack)
+	s.setCommitment(packetAcknowledgementPath(packet), types.CommitAcks([][]byte{ack}))
 }
 
 // AcknowledgementReceipt returns the receipt stored at a packet's ack path.
 func (s *Store) AcknowledgementReceipt(channelId types.ChannelId, packet types.Packet) (types.H256, bool) {
-	return s.clientForChannel(channelId).getBatchReceiptsAtPath(packetAcknowledgementPath(packet))
+	return s.getCommitment(packetAcknowledgementPath(packet))
 }
 
 // PacketCommitment returns the commitment stored at a packet's commitment path.
 func (s *Store) PacketCommitment(channelId types.ChannelId, packet types.Packet) (types.H256, bool) {
-	return s.clientForChannel(channelId).getBatchPacketsAtPath(packetCommitmentPath(packet))
+	return s.getCommitment(packetCommitmentPath(packet))
 }
 
 // SaveBatchPackets records a batch commitment under batchHash.
 func (s *Store) SaveBatchPackets(_ int, rlm realm, channelId types.ChannelId, batchHash, value types.H256) {
-	s.clientForChannel(channelId).saveBatchPackets(batchHash, value)
+	s.setCommitment(types.BatchPacketsPath(batchHash), value)
 }
 
 // SaveBatchReceipts records a batch receipt under batchHash.
 func (s *Store) SaveBatchReceipts(_ int, rlm realm, channelId types.ChannelId, batchHash, value types.H256) {
-	s.clientForChannel(channelId).saveBatchReceipts(batchHash, value)
+	s.setCommitment(types.BatchReceiptsPath(batchHash), value)
 }
 
 // SaveMembershipProof records a verified membership commitment.
@@ -287,31 +299,12 @@ func (s *Store) ConsensusStateBytes(clientId types.ClientId, height types.Height
 
 // BatchPacketsAt returns the batch packet commitment for a batch hash.
 func (s *Store) BatchPacketsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool) {
-	c := s.clientForChannelSafe(channelId)
-	if c == nil {
-		var zero types.H256
-		return zero, false
-	}
-	return c.getBatchPacketsAtPath(types.BatchPacketsPath(batchHash))
+	return s.getCommitment(types.BatchPacketsPath(batchHash))
 }
 
 // BatchReceiptsAt returns the batch receipt commitment for a batch hash.
 func (s *Store) BatchReceiptsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool) {
-	c := s.clientForChannelSafe(channelId)
-	if c == nil {
-		var zero types.H256
-		return zero, false
-	}
-	return c.getBatchReceiptsAtPath(types.BatchReceiptsPath(batchHash))
-}
-
-// clientForChannelSafe resolves a channel's client without panicking.
-func (s *Store) clientForChannelSafe(channelId types.ChannelId) *client {
-	entry, ok := s.getChannelEntry(channelId)
-	if !ok {
-		return nil
-	}
-	return s.getClient(entry.clientId)
+	return s.getCommitment(types.BatchReceiptsPath(batchHash))
 }
 
 // --- Key helpers ---
@@ -341,6 +334,31 @@ func h256ChainParamKey(key types.H256) string {
 	return hex.EncodeToString(key[:])
 }
 
+// --- Commitment primitives (path → value) ---
+
+// setCommitment stores a commitment value and mirrors it into chain params so
+// counterparties can prove it.
+func (s *Store) setCommitment(path types.H256, value types.H256) {
+	s.commitments[path] = value
+	setChainParam(h256ChainParamKey(path), value[:])
+}
+
+// setCommitmentMem stores a commitment value in memory only (no chain-param
+// mirror). Used for the acknowledged flip, which is local bookkeeping.
+func (s *Store) setCommitmentMem(path types.H256, value types.H256) {
+	s.commitments[path] = value
+}
+
+// getCommitment reads the commitment value stored at path.
+func (s *Store) getCommitment(path types.H256) (types.H256, bool) {
+	v, found := s.commitments[path]
+	if !found {
+		var zero types.H256
+		return zero, false
+	}
+	return v, true
+}
+
 // --- Client state ---
 
 func (c *client) saveState(clientStateBytes []byte) {
@@ -361,152 +379,7 @@ func (c *client) getConsensusState(height types.Height) ([]byte, bool) {
 	return cloneBytes(v.([]byte)), true
 }
 
-func (c *client) findConsensusState(height types.Height) ([]byte, bool) {
-	v, found := c.consensusByHeight.Get(string(height.Bytes()))
-	if !found {
-		return nil, false
-	}
-	return cloneBytes(v.([]byte)), true
-}
-
-// --- Batch packets (per client) ---
-
-func (c *client) saveBatchPackets(hash types.H256, value types.H256) {
-	key := types.BatchPacketsPath(hash)
-	c.batchPackets[key] = value
-	setChainParam(h256ChainParamKey(key), value[:])
-}
-
-// setBatchPackets mirrors value in memory only (no chain-param write).
-func (c *client) setBatchPackets(hash types.H256, value types.H256) {
-	c.batchPackets[types.BatchPacketsPath(hash)] = value
-}
-
-func (c *client) getBatchPackets(hash types.H256) types.H256 {
-	v, found := c.getBatchPacketsAtPath(types.BatchPacketsPath(hash))
-	if !found {
-		panic(ErrBatchPacketsNotFound)
-	}
-	return v
-}
-
-func (c *client) getBatchPacketsAtPath(path types.H256) (types.H256, bool) {
-	v, found := c.batchPackets[path]
-	if !found {
-		var zero types.H256
-		return zero, false
-	}
-	return v, true
-}
-
-func (c *client) deleteBatchPackets(hash types.H256) {
-	var zero types.H256
-	key := types.BatchPacketsPath(hash)
-	delete(c.batchPackets, key)
-	setChainParam(h256ChainParamKey(key), zero[:])
-}
-
-// --- Batch receipts (per client) ---
-
-func (c *client) saveBatchReceipts(hash types.H256, value types.H256) {
-	key := types.BatchReceiptsPath(hash)
-	c.batchReceipts[key] = value
-	setChainParam(h256ChainParamKey(key), value[:])
-}
-
-func (c *client) getBatchReceipts(hash types.H256) types.H256 {
-	v, found := c.getBatchReceiptsAtPath(types.BatchReceiptsPath(hash))
-	if !found {
-		panic(ErrBatchReceiptsNotFound)
-	}
-	return v
-}
-
-func (c *client) getBatchReceiptsAtPath(path types.H256) (types.H256, bool) {
-	v, found := c.batchReceipts[path]
-	if !found {
-		var zero types.H256
-		return zero, false
-	}
-	return v, true
-}
-
-func (c *client) deleteBatchReceipts(hash types.H256) {
-	var zero types.H256
-	key := types.BatchReceiptsPath(hash)
-	delete(c.batchReceipts, key)
-	setChainParam(h256ChainParamKey(key), zero[:])
-}
-
-// --- Packet helpers (per client) ---
-
-func (c *client) commitPacket(packet types.Packet) {
-	c.saveBatchPackets(commitPacketHash(packet), types.COMMITMENT_MAGIC)
-}
-
-func (c *client) deletePacketCommitment(packet types.Packet) {
-	var zero types.H256
-	path := packetCommitmentPath(packet)
-	delete(c.batchPackets, path)
-	setChainParam(h256ChainParamKey(path), zero[:])
-}
-
-func (c *client) markPacketAcknowledged(packet types.Packet) error {
-	path := packetCommitmentPath(packet)
-	commitment, found := c.getBatchPacketsAtPath(path)
-	if !found {
-		return ErrPacketCommitmentNotFound
-	}
-	if commitment == types.COMMITMENT_MAGIC_ACK {
-		return ErrPacketAlreadyAcknowledged
-	}
-	if commitment != types.COMMITMENT_MAGIC {
-		return ErrPacketCommitmentNotFound
-	}
-	c.setBatchPackets(commitPacketHash(packet), types.COMMITMENT_MAGIC_ACK)
-	return nil
-}
-
-func (c *client) hasPacketCommitment(packet types.Packet) bool {
-	_, found := c.getBatchPacketsAtPath(packetCommitmentPath(packet))
-	return found
-}
-
-func (c *client) commitAcknowledgement(packet types.Packet, ack []byte) {
-	c.saveBatchReceipts(commitPacketHash(packet), types.CommitAcks([][]byte{ack}))
-}
-
-func (c *client) hasAcknowledgement(packet types.Packet) bool {
-	v, ok := c.getBatchReceiptsAtPath(packetAcknowledgementPath(packet))
-	return ok && v != types.COMMITMENT_MAGIC
-}
-
-func (c *client) acknowledgementHash(packet types.Packet) types.H256 {
-	v, found := c.getBatchReceiptsAtPath(packetAcknowledgementPath(packet))
-	if !found {
-		var zero types.H256
-		return zero
-	}
-	return v
-}
-
-func (c *client) setPacketReceipt(packet types.Packet) {
-	c.saveBatchReceipts(commitPacketHash(packet), types.COMMITMENT_MAGIC)
-}
-
-func (c *client) hasPacketReceipt(packet types.Packet) bool {
-	_, found := c.getBatchReceiptsAtPath(packetAcknowledgementPath(packet))
-	return found
-}
-
-func (c *client) deletePacketReceipt(packet types.Packet) {
-	var zero types.H256
-	path := packetAcknowledgementPath(packet)
-	delete(c.batchReceipts, path)
-	setChainParam(h256ChainParamKey(path), zero[:])
-}
-
-// --- Committed proofs and timeout commitments (global paths) ---
+// --- Committed proofs (global paths) ---
 
 func (s *Store) saveMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte, value types.H256) {
 	key := types.MembershipProofPath(clientId, proofHeight, path)
@@ -554,10 +427,6 @@ func (s *Store) addClient(typ types.ClientType, creator address, lc lightclient.
 		creator:           creator,
 		lightClient:       lc,
 		consensusByHeight: bptree.NewBPTree32(),
-		connectionsByID:   bptree.NewBPTree32(),
-		channelsByID:      bptree.NewBPTree32(),
-		batchPackets:      make(map[types.H256]types.H256),
-		batchReceipts:     make(map[types.H256]types.H256),
 	}
 	s.clientByID.Set(clientKey(clientId), c)
 	return c
@@ -596,49 +465,26 @@ func (s *Store) getAppByPortId(portId types.Bytes) app.IApp {
 // --- Connection ---
 
 func (s *Store) saveConnection(connectionId types.ConnectionId, connection types.Connection) {
-	c := s.getClient(connection.ClientId)
-	if c == nil {
-		panic("client " + connection.ClientId.String() + " not found")
-	}
-	c.connectionsByID.Set(connectionKey(connectionId), connection)
-	s.connectionClientByID.Set(connectionKey(connectionId), connection.ClientId)
+	s.connections.Set(connectionKey(connectionId), connection)
 	setChainParam(h256ChainParamKey(types.ConnectionPath(connectionId)), h256Bytes(connectionValue(connection)))
 }
 
 func (s *Store) getConnection(connectionId types.ConnectionId) (types.Connection, bool) {
-	v, found := s.connectionClientByID.Get(connectionKey(connectionId))
+	v, found := s.connections.Get(connectionKey(connectionId))
 	if !found {
 		return types.Connection{}, false
 	}
-	c := s.getClient(v.(types.ClientId))
-	if c == nil {
-		return types.Connection{}, false
-	}
-	conn, found := c.connectionsByID.Get(connectionKey(connectionId))
-	if !found {
-		return types.Connection{}, false
-	}
-	return conn.(types.Connection), true
+	return v.(types.Connection), true
 }
 
 // --- Channel ---
 
 func (s *Store) createChannel(channelId types.ChannelId, channel types.Channel, portId types.Bytes) {
-	conn, ok := s.getConnection(channel.ConnectionId)
-	if !ok {
-		panic("connection " + channel.ConnectionId.String() + " not found")
-	}
 	entry := &channelEntry{
-		channel:  channel,
-		portId:   cloneBytes(portId),
-		clientId: conn.ClientId,
+		channel: channel,
+		portId:  cloneBytes(portId),
 	}
-	c := s.getClient(conn.ClientId)
-	if c == nil {
-		panic("client " + conn.ClientId.String() + " not found")
-	}
-	c.channelsByID.Set(channelKey(channelId), entry)
-	s.channelClientByID.Set(channelKey(channelId), conn.ClientId)
+	s.channels.Set(channelKey(channelId), entry)
 	setChainParam(h256ChainParamKey(types.ChannelPath(channelId)), h256Bytes(channelValue(channel)))
 }
 
@@ -652,19 +498,11 @@ func (s *Store) saveChannel(channelId types.ChannelId, channel types.Channel) {
 }
 
 func (s *Store) getChannelEntry(channelId types.ChannelId) (*channelEntry, bool) {
-	v, found := s.channelClientByID.Get(channelKey(channelId))
+	v, found := s.channels.Get(channelKey(channelId))
 	if !found {
 		return nil, false
 	}
-	c := s.getClient(v.(types.ClientId))
-	if c == nil {
-		return nil, false
-	}
-	entry, found := c.channelsByID.Get(channelKey(channelId))
-	if !found {
-		return nil, false
-	}
-	return entry.(*channelEntry), true
+	return v.(*channelEntry), true
 }
 
 func (s *Store) getChannel(channelId types.ChannelId) types.Channel {
@@ -681,93 +519,4 @@ func (s *Store) getChannelOwner(channelId types.ChannelId) types.Bytes {
 		panic("channel " + channelId.String() + " not found")
 	}
 	return entry.portId
-}
-
-// clientForChannel returns the client associated with channelId via the cached
-// clientId in the channel entry. Panics if the channel or client is not found.
-func (s *Store) clientForChannel(channelId types.ChannelId) *client {
-	entry, found := s.getChannelEntry(channelId)
-	if !found {
-		panic("channel " + channelId.String() + " not found")
-	}
-	c := s.getClient(entry.clientId)
-	if c == nil {
-		panic("client " + entry.clientId.String() + " not found")
-	}
-	return c
-}
-
-// --- Store-level packet delegation (routes via channel ID) ---
-// These allow packet.gno and tests to call store.* without holding a *client.
-// All safe variants (has*/acknowledgementHash) return zero/false when the channel
-// or client is not found instead of panicking.
-
-func (s *Store) commitPacket(packet types.Packet) {
-	s.clientForChannel(packet.SourceChannelId).commitPacket(packet)
-}
-
-func (s *Store) deletePacketCommitment(packet types.Packet) {
-	s.clientForChannel(packet.SourceChannelId).deletePacketCommitment(packet)
-}
-
-func (s *Store) hasPacketCommitment(packet types.Packet) bool {
-	entry, ok := s.getChannelEntry(packet.SourceChannelId)
-	if !ok {
-		return false
-	}
-	c := s.getClient(entry.clientId)
-	if c == nil {
-		return false
-	}
-	return c.hasPacketCommitment(packet)
-}
-
-func (s *Store) commitAcknowledgement(packet types.Packet, ack []byte) {
-	s.clientForChannel(packet.DestinationChannelId).commitAcknowledgement(packet, ack)
-}
-
-func (s *Store) hasAcknowledgement(packet types.Packet) bool {
-	entry, ok := s.getChannelEntry(packet.DestinationChannelId)
-	if !ok {
-		return false
-	}
-	c := s.getClient(entry.clientId)
-	if c == nil {
-		return false
-	}
-	return c.hasAcknowledgement(packet)
-}
-
-func (s *Store) acknowledgementHash(packet types.Packet) types.H256 {
-	entry, ok := s.getChannelEntry(packet.DestinationChannelId)
-	if !ok {
-		var zero types.H256
-		return zero
-	}
-	c := s.getClient(entry.clientId)
-	if c == nil {
-		var zero types.H256
-		return zero
-	}
-	return c.acknowledgementHash(packet)
-}
-
-func (s *Store) setPacketReceipt(packet types.Packet) {
-	s.clientForChannel(packet.DestinationChannelId).setPacketReceipt(packet)
-}
-
-func (s *Store) hasPacketReceipt(packet types.Packet) bool {
-	entry, ok := s.getChannelEntry(packet.DestinationChannelId)
-	if !ok {
-		return false
-	}
-	c := s.getClient(entry.clientId)
-	if c == nil {
-		return false
-	}
-	return c.hasPacketReceipt(packet)
-}
-
-func (s *Store) deletePacketReceipt(packet types.Packet) {
-	s.clientForChannel(packet.DestinationChannelId).deletePacketReceipt(packet)
 }

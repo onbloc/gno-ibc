@@ -168,9 +168,7 @@ func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAckn
 		if packet.SourceChannelId != first.SourceChannelId {
 			panic(core.ErrBatchSameChannelOnly)
 		}
-		if err := c.store.MarkPacketAcknowledged(0, rlm, packet); err != nil {
-			panic(err)
-		}
+		c.markPacketAcknowledged(0, rlm, packet)
 
 		a.OnAcknowledgementPacket(cross(rlm), packet, ack, relayer)
 		core.EmitPacketAck(packet, channel, connection, ack)
@@ -207,9 +205,7 @@ func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 	commitmentKey := types.BatchReceiptsPath(core.CommitPacketHash(packet))
 	c.verifyNonMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, commitmentKey[:])
 
-	if err := c.store.MarkPacketAcknowledged(0, rlm, packet); err != nil {
-		panic(err)
-	}
+	c.markPacketAcknowledged(0, rlm, packet)
 	if packet.TimeoutTimestamp == 0 {
 		panic(core.ErrTimeoutMustBeSet)
 	}
@@ -222,6 +218,24 @@ func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 	a.OnTimeoutPacket(cross(rlm), packet, relayer)
 
 	core.EmitPacketTimeout(packet, channel, connection)
+}
+
+// markPacketAcknowledged is the source-side acknowledge/timeout state machine.
+// It verifies the packet's commitment exists and is not already acknowledged,
+// then flips it through the store's pure SetPacketAcknowledged primitive. Acks
+// and timeouts share it: both retire a sent packet exactly once.
+func (c *coreV1) markPacketAcknowledged(_ int, rlm realm, packet types.Packet) {
+	commitment, ok := c.store.PacketCommitment(packet.SourceChannelId, packet)
+	if !ok {
+		panic(core.ErrPacketCommitmentNotFound)
+	}
+	if commitment == types.COMMITMENT_MAGIC_ACK {
+		panic(core.ErrPacketAlreadyAcknowledged)
+	}
+	if commitment != types.COMMITMENT_MAGIC {
+		panic(core.ErrPacketCommitmentNotFound)
+	}
+	c.store.SetPacketAcknowledged(0, rlm, packet)
 }
 
 // CommitMembershipProof verifies and records a membership proof for later reuse.

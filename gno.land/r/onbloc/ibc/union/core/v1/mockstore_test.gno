@@ -69,20 +69,8 @@ func (m *mockStore) CommitPacket(_ int, rlm realm, packet types.Packet) {
 	m.commitments[packetKey(packet)] = types.COMMITMENT_MAGIC
 }
 
-func (m *mockStore) MarkPacketAcknowledged(_ int, rlm realm, packet types.Packet) error {
-	key := packetKey(packet)
-	commitment, ok := m.commitments[key]
-	if !ok {
-		return core.ErrPacketCommitmentNotFound
-	}
-	if commitment == types.COMMITMENT_MAGIC_ACK {
-		return core.ErrPacketAlreadyAcknowledged
-	}
-	if commitment != types.COMMITMENT_MAGIC {
-		return core.ErrPacketCommitmentNotFound
-	}
-	m.commitments[key] = types.COMMITMENT_MAGIC_ACK
-	return nil
+func (m *mockStore) SetPacketAcknowledged(_ int, rlm realm, packet types.Packet) {
+	m.commitments[packetKey(packet)] = types.COMMITMENT_MAGIC_ACK
 }
 
 func (m *mockStore) HasPacketReceipt(packet types.Packet) bool {

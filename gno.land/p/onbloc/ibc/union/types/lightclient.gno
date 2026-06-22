@@ -25,6 +25,7 @@ type StateUpdate struct {
 	Height              uint64
 	ConsensusStateBytes []byte
 	ClientStateBytes    []byte
+	StorageWrites       map[string][]byte
 }
 
 // ClientCreationResult is the result of lightclient.Interface.VerifyCreation.
@@ -35,4 +36,5 @@ type StateUpdate struct {
 // so its result is empty; the type is kept for symmetry with other clients.
 type ClientCreationResult struct {
 	ClientStateBytes []byte
+	StorageWrites    map[string][]byte
 }

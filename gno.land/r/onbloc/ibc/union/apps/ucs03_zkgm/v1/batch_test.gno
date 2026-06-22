@@ -23,7 +23,7 @@ func TestVerifyBatchRejectsNestedBatch(cur realm, t *testing.T) {
 		Opcode:  z.OP_BATCH,
 	}}}
 
-	err := newTestImpl().verifyBatch(0, cur, types.ChannelId(1), "sender", newFunds(nil), u256.Zero(), [32]byte{}, batch)
+	err := newTestImpl().verifyBatch(0, cur, types.ChannelId(1), "sender", newFunds(nil), u256.Zero(), batch)
 
 	uassert.ErrorContains(t, err, "invalid batch instruction")
 }
@@ -34,7 +34,7 @@ func TestVerifyBatchPassesAllowedCallChildren(cur realm, t *testing.T) {
 		batchMustCallInstruction(batchCall("sender", "b")),
 	}}
 
-	err := newTestImpl().verifyBatch(0, cur, types.ChannelId(1), "sender", newFunds(nil), u256.Zero(), [32]byte{}, batch)
+	err := newTestImpl().verifyBatch(0, cur, types.ChannelId(1), "sender", newFunds(nil), u256.Zero(), batch)
 
 	uassert.NoError(t, err)
 }
@@ -51,7 +51,7 @@ func TestVerifyBatchExactTotalNativeConsumptionPasses(cur realm, t *testing.T) {
 	}}
 	f := newFunds(parseCoins("100ugnot"))
 
-	err := v.verifyBatch(0, cur, channelId, sender, f, u256.Zero(), [32]byte{}, batch)
+	err := v.verifyBatch(0, cur, channelId, sender, f, u256.Zero(), batch)
 	uassert.NoError(t, err)
 	uassert.NoError(t, f.assertEmpty())
 
@@ -69,7 +69,7 @@ func TestVerifyBatchDuplicateNativeConsumptionRejected(cur realm, t *testing.T) 
 		batchMustOrderInstruction(batchRefundOrder("batch-dup-b", "ugnot", "quote-dup-b", 100)),
 	}}
 
-	err := v.verifyBatch(0, cur, types.ChannelId(91), sender, newFunds(parseCoins("100ugnot")), u256.Zero(), [32]byte{}, batch)
+	err := v.verifyBatch(0, cur, types.ChannelId(91), sender, newFunds(parseCoins("100ugnot")), u256.Zero(), batch)
 
 	uassert.ErrorContains(t, err, "sent coin mismatch")
 }
@@ -82,7 +82,7 @@ func TestVerifyBatchLeftoverNativeRejected(cur realm, t *testing.T) {
 	}}
 	f := newFunds(parseCoins("100ugnot"))
 
-	err := v.verifyBatch(0, cur, types.ChannelId(93), sender, f, u256.Zero(), [32]byte{}, batch)
+	err := v.verifyBatch(0, cur, types.ChannelId(93), sender, f, u256.Zero(), batch)
 	uassert.NoError(t, err)
 	// 40ugnot left unconsumed → the send-path drain check must reject it.
 	uassert.ErrorContains(t, f.assertEmpty(), "sent coin mismatch")
@@ -97,7 +97,7 @@ func TestVerifyBatchMultiDenomExactPasses(cur realm, t *testing.T) {
 	}}
 	f := newFunds(parseCoins("100ugnot,50foo"))
 
-	err := v.verifyBatch(0, cur, types.ChannelId(95), sender, f, u256.Zero(), [32]byte{}, batch)
+	err := v.verifyBatch(0, cur, types.ChannelId(95), sender, f, u256.Zero(), batch)
 	uassert.NoError(t, err)
 	uassert.NoError(t, f.assertEmpty())
 }
@@ -110,7 +110,7 @@ func TestVerifyBatchMultiDenomShortfallRejected(cur realm, t *testing.T) {
 		batchMustOrderInstruction(batchRefundOrder("batch-denom-sb", "foo", "quote-denom-sb", 50)),
 	}}
 
-	err := v.verifyBatch(0, cur, types.ChannelId(96), sender, newFunds(parseCoins("100ugnot,40foo")), u256.Zero(), [32]byte{}, batch)
+	err := v.verifyBatch(0, cur, types.ChannelId(96), sender, newFunds(parseCoins("100ugnot,40foo")), u256.Zero(), batch)
 
 	uassert.ErrorContains(t, err, "sent coin mismatch")
 }
@@ -133,7 +133,7 @@ func TestVerifyBatchMixedNativeAndVoucher(cur realm, t *testing.T) {
 	}}
 	f := newFunds(parseCoins("100ugnot"))
 
-	err := v.verifyBatch(0, cur, types.ChannelId(94), sender, f, u256.Zero(), [32]byte{}, batch)
+	err := v.verifyBatch(0, cur, types.ChannelId(94), sender, f, u256.Zero(), batch)
 	uassert.NoError(t, err)
 	uassert.NoError(t, f.assertEmpty())
 	uassert.Equal(t, int64(13), voucherBalanceOf(voucherDenom, address(sender)))
@@ -146,7 +146,8 @@ func TestAcknowledgeBatchRejectsAckCountMismatch(cur realm, t *testing.T) {
 		batchMustCallInstruction(batchCall("sender", "second")),
 	}}
 
-	err := newTestImpl().acknowledgeBatch(0, cur, packet, u256.Zero(), [32]byte{}, batch, mustBatchOuterAck([][]byte{mustSuccessAck()}))
+	outerAck := mustBatchOuterAck([][]byte{mustSuccessAck()})
+	err := newTestImpl().acknowledgeBatch(0, cur, packet, u256.Zero(), [32]byte{}, batch, true, outerAck.InnerAck)
 
 	uassert.ErrorContains(t, err, "batch ack count mismatch")
 }
@@ -194,9 +195,7 @@ func batchRefundOrder(sender string, baseToken string, quoteToken string, amount
 
 func assertNoChannelBalance(t *testing.T, channelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) {
 	balance, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(channelId, path, order.BaseToken, order.QuoteToken))
-	// absence is the canonical post-drain state (decreaseChannelBalanceV2 removes
-	// the entry on zero); IsZero() defends against out-of-band zero writes.
-	uassert.True(t, !ok || balance.IsZero())
+	uassert.True(t, ok && balance.IsZero())
 }
 
 func mustBatchOuterAck(childAcks [][]byte) z.Ack {

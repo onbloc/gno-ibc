@@ -1,89 +1,78 @@
 package core
 
 import (
-	"chain"
 	"chain/runtime"
 
 	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-func NewConsensusStateUpdate(height types.Height, consensusStateBytes, clientStateBytes []byte) types.ConsensusStateUpdate {
-	return types.ConsensusStateUpdate{Height: height, ConsensusStateBytes: consensusStateBytes, ClientStateBytes: clientStateBytes}
+// RegisterClient registers a light client implementation for a client type,
+// delegating to the installed impl.
+//
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L849-L865
+func RegisterClient(cur realm, clientType types.ClientType, lc lightclient.Interface) {
+	getImpl().RegisterClient(0, cur, clientType, lc)
 }
 
-// CreateClient stores a light client object built by the caller (an
-// app/bootstrap realm) and assigns it an id. The object owns its own client and
-// consensus state. This mirrors aib's model of handing core an already-built
-// light client instead of core decoding bytes itself.
-func CreateClient(cur realm, clientType types.ClientType, lc lightclient.Interface) types.ClientId {
-	return getImpl().CreateClient(0, cur, clientType, lc)
+// HasClient reports whether a light client is registered for a client type.
+func HasClient(clientType types.ClientType) bool {
+	return getImpl().HasClient(clientType)
+}
+
+// CreateClient assigns a client id for a registered light client type, stores
+// the submitted state bytes, then lets the light client verify creation against
+// that freshly stored state.
+//
+// Union references:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L867-L903
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L905-L972
+func CreateClient(cur realm, msg types.MsgCreateClient) types.ClientId {
+	return getImpl().CreateClient(0, cur, msg)
 }
 
 // UpdateClient verifies a client message against the light client object, which
 // updates its own state, and mirrors the resulting state bytes for queries and
 // counterparty proofs.
+//
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L975-L1046
 func UpdateClient(cur realm, msg types.MsgUpdateClient) types.Height {
 	return getImpl().UpdateClient(0, cur, msg)
 }
 
-// ForceUpdateClient replaces a client's object with a new one built by the
-// caller, bypassing proof verification.
+// ForceUpdateClient re-initializes a client from submitted state bytes,
+// bypassing header proof verification.
 //
 // It is restricted to the admin and recovers expired or otherwise unrecoverable
-// clients. Replacing the object with one the caller constructed from fresh state
-// IS the recovery: the new object owns the new state.
-func ForceUpdateClient(cur realm, clientId types.ClientId, lc lightclient.Interface) types.Height {
+// clients. The registered light client type for the existing client is reused.
+//
+// Union references:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L146-L166
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L905-L972
+func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) types.Height {
 	requireAdmin(cur, "ForceUpdateClient")
-
-	c := store.getClient(clientId)
-	if c == nil {
-		panic("client " + clientId.String() + " not found")
-	}
-
 	runtime.AssertOriginCall()
-
-	c.lightClient = lc
-	height := types.NewHeight(lc.GetLatestHeight())
-
-	chain.Emit(
-		UpdateClientEvent,
-		"client_type", c.typ.String(),
-		"client_id", clientId.String(),
-		"height", height.String(),
-	)
-
-	return height
+	return getImpl().ForceUpdateClient(0, cur, msg)
 }
 
-// VerifyClientMembership verifies a membership proof against a registered light client.
-//
-// It does not commit the verified value into this realm's state.
+// VerifyClientMembership verifies a membership proof against a registered light
+// client. It does not commit the verified value into this realm's state.
 func VerifyClientMembership(cur realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {
 	getImpl().VerifyClientMembership(0, cur, clientId, proofHeight, proof, path, value)
 }
 
-// statusToTypes maps the light client object's status (a string) to the core
-// status enum.
-func statusToTypes(s lightclient.Status) types.Status {
-	switch s {
-	case lightclient.Active:
-		return types.StatusActive
-	case lightclient.Expired:
-		return types.StatusExpired
-	case lightclient.Frozen:
-		return types.StatusFrozen
-	default:
-		return types.StatusUnknown
-	}
-}
-
+// requireActiveClient panics unless the client's light client reports Active.
+// Used by the proxy-resident admin recovery (Force*) handshake paths.
 func requireActiveClient(c *client) {
-	if statusToTypes(c.lightClient.Status()) != types.StatusActive {
+	if c.lightClient.Status().ToType() != types.StatusActive {
 		panic(ErrClientNotActive)
 	}
 }
 
+// verifyMembershipActive verifies a membership proof against an active client,
+// used by the proxy-resident Force* connection/channel handshake paths.
 func verifyMembershipActive(clientId types.ClientId, height types.Height, proof, key, value []byte) {
 	c := store.getClient(clientId)
 	if c == nil {
@@ -97,60 +86,12 @@ func verifyMembershipActive(clientId types.ClientId, height types.Height, proof,
 	}
 }
 
+// verifyNonMembershipWithActiveClient verifies a non-membership proof against an
+// already-fetched active client, used by the proxy-resident Force* paths.
 func verifyNonMembershipWithActiveClient(c *client, height types.Height, proof, key []byte) {
 	requireActiveClient(c)
 
 	if err := c.lightClient.VerifyNonMembership(height.RevisionHeight, key, proof); err != nil {
 		panic(err)
 	}
-}
-
-// GetLightClient returns the stored light client object for clientId.
-func GetLightClient(clientId types.ClientId) (lightclient.Interface, bool) {
-	return store.lightClientOf(clientId)
-}
-
-// QueryClientState returns the stored client state as a hex string.
-func QueryClientState(clientId types.ClientId) string {
-	c := store.getClient(clientId)
-	if c == nil {
-		return ""
-	}
-
-	return hexString(c.clientState)
-}
-
-// QueryConsensusState returns the consensus state at height as a hex string.
-func QueryConsensusState(clientId types.ClientId, height types.Height) string {
-	c := store.getClient(clientId)
-	if c == nil {
-		return ""
-	}
-
-	bz, found := c.getConsensusState(height)
-	if !found {
-		return ""
-	}
-
-	return hexString(bz)
-}
-
-// GetClientStatus returns the current status reported by a registered light client.
-func GetClientStatus(clientId types.ClientId) types.Status {
-	c := store.getClient(clientId)
-	if c == nil {
-		return types.StatusUnknown
-	}
-
-	return statusToTypes(c.lightClient.Status())
-}
-
-// GetClientType returns the registered client type for clientId.
-func GetClientType(clientId types.ClientId) string {
-	c := store.getClient(clientId)
-	if c == nil {
-		return ""
-	}
-
-	return c.typ.String()
 }

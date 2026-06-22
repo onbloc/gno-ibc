@@ -69,7 +69,6 @@ func (v *ucs03ZkgmV1) getOrCreateVoucher(_ int, rlm realm, ibcDenom string, imag
 
 	vou := zkgm.NewVoucher(0, rlm, token, ledger)
 	v.store.SetVoucher(0, rlm, ibcDenom, vou)
-	v.store.SetMetadataImageOf(0, rlm, ibcDenom, image)
 	return vou
 }
 

@@ -20,14 +20,14 @@ var (
 
 // verifyForward checks the forwarded instruction is allowed and the timeout is set, then verifies the inner instruction.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2969-L2995
-func (v *ucs03ZkgmV1) verifyForward(_ int, rlm realm, channelId types.ChannelId, sender string, funds *funds, path *u256.Uint, salt [32]byte, forward z.Forward) error {
+func (v *ucs03ZkgmV1) verifyForward(_ int, rlm realm, channelId types.ChannelId, sender string, funds *funds, path *u256.Uint, forward z.Forward) error {
 	if !isAllowedForwardInstruction(forward.Instruction.Opcode) {
 		return errInvalidForwardInstruction
 	}
 	if forward.TimeoutTimestamp == 0 {
 		return errForwardZeroTimeout
 	}
-	return v.dispatchVerify(0, rlm, channelId, sender, funds, forward.Path, z.DeriveForwardSalt(salt), forward.Instruction)
+	return v.dispatchVerify(0, rlm, channelId, sender, funds, forward.Path, forward.Instruction)
 }
 
 // executeForward builds and dispatches the next-hop packet, recording the parent for async ack settlement.
@@ -58,8 +58,8 @@ func (v *ucs03ZkgmV1) executeForward(_ int, rlm realm, packet types.Packet, path
 }
 
 // acknowledgeForward dispatches the ack to the forwarded inner instruction.
-func (v *ucs03ZkgmV1) acknowledgeForward(_ int, rlm realm, packet types.Packet, path *u256.Uint, salt [32]byte, forward z.Forward, ack z.Ack) error {
-	return v.dispatchAck(0, rlm, packet, forward.Path, salt, forward.Instruction, ack.InnerAck)
+func (v *ucs03ZkgmV1) acknowledgeForward(_ int, rlm realm, packet types.Packet, path *u256.Uint, salt [32]byte, forward z.Forward, successful bool, ack []byte) error {
+	return v.dispatchAck(0, rlm, packet, forward.Path, salt, forward.Instruction, successful, ack)
 }
 
 // timeoutForward dispatches the timeout to the forwarded inner instruction.

@@ -75,8 +75,11 @@ func NewStateLensIcs23MptLightClient(
 // VerifyMembership verifies that key stores value under the L2 storage root at
 // the given height using an EVM MPT storage proof. Status gating is the caller's
 // responsibility, mirroring the cometbls object form.
+// Union reference:
+// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L39-L50
+// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L189-L218
 func (c *StateLensIcs23MptLightClient) VerifyMembership(height uint64, key []byte, proof []byte, value []byte) error {
-	consState, storageProof, err := c.prepareProof(height, key, proof)
+	consensusState, storageProof, err := c.prepareProof(height, key, proof)
 	if err != nil {
 		return err
 	}
@@ -90,7 +93,7 @@ func (c *StateLensIcs23MptLightClient) VerifyMembership(height uint64, key []byt
 
 	// storage.VerifyProof only reads the storage root (it hashes the proof key
 	// and walks the trie), so the root slice can be passed without copying.
-	if err := storage.VerifyProof(consState.StorageRoot, storage.Proof{
+	if err := storage.VerifyProof(consensusState.StorageRoot, storage.Proof{
 		Key:   storageProof.Key,
 		Value: storageProof.Value,
 		Proof: storageProof.Proof,
@@ -103,13 +106,16 @@ func (c *StateLensIcs23MptLightClient) VerifyMembership(height uint64, key []byt
 
 // VerifyNonMembership verifies the absence of key under the L2 storage root at
 // the given height using an EVM MPT absence proof.
+// Union reference:
+// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L53-L63
+// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L233-L254
 func (c *StateLensIcs23MptLightClient) VerifyNonMembership(height uint64, key []byte, proof []byte) error {
-	consState, storageProof, err := c.prepareProof(height, key, proof)
+	consensusState, storageProof, err := c.prepareProof(height, key, proof)
 	if err != nil {
 		return err
 	}
 
-	if err := storage.VerifyAbsence(consState.StorageRoot, storage.Proof{
+	if err := storage.VerifyAbsence(consensusState.StorageRoot, storage.Proof{
 		Key:   storageProof.Key,
 		Proof: storageProof.Proof,
 	}); err != nil {
@@ -123,12 +129,15 @@ func (c *StateLensIcs23MptLightClient) VerifyNonMembership(height uint64, key []
 // VerifyNonMembership: the proof height must not exceed the latest height, a
 // consensus state must exist at the height, the storage proof must decode, and
 // its key must match the IBC commitment key derived from path.
+// Union reference:
+// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L189-L231
+// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L233-L254
 func (c *StateLensIcs23MptLightClient) prepareProof(height uint64, key []byte, proof []byte) (*ConsensusState, storage.Proof, error) {
 	if height > c.clientState.L2LatestHeight {
 		return nil, storage.Proof{}, ErrInvalidHeight
 	}
 
-	consState, found := c.getConsensusState(height)
+	consensusState, found := c.getConsensusState(height)
 	if !found {
 		return nil, storage.Proof{}, ErrConsensusStateNotFound
 	}
@@ -142,67 +151,73 @@ func (c *StateLensIcs23MptLightClient) prepareProof(height uint64, key []byte, p
 		return nil, storage.Proof{}, err
 	}
 
-	return consState, storageProof, nil
+	return consensusState, storageProof, nil
 }
 
 // VerifyHeader verifies a state-lens header and updates the client. It proves
 // that the submitted L2 consensus state is committed in the L1 state at
 // L1Height (via the L1 client), then extracts and stores the L2 consensus state
 // at L2Height. Mirrors Union's verify_header.
-func (c *StateLensIcs23MptLightClient) VerifyHeader(caller address, header []byte, relayer address) (types.StateUpdate, error) {
+// Union reference:
+// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L98-L134
+func (c *StateLensIcs23MptLightClient) VerifyHeader(caller address, headerBytes []byte, relayer address) (types.StateUpdate, error) {
 	if c.l1Client == nil {
 		return types.StateUpdate{}, ErrNoL1Client
 	}
 
-	h, err := DecodeHeader(header)
+	clientState := c.clientState
+
+	header, err := DecodeHeader(headerBytes)
 	if err != nil {
 		return types.StateUpdate{}, ufmt.Errorf("ics23mpt: failed to decode header: %v", err)
 	}
 
 	// The L2 consensus state must be committed under the consensus-state path of
 	// the L2 client, in the L1 chain's state, as a keccak256 hash.
-	consensusPath := types.ConsensusStatePath(types.ClientId(c.clientState.L2ClientID), types.NewHeight(h.L2Height))
-	consensusHash := keccak256.Sum256(h.L2ConsensusState)
-	if err := c.l1Client.VerifyMembership(h.L1Height, consensusPath[:], h.L2ConsensusStateProof, consensusHash[:]); err != nil {
+	consensusPath := types.ConsensusStatePath(types.ClientId(clientState.L2ClientID), types.NewHeight(header.L2Height))
+	consensusHash := keccak256.Sum256(header.L2ConsensusState)
+	if err := c.l1Client.VerifyMembership(header.L1Height, consensusPath[:], header.L2ConsensusStateProof, consensusHash[:]); err != nil {
 		return types.StateUpdate{}, ufmt.Errorf("ics23mpt: l1 consensus state membership verification failed: %v", err)
 	}
 
-	consState, err := ExtractConsensusState(h.L2ConsensusState, *c.clientState)
+	consensusState, err := ExtractConsensusState(header.L2ConsensusState, *clientState)
 	if err != nil {
 		return types.StateUpdate{}, err
 	}
 
-	return c.updateState(h, &consState), nil
+	return c.updateState(header, &consensusState), nil
 }
 
 // updateState stores the extracted L2 consensus state at L2Height and advances
 // the latest height when the header is newer. Mirrors Union's StateUpdate flow.
-func (c *StateLensIcs23MptLightClient) updateState(header Header, consState *ConsensusState) types.StateUpdate {
+func (c *StateLensIcs23MptLightClient) updateState(header Header, consensusState *ConsensusState) types.StateUpdate {
 	height := header.L2Height
 
-	c.setConsensusState(height, consState)
+	c.setConsensusState(height, consensusState)
 
-	update := types.StateUpdate{Height: height}
+	stateUpdate := types.StateUpdate{Height: height}
 	// Mirror the new consensus state bytes so the host (core) can persist them
 	// for queries and counterparty proofs. Encoding cannot fail here (roots are
 	// fixed 32-byte words), but stay defensive and leave the mirror empty on error.
-	if consBytes, err := EncodeConsensusState(*consState); err == nil {
-		update.ConsensusStateBytes = consBytes
+	if consensusStateBytes, err := EncodeConsensusState(*consensusState); err == nil {
+		stateUpdate.ConsensusStateBytes = consensusStateBytes
 	}
 
 	if height > c.clientState.L2LatestHeight {
 		c.clientState.L2LatestHeight = height
-		if csBytes, err := EncodeClientState(*c.clientState); err == nil {
-			update.ClientStateBytes = csBytes
+		if clientStateBytes, err := EncodeClientState(*c.clientState); err == nil {
+			stateUpdate.ClientStateBytes = clientStateBytes
 		}
 	}
 
-	return update
+	return stateUpdate
 }
 
 // VerifyCreation performs no creation-time state mutation; the state-lens client
 // trusts its initial consensus state. Mirrors Union's verify_creation, which
 // only emits an event.
+// Union reference:
+// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L83-L96
 func (c *StateLensIcs23MptLightClient) VerifyCreation(caller address, relayer address) (types.ClientCreationResult, error) {
 	return types.ClientCreationResult{}, nil
 }

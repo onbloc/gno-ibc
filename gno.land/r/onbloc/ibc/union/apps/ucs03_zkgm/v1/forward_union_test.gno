@@ -5,7 +5,6 @@ import (
 
 	types "gno.land/p/onbloc/ibc/union/types"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 )
@@ -60,7 +59,7 @@ func TestUnionVerifyForward(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		err := v.verifyForward(0, cur, types.ChannelId(1), sender, newFunds(nil), u256.Zero(), tc.forward)
+		err := v.verifyForward(0, cur, MessageInfo{Sender: sender}, newFunds(nil), types.ChannelId(1), tc.forward)
 		if tc.wantErr == "" {
 			uassert.NoError(t, err)
 		} else {

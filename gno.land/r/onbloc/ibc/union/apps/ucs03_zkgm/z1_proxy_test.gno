@@ -34,10 +34,11 @@ func TestUpdateImplRejectsNonAdmin(cur realm, t *testing.T) {
 func TestUpdateImplRejectsUnregisteredPath(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 
-	// Call with the outer (admin) cur, not the closure's crossing param, so the
-	// admin gate passes and the unregistered-path validation is what aborts.
-	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
-	uassert.AbortsContains(t, cur, "impl constructor not found", func() {
+	// Set the admin realm inside the abort closure so the admin gate's
+	// cur.Previous() resolves to the admin user realm; the unregistered-path
+	// validation is then what aborts.
+	uassert.AbortsContains(t, cur, "impl constructor not found", func(cur realm) {
+		testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
 		UpdateImpl(cross(cur), testImplPathA)
 	})
 }

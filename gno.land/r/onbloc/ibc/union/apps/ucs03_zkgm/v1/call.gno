@@ -17,13 +17,15 @@ var (
 
 // verifyCall rejects eureka mode and requires the call sender to match the dispatch sender.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2997-L3019
-func (v *ucs03ZkgmV1) verifyCall(_ int, rlm realm, sender string, call z.Call) error {
+func (v *ucs03ZkgmV1) verifyCall(_ int, rlm realm, call z.Call, sender string) error {
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
+
 	if string(call.Sender) != sender {
 		return errInvalidCallSender
 	}
+
 	return nil
 }
 
@@ -40,6 +42,7 @@ func (v *ucs03ZkgmV1) executeCall(_ int, rlm realm, packet types.Packet, relayer
 	calldata := cloneBytes(call.ContractCalldata)
 	receiverPath := string(call.ContractAddress)
 	receiver, ok := v.store.GetReceiver(receiverPath)
+
 	if !ok || receiver == nil {
 		return callErrAck(0, rlm, errors.New("zkgm/v1: receiver not registered: "+receiverPath)), nil
 	}
@@ -65,6 +68,7 @@ func (v *ucs03ZkgmV1) executeCall(_ int, rlm realm, packet types.Packet, relayer
 		if err, panicked := safeCallOnIntentZkgm(0, rlm, receiver, env); panicked || err != nil {
 			return core.NewRecvPacketResult(types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 		}
+
 		return callSuccessAck()
 	}
 
@@ -84,9 +88,11 @@ func (v *ucs03ZkgmV1) executeCall(_ int, rlm realm, packet types.Packet, relayer
 	if panicked {
 		return core.NewRecvPacketResult(types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
+
 	if err != nil {
 		return callErrAck(0, rlm, err), nil
 	}
+
 	return callSuccessAck()
 }
 
@@ -96,6 +102,7 @@ func callSuccessAck() (types.RecvPacketResult, error) {
 	if err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
+
 	return core.NewRecvPacketResult(types.PacketStatusSuccess, ack), nil
 }
 
@@ -104,6 +111,7 @@ func (v *ucs03ZkgmV1) acknowledgeCall(_ int, rlm realm, packet types.Packet, pat
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
+
 	return nil
 }
 
@@ -112,6 +120,7 @@ func (v *ucs03ZkgmV1) timeoutCall(_ int, rlm realm, packet types.Packet, path *u
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
+
 	return nil
 }
 
@@ -123,6 +132,7 @@ func safeCallOnZkgm(_ int, rlm realm, receiver z.Zkgmable, env z.CallEnv) (err e
 		p := revive(func() {
 			err = receiver.OnZkgm(cross(rlm), env)
 		})
+
 		return err, p != nil
 	}
 
@@ -132,7 +142,9 @@ func safeCallOnZkgm(_ int, rlm realm, receiver z.Zkgmable, env z.CallEnv) (err e
 			panicked = true
 		}
 	}()
+
 	err = receiver.OnZkgm(cross(rlm), env)
+
 	return err, false
 }
 
@@ -143,6 +155,7 @@ func safeCallOnIntentZkgm(_ int, rlm realm, receiver z.Zkgmable, env z.IntentCal
 		p := revive(func() {
 			err = receiver.OnIntentZkgm(cross(rlm), env)
 		})
+
 		return err, p != nil
 	}
 
@@ -152,7 +165,9 @@ func safeCallOnIntentZkgm(_ int, rlm realm, receiver z.Zkgmable, env z.IntentCal
 			panicked = true
 		}
 	}()
+
 	err = receiver.OnIntentZkgm(cross(rlm), env)
+
 	return err, false
 }
 
@@ -160,12 +175,14 @@ func safeCallOnIntentZkgm(_ int, rlm realm, receiver z.Zkgmable, env z.IntentCal
 // rather than returning when the interpreter lacks support for it.
 func canRevive() (ok bool) {
 	ok = true
+
 	defer func() {
 		if recover() != nil {
 			ok = false
 		}
 	}()
 	revive(func() {})
+
 	return ok
 }
 
@@ -177,13 +194,16 @@ func callErrAck(_ int, rlm realm, err error) types.RecvPacketResult {
 		// would emit a non-Tag-prefixed ack the counterparty can't decode.
 		panic(encErr)
 	}
+
 	return failureResult(ack)
 }
 
 // cloneBytes copies slices before storing or passing them to code that may
 // persist or mutate them across realm boundaries.
+// cloneBytes returns a fresh realm-local copy of in. The string round-trip (vs a
+// raw copy) launders the realm taint on slices that crossed the proxy/impl
+// boundary; copy() would propagate it and a later store/convert would panic with
+// "illegal conversion of readonly or externally stored value".
 func cloneBytes(in []byte) []byte {
-	out := make([]byte, len(in))
-	copy(out, in)
-	return out
+	return []byte(string(in))
 }

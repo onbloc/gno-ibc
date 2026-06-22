@@ -24,7 +24,9 @@ func (v *ucs03ZkgmV1) mintVoucher(_ int, rlm realm, ibcDenom string, image [32]b
 	if err != nil {
 		return err
 	}
+
 	vou := v.getOrCreateVoucher(0, rlm, ibcDenom, image, name, symbol, decimals)
+
 	return vou.Ledger().Mint(address(receiver), n)
 }
 
@@ -63,9 +65,11 @@ func (v *ucs03ZkgmV1) getOrCreateVoucher(_ int, rlm realm, ibcDenom string, imag
 	if vou, ok := v.store.GetVoucher(ibcDenom); ok {
 		return vou
 	}
+
 	if name == "" {
 		name = ibcDenom
 	}
+
 	symbol = sanitizeVoucherSymbol(symbol, ibcDenom)
 
 	token, ledger := grc20.NewToken(0, rlm, name, symbol, int(decimals))
@@ -73,6 +77,7 @@ func (v *ucs03ZkgmV1) getOrCreateVoucher(_ int, rlm realm, ibcDenom string, imag
 
 	vou := zkgm.NewVoucher(0, rlm, token, ledger)
 	v.store.SetVoucher(0, rlm, ibcDenom, vou)
+
 	return vou
 }
 
@@ -86,13 +91,16 @@ func sanitizeVoucherSymbol(candidate, ibcDenom string) string {
 			out = append(out, c)
 		}
 	}
+
 	if len(out) == 0 {
 		fallback := strings.TrimPrefix(ibcDenom, ibcDenomPrefix)
 		if len(fallback) > grc20.MaxSymbolLen {
 			fallback = fallback[:grc20.MaxSymbolLen]
 		}
+
 		return fallback
 	}
+
 	return string(out)
 }
 
@@ -102,5 +110,6 @@ func amountInt64(amount *u256.Uint) (int64, error) {
 	if !amount.IsUint64() || amount.Uint64() > uint64(math.MaxInt64) {
 		return 0, errAmountOverflow
 	}
+
 	return amount.Int64(), nil
 }

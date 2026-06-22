@@ -56,11 +56,14 @@ func forgedInitializePacket(cur realm) types.Packet {
 		Implementation: []byte("grc20"),
 		Initializer:    []byte("init"),
 	}
+
 	metaBytes, err := z.EncodeTokenMetadata(meta)
 	if err != nil {
 		panic(err)
 	}
+
 	ibcDenom := impl.PredictWrappedTokenV2(u256.Zero(), uint32(forgedDestinationChannel), []byte("ugnot"), impl.MetadataImage(meta))
+
 	orderBytes, err := z.EncodeTokenOrderV2(z.TokenOrderV2{
 		Sender:      []byte("attacker-sender"),
 		Receiver:    []byte(testutils.TestAddress("forged-receiver")),
@@ -74,6 +77,7 @@ func forgedInitializePacket(cur realm) types.Packet {
 	if err != nil {
 		panic(err)
 	}
+
 	data, err := z.EncodeZkgmPacket(z.ZkgmPacket{
 		Salt: [32]byte{},
 		Path: u256.Zero(),
@@ -86,5 +90,6 @@ func forgedInitializePacket(cur realm) types.Packet {
 	if err != nil {
 		panic(err)
 	}
+
 	return core.NewPacket(types.ChannelId(1), forgedDestinationChannel, data, 1000)
 }

@@ -82,6 +82,7 @@ func (s *Store) GetTokenOrigin(denom string) (*u256.Uint, bool) {
 	if !ok {
 		return nil, false
 	}
+
 	return v.(*u256.Uint), true
 }
 
@@ -101,6 +102,7 @@ func (s *Store) GetChannelBalanceV2(key string) (*u256.Uint, bool) {
 	if !ok {
 		return nil, false
 	}
+
 	return v.(*u256.Uint), true
 }
 
@@ -115,6 +117,7 @@ func (s *Store) GetMetadataImageOf(denom string) ([32]byte, bool) {
 	if !ok {
 		return [32]byte{}, false
 	}
+
 	return v.([32]byte), true
 }
 
@@ -129,6 +132,7 @@ func (s *Store) GetForeignToken(denom string) ([]byte, bool) {
 	if !ok {
 		return nil, false
 	}
+
 	return v.([]byte), true
 }
 
@@ -143,6 +147,7 @@ func (s *Store) GetInFlightPacket(packetHash string) (types.Packet, bool) {
 	if !ok {
 		return types.Packet{}, false
 	}
+
 	return v.(types.Packet), true
 }
 
@@ -162,6 +167,7 @@ func (s *Store) GetTokenBucket(denom string) (*tb.TokenBucket, bool) {
 	if !ok {
 		return nil, false
 	}
+
 	return v.(*tb.TokenBucket), true
 }
 
@@ -181,6 +187,7 @@ func (s *Store) GetVoucher(ibcDenom string) (*Voucher, bool) {
 	if !ok {
 		return nil, false
 	}
+
 	return v.(*Voucher), true
 }
 
@@ -200,6 +207,7 @@ func (s *Store) GetReceiver(path string) (z.Zkgmable, bool) {
 	if !ok {
 		return nil, false
 	}
+
 	return r.(z.Zkgmable), true
 }
 

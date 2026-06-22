@@ -11,36 +11,42 @@ import (
 
 // TODO: cap batch.Instructions length once the upstream Solidity reference
 // confirms a value (Reviewer flagged unbounded recursion as a DoS vector —
-// each child runs full dispatchExecute incl. abi decode + keccak).
+// each child runs full dispatchExecutePacket incl. abi decode + keccak).
 var errInvalidBatchInstruction = errors.New("zkgm/v1: invalid batch instruction")
 
 // verifyBatch verifies each allowed child instruction against the shared funds budget.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2941-L2967
-func (v *ucs03ZkgmV1) verifyBatch(_ int, rlm realm, channelId types.ChannelId, sender string, funds *funds, path *u256.Uint, batch z.Batch) error {
-	for _, instr := range batch.Instructions {
-		if !isAllowedBatchInstruction(instr.Opcode) {
+func (v *ucs03ZkgmV1) verifyBatch(_ int, rlm realm, info MessageInfo, funds *funds, channelId types.ChannelId, path *u256.Uint, batch z.Batch) error {
+	for _, instruction := range batch.Instructions {
+		if !isAllowedBatchInstruction(instruction.Opcode) {
 			return errInvalidBatchInstruction
 		}
-		if err := v.dispatchVerify(0, rlm, channelId, sender, funds, path, instr); err != nil {
+
+		if err := v.verifyInternal(0, rlm, info, funds, channelId, path, instruction); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
 // executeBatch runs each child in order, aborting the whole batch on an only-maker child.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L1686-L1726
-func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relayer address, relayerMsg []byte, path *u256.Uint, parentSalt [32]byte, batch z.Batch, intent bool) ([]byte, error) {
+func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relayer address, relayerMsg []byte, salt [32]byte, path *u256.Uint, batch z.Batch, intent bool) ([]byte, error) {
 	acks := make([][]byte, len(batch.Instructions))
-	for i, instr := range batch.Instructions {
-		if !isAllowedBatchInstruction(instr.Opcode) {
+
+	for i, instruction := range batch.Instructions {
+		if !isAllowedBatchInstruction(instruction.Opcode) {
 			return nil, errInvalidBatchInstruction
 		}
-		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), parentSalt)
-		childRes, err := v.dispatchExecute(0, rlm, packet, relayer, relayerMsg, path, childSalt, instr, intent)
+
+		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), salt)
+
+		childRes, err := v.dispatchExecutePacket(0, rlm, packet, relayer, relayerMsg, childSalt, path, instruction, intent)
 		if err != nil {
 			return nil, err
 		}
+
 		childAck := childRes.Acknowledgement
 		if len(childAck) == 0 {
 			panic("zkgm/v1: batch child returned empty ack")
@@ -52,55 +58,67 @@ func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relaye
 		if isOnlyMakerAck(childAck) {
 			return cloneBytes(z.ACK_ERR_ONLY_MAKER), nil
 		}
+
 		acks[i] = childAck
 	}
+
 	batchAckBytes, err := z.EncodeBatchAck(z.BatchAck{Acknowledgements: acks})
 	if err != nil {
 		return nil, err
 	}
+
 	return z.EncodeAck(z.Ack{Tag: tagAckSuccess(), InnerAck: batchAckBytes})
 }
 
 // acknowledgeBatch fans the outer ack out to each child instruction.
-func (v *ucs03ZkgmV1) acknowledgeBatch(_ int, rlm realm, packet types.Packet, path *u256.Uint, parentSalt [32]byte, batch z.Batch, successful bool, ack []byte) error {
+func (v *ucs03ZkgmV1) acknowledgeBatch(_ int, rlm realm, packet types.Packet, relayer address, salt [32]byte, path *u256.Uint, batch z.Batch, successful bool, ack []byte) error {
 	var batchAck z.BatchAck
+
 	if successful {
 		decoded, err := z.DecodeBatchAck(ack)
 		if err != nil {
 			return err
 		}
+
 		batchAck = decoded
 		if len(batchAck.Acknowledgements) != len(batch.Instructions) {
 			return errors.New("zkgm/v1: batch ack count mismatch")
 		}
 	}
-	for i, instr := range batch.Instructions {
+
+	for i, instruction := range batch.Instructions {
 		var childAck []byte
+
 		childSuccessful := successful
+
 		if successful {
 			decodedChildAck, err := z.DecodeAck(batchAck.Acknowledgements[i])
 			if err != nil {
 				return err
 			}
+
 			childSuccessful = decodedChildAck.Tag != nil && decodedChildAck.Tag.Eq(tagAckSuccess())
 			childAck = decodedChildAck.InnerAck
 		}
-		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), parentSalt)
-		if err := v.dispatchAck(0, rlm, packet, path, childSalt, instr, childSuccessful, childAck); err != nil {
+
+		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), salt)
+		if err := v.acknowledgeInternal(0, rlm, packet, relayer, childSalt, path, instruction, childSuccessful, childAck); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
 // timeoutBatch fans the timeout out to each child instruction.
-func (v *ucs03ZkgmV1) timeoutBatch(_ int, rlm realm, packet types.Packet, path *u256.Uint, parentSalt [32]byte, batch z.Batch) error {
-	for i, instr := range batch.Instructions {
-		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), parentSalt)
-		if err := v.dispatchTimeout(0, rlm, packet, path, childSalt, instr); err != nil {
+func (v *ucs03ZkgmV1) timeoutBatch(_ int, rlm realm, packet types.Packet, salt [32]byte, path *u256.Uint, batch z.Batch) error {
+	for i, instruction := range batch.Instructions {
+		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), salt)
+		if err := v.timeoutInternal(0, rlm, packet, childSalt, path, instruction); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 

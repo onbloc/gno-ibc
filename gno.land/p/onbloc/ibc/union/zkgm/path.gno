@@ -30,8 +30,10 @@ func DequeueChannelFromPath(path *u256.Uint) (*u256.Uint, uint32) {
 	if path.IsZero() {
 		return u256.Zero(), 0
 	}
+
 	newPath := new(u256.Uint).Rsh(path, channelSlotBit)
 	low := new(u256.Uint).And(path, channelIDMaskU256())
+
 	return newPath, uint32(low.Uint64())
 }
 
@@ -44,11 +46,13 @@ func PopChannelFromPath(path *u256.Uint) (*u256.Uint, uint32) {
 	if path.IsZero() {
 		return u256.Zero(), 0
 	}
+
 	highestIndex := uint(path.BitLen()-1) / channelSlotBit
 	channelID := GetChannelFromPath(path, int(highestIndex))
 
 	slotMask := new(u256.Uint).Lsh(channelIDMaskU256(), highestIndex*channelSlotBit)
 	basePath := new(u256.Uint).AndNot(path, slotMask)
+
 	return basePath, channelID
 }
 
@@ -62,11 +66,14 @@ func UpdateChannelPath(path *u256.Uint, nextChannelID uint32) (*u256.Uint, error
 	if path.IsZero() {
 		return u256.NewUint(uint64(nextChannelID)), nil
 	}
+
 	nextHopIndex := HopCount(path)
 	if nextHopIndex > maxHopIndex {
 		return nil, ErrChannelPathFull
 	}
+
 	slot := MakePathFromChannel(nextChannelID, nextHopIndex)
+
 	return new(u256.Uint).Or(slot, path), nil
 }
 
@@ -78,8 +85,10 @@ func GetChannelFromPath(path *u256.Uint, index int) uint32 {
 	if index < 0 {
 		return 0
 	}
+
 	shifted := new(u256.Uint).Rsh(path, uint(index)*channelSlotBit)
 	masked := new(u256.Uint).And(shifted, channelIDMaskU256())
+
 	return uint32(masked.Uint64())
 }
 
@@ -89,6 +98,7 @@ func HopCount(path *u256.Uint) int {
 	if path == nil || path.IsZero() {
 		return 0
 	}
+
 	return (path.BitLen() + int(channelSlotBit) - 1) / int(channelSlotBit)
 }
 
@@ -99,6 +109,7 @@ func MakePathFromChannel(channelID uint32, index int) *u256.Uint {
 	if index < 0 {
 		return u256.Zero()
 	}
+
 	return new(u256.Uint).Lsh(u256.NewUint(uint64(channelID)), uint(index)*channelSlotBit)
 }
 
@@ -109,6 +120,7 @@ func MakePathFromChannel(channelID uint32, index int) *u256.Uint {
 // Based on Union's `reverse_channel_path` path helper.
 func ReverseChannelPath(path *u256.Uint) (*u256.Uint, error) {
 	reversed := u256.Zero()
+
 	cur := path
 	for hops := 0; hops < MaxHops; hops++ {
 		tail, head := PopChannelFromPath(cur)
@@ -117,11 +129,14 @@ func ReverseChannelPath(path *u256.Uint) (*u256.Uint, error) {
 			if err != nil {
 				return nil, err
 			}
+
 			reversed = updated
 		}
+
 		if tail.IsZero() {
 			return reversed, nil
 		}
+
 		cur = tail
 	}
 	// A valid uint256 path has at most MaxHops 32-bit slots. Reaching this

@@ -9,8 +9,10 @@ import (
 
 func DeriveBatchSalt(index *u256.Uint, salt [32]byte) [32]byte {
 	var input [64]byte
+
 	putUint256BE(input[:32], index)
 	copy(input[32:], salt[:])
+
 	return keccak256.Sum256(input[:])
 }
 
@@ -19,6 +21,7 @@ func TintForwardSalt(salt [32]byte) [32]byte {
 	for i := range salt {
 		out[i] = salt[i] | FORWARD_SALT_MAGIC[i]
 	}
+
 	return out
 }
 
@@ -28,6 +31,7 @@ func IsForwardedPacket(salt [32]byte) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -39,7 +43,9 @@ func DeriveForwardSalt(salt [32]byte) [32]byte {
 // Uint256ToBytes32 returns the big-endian 32-byte encoding of x.
 func Uint256ToBytes32(x *u256.Uint) [32]byte {
 	var out [32]byte
+
 	putUint256BE(out[:], x)
+
 	return out
 }
 
@@ -66,6 +72,7 @@ func DeriveSenderSalt(sender []byte, salt [32]byte) [32]byte {
 	copy(buf[64:96], salt[:])
 	binary.BigEndian.PutUint64(buf[120:128], uint64(len(sender)))
 	copy(buf[128:], sender)
+
 	return keccak256.Sum256(buf)
 }
 

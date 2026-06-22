@@ -14,6 +14,13 @@ func ProxyPkgPath() string {
 	return proxyPkgPath
 }
 
+// ProductionImplPath is the package path of the canonical v1 impl realm. Test
+// harnesses use it to enter the impl's code realm (e.g. before a privileged
+// BatchSend) so the call presents the impl as caller.
+func ProductionImplPath() string {
+	return proxyPkgPath + "/v1"
+}
+
 // AsIBCApp returns the stable App reference core routes packets to.
 func AsIBCApp() app.IApp {
 	return &App{}

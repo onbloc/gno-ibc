@@ -20,30 +20,33 @@ var (
 
 // verifyForward checks the forwarded instruction is allowed and the timeout is set, then verifies the inner instruction.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2969-L2995
-func (v *ucs03ZkgmV1) verifyForward(_ int, rlm realm, channelId types.ChannelId, sender string, funds *funds, path *u256.Uint, forward z.Forward) error {
+func (v *ucs03ZkgmV1) verifyForward(_ int, rlm realm, info MessageInfo, funds *funds, channelId types.ChannelId, forward z.Forward) error {
 	if !isAllowedForwardInstruction(forward.Instruction.Opcode) {
 		return errInvalidForwardInstruction
 	}
+
 	if forward.TimeoutTimestamp == 0 {
 		return errForwardZeroTimeout
 	}
-	return v.dispatchVerify(0, rlm, channelId, sender, funds, forward.Path, forward.Instruction)
+
+	return v.verifyInternal(0, rlm, info, funds, channelId, forward.Path, forward.Instruction)
 }
 
 // executeForward builds and dispatches the next-hop packet, recording the parent for async ack settlement.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L1392-L1497
-func (v *ucs03ZkgmV1) executeForward(_ int, rlm realm, packet types.Packet, path *u256.Uint, parentSalt [32]byte, forward z.Forward, intent bool) (types.RecvPacketResult, error) {
-	// Recv skips dispatchVerify (see impl.go Recv flow), so this opcode check is
+func (v *ucs03ZkgmV1) executeForward(_ int, rlm realm, packet types.Packet, salt [32]byte, path *u256.Uint, forward z.Forward, intent bool) (types.RecvPacketResult, error) {
+	// Recv skips verifyInternal (see impl.go Recv flow), so this opcode check is
 	// the only line of defense on receive. Do not strip as redundant with
 	// verifyForward.
 	if !isAllowedForwardInstruction(forward.Instruction.Opcode) {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), errInvalidForwardInstruction
 	}
+
 	if intent {
 		return core.NewRecvPacketResult(types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 
-	childPacket, err := buildForwardChild(packet, path, parentSalt, forward)
+	childPacket, err := buildForwardChild(packet, path, salt, forward)
 	if err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
@@ -57,29 +60,23 @@ func (v *ucs03ZkgmV1) executeForward(_ int, rlm realm, packet types.Packet, path
 	return core.NewRecvPacketResult(types.PacketStatusAsync, nil), nil
 }
 
-// acknowledgeForward dispatches the ack to the forwarded inner instruction.
-func (v *ucs03ZkgmV1) acknowledgeForward(_ int, rlm realm, packet types.Packet, path *u256.Uint, salt [32]byte, forward z.Forward, successful bool, ack []byte) error {
-	return v.dispatchAck(0, rlm, packet, forward.Path, salt, forward.Instruction, successful, ack)
-}
-
-// timeoutForward dispatches the timeout to the forwarded inner instruction.
-func (v *ucs03ZkgmV1) timeoutForward(_ int, rlm realm, packet types.Packet, path *u256.Uint, salt [32]byte, forward z.Forward) error {
-	return v.dispatchTimeout(0, rlm, packet, forward.Path, salt, forward.Instruction)
-}
-
 // handleForwardChild detects a forwarded child packet resolving on ack/timeout
 // and writes the captured parent's deferred acknowledgement through core.
 func (v *ucs03ZkgmV1) handleForwardChild(_ int, rlm realm, packet types.Packet, zp z.ZkgmPacket, ack []byte) bool {
 	if !z.IsForwardedPacket(zp.Salt) {
 		return false
 	}
+
 	key := forwardInFlightKey(packet)
+
 	parent, ok := v.store.GetInFlightPacket(key)
 	if !ok {
 		return false
 	}
+
 	v.store.RemoveInFlightPacket(0, rlm, key)
 	core.WriteAcknowledgement(cross(rlm), types.NewMsgWriteAcknowledgement(parent, ack))
+
 	return true
 }
 
@@ -103,11 +100,13 @@ func buildForwardChild(packet types.Packet, path *u256.Uint, parentSalt [32]byte
 	if nextSourceChannel == 0 {
 		return core.NewPacket(0, 0, nil, 0), errForwardMissingNextSource
 	}
+
 	if packet.DestinationChannelId != types.ChannelId(prevDestChannel) {
 		return core.NewPacket(0, 0, nil, 0), errForwardPrevDestMismatch
 	}
 
 	nextInstruction := forward.Instruction
+
 	if !continuationPath.IsZero() {
 		nextForward := z.Forward{
 			Path:             continuationPath,
@@ -132,6 +131,7 @@ func buildForwardChild(packet types.Packet, path *u256.Uint, parentSalt [32]byte
 	if err != nil {
 		return core.NewPacket(0, 0, nil, 0), err
 	}
+
 	nextPath, err := z.UpdateChannelPath(intermediate, nextSourceChannel)
 	if err != nil {
 		return core.NewPacket(0, 0, nil, 0), err
@@ -148,6 +148,7 @@ func buildForwardChild(packet types.Packet, path *u256.Uint, parentSalt [32]byte
 
 	sourceChannelId := types.ChannelId(nextSourceChannel)
 	sourceChannel := core.GetChannel(sourceChannelId)
+
 	return core.NewPacket(sourceChannelId, sourceChannel.CounterpartyChannelId, childBytes, types.Timestamp(forward.TimeoutTimestamp)), nil
 }
 

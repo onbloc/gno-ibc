@@ -79,3 +79,18 @@ func (c *coreV1) ConnectionOpenConfirm(_ int, rlm realm, msg types.MsgConnection
 
 	core.EmitConnectionOpenConfirm(msg.ConnectionId, connection.ClientId, connection.CounterpartyClientId, counterpartyConnectionId)
 }
+
+// ensureConnectionOpen returns the connection for connectionId, requiring it to
+// be Open.
+func (c *coreV1) ensureConnectionOpen(connectionId types.ConnectionId) types.Connection {
+	connection, ok := c.store.GetConnection(connectionId)
+	if !ok {
+		panic("connection " + connectionId.String() + " not found")
+	}
+
+	if connection.State != types.ConnectionStateOpen {
+		panic(core.ErrInvalidConnectionState)
+	}
+
+	return connection
+}

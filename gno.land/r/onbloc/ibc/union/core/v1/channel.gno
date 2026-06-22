@@ -9,19 +9,6 @@ import (
 // proxy entrypoint; the Force* recovery variants remain proxy admin operations.
 // Each handshake step dispatches the matching callback to the channel's app.
 
-// ensureConnectionOpen returns the connection for connectionId, requiring it to
-// be Open.
-func (c *coreV1) ensureConnectionOpen(connectionId types.ConnectionId) types.Connection {
-	connection, ok := c.store.GetConnection(connectionId)
-	if !ok {
-		panic("connection " + connectionId.String() + " not found")
-	}
-	if connection.State != types.ConnectionStateOpen {
-		panic(core.ErrInvalidConnectionState)
-	}
-	return connection
-}
-
 // ChannelOpenInit starts a channel in the Init state and notifies its app.
 func (c *coreV1) ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit) types.ChannelId {
 	relayer := rlm.Previous().Address()

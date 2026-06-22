@@ -25,7 +25,7 @@ func TestOnChannelCloseInitOnlyCore(cur realm, t *testing.T) {
 	setupChannelGate()
 	testing.SetRealm(testing.NewCodeRealm(proxyPkgPath))
 
-	uassert.AbortsContains(t, cur, "only core can channel close init", func() {
+	uassert.AbortsContains(t, cur, "ibc host only", func() {
 		AsIBCApp().OnChannelCloseInit(cross(cur), 2, address("g1relayer"))
 	})
 }

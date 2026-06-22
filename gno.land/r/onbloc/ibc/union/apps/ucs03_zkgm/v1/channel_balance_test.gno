@@ -19,9 +19,8 @@ func balanceOf(chanId types.ChannelId, path *u256.Uint, base, quote []byte) (uin
 	return bal.Uint64(), ok
 }
 
-// increaseChannelBalanceV2 accumulates deposits; a zero amount must not create
-// an entry. Each case uses a distinct base token so the shared store singleton
-// keeps cases isolated.
+// increaseChannelBalanceV2 accumulates deposits; a zero amount stores a zero entry.
+// Each case uses a distinct base token so the shared store singleton keeps cases isolated.
 func TestIncreaseChannelBalanceV2(cur realm, t *testing.T) {
 	cases := []struct {
 		name     string
@@ -31,7 +30,7 @@ func TestIncreaseChannelBalanceV2(cur realm, t *testing.T) {
 	}{
 		{"single deposit", []uint64{500}, 500, true},
 		{"accumulates deposits", []uint64{100, 250, 150}, 500, true},
-		{"zero is noop", []uint64{0}, 0, false},
+		{"zero stores zero", []uint64{0}, 0, true},
 		{"zero then real deposit", []uint64{0, 75}, 75, true},
 	}
 	v := newTestImpl()
@@ -54,8 +53,8 @@ func TestIncreaseChannelBalanceV2(cur realm, t *testing.T) {
 }
 
 // decreaseChannelBalanceV2 spends escrow: a partial spend leaves a remainder, an
-// exact spend clears the entry, an over-spend underflows, and a zero spend is a
-// noop that never touches the entry.
+// exact spend preserves a zero entry, an over-spend underflows, and a zero spend
+// on an empty balance underflows.
 func TestDecreaseChannelBalanceV2(cur realm, t *testing.T) {
 	cases := []struct {
 		name    string
@@ -66,11 +65,11 @@ func TestDecreaseChannelBalanceV2(cur realm, t *testing.T) {
 		wantSet bool
 	}{
 		{"partial leaves remainder", 500, 200, false, 300, true},
-		{"exact spend clears entry", 500, 500, false, 0, false},
+		{"exact spend preserves zero", 500, 500, false, 0, true},
 		{"overspend underflows", 500, 501, true, 500, true},
 		{"spend on empty underflows", 0, 1, true, 0, false},
 		{"zero spend is noop", 500, 0, false, 500, true},
-		{"zero spend on empty stays empty", 0, 0, false, 0, false},
+		{"zero spend on empty underflows", 0, 0, true, 0, false},
 	}
 	v := newTestImpl()
 	path := u256.Zero()

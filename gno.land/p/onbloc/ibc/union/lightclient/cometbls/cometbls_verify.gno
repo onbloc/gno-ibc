@@ -25,63 +25,64 @@ import (
 //   - the Groth16 proof must verify against the trusted next validators hash
 //
 // now is the current block time, used for the clock-drift bound.
-func (c *CometblsLightClient) verifyHeader(header *Header, now time.Time) error {
-	// Retrieve the trusted consensus state for the header's trusted height.
-	consState, found := c.getConsensusState(*header.TrustedHeight)
-	if !found {
+// Union reference:
+// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/cometbls/src/client.rs#L185-L254
+func (c *CometblsLightClient) verifyHeader(clientState *ClientState, trustedConsensusState *ConsensusState, header *Header, now time.Time) error {
+	// The untrusted (signed) header height. CometBLS carries a single revision,
+	// so heights are compared against the trusted height's revision height.
+	untrustedHeightNumber := header.SignedHeader.Height
+	trustedHeightNumber := header.TrustedHeight.RevisionHeight
+
+	if untrustedHeightNumber <= int64(trustedHeightNumber) {
 		return makeError(
-			ErrInvalidConsensus,
-			ufmt.Sprintf("could not get trusted consensus state for Header at TrustedHeight: %s", header.TrustedHeight),
+			ErrInvalidHeader,
+			ufmt.Sprintf("header height <= consensus state height (%d <= %d)", untrustedHeightNumber, trustedHeightNumber),
 		)
 	}
 
-	if c.clientState.IsExpired(consState.Timestamp, uint64(now.UnixNano())) {
+	trustedTimestamp := trustedConsensusState.Timestamp
+	// Normalize to nanoseconds to follow tendermint convention
+	untrustedTimestamp := uint64(header.GetTime().UnixNano())
+
+	if untrustedTimestamp <= trustedTimestamp {
+		return makeError(
+			ErrInvalidHeaderTimestamp,
+			ufmt.Sprintf(
+				"trusted header timestamp %d is greater than or equal to the new header timestamp %d",
+				trustedTimestamp, untrustedTimestamp,
+			),
+		)
+	}
+
+	currentBlockTime := uint64(now.UnixNano())
+	if isClientExpiredAt(trustedTimestamp, clientState.TrustingPeriod, currentBlockTime) {
 		return makeError(
 			ErrTrustingPeriodExpired,
 			ufmt.Sprintf("trusted consensus state at TrustedHeight %s has expired", header.TrustedHeight),
 		)
 	}
 
-	// The untrusted (signed) header height. CometBLS carries a single revision,
-	// so heights are compared against the trusted height's revision height.
-	signedHeight := header.SignedHeader.Height
-
-	headerTime := header.GetTime()
-
-	if consState.Timestamp >= uint64(headerTime.UnixNano()) {
-		return makeError(
-			ErrInvalidHeaderTimestamp,
-			ufmt.Sprintf(
-				"trusted header timestamp %d is greater than or equal to the new header timestamp %d",
-				consState.Timestamp, headerTime.UnixNano(),
-			),
-		)
+	maxClockDriftTimestamp, overflow := checkedAddUint64(currentBlockTime, clientState.MaxClockDrift)
+	if overflow {
+		return makeError(ErrMathOverflow)
 	}
-
-	// Assert header height is newer than the trusted consensus state height.
-	if signedHeight <= int64(header.TrustedHeight.RevisionHeight) {
+	if untrustedTimestamp >= maxClockDriftTimestamp {
 		return makeError(
 			ErrInvalidHeader,
-			ufmt.Sprintf("header height <= consensus state height (%d <= %d)", signedHeight, header.TrustedHeight.RevisionHeight),
+			ufmt.Sprintf("header time >= max drift (%d >= currentTime + %d)", untrustedTimestamp, clientState.MaxClockDrift),
 		)
 	}
 
-	if headerTime.UnixNano() >= now.UnixNano()+int64(c.clientState.MaxClockDrift) {
-		return makeError(
-			ErrInvalidHeader,
-			ufmt.Sprintf("header time >= max drift (%d >= currentTime + %d)", headerTime.UnixNano(), c.clientState.MaxClockDrift),
-		)
-	}
-
+	trustedValidatorsHash := trustedConsensusState.NextValidatorsHash
 	// For an adjacent block, the header validators hash must match the trusted
 	// next validators hash.
-	if header.SignedHeader.Height == int64(header.TrustedHeight.RevisionHeight)+1 &&
-		!bytes.Equal(header.SignedHeader.ValidatorsHash, consState.NextValidatorsHash) {
+	if untrustedHeightNumber == int64(trustedHeightNumber)+1 &&
+		!bytes.Equal(header.SignedHeader.ValidatorsHash, trustedValidatorsHash) {
 		return makeError(
 			ErrInvalidHeader,
 			ufmt.Sprintf(
 				"the validators hash %s doesn't match the trusted validators hash %s for an adjacent block",
-				hex.EncodeToString(header.SignedHeader.ValidatorsHash), hex.EncodeToString(consState.NextValidatorsHash),
+				hex.EncodeToString(header.SignedHeader.ValidatorsHash), hex.EncodeToString(trustedValidatorsHash),
 			),
 		)
 	}
@@ -90,8 +91,8 @@ func (c *CometblsLightClient) verifyHeader(header *Header, now time.Time) error 
 	// the untrusted header; the Groth16 proof attests that they did. SignedHeader
 	// is a crypto/cometblszk.LightHeader, so it feeds VerifyZKP directly.
 	if err := cometblszk.VerifyZKP(
-		c.clientState.ChainID,
-		consState.NextValidatorsHash,
+		clientState.ChainID,
+		trustedValidatorsHash,
 		*header.SignedHeader,
 		header.ZeroKnowledgeProof,
 	); err != nil {
@@ -101,33 +102,68 @@ func (c *CometblsLightClient) verifyHeader(header *Header, now time.Time) error 
 	return nil
 }
 
-// verifyMisbehaviour determines whether two conflicting headers at the same
-// height would have convinced the light client. It mirrors Union's
-// cometbls.verifyMisbehaviour (11-cometbls/misbehaviour_handle.go): both headers
-// must independently verify, and they must together constitute a fork (same
-// trusted height, differing signed headers) or a BFT time violation (Header1 is
-// not strictly older than Header2).
+func isClientExpiredAt(consensusStateTimestamp uint64, trustingPeriod uint64, now uint64) bool {
+	expiresAt, overflow := checkedAddUint64(consensusStateTimestamp, trustingPeriod)
+	if overflow {
+		return true
+	}
+	return expiresAt < now
+}
+
+func checkedAddUint64(a uint64, b uint64) (uint64, bool) {
+	sum := a + b
+	if sum < a {
+		return 0, true
+	}
+	return sum, false
+}
+
+// verifyMisbehaviour mirrors Union's cometbls.verifyMisbehaviour
+// (11-cometbls/misbehaviour_handle.go): both headers must independently verify,
+// and the pair is accepted only when it matches Union's same-height or
+// non-increasing-time conditions.
+// Union reference:
+// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/cometbls/src/client.rs#L256-L281
 func (c *CometblsLightClient) verifyMisbehaviour(misbehaviour *Misbehaviour, now time.Time) error {
+	headerA := misbehaviour.Header1
+	headerB := misbehaviour.Header2
+
+	if headerA.SignedHeader.Height < headerB.SignedHeader.Height {
+		return makeError(ErrInvalidMisbehaviourHeaderSequence)
+	}
+
 	// Regardless of the type of misbehaviour, ensure that both headers are valid
 	// and would have been accepted by the light client.
-	if err := c.verifyHeader(misbehaviour.Header1, now); err != nil {
-		return makeError(ErrInvalidMisbehaviour, "verifying Header_1 in Misbehaviour failed: "+err.Error())
+	if err := c.verifyMisbehaviourHeader("Header_1", headerA, now); err != nil {
+		return err
+	}
+	if err := c.verifyMisbehaviourHeader("Header_2", headerB, now); err != nil {
+		return err
 	}
 
-	if err := c.verifyHeader(misbehaviour.Header2, now); err != nil {
-		return makeError(ErrInvalidMisbehaviour, "verifying Header_2 in Misbehaviour failed: "+err.Error())
-	}
-
-	if misbehaviour.Header1.TrustedHeight.EQ(*misbehaviour.Header2.TrustedHeight) {
-		if signedHeadersEqual(misbehaviour.Header1.SignedHeader, misbehaviour.Header2.SignedHeader) {
-			return makeError(ErrInvalidMisbehaviour, "headers are the same")
+	if headerA.SignedHeader.Height == headerB.SignedHeader.Height {
+		if signedHeadersEqual(headerA.SignedHeader, headerB.SignedHeader) {
+			return nil
 		}
-	} else {
-		if misbehaviour.Header1.GetTime().After(misbehaviour.Header2.GetTime()) {
-			return makeError(ErrInvalidMisbehaviour, "headers are in the correct order")
-		}
+	} else if headerA.GetTime().UnixNano() <= headerB.GetTime().UnixNano() {
+		return nil
 	}
 
+	return makeError(ErrMisbehaviourNotFound)
+}
+
+func (c *CometblsLightClient) verifyMisbehaviourHeader(label string, header *Header, now time.Time) error {
+	prefix := ufmt.Sprintf("verifying %s in Misbehaviour failed: ", label)
+	consensusState, found := c.getConsensusState(*header.TrustedHeight)
+	if !found {
+		return makeError(
+			ErrInvalidMisbehaviour,
+			prefix+ufmt.Sprintf("could not get trusted consensus state for Header at TrustedHeight: %s", header.TrustedHeight),
+		)
+	}
+	if err := c.verifyHeader(c.clientState, consensusState, header, now); err != nil {
+		return makeError(ErrInvalidMisbehaviour, prefix+err.Error())
+	}
 	return nil
 }
 

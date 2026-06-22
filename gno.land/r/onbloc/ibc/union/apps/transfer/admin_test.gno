@@ -5,17 +5,27 @@ import (
 
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
+	manager "gno.land/p/onbloc/access/manager"
+	"gno.land/r/onbloc/ibc/union/access"
 )
 
 // SetHook takes a TransferHook interface and cannot be called via maketx, so
-// callers must route through an ephemeral realm. The admin case therefore tests
-// without crossing (Previous() = the user realm we set), and the non-admin
-// denial crosses so the abort propagates back through AbortsContains.
+// callers must route through an ephemeral realm. These tests call it without
+// crossing so Previous() is the user realm configured by testing.SetRealm.
 //
 // transferAdminForTest returns the empty address in unit tests because app init
 // captures OriginCaller, which is unset at import time.
 
+func transferAdminForTest() address {
+	return address("")
+}
+
+func resetAccess(cur realm, initialAdmin address) {
+	access.SetFunctionRole(cross(cur), SelectorSetHook, manager.AdminRole)
+}
+
 func TestSetHookAllowedForAdmin(cur realm, t *testing.T) {
+	resetAccess(cur, transferAdminForTest())
 	hook = nil
 	hookCaller = address("")
 
@@ -34,6 +44,7 @@ func TestSetHookAllowedForAdmin(cur realm, t *testing.T) {
 }
 
 func TestSetHookClearsWithNil(cur realm, t *testing.T) {
+	resetAccess(cur, transferAdminForTest())
 	hook = &dummyHook{addr: address("g1existing000000000000000000000000000000")}
 	hookCaller = address("g1existing000000000000000000000000000000")
 
@@ -49,6 +60,7 @@ func TestSetHookClearsWithNil(cur realm, t *testing.T) {
 }
 
 func TestSetHookInvalidAddressIsRejected(cur realm, t *testing.T) {
+	resetAccess(cur, transferAdminForTest())
 	hook = nil
 	hookCaller = address("")
 
@@ -64,13 +76,14 @@ func TestSetHookInvalidAddressIsRejected(cur realm, t *testing.T) {
 }
 
 func TestSetHookDeniedForNonAdmin(cur realm, t *testing.T) {
+	resetAccess(cur, transferAdminForTest())
 	hook = nil
 	hookCaller = address("")
 
 	testing.SetRealm(testing.NewUserRealm(address("g1notadmin0000000000000000000000000000000")))
 
 	uassert.AbortsContains(t, cur, "caller not authorized to set_hook", func(cur realm) {
-		SetHook(cross(cur), nil)
+		SetHook(cur, nil)
 	})
 
 	if hook != nil || hookCaller != (address("")) {

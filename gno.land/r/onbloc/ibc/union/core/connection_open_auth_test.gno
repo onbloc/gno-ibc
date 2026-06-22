@@ -9,25 +9,25 @@ import (
 
 func TestForceConnectionOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest(cur)
-	defer cleanup()
+	previousRole := denySelectorForTest(cur, SelectorForceConnectionAck)
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		ForceConnectionOpenAck(cur, types.NewMsgConnectionOpenAck(
+		ForceConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(
 			types.ConnectionId(1),
 			types.ConnectionId(77),
 			nil,
 			10,
 		))
 	})
+	restoreSelectorForTest(cur, SelectorForceConnectionAck, previousRole)
 }
 
 func TestForceConnectionOpenConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest(cur)
-	defer cleanup()
+	previousRole := denySelectorForTest(cur, SelectorForceConnectionConfirm)
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		ForceConnectionOpenConfirm(cur, types.NewMsgConnectionOpenConfirm(types.ConnectionId(1), nil, 10))
+		ForceConnectionOpenConfirm(cross(cur), types.NewMsgConnectionOpenConfirm(types.ConnectionId(1), nil, 10))
 	})
+	restoreSelectorForTest(cur, SelectorForceConnectionConfirm, previousRole)
 }

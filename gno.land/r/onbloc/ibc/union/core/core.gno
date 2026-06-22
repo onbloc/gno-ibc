@@ -3,6 +3,7 @@ package core
 import (
 	"gno.land/p/onbloc/ibc/union/app"
 	"gno.land/p/onbloc/ibc/union/types"
+	"gno.land/r/onbloc/ibc/union/access"
 )
 
 // SendPacket commits a packet for the caller's port. Per the ibc-union-spec the
@@ -42,7 +43,7 @@ func SendPacket(cur realm, sourceChannelId types.ChannelId, timeoutTimestamp typ
 }
 
 func PacketRecv(cur realm, msg types.MsgPacketRecv) {
-	requireCanCall(0, cur, SelectorPacketRecv)
+	access.AssertCanCall(cross(cur), SelectorPacketRecv, cur.Previous().Address())
 
 	relayer := cur.Previous().Address()
 	if len(msg.Packets) == 0 {
@@ -81,7 +82,7 @@ func PacketRecv(cur realm, msg types.MsgPacketRecv) {
 }
 
 func IntentPacketRecv(cur realm, msg types.MsgIntentPacketRecv) {
-	requireCanCall(0, cur, SelectorIntentPacketRecv)
+	access.AssertCanCall(cross(cur), SelectorIntentPacketRecv, cur.Previous().Address())
 
 	marketMaker := cur.Previous().Address()
 	if len(msg.Packets) == 0 {
@@ -122,7 +123,7 @@ func IntentPacketRecv(cur realm, msg types.MsgIntentPacketRecv) {
 }
 
 func PacketAcknowledgement(cur realm, msg types.MsgPacketAcknowledgement) {
-	requireCanCall(0, cur, SelectorPacketAck)
+	access.AssertCanCall(cross(cur), SelectorPacketAck, cur.Previous().Address())
 
 	relayer := cur.Previous().Address()
 	if len(msg.Packets) == 0 {
@@ -166,7 +167,7 @@ func PacketAcknowledgement(cur realm, msg types.MsgPacketAcknowledgement) {
 }
 
 func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
-	requireCanCall(0, cur, SelectorPacketTimeout)
+	access.AssertCanCall(cross(cur), SelectorPacketTimeout, cur.Previous().Address())
 
 	relayer := cur.Previous().Address()
 	packet := msg.Packet
@@ -206,7 +207,7 @@ func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
 }
 
 func CommitMembershipProof(cur realm, msg types.MsgCommitMembershipProof) {
-	requireCanCall(0, cur, SelectorCommitMembershipProof)
+	access.AssertCanCall(cross(cur), SelectorCommitMembershipProof, cur.Previous().Address())
 
 	verifyMembershipActive(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, msg.Path, msg.Value)
 	store.saveMembershipProof(msg.ClientId, msg.ProofHeight, msg.Path, types.Keccak(msg.Value))
@@ -215,7 +216,7 @@ func CommitMembershipProof(cur realm, msg types.MsgCommitMembershipProof) {
 }
 
 func CommitNonMembershipProof(cur realm, msg types.MsgCommitNonMembershipProof) {
-	requireCanCall(0, cur, SelectorCommitNonMembershipProof)
+	access.AssertCanCall(cross(cur), SelectorCommitNonMembershipProof, cur.Previous().Address())
 
 	c := store.getClient(msg.ClientId)
 	if c == nil {
@@ -228,7 +229,7 @@ func CommitNonMembershipProof(cur realm, msg types.MsgCommitNonMembershipProof) 
 }
 
 func BatchSend(cur realm, msg types.MsgBatchSend) {
-	requireCanCall(0, cur, SelectorBatchSend)
+	access.AssertCanCall(cross(cur), SelectorBatchSend, cur.Previous().Address())
 
 	if len(msg.Packets) < 2 {
 		panic(ErrNotEnoughPackets)
@@ -258,7 +259,7 @@ func BatchSend(cur realm, msg types.MsgBatchSend) {
 }
 
 func BatchAcks(cur realm, msg types.MsgBatchAcks) {
-	requireCanCall(0, cur, SelectorBatchAcks)
+	access.AssertCanCall(cross(cur), SelectorBatchAcks, cur.Previous().Address())
 
 	if len(msg.Packets) < 2 {
 		panic(ErrNotEnoughPackets)

@@ -2,6 +2,7 @@ package core
 
 import (
 	"gno.land/p/onbloc/ibc/union/app"
+	"gno.land/r/onbloc/ibc/union/access"
 )
 
 // RegisterApp registers an IBC application at the caller realm's package path.
@@ -16,7 +17,7 @@ func RegisterApp(cur realm, app app.IApp) {
 // privileged path is for deployment/loaders that install an app on behalf of
 // another realm.
 func RegisterAppForPort(cur realm, portId []byte, app app.IApp) {
-	requireCanCall(0, cur, SelectorRegisterPort)
+	access.AssertCanCall(cross(cur), SelectorRegisterPort, cur.Previous().Address())
 	registerAppAtPort(portId, app)
 	emitAppRegisteredEvent(portId, cur.Previous().PkgPath(), true)
 }

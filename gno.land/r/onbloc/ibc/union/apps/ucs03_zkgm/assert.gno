@@ -1,6 +1,6 @@
 package zkgm
 
-import core "gno.land/r/onbloc/ibc/union/core"
+import "gno.land/r/onbloc/ibc/union/access"
 
 // assert.gno holds the proxy's trust gates. The App receiver surface is reachable
 // only through core (assertIsIBCHost), while governance entrypoints use the app's
@@ -8,7 +8,7 @@ import core "gno.land/r/onbloc/ibc/union/core"
 // the injected store, so no separate impl-realm gate is needed here.
 
 func assertIsIBCHost(cur realm) {
-	if cur.Previous().PkgPath() != core.PackagePath() {
+	if cur.Previous().PkgPath() != access.CoreRealmPath {
 		panic("zkgm: ibc host only")
 	}
 }

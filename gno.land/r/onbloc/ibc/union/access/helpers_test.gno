@@ -1,5 +1,5 @@
 package access
 
-func ResetForTest(initialAdmin address) {
+func ResetForTest(cur realm, initialAdmin address) {
 	resetAccess(initialAdmin)
 }

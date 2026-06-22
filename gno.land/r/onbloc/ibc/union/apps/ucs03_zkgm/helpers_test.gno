@@ -7,6 +7,7 @@ import (
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	"gno.land/r/onbloc/ibc/union/access"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -14,7 +15,7 @@ import (
 // used to assert the App receiver surface delegates correctly, and the reset
 // helper that returns the proxy package state to a clean baseline between tests.
 
-var coreRealmPath = core.PackagePath()
+var coreRealmPath = access.CoreRealmPath
 
 func zkgmAdminForTest() address {
 	// Unit package init has no previous deployer realm, so cur.Previous() is the empty address.
@@ -109,21 +110,17 @@ func (d *dummyImpl) Send(_ int, rlm realm, channelId types.ChannelId, timeoutTim
 // resetZkgmForTest returns the proxy package state to a clean baseline. The new
 // upgrade model holds only the single `impl` swap pointer and the `paused` gate.
 func resetAccess(cur realm, initialAdmin address) {
-	testing.SetRealm(testing.NewUserRealm(address("")))
-	GrantRole(0, cur, manager.AdminRole, initialAdmin)
-	SetFunctionRole(0, cur, SelectorUpdateImpl, manager.AdminRole)
-	SetFunctionRole(0, cur, SelectorSetBucketConfig, manager.AdminRole)
-	SetFunctionRole(0, cur, SelectorSetRateLimitDisabled, manager.AdminRole)
-	SetFunctionRole(0, cur, SelectorPausable, manager.AdminRole)
+	access.SetFunctionRole(cross(cur), SelectorUpdateImpl, manager.AdminRole)
+	access.SetFunctionRole(cross(cur), SelectorSetBucketConfig, manager.AdminRole)
+	access.SetFunctionRole(cross(cur), SelectorSetRateLimitDisabled, manager.AdminRole)
+	access.SetFunctionRole(cross(cur), SelectorPausable, manager.AdminRole)
 	testing.SetRealm(testing.NewUserRealm(initialAdmin))
 }
 
 func resetZkgmForTest(cur realm) {
 	impl = nil
 	paused = false
-	if cur.PkgPath() == packagePath {
-		resetAccess(cur, zkgmAdminForTest())
-	}
+	resetAccess(cur, zkgmAdminForTest())
 	// Restore the opt-in rate-limit default (disabled) on the shared singleton.
 	store.rateLimitDisabled = true
 }

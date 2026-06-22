@@ -75,10 +75,10 @@ clearest construction path.
 
 In this repository, the shared Union access realm
 `gno.land/r/onbloc/ibc/union/access` owns the single `manager.State`. Core and
-app realms keep thin wrappers that route through that shared realm with their
-package path as the target. This mirrors Union's AccessManager plus
-AccessManaged split: the manager owns role/selector state, and managed
-contracts pass their own target identity when checking calls.
+app realms call that shared realm directly. This mirrors Union's AccessManager
+plus AccessManaged split: the manager owns role/selector state, and managed
+contracts cross into the manager so the manager can derive the target identity
+from `cur.Previous().PkgPath()`.
 
 Union passes `initial_admin` and `initial_authority` through instantiate or
 migrate messages. Gno realms in this repository do not have that instantiate
@@ -108,22 +108,23 @@ func configureCoreAccess(target string) {
 }
 ```
 
-Check access from the realm using the caller address extracted from the correct
-frame, usually `cur.Previous().Address()` for externally invoked realm methods.
+Check access from the managed realm by calling the shared access realm's guard.
+The managed realm passes only the selector and the caller address extracted from
+its own frame, usually `cur.Previous().Address()` for externally invoked realm
+methods. The shared access realm scopes the check to the crossing caller's
+package path.
 
 ```go
-func requireCanCall(cur realm, target string, selector manager.Selector) {
-	caller := cur.Previous().Address()
-	if !accessState.IsAuthorized(caller, target, selector) {
-		panic("unauthorized")
-	}
+func Protected(cur realm) {
+	access.AssertCanCall(cross(cur), SelectorProtected, cur.Previous().Address())
+	// protected logic
 }
 ```
 
-Management wrappers should enforce the same authorization rules as the caller
-realm wants to expose. For example, `GrantRole` should normally require
-`state.CanAdminRole(role, caller)`, while target function role changes should
-normally require `state.CanManageTarget(caller)`.
+Management should go through the shared access realm directly. `GrantRole`
+requires the caller to hold the role's admin role, while target function role
+changes require manager admin authority and apply to the crossing caller's
+package path.
 
 ## Implemented API
 

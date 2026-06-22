@@ -59,7 +59,6 @@ func TestCreateClientUnionUsesRegisteredClient(cur realm, t *testing.T) {
 		},
 	}
 	RegisterClient(cross(cur), mockType, lc)
-	GrantRole(0, cur, RelayerRole, creator)
 	testing.SetRealm(testing.NewUserRealm(creator))
 
 	CreateClient(cross(cur), types.MsgCreateClient{
@@ -174,9 +173,9 @@ func TestUpdateClientUnionRejectsLightClientUpdateError(cur realm, t *testing.T)
 func TestForceUpdateClientUnionMirrorsSubmittedState(cur realm, t *testing.T) {
 	resetStore(cur)
 	adminAddr := testutils.TestAddress("admin")
-	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	admin = adminAddr
 	resetAccess(cur, admin)
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
 
 	lc := &mockClient{
 		chainId: "union-1",

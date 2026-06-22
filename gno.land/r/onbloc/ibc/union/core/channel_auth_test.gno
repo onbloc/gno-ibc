@@ -3,107 +3,110 @@ package core
 import (
 	"testing"
 
-	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
+	manager "gno.land/p/onbloc/access/manager"
 	"gno.land/p/onbloc/ibc/union/types"
+	"gno.land/r/onbloc/ibc/union/access"
 )
 
-func setNonAdminForTest(cur realm) func() {
-	oldAdmin := admin
-	admin = testutils.TestAddress("authorized-admin")
-	resetAccess(cur, admin)
-	return func() {
-		admin = oldAdmin
-		resetAccess(cur, admin)
-	}
+const deniedRole manager.RoleId = 99
+
+func denySelectorForTest(cur realm, selector manager.Selector) manager.RoleId {
+	previousRole := access.GetFunctionRole(cross(cur), selector)
+	access.SetFunctionRole(cross(cur), selector, deniedRole)
+	return previousRole
+}
+
+func restoreSelectorForTest(cur realm, selector manager.Selector, role manager.RoleId) {
+	access.SetFunctionRole(cross(cur), selector, role)
 }
 
 func TestChannelOpenInitPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest(cur)
-	defer cleanup()
+	previousRole := denySelectorForTest(cur, SelectorChannelOpenInit)
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		ChannelOpenInit(cur, types.NewMsgChannelOpenInit(nil, nil, 1, "ics20-1", "g1msgrelayer"))
+		ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(nil, nil, 1, "ics20-1", "g1msgrelayer"))
 	})
+	restoreSelectorForTest(cur, SelectorChannelOpenInit, previousRole)
 }
 
 func TestChannelOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest(cur)
-	defer cleanup()
+	previousRole := denySelectorForTest(cur, SelectorChannelOpenTry)
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		ChannelOpenTry(cur, types.MsgChannelOpenTry{})
+		ChannelOpenTry(cross(cur), types.MsgChannelOpenTry{})
 	})
+	restoreSelectorForTest(cur, SelectorChannelOpenTry, previousRole)
 }
 
 func TestForceChannelOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest(cur)
-	defer cleanup()
+	previousRole := denySelectorForTest(cur, SelectorForceChannelTry)
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		ForceChannelOpenTry(cur, types.MsgChannelOpenTry{})
+		ForceChannelOpenTry(cross(cur), types.MsgChannelOpenTry{})
 	})
+	restoreSelectorForTest(cur, SelectorForceChannelTry, previousRole)
 }
 
 func TestChannelOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest(cur)
-	defer cleanup()
+	previousRole := denySelectorForTest(cur, SelectorChannelOpenAck)
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		ChannelOpenAck(cur, types.MsgChannelOpenAck{})
+		ChannelOpenAck(cross(cur), types.MsgChannelOpenAck{})
 	})
+	restoreSelectorForTest(cur, SelectorChannelOpenAck, previousRole)
 }
 
 func TestForceChannelOpenAckPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest(cur)
-	defer cleanup()
+	previousRole := denySelectorForTest(cur, SelectorForceChannelAck)
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		ForceChannelOpenAck(cur, types.MsgChannelOpenAck{})
+		ForceChannelOpenAck(cross(cur), types.MsgChannelOpenAck{})
 	})
+	restoreSelectorForTest(cur, SelectorForceChannelAck, previousRole)
 }
 
 func TestChannelOpenConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest(cur)
-	defer cleanup()
+	previousRole := denySelectorForTest(cur, SelectorChannelOpenConfirm)
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		ChannelOpenConfirm(cur, types.MsgChannelOpenConfirm{})
+		ChannelOpenConfirm(cross(cur), types.MsgChannelOpenConfirm{})
 	})
+	restoreSelectorForTest(cur, SelectorChannelOpenConfirm, previousRole)
 }
 
 func TestForceChannelOpenConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest(cur)
-	defer cleanup()
+	previousRole := denySelectorForTest(cur, SelectorForceChannelConfirm)
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		ForceChannelOpenConfirm(cur, types.MsgChannelOpenConfirm{})
+		ForceChannelOpenConfirm(cross(cur), types.MsgChannelOpenConfirm{})
 	})
+	restoreSelectorForTest(cur, SelectorForceChannelConfirm, previousRole)
 }
 
 func TestChannelCloseInitPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest(cur)
-	defer cleanup()
+	previousRole := denySelectorForTest(cur, SelectorChannelCloseInit)
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		ChannelCloseInit(cur, types.MsgChannelCloseInit{})
+		ChannelCloseInit(cross(cur), types.MsgChannelCloseInit{})
 	})
+	restoreSelectorForTest(cur, SelectorChannelCloseInit, previousRole)
 }
 
 func TestChannelCloseConfirmPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest(cur)
-	defer cleanup()
+	previousRole := denySelectorForTest(cur, SelectorChannelCloseConfirm)
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		ChannelCloseConfirm(cur, types.MsgChannelCloseConfirm{})
+		ChannelCloseConfirm(cross(cur), types.MsgChannelCloseConfirm{})
 	})
+	restoreSelectorForTest(cur, SelectorChannelCloseConfirm, previousRole)
 }

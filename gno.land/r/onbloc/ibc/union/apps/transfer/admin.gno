@@ -1,11 +1,15 @@
 package transfer
 
-import "chain"
+import (
+	"chain"
+
+	"gno.land/r/onbloc/ibc/union/access"
+)
 
 // SetHook registers h as the active recv hook. The hook's Address() is
 // automatically authorized to call Send(). Admin-only. Pass nil to clear.
 func SetHook(cur realm, h TransferHook) {
-	requireCanCall(0, cur, SelectorSetHook)
+	access.AssertCanCall(cross(cur), SelectorSetHook, cur.Previous().Address())
 	if h != nil && !h.Address().IsValid() {
 		panic("transfer: hook address is invalid")
 	}

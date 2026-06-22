@@ -2,6 +2,7 @@ package core
 
 import (
 	"gno.land/p/onbloc/ibc/union/types"
+	"gno.land/r/onbloc/ibc/union/access"
 )
 
 func NewConnection(state types.ConnectionState, clientId, counterpartyClientId types.ClientId, counterpartyConnectionId types.ConnectionId) types.Connection {
@@ -9,7 +10,7 @@ func NewConnection(state types.ConnectionState, clientId, counterpartyClientId t
 }
 
 func ConnectionOpenInit(cur realm, msg types.MsgConnectionOpenInit) {
-	requireCanCall(0, cur, SelectorConnectionOpenInit)
+	access.AssertCanCall(cross(cur), SelectorConnectionOpenInit, cur.Previous().Address())
 
 	connectionId := store.nextConnectionId()
 
@@ -20,12 +21,12 @@ func ConnectionOpenInit(cur realm, msg types.MsgConnectionOpenInit) {
 }
 
 func ConnectionOpenTry(cur realm, msg types.MsgConnectionOpenTry) {
-	requireCanCall(0, cur, SelectorConnectionOpenTry)
+	access.AssertCanCall(cross(cur), SelectorConnectionOpenTry, cur.Previous().Address())
 	connectionOpenTry(msg, true)
 }
 
 func ForceConnectionOpenTry(cur realm, msg types.MsgConnectionOpenTry) {
-	requireCanCall(0, cur, SelectorForceConnectionTry)
+	access.AssertCanCall(cross(cur), SelectorForceConnectionTry, cur.Previous().Address())
 	connectionOpenTry(msg, false)
 }
 
@@ -47,12 +48,12 @@ func connectionOpenTry(msg types.MsgConnectionOpenTry, verify bool) {
 }
 
 func ConnectionOpenAck(cur realm, msg types.MsgConnectionOpenAck) {
-	requireCanCall(0, cur, SelectorConnectionOpenAck)
+	access.AssertCanCall(cross(cur), SelectorConnectionOpenAck, cur.Previous().Address())
 	connectionOpenAck(msg, true)
 }
 
 func ForceConnectionOpenAck(cur realm, msg types.MsgConnectionOpenAck) {
-	requireCanCall(0, cur, SelectorForceConnectionAck)
+	access.AssertCanCall(cross(cur), SelectorForceConnectionAck, cur.Previous().Address())
 	connectionOpenAck(msg, false)
 }
 
@@ -80,12 +81,12 @@ func connectionOpenAck(msg types.MsgConnectionOpenAck, verify bool) {
 }
 
 func ConnectionOpenConfirm(cur realm, msg types.MsgConnectionOpenConfirm) {
-	requireCanCall(0, cur, SelectorConnectionOpenConfirm)
+	access.AssertCanCall(cross(cur), SelectorConnectionOpenConfirm, cur.Previous().Address())
 	connectionOpenConfirm(msg, true)
 }
 
 func ForceConnectionOpenConfirm(cur realm, msg types.MsgConnectionOpenConfirm) {
-	requireCanCall(0, cur, SelectorForceConnectionConfirm)
+	access.AssertCanCall(cross(cur), SelectorForceConnectionConfirm, cur.Previous().Address())
 	connectionOpenConfirm(msg, false)
 }
 

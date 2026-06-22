@@ -8,6 +8,7 @@ import (
 	"gno.land/p/nt/uassert/v0"
 	manager "gno.land/p/onbloc/access/manager"
 	"gno.land/p/onbloc/ibc/union/types"
+	"gno.land/r/onbloc/ibc/union/access"
 )
 
 // --- Helpers ---
@@ -21,15 +22,42 @@ const (
 var admin address
 
 func resetAccess(cur realm, initialAdmin address) {
-	testing.SetRealm(testing.NewUserRealm(address("")))
-	GrantRole(0, cur, manager.AdminRole, initialAdmin)
-	GrantRole(0, cur, RelayerRole, initialAdmin)
-	SetFunctionRole(0, cur, SelectorRegisterClient, manager.AdminRole)
-	SetFunctionRole(0, cur, SelectorForceUpdateClient, manager.AdminRole)
-	SetFunctionRole(0, cur, SelectorCommitMembershipProof, manager.AdminRole)
-	SetFunctionRole(0, cur, SelectorCommitNonMembershipProof, manager.AdminRole)
-	SetFunctionRole(0, cur, SelectorRegisterPort, manager.AdminRole)
+	access.SetFunctionRoles(cross(cur), protectedSelectorsForTest(), manager.PublicRole)
 	testing.SetRealm(testing.NewUserRealm(initialAdmin))
+}
+
+func protectedSelectorsForTest() []manager.Selector {
+	return []manager.Selector{
+		SelectorRegisterClient,
+		SelectorCreateClient,
+		SelectorUpdateClient,
+		SelectorForceUpdateClient,
+		SelectorConnectionOpenInit,
+		SelectorConnectionOpenTry,
+		SelectorConnectionOpenAck,
+		SelectorConnectionOpenConfirm,
+		SelectorForceConnectionTry,
+		SelectorForceConnectionAck,
+		SelectorForceConnectionConfirm,
+		SelectorChannelOpenInit,
+		SelectorChannelOpenTry,
+		SelectorChannelOpenAck,
+		SelectorChannelOpenConfirm,
+		SelectorForceChannelTry,
+		SelectorForceChannelAck,
+		SelectorForceChannelConfirm,
+		SelectorChannelCloseInit,
+		SelectorChannelCloseConfirm,
+		SelectorPacketRecv,
+		SelectorIntentPacketRecv,
+		SelectorPacketAck,
+		SelectorPacketTimeout,
+		SelectorCommitMembershipProof,
+		SelectorCommitNonMembershipProof,
+		SelectorBatchSend,
+		SelectorBatchAcks,
+		SelectorRegisterPort,
+	}
 }
 
 func resetStore(cur realm) {
@@ -432,7 +460,6 @@ func TestCreateClientBuildsAndStoresObject(cur realm, t *testing.T) {
 	mc := &mockClient{chainId: "union-1", height: types.NewHeight(100)}
 
 	RegisterClient(cross(cur), mockType, mc)
-	GrantRole(0, cur, RelayerRole, creatorAddr)
 	testing.SetRealm(testing.NewUserRealm(creatorAddr))
 	CreateClient(cross(cur), types.NewMsgCreateClient(mockType, []byte("client-state"), []byte("consensus-state")))
 	clientId := types.ClientId(1)
@@ -999,13 +1026,12 @@ func TestBatchAcksRejectsAlreadyAckedPacket(cur realm, t *testing.T) {
 
 func TestRestrictedPacketEntrypointsRejectNonAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	oldAdmin := admin
-	admin = testutils.TestAddress("non-admin-sentinel")
-	resetAccess(cur, admin)
-	defer func() {
-		admin = oldAdmin
-		resetAccess(cur, admin)
-	}()
+	packetRecvRole := denySelectorForTest(cur, SelectorPacketRecv)
+	intentPacketRecvRole := denySelectorForTest(cur, SelectorIntentPacketRecv)
+	packetAckRole := denySelectorForTest(cur, SelectorPacketAck)
+	packetTimeoutRole := denySelectorForTest(cur, SelectorPacketTimeout)
+	batchSendRole := denySelectorForTest(cur, SelectorBatchSend)
+	batchAcksRole := denySelectorForTest(cur, SelectorBatchAcks)
 
 	uassert.AbortsContains(t, cur, "caller not authorized to packet_recv", func(cur realm) {
 		PacketRecv(cross(cur), types.MsgPacketRecv{})
@@ -1025,6 +1051,12 @@ func TestRestrictedPacketEntrypointsRejectNonAdmin(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "caller not authorized to batch_acks", func(cur realm) {
 		BatchAcks(cross(cur), types.MsgBatchAcks{})
 	})
+	restoreSelectorForTest(cur, SelectorPacketRecv, packetRecvRole)
+	restoreSelectorForTest(cur, SelectorIntentPacketRecv, intentPacketRecvRole)
+	restoreSelectorForTest(cur, SelectorPacketAck, packetAckRole)
+	restoreSelectorForTest(cur, SelectorPacketTimeout, packetTimeoutRole)
+	restoreSelectorForTest(cur, SelectorBatchSend, batchSendRole)
+	restoreSelectorForTest(cur, SelectorBatchAcks, batchAcksRole)
 }
 
 func TestPacketReceiptLifecycle(cur realm, t *testing.T) {
@@ -1220,21 +1252,16 @@ func TestGetChannelOwnerPanicsWhenMissing(cur realm, t *testing.T) {
 
 func TestRegisterAppRejectsPortSquatting(cur realm, t *testing.T) {
 	resetStore(cur)
-	oldAdmin := admin
-	admin = "gno1authorized"
-	resetAccess(cur, admin)
-	defer func() {
-		admin = oldAdmin
-		resetAccess(cur, admin)
-	}()
+	previousRole := denySelectorForTest(cur, SelectorRegisterPort)
 	portId := types.Bytes("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm")
 
 	uassert.AbortsContains(t, cur, "caller not authorized to register_port", func(cur realm) {
-		RegisterAppForPort(cur, portId, &mockApp{})
+		RegisterAppForPort(cross(cur), portId, &mockApp{})
 	})
 	if HasApp(portId) {
 		t.Fatal("unauthorized RegisterApp must not reserve a foreign port")
 	}
+	restoreSelectorForTest(cur, SelectorRegisterPort, previousRole)
 }
 
 func TestRegisterAppUsesCallerPackagePath(cur realm, t *testing.T) {
@@ -2016,9 +2043,9 @@ func TestGetStatusReturnsUnknownForMissingClient(cur realm, t *testing.T) {
 func TestForceUpdateClientReinitializesSubmittedState(cur realm, t *testing.T) {
 	resetStore(cur)
 	adminAddr := testutils.TestAddress("admin")
-	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	admin = adminAddr
 	resetAccess(cur, admin)
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
 
 	mc := &mockClient{height: types.NewHeight(0)}
 	RegisterClient(cross(cur), mockType, mc)
@@ -2041,16 +2068,12 @@ func TestForceUpdateClientReinitializesSubmittedState(cur realm, t *testing.T) {
 
 func TestForceUpdateClientPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	admin = "gno1authorized"
-	resetAccess(cur, admin)
-	defer func() {
-		admin = ""
-		resetAccess(cur, admin)
-	}()
+	previousRole := denySelectorForTest(cur, SelectorForceUpdateClient)
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		ForceUpdateClient(cur, types.NewMsgForceUpdateClient(types.ClientId(0), nil, nil))
+		ForceUpdateClient(cross(cur), types.NewMsgForceUpdateClient(types.ClientId(0), nil, nil))
 	})
+	restoreSelectorForTest(cur, SelectorForceUpdateClient, previousRole)
 }
 
 // --- Integration: channel close ---

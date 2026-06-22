@@ -2,6 +2,8 @@ package access
 
 import manager "gno.land/p/onbloc/access/manager"
 
+const CoreRealmPath = "gno.land/r/onbloc/ibc/union/core"
+
 func init(cur realm) {
 	resetAccess(cur.Previous().Address())
 }
@@ -17,7 +19,7 @@ func resetAccess(initialAdmin address) {
 }
 
 func applyUnionDeployerRoleSetup() {
-	accessState.SetTargetFunctionRoles(CoreTarget, unionDeployerRelayerSelectors(), RelayerRole)
+	accessState.SetTargetFunctionRoles(CoreRealmPath, unionDeployerRelayerSelectors(), RelayerRole)
 }
 
 // Union reference:

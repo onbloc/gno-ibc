@@ -3,7 +3,6 @@ package core
 import (
 	"testing"
 
-	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
 	"gno.land/p/onbloc/ibc/union/types"
 )
@@ -14,7 +13,6 @@ func setAdminForTest(cur realm) func() {
 	resetAccess(cur, admin)
 	return func() {
 		admin = oldAdmin
-		resetAccess(cur, admin)
 	}
 }
 
@@ -238,16 +236,10 @@ func TestForceConnectionOpenConfirmBypassesProofVerification(cur realm, t *testi
 
 func TestForceConnectionOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	oldAdmin := admin
-	admin = testutils.TestAddress("authorized-admin")
-	resetAccess(cur, admin)
-	defer func() {
-		admin = oldAdmin
-		resetAccess(cur, admin)
-	}()
+	previousRole := denySelectorForTest(cur, SelectorForceConnectionTry)
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		ForceConnectionOpenTry(cur, types.NewMsgConnectionOpenTry(
+		ForceConnectionOpenTry(cross(cur), types.NewMsgConnectionOpenTry(
 			types.ClientId(1),
 			types.ClientId(99),
 			types.ConnectionId(77),
@@ -255,4 +247,5 @@ func TestForceConnectionOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.
 			10,
 		))
 	})
+	restoreSelectorForTest(cur, SelectorForceConnectionTry, previousRole)
 }

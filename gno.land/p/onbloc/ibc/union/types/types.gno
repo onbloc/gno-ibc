@@ -32,7 +32,8 @@ func (bz Bytes) String() string {
 func (bz Bytes) Bytes() []byte {
 	out := make([]byte, len(bz))
 	copy(out, bz)
-	return []byte(out)
+
+	return out
 }
 
 type H256 [32]byte

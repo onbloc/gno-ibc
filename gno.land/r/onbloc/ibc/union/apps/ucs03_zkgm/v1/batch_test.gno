@@ -160,6 +160,10 @@ func TestTimeoutBatchTokenOrderChildrenRefund(cur realm, t *testing.T) {
 	orderB := batchRefundOrder("timeout-b", "ibc/batch-timeout-b", "quote-b", 17)
 	v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount)
 	v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount)
+	// Escrow the wrapped vouchers in the proxy so the timeout refund can transfer
+	// them back to each sender (settleEscrowedV2 moves ibc/ vouchers out of escrow).
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "", 0, cur.Address().String(), orderA.BaseAmount))
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "", 0, cur.Address().String(), orderB.BaseAmount))
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(orderA),
 		batchMustOrderInstruction(orderB),

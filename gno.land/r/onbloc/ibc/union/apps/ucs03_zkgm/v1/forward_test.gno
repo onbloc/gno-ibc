@@ -173,6 +173,9 @@ func TestAcknowledgeForwardWithTokenOrderChildRefundsOnFailure(cur realm, t *tes
 	}
 	path := forwardPath(1, 2)
 	v.increaseChannelBalanceV2(0, cur, types.ChannelId(3), path, order.BaseToken, order.QuoteToken, order.BaseAmount)
+	// Escrow the wrapped voucher in the proxy so the failure refund can transfer it
+	// back to the sender (settleEscrowedV2 moves ibc/ vouchers out of escrow).
+	uassert.NoError(t, v.mintVoucher(0, cur, string(order.BaseToken), [32]byte{}, "", "", 0, cur.Address().String(), order.BaseAmount))
 
 	err := v.acknowledgeForward(0, cur, core.NewPacket(types.ChannelId(3), types.ChannelId(4), nil, 0), u256.Zero(), [32]byte{}, z.Forward{
 		Path:        path,

@@ -11,6 +11,7 @@ const RelayerRole manager.RoleId = 1
 
 const (
 	selectorGrantRole             manager.Selector = "grant_role"
+	selectorLabelRole             manager.Selector = "label_role"
 	selectorRevokeRole            manager.Selector = "revoke_role"
 	selectorSetTargetFunctionRole manager.Selector = "set_target_function_role"
 )
@@ -25,15 +26,20 @@ func RevokeRole(cur realm, role manager.RoleId, account address) {
 	revokeRoleUnchecked(role, account)
 }
 
+func LabelRole(cur realm, role manager.RoleId, label string) {
+	requireManagerAdmin(cur, selectorLabelRole)
+	accessState.LabelRole(role, label)
+}
+
 func SetFunctionRole(cur realm, selector manager.Selector, role manager.RoleId) {
 	target := cur.Previous().PkgPath()
-	requireCanManageTarget(cur, target, selectorSetTargetFunctionRole)
+	requireManagerAdmin(cur, selectorSetTargetFunctionRole)
 	accessState.SetTargetFunctionRole(target, selector, role)
 }
 
 func SetFunctionRoles(cur realm, selectors []manager.Selector, role manager.RoleId) {
 	target := cur.Previous().PkgPath()
-	requireCanManageTarget(cur, target, selectorSetTargetFunctionRole)
+	requireManagerAdmin(cur, selectorSetTargetFunctionRole)
 	accessState.SetTargetFunctionRoles(target, selectors, role)
 }
 
@@ -49,29 +55,6 @@ func HasRole(cur realm, role manager.RoleId, account address) bool {
 func CanCall(cur realm, selector manager.Selector, caller address) bool {
 	target := cur.Previous().PkgPath()
 	return accessState.IsAuthorized(caller, target, selector)
-}
-
-func requireCanManageTarget(cur realm, target string, action manager.Selector) {
-	if target != "" {
-		return
-	}
-	requireManagerAdminForCaller(cur.Previous().Address(), action)
-}
-
-func requireManagerAdminForCaller(caller address, action manager.Selector) {
-	if !accessState.CanManageTarget(caller).Immediate {
-		panic("caller not authorized to " + string(action) + ": unauthorized")
-	}
-}
-
-func requireRoleAdmin(cur realm, role manager.RoleId, action manager.Selector) {
-	requireRoleAdminForCaller(cur.Previous().Address(), role, action)
-}
-
-func requireRoleAdminForCaller(caller address, role manager.RoleId, action manager.Selector) {
-	if !accessState.CanAdminRole(role, caller).Immediate {
-		panic("caller not authorized to " + string(action) + ": unauthorized")
-	}
 }
 
 func grantRoleUnchecked(role manager.RoleId, account address) {

@@ -71,10 +71,27 @@ func TestSetFunctionRoleRejectsNonAdmin(cur realm, t *testing.T) {
 	}
 }
 
+func TestLabelRoleRequiresManagerAdmin(cur realm, t *testing.T) {
+	admin := testutils.TestAddress("access-admin")
+	caller := testutils.TestAddress("access-non-admin")
+	ResetForTest(cur, admin)
+
+	testing.SetRealm(testing.NewUserRealm(admin))
+	LabelRole(cross(cur), RelayerRole, "RELAYER")
+
+	testing.SetRealm(testing.NewUserRealm(caller))
+	uassert.AbortsContains(t, cur, "caller not authorized to label_role", func(cur realm) {
+		LabelRole(cross(cur), RelayerRole, "RELAYER")
+	})
+}
+
 func TestUnionDeployerRelayerSelectorSetup(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	ResetForTest(cur, admin)
 
+	if HasRole(cur, RelayerRole, admin) {
+		t.Fatal("initial admin must not receive relayer role during access-manager bootstrap")
+	}
 	for _, selector := range types.RelayerSelectors() {
 		if accessState.GetTargetFunctionRole(CoreRealmPath, selector) != RelayerRole {
 			t.Fatalf("%s must be initialized with relayer role", selector)

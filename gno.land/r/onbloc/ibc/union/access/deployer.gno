@@ -16,8 +16,17 @@ func init(cur realm) {
 // this realm applies that setup during init.
 func resetAccess(initialAdmin address) {
 	accessState = manager.NewState()
+
+	// Mirrors initial admin bootstrap only:
+	// OZ AccessManager constructor:
+	// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v5.6.1/contracts/access/manager/AccessManager.sol#L133-L136
+	// Union access-manager init:
+	// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/lib.rs#L148-L154
+	//
+	// RELAYER membership is separate deployer policy in Union and is granted by
+	// GrantRole, not by AccessManager initialization:
+	// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L1143-L1152
 	grantRoleUnchecked(manager.AdminRole, initialAdmin)
-	grantRoleUnchecked(RelayerRole, initialAdmin)
 	setupRoles()
 }
 
@@ -25,4 +34,8 @@ func resetAccess(initialAdmin address) {
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L1779
 func setupRoles() {
 	accessState.SetTargetFunctionRoles(CoreRealmPath, types.RelayerSelectors(), RelayerRole)
+	// Union deployer labels all production roles. We only bootstrap RELAYER for
+	// now; PAUSER/UNPAUSER/RATE_LIMITER are added when their roles are adopted.
+	// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L1871-L1908
+	accessState.LabelRole(RelayerRole, "RELAYER")
 }

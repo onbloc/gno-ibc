@@ -5,7 +5,7 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-// query.gno implements the read-only IQuery surface. Results read the injected
+// query.gno implements the read-only ICoreGetter surface. Results read the injected
 // store / light client; missing state is signalled by the bool return.
 
 // GetStatus returns the client's status, or StatusUnknown when missing.

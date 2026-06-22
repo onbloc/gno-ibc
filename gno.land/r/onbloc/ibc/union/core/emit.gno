@@ -9,7 +9,7 @@ import (
 // emit.gno exposes the host event emitters the injected impl calls so that
 // events are emitted from the core (proxy) realm, keeping the IBC host as the
 // stable event source across impl upgrades. Mirrors EmitRecvError used by the
-// ucs03_zkgm impl.
+// ucs03_zkgm getImpl().
 
 // EmitCreateClient emits the CreateClient host event.
 func EmitCreateClient(clientId types.ClientId, clientType types.ClientType) {

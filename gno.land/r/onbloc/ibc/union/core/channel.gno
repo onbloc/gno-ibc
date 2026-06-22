@@ -9,13 +9,13 @@ import (
 func ChannelOpenInit(cur realm, msg types.MsgChannelOpenInit) types.ChannelId {
 	requireAdmin(cur, "ChannelOpenInit")
 	runtime.AssertOriginCall()
-	return impl.ChannelOpenInit(0, cur, msg)
+	return getImpl().ChannelOpenInit(0, cur, msg)
 }
 
 func ChannelOpenTry(cur realm, msg types.MsgChannelOpenTry) types.ChannelId {
 	requireAdmin(cur, "ChannelOpenTry")
 	runtime.AssertOriginCall()
-	return impl.ChannelOpenTry(0, cur, msg)
+	return getImpl().ChannelOpenTry(0, cur, msg)
 }
 
 func ForceChannelOpenTry(cur realm, msg types.MsgChannelOpenTry) types.ChannelId {
@@ -59,7 +59,7 @@ func channelOpenTry(cur realm, msg types.MsgChannelOpenTry, verify bool) types.C
 func ChannelOpenAck(cur realm, msg types.MsgChannelOpenAck) {
 	requireAdmin(cur, "ChannelOpenAck")
 	runtime.AssertOriginCall()
-	impl.ChannelOpenAck(0, cur, msg)
+	getImpl().ChannelOpenAck(0, cur, msg)
 }
 
 func ForceChannelOpenAck(cur realm, msg types.MsgChannelOpenAck) {
@@ -102,7 +102,7 @@ func channelOpenAck(cur realm, msg types.MsgChannelOpenAck, verify bool) {
 func ChannelOpenConfirm(cur realm, msg types.MsgChannelOpenConfirm) {
 	requireAdmin(cur, "ChannelOpenConfirm")
 	runtime.AssertOriginCall()
-	impl.ChannelOpenConfirm(0, cur, msg)
+	getImpl().ChannelOpenConfirm(0, cur, msg)
 }
 
 func ForceChannelOpenConfirm(cur realm, msg types.MsgChannelOpenConfirm) {
@@ -146,13 +146,13 @@ func channelOpenConfirm(cur realm, msg types.MsgChannelOpenConfirm, verify bool)
 func ChannelCloseInit(cur realm, msg types.MsgChannelCloseInit) {
 	requireAdmin(cur, "ChannelCloseInit")
 	runtime.AssertOriginCall()
-	impl.ChannelCloseInit(0, cur, msg)
+	getImpl().ChannelCloseInit(0, cur, msg)
 }
 
 func ChannelCloseConfirm(cur realm, msg types.MsgChannelCloseConfirm) {
 	requireAdmin(cur, "ChannelCloseConfirm")
 	runtime.AssertOriginCall()
-	impl.ChannelCloseConfirm(0, cur, msg)
+	getImpl().ChannelCloseConfirm(0, cur, msg)
 }
 
 func QueryChannel(channelId types.ChannelId) string {

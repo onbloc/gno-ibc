@@ -9,7 +9,7 @@ import (
 // types.gno declares the upgradeable-proxy contracts for the IBC host, mirroring
 // the apps/ucs03_zkgm split. core is the proxy: it owns the stable identity
 // (admin, package address/path), the Store, and the app registry, and delegates
-// its logic to the installed impl.
+// its logic to the installed getImpl().
 //
 // ICore is the swappable logic surface: it carries every non-admin entrypoint
 // (client, connection, channel, packet, app registration). The admin/recovery
@@ -20,10 +20,6 @@ import (
 // Migration is incremental: the client subsystem is implemented in core/v1; the
 // remaining methods are present on ICore and stubbed in the impl until migrated.
 type ICore interface {
-	// SetStore injects the proxy-owned store. UpdateImpl calls it at install time
-	// so the store stays private to the proxy (no public store getter).
-	SetStore(_ int, rlm realm, store IStore)
-
 	// --- Client ---
 	CreateClient(_ int, rlm realm, clientType types.ClientType, lc lightclient.Interface) types.ClientId
 	UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) types.Height
@@ -59,15 +55,15 @@ type ICore interface {
 	RegisterApp(_ int, rlm realm, app app.IApp)
 
 	// Read-only relayer/tooling query surface.
-	IQuery
+	ICoreGetter
 }
 
-// IQuery is the read-only query surface, implemented by the impl and exposed by
+// ICoreGetter is the read-only query surface, implemented by the impl and exposed by
 // the proxy's getters.gno. It mirrors union's relayer-facing get queries; results
 // for missing state are signalled by the bool return (no panic). The best-effort
 // methods (GetRegisteredClientType, GetClientImpl, GetChannels) have no direct
 // gno equivalent — see getters.gno for the adaptation notes.
-type IQuery interface {
+type ICoreGetter interface {
 	GetStatus(clientId types.ClientId) types.Status
 	GetClientType(clientId types.ClientId) (types.ClientType, bool)
 	GetClientImpl(clientId types.ClientId) (string, bool)
@@ -83,7 +79,7 @@ type IQuery interface {
 	GetBatchReceiptsCommitment(channelId types.ChannelId, batchHash types.H256) (types.H256, bool)
 }
 
-// IStore is the proxy-owned persistent state injected into the impl. Setters take
+// IStore is the proxy-owned persistent state injected into the getImpl(). Setters take
 // the borrow-rule (_ int, rlm realm, ...) form; getters are plain. The nested
 // per-client structure (consensus/connection/channel/batch trees, chain-param
 // commitment mirror) stays private to the Store — the impl operates by id, so the
@@ -123,7 +119,7 @@ type IStore interface {
 	CommitPacket(_ int, rlm realm, packet types.Packet)
 	// SetPacketAcknowledged flips a packet's source commitment to the acknowledged
 	// marker. The acknowledge/timeout state machine (the read-check that the
-	// commitment exists and is not already acknowledged) lives in the impl.
+	// commitment exists and is not already acknowledged) lives in the getImpl().
 	SetPacketAcknowledged(_ int, rlm realm, packet types.Packet)
 
 	// --- Packet receipt / acknowledgement (destination side) ---

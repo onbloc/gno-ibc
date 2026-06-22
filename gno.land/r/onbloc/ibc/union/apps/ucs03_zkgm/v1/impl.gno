@@ -69,7 +69,9 @@ func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relaye
 }
 
 // OnIntentRecvPacket executes the market-maker fast path. Only-maker outcomes
-// revert the intent tx so proven recv can proceed.
+// abort the intent tx so proven recv can proceed instead. This is also the
+// explicit stop point for market-maker fills that require unsupported native
+// maker funding.
 func (v *ucs03ZkgmV1) OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
 	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
 	if err != nil {
@@ -82,6 +84,9 @@ func (v *ucs03ZkgmV1) OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, 
 		return failureResult(universalErrorAck())
 	}
 	if isOnlyMakerAck(res.Acknowledgement) {
+		// Intent recv must not silently succeed without a maker fill. Panicking
+		// preserves the proven recv fallback path and makes unsupported native
+		// market-maker funding fail explicitly until funds plumbing is added.
 		panic("zkgm: only maker")
 	}
 	return res
@@ -96,7 +101,12 @@ func (v *ucs03ZkgmV1) OnAcknowledgementPacket(_ int, rlm realm, packet types.Pac
 	if v.handleForwardChild(0, rlm, packet, zp, acknowledgement) {
 		return
 	}
-	if err := v.dispatchAck(0, rlm, packet, zp.Path, zp.Salt, zp.Instruction, acknowledgement); err != nil {
+	outerAck, err := z.DecodeAck(acknowledgement)
+	if err != nil {
+		panic(err.Error())
+	}
+	successful := outerAck.Tag != nil && outerAck.Tag.Eq(tagAckSuccess())
+	if err := v.dispatchAck(0, rlm, packet, zp.Path, zp.Salt, zp.Instruction, successful, outerAck.InnerAck); err != nil {
 		panic(err.Error())
 	}
 }
@@ -124,7 +134,7 @@ func (v *ucs03ZkgmV1) Send(_ int, rlm realm, channelId types.ChannelId, timeoutT
 	// the impl no longer receives it; wiring the escrow envelope from the proxy
 	// is the open migration item (see VOUCHER_ANALYSIS.md / migration plan).
 	funds := newFunds(parseCoins(""))
-	if err := v.dispatchVerify(0, rlm, channelId, sender, funds, u256.Zero(), salt, instruction); err != nil {
+	if err := v.dispatchVerify(0, rlm, channelId, sender, funds, u256.Zero(), instruction); err != nil {
 		panic(err)
 	}
 	if err := funds.assertEmpty(); err != nil {

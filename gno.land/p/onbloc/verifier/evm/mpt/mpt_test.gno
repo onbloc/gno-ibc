@@ -98,6 +98,7 @@ func TestRejectsBadRootAndMissingHashedChild(t *testing.T) {
 	value := bytes.Repeat([]byte{0x77}, 64)
 	leaf := node(leafPath([]byte{0x0b}), rlp.EncodeBytes(value))
 	leafHash := hash(leaf)
+	wrongLeaf := node(leafPath([]byte{0x0b}), rlp.EncodeBytes([]byte("wrong")))
 
 	children := emptyBranch()
 	children[0x0a] = rlp.EncodeBytes(leafHash[:])
@@ -112,6 +113,9 @@ func TestRejectsBadRootAndMissingHashedChild(t *testing.T) {
 	}
 	if err := Verify(root[:], []byte{0xab}, value, [][]byte{branch}); err != ErrEmptyProof {
 		t.Fatalf("missing child: got %v want %v", err, ErrEmptyProof)
+	}
+	if err := Verify(root[:], []byte{0xab}, value, [][]byte{branch, wrongLeaf}); err != ErrInvalidReference {
+		t.Fatalf("hashed child mismatch: got %v want %v", err, ErrInvalidReference)
 	}
 	if err := Verify(root[:], []byte{0xab}, value, [][]byte{branch, leaf, leaf}); err != ErrUnusedProof {
 		t.Fatalf("unused proof: got %v want %v", err, ErrUnusedProof)

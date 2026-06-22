@@ -7,19 +7,22 @@ import (
 )
 
 func TestRejectInvalidClientStateOffsets(t *testing.T) {
-	bz := mustHex(
-		"00000000000000000000000000000000000000000000000000000000000000e0" +
-			"0000000000000000000000000000000000000000000000000000000000000001" +
-			"0000000000000000000000000000000000000000000000000000000000000001" +
-			"00000000000000000000000000000000000000000000000000000000007e36fd" +
-			"0000000000000000000000000000000000000000000000000000000000010000" +
-			"0000000000000000000000000000000000000000000000000000000000000020" +
-			"0000000000000000000000000000000000000000000000000000000000000040" +
-			"0000000000000000000000000000000000000000000000000000000000000008" +
-			"3131313535313131000000000000000000000000000000000000000000000000",
-	)
-	if _, err := DecodeClientState(bz); err == nil {
-		t.Fatalf("DecodeClientState accepted uint16 overflow")
+	tests := []struct {
+		name    string
+		offsets []uint64
+	}{
+		{name: "timestamp offset", offsets: []uint64{0x10000, 0x20, 0x40}},
+		{name: "state root offset", offsets: []uint64{0x10, 0x10000, 0x40}},
+		{name: "storage root offset", offsets: []uint64{0x10, 0x20, 0x10000}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bz := mustClientStateWithOffsets(tt.offsets[0], tt.offsets[1], tt.offsets[2])
+			if _, err := DecodeClientState(bz); err == nil {
+				t.Fatalf("DecodeClientState accepted uint16 overflow")
+			}
+		})
 	}
 }
 
@@ -69,4 +72,18 @@ func word32(v uint64) string {
 	out[30] = byte(v >> 8)
 	out[31] = byte(v)
 	return hex.EncodeToString(out)
+}
+
+func mustClientStateWithOffsets(timestampOffset, stateRootOffset, storageRootOffset uint64) []byte {
+	return mustHex(
+		word32(0xe0) +
+			word32(1) +
+			word32(1) +
+			word32(0x7e36fd) +
+			word32(timestampOffset) +
+			word32(stateRootOffset) +
+			word32(storageRootOffset) +
+			word32(8) +
+			"3131313535313131000000000000000000000000000000000000000000000000",
+	)
 }

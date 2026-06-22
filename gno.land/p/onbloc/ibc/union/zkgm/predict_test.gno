@@ -60,10 +60,10 @@ func TestPredictWrappedTokenInputSensitivity(t *testing.T) {
 	baseDenom := PredictWrappedToken(path, 7, base)
 
 	tests := []struct {
-		name      string
-		path      *u256.Uint
-		channel   uint32
-		base      []byte
+		name       string
+		path       *u256.Uint
+		channel    uint32
+		base       []byte
 		sameAsBase bool
 	}{
 		{"path change", u256.NewUint(6), 7, base, false},
@@ -101,11 +101,11 @@ func TestPredictWrappedTokenV2InputSensitivity(t *testing.T) {
 	})
 
 	tests := []struct {
-		name   string
-		path   *u256.Uint
-		channel uint32
-		base   []byte
-		image  [32]byte
+		name       string
+		path       *u256.Uint
+		channel    uint32
+		base       []byte
+		image      [32]byte
 		sameAsBase bool
 	}{
 		{"path change", u256.NewUint(6), 7, base, image, false},
@@ -128,12 +128,17 @@ func TestPredictCallProxyAccountDeterministic(t *testing.T) {
 	a := PredictCallProxyAccount(path, types.ChannelId(8), []byte("sender"))
 	b := PredictCallProxyAccount(path, types.ChannelId(8), []byte("sender"))
 	c := PredictCallProxyAccount(path, types.ChannelId(9), []byte("sender"))
+	zero := PredictCallProxyAccount(u256.Zero(), types.ChannelId(8), []byte("sender"))
+	nilPath := PredictCallProxyAccount(nil, types.ChannelId(8), []byte("sender"))
 
 	if a != b {
 		t.Fatalf("PredictCallProxyAccount not deterministic: %q != %q", a, b)
 	}
 	if a == c {
 		t.Fatal("PredictCallProxyAccount did not change when channel changed")
+	}
+	if nilPath != zero {
+		t.Fatalf("PredictCallProxyAccount nil path: got %q want %q", nilPath, zero)
 	}
 	if !strings.HasPrefix(a, "zkgm1") || len(a) != len("zkgm1")+40 {
 		t.Fatalf("PredictCallProxyAccount: unexpected address %q", a)

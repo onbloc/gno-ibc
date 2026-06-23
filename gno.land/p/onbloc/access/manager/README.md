@@ -5,6 +5,10 @@ Pure Gno port of the core permission model from OpenZeppelin Contracts
 
 Reference:
 
+- OpenZeppelin Access Management concept guide:
+  https://docs.openzeppelin.com/contracts/5.x/access-control#access-management
+- OpenZeppelin Contracts `AccessManager` API reference:
+  https://docs.openzeppelin.com/contracts/5.x/api/access#AccessManager
 - OpenZeppelin Contracts `AccessManager` v5.6.1:
   https://github.com/OpenZeppelin/openzeppelin-contracts/tree/v5.6.1/contracts/access/manager
 - Union CosmWasm `access-manager`:
@@ -43,6 +47,13 @@ realm.
 Use these references when checking whether this package and the consuming realms
 are still aligned with the source models:
 
+- OpenZeppelin's access-management guide describes the shared manager model:
+  roles are granted to accounts, target functions are assigned to roles, and a
+  caller is authorized when it has the role assigned to the target function:
+  https://docs.openzeppelin.com/contracts/5.x/access-control#access-management
+- OpenZeppelin's API reference is useful for checking the public AccessManager
+  surface and the fields intentionally not ported in this Gno package:
+  https://docs.openzeppelin.com/contracts/5.x/api/access#AccessManager
 - OpenZeppelin defines the target/function role model, admin role behavior,
   public role behavior, target closure, and delayed operation concepts:
   https://github.com/OpenZeppelin/openzeppelin-contracts/tree/v5.6.1/contracts/access/manager

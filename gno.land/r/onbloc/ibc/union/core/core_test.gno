@@ -400,12 +400,12 @@ func TestRestrictedPacketEntrypointsRejectNonAdmin(cur realm, t *testing.T) {
 func TestRestrictedPacketEntrypointsAllowAdminRealmCallToReachImpl(cur realm, t *testing.T) {
 	resetStore(cur)
 	oldAdmin := admin
-	oldImpl := impl
+	oldImpl := currentImpl
 	admin = cur.Address()
-	impl = nil
+	currentImpl = nil
 	defer func() {
 		admin = oldAdmin
-		impl = oldImpl
+		currentImpl = oldImpl
 	}()
 
 	tests := []struct {

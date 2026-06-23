@@ -52,12 +52,18 @@ func TestAssertCanCall(cur realm, t *testing.T) {
 			testing.SetRealm(testing.NewUserRealm(admin))
 			tc.setup(cur)
 
+			testing.SetRealm(testing.NewUserRealm(caller))
+
 			if tc.aborts {
 				uassert.AbortsContains(t, cur, ErrorAccessManagerUnauthorizedCall, func(cur realm) {
-					AssertCanCall(cross(cur), tc.selector, caller)
+					func(cur realm) {
+						AssertCanCall(0, cur, tc.selector)
+					}(cross(cur))
 				})
 			} else {
-				AssertCanCall(cross(cur), tc.selector, caller)
+				func(cur realm) {
+					AssertCanCall(0, cur, tc.selector)
+				}(cross(cur))
 			}
 		})
 	}

@@ -12,7 +12,7 @@ const SelectorSetHook manager.Selector = "set_hook"
 // SetHook registers h as the active recv hook. The hook's Address() is
 // automatically authorized to call Send(). Admin-only. Pass nil to clear.
 func SetHook(cur realm, h TransferHook) {
-	access.AssertCanCall(cross(cur), SelectorSetHook, cur.Previous().Address())
+	access.AssertCanCall(0, cur, SelectorSetHook)
 	if h != nil && !h.Address().IsValid() {
 		panic("transfer: hook address is invalid")
 	}

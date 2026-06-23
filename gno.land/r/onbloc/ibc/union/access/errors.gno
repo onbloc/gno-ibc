@@ -9,6 +9,7 @@ import (
 const (
 	ErrorAccessManagerUnauthorizedAccount = "AccessManagerUnauthorizedAccount"
 	ErrorAccessManagerUnauthorizedCall    = "AccessManagerUnauthorizedCall"
+	ErrorSpoofedRealm                     = "rlm does not match the current crossing frame"
 )
 
 // AccessManagerUnauthorizedAccountError formats an account-role authorization error.

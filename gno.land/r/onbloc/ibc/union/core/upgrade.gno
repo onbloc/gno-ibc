@@ -46,7 +46,7 @@ func RegisterImpl(cur realm, constructor func(store IStore) ICore) {
 // injects the proxy-owned store into the target, so the store needs no public
 // getter — the only way to obtain it is through this gated install.
 func UpdateImpl(cur realm, path string) {
-	access.AssertCanCall(cross(cur), SelectorUpdateImpl, cur.Previous().Address())
+	access.AssertCanCall(0, cur, SelectorUpdateImpl)
 
 	constructor, ok := implConstructors[path]
 	if !ok {

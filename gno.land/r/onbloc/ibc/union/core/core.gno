@@ -17,49 +17,49 @@ func SendPacket(cur realm, sourceChannelId types.ChannelId, timeoutTimestamp typ
 
 // PacketRecv proves and dispatches a batch of received packets.
 func PacketRecv(cur realm, msg types.MsgPacketRecv) {
-	access.AssertCanCall(cross(cur), SelectorPacketRecv, cur.Previous().Address())
+	access.AssertCanCall(0, cur, SelectorPacketRecv)
 	mustGetImpl().PacketRecv(0, cur, msg)
 }
 
 // IntentPacketRecv settles packets on the proofless market-maker fast path.
 func IntentPacketRecv(cur realm, msg types.MsgIntentPacketRecv) {
-	access.AssertCanCall(cross(cur), SelectorIntentPacketRecv, cur.Previous().Address())
+	access.AssertCanCall(0, cur, SelectorIntentPacketRecv)
 	mustGetImpl().IntentPacketRecv(0, cur, msg)
 }
 
 // PacketAcknowledgement proves the counterparty acks and notifies the app.
 func PacketAcknowledgement(cur realm, msg types.MsgPacketAcknowledgement) {
-	access.AssertCanCall(cross(cur), SelectorPacketAck, cur.Previous().Address())
+	access.AssertCanCall(0, cur, SelectorPacketAck)
 	mustGetImpl().PacketAcknowledgement(0, cur, msg)
 }
 
 // PacketTimeout proves a packet was never received and notifies the app.
 func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
-	access.AssertCanCall(cross(cur), SelectorPacketTimeout, cur.Previous().Address())
+	access.AssertCanCall(0, cur, SelectorPacketTimeout)
 	mustGetImpl().PacketTimeout(0, cur, msg)
 }
 
 // CommitMembershipProof verifies and records a membership proof.
 func CommitMembershipProof(cur realm, msg types.MsgCommitMembershipProof) {
-	access.AssertCanCall(cross(cur), SelectorCommitMembershipProof, cur.Previous().Address())
+	access.AssertCanCall(0, cur, SelectorCommitMembershipProof)
 	mustGetImpl().CommitMembershipProof(0, cur, msg)
 }
 
 // CommitNonMembershipProof verifies and records a non-membership proof.
 func CommitNonMembershipProof(cur realm, msg types.MsgCommitNonMembershipProof) {
-	access.AssertCanCall(cross(cur), SelectorCommitNonMembershipProof, cur.Previous().Address())
+	access.AssertCanCall(0, cur, SelectorCommitNonMembershipProof)
 	mustGetImpl().CommitNonMembershipProof(0, cur, msg)
 }
 
 // BatchSend aggregates already-committed packets into a batch commitment.
 func BatchSend(cur realm, msg types.MsgBatchSend) {
-	access.AssertCanCall(cross(cur), SelectorBatchSend, cur.Previous().Address())
+	access.AssertCanCall(0, cur, SelectorBatchSend)
 	mustGetImpl().BatchSend(0, cur, msg)
 }
 
 // BatchAcks aggregates the acks of received packets into a batch receipt.
 func BatchAcks(cur realm, msg types.MsgBatchAcks) {
-	access.AssertCanCall(cross(cur), SelectorBatchAcks, cur.Previous().Address())
+	access.AssertCanCall(0, cur, SelectorBatchAcks)
 	mustGetImpl().BatchAcks(0, cur, msg)
 }
 

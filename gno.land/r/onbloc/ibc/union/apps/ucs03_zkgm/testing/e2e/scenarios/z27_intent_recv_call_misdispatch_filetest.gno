@@ -1,8 +1,8 @@
 // PKGPATH: gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios
 package scenarios
 
-// Regression for "Intent recv dispatches OP_CALL to the proven OnZkgm handler
-// with no proof" (local_docs/issue_intent_recv_call_misdispatch.md).
+// Regression for a forged OP_CALL being dispatched to the proven OnZkgm handler
+// through intent recv without membership proof.
 //
 // A forged OP_CALL is delivered through the proofless market-maker fast path
 // core.IntentPacketRecv, which performs no VerifyMembership. Intent calls must

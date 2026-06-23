@@ -52,7 +52,7 @@ func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relaye
 			panic("zkgm/v1: batch child returned empty ack")
 		}
 		// Spec: a single only-maker child aborts the entire batch. Already-processed
-		// children's state mutations stand (per Union v0 spec). The outer ack signals
+		// children's state mutations stand (per Union ZKGM spec). The outer ack signals
 		// "filled by maker, replay later" so the relayer retries against a market-maker
 		// fill.
 		if isOnlyMakerAck(childAck) {

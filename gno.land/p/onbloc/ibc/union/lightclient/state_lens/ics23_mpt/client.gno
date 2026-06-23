@@ -28,10 +28,10 @@ var (
 // lightclient.Interface for the state-lens/ics23/mpt client.
 //
 // It holds the client state and the L2 consensus states keyed by height,
-// mirroring the realm adapter's per-client entry but as a self-contained pure
-// object: the adapter routes by clientId into realm storage and delegates L1
-// proof verification to core, whereas this object owns its own state and holds
-// a direct reference to the L1 light client it depends on.
+// mirroring the host store's per-client entry as a self-contained pure object.
+// The core host routes by clientId to the stored light-client object; this
+// object owns its own state and holds a direct reference to the L1 light client
+// it depends on.
 //
 // A state-lens client does not track its own chain directly. It trusts the
 // counterparty's opaque L2 consensus blob, proven to exist in the L1 chain's
@@ -46,15 +46,15 @@ type StateLensIcs23MptLightClient struct {
 	// l1Client is the light client tracking the settlement (L1) chain. It is
 	// used during VerifyHeader to prove that the submitted L2 consensus state is
 	// committed in the L1 state, and during Status to mirror the L1 client's
-	// liveness. It corresponds to ClientState.L1ClientID, which the realm
-	// adapter resolves through core.
+	// liveness. It corresponds to ClientState.L1ClientID, which the core host
+	// resolves before constructing this object.
 	l1Client lightclient.Interface
 }
 
 var _ lightclient.Interface = (*StateLensIcs23MptLightClient)(nil)
 
 // NewStateLensIcs23MptLightClient builds a client from the client and consensus
-// state and the L1 client it depends on. This mirrors the realm adapter's
+// state and the L1 client it depends on. This mirrors the core host's
 // CreateClient path, which seeds the consensus state at L2LatestHeight.
 func NewStateLensIcs23MptLightClient(
 	clientState *ClientState,

@@ -35,7 +35,7 @@ func (v *ucs03ZkgmV1) verifyForward(_ int, rlm realm, funds *funds, channelId ty
 // executeForward builds and dispatches the next-hop packet, recording the parent for async ack settlement.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L1392-L1497
 func (v *ucs03ZkgmV1) executeForward(_ int, rlm realm, packet types.Packet, salt [32]byte, path *u256.Uint, forward z.Forward, intent bool) (types.RecvPacketResult, error) {
-	// Recv skips verifyInternal (see impl.go Recv flow), so this opcode check is
+	// Recv skips verifyInternal (see impl.gno OnRecvPacket flow), so this opcode check is
 	// the only line of defense on receive. Do not strip as redundant with
 	// verifyForward.
 	if !isAllowedForwardInstruction(forward.Instruction.Opcode) {

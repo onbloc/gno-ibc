@@ -8,12 +8,10 @@ import (
 // app.gno is the App receiver surface: the core-driven half of the proxy. core
 // holds this App reference permanently (its port is keyed by the proxy pkgpath
 // and re-registration is rejected), so App is the stable IBC identity and must
-// never carry business logic. Every receiver gates on assertIsIBCHost and then
-// delegates to the installed impl; the packet callbacks (recv/intent/ack/timeout)
-// additionally check assertNotPaused. Channel handshake is intentionally allowed
-// while paused so channels can still be managed. Logic lives in the impl realm;
-// authority and funds live in the proxy. See assert.gno for the gates and
-// upgrade.gno for the swap point.
+// never carry business logic. Every receiver gates on assertIsIBCHost and checks
+// the pause state before delegating to the installed impl or rejecting channel
+// close. Logic lives in the impl realm; authority and funds live in the proxy.
+// See assert.gno for the gates and upgrade.gno for the swap point.
 type App struct{}
 
 var (

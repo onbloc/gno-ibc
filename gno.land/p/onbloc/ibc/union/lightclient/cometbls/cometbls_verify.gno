@@ -13,8 +13,8 @@ import (
 
 // verifyHeader verifies a CometBLS Header against the client's state and the
 // trusted ConsensusState at header.TrustedHeight. It mirrors Union's
-// cometbls.verifyHeader (11-cometbls/update.go), preserving the order of checks
-// and their error semantics:
+// cometbls verify_header in client.rs, preserving the order of checks and their
+// error semantics:
 //   - the trusted consensus state must exist for header.TrustedHeight
 //   - header revision must match the trusted height revision
 //   - the trusted timestamp must be strictly less than the header timestamp
@@ -118,10 +118,9 @@ func checkedAddUint64(a uint64, b uint64) (uint64, bool) {
 	return sum, false
 }
 
-// verifyMisbehaviour mirrors Union's cometbls.verifyMisbehaviour
-// (11-cometbls/misbehaviour_handle.go): both headers must independently verify,
-// and the pair is accepted only when it matches Union's same-height or
-// non-increasing-time conditions.
+// verifyMisbehaviour mirrors Union's cometbls verify_misbehaviour in client.rs:
+// both headers must independently verify, and the pair is accepted only when it
+// matches Union's same-height or non-increasing-time conditions.
 // Union reference:
 // https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/cometbls/src/client.rs#L256-L281
 func (c *CometblsLightClient) verifyMisbehaviour(misbehaviour *Misbehaviour, now time.Time) error {

@@ -142,7 +142,7 @@ func (v *ucs03ZkgmV1) Send(_ int, rlm realm, channelId types.ChannelId, timeoutT
 	// TODO(escrow): the sent-coin funds previously arrived from the proxy
 	// (OriginSend captured at the EOA boundary). With the IStore-only injection
 	// the impl no longer receives it; wiring the escrow envelope from the proxy
-	// is the open migration item (see VOUCHER_ANALYSIS.md / migration plan).
+	// remains the open migration item.
 	funds := newFunds(parseCoins(""))
 
 	if err := v.verifyInternal(0, rlm, funds, channelId, u256.Zero(), instruction); err != nil {

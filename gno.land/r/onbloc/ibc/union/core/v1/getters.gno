@@ -156,8 +156,13 @@ func (c *coreV1) GetBatchReceiptsCommitment(batchHash types.H256) (types.H256, e
 
 // GetCommittedMembershipProofCommitment returns the committed membership proof
 // value for a client/height/path key.
-func (c *coreV1) GetCommittedMembershipProofCommitment(clientId types.ClientId, proofHeight uint64, path []byte) (types.H256, bool) {
-	return c.store.MembershipProofAt(clientId, proofHeight, path)
+func (c *coreV1) GetCommittedMembershipProofCommitment(clientId types.ClientId, proofHeight uint64, path []byte) (types.H256, error) {
+	commitment, ok := c.store.MembershipProofAt(clientId, proofHeight, path)
+	if !ok {
+		return types.H256{}, makeError(core.ErrMembershipProofNotFound)
+	}
+
+	return commitment, nil
 }
 
 // GetCommittedNonMembershipProof reports whether a non-membership proof

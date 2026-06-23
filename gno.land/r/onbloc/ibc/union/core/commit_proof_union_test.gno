@@ -10,8 +10,13 @@ type committedProofGetterImpl struct {
 	ICore
 }
 
-func (i *committedProofGetterImpl) GetCommittedMembershipProofCommitment(clientId types.ClientId, proofHeight uint64, path []byte) (types.H256, bool) {
-	return store.MembershipProofAt(clientId, proofHeight, path)
+func (i *committedProofGetterImpl) GetCommittedMembershipProofCommitment(clientId types.ClientId, proofHeight uint64, path []byte) (types.H256, error) {
+	commitment, ok := store.MembershipProofAt(clientId, proofHeight, path)
+	if !ok {
+		return types.H256{}, makeError(ErrMembershipProofNotFound)
+	}
+
+	return commitment, nil
 }
 
 func (i *committedProofGetterImpl) GetCommittedNonMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) bool {
@@ -25,11 +30,12 @@ func resetCommittedProofGetterTest(cur realm) {
 
 // Union implementation reference:
 // https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L2176-L2191
-func TestGetCommittedMembershipProofUnknownReturnsEmpty(cur realm, t *testing.T) {
+func TestGetCommittedMembershipProofUnknownReturnsError(cur realm, t *testing.T) {
 	resetCommittedProofGetterTest(cur)
 
-	if got := GetCommittedMembershipProof(types.ClientId(1), 10, types.Bytes("path")); got != "" {
-		t.Fatalf("GetCommittedMembershipProof unknown: got %q want empty", got)
+	_, err := GetCommittedMembershipProof(types.ClientId(1), 10, types.Bytes("path"))
+	if err == nil || err.Error() != ErrMembershipProofNotFound {
+		t.Fatalf("GetCommittedMembershipProof unknown error: got %v want %q", err, ErrMembershipProofNotFound)
 	}
 }
 
@@ -42,17 +48,21 @@ func TestGetCommittedMembershipProofUsesClientHeightAndPath(cur realm, t *testin
 	value := types.Keccak(types.Bytes("consensus-state"))
 	store.SaveMembershipProof(0, cur, clientId, 10, path, value)
 
-	if got := GetCommittedMembershipProof(clientId, 10, path); got != value.String() {
-		t.Fatalf("GetCommittedMembershipProof exact key: got %q want %s", got, value)
+	got, err := GetCommittedMembershipProof(clientId, 10, path)
+	if err != nil {
+		t.Fatalf("GetCommittedMembershipProof exact key error: %v", err)
 	}
-	if got := GetCommittedMembershipProof(types.ClientId(8), 10, path); got != "" {
-		t.Fatalf("GetCommittedMembershipProof wrong client: got %q want empty", got)
+	if got != value {
+		t.Fatalf("GetCommittedMembershipProof exact key: got %s want %s", got, value)
 	}
-	if got := GetCommittedMembershipProof(clientId, 11, path); got != "" {
-		t.Fatalf("GetCommittedMembershipProof wrong height: got %q want empty", got)
+	if _, err := GetCommittedMembershipProof(types.ClientId(8), 10, path); err == nil || err.Error() != ErrMembershipProofNotFound {
+		t.Fatalf("GetCommittedMembershipProof wrong client error: got %v want %q", err, ErrMembershipProofNotFound)
 	}
-	if got := GetCommittedMembershipProof(clientId, 10, types.Bytes("other-path")); got != "" {
-		t.Fatalf("GetCommittedMembershipProof wrong path: got %q want empty", got)
+	if _, err := GetCommittedMembershipProof(clientId, 11, path); err == nil || err.Error() != ErrMembershipProofNotFound {
+		t.Fatalf("GetCommittedMembershipProof wrong height error: got %v want %q", err, ErrMembershipProofNotFound)
+	}
+	if _, err := GetCommittedMembershipProof(clientId, 10, types.Bytes("other-path")); err == nil || err.Error() != ErrMembershipProofNotFound {
+		t.Fatalf("GetCommittedMembershipProof wrong path error: got %v want %q", err, ErrMembershipProofNotFound)
 	}
 }
 

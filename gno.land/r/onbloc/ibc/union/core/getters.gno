@@ -75,15 +75,10 @@ func GetBatchReceipts(batchHash types.H256) (types.H256, error) {
 	return mustGetImpl().GetBatchReceiptsCommitment(batchHash)
 }
 
-// GetCommittedMembershipProof returns the committed membership proof value as a
-// hex string, or an empty string when no proof commitment is stored for the key.
-func GetCommittedMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) string {
-	v, found := mustGetImpl().GetCommittedMembershipProofCommitment(clientId, proofHeight, path)
-	if !found {
-		return ""
-	}
-
-	return h256String(v)
+// GetCommittedMembershipProof returns the committed membership proof value for
+// the client/height/path key.
+func GetCommittedMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) (types.H256, error) {
+	return mustGetImpl().GetCommittedMembershipProofCommitment(clientId, proofHeight, path)
 }
 
 // GetCommittedNonMembershipProof reports whether a non-membership proof

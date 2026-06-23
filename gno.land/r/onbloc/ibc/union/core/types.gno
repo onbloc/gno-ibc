@@ -92,7 +92,7 @@ type ICoreGetter interface {
 	GetChannel(channelId types.ChannelId) (types.Channel, error)
 	GetBatchPacketsCommitment(batchHash types.H256) (types.H256, error)
 	GetBatchReceiptsCommitment(batchHash types.H256) (types.H256, error)
-	GetCommittedMembershipProofCommitment(clientId types.ClientId, proofHeight uint64, path []byte) (types.H256, bool)
+	GetCommittedMembershipProofCommitment(clientId types.ClientId, proofHeight uint64, path []byte) (types.H256, error)
 	GetCommittedNonMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) bool
 }
 

@@ -106,12 +106,12 @@ func TestGetCommittedProofGetters(cur realm, t *testing.T) {
 	v.store.SaveMembershipProof(0, cur, clientId, 10, path, value)
 	v.store.SaveNonMembershipProof(0, cur, clientId, 10, path, types.NON_MEMBERSHIP_COMMITMENT_VALUE)
 
-	got, ok := v.GetCommittedMembershipProofCommitment(clientId, 10, path)
-	uassert.True(t, ok)
+	got, err := v.GetCommittedMembershipProofCommitment(clientId, 10, path)
+	uassert.NoError(t, err)
 	uassert.Equal(t, value.String(), got.String())
 	uassert.True(t, v.GetCommittedNonMembershipProof(clientId, 10, path))
 
-	_, ok = v.GetCommittedMembershipProofCommitment(clientId, 11, path)
-	uassert.False(t, ok)
+	_, err = v.GetCommittedMembershipProofCommitment(clientId, 11, path)
+	uassert.ErrorIs(t, err, makeError(core.ErrMembershipProofNotFound))
 	uassert.False(t, v.GetCommittedNonMembershipProof(clientId, 11, path))
 }

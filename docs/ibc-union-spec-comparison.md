@@ -49,6 +49,9 @@ difference.
 | Shared access realm | [access README](../gno.land/r/onbloc/ibc/union/access/README.md) | `access-manager`, `access-managed`, deployer selector wiring | Provides the authority and selector gates used by core and ZKGM. |
 | Pure access manager package | [package README](../gno.land/p/onbloc/access/manager/README.md) | OpenZeppelin `AccessManager`, Union `access-manager` | Stateless state-transition library used by the shared access realm. |
 
+Implementation-level ZKGM differences that are not visible from message
+variants alone are tracked in the [ZKGM implementation table](../gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/README.md#implementation-level-union-differences).
+
 ## Admin And Access Boundary
 
 Union nests `access_managed::ExecuteMsg`, `access_managed::QueryMsg`,

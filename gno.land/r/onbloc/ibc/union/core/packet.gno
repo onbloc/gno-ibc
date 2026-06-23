@@ -46,16 +46,3 @@ func QueryReceiptAtPath(channelId types.ChannelId, path types.H256) string {
 
 	return h256String(v)
 }
-
-func GetCommittedMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) string {
-	v, found := store.getMembershipProof(clientId, proofHeight, path)
-	if !found {
-		return ""
-	}
-
-	return h256String(v)
-}
-
-func GetCommittedNonMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) bool {
-	return store.hasNonMembershipProof(clientId, proofHeight, path)
-}

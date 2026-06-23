@@ -461,13 +461,13 @@ func mustHex(s string) []byte {
 	return bz
 }
 
-func mustH256(s string) cometblsp.H256 {
+func mustH256(s string) types.H256 {
 	bz := mustHex(s)
 	if len(bz) != 32 {
 		panic("realcometbls: H256 must be 32 bytes")
 	}
 
-	var out cometblsp.H256
+	var out types.H256
 
 	copy(out[:], bz)
 

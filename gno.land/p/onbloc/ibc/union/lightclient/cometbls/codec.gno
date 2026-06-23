@@ -30,25 +30,28 @@ var consensusStateSchema = abienc.Schema{Fields: []abienc.Field{
 
 func EncodeClientState(cs *ClientState) ([]byte, error) {
 	if cs == nil {
-		return nil, errors.New("cometbls: nil client state")
+		return nil, errors.New("nil client state")
 	}
+
 	return abienc.Encode(clientStateSchema, []any{
-		cs.ChainID,
-		cs.TrustingPeriod,
-		cs.UnbondingPeriod,
-		cs.MaxClockDrift,
-		cs.FrozenHeight.RevisionHeight,
-		cs.LatestHeight.RevisionHeight,
-		[32]byte(cs.ContractAddress),
+		cs.GetChainID(),
+		cs.GetTrustingPeriod(),
+		cs.GetUnbondingPeriod(),
+		cs.GetMaxClockDrift(),
+		cs.GetFrozenRevisionHeight(),
+		cs.GetLatestRevisionHeight(),
+		[32]byte(cs.GetContractAddress()),
 	})
 }
 
 func DecodeClientState(buf []byte) (*ClientState, error) {
 	vals, err := abienc.Decode(clientStateSchema, buf)
 	if err != nil {
-		return nil, errors.New("cometbls: " + err.Error())
+		return nil, errors.New("" + err.Error())
 	}
+
 	contractAddress := vals[6].([32]byte)
+
 	return &ClientState{
 		ChainID:         vals[0].(string),
 		TrustingPeriod:  vals[1].(uint64),
@@ -56,22 +59,25 @@ func DecodeClientState(buf []byte) (*ClientState, error) {
 		MaxClockDrift:   vals[3].(uint64),
 		FrozenHeight:    types.NewHeight(vals[4].(uint64)),
 		LatestHeight:    types.NewHeight(vals[5].(uint64)),
-		ContractAddress: H256(contractAddress),
+		ContractAddress: types.H256(contractAddress),
 	}, nil
 }
 
 func EncodeConsensusState(cs *ConsensusState) ([]byte, error) {
 	if cs == nil {
-		return nil, errors.New("cometbls: nil consensus state")
+		return nil, errors.New("nil consensus state")
 	}
-	root, err := toBytes32(cs.Root.Hash, "root hash")
+
+	root, err := toBytes32(cs.GetRootHash())
 	if err != nil {
 		return nil, err
 	}
-	nextValidatorsHash, err := toBytes32(cs.NextValidatorsHash, "next validators hash")
+
+	nextValidatorsHash, err := toBytes32(cs.GetNextValidatorsHash())
 	if err != nil {
 		return nil, err
 	}
+
 	return abienc.Encode(consensusStateSchema, []any{
 		cs.Timestamp,
 		root,
@@ -82,10 +88,12 @@ func EncodeConsensusState(cs *ConsensusState) ([]byte, error) {
 func DecodeConsensusState(buf []byte) (*ConsensusState, error) {
 	vals, err := abienc.Decode(consensusStateSchema, buf)
 	if err != nil {
-		return nil, errors.New("cometbls: " + err.Error())
+		return nil, errors.New("" + err.Error())
 	}
+
 	root := vals[1].([32]byte)
 	nextValidatorsHash := vals[2].([32]byte)
+
 	return &ConsensusState{
 		Timestamp:          vals[0].(uint64),
 		Root:               MerkleRoot{Hash: bytes32Slice(root)},
@@ -96,5 +104,6 @@ func DecodeConsensusState(buf []byte) (*ConsensusState, error) {
 func bytes32Slice(b [32]byte) []byte {
 	out := make([]byte, 32)
 	copy(out, b[:])
+
 	return out
 }

@@ -17,7 +17,8 @@ the `ICore` interface.
 - [getters.gno](getters.gno) exposes read-only query helpers.
 - [types.gno](types.gno) defines the proxy, implementation, getter, and store
   interfaces.
-- [store.gno](store.gno) owns persistent core state.
+- [store.gno](store.gno) owns persistent core state and guards injected store
+  writes with the current crossing realm token.
 - [upgrade.gno](upgrade.gno) registers and installs implementation realms.
 - [access.gno](access.gno) and [errors.gno](errors.gno) define access selectors
   and error helpers.

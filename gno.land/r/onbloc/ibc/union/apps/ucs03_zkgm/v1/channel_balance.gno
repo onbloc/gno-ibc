@@ -2,7 +2,6 @@ package impl
 
 import (
 	"encoding/hex"
-	"errors"
 
 	types "gno.land/p/onbloc/ibc/union/types"
 
@@ -34,7 +33,7 @@ func (v *ucs03ZkgmV1) decreaseChannelBalanceV2(_ int, rlm realm, channelId types
 
 	curAmount, ok := v.store.GetChannelBalanceV2(key)
 	if !ok || curAmount == nil || curAmount.Cmp(amount) < 0 {
-		return errors.New("zkgm/channel_balance: underflow")
+		return makeError(errChannelBalanceUnderflow)
 	}
 
 	next := new(u256.Uint).Sub(curAmount, amount)

@@ -15,7 +15,7 @@ func TestClientStateCodecRoundTrip(t *testing.T) {
 		MaxClockDrift:   30,
 		FrozenHeight:    types.NewHeight(0),
 		LatestHeight:    types.NewHeight(42),
-		ContractAddress: H256(repeat32Arr(0xAB)),
+		ContractAddress: types.H256(repeat32Arr(0xAB)),
 	}
 
 	bz, err := EncodeClientState(cs)

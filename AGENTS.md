@@ -203,10 +203,9 @@ Prefer one accessor per scalar field over a single struct-returning getter: `Get
 
 PR 4831 legalized `[]byte` <-> `string` conversions on realm-owned fields, so
 `bytes.Equal` is safe on readonly-tainted slices. The old `equalBytes` helper
-and `string(cloneBytes(...))` workaround are obsolete for cast-only use. Keep
-`cloneBytes` style helpers for sites that store into foreign-realm maps, mutate
-in place, or feed consumers such as ics23 internals that may `append` or `copy`
-against their inputs.
+and string-copy workaround are obsolete for cast-only use. Use `types.CloneBytes`
+for sites that store into foreign-realm maps, mutate in place, or feed consumers
+such as ics23 internals that may `append` or `copy` against their inputs.
 
 #### Cross-realm struct and typed-slice allocation
 
@@ -327,7 +326,7 @@ Forward in the ZKGM v1 implementation uses the IBC core's async acknowledgement 
   ```
 
 - Use `bytes.Equal` directly for `ACK_ERR_ONLY_MAKER` comparisons; the prior `equalBytes` workaround was removed in the PR 4831 cleanup.
-- Use `cloneBytes` before handing package-level `[]byte` acknowledgement constants to code that may persist or mutate them. It is no longer required just to make `bytes.Equal` succeed.
+- Use `types.CloneBytes` before handing package-level `[]byte` acknowledgement constants to code that may persist or mutate them. It is no longer required just to make `bytes.Equal` succeed.
 
 ### ZKGM Test Guidance
 

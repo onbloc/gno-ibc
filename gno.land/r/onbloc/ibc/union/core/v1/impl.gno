@@ -37,16 +37,3 @@ func resolveRelayer(caller address, relayer string) address {
 
 	return address(relayer)
 }
-
-// cloneBytes returns a fresh copy of b, used to detach caller- or store-owned
-// byte slices before persisting or rebuilding records.
-func cloneBytes(b []byte) []byte {
-	if b == nil {
-		return nil
-	}
-
-	out := make([]byte, len(b))
-	copy(out, b)
-
-	return out
-}

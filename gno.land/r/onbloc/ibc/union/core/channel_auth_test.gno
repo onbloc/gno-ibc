@@ -9,7 +9,7 @@ import (
 	"gno.land/r/onbloc/ibc/union/access"
 )
 
-const accessManagerUnauthorizedCallError = access.ErrorAccessManagerUnauthorizedCall
+const accessManagerUnauthorizedCallError = access.ErrAccessManagerUnauthorizedCall
 
 func denySelectorForTest(cur realm, selector manager.Selector) manager.RoleId {
 	previousRole := access.GetFunctionRole(cross(cur), selector)

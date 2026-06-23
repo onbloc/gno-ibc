@@ -12,7 +12,8 @@ installed implementation realm supplies the swappable protocol logic behind the
 - [app.gno](app.gno) exposes the core-facing IBC Union app and intent app
   callbacks.
 - [types.gno](types.gno) defines the proxy/implementation/store interfaces.
-- [store.gno](store.gno) owns persistent ZKGM state.
+- [store.gno](store.gno) owns persistent ZKGM state and guards injected store
+  writes with the current crossing realm token.
 - [upgrade.gno](upgrade.gno) registers and installs implementation realms.
 - [register.gno](register.gno) registers the proxy app and OP_CALL receivers.
 - [admin.gno](admin.gno), [access.gno](access.gno), and
@@ -66,8 +67,8 @@ For the cross-module comparison guide, see
 
 | Gno surface | IBC Union surface | Reference | Notes |
 | --- | --- | --- | --- |
-| [PredictWrappedToken](v1/predict.gno) | `QueryMsg::PredictWrappedToken` | [msg.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/msg.rs#L203), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/contract.rs#L3125) | Gno exposes the derivation as an impl function, not a proxy query. |
-| [PredictWrappedTokenV2](v1/predict.gno) | `QueryMsg::PredictWrappedTokenV2` | [msg.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/msg.rs#L211), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/contract.rs#L3144) | Gno exposes the derivation as an impl function, not a proxy query. |
+| [PredictWrappedToken](../../../../../../p/onbloc/ibc/union/zkgm/predict.gno) | `QueryMsg::PredictWrappedToken` | [msg.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/msg.rs#L203), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/contract.rs#L3125) | Gno exposes the derivation as a pure package helper, not a proxy query. |
+| [PredictWrappedTokenV2](../../../../../../p/onbloc/ibc/union/zkgm/predict.gno) | `QueryMsg::PredictWrappedTokenV2` | [msg.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/msg.rs#L211), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/contract.rs#L3144) | Gno exposes the derivation as a pure package helper, not a proxy query. |
 | - | `QueryMsg::GetMinter` | [msg.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/msg.rs#L220), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/contract.rs#L3163) | No Gno public query surface. |
 | - | `QueryMsg::GetTokenBucket` | [msg.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/msg.rs#L221), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/contract.rs#L3167) | Store has an internal getter, but no public query surface. |
 | - | `QueryMsg::GetChannelBalance` | [msg.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/msg.rs#L224), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/contract.rs#L3171) | No Gno public query surface. |

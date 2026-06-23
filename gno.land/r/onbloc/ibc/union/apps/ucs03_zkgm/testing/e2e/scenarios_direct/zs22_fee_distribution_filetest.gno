@@ -26,7 +26,7 @@ func main(cur realm) {
 	escrowChannel := types.ChannelId(21)
 	unescrowChannel := types.ChannelId(22)
 	meta := e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: "Fee Token", Symbol: "FEE", Decimals: 6})
-	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(escrowChannel), []byte("ufee"), impl.MetadataImage(sh.DecodeTokenMetadata(meta)))
+	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(escrowChannel), []byte("ufee"), z.MetadataImage(sh.DecodeTokenMetadata(meta)))
 
 	println("[SCENARIO] escrow recv fee mints voucher split")
 	escrowOrder := z.TokenOrderV2{

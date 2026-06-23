@@ -62,7 +62,7 @@ func forgedInitializePacket(cur realm) types.Packet {
 		panic(err)
 	}
 
-	ibcDenom := impl.PredictWrappedTokenV2(u256.Zero(), uint32(forgedDestinationChannel), []byte("ugnot"), impl.MetadataImage(meta))
+	ibcDenom := z.PredictWrappedTokenV2(u256.Zero(), uint32(forgedDestinationChannel), []byte("ugnot"), z.MetadataImage(meta))
 
 	orderBytes, err := z.EncodeTokenOrderV2(z.TokenOrderV2{
 		Sender:      []byte("attacker-sender"),

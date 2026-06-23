@@ -26,6 +26,7 @@ func TestOZGetTargetFunctionRoleReturnsConfiguredRoleOrAdminDefault(t *testing.T
 	}
 
 	state.SetTargetFunctionRole(ozTarget, ozSelector, ozRole)
+
 	if state.GetTargetFunctionRole(ozTarget, ozSelector) != ozRole {
 		t.Fatal("target function role must return the configured role")
 	}
@@ -41,6 +42,7 @@ func TestOZGetRoleAdminReturnsConfiguredAdminOrAdminDefault(t *testing.T) {
 	}
 
 	state.SetRoleAdmin(ozRole, ozAdminRole)
+
 	if state.GetRoleAdmin(ozRole) != ozAdminRole {
 		t.Fatal("role admin must return the configured admin role")
 	}
@@ -56,6 +58,7 @@ func TestOZGetRoleGrantDelayReturnsConfiguredDelayOrZeroDefault(t *testing.T) {
 	}
 
 	state.SetGrantDelay(ozRole, 11)
+
 	if state.GetRoleGrantDelay(ozRole) != 11 {
 		t.Fatal("role grant delay must return the configured delay")
 	}
@@ -66,6 +69,7 @@ func TestOZGetRoleGrantDelayReturnsConfiguredDelayOrZeroDefault(t *testing.T) {
 func TestOZCanCallClosedTargetReturnsFalse(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
+
 	state.SetTargetFunctionRole(ozTarget, ozSelector, PublicRole)
 	state.SetTargetClosed(ozTarget, true)
 
@@ -80,6 +84,7 @@ func TestOZCanCallClosedTargetReturnsFalse(t *testing.T) {
 func TestOZCanCallPublicRoleReturnsTrue(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
+
 	state.SetTargetFunctionRole(ozTarget, ozSelector, PublicRole)
 
 	result := state.CanCall(caller, ozTarget, ozSelector)
@@ -105,6 +110,7 @@ func TestOZHasRolePublicRoleReturnsTrue(t *testing.T) {
 func TestOZHasRolePendingGrantReturnsFalse(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
+
 	state.SetGrantDelay(ozRole, 10)
 	state.GrantRole(ozRole, caller)
 
@@ -119,6 +125,7 @@ func TestOZHasRolePendingGrantReturnsFalse(t *testing.T) {
 func TestOZHasRoleGrantedRoleReturnsTrue(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
+
 	state.GrantRole(ozRole, caller)
 
 	result := state.HasRole(ozRole, caller)

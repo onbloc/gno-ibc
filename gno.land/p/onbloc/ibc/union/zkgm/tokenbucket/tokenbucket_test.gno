@@ -8,15 +8,15 @@ import (
 
 func TestNewRejectsZeroCapacity(t *testing.T) {
 	_, err := New(u256.Zero(), u256.NewUint(1), u256.Zero())
-	if err != ZeroCapacity {
-		t.Fatalf("New zero capacity error: got %v want %v", err, ZeroCapacity)
+	if err != ErrZeroCapacity {
+		t.Fatalf("New zero capacity error: got %v want %v", err, ErrZeroCapacity)
 	}
 }
 
 func TestNewRejectsZeroRefillRate(t *testing.T) {
 	_, err := New(u256.NewUint(1), u256.Zero(), u256.Zero())
-	if err != ZeroRefillRate {
-		t.Fatalf("New zero refill rate error: got %v want %v", err, ZeroRefillRate)
+	if err != ErrZeroRefillRate {
+		t.Fatalf("New zero refill rate error: got %v want %v", err, ErrZeroRefillRate)
 	}
 }
 
@@ -81,8 +81,8 @@ func TestRateLimitRejectsExceededAmount(t *testing.T) {
 	tb := mustNew(t, 100, 5, 10)
 
 	err := tb.RateLimit(u256.NewUint(101), u256.NewUint(10))
-	if err != RateLimitExceeded {
-		t.Fatalf("RateLimit exceeded error: got %v want %v", err, RateLimitExceeded)
+	if err != ErrRateLimitExceeded {
+		t.Fatalf("RateLimit exceeded error: got %v want %v", err, ErrRateLimitExceeded)
 	}
 
 	assertUint(t, "available", tb.Available, 100)
@@ -103,8 +103,8 @@ func TestUpdateRejectsZeroCapacity(t *testing.T) {
 	tb := mustNew(t, 100, 5, 10)
 
 	err := tb.Update(u256.Zero(), u256.NewUint(1), false)
-	if err != ZeroCapacity {
-		t.Fatalf("Update zero capacity error: got %v want %v", err, ZeroCapacity)
+	if err != ErrZeroCapacity {
+		t.Fatalf("Update zero capacity error: got %v want %v", err, ErrZeroCapacity)
 	}
 }
 
@@ -112,8 +112,8 @@ func TestUpdateRejectsZeroRefillRate(t *testing.T) {
 	tb := mustNew(t, 100, 5, 10)
 
 	err := tb.Update(u256.NewUint(1), u256.Zero(), false)
-	if err != ZeroRefillRate {
-		t.Fatalf("Update zero refill rate error: got %v want %v", err, ZeroRefillRate)
+	if err != ErrZeroRefillRate {
+		t.Fatalf("Update zero refill rate error: got %v want %v", err, ErrZeroRefillRate)
 	}
 }
 

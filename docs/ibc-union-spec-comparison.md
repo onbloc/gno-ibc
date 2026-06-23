@@ -73,5 +73,5 @@ the Union reference adds an equivalent public message:
 - proxy lifecycle helpers such as implementation registration and render
   functions;
 - local realm render output;
-- package-level constructors and typed helpers used to satisfy Gno realm
-  allocation rules.
+- package-level constructors, typed helpers, and pure derivation functions such
+  as ZKGM wrapped-token prediction helpers.

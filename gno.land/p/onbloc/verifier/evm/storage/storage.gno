@@ -35,16 +35,23 @@ type Proof struct {
 // Ethereum storage tries are keyed by keccak256(slot), and the leaf payload is
 // the RLP encoding of the storage value with leading zero bytes removed.
 func VerifyProof(storageRoot []byte, proof Proof) error {
-	if err := validateWord(storageRoot, ErrInvalidRootLength); err != nil {
+	err := validateWord(storageRoot, ErrInvalidRootLength)
+	if err != nil {
 		return err
 	}
-	if err := validateWord(proof.Key, ErrInvalidKeyLength); err != nil {
+
+	err = validateWord(proof.Key, ErrInvalidKeyLength)
+	if err != nil {
 		return err
 	}
-	if err := validateWord(proof.Value, ErrInvalidValueLength); err != nil {
+
+	err = validateWord(proof.Value, ErrInvalidValueLength)
+	if err != nil {
 		return err
 	}
+
 	path := keccak256.Sum256(proof.Key)
+
 	return mpt.Verify(storageRoot, path[:], encodeStorageValue(proof.Value), proof.Proof)
 }
 
@@ -52,36 +59,48 @@ func VerifyProof(storageRoot []byte, proof Proof) error {
 // field is intentionally ignored for absence proofs because eth_getProof returns
 // zero for missing slots.
 func VerifyAbsence(storageRoot []byte, proof Proof) error {
-	if err := validateWord(storageRoot, ErrInvalidRootLength); err != nil {
+	err := validateWord(storageRoot, ErrInvalidRootLength)
+	if err != nil {
 		return err
 	}
-	if err := validateWord(proof.Key, ErrInvalidKeyLength); err != nil {
+
+	err = validateWord(proof.Key, ErrInvalidKeyLength)
+	if err != nil {
 		return err
 	}
+
 	path := keccak256.Sum256(proof.Key)
+
 	return mpt.VerifyAbsence(storageRoot, path[:], proof.Proof)
 }
 
 // CheckValue verifies only the value reported by the proof object. This is
 // useful when a caller receives an expected 32-byte commitment separately.
 func CheckValue(proof Proof, expected []byte) error {
-	if err := validateWord(proof.Value, ErrInvalidValueLength); err != nil {
+	err := validateWord(proof.Value, ErrInvalidValueLength)
+	if err != nil {
 		return err
 	}
-	if err := validateWord(expected, ErrInvalidValueLength); err != nil {
+
+	err = validateWord(expected, ErrInvalidValueLength)
+	if err != nil {
 		return err
 	}
+
 	if !bytes.Equal(proof.Value, expected) {
 		return ErrValueMismatch
 	}
+
 	return nil
 }
 
 // StoragePath returns the MPT path used for an EVM storage slot.
 func StoragePath(slot []byte) ([32]byte, error) {
-	if err := validateWord(slot, ErrInvalidKeyLength); err != nil {
+	err := validateWord(slot, ErrInvalidKeyLength)
+	if err != nil {
 		return [32]byte{}, err
 	}
+
 	return keccak256.Sum256(slot), nil
 }
 
@@ -91,19 +110,25 @@ func StoragePath(slot []byte) ([32]byte, error) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/main/lib/unionlabs/src/ethereum.rs
 func IBCCommitmentKey(path []byte) ([32]byte, error) {
-	if err := validateWord(path, ErrInvalidPathLength); err != nil {
+	err := validateWord(path, ErrInvalidPathLength)
+	if err != nil {
 		return [32]byte{}, err
 	}
+
 	var input [64]byte
+
 	copy(input[0:32], path)
+
 	return keccak256.Sum256(input[:]), nil
 }
 
 // EncodeStorageValue returns the leaf payload expected by the storage trie.
 func EncodeStorageValue(word []byte) ([]byte, error) {
-	if err := validateWord(word, ErrInvalidValueLength); err != nil {
+	err := validateWord(word, ErrInvalidValueLength)
+	if err != nil {
 		return nil, err
 	}
+
 	return encodeStorageValue(word), nil
 }
 
@@ -111,6 +136,7 @@ func validateWord(word []byte, err error) error {
 	if len(word) != 32 {
 		return err
 	}
+
 	return nil
 }
 
@@ -120,14 +146,17 @@ func encodeStorageValue(word []byte) []byte {
 
 func trimLeadingZeroes(word []byte) []byte {
 	i := 0
+
 	for i < len(word) && word[i] == 0 {
 		i++
 	}
+
 	return word[i:]
 }
 
 func WordFromUint64(v uint64) []byte {
 	out := make([]byte, 32)
 	binary.BigEndian.PutUint64(out[24:], v)
+
 	return out
 }

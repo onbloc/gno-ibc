@@ -12,7 +12,8 @@ realms that need to allocate values across Gno realm boundaries.
 - [types.gno](types.gno), [client.gno](client.gno),
   [connection.gno](connection.gno), [channel.gno](channel.gno), and
   [packet.gno](packet.gno) define ids, status values, and core IBC Union data
-  structures.
+  structures. `types.gno` also provides `Bytes.Clone` and `CloneBytes` for
+  detaching byte slices that crossed Gno realm boundaries.
 - [msgs.gno](msgs.gno) and [msgs_handshake.gno](msgs_handshake.gno) define
   public message shapes.
 - [path.gno](path.gno), [commit.gno](commit.gno), and

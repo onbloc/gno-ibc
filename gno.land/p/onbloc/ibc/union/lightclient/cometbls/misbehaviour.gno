@@ -37,31 +37,31 @@ func (m *Misbehaviour) GetTime() time.Time {
 // ValidateBasic implements Misbehaviour interface
 func (m *Misbehaviour) ValidateBasic() error {
 	if m.Header1 == nil {
-		return makeError(ErrInvalidHeader, "misbehaviour Header_1 cannot be nil")
+		return errorWithDetails(ErrInvalidHeader, "misbehaviour Header_1 cannot be nil")
 	}
 
 	if m.Header2 == nil {
-		return makeError(ErrInvalidHeader, "misbehaviour Header_2 cannot be nil")
+		return errorWithDetails(ErrInvalidHeader, "misbehaviour Header_2 cannot be nil")
 	}
 
 	if m.Header1.TrustedHeight.RevisionHeight == 0 {
-		return makeError(ErrInvalidHeaderHeight, "misbehaviour Header_1 cannot have zero revision height")
+		return errorWithDetails(ErrInvalidHeaderHeight, "misbehaviour Header_1 cannot have zero revision height")
 	}
 
 	if m.Header2.TrustedHeight.RevisionHeight == 0 {
-		return makeError(ErrInvalidHeaderHeight, "misbehaviour Header_2 cannot have zero revision height")
+		return errorWithDetails(ErrInvalidHeaderHeight, "misbehaviour Header_2 cannot have zero revision height")
 	}
 
 	// ValidateBasic on both validators
 	if err := m.Header1.ValidateBasic(); err != nil {
-		return makeError(
+		return errorWithDetails(
 			ErrInvalidMisbehaviour,
 			ufmt.Sprintf("header 1 failed validation: %v", err),
 		)
 	}
 
 	if err := m.Header2.ValidateBasic(); err != nil {
-		return makeError(
+		return errorWithDetails(
 			ErrInvalidMisbehaviour,
 			ufmt.Sprintf("header 2 failed validation: %v", err),
 		)
@@ -69,7 +69,7 @@ func (m *Misbehaviour) ValidateBasic() error {
 
 	// Ensure that Height1 is greater than or equal to Height2
 	if m.Header1.GetHeight().LT(m.Header2.GetHeight()) {
-		return makeError(
+		return errorWithDetails(
 			ErrInvalidMisbehaviour,
 			ufmt.Sprintf("Header_1 height is less than Header_2 height (%s < %s)", m.Header1.GetHeight(), m.Header2.GetHeight()),
 		)

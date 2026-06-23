@@ -31,11 +31,11 @@ func RegisterImpl(cur realm, constructor func(store IStore) ICore) {
 	prefix := currentPath + "/"
 
 	if !strings.HasPrefix(previousPath, prefix) {
-		panic("core: previous impl path is not a prefix of the current impl path")
+		panic("previous impl path is not a prefix of the current impl path")
 	}
 
 	if _, ok := implConstructors[previousPath]; ok {
-		panic("core: impl already registered")
+		panic("impl already registered")
 	}
 
 	implConstructors[previousPath] = constructor
@@ -49,7 +49,7 @@ func UpdateImpl(cur realm, path string) {
 
 	constructor, ok := implConstructors[path]
 	if !ok {
-		panic("core: impl constructor not found")
+		panic("impl constructor not found")
 	}
 
 	currentImplPath = path
@@ -58,7 +58,7 @@ func UpdateImpl(cur realm, path string) {
 
 func mustGetImpl() ICore {
 	if currentImpl == nil {
-		panic("core: implementation not installed")
+		panic("implementation not installed")
 	}
 
 	return currentImpl

@@ -82,11 +82,6 @@ func main(cur realm) {
 		StateRoot:   make([]byte, 32),
 		StorageRoot: storageRoot,
 	}
-	lc, err := ics23mpt.NewStateLensIcs23MptLightClient(clientState, consensusState, &mockL1Client{})
-	if err != nil {
-		panic(err)
-	}
-
 	clientStateBytes, err := ics23mpt.EncodeClientState(*clientState)
 	if err != nil {
 		panic(err)
@@ -96,10 +91,27 @@ func main(cur realm) {
 		panic(err)
 	}
 
+	// Register a mock L1 client first — state lens needs its L1ClientID resolved in the store.
+	mockL1Type := types.ClientType("mock-l1")
+	core.RegisterClient(cross(cur), mockL1Type, func(_, _ []byte) (lightclient.Interface, error) {
+		return &mockL1Client{}, nil
+	})
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(mockL1Type, nil, nil))
+
 	clientType := types.ClientType(ics23mpt.ClientType)
-	core.RegisterClient(cross(cur), clientType, lc)
+	core.RegisterClient(cross(cur), clientType, func(csBytes, consBytes []byte) (lightclient.Interface, error) {
+		cs, err := ics23mpt.DecodeClientState(csBytes)
+		if err != nil {
+			return nil, err
+		}
+		cons, err := ics23mpt.DecodeConsensusState(consBytes)
+		if err != nil {
+			return nil, err
+		}
+		return ics23mpt.NewStateLensIcs23MptLightClient(&cs, &cons, core.GetLightClient)
+	})
 	core.CreateClient(cross(cur), core.NewMsgCreateClient(clientType, clientStateBytes, consensusStateBytes))
-	clientId := types.ClientId(1)
+	clientId := types.ClientId(2)
 
 	// Force-open connection + channel (admin variants skip the handshake proofs).
 	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
@@ -276,7 +288,7 @@ func (e mockError) Error() string { return string(e) }
 
 // Output:
 // [SCENARIO] 1. Open a channel backed by the real state-lens/ics23-mpt light client
-// [INFO] client opened: id=1 type=state-lens/ics23/mpt
+// [INFO] client opened: id=2 type=state-lens/ics23/mpt
 // [INFO] channel opened (source=2 destination=1)
 // [EXPECTED] client type should be state-lens/ics23/mpt (real, not mock)
 // [EXPECTED] destination channel should be 1

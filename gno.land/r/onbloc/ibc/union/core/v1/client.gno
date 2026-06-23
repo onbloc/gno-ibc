@@ -6,14 +6,16 @@ import (
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
-// RegisterClient records a light client object under a client type so it can be
-// instantiated later by CreateClient. The caller must supply a non-nil object.
-func (c *coreV1) RegisterClient(_ int, rlm realm, clientType types.ClientType, lc lightclient.Interface) {
-	if lc == nil {
+// RegisterClient stores a light client implementation for a client type.
+// CreateClient calls it to produce a fresh instance from the submitted state
+// bytes. Callers that pass nil are rejected as unauthorized.
+// Union reference:
+// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/core/src/contract.rs#L849-L865
+func (c *coreV1) RegisterClient(_ int, rlm realm, clientType types.ClientType, clientImpl lightclient.ClientImpl) {
+	if clientImpl == nil {
 		panic("caller not authorized to register client: unauthorized")
 	}
-
-	c.store.RegisterClient(0, rlm, clientType, lc)
+	c.store.RegisterClient(0, rlm, clientType, clientImpl)
 	core.EmitRegisterClient(clientType)
 }
 
@@ -26,16 +28,20 @@ func (c *coreV1) HasClient(clientType types.ClientType) bool {
 // the submitted state bytes, then lets the light client verify creation against
 // that freshly stored state.
 func (c *coreV1) CreateClient(_ int, rlm realm, msg types.MsgCreateClient) {
-	caller := rlm.Previous().Address()
-	relayer := resolveRelayer(caller, msg.Relayer)
-
-	lc, ok := c.store.RegisteredClient(msg.ClientType)
+	creator := rlm.Previous().Address()
+	relayer := resolveRelayer(creator, msg.Relayer)
+	clientImpl, ok := c.store.ClientRegistry(msg.ClientType)
 	if !ok {
 		panic("client type not found")
 	}
 
-	clientId := c.store.AddClient(0, rlm, msg.ClientType, caller, lc)
-	c.initClient(0, rlm, msg.ClientStateBytes, msg.ConsensusStateBytes, relayer, lc, clientId)
+	lc, err := clientImpl(msg.ClientStateBytes, msg.ConsensusStateBytes)
+	if err != nil {
+		panic("create client: " + err.Error())
+	}
+
+	clientId := c.store.AddClient(0, rlm, msg.ClientType, creator, lc)
+	c.initClient(0, rlm, clientId, msg.ClientStateBytes, msg.ConsensusStateBytes, relayer)
 
 	core.EmitCreateClient(clientId, msg.ClientType, lc.GetCounterpartyChainID())
 }
@@ -44,7 +50,12 @@ func (c *coreV1) CreateClient(_ int, rlm realm, msg types.MsgCreateClient) {
 // runs the light client's creation verification, then persists any state
 // overwrite and storage writes the verification returns. It returns the height
 // the consensus state was stored at.
-func (c *coreV1) initClient(_ int, rlm realm, clientStateBytes, consensusStateBytes []byte, relayer address, lc lightclient.Interface, clientId types.ClientId) types.Height {
+func (c *coreV1) initClient(_ int, rlm realm, clientId types.ClientId, clientStateBytes, consensusStateBytes []byte, relayer address) types.Height {
+	lc, ok := c.store.GetLightClient(clientId)
+	if !ok {
+		panic("client " + clientId.String() + " not found")
+	}
+
 	c.store.SaveClientState(0, rlm, clientId, clientStateBytes)
 
 	height := types.NewHeight(lc.GetLatestHeight())
@@ -105,19 +116,19 @@ func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) {
 	core.EmitUpdateClient(msg.ClientId, height)
 }
 
-// ForceUpdateClient re-initializes a client from submitted state bytes,
-// bypassing header proof verification. The admin gate lives on the proxy; the
-// registered light client object for the existing client is reused.
 func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateClient) {
-	lc, ok := c.store.GetLightClient(msg.ClientId)
+	clientImpl, ok := c.store.GetClientImpl(msg.ClientId)
 	if !ok {
 		panic("client " + msg.ClientId.String() + " not found")
 	}
+	next, err := clientImpl(msg.ClientStateBytes, msg.ConsensusStateBytes)
+	if err != nil {
+		panic("force update client: " + err.Error())
+	}
+	c.store.SetLightClient(0, rlm, msg.ClientId, next)
 
-	// Union reuses info.sender as both caller and relayer for the force path
-	// (contract.rs L150-159: init_client(.., info.sender, client_impl, client_id)).
-	relayer := rlm.Previous().Address()
-	height := c.initClient(0, rlm, msg.ClientStateBytes, msg.ConsensusStateBytes, relayer, lc, msg.ClientId)
+	caller := rlm.Previous().Address()
+	height := c.initClient(0, rlm, msg.ClientId, msg.ClientStateBytes, msg.ConsensusStateBytes, caller)
 
 	core.EmitForceUpdateClient(msg.ClientId, height)
 }

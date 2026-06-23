@@ -5,18 +5,9 @@ import (
 	"strings"
 )
 
-// makeError builds a fresh error from one or more message parts joined by ", ".
-// Errors are constructed at the call site (never shared package-level values) so
-// the resulting object is owned by the current realm; propagating a shared
-// sentinel across a realm boundary would carry a foreign-owned object. The base
-// message constant comes first and any value-carrying detail (denom, path, id)
-// after, e.g. makeError(errVoucherNotFound, ibcDenom).
-func makeError(msgs ...string) error {
-	return errors.New(strings.Join(msgs, ", "))
-}
-
 // Error messages for the zkgm v1 impl, collected in one place so the wording
 // stays consistent. They are string constants rather than package-level error
+
 // values; build them with makeError at the call site (see above).
 const (
 	// opcode routing
@@ -63,4 +54,12 @@ const (
 	// coins / channel balance
 	errCoinMismatch            = "zkgm/coins: sent coin mismatch"
 	errChannelBalanceUnderflow = "zkgm/channel_balance: underflow"
+
+	// ErrSpoofedRealm guards non-crossing (_ int, rlm realm, ...) entrypoints: the
+	// passed rlm must be the current crossing frame, not a forged or stale token.
+	errSpoofedRealm = "rlm does not match the current crossing frame"
 )
+
+func makeError(msgs ...string) error {
+	return errors.New(strings.Join(msgs, ", "))
+}

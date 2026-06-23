@@ -5,17 +5,6 @@ import (
 	"strings"
 )
 
-// makeError builds a fresh error from one or more message parts joined by ", ".
-// Errors are always constructed at the call site (never shared package-level
-// values) so the resulting object is owned by the current realm: a shared
-// *errorString would be owned by this (core) realm, and propagating it across
-// the proxy -> impl boundary would carry a foreign-owned object. Pass the base
-// message constant first and any value-carrying detail after, e.g.
-// makeError(ErrChannelNotFound, id.String()).
-func makeError(msgs ...string) error {
-	return errors.New(strings.Join(msgs, ", "))
-}
-
 // Error messages are defined as constants rather than package-level error
 // values; build them with makeError at the call site (see above).
 const (
@@ -61,4 +50,13 @@ const (
 	ErrConsensusStateNotFound = "consensus state not found"
 	ErrConnectionNotFound     = "connection not found"
 	ErrChannelNotFound        = "channel not found"
+
+	// ErrSpoofedRealm guards non-crossing (_ int, rlm realm, ...) entrypoints:
+	// the passed rlm must be the current crossing frame, not a forged or stale
+	// token replayed by a caller.
+	ErrSpoofedRealm = "rlm does not match the current crossing frame"
 )
+
+func makeError(msgs ...string) error {
+	return errors.New(strings.Join(msgs, ", "))
+}

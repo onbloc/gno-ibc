@@ -13,6 +13,10 @@ import (
 // SendPacket commits a packet for the caller's port. Per the spec the timeout
 // height is always zero; only the timeout timestamp is meaningful.
 func (c *coreV1) SendPacket(_ int, rlm realm, sourceChannelId types.ChannelId, timeoutTimestamp types.Timestamp, data []byte) types.Packet {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	if timeoutTimestamp == 0 {
 		panic(makeError(core.ErrTimeoutMustBeSet))
 	}
@@ -58,6 +62,10 @@ func (c *coreV1) SendPacket(_ int, rlm realm, sourceChannelId types.ChannelId, t
 // PacketRecv proves a batch of packets committed on the counterparty and
 // dispatches each to its app, recording receipts and sync acks.
 func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	relayer := rlm.Previous().Address()
 
 	if len(msg.Packets) == 0 {
@@ -107,6 +115,10 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 
 // IntentPacketRecv settles packets on the proofless market-maker fast path.
 func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRecv) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	marketMaker := rlm.Previous().Address()
 
 	if len(msg.Packets) == 0 {
@@ -157,6 +169,10 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 
 // PacketAcknowledgement proves the counterparty's acks and notifies the app.
 func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAcknowledgement) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	relayer := rlm.Previous().Address()
 
 	if len(msg.Packets) == 0 {
@@ -199,6 +215,10 @@ func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAckn
 // PacketTimeout proves the counterparty never received the packet and notifies
 // the app to refund.
 func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	relayer := rlm.Previous().Address()
 	packet := msg.Packet
 
@@ -270,6 +290,10 @@ func (c *coreV1) markPacketAcknowledged(_ int, rlm realm, packet types.Packet) {
 
 // CommitMembershipProof verifies and records a membership proof for later reuse.
 func (c *coreV1) CommitMembershipProof(_ int, rlm realm, msg types.MsgCommitMembershipProof) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	c.verifyMembership(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, msg.Path, msg.Value)
 	c.store.SaveMembershipProof(0, rlm, msg.ClientId, msg.ProofHeight, msg.Path, types.Keccak(msg.Value))
 	core.EmitCommitMembershipProof(msg)
@@ -277,6 +301,10 @@ func (c *coreV1) CommitMembershipProof(_ int, rlm realm, msg types.MsgCommitMemb
 
 // CommitNonMembershipProof verifies and records a non-membership proof.
 func (c *coreV1) CommitNonMembershipProof(_ int, rlm realm, msg types.MsgCommitNonMembershipProof) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	if !c.store.ClientExists(msg.ClientId) {
 		panic(makeError(core.ErrClientNotFound, msg.ClientId.String()))
 	}
@@ -289,6 +317,10 @@ func (c *coreV1) CommitNonMembershipProof(_ int, rlm realm, msg types.MsgCommitN
 // BatchSend aggregates several already-committed packets into a single batch
 // commitment.
 func (c *coreV1) BatchSend(_ int, rlm realm, msg types.MsgBatchSend) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	if len(msg.Packets) < 2 {
 		panic(makeError(core.ErrNotEnoughPackets))
 	}
@@ -315,6 +347,10 @@ func (c *coreV1) BatchSend(_ int, rlm realm, msg types.MsgBatchSend) {
 
 // BatchAcks aggregates the acks of several received packets into a batch receipt.
 func (c *coreV1) BatchAcks(_ int, rlm realm, msg types.MsgBatchAcks) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	if len(msg.Packets) < 2 {
 		panic(makeError(core.ErrNotEnoughPackets))
 	}
@@ -355,6 +391,10 @@ func (c *coreV1) BatchAcks(_ int, rlm realm, msg types.MsgBatchAcks) {
 // WriteAcknowledgement commits a (previously deferred) acknowledgement for a
 // received packet. Only the channel's port owner may write it.
 func (c *coreV1) WriteAcknowledgement(_ int, rlm realm, msg types.MsgWriteAcknowledgement) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	if len(msg.Acknowledgement) == 0 {
 		panic(makeError(core.ErrAcknowledgementEmpty))
 	}

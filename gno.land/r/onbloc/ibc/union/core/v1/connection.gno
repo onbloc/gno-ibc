@@ -11,6 +11,10 @@ import (
 
 // ConnectionOpenInit starts a connection in the Init state.
 func (c *coreV1) ConnectionOpenInit(_ int, rlm realm, msg types.MsgConnectionOpenInit) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	connectionId := c.store.NextConnectionId(0, rlm)
 	connection := core.NewConnection(types.ConnectionStateInit, msg.ClientId, msg.CounterpartyClientId, 0)
 	c.store.SaveConnection(0, rlm, connectionId, connection)
@@ -20,12 +24,20 @@ func (c *coreV1) ConnectionOpenInit(_ int, rlm realm, msg types.MsgConnectionOpe
 // ConnectionOpenTry acknowledges a counterparty Init by proving it and moving to
 // TryOpen.
 func (c *coreV1) ConnectionOpenTry(_ int, rlm realm, msg types.MsgConnectionOpenTry) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	c.connectionOpenTry(0, rlm, msg, true)
 }
 
 // ForceConnectionOpenTry is the admin recovery variant of ConnectionOpenTry that
 // skips counterparty proof verification.
 func (c *coreV1) ForceConnectionOpenTry(_ int, rlm realm, msg types.MsgConnectionOpenTry) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	c.connectionOpenTry(0, rlm, msg, false)
 }
 
@@ -47,12 +59,20 @@ func (c *coreV1) connectionOpenTry(_ int, rlm realm, msg types.MsgConnectionOpen
 // ConnectionOpenAck proves the counterparty TryOpen and moves the local Init
 // connection to Open.
 func (c *coreV1) ConnectionOpenAck(_ int, rlm realm, msg types.MsgConnectionOpenAck) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	c.connectionOpenAck(0, rlm, msg, true)
 }
 
 // ForceConnectionOpenAck is the admin recovery variant of ConnectionOpenAck that
 // skips counterparty proof verification.
 func (c *coreV1) ForceConnectionOpenAck(_ int, rlm realm, msg types.MsgConnectionOpenAck) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	c.connectionOpenAck(0, rlm, msg, false)
 }
 
@@ -84,12 +104,20 @@ func (c *coreV1) connectionOpenAck(_ int, rlm realm, msg types.MsgConnectionOpen
 // ConnectionOpenConfirm proves the counterparty Open and moves the local TryOpen
 // connection to Open.
 func (c *coreV1) ConnectionOpenConfirm(_ int, rlm realm, msg types.MsgConnectionOpenConfirm) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	c.connectionOpenConfirm(0, rlm, msg, true)
 }
 
 // ForceConnectionOpenConfirm is the admin recovery variant of
 // ConnectionOpenConfirm that skips counterparty proof verification.
 func (c *coreV1) ForceConnectionOpenConfirm(_ int, rlm realm, msg types.MsgConnectionOpenConfirm) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	c.connectionOpenConfirm(0, rlm, msg, false)
 }
 

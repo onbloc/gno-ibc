@@ -12,6 +12,10 @@ import (
 // ChannelOpenInit starts a channel in the Init state and notifies its app. The
 // created channel id is observable through the emitted event, not returned.
 func (c *coreV1) ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	relayer := rlm.Previous().Address()
 	portId := types.Bytes(types.CloneBytes(msg.PortId))
 	c.ensureConnectionState(msg.ConnectionId)
@@ -38,12 +42,20 @@ func (c *coreV1) ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit)
 // ChannelOpenTry proves a counterparty Init and opens the local channel in
 // TryOpen, notifying its app.
 func (c *coreV1) ChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	c.channelOpenTry(0, rlm, msg, true)
 }
 
 // ForceChannelOpenTry is the admin recovery variant of ChannelOpenTry that skips
 // counterparty proof verification.
 func (c *coreV1) ForceChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	c.channelOpenTry(0, rlm, msg, false)
 }
 
@@ -89,12 +101,20 @@ func (c *coreV1) channelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry, v
 // ChannelOpenAck proves the counterparty TryOpen and moves the local Init
 // channel to Open, notifying its app.
 func (c *coreV1) ChannelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	c.channelOpenAck(0, rlm, msg, true)
 }
 
 // ForceChannelOpenAck is the admin recovery variant of ChannelOpenAck that skips
 // counterparty proof verification.
 func (c *coreV1) ForceChannelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	c.channelOpenAck(0, rlm, msg, false)
 }
 
@@ -148,12 +168,20 @@ func (c *coreV1) channelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck, v
 // ChannelOpenConfirm proves the counterparty Open and moves the local TryOpen
 // channel to Open, notifying its app.
 func (c *coreV1) ChannelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenConfirm) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	c.channelOpenConfirm(0, rlm, msg, true)
 }
 
 // ForceChannelOpenConfirm is the admin recovery variant of ChannelOpenConfirm
 // that skips counterparty proof verification.
 func (c *coreV1) ForceChannelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenConfirm) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	c.channelOpenConfirm(0, rlm, msg, false)
 }
 
@@ -210,6 +238,10 @@ func (c *coreV1) channelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenCo
 
 // ChannelCloseInit closes an Open channel locally and notifies its app.
 func (c *coreV1) ChannelCloseInit(_ int, rlm realm, msg types.MsgChannelCloseInit) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	relayer := rlm.Previous().Address()
 
 	channel, err := c.getChannel(msg.ChannelId)
@@ -239,6 +271,10 @@ func (c *coreV1) ChannelCloseInit(_ int, rlm realm, msg types.MsgChannelCloseIni
 // ChannelCloseConfirm proves the counterparty Closed and closes the local
 // channel, notifying its app.
 func (c *coreV1) ChannelCloseConfirm(_ int, rlm realm, msg types.MsgChannelCloseConfirm) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	relayer := rlm.Previous().Address()
 
 	channel, err := c.getChannel(msg.ChannelId)

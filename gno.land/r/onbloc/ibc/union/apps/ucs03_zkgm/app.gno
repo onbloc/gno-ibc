@@ -23,42 +23,42 @@ var (
 
 func (a *App) OnChannelOpenInit(cur realm, connectionId types.ConnectionId, channelId types.ChannelId, version string, relayer address) {
 	assertIsIBCHost(cur)
-	assertIsNotPaused(cur)
+	assertIsNotPaused()
 
 	mustGetImpl().OnChannelOpenInit(0, cur, connectionId, channelId, version, relayer)
 }
 
 func (a *App) OnChannelOpenTry(cur realm, connectionId types.ConnectionId, channelId types.ChannelId, version string, counterpartyVersion string, relayer address) {
 	assertIsIBCHost(cur)
-	assertIsNotPaused(cur)
+	assertIsNotPaused()
 
 	mustGetImpl().OnChannelOpenTry(0, cur, connectionId, channelId, version, counterpartyVersion, relayer)
 }
 
 func (a *App) OnChannelOpenAck(cur realm, channelId types.ChannelId, counterpartyChannelId types.ChannelId, counterpartyVersion string, relayer address) {
 	assertIsIBCHost(cur)
-	assertIsNotPaused(cur)
+	assertIsNotPaused()
 
 	mustGetImpl().OnChannelOpenAck(0, cur, channelId, counterpartyChannelId, counterpartyVersion, relayer)
 }
 
 func (a *App) OnChannelOpenConfirm(cur realm, channelId types.ChannelId, relayer address) {
 	assertIsIBCHost(cur)
-	assertIsNotPaused(cur)
+	assertIsNotPaused()
 
 	mustGetImpl().OnChannelOpenConfirm(0, cur, channelId, relayer)
 }
 
 func (a *App) OnChannelCloseInit(cur realm, channelId types.ChannelId, relayer address) {
 	assertIsIBCHost(cur)
-	assertIsNotPaused(cur)
+	assertIsNotPaused()
 
 	panic("zkgm: the show must go on")
 }
 
 func (a *App) OnChannelCloseConfirm(cur realm, channelId types.ChannelId, relayer address) {
 	assertIsIBCHost(cur)
-	assertIsNotPaused(cur)
+	assertIsNotPaused()
 
 	panic("zkgm: the show must go on")
 }

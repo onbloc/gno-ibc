@@ -26,10 +26,7 @@ func (c *coreV1) ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit)
 	)
 	c.store.CreateChannel(0, rlm, channelId, channel, portId)
 
-	a, ok := c.store.GetAppByPortId(portId)
-	if !ok {
-		panic(makeError(core.ErrPortNotFound, string(portId)))
-	}
+	a := c.appAtPort(portId)
 
 	a.OnChannelOpenInit(cross(rlm), msg.ConnectionId, channelId, msg.Version, relayer)
 	core.EmitChannelOpenInit(portId, channelId, channel)
@@ -76,10 +73,7 @@ func (c *coreV1) channelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry, v
 
 	c.store.CreateChannel(0, rlm, channelId, msg.Channel, portId)
 
-	a, ok := c.store.GetAppByPortId(portId)
-	if !ok {
-		panic(makeError(core.ErrPortNotFound, string(portId)))
-	}
+	a := c.appAtPort(portId)
 
 	a.OnChannelOpenTry(cross(rlm), msg.Channel.ConnectionId, channelId, msg.Channel.Version, msg.CounterpartyVersion, relayer)
 
@@ -101,10 +95,7 @@ func (c *coreV1) ForceChannelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenA
 func (c *coreV1) channelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck, verify bool) {
 	relayer := rlm.Previous().Address()
 
-	channel, ok := c.store.GetChannel(msg.ChannelId)
-	if !ok {
-		panic(makeError(core.ErrChannelNotFound, msg.ChannelId.String()))
-	}
+	channel := c.channel(msg.ChannelId)
 
 	if channel.State != types.ChannelStateInit {
 		panic(makeError(core.ErrInvalidChannelState))
@@ -135,10 +126,7 @@ func (c *coreV1) channelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck, v
 	)
 	c.store.SaveChannel(0, rlm, msg.ChannelId, updated)
 
-	a, ok := c.store.GetAppByPortId(portId)
-	if !ok {
-		panic(makeError(core.ErrPortNotFound, string(portId)))
-	}
+	a := c.appAtPort(portId)
 
 	a.OnChannelOpenAck(cross(rlm), msg.ChannelId, msg.CounterpartyChannelId, msg.CounterpartyVersion, relayer)
 
@@ -160,10 +148,7 @@ func (c *coreV1) ForceChannelOpenConfirm(_ int, rlm realm, msg types.MsgChannelO
 func (c *coreV1) channelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenConfirm, verify bool) {
 	relayer := rlm.Previous().Address()
 
-	channel, ok := c.store.GetChannel(msg.ChannelId)
-	if !ok {
-		panic(makeError(core.ErrChannelNotFound, msg.ChannelId.String()))
-	}
+	channel := c.channel(msg.ChannelId)
 
 	if channel.State != types.ChannelStateTryOpen {
 		panic(makeError(core.ErrInvalidChannelState))
@@ -198,10 +183,7 @@ func (c *coreV1) channelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenCo
 	)
 	c.store.SaveChannel(0, rlm, msg.ChannelId, updated)
 
-	a, ok := c.store.GetAppByPortId(portId)
-	if !ok {
-		panic(makeError(core.ErrPortNotFound, string(portId)))
-	}
+	a := c.appAtPort(portId)
 
 	a.OnChannelOpenConfirm(cross(rlm), msg.ChannelId, relayer)
 
@@ -212,10 +194,7 @@ func (c *coreV1) channelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenCo
 func (c *coreV1) ChannelCloseInit(_ int, rlm realm, msg types.MsgChannelCloseInit) {
 	relayer := rlm.Previous().Address()
 
-	channel, ok := c.store.GetChannel(msg.ChannelId)
-	if !ok {
-		panic(makeError(core.ErrChannelNotFound, msg.ChannelId.String()))
-	}
+	channel := c.channel(msg.ChannelId)
 
 	if channel.State != types.ChannelStateOpen {
 		panic(makeError(core.ErrInvalidChannelState))
@@ -241,10 +220,7 @@ func (c *coreV1) ChannelCloseInit(_ int, rlm realm, msg types.MsgChannelCloseIni
 func (c *coreV1) ChannelCloseConfirm(_ int, rlm realm, msg types.MsgChannelCloseConfirm) {
 	relayer := rlm.Previous().Address()
 
-	channel, ok := c.store.GetChannel(msg.ChannelId)
-	if !ok {
-		panic(makeError(core.ErrChannelNotFound, msg.ChannelId.String()))
-	}
+	channel := c.channel(msg.ChannelId)
 
 	if channel.State != types.ChannelStateOpen {
 		panic(makeError(core.ErrInvalidChannelState))
@@ -286,4 +262,15 @@ func (c *coreV1) closedChannel(channel types.Channel) types.Channel {
 		channel.CounterpartyPortId.Clone(),
 		channel.Version,
 	)
+}
+
+// channel returns the stored channel for channelId, panicking when it is
+// missing. It centralizes the lookup shared by the handshake and packet paths.
+func (c *coreV1) channel(channelId types.ChannelId) types.Channel {
+	channel, ok := c.store.GetChannel(channelId)
+	if !ok {
+		panic(makeError(core.ErrChannelNotFound, channelId.String()))
+	}
+
+	return channel
 }

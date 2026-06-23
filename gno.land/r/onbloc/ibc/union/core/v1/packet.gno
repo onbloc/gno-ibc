@@ -2,7 +2,6 @@ package impl
 
 import (
 	"gno.land/p/onbloc/ibc/union/app"
-	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
@@ -27,10 +26,7 @@ func (c *coreV1) SendPacket(_ int, rlm realm, sourceChannelId types.ChannelId, t
 		panic(makeError(core.ErrUnauthorizedPacketSender))
 	}
 
-	channel, ok := c.store.GetChannel(sourceChannelId)
-	if !ok {
-		panic(makeError(core.ErrChannelNotFound, sourceChannelId.String()))
-	}
+	channel := c.channel(sourceChannelId)
 
 	if channel.State != types.ChannelStateOpen {
 		panic(makeError(core.ErrInvalidChannelState))
@@ -66,11 +62,7 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 	}
 
 	destinationChannelId := msg.Packets[0].DestinationChannelId
-	channel, ok := c.store.GetChannel(destinationChannelId)
-
-	if !ok {
-		panic(makeError(core.ErrChannelNotFound, destinationChannelId.String()))
-	}
+	channel := c.channel(destinationChannelId)
 
 	connection := c.ensureConnectionState(channel.ConnectionId)
 
@@ -79,11 +71,7 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 	c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, proofKey[:], magic[:])
 
 	portId, _ := c.store.GetChannelOwner(destinationChannelId)
-	a, ok := c.store.GetAppByPortId(portId)
-
-	if !ok {
-		panic(makeError(core.ErrPortNotFound, string(portId)))
-	}
+	a := c.appAtPort(portId)
 
 	now := core.NowNanos()
 
@@ -117,20 +105,12 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 	}
 
 	destinationChannelId := msg.Packets[0].DestinationChannelId
-	channel, ok := c.store.GetChannel(destinationChannelId)
-
-	if !ok {
-		panic(makeError(core.ErrChannelNotFound, destinationChannelId.String()))
-	}
+	channel := c.channel(destinationChannelId)
 
 	connection := c.ensureConnectionState(channel.ConnectionId)
 
 	portId, _ := c.store.GetChannelOwner(destinationChannelId)
-	a, ok := c.store.GetAppByPortId(portId)
-
-	if !ok {
-		panic(makeError(core.ErrPortNotFound, string(portId)))
-	}
+	a := c.appAtPort(portId)
 
 	intentApp, ok := a.(app.IIntentApp)
 	if !ok {
@@ -170,11 +150,7 @@ func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAckn
 
 	first := msg.Packets[0]
 	sourceChannelId := first.SourceChannelId
-	channel, ok := c.store.GetChannel(sourceChannelId)
-
-	if !ok {
-		panic(makeError(core.ErrChannelNotFound, sourceChannelId.String()))
-	}
+	channel := c.channel(sourceChannelId)
 
 	connection := c.ensureConnectionState(channel.ConnectionId)
 
@@ -208,10 +184,7 @@ func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 	relayer := rlm.Previous().Address()
 	packet := msg.Packet
 
-	channel, ok := c.store.GetChannel(packet.SourceChannelId)
-	if !ok {
-		panic(makeError(core.ErrChannelNotFound, packet.SourceChannelId.String()))
-	}
+	channel := c.channel(packet.SourceChannelId)
 
 	if channel.State != types.ChannelStateOpen {
 		panic(makeError(core.ErrInvalidChannelState))
@@ -219,10 +192,7 @@ func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 
 	connection := c.ensureConnectionState(channel.ConnectionId)
 
-	lc, ok := c.store.GetLightClient(connection.ClientId)
-	if !ok {
-		panic(makeError(core.ErrClientNotFound, connection.ClientId.String()))
-	}
+	lc := c.client(connection.ClientId)
 
 	proofTimestamp, err := lc.GetTimestampAtHeight(msg.ProofHeight)
 	if err != nil {
@@ -398,10 +368,7 @@ func (c *coreV1) acceptRecvPacket(_ int, rlm realm, packet types.Packet, batchCh
 		panic(makeError(core.ErrBatchSameChannelOnly))
 	}
 
-	channel, ok := c.store.GetChannel(packet.DestinationChannelId)
-	if !ok {
-		panic(makeError(core.ErrChannelNotFound, packet.DestinationChannelId.String()))
-	}
+	channel := c.channel(packet.DestinationChannelId)
 
 	if channel.State != types.ChannelStateOpen {
 		panic(makeError(core.ErrInvalidChannelState))
@@ -442,16 +409,21 @@ func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, res types.
 
 // verifyNonMembership checks a non-membership proof against an active light client.
 func (c *coreV1) verifyNonMembership(clientId types.ClientId, height types.Height, proof, key []byte) {
-	lc, ok := c.store.GetLightClient(clientId)
-	if !ok {
-		panic(makeError(core.ErrClientNotFound, clientId.String()))
-	}
-
-	if lc.Status() != lightclient.Active {
-		panic(makeError(core.ErrClientNotActive))
-	}
+	lc := c.activeClient(clientId)
 
 	if err := lc.VerifyNonMembership(height.RevisionHeight, key, proof); err != nil {
 		panic(err)
 	}
+}
+
+// appAtPort returns the app registered for portId, panicking when no app is
+// registered. It centralizes the port -> app lookup the recv and handshake
+// callback paths share.
+func (c *coreV1) appAtPort(portId types.Bytes) app.IApp {
+	a, ok := c.store.GetAppByPortId(portId)
+	if !ok {
+		panic(makeError(core.ErrPortNotFound, string(portId)))
+	}
+
+	return a
 }

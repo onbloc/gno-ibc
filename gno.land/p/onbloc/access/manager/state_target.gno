@@ -14,6 +14,7 @@ func NewTargetConfig(closed bool) *TargetConfig {
 
 func (targetConfig *TargetConfig) setFunctionRole(selector Selector, role RoleId) {
 	targetConfig.ensureFunctionRoles()
+
 	targetConfig.FunctionRoles[selector] = role
 }
 
@@ -25,6 +26,7 @@ func (targetConfig *TargetConfig) setFunctionRoles(selectors []Selector, role Ro
 
 func (targetConfig *TargetConfig) functionRole(selector Selector) RoleId {
 	targetConfig.ensureFunctionRoles()
+
 	role, found := targetConfig.FunctionRoles[selector]
 	if !found {
 		return AdminRole

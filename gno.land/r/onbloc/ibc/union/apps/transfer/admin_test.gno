@@ -11,7 +11,6 @@ import (
 // SetHook takes a TransferHook interface and cannot be called via maketx, so
 // callers must route through an ephemeral realm. These tests cross through the
 // test realm so Previous() is the user realm configured by testing.SetRealm.
-//
 func TestSetHookAllowedForAdmin(cur realm, t *testing.T) {
 	hook = nil
 	hookCaller = address("")
@@ -66,7 +65,7 @@ func TestSetHookDeniedForNonAdmin(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(address("g1notadmin0000000000000000000000000000000")))
 
-	uassert.AbortsContains(t, cur, "AccessManagerUnauthorizedCall", func(cur realm) {
+	uassert.AbortsContains(t, cur, "access manager unauthorized call", func(cur realm) {
 		SetHook(cross(cur), nil)
 	})
 

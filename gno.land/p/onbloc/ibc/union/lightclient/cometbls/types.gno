@@ -6,16 +6,6 @@ import (
 	"gno.land/p/nt/ufmt/v0"
 )
 
-// Height is a block height for ibc-union.
-// Mirrors the ibc-union spec where height is a plain uint64 (revision 0 only).
-type Height = uint64
-
-type H256 [32]byte
-
-func (h H256) GetHash() []byte {
-	return h[:]
-}
-
 // MerkleRoot is the commitment root (app hash).
 // Mirrors ibc.core.commitment.v1.MerkleRoot.
 type MerkleRoot struct {
@@ -41,5 +31,6 @@ func validateHash(h []byte) error {
 			len(h),
 		)
 	}
+
 	return nil
 }

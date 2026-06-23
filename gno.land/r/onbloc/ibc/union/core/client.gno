@@ -6,6 +6,11 @@ import (
 	"gno.land/r/onbloc/ibc/union/access"
 )
 
+// HasClient reports whether a light client is registered for a client type.
+func HasClient(clientType types.ClientType) bool {
+	return mustGetImpl().HasClient(clientType)
+}
+
 // RegisterClient registers a light client implementation for a client type,
 // delegating to the installed impl.
 //
@@ -14,11 +19,6 @@ import (
 func RegisterClient(cur realm, clientType types.ClientType, clientImpl lightclient.ClientImpl) {
 	access.AssertCanCall(0, cur, SelectorRegisterClient)
 	mustGetImpl().RegisterClient(0, cur, clientType, clientImpl)
-}
-
-// HasClient reports whether a light client is registered for a client type.
-func HasClient(clientType types.ClientType) bool {
-	return mustGetImpl().HasClient(clientType)
 }
 
 // CreateClient assigns a client id, stores the submitted state bytes, then lets

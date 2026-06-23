@@ -23,9 +23,10 @@ import (
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
-	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
+	"gno.land/r/onbloc/ibc/union/access"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
+	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
 )
 
 const (
@@ -48,10 +49,14 @@ func main(cur realm) {
 	zkgm.SetRateLimitDisabled(cross(cur), true)
 	zkgm.RegisterCoreApp(cross(cur))
 
+	// The relayer-gated host entrypoints require RELAYER. Grant it to the admin so
+	// this single-actor scenario can drive the full flow.
+	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
+
 	channelId := types.ChannelId(1)
 	counterpartyChannel := types.ChannelId(2)
 	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
-	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), impl.MetadataImage(mustDecodeMeta(meta)))
+	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 	initOrder := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
 		Receiver:    []byte(senderAddr.String()),

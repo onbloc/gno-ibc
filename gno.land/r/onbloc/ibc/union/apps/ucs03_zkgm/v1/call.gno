@@ -1,8 +1,6 @@
 package impl
 
 import (
-	"errors"
-
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -10,20 +8,15 @@ import (
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
-var (
-	errEurekaUnsupported = errors.New("zkgm/v1: eureka mode not supported")
-	errInvalidCallSender = errors.New("zkgm/v1: invalid call sender")
-)
-
 // verifyCall rejects eureka mode and requires the call sender to match the dispatch sender.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2997-L3019
 func (v *ucs03ZkgmV1) verifyCall(_ int, rlm realm, call z.Call) error {
 	if call.Eureka {
-		return errEurekaUnsupported
+		return makeError(errEurekaUnsupported)
 	}
 
 	if string(call.Sender) != rlm.Previous().Address().String() {
-		return errInvalidCallSender
+		return makeError(errInvalidCallSender)
 	}
 
 	return nil
@@ -35,20 +28,20 @@ func (v *ucs03ZkgmV1) executeCall(_ int, rlm realm, packet types.Packet, relayer
 	// TODO: when eureka is supported, fail it closed on intent (return
 	// ACK_ERR_ONLY_MAKER) like every other opcode instead of a failure ack.
 	if call.Eureka {
-		return callErrAck(0, rlm, errEurekaUnsupported), nil
+		return callErrAck(0, rlm, makeError(errEurekaUnsupported)), nil
 	}
 
-	sender := cloneBytes(call.Sender)
-	calldata := cloneBytes(call.ContractCalldata)
+	sender := types.CloneBytes(call.Sender)
+	calldata := types.CloneBytes(call.ContractCalldata)
 	receiverPath := string(call.ContractAddress)
 	receiver, ok := v.store.GetReceiver(receiverPath)
 
 	if !ok || receiver == nil {
-		return callErrAck(0, rlm, errors.New("zkgm/v1: receiver not registered: "+receiverPath)), nil
+		return callErrAck(0, rlm, makeError(errReceiverNotRegistered, receiverPath)), nil
 	}
 
 	relayerStr := string(relayer)
-	proxyAccount := PredictCallProxyAccount(path, packet.DestinationChannelId, sender)
+	proxyAccount := z.PredictCallProxyAccount(path, packet.DestinationChannelId, sender)
 
 	// Intent settlement dispatches OnIntentZkgm to the receiver (union execute_call
 	// intent arm), and is maker-only: any receiver failure reverts to ACK_ERR_ONLY_MAKER
@@ -63,10 +56,10 @@ func (v *ucs03ZkgmV1) executeCall(_ int, rlm realm, packet types.Packet, relayer
 			Sender:             sender,
 			Calldata:           calldata,
 			MarketMaker:        []byte(relayerStr),
-			MarketMakerMsg:     cloneBytes(relayerMsg),
+			MarketMakerMsg:     types.CloneBytes(relayerMsg),
 		}
 		if err, panicked := safeCallOnIntentZkgm(0, rlm, receiver, env); panicked || err != nil {
-			return core.NewRecvPacketResult(types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
+			return core.NewRecvPacketResult(types.PacketStatusSuccess, types.CloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 		}
 
 		return callSuccessAck()
@@ -81,12 +74,12 @@ func (v *ucs03ZkgmV1) executeCall(_ int, rlm realm, packet types.Packet, relayer
 		Sender:             sender,
 		Calldata:           calldata,
 		Relayer:            []byte(relayerStr),
-		RelayerMsg:         cloneBytes(relayerMsg),
+		RelayerMsg:         types.CloneBytes(relayerMsg),
 	}
 
 	err, panicked := safeCallOnZkgm(0, rlm, receiver, env)
 	if panicked {
-		return core.NewRecvPacketResult(types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
+		return core.NewRecvPacketResult(types.PacketStatusSuccess, types.CloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 
 	if err != nil {
@@ -109,7 +102,7 @@ func callSuccessAck() (types.RecvPacketResult, error) {
 // acknowledgeCall is a no-op for standard calls; eureka mode is unsupported.
 func (v *ucs03ZkgmV1) acknowledgeCall(_ int, rlm realm, packet types.Packet, path *u256.Uint, call z.Call) error {
 	if call.Eureka {
-		return errEurekaUnsupported
+		return makeError(errEurekaUnsupported)
 	}
 
 	return nil
@@ -118,7 +111,7 @@ func (v *ucs03ZkgmV1) acknowledgeCall(_ int, rlm realm, packet types.Packet, pat
 // timeoutCall is a no-op for standard calls; eureka mode is unsupported.
 func (v *ucs03ZkgmV1) timeoutCall(_ int, rlm realm, packet types.Packet, path *u256.Uint, call z.Call) error {
 	if call.Eureka {
-		return errEurekaUnsupported
+		return makeError(errEurekaUnsupported)
 	}
 
 	return nil
@@ -196,17 +189,4 @@ func callErrAck(_ int, rlm realm, err error) types.RecvPacketResult {
 	}
 
 	return failureResult(ack)
-}
-
-// cloneBytes returns a fresh realm-local copy of in, detaching the realm taint on
-// slices that crossed the proxy/impl boundary. copy is an element-wise read (not a
-// conversion), so it is permitted on a readonly source; a []byte->string->[]byte
-// round-trip (which gno elides) would instead keep the foreign ownership and a
-// later store/convert would panic with "illegal conversion of readonly or
-// externally stored value".
-func cloneBytes(in []byte) []byte {
-	out := make([]byte, len(in))
-	copy(out, in)
-
-	return out
 }

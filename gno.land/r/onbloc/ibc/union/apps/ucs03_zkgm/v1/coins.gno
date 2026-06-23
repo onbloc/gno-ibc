@@ -2,7 +2,6 @@ package impl
 
 import (
 	"chain"
-	"errors"
 	"strconv"
 	"strings"
 
@@ -69,7 +68,7 @@ func (f *funds) sub(denom string, amount *u256.Uint) error {
 	for i := range f.coins {
 		if f.coins[i].Denom == denom {
 			if f.coins[i].Amount < want {
-				return errCoinMismatch
+				return makeError(errCoinMismatch)
 			}
 
 			f.coins[i].Amount -= want
@@ -78,7 +77,7 @@ func (f *funds) sub(denom string, amount *u256.Uint) error {
 		}
 	}
 
-	return errCoinMismatch
+	return makeError(errCoinMismatch)
 }
 
 // isEmpty reports whether every attached coin has been fully consumed.
@@ -95,10 +94,8 @@ func (f *funds) isEmpty() bool {
 // assertEmpty errors when any attached coin is left unconsumed.
 func (f *funds) assertEmpty() error {
 	if !f.isEmpty() {
-		return errCoinMismatch
+		return makeError(errCoinMismatch)
 	}
 
 	return nil
 }
-
-var errCoinMismatch = errors.New("zkgm/coins: sent coin mismatch")

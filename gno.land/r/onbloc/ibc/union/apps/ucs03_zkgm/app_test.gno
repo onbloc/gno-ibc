@@ -51,7 +51,7 @@ func TestOnChannelOpenInitOnlyIbc(cur realm, t *testing.T) {
 	currentImpl = d
 
 	// Do NOT impersonate core - call from a non-core realm
-	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
+	uassert.AbortsContains(t, cur, "ibc host only", func() {
 		(&App{}).OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer"))
 	})
 
@@ -112,7 +112,7 @@ func TestOnChannelOpenTryOnlyIbc(cur realm, t *testing.T) {
 	currentImpl = d
 
 	// Do NOT impersonate core - call from a non-core realm
-	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
+	uassert.AbortsContains(t, cur, "ibc host only", func() {
 		(&App{}).OnChannelOpenTry(cross(cur), 1, 2, Version, Version, address("g1relayer"))
 	})
 
@@ -174,7 +174,7 @@ func TestOnChannelCloseInitOnlyIbc(cur realm, t *testing.T) {
 
 	// Do NOT impersonate core - call from a non-core realm
 	// The caller gate runs before the close rejection
-	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
+	uassert.AbortsContains(t, cur, "ibc host only", func() {
 		(&App{}).OnChannelCloseInit(cross(cur), 2, address("g1relayer"))
 	})
 
@@ -214,7 +214,7 @@ func TestOnChannelCloseConfirmOnlyIbc(cur realm, t *testing.T) {
 
 	// Do NOT impersonate core - call from a non-core realm
 	// The caller gate runs before the close rejection
-	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
+	uassert.AbortsContains(t, cur, "ibc host only", func() {
 		(&App{}).OnChannelCloseConfirm(cross(cur), 2, address("g1relayer"))
 	})
 
@@ -238,7 +238,7 @@ func TestOnChannelOpenInitPausedBlocks(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
 	// Union: paused check happens before any callback logic
-	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+	uassert.AbortsContains(t, cur, "paused", func() {
 		(&App{}).OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer"))
 	})
 
@@ -257,7 +257,7 @@ func TestOnChannelOpenTryPausedBlocks(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
-	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+	uassert.AbortsContains(t, cur, "paused", func() {
 		(&App{}).OnChannelOpenTry(cross(cur), 1, 2, Version, Version, address("g1relayer"))
 	})
 
@@ -276,7 +276,7 @@ func TestOnChannelOpenAckPausedBlocks(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
-	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+	uassert.AbortsContains(t, cur, "paused", func() {
 		(&App{}).OnChannelOpenAck(cross(cur), 2, 3, Version, address("g1relayer"))
 	})
 
@@ -295,7 +295,7 @@ func TestOnChannelOpenConfirmPausedBlocks(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
-	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+	uassert.AbortsContains(t, cur, "paused", func() {
 		(&App{}).OnChannelOpenConfirm(cross(cur), 2, address("g1relayer"))
 	})
 
@@ -315,7 +315,7 @@ func TestOnChannelCloseInitPausedBlocks(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
 	// Pause check happens before "the show must go on" panic
-	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+	uassert.AbortsContains(t, cur, "paused", func() {
 		(&App{}).OnChannelCloseInit(cross(cur), 2, address("g1relayer"))
 	})
 
@@ -334,7 +334,7 @@ func TestOnChannelCloseConfirmPausedBlocks(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
 	// Pause check happens before "the show must go on" panic
-	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+	uassert.AbortsContains(t, cur, "paused", func() {
 		(&App{}).OnChannelCloseConfirm(cross(cur), 2, address("g1relayer"))
 	})
 
@@ -368,7 +368,7 @@ func TestAllChannelCallbacksRequireIbcHost(cur realm, t *testing.T) {
 	for i, cb := range callbacks {
 		resetZkgmForTest(cur)
 		currentImpl = d
-		uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() { cb() })
+		uassert.AbortsContains(t, cur, "ibc host only", func() { cb() })
 
 		// Verify no delegation happened
 		if d.openInitCalled || d.openTryCalled || d.openAckCalled || d.openConfirmCalled || d.closeInitCalled || d.closeConfirmCalled {
@@ -413,7 +413,7 @@ func TestOnRecvPacketOnlyIbc(cur realm, t *testing.T) {
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Non-IBC caller is rejected
-	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
+	uassert.AbortsContains(t, cur, "ibc host only", func() {
 		(&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
 	})
 
@@ -433,7 +433,7 @@ func TestOnIntentRecvPacketOnlyIbc(cur realm, t *testing.T) {
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Non-IBC caller is rejected
-	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
+	uassert.AbortsContains(t, cur, "ibc host only", func() {
 		(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
 	})
 
@@ -453,7 +453,7 @@ func TestOnAcknowledgementPacketOnlyIbc(cur realm, t *testing.T) {
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Non-IBC caller is rejected
-	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
+	uassert.AbortsContains(t, cur, "ibc host only", func() {
 		(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
 	})
 
@@ -473,7 +473,7 @@ func TestOnTimeoutPacketOnlyIbc(cur realm, t *testing.T) {
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Non-IBC caller is rejected
-	uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() {
+	uassert.AbortsContains(t, cur, "ibc host only", func() {
 		(&App{}).OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
 	})
 

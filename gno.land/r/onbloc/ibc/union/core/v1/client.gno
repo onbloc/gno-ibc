@@ -12,6 +12,10 @@ import (
 // Union reference:
 // https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/core/src/contract.rs#L849-L865
 func (c *coreV1) RegisterClient(_ int, rlm realm, clientType types.ClientType, clientImpl lightclient.ClientImpl) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	if clientImpl == nil {
 		panic("caller not authorized to register client: unauthorized")
 	}
@@ -28,6 +32,10 @@ func (c *coreV1) HasClient(clientType types.ClientType) bool {
 // the submitted state bytes, then lets the light client verify creation against
 // that freshly stored state.
 func (c *coreV1) CreateClient(_ int, rlm realm, msg types.MsgCreateClient) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	creator := rlm.Previous().Address()
 	relayer := resolveRelayer(creator, msg.Relayer)
 	clientImpl, ok := c.store.ClientRegistry(msg.ClientType)
@@ -83,13 +91,13 @@ func (c *coreV1) initClient(_ int, rlm realm, clientId types.ClientId, clientSta
 // updates its own state, and mirrors the resulting state bytes for queries and
 // counterparty proofs.
 func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) {
-	lc, ok := c.store.GetLightClient(msg.ClientId)
-	if !ok {
-		panic("client " + msg.ClientId.String() + " not found")
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
 	}
 
-	if lc.Status() != lightclient.Active {
-		panic(core.ErrClientNotActive)
+	lc, err := c.getActiveClient(msg.ClientId)
+	if err != nil {
+		panic(err)
 	}
 
 	caller := rlm.Previous().Address()
@@ -105,6 +113,7 @@ func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) {
 	if len(update.ClientStateBytes) != 0 {
 		c.store.SaveClientState(0, rlm, msg.ClientId, update.ClientStateBytes)
 	}
+
 	// Union stores consensus_state_bytes unconditionally because the field is not
 	// optional in the update response.
 	c.store.SaveConsensusState(0, rlm, msg.ClientId, height, update.ConsensusStateBytes)
@@ -117,14 +126,20 @@ func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) {
 }
 
 func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateClient) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	clientImpl, ok := c.store.GetClientImpl(msg.ClientId)
 	if !ok {
-		panic("client " + msg.ClientId.String() + " not found")
+		panic(makeError(core.ErrClientNotFound, msg.ClientId.String()))
 	}
+
 	next, err := clientImpl(msg.ClientStateBytes, msg.ConsensusStateBytes)
 	if err != nil {
 		panic("force update client: " + err.Error())
 	}
+
 	c.store.SetLightClient(0, rlm, msg.ClientId, next)
 
 	caller := rlm.Previous().Address()
@@ -139,13 +154,13 @@ func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateCli
 // mirror / ClientStatePath commitment before emitting the event.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L1048-L1093
 func (c *coreV1) Misbehaviour(_ int, rlm realm, msg types.MsgMisbehaviour) {
-	lc, ok := c.store.GetLightClient(msg.ClientId)
-	if !ok {
-		panic("client " + msg.ClientId.String() + " not found")
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
 	}
 
-	if lc.Status() != lightclient.Active {
-		panic(core.ErrClientNotActive)
+	lc, err := c.getActiveClient(msg.ClientId)
+	if err != nil {
+		panic(err)
 	}
 
 	caller := rlm.Previous().Address()
@@ -166,22 +181,52 @@ func (c *coreV1) Misbehaviour(_ int, rlm realm, msg types.MsgMisbehaviour) {
 // VerifyClientMembership verifies a membership proof against a registered, active
 // light client. It does not commit the verified value into the host state.
 func (c *coreV1) VerifyClientMembership(_ int, rlm realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	c.verifyMembership(clientId, proofHeight, proof, path, value)
 }
 
 // verifyMembership checks a membership proof against a registered, active light
 // client. Shared by VerifyClientMembership and the connection/channel handshakes.
 func (c *coreV1) verifyMembership(clientId types.ClientId, height types.Height, proof, key, value []byte) {
+	lc, err := c.getActiveClient(clientId)
+	if err != nil {
+		panic(err)
+	}
+
+	err = lc.VerifyMembership(height.RevisionHeight, key, proof, value)
+	if err != nil {
+		panic(err)
+	}
+}
+
+// getClient returns the light client registered under clientId, or an error
+// when no client is registered for it. The caller (entrypoint) decides whether
+// a miss reverts.
+func (c *coreV1) getClient(clientId types.ClientId) (lightclient.Interface, error) {
 	lc, ok := c.store.GetLightClient(clientId)
 	if !ok {
-		panic("client " + clientId.String() + " not found")
+		return nil, makeError(core.ErrClientNotFound, clientId.String())
+	}
+
+	return lc, nil
+}
+
+// getActiveClient returns the light client registered under clientId, or an
+// error when it is missing or not in the Active status. It centralizes the
+// "registered and active" precondition shared by the update, misbehaviour, and
+// proof-verification paths.
+func (c *coreV1) getActiveClient(clientId types.ClientId) (lightclient.Interface, error) {
+	lc, err := c.getClient(clientId)
+	if err != nil {
+		return nil, err
 	}
 
 	if lc.Status() != lightclient.Active {
-		panic(core.ErrClientNotActive)
+		return nil, makeError(core.ErrClientNotActive)
 	}
 
-	if err := lc.VerifyMembership(height.RevisionHeight, key, proof, value); err != nil {
-		panic(err)
-	}
+	return lc, nil
 }

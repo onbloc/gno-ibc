@@ -34,13 +34,13 @@ func EncodeClientState(cs *ClientState) ([]byte, error) {
 	}
 
 	return abienc.Encode(clientStateSchema, []any{
-		cs.ChainID,
-		cs.TrustingPeriod,
-		cs.UnbondingPeriod,
-		cs.MaxClockDrift,
-		cs.FrozenHeight.RevisionHeight,
+		cs.GetChainID(),
+		cs.GetTrustingPeriod(),
+		cs.GetUnbondingPeriod(),
+		cs.GetMaxClockDrift(),
+		cs.GetFrozenRevisionHeight(),
 		cs.GetLatestRevisionHeight(),
-		[32]byte(cs.ContractAddress),
+		[32]byte(cs.GetContractAddress()),
 	})
 }
 
@@ -68,12 +68,12 @@ func EncodeConsensusState(cs *ConsensusState) ([]byte, error) {
 		return nil, errors.New("cometbls: nil consensus state")
 	}
 
-	root, err := toBytes32(cs.Root.Hash, "root hash")
+	root, err := toBytes32(cs.GetRootHash())
 	if err != nil {
 		return nil, err
 	}
 
-	nextValidatorsHash, err := toBytes32(cs.NextValidatorsHash, "next validators hash")
+	nextValidatorsHash, err := toBytes32(cs.GetNextValidatorsHash())
 	if err != nil {
 		return nil, err
 	}

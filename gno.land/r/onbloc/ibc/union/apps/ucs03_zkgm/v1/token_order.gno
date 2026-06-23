@@ -121,8 +121,9 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
-	// Predict the wrapped denom for an escrow/initialize order. A mismatch (or an
-	// under-quote) is not an error: the order falls back to a market-maker fill.
+	// Predict the wrapped denom for an escrow/initialize order.
+	// A mismatch (or an under-quote) is not an error:
+	// the order falls back to a market-maker fill.
 	var (
 		wrapped     string
 		hasWrapped  bool

@@ -48,17 +48,17 @@ func EncodeHeader(h *Header) ([]byte, error) {
 
 	lh := h.SignedHeader
 
-	vh, err := toBytes32(lh.ValidatorsHash, "validators hash")
+	vh, err := toBytes32(lh.ValidatorsHash)
 	if err != nil {
 		return nil, err
 	}
 
-	nvh, err := toBytes32(lh.NextValidatorsHash, "next validators hash")
+	nvh, err := toBytes32(lh.NextValidatorsHash)
 	if err != nil {
 		return nil, err
 	}
 
-	ah, err := toBytes32(lh.AppHash, "app hash")
+	ah, err := toBytes32(lh.AppHash)
 	if err != nil {
 		return nil, err
 	}
@@ -187,10 +187,10 @@ func DecodeMisbehaviour(buf []byte) (*Misbehaviour, error) {
 
 // toBytes32 converts a 32-byte slice into a [32]byte array, returning an error
 // for any other length.
-func toBytes32(b []byte, label string) ([32]byte, error) {
+func toBytes32(b []byte) ([32]byte, error) {
 	var out [32]byte
 	if len(b) != 32 {
-		return out, errors.New("cometbls: " + label + " must be 32 bytes")
+		return out, errors.New("cometbls: must be 32 bytes")
 	}
 
 	copy(out[:], b)

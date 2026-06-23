@@ -50,14 +50,34 @@ func (cs *ClientState) GetChainID() string {
 	return cs.ChainID
 }
 
+func (cs *ClientState) GetTrustingPeriod() uint64 {
+	return cs.TrustingPeriod
+}
+
+func (cs *ClientState) GetUnbondingPeriod() uint64 {
+	return cs.UnbondingPeriod
+}
+
+func (cs *ClientState) GetMaxClockDrift() uint64 {
+	return cs.MaxClockDrift
+}
+
 // GetLatestHeight returns latest block height.
 func (cs *ClientState) GetLatestHeight() types.Height {
 	return cs.LatestHeight
 }
 
+func (cs *ClientState) GetFrozenRevisionHeight() uint64 {
+	return cs.FrozenHeight.RevisionHeight
+}
+
 // GetLatestRevisionHeight returns latest block height.
 func (cs *ClientState) GetLatestRevisionHeight() uint64 {
 	return cs.LatestHeight.RevisionHeight
+}
+
+func (cs *ClientState) GetContractAddress() types.H256 {
+	return cs.ContractAddress
 }
 
 // IsExpired returns whether or not the client has passed the trusting period since the last

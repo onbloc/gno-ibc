@@ -26,6 +26,10 @@ func (cs *ConsensusState) GetRoot() MerkleRoot {
 	return cs.Root
 }
 
+func (cs *ConsensusState) GetRootHash() []byte {
+	return cs.Root.Hash
+}
+
 func (cs *ConsensusState) GetTimestamp() uint64 {
 	return cs.Timestamp
 }

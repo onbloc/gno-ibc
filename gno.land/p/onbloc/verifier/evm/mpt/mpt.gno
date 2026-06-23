@@ -131,7 +131,7 @@ func walk(root []byte, path []byte, proof [][]byte) (walkResult, error) {
 			if err != nil {
 				return walkResult{}, err
 			}
-			if !hasPrefix(path[pos:], partial) {
+			if !bytes.HasPrefix(path[pos:], partial) {
 				return finishWalk(walkResult{found: false}, proofIndex, proof)
 			}
 			pos += len(partial)
@@ -234,16 +234,4 @@ func compactDecode(encoded []byte) (bool, []byte, error) {
 		return false, nil, ErrPathMismatch
 	}
 	return leaf, out, nil
-}
-
-func hasPrefix(path []byte, prefix []byte) bool {
-	if len(prefix) > len(path) {
-		return false
-	}
-	for i := range prefix {
-		if path[i] != prefix[i] {
-			return false
-		}
-	}
-	return true
 }

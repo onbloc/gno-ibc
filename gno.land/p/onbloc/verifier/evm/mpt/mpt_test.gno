@@ -308,26 +308,3 @@ func TestCompactDecode(t *testing.T) {
 		})
 	}
 }
-
-func TestHasPrefix(t *testing.T) {
-	tests := []struct {
-		name   string
-		path   []byte
-		prefix []byte
-		want   bool
-	}{
-		{name: "empty prefix", path: []byte{0x01}, prefix: nil, want: true},
-		{name: "both empty", path: nil, prefix: nil, want: true},
-		{name: "prefix longer", path: []byte{0x01}, prefix: []byte{0x01, 0x02}, want: false},
-		{name: "matches", path: []byte{0x01, 0x02, 0x03}, prefix: []byte{0x01, 0x02}, want: true},
-		{name: "mismatch", path: []byte{0x01, 0x02}, prefix: []byte{0x01, 0x03}, want: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := hasPrefix(tt.path, tt.prefix); got != tt.want {
-				t.Fatalf("hasPrefix: got %v want %v", got, tt.want)
-			}
-		})
-	}
-}

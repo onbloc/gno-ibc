@@ -62,7 +62,7 @@ func TestGetMissingClient(cur realm, t *testing.T) {
 	_, err = v.GetClientStateBytes(types.ClientId(99))
 	uassert.ErrorIs(t, err, core.ErrClientStateNotFound)
 	_, err = v.GetConsensusStateBytes(types.ClientId(99), types.NewHeight(1))
-	uassert.ErrorIs(t, err, core.ErrConsensusNotFound)
+	uassert.ErrorIs(t, err, core.ErrConsensusStateNotFound)
 }
 
 func TestGetFrozenStatus(cur realm, t *testing.T) {
@@ -110,16 +110,16 @@ func TestGetBatchPacketAndReceiptCommitments(cur realm, t *testing.T) {
 	v.store.SaveBatchPackets(0, cur, chId, batchHash, packetValue)
 	v.store.SaveBatchReceipts(0, cur, chId, batchHash, receiptValue)
 
-	gotPacket, ok := v.GetBatchPacketsCommitment(chId, batchHash)
-	uassert.True(t, ok)
+	gotPacket, err := v.GetBatchPacketsCommitment(batchHash)
+	uassert.NoError(t, err)
 	uassert.True(t, gotPacket == packetValue)
 
-	gotReceipt, ok := v.GetBatchReceiptsCommitment(chId, batchHash)
-	uassert.True(t, ok)
+	gotReceipt, err := v.GetBatchReceiptsCommitment(batchHash)
+	uassert.NoError(t, err)
 	uassert.True(t, gotReceipt == receiptValue)
 
-	_, ok = v.GetBatchPacketsCommitment(chId, types.Keccak([]byte("missing")))
-	uassert.False(t, ok)
-	_, ok = v.GetBatchReceiptsCommitment(chId, types.Keccak([]byte("missing")))
-	uassert.False(t, ok)
+	_, err = v.GetBatchPacketsCommitment(types.Keccak([]byte("missing")))
+	uassert.ErrorIs(t, err, core.ErrBatchPacketsNotFound)
+	_, err = v.GetBatchReceiptsCommitment(types.Keccak([]byte("missing")))
+	uassert.ErrorIs(t, err, core.ErrBatchReceiptsNotFound)
 }

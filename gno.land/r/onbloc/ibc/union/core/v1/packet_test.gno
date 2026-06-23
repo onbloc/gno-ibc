@@ -931,7 +931,7 @@ func TestBatchAcksAggregatesReceipts(cur realm, t *testing.T) {
 	v.BatchAcks(0, cur, types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: [][]byte{[]byte("ack"), []byte("ack")}})
 
 	batchHash := core.CommitPacketsHash([]types.Packet{p1, p2})
-	receipt, ok := v.store.BatchReceiptsAt(chId, batchHash)
+	receipt, ok := v.store.BatchReceiptsAt(batchHash)
 	uassert.True(t, ok)
 	uassert.True(t, receipt == types.CommitAcks([][]byte{[]byte("ack"), []byte("ack")}))
 }
@@ -1042,7 +1042,7 @@ func TestBatchAcksLengthMismatchPersistsProvidedAcks(cur realm, t *testing.T) {
 			v.BatchAcks(0, cur, types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: tc.acks})
 
 			batchHash := core.CommitPacketsHash([]types.Packet{p1, p2})
-			receipt, ok := v.store.BatchReceiptsAt(chId, batchHash)
+			receipt, ok := v.store.BatchReceiptsAt(batchHash)
 			uassert.True(t, ok)
 			uassert.True(t, receipt == types.CommitAcks(tc.acks))
 		})

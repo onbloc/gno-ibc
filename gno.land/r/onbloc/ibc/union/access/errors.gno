@@ -3,7 +3,7 @@ package access
 import (
 	"strconv"
 
-	manager "gno.land/p/onbloc/access/manager"
+	"gno.land/p/onbloc/access/manager"
 )
 
 const (

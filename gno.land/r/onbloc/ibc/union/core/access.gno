@@ -1,7 +1,7 @@
 package core
 
 import (
-	manager "gno.land/p/onbloc/access/manager"
+	"gno.land/p/onbloc/access/manager"
 	"gno.land/p/onbloc/ibc/union/types"
 	"gno.land/r/onbloc/ibc/union/access"
 )

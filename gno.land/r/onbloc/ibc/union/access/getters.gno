@@ -1,6 +1,6 @@
 package access
 
-import manager "gno.land/p/onbloc/access/manager"
+import "gno.land/p/onbloc/access/manager"
 
 func HasRole(cur realm, role manager.RoleId, account address) manager.HasRoleResult {
 	return accessState.HasRole(role, account)

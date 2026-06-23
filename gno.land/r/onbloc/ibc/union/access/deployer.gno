@@ -1,7 +1,7 @@
 package access
 
 import (
-	manager "gno.land/p/onbloc/access/manager"
+	"gno.land/p/onbloc/access/manager"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 

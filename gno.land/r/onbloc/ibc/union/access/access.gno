@@ -1,6 +1,6 @@
 package access
 
-import manager "gno.land/p/onbloc/access/manager"
+import "gno.land/p/onbloc/access/manager"
 
 var accessState manager.State
 

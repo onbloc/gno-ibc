@@ -1,6 +1,6 @@
 package zkgm
 
-import manager "gno.land/p/onbloc/access/manager"
+import "gno.land/p/onbloc/access/manager"
 
 const (
 	SelectorUpdateImpl           manager.Selector = "update_impl"

@@ -5,7 +5,7 @@ import (
 
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
-	manager "gno.land/p/onbloc/access/manager"
+	"gno.land/p/onbloc/access/manager"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 

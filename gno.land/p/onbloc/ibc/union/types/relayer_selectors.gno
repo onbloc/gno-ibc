@@ -1,6 +1,6 @@
 package types
 
-import manager "gno.land/p/onbloc/access/manager"
+import "gno.land/p/onbloc/access/manager"
 
 const (
 	RelayerSelectorRegisterClient        manager.Selector = "register_client"

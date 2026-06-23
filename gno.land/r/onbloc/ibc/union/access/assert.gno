@@ -1,6 +1,6 @@
 package access
 
-import manager "gno.land/p/onbloc/access/manager"
+import "gno.land/p/onbloc/access/manager"
 
 func AssertCanCall(cur realm, selector manager.Selector, caller address) {
 	target := cur.Previous().PkgPath()

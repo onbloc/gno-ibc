@@ -3,7 +3,7 @@ package transfer
 import (
 	"chain"
 
-	manager "gno.land/p/onbloc/access/manager"
+	"gno.land/p/onbloc/access/manager"
 	"gno.land/r/onbloc/ibc/union/access"
 )
 

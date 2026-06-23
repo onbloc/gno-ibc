@@ -4,7 +4,7 @@ import (
 	"chain"
 	"strconv"
 
-	manager "gno.land/p/onbloc/access/manager"
+	"gno.land/p/onbloc/access/manager"
 )
 
 func emitRoleLabelEvent(role manager.RoleId, label string) {

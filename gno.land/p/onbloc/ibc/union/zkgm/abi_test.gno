@@ -336,6 +336,140 @@ func TestMetadataWrapperRoundTrip(t *testing.T) {
 	}
 }
 
+func TestTokenMetadataRoundTrip(t *testing.T) {
+	tests := []struct {
+		name    string
+		m       TokenMetadata
+		data    []byte
+		wantErr bool
+	}{
+		{
+			name:    "empty",
+			data:    []byte{},
+			wantErr: true,
+		},
+		{
+			name:    "truncated",
+			data:    mustHex("0000000000000000000000000000000000000000000000000000000000000001"),
+			wantErr: true,
+		},
+		{
+			name:    "wrong layout",
+			data:    mustHex("cafe"),
+			wantErr: true,
+		},
+		{
+			name: "empty values",
+			m:    TokenMetadata{Implementation: []byte{}, Initializer: []byte{}},
+		},
+		{
+			name: "grc20 implementation",
+			m:    TokenMetadata{Implementation: []byte("grc20"), Initializer: mustHex("deadbeef")},
+		},
+		{
+			name: "large initializer",
+			m:    TokenMetadata{Implementation: []byte("impl"), Initializer: bytes.Repeat([]byte{0xaa}, 100)},
+		},
+		{
+			name: "nil initializer",
+			m:    TokenMetadata{Implementation: []byte("custom"), Initializer: nil},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.wantErr {
+				_, err := DecodeTokenMetadata(tt.data)
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+			data, err := EncodeTokenMetadata(tt.m)
+			if err != nil {
+				t.Fatalf("EncodeTokenMetadata: %v", err)
+			}
+			decoded, err := DecodeTokenMetadata(data)
+			if err != nil {
+				t.Fatalf("DecodeTokenMetadata: %v", err)
+			}
+			if !bytes.Equal(decoded.Implementation, tt.m.Implementation) {
+				t.Fatalf("implementation mismatch")
+			}
+			if !bytes.Equal(decoded.Initializer, tt.m.Initializer) {
+				t.Fatalf("initializer mismatch")
+			}
+		})
+	}
+}
+
+func TestSolverMetadataRoundTrip(t *testing.T) {
+	tests := []struct {
+		name    string
+		m       SolverMetadata
+		data    []byte
+		wantErr bool
+	}{
+		{
+			name:    "empty",
+			data:    []byte{},
+			wantErr: true,
+		},
+		{
+			name:    "truncated",
+			data:    mustHex("0000000000000000000000000000000000000000000000000000000000000001"),
+			wantErr: true,
+		},
+		{
+			name:    "wrong layout",
+			data:    mustHex("cafe"),
+			wantErr: true,
+		},
+		{
+			name: "empty values",
+			m:    SolverMetadata{SolverAddress: []byte{}, Metadata: []byte{}},
+		},
+		{
+			name: "typical solver",
+			m:    SolverMetadata{SolverAddress: mustHex("deadbeef"), Metadata: mustHex("0dd1a0")},
+		},
+		{
+			name: "large metadata",
+			m:    SolverMetadata{SolverAddress: mustHex("cafecafe"), Metadata: bytes.Repeat([]byte{0xbb}, 100)},
+		},
+		{
+			name: "nil metadata",
+			m:    SolverMetadata{SolverAddress: mustHex("aa"), Metadata: nil},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.wantErr {
+				_, err := DecodeSolverMetadata(tt.data)
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+			data, err := EncodeSolverMetadata(tt.m)
+			if err != nil {
+				t.Fatalf("EncodeSolverMetadata: %v", err)
+			}
+			decoded, err := DecodeSolverMetadata(data)
+			if err != nil {
+				t.Fatalf("DecodeSolverMetadata: %v", err)
+			}
+			if !bytes.Equal(decoded.SolverAddress, tt.m.SolverAddress) {
+				t.Fatalf("solver_address mismatch")
+			}
+			if !bytes.Equal(decoded.Metadata, tt.m.Metadata) {
+				t.Fatalf("metadata mismatch")
+			}
+		})
+	}
+}
+
 func TestInstructionValues(t *testing.T) {
 	tests := []struct {
 		name string
@@ -542,20 +676,181 @@ func TestEncodeForward(t *testing.T) {
 	}
 }
 
-func TestDecodeForwardErrors(t *testing.T) {
+func TestDecodeForward(t *testing.T) {
 	tests := []struct {
-		name string
-		data []byte
+		name       string
+		data       []byte
+		want       Forward
+		wantErr    bool
 	}{
-		{"empty", []byte{}},
-		{"truncated", mustHex("0000000000000000000000000000000000000000000000000000000000000001")},
-		{"wrong layout", mustHex("00")},
+		{
+			name:    "empty",
+			data:    []byte{},
+			wantErr: true,
+		},
+		{
+			name:    "truncated",
+			data:    mustHex("0000000000000000000000000000000000000000000000000000000000000001"),
+			wantErr: true,
+		},
+		{
+			name:    "wrong layout",
+			data:    mustHex("00"),
+			wantErr: true,
+		},
+		{
+			name: "minimal values",
+			data: mustEncodeForward(Forward{
+				Path: u256.NewUint(0),
+				TimeoutHeight:    0,
+				TimeoutTimestamp: 0,
+				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte{}},
+			}),
+			want: Forward{
+				Path: u256.NewUint(0),
+				TimeoutHeight:    0,
+				TimeoutTimestamp: 0,
+				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte{}},
+			},
+		},
+		{
+			name: "typical values",
+			data: mustEncodeForward(Forward{
+				Path: u256.NewUint(123),
+				TimeoutHeight:    5000,
+				TimeoutTimestamp: 10000,
+				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_BATCH, Operand: []byte{0xab, 0xcd}},
+			}),
+			want: Forward{
+				Path: u256.NewUint(123),
+				TimeoutHeight:    5000,
+				TimeoutTimestamp: 10000,
+				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_BATCH, Operand: []byte{0xab, 0xcd}},
+			},
+		},
+		{
+			name: "large path and timeouts",
+			data: mustEncodeForward(Forward{
+				Path: u256.NewUint(18446744073709551615),
+				TimeoutHeight:    18446744073709551615,
+				TimeoutTimestamp: 18446744073709551615,
+				Instruction:      Instruction{Version: INSTR_VERSION_1, Opcode: OP_TOKEN_ORDER, Operand: []byte{0xff}},
+			}),
+			want: Forward{
+				Path: u256.NewUint(18446744073709551615),
+				TimeoutHeight:    18446744073709551615,
+				TimeoutTimestamp: 18446744073709551615,
+				Instruction:      Instruction{Version: INSTR_VERSION_1, Opcode: OP_TOKEN_ORDER, Operand: []byte{0xff}},
+			},
+		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := DecodeForward(tt.data)
-			if err == nil {
-				t.Fatalf("expected error, got nil")
+			got, err := DecodeForward(tt.data)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("DecodeForward: %v", err)
+			}
+			if got.Path.ToString() != tt.want.Path.ToString() {
+				t.Fatalf("path: got %s want %s", got.Path.ToString(), tt.want.Path.ToString())
+			}
+			if got.TimeoutHeight != tt.want.TimeoutHeight {
+				t.Fatalf("timeout_height: got %d want %d", got.TimeoutHeight, tt.want.TimeoutHeight)
+			}
+			if got.TimeoutTimestamp != tt.want.TimeoutTimestamp {
+				t.Fatalf("timeout_timestamp: got %d want %d", got.TimeoutTimestamp, tt.want.TimeoutTimestamp)
+			}
+			if got.Instruction.Version != tt.want.Instruction.Version {
+				t.Fatalf("instruction version: got %d want %d", got.Instruction.Version, tt.want.Instruction.Version)
+			}
+			if got.Instruction.Opcode != tt.want.Instruction.Opcode {
+				t.Fatalf("instruction opcode: got %d want %d", got.Instruction.Opcode, tt.want.Instruction.Opcode)
+			}
+			if !bytes.Equal(got.Instruction.Operand, tt.want.Instruction.Operand) {
+				t.Fatalf("instruction operand: got %x want %x", got.Instruction.Operand, tt.want.Instruction.Operand)
+			}
+		})
+	}
+}
+
+func TestCallRoundTrip(t *testing.T) {
+	tests := []struct {
+		name    string
+		c       Call
+		data    []byte
+		wantErr bool
+	}{
+		{
+			name:    "empty",
+			data:    []byte{},
+			wantErr: true,
+		},
+		{
+			name:    "truncated",
+			data:    mustHex("0000000000000000000000000000000000000000000000000000000000000001"),
+			wantErr: true,
+		},
+		{
+			name:    "wrong layout",
+			data:    mustHex("cafe"),
+			wantErr: true,
+		},
+		{
+			name: "minimal values",
+			c:    Call{Sender: []byte{}, Eureka: false, ContractAddress: []byte{}, ContractCalldata: []byte{}},
+		},
+		{
+			name: "typical values",
+			c:    Call{Sender: mustHex("aabbccdd"), Eureka: false, ContractAddress: mustHex("deadbeef"), ContractCalldata: []byte("calldata")},
+		},
+		{
+			name: "eureka enabled",
+			c:    Call{Sender: mustHex("ffee"), Eureka: true, ContractAddress: mustHex("ddbb"), ContractCalldata: []byte("data")},
+		},
+		{
+			name: "large calldata",
+			c:    Call{Sender: mustHex("deadbeefdeadbeef"), Eureka: false, ContractAddress: mustHex("cafecafecafe"), ContractCalldata: bytes.Repeat([]byte{0xcc}, 100)},
+		},
+		{
+			name: "nil calldata",
+			c:    Call{Sender: mustHex("aa"), Eureka: false, ContractAddress: mustHex("bb"), ContractCalldata: nil},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.wantErr {
+				_, err := DecodeCall(tt.data)
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+			data, err := EncodeCall(tt.c)
+			if err != nil {
+				t.Fatalf("EncodeCall: %v", err)
+			}
+			decoded, err := DecodeCall(data)
+			if err != nil {
+				t.Fatalf("DecodeCall: %v", err)
+			}
+			if !bytes.Equal(decoded.Sender, tt.c.Sender) {
+				t.Fatalf("sender mismatch")
+			}
+			if decoded.Eureka != tt.c.Eureka {
+				t.Fatalf("eureka: got %v want %v", decoded.Eureka, tt.c.Eureka)
+			}
+			if !bytes.Equal(decoded.ContractAddress, tt.c.ContractAddress) {
+				t.Fatalf("contract_address mismatch")
+			}
+			if !bytes.Equal(decoded.ContractCalldata, tt.c.ContractCalldata) {
+				t.Fatalf("contract_calldata mismatch")
 			}
 		})
 	}
@@ -847,6 +1142,80 @@ func TestDecodeTokenOrderV2Errors(t *testing.T) {
 			_, err := DecodeTokenOrderV2(tt.data)
 			if err == nil {
 				t.Fatalf("expected error, got nil")
+			}
+		})
+	}
+}
+
+func TestTokenInitializerRoundTrip(t *testing.T) {
+	tests := []struct {
+		name    string
+		ti      TokenInitializer
+		data    []byte
+		wantErr bool
+	}{
+		{
+			name:    "empty",
+			data:    []byte{},
+			wantErr: true,
+		},
+		{
+			name:    "truncated",
+			data:    mustHex("0000000000000000000000000000000000000000000000000000000000000020"),
+			wantErr: true,
+		},
+		{
+			name:    "wrong layout",
+			data:    mustHex("cafe"),
+			wantErr: true,
+		},
+		{
+			name: "minimal values",
+			ti:   TokenInitializer{Name: "", Symbol: "", Decimals: 0},
+		},
+		{
+			name: "typical token",
+			ti:   TokenInitializer{Name: "Test Token", Symbol: "TST", Decimals: 18},
+		},
+		{
+			name: "maximum decimals",
+			ti:   TokenInitializer{Name: "USD Coin", Symbol: "USDC", Decimals: 255},
+		},
+		{
+			name: "single character name and symbol",
+			ti:   TokenInitializer{Name: "A", Symbol: "B", Decimals: 6},
+		},
+		{
+			name: "long name and symbol",
+			ti:   TokenInitializer{Name: "Very Long Token Name With Many Words", Symbol: "VLONG", Decimals: 12},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.wantErr {
+				_, err := DecodeTokenInitializer(tt.data)
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+			data, err := EncodeTokenInitializer(tt.ti)
+			if err != nil {
+				t.Fatalf("EncodeTokenInitializer: %v", err)
+			}
+			decoded, err := DecodeTokenInitializer(data)
+			if err != nil {
+				t.Fatalf("DecodeTokenInitializer: %v", err)
+			}
+			if decoded.Name != tt.ti.Name {
+				t.Fatalf("name: got %q want %q", decoded.Name, tt.ti.Name)
+			}
+			if decoded.Symbol != tt.ti.Symbol {
+				t.Fatalf("symbol: got %q want %q", decoded.Symbol, tt.ti.Symbol)
+			}
+			if decoded.Decimals != tt.ti.Decimals {
+				t.Fatalf("decimals: got %d want %d", decoded.Decimals, tt.ti.Decimals)
 			}
 		})
 	}
@@ -1511,4 +1880,12 @@ func mustHex0x(s string) []byte {
 		panic("hex string missing 0x prefix")
 	}
 	return mustHex(s[2:])
+}
+
+func mustEncodeForward(f Forward) []byte {
+	data, err := EncodeForward(f)
+	if err != nil {
+		panic(err)
+	}
+	return data
 }

@@ -6,6 +6,20 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 )
 
+func TestChannelIDMaskU256(t *testing.T) {
+	got := channelIDMaskU256()
+	if got == nil {
+		t.Fatalf("channelIDMaskU256 returned nil")
+	}
+	want := u256.NewUint(0xFFFFFFFF)
+	if !got.Eq(want) {
+		t.Fatalf("channelIDMaskU256 = %s want %s", got.Dec(), want.Dec())
+	}
+	if got.Uint64() != 0xFFFFFFFF {
+		t.Fatalf("Uint64() = %d want %d", got.Uint64(), 0xFFFFFFFF)
+	}
+}
+
 func TestMakePathFromChannel(t *testing.T) {
 	tests := []struct {
 		name     string

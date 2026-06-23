@@ -5,19 +5,7 @@ import (
 	"testing"
 )
 
-func TestDecodeProofRejectsTrailingBytes(t *testing.T) {
-	_, err := DecodeProof(mustHex(
-		"0200000000000000000000000000000000000000000000000000000000000000" +
-			"efbeadde00000000000000000000000000000000000000000000000000000000" +
-			"0000000000000000" +
-			"ff",
-	))
-	if err != ErrTrailingProofBytes {
-		t.Fatalf("DecodeProof trailing: got %v want %v", err, ErrTrailingProofBytes)
-	}
-}
-
-func TestDecodeProofRejectsMalformedBytes(t *testing.T) {
+func TestDecodeProof(t *testing.T) {
 	key := reverse32(WordFromUint64(2))
 	value := reverse32(WordFromUint64(0xdeadbeef))
 	validPrefix := append(append([]byte{}, key...), value...)
@@ -27,6 +15,16 @@ func TestDecodeProofRejectsMalformedBytes(t *testing.T) {
 		buf  []byte
 		err  error
 	}{
+		{
+			name: "trailing bytes after valid proof",
+			buf: mustHex(
+				"0200000000000000000000000000000000000000000000000000000000000000" +
+					"efbeadde00000000000000000000000000000000000000000000000000000000" +
+					"0000000000000000" +
+					"ff",
+			),
+			err: ErrTrailingProofBytes,
+		},
 		{
 			name: "short key",
 			buf:  bytes.Repeat([]byte{0x00}, 31),

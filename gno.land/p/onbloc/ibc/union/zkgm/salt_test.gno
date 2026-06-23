@@ -97,6 +97,11 @@ func TestIsForwardedPacket(t *testing.T) {
 	}{
 		{"raw", raw, false},
 		{"tinted", TintForwardSalt(raw), true},
+		{"zero salt", [32]byte{}, false},
+		{"all ff salt", [32]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, true},
+		{"already tinted idempotent", TintForwardSalt(TintForwardSalt(raw)), true},
+		{"only 0xC0 at position 0", [32]byte{0xC0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, false},
+		{"only 0xBE at position 31", [32]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xBE}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -120,6 +125,9 @@ func TestDeriveForwardSalt(t *testing.T) {
 	}{
 		{"vector", vectorSalt, "caff6a6a44328f3fb063df12b0cf3fa225a3c6dbdd6acef0f6e619d33890ffbe", [32]byte{}},
 		{"different input", salt1, "", salt2},
+		{"zero salt", [32]byte{}, "", salt1},
+		{"all ff salt", [32]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, "", salt2},
+		{"already tinted stays tinted", TintForwardSalt(vectorSalt), "", [32]byte{}},
 	}
 
 	for _, tt := range tests {
@@ -134,6 +142,10 @@ func TestDeriveForwardSalt(t *testing.T) {
 			if tt.compareSalt != [32]byte{} && got == DeriveForwardSalt(tt.compareSalt) {
 				t.Fatal("different inputs derived the same forward salt")
 			}
+			// Tinting again should be idempotent
+			if TintForwardSalt(got) != got {
+				t.Fatal("TintForwardSalt is not idempotent on derived salt")
+			}
 		})
 	}
 }
@@ -145,7 +157,11 @@ func TestUint256ToBytes32(t *testing.T) {
 		x    *u256.Uint
 		want string
 	}{
+		{"zero", u256.Zero(), "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"one", u256.NewUint(1), "0000000000000000000000000000000000000000000000000000000000000001"},
+		{"max uint64", u256.NewUint(18446744073709551615), "000000000000000000000000000000000000000000000000ffffffffffffffff"},
 		{"bytes32", new(u256.Uint).SetBytes(bz[:]), "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20"},
+		{"large u256", u256.NewUint(1000000000000000000), "0000000000000000000000000000000000000000000000000de0b6b3a7640000"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

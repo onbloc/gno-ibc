@@ -148,126 +148,132 @@ func TestEncodeProofBoundaries(t *testing.T) {
 	}
 }
 
-func TestProofDecoderHelpers(t *testing.T) {
-	t.Run("readU256", func(t *testing.T) {
-		tests := []struct {
-			name    string
-			buf     []byte
-			want    []byte
-			wantPos int
-			err     error
-		}{
-			{name: "short", buf: bytes.Repeat([]byte{0x00}, 31), err: ErrInvalidProofBytes},
-			{name: "exact zero", buf: bytes.Repeat([]byte{0x00}, 32), want: bytes.Repeat([]byte{0x00}, 32), wantPos: 32},
-			{name: "exact max", buf: bytes.Repeat([]byte{0xff}, 32), want: bytes.Repeat([]byte{0xff}, 32), wantPos: 32},
-			{name: "extra bytes", buf: append(reverse32(WordFromUint64(0x0102)), 0xff), want: WordFromUint64(0x0102), wantPos: 32},
-		}
+func TestReadU256(t *testing.T) {
+	tests := []struct {
+		name    string
+		buf     []byte
+		want    []byte
+		wantPos int
+		err     error
+	}{
+		{name: "short", buf: bytes.Repeat([]byte{0x00}, 31), err: ErrInvalidProofBytes},
+		{name: "exact zero", buf: bytes.Repeat([]byte{0x00}, 32), want: bytes.Repeat([]byte{0x00}, 32), wantPos: 32},
+		{name: "exact max", buf: bytes.Repeat([]byte{0xff}, 32), want: bytes.Repeat([]byte{0xff}, 32), wantPos: 32},
+		{name: "extra bytes", buf: append(reverse32(WordFromUint64(0x0102)), 0xff), want: WordFromUint64(0x0102), wantPos: 32},
+	}
 
-		for _, tt := range tests {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			d := proofDecoder{buf: tt.buf}
 			got, err := d.readU256()
 			if err != tt.err {
-				t.Fatalf("%s: got err %v want %v", tt.name, err, tt.err)
+				t.Fatalf("readU256: got err %v want %v", err, tt.err)
 			}
 			if err != nil {
-				continue
+				return
 			}
 			if d.pos != tt.wantPos || !bytes.Equal(got, tt.want) {
-				t.Fatalf("%s: got value=%x pos=%d want value=%x pos=%d", tt.name, got, d.pos, tt.want, tt.wantPos)
+				t.Fatalf("readU256: got value=%x pos=%d want value=%x pos=%d", got, d.pos, tt.want, tt.wantPos)
 			}
-		}
-	})
+		})
+	}
+}
 
-	t.Run("readUint64", func(t *testing.T) {
-		tests := []struct {
-			name    string
-			buf     []byte
-			want    uint64
-			wantPos int
-			err     error
-		}{
-			{name: "short", buf: []byte{0x01, 0x02}, err: ErrInvalidProofBytes},
-			{name: "exact", buf: []byte{0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01}, want: 0x0102030405060708, wantPos: 8},
-			{name: "extra", buf: []byte{0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xaa}, want: 0xff, wantPos: 8},
-		}
+func TestReadBytes(t *testing.T) {
+	tests := []struct {
+		name    string
+		buf     []byte
+		want    []byte
+		wantPos int
+		err     error
+	}{
+		{name: "missing length", buf: []byte{0x01}, err: ErrInvalidProofBytes},
+		{name: "zero length", buf: appendUint64LE(nil, 0), want: []byte{}, wantPos: 8},
+		{name: "exact remaining", buf: append(appendUint64LE(nil, 3), 0xaa, 0xbb, 0xcc), want: []byte{0xaa, 0xbb, 0xcc}, wantPos: 11},
+		{name: "payload truncated", buf: append(appendUint64LE(nil, 3), 0xaa, 0xbb), err: ErrInvalidProofBytes},
+	}
 
-		for _, tt := range tests {
-			d := proofDecoder{buf: tt.buf}
-			got, err := d.readUint64()
-			if err != tt.err {
-				t.Fatalf("%s: got err %v want %v", tt.name, err, tt.err)
-			}
-			if err != nil {
-				continue
-			}
-			if d.pos != tt.wantPos || got != tt.want {
-				t.Fatalf("%s: got value=%d pos=%d want value=%d pos=%d", tt.name, got, d.pos, tt.want, tt.wantPos)
-			}
-		}
-	})
-
-	t.Run("readBytes", func(t *testing.T) {
-		tests := []struct {
-			name    string
-			buf     []byte
-			want    []byte
-			wantPos int
-			err     error
-		}{
-			{name: "missing length", buf: []byte{0x01}, err: ErrInvalidProofBytes},
-			{name: "zero length", buf: appendUint64LE(nil, 0), want: []byte{}, wantPos: 8},
-			{name: "exact remaining", buf: append(appendUint64LE(nil, 3), 0xaa, 0xbb, 0xcc), want: []byte{0xaa, 0xbb, 0xcc}, wantPos: 11},
-			{name: "payload truncated", buf: append(appendUint64LE(nil, 3), 0xaa, 0xbb), err: ErrInvalidProofBytes},
-		}
-
-		for _, tt := range tests {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			d := proofDecoder{buf: tt.buf}
 			got, err := d.readBytes()
 			if err != tt.err {
-				t.Fatalf("%s: got err %v want %v", tt.name, err, tt.err)
+				t.Fatalf("readBytes: got err %v want %v", err, tt.err)
 			}
 			if err != nil {
-				continue
+				return
 			}
 			if d.pos != tt.wantPos || !bytes.Equal(got, tt.want) {
-				t.Fatalf("%s: got value=%x pos=%d want value=%x pos=%d", tt.name, got, d.pos, tt.want, tt.wantPos)
+				t.Fatalf("readBytes: got value=%x pos=%d want value=%x pos=%d", got, d.pos, tt.want, tt.wantPos)
 			}
-		}
-	})
+		})
+	}
 }
 
-func TestCodecByteOrderHelpers(t *testing.T) {
-	t.Run("appendUint64LE", func(t *testing.T) {
-		tests := []struct {
-			name string
-			v    uint64
-			want string
-		}{
-			{name: "zero", v: 0, want: "0000000000000000"},
-			{name: "one", v: 1, want: "0100000000000000"},
-			{name: "multi byte", v: 0x0102030405060708, want: "0807060504030201"},
-			{name: "max", v: ^uint64(0), want: "ffffffffffffffff"},
-		}
+func TestReadUint64(t *testing.T) {
+	tests := []struct {
+		name    string
+		buf     []byte
+		want    uint64
+		wantPos int
+		err     error
+	}{
+		{name: "short", buf: []byte{0x01, 0x02}, err: ErrInvalidProofBytes},
+		{name: "exact", buf: []byte{0x08, 0x07, 0x06, 0x05, 0x04, 0x03, 0x02, 0x01}, want: 0x0102030405060708, wantPos: 8},
+		{name: "extra", buf: []byte{0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xaa}, want: 0xff, wantPos: 8},
+	}
 
-		for _, tt := range tests {
-			assertHex(t, tt.name, appendUint64LE(nil, tt.v), tt.want)
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := proofDecoder{buf: tt.buf}
+			got, err := d.readUint64()
+			if err != tt.err {
+				t.Fatalf("readUint64: got err %v want %v", err, tt.err)
+			}
+			if err != nil {
+				return
+			}
+			if d.pos != tt.wantPos || got != tt.want {
+				t.Fatalf("readUint64: got value=%d pos=%d want value=%d pos=%d", got, d.pos, tt.want, tt.wantPos)
+			}
+		})
+	}
+}
 
-	t.Run("reverse32", func(t *testing.T) {
-		tests := []struct {
-			name string
-			in   []byte
-			want string
-		}{
-			{name: "empty", in: nil, want: "0000000000000000000000000000000000000000000000000000000000000000"},
-			{name: "short", in: []byte{0x01, 0x02, 0x03}, want: "0302010000000000000000000000000000000000000000000000000000000000"},
-			{name: "exact", in: mustHex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"), want: "1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100"},
-			{name: "long truncates to last 32 bytes reversed by source end", in: append([]byte{0xaa}, mustHex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")...), want: "1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100"},
-		}
+func TestAppendUint64LE(t *testing.T) {
+	tests := []struct {
+		name string
+		v    uint64
+		want string
+	}{
+		{name: "zero", v: 0, want: "0000000000000000"},
+		{name: "one", v: 1, want: "0100000000000000"},
+		{name: "multi byte", v: 0x0102030405060708, want: "0807060504030201"},
+		{name: "max", v: ^uint64(0), want: "ffffffffffffffff"},
+	}
 
-		for _, tt := range tests {
-			assertHex(t, tt.name, reverse32(tt.in), tt.want)
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertHex(t, "appendUint64LE", appendUint64LE(nil, tt.v), tt.want)
+		})
+	}
+}
+
+func TestReverse32(t *testing.T) {
+	tests := []struct {
+		name string
+		in   []byte
+		want string
+	}{
+		{name: "empty", in: nil, want: "0000000000000000000000000000000000000000000000000000000000000000"},
+		{name: "short", in: []byte{0x01, 0x02, 0x03}, want: "0302010000000000000000000000000000000000000000000000000000000000"},
+		{name: "exact", in: mustHex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f"), want: "1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100"},
+		{name: "long truncates to last 32 bytes reversed by source end", in: append([]byte{0xaa}, mustHex("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")...), want: "1f1e1d1c1b1a191817161514131211100f0e0d0c0b0a09080706050403020100"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertHex(t, "reverse32", reverse32(tt.in), tt.want)
+		})
+	}
 }

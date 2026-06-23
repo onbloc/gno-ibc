@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto/keccak256"
 	"errors"
+	"strconv"
+	"strings"
 
 	"gno.land/p/nt/bptree/v0"
 	"gno.land/p/nt/ufmt/v0"
@@ -288,5 +290,13 @@ func (c *StateLensIcs23MptLightClient) setConsensusState(height uint64, consStat
 // key. ibc-union heights carry a single revision, so the numeric ordering of the
 // formatted height matches height ordering.
 func heightKey(height uint64) string {
-	return ufmt.Sprintf("%020d", height)
+	return zeroPadDecimalUint64(height)
+}
+
+// zeroPadDecimalUint64 converts a uint64 number into a zero-padded 20-character string.
+func zeroPadDecimalUint64(num uint64) string {
+	s := strconv.FormatUint(num, 10)
+	zerosNeeded := 20 - len(s)
+
+	return strings.Repeat("0", zerosNeeded) + s
 }

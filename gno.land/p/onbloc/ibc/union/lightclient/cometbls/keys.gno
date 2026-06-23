@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	ModuleName = "11-cometbls"
+	ModuleName = "cometbls"
 
 	ClientType = ModuleName
 )

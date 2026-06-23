@@ -6,49 +6,126 @@ import (
 )
 
 func TestInstructionVersions(t *testing.T) {
-	if INSTR_VERSION_0 != 0x00 || INSTR_VERSION_1 != 0x01 || INSTR_VERSION_2 != 0x02 {
-		t.Fatalf("instruction versions: got %d/%d/%d", INSTR_VERSION_0, INSTR_VERSION_1, INSTR_VERSION_2)
+	tests := []struct {
+		name string
+		got  byte
+		want byte
+	}{
+		{"v0", INSTR_VERSION_0, 0x00},
+		{"v1", INSTR_VERSION_1, 0x01},
+		{"v2", INSTR_VERSION_2, 0x02},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Fatalf("got %d want %d", tt.got, tt.want)
+			}
+		})
 	}
 }
 
 func TestOpcodes(t *testing.T) {
-	if OP_FORWARD != 0x00 || OP_CALL != 0x01 || OP_BATCH != 0x02 || OP_TOKEN_ORDER != 0x03 {
-		t.Fatalf("opcodes: got %d/%d/%d/%d", OP_FORWARD, OP_CALL, OP_BATCH, OP_TOKEN_ORDER)
+	tests := []struct {
+		name string
+		got  byte
+		want byte
+	}{
+		{"forward", OP_FORWARD, 0x00},
+		{"call", OP_CALL, 0x01},
+		{"batch", OP_BATCH, 0x02},
+		{"token order", OP_TOKEN_ORDER, 0x03},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Fatalf("got %d want %d", tt.got, tt.want)
+			}
+		})
 	}
 }
 
 func TestAckConstants(t *testing.T) {
-	assertHex(t, "ACK_ERR_ONLY_MAKER", ACK_ERR_ONLY_MAKER, "deadc0de")
-	assertHex(t, "TAG_ACK_FAILURE", TAG_ACK_FAILURE[:], "0000000000000000000000000000000000000000000000000000000000000000")
-	assertHex(t, "TAG_ACK_SUCCESS", TAG_ACK_SUCCESS[:], "0000000000000000000000000000000000000000000000000000000000000001")
+	tests := []struct {
+		name string
+		got  []byte
+		want string
+	}{
+		{"ACK_ERR_ONLY_MAKER", ACK_ERR_ONLY_MAKER, "deadc0de"},
+		{"TAG_ACK_FAILURE", TAG_ACK_FAILURE[:], "0000000000000000000000000000000000000000000000000000000000000000"},
+		{"TAG_ACK_SUCCESS", TAG_ACK_SUCCESS[:], "0000000000000000000000000000000000000000000000000000000000000001"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertHex(t, tt.name, tt.got, tt.want)
+		})
+	}
 }
 
 func TestFillTypeConstants(t *testing.T) {
-	assertHex(t, "FILL_TYPE_PROTOCOL", FILL_TYPE_PROTOCOL[:], "0000000000000000000000000000000000000000000000000000000000b0cad0")
-	assertHex(t, "FILL_TYPE_MARKETMAKER", FILL_TYPE_MARKETMAKER[:], "00000000000000000000000000000000000000000000000000000000d1cec45e")
+	tests := []struct {
+		name string
+		got  []byte
+		want string
+	}{
+		{"FILL_TYPE_PROTOCOL", FILL_TYPE_PROTOCOL[:], "0000000000000000000000000000000000000000000000000000000000b0cad0"},
+		{"FILL_TYPE_MARKETMAKER", FILL_TYPE_MARKETMAKER[:], "00000000000000000000000000000000000000000000000000000000d1cec45e"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertHex(t, tt.name, tt.got, tt.want)
+		})
+	}
 }
 
 func TestTokenOrderKinds(t *testing.T) {
-	if TOKEN_ORDER_KIND_INITIALIZE != 0x00 ||
-		TOKEN_ORDER_KIND_ESCROW != 0x01 ||
-		TOKEN_ORDER_KIND_UNESCROW != 0x02 ||
-		TOKEN_ORDER_KIND_SOLVE != 0x03 {
-		t.Fatalf("token order kinds: got %d/%d/%d/%d",
-			TOKEN_ORDER_KIND_INITIALIZE,
-			TOKEN_ORDER_KIND_ESCROW,
-			TOKEN_ORDER_KIND_UNESCROW,
-			TOKEN_ORDER_KIND_SOLVE,
-		)
+	tests := []struct {
+		name string
+		got  byte
+		want byte
+	}{
+		{"initialize", TOKEN_ORDER_KIND_INITIALIZE, 0x00},
+		{"escrow", TOKEN_ORDER_KIND_ESCROW, 0x01},
+		{"unescrow", TOKEN_ORDER_KIND_UNESCROW, 0x02},
+		{"solve", TOKEN_ORDER_KIND_SOLVE, 0x03},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Fatalf("got %d want %d", tt.got, tt.want)
+			}
+		})
 	}
 }
 
 func TestForwardSaltMagic(t *testing.T) {
-	assertHex(t, "FORWARD_SALT_MAGIC", FORWARD_SALT_MAGIC[:], "c0de00000000000000000000000000000000000000000000000000000000babe")
+	tests := []struct {
+		name string
+		got  []byte
+		want string
+	}{
+		{"FORWARD_SALT_MAGIC", FORWARD_SALT_MAGIC[:], "c0de00000000000000000000000000000000000000000000000000000000babe"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertHex(t, tt.name, tt.got, tt.want)
+		})
+	}
 }
 
 func TestProtocolVersion(t *testing.T) {
-	if PROTOCOL_VERSION != "ucs03-zkgm-0" {
-		t.Fatalf("PROTOCOL_VERSION: got %q want %q", PROTOCOL_VERSION, "ucs03-zkgm-0")
+	tests := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{"PROTOCOL_VERSION", PROTOCOL_VERSION, "ucs03-zkgm-0"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.got != tt.want {
+				t.Fatalf("got %q want %q", tt.got, tt.want)
+			}
+		})
 	}
 }
 

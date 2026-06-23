@@ -74,14 +74,14 @@ var (
 )
 
 func ClientStatePath(clientId ClientId) H256 {
-	return keccak(bytes.Join([][]byte{
+	return Keccak(bytes.Join([][]byte{
 		CLIENT_STATE[:],
 		u32ToH256(uint32(clientId)),
 	}, nil))
 }
 
 func ConsensusStatePath(clientId ClientId, height Height) H256 {
-	return keccak(bytes.Join([][]byte{
+	return Keccak(bytes.Join([][]byte{
 		CONSENSUS_STATE[:],
 		u32ToH256(uint32(clientId)),
 		u64ToH256(height.RevisionHeight),
@@ -89,14 +89,14 @@ func ConsensusStatePath(clientId ClientId, height Height) H256 {
 }
 
 func ConnectionPath(connectionId ConnectionId) H256 {
-	return keccak(bytes.Join([][]byte{
+	return Keccak(bytes.Join([][]byte{
 		CONNECTIONS[:],
 		u32ToH256(uint32(connectionId)),
 	}, nil))
 }
 
 func ChannelPath(channelId ChannelId) H256 {
-	return keccak(bytes.Join([][]byte{
+	return Keccak(bytes.Join([][]byte{
 		CHANNELS[:],
 		u32ToH256(uint32(channelId)),
 	}, nil))
@@ -126,21 +126,21 @@ func PacketAcknowledgementPath(packet Packet) (H256, error) {
 }
 
 func BatchPacketsPath(batchHash H256) H256 {
-	return keccak(bytes.Join([][]byte{
+	return Keccak(bytes.Join([][]byte{
 		PACKETS[:],
 		batchHash[:],
 	}, nil))
 }
 
 func BatchReceiptsPath(batchHash H256) H256 {
-	return keccak(bytes.Join([][]byte{
+	return Keccak(bytes.Join([][]byte{
 		PACKET_ACKS[:],
 		batchHash[:],
 	}, nil))
 }
 
 func MembershipProofPath(clientId ClientId, proofHeight uint64, path []byte) H256 {
-	return keccak(bytes.Join([][]byte{
+	return Keccak(bytes.Join([][]byte{
 		MEMBERSHIP_PROOF[:],
 		u32ToH256(uint32(clientId)),
 		u64ToH256(proofHeight),
@@ -149,7 +149,7 @@ func MembershipProofPath(clientId ClientId, proofHeight uint64, path []byte) H25
 }
 
 func NonMembershipProofPath(clientId ClientId, proofHeight uint64, path []byte) H256 {
-	return keccak(bytes.Join([][]byte{
+	return Keccak(bytes.Join([][]byte{
 		NON_MEMBERSHIP_PROOF[:],
 		u32ToH256(uint32(clientId)),
 		u64ToH256(proofHeight),

@@ -53,3 +53,44 @@ func word32(v uint64) string {
 func bytes32hex(b byte) string {
 	return hex.EncodeToString(bytes.Repeat([]byte{b}, 32))
 }
+
+func cloneTestHeaderWith(malleate func(*Header)) *Header {
+	h := newTestHeader(1, 100, 0, 0, repeat32(0xFF))
+	malleate(h)
+	return h
+}
+
+func cloneLightHeaderWith(h *LightHeader, mutate func(*LightHeader)) *LightHeader {
+	out := cloneLightHeader(h)
+	mutate(out)
+	return out
+}
+
+func cloneLightHeader(h *LightHeader) *LightHeader {
+	if h == nil {
+		return nil
+	}
+	return &LightHeader{
+		Height:             h.Height,
+		TimeSeconds:        h.TimeSeconds,
+		TimeNanos:          h.TimeNanos,
+		ValidatorsHash:     append([]byte(nil), h.ValidatorsHash...),
+		NextValidatorsHash: append([]byte(nil), h.NextValidatorsHash...),
+		AppHash:            append([]byte(nil), h.AppHash...),
+	}
+}
+
+// contains reports whether substr is in s. Used by tests that cannot use strings.Contains.
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && indexOf(s, substr) >= 0)
+}
+
+// indexOf returns the index of substr in s, or -1 if not found.
+func indexOf(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}

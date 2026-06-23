@@ -45,7 +45,7 @@ func NewChannelPair(cur realm, clientId types.ClientId, connectionId types.Conne
 
 func RegisterMockLightClient(cur realm) {
 	if !core.HasClient(MockClientType) {
-		core.RegisterClient(cross(cur), MockClientType, &MockLightClient{})
+		core.RegisterClient(cross(cur), MockClientType, MockClientImpl)
 	}
 }
 

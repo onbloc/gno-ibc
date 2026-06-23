@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
@@ -9,6 +10,12 @@ import (
 // injected store / light client. Queries that fail on a missing lookup
 // (client/consensus/connection/channel state, status, latest height, timestamp,
 // batch commitments) return an error rather than a found-bool or a panic.
+
+// GetLightClient returns the live light client instance for a client, or
+// (nil, false) when the client is missing.
+func (c *coreV1) GetLightClient(clientId types.ClientId) (lightclient.Interface, bool) {
+	return c.store.GetLightClient(clientId)
+}
 
 // GetStatus returns the client's status, or an error when the client is missing.
 func (c *coreV1) GetStatus(clientId types.ClientId) (types.Status, error) {
@@ -43,11 +50,10 @@ func (c *coreV1) GetClientImpl(clientId types.ClientId) (string, error) {
 	return string(typ), nil
 }
 
-// GetRegisteredClientType is best-effort: gno registers light client objects per
-// client id rather than a global client-type registry, so there is no
-// registered-type set to query; it always reports false.
+// GetRegisteredClientType reports whether a light client implementation is
+// registered for the given client type.
 func (c *coreV1) GetRegisteredClientType(clientType types.ClientType) bool {
-	return false
+	return c.store.HasRegisteredClient(clientType)
 }
 
 // GetClientStateBytes returns the mirrored client state bytes, or an error when

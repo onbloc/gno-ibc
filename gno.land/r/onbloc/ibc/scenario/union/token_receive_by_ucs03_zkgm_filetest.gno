@@ -43,7 +43,9 @@ func main(cur realm) {
 	zkgm.SetRateLimitDisabled(cross(cur), true)
 	zkgm.RegisterCoreApp(cross(cur))
 
-	core.RegisterClient(cross(cur), mockClientType, &mockLightClient{})
+	core.RegisterClient(cross(cur), mockClientType, func(_, _ []byte) (lightclient.Interface, error) {
+		return &mockLightClient{}, nil
+	})
 	core.CreateClient(cross(cur), core.NewMsgCreateClient(mockClientType, nil, nil))
 	clientId := types.ClientId(1)
 

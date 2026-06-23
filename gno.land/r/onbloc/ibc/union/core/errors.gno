@@ -31,4 +31,13 @@ var (
 	ErrPacketTimeoutExpired          = errors.New("packet timeout expired")
 	ErrPacketTimeoutNotReached       = errors.New("packet timeout not reached")
 	ErrIntentNotSupported            = errors.New("intent receive not supported")
+
+	// Query getters return these when the requested state is missing. Getters
+	// return an error rather than panicking so callers can decide how to handle
+	// a missing lookup.
+	ErrClientNotFound         = errors.New("client not found")
+	ErrClientStateNotFound    = errors.New("client state not found")
+	ErrConsensusStateNotFound = errors.New("consensus state not found")
+	ErrConnectionNotFound     = errors.New("connection not found")
+	ErrChannelNotFound        = errors.New("channel not found")
 )

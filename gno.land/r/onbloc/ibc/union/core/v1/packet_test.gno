@@ -20,7 +20,8 @@ func setupOpenChannel(cur realm, v *coreV1) (types.ChannelId, types.Bytes, *mock
 	port := types.Bytes(cur.Previous().PkgPath())
 	mApp := &mockApp{}
 	ms.registerApp(port, mApp)
-	chId := v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: port, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: port, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	chId := v.store.(*mockStore).currentChannelId()
 	v.ChannelOpenAck(0, cur, types.MsgChannelOpenAck{ChannelId: chId, CounterpartyChannelId: types.ChannelId(9), CounterpartyVersion: "v1", ProofHeight: 10, ProofTry: []byte("p")})
 	return chId, port, mApp
 }
@@ -54,7 +55,8 @@ func TestSendPacketUnauthorizedSender(cur realm, t *testing.T) {
 	// Channel owned by a port other than the caller.
 	other := types.Bytes("other-port")
 	ms.registerApp(other, &mockApp{})
-	chId := v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: other, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: other, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	chId := v.store.(*mockStore).currentChannelId()
 	v.ChannelOpenAck(0, cur, types.MsgChannelOpenAck{ChannelId: chId, CounterpartyChannelId: types.ChannelId(9), CounterpartyVersion: "v1", ProofHeight: 10, ProofTry: []byte("p")})
 
 	uassert.AbortsContains(t, cur, "authorized to send", func(cur realm) {
@@ -108,7 +110,8 @@ func TestPacketRecvProofFailureAborts(cur realm, t *testing.T) {
 		core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
 	port := types.Bytes(cur.Previous().PkgPath())
 	ms.registerApp(port, &mockApp{})
-	chId := v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: port, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: port, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	chId := v.store.(*mockStore).currentChannelId()
 	// channel stays Init (ack would need a separate good client); recv only needs it Open.
 	ms.SaveChannel(0, cur, chId, types.Channel{State: types.ChannelStateOpen, ConnectionId: types.ConnectionId(1), CounterpartyChannelId: types.ChannelId(9), Version: "v1"})
 

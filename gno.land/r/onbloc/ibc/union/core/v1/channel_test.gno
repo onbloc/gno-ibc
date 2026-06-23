@@ -42,12 +42,13 @@ func TestChannelOpenInit(cur realm, t *testing.T) {
 	v := newTestImpl()
 	portId, mApp := setupChannelEnv(cur, v)
 
-	chId := v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{
+	v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{
 		PortId:             portId,
 		ConnectionId:       types.ConnectionId(1),
 		CounterpartyPortId: types.Bytes("cp-port"),
 		Version:            "v1",
 	})
+	chId := v.store.(*mockStore).currentChannelId()
 
 	ch, ok := v.store.GetChannel(chId)
 	uassert.True(t, ok)
@@ -72,7 +73,8 @@ func TestChannelOpenTry(cur realm, t *testing.T) {
 	v := newTestImpl()
 	portId, mApp := setupChannelEnv(cur, v)
 
-	chId := v.ChannelOpenTry(0, cur, openTryMsg(portId))
+	v.ChannelOpenTry(0, cur, openTryMsg(portId))
+	chId := v.store.(*mockStore).currentChannelId()
 
 	ch, ok := v.store.GetChannel(chId)
 	uassert.True(t, ok)
@@ -146,9 +148,10 @@ func TestChannelOpenTryRejectsInactiveClient(cur realm, t *testing.T) {
 func TestChannelOpenAckMovesInitToOpen(cur realm, t *testing.T) {
 	v := newTestImpl()
 	portId, mApp := setupChannelEnv(cur, v)
-	chId := v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{
+	v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{
 		PortId: portId, ConnectionId: types.ConnectionId(1), Version: "v1",
 	})
+	chId := v.store.(*mockStore).currentChannelId()
 
 	v.ChannelOpenAck(0, cur, types.MsgChannelOpenAck{
 		ChannelId:             chId,
@@ -184,9 +187,10 @@ func TestChannelOpenAckNotFound(cur realm, t *testing.T) {
 func TestForceChannelOpenAckAllowsZeroCounterpartyChannelId(cur realm, t *testing.T) {
 	v := newTestImpl()
 	portId, _ := setupChannelEnv(cur, v)
-	chId := v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{
+	v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{
 		PortId: portId, ConnectionId: types.ConnectionId(1), Version: "v1",
 	})
+	chId := v.store.(*mockStore).currentChannelId()
 
 	v.ForceChannelOpenAck(0, cur, types.MsgChannelOpenAck{
 		ChannelId:             chId,
@@ -205,7 +209,8 @@ func TestChannelOpenAckWrongStateAborts(cur realm, t *testing.T) {
 	v := newTestImpl()
 	portId, _ := setupChannelEnv(cur, v)
 	// TryOpen is the wrong state for an ack.
-	chId := v.ChannelOpenTry(0, cur, openTryMsg(portId))
+	v.ChannelOpenTry(0, cur, openTryMsg(portId))
+	chId := v.store.(*mockStore).currentChannelId()
 
 	uassert.AbortsContains(t, cur, "invalid channel state", func(cur realm) {
 		v.ChannelOpenAck(0, cur, types.MsgChannelOpenAck{
@@ -218,7 +223,8 @@ func TestChannelOpenAckWrongStateAborts(cur realm, t *testing.T) {
 func TestChannelOpenConfirmMovesTryOpenToOpen(cur realm, t *testing.T) {
 	v := newTestImpl()
 	portId, mApp := setupChannelEnv(cur, v)
-	chId := v.ChannelOpenTry(0, cur, openTryMsg(portId))
+	v.ChannelOpenTry(0, cur, openTryMsg(portId))
+	chId := v.store.(*mockStore).currentChannelId()
 
 	v.ChannelOpenConfirm(0, cur, types.MsgChannelOpenConfirm{
 		ChannelId: chId, ProofHeight: 11, ProofAck: []byte("proof"),
@@ -288,7 +294,8 @@ func TestChannelCloseInit(cur realm, t *testing.T) {
 	v := newTestImpl()
 	portId, mApp := setupChannelEnv(cur, v)
 	// Open the channel: Init -> Ack -> Open.
-	chId := v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: portId, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: portId, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	chId := v.store.(*mockStore).currentChannelId()
 	v.ChannelOpenAck(0, cur, types.MsgChannelOpenAck{ChannelId: chId, CounterpartyChannelId: types.ChannelId(9), CounterpartyVersion: "v1", ProofHeight: 10, ProofTry: []byte("p")})
 
 	v.ChannelCloseInit(0, cur, types.MsgChannelCloseInit{ChannelId: chId})
@@ -301,7 +308,8 @@ func TestChannelCloseInit(cur realm, t *testing.T) {
 func TestChannelCloseConfirm(cur realm, t *testing.T) {
 	v := newTestImpl()
 	portId, mApp := setupChannelEnv(cur, v)
-	chId := v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: portId, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: portId, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	chId := v.store.(*mockStore).currentChannelId()
 	v.ChannelOpenAck(0, cur, types.MsgChannelOpenAck{ChannelId: chId, CounterpartyChannelId: types.ChannelId(9), CounterpartyVersion: "v1", ProofHeight: 10, ProofTry: []byte("p")})
 
 	v.ChannelCloseConfirm(0, cur, types.MsgChannelCloseConfirm{ChannelId: chId, ProofHeight: 12, ProofInit: []byte("proof")})
@@ -329,7 +337,8 @@ func TestForceChannelOpenTrySkipsProofVerification(cur realm, t *testing.T) {
 	v := newTestImpl()
 	portId, mApp := setupFrozenChannelEnv(cur, v)
 
-	chId := v.ForceChannelOpenTry(0, cur, openTryMsg(portId))
+	v.ForceChannelOpenTry(0, cur, openTryMsg(portId))
+	chId := v.store.(*mockStore).currentChannelId()
 
 	ch, ok := v.store.GetChannel(chId)
 	uassert.True(t, ok)

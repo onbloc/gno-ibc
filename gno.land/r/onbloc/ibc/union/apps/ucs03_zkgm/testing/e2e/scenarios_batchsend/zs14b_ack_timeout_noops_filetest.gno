@@ -122,7 +122,8 @@ func openTimeoutScenarioChannelPair(cur realm) e2e.ChannelPair {
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
 
 	portId := []byte(zkgm.ProxyPkgPath())
-	source := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	source := types.ChannelId(1)
 	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(source, zkgm.Version, types.ChannelId(2), nil, 1, "g1msgrelayer"))
 	return e2e.NewChannelPair(cross(cur), clientId, connectionId, source, types.ChannelId(2))
 }

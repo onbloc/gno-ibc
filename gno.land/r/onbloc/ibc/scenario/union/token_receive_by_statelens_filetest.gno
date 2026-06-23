@@ -107,7 +107,8 @@ func main(cur realm) {
 	core.ForceConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 0))
 
 	portId := []byte(zkgm.ProxyPkgPath())
-	opened := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1relayer"))
+	core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1relayer"))
+	opened := types.ChannelId(1)
 	core.ForceChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(opened, zkgm.Version, sourceChannel, nil, 0, "g1relayer"))
 
 	ufmt.Printf("[INFO] client opened: id=%s type=%s\n", clientId.String(), ics23mpt.ClientType)
@@ -120,7 +121,7 @@ func main(cur realm) {
 	ufmt.Println("[SCENARIO] 2. Receive INITIALIZE order proven by the state-lens MPT proof (mint 100)")
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, nil, packetProof, statelensProofHeight))
 
-	_, receiptRecorded := core.GetBatchReceipts(channelId, core.CommitPacketsHash([]types.Packet{packet}))
+	_, receiptRecorded := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))
 	ufmt.Printf("[INFO] packet receipt recorded (state-lens MPT proof verified): %t\n", receiptRecorded)
 	ufmt.Printf("[INFO] minted token (wrapped voucher): %s\n", quoteToken)
 	ufmt.Printf("[INFO] receiver voucher balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, receiverAddr))

@@ -41,15 +41,15 @@ type ICore interface {
 	ForceConnectionOpenConfirm(_ int, rlm realm, msg types.MsgConnectionOpenConfirm)
 
 	// --- Channel handshake ---
-	ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit) types.ChannelId
-	ChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry) types.ChannelId
+	ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit)
+	ChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry)
 	ChannelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck)
 	ChannelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenConfirm)
 	ChannelCloseInit(_ int, rlm realm, msg types.MsgChannelCloseInit)
 	ChannelCloseConfirm(_ int, rlm realm, msg types.MsgChannelCloseConfirm)
 	// Force* are the admin recovery variants that skip counterparty proof
 	// verification. The admin gate stays on the proxy.
-	ForceChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry) types.ChannelId
+	ForceChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry)
 	ForceChannelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck)
 	ForceChannelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenConfirm)
 
@@ -73,24 +73,24 @@ type ICore interface {
 }
 
 // ICoreGetter is the read-only query surface, implemented by the impl and exposed by
-// the proxy's getters.gno. It mirrors union's relayer-facing get queries; results
-// for missing state are signalled by the bool return (no panic). The best-effort
-// methods (GetRegisteredClientType, GetClientImpl, GetChannels) have no direct
-// gno equivalent — see getters.gno for the adaptation notes.
+// the proxy's getters.gno. Queries that fail on a missing lookup return an error;
+// existence-probe queries keep a found-bool. The best-effort methods
+// (GetRegisteredClientType, GetClientImpl) have no direct gno equivalent — see
+// getters.gno for the notes.
 type ICoreGetter interface {
-	GetStatus(clientId types.ClientId) types.Status
+	GetStatus(clientId types.ClientId) (types.Status, error)
 	GetClientType(clientId types.ClientId) (types.ClientType, bool)
 	GetClientImpl(clientId types.ClientId) (string, bool)
 	GetRegisteredClientType(clientType types.ClientType) bool
-	GetClientStateBytes(clientId types.ClientId) ([]byte, bool)
-	GetConsensusStateBytes(clientId types.ClientId, height types.Height) ([]byte, bool)
-	GetLatestHeight(clientId types.ClientId) (uint64, bool)
-	GetTimestampAtHeight(clientId types.ClientId, height uint64) (types.Timestamp, bool)
-	GetConnectionTyped(connectionId types.ConnectionId) (types.Connection, bool)
-	GetChannelTyped(channelId types.ChannelId) (types.Channel, bool)
-	GetChannels(contract string) []types.ChannelId
-	GetBatchPacketsCommitment(channelId types.ChannelId, batchHash types.H256) (types.H256, bool)
-	GetBatchReceiptsCommitment(channelId types.ChannelId, batchHash types.H256) (types.H256, bool)
+	GetClientStateBytes(clientId types.ClientId) ([]byte, error)
+	GetConsensusStateBytes(clientId types.ClientId, height types.Height) ([]byte, error)
+	GetLatestHeight(clientId types.ClientId) (uint64, error)
+	GetTimestampAtHeight(clientId types.ClientId, height uint64) (types.Timestamp, error)
+	GetConnectionTyped(connectionId types.ConnectionId) (types.Connection, error)
+	GetChannels() ([]types.Channel, error)
+	GetChannel(channelId types.ChannelId) (types.Channel, error)
+	GetBatchPacketsCommitment(batchHash types.H256) (types.H256, bool)
+	GetBatchReceiptsCommitment(batchHash types.H256) (types.H256, bool)
 }
 
 // IStore is the proxy-owned persistent state injected into the mustGetImpl(). Setters take
@@ -124,6 +124,7 @@ type IStore interface {
 	NextChannelId(_ int, rlm realm) types.ChannelId
 	CreateChannel(_ int, rlm realm, channelId types.ChannelId, channel types.Channel, portId types.Bytes)
 	SaveChannel(_ int, rlm realm, channelId types.ChannelId, channel types.Channel)
+	GetChannels() ([]types.Channel, error)
 	GetChannel(channelId types.ChannelId) (types.Channel, bool)
 	GetChannelOwner(channelId types.ChannelId) (types.Bytes, bool)
 
@@ -158,8 +159,8 @@ type IStore interface {
 	// --- Read-only query support ---
 	ClientStateBytes(clientId types.ClientId) ([]byte, bool)
 	ConsensusStateBytes(clientId types.ClientId, height types.Height) ([]byte, bool)
-	BatchPacketsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool)
-	BatchReceiptsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool)
+	BatchPacketsAt(batchHash types.H256) (types.H256, bool)
+	BatchReceiptsAt(batchHash types.H256) (types.H256, bool)
 }
 
 func NewChannel(

@@ -210,6 +210,26 @@ func (s *Store) SaveChannel(_ int, rlm realm, channelId types.ChannelId, channel
 	s.saveChannel(channelId, channel)
 }
 
+// GetChannels returns all stored channel records.
+// The bptree callback returns false to keep iterating (returning true stops early),
+// and the empty range bounds walk every entry.
+func (s *Store) GetChannels() ([]types.Channel, error) {
+	channels := make([]types.Channel, 0)
+
+	s.channels.Iterate("", "", func(key string, value any) bool {
+		entry, ok := value.(*channelEntry)
+		if !ok {
+			return false
+		}
+
+		channels = append(channels, entry.channel)
+
+		return false
+	})
+
+	return channels, nil
+}
+
 // GetChannel returns the stored channel for channelId.
 func (s *Store) GetChannel(channelId types.ChannelId) (types.Channel, bool) {
 	entry, ok := s.getChannelEntry(channelId)
@@ -338,13 +358,15 @@ func (s *Store) ConsensusStateBytes(clientId types.ClientId, height types.Height
 	return c.getConsensusState(height)
 }
 
-// BatchPacketsAt returns the batch packet commitment for a batch hash.
-func (s *Store) BatchPacketsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool) {
+// BatchPacketsAt returns the batch packet commitment for a batch hash. The
+// commitment is keyed by the global batch path, so no channel id is required.
+func (s *Store) BatchPacketsAt(batchHash types.H256) (types.H256, bool) {
 	return s.getCommitment(types.BatchPacketsPath(batchHash))
 }
 
-// BatchReceiptsAt returns the batch receipt commitment for a batch hash.
-func (s *Store) BatchReceiptsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool) {
+// BatchReceiptsAt returns the batch receipt commitment for a batch hash. The
+// commitment is keyed by the global batch path, so no channel id is required.
+func (s *Store) BatchReceiptsAt(batchHash types.H256) (types.H256, bool) {
 	return s.getCommitment(types.BatchReceiptsPath(batchHash))
 }
 

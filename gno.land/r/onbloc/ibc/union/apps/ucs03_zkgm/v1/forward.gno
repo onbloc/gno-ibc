@@ -147,7 +147,10 @@ func buildForwardChild(packet types.Packet, path *u256.Uint, parentSalt [32]byte
 	}
 
 	sourceChannelId := types.ChannelId(nextSourceChannel)
-	sourceChannel := core.GetChannel(sourceChannelId)
+	sourceChannel, err := core.GetChannel(sourceChannelId)
+	if err != nil {
+		return core.NewPacket(0, 0, nil, 0), err
+	}
 
 	return core.NewPacket(sourceChannelId, sourceChannel.CounterpartyChannelId, childBytes, types.Timestamp(forward.TimeoutTimestamp)), nil
 }

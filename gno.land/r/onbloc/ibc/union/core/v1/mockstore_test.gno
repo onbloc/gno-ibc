@@ -100,11 +100,11 @@ func (m *mockStore) PacketCommitment(channelId types.ChannelId, packet types.Pac
 }
 
 func (m *mockStore) SaveBatchPackets(_ int, rlm realm, channelId types.ChannelId, batchHash, value types.H256) {
-	m.batchPackets[channelId.String()+"|"+string(batchHash[:])] = value
+	m.batchPackets[string(batchHash[:])] = value
 }
 
 func (m *mockStore) SaveBatchReceipts(_ int, rlm realm, channelId types.ChannelId, batchHash, value types.H256) {
-	m.batchReceipts[channelId.String()+"|"+string(batchHash[:])] = value
+	m.batchReceipts[string(batchHash[:])] = value
 }
 
 func (m *mockStore) SaveMembershipProof(_ int, rlm realm, clientId types.ClientId, proofHeight uint64, path []byte, value types.H256) {
@@ -130,13 +130,13 @@ func (m *mockStore) ConsensusStateBytes(clientId types.ClientId, height types.He
 	return v, ok
 }
 
-func (m *mockStore) BatchPacketsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool) {
-	v, ok := m.batchPackets[channelId.String()+"|"+string(batchHash[:])]
+func (m *mockStore) BatchPacketsAt(batchHash types.H256) (types.H256, bool) {
+	v, ok := m.batchPackets[string(batchHash[:])]
 	return v, ok
 }
 
-func (m *mockStore) BatchReceiptsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool) {
-	v, ok := m.batchReceipts[channelId.String()+"|"+string(batchHash[:])]
+func (m *mockStore) BatchReceiptsAt(batchHash types.H256) (types.H256, bool) {
+	v, ok := m.batchReceipts[string(batchHash[:])]
 	return v, ok
 }
 
@@ -252,6 +252,12 @@ func (m *mockStore) NextChannelId(_ int, rlm realm) types.ChannelId {
 	return types.ChannelId(m.chanSeq)
 }
 
+// currentChannelId returns the most recently allocated channel id, letting tests
+// recover the id that ChannelOpen* no longer returns.
+func (m *mockStore) currentChannelId() types.ChannelId {
+	return types.ChannelId(m.chanSeq)
+}
+
 func (m *mockStore) CreateChannel(_ int, rlm realm, channelId types.ChannelId, channel types.Channel, portId types.Bytes) {
 	m.channels[uint32(channelId)] = channel
 	m.channelOwners[uint32(channelId)] = portId
@@ -264,6 +270,14 @@ func (m *mockStore) SaveChannel(_ int, rlm realm, channelId types.ChannelId, cha
 func (m *mockStore) GetChannel(channelId types.ChannelId) (types.Channel, bool) {
 	ch, ok := m.channels[uint32(channelId)]
 	return ch, ok
+}
+
+func (m *mockStore) GetChannels() ([]types.Channel, error) {
+	out := make([]types.Channel, 0, len(m.channels))
+	for _, ch := range m.channels {
+		out = append(out, ch)
+	}
+	return out, nil
 }
 
 func (m *mockStore) GetChannelOwner(channelId types.ChannelId) (types.Bytes, bool) {

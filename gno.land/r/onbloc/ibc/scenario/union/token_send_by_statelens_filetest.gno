@@ -102,7 +102,8 @@ func main(cur realm) {
 	core.ForceConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 0))
 
 	portId := []byte(zkgm.ProxyPkgPath())
-	opened := core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1relayer"))
+	core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1relayer"))
+	opened := types.ChannelId(1)
 	core.ForceChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(opened, zkgm.Version, counterpartyChannel, nil, 0, "g1relayer"))
 
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{initPacket}, nil, fundProof, fundHeight))

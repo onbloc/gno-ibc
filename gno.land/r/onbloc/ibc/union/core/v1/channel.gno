@@ -9,8 +9,9 @@ import (
 // proxy entrypoint; the Force* recovery variants remain proxy admin operations.
 // Each handshake step dispatches the matching callback to the channel's app.
 
-// ChannelOpenInit starts a channel in the Init state and notifies its app.
-func (c *coreV1) ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit) types.ChannelId {
+// ChannelOpenInit starts a channel in the Init state and notifies its app. The
+// created channel id is observable through the emitted event, not returned.
+func (c *coreV1) ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit) {
 	relayer := rlm.Previous().Address()
 	portId := types.Bytes(cloneBytes(msg.PortId))
 	c.ensureConnectionState(msg.ConnectionId)
@@ -31,22 +32,21 @@ func (c *coreV1) ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit)
 	}
 	a.OnChannelOpenInit(cross(rlm), msg.ConnectionId, channelId, msg.Version, relayer)
 	core.EmitChannelOpenInit(portId, channelId, channel)
-	return channelId
 }
 
 // ChannelOpenTry proves a counterparty Init and opens the local channel in
 // TryOpen, notifying its app.
-func (c *coreV1) ChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry) types.ChannelId {
-	return c.channelOpenTry(0, rlm, msg, true)
+func (c *coreV1) ChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry) {
+	c.channelOpenTry(0, rlm, msg, true)
 }
 
 // ForceChannelOpenTry is the admin recovery variant of ChannelOpenTry that skips
 // counterparty proof verification.
-func (c *coreV1) ForceChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry) types.ChannelId {
-	return c.channelOpenTry(0, rlm, msg, false)
+func (c *coreV1) ForceChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry) {
+	c.channelOpenTry(0, rlm, msg, false)
 }
 
-func (c *coreV1) channelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry, verify bool) types.ChannelId {
+func (c *coreV1) channelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry, verify bool) {
 	relayer := rlm.Previous().Address()
 	portId := types.Bytes(cloneBytes(msg.PortId))
 	if msg.Channel.State != types.ChannelStateTryOpen {
@@ -81,8 +81,6 @@ func (c *coreV1) channelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry, v
 	a.OnChannelOpenTry(cross(rlm), msg.Channel.ConnectionId, channelId, msg.Channel.Version, msg.CounterpartyVersion, relayer)
 
 	core.EmitChannelOpenTry(portId, channelId, msg.Channel, msg.CounterpartyVersion)
-
-	return channelId
 }
 
 // ChannelOpenAck proves the counterparty TryOpen and moves the local Init

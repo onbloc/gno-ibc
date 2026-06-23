@@ -126,7 +126,8 @@ func openForwardChildTimeoutConnection(cur realm) types.ConnectionId {
 
 func openForwardChildTimeoutChannel(cur realm, connectionId types.ConnectionId, counterpartyChannelId types.ChannelId) types.ChannelId {
 	portId := []byte(zkgm.ProxyPkgPath())
-	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	channelId := types.ChannelId(1)
 	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, counterpartyChannelId, nil, 1, "g1msgrelayer"))
 	return channelId
 }

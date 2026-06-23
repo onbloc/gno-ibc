@@ -54,6 +54,14 @@ func (m *mockL1Client) Misbehaviour(_ address, _ []byte, _ address) ([]byte, err
 	return nil, nil
 }
 
+// newTestStateLensClient creates a client with a lazy getter returning l1.
+// Used in tests to simulate the host store lookup pattern.
+func newTestStateLensClient(cs *ClientState, cons *ConsensusState, l1 lightclient.Interface) (*StateLensIcs23MptLightClient, error) {
+	return NewStateLensIcs23MptLightClient(cs, cons, func(_ types.ClientId) (lightclient.Interface, bool) {
+		return l1, l1 != nil
+	})
+}
+
 // newTestClient builds a client with a single consensus state at L2LatestHeight
 // 10 and an active mock L1 client. The L2 consensus blob layout uses
 // state_root at offset 0, storage_root at offset 32, timestamp at offset 64
@@ -74,7 +82,7 @@ func newTestClient(t *testing.T, l1 *mockL1Client, storageRoot []byte) *StateLen
 		StateRoot:   bytes.Repeat([]byte{0xaa}, 32),
 		StorageRoot: storageRoot,
 	}
-	c, err := NewStateLensIcs23MptLightClient(cs, cons, l1)
+	c, err := newTestStateLensClient(cs, cons, l1)
 	if err != nil {
 		t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
 	}
@@ -218,7 +226,7 @@ func TestStatusNilL1IsFrozen(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			cs := &ClientState{L2ChainID: "l2", L2LatestHeight: 1}
 			cons := &ConsensusState{Timestamp: 1, StateRoot: bytes.Repeat([]byte{0x01}, 32), StorageRoot: bytes.Repeat([]byte{0x02}, 32)}
-			c, err := NewStateLensIcs23MptLightClient(cs, cons, nil)
+			c, err := newTestStateLensClient(cs, cons, nil)
 			if err != nil {
 				t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
 			}
@@ -226,6 +234,62 @@ func TestStatusNilL1IsFrozen(t *testing.T) {
 				t.Errorf("Status with nil L1: got %q want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNewStateLensIcs23MptLightClientUsesLazyGetter(t *testing.T) {
+	clientState := ClientState{
+		L2ChainID:         "reinit-l2",
+		L1ClientID:        2,
+		L2ClientID:        9,
+		L2LatestHeight:    42,
+		TimestampOffset:   64,
+		StateRootOffset:   0,
+		StorageRootOffset: 32,
+	}
+	consensusState := ConsensusState{
+		Timestamp:   4242,
+		StateRoot:   bytes.Repeat([]byte{0x42}, 32),
+		StorageRoot: bytes.Repeat([]byte{0x43}, 32),
+	}
+
+	// The getter closes over `current`. Swapping it simulates ForceUpdateClient
+	// replacing the L1 light client in the host store without any explicit refresh.
+	current := lightclient.Interface(&mockL1Client{status: lightclient.Active})
+	getL1ClientFn := func(_ types.ClientId) (lightclient.Interface, bool) {
+		return current, current != nil
+	}
+
+	c, err := NewStateLensIcs23MptLightClient(&clientState, &consensusState, getL1ClientFn)
+	if err != nil {
+		t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
+	}
+
+	if c.clientState.L1ClientID != 2 {
+		t.Fatalf("l1 client id: got %d want 2", c.clientState.L1ClientID)
+	}
+	if c.GetLatestHeight() != 42 {
+		t.Fatalf("latest height: got %d want 42", c.GetLatestHeight())
+	}
+	if c.GetCounterpartyChainID() != "reinit-l2" {
+		t.Fatalf("chain id: got %q want reinit-l2", c.GetCounterpartyChainID())
+	}
+	got, found := c.getConsensusState(42)
+	if !found {
+		t.Fatal("consensus state not stored")
+	}
+	if got.Timestamp != 4242 || !bytes.Equal(got.StorageRoot, bytes.Repeat([]byte{0x43}, 32)) {
+		t.Fatalf("unexpected consensus state: %#v", got)
+	}
+
+	if s := c.Status(); s != lightclient.Active {
+		t.Fatalf("status: got %q want Active", s)
+	}
+
+	// Swap to simulate ForceUpdateClient on L1 — the change is visible immediately.
+	current = &mockL1Client{status: lightclient.Expired}
+	if s := c.Status(); s != lightclient.Expired {
+		t.Fatalf("status after L1 swap: got %q want Expired", s)
 	}
 }
 
@@ -310,7 +374,7 @@ func TestVerifyHeader(t *testing.T) {
 				cs := &ClientState{L2ChainID: "l2", L2ClientID: 7, L2LatestHeight: 10, StorageRootOffset: 32}
 				cons := &ConsensusState{Timestamp: 1, StateRoot: bytes.Repeat([]byte{0x01}, 32), StorageRoot: bytes.Repeat([]byte{0x02}, 32)}
 				var err error
-				c, err = NewStateLensIcs23MptLightClient(cs, cons, nil)
+				c, err = newTestStateLensClient(cs, cons, nil)
 				if err != nil {
 					t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
 				}
@@ -433,6 +497,19 @@ func TestUpdateState(t *testing.T) {
 				t.Fatalf("stored consensus state: got %#v want %#v", got, cons)
 			}
 		})
+	}
+}
+
+func TestVerifyHeaderNilL1(t *testing.T) {
+	cs := &ClientState{L2ChainID: "l2", L2ClientID: 7, L2LatestHeight: 10, StorageRootOffset: 32}
+	cons := &ConsensusState{Timestamp: 1, StateRoot: bytes.Repeat([]byte{0x01}, 32), StorageRoot: bytes.Repeat([]byte{0x02}, 32)}
+	c, err := newTestStateLensClient(cs, cons, nil)
+	if err != nil {
+		t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
+	}
+	var caller, relayer address
+	if _, err := c.VerifyHeader(caller, []byte{0x00}, relayer); err != ErrNoL1Client {
+		t.Fatalf("VerifyHeader nil L1: got %v want %v", err, ErrNoL1Client)
 	}
 }
 
@@ -841,5 +918,77 @@ func TestGetTimestampAtHeight(t *testing.T) {
 				t.Errorf("timestamp: got %d want %d", ts, tt.want)
 			}
 		})
+	}
+}
+
+// --- fixtures ---
+
+// makeConsensusBytes lays out an L2 consensus blob matching the offsets used by
+// newTestClient: state_root at 0, storage_root at 32, big-endian timestamp at
+// 64.
+func makeConsensusBytes(timestamp uint64, stateRoot, storageRoot []byte) []byte {
+	out := make([]byte, 72)
+	copy(out[0:32], stateRoot)
+	copy(out[32:64], storageRoot)
+	out[64] = byte(timestamp >> 56)
+	out[65] = byte(timestamp >> 48)
+	out[66] = byte(timestamp >> 40)
+	out[67] = byte(timestamp >> 32)
+	out[68] = byte(timestamp >> 24)
+	out[69] = byte(timestamp >> 16)
+	out[70] = byte(timestamp >> 8)
+	out[71] = byte(timestamp)
+	return out
+}
+
+// storageProofFixture builds a single-leaf MPT proving slot stores value, and
+// returns its root and the proof node list. Mirrors the realm test fixture.
+func storageProofFixture(t *testing.T, slot []byte, value []byte) ([32]byte, [][]byte) {
+	t.Helper()
+	path, err := storage.StoragePath(slot)
+	if err != nil {
+		t.Fatalf("StoragePath: %v", err)
+	}
+	storedValue, err := storage.EncodeStorageValue(value)
+	if err != nil {
+		t.Fatalf("EncodeStorageValue: %v", err)
+	}
+	leaf := rlp.EncodeList(rlp.EncodeBytes(compactEncode(true, nibbles(path[:]))), rlp.EncodeBytes(storedValue))
+	root := keccak256.Sum256(leaf)
+	return root, [][]byte{leaf}
+}
+
+func nibbles(key []byte) []byte {
+	out := make([]byte, 0, len(key)*2)
+	for _, b := range key {
+		out = append(out, b>>4, b&0x0f)
+	}
+	return out
+}
+
+func compactEncode(leaf bool, ns []byte) []byte {
+	flag := byte(0)
+	if leaf {
+		flag = 2
+	}
+	odd := len(ns)%2 == 1
+	out := make([]byte, 0, (len(ns)+2)/2)
+	if odd {
+		out = append(out, (flag+1)<<4|ns[0])
+		ns = ns[1:]
+	} else {
+		out = append(out, flag<<4)
+	}
+	for i := 0; i < len(ns); i += 2 {
+		out = append(out, ns[i]<<4|ns[i+1])
+	}
+	return out
+}
+
+// assertBytes compares two byte slices for equality.
+func assertBytes(t *testing.T, name string, got, want []byte) {
+	t.Helper()
+	if !bytes.Equal(got, want) {
+		t.Errorf("%s: got %x want %x", name, got, want)
 	}
 }

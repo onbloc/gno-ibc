@@ -6,190 +6,208 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 )
 
-func TestNewRejectsZeroCapacity(t *testing.T) {
-	_, err := New(u256.Zero(), u256.NewUint(1), u256.Zero())
-	if err != ZeroCapacity {
-		t.Fatalf("New zero capacity error: got %v want %v", err, ZeroCapacity)
+func TestNew(t *testing.T) {
+	cases := []struct {
+		name       string
+		capacity   *u256.Uint
+		refillRate *u256.Uint
+		now        *u256.Uint
+		wantErr    error
+	}{
+		{"rejects zero capacity", u256.Zero(), u256.NewUint(1), u256.Zero(), ZeroCapacity},
+		{"rejects zero refill rate", u256.NewUint(1), u256.Zero(), u256.Zero(), ZeroRefillRate},
+		{"initializes available and last refill", u256.NewUint(100), u256.NewUint(5), u256.NewUint(7), nil},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tb, err := New(tc.capacity, tc.refillRate, tc.now)
+			if err != tc.wantErr {
+				t.Fatalf("New error: got %v want %v", err, tc.wantErr)
+			}
+			if tc.wantErr != nil {
+				return
+			}
+
+			assertUintEqual(t, "capacity", tb.Capacity, tc.capacity)
+			assertUintEqual(t, "available", tb.Available, tc.capacity)
+			assertUintEqual(t, "refill_rate", tb.RefillRate, tc.refillRate)
+			assertUintEqual(t, "last_refill", tb.LastRefill, tc.now)
+		})
 	}
 }
 
-func TestNewRejectsZeroRefillRate(t *testing.T) {
-	_, err := New(u256.NewUint(1), u256.Zero(), u256.Zero())
-	if err != ZeroRefillRate {
-		t.Fatalf("New zero refill rate error: got %v want %v", err, ZeroRefillRate)
+func TestRefill(t *testing.T) {
+	cases := []struct {
+		name           string
+		capacity       uint64
+		refillRate     uint64
+		start          uint64
+		initialCharge  uint64
+		now            uint64
+		wantAvailable  uint64
+		wantLastRefill uint64
+	}{
+		{"adds elapsed capacity", 100, 5, 10, 80, 13, 35, 13},
+		{"caps at capacity", 100, 50, 10, 80, 12, 100, 12},
+		{"full bucket only moves last refill", 100, 5, 10, 0, 20, 100, 20},
+		{"ignores clock going backward", 100, 5, 10, 80, 5, 20, 10},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tb := mustNew(t, tc.capacity, tc.refillRate, tc.start)
+			if tc.initialCharge != 0 {
+				mustRateLimit(t, tb, tc.initialCharge, tc.start)
+			}
+
+			tb.Refill(u256.NewUint(tc.now))
+
+			assertUint(t, "available", tb.Available, tc.wantAvailable)
+			assertUint(t, "last_refill", tb.LastRefill, tc.wantLastRefill)
+		})
 	}
 }
 
-func TestNewInitializesAvailableAndLastRefill(t *testing.T) {
-	tb := mustNew(t, 100, 5, 7)
-
-	assertUint(t, "capacity", tb.Capacity, 100)
-	assertUint(t, "available", tb.Available, 100)
-	assertUint(t, "refill_rate", tb.RefillRate, 5)
-	assertUint(t, "last_refill", tb.LastRefill, 7)
-}
-
-func TestRefillAddsElapsedCapacity(t *testing.T) {
-	tb := mustNew(t, 100, 5, 10)
-	mustRateLimit(t, tb, 80, 10)
-
-	tb.Refill(u256.NewUint(13))
-
-	assertUint(t, "available", tb.Available, 35)
-	assertUint(t, "last_refill", tb.LastRefill, 13)
-}
-
-func TestRefillCapsAtCapacity(t *testing.T) {
-	tb := mustNew(t, 100, 50, 10)
-	mustRateLimit(t, tb, 80, 10)
-
-	tb.Refill(u256.NewUint(12))
-
-	assertUint(t, "available", tb.Available, 100)
-	assertUint(t, "last_refill", tb.LastRefill, 12)
-}
-
-func TestRefillFullBucketOnlyMovesLastRefill(t *testing.T) {
-	tb := mustNew(t, 100, 5, 10)
-
-	tb.Refill(u256.NewUint(20))
-
-	assertUint(t, "available", tb.Available, 100)
-	assertUint(t, "last_refill", tb.LastRefill, 20)
-}
-
-func TestRateLimitAllowsWithinAvailable(t *testing.T) {
-	tb := mustNew(t, 100, 5, 10)
-
-	mustRateLimit(t, tb, 40, 10)
-
-	assertUint(t, "available", tb.Available, 60)
-	assertUint(t, "last_refill", tb.LastRefill, 10)
-}
-
-func TestRateLimitRefillsBeforeCharging(t *testing.T) {
-	tb := mustNew(t, 100, 5, 10)
-	mustRateLimit(t, tb, 80, 10)
-
-	mustRateLimit(t, tb, 30, 12)
-
-	assertUint(t, "available", tb.Available, 0)
-	assertUint(t, "last_refill", tb.LastRefill, 12)
-}
-
-func TestRateLimitRejectsExceededAmount(t *testing.T) {
-	tb := mustNew(t, 100, 5, 10)
-
-	err := tb.RateLimit(u256.NewUint(101), u256.NewUint(10))
-	if err != RateLimitExceeded {
-		t.Fatalf("RateLimit exceeded error: got %v want %v", err, RateLimitExceeded)
+func TestRateLimit(t *testing.T) {
+	cases := []struct {
+		name           string
+		initialCharge  uint64
+		amount         uint64
+		now            uint64
+		wantErr        error
+		wantAvailable  uint64
+		wantLastRefill uint64
+	}{
+		{"allows within available", 0, 40, 10, nil, 60, 10},
+		{"refills before charging", 80, 30, 12, nil, 0, 12},
+		{"rejects exceeded amount", 0, 101, 10, RateLimitExceeded, 100, 10},
+		{"zero amount noop", 0, 0, 20, nil, 100, 10},
 	}
 
-	assertUint(t, "available", tb.Available, 100)
-}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tb := mustNew(t, 100, 5, 10)
+			if tc.initialCharge != 0 {
+				mustRateLimit(t, tb, tc.initialCharge, 10)
+			}
 
-func TestRateLimitZeroAmountNoop(t *testing.T) {
-	tb := mustNew(t, 100, 5, 10)
+			err := tb.RateLimit(u256.NewUint(tc.amount), u256.NewUint(tc.now))
+			if err != tc.wantErr {
+				t.Fatalf("RateLimit error: got %v want %v", err, tc.wantErr)
+			}
 
-	if err := tb.RateLimit(u256.Zero(), u256.NewUint(20)); err != nil {
-		t.Fatalf("RateLimit zero amount error: %v", err)
-	}
-
-	assertUint(t, "available", tb.Available, 100)
-	assertUint(t, "last_refill", tb.LastRefill, 10)
-}
-
-func TestUpdateRejectsZeroCapacity(t *testing.T) {
-	tb := mustNew(t, 100, 5, 10)
-
-	err := tb.Update(u256.Zero(), u256.NewUint(1), false)
-	if err != ZeroCapacity {
-		t.Fatalf("Update zero capacity error: got %v want %v", err, ZeroCapacity)
+			assertUint(t, "available", tb.Available, tc.wantAvailable)
+			assertUint(t, "last_refill", tb.LastRefill, tc.wantLastRefill)
+		})
 	}
 }
 
-func TestUpdateRejectsZeroRefillRate(t *testing.T) {
-	tb := mustNew(t, 100, 5, 10)
+func TestUpdate(t *testing.T) {
+	cases := []struct {
+		name           string
+		start          uint64
+		initialCharge  uint64
+		capacity       *u256.Uint
+		refillRate     *u256.Uint
+		reset          bool
+		wantErr        error
+		wantCapacity   uint64
+		wantAvailable  uint64
+		wantRefillRate uint64
+	}{
+		{"rejects zero capacity", 10, 0, u256.Zero(), u256.NewUint(1), false, ZeroCapacity, 0, 0, 0},
+		{"rejects zero refill rate", 10, 0, u256.NewUint(1), u256.Zero(), false, ZeroRefillRate, 0, 0, 0},
+		{"without reset keeps available", 10, 40, u256.NewUint(200), u256.NewUint(7), false, nil, 200, 60, 7},
+		{"with reset restores available", 10, 40, u256.NewUint(200), u256.NewUint(7), true, nil, 200, 200, 7},
+		{"clamps available when shrinking capacity", 10, 0, u256.NewUint(50), u256.NewUint(5), false, nil, 50, 50, 5},
+		{"last refill zero restores available", 0, 40, u256.NewUint(200), u256.NewUint(7), false, nil, 200, 200, 7},
+	}
 
-	err := tb.Update(u256.NewUint(1), u256.Zero(), false)
-	if err != ZeroRefillRate {
-		t.Fatalf("Update zero refill rate error: got %v want %v", err, ZeroRefillRate)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tb := mustNew(t, 100, 5, tc.start)
+			if tc.initialCharge != 0 {
+				mustRateLimit(t, tb, tc.initialCharge, tc.start)
+			}
+
+			err := tb.Update(tc.capacity, tc.refillRate, tc.reset)
+			if err != tc.wantErr {
+				t.Fatalf("Update error: got %v want %v", err, tc.wantErr)
+			}
+			if tc.wantErr != nil {
+				return
+			}
+
+			assertUint(t, "capacity", tb.Capacity, tc.wantCapacity)
+			assertUint(t, "available", tb.Available, tc.wantAvailable)
+			assertUint(t, "refill_rate", tb.RefillRate, tc.wantRefillRate)
+		})
 	}
 }
 
-func TestUpdateWithoutResetKeepsAvailable(t *testing.T) {
-	tb := mustNew(t, 100, 5, 10)
-	mustRateLimit(t, tb, 40, 10)
-
-	if err := tb.Update(u256.NewUint(200), u256.NewUint(7), false); err != nil {
-		t.Fatalf("Update error: %v", err)
+func TestSaturatingAdd(t *testing.T) {
+	max := maxUint256()
+	cases := []struct {
+		name string
+		x    *u256.Uint
+		y    *u256.Uint
+		want *u256.Uint
+	}{
+		{"adds without overflow", u256.NewUint(5), u256.NewUint(7), u256.NewUint(12)},
+		{"saturates on overflow", max, u256.NewUint(1), max},
 	}
 
-	assertUint(t, "capacity", tb.Capacity, 200)
-	assertUint(t, "available", tb.Available, 60)
-	assertUint(t, "refill_rate", tb.RefillRate, 7)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := saturatingAdd(tc.x, tc.y)
+			assertUintEqual(t, "sum", got, tc.want)
+		})
+	}
 }
 
-func TestUpdateWithResetRestoresAvailable(t *testing.T) {
-	tb := mustNew(t, 100, 5, 10)
-	mustRateLimit(t, tb, 40, 10)
-
-	if err := tb.Update(u256.NewUint(200), u256.NewUint(7), true); err != nil {
-		t.Fatalf("Update error: %v", err)
+func TestSaturatingMul(t *testing.T) {
+	max := maxUint256()
+	cases := []struct {
+		name string
+		x    *u256.Uint
+		y    *u256.Uint
+		want *u256.Uint
+	}{
+		{"multiplies without overflow", u256.NewUint(6), u256.NewUint(7), u256.NewUint(42)},
+		{"saturates on overflow", max, u256.NewUint(2), max},
 	}
 
-	assertUint(t, "capacity", tb.Capacity, 200)
-	assertUint(t, "available", tb.Available, 200)
-	assertUint(t, "refill_rate", tb.RefillRate, 7)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := saturatingMul(tc.x, tc.y)
+			assertUintEqual(t, "product", got, tc.want)
+		})
+	}
 }
 
-func TestRefillIgnoresClockGoingBackward(t *testing.T) {
-	tb := mustNew(t, 100, 5, 10)
-	mustRateLimit(t, tb, 80, 10)
-
-	tb.Refill(u256.NewUint(5))
-
-	assertUint(t, "available", tb.Available, 20)
-	assertUint(t, "last_refill", tb.LastRefill, 10)
-}
-
-func TestUpdateClampsAvailableWhenShrinkingCapacity(t *testing.T) {
-	tb := mustNew(t, 100, 5, 10)
-
-	if err := tb.Update(u256.NewUint(50), u256.NewUint(5), false); err != nil {
-		t.Fatalf("Update error: %v", err)
+func TestMin(t *testing.T) {
+	cases := []struct {
+		name string
+		x    *u256.Uint
+		y    *u256.Uint
+		want *u256.Uint
+	}{
+		{"returns x when x is lower", u256.NewUint(3), u256.NewUint(5), u256.NewUint(3)},
+		{"returns x when equal", u256.NewUint(5), u256.NewUint(5), u256.NewUint(5)},
+		{"returns y when y is lower", u256.NewUint(8), u256.NewUint(2), u256.NewUint(2)},
 	}
 
-	assertUint(t, "capacity", tb.Capacity, 50)
-	assertUint(t, "available", tb.Available, 50)
-}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := min(tc.x, tc.y)
+			assertUintEqual(t, "min", got, tc.want)
 
-func TestUpdateWhenLastRefillZeroRestoresAvailable(t *testing.T) {
-	tb := mustNew(t, 100, 5, 0)
-	mustRateLimit(t, tb, 40, 0)
-
-	if err := tb.Update(u256.NewUint(200), u256.NewUint(7), false); err != nil {
-		t.Fatalf("Update error: %v", err)
-	}
-
-	assertUint(t, "available", tb.Available, 200)
-}
-
-func mustNew(t *testing.T, capacity uint64, refillRate uint64, now uint64) *TokenBucket {
-	t.Helper()
-
-	tb, err := New(u256.NewUint(capacity), u256.NewUint(refillRate), u256.NewUint(now))
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	return tb
-}
-
-func mustRateLimit(t *testing.T, tb *TokenBucket, amount uint64, now uint64) {
-	t.Helper()
-
-	if err := tb.RateLimit(u256.NewUint(amount), u256.NewUint(now)); err != nil {
-		t.Fatalf("RateLimit error: %v", err)
+			got.Set(u256.NewUint(99))
+			if tc.x.Cmp(u256.NewUint(99)) == 0 || tc.y.Cmp(u256.NewUint(99)) == 0 {
+				t.Fatalf("min returned an aliased uint")
+			}
+		})
 	}
 }
 

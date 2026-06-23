@@ -50,27 +50,32 @@ func TestEncodeMisbehaviourNil(t *testing.T) {
 	}
 }
 
-func TestDecodeMisbehaviourMissingHeader(t *testing.T) {
-	// Only field 1 (Header1) present; Header2 missing must be rejected.
+func TestDecodeMisbehaviour(t *testing.T) {
 	h1, err := EncodeHeader(newTestHeader(100, 2000, 0, 90, []byte{0x01}))
 	if err != nil {
 		t.Fatalf("EncodeHeader: %v", err)
 	}
-	var buf []byte
-	buf = proto.AppendLengthDelimited(buf, 1, h1)
 
-	if _, err := DecodeMisbehaviour(buf); err == nil {
-		t.Fatal("expected error for misbehaviour missing a header")
+	cases := []struct {
+		name string
+		buf  []byte
+	}{
+		{
+			name: "missing header2",
+			buf:  proto.AppendLengthDelimited(nil, 1, h1),
+		},
+		{
+			name: "bad header bytes",
+			buf:  proto.AppendLengthDelimited(nil, 1, []byte{0x01, 0x02, 0x03}),
+		},
 	}
-}
 
-func TestDecodeMisbehaviourBadHeaderBytes(t *testing.T) {
-	// Field 1 carries bytes that are too short to be a valid ABI header.
-	var buf []byte
-	buf = proto.AppendLengthDelimited(buf, 1, []byte{0x01, 0x02, 0x03})
-
-	if _, err := DecodeMisbehaviour(buf); err == nil {
-		t.Fatal("expected error for undecodable header bytes")
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := DecodeMisbehaviour(tc.buf); err == nil {
+				t.Fatal("expected decode error")
+			}
+		})
 	}
 }
 

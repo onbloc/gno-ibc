@@ -1,6 +1,7 @@
 package abi
 
 import (
+	"bytes"
 	"testing"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -233,7 +234,7 @@ func TestStaticValue(t *testing.T) {
 					if !ok {
 						t.Fatalf("staticValue type = %T, want []byte", got)
 					}
-					if len(gotAddr) != len(v) || !hexEqual(gotAddr, v) {
+					if len(gotAddr) != len(v) || !bytes.Equal(gotAddr, v) {
 						t.Fatalf("staticValue address = %x, want %x", gotAddr, v)
 					}
 				case []any:
@@ -253,18 +254,6 @@ func TestStaticValue(t *testing.T) {
 			}
 		})
 	}
-}
-
-func hexEqual(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 func TestArrayAt(t *testing.T) {

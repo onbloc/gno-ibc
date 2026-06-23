@@ -5,45 +5,52 @@ import (
 )
 
 func TestConsensusStateValidateBasic(t *testing.T) {
-	t.Run("valid", func(t *testing.T) {
-		cs := ConsensusState{
-			Timestamp:          testNow,
-			Root:               MerkleRoot{Hash: repeat32(0xAB)},
-			NextValidatorsHash: repeat32(0xCD),
-		}
-		if err := cs.ValidateBasic(); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	})
+	cases := []struct {
+		name    string
+		state   ConsensusState
+		wantErr string
+	}{
+		{
+			name: "valid",
+			state: ConsensusState{
+				Timestamp:          testNow,
+				Root:               MerkleRoot{Hash: repeat32(0xAB)},
+				NextValidatorsHash: repeat32(0xCD),
+			},
+		},
+		{
+			name:  "valid empty next validators hash",
+			state: ConsensusState{Root: MerkleRoot{Hash: repeat32(0xAB)}},
+		},
+		{
+			name:    "nil root",
+			state:   ConsensusState{Root: MerkleRoot{Hash: nil}, NextValidatorsHash: repeat32(0xCD)},
+			wantErr: "root hash",
+		},
+		{
+			name:    "empty root",
+			state:   ConsensusState{Root: MerkleRoot{Hash: []byte{}}, NextValidatorsHash: repeat32(0xCD)},
+			wantErr: "root hash",
+		},
+		{
+			name:    "bad next validators hash length",
+			state:   ConsensusState{Root: MerkleRoot{Hash: repeat32(0xAB)}, NextValidatorsHash: []byte{0x01, 0x02}},
+			wantErr: "next validators hash",
+		},
+	}
 
-	t.Run("valid_empty_next_validators_hash", func(t *testing.T) {
-		// validateHash permits an empty hash (proto3 default).
-		cs := ConsensusState{Root: MerkleRoot{Hash: repeat32(0xAB)}}
-		if err := cs.ValidateBasic(); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("nil_root", func(t *testing.T) {
-		cs := ConsensusState{Root: MerkleRoot{Hash: nil}, NextValidatorsHash: repeat32(0xCD)}
-		if err := cs.ValidateBasic(); err == nil {
-			t.Fatal("expected error for nil root hash")
-		}
-	})
-
-	t.Run("empty_root", func(t *testing.T) {
-		cs := ConsensusState{Root: MerkleRoot{Hash: []byte{}}, NextValidatorsHash: repeat32(0xCD)}
-		if err := cs.ValidateBasic(); err == nil {
-			t.Fatal("expected error for empty root hash")
-		}
-	})
-
-	t.Run("bad_next_validators_hash_length", func(t *testing.T) {
-		cs := ConsensusState{Root: MerkleRoot{Hash: repeat32(0xAB)}, NextValidatorsHash: []byte{0x01, 0x02}}
-		if err := cs.ValidateBasic(); err == nil {
-			t.Fatal("expected error for non-32-byte next validators hash")
-		}
-	})
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.state.ValidateBasic()
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			requireErrorContains(t, err, tc.wantErr)
+		})
+	}
 }
 
 func TestConsensusStateGetters(t *testing.T) {
@@ -62,10 +69,20 @@ func TestConsensusStateGetters(t *testing.T) {
 }
 
 func TestMerkleRootEmpty(t *testing.T) {
-	if !(MerkleRoot{}).Empty() {
-		t.Error("zero MerkleRoot should be empty")
+	cases := []struct {
+		name string
+		root MerkleRoot
+		want bool
+	}{
+		{"zero root", MerkleRoot{}, true},
+		{"non-empty root", MerkleRoot{Hash: repeat32(0x01)}, false},
 	}
-	if (MerkleRoot{Hash: repeat32(0x01)}).Empty() {
-		t.Error("non-empty MerkleRoot should not be empty")
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.root.Empty(); got != tc.want {
+				t.Fatalf("Empty: got %v want %v", got, tc.want)
+			}
+		})
 	}
 }

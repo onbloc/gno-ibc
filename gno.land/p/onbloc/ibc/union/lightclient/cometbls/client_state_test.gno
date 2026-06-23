@@ -20,92 +20,58 @@ func validClientState() ClientState {
 }
 
 func TestClientStateValidate(t *testing.T) {
-	t.Run("valid", func(t *testing.T) {
-		cs := validClientState()
-		if err := cs.Validate(); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-	})
+	cases := []struct {
+		name    string
+		setup   func(*ClientState)
+		wantErr string
+	}{
+		{"valid", func(*ClientState) {}, ""},
+		{"empty chain id", func(cs *ClientState) { cs.ChainID = "   " }, "chain"},
+		{"chain id too long", func(cs *ClientState) { cs.ChainID = strings.Repeat("x", MaxChainIDLen+1) }, "chain-id"},
+		{"chain id max length", func(cs *ClientState) { cs.ChainID = strings.Repeat("x", MaxChainIDLen) }, ""},
+		{"zero trusting period", func(cs *ClientState) { cs.TrustingPeriod = 0 }, "trusting period"},
+		{"zero unbonding period", func(cs *ClientState) { cs.UnbondingPeriod = 0 }, "unbonding period"},
+		{"zero max clock drift", func(cs *ClientState) { cs.MaxClockDrift = 0 }, "max clock drift"},
+		{"zero latest height", func(cs *ClientState) { cs.LatestHeight = types.NewHeight(0) }, "latest height"},
+		{"trusting period not less than unbonding", func(cs *ClientState) { cs.TrustingPeriod = cs.UnbondingPeriod }, "trusting period"},
+	}
 
-	t.Run("empty_chain_id", func(t *testing.T) {
-		cs := validClientState()
-		cs.ChainID = "   "
-		if err := cs.Validate(); err == nil {
-			t.Fatal("expected error for empty chain id")
-		}
-	})
-
-	t.Run("chain_id_too_long", func(t *testing.T) {
-		cs := validClientState()
-		cs.ChainID = strings.Repeat("x", MaxChainIDLen+1)
-		if err := cs.Validate(); err == nil {
-			t.Fatal("expected error for over-long chain id")
-		}
-	})
-
-	t.Run("chain_id_max_length", func(t *testing.T) {
-		cs := validClientState()
-		cs.ChainID = strings.Repeat("x", MaxChainIDLen)
-		if err := cs.Validate(); err != nil {
-			t.Fatalf("unexpected error for max-length chain id: %v", err)
-		}
-	})
-
-	t.Run("zero_trusting_period", func(t *testing.T) {
-		cs := validClientState()
-		cs.TrustingPeriod = 0
-		if err := cs.Validate(); err == nil {
-			t.Fatal("expected error for zero trusting period")
-		}
-	})
-
-	t.Run("zero_unbonding_period", func(t *testing.T) {
-		cs := validClientState()
-		cs.UnbondingPeriod = 0
-		if err := cs.Validate(); err == nil {
-			t.Fatal("expected error for zero unbonding period")
-		}
-	})
-
-	t.Run("zero_max_clock_drift", func(t *testing.T) {
-		cs := validClientState()
-		cs.MaxClockDrift = 0
-		if err := cs.Validate(); err == nil {
-			t.Fatal("expected error for zero max clock drift")
-		}
-	})
-
-	t.Run("zero_latest_height", func(t *testing.T) {
-		cs := validClientState()
-		cs.LatestHeight = types.NewHeight(0)
-		if err := cs.Validate(); err == nil {
-			t.Fatal("expected error for zero latest height")
-		}
-	})
-
-	t.Run("trusting_period_not_less_than_unbonding", func(t *testing.T) {
-		cs := validClientState()
-		cs.TrustingPeriod = cs.UnbondingPeriod
-		if err := cs.Validate(); err == nil {
-			t.Fatal("expected error when trusting period >= unbonding period")
-		}
-	})
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cs := validClientState()
+			tc.setup(&cs)
+			err := cs.Validate()
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			requireErrorContains(t, err, tc.wantErr)
+		})
+	}
 }
 
 func TestClientStateIsExpired(t *testing.T) {
 	cs := validClientState() // TrustingPeriod = 1000
 
-	if cs.IsExpired(testNow-1000, testNow) {
-		t.Error("expected not expired when latestTimestamp + trustingPeriod == now")
+	cases := []struct {
+		name            string
+		latestTimestamp uint64
+		want            bool
+	}{
+		{"expires exactly at now is active", testNow - 1000, false},
+		{"expires after now is active", testNow - 999, false},
+		{"expired before now", testNow - 1001, true},
+		{"trusting period overflow expires", ^uint64(0) - 999, true},
 	}
-	if cs.IsExpired(testNow-999, testNow) {
-		t.Error("expected not expired when latestTimestamp + trustingPeriod > now")
-	}
-	if !cs.IsExpired(testNow-1001, testNow) {
-		t.Error("expected expired when latestTimestamp + trustingPeriod < now")
-	}
-	if !cs.IsExpired(^uint64(0)-999, testNow) {
-		t.Error("expected expired when latestTimestamp + trustingPeriod overflows")
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := cs.IsExpired(tc.latestTimestamp, testNow); got != tc.want {
+				t.Fatalf("IsExpired: got %v want %v", got, tc.want)
+			}
+		})
 	}
 }
 

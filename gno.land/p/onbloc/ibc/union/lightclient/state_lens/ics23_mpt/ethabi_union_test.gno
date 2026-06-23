@@ -37,28 +37,42 @@ func TestClientStateEthABIVector(t *testing.T) {
 			l2ChainIDData,
 	)
 
-	value := ClientState{
-		L2ChainID:         "11155111",
-		L1ClientID:        1,
-		L2ClientID:        1,
-		L2LatestHeight:    8271613,
-		TimestampOffset:   120,
-		StateRootOffset:   32,
-		StorageRootOffset: 64,
+	tests := []struct {
+		name  string
+		value ClientState
+		bz    []byte
+	}{
+		{
+			name: "union client state vector",
+			value: ClientState{
+				L2ChainID:         "11155111",
+				L1ClientID:        1,
+				L2ClientID:        1,
+				L2LatestHeight:    8271613,
+				TimestampOffset:   120,
+				StateRootOffset:   32,
+				StorageRootOffset: 64,
+			},
+			bz: bz,
+		},
 	}
 
-	encoded, err := EncodeClientState(value)
-	if err != nil {
-		t.Fatalf("EncodeClientState: %v", err)
-	}
-	assertBytes(t, "EncodeClientState", encoded, bz)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			encoded, err := EncodeClientState(tt.value)
+			if err != nil {
+				t.Fatalf("EncodeClientState: %v", err)
+			}
+			assertBytes(t, "EncodeClientState", encoded, tt.bz)
 
-	got, err := DecodeClientState(bz)
-	if err != nil {
-		t.Fatalf("DecodeClientState: %v", err)
-	}
-	if got != value {
-		t.Fatalf("DecodeClientState: got %#v want %#v", got, value)
+			got, err := DecodeClientState(tt.bz)
+			if err != nil {
+				t.Fatalf("DecodeClientState: %v", err)
+			}
+			if got != tt.value {
+				t.Fatalf("DecodeClientState: got %#v want %#v", got, tt.value)
+			}
+		})
 	}
 }
 
@@ -81,26 +95,40 @@ func TestConsensusStateEthABIVector(t *testing.T) {
 			storageRoot,
 	)
 
-	value := ConsensusState{
-		Timestamp:   3608375302355866610,
-		StateRoot:   mustHex(stateRoot),
-		StorageRoot: mustHex(storageRoot),
+	tests := []struct {
+		name  string
+		value ConsensusState
+		bz    []byte
+	}{
+		{
+			name: "union consensus state vector",
+			value: ConsensusState{
+				Timestamp:   3608375302355866610,
+				StateRoot:   mustHex(stateRoot),
+				StorageRoot: mustHex(storageRoot),
+			},
+			bz: bz,
+		},
 	}
 
-	encoded, err := EncodeConsensusState(value)
-	if err != nil {
-		t.Fatalf("EncodeConsensusState: %v", err)
-	}
-	assertBytes(t, "EncodeConsensusState", encoded, bz)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			encoded, err := EncodeConsensusState(tt.value)
+			if err != nil {
+				t.Fatalf("EncodeConsensusState: %v", err)
+			}
+			assertBytes(t, "EncodeConsensusState", encoded, tt.bz)
 
-	got, err := DecodeConsensusState(bz)
-	if err != nil {
-		t.Fatalf("DecodeConsensusState: %v", err)
-	}
-	if got.Timestamp != value.Timestamp ||
-		!bytes.Equal(got.StateRoot, value.StateRoot) ||
-		!bytes.Equal(got.StorageRoot, value.StorageRoot) {
-		t.Fatalf("DecodeConsensusState: got %#v want %#v", got, value)
+			got, err := DecodeConsensusState(tt.bz)
+			if err != nil {
+				t.Fatalf("DecodeConsensusState: %v", err)
+			}
+			if got.Timestamp != tt.value.Timestamp ||
+				!bytes.Equal(got.StateRoot, tt.value.StateRoot) ||
+				!bytes.Equal(got.StorageRoot, tt.value.StorageRoot) {
+				t.Fatalf("DecodeConsensusState: got %#v want %#v", got, tt.value)
+			}
+		})
 	}
 }
 
@@ -108,13 +136,6 @@ func TestHeaderEthABI(t *testing.T) {
 	// Header has no fixed upstream hex fixture in Union's type tests at the
 	// time this test was added. The shape is pinned against the reference type:
 	// https://github.com/unionlabs/union/blob/main/lib/state-lens-light-client-types/src/header.rs
-	value := Header{
-		L1Height:              11,
-		L2Height:              22,
-		L2ConsensusStateProof: mustHex("aabbcc"),
-		L2ConsensusState:      mustHex("01020304"),
-	}
-
 	l1Height := word32(11)
 	l2Height := word32(22)
 	l2ConsensusStateProofOffset := word32(128)
@@ -124,7 +145,7 @@ func TestHeaderEthABI(t *testing.T) {
 	l2ConsensusStateLength := word32(4)
 	l2ConsensusStateData := "0102030400000000000000000000000000000000000000000000000000000000"
 
-	want := mustHex(
+	bz := mustHex(
 		l1Height +
 			l2Height +
 			l2ConsensusStateProofOffset +
@@ -135,20 +156,41 @@ func TestHeaderEthABI(t *testing.T) {
 			l2ConsensusStateData,
 	)
 
-	encoded, err := EncodeHeader(value)
-	if err != nil {
-		t.Fatalf("EncodeHeader: %v", err)
+	tests := []struct {
+		name  string
+		value Header
+		bz    []byte
+	}{
+		{
+			name: "header with proof and consensus state",
+			value: Header{
+				L1Height:              11,
+				L2Height:              22,
+				L2ConsensusStateProof: mustHex("aabbcc"),
+				L2ConsensusState:      mustHex("01020304"),
+			},
+			bz: bz,
+		},
 	}
-	assertBytes(t, "EncodeHeader", encoded, want)
 
-	got, err := DecodeHeader(encoded)
-	if err != nil {
-		t.Fatalf("DecodeHeader: %v", err)
-	}
-	if got.L1Height != value.L1Height ||
-		got.L2Height != value.L2Height ||
-		!bytes.Equal(got.L2ConsensusStateProof, value.L2ConsensusStateProof) ||
-		!bytes.Equal(got.L2ConsensusState, value.L2ConsensusState) {
-		t.Fatalf("DecodeHeader: got %#v want %#v", got, value)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			encoded, err := EncodeHeader(tt.value)
+			if err != nil {
+				t.Fatalf("EncodeHeader: %v", err)
+			}
+			assertBytes(t, "EncodeHeader", encoded, tt.bz)
+
+			got, err := DecodeHeader(encoded)
+			if err != nil {
+				t.Fatalf("DecodeHeader: %v", err)
+			}
+			if got.L1Height != tt.value.L1Height ||
+				got.L2Height != tt.value.L2Height ||
+				!bytes.Equal(got.L2ConsensusStateProof, tt.value.L2ConsensusStateProof) ||
+				!bytes.Equal(got.L2ConsensusState, tt.value.L2ConsensusState) {
+				t.Fatalf("DecodeHeader: got %#v want %#v", got, tt.value)
+			}
+		})
 	}
 }

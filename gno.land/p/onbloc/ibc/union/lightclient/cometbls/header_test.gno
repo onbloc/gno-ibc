@@ -28,36 +28,32 @@ func newTestHeader(height, sec int64, nanos int32, trusted uint64, zkp []byte) *
 }
 
 func TestEncodeHeader(t *testing.T) {
-	t.Run("basic_zkp_2bytes", func(t *testing.T) {
-		h := newTestHeader(42, 1000, 500, 10, []byte{0xAA, 0xBB})
+	zkpPadded := make([]byte, 32)
+	copy(zkpPadded, []byte{0xAA, 0xBB})
 
-		zkpPadded := make([]byte, 32)
-		copy(zkpPadded, []byte{0xAA, 0xBB})
-		want := mustHex(
-			word32(42) +
-				word32(1000) +
-				word32(500) +
-				bytes32hex(0x01) +
-				bytes32hex(0x02) +
-				bytes32hex(0x03) +
-				word32(10) +
-				word32(256) + // offset to the dynamic bytes field
-				word32(2) + // ZKP length
-				hex.EncodeToString(zkpPadded),
-		)
-		got, err := EncodeHeader(h)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		bytesEq(t, "EncodeHeader/basic", got, want)
-	})
-
-	rejectCases := []struct {
+	cases := []struct {
 		name    string
 		header  *Header
+		want    []byte
 		wantErr string
 	}{
-		{"nil header", nil, "nil header"},
+		{
+			name:   "basic zkp 2 bytes",
+			header: newTestHeader(42, 1000, 500, 10, []byte{0xAA, 0xBB}),
+			want: mustHex(
+				word32(42) +
+					word32(1000) +
+					word32(500) +
+					bytes32hex(0x01) +
+					bytes32hex(0x02) +
+					bytes32hex(0x03) +
+					word32(10) +
+					word32(256) + // offset to the dynamic bytes field
+					word32(2) + // ZKP length
+					hex.EncodeToString(zkpPadded),
+			),
+		},
+		{name: "nil header", header: nil, wantErr: "nil header"},
 		{
 			name: "nil signed header",
 			header: &Header{
@@ -97,60 +93,65 @@ func TestEncodeHeader(t *testing.T) {
 		},
 	}
 
-	for _, tc := range rejectCases {
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := EncodeHeader(tc.header)
-			requireErrorContains(t, err, tc.wantErr)
+			got, err := EncodeHeader(tc.header)
+			if tc.wantErr != "" {
+				requireErrorContains(t, err, tc.wantErr)
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			bytesEq(t, "EncodeHeader", got, tc.want)
 		})
 	}
 }
 
 func TestDecodeHeader(t *testing.T) {
-	t.Run("basic", func(t *testing.T) {
-		zkp := []byte{0xAA, 0xBB}
-		zkpPadded := make([]byte, 32)
-		copy(zkpPadded, zkp)
-		buf := mustHex(
-			word32(42) +
-				word32(1000) +
-				word32(500) +
-				bytes32hex(0x01) +
-				bytes32hex(0x02) +
-				bytes32hex(0x03) +
-				word32(10) +
-				word32(256) +
-				word32(2) +
-				hex.EncodeToString(zkpPadded),
-		)
-		got, err := DecodeHeader(buf)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if got.SignedHeader.Height != 42 {
-			t.Fatalf("Height: got %d want 42", got.SignedHeader.Height)
-		}
-		if got.SignedHeader.TimeSeconds != 1000 {
-			t.Fatalf("TimeSeconds: got %d want 1000", got.SignedHeader.TimeSeconds)
-		}
-		if got.SignedHeader.TimeNanos != 500 {
-			t.Fatalf("TimeNanos: got %d want 500", got.SignedHeader.TimeNanos)
-		}
-		bytesEq(t, "ValidatorsHash", got.SignedHeader.ValidatorsHash, repeat32(0x01))
-		bytesEq(t, "NextValidatorsHash", got.SignedHeader.NextValidatorsHash, repeat32(0x02))
-		bytesEq(t, "AppHash", got.SignedHeader.AppHash, repeat32(0x03))
-		if got.TrustedHeight.RevisionHeight != 10 {
-			t.Fatalf("TrustedHeight: got %d want 10", got.TrustedHeight.RevisionHeight)
-		}
-		bytesEq(t, "ZKP", got.ZeroKnowledgeProof, zkp)
-	})
-
+	zkp := []byte{0xAA, 0xBB}
 	zkpPadded := make([]byte, 32)
-	errCases := []struct {
+	copy(zkpPadded, zkp)
+	cases := []struct {
 		name    string
 		data    []byte
+		check   func(*testing.T, *Header)
 		wantErr string
 	}{
-		{"too short", make([]byte, 255), "abi: invalid data"},
+		{
+			name: "basic",
+			data: mustHex(
+				word32(42) +
+					word32(1000) +
+					word32(500) +
+					bytes32hex(0x01) +
+					bytes32hex(0x02) +
+					bytes32hex(0x03) +
+					word32(10) +
+					word32(256) +
+					word32(2) +
+					hex.EncodeToString(zkpPadded),
+			),
+			check: func(t *testing.T, got *Header) {
+				if got.SignedHeader.Height != 42 {
+					t.Fatalf("Height: got %d want 42", got.SignedHeader.Height)
+				}
+				if got.SignedHeader.TimeSeconds != 1000 {
+					t.Fatalf("TimeSeconds: got %d want 1000", got.SignedHeader.TimeSeconds)
+				}
+				if got.SignedHeader.TimeNanos != 500 {
+					t.Fatalf("TimeNanos: got %d want 500", got.SignedHeader.TimeNanos)
+				}
+				bytesEq(t, "ValidatorsHash", got.SignedHeader.ValidatorsHash, repeat32(0x01))
+				bytesEq(t, "NextValidatorsHash", got.SignedHeader.NextValidatorsHash, repeat32(0x02))
+				bytesEq(t, "AppHash", got.SignedHeader.AppHash, repeat32(0x03))
+				if got.TrustedHeight.RevisionHeight != 10 {
+					t.Fatalf("TrustedHeight: got %d want 10", got.TrustedHeight.RevisionHeight)
+				}
+				bytesEq(t, "ZKP", got.ZeroKnowledgeProof, zkp)
+			},
+		},
+		{name: "too short", data: make([]byte, 255), wantErr: "abi: invalid data"},
 		{
 			name: "timenanos out of range",
 			data: mustHex(
@@ -214,10 +215,17 @@ func TestDecodeHeader(t *testing.T) {
 			wantErr: "abi: invalid data",
 		},
 	}
-	for _, tc := range errCases {
+	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := DecodeHeader(tc.data)
-			requireErrorContains(t, err, tc.wantErr)
+			got, err := DecodeHeader(tc.data)
+			if tc.wantErr != "" {
+				requireErrorContains(t, err, tc.wantErr)
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			tc.check(t, got)
 		})
 	}
 }

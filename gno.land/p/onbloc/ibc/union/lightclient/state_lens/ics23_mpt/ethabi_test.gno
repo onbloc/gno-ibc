@@ -67,17 +67,27 @@ func TestToBytes32(t *testing.T) {
 }
 
 func TestCloneBytes(t *testing.T) {
-	src := []byte{0x01, 0x02, 0x03}
-	got := cloneBytes(src)
-	assertBytes(t, "cloneBytes", got, src)
-	got[0] = 0xff
-	if src[0] != 0x01 {
-		t.Fatalf("cloneBytes returned an aliased slice")
+	tests := []struct {
+		name      string
+		src       []byte
+		want      []byte
+		checkCopy bool
+	}{
+		{name: "copies non-empty slice", src: []byte{0x01, 0x02, 0x03}, want: []byte{0x01, 0x02, 0x03}, checkCopy: true},
+		{name: "nil returns empty slice", src: nil, want: nil},
 	}
 
-	got = cloneBytes(nil)
-	if len(got) != 0 {
-		t.Fatalf("cloneBytes(nil): got length %d want 0", len(got))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := cloneBytes(tt.src)
+			assertBytes(t, "cloneBytes", got, tt.want)
+			if tt.checkCopy {
+				got[0] = 0xff
+				if tt.src[0] != 0x01 {
+					t.Fatalf("cloneBytes returned an aliased slice")
+				}
+			}
+		})
 	}
 }
 
@@ -130,22 +140,35 @@ func TestDecodeClientStateOffsetBoundaries(t *testing.T) {
 }
 
 func TestEncodeClientStateMaxOffsets(t *testing.T) {
-	value := ClientState{
-		L2ChainID:         "11155111",
-		L1ClientID:        1,
-		L2ClientID:        1,
-		L2LatestHeight:    8271613,
-		TimestampOffset:   0xFFFF,
-		StateRootOffset:   0xFFFF,
-		StorageRootOffset: 0xFFFF,
+	tests := []struct {
+		name  string
+		value ClientState
+		want  []byte
+	}{
+		{
+			name: "max uint16 offsets",
+			value: ClientState{
+				L2ChainID:         "11155111",
+				L1ClientID:        1,
+				L2ClientID:        1,
+				L2LatestHeight:    8271613,
+				TimestampOffset:   0xFFFF,
+				StateRootOffset:   0xFFFF,
+				StorageRootOffset: 0xFFFF,
+			},
+			want: mustClientStateWithOffsets(0xFFFF, 0xFFFF, 0xFFFF),
+		},
 	}
-	want := mustClientStateWithOffsets(0xFFFF, 0xFFFF, 0xFFFF)
 
-	got, err := EncodeClientState(value)
-	if err != nil {
-		t.Fatalf("EncodeClientState: %v", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := EncodeClientState(tt.value)
+			if err != nil {
+				t.Fatalf("EncodeClientState: %v", err)
+			}
+			assertBytes(t, "EncodeClientState", got, tt.want)
+		})
 	}
-	assertBytes(t, "EncodeClientState", got, want)
 }
 
 func TestRejectInvalidClientStateOffsets(t *testing.T) {
@@ -187,8 +210,19 @@ func TestRejectInvalidClientStateUint32Fields(t *testing.T) {
 }
 
 func TestDecodeClientStateRejectsMalformedUint64Fields(t *testing.T) {
-	if _, err := DecodeClientState(mustClientStateWithLatestHeightWord(highPaddingWord(1))); err == nil {
-		t.Fatalf("DecodeClientState accepted uint64 overflow")
+	tests := []struct {
+		name string
+		bz   []byte
+	}{
+		{name: "latest height high padding", bz: mustClientStateWithLatestHeightWord(highPaddingWord(1))},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if _, err := DecodeClientState(tt.bz); err == nil {
+				t.Fatalf("DecodeClientState accepted uint64 overflow")
+			}
+		})
 	}
 }
 

@@ -20,6 +20,12 @@ const timeoutScenarioClientType = types.ClientType("gno.land/r/onbloc/ibc/union/
 
 type timeoutScenarioLightClient struct{}
 
+var _ lightclient.ClientImpl = timeoutScenarioClientImpl
+
+func timeoutScenarioClientImpl(_, _ []byte) (lightclient.Interface, error) {
+	return &timeoutScenarioLightClient{}, nil
+}
+
 func (m *timeoutScenarioLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error {
 	return nil
 }
@@ -113,7 +119,7 @@ func main(cur realm) {
 
 func openTimeoutScenarioChannelPair(cur realm) e2e.ChannelPair {
 	if !core.HasClient(timeoutScenarioClientType) {
-		core.RegisterClient(cross(cur), timeoutScenarioClientType, &timeoutScenarioLightClient{})
+		core.RegisterClient(cross(cur), timeoutScenarioClientType, timeoutScenarioClientImpl)
 	}
 	core.CreateClient(cross(cur), types.NewMsgCreateClient(timeoutScenarioClientType, nil, nil))
 	clientId := types.ClientId(1)

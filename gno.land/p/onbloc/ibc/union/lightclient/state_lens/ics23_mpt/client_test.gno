@@ -74,7 +74,7 @@ func newTestClient(t *testing.T, l1 *mockL1Client, storageRoot []byte) *StateLen
 		StateRoot:   bytes.Repeat([]byte{0xaa}, 32),
 		StorageRoot: storageRoot,
 	}
-	c, err := NewStateLensIcs23MptLightClient(cs, cons, l1)
+	c, err := newTestStateLensClient(cs, cons, l1)
 	if err != nil {
 		t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestStatusMirrorsL1(t *testing.T) {
 func TestStatusNilL1IsFrozen(t *testing.T) {
 	cs := &ClientState{L2ChainID: "l2", L2LatestHeight: 1}
 	cons := &ConsensusState{Timestamp: 1, StateRoot: bytes.Repeat([]byte{0x01}, 32), StorageRoot: bytes.Repeat([]byte{0x02}, 32)}
-	c, err := NewStateLensIcs23MptLightClient(cs, cons, nil)
+	c, err := newTestStateLensClient(cs, cons, nil)
 	if err != nil {
 		t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestVerifyHeaderRejectsWhenL1Fails(t *testing.T) {
 func TestVerifyHeaderNilL1(t *testing.T) {
 	cs := &ClientState{L2ChainID: "l2", L2ClientID: 7, L2LatestHeight: 10, StorageRootOffset: 32}
 	cons := &ConsensusState{Timestamp: 1, StateRoot: bytes.Repeat([]byte{0x01}, 32), StorageRoot: bytes.Repeat([]byte{0x02}, 32)}
-	c, err := NewStateLensIcs23MptLightClient(cs, cons, nil)
+	c, err := newTestStateLensClient(cs, cons, nil)
 	if err != nil {
 		t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
 	}
@@ -250,6 +250,98 @@ func TestVerifyCreationEmpty(t *testing.T) {
 	if len(res.ClientStateBytes) != 0 {
 		t.Errorf("VerifyCreation must not write a client state")
 	}
+}
+
+func TestNewStateLensIcs23MptLightClientBuildsClientAndAllowsL1ClientRefresh(t *testing.T) {
+	l1 := &mockL1Client{status: lightclient.Active}
+	nextL1 := &mockL1Client{status: lightclient.Active}
+	c := newTestClient(t, l1, bytes.Repeat([]byte{0x02}, 32))
+
+	clientState := ClientState{
+		L2ChainID:         "reinit-l2",
+		L1ClientID:        2,
+		L2ClientID:        9,
+		L2LatestHeight:    42,
+		TimestampOffset:   64,
+		StateRootOffset:   0,
+		StorageRootOffset: 32,
+	}
+	clientStateBytes, err := EncodeClientState(clientState)
+	if err != nil {
+		t.Fatalf("EncodeClientState: %v", err)
+	}
+	consensusState := ConsensusState{
+		Timestamp:   4242,
+		StateRoot:   bytes.Repeat([]byte{0x42}, 32),
+		StorageRoot: bytes.Repeat([]byte{0x43}, 32),
+	}
+	consensusStateBytes, err := EncodeConsensusState(consensusState)
+	if err != nil {
+		t.Fatalf("EncodeConsensusState: %v", err)
+	}
+
+	next, err := newStateLensIcs23MptLightClientFromBytes(clientStateBytes, consensusStateBytes)
+	if err != nil {
+		t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
+	}
+	nextClient := next.(*StateLensIcs23MptLightClient)
+
+	if nextClient.l1Client != nil {
+		t.Fatal("NewStateLensIcs23MptLightClient must leave L1 client resolution to core")
+	}
+	if nextClient.L1ClientID() != types.ClientId(2) {
+		t.Fatalf("l1 client id: got %s want 2", nextClient.L1ClientID())
+	}
+	nextClient.SetL1Client(nextL1)
+	if nextClient.l1Client != lightclient.Interface(nextL1) {
+		t.Fatal("SetL1Client must replace the L1 client reference")
+	}
+	if c.GetLatestHeight() != 10 {
+		t.Fatalf("original latest height changed: got %d want 10", c.GetLatestHeight())
+	}
+	if nextClient.GetLatestHeight() != 42 {
+		t.Fatalf("latest height: got %d want 42", nextClient.GetLatestHeight())
+	}
+	if nextClient.GetCounterpartyChainID() != "reinit-l2" {
+		t.Fatalf("chain id: got %q want reinit-l2", nextClient.GetCounterpartyChainID())
+	}
+	got, found := nextClient.getConsensusState(42)
+	if !found {
+		t.Fatal("new consensus state not stored")
+	}
+	if got.Timestamp != 4242 || !bytes.Equal(got.StorageRoot, bytes.Repeat([]byte{0x43}, 32)) {
+		t.Fatalf("unexpected consensus state: %#v", got)
+	}
+}
+
+func newTestStateLensClient(cs *ClientState, cons *ConsensusState, l1 lightclient.Interface) (*StateLensIcs23MptLightClient, error) {
+	clientStateBytes, err := EncodeClientState(*cs)
+	if err != nil {
+		return nil, err
+	}
+	consensusStateBytes, err := EncodeConsensusState(*cons)
+	if err != nil {
+		return nil, err
+	}
+	lc, err := newStateLensIcs23MptLightClientFromBytes(clientStateBytes, consensusStateBytes)
+	if err != nil {
+		return nil, err
+	}
+	c := lc.(*StateLensIcs23MptLightClient)
+	c.SetL1Client(l1)
+	return c, nil
+}
+
+func newStateLensIcs23MptLightClientFromBytes(clientStateBytes, consensusStateBytes []byte) (lightclient.Interface, error) {
+	clientState, err := DecodeClientState(clientStateBytes)
+	if err != nil {
+		return nil, err
+	}
+	consensusState, err := DecodeConsensusState(consensusStateBytes)
+	if err != nil {
+		return nil, err
+	}
+	return NewStateLensIcs23MptLightClient(&clientState, &consensusState, nil)
 }
 
 func TestVerifyMembershipStorageProof(t *testing.T) {

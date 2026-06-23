@@ -24,7 +24,7 @@ type mockClient struct {
 type mockStore struct {
 	seq           uint32
 	clients       map[uint32]*mockClient
-	registry      map[string]lightclient.Interface // client type -> registered light client
+	registry      map[string]lightclient.ClientImpl // ClientRegistry: client type -> registered impl
 	connSeq       uint32
 	connections   map[uint32]types.Connection
 	chanSeq       uint32
@@ -42,7 +42,7 @@ var _ core.IStore = (*mockStore)(nil)
 func newMockStore() *mockStore {
 	return &mockStore{
 		clients:       map[uint32]*mockClient{},
-		registry:      map[string]lightclient.Interface{},
+		registry:      map[string]lightclient.ClientImpl{},
 		connections:   map[uint32]types.Connection{},
 		channels:      map[uint32]types.Channel{},
 		channelOwners: map[uint32]types.Bytes{},
@@ -151,17 +151,17 @@ func newTestImpl() *coreV1 {
 	return &coreV1{store: newMockStore()}
 }
 
-func (m *mockStore) RegisterClient(_ int, rlm realm, typ types.ClientType, lc lightclient.Interface) {
+func (m *mockStore) RegisterClient(_ int, rlm realm, typ types.ClientType, clientImpl lightclient.ClientImpl) {
 	key := typ.String()
 	if _, ok := m.registry[key]; ok {
 		panic("client type already exists")
 	}
-	m.registry[key] = lc
+	m.registry[key] = clientImpl
 }
 
-func (m *mockStore) RegisteredClient(typ types.ClientType) (lightclient.Interface, bool) {
-	lc, ok := m.registry[typ.String()]
-	return lc, ok
+func (m *mockStore) ClientRegistry(typ types.ClientType) (lightclient.ClientImpl, bool) {
+	clientImpl, ok := m.registry[typ.String()]
+	return clientImpl, ok
 }
 
 func (m *mockStore) HasRegisteredClient(typ types.ClientType) bool {

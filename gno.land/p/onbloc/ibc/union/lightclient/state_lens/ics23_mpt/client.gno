@@ -52,10 +52,8 @@ type StateLensIcs23MptLightClient struct {
 }
 
 var _ lightclient.Interface = (*StateLensIcs23MptLightClient)(nil)
+var _ lightclient.L1ClientUpdater = (*StateLensIcs23MptLightClient)(nil)
 
-// NewStateLensIcs23MptLightClient builds a client from the client and consensus
-// state and the L1 client it depends on. This mirrors the realm adapter's
-// CreateClient path, which seeds the consensus state at L2LatestHeight.
 func NewStateLensIcs23MptLightClient(
 	clientState *ClientState,
 	consensusState *ConsensusState,
@@ -66,10 +64,19 @@ func NewStateLensIcs23MptLightClient(
 		consensusStateByHeight: bptree.NewBPTree32(),
 		l1Client:               l1Client,
 	}
-
 	client.setConsensusState(clientState.L2LatestHeight, consensusState)
-
 	return client, nil
+}
+
+func (c *StateLensIcs23MptLightClient) L1ClientID() types.ClientId {
+	if c.clientState == nil {
+		return 0
+	}
+	return types.ClientId(c.clientState.L1ClientID)
+}
+
+func (c *StateLensIcs23MptLightClient) SetL1Client(l1Client lightclient.Interface) {
+	c.l1Client = l1Client
 }
 
 // VerifyMembership verifies that key stores value under the L2 storage root at

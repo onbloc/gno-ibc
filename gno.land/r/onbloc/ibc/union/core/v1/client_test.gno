@@ -9,13 +9,12 @@ import (
 )
 
 const testClientType = types.ClientType("cometbls")
+const testLensClientType = types.ClientType("state-lens/ics23/mpt")
 
-// createClient registers lc under the test client type and creates a client from
-// the given state bytes, returning the assigned id. It mirrors the proxy's
-// RegisterClient -> CreateClient flow used by the host entrypoints. CreateClient
-// no longer returns the id, so the id is read back from the mock store's sequence.
-func createClient(cur realm, v *coreV1, lc lightclient.Interface, clientState, consensusState []byte) types.ClientId {
-	v.RegisterClient(0, cur, testClientType, lc)
+// createClient registers lc's client implementation for testClientType and creates a
+// client from the given state bytes, returning the assigned id.
+func createClient(cur realm, v *coreV1, lc *mockLightClient, clientState, consensusState []byte) types.ClientId {
+	v.RegisterClient(0, cur, testClientType, lc.ClientImpl)
 	v.CreateClient(0, cur, types.NewMsgCreateClient(testClientType, clientState, consensusState))
 	return types.ClientId(v.store.(*mockStore).seq)
 }
@@ -30,10 +29,10 @@ func TestRegisterClientRejectsNil(cur realm, t *testing.T) {
 
 func TestRegisterClientRejectsDuplicate(cur realm, t *testing.T) {
 	v := newTestImpl()
-	v.RegisterClient(0, cur, testClientType, &mockLightClient{})
+	v.RegisterClient(0, cur, testClientType, (&mockLightClient{}).ClientImpl)
 
 	uassert.AbortsContains(t, cur, "client type already exists", func(cur realm) {
-		v.RegisterClient(0, cur, testClientType, &mockLightClient{})
+		v.RegisterClient(0, cur, testClientType, (&mockLightClient{}).ClientImpl)
 	})
 }
 
@@ -62,6 +61,44 @@ func TestCreateClientRegistersAndVerifies(cur realm, t *testing.T) {
 	mc := v.store.(*mockStore).clients[uint32(clientId)]
 	uassert.Equal(t, "client-state", string(mc.clientState))
 	uassert.Equal(t, "consensus-state", string(mc.consensus[types.NewHeight(1).String()]))
+}
+
+func TestCreateClientStoresClientImplResult(cur realm, t *testing.T) {
+	v := newTestImpl()
+	created := &mockLightClient{latestHeight: 2}
+	clientImpl := &mockLightClient{latestHeight: 9, implClient: created}
+
+	clientId := createClient(cur, v, clientImpl, []byte("impl-client"), []byte("impl-consensus"))
+
+	uassert.Equal(t, 1, clientImpl.implCalls)
+	uassert.Equal(t, "impl-client", string(clientImpl.implCS))
+	uassert.Equal(t, "impl-consensus", string(clientImpl.implCons))
+	got, ok := v.store.GetLightClient(clientId)
+	uassert.True(t, ok)
+	uassert.True(t, got == lightclient.Interface(created))
+	mc := v.store.(*mockStore).clients[uint32(clientId)]
+	uassert.Equal(t, "impl-consensus", string(mc.consensus[types.NewHeight(2).String()]))
+}
+
+func TestCreateClientRefreshesL1ClientReference(cur realm, t *testing.T) {
+	v := newTestImpl()
+	store := v.store.(*mockStore)
+	l1 := &mockLightClient{latestHeight: 2}
+	var creator address
+	l1Id := store.AddClient(0, cur, testClientType, creator, l1)
+	lensImpl := &mockLensLightClient{
+		mockLightClient: &mockLightClient{latestHeight: 4},
+		l1ClientId:     l1Id,
+	}
+	v.RegisterClient(0, cur, testLensClientType, lensImpl.ClientImpl)
+
+	v.CreateClient(0, cur, types.NewMsgCreateClient(testLensClientType, []byte("client"), []byte("consensus")))
+
+	uassert.Equal(t, 1, lensImpl.implCalls)
+	got, ok := store.GetLightClient(types.ClientId(store.seq))
+	uassert.True(t, ok)
+	lens := got.(*mockLensLightClient)
+	uassert.True(t, lens.l1Client == lightclient.Interface(l1))
 }
 
 func TestCreateClientVerifyCreationFailureAborts(cur realm, t *testing.T) {
@@ -133,7 +170,7 @@ func TestUpdateClientVerifyHeaderFailureAborts(cur realm, t *testing.T) {
 	})
 }
 
-func TestForceUpdateClientReinitializesSubmittedState(cur realm, t *testing.T) {
+func TestForceUpdateClientRebuildsSubmittedState(cur realm, t *testing.T) {
 	v := newTestImpl()
 	lc := &mockLightClient{latestHeight: 1}
 	clientId := createClient(cur, v, lc, []byte("old-client"), []byte("old-consensus"))
@@ -144,6 +181,55 @@ func TestForceUpdateClientReinitializesSubmittedState(cur realm, t *testing.T) {
 	mc := v.store.(*mockStore).clients[uint32(clientId)]
 	uassert.Equal(t, "new-client", string(mc.clientState))
 	uassert.Equal(t, "new-consensus", string(mc.consensus[types.NewHeight(3).String()]))
+}
+
+func TestForceUpdateClientReplacesExistingClient(cur realm, t *testing.T) {
+	v := newTestImpl()
+	initial := &mockLightClient{latestHeight: 1}
+	rebuilt := &mockLightClient{latestHeight: 4}
+	clientImpl := &mockLightClient{implClient: initial}
+	clientId := createClient(cur, v, clientImpl, []byte("old-client"), []byte("old-consensus"))
+
+	clientImpl.implClient = rebuilt
+	v.ForceUpdateClient(0, cur, types.NewMsgForceUpdateClient(clientId, []byte("new-client"), []byte("new-consensus")))
+
+	uassert.Equal(t, 2, clientImpl.implCalls)
+	uassert.Equal(t, "new-client", string(clientImpl.implCS))
+	uassert.Equal(t, "new-consensus", string(clientImpl.implCons))
+	got, ok := v.store.GetLightClient(clientId)
+	uassert.True(t, ok)
+	uassert.True(t, got == lightclient.Interface(rebuilt))
+	mc := v.store.(*mockStore).clients[uint32(clientId)]
+	uassert.Equal(t, "new-consensus", string(mc.consensus[types.NewHeight(4).String()]))
+}
+
+func TestForceUpdateClientRefreshesL1ClientReference(cur realm, t *testing.T) {
+	v := newTestImpl()
+	store := v.store.(*mockStore)
+	oldL1 := &mockLightClient{latestHeight: 1}
+	newL1 := &mockLightClient{latestHeight: 2}
+	var creator address
+	oldL1Id := store.AddClient(0, cur, testClientType, creator, oldL1)
+	newL1Id := store.AddClient(0, cur, testClientType, creator, newL1)
+	lens := &mockLensLightClient{
+		mockLightClient: &mockLightClient{latestHeight: 4},
+		l1ClientId:     oldL1Id,
+		nextL1ClientId: newL1Id,
+		l1Client:       oldL1,
+	}
+	store.registry[testLensClientType.String()] = lens.ClientImpl
+	lensId := store.AddClient(0, cur, testLensClientType, creator, lens)
+
+	v.ForceUpdateClient(0, cur, types.NewMsgForceUpdateClient(lensId, []byte("new-client"), []byte("new-consensus")))
+
+	uassert.Equal(t, 1, lens.implCalls)
+	got, ok := store.GetLightClient(lensId)
+	uassert.True(t, ok)
+	nextLens := got.(*mockLensLightClient)
+	uassert.True(t, nextLens != lens)
+	uassert.True(t, nextLens.l1Client == lightclient.Interface(newL1))
+	mc := store.clients[uint32(lensId)]
+	uassert.Equal(t, "new-consensus", string(mc.consensus[types.NewHeight(4).String()]))
 }
 
 func TestForceUpdateClientUnknownClientAborts(cur realm, t *testing.T) {

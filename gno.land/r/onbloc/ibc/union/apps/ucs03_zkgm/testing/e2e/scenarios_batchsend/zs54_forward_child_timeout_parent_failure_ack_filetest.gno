@@ -19,6 +19,12 @@ const forwardChildTimeoutClientType = types.ClientType("gno.land/r/onbloc/ibc/un
 
 type forwardChildTimeoutLightClient struct{}
 
+var _ lightclient.ClientImpl = forwardChildTimeoutClientImpl
+
+func forwardChildTimeoutClientImpl(_, _ []byte) (lightclient.Interface, error) {
+	return &forwardChildTimeoutLightClient{}, nil
+}
+
 func (m *forwardChildTimeoutLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error {
 	return nil
 }
@@ -114,7 +120,7 @@ func main(cur realm) {
 
 func openForwardChildTimeoutConnection(cur realm) types.ConnectionId {
 	if !core.HasClient(forwardChildTimeoutClientType) {
-		core.RegisterClient(cross(cur), forwardChildTimeoutClientType, &forwardChildTimeoutLightClient{})
+		core.RegisterClient(cross(cur), forwardChildTimeoutClientType, forwardChildTimeoutClientImpl)
 	}
 	core.CreateClient(cross(cur), types.NewMsgCreateClient(forwardChildTimeoutClientType, nil, nil))
 	clientId := types.ClientId(1)

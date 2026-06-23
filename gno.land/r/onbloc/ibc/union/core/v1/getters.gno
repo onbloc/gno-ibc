@@ -43,11 +43,10 @@ func (c *coreV1) GetClientImpl(clientId types.ClientId) (string, error) {
 	return string(typ), nil
 }
 
-// GetRegisteredClientType is best-effort: gno registers light client objects per
-// client id rather than a global client-type registry, so there is no
-// registered-type set to query; it always reports false.
+// GetRegisteredClientType reports whether a light client implementation is
+// registered for the given client type.
 func (c *coreV1) GetRegisteredClientType(clientType types.ClientType) bool {
-	return false
+	return c.store.HasRegisteredClient(clientType)
 }
 
 // GetClientStateBytes returns the mirrored client state bytes, or an error when

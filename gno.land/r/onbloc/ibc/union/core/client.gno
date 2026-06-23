@@ -12,8 +12,8 @@ import (
 //
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L849-L865
-func RegisterClient(cur realm, clientType types.ClientType, lc lightclient.Interface) {
-	mustGetImpl().RegisterClient(0, cur, clientType, lc)
+func RegisterClient(cur realm, clientType types.ClientType, clientImpl lightclient.ClientImpl) {
+	mustGetImpl().RegisterClient(0, cur, clientType, clientImpl)
 }
 
 // HasClient reports whether a light client is registered for a client type.

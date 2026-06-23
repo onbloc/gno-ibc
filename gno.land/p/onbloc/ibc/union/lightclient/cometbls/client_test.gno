@@ -17,11 +17,19 @@ func newTestClient(t *testing.T) *CometblsLightClient {
 		Root:               MerkleRoot{Hash: repeat32(0xAB)},
 		NextValidatorsHash: repeat32(0xCD),
 	}
-	c, err := NewCometblsLightClient(&cs, consensus)
+	clientStateBytes, err := EncodeClientState(&cs)
 	if err != nil {
-		t.Fatalf("NewCometblsLightClient: %v", err)
+		t.Fatalf("EncodeClientState: %v", err)
 	}
-	return c
+	consensusStateBytes, err := EncodeConsensusState(consensus)
+	if err != nil {
+		t.Fatalf("EncodeConsensusState: %v", err)
+	}
+	lc, err := newCometblsLightClientFromBytes(clientStateBytes, consensusStateBytes)
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	return lc.(*CometblsLightClient)
 }
 
 func TestClientAccessors(t *testing.T) {
@@ -75,6 +83,62 @@ func TestVerifyCreationEmpty(t *testing.T) {
 	if len(res.ClientStateBytes) != 0 {
 		t.Fatal("VerifyCreation must not return client state bytes")
 	}
+}
+
+func TestNewCometblsLightClientBuildsClientFromState(t *testing.T) {
+	c := newTestClient(t)
+
+	clientState := validClientState()
+	clientState.ChainID = "reinit-chain"
+	clientState.LatestHeight = types.NewHeight(77)
+	clientStateBytes, err := EncodeClientState(&clientState)
+	if err != nil {
+		t.Fatalf("EncodeClientState: %v", err)
+	}
+	consensusState := &ConsensusState{
+		Timestamp:          testNow + 7,
+		Root:               MerkleRoot{Hash: repeat32(0x77)},
+		NextValidatorsHash: repeat32(0x78),
+	}
+	consensusStateBytes, err := EncodeConsensusState(consensusState)
+	if err != nil {
+		t.Fatalf("EncodeConsensusState: %v", err)
+	}
+
+	next, err := newCometblsLightClientFromBytes(clientStateBytes, consensusStateBytes)
+	if err != nil {
+		t.Fatalf("NewCometblsLightClient: %v", err)
+	}
+	nextClient := next.(*CometblsLightClient)
+	if c.GetLatestHeight() != 100 {
+		t.Fatalf("original latest height changed: got %d want 100", c.GetLatestHeight())
+	}
+	if nextClient.GetLatestHeight() != 77 {
+		t.Fatalf("latest height: got %d want 77", nextClient.GetLatestHeight())
+	}
+	if nextClient.GetCounterpartyChainID() != "reinit-chain" {
+		t.Fatalf("chain id: got %q want reinit-chain", nextClient.GetCounterpartyChainID())
+	}
+	got, found := nextClient.getConsensusState(types.NewHeight(77))
+	if !found {
+		t.Fatal("new consensus state not stored")
+	}
+	if got.Timestamp != testNow+7 {
+		t.Fatalf("timestamp: got %d want %d", got.Timestamp, testNow+7)
+	}
+	bytesEq(t, "root", got.Root.Hash, repeat32(0x77))
+}
+
+func newCometblsLightClientFromBytes(clientStateBytes, consensusStateBytes []byte) (lightclient.Interface, error) {
+	clientState, err := DecodeClientState(clientStateBytes)
+	if err != nil {
+		return nil, err
+	}
+	consensusState, err := DecodeConsensusState(consensusStateBytes)
+	if err != nil {
+		return nil, err
+	}
+	return NewCometblsLightClient(clientState, consensusState)
 }
 
 // twoExistProof returns a MerkleProof wire buffer containing two existence

@@ -19,9 +19,60 @@ type mockLightClient struct {
 	timestampAtHt    types.Timestamp
 	update           types.StateUpdate
 	creationWrites   map[string][]byte
+	implCalls        int
+	implClient       lightclient.Interface
+	implCS           []byte
+	implCons         []byte
 }
 
 var _ lightclient.Interface = (*mockLightClient)(nil)
+
+type mockLensLightClient struct {
+	*mockLightClient
+	l1ClientId     types.ClientId
+	nextL1ClientId types.ClientId
+	l1Client       lightclient.Interface
+	newLensResult  *mockLensLightClient
+}
+
+var _ lightclient.Interface = (*mockLensLightClient)(nil)
+var _ lightclient.L1ClientUpdater = (*mockLensLightClient)(nil)
+
+func (l *mockLightClient) ClientImpl(clientStateBytes, consensusStateBytes []byte) (lightclient.Interface, error) {
+	l.implCalls++
+	l.implCS = clientStateBytes
+	l.implCons = consensusStateBytes
+	if l.implClient != nil {
+		return l.implClient, nil
+	}
+	return l, nil
+}
+
+func (l *mockLensLightClient) ClientImpl(clientStateBytes, consensusStateBytes []byte) (lightclient.Interface, error) {
+	l.implCalls++
+	l.implCS = clientStateBytes
+	l.implCons = consensusStateBytes
+	if l.newLensResult != nil {
+		return l.newLensResult, nil
+	}
+	next := &mockLensLightClient{
+		mockLightClient: &mockLightClient{latestHeight: l.latestHeight},
+		l1ClientId:     l.l1ClientId,
+		l1Client:       l.l1Client,
+	}
+	if l.nextL1ClientId != 0 {
+		next.l1ClientId = l.nextL1ClientId
+	}
+	return next, nil
+}
+
+func (l *mockLensLightClient) L1ClientID() types.ClientId {
+	return l.l1ClientId
+}
+
+func (l *mockLensLightClient) SetL1Client(l1Client lightclient.Interface) {
+	l.l1Client = l1Client
+}
 
 func (l *mockLightClient) VerifyMembership(height uint64, key, proof, value []byte) error {
 	if l.membershipErr != "" {

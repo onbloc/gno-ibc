@@ -27,7 +27,7 @@ func init() {
 type Store struct {
 	clientSeq          seqid.ID
 	clientByID         *bptree.BPTree // clientKey(ClientId) → *client
-	clientRegistryByTy map[string]lightclient.Interface
+	clientRegistry map[string]lightclient.ClientImpl
 
 	connectionSeq seqid.ID
 	connections   *bptree.BPTree // connectionKey(ConnectionId) → types.Connection
@@ -69,7 +69,7 @@ type channelEntry struct {
 func newStore() *Store {
 	return &Store{
 		clientByID:          bptree.NewBPTree32(),
-		clientRegistryByTy:  make(map[string]lightclient.Interface),
+		clientRegistry:      make(map[string]lightclient.ClientImpl),
 		connections:         bptree.NewBPTree32(),
 		channels:            bptree.NewBPTree32(),
 		commitments:         make(map[types.H256]types.H256),
@@ -86,15 +86,15 @@ func newStore() *Store {
 // context.
 var _ IStore = (*Store)(nil)
 
-// RegisterClient records the light client object for a client type, panicking
+// RegisterClient records the light client implementation for a client type, panicking
 // when the type is already registered.
-func (s *Store) RegisterClient(_ int, rlm realm, typ types.ClientType, lc lightclient.Interface) {
-	s.registerClient(typ, lc)
+func (s *Store) RegisterClient(_ int, rlm realm, typ types.ClientType, clientImpl lightclient.ClientImpl) {
+	s.registerClient(typ, clientImpl)
 }
 
-// RegisteredClient returns the light client object registered for a client type.
-func (s *Store) RegisteredClient(typ types.ClientType) (lightclient.Interface, bool) {
-	return s.registeredClient(typ)
+// ClientRegistry returns the implementation registered for a client type.
+func (s *Store) ClientRegistry(typ types.ClientType) (lightclient.ClientImpl, bool) {
+	return s.clientRegistryEntry(typ)
 }
 
 // HasRegisteredClient reports whether a light client is registered for a type.
@@ -521,22 +521,21 @@ func (s *Store) addClient(clientId types.ClientId, typ types.ClientType, creator
 	return c
 }
 
-func (s *Store) registerClient(typ types.ClientType, lc lightclient.Interface) {
+func (s *Store) registerClient(typ types.ClientType, clientImpl lightclient.ClientImpl) {
 	key := typ.String()
-	if _, ok := s.clientRegistryByTy[key]; ok {
+	if _, ok := s.clientRegistry[key]; ok {
 		panic("client type already exists")
 	}
-
-	s.clientRegistryByTy[key] = lc
+	s.clientRegistry[key] = clientImpl
 }
 
-func (s *Store) registeredClient(typ types.ClientType) (lightclient.Interface, bool) {
-	lc, ok := s.clientRegistryByTy[typ.String()]
-	return lc, ok
+func (s *Store) clientRegistryEntry(typ types.ClientType) (lightclient.ClientImpl, bool) {
+	clientImpl, ok := s.clientRegistry[typ.String()]
+	return clientImpl, ok
 }
 
 func (s *Store) hasRegisteredClient(typ types.ClientType) bool {
-	_, ok := s.clientRegistryByTy[typ.String()]
+	_, ok := s.clientRegistry[typ.String()]
 	return ok
 }
 

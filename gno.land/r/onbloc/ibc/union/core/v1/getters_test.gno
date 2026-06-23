@@ -75,8 +75,12 @@ func TestGetFrozenStatus(cur realm, t *testing.T) {
 func TestGetBestEffortGetters(cur realm, t *testing.T) {
 	v := newTestImpl()
 
-	// gno has no client-type registry.
-	uassert.False(t, v.GetRegisteredClientType(types.ClientType("cometbls")))
+	v.RegisterClient(0, cur, testClientType, (&mockLightClient{}).ClientImpl)
+
+	uassert.False(t, v.GetRegisteredClientType(types.ClientType("unknown")))
+	uassert.True(t, v.GetRegisteredClientType(testClientType))
+	channels, _ := v.GetChannels()
+	uassert.Equal(t, 0, len(channels))
 }
 
 func TestGetConnectionAndChannel(cur realm, t *testing.T) {

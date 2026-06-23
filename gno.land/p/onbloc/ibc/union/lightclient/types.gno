@@ -2,6 +2,14 @@ package lightclient
 
 import "gno.land/p/onbloc/ibc/union/types"
 
+// ClientImpl is the registered light client implementation for a client type.
+// It mirrors Union's ClientRegistry value: Union stores a client contract
+// address, while this Gno core stores a constructor function that instantiates
+// the live light client for a submitted client state.
+// Union references:
+// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/core/src/contract.rs#L849-L865
+type ClientImpl func(clientStateBytes, consensusStateBytes []byte) (Interface, error)
+
 type Status string
 
 const (
@@ -53,4 +61,11 @@ type Interface interface {
 	VerifyCreation(caller address, relayer address) (types.ClientCreationResult, error)
 
 	Misbehaviour(caller address, misbehaviour []byte, relayer address) ([]byte, error)
+}
+
+// L1ClientUpdater lets a client whose state depends on another local light
+// client refresh that dependency after its client state changes.
+type L1ClientUpdater interface {
+	L1ClientID() types.ClientId
+	SetL1Client(l1Client Interface)
 }

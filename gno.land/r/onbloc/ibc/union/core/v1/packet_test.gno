@@ -85,6 +85,40 @@ func TestPacketRecvDispatchesAndReceipts(cur realm, t *testing.T) {
 	uassert.True(t, v.store.HasPacketReceipt(packet))
 }
 
+// TestPacketRecvShorterRelayerMsgsStillDispatchesAll pins the intentional Gno
+// divergence from union's `packets.zip(relayer_msgs)`: union drops packets that
+// have no matching relayer msg, while gno treats relayer msgs as optional and
+// dispatches every packet, passing an empty msg where none is supplied.
+func TestPacketRecvShorterRelayerMsgsStillDispatchesAll(cur realm, t *testing.T) {
+	v := newTestImpl()
+	chId, _, mApp := setupOpenChannel(cur, v)
+	packet0 := types.Packet{
+		SourceChannelId:      types.ChannelId(9),
+		DestinationChannelId: chId,
+		Data:                 []byte("recv-0"),
+		TimeoutTimestamp:     farFuture,
+	}
+	packet1 := types.Packet{
+		SourceChannelId:      types.ChannelId(9),
+		DestinationChannelId: chId,
+		Data:                 []byte("recv-1"),
+		TimeoutTimestamp:     farFuture,
+	}
+
+	// Two packets, but only one relayer msg: the second packet has no match.
+	v.PacketRecv(0, cur, types.MsgPacketRecv{
+		Packets:     []types.Packet{packet0, packet1},
+		RelayerMsgs: [][]byte{[]byte("rm0")},
+		Proof:       []byte("proof"),
+		ProofHeight: 10,
+	})
+
+	// Both packets are dispatched and receipted (union would drop packet1).
+	uassert.Equal(t, 2, mApp.recvCalls)
+	uassert.True(t, v.store.HasPacketReceipt(packet0))
+	uassert.True(t, v.store.HasPacketReceipt(packet1))
+}
+
 func TestPacketRecvDuplicateSkipped(cur realm, t *testing.T) {
 	v := newTestImpl()
 	chId, _, mApp := setupOpenChannel(cur, v)

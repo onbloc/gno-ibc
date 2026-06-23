@@ -13,7 +13,7 @@ import (
 // created channel id is observable through the emitted event, not returned.
 func (c *coreV1) ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit) {
 	relayer := rlm.Previous().Address()
-	portId := types.Bytes(cloneBytes(msg.PortId))
+	portId := types.Bytes(types.CloneBytes(msg.PortId))
 	c.ensureConnectionState(msg.ConnectionId)
 	channelId := c.store.NextChannelId(0, rlm)
 
@@ -21,14 +21,14 @@ func (c *coreV1) ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit)
 		types.ChannelStateInit,
 		msg.ConnectionId,
 		0,
-		types.Bytes(cloneBytes(msg.CounterpartyPortId)),
+		types.Bytes(types.CloneBytes(msg.CounterpartyPortId)),
 		msg.Version,
 	)
 	c.store.CreateChannel(0, rlm, channelId, channel, portId)
 
 	a, ok := c.store.GetAppByPortId(portId)
 	if !ok {
-		panic("port " + string(portId) + " not found")
+		panic(makeError(core.ErrPortNotFound, string(portId)))
 	}
 
 	a.OnChannelOpenInit(cross(rlm), msg.ConnectionId, channelId, msg.Version, relayer)
@@ -49,14 +49,13 @@ func (c *coreV1) ForceChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenT
 
 func (c *coreV1) channelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry, verify bool) {
 	relayer := rlm.Previous().Address()
-	portId := types.Bytes(cloneBytes(msg.PortId))
-
+	portId := types.Bytes(types.CloneBytes(msg.PortId))
 	if msg.Channel.State != types.ChannelStateTryOpen {
-		panic(core.ErrInvalidChannelState)
+		panic(makeError(core.ErrInvalidChannelState))
 	}
 
 	if msg.Channel.CounterpartyChannelId == 0 {
-		panic(core.ErrInvalidCounterpartyChannelId)
+		panic(makeError(core.ErrInvalidCounterpartyChannelId))
 	}
 
 	connection := c.ensureConnectionState(msg.Channel.ConnectionId)
@@ -79,7 +78,7 @@ func (c *coreV1) channelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry, v
 
 	a, ok := c.store.GetAppByPortId(portId)
 	if !ok {
-		panic("port " + string(portId) + " not found")
+		panic(makeError(core.ErrPortNotFound, string(portId)))
 	}
 
 	a.OnChannelOpenTry(cross(rlm), msg.Channel.ConnectionId, channelId, msg.Channel.Version, msg.CounterpartyVersion, relayer)
@@ -104,11 +103,11 @@ func (c *coreV1) channelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck, v
 
 	channel, ok := c.store.GetChannel(msg.ChannelId)
 	if !ok {
-		panic("channel " + msg.ChannelId.String() + " not found")
+		panic(makeError(core.ErrChannelNotFound, msg.ChannelId.String()))
 	}
 
 	if channel.State != types.ChannelStateInit {
-		panic(core.ErrInvalidChannelState)
+		panic(makeError(core.ErrInvalidChannelState))
 	}
 
 	connection := c.ensureConnectionState(channel.ConnectionId)
@@ -138,7 +137,7 @@ func (c *coreV1) channelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck, v
 
 	a, ok := c.store.GetAppByPortId(portId)
 	if !ok {
-		panic("port " + string(portId) + " not found")
+		panic(makeError(core.ErrPortNotFound, string(portId)))
 	}
 
 	a.OnChannelOpenAck(cross(rlm), msg.ChannelId, msg.CounterpartyChannelId, msg.CounterpartyVersion, relayer)
@@ -163,15 +162,15 @@ func (c *coreV1) channelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenCo
 
 	channel, ok := c.store.GetChannel(msg.ChannelId)
 	if !ok {
-		panic("channel " + msg.ChannelId.String() + " not found")
+		panic(makeError(core.ErrChannelNotFound, msg.ChannelId.String()))
 	}
 
 	if channel.State != types.ChannelStateTryOpen {
-		panic(core.ErrInvalidChannelState)
+		panic(makeError(core.ErrInvalidChannelState))
 	}
 
 	if channel.CounterpartyChannelId == 0 {
-		panic(core.ErrInvalidCounterpartyChannelId)
+		panic(makeError(core.ErrInvalidCounterpartyChannelId))
 	}
 
 	connection := c.ensureConnectionState(channel.ConnectionId)
@@ -201,7 +200,7 @@ func (c *coreV1) channelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenCo
 
 	a, ok := c.store.GetAppByPortId(portId)
 	if !ok {
-		panic("port " + string(portId) + " not found")
+		panic(makeError(core.ErrPortNotFound, string(portId)))
 	}
 
 	a.OnChannelOpenConfirm(cross(rlm), msg.ChannelId, relayer)
@@ -215,15 +214,15 @@ func (c *coreV1) ChannelCloseInit(_ int, rlm realm, msg types.MsgChannelCloseIni
 
 	channel, ok := c.store.GetChannel(msg.ChannelId)
 	if !ok {
-		panic("channel " + msg.ChannelId.String() + " not found")
+		panic(makeError(core.ErrChannelNotFound, msg.ChannelId.String()))
 	}
 
 	if channel.State != types.ChannelStateOpen {
-		panic(core.ErrInvalidChannelState)
+		panic(makeError(core.ErrInvalidChannelState))
 	}
 
 	if channel.CounterpartyChannelId == 0 {
-		panic(core.ErrInvalidCounterpartyChannelId)
+		panic(makeError(core.ErrInvalidCounterpartyChannelId))
 	}
 
 	c.ensureConnectionState(channel.ConnectionId)
@@ -244,15 +243,15 @@ func (c *coreV1) ChannelCloseConfirm(_ int, rlm realm, msg types.MsgChannelClose
 
 	channel, ok := c.store.GetChannel(msg.ChannelId)
 	if !ok {
-		panic("channel " + msg.ChannelId.String() + " not found")
+		panic(makeError(core.ErrChannelNotFound, msg.ChannelId.String()))
 	}
 
 	if channel.State != types.ChannelStateOpen {
-		panic(core.ErrInvalidChannelState)
+		panic(makeError(core.ErrInvalidChannelState))
 	}
 
 	if channel.CounterpartyChannelId == 0 {
-		panic(core.ErrInvalidCounterpartyChannelId)
+		panic(makeError(core.ErrInvalidCounterpartyChannelId))
 	}
 
 	connection := c.ensureConnectionState(channel.ConnectionId)

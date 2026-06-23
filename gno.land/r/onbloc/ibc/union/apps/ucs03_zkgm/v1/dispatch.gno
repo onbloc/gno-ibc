@@ -2,7 +2,6 @@ package impl
 
 import (
 	"bytes"
-	"errors"
 
 	types "gno.land/p/onbloc/ibc/union/types"
 
@@ -45,7 +44,7 @@ func (v *ucs03ZkgmV1) verifyInternal(_ int, rlm realm, funds *funds, channelId t
 
 		return v.verifyCall(0, rlm, call)
 	default:
-		return errors.New("zkgm/v1: unsupported opcode")
+		return makeError(errUnsupportedOpcode)
 	}
 }
 
@@ -114,7 +113,7 @@ func (v *ucs03ZkgmV1) dispatchExecutePacket(
 
 		return v.executeForward(0, rlm, packet, salt, path, forward, intent)
 	default:
-		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), errors.New("zkgm/v1: unsupported opcode")
+		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), makeError(errUnsupportedOpcode)
 	}
 }
 
@@ -157,7 +156,7 @@ func (v *ucs03ZkgmV1) acknowledgeInternal(_ int, rlm realm, packet types.Packet,
 
 		return v.acknowledgeCall(0, rlm, packet, path, call)
 	default:
-		return errors.New("zkgm/v1: unsupported opcode")
+		return makeError(errUnsupportedOpcode)
 	}
 }
 
@@ -186,14 +185,14 @@ func (v *ucs03ZkgmV1) timeoutInternal(_ int, rlm realm, packet types.Packet, sal
 
 		return v.timeoutCall(0, rlm, packet, path, call)
 	default:
-		return errors.New("zkgm/v1: unsupported opcode")
+		return makeError(errUnsupportedOpcode)
 	}
 }
 
 // decodeOrderInstruction decodes a v2 token order, rejecting unsupported instruction versions.
 func decodeOrderInstruction(instruction z.Instruction) (z.TokenOrderV2, error) {
 	if instruction.Version != z.INSTR_VERSION_2 {
-		return z.TokenOrderV2{}, errors.New("zkgm/v1: unsupported token order version")
+		return z.TokenOrderV2{}, makeError(errUnsupportedTokenOrderVersion)
 	}
 
 	return z.DecodeTokenOrderV2(instruction.Operand)
@@ -202,7 +201,7 @@ func decodeOrderInstruction(instruction z.Instruction) (z.TokenOrderV2, error) {
 // decodeCallInstruction decodes a call, rejecting unsupported instruction versions.
 func decodeCallInstruction(instruction z.Instruction) (z.Call, error) {
 	if instruction.Version != z.INSTR_VERSION_0 {
-		return z.Call{}, errors.New("zkgm/v1: unsupported call version")
+		return z.Call{}, makeError(errUnsupportedCallVersion)
 	}
 
 	return z.DecodeCall(instruction.Operand)
@@ -211,7 +210,7 @@ func decodeCallInstruction(instruction z.Instruction) (z.Call, error) {
 // decodeBatchInstruction decodes a batch, rejecting unsupported instruction versions.
 func decodeBatchInstruction(instruction z.Instruction) (z.Batch, error) {
 	if instruction.Version != z.INSTR_VERSION_0 {
-		return z.Batch{}, errors.New("zkgm/v1: unsupported batch version")
+		return z.Batch{}, makeError(errUnsupportedBatchVersion)
 	}
 
 	return z.DecodeBatch(instruction.Operand)
@@ -220,7 +219,7 @@ func decodeBatchInstruction(instruction z.Instruction) (z.Batch, error) {
 // decodeForwardInstruction decodes a forward, rejecting unsupported instruction versions.
 func decodeForwardInstruction(instruction z.Instruction) (z.Forward, error) {
 	if instruction.Version != z.INSTR_VERSION_0 {
-		return z.Forward{}, errors.New("zkgm/v1: unsupported forward version")
+		return z.Forward{}, makeError(errUnsupportedForwardVersion)
 	}
 
 	return z.DecodeForward(instruction.Operand)
@@ -260,7 +259,7 @@ func universalErrorAck() []byte {
 func tokenOrderDestinationChannel(channelId types.ChannelId) (uint32, error) {
 	raw := uint32(channelId)
 	if raw == 0 {
-		return 0, errors.New("zkgm/v1: invalid token order destination channel")
+		return 0, makeError(errInvalidTokenOrderDestChannel)
 	}
 
 	return raw, nil

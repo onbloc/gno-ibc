@@ -85,11 +85,11 @@ func (c *coreV1) initClient(_ int, rlm realm, clientId types.ClientId, clientSta
 func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) {
 	lc, ok := c.store.GetLightClient(msg.ClientId)
 	if !ok {
-		panic("client " + msg.ClientId.String() + " not found")
+		panic(makeError(core.ErrClientNotFound, msg.ClientId.String()))
 	}
 
 	if lc.Status() != lightclient.Active {
-		panic(core.ErrClientNotActive)
+		panic(makeError(core.ErrClientNotActive))
 	}
 
 	caller := rlm.Previous().Address()
@@ -119,7 +119,7 @@ func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) {
 func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateClient) {
 	clientImpl, ok := c.store.GetClientImpl(msg.ClientId)
 	if !ok {
-		panic("client " + msg.ClientId.String() + " not found")
+		panic(makeError(core.ErrClientNotFound, msg.ClientId.String()))
 	}
 	next, err := clientImpl(msg.ClientStateBytes, msg.ConsensusStateBytes)
 	if err != nil {
@@ -141,11 +141,11 @@ func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateCli
 func (c *coreV1) Misbehaviour(_ int, rlm realm, msg types.MsgMisbehaviour) {
 	lc, ok := c.store.GetLightClient(msg.ClientId)
 	if !ok {
-		panic("client " + msg.ClientId.String() + " not found")
+		panic(makeError(core.ErrClientNotFound, msg.ClientId.String()))
 	}
 
 	if lc.Status() != lightclient.Active {
-		panic(core.ErrClientNotActive)
+		panic(makeError(core.ErrClientNotActive))
 	}
 
 	caller := rlm.Previous().Address()
@@ -174,11 +174,11 @@ func (c *coreV1) VerifyClientMembership(_ int, rlm realm, clientId types.ClientI
 func (c *coreV1) verifyMembership(clientId types.ClientId, height types.Height, proof, key, value []byte) {
 	lc, ok := c.store.GetLightClient(clientId)
 	if !ok {
-		panic("client " + clientId.String() + " not found")
+		panic(makeError(core.ErrClientNotFound, clientId.String()))
 	}
 
 	if lc.Status() != lightclient.Active {
-		panic(core.ErrClientNotActive)
+		panic(makeError(core.ErrClientNotActive))
 	}
 
 	if err := lc.VerifyMembership(height.RevisionHeight, key, proof, value); err != nil {

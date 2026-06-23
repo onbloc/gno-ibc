@@ -15,25 +15,25 @@ import (
 // height is always zero; only the timeout timestamp is meaningful.
 func (c *coreV1) SendPacket(_ int, rlm realm, sourceChannelId types.ChannelId, timeoutTimestamp types.Timestamp, data []byte) types.Packet {
 	if timeoutTimestamp == 0 {
-		panic(core.ErrTimeoutMustBeSet)
+		panic(makeError(core.ErrTimeoutMustBeSet))
 	}
 
 	portId, ok := c.store.GetChannelOwner(sourceChannelId)
 	if !ok {
-		panic("channel " + sourceChannelId.String() + " not found")
+		panic(makeError(core.ErrChannelNotFound, sourceChannelId.String()))
 	}
 
 	if string(portId) != rlm.Previous().PkgPath() {
-		panic(core.ErrUnauthorizedPacketSender)
+		panic(makeError(core.ErrUnauthorizedPacketSender))
 	}
 
 	channel, ok := c.store.GetChannel(sourceChannelId)
 	if !ok {
-		panic("channel " + sourceChannelId.String() + " not found")
+		panic(makeError(core.ErrChannelNotFound, sourceChannelId.String()))
 	}
 
 	if channel.State != types.ChannelStateOpen {
-		panic(core.ErrInvalidChannelState)
+		panic(makeError(core.ErrInvalidChannelState))
 	}
 
 	connection := c.ensureConnectionState(channel.ConnectionId)
@@ -46,7 +46,7 @@ func (c *coreV1) SendPacket(_ int, rlm realm, sourceChannelId types.ChannelId, t
 		TimeoutTimestamp:     timeoutTimestamp,
 	}
 	if c.store.HasPacketCommitment(packet) {
-		panic(core.ErrPacketCommitmentAlreadyExists)
+		panic(makeError(core.ErrPacketCommitmentAlreadyExists))
 	}
 
 	c.store.CommitPacket(0, rlm, packet)
@@ -62,14 +62,14 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 	relayer := rlm.Previous().Address()
 
 	if len(msg.Packets) == 0 {
-		panic(core.ErrNotEnoughPackets)
+		panic(makeError(core.ErrNotEnoughPackets))
 	}
 
 	destinationChannelId := msg.Packets[0].DestinationChannelId
 	channel, ok := c.store.GetChannel(destinationChannelId)
 
 	if !ok {
-		panic("channel " + destinationChannelId.String() + " not found")
+		panic(makeError(core.ErrChannelNotFound, destinationChannelId.String()))
 	}
 
 	connection := c.ensureConnectionState(channel.ConnectionId)
@@ -82,7 +82,7 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 	a, ok := c.store.GetAppByPortId(portId)
 
 	if !ok {
-		panic("port " + string(portId) + " not found")
+		panic(makeError(core.ErrPortNotFound, string(portId)))
 	}
 
 	now := core.NowNanos()
@@ -113,14 +113,14 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 	marketMaker := rlm.Previous().Address()
 
 	if len(msg.Packets) == 0 {
-		panic(core.ErrNotEnoughPackets)
+		panic(makeError(core.ErrNotEnoughPackets))
 	}
 
 	destinationChannelId := msg.Packets[0].DestinationChannelId
 	channel, ok := c.store.GetChannel(destinationChannelId)
 
 	if !ok {
-		panic("channel " + destinationChannelId.String() + " not found")
+		panic(makeError(core.ErrChannelNotFound, destinationChannelId.String()))
 	}
 
 	connection := c.ensureConnectionState(channel.ConnectionId)
@@ -129,12 +129,12 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 	a, ok := c.store.GetAppByPortId(portId)
 
 	if !ok {
-		panic("port " + string(portId) + " not found")
+		panic(makeError(core.ErrPortNotFound, string(portId)))
 	}
 
 	intentApp, ok := a.(app.IIntentApp)
 	if !ok {
-		panic(core.ErrIntentNotSupported)
+		panic(makeError(core.ErrIntentNotSupported))
 	}
 
 	now := core.NowNanos()
@@ -165,7 +165,7 @@ func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAckn
 	relayer := rlm.Previous().Address()
 
 	if len(msg.Packets) == 0 {
-		panic(core.ErrNotEnoughPackets)
+		panic(makeError(core.ErrNotEnoughPackets))
 	}
 
 	first := msg.Packets[0]
@@ -173,7 +173,7 @@ func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAckn
 	channel, ok := c.store.GetChannel(sourceChannelId)
 
 	if !ok {
-		panic("channel " + sourceChannelId.String() + " not found")
+		panic(makeError(core.ErrChannelNotFound, sourceChannelId.String()))
 	}
 
 	connection := c.ensureConnectionState(channel.ConnectionId)
@@ -192,7 +192,7 @@ func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAckn
 
 		packet := msg.Packets[i]
 		if packet.SourceChannelId != first.SourceChannelId {
-			panic(core.ErrBatchSameChannelOnly)
+			panic(makeError(core.ErrBatchSameChannelOnly))
 		}
 
 		c.markPacketAcknowledged(0, rlm, packet)
@@ -210,18 +210,18 @@ func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 
 	channel, ok := c.store.GetChannel(packet.SourceChannelId)
 	if !ok {
-		panic("channel " + packet.SourceChannelId.String() + " not found")
+		panic(makeError(core.ErrChannelNotFound, packet.SourceChannelId.String()))
 	}
 
 	if channel.State != types.ChannelStateOpen {
-		panic(core.ErrInvalidChannelState)
+		panic(makeError(core.ErrInvalidChannelState))
 	}
 
 	connection := c.ensureConnectionState(channel.ConnectionId)
 
 	lc, ok := c.store.GetLightClient(connection.ClientId)
 	if !ok {
-		panic("client " + connection.ClientId.String() + " not found")
+		panic(makeError(core.ErrClientNotFound, connection.ClientId.String()))
 	}
 
 	proofTimestamp, err := lc.GetTimestampAtHeight(msg.ProofHeight)
@@ -230,7 +230,7 @@ func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 	}
 
 	if proofTimestamp == 0 {
-		panic(core.ErrTimeoutProofTimestampNotFound)
+		panic(makeError(core.ErrTimeoutProofTimestampNotFound))
 	}
 
 	commitmentKey := types.BatchReceiptsPath(core.CommitPacketHash(packet))
@@ -239,11 +239,11 @@ func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 	c.markPacketAcknowledged(0, rlm, packet)
 
 	if packet.TimeoutTimestamp == 0 {
-		panic(core.ErrTimeoutMustBeSet)
+		panic(makeError(core.ErrTimeoutMustBeSet))
 	}
 
 	if uint64(packet.TimeoutTimestamp) > uint64(proofTimestamp) {
-		panic(core.ErrPacketTimeoutNotReached)
+		panic(makeError(core.ErrPacketTimeoutNotReached))
 	}
 
 	portId, _ := c.store.GetChannelOwner(packet.SourceChannelId)
@@ -260,15 +260,15 @@ func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 func (c *coreV1) markPacketAcknowledged(_ int, rlm realm, packet types.Packet) {
 	commitment, ok := c.store.PacketCommitment(packet.SourceChannelId, packet)
 	if !ok {
-		panic(core.ErrPacketCommitmentNotFound)
+		panic(makeError(core.ErrPacketCommitmentNotFound))
 	}
 
 	if commitment == types.COMMITMENT_MAGIC_ACK {
-		panic(core.ErrPacketAlreadyAcknowledged)
+		panic(makeError(core.ErrPacketAlreadyAcknowledged))
 	}
 
 	if commitment != types.COMMITMENT_MAGIC {
-		panic(core.ErrPacketCommitmentNotFound)
+		panic(makeError(core.ErrPacketCommitmentNotFound))
 	}
 
 	c.store.SetPacketAcknowledged(0, rlm, packet)
@@ -284,7 +284,7 @@ func (c *coreV1) CommitMembershipProof(_ int, rlm realm, msg types.MsgCommitMemb
 // CommitNonMembershipProof verifies and records a non-membership proof.
 func (c *coreV1) CommitNonMembershipProof(_ int, rlm realm, msg types.MsgCommitNonMembershipProof) {
 	if !c.store.ClientExists(msg.ClientId) {
-		panic("client " + msg.ClientId.String() + " not found")
+		panic(makeError(core.ErrClientNotFound, msg.ClientId.String()))
 	}
 
 	c.verifyNonMembership(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, msg.Path)
@@ -296,7 +296,7 @@ func (c *coreV1) CommitNonMembershipProof(_ int, rlm realm, msg types.MsgCommitN
 // commitment.
 func (c *coreV1) BatchSend(_ int, rlm realm, msg types.MsgBatchSend) {
 	if len(msg.Packets) < 2 {
-		panic(core.ErrNotEnoughPackets)
+		panic(makeError(core.ErrNotEnoughPackets))
 	}
 
 	channelId := msg.Packets[0].SourceChannelId
@@ -304,12 +304,12 @@ func (c *coreV1) BatchSend(_ int, rlm realm, msg types.MsgBatchSend) {
 
 	for _, packet := range msg.Packets {
 		if packet.SourceChannelId != channelId {
-			panic(core.ErrBatchSameChannelOnly)
+			panic(makeError(core.ErrBatchSameChannelOnly))
 		}
 
 		commitment, ok := c.store.PacketCommitment(channelId, packet)
 		if !ok || commitment != types.COMMITMENT_MAGIC {
-			panic(core.ErrPacketCommitmentNotFound)
+			panic(makeError(core.ErrPacketCommitmentNotFound))
 		}
 
 		packetHash := core.CommitPacketsHash([]types.Packet{packet})
@@ -322,7 +322,7 @@ func (c *coreV1) BatchSend(_ int, rlm realm, msg types.MsgBatchSend) {
 // BatchAcks aggregates the acks of several received packets into a batch receipt.
 func (c *coreV1) BatchAcks(_ int, rlm realm, msg types.MsgBatchAcks) {
 	if len(msg.Packets) < 2 {
-		panic(core.ErrNotEnoughPackets)
+		panic(makeError(core.ErrNotEnoughPackets))
 	}
 
 	channelId := msg.Packets[0].DestinationChannelId
@@ -335,7 +335,7 @@ func (c *coreV1) BatchAcks(_ int, rlm realm, msg types.MsgBatchAcks) {
 
 		packet := msg.Packets[i]
 		if packet.DestinationChannelId != channelId {
-			panic(core.ErrBatchSameChannelOnly)
+			panic(makeError(core.ErrBatchSameChannelOnly))
 		}
 
 		packetHash := core.CommitPacketsHash([]types.Packet{packet})
@@ -343,15 +343,15 @@ func (c *coreV1) BatchAcks(_ int, rlm realm, msg types.MsgBatchAcks) {
 
 		commitment, ok := c.store.AcknowledgementReceipt(channelId, packet)
 		if !ok {
-			panic(core.ErrPacketCommitmentNotFound)
+			panic(makeError(core.ErrPacketCommitmentNotFound))
 		}
 
 		if commitment == types.COMMITMENT_MAGIC {
-			panic(core.ErrAcknowledgementEmpty)
+			panic(makeError(core.ErrAcknowledgementEmpty))
 		}
 
 		if expected := types.CommitAcks([][]byte{ack}); commitment != expected {
-			panic(core.ErrAcknowledgementMismatch)
+			panic(makeError(core.ErrAcknowledgementMismatch))
 		}
 	}
 
@@ -362,27 +362,27 @@ func (c *coreV1) BatchAcks(_ int, rlm realm, msg types.MsgBatchAcks) {
 // received packet. Only the channel's port owner may write it.
 func (c *coreV1) WriteAcknowledgement(_ int, rlm realm, msg types.MsgWriteAcknowledgement) {
 	if len(msg.Acknowledgement) == 0 {
-		panic(core.ErrAcknowledgementEmpty)
+		panic(makeError(core.ErrAcknowledgementEmpty))
 	}
 
 	channelId := msg.Packet.DestinationChannelId
 	portId, ok := c.store.GetChannelOwner(channelId)
 
 	if !ok {
-		panic("channel " + channelId.String() + " not found")
+		panic(makeError(core.ErrChannelNotFound, channelId.String()))
 	}
 
 	if string(portId) != rlm.Previous().PkgPath() {
-		panic(core.ErrUnauthorizedAckWriter)
+		panic(makeError(core.ErrUnauthorizedAckWriter))
 	}
 
 	commitment, ok := c.store.AcknowledgementReceipt(channelId, msg.Packet)
 	if !ok {
-		panic(core.ErrPacketReceiptNotFound)
+		panic(makeError(core.ErrPacketReceiptNotFound))
 	}
 
 	if commitment != types.COMMITMENT_MAGIC {
-		panic(core.ErrAcknowledgementAlreadyWritten)
+		panic(makeError(core.ErrAcknowledgementAlreadyWritten))
 	}
 
 	c.store.CommitAcknowledgement(0, rlm, msg.Packet, msg.Acknowledgement)
@@ -395,20 +395,20 @@ func (c *coreV1) WriteAcknowledgement(_ int, rlm realm, msg types.MsgWriteAcknow
 // returning skip=true for an already-received (duplicate) packet.
 func (c *coreV1) acceptRecvPacket(_ int, rlm realm, packet types.Packet, batchChannelId types.ChannelId, now uint64) (types.Channel, bool) {
 	if packet.DestinationChannelId != batchChannelId {
-		panic(core.ErrBatchSameChannelOnly)
+		panic(makeError(core.ErrBatchSameChannelOnly))
 	}
 
 	channel, ok := c.store.GetChannel(packet.DestinationChannelId)
 	if !ok {
-		panic("channel " + packet.DestinationChannelId.String() + " not found")
+		panic(makeError(core.ErrChannelNotFound, packet.DestinationChannelId.String()))
 	}
 
 	if channel.State != types.ChannelStateOpen {
-		panic(core.ErrInvalidChannelState)
+		panic(makeError(core.ErrInvalidChannelState))
 	}
 
 	if now >= uint64(packet.TimeoutTimestamp) {
-		panic(core.ErrPacketTimeoutExpired)
+		panic(makeError(core.ErrPacketTimeoutExpired))
 	}
 
 	if c.store.HasPacketReceipt(packet) {
@@ -428,7 +428,7 @@ func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, res types.
 		return nil
 	case types.PacketStatusSuccess, types.PacketStatusFailure:
 		if len(res.Acknowledgement) == 0 {
-			return core.ErrSyncAckEmpty
+			return makeError(core.ErrSyncAckEmpty)
 		}
 
 		c.store.CommitAcknowledgement(0, rlm, packet, res.Acknowledgement)
@@ -436,7 +436,7 @@ func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, res types.
 
 		return nil
 	default:
-		return core.ErrUnknownPacketStatus
+		return makeError(core.ErrUnknownPacketStatus)
 	}
 }
 
@@ -444,11 +444,11 @@ func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, res types.
 func (c *coreV1) verifyNonMembership(clientId types.ClientId, height types.Height, proof, key []byte) {
 	lc, ok := c.store.GetLightClient(clientId)
 	if !ok {
-		panic("client " + clientId.String() + " not found")
+		panic(makeError(core.ErrClientNotFound, clientId.String()))
 	}
 
 	if lc.Status() != lightclient.Active {
-		panic(core.ErrClientNotActive)
+		panic(makeError(core.ErrClientNotActive))
 	}
 
 	if err := lc.VerifyNonMembership(height.RevisionHeight, key, proof); err != nil {

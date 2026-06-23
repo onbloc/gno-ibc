@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"errors"
 	"strings"
 
 	types "gno.land/p/onbloc/ibc/union/types"
@@ -11,8 +10,6 @@ import (
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
-
-var errInvalidUnescrow = errors.New("zkgm/v1: invalid token order unescrow")
 
 // tagAckSuccess returns a fresh copy of the success ack tag.
 func tagAckSuccess() *u256.Uint       { return u256FromBytes32(z.TAG_ACK_SUCCESS) }
@@ -46,7 +43,7 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channel
 
 		origin, ok := v.store.GetTokenOrigin(baseDenom)
 		if !ok {
-			return errInvalidUnescrow
+			return makeError(errInvalidUnescrow)
 		}
 
 		intermediatePath, destChan := z.PopChannelFromPath(origin)
@@ -57,11 +54,11 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channel
 		}
 
 		if path.Cmp(reversed) != 0 {
-			return errInvalidUnescrow
+			return makeError(errInvalidUnescrow)
 		}
 
 		if channelId != types.ChannelId(destChan) {
-			return errInvalidUnescrow
+			return makeError(errInvalidUnescrow)
 		}
 
 		image, ok := v.store.GetMetadataImageOf(baseDenom)
@@ -75,7 +72,7 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channel
 		wrappedV2 := PredictWrappedTokenV2(intermediatePath, uint32(channelId), order.QuoteToken, image)
 
 		if baseDenom != wrappedV1 && baseDenom != wrappedV2 {
-			return errInvalidUnescrow
+			return makeError(errInvalidUnescrow)
 		}
 
 		if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
@@ -84,9 +81,9 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channel
 
 		return funds.sub(baseDenom, order.BaseAmount)
 	case z.TOKEN_ORDER_KIND_SOLVE:
-		return errors.New("zkgm/v1: solve token order not implemented")
+		return makeError(errSolveNotImplemented)
 	default:
-		return errors.New("zkgm/v1: unknown token order kind")
+		return makeError(errUnknownTokenOrderKind)
 	}
 }
 
@@ -345,7 +342,7 @@ func (v *ucs03ZkgmV1) marketMakerFillV2(_ int, rlm realm, relayer address, relay
 		// Union can fill local/native quote tokens from the maker's funds. This
 		// implementation cannot observe those funds here yet, so only voucher
 		// quote tokens are eligible for the market-maker fast path.
-		return core.NewRecvPacketResult(types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
+		return core.NewRecvPacketResult(types.PacketStatusSuccess, types.CloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 
 	if _, err := amountInt64(order.QuoteAmount); err != nil {
@@ -353,7 +350,7 @@ func (v *ucs03ZkgmV1) marketMakerFillV2(_ int, rlm realm, relayer address, relay
 	}
 
 	if err := v.transferVoucher(0, rlm, quoteDenom, relayer, address(order.Receiver), order.QuoteAmount); err != nil {
-		return core.NewRecvPacketResult(types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
+		return core.NewRecvPacketResult(types.PacketStatusSuccess, types.CloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 
 	// market_maker is the relayer-supplied settlement target (union saves
@@ -385,7 +382,7 @@ func (v *ucs03ZkgmV1) acknowledgeTokenOrderV2(_ int, rlm realm, packet types.Pac
 	}
 
 	if !orderAck.FillType.Eq(fillTypeMarketMaker()) {
-		return errors.New("zkgm/v1: unknown fill type")
+		return makeError(errUnknownFillType)
 	}
 
 	marketMaker := string(orderAck.MarketMaker)
@@ -396,7 +393,7 @@ func (v *ucs03ZkgmV1) acknowledgeTokenOrderV2(_ int, rlm realm, packet types.Pac
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
 		return v.settleEscrowedV2(0, rlm, sourceChannelId, path, order, marketMaker)
 	default:
-		return errors.New("zkgm/v1: unsupported token order kind for ack")
+		return makeError(errUnsupportedTokenOrderKindForAck)
 	}
 }
 
@@ -409,7 +406,7 @@ func (v *ucs03ZkgmV1) refundV2(_ int, rlm realm, path *u256.Uint, sourceChannelI
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
 		return v.settleEscrowedV2(0, rlm, sourceChannelId, path, order, string(order.Sender))
 	default:
-		return errors.New("zkgm/v1: unsupported token order kind for refund")
+		return makeError(errUnsupportedTokenOrderKindForRefund)
 	}
 }
 

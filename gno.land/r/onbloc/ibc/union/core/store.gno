@@ -354,7 +354,7 @@ func (s *Store) ClientStateBytes(clientId types.ClientId) ([]byte, bool) {
 		return nil, false
 	}
 
-	return cloneBytes(c.clientState), true
+	return types.CloneBytes(c.clientState), true
 }
 
 // ConsensusStateBytes returns the consensus state bytes at a height.
@@ -431,12 +431,12 @@ func (s *Store) getCommitment(path types.H256) (types.H256, bool) {
 // --- Client state ---
 
 func (c *client) saveClientState(clientStateBytes []byte) {
-	c.clientState = cloneBytes(clientStateBytes)
+	c.clientState = types.CloneBytes(clientStateBytes)
 	setChainParam(h256ChainParamKey(types.ClientStatePath(c.id)), h256Bytes(keccak(clientStateBytes)))
 }
 
 func (c *client) saveConsensusState(height types.Height, consensusStateBytes []byte) {
-	c.consensusByHeight.Set(string(height.Bytes()), cloneBytes(consensusStateBytes))
+	c.consensusByHeight.Set(string(height.Bytes()), types.CloneBytes(consensusStateBytes))
 	setChainParam(h256ChainParamKey(types.ConsensusStatePath(c.id, height)), h256Bytes(keccak(consensusStateBytes)))
 }
 
@@ -446,13 +446,13 @@ func (c *client) getConsensusState(height types.Height) ([]byte, bool) {
 		return nil, false
 	}
 
-	return cloneBytes(v.([]byte)), true
+	return types.CloneBytes(v.([]byte)), true
 }
 
 // --- Client store (light client storage writes) ---
 
 func (c *client) saveClientStore(key string, value []byte) {
-	c.clientStore[key] = cloneBytes(value)
+	c.clientStore[key] = types.CloneBytes(value)
 }
 
 func (c *client) getClientStore(key string) ([]byte, bool) {
@@ -461,7 +461,7 @@ func (c *client) getClientStore(key string) ([]byte, bool) {
 		return nil, false
 	}
 
-	return cloneBytes(v), true
+	return types.CloneBytes(v), true
 }
 
 // --- Committed proofs (global paths) ---
@@ -566,7 +566,7 @@ func portKey(portId types.Bytes) string {
 func (s *Store) getAppByPortId(portId types.Bytes) app.IApp {
 	a, ok := s.ports[portKey(portId)]
 	if !ok {
-		panic("port " + string(portId) + " not found")
+		panic(makeError(ErrPortNotFound, string(portId)))
 	}
 
 	return a
@@ -602,7 +602,7 @@ func (s *Store) createChannel(channelId types.ChannelId, channel types.Channel, 
 func (s *Store) saveChannel(channelId types.ChannelId, channel types.Channel) {
 	entry, found := s.getChannelEntry(channelId)
 	if !found {
-		panic("channel " + channelId.String() + " not found")
+		panic(makeError(ErrChannelNotFound, channelId.String()))
 	}
 
 	entry.channel = cloneChannel(channel)
@@ -621,7 +621,7 @@ func (s *Store) getChannelEntry(channelId types.ChannelId) (*channelEntry, bool)
 func (s *Store) getChannel(channelId types.ChannelId) types.Channel {
 	entry, found := s.getChannelEntry(channelId)
 	if !found {
-		panic("channel " + channelId.String() + " not found")
+		panic(makeError(ErrChannelNotFound, channelId.String()))
 	}
 
 	return entry.channel
@@ -630,7 +630,7 @@ func (s *Store) getChannel(channelId types.ChannelId) types.Channel {
 func (s *Store) getChannelOwner(channelId types.ChannelId) types.Bytes {
 	entry, found := s.getChannelEntry(channelId)
 	if !found {
-		panic("channel " + channelId.String() + " not found")
+		panic(makeError(ErrChannelNotFound, channelId.String()))
 	}
 
 	return entry.portId

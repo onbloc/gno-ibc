@@ -131,7 +131,7 @@ func TestConnectionOpenAckUnknownAborts(cur realm, t *testing.T) {
 func TestConnectionOpenTryClientNotFound(cur realm, t *testing.T) {
 	v := newTestImpl()
 
-	uassert.AbortsContains(t, cur, "client 1 not found", func(cur realm) {
+	uassert.AbortsContains(t, cur, "client not found, 1", func(cur realm) {
 		v.ConnectionOpenTry(0, cur, types.MsgConnectionOpenTry{
 			ClientId:                 types.ClientId(1),
 			CounterpartyClientId:     types.ClientId(2),

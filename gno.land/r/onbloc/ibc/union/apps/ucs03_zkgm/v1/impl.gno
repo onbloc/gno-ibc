@@ -55,7 +55,7 @@ func (v *ucs03ZkgmV1) OnChannelCloseConfirm(_ int, rlm realm, channelId types.Ch
 
 // OnRecvPacket decodes the packet and dispatches it; decode/exec failures return a failure ack rather than aborting.
 func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {
-	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
+	zp, err := z.DecodeZkgmPacket(types.CloneBytes(packet.Data))
 	if err != nil {
 		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
 		return failureResult(universalErrorAck())
@@ -75,7 +75,7 @@ func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relaye
 // explicit stop point for market-maker fills that require unsupported native
 // maker funding.
 func (v *ucs03ZkgmV1) OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
-	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
+	zp, err := z.DecodeZkgmPacket(types.CloneBytes(packet.Data))
 	if err != nil {
 		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
 		return failureResult(universalErrorAck())
@@ -99,7 +99,7 @@ func (v *ucs03ZkgmV1) OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, 
 
 // OnAcknowledgementPacket routes the ack to its instruction, or to the forwarded parent packet.
 func (v *ucs03ZkgmV1) OnAcknowledgementPacket(_ int, rlm realm, packet types.Packet, acknowledgement []byte, relayer address) {
-	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
+	zp, err := z.DecodeZkgmPacket(types.CloneBytes(packet.Data))
 	if err != nil {
 		panic(err.Error())
 	}
@@ -121,7 +121,7 @@ func (v *ucs03ZkgmV1) OnAcknowledgementPacket(_ int, rlm realm, packet types.Pac
 
 // OnTimeoutPacket refunds the timed-out instruction, or settles the forwarded parent packet.
 func (v *ucs03ZkgmV1) OnTimeoutPacket(_ int, rlm realm, packet types.Packet, relayer address) {
-	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
+	zp, err := z.DecodeZkgmPacket(types.CloneBytes(packet.Data))
 	if err != nil {
 		panic(err.Error())
 	}

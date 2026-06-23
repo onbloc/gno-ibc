@@ -173,7 +173,7 @@ func TestChannelOpenAckMovesInitToOpen(cur realm, t *testing.T) {
 func TestChannelOpenAckNotFound(cur realm, t *testing.T) {
 	v := newTestImpl()
 
-	uassert.AbortsContains(t, cur, "channel 1 not found", func(cur realm) {
+	uassert.AbortsContains(t, cur, "channel not found, 1", func(cur realm) {
 		v.ChannelOpenAck(0, cur, types.MsgChannelOpenAck{
 			ChannelId: types.ChannelId(1), CounterpartyChannelId: types.ChannelId(9),
 			CounterpartyVersion: "v1", ProofHeight: 10, ProofTry: []byte("p"),
@@ -241,7 +241,7 @@ func TestChannelOpenConfirmMovesTryOpenToOpen(cur realm, t *testing.T) {
 func TestChannelOpenConfirmNotFound(cur realm, t *testing.T) {
 	v := newTestImpl()
 
-	uassert.AbortsContains(t, cur, "channel 1 not found", func(cur realm) {
+	uassert.AbortsContains(t, cur, "channel not found, 1", func(cur realm) {
 		v.ChannelOpenConfirm(0, cur, types.MsgChannelOpenConfirm{
 			ChannelId: types.ChannelId(1), ProofHeight: 11, ProofAck: []byte("proof"),
 		})

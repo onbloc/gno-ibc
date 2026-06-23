@@ -54,13 +54,13 @@ func TestGetMissingClient(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	_, err := v.GetStatus(types.ClientId(99))
-	uassert.ErrorIs(t, err, core.ErrClientNotFound)
+	uassert.ErrorIs(t, err, makeError(core.ErrClientNotFound))
 	_, err = v.GetClientType(types.ClientId(99))
-	uassert.ErrorIs(t, err, core.ErrClientNotFound)
+	uassert.ErrorIs(t, err, makeError(core.ErrClientNotFound))
 	_, err = v.GetLatestHeight(types.ClientId(99))
-	uassert.ErrorIs(t, err, core.ErrClientNotFound)
+	uassert.ErrorIs(t, err, makeError(core.ErrClientNotFound))
 	_, err = v.GetClientStateBytes(types.ClientId(99))
-	uassert.ErrorIs(t, err, core.ErrClientStateNotFound)
+	uassert.ErrorIs(t, err, makeError(core.ErrClientStateNotFound))
 }
 
 func TestGetFrozenStatus(cur realm, t *testing.T) {
@@ -95,5 +95,5 @@ func TestGetConnectionAndChannel(cur realm, t *testing.T) {
 	uassert.True(t, ch.State == types.ChannelStateOpen)
 
 	_, err = v.GetConnection(types.ConnectionId(99))
-	uassert.ErrorIs(t, err, core.ErrConnectionNotFound)
+	uassert.ErrorIs(t, err, makeError(core.ErrConnectionNotFound))
 }

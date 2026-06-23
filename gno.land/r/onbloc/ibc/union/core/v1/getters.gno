@@ -21,7 +21,7 @@ func (c *coreV1) GetLightClient(clientId types.ClientId) (lightclient.Interface,
 func (c *coreV1) GetStatus(clientId types.ClientId) (types.Status, error) {
 	lc, ok := c.store.GetLightClient(clientId)
 	if !ok {
-		return types.StatusUnknown, core.ErrClientNotFound
+		return types.StatusUnknown, makeError(core.ErrClientNotFound)
 	}
 
 	return lc.Status().ToType(), nil
@@ -32,7 +32,7 @@ func (c *coreV1) GetStatus(clientId types.ClientId) (types.Status, error) {
 func (c *coreV1) GetClientType(clientId types.ClientId) (types.ClientType, error) {
 	typ, ok := c.store.ClientType(clientId)
 	if !ok {
-		return "", core.ErrClientNotFound
+		return "", makeError(core.ErrClientNotFound)
 	}
 
 	return typ, nil
@@ -44,7 +44,7 @@ func (c *coreV1) GetClientType(clientId types.ClientId) (types.ClientType, error
 func (c *coreV1) GetClientImpl(clientId types.ClientId) (string, error) {
 	typ, ok := c.store.ClientType(clientId)
 	if !ok {
-		return "", core.ErrClientNotFound
+		return "", makeError(core.ErrClientNotFound)
 	}
 
 	return string(typ), nil
@@ -61,7 +61,7 @@ func (c *coreV1) GetRegisteredClientType(clientType types.ClientType) bool {
 func (c *coreV1) GetClientStateBytes(clientId types.ClientId) ([]byte, error) {
 	bz, ok := c.store.ClientStateBytes(clientId)
 	if !ok {
-		return nil, core.ErrClientStateNotFound
+		return nil, makeError(core.ErrClientStateNotFound)
 	}
 
 	return bz, nil
@@ -72,7 +72,7 @@ func (c *coreV1) GetClientStateBytes(clientId types.ClientId) ([]byte, error) {
 func (c *coreV1) GetConsensusStateBytes(clientId types.ClientId, height types.Height) ([]byte, error) {
 	bz, ok := c.store.ConsensusStateBytes(clientId, height)
 	if !ok {
-		return nil, core.ErrConsensusStateNotFound
+		return nil, makeError(core.ErrConsensusStateNotFound)
 	}
 
 	return bz, nil
@@ -83,7 +83,7 @@ func (c *coreV1) GetConsensusStateBytes(clientId types.ClientId, height types.He
 func (c *coreV1) GetLatestHeight(clientId types.ClientId) (uint64, error) {
 	lc, ok := c.store.GetLightClient(clientId)
 	if !ok {
-		return 0, core.ErrClientNotFound
+		return 0, makeError(core.ErrClientNotFound)
 	}
 
 	return lc.GetLatestHeight(), nil
@@ -94,7 +94,7 @@ func (c *coreV1) GetLatestHeight(clientId types.ClientId) (uint64, error) {
 func (c *coreV1) GetTimestampAtHeight(clientId types.ClientId, height uint64) (types.Timestamp, error) {
 	lc, ok := c.store.GetLightClient(clientId)
 	if !ok {
-		return 0, core.ErrClientNotFound
+		return 0, makeError(core.ErrClientNotFound)
 	}
 
 	ts, err := lc.GetTimestampAtHeight(height)
@@ -110,7 +110,7 @@ func (c *coreV1) GetTimestampAtHeight(clientId types.ClientId, height uint64) (t
 func (c *coreV1) GetConnection(connectionId types.ConnectionId) (types.Connection, error) {
 	conn, ok := c.store.GetConnection(connectionId)
 	if !ok {
-		return types.Connection{}, core.ErrConnectionNotFound
+		return types.Connection{}, makeError(core.ErrConnectionNotFound)
 	}
 
 	return conn, nil
@@ -126,7 +126,7 @@ func (c *coreV1) GetChannels() ([]types.Channel, error) {
 func (c *coreV1) GetChannel(channelId types.ChannelId) (types.Channel, error) {
 	ch, ok := c.store.GetChannel(channelId)
 	if !ok {
-		return types.Channel{}, core.ErrChannelNotFound
+		return types.Channel{}, makeError(core.ErrChannelNotFound)
 	}
 
 	return ch, nil
@@ -137,7 +137,7 @@ func (c *coreV1) GetChannel(channelId types.ChannelId) (types.Channel, error) {
 func (c *coreV1) GetBatchPacketsCommitment(batchHash types.H256) (types.H256, error) {
 	commitment, ok := c.store.BatchPacketsAt(batchHash)
 	if !ok {
-		return types.H256{}, core.ErrBatchPacketsNotFound
+		return types.H256{}, makeError(core.ErrBatchPacketsNotFound)
 	}
 
 	return commitment, nil
@@ -148,7 +148,7 @@ func (c *coreV1) GetBatchPacketsCommitment(batchHash types.H256) (types.H256, er
 func (c *coreV1) GetBatchReceiptsCommitment(batchHash types.H256) (types.H256, error) {
 	commitment, ok := c.store.BatchReceiptsAt(batchHash)
 	if !ok {
-		return types.H256{}, core.ErrBatchReceiptsNotFound
+		return types.H256{}, makeError(core.ErrBatchReceiptsNotFound)
 	}
 
 	return commitment, nil

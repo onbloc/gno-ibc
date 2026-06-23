@@ -132,7 +132,7 @@ func (h Height) Bytes() []byte {
 // is zero.
 func ParseHeight(s string) (Height, error) {
 	if s == "" {
-		return Height{}, errors.New("invalid height string")
+		return Height{}, errors.New("types: invalid height string")
 	}
 
 	revStr, heightStr, found := strings.Cut(s, "-")

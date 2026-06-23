@@ -382,6 +382,81 @@ func TestPacketRecvProofFailureAborts(cur realm, t *testing.T) {
 	})
 }
 
+func setupOpenChannelWithClient(cur realm, v *coreV1, lc *mockLightClient, portId types.Bytes) types.ChannelId {
+	ms := v.store.(*mockStore)
+	clientId := createClient(cur, v, lc, nil, nil)
+	ms.SaveConnection(0, cur, types.ConnectionId(1),
+		core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+	ms.registerApp(portId, &mockApp{})
+	chId := v.store.NextChannelId(0, cur)
+	v.store.CreateChannel(0, cur, chId, types.Channel{
+		State:                 types.ChannelStateOpen,
+		ConnectionId:          types.ConnectionId(1),
+		CounterpartyChannelId: types.ChannelId(9),
+		Version:               "v1",
+	}, portId)
+	return chId
+}
+
+func TestPacketMembershipEntrypointsInactiveClientAbortBeforeVerification(cur realm, t *testing.T) {
+	tests := []struct {
+		name string
+		run  func(cur realm, v *coreV1, lc *mockLightClient)
+	}{
+		{
+			name: "packet recv",
+			run: func(cur realm, v *coreV1, lc *mockLightClient) {
+				chId := setupOpenChannelWithClient(cur, v, lc, types.Bytes(cur.Previous().PkgPath()))
+				packet := recvPacket(chId, "inactive-recv")
+				v.PacketRecv(0, cur, types.MsgPacketRecv{
+					Packets:     []types.Packet{packet},
+					RelayerMsgs: [][]byte{[]byte("rm")},
+					Proof:       []byte("proof"),
+					ProofHeight: 10,
+				})
+			},
+		},
+		{
+			name: "packet acknowledgement",
+			run: func(cur realm, v *coreV1, lc *mockLightClient) {
+				chId := setupOpenChannelWithClient(cur, v, lc, types.Bytes(cur.Previous().PkgPath()))
+				packet := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("inactive-ack"))
+				v.PacketAcknowledgement(0, cur, types.MsgPacketAcknowledgement{
+					Packets:          []types.Packet{packet},
+					Acknowledgements: [][]byte{[]byte("ack")},
+					Proof:            []byte("proof"),
+					ProofHeight:      10,
+				})
+			},
+		},
+		{
+			name: "commit membership proof",
+			run: func(cur realm, v *coreV1, lc *mockLightClient) {
+				clientId := createClient(cur, v, lc, nil, nil)
+				v.CommitMembershipProof(0, cur, types.MsgCommitMembershipProof{
+					ClientId:    clientId,
+					ProofHeight: 10,
+					Proof:       []byte("proof"),
+					Path:        []byte("path"),
+					Value:       []byte("value"),
+				})
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			lc := &mockLightClient{status: "Frozen", timestampAtHt: farFuture}
+
+			uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
+				tc.run(cur, v, lc)
+			})
+			uassert.Equal(t, 0, lc.membershipCalls)
+		})
+	}
+}
+
 func TestPacketRecvRejectsMissingPortApp(cur realm, t *testing.T) {
 	v := newTestImpl()
 	chId := setupOpenChannelWithoutApp(cur, v, types.Bytes("missing-port"))

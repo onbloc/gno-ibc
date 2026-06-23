@@ -500,6 +500,46 @@ func TestChannelCloseRejectsInvalidMessages(cur realm, t *testing.T) {
 				v.ChannelCloseConfirm(0, cur, types.MsgChannelCloseConfirm{ChannelId: chId, ProofHeight: 12, ProofInit: []byte("proof")})
 			},
 		},
+		{
+			name: "close init missing app",
+			want: "port missing-port not found",
+			run: func(cur realm) {
+				v := newTestImpl()
+				ms := v.store.(*mockStore)
+				clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
+				ms.SaveConnection(0, cur, types.ConnectionId(1),
+					core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+				chId := v.store.NextChannelId(0, cur)
+				v.store.CreateChannel(0, cur, chId, types.Channel{
+					State:                 types.ChannelStateOpen,
+					ConnectionId:          types.ConnectionId(1),
+					CounterpartyChannelId: types.ChannelId(9),
+					CounterpartyPortId:    types.Bytes("cp-port"),
+					Version:               "v1",
+				}, types.Bytes("missing-port"))
+				v.ChannelCloseInit(0, cur, types.MsgChannelCloseInit{ChannelId: chId})
+			},
+		},
+		{
+			name: "close confirm missing app",
+			want: "port missing-port not found",
+			run: func(cur realm) {
+				v := newTestImpl()
+				ms := v.store.(*mockStore)
+				clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
+				ms.SaveConnection(0, cur, types.ConnectionId(1),
+					core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+				chId := v.store.NextChannelId(0, cur)
+				v.store.CreateChannel(0, cur, chId, types.Channel{
+					State:                 types.ChannelStateOpen,
+					ConnectionId:          types.ConnectionId(1),
+					CounterpartyChannelId: types.ChannelId(9),
+					CounterpartyPortId:    types.Bytes("cp-port"),
+					Version:               "v1",
+				}, types.Bytes("missing-port"))
+				v.ChannelCloseConfirm(0, cur, types.MsgChannelCloseConfirm{ChannelId: chId, ProofHeight: 12, ProofInit: []byte("proof")})
+			},
+		},
 	}
 
 	for _, tc := range testCases {

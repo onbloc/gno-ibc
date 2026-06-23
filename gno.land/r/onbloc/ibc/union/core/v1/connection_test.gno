@@ -58,6 +58,66 @@ func TestConnectionOpenTryProofFailureAborts(cur realm, t *testing.T) {
 	})
 }
 
+func TestConnectionProofEntrypointsInactiveClientAbortBeforeVerification(cur realm, t *testing.T) {
+	tests := []struct {
+		name string
+		run  func(cur realm, v *coreV1, lc *mockLightClient, clientId types.ClientId)
+	}{
+		{
+			name: "open try",
+			run: func(cur realm, v *coreV1, lc *mockLightClient, clientId types.ClientId) {
+				v.ConnectionOpenTry(0, cur, types.MsgConnectionOpenTry{
+					ClientId:                 clientId,
+					CounterpartyClientId:     types.ClientId(7),
+					CounterpartyConnectionId: types.ConnectionId(3),
+					ProofHeight:              10,
+					ProofInit:                []byte("proof"),
+				})
+			},
+		},
+		{
+			name: "open ack",
+			run: func(cur realm, v *coreV1, lc *mockLightClient, clientId types.ClientId) {
+				v.ConnectionOpenInit(0, cur, types.MsgConnectionOpenInit{
+					ClientId:             clientId,
+					CounterpartyClientId: types.ClientId(7),
+				})
+				v.ConnectionOpenAck(0, cur, types.MsgConnectionOpenAck{
+					ConnectionId:             types.ConnectionId(1),
+					CounterpartyConnectionId: types.ConnectionId(5),
+					ProofHeight:              10,
+					ProofTry:                 []byte("proof"),
+				})
+			},
+		},
+		{
+			name: "open confirm",
+			run: func(cur realm, v *coreV1, lc *mockLightClient, clientId types.ClientId) {
+				v.store.SaveConnection(0, cur, types.ConnectionId(1),
+					core.NewConnection(types.ConnectionStateTryOpen, clientId, types.ClientId(7), types.ConnectionId(5)))
+				v.ConnectionOpenConfirm(0, cur, types.MsgConnectionOpenConfirm{
+					ConnectionId: types.ConnectionId(1),
+					ProofHeight:  10,
+					ProofAck:     []byte("proof"),
+				})
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			lc := &mockLightClient{status: lightclient.Frozen}
+			clientId := createClient(cur, v, lc, nil, nil)
+
+			uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
+				tc.run(cur, v, lc, clientId)
+			})
+			uassert.Equal(t, 0, lc.membershipCalls)
+		})
+	}
+}
+
 func TestConnectionOpenAckMovesInitToOpen(cur realm, t *testing.T) {
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)

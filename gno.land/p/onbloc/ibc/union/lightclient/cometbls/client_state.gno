@@ -17,11 +17,7 @@ type ClientState struct {
 	MaxClockDrift   uint64
 	FrozenHeight    types.Height
 	LatestHeight    types.Height
-	// ContractAddress is the address of the counterparty IBC host contract.
-	// Membership proofs are verified against the commitments stored by this contract.
-	//
-	// Mirrors Union's cometbls `ClientState.contract_address`.
-	ContractAddress H256
+	ContractAddress types.H256
 }
 
 func NewClientState(
@@ -31,7 +27,7 @@ func NewClientState(
 	maxClockDrift uint64,
 	frozenHeight types.Height,
 	latestHeight types.Height,
-	contractAddress H256,
+	contractAddress types.H256,
 ) *ClientState {
 	return &ClientState{
 		ChainID:         chainID,

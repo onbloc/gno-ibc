@@ -22,14 +22,17 @@ func (cs ClientState) ExtractConsensusState(data []byte) (ConsensusState, error)
 	if err != nil {
 		return ConsensusState{}, err
 	}
+
 	stateRoot, err := extractBytes32(data, int(cs.StateRootOffset))
 	if err != nil {
 		return ConsensusState{}, err
 	}
+
 	storageRoot, err := extractBytes32(data, int(cs.StorageRootOffset))
 	if err != nil {
 		return ConsensusState{}, err
 	}
+
 	return ConsensusState{
 		Timestamp:   timestamp,
 		StateRoot:   stateRoot,
@@ -41,6 +44,7 @@ func extractUint64(data []byte, offset int) (uint64, error) {
 	if offset < 0 || offset+8 > len(data) {
 		return 0, ErrConsensusStateTooShort
 	}
+
 	return binary.BigEndian.Uint64(data[offset : offset+8]), nil
 }
 
@@ -48,8 +52,10 @@ func extractBytes32(data []byte, offset int) ([]byte, error) {
 	if offset < 0 || offset+32 > len(data) {
 		return nil, ErrConsensusStateTooShort
 	}
+
 	out := make([]byte, 32)
 	copy(out, data[offset:offset+32])
+
 	return out, nil
 }
 
@@ -61,8 +67,10 @@ func VerifyCommitmentKey(path []byte, proofKey []byte) error {
 	if err != nil {
 		return ErrInvalidCommitmentKey
 	}
+
 	if !bytes.Equal(expected[:], proofKey) {
 		return ErrInvalidCommitmentKey
 	}
+
 	return nil
 }

@@ -79,6 +79,7 @@ func (c *StateLensIcs23MptLightClient) VerifyMembership(height uint64, key []byt
 	if len(value) != 32 {
 		return ErrInvalidCommitmentValue
 	}
+
 	if !bytes.Equal(storageProof.Value, value) {
 		return ErrStoredValueMismatch
 	}
@@ -165,7 +166,8 @@ func (c *StateLensIcs23MptLightClient) VerifyHeader(caller address, headerBytes 
 
 	// The L2 consensus state must be committed under the consensus-state path of
 	// the L2 client, in the L1 chain's state, as a keccak256 hash.
-	consensusPath := types.ConsensusStatePath(types.ClientId(c.clientState.L2ClientID), types.NewHeight(header.L2Height))
+	consensusPath := types.ConsensusStatePath(types.ClientId(clientState.L2ClientID), types.NewHeight(header.L2Height))
+
 	consensusHash := keccak256.Sum256(header.L2ConsensusState)
 	if err := l1.VerifyMembership(header.L1Height, consensusPath[:], header.L2ConsensusStateProof, consensusHash[:]); err != nil {
 		return types.StateUpdate{}, ufmt.Errorf("ics23mpt: l1 consensus state membership verification failed: %v", err)
@@ -235,6 +237,7 @@ func (c *StateLensIcs23MptLightClient) GetTimestampAtHeight(height uint64) (type
 	if !found {
 		return 0, ErrConsensusStateNotFound
 	}
+
 	return types.Timestamp(consState.Timestamp), nil
 }
 
@@ -263,7 +266,7 @@ func (c *StateLensIcs23MptLightClient) Status() lightclient.Status {
 	}
 }
 
-func (c *StateLensIcs23MptLightClient) getConsensusState(height Height) (*ConsensusState, bool) {
+func (c *StateLensIcs23MptLightClient) getConsensusState(height uint64) (*ConsensusState, bool) {
 	v, found := c.consensusStateByHeight.Get(heightKey(height))
 	if !found {
 		return nil, false
@@ -277,13 +280,13 @@ func (c *StateLensIcs23MptLightClient) getConsensusState(height Height) (*Consen
 	return consState, true
 }
 
-func (c *StateLensIcs23MptLightClient) setConsensusState(height Height, consState *ConsensusState) {
+func (c *StateLensIcs23MptLightClient) setConsensusState(height uint64, consState *ConsensusState) {
 	c.consensusStateByHeight.Set(heightKey(height), consState)
 }
 
 // heightKey renders a height as a fixed-width, lexicographically sortable bptree
 // key. ibc-union heights carry a single revision, so the numeric ordering of the
 // formatted height matches height ordering.
-func heightKey(height Height) string {
+func heightKey(height uint64) string {
 	return ufmt.Sprintf("%020d", height)
 }

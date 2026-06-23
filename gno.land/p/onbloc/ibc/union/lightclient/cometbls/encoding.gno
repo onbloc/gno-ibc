@@ -45,16 +45,19 @@ func EncodeHeader(h *Header) ([]byte, error) {
 	if h == nil || h.SignedHeader == nil {
 		return nil, errors.New("cometbls: nil header")
 	}
+
 	lh := h.SignedHeader
 
 	vh, err := toBytes32(lh.ValidatorsHash, "validators hash")
 	if err != nil {
 		return nil, err
 	}
+
 	nvh, err := toBytes32(lh.NextValidatorsHash, "next validators hash")
 	if err != nil {
 		return nil, err
 	}
+
 	ah, err := toBytes32(lh.AppHash, "app hash")
 	if err != nil {
 		return nil, err
@@ -83,6 +86,7 @@ func DecodeHeader(buf []byte) (*Header, error) {
 	}
 
 	timeSeconds := vals[1].(uint64)
+
 	timeNanos := vals[2].(uint64)
 	if timeNanos >= maxTimeNanos {
 		return nil, errors.New("cometbls: TimeNanos out of range")
@@ -114,10 +118,12 @@ func EncodeMisbehaviour(m *Misbehaviour) ([]byte, error) {
 	if m == nil {
 		return nil, errors.New("cometbls: nil misbehaviour")
 	}
+
 	h1, err := EncodeHeader(m.Header1)
 	if err != nil {
 		return nil, err
 	}
+
 	h2, err := EncodeHeader(m.Header2)
 	if err != nil {
 		return nil, err
@@ -126,18 +132,21 @@ func EncodeMisbehaviour(m *Misbehaviour) ([]byte, error) {
 	buf := make([]byte, 0, len(h1)+len(h2)+8)
 	buf = proto.AppendLengthDelimited(buf, 1, h1)
 	buf = proto.AppendLengthDelimited(buf, 2, h2)
+
 	return buf, nil
 }
 
 // DecodeMisbehaviour protobuf-decodes a Misbehaviour.
 func DecodeMisbehaviour(buf []byte) (*Misbehaviour, error) {
 	m := &Misbehaviour{}
+
 	pos := 0
 	for pos < len(buf) {
 		fieldNum, wireType, newPos, err := decodeTag(buf, pos)
 		if err != nil {
 			return nil, err
 		}
+
 		pos = newPos
 
 		if wireType != proto.LEN {
@@ -145,6 +154,7 @@ func DecodeMisbehaviour(buf []byte) (*Misbehaviour, error) {
 			if err != nil {
 				return nil, err
 			}
+
 			continue
 		}
 
@@ -152,6 +162,7 @@ func DecodeMisbehaviour(buf []byte) (*Misbehaviour, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		pos = newPos
 
 		header, err := DecodeHeader([]byte(s))
@@ -170,6 +181,7 @@ func DecodeMisbehaviour(buf []byte) (*Misbehaviour, error) {
 	if m.Header1 == nil || m.Header2 == nil {
 		return nil, errors.New("cometbls: misbehaviour missing a header")
 	}
+
 	return m, nil
 }
 
@@ -180,6 +192,8 @@ func toBytes32(b []byte, label string) ([32]byte, error) {
 	if len(b) != 32 {
 		return out, errors.New("cometbls: " + label + " must be 32 bytes")
 	}
+
 	copy(out[:], b)
+
 	return out, nil
 }

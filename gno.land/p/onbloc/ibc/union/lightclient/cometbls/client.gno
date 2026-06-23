@@ -40,6 +40,7 @@ func NewCometblsLightClient(clientState *ClientState, consensusState *ConsensusS
 // https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/cometbls/src/client.rs#L48-L72
 func (c *CometblsLightClient) VerifyMembership(height uint64, key []byte, proof []byte, value []byte) error {
 	clientState := c.clientState
+
 	consensusState, storageProof, merklePath, err := c.prepareProof(clientState, height, key, proof)
 	if err != nil {
 		return err
@@ -52,6 +53,7 @@ func (c *CometblsLightClient) VerifyMembership(height uint64, key []byte, proof 
 // https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/cometbls/src/client.rs#L75-L99
 func (c *CometblsLightClient) VerifyNonMembership(height uint64, key []byte, proof []byte) error {
 	clientState := c.clientState
+
 	consensusState, storageProof, merklePath, err := c.prepareProof(clientState, height, key, proof)
 	if err != nil {
 		return err
@@ -172,6 +174,7 @@ func (c *CometblsLightClient) Misbehaviour(caller address, misbehaviour []byte, 
 	if err != nil {
 		return nil, err
 	}
+
 	return csBytes, nil
 }
 
@@ -203,6 +206,7 @@ func (c *CometblsLightClient) updateState(clientState *ClientState, trustedConse
 			stateUpdate.ClientStateBytes = csBytes
 		}
 	}
+
 	return stateUpdate
 }
 
@@ -211,6 +215,7 @@ func makeStateUpdate(height types.Height, consensusState *ConsensusState) types.
 	if consBytes, err := EncodeConsensusState(consensusState); err == nil {
 		update.ConsensusStateBytes = consBytes
 	}
+
 	return update
 }
 

@@ -66,6 +66,7 @@ func (c *CometblsLightClient) verifyHeader(clientState *ClientState, trustedCons
 	if overflow {
 		return makeError(ErrMathOverflow)
 	}
+
 	if untrustedTimestamp >= maxClockDriftTimestamp {
 		return makeError(
 			ErrInvalidHeader,
@@ -107,6 +108,7 @@ func isClientExpiredAt(consensusStateTimestamp uint64, trustingPeriod uint64, no
 	if overflow {
 		return true
 	}
+
 	return expiresAt < now
 }
 
@@ -115,6 +117,7 @@ func checkedAddUint64(a uint64, b uint64) (uint64, bool) {
 	if sum < a {
 		return 0, true
 	}
+
 	return sum, false
 }
 
@@ -137,6 +140,7 @@ func (c *CometblsLightClient) verifyMisbehaviour(misbehaviour *Misbehaviour, now
 	if err := c.verifyMisbehaviourHeader("Header_1", headerA, now); err != nil {
 		return err
 	}
+
 	if err := c.verifyMisbehaviourHeader("Header_2", headerB, now); err != nil {
 		return err
 	}
@@ -162,6 +166,7 @@ func isMisbehaviourPair(headerA, headerB *Header) bool {
 
 func (c *CometblsLightClient) verifyMisbehaviourHeader(label string, header *Header, now time.Time) error {
 	prefix := ufmt.Sprintf("verifying %s in Misbehaviour failed: ", label)
+
 	consensusState, found := c.getConsensusState(*header.TrustedHeight)
 	if !found {
 		return makeError(
@@ -169,9 +174,11 @@ func (c *CometblsLightClient) verifyMisbehaviourHeader(label string, header *Hea
 			prefix+ufmt.Sprintf("could not get trusted consensus state for Header at TrustedHeight: %s", header.TrustedHeight),
 		)
 	}
+
 	if err := c.verifyHeader(c.clientState, consensusState, header, now); err != nil {
 		return makeError(ErrInvalidMisbehaviour, prefix+err.Error())
 	}
+
 	return nil
 }
 
@@ -180,9 +187,11 @@ func signedHeadersEqual(a, b *LightHeader) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
+
 	if a.Height != b.Height || a.TimeSeconds != b.TimeSeconds || a.TimeNanos != b.TimeNanos {
 		return false
 	}
+
 	return bytes.Equal(a.ValidatorsHash, b.ValidatorsHash) &&
 		bytes.Equal(a.NextValidatorsHash, b.NextValidatorsHash) &&
 		bytes.Equal(a.AppHash, b.AppHash)

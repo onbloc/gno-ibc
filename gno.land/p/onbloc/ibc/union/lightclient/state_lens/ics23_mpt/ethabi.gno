@@ -12,9 +12,6 @@ var (
 		{Type: abienc.TypeUint32},
 		{Type: abienc.TypeUint32},
 		{Type: abienc.TypeUint64},
-		// Solidity uint16 values are ABI-encoded as 32-byte words. The local
-		// ABI package does not expose TypeUint16, so decode as uint32 and
-		// range-check before narrowing.
 		{Type: abienc.TypeUint32},
 		{Type: abienc.TypeUint32},
 		{Type: abienc.TypeUint32},
@@ -56,10 +53,12 @@ func DecodeClientState(buf []byte) (ClientState, error) {
 	if err != nil {
 		return ClientState{}, err
 	}
+
 	stateRootOffset, err := toUint16(vals[5].(uint32), "state root offset")
 	if err != nil {
 		return ClientState{}, err
 	}
+
 	storageRootOffset, err := toUint16(vals[6].(uint32), "storage root offset")
 	if err != nil {
 		return ClientState{}, err
@@ -69,7 +68,7 @@ func DecodeClientState(buf []byte) (ClientState, error) {
 		L2ChainID:         vals[0].(string),
 		L1ClientID:        vals[1].(uint32),
 		L2ClientID:        vals[2].(uint32),
-		L2LatestHeight:    Height(vals[3].(uint64)),
+		L2LatestHeight:    vals[3].(uint64),
 		TimestampOffset:   timestampOffset,
 		StateRootOffset:   stateRootOffset,
 		StorageRootOffset: storageRootOffset,
@@ -81,10 +80,12 @@ func EncodeConsensusState(cs ConsensusState) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	storageRoot, err := toBytes32(cs.StorageRoot, "storage root")
 	if err != nil {
 		return nil, err
 	}
+
 	return abienc.Encode(consensusStateSchema, []any{
 		cs.Timestamp,
 		stateRoot,
@@ -100,6 +101,7 @@ func DecodeConsensusState(buf []byte) (ConsensusState, error) {
 
 	stateRoot := vals[1].([32]byte)
 	storageRoot := vals[2].([32]byte)
+
 	return ConsensusState{
 		Timestamp:   vals[0].(uint64),
 		StateRoot:   cloneBytes(stateRoot[:]),
@@ -121,9 +123,10 @@ func DecodeHeader(buf []byte) (Header, error) {
 	if err != nil {
 		return Header{}, wrapErr(err)
 	}
+
 	return Header{
-		L1Height:              Height(vals[0].(uint64)),
-		L2Height:              Height(vals[1].(uint64)),
+		L1Height:              vals[0].(uint64),
+		L2Height:              vals[1].(uint64),
 		L2ConsensusStateProof: vals[2].([]byte),
 		L2ConsensusState:      vals[3].([]byte),
 	}, nil
@@ -138,6 +141,7 @@ func toUint16(v uint32, name string) (uint16, error) {
 	if v > 0xFFFF {
 		return 0, errors.New("ics23mpt: " + name + " exceeds uint16")
 	}
+
 	return uint16(v), nil
 }
 
@@ -145,13 +149,16 @@ func toBytes32(b []byte, name string) ([32]byte, error) {
 	if len(b) != 32 {
 		return [32]byte{}, errors.New("ics23mpt: " + name + " must be 32 bytes")
 	}
+
 	var out [32]byte
 	copy(out[:], b)
+
 	return out, nil
 }
 
 func cloneBytes(b []byte) []byte {
 	out := make([]byte, len(b))
 	copy(out, b)
+
 	return out
 }

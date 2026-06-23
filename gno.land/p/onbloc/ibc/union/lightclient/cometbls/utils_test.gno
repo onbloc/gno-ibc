@@ -11,6 +11,9 @@ func TestChainIDToString(t *testing.T) {
 		{"plain", []byte("union-testnet-9"), "union-testnet-9"},
 		{"leading zero padding", []byte{0, 0, 'u', 'n', 'i', 'o', 'n'}, "union"},
 		{"middle zero preserved", []byte{'a', 0, 'b'}, string([]byte{'a', 0, 'b'})},
+		{"max length exactly", repeatBytes('x', maxChainIDLen), string(repeatBytes('x', maxChainIDLen))},
+		{"special chars", []byte("chain-123_abc"), "chain-123_abc"},
+		{"numeric only", []byte("12345"), "12345"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

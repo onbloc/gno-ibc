@@ -173,6 +173,7 @@ func TestEncodeHelperBoundaries(t *testing.T) {
 		n    int
 		want string
 	}{
+		{"zero bytes", 0xab, 0, ""},
 		{"zero one byte", 0, 1, "00"},
 		{"one byte", 0xab, 1, "ab"},
 		{"eight bytes", 0x0102030405060708, 8, "0102030405060708"},

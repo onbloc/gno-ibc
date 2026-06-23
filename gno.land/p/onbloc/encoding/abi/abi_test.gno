@@ -240,75 +240,211 @@ func TestRejectIntegerOverflow(t *testing.T) {
 }
 
 func TestEncodeErrors(t *testing.T) {
-	// wrong Go type for a field
-	if _, err := Encode(Schema{Fields: []Field{{Type: TypeUint8}}}, []any{int(1)}); err != ErrInvalidValue {
-		t.Fatalf("wrong type: got %v want ErrInvalidValue", err)
+	tests := []struct {
+		name   string
+		schema Schema
+		values []any
+		want   error
+	}{
+		{
+			name:   "wrong type",
+			schema: Schema{Fields: []Field{{Type: TypeUint8}}},
+			values: []any{int(1)},
+			want:   ErrInvalidValue,
+		},
+		{
+			name:   "wrong count",
+			schema: Schema{Fields: []Field{{Type: TypeUint8}}},
+			values: []any{},
+			want:   ErrInvalidValue,
+		},
+		{
+			name:   "nil struct sub",
+			schema: Schema{Fields: []Field{{Type: TypeStruct}}},
+			values: []any{[]any{}},
+			want:   ErrInvalidSchema,
+		},
+		{
+			name:   "nil array elem",
+			schema: Schema{Fields: []Field{{Type: TypeArray}}},
+			values: []any{[]any{}},
+			want:   ErrInvalidSchema,
+		},
+		{
+			name:   "nil uint256",
+			schema: Schema{Fields: []Field{{Type: TypeUint256}}},
+			values: []any{(*u256.Uint)(nil)},
+			want:   ErrInvalidValue,
+		},
+		{
+			name:   "short address",
+			schema: Schema{Fields: []Field{{Type: TypeAddress}}},
+			values: []any{[]byte{0x01, 0x02}},
+			want:   ErrInvalidValue,
+		},
+		{
+			name:   "long address",
+			schema: Schema{Fields: []Field{{Type: TypeAddress}}},
+			values: []any{make([]byte, 32)},
+			want:   ErrInvalidValue,
+		},
+		{
+			name:   "wrong address type",
+			schema: Schema{Fields: []Field{{Type: TypeAddress}}},
+			values: []any{"not_a_byte_slice"},
+			want:   ErrInvalidValue,
+		},
+		{
+			name:   "short bytes32",
+			schema: Schema{Fields: []Field{{Type: TypeBytes32}}},
+			values: []any{[]byte{0x01}},
+			want:   ErrInvalidValue,
+		},
+		{
+			name:   "long bytes32",
+			schema: Schema{Fields: []Field{{Type: TypeBytes32}}},
+			values: []any{[64]byte{}},
+			want:   ErrInvalidValue,
+		},
+		{
+			name: "array wrong element type",
+			schema: Schema{
+				Fields: []Field{
+					{
+						Type: TypeArray,
+						Elem: &Field{Type: TypeBytes},
+					},
+				},
+			},
+			values: []any{[]any{"not_bytes"}},
+			want:   ErrInvalidValue,
+		},
+		{
+			name: "array non-slice",
+			schema: Schema{
+				Fields: []Field{
+					{
+						Type: TypeArray,
+						Elem: &Field{Type: TypeUint8},
+					},
+				},
+			},
+			values: []any{"not_a_slice"},
+			want:   ErrInvalidValue,
+		},
+		{
+			name:   "string wrong type",
+			schema: Schema{Fields: []Field{{Type: TypeString}}},
+			values: []any{[]byte{0x01}},
+			want:   ErrInvalidValue,
+		},
+		{
+			name:   "bytes wrong type",
+			schema: Schema{Fields: []Field{{Type: TypeBytes}}},
+			values: []any{"not_bytes"},
+			want:   ErrInvalidValue,
+		},
 	}
 
-	// wrong number of values
-	if _, err := Encode(Schema{Fields: []Field{{Type: TypeUint8}}}, []any{}); err != ErrInvalidValue {
-		t.Fatalf("wrong count: got %v want ErrInvalidValue", err)
-	}
-
-	// TypeStruct with nil Sub
-	if _, err := Encode(Schema{Fields: []Field{{Type: TypeStruct}}}, []any{[]any{}}); err != ErrInvalidSchema {
-		t.Fatalf("nil Sub: got %v want ErrInvalidSchema", err)
-	}
-
-	// TypeArray with nil Elem
-	if _, err := Encode(Schema{Fields: []Field{{Type: TypeArray}}}, []any{[]any{}}); err != ErrInvalidSchema {
-		t.Fatalf("nil Elem: got %v want ErrInvalidSchema", err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := Encode(tt.schema, tt.values)
+			if err != tt.want {
+				t.Fatalf("got %v want %v", err, tt.want)
+			}
+		})
 	}
 }
 
 func TestRejectMalformedData(t *testing.T) {
 	cases := []struct {
-		name   string
-		schema Schema
-		data   []byte
+		name       string
+		schema     Schema
+		data       []byte
+		wantErr    error
+		wantString string
+		wantUint8  uint8
 	}{
 		{
-			name:   "data length is not word aligned",
-			schema: Schema{Fields: []Field{{Type: TypeUint256}}},
-			data:   []byte{1, 2, 3},
+			name:    "data length is not word aligned",
+			schema:  Schema{Fields: []Field{{Type: TypeUint256}}},
+			data:    []byte{1, 2, 3},
+			wantErr: ErrInvalidData,
 		},
 		{
-			name:   "bool value greater than one",
-			schema: Schema{Fields: []Field{{Type: TypeBool}}},
-			data:   mustHex("0000000000000000000000000000000000000000000000000000000000000002"),
+			name:    "bool value greater than one",
+			schema:  Schema{Fields: []Field{{Type: TypeBool}}},
+			data:    mustHex("0000000000000000000000000000000000000000000000000000000000000002"),
+			wantErr: ErrInvalidData,
 		},
 		{
-			name:   "uint64 high padding is non-zero",
-			schema: Schema{Fields: []Field{{Type: TypeUint64}}},
-			data:   mustHex("0000000000000000000000000000000000000000000000010000000000000000"),
+			name:    "bool value greater than one (0xff)",
+			schema:  Schema{Fields: []Field{{Type: TypeBool}}},
+			data:    mustHex("00000000000000000000000000000000000000000000000000000000000000ff"),
+			wantErr: ErrInvalidData,
 		},
 		{
-			name:   "address left padding is non-zero",
-			schema: Schema{Fields: []Field{{Type: TypeAddress}}},
-			data:   mustHex("0000000000000000000000ff0101010101010101010101010101010101010101"),
+			name:    "uint64 high padding is non-zero",
+			schema:  Schema{Fields: []Field{{Type: TypeUint64}}},
+			data:    mustHex("0000000000000000000000000000000000000000000000010000000000000000"),
+			wantErr: ErrInvalidData,
 		},
 		{
-			name:   "empty string",
-			schema: Schema{Fields: []Field{{Type: TypeString}}},
+			name:    "address left padding is non-zero",
+			schema:  Schema{Fields: []Field{{Type: TypeAddress}}},
+			data:    mustHex("0000000000000000000000ff0101010101010101010101010101010101010101"),
+			wantErr: ErrInvalidData,
+		},
+		{
+			name:       "empty string",
+			schema:     Schema{Fields: []Field{{Type: TypeString}}},
+			wantString: "",
 			data: mustHex("0000000000000000000000000000000000000000000000000000000000000020" +
 				"0000000000000000000000000000000000000000000000000000000000000000"),
+		},
+		{
+			name:    "address decode from short data",
+			schema:  Schema{Fields: []Field{{Type: TypeAddress}}},
+			data:    make([]byte, 16),
+			wantErr: ErrInvalidData,
+		},
+		{
+			name:    "bytes32 decode from short data",
+			schema:  Schema{Fields: []Field{{Type: TypeBytes32}}},
+			data:    make([]byte, 16),
+			wantErr: ErrInvalidData,
+		},
+		{
+			name:    "uint8 overflow (256)",
+			schema:  Schema{Fields: []Field{{Type: TypeUint8}}},
+			data:    mustHex("0000000000000000000000000000000000000000000000000000000000000100"),
+			wantErr: ErrInvalidData,
+		},
+		{
+			name:      "uint8 boundary value (255) should succeed",
+			schema:    Schema{Fields: []Field{{Type: TypeUint8}}},
+			data:      mustHex("00000000000000000000000000000000000000000000000000000000000000ff"),
+			wantUint8: 255,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := Decode(tc.schema, tc.data)
-			if tc.name == "empty string" {
-				if err != nil {
-					t.Fatalf("Decode empty string: %v", err)
-				}
-				if got[0].(string) != "" {
-					t.Fatalf("empty string decoded as %q", got[0].(string))
-				}
+			if err != tc.wantErr {
+				t.Fatalf("got %v want %v", err, tc.wantErr)
+			}
+			if tc.wantErr != nil {
 				return
 			}
-			if err != ErrInvalidData {
-				t.Fatalf("got %v want ErrInvalidData", err)
+			if len(got) != 1 {
+				t.Fatalf("decoded values length = %d, want 1", len(got))
+			}
+			if tc.schema.Fields[0].Type == TypeString && got[0].(string) != tc.wantString {
+				t.Fatalf("decoded string = %q, want %q", got[0].(string), tc.wantString)
+			}
+			if tc.schema.Fields[0].Type == TypeUint8 && got[0].(uint8) != tc.wantUint8 {
+				t.Fatalf("decoded uint8 = %d, want %d", got[0].(uint8), tc.wantUint8)
 			}
 		})
 	}
@@ -437,11 +573,24 @@ func TestIsDynamic(t *testing.T) {
 		field Field
 		want  bool
 	}{
+		// Dynamic types
 		{"bytes is dynamic", Field{Type: TypeBytes}, true},
+		{"string is dynamic", Field{Type: TypeString}, true},
 		{"array is dynamic", Field{Type: TypeArray, Elem: &Field{Type: TypeUint8}}, true},
 		{"struct with nil schema is treated dynamic", Field{Type: TypeStruct}, true},
-		{"static nested struct", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeUint32}}}}, false},
 		{"struct with dynamic child", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeString}}}}, true},
+		// Static types
+		{"uint8 is static", Field{Type: TypeUint8}, false},
+		{"uint32 is static", Field{Type: TypeUint32}, false},
+		{"uint64 is static", Field{Type: TypeUint64}, false},
+		{"uint256 is static", Field{Type: TypeUint256}, false},
+		{"bytes32 is static", Field{Type: TypeBytes32}, false},
+		{"bool is static", Field{Type: TypeBool}, false},
+		{"address is static", Field{Type: TypeAddress}, false},
+		{"static nested struct", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeUint32}}}}, false},
+		{"deep static struct remains static", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{
+			{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}}}}}}},
+		}}}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -461,8 +610,23 @@ func TestStaticHeadSize(t *testing.T) {
 	}{
 		{"single static field", Field{Type: TypeUint8}, wordSize, nil},
 		{"dynamic field head size", Field{Type: TypeBytes}, wordSize, nil},
+		{"dynamic array head size", Field{Type: TypeArray, Elem: &Field{Type: TypeUint8}}, wordSize, nil},
+		{"dynamic string head size", Field{Type: TypeString}, wordSize, nil},
 		{"nested static struct", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint32}, {Type: TypeBool}}}}}}}, wordSize * 3, nil},
-		{"nil struct schema", Field{Type: TypeStruct, Sub: nil}, wordSize, nil},
+		{"struct with dynamic child returns head size", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeString}}}}, wordSize, nil},
+		{"deeply nested static struct", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{
+			{Type: TypeStruct, Sub: &Schema{Fields: []Field{
+				{Type: TypeStruct, Sub: &Schema{Fields: []Field{
+					{Type: TypeUint8},
+					{Type: TypeUint32},
+				}}},
+			}}},
+		}}}, wordSize * 2, nil},
+		{"nil struct schema", Field{Type: TypeStruct, Sub: nil}, 0, ErrInvalidSchema},
+		{"nested struct with nil schema in child", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{
+			{Type: TypeUint8},
+			{Type: TypeStruct, Sub: nil},
+		}}}, 0, ErrInvalidSchema},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

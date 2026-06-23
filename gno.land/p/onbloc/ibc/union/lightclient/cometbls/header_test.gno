@@ -53,19 +53,57 @@ func TestEncodeHeader(t *testing.T) {
 		bytesEq(t, "EncodeHeader/basic", got, want)
 	})
 
-	t.Run("nil_header", func(t *testing.T) {
-		if _, err := EncodeHeader(nil); err == nil {
-			t.Fatal("expected error for nil header")
-		}
-	})
+	rejectCases := []struct {
+		name    string
+		header  *Header
+		wantErr string
+	}{
+		{"nil header", nil, "nil header"},
+		{
+			name: "nil signed header",
+			header: &Header{
+				SignedHeader:       nil,
+				TrustedHeight:      heightPtr(types.NewHeight(1)),
+				ZeroKnowledgeProof: []byte{0x01},
+			},
+			wantErr: "nil header",
+		},
+		{
+			name: "short validators hash",
+			header: cloneTestHeaderWith(func(h *Header) {
+				h.SignedHeader.ValidatorsHash = []byte{0x01}
+			}),
+			wantErr: "validators hash must be 32 bytes",
+		},
+		{
+			name: "short next validators hash",
+			header: cloneTestHeaderWith(func(h *Header) {
+				h.SignedHeader.NextValidatorsHash = []byte{0x01}
+			}),
+			wantErr: "next validators hash must be 32 bytes",
+		},
+		{
+			name: "short app hash",
+			header: cloneTestHeaderWith(func(h *Header) {
+				h.SignedHeader.AppHash = []byte{0x01}
+			}),
+			wantErr: "app hash must be 32 bytes",
+		},
+		{
+			name: "long validators hash",
+			header: cloneTestHeaderWith(func(h *Header) {
+				h.SignedHeader.ValidatorsHash = repeatBytes(0x01, 33)
+			}),
+			wantErr: "validators hash must be 32 bytes",
+		},
+	}
 
-	t.Run("short_hash_rejected", func(t *testing.T) {
-		h := newTestHeader(1, 100, 0, 0, repeat32(0xFF))
-		h.SignedHeader.ValidatorsHash = []byte{0x01} // not 32 bytes
-		if _, err := EncodeHeader(h); err == nil {
-			t.Fatal("expected error for non-32-byte validators hash")
-		}
-	})
+	for _, tc := range rejectCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := EncodeHeader(tc.header)
+			requireErrorContains(t, err, tc.wantErr)
+		})
+	}
 }
 
 func TestDecodeHeader(t *testing.T) {
@@ -107,36 +145,82 @@ func TestDecodeHeader(t *testing.T) {
 		bytesEq(t, "ZKP", got.ZeroKnowledgeProof, zkp)
 	})
 
-	t.Run("too_short", func(t *testing.T) {
-		_, err := DecodeHeader(make([]byte, 255))
-		if err == nil {
-			t.Fatal("expected error for short buffer")
-		}
-	})
-
-	t.Run("timenanos_out_of_range", func(t *testing.T) {
-		zkpPadded := make([]byte, 32)
-		buf := mustHex(
-			word32(1) +
-				word32(1000) +
-				word32(1_000_000_000) +
-				bytes32hex(0x01) +
-				bytes32hex(0x02) +
-				bytes32hex(0x03) +
-				word32(0) +
-				word32(256) +
-				word32(uint64(len(zkpPadded))) +
-				hex.EncodeToString(zkpPadded),
-		)
-		_, err := DecodeHeader(buf)
-		if err == nil {
-			t.Fatal("expected error for TimeNanos >= 1e9")
-		}
-		want := "cometbls: TimeNanos out of range"
-		if err.Error() != want {
-			t.Fatalf("error: got %q want %q", err.Error(), want)
-		}
-	})
+	zkpPadded := make([]byte, 32)
+	errCases := []struct {
+		name    string
+		data    []byte
+		wantErr string
+	}{
+		{"too short", make([]byte, 255), "abi: invalid data"},
+		{
+			name: "timenanos out of range",
+			data: mustHex(
+				word32(1) +
+					word32(1000) +
+					word32(1_000_000_000) +
+					bytes32hex(0x01) +
+					bytes32hex(0x02) +
+					bytes32hex(0x03) +
+					word32(0) +
+					word32(256) +
+					word32(uint64(len(zkpPadded))) +
+					hex.EncodeToString(zkpPadded),
+			),
+			wantErr: "TimeNanos out of range",
+		},
+		{
+			name: "zkp offset unaligned",
+			data: mustHex(
+				word32(1) +
+					word32(1000) +
+					word32(0) +
+					bytes32hex(0x01) +
+					bytes32hex(0x02) +
+					bytes32hex(0x03) +
+					word32(0) +
+					word32(257) +
+					word32(0),
+			),
+			wantErr: "abi: invalid data",
+		},
+		{
+			name: "zkp offset out of range",
+			data: mustHex(
+				word32(1) +
+					word32(1000) +
+					word32(0) +
+					bytes32hex(0x01) +
+					bytes32hex(0x02) +
+					bytes32hex(0x03) +
+					word32(0) +
+					word32(512) +
+					word32(0),
+			),
+			wantErr: "abi: invalid data",
+		},
+		{
+			name: "zkp length exceeds tail",
+			data: mustHex(
+				word32(1) +
+					word32(1000) +
+					word32(0) +
+					bytes32hex(0x01) +
+					bytes32hex(0x02) +
+					bytes32hex(0x03) +
+					word32(0) +
+					word32(256) +
+					word32(64) +
+					hex.EncodeToString(zkpPadded),
+			),
+			wantErr: "abi: invalid data",
+		},
+	}
+	for _, tc := range errCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := DecodeHeader(tc.data)
+			requireErrorContains(t, err, tc.wantErr)
+		})
+	}
 }
 
 // TestDecodeHeaderUnionFixture decodes a real ABI-encoded Header produced by
@@ -193,43 +277,45 @@ func TestDecodeHeaderUnionFixture(t *testing.T) {
 }
 
 func TestEncodeDecodeHeaderRoundTrip(t *testing.T) {
-	th := types.NewHeight(3405691581)
-	original := &Header{
-		SignedHeader: &LightHeader{
-			Height:             3405691582,
-			TimeSeconds:        1732205251,
-			TimeNanos:          998131342,
-			ValidatorsHash:     repeat32(0xDE),
-			NextValidatorsHash: repeat32(0xAD),
-			AppHash:            repeat32(0xBE),
-		},
-		TrustedHeight:      &th,
-		ZeroKnowledgeProof: repeatBytes(0xEF, 384),
-	}
-	enc, err := EncodeHeader(original)
-	if err != nil {
-		t.Fatalf("EncodeHeader: %v", err)
-	}
-	got, err := DecodeHeader(enc)
-	if err != nil {
-		t.Fatalf("DecodeHeader: %v", err)
-	}
-	if got.SignedHeader.Height != original.SignedHeader.Height {
-		t.Fatalf("Height: got %d want %d", got.SignedHeader.Height, original.SignedHeader.Height)
-	}
-	if got.SignedHeader.TimeSeconds != original.SignedHeader.TimeSeconds {
-		t.Fatalf("TimeSeconds: got %d want %d", got.SignedHeader.TimeSeconds, original.SignedHeader.TimeSeconds)
-	}
-	if got.SignedHeader.TimeNanos != original.SignedHeader.TimeNanos {
-		t.Fatalf("TimeNanos: got %d want %d", got.SignedHeader.TimeNanos, original.SignedHeader.TimeNanos)
-	}
-	bytesEq(t, "ValidatorsHash", got.SignedHeader.ValidatorsHash, original.SignedHeader.ValidatorsHash)
-	bytesEq(t, "NextValidatorsHash", got.SignedHeader.NextValidatorsHash, original.SignedHeader.NextValidatorsHash)
-	bytesEq(t, "AppHash", got.SignedHeader.AppHash, original.SignedHeader.AppHash)
-	if got.TrustedHeight.RevisionHeight != original.TrustedHeight.RevisionHeight {
-		t.Fatalf("TrustedHeight: got %d want %d", got.TrustedHeight.RevisionHeight, original.TrustedHeight.RevisionHeight)
-	}
-	bytesEq(t, "ZKP", got.ZeroKnowledgeProof, original.ZeroKnowledgeProof)
+	t.Run("successful roundtrip", func(t *testing.T) {
+		th := types.NewHeight(3405691581)
+		original := &Header{
+			SignedHeader: &LightHeader{
+				Height:             3405691582,
+				TimeSeconds:        1732205251,
+				TimeNanos:          998131342,
+				ValidatorsHash:     repeat32(0xDE),
+				NextValidatorsHash: repeat32(0xAD),
+				AppHash:            repeat32(0xBE),
+			},
+			TrustedHeight:      &th,
+			ZeroKnowledgeProof: repeatBytes(0xEF, 384),
+		}
+		enc, err := EncodeHeader(original)
+		if err != nil {
+			t.Fatalf("EncodeHeader: %v", err)
+		}
+		got, err := DecodeHeader(enc)
+		if err != nil {
+			t.Fatalf("DecodeHeader: %v", err)
+		}
+		if got.SignedHeader.Height != original.SignedHeader.Height {
+			t.Fatalf("Height: got %d want %d", got.SignedHeader.Height, original.SignedHeader.Height)
+		}
+		if got.SignedHeader.TimeSeconds != original.SignedHeader.TimeSeconds {
+			t.Fatalf("TimeSeconds: got %d want %d", got.SignedHeader.TimeSeconds, original.SignedHeader.TimeSeconds)
+		}
+		if got.SignedHeader.TimeNanos != original.SignedHeader.TimeNanos {
+			t.Fatalf("TimeNanos: got %d want %d", got.SignedHeader.TimeNanos, original.SignedHeader.TimeNanos)
+		}
+		bytesEq(t, "ValidatorsHash", got.SignedHeader.ValidatorsHash, original.SignedHeader.ValidatorsHash)
+		bytesEq(t, "NextValidatorsHash", got.SignedHeader.NextValidatorsHash, original.SignedHeader.NextValidatorsHash)
+		bytesEq(t, "AppHash", got.SignedHeader.AppHash, original.SignedHeader.AppHash)
+		if got.TrustedHeight.RevisionHeight != original.TrustedHeight.RevisionHeight {
+			t.Fatalf("TrustedHeight: got %d want %d", got.TrustedHeight.RevisionHeight, original.TrustedHeight.RevisionHeight)
+		}
+		bytesEq(t, "ZKP", got.ZeroKnowledgeProof, original.ZeroKnowledgeProof)
+	})
 }
 
 func TestHeaderValidateBasic(t *testing.T) {
@@ -321,18 +407,35 @@ func TestHeaderConsensusState(t *testing.T) {
 }
 
 func TestHeaderGetTimeUsesSecondsAndNanosUTC(t *testing.T) {
-	h := newTestHeader(42, 1704067200, 123456789, 10, []byte{0xAA})
-
-	got := h.GetTime()
-
-	if got.Unix() != 1704067200 {
-		t.Fatalf("Unix seconds: got %d want 1704067200", got.Unix())
+	cases := []struct {
+		name      string
+		seconds   int64
+		nanos     int32
+		wantUnix  int64
+		wantNanos int
+	}{
+		{"valid timestamp", 1704067200, 123456789, 1704067200, 123456789},
+		{"nanos at boundary", 1704067200, 999999999, 1704067200, 999999999},
+		{"zero timestamp", 0, 0, 0, 0},
+		{"negative seconds", -86400, 0, -86400, 0},
 	}
-	if got.Nanosecond() != 123456789 {
-		t.Fatalf("nanoseconds: got %d want 123456789", got.Nanosecond())
-	}
-	if got.Location() != time.UTC {
-		t.Fatalf("location: got %s want UTC", got.Location())
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newTestHeader(42, tc.seconds, tc.nanos, 10, []byte{0xAA})
+
+			got := h.GetTime()
+
+			if got.Unix() != tc.wantUnix {
+				t.Fatalf("Unix seconds: got %d want %d", got.Unix(), tc.wantUnix)
+			}
+			if got.Nanosecond() != tc.wantNanos {
+				t.Fatalf("nanoseconds: got %d want %d", got.Nanosecond(), tc.wantNanos)
+			}
+			if got.Location() != time.UTC {
+				t.Fatalf("location: got %s want UTC", got.Location())
+			}
+		})
 	}
 }
 
@@ -349,6 +452,12 @@ func TestVerifyHeaderWrapperRejectsMalformedHeader(t *testing.T) {
 
 func heightPtr(height types.Height) *types.Height {
 	return &height
+}
+
+func cloneTestHeaderWith(malleate func(*Header)) *Header {
+	h := newTestHeader(1, 100, 0, 0, repeat32(0xFF))
+	malleate(h)
+	return h
 }
 
 func updateStateTestHeader(trustedHeight, signedHeight uint64, timestamp uint64) *Header {

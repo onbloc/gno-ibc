@@ -14,10 +14,10 @@ var (
 )
 
 // ExtractConsensusState parses the L2 consensus state bytes into a
-// ConsensusState using the byte offsets recorded in the client state. The
+// ConsensusState using the byte offsets recorded in this client state. The
 // state-lens client trusts the counterparty's opaque L2 consensus blob and
 // reads timestamp / state root / storage root from fixed offsets.
-func ExtractConsensusState(data []byte, cs ClientState) (ConsensusState, error) {
+func (cs ClientState) ExtractConsensusState(data []byte) (ConsensusState, error) {
 	timestamp, err := extractUint64(data, int(cs.TimestampOffset))
 	if err != nil {
 		return ConsensusState{}, err

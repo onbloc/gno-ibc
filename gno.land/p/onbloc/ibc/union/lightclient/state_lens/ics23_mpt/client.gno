@@ -171,7 +171,7 @@ func (c *StateLensIcs23MptLightClient) VerifyHeader(caller address, headerBytes 
 		return types.StateUpdate{}, ufmt.Errorf("ics23mpt: l1 consensus state membership verification failed: %v", err)
 	}
 
-	consensusState, err := ExtractConsensusState(header.L2ConsensusState, *c.clientState)
+	consensusState, err := c.clientState.ExtractConsensusState(header.L2ConsensusState)
 	if err != nil {
 		return types.StateUpdate{}, err
 	}

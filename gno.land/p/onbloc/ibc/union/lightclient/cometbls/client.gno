@@ -45,7 +45,7 @@ func (c *CometblsLightClient) VerifyMembership(height uint64, key []byte, proof 
 		return err
 	}
 
-	return c.verifyChainedMembershipProof(consensusState.Root.Hash, storageProof, merklePath, value, 0)
+	return c.verifyChainedMembershipProof(consensusState.GetRoot().Hash, storageProof, merklePath, value, 0)
 }
 
 // Union reference:
@@ -76,7 +76,7 @@ func (c *CometblsLightClient) VerifyNonMembership(height uint64, key []byte, pro
 
 	// Verify the chained membership proof starting from index 1 with value =
 	// subroot.
-	return c.verifyChainedMembershipProof(consensusState.Root.Hash, storageProof, merklePath, subroot, 1)
+	return c.verifyChainedMembershipProof(consensusState.GetRoot().Hash, storageProof, merklePath, subroot, 1)
 }
 
 // prepareProof performs the validation shared by VerifyMembership and

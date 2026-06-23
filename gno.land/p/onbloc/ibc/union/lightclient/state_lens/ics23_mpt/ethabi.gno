@@ -49,7 +49,7 @@ func EncodeClientState(cs ClientState) ([]byte, error) {
 func DecodeClientState(buf []byte) (ClientState, error) {
 	vals, err := abienc.Decode(clientStateSchema, buf)
 	if err != nil {
-		return ClientState{}, errors.New("ics23mpt: " + err.Error())
+		return ClientState{}, wrapErr(err)
 	}
 
 	timestampOffset, err := toUint16(vals[4].(uint32), "timestamp offset")
@@ -95,7 +95,7 @@ func EncodeConsensusState(cs ConsensusState) ([]byte, error) {
 func DecodeConsensusState(buf []byte) (ConsensusState, error) {
 	vals, err := abienc.Decode(consensusStateSchema, buf)
 	if err != nil {
-		return ConsensusState{}, errors.New("ics23mpt: " + err.Error())
+		return ConsensusState{}, wrapErr(err)
 	}
 
 	stateRoot := vals[1].([32]byte)
@@ -119,7 +119,7 @@ func EncodeHeader(h Header) ([]byte, error) {
 func DecodeHeader(buf []byte) (Header, error) {
 	vals, err := abienc.Decode(headerSchema, buf)
 	if err != nil {
-		return Header{}, errors.New("ics23mpt: " + err.Error())
+		return Header{}, wrapErr(err)
 	}
 	return Header{
 		L1Height:              Height(vals[0].(uint64)),
@@ -127,6 +127,11 @@ func DecodeHeader(buf []byte) (Header, error) {
 		L2ConsensusStateProof: vals[2].([]byte),
 		L2ConsensusState:      vals[3].([]byte),
 	}, nil
+}
+
+// wrapErr prefixes a wrapped decode error with the package domain.
+func wrapErr(err error) error {
+	return errors.New("ics23mpt: " + err.Error())
 }
 
 func toUint16(v uint32, name string) (uint16, error) {

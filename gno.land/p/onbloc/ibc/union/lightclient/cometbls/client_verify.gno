@@ -40,7 +40,7 @@ func (c *CometblsLightClient) verifyHeader(clientState *ClientState, trustedCons
 		)
 	}
 
-	trustedTimestamp := trustedConsensusState.Timestamp
+	trustedTimestamp := trustedConsensusState.GetTimestamp()
 	// Normalize to nanoseconds to follow tendermint convention
 	untrustedTimestamp := uint64(header.GetTime().UnixNano())
 
@@ -73,7 +73,7 @@ func (c *CometblsLightClient) verifyHeader(clientState *ClientState, trustedCons
 		)
 	}
 
-	trustedValidatorsHash := trustedConsensusState.NextValidatorsHash
+	trustedValidatorsHash := trustedConsensusState.GetNextValidatorsHash()
 	// For an adjacent block, the header validators hash must match the trusted
 	// next validators hash.
 	if untrustedHeightNumber == int64(trustedHeightNumber)+1 &&
@@ -141,15 +141,23 @@ func (c *CometblsLightClient) verifyMisbehaviour(misbehaviour *Misbehaviour, now
 		return err
 	}
 
-	if headerA.SignedHeader.Height == headerB.SignedHeader.Height {
-		if signedHeadersEqual(headerA.SignedHeader, headerB.SignedHeader) {
-			return nil
-		}
-	} else if headerA.GetTime().UnixNano() <= headerB.GetTime().UnixNano() {
-		return nil
+	if !isMisbehaviourPair(headerA, headerB) {
+		return makeError(ErrMisbehaviourNotFound)
 	}
 
-	return makeError(ErrMisbehaviourNotFound)
+	return nil
+}
+
+// isMisbehaviourPair reports whether two independently-valid headers constitute
+// accepted misbehaviour, mirroring Union's conditions: at the same height the
+// signed headers must be identical; at different heights the earlier-listed
+// header must not be strictly newer than the later one.
+func isMisbehaviourPair(headerA, headerB *Header) bool {
+	if headerA.SignedHeader.Height == headerB.SignedHeader.Height {
+		return signedHeadersEqual(headerA.SignedHeader, headerB.SignedHeader)
+	}
+
+	return headerA.GetTime().UnixNano() <= headerB.GetTime().UnixNano()
 }
 
 func (c *CometblsLightClient) verifyMisbehaviourHeader(label string, header *Header, now time.Time) error {
@@ -208,33 +216,15 @@ func (c *CometblsLightClient) verifyChainedMembershipProof(
 	// In this case, there may be no intermediate proofs to verify and we just
 	// check that lowest proof root equals final root
 	for i := index; i < len(proofs); i++ {
-		// verify membership of the proof at this index with appropriate key and value
-		exist := proofs[i].GetExist()
-		if exist == nil {
-			return makeError(
-				ErrInvalidProof,
-				"commitment proof must be existence proof foar verifying membership",
-			)
-		}
-
-		subroot, err = exist.Calculate()
-		if err != nil {
-			return makeError(
-				ErrInvalidProof,
-				ufmt.Sprintf("could not calculate proof root at index %d, merkle tree may be empty. %v", i, err),
-			)
-		}
-
 		// Since keys are passed in from highest to lowest, we must grab their
 		// indices in reverse order from the proofs and specs which are lowest to
 		// highest
 		key := keys.KeyPath[len(keys.KeyPath)-1-i]
 
-		if err := exist.Verify(specs[i], subroot, key, value); err != nil {
-			return makeError(
-				ErrInvalidProof,
-				ufmt.Sprintf("failed to verify membership proof at index %d: %v", i, err),
-			)
+		// verify membership of the proof at this index with appropriate key and value
+		subroot, err = c.verifyMembershipProofAt(proofs[i], specs[i], key, value, i)
+		if err != nil {
+			return err
 		}
 
 		// Set value to subroot so that we verify next proof in chain commits to
@@ -253,4 +243,33 @@ func (c *CometblsLightClient) verifyChainedMembershipProof(
 	}
 
 	return nil
+}
+
+// verifyMembershipProofAt verifies the existence proof at a single chain index
+// and returns its calculated subroot. index is used only for error context.
+func (c *CometblsLightClient) verifyMembershipProofAt(proof ics23.CommitmentProof, spec *ics23.ProofSpec, key, value []byte, index int) ([]byte, error) {
+	exist := proof.GetExist()
+	if exist == nil {
+		return nil, makeError(
+			ErrInvalidProof,
+			"commitment proof must be existence proof foar verifying membership",
+		)
+	}
+
+	subroot, err := exist.Calculate()
+	if err != nil {
+		return nil, makeError(
+			ErrInvalidProof,
+			ufmt.Sprintf("could not calculate proof root at index %d, merkle tree may be empty. %v", index, err),
+		)
+	}
+
+	if err := exist.Verify(spec, subroot, key, value); err != nil {
+		return nil, makeError(
+			ErrInvalidProof,
+			ufmt.Sprintf("failed to verify membership proof at index %d: %v", index, err),
+		)
+	}
+
+	return subroot, nil
 }

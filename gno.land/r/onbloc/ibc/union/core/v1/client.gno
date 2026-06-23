@@ -122,13 +122,9 @@ func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateCli
 		panic("client " + msg.ClientId.String() + " not found")
 	}
 
-	clientType, ok := c.store.ClientType(msg.ClientId)
+	clientImpl, ok := c.store.GetClientImpl(msg.ClientId)
 	if !ok {
 		panic("client " + msg.ClientId.String() + " not found")
-	}
-	clientImpl, ok := c.store.ClientRegistry(clientType)
-	if !ok {
-		panic("client type not found")
 	}
 	next, err := clientImpl(msg.ClientStateBytes, msg.ConsensusStateBytes)
 	if err != nil {

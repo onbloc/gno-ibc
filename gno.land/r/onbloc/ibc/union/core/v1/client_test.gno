@@ -11,8 +11,8 @@ import (
 const testClientType = types.ClientType("cometbls")
 const testLensClientType = types.ClientType("state-lens/ics23/mpt")
 
-// createClient registers lc's client implementation for testClientType and creates a
-// client from the given state bytes, returning the assigned id.
+// createClient registers the mock light client's factory for testClientType, then
+// creates a client from the given state bytes, returning the assigned id.
 func createClient(cur realm, v *coreV1, lc *mockLightClient, clientState, consensusState []byte) types.ClientId {
 	v.RegisterClient(0, cur, testClientType, lc.ClientImpl)
 	v.CreateClient(0, cur, types.NewMsgCreateClient(testClientType, clientState, consensusState))
@@ -91,7 +91,6 @@ func TestCreateClientRefreshesL1ClientReference(cur realm, t *testing.T) {
 		l1ClientId:     l1Id,
 	}
 	v.RegisterClient(0, cur, testLensClientType, lensImpl.ClientImpl)
-
 	v.CreateClient(0, cur, types.NewMsgCreateClient(testLensClientType, []byte("client"), []byte("consensus")))
 
 	uassert.Equal(t, 1, lensImpl.implCalls)
@@ -217,7 +216,7 @@ func TestForceUpdateClientRefreshesL1ClientReference(cur realm, t *testing.T) {
 		nextL1ClientId: newL1Id,
 		l1Client:       oldL1,
 	}
-	store.registry[testLensClientType.String()] = lens.ClientImpl
+	store.RegisterClient(0, cur, testLensClientType, lens.ClientImpl)
 	lensId := store.AddClient(0, cur, testLensClientType, creator, lens)
 
 	v.ForceUpdateClient(0, cur, types.NewMsgForceUpdateClient(lensId, []byte("new-client"), []byte("new-consensus")))

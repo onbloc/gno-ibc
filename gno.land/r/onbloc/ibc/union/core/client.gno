@@ -21,9 +21,8 @@ func HasClient(clientType types.ClientType) bool {
 	return mustGetImpl().HasClient(clientType)
 }
 
-// CreateClient assigns a client id for a registered light client type, stores
-// the submitted state bytes, then lets the light client verify creation against
-// that freshly stored state.
+// CreateClient assigns a client id, stores the submitted state bytes, then lets
+// the light client verify creation against that freshly stored state.
 //
 // Union references:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L867-L903

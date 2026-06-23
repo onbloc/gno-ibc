@@ -21,8 +21,8 @@ import (
 // remaining methods are present on ICore and stubbed in the impl until migrated.
 type ICore interface {
 	// --- Client ---
-	RegisterClient(_ int, rlm realm, clientType types.ClientType, clientImpl lightclient.ClientImpl)
-	HasClient(clientType types.ClientType) bool
+	RegisterClient(_ int, rlm realm, typ types.ClientType, impl lightclient.ClientImpl)
+	HasClient(typ types.ClientType) bool
 	CreateClient(_ int, rlm realm, msg types.MsgCreateClient)
 	UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient)
 	ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateClient)
@@ -102,10 +102,11 @@ type ICoreGetter interface {
 // connection/channel/packet/app operations are added as those subsystems migrate.
 type IStore interface {
 	// --- Client ---
-	RegisterClient(_ int, rlm realm, typ types.ClientType, clientImpl lightclient.ClientImpl)
+	RegisterClient(_ int, rlm realm, typ types.ClientType, impl lightclient.ClientImpl)
 	ClientRegistry(typ types.ClientType) (lightclient.ClientImpl, bool)
 	HasRegisteredClient(typ types.ClientType) bool
 	AddClient(_ int, rlm realm, typ types.ClientType, creator address, lc lightclient.Interface) types.ClientId
+	GetClientImpl(clientId types.ClientId) (lightclient.ClientImpl, bool)
 	ClientExists(clientId types.ClientId) bool
 	ClientType(clientId types.ClientId) (types.ClientType, bool)
 	GetLightClient(clientId types.ClientId) (lightclient.Interface, bool)

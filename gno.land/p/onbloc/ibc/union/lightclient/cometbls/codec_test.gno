@@ -7,83 +7,109 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-func TestClientStateCodecRoundTrip(t *testing.T) {
-	cs := &ClientState{
-		ChainID:         "union-devnet-1",
-		TrustingPeriod:  100,
-		UnbondingPeriod: 200,
-		MaxClockDrift:   30,
-		FrozenHeight:    types.NewHeight(0),
-		LatestHeight:    types.NewHeight(42),
-		ContractAddress: H256(repeat32Arr(0xAB)),
+func TestCodecRoundTrip(t *testing.T) {
+	cases := []struct {
+		name   string
+		encode func(any) ([]byte, error)
+		decode func([]byte) (any, error)
+		input  any
+		assert func(*testing.T, any, any)
+	}{
+		{
+			name:   "client state",
+			encode: func(v any) ([]byte, error) { return EncodeClientState(v.(*ClientState)) },
+			decode: func(bz []byte) (any, error) { return DecodeClientState(bz) },
+			input: &ClientState{
+				ChainID:         "union-devnet-1",
+				TrustingPeriod:  100,
+				UnbondingPeriod: 200,
+				MaxClockDrift:   30,
+				FrozenHeight:    types.NewHeight(0),
+				LatestHeight:    types.NewHeight(42),
+				ContractAddress: H256(repeat32Arr(0xAB)),
+			},
+			assert: func(t *testing.T, got, want any) {
+				g := got.(*ClientState)
+				w := want.(*ClientState)
+				if g.ChainID != w.ChainID ||
+					g.TrustingPeriod != w.TrustingPeriod ||
+					g.UnbondingPeriod != w.UnbondingPeriod ||
+					g.MaxClockDrift != w.MaxClockDrift ||
+					!g.FrozenHeight.EQ(w.FrozenHeight) ||
+					!g.LatestHeight.EQ(w.LatestHeight) ||
+					g.ContractAddress != w.ContractAddress {
+					t.Fatalf("client state round-trip mismatch: got %#v want %#v", g, w)
+				}
+			},
+		},
+		{
+			name:   "consensus state",
+			encode: func(v any) ([]byte, error) { return EncodeConsensusState(v.(*ConsensusState)) },
+			decode: func(bz []byte) (any, error) { return DecodeConsensusState(bz) },
+			input: &ConsensusState{
+				Timestamp:          1234567890,
+				Root:               MerkleRoot{Hash: repeat32(0xCD)},
+				NextValidatorsHash: repeat32(0xEF),
+			},
+			assert: func(t *testing.T, got, want any) {
+				g := got.(*ConsensusState)
+				w := want.(*ConsensusState)
+				if g.Timestamp != w.Timestamp ||
+					!bytes.Equal(g.Root.Hash, w.Root.Hash) ||
+					!bytes.Equal(g.NextValidatorsHash, w.NextValidatorsHash) {
+					t.Fatalf("consensus state round-trip mismatch: got %#v want %#v", g, w)
+				}
+			},
+		},
 	}
 
-	bz, err := EncodeClientState(cs)
-	if err != nil {
-		t.Fatalf("EncodeClientState: %v", err)
-	}
-	got, err := DecodeClientState(bz)
-	if err != nil {
-		t.Fatalf("DecodeClientState: %v", err)
-	}
-	if got.ChainID != cs.ChainID ||
-		got.TrustingPeriod != cs.TrustingPeriod ||
-		got.UnbondingPeriod != cs.UnbondingPeriod ||
-		got.MaxClockDrift != cs.MaxClockDrift ||
-		!got.FrozenHeight.EQ(cs.FrozenHeight) ||
-		!got.LatestHeight.EQ(cs.LatestHeight) ||
-		got.ContractAddress != cs.ContractAddress {
-		t.Fatalf("client state round-trip mismatch: got %#v want %#v", got, cs)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			bz, err := tc.encode(tc.input)
+			if err != nil {
+				t.Fatalf("encode: %v", err)
+			}
+			got, err := tc.decode(bz)
+			if err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			tc.assert(t, got, tc.input)
+		})
 	}
 }
 
-func TestConsensusStateCodecRoundTrip(t *testing.T) {
-	cs := &ConsensusState{
-		Timestamp:          1234567890,
-		Root:               MerkleRoot{Hash: repeat32(0xCD)},
-		NextValidatorsHash: repeat32(0xEF),
+func TestEncodeNil(t *testing.T) {
+	cases := []struct {
+		name      string
+		encode    func() ([]byte, error)
+		wantErr   string
+	}{
+		{
+			name: "client state",
+			encode: func() ([]byte, error) {
+				return EncodeClientState(nil)
+			},
+			wantErr: "nil client state",
+		},
+		{
+			name: "consensus state",
+			encode: func() ([]byte, error) {
+				return EncodeConsensusState(nil)
+			},
+			wantErr: "nil consensus state",
+		},
 	}
 
-	bz, err := EncodeConsensusState(cs)
-	if err != nil {
-		t.Fatalf("EncodeConsensusState: %v", err)
-	}
-	got, err := DecodeConsensusState(bz)
-	if err != nil {
-		t.Fatalf("DecodeConsensusState: %v", err)
-	}
-	if got.Timestamp != cs.Timestamp ||
-		!bytes.Equal(got.Root.Hash, cs.Root.Hash) ||
-		!bytes.Equal(got.NextValidatorsHash, cs.NextValidatorsHash) {
-		t.Fatalf("consensus state round-trip mismatch: got %#v want %#v", got, cs)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.encode()
+			if err == nil || !contains(err.Error(), tc.wantErr) {
+				t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
+			}
+		})
 	}
 }
 
-func repeat32Arr(b byte) [32]byte {
-	var out [32]byte
-	for i := range out {
-		out[i] = b
-	}
-	return out
-}
-
-// TestEncodeClientStateNil covers the nil input branch.
-func TestEncodeClientStateNil(t *testing.T) {
-	_, err := EncodeClientState(nil)
-	if err == nil || !contains(err.Error(), "nil client state") {
-		t.Fatalf("expected error containing 'nil client state', got %v", err)
-	}
-}
-
-// TestEncodeConsensusStateNil covers the nil input branch.
-func TestEncodeConsensusStateNil(t *testing.T) {
-	_, err := EncodeConsensusState(nil)
-	if err == nil || !contains(err.Error(), "nil consensus state") {
-		t.Fatalf("expected error containing 'nil consensus state', got %v", err)
-	}
-}
-
-// TestDecodeClientStateMalformed covers truncated/invalid ABI input.
 func TestDecodeClientStateMalformed(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -159,8 +185,6 @@ func TestDecodeConsensusStateMalformed(t *testing.T) {
 	}
 }
 
-// TestBytes32Slice verifies that bytes32Slice returns an independent copy
-// and correctly converts a [32]byte to []byte.
 func TestBytes32Slice(t *testing.T) {
 	cases := []struct {
 		name  string
@@ -208,4 +232,12 @@ func TestBytes32Slice(t *testing.T) {
 			}
 		})
 	}
+}
+
+func repeat32Arr(b byte) [32]byte {
+	var out [32]byte
+	for i := range out {
+		out[i] = b
+	}
+	return out
 }

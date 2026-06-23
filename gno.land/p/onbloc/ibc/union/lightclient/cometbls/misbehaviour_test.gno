@@ -242,3 +242,179 @@ func TestVerifyMisbehaviourHeaderMissingTrustedConsensus(t *testing.T) {
 	requireErrorContains(t, err, "could not get trusted consensus state")
 	requireErrorContains(t, err, ErrInvalidMisbehaviour)
 }
+
+func TestNewMisbehaviour(t *testing.T) {
+	cases := []struct {
+		name     string
+		header1  *Header
+		header2  *Header
+		wantH1   *Header
+		wantH2   *Header
+	}{
+		{
+			name:    "valid headers",
+			header1: newTestHeader(100, 2000, 0, 90, []byte{0x01}),
+			header2: newTestHeader(99, 2000, 0, 89, []byte{0x02}),
+			wantH1:  newTestHeader(100, 2000, 0, 90, []byte{0x01}),
+			wantH2:  newTestHeader(99, 2000, 0, 89, []byte{0x02}),
+		},
+		{
+			name:    "both headers nil",
+			header1: nil,
+			header2: nil,
+			wantH1:  nil,
+			wantH2:  nil,
+		},
+		{
+			name:    "header1 nil header2 valid",
+			header1: nil,
+			header2: newTestHeader(99, 2000, 0, 89, []byte{0x02}),
+			wantH1:  nil,
+			wantH2:  newTestHeader(99, 2000, 0, 89, []byte{0x02}),
+		},
+		{
+			name:    "header1 valid header2 nil",
+			header1: newTestHeader(100, 2000, 0, 90, []byte{0x01}),
+			header2: nil,
+			wantH1:  newTestHeader(100, 2000, 0, 90, []byte{0x01}),
+			wantH2:  nil,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NewMisbehaviour(tc.header1, tc.header2)
+			if got == nil {
+				t.Fatal("NewMisbehaviour returned nil")
+			}
+			if got.Header1 != tc.wantH1 {
+				if got.Header1 == nil && tc.wantH1 == nil {
+					return
+				}
+				if got.Header1 == nil || tc.wantH1 == nil {
+					t.Fatalf("Header1: got %v want %v", got.Header1, tc.wantH1)
+				}
+				if got.Header1.SignedHeader.Height != tc.wantH1.SignedHeader.Height {
+					t.Errorf("Header1 height: got %d want %d", got.Header1.SignedHeader.Height, tc.wantH1.SignedHeader.Height)
+				}
+			}
+			if got.Header2 != tc.wantH2 {
+				if got.Header2 == nil && tc.wantH2 == nil {
+					return
+				}
+				if got.Header2 == nil || tc.wantH2 == nil {
+					t.Fatalf("Header2: got %v want %v", got.Header2, tc.wantH2)
+				}
+				if got.Header2.SignedHeader.Height != tc.wantH2.SignedHeader.Height {
+					t.Errorf("Header2 height: got %d want %d", got.Header2.SignedHeader.Height, tc.wantH2.SignedHeader.Height)
+				}
+			}
+		})
+	}
+}
+
+func TestMisbehaviourValidateBasic(t *testing.T) {
+	cases := []struct {
+		name    string
+		mis     *Misbehaviour
+		wantErr string
+	}{
+		{
+			name: "valid misbehaviour with equal heights",
+			mis: &Misbehaviour{
+				Header1: newTestHeader(100, 2000, 0, 90, []byte{0x01}),
+				Header2: newTestHeader(100, 2001, 0, 90, []byte{0x02}),
+			},
+		},
+		{
+			name: "valid misbehaviour with header1 greater height",
+			mis: &Misbehaviour{
+				Header1: newTestHeader(101, 2000, 0, 91, []byte{0x01}),
+				Header2: newTestHeader(100, 2001, 0, 90, []byte{0x02}),
+			},
+		},
+		{
+			name: "header1 nil",
+			mis: &Misbehaviour{
+				Header1: nil,
+				Header2: newTestHeader(100, 2001, 0, 90, []byte{0x02}),
+			},
+			wantErr: ErrInvalidHeader,
+		},
+		{
+			name: "header2 nil",
+			mis: &Misbehaviour{
+				Header1: newTestHeader(100, 2000, 0, 90, []byte{0x01}),
+				Header2: nil,
+			},
+			wantErr: ErrInvalidHeader,
+		},
+		{
+			name: "both headers nil",
+			mis: &Misbehaviour{
+				Header1: nil,
+				Header2: nil,
+			},
+			wantErr: ErrInvalidHeader,
+		},
+		{
+			name: "header1 zero revision height",
+			mis: &Misbehaviour{
+				Header1: newTestHeader(100, 2000, 0, 0, []byte{0x01}),
+				Header2: newTestHeader(100, 2001, 0, 90, []byte{0x02}),
+			},
+			wantErr: ErrInvalidHeaderHeight,
+		},
+		{
+			name: "header2 zero revision height",
+			mis: &Misbehaviour{
+				Header1: newTestHeader(100, 2000, 0, 90, []byte{0x01}),
+				Header2: newTestHeader(100, 2001, 0, 0, []byte{0x02}),
+			},
+			wantErr: ErrInvalidHeaderHeight,
+		},
+		{
+			name: "both headers zero revision height",
+			mis: &Misbehaviour{
+				Header1: newTestHeader(100, 2000, 0, 0, []byte{0x01}),
+				Header2: newTestHeader(100, 2001, 0, 0, []byte{0x02}),
+			},
+			wantErr: ErrInvalidHeaderHeight,
+		},
+		{
+			name: "header1 less than header2 height",
+			mis: &Misbehaviour{
+				Header1: newTestHeader(99, 2000, 0, 89, []byte{0x01}),
+				Header2: newTestHeader(100, 2001, 0, 90, []byte{0x02}),
+			},
+			wantErr: ErrInvalidMisbehaviour,
+		},
+		{
+			name: "header1 height less than header2 with valid revision heights",
+			mis: &Misbehaviour{
+				Header1: newTestHeader(50, 2000, 0, 50, []byte{0x01}),
+				Header2: newTestHeader(100, 2001, 0, 100, []byte{0x02}),
+			},
+			wantErr: ErrInvalidMisbehaviour,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.mis.ValidateBasic()
+			if tc.wantErr != "" {
+				requireErrorContains(t, err, tc.wantErr)
+			} else if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestMisbehaviourClientType(t *testing.T) {
+	m := &Misbehaviour{
+		Header1: newTestHeader(100, 2000, 0, 90, []byte{0x01}),
+		Header2: newTestHeader(99, 2001, 0, 89, []byte{0x02}),
+	}
+	if got := m.ClientType(); got != ClientType {
+		t.Fatalf("ClientType: got %s want %s", got, ClientType)
+	}
+}

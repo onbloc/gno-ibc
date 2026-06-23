@@ -463,17 +463,59 @@ func TestDecodeZkgmPacketErrors(t *testing.T) {
 
 func TestEncodeForward(t *testing.T) {
 	tests := []struct {
-		name string
-		f    Forward
+		name             string
+		f                Forward
+		wantPath         string
+		wantTimeoutHeight uint64
+		wantTimeoutTimestamp uint64
 	}{
 		{
-			"round trip",
-			Forward{
+			name: "zero values",
+			f: Forward{
+				Path:             u256.NewUint(0),
+				TimeoutHeight:    0,
+				TimeoutTimestamp: 0,
+				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte{}},
+			},
+			wantPath:         "0",
+			wantTimeoutHeight: 0,
+			wantTimeoutTimestamp: 0,
+		},
+		{
+			name: "typical values",
+			f: Forward{
 				Path:             u256.NewUint(456),
 				TimeoutHeight:    1000,
 				TimeoutTimestamp: 2000,
 				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_BATCH, Operand: []byte{}},
 			},
+			wantPath:         "456",
+			wantTimeoutHeight: 1000,
+			wantTimeoutTimestamp: 2000,
+		},
+		{
+			name: "large timeouts",
+			f: Forward{
+				Path:             u256.NewUint(99999),
+				TimeoutHeight:    18446744073709551615,
+				TimeoutTimestamp: 18446744073709551615,
+				Instruction:      Instruction{Version: INSTR_VERSION_1, Opcode: OP_TOKEN_ORDER, Operand: []byte{0xab}},
+			},
+			wantPath:         "99999",
+			wantTimeoutHeight: 18446744073709551615,
+			wantTimeoutTimestamp: 18446744073709551615,
+		},
+		{
+			name: "large operand",
+			f: Forward{
+				Path:             u256.NewUint(12345),
+				TimeoutHeight:    5000,
+				TimeoutTimestamp: 10000,
+				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: bytes.Repeat([]byte{0xcc}, 100)},
+			},
+			wantPath:         "12345",
+			wantTimeoutHeight: 5000,
+			wantTimeoutTimestamp: 10000,
 		},
 	}
 
@@ -487,14 +529,14 @@ func TestEncodeForward(t *testing.T) {
 			if err != nil {
 				t.Fatalf("DecodeForward: %v", err)
 			}
-			if decoded.Path.ToString() != "456" {
-				t.Fatalf("path: got %s want 456", decoded.Path.ToString())
+			if decoded.Path.ToString() != tt.wantPath {
+				t.Fatalf("path: got %s want %s", decoded.Path.ToString(), tt.wantPath)
 			}
-			if decoded.TimeoutHeight != 1000 {
-				t.Fatalf("timeout_height: got %d want 1000", decoded.TimeoutHeight)
+			if decoded.TimeoutHeight != tt.wantTimeoutHeight {
+				t.Fatalf("timeout_height: got %d want %d", decoded.TimeoutHeight, tt.wantTimeoutHeight)
 			}
-			if decoded.TimeoutTimestamp != 2000 {
-				t.Fatalf("timeout_timestamp: got %d want 2000", decoded.TimeoutTimestamp)
+			if decoded.TimeoutTimestamp != tt.wantTimeoutTimestamp {
+				t.Fatalf("timeout_timestamp: got %d want %d", decoded.TimeoutTimestamp, tt.wantTimeoutTimestamp)
 			}
 		})
 	}
@@ -521,15 +563,45 @@ func TestDecodeForwardErrors(t *testing.T) {
 
 func TestEncodeBatch(t *testing.T) {
 	tests := []struct {
-		name string
-		b    Batch
+		name             string
+		b                Batch
+		wantInstrCount   int
 	}{
 		{
-			"two call instructions",
-			Batch{Instructions: []Instruction{
+			name: "empty instructions",
+			b:    Batch{Instructions: []Instruction{}},
+			wantInstrCount: 0,
+		},
+		{
+			name: "single instruction",
+			b: Batch{Instructions: []Instruction{
+				{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte("call1")},
+			}},
+			wantInstrCount: 1,
+		},
+		{
+			name: "two call instructions",
+			b: Batch{Instructions: []Instruction{
 				{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte("call1")},
 				{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte("call2")},
 			}},
+			wantInstrCount: 2,
+		},
+		{
+			name: "mixed instruction types",
+			b: Batch{Instructions: []Instruction{
+				{Version: INSTR_VERSION_1, Opcode: OP_TOKEN_ORDER, Operand: []byte{0xab, 0xcd}},
+				{Version: INSTR_VERSION_0, Opcode: OP_BATCH, Operand: []byte{}},
+				{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte("data")},
+			}},
+			wantInstrCount: 3,
+		},
+		{
+			name: "instruction with large operand",
+			b: Batch{Instructions: []Instruction{
+				{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: bytes.Repeat([]byte{0xff}, 200)},
+			}},
+			wantInstrCount: 1,
 		},
 	}
 
@@ -543,14 +615,13 @@ func TestEncodeBatch(t *testing.T) {
 			if err != nil {
 				t.Fatalf("DecodeBatch: %v", err)
 			}
-			if len(decoded.Instructions) != 2 {
-				t.Fatalf("instructions count: got %d want 2", len(decoded.Instructions))
+			if len(decoded.Instructions) != tt.wantInstrCount {
+				t.Fatalf("instructions count: got %d want %d", len(decoded.Instructions), tt.wantInstrCount)
 			}
-			if !bytes.Equal(decoded.Instructions[0].Operand, []byte("call1")) {
-				t.Fatalf("instruction[0] operand mismatch")
-			}
-			if !bytes.Equal(decoded.Instructions[1].Operand, []byte("call2")) {
-				t.Fatalf("instruction[1] operand mismatch")
+			for i := range tt.b.Instructions {
+				if !bytes.Equal(decoded.Instructions[i].Operand, tt.b.Instructions[i].Operand) {
+					t.Fatalf("instruction[%d] operand mismatch", i)
+				}
 			}
 		})
 	}
@@ -581,8 +652,23 @@ func TestEncodeTokenOrderV1(t *testing.T) {
 		o    TokenOrderV1
 	}{
 		{
-			"round trip",
-			TokenOrderV1{
+			name: "minimal values",
+			o: TokenOrderV1{
+				Sender:            mustHex("aa"),
+				Receiver:          mustHex("bb"),
+				BaseToken:         mustHex("00112233445566778899aabbccddeeff"),
+				BaseAmount:        u256.NewUint(1),
+				BaseTokenSymbol:   "T",
+				BaseTokenName:     "T",
+				BaseTokenDecimals: 0,
+				BaseTokenPath:     u256.NewUint(0),
+				QuoteToken:        mustHex("ffeeddccbbaa99887766554433221100"),
+				QuoteAmount:       u256.NewUint(1),
+			},
+		},
+		{
+			name: "typical values",
+			o: TokenOrderV1{
 				Sender:            mustHex("aabbccdd"),
 				Receiver:          mustHex("ddeeffaa"),
 				BaseToken:         mustHex("00112233445566778899aabbccddeeff"),
@@ -593,6 +679,21 @@ func TestEncodeTokenOrderV1(t *testing.T) {
 				BaseTokenPath:     u256.NewUint(1),
 				QuoteToken:        mustHex("00112233445566778899aabbccddeeff"),
 				QuoteAmount:       u256.NewUint(20000),
+			},
+		},
+		{
+			name: "large amounts",
+			o: TokenOrderV1{
+				Sender:            mustHex("deadbeef"),
+				Receiver:          mustHex("cafedead"),
+				BaseToken:         mustHex("11112222333344445555666677778888"),
+				BaseAmount:        u256.NewUint(1000000000000000000),
+				BaseTokenSymbol:   "ABC",
+				BaseTokenName:     "Abc Token",
+				BaseTokenDecimals: 6,
+				BaseTokenPath:     u256.NewUint(999),
+				QuoteToken:        mustHex("88887777666655554444333322221111"),
+				QuoteAmount:       u256.NewUint(5000000000000),
 			},
 		},
 	}
@@ -613,23 +714,23 @@ func TestEncodeTokenOrderV1(t *testing.T) {
 			if !bytes.Equal(decoded.Receiver, tt.o.Receiver) {
 				t.Fatalf("receiver mismatch")
 			}
-			if decoded.BaseAmount.ToString() != "10000" {
-				t.Fatalf("base_amount: got %s want 10000", decoded.BaseAmount.ToString())
+			if decoded.BaseAmount.ToString() != tt.o.BaseAmount.ToString() {
+				t.Fatalf("base_amount: got %s want %s", decoded.BaseAmount.ToString(), tt.o.BaseAmount.ToString())
 			}
-			if decoded.BaseTokenSymbol != "TEST" {
-				t.Fatalf("base_token_symbol: got %s want TEST", decoded.BaseTokenSymbol)
+			if decoded.BaseTokenSymbol != tt.o.BaseTokenSymbol {
+				t.Fatalf("base_token_symbol: got %s want %s", decoded.BaseTokenSymbol, tt.o.BaseTokenSymbol)
 			}
-			if decoded.BaseTokenName != "Test Token" {
-				t.Fatalf("base_token_name: got %s want Test Token", decoded.BaseTokenName)
+			if decoded.BaseTokenName != tt.o.BaseTokenName {
+				t.Fatalf("base_token_name: got %s want %s", decoded.BaseTokenName, tt.o.BaseTokenName)
 			}
-			if decoded.BaseTokenDecimals != 18 {
-				t.Fatalf("base_token_decimals: got %d want 18", decoded.BaseTokenDecimals)
+			if decoded.BaseTokenDecimals != tt.o.BaseTokenDecimals {
+				t.Fatalf("base_token_decimals: got %d want %d", decoded.BaseTokenDecimals, tt.o.BaseTokenDecimals)
 			}
-			if decoded.BaseTokenPath.ToString() != "1" {
-				t.Fatalf("base_token_path: got %s want 1", decoded.BaseTokenPath.ToString())
+			if decoded.BaseTokenPath.ToString() != tt.o.BaseTokenPath.ToString() {
+				t.Fatalf("base_token_path: got %s want %s", decoded.BaseTokenPath.ToString(), tt.o.BaseTokenPath.ToString())
 			}
-			if decoded.QuoteAmount.ToString() != "20000" {
-				t.Fatalf("quote_amount: got %s want 20000", decoded.QuoteAmount.ToString())
+			if decoded.QuoteAmount.ToString() != tt.o.QuoteAmount.ToString() {
+				t.Fatalf("quote_amount: got %s want %s", decoded.QuoteAmount.ToString(), tt.o.QuoteAmount.ToString())
 			}
 		})
 	}
@@ -660,8 +761,21 @@ func TestEncodeTokenOrderV2(t *testing.T) {
 		o    TokenOrderV2
 	}{
 		{
-			"round trip",
-			TokenOrderV2{
+			name: "minimal values",
+			o: TokenOrderV2{
+				Sender:      mustHex("aa"),
+				Receiver:    mustHex("bb"),
+				BaseToken:   mustHex("00112233445566778899aabbccddeeff"),
+				BaseAmount:  u256.NewUint(1),
+				QuoteToken:  mustHex("ffeeddccbbaa99887766554433221100"),
+				QuoteAmount: u256.NewUint(1),
+				Kind:        0,
+				Metadata:    []byte{},
+			},
+		},
+		{
+			name: "typical values",
+			o: TokenOrderV2{
 				Sender:      mustHex("aabbccdd"),
 				Receiver:    mustHex("ddeeffaa"),
 				BaseToken:   mustHex("00112233445566778899aabbccddeeff"),
@@ -670,6 +784,19 @@ func TestEncodeTokenOrderV2(t *testing.T) {
 				QuoteAmount: u256.NewUint(20000),
 				Kind:        1,
 				Metadata:    mustHex("deadbeef"),
+			},
+		},
+		{
+			name: "large amounts with metadata",
+			o: TokenOrderV2{
+				Sender:      mustHex("deadbeefdeadbeef"),
+				Receiver:    mustHex("cafecafecafecafe"),
+				BaseToken:   mustHex("11112222333344445555666677778888"),
+				BaseAmount:  u256.NewUint(1000000000000000000),
+				QuoteToken:  mustHex("88887777666655554444333322221111"),
+				QuoteAmount: u256.NewUint(5000000000000),
+				Kind:        255,
+				Metadata:    bytes.Repeat([]byte{0xab}, 50),
 			},
 		},
 	}
@@ -690,14 +817,14 @@ func TestEncodeTokenOrderV2(t *testing.T) {
 			if !bytes.Equal(decoded.Receiver, tt.o.Receiver) {
 				t.Fatalf("receiver mismatch")
 			}
-			if decoded.BaseAmount.ToString() != "10000" {
-				t.Fatalf("base_amount: got %s want 10000", decoded.BaseAmount.ToString())
+			if decoded.BaseAmount.ToString() != tt.o.BaseAmount.ToString() {
+				t.Fatalf("base_amount: got %s want %s", decoded.BaseAmount.ToString(), tt.o.BaseAmount.ToString())
 			}
-			if decoded.QuoteAmount.ToString() != "20000" {
-				t.Fatalf("quote_amount: got %s want 20000", decoded.QuoteAmount.ToString())
+			if decoded.QuoteAmount.ToString() != tt.o.QuoteAmount.ToString() {
+				t.Fatalf("quote_amount: got %s want %s", decoded.QuoteAmount.ToString(), tt.o.QuoteAmount.ToString())
 			}
-			if decoded.Kind != 1 {
-				t.Fatalf("kind: got %d want 1", decoded.Kind)
+			if decoded.Kind != tt.o.Kind {
+				t.Fatalf("kind: got %d want %d", decoded.Kind, tt.o.Kind)
 			}
 			if !bytes.Equal(decoded.Metadata, tt.o.Metadata) {
 				t.Fatalf("metadata mismatch")
@@ -730,7 +857,22 @@ func TestEncodeAck(t *testing.T) {
 		name string
 		a    Ack
 	}{
-		{"round trip", Ack{Tag: u256.NewUint(12345), InnerAck: mustHex("deadbeef")}},
+		{
+			name: "zero values",
+			a:    Ack{Tag: u256.NewUint(0), InnerAck: []byte{}},
+		},
+		{
+			name: "typical values",
+			a:    Ack{Tag: u256.NewUint(12345), InnerAck: mustHex("deadbeef")},
+		},
+		{
+			name: "large tag and inner ack",
+			a:    Ack{Tag: u256.NewUint(18446744073709551615), InnerAck: bytes.Repeat([]byte{0xcc}, 100)},
+		},
+		{
+			name: "nil inner ack",
+			a:    Ack{Tag: u256.NewUint(1), InnerAck: nil},
+		},
 	}
 
 	for _, tt := range tests {
@@ -743,8 +885,8 @@ func TestEncodeAck(t *testing.T) {
 			if err != nil {
 				t.Fatalf("DecodeAck: %v", err)
 			}
-			if decoded.Tag.ToString() != "12345" {
-				t.Fatalf("tag: got %s want 12345", decoded.Tag.ToString())
+			if decoded.Tag.ToString() != tt.a.Tag.ToString() {
+				t.Fatalf("tag: got %s want %s", decoded.Tag.ToString(), tt.a.Tag.ToString())
 			}
 			if !bytes.Equal(decoded.InnerAck, tt.a.InnerAck) {
 				t.Fatalf("inner_ack mismatch")
@@ -774,16 +916,46 @@ func TestDecodeAckErrors(t *testing.T) {
 
 func TestEncodeBatchAck(t *testing.T) {
 	tests := []struct {
-		name string
-		ba   BatchAck
+		name              string
+		ba                BatchAck
+		wantAckCount      int
 	}{
 		{
-			"three acknowledgements",
-			BatchAck{Acknowledgements: [][]byte{
+			name:         "empty acknowledgements",
+			ba:           BatchAck{Acknowledgements: [][]byte{}},
+			wantAckCount: 0,
+		},
+		{
+			name: "single acknowledgement",
+			ba: BatchAck{Acknowledgements: [][]byte{
+				mustHex("dead"),
+			}},
+			wantAckCount: 1,
+		},
+		{
+			name: "three acknowledgements",
+			ba: BatchAck{Acknowledgements: [][]byte{
 				mustHex("dead"),
 				mustHex("beef"),
 				mustHex("cafe"),
 			}},
+			wantAckCount: 3,
+		},
+		{
+			name: "mixed nil and non-nil",
+			ba: BatchAck{Acknowledgements: [][]byte{
+				mustHex("aa"),
+				nil,
+				mustHex("bb"),
+			}},
+			wantAckCount: 3,
+		},
+		{
+			name: "large acknowledgement",
+			ba: BatchAck{Acknowledgements: [][]byte{
+				bytes.Repeat([]byte{0xdd}, 200),
+			}},
+			wantAckCount: 1,
 		},
 	}
 
@@ -797,17 +969,13 @@ func TestEncodeBatchAck(t *testing.T) {
 			if err != nil {
 				t.Fatalf("DecodeBatchAck: %v", err)
 			}
-			if len(decoded.Acknowledgements) != 3 {
-				t.Fatalf("acknowledgements count: got %d want 3", len(decoded.Acknowledgements))
+			if len(decoded.Acknowledgements) != tt.wantAckCount {
+				t.Fatalf("acknowledgements count: got %d want %d", len(decoded.Acknowledgements), tt.wantAckCount)
 			}
-			if !bytes.Equal(decoded.Acknowledgements[0], tt.ba.Acknowledgements[0]) {
-				t.Fatalf("ack[0] mismatch")
-			}
-			if !bytes.Equal(decoded.Acknowledgements[1], tt.ba.Acknowledgements[1]) {
-				t.Fatalf("ack[1] mismatch")
-			}
-			if !bytes.Equal(decoded.Acknowledgements[2], tt.ba.Acknowledgements[2]) {
-				t.Fatalf("ack[2] mismatch")
+			for i := range tt.ba.Acknowledgements {
+				if !bytes.Equal(decoded.Acknowledgements[i], tt.ba.Acknowledgements[i]) {
+					t.Fatalf("ack[%d] mismatch", i)
+				}
 			}
 		})
 	}
@@ -837,7 +1005,26 @@ func TestEncodeTokenOrderAck(t *testing.T) {
 		name string
 		toa  TokenOrderAck
 	}{
-		{"round trip", TokenOrderAck{FillType: u256.NewUint(999), MarketMaker: mustHex("aabbcc")}},
+		{
+			name: "zero values",
+			toa:  TokenOrderAck{FillType: u256.NewUint(0), MarketMaker: []byte{}},
+		},
+		{
+			name: "typical values",
+			toa:  TokenOrderAck{FillType: u256.NewUint(999), MarketMaker: mustHex("aabbcc")},
+		},
+		{
+			name: "large fill type",
+			toa:  TokenOrderAck{FillType: u256.NewUint(1000000000000000000), MarketMaker: mustHex("deadbeefdeadbeef")},
+		},
+		{
+			name: "nil market maker",
+			toa:  TokenOrderAck{FillType: u256.NewUint(123), MarketMaker: nil},
+		},
+		{
+			name: "large market maker",
+			toa:  TokenOrderAck{FillType: u256.NewUint(456), MarketMaker: bytes.Repeat([]byte{0xee}, 100)},
+		},
 	}
 
 	for _, tt := range tests {
@@ -850,8 +1037,8 @@ func TestEncodeTokenOrderAck(t *testing.T) {
 			if err != nil {
 				t.Fatalf("DecodeTokenOrderAck: %v", err)
 			}
-			if decoded.FillType.ToString() != "999" {
-				t.Fatalf("fill_type: got %s want 999", decoded.FillType.ToString())
+			if decoded.FillType.ToString() != tt.toa.FillType.ToString() {
+				t.Fatalf("fill_type: got %s want %s", decoded.FillType.ToString(), tt.toa.FillType.ToString())
 			}
 			if !bytes.Equal(decoded.MarketMaker, tt.toa.MarketMaker) {
 				t.Fatalf("market_maker mismatch")

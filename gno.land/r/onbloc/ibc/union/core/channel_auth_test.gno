@@ -11,17 +11,6 @@ import (
 
 const accessManagerUnauthorizedCallError = access.ErrorAccessManagerUnauthorizedCall
 
-func denySelectorForTest(cur realm, selector manager.Selector) manager.RoleId {
-	previousRole := access.GetFunctionRole(cross(cur), selector)
-	if previousRole == manager.PublicRole {
-		panic("test selector must not be public")
-	}
-	return previousRole
-}
-
-func restoreSelectorForTest(cur realm, selector manager.Selector, role manager.RoleId) {
-}
-
 func TestChannelAdminEntrypointsRejectNonAdmin(cur realm, t *testing.T) {
 	cases := []struct {
 		name     string
@@ -91,13 +80,19 @@ func TestChannelAdminEntrypointsRejectNonAdmin(cur realm, t *testing.T) {
 				ChannelCloseConfirm(cur, types.MsgChannelCloseConfirm{})
 			},
 		},
+		{
+			name:     "RegisterAppForPort",
+			selector: SelectorRegisterPort,
+			run: func(cur realm) {
+				RegisterAppForPort(cur, []byte("explicit-port"), &mockApp{})
+			},
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			resetStore(cur)
-			previousRole := denySelectorForTest(cur, tc.selector)
-			defer restoreSelectorForTest(cur, tc.selector, previousRole)
+			requireSelectorProtectedForTest(cur, tc.selector)
 
 			uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 				tc.run(cross(cur))

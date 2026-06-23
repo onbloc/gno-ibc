@@ -6,6 +6,16 @@ import (
 	"gno.land/p/nt/uassert/v0"
 )
 
+func TestNewCoreV1(t *testing.T) {
+	s := newMockStore()
+	got := NewCoreV1(s)
+	impl, ok := got.(*coreV1)
+
+	uassert.Equal(t, true, ok)
+	uassert.Equal(t, true, impl != nil)
+	uassert.Equal(t, true, impl.store == s)
+}
+
 func TestResolveRelayer(t *testing.T) {
 	caller := address("g1caller")
 

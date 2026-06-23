@@ -189,6 +189,28 @@ func TestBatchReceiptsPathDiffers(cur realm, t *testing.T) {
 	}
 }
 
+func TestRenderShowsNextClientID(cur realm, t *testing.T) {
+	resetStore(cur)
+
+	cases := []struct {
+		name string
+		want string
+		step func()
+	}{
+		{"initial", "next client id: 1", func() {}},
+		{"after increment", "next client id: 2", func() { store.nextClientId() }},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.step()
+			if got := Render(""); got != tc.want {
+				t.Fatalf("Render: got %q want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestUnionPathReferenceVectors(cur realm, t *testing.T) {
 	// Mirrors Union ibc-union-spec path keys:
 	// https://github.com/unionlabs/union/blob/main/lib/ibc-union-spec/src/path.rs
@@ -374,41 +396,35 @@ func TestGetChannelNotFoundPanics(cur realm, t *testing.T) {
 func TestRestrictedPacketEntrypointsRejectNonAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
 
-	prevPacketRecv := denySelectorForTest(cur, SelectorPacketRecv)
+	requireSelectorProtectedForTest(cur, SelectorPacketRecv)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		PacketRecv(cross(cur), types.MsgPacketRecv{})
 	})
-	restoreSelectorForTest(cur, SelectorPacketRecv, prevPacketRecv)
 
-	prevIntentPacketRecv := denySelectorForTest(cur, SelectorIntentPacketRecv)
+	requireSelectorProtectedForTest(cur, SelectorIntentPacketRecv)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{})
 	})
-	restoreSelectorForTest(cur, SelectorIntentPacketRecv, prevIntentPacketRecv)
 
-	prevPacketAck := denySelectorForTest(cur, SelectorPacketAck)
+	requireSelectorProtectedForTest(cur, SelectorPacketAck)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{})
 	})
-	restoreSelectorForTest(cur, SelectorPacketAck, prevPacketAck)
 
-	prevPacketTimeout := denySelectorForTest(cur, SelectorPacketTimeout)
+	requireSelectorProtectedForTest(cur, SelectorPacketTimeout)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		PacketTimeout(cross(cur), types.MsgPacketTimeout{})
 	})
-	restoreSelectorForTest(cur, SelectorPacketTimeout, prevPacketTimeout)
 
-	prevBatchSend := denySelectorForTest(cur, SelectorBatchSend)
+	requireSelectorProtectedForTest(cur, SelectorBatchSend)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		BatchSend(cross(cur), types.MsgBatchSend{})
 	})
-	restoreSelectorForTest(cur, SelectorBatchSend, prevBatchSend)
 
-	prevBatchAcks := denySelectorForTest(cur, SelectorBatchAcks)
+	requireSelectorProtectedForTest(cur, SelectorBatchAcks)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		BatchAcks(cross(cur), types.MsgBatchAcks{})
 	})
-	restoreSelectorForTest(cur, SelectorBatchAcks, prevBatchAcks)
 }
 
 func TestRestrictedPacketEntrypointsAllowRelayerRealmCallToReachImpl(cur realm, t *testing.T) {
@@ -422,6 +438,10 @@ func TestRestrictedPacketEntrypointsAllowRelayerRealmCallToReachImpl(cur realm, 
 	authorizedRelayer := testutils.TestAddress("authorized-relayer")
 	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
 	access.GrantRole(cross(cur), RelayerRole, authorizedRelayer)
+	defer func() {
+		testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+		access.RevokeRole(cross(cur), RelayerRole, authorizedRelayer)
+	}()
 
 	tests := []struct {
 		name   string
@@ -493,10 +513,9 @@ func TestGetChannelOwnerPanicsWhenMissing(cur realm, t *testing.T) {
 
 func TestForceUpdateClientPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	previousRole := denySelectorForTest(cur, SelectorForceUpdateClient)
+	requireSelectorProtectedForTest(cur, SelectorForceUpdateClient)
 
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		ForceUpdateClient(cross(cur), types.NewMsgForceUpdateClient(types.ClientId(0), nil, nil))
 	})
-	restoreSelectorForTest(cur, SelectorForceUpdateClient, previousRole)
 }

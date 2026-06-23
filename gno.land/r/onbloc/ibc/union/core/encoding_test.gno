@@ -71,6 +71,55 @@ func TestPacketCommitmentHashes(cur realm, t *testing.T) {
 	}
 }
 
+func TestCorePureSurfaceHelpers(cur realm, t *testing.T) {
+	packet := types.Packet{SourceChannelId: 1, DestinationChannelId: 2, Data: types.Bytes("payload"), TimeoutTimestamp: 1000}
+	packets := []types.Packet{packet}
+	connection := types.Connection{State: types.ConnectionStateOpen, ClientId: 1, CounterpartyClientId: 2, CounterpartyConnectionId: 3}
+	channel := types.Channel{State: types.ChannelStateOpen, ConnectionId: 1, CounterpartyChannelId: 2, Version: "v1"}
+
+	cases := []struct {
+		name   string
+		assert func(*testing.T)
+	}{
+		{
+			"CommitPacketHash",
+			func(t *testing.T) {
+				if got, want := CommitPacketHash(packet), commitPacketHash(packet); got != want {
+					t.Errorf("CommitPacketHash: got %s want %s", got.String(), want.String())
+				}
+			},
+		},
+		{
+			"CommitPacketsHash",
+			func(t *testing.T) {
+				if got, want := CommitPacketsHash(packets), commitPacketsHash(packets); got != want {
+					t.Errorf("CommitPacketsHash: got %s want %s", got.String(), want.String())
+				}
+			},
+		},
+		{
+			"ConnectionValue",
+			func(t *testing.T) {
+				if got, want := ConnectionValue(connection), connectionValue(connection); got != want {
+					t.Errorf("ConnectionValue: got %s want %s", got.String(), want.String())
+				}
+			},
+		},
+		{
+			"ChannelValue",
+			func(t *testing.T) {
+				if got, want := ChannelValue(channel), channelValue(channel); got != want {
+					t.Errorf("ChannelValue: got %s want %s", got.String(), want.String())
+				}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, tc.assert)
+	}
+}
+
 func TestStateValueEncoding(cur realm, t *testing.T) {
 	cases := []struct {
 		name   string

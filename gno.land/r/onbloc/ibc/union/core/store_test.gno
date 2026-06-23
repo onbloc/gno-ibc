@@ -7,6 +7,63 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
+func TestStoreKeyHelpers(cur realm, t *testing.T) {
+	exactCases := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{"port key", portKey(types.Bytes("port")), "port"},
+	}
+
+	var h256Key types.H256
+	for i := 0; i < len(h256Key); i++ {
+		h256Key[i] = byte(i)
+	}
+	exactCases = append(exactCases, struct {
+		name string
+		got  string
+		want string
+	}{
+		name: "h256 chain param key",
+		got:  h256ChainParamKey(h256Key),
+		want: "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+	})
+
+	for _, tc := range exactCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Fatalf("got %q want %q", tc.got, tc.want)
+			}
+		})
+	}
+
+	distinctCases := []struct {
+		name  string
+		left  string
+		again string
+		right string
+	}{
+		{"client key", clientKey(1), clientKey(1), clientKey(2)},
+		{"connection key", connectionKey(1), connectionKey(1), connectionKey(2)},
+		{"channel key", channelKey(1), channelKey(1), channelKey(2)},
+	}
+
+	for _, tc := range distinctCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.left == "" {
+				t.Fatal("left key is empty")
+			}
+			if tc.left != tc.again {
+				t.Fatal("key helper is not stable")
+			}
+			if tc.left == tc.right {
+				t.Fatalf("keys for distinct ids collided: %q", tc.left)
+			}
+		})
+	}
+}
+
 func TestClientStore(cur realm, t *testing.T) {
 	cases := []struct {
 		name string
@@ -160,10 +217,11 @@ func TestChannelStore(cur realm, t *testing.T) {
 			connectionId := addMockConnection(types.ConnectionStateOpen)
 			channelId := store.nextChannelId()
 			portId := types.Bytes("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm")
+			counterpartyPortId := types.Bytes("counterparty")
 			channel := types.Channel{
 				State:              types.ChannelStateInit,
 				ConnectionId:       connectionId,
-				CounterpartyPortId: types.Bytes("counterparty"),
+				CounterpartyPortId: counterpartyPortId,
 				Version:            "ucs03-zkgm-0",
 			}
 
@@ -175,6 +233,18 @@ func TestChannelStore(cur realm, t *testing.T) {
 			}
 			if string(store.getChannelOwner(channelId)) != string(portId) {
 				t.Errorf("port owner: got %q want %q", string(store.getChannelOwner(channelId)), string(portId))
+			}
+			portId[0] = 'x'
+			counterpartyPortId[0] = 'X'
+			entry, ok := store.getChannelEntry(channelId)
+			if !ok {
+				t.Fatal("channel entry not found")
+			}
+			if string(entry.portId) != "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm" {
+				t.Fatal("createChannel must clone owner port id")
+			}
+			if string(entry.channel.CounterpartyPortId) != "counterparty" {
+				t.Fatal("createChannel must clone channel byte fields")
 			}
 		}},
 		{"save channel", func(t *testing.T) {
@@ -273,6 +343,96 @@ func TestCommitmentStore(cur realm, t *testing.T) {
 			if got != value {
 				t.Errorf("commitment: got %s want %s", got.String(), value.String())
 			}
+		})
+	}
+}
+
+func TestPacketCommitmentStore(cur realm, t *testing.T) {
+	packet := types.NewPacket(1, 2, []byte("data"), 10)
+	batchHash := CommitPacketsHash([]types.Packet{packet})
+	batchValue := types.Keccak([]byte("batch-value"))
+
+	cases := []struct {
+		name string
+		run  func(*testing.T)
+	}{
+		{"commit packet path", func(t *testing.T) {
+			if store.HasPacketCommitment(packet) {
+				t.Fatal("packet commitment must start missing")
+			}
+
+			store.CommitPacket(0, cur, packet)
+
+			if !store.HasPacketCommitment(packet) {
+				t.Fatal("packet commitment missing after CommitPacket")
+			}
+			if got, ok := store.PacketCommitment(1, packet); !ok || got != types.COMMITMENT_MAGIC {
+				t.Fatal("PacketCommitment returned wrong value")
+			}
+			if got, ok := store.getCommitment(packetCommitmentPath(packet)); !ok || got != types.COMMITMENT_MAGIC {
+				t.Fatal("CommitPacket stored the wrong packet commitment path")
+			}
+		}},
+		{"acknowledged packet stays memory only", func(t *testing.T) {
+			store.CommitPacket(0, cur, packet)
+			store.SetPacketAcknowledged(0, cur, packet)
+
+			if got, ok := store.PacketCommitment(1, packet); !ok || got != types.COMMITMENT_MAGIC_ACK {
+				t.Fatal("SetPacketAcknowledged did not update memory commitment")
+			}
+			if got, ok := store.getCommitment(packetCommitmentPath(packet)); !ok || got != types.COMMITMENT_MAGIC_ACK {
+				t.Fatal("SetPacketAcknowledged stored the wrong packet commitment path")
+			}
+		}},
+		{"packet receipt and acknowledgement share ack path", func(t *testing.T) {
+			if store.HasPacketReceipt(packet) {
+				t.Fatal("packet receipt must start missing")
+			}
+
+			store.SetPacketReceipt(0, cur, packet)
+
+			if !store.HasPacketReceipt(packet) {
+				t.Fatal("packet receipt missing after SetPacketReceipt")
+			}
+			if got, ok := store.getCommitment(packetAcknowledgementPath(packet)); !ok || got != types.COMMITMENT_MAGIC {
+				t.Fatal("SetPacketReceipt stored the wrong acknowledgement path")
+			}
+
+			store.CommitAcknowledgement(0, cur, packet, []byte("ack"))
+
+			if got, ok := store.AcknowledgementReceipt(1, packet); !ok || got != types.CommitAcks([][]byte{[]byte("ack")}) {
+				t.Fatal("AcknowledgementReceipt returned wrong value")
+			}
+			if got, ok := store.getCommitment(packetAcknowledgementPath(packet)); !ok || got != types.CommitAcks([][]byte{[]byte("ack")}) {
+				t.Fatal("CommitAcknowledgement stored the wrong acknowledgement path")
+			}
+		}},
+		{"batch packets path", func(t *testing.T) {
+			store.SaveBatchPackets(0, cur, 1, batchHash, batchValue)
+
+			if got, ok := store.BatchPacketsAt(batchHash); !ok || got != batchValue {
+				t.Fatal("BatchPacketsAt returned wrong value")
+			}
+			if got, ok := store.getCommitment(types.BatchPacketsPath(batchHash)); !ok || got != batchValue {
+				t.Fatal("SaveBatchPackets stored the wrong batch packet path")
+			}
+		}},
+		{"batch receipts path", func(t *testing.T) {
+			store.SaveBatchReceipts(0, cur, 1, batchHash, batchValue)
+
+			if got, ok := store.BatchReceiptsAt(batchHash); !ok || got != batchValue {
+				t.Fatal("BatchReceiptsAt returned wrong value")
+			}
+			if got, ok := store.getCommitment(types.BatchReceiptsPath(batchHash)); !ok || got != batchValue {
+				t.Fatal("SaveBatchReceipts stored the wrong batch receipt path")
+			}
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetStore(cur)
+			tc.run(t)
 		})
 	}
 }

@@ -16,6 +16,8 @@ configuration.
 
 ## References
 
+- Repository comparison guide:
+  [docs/access-management.md](../../../../../../docs/access-management.md)
 - OpenZeppelin Contracts `AccessManager` v5.6.1:
   https://github.com/OpenZeppelin/openzeppelin-contracts/tree/v5.6.1/contracts/access/manager
 - Union CosmWasm `access-manager`:

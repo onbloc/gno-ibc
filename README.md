@@ -18,66 +18,20 @@ light-client verification, and related tooling.
 | `gno.land/r/onbloc/ibc/union/` | First-party stateful realms: Union IBC core, light-client-facing apps, UCS03 ZKGM proxy/implementation, and test realms. |
 | `tools/` | Fixture generators, protocol-code generation, and smoke-test scripts. |
 | `third_party/` | Sparse-checkout submodules mirrored into `gno.land/` by `make vendor`. |
-| `docs/` | Operational guides for tx-indexer queries, ZKGM packet sends, and native gas calibration. |
+| `docs/` | Cross-module references, Union spec comparison notes, operational guides, and gas calibration. |
 
-## Prerequisites
+## Main Surfaces
 
-- Go, for building the pinned Gno toolchain and native bindings.
-- Git submodule support, used by `make vendor`.
-- `nix develop` is optional but recommended; it provides the supporting
-  toolchain used by this workspace.
-- Rust and Cargo are required only when refreshing ABI or ZKGM fixture vectors.
-
-The Gno binaries themselves are not supplied by the flake. Build them with
-`make install-gno` so `gno`, `gnodev`, and `gnokey` match the commit pinned in
-`.gno-version`. The IBC crypto stdlibs ship in that upstream pin, so this repo
-no longer vendors them locally.
-
-## Quick Start
-
-```bash
-nix develop          # optional: enter the pinned development shell
-make install-gno     # build and install gno, gnodev, and gnokey
-make test            # vendor dependencies and run first-party Gno tests
-```
-
-If `make test` reports that `gno` is missing or points at the wrong commit,
-ensure `$(go env GOPATH)/bin` is on `PATH`, then rerun `make install-gno`.
-
-## Common Tasks
-
-```bash
-make vendor                    # mirror sparse third-party packages into gno.land/
-make test                      # run first-party Gno package and realm tests
-make test-gnokey-query-smoke   # run the full gnokey smoke suite
-make refresh-zkgm-scenarios    # regenerate ZKGM handler scenario fixtures
-make generate-check            # verify generated protobuf codecs are current
-```
-
-Focused Gno test runs are also useful during development:
-
-```bash
-gno test -v ./gno.land/r/onbloc/ibc/union/core
-gno test -v ./gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1
-gno test -v ./gno.land/p/onbloc/ibc/union/zkgm
-```
-
-## Development Notes
-
-- `.gno` files are Gno, not Go. Use `gnomod.toml` module manifests and
-  `gno.land/p/...` or `gno.land/r/...` import paths.
-- The ZKGM proxy source tree and module path live under
-  `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/`; the current implementation
-  lives under `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1/`.
-- `make vendor` is idempotent and safe to run before tests. Mirrored
-  third-party packages are generated workspace inputs; their submodule pins are
-  the source of truth.
-
-For detailed agent and contribution conventions, see [AGENTS.md](AGENTS.md).
+- [IBC Union core proxy realm](gno.land/r/onbloc/ibc/union/core/README.md)
+- [IBC Union UCS03-ZKGM proxy realm](gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/README.md)
+- [Union access realm](gno.land/r/onbloc/ibc/union/access/README.md)
+- [Access manager pure package](gno.land/p/onbloc/access/manager/README.md)
 
 ## Documentation
 
 - [Documentation index](docs/README.md)
+- [IBC Union spec comparison](docs/ibc-union-spec-comparison.md)
+- [Access management comparison](docs/access-management.md)
 - [TX Indexer Guide](docs/tx-indexer.md)
 - [ZKGM Packet Send Guide](docs/zkgm-packet-send-guide.md)
 - [ZKGM Batch Call-Recv Pattern](docs/zkgm-batch-call-recv.md)
@@ -85,12 +39,11 @@ For detailed agent and contribution conventions, see [AGENTS.md](AGENTS.md).
 - [Tools overview](tools/README.md)
 - [Third-party mirror workflow](third_party/README.md)
 
-## Getting Help
+## Contributing
 
-Use the repository's issue and pull request discussions for design questions,
-bug reports, and review feedback. When reporting a failure, include the exact
-command, the pinned Gno commit from `.gno-version`, and any relevant generated
-fixture or packet data.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, validation commands, Gno
+development notes, and reporting guidance. For agent-specific repository rules,
+see [AGENTS.md](AGENTS.md).
 
 ## License
 

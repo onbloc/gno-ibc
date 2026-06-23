@@ -34,6 +34,9 @@ The tables below use Union ZKGM `ExecuteMsg`, nested `IbcUnionMsg`,
 `RestrictedExecuteMsg`, and `QueryMsg` variants as the row source. `-` means this
 proxy does not expose a matching Gno public surface.
 
+For the cross-module comparison guide, see
+[docs/ibc-union-spec-comparison.md](../../../../../../../docs/ibc-union-spec-comparison.md).
+
 ### Execute
 
 | Gno surface | IBC Union surface | Reference | Notes |

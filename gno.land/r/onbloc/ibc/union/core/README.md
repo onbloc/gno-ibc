@@ -38,6 +38,9 @@ variants as the row source. `-` means this proxy does not expose a matching Gno
 public surface, or the only local surface is a Gno proxy lifecycle boundary
 rather than an IBC Union message.
 
+For the cross-module comparison guide, see
+[docs/ibc-union-spec-comparison.md](../../../../../../docs/ibc-union-spec-comparison.md).
+
 ### Client
 
 | Gno surface | IBC Union surface | Reference | Notes |

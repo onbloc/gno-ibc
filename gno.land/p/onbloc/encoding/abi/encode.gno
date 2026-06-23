@@ -216,7 +216,7 @@ func encodeUint64Word(v uint64) []byte {
 	return out
 }
 
-// TODO: depends on gnoswap/uint256's internal [4]uint64 layout (mirror of
+// NOTE: depends on gnoswap/uint256's internal [4]uint64 layout (mirror of
 // SetBytes32). Replace with the upstream Bytes32() method once it exists.
 // Same workaround lives in ibc/union/zkgm/salt.gno; consolidate when fixed.
 func encodeUint256Word(v *u256.Uint) []byte {

@@ -25,10 +25,11 @@ For local `gnodev`, include the ZKGM proxy, v1 impl, e2e helper, core, cometbls,
 and state-lens-ics23-mpt paths. The ZKGM proxy package registers the app with
 core during package initialization.
 
-The `g1TODO_PORT` values in the generated field vectors are placeholders. The
-copy-paste channel transactions below use `zkgm.ProxyPkgPath()` for both local
-and counterparty ports. If you need the ABCI query expected hashes for those
-channel sections, regenerate this document with that concrete port value.
+NOTE: The `<zkgm-proxy-port>` values in the generated field vectors are
+placeholders. The copy-paste channel transactions below use `zkgm.ProxyPkgPath()`
+for both local and counterparty ports. If you need the ABCI query expected
+hashes for those channel sections, regenerate this document with that concrete
+port value.
 
 Handshake steps that verify counterparty state need values from the
 counterparty chain, usually supplied by a relayer. In a Gno <-> Union flow, the
@@ -738,8 +739,8 @@ Source: `channelOpenInitArgs`, `encodeChannel`, `channelPath`.
 Copyable field vector:
 
 ```txt
-PortId: g1TODO_PORT
-CounterpartyPortId: g1TODO_PORT
+PortId: <zkgm-proxy-port>
+CounterpartyPortId: <zkgm-proxy-port>
 ConnectionId: 1
 Version: ucs03-zkgm-0
 ```

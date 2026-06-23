@@ -27,9 +27,9 @@ func init() {
 type Store struct {
 	clientSeq      seqid.ID
 	clientRegistry map[string]lightclient.ClientImpl // ClientRegistry: type → factory
-	clientTypeByID map[uint32]types.ClientType        // ClientTypes: clientId → type
-	clientImplByID map[uint32]lightclient.ClientImpl  // ClientImpls: clientId → factory
-	clientByID     map[uint32]*client                 // clientId → instantiated state
+	clientTypeByID map[uint32]types.ClientType       // ClientTypes: clientId → type
+	clientImplByID map[uint32]lightclient.ClientImpl // ClientImpls: clientId → factory
+	clientByID     map[uint32]*client                // clientId → instantiated state
 
 	connectionSeq seqid.ID
 	connections   *bptree.BPTree // connectionKey(ConnectionId) → types.Connection
@@ -69,11 +69,11 @@ type channelEntry struct {
 
 func newStore() *Store {
 	return &Store{
-		clientRegistry: make(map[string]lightclient.ClientImpl),
-		clientTypeByID: make(map[uint32]types.ClientType),
-		clientImplByID: make(map[uint32]lightclient.ClientImpl),
-		clientByID:     make(map[uint32]*client),
-		connections:    bptree.NewBPTree32(),
+		clientRegistry:      make(map[string]lightclient.ClientImpl),
+		clientTypeByID:      make(map[uint32]types.ClientType),
+		clientImplByID:      make(map[uint32]lightclient.ClientImpl),
+		clientByID:          make(map[uint32]*client),
+		connections:         bptree.NewBPTree32(),
 		channels:            bptree.NewBPTree32(),
 		commitments:         make(map[types.H256]types.H256),
 		membershipProofs:    make(map[types.H256]types.H256),
@@ -470,7 +470,7 @@ func channelKey(id types.ChannelId) string {
 }
 
 func setChainParam(key string, value []byte) {
-	// TODO find a way to assert this write in tests (difficult since params does
+	// NOTE: find a way to assert this write in tests (difficult since params does
 	// not expose getters)
 	params.SetBytes(key, value)
 }

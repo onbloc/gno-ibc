@@ -3,9 +3,83 @@ package ics23mpt
 import (
 	"bytes"
 	"encoding/hex"
-	"strings"
 	"testing"
 )
+
+func TestToUint16(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   uint32
+		want    uint16
+		wantErr bool
+	}{
+		{name: "zero", value: 0, want: 0},
+		{name: "max uint16", value: 0xFFFF, want: 0xFFFF},
+		{name: "overflow", value: 0x10000, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := toUint16(tt.value, "offset")
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("toUint16 accepted overflow")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("toUint16: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("toUint16: got %d want %d", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestToBytes32(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   []byte
+		wantErr bool
+	}{
+		{name: "bytes32", value: bytes.Repeat([]byte{0x01}, 32)},
+		{name: "nil", value: nil, wantErr: true},
+		{name: "short", value: bytes.Repeat([]byte{0x01}, 31), wantErr: true},
+		{name: "long", value: bytes.Repeat([]byte{0x01}, 33), wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := toBytes32(tt.value, "root")
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("toBytes32 accepted invalid length")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("toBytes32: %v", err)
+			}
+			assertBytes(t, "toBytes32", got[:], tt.value)
+		})
+	}
+}
+
+func TestCloneBytes(t *testing.T) {
+	src := []byte{0x01, 0x02, 0x03}
+	got := cloneBytes(src)
+	assertBytes(t, "cloneBytes", got, src)
+	got[0] = 0xff
+	if src[0] != 0x01 {
+		t.Fatalf("cloneBytes returned an aliased slice")
+	}
+
+	got = cloneBytes(nil)
+	if len(got) != 0 {
+		t.Fatalf("cloneBytes(nil): got length %d want 0", len(got))
+	}
+}
 
 func TestDecodeClientStateOffsetBoundaries(t *testing.T) {
 	tests := []struct {
@@ -282,115 +356,4 @@ func TestDecodeHeaderRejectsMalformedData(t *testing.T) {
 			}
 		})
 	}
-}
-
-func assertBytes(t *testing.T, name string, got, want []byte) {
-	t.Helper()
-	if !bytes.Equal(got, want) {
-		t.Fatalf("%s: got %x want %x", name, got, want)
-	}
-}
-
-func mustHex(s string) []byte {
-	bz, err := hex.DecodeString(s)
-	if err != nil {
-		panic("mustHex: " + err.Error())
-	}
-	return bz
-}
-
-func word32(v uint64) string {
-	out := make([]byte, 32)
-	out[24] = byte(v >> 56)
-	out[25] = byte(v >> 48)
-	out[26] = byte(v >> 40)
-	out[27] = byte(v >> 32)
-	out[28] = byte(v >> 24)
-	out[29] = byte(v >> 16)
-	out[30] = byte(v >> 8)
-	out[31] = byte(v)
-	return hex.EncodeToString(out)
-}
-
-func mustClientStateWithOffsets(timestampOffset, stateRootOffset, storageRootOffset uint64) []byte {
-	return mustHex(
-		word32(0xe0) +
-			word32(1) +
-			word32(1) +
-			word32(0x7e36fd) +
-			word32(timestampOffset) +
-			word32(stateRootOffset) +
-			word32(storageRootOffset) +
-			word32(8) +
-			"3131313535313131000000000000000000000000000000000000000000000000",
-	)
-}
-
-func mustClientStateWithIDs(l1ClientID, l2ClientID uint64) []byte {
-	return mustHex(
-		word32(0xe0) +
-			word32(l1ClientID) +
-			word32(l2ClientID) +
-			word32(0x7e36fd) +
-			word32(0x78) +
-			word32(0x20) +
-			word32(0x40) +
-			word32(8) +
-			"3131313535313131000000000000000000000000000000000000000000000000",
-	)
-}
-
-func mustClientStateWithLatestHeightWord(l2LatestHeight string) []byte {
-	return mustHex(
-		word32(0xe0) +
-			word32(1) +
-			word32(1) +
-			l2LatestHeight +
-			word32(0x78) +
-			word32(0x20) +
-			word32(0x40) +
-			word32(8) +
-			"3131313535313131000000000000000000000000000000000000000000000000",
-	)
-}
-
-func mustConsensusStateBytes(timestamp uint64, stateRoot, storageRoot []byte) []byte {
-	return mustHex(
-		word32(timestamp) +
-			hex.EncodeToString(stateRoot) +
-			hex.EncodeToString(storageRoot),
-	)
-}
-
-func mustHeaderBytes(
-	l1Height string,
-	l2Height string,
-	l2ConsensusStateProofOffset string,
-	l2ConsensusStateOffset string,
-	l2ConsensusStateProofLength string,
-	l2ConsensusStateProofData string,
-	l2ConsensusStateLength string,
-	l2ConsensusStateData string,
-) []byte {
-	return mustHex(
-		l1Height +
-			l2Height +
-			l2ConsensusStateProofOffset +
-			l2ConsensusStateOffset +
-			l2ConsensusStateProofLength +
-			paddedBytesHex(l2ConsensusStateProofData) +
-			l2ConsensusStateLength +
-			paddedBytesHex(l2ConsensusStateData),
-	)
-}
-
-func highPaddingWord(v uint64) string {
-	return "01" + strings.Repeat("00", 23) + word32(v)[48:]
-}
-
-func paddedBytesHex(s string) string {
-	if len(s)%64 == 0 {
-		return s
-	}
-	return s + strings.Repeat("0", 64-len(s)%64)
 }

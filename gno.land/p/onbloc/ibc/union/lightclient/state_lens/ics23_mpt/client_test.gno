@@ -232,6 +232,55 @@ func TestVerifyHeaderNilL1(t *testing.T) {
 	}
 }
 
+func TestUpdateState(t *testing.T) {
+	tests := []struct {
+		name              string
+		initialHeight     Height
+		headerHeight      Height
+		wantLatestHeight  Height
+		wantClientBytes   bool
+		wantConsensusTime uint64
+	}{
+		{name: "newer header advances latest height", initialHeight: 10, headerHeight: 11, wantLatestHeight: 11, wantClientBytes: true, wantConsensusTime: 67890},
+		{name: "older header stores consensus without advancing latest height", initialHeight: 10, headerHeight: 9, wantLatestHeight: 10, wantConsensusTime: 67890},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
+			c.clientState.L2LatestHeight = tt.initialHeight
+			cons := &ConsensusState{
+				Timestamp:   tt.wantConsensusTime,
+				StateRoot:   bytes.Repeat([]byte{0xcc}, 32),
+				StorageRoot: bytes.Repeat([]byte{0xdd}, 32),
+			}
+
+			update := c.updateState(Header{L2Height: tt.headerHeight}, cons)
+			if update.Height != tt.headerHeight {
+				t.Fatalf("update height: got %d want %d", update.Height, tt.headerHeight)
+			}
+			if c.GetLatestHeight() != tt.wantLatestHeight {
+				t.Fatalf("latest height: got %d want %d", c.GetLatestHeight(), tt.wantLatestHeight)
+			}
+			if (len(update.ClientStateBytes) != 0) != tt.wantClientBytes {
+				t.Fatalf("client state bytes present: got %t want %t", len(update.ClientStateBytes) != 0, tt.wantClientBytes)
+			}
+			if len(update.ConsensusStateBytes) == 0 {
+				t.Fatalf("expected consensus state bytes")
+			}
+			got, found := c.getConsensusState(tt.headerHeight)
+			if !found {
+				t.Fatalf("consensus state at height %d not stored", tt.headerHeight)
+			}
+			if got.Timestamp != tt.wantConsensusTime ||
+				!bytes.Equal(got.StateRoot, cons.StateRoot) ||
+				!bytes.Equal(got.StorageRoot, cons.StorageRoot) {
+				t.Fatalf("stored consensus state: got %#v want %#v", got, cons)
+			}
+		})
+	}
+}
+
 func TestMisbehaviourUnsupported(t *testing.T) {
 	c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
 	var caller, relayer address
@@ -273,17 +322,6 @@ func TestVerifyMembershipStorageProof(t *testing.T) {
 	}
 }
 
-func TestVerifyMembershipRejectsWrongCommitmentKey(t *testing.T) {
-	c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
-	proof := storage.EncodeProof(storage.Proof{
-		Key:   storage.WordFromUint64(2),
-		Value: storage.WordFromUint64(0xdeadbeef),
-	})
-	if err := c.VerifyMembership(10, bytes.Repeat([]byte{0x11}, 32), proof, storage.WordFromUint64(0xdeadbeef)); err != ErrInvalidCommitmentKey {
-		t.Fatalf("VerifyMembership: got %v want %v", err, ErrInvalidCommitmentKey)
-	}
-}
-
 func TestVerifyMembershipRejectsValueMismatch(t *testing.T) {
 	path := bytes.Repeat([]byte{0x11}, 32)
 	value := storage.WordFromUint64(0xdeadbeef)
@@ -317,21 +355,6 @@ func TestVerifyMembershipRejectsNon32Value(t *testing.T) {
 	}
 }
 
-func TestVerifyMembershipHeightTooHigh(t *testing.T) {
-	c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
-	if err := c.VerifyMembership(11, bytes.Repeat([]byte{0x11}, 32), nil, make([]byte, 32)); err != ErrInvalidHeight {
-		t.Fatalf("VerifyMembership: got %v want %v", err, ErrInvalidHeight)
-	}
-}
-
-func TestVerifyMembershipConsensusNotFound(t *testing.T) {
-	c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
-	// Height 5 <= latest 10 but no consensus state stored there.
-	if err := c.VerifyMembership(5, bytes.Repeat([]byte{0x11}, 32), nil, make([]byte, 32)); err != ErrConsensusStateNotFound {
-		t.Fatalf("VerifyMembership: got %v want %v", err, ErrConsensusStateNotFound)
-	}
-}
-
 func TestVerifyNonMembershipStorageProof(t *testing.T) {
 	path := bytes.Repeat([]byte{0x22}, 32)
 	slot, err := storage.IBCCommitmentKey(path)
@@ -350,66 +373,91 @@ func TestVerifyNonMembershipStorageProof(t *testing.T) {
 	}
 }
 
-// --- fixtures ---
-
-// makeConsensusBytes lays out an L2 consensus blob matching the offsets used by
-// newTestClient: state_root at 0, storage_root at 32, big-endian timestamp at
-// 64.
-func makeConsensusBytes(timestamp uint64, stateRoot, storageRoot []byte) []byte {
-	out := make([]byte, 72)
-	copy(out[0:32], stateRoot)
-	copy(out[32:64], storageRoot)
-	out[64] = byte(timestamp >> 56)
-	out[65] = byte(timestamp >> 48)
-	out[66] = byte(timestamp >> 40)
-	out[67] = byte(timestamp >> 32)
-	out[68] = byte(timestamp >> 24)
-	out[69] = byte(timestamp >> 16)
-	out[70] = byte(timestamp >> 8)
-	out[71] = byte(timestamp)
-	return out
-}
-
-// storageProofFixture builds a single-leaf MPT proving slot stores value, and
-// returns its root and the proof node list. Mirrors the realm test fixture.
-func storageProofFixture(t *testing.T, slot []byte, value []byte) ([32]byte, [][]byte) {
-	t.Helper()
-	path, err := storage.StoragePath(slot)
+func TestPrepareProof(t *testing.T) {
+	path := bytes.Repeat([]byte{0x11}, 32)
+	slot, err := storage.IBCCommitmentKey(path)
 	if err != nil {
-		t.Fatalf("StoragePath: %v", err)
+		t.Fatalf("IBCCommitmentKey: %v", err)
 	}
-	storedValue, err := storage.EncodeStorageValue(value)
-	if err != nil {
-		t.Fatalf("EncodeStorageValue: %v", err)
+	validProof := storage.EncodeProof(storage.Proof{
+		Key:   slot[:],
+		Value: storage.WordFromUint64(0xdeadbeef),
+	})
+
+	tests := []struct {
+		name    string
+		height  uint64
+		key     []byte
+		proof   []byte
+		wantErr error
+		anyErr  bool
+	}{
+		{name: "success", height: 10, key: path, proof: validProof},
+		{name: "height too high", height: 11, key: path, proof: validProof, wantErr: ErrInvalidHeight},
+		{name: "consensus not found", height: 5, key: path, proof: validProof, wantErr: ErrConsensusStateNotFound},
+		{name: "invalid storage proof", height: 10, key: path, proof: []byte{0xff}, anyErr: true},
+		{name: "wrong commitment key", height: 10, key: path, proof: storage.EncodeProof(storage.Proof{
+			Key:   storage.WordFromUint64(2),
+			Value: storage.WordFromUint64(0xdeadbeef),
+		}), wantErr: ErrInvalidCommitmentKey},
 	}
-	leaf := rlp.EncodeList(rlp.EncodeBytes(compactEncode(true, nibbles(path[:]))), rlp.EncodeBytes(storedValue))
-	root := keccak256.Sum256(leaf)
-	return root, [][]byte{leaf}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
+			consensusState, storageProof, err := c.prepareProof(tt.height, tt.key, tt.proof)
+			if tt.anyErr {
+				if err == nil {
+					t.Fatalf("prepareProof accepted invalid input")
+				}
+				return
+			}
+			if err != tt.wantErr {
+				t.Fatalf("prepareProof: got %v want %v", err, tt.wantErr)
+			}
+			if err != nil {
+				return
+			}
+			if consensusState.Timestamp != 12345 {
+				t.Fatalf("consensus timestamp: got %d want 12345", consensusState.Timestamp)
+			}
+			assertBytes(t, "storage proof key", storageProof.Key, slot[:])
+		})
+	}
 }
 
-func nibbles(key []byte) []byte {
-	out := make([]byte, 0, len(key)*2)
-	for _, b := range key {
-		out = append(out, b>>4, b&0x0f)
+func TestGetConsensusState(t *testing.T) {
+	c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
+	if _, found := c.getConsensusState(9); found {
+		t.Fatalf("getConsensusState found missing height")
 	}
-	return out
+
+	cons := &ConsensusState{Timestamp: 99, StateRoot: bytes.Repeat([]byte{0x03}, 32), StorageRoot: bytes.Repeat([]byte{0x04}, 32)}
+	c.setConsensusState(9, cons)
+	got, found := c.getConsensusState(9)
+	if !found {
+		t.Fatalf("getConsensusState did not find stored height")
+	}
+	if got != cons {
+		t.Fatalf("getConsensusState returned unexpected pointer")
+	}
 }
 
-func compactEncode(leaf bool, ns []byte) []byte {
-	flag := byte(0)
-	if leaf {
-		flag = 2
+func TestHeightKey(t *testing.T) {
+	tests := []struct {
+		height Height
+		want   string
+	}{
+		{0, "0"},
+		{1, "1"},
+		{10, "10"},
 	}
-	odd := len(ns)%2 == 1
-	out := make([]byte, 0, (len(ns)+2)/2)
-	if odd {
-		out = append(out, (flag+1)<<4|ns[0])
-		ns = ns[1:]
-	} else {
-		out = append(out, flag<<4)
+
+	for _, tt := range tests {
+		t.Run(tt.want, func(t *testing.T) {
+			if got := heightKey(tt.height); got != tt.want {
+				t.Fatalf("heightKey: got %q want %q", got, tt.want)
+			}
+		})
 	}
-	for i := 0; i < len(ns); i += 2 {
-		out = append(out, ns[i]<<4|ns[i+1])
-	}
-	return out
 }

@@ -8,8 +8,8 @@ import (
 
 func TestRoleConfigManagesNilMembersMap(t *testing.T) {
 	account := testutils.TestAddress("member")
-	roleConfig := &RoleConfig{GrantDelay: 5}
-	now := NewTimepoint(100)
+	roleConfig := &RoleConfig{GrantDelay: 5, Members: make(map[address]Access)}
+	now := NewTimePoint(100)
 
 	if roleConfig.hasMember(account, now) {
 		t.Fatal("missing member must be inactive")
@@ -23,11 +23,11 @@ func TestRoleConfigManagesNilMembersMap(t *testing.T) {
 
 	membershipTests := []struct {
 		name string
-		at   Timepoint
+		at   TimePoint
 		want bool
 	}{
 		{"before delay", now, false},
-		{"after delay", NewTimepoint(105), true},
+		{"after delay", NewTimePoint(105), true},
 	}
 	for _, tc := range membershipTests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -43,7 +43,7 @@ func TestRoleConfigManagesNilMembersMap(t *testing.T) {
 	if !roleConfig.revoke(account) {
 		t.Fatal("revoke must report an existing member")
 	}
-	if roleConfig.hasMember(account, NewTimepoint(105)) {
+	if roleConfig.hasMember(account, NewTimePoint(105)) {
 		t.Fatal("revoked member must be inactive")
 	}
 	if roleConfig.revoke(account) {

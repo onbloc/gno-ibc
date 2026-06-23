@@ -3,7 +3,7 @@ package manager
 import "testing"
 
 func TestAccessIsActiveAt(t *testing.T) {
-	now := NewTimepoint(100)
+	now := NewTimePoint(100)
 
 	tests := []struct {
 		name   string
@@ -11,9 +11,9 @@ func TestAccessIsActiveAt(t *testing.T) {
 		want   bool
 	}{
 		{"zero", Access{}, false},
-		{"future", NewAccess(NewTimepoint(101)), false},
+		{"future", NewAccess(NewTimePoint(101)), false},
 		{"current", NewAccess(now), true},
-		{"past", NewAccess(NewTimepoint(99)), true},
+		{"past", NewAccess(NewTimePoint(99)), true},
 	}
 
 	for _, tc := range tests {

@@ -118,12 +118,12 @@ func TestGrantDelayDefersMembership(t *testing.T) {
 	if state.HasRole(testRole, caller).IsMember {
 		t.Fatal("role must not be active before grant delay")
 	}
-	if !state.Roles[testRole].Members[caller].Since.After(CurrentTimepoint()) {
-		t.Fatal("grant delay must set activation after the current timepoint")
+	if !state.Roles[testRole].Members[caller].Since.After(CurrentTimePoint()) {
+		t.Fatal("grant delay must set activation after the current timePoint")
 	}
 }
 
-func TestGrantRoleForExistingMemberPreservesEffectiveTimepoint(t *testing.T) {
+func TestGrantRoleForExistingMemberPreservesEffectiveTimePoint(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
 	state.GrantRole(testRole, caller)
@@ -136,7 +136,7 @@ func TestGrantRoleForExistingMemberPreservesEffectiveTimepoint(t *testing.T) {
 
 	access := state.Roles[testRole].Members[caller]
 	if !access.Since.Equal(previousSince) {
-		t.Fatal("grant delay must not reset an existing member effective timepoint")
+		t.Fatal("grant delay must not reset an existing member effective timePoint")
 	}
 	if !state.HasRole(testRole, caller).IsMember {
 		t.Fatal("existing member must remain active after repeated grant")

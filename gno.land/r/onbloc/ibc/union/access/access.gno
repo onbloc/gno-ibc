@@ -68,7 +68,7 @@ func SetRoleAdmin(cur realm, role manager.RoleId, admin manager.RoleId) {
 func SetGrantDelay(cur realm, role manager.RoleId, delay manager.Delay) {
 	requireManagerAdmin(cur)
 	accessState.SetGrantDelay(role, delay)
-	emitRoleGrantDelayChangedEvent(role, delay, manager.CurrentTimepoint())
+	emitRoleGrantDelayChangedEvent(role, delay, manager.CurrentTimePoint())
 }
 
 // SetFunctionRole sets the role for selector on the calling realm's target path.

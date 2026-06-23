@@ -1,5 +1,17 @@
 package manager
 
+type State struct {
+	Roles   map[RoleId]*RoleConfig
+	Targets map[string]*TargetConfig
+}
+
+func NewState() State {
+	return State{
+		Roles:   make(map[RoleId]*RoleConfig),
+		Targets: make(map[string]*TargetConfig),
+	}
+}
+
 // =================================================== GETTERS ====================================================
 
 // CanCall reports whether caller can call target selector immediately.
@@ -38,7 +50,7 @@ func (state *State) HasRole(role RoleId, account address) HasRoleResult {
 	if roleConfig == nil {
 		return NewHasRoleResult(false)
 	}
-	return NewHasRoleResult(roleConfig.hasMember(account, CurrentTimepoint()))
+	return NewHasRoleResult(roleConfig.hasMember(account, CurrentTimePoint()))
 }
 
 // GetRoleAdmin returns the admin role for role, defaulting to AdminRole.
@@ -94,7 +106,10 @@ func (state *State) GrantRole(role RoleId, account address) bool {
 	if role == PublicRole {
 		panic(AccessManagerLockedRoleError(role))
 	}
-	return state.ensureRole(role).grant(account, CurrentTimepoint())
+
+	state.ensureRole(role)
+
+	return state.getRole(role).grant(account, CurrentTimePoint())
 }
 
 // RevokeRole revokes role membership from account and reports whether it existed.
@@ -105,7 +120,10 @@ func (state *State) RevokeRole(role RoleId, account address) bool {
 	if role == PublicRole {
 		panic(AccessManagerLockedRoleError(role))
 	}
-	return state.ensureRole(role).revoke(account)
+
+	state.ensureRole(role)
+
+	return state.getRole(role).revoke(account)
 }
 
 // RenounceRole revokes caller-confirmed role membership from account.
@@ -115,6 +133,7 @@ func (state *State) RenounceRole(role RoleId, account address, callerConfirmatio
 	if account != callerConfirmation {
 		panic(ErrorAccessManagerBadConfirmation)
 	}
+
 	return state.RevokeRole(role, account)
 }
 
@@ -124,7 +143,9 @@ func (state *State) RenounceRole(role RoleId, account address, callerConfirmatio
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L321-L337
 func (state *State) SetRoleAdmin(role RoleId, admin RoleId) {
 	RequireUnlockedConfigRole(role)
-	state.ensureRole(role).setAdmin(admin)
+
+	state.ensureRole(role)
+	state.getRole(role).setAdmin(admin)
 }
 
 // SetGrantDelay sets the delay before future grants of role become active.
@@ -135,7 +156,9 @@ func (state *State) SetGrantDelay(role RoleId, delay Delay) {
 	if role == PublicRole {
 		panic(AccessManagerLockedRoleError(role))
 	}
-	state.ensureRole(role).setGrantDelay(delay)
+
+	state.ensureRole(role)
+	state.getRole(role).setGrantDelay(delay)
 }
 
 // ============================================= FUNCTION MANAGEMENT ==============================================
@@ -144,14 +167,16 @@ func (state *State) SetGrantDelay(role RoleId, delay Delay) {
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L385-L393
 func (state *State) SetTargetFunctionRole(target string, selector Selector, role RoleId) {
-	state.ensureTarget(target).setFunctionRole(selector, role)
+	state.ensureTarget(target)
+	state.getTarget(target).setFunctionRole(selector, role)
 }
 
 // SetTargetFunctionRoles sets the same role for multiple target selectors.
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L373-L383
 func (state *State) SetTargetFunctionRoles(target string, selectors []Selector, role RoleId) {
-	state.ensureTarget(target).setFunctionRoles(selectors, role)
+	state.ensureTarget(target)
+	state.getTarget(target).setFunctionRoles(selectors, role)
 }
 
 // =============================================== MODE MANAGEMENT ================================================
@@ -161,7 +186,8 @@ func (state *State) SetTargetFunctionRoles(target string, selectors []Selector, 
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L412-L416
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L418-L426
 func (state *State) SetTargetClosed(target string, closed bool) {
-	state.ensureTarget(target).setClosed(closed)
+	state.ensureTarget(target)
+	state.getTarget(target).setClosed(closed)
 }
 
 // ================================================= ADMIN LOGIC ==================================================
@@ -171,10 +197,12 @@ func (state *State) SetTargetClosed(target string, closed bool) {
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L652-L657
 func (state *State) CanAdminRole(role RoleId, caller address) CanCallResult {
 	adminRole := state.GetRoleAdmin(role)
+
 	membership := state.HasRole(adminRole, caller)
 	if !membership.IsMember {
 		return NewCanCallResult(false)
 	}
+
 	return NewCanCallResult(true)
 }
 
@@ -187,6 +215,7 @@ func (state *State) CanManageTarget(caller address) CanCallResult {
 	if !membership.IsMember {
 		return NewCanCallResult(false)
 	}
+
 	return NewCanCallResult(true)
 }
 
@@ -203,40 +232,23 @@ func RequireUnlockedConfigRole(role RoleId) {
 }
 
 func (state *State) getRole(role RoleId) *RoleConfig {
-	state.ensureInitialized()
 	return state.Roles[role]
 }
 
-func (state *State) ensureRole(role RoleId) *RoleConfig {
-	state.ensureInitialized()
-	roleConfig := state.Roles[role]
-	if roleConfig == nil {
-		roleConfig = NewRoleConfig(AdminRole, 0)
-		state.Roles[role] = roleConfig
-	}
-	return roleConfig
-}
-
 func (state *State) getTarget(target string) *TargetConfig {
-	state.ensureInitialized()
 	return state.Targets[target]
 }
 
-func (state *State) ensureTarget(target string) *TargetConfig {
-	state.ensureInitialized()
-	targetConfig := state.Targets[target]
-	if targetConfig == nil {
-		targetConfig = NewTargetConfig(false)
-		state.Targets[target] = targetConfig
+func (state *State) ensureRole(role RoleId) {
+	roleConfig, found := state.Roles[role]
+	if !found || roleConfig == nil {
+		state.Roles[role] = NewRoleConfig(AdminRole, 0)
 	}
-	return targetConfig
 }
 
-func (state *State) ensureInitialized() {
-	if state.Roles == nil {
-		state.Roles = make(map[RoleId]*RoleConfig)
-	}
-	if state.Targets == nil {
-		state.Targets = make(map[string]*TargetConfig)
+func (state *State) ensureTarget(target string) {
+	targetConfig, found := state.Targets[target]
+	if !found || targetConfig == nil {
+		state.Targets[target] = NewTargetConfig(false)
 	}
 }

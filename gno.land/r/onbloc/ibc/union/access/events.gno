@@ -10,17 +10,17 @@ import (
 func emitRoleLabelEvent(role manager.RoleId, label string) {
 	chain.Emit(
 		manager.EventTypeRoleLabel,
-		manager.AttributeKeyRoleID, formatRoleID(role),
+		manager.AttributeKeyRoleID, role.String(),
 		manager.AttributeKeyLabel, label,
 	)
 }
 
-func emitRoleGrantedEvent(role manager.RoleId, account address, since manager.Timepoint, newMember bool) {
+func emitRoleGrantedEvent(role manager.RoleId, account address, since manager.TimePoint, newMember bool) {
 	chain.Emit(
 		manager.EventTypeRoleGranted,
-		manager.AttributeKeyRoleID, formatRoleID(role),
+		manager.AttributeKeyRoleID, role.String(),
 		manager.AttributeKeyAccount, account.String(),
-		manager.AttributeKeySince, formatTimepoint(since),
+		manager.AttributeKeySince, since.String(),
 		manager.AttributeKeyNewMember, strconv.FormatBool(newMember),
 	)
 }
@@ -28,7 +28,7 @@ func emitRoleGrantedEvent(role manager.RoleId, account address, since manager.Ti
 func emitRoleRevokedEvent(role manager.RoleId, account address) {
 	chain.Emit(
 		manager.EventTypeRoleRevoked,
-		manager.AttributeKeyRoleID, formatRoleID(role),
+		manager.AttributeKeyRoleID, role.String(),
 		manager.AttributeKeyAccount, account.String(),
 	)
 }
@@ -36,17 +36,17 @@ func emitRoleRevokedEvent(role manager.RoleId, account address) {
 func emitRoleAdminChangedEvent(role manager.RoleId, admin manager.RoleId) {
 	chain.Emit(
 		manager.EventTypeRoleAdminChanged,
-		manager.AttributeKeyRoleID, formatRoleID(role),
-		manager.AttributeKeyAdmin, formatRoleID(admin),
+		manager.AttributeKeyRoleID, role.String(),
+		manager.AttributeKeyAdmin, admin.String(),
 	)
 }
 
-func emitRoleGrantDelayChangedEvent(role manager.RoleId, delay manager.Delay, since manager.Timepoint) {
+func emitRoleGrantDelayChangedEvent(role manager.RoleId, delay manager.Delay, since manager.TimePoint) {
 	chain.Emit(
 		manager.EventTypeRoleGrantDelayChanged,
-		manager.AttributeKeyRoleID, formatRoleID(role),
-		manager.AttributeKeyDelay, formatDelay(delay),
-		manager.AttributeKeySince, formatTimepoint(since),
+		manager.AttributeKeyRoleID, role.String(),
+		manager.AttributeKeyDelay, delay.String(),
+		manager.AttributeKeySince, since.String(),
 	)
 }
 
@@ -63,18 +63,6 @@ func emitTargetFunctionRoleUpdatedEvent(target string, selector manager.Selector
 		manager.EventTypeTargetFunctionRoleUpdated,
 		manager.AttributeKeyTarget, target,
 		manager.AttributeKeySelector, string(selector),
-		manager.AttributeKeyRoleID, formatRoleID(role),
+		manager.AttributeKeyRoleID, role.String(),
 	)
-}
-
-func formatRoleID(role manager.RoleId) string {
-	return strconv.FormatUint(uint64(role), 10)
-}
-
-func formatDelay(delay manager.Delay) string {
-	return strconv.FormatUint(uint64(delay), 10)
-}
-
-func formatTimepoint(timepoint manager.Timepoint) string {
-	return strconv.FormatInt(timepoint.Unix(), 10)
 }

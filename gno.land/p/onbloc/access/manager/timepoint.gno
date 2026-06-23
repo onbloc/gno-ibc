@@ -1,20 +1,40 @@
 package manager
 
-import "time"
+import (
+	"strconv"
+	"time"
+)
 
-type Timepoint = time.Time
+type TimePoint int64
 
-func NewTimepoint(timepoint int64) Timepoint {
-	return time.Unix(timepoint, 0).UTC()
+func NewTimePoint(timePoint int64) TimePoint {
+	return TimePoint(timePoint)
 }
 
-func CurrentTimepoint() Timepoint {
-	return time.Now()
+func CurrentTimePoint() TimePoint {
+	return TimePoint(time.Now().Unix())
 }
 
-func timepointAvailableAt(timepoint Timepoint, delay Delay) Timepoint {
-	if timepoint.IsZero() {
-		return timepoint
-	}
-	return timepoint.Add(time.Duration(delay) * time.Second)
+func (t TimePoint) After(other TimePoint) bool {
+	return t > other
+}
+
+func (t TimePoint) Before(other TimePoint) bool {
+	return t < other
+}
+
+func (t TimePoint) Equal(other TimePoint) bool {
+	return t == other
+}
+
+func (t TimePoint) String() string {
+	return strconv.FormatInt(int64(t), 10)
+}
+
+func (t TimePoint) Int64() int64 {
+	return int64(t)
+}
+
+func (t TimePoint) IsZero() bool {
+	return t == 0
 }

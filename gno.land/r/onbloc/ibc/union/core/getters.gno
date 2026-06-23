@@ -53,7 +53,7 @@ func GetTimestampAtHeight(clientId types.ClientId, height uint64) (types.Timesta
 // GetConnection returns the typed connection record, or an error when the
 // connection is missing.
 func GetConnection(connectionId types.ConnectionId) (types.Connection, error) {
-	return mustGetImpl().GetConnectionTyped(connectionId)
+	return mustGetImpl().GetConnection(connectionId)
 }
 
 // GetBatchPackets returns the batch packet commitment for a batch hash, or an

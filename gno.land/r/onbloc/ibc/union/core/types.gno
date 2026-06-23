@@ -85,7 +85,7 @@ type ICoreGetter interface {
 	GetConsensusStateBytes(clientId types.ClientId, height types.Height) ([]byte, error)
 	GetLatestHeight(clientId types.ClientId) (uint64, error)
 	GetTimestampAtHeight(clientId types.ClientId, height uint64) (types.Timestamp, error)
-	GetConnectionTyped(connectionId types.ConnectionId) (types.Connection, error)
+	GetConnection(connectionId types.ConnectionId) (types.Connection, error)
 	GetChannels() ([]types.Channel, error)
 	GetChannel(channelId types.ChannelId) (types.Channel, error)
 	GetBatchPacketsCommitment(batchHash types.H256) (types.H256, error)

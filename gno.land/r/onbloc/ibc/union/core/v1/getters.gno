@@ -99,9 +99,9 @@ func (c *coreV1) GetTimestampAtHeight(clientId types.ClientId, height uint64) (t
 	return ts, nil
 }
 
-// GetConnectionTyped returns the typed connection record, or an error when the
+// GetConnection returns the typed connection record, or an error when the
 // connection is missing.
-func (c *coreV1) GetConnectionTyped(connectionId types.ConnectionId) (types.Connection, error) {
+func (c *coreV1) GetConnection(connectionId types.ConnectionId) (types.Connection, error) {
 	conn, ok := c.store.GetConnection(connectionId)
 	if !ok {
 		return types.Connection{}, core.ErrConnectionNotFound

@@ -86,7 +86,7 @@ func TestGetConnectionAndChannel(cur realm, t *testing.T) {
 		core.NewConnection(types.ConnectionStateOpen, types.ClientId(1), types.ClientId(7), types.ConnectionId(2)))
 	ms.channels[3] = types.Channel{State: types.ChannelStateOpen, ConnectionId: types.ConnectionId(1)}
 
-	conn, err := v.GetConnectionTyped(types.ConnectionId(1))
+	conn, err := v.GetConnection(types.ConnectionId(1))
 	uassert.NoError(t, err)
 	uassert.True(t, conn.State == types.ConnectionStateOpen)
 
@@ -94,6 +94,6 @@ func TestGetConnectionAndChannel(cur realm, t *testing.T) {
 	uassert.NoError(t, err)
 	uassert.True(t, ch.State == types.ChannelStateOpen)
 
-	_, err = v.GetConnectionTyped(types.ConnectionId(99))
+	_, err = v.GetConnection(types.ConnectionId(99))
 	uassert.ErrorIs(t, err, core.ErrConnectionNotFound)
 }

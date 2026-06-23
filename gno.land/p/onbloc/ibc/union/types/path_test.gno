@@ -59,12 +59,12 @@ func TestClientStatePath(t *testing.T) {
 		{
 			name:     "large client id",
 			clientId: 1000000,
-			want:     "c033441713512b1dc2fd4ba8568c2cfacae5f5e4debe33f523e43791183b2d38",
+			want:     "dcc8475ee9860607a27ad9f2ca21c2c400497f7a3a186b41ec38b247279da7eb",
 		},
 		{
 			name:     "max uint32 client id",
 			clientId: 0xFFFFFFFF,
-			want:     "aa7f6db4c3d761d3818cbb4cf949eb549bfe4caa062d07def734e6c03cc09fa7",
+			want:     "1443ce2b9f5be4b521b79a31b8c504d5791ccbbbb7a54a4c907a3074b8298bfb",
 		},
 	}
 
@@ -99,13 +99,13 @@ func TestConsensusStatePath(t *testing.T) {
 			name:     "large client id and height",
 			clientId: 9999,
 			height:   NewHeight(10000),
-			want:     "2a9cc7bb20e26809f2761043d85e2cb269d471d999d8bfe97052b22e03c3e9b",
+			want:     "fc6914b44a62783902266b77f2c3263f0a98cba9721d52bd6ba8dc9ae94b14aa",
 		},
 		{
 			name:     "max uint64 height",
 			clientId: 1,
 			height:   NewHeight(0xFFFFFFFFFFFFFFFF),
-			want:     "e8c89c6d944e1dfc5e6cf60bc9ae82f8ed6867576b5df99b6f1b3cd4efbb1c72",
+			want:     "7ac1c4b72613bd80238651b90f837b345cd7250bf414b8b4cf36282a9aaa1c9e",
 		},
 	}
 
@@ -136,12 +136,12 @@ func TestConnectionPath(t *testing.T) {
 		{
 			name:         "large connection id",
 			connectionId: 50000,
-			want:         "844d77e867f4f73d7e8e14f5c50b4eb35c6f642239b7dd3f675cf31f27e82531",
+			want:         "215aca87594ebfe024e35e7bd0fbf92ddba55cb75e6d9609214612f2c8e23f47",
 		},
 		{
 			name:         "max uint32 connection id",
 			connectionId: 0xFFFFFFFF,
-			want:         "5e5cb4ce060a5b5e25894e886c5ebe0051c951ba25eeab7d3c63b59d48b1e3f0",
+			want:         "4d904f334c769f52591df191b17a5e2f5bbb770cf82c8fb10c71088a1e65b6ac",
 		},
 	}
 
@@ -172,12 +172,12 @@ func TestChannelPath(t *testing.T) {
 		{
 			name:      "large channel id",
 			channelId: 100000,
-			want:      "4b5a6d72de693457c8f151c09bcabb0f0e0f7cbffaaa901701a24145e8db0476",
+			want:      "0d0a8d351b6115086f4358f3279585cc53ef5e3c7b2e39290f04ce495db3ef3b",
 		},
 		{
 			name:      "max uint32 channel id",
 			channelId: 0xFFFFFFFF,
-			want:      "3b4b3c2b5c06b49408338445484e3f86c7f5c6db5c5e71f5b99c265a19bae6e6",
+			want:      "74fb9905a035d2dd7f821526973ac02d8b2e4f85cbb8a3b243bd21e181d98b44",
 		},
 	}
 
@@ -208,12 +208,12 @@ func TestBatchPacketsPath(t *testing.T) {
 		{
 			name:      "full byte hash",
 			batchHash: mustH256(t, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
-			want:      "c92d4f2dc3990f46e92f12f24947e044c3cf5a828d4d29ef98ba13c6e193ee0",
+			want:      "275af1e1d9599f9d6c81a587f3ecc2086b93734915d3e5baea15ae7f0f95549f",
 		},
 		{
 			name:      "mixed hash",
-			batchHash: mustH256(t, "aabbccddeeff0011223344556677889900112233445566778899aabbccdd"),
-			want:      "1d0f89d7e46e94f44db5ee7a45707d8c96f71e6db256ce5f589c5bb2ecfe58b",
+			batchHash: mustH256(t, "aabbccddeeff0011223344556677889900112233445566778899aabbccddeeff"),
+			want:      "3c80bbd81a5a0929f40eb2b65b7918e95a743a8e01eda88be602e8dd38ef28ff",
 		},
 	}
 
@@ -244,12 +244,12 @@ func TestBatchReceiptsPath(t *testing.T) {
 		{
 			name:      "full byte hash",
 			batchHash: mustH256(t, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
-			want:      "9d63fe805e80e9f053f80cf20b8c5aa6f5fd9cedc8c856ebc79005881c5bb1a3",
+			want:      "a485e1e40f3492f97a85776092f442e9f945f0cf0fb89b7c7711be18a5657f6e",
 		},
 		{
 			name:      "mixed hash",
-			batchHash: mustH256(t, "aabbccddeeff0011223344556677889900112233445566778899aabbccdd"),
-			want:      "f26b156c512a8c8b928c832dddc577870cba8b0f4ee15080806cb0c4730a35e7",
+			batchHash: mustH256(t, "aabbccddeeff0011223344556677889900112233445566778899aabbccddeeff"),
+			want:      "448d7f4d27610b7e8a7d547470c85adc7f550d75709c6c72eadefb5442c4fbef",
 		},
 	}
 
@@ -288,14 +288,14 @@ func TestMembershipProofPath(t *testing.T) {
 			clientId:    10000,
 			proofHeight: 1000000,
 			path:        bytes.Repeat([]byte{0xaa}, 32),
-			want:        "65bc38c6bdc3a9ddbe9aefc6e4a6a4e1b5da05b2b501504b7f26057806f03f46",
+			want:        "e5540aca01035d48b5e7dcbe249627d0afb9713efb664e35ba366d5a9e9a4af8",
 		},
 		{
 			name:        "max uint64 height",
 			clientId:    5,
 			proofHeight: 0xFFFFFFFFFFFFFFFF,
 			path:        []byte{0xff, 0xee, 0xdd},
-			want:        "a29c625a8b487a2723bc4e70d3c1a11bb5a50de3b3844bb83b35db1c1c33c6d0",
+			want:        "7bfc7038cb44538946f391d96b0deee4906cc16b65033ab64c4e813dccd8c35b",
 		},
 	}
 
@@ -334,14 +334,14 @@ func TestNonMembershipProofPath(t *testing.T) {
 			clientId:    10000,
 			proofHeight: 1000000,
 			path:        bytes.Repeat([]byte{0xbb}, 32),
-			want:        "d7a916744dfc72f4d0cc292c9a629b1ac15b8d000f62ed18c5fc7b8d3d2f34e6",
+			want:        "1558e9d519d6fc58198d3d3d76a1168b2c5d6d7f2d734c7a4b4f00ddc656459a",
 		},
 		{
 			name:        "max uint64 height",
 			clientId:    5,
 			proofHeight: 0xFFFFFFFFFFFFFFFF,
 			path:        []byte{0x11, 0x22, 0x33},
-			want:        "1ab47e642b7f66f70c6c12e5e23d98e3b5c9a6f774d44f1bd23c5bb1aaefee72",
+			want:        "062516bfa4d3caebc29879a0f9c4998b8111cad47c809ed971e0cde7620d0094",
 		},
 	}
 
@@ -393,7 +393,7 @@ func TestPacketCommitmentPath(t *testing.T) {
 				TimeoutHeight:        0,
 				TimeoutTimestamp:     10000,
 			},
-			want:    "f6bc34c20f5b3cf5e5ee3e8f9e8f93e1ba7d6e1f9e4f93e6f1c9e8f93e6f1c9e8",
+			want:    "f9598f0d8f8ff023f550e12f8d1d7fdb6617a3db6dfcdc75e0ae94c29089618b",
 			wantErr: false,
 		},
 		{
@@ -405,7 +405,7 @@ func TestPacketCommitmentPath(t *testing.T) {
 				TimeoutHeight:        0,
 				TimeoutTimestamp:     0xFFFFFFFFFFFFFFFF,
 			},
-			want:    "3a1fc2a6e19c34b8e19c34b8e19c34b8e19c34b8e19c34b8e19c34b8e19c34b8",
+			want:    "73bf318b8cceb6bd6ee3d6acaa3819fddb30018b42cb57bc55562cdd2e759800",
 			wantErr: false,
 		},
 	}
@@ -467,7 +467,7 @@ func TestPacketAcknowledgementPath(t *testing.T) {
 				TimeoutHeight:        0,
 				TimeoutTimestamp:     5000,
 			},
-			want:    "c8f93e6f1c9e8f93e6f1c9e8f93e6f1c9e8f93e6f1c9e8f93e6f1c9e8f93e6f1c9",
+			want:    "f6b0ac3c8204dad4893813d7266cc882d56ac6d7b00e88390139122fe31b8dee",
 			wantErr: false,
 		},
 		{
@@ -479,7 +479,7 @@ func TestPacketAcknowledgementPath(t *testing.T) {
 				TimeoutHeight:        0,
 				TimeoutTimestamp:     0,
 			},
-			want:    "f6e1f9e4f93e6f1c9e8f93e6f1c9e8f93e6f1c9e8f93e6f1c9e8f93e6f1c9e8f93",
+			want:    "f43dc2390ae6b256dada11475f81acd313280a4071f344ea59b2a9090a8e3c50",
 			wantErr: false,
 		},
 	}

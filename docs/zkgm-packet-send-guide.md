@@ -18,10 +18,10 @@ the operand and the common page to broadcast and verify the packet.
 
 | Item | Value |
 |---|---|
-| Source code | `gno.land/r/core/ibc/v1/apps/zkgm/` |
-| Deployed pkgpath (testnet) | `gno.land/r/onbloc/unionibc/v1/apps/zkgm` |
-| Wire ABI schemas | `gno.land/p/core/ibc/zkgm/abi.gno` |
-| Module import path | `gno.land/p/onbloc/unionibc/zkgm` |
+| Source code | `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/` |
+| Deployed pkgpath (testnet) | `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm` |
+| Wire ABI schemas | `gno.land/p/onbloc/ibc/union/zkgm/abi.gno` |
+| Module import path | `gno.land/p/onbloc/ibc/union/zkgm` |
 | RPC | `http://23.20.153.250:26657` |
 | tx-indexer | `http://23.20.153.250:8546/graphql` |
 | Gno channel id | `1` |

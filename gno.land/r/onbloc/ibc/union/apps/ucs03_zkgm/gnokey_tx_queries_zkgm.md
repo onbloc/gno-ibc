@@ -1,6 +1,6 @@
 # gnokey transaction query vectors — ZKGM
 
-Target realm: `gno.land/r/onbloc/unionibc/v1/apps/zkgm`
+Target realm: `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm`
 
 The copy-paste transactions below exercise ZKGM on a single local node with a
 mock light client and locally opened channel pairs. They are intended as smoke
@@ -23,11 +23,10 @@ GNO_IBC_ROOT=<repo root>
 RPC_LISTENER=0.0.0.0:26657
 ```
 
-The ZKGM loader runs at package load time and calls `core.RegisterApp`, so
-there is no separate `maketx` step for app registration. The script includes
-extra `local` resolvers because ZKGM module paths use
-`gno.land/{p,r}/onbloc/unionibc/...`, while source directories live under
-`gno.land/{p,r}/core/...` in this repository.
+The ZKGM proxy registers with core at package load time, so there is no separate
+`maketx` step for app registration. The smoke-node script includes `local`
+resolvers for the current source-backed module paths under
+`gno.land/r/onbloc/ibc/union/...` and `gno.land/p/onbloc/ibc/union/...`.
 
 All examples use the default `gnodev local` `test1` key, whose password is
 empty. The leading `printf '\n'` feeds that empty password to `gnokey`.
@@ -131,7 +130,7 @@ printf '\n' | gnokey maketx call \
   -gas-fee 1000000ugnot -gas-wanted 90000000 \
   -broadcast -insecure-password-stdin \
   -chainid dev -remote tcp://127.0.0.1:26657 \
-  -pkgpath gno.land/r/onbloc/unionibc/v1/apps/zkgm \
+  -pkgpath gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm \
   -func SendRaw \
   -args "$SOURCE_CHANNEL" \
   -args "$TIMEOUT_TIMESTAMP" \

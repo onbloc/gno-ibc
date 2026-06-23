@@ -14,8 +14,8 @@ light-client verification, and related tooling.
 
 | Path | Contents |
 |---|---|
-| `gno.land/p/core/` | First-party stateless Gno packages: ABI/RLP codecs, Ethereum MPT/storage helpers, ZKGM ABI/types, token bucket logic, and light-client primitives. |
-| `gno.land/r/core/ibc/v1/` | First-party stateful realms: v1 IBC core, light-client adapters, ZKGM proxy, implementation, loader, and test realms. |
+| `gno.land/p/onbloc/` | First-party stateless Gno packages: ABI/RLP codecs, Ethereum MPT/storage helpers, ZKGM ABI/types, token bucket logic, access helpers, and light-client primitives. |
+| `gno.land/r/onbloc/ibc/union/` | First-party stateful realms: Union IBC core, light-client-facing apps, UCS03 ZKGM proxy/implementation, and test realms. |
 | `tools/` | Fixture generators, protocol-code generation, and smoke-test scripts. |
 | `third_party/` | Sparse-checkout submodules mirrored into `gno.land/` by `make vendor`. |
 | `docs/` | Operational guides for tx-indexer queries, ZKGM packet sends, and native gas calibration. |
@@ -57,17 +57,18 @@ make generate-check            # verify generated protobuf codecs are current
 Focused Gno test runs are also useful during development:
 
 ```bash
-gno test -v ./gno.land/r/core/ibc/v1/core
-gno test -v ./gno.land/r/core/ibc/v1/apps/zkgm/v0/impl
-gno test -v ./gno.land/p/core/ibc/zkgm
+gno test -v ./gno.land/r/onbloc/ibc/union/core
+gno test -v ./gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1
+gno test -v ./gno.land/p/onbloc/ibc/union/zkgm
 ```
 
 ## Development Notes
 
 - `.gno` files are Gno, not Go. Use `gnomod.toml` module manifests and
   `gno.land/p/...` or `gno.land/r/...` import paths.
-- The ZKGM source tree lives under `gno.land/r/core/ibc/v1/apps/zkgm/`, while
-  its module/import path is `gno.land/r/onbloc/unionibc/v1/apps/zkgm`.
+- The ZKGM proxy source tree and module path live under
+  `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/`; the current implementation
+  lives under `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1/`.
 - `make vendor` is idempotent and safe to run before tests. Mirrored
   third-party packages are generated workspace inputs; their submodule pins are
   the source of truth.

@@ -31,7 +31,7 @@ OPERAND="<hex from the per-kind guide>"
 
 printf '\n' | gnokey maketx call \
   -insecure-password-stdin \
-  -pkgpath "gno.land/r/onbloc/unionibc/v1/apps/zkgm" \
+  -pkgpath "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm" \
   -func "SendRaw" \
   -args "1" \
   -args "$TIMEOUT" \
@@ -101,7 +101,7 @@ Optional verification via indexer:
 ```bash
 curl -s -X POST http://23.20.153.250:8546/graphql/query \
   -H 'Content-Type: application/json' \
-  -d '{"query":"{ getTransactions(where:{success:{eq:true},response:{events:{GnoEvent:{type:{eq:\"PacketSend\"},pkg_path:{eq:\"gno.land/r/onbloc/unionibc/v1/core\"},_and:[{attrs:{key:{eq:\"packet_hash\"},value:{eq:\"0x...\"}}},{attrs:{key:{eq:\"source_channel_id\"},value:{eq:\"1\"}}},{attrs:{key:{eq:\"destination_channel_id\"},value:{eq:\"25\"}}}]}}}},order:{heightAndIndex:DESC}){ block_height hash response { events { ...on GnoEvent { type pkg_path attrs { key value } } } } } }"}'
+  -d '{"query":"{ getTransactions(where:{success:{eq:true},response:{events:{GnoEvent:{type:{eq:\"PacketSend\"},pkg_path:{eq:\"gno.land/r/onbloc/ibc/union/core\"},_and:[{attrs:{key:{eq:\"packet_hash\"},value:{eq:\"0x...\"}}},{attrs:{key:{eq:\"source_channel_id\"},value:{eq:\"1\"}}},{attrs:{key:{eq:\"destination_channel_id\"},value:{eq:\"25\"}}}]}}}},order:{heightAndIndex:DESC}){ block_height hash response { events { ...on GnoEvent { type pkg_path attrs { key value } } } } } }"}'
 ```
 
 Store permanent logs under:
@@ -172,13 +172,13 @@ If multiple debugging packets were broadcast, clearly identify:
 Source:
 
 ```text
-gno.land/r/core/ibc/v1/apps/zkgm/
+gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/
 ```
 
 Current deployed realm:
 
 ```text
-gno.land/r/onbloc/unionibc/v1/apps/zkgm
+gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm
 ```
 
 Always use the deployed path for `-pkgpath`.
@@ -269,7 +269,7 @@ Find the specific `PacketSend` event by packet hash and channel pair:
 
 ```bash
 curl -sS -X POST -H "Content-Type: application/json" \
-  -d "{\"query\":\"{ getTransactions(where:{success:{eq:true},response:{events:{GnoEvent:{type:{eq:\\\"PacketSend\\\"},pkg_path:{eq:\\\"gno.land/r/onbloc/unionibc/v1/core\\\"},_and:[{attrs:{key:{eq:\\\"packet_hash\\\"},value:{eq:\\\"${PACKET_HASH}\\\"}}},{attrs:{key:{eq:\\\"source_channel_id\\\"},value:{eq:\\\"${SOURCE_CHANNEL_ID}\\\"}}},{attrs:{key:{eq:\\\"destination_channel_id\\\"},value:{eq:\\\"${DESTINATION_CHANNEL_ID}\\\"}}}]}}}},order:{heightAndIndex:DESC}){ block_height hash response { events { ...on GnoEvent { type pkg_path attrs { key value } } } } } }\"}" \
+  -d "{\"query\":\"{ getTransactions(where:{success:{eq:true},response:{events:{GnoEvent:{type:{eq:\\\"PacketSend\\\"},pkg_path:{eq:\\\"gno.land/r/onbloc/ibc/union/core\\\"},_and:[{attrs:{key:{eq:\\\"packet_hash\\\"},value:{eq:\\\"${PACKET_HASH}\\\"}}},{attrs:{key:{eq:\\\"source_channel_id\\\"},value:{eq:\\\"${SOURCE_CHANNEL_ID}\\\"}}},{attrs:{key:{eq:\\\"destination_channel_id\\\"},value:{eq:\\\"${DESTINATION_CHANNEL_ID}\\\"}}}]}}}},order:{heightAndIndex:DESC}){ block_height hash response { events { ...on GnoEvent { type pkg_path attrs { key value } } } } } }\"}" \
   "$INDEXER_URL" | python3 -m json.tool
 ```
 
@@ -277,6 +277,6 @@ Find recent `PacketSend` events on the Gno source channel:
 
 ```bash
 curl -sS -X POST -H "Content-Type: application/json" \
-  -d "{\"query\":\"{ getTransactions(where: { response: { events: { _or: [ { GnoEvent: { type: { eq: \\\"PacketSend\\\" } pkg_path: { eq: \\\"gno.land/r/onbloc/unionibc/v1/core\\\" } attrs: { key: { eq: \\\"source_channel_id\\\" } value: { eq: \\\"${SOURCE_CHANNEL_ID}\\\" } } } } ] } } } order: { heightAndIndex: DESC }) { hash block_height response { events { ...on GnoEvent { type attrs { key value } } } } } }\"}" \
+  -d "{\"query\":\"{ getTransactions(where: { response: { events: { _or: [ { GnoEvent: { type: { eq: \\\"PacketSend\\\" } pkg_path: { eq: \\\"gno.land/r/onbloc/ibc/union/core\\\" } attrs: { key: { eq: \\\"source_channel_id\\\" } value: { eq: \\\"${SOURCE_CHANNEL_ID}\\\" } } } } ] } } } order: { heightAndIndex: DESC }) { hash block_height response { events { ...on GnoEvent { type attrs { key value } } } } } }\"}" \
   "$INDEXER_URL" | python3 -m json.tool
 ```

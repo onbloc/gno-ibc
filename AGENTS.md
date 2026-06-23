@@ -25,7 +25,7 @@
 ## Light Client Proof Verification
 
 - Any code path that verifies membership or non-membership proofs must reject inactive clients before proof verification.
-- For v1 light client adapters (`gno.land/r/core/ibc/v1/lightclients/...`), put an explicit status guard in the adapter's `VerifyMembership` and `VerifyNonMembership` methods before decoding or verifying proof bytes. Only `StatusActive` clients may proceed.
+- For v1 light client adapters (`gno.land/p/onbloc/ibc/union/lightclient/...`), put an explicit status guard in the adapter's `VerifyMembership` and `VerifyNonMembership` methods before decoding or verifying proof bytes. Only `StatusActive` clients may proceed.
 - For v2 core paths (`gno.land/r/aib/ibc/core`), keep the existing core-level `lightClient.Status() == Active` checks before every `VerifyMembership` or `VerifyNonMembership` call.
 - Inner light client implementations should still enforce any status checks they can determine without caller context. For example, frozen-client checks belong in the inner client, while expiration checks that need the current block time may need to stay in the adapter or core caller.
 - New light client adapters must include tests showing that frozen or expired clients cannot be used for membership or non-membership proof verification.
@@ -85,7 +85,7 @@ ref: <https://github.com/allinbits/gno-realms/blob/master/AGENTS.md#gno-specific
 Each package/realm has a `gnomod.toml` (not `gno.mod`):
 
 ```toml
-module = "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl"
+module = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 gno = "0.9"
 ```
 
@@ -173,7 +173,7 @@ caller model they enforce, and do not merge distinct trust domains:
   action)`, which means registered impl OR allowed impl. Do not split this
   into registered-only / allowed-only helpers unless the behavior is
   intentionally changing.
-- Bootstrap loader checks may have a named caller helper, but request-dependent
+- Bootstrap checks may have a named caller helper, but request-dependent
   bootstrap policy should stay near `UpdateImpl`.
 - Preserve admin-only direct ledger writes such as `SetBucketConfig`; admin and
   impl authorization are separate trust domains.
@@ -222,7 +222,7 @@ The owning realm must expose a crossing constructor whose body runs in
 the owning realm:
 
 ```gno
-// in owning realm (e.g., r/core/ibc/v1/core/types.gno)
+// in owning realm (e.g., r/onbloc/ibc/union/core/types.gno)
 func NewRecvPacketResult(cur realm, status PacketStatus, ack []byte) RecvPacketResult {
     return RecvPacketResult{Status: status, Ack: ack}
 }
@@ -239,9 +239,9 @@ these constructors at minimum:
   `NewConsensusStateUpdate`.
 - `core/msg.gno`: the full `NewMsg*` family covering every
   `MsgCreateClient`, `MsgPacketRecv`, `MsgChannelOpenInit`, etc.
-- `apps/zkgm/types.gno`: `NewUpdateRequest`, `NewInFlightValue`,
+- `apps/ucs03_zkgm/types.gno`: `NewUpdateRequest`, `NewInFlightValue`,
   `NewInFlightKey`, `NewSendRequest`.
-- `apps/zkgm/testing/e2e/helpers.gno`: `NewChannelPair`.
+- `apps/ucs03_zkgm/testing/e2e/helpers.gno`: `NewChannelPair`.
 
 If a test mock or filetest panics with `cannot allocate <type>`, the fix
 is to add the missing constructor in the type's home realm and rewrite
@@ -251,7 +251,7 @@ returns (`return Foo{}, err`) need the same treatment: use
 
 ### MsgRun vs MsgCall
 
-Most IBC functions require `MsgRun` (not `MsgCall`) because they take complex arguments (structs, slices of bytes). The v1 IBC core realm module path is `gno.land/r/onbloc/unionibc/v1/core`; the vendored gno-realms core still lives at `gno.land/r/aib/ibc/core`. See filetests under `gno.land/r/core/ibc/v1/apps/zkgm/` for working `MsgRun` examples.
+Most IBC functions require `MsgRun` (not `MsgCall`) because they take complex arguments (structs, slices of bytes). The Union IBC core realm module path is `gno.land/r/onbloc/ibc/union/core`; the vendored gno-realms core still lives at `gno.land/r/aib/ibc/core`. See filetests under `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/` for working `MsgRun` examples.
 
 ### Gno Standard Library
 
@@ -278,10 +278,10 @@ IBC voucher tokens (minted on RecvPacket for cross-chain tokens) use **GRC20 tok
 
 The ZKGM port is tracked in `local_docs/zkgm/`. Before changing ZKGM code, read the relevant wave plan/review there first. The main implementation paths are:
 
-- ABI/types: `gno.land/p/core/ibc/zkgm/`
-- Proxy realm source: `gno.land/r/core/ibc/v1/apps/zkgm/` (module/import path `gno.land/r/onbloc/unionibc/v1/apps/zkgm`)
-- v0 implementation source: `gno.land/r/core/ibc/v1/apps/zkgm/v0/impl/` (module/import path `gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl`)
-- Mock receiver realm source: `gno.land/r/core/ibc/v1/apps/zkgm/testing/mock/` (module/import path `gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/mock`)
+- ABI/types: `gno.land/p/onbloc/ibc/union/zkgm/`
+- Proxy realm source: `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/`
+- v1 implementation source: `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1/`
+- Mock receiver realm source: `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock/`
 
 ### Call Handler Invariants
 
@@ -293,14 +293,14 @@ The ZKGM port is tracked in `local_docs/zkgm/`. Before changing ZKGM code, read 
 
 ### Batch Dispatcher Invariants
 
-The ZKGM implementation uses dispatcher helpers in `v0/impl/dispatch.gno`. Use these for new opcode integration:
+The ZKGM implementation uses dispatcher helpers in `apps/ucs03_zkgm/v1/dispatch.gno`. Use these for new opcode integration:
 
 - `dispatchVerify`
 - `dispatchExecute`
 - `dispatchAck`
 - `dispatchTimeout`
 
-Batch children are intentionally limited to `OP_CALL` and `OP_TOKEN_ORDER`. Nested batch and forward children are rejected in v0. `dispatchExecute` must preserve `types.RecvPacketResult.Status`; do not reduce it to acknowledgement bytes only, or standalone Call failure status will be lost.
+Batch children are intentionally limited to `OP_CALL` and `OP_TOKEN_ORDER`. Nested batch and forward children are rejected in v1. `dispatchExecute` must preserve `types.RecvPacketResult.Status`; do not reduce it to acknowledgement bytes only, or standalone Call failure status will be lost.
 
 Batch acknowledgement rules:
 
@@ -311,7 +311,7 @@ Batch acknowledgement rules:
 
 ### Forward Handler Invariants
 
-Forward v0 uses the v1 IBC core's async acknowledgement path. `executeForward` sends the child packet immediately, stores the parent packet in `inFlightPacket`, and returns `PacketStatusAsync`. Child ack/timeout later consumes the in-flight entry and writes the parent acknowledgement through the ZKGM proxy's `WriteForwardAck` wrapper, which delegates to core `WriteAcknowledgement`.
+Forward in the ZKGM v1 implementation uses the IBC core's async acknowledgement path. `executeForward` sends the child packet immediately, stores the parent packet in `inFlightPacket`, and returns `PacketStatusAsync`. Child ack/timeout later consumes the in-flight entry and writes the parent acknowledgement through the ZKGM proxy's `WriteForwardAck` wrapper, which delegates to core `WriteAcknowledgement`.
 
 - Forward children may be `OP_CALL`, `OP_TOKEN_ORDER`, or `OP_BATCH`. Direct Forward-of-Forward input is rejected by verify, but multi-hop continuation rebuilds a nested Forward internally.
 - Forward child packet routing uses `core.GetChannel(sourceChannelId)` to obtain the counterparty channel. Keep channel state initialized before exercising Forward paths.
@@ -331,7 +331,7 @@ Forward v0 uses the v1 IBC core's async acknowledgement path. `executeForward` s
 
 ### ZKGM Test Guidance
 
-The ZKGM impl currently relies mostly on focused unit tests, not filetests. For Batch and Call work, keep tests close to `v0/impl/` and cover:
+The ZKGM impl currently relies mostly on focused unit tests, not filetests. For Batch and Call work, keep tests close to `apps/ucs03_zkgm/v1/` and cover:
 
 - direct handler behavior (`executeCall`, `executeBatch`, `acknowledgeBatch`, `timeoutBatch`)
 - dispatcher routing from `Recv` / `Ack` / `Timeout`
@@ -350,7 +350,7 @@ Operational knowledge from sending real `SendRaw` calls against a `gnodev` testn
 
 Both `Send` and `SendRaw` in the ZKGM realm capture sent coins only when `cur.Previous().IsUserCall()` returns true. A `gnokey maketx run` script does **not** satisfy this check — the script's package is the previous realm, not the user EOA — so `unsafe.OriginSend()` returns empty and `requireSentCoin` panics with `zkgm/coins: sent coin mismatch` even though `-send <denom>` was attached.
 
-For native-token sends, always use `gnokey maketx call -func SendRaw …`. Pre-encode the operand offline using the Solidity ABI schemas in `gno.land/p/core/ibc/zkgm/abi.gno` and pass it as `operandHex`.
+For native-token sends, always use `gnokey maketx call -func SendRaw ...`. Pre-encode the operand offline using the Solidity ABI schemas in `gno.land/p/onbloc/ibc/union/zkgm/abi.gno` and pass it as `operandHex`.
 
 ### `TokenMetadata` is just two `[]byte` fields
 
@@ -383,7 +383,7 @@ The tuple inputs must be byte-identical to the `TokenMetadata` you will ship in 
 
 ### `-send` must exactly match the operand `BaseAmount`
 
-`requireSentCoin` (see `apps/zkgm/v0/impl/coins.gno`) rejects anything that isn't a single coin with `Denom == BaseToken` and `Amount == BaseAmount`. Mismatched amounts, extra denoms, or zero-coin transactions all fail. Refunds on timeout or non-success ack land on the proxy realm — see PR#50.
+`requireSentCoin` (see `apps/ucs03_zkgm/v1/coins.gno`) rejects anything that isn't a single coin with `Denom == BaseToken` and `Amount == BaseAmount`. Mismatched amounts, extra denoms, or zero-coin transactions all fail. Refunds on timeout or non-success ack land on the proxy realm — see PR#50.
 
 ### Gas budget
 
@@ -391,7 +391,7 @@ A TokenOrderV2 INITIALIZE `SendRaw` consumes ~50.7M gas on the dev chain. Use `-
 
 ### Deployed realm path vs. source tree
 
-Source files live under `gno.land/r/core/ibc/v1/apps/zkgm/`, but a testnet deployment may publish them under a different namespace such as `gno.land/r/onbloc/unionibc/v1/apps/zkgm`. For `maketx call -pkgpath`, use the *deployed* path. The authoritative deployed path is the `port_id` attribute of `ChannelOpenInit` / `ChannelOpenAck` / `ChannelOpenConfirm` events surfaced by the tx-indexer.
+Source files live under `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/`, but a testnet deployment may publish them under a chain-specific namespace. For `maketx call -pkgpath`, use the *deployed* path. The authoritative deployed path is the `port_id` attribute of `ChannelOpenInit` / `ChannelOpenAck` / `ChannelOpenConfirm` events surfaced by the tx-indexer.
 
 ### Indexer GraphQL quirks (see `docs/tx-indexer.md`)
 
@@ -418,7 +418,7 @@ Files named `z*_filetest.gno` in realm directories. These are integration tests 
 ```gno
 package main
 
-import "gno.land/r/onbloc/unionibc/v1/core"
+import "gno.land/r/onbloc/ibc/union/core"
 
 func main(cur realm) {
     clientID := core.CreateClient(cross(cur), clientState, consensusState)
@@ -484,10 +484,10 @@ uassert.Equal(t, expected, actual)
 
 ## gnokey qeval Expression Syntax
 
-`gnokey query vm/qeval -data '<expr>'` evaluates a single Gno expression against a realm package. Useful for relayer-style reads against a running node (see `gno.land/r/core/ibc/v1/gnokey_tx_queries.md` for IBC examples). Rules verified live against a `gnodev local` smoke node:
+`gnokey query vm/qeval -data '<expr>'` evaluates a single Gno expression against a realm package. Useful for relayer-style reads against a running node (see `gno.land/r/onbloc/ibc/gnokey_tx_queries.md` for IBC examples). Rules verified live against a `gnodev local` smoke node:
 
 - Top-level form is `gno.land/r/<path>.<Func>(<args>)`. The fully qualified package path is required for the entry function only.
-- Inside `<args>`, types and identifiers resolve in the **called package's scope**. Use unqualified names. Writing `gno.land/r/onbloc/unionibc/v1/core.H256{}` inside an arg fails with `name gno not declared` because the parser tries to read `gno` as an identifier.
+- Inside `<args>`, types and identifiers resolve in the **called package's scope**. Use unqualified names. Writing `gno.land/r/onbloc/ibc/union/core.H256{}` inside an arg fails with `name gno not declared` because the parser tries to read `gno` as an identifier.
 - 32-byte array aliases (e.g. `H256 [32]byte`) take a composite literal `H256{0xab,0xcd,...,0x33}` with exactly 32 entries. Bare numeric literals must include the `0x` prefix or be unsigned decimals in `byte` range.
 - Argument expressions can **compose other realm functions**. Example: `QueryCommitmentAtPath(BatchPacketsPath(H256{...}))` chains a path-derivation helper into the lookup, so callers do not need to precompute the derived hash off-chain.
 - qeval returns the result in the form `("<value>" string)` (or the appropriate type tag). Empty-string returns from query functions show as `("" string)`.

@@ -26,7 +26,10 @@ func (c *coreV1) ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit)
 	)
 	c.store.CreateChannel(0, rlm, channelId, channel, portId)
 
-	a := c.appAtPort(portId)
+	a, err := c.getAppAtPort(portId)
+	if err != nil {
+		panic(err)
+	}
 
 	a.OnChannelOpenInit(cross(rlm), msg.ConnectionId, channelId, msg.Version, relayer)
 	core.EmitChannelOpenInit(portId, channelId, channel)
@@ -73,7 +76,10 @@ func (c *coreV1) channelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry, v
 
 	c.store.CreateChannel(0, rlm, channelId, msg.Channel, portId)
 
-	a := c.appAtPort(portId)
+	a, err := c.getAppAtPort(portId)
+	if err != nil {
+		panic(err)
+	}
 
 	a.OnChannelOpenTry(cross(rlm), msg.Channel.ConnectionId, channelId, msg.Channel.Version, msg.CounterpartyVersion, relayer)
 
@@ -95,7 +101,10 @@ func (c *coreV1) ForceChannelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenA
 func (c *coreV1) channelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck, verify bool) {
 	relayer := rlm.Previous().Address()
 
-	channel := c.channel(msg.ChannelId)
+	channel, err := c.getChannel(msg.ChannelId)
+	if err != nil {
+		panic(err)
+	}
 
 	if channel.State != types.ChannelStateInit {
 		panic(makeError(core.ErrInvalidChannelState))
@@ -126,7 +135,10 @@ func (c *coreV1) channelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck, v
 	)
 	c.store.SaveChannel(0, rlm, msg.ChannelId, updated)
 
-	a := c.appAtPort(portId)
+	a, err := c.getAppAtPort(portId)
+	if err != nil {
+		panic(err)
+	}
 
 	a.OnChannelOpenAck(cross(rlm), msg.ChannelId, msg.CounterpartyChannelId, msg.CounterpartyVersion, relayer)
 
@@ -148,7 +160,10 @@ func (c *coreV1) ForceChannelOpenConfirm(_ int, rlm realm, msg types.MsgChannelO
 func (c *coreV1) channelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenConfirm, verify bool) {
 	relayer := rlm.Previous().Address()
 
-	channel := c.channel(msg.ChannelId)
+	channel, err := c.getChannel(msg.ChannelId)
+	if err != nil {
+		panic(err)
+	}
 
 	if channel.State != types.ChannelStateTryOpen {
 		panic(makeError(core.ErrInvalidChannelState))
@@ -183,7 +198,10 @@ func (c *coreV1) channelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenCo
 	)
 	c.store.SaveChannel(0, rlm, msg.ChannelId, updated)
 
-	a := c.appAtPort(portId)
+	a, err := c.getAppAtPort(portId)
+	if err != nil {
+		panic(err)
+	}
 
 	a.OnChannelOpenConfirm(cross(rlm), msg.ChannelId, relayer)
 
@@ -194,7 +212,10 @@ func (c *coreV1) channelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenCo
 func (c *coreV1) ChannelCloseInit(_ int, rlm realm, msg types.MsgChannelCloseInit) {
 	relayer := rlm.Previous().Address()
 
-	channel := c.channel(msg.ChannelId)
+	channel, err := c.getChannel(msg.ChannelId)
+	if err != nil {
+		panic(err)
+	}
 
 	if channel.State != types.ChannelStateOpen {
 		panic(makeError(core.ErrInvalidChannelState))
@@ -220,7 +241,10 @@ func (c *coreV1) ChannelCloseInit(_ int, rlm realm, msg types.MsgChannelCloseIni
 func (c *coreV1) ChannelCloseConfirm(_ int, rlm realm, msg types.MsgChannelCloseConfirm) {
 	relayer := rlm.Previous().Address()
 
-	channel := c.channel(msg.ChannelId)
+	channel, err := c.getChannel(msg.ChannelId)
+	if err != nil {
+		panic(err)
+	}
 
 	if channel.State != types.ChannelStateOpen {
 		panic(makeError(core.ErrInvalidChannelState))
@@ -264,13 +288,14 @@ func (c *coreV1) closedChannel(channel types.Channel) types.Channel {
 	)
 }
 
-// channel returns the stored channel for channelId, panicking when it is
-// missing. It centralizes the lookup shared by the handshake and packet paths.
-func (c *coreV1) channel(channelId types.ChannelId) types.Channel {
+// getChannel returns the stored channel for channelId, or an error when it is
+// missing. It centralizes the lookup shared by the handshake and packet paths;
+// the caller (entrypoint) decides whether a miss reverts.
+func (c *coreV1) getChannel(channelId types.ChannelId) (types.Channel, error) {
 	channel, ok := c.store.GetChannel(channelId)
 	if !ok {
-		panic(makeError(core.ErrChannelNotFound, channelId.String()))
+		return types.Channel{}, makeError(core.ErrChannelNotFound, channelId.String())
 	}
 
-	return channel
+	return channel, nil
 }

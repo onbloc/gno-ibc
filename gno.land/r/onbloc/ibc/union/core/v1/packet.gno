@@ -26,7 +26,10 @@ func (c *coreV1) SendPacket(_ int, rlm realm, sourceChannelId types.ChannelId, t
 		panic(makeError(core.ErrUnauthorizedPacketSender))
 	}
 
-	channel := c.channel(sourceChannelId)
+	channel, err := c.getChannel(sourceChannelId)
+	if err != nil {
+		panic(err)
+	}
 
 	if channel.State != types.ChannelStateOpen {
 		panic(makeError(core.ErrInvalidChannelState))
@@ -62,7 +65,10 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 	}
 
 	destinationChannelId := msg.Packets[0].DestinationChannelId
-	channel := c.channel(destinationChannelId)
+	channel, err := c.getChannel(destinationChannelId)
+	if err != nil {
+		panic(err)
+	}
 
 	connection := c.ensureConnectionState(channel.ConnectionId)
 
@@ -71,7 +77,10 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 	c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, proofKey[:], magic[:])
 
 	portId, _ := c.store.GetChannelOwner(destinationChannelId)
-	a := c.appAtPort(portId)
+	a, err := c.getAppAtPort(portId)
+	if err != nil {
+		panic(err)
+	}
 
 	now := core.NowNanos()
 
@@ -105,12 +114,18 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 	}
 
 	destinationChannelId := msg.Packets[0].DestinationChannelId
-	channel := c.channel(destinationChannelId)
+	channel, err := c.getChannel(destinationChannelId)
+	if err != nil {
+		panic(err)
+	}
 
 	connection := c.ensureConnectionState(channel.ConnectionId)
 
 	portId, _ := c.store.GetChannelOwner(destinationChannelId)
-	a := c.appAtPort(portId)
+	a, err := c.getAppAtPort(portId)
+	if err != nil {
+		panic(err)
+	}
 
 	intentApp, ok := a.(app.IIntentApp)
 	if !ok {
@@ -150,7 +165,10 @@ func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAckn
 
 	first := msg.Packets[0]
 	sourceChannelId := first.SourceChannelId
-	channel := c.channel(sourceChannelId)
+	channel, err := c.getChannel(sourceChannelId)
+	if err != nil {
+		panic(err)
+	}
 
 	connection := c.ensureConnectionState(channel.ConnectionId)
 
@@ -184,7 +202,10 @@ func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 	relayer := rlm.Previous().Address()
 	packet := msg.Packet
 
-	channel := c.channel(packet.SourceChannelId)
+	channel, err := c.getChannel(packet.SourceChannelId)
+	if err != nil {
+		panic(err)
+	}
 
 	if channel.State != types.ChannelStateOpen {
 		panic(makeError(core.ErrInvalidChannelState))
@@ -192,7 +213,10 @@ func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 
 	connection := c.ensureConnectionState(channel.ConnectionId)
 
-	lc := c.client(connection.ClientId)
+	lc, err := c.getClient(connection.ClientId)
+	if err != nil {
+		panic(err)
+	}
 
 	proofTimestamp, err := lc.GetTimestampAtHeight(msg.ProofHeight)
 	if err != nil {
@@ -368,7 +392,10 @@ func (c *coreV1) acceptRecvPacket(_ int, rlm realm, packet types.Packet, batchCh
 		panic(makeError(core.ErrBatchSameChannelOnly))
 	}
 
-	channel := c.channel(packet.DestinationChannelId)
+	channel, err := c.getChannel(packet.DestinationChannelId)
+	if err != nil {
+		panic(err)
+	}
 
 	if channel.State != types.ChannelStateOpen {
 		panic(makeError(core.ErrInvalidChannelState))
@@ -409,21 +436,24 @@ func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, res types.
 
 // verifyNonMembership checks a non-membership proof against an active light client.
 func (c *coreV1) verifyNonMembership(clientId types.ClientId, height types.Height, proof, key []byte) {
-	lc := c.activeClient(clientId)
+	lc, err := c.getActiveClient(clientId)
+	if err != nil {
+		panic(err)
+	}
 
 	if err := lc.VerifyNonMembership(height.RevisionHeight, key, proof); err != nil {
 		panic(err)
 	}
 }
 
-// appAtPort returns the app registered for portId, panicking when no app is
-// registered. It centralizes the port -> app lookup the recv and handshake
-// callback paths share.
-func (c *coreV1) appAtPort(portId types.Bytes) app.IApp {
+// getAppAtPort returns the app registered for portId, or an error when no app
+// is registered. It centralizes the port -> app lookup the recv and handshake
+// callback paths share; the caller (entrypoint) decides whether a miss reverts.
+func (c *coreV1) getAppAtPort(portId types.Bytes) (app.IApp, error) {
 	a, ok := c.store.GetAppByPortId(portId)
 	if !ok {
-		panic(makeError(core.ErrPortNotFound, string(portId)))
+		return nil, makeError(core.ErrPortNotFound, string(portId))
 	}
 
-	return a
+	return a, nil
 }

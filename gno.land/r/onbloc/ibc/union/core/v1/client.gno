@@ -83,7 +83,10 @@ func (c *coreV1) initClient(_ int, rlm realm, clientId types.ClientId, clientSta
 // updates its own state, and mirrors the resulting state bytes for queries and
 // counterparty proofs.
 func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) {
-	lc := c.activeClient(msg.ClientId)
+	lc, err := c.getActiveClient(msg.ClientId)
+	if err != nil {
+		panic(err)
+	}
 
 	caller := rlm.Previous().Address()
 	relayer := resolveRelayer(caller, msg.Relayer)
@@ -135,7 +138,10 @@ func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateCli
 // mirror / ClientStatePath commitment before emitting the event.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L1048-L1093
 func (c *coreV1) Misbehaviour(_ int, rlm realm, msg types.MsgMisbehaviour) {
-	lc := c.activeClient(msg.ClientId)
+	lc, err := c.getActiveClient(msg.ClientId)
+	if err != nil {
+		panic(err)
+	}
 
 	caller := rlm.Previous().Address()
 	relayer := resolveRelayer(caller, msg.Relayer)
@@ -161,7 +167,10 @@ func (c *coreV1) VerifyClientMembership(_ int, rlm realm, clientId types.ClientI
 // verifyMembership checks a membership proof against a registered, active light
 // client. Shared by VerifyClientMembership and the connection/channel handshakes.
 func (c *coreV1) verifyMembership(clientId types.ClientId, height types.Height, proof, key, value []byte) {
-	lc := c.activeClient(clientId)
+	lc, err := c.getActiveClient(clientId)
+	if err != nil {
+		panic(err)
+	}
 
 	err := lc.VerifyMembership(height.RevisionHeight, key, proof, value)
 	if err != nil {
@@ -169,26 +178,31 @@ func (c *coreV1) verifyMembership(clientId types.ClientId, height types.Height, 
 	}
 }
 
-// client returns the light client registered under clientId, panicking when no
-// client is registered for it.
-func (c *coreV1) client(clientId types.ClientId) lightclient.Interface {
+// getClient returns the light client registered under clientId, or an error
+// when no client is registered for it. The caller (entrypoint) decides whether
+// a miss reverts.
+func (c *coreV1) getClient(clientId types.ClientId) (lightclient.Interface, error) {
 	lc, ok := c.store.GetLightClient(clientId)
 	if !ok {
-		panic(makeError(core.ErrClientNotFound, clientId.String()))
+		return nil, makeError(core.ErrClientNotFound, clientId.String())
 	}
 
-	return lc
+	return lc, nil
 }
 
-// activeClient returns the light client registered under clientId, panicking
-// when it is missing or not in the Active status. It centralizes the
+// getActiveClient returns the light client registered under clientId, or an
+// error when it is missing or not in the Active status. It centralizes the
 // "registered and active" precondition shared by the update, misbehaviour, and
 // proof-verification paths.
-func (c *coreV1) activeClient(clientId types.ClientId) lightclient.Interface {
-	lc := c.client(clientId)
-	if lc.Status() != lightclient.Active {
-		panic(makeError(core.ErrClientNotActive))
+func (c *coreV1) getActiveClient(clientId types.ClientId) (lightclient.Interface, error) {
+	lc, err := c.getClient(clientId)
+	if err != nil {
+		return nil, err
 	}
 
-	return lc
+	if lc.Status() != lightclient.Active {
+		return nil, makeError(core.ErrClientNotActive)
+	}
+
+	return lc, nil
 }

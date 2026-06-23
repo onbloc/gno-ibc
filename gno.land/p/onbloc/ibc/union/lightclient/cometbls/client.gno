@@ -24,20 +24,15 @@ type CometblsLightClient struct {
 
 var _ lightclient.Interface = (*CometblsLightClient)(nil)
 
-// NewCometblsLightClient builds a client from the client and consensus state.
-// The membership-key owner is taken from clientState.ContractAddress, so the
-// caller (an app/bootstrap realm) only supplies the typed state.
-func NewCometblsLightClient(
-	clientState *ClientState,
-	consensusState *ConsensusState,
-) (*CometblsLightClient, error) {
+// NewCometblsLightClient builds the Gno object-form light client from decoded
+// client and consensus state. Core ClientImpl adapters decode MsgCreateClient
+// bytes before calling this constructor.
+func NewCometblsLightClient(clientState *ClientState, consensusState *ConsensusState) (*CometblsLightClient, error) {
 	client := &CometblsLightClient{
 		clientState:            clientState,
 		consensusStateByHeight: bptree.NewBPTree32(),
 	}
-
 	client.setConsensusState(clientState.LatestHeight, consensusState)
-
 	return client, nil
 }
 

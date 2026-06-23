@@ -25,9 +25,11 @@ func init() {
 // retrieves, mirroring commitment values into chain params so counterparties
 // can prove them.
 type Store struct {
-	clientSeq          seqid.ID
-	clientByID         *bptree.BPTree // clientKey(ClientId) → *client
-	clientRegistryByTy map[string]lightclient.Interface
+	clientSeq      seqid.ID
+	clientRegistry map[string]lightclient.ClientImpl // ClientRegistry: type → factory
+	clientTypeByID map[uint32]types.ClientType        // ClientTypes: clientId → type
+	clientImplByID map[uint32]lightclient.ClientImpl  // ClientImpls: clientId → factory
+	clientByID     map[uint32]*client                 // clientId → instantiated state
 
 	connectionSeq seqid.ID
 	connections   *bptree.BPTree // connectionKey(ConnectionId) → types.Connection
@@ -49,7 +51,6 @@ type Store struct {
 
 type client struct {
 	id                types.ClientId
-	typ               types.ClientType
 	creator           address
 	lightClient       lightclient.Interface
 	clientState       []byte
@@ -68,9 +69,11 @@ type channelEntry struct {
 
 func newStore() *Store {
 	return &Store{
-		clientByID:          bptree.NewBPTree32(),
-		clientRegistryByTy:  make(map[string]lightclient.Interface),
-		connections:         bptree.NewBPTree32(),
+		clientRegistry: make(map[string]lightclient.ClientImpl),
+		clientTypeByID: make(map[uint32]types.ClientType),
+		clientImplByID: make(map[uint32]lightclient.ClientImpl),
+		clientByID:     make(map[uint32]*client),
+		connections:    bptree.NewBPTree32(),
 		channels:            bptree.NewBPTree32(),
 		commitments:         make(map[types.H256]types.H256),
 		membershipProofs:    make(map[types.H256]types.H256),
@@ -86,26 +89,32 @@ func newStore() *Store {
 // context.
 var _ IStore = (*Store)(nil)
 
-// RegisterClient records the light client object for a client type, panicking
-// when the type is already registered.
-func (s *Store) RegisterClient(_ int, rlm realm, typ types.ClientType, lc lightclient.Interface) {
-	s.registerClient(typ, lc)
+// RegisterClient stores a factory function for typ in the client registry.
+func (s *Store) RegisterClient(_ int, rlm realm, typ types.ClientType, impl lightclient.ClientImpl) {
+	s.registerClient(typ, impl)
 }
 
-// RegisteredClient returns the light client object registered for a client type.
-func (s *Store) RegisteredClient(typ types.ClientType) (lightclient.Interface, bool) {
-	return s.registeredClient(typ)
+// ClientRegistry returns the registered factory for typ.
+func (s *Store) ClientRegistry(typ types.ClientType) (lightclient.ClientImpl, bool) {
+	return s.clientRegistryEntry(typ)
 }
 
-// HasRegisteredClient reports whether a light client is registered for a type.
+// HasRegisteredClient reports whether a factory is registered for typ.
 func (s *Store) HasRegisteredClient(typ types.ClientType) bool {
-	return s.hasRegisteredClient(typ)
+	_, found := s.clientRegistryEntry(typ)
+	return found
 }
 
 // AddClient allocates a new client id and stores the light client object,
 // returning the assigned id.
 func (s *Store) AddClient(_ int, rlm realm, typ types.ClientType, creator address, lc lightclient.Interface) types.ClientId {
 	return s.addClient(s.nextClientId(), typ, creator, lc).id
+}
+
+// GetClientImpl returns the factory stored for clientId.
+func (s *Store) GetClientImpl(clientId types.ClientId) (lightclient.ClientImpl, bool) {
+	impl, found := s.clientImplByID[uint32(clientId)]
+	return impl, found
 }
 
 // SaveClientStore records a light client storage write (result StorageWrites),
@@ -123,17 +132,14 @@ func (s *Store) SaveClientStore(_ int, rlm realm, clientId types.ClientId, key s
 
 // ClientExists reports whether a client is registered under clientId.
 func (s *Store) ClientExists(clientId types.ClientId) bool {
-	return s.getClient(clientId) != nil
+	_, found := s.clientTypeByID[uint32(clientId)]
+	return found
 }
 
 // ClientType returns the registered client type for clientId.
 func (s *Store) ClientType(clientId types.ClientId) (types.ClientType, bool) {
-	c := s.getClient(clientId)
-	if c == nil {
-		return "", false
-	}
-
-	return c.typ, true
+	typ, found := s.clientTypeByID[uint32(clientId)]
+	return typ, found
 }
 
 // GetLightClient returns the stored light client object for clientId.
@@ -375,10 +381,6 @@ func (s *Store) BatchReceiptsAt(batchHash types.H256) (types.H256, bool) {
 
 // --- Key helpers ---
 
-func clientKey(id types.ClientId) string {
-	return seqid.ID(id).Binary()
-}
-
 func connectionKey(id types.ConnectionId) string {
 	return seqid.ID(id).Binary()
 }
@@ -508,45 +510,42 @@ func (s *Store) nextClientId() types.ClientId {
 // --- Client ---
 
 func (s *Store) addClient(clientId types.ClientId, typ types.ClientType, creator address, lc lightclient.Interface) *client {
+	id := uint32(clientId)
+	clientImpl, _ := s.clientRegistryEntry(typ)
 	c := &client{
 		id:                clientId,
-		typ:               typ,
 		creator:           creator,
 		lightClient:       lc,
 		consensusByHeight: bptree.NewBPTree32(),
 		clientStore:       make(map[string][]byte),
 	}
-	s.clientByID.Set(clientKey(clientId), c)
+	s.clientTypeByID[id] = typ
+	s.clientImplByID[id] = clientImpl
+	s.clientByID[id] = c
 
 	return c
 }
 
-func (s *Store) registerClient(typ types.ClientType, lc lightclient.Interface) {
+func (s *Store) registerClient(typ types.ClientType, impl lightclient.ClientImpl) {
 	key := typ.String()
-	if _, ok := s.clientRegistryByTy[key]; ok {
+	if _, ok := s.clientRegistry[key]; ok {
 		panic("client type already exists")
 	}
-
-	s.clientRegistryByTy[key] = lc
+	s.clientRegistry[key] = impl
 }
 
-func (s *Store) registeredClient(typ types.ClientType) (lightclient.Interface, bool) {
-	lc, ok := s.clientRegistryByTy[typ.String()]
-	return lc, ok
-}
-
-func (s *Store) hasRegisteredClient(typ types.ClientType) bool {
-	_, ok := s.clientRegistryByTy[typ.String()]
-	return ok
+func (s *Store) clientRegistryEntry(typ types.ClientType) (lightclient.ClientImpl, bool) {
+	impl, found := s.clientRegistry[string(typ)]
+	return impl, found
 }
 
 func (s *Store) getClient(clientId types.ClientId) *client {
-	v, found := s.clientByID.Get(clientKey(clientId))
+	c, found := s.clientByID[uint32(clientId)]
 	if !found {
 		return nil
 	}
 
-	return v.(*client)
+	return c
 }
 
 func (s *Store) lightClientOf(clientId types.ClientId) (lightclient.Interface, bool) {

@@ -19,9 +19,23 @@ type mockLightClient struct {
 	timestampAtHt    types.Timestamp
 	update           types.StateUpdate
 	creationWrites   map[string][]byte
+	implCalls        int
+	implClient       lightclient.Interface
+	implCS           []byte
+	implCons         []byte
 }
 
 var _ lightclient.Interface = (*mockLightClient)(nil)
+
+func (l *mockLightClient) ClientImpl(clientStateBytes, consensusStateBytes []byte) (lightclient.Interface, error) {
+	l.implCalls++
+	l.implCS = clientStateBytes
+	l.implCons = consensusStateBytes
+	if l.implClient != nil {
+		return l.implClient, nil
+	}
+	return l, nil
+}
 
 func (l *mockLightClient) VerifyMembership(height uint64, key, proof, value []byte) error {
 	if l.membershipErr != "" {

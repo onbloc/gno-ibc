@@ -83,6 +83,76 @@ func TestCreateClientPersistsCreationStorageWrites(cur realm, t *testing.T) {
 	uassert.Equal(t, "create-value", string(mc.clientStore["create-key"]))
 }
 
+func TestInitClient(cur realm, t *testing.T) {
+	tests := []struct {
+		name            string
+		lc              *mockLightClient
+		clientState     []byte
+		consensusState  []byte
+		wantHeight      types.Height
+		wantClientState string
+		wantConsensus   string
+		wantStoreKey    string
+		wantStoreValue  string
+		wantAbort       string
+	}{
+		{
+			name:            "persists submitted state at light client latest height",
+			lc:              &mockLightClient{latestHeight: 3},
+			clientState:     []byte("client-state"),
+			consensusState:  []byte("consensus-state"),
+			wantHeight:      types.NewHeight(3),
+			wantClientState: "client-state",
+			wantConsensus:   "consensus-state",
+		},
+		{
+			name:            "creation result overwrites client state and storage",
+			lc:              &mockLightClient{latestHeight: 4, creationState: []byte("verified-client"), creationWrites: map[string][]byte{"create-key": []byte("create-value")}},
+			clientState:     []byte("submitted-client"),
+			consensusState:  []byte("submitted-consensus"),
+			wantHeight:      types.NewHeight(4),
+			wantClientState: "verified-client",
+			wantConsensus:   "submitted-consensus",
+			wantStoreKey:    "create-key",
+			wantStoreValue:  "create-value",
+		},
+		{
+			name:      "creation verification error aborts",
+			lc:        &mockLightClient{createErr: "bad genesis"},
+			wantAbort: "create client: bad genesis",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			lc := tc.lc
+			if lc == nil {
+				lc = &mockLightClient{}
+			}
+			clientId := types.ClientId(1)
+			v.store.(*mockStore).clients[uint32(clientId)] = &mockClient{typ: testClientType, lc: lc, consensus: make(map[string][]byte), clientStore: make(map[string][]byte)}
+
+			if tc.wantAbort != "" {
+				uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
+					v.initClient(0, cur, tc.clientState, tc.consensusState, cur.Previous().Address(), lc, clientId)
+				})
+				return
+			}
+
+			height := v.initClient(0, cur, tc.clientState, tc.consensusState, cur.Previous().Address(), lc, clientId)
+			uassert.Equal(t, tc.wantHeight.String(), height.String())
+
+			mc := v.store.(*mockStore).clients[uint32(clientId)]
+			uassert.Equal(t, tc.wantClientState, string(mc.clientState))
+			uassert.Equal(t, tc.wantConsensus, string(mc.consensus[tc.wantHeight.String()]))
+			if tc.wantStoreKey != "" {
+				uassert.Equal(t, tc.wantStoreValue, string(mc.clientStore[tc.wantStoreKey]))
+			}
+		})
+	}
+}
+
 func TestUpdateClientSavesStateAndConsensus(cur realm, t *testing.T) {
 	v := newTestImpl()
 	lc := &mockLightClient{update: types.StateUpdate{
@@ -154,29 +224,39 @@ func TestForceUpdateClientUnknownClientAborts(cur realm, t *testing.T) {
 	})
 }
 
-func TestVerifyClientMembershipActivePasses(cur realm, t *testing.T) {
-	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
+func TestVerifyMembership(cur realm, t *testing.T) {
+	tests := []struct {
+		name         string
+		lc           *mockLightClient
+		missing      bool
+		wantAbort    string
+		wantCalls    int
+		wantNoAbort  bool
+	}{
+		{"active client verifies", &mockLightClient{}, false, "", 1, true},
+		{"unknown client aborts", &mockLightClient{}, true, "client 99 not found", 0, false},
+		{"inactive client aborts before proof verification", &mockLightClient{status: lightclient.Expired}, false, "client is not active", 0, false},
+		{"proof failure aborts", &mockLightClient{membershipErr: "bad proof"}, false, "bad proof", 1, false},
+	}
 
-	uassert.NotAborts(t, cur, func() {
-		v.VerifyClientMembership(0, cur, clientId, types.NewHeight(1), []byte("proof"), []byte("path"), []byte("value"))
-	})
-}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			clientId := types.ClientId(99)
+			if !tc.missing {
+				clientId = createClient(cur, v, tc.lc, nil, nil)
+			}
 
-func TestVerifyClientMembershipInactiveAborts(cur realm, t *testing.T) {
-	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{status: lightclient.Expired}, nil, nil)
-
-	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
-		v.VerifyClientMembership(0, cur, clientId, types.NewHeight(1), []byte("proof"), []byte("path"), []byte("value"))
-	})
-}
-
-func TestVerifyClientMembershipProofFailureAborts(cur realm, t *testing.T) {
-	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{membershipErr: "bad proof"}, nil, nil)
-
-	uassert.AbortsContains(t, cur, "bad proof", func(cur realm) {
-		v.VerifyClientMembership(0, cur, clientId, types.NewHeight(1), []byte("proof"), []byte("path"), []byte("value"))
-	})
+			if tc.wantNoAbort {
+				uassert.NotAborts(t, cur, func() {
+					v.verifyMembership(clientId, types.NewHeight(1), []byte("proof"), []byte("path"), []byte("value"))
+				})
+			} else {
+				uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
+					v.verifyMembership(clientId, types.NewHeight(1), []byte("proof"), []byte("path"), []byte("value"))
+				})
+			}
+			uassert.Equal(t, tc.wantCalls, tc.lc.membershipCalls)
+		})
+	}
 }

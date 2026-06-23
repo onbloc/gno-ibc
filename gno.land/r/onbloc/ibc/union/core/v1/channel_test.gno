@@ -12,8 +12,12 @@ import (
 // setupChannelEnv seeds an active client, an open connection (id 1), and a
 // registered app at "app-port", returning the port id and the app.
 func setupChannelEnv(cur realm, v *coreV1) (types.Bytes, *mockApp) {
+	return setupChannelEnvWithLightClient(cur, v, &mockLightClient{})
+}
+
+func setupChannelEnvWithLightClient(cur realm, v *coreV1, lc *mockLightClient) (types.Bytes, *mockApp) {
 	ms := v.store.(*mockStore)
-	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
+	clientId := createClient(cur, v, lc, nil, nil)
 	ms.SaveConnection(0, cur, types.ConnectionId(1),
 		core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
 	portId := types.Bytes("app-port")
@@ -70,16 +74,52 @@ func TestChannelOpenInitRequiresOpenConnection(cur realm, t *testing.T) {
 }
 
 func TestChannelOpenTry(cur realm, t *testing.T) {
-	v := newTestImpl()
-	portId, mApp := setupChannelEnv(cur, v)
+	tests := []struct {
+		name       string
+		lc         *mockLightClient
+		verify     bool
+		malleate   func(msg *types.MsgChannelOpenTry)
+		wantAbort  string
+		wantCalls  int
+		wantSaved  bool
+		wantNotify int
+	}{
+		{"verifies proof and saves try-open channel", &mockLightClient{}, true, func(msg *types.MsgChannelOpenTry) {}, "", 1, true, 1},
+		{"force path skips proof verification", &mockLightClient{status: lightclient.Frozen}, false, func(msg *types.MsgChannelOpenTry) {}, "", 0, true, 1},
+		{"invalid state aborts before proof", &mockLightClient{}, true, func(msg *types.MsgChannelOpenTry) { msg.Channel.State = types.ChannelStateOpen }, "invalid channel state", 0, false, 0},
+		{"invalid counterparty aborts before proof", &mockLightClient{}, true, func(msg *types.MsgChannelOpenTry) { msg.Channel.CounterpartyChannelId = 0 }, "invalid counterparty channel id", 0, false, 0},
+		{"proof failure aborts", &mockLightClient{membershipErr: "bad proof"}, true, func(msg *types.MsgChannelOpenTry) {}, "bad proof", 1, false, 0},
+	}
 
-	v.ChannelOpenTry(0, cur, openTryMsg(portId))
-	chId := v.store.(*mockStore).currentChannelId()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			ms := v.store.(*mockStore)
+			clientId := createClient(cur, v, tc.lc, nil, nil)
+			ms.SaveConnection(0, cur, types.ConnectionId(1),
+				core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+			portId := types.Bytes("app-port")
+			mApp := &mockApp{}
+			ms.registerApp(portId, mApp)
+			msg := openTryMsg(portId)
+			tc.malleate(&msg)
 
-	ch, ok := v.store.GetChannel(chId)
-	uassert.True(t, ok)
-	uassert.True(t, ch.State == types.ChannelStateTryOpen)
-	uassert.Equal(t, 1, mApp.openTry)
+			run := func(cur realm) {
+				v.channelOpenTry(0, cur, msg, tc.verify)
+			}
+			if tc.wantAbort != "" {
+				uassert.AbortsContains(t, cur, tc.wantAbort, run)
+			} else {
+				uassert.NotAborts(t, cur, func() {
+					v.channelOpenTry(0, cur, msg, tc.verify)
+				})
+			}
+			uassert.Equal(t, tc.wantCalls, tc.lc.membershipCalls)
+			_, ok := v.store.GetChannel(types.ChannelId(1))
+			uassert.Equal(t, tc.wantSaved, ok)
+			uassert.Equal(t, tc.wantNotify, mApp.openTry)
+		})
+	}
 }
 
 func TestChannelOpenTryProofFailureAborts(cur realm, t *testing.T) {
@@ -167,6 +207,70 @@ func TestChannelOpenAckMovesInitToOpen(cur realm, t *testing.T) {
 	uassert.Equal(t, 1, mApp.openAck)
 }
 
+func TestChannelOpenAck(cur realm, t *testing.T) {
+	tests := []struct {
+		name                  string
+		lc                    *mockLightClient
+		verify                bool
+		seedState             types.ChannelState
+		counterpartyChannelId types.ChannelId
+		missing               bool
+		wantAbort             string
+		wantCalls             int
+		wantOpen              bool
+	}{
+		{"verifies proof and opens init channel", &mockLightClient{}, true, types.ChannelStateInit, types.ChannelId(9), false, "", 1, true},
+		{"force path skips proof verification", &mockLightClient{status: lightclient.Frozen}, false, types.ChannelStateInit, 0, false, "", 0, true},
+		{"missing channel aborts", &mockLightClient{}, true, types.ChannelStateInit, types.ChannelId(9), true, "channel 1 not found", 0, false},
+		{"wrong state aborts before proof", &mockLightClient{}, true, types.ChannelStateTryOpen, types.ChannelId(9), false, "invalid channel state", 0, false},
+		{"proof failure aborts", &mockLightClient{membershipErr: "bad proof"}, true, types.ChannelStateInit, types.ChannelId(9), false, "bad proof", 1, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			portId, mApp := setupChannelEnvWithLightClient(cur, v, tc.lc)
+			chId := types.ChannelId(1)
+			if !tc.missing {
+				v.store.CreateChannel(0, cur, chId, types.Channel{
+					State:              tc.seedState,
+					ConnectionId:       types.ConnectionId(1),
+					CounterpartyPortId: types.Bytes("cp-port"),
+					Version:            "v1",
+				}, portId)
+			}
+			msg := types.MsgChannelOpenAck{
+				ChannelId:             chId,
+				CounterpartyChannelId: tc.counterpartyChannelId,
+				CounterpartyVersion:   "counterparty-v1",
+				ProofHeight:           10,
+				ProofTry:              []byte("proof"),
+			}
+
+			run := func(cur realm) {
+				v.channelOpenAck(0, cur, msg, tc.verify)
+			}
+			if tc.wantAbort != "" {
+				uassert.AbortsContains(t, cur, tc.wantAbort, run)
+			} else {
+				uassert.NotAborts(t, cur, func() {
+					v.channelOpenAck(0, cur, msg, tc.verify)
+				})
+			}
+			uassert.Equal(t, tc.wantCalls, tc.lc.membershipCalls)
+			if tc.wantOpen {
+				ch, _ := v.store.GetChannel(chId)
+				uassert.True(t, ch.State == types.ChannelStateOpen)
+				uassert.Equal(t, uint32(tc.counterpartyChannelId), uint32(ch.CounterpartyChannelId))
+				uassert.Equal(t, "counterparty-v1", ch.Version)
+				uassert.Equal(t, 1, mApp.openAck)
+				owner, _ := v.store.GetChannelOwner(chId)
+				uassert.Equal(t, string(portId), string(owner))
+			}
+		})
+	}
+}
+
 // Converted from Union channel_open_ack_not_found.
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L591-L650
@@ -233,6 +337,66 @@ func TestChannelOpenConfirmMovesTryOpenToOpen(cur realm, t *testing.T) {
 	ch, _ := v.store.GetChannel(chId)
 	uassert.True(t, ch.State == types.ChannelStateOpen)
 	uassert.Equal(t, 1, mApp.openConfirm)
+}
+
+func TestChannelOpenConfirm(cur realm, t *testing.T) {
+	tests := []struct {
+		name                  string
+		lc                    *mockLightClient
+		verify                bool
+		seedState             types.ChannelState
+		counterpartyChannelId types.ChannelId
+		missing               bool
+		wantAbort             string
+		wantCalls             int
+		wantOpen              bool
+	}{
+		{"verifies proof and opens try-open channel", &mockLightClient{}, true, types.ChannelStateTryOpen, types.ChannelId(9), false, "", 1, true},
+		{"force path skips proof verification", &mockLightClient{status: lightclient.Frozen}, false, types.ChannelStateTryOpen, types.ChannelId(9), false, "", 0, true},
+		{"missing channel aborts", &mockLightClient{}, true, types.ChannelStateTryOpen, types.ChannelId(9), true, "channel 1 not found", 0, false},
+		{"wrong state aborts before proof", &mockLightClient{}, true, types.ChannelStateOpen, types.ChannelId(9), false, "invalid channel state", 0, false},
+		{"zero counterparty channel aborts before proof", &mockLightClient{}, true, types.ChannelStateTryOpen, 0, false, "invalid counterparty channel id", 0, false},
+		{"proof failure aborts", &mockLightClient{membershipErr: "bad proof"}, true, types.ChannelStateTryOpen, types.ChannelId(9), false, "bad proof", 1, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			portId, mApp := setupChannelEnvWithLightClient(cur, v, tc.lc)
+			chId := types.ChannelId(1)
+			if !tc.missing {
+				v.store.CreateChannel(0, cur, chId, types.Channel{
+					State:                 tc.seedState,
+					ConnectionId:          types.ConnectionId(1),
+					CounterpartyChannelId: tc.counterpartyChannelId,
+					CounterpartyPortId:    types.Bytes("cp-port"),
+					Version:               "v1",
+				}, portId)
+			}
+			msg := types.MsgChannelOpenConfirm{
+				ChannelId:   chId,
+				ProofHeight: 10,
+				ProofAck:    []byte("proof"),
+			}
+
+			run := func(cur realm) {
+				v.channelOpenConfirm(0, cur, msg, tc.verify)
+			}
+			if tc.wantAbort != "" {
+				uassert.AbortsContains(t, cur, tc.wantAbort, run)
+			} else {
+				uassert.NotAborts(t, cur, func() {
+					v.channelOpenConfirm(0, cur, msg, tc.verify)
+				})
+			}
+			uassert.Equal(t, tc.wantCalls, tc.lc.membershipCalls)
+			if tc.wantOpen {
+				ch, _ := v.store.GetChannel(chId)
+				uassert.True(t, ch.State == types.ChannelStateOpen)
+				uassert.Equal(t, 1, mApp.openConfirm)
+			}
+		})
+	}
 }
 
 // Converted from Union channel_open_confirm_not_found.
@@ -623,4 +787,25 @@ func TestForceChannelOpenConfirmSkipsProofVerification(cur realm, t *testing.T) 
 	ch, _ := v.store.GetChannel(chId)
 	uassert.True(t, ch.State == types.ChannelStateOpen)
 	uassert.Equal(t, 1, mApp.openConfirm)
+}
+
+func TestClosedChannel(t *testing.T) {
+	v := newTestImpl()
+	original := types.Channel{
+		State:                 types.ChannelStateOpen,
+		ConnectionId:          types.ConnectionId(1),
+		CounterpartyChannelId: types.ChannelId(9),
+		CounterpartyPortId:    types.Bytes("cp-port"),
+		Version:               "v1",
+	}
+
+	closed := v.closedChannel(original)
+
+	uassert.True(t, closed.State == types.ChannelStateClosed)
+	uassert.Equal(t, uint32(original.ConnectionId), uint32(closed.ConnectionId))
+	uassert.Equal(t, uint32(original.CounterpartyChannelId), uint32(closed.CounterpartyChannelId))
+	uassert.Equal(t, string(original.CounterpartyPortId), string(closed.CounterpartyPortId))
+	uassert.Equal(t, original.Version, closed.Version)
+
+	uassert.Equal(t, "cp-port", string(original.CounterpartyPortId))
 }

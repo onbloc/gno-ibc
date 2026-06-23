@@ -612,6 +612,68 @@ func TestPacketAcknowledgementLengthMismatchIsPartial(cur realm, t *testing.T) {
 	}
 }
 
+func TestMarkPacketAcknowledged(cur realm, t *testing.T) {
+	tests := []struct {
+		name       string
+		setup      func(cur realm, v *coreV1, packet types.Packet)
+		wantAbort  string
+		wantAck    bool
+	}{
+		{
+			name: "committed packet is marked acknowledged",
+			setup: func(cur realm, v *coreV1, packet types.Packet) {
+				v.store.CommitPacket(0, cur, packet)
+			},
+			wantAck: true,
+		},
+		{
+			name:      "missing commitment aborts",
+			setup:     func(cur realm, v *coreV1, packet types.Packet) {},
+			wantAbort: "packet commitment not found",
+		},
+		{
+			name: "already acknowledged aborts",
+			setup: func(cur realm, v *coreV1, packet types.Packet) {
+				v.store.CommitPacket(0, cur, packet)
+				v.store.SetPacketAcknowledged(0, cur, packet)
+			},
+			wantAbort: "packet already acknowledged",
+		},
+		{
+			name: "unexpected commitment value aborts as missing",
+			setup: func(cur realm, v *coreV1, packet types.Packet) {
+				v.store.(*mockStore).commitments[packetKey(packet)] = types.H256{}
+			},
+			wantAbort: "packet commitment not found",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			packet := types.Packet{
+				SourceChannelId:      types.ChannelId(1),
+				DestinationChannelId: types.ChannelId(9),
+				Data:                 []byte(tc.name),
+				TimeoutTimestamp:     types.Timestamp(1000),
+			}
+			tc.setup(cur, v, packet)
+
+			if tc.wantAbort != "" {
+				uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
+					v.markPacketAcknowledged(0, cur, packet)
+				})
+				return
+			}
+
+			v.markPacketAcknowledged(0, cur, packet)
+			commitment, ok := v.store.PacketCommitment(packet.SourceChannelId, packet)
+			uassert.True(t, ok)
+			uassert.Equal(t, tc.wantAck, commitment == types.COMMITMENT_MAGIC_ACK)
+		})
+	}
+}
+
 func TestPacketTimeoutRefunds(cur realm, t *testing.T) {
 	v := newTestImpl()
 	chId, _, mApp := setupOpenChannel(cur, v)
@@ -747,6 +809,43 @@ func TestCommitNonMembershipProofInactiveClientAbortsBeforeVerification(cur real
 	uassert.Equal(t, 0, lc.nonMembershipCalls)
 }
 
+func TestVerifyNonMembership(cur realm, t *testing.T) {
+	tests := []struct {
+		name        string
+		lc          *mockLightClient
+		missing     bool
+		wantAbort   string
+		wantCalls   int
+		wantNoAbort bool
+	}{
+		{"active client verifies", &mockLightClient{}, false, "", 1, true},
+		{"unknown client aborts", &mockLightClient{}, true, "client 99 not found", 0, false},
+		{"inactive client aborts before proof verification", &mockLightClient{status: "Frozen"}, false, "client is not active", 0, false},
+		{"proof failure aborts", &mockLightClient{nonMembershipErr: "bad proof"}, false, "bad proof", 1, false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			clientId := types.ClientId(99)
+			if !tc.missing {
+				clientId = createClient(cur, v, tc.lc, nil, nil)
+			}
+
+			if tc.wantNoAbort {
+				uassert.NotAborts(t, cur, func() {
+					v.verifyNonMembership(clientId, types.NewHeight(1), []byte("proof"), []byte("path"))
+				})
+			} else {
+				uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
+					v.verifyNonMembership(clientId, types.NewHeight(1), []byte("proof"), []byte("path"))
+				})
+			}
+			uassert.Equal(t, tc.wantCalls, tc.lc.nonMembershipCalls)
+		})
+	}
+}
+
 func TestWriteAcknowledgementWritesAsyncAck(cur realm, t *testing.T) {
 	v := newTestImpl()
 	chId, _, mApp := setupOpenChannel(cur, v)
@@ -830,6 +929,134 @@ func TestWriteAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			uassert.AbortsContains(t, cur, tc.want, tc.run)
+		})
+	}
+}
+
+func TestAcceptRecvPacket(cur realm, t *testing.T) {
+	tests := []struct {
+		name         string
+		malleate     func(cur realm, v *coreV1, packet *types.Packet, chId types.ChannelId)
+		now          uint64
+		batchChannel types.ChannelId
+		wantAbort    string
+		wantSkip     bool
+		wantReceipt  bool
+	}{
+		{
+			name:         "new packet records receipt",
+			malleate:     func(cur realm, v *coreV1, packet *types.Packet, chId types.ChannelId) {},
+			now:          100,
+			batchChannel: 0,
+			wantReceipt:  true,
+		},
+		{
+			name: "duplicate packet skips dispatch",
+			malleate: func(cur realm, v *coreV1, packet *types.Packet, chId types.ChannelId) {
+				v.store.SetPacketReceipt(0, cur, *packet)
+			},
+			now:          100,
+			batchChannel: 0,
+			wantSkip:     true,
+			wantReceipt:  true,
+		},
+		{
+			name:         "mixed destination channel aborts",
+			malleate:     func(cur realm, v *coreV1, packet *types.Packet, chId types.ChannelId) {},
+			now:          100,
+			batchChannel: types.ChannelId(99),
+			wantAbort:    "batch must use the same channel",
+		},
+		{
+			name: "missing channel aborts",
+			malleate: func(cur realm, v *coreV1, packet *types.Packet, chId types.ChannelId) {
+				packet.DestinationChannelId = types.ChannelId(99)
+			},
+			now:          100,
+			batchChannel: types.ChannelId(99),
+			wantAbort:    "channel 99 not found",
+		},
+		{
+			name: "closed channel aborts",
+			malleate: func(cur realm, v *coreV1, packet *types.Packet, chId types.ChannelId) {
+				v.store.SaveChannel(0, cur, chId, types.Channel{
+					State:                 types.ChannelStateClosed,
+					ConnectionId:          types.ConnectionId(1),
+					CounterpartyChannelId: types.ChannelId(9),
+					Version:               "v1",
+				})
+			},
+			now:          100,
+			batchChannel: 0,
+			wantAbort:    "invalid channel state",
+		},
+		{
+			name:         "expired packet aborts",
+			malleate:     func(cur realm, v *coreV1, packet *types.Packet, chId types.ChannelId) {},
+			now:          uint64(farFuture),
+			batchChannel: 0,
+			wantAbort:    "packet timeout expired",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			chId, _, _ := setupOpenChannel(cur, v)
+			packet := recvPacket(chId, tc.name)
+			batchChannel := tc.batchChannel
+			if batchChannel == 0 {
+				batchChannel = chId
+			}
+			tc.malleate(cur, v, &packet, chId)
+
+			if tc.wantAbort != "" {
+				uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
+					v.acceptRecvPacket(0, cur, packet, batchChannel, tc.now)
+				})
+				return
+			}
+
+			_, skip := v.acceptRecvPacket(0, cur, packet, batchChannel, tc.now)
+			uassert.Equal(t, tc.wantSkip, skip)
+			uassert.Equal(t, tc.wantReceipt, v.store.HasPacketReceipt(packet))
+		})
+	}
+}
+
+func TestCommitSyncAck(cur realm, t *testing.T) {
+	tests := []struct {
+		name      string
+		result    types.RecvPacketResult
+		wantErr   string
+		wantAcked bool
+	}{
+		{"async result defers ack", types.NewRecvPacketResult(types.PacketStatusAsync, nil), "", false},
+		{"success result commits ack", types.NewRecvPacketResult(types.PacketStatusSuccess, []byte("ack")), "", true},
+		{"failure result commits ack", types.NewRecvPacketResult(types.PacketStatusFailure, []byte("ack")), "", true},
+		{"sync result requires ack bytes", types.NewRecvPacketResult(types.PacketStatusSuccess, nil), "sync ack cannot be empty", false},
+		{"unknown status errors", types.NewRecvPacketResult(types.PacketStatus(99), []byte("ack")), "unknown packet status", false},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			packet := types.Packet{
+				SourceChannelId:      types.ChannelId(9),
+				DestinationChannelId: types.ChannelId(1),
+				Data:                 []byte(tc.name),
+				TimeoutTimestamp:     farFuture,
+			}
+
+			err := v.commitSyncAck(0, cur, packet, tc.result)
+			if tc.wantErr != "" {
+				uassert.Equal(t, tc.wantErr, err.Error())
+				return
+			}
+
+			uassert.True(t, err == nil)
+			_, ok := v.store.AcknowledgementReceipt(packet.DestinationChannelId, packet)
+			uassert.Equal(t, tc.wantAcked, ok)
 		})
 	}
 }

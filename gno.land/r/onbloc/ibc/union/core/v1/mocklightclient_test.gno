@@ -21,6 +21,7 @@ type mockLightClient struct {
 	membershipCalls    int
 	nonMembershipCalls int
 	update             types.StateUpdate
+	creationState      []byte
 	creationWrites     map[string][]byte
 }
 
@@ -73,7 +74,7 @@ func (l *mockLightClient) VerifyCreation(caller address, relayer address) (types
 	if l.createErr != "" {
 		return types.ClientCreationResult{}, errors.New(l.createErr)
 	}
-	return types.ClientCreationResult{StorageWrites: l.creationWrites}, nil
+	return types.ClientCreationResult{ClientStateBytes: l.creationState, StorageWrites: l.creationWrites}, nil
 }
 
 func (l *mockLightClient) Misbehaviour(caller address, misbehaviour []byte, relayer address) ([]byte, error) {

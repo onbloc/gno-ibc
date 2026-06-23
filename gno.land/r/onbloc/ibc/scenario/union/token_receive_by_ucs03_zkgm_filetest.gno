@@ -80,7 +80,7 @@ func main(cur realm) {
 	initPacket := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(initOrder)), types.Timestamp(1<<62))
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{initPacket}, nil, nil, 1))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{initPacket}, [][]byte{nil}, nil, 1))
 
 	ufmt.Printf("[INFO] minted token (wrapped voucher): %s\n", quoteToken)
 	ufmt.Println("[INFO] minted token wraps base token: ugnot")
@@ -103,7 +103,7 @@ func main(cur realm) {
 	escrowPacket := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(escrowOrder)), types.Timestamp(1<<62))
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{escrowPacket}, nil, nil, 1))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{escrowPacket}, [][]byte{nil}, nil, 1))
 
 	ufmt.Printf("[INFO] minted token (same wrapped voucher): %s\n", quoteToken)
 	ufmt.Printf("[INFO] receiver B balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, receiverBAddr))

@@ -106,7 +106,7 @@ func main(cur realm) {
 	opened := types.ChannelId(1)
 	core.ForceChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(opened, zkgm.Version, counterpartyChannel, nil, 0, "g1relayer"))
 
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{initPacket}, nil, fundProof, fundHeight))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{initPacket}, [][]byte{nil}, fundProof, fundHeight))
 	ufmt.Printf("[INFO] sender voucher balance after fund: %d\n", zkgm.VoucherBalanceOf(quoteToken, senderAddr))
 	ufmt.Println("[EXPECTED] sender voucher balance after fund should be 100")
 

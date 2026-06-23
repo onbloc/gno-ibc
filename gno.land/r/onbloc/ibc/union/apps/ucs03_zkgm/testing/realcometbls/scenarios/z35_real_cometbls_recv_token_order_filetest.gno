@@ -28,7 +28,7 @@ func main(cur realm) {
 	}
 	packet := core.NewPacket(pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(0))
 
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, realcometbls.Z35PacketCommitmentProof(cross(cur)), uint64(realcometbls.DevnetHeight-1)))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, realcometbls.Z35PacketCommitmentProof(cross(cur)), uint64(realcometbls.DevnetHeight-1)))
 
 	println("quote_balance", impl.VoucherBalanceOf("ibc/quote", address(receiver)))
 	println("ack_hash_matches_failure", core.AcknowledgementHash(cross(cur), packet).String() == expectedFailureAckHash())

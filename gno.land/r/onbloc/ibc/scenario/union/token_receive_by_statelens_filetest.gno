@@ -119,7 +119,7 @@ func main(cur realm) {
 	// --- SCENARIO 2: receive the packet proven by the state-lens MPT proof ---
 	ufmt.Println("")
 	ufmt.Println("[SCENARIO] 2. Receive INITIALIZE order proven by the state-lens MPT proof (mint 100)")
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, nil, packetProof, statelensProofHeight))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, packetProof, statelensProofHeight))
 
 	_, receiptErr := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))
 	receiptRecorded := receiptErr == nil

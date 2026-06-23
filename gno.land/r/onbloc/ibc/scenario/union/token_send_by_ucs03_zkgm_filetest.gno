@@ -75,7 +75,7 @@ func main(cur realm) {
 	initPacket := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(initOrder)), types.Timestamp(1<<62))
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{initPacket}, nil, nil, 1))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{initPacket}, [][]byte{nil}, nil, 1))
 
 	// Balances are read back through the proxy's VoucherBalanceOf, the stable public
 	// surface for wrapped-voucher balances (proxy-owned escrow amount).

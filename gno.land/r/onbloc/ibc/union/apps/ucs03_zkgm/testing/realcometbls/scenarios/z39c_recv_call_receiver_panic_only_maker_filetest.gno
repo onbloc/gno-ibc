@@ -21,7 +21,7 @@ func main(cur realm) {
 	pair := realcometbls.OpenZ35CometBLSChannel(cross(cur))
 	packet := callPacket(cur, pair, mockReceiverPath)
 
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, realcometbls.Z39CallPacketCommitmentProof(cross(cur)), uint64(realcometbls.DevnetHeight-1)))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, realcometbls.Z39CallPacketCommitmentProof(cross(cur)), uint64(realcometbls.DevnetHeight-1)))
 
 	println("mock_calls", mock.Calls(cross(cur)))
 	println("receipt_after_recv", core.HasPacketReceipt(cross(cur), packet))

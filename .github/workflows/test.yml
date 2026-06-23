@@ -21,9 +21,28 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  gno-test:
+  # Discover all gno packages to test
+  discover-packages:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    outputs:
+      packages: ${{ steps.packages.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: packages
+        run: |
+          pkgs=$(find gno.land/p/onbloc gno.land/r/onbloc -name gnomod.toml 2>/dev/null | sort | sed 's|gnomod.toml||' | sed 's|^|./|' | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "matrix=$pkgs" >> "$GITHUB_OUTPUT"
+
+  # Test each package in parallel
+  gno-test:
+    needs: discover-packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        pkg: ${{ fromJson(needs.discover-packages.outputs.packages) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -33,5 +52,17 @@ jobs:
       - name: Verify gno binary
         run: make verify-gno
 
-      - name: Run tests
-        run: make test
+      - name: Test ${{ matrix.pkg }}
+        id: test
+        run: |
+          make vendor
+          gno test ${{ matrix.pkg }}
+
+      - name: Report result
+        if: always()
+        run: |
+          status="${{ steps.test.outcome }}"
+          pkg="${{ matrix.pkg }}"
+          emoji="✅"
+          [ "$status" != "success" ] && emoji="❌"
+          echo "$emoji $pkg" >> "$GITHUB_STEP_SUMMARY"

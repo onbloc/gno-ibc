@@ -16,9 +16,9 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
-	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
+	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
 )
 
 const (
@@ -63,7 +63,7 @@ func main(cur realm) {
 	ufmt.Println("")
 	ufmt.Println("[SCENARIO] 2. Fund sender with wrapped voucher via INITIALIZE recv (amount 100)")
 	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
-	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), impl.MetadataImage(mustDecodeMeta(meta)))
+	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 	initOrder := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
 		Receiver:    []byte(senderAddr.String()),

@@ -39,7 +39,7 @@ func TestInitializeDecimalsAgnosticAccounting(cur realm, t *testing.T) {
 			Implementation: []byte("grc20"),
 			Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "T", Symbol: tc.sym, Decimals: tc.decimals}),
 		})
-		denom := PredictWrappedTokenV2(u256.NewUint(tc.path), tc.dest, base, MetadataImage(mustDecodeTokenMetadata(meta)))
+		denom := z.PredictWrappedTokenV2(u256.NewUint(tc.path), tc.dest, base, z.MetadataImage(mustDecodeTokenMetadata(meta)))
 		rx := testAddress(tc.rxSuffix)
 		res, err := v.executeTokenOrderV2(0, cur,
 			core.NewPacket(types.ChannelId(1), types.ChannelId(tc.dest), nil, 0),
@@ -70,7 +70,7 @@ func TestBaseAmountPreservedThroughMint(cur realm, t *testing.T) {
 		Implementation: []byte("grc20"),
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "RT", Symbol: "RT", Decimals: 6}),
 	})
-	ibcDest := PredictWrappedTokenV2(path, uint32(chanDest), []byte(ibcBase), MetadataImage(mustDecodeTokenMetadata(metaBytes)))
+	ibcDest := z.PredictWrappedTokenV2(path, uint32(chanDest), []byte(ibcBase), z.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
 
 	order := z.TokenOrderV2{
 		Sender:      []byte(testAddress("rt-sender-mint")),
@@ -122,7 +122,7 @@ func TestInitializeOverflowAmountReturnsFailureAckNoMint(cur realm, t *testing.T
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "OVF", Symbol: "OVF", Decimals: 18}),
 	})
 	const destChan = types.ChannelId(150)
-	ibcDenom := PredictWrappedTokenV2(u256.Zero(), uint32(destChan), []byte("uatom"), MetadataImage(mustDecodeTokenMetadata(metaBytes)))
+	ibcDenom := z.PredictWrappedTokenV2(u256.Zero(), uint32(destChan), []byte("uatom"), z.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
 	overflowAmt := new(u256.Uint).Add(u256.NewUint(uint64(math.MaxInt64)), u256.NewUint(1))
 	receiver := testAddress("ovf-rx")
 
@@ -215,7 +215,7 @@ func TestInitializeDecimalsExceedMaxReturnsFailureAck(cur realm, t *testing.T) {
 		}),
 	})
 	const destChan = types.ChannelId(180)
-	ibcDenom := PredictWrappedTokenV2(u256.Zero(), uint32(destChan), []byte("uatom"), MetadataImage(mustDecodeTokenMetadata(metaBytes)))
+	ibcDenom := z.PredictWrappedTokenV2(u256.Zero(), uint32(destChan), []byte("uatom"), z.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
 
 	data := mustZkgmPacketBytes(batchMustOrderInstruction(z.TokenOrderV2{
 		Sender:      []byte("sender"),

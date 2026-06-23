@@ -42,7 +42,7 @@ func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
 	uassert.Equal(t, "g1relayer", mock.LastRelayer(cross(cur)))
 	uassert.Equal(t, "relay-msg", mock.LastRelayerMsg(cross(cur)))
 	uassert.Equal(t, "9", mock.LastPathDec(cross(cur)))
-	uassert.Equal(t, PredictCallProxyAccount(path, types.ChannelId(8), []byte("sender")), mock.LastProxyAccount(cross(cur)))
+	uassert.Equal(t, z.PredictCallProxyAccount(path, types.ChannelId(8), []byte("sender")), mock.LastProxyAccount(cross(cur)))
 }
 
 func TestExecuteCallReceiverErrorReturnsFailureAck(cur realm, t *testing.T) {

@@ -22,9 +22,9 @@ import (
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
-	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
+	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
 )
 
 const (
@@ -51,7 +51,7 @@ func main(cur realm) {
 	channelId := types.ChannelId(1)
 	sourceChannel := types.ChannelId(2)
 	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
-	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), impl.MetadataImage(mustDecodeMeta(meta)))
+	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 	order := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
 		Receiver:    []byte(receiverAddr.String()),

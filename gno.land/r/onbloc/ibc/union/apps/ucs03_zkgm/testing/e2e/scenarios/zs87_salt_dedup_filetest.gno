@@ -19,7 +19,7 @@ func main(cur realm) {
 
 	receiver := string(testutils.TestAddress("zs87-receiver"))
 	metaBytes := e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: "Dedup Token", Symbol: "DDP", Decimals: 6})
-	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(pair.Destination), []byte("ugnot"), impl.MetadataImage(mustDecodeZS87TokenMetadata(metaBytes)))
+	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(pair.Destination), []byte("ugnot"), z.MetadataImage(mustDecodeZS87TokenMetadata(metaBytes)))
 	order := z.TokenOrderV2{
 		Sender:      []byte("same-sender"),
 		Receiver:    []byte(receiver),
@@ -31,7 +31,7 @@ func main(cur realm) {
 		Metadata:    metaBytes,
 	}
 	otherMetaBytes := e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: "Other Dedup Token", Symbol: "DDP2", Decimals: 6})
-	otherQuoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(pair.Destination), []byte("uother"), impl.MetadataImage(mustDecodeZS87TokenMetadata(otherMetaBytes)))
+	otherQuoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(pair.Destination), []byte("uother"), z.MetadataImage(mustDecodeZS87TokenMetadata(otherMetaBytes)))
 	otherOrder := z.TokenOrderV2{
 		Sender:      []byte("same-sender"),
 		Receiver:    []byte(receiver),

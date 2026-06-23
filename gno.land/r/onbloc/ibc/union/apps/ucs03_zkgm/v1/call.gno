@@ -41,7 +41,7 @@ func (v *ucs03ZkgmV1) executeCall(_ int, rlm realm, packet types.Packet, relayer
 	}
 
 	relayerStr := string(relayer)
-	proxyAccount := PredictCallProxyAccount(path, packet.DestinationChannelId, sender)
+	proxyAccount := z.PredictCallProxyAccount(path, packet.DestinationChannelId, sender)
 
 	// Intent settlement dispatches OnIntentZkgm to the receiver (union execute_call
 	// intent arm), and is maker-only: any receiver failure reverts to ACK_ERR_ONLY_MAKER

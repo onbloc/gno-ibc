@@ -24,7 +24,7 @@ func main(cur realm) {
 	instructions := make([]z.Instruction, len(bases))
 	for i := 0; i < len(instructions); i++ {
 		metaBytes := e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: bases[i], Symbol: "ZS89", Decimals: 6})
-		quoteTokens[i] = impl.PredictWrappedTokenV2(u256.Zero(), uint32(pair.Destination), []byte(bases[i]), impl.MetadataImage(mustDecodeZS89TokenMetadata(metaBytes)))
+		quoteTokens[i] = z.PredictWrappedTokenV2(u256.Zero(), uint32(pair.Destination), []byte(bases[i]), z.MetadataImage(mustDecodeZS89TokenMetadata(metaBytes)))
 		instructions[i] = e2e.MustTokenOrderInstruction(cross(cur), z.TokenOrderV2{
 			Sender:      []byte("sender"),
 			Receiver:    []byte(receiver),

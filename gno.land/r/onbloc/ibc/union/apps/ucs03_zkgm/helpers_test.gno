@@ -1,6 +1,7 @@
 package zkgm
 
 import (
+	"gno.land/p/demo/tokens/grc20"
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	z "gno.land/p/onbloc/ibc/union/zkgm"
@@ -134,4 +135,8 @@ func installImplForTest(path string, target IApp) {
 	implConstructors[path] = func(store IStore) IApp { return target }
 	currentImplPath = path
 	currentImpl = target
+}
+
+func newVoucherTokenForTest(cur realm, name string, symbol string) (*grc20.Token, *grc20.PrivateLedger) {
+	return grc20.NewToken(0, cur, name, symbol, 6)
 }

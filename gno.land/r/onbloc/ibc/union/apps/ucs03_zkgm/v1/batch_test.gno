@@ -19,6 +19,26 @@ import (
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
+func TestIsAllowedBatchInstruction(t *testing.T) {
+	cases := []struct {
+		name string
+		op   uint8
+		want bool
+	}{
+		{"call", z.OP_CALL, true},
+		{"token order", z.OP_TOKEN_ORDER, true},
+		{"batch", z.OP_BATCH, false},
+		{"forward", z.OP_FORWARD, false},
+		{"unknown", 0xFF, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.Equal(t, tc.want, isAllowedBatchInstruction(tc.op))
+		})
+	}
+}
+
 func TestVerifyBatchRejectsNestedBatch(cur realm, t *testing.T) {
 	batch := z.Batch{Instructions: []z.Instruction{{
 		Version: z.INSTR_VERSION_0,

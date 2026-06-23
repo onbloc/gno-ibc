@@ -13,6 +13,163 @@ import (
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
+func TestMustEncodeUniversalErrorAck(t *testing.T) {
+	ack, err := z.DecodeAck(mustEncodeUniversalErrorAck())
+
+	uassert.NoError(t, err)
+	uassert.True(t, ack.Tag.Eq(tagAckFailure()))
+	uassert.Equal(t, "", string(ack.InnerAck))
+}
+
+func TestFailureResult(t *testing.T) {
+	res := failureResult([]byte("ack"))
+
+	uassert.True(t, res.Status == types.PacketStatusFailure)
+	uassert.Equal(t, "ack", string(res.Acknowledgement))
+}
+
+func TestUniversalErrorAck(t *testing.T) {
+	got := universalErrorAck()
+	want := mustEncodeUniversalErrorAck()
+
+	uassert.Equal(t, string(want), string(got))
+}
+
+func TestDispatchExecutePacket(cur realm, t *testing.T) {
+	v := newTestImpl()
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), nil, 0)
+
+	cases := []struct {
+		name    string
+		instr   z.Instruction
+		wantErr string
+	}{
+		{
+			name:    "unsupported opcode",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_0, Opcode: 0xFF},
+			wantErr: "unsupported opcode",
+		},
+		{
+			name:    "malformed call",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_CALL, Operand: []byte{0x01}},
+			wantErr: "invalid",
+		},
+		{
+			name:    "malformed batch",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_BATCH, Operand: []byte{0x01}},
+			wantErr: "invalid",
+		},
+		{
+			name:    "malformed forward",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_FORWARD, Operand: []byte{0x01}},
+			wantErr: "invalid",
+		},
+		{
+			name:    "wrong token order version",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_TOKEN_ORDER, Operand: []byte{0x01}},
+			wantErr: "unsupported token order version",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := v.dispatchExecutePacket(0, cur, packet, address(testAddress("dispatch-relayer")), nil, [32]byte{}, u256.Zero(), tc.instr, false)
+
+			uassert.ErrorContains(t, err, tc.wantErr)
+			uassert.True(t, res.Status == types.PacketStatusUnknown)
+			uassert.Equal(t, "", string(res.Acknowledgement))
+		})
+	}
+}
+
+func TestAcknowledgeInternal(cur realm, t *testing.T) {
+	v := newTestImpl()
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), nil, 0)
+
+	cases := []struct {
+		name    string
+		instr   z.Instruction
+		success bool
+		ack     []byte
+		wantErr string
+	}{
+		{
+			name:    "unsupported opcode",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_0, Opcode: 0xFF},
+			wantErr: "unsupported opcode",
+		},
+		{
+			name:    "malformed call",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_CALL, Operand: []byte{0x01}},
+			wantErr: "invalid",
+		},
+		{
+			name:    "call eureka",
+			instr:   batchMustCallInstruction(z.Call{Eureka: true}),
+			wantErr: "eureka mode not supported",
+		},
+		{
+			name:    "successful call",
+			instr:   batchMustCallInstruction(z.Call{}),
+			wantErr: "",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := v.acknowledgeInternal(0, cur, packet, address(testAddress("ack-relayer")), [32]byte{}, u256.Zero(), tc.instr, tc.success, tc.ack)
+			if tc.wantErr != "" {
+				uassert.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			uassert.NoError(t, err)
+		})
+	}
+}
+
+func TestTimeoutInternal(cur realm, t *testing.T) {
+	v := newTestImpl()
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), nil, 0)
+
+	cases := []struct {
+		name    string
+		instr   z.Instruction
+		wantErr string
+	}{
+		{
+			name:    "unsupported opcode",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_0, Opcode: 0xFF},
+			wantErr: "unsupported opcode",
+		},
+		{
+			name:    "malformed call",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_CALL, Operand: []byte{0x01}},
+			wantErr: "invalid",
+		},
+		{
+			name:    "call eureka",
+			instr:   batchMustCallInstruction(z.Call{Eureka: true}),
+			wantErr: "eureka mode not supported",
+		},
+		{
+			name:    "successful call",
+			instr:   batchMustCallInstruction(z.Call{}),
+			wantErr: "",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := v.timeoutInternal(0, cur, packet, [32]byte{}, u256.Zero(), tc.instr)
+			if tc.wantErr != "" {
+				uassert.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			uassert.NoError(t, err)
+		})
+	}
+}
+
 func TestRecvForwardExecuteErrorReturnsFailure(cur realm, t *testing.T) {
 	data := mustZkgmPacketBytes(z.Instruction{
 		Version: z.INSTR_VERSION_0,

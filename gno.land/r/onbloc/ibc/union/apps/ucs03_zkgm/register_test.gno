@@ -4,7 +4,15 @@ import (
 	"testing"
 
 	"gno.land/p/nt/uassert/v0"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 )
+
+func TestAsIBCApp(t *testing.T) {
+	app := AsIBCApp()
+	if app == nil {
+		t.Fatal("AsIBCApp returned nil")
+	}
+}
 
 func TestRegisterReceiverStoresPreviousRealmPath(cur realm, t *testing.T) {
 	resetZkgmForTest()
@@ -39,4 +47,28 @@ func TestRegisterReceiverSeparatesPreviousRealmKeys(cur realm, t *testing.T) {
 	uassert.True(t, okB)
 	uassert.True(t, gotA == receiverA)
 	uassert.True(t, gotB == receiverB)
+}
+
+func TestRegisterReceiver(cur realm, t *testing.T) {
+	resetZkgmForTest()
+
+	const receiverPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/direct_receiver"
+	cases := []struct {
+		name     string
+		receiver z.Zkgmable
+	}{
+		{"first receiver", &dummyReceiver{}},
+		{"replacement receiver", &dummyReceiver{}},
+	}
+
+	testing.SetRealm(testing.NewCodeRealm(receiverPath))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			RegisterReceiver(cross(cur), tc.receiver)
+
+			got, ok := store.GetReceiver(receiverPath)
+			uassert.True(t, ok)
+			uassert.True(t, got == tc.receiver)
+		})
+	}
 }

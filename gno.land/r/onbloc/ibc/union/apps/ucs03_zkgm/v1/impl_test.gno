@@ -15,6 +15,39 @@ import (
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
 
+func TestNewUCS03ZkgmV1(t *testing.T) {
+	app := NewUCS03ZkgmV1(testStore)
+	v, ok := app.(*ucs03ZkgmV1)
+
+	uassert.True(t, ok)
+	uassert.True(t, v.store == testStore)
+}
+
+func TestEnforceVersion(cur realm, t *testing.T) {
+	cases := []struct {
+		name      string
+		version   string
+		wantPanic bool
+	}{
+		{"protocol version", zkgm.Version, false},
+		{"empty version", "", true},
+		{"wrong version", "wrong", true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.wantPanic {
+				uassert.AbortsContains(t, cur, "unsupported channel version", func(cur realm) {
+					enforceVersion(tc.version)
+				})
+				return
+			}
+
+			enforceVersion(tc.version)
+		})
+	}
+}
+
 func TestOnChannelOpenInitRejectsWrongVersion(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "unsupported channel version", func(cur realm) {
 		newTestImpl().OnChannelOpenInit(0, cur, types.ConnectionId(1), types.ChannelId(1), "wrong", address("g1relayer"))

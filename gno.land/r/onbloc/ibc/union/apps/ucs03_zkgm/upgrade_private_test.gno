@@ -7,6 +7,14 @@ import (
 	types "gno.land/p/onbloc/ibc/union/types"
 )
 
+func TestRegisterImpl(cur realm, t *testing.T) {
+	resetZkgmForTest()
+
+	uassert.AbortsContains(t, cur, "zkgm: previous impl path is not a prefix of the current impl path", func(cur realm) {
+		RegisterImpl(cross(cur), func(store IStore) IApp { return &dummyImpl{} })
+	})
+}
+
 func TestMustGetImpl(cur realm, t *testing.T) {
 	cases := []struct {
 		name      string

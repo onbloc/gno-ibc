@@ -15,6 +15,192 @@ import (
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
+func TestIsZeroImage(t *testing.T) {
+	uassert.True(t, isZeroImage([32]byte{}))
+	uassert.False(t, isZeroImage([32]byte{31: 0x01}))
+}
+
+func TestEncodeTokenOrderSuccessAck(t *testing.T) {
+	ackBytes, err := encodeTokenOrderSuccessAck(fillTypeMarketMaker(), []byte("maker"))
+	uassert.NoError(t, err)
+
+	outerAck, err := z.DecodeAck(ackBytes)
+	uassert.NoError(t, err)
+	uassert.True(t, outerAck.Tag.Eq(tagAckSuccess()))
+
+	orderAck, err := z.DecodeTokenOrderAck(outerAck.InnerAck)
+	uassert.NoError(t, err)
+	uassert.True(t, orderAck.FillType.Eq(fillTypeMarketMaker()))
+	uassert.Equal(t, "maker", string(orderAck.MarketMaker))
+}
+
+func TestProtocolFillMint(cur realm, t *testing.T) {
+	v := newTestImpl()
+	wrapped := "ibc/direct-protocol-mint"
+	meta := z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Direct Token", Symbol: "DIR", Decimals: 6}),
+	}
+	path := u256.NewUint(9)
+	receiver := testAddress("direct-mint-rx")
+	relayer := testAddress("direct-mint-rly")
+
+	res, err := v.protocolFillMint(0, cur, types.ChannelId(15), path, []byte("ugnot"), wrapped, address(receiver), address(relayer), u256.NewUint(100), u256.NewUint(95), &meta, true)
+
+	uassert.NoError(t, err)
+	uassert.True(t, res.Status == types.PacketStatusSuccess)
+	assertProtocolAck(t, res.Acknowledgement)
+	uassert.Equal(t, int64(95), voucherBalanceOf(wrapped, address(receiver)))
+	uassert.Equal(t, int64(5), voucherBalanceOf(wrapped, address(relayer)))
+
+	foreign, ok := testStore.GetForeignToken(wrapped)
+	uassert.True(t, ok)
+	uassert.Equal(t, "ugnot", string(foreign))
+	_, ok = testStore.GetTokenOrigin(wrapped)
+	uassert.True(t, ok)
+	image, ok := testStore.GetMetadataImageOf(wrapped)
+	uassert.True(t, ok)
+	uassert.True(t, image == MetadataImage(meta))
+}
+
+func TestMarketMakerFillV2(cur realm, t *testing.T) {
+	v := newTestImpl()
+	maker := testAddress("direct-mm-maker")
+	receiver := testAddress("direct-mm-rx")
+
+	cases := []struct {
+		name       string
+		quoteDenom string
+		seed       bool
+		relayerMsg []byte
+		wantAck    string
+	}{
+		{"unknown quote token", "native-mm-quote", false, nil, "only-maker"},
+		{"voucher quote token", "ibc/direct-mm-quote", true, []byte("maker-bytes"), "market-maker"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.seed {
+				uassert.NoError(t, v.mintVoucher(0, cur, tc.quoteDenom, [32]byte{}, "", "", 0, maker, u256.NewUint(30)))
+			}
+
+			res, err := v.marketMakerFillV2(0, cur, address(maker), tc.relayerMsg, z.TokenOrderV2{
+				Receiver:    []byte(receiver),
+				QuoteToken:  []byte(tc.quoteDenom),
+				QuoteAmount: u256.NewUint(12),
+			})
+
+			uassert.NoError(t, err)
+			uassert.True(t, res.Status == types.PacketStatusSuccess)
+			if tc.wantAck == "only-maker" {
+				uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Acknowledgement))
+				return
+			}
+
+			assertMarketMakerAck(t, res.Acknowledgement, string(tc.relayerMsg))
+			uassert.Equal(t, int64(18), voucherBalanceOf(tc.quoteDenom, address(maker)))
+			uassert.Equal(t, int64(12), voucherBalanceOf(tc.quoteDenom, address(receiver)))
+		})
+	}
+}
+
+func TestRefundV2(cur realm, t *testing.T) {
+	v := newTestImpl()
+	path := u256.NewUint(3)
+	sourceChannel := types.ChannelId(16)
+	baseToken := "ibc/direct-refund"
+	sender := testAddress("direct-refund-sender")
+	order := z.TokenOrderV2{
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+		Sender:      []byte(sender),
+		BaseToken:   []byte(baseToken),
+		BaseAmount:  u256.NewUint(7),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(7),
+	}
+	v.increaseChannelBalanceV2(0, cur, sourceChannel, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
+	uassert.NoError(t, v.mintVoucher(0, cur, baseToken, [32]byte{}, "", "", 0, cur.Address().String(), order.BaseAmount))
+
+	err := v.refundV2(0, cur, path, sourceChannel, order)
+
+	uassert.NoError(t, err)
+	assertNoChannelBalance(t, sourceChannel, path, order)
+	uassert.Equal(t, int64(7), voucherBalanceOf(baseToken, address(sender)))
+
+	err = v.refundV2(0, cur, path, sourceChannel, z.TokenOrderV2{Kind: 99})
+	uassert.ErrorContains(t, err, "unsupported token order kind for refund")
+}
+
+func TestSettleEscrowedV2(cur realm, t *testing.T) {
+	v := newTestImpl()
+	path := u256.NewUint(4)
+	sourceChannel := types.ChannelId(17)
+	baseToken := "ibc/direct-settle"
+	recipient := testAddress("direct-settle-rx")
+	order := z.TokenOrderV2{
+		BaseToken:   []byte(baseToken),
+		BaseAmount:  u256.NewUint(9),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(9),
+	}
+	v.increaseChannelBalanceV2(0, cur, sourceChannel, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
+	uassert.NoError(t, v.mintVoucher(0, cur, baseToken, [32]byte{}, "", "", 0, cur.Address().String(), order.BaseAmount))
+
+	err := v.settleEscrowedV2(0, cur, sourceChannel, path, order, recipient)
+
+	uassert.NoError(t, err)
+	assertNoChannelBalance(t, sourceChannel, path, order)
+	uassert.Equal(t, int64(9), voucherBalanceOf(baseToken, address(recipient)))
+}
+
+func TestLocalTokenEscrow(cur realm, t *testing.T) {
+	v := newTestImpl()
+	denom := "ibc/direct-local-escrow"
+	sender := testAddress("direct-escrow-snd")
+	uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, "", "", 0, sender, u256.NewUint(11)))
+
+	err := v.localTokenEscrow(0, cur, denom, sender, newFunds(nil), u256.NewUint(5))
+
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(6), voucherBalanceOf(denom, address(sender)))
+	uassert.Equal(t, int64(5), voucherBalanceOf(denom, cur.Address()))
+
+	f := newFunds(parseCoins("7ugnot"))
+	err = v.localTokenEscrow(0, cur, "ugnot", sender, f, u256.NewUint(7))
+	uassert.NoError(t, err)
+	uassert.True(t, f.isEmpty())
+}
+
+func TestLocalTokenUnescrow(cur realm, t *testing.T) {
+	v := newTestImpl()
+	denom := "ibc/direct-local-unescrow"
+	recipient := testAddress("direct-unescrow-rx")
+	uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, "", "", 0, cur.Address().String(), u256.NewUint(13)))
+
+	err := v.localTokenUnescrow(0, cur, denom, recipient, u256.NewUint(8))
+
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(5), voucherBalanceOf(denom, cur.Address()))
+	uassert.Equal(t, int64(8), voucherBalanceOf(denom, address(recipient)))
+}
+
+func TestRefundIBCVoucher(cur realm, t *testing.T) {
+	v := newTestImpl()
+	denom := "ibc/direct-refund-voucher"
+	recipient := testAddress("direct-refund-rx")
+	image := [32]byte{0x44}
+	testStore.SetMetadataImageOf(0, cur, denom, image)
+
+	err := v.refundIBCVoucher(0, cur, []byte(denom), recipient, u256.NewUint(6))
+
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(6), voucherBalanceOf(denom, address(recipient)))
+	stored, ok := testStore.GetMetadataImageOf(denom)
+	uassert.True(t, ok)
+	uassert.True(t, stored == image)
+}
+
 func TestTokenOrderAckFailureUnderflowDoesNotReleaseEscrowedVoucher(cur realm, t *testing.T) {
 	v := newTestImpl()
 

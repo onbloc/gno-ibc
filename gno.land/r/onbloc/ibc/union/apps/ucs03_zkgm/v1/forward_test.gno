@@ -18,6 +18,33 @@ import (
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
+func TestForwardInFlightKey(t *testing.T) {
+	packet := core.NewPacket(types.ChannelId(3), types.ChannelId(4), []byte("child"), 99)
+
+	uassert.Equal(t, types.MustCommit(types.CommitPacket(packet)).String(), forwardInFlightKey(packet))
+	uassert.NotEqual(t, forwardInFlightKey(packet), forwardInFlightKey(core.NewPacket(types.ChannelId(3), types.ChannelId(5), []byte("child"), 99)))
+}
+
+func TestIsAllowedForwardInstruction(t *testing.T) {
+	cases := []struct {
+		name string
+		op   uint8
+		want bool
+	}{
+		{"call", z.OP_CALL, true},
+		{"token order", z.OP_TOKEN_ORDER, true},
+		{"batch", z.OP_BATCH, true},
+		{"forward", z.OP_FORWARD, false},
+		{"unknown", 0xFF, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.Equal(t, tc.want, isAllowedForwardInstruction(tc.op))
+		})
+	}
+}
+
 func TestVerifyForwardRejectsNestedForward(cur realm, t *testing.T) {
 	err := newTestImpl().verifyForward(0, cur, newFunds(nil), types.ChannelId(1), z.Forward{
 		Path: forwardPath(1, 2),

@@ -1,60 +1,193 @@
 package storage
 
 import (
-	"encoding/hex"
+	"crypto/keccak256"
 	"testing"
 
-	"crypto/keccak256"
 	"gno.land/p/onbloc/encoding/rlp"
 )
 
 func TestEncodeStorageValue(t *testing.T) {
-	assertHex(t, "zero", mustEncode(t, make([]byte, 32)), "80")
-	assertHex(t, "single byte", mustEncode(t, WordFromUint64(0x7f)), "7f")
-	assertHex(t, "short string", mustEncode(t, WordFromUint64(0x80)), "8180")
-	assertHex(t, "two bytes", mustEncode(t, WordFromUint64(0x0100)), "820100")
-}
-
-func TestVerifyStorageProof(t *testing.T) {
-	slot := wordWithLastByte(0x01)
-	value := WordFromUint64(0x1234)
-	path := keccak256.Sum256(slot)
-
-	leaf := node(leafPath(nibbles(path[:])), rlp.EncodeBytes(mustEncode(t, value)))
-	root := hash(leaf)
-
-	proof := Proof{Key: slot, Value: value, Proof: [][]byte{leaf}}
-	if err := VerifyProof(root[:], proof); err != nil {
-		t.Fatalf("VerifyProof: %v", err)
-	}
-	if err := CheckValue(proof, value); err != nil {
-		t.Fatalf("CheckValue: %v", err)
+	tests := []struct {
+		name string
+		word []byte
+		want string
+	}{
+		{name: "zero", word: make([]byte, 32), want: "80"},
+		{name: "single byte", word: WordFromUint64(0x7f), want: "7f"},
+		{name: "short string", word: WordFromUint64(0x80), want: "8180"},
+		{name: "two bytes", word: WordFromUint64(0x0100), want: "820100"},
+		{name: "all ones", word: bytesRepeat(0xff, 32), want: "a0ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"},
+		{name: "leading zeroes trimmed", word: append(bytesRepeat(0x00, 30), 0x01, 0x02), want: "820102"},
+		{name: "first byte nonzero keeps full word", word: append([]byte{0x01}, bytesRepeat(0x00, 31)...), want: "a00100000000000000000000000000000000000000000000000000000000000000"},
 	}
 
-	wrong := WordFromUint64(0x1235)
-	proof.Value = wrong
-	if err := VerifyProof(root[:], proof); err == nil {
-		t.Fatalf("VerifyProof accepted wrong value")
-	}
-	if err := CheckValue(proof, value); err != ErrValueMismatch {
-		t.Fatalf("CheckValue wrong value: got %v want %v", err, ErrValueMismatch)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := EncodeStorageValue(tt.word)
+			if err != nil {
+				t.Fatalf("EncodeStorageValue: %v", err)
+			}
+			assertHex(t, "EncodeStorageValue", got, tt.want)
+		})
 	}
 }
 
-func TestVerifyStorageAbsence(t *testing.T) {
-	slot := wordWithLastByte(0x01)
-	value := WordFromUint64(0x1234)
-	path := keccak256.Sum256(slot)
-	leaf := node(leafPath(nibbles(path[:])), rlp.EncodeBytes(mustEncode(t, value)))
-	root := hash(leaf)
+func TestEncodeStorageValueRejectsInvalidWord(t *testing.T) {
+	if _, err := EncodeStorageValue(make([]byte, 31)); err != ErrInvalidValueLength {
+		t.Fatalf("EncodeStorageValue: got %v want %v", err, ErrInvalidValueLength)
+	}
+}
 
-	missing := wordWithLastByte(0x02)
-	if err := VerifyAbsence(root[:], Proof{Key: missing, Proof: [][]byte{leaf}}); err != nil {
-		t.Fatalf("VerifyAbsence: %v", err)
-	}
-	if err := VerifyAbsence(root[:], Proof{Key: slot, Proof: [][]byte{leaf}}); err == nil {
-		t.Fatalf("VerifyAbsence accepted present key")
-	}
+func TestVerifyProof(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		slot := wordWithLastByte(0x01)
+		value := WordFromUint64(0x1234)
+		path := keccak256.Sum256(slot)
+
+		leaf := node(leafPath(nibbles(path[:])), rlp.EncodeBytes(mustEncode(t, value)))
+		root := hash(leaf)
+
+		proof := Proof{Key: slot, Value: value, Proof: [][]byte{leaf}}
+		if err := VerifyProof(root[:], proof); err != nil {
+			t.Fatalf("VerifyProof: %v", err)
+		}
+	})
+
+	t.Run("wrong value", func(t *testing.T) {
+		slot := wordWithLastByte(0x01)
+		value := WordFromUint64(0x1234)
+		path := keccak256.Sum256(slot)
+
+		leaf := node(leafPath(nibbles(path[:])), rlp.EncodeBytes(mustEncode(t, value)))
+		root := hash(leaf)
+
+		wrong := WordFromUint64(0x1235)
+		proof := Proof{Key: slot, Value: wrong, Proof: [][]byte{leaf}}
+		if err := VerifyProof(root[:], proof); err == nil {
+			t.Fatalf("VerifyProof accepted wrong value")
+		}
+	})
+
+	t.Run("invalid root", func(t *testing.T) {
+		slot := wordWithLastByte(0x01)
+		value := WordFromUint64(0x1234)
+
+		proof := Proof{Key: slot, Value: value, Proof: [][]byte{}}
+		if err := VerifyProof(make([]byte, 31), proof); err != ErrInvalidRootLength {
+			t.Fatalf("VerifyProof invalid root: got %v want %v", err, ErrInvalidRootLength)
+		}
+	})
+
+	t.Run("invalid key", func(t *testing.T) {
+		root := make([]byte, 32)
+		value := WordFromUint64(0x1234)
+
+		proof := Proof{Key: make([]byte, 31), Value: value, Proof: [][]byte{}}
+		if err := VerifyProof(root, proof); err != ErrInvalidKeyLength {
+			t.Fatalf("VerifyProof invalid key: got %v want %v", err, ErrInvalidKeyLength)
+		}
+	})
+
+	t.Run("invalid value", func(t *testing.T) {
+		root := make([]byte, 32)
+		slot := wordWithLastByte(0x01)
+
+		proof := Proof{Key: slot, Value: make([]byte, 31), Proof: [][]byte{}}
+		if err := VerifyProof(root, proof); err != ErrInvalidValueLength {
+			t.Fatalf("VerifyProof invalid value: got %v want %v", err, ErrInvalidValueLength)
+		}
+	})
+}
+
+func TestVerifyAbsence(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		slot := wordWithLastByte(0x01)
+		value := WordFromUint64(0x1234)
+		path := keccak256.Sum256(slot)
+		leaf := node(leafPath(nibbles(path[:])), rlp.EncodeBytes(mustEncode(t, value)))
+		root := hash(leaf)
+
+		missing := wordWithLastByte(0x02)
+		if err := VerifyAbsence(root[:], Proof{Key: missing, Proof: [][]byte{leaf}}); err != nil {
+			t.Fatalf("VerifyAbsence: %v", err)
+		}
+	})
+
+	t.Run("present key rejected", func(t *testing.T) {
+		slot := wordWithLastByte(0x01)
+		value := WordFromUint64(0x1234)
+		path := keccak256.Sum256(slot)
+		leaf := node(leafPath(nibbles(path[:])), rlp.EncodeBytes(mustEncode(t, value)))
+		root := hash(leaf)
+
+		if err := VerifyAbsence(root[:], Proof{Key: slot, Proof: [][]byte{leaf}}); err == nil {
+			t.Fatalf("VerifyAbsence accepted present key")
+		}
+	})
+
+	t.Run("invalid root", func(t *testing.T) {
+		slot := wordWithLastByte(0x01)
+		proof := Proof{Key: slot, Proof: [][]byte{}}
+		if err := VerifyAbsence(make([]byte, 31), proof); err != ErrInvalidRootLength {
+			t.Fatalf("VerifyAbsence invalid root: got %v want %v", err, ErrInvalidRootLength)
+		}
+	})
+
+	t.Run("invalid key", func(t *testing.T) {
+		root := make([]byte, 32)
+		proof := Proof{Key: make([]byte, 31), Proof: [][]byte{}}
+		if err := VerifyAbsence(root, proof); err != ErrInvalidKeyLength {
+			t.Fatalf("VerifyAbsence invalid key: got %v want %v", err, ErrInvalidKeyLength)
+		}
+	})
+
+	t.Run("value ignored", func(t *testing.T) {
+		root := mptEmptyRoot()
+		slot := wordWithLastByte(0x01)
+		// Value field should be ignored for absence proofs
+		proof := Proof{Key: slot, Value: []byte{0x01}, Proof: [][]byte{}}
+		if err := VerifyAbsence(root, proof); err != nil {
+			t.Fatalf("VerifyAbsence with value: got %v want nil", err)
+		}
+	})
+}
+
+func TestCheckValue(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		value := WordFromUint64(0x1234)
+		proof := Proof{Value: value}
+		if err := CheckValue(proof, value); err != nil {
+			t.Fatalf("CheckValue: %v", err)
+		}
+	})
+
+	t.Run("mismatch", func(t *testing.T) {
+		value := WordFromUint64(0x1234)
+		expected := WordFromUint64(0x1235)
+		proof := Proof{Value: value}
+		if err := CheckValue(proof, expected); err != ErrValueMismatch {
+			t.Fatalf("CheckValue mismatch: got %v want %v", err, ErrValueMismatch)
+		}
+	})
+
+	t.Run("invalid proof value", func(t *testing.T) {
+		value := WordFromUint64(0x1234)
+		proof := Proof{Value: value[:31]}
+		expected := WordFromUint64(0x1235)
+		if err := CheckValue(proof, expected); err != ErrInvalidValueLength {
+			t.Fatalf("CheckValue invalid proof value: got %v want %v", err, ErrInvalidValueLength)
+		}
+	})
+
+	t.Run("invalid expected value", func(t *testing.T) {
+		value := WordFromUint64(0x1234)
+		proof := Proof{Value: value}
+		expected := value[:31]
+		if err := CheckValue(proof, expected); err != ErrInvalidValueLength {
+			t.Fatalf("CheckValue invalid expected value: got %v want %v", err, ErrInvalidValueLength)
+		}
+	})
 }
 
 func TestVerifyGethStorageProofFixture(t *testing.T) {
@@ -86,6 +219,33 @@ func TestVerifyGethStorageProofFixture(t *testing.T) {
 	absenceProof := [][]byte{proof[0]}
 	if err := VerifyAbsence(root, Proof{Key: missingSlot, Proof: absenceProof}); err != nil {
 		t.Fatalf("VerifyAbsence geth fixture: %v", err)
+	}
+}
+
+func TestStoragePath(t *testing.T) {
+	tests := []struct {
+		name string
+		slot []byte
+		want string
+		err  error
+	}{
+		{name: "invalid short slot", slot: make([]byte, 31), err: ErrInvalidKeyLength},
+		{name: "zero slot", slot: make([]byte, 32), want: "290decd9548b62a8d60345a988386fc84ba6bc95484008f6362f93160ef3e563"},
+		{name: "slot two", slot: WordFromUint64(2), want: "405787fa12a823e0f2b7631cc41b3ba8828b3321ca811111fa75cd3aa3bb5ace"},
+		{name: "all ones", slot: bytesRepeat(0xff, 32), want: "a9c584056064687e149968cbab758a3376d22aedc6a55823d1b3ecbee81b8fb9"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := StoragePath(tt.slot)
+			if err != tt.err {
+				t.Fatalf("StoragePath: got err %v want %v", err, tt.err)
+			}
+			if err != nil {
+				return
+			}
+			assertHex(t, "StoragePath", got[:], tt.want)
+		})
 	}
 }
 
@@ -137,6 +297,68 @@ func TestIBCCommitmentKey(t *testing.T) {
 	}
 }
 
+func TestValidateWord(t *testing.T) {
+	sentinel := ErrInvalidKeyLength
+	tests := []struct {
+		name string
+		word []byte
+		err  error
+	}{
+		{name: "nil", word: nil, err: sentinel},
+		{name: "short", word: make([]byte, 31), err: sentinel},
+		{name: "exact", word: make([]byte, 32)},
+		{name: "long", word: make([]byte, 33), err: sentinel},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := validateWord(tt.word, sentinel); err != tt.err {
+				t.Fatalf("validateWord: got %v want %v", err, tt.err)
+			}
+		})
+	}
+}
+
+func TestTrimLeadingZeroes(t *testing.T) {
+	tests := []struct {
+		name string
+		word []byte
+		want []byte
+	}{
+		{name: "nil", word: nil, want: nil},
+		{name: "all zeroes", word: []byte{0x00, 0x00}, want: []byte{}},
+		{name: "all ones", word: []byte{0xff, 0xff}, want: []byte{0xff, 0xff}},
+		{name: "leading zeroes", word: []byte{0x00, 0x00, 0x01, 0x02}, want: []byte{0x01, 0x02}},
+		{name: "first byte nonzero", word: []byte{0x01, 0x00}, want: []byte{0x01, 0x00}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := trimLeadingZeroes(tt.word); !bytesEqual(got, tt.want) {
+				t.Fatalf("trimLeadingZeroes: got %x want %x", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestWordFromUint64(t *testing.T) {
+	tests := []struct {
+		name string
+		v    uint64
+		want string
+	}{
+		{name: "zero", v: 0, want: "0000000000000000000000000000000000000000000000000000000000000000"},
+		{name: "one", v: 1, want: "0000000000000000000000000000000000000000000000000000000000000001"},
+		{name: "max", v: ^uint64(0), want: "000000000000000000000000000000000000000000000000ffffffffffffffff"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assertHex(t, "WordFromUint64", WordFromUint64(tt.v), tt.want)
+		})
+	}
+}
+
 func TestRejectInvalidWordLengths(t *testing.T) {
 	root := make([]byte, 32)
 	slot := make([]byte, 32)
@@ -154,79 +376,4 @@ func TestRejectInvalidWordLengths(t *testing.T) {
 	if _, err := StoragePath(slot[:31]); err != ErrInvalidKeyLength {
 		t.Fatalf("StoragePath length: got %v want %v", err, ErrInvalidKeyLength)
 	}
-}
-
-func mustEncode(t *testing.T, word []byte) []byte {
-	t.Helper()
-	out, err := EncodeStorageValue(word)
-	if err != nil {
-		t.Fatalf("EncodeStorageValue: %v", err)
-	}
-	return out
-}
-
-func ethereumMappingBytes32Slot0(path []byte) [32]byte {
-	var input [64]byte
-	copy(input[0:32], path)
-	return keccak256.Sum256(input[:])
-}
-
-func wordWithLastByte(b byte) []byte {
-	out := make([]byte, 32)
-	out[31] = b
-	return out
-}
-
-func node(path []byte, valueOrRef []byte) []byte {
-	return rlp.EncodeList(rlp.EncodeBytes(path), valueOrRef)
-}
-
-func hash(encoded []byte) [32]byte {
-	return keccak256.Sum256(encoded)
-}
-
-func nibbles(key []byte) []byte {
-	out := make([]byte, 0, len(key)*2)
-	for _, b := range key {
-		out = append(out, b>>4, b&0x0f)
-	}
-	return out
-}
-
-func leafPath(ns []byte) []byte {
-	return compactEncode(true, ns)
-}
-
-func compactEncode(leaf bool, ns []byte) []byte {
-	flag := byte(0)
-	if leaf {
-		flag = 2
-	}
-	odd := len(ns)%2 == 1
-	out := make([]byte, 0, (len(ns)+2)/2)
-	if odd {
-		out = append(out, (flag+1)<<4|ns[0])
-		ns = ns[1:]
-	} else {
-		out = append(out, flag<<4)
-	}
-	for i := 0; i < len(ns); i += 2 {
-		out = append(out, ns[i]<<4|ns[i+1])
-	}
-	return out
-}
-
-func assertHex(t *testing.T, name string, got []byte, want string) {
-	t.Helper()
-	if hex.EncodeToString(got) != want {
-		t.Fatalf("%s: got %x want %s", name, got, want)
-	}
-}
-
-func mustHex(s string) []byte {
-	bz, err := hex.DecodeString(s)
-	if err != nil {
-		panic(err)
-	}
-	return bz
 }

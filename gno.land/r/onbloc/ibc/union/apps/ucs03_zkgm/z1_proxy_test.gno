@@ -77,6 +77,17 @@ func TestUpdateImplSwapsToLatestTarget(cur realm, t *testing.T) {
 	}
 }
 
+func TestRegisterCoreAppRegistersProxyAndRejectsDuplicate(cur realm, t *testing.T) {
+	RegisterCoreApp(cur)
+	if !core.HasApp([]byte(ProxyPkgPath())) {
+		t.Fatal("RegisterCoreApp must register the proxy package path")
+	}
+
+	uassert.AbortsContains(t, cur, "port already registered", func(_ realm) {
+		RegisterCoreApp(cur)
+	})
+}
+
 func TestProxyAddressIsCaptured(cur realm, t *testing.T) {
 	// proxyAddress is captured in upgrade.gno's init; it must be a real address.
 	if ProxyAddress() == "" {

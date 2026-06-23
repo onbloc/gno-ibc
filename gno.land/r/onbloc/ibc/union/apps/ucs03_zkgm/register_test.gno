@@ -14,61 +14,62 @@ func TestAsIBCApp(t *testing.T) {
 	}
 }
 
-func TestRegisterReceiverStoresPreviousRealmPath(cur realm, t *testing.T) {
-	resetZkgmForTest()
-
-	const receiverPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/receiver"
+func TestRegisterReceiver(cur realm, t *testing.T) {
 	receiver := &dummyReceiver{}
-
-	testing.SetRealm(testing.NewCodeRealm(receiverPath))
-	RegisterReceiver(cross(cur), receiver)
-
-	got, ok := store.GetReceiver(receiverPath)
-	uassert.True(t, ok)
-	uassert.True(t, got == receiver)
-}
-
-func TestRegisterReceiverSeparatesPreviousRealmKeys(cur realm, t *testing.T) {
-	resetZkgmForTest()
-
-	const receiverPathA = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/receiver_a"
-	const receiverPathB = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/receiver_b"
 	receiverA := &dummyReceiver{}
 	receiverB := &dummyReceiver{}
+	replacementA := z.Zkgmable(&dummyReceiver{})
+	replacementB := z.Zkgmable(&dummyReceiver{})
 
-	testing.SetRealm(testing.NewCodeRealm(receiverPathA))
-	RegisterReceiver(cross(cur), receiverA)
-	testing.SetRealm(testing.NewCodeRealm(receiverPathB))
-	RegisterReceiver(cross(cur), receiverB)
-
-	gotA, okA := store.GetReceiver(receiverPathA)
-	gotB, okB := store.GetReceiver(receiverPathB)
-	uassert.True(t, okA)
-	uassert.True(t, okB)
-	uassert.True(t, gotA == receiverA)
-	uassert.True(t, gotB == receiverB)
-}
-
-func TestRegisterReceiver(cur realm, t *testing.T) {
-	resetZkgmForTest()
-
-	const receiverPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/direct_receiver"
 	cases := []struct {
-		name     string
-		receiver z.Zkgmable
+		name          string
+		registerPaths []string
+		receivers     []z.Zkgmable
+		wantPaths     []string
+		wantReceivers []z.Zkgmable
 	}{
-		{"first receiver", &dummyReceiver{}},
-		{"replacement receiver", &dummyReceiver{}},
+		{
+			name:          "stores previous realm path",
+			registerPaths: []string{"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/receiver"},
+			receivers:     []z.Zkgmable{receiver},
+			wantPaths:     []string{"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/receiver"},
+			wantReceivers: []z.Zkgmable{receiver},
+		},
+		{
+			name: "separates previous realm keys",
+			registerPaths: []string{
+				"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/receiver_a",
+				"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/receiver_b",
+			},
+			receivers: []z.Zkgmable{receiverA, receiverB},
+			wantPaths: []string{
+				"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/receiver_a",
+				"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/receiver_b",
+			},
+			wantReceivers: []z.Zkgmable{receiverA, receiverB},
+		},
+		{
+			name: "replaces receiver for same path",
+			registerPaths: []string{
+				"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/direct_receiver",
+				"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/direct_receiver",
+			},
+			receivers:     []z.Zkgmable{replacementA, replacementB},
+			wantPaths:     []string{"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/direct_receiver"},
+			wantReceivers: []z.Zkgmable{replacementB},
+		},
 	}
 
-	testing.SetRealm(testing.NewCodeRealm(receiverPath))
 	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			RegisterReceiver(cross(cur), tc.receiver)
-
-			got, ok := store.GetReceiver(receiverPath)
+		resetZkgmForTest()
+		for i, path := range tc.registerPaths {
+			testing.SetRealm(testing.NewCodeRealm(path))
+			RegisterReceiver(cross(cur), tc.receivers[i])
+		}
+		for i, path := range tc.wantPaths {
+			got, ok := store.GetReceiver(path)
 			uassert.True(t, ok)
-			uassert.True(t, got == tc.receiver)
-		})
+			uassert.True(t, got == tc.wantReceivers[i])
+		}
 	}
 }

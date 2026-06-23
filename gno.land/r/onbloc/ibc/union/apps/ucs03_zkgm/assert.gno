@@ -13,7 +13,7 @@ func assertIsIBCHost(cur realm) {
 	}
 }
 
-func assertNotPaused() {
+func assertIsNotPaused(cur realm) {
 	if paused {
 		panic("zkgm: paused")
 	}

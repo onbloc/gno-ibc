@@ -16,12 +16,15 @@ type mockLightClient struct {
 	headerErr          string
 	membershipErr      string
 	nonMembershipErr   string
+	misbehaviourErr    string
+	misbehaviourState  []byte
 	timestampAtHt      types.Timestamp
 	timestampErr       string
 	update             types.StateUpdate
 	creationWrites     map[string][]byte
 	membershipCalls    int
 	nonMembershipCalls int
+	misbehaviourCalls  int
 	implCalls          int
 	implClient         lightclient.Interface
 	implCS             []byte
@@ -91,5 +94,9 @@ func (l *mockLightClient) VerifyCreation(caller address, relayer address) (types
 }
 
 func (l *mockLightClient) Misbehaviour(caller address, misbehaviour []byte, relayer address) ([]byte, error) {
-	return nil, nil
+	l.misbehaviourCalls++
+	if l.misbehaviourErr != "" {
+		return nil, errors.New(l.misbehaviourErr)
+	}
+	return l.misbehaviourState, nil
 }

@@ -189,6 +189,92 @@ func TestForceUpdateClientUnknownClientAborts(cur realm, t *testing.T) {
 	})
 }
 
+func TestMisbehaviourUpdatesClientState(cur realm, t *testing.T) {
+	cases := []struct {
+		name      string
+		initial   []byte
+		returned  []byte
+		wantState string
+	}{
+		{
+			name:      "returned state mirrors frozen state",
+			initial:   []byte("old-client"),
+			returned:  []byte("frozen-client"),
+			wantState: "frozen-client",
+		},
+		{
+			name:      "empty returned state keeps previous state",
+			initial:   []byte("old-client"),
+			returned:  nil,
+			wantState: "old-client",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			lc := &mockLightClient{misbehaviourState: tc.returned}
+			clientId := createClient(cur, v, lc, tc.initial, nil)
+
+			v.Misbehaviour(0, cur, types.NewMsgMisbehaviour(clientId, []byte("evidence"), "g1relayer"))
+
+			uassert.Equal(t, 1, lc.misbehaviourCalls)
+			mc := v.store.(*mockStore).clients[uint32(clientId)]
+			uassert.Equal(t, tc.wantState, string(mc.clientState))
+		})
+	}
+}
+
+func TestMisbehaviourRejectsInvalidMessages(cur realm, t *testing.T) {
+	cases := []struct {
+		name      string
+		setup     func(*coreV1) (types.MsgMisbehaviour, *mockLightClient)
+		wantPanic string
+		wantCalls int
+	}{
+		{
+			name: "unknown client",
+			setup: func(v *coreV1) (types.MsgMisbehaviour, *mockLightClient) {
+				return types.NewMsgMisbehaviour(types.ClientId(99), []byte("evidence"), ""), nil
+			},
+			wantPanic: "not found",
+		},
+		{
+			name: "inactive client",
+			setup: func(v *coreV1) (types.MsgMisbehaviour, *mockLightClient) {
+				lc := &mockLightClient{status: lightclient.Expired}
+				clientId := createClient(cur, v, lc, nil, nil)
+				return types.NewMsgMisbehaviour(clientId, []byte("evidence"), ""), lc
+			},
+			wantPanic: "client is not active",
+		},
+		{
+			name: "light client error",
+			setup: func(v *coreV1) (types.MsgMisbehaviour, *mockLightClient) {
+				lc := &mockLightClient{misbehaviourErr: "bad evidence"}
+				clientId := createClient(cur, v, lc, nil, nil)
+				return types.NewMsgMisbehaviour(clientId, []byte("evidence"), ""), lc
+			},
+			wantPanic: "misbehaviour: bad evidence",
+			wantCalls: 1,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			msg, lc := tc.setup(v)
+
+			uassert.AbortsContains(t, cur, tc.wantPanic, func(cur realm) {
+				v.Misbehaviour(0, cur, msg)
+			})
+			if lc != nil {
+				uassert.Equal(t, tc.wantCalls, lc.misbehaviourCalls)
+			}
+		})
+	}
+}
+
 func TestVerifyClientMembershipActivePasses(cur realm, t *testing.T) {
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)

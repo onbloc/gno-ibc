@@ -30,6 +30,7 @@ func (c *coreV1) ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit)
 	if !ok {
 		panic("port " + string(portId) + " not found")
 	}
+
 	a.OnChannelOpenInit(cross(rlm), msg.ConnectionId, channelId, msg.Version, relayer)
 	core.EmitChannelOpenInit(portId, channelId, channel)
 }
@@ -49,12 +50,15 @@ func (c *coreV1) ForceChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenT
 func (c *coreV1) channelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry, verify bool) {
 	relayer := rlm.Previous().Address()
 	portId := types.Bytes(cloneBytes(msg.PortId))
+
 	if msg.Channel.State != types.ChannelStateTryOpen {
 		panic(core.ErrInvalidChannelState)
 	}
+
 	if msg.Channel.CounterpartyChannelId == 0 {
 		panic(core.ErrInvalidCounterpartyChannelId)
 	}
+
 	connection := c.ensureConnectionState(msg.Channel.ConnectionId)
 	channelId := c.store.NextChannelId(0, rlm)
 
@@ -97,13 +101,16 @@ func (c *coreV1) ForceChannelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenA
 
 func (c *coreV1) channelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck, verify bool) {
 	relayer := rlm.Previous().Address()
+
 	channel, ok := c.store.GetChannel(msg.ChannelId)
 	if !ok {
 		panic("channel " + msg.ChannelId.String() + " not found")
 	}
+
 	if channel.State != types.ChannelStateInit {
 		panic(core.ErrInvalidChannelState)
 	}
+
 	connection := c.ensureConnectionState(channel.ConnectionId)
 	portId, _ := c.store.GetChannelOwner(msg.ChannelId)
 
@@ -153,6 +160,7 @@ func (c *coreV1) ForceChannelOpenConfirm(_ int, rlm realm, msg types.MsgChannelO
 
 func (c *coreV1) channelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenConfirm, verify bool) {
 	relayer := rlm.Previous().Address()
+
 	channel, ok := c.store.GetChannel(msg.ChannelId)
 	if !ok {
 		panic("channel " + msg.ChannelId.String() + " not found")
@@ -204,6 +212,7 @@ func (c *coreV1) channelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenCo
 // ChannelCloseInit closes an Open channel locally and notifies its app.
 func (c *coreV1) ChannelCloseInit(_ int, rlm realm, msg types.MsgChannelCloseInit) {
 	relayer := rlm.Previous().Address()
+
 	channel, ok := c.store.GetChannel(msg.ChannelId)
 	if !ok {
 		panic("channel " + msg.ChannelId.String() + " not found")
@@ -232,6 +241,7 @@ func (c *coreV1) ChannelCloseInit(_ int, rlm realm, msg types.MsgChannelCloseIni
 // channel, notifying its app.
 func (c *coreV1) ChannelCloseConfirm(_ int, rlm realm, msg types.MsgChannelCloseConfirm) {
 	relayer := rlm.Previous().Address()
+
 	channel, ok := c.store.GetChannel(msg.ChannelId)
 	if !ok {
 		panic("channel " + msg.ChannelId.String() + " not found")

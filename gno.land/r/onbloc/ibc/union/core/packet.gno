@@ -12,6 +12,7 @@ func QueryBatchPackets(channelId types.ChannelId, batchHash types.H256) string {
 	if !found {
 		return ""
 	}
+
 	return h256String(v)
 }
 
@@ -22,6 +23,7 @@ func QueryBatchReceipts(channelId types.ChannelId, batchHash types.H256) string 
 	if !found {
 		return ""
 	}
+
 	return h256String(v)
 }
 
@@ -31,6 +33,7 @@ func QueryCommitmentAtPath(channelId types.ChannelId, path types.H256) string {
 	if !found {
 		return ""
 	}
+
 	return h256String(v)
 }
 
@@ -40,6 +43,7 @@ func QueryReceiptAtPath(channelId types.ChannelId, path types.H256) string {
 	if !found {
 		return ""
 	}
+
 	return h256String(v)
 }
 
@@ -48,6 +52,7 @@ func GetCommittedMembershipProof(clientId types.ClientId, proofHeight uint64, pa
 	if !found {
 		return ""
 	}
+
 	return h256String(v)
 }
 

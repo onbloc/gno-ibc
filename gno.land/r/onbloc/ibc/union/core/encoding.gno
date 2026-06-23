@@ -20,6 +20,7 @@ func commitPacketHash(packet types.Packet) types.H256 {
 	if err != nil {
 		panic(err)
 	}
+
 	return h
 }
 
@@ -28,6 +29,7 @@ func commitPacketsHash(packets []types.Packet) types.H256 {
 	if err != nil {
 		panic(err)
 	}
+
 	return h
 }
 
@@ -36,6 +38,7 @@ func packetCommitmentPath(packet types.Packet) types.H256 {
 	if err != nil {
 		panic(err)
 	}
+
 	return h
 }
 
@@ -44,6 +47,7 @@ func packetAcknowledgementPath(packet types.Packet) types.H256 {
 	if err != nil {
 		panic(err)
 	}
+
 	return h
 }
 
@@ -52,6 +56,7 @@ func channelValue(channel types.Channel) types.H256 {
 	if err != nil {
 		panic(err)
 	}
+
 	return keccak(bz)
 }
 
@@ -60,6 +65,7 @@ func connectionValue(connection types.Connection) types.H256 {
 	if err != nil {
 		panic(err)
 	}
+
 	return keccak(bz)
 }
 
@@ -71,6 +77,7 @@ func connectionValue(connection types.Connection) types.H256 {
 func h256Bytes(h types.H256) []byte {
 	out := make([]byte, len(h))
 	copy(out, h[:])
+
 	return out
 }
 
@@ -101,6 +108,7 @@ func cloneBytes(b []byte) []byte {
 	if b == nil {
 		return nil
 	}
+
 	out := make([]byte, len(b))
 	copy(out, b)
 

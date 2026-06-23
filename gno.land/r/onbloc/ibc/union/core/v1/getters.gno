@@ -33,6 +33,7 @@ func (c *coreV1) GetClientImpl(clientId types.ClientId) (string, bool) {
 	if !ok {
 		return "", false
 	}
+
 	return string(typ), true
 }
 
@@ -50,6 +51,7 @@ func (c *coreV1) GetClientStateBytes(clientId types.ClientId) ([]byte, error) {
 	if !ok {
 		return nil, core.ErrClientStateNotFound
 	}
+
 	return bz, nil
 }
 
@@ -60,6 +62,7 @@ func (c *coreV1) GetConsensusStateBytes(clientId types.ClientId, height types.He
 	if !ok {
 		return nil, core.ErrConsensusStateNotFound
 	}
+
 	return bz, nil
 }
 
@@ -70,6 +73,7 @@ func (c *coreV1) GetLatestHeight(clientId types.ClientId) (uint64, error) {
 	if !ok {
 		return 0, core.ErrClientNotFound
 	}
+
 	return lc.GetLatestHeight(), nil
 }
 
@@ -80,10 +84,12 @@ func (c *coreV1) GetTimestampAtHeight(clientId types.ClientId, height uint64) (t
 	if !ok {
 		return 0, core.ErrClientNotFound
 	}
+
 	ts, err := lc.GetTimestampAtHeight(height)
 	if err != nil {
 		return 0, err
 	}
+
 	return ts, nil
 }
 
@@ -94,6 +100,7 @@ func (c *coreV1) GetConnectionTyped(connectionId types.ConnectionId) (types.Conn
 	if !ok {
 		return types.Connection{}, core.ErrConnectionNotFound
 	}
+
 	return conn, nil
 }
 

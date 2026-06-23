@@ -36,6 +36,7 @@ func resolveRelayer(caller address, relayer string) address {
 	if relayer == "" {
 		return caller
 	}
+
 	return address(relayer)
 }
 
@@ -45,7 +46,9 @@ func cloneBytes(b []byte) []byte {
 	if b == nil {
 		return nil
 	}
+
 	out := make([]byte, len(b))
 	copy(out, b)
+
 	return out
 }

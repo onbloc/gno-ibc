@@ -12,6 +12,7 @@ func (c *coreV1) RegisterClient(_ int, rlm realm, clientType types.ClientType, l
 	if lc == nil {
 		panic("caller not authorized to register client: unauthorized")
 	}
+
 	c.store.RegisterClient(0, rlm, clientType, lc)
 	core.EmitRegisterClient(clientType)
 }
@@ -27,6 +28,7 @@ func (c *coreV1) HasClient(clientType types.ClientType) bool {
 func (c *coreV1) CreateClient(_ int, rlm realm, msg types.MsgCreateClient) {
 	caller := rlm.Previous().Address()
 	relayer := resolveRelayer(caller, msg.Relayer)
+
 	lc, ok := c.store.RegisteredClient(msg.ClientType)
 	if !ok {
 		panic("client type not found")
@@ -44,6 +46,7 @@ func (c *coreV1) CreateClient(_ int, rlm realm, msg types.MsgCreateClient) {
 // the consensus state was stored at.
 func (c *coreV1) initClient(_ int, rlm realm, clientStateBytes, consensusStateBytes []byte, relayer address, lc lightclient.Interface, clientId types.ClientId) types.Height {
 	c.store.SaveClientState(0, rlm, clientId, clientStateBytes)
+
 	height := types.NewHeight(lc.GetLatestHeight())
 	c.store.SaveConsensusState(0, rlm, clientId, height, consensusStateBytes)
 
@@ -57,6 +60,7 @@ func (c *coreV1) initClient(_ int, rlm realm, clientStateBytes, consensusStateBy
 	if len(result.ClientStateBytes) != 0 {
 		c.store.SaveClientState(0, rlm, clientId, result.ClientStateBytes)
 	}
+
 	for k, v := range result.StorageWrites {
 		c.store.SaveClientStore(0, rlm, clientId, k, v)
 	}
@@ -72,24 +76,28 @@ func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) {
 	if !ok {
 		panic("client " + msg.ClientId.String() + " not found")
 	}
+
 	if lc.Status() != lightclient.Active {
 		panic(core.ErrClientNotActive)
 	}
 
 	caller := rlm.Previous().Address()
 	relayer := resolveRelayer(caller, msg.Relayer)
+
 	update, err := lc.VerifyHeader(caller, msg.ClientMessage, relayer)
 	if err != nil {
 		panic("update client: " + err.Error())
 	}
 
 	height := types.NewHeight(update.Height)
+
 	if len(update.ClientStateBytes) != 0 {
 		c.store.SaveClientState(0, rlm, msg.ClientId, update.ClientStateBytes)
 	}
 	// Union stores consensus_state_bytes unconditionally because the field is not
 	// optional in the update response.
 	c.store.SaveConsensusState(0, rlm, msg.ClientId, height, update.ConsensusStateBytes)
+
 	for k, v := range update.StorageWrites {
 		c.store.SaveClientStore(0, rlm, msg.ClientId, k, v)
 	}
@@ -136,6 +144,7 @@ func (c *coreV1) Misbehaviour(_ int, rlm realm, msg types.MsgMisbehaviour) {
 	if err != nil {
 		panic("misbehaviour: " + err.Error())
 	}
+
 	if len(clientStateBytes) != 0 {
 		c.store.SaveClientState(0, rlm, msg.ClientId, clientStateBytes)
 	}
@@ -156,9 +165,11 @@ func (c *coreV1) verifyMembership(clientId types.ClientId, height types.Height, 
 	if !ok {
 		panic("client " + clientId.String() + " not found")
 	}
+
 	if lc.Status() != lightclient.Active {
 		panic(core.ErrClientNotActive)
 	}
+
 	if err := lc.VerifyMembership(height.RevisionHeight, key, proof, value); err != nil {
 		panic(err)
 	}

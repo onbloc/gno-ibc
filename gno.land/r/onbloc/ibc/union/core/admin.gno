@@ -33,6 +33,7 @@ func GetAdmin() address {
 func SetAdmin(cur realm, newAdmin address) {
 	runtime.AssertOriginCall()
 	requireAdmin(cur, "set admin")
+
 	oldAdmin := admin
 	admin = newAdmin
 	emitAdminChangedEvent(oldAdmin, newAdmin)

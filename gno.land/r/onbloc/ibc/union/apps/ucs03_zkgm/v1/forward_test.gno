@@ -158,6 +158,46 @@ func TestIntentRecvOnlyMakerForwardAborts(cur realm, t *testing.T) {
 	})
 }
 
+func TestHandleForwardChildNoopsWhenPacketIsNotResolvable(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+	parent := core.NewPacket(types.ChannelId(1), types.ChannelId(2), []byte("parent"), 0)
+	child := core.NewPacket(types.ChannelId(3), types.ChannelId(4), []byte("child"), 0)
+	childKey := forwardInFlightKey(child)
+
+	cases := []struct {
+		name string
+		zp   z.ZkgmPacket
+		seed bool
+	}{
+		{
+			name: "plain salt ignores stored key",
+			zp:   z.ZkgmPacket{Salt: [32]byte{0x01}},
+			seed: true,
+		},
+		{
+			name: "forward salt without stored parent",
+			zp:   z.ZkgmPacket{Salt: z.DeriveForwardSalt([32]byte{0x02})},
+			seed: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testStore.RemoveInFlightPacket(0, cur, childKey)
+			if tc.seed {
+				testStore.SetInFlightPacket(0, cur, childKey, parent)
+			}
+
+			ok := v.handleForwardChild(0, cur, child, tc.zp, []byte("ack"))
+
+			uassert.False(t, ok)
+			_, found := testStore.GetInFlightPacket(childKey)
+			uassert.Equal(t, tc.seed, found)
+		})
+	}
+}
+
 func forwardPath(channels ...uint32) *u256.Uint {
 	path := u256.Zero()
 	for _, channel := range channels {

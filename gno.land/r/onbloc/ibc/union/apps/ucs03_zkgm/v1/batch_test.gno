@@ -3,10 +3,11 @@ package impl
 // batch_test.gno covers batch.gno's verify/acknowledge/timeout logic and the
 // funds-accounting it drives. The send-path native funds checks are exercised
 // here directly against verifyBatch + funds.assertEmpty (the Send entry point
-// itself is integration-tested in the e2e suite). executeBatch's call-dispatch
-// (mock receiver) likewise lives in e2e since it needs a registered receiver.
+// itself is integration-tested in the e2e suite). executeBatch is covered here
+// for unit-level ack/short-circuit behavior with an injected mock receiver.
 
 import (
+	"bytes"
 	"testing"
 
 	types "gno.land/p/onbloc/ibc/union/types"
@@ -14,6 +15,7 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -123,6 +125,57 @@ func TestAcknowledgeBatchRejectsAckCountMismatch(cur realm, t *testing.T) {
 	err := newTestImpl().acknowledgeBatch(0, cur, packet, address(""), [32]byte{}, u256.Zero(), batch, true, outerAck.InnerAck)
 
 	uassert.ErrorContains(t, err, "batch ack count mismatch")
+}
+
+func TestExecuteBatchPropagatesOnlyMakerAndSkipsRemainingChildren(cur realm, t *testing.T) {
+	mock.Reset(cross(cur))
+	testStore = newMockStore()
+	testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
+
+	onlyMakerOrder := z.TokenOrderV2{
+		Kind:        z.TOKEN_ORDER_KIND_SOLVE,
+		Sender:      []byte(testAddress("batch-om-sender")),
+		Receiver:    []byte(testAddress("batch-om-receiver")),
+		BaseToken:   []byte("uatom"),
+		BaseAmount:  u256.NewUint(10),
+		QuoteToken:  []byte("ibc/batch-only-maker-quote"),
+		QuoteAmount: u256.NewUint(10),
+	}
+	batch := z.Batch{Instructions: []z.Instruction{
+		batchMustOrderInstruction(onlyMakerOrder),
+		batchMustCallInstruction(batchCall("sender", "must-not-run")),
+	}}
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
+
+	ack, err := newTestImpl().executeBatch(0, cur, packet, address(testAddress("relayer")), nil, [32]byte{}, u256.Zero(), batch, false)
+
+	uassert.NoError(t, err)
+	uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, ack))
+	uassert.Equal(t, 0, mock.Calls(cross(cur)))
+}
+
+func TestAcknowledgeBatchFailureRefundsTokenOrderChildren(cur realm, t *testing.T) {
+	v := newTestImpl()
+	path := u256.NewUint(29)
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
+	orderA := batchRefundOrder("ack-fail-a", "ibc/batch-ack-fail-a", "quote-a", 11)
+	orderB := batchRefundOrder("ack-fail-b", "ibc/batch-ack-fail-b", "quote-b", 17)
+	v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount)
+	v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount)
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "", 0, cur.Address().String(), orderA.BaseAmount))
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "", 0, cur.Address().String(), orderB.BaseAmount))
+	batch := z.Batch{Instructions: []z.Instruction{
+		batchMustOrderInstruction(orderA),
+		batchMustOrderInstruction(orderB),
+	}}
+
+	err := v.acknowledgeBatch(0, cur, packet, address(testAddress("relayer")), [32]byte{}, path, batch, false, nil)
+
+	uassert.NoError(t, err)
+	assertNoChannelBalance(t, types.ChannelId(7), path, orderA)
+	assertNoChannelBalance(t, types.ChannelId(7), path, orderB)
+	uassert.Equal(t, int64(11), voucherBalanceOf("ibc/batch-ack-fail-a", address(orderA.Sender)))
+	uassert.Equal(t, int64(17), voucherBalanceOf("ibc/batch-ack-fail-b", address(orderB.Sender)))
 }
 
 func TestTimeoutBatchTokenOrderChildrenRefund(cur realm, t *testing.T) {

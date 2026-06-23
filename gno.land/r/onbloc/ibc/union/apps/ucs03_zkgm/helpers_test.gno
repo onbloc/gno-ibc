@@ -32,6 +32,9 @@ type dummyImpl struct {
 	lastChannelId       types.ChannelId
 	lastCounterpartyId  types.ChannelId
 	lastCounterpartyVer string
+	lastTimeout         types.Timestamp
+	lastSalt            [32]byte
+	lastInstruction     z.Instruction
 }
 
 var _ IApp = &dummyImpl{}
@@ -95,7 +98,21 @@ func (d *dummyImpl) OnTimeoutPacket(_ int, rlm realm, packet types.Packet, relay
 
 func (d *dummyImpl) Send(_ int, rlm realm, channelId types.ChannelId, timeoutTimestamp types.Timestamp, salt [32]byte, instruction z.Instruction) types.Packet {
 	d.sendCalled = true
-	return types.Packet{}
+	d.lastChannelId = channelId
+	d.lastTimeout = timeoutTimestamp
+	d.lastSalt = salt
+	d.lastInstruction = instruction
+	return core.NewPacket(channelId, 0, instruction.Operand, timeoutTimestamp)
+}
+
+type dummyReceiver struct{}
+
+func (d *dummyReceiver) OnZkgm(cur realm, env z.CallEnv) error {
+	return nil
+}
+
+func (d *dummyReceiver) OnIntentZkgm(cur realm, env z.IntentCallEnv) error {
+	return nil
 }
 
 // resetZkgmForTest returns the proxy package state to a clean baseline. The

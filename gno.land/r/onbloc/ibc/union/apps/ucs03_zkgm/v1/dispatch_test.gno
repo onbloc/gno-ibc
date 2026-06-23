@@ -58,6 +58,67 @@ func TestAckUnsupportedOpcodeAborts(cur realm, t *testing.T) {
 	})
 }
 
+func TestPacketResolutionRejectsMalformedInputs(cur realm, t *testing.T) {
+	validCallPacket := core.NewPacket(types.ChannelId(1), types.ChannelId(2), mustZkgmPacketBytes(batchMustCallInstruction(batchCall("sender", ""))), 0)
+	malformedPacket := core.NewPacket(types.ChannelId(1), types.ChannelId(2), []byte{0x01}, 0)
+
+	cases := []struct {
+		name    string
+		run     func(cur realm)
+		wantErr string
+	}{
+		{
+			"ack malformed packet",
+			func(cur realm) {
+				newTestImpl().OnAcknowledgementPacket(0, cur, malformedPacket, mustSuccessAck(), address(testAddress("relayer")))
+			},
+			"invalid",
+		},
+		{
+			"ack malformed outer ack",
+			func(cur realm) {
+				newTestImpl().OnAcknowledgementPacket(0, cur, validCallPacket, []byte{0x01}, address(testAddress("relayer")))
+			},
+			"invalid",
+		},
+		{
+			"timeout malformed packet",
+			func(cur realm) {
+				newTestImpl().OnTimeoutPacket(0, cur, malformedPacket, address(testAddress("relayer")))
+			},
+			"invalid",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.AbortsContains(t, cur, tc.wantErr, func(cur realm) {
+				tc.run(cur)
+			})
+		})
+	}
+}
+
+func TestPacketAcknowledgementRejectsUnknownTokenOrderFillType(cur realm, t *testing.T) {
+	order := z.TokenOrderV2{
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+		Sender:      []byte(testAddress("unknown-fill-sender")),
+		BaseToken:   []byte("ibc/unknown-fill"),
+		BaseAmount:  u256.NewUint(10),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(10),
+	}
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), mustZkgmPacketBytes(batchMustOrderInstruction(order)), 0)
+	ack := mustTokenOrderOuterAck(z.TokenOrderAck{
+		FillType:    u256.NewUint(99),
+		MarketMaker: []byte(testAddress("maker")),
+	})
+
+	uassert.AbortsContains(t, cur, "unknown fill type", func(cur realm) {
+		newTestImpl().OnAcknowledgementPacket(0, cur, packet, ack, address(testAddress("relayer")))
+	})
+}
+
 // TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck verifies that an
 // error occurring before any state mutation produces a universalErrorAck rather
 // than aborting the transaction.
@@ -194,4 +255,16 @@ func TestExtractPanicMessage(t *testing.T) {
 	uassert.Equal(t, "boom", extractPanicMessage("boom"))
 	uassert.Equal(t, "wrapped", extractPanicMessage(errors.New("wrapped")))
 	uassert.Equal(t, "42", extractPanicMessage(42))
+}
+
+func mustTokenOrderOuterAck(orderAck z.TokenOrderAck) []byte {
+	inner, err := z.EncodeTokenOrderAck(orderAck)
+	if err != nil {
+		panic(err)
+	}
+	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess(), InnerAck: inner})
+	if err != nil {
+		panic(err)
+	}
+	return ack
 }

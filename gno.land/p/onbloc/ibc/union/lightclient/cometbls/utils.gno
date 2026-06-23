@@ -10,11 +10,11 @@ const maxChainIDLen = 32
 // padding, since none of those yield a valid chain-id.
 func chainIdToString(source []byte) (string, error) {
 	if len(source) == 0 {
-		return "", makeError(ErrInvalidChainID, "empty source")
+		return "", errorWithDetails(ErrInvalidChainID, "empty source")
 	}
 
 	if len(source) > maxChainIDLen {
-		return "", makeError(ErrInvalidChainID, "source exceeds max length")
+		return "", errorWithDetails(ErrInvalidChainID, "source exceeds max length")
 	}
 
 	offset := 0
@@ -23,7 +23,7 @@ func chainIdToString(source []byte) (string, error) {
 	}
 
 	if offset == len(source) {
-		return "", makeError(ErrInvalidChainID, "source is all zero padding")
+		return "", errorWithDetails(ErrInvalidChainID, "source is all zero padding")
 	}
 
 	return string(source[offset:]), nil

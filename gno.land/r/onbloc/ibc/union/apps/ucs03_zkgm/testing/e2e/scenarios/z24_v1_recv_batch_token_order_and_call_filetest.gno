@@ -22,7 +22,7 @@ func main(cur realm) {
 	pair := e2e.OpenE2EChannelPair(cross(cur))
 
 	receiver := string(testutils.TestAddress("receiver"))
-	quoteToken := impl.PredictWrappedToken(u256.Zero(), uint32(pair.Destination), []byte("ugnot"))
+	quoteToken := z.PredictWrappedToken(u256.Zero(), uint32(pair.Destination), []byte("ugnot"))
 
 	batch := z.Batch{Instructions: []z.Instruction{
 		e2e.MustTokenOrderInstruction(cross(cur), z.TokenOrderV2{

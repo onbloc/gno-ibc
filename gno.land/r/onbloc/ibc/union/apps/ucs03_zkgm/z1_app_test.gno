@@ -64,38 +64,38 @@ func TestAppPausedBlocksAllCallbacks(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 
 	// Channel handshake callbacks are blocked by pause
-	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+	uassert.AbortsContains(t, cur, "paused", func() {
 		(&App{}).OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer"))
 	})
-	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+	uassert.AbortsContains(t, cur, "paused", func() {
 		(&App{}).OnChannelOpenTry(cross(cur), 1, 2, Version, Version, address("g1relayer"))
 	})
-	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+	uassert.AbortsContains(t, cur, "paused", func() {
 		(&App{}).OnChannelOpenAck(cross(cur), 2, 3, Version, address("g1relayer"))
 	})
-	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+	uassert.AbortsContains(t, cur, "paused", func() {
 		(&App{}).OnChannelOpenConfirm(cross(cur), 2, address("g1relayer"))
 	})
 
 	// Close callbacks are blocked by pause before "the show must go on"
-	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+	uassert.AbortsContains(t, cur, "paused", func() {
 		(&App{}).OnChannelCloseInit(cross(cur), 2, address("g1relayer"))
 	})
-	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+	uassert.AbortsContains(t, cur, "paused", func() {
 		(&App{}).OnChannelCloseConfirm(cross(cur), 2, address("g1relayer"))
 	})
 
 	// Packet callbacks are blocked by pause
-	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+	uassert.AbortsContains(t, cur, "paused", func() {
 		AsIBCApp().OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
 	})
-	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+	uassert.AbortsContains(t, cur, "paused", func() {
 		(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
 	})
-	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+	uassert.AbortsContains(t, cur, "paused", func() {
 		AsIBCApp().OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
 	})
-	uassert.AbortsContains(t, cur, "zkgm: paused", func() {
+	uassert.AbortsContains(t, cur, "paused", func() {
 		AsIBCApp().OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
 	})
 

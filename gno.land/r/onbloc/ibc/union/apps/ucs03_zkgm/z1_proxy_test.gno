@@ -23,7 +23,7 @@ func TestUpdateImplRejectsNonAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	implConstructors[testImplPathA] = func(store IStore) IApp { return &dummyImpl{} }
 
-	uassert.AbortsContains(t, cur, "AccessManagerUnauthorizedCall", func(cur realm) {
+	uassert.AbortsContains(t, cur, "access manager unauthorized call", func(cur realm) {
 		UpdateImpl(cross(cur), testImplPathA)
 	})
 	if currentImpl != nil {

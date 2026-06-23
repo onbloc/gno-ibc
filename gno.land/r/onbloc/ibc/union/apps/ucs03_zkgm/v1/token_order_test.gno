@@ -131,8 +131,8 @@ func TestTokenOrderExecuteAppliesRateLimit(cur realm, t *testing.T) {
 		Implementation: []byte("grc20"),
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6}),
 	})
-	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	ibcDenom := PredictWrappedTokenV2(u256.NewUint(7), 5, []byte("ugnot"), image)
+	image := z.MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	ibcDenom := z.PredictWrappedTokenV2(u256.NewUint(7), 5, []byte("ugnot"), image)
 
 	now := u256.NewUint(uint64(time.Now().Unix()))
 	bucket, err := tb.New(u256.NewUint(10), u256.NewUint(1), now)
@@ -172,8 +172,8 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 		Implementation: []byte("grc20"),
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6}),
 	})
-	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	ibcDenom := PredictWrappedTokenV2(u256.NewUint(7), 5, []byte("ugnot"), image)
+	image := z.MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	ibcDenom := z.PredictWrappedTokenV2(u256.NewUint(7), 5, []byte("ugnot"), image)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(testAddress("v1-receiver")),
@@ -220,8 +220,8 @@ func TestTokenOrderExecuteInitializeMalformedInitializerUsesDefaults(cur realm, 
 		Implementation: []byte("grc20"),
 		Initializer:    []byte("not-valid-abi"),
 	})
-	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	ibcDenom := PredictWrappedTokenV2(u256.NewUint(3), 4, []byte("ugnot"), image)
+	image := z.MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	ibcDenom := z.PredictWrappedTokenV2(u256.NewUint(3), 4, []byte("ugnot"), image)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(testAddress("fallback-receiver")),
@@ -250,8 +250,8 @@ func TestTokenOrderExecuteInitializeEmptyInitializerUsesDefaults(cur realm, t *t
 		Implementation: []byte("grc20"),
 		Initializer:    []byte{},
 	})
-	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	ibcDenom := PredictWrappedTokenV2(u256.NewUint(5), 6, []byte("ugnot"), image)
+	image := z.MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	ibcDenom := z.PredictWrappedTokenV2(u256.NewUint(5), 6, []byte("ugnot"), image)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(testAddress("empty-init-receiver")),
@@ -280,8 +280,8 @@ func TestTokenOrderExecuteInitializeMintErrorDoesNotSetOrigin(cur realm, t *test
 		Initializer:    []byte("init-invalid-rx"),
 	})
 
-	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	ibcDenom := PredictWrappedTokenV2(u256.NewUint(9), 7, []byte("ugnot"), image)
+	image := z.MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	ibcDenom := z.PredictWrappedTokenV2(u256.NewUint(9), 7, []byte("ugnot"), image)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte("not-a-valid-address"),
@@ -310,7 +310,7 @@ func TestTokenOrderExecuteEscrowMintErrorDoesNotSetOrigin(cur realm, t *testing.
 
 	path := u256.NewUint(11)
 	destChan := uint32(8)
-	quoteDenom := PredictWrappedToken(path, destChan, []byte("ugnot"))
+	quoteDenom := z.PredictWrappedToken(path, destChan, []byte("ugnot"))
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte("not-a-valid-address"),
@@ -336,10 +336,10 @@ func TestTokenOrderExecuteInitializeUnderQuoteFallsBackToMarketMaker(cur realm, 
 		Implementation: []byte("grc20"),
 		Initializer:    []byte("init"),
 	})
-	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	image := z.MetadataImage(mustDecodeTokenMetadata(metaBytes))
 	path := u256.NewUint(30)
 	const destChan = types.ChannelId(30)
-	ibcDenom := PredictWrappedTokenV2(path, uint32(destChan), []byte("ugnot"), image)
+	ibcDenom := z.PredictWrappedTokenV2(path, uint32(destChan), []byte("ugnot"), image)
 	receiver := testAddress("quote-exceeds-rx")
 
 	order := z.TokenOrderV2{
@@ -424,7 +424,7 @@ func TestTokenOrderExecuteEscrowZeroFeeSkipsRelayerMint(cur realm, t *testing.T)
 	const destChan = types.ChannelId(60)
 	relayer := testAddress("zero-fee-relayer")
 	receiver := testAddress("zero-fee-receiver")
-	quoteDenom := PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -458,7 +458,7 @@ func TestTokenOrderExecuteEscrowZeroQuoteSkipsReceiverMint(cur realm, t *testing
 	const destChan = types.ChannelId(61)
 	relayer := testAddress("zero-quote-relayer")
 	receiver := testAddress("zero-quote-receiver")
-	quoteDenom := PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -485,7 +485,7 @@ func TestTokenOrderExecuteEscrowZeroAmountSkipsBothMints(cur realm, t *testing.T
 	const destChan = types.ChannelId(62)
 	relayer := testAddress("zero-amt-relayer")
 	receiver := testAddress("zero-amt-receiver")
-	quoteDenom := PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -511,7 +511,7 @@ func TestTokenOrderVerifyUnescrowV1PredictionPasses(cur realm, t *testing.T) {
 	const destChan = types.ChannelId(70)
 	sender := testAddress("v1-predict-sender")
 	quoteToken := []byte("ugnot")
-	baseDenom := PredictWrappedToken(u256.Zero(), uint32(destChan), quoteToken)
+	baseDenom := z.PredictWrappedToken(u256.Zero(), uint32(destChan), quoteToken)
 	origin, err := z.UpdateChannelPath(u256.Zero(), uint32(destChan))
 	uassert.NoError(t, err)
 	testStore.SetTokenOrigin(0, cur, baseDenom, origin)
@@ -540,7 +540,7 @@ func TestTokenOrderVerifyUnescrowV2PredictionWithImagePasses(cur realm, t *testi
 	sender := testAddress("v2-predict-sender")
 	quoteToken := []byte("ugnot")
 	image := [32]byte{0x01}
-	baseDenom := PredictWrappedTokenV2(u256.Zero(), uint32(destChan), quoteToken, image)
+	baseDenom := z.PredictWrappedTokenV2(u256.Zero(), uint32(destChan), quoteToken, image)
 	origin, err := z.UpdateChannelPath(u256.Zero(), uint32(destChan))
 	uassert.NoError(t, err)
 	testStore.SetTokenOrigin(0, cur, baseDenom, origin)
@@ -571,7 +571,7 @@ func TestTokenOrderVerifyUnescrowWrongImageRejected(cur realm, t *testing.T) {
 	quoteToken := []byte("ugnot")
 	imageCorrect := [32]byte{0x01}
 	imageWrong := [32]byte{0x02}
-	baseDenom := PredictWrappedTokenV2(u256.Zero(), uint32(destChan), quoteToken, imageCorrect)
+	baseDenom := z.PredictWrappedTokenV2(u256.Zero(), uint32(destChan), quoteToken, imageCorrect)
 	origin, err := z.UpdateChannelPath(u256.Zero(), uint32(destChan))
 	uassert.NoError(t, err)
 	testStore.SetTokenOrigin(0, cur, baseDenom, origin)

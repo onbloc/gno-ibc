@@ -35,12 +35,15 @@ func Verify(root []byte, key []byte, value []byte, proof [][]byte) error {
 	if err != nil {
 		return err
 	}
+
 	if !result.found {
 		return ErrKeyAbsent
 	}
+
 	if !bytes.Equal(result.value, value) {
 		return ErrValueMismatch
 	}
+
 	return nil
 }
 
@@ -50,9 +53,11 @@ func VerifyAbsence(root []byte, key []byte, proof [][]byte) error {
 	if err != nil {
 		return err
 	}
+
 	if result.found {
 		return ErrKeyPresent
 	}
+
 	return nil
 }
 
@@ -71,13 +76,16 @@ func walk(root []byte, path []byte, proof [][]byte) (walkResult, error) {
 	if len(root) != keccak256.Size {
 		return walkResult{}, ErrInvalidRoot
 	}
+
 	if len(proof) == 0 {
 		emptyRoot := EmptyRoot()
 		if bytes.Equal(root, emptyRoot[:]) {
 			return walkResult{found: false}, nil
 		}
+
 		return walkResult{}, ErrEmptyProof
 	}
+
 	if err := matchHash(root, proof[0]); err != nil {
 		return walkResult{}, err
 	}
@@ -91,6 +99,7 @@ func walk(root []byte, path []byte, proof [][]byte) (walkResult, error) {
 		if err != nil {
 			return walkResult{}, err
 		}
+
 		if v.Kind != rlp.KindList {
 			return walkResult{}, ErrUnexpectedNode
 		}
@@ -102,9 +111,11 @@ func walk(root []byte, path []byte, proof [][]byte) (walkResult, error) {
 				if !isBytesNode(value) {
 					return walkResult{}, ErrUnexpectedNode
 				}
+
 				if len(value.Bytes) == 0 {
 					return finishWalk(walkResult{found: false}, proofIndex, proof)
 				}
+
 				return finishWalk(walkResult{found: true, value: value.Bytes}, proofIndex, proof)
 			}
 
@@ -112,13 +123,16 @@ func walk(root []byte, path []byte, proof [][]byte) (walkResult, error) {
 			if !isBytesNode(child) {
 				return walkResult{}, ErrUnexpectedNode
 			}
+
 			if len(child.Bytes) == 0 {
 				return finishWalk(walkResult{found: false}, proofIndex, proof)
 			}
+
 			next, nextIndex, err := resolveReference(child.Bytes, proof, proofIndex)
 			if err != nil {
 				return walkResult{}, err
 			}
+
 			proofIndex = nextIndex
 			node = next
 			pos++
@@ -127,23 +141,28 @@ func walk(root []byte, path []byte, proof [][]byte) (walkResult, error) {
 			if !isBytesNode(v.List[0]) {
 				return walkResult{}, ErrUnexpectedNode
 			}
+
 			leaf, partial, err := compactDecode(v.List[0].Bytes)
 			if err != nil {
 				return walkResult{}, err
 			}
-			if !bytes.HasPrefix(path[pos:], partial) {
+
+			if !hasPrefix(path[pos:], partial) {
 				return finishWalk(walkResult{found: false}, proofIndex, proof)
 			}
+
 			pos += len(partial)
 
 			if leaf {
 				if pos != len(path) {
 					return finishWalk(walkResult{found: false}, proofIndex, proof)
 				}
+
 				value := v.List[1]
 				if !isBytesNode(value) {
 					return walkResult{}, ErrUnexpectedNode
 				}
+
 				return finishWalk(walkResult{found: true, value: value.Bytes}, proofIndex, proof)
 			}
 
@@ -151,10 +170,12 @@ func walk(root []byte, path []byte, proof [][]byte) (walkResult, error) {
 			if !isBytesNode(child) {
 				return walkResult{}, ErrUnexpectedNode
 			}
+
 			next, nextIndex, err := resolveReference(child.Bytes, proof, proofIndex)
 			if err != nil {
 				return walkResult{}, err
 			}
+
 			proofIndex = nextIndex
 			node = next
 
@@ -168,6 +189,7 @@ func finishWalk(result walkResult, proofIndex int, proof [][]byte) (walkResult, 
 	if proofIndex != len(proof)-1 {
 		return walkResult{}, ErrUnusedProof
 	}
+
 	return result, nil
 }
 
@@ -175,19 +197,24 @@ func resolveReference(ref []byte, proof [][]byte, proofIndex int) ([]byte, int, 
 	if len(ref) == 0 {
 		return nil, proofIndex, ErrInvalidReference
 	}
+
 	if len(ref) < keccak256.Size {
 		return ref, proofIndex, nil
 	}
+
 	if len(ref) != keccak256.Size {
 		return nil, proofIndex, ErrInvalidReference
 	}
+
 	nextIndex := proofIndex + 1
 	if nextIndex >= len(proof) {
 		return nil, proofIndex, ErrEmptyProof
 	}
+
 	if err := matchHash(ref, proof[nextIndex]); err != nil {
 		return nil, proofIndex, err
 	}
+
 	return proof[nextIndex], nextIndex, nil
 }
 
@@ -196,6 +223,7 @@ func matchHash(expected []byte, encodedNode []byte) error {
 	if !bytes.Equal(expected, h[:]) {
 		return ErrInvalidReference
 	}
+
 	return nil
 }
 
@@ -204,6 +232,7 @@ func keybytesToNibbles(key []byte) []byte {
 	for _, b := range key {
 		out = append(out, b>>4, b&0x0f)
 	}
+
 	return out
 }
 
@@ -211,10 +240,12 @@ func compactDecode(encoded []byte) (bool, []byte, error) {
 	if len(encoded) == 0 {
 		return false, nil, ErrPathMismatch
 	}
+
 	flag := encoded[0] >> 4
 	if flag > 3 {
 		return false, nil, ErrPathMismatch
 	}
+
 	leaf := (flag & 2) != 0
 	odd := (flag & 1) != 0
 
@@ -224,6 +255,7 @@ func compactDecode(encoded []byte) (bool, []byte, error) {
 	} else if encoded[0]&0x0f != 0 {
 		return false, nil, ErrPathMismatch
 	}
+
 	for i := 1; i < len(encoded); i++ {
 		out = append(out, encoded[i]>>4, encoded[i]&0x0f)
 	}
@@ -233,5 +265,20 @@ func compactDecode(encoded []byte) (bool, []byte, error) {
 	if !leaf && len(out) == 0 {
 		return false, nil, ErrPathMismatch
 	}
+
 	return leaf, out, nil
+}
+
+func hasPrefix(path []byte, prefix []byte) bool {
+	if len(prefix) > len(path) {
+		return false
+	}
+
+	for i := range prefix {
+		if path[i] != prefix[i] {
+			return false
+		}
+	}
+
+	return true
 }

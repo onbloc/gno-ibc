@@ -209,7 +209,7 @@ func (*mockNonIntentApp) OnRecvPacket(_ realm, _ types.Packet, _ address, _ []by
 }
 
 func (*mockNonIntentApp) OnIntentRecvPacket(_ realm, _ types.Packet, _ address, _ []byte) types.RecvPacketResult {
-	panic(ErrIntentNotSupported)
+	panic(makeError(ErrIntentNotSupported))
 }
 
 func (*mockNonIntentApp) OnAcknowledgementPacket(_ realm, _ types.Packet, _ []byte, _ address) {

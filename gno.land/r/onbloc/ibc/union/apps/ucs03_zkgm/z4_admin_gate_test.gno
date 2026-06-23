@@ -11,7 +11,7 @@ import (
 func TestPausableRejectsNonAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 
-	uassert.AbortsContains(t, cur, "AccessManagerUnauthorizedCall", func(cur realm) {
+	uassert.AbortsContains(t, cur, "access manager unauthorized call", func(cur realm) {
 		Pausable(cross(cur), true)
 	})
 	if paused {
@@ -37,7 +37,7 @@ func TestPausableSetByAdmin(cur realm, t *testing.T) {
 func TestSetBucketConfigRejectsNonAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 
-	uassert.AbortsContains(t, cur, "AccessManagerUnauthorizedCall", func(cur realm) {
+	uassert.AbortsContains(t, cur, "access manager unauthorized call", func(cur realm) {
 		SetBucketConfig(cross(cur), "ugnot", u256.NewUint(100), u256.NewUint(10))
 	})
 	if _, ok := store.GetTokenBucket("ugnot"); ok {
@@ -60,7 +60,7 @@ func TestSetRateLimitDisabledRejectsNonAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 
 	// Default is disabled (true); a rejected non-admin toggle to false must not stick.
-	uassert.AbortsContains(t, cur, "AccessManagerUnauthorizedCall", func(cur realm) {
+	uassert.AbortsContains(t, cur, "access manager unauthorized call", func(cur realm) {
 		SetRateLimitDisabled(cross(cur), false)
 	})
 	if !store.RateLimitDisabled() {

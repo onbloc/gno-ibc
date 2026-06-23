@@ -55,7 +55,7 @@ func ChannelBalanceStr(channelId types.ChannelId, path *u256.Uint, baseToken []b
 
 func MintVoucher(cur realm, inst zkgm.IApp, channelId types.ChannelId, base string, receiver string, amount uint64, symbol string) string {
 	meta := e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: base, Symbol: symbol, Decimals: 6})
-	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte(base), impl.MetadataImage(DecodeTokenMetadata(meta)))
+	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte(base), z.MetadataImage(DecodeTokenMetadata(meta)))
 	order := z.TokenOrderV2{
 		Sender:      []byte("remote"),
 		Receiver:    []byte(receiver),

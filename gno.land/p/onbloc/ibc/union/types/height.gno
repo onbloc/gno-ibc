@@ -124,6 +124,7 @@ func (h Height) Bytes() []byte {
 	buf := make([]byte, 16)
 	binary.BigEndian.PutUint64(buf[:8], h.RevisionNumber)
 	binary.BigEndian.PutUint64(buf[8:], h.RevisionHeight)
+
 	return buf
 }
 
@@ -132,7 +133,7 @@ func (h Height) Bytes() []byte {
 // is zero.
 func ParseHeight(s string) (Height, error) {
 	if s == "" {
-		return Height{}, errors.New("invalid height string")
+		return Height{}, errors.New("types: invalid height string")
 	}
 
 	revStr, heightStr, found := strings.Cut(s, "-")
@@ -141,6 +142,7 @@ func ParseHeight(s string) (Height, error) {
 		if err != nil {
 			return Height{}, err
 		}
+
 		return Height{RevisionNumber: 0, RevisionHeight: height}, nil
 	}
 

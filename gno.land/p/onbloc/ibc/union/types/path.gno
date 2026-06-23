@@ -112,6 +112,7 @@ func PacketCommitmentPath(packet Packet) (H256, error) {
 	if err != nil {
 		return H256{}, err
 	}
+
 	return BatchPacketsPath(hash), nil
 }
 
@@ -120,6 +121,7 @@ func PacketAcknowledgementPath(packet Packet) (H256, error) {
 	if err != nil {
 		return H256{}, err
 	}
+
 	return BatchReceiptsPath(hash), nil
 }
 

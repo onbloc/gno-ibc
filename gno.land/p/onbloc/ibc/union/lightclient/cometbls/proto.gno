@@ -99,7 +99,7 @@ func decodeCommitmentProof(buf []byte) (ics23.CommitmentProof, error) {
 		}
 	}
 
-	return nil, errors.New("cometbls: empty commitment proof")
+	return nil, errors.New("empty commitment proof")
 }
 
 func decodeExistenceProof(buf []byte) (*ics23.ExistenceProof, error) {
@@ -189,6 +189,7 @@ func decodeLeafOp(buf []byte) (*ics23.LeafOp, error) {
 			}
 
 			pos = newPos
+
 			switch fieldNum {
 			case 1:
 				lop.Hash = ics23.HashOp(v)
@@ -221,6 +222,7 @@ func decodeLeafOp(buf []byte) (*ics23.LeafOp, error) {
 
 func decodeInnerOp(buf []byte) (*ics23.InnerOp, error) {
 	iop := &ics23.InnerOp{}
+
 	pos := 0
 	for pos < len(buf) {
 		fieldNum, wireType, newPos, err := decodeTag(buf, pos)
@@ -229,6 +231,7 @@ func decodeInnerOp(buf []byte) (*ics23.InnerOp, error) {
 		}
 
 		pos = newPos
+
 		switch {
 		case fieldNum == 1 && wireType == proto.VARINT:
 			v, newPos, err := proto.DecodeVarint(buf, pos)
@@ -245,6 +248,7 @@ func decodeInnerOp(buf []byte) (*ics23.InnerOp, error) {
 			}
 
 			pos = newPos
+
 			b := []byte(s)
 			if fieldNum == 2 {
 				iop.Prefix = b
@@ -258,6 +262,7 @@ func decodeInnerOp(buf []byte) (*ics23.InnerOp, error) {
 			}
 		}
 	}
+
 	return iop, nil
 }
 
@@ -338,16 +343,17 @@ func skipField(buf []byte, pos int, wireType proto.WireType) (int, error) {
 		return newPos, err
 	case proto.FIXED64:
 		if pos+8 > len(buf) {
-			return pos, errors.New("cometbls: buffer underflow while skipping fixed64")
+			return pos, errors.New("buffer underflow while skipping fixed64")
 		}
+
 		return pos + 8, nil
 	case proto.FIXED32:
 		if pos+4 > len(buf) {
-			return pos, errors.New("cometbls: buffer underflow while skipping fixed32")
+			return pos, errors.New("buffer underflow while skipping fixed32")
 		}
 
 		return pos + 4, nil
 	default:
-		return pos, errors.New("cometbls: unsupported wire type")
+		return pos, errors.New("unsupported wire type")
 	}
 }

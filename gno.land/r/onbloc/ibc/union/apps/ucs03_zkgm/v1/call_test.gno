@@ -42,7 +42,7 @@ func TestExecuteCallDispatchesOnZkgm(cur realm, t *testing.T) {
 	uassert.Equal(t, "g1relayer", mock.LastRelayer(cross(cur)))
 	uassert.Equal(t, "relay-msg", mock.LastRelayerMsg(cross(cur)))
 	uassert.Equal(t, "9", mock.LastPathDec(cross(cur)))
-	uassert.Equal(t, PredictCallProxyAccount(path, types.ChannelId(8), []byte("sender")), mock.LastProxyAccount(cross(cur)))
+	uassert.Equal(t, z.PredictCallProxyAccount(path, types.ChannelId(8), []byte("sender")), mock.LastProxyAccount(cross(cur)))
 }
 
 func TestExecuteCallReceiverErrorReturnsFailureAck(cur realm, t *testing.T) {
@@ -114,7 +114,7 @@ func TestIntentRecvOnlyMakerCallAborts(cur realm, t *testing.T) {
 	}))
 	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), data, 0)
 
-	uassert.AbortsContains(t, cur, "zkgm: only maker", func(cur realm) {
+	uassert.AbortsContains(t, cur, "only maker", func(cur realm) {
 		newTestImpl().OnIntentRecvPacket(0, cur, packet, address("g1relayer"), nil)
 	})
 }

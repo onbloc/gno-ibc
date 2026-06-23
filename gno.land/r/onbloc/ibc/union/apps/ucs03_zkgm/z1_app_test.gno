@@ -15,7 +15,7 @@ import (
 // caller gate is covered by z2.
 
 func TestAppDelegatesAllReceiversToImpl(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	currentImpl = d
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
@@ -54,7 +54,7 @@ func TestAppDelegatesAllReceiversToImpl(cur realm, t *testing.T) {
 }
 
 func TestAppPausedBlocksAllCallbacks(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	currentImpl = d
 	paused = true

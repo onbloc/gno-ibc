@@ -1,21 +1,14 @@
 package zkgm
 
-import core "gno.land/r/onbloc/ibc/union/core"
+import "gno.land/r/onbloc/ibc/union/access"
 
 // assert.gno holds the proxy's trust gates. The App receiver surface is reachable
-// only through core (assertIsIBCHost); the governance surface only through the
-// admin (assertIsAdmin); and both check assertNotPaused before delegating. State
-// writes are gated by the interrealm borrow rule on the injected store, so no
-// separate impl-realm gate is needed here.
-
-func assertIsAdmin(cur realm) {
-	if cur.Previous().Address() != core.GetAdmin() {
-		panic("zkgm: admin only")
-	}
-}
+// only through core (assertIsIBCHost), while governance entrypoints use the app's
+// access manager state. State writes are gated by the interrealm borrow rule on
+// the injected store, so no separate impl-realm gate is needed here.
 
 func assertIsIBCHost(cur realm) {
-	if cur.Previous().PkgPath() != core.PackagePath() {
+	if cur.Previous().PkgPath() != access.CoreRealmPath {
 		panic("zkgm: ibc host only")
 	}
 }

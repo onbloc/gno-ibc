@@ -18,7 +18,6 @@ const (
 
 func resetStore(cur realm) {
 	store = newStore()
-	admin = cur.Address()
 }
 
 func mustPanic(t *testing.T, fn func()) {
@@ -373,28 +372,42 @@ func TestGetChannelNotFoundPanics(cur realm, t *testing.T) {
 
 func TestRestrictedPacketEntrypointsRejectNonAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	oldAdmin := admin
-	admin = testutils.TestAddress("non-admin-sentinel")
-	defer func() { admin = oldAdmin }()
 
-	uassert.AbortsContains(t, cur, "caller not authorized to packet recv", func(cur realm) {
+	prevPacketRecv := denySelectorForTest(cur, SelectorPacketRecv)
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		PacketRecv(cross(cur), types.MsgPacketRecv{})
 	})
-	uassert.AbortsContains(t, cur, "caller not authorized to intent packet recv", func(cur realm) {
+	restoreSelectorForTest(cur, SelectorPacketRecv, prevPacketRecv)
+
+	prevIntentPacketRecv := denySelectorForTest(cur, SelectorIntentPacketRecv)
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{})
 	})
-	uassert.AbortsContains(t, cur, "caller not authorized to packet acknowledgement", func(cur realm) {
+	restoreSelectorForTest(cur, SelectorIntentPacketRecv, prevIntentPacketRecv)
+
+	prevPacketAck := denySelectorForTest(cur, SelectorPacketAck)
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{})
 	})
-	uassert.AbortsContains(t, cur, "caller not authorized to packet timeout", func(cur realm) {
+	restoreSelectorForTest(cur, SelectorPacketAck, prevPacketAck)
+
+	prevPacketTimeout := denySelectorForTest(cur, SelectorPacketTimeout)
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		PacketTimeout(cross(cur), types.MsgPacketTimeout{})
 	})
-	uassert.AbortsContains(t, cur, "caller not authorized to batch send", func(cur realm) {
+	restoreSelectorForTest(cur, SelectorPacketTimeout, prevPacketTimeout)
+
+	prevBatchSend := denySelectorForTest(cur, SelectorBatchSend)
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		BatchSend(cross(cur), types.MsgBatchSend{})
 	})
-	uassert.AbortsContains(t, cur, "caller not authorized to batch acks", func(cur realm) {
+	restoreSelectorForTest(cur, SelectorBatchSend, prevBatchSend)
+
+	prevBatchAcks := denySelectorForTest(cur, SelectorBatchAcks)
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		BatchAcks(cross(cur), types.MsgBatchAcks{})
 	})
+	restoreSelectorForTest(cur, SelectorBatchAcks, prevBatchAcks)
 }
 
 // --- types.Channel state machine ---
@@ -533,59 +546,10 @@ func TestGetChannelOwnerPanicsWhenMissing(cur realm, t *testing.T) {
 
 func TestForceUpdateClientPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	admin = "gno1authorized"
-	defer func() { admin = "" }()
+	previousRole := denySelectorForTest(cur, SelectorForceUpdateClient)
 
-	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		ForceUpdateClient(cur, types.NewMsgForceUpdateClient(types.ClientId(0), nil, nil))
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
+		ForceUpdateClient(cross(cur), types.NewMsgForceUpdateClient(types.ClientId(0), nil, nil))
 	})
-}
-
-// --- Admin ---
-
-func TestGetAdminReflectsCurrentAdmin(cur realm, t *testing.T) {
-	old := admin
-	defer func() { admin = old }()
-	sentinel := testutils.TestAddress("admin-sentinel")
-	admin = sentinel
-	if got := GetAdmin(); got != sentinel {
-		t.Errorf("GetAdmin: got %v want %v", got, sentinel)
-	}
-}
-
-func TestSetAdminTransfersRights(cur realm, t *testing.T) {
-	old := admin
-	defer func() { admin = old }()
-	oldAdmin := testutils.TestAddress("old-admin")
-	newAdmin := testutils.TestAddress("new-admin")
-	admin = oldAdmin
-
-	testing.SetRealm(testing.NewUserRealm(oldAdmin))
-	SetAdmin(cross(cur), newAdmin)
-
-	if GetAdmin() != newAdmin {
-		t.Fatalf("admin not transferred; got %v want %v", GetAdmin(), newAdmin)
-	}
-
-	// After transfer admin=newAdmin; closure caller != newAdmin → rejected.
-	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		requireAdmin(cur, "set admin")
-	})
-	if GetAdmin() != newAdmin {
-		t.Error("rejected call must not revert the transfer")
-	}
-}
-
-func TestSetAdminRejectsNonAdmin(cur realm, t *testing.T) {
-	old := admin
-	defer func() { admin = old }()
-	adminAddr := testutils.TestAddress("authorized-admin")
-	admin = adminAddr
-
-	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		requireAdmin(cur, "set admin")
-	})
-	if admin != adminAddr {
-		t.Error("rejected call must not change the admin")
-	}
+	restoreSelectorForTest(cur, SelectorForceUpdateClient, previousRole)
 }

@@ -11,11 +11,11 @@ import (
 // (core/v1/connection_test.gno). The proxy only keeps the admin gate.
 func TestForceConnectionOpenTryPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	cleanup := setNonAdminForTest()
-	defer cleanup()
+	previousRole := denySelectorForTest(cur, SelectorForceConnectionTry)
+	defer restoreSelectorForTest(cur, SelectorForceConnectionTry, previousRole)
 
-	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		ForceConnectionOpenTry(cur, types.NewMsgConnectionOpenTry(
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
+		ForceConnectionOpenTry(cross(cur), types.NewMsgConnectionOpenTry(
 			types.ClientId(1),
 			types.ClientId(99),
 			types.ConnectionId(77),

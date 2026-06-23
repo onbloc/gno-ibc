@@ -1,6 +1,10 @@
 package zkgm
 
-import "strings"
+import (
+	"strings"
+
+	"gno.land/r/onbloc/ibc/union/access"
+)
 
 // upgrade.gno is the single admin-gated swap point for the zkgm app logic. The
 // proxy keeps the Store, identity, and escrow funds stable across upgrades; only
@@ -55,7 +59,7 @@ func RegisterImpl(cur realm, constructor func(store IStore) IApp) {
 // steady-state tiers of the trust model. It is admin-gated and injects the
 // proxy-owned store into the registered constructor for path.
 func UpdateImpl(cur realm, path string) {
-	assertIsAdmin(cur)
+	access.AssertCanCall(0, cur, SelectorUpdateImpl)
 
 	constructor, ok := implConstructors[path]
 	if !ok {

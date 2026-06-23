@@ -70,5 +70,6 @@ func VerifyClientMembership(cur realm, clientId types.ClientId, proofHeight type
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L1048-L1093
 func Misbehaviour(cur realm, msg types.MsgMisbehaviour) {
+	access.AssertCanCall(0, cur, SelectorMisbehaviour)
 	mustGetImpl().Misbehaviour(0, cur, msg)
 }

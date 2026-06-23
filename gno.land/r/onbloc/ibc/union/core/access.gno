@@ -31,6 +31,7 @@ const (
 	SelectorRegisterClient        manager.Selector = types.RelayerSelectorRegisterClient
 	SelectorCreateClient          manager.Selector = types.RelayerSelectorCreateClient
 	SelectorUpdateClient          manager.Selector = types.RelayerSelectorUpdateClient
+	SelectorMisbehaviour          manager.Selector = types.RelayerSelectorMisbehaviour
 	SelectorConnectionOpenInit    manager.Selector = types.RelayerSelectorConnectionOpenInit
 	SelectorConnectionOpenTry     manager.Selector = types.RelayerSelectorConnectionOpenTry
 	SelectorConnectionOpenAck     manager.Selector = types.RelayerSelectorConnectionOpenAck

@@ -152,6 +152,8 @@ func EncodeForward(f Forward) ([]byte, error) {
 	})
 }
 
+// --------
+
 func DecodeForward(data []byte) (Forward, error) {
 	out, err := abi.Decode(ForwardSchema, data)
 	if err != nil {

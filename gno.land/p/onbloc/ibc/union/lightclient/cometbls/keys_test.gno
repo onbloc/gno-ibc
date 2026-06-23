@@ -73,7 +73,7 @@ func TestMakeStoreKeyEmptyKey(t *testing.T) {
 	}
 }
 
-func TestHeightKeyLexicographicWidth(t *testing.T) {
+func TestHeightKey_LexicographicWidth(t *testing.T) {
 	cases := []struct {
 		name       string
 		height     types.Height

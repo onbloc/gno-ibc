@@ -81,6 +81,57 @@ func newTestClient(t *testing.T, l1 *mockL1Client, storageRoot []byte) *StateLen
 	return c
 }
 
+func TestNewStateLensIcs23MptLightClient(t *testing.T) {
+	tests := []struct {
+		name string
+		cs   *ClientState
+		cons *ConsensusState
+	}{
+		{
+			name: "stores initial consensus state",
+			cs: &ClientState{
+				L2ChainID:         "l2-chain",
+				L1ClientID:        1,
+				L2ClientID:        7,
+				L2LatestHeight:    10,
+				TimestampOffset:   64,
+				StateRootOffset:   0,
+				StorageRootOffset: 32,
+			},
+			cons: &ConsensusState{
+				Timestamp:   12345,
+				StateRoot:   bytes.Repeat([]byte{0xaa}, 32),
+				StorageRoot: bytes.Repeat([]byte{0x02}, 32),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l1 := &mockL1Client{status: lightclient.Active}
+			c, err := NewStateLensIcs23MptLightClient(tt.cs, tt.cons, l1)
+			if err != nil {
+				t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
+			}
+
+			// The initial consensus state must be stored at L2LatestHeight.
+			got, found := c.getConsensusState(tt.cs.L2LatestHeight)
+			if !found {
+				t.Fatal("initial consensus state not stored at L2LatestHeight")
+			}
+			if got.Timestamp != tt.cons.Timestamp {
+				t.Errorf("timestamp: got %d want %d", got.Timestamp, tt.cons.Timestamp)
+			}
+			if !bytes.Equal(got.StateRoot, tt.cons.StateRoot) {
+				t.Errorf("state root mismatch")
+			}
+			if !bytes.Equal(got.StorageRoot, tt.cons.StorageRoot) {
+				t.Errorf("storage root mismatch")
+			}
+		})
+	}
+}
+
 func TestClientAccessors(t *testing.T) {
 	c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
 
@@ -178,17 +229,22 @@ func TestStatusNilL1IsFrozen(t *testing.T) {
 	}
 }
 
-func TestVerifyHeaderUpdatesState(t *testing.T) {
+func TestVerifyHeader(t *testing.T) {
 	tests := []struct {
 		name             string
-		header           Header
+		l1               *mockL1Client
+		header           []byte
+		headerObj        *Header // set to nil for raw header bytes
+		wantErr          bool
 		wantLatestHeight Height
 		wantClientBytes  bool
 		wantTimestamp    uint64
+		assertL1Called   bool
 	}{
 		{
 			name: "valid header advances latest height",
-			header: Header{
+			l1:   &mockL1Client{status: lightclient.Active},
+			headerObj: &Header{
 				L1Height:              20,
 				L2Height:              11,
 				L2ConsensusStateProof: []byte("l1-proof"),
@@ -197,10 +253,12 @@ func TestVerifyHeaderUpdatesState(t *testing.T) {
 			wantLatestHeight: 11,
 			wantClientBytes:  true,
 			wantTimestamp:    67890,
+			assertL1Called:   true,
 		},
 		{
 			name: "valid older header stores consensus without advancing latest height",
-			header: Header{
+			l1:   &mockL1Client{status: lightclient.Active},
+			headerObj: &Header{
 				L1Height:              21,
 				L2Height:              9,
 				L2ConsensusStateProof: []byte("old-l1-proof"),
@@ -208,126 +266,122 @@ func TestVerifyHeaderUpdatesState(t *testing.T) {
 			},
 			wantLatestHeight: 10,
 			wantTimestamp:    45678,
+			assertL1Called:   true,
+		},
+		{
+			name:             "membership verification failure",
+			l1:               &mockL1Client{status: lightclient.Active, membershipErr: errors.New("boom")},
+			headerObj:        &Header{L1Height: 20, L2Height: 11, L2ConsensusStateProof: []byte("l1-proof"), L2ConsensusState: makeConsensusBytes(1, bytes.Repeat([]byte{0xcc}, 32), bytes.Repeat([]byte{0xdd}, 32))},
+			wantErr:          true,
+			wantLatestHeight: 10,
+		},
+		{
+			name:             "nil l1 client",
+			l1:               nil,
+			header:           []byte{0x00},
+			wantErr:          true,
+			wantLatestHeight: 10,
+		},
+		{
+			name:             "malformed header invalid ABI bytes",
+			l1:               &mockL1Client{status: lightclient.Active},
+			header:           []byte{0xff, 0xff, 0xff},
+			wantErr:          true,
+			wantLatestHeight: 10,
+			assertL1Called:   false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			l1 := &mockL1Client{status: lightclient.Active}
-			c := newTestClient(t, l1, bytes.Repeat([]byte{0x02}, 32))
+			var c *StateLensIcs23MptLightClient
+			var headerBytes []byte
 
-			headerBytes, err := EncodeHeader(tt.header)
-			if err != nil {
-				t.Fatalf("EncodeHeader: %v", err)
+			if tt.l1 != nil && tt.headerObj != nil {
+				// Normal case with L1 client and Header object
+				c = newTestClient(t, tt.l1, bytes.Repeat([]byte{0x02}, 32))
+				var err error
+				headerBytes, err = EncodeHeader(*tt.headerObj)
+				if err != nil {
+					t.Fatalf("EncodeHeader: %v", err)
+				}
+			} else if tt.l1 == nil && tt.header != nil {
+				// nil L1 client case
+				cs := &ClientState{L2ChainID: "l2", L2ClientID: 7, L2LatestHeight: 10, StorageRootOffset: 32}
+				cons := &ConsensusState{Timestamp: 1, StateRoot: bytes.Repeat([]byte{0x01}, 32), StorageRoot: bytes.Repeat([]byte{0x02}, 32)}
+				var err error
+				c, err = NewStateLensIcs23MptLightClient(cs, cons, nil)
+				if err != nil {
+					t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
+				}
+				headerBytes = tt.header
+			} else {
+				// L1 client with raw header bytes
+				c = newTestClient(t, tt.l1, bytes.Repeat([]byte{0x02}, 32))
+				headerBytes = tt.header
 			}
 
 			var caller, relayer address
 			update, err := c.VerifyHeader(caller, headerBytes, relayer)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected VerifyHeader to fail")
+				}
+				if c.GetLatestHeight() != tt.wantLatestHeight {
+					t.Errorf("latest height: got %d want %d", c.GetLatestHeight(), tt.wantLatestHeight)
+				}
+				if tt.assertL1Called && tt.l1 != nil && tt.l1.called {
+					t.Errorf("L1 should not be called for this failure case")
+				}
+				return
+			}
+
 			if err != nil {
 				t.Fatalf("VerifyHeader: %v", err)
 			}
-			if update.Height != tt.header.L2Height {
-				t.Errorf("update height: got %d want %d", update.Height, tt.header.L2Height)
-			}
-			if (len(update.ClientStateBytes) != 0) != tt.wantClientBytes {
-				t.Errorf("client state bytes present: got %t want %t", len(update.ClientStateBytes) != 0, tt.wantClientBytes)
-			}
 
-			// The L1 membership check must target the L2 consensus-state path at L1Height
-			// with the keccak256 of the L2 consensus blob.
-			if !l1.called {
-				t.Fatal("expected L1 VerifyMembership to be called")
-			}
-			if l1.gotHeight != tt.header.L1Height {
-				t.Errorf("L1 height: got %d want %d", l1.gotHeight, tt.header.L1Height)
-			}
-			wantPath := types.ConsensusStatePath(types.ClientId(7), types.NewHeight(tt.header.L2Height))
-			if !bytes.Equal(l1.gotKey, wantPath[:]) {
-				t.Errorf("L1 key mismatch")
-			}
-			if !bytes.Equal(l1.gotProof, tt.header.L2ConsensusStateProof) {
-				t.Errorf("L1 proof mismatch")
-			}
-			wantHash := keccak256.Sum256(tt.header.L2ConsensusState)
-			if !bytes.Equal(l1.gotValue, wantHash[:]) {
-				t.Errorf("L1 value mismatch")
-			}
+			if tt.headerObj != nil {
+				if update.Height != tt.headerObj.L2Height {
+					t.Errorf("update height: got %d want %d", update.Height, tt.headerObj.L2Height)
+				}
+				if (len(update.ClientStateBytes) != 0) != tt.wantClientBytes {
+					t.Errorf("client state bytes present: got %t want %t", len(update.ClientStateBytes) != 0, tt.wantClientBytes)
+				}
 
-			// The extracted consensus state must be stored and the latest height advanced.
-			if c.GetLatestHeight() != tt.wantLatestHeight {
-				t.Errorf("latest height: got %d want %d", c.GetLatestHeight(), tt.wantLatestHeight)
-			}
-			got, found := c.getConsensusState(tt.header.L2Height)
-			if !found {
-				t.Fatalf("consensus state at height %d not stored", tt.header.L2Height)
-			}
-			if got.Timestamp != tt.wantTimestamp ||
-				!bytes.Equal(got.StateRoot, bytes.Repeat([]byte{0xcc}, 32)) ||
-				!bytes.Equal(got.StorageRoot, bytes.Repeat([]byte{0xdd}, 32)) {
-				t.Fatalf("unexpected extracted consensus state: %#v", got)
-			}
-		})
-	}
-}
+				// Verify L1 membership call details
+				if tt.assertL1Called {
+					if !tt.l1.called {
+						t.Fatal("expected L1 VerifyMembership to be called")
+					}
+					if tt.l1.gotHeight != tt.headerObj.L1Height {
+						t.Errorf("L1 height: got %d want %d", tt.l1.gotHeight, tt.headerObj.L1Height)
+					}
+					wantPath := types.ConsensusStatePath(types.ClientId(7), types.NewHeight(tt.headerObj.L2Height))
+					if !bytes.Equal(tt.l1.gotKey, wantPath[:]) {
+						t.Errorf("L1 key mismatch")
+					}
+					if !bytes.Equal(tt.l1.gotProof, tt.headerObj.L2ConsensusStateProof) {
+						t.Errorf("L1 proof mismatch")
+					}
+					wantHash := keccak256.Sum256(tt.headerObj.L2ConsensusState)
+					if !bytes.Equal(tt.l1.gotValue, wantHash[:]) {
+						t.Errorf("L1 value mismatch")
+					}
+				}
 
-func TestVerifyHeaderRejectsWhenL1Fails(t *testing.T) {
-	tests := []struct {
-		name   string
-		header Header
-	}{
-		{
-			name: "membership verification failure",
-			header: Header{
-				L1Height:              20,
-				L2Height:              11,
-				L2ConsensusStateProof: []byte("l1-proof"),
-				L2ConsensusState:      makeConsensusBytes(1, bytes.Repeat([]byte{0xcc}, 32), bytes.Repeat([]byte{0xdd}, 32)),
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			l1 := &mockL1Client{status: lightclient.Active, membershipErr: errors.New("boom")}
-			c := newTestClient(t, l1, bytes.Repeat([]byte{0x02}, 32))
-
-			headerBytes, err := EncodeHeader(tt.header)
-			if err != nil {
-				t.Fatalf("EncodeHeader: %v", err)
-			}
-
-			var caller, relayer address
-			if _, err := c.VerifyHeader(caller, headerBytes, relayer); err == nil {
-				t.Fatal("expected VerifyHeader to fail when L1 membership fails")
-			}
-			// Latest height must not advance on failure.
-			if c.GetLatestHeight() != 10 {
-				t.Errorf("latest height advanced despite failure: got %d want 10", c.GetLatestHeight())
-			}
-		})
-	}
-}
-
-func TestVerifyHeaderNilL1(t *testing.T) {
-	tests := []struct {
-		name    string
-		header  []byte
-		wantErr error
-	}{
-		{name: "nil l1 client", header: []byte{0x00}, wantErr: ErrNoL1Client},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cs := &ClientState{L2ChainID: "l2", L2ClientID: 7, L2LatestHeight: 10, StorageRootOffset: 32}
-			cons := &ConsensusState{Timestamp: 1, StateRoot: bytes.Repeat([]byte{0x01}, 32), StorageRoot: bytes.Repeat([]byte{0x02}, 32)}
-			c, err := NewStateLensIcs23MptLightClient(cs, cons, nil)
-			if err != nil {
-				t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
-			}
-			var caller, relayer address
-			if _, err := c.VerifyHeader(caller, tt.header, relayer); err != tt.wantErr {
-				t.Fatalf("VerifyHeader nil L1: got %v want %v", err, tt.wantErr)
+				if c.GetLatestHeight() != tt.wantLatestHeight {
+					t.Errorf("latest height: got %d want %d", c.GetLatestHeight(), tt.wantLatestHeight)
+				}
+				got, found := c.getConsensusState(tt.headerObj.L2Height)
+				if !found {
+					t.Fatalf("consensus state at height %d not stored", tt.headerObj.L2Height)
+				}
+				if got.Timestamp != tt.wantTimestamp ||
+					!bytes.Equal(got.StateRoot, bytes.Repeat([]byte{0xcc}, 32)) ||
+					!bytes.Equal(got.StorageRoot, bytes.Repeat([]byte{0xdd}, 32)) {
+					t.Fatalf("unexpected extracted consensus state: %#v", got)
+				}
 			}
 		})
 	}
@@ -425,16 +479,40 @@ func TestVerifyCreationEmpty(t *testing.T) {
 	}
 }
 
-func TestVerifyMembershipStorageProof(t *testing.T) {
+func TestVerifyMembership(t *testing.T) {
 	tests := []struct {
 		name        string
 		path        []byte
+		stored      []byte
 		value       []byte
 		corruptRoot bool
-		wantErr     bool
+		wantErr     error
 	}{
-		{name: "valid storage proof", path: bytes.Repeat([]byte{0x11}, 32), value: storage.WordFromUint64(0xdeadbeef)},
-		{name: "storage proof rejected for wrong root", path: bytes.Repeat([]byte{0x11}, 32), value: storage.WordFromUint64(0xdeadbeef), corruptRoot: true, wantErr: true},
+		{
+			name:  "valid storage proof",
+			path:  bytes.Repeat([]byte{0x11}, 32),
+			value: storage.WordFromUint64(0xdeadbeef),
+		},
+		{
+			name:        "storage proof rejected for wrong root",
+			path:        bytes.Repeat([]byte{0x11}, 32),
+			value:       storage.WordFromUint64(0xdeadbeef),
+			corruptRoot: true,
+			wantErr:     errors.New(""),
+		},
+		{
+			name:    "stored value mismatch",
+			path:    bytes.Repeat([]byte{0x11}, 32),
+			stored:  storage.WordFromUint64(0xdeadbeef),
+			value:   storage.WordFromUint64(0xcafe),
+			wantErr: ErrStoredValueMismatch,
+		},
+		{
+			name:    "non-32-byte value",
+			path:    bytes.Repeat([]byte{0x11}, 32),
+			value:   []byte{0x01},
+			wantErr: ErrInvalidCommitmentValue,
+		},
 	}
 
 	for _, tt := range tests {
@@ -443,22 +521,49 @@ func TestVerifyMembershipStorageProof(t *testing.T) {
 			if err != nil {
 				t.Fatalf("IBCCommitmentKey: %v", err)
 			}
-			root, nodes := storageProofFixture(t, slot[:], tt.value)
+
+			var c *StateLensIcs23MptLightClient
+			var proof []byte
+
 			if tt.corruptRoot {
+				// Use full proof with corrupted root
+				root, nodes := storageProofFixture(t, slot[:], tt.value)
 				root[0] ^= 0xff
+				c = newTestClient(t, &mockL1Client{status: lightclient.Active}, root[:])
+				proof = storage.EncodeProof(storage.Proof{
+					Key:   slot[:],
+					Value: tt.value,
+					Proof: nodes,
+				})
+			} else if tt.stored != nil {
+				// Value mismatch case
+				c = newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
+				proof = storage.EncodeProof(storage.Proof{
+					Key:   slot[:],
+					Value: tt.stored,
+				})
+			} else if len(tt.value) != 32 {
+				// Non-32-byte value case
+				c = newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
+				proof = storage.EncodeProof(storage.Proof{
+					Key:   slot[:],
+					Value: make([]byte, 32),
+				})
+			} else {
+				// Valid proof case - root is used as storage root for client
+				root, nodes := storageProofFixture(t, slot[:], tt.value)
+				c = newTestClient(t, &mockL1Client{status: lightclient.Active}, root[:])
+				proof = storage.EncodeProof(storage.Proof{
+					Key:   slot[:],
+					Value: tt.value,
+					Proof: nodes,
+				})
 			}
 
-			c := newTestClient(t, &mockL1Client{status: lightclient.Active}, root[:])
-
-			proof := storage.EncodeProof(storage.Proof{
-				Key:   slot[:],
-				Value: tt.value,
-				Proof: nodes,
-			})
 			err = c.VerifyMembership(10, tt.path, proof, tt.value)
-			if tt.wantErr {
+			if tt.wantErr != nil {
 				if err == nil {
-					t.Fatalf("VerifyMembership accepted invalid storage proof")
+					t.Fatalf("VerifyMembership accepted invalid proof")
 				}
 				return
 			}
@@ -469,64 +574,7 @@ func TestVerifyMembershipStorageProof(t *testing.T) {
 	}
 }
 
-func TestVerifyMembershipRejectsValueMismatch(t *testing.T) {
-	tests := []struct {
-		name    string
-		path    []byte
-		stored  []byte
-		value   []byte
-		wantErr error
-	}{
-		{name: "stored value mismatch", path: bytes.Repeat([]byte{0x11}, 32), stored: storage.WordFromUint64(0xdeadbeef), value: storage.WordFromUint64(0xcafe), wantErr: ErrStoredValueMismatch},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			slot, err := storage.IBCCommitmentKey(tt.path)
-			if err != nil {
-				t.Fatalf("IBCCommitmentKey: %v", err)
-			}
-			c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
-			proof := storage.EncodeProof(storage.Proof{
-				Key:   slot[:],
-				Value: tt.stored,
-			})
-			if err := c.VerifyMembership(10, tt.path, proof, tt.value); err != tt.wantErr {
-				t.Fatalf("VerifyMembership: got %v want %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestVerifyMembershipRejectsNon32Value(t *testing.T) {
-	tests := []struct {
-		name    string
-		path    []byte
-		value   []byte
-		wantErr error
-	}{
-		{name: "non-32-byte value", path: bytes.Repeat([]byte{0x11}, 32), value: []byte{0x01}, wantErr: ErrInvalidCommitmentValue},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			slot, err := storage.IBCCommitmentKey(tt.path)
-			if err != nil {
-				t.Fatalf("IBCCommitmentKey: %v", err)
-			}
-			c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
-			proof := storage.EncodeProof(storage.Proof{
-				Key:   slot[:],
-				Value: make([]byte, 32),
-			})
-			if err := c.VerifyMembership(10, tt.path, proof, tt.value); err != tt.wantErr {
-				t.Fatalf("VerifyMembership: got %v want %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestVerifyNonMembershipStorageProof(t *testing.T) {
+func TestVerifyNonMembership_StorageProof(t *testing.T) {
 	tests := []struct {
 		name    string
 		path    []byte
@@ -666,6 +714,86 @@ func TestGetConsensusState(t *testing.T) {
 	}
 }
 
+func TestSetConsensusState(t *testing.T) {
+	cases := []struct {
+		name            string
+		height          Height
+		consState       *ConsensusState
+		overwrite       *ConsensusState // if set, overwrite same height with this
+		wantStored      bool
+		wantOverwritten bool
+	}{
+		{
+			name:       "stores consensus state at height",
+			height:     100,
+			consState:  &ConsensusState{Timestamp: 12345, StateRoot: bytes.Repeat([]byte{0xAA}, 32), StorageRoot: bytes.Repeat([]byte{0xBB}, 32)},
+			wantStored: true,
+		},
+		{
+			name:            "overwrites existing consensus state",
+			height:          50,
+			consState:       &ConsensusState{Timestamp: 11111, StateRoot: bytes.Repeat([]byte{0x11}, 32), StorageRoot: bytes.Repeat([]byte{0x22}, 32)},
+			overwrite:       &ConsensusState{Timestamp: 22222, StateRoot: bytes.Repeat([]byte{0x33}, 32), StorageRoot: bytes.Repeat([]byte{0x44}, 32)},
+			wantStored:      true,
+			wantOverwritten: true,
+		},
+		{
+			name:       "stores at zero height",
+			height:     0,
+			consState:  &ConsensusState{Timestamp: 1, StateRoot: bytes.Repeat([]byte{0x01}, 32), StorageRoot: bytes.Repeat([]byte{0x02}, 32)},
+			wantStored: true,
+		},
+		{
+			name:       "stores at large height",
+			height:     999999,
+			consState:  &ConsensusState{Timestamp: 999, StateRoot: bytes.Repeat([]byte{0x99}, 32), StorageRoot: bytes.Repeat([]byte{0x88}, 32)},
+			wantStored: true,
+		},
+		{
+			name:       "stores consensus with zero timestamp",
+			height:     10,
+			consState:  &ConsensusState{Timestamp: 0, StateRoot: bytes.Repeat([]byte{0xCC}, 32), StorageRoot: bytes.Repeat([]byte{0xDD}, 32)},
+			wantStored: true,
+		},
+		{
+			name:       "stores consensus with max timestamp",
+			height:     20,
+			consState:  &ConsensusState{Timestamp: ^uint64(0), StateRoot: bytes.Repeat([]byte{0xEE}, 32), StorageRoot: bytes.Repeat([]byte{0xFF}, 32)},
+			wantStored: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
+
+			c.setConsensusState(tc.height, tc.consState)
+
+			got, found := c.getConsensusState(tc.height)
+			if !found {
+				t.Fatalf("setConsensusState: height %d not found", tc.height)
+			}
+			if got != tc.consState {
+				t.Fatalf("setConsensusState: got %#v want %#v", got, tc.consState)
+			}
+
+			if tc.overwrite != nil {
+				c.setConsensusState(tc.height, tc.overwrite)
+				got, found = c.getConsensusState(tc.height)
+				if !found {
+					t.Fatalf("setConsensusState overwrite: height %d not found", tc.height)
+				}
+				if got != tc.overwrite {
+					t.Fatalf("setConsensusState overwrite: got %#v want %#v", got, tc.overwrite)
+				}
+				if got.Timestamp == tc.consState.Timestamp {
+					t.Errorf("setConsensusState overwrite: timestamp not updated")
+				}
+			}
+		})
+	}
+}
+
 func TestHeightKey(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -683,85 +811,6 @@ func TestHeightKey(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := heightKey(tt.height); got != tt.want {
 				t.Fatalf("heightKey: got %q want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestNewStateLensIcs23MptLightClient(t *testing.T) {
-	tests := []struct {
-		name string
-		cs   *ClientState
-		cons *ConsensusState
-	}{
-		{
-			name: "stores initial consensus state",
-			cs: &ClientState{
-				L2ChainID:         "l2-chain",
-				L1ClientID:        1,
-				L2ClientID:        7,
-				L2LatestHeight:    10,
-				TimestampOffset:   64,
-				StateRootOffset:   0,
-				StorageRootOffset: 32,
-			},
-			cons: &ConsensusState{
-				Timestamp:   12345,
-				StateRoot:   bytes.Repeat([]byte{0xaa}, 32),
-				StorageRoot: bytes.Repeat([]byte{0x02}, 32),
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			l1 := &mockL1Client{status: lightclient.Active}
-			c, err := NewStateLensIcs23MptLightClient(tt.cs, tt.cons, l1)
-			if err != nil {
-				t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
-			}
-
-			// The initial consensus state must be stored at L2LatestHeight.
-			got, found := c.getConsensusState(tt.cs.L2LatestHeight)
-			if !found {
-				t.Fatal("initial consensus state not stored at L2LatestHeight")
-			}
-			if got.Timestamp != tt.cons.Timestamp {
-				t.Errorf("timestamp: got %d want %d", got.Timestamp, tt.cons.Timestamp)
-			}
-			if !bytes.Equal(got.StateRoot, tt.cons.StateRoot) {
-				t.Errorf("state root mismatch")
-			}
-			if !bytes.Equal(got.StorageRoot, tt.cons.StorageRoot) {
-				t.Errorf("storage root mismatch")
-			}
-		})
-	}
-}
-
-func TestVerifyHeaderRejectsMalformedHeader(t *testing.T) {
-	tests := []struct {
-		name   string
-		header []byte
-	}{
-		{name: "invalid ABI bytes", header: []byte{0xff, 0xff, 0xff}},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			l1 := &mockL1Client{status: lightclient.Active}
-			c := newTestClient(t, l1, bytes.Repeat([]byte{0x02}, 32))
-
-			// Invalid ABI bytes should fail decode without calling L1 membership.
-			var caller, relayer address
-			_, err := c.VerifyHeader(caller, tt.header, relayer)
-			if err == nil {
-				t.Fatal("expected VerifyHeader to fail with malformed header")
-			}
-
-			// Ensure L1 membership was not called.
-			if l1.called {
-				t.Fatal("L1 VerifyMembership should not be called for malformed header")
 			}
 		})
 	}

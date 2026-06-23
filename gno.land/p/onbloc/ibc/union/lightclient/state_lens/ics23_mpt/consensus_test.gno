@@ -7,6 +7,45 @@ import (
 	"gno.land/p/onbloc/verifier/evm/storage"
 )
 
+func TestExtractConsensusState(t *testing.T) {
+	stateRoot := bytes.Repeat([]byte{0xaa}, 32)
+	storageRoot := bytes.Repeat([]byte{0xbb}, 32)
+	valid := makeConsensusBytes(77, stateRoot, storageRoot)
+	cs := ClientState{
+		TimestampOffset:   64,
+		StateRootOffset:   0,
+		StorageRootOffset: 32,
+	}
+	tests := []struct {
+		name    string
+		data    []byte
+		cs      ClientState
+		wantErr error
+	}{
+		{name: "success", data: valid, cs: cs},
+		{name: "timestamp too short", data: valid[:71], cs: cs, wantErr: ErrConsensusStateTooShort},
+		{name: "state root too short", data: valid[:31], cs: ClientState{StateRootOffset: 0}, wantErr: ErrConsensusStateTooShort},
+		{name: "storage root too short", data: valid[:63], cs: ClientState{StateRootOffset: 0, StorageRootOffset: 32}, wantErr: ErrConsensusStateTooShort},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ExtractConsensusState(tt.data, tt.cs)
+			if err != tt.wantErr {
+				t.Fatalf("ExtractConsensusState error: got %v want %v", err, tt.wantErr)
+			}
+			if err != nil {
+				return
+			}
+			if got.Timestamp != 77 {
+				t.Fatalf("timestamp: got %d want 77", got.Timestamp)
+			}
+			assertBytes(t, "state root", got.StateRoot, stateRoot)
+			assertBytes(t, "storage root", got.StorageRoot, storageRoot)
+		})
+	}
+}
+
 func TestExtractUint64(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -69,45 +108,6 @@ func TestExtractBytes32(t *testing.T) {
 			if bytes.Equal(got, tt.data[tt.offset:tt.offset+32]) {
 				t.Fatalf("extractBytes32 returned an aliased slice")
 			}
-		})
-	}
-}
-
-func TestExtractConsensusState(t *testing.T) {
-	stateRoot := bytes.Repeat([]byte{0xaa}, 32)
-	storageRoot := bytes.Repeat([]byte{0xbb}, 32)
-	valid := makeConsensusBytes(77, stateRoot, storageRoot)
-	cs := ClientState{
-		TimestampOffset:   64,
-		StateRootOffset:   0,
-		StorageRootOffset: 32,
-	}
-	tests := []struct {
-		name    string
-		data    []byte
-		cs      ClientState
-		wantErr error
-	}{
-		{name: "success", data: valid, cs: cs},
-		{name: "timestamp too short", data: valid[:71], cs: cs, wantErr: ErrConsensusStateTooShort},
-		{name: "state root too short", data: valid[:31], cs: ClientState{StateRootOffset: 0}, wantErr: ErrConsensusStateTooShort},
-		{name: "storage root too short", data: valid[:63], cs: ClientState{StateRootOffset: 0, StorageRootOffset: 32}, wantErr: ErrConsensusStateTooShort},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := ExtractConsensusState(tt.data, tt.cs)
-			if err != tt.wantErr {
-				t.Fatalf("ExtractConsensusState error: got %v want %v", err, tt.wantErr)
-			}
-			if err != nil {
-				return
-			}
-			if got.Timestamp != 77 {
-				t.Fatalf("timestamp: got %d want 77", got.Timestamp)
-			}
-			assertBytes(t, "state root", got.StateRoot, stateRoot)
-			assertBytes(t, "storage root", got.StorageRoot, storageRoot)
 		})
 	}
 }

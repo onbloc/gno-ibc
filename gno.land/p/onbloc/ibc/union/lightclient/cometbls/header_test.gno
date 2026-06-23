@@ -384,33 +384,163 @@ func TestHeaderValidateBasic(t *testing.T) {
 	}
 }
 
-func TestHeaderGetHeightPreservesTrustedRevision(t *testing.T) {
-	// Union reference: update_state rebuilds the untrusted height with the
-	// trusted height revision.
-	h := newTestHeader(42, 1000, 500, 10, []byte{0xAA})
-	h.TrustedHeight = heightPtr(types.NewHeightWithRevision(7, 10))
-
-	got := h.GetHeight()
-	if got.RevisionNumber != 7 {
-		t.Fatalf("revision number: got %d want 7", got.RevisionNumber)
+func TestHeaderGetHeight(t *testing.T) {
+	cases := []struct {
+		name               string
+		headerHeight       int64
+		trustedRevision    uint64
+		trustedHeight      uint64
+		wantRevisionNumber uint64
+		wantRevisionHeight uint64
+	}{
+		{
+			name:               "preserves trusted revision",
+			headerHeight:       42,
+			trustedRevision:    7,
+			trustedHeight:      10,
+			wantRevisionNumber: 7,
+			wantRevisionHeight: 42,
+		},
+		{
+			name:               "zero revision number",
+			headerHeight:       100,
+			trustedRevision:    0,
+			trustedHeight:      50,
+			wantRevisionNumber: 0,
+			wantRevisionHeight: 100,
+		},
+		{
+			name:               "max revision number",
+			headerHeight:       1,
+			trustedRevision:    ^uint64(0),
+			trustedHeight:      0,
+			wantRevisionNumber: ^uint64(0),
+			wantRevisionHeight: 1,
+		},
+		{
+			name:               "zero header height",
+			headerHeight:       0,
+			trustedRevision:    5,
+			trustedHeight:      0,
+			wantRevisionNumber: 5,
+			wantRevisionHeight: 0,
+		},
+		{
+			name:               "max header height",
+			headerHeight:       ^int64(0),
+			trustedRevision:    1,
+			trustedHeight:      0,
+			wantRevisionNumber: 1,
+			wantRevisionHeight: ^uint64(0),
+		},
+		{
+			name:               "trusted height zero",
+			headerHeight:       999,
+			trustedRevision:    3,
+			trustedHeight:      0,
+			wantRevisionNumber: 3,
+			wantRevisionHeight: 999,
+		},
+		{
+			name:               "large revision number",
+			headerHeight:       12345,
+			trustedRevision:    1000000,
+			trustedHeight:      5000,
+			wantRevisionNumber: 1000000,
+			wantRevisionHeight: 12345,
+		},
 	}
-	if got.RevisionHeight != 42 {
-		t.Fatalf("revision height: got %d want 42", got.RevisionHeight)
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newTestHeader(tc.headerHeight, 1000, 500, tc.trustedHeight, []byte{0xAA})
+			h.TrustedHeight = heightPtr(types.NewHeightWithRevision(tc.trustedRevision, tc.trustedHeight))
+
+			got := h.GetHeight()
+			if got.RevisionNumber != tc.wantRevisionNumber {
+				t.Errorf("revision number: got %d want %d", got.RevisionNumber, tc.wantRevisionNumber)
+			}
+			if got.RevisionHeight != tc.wantRevisionHeight {
+				t.Errorf("revision height: got %d want %d", got.RevisionHeight, tc.wantRevisionHeight)
+			}
+		})
 	}
 }
 
 func TestHeaderConsensusState(t *testing.T) {
-	h := newTestHeader(42, 1000, 500, 10, []byte{0xAA})
-	h.SignedHeader.AppHash = repeat32(0x44)
-	h.SignedHeader.NextValidatorsHash = repeat32(0x45)
-
-	got := h.ConsensusState()
-
-	if got.Timestamp != uint64(h.GetTime().UnixNano()) {
-		t.Fatalf("timestamp: got %d want %d", got.Timestamp, h.GetTime().UnixNano())
+	cases := []struct {
+		name               string
+		height             int64
+		timeSeconds        int64
+		timeNanos          int32
+		appHash            []byte
+		nextValidatorsHash []byte
+	}{
+		{
+			name:               "valid consensus state",
+			height:             42,
+			timeSeconds:        1000,
+			timeNanos:          500,
+			appHash:            repeat32(0x44),
+			nextValidatorsHash: repeat32(0x45),
+		},
+		{
+			name:               "zero timestamp",
+			height:             1,
+			timeSeconds:        0,
+			timeNanos:          0,
+			appHash:            repeat32(0xAA),
+			nextValidatorsHash: repeat32(0xBB),
+		},
+		{
+			name:               "max timestamp values",
+			height:             100,
+			timeSeconds:        ^int64(0) >> 1, // max int64 (avoid negative)
+			timeNanos:          999999999,
+			appHash:            repeat32(0xCC),
+			nextValidatorsHash: repeat32(0xDD),
+		},
+		{
+			name:               "negative timestamp",
+			height:             50,
+			timeSeconds:        -86400,
+			timeNanos:          0,
+			appHash:            repeat32(0xEE),
+			nextValidatorsHash: repeat32(0xFF),
+		},
+		{
+			name:               "empty hashes",
+			height:             10,
+			timeSeconds:        500,
+			timeNanos:          250,
+			appHash:            []byte{},
+			nextValidatorsHash: []byte{},
+		},
+		{
+			name:               "large nanos",
+			height:             999,
+			timeSeconds:        1704067200,
+			timeNanos:          999999999,
+			appHash:            repeat32(0x12),
+			nextValidatorsHash: repeat32(0x34),
+		},
 	}
-	bytesEq(t, "root hash", got.Root.Hash, h.SignedHeader.AppHash)
-	bytesEq(t, "next validators hash", got.NextValidatorsHash, h.SignedHeader.NextValidatorsHash)
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newTestHeader(tc.height, tc.timeSeconds, tc.timeNanos, 10, []byte{0xAA})
+			h.SignedHeader.AppHash = tc.appHash
+			h.SignedHeader.NextValidatorsHash = tc.nextValidatorsHash
+
+			got := h.ConsensusState()
+
+			if got.Timestamp != uint64(h.GetTime().UnixNano()) {
+				t.Errorf("timestamp: got %d want %d", got.Timestamp, h.GetTime().UnixNano())
+			}
+			bytesEq(t, "root hash", got.Root.Hash, tc.appHash)
+			bytesEq(t, "next validators hash", got.NextValidatorsHash, tc.nextValidatorsHash)
+		})
+	}
 }
 
 func TestHeaderGetTimeUsesSecondsAndNanosUTC(t *testing.T) {

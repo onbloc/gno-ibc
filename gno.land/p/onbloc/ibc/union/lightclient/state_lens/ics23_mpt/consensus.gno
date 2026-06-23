@@ -13,10 +13,8 @@ var (
 	ErrInvalidCommitmentKey   = errors.New("ics23mpt: invalid commitment key")
 )
 
-// ExtractConsensusState parses the L2 consensus state bytes into a
-// ConsensusState using the byte offsets recorded in the client state. The
-// state-lens client trusts the counterparty's opaque L2 consensus blob and
-// reads timestamp / state root / storage root from fixed offsets.
+// ExtractConsensusState extracts consensus fields from an opaque L2 consensus
+// blob using the fixed byte offsets recorded in the client state.
 func ExtractConsensusState(data []byte, cs ClientState) (ConsensusState, error) {
 	timestamp, err := extractUint64(data, int(cs.TimestampOffset))
 	if err != nil {

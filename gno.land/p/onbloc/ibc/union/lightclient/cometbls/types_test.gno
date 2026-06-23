@@ -4,7 +4,6 @@ import (
 	"testing"
 )
 
-// TestH256GetHash tests the GetHash method for H256.
 func TestH256GetHash(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -67,7 +66,6 @@ func TestH256GetHash(t *testing.T) {
 	}
 }
 
-// TestMerkleRootGetHash tests the GetHash method for MerkleRoot.
 func TestMerkleRootGetHash(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -117,7 +115,6 @@ func TestMerkleRootGetHash(t *testing.T) {
 	}
 }
 
-// TestMerkleRootEmptyTypes tests the Empty method for MerkleRoot.
 func TestMerkleRootEmptyTypes(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -164,7 +161,6 @@ func TestMerkleRootEmptyTypes(t *testing.T) {
 	}
 }
 
-// TestValidateHash tests the validateHash private function.
 func TestValidateHash(t *testing.T) {
 	tests := []struct {
 		name        string

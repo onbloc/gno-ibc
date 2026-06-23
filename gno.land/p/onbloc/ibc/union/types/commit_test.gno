@@ -95,6 +95,58 @@ func TestCommitAcks(t *testing.T) {
 	}
 }
 
+func TestCommitPacket(t *testing.T) {
+	tests := []struct {
+		name   string
+		packet Packet
+		want   string
+	}{
+		{
+			name: "empty data",
+			packet: Packet{
+				SourceChannelId:      1,
+				DestinationChannelId: 2,
+				Data:                 nil,
+				TimeoutHeight:        0,
+				TimeoutTimestamp:     100,
+			},
+			want: "c44210ccbbc75298ed35e9a1d03a9cc47f80b47157f280488abbceeac8a2dacc",
+		},
+		{
+			name: "single byte data",
+			packet: Packet{
+				SourceChannelId:      5,
+				DestinationChannelId: 10,
+				Data:                 []byte{0xaa},
+				TimeoutHeight:        0,
+				TimeoutTimestamp:     200,
+			},
+			want: "72c94facb1f818f209e3031106ed6c2caff6660887ac53ceab341a4fbd11a5f4",
+		},
+		{
+			name: "multi byte data",
+			packet: Packet{
+				SourceChannelId:      1,
+				DestinationChannelId: 2,
+				Data:                 []byte{0xab, 0xcd},
+				TimeoutHeight:        0,
+				TimeoutTimestamp:     3,
+			},
+			want: "31f771c1d8ee88a4676e6da4cc884fbfecb6e7a7ca033f7f3612a14893ac51e3",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := CommitPacket(tc.packet)
+			if err != nil {
+				t.Fatalf("CommitPacket error: %v", err)
+			}
+			assertHex(t, tc.name, got[:], tc.want)
+		})
+	}
+}
+
 func TestCommitAck(t *testing.T) {
 	tests := []struct {
 		name string

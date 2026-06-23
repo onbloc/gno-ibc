@@ -1,6 +1,9 @@
 package types
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 func TestNewChannel(t *testing.T) {
 	tests := []struct {
@@ -161,7 +164,7 @@ func TestNewChannel(t *testing.T) {
 			if got.CounterpartyChannelId != tc.wantCounterpartyChannelId {
 				t.Errorf("CounterpartyChannelId = %v, want %v", got.CounterpartyChannelId, tc.wantCounterpartyChannelId)
 			}
-			if !bytesEqual(got.CounterpartyPortId, tc.wantCounterpartyPortId) {
+			if !bytes.Equal(got.CounterpartyPortId.Bytes(), tc.wantCounterpartyPortId.Bytes()) {
 				t.Errorf("CounterpartyPortId = %v, want %v", got.CounterpartyPortId, tc.wantCounterpartyPortId)
 			}
 			if got.Version != tc.wantVersion {
@@ -171,19 +174,7 @@ func TestNewChannel(t *testing.T) {
 	}
 }
 
-func bytesEqual(a, b Bytes) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
-func TestChannelEncodeABI(t *testing.T) {
+func TestChannel_EncodeABI(t *testing.T) {
 	tests := []struct {
 		name    string
 		channel Channel

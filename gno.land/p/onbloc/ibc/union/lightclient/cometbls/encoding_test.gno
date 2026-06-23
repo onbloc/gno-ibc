@@ -8,11 +8,6 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-// TestEncodeHeaderAdditional covers additional branches not in header_test.gno:
-// - All three hashes at boundary lengths (31, 32, 33 bytes)
-// - All three hashes at boundary lengths (empty, 64 bytes)
-// - Trusted height nil vs non-nil
-// - All hash combinations at 32 bytes
 func TestEncodeHeaderAdditional(t *testing.T) {
 	zkpPadded := make([]byte, 32)
 	copy(zkpPadded, []byte{0xAA, 0xBB})
@@ -873,8 +868,8 @@ func TestToBytes32(t *testing.T) {
 			}(),
 		},
 		{
-			name:  "exactly 32 bytes with pattern",
-			b:     func() []byte {
+			name: "exactly 32 bytes with pattern",
+			b: func() []byte {
 				out := make([]byte, 32)
 				for i := range out {
 					out[i] = byte(i)

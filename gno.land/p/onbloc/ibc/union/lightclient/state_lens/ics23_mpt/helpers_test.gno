@@ -92,6 +92,34 @@ func mustClientStateWithLatestHeightWord(l2LatestHeight string) []byte {
 	)
 }
 
+func mustClientStateWithIDsAndOffsets(l1ClientID, l2ClientID, l2LatestHeight, timestampOffset, stateRootOffset, storageRootOffset uint64) []byte {
+	return mustHex(
+		word32(0xe0) +
+			word32(l1ClientID) +
+			word32(l2ClientID) +
+			word32(l2LatestHeight) +
+			word32(timestampOffset) +
+			word32(stateRootOffset) +
+			word32(storageRootOffset) +
+			word32(10) +
+			"746573742d636861696e00000000000000000000000000000000000000000000",
+	)
+}
+
+func mustClientStateWithHeightAndOffsets(l2LatestHeight uint64, timestampOffset, stateRootOffset, storageRootOffset uint64) []byte {
+	return mustHex(
+		word32(0xe0) +
+			word32(1) +
+			word32(2) +
+			word32(l2LatestHeight) +
+			word32(timestampOffset) +
+			word32(stateRootOffset) +
+			word32(storageRootOffset) +
+			word32(10) +
+			"746573742d636861696e00000000000000000000000000000000000000000000",
+	)
+}
+
 func mustConsensusStateBytes(timestamp uint64, stateRoot, storageRoot []byte) []byte {
 	return mustHex(
 		word32(timestamp) +

@@ -326,7 +326,6 @@ func TestH256String(t *testing.T) {
 	}
 }
 
-// TestClientTypeString tests the String method for ClientType type.
 func TestClientTypeString(t *testing.T) {
 	tests := []struct {
 		name string

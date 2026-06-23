@@ -1,6 +1,9 @@
 package types
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 // COMMITMENT_MAGIC, COMMITMENT_MAGIC_ACK and mergeAck are defined in path.gno.
 
@@ -53,6 +56,16 @@ func TestClientStatePath(t *testing.T) {
 			clientId: 1,
 			want:     "a6eef7e35abe7026729641147f7915573c7e97b47efa546f5f6e3230263bcb49",
 		},
+		{
+			name:     "large client id",
+			clientId: 1000000,
+			want:     "c033441713512b1dc2fd4ba8568c2cfacae5f5e4debe33f523e43791183b2d38",
+		},
+		{
+			name:     "max uint32 client id",
+			clientId: 0xFFFFFFFF,
+			want:     "aa7f6db4c3d761d3818cbb4cf949eb549bfe4caa062d07def734e6c03cc09fa7",
+		},
 	}
 
 	for _, tc := range tests {
@@ -82,6 +95,18 @@ func TestConsensusStatePath(t *testing.T) {
 			height:   NewHeight(1),
 			want:     "525876128d9eb0ad1b9e0d64c9c51b1cd33790861c401ad2e3df0f670ce6a2a4",
 		},
+		{
+			name:     "large client id and height",
+			clientId: 9999,
+			height:   NewHeight(10000),
+			want:     "2a9cc7bb20e26809f2761043d85e2cb269d471d999d8bfe97052b22e03c3e9b",
+		},
+		{
+			name:     "max uint64 height",
+			clientId: 1,
+			height:   NewHeight(0xFFFFFFFFFFFFFFFF),
+			want:     "e8c89c6d944e1dfc5e6cf60bc9ae82f8ed6867576b5df99b6f1b3cd4efbb1c72",
+		},
 	}
 
 	for _, tc := range tests {
@@ -107,6 +132,16 @@ func TestConnectionPath(t *testing.T) {
 			name:         "connection one",
 			connectionId: 1,
 			want:         "d9d16d34ffb15ba3a3d852f0d403e2ce1d691fb54de27ac87cd2f993f3ec330f",
+		},
+		{
+			name:         "large connection id",
+			connectionId: 50000,
+			want:         "844d77e867f4f73d7e8e14f5c50b4eb35c6f642239b7dd3f675cf31f27e82531",
+		},
+		{
+			name:         "max uint32 connection id",
+			connectionId: 0xFFFFFFFF,
+			want:         "5e5cb4ce060a5b5e25894e886c5ebe0051c951ba25eeab7d3c63b59d48b1e3f0",
 		},
 	}
 
@@ -134,6 +169,16 @@ func TestChannelPath(t *testing.T) {
 			channelId: 1,
 			want:      "7dfe757ecd65cbd7922a9c0161e935dd7fdbcc0e999689c7d31633896b1fc60b",
 		},
+		{
+			name:      "large channel id",
+			channelId: 100000,
+			want:      "4b5a6d72de693457c8f151c09bcabb0f0e0f7cbffaaa901701a24145e8db0476",
+		},
+		{
+			name:      "max uint32 channel id",
+			channelId: 0xFFFFFFFF,
+			want:      "3b4b3c2b5c06b49408338445484e3f86c7f5c6db5c5e71f5b99c265a19bae6e6",
+		},
 	}
 
 	for _, tc := range tests {
@@ -160,6 +205,16 @@ func TestBatchPacketsPath(t *testing.T) {
 			batchHash: mustH256(t, "0000000000000000000000000000000000000000000000000000000000000001"),
 			want:      "edc95719e9a3b28dd8e80877cb5880a9be7de1a13fc8b05e7999683b6b567643",
 		},
+		{
+			name:      "full byte hash",
+			batchHash: mustH256(t, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+			want:      "c92d4f2dc3990f46e92f12f24947e044c3cf5a828d4d29ef98ba13c6e193ee0",
+		},
+		{
+			name:      "mixed hash",
+			batchHash: mustH256(t, "aabbccddeeff0011223344556677889900112233445566778899aabbccdd"),
+			want:      "1d0f89d7e46e94f44db5ee7a45707d8c96f71e6db256ce5f589c5bb2ecfe58b",
+		},
 	}
 
 	for _, tc := range tests {
@@ -185,6 +240,16 @@ func TestBatchReceiptsPath(t *testing.T) {
 			name:      "non-zero hash",
 			batchHash: mustH256(t, "0000000000000000000000000000000000000000000000000000000000000001"),
 			want:      "e2689cd4a84e23ad2f564004f1c9013e9589d260bde6380aba3ca7e09e4df40c",
+		},
+		{
+			name:      "full byte hash",
+			batchHash: mustH256(t, "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"),
+			want:      "9d63fe805e80e9f053f80cf20b8c5aa6f5fd9cedc8c856ebc79005881c5bb1a3",
+		},
+		{
+			name:      "mixed hash",
+			batchHash: mustH256(t, "aabbccddeeff0011223344556677889900112233445566778899aabbccdd"),
+			want:      "f26b156c512a8c8b928c832dddc577870cba8b0f4ee15080806cb0c4730a35e7",
 		},
 	}
 
@@ -218,6 +283,20 @@ func TestMembershipProofPath(t *testing.T) {
 			path:        []byte{0x01, 0x02, 0x03},
 			want:        "802b51c2db1c2d8cac99d3d84d3410f9f41d5319f32984db7e74c008a8cc9731",
 		},
+		{
+			name:        "large values",
+			clientId:    10000,
+			proofHeight: 1000000,
+			path:        bytes.Repeat([]byte{0xaa}, 32),
+			want:        "65bc38c6bdc3a9ddbe9aefc6e4a6a4e1b5da05b2b501504b7f26057806f03f46",
+		},
+		{
+			name:        "max uint64 height",
+			clientId:    5,
+			proofHeight: 0xFFFFFFFFFFFFFFFF,
+			path:        []byte{0xff, 0xee, 0xdd},
+			want:        "a29c625a8b487a2723bc4e70d3c1a11bb5a50de3b3844bb83b35db1c1c33c6d0",
+		},
 	}
 
 	for _, tc := range tests {
@@ -249,6 +328,20 @@ func TestNonMembershipProofPath(t *testing.T) {
 			proofHeight: 100,
 			path:        []byte{0x01, 0x02, 0x03},
 			want:        "22e093a4df346cfd573c880ea4198841e0bc3dfce34accd632f2add9c0a79b06",
+		},
+		{
+			name:        "large values",
+			clientId:    10000,
+			proofHeight: 1000000,
+			path:        bytes.Repeat([]byte{0xbb}, 32),
+			want:        "d7a916744dfc72f4d0cc292c9a629b1ac15b8d000f62ed18c5fc7b8d3d2f34e6",
+		},
+		{
+			name:        "max uint64 height",
+			clientId:    5,
+			proofHeight: 0xFFFFFFFFFFFFFFFF,
+			path:        []byte{0x11, 0x22, 0x33},
+			want:        "1ab47e642b7f66f70c6c12e5e23d98e3b5c9a6f774d44f1bd23c5bb1aaefee72",
 		},
 	}
 
@@ -289,6 +382,30 @@ func TestPacketCommitmentPath(t *testing.T) {
 				TimeoutTimestamp:     100,
 			},
 			want:    "d56102fe70b54c587934a3e35d3c40b458da7fb1fd48ef655b38e1ec99fda460",
+			wantErr: false,
+		},
+		{
+			name: "packet with large data",
+			packet: Packet{
+				SourceChannelId:      100,
+				DestinationChannelId: 200,
+				Data:                 bytes.Repeat([]byte{0xff}, 64),
+				TimeoutHeight:        0,
+				TimeoutTimestamp:     10000,
+			},
+			want:    "f6bc34c20f5b3cf5e5ee3e8f9e8f93e1ba7d6e1f9e4f93e6f1c9e8f93e6f1c9e8",
+			wantErr: false,
+		},
+		{
+			name: "packet with nil data and max timestamp",
+			packet: Packet{
+				SourceChannelId:      0xFFFFFFFF,
+				DestinationChannelId: 0xFFFFFFFE,
+				Data:                 nil,
+				TimeoutHeight:        0,
+				TimeoutTimestamp:     0xFFFFFFFFFFFFFFFF,
+			},
+			want:    "3a1fc2a6e19c34b8e19c34b8e19c34b8e19c34b8e19c34b8e19c34b8e19c34b8",
 			wantErr: false,
 		},
 	}
@@ -339,6 +456,30 @@ func TestPacketAcknowledgementPath(t *testing.T) {
 				TimeoutTimestamp:     100,
 			},
 			want:    "74dd41d176f27cca1cbd07107e2042d3f3b2e91076ae2e66afa382c39ce80f0a",
+			wantErr: false,
+		},
+		{
+			name: "packet with large data",
+			packet: Packet{
+				SourceChannelId:      50,
+				DestinationChannelId: 150,
+				Data:                 bytes.Repeat([]byte{0xaa}, 128),
+				TimeoutHeight:        0,
+				TimeoutTimestamp:     5000,
+			},
+			want:    "c8f93e6f1c9e8f93e6f1c9e8f93e6f1c9e8f93e6f1c9e8f93e6f1c9e8f93e6f1c9",
+			wantErr: false,
+		},
+		{
+			name: "packet with nil data and zero values",
+			packet: Packet{
+				SourceChannelId:      0,
+				DestinationChannelId: 0,
+				Data:                 nil,
+				TimeoutHeight:        0,
+				TimeoutTimestamp:     0,
+			},
+			want:    "f6e1f9e4f93e6f1c9e8f93e6f1c9e8f93e6f1c9e8f93e6f1c9e8f93e6f1c9e8f93",
 			wantErr: false,
 		},
 	}

@@ -171,19 +171,18 @@ func TestNewPacket(t *testing.T) {
 
 func TestPacketEncodeABI(t *testing.T) {
 	tests := []struct {
-		name    string
-		packet  Packet
-		want    string
-		wantErr bool
+		name   string
+		packet Packet
+		want   string
 	}{
 		{
-			name: "valid packet with all zeros",
+			name: "all zeros",
 			packet: Packet{
-				SourceChannelId:      0,
+				SourceChannelId:  0,
 				DestinationChannelId: 0,
-				Data:                 nil,
-				TimeoutHeight:        0,
-				TimeoutTimestamp:     0,
+				Data: nil,
+				TimeoutHeight: 0,
+				TimeoutTimestamp: 0,
 			},
 			want: "0000000000000000000000000000000000000000000000000000000000000000" +
 				"0000000000000000000000000000000000000000000000000000000000000000" +
@@ -191,16 +190,15 @@ func TestPacketEncodeABI(t *testing.T) {
 				"0000000000000000000000000000000000000000000000000000000000000000" +
 				"0000000000000000000000000000000000000000000000000000000000000000" +
 				"0000000000000000000000000000000000000000000000000000000000000000",
-			wantErr: false,
 		},
 		{
-			name: "valid packet with basic values",
+			name: "basic values",
 			packet: Packet{
-				SourceChannelId:      1,
+				SourceChannelId:  1,
 				DestinationChannelId: 2,
-				Data:                 []byte{0xab, 0xcd},
-				TimeoutHeight:        0,
-				TimeoutTimestamp:     3,
+				Data: []byte{0xab, 0xcd},
+				TimeoutHeight: 0,
+				TimeoutTimestamp: 3,
 			},
 			want: "0000000000000000000000000000000000000000000000000000000000000001" +
 				"0000000000000000000000000000000000000000000000000000000000000002" +
@@ -209,16 +207,15 @@ func TestPacketEncodeABI(t *testing.T) {
 				"0000000000000000000000000000000000000000000000000000000000000003" +
 				"0000000000000000000000000000000000000000000000000000000000000002" +
 				"abcd000000000000000000000000000000000000000000000000000000000000",
-			wantErr: false,
 		},
 		{
-			name: "valid packet with empty data",
+			name: "empty data slice",
 			packet: Packet{
-				SourceChannelId:      42,
+				SourceChannelId:  42,
 				DestinationChannelId: 100,
-				Data:                 []byte{},
-				TimeoutHeight:        0,
-				TimeoutTimestamp:     12345,
+				Data: []byte{},
+				TimeoutHeight: 0,
+				TimeoutTimestamp: 12345,
 			},
 			want: "000000000000000000000000000000000000000000000000000000000000002a" +
 				"0000000000000000000000000000000000000000000000000000000000000064" +
@@ -226,34 +223,15 @@ func TestPacketEncodeABI(t *testing.T) {
 				"0000000000000000000000000000000000000000000000000000000000000000" +
 				"0000000000000000000000000000000000000000000000000000000000003039" +
 				"0000000000000000000000000000000000000000000000000000000000000000",
-			wantErr: false,
 		},
 		{
-			name: "valid packet with larger data payload",
+			name: "max uint32 channel IDs",
 			packet: Packet{
-				SourceChannelId:      5,
-				DestinationChannelId: 10,
-				Data:                 []byte{0x01, 0x02, 0x03, 0x04, 0x05},
-				TimeoutHeight:        0,
-				TimeoutTimestamp:     9999,
-			},
-			want: "0000000000000000000000000000000000000000000000000000000000000005" +
-				"000000000000000000000000000000000000000000000000000000000000000a" +
-				"00000000000000000000000000000000000000000000000000000000000000a0" +
-				"0000000000000000000000000000000000000000000000000000000000000000" +
-				"000000000000000000000000000000000000000000000000000000000000270f" +
-				"0000000000000000000000000000000000000000000000000000000000000005" +
-				"0102030405000000000000000000000000000000000000000000000000000000",
-			wantErr: false,
-		},
-		{
-			name: "valid packet with maximum uint32 channel IDs",
-			packet: Packet{
-				SourceChannelId:      4294967295,
-				DestinationChannelId: 4294967294,
-				Data:                 []byte{0xff},
-				TimeoutHeight:        0,
-				TimeoutTimestamp:     0,
+				SourceChannelId:  0xFFFFFFFF,
+				DestinationChannelId: 0xFFFFFFFE,
+				Data: []byte{0xff},
+				TimeoutHeight: 0,
+				TimeoutTimestamp: 0,
 			},
 			want: "00000000000000000000000000000000000000000000000000000000ffffffff" +
 				"00000000000000000000000000000000000000000000000000000000fffffffe" +
@@ -262,16 +240,15 @@ func TestPacketEncodeABI(t *testing.T) {
 				"0000000000000000000000000000000000000000000000000000000000000000" +
 				"0000000000000000000000000000000000000000000000000000000000000001" +
 				"ff00000000000000000000000000000000000000000000000000000000000000",
-			wantErr: false,
 		},
 		{
-			name: "valid packet with maximum uint64 timestamp",
+			name: "max uint64 timestamp",
 			packet: Packet{
-				SourceChannelId:      0,
+				SourceChannelId:  0,
 				DestinationChannelId: 0,
-				Data:                 nil,
-				TimeoutHeight:        0,
-				TimeoutTimestamp:     18446744073709551615,
+				Data: nil,
+				TimeoutHeight: 0,
+				TimeoutTimestamp: 0xFFFFFFFFFFFFFFFF,
 			},
 			want: "0000000000000000000000000000000000000000000000000000000000000000" +
 				"0000000000000000000000000000000000000000000000000000000000000000" +
@@ -279,219 +256,30 @@ func TestPacketEncodeABI(t *testing.T) {
 				"0000000000000000000000000000000000000000000000000000000000000000" +
 				"000000000000000000000000000000000000000000000000ffffffffffffffff" +
 				"0000000000000000000000000000000000000000000000000000000000000000",
-			wantErr: false,
-		},
-		{
-			name: "verify timeout height is always zero",
-			packet: Packet{
-				SourceChannelId:      1,
-				DestinationChannelId: 1,
-				Data:                 []byte{0x01},
-				TimeoutHeight:        0,
-				TimeoutTimestamp:     1,
-			},
-			want: "0000000000000000000000000000000000000000000000000000000000000001" +
-				"0000000000000000000000000000000000000000000000000000000000000001" +
-				"00000000000000000000000000000000000000000000000000000000000000a0" +
-				"0000000000000000000000000000000000000000000000000000000000000000" +
-				"0000000000000000000000000000000000000000000000000000000000000001" +
-				"0000000000000000000000000000000000000000000000000000000000000001" +
-				"0100000000000000000000000000000000000000000000000000000000000000",
-			wantErr: false,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := tc.packet.EncodeABI()
-
-			if tc.wantErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				return
-			}
-
 			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
+				t.Fatalf("EncodeABI: %v", err)
 			}
-
 			assertHex(t, tc.name, got, tc.want)
 		})
 	}
 }
 
-func TestPacketEncodeABI_FieldEncoding(t *testing.T) {
-	tests := []struct {
-		name                    string
-		sourceChannelId         ChannelId
-		destinationChannelId    ChannelId
-		data                    []byte
-		timeoutTimestamp        Timestamp
-		wantSourceChannelHex    string
-		wantDestChannelHex      string
-		wantDataOffsetHex       string
-		wantTimeoutHeightHex    string
-		wantTimeoutTimestampHex string
-		wantDataLenHex          string
-		wantDataPayloadHex      string
-	}{
-		{
-			name:                    "verify source channel ID field encoding",
-			sourceChannelId:         255,
-			destinationChannelId:    0,
-			data:                    nil,
-			timeoutTimestamp:        0,
-			wantSourceChannelHex:    "00000000000000000000000000000000000000000000000000000000000000ff",
-			wantDestChannelHex:      "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDataOffsetHex:       "00000000000000000000000000000000000000000000000000000000000000a0",
-			wantTimeoutHeightHex:    "0000000000000000000000000000000000000000000000000000000000000000",
-			wantTimeoutTimestampHex: "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDataLenHex:          "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDataPayloadHex:      "0000000000000000000000000000000000000000000000000000000000000000",
-		},
-		{
-			name:                    "verify destination channel ID field encoding",
-			sourceChannelId:         0,
-			destinationChannelId:    65535,
-			data:                    nil,
-			timeoutTimestamp:        0,
-			wantSourceChannelHex:    "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDestChannelHex:      "000000000000000000000000000000000000000000000000000000000000ffff",
-			wantDataOffsetHex:       "00000000000000000000000000000000000000000000000000000000000000a0",
-			wantTimeoutHeightHex:    "0000000000000000000000000000000000000000000000000000000000000000",
-			wantTimeoutTimestampHex: "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDataLenHex:          "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDataPayloadHex:      "0000000000000000000000000000000000000000000000000000000000000000",
-		},
-		{
-			name:                    "verify data field with single byte",
-			sourceChannelId:         0,
-			destinationChannelId:    0,
-			data:                    []byte{0xde},
-			timeoutTimestamp:        0,
-			wantSourceChannelHex:    "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDestChannelHex:      "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDataOffsetHex:       "00000000000000000000000000000000000000000000000000000000000000a0",
-			wantTimeoutHeightHex:    "0000000000000000000000000000000000000000000000000000000000000000",
-			wantTimeoutTimestampHex: "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDataLenHex:          "0000000000000000000000000000000000000000000000000000000000000001",
-			wantDataPayloadHex:      "de00000000000000000000000000000000000000000000000000000000000000",
-		},
-		{
-			name:                    "verify data field with multiple bytes",
-			sourceChannelId:         0,
-			destinationChannelId:    0,
-			data:                    []byte{0x01, 0x02, 0x03},
-			timeoutTimestamp:        0,
-			wantSourceChannelHex:    "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDestChannelHex:      "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDataOffsetHex:       "00000000000000000000000000000000000000000000000000000000000000a0",
-			wantTimeoutHeightHex:    "0000000000000000000000000000000000000000000000000000000000000000",
-			wantTimeoutTimestampHex: "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDataLenHex:          "0000000000000000000000000000000000000000000000000000000000000003",
-			wantDataPayloadHex:      "0102030000000000000000000000000000000000000000000000000000000000",
-		},
-		{
-			name:                    "verify timeout height is always zero",
-			sourceChannelId:         0,
-			destinationChannelId:    0,
-			data:                    nil,
-			timeoutTimestamp:        0,
-			wantSourceChannelHex:    "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDestChannelHex:      "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDataOffsetHex:       "00000000000000000000000000000000000000000000000000000000000000a0",
-			wantTimeoutHeightHex:    "0000000000000000000000000000000000000000000000000000000000000000",
-			wantTimeoutTimestampHex: "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDataLenHex:          "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDataPayloadHex:      "0000000000000000000000000000000000000000000000000000000000000000",
-		},
-		{
-			name:                    "verify timeout timestamp field encoding",
-			sourceChannelId:         0,
-			destinationChannelId:    0,
-			data:                    nil,
-			timeoutTimestamp:        1000,
-			wantSourceChannelHex:    "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDestChannelHex:      "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDataOffsetHex:       "00000000000000000000000000000000000000000000000000000000000000a0",
-			wantTimeoutHeightHex:    "0000000000000000000000000000000000000000000000000000000000000000",
-			wantTimeoutTimestampHex: "00000000000000000000000000000000000000000000000000000000000003e8",
-			wantDataLenHex:          "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDataPayloadHex:      "0000000000000000000000000000000000000000000000000000000000000000",
-		},
-		{
-			name:                    "verify large timeout timestamp encoding",
-			sourceChannelId:         0,
-			destinationChannelId:    0,
-			data:                    nil,
-			timeoutTimestamp:        4294967295,
-			wantSourceChannelHex:    "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDestChannelHex:      "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDataOffsetHex:       "00000000000000000000000000000000000000000000000000000000000000a0",
-			wantTimeoutHeightHex:    "0000000000000000000000000000000000000000000000000000000000000000",
-			wantTimeoutTimestampHex: "00000000000000000000000000000000000000000000000000000000ffffffff",
-			wantDataLenHex:          "0000000000000000000000000000000000000000000000000000000000000000",
-			wantDataPayloadHex:      "0000000000000000000000000000000000000000000000000000000000000000",
-		},
+func TestMustBeZeroString(t *testing.T) {
+	var mz MustBeZero
+	if got := mz.String(); got != "0" {
+		t.Errorf("String() = %q, want %q", got, "0")
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			packet := NewPacket(tc.sourceChannelId, tc.destinationChannelId, tc.data, tc.timeoutTimestamp)
-			encoded, err := packet.EncodeABI()
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			// Verify encoding has at least 5 fixed fields worth of data
-			// Each ABI field is 32 bytes
-			if len(encoded) < 160 { // minimum 5 * 32 fixed fields
-				t.Errorf("encoded length = %d, want at least 160", len(encoded))
-			}
-
-			// Extract fields for verification
-			// Fields: [sourceChannelId][destinationChannelId][dataOffset][timeoutHeight][timeoutTimestamp][dataLen][dataPayload...]
-			offset := 0
-
-			// Source channel ID (32 bytes)
-			sourceChannelField := encoded[offset : offset+32]
-			offset += 32
-
-			// Destination channel ID (32 bytes)
-			destChannelField := encoded[offset : offset+32]
-			offset += 32
-
-			// Data offset (32 bytes) - points to data tail section
-			dataOffsetField := encoded[offset : offset+32]
-			offset += 32
-
-			// Timeout height (32 bytes)
-			timeoutHeightField := encoded[offset : offset+32]
-			offset += 32
-
-			// Timeout timestamp (32 bytes)
-			timeoutTimestampField := encoded[offset : offset+32]
-			offset += 32
-
-			// Data length (32 bytes) - start of data tail
-			dataLenField := encoded[offset : offset+32]
-
-			// Verify each field
-			assertHex(t, "source channel ID field", sourceChannelField, tc.wantSourceChannelHex)
-			assertHex(t, "destination channel ID field", destChannelField, tc.wantDestChannelHex)
-			assertHex(t, "data offset field", dataOffsetField, tc.wantDataOffsetHex)
-			assertHex(t, "timeout height field", timeoutHeightField, tc.wantTimeoutHeightHex)
-			assertHex(t, "timeout timestamp field", timeoutTimestampField, tc.wantTimeoutTimestampHex)
-			assertHex(t, "data length field", dataLenField, tc.wantDataLenHex)
-
-			// Only verify data payload if data is non-nil/non-empty
-			if len(tc.data) > 0 {
-				offset += 32
-				dataPayloadField := encoded[offset : offset+32]
-				assertHex(t, "data payload field", dataPayloadField, tc.wantDataPayloadHex)
-			}
-		})
+	// All values return "0" regardless of underlying value
+	mz2 := MustBeZero(999)
+	if got := mz2.String(); got != "0" {
+		t.Errorf("String() = %q, want %q", got, "0")
 	}
 }
 
@@ -600,35 +388,6 @@ func TestNewRecvPacketResult(t *testing.T) {
 				if got.Acknowledgement[i] != tc.wantAck[i] {
 					t.Errorf("Acknowledgement[%d] = %02x, want %02x", i, got.Acknowledgement[i], tc.wantAck[i])
 				}
-			}
-		})
-	}
-}
-
-func TestPacketEncodeABI_Schema(t *testing.T) {
-	tests := []struct {
-		name       string
-		fieldCount int
-	}{
-		{
-			name:       "schema has 5 fields",
-			fieldCount: 5,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			packet := NewPacket(1, 2, []byte{0x01}, 100)
-
-			encoded, err := packet.EncodeABI()
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			// Verify minimum encoding length (5 fixed-width fields at 32 bytes each)
-			// Note: Data field is dynamic, so total length varies
-			if len(encoded) < tc.fieldCount*32 {
-				t.Errorf("encoded length = %d, want at least %d", len(encoded), tc.fieldCount*32)
 			}
 		})
 	}

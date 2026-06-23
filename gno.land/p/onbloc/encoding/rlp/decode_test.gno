@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestDecodeValueEntrypoint(t *testing.T) {
+func TestDecodeValue_Entrypoint(t *testing.T) {
 	longPayload := make([]byte, 56)
 	for i := range longPayload {
 		longPayload[i] = byte(i)

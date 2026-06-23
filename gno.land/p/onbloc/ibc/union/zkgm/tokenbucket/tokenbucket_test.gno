@@ -170,40 +170,63 @@ func TestUpdate(t *testing.T) {
 
 func TestSaturatingAdd(t *testing.T) {
 	max := maxUint256()
+	maxMinusOne, _ := new(u256.Uint).SubOverflow(max, u256.NewUint(1))
 	cases := []struct {
 		name string
 		x    *u256.Uint
 		y    *u256.Uint
 		want *u256.Uint
 	}{
+		{"zero plus zero", u256.Zero(), u256.Zero(), u256.Zero()},
+		{"zero plus value", u256.Zero(), u256.NewUint(7), u256.NewUint(7)},
 		{"adds without overflow", u256.NewUint(5), u256.NewUint(7), u256.NewUint(12)},
+		{"max plus zero stays max", max, u256.Zero(), max},
+		{"max minus one plus one reaches max", maxMinusOne, u256.NewUint(1), max},
 		{"saturates on overflow", max, u256.NewUint(1), max},
+		{"saturates when sum crosses max", maxMinusOne, u256.NewUint(2), max},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			got := saturatingAdd(tc.x, tc.y)
 			assertUintEqual(t, "sum", got, tc.want)
+
+			got.Set(u256.NewUint(99))
+			if tc.x.Cmp(u256.NewUint(99)) == 0 || tc.y.Cmp(u256.NewUint(99)) == 0 {
+				t.Fatalf("saturatingAdd returned an aliased uint")
+			}
 		})
 	}
 }
 
 func TestSaturatingMul(t *testing.T) {
 	max := maxUint256()
+	halfMax := new(u256.Uint).Rsh(max, 1)
+	halfMaxTimesTwo, _ := new(u256.Uint).MulOverflow(halfMax, u256.NewUint(2))
 	cases := []struct {
 		name string
 		x    *u256.Uint
 		y    *u256.Uint
 		want *u256.Uint
 	}{
+		{"zero times max is zero", u256.Zero(), max, u256.Zero()},
+		{"max times zero is zero", max, u256.Zero(), u256.Zero()},
+		{"one times max stays max", u256.NewUint(1), max, max},
 		{"multiplies without overflow", u256.NewUint(6), u256.NewUint(7), u256.NewUint(42)},
+		{"large product without overflow", halfMax, u256.NewUint(2), halfMaxTimesTwo},
 		{"saturates on overflow", max, u256.NewUint(2), max},
+		{"saturates near max overflow", halfMax, u256.NewUint(3), max},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			got := saturatingMul(tc.x, tc.y)
 			assertUintEqual(t, "product", got, tc.want)
+
+			got.Set(u256.NewUint(99))
+			if tc.x.Cmp(u256.NewUint(99)) == 0 || tc.y.Cmp(u256.NewUint(99)) == 0 {
+				t.Fatalf("saturatingMul returned an aliased uint")
+			}
 		})
 	}
 }

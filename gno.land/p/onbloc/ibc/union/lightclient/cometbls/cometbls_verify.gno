@@ -180,16 +180,16 @@ func signedHeadersEqual(a, b *LightHeader) bool {
 		bytes.Equal(a.AppHash, b.AppHash)
 }
 
-// verifyChainedMembershipProof takes a list of proofs and specs and verifies
-// each proof sequentially ensuring that the value is committed to by first
-// proof and each subsequent subroot is committed to by the next subroot and
-// checking that the final calculated root is equal to the given roothash.
-// The proofs and specs are passed in from lowest subtree to the highest
-// subtree, but the keys are passed in from highest subtree to lowest.
-// The index specifies what index to start chaining the membership proofs, this
-// is useful since the lowest proof may not be a membership proof, thus we will
-// want to start the membership proof chaining from index 1 with value being
-// the lowest subroot
+// verifyChainedMembershipProof verifies a chain of ICS23 membership proofs.
+// Proofs/specs are ordered from the lowest subtree to the root, while keys
+// are ordered from the root to the lowest subtree.
+//
+// Starting at index, each proof must commit to the subroot produced by the
+// previous proof (or the initial value). The final derived root must match
+// the expected root.
+//
+// index allows verification to begin after a non-membership proof, using the
+// previously computed subroot as the initial value.
 func (c *CometblsLightClient) verifyChainedMembershipProof(
 	root []byte,
 	proofs []ics23.CommitmentProof,
@@ -202,11 +202,8 @@ func (c *CometblsLightClient) verifyChainedMembershipProof(
 
 	var err error
 
-	// Initialize subroot to value since the proofs list may be empty.
-	// This may happen if this call is verifying intermediate proofs after the
-	// lowest proof has been executed.
-	// In this case, there may be no intermediate proofs to verify and we just
-	// check that lowest proof root equals final root
+	// Start with the provided value. If no proofs remain, subroot is compared
+	// directly against the expected root.
 	for i := index; i < len(proofs); i++ {
 		// verify membership of the proof at this index with appropriate key and value
 		exist := proofs[i].GetExist()
@@ -225,9 +222,7 @@ func (c *CometblsLightClient) verifyChainedMembershipProof(
 			)
 		}
 
-		// Since keys are passed in from highest to lowest, we must grab their
-		// indices in reverse order from the proofs and specs which are lowest to
-		// highest
+		// Keys are ordered root→leaf, so access them in reverse.
 		key := keys.KeyPath[len(keys.KeyPath)-1-i]
 
 		if err := exist.Verify(specs[i], subroot, key, value); err != nil {
@@ -237,12 +232,11 @@ func (c *CometblsLightClient) verifyChainedMembershipProof(
 			)
 		}
 
-		// Set value to subroot so that we verify next proof in chain commits to
-		// this subroot
+		// Use the computed subroot as the value for the next proof.
 		value = subroot
 	}
 
-	// Check that chained proof root equals passed-in root
+	// Ensure the final chained root matches the expected root.
 	if !bytes.Equal(root, subroot) {
 		h1, h2 := hex.EncodeToString(root), hex.EncodeToString(subroot)
 

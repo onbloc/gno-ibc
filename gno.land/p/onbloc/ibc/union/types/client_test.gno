@@ -1,6 +1,9 @@
 package types
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 func TestNewConsensusStateUpdate(t *testing.T) {
 	tests := []struct {
@@ -130,25 +133,13 @@ func TestNewConsensusStateUpdate(t *testing.T) {
 				t.Errorf("Height: got %v want %v", got.Height, tc.wantHeight)
 			}
 
-			if !equalBytes(got.ConsensusStateBytes, tc.wantConsensusBytes) {
+			if !bytes.Equal(got.ConsensusStateBytes, tc.wantConsensusBytes) {
 				t.Errorf("ConsensusStateBytes: got %x want %x", got.ConsensusStateBytes, tc.wantConsensusBytes)
 			}
 
-			if !equalBytes(got.ClientStateBytes, tc.wantClientBytes) {
+			if !bytes.Equal(got.ClientStateBytes, tc.wantClientBytes) {
 				t.Errorf("ClientStateBytes: got %x want %x", got.ClientStateBytes, tc.wantClientBytes)
 			}
 		})
 	}
-}
-
-func equalBytes(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }

@@ -9,6 +9,46 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 )
 
+func TestEncode(t *testing.T) {
+	cases := []struct {
+		name    string
+		schema  Schema
+		values  []any
+		wantHex string
+		wantErr error
+	}{
+		{
+			name:    "empty",
+			schema:  Schema{Fields: nil},
+			values:  nil,
+			wantHex: "",
+		},
+		{
+			name:   "static values",
+			schema: Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeBool}}},
+			values: []any{uint8(42), true},
+			wantHex: "000000000000000000000000000000000000000000000000000000000000002a" +
+				"0000000000000000000000000000000000000000000000000000000000000001",
+		},
+		{
+			name:    "wrong value count",
+			schema:  Schema{Fields: []Field{{Type: TypeUint8}}},
+			values:  []any{},
+			wantErr: ErrInvalidValue,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Encode(tc.schema, tc.values)
+			assertError(t, err, tc.wantErr)
+			if tc.wantErr != nil {
+				return
+			}
+			assertHex(t, tc.name, got, tc.wantHex)
+		})
+	}
+}
+
 func TestEncodeTuple(t *testing.T) {
 	maxUint256 := new(u256.Uint).SetAllOne()
 	cases := []struct {
@@ -323,46 +363,6 @@ func TestStaticHeadSize(t *testing.T) {
 			if got != tc.want {
 				t.Fatalf("staticHeadSize = %d, want %d", got, tc.want)
 			}
-		})
-	}
-}
-
-func TestEncode(t *testing.T) {
-	cases := []struct {
-		name    string
-		schema  Schema
-		values  []any
-		wantHex string
-		wantErr error
-	}{
-		{
-			name:    "empty",
-			schema:  Schema{Fields: nil},
-			values:  nil,
-			wantHex: "",
-		},
-		{
-			name:   "static values",
-			schema: Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeBool}}},
-			values: []any{uint8(42), true},
-			wantHex: "000000000000000000000000000000000000000000000000000000000000002a" +
-				"0000000000000000000000000000000000000000000000000000000000000001",
-		},
-		{
-			name:    "wrong value count",
-			schema:  Schema{Fields: []Field{{Type: TypeUint8}}},
-			values:  []any{},
-			wantErr: ErrInvalidValue,
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := Encode(tc.schema, tc.values)
-			assertError(t, err, tc.wantErr)
-			if tc.wantErr != nil {
-				return
-			}
-			assertHex(t, tc.name, got, tc.wantHex)
 		})
 	}
 }

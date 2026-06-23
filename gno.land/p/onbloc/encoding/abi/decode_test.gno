@@ -7,6 +7,59 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 )
 
+func TestDecode(t *testing.T) {
+	cases := []struct {
+		name    string
+		schema  Schema
+		data    []byte
+		wantErr error
+		wantLen int
+	}{
+		{
+			name:    "empty",
+			schema:  Schema{Fields: nil},
+			data:    nil,
+			wantLen: 0,
+		},
+		{
+			name:    "static values",
+			schema:  Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeBool}}},
+			data:    mustHex("000000000000000000000000000000000000000000000000000000000000002a0000000000000000000000000000000000000000000000000000000000000001"),
+			wantLen: 2,
+		},
+		{
+			name:    "data not word aligned",
+			schema:  Schema{Fields: []Field{{Type: TypeUint8}}},
+			data:    []byte{0x01},
+			wantErr: ErrInvalidData,
+		},
+		{
+			name:    "data length 31",
+			schema:  Schema{Fields: []Field{{Type: TypeUint8}}},
+			data:    make([]byte, 31),
+			wantErr: ErrInvalidData,
+		},
+		{
+			name:    "data length 33",
+			schema:  Schema{Fields: []Field{{Type: TypeUint8}}},
+			data:    make([]byte, 33),
+			wantErr: ErrInvalidData,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Decode(tc.schema, tc.data)
+			assertError(t, err, tc.wantErr)
+			if tc.wantErr != nil {
+				return
+			}
+			if len(got) != tc.wantLen {
+				t.Fatalf("Decode len = %d, want %d", len(got), tc.wantLen)
+			}
+		})
+	}
+}
+
 func TestTupleAt(t *testing.T) {
 	cases := []struct {
 		name       string
@@ -363,59 +416,6 @@ func TestRoundUp32(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := roundUp32(tc.in); got != tc.want {
 				t.Fatalf("roundUp32(%d) = %d, want %d", tc.in, got, tc.want)
-			}
-		})
-	}
-}
-
-func TestDecode(t *testing.T) {
-	cases := []struct {
-		name    string
-		schema  Schema
-		data    []byte
-		wantErr error
-		wantLen int
-	}{
-		{
-			name:    "empty",
-			schema:  Schema{Fields: nil},
-			data:    nil,
-			wantLen: 0,
-		},
-		{
-			name:    "static values",
-			schema:  Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeBool}}},
-			data:    mustHex("000000000000000000000000000000000000000000000000000000000000002a0000000000000000000000000000000000000000000000000000000000000001"),
-			wantLen: 2,
-		},
-		{
-			name:    "data not word aligned",
-			schema:  Schema{Fields: []Field{{Type: TypeUint8}}},
-			data:    []byte{0x01},
-			wantErr: ErrInvalidData,
-		},
-		{
-			name:    "data length 31",
-			schema:  Schema{Fields: []Field{{Type: TypeUint8}}},
-			data:    make([]byte, 31),
-			wantErr: ErrInvalidData,
-		},
-		{
-			name:    "data length 33",
-			schema:  Schema{Fields: []Field{{Type: TypeUint8}}},
-			data:    make([]byte, 33),
-			wantErr: ErrInvalidData,
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, err := Decode(tc.schema, tc.data)
-			assertError(t, err, tc.wantErr)
-			if tc.wantErr != nil {
-				return
-			}
-			if len(got) != tc.wantLen {
-				t.Fatalf("Decode len = %d, want %d", len(got), tc.wantLen)
 			}
 		})
 	}

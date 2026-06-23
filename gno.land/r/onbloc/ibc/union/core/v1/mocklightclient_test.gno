@@ -17,6 +17,7 @@ type mockLightClient struct {
 	membershipErr      string
 	nonMembershipErr   string
 	timestampAtHt      types.Timestamp
+	timestampErr       string
 	update             types.StateUpdate
 	creationWrites     map[string][]byte
 	membershipCalls    int
@@ -58,6 +59,9 @@ func (l *mockLightClient) VerifyNonMembership(height uint64, key, proof []byte) 
 func (l *mockLightClient) GetTimestamp() types.Timestamp { return 0 }
 
 func (l *mockLightClient) GetTimestampAtHeight(height uint64) (types.Timestamp, error) {
+	if l.timestampErr != "" {
+		return 0, errors.New(l.timestampErr)
+	}
 	return l.timestampAtHt, nil
 }
 

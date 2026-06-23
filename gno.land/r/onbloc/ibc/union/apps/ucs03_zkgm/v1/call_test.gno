@@ -81,6 +81,77 @@ func TestExecuteCallReceiverPanicReturnsOnlyMakerAck(cur realm, t *testing.T) {
 	uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Acknowledgement))
 }
 
+func TestExecuteCallFailureBoundaries(cur realm, t *testing.T) {
+	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
+
+	cases := []struct {
+		name             string
+		call             z.Call
+		intent           bool
+		setup            func()
+		wantStatus       types.PacketStatus
+		wantFailureInner string
+		wantOnlyMaker    bool
+	}{
+		{
+			name: "eureka returns failure ack",
+			call: z.Call{
+				Eureka:          true,
+				Sender:          []byte("sender"),
+				ContractAddress: []byte(mockReceiverPath),
+			},
+			wantStatus:       types.PacketStatusFailure,
+			wantFailureInner: "eureka mode not supported",
+		},
+		{
+			name: "missing receiver returns failure ack",
+			call: z.Call{
+				Sender:          []byte("sender"),
+				ContractAddress: []byte("gno.land/r/missing/zkgm/receiver"),
+			},
+			wantStatus:       types.PacketStatusFailure,
+			wantFailureInner: "receiver not registered, gno.land/r/missing/zkgm/receiver",
+		},
+		{
+			name: "intent receiver error returns only-maker ack",
+			call: z.Call{
+				Sender:          []byte("sender"),
+				ContractAddress: []byte(mockReceiverPath),
+			},
+			intent: true,
+			setup: func() {
+				testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
+				mock.SetError(cross(cur), "intent receiver failed")
+			},
+			wantStatus:    types.PacketStatusSuccess,
+			wantOnlyMaker: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			mock.Reset(cross(cur))
+			if tc.setup != nil {
+				tc.setup()
+			}
+
+			res, err := newTestImpl().executeCall(0, cur, packet, address("g1relayer"), nil, u256.Zero(), tc.call, tc.intent)
+			uassert.NoError(t, err)
+			uassert.True(t, res.Status == tc.wantStatus)
+
+			if tc.wantOnlyMaker {
+				uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Acknowledgement))
+				return
+			}
+
+			ack, err := z.DecodeAck(res.Acknowledgement)
+			uassert.NoError(t, err)
+			uassert.True(t, ack.Tag.Eq(tagAckFailure()))
+			uassert.Equal(t, tc.wantFailureInner, string(ack.InnerAck))
+		})
+	}
+}
+
 func TestExecuteCallIntentDispatchesOnIntentZkgm(cur realm, t *testing.T) {
 	mock.Reset(cross(cur))
 	testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))

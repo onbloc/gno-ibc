@@ -10,17 +10,43 @@ import (
 	"testing"
 )
 
+func TestEncode_KnownEthereumExamples(t *testing.T) {
+	cases := []struct {
+		name string
+		got  []byte
+		want string
+	}{
+		{"dog", EncodeBytes([]byte("dog")), "83646f67"},
+		{"empty string", EncodeBytes(nil), "80"},
+		{"empty list", EncodeList(), "c0"},
+		{"cat dog list", EncodeList(EncodeBytes([]byte("cat")), EncodeBytes([]byte("dog"))), "c88363617483646f67"},
+		{"zero byte", EncodeBytes([]byte{0x00}), "00"},
+		{"bytes 0400", EncodeBytes([]byte{0x04, 0x00}), "820400"},
+		{"set theoretical three", EncodeList(
+			EncodeList(),
+			EncodeList(EncodeList()),
+			EncodeList(EncodeList(), EncodeList(EncodeList())),
+		), "c7c0c1c0c3c0c1c0"},
+		{"lorem long string", EncodeBytes([]byte("Lorem ipsum dolor sit amet, consectetur adipisicing elit")),
+			"b8384c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e7365637465747572206164697069736963696e6720656c6974"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assertHex(t, tc.name, tc.got, tc.want)
+		})
+	}
+}
+
 func TestEncodeBytes(t *testing.T) {
 	cases := []struct {
 		name string
 		in   []byte
 		want string
 	}{
-		{"dog", []byte("dog"), "83646f67"},
-		{"empty string", nil, "80"},
-		{"zero byte", []byte{0x00}, "00"},
-		{"bytes 0400", []byte{0x04, 0x00}, "820400"},
-		{"lorem long string", []byte("Lorem ipsum dolor sit amet, consectetur adipisicing elit"), "b8384c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e7365637465747572206164697069736963696e6720656c6974"},
+		{"single byte 0x7f", []byte{0x7f}, "7f"},
+		{"single byte 0x80", []byte{0x80}, "8180"},
+		{"fifty five byte string", bytes.Repeat([]byte{0xaa}, 55), "b7" + strings.Repeat("aa", 55)},
+		{"fifty six byte string", bytes.Repeat([]byte{0xaa}, 56), "b838" + strings.Repeat("aa", 56)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -35,13 +61,9 @@ func TestEncodeList(t *testing.T) {
 		items [][]byte
 		want  string
 	}{
-		{"empty list", nil, "c0"},
-		{"cat dog list", [][]byte{EncodeBytes([]byte("cat")), EncodeBytes([]byte("dog"))}, "c88363617483646f67"},
-		{"set theoretical three", [][]byte{
-			EncodeList(),
-			EncodeList(EncodeList()),
-			EncodeList(EncodeList(), EncodeList(EncodeList())),
-		}, "c7c0c1c0c3c0c1c0"},
+		{"single short item", [][]byte{EncodeBytes([]byte("dog"))}, "c483646f67"},
+		{"item is empty string", [][]byte{EncodeBytes(nil)}, "c180"},
+		{"short list 55 byte payload", [][]byte{bytes.Repeat([]byte{0xaa}, 55)}, "f7" + strings.Repeat("aa", 55)},
 		{"long list 56 bytes", [][]byte{bytes.Repeat([]byte{0xaa}, 56)}, "f838" + strings.Repeat("aa", 56)},
 	}
 	for _, tc := range cases {

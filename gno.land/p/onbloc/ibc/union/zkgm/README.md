@@ -1,4 +1,4 @@
-# Union ZKGM Types Package
+# IBC Union ZKGM Types Package
 
 Pure package for UCS03-ZKGM wire types, ABI codecs, path helpers, salts,
 prediction helpers, and receiver interfaces.

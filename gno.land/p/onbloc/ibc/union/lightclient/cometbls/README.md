@@ -1,4 +1,4 @@
-# Union CometBLS Light Client Package
+# IBC Union CometBLS Light Client Package
 
 Pure package implementing the Union CometBLS light-client object used by the
 core host.

@@ -1,6 +1,6 @@
-# Union App Interface Package
+# IBC Union App Interface Package
 
-Pure interface package for IBC application callbacks invoked by the Union
+Pure interface package for IBC Union application callbacks invoked by the
 [core realm](../../../../../r/onbloc/ibc/union/core/).
 
 This module exists so application realms can implement the callback contracts
@@ -10,6 +10,6 @@ receive callbacks through them.
 
 ## Files
 
-- [app.gno](app.gno) defines `IApp` for ordinary IBC callbacks.
+- [app.gno](app.gno) defines `IApp` for ordinary IBC Union callbacks.
 - [app.gno](app.gno) also defines `IIntentApp` for apps that opt into proofless
   intent receive handling.

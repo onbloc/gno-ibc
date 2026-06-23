@@ -1,7 +1,7 @@
-# Union State-Lens ICS23/MPT Light Client Package
+# IBC Union State-Lens ICS23/MPT Light Client Package
 
-Pure package implementing the Union state-lens light client backed by ICS23/MPT
-proofs.
+Pure package implementing the IBC Union state-lens light client backed by
+ICS23/MPT proofs.
 
 This client verifies L2 commitments using an L1 light client reference held in
 its client state. The core host owns the client id and routes through the shared

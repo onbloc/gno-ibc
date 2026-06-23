@@ -5,18 +5,13 @@ import (
 
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/onbloc/ibc/union/core"
+	"gno.land/r/onbloc/ibc/union/access"
 )
 
 // SetHook takes a TransferHook interface and cannot be called via maketx, so
-// callers must route through an ephemeral realm. The admin case therefore tests
-// without crossing (Previous() = the user realm we set), and the non-admin
-// denial crosses so the abort propagates back through AbortsContains.
+// callers must route through an ephemeral realm. These tests cross through the
+// test realm so Previous() is the user realm configured by testing.SetRealm.
 //
-// core.GetAdmin() returns the empty address in unit tests because core's init
-// captures OriginCaller, which is unset at import time. The same pattern is
-// used in zkgm's ForceSetImpl admin tests.
-
 func TestSetHookAllowedForAdmin(cur realm, t *testing.T) {
 	hook = nil
 	hookCaller = address("")
@@ -24,8 +19,8 @@ func TestSetHookAllowedForAdmin(cur realm, t *testing.T) {
 	hookAddr := address(testutils.TestAddress("hook-owner"))
 	h := &dummyHook{addr: hookAddr}
 
-	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
-	SetHook(cur, h)
+	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+	SetHook(cross(cur), h)
 
 	if hook != h {
 		t.Fatal("SetHook must register the provided hook")
@@ -39,8 +34,8 @@ func TestSetHookClearsWithNil(cur realm, t *testing.T) {
 	hook = &dummyHook{addr: address("g1existing000000000000000000000000000000")}
 	hookCaller = address("g1existing000000000000000000000000000000")
 
-	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
-	SetHook(cur, nil)
+	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+	SetHook(cross(cur), nil)
 
 	if hook != nil {
 		t.Fatal("SetHook(nil) must clear the hook")
@@ -54,10 +49,10 @@ func TestSetHookInvalidAddressIsRejected(cur realm, t *testing.T) {
 	hook = nil
 	hookCaller = address("")
 
-	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
 
-	uassert.AbortsContains(t, cur, "transfer: hook address is invalid", func(_ realm) {
-		SetHook(cur, &dummyHook{addr: address("")})
+	uassert.AbortsContains(t, cur, "transfer: hook address is invalid", func() {
+		SetHook(cross(cur), &dummyHook{addr: address("")})
 	})
 
 	if hook != nil || hookCaller != (address("")) {
@@ -71,7 +66,7 @@ func TestSetHookDeniedForNonAdmin(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(address("g1notadmin0000000000000000000000000000000")))
 
-	uassert.AbortsContains(t, cur, "transfer: admin only", func(cur realm) {
+	uassert.AbortsContains(t, cur, "AccessManagerUnauthorizedCall", func(cur realm) {
 		SetHook(cross(cur), nil)
 	})
 

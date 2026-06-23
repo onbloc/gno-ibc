@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"gno.land/p/nt/uassert/v0"
+	"gno.land/r/onbloc/ibc/union/access"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -19,10 +20,10 @@ const (
 )
 
 func TestUpdateImplRejectsNonAdmin(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	implConstructors[testImplPathA] = func(store IStore) IApp { return &dummyImpl{} }
 
-	uassert.AbortsContains(t, cur, "zkgm: admin only", func(cur realm) {
+	uassert.AbortsContains(t, cur, "AccessManagerUnauthorizedCall", func(cur realm) {
 		UpdateImpl(cross(cur), testImplPathA)
 	})
 	if currentImpl != nil {
@@ -31,22 +32,22 @@ func TestUpdateImplRejectsNonAdmin(cur realm, t *testing.T) {
 }
 
 func TestUpdateImplRejectsUnregisteredPath(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 
 	// Set the admin realm inside the abort closure so the admin gate's
 	// cur.Previous() resolves to the admin user realm; the unregistered-path
 	// validation is then what aborts.
 	uassert.AbortsContains(t, cur, "impl constructor not found", func(cur realm) {
-		testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+		testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
 		UpdateImpl(cross(cur), testImplPathA)
 	})
 }
 
 func TestUpdateImplByAdminInstallsImpl(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	implConstructors[testImplPathA] = func(store IStore) IApp { return &dummyImpl{} }
 
-	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
 	UpdateImpl(cross(cur), testImplPathA)
 
 	if currentImpl == nil {
@@ -58,14 +59,14 @@ func TestUpdateImplByAdminInstallsImpl(cur realm, t *testing.T) {
 }
 
 func TestUpdateImplSwapsToLatestTarget(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	first := &dummyImpl{}
 	second := &dummyImpl{}
 	implConstructors[testImplPathA] = func(store IStore) IApp { return first }
 	implConstructors[testImplPathB] = func(store IStore) IApp { return second }
 	packet := core.NewPacket(1, 2, []byte("d"), 0)
 
-	testing.SetRealm(testing.NewUserRealm(core.GetAdmin()))
+	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
 	UpdateImpl(cross(cur), testImplPathA)
 	UpdateImpl(cross(cur), testImplPathB)
 

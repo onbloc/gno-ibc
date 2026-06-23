@@ -3,7 +3,6 @@ package core
 import (
 	"testing"
 
-	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
 	"gno.land/p/onbloc/ibc/union/types"
 )
@@ -11,14 +10,14 @@ import (
 // Gno equivalent of Union RestrictedExecuteMsg access management.
 func TestCommitMembershipProofRejectsNonAdminBeforeVerification(cur realm, t *testing.T) {
 	resetStore(cur)
-	oldAdmin := admin
-	defer func() { admin = oldAdmin }()
-	admin = testutils.TestAddress("different-admin")
+	previousRole := denySelectorForTest(cur, SelectorCommitMembershipProof)
+	defer restoreSelectorForTest(cur, SelectorCommitMembershipProof, previousRole)
+
 	client := &mockClient{chainId: "union-1", status: types.StatusActive}
 	clientId := registerMockClient(client)
 
-	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		CommitMembershipProof(cur, types.MsgCommitMembershipProof{
+	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
+		CommitMembershipProof(cross(cur), types.MsgCommitMembershipProof{
 			ClientId:    clientId,
 			ProofHeight: 10,
 			Proof:       types.Bytes("proof"),

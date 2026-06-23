@@ -30,7 +30,7 @@ func TestRegisterImpl(cur realm, t *testing.T) {
 		{
 			name:         "rejects previous realm outside proxy namespace",
 			previousPath: "gno.land/r/outside/impl",
-			wantAbort:    "zkgm: previous impl path is not a prefix of the current impl path",
+			wantAbort:    "previous impl path is not a prefix of the current impl path",
 		},
 		{
 			name:         "registers constructor under previous impl path",
@@ -40,7 +40,7 @@ func TestRegisterImpl(cur realm, t *testing.T) {
 			name:          "rejects duplicate impl registration",
 			previousPath:  testImplPathA,
 			preRegistered: true,
-			wantAbort:     "zkgm: impl already registered",
+			wantAbort:     "impl already registered",
 		},
 	}
 
@@ -88,7 +88,7 @@ func TestUpdateImpl(cur realm, t *testing.T) {
 			registerA: true,
 			caller:    nonAdmin,
 			path:      testImplPathA,
-			wantAbort: access.ErrorAccessManagerUnauthorizedCall,
+			wantAbort: access.ErrAccessManagerUnauthorizedCall,
 		},
 		{
 			name:      "rejects unregistered path",
@@ -185,7 +185,7 @@ func TestMustGetImpl(cur realm, t *testing.T) {
 		install   bool
 		wantAbort string
 	}{
-		{"missing impl", false, "zkgm: implementation not installed"},
+		{"missing impl", false, "implementation not installed"},
 		{"installed impl", true, ""},
 	}
 

@@ -26,36 +26,63 @@ func NewUCS03ZkgmV1(store zkgm.IStore) zkgm.IApp {
 
 // OnChannelOpenInit accepts a channel only if it speaks the zkgm protocol version.
 func (v *ucs03ZkgmV1) OnChannelOpenInit(_ int, rlm realm, connectionId types.ConnectionId, channelId types.ChannelId, version string, relayer address) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	enforceVersion(version)
 }
 
 // OnChannelOpenTry enforces the protocol version on both sides of the handshake.
 func (v *ucs03ZkgmV1) OnChannelOpenTry(_ int, rlm realm, connectionId types.ConnectionId, channelId types.ChannelId, version string, counterpartyVersion string, relayer address) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	enforceVersion(version)
 	enforceVersion(counterpartyVersion)
 }
 
 // OnChannelOpenAck enforces the counterparty's negotiated protocol version.
 func (v *ucs03ZkgmV1) OnChannelOpenAck(_ int, rlm realm, channelId types.ChannelId, counterpartyChannelId types.ChannelId, counterpartyVersion string, relayer address) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	enforceVersion(counterpartyVersion)
 }
 
 // OnChannelOpenConfirm completes the handshake; zkgm keeps no per-channel state.
 func (v *ucs03ZkgmV1) OnChannelOpenConfirm(_ int, rlm realm, channelId types.ChannelId, relayer address) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
 }
 
 // Channel closing is not supported by zkgm (reference returns an error).
 func (v *ucs03ZkgmV1) OnChannelCloseInit(_ int, rlm realm, channelId types.ChannelId, relayer address) {
-	panic("zkgm: channel closing is not allowed")
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
+	panic("channel closing is not allowed")
 }
 
 func (v *ucs03ZkgmV1) OnChannelCloseConfirm(_ int, rlm realm, channelId types.ChannelId, relayer address) {
-	panic("zkgm: channel closing is not allowed")
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
+	panic("channel closing is not allowed")
 }
 
 // OnRecvPacket decodes the packet and dispatches it; decode/exec failures return a failure ack rather than aborting.
 func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {
-	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
+	zp, err := z.DecodeZkgmPacket(types.CloneBytes(packet.Data))
 	if err != nil {
 		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
 		return failureResult(universalErrorAck())
@@ -75,7 +102,11 @@ func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relaye
 // explicit stop point for market-maker fills that require unsupported native
 // maker funding.
 func (v *ucs03ZkgmV1) OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
-	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
+	zp, err := z.DecodeZkgmPacket(types.CloneBytes(packet.Data))
 	if err != nil {
 		zkgm.EmitRecvError(packet.SourceChannelId, packet.DestinationChannelId, err.Error())
 		return failureResult(universalErrorAck())
@@ -91,7 +122,7 @@ func (v *ucs03ZkgmV1) OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, 
 		// Intent recv must not silently succeed without a maker fill. Panicking
 		// preserves the proven recv fallback path and makes unsupported native
 		// market-maker funding fail explicitly until funds plumbing is added.
-		panic("zkgm: only maker")
+		panic("only maker")
 	}
 
 	return res
@@ -99,7 +130,11 @@ func (v *ucs03ZkgmV1) OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, 
 
 // OnAcknowledgementPacket routes the ack to its instruction, or to the forwarded parent packet.
 func (v *ucs03ZkgmV1) OnAcknowledgementPacket(_ int, rlm realm, packet types.Packet, acknowledgement []byte, relayer address) {
-	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
+	zp, err := z.DecodeZkgmPacket(types.CloneBytes(packet.Data))
 	if err != nil {
 		panic(err.Error())
 	}
@@ -121,7 +156,11 @@ func (v *ucs03ZkgmV1) OnAcknowledgementPacket(_ int, rlm realm, packet types.Pac
 
 // OnTimeoutPacket refunds the timed-out instruction, or settles the forwarded parent packet.
 func (v *ucs03ZkgmV1) OnTimeoutPacket(_ int, rlm realm, packet types.Packet, relayer address) {
-	zp, err := z.DecodeZkgmPacket(cloneBytes(packet.Data))
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
+	zp, err := z.DecodeZkgmPacket(types.CloneBytes(packet.Data))
 	if err != nil {
 		panic(err.Error())
 	}
@@ -137,6 +176,10 @@ func (v *ucs03ZkgmV1) OnTimeoutPacket(_ int, rlm realm, packet types.Packet, rel
 
 // Send verifies the instruction against the attached funds, namespaces the salt, and emits the packet through core.
 func (v *ucs03ZkgmV1) Send(_ int, rlm realm, channelId types.ChannelId, timeoutTimestamp types.Timestamp, salt [32]byte, instruction z.Instruction) types.Packet {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	sender := rlm.Previous().Address().String()
 
 	// TODO(escrow): the sent-coin funds previously arrived from the proxy
@@ -172,6 +215,6 @@ func (v *ucs03ZkgmV1) Send(_ int, rlm realm, channelId types.ChannelId, timeoutT
 // enforceVersion rejects channels that do not speak the zkgm protocol version.
 func enforceVersion(version string) {
 	if version != zkgm.Version {
-		panic("zkgm: unsupported channel version")
+		panic("unsupported channel version")
 	}
 }

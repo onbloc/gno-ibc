@@ -28,71 +28,90 @@ func setupGateImpl(cur realm) types.Packet {
 	return core.NewPacket(1, 2, []byte("data"), 0)
 }
 
-func TestPacketCallbackCallerGate(cur realm, t *testing.T) {
-	cases := []struct {
-		name      string
-		callback  string
-		caller    string
-		wantAbort string
-	}{
-		{"recv rejects ephemeral caller", "recv", "ephemeral", "zkgm: ibc host only"},
-		{"intent recv rejects ephemeral caller", "intent_recv", "ephemeral", "zkgm: ibc host only"},
-		{"ack rejects ephemeral caller", "ack", "ephemeral", "zkgm: ibc host only"},
-		{"timeout rejects ephemeral caller", "timeout", "ephemeral", "zkgm: ibc host only"},
-		{"recv rejects proxy caller", "recv", "proxy", "zkgm: ibc host only"},
-		{"intent recv rejects proxy caller", "intent_recv", "proxy", "zkgm: ibc host only"},
-		{"ack rejects proxy caller", "ack", "proxy", "zkgm: ibc host only"},
-		{"timeout rejects proxy caller", "timeout", "proxy", "zkgm: ibc host only"},
-		{"recv allows core caller", "recv", "core", ""},
-		{"intent recv allows core caller", "intent_recv", "core", ""},
-		{"ack allows core caller", "ack", "core", ""},
-		{"timeout allows core caller", "timeout", "core", ""},
-	}
+func TestRecvGateRejectsEphemeralCaller(cur realm, t *testing.T) {
+	packet := setupGateImpl(cur)
+	testing.SetRealm(testing.NewUserRealm(address(testutils.TestAddress("eoa"))))
+	uassert.AbortsContains(t, cur, "ibc host only", func() {
+		AsIBCApp().OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
+	})
+}
 
-	for _, tc := range cases {
-		packet := setupGateImpl(cur)
-		switch tc.caller {
-		case "ephemeral":
-			testing.SetRealm(testing.NewUserRealm(address(testutils.TestAddress("eoa"))))
-		case "proxy":
-			testing.SetRealm(testing.NewCodeRealm(proxyPkgPath))
-		case "core":
-			testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-		default:
-			t.Fatalf("%s: unknown caller %q", tc.name, tc.caller)
-		}
+func TestIntentRecvGateRejectsEphemeralCaller(cur realm, t *testing.T) {
+	packet := setupGateImpl(cur)
+	testing.SetRealm(testing.NewUserRealm(address(testutils.TestAddress("eoa"))))
+	uassert.AbortsContains(t, cur, "ibc host only", func() {
+		(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
+	})
+}
 
-		if tc.wantAbort != "" {
-			uassert.AbortsContains(t, cur, tc.wantAbort, func() {
-				switch tc.callback {
-				case "recv":
-					AsIBCApp().OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
-				case "intent_recv":
-					(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
-				case "ack":
-					AsIBCApp().OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
-				case "timeout":
-					AsIBCApp().OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
-				default:
-					t.Fatalf("%s: unknown callback %q", tc.name, tc.callback)
-				}
-			})
-			continue
-		}
+func TestAckGateRejectsEphemeralCaller(cur realm, t *testing.T) {
+	packet := setupGateImpl(cur)
+	testing.SetRealm(testing.NewUserRealm(address(testutils.TestAddress("eoa"))))
+	uassert.AbortsContains(t, cur, "ibc host only", func() {
+		AsIBCApp().OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
+	})
+}
 
-		uassert.NotAborts(t, cur, func() {
-			switch tc.callback {
-			case "recv":
-				AsIBCApp().OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
-			case "intent_recv":
-				(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
-			case "ack":
-				AsIBCApp().OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
-			case "timeout":
-				AsIBCApp().OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
-			default:
-				t.Fatalf("%s: unknown callback %q", tc.name, tc.callback)
-			}
-		})
-	}
+func TestTimeoutGateRejectsEphemeralCaller(cur realm, t *testing.T) {
+	packet := setupGateImpl(cur)
+	testing.SetRealm(testing.NewUserRealm(address(testutils.TestAddress("eoa"))))
+	uassert.AbortsContains(t, cur, "ibc host only", func() {
+		AsIBCApp().OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
+	})
+}
+
+func TestRecvGateRejectsProxyCaller(cur realm, t *testing.T) {
+	packet := setupGateImpl(cur)
+	testing.SetRealm(testing.NewCodeRealm(proxyPkgPath))
+	uassert.AbortsContains(t, cur, "ibc host only", func() {
+		AsIBCApp().OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
+	})
+}
+
+func TestAckGateRejectsProxyCaller(cur realm, t *testing.T) {
+	packet := setupGateImpl(cur)
+	testing.SetRealm(testing.NewCodeRealm(proxyPkgPath))
+	uassert.AbortsContains(t, cur, "ibc host only", func() {
+		AsIBCApp().OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
+	})
+}
+
+func TestTimeoutGateRejectsProxyCaller(cur realm, t *testing.T) {
+	packet := setupGateImpl(cur)
+	testing.SetRealm(testing.NewCodeRealm(proxyPkgPath))
+	uassert.AbortsContains(t, cur, "ibc host only", func() {
+		AsIBCApp().OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
+	})
+}
+
+func TestRecvGateAllowsCoreCaller(cur realm, t *testing.T) {
+	packet := setupGateImpl(cur)
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	uassert.NotAborts(t, cur, func() {
+		AsIBCApp().OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
+	})
+}
+
+func TestIntentRecvGateAllowsCoreCaller(cur realm, t *testing.T) {
+	packet := setupGateImpl(cur)
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	uassert.NotAborts(t, cur, func() {
+		(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
+	})
+}
+
+func TestAckGateAllowsCoreCaller(cur realm, t *testing.T) {
+	packet := setupGateImpl(cur)
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	uassert.NotAborts(t, cur, func() {
+		AsIBCApp().OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
+	})
+}
+
+func TestTimeoutGateAllowsCoreCaller(cur realm, t *testing.T) {
+	packet := setupGateImpl(cur)
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	uassert.NotAborts(t, cur, func() {
+		AsIBCApp().OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
+	})
 }

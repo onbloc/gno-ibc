@@ -132,7 +132,7 @@ func TestDecodeHeader(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for TimeNanos >= 1e9")
 		}
-		want := "cometbls: TimeNanos out of range"
+		want := "TimeNanos out of range"
 		if err.Error() != want {
 			t.Fatalf("error: got %q want %q", err.Error(), want)
 		}
@@ -441,7 +441,7 @@ func TestVerifyHeaderChecksTimestampBeforeExpiry(t *testing.T) {
 	now := time.Unix(0, int64(testNow+c.clientState.TrustingPeriod+1))
 
 	err := c.verifyHeader(c.clientState, trustedConsensusState, h, now)
-	requireErrorContains(t, err, ErrInvalidHeaderTimestamp)
+	requireErrorContains(t, err, ErrInvalidHeaderTimestamp.Error())
 }
 
 func TestVerifyHeaderExpiryBoundaryMatchesUnion(t *testing.T) {
@@ -468,7 +468,7 @@ func TestVerifyHeaderMaxClockDriftOverflowMatchesUnion(t *testing.T) {
 	now := time.Unix(0, int64(testNow))
 
 	err := c.verifyHeader(c.clientState, trustedConsensusState, h, now)
-	requireErrorContains(t, err, ErrMathOverflow)
+	requireErrorContains(t, err, ErrMathOverflow.Error())
 }
 
 func requireErrorContains(t *testing.T, err error, want string) {

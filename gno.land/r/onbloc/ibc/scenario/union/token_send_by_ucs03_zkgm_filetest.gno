@@ -15,8 +15,9 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 
+	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
-	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
+	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
 )
@@ -40,7 +41,13 @@ func main(cur realm) {
 	zkgm.SetRateLimitDisabled(cross(cur), true)
 	zkgm.RegisterCoreApp(cross(cur))
 
-	core.RegisterClient(cross(cur), mockClientType, &mockLightClient{})
+	// The relayer-gated host entrypoints require RELAYER. Grant it to the admin so
+	// this single-actor scenario can drive the full flow.
+	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
+
+	core.RegisterClient(cross(cur), mockClientType, func(_, _ []byte) (lightclient.Interface, error) {
+		return &mockLightClient{}, nil
+	})
 	core.CreateClient(cross(cur), core.NewMsgCreateClient(mockClientType, nil, nil))
 	clientId := types.ClientId(1)
 
@@ -61,7 +68,7 @@ func main(cur realm) {
 	ufmt.Println("")
 	ufmt.Println("[SCENARIO] 2. Fund sender with wrapped voucher via INITIALIZE recv (amount 100)")
 	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
-	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), impl.MetadataImage(mustDecodeMeta(meta)))
+	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 	initOrder := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
 		Receiver:    []byte(senderAddr.String()),
@@ -185,6 +192,7 @@ type mockLightClient struct{}
 func (m *mockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
 func (m *mockLightClient) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
 func (m *mockLightClient) GetTimestamp() types.Timestamp                         { return types.Timestamp(1) }
+
 func (m *mockLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
 	return types.Timestamp(1), nil
 }

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"gno.land/p/nt/testutils/v0"
+	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
@@ -44,7 +45,6 @@ func TestStoreKeyHelpers(cur realm, t *testing.T) {
 		again string
 		right string
 	}{
-		{"client key", clientKey(1), clientKey(1), clientKey(2)},
 		{"connection key", connectionKey(1), connectionKey(1), connectionKey(2)},
 		{"channel key", channelKey(1), channelKey(1), channelKey(2)},
 	}
@@ -86,33 +86,49 @@ func TestClientStore(cur realm, t *testing.T) {
 		}},
 		{"register client", func(t *testing.T) {
 			lc := &mockClient{}
+			impl := func(clientStateBytes, consensusStateBytes []byte) (lightclient.Interface, error) {
+				return lc, nil
+			}
 
-			store.registerClient(mockType, lc)
-			if !store.hasRegisteredClient(mockType) {
+			store.registerClient(mockType, impl)
+			if !store.HasRegisteredClient(mockType) {
 				t.Fatal("registered client type not found")
 			}
-			got, ok := store.registeredClient(mockType)
+			got, ok := store.ClientRegistry(mockType)
 			if !ok {
 				t.Fatal("registered client lookup returned false")
 			}
-			if got != lc {
-				t.Fatal("registered client lookup returned wrong light client")
+			if got == nil {
+				t.Fatal("registered client lookup returned nil factory")
 			}
 		}},
 		{"register duplicate client panics", func(t *testing.T) {
-			store.registerClient(mockType, &mockClient{})
-			mustPanic(t, func() { store.registerClient(mockType, &mockClient{}) })
+			impl := func(clientStateBytes, consensusStateBytes []byte) (lightclient.Interface, error) {
+				return &mockClient{}, nil
+			}
+			store.registerClient(mockType, impl)
+			mustPanic(t, func() { store.registerClient(mockType, impl) })
 		}},
 		{"add client", func(t *testing.T) {
 			creator := testutils.TestAddress("creator")
 			lc := &mockClient{}
+			impl := func(clientStateBytes, consensusStateBytes []byte) (lightclient.Interface, error) {
+				return lc, nil
+			}
+			store.registerClient(mockType, impl)
 			c := store.addClient(types.ClientId(7), mockType, creator, lc)
 
-			if c.id != types.ClientId(7) || c.typ != mockType || c.creator != creator || c.lightClient != lc {
+			if c.id != types.ClientId(7) || c.creator != creator || c.lightClient != lc {
 				t.Fatal("client fields not saved")
 			}
 			if got := store.getClient(types.ClientId(7)); got != c {
 				t.Fatal("client not indexed by id")
+			}
+			if got, ok := store.ClientType(types.ClientId(7)); !ok || got != mockType {
+				t.Fatal("client type not indexed by id")
+			}
+			if got, ok := store.GetClientImpl(types.ClientId(7)); !ok || got == nil {
+				t.Fatal("client impl not indexed by id")
 			}
 		}},
 	}

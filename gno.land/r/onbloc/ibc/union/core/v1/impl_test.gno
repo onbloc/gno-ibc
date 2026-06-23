@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"gno.land/p/nt/uassert/v0"
+	"gno.land/p/onbloc/ibc/union/types"
 )
 
 func TestNewCoreV1(t *testing.T) {
@@ -47,7 +48,7 @@ func TestCloneBytes(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := cloneBytes(tc.in)
+			got := types.CloneBytes(tc.in)
 			uassert.Equal(t, len(tc.in), len(got))
 			uassert.Equal(t, string(tc.in), string(got))
 

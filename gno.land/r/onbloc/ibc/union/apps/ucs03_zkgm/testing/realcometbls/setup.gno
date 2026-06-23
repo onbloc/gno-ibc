@@ -3,6 +3,7 @@ package realcometbls
 import (
 	stdtesting "testing"
 
+	"gno.land/p/onbloc/ibc/union/lightclient"
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	realcometbls "gno.land/p/onbloc/ibc/union/lightclient/cometbls"
@@ -17,8 +18,10 @@ type ChannelPair struct {
 	Destination  types.ChannelId
 }
 
-var testClientSeq uint32
-var testConnectionSeq uint32
+var (
+	testClientSeq     uint32
+	testConnectionSeq uint32
+)
 
 func nextTestClientId() types.ClientId {
 	testClientSeq++
@@ -67,24 +70,9 @@ func createSyntheticCometBLSClient(cur realm, clientStateBytes []byte) types.Cli
 }
 
 func createCometBLSClient(cur realm, clientStateBytes, consensusStateBytes []byte) types.ClientId {
-	clientState, err := realcometbls.DecodeClientState(clientStateBytes)
-	if err != nil {
-		panic(err)
-	}
-
-	consensusState, err := realcometbls.DecodeConsensusState(consensusStateBytes)
-	if err != nil {
-		panic(err)
-	}
-
-	lightClient, err := realcometbls.NewCometblsLightClient(clientState, consensusState)
-	if err != nil {
-		panic(err)
-	}
-
 	clientType := types.ClientType(realcometbls.ClientType)
 	if !core.HasClient(clientType) {
-		core.RegisterClient(cross(cur), clientType, lightClient)
+		core.RegisterClient(cross(cur), clientType, newCometBLSLightClient)
 	}
 
 	clientId := nextTestClientId()
@@ -92,6 +80,18 @@ func createCometBLSClient(cur realm, clientStateBytes, consensusStateBytes []byt
 	core.CreateClient(cross(cur), types.NewMsgCreateClient(clientType, clientStateBytes, consensusStateBytes))
 
 	return clientId
+}
+
+func newCometBLSLightClient(clientStateBytes, consensusStateBytes []byte) (lightclient.Interface, error) {
+	clientState, err := realcometbls.DecodeClientState(clientStateBytes)
+	if err != nil {
+		return nil, err
+	}
+	consensusState, err := realcometbls.DecodeConsensusState(consensusStateBytes)
+	if err != nil {
+		return nil, err
+	}
+	return realcometbls.NewCometblsLightClient(clientState, consensusState)
 }
 
 func OpenZ35CometBLSChannel(cur realm) ChannelPair {

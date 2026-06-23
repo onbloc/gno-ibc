@@ -9,7 +9,7 @@ import (
 	"gno.land/r/onbloc/ibc/union/access"
 )
 
-const accessManagerUnauthorizedCallError = access.ErrorAccessManagerUnauthorizedCall
+const accessManagerUnauthorizedCallError = access.ErrAccessManagerUnauthorizedCall
 
 func TestChannelAdminEntrypointsRejectNonAdmin(cur realm, t *testing.T) {
 	cases := []struct {

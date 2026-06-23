@@ -15,6 +15,7 @@ import (
 type mockClient struct {
 	typ         types.ClientType
 	creator     address
+	impl        lightclient.ClientImpl
 	lc          lightclient.Interface
 	clientState []byte
 	consensus   map[string][]byte // height.String() -> consensus bytes
@@ -23,8 +24,8 @@ type mockClient struct {
 
 type mockStore struct {
 	seq           uint32
+	registry      map[string]lightclient.ClientImpl
 	clients       map[uint32]*mockClient
-	registry      map[string]lightclient.Interface // client type -> registered light client
 	connSeq       uint32
 	connections   map[uint32]types.Connection
 	chanSeq       uint32
@@ -41,8 +42,8 @@ var _ core.IStore = (*mockStore)(nil)
 
 func newMockStore() *mockStore {
 	return &mockStore{
+		registry:      map[string]lightclient.ClientImpl{},
 		clients:       map[uint32]*mockClient{},
-		registry:      map[string]lightclient.Interface{},
 		connections:   map[uint32]types.Connection{},
 		channels:      map[uint32]types.Channel{},
 		channelOwners: map[uint32]types.Bytes{},
@@ -151,29 +152,38 @@ func newTestImpl() *coreV1 {
 	return &coreV1{store: newMockStore()}
 }
 
-func (m *mockStore) RegisterClient(_ int, rlm realm, typ types.ClientType, lc lightclient.Interface) {
+func (m *mockStore) RegisterClient(_ int, rlm realm, typ types.ClientType, impl lightclient.ClientImpl) {
 	key := typ.String()
 	if _, ok := m.registry[key]; ok {
 		panic("client type already exists")
 	}
-	m.registry[key] = lc
+	m.registry[key] = impl
 }
 
-func (m *mockStore) RegisteredClient(typ types.ClientType) (lightclient.Interface, bool) {
-	lc, ok := m.registry[typ.String()]
-	return lc, ok
+func (m *mockStore) ClientRegistry(typ types.ClientType) (lightclient.ClientImpl, bool) {
+	impl, found := m.registry[string(typ)]
+	return impl, found
 }
 
 func (m *mockStore) HasRegisteredClient(typ types.ClientType) bool {
-	_, ok := m.registry[typ.String()]
-	return ok
+	_, found := m.registry[string(typ)]
+	return found
 }
 
 func (m *mockStore) AddClient(_ int, rlm realm, typ types.ClientType, creator address, lc lightclient.Interface) types.ClientId {
 	m.seq++
 	id := m.seq
-	m.clients[id] = &mockClient{typ: typ, creator: creator, lc: lc, consensus: map[string][]byte{}, clientStore: map[string][]byte{}}
+	impl := m.registry[string(typ)]
+	m.clients[id] = &mockClient{typ: typ, creator: creator, impl: impl, lc: lc, consensus: map[string][]byte{}, clientStore: map[string][]byte{}}
 	return types.ClientId(id)
+}
+
+func (m *mockStore) GetClientImpl(clientId types.ClientId) (lightclient.ClientImpl, bool) {
+	c, ok := m.clients[uint32(clientId)]
+	if !ok {
+		return nil, false
+	}
+	return c.impl, true
 }
 
 func (m *mockStore) SaveClientStore(_ int, rlm realm, clientId types.ClientId, key string, value []byte) bool {

@@ -278,7 +278,7 @@ func TestPacketRecv(cur realm, t *testing.T) {
 		},
 		{
 			name: "missing port app",
-			want: "port missing-port not found",
+			want: "port not found, missing-port",
 			run: func(cur realm, t *testing.T) {
 				v := newTestImpl()
 				chId := setupOpenChannelWithoutApp(cur, v, types.Bytes("missing-port"))
@@ -480,7 +480,7 @@ func TestIntentPacketRecvRejectsMissingPortApp(cur realm, t *testing.T) {
 	chId := setupOpenChannelWithoutApp(cur, v, types.Bytes("missing-port"))
 	packet := recvPacket(chId, "missing-port-intent")
 
-	uassert.AbortsContains(t, cur, "port missing-port not found", func(cur realm) {
+	uassert.AbortsContains(t, cur, "port not found, missing-port", func(cur realm) {
 		v.IntentPacketRecv(0, cur, types.MsgIntentPacketRecv{
 			Packets:             []types.Packet{packet},
 			MarketMakerMessages: [][]byte{[]byte("mm")},
@@ -617,10 +617,10 @@ func TestPacketAcknowledgementLengthMismatchIsPartial(cur realm, t *testing.T) {
 
 func TestMarkPacketAcknowledged(cur realm, t *testing.T) {
 	tests := []struct {
-		name       string
-		setup      func(cur realm, v *coreV1, packet types.Packet)
-		wantAbort  string
-		wantAck    bool
+		name      string
+		setup     func(cur realm, v *coreV1, packet types.Packet)
+		wantAbort string
+		wantAck   bool
 	}{
 		{
 			name: "committed packet is marked acknowledged",
@@ -699,7 +699,7 @@ func TestPacketTimeoutRejectsInvalidMessages(cur realm, t *testing.T) {
 	}{
 		{
 			name: "missing channel",
-			want: "channel 777 not found",
+			want: "channel not found, 777",
 			run: func(cur realm) {
 				v := newTestImpl()
 				packet := types.Packet{SourceChannelId: types.ChannelId(777), DestinationChannelId: types.ChannelId(9), Data: []byte("timeout-missing-channel"), TimeoutTimestamp: types.Timestamp(1000)}
@@ -708,7 +708,7 @@ func TestPacketTimeoutRejectsInvalidMessages(cur realm, t *testing.T) {
 		},
 		{
 			name: "missing client",
-			want: "client 99 not found",
+			want: "client not found, 99",
 			run: func(cur realm) {
 				v := newTestImpl()
 				ms := v.store.(*mockStore)
@@ -822,7 +822,7 @@ func TestVerifyNonMembership(cur realm, t *testing.T) {
 		wantNoAbort bool
 	}{
 		{"active client verifies", &mockLightClient{}, false, "", 1, true},
-		{"unknown client aborts", &mockLightClient{}, true, "client 99 not found", 0, false},
+		{"unknown client aborts", &mockLightClient{}, true, "client not found, 99", 0, false},
 		{"inactive client aborts before proof verification", &mockLightClient{status: "Frozen"}, false, "client is not active", 0, false},
 		{"proof failure aborts", &mockLightClient{nonMembershipErr: "bad proof"}, false, "bad proof", 1, false},
 	}
@@ -899,7 +899,7 @@ func TestWriteAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
 		},
 		{
 			name: "missing channel",
-			want: "channel 777 not found",
+			want: "channel not found, 777",
 			run: func(cur realm) {
 				v := newTestImpl()
 				packet := recvPacket(types.ChannelId(777), "missing-write-channel")
@@ -977,7 +977,7 @@ func TestAcceptRecvPacket(cur realm, t *testing.T) {
 			},
 			now:          100,
 			batchChannel: types.ChannelId(99),
-			wantAbort:    "channel 99 not found",
+			wantAbort:    "channel not found, 99",
 		},
 		{
 			name: "closed channel aborts",
@@ -1072,7 +1072,7 @@ func TestSendPacketRejectsInvalidState(cur realm, t *testing.T) {
 	}{
 		{
 			name: "missing channel owner",
-			want: "channel 777 not found",
+			want: "channel not found, 777",
 			run: func(cur realm) {
 				v := newTestImpl()
 				v.SendPacket(0, cur, types.ChannelId(777), types.Timestamp(1000), []byte("missing-owner-send"))
@@ -1080,7 +1080,7 @@ func TestSendPacketRejectsInvalidState(cur realm, t *testing.T) {
 		},
 		{
 			name: "missing channel record",
-			want: "channel 77 not found",
+			want: "channel not found, 77",
 			run: func(cur realm) {
 				v := newTestImpl()
 				ms := v.store.(*mockStore)

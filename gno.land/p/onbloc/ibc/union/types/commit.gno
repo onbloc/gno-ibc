@@ -23,6 +23,7 @@ func MustCommit(h H256, err error) H256 {
 	if err != nil {
 		panic(err)
 	}
+
 	return h
 }
 

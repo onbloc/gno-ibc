@@ -13,7 +13,7 @@ func TestAssertIsIBCHost(cur realm, t *testing.T) {
 		wantAbort string
 	}{
 		{"core caller", coreRealmPath, ""},
-		{"non-core caller", "gno.land/r/onbloc/ibc/notcore", "zkgm: ibc host only"},
+		{"non-core caller", "gno.land/r/onbloc/ibc/notcore", "ibc host only"},
 	}
 
 	for _, tc := range cases {
@@ -38,7 +38,7 @@ func TestAssertNotPaused(cur realm, t *testing.T) {
 		wantAbort string
 	}{
 		{"unpaused", false, ""},
-		{"paused", true, "zkgm: paused"},
+		{"paused", true, "paused"},
 	}
 
 	for _, tc := range cases {
@@ -47,11 +47,11 @@ func TestAssertNotPaused(cur realm, t *testing.T) {
 
 		if tc.wantAbort != "" {
 			uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
-				assertNotPaused()
+				assertIsNotPaused()
 			})
 			continue
 		}
 
-		assertNotPaused()
+		assertIsNotPaused()
 	}
 }

@@ -460,7 +460,7 @@ func TestRestrictedPacketEntrypointsAllowRelayerRealmCallToReachImpl(cur realm, 
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			uassert.AbortsContains(t, cur, "core: implementation not installed", func(cur realm) {
+			uassert.AbortsContains(t, cur, "implementation not installed", func(cur realm) {
 				testing.SetRealm(testing.NewUserRealm(tc.caller))
 				tc.run(cur)
 			})

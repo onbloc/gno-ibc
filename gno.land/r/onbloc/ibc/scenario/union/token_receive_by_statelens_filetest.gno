@@ -21,8 +21,9 @@ import (
 	"gno.land/p/nt/ufmt/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
+	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
-	impl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
+	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
 )
@@ -46,12 +47,17 @@ func main(cur realm) {
 	zkgm.SetRateLimitDisabled(cross(cur), true)
 	zkgm.RegisterCoreApp(cross(cur))
 
+	// The relayer-gated host entrypoints (register/create client, handshake,
+	// packet recv) require RELAYER. Grant it to the admin so this single-actor
+	// scenario can drive the full flow.
+	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
+
 	// The first channel opened is ChannelId(1); the wrapped denom and the packet
 	// are deterministic, so the packet (and its commitment) can be built up front.
 	channelId := types.ChannelId(1)
 	sourceChannel := types.ChannelId(2)
 	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
-	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), impl.MetadataImage(mustDecodeMeta(meta)))
+	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 	order := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
 		Receiver:    []byte(receiverAddr.String()),
@@ -82,11 +88,6 @@ func main(cur realm) {
 		StateRoot:   make([]byte, 32),
 		StorageRoot: storageRoot,
 	}
-	lc, err := ics23mpt.NewStateLensIcs23MptLightClient(clientState, consensusState, &mockL1Client{})
-	if err != nil {
-		panic(err)
-	}
-
 	clientStateBytes, err := ics23mpt.EncodeClientState(*clientState)
 	if err != nil {
 		panic(err)
@@ -96,10 +97,27 @@ func main(cur realm) {
 		panic(err)
 	}
 
+	// Register a mock L1 client first — state lens needs its L1ClientID resolved in the store.
+	mockL1Type := types.ClientType("mock-l1")
+	core.RegisterClient(cross(cur), mockL1Type, func(_, _ []byte) (lightclient.Interface, error) {
+		return &mockL1Client{}, nil
+	})
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(mockL1Type, nil, nil))
+
 	clientType := types.ClientType(ics23mpt.ClientType)
-	core.RegisterClient(cross(cur), clientType, lc)
+	core.RegisterClient(cross(cur), clientType, func(csBytes, consBytes []byte) (lightclient.Interface, error) {
+		cs, err := ics23mpt.DecodeClientState(csBytes)
+		if err != nil {
+			return nil, err
+		}
+		cons, err := ics23mpt.DecodeConsensusState(consBytes)
+		if err != nil {
+			return nil, err
+		}
+		return ics23mpt.NewStateLensIcs23MptLightClient(&cs, &cons, core.GetLightClient)
+	})
 	core.CreateClient(cross(cur), core.NewMsgCreateClient(clientType, clientStateBytes, consensusStateBytes))
-	clientId := types.ClientId(1)
+	clientId := types.ClientId(2)
 
 	// Force-open connection + channel (admin variants skip the handshake proofs).
 	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
@@ -249,6 +267,7 @@ type mockL1Client struct{}
 func (m *mockL1Client) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
 func (m *mockL1Client) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
 func (m *mockL1Client) GetTimestamp() types.Timestamp                         { return types.Timestamp(1) }
+
 func (m *mockL1Client) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
 	return types.Timestamp(1), nil
 }
@@ -276,7 +295,7 @@ func (e mockError) Error() string { return string(e) }
 
 // Output:
 // [SCENARIO] 1. Open a channel backed by the real state-lens/ics23-mpt light client
-// [INFO] client opened: id=1 type=state-lens/ics23/mpt
+// [INFO] client opened: id=2 type=state-lens/ics23/mpt
 // [INFO] channel opened (source=2 destination=1)
 // [EXPECTED] client type should be state-lens/ics23/mpt (real, not mock)
 // [EXPECTED] destination channel should be 1

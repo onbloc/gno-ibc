@@ -1,5 +1,7 @@
 package manager
 
+import "gno.land/p/nt/ufmt/v0"
+
 type State struct {
 	Roles   map[RoleId]*RoleConfig
 	Targets map[string]*TargetConfig
@@ -23,11 +25,14 @@ func (state *State) CanCall(caller address, target string, selector Selector) Ca
 	if state.IsTargetClosed(target) {
 		return NewCanCallResult(false)
 	}
+
 	role := state.GetTargetFunctionRole(target, selector)
+
 	membership := state.HasRole(role, caller)
 	if !membership.IsMember {
 		return NewCanCallResult(false)
 	}
+
 	return NewCanCallResult(true)
 }
 
@@ -46,10 +51,12 @@ func (state *State) HasRole(role RoleId, account address) HasRoleResult {
 	if role == PublicRole {
 		return NewHasRoleResult(true)
 	}
+
 	roleConfig := state.getRole(role)
 	if roleConfig == nil {
 		return NewHasRoleResult(false)
 	}
+
 	return NewHasRoleResult(roleConfig.hasMember(account, CurrentTimePoint()))
 }
 
@@ -61,6 +68,7 @@ func (state *State) GetRoleAdmin(role RoleId) RoleId {
 	if roleConfig == nil {
 		return AdminRole
 	}
+
 	return roleConfig.adminRole()
 }
 
@@ -72,6 +80,7 @@ func (state *State) GetRoleGrantDelay(role RoleId) Delay {
 	if roleConfig == nil {
 		return 0
 	}
+
 	return roleConfig.grantDelay()
 }
 
@@ -84,6 +93,7 @@ func (state *State) GetTargetFunctionRole(target string, selector Selector) Role
 	if targetConfig == nil {
 		return AdminRole
 	}
+
 	return targetConfig.functionRole(selector)
 }
 
@@ -92,6 +102,7 @@ func (state *State) GetTargetFunctionRole(target string, selector Selector) Role
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L168-L171
 func (state *State) IsTargetClosed(target string) bool {
 	targetConfig := state.getTarget(target)
+
 	return targetConfig != nil && targetConfig.isClosed()
 }
 
@@ -104,7 +115,7 @@ func (state *State) IsTargetClosed(target string) bool {
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L271-L298
 func (state *State) GrantRole(role RoleId, account address) bool {
 	if role == PublicRole {
-		panic(AccessManagerLockedRoleError(role))
+		panic(errorWithDetails(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
 	}
 
 	state.ensureRole(role)
@@ -118,7 +129,7 @@ func (state *State) GrantRole(role RoleId, account address) bool {
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L300-L319
 func (state *State) RevokeRole(role RoleId, account address) bool {
 	if role == PublicRole {
-		panic(AccessManagerLockedRoleError(role))
+		panic(errorWithDetails(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
 	}
 
 	state.ensureRole(role)
@@ -131,7 +142,7 @@ func (state *State) RevokeRole(role RoleId, account address) bool {
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L243-L249
 func (state *State) RenounceRole(role RoleId, account address, callerConfirmation address) bool {
 	if account != callerConfirmation {
-		panic(ErrorAccessManagerBadConfirmation)
+		panic(errAccessManagerBadConfirmation)
 	}
 
 	return state.RevokeRole(role, account)
@@ -154,7 +165,7 @@ func (state *State) SetRoleAdmin(role RoleId, admin RoleId) {
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L357-L371
 func (state *State) SetGrantDelay(role RoleId, delay Delay) {
 	if role == PublicRole {
-		panic(AccessManagerLockedRoleError(role))
+		panic(errorWithDetails(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
 	}
 
 	state.ensureRole(role)
@@ -217,18 +228,6 @@ func (state *State) CanManageTarget(caller address) CanCallResult {
 	}
 
 	return NewCanCallResult(true)
-}
-
-// =================================================== HELPERS ====================================================
-
-// RequireUnlockedConfigRole rejects role ids whose configuration is locked.
-// Use this before emitting LabelRole metadata from a realm.
-// OpenZeppelin reference:
-// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L226-L230
-func RequireUnlockedConfigRole(role RoleId) {
-	if role == AdminRole || role == PublicRole {
-		panic(AccessManagerLockedRoleError(role))
-	}
 }
 
 func (state *State) getRole(role RoleId) *RoleConfig {

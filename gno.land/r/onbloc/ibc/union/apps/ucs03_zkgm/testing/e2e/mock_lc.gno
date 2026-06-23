@@ -11,6 +11,12 @@ const MockClientType = types.ClientType("gno.land/r/onbloc/ibc/union/apps/ucs03_
 
 type MockLightClient struct{}
 
+var _ lightclient.ClientImpl = MockClientImpl
+
+func MockClientImpl(_, _ []byte) (lightclient.Interface, error) {
+	return &MockLightClient{}, nil
+}
+
 func (m *MockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error {
 	return nil
 }

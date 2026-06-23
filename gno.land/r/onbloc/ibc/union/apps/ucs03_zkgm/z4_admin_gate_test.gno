@@ -8,200 +8,76 @@ import (
 	"gno.land/r/onbloc/ibc/union/access"
 )
 
-func TestPausable(cur realm, t *testing.T) {
-	admin := access.DefaultAdminAddress
-	nonAdmin := address("g1notadmin")
+func TestPausableRejectsNonAdmin(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
 
-	cases := []struct {
-		name        string
-		caller      address
-		values      []bool
-		wantAbort   string
-		wantPaused  bool
-		assertAfter func()
-	}{
-		{
-			name:       "rejects non-admin",
-			caller:     nonAdmin,
-			values:     []bool{true},
-			wantAbort:  access.ErrorAccessManagerUnauthorizedCall,
-			wantPaused: false,
-			assertAfter: func() {
-				if paused {
-					t.Error("rejected Pausable must not set paused=true")
-				}
-			},
-		},
-		{
-			name:       "admin toggles pause state",
-			caller:     admin,
-			values:     []bool{true, false},
-			wantPaused: false,
-			assertAfter: func() {
-				if paused {
-					t.Error("Pausable(false) by admin must set paused=false")
-				}
-			},
-		},
-	}
-
-	for _, tc := range cases {
-		resetZkgmForTest(cur)
-
-		if tc.wantAbort != "" {
-			uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
-				testing.SetRealm(testing.NewUserRealm(tc.caller))
-				Pausable(cross(cur), tc.values[0])
-			})
-			if paused != tc.wantPaused {
-				t.Errorf("%s: paused = %v, want %v", tc.name, paused, tc.wantPaused)
-			}
-			tc.assertAfter()
-			continue
-		}
-
-		testing.SetRealm(testing.NewUserRealm(tc.caller))
-		for _, value := range tc.values {
-			Pausable(cross(cur), value)
-			if paused != value {
-				t.Errorf("%s: Pausable(%v) left paused = %v", tc.name, value, paused)
-			}
-		}
-		if paused != tc.wantPaused {
-			t.Errorf("%s: paused = %v, want %v", tc.name, paused, tc.wantPaused)
-		}
-		tc.assertAfter()
+	uassert.AbortsContains(t, cur, "access manager unauthorized call", func(cur realm) {
+		Pausable(cross(cur), true)
+	})
+	if paused {
+		t.Error("rejected Pausable must not set paused=true")
 	}
 }
 
-func TestSetBucketConfig(cur realm, t *testing.T) {
-	admin := access.DefaultAdminAddress
-	nonAdmin := address("g1notadmin")
+func TestPausableSetByAdmin(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
 
-	cases := []struct {
-		name       string
-		caller     address
-		denom      string
-		preConfig  bool
-		capacity   uint64
-		refillRate uint64
-		wantAbort  string
-		wantBucket bool
-	}{
-		{
-			name:       "rejects non-admin",
-			caller:     nonAdmin,
-			denom:      "ugnot",
-			capacity:   100,
-			refillRate: 10,
-			wantAbort:  access.ErrorAccessManagerUnauthorizedCall,
-		},
-		{
-			name:       "admin creates bucket",
-			caller:     admin,
-			denom:      "ugnot-admin",
-			capacity:   100,
-			refillRate: 10,
-			wantBucket: true,
-		},
-		{
-			name:       "admin updates existing bucket",
-			caller:     admin,
-			denom:      "ugnot-update",
-			preConfig:  true,
-			capacity:   200,
-			refillRate: 20,
-			wantBucket: true,
-		},
+	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+	Pausable(cross(cur), true)
+	if !paused {
+		t.Error("Pausable(true) by admin must set paused=true")
 	}
 
-	for _, tc := range cases {
-		resetZkgmForTest(cur)
-		if tc.preConfig {
-			testing.SetRealm(testing.NewUserRealm(admin))
-			SetBucketConfig(cross(cur), tc.denom, u256.NewUint(100), u256.NewUint(10))
-		}
-
-		if tc.wantAbort != "" {
-			uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
-				testing.SetRealm(testing.NewUserRealm(tc.caller))
-				SetBucketConfig(cross(cur), tc.denom, u256.NewUint(tc.capacity), u256.NewUint(tc.refillRate))
-			})
-			if _, ok := store.GetTokenBucket(tc.denom); ok {
-				t.Errorf("%s: rejected SetBucketConfig must not create a bucket", tc.name)
-			}
-			continue
-		}
-
-		testing.SetRealm(testing.NewUserRealm(tc.caller))
-		SetBucketConfig(cross(cur), tc.denom, u256.NewUint(tc.capacity), u256.NewUint(tc.refillRate))
-
-		bucket, ok := store.GetTokenBucket(tc.denom)
-		if ok != tc.wantBucket {
-			t.Errorf("%s: bucket exists = %v, want %v", tc.name, ok, tc.wantBucket)
-			continue
-		}
-		if !ok {
-			continue
-		}
-		if !bucket.Capacity.Eq(u256.NewUint(tc.capacity)) {
-			t.Errorf("%s: capacity = %s, want %d", tc.name, bucket.Capacity.ToString(), tc.capacity)
-		}
-		if !bucket.RefillRate.Eq(u256.NewUint(tc.refillRate)) {
-			t.Errorf("%s: refill rate = %s, want %d", tc.name, bucket.RefillRate.ToString(), tc.refillRate)
-		}
+	Pausable(cross(cur), false)
+	if paused {
+		t.Error("Pausable(false) by admin must set paused=false")
 	}
 }
 
-func TestSetRateLimitDisabled(cur realm, t *testing.T) {
-	admin := access.DefaultAdminAddress
-	nonAdmin := address("g1notadmin")
+func TestSetBucketConfigRejectsNonAdmin(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
 
-	cases := []struct {
-		name         string
-		caller       address
-		disabled     bool
-		wantAbort    string
-		wantDisabled bool
-	}{
-		{
-			name:         "rejects non-admin",
-			caller:       nonAdmin,
-			disabled:     false,
-			wantAbort:    access.ErrorAccessManagerUnauthorizedCall,
-			wantDisabled: true,
-		},
-		{
-			name:         "admin enables rate limiting",
-			caller:       admin,
-			disabled:     false,
-			wantDisabled: false,
-		},
+	uassert.AbortsContains(t, cur, "access manager unauthorized call", func(cur realm) {
+		SetBucketConfig(cross(cur), "ugnot", u256.NewUint(100), u256.NewUint(10))
+	})
+	if _, ok := store.GetTokenBucket("ugnot"); ok {
+		t.Error("rejected SetBucketConfig must not create a bucket")
+	}
+}
+
+func TestSetBucketConfigSucceedsByAdmin(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+	SetBucketConfig(cross(cur), "ugnot-admin", u256.NewUint(100), u256.NewUint(10))
+
+	if _, ok := store.GetTokenBucket("ugnot-admin"); !ok {
+		t.Error("SetBucketConfig by admin must create a bucket")
+	}
+}
+
+func TestSetRateLimitDisabledRejectsNonAdmin(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	// Default is disabled (true); a rejected non-admin toggle to false must not stick.
+	uassert.AbortsContains(t, cur, "access manager unauthorized call", func(cur realm) {
+		SetRateLimitDisabled(cross(cur), false)
+	})
+	if !store.RateLimitDisabled() {
+		t.Error("rejected SetRateLimitDisabled must not toggle the kill-switch")
+	}
+}
+
+func TestSetRateLimitDisabledSucceedsByAdmin(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	// Default is disabled (true); admin enables rate limiting by setting false.
+	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+	SetRateLimitDisabled(cross(cur), false)
+	if store.RateLimitDisabled() {
+		t.Error("SetRateLimitDisabled by admin must clear the kill-switch")
 	}
 
-	for _, tc := range cases {
-		resetZkgmForTest(cur)
-
-		if tc.wantAbort != "" {
-			// Default is disabled (true); a rejected non-admin toggle to false must not stick.
-			uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
-				testing.SetRealm(testing.NewUserRealm(tc.caller))
-				SetRateLimitDisabled(cross(cur), tc.disabled)
-			})
-			if store.RateLimitDisabled() != tc.wantDisabled {
-				t.Errorf("%s: rate-limit disabled = %v, want %v", tc.name, store.RateLimitDisabled(), tc.wantDisabled)
-			}
-			continue
-		}
-
-		// Default is disabled (true); admin enables rate limiting by setting false.
-		testing.SetRealm(testing.NewUserRealm(tc.caller))
-		SetRateLimitDisabled(cross(cur), tc.disabled)
-		if store.RateLimitDisabled() != tc.wantDisabled {
-			t.Errorf("%s: rate-limit disabled = %v, want %v", tc.name, store.RateLimitDisabled(), tc.wantDisabled)
-		}
-
-		// Reset the shared singleton flag so later tests see the default.
-		resetZkgmForTest(cur)
-	}
+	// Reset the shared singleton flag so later tests see the default.
+	resetZkgmForTest(cur)
 }

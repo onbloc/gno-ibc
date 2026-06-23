@@ -310,7 +310,7 @@ func TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts(cur realm, t *testing.T
 	// Store a non-zero metadataImage so ESCROW takes the V2 prediction path
 	// (union uses V1 only when the image is zero) and the quote denom matches.
 	image := [32]byte{0x01}
-	ibcDenom := PredictWrappedTokenV2(path, uint32(destChan), baseToken, image)
+	ibcDenom := z.PredictWrappedTokenV2(path, uint32(destChan), baseToken, image)
 	testStore.SetMetadataImageOf(0, cur, ibcDenom, image)
 
 	// Saturate supply to MaxInt64-1. After receiver mint (+1) total = MaxInt64.

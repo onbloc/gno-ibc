@@ -13,8 +13,10 @@ import (
 
 var Relayer = address("g1relayer")
 
-var testClientSeq uint32
-var testConnectionSeq uint32
+var (
+	testClientSeq     uint32
+	testConnectionSeq uint32
+)
 
 func nextTestClientId() types.ClientId {
 	testClientSeq++
@@ -45,7 +47,7 @@ func NewChannelPair(cur realm, clientId types.ClientId, connectionId types.Conne
 
 func RegisterMockLightClient(cur realm) {
 	if !core.HasClient(MockClientType) {
-		core.RegisterClient(cross(cur), MockClientType, &MockLightClient{})
+		core.RegisterClient(cross(cur), MockClientType, MockClientImpl)
 	}
 }
 

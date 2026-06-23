@@ -6,24 +6,23 @@ import (
 	"gno.land/r/onbloc/ibc/union/access"
 )
 
-// RegisterClient registers a light client implementation for a client type,
-// delegating to the installed impl.
-//
-// Union reference:
-// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L849-L865
-func RegisterClient(cur realm, clientType types.ClientType, lc lightclient.Interface) {
-	access.AssertCanCall(0, cur, SelectorRegisterClient)
-	mustGetImpl().RegisterClient(0, cur, clientType, lc)
-}
-
 // HasClient reports whether a light client is registered for a client type.
 func HasClient(clientType types.ClientType) bool {
 	return mustGetImpl().HasClient(clientType)
 }
 
-// CreateClient assigns a client id for a registered light client type, stores
-// the submitted state bytes, then lets the light client verify creation against
-// that freshly stored state.
+// RegisterClient registers a light client implementation for a client type,
+// delegating to the installed impl.
+//
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L849-L865
+func RegisterClient(cur realm, clientType types.ClientType, clientImpl lightclient.ClientImpl) {
+	access.AssertCanCall(0, cur, SelectorRegisterClient)
+	mustGetImpl().RegisterClient(0, cur, clientType, clientImpl)
+}
+
+// CreateClient assigns a client id, stores the submitted state bytes, then lets
+// the light client verify creation against that freshly stored state.
 //
 // Union references:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L867-L903

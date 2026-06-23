@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"errors"
 	"math"
 	"strings"
 
@@ -9,11 +8,6 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/r/demo/defi/grc20reg"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
-)
-
-var (
-	errAmountOverflow  = errors.New("zkgm/v1: amount overflows int64")
-	errVoucherNotFound = errors.New("zkgm/v1: voucher not found")
 )
 
 // mintVoucher mints `amount` of the wrapped grc20 voucher for ibcDenom to
@@ -39,7 +33,7 @@ func (v *ucs03ZkgmV1) burnVoucher(_ int, rlm realm, ibcDenom, sender string, amo
 
 	vou, ok := v.store.GetVoucher(ibcDenom)
 	if !ok {
-		return errors.New(errVoucherNotFound.Error() + ": " + ibcDenom)
+		return makeError(errVoucherNotFound, ibcDenom)
 	}
 
 	return vou.Ledger().Burn(address(sender), n)
@@ -54,7 +48,7 @@ func (v *ucs03ZkgmV1) transferVoucher(_ int, rlm realm, ibcDenom string, from, t
 
 	vou, ok := v.store.GetVoucher(ibcDenom)
 	if !ok {
-		return errors.New(errVoucherNotFound.Error() + ": " + ibcDenom)
+		return makeError(errVoucherNotFound, ibcDenom)
 	}
 
 	return vou.Ledger().Transfer(from, to, n)
@@ -108,7 +102,7 @@ func sanitizeVoucherSymbol(candidate, ibcDenom string) string {
 // an error so an oversized amount surfaces as a failure ack rather than a panic.
 func amountInt64(amount *u256.Uint) (int64, error) {
 	if !amount.IsUint64() || amount.Uint64() > uint64(math.MaxInt64) {
-		return 0, errAmountOverflow
+		return 0, makeError(errAmountOverflow)
 	}
 
 	return amount.Int64(), nil

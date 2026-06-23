@@ -106,7 +106,7 @@ func TestVerifyForwardRejectsZeroTimeout(cur realm, t *testing.T) {
 		Instruction:      batchMustCallInstruction(batchCall("sender", "")),
 	})
 
-	uassert.True(t, err == errForwardZeroTimeout)
+	uassert.ErrorIs(t, err, makeError(errForwardZeroTimeout))
 }
 
 func TestVerifyForwardAllowsMaxHopPath(cur realm, t *testing.T) {
@@ -126,7 +126,7 @@ func TestBuildForwardChildRejectsInvalidPath(cur realm, t *testing.T) {
 		name    string
 		destCh  types.ChannelId
 		path    *u256.Uint
-		wantErr error
+		wantErr string
 	}{
 		{"missing prev dest", types.ChannelId(1), u256.Zero(), errForwardMissingPrevDest},
 		{"missing next source", types.ChannelId(5), forwardPath(5), errForwardMissingNextSource},
@@ -140,7 +140,7 @@ func TestBuildForwardChildRejectsInvalidPath(cur realm, t *testing.T) {
 				TimeoutTimestamp: 999,
 				Instruction:      batchMustCallInstruction(batchCall("sender", "")),
 			})
-			uassert.True(t, err == tc.wantErr)
+			uassert.ErrorIs(t, err, makeError(tc.wantErr))
 		})
 	}
 }
@@ -154,7 +154,7 @@ func TestBuildForwardChildRejectsZeroTimeout(cur realm, t *testing.T) {
 		Instruction:      batchMustCallInstruction(batchCall("sender", "call")),
 	})
 
-	uassert.True(t, err == errForwardZeroTimeout)
+	uassert.ErrorIs(t, err, makeError(errForwardZeroTimeout))
 	uassert.Equal(t, uint32(0), uint32(child.SourceChannelId))
 	uassert.True(t, len(child.Data) == 0)
 }
@@ -181,7 +181,7 @@ func TestIntentRecvOnlyMakerForwardAborts(cur realm, t *testing.T) {
 	})
 	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), data, 0)
 
-	uassert.AbortsContains(t, cur, "zkgm: only maker", func(cur realm) {
+	uassert.AbortsContains(t, cur, "only maker", func(cur realm) {
 		newTestImpl().OnIntentRecvPacket(0, cur, packet, address("g1relayer"), nil)
 	})
 }

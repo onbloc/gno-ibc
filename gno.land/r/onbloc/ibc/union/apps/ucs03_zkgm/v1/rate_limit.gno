@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"errors"
 	"time"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -9,7 +8,6 @@ import (
 
 // errTokenBucketAbsent rejects a rate-limited denom that has no configured bucket,
 // matching union's ContractError::TokenBucketIsAbsent.
-var errTokenBucketAbsent = errors.New("zkgm/v1: token bucket is absent")
 
 // rateLimit charges `amount` from denom's token bucket when rate limiting is
 // enabled. The bucket is anchored to block time, so its RefillRate is tokens per
@@ -23,7 +21,7 @@ func (v *ucs03ZkgmV1) rateLimit(_ int, rlm realm, denom string, amount *u256.Uin
 
 	bucket, ok := v.store.GetTokenBucket(denom)
 	if !ok || bucket == nil {
-		return errors.New(errTokenBucketAbsent.Error() + ": " + denom)
+		return makeError(errTokenBucketAbsent, denom)
 	}
 
 	now := time.Now().Unix()

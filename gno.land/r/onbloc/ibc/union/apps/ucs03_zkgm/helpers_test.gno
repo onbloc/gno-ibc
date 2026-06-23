@@ -133,7 +133,7 @@ func resetZkgmForTest(cur realm) {
 	paused = false
 	resetAccess(cur, access.DefaultAdminAddress)
 	// Restore the opt-in rate-limit default (disabled) on the shared singleton.
-	store.rateLimitDisabled = true
+	store.SetRateLimitDisabled(0, cur, true)
 }
 
 // installImplForTest registers a constructor under path and activates it, driving

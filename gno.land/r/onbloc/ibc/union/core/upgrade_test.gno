@@ -33,7 +33,7 @@ func TestRegisterImpl(cur realm, t *testing.T) {
 		{
 			name:         "rejects previous realm outside proxy namespace",
 			previousPath: "gno.land/r/outside/impl",
-			wantAbort:    "core: previous impl path is not a prefix of the current impl path",
+			wantAbort:    "previous impl path is not a prefix of the current impl path",
 		},
 		{
 			name:         "registers constructor under previous impl path",
@@ -43,7 +43,7 @@ func TestRegisterImpl(cur realm, t *testing.T) {
 			name:          "rejects duplicate impl registration",
 			previousPath:  testImplPathA,
 			preRegistered: true,
-			wantAbort:     "core: impl already registered",
+			wantAbort:     "impl already registered",
 		},
 	}
 
@@ -95,13 +95,13 @@ func TestUpdateImpl(cur realm, t *testing.T) {
 			registerA: true,
 			caller:    nonAdmin,
 			path:      testImplPathA,
-			wantAbort: access.ErrorAccessManagerUnauthorizedCall,
+			wantAbort: access.ErrAccessManagerUnauthorizedCall,
 		},
 		{
 			name:      "rejects unregistered path",
 			caller:    admin,
 			path:      testImplPathA,
-			wantAbort: "core: impl constructor not found",
+			wantAbort: "impl constructor not found",
 		},
 		{
 			name:            "admin installs registered impl",
@@ -208,7 +208,7 @@ func TestMustGetImpl(cur realm, t *testing.T) {
 	}{
 		{
 			name:      "missing impl",
-			wantAbort: "core: implementation not installed",
+			wantAbort: "implementation not installed",
 		},
 		{
 			name: "installed impl",

@@ -23,9 +23,7 @@ var _ core.ICore = (*coreV1)(nil)
 // New constructs a fresh v1 impl. The store is injected by the proxy at install
 // time via SetStore, so it is nil until installed.
 func NewCoreV1(s core.IStore) core.ICore {
-	return &coreV1{
-		store: s,
-	}
+	return &coreV1{store: s}
 }
 
 // resolveRelayer defaults an empty relayer string to the authenticated caller.
@@ -38,17 +36,4 @@ func resolveRelayer(caller address, relayer string) address {
 	}
 
 	return address(relayer)
-}
-
-// cloneBytes returns a fresh copy of b, used to detach caller- or store-owned
-// byte slices before persisting or rebuilding records.
-func cloneBytes(b []byte) []byte {
-	if b == nil {
-		return nil
-	}
-
-	out := make([]byte, len(b))
-	copy(out, b)
-
-	return out
 }

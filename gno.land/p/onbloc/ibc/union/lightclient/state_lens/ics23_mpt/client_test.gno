@@ -74,7 +74,7 @@ func newTestClient(t *testing.T, l1 *mockL1Client, storageRoot []byte) *StateLen
 		StateRoot:   bytes.Repeat([]byte{0xaa}, 32),
 		StorageRoot: storageRoot,
 	}
-	c, err := NewStateLensIcs23MptLightClient(cs, cons, l1)
+	c, err := newTestStateLensClient(cs, cons, l1)
 	if err != nil {
 		t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestStatusMirrorsL1(t *testing.T) {
 func TestStatusNilL1IsFrozen(t *testing.T) {
 	cs := &ClientState{L2ChainID: "l2", L2LatestHeight: 1}
 	cons := &ConsensusState{Timestamp: 1, StateRoot: bytes.Repeat([]byte{0x01}, 32), StorageRoot: bytes.Repeat([]byte{0x02}, 32)}
-	c, err := NewStateLensIcs23MptLightClient(cs, cons, nil)
+	c, err := newTestStateLensClient(cs, cons, nil)
 	if err != nil {
 		t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
 	}
@@ -222,7 +222,7 @@ func TestVerifyHeaderRejectsWhenL1Fails(t *testing.T) {
 func TestVerifyHeaderNilL1(t *testing.T) {
 	cs := &ClientState{L2ChainID: "l2", L2ClientID: 7, L2LatestHeight: 10, StorageRootOffset: 32}
 	cons := &ConsensusState{Timestamp: 1, StateRoot: bytes.Repeat([]byte{0x01}, 32), StorageRoot: bytes.Repeat([]byte{0x02}, 32)}
-	c, err := NewStateLensIcs23MptLightClient(cs, cons, nil)
+	c, err := newTestStateLensClient(cs, cons, nil)
 	if err != nil {
 		t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
 	}
@@ -250,6 +250,68 @@ func TestVerifyCreationEmpty(t *testing.T) {
 	if len(res.ClientStateBytes) != 0 {
 		t.Errorf("VerifyCreation must not write a client state")
 	}
+}
+
+func TestNewStateLensIcs23MptLightClientUsesLazyGetter(t *testing.T) {
+	clientState := ClientState{
+		L2ChainID:         "reinit-l2",
+		L1ClientID:        2,
+		L2ClientID:        9,
+		L2LatestHeight:    42,
+		TimestampOffset:   64,
+		StateRootOffset:   0,
+		StorageRootOffset: 32,
+	}
+	consensusState := ConsensusState{
+		Timestamp:   4242,
+		StateRoot:   bytes.Repeat([]byte{0x42}, 32),
+		StorageRoot: bytes.Repeat([]byte{0x43}, 32),
+	}
+
+	// The getter closes over `current`. Swapping it simulates ForceUpdateClient
+	// replacing the L1 light client in the host store without any explicit refresh.
+	current := lightclient.Interface(&mockL1Client{status: lightclient.Active})
+	getL1ClientFn := func(_ types.ClientId) (lightclient.Interface, bool) {
+		return current, current != nil
+	}
+
+	c, err := NewStateLensIcs23MptLightClient(&clientState, &consensusState, getL1ClientFn)
+	if err != nil {
+		t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
+	}
+
+	if c.clientState.L1ClientID != 2 {
+		t.Fatalf("l1 client id: got %d want 2", c.clientState.L1ClientID)
+	}
+	if c.GetLatestHeight() != 42 {
+		t.Fatalf("latest height: got %d want 42", c.GetLatestHeight())
+	}
+	if c.GetCounterpartyChainID() != "reinit-l2" {
+		t.Fatalf("chain id: got %q want reinit-l2", c.GetCounterpartyChainID())
+	}
+	got, found := c.getConsensusState(42)
+	if !found {
+		t.Fatal("consensus state not stored")
+	}
+	if got.Timestamp != 4242 || !bytes.Equal(got.StorageRoot, bytes.Repeat([]byte{0x43}, 32)) {
+		t.Fatalf("unexpected consensus state: %#v", got)
+	}
+
+	if s := c.Status(); s != lightclient.Active {
+		t.Fatalf("status: got %q want Active", s)
+	}
+
+	// Swap to simulate ForceUpdateClient on L1 — the change is visible immediately.
+	current = &mockL1Client{status: lightclient.Expired}
+	if s := c.Status(); s != lightclient.Expired {
+		t.Fatalf("status after L1 swap: got %q want Expired", s)
+	}
+}
+
+func newTestStateLensClient(cs *ClientState, cons *ConsensusState, l1 lightclient.Interface) (*StateLensIcs23MptLightClient, error) {
+	return NewStateLensIcs23MptLightClient(cs, cons, func(_ types.ClientId) (lightclient.Interface, bool) {
+		return l1, l1 != nil
+	})
 }
 
 func TestVerifyMembershipStorageProof(t *testing.T) {

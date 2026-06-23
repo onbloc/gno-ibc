@@ -86,5 +86,5 @@ func TestVerifyMisbehaviourRejectsInvalidHeaderSequenceBeforeProofVerification(t
 
 	err := c.verifyMisbehaviour(m, time.Unix(int64(testNow/1_000_000_000)+3, 0))
 
-	requireErrorContains(t, err, ErrInvalidMisbehaviourHeaderSequence)
+	requireErrorContains(t, err, ErrInvalidMisbehaviourHeaderSequence.Error())
 }

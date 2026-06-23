@@ -98,23 +98,6 @@ func cloneChannel(c types.Channel) types.Channel {
 	}
 }
 
-// cloneBytes returns a fresh core-realm-owned copy of b, detaching any
-// external/readonly realm ownership a slice picked up crossing the proxy/impl
-// boundary. copy is an element-wise read (not a conversion), so it is permitted
-// on a readonly source; a slice->slice conversion or a []byte->string->[]byte
-// round-trip (which gno elides) would instead keep the foreign ownership and
-// later panic with "illegal conversion of readonly or externally stored value".
-func cloneBytes(b []byte) []byte {
-	if b == nil {
-		return nil
-	}
-
-	out := make([]byte, len(b))
-	copy(out, b)
-
-	return out
-}
-
 func hexString(b []byte) string {
 	return "0x" + hex.EncodeToString(b)
 }

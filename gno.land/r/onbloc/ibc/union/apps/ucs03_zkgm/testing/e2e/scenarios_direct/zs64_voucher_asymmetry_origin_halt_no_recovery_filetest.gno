@@ -29,7 +29,7 @@ func main(cur realm) {
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	relayer := testutils.TestAddress("zs64-relayer")
 	meta := e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: "Halted Origin GNOT", Symbol: "HOGNOT", Decimals: 6})
-	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(destChannel), []byte("ugnot"), impl.MetadataImage(sh.DecodeTokenMetadata(meta)))
+	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(destChannel), []byte("ugnot"), z.MetadataImage(sh.DecodeTokenMetadata(meta)))
 
 	println("[SCENARIO] lock native on source")
 	lockOrder := z.TokenOrderV2{

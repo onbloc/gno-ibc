@@ -1,12 +1,19 @@
 package core
 
 import (
+	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
 // GetStatus returns the client's status, or an error when the client is missing.
 func GetStatus(clientId types.ClientId) (types.Status, error) {
 	return mustGetImpl().GetStatus(clientId)
+}
+
+// GetLightClient returns the live light client instance for a client, or
+// (nil, false) when the client is missing.
+func GetLightClient(clientId types.ClientId) (lightclient.Interface, bool) {
+	return mustGetImpl().GetLightClient(clientId)
 }
 
 // GetClientType returns the registered client type for a client, or an error

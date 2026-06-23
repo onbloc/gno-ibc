@@ -16,16 +16,28 @@ type mockLightClient struct {
 	headerErr          string
 	membershipErr      string
 	nonMembershipErr   string
-	timestampErr       string
 	timestampAtHt      types.Timestamp
+	update             types.StateUpdate
+	creationWrites     map[string][]byte
 	membershipCalls    int
 	nonMembershipCalls int
-	update             types.StateUpdate
-	creationState      []byte
-	creationWrites     map[string][]byte
+	implCalls          int
+	implClient         lightclient.Interface
+	implCS             []byte
+	implCons           []byte
 }
 
 var _ lightclient.Interface = (*mockLightClient)(nil)
+
+func (l *mockLightClient) ClientImpl(clientStateBytes, consensusStateBytes []byte) (lightclient.Interface, error) {
+	l.implCalls++
+	l.implCS = clientStateBytes
+	l.implCons = consensusStateBytes
+	if l.implClient != nil {
+		return l.implClient, nil
+	}
+	return l, nil
+}
 
 func (l *mockLightClient) VerifyMembership(height uint64, key, proof, value []byte) error {
 	l.membershipCalls++
@@ -46,9 +58,6 @@ func (l *mockLightClient) VerifyNonMembership(height uint64, key, proof []byte) 
 func (l *mockLightClient) GetTimestamp() types.Timestamp { return 0 }
 
 func (l *mockLightClient) GetTimestampAtHeight(height uint64) (types.Timestamp, error) {
-	if l.timestampErr != "" {
-		return 0, errors.New(l.timestampErr)
-	}
 	return l.timestampAtHt, nil
 }
 
@@ -74,7 +83,7 @@ func (l *mockLightClient) VerifyCreation(caller address, relayer address) (types
 	if l.createErr != "" {
 		return types.ClientCreationResult{}, errors.New(l.createErr)
 	}
-	return types.ClientCreationResult{ClientStateBytes: l.creationState, StorageWrites: l.creationWrites}, nil
+	return types.ClientCreationResult{StorageWrites: l.creationWrites}, nil
 }
 
 func (l *mockLightClient) Misbehaviour(caller address, misbehaviour []byte, relayer address) ([]byte, error) {

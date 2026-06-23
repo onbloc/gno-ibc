@@ -27,11 +27,10 @@ var (
 // StateLensIcs23MptLightClient is the stateful object implementing
 // lightclient.Interface for the state-lens/ics23/mpt client.
 //
-// It holds the client state and the L2 consensus states keyed by height,
-// mirroring the realm adapter's per-client entry but as a self-contained pure
-// object: the adapter routes by clientId into realm storage and delegates L1
-// proof verification to core, whereas this object owns its own state and holds
-// a direct reference to the L1 light client it depends on.
+// It holds the client state and the L2 consensus states keyed by height.
+// The L1 client dependency is resolved lazily on every use via getL1Client,
+// mirroring Union's ctx-based approach where the light client struct is
+// stateless and the host provides L1 access through the execution context.
 //
 // A state-lens client does not track its own chain directly. It trusts the
 // counterparty's opaque L2 consensus blob, proven to exist in the L1 chain's
@@ -43,33 +42,26 @@ var (
 type StateLensIcs23MptLightClient struct {
 	clientState            *ClientState
 	consensusStateByHeight *bptree.BPTree // height:*ConsensusState
-	// l1Client is the light client tracking the settlement (L1) chain. It is
-	// used during VerifyHeader to prove that the submitted L2 consensus state is
-	// committed in the L1 state, and during Status to mirror the L1 client's
-	// liveness. It corresponds to ClientState.L1ClientID, which the realm
-	// adapter resolves through core.
-	l1Client lightclient.Interface
+	// getL1ClientFn resolves the settlement-chain light client from the host store
+	// on every call, so the state-lens always sees the current L1 state without
+	// needing an explicit refresh step.
+	getL1ClientFn func(types.ClientId) (lightclient.Interface, bool)
 }
 
 var _ lightclient.Interface = (*StateLensIcs23MptLightClient)(nil)
 
-// NewStateLensIcs23MptLightClient builds a client from the client and consensus
-// state and the L1 client it depends on. This mirrors the realm adapter's
-// CreateClient path, which seeds the consensus state at L2LatestHeight.
-func NewStateLensIcs23MptLightClient(
-	clientState *ClientState,
-	consensusState *ConsensusState,
-	l1Client lightclient.Interface,
-) (*StateLensIcs23MptLightClient, error) {
-	client := &StateLensIcs23MptLightClient{
+// NewStateLensIcs23MptLightClient builds the Gno object-form light client from
+// decoded client and consensus state. getL1ClientFn is a live store getter
+// called on every L1 lookup, matching Union's ctx-based approach where the
+// light client resolves the L1 dependency lazily from the host store.
+func NewStateLensIcs23MptLightClient(clientState *ClientState, consensusState *ConsensusState, getL1ClientFn func(types.ClientId) (lightclient.Interface, bool)) (*StateLensIcs23MptLightClient, error) {
+	c := &StateLensIcs23MptLightClient{
 		clientState:            clientState,
 		consensusStateByHeight: bptree.NewBPTree32(),
-		l1Client:               l1Client,
+		getL1ClientFn:          getL1ClientFn,
 	}
-
-	client.setConsensusState(clientState.L2LatestHeight, consensusState)
-
-	return client, nil
+	c.setConsensusState(clientState.L2LatestHeight, consensusState)
+	return c, nil
 }
 
 // VerifyMembership verifies that key stores value under the L2 storage root at
@@ -87,6 +79,7 @@ func (c *StateLensIcs23MptLightClient) VerifyMembership(height uint64, key []byt
 	if len(value) != 32 {
 		return ErrInvalidCommitmentValue
 	}
+
 	if !bytes.Equal(storageProof.Value, value) {
 		return ErrStoredValueMismatch
 	}
@@ -161,11 +154,10 @@ func (c *StateLensIcs23MptLightClient) prepareProof(height uint64, key []byte, p
 // Union reference:
 // https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/state-lens-ics23-mpt/src/client.rs#L98-L134
 func (c *StateLensIcs23MptLightClient) VerifyHeader(caller address, headerBytes []byte, relayer address) (types.StateUpdate, error) {
-	if c.l1Client == nil {
+	l1, ok := c.getL1ClientFn(types.ClientId(c.clientState.L1ClientID))
+	if !ok {
 		return types.StateUpdate{}, ErrNoL1Client
 	}
-
-	clientState := c.clientState
 
 	header, err := DecodeHeader(headerBytes)
 	if err != nil {
@@ -174,13 +166,14 @@ func (c *StateLensIcs23MptLightClient) VerifyHeader(caller address, headerBytes 
 
 	// The L2 consensus state must be committed under the consensus-state path of
 	// the L2 client, in the L1 chain's state, as a keccak256 hash.
-	consensusPath := types.ConsensusStatePath(types.ClientId(clientState.L2ClientID), types.NewHeight(header.L2Height))
+	consensusPath := types.ConsensusStatePath(types.ClientId(c.clientState.L2ClientID), types.NewHeight(header.L2Height))
+
 	consensusHash := keccak256.Sum256(header.L2ConsensusState)
-	if err := c.l1Client.VerifyMembership(header.L1Height, consensusPath[:], header.L2ConsensusStateProof, consensusHash[:]); err != nil {
+	if err := l1.VerifyMembership(header.L1Height, consensusPath[:], header.L2ConsensusStateProof, consensusHash[:]); err != nil {
 		return types.StateUpdate{}, ufmt.Errorf("ics23mpt: l1 consensus state membership verification failed: %v", err)
 	}
 
-	consensusState, err := ExtractConsensusState(header.L2ConsensusState, *clientState)
+	consensusState, err := c.clientState.ExtractConsensusState(header.L2ConsensusState)
 	if err != nil {
 		return types.StateUpdate{}, err
 	}
@@ -244,6 +237,7 @@ func (c *StateLensIcs23MptLightClient) GetTimestampAtHeight(height uint64) (type
 	if !found {
 		return 0, ErrConsensusStateNotFound
 	}
+
 	return types.Timestamp(consState.Timestamp), nil
 }
 
@@ -259,11 +253,12 @@ func (c *StateLensIcs23MptLightClient) GetCounterpartyChainID() string {
 // its own: it is only as live as the L1 client it depends on. A missing or
 // unknown L1 status is treated as Frozen, matching Union's unwrap_or(Frozen).
 func (c *StateLensIcs23MptLightClient) Status() lightclient.Status {
-	if c.l1Client == nil {
+	l1, ok := c.getL1ClientFn(types.ClientId(c.clientState.L1ClientID))
+	if !ok {
 		return lightclient.Frozen
 	}
 
-	switch status := c.l1Client.Status(); status {
+	switch status := l1.Status(); status {
 	case lightclient.Active, lightclient.Expired, lightclient.Frozen:
 		return status
 	default:
@@ -271,7 +266,7 @@ func (c *StateLensIcs23MptLightClient) Status() lightclient.Status {
 	}
 }
 
-func (c *StateLensIcs23MptLightClient) getConsensusState(height Height) (*ConsensusState, bool) {
+func (c *StateLensIcs23MptLightClient) getConsensusState(height uint64) (*ConsensusState, bool) {
 	v, found := c.consensusStateByHeight.Get(heightKey(height))
 	if !found {
 		return nil, false
@@ -285,13 +280,13 @@ func (c *StateLensIcs23MptLightClient) getConsensusState(height Height) (*Consen
 	return consState, true
 }
 
-func (c *StateLensIcs23MptLightClient) setConsensusState(height Height, consState *ConsensusState) {
+func (c *StateLensIcs23MptLightClient) setConsensusState(height uint64, consState *ConsensusState) {
 	c.consensusStateByHeight.Set(heightKey(height), consState)
 }
 
 // heightKey renders a height as a fixed-width, lexicographically sortable bptree
 // key. ibc-union heights carry a single revision, so the numeric ordering of the
 // formatted height matches height ordering.
-func heightKey(height Height) string {
+func heightKey(height uint64) string {
 	return ufmt.Sprintf("%020d", height)
 }

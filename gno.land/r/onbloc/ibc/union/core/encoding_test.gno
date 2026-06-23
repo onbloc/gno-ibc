@@ -265,7 +265,7 @@ func TestCloning(cur realm, t *testing.T) {
 		{
 			"clone bytes nil",
 			func(t *testing.T) {
-				got := cloneBytes(nil)
+				got := types.CloneBytes(nil)
 				if got != nil {
 					t.Fatal("nil input must remain nil")
 				}
@@ -274,7 +274,7 @@ func TestCloning(cur realm, t *testing.T) {
 		{
 			"clone bytes empty",
 			func(t *testing.T) {
-				got := cloneBytes([]byte{})
+				got := types.CloneBytes([]byte{})
 				if len(got) != 0 {
 					t.Fatalf("len: got %d want 0", len(got))
 				}
@@ -284,7 +284,7 @@ func TestCloning(cur realm, t *testing.T) {
 			"clone bytes value",
 			func(t *testing.T) {
 				in := []byte{1, 2, 3}
-				got := cloneBytes(in)
+				got := types.CloneBytes(in)
 				if len(got) != len(in) {
 					t.Fatalf("len: got %d want %d", len(got), len(in))
 				}

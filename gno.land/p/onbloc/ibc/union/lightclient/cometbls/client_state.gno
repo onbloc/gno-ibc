@@ -17,11 +17,7 @@ type ClientState struct {
 	MaxClockDrift   uint64
 	FrozenHeight    types.Height
 	LatestHeight    types.Height
-	// ContractAddress is the address of the counterparty IBC host contract.
-	// Membership proofs are verified against the commitments stored by this contract.
-	//
-	// Mirrors Union's cometbls `ClientState.contract_address`.
-	ContractAddress H256
+	ContractAddress types.H256
 }
 
 func NewClientState(
@@ -31,7 +27,7 @@ func NewClientState(
 	maxClockDrift uint64,
 	frozenHeight types.Height,
 	latestHeight types.Height,
-	contractAddress H256,
+	contractAddress types.H256,
 ) *ClientState {
 	return &ClientState{
 		ChainID:         chainID,
@@ -54,9 +50,34 @@ func (cs *ClientState) GetChainID() string {
 	return cs.ChainID
 }
 
+func (cs *ClientState) GetTrustingPeriod() uint64 {
+	return cs.TrustingPeriod
+}
+
+func (cs *ClientState) GetUnbondingPeriod() uint64 {
+	return cs.UnbondingPeriod
+}
+
+func (cs *ClientState) GetMaxClockDrift() uint64 {
+	return cs.MaxClockDrift
+}
+
 // GetLatestHeight returns latest block height.
 func (cs *ClientState) GetLatestHeight() types.Height {
 	return cs.LatestHeight
+}
+
+func (cs *ClientState) GetFrozenRevisionHeight() uint64 {
+	return cs.FrozenHeight.RevisionHeight
+}
+
+// GetLatestRevisionHeight returns latest block height.
+func (cs *ClientState) GetLatestRevisionHeight() uint64 {
+	return cs.LatestHeight.RevisionHeight
+}
+
+func (cs *ClientState) GetContractAddress() types.H256 {
+	return cs.ContractAddress
 }
 
 // IsExpired returns whether or not the client has passed the trusting period since the last
@@ -68,7 +89,7 @@ func (cs *ClientState) IsExpired(latestTimestamp, now uint64) bool {
 // Validate performs a basic validation of the client state fields.
 func (cs *ClientState) Validate() error {
 	if strings.TrimSpace(cs.ChainID) == "" {
-		return makeError(ErrInvalidChainID, "chain id cannot be empty string")
+		return errorWithDetails(ErrInvalidChainID, "chain id cannot be empty string")
 	}
 
 	// NOTE: the value of tmtypes.MaxChainIDLen may change in the future.
@@ -77,30 +98,30 @@ func (cs *ClientState) Validate() error {
 	// and the tendermint version used by this light client.
 	// https://github.com/cosmos/ibc-go/issues/177
 	if len(cs.ChainID) > MaxChainIDLen {
-		return makeError(
+		return errorWithDetails(
 			ErrInvalidChainID,
 			ufmt.Sprintf("chainID is too long; got: %d, max: %d", len(cs.ChainID), MaxChainIDLen),
 		)
 	}
 
 	if cs.TrustingPeriod <= 0 {
-		return makeError(ErrInvalidTrustingPeriod, "trusting period must be greater than zero")
+		return errorWithDetails(ErrInvalidTrustingPeriod, "trusting period must be greater than zero")
 	}
 
 	if cs.UnbondingPeriod <= 0 {
-		return makeError(ErrInvalidUnbondingPeriod, "unbonding period must be greater than zero")
+		return errorWithDetails(ErrInvalidUnbondingPeriod, "unbonding period must be greater than zero")
 	}
 
 	if cs.MaxClockDrift <= 0 {
-		return makeError(ErrInvalidMaxClockDrift, "max clock drift must be greater than zero")
+		return errorWithDetails(ErrInvalidMaxClockDrift, "max clock drift must be greater than zero")
 	}
 
-	if cs.LatestHeight.RevisionHeight == 0 {
-		return makeError(ErrInvalidHeaderHeight, "cometbls client's latest height cannot be zero")
+	if cs.GetLatestRevisionHeight() == 0 {
+		return errorWithDetails(ErrInvalidHeaderHeight, "cometbls client's latest height cannot be zero")
 	}
 
 	if cs.TrustingPeriod >= cs.UnbondingPeriod {
-		return makeError(
+		return errorWithDetails(
 			ErrInvalidTrustingPeriod,
 			ufmt.Sprintf("trusting period (%d) should be < unbonding period (%d)", cs.TrustingPeriod, cs.UnbondingPeriod),
 		)

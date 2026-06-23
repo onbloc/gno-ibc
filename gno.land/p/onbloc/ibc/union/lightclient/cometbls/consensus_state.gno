@@ -26,6 +26,10 @@ func (cs *ConsensusState) GetRoot() MerkleRoot {
 	return cs.Root
 }
 
+func (cs *ConsensusState) GetRootHash() []byte {
+	return cs.Root.Hash
+}
+
 func (cs *ConsensusState) GetTimestamp() uint64 {
 	return cs.Timestamp
 }
@@ -36,11 +40,11 @@ func (cs *ConsensusState) GetNextValidatorsHash() []byte {
 
 func (cs *ConsensusState) ValidateBasic() error {
 	if cs.Root.Hash == nil || cs.Root.Empty() {
-		return makeError(ErrInvalidConsensus, "root hash cannot be nil")
+		return errorWithDetails(ErrInvalidConsensus, "root hash cannot be nil")
 	}
 
 	if err := validateHash(cs.NextValidatorsHash); err != nil {
-		return makeError(ErrInvalidNextValidatorsHash, err.Error())
+		return errorWithDetails(ErrInvalidNextValidatorsHash, err.Error())
 	}
 
 	return nil

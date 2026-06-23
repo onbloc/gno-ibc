@@ -1,8 +1,6 @@
 package cometbls
 
 import (
-	"errors"
-
 	abienc "gno.land/p/onbloc/encoding/abi"
 	"gno.land/p/onbloc/ibc/union/types"
 )
@@ -13,13 +11,12 @@ import (
 // height is encoded; decoding rebuilds the Height with types.NewHeight.
 
 var clientStateSchema = abienc.Schema{Fields: []abienc.Field{
-	{Type: abienc.TypeString},  // ChainID
-	{Type: abienc.TypeUint64},  // TrustingPeriod
-	{Type: abienc.TypeUint64},  // UnbondingPeriod
-	{Type: abienc.TypeUint64},  // MaxClockDrift
-	{Type: abienc.TypeUint64},  // FrozenHeight (revision height)
-	{Type: abienc.TypeUint64},  // LatestHeight (revision height)
-	{Type: abienc.TypeBytes32}, // ContractAddress
+	{Type: abienc.TypeBytes32},
+	{Type: abienc.TypeUint64},
+	{Type: abienc.TypeUint64},
+	{Type: abienc.TypeUint64},
+	{Type: abienc.TypeUint64},
+	{Type: abienc.TypeBytes32},
 }}
 
 var consensusStateSchema = abienc.Schema{Fields: []abienc.Field{
@@ -28,82 +25,100 @@ var consensusStateSchema = abienc.Schema{Fields: []abienc.Field{
 	{Type: abienc.TypeBytes32}, // NextValidatorsHash
 }}
 
-func EncodeClientState(cs *ClientState) ([]byte, error) {
-	if cs == nil {
-		return nil, errors.New("nil client state")
+func EncodeClientState(m *ClientState) ([]byte, error) {
+	var chainIdWord [32]byte
+
+	chainBytes := []byte(m.ChainID)
+	if len(chainBytes) > 31 {
+		chainBytes = chainBytes[:31]
 	}
 
+	copy(chainIdWord[:], chainBytes)
+
 	return abienc.Encode(clientStateSchema, []any{
-		cs.GetChainID(),
-		cs.GetTrustingPeriod(),
-		cs.GetUnbondingPeriod(),
-		cs.GetMaxClockDrift(),
-		cs.GetFrozenRevisionHeight(),
-		cs.GetLatestRevisionHeight(),
-		[32]byte(cs.GetContractAddress()),
+		chainIdWord,
+		m.TrustingPeriod,
+		m.MaxClockDrift,
+		uint64(m.FrozenHeight.RevisionHeight),
+		uint64(m.LatestHeight.RevisionHeight),
+		[32]byte(m.ContractAddress),
 	})
 }
 
 func DecodeClientState(buf []byte) (*ClientState, error) {
 	vals, err := abienc.Decode(clientStateSchema, buf)
 	if err != nil {
-		return nil, errors.New("" + err.Error())
+		return nil, err
 	}
 
-	contractAddress := vals[6].([32]byte)
+	chainIdWord := vals[0].([32]byte)
+	chainID := trimNullBytes(chainIdWord)
+	trustingPeriod := vals[1].(uint64)
+	maxClockDrift := vals[2].(uint64)
+	frozenHeight := types.NewHeight(vals[3].(uint64))
+	latestHeight := types.NewHeight(vals[4].(uint64))
+	contractAddress := vals[5].([32]byte)
 
-	return &ClientState{
-		ChainID:         vals[0].(string),
-		TrustingPeriod:  vals[1].(uint64),
-		UnbondingPeriod: vals[2].(uint64),
-		MaxClockDrift:   vals[3].(uint64),
-		FrozenHeight:    types.NewHeight(vals[4].(uint64)),
-		LatestHeight:    types.NewHeight(vals[5].(uint64)),
-		ContractAddress: types.H256(contractAddress),
-	}, nil
+	return NewClientState(
+		chainID,
+		trustingPeriod,
+		0,
+		maxClockDrift,
+		frozenHeight,
+		latestHeight,
+		contractAddress,
+	), nil
 }
 
+// EncodeConsensusState ABI-encodes a ConsensusState (96 bytes).
+// Root.Hash must be exactly 32 bytes.
 func EncodeConsensusState(cs *ConsensusState) ([]byte, error) {
-	if cs == nil {
-		return nil, errors.New("nil consensus state")
-	}
-
-	root, err := toBytes32(cs.GetRootHash())
+	appHash, err := toBytes32(cs.Root.Hash)
 	if err != nil {
 		return nil, err
 	}
 
-	nextValidatorsHash, err := toBytes32(cs.GetNextValidatorsHash())
+	validatorsHash, err := toBytes32(cs.NextValidatorsHash)
 	if err != nil {
 		return nil, err
 	}
 
-	return abienc.Encode(consensusStateSchema, []any{
-		cs.Timestamp,
-		root,
-		nextValidatorsHash,
-	})
+	return abienc.Encode(
+		consensusStateSchema,
+		[]any{cs.Timestamp, appHash, validatorsHash},
+	)
 }
 
 func DecodeConsensusState(buf []byte) (*ConsensusState, error) {
 	vals, err := abienc.Decode(consensusStateSchema, buf)
 	if err != nil {
-		return nil, errors.New("" + err.Error())
+		return nil, err
 	}
 
-	root := vals[1].([32]byte)
-	nextValidatorsHash := vals[2].([32]byte)
+	var cs ConsensusState
 
-	return &ConsensusState{
-		Timestamp:          vals[0].(uint64),
-		Root:               MerkleRoot{Hash: bytes32Slice(root)},
-		NextValidatorsHash: bytes32Slice(nextValidatorsHash),
-	}, nil
+	rootHash, ok := vals[1].([32]byte)
+	if !ok {
+		return nil, ErrDecodeState
+	}
+
+	nextValidatorsHash, ok := vals[2].([32]byte)
+	if !ok {
+		return nil, ErrDecodeState
+	}
+
+	cs.Timestamp = vals[0].(uint64)
+	cs.Root.Hash = rootHash[:]
+	cs.NextValidatorsHash = nextValidatorsHash[:]
+
+	return &cs, nil
 }
 
-func bytes32Slice(b [32]byte) []byte {
-	out := make([]byte, 32)
-	copy(out, b[:])
+func trimNullBytes(b [32]byte) string {
+	end := 32
+	for end > 0 && b[end-1] == 0 {
+		end--
+	}
 
-	return out
+	return string(b[:end])
 }

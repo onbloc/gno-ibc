@@ -64,61 +64,78 @@ func TestSanitizeVoucherSymbol(t *testing.T) {
 	}
 }
 
-// mintVoucher creates the wrapped token on first use, credits the receiver, and
-// accumulates on repeat mints. An amount that overflows int64 must error.
-func TestMintVoucher(cur realm, t *testing.T) {
-	v := newTestImpl()
-	denom := "ibc/mint-basic"
-	rx := address(testAddress("mint-rx"))
+// Voucher operations create and reuse wrapped grc20 tokens while preserving
+// ledger error behavior for mint, burn, and transfer paths.
+func TestVoucher(cur realm, t *testing.T) {
+	cases := []struct {
+		name string
+		run  func(t *testing.T, rlm realm, v *ucs03ZkgmV1)
+	}{
+		{
+			name: "mint creates voucher accumulates balance and rejects overflow",
+			run: func(t *testing.T, rlm realm, v *ucs03ZkgmV1) {
+				denom := "ibc/mint-basic"
+				rx := address(testAddress("mint-rx"))
 
-	uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, "Wrapped", "WRAP", 6, string(rx), u256.NewUint(100)))
-	uassert.Equal(t, int64(100), voucherBalanceOf(denom, rx))
-	uassert.Equal(t, 6, voucherDecimalsOf(denom))
+				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "Wrapped", "WRAP", 6, string(rx), u256.NewUint(100)))
+				uassert.Equal(t, int64(100), voucherBalanceOf(denom, rx))
+				uassert.Equal(t, 6, voucherDecimalsOf(denom))
 
-	uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, "Wrapped", "WRAP", 6, string(rx), u256.NewUint(50)))
-	uassert.Equal(t, int64(150), voucherBalanceOf(denom, rx))
+				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "Wrapped", "WRAP", 6, string(rx), u256.NewUint(50)))
+				uassert.Equal(t, int64(150), voucherBalanceOf(denom, rx))
 
-	wide := new(u256.Uint).Lsh(u256.NewUint(1), 64)
-	uassert.Error(t, v.mintVoucher(0, cur, "ibc/mint-overflow", [32]byte{}, "X", "X", 0, string(rx), wide))
-}
+				wide := new(u256.Uint).Lsh(u256.NewUint(1), 64)
+				uassert.Error(t, v.mintVoucher(0, rlm, "ibc/mint-overflow", [32]byte{}, "X", "X", 0, string(rx), wide))
+			},
+		},
+		{
+			name: "burn reduces balance and rejects insufficient or unknown voucher",
+			run: func(t *testing.T, rlm realm, v *ucs03ZkgmV1) {
+				denom := "ibc/burn-basic"
+				holder := address(testAddress("burn-holder"))
 
-// burnVoucher / transferVoucher must reject an unknown denom up front, and an
-// overflowing amount before touching the ledger.
-func TestBurnAndTransferVoucher(cur realm, t *testing.T) {
-	v := newTestImpl()
-	denom := "ibc/burn-basic"
-	holder := address(testAddress("burn-holder"))
-	other := address(testAddress("burn-other"))
+				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "B", "B", 0, string(holder), u256.NewUint(100)))
+				uassert.NoError(t, v.burnVoucher(0, rlm, denom, string(holder), u256.NewUint(40)))
+				uassert.Equal(t, int64(60), voucherBalanceOf(denom, holder))
 
-	uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, "B", "B", 0, string(holder), u256.NewUint(100)))
+				uassert.Error(t, v.burnVoucher(0, rlm, denom, string(holder), u256.NewUint(1000)))
+				uassert.Error(t, v.burnVoucher(0, rlm, "ibc/missing", string(holder), u256.NewUint(1)))
+			},
+		},
+		{
+			name: "transfer moves balance and rejects unknown voucher",
+			run: func(t *testing.T, rlm realm, v *ucs03ZkgmV1) {
+				denom := "ibc/transfer-basic"
+				holder := address(testAddress("transfer-holder"))
+				other := address(testAddress("transfer-other"))
 
-	// burn reduces the holder's balance.
-	uassert.NoError(t, v.burnVoucher(0, cur, denom, string(holder), u256.NewUint(40)))
-	uassert.Equal(t, int64(60), voucherBalanceOf(denom, holder))
+				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "T", "T", 0, string(holder), u256.NewUint(100)))
+				uassert.NoError(t, v.transferVoucher(0, rlm, denom, holder, other, u256.NewUint(10)))
+				uassert.Equal(t, int64(90), voucherBalanceOf(denom, holder))
+				uassert.Equal(t, int64(10), voucherBalanceOf(denom, other))
 
-	// burning more than held is rejected by the ledger.
-	uassert.Error(t, v.burnVoucher(0, cur, denom, string(holder), u256.NewUint(1000)))
+				uassert.Error(t, v.transferVoucher(0, rlm, "ibc/missing", holder, other, u256.NewUint(1)))
+			},
+		},
+		{
+			name: "empty name falls back to ibc denom",
+			run: func(t *testing.T, rlm realm, v *ucs03ZkgmV1) {
+				denom := "ibc/name-fallback"
+				rx := testAddress("name-fb-rx")
 
-	// transfer moves balance between holders (market-maker fill path).
-	uassert.NoError(t, v.transferVoucher(0, cur, denom, holder, other, u256.NewUint(10)))
-	uassert.Equal(t, int64(50), voucherBalanceOf(denom, holder))
-	uassert.Equal(t, int64(10), voucherBalanceOf(denom, other))
+				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "", "SYM", 0, rx, u256.NewUint(1)))
 
-	// unknown denom is rejected before any ledger access.
-	uassert.Error(t, v.burnVoucher(0, cur, "ibc/missing", string(holder), u256.NewUint(1)))
-	uassert.Error(t, v.transferVoucher(0, cur, "ibc/missing", holder, other, u256.NewUint(1)))
-}
+				vou, ok := testStore.GetVoucher(denom)
+				uassert.True(t, ok)
+				uassert.Equal(t, denom, vou.Token().GetName())
+			},
+		},
+	}
 
-// getOrCreateVoucher falls back to the IBC denom for an empty name, and reuses
-// the same token instance on subsequent lookups.
-func TestVoucherNameFallsBackToIBCDenom(cur realm, t *testing.T) {
-	v := newTestImpl()
-	denom := "ibc/name-fallback"
-	rx := testAddress("name-fb-rx")
-
-	uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, "", "SYM", 0, rx, u256.NewUint(1)))
-
-	vou, ok := testStore.GetVoucher(denom)
-	uassert.True(t, ok)
-	uassert.Equal(t, denom, vou.Token().GetName())
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testStore = newMockStore()
+			tc.run(t, cur, newTestImpl())
+		})
+	}
 }

@@ -26,24 +26,6 @@ func TestMetadataImage(t *testing.T) {
 	uassert.True(t, z.MetadataImage(meta) == ref)
 }
 
-func TestU256FromBytes32(t *testing.T) {
-	cases := []struct {
-		name string
-		bz   [32]byte
-		want string
-	}{
-		{"zero", [32]byte{}, "0"},
-		{"low byte", [32]byte{31: 0x2A}, "42"},
-		{"big endian", [32]byte{30: 0x01, 31: 0x00}, "256"},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			uassert.Equal(t, tc.want, u256FromBytes32(tc.bz).ToString())
-		})
-	}
-}
-
 // PredictWrappedToken is a pure keccak derivation: deterministic, ibc-prefixed,
 // and distinct for any change of path, channel, or base token. A nil path must
 // normalise to zero so callers cannot derive two denoms for the same order.

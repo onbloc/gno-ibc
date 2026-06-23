@@ -9,16 +9,6 @@ import (
 	"gno.land/p/nt/uassert/v0"
 )
 
-// balanceOf reads the current escrow balance, normalising a missing entry to 0.
-func balanceOf(chanId types.ChannelId, path *u256.Uint, base, quote []byte) (uint64, bool) {
-	key := ChannelBalanceKeyV2(chanId, path, base, quote)
-	bal, ok := testStore.GetChannelBalanceV2(key)
-	if !ok || bal == nil {
-		return 0, ok
-	}
-	return bal.Uint64(), ok
-}
-
 // increaseChannelBalanceV2 accumulates deposits; a zero amount stores a zero entry.
 // Each case uses a distinct base token so the shared store singleton keeps cases isolated.
 func TestIncreaseChannelBalanceV2(cur realm, t *testing.T) {
@@ -43,7 +33,7 @@ func TestIncreaseChannelBalanceV2(cur realm, t *testing.T) {
 			for _, d := range tc.deposits {
 				v.increaseChannelBalanceV2(0, cur, chanId, path, base, quote, u256.NewUint(d))
 			}
-			bal, ok := balanceOf(chanId, path, base, quote)
+			bal, ok := balanceOf(t, chanId, path, base, quote)
 			uassert.Equal(t, tc.wantSet, ok)
 			if tc.wantSet {
 				uassert.Equal(t, tc.wantBal, bal)
@@ -87,7 +77,7 @@ func TestDecreaseChannelBalanceV2(cur realm, t *testing.T) {
 			} else {
 				uassert.NoError(t, err)
 			}
-			bal, ok := balanceOf(chanId, path, base, quote)
+			bal, ok := balanceOf(t, chanId, path, base, quote)
 			uassert.Equal(t, tc.wantSet, ok)
 			if tc.wantSet {
 				uassert.Equal(t, tc.wantBal, bal)
@@ -121,4 +111,14 @@ func TestChannelBalanceKeyV2(t *testing.T) {
 			uassert.NotEqual(t, ref, tc.key)
 		})
 	}
+}
+
+// balanceOf reads the current escrow balance, normalising a missing entry to 0.
+func balanceOf(t *testing.T, chanId types.ChannelId, path *u256.Uint, base, quote []byte) (uint64, bool) {
+	key := ChannelBalanceKeyV2(chanId, path, base, quote)
+	bal, ok := testStore.GetChannelBalanceV2(key)
+	if !ok || bal == nil {
+		return 0, ok
+	}
+	return bal.Uint64(), ok
 }

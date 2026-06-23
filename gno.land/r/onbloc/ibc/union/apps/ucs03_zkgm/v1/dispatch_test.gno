@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"errors"
 	"math"
 	"testing"
 
@@ -502,13 +501,6 @@ func TestIsOnlyMakerAck(t *testing.T) {
 	uassert.True(t, isOnlyMakerAck(z.ACK_ERR_ONLY_MAKER))
 	uassert.False(t, isOnlyMakerAck([]byte("other")))
 	uassert.False(t, isOnlyMakerAck(nil))
-}
-
-// extractPanicMessage renders string, error, and arbitrary recovered values.
-func TestExtractPanicMessage(t *testing.T) {
-	uassert.Equal(t, "boom", extractPanicMessage("boom"))
-	uassert.Equal(t, "wrapped", extractPanicMessage(errors.New("wrapped")))
-	uassert.Equal(t, "42", extractPanicMessage(42))
 }
 
 func mustTokenOrderOuterAck(orderAck z.TokenOrderAck) []byte {

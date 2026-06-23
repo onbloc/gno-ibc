@@ -1,10 +1,11 @@
 package impl
 
-// forward_test.gno covers forward.gno's pure validation and dispatch logic:
-// instruction allow-listing, path/timeout validation in buildForwardChild, the
-// market-maker intent short-circuit, and ack refund routing. The async dispatch
-// (BatchSend + in-flight tracking) and the core-frame receive flow are
-// integration paths exercised in the e2e suite.
+// forward_test.gno tests the validation and dispatch logic in forward.gno,
+// including instruction allow-listing, buildForwardChild validation,
+// market-maker intent short-circuiting, and ack refund routing.
+//
+// Asynchronous dispatch and core-frame receive handling are covered by the e2e
+// suite.
 
 import (
 	"bytes"

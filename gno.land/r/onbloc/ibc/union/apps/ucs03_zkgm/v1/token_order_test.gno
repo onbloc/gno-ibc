@@ -15,6 +15,8 @@ import (
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
+const tokenOrderTestRealmPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
+
 func TestIsZeroImage(t *testing.T) {
 	uassert.True(t, isZeroImage([32]byte{}))
 	uassert.False(t, isZeroImage([32]byte{31: 0x01}))
@@ -226,84 +228,227 @@ func TestTokenOrderAckFailureUnderflowDoesNotReleaseEscrowedVoucher(cur realm, t
 	uassert.Equal(t, int64(13), voucherBalanceOf(baseToken, cur.Address()))
 }
 
-func TestTokenOrderVerifyNativeRequiresSentCoin(cur realm, t *testing.T) {
-	v := newTestImpl()
-	order := z.TokenOrderV2{
-		Sender:     []byte(testAddress("v1-native-sender")),
-		BaseToken:  []byte("ugnot"),
-		BaseAmount: u256.NewUint(13),
-		QuoteToken: []byte("quote"),
-		Kind:       z.TOKEN_ORDER_KIND_INITIALIZE,
+func TestVerifyTokenOrderV2(cur realm, t *testing.T) {
+	cases := []struct {
+		name        string
+		channelId   types.ChannelId
+		path        *u256.Uint
+		funds       *funds
+		crossSender string
+		setup       func(cur realm, t *testing.T, v *ucs03ZkgmV1) z.TokenOrderV2
+		wantErr     string
+		after       func(t *testing.T, order z.TokenOrderV2, funds *funds)
+	}{
+		{
+			name:      "native initialize requires sent coin",
+			channelId: types.ChannelId(4),
+			path:      u256.Zero(),
+			funds:     newFunds(chain.NewCoins(chain.NewCoin("ugnot", 13))),
+			setup: func(cur realm, t *testing.T, v *ucs03ZkgmV1) z.TokenOrderV2 {
+				return z.TokenOrderV2{
+					Sender:     []byte(testAddress("v1-native-sender")),
+					BaseToken:  []byte("ugnot"),
+					BaseAmount: u256.NewUint(13),
+					QuoteToken: []byte("quote"),
+					Kind:       z.TOKEN_ORDER_KIND_INITIALIZE,
+				}
+			},
+		},
+		{
+			name:      "native escrow consumes funds and increases channel balance",
+			channelId: types.ChannelId(20),
+			path:      u256.Zero(),
+			funds:     newFunds(chain.NewCoins(chain.NewCoin("ugnot", 13))),
+			setup: func(cur realm, t *testing.T, v *ucs03ZkgmV1) z.TokenOrderV2 {
+				return z.TokenOrderV2{
+					Sender:      []byte(testAddress("native-escrow-sender")),
+					BaseToken:   []byte("ugnot"),
+					BaseAmount:  u256.NewUint(13),
+					QuoteToken:  []byte("quote-native"),
+					QuoteAmount: u256.NewUint(13),
+					Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+				}
+			},
+			after: func(t *testing.T, order z.TokenOrderV2, funds *funds) {
+				uassert.True(t, funds.isEmpty())
+				balance, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(20), u256.Zero(), order.BaseToken, order.QuoteToken))
+				uassert.Equal(t, "13", balance.ToString())
+			},
+		},
+		{
+			name:      "voucher burn insufficient balance rejected",
+			channelId: types.ChannelId(21),
+			path:      u256.Zero(),
+			funds:     newFunds(nil),
+			setup: func(cur realm, t *testing.T, v *ucs03ZkgmV1) z.TokenOrderV2 {
+				sender := testAddress("burn-insuf-sender")
+				baseToken := "ibc/burn-insuf"
+				uassert.NoError(t, v.mintVoucher(0, cur, baseToken, [32]byte{}, "", "", 0, sender, u256.NewUint(10)))
+				return z.TokenOrderV2{
+					Sender:      []byte(sender),
+					BaseToken:   []byte(baseToken),
+					BaseAmount:  u256.NewUint(50),
+					QuoteToken:  []byte("quote"),
+					QuoteAmount: u256.NewUint(50),
+					Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+				}
+			},
+			wantErr: "error",
+			after: func(t *testing.T, order z.TokenOrderV2, funds *funds) {
+				uassert.Equal(t, int64(10), voucherBalanceOf(string(order.BaseToken), address(order.Sender)))
+			},
+		},
+		{
+			name:      "native unescrow rejected before funds consume",
+			channelId: types.ChannelId(0),
+			path:      u256.Zero(),
+			funds:     newFunds(chain.NewCoins(chain.NewCoin("native-unescrow", 13))),
+			setup: func(cur realm, t *testing.T, v *ucs03ZkgmV1) z.TokenOrderV2 {
+				baseDenom := "native-unescrow"
+				testStore.SetTokenOrigin(0, cur, baseDenom, u256.Zero())
+				return z.TokenOrderV2{
+					Sender:      []byte(testAddress("native-unescrow")),
+					BaseToken:   []byte(baseDenom),
+					BaseAmount:  u256.NewUint(13),
+					QuoteToken:  []byte("ugnot"),
+					QuoteAmount: u256.NewUint(13),
+					Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
+				}
+			},
+			wantErr: "invalid token order unescrow",
+			after: func(t *testing.T, order z.TokenOrderV2, funds *funds) {
+				uassert.False(t, funds.isEmpty())
+			},
+		},
+		{
+			name:        "unescrow v1 prediction passes",
+			channelId:   types.ChannelId(70),
+			path:        u256.Zero(),
+			funds:       newFunds(nil),
+			crossSender: testAddress("v1-predict-sender"),
+			setup: func(cur realm, t *testing.T, v *ucs03ZkgmV1) z.TokenOrderV2 {
+				const destChan = types.ChannelId(70)
+				sender := testAddress("v1-predict-sender")
+				quoteToken := []byte("ugnot")
+				baseDenom := PredictWrappedToken(u256.Zero(), uint32(destChan), quoteToken)
+				origin, err := z.UpdateChannelPath(u256.Zero(), uint32(destChan))
+				uassert.NoError(t, err)
+				testStore.SetTokenOrigin(0, cur, baseDenom, origin)
+				uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, [32]byte{}, "", "", 0, sender, u256.NewUint(100)))
+				return z.TokenOrderV2{
+					Sender:      []byte(sender),
+					BaseToken:   []byte(baseDenom),
+					BaseAmount:  u256.NewUint(50),
+					QuoteToken:  quoteToken,
+					QuoteAmount: u256.NewUint(50),
+					Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
+				}
+			},
+			after: func(t *testing.T, order z.TokenOrderV2, funds *funds) {
+				uassert.Equal(t, int64(50), voucherBalanceOf(string(order.BaseToken), address(order.Sender)))
+			},
+		},
+		{
+			name:        "unescrow v2 prediction with image passes",
+			channelId:   types.ChannelId(71),
+			path:        u256.Zero(),
+			funds:       newFunds(nil),
+			crossSender: testAddress("v2-predict-sender"),
+			setup: func(cur realm, t *testing.T, v *ucs03ZkgmV1) z.TokenOrderV2 {
+				const destChan = types.ChannelId(71)
+				sender := testAddress("v2-predict-sender")
+				quoteToken := []byte("ugnot")
+				image := [32]byte{0x01}
+				baseDenom := PredictWrappedTokenV2(u256.Zero(), uint32(destChan), quoteToken, image)
+				origin, err := z.UpdateChannelPath(u256.Zero(), uint32(destChan))
+				uassert.NoError(t, err)
+				testStore.SetTokenOrigin(0, cur, baseDenom, origin)
+				testStore.SetMetadataImageOf(0, cur, baseDenom, image)
+				uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, image, "", "", 0, sender, u256.NewUint(100)))
+				return z.TokenOrderV2{
+					Sender:      []byte(sender),
+					BaseToken:   []byte(baseDenom),
+					BaseAmount:  u256.NewUint(50),
+					QuoteToken:  quoteToken,
+					QuoteAmount: u256.NewUint(50),
+					Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
+				}
+			},
+			after: func(t *testing.T, order z.TokenOrderV2, funds *funds) {
+				uassert.Equal(t, int64(50), voucherBalanceOf(string(order.BaseToken), address(order.Sender)))
+			},
+		},
+		{
+			name:        "unescrow wrong image rejected",
+			channelId:   types.ChannelId(72),
+			path:        u256.Zero(),
+			funds:       newFunds(nil),
+			crossSender: testAddress("wrong-image-sender"),
+			setup: func(cur realm, t *testing.T, v *ucs03ZkgmV1) z.TokenOrderV2 {
+				const destChan = types.ChannelId(72)
+				sender := testAddress("wrong-image-sender")
+				quoteToken := []byte("ugnot")
+				imageCorrect := [32]byte{0x01}
+				imageWrong := [32]byte{0x02}
+				baseDenom := PredictWrappedTokenV2(u256.Zero(), uint32(destChan), quoteToken, imageCorrect)
+				origin, err := z.UpdateChannelPath(u256.Zero(), uint32(destChan))
+				uassert.NoError(t, err)
+				testStore.SetTokenOrigin(0, cur, baseDenom, origin)
+				testStore.SetMetadataImageOf(0, cur, baseDenom, imageWrong)
+				uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, imageWrong, "", "", 0, sender, u256.NewUint(100)))
+				return z.TokenOrderV2{
+					Sender:      []byte(sender),
+					BaseToken:   []byte(baseDenom),
+					BaseAmount:  u256.NewUint(50),
+					QuoteToken:  quoteToken,
+					QuoteAmount: u256.NewUint(50),
+					Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
+				}
+			},
+			wantErr: "invalid token order unescrow",
+		},
+		{
+			name:      "solve returns error",
+			channelId: types.ChannelId(80),
+			path:      u256.Zero(),
+			funds:     newFunds(nil),
+			setup: func(cur realm, t *testing.T, v *ucs03ZkgmV1) z.TokenOrderV2 {
+				return z.TokenOrderV2{
+					Sender:      []byte(testAddress("solve-sender")),
+					BaseToken:   []byte("ugnot"),
+					BaseAmount:  u256.NewUint(1),
+					QuoteToken:  []byte("ibc/solve"),
+					QuoteAmount: u256.NewUint(1),
+					Kind:        z.TOKEN_ORDER_KIND_SOLVE,
+				}
+			},
+			wantErr: "not implemented",
+		},
 	}
 
-	err := v.verifyTokenOrderV2(0, cur, newFunds(chain.NewCoins(chain.NewCoin("ugnot", 13))), types.ChannelId(4), u256.Zero(), order)
-
-	uassert.NoError(t, err)
-}
-
-func TestTokenOrderVerifyNativeEscrowConsumesFundsAndIncreasesChannelBalance(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	sender := testAddress("native-escrow-sender")
-	const channelId = types.ChannelId(20)
-	order := z.TokenOrderV2{
-		Sender:      []byte(sender),
-		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(13),
-		QuoteToken:  []byte("quote-native"),
-		QuoteAmount: u256.NewUint(13),
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	for _, tc := range cases {
+		testing.SetRealm(testing.NewCodeRealm(tokenOrderTestRealmPath))
+		testStore = newMockStore()
+		v := newTestImpl()
+		order := tc.setup(cur, t, v)
+		var err error
+		if tc.crossSender != "" {
+			testing.SetRealm(testing.NewUserRealm(address(tc.crossSender)))
+			err = v.verifyTokenOrderV2X(cross(cur), tc.funds, tc.channelId, tc.path, order)
+		} else {
+			err = v.verifyTokenOrderV2(0, cur, tc.funds, tc.channelId, tc.path, order)
+		}
+		if tc.wantErr == "" {
+			uassert.NoError(t, err, tc.name)
+		} else if tc.wantErr == "error" {
+			uassert.Error(t, err, tc.name)
+		} else {
+			uassert.ErrorContains(t, err, tc.wantErr, tc.name)
+		}
+		if tc.after != nil {
+			tc.after(t, order, tc.funds)
+		}
 	}
-	f := newFunds(chain.NewCoins(chain.NewCoin("ugnot", 13)))
-
-	err := v.verifyTokenOrderV2(0, cur, f, channelId, u256.Zero(), order)
-
-	uassert.NoError(t, err)
-	uassert.True(t, f.isEmpty())
-	balance, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(channelId, u256.Zero(), order.BaseToken, order.QuoteToken))
-	uassert.Equal(t, "13", balance.ToString())
-}
-
-func TestTokenOrderVerifyVoucherBurnInsufficientBalanceRejected(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	sender := testAddress("burn-insuf-sender")
-	baseToken := "ibc/burn-insuf"
-	uassert.NoError(t, v.mintVoucher(0, cur, baseToken, [32]byte{}, "", "", 0, sender, u256.NewUint(10)))
-
-	order := z.TokenOrderV2{
-		Sender:      []byte(sender),
-		BaseToken:   []byte(baseToken),
-		BaseAmount:  u256.NewUint(50),
-		QuoteToken:  []byte("quote"),
-		QuoteAmount: u256.NewUint(50),
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-	}
-
-	err := v.verifyTokenOrderV2(0, cur, newFunds(nil), types.ChannelId(21), u256.Zero(), order)
-
-	uassert.Error(t, err)
-	uassert.Equal(t, int64(10), voucherBalanceOf(baseToken, address(sender)))
-}
-
-func TestTokenOrderVerifyUnescrowNativeRejectedBeforeFundsConsume(cur realm, t *testing.T) {
-	v := newTestImpl()
-	baseDenom := "native-unescrow"
-	testStore.SetTokenOrigin(0, cur, baseDenom, u256.Zero())
-	order := z.TokenOrderV2{
-		Sender:      []byte(testAddress("native-unescrow")),
-		BaseToken:   []byte(baseDenom),
-		BaseAmount:  u256.NewUint(13),
-		QuoteToken:  []byte("ugnot"),
-		QuoteAmount: u256.NewUint(13),
-		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
-	}
-	f := newFunds(chain.NewCoins(chain.NewCoin(baseDenom, 13)))
-
-	err := v.verifyTokenOrderV2(0, cur, f, types.ChannelId(0), u256.Zero(), order)
-
-	uassert.ErrorContains(t, err, "invalid token order unescrow")
-	uassert.False(t, f.isEmpty())
 }
 
 // The reference applies the token-order rate limit only on the receive/execute
@@ -351,144 +496,141 @@ func TestTokenOrderExecuteAppliesRateLimit(cur realm, t *testing.T) {
 	testStore.RemoveTokenBucket(0, cur, ibcDenom)
 }
 
-func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
-		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6}),
-	})
-	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	ibcDenom := PredictWrappedTokenV2(u256.NewUint(7), 5, []byte("ugnot"), image)
-	order := z.TokenOrderV2{
-		Sender:      []byte("sender"),
-		Receiver:    []byte(testAddress("v1-receiver")),
-		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(100),
-		QuoteToken:  []byte(ibcDenom),
-		QuoteAmount: u256.NewUint(95),
-		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
-		Metadata:    metaBytes,
+func TestExecuteTokenOrderV2Initialize(cur realm, t *testing.T) {
+	cases := []struct {
+		name           string
+		path           *u256.Uint
+		destChannel    types.ChannelId
+		receiver       string
+		relayer        string
+		implementation []byte
+		initializer    []byte
+		baseAmount     *u256.Uint
+		quoteAmount    *u256.Uint
+		wantErr        string
+		wantBalance    int64
+		wantName       string
+		wantSymbol     string
+		wantDecimals   int
+		checkFullMeta  bool
+		checkNoState   bool
+	}{
+		{
+			name:           "mints voucher and success ack",
+			path:           u256.NewUint(7),
+			destChannel:    types.ChannelId(5),
+			receiver:       testAddress("v1-receiver"),
+			relayer:        testAddress("v1-relayer"),
+			implementation: []byte("grc20"),
+			initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6}),
+			baseAmount:     u256.NewUint(100),
+			quoteAmount:    u256.NewUint(95),
+			wantBalance:    95,
+			wantName:       "Gno Token",
+			wantSymbol:     "GNOT",
+			wantDecimals:   6,
+			checkFullMeta:  true,
+		},
+		{
+			name:           "malformed initializer uses defaults",
+			path:           u256.NewUint(3),
+			destChannel:    types.ChannelId(4),
+			receiver:       testAddress("fallback-receiver"),
+			relayer:        testAddress("fallback-relayer"),
+			implementation: []byte("grc20"),
+			initializer:    []byte("not-valid-abi"),
+			baseAmount:     u256.NewUint(50),
+			quoteAmount:    u256.NewUint(50),
+			wantBalance:    50,
+			wantDecimals:   0,
+		},
+		{
+			name:           "empty initializer uses defaults",
+			path:           u256.NewUint(5),
+			destChannel:    types.ChannelId(6),
+			receiver:       testAddress("empty-init-receiver"),
+			relayer:        testAddress("empty-init-relayer"),
+			implementation: []byte("grc20"),
+			initializer:    []byte{},
+			baseAmount:     u256.NewUint(20),
+			quoteAmount:    u256.NewUint(20),
+			wantBalance:    20,
+			wantDecimals:   0,
+		},
+		{
+			name:           "mint error does not set origin",
+			path:           u256.NewUint(9),
+			destChannel:    types.ChannelId(7),
+			receiver:       "not-a-valid-address",
+			relayer:        testAddress("invalid-rx-relayer"),
+			implementation: []byte("grc20-invalid-rx"),
+			initializer:    []byte("init-invalid-rx"),
+			baseAmount:     u256.NewUint(100),
+			quoteAmount:    u256.NewUint(95),
+			wantErr:        "invalid address",
+			checkNoState:   true,
+		},
 	}
-	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(5), nil, 0)
 
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("v1-relayer")), nil, [32]byte{}, u256.NewUint(7), order, false)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testStore = newMockStore()
+			v := newTestImpl()
+			metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+				Implementation: tc.implementation,
+				Initializer:    tc.initializer,
+			})
+			image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
+			ibcDenom := PredictWrappedTokenV2(tc.path, uint32(tc.destChannel), []byte("ugnot"), image)
+			order := z.TokenOrderV2{
+				Sender:      []byte("sender"),
+				Receiver:    []byte(tc.receiver),
+				BaseToken:   []byte("ugnot"),
+				BaseAmount:  tc.baseAmount,
+				QuoteToken:  []byte(ibcDenom),
+				QuoteAmount: tc.quoteAmount,
+				Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+				Metadata:    metaBytes,
+			}
+			packet := core.NewPacket(types.ChannelId(1), tc.destChannel, nil, 0)
 
-	uassert.NoError(t, err)
-	uassert.True(t, res.Status == types.PacketStatusSuccess)
-	assertProtocolAck(t, res.Acknowledgement)
+			res, err := v.executeTokenOrderV2(0, cur, packet, address(tc.relayer), nil, [32]byte{}, tc.path, order, false)
+			if tc.wantErr != "" {
+				uassert.ErrorContains(t, err, tc.wantErr)
+				if tc.checkNoState {
+					_, ok := testStore.GetTokenOrigin(ibcDenom)
+					uassert.False(t, ok, "mint error must not set token origin")
+					_, ok = testStore.GetForeignToken(ibcDenom)
+					uassert.False(t, ok, "mint error must not set foreign token")
+					_, ok = testStore.GetMetadataImageOf(ibcDenom)
+					uassert.False(t, ok, "mint error must not set metadata image")
+				}
+				return
+			}
 
-	uassert.Equal(t, int64(95), voucherBalanceOf(ibcDenom, address(order.Receiver)))
+			uassert.NoError(t, err)
+			uassert.True(t, res.Status == types.PacketStatusSuccess)
+			assertProtocolAck(t, res.Acknowledgement)
+			uassert.Equal(t, tc.wantBalance, voucherBalanceOf(ibcDenom, address(order.Receiver)))
+			uassert.Equal(t, tc.wantDecimals, voucherDecimalsOf(ibcDenom))
 
-	storedImage, ok := testStore.GetMetadataImageOf(ibcDenom)
-	uassert.True(t, ok)
-	uassert.True(t, image == storedImage)
+			if tc.checkFullMeta {
+				storedImage, ok := testStore.GetMetadataImageOf(ibcDenom)
+				uassert.True(t, ok)
+				uassert.True(t, image == storedImage)
 
-	origin, ok := testStore.GetTokenOrigin(ibcDenom)
-	uassert.True(t, ok)
-	uassert.Equal(t, "21474836487", origin.ToString())
+				origin, ok := testStore.GetTokenOrigin(ibcDenom)
+				uassert.True(t, ok)
+				uassert.Equal(t, "21474836487", origin.ToString())
 
-	foreignToken, ok := testStore.GetForeignToken(ibcDenom)
-	uassert.True(t, ok)
-	uassert.Equal(t, "ugnot", string(foreignToken))
-
-	uassert.Equal(t, "Gno Token", voucherNameOf(ibcDenom))
-	uassert.Equal(t, "GNOT", voucherSymbolOf(ibcDenom))
-	uassert.Equal(t, 6, voucherDecimalsOf(ibcDenom))
-}
-
-func TestTokenOrderExecuteInitializeMalformedInitializerUsesDefaults(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	// Initializer is raw bytes that cannot be decoded as TokenInitializer.
-	// The protocol must fall back to ibcDenom-derived name/symbol and 0 decimals.
-	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
-		Initializer:    []byte("not-valid-abi"),
-	})
-	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	ibcDenom := PredictWrappedTokenV2(u256.NewUint(3), 4, []byte("ugnot"), image)
-	order := z.TokenOrderV2{
-		Sender:      []byte("sender"),
-		Receiver:    []byte(testAddress("fallback-receiver")),
-		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(50),
-		QuoteToken:  []byte(ibcDenom),
-		QuoteAmount: u256.NewUint(50),
-		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
-		Metadata:    metaBytes,
+				foreignToken, ok := testStore.GetForeignToken(ibcDenom)
+				uassert.True(t, ok)
+				uassert.Equal(t, "ugnot", string(foreignToken))
+				uassert.Equal(t, tc.wantName, voucherNameOf(ibcDenom))
+				uassert.Equal(t, tc.wantSymbol, voucherSymbolOf(ibcDenom))
+			}
+		})
 	}
-	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(4), nil, 0)
-
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("fallback-relayer")), nil, [32]byte{}, u256.NewUint(3), order, false)
-
-	uassert.NoError(t, err)
-	uassert.True(t, res.Status == types.PacketStatusSuccess)
-
-	uassert.Equal(t, 0, voucherDecimalsOf(ibcDenom))
-}
-
-func TestTokenOrderExecuteInitializeEmptyInitializerUsesDefaults(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	// Empty Initializer: decimals must default to 0, symbol derived from ibcDenom.
-	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
-		Initializer:    []byte{},
-	})
-	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	ibcDenom := PredictWrappedTokenV2(u256.NewUint(5), 6, []byte("ugnot"), image)
-	order := z.TokenOrderV2{
-		Sender:      []byte("sender"),
-		Receiver:    []byte(testAddress("empty-init-receiver")),
-		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(20),
-		QuoteToken:  []byte(ibcDenom),
-		QuoteAmount: u256.NewUint(20),
-		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
-		Metadata:    metaBytes,
-	}
-	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(6), nil, 0)
-
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("empty-init-relayer")), nil, [32]byte{}, u256.NewUint(5), order, false)
-
-	uassert.NoError(t, err)
-	uassert.True(t, res.Status == types.PacketStatusSuccess)
-
-	uassert.Equal(t, 0, voucherDecimalsOf(ibcDenom))
-}
-
-func TestTokenOrderExecuteInitializeMintErrorDoesNotSetOrigin(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20-invalid-rx"),
-		Initializer:    []byte("init-invalid-rx"),
-	})
-
-	image := MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	ibcDenom := PredictWrappedTokenV2(u256.NewUint(9), 7, []byte("ugnot"), image)
-	order := z.TokenOrderV2{
-		Sender:      []byte("sender"),
-		Receiver:    []byte("not-a-valid-address"),
-		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(100),
-		QuoteToken:  []byte(ibcDenom),
-		QuoteAmount: u256.NewUint(95),
-		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
-		Metadata:    metaBytes,
-	}
-	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(7), nil, 0)
-
-	_, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("invalid-rx-relayer")), nil, [32]byte{}, u256.NewUint(9), order, false)
-	uassert.ErrorContains(t, err, "invalid address")
-
-	_, ok := testStore.GetTokenOrigin(ibcDenom)
-	uassert.False(t, ok, "mint error must not set token origin")
-	_, ok = testStore.GetForeignToken(ibcDenom)
-	uassert.False(t, ok, "mint error must not set foreign token")
-	_, ok = testStore.GetMetadataImageOf(ibcDenom)
-	uassert.False(t, ok, "mint error must not set metadata image")
 }
 
 func TestTokenOrderExecuteEscrowMintErrorDoesNotSetOrigin(cur realm, t *testing.T) {
@@ -603,277 +745,176 @@ func TestTokenOrderExecuteEscrowQuoteDenomMismatchFallsBackToMarketMaker(cur rea
 	uassert.Equal(t, int64(0), voucherBalanceOf("ibc/wrong-denom", address(receiver)))
 }
 
-func TestTokenOrderExecuteEscrowZeroFeeSkipsRelayerMint(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	path := u256.Zero()
-	const destChan = types.ChannelId(60)
-	relayer := testAddress("zero-fee-relayer")
-	receiver := testAddress("zero-fee-receiver")
-	quoteDenom := PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
-	order := z.TokenOrderV2{
-		Sender:      []byte("sender"),
-		Receiver:    []byte(receiver),
-		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(100),
-		QuoteToken:  []byte(quoteDenom),
-		QuoteAmount: u256.NewUint(100), // fee = 0
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+func TestExecuteTokenOrderV2EscrowZeroAmounts(cur realm, t *testing.T) {
+	cases := []struct {
+		name            string
+		destChannel     types.ChannelId
+		relayer         string
+		receiver        string
+		baseAmount      *u256.Uint
+		quoteAmount     *u256.Uint
+		wantReceiver    int64
+		wantRelayer     int64
+		checkNoMetadata bool
+	}{
+		{
+			name:            "zero fee skips relayer mint",
+			destChannel:     types.ChannelId(60),
+			relayer:         testAddress("zero-fee-relayer"),
+			receiver:        testAddress("zero-fee-receiver"),
+			baseAmount:      u256.NewUint(100),
+			quoteAmount:     u256.NewUint(100),
+			wantReceiver:    100,
+			wantRelayer:     0,
+			checkNoMetadata: true,
+		},
+		{
+			name:         "zero quote skips receiver mint",
+			destChannel:  types.ChannelId(61),
+			relayer:      testAddress("zero-quote-relayer"),
+			receiver:     testAddress("zero-quote-receiver"),
+			baseAmount:   u256.NewUint(100),
+			quoteAmount:  u256.NewUint(0),
+			wantReceiver: 0,
+			wantRelayer:  100,
+		},
+		{
+			name:         "zero amount skips both mints",
+			destChannel:  types.ChannelId(62),
+			relayer:      testAddress("zero-amt-relayer"),
+			receiver:     testAddress("zero-amt-receiver"),
+			baseAmount:   u256.NewUint(0),
+			quoteAmount:  u256.NewUint(0),
+			wantReceiver: 0,
+			wantRelayer:  0,
+		},
 	}
-	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
 
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(relayer), nil, [32]byte{}, path, order, false)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testStore = newMockStore()
+			v := newTestImpl()
+			path := u256.Zero()
+			quoteDenom := PredictWrappedToken(path, uint32(tc.destChannel), []byte("ugnot"))
+			order := z.TokenOrderV2{
+				Sender:      []byte("sender"),
+				Receiver:    []byte(tc.receiver),
+				BaseToken:   []byte("ugnot"),
+				BaseAmount:  tc.baseAmount,
+				QuoteToken:  []byte(quoteDenom),
+				QuoteAmount: tc.quoteAmount,
+				Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+			}
+			packet := core.NewPacket(types.ChannelId(1), tc.destChannel, nil, 0)
 
-	uassert.NoError(t, err)
-	uassert.True(t, res.Status == types.PacketStatusSuccess)
-	uassert.Equal(t, int64(100), voucherBalanceOf(quoteDenom, address(receiver)))
-	uassert.Equal(t, int64(0), voucherBalanceOf(quoteDenom, address(relayer)))
+			res, err := v.executeTokenOrderV2(0, cur, packet, address(tc.relayer), nil, [32]byte{}, path, order, false)
 
-	_, ok := testStore.GetTokenOrigin(quoteDenom)
-	uassert.False(t, ok, "escrow protocol fill must not set token origin")
-	_, ok = testStore.GetForeignToken(quoteDenom)
-	uassert.False(t, ok, "escrow protocol fill must not set foreign token")
-	_, ok = testStore.GetMetadataImageOf(quoteDenom)
-	uassert.False(t, ok, "escrow protocol fill must not set metadata image")
+			uassert.NoError(t, err)
+			uassert.True(t, res.Status == types.PacketStatusSuccess)
+			uassert.Equal(t, tc.wantReceiver, voucherBalanceOf(quoteDenom, address(tc.receiver)))
+			uassert.Equal(t, tc.wantRelayer, voucherBalanceOf(quoteDenom, address(tc.relayer)))
+			if tc.checkNoMetadata {
+				_, ok := testStore.GetTokenOrigin(quoteDenom)
+				uassert.False(t, ok, "escrow protocol fill must not set token origin")
+				_, ok = testStore.GetForeignToken(quoteDenom)
+				uassert.False(t, ok, "escrow protocol fill must not set foreign token")
+				_, ok = testStore.GetMetadataImageOf(quoteDenom)
+				uassert.False(t, ok, "escrow protocol fill must not set metadata image")
+			}
+		})
+	}
 }
 
-func TestTokenOrderExecuteEscrowZeroQuoteSkipsReceiverMint(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	path := u256.Zero()
-	const destChan = types.ChannelId(61)
-	relayer := testAddress("zero-quote-relayer")
-	receiver := testAddress("zero-quote-receiver")
-	quoteDenom := PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
-	order := z.TokenOrderV2{
-		Sender:      []byte("sender"),
-		Receiver:    []byte(receiver),
-		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(100),
-		QuoteToken:  []byte(quoteDenom),
-		QuoteAmount: u256.NewUint(0), // receiver gets nothing; all goes to relayer as fee
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-	}
-	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
-
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(relayer), nil, [32]byte{}, path, order, false)
-
-	uassert.NoError(t, err)
-	uassert.True(t, res.Status == types.PacketStatusSuccess)
-	uassert.Equal(t, int64(0), voucherBalanceOf(quoteDenom, address(receiver)))
-	uassert.Equal(t, int64(100), voucherBalanceOf(quoteDenom, address(relayer)))
-}
-
-func TestTokenOrderExecuteEscrowZeroAmountSkipsBothMints(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	path := u256.Zero()
-	const destChan = types.ChannelId(62)
-	relayer := testAddress("zero-amt-relayer")
-	receiver := testAddress("zero-amt-receiver")
-	quoteDenom := PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
-	order := z.TokenOrderV2{
-		Sender:      []byte("sender"),
-		Receiver:    []byte(receiver),
-		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(0),
-		QuoteToken:  []byte(quoteDenom),
-		QuoteAmount: u256.NewUint(0),
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-	}
-	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
-
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(relayer), nil, [32]byte{}, path, order, false)
-
-	uassert.NoError(t, err)
-	uassert.True(t, res.Status == types.PacketStatusSuccess)
-	uassert.Equal(t, int64(0), voucherBalanceOf(quoteDenom, address(receiver)))
-	uassert.Equal(t, int64(0), voucherBalanceOf(quoteDenom, address(relayer)))
-}
-
-func TestTokenOrderVerifyUnescrowV1PredictionPasses(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	const destChan = types.ChannelId(70)
-	sender := testAddress("v1-predict-sender")
-	quoteToken := []byte("ugnot")
-	baseDenom := PredictWrappedToken(u256.Zero(), uint32(destChan), quoteToken)
-	origin, err := z.UpdateChannelPath(u256.Zero(), uint32(destChan))
-	uassert.NoError(t, err)
-	testStore.SetTokenOrigin(0, cur, baseDenom, origin)
-	uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, [32]byte{}, "", "", 0, sender, u256.NewUint(100)))
-
-	order := z.TokenOrderV2{
-		Sender:      []byte(sender),
-		BaseToken:   []byte(baseDenom),
-		BaseAmount:  u256.NewUint(50),
-		QuoteToken:  quoteToken,
-		QuoteAmount: u256.NewUint(50),
-		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
+func TestExecuteTokenOrderV2Intent(cur realm, t *testing.T) {
+	cases := []struct {
+		name                string
+		maker               string
+		receiver            string
+		quoteToken          string
+		kind                uint8
+		quoteAmount         *u256.Uint
+		seedMakerBalance    uint64
+		wantOnlyMaker       bool
+		wantMakerBalance    int64
+		wantReceiverBalance int64
+		checkNoOrigin       bool
+		checkNoBalance      bool
+	}{
+		{
+			name:                "voucher market maker fill transfers maker funds",
+			maker:               testAddress("v1-intent-maker"),
+			receiver:            testAddress("v1-intent-receiver"),
+			quoteToken:          "ibc/v1-intent-quote",
+			kind:                z.TOKEN_ORDER_KIND_ESCROW,
+			quoteAmount:         u256.NewUint(12),
+			seedMakerBalance:    30,
+			wantMakerBalance:    18,
+			wantReceiverBalance: 12,
+			checkNoOrigin:       true,
+			checkNoBalance:      true,
+		},
+		{
+			name:          "unknown quote returns only maker",
+			maker:         testAddress("v1-intent-maker"),
+			receiver:      testAddress("int-unknown-rx"),
+			quoteToken:    "ugnot",
+			kind:          z.TOKEN_ORDER_KIND_UNESCROW,
+			quoteAmount:   u256.NewUint(10),
+			wantOnlyMaker: true,
+		},
+		{
+			name:                "insufficient maker balance returns only maker",
+			maker:               testAddress("v1-intent-poor-maker"),
+			receiver:            testAddress("int-poor-rx"),
+			quoteToken:          "ibc/v1-intent-poor",
+			kind:                z.TOKEN_ORDER_KIND_ESCROW,
+			quoteAmount:         u256.NewUint(9),
+			seedMakerBalance:    3,
+			wantOnlyMaker:       true,
+			wantMakerBalance:    3,
+			wantReceiverBalance: 0,
+		},
 	}
 
-	testing.SetRealm(testing.NewUserRealm(address(sender)))
-	err = v.verifyTokenOrderV2X(cross(cur), newFunds(nil), destChan, u256.Zero(), order)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testStore = newMockStore()
+			v := newTestImpl()
+			if tc.seedMakerBalance > 0 {
+				uassert.NoError(t, v.mintVoucher(0, cur, tc.quoteToken, [32]byte{}, "", "", 0, tc.maker, u256.NewUint(tc.seedMakerBalance)))
+			}
+			order := z.TokenOrderV2{
+				Sender:      []byte("sender"),
+				Receiver:    []byte(tc.receiver),
+				BaseToken:   []byte("ugnot"),
+				BaseAmount:  u256.NewUint(100),
+				QuoteToken:  []byte(tc.quoteToken),
+				QuoteAmount: tc.quoteAmount,
+				Kind:        tc.kind,
+			}
+			packet := core.NewPacket(types.ChannelId(1), types.ChannelId(5), nil, 0)
 
-	uassert.NoError(t, err)
-	uassert.Equal(t, int64(50), voucherBalanceOf(baseDenom, address(sender)))
-}
+			res, err := v.executeTokenOrderV2(0, cur, packet, address(tc.maker), nil, [32]byte{}, u256.Zero(), order, true)
 
-func TestTokenOrderVerifyUnescrowV2PredictionWithImagePasses(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	const destChan = types.ChannelId(71)
-	sender := testAddress("v2-predict-sender")
-	quoteToken := []byte("ugnot")
-	image := [32]byte{0x01}
-	baseDenom := PredictWrappedTokenV2(u256.Zero(), uint32(destChan), quoteToken, image)
-	origin, err := z.UpdateChannelPath(u256.Zero(), uint32(destChan))
-	uassert.NoError(t, err)
-	testStore.SetTokenOrigin(0, cur, baseDenom, origin)
-	testStore.SetMetadataImageOf(0, cur, baseDenom, image)
-	uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, image, "", "", 0, sender, u256.NewUint(100)))
-
-	order := z.TokenOrderV2{
-		Sender:      []byte(sender),
-		BaseToken:   []byte(baseDenom),
-		BaseAmount:  u256.NewUint(50),
-		QuoteToken:  quoteToken,
-		QuoteAmount: u256.NewUint(50),
-		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
+			uassert.NoError(t, err)
+			uassert.True(t, res.Status == types.PacketStatusSuccess)
+			if tc.wantOnlyMaker {
+				uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Acknowledgement))
+			} else {
+				assertMarketMakerAck(t, res.Acknowledgement, tc.maker)
+			}
+			uassert.Equal(t, tc.wantMakerBalance, voucherBalanceOf(tc.quoteToken, address(tc.maker)))
+			uassert.Equal(t, tc.wantReceiverBalance, voucherBalanceOf(tc.quoteToken, address(tc.receiver)))
+			if tc.checkNoOrigin {
+				_, ok := testStore.GetTokenOrigin(tc.quoteToken)
+				uassert.False(t, ok, "market-maker fill must not set token origin")
+			}
+			if tc.checkNoBalance {
+				balance, hasBalance := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(5), u256.Zero(), order.BaseToken, order.QuoteToken))
+				uassert.True(t, !hasBalance || balance.IsZero())
+			}
+		})
 	}
-
-	testing.SetRealm(testing.NewUserRealm(address(sender)))
-	err = v.verifyTokenOrderV2X(cross(cur), newFunds(nil), destChan, u256.Zero(), order)
-
-	uassert.NoError(t, err)
-	uassert.Equal(t, int64(50), voucherBalanceOf(baseDenom, address(sender)))
-}
-
-func TestTokenOrderVerifyUnescrowWrongImageRejected(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	const destChan = types.ChannelId(72)
-	sender := testAddress("wrong-image-sender")
-	quoteToken := []byte("ugnot")
-	imageCorrect := [32]byte{0x01}
-	imageWrong := [32]byte{0x02}
-	baseDenom := PredictWrappedTokenV2(u256.Zero(), uint32(destChan), quoteToken, imageCorrect)
-	origin, err := z.UpdateChannelPath(u256.Zero(), uint32(destChan))
-	uassert.NoError(t, err)
-	testStore.SetTokenOrigin(0, cur, baseDenom, origin)
-	testStore.SetMetadataImageOf(0, cur, baseDenom, imageWrong)
-	// imageWrong diverges from imageCorrect used to hash baseDenom — prediction will not match.
-	uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, imageWrong, "", "", 0, sender, u256.NewUint(100)))
-
-	order := z.TokenOrderV2{
-		Sender:      []byte(sender),
-		BaseToken:   []byte(baseDenom),
-		BaseAmount:  u256.NewUint(50),
-		QuoteToken:  quoteToken,
-		QuoteAmount: u256.NewUint(50),
-		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
-	}
-
-	testing.SetRealm(testing.NewUserRealm(address(sender)))
-	err = v.verifyTokenOrderV2X(cross(cur), newFunds(nil), destChan, u256.Zero(), order)
-
-	uassert.ErrorContains(t, err, "invalid token order unescrow")
-}
-
-func TestTokenOrderIntentVoucherMarketMakerFillTransfersMakerFunds(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	maker := testAddress("v1-intent-maker")
-	receiver := testAddress("v1-intent-receiver")
-	quoteToken := "ibc/v1-intent-quote"
-	uassert.NoError(t, v.mintVoucher(0, cur, quoteToken, [32]byte{}, "", "", 0, maker, u256.NewUint(30)))
-	order := z.TokenOrderV2{
-		Sender:      []byte("sender"),
-		Receiver:    []byte(receiver),
-		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(100),
-		QuoteToken:  []byte(quoteToken),
-		QuoteAmount: u256.NewUint(12),
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-	}
-	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(5), nil, 0)
-
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(maker), nil, [32]byte{}, u256.Zero(), order, true)
-
-	uassert.NoError(t, err)
-	uassert.True(t, res.Status == types.PacketStatusSuccess)
-	assertMarketMakerAck(t, res.Acknowledgement, maker)
-	uassert.Equal(t, int64(18), voucherBalanceOf(quoteToken, address(maker)))
-	uassert.Equal(t, int64(12), voucherBalanceOf(quoteToken, address(receiver)))
-
-	_, ok := testStore.GetTokenOrigin(quoteToken)
-	uassert.False(t, ok, "market-maker fill must not set token origin")
-
-	balance, hasBalance := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(5), u256.Zero(), order.BaseToken, order.QuoteToken))
-	uassert.True(t, !hasBalance || balance.IsZero())
-}
-
-func TestTokenOrderIntentUnknownQuoteReturnsOnlyMaker(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	order := z.TokenOrderV2{
-		Receiver:    []byte(testAddress("int-unknown-rx")),
-		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(10),
-		QuoteToken:  []byte("ugnot"),
-		QuoteAmount: u256.NewUint(10),
-		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
-	}
-	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(5), nil, 0)
-
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("v1-intent-maker")), nil, [32]byte{}, u256.Zero(), order, true)
-
-	uassert.NoError(t, err)
-	uassert.True(t, res.Status == types.PacketStatusSuccess)
-	uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Acknowledgement))
-}
-
-func TestTokenOrderIntentInsufficientMakerBalanceReturnsOnlyMaker(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	maker := testAddress("v1-intent-poor-maker")
-	receiver := testAddress("int-poor-rx")
-	quoteToken := "ibc/v1-intent-poor"
-	uassert.NoError(t, v.mintVoucher(0, cur, quoteToken, [32]byte{}, "", "", 0, maker, u256.NewUint(3)))
-	order := z.TokenOrderV2{
-		Receiver:    []byte(receiver),
-		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(10),
-		QuoteToken:  []byte(quoteToken),
-		QuoteAmount: u256.NewUint(9),
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-	}
-	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(5), nil, 0)
-
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(maker), nil, [32]byte{}, u256.Zero(), order, true)
-
-	uassert.NoError(t, err)
-	uassert.True(t, res.Status == types.PacketStatusSuccess)
-	uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Acknowledgement))
-	uassert.Equal(t, int64(3), voucherBalanceOf(quoteToken, address(maker)))
-	uassert.Equal(t, int64(0), voucherBalanceOf(quoteToken, address(receiver)))
-}
-
-func TestTokenOrderVerifySolveReturnsError(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	order := z.TokenOrderV2{
-		Sender:      []byte(testAddress("solve-sender")),
-		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(1),
-		QuoteToken:  []byte("ibc/solve"),
-		QuoteAmount: u256.NewUint(1),
-		Kind:        z.TOKEN_ORDER_KIND_SOLVE,
-	}
-
-	err := v.verifyTokenOrderV2(0, cur, newFunds(nil), types.ChannelId(80), u256.Zero(), order)
-
-	uassert.ErrorContains(t, err, "not implemented")
 }
 
 func TestAckConstantConstructorsReturnIndependentInstances(cur realm, t *testing.T) {

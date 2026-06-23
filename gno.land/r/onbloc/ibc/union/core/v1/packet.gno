@@ -87,15 +87,12 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 
 	now := core.NowNanos()
 
-	// reference zips packets with relayer_msgs (contract.rs L1751); the relayer
-	// always supplies a per-packet entry there. gno callers may omit relayer msgs
-	// (they are optional), so iterate packets and index the relayer msgs when
-	// present rather than letting an empty RelayerMsgs skip every packet.
-	for i, packet := range msg.Packets {
-		var relayerMsg []byte
-		if i < len(msg.RelayerMsgs) {
-			relayerMsg = msg.RelayerMsgs[i]
-		}
+	// reference iterates packets.into_iter().zip(relayer_msgs) (contract.rs L1751):
+	// each packet is paired with its relayer msg, so a packet without a matching
+	// relayer msg is not dispatched (iteration stops at the shorter array).
+	for i := 0; i < len(msg.Packets) && i < len(msg.RelayerMsgs); i++ {
+		packet := msg.Packets[i]
+		relayerMsg := msg.RelayerMsgs[i]
 
 		ch, skip := c.acceptRecvPacket(0, rlm, packet, destinationChannelId, now)
 		if skip {
@@ -142,13 +139,12 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 
 	now := core.NowNanos()
 
-	// Iterate packets and index the market-maker msgs when present; gno callers
-	// may omit them, matching the optional relayer-msg handling in PacketRecv.
-	for i, packet := range msg.Packets {
-		var marketMakerMsg []byte
-		if i < len(msg.MarketMakerMessages) {
-			marketMakerMsg = msg.MarketMakerMessages[i]
-		}
+	// reference iterates packets.into_iter().zip(market_maker_msgs) (contract.rs
+	// L1751, intent path): a packet without a matching market-maker msg is not
+	// dispatched (iteration stops at the shorter array).
+	for i := 0; i < len(msg.Packets) && i < len(msg.MarketMakerMessages); i++ {
+		packet := msg.Packets[i]
+		marketMakerMsg := msg.MarketMakerMessages[i]
 
 		ch, skip := c.acceptRecvPacket(0, rlm, packet, destinationChannelId, now)
 		if skip {

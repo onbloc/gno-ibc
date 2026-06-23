@@ -85,11 +85,11 @@ func TestPacketRecvDispatchesAndReceipts(cur realm, t *testing.T) {
 	uassert.True(t, v.store.HasPacketReceipt(packet))
 }
 
-// TestPacketRecvShorterRelayerMsgsStillDispatchesAll pins the intentional Gno
-// divergence from union's `packets.zip(relayer_msgs)`: union drops packets that
-// have no matching relayer msg, while gno treats relayer msgs as optional and
-// dispatches every packet, passing an empty msg where none is supplied.
-func TestPacketRecvShorterRelayerMsgsStillDispatchesAll(cur realm, t *testing.T) {
+// TestPacketRecvShorterRelayerMsgsDropsUnpaired pins union's zip semantics
+// (contract.rs L1751, packets.into_iter().zip(relayer_msgs)): a packet without a
+// matching relayer msg is not dispatched. With two packets and one relayer msg,
+// only the first packet is received; the second is left undispatched.
+func TestPacketRecvShorterRelayerMsgsDropsUnpaired(cur realm, t *testing.T) {
 	v := newTestImpl()
 	chId, _, mApp := setupOpenChannel(cur, v)
 	packet0 := types.Packet{
@@ -113,10 +113,10 @@ func TestPacketRecvShorterRelayerMsgsStillDispatchesAll(cur realm, t *testing.T)
 		ProofHeight: 10,
 	})
 
-	// Both packets are dispatched and receipted (union would drop packet1).
-	uassert.Equal(t, 2, mApp.recvCalls)
+	// Only the paired packet is dispatched and receipted; the unpaired one is dropped.
+	uassert.Equal(t, 1, mApp.recvCalls)
 	uassert.True(t, v.store.HasPacketReceipt(packet0))
-	uassert.True(t, v.store.HasPacketReceipt(packet1))
+	uassert.False(t, v.store.HasPacketReceipt(packet1))
 }
 
 func TestPacketRecvDuplicateSkipped(cur realm, t *testing.T) {

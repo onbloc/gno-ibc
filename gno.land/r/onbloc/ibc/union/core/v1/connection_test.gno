@@ -25,39 +25,6 @@ func TestConnectionOpenInit(cur realm, t *testing.T) {
 	uassert.Equal(t, uint32(7), uint32(conn.CounterpartyClientId))
 }
 
-func TestConnectionOpenTryVerifiesAndSaves(cur realm, t *testing.T) {
-	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
-
-	v.ConnectionOpenTry(0, cur, types.MsgConnectionOpenTry{
-		ClientId:                 clientId,
-		CounterpartyClientId:     types.ClientId(7),
-		CounterpartyConnectionId: types.ConnectionId(3),
-		ProofHeight:              10,
-		ProofInit:                []byte("proof"),
-	})
-
-	conn, ok := v.store.GetConnection(types.ConnectionId(1))
-	uassert.True(t, ok)
-	uassert.True(t, conn.State == types.ConnectionStateTryOpen)
-	uassert.Equal(t, uint32(3), uint32(conn.CounterpartyConnectionId))
-}
-
-func TestConnectionOpenTryProofFailureAborts(cur realm, t *testing.T) {
-	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{membershipErr: "bad proof"}, nil, nil)
-
-	uassert.AbortsContains(t, cur, "bad proof", func(cur realm) {
-		v.ConnectionOpenTry(0, cur, types.MsgConnectionOpenTry{
-			ClientId:                 clientId,
-			CounterpartyClientId:     types.ClientId(7),
-			CounterpartyConnectionId: types.ConnectionId(3),
-			ProofHeight:              10,
-			ProofInit:                []byte("proof"),
-		})
-	})
-}
-
 func TestConnectionProofEntrypointsInactiveClientAbortBeforeVerification(cur realm, t *testing.T) {
 	tests := []struct {
 		name string
@@ -118,124 +85,6 @@ func TestConnectionProofEntrypointsInactiveClientAbortBeforeVerification(cur rea
 	}
 }
 
-func TestConnectionOpenAckMovesInitToOpen(cur realm, t *testing.T) {
-	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
-	v.ConnectionOpenInit(0, cur, types.MsgConnectionOpenInit{ClientId: clientId, CounterpartyClientId: types.ClientId(7)})
-
-	v.ConnectionOpenAck(0, cur, types.MsgConnectionOpenAck{
-		ConnectionId:             types.ConnectionId(1),
-		CounterpartyConnectionId: types.ConnectionId(5),
-		ProofHeight:              10,
-		ProofTry:                 []byte("proof"),
-	})
-
-	conn, _ := v.store.GetConnection(types.ConnectionId(1))
-	uassert.True(t, conn.State == types.ConnectionStateOpen)
-	uassert.Equal(t, uint32(5), uint32(conn.CounterpartyConnectionId))
-}
-
-func TestConnectionOpenAckWrongStateAborts(cur realm, t *testing.T) {
-	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
-	// TryOpen (not Init) is the wrong state for an ack.
-	v.ConnectionOpenTry(0, cur, types.MsgConnectionOpenTry{
-		ClientId:                 clientId,
-		CounterpartyClientId:     types.ClientId(7),
-		CounterpartyConnectionId: types.ConnectionId(3),
-		ProofHeight:              10,
-		ProofInit:                []byte("proof"),
-	})
-
-	uassert.AbortsContains(t, cur, "invalid connection state", func(cur realm) {
-		v.ConnectionOpenAck(0, cur, types.MsgConnectionOpenAck{
-			ConnectionId:             types.ConnectionId(1),
-			CounterpartyConnectionId: types.ConnectionId(5),
-			ProofHeight:              10,
-			ProofTry:                 []byte("proof"),
-		})
-	})
-}
-
-func TestConnectionOpenConfirmMovesTryOpenToOpen(cur realm, t *testing.T) {
-	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
-	v.ConnectionOpenTry(0, cur, types.MsgConnectionOpenTry{
-		ClientId:                 clientId,
-		CounterpartyClientId:     types.ClientId(7),
-		CounterpartyConnectionId: types.ConnectionId(3),
-		ProofHeight:              10,
-		ProofInit:                []byte("proof"),
-	})
-
-	v.ConnectionOpenConfirm(0, cur, types.MsgConnectionOpenConfirm{
-		ConnectionId: types.ConnectionId(1),
-		ProofHeight:  11,
-		ProofAck:     []byte("proof"),
-	})
-
-	conn, _ := v.store.GetConnection(types.ConnectionId(1))
-	uassert.True(t, conn.State == types.ConnectionStateOpen)
-}
-
-func TestConnectionOpenConfirmRejectsInvalidMessages(cur realm, t *testing.T) {
-	testCases := []struct {
-		name string
-		want string
-		run  func(cur realm)
-	}{
-		{
-			name: "unknown connection",
-			want: "connection 99 not found",
-			run: func(cur realm) {
-				v := newTestImpl()
-				v.ConnectionOpenConfirm(0, cur, types.MsgConnectionOpenConfirm{ConnectionId: types.ConnectionId(99), ProofHeight: 11, ProofAck: []byte("proof")})
-			},
-		},
-		{
-			name: "wrong state",
-			want: "invalid connection state",
-			run: func(cur realm) {
-				v := newTestImpl()
-				clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
-				v.store.SaveConnection(0, cur, types.ConnectionId(1),
-					core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
-				v.ConnectionOpenConfirm(0, cur, types.MsgConnectionOpenConfirm{ConnectionId: types.ConnectionId(1), ProofHeight: 11, ProofAck: []byte("proof")})
-			},
-		},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			uassert.AbortsContains(t, cur, tc.want, tc.run)
-		})
-	}
-}
-
-func TestConnectionOpenAckUnknownAborts(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	uassert.AbortsContains(t, cur, "not found", func(cur realm) {
-		v.ConnectionOpenAck(0, cur, types.MsgConnectionOpenAck{ConnectionId: types.ConnectionId(99), ProofTry: []byte("p")})
-	})
-}
-
-// Converted from Union connection_open_try_client_not_found:
-// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/connection/ibc.rs#L170-L226
-func TestConnectionOpenTryClientNotFound(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	uassert.AbortsContains(t, cur, "client 1 not found", func(cur realm) {
-		v.ConnectionOpenTry(0, cur, types.MsgConnectionOpenTry{
-			ClientId:                 types.ClientId(1),
-			CounterpartyClientId:     types.ClientId(2),
-			CounterpartyConnectionId: types.ConnectionId(1),
-			ProofInit:                []byte{1, 2, 3},
-			ProofHeight:              1,
-		})
-	})
-}
-
 func TestConnectionOpenTry(cur realm, t *testing.T) {
 	tests := []struct {
 		name            string
@@ -248,6 +97,8 @@ func TestConnectionOpenTry(cur realm, t *testing.T) {
 	}{
 		{"verifies proof and saves try-open", &mockLightClient{}, true, false, "", 1, true},
 		{"force path skips proof verification", &mockLightClient{status: lightclient.Frozen}, false, false, "", 0, true},
+		// Converted from Union connection_open_try_client_not_found:
+		// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/connection/ibc.rs#L170-L226
 		{"missing client aborts when verifying", &mockLightClient{}, true, true, "client 1 not found", 0, false},
 		{"proof failure aborts", &mockLightClient{membershipErr: "bad proof"}, true, false, "bad proof", 1, false},
 	}
@@ -298,6 +149,7 @@ func TestConnectionOpenAck(cur realm, t *testing.T) {
 		{"verifies proof and opens init connection", &mockLightClient{}, true, types.ConnectionStateInit, false, "", 1, true},
 		{"force path skips proof verification", &mockLightClient{status: lightclient.Frozen}, false, types.ConnectionStateInit, false, "", 0, true},
 		{"missing connection aborts", &mockLightClient{}, true, types.ConnectionStateInit, true, "connection 1 not found", 0, false},
+		// TryOpen (not Init) is the wrong state for an ack.
 		{"wrong state aborts before proof", &mockLightClient{}, true, types.ConnectionStateTryOpen, false, "invalid connection state", 0, false},
 		{"proof failure aborts", &mockLightClient{membershipErr: "bad proof"}, true, types.ConnectionStateInit, false, "bad proof", 1, false},
 	}
@@ -390,66 +242,90 @@ func TestConnectionOpenConfirm(cur realm, t *testing.T) {
 	}
 }
 
-// Converted from Union force_connection_open_try dispatch:
-// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L195-L208
-// A frozen client makes the proof-verifying path abort ("client is not active");
-// the Force variant must skip verification and still save the connection.
-func TestForceConnectionOpenTryBypassesProofVerification(cur realm, t *testing.T) {
-	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{status: lightclient.Frozen}, nil, nil)
+func TestForceConnectionOpenBypassesProofVerification(cur realm, t *testing.T) {
+	tests := []struct {
+		name           string
+		wantState      types.ConnectionState
+		wantCounterId  types.ConnectionId
+		seedConnection func(cur realm, v *coreV1, clientId types.ClientId) types.ConnectionId
+		run            func(cur realm, v *coreV1, id types.ConnectionId, clientId types.ClientId)
+	}{
+		{
+			// Converted from Union force_connection_open_try dispatch:
+			// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L195-L208
+			// A frozen client makes the proof-verifying path abort ("client is not active");
+			// the Force variant must skip verification and still save the connection.
+			name:          "try",
+			wantState:     types.ConnectionStateTryOpen,
+			wantCounterId: types.ConnectionId(77),
+			seedConnection: func(cur realm, v *coreV1, clientId types.ClientId) types.ConnectionId {
+				return types.ConnectionId(1)
+			},
+			run: func(cur realm, v *coreV1, id types.ConnectionId, clientId types.ClientId) {
+				v.ForceConnectionOpenTry(0, cur, types.MsgConnectionOpenTry{
+					ClientId:                 clientId,
+					CounterpartyClientId:     types.ClientId(99),
+					CounterpartyConnectionId: types.ConnectionId(77),
+					ProofInit:                []byte("ignored-proof"),
+					ProofHeight:              10,
+				})
+			},
+		},
+		{
+			// Converted from Union force_connection_open_ack dispatch:
+			// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L223-L234
+			name:          "ack",
+			wantState:     types.ConnectionStateOpen,
+			wantCounterId: types.ConnectionId(77),
+			seedConnection: func(cur realm, v *coreV1, clientId types.ClientId) types.ConnectionId {
+				id := v.store.NextConnectionId(0, cur)
+				v.store.SaveConnection(0, cur, id, core.NewConnection(types.ConnectionStateInit, clientId, types.ClientId(99), 0))
+				return id
+			},
+			run: func(cur realm, v *coreV1, id types.ConnectionId, clientId types.ClientId) {
+				v.ForceConnectionOpenAck(0, cur, types.MsgConnectionOpenAck{
+					ConnectionId:             id,
+					CounterpartyConnectionId: types.ConnectionId(77),
+					ProofTry:                 []byte("ignored-proof"),
+					ProofHeight:              10,
+				})
+			},
+		},
+		{
+			// Converted from Union force_connection_open_confirm dispatch:
+			// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L247-L258
+			name:          "confirm",
+			wantState:     types.ConnectionStateOpen,
+			wantCounterId: types.ConnectionId(77),
+			seedConnection: func(cur realm, v *coreV1, clientId types.ClientId) types.ConnectionId {
+				id := v.store.NextConnectionId(0, cur)
+				v.store.SaveConnection(0, cur, id, core.NewConnection(types.ConnectionStateTryOpen, clientId, types.ClientId(99), types.ConnectionId(77)))
+				return id
+			},
+			run: func(cur realm, v *coreV1, id types.ConnectionId, clientId types.ClientId) {
+				v.ForceConnectionOpenConfirm(0, cur, types.MsgConnectionOpenConfirm{
+					ConnectionId: id,
+					ProofAck:     []byte("ignored-proof"),
+					ProofHeight:  10,
+				})
+			},
+		},
+	}
 
-	v.ForceConnectionOpenTry(0, cur, types.MsgConnectionOpenTry{
-		ClientId:                 clientId,
-		CounterpartyClientId:     types.ClientId(99),
-		CounterpartyConnectionId: types.ConnectionId(77),
-		ProofInit:                []byte("ignored-proof"),
-		ProofHeight:              10,
-	})
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			clientId := createClient(cur, v, &mockLightClient{status: lightclient.Frozen}, nil, nil)
+			id := tc.seedConnection(cur, v, clientId)
 
-	conn, ok := v.store.GetConnection(types.ConnectionId(1))
-	uassert.True(t, ok)
-	uassert.True(t, conn.State == types.ConnectionStateTryOpen)
-	uassert.Equal(t, uint32(77), uint32(conn.CounterpartyConnectionId))
-}
+			tc.run(cur, v, id, clientId)
 
-// Converted from Union force_connection_open_ack dispatch:
-// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L223-L234
-func TestForceConnectionOpenAckBypassesProofVerification(cur realm, t *testing.T) {
-	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{status: lightclient.Frozen}, nil, nil)
-	id := v.store.NextConnectionId(0, cur)
-	v.store.SaveConnection(0, cur, id, core.NewConnection(types.ConnectionStateInit, clientId, types.ClientId(99), 0))
-
-	v.ForceConnectionOpenAck(0, cur, types.MsgConnectionOpenAck{
-		ConnectionId:             id,
-		CounterpartyConnectionId: types.ConnectionId(77),
-		ProofTry:                 []byte("ignored-proof"),
-		ProofHeight:              10,
-	})
-
-	conn, ok := v.store.GetConnection(id)
-	uassert.True(t, ok)
-	uassert.True(t, conn.State == types.ConnectionStateOpen)
-	uassert.Equal(t, uint32(77), uint32(conn.CounterpartyConnectionId))
-}
-
-// Converted from Union force_connection_open_confirm dispatch:
-// https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L247-L258
-func TestForceConnectionOpenConfirmBypassesProofVerification(cur realm, t *testing.T) {
-	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{status: lightclient.Frozen}, nil, nil)
-	id := v.store.NextConnectionId(0, cur)
-	v.store.SaveConnection(0, cur, id, core.NewConnection(types.ConnectionStateTryOpen, clientId, types.ClientId(99), types.ConnectionId(77)))
-
-	v.ForceConnectionOpenConfirm(0, cur, types.MsgConnectionOpenConfirm{
-		ConnectionId: id,
-		ProofAck:     []byte("ignored-proof"),
-		ProofHeight:  10,
-	})
-
-	conn, ok := v.store.GetConnection(id)
-	uassert.True(t, ok)
-	uassert.True(t, conn.State == types.ConnectionStateOpen)
+			conn, ok := v.store.GetConnection(id)
+			uassert.True(t, ok)
+			uassert.True(t, conn.State == tc.wantState)
+			uassert.Equal(t, uint32(tc.wantCounterId), uint32(conn.CounterpartyConnectionId))
+		})
+	}
 }
 
 func TestEnsureConnectionState(cur realm, t *testing.T) {

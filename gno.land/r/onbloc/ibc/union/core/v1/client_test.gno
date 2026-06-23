@@ -10,77 +10,128 @@ import (
 
 const testClientType = types.ClientType("cometbls")
 
-// createClient registers lc under the test client type and creates a client from
-// the given state bytes, returning the assigned id. It mirrors the proxy's
-// RegisterClient -> CreateClient flow used by the host entrypoints. CreateClient
-// no longer returns the id, so the id is read back from the mock store's sequence.
+// createClient registers lc, creates a test client, and returns its id.
+// Since CreateClient does not return the id, it is read from the mock store.
 func createClient(cur realm, v *coreV1, lc lightclient.Interface, clientState, consensusState []byte) types.ClientId {
 	v.RegisterClient(0, cur, testClientType, lc)
 	v.CreateClient(0, cur, types.NewMsgCreateClient(testClientType, clientState, consensusState))
 	return types.ClientId(v.store.(*mockStore).seq)
 }
 
-func TestRegisterClientRejectsNil(cur realm, t *testing.T) {
-	v := newTestImpl()
+func TestRegisterClient(cur realm, t *testing.T) {
+	tests := []struct {
+		name      string
+		setup     func(v *coreV1)
+		lc        lightclient.Interface
+		wantAbort string
+	}{
+		{
+			name:      "rejects nil",
+			lc:        nil,
+			wantAbort: "unauthorized",
+		},
+		{
+			name: "rejects duplicate",
+			setup: func(v *coreV1) {
+				v.RegisterClient(0, cur, testClientType, &mockLightClient{})
+			},
+			lc:        &mockLightClient{},
+			wantAbort: "client type already exists",
+		},
+	}
 
-	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
-		v.RegisterClient(0, cur, testClientType, nil)
-	})
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			if tc.setup != nil {
+				tc.setup(v)
+			}
+
+			uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
+				v.RegisterClient(0, cur, testClientType, tc.lc)
+			})
+		})
+	}
 }
 
-func TestRegisterClientRejectsDuplicate(cur realm, t *testing.T) {
-	v := newTestImpl()
-	v.RegisterClient(0, cur, testClientType, &mockLightClient{})
+func TestCreateClient(cur realm, t *testing.T) {
+	tests := []struct {
+		name            string
+		lc              *mockLightClient
+		registerClient  bool
+		clientState     []byte
+		consensusState  []byte
+		wantAbort       string
+		wantClientState string
+		wantConsensus   string
+		wantStoreKey    string
+		wantStoreValue  string
+	}{
+		{
+			name:      "rejects unregistered type",
+			wantAbort: "client type not found",
+		},
+		{
+			name:           "creation verification failure aborts",
+			lc:             &mockLightClient{createErr: "bad genesis"},
+			registerClient: true,
+			wantAbort:      "create client: bad genesis",
+		},
+		{
+			name:            "registers and verifies",
+			lc:              &mockLightClient{latestHeight: 1},
+			registerClient:  true,
+			clientState:     []byte("client-state"),
+			consensusState:  []byte("consensus-state"),
+			wantClientState: "client-state",
+			wantConsensus:   "consensus-state",
+		},
+		{
+			name:           "persists creation storage writes",
+			lc:             &mockLightClient{creationWrites: map[string][]byte{"create-key": []byte("create-value")}},
+			registerClient: true,
+			wantStoreKey:   "create-key",
+			wantStoreValue: "create-value",
+		},
+	}
 
-	uassert.AbortsContains(t, cur, "client type already exists", func(cur realm) {
-		v.RegisterClient(0, cur, testClientType, &mockLightClient{})
-	})
-}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			if tc.registerClient {
+				v.RegisterClient(0, cur, testClientType, tc.lc)
+			}
 
-func TestCreateClientRejectsUnregisteredType(cur realm, t *testing.T) {
-	v := newTestImpl()
+			if tc.wantAbort != "" {
+				uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
+					v.CreateClient(0, cur, types.NewMsgCreateClient(testClientType, nil, nil))
+				})
+				return
+			}
 
-	uassert.AbortsContains(t, cur, "client type not found", func(cur realm) {
-		v.CreateClient(0, cur, types.NewMsgCreateClient(testClientType, nil, nil))
-	})
-}
+			v.CreateClient(0, cur, types.NewMsgCreateClient(testClientType, tc.clientState, tc.consensusState))
+			clientId := types.ClientId(v.store.(*mockStore).seq)
 
-func TestCreateClientRegistersAndVerifies(cur realm, t *testing.T) {
-	v := newTestImpl()
-	lc := &mockLightClient{latestHeight: 1}
+			uassert.True(t, v.store.ClientExists(clientId))
+			typ, ok := v.store.ClientType(clientId)
+			uassert.True(t, ok)
+			uassert.Equal(t, "cometbls", string(typ))
+			got, ok := v.store.GetLightClient(clientId)
+			uassert.True(t, ok)
+			uassert.True(t, got == lightclient.Interface(tc.lc))
 
-	clientId := createClient(cur, v, lc, []byte("client-state"), []byte("consensus-state"))
-
-	uassert.True(t, v.store.ClientExists(clientId))
-	typ, ok := v.store.ClientType(clientId)
-	uassert.True(t, ok)
-	uassert.Equal(t, "cometbls", string(typ))
-	got, ok := v.store.GetLightClient(clientId)
-	uassert.True(t, ok)
-	uassert.True(t, got == lightclient.Interface(lc))
-
-	mc := v.store.(*mockStore).clients[uint32(clientId)]
-	uassert.Equal(t, "client-state", string(mc.clientState))
-	uassert.Equal(t, "consensus-state", string(mc.consensus[types.NewHeight(1).String()]))
-}
-
-func TestCreateClientVerifyCreationFailureAborts(cur realm, t *testing.T) {
-	v := newTestImpl()
-	lc := &mockLightClient{createErr: "bad genesis"}
-
-	uassert.AbortsContains(t, cur, "create client: bad genesis", func(cur realm) {
-		createClient(cur, v, lc, nil, nil)
-	})
-}
-
-func TestCreateClientPersistsCreationStorageWrites(cur realm, t *testing.T) {
-	v := newTestImpl()
-	lc := &mockLightClient{creationWrites: map[string][]byte{"create-key": []byte("create-value")}}
-
-	clientId := createClient(cur, v, lc, nil, nil)
-
-	mc := v.store.(*mockStore).clients[uint32(clientId)]
-	uassert.Equal(t, "create-value", string(mc.clientStore["create-key"]))
+			mc := v.store.(*mockStore).clients[uint32(clientId)]
+			if tc.wantClientState != "" {
+				uassert.Equal(t, tc.wantClientState, string(mc.clientState))
+			}
+			if tc.wantConsensus != "" {
+				uassert.Equal(t, tc.wantConsensus, string(mc.consensus[types.NewHeight(tc.lc.latestHeight).String()]))
+			}
+			if tc.wantStoreKey != "" {
+				uassert.Equal(t, tc.wantStoreValue, string(mc.clientStore[tc.wantStoreKey]))
+			}
+		})
+	}
 }
 
 func TestInitClient(cur realm, t *testing.T) {
@@ -153,85 +204,140 @@ func TestInitClient(cur realm, t *testing.T) {
 	}
 }
 
-func TestUpdateClientSavesStateAndConsensus(cur realm, t *testing.T) {
-	v := newTestImpl()
-	lc := &mockLightClient{update: types.StateUpdate{
-		Height:              7,
-		ClientStateBytes:    []byte("client-state"),
-		ConsensusStateBytes: []byte("consensus-state"),
-		StorageWrites:       map[string][]byte{"update-key": []byte("update-value")},
-	}}
-	clientId := createClient(cur, v, lc, nil, nil)
+func TestUpdateClient(cur realm, t *testing.T) {
+	tests := []struct {
+		name            string
+		lc              *mockLightClient
+		missing         bool
+		wantAbort       string
+		wantHeight      types.Height
+		wantClientState string
+		wantConsensus   string
+		wantStoreKey    string
+		wantStoreValue  string
+	}{
+		{
+			name: "saves state and consensus",
+			lc: &mockLightClient{update: types.StateUpdate{
+				Height:              7,
+				ClientStateBytes:    []byte("client-state"),
+				ConsensusStateBytes: []byte("consensus-state"),
+				StorageWrites:       map[string][]byte{"update-key": []byte("update-value")},
+			}},
+			wantHeight:      types.NewHeight(7),
+			wantClientState: "client-state",
+			wantConsensus:   "consensus-state",
+			wantStoreKey:    "update-key",
+			wantStoreValue:  "update-value",
+		},
+		{
+			name:      "unknown client aborts",
+			lc:        &mockLightClient{},
+			missing:   true,
+			wantAbort: "not found",
+		},
+		{
+			name:      "inactive client aborts",
+			lc:        &mockLightClient{status: lightclient.Expired},
+			wantAbort: "client is not active",
+		},
+		{
+			name:      "verify header failure aborts",
+			lc:        &mockLightClient{headerErr: "stale header"},
+			wantAbort: "update client: stale header",
+		},
+	}
 
-	v.UpdateClient(0, cur, types.MsgUpdateClient{
-		ClientId:      clientId,
-		ClientMessage: []byte("header"),
-	})
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			clientId := types.ClientId(99)
+			if !tc.missing {
+				clientId = createClient(cur, v, tc.lc, nil, nil)
+			}
 
-	height := types.NewHeight(7)
-	mc := v.store.(*mockStore).clients[uint32(clientId)]
-	uassert.Equal(t, "client-state", string(mc.clientState))
-	uassert.Equal(t, "consensus-state", string(mc.consensus[height.String()]))
-	uassert.Equal(t, "update-value", string(mc.clientStore["update-key"]))
+			if tc.wantAbort != "" {
+				uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
+					v.UpdateClient(0, cur, types.MsgUpdateClient{ClientId: clientId, ClientMessage: []byte("h")})
+				})
+				return
+			}
+
+			v.UpdateClient(0, cur, types.MsgUpdateClient{
+				ClientId:      clientId,
+				ClientMessage: []byte("header"),
+			})
+
+			mc := v.store.(*mockStore).clients[uint32(clientId)]
+			uassert.Equal(t, tc.wantClientState, string(mc.clientState))
+			uassert.Equal(t, tc.wantConsensus, string(mc.consensus[tc.wantHeight.String()]))
+			if tc.wantStoreKey != "" {
+				uassert.Equal(t, tc.wantStoreValue, string(mc.clientStore[tc.wantStoreKey]))
+			}
+		})
+	}
 }
 
-func TestUpdateClientUnknownClientAborts(cur realm, t *testing.T) {
-	v := newTestImpl()
+func TestForceUpdateClient(cur realm, t *testing.T) {
+	tests := []struct {
+		name            string
+		lc              *mockLightClient
+		missing         bool
+		clientState     []byte
+		consensusState  []byte
+		wantAbort       string
+		wantClientState string
+		wantConsensus   string
+	}{
+		{
+			name:            "reinitializes submitted state",
+			lc:              &mockLightClient{latestHeight: 1},
+			clientState:     []byte("new-client"),
+			consensusState:  []byte("new-consensus"),
+			wantClientState: "new-client",
+			wantConsensus:   "new-consensus",
+		},
+		{
+			name:      "unknown client aborts",
+			lc:        &mockLightClient{},
+			missing:   true,
+			wantAbort: "not found",
+		},
+	}
 
-	uassert.AbortsContains(t, cur, "not found", func(cur realm) {
-		v.UpdateClient(0, cur, types.MsgUpdateClient{ClientId: types.ClientId(99)})
-	})
-}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			clientId := types.ClientId(99)
+			if !tc.missing {
+				clientId = createClient(cur, v, tc.lc, []byte("old-client"), []byte("old-consensus"))
+				tc.lc.latestHeight = 3
+			}
 
-func TestUpdateClientInactiveAborts(cur realm, t *testing.T) {
-	v := newTestImpl()
-	lc := &mockLightClient{status: lightclient.Expired}
-	clientId := createClient(cur, v, lc, nil, nil)
+			if tc.wantAbort != "" {
+				uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
+					v.ForceUpdateClient(0, cur, types.NewMsgForceUpdateClient(clientId, tc.clientState, tc.consensusState))
+				})
+				return
+			}
 
-	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
-		v.UpdateClient(0, cur, types.MsgUpdateClient{ClientId: clientId, ClientMessage: []byte("h")})
-	})
-}
+			v.ForceUpdateClient(0, cur, types.NewMsgForceUpdateClient(clientId, tc.clientState, tc.consensusState))
 
-func TestUpdateClientVerifyHeaderFailureAborts(cur realm, t *testing.T) {
-	v := newTestImpl()
-	lc := &mockLightClient{headerErr: "stale header"}
-	clientId := createClient(cur, v, lc, nil, nil)
-
-	uassert.AbortsContains(t, cur, "update client: stale header", func(cur realm) {
-		v.UpdateClient(0, cur, types.MsgUpdateClient{ClientId: clientId, ClientMessage: []byte("h")})
-	})
-}
-
-func TestForceUpdateClientReinitializesSubmittedState(cur realm, t *testing.T) {
-	v := newTestImpl()
-	lc := &mockLightClient{latestHeight: 1}
-	clientId := createClient(cur, v, lc, []byte("old-client"), []byte("old-consensus"))
-
-	lc.latestHeight = 3
-	v.ForceUpdateClient(0, cur, types.NewMsgForceUpdateClient(clientId, []byte("new-client"), []byte("new-consensus")))
-
-	mc := v.store.(*mockStore).clients[uint32(clientId)]
-	uassert.Equal(t, "new-client", string(mc.clientState))
-	uassert.Equal(t, "new-consensus", string(mc.consensus[types.NewHeight(3).String()]))
-}
-
-func TestForceUpdateClientUnknownClientAborts(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	uassert.AbortsContains(t, cur, "not found", func(cur realm) {
-		v.ForceUpdateClient(0, cur, types.NewMsgForceUpdateClient(types.ClientId(99), nil, nil))
-	})
+			mc := v.store.(*mockStore).clients[uint32(clientId)]
+			uassert.Equal(t, tc.wantClientState, string(mc.clientState))
+			uassert.Equal(t, tc.wantConsensus, string(mc.consensus[types.NewHeight(tc.lc.latestHeight).String()]))
+		})
+	}
 }
 
 func TestVerifyMembership(cur realm, t *testing.T) {
 	tests := []struct {
-		name         string
-		lc           *mockLightClient
-		missing      bool
-		wantAbort    string
-		wantCalls    int
-		wantNoAbort  bool
+		name        string
+		lc          *mockLightClient
+		missing     bool
+		wantAbort   string
+		wantCalls   int
+		wantNoAbort bool
 	}{
 		{"active client verifies", &mockLightClient{}, false, "", 1, true},
 		{"unknown client aborts", &mockLightClient{}, true, "client 99 not found", 0, false},

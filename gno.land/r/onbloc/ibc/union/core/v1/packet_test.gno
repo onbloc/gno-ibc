@@ -92,88 +92,134 @@ func TestSendPacketUnauthorizedSender(cur realm, t *testing.T) {
 	})
 }
 
-func TestPacketRecvDispatchesAndReceipts(cur realm, t *testing.T) {
-	v := newTestImpl()
-	chId, _, mApp := setupOpenChannel(cur, v)
-	packet := types.Packet{
-		SourceChannelId:      types.ChannelId(9),
-		DestinationChannelId: chId,
-		Data:                 []byte("recv-data"),
-		TimeoutTimestamp:     farFuture,
-	}
-
-	v.PacketRecv(0, cur, types.MsgPacketRecv{
-		Packets:     []types.Packet{packet},
-		RelayerMsgs: [][]byte{[]byte("rm")},
-		Proof:       []byte("proof"),
-		ProofHeight: 10,
-	})
-
-	uassert.Equal(t, 1, mApp.recvCalls)
-	uassert.True(t, v.store.HasPacketReceipt(packet))
-}
-
-// TestPacketRecvShorterRelayerMsgsDropsUnpaired pins union's zip semantics
-// (contract.rs L1751, packets.into_iter().zip(relayer_msgs)): a packet without a
-// matching relayer msg is not dispatched. With two packets and one relayer msg,
-// only the first packet is received; the second is left undispatched.
-func TestPacketRecvShorterRelayerMsgsDropsUnpaired(cur realm, t *testing.T) {
-	v := newTestImpl()
-	chId, _, mApp := setupOpenChannel(cur, v)
-	packet0 := types.Packet{
-		SourceChannelId:      types.ChannelId(9),
-		DestinationChannelId: chId,
-		Data:                 []byte("recv-0"),
-		TimeoutTimestamp:     farFuture,
-	}
-	packet1 := types.Packet{
-		SourceChannelId:      types.ChannelId(9),
-		DestinationChannelId: chId,
-		Data:                 []byte("recv-1"),
-		TimeoutTimestamp:     farFuture,
-	}
-
-	// Two packets, but only one relayer msg: the second packet has no match.
-	v.PacketRecv(0, cur, types.MsgPacketRecv{
-		Packets:     []types.Packet{packet0, packet1},
-		RelayerMsgs: [][]byte{[]byte("rm0")},
-		Proof:       []byte("proof"),
-		ProofHeight: 10,
-	})
-
-	// Only the paired packet is dispatched and receipted; the unpaired one is dropped.
-	uassert.Equal(t, 1, mApp.recvCalls)
-	uassert.True(t, v.store.HasPacketReceipt(packet0))
-	uassert.False(t, v.store.HasPacketReceipt(packet1))
-}
-
-func TestPacketRecvDuplicateSkipped(cur realm, t *testing.T) {
-	v := newTestImpl()
-	chId, _, mApp := setupOpenChannel(cur, v)
-	packet := types.Packet{
-		SourceChannelId:      types.ChannelId(9),
-		DestinationChannelId: chId,
-		Data:                 []byte("dup-data"),
-		TimeoutTimestamp:     farFuture,
-	}
-	msg := types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{[]byte("rm")}, Proof: []byte("p"), ProofHeight: 10}
-
-	v.PacketRecv(0, cur, msg)
-	v.PacketRecv(0, cur, msg) // replay
-
-	uassert.Equal(t, 1, mApp.recvCalls) // only dispatched once
-}
-
-func TestPacketRecvRejectsInvalidMessages(cur realm, t *testing.T) {
+func TestPacketRecv(cur realm, t *testing.T) {
 	tests := []struct {
 		name string
+		run  func(cur realm, t *testing.T)
 		want string
-		run  func(cur realm)
 	}{
+		{
+			name: "dispatches and receipts",
+			run: func(cur realm, t *testing.T) {
+				v := newTestImpl()
+				chId, _, mApp := setupOpenChannel(cur, v)
+				packet := recvPacket(chId, "recv-data")
+
+				v.PacketRecv(0, cur, types.MsgPacketRecv{
+					Packets:     []types.Packet{packet},
+					RelayerMsgs: [][]byte{[]byte("rm")},
+					Proof:       []byte("proof"),
+					ProofHeight: 10,
+				})
+
+				uassert.Equal(t, 1, mApp.recvCalls)
+				uassert.True(t, v.store.HasPacketReceipt(packet))
+			},
+		},
+		{
+			// TestPacketRecvShorterRelayerMsgsDropsUnpaired pins union's zip semantics
+			// (contract.rs L1751, packets.into_iter().zip(relayer_msgs)): a packet without a
+			// matching relayer msg is not dispatched. With two packets and one relayer msg,
+			// only the first packet is received; the second is left undispatched.
+			name: "shorter relayer messages drops unpaired",
+			run: func(cur realm, t *testing.T) {
+				v := newTestImpl()
+				chId, _, mApp := setupOpenChannel(cur, v)
+				packet0 := recvPacket(chId, "recv-0")
+				packet1 := recvPacket(chId, "recv-1")
+
+				// Two packets, but only one relayer msg: the second packet has no match.
+				v.PacketRecv(0, cur, types.MsgPacketRecv{
+					Packets:     []types.Packet{packet0, packet1},
+					RelayerMsgs: [][]byte{[]byte("rm0")},
+					Proof:       []byte("proof"),
+					ProofHeight: 10,
+				})
+
+				// Only the paired packet is dispatched and receipted; the unpaired one is dropped.
+				uassert.Equal(t, 1, mApp.recvCalls)
+				uassert.True(t, v.store.HasPacketReceipt(packet0))
+				uassert.False(t, v.store.HasPacketReceipt(packet1))
+			},
+		},
+		{
+			name: "duplicate skipped",
+			run: func(cur realm, t *testing.T) {
+				v := newTestImpl()
+				chId, _, mApp := setupOpenChannel(cur, v)
+				packet := recvPacket(chId, "dup-data")
+				msg := types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{[]byte("rm")}, Proof: []byte("p"), ProofHeight: 10}
+
+				v.PacketRecv(0, cur, msg)
+				v.PacketRecv(0, cur, msg) // replay
+
+				uassert.Equal(t, 1, mApp.recvCalls) // only dispatched once
+			},
+		},
+		{
+			name: "fewer relayer messages than packets",
+			run: func(cur realm, t *testing.T) {
+				v := newTestImpl()
+				chId, _, mApp := setupOpenChannel(cur, v)
+				p1 := recvPacket(chId, "recv-len-1")
+				p2 := recvPacket(chId, "recv-len-2")
+
+				v.PacketRecv(0, cur, types.MsgPacketRecv{
+					Packets:     []types.Packet{p1, p2},
+					RelayerMsgs: [][]byte{[]byte("rm1")},
+					Proof:       []byte("p"),
+					ProofHeight: 10,
+				})
+
+				uassert.Equal(t, 1, mApp.recvCalls)
+				uassert.True(t, v.store.HasPacketReceipt(p1))
+				uassert.False(t, v.store.HasPacketReceipt(p2))
+			},
+		},
+		{
+			name: "more relayer messages than packets",
+			run: func(cur realm, t *testing.T) {
+				v := newTestImpl()
+				chId, _, mApp := setupOpenChannel(cur, v)
+				p1 := recvPacket(chId, "recv-len-1")
+				p2 := recvPacket(chId, "recv-len-2")
+
+				v.PacketRecv(0, cur, types.MsgPacketRecv{
+					Packets:     []types.Packet{p1, p2},
+					RelayerMsgs: [][]byte{[]byte("rm1"), []byte("rm2"), []byte("extra")},
+					Proof:       []byte("p"),
+					ProofHeight: 10,
+				})
+
+				uassert.Equal(t, 2, mApp.recvCalls)
+				uassert.True(t, v.store.HasPacketReceipt(p1))
+				uassert.True(t, v.store.HasPacketReceipt(p2))
+			},
+		},
+		{
+			name: "async leaves magic receipt",
+			run: func(cur realm, t *testing.T) {
+				v := newTestImpl()
+				chId, _, mApp := setupOpenChannel(cur, v)
+				mApp.recvStatus = types.PacketStatusAsync
+				packet := recvPacket(chId, "async-recv")
+
+				v.PacketRecv(0, cur, types.MsgPacketRecv{
+					Packets:     []types.Packet{packet},
+					RelayerMsgs: [][]byte{[]byte("rm")},
+					Proof:       []byte("p"),
+					ProofHeight: 10,
+				})
+
+				receipt, ok := v.store.AcknowledgementReceipt(chId, packet)
+				uassert.True(t, ok)
+				uassert.True(t, receipt == types.COMMITMENT_MAGIC)
+			},
+		},
 		{
 			name: "empty packet batch",
 			want: "not enough packets",
-			run: func(cur realm) {
+			run: func(cur realm, t *testing.T) {
 				v := newTestImpl()
 				v.PacketRecv(0, cur, types.MsgPacketRecv{})
 			},
@@ -181,7 +227,7 @@ func TestPacketRecvRejectsInvalidMessages(cur realm, t *testing.T) {
 		{
 			name: "mixed destination channels",
 			want: "batch must use the same channel",
-			run: func(cur realm) {
+			run: func(cur realm, t *testing.T) {
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannel(cur, v)
 				p1 := recvPacket(chId, "mixed-1")
@@ -197,7 +243,7 @@ func TestPacketRecvRejectsInvalidMessages(cur realm, t *testing.T) {
 		{
 			name: "expired packet",
 			want: "packet timeout expired",
-			run: func(cur realm) {
+			run: func(cur realm, t *testing.T) {
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannel(cur, v)
 				packet := recvPacket(chId, "expired")
@@ -210,64 +256,55 @@ func TestPacketRecvRejectsInvalidMessages(cur realm, t *testing.T) {
 				})
 			},
 		},
+		{
+			name: "proof failure",
+			want: "bad proof",
+			run: func(cur realm, t *testing.T) {
+				v := newTestImpl()
+				ms := v.store.(*mockStore)
+				clientId := createClient(cur, v, &mockLightClient{membershipErr: "bad proof"}, nil, nil)
+				ms.SaveConnection(0, cur, types.ConnectionId(1),
+					core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+				port := types.Bytes(cur.Previous().PkgPath())
+				ms.registerApp(port, &mockApp{})
+				v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: port, ConnectionId: types.ConnectionId(1), Version: "v1"})
+				chId := v.store.(*mockStore).currentChannelId()
+				// channel stays Init (ack would need a separate good client); recv only needs it Open.
+				ms.SaveChannel(0, cur, chId, types.Channel{State: types.ChannelStateOpen, ConnectionId: types.ConnectionId(1), CounterpartyChannelId: types.ChannelId(9), Version: "v1"})
+
+				packet := recvPacket(chId, "d")
+				v.PacketRecv(0, cur, types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{[]byte("rm")}, Proof: []byte("p"), ProofHeight: 10})
+			},
+		},
+		{
+			name: "missing port app",
+			want: "port missing-port not found",
+			run: func(cur realm, t *testing.T) {
+				v := newTestImpl()
+				chId := setupOpenChannelWithoutApp(cur, v, types.Bytes("missing-port"))
+				packet := recvPacket(chId, "missing-port-recv")
+
+				v.PacketRecv(0, cur, types.MsgPacketRecv{
+					Packets:     []types.Packet{packet},
+					RelayerMsgs: [][]byte{[]byte("rm")},
+					Proof:       []byte("p"),
+					ProofHeight: 10,
+				})
+			},
+		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			uassert.AbortsContains(t, cur, tc.want, tc.run)
+			if tc.want != "" {
+				uassert.AbortsContains(t, cur, tc.want, func(cur realm) {
+					tc.run(cur, t)
+				})
+				return
+			}
+			tc.run(cur, t)
 		})
 	}
-}
-
-func TestPacketRecvRelayerMessageLengthMismatchIsPartial(cur realm, t *testing.T) {
-	tests := []struct {
-		name      string
-		msgs      [][]byte
-		wantCalls int
-		wantP1    bool
-		wantP2    bool
-	}{
-		{"fewer relayer messages than packets", [][]byte{[]byte("rm1")}, 1, true, false},
-		{"more relayer messages than packets", [][]byte{[]byte("rm1"), []byte("rm2"), []byte("extra")}, 2, true, true},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			v := newTestImpl()
-			chId, _, mApp := setupOpenChannel(cur, v)
-			p1 := recvPacket(chId, "recv-len-1")
-			p2 := recvPacket(chId, "recv-len-2")
-
-			v.PacketRecv(0, cur, types.MsgPacketRecv{
-				Packets:     []types.Packet{p1, p2},
-				RelayerMsgs: tc.msgs,
-				Proof:       []byte("p"),
-				ProofHeight: 10,
-			})
-
-			uassert.Equal(t, tc.wantCalls, mApp.recvCalls)
-			uassert.Equal(t, tc.wantP1, v.store.HasPacketReceipt(p1))
-			uassert.Equal(t, tc.wantP2, v.store.HasPacketReceipt(p2))
-		})
-	}
-}
-
-func TestPacketRecvAsyncLeavesMagicReceipt(cur realm, t *testing.T) {
-	v := newTestImpl()
-	chId, _, mApp := setupOpenChannel(cur, v)
-	mApp.recvStatus = types.PacketStatusAsync
-	packet := recvPacket(chId, "async-recv")
-
-	v.PacketRecv(0, cur, types.MsgPacketRecv{
-		Packets:     []types.Packet{packet},
-		RelayerMsgs: [][]byte{[]byte("rm")},
-		Proof:       []byte("p"),
-		ProofHeight: 10,
-	})
-
-	receipt, ok := v.store.AcknowledgementReceipt(chId, packet)
-	uassert.True(t, ok)
-	uassert.True(t, receipt == types.COMMITMENT_MAGIC)
 }
 
 func TestIntentPacketRecvDispatchesAndReceipts(cur realm, t *testing.T) {
@@ -363,25 +400,6 @@ func TestIntentPacketRecvRejectsInvalidSyncResult(cur realm, t *testing.T) {
 	}
 }
 
-func TestPacketRecvProofFailureAborts(cur realm, t *testing.T) {
-	v := newTestImpl()
-	ms := v.store.(*mockStore)
-	clientId := createClient(cur, v, &mockLightClient{membershipErr: "bad proof"}, nil, nil)
-	ms.SaveConnection(0, cur, types.ConnectionId(1),
-		core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
-	port := types.Bytes(cur.Previous().PkgPath())
-	ms.registerApp(port, &mockApp{})
-	v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: port, ConnectionId: types.ConnectionId(1), Version: "v1"})
-	chId := v.store.(*mockStore).currentChannelId()
-	// channel stays Init (ack would need a separate good client); recv only needs it Open.
-	ms.SaveChannel(0, cur, chId, types.Channel{State: types.ChannelStateOpen, ConnectionId: types.ConnectionId(1), CounterpartyChannelId: types.ChannelId(9), Version: "v1"})
-
-	packet := types.Packet{SourceChannelId: types.ChannelId(9), DestinationChannelId: chId, Data: []byte("d"), TimeoutTimestamp: farFuture}
-	uassert.AbortsContains(t, cur, "bad proof", func(cur realm) {
-		v.PacketRecv(0, cur, types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{[]byte("rm")}, Proof: []byte("p"), ProofHeight: 10})
-	})
-}
-
 func setupOpenChannelWithClient(cur realm, v *coreV1, lc *mockLightClient, portId types.Bytes) types.ChannelId {
 	ms := v.store.(*mockStore)
 	clientId := createClient(cur, v, lc, nil, nil)
@@ -455,21 +473,6 @@ func TestPacketMembershipEntrypointsInactiveClientAbortBeforeVerification(cur re
 			uassert.Equal(t, 0, lc.membershipCalls)
 		})
 	}
-}
-
-func TestPacketRecvRejectsMissingPortApp(cur realm, t *testing.T) {
-	v := newTestImpl()
-	chId := setupOpenChannelWithoutApp(cur, v, types.Bytes("missing-port"))
-	packet := recvPacket(chId, "missing-port-recv")
-
-	uassert.AbortsContains(t, cur, "port missing-port not found", func(cur realm) {
-		v.PacketRecv(0, cur, types.MsgPacketRecv{
-			Packets:     []types.Packet{packet},
-			RelayerMsgs: [][]byte{[]byte("rm")},
-			Proof:       []byte("p"),
-			ProofHeight: 10,
-		})
-	})
 }
 
 func TestIntentPacketRecvRejectsMissingPortApp(cur realm, t *testing.T) {

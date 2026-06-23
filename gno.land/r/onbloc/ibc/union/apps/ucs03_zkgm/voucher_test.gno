@@ -14,6 +14,35 @@ func TestNewVoucher(cur realm, t *testing.T) {
 	uassert.True(t, vou.Ledger() == ledger)
 }
 
+func TestNewVoucherRejectsSpoofedRealm(cur realm, t *testing.T) {
+	token, ledger := newVoucherTokenForTest(cur, "Spoofed Voucher", "VSPF")
+	spoofedRealm := cur.Previous()
+
+	cases := []struct {
+		name      string
+		rlm       realm
+		wantAbort string
+	}{
+		{"current realm", cur, ""},
+		{"spoofed realm", spoofedRealm, ErrSpoofedRealm},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.wantAbort != "" {
+				uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
+					NewVoucher(0, tc.rlm, token, ledger)
+				})
+				return
+			}
+
+			vou := NewVoucher(0, tc.rlm, token, ledger)
+			uassert.True(t, vou.Token() == token)
+			uassert.True(t, vou.Ledger() == ledger)
+		})
+	}
+}
+
 func TestVoucherAccessors(cur realm, t *testing.T) {
 	token, ledger := newVoucherTokenForTest(cur, "Accessor Test", "VACC")
 	vou := NewVoucher(0, cur, token, ledger)

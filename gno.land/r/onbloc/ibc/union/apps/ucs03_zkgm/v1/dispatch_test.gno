@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"errors"
 	"math"
 	"testing"
 
@@ -501,6 +502,25 @@ func TestIsOnlyMakerAck(t *testing.T) {
 	uassert.True(t, isOnlyMakerAck(z.ACK_ERR_ONLY_MAKER))
 	uassert.False(t, isOnlyMakerAck([]byte("other")))
 	uassert.False(t, isOnlyMakerAck(nil))
+}
+
+func TestExtractPanicMessage(t *testing.T) {
+	cases := []struct {
+		name string
+		in   any
+		want string
+	}{
+		{"string panic", "boom", "boom"},
+		{"error panic", errors.New("bad input"), "bad input"},
+		{"numeric panic", 17, "17"},
+		{"nil panic", nil, "<nil>"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.Equal(t, tc.want, extractPanicMessage(tc.in))
+		})
+	}
 }
 
 func mustTokenOrderOuterAck(orderAck z.TokenOrderAck) []byte {

@@ -245,6 +245,84 @@ func TestRateLimitDisabled(cur realm, t *testing.T) {
 	}
 }
 
+func TestStoreMutationsRejectSpoofedRealm(cur realm, t *testing.T) {
+	s := NewStore()
+	token, ledger := newVoucherTokenForTest(cur, "Spoof Voucher", "SPF")
+	vou := NewVoucher(0, cur, token, ledger)
+	bucket := mustTokenBucketForTest(t, 100, 10, 1)
+	packet := types.NewPacket(1, 2, []byte("parent"), 100)
+	spoofedRealm := cur.Previous()
+
+	cases := []struct {
+		name string
+		run  func()
+	}{
+		{"set token origin", func() { s.SetTokenOrigin(0, spoofedRealm, "ibc/spoof-origin", u256.NewUint(1)) }},
+		{"set channel balance", func() { s.SetChannelBalanceV2(0, spoofedRealm, "spoof-balance", u256.NewUint(2)) }},
+		{"remove channel balance", func() { s.RemoveChannelBalanceV2(0, spoofedRealm, "spoof-balance") }},
+		{"set metadata image", func() { s.SetMetadataImageOf(0, spoofedRealm, "ibc/spoof-image", [32]byte{0x01}) }},
+		{"set foreign token", func() { s.SetForeignToken(0, spoofedRealm, "ibc/spoof-foreign", []byte("utoken")) }},
+		{"set inflight packet", func() { s.SetInFlightPacket(0, spoofedRealm, "spoof-packet", packet) }},
+		{"remove inflight packet", func() { s.RemoveInFlightPacket(0, spoofedRealm, "spoof-packet") }},
+		{"set token bucket", func() { s.SetTokenBucket(0, spoofedRealm, "ibc/spoof-bucket", bucket) }},
+		{"remove token bucket", func() { s.RemoveTokenBucket(0, spoofedRealm, "ibc/spoof-bucket") }},
+		{"set voucher", func() { s.SetVoucher(0, spoofedRealm, "ibc/spoof-voucher", vou) }},
+		{"set receiver", func() { s.SetReceiver(0, spoofedRealm, "gno.land/r/spoof/receiver", &dummyReceiver{}) }},
+		{"set rate limit disabled", func() { s.SetRateLimitDisabled(0, spoofedRealm, false) }},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.AbortsContains(t, cur, ErrSpoofedRealm, func(cur realm) {
+				tc.run()
+			})
+		})
+	}
+}
+
+func TestStoreRemoveMissingEntries(cur realm, t *testing.T) {
+	s := NewStore()
+	cases := []struct {
+		name   string
+		remove func()
+		exists func() bool
+	}{
+		{
+			name:   "channel balance",
+			remove: func() { s.RemoveChannelBalanceV2(0, cur, "missing-channel-balance") },
+			exists: func() bool {
+				_, ok := s.GetChannelBalanceV2("missing-channel-balance")
+				return ok
+			},
+		},
+		{
+			name:   "inflight packet",
+			remove: func() { s.RemoveInFlightPacket(0, cur, "missing-inflight") },
+			exists: func() bool {
+				_, ok := s.GetInFlightPacket("missing-inflight")
+				return ok
+			},
+		},
+		{
+			name:   "token bucket",
+			remove: func() { s.RemoveTokenBucket(0, cur, "missing-token-bucket") },
+			exists: func() bool {
+				_, ok := s.GetTokenBucket("missing-token-bucket")
+				return ok
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.NotAborts(t, cur, func() {
+				tc.remove()
+			})
+			uassert.False(t, tc.exists())
+		})
+	}
+}
+
 func mustTokenBucketForTest(t *testing.T, capacity uint64, refillRate uint64, now uint64) *tb.TokenBucket {
 	bucket, err := tb.New(u256.NewUint(capacity), u256.NewUint(refillRate), u256.NewUint(now))
 	if err != nil {

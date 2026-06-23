@@ -75,10 +75,28 @@ func TestChannelCallbacks(cur realm, t *testing.T) {
 			},
 		},
 		{
+			name: "open try accepts protocol version",
+			call: func(cur realm, app *ucs03ZkgmV1) {
+				app.OnChannelOpenTry(0, cur, types.ConnectionId(1), types.ChannelId(1), zkgm.Version, zkgm.Version, address("g1relayer"))
+			},
+		},
+		{
 			name:      "open ack rejects wrong counterparty version",
 			wantAbort: "unsupported channel version",
 			call: func(cur realm, app *ucs03ZkgmV1) {
 				app.OnChannelOpenAck(0, cur, types.ChannelId(1), types.ChannelId(2), "wrong", address("g1relayer"))
+			},
+		},
+		{
+			name: "open ack accepts protocol version",
+			call: func(cur realm, app *ucs03ZkgmV1) {
+				app.OnChannelOpenAck(0, cur, types.ChannelId(1), types.ChannelId(2), zkgm.Version, address("g1relayer"))
+			},
+		},
+		{
+			name: "open confirm noops",
+			call: func(cur realm, app *ucs03ZkgmV1) {
+				app.OnChannelOpenConfirm(0, cur, types.ChannelId(1), address("g1relayer"))
 			},
 		},
 		{

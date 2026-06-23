@@ -8,12 +8,8 @@ import (
 	types "gno.land/p/onbloc/ibc/union/types"
 )
 
-func TestPredictWrappedTokenNilPathMatchesZero(t *testing.T) {
+func TestPredictWrappedToken(t *testing.T) {
 	base := []byte("ugnot")
-	image := MetadataImage(TokenMetadata{
-		Implementation: []byte("grc20"),
-		Initializer:    []byte("init"),
-	})
 
 	v1Nil := PredictWrappedToken(nil, 7, base)
 	v1Zero := PredictWrappedToken(u256.Zero(), 7, base)
@@ -21,41 +17,8 @@ func TestPredictWrappedTokenNilPathMatchesZero(t *testing.T) {
 		t.Fatalf("PredictWrappedToken nil path: got %q want %q", v1Nil, v1Zero)
 	}
 
-	v2Nil := PredictWrappedTokenV2(nil, 7, base, image)
-	v2Zero := PredictWrappedTokenV2(u256.Zero(), 7, base, image)
-	if v2Nil != v2Zero {
-		t.Fatalf("PredictWrappedTokenV2 nil path: got %q want %q", v2Nil, v2Zero)
-	}
 	assertIBCDenom(t, v1Nil)
-	assertIBCDenom(t, v2Nil)
-}
 
-func TestMetadataImageChangesWithMetadata(t *testing.T) {
-	a := MetadataImage(TokenMetadata{
-		Implementation: []byte("grc20"),
-		Initializer:    []byte("init-a"),
-	})
-	b := MetadataImage(TokenMetadata{
-		Implementation: []byte("grc20"),
-		Initializer:    []byte("init-b"),
-	})
-	if a == b {
-		t.Fatal("MetadataImage did not change when metadata changed")
-	}
-}
-
-func TestMetadataImageEmptyFieldsDeterministic(t *testing.T) {
-	meta := TokenMetadata{}
-
-	a := MetadataImage(meta)
-	b := MetadataImage(meta)
-	if a != b {
-		t.Fatal("MetadataImage changed for the same empty metadata")
-	}
-}
-
-func TestPredictWrappedTokenInputSensitivity(t *testing.T) {
-	base := []byte("ugnot")
 	path := u256.NewUint(5)
 	baseDenom := PredictWrappedToken(path, 7, base)
 
@@ -86,13 +49,21 @@ func TestPredictWrappedTokenInputSensitivity(t *testing.T) {
 	}
 }
 
-func TestPredictWrappedTokenV2InputSensitivity(t *testing.T) {
+func TestPredictWrappedTokenV2(t *testing.T) {
 	path := u256.NewUint(5)
 	base := []byte("ugnot")
 	image := MetadataImage(TokenMetadata{
 		Implementation: []byte("grc20"),
 		Initializer:    []byte("init-a"),
 	})
+
+	v2Nil := PredictWrappedTokenV2(nil, 7, base, image)
+	v2Zero := PredictWrappedTokenV2(u256.Zero(), 7, base, image)
+	if v2Nil != v2Zero {
+		t.Fatalf("PredictWrappedTokenV2 nil path: got %q want %q", v2Nil, v2Zero)
+	}
+	assertIBCDenom(t, v2Nil)
+
 	baseDenom := PredictWrappedTokenV2(path, 7, base, image)
 
 	otherImage := MetadataImage(TokenMetadata{
@@ -123,7 +94,39 @@ func TestPredictWrappedTokenV2InputSensitivity(t *testing.T) {
 	}
 }
 
-func TestPredictCallProxyAccountDeterministic(t *testing.T) {
+func TestMetadataImage(t *testing.T) {
+	tests := []struct {
+		name string
+		a    TokenMetadata
+		b    TokenMetadata
+		same bool
+	}{
+		{
+			"changes with metadata",
+			TokenMetadata{Implementation: []byte("grc20"), Initializer: []byte("init-a")},
+			TokenMetadata{Implementation: []byte("grc20"), Initializer: []byte("init-b")},
+			false,
+		},
+		{
+			"empty fields deterministic",
+			TokenMetadata{},
+			TokenMetadata{},
+			true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := MetadataImage(tt.a)
+			b := MetadataImage(tt.b)
+			if (a == b) != tt.same {
+				t.Fatalf("same image: got %t want %t", a == b, tt.same)
+			}
+		})
+	}
+}
+
+func TestPredictCallProxyAccount(t *testing.T) {
 	path := u256.NewUint(5)
 	a := PredictCallProxyAccount(path, types.ChannelId(8), []byte("sender"))
 	b := PredictCallProxyAccount(path, types.ChannelId(8), []byte("sender"))

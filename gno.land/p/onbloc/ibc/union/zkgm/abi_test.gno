@@ -312,6 +312,74 @@ func TestMetadataWrapperRoundTrip(t *testing.T) {
 	}
 }
 
+func TestInstructionValues(t *testing.T) {
+	tests := []struct {
+		name string
+		ins  Instruction
+	}{
+		{"call", Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte("call")}},
+		{"token order", Instruction{Version: INSTR_VERSION_1, Opcode: OP_TOKEN_ORDER, Operand: mustHex("cafe")}},
+		{"empty operand", Instruction{Version: INSTR_VERSION_0, Opcode: OP_BATCH, Operand: []byte{}}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := instructionValues(tt.ins)
+			if len(got) != 3 {
+				t.Fatalf("len: got %d want 3", len(got))
+			}
+			if got[0].(uint8) != tt.ins.Version {
+				t.Fatalf("version: got %d want %d", got[0].(uint8), tt.ins.Version)
+			}
+			if got[1].(uint8) != tt.ins.Opcode {
+				t.Fatalf("opcode: got %d want %d", got[1].(uint8), tt.ins.Opcode)
+			}
+			if !bytes.Equal(got[2].([]byte), tt.ins.Operand) {
+				t.Fatalf("operand: got %x want %x", got[2].([]byte), tt.ins.Operand)
+			}
+		})
+	}
+}
+
+func TestInstructionFromValues(t *testing.T) {
+	tests := []struct {
+		name   string
+		values []any
+		want   Instruction
+	}{
+		{
+			"call",
+			[]any{uint8(INSTR_VERSION_0), uint8(OP_CALL), []byte("call")},
+			Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte("call")},
+		},
+		{
+			"token order",
+			[]any{uint8(INSTR_VERSION_1), uint8(OP_TOKEN_ORDER), mustHex("cafe")},
+			Instruction{Version: INSTR_VERSION_1, Opcode: OP_TOKEN_ORDER, Operand: mustHex("cafe")},
+		},
+		{
+			"empty operand",
+			[]any{uint8(INSTR_VERSION_0), uint8(OP_BATCH), []byte{}},
+			Instruction{Version: INSTR_VERSION_0, Opcode: OP_BATCH, Operand: []byte{}},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := instructionFromValues(tt.values)
+			if got.Version != tt.want.Version {
+				t.Fatalf("version: got %d want %d", got.Version, tt.want.Version)
+			}
+			if got.Opcode != tt.want.Opcode {
+				t.Fatalf("opcode: got %d want %d", got.Opcode, tt.want.Opcode)
+			}
+			if !bytes.Equal(got.Operand, tt.want.Operand) {
+				t.Fatalf("operand: got %x want %x", got.Operand, tt.want.Operand)
+			}
+		})
+	}
+}
+
 func schemaByType(typeName string) (abi.Schema, bool) {
 	switch typeName {
 	case "Instruction":

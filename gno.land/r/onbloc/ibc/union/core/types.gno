@@ -92,6 +92,8 @@ type ICoreGetter interface {
 	GetChannel(channelId types.ChannelId) (types.Channel, error)
 	GetBatchPacketsCommitment(batchHash types.H256) (types.H256, error)
 	GetBatchReceiptsCommitment(batchHash types.H256) (types.H256, error)
+	GetCommittedMembershipProofCommitment(clientId types.ClientId, proofHeight uint64, path []byte) (types.H256, error)
+	GetCommittedNonMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) bool
 }
 
 // IStore is the proxy-owned persistent state injected into the mustGetImpl(). Setters take
@@ -163,6 +165,8 @@ type IStore interface {
 	ConsensusStateBytes(clientId types.ClientId, height types.Height) ([]byte, bool)
 	BatchPacketsAt(batchHash types.H256) (types.H256, bool)
 	BatchReceiptsAt(batchHash types.H256) (types.H256, bool)
+	MembershipProofAt(clientId types.ClientId, proofHeight uint64, path []byte) (types.H256, bool)
+	HasNonMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) bool
 }
 
 func NewChannel(

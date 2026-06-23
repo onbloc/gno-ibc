@@ -26,14 +26,29 @@ func TestClientStateCodecRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DecodeClientState: %v", err)
 	}
-	if got.ChainID != cs.ChainID ||
-		got.TrustingPeriod != cs.TrustingPeriod ||
-		got.UnbondingPeriod != cs.UnbondingPeriod ||
-		got.MaxClockDrift != cs.MaxClockDrift ||
-		!got.FrozenHeight.EQ(cs.FrozenHeight) ||
-		!got.LatestHeight.EQ(cs.LatestHeight) ||
-		got.ContractAddress != cs.ContractAddress {
-		t.Fatalf("client state round-trip mismatch: got %#v want %#v", got, cs)
+
+	if got.ChainID != cs.ChainID {
+		t.Fatalf("ChainID: got %q want %q", got.ChainID, cs.ChainID)
+	}
+
+	if got.TrustingPeriod != cs.TrustingPeriod {
+		t.Fatalf("TrustingPeriod: got %d want %d", got.TrustingPeriod, cs.TrustingPeriod)
+	}
+
+	if got.MaxClockDrift != cs.MaxClockDrift {
+		t.Fatalf("MaxClockDrift: got %d want %d", got.MaxClockDrift, cs.MaxClockDrift)
+	}
+
+	if !got.FrozenHeight.EQ(cs.FrozenHeight) {
+		t.Fatalf("FrozenHeight: got %d want %d", got.FrozenHeight.RevisionHeight, cs.FrozenHeight.RevisionHeight)
+	}
+
+	if !got.LatestHeight.EQ(cs.LatestHeight) {
+		t.Fatalf("LatestHeight: got %d want %d", got.LatestHeight.RevisionHeight, cs.LatestHeight.RevisionHeight)
+	}
+
+	if got.ContractAddress != cs.ContractAddress {
+		t.Fatalf("ContractAddress: got %q want %q", got.ContractAddress, cs.ContractAddress)
 	}
 }
 

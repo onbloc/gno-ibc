@@ -45,11 +45,12 @@ const (
 	// Query getters return these when the requested state is missing. Getters
 	// return an error rather than panicking so callers can decide how to handle
 	// a missing lookup.
-	ErrClientNotFound         = "client not found"
-	ErrClientStateNotFound    = "client state not found"
-	ErrConsensusStateNotFound = "consensus state not found"
-	ErrConnectionNotFound     = "connection not found"
-	ErrChannelNotFound        = "channel not found"
+	ErrClientNotFound          = "client not found"
+	ErrClientStateNotFound     = "client state not found"
+	ErrConsensusStateNotFound  = "consensus state not found"
+	ErrConnectionNotFound      = "connection not found"
+	ErrChannelNotFound         = "channel not found"
+	ErrMembershipProofNotFound = "membership proof not found"
 
 	// ErrSpoofedRealm guards non-crossing (_ int, rlm realm, ...) entrypoints:
 	// the passed rlm must be the current crossing frame, not a forged or stale

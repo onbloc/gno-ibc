@@ -29,6 +29,7 @@ var (
 	ErrInvalidMisbehaviourHeaderSequence = errors.New("invalid misbehaviour header sequence")
 	ErrMathOverflow                      = errors.New("math operation with overflow")
 	ErrMisbehaviourNotFound              = errors.New("misbehaviour not found")
+	ErrDecodeState                       = errors.New("decode state error")
 )
 
 func errorWithDetails(err error, msgs ...string) error {

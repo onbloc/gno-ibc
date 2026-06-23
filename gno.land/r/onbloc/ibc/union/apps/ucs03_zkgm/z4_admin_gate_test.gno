@@ -5,11 +5,11 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/onbloc/ibc/union/core"
+	"gno.land/r/onbloc/ibc/union/access"
 )
 
 func TestPausable(cur realm, t *testing.T) {
-	admin := core.GetAdmin()
+	admin := access.DefaultAdminAddress
 	nonAdmin := address("g1notadmin")
 
 	cases := []struct {
@@ -24,7 +24,7 @@ func TestPausable(cur realm, t *testing.T) {
 			name:       "rejects non-admin",
 			caller:     nonAdmin,
 			values:     []bool{true},
-			wantAbort:  "zkgm: admin only",
+			wantAbort:  access.ErrorAccessManagerUnauthorizedCall,
 			wantPaused: false,
 			assertAfter: func() {
 				if paused {
@@ -46,7 +46,7 @@ func TestPausable(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		resetZkgmForTest()
+		resetZkgmForTest(cur)
 
 		if tc.wantAbort != "" {
 			uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
@@ -75,7 +75,7 @@ func TestPausable(cur realm, t *testing.T) {
 }
 
 func TestSetBucketConfig(cur realm, t *testing.T) {
-	admin := core.GetAdmin()
+	admin := access.DefaultAdminAddress
 	nonAdmin := address("g1notadmin")
 
 	cases := []struct {
@@ -94,7 +94,7 @@ func TestSetBucketConfig(cur realm, t *testing.T) {
 			denom:      "ugnot",
 			capacity:   100,
 			refillRate: 10,
-			wantAbort:  "zkgm: admin only",
+			wantAbort:  access.ErrorAccessManagerUnauthorizedCall,
 		},
 		{
 			name:       "admin creates bucket",
@@ -116,7 +116,7 @@ func TestSetBucketConfig(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		resetZkgmForTest()
+		resetZkgmForTest(cur)
 		if tc.preConfig {
 			testing.SetRealm(testing.NewUserRealm(admin))
 			SetBucketConfig(cross(cur), tc.denom, u256.NewUint(100), u256.NewUint(10))
@@ -154,7 +154,7 @@ func TestSetBucketConfig(cur realm, t *testing.T) {
 }
 
 func TestSetRateLimitDisabled(cur realm, t *testing.T) {
-	admin := core.GetAdmin()
+	admin := access.DefaultAdminAddress
 	nonAdmin := address("g1notadmin")
 
 	cases := []struct {
@@ -168,7 +168,7 @@ func TestSetRateLimitDisabled(cur realm, t *testing.T) {
 			name:         "rejects non-admin",
 			caller:       nonAdmin,
 			disabled:     false,
-			wantAbort:    "zkgm: admin only",
+			wantAbort:    access.ErrorAccessManagerUnauthorizedCall,
 			wantDisabled: true,
 		},
 		{
@@ -180,7 +180,7 @@ func TestSetRateLimitDisabled(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		resetZkgmForTest()
+		resetZkgmForTest(cur)
 
 		if tc.wantAbort != "" {
 			// Default is disabled (true); a rejected non-admin toggle to false must not stick.
@@ -202,6 +202,6 @@ func TestSetRateLimitDisabled(cur realm, t *testing.T) {
 		}
 
 		// Reset the shared singleton flag so later tests see the default.
-		resetZkgmForTest()
+		resetZkgmForTest(cur)
 	}
 }

@@ -1,10 +1,13 @@
 package zkgm
 
 import (
+	"testing"
+
 	"gno.land/p/demo/tokens/grc20"
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	"gno.land/r/onbloc/ibc/union/access"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -12,7 +15,7 @@ import (
 // used to assert the App receiver surface delegates correctly, and the reset
 // helper that returns the proxy package state to a clean baseline between tests.
 
-var coreRealmPath = core.PackagePath()
+var coreRealmPath = access.CoreRealmPath
 
 // dummyImpl is a recording stub implementing the injected IApp contract. It lets
 // the App-receiver tests assert delegation/gating without the real v1 logic.
@@ -119,11 +122,16 @@ func (d *dummyReceiver) OnIntentZkgm(cur realm, env z.IntentCallEnv) error {
 // resetZkgmForTest returns the proxy package state to a clean baseline. The
 // upgrade model holds the registered impl constructors, the active impl pointer,
 // and the `paused` gate.
-func resetZkgmForTest() {
+func resetAccess(cur realm, initialAdmin address) {
+	testing.SetRealm(testing.NewUserRealm(initialAdmin))
+}
+
+func resetZkgmForTest(cur realm) {
 	currentImpl = nil
 	currentImplPath = ""
 	implConstructors = make(map[string]func(store IStore) IApp)
 	paused = false
+	resetAccess(cur, access.DefaultAdminAddress)
 	// Restore the opt-in rate-limit default (disabled) on the shared singleton.
 	store.rateLimitDisabled = true
 }

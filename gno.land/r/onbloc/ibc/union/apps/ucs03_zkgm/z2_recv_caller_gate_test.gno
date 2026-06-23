@@ -22,7 +22,7 @@ import (
 // the callback without aborting.
 
 func setupGateImpl(cur realm) types.Packet {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	currentImpl = &dummyImpl{}
 	paused = false
 	return core.NewPacket(1, 2, []byte("data"), 0)

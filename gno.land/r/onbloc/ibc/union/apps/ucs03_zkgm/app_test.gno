@@ -11,8 +11,8 @@ import (
 	"gno.land/r/onbloc/ibc/union/core"
 )
 
-func newAppTestImpl(pausedState bool) *dummyImpl {
-	resetZkgmForTest()
+func newAppTestImpl(cur realm, pausedState bool) *dummyImpl {
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	currentImpl = d
 	paused = pausedState
@@ -87,7 +87,7 @@ func TestOnChannelOpenInit(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		d := newAppTestImpl(tc.paused)
+		d := newAppTestImpl(cur, tc.paused)
 		if tc.coreCaller {
 			// Channel callbacks are gated to the core caller, so impersonate core.
 			testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
@@ -193,7 +193,7 @@ func TestOnChannelOpenTry(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		d := newAppTestImpl(tc.paused)
+		d := newAppTestImpl(cur, tc.paused)
 		if tc.coreCaller {
 			testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		} else {
@@ -246,7 +246,7 @@ func TestOnChannelOpenAck(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		d := newAppTestImpl(tc.paused)
+		d := newAppTestImpl(cur, tc.paused)
 		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		call := func() {
 			// OnChannelOpenAck should delegate to impl (no-op in current impl)
@@ -293,7 +293,7 @@ func TestOnChannelOpenConfirm(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		d := newAppTestImpl(tc.paused)
+		d := newAppTestImpl(cur, tc.paused)
 		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		call := func() {
 			// OnChannelOpenConfirm should delegate to impl (no-op in current impl)
@@ -359,7 +359,7 @@ func TestOnChannelCloseInit(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		d := newAppTestImpl(tc.paused)
+		d := newAppTestImpl(cur, tc.paused)
 		if tc.coreCaller {
 			testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		} else {
@@ -433,7 +433,7 @@ func TestOnChannelCloseConfirm(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		d := newAppTestImpl(tc.paused)
+		d := newAppTestImpl(cur, tc.paused)
 		if tc.coreCaller {
 			testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		} else {
@@ -464,7 +464,7 @@ func TestOnChannelCloseConfirm(cur realm, t *testing.T) {
 // Test all IBC host caller validation for channel callbacks
 // Ensures only core realm can call channel handshake methods
 func TestAllChannelCallbacksRequireIbcHost(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	currentImpl = d
 
@@ -479,7 +479,7 @@ func TestAllChannelCallbacksRequireIbcHost(cur realm, t *testing.T) {
 	}
 
 	for i, cb := range callbacks {
-		resetZkgmForTest()
+		resetZkgmForTest(cur)
 		currentImpl = d
 		uassert.AbortsContains(t, cur, "zkgm: ibc host only", func() { cb() })
 
@@ -491,7 +491,7 @@ func TestAllChannelCallbacksRequireIbcHost(cur realm, t *testing.T) {
 }
 
 func TestAppDelegatesVersionValidationToImpl(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	currentImpl = d
 
@@ -506,7 +506,7 @@ func TestAppDelegatesVersionValidationToImpl(cur realm, t *testing.T) {
 	}
 
 	// Valid versions should succeed
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d = &dummyImpl{}
 	currentImpl = d
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
@@ -520,7 +520,7 @@ func TestAppDelegatesVersionValidationToImpl(cur realm, t *testing.T) {
 
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/tests.rs#L713-L746
 func TestOnRecvPacketOnlyIbc(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	currentImpl = d
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
@@ -540,7 +540,7 @@ func TestOnRecvPacketOnlyIbc(cur realm, t *testing.T) {
 
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/contract.rs#L168-L182
 func TestOnIntentRecvPacketOnlyIbc(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	currentImpl = d
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
@@ -560,7 +560,7 @@ func TestOnIntentRecvPacketOnlyIbc(cur realm, t *testing.T) {
 
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/contract.rs#L183-L192
 func TestOnAcknowledgementPacketOnlyIbc(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	currentImpl = d
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
@@ -580,7 +580,7 @@ func TestOnAcknowledgementPacketOnlyIbc(cur realm, t *testing.T) {
 
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/contract.rs#L193-L201
 func TestOnTimeoutPacketOnlyIbc(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	currentImpl = d
 	packet := core.NewPacket(1, 2, []byte("data"), 0)

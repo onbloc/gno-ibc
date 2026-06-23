@@ -3,13 +3,16 @@ package transfer
 import (
 	"chain"
 
-	core "gno.land/r/onbloc/ibc/union/core"
+	"gno.land/p/onbloc/access/manager"
+	"gno.land/r/onbloc/ibc/union/access"
 )
+
+const SelectorSetHook manager.Selector = "set_hook"
 
 // SetHook registers h as the active recv hook. The hook's Address() is
 // automatically authorized to call Send(). Admin-only. Pass nil to clear.
 func SetHook(cur realm, h TransferHook) {
-	mustBeAdmin(cur)
+	access.AssertCanCall(0, cur, SelectorSetHook)
 	if h != nil && !h.Address().IsValid() {
 		panic("transfer: hook address is invalid")
 	}
@@ -18,13 +21,8 @@ func SetHook(cur realm, h TransferHook) {
 	if h != nil {
 		hookCaller = h.Address()
 	}
-	chain.Emit(EventTypeHookSet,
+	chain.Emit(
+		EventTypeHookSet,
 		AttributeKeyHookCaller, hookCaller.String(),
 	)
-}
-
-func mustBeAdmin(cur realm) {
-	if cur.Previous().Address() != core.GetAdmin() {
-		panic("transfer: admin only")
-	}
 }

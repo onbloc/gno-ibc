@@ -61,7 +61,7 @@ func TestRegisterReceiver(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		resetZkgmForTest()
+		resetZkgmForTest(cur)
 		for i, path := range tc.registerPaths {
 			testing.SetRealm(testing.NewCodeRealm(path))
 			RegisterReceiver(cross(cur), tc.receivers[i])

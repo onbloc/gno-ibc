@@ -10,7 +10,7 @@ import (
 )
 
 func TestSendRequiresInstalledImpl(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 
 	uassert.AbortsContains(t, cur, "implementation not installed", func(cur realm) {
 		Send(cross(cur), types.ChannelId(7), types.Timestamp(99), [32]byte{}, z.Instruction{})
@@ -18,7 +18,7 @@ func TestSendRequiresInstalledImpl(cur realm, t *testing.T) {
 }
 
 func TestSendDelegatesToInstalledImpl(cur realm, t *testing.T) {
-	resetZkgmForTest()
+	resetZkgmForTest(cur)
 
 	d := &dummyImpl{}
 	currentImpl = d

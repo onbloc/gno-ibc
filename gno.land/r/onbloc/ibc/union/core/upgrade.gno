@@ -1,6 +1,10 @@
 package core
 
-import "strings"
+import (
+	"strings"
+
+	"gno.land/r/onbloc/ibc/union/access"
+)
 
 // upgrade.gno is the single admin-gated swap point for the IBC host logic. The
 // proxy keeps the Store and identity stable across upgrades; only `impl` changes.
@@ -42,7 +46,7 @@ func RegisterImpl(cur realm, constructor func(store IStore) ICore) {
 // injects the proxy-owned store into the target, so the store needs no public
 // getter — the only way to obtain it is through this gated install.
 func UpdateImpl(cur realm, path string) {
-	requireAdmin(cur, "UpdateImpl")
+	access.AssertCanCall(0, cur, SelectorUpdateImpl)
 
 	constructor, ok := implConstructors[path]
 	if !ok {

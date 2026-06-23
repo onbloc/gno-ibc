@@ -5,6 +5,7 @@ import (
 
 	"gno.land/p/nt/uassert/v0"
 	types "gno.land/p/onbloc/ibc/union/types"
+	"gno.land/r/onbloc/ibc/union/access"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -44,7 +45,7 @@ func TestRegisterImpl(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		resetZkgmForTest()
+		resetZkgmForTest(cur)
 		if tc.preRegistered {
 			implConstructors[tc.previousPath] = func(store IStore) IApp { return &dummyImpl{} }
 		}
@@ -66,7 +67,7 @@ func TestRegisterImpl(cur realm, t *testing.T) {
 }
 
 func TestUpdateImpl(cur realm, t *testing.T) {
-	admin := core.GetAdmin()
+	admin := access.DefaultAdminAddress
 	nonAdmin := address("g1notadmin")
 
 	cases := []struct {
@@ -87,7 +88,7 @@ func TestUpdateImpl(cur realm, t *testing.T) {
 			registerA: true,
 			caller:    nonAdmin,
 			path:      testImplPathA,
-			wantAbort: "zkgm: admin only",
+			wantAbort: access.ErrorAccessManagerUnauthorizedCall,
 		},
 		{
 			name:      "rejects unregistered path",
@@ -117,7 +118,7 @@ func TestUpdateImpl(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		resetZkgmForTest()
+		resetZkgmForTest(cur)
 		first := &dummyImpl{}
 		second := &dummyImpl{}
 		storeInjected := false
@@ -189,7 +190,7 @@ func TestMustGetImpl(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		resetZkgmForTest()
+		resetZkgmForTest(cur)
 		d := &dummyImpl{}
 		if tc.install {
 			currentImpl = d

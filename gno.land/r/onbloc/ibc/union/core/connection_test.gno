@@ -4,22 +4,26 @@ import (
 	"testing"
 
 	"gno.land/p/nt/uassert/v0"
+	"gno.land/p/onbloc/access/manager"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
 func TestConnectionOpenPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	cases := []struct {
-		name string
-		run  func(realm)
+		name     string
+		selector manager.Selector
+		run      func(realm)
 	}{
 		{
-			name: "ConnectionOpenInit",
+			name:     "ConnectionOpenInit",
+			selector: SelectorConnectionOpenInit,
 			run: func(cur realm) {
 				ConnectionOpenInit(cur, types.NewMsgConnectionOpenInit(types.ClientId(1), types.ClientId(99)))
 			},
 		},
 		{
-			name: "ConnectionOpenTry",
+			name:     "ConnectionOpenTry",
+			selector: SelectorConnectionOpenTry,
 			run: func(cur realm) {
 				ConnectionOpenTry(cur, types.NewMsgConnectionOpenTry(
 					types.ClientId(1),
@@ -31,7 +35,8 @@ func TestConnectionOpenPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 			},
 		},
 		{
-			name: "ConnectionOpenAck",
+			name:     "ConnectionOpenAck",
+			selector: SelectorConnectionOpenAck,
 			run: func(cur realm) {
 				ConnectionOpenAck(cur, types.NewMsgConnectionOpenAck(
 					types.ConnectionId(1),
@@ -42,7 +47,8 @@ func TestConnectionOpenPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 			},
 		},
 		{
-			name: "ConnectionOpenConfirm",
+			name:     "ConnectionOpenConfirm",
+			selector: SelectorConnectionOpenConfirm,
 			run: func(cur realm) {
 				ConnectionOpenConfirm(cur, types.NewMsgConnectionOpenConfirm(types.ConnectionId(1), nil, 10))
 			},
@@ -52,10 +58,12 @@ func TestConnectionOpenPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			resetStore(cur)
-			cleanup := setNonAdminForTest()
-			defer cleanup()
+			previousRole := denySelectorForTest(cur, tc.selector)
+			defer restoreSelectorForTest(cur, tc.selector, previousRole)
 
-			uassert.AbortsContains(t, cur, "unauthorized", tc.run)
+			uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
+				tc.run(cross(cur))
+			})
 		})
 	}
 }
@@ -64,11 +72,13 @@ func TestConnectionOpenPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 // (core/v1/connection_test.gno). The proxy only keeps the admin gate.
 func TestForceConnectionOpenPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	cases := []struct {
-		name string
-		run  func(realm)
+		name     string
+		selector manager.Selector
+		run      func(realm)
 	}{
 		{
-			name: "ForceConnectionOpenTry",
+			name:     "ForceConnectionOpenTry",
+			selector: SelectorForceConnectionTry,
 			run: func(cur realm) {
 				ForceConnectionOpenTry(cur, types.NewMsgConnectionOpenTry(
 					types.ClientId(1),
@@ -80,7 +90,8 @@ func TestForceConnectionOpenPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) 
 			},
 		},
 		{
-			name: "ForceConnectionOpenAck",
+			name:     "ForceConnectionOpenAck",
+			selector: SelectorForceConnectionAck,
 			run: func(cur realm) {
 				ForceConnectionOpenAck(cur, types.NewMsgConnectionOpenAck(
 					types.ConnectionId(1),
@@ -91,7 +102,8 @@ func TestForceConnectionOpenPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) 
 			},
 		},
 		{
-			name: "ForceConnectionOpenConfirm",
+			name:     "ForceConnectionOpenConfirm",
+			selector: SelectorForceConnectionConfirm,
 			run: func(cur realm) {
 				ForceConnectionOpenConfirm(cur, types.NewMsgConnectionOpenConfirm(types.ConnectionId(1), nil, 10))
 			},
@@ -101,10 +113,12 @@ func TestForceConnectionOpenPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			resetStore(cur)
-			cleanup := setNonAdminForTest()
-			defer cleanup()
+			previousRole := denySelectorForTest(cur, tc.selector)
+			defer restoreSelectorForTest(cur, tc.selector, previousRole)
 
-			uassert.AbortsContains(t, cur, "unauthorized", tc.run)
+			uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
+				tc.run(cross(cur))
+			})
 		})
 	}
 }

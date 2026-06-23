@@ -8,13 +8,14 @@ import (
 
 // types.gno declares the upgradeable-proxy contracts for the IBC host, mirroring
 // the apps/ucs03_zkgm split. core is the proxy: it owns the stable identity
-// (admin, package address/path), the Store, and the app registry, and delegates
-// its logic to the installed mustGetImpl().
+// (package address/path), the Store, and the app registry, and delegates its
+// logic to the installed mustGetImpl(). Shared access-manager authority lives in
+// gno.land/r/onbloc/ibc/union/access and stays outside the swappable impl.
 //
 // ICore is the swappable logic surface: it carries every non-admin entrypoint
-// (client, connection, channel, packet, app registration). The admin/recovery
-// entrypoints (SetAdmin, the Force* handshake overrides, RegisterAppForPort) and
-// the read-only queries stay on the proxy — admin authority is not swappable, and
+// (client, connection, channel, packet, app registration). The access-managed
+// recovery entrypoints (Force* handshake overrides, RegisterAppForPort) and the
+// read-only queries stay on the proxy: authorization is not swappable, and
 // queries are pure views.
 //
 // Migration is incremental: the client subsystem is implemented in core/v1; the

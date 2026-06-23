@@ -4,33 +4,7 @@ import (
 	"testing"
 
 	"gno.land/p/nt/uassert/v0"
-	core "gno.land/r/onbloc/ibc/union/core"
 )
-
-func TestAssertIsAdmin(cur realm, t *testing.T) {
-	cases := []struct {
-		name      string
-		caller    address
-		wantAbort string
-	}{
-		{"admin caller", core.GetAdmin(), ""},
-		{"non-admin caller", address("g1notadmin"), "zkgm: admin only"},
-	}
-
-	for _, tc := range cases {
-		resetZkgmForTest()
-		testing.SetRealm(testing.NewUserRealm(tc.caller))
-
-		if tc.wantAbort != "" {
-			uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
-				assertIsAdmin(cross(cur))
-			})
-			continue
-		}
-
-		assertIsAdmin(cross(cur))
-	}
-}
 
 func TestAssertIsIBCHost(cur realm, t *testing.T) {
 	cases := []struct {
@@ -43,7 +17,7 @@ func TestAssertIsIBCHost(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		resetZkgmForTest()
+		resetZkgmForTest(cur)
 		testing.SetRealm(testing.NewCodeRealm(tc.caller))
 
 		if tc.wantAbort != "" {
@@ -68,7 +42,7 @@ func TestAssertNotPaused(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		resetZkgmForTest()
+		resetZkgmForTest(cur)
 		paused = tc.paused
 
 		if tc.wantAbort != "" {

@@ -28,6 +28,17 @@ func NewCoreV1(s core.IStore) core.ICore {
 	}
 }
 
+// resolveRelayer defaults an empty relayer string to the authenticated caller.
+// The client lifecycle message constructors leave Relayer empty, so without this
+// the light-client callbacks would receive the zero address; union likewise
+// reuses info.sender as the relayer on the paths that do not carry one.
+func resolveRelayer(caller address, relayer string) address {
+	if relayer == "" {
+		return caller
+	}
+	return address(relayer)
+}
+
 // cloneBytes returns a fresh copy of b, used to detach caller- or store-owned
 // byte slices before persisting or rebuilding records.
 func cloneBytes(b []byte) []byte {

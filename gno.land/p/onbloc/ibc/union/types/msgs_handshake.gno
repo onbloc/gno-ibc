@@ -44,8 +44,8 @@ type MsgMisbehaviour struct {
 	Relayer       string
 }
 
-func NewMsgMisbehaviour(clientId ClientId, clientMessage []byte) MsgMisbehaviour {
-	return MsgMisbehaviour{ClientId: clientId, ClientMessage: clientMessage}
+func NewMsgMisbehaviour(clientId ClientId, clientMessage []byte, relayer string) MsgMisbehaviour {
+	return MsgMisbehaviour{ClientId: clientId, ClientMessage: clientMessage, Relayer: relayer}
 }
 
 // --- connection handshake ---

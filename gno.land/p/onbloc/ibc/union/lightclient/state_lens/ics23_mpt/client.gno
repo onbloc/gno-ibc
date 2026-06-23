@@ -224,7 +224,7 @@ func (c *StateLensIcs23MptLightClient) VerifyCreation(caller address, relayer ad
 
 // Misbehaviour is unsupported for state-lens clients, mirroring Union's
 // `unimplemented!()` for this client type.
-func (c *StateLensIcs23MptLightClient) Misbehaviour(caller address, misbehaviour []byte, relayer address) (types.ClientState, error) {
+func (c *StateLensIcs23MptLightClient) Misbehaviour(caller address, misbehaviour []byte, relayer address) ([]byte, error) {
 	return nil, ErrMisbehaviourUnsupported
 }
 

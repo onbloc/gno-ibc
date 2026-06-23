@@ -55,7 +55,7 @@ func (m *forwardChildTimeoutLightClient) VerifyCreation(address, address) (types
 	return types.ClientCreationResult{}, nil
 }
 
-func (m *forwardChildTimeoutLightClient) Misbehaviour(address, []byte, address) (types.ClientState, error) {
+func (m *forwardChildTimeoutLightClient) Misbehaviour(address, []byte, address) ([]byte, error) {
 	return nil, errors.New("mock: misbehaviour unsupported")
 }
 

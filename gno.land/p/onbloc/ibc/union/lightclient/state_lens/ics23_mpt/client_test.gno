@@ -50,7 +50,7 @@ func (m *mockL1Client) VerifyCreation(_ address, _ address) (types.ClientCreatio
 	return types.ClientCreationResult{}, nil
 }
 
-func (m *mockL1Client) Misbehaviour(_ address, _ []byte, _ address) (types.ClientState, error) {
+func (m *mockL1Client) Misbehaviour(_ address, _ []byte, _ address) ([]byte, error) {
 	return nil, nil
 }
 

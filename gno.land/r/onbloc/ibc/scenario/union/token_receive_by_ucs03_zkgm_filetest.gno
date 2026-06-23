@@ -173,7 +173,7 @@ func (m *mockLightClient) VerifyCreation(address, address) (types.ClientCreation
 	return types.ClientCreationResult{}, nil
 }
 
-func (m *mockLightClient) Misbehaviour(address, []byte, address) (types.ClientState, error) {
+func (m *mockLightClient) Misbehaviour(address, []byte, address) ([]byte, error) {
 	return nil, errMisbehaviourUnsupported
 }
 

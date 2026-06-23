@@ -26,7 +26,7 @@ func (c *coreV1) HasClient(clientType types.ClientType) bool {
 // that freshly stored state.
 func (c *coreV1) CreateClient(_ int, rlm realm, msg types.MsgCreateClient) {
 	caller := rlm.Previous().Address()
-	relayer := address(msg.Relayer)
+	relayer := resolveRelayer(caller, msg.Relayer)
 	lc, ok := c.store.RegisteredClient(msg.ClientType)
 	if !ok {
 		panic("client type not found")
@@ -77,7 +77,7 @@ func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) {
 	}
 
 	caller := rlm.Previous().Address()
-	relayer := address(msg.Relayer)
+	relayer := resolveRelayer(caller, msg.Relayer)
 	update, err := lc.VerifyHeader(caller, msg.ClientMessage, relayer)
 	if err != nil {
 		panic("update client: " + err.Error())
@@ -115,23 +115,29 @@ func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateCli
 }
 
 // Misbehaviour verifies a misbehaviour message against an active light client and
-// freezes it. The gno light client freezes its own in-memory state (persisted by
-// reference through the store), so unlike union the host does not mirror/commit
-// the frozen client-state bytes; it only invokes the client and emits the event.
+// freezes it. Mirroring union (contract.rs L1048-L1093), the host commits the
+// frozen client-state bytes the light client returns back to the client-state
+// mirror / ClientStatePath commitment before emitting the event.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L1048-L1093
 func (c *coreV1) Misbehaviour(_ int, rlm realm, msg types.MsgMisbehaviour) {
 	lc, ok := c.store.GetLightClient(msg.ClientId)
 	if !ok {
 		panic("client " + msg.ClientId.String() + " not found")
 	}
+
 	if lc.Status() != lightclient.Active {
 		panic(core.ErrClientNotActive)
 	}
 
 	caller := rlm.Previous().Address()
-	relayer := address(msg.Relayer)
-	if _, err := lc.Misbehaviour(caller, msg.ClientMessage, relayer); err != nil {
+	relayer := resolveRelayer(caller, msg.Relayer)
+
+	clientStateBytes, err := lc.Misbehaviour(caller, msg.ClientMessage, relayer)
+	if err != nil {
 		panic("misbehaviour: " + err.Error())
+	}
+	if len(clientStateBytes) != 0 {
+		c.store.SaveClientState(0, rlm, msg.ClientId, clientStateBytes)
 	}
 
 	core.EmitMisbehaviour(msg.ClientId)

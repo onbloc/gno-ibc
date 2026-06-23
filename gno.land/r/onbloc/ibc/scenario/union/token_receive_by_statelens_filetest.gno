@@ -263,7 +263,7 @@ func (m *mockL1Client) VerifyCreation(address, address) (types.ClientCreationRes
 	return types.ClientCreationResult{}, nil
 }
 
-func (m *mockL1Client) Misbehaviour(address, []byte, address) (types.ClientState, error) {
+func (m *mockL1Client) Misbehaviour(address, []byte, address) ([]byte, error) {
 	return nil, errL1Unsupported
 }
 

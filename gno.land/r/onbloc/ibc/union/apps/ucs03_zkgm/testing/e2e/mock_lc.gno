@@ -51,6 +51,6 @@ func (m *MockLightClient) VerifyCreation(address, address) (types.ClientCreation
 	return types.ClientCreationResult{}, nil
 }
 
-func (m *MockLightClient) Misbehaviour(address, []byte, address) (types.ClientState, error) {
+func (m *MockLightClient) Misbehaviour(address, []byte, address) ([]byte, error) {
 	return nil, errors.New("mock: misbehaviour unsupported")
 }

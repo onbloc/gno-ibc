@@ -56,7 +56,7 @@ func (m *timeoutScenarioLightClient) VerifyCreation(address, address) (types.Cli
 	return types.ClientCreationResult{}, nil
 }
 
-func (m *timeoutScenarioLightClient) Misbehaviour(address, []byte, address) (types.ClientState, error) {
+func (m *timeoutScenarioLightClient) Misbehaviour(address, []byte, address) ([]byte, error) {
 	return nil, errors.New("mock: misbehaviour unsupported")
 }
 

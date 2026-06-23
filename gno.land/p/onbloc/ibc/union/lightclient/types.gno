@@ -52,5 +52,5 @@ type Interface interface {
 
 	VerifyCreation(caller address, relayer address) (types.ClientCreationResult, error)
 
-	Misbehaviour(caller address, misbehaviour []byte, relayer address) (types.ClientState, error)
+	Misbehaviour(caller address, misbehaviour []byte, relayer address) ([]byte, error)
 }

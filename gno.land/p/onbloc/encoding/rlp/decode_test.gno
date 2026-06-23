@@ -10,57 +10,60 @@ import (
 )
 
 func TestDecodeValueEntrypoint(t *testing.T) {
-	cases := []struct {
-		name string
-		data []byte
-		want error
-	}{
-		{"valid single item", mustHex("c88363617483646f67"), nil},
-		{"trailing bytes", mustHex("8080"), ErrTrailingBytes},
-		{"empty input", nil, ErrUnexpectedEOF},
+	longPayload := make([]byte, 56)
+	for i := range longPayload {
+		longPayload[i] = byte(i)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			v, err := DecodeValue(tc.data)
-			if err != tc.want {
-				t.Fatalf("DecodeValue error = %v, want %v", err, tc.want)
-			}
-			if tc.want != nil {
-				return
-			}
+	longEncoded := EncodeBytes(longPayload)
+
+	deepList := EncodeList()
+	for i := 0; i < 257; i++ {
+		deepList = EncodeList(deepList)
+	}
+
+	cases := []struct {
+		name    string
+		data    []byte
+		wantErr error
+		check   func(*testing.T, Value)
+	}{
+		{"valid single item", mustHex("c88363617483646f67"), nil, func(t *testing.T, v Value) {
 			if v.Kind != KindList || len(v.List) != 2 {
 				t.Fatalf("list shape mismatch")
 			}
 			if string(v.List[0].Bytes) != "cat" || string(v.List[1].Bytes) != "dog" {
 				t.Fatalf("list values mismatch")
 			}
+		}},
+		{"single byte encoded as string", mustHex("8100"), ErrCanonSize, nil},
+		{"short string encoded as long", mustHex("b80100"), ErrCanonSize, nil},
+		{"trailing bytes", mustHex("8080"), ErrTrailingBytes, nil},
+		{"empty input", nil, ErrUnexpectedEOF, nil},
+		{"truncated string", []byte{0x83, 0x01, 0x02}, ErrValueTooLarge, nil},
+		{"long string", longEncoded, nil, func(t *testing.T, v Value) {
+			if len(longEncoded) != 58 || longEncoded[0] != 0xb8 || longEncoded[1] != 56 {
+				t.Fatalf("long string header mismatch: %x", longEncoded[:2])
+			}
+			if v.Kind != KindString || hex.EncodeToString(v.Bytes) != hex.EncodeToString(longPayload) {
+				t.Fatalf("long string content mismatch")
+			}
+		}},
+		{"depth limit", deepList, ErrDepthLimit, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v, err := DecodeValue(tc.data)
+			if err != tc.wantErr {
+				t.Fatalf("DecodeValue error = %v, want %v", err, tc.wantErr)
+			}
+			if tc.wantErr != nil {
+				return
+			}
+			if tc.check != nil {
+				tc.check(t, v)
+			}
 		})
 	}
-
-	t.Run("long string", func(t *testing.T) {
-		payload := make([]byte, 56)
-		for i := range payload {
-			payload[i] = byte(i)
-		}
-		v, err := DecodeValue(EncodeBytes(payload))
-		if err != nil {
-			t.Fatalf("DecodeValue long: %v", err)
-		}
-		if v.Kind != KindString || hex.EncodeToString(v.Bytes) != hex.EncodeToString(payload) {
-			t.Fatalf("long string content mismatch")
-		}
-	})
-
-	t.Run("depth limit", func(t *testing.T) {
-		b := EncodeList()
-		for i := 0; i < 257; i++ {
-			b = EncodeList(b)
-		}
-		_, err := DecodeValue(b)
-		if err != ErrDepthLimit {
-			t.Fatalf("ErrDepthLimit: got %v", err)
-		}
-	})
 }
 
 func TestSplit(t *testing.T) {

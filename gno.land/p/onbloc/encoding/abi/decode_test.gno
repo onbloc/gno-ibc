@@ -63,6 +63,23 @@ func TestTupleAt(t *testing.T) {
 			wantErr:  ErrInvalidData,
 		},
 		{
+			name:     "end less than start",
+			data:     make([]byte, 32),
+			fields:   []Field{{Type: TypeUint8}},
+			start:    32,
+			end:      16,
+			maxDepth: maxDecodeDepth,
+			wantErr:  ErrInvalidData,
+		},
+		{
+			name:     "end exceeds data length",
+			data:     make([]byte, 32),
+			fields:   []Field{{Type: TypeUint8}},
+			end:      64,
+			maxDepth: maxDecodeDepth,
+			wantErr:  ErrInvalidData,
+		},
+		{
 			name:     "dynamic offset out of range",
 			data:     mustHex("0000000000000000000000000000000000000000000000000000000000000040"),
 			fields:   []Field{{Type: TypeBytes}},
@@ -75,6 +92,14 @@ func TestTupleAt(t *testing.T) {
 			data:     mustHex("0000000000000000000000000000000000000000000000000000000000000001"),
 			fields:   []Field{{Type: TypeBytes}},
 			end:      32,
+			maxDepth: maxDecodeDepth,
+			wantErr:  ErrInvalidData,
+		},
+		{
+			name:     "dynamic offset word with non-zero high padding",
+			data:     mustHex("0000000000000000000000000000000000000000000000010000000000000020"),
+			fields:   []Field{{Type: TypeBytes}},
+			end:      96,
 			maxDepth: maxDecodeDepth,
 			wantErr:  ErrInvalidData,
 		},
@@ -157,32 +182,89 @@ func TestStaticValue(t *testing.T) {
 		data    []byte
 		field   Field
 		wantErr error
+		wantVal any
 	}{
-		{"uint8", encodeUint64Word(255), Field{Type: TypeUint8}, nil},
-		{"uint8 overflow", mustHex("0000000000000000000000000000000000000000000000000000000000000100"), Field{Type: TypeUint8}, ErrInvalidData},
-		{"uint32", encodeUint64Word(0xffffffff), Field{Type: TypeUint32}, nil},
-		{"uint32 overflow", mustHex("0000000000000000000000000000000000000000000000000000000100000000"), Field{Type: TypeUint32}, ErrInvalidData},
-		{"uint64", encodeUint64Word(2), Field{Type: TypeUint64}, nil},
-		{"uint64 high padding", mustHex("0000000000000000000000000000000000000000000000010000000000000000"), Field{Type: TypeUint64}, ErrInvalidData},
-		{"uint256", encodeUint256Word(u256.NewUint(2)), Field{Type: TypeUint256}, nil},
-		{"bytes32", b32[:], Field{Type: TypeBytes32}, nil},
-		{"bool true", encodeUint64Word(1), Field{Type: TypeBool}, nil},
-		{"bool false", encodeUint64Word(0), Field{Type: TypeBool}, nil},
-		{"bool invalid", encodeUint64Word(2), Field{Type: TypeBool}, ErrInvalidData},
-		{"address", addrWord, Field{Type: TypeAddress}, nil},
-		{"address non-zero padding", mustHex("0000000000000000000000ff0101010101010101010101010101010101010101"), Field{Type: TypeAddress}, ErrInvalidData},
-		{"struct", append(encodeUint64Word(1), encodeUint64Word(2)...), Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeUint8}}}}, nil},
-		{"nil struct schema", make([]byte, 32), Field{Type: TypeStruct}, ErrInvalidSchema},
-		{"short data", make([]byte, 16), Field{Type: TypeUint8}, ErrInvalidData},
-		{"unsupported", make([]byte, 32), Field{Type: TypeBytes}, ErrUnsupportedType},
+		{"uint8", encodeUint64Word(255), Field{Type: TypeUint8}, nil, nil},
+		{"uint8 overflow", mustHex("0000000000000000000000000000000000000000000000000000000000000100"), Field{Type: TypeUint8}, ErrInvalidData, nil},
+		{"uint32", encodeUint64Word(0xffffffff), Field{Type: TypeUint32}, nil, nil},
+		{"uint32 overflow", mustHex("0000000000000000000000000000000000000000000000000000000100000000"), Field{Type: TypeUint32}, ErrInvalidData, nil},
+		{"uint64", encodeUint64Word(2), Field{Type: TypeUint64}, nil, nil},
+		{"uint64 high padding", mustHex("0000000000000000000000000000000000000000000000010000000000000000"), Field{Type: TypeUint64}, ErrInvalidData, nil},
+		{"uint256", encodeUint256Word(u256.NewUint(2)), Field{Type: TypeUint256}, nil, u256.NewUint(2)},
+		{"bytes32", b32[:], Field{Type: TypeBytes32}, nil, b32},
+		{"bool true", encodeUint64Word(1), Field{Type: TypeBool}, nil, nil},
+		{"bool false", encodeUint64Word(0), Field{Type: TypeBool}, nil, nil},
+		{"bool invalid", encodeUint64Word(2), Field{Type: TypeBool}, ErrInvalidData, nil},
+		{"address", addrWord, Field{Type: TypeAddress}, nil, filledBytes(20, 0x01)},
+		{"address non-zero padding", mustHex("0000000000000000000000ff0101010101010101010101010101010101010101"), Field{Type: TypeAddress}, ErrInvalidData, nil},
+		{"struct", append(encodeUint64Word(1), encodeUint64Word(2)...), Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeUint8}}}}, nil, nil},
+		{"nil struct schema", make([]byte, 32), Field{Type: TypeStruct}, ErrInvalidSchema, nil},
+		{"short data", make([]byte, 16), Field{Type: TypeUint8}, ErrInvalidData, nil},
+		{"unsupported", make([]byte, 32), Field{Type: TypeBytes}, ErrUnsupportedType, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			d := decoder{data: tc.data, maxDepth: maxDecodeDepth}
-			_, err := d.staticValue(tc.field, 0, len(tc.data), 0)
+			got, err := d.staticValue(tc.field, 0, len(tc.data), 0)
 			assertError(t, err, tc.wantErr)
+			if tc.wantErr != nil {
+				return
+			}
+			if tc.wantVal != nil {
+				switch v := tc.wantVal.(type) {
+				case *u256.Uint:
+					gotU256, ok := got.(*u256.Uint)
+					if !ok {
+						t.Fatalf("staticValue type = %T, want *u256.Uint", got)
+					}
+					if gotU256.Cmp(v) != 0 {
+						t.Fatalf("staticValue uint256 = %v, want %v", gotU256, v)
+					}
+				case [32]byte:
+					gotB32, ok := got.([32]byte)
+					if !ok {
+						t.Fatalf("staticValue type = %T, want [32]byte", got)
+					}
+					if gotB32 != v {
+						t.Fatalf("staticValue bytes32 = %x, want %x", gotB32, v)
+					}
+				case []byte:
+					gotAddr, ok := got.([]byte)
+					if !ok {
+						t.Fatalf("staticValue type = %T, want []byte", got)
+					}
+					if len(gotAddr) != len(v) || !hexEqual(gotAddr, v) {
+						t.Fatalf("staticValue address = %x, want %x", gotAddr, v)
+					}
+				case []any:
+					gotTuple, ok := got.([]any)
+					if !ok {
+						t.Fatalf("staticValue type = %T, want []any", got)
+					}
+					if len(gotTuple) != len(v) {
+						t.Fatalf("staticValue tuple len = %d, want %d", len(gotTuple), len(v))
+					}
+					for i, wantElem := range v {
+						if gotTuple[i] != wantElem {
+							t.Fatalf("staticValue tuple[%d] = %v, want %v", i, gotTuple[i], wantElem)
+						}
+					}
+				}
+			}
 		})
 	}
+}
+
+func hexEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func TestArrayAt(t *testing.T) {
@@ -292,6 +374,59 @@ func TestRoundUp32(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := roundUp32(tc.in); got != tc.want {
 				t.Fatalf("roundUp32(%d) = %d, want %d", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDecode(t *testing.T) {
+	cases := []struct {
+		name    string
+		schema  Schema
+		data    []byte
+		wantErr error
+		wantLen int
+	}{
+		{
+			name:    "empty",
+			schema:  Schema{Fields: nil},
+			data:    nil,
+			wantLen: 0,
+		},
+		{
+			name:    "static values",
+			schema:  Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeBool}}},
+			data:    mustHex("000000000000000000000000000000000000000000000000000000000000002a0000000000000000000000000000000000000000000000000000000000000001"),
+			wantLen: 2,
+		},
+		{
+			name:    "data not word aligned",
+			schema:  Schema{Fields: []Field{{Type: TypeUint8}}},
+			data:    []byte{0x01},
+			wantErr: ErrInvalidData,
+		},
+		{
+			name:    "data length 31",
+			schema:  Schema{Fields: []Field{{Type: TypeUint8}}},
+			data:    make([]byte, 31),
+			wantErr: ErrInvalidData,
+		},
+		{
+			name:    "data length 33",
+			schema:  Schema{Fields: []Field{{Type: TypeUint8}}},
+			data:    make([]byte, 33),
+			wantErr: ErrInvalidData,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Decode(tc.schema, tc.data)
+			assertError(t, err, tc.wantErr)
+			if tc.wantErr != nil {
+				return
+			}
+			if len(got) != tc.wantLen {
+				t.Fatalf("Decode len = %d, want %d", len(got), tc.wantLen)
 			}
 		})
 	}

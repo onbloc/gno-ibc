@@ -141,6 +141,8 @@ func TestWalk(t *testing.T) {
 		{name: "extension path is list", root: hashBytes(rlp.EncodeList(rlp.EncodeList(), rlp.EncodeBytes(nil))), path: []byte{0x01, 0x02}, proof: [][]byte{rlp.EncodeList(rlp.EncodeList(), rlp.EncodeBytes(nil))}, err: ErrUnexpectedNode},
 		{name: "leaf value is list", root: hashBytes(node(leafPath(nil), rlp.EncodeList())), proof: [][]byte{node(leafPath(nil), rlp.EncodeList())}, err: ErrUnexpectedNode},
 		{name: "list has unsupported length", root: hashBytes(rlp.EncodeList(rlp.EncodeBytes(nil))), proof: [][]byte{rlp.EncodeList(rlp.EncodeBytes(nil))}, err: ErrUnexpectedNode},
+		{name: "branch terminal value", root: hashBytes(branchWithValue(rlp.EncodeBytes([]byte("terminal")))), path: []byte{}, proof: [][]byte{branchWithValue(rlp.EncodeBytes([]byte("terminal")))}, wantFound: true, wantValue: []byte("terminal")},
+		{name: "extension child is list", root: hashBytes(node(extensionPath([]byte{0x0a}), rlp.EncodeList())), path: []byte{0x0a}, proof: [][]byte{node(extensionPath([]byte{0x0a}), rlp.EncodeList())}, err: ErrUnexpectedNode},
 	}
 
 	for _, tt := range tests {
@@ -286,7 +288,9 @@ func TestCompactDecode(t *testing.T) {
 		{name: "empty extension", encoded: extensionPath(nil), err: ErrPathMismatch},
 		{name: "empty leaf", encoded: leafPath(nil), wantLeaf: true, wantPartial: nil},
 		{name: "odd extension", encoded: extensionPath([]byte{0x0a, 0x0b, 0x0c}), wantPartial: []byte{0x0a, 0x0b, 0x0c}},
+		{name: "odd leaf", encoded: leafPath([]byte{0x0a, 0x0b, 0x0c}), wantLeaf: true, wantPartial: []byte{0x0a, 0x0b, 0x0c}},
 		{name: "even leaf", encoded: leafPath([]byte{0x01, 0x02}), wantLeaf: true, wantPartial: []byte{0x01, 0x02}},
+		{name: "even extension", encoded: extensionPath([]byte{0x01, 0x02}), wantPartial: []byte{0x01, 0x02}},
 	}
 
 	for _, tt := range tests {

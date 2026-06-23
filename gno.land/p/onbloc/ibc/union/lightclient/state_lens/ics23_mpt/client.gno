@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"crypto/keccak256"
 	"errors"
+	"strconv"
+	"strings"
 
 	"gno.land/p/nt/bptree/v0"
 	"gno.land/p/nt/ufmt/v0"
@@ -290,8 +292,19 @@ func (c *StateLensIcs23MptLightClient) setConsensusState(height Height, consStat
 }
 
 // heightKey renders a height as a fixed-width, lexicographically sortable bptree
-// key. ibc-union heights carry a single revision, so the numeric ordering of the
-// formatted height matches height ordering.
+// key. The height is interpreted as revision height with revision number 0.
 func heightKey(height Height) string {
-	return ufmt.Sprintf("%020d", height)
+	h := types.Height{RevisionNumber: 0, RevisionHeight: uint64(height)}
+	return zeroPadDecimalUint64(h.RevisionNumber) + "-" + zeroPadDecimalUint64(h.RevisionHeight)
+}
+
+// zeroPadDecimalUint64 converts a uint64 number into a zero-padded 20-character string.
+func zeroPadDecimalUint64(num uint64) string {
+	// Convert the value to a decimal string.
+	s := strconv.FormatUint(num, 10)
+
+	// Zero-pad to a total length of 20 characters.
+	zerosNeeded := 20 - len(s)
+
+	return strings.Repeat("0", zerosNeeded) + s
 }

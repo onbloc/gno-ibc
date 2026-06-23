@@ -164,3 +164,100 @@ func TestSignedHeadersEqual(t *testing.T) {
 		})
 	}
 }
+
+// TestVerifyChainedMembershipProof covers error branches in verifyChainedMembershipProof.
+func TestVerifyChainedMembershipProof(t *testing.T) {
+	c := newTestClient(t)
+
+	cases := []struct {
+		name    string
+		root    []byte
+		proofs  []byte
+		keys    []byte
+		value   []byte
+		index   int
+		wantErr string
+	}{
+		{
+			name:    "empty proofs with matching root/value succeeds",
+			root:    []byte("root"),
+			proofs:  []byte{}, // empty proof list
+			keys:    []byte{},
+			value:   []byte("root"), // value equals root
+			index:   0,
+			wantErr: "",
+		},
+		{
+			name:    "empty proofs with root mismatch fails",
+			root:    []byte("root"),
+			proofs:  []byte{},
+			keys:    []byte{},
+			value:   []byte("different"),
+			index:   0,
+			wantErr: "proof did not commit to expected root",
+		},
+		{
+			name: "non-existence proof where existence required",
+			root: []byte("root"),
+			proofs: func() []byte {
+				nep := encodeNonExistenceProof([]byte("k"), nil, nil)
+				return encodeMerkleProof(encodeCommitmentNonexist(nep))
+			}(),
+			keys:    []byte{},
+			value:   []byte("v"),
+			index:   0,
+			wantErr: "commitment proof must be existence proof",
+		},
+		{
+			name:    "decode failure propagates",
+			root:    []byte("root"),
+			proofs:  []byte{0x0a, 0xff}, // truncated
+			keys:    []byte{},
+			value:   []byte("v"),
+			index:   0,
+			wantErr: "invalid",
+		},
+		{
+			name: "proof index beyond length skips loop",
+			root: []byte("root"),
+			proofs: func() []byte {
+				ep := encodeExistenceProof([]byte("k"), []byte("v"), nil, nil)
+				return encodeMerkleProof(encodeCommitmentExist(ep))
+			}(),
+			keys:    []byte{},
+			value:   []byte("root"), // value equals root, so matching after index skips proof
+			index:   5,              // index beyond proofs length
+			wantErr: "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			proofs, err := DecodeProofs(tc.proofs)
+			if tc.wantErr == "invalid" {
+				// For this case we expect decode failure
+			} else if err != nil && tc.wantErr != "" {
+				t.Fatalf("unexpected DecodeProofs error: %v", err)
+			}
+
+			// Build a minimal merkle path for the test
+			var merklePath struct{ KeyPath [][]byte }
+			if len(tc.keys) > 0 {
+				merklePath.KeyPath = append(merklePath.KeyPath, tc.keys)
+			} else {
+				merklePath.KeyPath = [][]byte{{'k'}}
+			}
+
+			err = c.verifyChainedMembershipProof(tc.root, proofs, merklePath, tc.value, tc.index)
+
+			if tc.wantErr != "" {
+				if err == nil || !contains(err.Error(), tc.wantErr) {
+					t.Fatalf("expected error containing %q, got %v", tc.wantErr, err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}

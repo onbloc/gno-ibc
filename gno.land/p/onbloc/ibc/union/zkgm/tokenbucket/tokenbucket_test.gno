@@ -17,6 +17,7 @@ func TestNew(t *testing.T) {
 		{"rejects zero capacity", u256.Zero(), u256.NewUint(1), u256.Zero(), ZeroCapacity},
 		{"rejects zero refill rate", u256.NewUint(1), u256.Zero(), u256.Zero(), ZeroRefillRate},
 		{"initializes available and last refill", u256.NewUint(100), u256.NewUint(5), u256.NewUint(7), nil},
+		{"clones inputs, does not alias", u256.NewUint(100), u256.NewUint(5), u256.NewUint(7), nil},
 	}
 
 	for _, tc := range cases {
@@ -33,6 +34,21 @@ func TestNew(t *testing.T) {
 			assertUintEqual(t, "available", tb.Available, tc.capacity)
 			assertUintEqual(t, "refill_rate", tb.RefillRate, tc.refillRate)
 			assertUintEqual(t, "last_refill", tb.LastRefill, tc.now)
+
+			// Mutate inputs to prove fields are cloned, not aliased
+			tc.capacity.Set(u256.NewUint(999))
+			tc.refillRate.Set(u256.NewUint(888))
+			tc.now.Set(u256.NewUint(777))
+
+			if tb.Capacity.Cmp(u256.NewUint(999)) == 0 {
+				t.Fatalf("capacity was aliased, not cloned")
+			}
+			if tb.RefillRate.Cmp(u256.NewUint(888)) == 0 {
+				t.Fatalf("refill_rate was aliased, not cloned")
+			}
+			if tb.LastRefill.Cmp(u256.NewUint(777)) == 0 {
+				t.Fatalf("last_refill was aliased, not cloned")
+			}
 		})
 	}
 }
@@ -52,6 +68,8 @@ func TestRefill(t *testing.T) {
 		{"caps at capacity", 100, 50, 10, 80, 12, 100, 12},
 		{"full bucket only moves last refill", 100, 5, 10, 0, 20, 100, 20},
 		{"ignores clock going backward", 100, 5, 10, 80, 5, 20, 10},
+		{"no-op when now equals last refill", 100, 5, 10, 40, 10, 60, 10},
+		{"saturates at capacity with huge elapsed", 100, 1000, 10, 0, 15, 100, 15},
 	}
 
 	for _, tc := range cases {
@@ -116,8 +134,8 @@ func TestUpdate(t *testing.T) {
 		wantAvailable  uint64
 		wantRefillRate uint64
 	}{
-		{"rejects zero capacity", 10, 0, u256.Zero(), u256.NewUint(1), false, ZeroCapacity, 0, 0, 0},
-		{"rejects zero refill rate", 10, 0, u256.NewUint(1), u256.Zero(), false, ZeroRefillRate, 0, 0, 0},
+		{"rejects zero capacity, preserves state", 10, 40, u256.Zero(), u256.NewUint(1), false, ZeroCapacity, 100, 60, 5},
+		{"rejects zero refill rate, preserves state", 10, 40, u256.NewUint(1), u256.Zero(), false, ZeroRefillRate, 100, 60, 5},
 		{"without reset keeps available", 10, 40, u256.NewUint(200), u256.NewUint(7), false, nil, 200, 60, 7},
 		{"with reset restores available", 10, 40, u256.NewUint(200), u256.NewUint(7), true, nil, 200, 200, 7},
 		{"clamps available when shrinking capacity", 10, 0, u256.NewUint(50), u256.NewUint(5), false, nil, 50, 50, 5},
@@ -136,6 +154,10 @@ func TestUpdate(t *testing.T) {
 				t.Fatalf("Update error: got %v want %v", err, tc.wantErr)
 			}
 			if tc.wantErr != nil {
+				// Verify state was preserved on error
+				assertUint(t, "capacity", tb.Capacity, tc.wantCapacity)
+				assertUint(t, "available", tb.Available, tc.wantAvailable)
+				assertUint(t, "refill_rate", tb.RefillRate, tc.wantRefillRate)
 				return
 			}
 

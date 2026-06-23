@@ -42,6 +42,7 @@ func TestEncodeList(t *testing.T) {
 			EncodeList(EncodeList()),
 			EncodeList(EncodeList(), EncodeList(EncodeList())),
 		}, "c7c0c1c0c3c0c1c0"},
+		{"long list 56 bytes", [][]byte{bytes.Repeat([]byte{0xaa}, 56)}, "f838" + strings.Repeat("aa", 56)},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -80,6 +81,8 @@ func TestBytesSize(t *testing.T) {
 		{"single byte 0x80 includes header", []byte{0x80}, 2},
 		{"fifty five byte string", bytes.Repeat([]byte{0xaa}, 55), 56},
 		{"fifty six byte string", bytes.Repeat([]byte{0xaa}, 56), 58},
+		{"nil input", nil, 1},
+		{"empty input", []byte{}, 1},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -121,6 +124,8 @@ func TestAppendHeader(t *testing.T) {
 		{"long string", 0x80, 56, "b838"},
 		{"short list empty", 0xC0, 0, "c0"},
 		{"long list", 0xC0, 56, "f838"},
+		{"very large 8-byte size string", 0x80, 1 << 56, "bf0100000000000000"},
+		{"very large 8-byte size list", 0xC0, 1 << 56, "ff0100000000000000"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -1,0 +1,122 @@
+package types
+
+import "testing"
+
+func TestCommitPackets(t *testing.T) {
+	tests := []struct {
+		name    string
+		packets []Packet
+		want    string
+	}{
+		{
+			name:    "empty",
+			packets: nil,
+			want:    "569e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd",
+		},
+		{
+			name: "single packet",
+			packets: []Packet{
+				{
+					SourceChannelId:      1,
+					DestinationChannelId: 2,
+					Data:                 []byte{0xab, 0xcd},
+					TimeoutHeight:        0,
+					TimeoutTimestamp:     3,
+				},
+			},
+			want: "31f771c1d8ee88a4676e6da4cc884fbfecb6e7a7ca033f7f3612a14893ac51e3",
+		},
+		{
+			name: "two packets",
+			packets: []Packet{
+				{
+					SourceChannelId:      1,
+					DestinationChannelId: 2,
+					Data:                 []byte{0xab, 0xcd},
+					TimeoutHeight:        0,
+					TimeoutTimestamp:     3,
+				},
+				{
+					SourceChannelId:      3,
+					DestinationChannelId: 4,
+					Data:                 []byte{0x12, 0x34},
+					TimeoutHeight:        0,
+					TimeoutTimestamp:     5,
+				},
+			},
+			want: "d795c5454ae1091c92168b9bfc9a7b10ae68fce29157b882904d69b19ef949cb",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := CommitPackets(tc.packets)
+			if err != nil {
+				t.Fatalf("CommitPackets error: %v", err)
+			}
+			assertHex(t, tc.name, got[:], tc.want)
+		})
+	}
+}
+
+func TestCommitAcks(t *testing.T) {
+	tests := []struct {
+		name string
+		acks [][]byte
+		want string
+	}{
+		{
+			name: "empty",
+			acks: nil,
+			want: "019e75fc77c1a856f6daaf9e69d8a9566ca34aa47f9133711ce065a571af0cfd",
+		},
+		{
+			name: "single ack",
+			acks: [][]byte{
+				{0xab, 0xcd},
+			},
+			want: "0108036852460acf48664bdbb4d99f13e8845c1c0e5b46608995e98bfb707f9e",
+		},
+		{
+			name: "two acks",
+			acks: [][]byte{
+				{0xab, 0xcd},
+				{0x12, 0x34},
+			},
+			want: "018d1833041ca53600fa7b8824af32ae57486b06d58bffc8481dc14336bea35a",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := CommitAcks(tc.acks)
+			assertHex(t, tc.name, got[:], tc.want)
+		})
+	}
+}
+
+func TestCommitAck(t *testing.T) {
+	tests := []struct {
+		name string
+		ack  []byte
+		want string
+	}{
+		{
+			name: "single ack byte",
+			ack:  []byte{0xab},
+			want: "01260ca8a2d29d0171573f71983914f6099f12d3b3886a9e6910ad855cb4950f",
+		},
+		{
+			name: "ack with multiple bytes",
+			ack:  []byte{0xab, 0xcd},
+			want: "0108036852460acf48664bdbb4d99f13e8845c1c0e5b46608995e98bfb707f9e",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := CommitAck(tc.ack)
+			assertHex(t, tc.name, got[:], tc.want)
+		})
+	}
+}

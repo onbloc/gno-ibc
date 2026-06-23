@@ -441,23 +441,111 @@ func TestGetConsensusState(t *testing.T) {
 	if got != cons {
 		t.Fatalf("getConsensusState returned unexpected pointer")
 	}
+
+	// Injecting a non-*ConsensusState value should return (nil, false).
+	c.consensusStateByHeight.Set(heightKey(8), "not a consensus state")
+	got, found = c.getConsensusState(8)
+	if found {
+		t.Fatalf("getConsensusState found non-*ConsensusState value")
+	}
+	if got != nil {
+		t.Fatalf("getConsensusState returned non-nil for wrong type")
+	}
 }
 
 func TestHeightKey(t *testing.T) {
 	tests := []struct {
+		name   string
 		height Height
 		want   string
 	}{
-		{0, "0"},
-		{1, "1"},
-		{10, "10"},
+		{"zero height", 0, "00000000000000000000-00000000000000000000"},
+		{"simple height", 1, "00000000000000000000-00000000000000000001"},
+		{"height 10", 10, "00000000000000000000-00000000000000000010"},
+		{"height 100", 100, "00000000000000000000-00000000000000000100"},
+		{"large height", 1234567890, "00000000000000000000-00000000001234567890"},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.want, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			if got := heightKey(tt.height); got != tt.want {
 				t.Fatalf("heightKey: got %q want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestNewStateLensIcs23MptLightClient(t *testing.T) {
+	l1 := &mockL1Client{status: lightclient.Active}
+	cs := &ClientState{
+		L2ChainID:         "l2-chain",
+		L1ClientID:        1,
+		L2ClientID:        7,
+		L2LatestHeight:    10,
+		TimestampOffset:   64,
+		StateRootOffset:   0,
+		StorageRootOffset: 32,
+	}
+	cons := &ConsensusState{
+		Timestamp:   12345,
+		StateRoot:   bytes.Repeat([]byte{0xaa}, 32),
+		StorageRoot: bytes.Repeat([]byte{0x02}, 32),
+	}
+
+	c, err := NewStateLensIcs23MptLightClient(cs, cons, l1)
+	if err != nil {
+		t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
+	}
+
+	// The initial consensus state must be stored at L2LatestHeight.
+	got, found := c.getConsensusState(10)
+	if !found {
+		t.Fatal("initial consensus state not stored at L2LatestHeight")
+	}
+	if got.Timestamp != 12345 {
+		t.Errorf("timestamp: got %d want 12345", got.Timestamp)
+	}
+	if !bytes.Equal(got.StateRoot, bytes.Repeat([]byte{0xaa}, 32)) {
+		t.Errorf("state root mismatch")
+	}
+	if !bytes.Equal(got.StorageRoot, bytes.Repeat([]byte{0x02}, 32)) {
+		t.Errorf("storage root mismatch")
+	}
+}
+
+func TestVerifyHeaderRejectsMalformedHeader(t *testing.T) {
+	l1 := &mockL1Client{status: lightclient.Active}
+	c := newTestClient(t, l1, bytes.Repeat([]byte{0x02}, 32))
+
+	// Invalid ABI bytes should fail decode without calling L1 membership.
+	invalidHeader := []byte{0xff, 0xff, 0xff}
+	var caller, relayer address
+	_, err := c.VerifyHeader(caller, invalidHeader, relayer)
+	if err == nil {
+		t.Fatal("expected VerifyHeader to fail with malformed header")
+	}
+
+	// Ensure L1 membership was not called.
+	if l1.called {
+		t.Fatal("L1 VerifyMembership should not be called for malformed header")
+	}
+}
+
+func TestGetTimestampAtHeight(t *testing.T) {
+	c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
+
+	// Existing height should return the timestamp.
+	ts, err := c.GetTimestampAtHeight(10)
+	if err != nil {
+		t.Fatalf("GetTimestampAtHeight(10): got error %v", err)
+	}
+	if ts != types.Timestamp(12345) {
+		t.Errorf("timestamp: got %d want 12345", ts)
+	}
+
+	// Missing height should return ErrConsensusStateNotFound.
+	_, err = c.GetTimestampAtHeight(5)
+	if err != ErrConsensusStateNotFound {
+		t.Errorf("GetTimestampAtHeight(5) error: got %v want %v", err, ErrConsensusStateNotFound)
 	}
 }

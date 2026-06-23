@@ -159,6 +159,8 @@ func TestReadKind(t *testing.T) {
 		{"short list truncated", []byte{0xc2, 0x80}, 0, 0, 0, ErrValueTooLarge},
 		{"long list", append([]byte{0xf8, 0x38}, bytes.Repeat([]byte{0xc0}, 56)...), KindList, 2, 56, nil},
 		{"long list payload truncated", []byte{0xf8, 0x38, 0xc0}, 0, 0, 0, ErrValueTooLarge},
+		{"non-canonical long-form string below threshold", append([]byte{0xb8, 0x37}, bytes.Repeat([]byte{0xaa}, 55)...), 0, 0, 0, ErrCanonSize},
+		{"non-canonical long-form list below threshold", append([]byte{0xf8, 0x37}, bytes.Repeat([]byte{0xc0}, 55)...), 0, 0, 0, ErrCanonSize},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -217,6 +219,7 @@ func TestReadSize(t *testing.T) {
 		{"long form below threshold", []byte{0x37}, 1, 0, ErrCanonSize},
 		{"valid one byte size", []byte{0x38}, 1, 56, nil},
 		{"valid two byte size", []byte{0x01, 0x00}, 2, 256, nil},
+		{"size exceeds maxInt", []byte{0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}, 8, 0, ErrValueTooLarge},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

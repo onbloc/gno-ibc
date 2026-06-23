@@ -48,6 +48,26 @@ func TestEncodeTuple(t *testing.T) {
 				"0000000000000000000000000000000000000000000000000000000000000002",
 		},
 		{
+			name:   "dynamic struct with string",
+			fields: []Field{{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeString}}}}},
+			values: []any{[]any{uint8(1), "test"}},
+			wantHex: "0000000000000000000000000000000000000000000000000000000000000020" +
+				"0000000000000000000000000000000000000000000000000000000000000001" +
+				"0000000000000000000000000000000000000000000000000000000000000040" +
+				"0000000000000000000000000000000000000000000000000000000000000004" +
+				"7465737400000000000000000000000000000000000000000000000000000000",
+		},
+		{
+			name:   "dynamic struct with bytes",
+			fields: []Field{{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeBytes}, {Type: TypeUint8}}}}},
+			values: []any{[]any{[]byte{0xab, 0xcd}, uint8(2)}},
+			wantHex: "0000000000000000000000000000000000000000000000000000000000000020" +
+				"0000000000000000000000000000000000000000000000000000000000000040" +
+				"0000000000000000000000000000000000000000000000000000000000000002" +
+				"0000000000000000000000000000000000000000000000000000000000000002" +
+				"abcd000000000000000000000000000000000000000000000000000000000000",
+		},
+		{
 			name:    "wrong value count",
 			fields:  []Field{{Type: TypeUint8}},
 			values:  []any{},
@@ -169,6 +189,12 @@ func TestEncodeArray(t *testing.T) {
 			elem:    Field{Type: TypeBytes},
 			values:  []any{"not_bytes"},
 			wantErr: ErrInvalidValue,
+		},
+		{
+			name:    "invalid dynamic element schema with struct",
+			elem:    Field{Type: TypeStruct},
+			values:  []any{[]any{uint8(1)}},
+			wantErr: ErrInvalidSchema,
 		},
 	}
 
@@ -318,6 +344,46 @@ func TestValidateSchemaField(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			assertError(t, validateSchemaField(tc.field), tc.wantErr)
+		})
+	}
+}
+
+func TestEncode(t *testing.T) {
+	cases := []struct {
+		name    string
+		schema  Schema
+		values  []any
+		wantHex string
+		wantErr error
+	}{
+		{
+			name:    "empty",
+			schema:  Schema{Fields: nil},
+			values:  nil,
+			wantHex: "",
+		},
+		{
+			name:   "static values",
+			schema: Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeBool}}},
+			values: []any{uint8(42), true},
+			wantHex: "000000000000000000000000000000000000000000000000000000000000002a" +
+				"0000000000000000000000000000000000000000000000000000000000000001",
+		},
+		{
+			name:    "wrong value count",
+			schema:  Schema{Fields: []Field{{Type: TypeUint8}}},
+			values:  []any{},
+			wantErr: ErrInvalidValue,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := Encode(tc.schema, tc.values)
+			assertError(t, err, tc.wantErr)
+			if tc.wantErr != nil {
+				return
+			}
+			assertHex(t, tc.name, got, tc.wantHex)
 		})
 	}
 }

@@ -106,3 +106,18 @@ func requireErrorContains(t *testing.T, err error, want string) {
 		t.Fatalf("error: got %q want substring %q", err.Error(), want)
 	}
 }
+
+// contains reports whether substr is in s. Used by tests that cannot use strings.Contains.
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && indexOf(s, substr) >= 0)
+}
+
+// indexOf returns the index of substr in s, or -1 if not found.
+func indexOf(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}

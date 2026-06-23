@@ -783,3 +783,436 @@ func mustHex0x(s string) []byte {
 	}
 	return mustHex(s[2:])
 }
+
+func TestEncodeZkgmPacket(t *testing.T) {
+	// Build a minimal packet using known field values
+	salt := [32]byte{0x01, 0x02}
+	path := u256.NewUint(123)
+	ins := Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte("operand")}
+
+	data, err := EncodeZkgmPacket(ZkgmPacket{Salt: salt, Path: path, Instruction: ins})
+	if err != nil {
+		t.Fatalf("EncodeZkgmPacket: %v", err)
+	}
+	// Verify we can decode it back
+	decoded, err := DecodeZkgmPacket(data)
+	if err != nil {
+		t.Fatalf("DecodeZkgmPacket: %v", err)
+	}
+	if decoded.Salt[0] != salt[0] || decoded.Salt[1] != salt[1] {
+		t.Fatalf("salt mismatch")
+	}
+	if decoded.Path.ToString() != "123" {
+		t.Fatalf("path: got %s want 123", decoded.Path.ToString())
+	}
+	if decoded.Instruction.Version != ins.Version || decoded.Instruction.Opcode != ins.Opcode {
+		t.Fatalf("instruction mismatch")
+	}
+}
+
+func TestDecodeZkgmPacketErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", []byte{}},
+		{"truncated", mustHex("00" + "01" + "00")},
+		{"wrong layout - invalid salt offset", mustHex("0000000000000000000000000000000000000000000000000000000000000020")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := DecodeZkgmPacket(tt.data)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+		})
+	}
+}
+
+func TestEncodeForward(t *testing.T) {
+	path := u256.NewUint(456)
+	ins := Instruction{Version: INSTR_VERSION_0, Opcode: OP_BATCH, Operand: []byte{}}
+	f := Forward{
+		Path:             path,
+		TimeoutHeight:    1000,
+		TimeoutTimestamp: 2000,
+		Instruction:      ins,
+	}
+
+	data, err := EncodeForward(f)
+	if err != nil {
+		t.Fatalf("EncodeForward: %v", err)
+	}
+	decoded, err := DecodeForward(data)
+	if err != nil {
+		t.Fatalf("DecodeForward: %v", err)
+	}
+	if decoded.Path.ToString() != "456" {
+		t.Fatalf("path: got %s want 456", decoded.Path.ToString())
+	}
+	if decoded.TimeoutHeight != 1000 {
+		t.Fatalf("timeout_height: got %d want 1000", decoded.TimeoutHeight)
+	}
+	if decoded.TimeoutTimestamp != 2000 {
+		t.Fatalf("timeout_timestamp: got %d want 2000", decoded.TimeoutTimestamp)
+	}
+}
+
+func TestDecodeForwardErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", []byte{}},
+		{"truncated", mustHex("0000000000000000000000000000000000000000000000000000000000000001")},
+		{"wrong layout", mustHex("00")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := DecodeForward(tt.data)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+		})
+	}
+}
+
+func TestEncodeBatch(t *testing.T) {
+	ins := []Instruction{
+		{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte("call1")},
+		{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte("call2")},
+	}
+	b := Batch{Instructions: ins}
+
+	data, err := EncodeBatch(b)
+	if err != nil {
+		t.Fatalf("EncodeBatch: %v", err)
+	}
+	decoded, err := DecodeBatch(data)
+	if err != nil {
+		t.Fatalf("DecodeBatch: %v", err)
+	}
+	if len(decoded.Instructions) != 2 {
+		t.Fatalf("instructions count: got %d want 2", len(decoded.Instructions))
+	}
+	if !bytes.Equal(decoded.Instructions[0].Operand, []byte("call1")) {
+		t.Fatalf("instruction[0] operand mismatch")
+	}
+	if !bytes.Equal(decoded.Instructions[1].Operand, []byte("call2")) {
+		t.Fatalf("instruction[1] operand mismatch")
+	}
+}
+
+func TestDecodeBatchErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", []byte{}},
+		{"truncated array", mustHex("00000000000000000000000000000000000000000000000000000000000000200000000000000001")},
+		{"wrong layout", mustHex("cafe")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := DecodeBatch(tt.data)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+		})
+	}
+}
+
+func TestEncodeTokenOrderV1(t *testing.T) {
+	o := TokenOrderV1{
+		Sender:            mustHex("aabbccdd"),
+		Receiver:          mustHex("ddeeffaa"),
+		BaseToken:         mustHex("00112233445566778899aabbccddeeff"),
+		BaseAmount:        u256.NewUint(10000),
+		BaseTokenSymbol:   "TEST",
+		BaseTokenName:     "Test Token",
+		BaseTokenDecimals: 18,
+		BaseTokenPath:     u256.NewUint(1),
+		QuoteToken:        mustHex("00112233445566778899aabbccddeeff"),
+		QuoteAmount:       u256.NewUint(20000),
+	}
+
+	data, err := EncodeTokenOrderV1(o)
+	if err != nil {
+		t.Fatalf("EncodeTokenOrderV1: %v", err)
+	}
+	decoded, err := DecodeTokenOrderV1(data)
+	if err != nil {
+		t.Fatalf("DecodeTokenOrderV1: %v", err)
+	}
+	if !bytes.Equal(decoded.Sender, o.Sender) {
+		t.Fatalf("sender mismatch")
+	}
+	if !bytes.Equal(decoded.Receiver, o.Receiver) {
+		t.Fatalf("receiver mismatch")
+	}
+	if decoded.BaseAmount.ToString() != "10000" {
+		t.Fatalf("base_amount: got %s want 10000", decoded.BaseAmount.ToString())
+	}
+	if decoded.BaseTokenSymbol != "TEST" {
+		t.Fatalf("base_token_symbol: got %s want TEST", decoded.BaseTokenSymbol)
+	}
+	if decoded.BaseTokenName != "Test Token" {
+		t.Fatalf("base_token_name: got %s want Test Token", decoded.BaseTokenName)
+	}
+	if decoded.BaseTokenDecimals != 18 {
+		t.Fatalf("base_token_decimals: got %d want 18", decoded.BaseTokenDecimals)
+	}
+	if decoded.BaseTokenPath.ToString() != "1" {
+		t.Fatalf("base_token_path: got %s want 1", decoded.BaseTokenPath.ToString())
+	}
+	if decoded.QuoteAmount.ToString() != "20000" {
+		t.Fatalf("quote_amount: got %s want 20000", decoded.QuoteAmount.ToString())
+	}
+}
+
+func TestDecodeTokenOrderV1Errors(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", []byte{}},
+		{"truncated", mustHex("aabb")},
+		{"wrong layout", mustHex("cafe")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := DecodeTokenOrderV1(tt.data)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+		})
+	}
+}
+
+func TestEncodeTokenOrderV2(t *testing.T) {
+	o := TokenOrderV2{
+		Sender:      mustHex("aabbccdd"),
+		Receiver:    mustHex("ddeeffaa"),
+		BaseToken:   mustHex("00112233445566778899aabbccddeeff"),
+		BaseAmount:  u256.NewUint(10000),
+		QuoteToken:  mustHex("ffeeddccbbaa99887766554433221100"),
+		QuoteAmount: u256.NewUint(20000),
+		Kind:        1,
+		Metadata:    mustHex("deadbeef"),
+	}
+
+	data, err := EncodeTokenOrderV2(o)
+	if err != nil {
+		t.Fatalf("EncodeTokenOrderV2: %v", err)
+	}
+	decoded, err := DecodeTokenOrderV2(data)
+	if err != nil {
+		t.Fatalf("DecodeTokenOrderV2: %v", err)
+	}
+	if !bytes.Equal(decoded.Sender, o.Sender) {
+		t.Fatalf("sender mismatch")
+	}
+	if !bytes.Equal(decoded.Receiver, o.Receiver) {
+		t.Fatalf("receiver mismatch")
+	}
+	if decoded.BaseAmount.ToString() != "10000" {
+		t.Fatalf("base_amount: got %s want 10000", decoded.BaseAmount.ToString())
+	}
+	if decoded.QuoteAmount.ToString() != "20000" {
+		t.Fatalf("quote_amount: got %s want 20000", decoded.QuoteAmount.ToString())
+	}
+	if decoded.Kind != 1 {
+		t.Fatalf("kind: got %d want 1", decoded.Kind)
+	}
+	if !bytes.Equal(decoded.Metadata, o.Metadata) {
+		t.Fatalf("metadata mismatch")
+	}
+}
+
+func TestDecodeTokenOrderV2Errors(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", []byte{}},
+		{"truncated", mustHex("aabb")},
+		{"wrong layout", mustHex("cafe")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := DecodeTokenOrderV2(tt.data)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+		})
+	}
+}
+
+func TestEncodeAck(t *testing.T) {
+	tag := u256.NewUint(12345)
+	innerAck := mustHex("deadbeef")
+	a := Ack{Tag: tag, InnerAck: innerAck}
+
+	data, err := EncodeAck(a)
+	if err != nil {
+		t.Fatalf("EncodeAck: %v", err)
+	}
+	decoded, err := DecodeAck(data)
+	if err != nil {
+		t.Fatalf("DecodeAck: %v", err)
+	}
+	if decoded.Tag.ToString() != "12345" {
+		t.Fatalf("tag: got %s want 12345", decoded.Tag.ToString())
+	}
+	if !bytes.Equal(decoded.InnerAck, innerAck) {
+		t.Fatalf("inner_ack mismatch")
+	}
+}
+
+func TestDecodeAckErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", []byte{}},
+		{"truncated", mustHex("0000000000000000000000000000000000000000000000000000000000000001")},
+		{"wrong layout", mustHex("cafe")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := DecodeAck(tt.data)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+		})
+	}
+}
+
+func TestEncodeBatchAck(t *testing.T) {
+	acks := [][]byte{
+		mustHex("dead"),
+		mustHex("beef"),
+		mustHex("cafe"),
+	}
+	ba := BatchAck{Acknowledgements: acks}
+
+	data, err := EncodeBatchAck(ba)
+	if err != nil {
+		t.Fatalf("EncodeBatchAck: %v", err)
+	}
+	decoded, err := DecodeBatchAck(data)
+	if err != nil {
+		t.Fatalf("DecodeBatchAck: %v", err)
+	}
+	if len(decoded.Acknowledgements) != 3 {
+		t.Fatalf("acknowledgements count: got %d want 3", len(decoded.Acknowledgements))
+	}
+	if !bytes.Equal(decoded.Acknowledgements[0], acks[0]) {
+		t.Fatalf("ack[0] mismatch")
+	}
+	if !bytes.Equal(decoded.Acknowledgements[1], acks[1]) {
+		t.Fatalf("ack[1] mismatch")
+	}
+	if !bytes.Equal(decoded.Acknowledgements[2], acks[2]) {
+		t.Fatalf("ack[2] mismatch")
+	}
+}
+
+func TestDecodeBatchAckErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", []byte{}},
+		{"truncated array", mustHex("00000000000000000000000000000000000000000000000000000000000000200000000000000002dead")},
+		{"wrong layout", mustHex("cafe")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := DecodeBatchAck(tt.data)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+		})
+	}
+}
+
+func TestEncodeTokenOrderAck(t *testing.T) {
+	fillType := u256.NewUint(999)
+	mm := mustHex("aabbcc")
+	toa := TokenOrderAck{FillType: fillType, MarketMaker: mm}
+
+	data, err := EncodeTokenOrderAck(toa)
+	if err != nil {
+		t.Fatalf("EncodeTokenOrderAck: %v", err)
+	}
+	decoded, err := DecodeTokenOrderAck(data)
+	if err != nil {
+		t.Fatalf("DecodeTokenOrderAck: %v", err)
+	}
+	if decoded.FillType.ToString() != "999" {
+		t.Fatalf("fill_type: got %s want 999", decoded.FillType.ToString())
+	}
+	if !bytes.Equal(decoded.MarketMaker, mm) {
+		t.Fatalf("market_maker mismatch")
+	}
+}
+
+func TestDecodeTokenOrderAckErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", []byte{}},
+		{"truncated", mustHex("0000000000000000000000000000000000000000000000000000000000000001")},
+		{"wrong layout", mustHex("cafe")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := DecodeTokenOrderAck(tt.data)
+			if err == nil {
+				t.Fatalf("expected error, got nil")
+			}
+		})
+	}
+}
+
+func TestDecodeTokenInitializerFromMetadata(t *testing.T) {
+	// Valid GRC20 metadata
+	validInit, err := EncodeTokenInitializer(TokenInitializer{Name: "Test Token", Symbol: "TST", Decimals: 18})
+	if err != nil {
+		t.Fatalf("EncodeTokenInitializer: %v", err)
+	}
+	meta := TokenMetadata{Implementation: []byte("grc20"), Initializer: validInit}
+	ti := DecodeTokenInitializerFromMetadata(meta)
+	if ti.Name != "Test Token" {
+		t.Fatalf("name: got %s want Test Token", ti.Name)
+	}
+	if ti.Symbol != "TST" {
+		t.Fatalf("symbol: got %s want TST", ti.Symbol)
+	}
+	if ti.Decimals != 18 {
+		t.Fatalf("decimals: got %d want 18", ti.Decimals)
+	}
+
+	// Invalid GRC20 initializer - should return zero value
+	invalidMeta := TokenMetadata{Implementation: []byte("grc20"), Initializer: []byte("truncated")}
+	ti = DecodeTokenInitializerFromMetadata(invalidMeta)
+	if ti != (TokenInitializer{}) {
+		t.Fatalf("invalid grc20 initializer: expected zero value, got %v", ti)
+	}
+
+	// Unknown implementation - should return zero value
+	unknownMeta := TokenMetadata{Implementation: []byte("unknown"), Initializer: []byte("whatever")}
+	ti = DecodeTokenInitializerFromMetadata(unknownMeta)
+	if ti != (TokenInitializer{}) {
+		t.Fatalf("unknown implementation: expected zero value, got %v", ti)
+	}
+
+	// Empty implementation - should return zero value
+	emptyMeta := TokenMetadata{Implementation: []byte{}, Initializer: []byte{}}
+	ti = DecodeTokenInitializerFromMetadata(emptyMeta)
+	if ti != (TokenInitializer{}) {
+		t.Fatalf("empty implementation: expected zero value, got %v", ti)
+	}
+}

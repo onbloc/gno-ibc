@@ -167,6 +167,8 @@ func TestUpdateChannelPath(t *testing.T) {
 	}{
 		{"empty", u256.Zero(), 7, u256.NewUint(7), nil, nil},
 		{"appends", u256.NewUint(7), 5, new(u256.Uint).Or(u256.NewUint(7), MakePathFromChannel(5, 1)), nil, nil},
+		{"next channel id zero", u256.Zero(), 0, u256.NewUint(0), nil, nil},
+		{"append zero to non-empty", u256.NewUint(7), 0, new(u256.Uint).Or(u256.NewUint(7), u256.NewUint(0)), nil, nil},
 		{
 			"full width channel appends next slot",
 			u256.NewUint(0xFFFFFFFF),

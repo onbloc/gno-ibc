@@ -206,15 +206,72 @@ func TestDecodeConsensusStateRejectsMalformedData(t *testing.T) {
 }
 
 func TestDecodeHeaderRejectsMalformedData(t *testing.T) {
-	valid := mustHeaderBytes(word32(11), word32(22), word32(128), word32(192), word32(3), "aabbcc", word32(4), "01020304")
+	valid := mustHeaderBytes(
+		word32(11),
+		word32(22),
+		word32(128),
+		word32(192),
+		word32(3),
+		"aabbcc",
+		word32(4),
+		"01020304",
+	)
 	tests := []struct {
 		name string
 		bz   []byte
 	}{
-		{name: "l1 height high padding", bz: mustHeaderBytes(highPaddingWord(11), word32(22), word32(128), word32(192), word32(3), "aabbcc", word32(4), "01020304")},
-		{name: "l2 height high padding", bz: mustHeaderBytes(word32(11), highPaddingWord(22), word32(128), word32(192), word32(3), "aabbcc", word32(4), "01020304")},
-		{name: "proof offset unaligned", bz: mustHeaderBytes(word32(11), word32(22), word32(129), word32(192), word32(3), "aabbcc", word32(4), "01020304")},
-		{name: "consensus state length exceeds tail", bz: mustHeaderBytes(word32(11), word32(22), word32(128), word32(192), word32(3), "aabbcc", word32(33), "01020304")},
+		{
+			name: "l1 height high padding",
+			bz: mustHeaderBytes(
+				highPaddingWord(11),
+				word32(22),
+				word32(128),
+				word32(192),
+				word32(3),
+				"aabbcc",
+				word32(4),
+				"01020304",
+			),
+		},
+		{
+			name: "l2 height high padding",
+			bz: mustHeaderBytes(
+				word32(11),
+				highPaddingWord(22),
+				word32(128),
+				word32(192),
+				word32(3),
+				"aabbcc",
+				word32(4),
+				"01020304",
+			),
+		},
+		{
+			name: "proof offset unaligned",
+			bz: mustHeaderBytes(
+				word32(11),
+				word32(22),
+				word32(129),
+				word32(192),
+				word32(3),
+				"aabbcc",
+				word32(4),
+				"01020304",
+			),
+		},
+		{
+			name: "consensus state length exceeds tail",
+			bz: mustHeaderBytes(
+				word32(11),
+				word32(22),
+				word32(128),
+				word32(192),
+				word32(3),
+				"aabbcc",
+				word32(33),
+				"01020304",
+			),
+		},
 		{name: "short data", bz: valid[:len(valid)-1]},
 	}
 

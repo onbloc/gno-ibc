@@ -3,10 +3,7 @@ package cometbls
 import (
 	"bytes"
 	"encoding/hex"
-	"strings"
 	"testing"
-
-	"gno.land/p/onbloc/ibc/union/types"
 )
 
 // testNow is 2024-01-01 00:00:00 UTC in nanoseconds, used as a fixed clock for
@@ -57,24 +54,10 @@ func bytes32hex(b byte) string {
 	return hex.EncodeToString(bytes.Repeat([]byte{b}, 32))
 }
 
-func heightPtr(height types.Height) *types.Height {
-	return &height
-}
-
 func cloneTestHeaderWith(malleate func(*Header)) *Header {
 	h := newTestHeader(1, 100, 0, 0, repeat32(0xFF))
 	malleate(h)
 	return h
-}
-
-func updateStateTestHeader(trustedHeight, signedHeight uint64, timestamp uint64) *Header {
-	return newTestHeader(
-		int64(signedHeight),
-		int64(timestamp/1_000_000_000),
-		int32(timestamp%1_000_000_000),
-		trustedHeight,
-		[]byte{0x01},
-	)
 }
 
 func cloneLightHeaderWith(h *LightHeader, mutate func(*LightHeader)) *LightHeader {
@@ -94,16 +77,6 @@ func cloneLightHeader(h *LightHeader) *LightHeader {
 		ValidatorsHash:     append([]byte(nil), h.ValidatorsHash...),
 		NextValidatorsHash: append([]byte(nil), h.NextValidatorsHash...),
 		AppHash:            append([]byte(nil), h.AppHash...),
-	}
-}
-
-func requireErrorContains(t *testing.T, err error, want string) {
-	t.Helper()
-	if err == nil {
-		t.Fatalf("expected error containing %q", want)
-	}
-	if !strings.Contains(err.Error(), want) {
-		t.Fatalf("error: got %q want substring %q", err.Error(), want)
 	}
 }
 

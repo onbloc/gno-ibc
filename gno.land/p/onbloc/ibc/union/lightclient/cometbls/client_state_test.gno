@@ -84,7 +84,7 @@ func TestNewClientState(t *testing.T) {
 		maxClockDrift   uint64
 		frozenHeight    types.Height
 		latestHeight    types.Height
-		contractAddress H256
+		contractAddress types.H256
 		wantNil         bool
 		assert          func(*testing.T, *ClientState)
 	}{
@@ -96,7 +96,7 @@ func TestNewClientState(t *testing.T) {
 			maxClockDrift:   100,
 			frozenHeight:    types.NewHeight(0),
 			latestHeight:    types.NewHeight(100),
-			contractAddress: H256{1, 2, 3},
+			contractAddress: types.H256{1, 2, 3},
 			wantNil:         false,
 			assert: func(t *testing.T, cs *ClientState) {
 				if cs.ChainID != "test-chain" {
@@ -130,7 +130,7 @@ func TestNewClientState(t *testing.T) {
 			maxClockDrift:   100,
 			frozenHeight:    types.NewHeight(0),
 			latestHeight:    types.NewHeight(50),
-			contractAddress: H256{},
+			contractAddress: types.H256{},
 			wantNil:         false,
 			assert: func(t *testing.T, cs *ClientState) {
 				if !cs.FrozenHeight.IsZero() {
@@ -146,7 +146,7 @@ func TestNewClientState(t *testing.T) {
 			maxClockDrift:   100,
 			frozenHeight:    types.NewHeight(123),
 			latestHeight:    types.NewHeight(200),
-			contractAddress: H256{},
+			contractAddress: types.H256{},
 			wantNil:         false,
 			assert: func(t *testing.T, cs *ClientState) {
 				if cs.FrozenHeight.RevisionHeight != 123 {
@@ -162,7 +162,7 @@ func TestNewClientState(t *testing.T) {
 			maxClockDrift:   100,
 			frozenHeight:    types.NewHeight(0),
 			latestHeight:    types.NewHeight(100),
-			contractAddress: H256{},
+			contractAddress: types.H256{},
 			wantNil:         false,
 			assert: func(t *testing.T, cs *ClientState) {
 				for i := range cs.ContractAddress {
@@ -180,7 +180,7 @@ func TestNewClientState(t *testing.T) {
 			maxClockDrift:   ^uint64(0),
 			frozenHeight:    types.NewHeight(0),
 			latestHeight:    types.NewHeight(^uint64(0)),
-			contractAddress: H256{255, 255, 255},
+			contractAddress: types.H256{255, 255, 255},
 			wantNil:         false,
 			assert: func(t *testing.T, cs *ClientState) {
 				if cs.UnbondingPeriod != ^uint64(0) {
@@ -250,7 +250,7 @@ func TestClientState_Getters(t *testing.T) {
 				100,
 				types.NewHeight(0),
 				tc.latestHeight,
-				H256{},
+				types.H256{},
 			)
 
 			if got := cs.GetChainID(); got != tc.wantChainID {

@@ -7,7 +7,7 @@ import (
 )
 
 func TestMakeStoreKey(t *testing.T) {
-	var standardAddr H256
+	var standardAddr types.H256
 	for i := 0; i < len(standardAddr); i++ {
 		standardAddr[i] = byte(i + 1)
 	}
@@ -18,12 +18,12 @@ func TestMakeStoreKey(t *testing.T) {
 
 	cases := []struct {
 		name string
-		addr H256
+		addr types.H256
 		key  []byte
 	}{
 		{"standard case", standardAddr, []byte("packet-commitment")},
-		{"zero address", H256{}, []byte("test-key")},
-		{"long key", H256{}, longKey},
+		{"zero address", types.H256{}, []byte("test-key")},
+		{"long key", types.H256{}, longKey},
 	}
 
 	for _, tc := range cases {
@@ -48,11 +48,11 @@ func TestMakeStoreKey(t *testing.T) {
 func TestMakeStoreKeyEmptyKey(t *testing.T) {
 	cases := []struct {
 		name string
-		addr H256
+		addr types.H256
 		key  []byte
 	}{
-		{"nil key", H256{}, nil},
-		{"empty key", H256{}, []byte{}},
+		{"nil key", types.H256{}, nil},
+		{"empty key", types.H256{}, []byte{}},
 	}
 	cases[0].addr[31] = 0xff
 	cases[1].addr[31] = 0xff

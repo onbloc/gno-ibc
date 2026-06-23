@@ -175,7 +175,7 @@ func TestClientAccessors(t *testing.T) {
 func TestClientGetTimestampNoConsensus(t *testing.T) {
 	tests := []struct {
 		name         string
-		latestHeight Height
+		latestHeight uint64
 		want         types.Timestamp
 	}{
 		{name: "missing latest consensus state", latestHeight: 999, want: 0},
@@ -300,7 +300,7 @@ func TestVerifyHeader(t *testing.T) {
 		header           []byte
 		headerObj        *Header // set to nil for raw header bytes
 		wantErr          bool
-		wantLatestHeight Height
+		wantLatestHeight uint64
 		wantClientBytes  bool
 		wantTimestamp    uint64
 		assertL1Called   bool
@@ -454,31 +454,31 @@ func TestVerifyHeader(t *testing.T) {
 func TestUpdateState(t *testing.T) {
 	tests := []struct {
 		name              string
-		initialHeight     Height
-		headerHeight      Height
-		wantLatestHeight  Height
+		initialHeight     types.Height
+		headerHeight      types.Height
+		wantLatestHeight  types.Height
 		wantClientBytes   bool
 		wantConsensusTime uint64
 	}{
-		{name: "newer header advances latest height", initialHeight: 10, headerHeight: 11, wantLatestHeight: 11, wantClientBytes: true, wantConsensusTime: 67890},
-		{name: "older header stores consensus without advancing latest height", initialHeight: 10, headerHeight: 9, wantLatestHeight: 10, wantConsensusTime: 67890},
+		{name: "newer header advances latest height", initialHeight: types.NewHeight(10), headerHeight: types.NewHeight(11), wantLatestHeight: types.NewHeight(11), wantClientBytes: true, wantConsensusTime: 67890},
+		{name: "older header stores consensus without advancing latest height", initialHeight: types.NewHeight(10), headerHeight: types.NewHeight(9), wantLatestHeight: types.NewHeight(10), wantConsensusTime: 67890},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c := newTestClient(t, &mockL1Client{status: lightclient.Active}, bytes.Repeat([]byte{0x02}, 32))
-			c.clientState.L2LatestHeight = tt.initialHeight
+			c.clientState.L2LatestHeight = tt.initialHeight.RevisionHeight
 			cons := &ConsensusState{
 				Timestamp:   tt.wantConsensusTime,
 				StateRoot:   bytes.Repeat([]byte{0xcc}, 32),
 				StorageRoot: bytes.Repeat([]byte{0xdd}, 32),
 			}
 
-			update := c.updateState(Header{L2Height: tt.headerHeight}, cons)
-			if update.Height != tt.headerHeight {
-				t.Fatalf("update height: got %d want %d", update.Height, tt.headerHeight)
+			update := c.updateState(Header{L2Height: tt.headerHeight.RevisionHeight}, cons)
+			if update.Height != tt.headerHeight.RevisionHeight {
+				t.Fatalf("update height: got %d want %d", update.Height, tt.headerHeight.RevisionHeight)
 			}
-			if c.GetLatestHeight() != tt.wantLatestHeight {
+			if c.GetLatestHeight() != tt.wantLatestHeight.RevisionHeight {
 				t.Fatalf("latest height: got %d want %d", c.GetLatestHeight(), tt.wantLatestHeight)
 			}
 			if (len(update.ClientStateBytes) != 0) != tt.wantClientBytes {
@@ -487,9 +487,9 @@ func TestUpdateState(t *testing.T) {
 			if len(update.ConsensusStateBytes) == 0 {
 				t.Fatalf("expected consensus state bytes")
 			}
-			got, found := c.getConsensusState(tt.headerHeight)
+			got, found := c.getConsensusState(tt.headerHeight.RevisionHeight)
 			if !found {
-				t.Fatalf("consensus state at height %d not stored", tt.headerHeight)
+				t.Fatalf("consensus state at height %d not stored", tt.headerHeight.RevisionHeight)
 			}
 			if got.Timestamp != tt.wantConsensusTime ||
 				!bytes.Equal(got.StateRoot, cons.StateRoot) ||
@@ -850,7 +850,7 @@ func TestGetConsensusState(t *testing.T) {
 func TestSetConsensusState(t *testing.T) {
 	cases := []struct {
 		name            string
-		height          Height
+		height          uint64
 		consState       *ConsensusState
 		overwrite       *ConsensusState // if set, overwrite same height with this
 		wantStored      bool
@@ -930,14 +930,14 @@ func TestSetConsensusState(t *testing.T) {
 func TestHeightKey(t *testing.T) {
 	tests := []struct {
 		name   string
-		height Height
+		height uint64
 		want   string
 	}{
-		{"zero height", 0, "00000000000000000000-00000000000000000000"},
-		{"simple height", 1, "00000000000000000000-00000000000000000001"},
-		{"height 10", 10, "00000000000000000000-00000000000000000010"},
-		{"height 100", 100, "00000000000000000000-00000000000000000100"},
-		{"large height", 1234567890, "00000000000000000000-00000000001234567890"},
+		{"zero height", 0, "00000000000000000000"},
+		{"simple height", 1, "00000000000000000001"},
+		{"height 10", 10, "00000000000000000010"},
+		{"height 100", 100, "00000000000000000100"},
+		{"large height", 1234567890, "00000000001234567890"},
 	}
 
 	for _, tt := range tests {

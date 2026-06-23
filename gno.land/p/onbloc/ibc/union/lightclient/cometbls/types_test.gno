@@ -4,68 +4,6 @@ import (
 	"testing"
 )
 
-func TestH256GetHash(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    H256
-		expected []byte
-	}{
-		{
-			name:     "zero hash returns 32 zero bytes",
-			input:    H256{},
-			expected: make([]byte, 32),
-		},
-		{
-			name: "non-zero hash returns correct bytes",
-			input: func() H256 {
-				var h H256
-				h[0] = 1
-				h[16] = 128
-				h[31] = 255
-				return h
-			}(),
-			expected: func() []byte {
-				b := make([]byte, 32)
-				b[0] = 1
-				b[16] = 128
-				b[31] = 255
-				return b
-			}(),
-		},
-		{
-			name: "all bytes set to max",
-			input: func() H256 {
-				var h H256
-				for i := range h {
-					h[i] = 255
-				}
-				return h
-			}(),
-			expected: func() []byte {
-				b := make([]byte, 32)
-				for i := range b {
-					b[i] = 255
-				}
-				return b
-			}(),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.input.GetHash()
-			if len(result) != len(tt.expected) {
-				t.Errorf("expected length %d, got %d", len(tt.expected), len(result))
-			}
-			for i := range tt.expected {
-				if result[i] != tt.expected[i] {
-					t.Errorf("byte %d: expected %d, got %d", i, tt.expected[i], result[i])
-				}
-			}
-		})
-	}
-}
-
 func TestMerkleRootGetHash(t *testing.T) {
 	tests := []struct {
 		name     string

@@ -54,28 +54,28 @@ func TestEncodeHeaderAdditional(t *testing.T) {
 			header: cloneTestHeaderWith(func(h *Header) {
 				h.SignedHeader.ValidatorsHash = repeatBytes(0x01, 31)
 			}),
-			wantErr: "validators hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
 			name: "validators hash empty",
 			header: cloneTestHeaderWith(func(h *Header) {
 				h.SignedHeader.ValidatorsHash = []byte{}
 			}),
-			wantErr: "validators hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
 			name: "validators hash too long (33 bytes)",
 			header: cloneTestHeaderWith(func(h *Header) {
 				h.SignedHeader.ValidatorsHash = repeatBytes(0x01, 33)
 			}),
-			wantErr: "validators hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
 			name: "validators hash way too long (64 bytes)",
 			header: cloneTestHeaderWith(func(h *Header) {
 				h.SignedHeader.ValidatorsHash = repeatBytes(0x01, 64)
 			}),
-			wantErr: "validators hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
 			name: "validators hash exactly 32 bytes succeeds",
@@ -89,21 +89,21 @@ func TestEncodeHeaderAdditional(t *testing.T) {
 			header: cloneTestHeaderWith(func(h *Header) {
 				h.SignedHeader.NextValidatorsHash = repeatBytes(0x02, 31)
 			}),
-			wantErr: "next validators hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
 			name: "next validators hash empty",
 			header: cloneTestHeaderWith(func(h *Header) {
 				h.SignedHeader.NextValidatorsHash = []byte{}
 			}),
-			wantErr: "next validators hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
 			name: "next validators hash too long (33 bytes)",
 			header: cloneTestHeaderWith(func(h *Header) {
 				h.SignedHeader.NextValidatorsHash = repeatBytes(0x02, 33)
 			}),
-			wantErr: "next validators hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
 			name: "next validators hash exactly 32 bytes succeeds",
@@ -117,21 +117,21 @@ func TestEncodeHeaderAdditional(t *testing.T) {
 			header: cloneTestHeaderWith(func(h *Header) {
 				h.SignedHeader.AppHash = repeatBytes(0x03, 31)
 			}),
-			wantErr: "app hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
 			name: "app hash empty",
 			header: cloneTestHeaderWith(func(h *Header) {
 				h.SignedHeader.AppHash = []byte{}
 			}),
-			wantErr: "app hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
 			name: "app hash too long (33 bytes)",
 			header: cloneTestHeaderWith(func(h *Header) {
 				h.SignedHeader.AppHash = repeatBytes(0x03, 33)
 			}),
-			wantErr: "app hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
 			name: "app hash exactly 32 bytes succeeds",
@@ -554,7 +554,7 @@ func TestEncodeMisbehaviourAdditional(t *testing.T) {
 				}),
 				Header2: validHeader,
 			},
-			wantErr: "validators hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
 			name: "header2 encoding error (invalid app hash)",
@@ -564,7 +564,7 @@ func TestEncodeMisbehaviourAdditional(t *testing.T) {
 					h.SignedHeader.AppHash = []byte{0x01}
 				}),
 			},
-			wantErr: "app hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
 			name: "both headers encoding error (header1 fails first)",
@@ -576,7 +576,7 @@ func TestEncodeMisbehaviourAdditional(t *testing.T) {
 					h.SignedHeader.AppHash = []byte{0x01}
 				}),
 			},
-			wantErr: "next validators hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
 			name: "nil signed header in header1",
@@ -830,37 +830,31 @@ func TestDecodeMisbehaviourAdditional(t *testing.T) {
 // - too short (1-31 bytes)
 // - exactly 32 bytes (success)
 // - too long (33+ bytes)
-// Tests the error message formatting with different labels
 func TestToBytes32(t *testing.T) {
 	cases := []struct {
 		name    string
 		b       []byte
-		label   string
 		want    [32]byte
 		wantErr string
 	}{
 		{
 			name:    "empty slice",
 			b:       []byte{},
-			label:   "test hash",
-			wantErr: "test hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
 			name:    "1 byte slice",
 			b:       []byte{0x01},
-			label:   "validators hash",
-			wantErr: "validators hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
 			name:    "31 byte slice",
 			b:       repeatBytes(0xAB, 31),
-			label:   "app hash",
-			wantErr: "app hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
-			name:  "exactly 32 bytes succeeds",
-			b:     repeat32(0xCD),
-			label: "next validators hash",
+			name: "exactly 32 bytes succeeds",
+			b:    repeat32(0xCD),
 			want: func() [32]byte {
 				var out [32]byte
 				copy(out[:], repeat32(0xCD))
@@ -876,7 +870,6 @@ func TestToBytes32(t *testing.T) {
 				}
 				return out
 			}(),
-			label: "custom hash",
 			want: func() [32]byte {
 				var out [32]byte
 				for i := range out {
@@ -888,25 +881,21 @@ func TestToBytes32(t *testing.T) {
 		{
 			name:    "33 byte slice",
 			b:       repeatBytes(0xEF, 33),
-			label:   "validators hash",
-			wantErr: "validators hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
 			name:    "64 byte slice",
 			b:       repeatBytes(0x99, 64),
-			label:   "next validators hash",
-			wantErr: "next validators hash must be 32 bytes",
+			wantErr: "must be 32 bytes",
 		},
 		{
-			name:  "32 bytes all zeros",
-			b:     make([]byte, 32),
-			label: "zero hash",
-			want:  [32]byte{},
+			name: "32 bytes all zeros",
+			b:    make([]byte, 32),
+			want: [32]byte{},
 		},
 		{
-			name:  "32 bytes all 0xFF",
-			b:     repeatBytes(0xFF, 32),
-			label: "max hash",
+			name: "32 bytes all 0xFF",
+			b:    repeatBytes(0xFF, 32),
 			want: func() [32]byte {
 				var out [32]byte
 				for i := range out {
@@ -919,7 +908,7 @@ func TestToBytes32(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := toBytes32(tc.b, tc.label)
+			got, err := toBytes32(tc.b)
 			if tc.wantErr != "" {
 				if err == nil {
 					t.Fatalf("expected error containing %q, got nil", tc.wantErr)

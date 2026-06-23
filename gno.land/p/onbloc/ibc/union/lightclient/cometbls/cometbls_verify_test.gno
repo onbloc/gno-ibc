@@ -26,7 +26,7 @@ func TestVerifyHeader(t *testing.T) {
 			malleate: func(c *CometblsLightClient, _ *ConsensusState, h *Header) time.Time {
 				return time.Unix(0, int64(testNow+c.clientState.TrustingPeriod+1))
 			},
-			wantErr: ErrInvalidHeaderTimestamp,
+			wantErr: ErrInvalidHeaderTimestamp.Error(),
 		},
 		{
 			name: "expiry boundary proceeds to adjacent validator hash check",
@@ -55,7 +55,7 @@ func TestVerifyHeader(t *testing.T) {
 				h.SignedHeader.TimeNanos = int32((testNow + 1) % 1_000_000_000)
 				return time.Unix(0, int64(testNow))
 			},
-			wantErr: ErrMathOverflow,
+			wantErr: ErrMathOverflow.Error(),
 		},
 	}
 	for _, tc := range testCases {
@@ -145,7 +145,7 @@ func TestVerifyMisbehaviour(t *testing.T) {
 				return testHeader(100, 101, testNow+1_000_000_000),
 					testHeader(100, 102, testNow+2_000_000_000)
 			},
-			wantErr: ErrInvalidMisbehaviourHeaderSequence,
+			wantErr: ErrInvalidMisbehaviourHeaderSequence.Error(),
 		},
 		{
 			name: "same height identical headers - no misbehaviour",
@@ -303,7 +303,7 @@ func TestVerifyMisbehaviourHeader(t *testing.T) {
 				return c, h, now
 			},
 			wantErr: []string{
-				ErrInvalidMisbehaviour,
+				ErrInvalidMisbehaviour.Error(),
 				"could not get trusted consensus state",
 			},
 		},
@@ -317,7 +317,7 @@ func TestVerifyMisbehaviourHeader(t *testing.T) {
 				return c, h, now
 			},
 			wantErr: []string{
-				ErrInvalidMisbehaviour,
+				ErrInvalidMisbehaviour.Error(),
 				"verifying TestHeader in Misbehaviour failed",
 				"the validators hash",
 			},

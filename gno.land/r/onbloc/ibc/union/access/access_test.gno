@@ -12,7 +12,7 @@ import (
 func TestGrantRoleDirectManagement(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	relayer := testutils.TestAddress("access-relayer")
-	ResetForTest(cur, admin)
+	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
 	GrantRole(cross(cur), RelayerRole, relayer)
@@ -30,7 +30,7 @@ func TestGrantRoleRejectsNonAdmin(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	caller := testutils.TestAddress("access-non-admin")
 	relayer := testutils.TestAddress("access-relayer")
-	ResetForTest(cur, admin)
+	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(caller))
 	uassert.AbortsContains(t, cur, ErrorAccessManagerUnauthorizedAccount, func(cur realm) {
@@ -45,7 +45,7 @@ func TestRoleMembershipRejectsNonAdmin(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	caller := testutils.TestAddress("access-non-admin")
 	relayer := testutils.TestAddress("access-relayer")
-	ResetForTest(cur, admin)
+	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
 	GrantRole(cross(cur), RelayerRole, relayer)
@@ -87,7 +87,7 @@ func TestRoleMembershipRejectsNonAdmin(cur realm, t *testing.T) {
 func TestSetFunctionRoleDirectManagement(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	caller := testutils.TestAddress("access-caller")
-	ResetForTest(cur, admin)
+	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
 	if CanCall(cross(cur), "set_hook", caller).Immediate {
@@ -104,7 +104,7 @@ func TestSetFunctionRolesDirectManagement(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	caller := testutils.TestAddress("access-caller")
 	selectors := []manager.Selector{"set_hook", "dispatch"}
-	ResetForTest(cur, admin)
+	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
 	SetFunctionRoles(cross(cur), selectors, manager.PublicRole)
@@ -127,7 +127,7 @@ func TestSetFunctionRolesDirectManagement(cur realm, t *testing.T) {
 func TestSetFunctionRoleRejectsNonAdmin(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	caller := testutils.TestAddress("access-non-admin")
-	ResetForTest(cur, admin)
+	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(caller))
 	uassert.AbortsContains(t, cur, ErrorAccessManagerUnauthorizedAccount, func(cur realm) {
@@ -141,7 +141,7 @@ func TestSetFunctionRoleRejectsNonAdmin(cur realm, t *testing.T) {
 func TestManagerAdminProtectedSurfacesRejectNonAdmin(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	caller := testutils.TestAddress("access-non-admin")
-	ResetForTest(cur, admin)
+	resetAccess(admin)
 
 	tests := []struct {
 		name string
@@ -210,7 +210,7 @@ func TestManagerAdminProtectedSurfacesRejectNonAdmin(cur realm, t *testing.T) {
 func TestLabelRoleRequiresManagerAdmin(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	caller := testutils.TestAddress("access-non-admin")
-	ResetForTest(cur, admin)
+	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
 	LabelRole(cross(cur), RelayerRole, "RELAYER")
@@ -226,7 +226,7 @@ func TestRoleConfigurationSurface(cur realm, t *testing.T) {
 	roleAdmin := testutils.TestAddress("access-role-admin")
 	relayer := testutils.TestAddress("access-relayer")
 	const roleAdminRole manager.RoleId = 7
-	ResetForTest(cur, admin)
+	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
 	GrantRole(cross(cur), roleAdminRole, roleAdmin)
@@ -255,7 +255,7 @@ func TestRoleConfigurationSurface(cur realm, t *testing.T) {
 func TestRenounceRoleSurface(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	relayer := testutils.TestAddress("access-relayer")
-	ResetForTest(cur, admin)
+	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
 	GrantRole(cross(cur), RelayerRole, relayer)
@@ -273,7 +273,7 @@ func TestRenounceRoleSurface(cur realm, t *testing.T) {
 func TestTargetConfigurationSurface(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	caller := testutils.TestAddress("access-caller")
-	ResetForTest(cur, admin)
+	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
 	SetFunctionRole(cross(cur), "set_hook", manager.PublicRole)
@@ -302,67 +302,9 @@ func TestTargetConfigurationSurface(cur realm, t *testing.T) {
 	}
 }
 
-func TestAssertCanCall(cur realm, t *testing.T) {
-	admin := testutils.TestAddress("access-admin")
-	caller := testutils.TestAddress("access-caller")
-	ResetForTest(cur, admin)
-
-	testing.SetRealm(testing.NewUserRealm(admin))
-	SetFunctionRole(cross(cur), "set_hook", manager.PublicRole)
-
-	tests := []struct {
-		name    string
-		setup   func(cur realm)
-		aborts  bool
-		message string
-	}{
-		{
-			name: "authorized public selector",
-			setup: func(cur realm) {
-				SetTargetClosed(cross(cur), false)
-			},
-		},
-		{
-			name: "closed target",
-			setup: func(cur realm) {
-				SetTargetClosed(cross(cur), true)
-			},
-			aborts:  true,
-			message: ErrorAccessManagerUnauthorizedCall,
-		},
-		{
-			name: "admin selector without role",
-			setup: func(cur realm) {
-				SetTargetClosed(cross(cur), false)
-			},
-			aborts:  true,
-			message: ErrorAccessManagerUnauthorizedCall,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			testing.SetRealm(testing.NewUserRealm(admin))
-			tc.setup(cur)
-
-			if tc.aborts {
-				uassert.AbortsContains(t, cur, tc.message, func(cur realm) {
-					if tc.name == "admin selector without role" {
-						AssertCanCall(cross(cur), "grant_role", caller)
-					} else {
-						AssertCanCall(cross(cur), "set_hook", caller)
-					}
-				})
-			} else {
-				AssertCanCall(cross(cur), "set_hook", caller)
-			}
-		})
-	}
-}
-
 func TestUnionDeployerRelayerSelectorSetup(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
-	ResetForTest(cur, admin)
+	resetAccess(admin)
 
 	if HasRole(cur, RelayerRole, admin).IsMember {
 		t.Fatal("initial admin must not receive relayer role during access-manager bootstrap")

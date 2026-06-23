@@ -12,14 +12,14 @@ func AssertCanCall(cur realm, selector manager.Selector, caller address) {
 	}
 }
 
-func requireManagerAdmin(cur realm, _ manager.Selector) {
+func requireManagerAdmin(cur realm) {
 	caller := cur.Previous().Address()
 	if !accessState.CanManageTarget(caller).Immediate {
 		panic(AccessManagerUnauthorizedAccountError(caller, manager.AdminRole))
 	}
 }
 
-func requireRoleAdmin(cur realm, role manager.RoleId, _ manager.Selector) {
+func requireRoleAdmin(cur realm, role manager.RoleId) {
 	caller := cur.Previous().Address()
 	if !accessState.CanAdminRole(role, caller).Immediate {
 		panic(AccessManagerUnauthorizedAccountError(caller, accessState.GetRoleAdmin(role)))

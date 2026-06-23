@@ -9,21 +9,11 @@ var accessState manager.State
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L65
 const RelayerRole manager.RoleId = 1
 
-const (
-	selectorGrantRole             manager.Selector = "grant_role"
-	selectorLabelRole             manager.Selector = "label_role"
-	selectorRevokeRole            manager.Selector = "revoke_role"
-	selectorSetGrantDelay         manager.Selector = "set_grant_delay"
-	selectorSetRoleAdmin          manager.Selector = "set_role_admin"
-	selectorSetTargetClosed       manager.Selector = "set_target_closed"
-	selectorSetTargetFunctionRole manager.Selector = "set_target_function_role"
-)
-
 // GrantRole grants role membership to account through the shared access realm.
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L69-L87
 func GrantRole(cur realm, role manager.RoleId, account address) bool {
-	requireRoleAdmin(cur, role, selectorGrantRole)
+	requireRoleAdmin(cur, role)
 	newMember := accessState.GrantRole(role, account)
 	access := accessState.Roles[role].Members[account]
 	emitRoleGrantedEvent(role, account, access.Since, newMember)
@@ -34,7 +24,7 @@ func GrantRole(cur realm, role manager.RoleId, account address) bool {
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L89-L100
 func RevokeRole(cur realm, role manager.RoleId, account address) bool {
-	requireRoleAdmin(cur, role, selectorRevokeRole)
+	requireRoleAdmin(cur, role)
 	revoked := accessState.RevokeRole(role, account)
 	if revoked {
 		emitRoleRevokedEvent(role, account)
@@ -58,7 +48,7 @@ func RenounceRole(cur realm, role manager.RoleId, callerConfirmation address) bo
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L48-L67
 func LabelRole(cur realm, role manager.RoleId, label string) {
-	requireManagerAdmin(cur, selectorLabelRole)
+	requireManagerAdmin(cur)
 	manager.RequireUnlockedConfigRole(role)
 	emitRoleLabelEvent(role, label)
 }
@@ -67,7 +57,7 @@ func LabelRole(cur realm, role manager.RoleId, label string) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L117-L126
 func SetRoleAdmin(cur realm, role manager.RoleId, admin manager.RoleId) {
-	requireManagerAdmin(cur, selectorSetRoleAdmin)
+	requireManagerAdmin(cur)
 	accessState.SetRoleAdmin(role, admin)
 	emitRoleAdminChangedEvent(role, admin)
 }
@@ -76,7 +66,7 @@ func SetRoleAdmin(cur realm, role manager.RoleId, admin manager.RoleId) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L139-L148
 func SetGrantDelay(cur realm, role manager.RoleId, delay manager.Delay) {
-	requireManagerAdmin(cur, selectorSetGrantDelay)
+	requireManagerAdmin(cur)
 	accessState.SetGrantDelay(role, delay)
 	emitRoleGrantDelayChangedEvent(role, delay, manager.CurrentTimepoint())
 }
@@ -86,7 +76,7 @@ func SetGrantDelay(cur realm, role manager.RoleId, delay manager.Delay) {
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L353-L367
 func SetFunctionRole(cur realm, selector manager.Selector, role manager.RoleId) {
 	target := cur.Previous().PkgPath()
-	requireManagerAdmin(cur, selectorSetTargetFunctionRole)
+	requireManagerAdmin(cur)
 	accessState.SetTargetFunctionRole(target, selector, role)
 	emitTargetFunctionRoleUpdatedEvent(target, selector, role)
 }
@@ -96,7 +86,7 @@ func SetFunctionRole(cur realm, selector manager.Selector, role manager.RoleId) 
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L353-L367
 func SetFunctionRoles(cur realm, selectors []manager.Selector, role manager.RoleId) {
 	target := cur.Previous().PkgPath()
-	requireManagerAdmin(cur, selectorSetTargetFunctionRole)
+	requireManagerAdmin(cur)
 	accessState.SetTargetFunctionRoles(target, selectors, role)
 	for i := range selectors {
 		emitTargetFunctionRoleUpdatedEvent(target, selectors[i], role)
@@ -108,7 +98,7 @@ func SetFunctionRoles(cur realm, selectors []manager.Selector, role manager.Role
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L450-L483
 func SetTargetClosed(cur realm, closed bool) {
 	target := cur.Previous().PkgPath()
-	requireManagerAdmin(cur, selectorSetTargetClosed)
+	requireManagerAdmin(cur)
 	accessState.SetTargetClosed(target, closed)
 	emitTargetClosedEvent(target, closed)
 }

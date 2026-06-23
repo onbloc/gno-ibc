@@ -102,7 +102,7 @@ func (m *mockClient) VerifyCreation(_ address, relayer address) (types.ClientCre
 	return types.ClientCreationResult{StorageWrites: m.creationStorage}, nil
 }
 
-func (m *mockClient) Misbehaviour(_ address, _ []byte, _ address) (types.ClientState, error) {
+func (m *mockClient) Misbehaviour(_ address, _ []byte, _ address) ([]byte, error) {
 	return nil, errors.New("mock: misbehaviour unsupported")
 }
 

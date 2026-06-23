@@ -204,7 +204,7 @@ func TestForceConnectionOpenConfirmBypassesProofVerification(cur realm, t *testi
 	uassert.True(t, conn.State == types.ConnectionStateOpen)
 }
 
-// --- ensureConnectionOpen ---
+// --- ensureConnectionState ---
 
 func TestEnsureConnectionOpenPanicsOnInit(cur realm, t *testing.T) {
 	v := newTestImpl()
@@ -213,7 +213,7 @@ func TestEnsureConnectionOpenPanicsOnInit(cur realm, t *testing.T) {
 	v.store.SaveConnection(0, cur, id, core.NewConnection(types.ConnectionStateInit, clientId, types.ClientId(7), 0))
 
 	uassert.AbortsContains(t, cur, "invalid connection state", func(cur realm) {
-		v.ensureConnectionOpen(id)
+		v.ensureConnectionState(id)
 	})
 }
 
@@ -223,7 +223,7 @@ func TestEnsureConnectionOpenSucceeds(cur realm, t *testing.T) {
 	id := v.store.NextConnectionId(0, cur)
 	v.store.SaveConnection(0, cur, id, core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(99)))
 
-	conn := v.ensureConnectionOpen(id)
+	conn := v.ensureConnectionState(id)
 	uassert.True(t, conn.State == types.ConnectionStateOpen)
 }
 
@@ -233,6 +233,6 @@ func TestEnsureConnectionOpenAllowsMissingCounterpartyConnectionId(cur realm, t 
 	id := v.store.NextConnectionId(0, cur)
 	v.store.SaveConnection(0, cur, id, core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), 0))
 
-	conn := v.ensureConnectionOpen(id)
+	conn := v.ensureConnectionState(id)
 	uassert.True(t, conn.State == types.ConnectionStateOpen)
 }

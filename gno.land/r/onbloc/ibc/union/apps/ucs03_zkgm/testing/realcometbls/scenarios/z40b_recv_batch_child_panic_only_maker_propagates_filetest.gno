@@ -23,7 +23,7 @@ func main(cur realm) {
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	packet := panicBatchPacket(cur, pair, receiver)
 
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, realcometbls.Z40PanicBatchPacketCommitmentProof(cross(cur)), uint64(realcometbls.DevnetHeight-1)))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, realcometbls.Z40PanicBatchPacketCommitmentProof(cross(cur)), uint64(realcometbls.DevnetHeight-1)))
 
 	println("mock_calls", mock.Calls(cross(cur)))
 	println("quote_balance", impl.VoucherBalanceOf("ibc/batch-panic-quote", address(receiver)))

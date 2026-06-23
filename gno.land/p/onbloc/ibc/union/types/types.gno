@@ -36,6 +36,21 @@ func (bz Bytes) Bytes() []byte {
 	return out
 }
 
+// Clone returns a fresh Bytes detached from any external/readonly realm
+// ownership of bz.
+//
+// Under gno's InterRealm v2 borrow rules a value that crossed a realm boundary
+// is externally stored, and a direct slice->slice conversion of it (a plain
+// types.Bytes->[]byte cast, or a []byte->string->[]byte round-trip, which gno
+// elides) keeps the foreign ownership and panics with "illegal conversion of
+// readonly or externally stored value" when later stored or re-emitted. copy is
+// an element-wise read, not a conversion, so it is permitted on a readonly
+// source and yields a value owned by the caller's realm. Use Clone before
+// persisting or re-emitting Bytes that arrived from another realm.
+func (bz Bytes) Clone() Bytes {
+	return Bytes(bz.Bytes())
+}
+
 type H256 [32]byte
 
 func (h H256) String() string {

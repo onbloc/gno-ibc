@@ -16,7 +16,9 @@ import (
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/tests.rs#L486-L543
 func TestUnionVerifyBatch(cur realm, t *testing.T) {
 	v := newTestImpl()
-	const sender = "sender"
+	// verify reads the sender from rlm.Previous(); drive it via SetRealm + the
+	// verifyBatchX crossing shim.
+	sender := testAddress("union-vb-caller")
 
 	cases := []struct {
 		name    string
@@ -39,7 +41,8 @@ func TestUnionVerifyBatch(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		err := v.verifyBatch(0, cur, MessageInfo{Sender: sender}, newFunds(nil), types.ChannelId(1), u256.Zero(), tc.batch)
+		testing.SetRealm(testing.NewUserRealm(address(sender)))
+		err := v.verifyBatchX(cross(cur), newFunds(nil), types.ChannelId(1), u256.Zero(), tc.batch)
 		if tc.wantErr == "" {
 			uassert.NoError(t, err)
 		} else {

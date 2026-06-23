@@ -38,6 +38,16 @@ func NewMsgForceUpdateClient(clientId ClientId, clientStateBytes, consensusState
 	return MsgForceUpdateClient{ClientId: clientId, ClientStateBytes: clientStateBytes, ConsensusStateBytes: consensusStateBytes}
 }
 
+type MsgMisbehaviour struct {
+	ClientId      ClientId
+	ClientMessage []byte
+	Relayer       string
+}
+
+func NewMsgMisbehaviour(clientId ClientId, clientMessage []byte, relayer string) MsgMisbehaviour {
+	return MsgMisbehaviour{ClientId: clientId, ClientMessage: clientMessage, Relayer: relayer}
+}
+
 // --- connection handshake ---
 
 type MsgConnectionOpenInit struct {

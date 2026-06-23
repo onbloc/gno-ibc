@@ -68,6 +68,6 @@ func (l *mockLightClient) VerifyCreation(caller address, relayer address) (types
 	return types.ClientCreationResult{StorageWrites: l.creationWrites}, nil
 }
 
-func (l *mockLightClient) Misbehaviour(caller address, misbehaviour []byte, relayer address) (types.ClientState, error) {
+func (l *mockLightClient) Misbehaviour(caller address, misbehaviour []byte, relayer address) ([]byte, error) {
 	return nil, nil
 }

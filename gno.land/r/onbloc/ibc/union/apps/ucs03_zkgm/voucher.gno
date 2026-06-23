@@ -30,3 +30,16 @@ func (v *Voucher) Token() *grc20.Token { return v.token }
 
 // Ledger returns the mint/burn capability. Callers MUST be impl-gated.
 func (v *Voucher) Ledger() *grc20.PrivateLedger { return v.ledger }
+
+// VoucherBalanceOf returns addr's balance of the wrapped voucher for ibcDenom,
+// or 0 when no voucher has been minted for it. It reads the proxy-owned Store, so
+// the balance is the stable public surface: it survives impl upgrades and does
+// not depend on grc20reg's realm-qualified registration key.
+func VoucherBalanceOf(ibcDenom string, addr address) int64 {
+	vou, ok := store.GetVoucher(ibcDenom)
+	if !ok {
+		return 0
+	}
+
+	return vou.Token().BalanceOf(addr)
+}

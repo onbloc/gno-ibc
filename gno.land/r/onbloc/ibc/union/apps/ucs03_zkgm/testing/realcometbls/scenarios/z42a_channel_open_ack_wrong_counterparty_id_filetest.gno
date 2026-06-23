@@ -14,7 +14,8 @@ func main(cur realm) {
 	impl.Register(cross(cur))
 	clientId := realcometbls.CreateZ35CometBLSClient(cross(cur))
 	connectionId := openConnection(cur, clientId, realcometbls.Z35ConnectionTryProof(cross(cur)))
-	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit([]byte(zkgm.ProxyPkgPath()), []byte(zkgm.ProxyPkgPath()), connectionId, zkgm.Version, "g1msgrelayer"))
+	core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit([]byte(zkgm.ProxyPkgPath()), []byte(zkgm.ProxyPkgPath()), connectionId, zkgm.Version, "g1msgrelayer"))
+	channelId := types.ChannelId(1)
 
 	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, types.ChannelId(3), realcometbls.Z35ChannelTryProof(cross(cur)), uint64(realcometbls.DevnetHeight-1), "g1msgrelayer"))
 }

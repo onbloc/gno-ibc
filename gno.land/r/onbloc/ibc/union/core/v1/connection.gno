@@ -61,6 +61,7 @@ func (c *coreV1) connectionOpenAck(_ int, rlm realm, msg types.MsgConnectionOpen
 	if !ok {
 		panic("connection " + msg.ConnectionId.String() + " not found")
 	}
+
 	if connection.State != types.ConnectionStateInit {
 		panic(core.ErrInvalidConnectionState)
 	}
@@ -97,11 +98,13 @@ func (c *coreV1) connectionOpenConfirm(_ int, rlm realm, msg types.MsgConnection
 	if !ok {
 		panic("connection " + msg.ConnectionId.String() + " not found")
 	}
+
 	if connection.State != types.ConnectionStateTryOpen {
 		panic(core.ErrInvalidConnectionState)
 	}
 
 	counterpartyConnectionId := connection.CounterpartyConnectionId
+
 	if verify {
 		expectedConnection := core.NewConnection(types.ConnectionStateOpen, connection.CounterpartyClientId, connection.ClientId, msg.ConnectionId)
 		key := types.ConnectionPath(counterpartyConnectionId)
@@ -116,9 +119,9 @@ func (c *coreV1) connectionOpenConfirm(_ int, rlm realm, msg types.MsgConnection
 	core.EmitConnectionOpenConfirm(msg.ConnectionId, connection.ClientId, connection.CounterpartyClientId, counterpartyConnectionId)
 }
 
-// ensureConnectionOpen returns the connection for connectionId, requiring it to
+// ensureConnectionState returns the connection for connectionId, requiring it to
 // be Open.
-func (c *coreV1) ensureConnectionOpen(connectionId types.ConnectionId) types.Connection {
+func (c *coreV1) ensureConnectionState(connectionId types.ConnectionId) types.Connection {
 	connection, ok := c.store.GetConnection(connectionId)
 	if !ok {
 		panic("connection " + connectionId.String() + " not found")

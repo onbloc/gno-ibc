@@ -39,7 +39,7 @@ func TestUnionVerifyInternal(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		err := v.verifyInternal(0, cur, MessageInfo{Sender: "sender"}, newFunds(nil), types.ChannelId(1), u256.Zero(), tc.instr)
+		err := v.verifyInternal(0, cur, newFunds(nil), types.ChannelId(1), u256.Zero(), tc.instr)
 		uassert.ErrorContains(t, err, tc.wantErr)
 	}
 }

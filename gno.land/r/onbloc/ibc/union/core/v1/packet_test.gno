@@ -20,7 +20,8 @@ func setupOpenChannel(cur realm, v *coreV1) (types.ChannelId, types.Bytes, *mock
 	port := types.Bytes(cur.Previous().PkgPath())
 	mApp := &mockApp{}
 	ms.registerApp(port, mApp)
-	chId := v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: port, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: port, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	chId := v.store.(*mockStore).currentChannelId()
 	v.ChannelOpenAck(0, cur, types.MsgChannelOpenAck{ChannelId: chId, CounterpartyChannelId: types.ChannelId(9), CounterpartyVersion: "v1", ProofHeight: 10, ProofTry: []byte("p")})
 	return chId, port, mApp
 }
@@ -54,7 +55,8 @@ func TestSendPacketUnauthorizedSender(cur realm, t *testing.T) {
 	// Channel owned by a port other than the caller.
 	other := types.Bytes("other-port")
 	ms.registerApp(other, &mockApp{})
-	chId := v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: other, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: other, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	chId := v.store.(*mockStore).currentChannelId()
 	v.ChannelOpenAck(0, cur, types.MsgChannelOpenAck{ChannelId: chId, CounterpartyChannelId: types.ChannelId(9), CounterpartyVersion: "v1", ProofHeight: 10, ProofTry: []byte("p")})
 
 	uassert.AbortsContains(t, cur, "authorized to send", func(cur realm) {
@@ -83,6 +85,40 @@ func TestPacketRecvDispatchesAndReceipts(cur realm, t *testing.T) {
 	uassert.True(t, v.store.HasPacketReceipt(packet))
 }
 
+// TestPacketRecvShorterRelayerMsgsDropsUnpaired pins union's zip semantics
+// (contract.rs L1751, packets.into_iter().zip(relayer_msgs)): a packet without a
+// matching relayer msg is not dispatched. With two packets and one relayer msg,
+// only the first packet is received; the second is left undispatched.
+func TestPacketRecvShorterRelayerMsgsDropsUnpaired(cur realm, t *testing.T) {
+	v := newTestImpl()
+	chId, _, mApp := setupOpenChannel(cur, v)
+	packet0 := types.Packet{
+		SourceChannelId:      types.ChannelId(9),
+		DestinationChannelId: chId,
+		Data:                 []byte("recv-0"),
+		TimeoutTimestamp:     farFuture,
+	}
+	packet1 := types.Packet{
+		SourceChannelId:      types.ChannelId(9),
+		DestinationChannelId: chId,
+		Data:                 []byte("recv-1"),
+		TimeoutTimestamp:     farFuture,
+	}
+
+	// Two packets, but only one relayer msg: the second packet has no match.
+	v.PacketRecv(0, cur, types.MsgPacketRecv{
+		Packets:     []types.Packet{packet0, packet1},
+		RelayerMsgs: [][]byte{[]byte("rm0")},
+		Proof:       []byte("proof"),
+		ProofHeight: 10,
+	})
+
+	// Only the paired packet is dispatched and receipted; the unpaired one is dropped.
+	uassert.Equal(t, 1, mApp.recvCalls)
+	uassert.True(t, v.store.HasPacketReceipt(packet0))
+	uassert.False(t, v.store.HasPacketReceipt(packet1))
+}
+
 func TestPacketRecvDuplicateSkipped(cur realm, t *testing.T) {
 	v := newTestImpl()
 	chId, _, mApp := setupOpenChannel(cur, v)
@@ -108,7 +144,8 @@ func TestPacketRecvProofFailureAborts(cur realm, t *testing.T) {
 		core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
 	port := types.Bytes(cur.Previous().PkgPath())
 	ms.registerApp(port, &mockApp{})
-	chId := v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: port, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: port, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	chId := v.store.(*mockStore).currentChannelId()
 	// channel stays Init (ack would need a separate good client); recv only needs it Open.
 	ms.SaveChannel(0, cur, chId, types.Channel{State: types.ChannelStateOpen, ConnectionId: types.ConnectionId(1), CounterpartyChannelId: types.ChannelId(9), Version: "v1"})
 

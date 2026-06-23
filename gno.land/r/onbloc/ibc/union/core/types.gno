@@ -26,6 +26,7 @@ type ICore interface {
 	CreateClient(_ int, rlm realm, msg types.MsgCreateClient)
 	UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient)
 	ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateClient)
+	Misbehaviour(_ int, rlm realm, msg types.MsgMisbehaviour)
 	VerifyClientMembership(_ int, rlm realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte)
 
 	// --- Connection handshake ---
@@ -40,15 +41,15 @@ type ICore interface {
 	ForceConnectionOpenConfirm(_ int, rlm realm, msg types.MsgConnectionOpenConfirm)
 
 	// --- Channel handshake ---
-	ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit) types.ChannelId
-	ChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry) types.ChannelId
+	ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit)
+	ChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry)
 	ChannelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck)
 	ChannelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenConfirm)
 	ChannelCloseInit(_ int, rlm realm, msg types.MsgChannelCloseInit)
 	ChannelCloseConfirm(_ int, rlm realm, msg types.MsgChannelCloseConfirm)
 	// Force* are the admin recovery variants that skip counterparty proof
 	// verification. The admin gate stays on the proxy.
-	ForceChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry) types.ChannelId
+	ForceChannelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry)
 	ForceChannelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck)
 	ForceChannelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenConfirm)
 
@@ -72,24 +73,23 @@ type ICore interface {
 }
 
 // ICoreGetter is the read-only query surface, implemented by the impl and exposed by
-// the proxy's getters.gno. It mirrors union's relayer-facing get queries; results
-// for missing state are signalled by the bool return (no panic). The best-effort
-// methods (GetRegisteredClientType, GetClientImpl, GetChannels) have no direct
-// gno equivalent — see getters.gno for the adaptation notes.
+// the proxy's getters.gno. Queries that fail on a missing lookup return an error.
+// The best-effort method GetRegisteredClientType has no direct gno equivalent — see
+// getters.gno for the notes.
 type ICoreGetter interface {
-	GetStatus(clientId types.ClientId) types.Status
-	GetClientType(clientId types.ClientId) (types.ClientType, bool)
-	GetClientImpl(clientId types.ClientId) (string, bool)
+	GetStatus(clientId types.ClientId) (types.Status, error)
+	GetClientType(clientId types.ClientId) (types.ClientType, error)
+	GetClientImpl(clientId types.ClientId) (string, error)
 	GetRegisteredClientType(clientType types.ClientType) bool
-	GetClientStateBytes(clientId types.ClientId) ([]byte, bool)
-	GetConsensusStateBytes(clientId types.ClientId, height types.Height) ([]byte, bool)
-	GetLatestHeight(clientId types.ClientId) (uint64, bool)
-	GetTimestampAtHeight(clientId types.ClientId, height uint64) (types.Timestamp, bool)
-	GetConnectionTyped(connectionId types.ConnectionId) (types.Connection, bool)
-	GetChannelTyped(channelId types.ChannelId) (types.Channel, bool)
-	GetChannels(contract string) []types.ChannelId
-	GetBatchPacketsCommitment(channelId types.ChannelId, batchHash types.H256) (types.H256, bool)
-	GetBatchReceiptsCommitment(channelId types.ChannelId, batchHash types.H256) (types.H256, bool)
+	GetClientStateBytes(clientId types.ClientId) ([]byte, error)
+	GetConsensusStateBytes(clientId types.ClientId, height types.Height) ([]byte, error)
+	GetLatestHeight(clientId types.ClientId) (uint64, error)
+	GetTimestampAtHeight(clientId types.ClientId, height uint64) (types.Timestamp, error)
+	GetConnection(connectionId types.ConnectionId) (types.Connection, error)
+	GetChannels() ([]types.Channel, error)
+	GetChannel(channelId types.ChannelId) (types.Channel, error)
+	GetBatchPacketsCommitment(batchHash types.H256) (types.H256, error)
+	GetBatchReceiptsCommitment(batchHash types.H256) (types.H256, error)
 }
 
 // IStore is the proxy-owned persistent state injected into the mustGetImpl(). Setters take
@@ -123,6 +123,7 @@ type IStore interface {
 	NextChannelId(_ int, rlm realm) types.ChannelId
 	CreateChannel(_ int, rlm realm, channelId types.ChannelId, channel types.Channel, portId types.Bytes)
 	SaveChannel(_ int, rlm realm, channelId types.ChannelId, channel types.Channel)
+	GetChannels() ([]types.Channel, error)
 	GetChannel(channelId types.ChannelId) (types.Channel, bool)
 	GetChannelOwner(channelId types.ChannelId) (types.Bytes, bool)
 
@@ -157,8 +158,8 @@ type IStore interface {
 	// --- Read-only query support ---
 	ClientStateBytes(clientId types.ClientId) ([]byte, bool)
 	ConsensusStateBytes(clientId types.ClientId, height types.Height) ([]byte, bool)
-	BatchPacketsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool)
-	BatchReceiptsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool)
+	BatchPacketsAt(batchHash types.H256) (types.H256, bool)
+	BatchReceiptsAt(batchHash types.H256) (types.H256, bool)
 }
 
 func NewChannel(
@@ -225,4 +226,38 @@ func NewMsgChannelOpenTry(
 		proofHeight,
 		relayer,
 	)
+}
+
+// The remaining message constructors are wrapped here (rather than calling
+// types.NewMsgXXX directly) so the datagram is allocated in core's realm. Under
+// the InterRealm v2 ownership rules an object built in the caller's realm and
+// then handed to a core entrypoint is read-only (taint); constructing it through
+// the owning (core) realm avoids that.
+
+func NewMsgCreateClient(clientType types.ClientType, clientStateBytes, consensusStateBytes []byte) types.MsgCreateClient {
+	return types.NewMsgCreateClient(clientType, clientStateBytes, consensusStateBytes)
+}
+
+func NewMsgConnectionOpenInit(clientId, counterpartyClientId types.ClientId) types.MsgConnectionOpenInit {
+	return types.NewMsgConnectionOpenInit(clientId, counterpartyClientId)
+}
+
+func NewMsgConnectionOpenAck(connectionId, counterpartyConnectionId types.ConnectionId, proofTry []byte, proofHeight uint64) types.MsgConnectionOpenAck {
+	return types.NewMsgConnectionOpenAck(connectionId, counterpartyConnectionId, proofTry, proofHeight)
+}
+
+func NewMsgChannelOpenInit(portId, counterpartyPortId []byte, connectionId types.ConnectionId, version string, relayer string) types.MsgChannelOpenInit {
+	return types.NewMsgChannelOpenInit(portId, counterpartyPortId, connectionId, version, relayer)
+}
+
+func NewMsgChannelOpenAck(channelId types.ChannelId, counterpartyVersion string, counterpartyChannelId types.ChannelId, proofTry []byte, proofHeight uint64, relayer string) types.MsgChannelOpenAck {
+	return types.NewMsgChannelOpenAck(channelId, counterpartyVersion, counterpartyChannelId, proofTry, proofHeight, relayer)
+}
+
+func NewMsgPacketRecv(packets []types.Packet, relayerMsgs [][]byte, proof []byte, proofHeight uint64) types.MsgPacketRecv {
+	return types.NewMsgPacketRecv(packets, relayerMsgs, proof, proofHeight)
+}
+
+func NewMsgPacketAcknowledgement(packets []types.Packet, acknowledgements [][]byte, proof []byte, proofHeight uint64) types.MsgPacketAcknowledgement {
+	return types.NewMsgPacketAcknowledgement(packets, acknowledgements, proof, proofHeight)
 }

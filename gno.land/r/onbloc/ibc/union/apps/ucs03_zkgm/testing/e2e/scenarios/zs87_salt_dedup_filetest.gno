@@ -64,15 +64,15 @@ func main(cur realm) {
 
 	println("")
 	println("[SCENARIO] repeated packet is swallowed by receipt")
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{samePacket}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{samePacket}, [][]byte{nil}, nil, 1))
 	println("receipt_after_first", core.HasPacketReceipt(cross(cur), samePacket))
 	println("receiver_after_first", impl.VoucherBalanceOf(quoteToken, address(receiver)))
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{samePacket}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{samePacket}, [][]byte{nil}, nil, 1))
 	println("receiver_after_second_same", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 
 	println("")
 	println("[SCENARIO] different salt is a distinct packet")
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{otherPacket}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{otherPacket}, [][]byte{nil}, nil, 1))
 	println("other_receipt", core.HasPacketReceipt(cross(cur), otherPacket))
 	println("receiver_other_token", impl.VoucherBalanceOf(otherQuoteToken, address(receiver)))
 }

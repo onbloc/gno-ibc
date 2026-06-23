@@ -89,7 +89,7 @@ func (cs *ClientState) IsExpired(latestTimestamp, now uint64) bool {
 // Validate performs a basic validation of the client state fields.
 func (cs *ClientState) Validate() error {
 	if strings.TrimSpace(cs.ChainID) == "" {
-		return makeError(ErrInvalidChainID, "chain id cannot be empty string")
+		return errorWithDetails(ErrInvalidChainID, "chain id cannot be empty string")
 	}
 
 	// NOTE: the value of tmtypes.MaxChainIDLen may change in the future.
@@ -98,30 +98,30 @@ func (cs *ClientState) Validate() error {
 	// and the tendermint version used by this light client.
 	// https://github.com/cosmos/ibc-go/issues/177
 	if len(cs.ChainID) > MaxChainIDLen {
-		return makeError(
+		return errorWithDetails(
 			ErrInvalidChainID,
 			ufmt.Sprintf("chainID is too long; got: %d, max: %d", len(cs.ChainID), MaxChainIDLen),
 		)
 	}
 
 	if cs.TrustingPeriod <= 0 {
-		return makeError(ErrInvalidTrustingPeriod, "trusting period must be greater than zero")
+		return errorWithDetails(ErrInvalidTrustingPeriod, "trusting period must be greater than zero")
 	}
 
 	if cs.UnbondingPeriod <= 0 {
-		return makeError(ErrInvalidUnbondingPeriod, "unbonding period must be greater than zero")
+		return errorWithDetails(ErrInvalidUnbondingPeriod, "unbonding period must be greater than zero")
 	}
 
 	if cs.MaxClockDrift <= 0 {
-		return makeError(ErrInvalidMaxClockDrift, "max clock drift must be greater than zero")
+		return errorWithDetails(ErrInvalidMaxClockDrift, "max clock drift must be greater than zero")
 	}
 
 	if cs.GetLatestRevisionHeight() == 0 {
-		return makeError(ErrInvalidHeaderHeight, "cometbls client's latest height cannot be zero")
+		return errorWithDetails(ErrInvalidHeaderHeight, "cometbls client's latest height cannot be zero")
 	}
 
 	if cs.TrustingPeriod >= cs.UnbondingPeriod {
-		return makeError(
+		return errorWithDetails(
 			ErrInvalidTrustingPeriod,
 			ufmt.Sprintf("trusting period (%d) should be < unbonding period (%d)", cs.TrustingPeriod, cs.UnbondingPeriod),
 		)

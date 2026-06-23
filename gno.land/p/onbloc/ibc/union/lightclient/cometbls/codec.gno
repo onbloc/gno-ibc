@@ -30,7 +30,7 @@ var consensusStateSchema = abienc.Schema{Fields: []abienc.Field{
 
 func EncodeClientState(cs *ClientState) ([]byte, error) {
 	if cs == nil {
-		return nil, errors.New("cometbls: nil client state")
+		return nil, errors.New("nil client state")
 	}
 
 	return abienc.Encode(clientStateSchema, []any{
@@ -47,7 +47,7 @@ func EncodeClientState(cs *ClientState) ([]byte, error) {
 func DecodeClientState(buf []byte) (*ClientState, error) {
 	vals, err := abienc.Decode(clientStateSchema, buf)
 	if err != nil {
-		return nil, errors.New("cometbls: " + err.Error())
+		return nil, errors.New("" + err.Error())
 	}
 
 	contractAddress := vals[6].([32]byte)
@@ -65,7 +65,7 @@ func DecodeClientState(buf []byte) (*ClientState, error) {
 
 func EncodeConsensusState(cs *ConsensusState) ([]byte, error) {
 	if cs == nil {
-		return nil, errors.New("cometbls: nil consensus state")
+		return nil, errors.New("nil consensus state")
 	}
 
 	root, err := toBytes32(cs.GetRootHash())
@@ -88,7 +88,7 @@ func EncodeConsensusState(cs *ConsensusState) ([]byte, error) {
 func DecodeConsensusState(buf []byte) (*ConsensusState, error) {
 	vals, err := abienc.Decode(consensusStateSchema, buf)
 	if err != nil {
-		return nil, errors.New("cometbls: " + err.Error())
+		return nil, errors.New("" + err.Error())
 	}
 
 	root := vals[1].([32]byte)

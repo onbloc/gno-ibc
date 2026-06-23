@@ -53,14 +53,14 @@ func (a *App) OnChannelCloseInit(cur realm, channelId types.ChannelId, relayer a
 	assertIsIBCHost(cur)
 	assertIsNotPaused()
 
-	panic("zkgm: the show must go on")
+	panic("the show must go on")
 }
 
 func (a *App) OnChannelCloseConfirm(cur realm, channelId types.ChannelId, relayer address) {
 	assertIsIBCHost(cur)
 	assertIsNotPaused()
 
-	panic("zkgm: the show must go on")
+	panic("the show must go on")
 }
 
 func (a *App) OnRecvPacket(cur realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {

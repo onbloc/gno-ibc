@@ -10,7 +10,7 @@ var (
 	errAccessManagerBadConfirmation = errors.New("access manager bad confirmation")
 )
 
-func makeError(err error, msgs ...string) error {
+func errorWithDetails(err error, msgs ...string) error {
 	if len(msgs) == 0 {
 		return err
 	}

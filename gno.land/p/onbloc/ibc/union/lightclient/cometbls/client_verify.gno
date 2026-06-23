@@ -34,7 +34,7 @@ func (c *CometblsLightClient) verifyHeader(clientState *ClientState, trustedCons
 	trustedHeightNumber := header.TrustedHeight.RevisionHeight
 
 	if untrustedHeightNumber <= int64(trustedHeightNumber) {
-		return makeError(
+		return errorWithDetails(
 			ErrInvalidHeader,
 			ufmt.Sprintf("header height <= consensus state height (%d <= %d)", untrustedHeightNumber, trustedHeightNumber),
 		)
@@ -45,7 +45,7 @@ func (c *CometblsLightClient) verifyHeader(clientState *ClientState, trustedCons
 	untrustedTimestamp := uint64(header.GetTime().UnixNano())
 
 	if untrustedTimestamp <= trustedTimestamp {
-		return makeError(
+		return errorWithDetails(
 			ErrInvalidHeaderTimestamp,
 			ufmt.Sprintf(
 				"trusted header timestamp %d is greater than or equal to the new header timestamp %d",
@@ -56,7 +56,7 @@ func (c *CometblsLightClient) verifyHeader(clientState *ClientState, trustedCons
 
 	currentBlockTime := uint64(now.UnixNano())
 	if isClientExpiredAt(trustedTimestamp, clientState.TrustingPeriod, currentBlockTime) {
-		return makeError(
+		return errorWithDetails(
 			ErrTrustingPeriodExpired,
 			ufmt.Sprintf("trusted consensus state at TrustedHeight %s has expired", header.TrustedHeight),
 		)
@@ -64,11 +64,11 @@ func (c *CometblsLightClient) verifyHeader(clientState *ClientState, trustedCons
 
 	maxClockDriftTimestamp, overflow := checkedAddUint64(currentBlockTime, clientState.MaxClockDrift)
 	if overflow {
-		return makeError(ErrMathOverflow)
+		return errorWithDetails(ErrMathOverflow)
 	}
 
 	if untrustedTimestamp >= maxClockDriftTimestamp {
-		return makeError(
+		return errorWithDetails(
 			ErrInvalidHeader,
 			ufmt.Sprintf("header time >= max drift (%d >= currentTime + %d)", untrustedTimestamp, clientState.MaxClockDrift),
 		)
@@ -79,7 +79,7 @@ func (c *CometblsLightClient) verifyHeader(clientState *ClientState, trustedCons
 	// next validators hash.
 	if untrustedHeightNumber == int64(trustedHeightNumber)+1 &&
 		!bytes.Equal(header.SignedHeader.ValidatorsHash, trustedValidatorsHash) {
-		return makeError(
+		return errorWithDetails(
 			ErrInvalidHeader,
 			ufmt.Sprintf(
 				"the validators hash %s doesn't match the trusted validators hash %s for an adjacent block",
@@ -97,7 +97,7 @@ func (c *CometblsLightClient) verifyHeader(clientState *ClientState, trustedCons
 		*header.SignedHeader,
 		header.ZeroKnowledgeProof,
 	); err != nil {
-		return makeError(ErrInvalidHeader, "zero-knowledge proof verification failed: "+err.Error())
+		return errorWithDetails(ErrInvalidHeader, "zero-knowledge proof verification failed: "+err.Error())
 	}
 
 	return nil
@@ -132,7 +132,7 @@ func (c *CometblsLightClient) verifyMisbehaviour(misbehaviour *Misbehaviour, now
 	headerB := misbehaviour.Header2
 
 	if headerA.SignedHeader.Height < headerB.SignedHeader.Height {
-		return makeError(ErrInvalidMisbehaviourHeaderSequence)
+		return errorWithDetails(ErrInvalidMisbehaviourHeaderSequence)
 	}
 
 	// Regardless of the type of misbehaviour, ensure that both headers are valid
@@ -146,7 +146,7 @@ func (c *CometblsLightClient) verifyMisbehaviour(misbehaviour *Misbehaviour, now
 	}
 
 	if !isMisbehaviourPair(headerA, headerB) {
-		return makeError(ErrMisbehaviourNotFound)
+		return errorWithDetails(ErrMisbehaviourNotFound)
 	}
 
 	return nil
@@ -169,14 +169,14 @@ func (c *CometblsLightClient) verifyMisbehaviourHeader(label string, header *Hea
 
 	consensusState, found := c.getConsensusState(*header.TrustedHeight)
 	if !found {
-		return makeError(
+		return errorWithDetails(
 			ErrInvalidMisbehaviour,
 			prefix+ufmt.Sprintf("could not get trusted consensus state for Header at TrustedHeight: %s", header.TrustedHeight),
 		)
 	}
 
 	if err := c.verifyHeader(c.clientState, consensusState, header, now); err != nil {
-		return makeError(ErrInvalidMisbehaviour, prefix+err.Error())
+		return errorWithDetails(ErrInvalidMisbehaviour, prefix+err.Error())
 	}
 
 	return nil
@@ -245,7 +245,7 @@ func (c *CometblsLightClient) verifyChainedMembershipProof(
 	if !bytes.Equal(root, subroot) {
 		h1, h2 := hex.EncodeToString(root), hex.EncodeToString(subroot)
 
-		return makeError(
+		return errorWithDetails(
 			ErrInvalidProof,
 			ufmt.Sprintf("proof did not commit to expected root: %s, got: %s. Please ensure proof was submitted with correct proofHeight and to the correct chain.", h1, h2),
 		)
@@ -259,7 +259,7 @@ func (c *CometblsLightClient) verifyChainedMembershipProof(
 func (c *CometblsLightClient) verifyMembershipProofAt(proof ics23.CommitmentProof, spec *ics23.ProofSpec, key, value []byte, index int) ([]byte, error) {
 	exist := proof.GetExist()
 	if exist == nil {
-		return nil, makeError(
+		return nil, errorWithDetails(
 			ErrInvalidProof,
 			"commitment proof must be existence proof foar verifying membership",
 		)
@@ -267,14 +267,14 @@ func (c *CometblsLightClient) verifyMembershipProofAt(proof ics23.CommitmentProo
 
 	subroot, err := exist.Calculate()
 	if err != nil {
-		return nil, makeError(
+		return nil, errorWithDetails(
 			ErrInvalidProof,
 			ufmt.Sprintf("could not calculate proof root at index %d, merkle tree may be empty. %v", index, err),
 		)
 	}
 
 	if err := exist.Verify(spec, subroot, key, value); err != nil {
-		return nil, makeError(
+		return nil, errorWithDetails(
 			ErrInvalidProof,
 			ufmt.Sprintf("failed to verify membership proof at index %d: %v", index, err),
 		)

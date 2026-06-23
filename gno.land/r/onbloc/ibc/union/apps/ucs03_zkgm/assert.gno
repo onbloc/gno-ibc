@@ -9,12 +9,12 @@ import "gno.land/r/onbloc/ibc/union/access"
 
 func assertIsIBCHost(cur realm) {
 	if cur.Previous().PkgPath() != access.CoreRealmPath {
-		panic("zkgm: ibc host only")
+		panic("ibc host only")
 	}
 }
 
 func assertIsNotPaused() {
 	if paused {
-		panic("zkgm: paused")
+		panic("paused")
 	}
 }

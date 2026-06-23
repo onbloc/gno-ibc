@@ -43,7 +43,7 @@ const maxTimeNanos = 1_000_000_000
 // AppHash must each be exactly 32 bytes.
 func EncodeHeader(h *Header) ([]byte, error) {
 	if h == nil || h.SignedHeader == nil {
-		return nil, errors.New("cometbls: nil header")
+		return nil, errors.New("nil header")
 	}
 
 	lh := h.SignedHeader
@@ -82,14 +82,14 @@ func EncodeHeader(h *Header) ([]byte, error) {
 func DecodeHeader(buf []byte) (*Header, error) {
 	vals, err := abienc.Decode(headerSchema, buf)
 	if err != nil {
-		return nil, errors.New("cometbls: " + err.Error())
+		return nil, errors.New("" + err.Error())
 	}
 
 	timeSeconds := vals[1].(uint64)
 
 	timeNanos := vals[2].(uint64)
 	if timeNanos >= maxTimeNanos {
-		return nil, errors.New("cometbls: TimeNanos out of range")
+		return nil, errors.New("TimeNanos out of range")
 	}
 
 	vh := vals[3].([32]byte)
@@ -116,7 +116,7 @@ func DecodeHeader(buf []byte) (*Header, error) {
 // field 2 is Header2, each an ABI-encoded header.
 func EncodeMisbehaviour(m *Misbehaviour) ([]byte, error) {
 	if m == nil {
-		return nil, errors.New("cometbls: nil misbehaviour")
+		return nil, errors.New("nil misbehaviour")
 	}
 
 	h1, err := EncodeHeader(m.Header1)
@@ -179,7 +179,7 @@ func DecodeMisbehaviour(buf []byte) (*Misbehaviour, error) {
 	}
 
 	if m.Header1 == nil || m.Header2 == nil {
-		return nil, errors.New("cometbls: misbehaviour missing a header")
+		return nil, errors.New("misbehaviour missing a header")
 	}
 
 	return m, nil
@@ -190,7 +190,7 @@ func DecodeMisbehaviour(buf []byte) (*Misbehaviour, error) {
 func toBytes32(b []byte) ([32]byte, error) {
 	var out [32]byte
 	if len(b) != 32 {
-		return out, errors.New("cometbls: must be 32 bytes")
+		return out, errors.New("must be 32 bytes")
 	}
 
 	copy(out[:], b)

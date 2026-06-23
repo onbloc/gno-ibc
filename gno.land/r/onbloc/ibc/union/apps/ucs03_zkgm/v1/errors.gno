@@ -11,45 +11,45 @@ import (
 // values; build them with makeError at the call site (see above).
 const (
 	// opcode routing
-	errUnsupportedOpcode = "zkgm/v1: unsupported opcode"
+	errUnsupportedOpcode = "unsupported opcode"
 
 	// instruction decoding
-	errUnsupportedTokenOrderVersion = "zkgm/v1: unsupported token order version"
-	errUnsupportedCallVersion       = "zkgm/v1: unsupported call version"
-	errUnsupportedBatchVersion      = "zkgm/v1: unsupported batch version"
-	errUnsupportedForwardVersion    = "zkgm/v1: unsupported forward version"
+	errUnsupportedTokenOrderVersion = "unsupported token order version"
+	errUnsupportedCallVersion       = "unsupported call version"
+	errUnsupportedBatchVersion      = "unsupported batch version"
+	errUnsupportedForwardVersion    = "unsupported forward version"
 
 	// token order
-	errInvalidUnescrow                    = "zkgm/v1: invalid token order unescrow"
-	errUnknownTokenOrderKind              = "zkgm/v1: unknown token order kind"
-	errUnknownFillType                    = "zkgm/v1: unknown fill type"
-	errUnsupportedTokenOrderKindForAck    = "zkgm/v1: unsupported token order kind for ack"
-	errUnsupportedTokenOrderKindForRefund = "zkgm/v1: unsupported token order kind for refund"
-	errSolveNotImplemented                = "zkgm/v1: solve token order not implemented"
-	errInvalidTokenOrderDestChannel       = "zkgm/v1: invalid token order destination channel"
+	errInvalidUnescrow                    = "invalid token order unescrow"
+	errUnknownTokenOrderKind              = "unknown token order kind"
+	errUnknownFillType                    = "unknown fill type"
+	errUnsupportedTokenOrderKindForAck    = "unsupported token order kind for ack"
+	errUnsupportedTokenOrderKindForRefund = "unsupported token order kind for refund"
+	errSolveNotImplemented                = "solve token order not implemented"
+	errInvalidTokenOrderDestChannel       = "invalid token order destination channel"
 
 	// call
-	errEurekaUnsupported     = "zkgm/v1: eureka mode not supported"
-	errInvalidCallSender     = "zkgm/v1: invalid call sender"
-	errReceiverNotRegistered = "zkgm/v1: receiver not registered"
+	errEurekaUnsupported     = "eureka mode not supported"
+	errInvalidCallSender     = "invalid call sender"
+	errReceiverNotRegistered = "receiver not registered"
 
 	// forward
-	errInvalidForwardInstruction = "zkgm/v1: invalid forward instruction"
-	errForwardMissingPrevDest    = "zkgm/v1: forward missing previous destination channel"
-	errForwardMissingNextSource  = "zkgm/v1: forward missing next source channel"
-	errForwardPrevDestMismatch   = "zkgm/v1: forward previous-destination mismatch"
-	errForwardZeroTimeout        = "zkgm/v1: forward timeout timestamp must be non-zero"
+	errInvalidForwardInstruction = "invalid forward instruction"
+	errForwardMissingPrevDest    = "forward missing previous destination channel"
+	errForwardMissingNextSource  = "forward missing next source channel"
+	errForwardPrevDestMismatch   = "forward previous-destination mismatch"
+	errForwardZeroTimeout        = "forward timeout timestamp must be non-zero"
 
 	// batch
-	errInvalidBatchInstruction = "zkgm/v1: invalid batch instruction"
-	errBatchAckCountMismatch   = "zkgm/v1: batch ack count mismatch"
+	errInvalidBatchInstruction = "invalid batch instruction"
+	errBatchAckCountMismatch   = "batch ack count mismatch"
 
 	// voucher
-	errAmountOverflow  = "zkgm/v1: amount overflows int64"
-	errVoucherNotFound = "zkgm/v1: voucher not found"
+	errAmountOverflow  = "amount overflows int64"
+	errVoucherNotFound = "voucher not found"
 
 	// rate limit
-	errTokenBucketAbsent = "zkgm/v1: token bucket is absent"
+	errTokenBucketAbsent = "token bucket is absent"
 
 	// coins / channel balance
 	errCoinMismatch            = "zkgm/coins: sent coin mismatch"

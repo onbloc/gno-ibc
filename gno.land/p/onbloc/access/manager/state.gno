@@ -115,7 +115,7 @@ func (state *State) IsTargetClosed(target string) bool {
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L271-L298
 func (state *State) GrantRole(role RoleId, account address) bool {
 	if role == PublicRole {
-		panic(makeError(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
+		panic(errorWithDetails(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
 	}
 
 	state.ensureRole(role)
@@ -129,7 +129,7 @@ func (state *State) GrantRole(role RoleId, account address) bool {
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L300-L319
 func (state *State) RevokeRole(role RoleId, account address) bool {
 	if role == PublicRole {
-		panic(makeError(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
+		panic(errorWithDetails(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
 	}
 
 	state.ensureRole(role)
@@ -165,7 +165,7 @@ func (state *State) SetRoleAdmin(role RoleId, admin RoleId) {
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L357-L371
 func (state *State) SetGrantDelay(role RoleId, delay Delay) {
 	if role == PublicRole {
-		panic(makeError(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
+		panic(errorWithDetails(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
 	}
 
 	state.ensureRole(role)

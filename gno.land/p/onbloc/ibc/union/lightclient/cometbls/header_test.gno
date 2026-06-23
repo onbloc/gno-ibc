@@ -132,7 +132,7 @@ func TestDecodeHeader(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected error for TimeNanos >= 1e9")
 		}
-		want := "cometbls: TimeNanos out of range"
+		want := "TimeNanos out of range"
 		if err.Error() != want {
 			t.Fatalf("error: got %q want %q", err.Error(), want)
 		}

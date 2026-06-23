@@ -66,7 +66,7 @@ func (v *ucs03ZkgmV1) OnChannelCloseInit(_ int, rlm realm, channelId types.Chann
 		panic(errSpoofedRealm)
 	}
 
-	panic("zkgm: channel closing is not allowed")
+	panic("channel closing is not allowed")
 }
 
 func (v *ucs03ZkgmV1) OnChannelCloseConfirm(_ int, rlm realm, channelId types.ChannelId, relayer address) {
@@ -74,7 +74,7 @@ func (v *ucs03ZkgmV1) OnChannelCloseConfirm(_ int, rlm realm, channelId types.Ch
 		panic(errSpoofedRealm)
 	}
 
-	panic("zkgm: channel closing is not allowed")
+	panic("channel closing is not allowed")
 }
 
 // OnRecvPacket decodes the packet and dispatches it; decode/exec failures return a failure ack rather than aborting.
@@ -123,7 +123,7 @@ func (v *ucs03ZkgmV1) OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, 
 		// Intent recv must not silently succeed without a maker fill. Panicking
 		// preserves the proven recv fallback path and makes unsupported native
 		// market-maker funding fail explicitly until funds plumbing is added.
-		panic("zkgm: only maker")
+		panic("only maker")
 	}
 
 	return res
@@ -216,6 +216,6 @@ func (v *ucs03ZkgmV1) Send(_ int, rlm realm, channelId types.ChannelId, timeoutT
 // enforceVersion rejects channels that do not speak the zkgm protocol version.
 func enforceVersion(version string) {
 	if version != zkgm.Version {
-		panic("zkgm: unsupported channel version")
+		panic("unsupported channel version")
 	}
 }

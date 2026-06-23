@@ -7,37 +7,34 @@ import (
 
 // IBC tendermint client sentinel errors
 var (
-	ErrInvalidChainID                    = errors.New("cometbls: invalid chain-id")
-	ErrInvalidHeight                     = errors.New("cometbls: invalid height")
-	ErrInvalidProof                      = errors.New("cometbls: invalid proof")
-	ErrInvalidConsensus                  = errors.New("cometbls: invalid consensus state")
-	ErrInvalidNextValidatorsHash         = errors.New("cometbls: invalid next validators hash")
-	ErrInvalidTrustingPeriod             = errors.New("cometbls: invalid trusting period")
-	ErrInvalidUnbondingPeriod            = errors.New("cometbls: invalid unbonding period")
-	ErrInvalidHeaderHeight               = errors.New("cometbls: invalid header height")
-	ErrInvalidMisbehaviour               = errors.New("cometbls: invalid misbehaviour")
-	ErrInvalidHeader                     = errors.New("cometbls: invalid header")
-	ErrInvalidMaxClockDrift              = errors.New("cometbls: invalid max clock drift")
-	ErrProcessedTimeNotFound             = errors.New("cometbls: processed time not found")
-	ErrProcessedHeightNotFound           = errors.New("cometbls: processed height not found")
-	ErrDelayPeriodNotPassed              = errors.New("cometbls: packet-specified delay period has not been reached")
-	ErrTrustingPeriodExpired             = errors.New("cometbls: time since latest trusted state has passed the trusting period")
-	ErrUnbondingPeriodExpired            = errors.New("cometbls: time since latest trusted state has passed the unbonding period")
-	ErrInvalidProofSpecs                 = errors.New("cometbls: invalid proof specs")
-	ErrInvalidValidatorSet               = errors.New("cometbls: invalid validator set")
-	ErrInvalidHeaderTimestamp            = errors.New("cometbls: invalid header timestamp")
-	ErrInvalidMisbehaviourHeaderSequence = errors.New("cometbls: invalid misbehaviour header sequence")
-	ErrMathOverflow                      = errors.New("cometbls: math operation with overflow")
-	ErrMisbehaviourNotFound              = errors.New("cometbls: misbehaviour not found")
+	ErrInvalidChainID                    = errors.New("invalid chain-id")
+	ErrInvalidHeight                     = errors.New("invalid height")
+	ErrInvalidProof                      = errors.New("invalid proof")
+	ErrInvalidConsensus                  = errors.New("invalid consensus state")
+	ErrInvalidNextValidatorsHash         = errors.New("invalid next validators hash")
+	ErrInvalidTrustingPeriod             = errors.New("invalid trusting period")
+	ErrInvalidUnbondingPeriod            = errors.New("invalid unbonding period")
+	ErrInvalidHeaderHeight               = errors.New("invalid header height")
+	ErrInvalidMisbehaviour               = errors.New("invalid misbehaviour")
+	ErrInvalidHeader                     = errors.New("invalid header")
+	ErrInvalidMaxClockDrift              = errors.New("invalid max clock drift")
+	ErrProcessedTimeNotFound             = errors.New("processed time not found")
+	ErrProcessedHeightNotFound           = errors.New("processed height not found")
+	ErrDelayPeriodNotPassed              = errors.New("packet-specified delay period has not been reached")
+	ErrTrustingPeriodExpired             = errors.New("time since latest trusted state has passed the trusting period")
+	ErrUnbondingPeriodExpired            = errors.New("time since latest trusted state has passed the unbonding period")
+	ErrInvalidProofSpecs                 = errors.New("invalid proof specs")
+	ErrInvalidValidatorSet               = errors.New("invalid validator set")
+	ErrInvalidHeaderTimestamp            = errors.New("invalid header timestamp")
+	ErrInvalidMisbehaviourHeaderSequence = errors.New("invalid misbehaviour header sequence")
+	ErrMathOverflow                      = errors.New("math operation with overflow")
+	ErrMisbehaviourNotFound              = errors.New("misbehaviour not found")
 )
 
-// makeError builds an error from a sentinel base and optional detail strings.
-// With no details it returns the sentinel itself (so errors stay comparable);
-// otherwise it appends the details to the sentinel's message, joined by ", ".
-func makeError(base error, details ...string) error {
-	if len(details) == 0 {
-		return base
+func errorWithDetails(err error, msgs ...string) error {
+	if len(msgs) == 0 {
+		return err
 	}
 
-	return errors.New(base.Error() + ", " + strings.Join(details, ", "))
+	return errors.New(err.Error() + ", " + strings.Join(msgs, ", "))
 }

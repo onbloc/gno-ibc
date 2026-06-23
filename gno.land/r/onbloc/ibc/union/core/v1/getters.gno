@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
@@ -9,6 +10,12 @@ import (
 // injected store / light client. Queries that fail on a missing lookup
 // (client/consensus/connection/channel state, status, latest height, timestamp,
 // batch commitments) return an error rather than a found-bool or a panic.
+
+// GetLightClient returns the live light client instance for a client, or
+// (nil, false) when the client is missing.
+func (c *coreV1) GetLightClient(clientId types.ClientId) (lightclient.Interface, bool) {
+	return c.store.GetLightClient(clientId)
+}
 
 // GetStatus returns the client's status, or an error when the client is missing.
 func (c *coreV1) GetStatus(clientId types.ClientId) (types.Status, error) {

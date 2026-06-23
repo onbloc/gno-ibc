@@ -62,10 +62,3 @@ type Interface interface {
 
 	Misbehaviour(caller address, misbehaviour []byte, relayer address) ([]byte, error)
 }
-
-// L1ClientUpdater lets a client whose state depends on another local light
-// client refresh that dependency after its client state changes.
-type L1ClientUpdater interface {
-	L1ClientID() types.ClientId
-	SetL1Client(l1Client Interface)
-}

@@ -39,7 +39,6 @@ func (c *coreV1) CreateClient(_ int, rlm realm, msg types.MsgCreateClient) {
 	if err != nil {
 		panic("create client: " + err.Error())
 	}
-	c.refreshL1Client(lc)
 
 	clientId := c.store.AddClient(0, rlm, msg.ClientType, creator, lc)
 	c.initClient(0, rlm, clientId, msg.ClientStateBytes, msg.ConsensusStateBytes, relayer)
@@ -118,10 +117,6 @@ func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) {
 }
 
 func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateClient) {
-	if _, ok := c.store.GetLightClient(msg.ClientId); !ok {
-		panic("client " + msg.ClientId.String() + " not found")
-	}
-
 	clientImpl, ok := c.store.GetClientImpl(msg.ClientId)
 	if !ok {
 		panic("client " + msg.ClientId.String() + " not found")
@@ -130,7 +125,6 @@ func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateCli
 	if err != nil {
 		panic("force update client: " + err.Error())
 	}
-	c.refreshL1Client(next)
 	c.store.SetLightClient(0, rlm, msg.ClientId, next)
 
 	caller := rlm.Previous().Address()
@@ -167,22 +161,6 @@ func (c *coreV1) Misbehaviour(_ int, rlm realm, msg types.MsgMisbehaviour) {
 	}
 
 	core.EmitMisbehaviour(msg.ClientId)
-}
-
-// refreshL1Client is the Gno object-model adapter for Union's ctx-based L1
-// client lookup used by state-lens clients.
-func (c *coreV1) refreshL1Client(lc lightclient.Interface) {
-	l1ClientUpdater, ok := lc.(lightclient.L1ClientUpdater)
-	if !ok {
-		return
-	}
-
-	l1ClientId := l1ClientUpdater.L1ClientID()
-	l1Client, ok := c.store.GetLightClient(l1ClientId)
-	if !ok {
-		panic("l1 client " + l1ClientId.String() + " not found")
-	}
-	l1ClientUpdater.SetL1Client(l1Client)
 }
 
 // VerifyClientMembership verifies a membership proof against a registered, active

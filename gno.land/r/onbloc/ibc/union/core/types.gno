@@ -79,6 +79,7 @@ type ICore interface {
 type ICoreGetter interface {
 	GetStatus(clientId types.ClientId) (types.Status, error)
 	GetClientType(clientId types.ClientId) (types.ClientType, error)
+	GetLightClient(clientId types.ClientId) (lightclient.Interface, bool)
 	GetClientImpl(clientId types.ClientId) (string, error)
 	GetRegisteredClientType(clientType types.ClientType) bool
 	GetClientStateBytes(clientId types.ClientId) ([]byte, error)

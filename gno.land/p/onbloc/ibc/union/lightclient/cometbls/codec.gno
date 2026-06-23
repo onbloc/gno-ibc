@@ -38,7 +38,7 @@ func EncodeClientState(cs *ClientState) ([]byte, error) {
 		cs.UnbondingPeriod,
 		cs.MaxClockDrift,
 		cs.FrozenHeight.RevisionHeight,
-		cs.LatestHeight.RevisionHeight,
+		cs.GetLatestRevisionHeight(),
 		[32]byte(cs.ContractAddress),
 	})
 }

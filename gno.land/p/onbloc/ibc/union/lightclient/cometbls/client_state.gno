@@ -59,6 +59,11 @@ func (cs *ClientState) GetLatestHeight() types.Height {
 	return cs.LatestHeight
 }
 
+// GetLatestRevisionHeight returns latest block height.
+func (cs *ClientState) GetLatestRevisionHeight() uint64 {
+	return cs.LatestHeight.RevisionHeight
+}
+
 // IsExpired returns whether or not the client has passed the trusting period since the last
 // update (in which case no headers are considered valid).
 func (cs *ClientState) IsExpired(latestTimestamp, now uint64) bool {
@@ -95,7 +100,7 @@ func (cs *ClientState) Validate() error {
 		return makeError(ErrInvalidMaxClockDrift, "max clock drift must be greater than zero")
 	}
 
-	if cs.LatestHeight.RevisionHeight == 0 {
+	if cs.GetLatestRevisionHeight() == 0 {
 		return makeError(ErrInvalidHeaderHeight, "cometbls client's latest height cannot be zero")
 	}
 

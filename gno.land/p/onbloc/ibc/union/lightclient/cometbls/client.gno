@@ -85,25 +85,21 @@ func (c *CometblsLightClient) VerifyNonMembership(height uint64, key []byte, pro
 // state must exist at the height. It returns the consensus state, decoded
 // storage proof and the membership path for the key.
 func (c *CometblsLightClient) prepareProof(clientState *ClientState, height uint64, key []byte, proof []byte) (*ConsensusState, []ics23.CommitmentProof, aibtypes.MerklePath, error) {
-	merklePath := aibtypes.MerklePath{}
-
-	if clientState.LatestHeight.RevisionHeight < height {
-		return nil, nil, merklePath, makeError(
+	if clientState.GetLatestRevisionHeight() < height {
+		return nil, nil, aibtypes.MerklePath{}, makeError(
 			ErrInvalidHeight,
-			ufmt.Sprintf("client state height < proof height (%d < %d), please ensure the client has been updated", clientState.LatestHeight.RevisionHeight, height),
+			ufmt.Sprintf("client state height < proof height (%d < %d), please ensure the client has been updated", clientState.GetLatestRevisionHeight(), height),
 		)
 	}
 
 	storageProof, err := DecodeProofs(proof)
 	if err != nil {
-		return nil, nil, merklePath, makeError(ErrInvalidProof, "failed to decode proof: "+err.Error())
+		return nil, nil, aibtypes.MerklePath{}, makeError(ErrInvalidProof, "failed to decode proof: "+err.Error())
 	}
-
-	merklePath = aibtypes.MerklePath{KeyPath: [][]byte{moduleKey, makeStoreKey(clientState.ContractAddress, key)}}
 
 	specs := ics23.GetSDKProofSpecs()
 	if len(storageProof) != len(specs) {
-		return nil, nil, merklePath, makeError(
+		return nil, nil, aibtypes.MerklePath{}, makeError(
 			ErrInvalidProof,
 			ufmt.Sprintf("length of specs: %d not equal to length of proof: %d", len(specs), len(storageProof)),
 		)
@@ -111,8 +107,10 @@ func (c *CometblsLightClient) prepareProof(clientState *ClientState, height uint
 
 	consensusState, found := c.getConsensusState(types.NewHeight(height))
 	if !found {
-		return nil, nil, merklePath, makeError(ErrInvalidConsensus, "please ensure the proof was constructed against a height that exists on the client")
+		return nil, nil, aibtypes.MerklePath{}, makeError(ErrInvalidConsensus, "please ensure the proof was constructed against a height that exists on the client")
 	}
+
+	merklePath := aibtypes.MerklePath{KeyPath: [][]byte{moduleKey, makeStoreKey(clientState.ContractAddress, key)}}
 
 	return consensusState, storageProof, merklePath, nil
 }
@@ -235,7 +233,7 @@ func (c *CometblsLightClient) GetTimestampAtHeight(height uint64) (types.Timesta
 }
 
 func (c *CometblsLightClient) GetLatestHeight() uint64 {
-	return c.clientState.LatestHeight.RevisionHeight
+	return c.clientState.GetLatestRevisionHeight()
 }
 
 func (c *CometblsLightClient) GetCounterpartyChainID() string {

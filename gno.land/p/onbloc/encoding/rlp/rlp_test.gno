@@ -4,7 +4,9 @@
 package rlp
 
 import (
+	"bytes"
 	"encoding/hex"
+	"strings"
 	"testing"
 )
 
@@ -113,8 +115,8 @@ func TestEncodeHelperBoundaries(t *testing.T) {
 		{"single byte zero stays literal", []byte{0x00}, "00"},
 		{"single byte 0x7f stays literal", []byte{0x7f}, "7f"},
 		{"single byte 0x80 gets string header", []byte{0x80}, "8180"},
-		{"fifty five byte string uses short header", repeatByte(0xaa, 55), "b7" + repeatHex("aa", 55)},
-		{"fifty six byte string uses long header", repeatByte(0xaa, 56), "b838" + repeatHex("aa", 56)},
+		{"fifty five byte string uses short header", bytes.Repeat([]byte{0xaa}, 55), "b7" + strings.Repeat("aa", 55)},
+		{"fifty six byte string uses long header", bytes.Repeat([]byte{0xaa}, 56), "b838" + strings.Repeat("aa", 56)},
 	}
 	for _, tc := range byteCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -200,10 +202,10 @@ func TestDecodeHelperBoundaries(t *testing.T) {
 		{"literal byte", []byte{0x7f}, KindByte, 0, 1, nil},
 		{"short string empty", []byte{0x80}, KindString, 1, 0, nil},
 		{"short string", []byte{0x83, 'd', 'o', 'g'}, KindString, 1, 3, nil},
-		{"long string", append([]byte{0xb8, 0x38}, repeatByte(0xaa, 56)...), KindString, 2, 56, nil},
+		{"long string", append([]byte{0xb8, 0x38}, bytes.Repeat([]byte{0xaa}, 56)...), KindString, 2, 56, nil},
 		{"short list empty", []byte{0xc0}, KindList, 1, 0, nil},
 		{"short list", []byte{0xc1, 0x80}, KindList, 1, 1, nil},
-		{"long list", append([]byte{0xf8, 0x38}, repeatByte(0xc0, 56)...), KindList, 2, 56, nil},
+		{"long list", append([]byte{0xf8, 0x38}, bytes.Repeat([]byte{0xc0}, 56)...), KindList, 2, 56, nil},
 	}
 	for _, tc := range kindCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -266,20 +268,4 @@ func mustHex(s string) []byte {
 		panic(err)
 	}
 	return bz
-}
-
-func repeatByte(b byte, n int) []byte {
-	out := make([]byte, n)
-	for i := range out {
-		out[i] = b
-	}
-	return out
-}
-
-func repeatHex(s string, n int) string {
-	out := ""
-	for i := 0; i < n; i++ {
-		out += s
-	}
-	return out
 }

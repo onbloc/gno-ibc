@@ -38,6 +38,7 @@ func (c *coreV1) CreateClient(_ int, rlm realm, msg types.MsgCreateClient) {
 
 	creator := rlm.Previous().Address()
 	relayer := resolveRelayer(creator, msg.Relayer)
+
 	clientImpl, ok := c.store.ClientRegistry(msg.ClientType)
 	if !ok {
 		panic("client type not found")

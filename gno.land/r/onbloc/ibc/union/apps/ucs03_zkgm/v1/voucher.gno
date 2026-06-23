@@ -69,10 +69,10 @@ func (v *ucs03ZkgmV1) getOrCreateVoucher(_ int, rlm realm, ibcDenom string, imag
 	token, ledger := grc20.NewToken(0, rlm, name, symbol, int(decimals))
 	grc20reg.Register(cross(rlm), token, strings.TrimPrefix(ibcDenom, ibcDenomPrefix))
 
-	vou := zkgm.NewVoucher(0, rlm, token, ledger)
-	v.store.SetVoucher(0, rlm, ibcDenom, vou)
+	voucher := zkgm.NewVoucher(token, ledger)
+	v.store.SetVoucher(0, rlm, ibcDenom, voucher)
 
-	return vou
+	return voucher
 }
 
 // sanitizeVoucherSymbol derives a grc20-legal symbol (<=MaxSymbolLen, [A-Za-z0-9_-])

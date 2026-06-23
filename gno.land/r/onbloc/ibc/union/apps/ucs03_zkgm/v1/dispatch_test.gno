@@ -206,28 +206,125 @@ func TestRecvTokenOrderSolveFallsBackToMarketMaker(cur realm, t *testing.T) {
 	uassert.Equal(t, string(z.ACK_ERR_ONLY_MAKER), string(res.Acknowledgement))
 }
 
-// Each decode* helper accepts exactly one instruction version and rejects all
-// others with a version-specific error, before any operand decoding.
-func TestDecodeInstructionVersionGate(t *testing.T) {
+func TestDecodeOrderInstruction(t *testing.T) {
+	validOrder := z.TokenOrderV2{
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+		Sender:      []byte("decode-order-sender"),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(10),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(10),
+	}
+	validInstruction := batchMustOrderInstruction(validOrder)
+
 	cases := []struct {
 		name    string
-		version uint8
-		decode  func(z.Instruction) error
+		input   z.Instruction
 		wantErr string
 	}{
-		{"order rejects v0", z.INSTR_VERSION_0, func(i z.Instruction) error { _, e := decodeOrderInstruction(i); return e }, "unsupported token order version"},
-		{"order rejects v1", z.INSTR_VERSION_1, func(i z.Instruction) error { _, e := decodeOrderInstruction(i); return e }, "unsupported token order version"},
-		{"call rejects v1", z.INSTR_VERSION_1, func(i z.Instruction) error { _, e := decodeCallInstruction(i); return e }, "unsupported call version"},
-		{"call rejects v2", z.INSTR_VERSION_2, func(i z.Instruction) error { _, e := decodeCallInstruction(i); return e }, "unsupported call version"},
-		{"batch rejects v1", z.INSTR_VERSION_1, func(i z.Instruction) error { _, e := decodeBatchInstruction(i); return e }, "unsupported batch version"},
-		{"batch rejects v2", z.INSTR_VERSION_2, func(i z.Instruction) error { _, e := decodeBatchInstruction(i); return e }, "unsupported batch version"},
-		{"forward rejects v1", z.INSTR_VERSION_1, func(i z.Instruction) error { _, e := decodeForwardInstruction(i); return e }, "unsupported forward version"},
-		{"forward rejects v2", z.INSTR_VERSION_2, func(i z.Instruction) error { _, e := decodeForwardInstruction(i); return e }, "unsupported forward version"},
+		{"accepts v2 token order", validInstruction, ""},
+		{"rejects v0", z.Instruction{Version: z.INSTR_VERSION_0, Operand: []byte("anything")}, "unsupported token order version"},
+		{"rejects v1", z.Instruction{Version: z.INSTR_VERSION_1, Operand: []byte("anything")}, "unsupported token order version"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := tc.decode(z.Instruction{Version: tc.version, Operand: []byte("anything")})
-			uassert.ErrorContains(t, err, tc.wantErr)
+			got, err := decodeOrderInstruction(tc.input)
+			if tc.wantErr != "" {
+				uassert.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			uassert.NoError(t, err)
+			uassert.Equal(t, string(validOrder.Sender), string(got.Sender))
+			uassert.Equal(t, validOrder.Kind, got.Kind)
+		})
+	}
+}
+
+func TestDecodeCallInstruction(t *testing.T) {
+	validCall := z.Call{
+		Sender:           []byte("decode-call-sender"),
+		ContractAddress:  []byte("decode-call-receiver"),
+		ContractCalldata: []byte("payload"),
+	}
+
+	cases := []struct {
+		name    string
+		input   z.Instruction
+		wantErr string
+	}{
+		{"accepts v0 call", batchMustCallInstruction(validCall), ""},
+		{"rejects v1", z.Instruction{Version: z.INSTR_VERSION_1, Operand: []byte("anything")}, "unsupported call version"},
+		{"rejects v2", z.Instruction{Version: z.INSTR_VERSION_2, Operand: []byte("anything")}, "unsupported call version"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := decodeCallInstruction(tc.input)
+			if tc.wantErr != "" {
+				uassert.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			uassert.NoError(t, err)
+			uassert.Equal(t, string(validCall.Sender), string(got.Sender))
+			uassert.Equal(t, string(validCall.ContractAddress), string(got.ContractAddress))
+			uassert.Equal(t, string(validCall.ContractCalldata), string(got.ContractCalldata))
+		})
+	}
+}
+
+func TestDecodeBatchInstruction(t *testing.T) {
+	validBatch := z.Batch{Instructions: []z.Instruction{
+		batchMustCallInstruction(z.Call{Sender: []byte("decode-batch-sender")}),
+	}}
+
+	cases := []struct {
+		name    string
+		input   z.Instruction
+		wantErr string
+	}{
+		{"accepts v0 batch", batchMustBatchInstruction(validBatch), ""},
+		{"rejects v1", z.Instruction{Version: z.INSTR_VERSION_1, Operand: []byte("anything")}, "unsupported batch version"},
+		{"rejects v2", z.Instruction{Version: z.INSTR_VERSION_2, Operand: []byte("anything")}, "unsupported batch version"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := decodeBatchInstruction(tc.input)
+			if tc.wantErr != "" {
+				uassert.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			uassert.NoError(t, err)
+			uassert.Equal(t, len(validBatch.Instructions), len(got.Instructions))
+			uassert.Equal(t, validBatch.Instructions[0].Opcode, got.Instructions[0].Opcode)
+		})
+	}
+}
+
+func TestDecodeForwardInstruction(t *testing.T) {
+	validForward := z.Forward{
+		Path:             u256.NewUint(1),
+		TimeoutTimestamp: 123,
+		Instruction:      batchMustCallInstruction(z.Call{Sender: []byte("decode-forward-sender")}),
+	}
+
+	cases := []struct {
+		name    string
+		input   z.Instruction
+		wantErr string
+	}{
+		{"accepts v0 forward", z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_FORWARD, Operand: mustForwardBytes(validForward)}, ""},
+		{"rejects v1", z.Instruction{Version: z.INSTR_VERSION_1, Operand: []byte("anything")}, "unsupported forward version"},
+		{"rejects v2", z.Instruction{Version: z.INSTR_VERSION_2, Operand: []byte("anything")}, "unsupported forward version"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := decodeForwardInstruction(tc.input)
+			if tc.wantErr != "" {
+				uassert.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+			uassert.NoError(t, err)
+			uassert.Equal(t, validForward.TimeoutTimestamp, got.TimeoutTimestamp)
+			uassert.Equal(t, validForward.Instruction.Opcode, got.Instruction.Opcode)
 		})
 	}
 }

@@ -3,8 +3,19 @@ package manager
 import "testing"
 
 func TestNewTimepoint(t *testing.T) {
-	if NewTimepoint(42).Unix() != 42 {
-		t.Fatal("NewTimepoint must preserve the provided unix timestamp")
+	tests := []struct {
+		name string
+		unix int64
+	}{
+		{"zero", 0},
+		{"positive", 42},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := NewTimepoint(tc.unix).Unix(); got != tc.unix {
+				t.Fatalf("NewTimepoint().Unix() = %d, want %d", got, tc.unix)
+			}
+		})
 	}
 }
 
@@ -14,21 +25,22 @@ func TestCurrentTimepointIsPositive(t *testing.T) {
 	}
 }
 
-func TestTimepointAvailableAtWithoutDelay(t *testing.T) {
-	if !timepointAvailableAt(NewTimepoint(100), 0).Equal(NewTimepoint(100)) {
-		t.Fatal("availableAt without delay must return the current timepoint")
+func TestTimepointAvailableAt(t *testing.T) {
+	tests := []struct {
+		name  string
+		now   Timepoint
+		delay Delay
+		want  Timepoint
+	}{
+		{"without delay", NewTimepoint(100), 0, NewTimepoint(100)},
+		{"adds delay", NewTimepoint(100), NewDelay(10), NewTimepoint(110)},
+		{"preserves zero", Timepoint{}, NewDelay(1), Timepoint{}},
 	}
-}
-
-func TestTimepointAvailableAtAddsDelay(t *testing.T) {
-	if !timepointAvailableAt(NewTimepoint(100), NewDelay(10)).Equal(NewTimepoint(110)) {
-		t.Fatal("availableAt must add grant delay")
-	}
-}
-
-func TestTimepointAvailableAtPreservesZeroTimepoint(t *testing.T) {
-	var zero Timepoint
-	if !timepointAvailableAt(zero, NewDelay(1)).IsZero() {
-		t.Fatal("availableAt must preserve zero time as the inactive sentinel")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := timepointAvailableAt(tc.now, tc.delay); !got.Equal(tc.want) {
+				t.Fatalf("timepointAvailableAt() = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }

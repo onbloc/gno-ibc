@@ -18,38 +18,69 @@ func mustPanic(t *testing.T, fn func()) {
 	fn()
 }
 
-func TestCanCallDefaultsTargetFunctionToAdminRole(t *testing.T) {
+func TestCanCallAuthorization(t *testing.T) {
 	admin := testutils.TestAddress("admin")
 	other := testutils.TestAddress("other")
-	state := NewState()
-	state.GrantRole(AdminRole, admin)
-
-	if !state.CanCall(admin, "target", "selector").Immediate {
-		t.Fatal("admin must be authorized for an unset target function role")
-	}
-	if state.CanCall(other, "target", "selector").Immediate {
-		t.Fatal("non-admin must not be authorized for an unset target function role")
-	}
-}
-
-func TestPublicRoleAuthorizesEveryAccount(t *testing.T) {
 	caller := testutils.TestAddress("caller")
-	state := NewState()
-	state.SetTargetFunctionRole("target", "selector", PublicRole)
-
-	if !state.CanCall(caller, "target", "selector").Immediate {
-		t.Fatal("public role must authorize every caller")
+	tests := []struct {
+		name   string
+		caller address
+		setup  func(state *State)
+		want   bool
+	}{
+		{
+			name:   "unset selector allows admin",
+			caller: admin,
+			setup: func(state *State) {
+				state.GrantRole(AdminRole, admin)
+			},
+			want: true,
+		},
+		{
+			name:   "unset selector rejects non-admin",
+			caller: other,
+			setup: func(state *State) {
+				state.GrantRole(AdminRole, admin)
+			},
+			want: false,
+		},
+		{
+			name:   "public role authorizes every account",
+			caller: caller,
+			setup: func(state *State) {
+				state.SetTargetFunctionRole("target", "selector", PublicRole)
+			},
+			want: true,
+		},
+		{
+			name:   "closed target rejects public selector",
+			caller: caller,
+			setup: func(state *State) {
+				state.SetTargetFunctionRole("target", "selector", PublicRole)
+				state.SetTargetClosed("target", true)
+			},
+			want: false,
+		},
+		{
+			name:   "active member can call",
+			caller: caller,
+			setup: func(state *State) {
+				state.GrantRole(testRole, caller)
+				state.SetTargetFunctionRole("target", "selector", testRole)
+			},
+			want: true,
+		},
 	}
-}
 
-func TestCanCallRejectsClosedTarget(t *testing.T) {
-	caller := testutils.TestAddress("caller")
-	state := NewState()
-	state.SetTargetFunctionRole("target", "selector", PublicRole)
-	state.SetTargetClosed("target", true)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			state := NewState()
+			tc.setup(&state)
 
-	if state.CanCall(caller, "target", "selector").Immediate {
-		t.Fatal("closed target must reject even public selectors")
+			if got := state.CanCall(tc.caller, "target", "selector").Immediate; got != tc.want {
+				t.Fatalf("CanCall() = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -89,17 +120,6 @@ func TestGrantDelayDefersMembership(t *testing.T) {
 	}
 	if !state.Roles[testRole].Members[caller].Since.After(CurrentTimepoint()) {
 		t.Fatal("grant delay must set activation after the current timepoint")
-	}
-}
-
-func TestActiveMemberCanCallImmediately(t *testing.T) {
-	caller := testutils.TestAddress("caller")
-	state := NewState()
-	state.GrantRole(testRole, caller)
-	state.SetTargetFunctionRole("target", "selector", testRole)
-
-	if !state.CanCall(caller, "target", "selector").Immediate {
-		t.Fatal("active member must be able to call immediately")
 	}
 }
 
@@ -151,32 +171,62 @@ func TestSetTargetFunctionRoles(t *testing.T) {
 	state := NewState()
 	state.SetTargetFunctionRoles("target", []Selector{"a", "b"}, testRole)
 
-	if state.GetTargetFunctionRole("target", "a") != testRole {
-		t.Fatal("first selector role not set")
+	tests := []struct {
+		name     string
+		selector Selector
+		want     RoleId
+	}{
+		{"first selector", "a", testRole},
+		{"second selector", "b", testRole},
+		{"unset selector", "c", AdminRole},
 	}
-	if state.GetTargetFunctionRole("target", "b") != testRole {
-		t.Fatal("second selector role not set")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := state.GetTargetFunctionRole("target", tc.selector); got != tc.want {
+				t.Fatalf("GetTargetFunctionRole() = %d, want %d", got, tc.want)
+			}
+		})
 	}
 }
 
 func TestRequireUnlockedConfigRole(t *testing.T) {
-	RequireUnlockedConfigRole(testRole)
-	mustPanic(t, func() {
-		RequireUnlockedConfigRole(AdminRole)
-	})
-	mustPanic(t, func() {
-		RequireUnlockedConfigRole(PublicRole)
-	})
+	tests := []struct {
+		name      string
+		role      RoleId
+		wantPanic bool
+	}{
+		{"regular role", testRole, false},
+		{"admin role", AdminRole, true},
+		{"public role", PublicRole, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.wantPanic {
+				mustPanic(t, func() {
+					RequireUnlockedConfigRole(tc.role)
+				})
+				return
+			}
+			RequireUnlockedConfigRole(tc.role)
+		})
+	}
 }
 
 func TestLockedPublicRoleCannotBeGrantedOrRevoked(t *testing.T) {
 	caller := testutils.TestAddress("caller")
-	state := NewState()
-
-	mustPanic(t, func() {
-		state.GrantRole(PublicRole, caller)
-	})
-	mustPanic(t, func() {
-		state.RevokeRole(PublicRole, caller)
-	})
+	tests := []struct {
+		name string
+		call func(state *State)
+	}{
+		{"grant", func(state *State) { state.GrantRole(PublicRole, caller) }},
+		{"revoke", func(state *State) { state.RevokeRole(PublicRole, caller) }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			state := NewState()
+			mustPanic(t, func() {
+				tc.call(&state)
+			})
+		})
+	}
 }

@@ -41,6 +41,49 @@ func TestGrantRoleRejectsNonAdmin(cur realm, t *testing.T) {
 	}
 }
 
+func TestRoleMembershipRejectsNonAdmin(cur realm, t *testing.T) {
+	admin := testutils.TestAddress("access-admin")
+	caller := testutils.TestAddress("access-non-admin")
+	relayer := testutils.TestAddress("access-relayer")
+	ResetForTest(cur, admin)
+
+	testing.SetRealm(testing.NewUserRealm(admin))
+	GrantRole(cross(cur), RelayerRole, relayer)
+
+	tests := []struct {
+		name string
+		run  func(cur realm)
+	}{
+		{
+			name: "grant",
+			run: func(cur realm) {
+				GrantRole(cross(cur), RelayerRole, caller)
+			},
+		},
+		{
+			name: "revoke",
+			run: func(cur realm) {
+				RevokeRole(cross(cur), RelayerRole, relayer)
+			},
+		},
+	}
+
+	testing.SetRealm(testing.NewUserRealm(caller))
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.AbortsContains(t, cur, ErrorAccessManagerUnauthorizedAccount, func(cur realm) {
+				tc.run(cur)
+			})
+		})
+	}
+	if HasRole(cur, RelayerRole, caller).IsMember {
+		t.Fatal("rejected grant must not add caller")
+	}
+	if !HasRole(cur, RelayerRole, relayer).IsMember {
+		t.Fatal("rejected revoke must not remove relayer")
+	}
+}
+
 func TestSetFunctionRoleDirectManagement(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	caller := testutils.TestAddress("access-caller")
@@ -57,6 +100,30 @@ func TestSetFunctionRoleDirectManagement(cur realm, t *testing.T) {
 	}
 }
 
+func TestSetFunctionRolesDirectManagement(cur realm, t *testing.T) {
+	admin := testutils.TestAddress("access-admin")
+	caller := testutils.TestAddress("access-caller")
+	selectors := []manager.Selector{"set_hook", "dispatch"}
+	ResetForTest(cur, admin)
+
+	testing.SetRealm(testing.NewUserRealm(admin))
+	SetFunctionRoles(cross(cur), selectors, manager.PublicRole)
+
+	for _, selector := range selectors {
+		t.Run(string(selector), func(t *testing.T) {
+			if GetFunctionRole(cross(cur), selector) != manager.PublicRole {
+				t.Fatalf("%s must be assigned public role", selector)
+			}
+			if GetTargetFunctionRole(cross(cur), selector) != manager.PublicRole {
+				t.Fatalf("%s must be assigned public target role", selector)
+			}
+			if !CanCall(cross(cur), selector, caller).Immediate {
+				t.Fatalf("%s must authorize arbitrary caller after public role assignment", selector)
+			}
+		})
+	}
+}
+
 func TestSetFunctionRoleRejectsNonAdmin(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	caller := testutils.TestAddress("access-non-admin")
@@ -68,6 +135,75 @@ func TestSetFunctionRoleRejectsNonAdmin(cur realm, t *testing.T) {
 	})
 	if GetFunctionRole(cross(cur), "set_hook") != manager.AdminRole {
 		t.Fatal("rejected role update must not change selector role")
+	}
+}
+
+func TestManagerAdminProtectedSurfacesRejectNonAdmin(cur realm, t *testing.T) {
+	admin := testutils.TestAddress("access-admin")
+	caller := testutils.TestAddress("access-non-admin")
+	ResetForTest(cur, admin)
+
+	tests := []struct {
+		name string
+		run  func(cur realm)
+	}{
+		{
+			name: "label role",
+			run: func(cur realm) {
+				LabelRole(cross(cur), RelayerRole, "RELAYER")
+			},
+		},
+		{
+			name: "set role admin",
+			run: func(cur realm) {
+				SetRoleAdmin(cross(cur), RelayerRole, 7)
+			},
+		},
+		{
+			name: "set grant delay",
+			run: func(cur realm) {
+				SetGrantDelay(cross(cur), RelayerRole, 5)
+			},
+		},
+		{
+			name: "set function role",
+			run: func(cur realm) {
+				SetFunctionRole(cross(cur), "set_hook", manager.PublicRole)
+			},
+		},
+		{
+			name: "set function roles",
+			run: func(cur realm) {
+				SetFunctionRoles(cross(cur), []manager.Selector{"set_hook", "dispatch"}, manager.PublicRole)
+			},
+		},
+		{
+			name: "set target closed",
+			run: func(cur realm) {
+				SetTargetClosed(cross(cur), true)
+			},
+		},
+	}
+
+	testing.SetRealm(testing.NewUserRealm(caller))
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.AbortsContains(t, cur, ErrorAccessManagerUnauthorizedAccount, func(cur realm) {
+				tc.run(cur)
+			})
+		})
+	}
+	if GetRoleAdmin(cur, RelayerRole) != manager.AdminRole {
+		t.Fatal("rejected SetRoleAdmin must not change role admin")
+	}
+	if GetRoleGrantDelay(cur, RelayerRole) != 0 {
+		t.Fatal("rejected SetGrantDelay must not change grant delay")
+	}
+	if GetFunctionRole(cross(cur), "set_hook") != manager.AdminRole {
+		t.Fatal("rejected SetFunctionRole must not change selector role")
+	}
+	if IsTargetClosed(cross(cur)) {
+		t.Fatal("rejected SetTargetClosed must not close target")
 	}
 }
 
@@ -163,6 +299,64 @@ func TestTargetConfigurationSurface(cur realm, t *testing.T) {
 	SetTargetClosed(cross(cur), false)
 	if !CanCall(cross(cur), "set_hook", caller).Immediate {
 		t.Fatal("reopened target must restore selector authorization")
+	}
+}
+
+func TestAssertCanCall(cur realm, t *testing.T) {
+	admin := testutils.TestAddress("access-admin")
+	caller := testutils.TestAddress("access-caller")
+	ResetForTest(cur, admin)
+
+	testing.SetRealm(testing.NewUserRealm(admin))
+	SetFunctionRole(cross(cur), "set_hook", manager.PublicRole)
+
+	tests := []struct {
+		name    string
+		setup   func(cur realm)
+		aborts  bool
+		message string
+	}{
+		{
+			name: "authorized public selector",
+			setup: func(cur realm) {
+				SetTargetClosed(cross(cur), false)
+			},
+		},
+		{
+			name: "closed target",
+			setup: func(cur realm) {
+				SetTargetClosed(cross(cur), true)
+			},
+			aborts:  true,
+			message: ErrorAccessManagerUnauthorizedCall,
+		},
+		{
+			name: "admin selector without role",
+			setup: func(cur realm) {
+				SetTargetClosed(cross(cur), false)
+			},
+			aborts:  true,
+			message: ErrorAccessManagerUnauthorizedCall,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testing.SetRealm(testing.NewUserRealm(admin))
+			tc.setup(cur)
+
+			if tc.aborts {
+				uassert.AbortsContains(t, cur, tc.message, func(cur realm) {
+					if tc.name == "admin selector without role" {
+						AssertCanCall(cross(cur), "grant_role", caller)
+					} else {
+						AssertCanCall(cross(cur), "set_hook", caller)
+					}
+				})
+			} else {
+				AssertCanCall(cross(cur), "set_hook", caller)
+			}
+		})
 	}
 }
 

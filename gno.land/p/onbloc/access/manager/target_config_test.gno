@@ -15,26 +15,45 @@ func TestTargetConfigManagesNilFunctionRolesMap(t *testing.T) {
 	targetConfig.setFunctionRole("a", testRole)
 	targetConfig.setFunctionRoles([]Selector{"b", "c"}, 2)
 
-	if targetConfig.functionRole("a") != testRole {
-		t.Fatal("single selector role must be configured")
+	tests := []struct {
+		name     string
+		selector Selector
+		want     RoleId
+	}{
+		{"single selector", "a", testRole},
+		{"first batch selector", "b", 2},
+		{"second batch selector", "c", 2},
+		{"unknown selector", "unknown", AdminRole},
 	}
-	if targetConfig.functionRole("b") != 2 {
-		t.Fatal("first batch selector role must be configured")
-	}
-	if targetConfig.functionRole("c") != 2 {
-		t.Fatal("second batch selector role must be configured")
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := targetConfig.functionRole(tc.selector); got != tc.want {
+				t.Fatalf("functionRole() = %d, want %d", got, tc.want)
+			}
+		})
 	}
 }
 
 func TestTargetConfigClosed(t *testing.T) {
-	targetConfig := NewTargetConfig(false)
-
-	if targetConfig.isClosed() {
-		t.Fatal("new target config must use provided closed value")
+	tests := []struct {
+		name    string
+		initial bool
+		next    bool
+	}{
+		{"open to closed", false, true},
+		{"closed to open", true, false},
 	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			targetConfig := NewTargetConfig(tc.initial)
+			if got := targetConfig.isClosed(); got != tc.initial {
+				t.Fatalf("initial isClosed() = %v, want %v", got, tc.initial)
+			}
 
-	targetConfig.setClosed(true)
-	if !targetConfig.isClosed() {
-		t.Fatal("target config must report updated closed value")
+			targetConfig.setClosed(tc.next)
+			if got := targetConfig.isClosed(); got != tc.next {
+				t.Fatalf("updated isClosed() = %v, want %v", got, tc.next)
+			}
+		})
 	}
 }

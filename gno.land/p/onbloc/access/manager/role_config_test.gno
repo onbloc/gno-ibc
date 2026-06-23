@@ -20,12 +20,23 @@ func TestRoleConfigManagesNilMembersMap(t *testing.T) {
 	if roleConfig.Members == nil {
 		t.Fatal("grant must initialize members map")
 	}
-	if roleConfig.hasMember(account, now) {
-		t.Fatal("grant delay must keep new member inactive")
+
+	membershipTests := []struct {
+		name string
+		at   Timepoint
+		want bool
+	}{
+		{"before delay", now, false},
+		{"after delay", NewTimepoint(105), true},
 	}
-	if !roleConfig.hasMember(account, NewTimepoint(105)) {
-		t.Fatal("member must become active after grant delay")
+	for _, tc := range membershipTests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := roleConfig.hasMember(account, tc.at); got != tc.want {
+				t.Fatalf("hasMember() = %v, want %v", got, tc.want)
+			}
+		})
 	}
+
 	if roleConfig.grant(account, now) {
 		t.Fatal("second grant must not report a new member")
 	}
@@ -43,13 +54,35 @@ func TestRoleConfigManagesNilMembersMap(t *testing.T) {
 func TestRoleConfigAdminAndGrantDelay(t *testing.T) {
 	roleConfig := NewRoleConfig(AdminRole, 0)
 
-	roleConfig.setAdmin(3)
-	if roleConfig.adminRole() != 3 {
-		t.Fatal("admin role must return configured role")
+	adminTests := []struct {
+		name string
+		role RoleId
+	}{
+		{"custom admin", 3},
+		{"admin role", AdminRole},
+	}
+	for _, tc := range adminTests {
+		t.Run(tc.name, func(t *testing.T) {
+			roleConfig.setAdmin(tc.role)
+			if got := roleConfig.adminRole(); got != tc.role {
+				t.Fatalf("adminRole() = %d, want %d", got, tc.role)
+			}
+		})
 	}
 
-	roleConfig.setGrantDelay(7)
-	if roleConfig.grantDelay() != 7 {
-		t.Fatal("grant delay must return configured delay")
+	delayTests := []struct {
+		name  string
+		delay Delay
+	}{
+		{"non-zero delay", 7},
+		{"zero delay", 0},
+	}
+	for _, tc := range delayTests {
+		t.Run(tc.name, func(t *testing.T) {
+			roleConfig.setGrantDelay(tc.delay)
+			if got := roleConfig.grantDelay(); got != tc.delay {
+				t.Fatalf("grantDelay() = %d, want %d", got, tc.delay)
+			}
+		})
 	}
 }

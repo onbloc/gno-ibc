@@ -9,14 +9,14 @@ height, chain-id, and status calls through the shared light-client interface.
 
 ## Files
 
-- [cometbls.gno](cometbls.gno) contains the light-client object and interface
+- [client.gno](client.gno) contains the light-client object and interface
   methods.
 - [client_state.gno](client_state.gno),
   [consensus_state.gno](consensus_state.gno), [header.gno](header.gno), and
   [misbehaviour.gno](misbehaviour.gno) define client message/state types.
 - [codec.gno](codec.gno), [encoding.gno](encoding.gno), and
   [proto.gno](proto.gno) handle wire formats.
-- [cometbls_verify.gno](cometbls_verify.gno) verifies CometBLS headers and
+- [client_verify.gno](client_verify.gno) verifies CometBLS headers and
   ICS23 proof chains.
 - [keys.gno](keys.gno), [types.gno](types.gno), [utils.gno](utils.gno), and
   [errors.gno](errors.gno) hold storage-key, helper, and sentinel definitions.

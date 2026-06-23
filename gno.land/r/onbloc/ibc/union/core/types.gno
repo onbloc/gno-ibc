@@ -75,8 +75,8 @@ type ICore interface {
 
 // ICoreGetter is the read-only query surface, implemented by the impl and exposed by
 // the proxy's getters.gno. Queries that fail on a missing lookup return an error.
-// The best-effort method GetRegisteredClientType has no direct gno equivalent — see
-// getters.gno for the notes.
+// Best-effort Union query mirrors, such as GetClientImpl, return Gno-native
+// identifiers; see getters.gno for the notes.
 type ICoreGetter interface {
 	GetStatus(clientId types.ClientId) (types.Status, error)
 	GetClientType(clientId types.ClientId) (types.ClientType, error)

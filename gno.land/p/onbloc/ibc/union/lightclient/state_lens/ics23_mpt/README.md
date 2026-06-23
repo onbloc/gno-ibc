@@ -3,10 +3,10 @@
 Pure package implementing the IBC Union state-lens light client backed by
 ICS23/MPT proofs.
 
-This client verifies L2 commitments using an L1 light client reference held in
-its client state. The core host owns the client id and routes through the shared
-light-client interface; this package owns proof decoding, consensus extraction,
-and state-lens verification.
+This client verifies L2 commitments using the L1 client id held in its client
+state. The core host owns the client id and resolves the current L1 light-client
+object from the host store through a live getter; this package owns proof
+decoding, consensus extraction, and state-lens verification.
 
 ## Files
 

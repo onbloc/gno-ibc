@@ -36,8 +36,7 @@ entrypoints run.
 
 The tables below use Union `ExecuteMsg`, `RestrictedExecuteMsg`, and `QueryMsg`
 variants as the row source. `-` means this proxy does not expose a matching Gno
-public surface, or the only local surface is a Gno proxy lifecycle boundary
-rather than an IBC Union message.
+public surface.
 
 For the cross-module comparison guide, see
 [docs/ibc-union-spec-comparison.md](../../../../../../docs/ibc-union-spec-comparison.md).
@@ -117,7 +116,7 @@ For the cross-module comparison guide, see
 
 | Gno surface | IBC Union surface | Reference | Notes |
 | --- | --- | --- | --- |
-| - | `ExecuteMsg::MigrateState` | [msg.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/msg/src/msg.rs#L27), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L90) | CosmWasm migration-only state import; no Gno public surface. |
+| - | `ExecuteMsg::MigrateState` | [msg.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/msg/src/msg.rs#L27), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L90) | CosmWasm migration-only state import; no current Gno public migration surface. |
 | [access realm](../access/README.md) / [access.gno](access.gno) | `ExecuteMsg::AccessManaged` | [msg.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/msg/src/msg.rs#L30), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L103) | Replaced by the Gno access realm plus core selector gates. |
 | [access realm](../access/README.md) / [access.gno](access.gno) | `ExecuteMsg::Restricted` | [msg.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/msg/src/msg.rs#L33), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L106) | Replaced by the Gno access realm plus per-entrypoint selector gates. |
 | [UpdateImpl](upgrade.gno) | `RestrictedExecuteMsg::Upgradable` | [msg.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/msg/src/msg.rs#L75), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L495) | Gno proxy upgrade surface corresponding to Union upgradable wrapper. |

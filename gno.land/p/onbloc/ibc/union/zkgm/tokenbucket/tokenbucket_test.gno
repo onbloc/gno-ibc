@@ -175,24 +175,6 @@ func TestUpdateWhenLastRefillZeroRestoresAvailable(t *testing.T) {
 	assertUint(t, "available", tb.Available, 200)
 }
 
-func mustNew(t *testing.T, capacity uint64, refillRate uint64, now uint64) *TokenBucket {
-	t.Helper()
-
-	tb, err := New(u256.NewUint(capacity), u256.NewUint(refillRate), u256.NewUint(now))
-	if err != nil {
-		t.Fatalf("New error: %v", err)
-	}
-	return tb
-}
-
-func mustRateLimit(t *testing.T, tb *TokenBucket, amount uint64, now uint64) {
-	t.Helper()
-
-	if err := tb.RateLimit(u256.NewUint(amount), u256.NewUint(now)); err != nil {
-		t.Fatalf("RateLimit error: %v", err)
-	}
-}
-
 func assertUint(t *testing.T, name string, got *u256.Uint, want uint64) {
 	t.Helper()
 

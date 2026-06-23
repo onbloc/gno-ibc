@@ -10,6 +10,10 @@ import (
 // app under its package path; re-registration is rejected by the store. The
 // admin-gated RegisterAppForPort stays on the proxy.
 func (c *coreV1) RegisterApp(_ int, rlm realm, a app.IApp) {
+	if !rlm.IsCurrent() {
+		panic(errSpoofedRealm)
+	}
+
 	caller := rlm.Previous().PkgPath()
 	portId := types.Bytes(caller)
 	c.store.RegisterAppAtPort(0, rlm, portId, a)

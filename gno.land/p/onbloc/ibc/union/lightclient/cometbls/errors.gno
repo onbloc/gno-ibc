@@ -7,30 +7,34 @@ import (
 
 // IBC tendermint client sentinel errors
 var (
-	ErrInvalidChainID                    = "invalid chain-id"
-	ErrInvalidHeight                     = "invalid height"
-	ErrInvalidProof                      = "invalid proof"
-	ErrInvalidConsensus                  = "invalid consensus state"
-	ErrInvalidNextValidatorsHash         = "invalid next validators hash"
-	ErrInvalidTrustingPeriod             = "invalid trusting period"
-	ErrInvalidUnbondingPeriod            = "invalid unbonding period"
-	ErrInvalidHeaderHeight               = "invalid header height"
-	ErrInvalidMisbehaviour               = "invalid misbehaviour"
-	ErrInvalidHeader                     = "invalid header"
-	ErrInvalidMaxClockDrift              = "invalid max clock drift"
-	ErrProcessedTimeNotFound             = "processed time not found"
-	ErrProcessedHeightNotFound           = "processed height not found"
-	ErrDelayPeriodNotPassed              = "packet-specified delay period has not been reached"
-	ErrTrustingPeriodExpired             = "time since latest trusted state has passed the trusting period"
-	ErrUnbondingPeriodExpired            = "time since latest trusted state has passed the unbonding period"
-	ErrInvalidProofSpecs                 = "invalid proof specs"
-	ErrInvalidValidatorSet               = "invalid validator set"
-	ErrInvalidHeaderTimestamp            = "invalid header timestamp"
-	ErrInvalidMisbehaviourHeaderSequence = "invalid misbehaviour header sequence"
-	ErrMathOverflow                      = "math operation with overflow"
-	ErrMisbehaviourNotFound              = "misbehaviour not found"
+	ErrInvalidChainID                    = errors.New("invalid chain-id")
+	ErrInvalidHeight                     = errors.New("invalid height")
+	ErrInvalidProof                      = errors.New("invalid proof")
+	ErrInvalidConsensus                  = errors.New("invalid consensus state")
+	ErrInvalidNextValidatorsHash         = errors.New("invalid next validators hash")
+	ErrInvalidTrustingPeriod             = errors.New("invalid trusting period")
+	ErrInvalidUnbondingPeriod            = errors.New("invalid unbonding period")
+	ErrInvalidHeaderHeight               = errors.New("invalid header height")
+	ErrInvalidMisbehaviour               = errors.New("invalid misbehaviour")
+	ErrInvalidHeader                     = errors.New("invalid header")
+	ErrInvalidMaxClockDrift              = errors.New("invalid max clock drift")
+	ErrProcessedTimeNotFound             = errors.New("processed time not found")
+	ErrProcessedHeightNotFound           = errors.New("processed height not found")
+	ErrDelayPeriodNotPassed              = errors.New("packet-specified delay period has not been reached")
+	ErrTrustingPeriodExpired             = errors.New("time since latest trusted state has passed the trusting period")
+	ErrUnbondingPeriodExpired            = errors.New("time since latest trusted state has passed the unbonding period")
+	ErrInvalidProofSpecs                 = errors.New("invalid proof specs")
+	ErrInvalidValidatorSet               = errors.New("invalid validator set")
+	ErrInvalidHeaderTimestamp            = errors.New("invalid header timestamp")
+	ErrInvalidMisbehaviourHeaderSequence = errors.New("invalid misbehaviour header sequence")
+	ErrMathOverflow                      = errors.New("math operation with overflow")
+	ErrMisbehaviourNotFound              = errors.New("misbehaviour not found")
 )
 
-func makeError(msgs ...string) error {
-	return errors.New(strings.Join(msgs, ", "))
+func errorWithDetails(err error, msgs ...string) error {
+	if len(msgs) == 0 {
+		return err
+	}
+
+	return errors.New(err.Error() + ", " + strings.Join(msgs, ", "))
 }

@@ -19,7 +19,7 @@ func main(cur realm) {
 
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	metaBytes := e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
-	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(pair.Destination), []byte("ugnot"), impl.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
+	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(pair.Destination), []byte("ugnot"), z.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
 
 	initialize := z.TokenOrderV2{
 		Sender:      []byte("sender"),

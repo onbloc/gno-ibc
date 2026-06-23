@@ -7,9 +7,9 @@ import (
 )
 
 var (
-	ZeroCapacity      = errors.New("token bucket capacity must not be zero")
-	ZeroRefillRate    = errors.New("token bucket refill rate must not be zero")
-	RateLimitExceeded = errors.New("token bucket rate limit exceeded")
+	ErrZeroCapacity      = errors.New("tokenbucket: capacity must not be zero")
+	ErrZeroRefillRate    = errors.New("tokenbucket: refill rate must not be zero")
+	ErrRateLimitExceeded = errors.New("tokenbucket: rate limit exceeded")
 )
 
 type TokenBucket struct {
@@ -21,11 +21,11 @@ type TokenBucket struct {
 
 func New(capacity *u256.Uint, refillRate *u256.Uint, now *u256.Uint) (*TokenBucket, error) {
 	if capacity.IsZero() {
-		return nil, ZeroCapacity
+		return nil, ErrZeroCapacity
 	}
 
 	if refillRate.IsZero() {
-		return nil, ZeroRefillRate
+		return nil, ErrZeroRefillRate
 	}
 
 	return &TokenBucket{
@@ -60,7 +60,7 @@ func (tb *TokenBucket) RateLimit(amount *u256.Uint, now *u256.Uint) error {
 	tb.Refill(now)
 
 	if tb.Available.Lt(amount) {
-		return RateLimitExceeded
+		return ErrRateLimitExceeded
 	}
 
 	tb.Available.Sub(tb.Available, amount)
@@ -70,11 +70,11 @@ func (tb *TokenBucket) RateLimit(amount *u256.Uint, now *u256.Uint) error {
 
 func (tb *TokenBucket) Update(capacity *u256.Uint, refillRate *u256.Uint, reset bool) error {
 	if capacity.IsZero() {
-		return ZeroCapacity
+		return ErrZeroCapacity
 	}
 
 	if refillRate.IsZero() {
-		return ZeroRefillRate
+		return ErrZeroRefillRate
 	}
 
 	tb.Capacity = capacity.Clone()

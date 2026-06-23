@@ -22,6 +22,10 @@ type Voucher struct {
 // the impl realm can assemble one (v2 borrow rule #1 forbids constructing a
 // foreign-stamped composite literal directly).
 func NewVoucher(_ int, rlm realm, token *grc20.Token, ledger *grc20.PrivateLedger) *Voucher {
+	if !rlm.IsCurrent() {
+		panic(ErrSpoofedRealm)
+	}
+
 	return &Voucher{token: token, ledger: ledger}
 }
 

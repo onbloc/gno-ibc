@@ -43,19 +43,22 @@ const maxTimeNanos = 1_000_000_000
 // AppHash must each be exactly 32 bytes.
 func EncodeHeader(h *Header) ([]byte, error) {
 	if h == nil || h.SignedHeader == nil {
-		return nil, errors.New("cometbls: nil header")
+		return nil, errors.New("nil header")
 	}
+
 	lh := h.SignedHeader
 
-	vh, err := toBytes32(lh.ValidatorsHash, "validators hash")
+	vh, err := toBytes32(lh.ValidatorsHash)
 	if err != nil {
 		return nil, err
 	}
-	nvh, err := toBytes32(lh.NextValidatorsHash, "next validators hash")
+
+	nvh, err := toBytes32(lh.NextValidatorsHash)
 	if err != nil {
 		return nil, err
 	}
-	ah, err := toBytes32(lh.AppHash, "app hash")
+
+	ah, err := toBytes32(lh.AppHash)
 	if err != nil {
 		return nil, err
 	}
@@ -79,13 +82,14 @@ func EncodeHeader(h *Header) ([]byte, error) {
 func DecodeHeader(buf []byte) (*Header, error) {
 	vals, err := abienc.Decode(headerSchema, buf)
 	if err != nil {
-		return nil, errors.New("cometbls: " + err.Error())
+		return nil, errors.New("" + err.Error())
 	}
 
 	timeSeconds := vals[1].(uint64)
+
 	timeNanos := vals[2].(uint64)
 	if timeNanos >= maxTimeNanos {
-		return nil, errors.New("cometbls: TimeNanos out of range")
+		return nil, errors.New("TimeNanos out of range")
 	}
 
 	vh := vals[3].([32]byte)
@@ -112,12 +116,14 @@ func DecodeHeader(buf []byte) (*Header, error) {
 // field 2 is Header2, each an ABI-encoded header.
 func EncodeMisbehaviour(m *Misbehaviour) ([]byte, error) {
 	if m == nil {
-		return nil, errors.New("cometbls: nil misbehaviour")
+		return nil, errors.New("nil misbehaviour")
 	}
+
 	h1, err := EncodeHeader(m.Header1)
 	if err != nil {
 		return nil, err
 	}
+
 	h2, err := EncodeHeader(m.Header2)
 	if err != nil {
 		return nil, err
@@ -126,18 +132,21 @@ func EncodeMisbehaviour(m *Misbehaviour) ([]byte, error) {
 	buf := make([]byte, 0, len(h1)+len(h2)+8)
 	buf = proto.AppendLengthDelimited(buf, 1, h1)
 	buf = proto.AppendLengthDelimited(buf, 2, h2)
+
 	return buf, nil
 }
 
 // DecodeMisbehaviour protobuf-decodes a Misbehaviour.
 func DecodeMisbehaviour(buf []byte) (*Misbehaviour, error) {
 	m := &Misbehaviour{}
+
 	pos := 0
 	for pos < len(buf) {
 		fieldNum, wireType, newPos, err := decodeTag(buf, pos)
 		if err != nil {
 			return nil, err
 		}
+
 		pos = newPos
 
 		if wireType != proto.LEN {
@@ -145,6 +154,7 @@ func DecodeMisbehaviour(buf []byte) (*Misbehaviour, error) {
 			if err != nil {
 				return nil, err
 			}
+
 			continue
 		}
 
@@ -152,6 +162,7 @@ func DecodeMisbehaviour(buf []byte) (*Misbehaviour, error) {
 		if err != nil {
 			return nil, err
 		}
+
 		pos = newPos
 
 		header, err := DecodeHeader([]byte(s))
@@ -168,18 +179,21 @@ func DecodeMisbehaviour(buf []byte) (*Misbehaviour, error) {
 	}
 
 	if m.Header1 == nil || m.Header2 == nil {
-		return nil, errors.New("cometbls: misbehaviour missing a header")
+		return nil, errors.New("misbehaviour missing a header")
 	}
+
 	return m, nil
 }
 
 // toBytes32 converts a 32-byte slice into a [32]byte array, returning an error
 // for any other length.
-func toBytes32(b []byte, label string) ([32]byte, error) {
+func toBytes32(b []byte) ([32]byte, error) {
 	var out [32]byte
 	if len(b) != 32 {
-		return out, errors.New("cometbls: " + label + " must be 32 bytes")
+		return out, errors.New("must be 32 bytes")
 	}
+
 	copy(out[:], b)
+
 	return out, nil
 }

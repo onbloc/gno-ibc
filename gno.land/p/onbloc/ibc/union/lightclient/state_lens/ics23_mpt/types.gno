@@ -2,9 +2,6 @@ package ics23mpt
 
 const ClientType = "state-lens/ics23/mpt"
 
-// Height is an ibc-union height. Revision is always 0 in this codebase.
-type Height = uint64
-
 // ClientState mirrors Union's state-lens ClientState<ics23-mpt Extra>.
 //
 // The generic Rust form is flattened here:
@@ -18,7 +15,7 @@ type ClientState struct {
 	L2ChainID         string
 	L1ClientID        uint32
 	L2ClientID        uint32
-	L2LatestHeight    Height
+	L2LatestHeight    uint64
 	TimestampOffset   uint16
 	StateRootOffset   uint16
 	StorageRootOffset uint16
@@ -33,8 +30,8 @@ type ConsensusState struct {
 
 // Header is the state-lens ClientMessage used to update the client.
 type Header struct {
-	L1Height              Height
-	L2Height              Height
+	L1Height              uint64
+	L2Height              uint64
 	L2ConsensusStateProof []byte
 	L2ConsensusState      []byte
 }

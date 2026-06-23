@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"errors"
 	"strings"
 
 	types "gno.land/p/onbloc/ibc/union/types"
@@ -12,13 +11,15 @@ import (
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
-var errInvalidUnescrow = errors.New("zkgm/v1: invalid token order unescrow")
+// ibcDenomPrefix is the prefix of wrapped IBC voucher denoms (mirrors
+// z.PredictWrappedToken*). Used to detect and trim wrapped denoms.
+const ibcDenomPrefix = "ibc/"
 
 // tagAckSuccess returns a fresh copy of the success ack tag.
-func tagAckSuccess() *u256.Uint       { return u256FromBytes32(z.TAG_ACK_SUCCESS) }
-func tagAckFailure() *u256.Uint       { return u256FromBytes32(z.TAG_ACK_FAILURE) }
-func fillTypeProtocol() *u256.Uint    { return u256FromBytes32(z.FILL_TYPE_PROTOCOL) }
-func fillTypeMarketMaker() *u256.Uint { return u256FromBytes32(z.FILL_TYPE_MARKETMAKER) }
+func tagAckSuccess() *u256.Uint       { return z.Uint256FromBytes32(z.TAG_ACK_SUCCESS) }
+func tagAckFailure() *u256.Uint       { return z.Uint256FromBytes32(z.TAG_ACK_FAILURE) }
+func fillTypeProtocol() *u256.Uint    { return z.Uint256FromBytes32(z.FILL_TYPE_PROTOCOL) }
+func fillTypeMarketMaker() *u256.Uint { return z.Uint256FromBytes32(z.FILL_TYPE_MARKETMAKER) }
 
 // verifyTokenOrderV2 validates a token order on send: rate-limit, escrow voucher
 // or consume native funds, then escrow the channel balance.
@@ -46,7 +47,7 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channel
 
 		origin, ok := v.store.GetTokenOrigin(baseDenom)
 		if !ok {
-			return errInvalidUnescrow
+			return makeError(errInvalidUnescrow)
 		}
 
 		intermediatePath, destChan := z.PopChannelFromPath(origin)
@@ -57,11 +58,11 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channel
 		}
 
 		if path.Cmp(reversed) != 0 {
-			return errInvalidUnescrow
+			return makeError(errInvalidUnescrow)
 		}
 
 		if channelId != types.ChannelId(destChan) {
-			return errInvalidUnescrow
+			return makeError(errInvalidUnescrow)
 		}
 
 		image, ok := v.store.GetMetadataImageOf(baseDenom)
@@ -71,11 +72,11 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channel
 		// reference predicts against the incoming channel_id (contract.rs L453,
 		// L466), not the popped destination channel. The is_sending_back check
 		// above guarantees they are equal on the valid-unescrow path.
-		wrappedV1 := PredictWrappedToken(intermediatePath, uint32(channelId), order.QuoteToken)
-		wrappedV2 := PredictWrappedTokenV2(intermediatePath, uint32(channelId), order.QuoteToken, image)
+		wrappedV1 := z.PredictWrappedToken(intermediatePath, uint32(channelId), order.QuoteToken)
+		wrappedV2 := z.PredictWrappedTokenV2(intermediatePath, uint32(channelId), order.QuoteToken, image)
 
 		if baseDenom != wrappedV1 && baseDenom != wrappedV2 {
-			return errInvalidUnescrow
+			return makeError(errInvalidUnescrow)
 		}
 
 		if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
@@ -84,9 +85,9 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channel
 
 		return funds.sub(baseDenom, order.BaseAmount)
 	case z.TOKEN_ORDER_KIND_SOLVE:
-		return errors.New("zkgm/v1: solve token order not implemented")
+		return makeError(errSolveNotImplemented)
 	default:
-		return errors.New("zkgm/v1: unknown token order kind")
+		return makeError(errUnknownTokenOrderKind)
 	}
 }
 
@@ -120,8 +121,9 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
-	// Predict the wrapped denom for an escrow/initialize order. A mismatch (or an
-	// under-quote) is not an error: the order falls back to a market-maker fill.
+	// Predict the wrapped denom for an escrow/initialize order.
+	// A mismatch (or an under-quote) is not an error:
+	// the order falls back to a market-maker fill.
 	var (
 		wrapped     string
 		hasWrapped  bool
@@ -134,10 +136,10 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 	case z.TOKEN_ORDER_KIND_ESCROW:
 		if img, ok := v.store.GetMetadataImageOf(quoteDenom); ok && !isZeroImage(img) {
 			image = img
-			wrapped = PredictWrappedTokenV2(path, destChan, order.BaseToken, image)
+			wrapped = z.PredictWrappedTokenV2(path, destChan, order.BaseToken, image)
 		} else {
 			image = [32]byte{}
-			wrapped = PredictWrappedToken(path, destChan, order.BaseToken)
+			wrapped = z.PredictWrappedToken(path, destChan, order.BaseToken)
 		}
 		hasWrapped = true
 	case z.TOKEN_ORDER_KIND_INITIALIZE:
@@ -152,8 +154,8 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 		}
 
 		meta, metaPresent = m, true
-		image = MetadataImage(meta)
-		wrapped = PredictWrappedTokenV2(path, destChan, order.BaseToken, image)
+		image = z.MetadataImage(meta)
+		wrapped = z.PredictWrappedTokenV2(path, destChan, order.BaseToken, image)
 		// A quote token that does not match the deterministic wrapped denom is an
 		// invalid initialize order (union InvalidTokenOrderKind).
 		if quoteDenom != wrapped {
@@ -208,7 +210,7 @@ func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.Channel
 	var decimals uint8
 
 	if canDeploy && metadata != nil {
-		image = MetadataImage(*metadata)
+		image = z.MetadataImage(*metadata)
 
 		ti := z.DecodeTokenInitializerFromMetadata(*metadata)
 		if ti.Decimals > grc20.MaxDecimals {
@@ -345,7 +347,7 @@ func (v *ucs03ZkgmV1) marketMakerFillV2(_ int, rlm realm, relayer address, relay
 		// Union can fill local/native quote tokens from the maker's funds. This
 		// implementation cannot observe those funds here yet, so only voucher
 		// quote tokens are eligible for the market-maker fast path.
-		return core.NewRecvPacketResult(types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
+		return core.NewRecvPacketResult(types.PacketStatusSuccess, types.CloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 
 	if _, err := amountInt64(order.QuoteAmount); err != nil {
@@ -353,7 +355,7 @@ func (v *ucs03ZkgmV1) marketMakerFillV2(_ int, rlm realm, relayer address, relay
 	}
 
 	if err := v.transferVoucher(0, rlm, quoteDenom, relayer, address(order.Receiver), order.QuoteAmount); err != nil {
-		return core.NewRecvPacketResult(types.PacketStatusSuccess, cloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
+		return core.NewRecvPacketResult(types.PacketStatusSuccess, types.CloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 
 	// market_maker is the relayer-supplied settlement target (union saves
@@ -385,7 +387,7 @@ func (v *ucs03ZkgmV1) acknowledgeTokenOrderV2(_ int, rlm realm, packet types.Pac
 	}
 
 	if !orderAck.FillType.Eq(fillTypeMarketMaker()) {
-		return errors.New("zkgm/v1: unknown fill type")
+		return makeError(errUnknownFillType)
 	}
 
 	marketMaker := string(orderAck.MarketMaker)
@@ -396,7 +398,7 @@ func (v *ucs03ZkgmV1) acknowledgeTokenOrderV2(_ int, rlm realm, packet types.Pac
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
 		return v.settleEscrowedV2(0, rlm, sourceChannelId, path, order, marketMaker)
 	default:
-		return errors.New("zkgm/v1: unsupported token order kind for ack")
+		return makeError(errUnsupportedTokenOrderKindForAck)
 	}
 }
 
@@ -409,7 +411,7 @@ func (v *ucs03ZkgmV1) refundV2(_ int, rlm realm, path *u256.Uint, sourceChannelI
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
 		return v.settleEscrowedV2(0, rlm, sourceChannelId, path, order, string(order.Sender))
 	default:
-		return errors.New("zkgm/v1: unsupported token order kind for refund")
+		return makeError(errUnsupportedTokenOrderKindForRefund)
 	}
 }
 

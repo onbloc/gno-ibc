@@ -32,7 +32,7 @@ func main(cur realm) {
 	stdtesting.SetRealm(stdtesting.NewCodeRealm("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios_direct"))
 
 	metaBytes := e2e.MustTokenMetadata(cross(cur), "grc20", z.TokenInitializer{Name: "Rate Limited", Symbol: "RL", Decimals: 6})
-	quoteToken := impl.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte(baseToken), impl.MetadataImage(sh.DecodeTokenMetadata(metaBytes)))
+	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte(baseToken), z.MetadataImage(sh.DecodeTokenMetadata(metaBytes)))
 	order := z.TokenOrderV2{
 		Sender:      []byte("remote"),
 		Receiver:    []byte(receiver),

@@ -45,11 +45,11 @@ func RegisterImpl(cur realm, constructor func(store IStore) IApp) {
 	prefix := currentPath + "/"
 
 	if !strings.HasPrefix(previousPath, prefix) {
-		panic("zkgm: previous impl path is not a prefix of the current impl path")
+		panic("previous impl path is not a prefix of the current impl path")
 	}
 
 	if _, ok := implConstructors[previousPath]; ok {
-		panic("zkgm: impl already registered")
+		panic("impl already registered")
 	}
 
 	implConstructors[previousPath] = constructor
@@ -63,7 +63,7 @@ func UpdateImpl(cur realm, path string) {
 
 	constructor, ok := implConstructors[path]
 	if !ok {
-		panic("zkgm: impl constructor not found")
+		panic("impl constructor not found")
 	}
 
 	currentImplPath = path
@@ -73,7 +73,7 @@ func UpdateImpl(cur realm, path string) {
 // mustGetImpl returns the installed impl, panicking until the first UpdateImpl.
 func mustGetImpl() IApp {
 	if currentImpl == nil {
-		panic("zkgm: implementation not installed")
+		panic("implementation not installed")
 	}
 
 	return currentImpl

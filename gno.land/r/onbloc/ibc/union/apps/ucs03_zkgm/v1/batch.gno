@@ -1,8 +1,6 @@
 package impl
 
 import (
-	"errors"
-
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -12,14 +10,13 @@ import (
 // TODO: cap batch.Instructions length once the upstream Solidity reference
 // confirms a value (Reviewer flagged unbounded recursion as a DoS vector —
 // each child runs full dispatchExecutePacket incl. abi decode + keccak).
-var errInvalidBatchInstruction = errors.New("zkgm/v1: invalid batch instruction")
 
 // verifyBatch verifies each allowed child instruction against the shared funds budget.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2941-L2967
 func (v *ucs03ZkgmV1) verifyBatch(_ int, rlm realm, funds *funds, channelId types.ChannelId, path *u256.Uint, batch z.Batch) error {
 	for _, instruction := range batch.Instructions {
 		if !isAllowedBatchInstruction(instruction.Opcode) {
-			return errInvalidBatchInstruction
+			return makeError(errInvalidBatchInstruction)
 		}
 
 		if err := v.verifyInternal(0, rlm, funds, channelId, path, instruction); err != nil {
@@ -37,7 +34,7 @@ func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relaye
 
 	for i, instruction := range batch.Instructions {
 		if !isAllowedBatchInstruction(instruction.Opcode) {
-			return nil, errInvalidBatchInstruction
+			return nil, makeError(errInvalidBatchInstruction)
 		}
 
 		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), salt)
@@ -49,14 +46,14 @@ func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relaye
 
 		childAck := childRes.Acknowledgement
 		if len(childAck) == 0 {
-			panic("zkgm/v1: batch child returned empty ack")
+			panic("batch child returned empty ack")
 		}
 		// Spec: a single only-maker child aborts the entire batch. Already-processed
 		// children's state mutations stand (per Union v0 spec). The outer ack signals
 		// "filled by maker, replay later" so the relayer retries against a market-maker
 		// fill.
 		if isOnlyMakerAck(childAck) {
-			return cloneBytes(z.ACK_ERR_ONLY_MAKER), nil
+			return types.CloneBytes(z.ACK_ERR_ONLY_MAKER), nil
 		}
 
 		acks[i] = childAck
@@ -82,7 +79,7 @@ func (v *ucs03ZkgmV1) acknowledgeBatch(_ int, rlm realm, packet types.Packet, re
 
 		batchAck = decoded
 		if len(batchAck.Acknowledgements) != len(batch.Instructions) {
-			return errors.New("zkgm/v1: batch ack count mismatch")
+			return makeError(errBatchAckCountMismatch)
 		}
 	}
 

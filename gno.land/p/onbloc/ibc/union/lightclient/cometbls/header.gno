@@ -54,16 +54,16 @@ func (h *Header) GetTime() time.Time {
 // with MsgCreateClient
 func (h *Header) ValidateBasic() error {
 	if h.SignedHeader == nil {
-		return makeError(ErrInvalidHeader, "signed header cannot be nil")
+		return errorWithDetails(ErrInvalidHeader, "signed header cannot be nil")
 	}
-	
+
 	if len(h.ZeroKnowledgeProof) == 0 {
-		return makeError(ErrInvalidHeader, "zero-knowledge proof cannot be empty")
+		return errorWithDetails(ErrInvalidHeader, "zero-knowledge proof cannot be empty")
 	}
 
 	// TrustedHeight is less than Header for updates and misbehaviour
 	if h.TrustedHeight.GTE(h.GetHeight()) {
-		return makeError(
+		return errorWithDetails(
 			ErrInvalidHeaderHeight,
 			ufmt.Sprintf("TrustedHeight %d must be less than header height %d", h.TrustedHeight, h.GetHeight()),
 		)

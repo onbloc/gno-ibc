@@ -9,13 +9,15 @@ func GetStatus(clientId types.ClientId) (types.Status, error) {
 	return mustGetImpl().GetStatus(clientId)
 }
 
-// GetClientType returns the registered client type for a client.
-func GetClientType(clientId types.ClientId) (types.ClientType, bool) {
+// GetClientType returns the registered client type for a client, or an error
+// when the client is missing.
+func GetClientType(clientId types.ClientId) (types.ClientType, error) {
 	return mustGetImpl().GetClientType(clientId)
 }
 
-// GetClientImpl returns the impl identifier for a client (best-effort: type).
-func GetClientImpl(clientId types.ClientId) (string, bool) {
+// GetClientImpl returns the impl identifier for a client (best-effort: type), or
+// an error when the client is missing.
+func GetClientImpl(clientId types.ClientId) (string, error) {
 	return mustGetImpl().GetClientImpl(clientId)
 }
 
@@ -54,13 +56,15 @@ func GetConnection(connectionId types.ConnectionId) (types.Connection, error) {
 	return mustGetImpl().GetConnectionTyped(connectionId)
 }
 
-// GetBatchPackets returns the batch packet commitment for a batch hash.
-func GetBatchPackets(batchHash types.H256) (types.H256, bool) {
+// GetBatchPackets returns the batch packet commitment for a batch hash, or an
+// error when no batch packet commitment is stored for that hash.
+func GetBatchPackets(batchHash types.H256) (types.H256, error) {
 	return mustGetImpl().GetBatchPacketsCommitment(batchHash)
 }
 
-// GetBatchReceipts returns the batch receipt commitment for a batch hash.
-func GetBatchReceipts(batchHash types.H256) (types.H256, bool) {
+// GetBatchReceipts returns the batch receipt commitment for a batch hash, or an
+// error when no batch receipt commitment is stored for that hash.
+func GetBatchReceipts(batchHash types.H256) (types.H256, error) {
 	return mustGetImpl().GetBatchReceiptsCommitment(batchHash)
 }
 

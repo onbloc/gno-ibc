@@ -121,7 +121,8 @@ func main(cur realm) {
 	ufmt.Println("[SCENARIO] 2. Receive INITIALIZE order proven by the state-lens MPT proof (mint 100)")
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, nil, packetProof, statelensProofHeight))
 
-	_, receiptRecorded := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))
+	_, receiptErr := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))
+	receiptRecorded := receiptErr == nil
 	ufmt.Printf("[INFO] packet receipt recorded (state-lens MPT proof verified): %t\n", receiptRecorded)
 	ufmt.Printf("[INFO] minted token (wrapped voucher): %s\n", quoteToken)
 	ufmt.Printf("[INFO] receiver voucher balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, receiverAddr))

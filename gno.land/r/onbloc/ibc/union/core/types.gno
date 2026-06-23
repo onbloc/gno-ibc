@@ -73,14 +73,13 @@ type ICore interface {
 }
 
 // ICoreGetter is the read-only query surface, implemented by the impl and exposed by
-// the proxy's getters.gno. Queries that fail on a missing lookup return an error;
-// existence-probe queries keep a found-bool. The best-effort methods
-// (GetRegisteredClientType, GetClientImpl) have no direct gno equivalent — see
+// the proxy's getters.gno. Queries that fail on a missing lookup return an error.
+// The best-effort method GetRegisteredClientType has no direct gno equivalent — see
 // getters.gno for the notes.
 type ICoreGetter interface {
 	GetStatus(clientId types.ClientId) (types.Status, error)
-	GetClientType(clientId types.ClientId) (types.ClientType, bool)
-	GetClientImpl(clientId types.ClientId) (string, bool)
+	GetClientType(clientId types.ClientId) (types.ClientType, error)
+	GetClientImpl(clientId types.ClientId) (string, error)
 	GetRegisteredClientType(clientType types.ClientType) bool
 	GetClientStateBytes(clientId types.ClientId) ([]byte, error)
 	GetConsensusStateBytes(clientId types.ClientId, height types.Height) ([]byte, error)
@@ -89,8 +88,8 @@ type ICoreGetter interface {
 	GetConnectionTyped(connectionId types.ConnectionId) (types.Connection, error)
 	GetChannels() ([]types.Channel, error)
 	GetChannel(channelId types.ChannelId) (types.Channel, error)
-	GetBatchPacketsCommitment(batchHash types.H256) (types.H256, bool)
-	GetBatchReceiptsCommitment(batchHash types.H256) (types.H256, bool)
+	GetBatchPacketsCommitment(batchHash types.H256) (types.H256, error)
+	GetBatchReceiptsCommitment(batchHash types.H256) (types.H256, error)
 }
 
 // IStore is the proxy-owned persistent state injected into the mustGetImpl(). Setters take

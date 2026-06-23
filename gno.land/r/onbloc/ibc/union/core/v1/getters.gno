@@ -7,9 +7,8 @@ import (
 
 // getters.gno implements the read-only ICoreGetter surface. Results read the
 // injected store / light client. Queries that fail on a missing lookup
-// (client/consensus/connection/channel state, status, latest height, timestamp)
-// return an error rather than a found-bool or a panic; existence-probe queries
-// keep a found-bool.
+// (client/consensus/connection/channel state, status, latest height, timestamp,
+// batch commitments) return an error rather than a found-bool or a panic.
 
 // GetStatus returns the client's status, or an error when the client is missing.
 func (c *coreV1) GetStatus(clientId types.ClientId) (types.Status, error) {
@@ -21,20 +20,27 @@ func (c *coreV1) GetStatus(clientId types.ClientId) (types.Status, error) {
 	return lc.Status().ToType(), nil
 }
 
-// GetClientType returns the registered client type for a client.
-func (c *coreV1) GetClientType(clientId types.ClientId) (types.ClientType, bool) {
-	return c.store.ClientType(clientId)
+// GetClientType returns the registered client type for a client, or an error
+// when the client is missing.
+func (c *coreV1) GetClientType(clientId types.ClientId) (types.ClientType, error) {
+	typ, ok := c.store.ClientType(clientId)
+	if !ok {
+		return "", core.ErrClientNotFound
+	}
+
+	return typ, nil
 }
 
 // GetClientImpl is best-effort: gno has no client_type->impl address mapping, so
-// it returns the registered client type as the impl identifier.
-func (c *coreV1) GetClientImpl(clientId types.ClientId) (string, bool) {
+// it returns the registered client type as the impl identifier, or an error when
+// the client is missing.
+func (c *coreV1) GetClientImpl(clientId types.ClientId) (string, error) {
 	typ, ok := c.store.ClientType(clientId)
 	if !ok {
-		return "", false
+		return "", core.ErrClientNotFound
 	}
 
-	return string(typ), true
+	return string(typ), nil
 }
 
 // GetRegisteredClientType is best-effort: gno registers light client objects per
@@ -120,12 +126,24 @@ func (c *coreV1) GetChannel(channelId types.ChannelId) (types.Channel, error) {
 	return ch, nil
 }
 
-// GetBatchPacketsCommitment returns the batch packet commitment for a batch hash.
-func (c *coreV1) GetBatchPacketsCommitment(batchHash types.H256) (types.H256, bool) {
-	return c.store.BatchPacketsAt(batchHash)
+// GetBatchPacketsCommitment returns the batch packet commitment for a batch hash,
+// or an error when no batch packet commitment is stored for that hash.
+func (c *coreV1) GetBatchPacketsCommitment(batchHash types.H256) (types.H256, error) {
+	commitment, ok := c.store.BatchPacketsAt(batchHash)
+	if !ok {
+		return types.H256{}, core.ErrBatchPacketsNotFound
+	}
+
+	return commitment, nil
 }
 
-// GetBatchReceiptsCommitment returns the batch receipt commitment for a batch hash.
-func (c *coreV1) GetBatchReceiptsCommitment(batchHash types.H256) (types.H256, bool) {
-	return c.store.BatchReceiptsAt(batchHash)
+// GetBatchReceiptsCommitment returns the batch receipt commitment for a batch hash,
+// or an error when no batch receipt commitment is stored for that hash.
+func (c *coreV1) GetBatchReceiptsCommitment(batchHash types.H256) (types.H256, error) {
+	commitment, ok := c.store.BatchReceiptsAt(batchHash)
+	if !ok {
+		return types.H256{}, core.ErrBatchReceiptsNotFound
+	}
+
+	return commitment, nil
 }

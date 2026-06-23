@@ -25,12 +25,12 @@ func TestGetClientGetters(cur realm, t *testing.T) {
 	uassert.NoError(t, err)
 	uassert.True(t, status == types.StatusActive)
 
-	typ, ok := v.GetClientType(clientId)
-	uassert.True(t, ok)
+	typ, err := v.GetClientType(clientId)
+	uassert.NoError(t, err)
 	uassert.Equal(t, "cometbls", string(typ))
 
-	implId, ok := v.GetClientImpl(clientId)
-	uassert.True(t, ok)
+	implId, err := v.GetClientImpl(clientId)
+	uassert.NoError(t, err)
 	uassert.Equal(t, "cometbls", implId)
 
 	cs, err := v.GetClientStateBytes(clientId)
@@ -55,8 +55,8 @@ func TestGetMissingClient(cur realm, t *testing.T) {
 
 	_, err := v.GetStatus(types.ClientId(99))
 	uassert.ErrorIs(t, err, core.ErrClientNotFound)
-	_, ok := v.GetClientType(types.ClientId(99))
-	uassert.False(t, ok)
+	_, err = v.GetClientType(types.ClientId(99))
+	uassert.ErrorIs(t, err, core.ErrClientNotFound)
 	_, err = v.GetLatestHeight(types.ClientId(99))
 	uassert.ErrorIs(t, err, core.ErrClientNotFound)
 	_, err = v.GetClientStateBytes(types.ClientId(99))

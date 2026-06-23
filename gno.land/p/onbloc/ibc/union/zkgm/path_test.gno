@@ -93,6 +93,15 @@ func TestMakeGetRoundTrip(t *testing.T) {
 		channels []uint32
 	}{
 		{"all slots selected channels", []int{0, 1, 2, 3, 4, 5, 6, 7}, []uint32{1, 2, 7, 0xDEADBEEF, 0xFFFFFFFF}},
+		{"slot zero edge cases", []int{0}, []uint32{0, 1, 0xFFFFFFFF, 0x80000000, 0x7FFFFFFF}},
+		{"slot seven edge cases", []int{7}, []uint32{0, 1, 0xFFFFFFFF, 0x80000000, 0x7FFFFFFF}},
+		{"middle slots boundary values", []int{3, 4}, []uint32{0, 1, 0xFFFF, 0xFFFF0000, 0xFFFFFFFF}},
+		{"consecutive slots small channels", []int{0, 1, 2}, []uint32{0, 1, 2, 3, 4, 5}},
+		{"high bit channels", []int{0, 1, 6, 7}, []uint32{0x80000000, 0x80000001, 0xFFFFFFFF, 0xFFFFFFFE}},
+		{"power of two channels", []int{0, 2, 4, 6}, []uint32{1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216, 33554432, 67108864, 134217728, 268435456, 536870912, 1073741824}},
+		{"all slots minimal channels", []int{0, 1, 2, 3, 4, 5, 6, 7}, []uint32{0, 1}},
+		{"all slots maximal channels", []int{0, 1, 2, 3, 4, 5, 6, 7}, []uint32{0xFFFFFFFF, 0xFFFFFFFE, 0x80000000}},
+		{"odd slots odd channels", []int{1, 3, 5, 7}, []uint32{1, 3, 5, 7, 9, 11, 13, 15}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

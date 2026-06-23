@@ -481,3 +481,236 @@ func TestVerifyHeaderDuplicateHeightShortCircuitsBeforeZKP(t *testing.T) {
 		t.Fatal("duplicate VerifyHeader must include existing consensus state bytes")
 	}
 }
+
+func TestNewHeader(t *testing.T) {
+	cases := []struct {
+		name               string
+		signedHeader       *LightHeader
+		trustedHeight      *types.Height
+		zeroKnowledgeProof []byte
+		wantHeight         int64
+		wantTimeSeconds    int64
+		wantTrustedHeight  uint64
+		wantZKPLen         int
+	}{
+		{
+			name:               "valid header with all fields",
+			signedHeader:       &LightHeader{Height: 42, TimeSeconds: 1000, TimeNanos: 500},
+			trustedHeight:      heightPtr(types.NewHeight(10)),
+			zeroKnowledgeProof: []byte{0xAA, 0xBB},
+			wantHeight:         42,
+			wantTimeSeconds:    1000,
+			wantTrustedHeight:  10,
+			wantZKPLen:         2,
+		},
+		{
+			name:               "valid header with nil trusted height",
+			signedHeader:       &LightHeader{Height: 100, TimeSeconds: 2000, TimeNanos: 0},
+			trustedHeight:      nil,
+			zeroKnowledgeProof: []byte{0x01},
+			wantHeight:         100,
+			wantTimeSeconds:    2000,
+			wantTrustedHeight:  0,
+			wantZKPLen:         1,
+		},
+		{
+			name:               "valid header with empty zkp",
+			signedHeader:       &LightHeader{Height: 1, TimeSeconds: 0, TimeNanos: 0},
+			trustedHeight:      heightPtr(types.NewHeight(0)),
+			zeroKnowledgeProof: []byte{},
+			wantHeight:         1,
+			wantTimeSeconds:    0,
+			wantTrustedHeight:  0,
+			wantZKPLen:         0,
+		},
+		{
+			name:               "valid header with nil signed header",
+			signedHeader:       nil,
+			trustedHeight:      heightPtr(types.NewHeight(5)),
+			zeroKnowledgeProof: []byte{0xCC},
+			wantHeight:         0,
+			wantTimeSeconds:    0,
+			wantTrustedHeight:  5,
+			wantZKPLen:         1,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NewHeader(tc.signedHeader, tc.trustedHeight, tc.zeroKnowledgeProof)
+
+			if got == nil {
+				t.Fatal("NewHeader returned nil")
+			}
+			if got.SignedHeader != tc.signedHeader {
+				if got.SignedHeader == nil && tc.signedHeader == nil {
+					// Both nil is OK
+				} else if got.SignedHeader == nil || tc.signedHeader == nil {
+					t.Fatalf("SignedHeader: got %v want %v", got.SignedHeader, tc.signedHeader)
+				} else if got.SignedHeader.Height != tc.wantHeight {
+					t.Fatalf("SignedHeader.Height: got %d want %d", got.SignedHeader.Height, tc.wantHeight)
+				}
+			}
+			if tc.signedHeader != nil && got.SignedHeader.Height != tc.wantHeight {
+				t.Fatalf("SignedHeader.Height: got %d want %d", got.SignedHeader.Height, tc.wantHeight)
+			}
+			if tc.signedHeader != nil && got.SignedHeader.TimeSeconds != tc.wantTimeSeconds {
+				t.Fatalf("SignedHeader.TimeSeconds: got %d want %d", got.SignedHeader.TimeSeconds, tc.wantTimeSeconds)
+			}
+			if tc.trustedHeight != nil && got.TrustedHeight != nil {
+				if got.TrustedHeight.RevisionHeight != tc.wantTrustedHeight {
+					t.Fatalf("TrustedHeight.RevisionHeight: got %d want %d", got.TrustedHeight.RevisionHeight, tc.wantTrustedHeight)
+				}
+			}
+			if tc.trustedHeight == nil && got.TrustedHeight != nil {
+				t.Fatalf("TrustedHeight: got %v want nil", got.TrustedHeight)
+			}
+			if len(got.ZeroKnowledgeProof) != tc.wantZKPLen {
+				t.Fatalf("ZeroKnowledgeProof length: got %d want %d", len(got.ZeroKnowledgeProof), tc.wantZKPLen)
+			}
+		})
+	}
+}
+
+func TestHeaderClientType(t *testing.T) {
+	cases := []struct {
+		name   string
+		header *Header
+		want   string
+	}{
+		{
+			name:   "returns client type constant",
+			header: &Header{},
+			want:   ClientType,
+		},
+		{
+			name:   "nil header still returns constant",
+			header: nil,
+			want:   ClientType,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var got string
+			if tc.header != nil {
+				got = tc.header.ClientType()
+			} else {
+				// For nil header, we need to call it on a valid Header
+				// since methods can't be called on nil in Gno
+				got = (&Header{}).ClientType()
+			}
+			if got != tc.want {
+				t.Fatalf("ClientType: got %s want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestNewLightHeader(t *testing.T) {
+	cases := []struct {
+		name               string
+		height             int64
+		timeSeconds        int64
+		timeNanos          int32
+		validatorsHash     []byte
+		nextValidatorsHash []byte
+		appHash            []byte
+		wantHeight         int64
+		wantTimeSeconds    int64
+		wantTimeNanos      int32
+		wantVHash          []byte
+		wantNVHash         []byte
+		wantAHash          []byte
+	}{
+		{
+			name:               "valid light header with all fields",
+			height:             42,
+			timeSeconds:        1000,
+			timeNanos:          500,
+			validatorsHash:     []byte{0x01, 0x02, 0x03},
+			nextValidatorsHash: []byte{0x04, 0x05, 0x06},
+			appHash:            []byte{0x07, 0x08, 0x09},
+			wantHeight:         42,
+			wantTimeSeconds:    1000,
+			wantTimeNanos:      500,
+			wantVHash:          []byte{0x01, 0x02, 0x03},
+			wantNVHash:         []byte{0x04, 0x05, 0x06},
+			wantAHash:          []byte{0x07, 0x08, 0x09},
+		},
+		{
+			name:               "light header with zero values",
+			height:             0,
+			timeSeconds:        0,
+			timeNanos:          0,
+			validatorsHash:     []byte{},
+			nextValidatorsHash: []byte{},
+			appHash:            []byte{},
+			wantHeight:         0,
+			wantTimeSeconds:    0,
+			wantTimeNanos:      0,
+			wantVHash:          []byte{},
+			wantNVHash:         []byte{},
+			wantAHash:          []byte{},
+		},
+		{
+			name:               "light header with 32-byte hashes",
+			height:             12345,
+			timeSeconds:        1704067200,
+			timeNanos:          999999999,
+			validatorsHash:     repeat32(0xAA),
+			nextValidatorsHash: repeat32(0xBB),
+			appHash:            repeat32(0xCC),
+			wantHeight:         12345,
+			wantTimeSeconds:    1704067200,
+			wantTimeNanos:      999999999,
+			wantVHash:          repeat32(0xAA),
+			wantNVHash:         repeat32(0xBB),
+			wantAHash:          repeat32(0xCC),
+		},
+		{
+			name:               "light header with negative time seconds",
+			height:             1,
+			timeSeconds:        -86400,
+			timeNanos:          0,
+			validatorsHash:     []byte{0xFF},
+			nextValidatorsHash: []byte{0xEE},
+			appHash:            []byte{0xDD},
+			wantHeight:         1,
+			wantTimeSeconds:    -86400,
+			wantTimeNanos:      0,
+			wantVHash:          []byte{0xFF},
+			wantNVHash:         []byte{0xEE},
+			wantAHash:          []byte{0xDD},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := NewLightHeader(
+				tc.height,
+				tc.timeSeconds,
+				tc.timeNanos,
+				tc.validatorsHash,
+				tc.nextValidatorsHash,
+				tc.appHash,
+			)
+
+			if got == nil {
+				t.Fatal("NewLightHeader returned nil")
+			}
+			if got.Height != tc.wantHeight {
+				t.Fatalf("Height: got %d want %d", got.Height, tc.wantHeight)
+			}
+			if got.TimeSeconds != tc.wantTimeSeconds {
+				t.Fatalf("TimeSeconds: got %d want %d", got.TimeSeconds, tc.wantTimeSeconds)
+			}
+			if got.TimeNanos != tc.wantTimeNanos {
+				t.Fatalf("TimeNanos: got %d want %d", got.TimeNanos, tc.wantTimeNanos)
+			}
+			bytesEq(t, "ValidatorsHash", got.ValidatorsHash, tc.wantVHash)
+			bytesEq(t, "NextValidatorsHash", got.NextValidatorsHash, tc.wantNVHash)
+			bytesEq(t, "AppHash", got.AppHash, tc.wantAHash)
+		})
+	}
+}

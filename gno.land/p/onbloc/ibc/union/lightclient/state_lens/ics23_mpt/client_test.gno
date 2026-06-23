@@ -117,7 +117,7 @@ func TestNewStateLensIcs23MptLightClient(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			l1 := &mockL1Client{status: lightclient.Active}
-			c, err := NewStateLensIcs23MptLightClient(tt.cs, tt.cons, l1)
+			c, err := newTestStateLensClient(tt.cs, tt.cons, l1)
 			if err != nil {
 				t.Fatalf("NewStateLensIcs23MptLightClient: %v", err)
 			}
@@ -751,12 +751,6 @@ func TestPrepareProof(t *testing.T) {
 	}
 }
 
-func newTestStateLensClient(cs *ClientState, cons *ConsensusState, l1 lightclient.Interface) (*StateLensIcs23MptLightClient, error) {
-	return NewStateLensIcs23MptLightClient(cs, cons, func(_ types.ClientId) (lightclient.Interface, bool) {
-		return l1, l1 != nil
-	})
-}
-
 func TestVerifyMembershipStorageProof(t *testing.T) {
 	path := bytes.Repeat([]byte{0x11}, 32)
 	slot, err := storage.IBCCommitmentKey(path)
@@ -980,77 +974,5 @@ func TestGetTimestampAtHeight(t *testing.T) {
 				t.Errorf("timestamp: got %d want %d", ts, tt.want)
 			}
 		})
-	}
-}
-
-// --- fixtures ---
-
-// makeConsensusBytes lays out an L2 consensus blob matching the offsets used by
-// newTestClient: state_root at 0, storage_root at 32, big-endian timestamp at
-// 64.
-func makeConsensusBytes(timestamp uint64, stateRoot, storageRoot []byte) []byte {
-	out := make([]byte, 72)
-	copy(out[0:32], stateRoot)
-	copy(out[32:64], storageRoot)
-	out[64] = byte(timestamp >> 56)
-	out[65] = byte(timestamp >> 48)
-	out[66] = byte(timestamp >> 40)
-	out[67] = byte(timestamp >> 32)
-	out[68] = byte(timestamp >> 24)
-	out[69] = byte(timestamp >> 16)
-	out[70] = byte(timestamp >> 8)
-	out[71] = byte(timestamp)
-	return out
-}
-
-// storageProofFixture builds a single-leaf MPT proving slot stores value, and
-// returns its root and the proof node list. Mirrors the realm test fixture.
-func storageProofFixture(t *testing.T, slot []byte, value []byte) ([32]byte, [][]byte) {
-	t.Helper()
-	path, err := storage.StoragePath(slot)
-	if err != nil {
-		t.Fatalf("StoragePath: %v", err)
-	}
-	storedValue, err := storage.EncodeStorageValue(value)
-	if err != nil {
-		t.Fatalf("EncodeStorageValue: %v", err)
-	}
-	leaf := rlp.EncodeList(rlp.EncodeBytes(compactEncode(true, nibbles(path[:]))), rlp.EncodeBytes(storedValue))
-	root := keccak256.Sum256(leaf)
-	return root, [][]byte{leaf}
-}
-
-func nibbles(key []byte) []byte {
-	out := make([]byte, 0, len(key)*2)
-	for _, b := range key {
-		out = append(out, b>>4, b&0x0f)
-	}
-	return out
-}
-
-func compactEncode(leaf bool, ns []byte) []byte {
-	flag := byte(0)
-	if leaf {
-		flag = 2
-	}
-	odd := len(ns)%2 == 1
-	out := make([]byte, 0, (len(ns)+2)/2)
-	if odd {
-		out = append(out, (flag+1)<<4|ns[0])
-		ns = ns[1:]
-	} else {
-		out = append(out, flag<<4)
-	}
-	for i := 0; i < len(ns); i += 2 {
-		out = append(out, ns[i]<<4|ns[i+1])
-	}
-	return out
-}
-
-// assertBytes compares two byte slices for equality.
-func assertBytes(t *testing.T, name string, got, want []byte) {
-	t.Helper()
-	if !bytes.Equal(got, want) {
-		t.Errorf("%s: got %x want %x", name, got, want)
 	}
 }

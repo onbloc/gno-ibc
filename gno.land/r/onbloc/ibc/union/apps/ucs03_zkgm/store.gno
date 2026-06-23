@@ -30,7 +30,7 @@ import (
 // transaction-scratch items (EXECUTING_PACKET, EXECUTION_ACK, MARKET_MAKER, ...)
 // are intentionally omitted: gno calls are synchronous, so that data is carried
 // as parameters/locals instead of persisted across submessage hops.
-var store IStore
+var store *Store
 
 // paused is a proxy-level gate checked by the App receivers before delegating to
 // the impl. It is governance state, not impl-visible state, so it lives on the

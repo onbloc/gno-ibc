@@ -172,7 +172,7 @@ func (c *coreV1) verifyMembership(clientId types.ClientId, height types.Height, 
 		panic(err)
 	}
 
-	err := lc.VerifyMembership(height.RevisionHeight, key, proof, value)
+	err = lc.VerifyMembership(height.RevisionHeight, key, proof, value)
 	if err != nil {
 		panic(err)
 	}

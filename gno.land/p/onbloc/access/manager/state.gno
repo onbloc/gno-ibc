@@ -165,7 +165,7 @@ func (state *State) SetRoleAdmin(role RoleId, admin RoleId) {
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L357-L371
 func (state *State) SetGrantDelay(role RoleId, delay Delay) {
 	if role == PublicRole {
-		panic(AccessManagerLockedRoleError(role))
+		panic(makeError(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
 	}
 
 	state.ensureRole(role)

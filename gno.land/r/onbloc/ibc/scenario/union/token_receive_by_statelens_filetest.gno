@@ -22,6 +22,7 @@ import (
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+	"gno.land/r/onbloc/ibc/union/access"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
@@ -45,6 +46,11 @@ func main(cur realm) {
 	zkgm.UpdateImpl(cross(cur), zkgmImplPath)
 	zkgm.SetRateLimitDisabled(cross(cur), true)
 	zkgm.RegisterCoreApp(cross(cur))
+
+	// The relayer-gated host entrypoints (register/create client, handshake,
+	// packet recv) require RELAYER. Grant it to the admin so this single-actor
+	// scenario can drive the full flow.
+	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
 
 	// The first channel opened is ChannelId(1); the wrapped denom and the packet
 	// are deterministic, so the packet (and its commitment) can be built up front.

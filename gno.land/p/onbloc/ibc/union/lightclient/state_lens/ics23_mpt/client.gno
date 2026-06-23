@@ -166,7 +166,7 @@ func (c *StateLensIcs23MptLightClient) VerifyHeader(caller address, headerBytes 
 
 	// The L2 consensus state must be committed under the consensus-state path of
 	// the L2 client, in the L1 chain's state, as a keccak256 hash.
-	consensusPath := types.ConsensusStatePath(types.ClientId(clientState.L2ClientID), types.NewHeight(header.L2Height))
+	consensusPath := types.ConsensusStatePath(types.ClientId(c.clientState.L2ClientID), types.NewHeight(header.L2Height))
 
 	consensusHash := keccak256.Sum256(header.L2ConsensusState)
 	if err := l1.VerifyMembership(header.L1Height, consensusPath[:], header.L2ConsensusStateProof, consensusHash[:]); err != nil {

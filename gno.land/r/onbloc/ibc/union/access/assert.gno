@@ -7,7 +7,7 @@ import "gno.land/p/onbloc/access/manager"
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-managed/src/restricted.rs#L38-L66
 func AssertCanCall(_ int, rlm realm, selector manager.Selector) {
 	if !rlm.IsCurrent() {
-		panic(ErrorSpoofedRealm)
+		panic(ErrSpoofedRealm)
 	}
 
 	caller := rlm.Previous().Address()

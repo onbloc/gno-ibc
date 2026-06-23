@@ -27,9 +27,9 @@ func init() {
 type Store struct {
 	clientSeq      seqid.ID
 	clientRegistry map[string]lightclient.ClientImpl // ClientRegistry: type → factory
-	clientTypeByID map[uint32]types.ClientType        // ClientTypes: clientId → type
-	clientImplByID map[uint32]lightclient.ClientImpl  // ClientImpls: clientId → factory
-	clientByID     map[uint32]*client                 // clientId → instantiated state
+	clientTypeByID map[uint32]types.ClientType       // ClientTypes: clientId → type
+	clientImplByID map[uint32]lightclient.ClientImpl // ClientImpls: clientId → factory
+	clientByID     map[uint32]*client                // clientId → instantiated state
 
 	connectionSeq seqid.ID
 	connections   *bptree.BPTree // connectionKey(ConnectionId) → types.Connection
@@ -69,11 +69,11 @@ type channelEntry struct {
 
 func newStore() *Store {
 	return &Store{
-		clientRegistry: make(map[string]lightclient.ClientImpl),
-		clientTypeByID: make(map[uint32]types.ClientType),
-		clientImplByID: make(map[uint32]lightclient.ClientImpl),
-		clientByID:     make(map[uint32]*client),
-		connections:    bptree.NewBPTree32(),
+		clientRegistry:      make(map[string]lightclient.ClientImpl),
+		clientTypeByID:      make(map[uint32]types.ClientType),
+		clientImplByID:      make(map[uint32]lightclient.ClientImpl),
+		clientByID:          make(map[uint32]*client),
+		connections:         bptree.NewBPTree32(),
 		channels:            bptree.NewBPTree32(),
 		commitments:         make(map[types.H256]types.H256),
 		membershipProofs:    make(map[types.H256]types.H256),
@@ -457,6 +457,18 @@ func (s *Store) BatchPacketsAt(batchHash types.H256) (types.H256, bool) {
 // commitment is keyed by the global batch path, so no channel id is required.
 func (s *Store) BatchReceiptsAt(batchHash types.H256) (types.H256, bool) {
 	return s.getCommitment(types.BatchReceiptsPath(batchHash))
+}
+
+// MembershipProofAt returns the committed membership proof value for the
+// client/height/path key.
+func (s *Store) MembershipProofAt(clientId types.ClientId, proofHeight uint64, path []byte) (types.H256, bool) {
+	return s.getMembershipProof(clientId, proofHeight, path)
+}
+
+// HasNonMembershipProof reports whether a non-membership proof was committed
+// for the client/height/path key.
+func (s *Store) HasNonMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) bool {
+	return s.hasNonMembershipProof(clientId, proofHeight, path)
 }
 
 // --- Key helpers ---

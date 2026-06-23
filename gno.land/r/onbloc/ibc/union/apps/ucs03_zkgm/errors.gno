@@ -4,6 +4,8 @@ package zkgm
 // passed rlm must be the current crossing frame, not a forged or stale token
 // replayed by a caller.
 const (
-	ErrSpoofedRealm      = "rlm does not match the current crossing frame"
-	ErrInvalidSaltLength = "invalid salt length"
+	ErrSpoofedRealm             = "rlm does not match the current crossing frame"
+	ErrInvalidSaltLength        = "invalid salt length"
+	ErrTokenBucketNotFound      = "token bucket not found"
+	ErrChannelBalanceV2NotFound = "channel balance v2 not found"
 )

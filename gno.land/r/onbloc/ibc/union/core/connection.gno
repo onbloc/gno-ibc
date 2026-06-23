@@ -40,16 +40,3 @@ func ForceConnectionOpenConfirm(cur realm, msg types.MsgConnectionOpenConfirm) {
 	mustGetImpl().ForceConnectionOpenConfirm(0, cur, msg)
 }
 
-func QueryConnection(connectionId types.ConnectionId) string {
-	connection, ok := store.getConnection(connectionId)
-	if !ok {
-		return ""
-	}
-
-	bz, err := connection.EncodeABI()
-	if err != nil {
-		return ""
-	}
-
-	return hexString(bz)
-}

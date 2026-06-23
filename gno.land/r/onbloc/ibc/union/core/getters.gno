@@ -75,6 +75,18 @@ func GetBatchReceipts(batchHash types.H256) (types.H256, error) {
 	return mustGetImpl().GetBatchReceiptsCommitment(batchHash)
 }
 
+// GetCommittedMembershipProof returns the committed membership proof value for
+// the client/height/path key.
+func GetCommittedMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) (types.H256, error) {
+	return mustGetImpl().GetCommittedMembershipProofCommitment(clientId, proofHeight, path)
+}
+
+// GetCommittedNonMembershipProof reports whether a non-membership proof
+// commitment is stored for the key.
+func GetCommittedNonMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) bool {
+	return mustGetImpl().GetCommittedNonMembershipProof(clientId, proofHeight, path)
+}
+
 // GetChannels returns all stored channel records.
 func GetChannels() ([]types.Channel, error) {
 	return mustGetImpl().GetChannels()

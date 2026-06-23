@@ -97,3 +97,21 @@ func TestGetConnectionAndChannel(cur realm, t *testing.T) {
 	_, err = v.GetConnection(types.ConnectionId(99))
 	uassert.ErrorIs(t, err, makeError(core.ErrConnectionNotFound))
 }
+
+func TestGetCommittedProofGetters(cur realm, t *testing.T) {
+	v := newTestImpl()
+	clientId := types.ClientId(7)
+	path := types.Bytes("clients/7/consensusStates/11")
+	value := types.Keccak(types.Bytes("consensus-state"))
+	v.store.SaveMembershipProof(0, cur, clientId, 10, path, value)
+	v.store.SaveNonMembershipProof(0, cur, clientId, 10, path, types.NON_MEMBERSHIP_COMMITMENT_VALUE)
+
+	got, err := v.GetCommittedMembershipProofCommitment(clientId, 10, path)
+	uassert.NoError(t, err)
+	uassert.Equal(t, value.String(), got.String())
+	uassert.True(t, v.GetCommittedNonMembershipProof(clientId, 10, path))
+
+	_, err = v.GetCommittedMembershipProofCommitment(clientId, 11, path)
+	uassert.ErrorIs(t, err, makeError(core.ErrMembershipProofNotFound))
+	uassert.False(t, v.GetCommittedNonMembershipProof(clientId, 11, path))
+}

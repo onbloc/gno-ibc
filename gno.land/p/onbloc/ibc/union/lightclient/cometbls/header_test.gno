@@ -2,7 +2,6 @@ package cometbls
 
 import (
 	"encoding/hex"
-	"strings"
 	"testing"
 	"time"
 
@@ -450,88 +449,6 @@ func TestVerifyHeaderWrapperRejectsMalformedHeader(t *testing.T) {
 	requireErrorContains(t, err, "failed to decode header")
 }
 
-func heightPtr(height types.Height) *types.Height {
-	return &height
-}
-
-func cloneTestHeaderWith(malleate func(*Header)) *Header {
-	h := newTestHeader(1, 100, 0, 0, repeat32(0xFF))
-	malleate(h)
-	return h
-}
-
-func updateStateTestHeader(trustedHeight, signedHeight uint64, timestamp uint64) *Header {
-	return newTestHeader(
-		int64(signedHeight),
-		int64(timestamp/1_000_000_000),
-		int32(timestamp%1_000_000_000),
-		trustedHeight,
-		[]byte{0x01},
-	)
-}
-
-func TestUpdateStateStoresConsensusAndAdvancesLatestHeight(t *testing.T) {
-	c := newTestClient(t)
-	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
-	if !found {
-		t.Fatal("trusted consensus state missing")
-	}
-	h := updateStateTestHeader(100, 101, testNow+1_000_000_000)
-	h.SignedHeader.AppHash = repeat32(0x44)
-	h.SignedHeader.NextValidatorsHash = repeat32(0x45)
-
-	update := c.updateState(c.clientState, trustedConsensusState, h)
-
-	if c.clientState.LatestHeight != types.NewHeight(101) {
-		t.Fatalf("latest height: got %s want 101", c.clientState.LatestHeight)
-	}
-	if update.Height != 101 {
-		t.Fatalf("update height: got %d want 101", update.Height)
-	}
-	if len(update.ClientStateBytes) == 0 {
-		t.Fatal("update must include client state bytes when latest height advances")
-	}
-	if len(update.ConsensusStateBytes) == 0 {
-		t.Fatal("update must include consensus state bytes for new height")
-	}
-	got, found := c.getConsensusState(types.NewHeight(101))
-	if !found {
-		t.Fatal("consensus state for height 101 not stored")
-	}
-	if got.Timestamp != testNow+1_000_000_000 {
-		t.Fatalf("stored timestamp: got %d want %d", got.Timestamp, testNow+1_000_000_000)
-	}
-	bytesEq(t, "stored app hash", got.Root.Hash, repeat32(0x44))
-	bytesEq(t, "stored next validators hash", got.NextValidatorsHash, repeat32(0x45))
-}
-
-func TestUpdateStateStoresOlderHeightWithoutRegressingLatestHeight(t *testing.T) {
-	c := newTestClient(t)
-	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
-	if !found {
-		t.Fatal("trusted consensus state missing")
-	}
-	h := updateStateTestHeader(50, 60, testNow+1_000_000_000)
-
-	update := c.updateState(c.clientState, trustedConsensusState, h)
-
-	if c.clientState.LatestHeight != types.NewHeight(100) {
-		t.Fatalf("latest height regressed: got %s want 100", c.clientState.LatestHeight)
-	}
-	if update.Height != 60 {
-		t.Fatalf("update height: got %d want 60", update.Height)
-	}
-	if len(update.ClientStateBytes) != 0 {
-		t.Fatal("older update must not include client state bytes")
-	}
-	if len(update.ConsensusStateBytes) == 0 {
-		t.Fatal("older update must still include consensus state bytes")
-	}
-	if _, found := c.getConsensusState(types.NewHeight(60)); !found {
-		t.Fatal("older valid consensus state should still be stored")
-	}
-}
-
 func TestVerifyHeaderDuplicateHeightShortCircuitsBeforeZKP(t *testing.T) {
 	c := newTestClient(t)
 	h := updateStateTestHeader(100, 100, testNow)
@@ -554,82 +471,5 @@ func TestVerifyHeaderDuplicateHeightShortCircuitsBeforeZKP(t *testing.T) {
 	}
 	if len(update.ConsensusStateBytes) == 0 {
 		t.Fatal("duplicate VerifyHeader must include existing consensus state bytes")
-	}
-}
-
-func TestVerifyHeaderChecksHeightBeforeExpiry(t *testing.T) {
-	c := newTestClient(t)
-	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
-	if !found {
-		t.Fatal("trusted consensus state missing")
-	}
-	h := updateStateTestHeader(100, 100, testNow+1)
-	now := time.Unix(0, int64(testNow+c.clientState.TrustingPeriod+1))
-
-	err := c.verifyHeader(c.clientState, trustedConsensusState, h, now)
-	requireErrorContains(t, err, "header height <= consensus state height")
-}
-
-func TestVerifyHeaderChecksTimestampBeforeExpiry(t *testing.T) {
-	c := newTestClient(t)
-	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
-	if !found {
-		t.Fatal("trusted consensus state missing")
-	}
-	h := updateStateTestHeader(100, 101, testNow)
-	now := time.Unix(0, int64(testNow+c.clientState.TrustingPeriod+1))
-
-	err := c.verifyHeader(c.clientState, trustedConsensusState, h, now)
-	requireErrorContains(t, err, ErrInvalidHeaderTimestamp)
-}
-
-func TestVerifyHeaderExpiryBoundaryMatchesUnion(t *testing.T) {
-	c := newTestClient(t)
-	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
-	if !found {
-		t.Fatal("trusted consensus state missing")
-	}
-	h := updateStateTestHeader(100, 101, testNow+1)
-	now := time.Unix(0, int64(testNow+c.clientState.TrustingPeriod))
-
-	err := c.verifyHeader(c.clientState, trustedConsensusState, h, now)
-	requireErrorContains(t, err, "the validators hash")
-}
-
-func TestVerifyHeaderRejectsInvalidZKP(t *testing.T) {
-	c := newTestClient(t)
-	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
-	if !found {
-		t.Fatal("trusted consensus state missing")
-	}
-	h := updateStateTestHeader(100, 101, testNow+1)
-	h.SignedHeader.ValidatorsHash = trustedConsensusState.NextValidatorsHash
-	now := time.Unix(0, int64(testNow))
-
-	err := c.verifyHeader(c.clientState, trustedConsensusState, h, now)
-	requireErrorContains(t, err, "zero-knowledge proof verification failed")
-}
-
-func TestVerifyHeaderMaxClockDriftOverflowMatchesUnion(t *testing.T) {
-	c := newTestClient(t)
-	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
-	if !found {
-		t.Fatal("trusted consensus state missing")
-	}
-	c.clientState.MaxClockDrift = ^uint64(0) - testNow + 1
-	h := updateStateTestHeader(100, 101, testNow+1)
-	now := time.Unix(0, int64(testNow))
-
-	err := c.verifyHeader(c.clientState, trustedConsensusState, h, now)
-	requireErrorContains(t, err, ErrMathOverflow)
-}
-
-func requireErrorContains(t *testing.T, err error, want string) {
-	t.Helper()
-	if err == nil {
-		t.Fatalf("expected error containing %q", want)
-	}
-	if !strings.Contains(err.Error(), want) {
-		t.Fatalf("error: got %q want substring %q", err.Error(), want)
 	}
 }

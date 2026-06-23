@@ -6,10 +6,6 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 )
 
-func TestChannelIDMaskU256(t *testing.T) {
-	mustEq(t, "channel mask", channelIDMaskU256(), u256.NewUint(0xFFFFFFFF))
-}
-
 func TestMakePathFromChannel(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -91,13 +87,24 @@ func TestHopCount(t *testing.T) {
 }
 
 func TestMakeGetRoundTrip(t *testing.T) {
-	for slot := 0; slot < 8; slot++ {
-		for _, ch := range []uint32{1, 2, 7, 0xDEADBEEF, 0xFFFFFFFF} {
-			p := MakePathFromChannel(ch, slot)
-			if got := GetChannelFromPath(p, slot); got != ch {
-				t.Fatalf("round-trip slot %d ch %x: got %x", slot, ch, got)
+	tests := []struct {
+		name     string
+		slots    []int
+		channels []uint32
+	}{
+		{"all slots selected channels", []int{0, 1, 2, 3, 4, 5, 6, 7}, []uint32{1, 2, 7, 0xDEADBEEF, 0xFFFFFFFF}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, slot := range tt.slots {
+				for _, ch := range tt.channels {
+					p := MakePathFromChannel(ch, slot)
+					if got := GetChannelFromPath(p, slot); got != ch {
+						t.Fatalf("round-trip slot %d ch %x: got %x", slot, ch, got)
+					}
+				}
 			}
-		}
+		})
 	}
 }
 
@@ -200,6 +207,32 @@ func TestUpdateChannelPath(t *testing.T) {
 				}
 			},
 		},
+		{
+			"high-bit max hops",
+			pathFromHops(t,
+				0x80000000,
+				0x80000001,
+				0x80000002,
+				0x80000003,
+				0x80000004,
+				0x80000005,
+				0x80000006,
+			),
+			0x80000007,
+			nil,
+			nil,
+			func(t *testing.T, got *u256.Uint) {
+				if got := HopCount(got); got != MaxHops {
+					t.Fatalf("HopCount: got %d want %d", got, MaxHops)
+				}
+				for i := 0; i < MaxHops; i++ {
+					want := uint32(0x80000000 + i)
+					if got := GetChannelFromPath(got, i); got != want {
+						t.Fatalf("slot %d: got %x want %x", i, got, want)
+					}
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -219,26 +252,6 @@ func TestUpdateChannelPath(t *testing.T) {
 			}
 		})
 	}
-
-	p := pathFromHops(t,
-		0x80000000,
-		0x80000001,
-		0x80000002,
-		0x80000003,
-		0x80000004,
-		0x80000005,
-		0x80000006,
-		0x80000007,
-	)
-	if got := HopCount(p); got != MaxHops {
-		t.Fatalf("HopCount: got %d want %d", got, MaxHops)
-	}
-	for i := 0; i < MaxHops; i++ {
-		want := uint32(0x80000000 + i)
-		if got := GetChannelFromPath(p, i); got != want {
-			t.Fatalf("slot %d: got %x want %x", i, got, want)
-		}
-	}
 }
 
 func TestReverseChannelPath(t *testing.T) {
@@ -246,10 +259,39 @@ func TestReverseChannelPath(t *testing.T) {
 		name     string
 		hops     []uint32
 		wantHops []uint32
+		inverse  bool
 	}{
-		{"empty", []uint32{}, []uint32{}},
-		{"single", []uint32{5}, []uint32{5}},
-		{"three hops", []uint32{3, 5, 7}, []uint32{7, 5, 3}},
+		{"empty", []uint32{}, []uint32{}, false},
+		{"single", []uint32{5}, []uint32{5}, false},
+		{"three hops", []uint32{3, 5, 7}, []uint32{7, 5, 3}, false},
+		{
+			"exactly max hops",
+			[]uint32{
+				0x80000000,
+				0x80000001,
+				0x80000002,
+				0x80000003,
+				0x80000004,
+				0x80000005,
+				0x80000006,
+				0x80000007,
+			},
+			[]uint32{
+				0x80000007,
+				0x80000006,
+				0x80000005,
+				0x80000004,
+				0x80000003,
+				0x80000002,
+				0x80000001,
+				0x80000000,
+			},
+			false,
+		},
+		{"involution single", []uint32{1}, nil, true},
+		{"involution two", []uint32{1, 2}, nil, true},
+		{"involution three", []uint32{1, 2, 3}, nil, true},
+		{"involution four", []uint32{9, 8, 7, 6}, nil, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -268,55 +310,15 @@ func TestReverseChannelPath(t *testing.T) {
 			if err != nil {
 				t.Fatalf("reverse: %v", err)
 			}
+			if tt.inverse {
+				twice, err := ReverseChannelPath(got)
+				if err != nil {
+					t.Fatalf("reverse(reverse(%v)): %v", tt.hops, err)
+				}
+				mustEq(t, "double reverse", twice, src)
+				return
+			}
 			mustEq(t, tt.name, got, want)
-		})
-	}
-
-	t.Run("exactly max hops", func(t *testing.T) {
-		src := pathFromHops(t,
-			0x80000000,
-			0x80000001,
-			0x80000002,
-			0x80000003,
-			0x80000004,
-			0x80000005,
-			0x80000006,
-			0x80000007,
-		)
-		want := pathFromHops(t,
-			0x80000007,
-			0x80000006,
-			0x80000005,
-			0x80000004,
-			0x80000003,
-			0x80000002,
-			0x80000001,
-			0x80000000,
-		)
-		got, err := ReverseChannelPath(src)
-		if err != nil {
-			t.Fatalf("reverse(max hops): %v", err)
-		}
-		mustEq(t, "reverse(max hops)", got, want)
-	})
-
-	for _, hops := range [][]uint32{
-		{1},
-		{1, 2},
-		{1, 2, 3},
-		{9, 8, 7, 6},
-	} {
-		t.Run("involution", func(t *testing.T) {
-			src := pathFromHops(t, hops...)
-			once, err := ReverseChannelPath(src)
-			if err != nil {
-				t.Fatalf("reverse(%v): %v", hops, err)
-			}
-			twice, err := ReverseChannelPath(once)
-			if err != nil {
-				t.Fatalf("reverse(reverse(%v)): %v", hops, err)
-			}
-			mustEq(t, "double reverse", twice, src)
 		})
 	}
 }

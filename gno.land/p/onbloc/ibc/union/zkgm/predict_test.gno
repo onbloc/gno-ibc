@@ -11,39 +11,35 @@ import (
 func TestPredictWrappedToken(t *testing.T) {
 	base := []byte("ugnot")
 
-	v1Nil := PredictWrappedToken(nil, 7, base)
 	v1Zero := PredictWrappedToken(u256.Zero(), 7, base)
-	if v1Nil != v1Zero {
-		t.Fatalf("PredictWrappedToken nil path: got %q want %q", v1Nil, v1Zero)
-	}
-
-	assertIBCDenom(t, v1Nil)
-
 	path := u256.NewUint(5)
 	baseDenom := PredictWrappedToken(path, 7, base)
 
 	tests := []struct {
-		name       string
-		path       *u256.Uint
-		channel    uint32
-		base       []byte
-		sameAsBase bool
+		name             string
+		path             *u256.Uint
+		channel          uint32
+		base             []byte
+		want             string
+		wantIBCDenom     bool
+		wantDiffFromBase bool
 	}{
-		{"path change", u256.NewUint(6), 7, base, false},
-		{"channel change", path, 8, base, false},
-		{"base change", path, 7, []byte("uatom"), false},
+		{"nil path equals zero", nil, 7, base, v1Zero, true, false},
+		{"path change", u256.NewUint(6), 7, base, "", false, true},
+		{"channel change", path, 8, base, "", false, true},
+		{"base change", path, 7, []byte("uatom"), "", false, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := PredictWrappedToken(tt.path, tt.channel, tt.base)
-			if tt.sameAsBase {
-				if got != baseDenom {
-					t.Fatalf("expected same as base, got %q", got)
-				}
-			} else {
-				if got == baseDenom {
-					t.Fatalf("expected change from base, got same")
-				}
+			if tt.want != "" && got != tt.want {
+				t.Fatalf("got %q want %q", got, tt.want)
+			}
+			if tt.wantIBCDenom {
+				assertIBCDenom(t, got)
+			}
+			if tt.wantDiffFromBase && got == baseDenom {
+				t.Fatalf("expected change from base, got same")
 			}
 		})
 	}
@@ -57,13 +53,7 @@ func TestPredictWrappedTokenV2(t *testing.T) {
 		Initializer:    []byte("init-a"),
 	})
 
-	v2Nil := PredictWrappedTokenV2(nil, 7, base, image)
 	v2Zero := PredictWrappedTokenV2(u256.Zero(), 7, base, image)
-	if v2Nil != v2Zero {
-		t.Fatalf("PredictWrappedTokenV2 nil path: got %q want %q", v2Nil, v2Zero)
-	}
-	assertIBCDenom(t, v2Nil)
-
 	baseDenom := PredictWrappedTokenV2(path, 7, base, image)
 
 	otherImage := MetadataImage(TokenMetadata{
@@ -72,22 +62,31 @@ func TestPredictWrappedTokenV2(t *testing.T) {
 	})
 
 	tests := []struct {
-		name       string
-		path       *u256.Uint
-		channel    uint32
-		base       []byte
-		image      [32]byte
-		sameAsBase bool
+		name             string
+		path             *u256.Uint
+		channel          uint32
+		base             []byte
+		image            [32]byte
+		want             string
+		wantIBCDenom     bool
+		wantDiffFromBase bool
 	}{
-		{"path change", u256.NewUint(6), 7, base, image, false},
-		{"channel change", path, 8, base, image, false},
-		{"base change", path, 7, []byte("uatom"), image, false},
-		{"image change", path, 7, base, otherImage, false},
+		{"nil path equals zero", nil, 7, base, image, v2Zero, true, false},
+		{"path change", u256.NewUint(6), 7, base, image, "", false, true},
+		{"channel change", path, 8, base, image, "", false, true},
+		{"base change", path, 7, []byte("uatom"), image, "", false, true},
+		{"image change", path, 7, base, otherImage, "", false, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := PredictWrappedTokenV2(tt.path, tt.channel, tt.base, tt.image)
-			if got == baseDenom {
+			if tt.want != "" && got != tt.want {
+				t.Fatalf("got %q want %q", got, tt.want)
+			}
+			if tt.wantIBCDenom {
+				assertIBCDenom(t, got)
+			}
+			if tt.wantDiffFromBase && got == baseDenom {
 				t.Fatalf("expected change from base, got same")
 			}
 		})
@@ -134,17 +133,27 @@ func TestPredictCallProxyAccount(t *testing.T) {
 	zero := PredictCallProxyAccount(u256.Zero(), types.ChannelId(8), []byte("sender"))
 	nilPath := PredictCallProxyAccount(nil, types.ChannelId(8), []byte("sender"))
 
-	if a != b {
-		t.Fatalf("PredictCallProxyAccount not deterministic: %q != %q", a, b)
+	tests := []struct {
+		name        string
+		got         string
+		other       string
+		wantEqual   bool
+		wantAddress bool
+	}{
+		{"deterministic", a, b, true, false},
+		{"channel change", a, c, false, false},
+		{"nil path equals zero", nilPath, zero, true, false},
+		{"address shape", a, "", false, true},
 	}
-	if a == c {
-		t.Fatal("PredictCallProxyAccount did not change when channel changed")
-	}
-	if nilPath != zero {
-		t.Fatalf("PredictCallProxyAccount nil path: got %q want %q", nilPath, zero)
-	}
-	if !strings.HasPrefix(a, "zkgm1") || len(a) != len("zkgm1")+40 {
-		t.Fatalf("PredictCallProxyAccount: unexpected address %q", a)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.other != "" && (tt.got == tt.other) != tt.wantEqual {
+				t.Fatalf("equal: got %t want %t", tt.got == tt.other, tt.wantEqual)
+			}
+			if tt.wantAddress && (!strings.HasPrefix(tt.got, "zkgm1") || len(tt.got) != len("zkgm1")+40) {
+				t.Fatalf("PredictCallProxyAccount: unexpected address %q", tt.got)
+			}
+		})
 	}
 }
 

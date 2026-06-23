@@ -32,8 +32,8 @@ The model follows OpenZeppelin's `AccessManager` shape:
 - a target can be closed, rejecting calls even when the function is public;
 - each role has an admin role, grant delay, and member access records;
 - a member access record has an activation timePoint;
-- current timePoint is represented as `time.Time` and read from Gno block time
-  with `time.Now()`;
+- current `TimePoint` is represented as Unix seconds in an `int64` wrapper and
+  read from Gno block time with `time.Now().Unix()`;
 - `CanCall` returns whether a call is immediately executable.
 
 Role labels follow OpenZeppelin's event-only model from the pure package's
@@ -134,13 +134,30 @@ Constructors:
 - `NewState`
 - `NewRoleConfig`
 - `NewAccess`
+- `NewAccessWithDelay`
 - `NewTargetConfig`
 - `NewCanCallResult`
 - `NewHasRoleResult`
 
+Role helpers:
+
+- `RoleId.Uint64`
+- `RoleId.String`
+
+Delay helpers:
+
+- `Delay.Uint32`
+- `Delay.String`
+
 TimePoint helpers:
 
 - `CurrentTimePoint`
+- `TimePoint.After`
+- `TimePoint.Before`
+- `TimePoint.Equal`
+- `TimePoint.String`
+- `TimePoint.Int64`
+- `TimePoint.IsZero`
 
 Role membership:
 

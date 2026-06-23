@@ -3,9 +3,16 @@
 Shared access authority for Union IBC realms.
 
 This realm owns the `manager.State` from
-`gno.land/p/onbloc/access/manager`. Core and app realms call this shared realm
-directly so the access realm can infer the managed target from
-`cur.Previous().PkgPath()`.
+`gno.land/p/onbloc/access/manager`. Core and app realms share this access
+authority, while each managed realm remains a separate target keyed by its
+package path.
+
+Authorization guards use the non-crossing `AssertCanCall(0, cur, selector)`
+form. The caller passes its current realm value, and access derives the target
+from `rlm.PkgPath()` and the caller from `rlm.Previous().Address()`.
+Management and query functions are crossing calls; those derive the target from
+the previous realm package path when they manage or inspect per-target
+configuration.
 
 ## References
 
@@ -71,6 +78,27 @@ selector groups and tests.
 This realm emits management events after successful state transitions. Event
 type and attribute key constants live in the pure manager package, but emission
 stays here so events are attributed to the state-owning realm.
+
+## Authorization Surface
+
+- `AssertCanCall`
+
+`AssertCanCall` is intentionally non-crossing. Managed realms call it with
+their own `cur realm`, so the asserted target is the managed realm itself. A
+spoofed realm value is rejected with `ErrorSpoofedRealm`.
+
+## Query Surface
+
+- `HasRole`
+- `GetRoleAdmin`
+- `GetRoleGrantDelay`
+- `GetFunctionRole`
+- `GetTargetFunctionRole`
+- `IsTargetClosed`
+- `CanCall`
+- `IsAuthorized`
+- `CanAdminRole`
+- `CanManageTarget`
 
 Only `GrantDelay` is retained from the OpenZeppelin delay model. Account
 execution delay, target admin delay, guardian role configuration, scheduling,

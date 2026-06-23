@@ -12,7 +12,7 @@ import (
 const RelayerRole manager.RoleId = access.RelayerRole
 
 const (
-	SelectorUpdateImpl             manager.Selector = "update_impl"
+	SelectorUpdateImpl               manager.Selector = "update_impl"
 	SelectorForceUpdateClient        manager.Selector = "force_update_client"
 	SelectorForceConnectionTry       manager.Selector = "force_connection_open_try"
 	SelectorForceConnectionAck       manager.Selector = "force_connection_open_ack"

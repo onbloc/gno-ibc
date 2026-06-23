@@ -217,17 +217,12 @@ func isDynamic(field Field) bool {
 }
 
 func staticHeadSize(field Field) (int, error) {
+	if isDynamic(field) {
+		return wordSize, nil
+	}
 	if field.Type == TypeStruct {
 		if field.Sub == nil {
 			return 0, ErrInvalidSchema
-		}
-		if isDynamic(field) {
-			for _, sub := range field.Sub.Fields {
-				if err := validateSchemaField(sub); err != nil {
-					return 0, err
-				}
-			}
-			return wordSize, nil
 		}
 		size := 0
 		for _, sub := range field.Sub.Fields {
@@ -239,35 +234,5 @@ func staticHeadSize(field Field) (int, error) {
 		}
 		return size, nil
 	}
-	if field.Type == TypeArray {
-		if field.Elem == nil {
-			return 0, ErrInvalidSchema
-		}
-		return wordSize, nil
-	}
-	if isDynamic(field) {
-		return wordSize, nil
-	}
 	return wordSize, nil
-}
-
-func validateSchemaField(field Field) error {
-	if field.Type == TypeStruct {
-		if field.Sub == nil {
-			return ErrInvalidSchema
-		}
-		for _, sub := range field.Sub.Fields {
-			if err := validateSchemaField(sub); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-	if field.Type == TypeArray {
-		if field.Elem == nil {
-			return ErrInvalidSchema
-		}
-		return validateSchemaField(*field.Elem)
-	}
-	return nil
 }

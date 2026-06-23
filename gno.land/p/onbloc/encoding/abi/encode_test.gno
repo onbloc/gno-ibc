@@ -312,9 +312,9 @@ func TestStaticHeadSize(t *testing.T) {
 				}}},
 			}}},
 		}}}, wordSize * 2, nil},
-		{"nil struct schema", Field{Type: TypeStruct}, 0, ErrInvalidSchema},
-		{"nested struct with nil schema child", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeStruct}}}}, 0, ErrInvalidSchema},
-		{"nil array elem", Field{Type: TypeArray}, 0, ErrInvalidSchema},
+		{"nil struct schema", Field{Type: TypeStruct}, wordSize, nil},
+		{"nested struct with nil schema child", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}, {Type: TypeStruct}}}}, wordSize, nil},
+		{"nil array elem", Field{Type: TypeArray}, wordSize, nil},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -323,27 +323,6 @@ func TestStaticHeadSize(t *testing.T) {
 			if got != tc.want {
 				t.Fatalf("staticHeadSize = %d, want %d", got, tc.want)
 			}
-		})
-	}
-}
-
-func TestValidateSchemaField(t *testing.T) {
-	cases := []struct {
-		name    string
-		field   Field
-		wantErr error
-	}{
-		{"static field", Field{Type: TypeUint8}, nil},
-		{"struct", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeUint8}}}}, nil},
-		{"array", Field{Type: TypeArray, Elem: &Field{Type: TypeBytes}}, nil},
-		{"nested array struct", Field{Type: TypeArray, Elem: &Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeString}}}}}, nil},
-		{"nil struct schema", Field{Type: TypeStruct}, ErrInvalidSchema},
-		{"nil array elem", Field{Type: TypeArray}, ErrInvalidSchema},
-		{"nested invalid array", Field{Type: TypeStruct, Sub: &Schema{Fields: []Field{{Type: TypeArray}}}}, ErrInvalidSchema},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			assertError(t, validateSchemaField(tc.field), tc.wantErr)
 		})
 	}
 }

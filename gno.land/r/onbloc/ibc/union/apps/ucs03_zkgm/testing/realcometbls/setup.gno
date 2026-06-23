@@ -114,7 +114,9 @@ func OpenZ35CometBLSChannel(cur realm) ChannelPair {
 
 func openZ35Channel(cur realm, connectionId types.ConnectionId, counterpartyChannelId types.ChannelId) types.ChannelId {
 	portId := []byte(zkgm.ProxyPkgPath())
-	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	// First (and only) local channel of the scenario; the store allocates id 1.
+	channelId := types.ChannelId(1)
 	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, counterpartyChannelId, Z35ChannelTryProof(cross(cur)), uint64(DevnetHeight-1), "g1msgrelayer"))
 
 	return channelId
@@ -137,7 +139,9 @@ func OpenZ37CometBLSChannel(cur realm) ChannelPair {
 	core.ConnectionOpenAck(cross(cur), types.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), Z37ConnectionTryProof(cross(cur)), uint64(DevnetHeight-1)))
 
 	portId := []byte(zkgm.ProxyPkgPath())
-	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	// First (and only) local channel of the scenario; the store allocates id 1.
+	channelId := types.ChannelId(1)
 	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, types.ChannelId(2), Z37ChannelTryProof(cross(cur)), uint64(DevnetHeight-1), "g1msgrelayer"))
 
 	return ChannelPair{
@@ -150,10 +154,12 @@ func OpenZ37CometBLSChannel(cur realm) ChannelPair {
 
 func UpdateRealCometBLSClient(cur realm, clientId types.ClientId) types.Height {
 	core.UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, HeaderBytes(cross(cur))))
-	return types.NewHeight(core.GetLatestHeight(clientId))
+	height, _ := core.GetLatestHeight(clientId)
+	return types.NewHeight(height)
 }
 
 func UpdateRealCometBLSClientWithTamperedHeader(cur realm, clientId types.ClientId) types.Height {
 	core.UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, TamperedHeaderBytes(cross(cur))))
-	return types.NewHeight(core.GetLatestHeight(clientId))
+	height, _ := core.GetLatestHeight(clientId)
+	return types.NewHeight(height)
 }

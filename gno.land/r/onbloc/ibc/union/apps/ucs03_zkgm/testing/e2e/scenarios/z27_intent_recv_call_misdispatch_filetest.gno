@@ -27,7 +27,7 @@ const mockReceiverPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mo
 func intentRecvReverted(cur realm, packet types.Packet) (reverted bool) {
 	p := revive(func() {
 		core.IntentPacketRecv(cross(cur),
-			types.NewMsgIntentPacketRecv([]types.Packet{packet}, nil))
+			types.NewMsgIntentPacketRecv([]types.Packet{packet}, [][]byte{nil}))
 	})
 	return p != nil
 }

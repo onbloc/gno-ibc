@@ -55,7 +55,7 @@ func (m *forwardChildTimeoutLightClient) VerifyCreation(address, address) (types
 	return types.ClientCreationResult{}, nil
 }
 
-func (m *forwardChildTimeoutLightClient) Misbehaviour(address, []byte, address) (types.ClientState, error) {
+func (m *forwardChildTimeoutLightClient) Misbehaviour(address, []byte, address) ([]byte, error) {
 	return nil, errors.New("mock: misbehaviour unsupported")
 }
 
@@ -84,7 +84,7 @@ func main(cur realm) {
 	childKey := zkgm.NewInFlightKey(cross(cur), types.MustCommit(types.CommitPacket(childPacket)))
 
 	println("[SCENARIO] 1. recv forward defers parent ack and tracks child")
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{parentPacket}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{parentPacket}, [][]byte{nil}, nil, 1))
 	_, inFlight := zkgm.GetInFlightPacket(childKey)
 	println("parent_receipt_after_recv", core.HasPacketReceipt(cross(cur), parentPacket))
 	println("parent_ack_after_recv", core.HasAcknowledgement(cross(cur), parentPacket))
@@ -126,7 +126,8 @@ func openForwardChildTimeoutConnection(cur realm) types.ConnectionId {
 
 func openForwardChildTimeoutChannel(cur realm, connectionId types.ConnectionId, counterpartyChannelId types.ChannelId) types.ChannelId {
 	portId := []byte(zkgm.ProxyPkgPath())
-	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	channelId := types.ChannelId(1)
 	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, counterpartyChannelId, nil, 1, "g1msgrelayer"))
 	return channelId
 }

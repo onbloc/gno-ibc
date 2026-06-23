@@ -34,7 +34,7 @@ func main(cur realm) {
 	packet := core.NewPacket(pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), instr), types.Timestamp(1<<62))
 	e2e.BatchSend(cross(cur), packet)
 
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
 
 	ack := e2e.MustSuccessAck(cross(cur), e2e.MustProtocolTokenOrderAck(cross(cur)))
 	core.PacketAcknowledgement(cross(cur), types.NewMsgPacketAcknowledgement([]types.Packet{packet}, [][]byte{ack}, nil, 1))

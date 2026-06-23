@@ -20,7 +20,9 @@ import (
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/tests.rs#L334-L454
 func TestUnionVerifyForward(cur realm, t *testing.T) {
 	v := newTestImpl()
-	const sender = "sender"
+	// verify reads the sender from rlm.Previous(); drive it via SetRealm + the
+	// verifyForwardX crossing shim.
+	sender := testAddress("union-vf-caller")
 	// update_channel_path(update_channel_path(0, 10), 1)
 	path := forwardPath(10, 1)
 	callOperand := mustCallBytes(z.Call{Sender: []byte(sender), ContractAddress: []byte(sender)})
@@ -59,7 +61,8 @@ func TestUnionVerifyForward(cur realm, t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		err := v.verifyForward(0, cur, MessageInfo{Sender: sender}, newFunds(nil), types.ChannelId(1), tc.forward)
+		testing.SetRealm(testing.NewUserRealm(address(sender)))
+		err := v.verifyForwardX(cross(cur), newFunds(nil), types.ChannelId(1), tc.forward)
 		if tc.wantErr == "" {
 			uassert.NoError(t, err)
 		} else {

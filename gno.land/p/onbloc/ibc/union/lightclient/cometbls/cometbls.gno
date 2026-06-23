@@ -156,7 +156,7 @@ func (c *CometblsLightClient) VerifyCreation(caller address, relayer address) (t
 	return types.ClientCreationResult{}, nil
 }
 
-func (c *CometblsLightClient) Misbehaviour(caller address, misbehaviour []byte, relayer address) (types.ClientState, error) {
+func (c *CometblsLightClient) Misbehaviour(caller address, misbehaviour []byte, relayer address) ([]byte, error) {
 	m, err := DecodeMisbehaviour(misbehaviour)
 	if err != nil {
 		return nil, makeError(ErrInvalidMisbehaviour, "failed to decode misbehaviour: "+err.Error())
@@ -173,7 +173,13 @@ func (c *CometblsLightClient) Misbehaviour(caller address, misbehaviour []byte, 
 	// Freeze the client. The frozen height is a sentinel boolean (non-zero).
 	c.clientState.FrozenHeight = FrozenHeight
 
-	return c.clientState, nil
+	// Return the frozen client-state bytes so the host commits them back to its
+	// client-state mirror, matching union's misbehaviour handling.
+	csBytes, err := EncodeClientState(c.clientState)
+	if err != nil {
+		return nil, err
+	}
+	return csBytes, nil
 }
 
 // updateState creates or updates the consensus state for a verified header and

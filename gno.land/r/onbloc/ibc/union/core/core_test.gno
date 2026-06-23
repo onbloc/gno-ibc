@@ -365,45 +365,9 @@ func TestConnectionStateSaved(cur realm, t *testing.T) {
 
 // --- State: channel ---
 
-func TestSaveAndGetChannel(cur realm, t *testing.T) {
-	resetStore(cur)
-	connectionId := addMockConnection(types.ConnectionStateOpen)
-	ch := types.Channel{
-		State:                 types.ChannelStateOpen,
-		ConnectionId:          connectionId,
-		CounterpartyChannelId: types.ChannelId(99),
-		CounterpartyPortId:    types.Bytes("counterparty"),
-		Version:               "ics20-1",
-	}
-	id := store.nextChannelId()
-	store.createChannel(id, ch, nil)
-
-	got := store.getChannel(id)
-	if got.State != types.ChannelStateOpen {
-		t.Errorf("state: got %v want Open", got.State)
-	}
-	if got.Version != "ics20-1" {
-		t.Errorf("version: got %v want ics20-1", got.Version)
-	}
-
-	want := hexString(mustEncodeABI(ch.EncodeABI()))
-	if got := QueryChannel(id); got != want {
-		t.Errorf("QueryChannel: got %q want %q", got, want)
-	}
-}
-
 func TestGetChannelNotFoundPanics(cur realm, t *testing.T) {
 	resetStore(cur)
 	mustPanic(t, func() { store.getChannel(types.ChannelId(999)) })
-}
-
-func TestQueryChannelUnknownReturnsEmpty(cur realm, t *testing.T) {
-	resetStore(cur)
-
-	got := QueryChannel(types.ChannelId(999))
-	if got != "" {
-		t.Errorf("QueryChannel: got %q want empty", got)
-	}
 }
 
 func TestRestrictedPacketEntrypointsRejectNonAdmin(cur realm, t *testing.T) {

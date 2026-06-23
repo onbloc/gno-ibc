@@ -63,3 +63,12 @@ func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) {
 func VerifyClientMembership(cur realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {
 	mustGetImpl().VerifyClientMembership(0, cur, clientId, proofHeight, proof, path, value)
 }
+
+// Misbehaviour freezes a client after a valid misbehaviour proof, delegating to
+// the installed impl.
+//
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L1048-L1093
+func Misbehaviour(cur realm, msg types.MsgMisbehaviour) {
+	mustGetImpl().Misbehaviour(0, cur, msg)
+}

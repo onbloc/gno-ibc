@@ -3,10 +3,34 @@ package impl
 import (
 	"time"
 
+	types "gno.land/p/onbloc/ibc/union/types"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 )
+
+// Crossing test shims for the send-side verify path. The production verify
+// methods take the borrow form (0, rlm) and read the sender from
+// rlm.Previous().Address() (MessageInfo was removed). A direct non-crossing test
+// call leaves rlm.Previous() empty, so these crossing wrappers let
+// testing.SetRealm(testing.NewUserRealm(sender)) + cross(cur) drive the sender
+// the verify path observes, exactly as the proxy Send entry does in production.
+func (v *ucs03ZkgmV1) verifyTokenOrderV2X(cur realm, funds *funds, channelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
+	return v.verifyTokenOrderV2(0, cur, funds, channelId, path, order)
+}
+
+func (v *ucs03ZkgmV1) verifyBatchX(cur realm, funds *funds, channelId types.ChannelId, path *u256.Uint, batch z.Batch) error {
+	return v.verifyBatch(0, cur, funds, channelId, path, batch)
+}
+
+func (v *ucs03ZkgmV1) verifyForwardX(cur realm, funds *funds, channelId types.ChannelId, forward z.Forward) error {
+	return v.verifyForward(0, cur, funds, channelId, forward)
+}
+
+func (v *ucs03ZkgmV1) verifyCallX(cur realm, call z.Call) error {
+	return v.verifyCall(0, cur, call)
+}
 
 // blockNow returns the current block time as the uint256 the token bucket uses
 // as its refill anchor, matching rate_limit.gno's internal time.Now().Unix().

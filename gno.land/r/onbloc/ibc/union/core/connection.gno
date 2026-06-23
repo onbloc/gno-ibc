@@ -45,9 +45,11 @@ func QueryConnection(connectionId types.ConnectionId) string {
 	if !ok {
 		return ""
 	}
+
 	bz, err := connection.EncodeABI()
 	if err != nil {
 		return ""
 	}
+
 	return hexString(bz)
 }

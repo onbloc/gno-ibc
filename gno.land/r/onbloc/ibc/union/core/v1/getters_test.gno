@@ -21,58 +21,62 @@ func TestGetClientGetters(cur realm, t *testing.T) {
 	v.store.SaveClientState(0, cur, clientId, []byte("client-state"))
 	v.store.SaveConsensusState(0, cur, clientId, types.NewHeight(5), []byte("consensus-5"))
 
-	uassert.True(t, v.GetStatus(clientId) == types.StatusActive)
+	status, err := v.GetStatus(clientId)
+	uassert.NoError(t, err)
+	uassert.True(t, status == types.StatusActive)
 
-	typ, ok := v.GetClientType(clientId)
-	uassert.True(t, ok)
+	typ, err := v.GetClientType(clientId)
+	uassert.NoError(t, err)
 	uassert.Equal(t, "cometbls", string(typ))
 
-	implId, ok := v.GetClientImpl(clientId)
-	uassert.True(t, ok)
+	implId, err := v.GetClientImpl(clientId)
+	uassert.NoError(t, err)
 	uassert.Equal(t, "cometbls", implId)
 
-	cs, ok := v.GetClientStateBytes(clientId)
-	uassert.True(t, ok)
+	cs, err := v.GetClientStateBytes(clientId)
+	uassert.NoError(t, err)
 	uassert.Equal(t, "client-state", string(cs))
 
-	cons, ok := v.GetConsensusStateBytes(clientId, types.NewHeight(5))
-	uassert.True(t, ok)
+	cons, err := v.GetConsensusStateBytes(clientId, types.NewHeight(5))
+	uassert.NoError(t, err)
 	uassert.Equal(t, "consensus-5", string(cons))
 
-	h, ok := v.GetLatestHeight(clientId)
-	uassert.True(t, ok)
+	h, err := v.GetLatestHeight(clientId)
+	uassert.NoError(t, err)
 	uassert.Equal(t, uint64(42), h)
 
-	ts, ok := v.GetTimestampAtHeight(clientId, 5)
-	uassert.True(t, ok)
+	ts, err := v.GetTimestampAtHeight(clientId, 5)
+	uassert.NoError(t, err)
 	uassert.Equal(t, uint64(123), uint64(ts))
 }
 
 func TestGetMissingClient(cur realm, t *testing.T) {
 	v := newTestImpl()
 
-	uassert.True(t, v.GetStatus(types.ClientId(99)) == types.StatusUnknown)
-	_, ok := v.GetClientType(types.ClientId(99))
-	uassert.False(t, ok)
-	_, ok = v.GetLatestHeight(types.ClientId(99))
-	uassert.False(t, ok)
-	_, ok = v.GetClientStateBytes(types.ClientId(99))
-	uassert.False(t, ok)
+	_, err := v.GetStatus(types.ClientId(99))
+	uassert.ErrorIs(t, err, core.ErrClientNotFound)
+	_, err = v.GetClientType(types.ClientId(99))
+	uassert.ErrorIs(t, err, core.ErrClientNotFound)
+	_, err = v.GetLatestHeight(types.ClientId(99))
+	uassert.ErrorIs(t, err, core.ErrClientNotFound)
+	_, err = v.GetClientStateBytes(types.ClientId(99))
+	uassert.ErrorIs(t, err, core.ErrClientStateNotFound)
 }
 
 func TestGetFrozenStatus(cur realm, t *testing.T) {
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{status: lightclient.Frozen}, nil, nil)
 
-	uassert.True(t, v.GetStatus(clientId) == types.StatusFrozen)
+	status, err := v.GetStatus(clientId)
+	uassert.NoError(t, err)
+	uassert.True(t, status == types.StatusFrozen)
 }
 
 func TestGetBestEffortGetters(cur realm, t *testing.T) {
 	v := newTestImpl()
 
-	// gno has no client-type registry and no per-app channel set.
+	// gno has no client-type registry.
 	uassert.False(t, v.GetRegisteredClientType(types.ClientType("cometbls")))
-	uassert.Equal(t, 0, len(v.GetChannels("some-app")))
 }
 
 func TestGetConnectionAndChannel(cur realm, t *testing.T) {
@@ -82,14 +86,14 @@ func TestGetConnectionAndChannel(cur realm, t *testing.T) {
 		core.NewConnection(types.ConnectionStateOpen, types.ClientId(1), types.ClientId(7), types.ConnectionId(2)))
 	ms.channels[3] = types.Channel{State: types.ChannelStateOpen, ConnectionId: types.ConnectionId(1)}
 
-	conn, ok := v.GetConnectionTyped(types.ConnectionId(1))
-	uassert.True(t, ok)
+	conn, err := v.GetConnection(types.ConnectionId(1))
+	uassert.NoError(t, err)
 	uassert.True(t, conn.State == types.ConnectionStateOpen)
 
-	ch, ok := v.GetChannelTyped(types.ChannelId(3))
-	uassert.True(t, ok)
+	ch, err := v.GetChannel(types.ChannelId(3))
+	uassert.NoError(t, err)
 	uassert.True(t, ch.State == types.ChannelStateOpen)
 
-	_, ok = v.GetConnectionTyped(types.ConnectionId(99))
-	uassert.False(t, ok)
+	_, err = v.GetConnection(types.ConnectionId(99))
+	uassert.ErrorIs(t, err, core.ErrConnectionNotFound)
 }

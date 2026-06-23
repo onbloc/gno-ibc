@@ -27,7 +27,11 @@ func main(cur realm) {
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
-	packet := core.NewPacket(pair.Destination, core.GetChannel(pair.Destination).CounterpartyChannelId, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(3600))
+	destChannel, err := core.GetChannel(pair.Destination)
+	if err != nil {
+		panic(err)
+	}
+	packet := core.NewPacket(pair.Destination, destChannel.CounterpartyChannelId, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(3600))
 	realcometbls.BatchSend(cross(cur), packet)
 	marketMaker := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	ack := e2e.MustSuccessAck(cross(cur), mustMarketMakerTokenOrderAck([]byte(marketMaker)))

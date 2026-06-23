@@ -1,6 +1,6 @@
 // Recv-side probe for OP_BATCH: Batch of two TokenOrderV2{ESCROW}, each
 // minting a different voucher denom on the destination chain. Exercises
-// dispatchExecute's batch loop, per-sub-instruction ack assembly into a
+// dispatchExecutePacket's batch loop, per-sub-instruction ack assembly into a
 // BatchAck, and the WriteAck commit with the wrapped Success ack.
 package main
 

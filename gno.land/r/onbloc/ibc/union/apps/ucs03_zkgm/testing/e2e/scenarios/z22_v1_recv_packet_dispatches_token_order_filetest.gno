@@ -30,7 +30,7 @@ func main(cur realm) {
 	}
 	packet := core.NewPacket(pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), 0)
 
-	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, nil, nil, 1))
+	core.PacketRecv(cross(cur), types.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
 
 	println("quote_balance", impl.VoucherBalanceOf(quoteToken, address(receiver)))
 	println("relayer_balance", impl.VoucherBalanceOf(quoteToken, cur.Address()))

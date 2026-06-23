@@ -17,12 +17,12 @@ var (
 
 // verifyCall rejects eureka mode and requires the call sender to match the dispatch sender.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2997-L3019
-func (v *ucs03ZkgmV1) verifyCall(_ int, rlm realm, call z.Call, sender string) error {
+func (v *ucs03ZkgmV1) verifyCall(_ int, rlm realm, call z.Call) error {
 	if call.Eureka {
 		return errEurekaUnsupported
 	}
 
-	if string(call.Sender) != sender {
+	if string(call.Sender) != rlm.Previous().Address().String() {
 		return errInvalidCallSender
 	}
 
@@ -198,12 +198,15 @@ func callErrAck(_ int, rlm realm, err error) types.RecvPacketResult {
 	return failureResult(ack)
 }
 
-// cloneBytes copies slices before storing or passing them to code that may
-// persist or mutate them across realm boundaries.
-// cloneBytes returns a fresh realm-local copy of in. The string round-trip (vs a
-// raw copy) launders the realm taint on slices that crossed the proxy/impl
-// boundary; copy() would propagate it and a later store/convert would panic with
-// "illegal conversion of readonly or externally stored value".
+// cloneBytes returns a fresh realm-local copy of in, detaching the realm taint on
+// slices that crossed the proxy/impl boundary. copy is an element-wise read (not a
+// conversion), so it is permitted on a readonly source; a []byte->string->[]byte
+// round-trip (which gno elides) would instead keep the foreign ownership and a
+// later store/convert would panic with "illegal conversion of readonly or
+// externally stored value".
 func cloneBytes(in []byte) []byte {
-	return []byte(string(in))
+	out := make([]byte, len(in))
+	copy(out, in)
+
+	return out
 }

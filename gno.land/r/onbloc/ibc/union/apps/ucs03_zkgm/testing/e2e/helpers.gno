@@ -90,9 +90,17 @@ func openConnection(cur realm, clientId types.ClientId) types.ConnectionId {
 	return connectionId
 }
 
+// e2eChannelSeq mirrors the core store's monotonic channel-id allocation so the
+// helpers can recover the id ChannelOpenInit no longer returns. Every e2e channel
+// is created through openChannel, so it stays in lockstep with the store; it
+// resets with each filetest's fresh realm.
+var e2eChannelSeq uint32
+
 func openChannel(cur realm, connectionId types.ConnectionId, counterpartyChannelId types.ChannelId) types.ChannelId {
 	portId := []byte(zkgm.ProxyPkgPath())
-	channelId := core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	core.ChannelOpenInit(cross(cur), types.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1msgrelayer"))
+	e2eChannelSeq++
+	channelId := types.ChannelId(e2eChannelSeq)
 	core.ChannelOpenAck(cross(cur), types.NewMsgChannelOpenAck(channelId, zkgm.Version, counterpartyChannelId, nil, 1, "g1msgrelayer"))
 
 	return channelId
@@ -222,7 +230,10 @@ func MustForwardChildPacket(cur realm, packet types.Packet, path *u256.Uint, par
 	}
 
 	sourceChannelId := types.ChannelId(nextSourceChannel)
-	sourceChannel := core.GetChannel(sourceChannelId)
+	sourceChannel, err := core.GetChannel(sourceChannelId)
+	if err != nil {
+		panic(err)
+	}
 
 	return core.NewPacket(sourceChannelId, sourceChannel.CounterpartyChannelId, childBytes, types.Timestamp(forward.TimeoutTimestamp))
 }

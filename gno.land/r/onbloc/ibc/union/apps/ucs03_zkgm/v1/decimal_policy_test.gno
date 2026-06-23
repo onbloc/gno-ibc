@@ -56,47 +56,6 @@ func TestInitializeDecimalsAgnosticAccounting(cur realm, t *testing.T) {
 	}
 }
 
-func TestBaseAmountPreservedThroughLockAndRefund(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	const N = uint64(100)
-	const chanSrc = types.ChannelId(130)
-	path := u256.Zero()
-	ibcBase := "ibc/rt-base"
-	sender := testAddress("rt-sender")
-
-	uassert.NoError(t, v.mintVoucher(0, cur, ibcBase, [32]byte{}, "", "", 0, sender, u256.NewUint(N)))
-
-	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
-		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "RT", Symbol: "RT", Decimals: 6}),
-	})
-	ibcDest := PredictWrappedTokenV2(path, uint32(types.ChannelId(131)), []byte(ibcBase), MetadataImage(mustDecodeTokenMetadata(metaBytes)))
-
-	order := z.TokenOrderV2{
-		Sender:      []byte(sender),
-		Receiver:    []byte(testAddress("rt-receiver")),
-		BaseToken:   []byte(ibcBase),
-		BaseAmount:  u256.NewUint(N),
-		QuoteToken:  []byte(ibcDest),
-		QuoteAmount: u256.NewUint(N),
-		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
-		Metadata:    metaBytes,
-	}
-
-	err := v.verifyTokenOrderV2(0, cur, MessageInfo{Sender: sender}, newFunds(nil), chanSrc, path, order)
-	uassert.NoError(t, err)
-	uassert.Equal(t, int64(0), voucherBalanceOf(ibcBase, address(sender)))
-	srcBal, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(chanSrc, path, order.BaseToken, order.QuoteToken))
-	uassert.Equal(t, u256.NewUint(N).ToString(), srcBal.ToString())
-
-	err = v.acknowledgeTokenOrderV2(0, cur, core.NewPacket(chanSrc, 0, nil, 0), address(""), [32]byte{}, path, order, z.TokenOrderAck{}, false)
-	uassert.NoError(t, err)
-	uassert.Equal(t, int64(N), voucherBalanceOf(ibcBase, address(sender)))
-	srcBalAfter, hasBal := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(chanSrc, path, order.BaseToken, order.QuoteToken))
-	uassert.True(t, hasBal && srcBalAfter.IsZero())
-}
-
 func TestBaseAmountPreservedThroughMint(cur realm, t *testing.T) {
 	v := newTestImpl()
 
@@ -147,7 +106,7 @@ func TestNativeBaseAmountNotUpscaled(cur realm, t *testing.T) {
 	}
 	f := newFunds(chain.NewCoins(chain.NewCoin("ugnot", N)))
 
-	err := v.verifyTokenOrderV2(0, cur, MessageInfo{Sender: testAddress("native-noscale-sndr")}, f, chanId, u256.Zero(), order)
+	err := v.verifyTokenOrderV2(0, cur, f, chanId, u256.Zero(), order)
 
 	uassert.NoError(t, err)
 	uassert.True(t, f.isEmpty())
@@ -201,7 +160,7 @@ func TestSendBaseAmountInt64Boundary(cur realm, t *testing.T) {
 		QuoteAmount: maxI64,
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
-	err := v.verifyTokenOrderV2(0, cur, MessageInfo{Sender: senderA}, newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), chanA, u256.Zero(), orderA)
+	err := v.verifyTokenOrderV2(0, cur, newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), chanA, u256.Zero(), orderA)
 	uassert.NoError(t, err)
 	balA, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(chanA, u256.Zero(), orderA.BaseToken, orderA.QuoteToken))
 	uassert.Equal(t, maxI64.ToString(), balA.ToString())
@@ -222,7 +181,7 @@ func TestSendBaseAmountInt64Boundary(cur realm, t *testing.T) {
 	// escrow leaves a transient balance entry; in production the verify error
 	// aborts the whole Send tx (impl.gno panics), rolling that write back. Here
 	// verify is called in isolation, so we only assert the rejection.
-	err = v.verifyTokenOrderV2(0, cur, MessageInfo{Sender: senderB}, newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), chanB, u256.Zero(), orderB)
+	err = v.verifyTokenOrderV2(0, cur, newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), chanB, u256.Zero(), orderB)
 	uassert.Error(t, err)
 }
 

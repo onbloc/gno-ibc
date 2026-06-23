@@ -14,7 +14,7 @@ import (
 
 // verifyInternal routes an instruction to its opcode-specific verifier (the send-side validation entry point).
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2742-L2796
-func (v *ucs03ZkgmV1) verifyInternal(_ int, rlm realm, info MessageInfo, funds *funds, channelId types.ChannelId, path *u256.Uint, instruction z.Instruction) error {
+func (v *ucs03ZkgmV1) verifyInternal(_ int, rlm realm, funds *funds, channelId types.ChannelId, path *u256.Uint, instruction z.Instruction) error {
 	switch instruction.Opcode {
 	case z.OP_TOKEN_ORDER:
 		order, err := decodeOrderInstruction(instruction)
@@ -22,28 +22,28 @@ func (v *ucs03ZkgmV1) verifyInternal(_ int, rlm realm, info MessageInfo, funds *
 			return err
 		}
 
-		return v.verifyTokenOrderV2(0, rlm, info, funds, channelId, path, order)
+		return v.verifyTokenOrderV2(0, rlm, funds, channelId, path, order)
 	case z.OP_BATCH:
 		batch, err := decodeBatchInstruction(instruction)
 		if err != nil {
 			return err
 		}
 
-		return v.verifyBatch(0, rlm, info, funds, channelId, path, batch)
+		return v.verifyBatch(0, rlm, funds, channelId, path, batch)
 	case z.OP_FORWARD:
 		forward, err := decodeForwardInstruction(instruction)
 		if err != nil {
 			return err
 		}
 
-		return v.verifyForward(0, rlm, info, funds, channelId, forward)
+		return v.verifyForward(0, rlm, funds, channelId, forward)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instruction)
 		if err != nil {
 			return err
 		}
 
-		return v.verifyCall(0, rlm, call, info.Sender)
+		return v.verifyCall(0, rlm, call)
 	default:
 		return errors.New("zkgm/v1: unsupported opcode")
 	}

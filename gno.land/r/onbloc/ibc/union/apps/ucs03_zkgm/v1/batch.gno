@@ -16,13 +16,13 @@ var errInvalidBatchInstruction = errors.New("zkgm/v1: invalid batch instruction"
 
 // verifyBatch verifies each allowed child instruction against the shared funds budget.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2941-L2967
-func (v *ucs03ZkgmV1) verifyBatch(_ int, rlm realm, info MessageInfo, funds *funds, channelId types.ChannelId, path *u256.Uint, batch z.Batch) error {
+func (v *ucs03ZkgmV1) verifyBatch(_ int, rlm realm, funds *funds, channelId types.ChannelId, path *u256.Uint, batch z.Batch) error {
 	for _, instruction := range batch.Instructions {
 		if !isAllowedBatchInstruction(instruction.Opcode) {
 			return errInvalidBatchInstruction
 		}
 
-		if err := v.verifyInternal(0, rlm, info, funds, channelId, path, instruction); err != nil {
+		if err := v.verifyInternal(0, rlm, funds, channelId, path, instruction); err != nil {
 			return err
 		}
 	}

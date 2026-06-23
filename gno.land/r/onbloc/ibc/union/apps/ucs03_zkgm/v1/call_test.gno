@@ -122,7 +122,7 @@ func TestIntentRecvOnlyMakerCallAborts(cur realm, t *testing.T) {
 func TestVerifyCallRejectsInvalidSender(cur realm, t *testing.T) {
 	err := newTestImpl().verifyCall(0, cur, z.Call{
 		Sender: []byte("other"),
-	}, "actual")
+	})
 
 	uassert.ErrorContains(t, err, "invalid call sender")
 }

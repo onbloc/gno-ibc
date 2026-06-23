@@ -27,7 +27,7 @@ func main(cur realm) {
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 	packet := core.NewPacket(pair.Source, pair.Destination, e2e.MustPacketData(cross(cur), e2e.MustTokenOrderInstruction(cross(cur), order)), types.Timestamp(0))
-	msg := types.NewMsgPacketRecv([]types.Packet{packet}, nil, realcometbls.Z35PacketCommitmentProof(cross(cur)), uint64(realcometbls.DevnetHeight-1))
+	msg := types.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, realcometbls.Z35PacketCommitmentProof(cross(cur)), uint64(realcometbls.DevnetHeight-1))
 
 	core.PacketRecv(cross(cur), msg)
 	println("quote_balance_after_first_recv", impl.VoucherBalanceOf("ibc/quote", address(receiver)))

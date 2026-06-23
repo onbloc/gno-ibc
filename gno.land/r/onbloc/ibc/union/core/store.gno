@@ -210,6 +210,26 @@ func (s *Store) SaveChannel(_ int, rlm realm, channelId types.ChannelId, channel
 	s.saveChannel(channelId, channel)
 }
 
+// GetChannels returns all stored channel records.
+// The bptree callback returns false to keep iterating (returning true stops early),
+// and the empty range bounds walk every entry.
+func (s *Store) GetChannels() ([]types.Channel, error) {
+	channels := make([]types.Channel, 0)
+
+	s.channels.Iterate("", "", func(key string, value any) bool {
+		entry, ok := value.(*channelEntry)
+		if !ok {
+			return false
+		}
+
+		channels = append(channels, entry.channel)
+
+		return false
+	})
+
+	return channels, nil
+}
+
 // GetChannel returns the stored channel for channelId.
 func (s *Store) GetChannel(channelId types.ChannelId) (types.Channel, bool) {
 	entry, ok := s.getChannelEntry(channelId)
@@ -251,6 +271,7 @@ func (s *Store) RegisterAppAtPort(_ int, rlm realm, portId types.Bytes, a app.IA
 	if _, ok := s.ports[key]; ok {
 		panic("port " + string(portId) + " already registered")
 	}
+
 	s.ports[key] = a
 }
 
@@ -326,6 +347,7 @@ func (s *Store) ClientStateBytes(clientId types.ClientId) ([]byte, bool) {
 	if c == nil || len(c.clientState) == 0 {
 		return nil, false
 	}
+
 	return cloneBytes(c.clientState), true
 }
 
@@ -335,16 +357,19 @@ func (s *Store) ConsensusStateBytes(clientId types.ClientId, height types.Height
 	if c == nil {
 		return nil, false
 	}
+
 	return c.getConsensusState(height)
 }
 
-// BatchPacketsAt returns the batch packet commitment for a batch hash.
-func (s *Store) BatchPacketsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool) {
+// BatchPacketsAt returns the batch packet commitment for a batch hash. The
+// commitment is keyed by the global batch path, so no channel id is required.
+func (s *Store) BatchPacketsAt(batchHash types.H256) (types.H256, bool) {
 	return s.getCommitment(types.BatchPacketsPath(batchHash))
 }
 
-// BatchReceiptsAt returns the batch receipt commitment for a batch hash.
-func (s *Store) BatchReceiptsAt(channelId types.ChannelId, batchHash types.H256) (types.H256, bool) {
+// BatchReceiptsAt returns the batch receipt commitment for a batch hash. The
+// commitment is keyed by the global batch path, so no channel id is required.
+func (s *Store) BatchReceiptsAt(batchHash types.H256) (types.H256, bool) {
 	return s.getCommitment(types.BatchReceiptsPath(batchHash))
 }
 
@@ -397,6 +422,7 @@ func (s *Store) getCommitment(path types.H256) (types.H256, bool) {
 		var zero types.H256
 		return zero, false
 	}
+
 	return v, true
 }
 
@@ -417,6 +443,7 @@ func (c *client) getConsensusState(height types.Height) ([]byte, bool) {
 	if !found {
 		return nil, false
 	}
+
 	return cloneBytes(v.([]byte)), true
 }
 
@@ -431,6 +458,7 @@ func (c *client) getClientStore(key string) ([]byte, bool) {
 	if !found {
 		return nil, false
 	}
+
 	return cloneBytes(v), true
 }
 
@@ -448,6 +476,7 @@ func (s *Store) getMembershipProof(clientId types.ClientId, proofHeight uint64, 
 		var zero types.H256
 		return zero, false
 	}
+
 	return v, true
 }
 
@@ -488,6 +517,7 @@ func (s *Store) addClient(clientId types.ClientId, typ types.ClientType, creator
 		clientStore:       make(map[string][]byte),
 	}
 	s.clientByID.Set(clientKey(clientId), c)
+
 	return c
 }
 
@@ -496,6 +526,7 @@ func (s *Store) registerClient(typ types.ClientType, lc lightclient.Interface) {
 	if _, ok := s.clientRegistryByTy[key]; ok {
 		panic("client type already exists")
 	}
+
 	s.clientRegistryByTy[key] = lc
 }
 
@@ -514,6 +545,7 @@ func (s *Store) getClient(clientId types.ClientId) *client {
 	if !found {
 		return nil
 	}
+
 	return v.(*client)
 }
 
@@ -522,6 +554,7 @@ func (s *Store) lightClientOf(clientId types.ClientId) (lightclient.Interface, b
 	if c == nil {
 		return nil, false
 	}
+
 	return c.lightClient, true
 }
 
@@ -536,6 +569,7 @@ func (s *Store) getAppByPortId(portId types.Bytes) app.IApp {
 	if !ok {
 		panic("port " + string(portId) + " not found")
 	}
+
 	return a
 }
 
@@ -551,6 +585,7 @@ func (s *Store) getConnection(connectionId types.ConnectionId) (types.Connection
 	if !found {
 		return types.Connection{}, false
 	}
+
 	return v.(types.Connection), true
 }
 
@@ -558,8 +593,8 @@ func (s *Store) getConnection(connectionId types.ConnectionId) (types.Connection
 
 func (s *Store) createChannel(channelId types.ChannelId, channel types.Channel, portId types.Bytes) {
 	entry := &channelEntry{
-		channel: channel,
-		portId:  cloneBytes(portId),
+		channel: cloneChannel(channel),
+		portId:  portId.Clone(),
 	}
 	s.channels.Set(channelKey(channelId), entry)
 	setChainParam(h256ChainParamKey(types.ChannelPath(channelId)), h256Bytes(channelValue(channel)))
@@ -570,7 +605,8 @@ func (s *Store) saveChannel(channelId types.ChannelId, channel types.Channel) {
 	if !found {
 		panic("channel " + channelId.String() + " not found")
 	}
-	entry.channel = channel
+
+	entry.channel = cloneChannel(channel)
 	setChainParam(h256ChainParamKey(types.ChannelPath(channelId)), h256Bytes(channelValue(channel)))
 }
 
@@ -579,6 +615,7 @@ func (s *Store) getChannelEntry(channelId types.ChannelId) (*channelEntry, bool)
 	if !found {
 		return nil, false
 	}
+
 	return v.(*channelEntry), true
 }
 
@@ -587,6 +624,7 @@ func (s *Store) getChannel(channelId types.ChannelId) types.Channel {
 	if !found {
 		panic("channel " + channelId.String() + " not found")
 	}
+
 	return entry.channel
 }
 
@@ -595,5 +633,6 @@ func (s *Store) getChannelOwner(channelId types.ChannelId) types.Bytes {
 	if !found {
 		panic("channel " + channelId.String() + " not found")
 	}
+
 	return entry.portId
 }

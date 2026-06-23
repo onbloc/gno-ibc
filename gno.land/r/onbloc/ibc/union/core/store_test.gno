@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"gno.land/p/nt/testutils/v0"
+	"gno.land/p/nt/uassert/v0"
 	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 )
@@ -569,6 +570,211 @@ func TestProofStore(cur realm, t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			resetStore(cur)
 			tc.run(t)
+		})
+	}
+}
+
+func TestStoreMutationsRejectSpoofedRealm(cur realm, t *testing.T) {
+	mockImpl := func(clientStateBytes, consensusStateBytes []byte) (lightclient.Interface, error) {
+		return &mockClient{}, nil
+	}
+	spoofedRealm := cur.Previous()
+	packet := types.NewPacket(1, 2, []byte("spoof-packet"), 10)
+	batchHash := types.Keccak([]byte("spoof-batch"))
+	value := types.Keccak([]byte("spoof-value"))
+	clientId := types.ClientId(1)
+	channelId := types.ChannelId(1)
+	portId := types.Bytes("gno.land/r/onbloc/ibc/union/core/spoof-app")
+
+	cases := []struct {
+		name        string
+		run         func(s *Store)
+		assertClean func(t *testing.T, s *Store)
+	}{
+		{
+			name: "register client",
+			run:  func(s *Store) { s.RegisterClient(0, spoofedRealm, mockType, mockImpl) },
+			assertClean: func(t *testing.T, s *Store) {
+				uassert.False(t, s.HasRegisteredClient(mockType))
+			},
+		},
+		{
+			name: "add client",
+			run: func(s *Store) {
+				s.AddClient(0, spoofedRealm, mockType, testutils.TestAddress("spoof-client"), &mockClient{})
+			},
+			assertClean: func(t *testing.T, s *Store) {
+				uassert.False(t, s.ClientExists(types.ClientId(1)))
+			},
+		},
+		{
+			name: "save client store",
+			run:  func(s *Store) { s.SaveClientStore(0, spoofedRealm, clientId, "key", []byte("value")) },
+		},
+		{
+			name: "set light client",
+			run:  func(s *Store) { s.SetLightClient(0, spoofedRealm, clientId, &mockClient{}) },
+		},
+		{
+			name: "save client state",
+			run:  func(s *Store) { s.SaveClientState(0, spoofedRealm, clientId, []byte("client-state")) },
+		},
+		{
+			name: "save consensus state",
+			run: func(s *Store) {
+				s.SaveConsensusState(0, spoofedRealm, clientId, types.NewHeight(1), []byte("consensus-state"))
+			},
+		},
+		{
+			name: "next connection id",
+			run:  func(s *Store) { s.NextConnectionId(0, spoofedRealm) },
+			assertClean: func(t *testing.T, s *Store) {
+				if got := s.nextConnectionId(); got != types.ConnectionId(1) {
+					t.Fatalf("next connection id mutated: got %v want 1", got)
+				}
+			},
+		},
+		{
+			name: "save connection",
+			run:  func(s *Store) { s.SaveConnection(0, spoofedRealm, types.ConnectionId(1), types.Connection{}) },
+			assertClean: func(t *testing.T, s *Store) {
+				_, ok := s.GetConnection(types.ConnectionId(1))
+				uassert.False(t, ok)
+			},
+		},
+		{
+			name: "next channel id",
+			run:  func(s *Store) { s.NextChannelId(0, spoofedRealm) },
+			assertClean: func(t *testing.T, s *Store) {
+				if got := s.nextChannelId(); got != types.ChannelId(1) {
+					t.Fatalf("next channel id mutated: got %v want 1", got)
+				}
+			},
+		},
+		{
+			name: "create channel",
+			run:  func(s *Store) { s.CreateChannel(0, spoofedRealm, channelId, types.Channel{}, portId) },
+			assertClean: func(t *testing.T, s *Store) {
+				_, ok := s.GetChannel(channelId)
+				uassert.False(t, ok)
+			},
+		},
+		{
+			name: "save channel",
+			run:  func(s *Store) { s.SaveChannel(0, spoofedRealm, channelId, types.Channel{}) },
+			assertClean: func(t *testing.T, s *Store) {
+				_, ok := s.GetChannel(channelId)
+				uassert.False(t, ok)
+			},
+		},
+		{
+			name: "register app at port",
+			run:  func(s *Store) { s.RegisterAppAtPort(0, spoofedRealm, portId, &mockApp{}) },
+			assertClean: func(t *testing.T, s *Store) {
+				uassert.False(t, s.HasApp(portId))
+			},
+		},
+		{
+			name: "commit packet",
+			run:  func(s *Store) { s.CommitPacket(0, spoofedRealm, packet) },
+			assertClean: func(t *testing.T, s *Store) {
+				uassert.False(t, s.HasPacketCommitment(packet))
+			},
+		},
+		{
+			name: "set packet acknowledged",
+			run:  func(s *Store) { s.SetPacketAcknowledged(0, spoofedRealm, packet) },
+			assertClean: func(t *testing.T, s *Store) {
+				uassert.False(t, s.HasPacketCommitment(packet))
+			},
+		},
+		{
+			name: "set packet receipt",
+			run:  func(s *Store) { s.SetPacketReceipt(0, spoofedRealm, packet) },
+			assertClean: func(t *testing.T, s *Store) {
+				uassert.False(t, s.HasPacketReceipt(packet))
+			},
+		},
+		{
+			name: "commit acknowledgement",
+			run:  func(s *Store) { s.CommitAcknowledgement(0, spoofedRealm, packet, []byte("ack")) },
+			assertClean: func(t *testing.T, s *Store) {
+				uassert.False(t, s.HasPacketReceipt(packet))
+			},
+		},
+		{
+			name: "save batch packets",
+			run:  func(s *Store) { s.SaveBatchPackets(0, spoofedRealm, channelId, batchHash, value) },
+			assertClean: func(t *testing.T, s *Store) {
+				_, ok := s.BatchPacketsAt(batchHash)
+				uassert.False(t, ok)
+			},
+		},
+		{
+			name: "save batch receipts",
+			run:  func(s *Store) { s.SaveBatchReceipts(0, spoofedRealm, channelId, batchHash, value) },
+			assertClean: func(t *testing.T, s *Store) {
+				_, ok := s.BatchReceiptsAt(batchHash)
+				uassert.False(t, ok)
+			},
+		},
+		{
+			name: "save membership proof",
+			run:  func(s *Store) { s.SaveMembershipProof(0, spoofedRealm, clientId, 1, []byte("path"), value) },
+			assertClean: func(t *testing.T, s *Store) {
+				_, ok := s.getMembershipProof(clientId, 1, []byte("path"))
+				uassert.False(t, ok)
+			},
+		},
+		{
+			name: "save non-membership proof",
+			run: func(s *Store) {
+				s.SaveNonMembershipProof(0, spoofedRealm, clientId, 1, []byte("path"), types.NON_MEMBERSHIP_COMMITMENT_VALUE)
+			},
+			assertClean: func(t *testing.T, s *Store) {
+				uassert.False(t, s.hasNonMembershipProof(clientId, 1, []byte("path")))
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetStore(cur)
+			s := store
+
+			uassert.AbortsContains(t, cur, ErrSpoofedRealm, func(cur realm) {
+				tc.run(s)
+			})
+			if tc.assertClean != nil {
+				tc.assertClean(t, s)
+			}
+		})
+	}
+}
+
+func TestStoreMissingClientWritesReturnFalse(cur realm, t *testing.T) {
+	cases := []struct {
+		name string
+		run  func(s *Store) bool
+	}{
+		{"save client store", func(s *Store) bool {
+			return s.SaveClientStore(0, cur, types.ClientId(404), "key", []byte("value"))
+		}},
+		{"set light client", func(s *Store) bool {
+			return s.SetLightClient(0, cur, types.ClientId(404), &mockClient{})
+		}},
+		{"save client state", func(s *Store) bool {
+			return s.SaveClientState(0, cur, types.ClientId(404), []byte("client-state"))
+		}},
+		{"save consensus state", func(s *Store) bool {
+			return s.SaveConsensusState(0, cur, types.ClientId(404), types.NewHeight(9), []byte("consensus-state"))
+		}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetStore(cur)
+			uassert.False(t, tc.run(store))
 		})
 	}
 }

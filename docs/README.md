@@ -1,5 +1,11 @@
 # Documentation
 
+## Architecture
+
+- [Project Architecture](architecture.md) — map of the first-party `onbloc`
+  pure packages and realms, the proxy/implementation split, and how a packet
+  flows through the layers
+
 ## Spec Comparisons
 
 `spec-comparisons/` contains source-to-source comparison material for the Gno

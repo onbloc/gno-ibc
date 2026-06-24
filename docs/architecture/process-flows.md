@@ -67,7 +67,7 @@ sequenceDiagram
     ZKGM-->>Receiver: receiver registered for OP_CALL
 ```
 
-`RegisterCoreApp` ([apps/ucs03_zkgm/register.gno](../../gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/register.gno)) crosses into `core.RegisterApp`. Core derives the port id from the caller's package path, so the app identity is its realm path. `core.RegisterAppForPort` remains the admin-only override for explicit port binding.
+`RegisterCoreApp` ([apps/ucs03_zkgm/register.gno](../../gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/register.gno)) crosses into `core.RegisterApp`. Core derives the port id from the caller's package path, so the app identity is its realm path.
 
 ## Packet Send
 

@@ -71,8 +71,7 @@ Some local functions are useful Gno integration points but are not IBC Union
 message rows. They should stay out of message-variant comparison tables unless
 the Union reference adds an equivalent public message:
 
-- app registration helpers such as `RegisterApp`, `RegisterAppForPort`, and
-  `HasApp`;
+- app registration helpers such as `RegisterApp` and `HasApp`;
 - proxy lifecycle helpers such as implementation registration and render
   functions;
 - local realm render output;

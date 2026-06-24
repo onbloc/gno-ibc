@@ -1,35 +1,14 @@
 package zkgm
 
 import (
-	app "gno.land/p/onbloc/ibc/union/app"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
-// proxyPkgPath is this proxy realm's package path — the stable IBC port id that
-// core keys the App registration under.
-const proxyPkgPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
-
-func ProxyPkgPath() string {
-	return proxyPkgPath
-}
-
-// ProductionImplPath is the package path of the canonical v1 impl realm. Test
-// harnesses use it to enter the impl's code realm (e.g. before a privileged
-// BatchSend) so the call presents the impl as caller.
-func ProductionImplPath() string {
-	return proxyPkgPath + "/v1"
-}
-
-// AsIBCApp returns the stable App reference core routes packets to.
-func AsIBCApp() app.IApp {
-	return &App{}
-}
-
 // RegisterCoreApp registers the proxy App with core under the proxy pkgpath.
 // core rejects re-registration, so the App identity is permanent once installed.
 func RegisterCoreApp(cur realm) {
-	core.RegisterApp(cross(cur), AsIBCApp())
+	core.RegisterApp(cross(cur), &App{})
 }
 
 // RegisterReceiver records the calling realm as an OP_CALL receiver target,

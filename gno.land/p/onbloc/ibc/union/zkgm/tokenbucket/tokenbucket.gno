@@ -80,9 +80,10 @@ func (tb *TokenBucket) Update(capacity *u256.Uint, refillRate *u256.Uint, reset 
 	tb.Capacity = capacity.Clone()
 	tb.RefillRate = refillRate.Clone()
 
+	// Mirror union's token_bucket update (token_bucket.rs L84-88): only reset
+	// available on first init or explicit reset. Do NOT clamp available down when
+	// capacity shrinks — union lets a now-excess available drain naturally.
 	if tb.LastRefill.IsZero() || reset {
-		tb.Available = tb.Capacity.Clone()
-	} else if tb.Available.Gt(tb.Capacity) {
 		tb.Available = tb.Capacity.Clone()
 	}
 

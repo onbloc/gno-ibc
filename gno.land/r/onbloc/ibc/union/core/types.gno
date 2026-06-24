@@ -14,9 +14,8 @@ import (
 //
 // ICore is the swappable logic surface: it carries every non-admin entrypoint
 // (client, connection, channel, packet, app registration). The access-managed
-// recovery entrypoints (Force* handshake overrides, RegisterAppForPort) and the
-// read-only queries stay on the proxy: authorization is not swappable, and
-// queries are pure views.
+// recovery entrypoints (Force* handshake overrides) and the read-only queries
+// stay on the proxy: authorization is not swappable, and queries are pure views.
 //
 // core/v1 currently implements the client, connection, channel, packet, app
 // registry, and query surfaces behind this interface.
@@ -28,7 +27,6 @@ type ICore interface {
 	UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient)
 	ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateClient)
 	Misbehaviour(_ int, rlm realm, msg types.MsgMisbehaviour)
-	VerifyClientMembership(_ int, rlm realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte)
 
 	// --- Connection handshake ---
 	ConnectionOpenInit(_ int, rlm realm, msg types.MsgConnectionOpenInit)

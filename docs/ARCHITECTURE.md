@@ -5,7 +5,7 @@ It explains how the pure packages (`p/`) and stateful realms (`r/`) under the `o
 what each one is responsible for, and how an IBC packet flows through them.
 
 For per-module detail, follow the linked `README.md` of each component.\
-For spec-level comparisons against the upstream references, see the [documentation index](README.md).
+For spec-level comparisons against the upstream references, see the [Spec Comparisons](README.md#spec-comparisons) section.
 
 ## Contracts
 
@@ -148,9 +148,3 @@ A receive (`RecvPacket`) is the most illustrative:
    The resulting acknowledgement is written back through core.
 
 Send, acknowledgement, and timeout follow the inverse path through the same proxy → implementation → pure-package layering.
-
-## Where to Go Next
-
-- [Documentation index](README.md) — spec comparisons, guides, and references.
-- [IBC Union spec comparison](spec-comparisons/ibc-union-spec-comparison.md) — Gno public surfaces vs. the pinned IBC Union references.
-- [Access management comparison](spec-comparisons/access-management.md) — access package/realm vs. OpenZeppelin and Union references.

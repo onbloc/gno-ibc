@@ -3,6 +3,7 @@ package manager
 type TargetConfig struct {
 	FunctionRoles map[Selector]RoleId
 	Closed        bool
+	AdminDelay    Delay
 }
 
 func NewTargetConfig(closed bool) *TargetConfig {
@@ -41,6 +42,14 @@ func (targetConfig *TargetConfig) setClosed(closed bool) {
 
 func (targetConfig *TargetConfig) isClosed() bool {
 	return targetConfig.Closed
+}
+
+func (targetConfig *TargetConfig) setAdminDelay(delay Delay) {
+	targetConfig.AdminDelay = delay
+}
+
+func (targetConfig *TargetConfig) adminDelay() Delay {
+	return targetConfig.AdminDelay
 }
 
 func (targetConfig *TargetConfig) ensureFunctionRoles() {

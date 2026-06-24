@@ -3,22 +3,23 @@ package manager
 import "gno.land/p/nt/ufmt/v0"
 
 type State struct {
-	Roles   map[RoleId]*RoleConfig
-	Targets map[string]*TargetConfig
+	Roles     map[RoleId]*RoleConfig
+	Targets   map[string]*TargetConfig
+	Schedules map[OperationId]Schedule
 }
 
 func NewState() State {
 	return State{
-		Roles:   make(map[RoleId]*RoleConfig),
-		Targets: make(map[string]*TargetConfig),
+		Roles:     make(map[RoleId]*RoleConfig),
+		Targets:   make(map[string]*TargetConfig),
+		Schedules: make(map[OperationId]Schedule),
 	}
 }
 
 // =================================================== GETTERS ====================================================
 
-// CanCall reports whether caller can call target selector immediately.
-// This Gno port returns only immediate authorization because scheduled
-// execution and execution delay are intentionally not ported.
+// CanCall reports whether caller can call target selector immediately or after
+// the caller's configured execution delay.
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L140-L156
 func (state *State) CanCall(caller address, target string, selector Selector) CanCallResult {
@@ -33,6 +34,10 @@ func (state *State) CanCall(caller address, target string, selector Selector) Ca
 		return NewCanCallResult(false)
 	}
 
+	if membership.ExecutionDelay > 0 {
+		return NewDelayedCanCallResult(membership.ExecutionDelay)
+	}
+
 	return NewCanCallResult(true)
 }
 
@@ -43,8 +48,8 @@ func (state *State) IsAuthorized(caller address, target string, selector Selecto
 	return state.CanCall(caller, target, selector).Immediate
 }
 
-// HasRole reports whether account currently has an active role membership.
-// This Gno port returns membership only because execution delay is not ported.
+// HasRole reports whether account currently has an active role membership and
+// its execution delay.
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L211-L220
 func (state *State) HasRole(role RoleId, account address) HasRoleResult {
@@ -57,7 +62,12 @@ func (state *State) HasRole(role RoleId, account address) HasRoleResult {
 		return NewHasRoleResult(false)
 	}
 
-	return NewHasRoleResult(roleConfig.hasMember(account, CurrentTimePoint()))
+	access := roleConfig.access(account, CurrentTimePoint())
+	if access.Since.IsZero() {
+		return NewHasRoleResult(false)
+	}
+
+	return NewHasRoleResultWithDelay(true, access.Delay)
 }
 
 // GetRoleAdmin returns the admin role for role, defaulting to AdminRole.
@@ -70,6 +80,17 @@ func (state *State) GetRoleAdmin(role RoleId) RoleId {
 	}
 
 	return roleConfig.adminRole()
+}
+
+// GetRoleGuardian returns the guardian role allowed to cancel delayed
+// operations for role.
+func (state *State) GetRoleGuardian(role RoleId) RoleId {
+	roleConfig := state.getRole(role)
+	if roleConfig == nil {
+		return AdminRole
+	}
+
+	return roleConfig.guardianRole()
 }
 
 // GetRoleGrantDelay returns the grant delay configured for role.
@@ -97,6 +118,17 @@ func (state *State) GetTargetFunctionRole(target string, selector Selector) Role
 	return targetConfig.functionRole(selector)
 }
 
+// GetTargetAdminDelay returns the delay required before target configuration
+// changes can be consumed.
+func (state *State) GetTargetAdminDelay(target string) Delay {
+	targetConfig := state.getTarget(target)
+	if targetConfig == nil {
+		return 0
+	}
+
+	return targetConfig.adminDelay()
+}
+
 // IsTargetClosed reports whether target is closed.
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L168-L171
@@ -114,13 +146,19 @@ func (state *State) IsTargetClosed(target string) bool {
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L233-L236
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L271-L298
 func (state *State) GrantRole(role RoleId, account address) bool {
+	return state.GrantRoleWithExecutionDelay(role, account, 0)
+}
+
+// GrantRoleWithExecutionDelay grants role membership to account with a call
+// execution delay after the membership becomes active.
+func (state *State) GrantRoleWithExecutionDelay(role RoleId, account address, executionDelay Delay) bool {
 	if role == PublicRole {
 		panic(errorWithDetails(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
 	}
 
 	state.ensureRole(role)
 
-	return state.getRole(role).grant(account, CurrentTimePoint())
+	return state.getRole(role).grant(account, CurrentTimePoint(), executionDelay)
 }
 
 // RevokeRole revokes role membership from account and reports whether it existed.
@@ -159,6 +197,15 @@ func (state *State) SetRoleAdmin(role RoleId, admin RoleId) {
 	state.getRole(role).setAdmin(admin)
 }
 
+// SetRoleGuardian sets the role that can cancel scheduled operations requiring
+// role.
+func (state *State) SetRoleGuardian(role RoleId, guardian RoleId) {
+	RequireUnlockedConfigRole(role)
+
+	state.ensureRole(role)
+	state.getRole(role).setGuardian(guardian)
+}
+
 // SetGrantDelay sets the delay before future grants of role become active.
 // OpenZeppelin references:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L261-L264
@@ -190,6 +237,13 @@ func (state *State) SetTargetFunctionRoles(target string, selectors []Selector, 
 	state.getTarget(target).setFunctionRoles(selectors, role)
 }
 
+// SetTargetAdminDelay sets the delay required before target configuration
+// operations can be consumed.
+func (state *State) SetTargetAdminDelay(target string, delay Delay) {
+	state.ensureTarget(target)
+	state.getTarget(target).setAdminDelay(delay)
+}
+
 // =============================================== MODE MANAGEMENT ================================================
 
 // SetTargetClosed sets whether target rejects calls regardless of selector role.
@@ -199,6 +253,68 @@ func (state *State) SetTargetFunctionRoles(target string, selectors []Selector, 
 func (state *State) SetTargetClosed(target string, closed bool) {
 	state.ensureTarget(target)
 	state.getTarget(target).setClosed(closed)
+}
+
+// ============================================= DELAYED OPERATIONS ================================================
+
+func (state *State) Schedule(caller address, target string, selector Selector, dataHash string, when TimePoint) (OperationId, Nonce) {
+	result := state.CanCall(caller, target, selector)
+	if !result.Authorized || result.Immediate {
+		panic(errAccessManagerUnauthorizedCall)
+	}
+
+	return state.scheduleWithDelay(caller, target, selector, dataHash, when, result.Delay)
+}
+
+func (state *State) ScheduleTargetAdmin(caller address, target string, selector Selector, dataHash string, when TimePoint) (OperationId, Nonce) {
+	result := state.CanManageTargetPath(caller, target)
+	if !result.Authorized || result.Immediate {
+		panic(errAccessManagerUnauthorizedCall)
+	}
+
+	return state.scheduleWithDelay(caller, target, selector, dataHash, when, result.Delay)
+}
+
+func (state *State) Cancel(msgSender address, caller address, target string, selector Selector, dataHash string) (OperationId, Nonce) {
+	operationId := HashOperation(caller, target, selector, dataHash)
+	schedule := state.getSchedule(operationId)
+	if !schedule.IsSet() {
+		panic(errAccessManagerNotScheduled)
+	}
+
+	if msgSender != caller && !state.HasRole(AdminRole, msgSender).IsMember {
+		requiredRole := state.GetTargetFunctionRole(target, selector)
+		guardianRole := state.GetRoleGuardian(requiredRole)
+		if !state.HasRole(guardianRole, msgSender).IsMember {
+			panic(errAccessManagerUnauthorizedCall)
+		}
+	}
+
+	schedule.Timepoint = 0
+	state.Schedules[operationId] = schedule
+
+	return operationId, schedule.Nonce
+}
+
+func (state *State) ConsumeScheduledOp(caller address, target string, selector Selector, dataHash string) (OperationId, Nonce) {
+	operationId := HashOperation(caller, target, selector, dataHash)
+	schedule := state.getSchedule(operationId)
+	if !schedule.IsSet() {
+		panic(errAccessManagerNotScheduled)
+	}
+
+	now := CurrentTimePoint()
+	if !schedule.isReady(now) {
+		panic(errAccessManagerNotReady)
+	}
+	if schedule.isExpired(now) {
+		panic(errAccessManagerExpired)
+	}
+
+	schedule.Timepoint = 0
+	state.Schedules[operationId] = schedule
+
+	return operationId, schedule.Nonce
 }
 
 // ================================================= ADMIN LOGIC ==================================================
@@ -214,6 +330,10 @@ func (state *State) CanAdminRole(role RoleId, caller address) CanCallResult {
 		return NewCanCallResult(false)
 	}
 
+	if membership.ExecutionDelay > 0 {
+		return NewDelayedCanCallResult(membership.ExecutionDelay)
+	}
+
 	return NewCanCallResult(true)
 }
 
@@ -227,7 +347,25 @@ func (state *State) CanManageTarget(caller address) CanCallResult {
 		return NewCanCallResult(false)
 	}
 
+	if membership.ExecutionDelay > 0 {
+		return NewDelayedCanCallResult(membership.ExecutionDelay)
+	}
+
 	return NewCanCallResult(true)
+}
+
+func (state *State) CanManageTargetPath(caller address, target string) CanCallResult {
+	result := state.CanManageTarget(caller)
+	if !result.Authorized || !result.Immediate {
+		return result
+	}
+
+	adminDelay := state.GetTargetAdminDelay(target)
+	if adminDelay > 0 {
+		return NewDelayedCanCallResult(adminDelay)
+	}
+
+	return result
 }
 
 func (state *State) getRole(role RoleId) *RoleConfig {
@@ -236,6 +374,36 @@ func (state *State) getRole(role RoleId) *RoleConfig {
 
 func (state *State) getTarget(target string) *TargetConfig {
 	return state.Targets[target]
+}
+
+func (state *State) getSchedule(operationId OperationId) Schedule {
+	if state.Schedules == nil {
+		state.Schedules = make(map[OperationId]Schedule)
+	}
+
+	return state.Schedules[operationId]
+}
+
+func (state *State) scheduleWithDelay(caller address, target string, selector Selector, dataHash string, when TimePoint, delay Delay) (OperationId, Nonce) {
+	now := CurrentTimePoint()
+	if when.Before(now + TimePoint(delay)) {
+		panic(errAccessManagerInsufficientDelay)
+	}
+
+	if state.Schedules == nil {
+		state.Schedules = make(map[OperationId]Schedule)
+	}
+
+	operationId := HashOperation(caller, target, selector, dataHash)
+	current := state.Schedules[operationId]
+	if current.IsSet() && !current.isExpired(now) {
+		panic(errAccessManagerAlreadyScheduled)
+	}
+
+	nonce := current.Nonce + 1
+	state.Schedules[operationId] = NewSchedule(when, nonce)
+
+	return operationId, nonce
 }
 
 func (state *State) ensureRole(role RoleId) {

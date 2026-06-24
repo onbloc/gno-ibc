@@ -2,6 +2,7 @@ package manager
 
 type Access struct {
 	Since TimePoint
+	Delay Delay
 }
 
 func NewAccess(since TimePoint) Access {
@@ -10,13 +11,14 @@ func NewAccess(since TimePoint) Access {
 	}
 }
 
-func NewAccessWithDelay(since TimePoint, delay Delay) Access {
+func NewAccessWithDelay(since TimePoint, grantDelay Delay, executionDelay Delay) Access {
 	if since.IsZero() {
 		return Access{Since: 0}
 	}
 
 	return Access{
-		Since: since + TimePoint(delay),
+		Since: since + TimePoint(grantDelay),
+		Delay: executionDelay,
 	}
 }
 

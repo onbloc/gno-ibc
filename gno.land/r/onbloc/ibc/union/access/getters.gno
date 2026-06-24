@@ -16,6 +16,11 @@ func GetRoleAdmin(role manager.RoleId) manager.RoleId {
 	return accessState.GetRoleAdmin(role)
 }
 
+// GetRoleGuardian returns the guardian role configured for role.
+func GetRoleGuardian(role manager.RoleId) manager.RoleId {
+	return accessState.GetRoleGuardian(role)
+}
+
 // GetRoleGrantDelay returns the grant delay configured for role.
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L1137-L1145
@@ -35,6 +40,11 @@ func GetFunctionRole(targetPath string, selector manager.Selector) manager.RoleI
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L1091-L1107
 func GetTargetFunctionRole(targetPath string, selector manager.Selector) manager.RoleId {
 	return accessState.GetTargetFunctionRole(targetPath, selector)
+}
+
+// GetTargetAdminDelay returns the admin delay configured for targetPath.
+func GetTargetAdminDelay(targetPath string) manager.Delay {
+	return accessState.GetTargetAdminDelay(targetPath)
 }
 
 // IsTargetClosed reports whether targetPath is closed.
@@ -66,4 +76,16 @@ func CanAdminRole(role manager.RoleId, caller address) manager.CanCallResult {
 // CanManageTarget reports whether caller can manage target configuration.
 func CanManageTarget(caller address) manager.CanCallResult {
 	return accessState.CanManageTarget(caller)
+}
+
+func CanManageTargetPath(targetPath string, caller address) manager.CanCallResult {
+	return accessState.CanManageTargetPath(caller, targetPath)
+}
+
+func HashOperation(caller address, targetPath string, selector manager.Selector, dataHash string) manager.OperationId {
+	return manager.HashOperation(caller, targetPath, selector, dataHash)
+}
+
+func GetSchedule(operationId manager.OperationId) manager.Schedule {
+	return accessState.Schedules[operationId]
 }

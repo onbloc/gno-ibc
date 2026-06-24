@@ -19,6 +19,7 @@ func (r RoleId) String() string {
 type RoleConfig struct {
 	Members    map[address]Access
 	Admin      RoleId
+	Guardian   RoleId
 	GrantDelay Delay
 }
 
@@ -26,17 +27,18 @@ func NewRoleConfig(admin RoleId, grantDelay Delay) *RoleConfig {
 	return &RoleConfig{
 		Members:    make(map[address]Access),
 		Admin:      admin,
+		Guardian:   AdminRole,
 		GrantDelay: grantDelay,
 	}
 }
 
-func (roleConfig *RoleConfig) grant(account address, now TimePoint) bool {
+func (roleConfig *RoleConfig) grant(account address, now TimePoint, executionDelay Delay) bool {
 	_, found := roleConfig.Members[account]
 	if found {
 		return false
 	}
 
-	roleConfig.Members[account] = NewAccessWithDelay(now, roleConfig.GrantDelay)
+	roleConfig.Members[account] = NewAccessWithDelay(now, roleConfig.GrantDelay, executionDelay)
 
 	return true
 }
@@ -59,12 +61,29 @@ func (roleConfig *RoleConfig) hasMember(account address, now TimePoint) bool {
 	return access.isActiveAt(now)
 }
 
+func (roleConfig *RoleConfig) access(account address, now TimePoint) Access {
+	access, found := roleConfig.Members[account]
+	if !found || !access.isActiveAt(now) {
+		return Access{}
+	}
+
+	return access
+}
+
 func (roleConfig *RoleConfig) setAdmin(admin RoleId) {
 	roleConfig.Admin = admin
 }
 
 func (roleConfig *RoleConfig) adminRole() RoleId {
 	return roleConfig.Admin
+}
+
+func (roleConfig *RoleConfig) setGuardian(guardian RoleId) {
+	roleConfig.Guardian = guardian
+}
+
+func (roleConfig *RoleConfig) guardianRole() RoleId {
+	return roleConfig.Guardian
 }
 
 func (roleConfig *RoleConfig) setGrantDelay(delay Delay) {

@@ -57,3 +57,15 @@ func TestTargetConfigClosed(t *testing.T) {
 		})
 	}
 }
+
+func TestTargetConfigAdminDelay(t *testing.T) {
+	targetConfig := NewTargetConfig(false)
+	if targetConfig.adminDelay() != 0 {
+		t.Fatal("target admin delay must default to zero")
+	}
+
+	targetConfig.setAdminDelay(17)
+	if targetConfig.adminDelay() != 17 {
+		t.Fatal("target admin delay must be updated")
+	}
+}

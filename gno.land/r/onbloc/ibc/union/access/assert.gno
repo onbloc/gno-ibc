@@ -21,14 +21,59 @@ func AssertCanCall(_ int, rlm realm, selector manager.Selector) {
 	}
 }
 
+func AssertCanCallOrConsume(_ int, rlm realm, selector manager.Selector, dataHash string) {
+	if !rlm.IsCurrent() {
+		panic(ErrSpoofedRealm)
+	}
+
+	caller := rlm.Previous().Address()
+	target := rlm.PkgPath()
+	result := accessState.CanCall(caller, target, selector)
+	if result.Immediate {
+		return
+	}
+	if !result.Authorized {
+		panic(AccessManagerUnauthorizedCallError(caller, target, selector))
+	}
+
+	operationId, nonce := accessState.ConsumeScheduledOp(caller, target, selector, dataHash)
+	emitOperationExecutedEvent(operationId, caller, target, selector, dataHash, nonce)
+}
+
 func assertCanManageTarget(_ int, rlm realm) {
+	if !rlm.IsCurrent() {
+		panic(ErrSpoofedRealm)
+	}
+
 	caller := rlm.Previous().Address()
 	if !accessState.CanManageTarget(caller).Immediate {
 		panic(AccessManagerUnauthorizedAccountError(caller, manager.AdminRole))
 	}
 }
 
+func assertCanManageTargetOrConsume(_ int, rlm realm, target string, selector manager.Selector, dataHash string) {
+	if !rlm.IsCurrent() {
+		panic(ErrSpoofedRealm)
+	}
+
+	caller := rlm.Previous().Address()
+	result := accessState.CanManageTargetPath(caller, target)
+	if result.Immediate {
+		return
+	}
+	if !result.Authorized {
+		panic(AccessManagerUnauthorizedAccountError(caller, manager.AdminRole))
+	}
+
+	operationId, nonce := accessState.ConsumeScheduledOp(caller, target, selector, dataHash)
+	emitOperationExecutedEvent(operationId, caller, target, selector, dataHash, nonce)
+}
+
 func assertCanAdminRole(_ int, rlm realm, role manager.RoleId) {
+	if !rlm.IsCurrent() {
+		panic(ErrSpoofedRealm)
+	}
+
 	caller := rlm.Previous().Address()
 	if !accessState.CanAdminRole(role, caller).Immediate {
 		panic(AccessManagerUnauthorizedAccountError(caller, accessState.GetRoleAdmin(role)))

@@ -14,8 +14,11 @@ func TestRoleConfigManagesNilMembersMap(t *testing.T) {
 	if roleConfig.hasMember(account, now) {
 		t.Fatal("missing member must be inactive")
 	}
-	if !roleConfig.grant(account, now) {
+	if !roleConfig.grant(account, now, 3) {
 		t.Fatal("first grant must report a new member")
+	}
+	if roleConfig.Members[account].Delay != 3 {
+		t.Fatal("grant must store execution delay")
 	}
 	if roleConfig.Members == nil {
 		t.Fatal("grant must initialize members map")
@@ -37,7 +40,7 @@ func TestRoleConfigManagesNilMembersMap(t *testing.T) {
 		})
 	}
 
-	if roleConfig.grant(account, now) {
+	if roleConfig.grant(account, now, 0) {
 		t.Fatal("second grant must not report a new member")
 	}
 	if !roleConfig.revoke(account) {
@@ -84,5 +87,10 @@ func TestRoleConfigAdminAndGrantDelay(t *testing.T) {
 				t.Fatalf("grantDelay() = %d, want %d", got, tc.delay)
 			}
 		})
+	}
+
+	roleConfig.setGuardian(4)
+	if got := roleConfig.guardianRole(); got != 4 {
+		t.Fatalf("guardianRole() = %d, want 4", got)
 	}
 }

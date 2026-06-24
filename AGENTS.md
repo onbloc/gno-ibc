@@ -433,14 +433,10 @@ func main(cur realm) {
 
 A bare `func main()` is still valid for filetests that do not call any crossing function. If the body references `cur`, the signature must take it.
 
-Naming convention: `z{category}{letter}_{description}_filetest.gno`
-
-**core realm**: `z1*` = create client, `z2*` = update client, `z3*` = send packet, `z5*` = acknowledgement, `z6*` = timeout, `z7*` = recv packet, `z8*` = misbehaviour
-
-**ZKGM app**: filetests live under `apps/ucs03_zkgm/testing/` and use
-directory-local scenario prefixes. Keep new tests near the behavior they cover
-and continue the nearby `z*` / `zs*` prefix pattern instead of reusing the
-removed legacy numbering.
+Scenario test convention: use `gno.land/r/onbloc/ibc/scenario` as the current
+scenario spec source. Scenario filetests use descriptive names without a `z`
+prefix, for example `token_send_by_ucs03_zkgm_filetest.gno` and
+`token_receive_by_statelens_filetest.gno`.
 
 `zz_*_example_filetest.gno` = documentation examples (referenced from README)
 

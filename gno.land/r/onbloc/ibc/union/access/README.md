@@ -10,9 +10,9 @@ package path.
 Authorization guards use the non-crossing `AssertCanCall(0, cur, selector)`
 form. The caller passes its current realm value, and access derives the target
 from `rlm.PkgPath()` and the caller from `rlm.Previous().Address()`.
-Management and query functions are crossing calls; those derive the target from
-the previous realm package path when they manage or inspect per-target
-configuration.
+Management functions are crossing calls; per-target mutations derive the target
+from the previous realm package path. Query getters are plain read surfaces that
+take the target path explicitly when they inspect per-target configuration.
 
 ## References
 

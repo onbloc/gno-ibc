@@ -1,0 +1,10 @@
+package main
+
+import (
+	"gno.land/p/onbloc/ibc/union/types"
+	"gno.land/r/onbloc/ibc/union/core"
+)
+
+func main(cur realm) {
+	core.ConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(types.ConnectionId(@CONNECTION_ID@), types.ConnectionId(77), nil, 1))
+}

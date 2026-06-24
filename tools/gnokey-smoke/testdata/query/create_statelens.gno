@@ -3,16 +3,17 @@ package main
 import (
 	"bytes"
 
-	statelensp "gno.land/p/onbloc/ibc/lightclients/statelensics23mpt"
-	core "gno.land/r/onbloc/unionibc/v1/core"
-	statelens "gno.land/r/onbloc/unionibc/v1/lightclients/statelensics23mpt"
+	statelensp "gno.land/p/onbloc/ibc/union/lightclient/state_lens/ics23_mpt"
+
+	"gno.land/r/onbloc/ibc/union/core"
+	statelens "gno.land/r/onbloc/ibc/union/lightclients/statelensics23mpt"
 )
 
 func main(cur realm) {
 	consensusState, err := statelensp.EncodeConsensusState(statelensp.ConsensusState{
 		Timestamp:   1,
-		StateRoot:   bytes.Repeat([]byte{0x01}, 32),
-		StorageRoot: bytes.Repeat([]byte{0x02}, 32),
+		StateRoot:   bytes.Repeat([]byte{0x04}, 32),
+		StorageRoot: bytes.Repeat([]byte{0x05}, 32),
 	})
 	if err != nil {
 		panic(err)
@@ -29,6 +30,5 @@ func main(cur realm) {
 	if err != nil {
 		panic(err)
 	}
-	id := core.CreateClient(cross(cur), core.NewMsgCreateClient(cross(cur), statelens.ClientType, clientState, consensusState))
-	println("statelens_client_id", id.String())
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(statelens.ClientType, clientState, consensusState))
 }

@@ -3,7 +3,8 @@ package main
 import (
 	"encoding/hex"
 
-	core "gno.land/r/onbloc/unionibc/v1/core"
+	"gno.land/p/onbloc/ibc/union/types"
+	"gno.land/r/onbloc/ibc/union/core"
 )
 
 func main(cur realm) {
@@ -11,6 +12,10 @@ func main(cur realm) {
 	if err != nil {
 		panic(err)
 	}
-	h := core.UpdateClient(cross(cur), core.NewMsgUpdateClient(cross(cur), core.ClientId(@COMETBLS_ID@), msg))
-	println("update_height", h.String())
+	core.UpdateClient(cross(cur), types.NewMsgUpdateClient(types.ClientId(@COMETBLS_ID@), msg))
+	h, err := core.GetLatestHeight(types.ClientId(@COMETBLS_ID@))
+	if err != nil {
+		panic(err)
+	}
+	println("update_height", h)
 }

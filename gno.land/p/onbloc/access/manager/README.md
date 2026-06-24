@@ -8,13 +8,13 @@ Reference:
 - Repository comparison guide:
   [docs/access-management.md](../../../../../docs/access-management.md)
 - OpenZeppelin Access Management concept guide:
-  https://docs.openzeppelin.com/contracts/5.x/access-control#access-management
+  [Access Management](https://docs.openzeppelin.com/contracts/5.x/access-control#access-management)
 - OpenZeppelin Contracts `AccessManager` API reference:
-  https://docs.openzeppelin.com/contracts/5.x/api/access#AccessManager
+  [`AccessManager` API](https://docs.openzeppelin.com/contracts/5.x/api/access#AccessManager)
 - OpenZeppelin Contracts `AccessManager` v5.6.1:
-  https://github.com/OpenZeppelin/openzeppelin-contracts/tree/v5.6.1/contracts/access/manager
+  [`contracts/access/manager`](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/v5.6.1/contracts/access/manager)
 - Union CosmWasm `access-manager`:
-  https://github.com/unionlabs/union/tree/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager
+  [`cosmwasm/access-manager`](https://github.com/unionlabs/union/tree/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager)
 
 This package is a state transition library, not a realm. It does not own
 storage, inspect `cur realm`, or decide who the caller is. A realm that wants
@@ -52,16 +52,16 @@ are still aligned with the source models:
 - OpenZeppelin's access-management guide describes the shared manager model:
   roles are granted to accounts, target functions are assigned to roles, and a
   caller is authorized when it has the role assigned to the target function:
-  https://docs.openzeppelin.com/contracts/5.x/access-control#access-management
+  [Access Management](https://docs.openzeppelin.com/contracts/5.x/access-control#access-management)
 - OpenZeppelin's API reference is useful for checking the public AccessManager
   surface and the fields intentionally not ported in this Gno package:
-  https://docs.openzeppelin.com/contracts/5.x/api/access#AccessManager
+  [`AccessManager` API](https://docs.openzeppelin.com/contracts/5.x/api/access#AccessManager)
 - OpenZeppelin defines the target/function role model, admin role behavior,
   public role behavior, target closure, and delayed operation concepts:
-  https://github.com/OpenZeppelin/openzeppelin-contracts/tree/v5.6.1/contracts/access/manager
+  [`AccessManager` source](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/v5.6.1/contracts/access/manager)
 - Union's `access-manager` ports the OpenZeppelin manager to CosmWasm. Its init
   grants `ADMIN_ROLE` to `InitMsg.initial_admin`:
-  https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/lib.rs#L135-L154
+  [`init` authority grant](https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/lib.rs#L135-L154)
 
 ## Usage
 

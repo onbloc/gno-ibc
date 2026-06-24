@@ -286,11 +286,13 @@ func TestVerifyClientMembershipActivePasses(cur realm, t *testing.T) {
 
 func TestVerifyClientMembershipInactiveAborts(cur realm, t *testing.T) {
 	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{status: lightclient.Expired}, nil, nil)
+	lc := &mockLightClient{status: lightclient.Expired}
+	clientId := createClient(cur, v, lc, nil, nil)
 
 	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
 		v.VerifyClientMembership(0, cur, clientId, types.NewHeight(1), []byte("proof"), []byte("path"), []byte("value"))
 	})
+	uassert.Equal(t, 0, lc.membershipCalls)
 }
 
 func TestVerifyClientMembershipProofFailureAborts(cur realm, t *testing.T) {

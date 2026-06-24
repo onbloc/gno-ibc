@@ -27,7 +27,8 @@ func TestConnectionOpenInit(cur realm, t *testing.T) {
 
 func TestConnectionOpenTryVerifiesAndSaves(cur realm, t *testing.T) {
 	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
+	lc := &mockLightClient{}
+	clientId := createClient(cur, v, lc, nil, nil)
 
 	v.ConnectionOpenTry(0, cur, types.MsgConnectionOpenTry{
 		ClientId:                 clientId,
@@ -41,6 +42,7 @@ func TestConnectionOpenTryVerifiesAndSaves(cur realm, t *testing.T) {
 	uassert.True(t, ok)
 	uassert.True(t, conn.State == types.ConnectionStateTryOpen)
 	uassert.Equal(t, uint32(3), uint32(conn.CounterpartyConnectionId))
+	uassert.Equal(t, 1, lc.membershipCalls)
 }
 
 func TestConnectionOpenTryProofFailureAborts(cur realm, t *testing.T) {
@@ -60,7 +62,8 @@ func TestConnectionOpenTryProofFailureAborts(cur realm, t *testing.T) {
 
 func TestConnectionOpenAckMovesInitToOpen(cur realm, t *testing.T) {
 	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
+	lc := &mockLightClient{}
+	clientId := createClient(cur, v, lc, nil, nil)
 	v.ConnectionOpenInit(0, cur, types.MsgConnectionOpenInit{ClientId: clientId, CounterpartyClientId: types.ClientId(7)})
 
 	v.ConnectionOpenAck(0, cur, types.MsgConnectionOpenAck{
@@ -73,6 +76,7 @@ func TestConnectionOpenAckMovesInitToOpen(cur realm, t *testing.T) {
 	conn, _ := v.store.GetConnection(types.ConnectionId(1))
 	uassert.True(t, conn.State == types.ConnectionStateOpen)
 	uassert.Equal(t, uint32(5), uint32(conn.CounterpartyConnectionId))
+	uassert.Equal(t, 1, lc.membershipCalls)
 }
 
 func TestConnectionOpenAckWrongStateAborts(cur realm, t *testing.T) {

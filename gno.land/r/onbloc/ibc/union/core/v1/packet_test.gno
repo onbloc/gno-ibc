@@ -475,6 +475,21 @@ func TestPacketMembershipEntrypointsInactiveClientAbortBeforeVerification(cur re
 	}
 }
 
+func TestPacketRecvRejectsMissingPortApp(cur realm, t *testing.T) {
+	v := newTestImpl()
+	chId := setupOpenChannelWithoutApp(cur, v, types.Bytes("missing-port"))
+	packet := recvPacket(chId, "missing-port-recv")
+
+	uassert.AbortsContains(t, cur, "port not found, missing-port", func(cur realm) {
+		v.PacketRecv(0, cur, types.MsgPacketRecv{
+			Packets:     []types.Packet{packet},
+			RelayerMsgs: [][]byte{[]byte("rm")},
+			Proof:       []byte("p"),
+			ProofHeight: 10,
+		})
+	})
+}
+
 func TestIntentPacketRecvRejectsMissingPortApp(cur realm, t *testing.T) {
 	v := newTestImpl()
 	chId := setupOpenChannelWithoutApp(cur, v, types.Bytes("missing-port"))
@@ -490,7 +505,8 @@ func TestIntentPacketRecvRejectsMissingPortApp(cur realm, t *testing.T) {
 
 func TestPacketAcknowledgementMarksAndNotifies(cur realm, t *testing.T) {
 	v := newTestImpl()
-	chId, _, mApp := setupOpenChannel(cur, v)
+	lc := &mockLightClient{timestampAtHt: farFuture}
+	chId, _, mApp := setupOpenChannelWithLightClient(cur, v, lc)
 	packet := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("ack-data"))
 
 	v.PacketAcknowledgement(0, cur, types.MsgPacketAcknowledgement{
@@ -501,6 +517,7 @@ func TestPacketAcknowledgementMarksAndNotifies(cur realm, t *testing.T) {
 	})
 
 	uassert.Equal(t, 1, mApp.ackCalls)
+	uassert.Equal(t, 2, lc.membershipCalls) // channel ack + acknowledgement proof
 	// A second ack of the same packet is now rejected (already acknowledged):
 	// the impl owns the state machine and aborts before re-flipping the commitment.
 	uassert.AbortsContains(t, cur, "already acknowledged", func(cur realm) {
@@ -677,9 +694,52 @@ func TestMarkPacketAcknowledged(cur realm, t *testing.T) {
 	}
 }
 
-func TestPacketTimeoutRefunds(cur realm, t *testing.T) {
+func TestZ38PacketLifecycleRejectsSecondAck(cur realm, t *testing.T) {
 	v := newTestImpl()
 	chId, _, mApp := setupOpenChannel(cur, v)
+	packet := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("z38-double-ack"))
+	msg := types.MsgPacketAcknowledgement{
+		Packets:          []types.Packet{packet},
+		Acknowledgements: [][]byte{[]byte("ack")},
+		Proof:            []byte("proof"),
+		ProofHeight:      10,
+	}
+
+	v.PacketAcknowledgement(0, cur, msg)
+
+	uassert.Equal(t, 1, mApp.ackCalls)
+	uassert.AbortsContains(t, cur, "packet already acknowledged", func(cur realm) {
+		v.PacketAcknowledgement(0, cur, msg)
+	})
+	uassert.Equal(t, 1, mApp.ackCalls)
+}
+
+func TestZ38PacketLifecycleRejectsTimeoutAfterAck(cur realm, t *testing.T) {
+	v := newTestImpl()
+	chId, _, mApp := setupOpenChannel(cur, v)
+	packet := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("z38-timeout-after-ack"))
+	v.PacketAcknowledgement(0, cur, types.MsgPacketAcknowledgement{
+		Packets:          []types.Packet{packet},
+		Acknowledgements: [][]byte{[]byte("ack")},
+		Proof:            []byte("proof"),
+		ProofHeight:      10,
+	})
+
+	uassert.AbortsContains(t, cur, "packet already acknowledged", func(cur realm) {
+		v.PacketTimeout(0, cur, types.MsgPacketTimeout{
+			Packet:      packet,
+			Proof:       []byte("proof"),
+			ProofHeight: 5,
+		})
+	})
+	uassert.Equal(t, 1, mApp.ackCalls)
+	uassert.Equal(t, 0, mApp.timeoutCalls)
+}
+
+func TestPacketTimeoutRefunds(cur realm, t *testing.T) {
+	v := newTestImpl()
+	lc := &mockLightClient{timestampAtHt: farFuture}
+	chId, _, mApp := setupOpenChannelWithLightClient(cur, v, lc)
 	packet := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("timeout-data"))
 
 	v.PacketTimeout(0, cur, types.MsgPacketTimeout{

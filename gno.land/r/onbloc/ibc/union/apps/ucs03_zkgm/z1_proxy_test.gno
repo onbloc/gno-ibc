@@ -3,6 +3,7 @@ package zkgm
 import (
 	"testing"
 
+	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	"gno.land/r/onbloc/ibc/union/access"
 
@@ -91,6 +92,34 @@ func TestRegisterCoreAppRegistersProxyAndRejectsDuplicate(cur realm, t *testing.
 	uassert.AbortsContains(t, cur, "already registered", func(cur realm) {
 		RegisterCoreApp(cross(cur))
 	})
+}
+
+func TestUpdateImplPreservesProxyStoreState(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+	first := &dummyImpl{}
+	second := &dummyImpl{}
+	implConstructors[testImplPathA] = func(store IStore) IApp { return first }
+	implConstructors[testImplPathB] = func(store IStore) IApp { return second }
+
+	channelKey := "upgrade-continuity/channel-balance"
+	inFlightKey := "upgrade-continuity/in-flight"
+	parent := core.NewPacket(10, 11, []byte("parent"), 100)
+
+	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+	UpdateImpl(cross(cur), testImplPathA)
+	store.SetChannelBalanceV2(0, cur, channelKey, u256.NewUint(40))
+	store.SetInFlightPacket(0, cur, inFlightKey, parent)
+	UpdateImpl(cross(cur), testImplPathB)
+
+	balance, ok := store.GetChannelBalanceV2(channelKey)
+	uassert.True(t, ok)
+	uassert.Equal(t, "40", balance.ToString())
+
+	popped, ok := store.GetInFlightPacket(inFlightKey)
+	uassert.True(t, ok)
+	uassert.Equal(t, "parent", string(popped.Data))
+	uassert.True(t, currentImpl == second)
+	uassert.True(t, currentImpl != first)
 }
 
 func TestProxyAddressIsCaptured(cur realm, t *testing.T) {

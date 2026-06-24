@@ -597,10 +597,10 @@ func TestDecodeZkgmPacketErrors(t *testing.T) {
 
 func TestEncodeForward(t *testing.T) {
 	tests := []struct {
-		name             string
-		f                Forward
-		wantPath         string
-		wantTimeoutHeight uint64
+		name                 string
+		f                    Forward
+		wantPath             string
+		wantTimeoutHeight    uint64
 		wantTimeoutTimestamp uint64
 	}{
 		{
@@ -611,8 +611,8 @@ func TestEncodeForward(t *testing.T) {
 				TimeoutTimestamp: 0,
 				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte{}},
 			},
-			wantPath:         "0",
-			wantTimeoutHeight: 0,
+			wantPath:             "0",
+			wantTimeoutHeight:    0,
 			wantTimeoutTimestamp: 0,
 		},
 		{
@@ -623,8 +623,8 @@ func TestEncodeForward(t *testing.T) {
 				TimeoutTimestamp: 2000,
 				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_BATCH, Operand: []byte{}},
 			},
-			wantPath:         "456",
-			wantTimeoutHeight: 1000,
+			wantPath:             "456",
+			wantTimeoutHeight:    1000,
 			wantTimeoutTimestamp: 2000,
 		},
 		{
@@ -635,8 +635,8 @@ func TestEncodeForward(t *testing.T) {
 				TimeoutTimestamp: 18446744073709551615,
 				Instruction:      Instruction{Version: INSTR_VERSION_1, Opcode: OP_TOKEN_ORDER, Operand: []byte{0xab}},
 			},
-			wantPath:         "99999",
-			wantTimeoutHeight: 18446744073709551615,
+			wantPath:             "99999",
+			wantTimeoutHeight:    18446744073709551615,
 			wantTimeoutTimestamp: 18446744073709551615,
 		},
 		{
@@ -647,8 +647,8 @@ func TestEncodeForward(t *testing.T) {
 				TimeoutTimestamp: 10000,
 				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: bytes.Repeat([]byte{0xcc}, 100)},
 			},
-			wantPath:         "12345",
-			wantTimeoutHeight: 5000,
+			wantPath:             "12345",
+			wantTimeoutHeight:    5000,
 			wantTimeoutTimestamp: 10000,
 		},
 	}
@@ -678,10 +678,10 @@ func TestEncodeForward(t *testing.T) {
 
 func TestDecodeForward(t *testing.T) {
 	tests := []struct {
-		name       string
-		data       []byte
-		want       Forward
-		wantErr    bool
+		name    string
+		data    []byte
+		want    Forward
+		wantErr bool
 	}{
 		{
 			name:    "empty",
@@ -701,13 +701,13 @@ func TestDecodeForward(t *testing.T) {
 		{
 			name: "minimal values",
 			data: mustEncodeForward(Forward{
-				Path: u256.NewUint(0),
+				Path:             u256.NewUint(0),
 				TimeoutHeight:    0,
 				TimeoutTimestamp: 0,
 				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte{}},
 			}),
 			want: Forward{
-				Path: u256.NewUint(0),
+				Path:             u256.NewUint(0),
 				TimeoutHeight:    0,
 				TimeoutTimestamp: 0,
 				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte{}},
@@ -716,13 +716,13 @@ func TestDecodeForward(t *testing.T) {
 		{
 			name: "typical values",
 			data: mustEncodeForward(Forward{
-				Path: u256.NewUint(123),
+				Path:             u256.NewUint(123),
 				TimeoutHeight:    5000,
 				TimeoutTimestamp: 10000,
 				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_BATCH, Operand: []byte{0xab, 0xcd}},
 			}),
 			want: Forward{
-				Path: u256.NewUint(123),
+				Path:             u256.NewUint(123),
 				TimeoutHeight:    5000,
 				TimeoutTimestamp: 10000,
 				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_BATCH, Operand: []byte{0xab, 0xcd}},
@@ -731,13 +731,13 @@ func TestDecodeForward(t *testing.T) {
 		{
 			name: "large path and timeouts",
 			data: mustEncodeForward(Forward{
-				Path: u256.NewUint(18446744073709551615),
+				Path:             u256.NewUint(18446744073709551615),
 				TimeoutHeight:    18446744073709551615,
 				TimeoutTimestamp: 18446744073709551615,
 				Instruction:      Instruction{Version: INSTR_VERSION_1, Opcode: OP_TOKEN_ORDER, Operand: []byte{0xff}},
 			}),
 			want: Forward{
-				Path: u256.NewUint(18446744073709551615),
+				Path:             u256.NewUint(18446744073709551615),
 				TimeoutHeight:    18446744073709551615,
 				TimeoutTimestamp: 18446744073709551615,
 				Instruction:      Instruction{Version: INSTR_VERSION_1, Opcode: OP_TOKEN_ORDER, Operand: []byte{0xff}},
@@ -858,13 +858,13 @@ func TestCallRoundTrip(t *testing.T) {
 
 func TestEncodeBatch(t *testing.T) {
 	tests := []struct {
-		name             string
-		b                Batch
-		wantInstrCount   int
+		name           string
+		b              Batch
+		wantInstrCount int
 	}{
 		{
-			name: "empty instructions",
-			b:    Batch{Instructions: []Instruction{}},
+			name:           "empty instructions",
+			b:              Batch{Instructions: []Instruction{}},
 			wantInstrCount: 0,
 		},
 		{
@@ -1285,9 +1285,9 @@ func TestDecodeAckErrors(t *testing.T) {
 
 func TestEncodeBatchAck(t *testing.T) {
 	tests := []struct {
-		name              string
-		ba                BatchAck
-		wantAckCount      int
+		name         string
+		ba           BatchAck
+		wantAckCount int
 	}{
 		{
 			name:         "empty acknowledgements",
@@ -1888,4 +1888,72 @@ func mustEncodeForward(f Forward) []byte {
 		panic(err)
 	}
 	return data
+}
+
+func TestZkgmPacketFixture(t *testing.T) {
+	decodeHex := func(str string) []byte {
+		bz, err := hex.DecodeString(str)
+		if err != nil {
+			panic(err)
+		}
+
+		return bz
+	}
+
+	tests := []struct {
+		name            string
+		salt            [32]byte
+		path            *u256.Uint
+		instruction     Instruction
+		expectedSize    int
+		expectedHexSize int
+	}{
+		{
+			name:            "minimal packet",
+			salt:            [32]byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f},
+			path:            u256.Zero(),
+			instruction:     Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte("operand")},
+			expectedSize:    256,
+			expectedHexSize: 512,
+		},
+		{
+			name: "common packet",
+			salt: [32]byte{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f},
+			path: u256.Zero(),
+			// operand sample {
+			// 	  sender: Ucs05.CosmosDisplay.make({
+			// 	    address: "g11qyqszqgpqyqszqgpqyqszqgpqyqszqgpf27zam", // 임시 g1 주소
+			// 	  }),
+			// 	  receiver: Ucs05.EvmDisplay.make({
+			// 	    address: "0x50A22f95bcB21E7bFb63c7A8544AC0683dCeA302",
+			// 	  }),
+			// 	  baseToken: "0x75676e6f74",           // "ugnot" UTF-8 hex
+			// 	  baseAmount: 1_000_000n,
+			// 	  quoteToken: "0x7FEd1d819109fb7a095137bF867aBe61DB36c99c", // Sepolia wrapped ugnot
+			// 	  quoteAmount: 1_000_000n,
+			// 	  kind: 1,                             // TOKEN_ORDER_KIND_ESCROW
+			// 	  metadata: "0x",
+			// }
+			// expected hex: 0x0000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000016000000000000000000000000000000000000000000000000000000000000001a000000000000000000000000000000000000000000000000000000000000f424000000000000000000000000000000000000000000000000000000000000001e000000000000000000000000000000000000000000000000000000000000f4240000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000002200000000000000000000000000000000000000000000000000000000000000029673131717971737a716770717971737a716770717971737a716770717971737a7167706632377a616d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001450A22f95bcB21E7bFb63c7A8544AC0683dCeA302000000000000000000000000000000000000000000000000000000000000000000000000000000000000000575676e6f7400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000147FEd1d819109fb7a095137bF867aBe61DB36c99c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
+			instruction:     Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: decodeHex("0000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000016000000000000000000000000000000000000000000000000000000000000001a000000000000000000000000000000000000000000000000000000000000f424000000000000000000000000000000000000000000000000000000000000001e000000000000000000000000000000000000000000000000000000000000f4240000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000002200000000000000000000000000000000000000000000000000000000000000029673131717971737a716770717971737a716770717971737a716770717971737a7167706632377a616d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001450A22f95bcB21E7bFb63c7A8544AC0683dCeA302000000000000000000000000000000000000000000000000000000000000000000000000000000000000000575676e6f7400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000147FEd1d819109fb7a095137bF867aBe61DB36c99c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")},
+			expectedSize:    800,
+			expectedHexSize: 1600,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := EncodeZkgmPacket(ZkgmPacket{Salt: tt.salt, Path: tt.path, Instruction: tt.instruction})
+			if err != nil {
+				t.Fatalf("EncodeZkgmPacket: %v", err)
+			}
+
+			if len(data) != tt.expectedSize {
+				t.Fatalf("expected size: got %d want %d", len(data), tt.expectedSize)
+			}
+
+			if len(hex.EncodeToString(data)) != tt.expectedHexSize {
+				t.Fatalf("expected hex size: got %d want %d", len(hex.EncodeToString(data)), tt.expectedHexSize)
+			}
+		})
+	}
 }

@@ -1091,6 +1091,7 @@ type protocolFillMintCase struct {
 	expectReceiver int64
 	expectRelayer  int64
 	expectDeployed bool
+	expectError    string // non-empty => protocolFillMint returns this error substring
 }
 
 func TestProtocolFillMint(cur realm, t *testing.T) {
@@ -1197,6 +1198,16 @@ func TestProtocolFillMint(cur realm, t *testing.T) {
 			expectRelayer:  0,
 			expectDeployed: false,
 		},
+		{
+			name:        "fee underflow - quote exceeds base returns error",
+			path:        u256.NewUint(36),
+			channelId:   types.ChannelId(36),
+			baseAmount:  u256.NewUint(50),
+			quoteAmount: u256.NewUint(80), // quote > base => fee = base - quote underflows
+			metadata:    &validMetadata,
+			canDeploy:   true,
+			expectError: "fee underflow",
+		},
 	}
 
 	for _, tc := range cases {
@@ -1222,6 +1233,14 @@ func TestProtocolFillMint(cur realm, t *testing.T) {
 			}
 
 			res, err := v.protocolFillMint(0, cur, channelId, path, baseToken, wrappedToken, address(receiver), address(relayer), tc.baseAmount, tc.quoteAmount, tc.metadata, tc.canDeploy)
+
+			if tc.expectError != "" {
+				uassert.ErrorContains(t, err, tc.expectError)
+				uassert.True(t, res.Status == types.PacketStatusUnknown)
+				uassert.Equal(t, int64(0), voucherBalanceOf(wrappedToken, address(receiver)))
+				uassert.Equal(t, int64(0), voucherBalanceOf(wrappedToken, address(relayer)))
+				return
+			}
 
 			if tc.expectSuccess {
 				uassert.NoError(t, err)
@@ -1314,6 +1333,15 @@ func TestProtocolFillUnescrowV2(cur realm, t *testing.T) {
 			expectReceiver: 0,
 			expectRelayer:  0,
 		},
+		{
+			name:           "fee underflow - quote exceeds base returns error",
+			path:           u256.NewUint(44),
+			channelId:      types.ChannelId(44),
+			baseAmount:     u256.NewUint(50),
+			quoteAmount:    u256.NewUint(80), // quote > base => fee = base - quote underflows
+			initialBalance: u256.NewUint(100),
+			expectError:    "fee underflow",
+		},
 	}
 
 	for _, tc := range cases {
@@ -1336,6 +1364,12 @@ func TestProtocolFillUnescrowV2(cur realm, t *testing.T) {
 			v.increaseChannelBalanceV2(0, cur, channelId, path, quoteToken, baseToken, tc.initialBalance)
 
 			res, err := v.protocolFillUnescrowV2(0, cur, channelId, path, baseToken, string(quoteToken), address(receiver), address(relayer), tc.baseAmount, tc.quoteAmount)
+
+			if tc.expectError != "" {
+				uassert.ErrorContains(t, err, tc.expectError)
+				uassert.True(t, res.Status == types.PacketStatusUnknown)
+				return
+			}
 
 			if tc.expectSuccess {
 				uassert.NoError(t, err)

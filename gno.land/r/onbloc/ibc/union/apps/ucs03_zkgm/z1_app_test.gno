@@ -22,13 +22,13 @@ func TestApp_DelegatesAllReceiversToImpl(cur realm, t *testing.T) {
 
 	// Callbacks are gated to the core caller, so impersonate core.
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-	AsIBCApp().OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer"))
-	AsIBCApp().OnChannelOpenTry(cross(cur), 1, 2, Version, Version, address("g1relayer"))
-	AsIBCApp().OnChannelOpenAck(cross(cur), 2, 3, Version, address("g1relayer"))
-	AsIBCApp().OnChannelOpenConfirm(cross(cur), 2, address("g1relayer"))
-	res := AsIBCApp().OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
-	AsIBCApp().OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
-	AsIBCApp().OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
+	(&App{}).OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer"))
+	(&App{}).OnChannelOpenTry(cross(cur), 1, 2, Version, Version, address("g1relayer"))
+	(&App{}).OnChannelOpenAck(cross(cur), 2, 3, Version, address("g1relayer"))
+	(&App{}).OnChannelOpenConfirm(cross(cur), 2, address("g1relayer"))
+	res := (&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
+	(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
+	(&App{}).OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
 	(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
 
 	if !d.openInitCalled || !d.openTryCalled || !d.openAckCalled || !d.openConfirmCalled {
@@ -87,16 +87,16 @@ func TestApp_PausedBlocksAllCallbacks(cur realm, t *testing.T) {
 
 	// Packet callbacks are blocked by pause
 	uassert.AbortsContains(t, cur, "paused", func() {
-		AsIBCApp().OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
+		(&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
 	})
 	uassert.AbortsContains(t, cur, "paused", func() {
 		(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
 	})
 	uassert.AbortsContains(t, cur, "paused", func() {
-		AsIBCApp().OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
+		(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
 	})
 	uassert.AbortsContains(t, cur, "paused", func() {
-		AsIBCApp().OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
+		(&App{}).OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
 	})
 
 	// Verify no delegation happened

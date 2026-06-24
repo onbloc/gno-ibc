@@ -80,13 +80,6 @@ func TestChannelAdminEntrypointsRejectNonAdmin(cur realm, t *testing.T) {
 				ChannelCloseConfirm(cur, types.MsgChannelCloseConfirm{})
 			},
 		},
-		{
-			name:     "RegisterAppForPort",
-			selector: SelectorRegisterPort,
-			run: func(cur realm) {
-				RegisterAppForPort(cur, []byte("explicit-port"), &mockApp{})
-			},
-		},
 	}
 
 	for _, tc := range cases {

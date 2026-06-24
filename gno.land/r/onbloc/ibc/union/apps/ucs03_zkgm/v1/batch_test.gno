@@ -374,3 +374,26 @@ func mustSuccessAck() []byte {
 	}
 	return ack
 }
+
+// A batch with an only-maker child aborts the whole recv tx: OnRecvPacket panics
+// on the only-maker outer ack, so no partial batch state is committed. This
+// mirrors union's reply handler returning Err(OnlyMaker) for a batch ack
+// (contract.rs L2528-2530); see also the corrected batch.gno comment.
+func TestRecvBatchOnlyMakerChildRevertsRecv(cur realm, t *testing.T) {
+	// A SOLVE order with no voucher for the quote denom is maker-only.
+	solve := batchMustOrderInstruction(z.TokenOrderV2{
+		Kind:        z.TOKEN_ORDER_KIND_SOLVE,
+		Sender:      []byte(testAddress("batch-onlymaker-snd")),
+		Receiver:    []byte(testAddress("batch-onlymaker-rx")),
+		BaseToken:   []byte("uatom"),
+		BaseAmount:  u256.NewUint(10),
+		QuoteToken:  []byte("ibc/batch-solve"),
+		QuoteAmount: u256.NewUint(10),
+	})
+	data := mustZkgmPacketBytes(batchMustBatchInstruction(z.Batch{Instructions: []z.Instruction{solve}}))
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(1), data, 0)
+
+	uassert.AbortsContains(t, cur, "only maker", func(cur realm) {
+		newTestImpl().OnRecvPacket(0, cur, packet, address("g1relayer"), nil)
+	})
+}

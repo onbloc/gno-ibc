@@ -13,6 +13,7 @@ func QueryClientState(clientId types.ClientId) string {
 	if !ok {
 		return ""
 	}
+
 	return hexString(bz)
 }
 
@@ -23,6 +24,7 @@ func QueryConsensusState(clientId types.ClientId, height uint64) string {
 	if !ok {
 		return ""
 	}
+
 	return hexString(bz)
 }
 
@@ -37,6 +39,7 @@ func QueryConnection(connectionId types.ConnectionId) string {
 	if err != nil {
 		return ""
 	}
+
 	return hexString(bz)
 }
 
@@ -51,6 +54,7 @@ func QueryChannel(channelId types.ChannelId) string {
 	if err != nil {
 		return ""
 	}
+
 	return hexString(bz)
 }
 
@@ -61,5 +65,6 @@ func GetClientStatus(clientId types.ClientId) string {
 	if !ok {
 		return strconv.FormatUint(uint64(types.StatusUnknown), 10)
 	}
+
 	return strconv.FormatUint(uint64(lc.Status().ToType()), 10)
 }

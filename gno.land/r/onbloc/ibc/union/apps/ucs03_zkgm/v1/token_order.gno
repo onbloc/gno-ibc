@@ -8,6 +8,7 @@ import (
 	"gno.land/p/demo/tokens/grc20"
 	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	"gno.land/r/demo/defi/grc20reg"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -396,6 +397,13 @@ func (v *ucs03ZkgmV1) acknowledgeTokenOrderV2(_ int, rlm realm, packet types.Pac
 	case z.TOKEN_ORDER_KIND_UNESCROW:
 		return v.refundIBCVoucher(0, rlm, order.BaseToken, marketMaker, order.BaseAmount)
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
+		// union: when the maker designates the canonical zero burn address, the
+		// escrowed base is burned instead of released to the maker
+		// (acknowledge_token_order_v2, contract.rs L1030-1059).
+		if marketMaker == z.BURN_ADDRESS {
+			return v.burnEscrowedV2(0, rlm, sourceChannelId, path, order)
+		}
+
 		return v.settleEscrowedV2(0, rlm, sourceChannelId, path, order, marketMaker)
 	default:
 		return makeError(errUnsupportedTokenOrderKindForAck)
@@ -436,20 +444,49 @@ func (v *ucs03ZkgmV1) settleEscrowedV2(_ int, rlm realm, sourceChannelId types.C
 	return v.localTokenUnescrow(0, rlm, baseDenom, recipient, order.BaseAmount)
 }
 
-func (v *ucs03ZkgmV1) localTokenEscrow(_ int, rlm realm, denom, sender string, funds *funds, amount *u256.Uint) error {
-	if strings.HasPrefix(denom, ibcDenomPrefix) {
-		return v.transferVoucher(0, rlm, denom, address(sender), rlm.Address(), amount)
+// burnEscrowedV2 removes the escrowed channel balance and finalizes the base
+// token as burned instead of releasing it to the maker.
+// Vouchers are supply-burned; native coins are kept locked in proxy escrow.
+func (v *ucs03ZkgmV1) burnEscrowedV2(_ int, rlm realm, sourceChannelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
+	if err := v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
+		return err
 	}
 
-	return funds.sub(denom, amount)
+	baseDenom := string(order.BaseToken)
+	if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
+		return v.burnVoucher(0, rlm, baseDenom, rlm.Address().String(), order.BaseAmount)
+	}
+
+	// native: left locked in the proxy, tracked in the locked-native accounting.
+	v.store.AddLockedNative(0, rlm, baseDenom, order.BaseAmount)
+
+	return nil
 }
 
-func (v *ucs03ZkgmV1) localTokenUnescrow(_ int, rlm realm, denom, recipient string, amount *u256.Uint) error {
-	if strings.HasPrefix(denom, ibcDenomPrefix) {
-		return v.transferVoucher(0, rlm, denom, rlm.Address(), address(recipient), amount)
+// localTokenEscrow takes custody of the base token for a local send.
+// Native funds must already be attached; foreign GRC20 escrow is not supported.
+func (v *ucs03ZkgmV1) localTokenEscrow(_ int, rlm realm, denom, sender string, funds *funds, amount *u256.Uint) error {
+	switch {
+	case strings.HasPrefix(denom, ibcDenomPrefix):
+		return v.transferVoucher(0, rlm, denom, address(sender), rlm.Address(), amount)
+	case grc20reg.Get(denom) != nil:
+		return makeError(errGRC20Unsupported, denom)
+	default:
+		return funds.sub(denom, amount)
 	}
+}
 
-	return v.sendNative(0, rlm, denom, recipient, amount)
+// localTokenUnescrow releases custody of the base token (recv unwrap / refund),
+// classified the same way as localTokenEscrow.
+func (v *ucs03ZkgmV1) localTokenUnescrow(_ int, rlm realm, denom, recipient string, amount *u256.Uint) error {
+	switch {
+	case strings.HasPrefix(denom, ibcDenomPrefix):
+		return v.transferVoucher(0, rlm, denom, rlm.Address(), address(recipient), amount)
+	case grc20reg.Get(denom) != nil:
+		return makeError(errGRC20Unsupported, denom)
+	default:
+		return v.sendNative(0, rlm, denom, recipient, amount)
+	}
 }
 
 // refundIBCVoucher re-mints an IBC voucher to recipient, preserving the stored metadata image.

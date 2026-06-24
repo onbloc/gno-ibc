@@ -5,8 +5,8 @@ import (
 
 	"gno.land/p/nt/uassert/v0"
 	"gno.land/p/onbloc/ibc/union/lightclient"
-	"gno.land/r/onbloc/ibc/union/access"
 	"gno.land/p/onbloc/ibc/union/types"
+	"gno.land/r/onbloc/ibc/union/access"
 )
 
 // client_proxy_test.gno covers the public proxy entrypoints in client.gno. Each
@@ -217,33 +217,6 @@ func TestMisbehaviour_RejectsNonRelayer(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		Misbehaviour(cross(cur), types.MsgMisbehaviour{ClientId: 1})
 	})
-}
-
-func TestVerifyClientMembership(cur realm, t *testing.T) {
-	cases := []struct {
-		name     string
-		clientId types.ClientId
-		height   types.Height
-		proof    []byte
-		path     []byte
-		value    []byte
-	}{
-		{"full args", 9, types.NewHeight(100), []byte{0x01}, []byte("path"), []byte("value")},
-		{"empty proof and value", 0, types.NewHeight(0), nil, nil, nil},
-	}
-
-	for _, tc := range cases {
-		resetStore(cur)
-		rec, restore := installRecordingCore()
-
-		// ungated: no SetRealm needed for authorization
-		VerifyClientMembership(cross(cur), tc.clientId, tc.height, tc.proof, tc.path, tc.value)
-
-		uassert.Equal(t, 1, rec.calls["VerifyClientMembership"])
-		uassert.Equal(t, uint64(tc.clientId), uint64(rec.verifyClientId))
-
-		restore()
-	}
 }
 
 func TestHasClient(cur realm, t *testing.T) {

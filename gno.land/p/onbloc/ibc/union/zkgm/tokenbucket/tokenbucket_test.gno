@@ -153,15 +153,18 @@ func TestRefillIgnoresClockGoingBackward(t *testing.T) {
 	assertUint(t, "last_refill", tb.LastRefill, 10)
 }
 
-func TestUpdateClampsAvailableWhenShrinkingCapacity(t *testing.T) {
+func TestUpdateDoesNotClampAvailableWhenShrinkingCapacity(t *testing.T) {
 	tb := mustNew(t, 100, 5, 10)
 
 	if err := tb.Update(u256.NewUint(50), u256.NewUint(5), false); err != nil {
 		t.Fatalf("Update error: %v", err)
 	}
 
+	// union's token_bucket update (token_bucket.rs L84-88) does NOT clamp available
+	// down when capacity shrinks (no reset): the now-excess available drains
+	// naturally on subsequent refills.
 	assertUint(t, "capacity", tb.Capacity, 50)
-	assertUint(t, "available", tb.Available, 50)
+	assertUint(t, "available", tb.Available, 100)
 }
 
 func TestUpdateWhenLastRefillZeroRestoresAvailable(t *testing.T) {

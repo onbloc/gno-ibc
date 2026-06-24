@@ -48,10 +48,12 @@ func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relaye
 		if len(childAck) == 0 {
 			panic("batch child returned empty ack")
 		}
-		// Spec: a single only-maker child aborts the entire batch. Already-processed
-		// children's state mutations stand (per Union v0 spec). The outer ack signals
-		// "filled by maker, replay later" so the relayer retries against a market-maker
-		// fill.
+
+		// A single only-maker child aborts the entire batch: return the sentinel up
+		// to the recv boundary (OnRecvPacket / OnIntentRecvPacket), which panics on
+		// it and reverts the whole recv tx — so already-processed children's
+		// mutations do NOT stand. Mirrors union's reply handler returning
+		// Err(OnlyMaker) on an only-maker batch ack (contract.rs L2528-2530).
 		if isOnlyMakerAck(childAck) {
 			return types.CloneBytes(z.ACK_ERR_ONLY_MAKER), nil
 		}

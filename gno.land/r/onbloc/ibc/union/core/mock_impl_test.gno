@@ -27,20 +27,20 @@ type recordingCore struct {
 	calls map[string]int
 
 	// client
-	registerClientType  types.ClientType
-	registerClientImpl  lightclient.ClientImpl
-	createClientMsg     types.MsgCreateClient
-	updateClientMsg     types.MsgUpdateClient
-	forceUpdateMsg      types.MsgForceUpdateClient
-	misbehaviourMsg     types.MsgMisbehaviour
-	verifyClientId      types.ClientId
-	verifyProofHeight   types.Height
-	verifyProof         []byte
-	verifyPath          []byte
-	verifyValue         []byte
-	hasClientType       types.ClientType
-	hasClientResult     bool
-	registerApp         app.IApp
+	registerClientType types.ClientType
+	registerClientImpl lightclient.ClientImpl
+	createClientMsg    types.MsgCreateClient
+	updateClientMsg    types.MsgUpdateClient
+	forceUpdateMsg     types.MsgForceUpdateClient
+	misbehaviourMsg    types.MsgMisbehaviour
+	verifyClientId     types.ClientId
+	verifyProofHeight  types.Height
+	verifyProof        []byte
+	verifyPath         []byte
+	verifyValue        []byte
+	hasClientType      types.ClientType
+	hasClientResult    bool
+	registerApp        app.IApp
 
 	// connection
 	connOpenInitMsg     types.MsgConnectionOpenInit

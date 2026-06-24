@@ -9,10 +9,12 @@ import (
 
 	types "gno.land/p/onbloc/ibc/union/types"
 
+	"gno.land/p/demo/tokens/grc20"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
+	"gno.land/r/demo/defi/grc20reg"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -39,6 +41,101 @@ func TestTokenOrderAckFailureUnderflowDoesNotReleaseEscrowedVoucher(cur realm, t
 	uassert.ErrorContains(t, err, "underflow")
 	uassert.Equal(t, int64(0), voucherBalanceOf(baseToken, address(sender)))
 	uassert.Equal(t, int64(13), voucherBalanceOf(baseToken, cur.Address()))
+}
+
+// A market-maker ack naming the canonical zero burn address burns the escrowed
+// voucher instead of releasing it to the maker, mirroring union's burn-address
+// branch in acknowledge_token_order_v2 (contract.rs L1030-1042).
+func TestTokenOrderAckMarketMakerBurnAddressBurnsEscrowedVoucher(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	baseToken := "ibc/burn-voucher"
+	channelId := types.ChannelId(11)
+	amount := u256.NewUint(13)
+
+	// Escrowed voucher held by the proxy, plus the channel balance the ack decrease
+	// will draw down.
+	uassert.NoError(t, v.mintVoucher(0, cur, baseToken, [32]byte{}, "", "", 0, cur.Address().String(), amount))
+
+	order := z.TokenOrderV2{
+		Sender:      []byte(testAddress("burn-snd")),
+		BaseToken:   []byte(baseToken),
+		BaseAmount:  amount,
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: amount,
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	v.increaseChannelBalanceV2(0, cur, channelId, u256.Zero(), order.BaseToken, order.QuoteToken, amount)
+
+	orderAck := z.TokenOrderAck{FillType: fillTypeMarketMaker(), MarketMaker: []byte(z.BURN_ADDRESS)}
+	err := v.acknowledgeTokenOrderV2(0, cur, core.NewPacket(channelId, 0, nil, 0), address(""), [32]byte{}, u256.Zero(), order, orderAck, true)
+
+	uassert.NoError(t, err)
+	// Burned: drained from the proxy escrow and NOT delivered to the burn address.
+	uassert.Equal(t, int64(0), voucherBalanceOf(baseToken, cur.Address()))
+	uassert.Equal(t, int64(0), voucherBalanceOf(baseToken, address(z.BURN_ADDRESS)))
+}
+
+// For a native base the burn branch cannot destroy supply, so it decrements the
+// channel balance (matching union's accounting) and leaves the native locked in
+// the proxy — no coins are shipped to the burn address.
+func TestTokenOrderAckMarketMakerBurnAddressLocksNative(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	channelId := types.ChannelId(12)
+	amount := u256.NewUint(13)
+	order := z.TokenOrderV2{
+		Sender:      []byte(testAddress("burn-native-snd")),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  amount,
+		QuoteToken:  []byte("quote-native"),
+		QuoteAmount: amount,
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	v.increaseChannelBalanceV2(0, cur, channelId, u256.Zero(), order.BaseToken, order.QuoteToken, amount)
+
+	orderAck := z.TokenOrderAck{FillType: fillTypeMarketMaker(), MarketMaker: []byte(z.BURN_ADDRESS)}
+	err := v.acknowledgeTokenOrderV2(0, cur, core.NewPacket(channelId, 0, nil, 0), address(""), [32]byte{}, u256.Zero(), order, orderAck, true)
+
+	uassert.NoError(t, err)
+	// Channel balance decremented (escrow no longer backs anything) and the native
+	// is recorded as permanently locked — no sendNative to the burn address, no
+	// orphaned surplus.
+	balance, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(channelId, u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.True(t, balance.IsZero())
+	locked, ok := testStore.GetLockedNative("ugnot")
+	uassert.True(t, ok)
+	uassert.Equal(t, "13", locked.ToString())
+}
+
+// A token order whose base denom is a foreign GRC20 (registered in grc20reg, not
+// a zkgm ibc/ voucher) is rejected on send with a clear "grc20 not yet supported"
+// error rather than being misclassified as native and surfacing errCoinMismatch.
+func TestTokenOrderEscrowGRC20BaseRejectedWithClearError(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	// grc20reg keys are fqname(callerPkgPath, slug) = pkgpath + "." + slug; the
+	// registrant here is this v1 realm, so a sender would reference the token by
+	// that full key as the order's base denom.
+	const (
+		grc20Slug = "foo-grc20-escrow"
+		grc20Key  = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1." + grc20Slug
+	)
+	token, _ := grc20.NewToken(0, cur, "Foo", "FOO", 6)
+	grc20reg.Register(cross(cur), token, grc20Slug)
+
+	order := z.TokenOrderV2{
+		Sender:      []byte(testAddress("grc20-snd")),
+		BaseToken:   []byte(grc20Key),
+		BaseAmount:  u256.NewUint(10),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(10),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+
+	err := v.verifyTokenOrderV2(0, cur, newFunds(nil), types.ChannelId(1), u256.Zero(), order)
+
+	uassert.ErrorContains(t, err, "grc20 token escrow not yet supported")
 }
 
 func TestTokenOrderVerifyNativeRequiresSentCoin(cur realm, t *testing.T) {

@@ -1,0 +1,2 @@
+module = "gno.land/p/onbloc/ibc/testing/zkgm/fixture"
+gno = "0.9"

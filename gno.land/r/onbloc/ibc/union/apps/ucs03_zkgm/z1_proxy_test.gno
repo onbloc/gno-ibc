@@ -70,7 +70,7 @@ func TestUpdateImpl_SwapsToLatestTarget(cur realm, t *testing.T) {
 
 	// Drive a packet through the proxy; only the latest impl must receive it.
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-	AsIBCApp().OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
+	(&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
 
 	if first.recvCalled {
 		t.Fatal("displaced impl must not receive packets")

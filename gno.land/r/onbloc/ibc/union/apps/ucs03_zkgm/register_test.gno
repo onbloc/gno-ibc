@@ -14,6 +14,23 @@ func TestAsIBCApp(t *testing.T) {
 	}
 }
 
+func TestProxyPathHelpers(t *testing.T) {
+	cases := []struct {
+		name string
+		run  func() string
+		want string
+	}{
+		{"proxy path", ProxyPkgPath, proxyPkgPath},
+		{"production impl path", ProductionImplPath, proxyPkgPath + "/v1"},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.Equal(t, tc.want, tc.run())
+		})
+	}
+}
+
 func TestRegisterReceiver(cur realm, t *testing.T) {
 	receiver := &dummyReceiver{}
 	receiverA := &dummyReceiver{}

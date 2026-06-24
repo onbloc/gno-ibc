@@ -64,6 +64,43 @@ func TestSanitizeVoucherSymbol(t *testing.T) {
 	}
 }
 
+func TestGetOrCreateVoucher(cur realm, t *testing.T) {
+	cases := []struct {
+		name       string
+		denom      string
+		nameArg    string
+		symbolArg  string
+		decimals   uint8
+		precreate  bool
+		wantName   string
+		wantSymbol string
+		wantDec    int
+	}{
+		{"creates voucher", "ibc/direct-create", "Wrapped", "WRAP", 6, false, "Wrapped", "WRAP", 6},
+		{"empty name falls back to denom", "ibc/direct-name-fallback", "", "SYM", 3, false, "ibc/direct-name-fallback", "SYM", 3},
+		{"sanitizes symbol", "ibc/direct-symbol", "Name", "$B A D!", 2, false, "Name", "BAD", 2},
+		{"reuses existing voucher", "ibc/direct-reuse", "Ignored", "IGN", 9, true, "Original", "ORG", 4},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testStore = newMockStore()
+			v := newTestImpl()
+			if tc.precreate {
+				v.getOrCreateVoucher(0, cur, tc.denom, [32]byte{}, "Original", "ORG", 4)
+			}
+
+			got := v.getOrCreateVoucher(0, cur, tc.denom, [32]byte{}, tc.nameArg, tc.symbolArg, tc.decimals)
+			stored, ok := testStore.GetVoucher(tc.denom)
+			uassert.True(t, ok)
+			uassert.True(t, got == stored)
+			uassert.Equal(t, tc.wantName, got.Token().GetName())
+			uassert.Equal(t, tc.wantSymbol, got.Token().GetSymbol())
+			uassert.Equal(t, tc.wantDec, got.Token().GetDecimals())
+		})
+	}
+}
+
 // Voucher operations create and reuse wrapped grc20 tokens while preserving
 // ledger error behavior for mint, burn, and transfer paths.
 func TestVoucher(cur realm, t *testing.T) {

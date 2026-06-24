@@ -30,6 +30,21 @@ func TestGetTokenBucketReturnsSnapshot(cur realm, t *testing.T) {
 	uassert.Equal(t, "80", stored.Available.ToString())
 }
 
+func TestCloneTokenBucket(t *testing.T) {
+	bucket, err := tb.New(u256.NewUint(100), u256.NewUint(5), u256.NewUint(7))
+	uassert.NoError(t, err)
+	uassert.NoError(t, bucket.RateLimit(u256.NewUint(20), u256.NewUint(7)))
+
+	got := cloneTokenBucket(bucket)
+	uassert.Equal(t, "100", got.Capacity.ToString())
+	uassert.Equal(t, "80", got.Available.ToString())
+	uassert.Equal(t, "5", got.RefillRate.ToString())
+	uassert.Equal(t, "7", got.LastRefill.ToString())
+
+	got.Available.Set(u256.Zero())
+	uassert.Equal(t, "80", bucket.Available.ToString())
+}
+
 func TestGetTokenBucketMissingDenom(cur realm, t *testing.T) {
 	v := newTestImpl()
 

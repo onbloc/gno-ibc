@@ -221,6 +221,20 @@ func TestCallSuccessAck(cur realm, t *testing.T) {
 	uassert.True(t, len(ack.InnerAck) == 0)
 }
 
+func TestCanRevive(cur realm, t *testing.T) {
+	uassert.True(t, canRevive())
+}
+
+func TestCallErrAck(cur realm, t *testing.T) {
+	res := callErrAck(0, cur, makeError("receiver failed"))
+
+	uassert.True(t, res.Status == types.PacketStatusFailure)
+	ack, err := z.DecodeAck(res.Acknowledgement)
+	uassert.NoError(t, err)
+	uassert.True(t, ack.Tag.Eq(tagAckFailure()))
+	uassert.Equal(t, "receiver failed", string(ack.InnerAck))
+}
+
 func TestAcknowledgeCall(cur realm, t *testing.T) {
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), nil, 0)
 

@@ -65,6 +65,26 @@ func TestStoreKeyHelpers(cur realm, t *testing.T) {
 	}
 }
 
+func TestSetChainParamAcceptsBoundaryValues(cur realm, t *testing.T) {
+	cases := []struct {
+		name  string
+		key   string
+		value []byte
+	}{
+		{"empty value", "test/empty", nil},
+		{"single byte", "test/single", []byte{1}},
+		{"binary value", "test/binary", []byte{0, 1, 2, 255}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.NotAborts(t, cur, func() {
+				setChainParam(tc.key, tc.value)
+			})
+		})
+	}
+}
+
 func TestClientStore(cur realm, t *testing.T) {
 	cases := []struct {
 		name string
@@ -138,6 +158,75 @@ func TestClientStore(cur realm, t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			resetStore(cur)
 			tc.run(t)
+		})
+	}
+}
+
+func TestClientRegistryEntry(cur realm, t *testing.T) {
+	impl := func(clientStateBytes, consensusStateBytes []byte) (lightclient.Interface, error) {
+		return &mockClient{}, nil
+	}
+
+	cases := []struct {
+		name string
+		seed func()
+		typ  types.ClientType
+		want bool
+	}{
+		{"registered", func() { store.registerClient(mockType, impl) }, mockType, true},
+		{"missing", func() {}, types.ClientType("missing"), false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetStore(cur)
+			tc.seed()
+
+			got, ok := store.clientRegistryEntry(tc.typ)
+			uassert.Equal(t, tc.want, ok)
+			if tc.want && got == nil {
+				t.Fatal("registered client impl is nil")
+			}
+			if !tc.want && got != nil {
+				t.Fatal("missing client impl must be nil")
+			}
+		})
+	}
+}
+
+func TestLightClientOf(cur realm, t *testing.T) {
+	lc := &mockClient{status: types.StatusActive}
+
+	cases := []struct {
+		name string
+		seed func() types.ClientId
+		want bool
+	}{
+		{
+			name: "stored client",
+			seed: func() types.ClientId {
+				return addMockClient(lc).id
+			},
+			want: true,
+		},
+		{
+			name: "missing client",
+			seed: func() types.ClientId { return types.ClientId(404) },
+			want: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resetStore(cur)
+			got, ok := store.lightClientOf(tc.seed())
+
+			uassert.Equal(t, tc.want, ok)
+			if tc.want {
+				uassert.True(t, got == lightclient.Interface(lc))
+			} else if got != nil {
+				t.Fatal("missing light client must return nil")
+			}
 		})
 	}
 }

@@ -743,6 +743,192 @@ func TestAckConstantConstructorsReturnIndependentInstances(cur realm, t *testing
 	uassert.True(t, !d2.Eq(d1), "fillTypeMarketMaker: mutation propagated to second call")
 }
 
+func TestIsZeroImage(t *testing.T) {
+	var zero [32]byte
+	nonzero := zero
+	nonzero[31] = 1
+
+	cases := []struct {
+		name  string
+		image [32]byte
+		want  bool
+	}{
+		{"zero", zero, true},
+		{"nonzero first byte", [32]byte{1}, false},
+		{"nonzero last byte", nonzero, false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.Equal(t, tc.want, isZeroImage(tc.image))
+		})
+	}
+}
+
+func TestLocalTokenEscrow(cur realm, t *testing.T) {
+	cases := []struct {
+		name          string
+		denom         string
+		sender        string
+		funds         *funds
+		seedVoucher   bool
+		amount        *u256.Uint
+		wantErr       string
+		wantFundsLeft bool
+		wantEscrowBal int64
+	}{
+		{
+			name:          "native funds deduct",
+			denom:         "ugnot",
+			sender:        testAddress("native-sender"),
+			funds:         newFunds(chain.NewCoins(chain.NewCoin("ugnot", 10))),
+			amount:        u256.NewUint(4),
+			wantFundsLeft: true,
+		},
+		{
+			name:    "native insufficient funds",
+			denom:   "ugnot",
+			sender:  testAddress("native-short"),
+			funds:   newFunds(chain.NewCoins(chain.NewCoin("ugnot", 3))),
+			amount:  u256.NewUint(4),
+			wantErr: errCoinMismatch,
+		},
+		{
+			name:          "voucher transfers to proxy escrow",
+			denom:         "ibc/local-escrow",
+			sender:        testAddress("voucher-sender"),
+			funds:         newFunds(nil),
+			seedVoucher:   true,
+			amount:        u256.NewUint(6),
+			wantEscrowBal: 6,
+		},
+		{
+			name:        "voucher insufficient balance",
+			denom:       "ibc/local-escrow-short",
+			sender:      testAddress("voucher-short"),
+			funds:       newFunds(nil),
+			seedVoucher: true,
+			amount:      u256.NewUint(20),
+			wantErr:     "insufficient",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testStore = newMockStore()
+			v := newTestImpl()
+			if tc.seedVoucher {
+				uassert.NoError(t, v.mintVoucher(0, cur, tc.denom, [32]byte{}, "Escrow", "ESC", 0, tc.sender, u256.NewUint(10)))
+			}
+
+			err := v.localTokenEscrow(0, cur, tc.denom, tc.sender, tc.funds, tc.amount)
+			if tc.wantErr != "" {
+				uassert.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+
+			uassert.NoError(t, err)
+			if tc.seedVoucher {
+				uassert.Equal(t, tc.wantEscrowBal, voucherBalanceOf(tc.denom, cur.Address()))
+			} else {
+				uassert.Equal(t, tc.wantFundsLeft, !tc.funds.isEmpty())
+			}
+		})
+	}
+}
+
+func TestRefundIBCVoucher(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+	denom := "ibc/refund-voucher"
+	recipient := address(testAddress("refund-voucher-rx"))
+	image := [32]byte{0xaa}
+	testStore.SetMetadataImageOf(0, cur, denom, image)
+
+	uassert.NoError(t, v.refundIBCVoucher(0, cur, []byte(denom), string(recipient), u256.NewUint(12)))
+	uassert.Equal(t, int64(12), voucherBalanceOf(denom, recipient))
+
+	gotImage, ok := testStore.GetMetadataImageOf(denom)
+	uassert.True(t, ok)
+	uassert.True(t, gotImage == image)
+
+	wide := new(u256.Uint).Lsh(u256.NewUint(1), 64)
+	uassert.ErrorContains(t, v.refundIBCVoucher(0, cur, []byte("ibc/refund-overflow"), string(recipient), wide), errAmountOverflow)
+}
+
+func TestRefundV2(cur realm, t *testing.T) {
+	cases := []struct {
+		name          string
+		order         z.TokenOrderV2
+		seed          func(*ucs03ZkgmV1, z.TokenOrderV2)
+		wantErr       string
+		wantRecipient int64
+		wantBalance   string
+	}{
+		{
+			name: "unescrow refunds ibc voucher",
+			order: z.TokenOrderV2{
+				Kind:       z.TOKEN_ORDER_KIND_UNESCROW,
+				BaseToken:  []byte("ibc/refund-unescrow"),
+				BaseAmount: u256.NewUint(7),
+				Sender:     []byte(testAddress("refund-unescrow")),
+			},
+			wantRecipient: 7,
+		},
+		{
+			name: "escrow settles escrowed voucher to sender",
+			order: z.TokenOrderV2{
+				Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+				BaseToken:   []byte("ibc/refund-escrow"),
+				QuoteToken:  []byte("quote"),
+				BaseAmount:  u256.NewUint(9),
+				QuoteAmount: u256.NewUint(9),
+				Sender:      []byte(testAddress("refund-escrow")),
+			},
+			seed: func(v *ucs03ZkgmV1, order z.TokenOrderV2) {
+				v.increaseChannelBalanceV2(0, cur, types.ChannelId(5), u256.Zero(), order.BaseToken, order.QuoteToken, order.BaseAmount)
+				uassert.NoError(t, v.mintVoucher(0, cur, string(order.BaseToken), [32]byte{}, "Escrow", "ESC", 0, cur.Address().String(), order.BaseAmount))
+			},
+			wantRecipient: 9,
+			wantBalance:   "0",
+		},
+		{
+			name: "unsupported kind",
+			order: z.TokenOrderV2{
+				Kind:       z.TOKEN_ORDER_KIND_SOLVE,
+				BaseToken:  []byte("ibc/refund-unsupported"),
+				BaseAmount: u256.NewUint(1),
+				Sender:     []byte(testAddress("refund-bad")),
+			},
+			wantErr: errUnsupportedTokenOrderKindForRefund,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testStore = newMockStore()
+			v := newTestImpl()
+			if tc.seed != nil {
+				tc.seed(v, tc.order)
+			}
+
+			err := v.refundV2(0, cur, u256.Zero(), types.ChannelId(5), tc.order)
+			if tc.wantErr != "" {
+				uassert.ErrorContains(t, err, tc.wantErr)
+				return
+			}
+
+			uassert.NoError(t, err)
+			uassert.Equal(t, tc.wantRecipient, voucherBalanceOf(string(tc.order.BaseToken), address(string(tc.order.Sender))))
+			if tc.wantBalance != "" {
+				bal, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(5), u256.Zero(), tc.order.BaseToken, tc.order.QuoteToken))
+				uassert.True(t, ok)
+				uassert.Equal(t, tc.wantBalance, bal.ToString())
+			}
+		})
+	}
+}
+
 func assertProtocolAck(t *testing.T, ackBytes []byte) {
 	ack, err := z.DecodeAck(ackBytes)
 	uassert.NoError(t, err)

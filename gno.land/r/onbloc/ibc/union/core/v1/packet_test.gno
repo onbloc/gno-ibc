@@ -54,6 +54,51 @@ func setupOpenChannelWithoutApp(cur realm, v *coreV1, portId types.Bytes) types.
 	return chId
 }
 
+func TestGetAppAtPort(cur realm, t *testing.T) {
+	cases := []struct {
+		name      string
+		seed      func(*mockStore) types.Bytes
+		wantPanic string
+	}{
+		{
+			name: "registered app",
+			seed: func(ms *mockStore) types.Bytes {
+				port := types.Bytes("app-port")
+				ms.registerApp(port, &mockApp{})
+				return port
+			},
+		},
+		{
+			name: "missing app",
+			seed: func(ms *mockStore) types.Bytes {
+				return types.Bytes("missing-port")
+			},
+			wantPanic: "port not found",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			port := tc.seed(v.store.(*mockStore))
+			run := func(cur realm) {
+				a, err := v.getAppAtPort(port)
+				if err != nil {
+					panic(err)
+				}
+				if a == nil {
+					t.Fatal("app is nil")
+				}
+			}
+			if tc.wantPanic != "" {
+				uassert.AbortsContains(t, cur, tc.wantPanic, run)
+				return
+			}
+			uassert.NotAborts(t, cur, run)
+		})
+	}
+}
+
 func TestSendPacketCommits(cur realm, t *testing.T) {
 	v := newTestImpl()
 	chId, _, _ := setupOpenChannel(cur, v)

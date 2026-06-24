@@ -17,7 +17,7 @@ import (
 // builds the active impl. The model rejects non-admin callers and unregistered
 // paths.
 
-func TestUpdateImplRejectsNonAdmin(cur realm, t *testing.T) {
+func TestUpdateImpl_RejectsNonAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	implConstructors[testImplPathA] = func(store IStore) IApp { return &dummyImpl{} }
 
@@ -29,7 +29,7 @@ func TestUpdateImplRejectsNonAdmin(cur realm, t *testing.T) {
 	}
 }
 
-func TestUpdateImplRejectsUnregisteredPath(cur realm, t *testing.T) {
+func TestUpdateImpl_RejectsUnregisteredPath(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 
 	// Set the admin realm inside the abort closure so the admin gate's
@@ -41,7 +41,7 @@ func TestUpdateImplRejectsUnregisteredPath(cur realm, t *testing.T) {
 	})
 }
 
-func TestUpdateImplByAdminInstallsImpl(cur realm, t *testing.T) {
+func TestUpdateImpl_ByAdminInstallsImpl(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	implConstructors[testImplPathA] = func(store IStore) IApp { return &dummyImpl{} }
 
@@ -56,7 +56,7 @@ func TestUpdateImplByAdminInstallsImpl(cur realm, t *testing.T) {
 	}
 }
 
-func TestUpdateImplSwapsToLatestTarget(cur realm, t *testing.T) {
+func TestUpdateImpl_SwapsToLatestTarget(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	first := &dummyImpl{}
 	second := &dummyImpl{}
@@ -80,7 +80,7 @@ func TestUpdateImplSwapsToLatestTarget(cur realm, t *testing.T) {
 	}
 }
 
-func TestRegisterCoreAppRegistersProxyAndRejectsDuplicate(cur realm, t *testing.T) {
+func TestRegisterCoreApp_RegistersProxyAndRejectsDuplicate(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
 	core.UpdateImpl(cross(cur), "gno.land/r/onbloc/ibc/union/core/v1")
 	RegisterCoreApp(cross(cur))
@@ -94,7 +94,7 @@ func TestRegisterCoreAppRegistersProxyAndRejectsDuplicate(cur realm, t *testing.
 	})
 }
 
-func TestUpdateImplPreservesProxyStoreState(cur realm, t *testing.T) {
+func TestUpdateImpl_PreservesProxyStoreState(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	first := &dummyImpl{}
 	second := &dummyImpl{}
@@ -122,7 +122,7 @@ func TestUpdateImplPreservesProxyStoreState(cur realm, t *testing.T) {
 	uassert.True(t, currentImpl != first)
 }
 
-func TestProxyAddressIsCaptured(cur realm, t *testing.T) {
+func TestProxyAddress_IsCaptured(cur realm, t *testing.T) {
 	// proxyAddress is captured in upgrade.gno's init; it must be a real address.
 	if ProxyAddress() == "" {
 		t.Fatal("ProxyAddress must return the captured proxy realm address")

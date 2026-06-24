@@ -9,7 +9,7 @@ import (
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 )
 
-func TestSendRequiresInstalledImpl(cur realm, t *testing.T) {
+func TestSend_RequiresInstalledImpl(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 
 	uassert.AbortsContains(t, cur, "implementation not installed", func(cur realm) {
@@ -17,7 +17,7 @@ func TestSendRequiresInstalledImpl(cur realm, t *testing.T) {
 	})
 }
 
-func TestSendDelegatesToInstalledImpl(cur realm, t *testing.T) {
+func TestSend_DelegatesToInstalledImpl(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 
 	d := &dummyImpl{}

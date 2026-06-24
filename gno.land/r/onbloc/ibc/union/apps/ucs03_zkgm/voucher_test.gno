@@ -14,7 +14,7 @@ func TestNewVoucher(cur realm, t *testing.T) {
 	uassert.True(t, vou.Ledger() == ledger)
 }
 
-func TestNewVoucherRejectsSpoofedRealm(cur realm, t *testing.T) {
+func TestNewVoucher_RejectsSpoofedRealm(cur realm, t *testing.T) {
 	// NewVoucher no longer takes a realm parameter, so spoofed realm
 	// protection is handled at the store level (SetVoucher).
 	// This test is kept for API surface coverage only.

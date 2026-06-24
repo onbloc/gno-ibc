@@ -8,7 +8,7 @@ import (
 	"gno.land/r/onbloc/ibc/union/access"
 )
 
-func TestPausableRejectsNonAdmin(cur realm, t *testing.T) {
+func TestPausable_RejectsNonAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 
 	uassert.AbortsContains(t, cur, "access manager unauthorized call", func(cur realm) {
@@ -19,7 +19,7 @@ func TestPausableRejectsNonAdmin(cur realm, t *testing.T) {
 	}
 }
 
-func TestPausableSetByAdmin(cur realm, t *testing.T) {
+func TestPausable_SetByAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 
 	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
@@ -34,7 +34,7 @@ func TestPausableSetByAdmin(cur realm, t *testing.T) {
 	}
 }
 
-func TestSetBucketConfigRejectsNonAdmin(cur realm, t *testing.T) {
+func TestSetBucketConfig_RejectsNonAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 
 	uassert.AbortsContains(t, cur, "access manager unauthorized call", func(cur realm) {
@@ -45,7 +45,7 @@ func TestSetBucketConfigRejectsNonAdmin(cur realm, t *testing.T) {
 	}
 }
 
-func TestSetBucketConfigSucceedsByAdmin(cur realm, t *testing.T) {
+func TestSetBucketConfig_SucceedsByAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 
 	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
@@ -56,7 +56,7 @@ func TestSetBucketConfigSucceedsByAdmin(cur realm, t *testing.T) {
 	}
 }
 
-func TestSetBucketConfigRejectsInvalidBoundsByAdmin(cur realm, t *testing.T) {
+func TestSetBucketConfig_RejectsInvalidBoundsByAdmin(cur realm, t *testing.T) {
 	cases := []struct {
 		name       string
 		denom      string
@@ -131,7 +131,7 @@ func TestSetBucketConfigRejectsInvalidBoundsByAdmin(cur realm, t *testing.T) {
 	}
 }
 
-func TestSetRateLimitDisabledRejectsNonAdmin(cur realm, t *testing.T) {
+func TestSetRateLimitDisabled_RejectsNonAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 
 	// Default is disabled (true); a rejected non-admin toggle to false must not stick.
@@ -143,7 +143,7 @@ func TestSetRateLimitDisabledRejectsNonAdmin(cur realm, t *testing.T) {
 	}
 }
 
-func TestSetRateLimitDisabledSucceedsByAdmin(cur realm, t *testing.T) {
+func TestSetRateLimitDisabled_SucceedsByAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 
 	// Default is disabled (true); admin enables rate limiting by setting false.

@@ -12,7 +12,7 @@ import (
 
 var errDummyGetter = errors.New("dummy getter error")
 
-func TestGetTokenBucketDelegatesToImpl(cur realm, t *testing.T) {
+func TestGetTokenBucket_DelegatesToImpl(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 
 	bucket, err := tb.New(u256.NewUint(100), u256.NewUint(5), u256.NewUint(7))
@@ -25,7 +25,7 @@ func TestGetTokenBucketDelegatesToImpl(cur realm, t *testing.T) {
 	uassert.Equal(t, "100", got.Capacity.ToString())
 }
 
-func TestGetTokenBucketPropagatesImplError(cur realm, t *testing.T) {
+func TestGetTokenBucket_PropagatesImplError(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	target := &dummyImpl{tokenBucketErr: errDummyGetter}
 	installImplForTest(testImplPathA, target)
@@ -37,7 +37,7 @@ func TestGetTokenBucketPropagatesImplError(cur realm, t *testing.T) {
 	}
 }
 
-func TestGetChannelBalanceV2DelegatesToImpl(cur realm, t *testing.T) {
+func TestGetChannelBalanceV2_DelegatesToImpl(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 
 	path := u256.NewUint(11)
@@ -53,7 +53,7 @@ func TestGetChannelBalanceV2DelegatesToImpl(cur realm, t *testing.T) {
 	uassert.Equal(t, "quote", string(target.lastBalanceQuote))
 }
 
-func TestGetChannelBalanceV2PropagatesImplError(cur realm, t *testing.T) {
+func TestGetChannelBalanceV2_PropagatesImplError(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	target := &dummyImpl{channelBalanceErr: errDummyGetter}
 	installImplForTest(testImplPathA, target)

@@ -245,7 +245,7 @@ func TestRateLimitDisabled(cur realm, t *testing.T) {
 	}
 }
 
-func TestStoreMutationsRejectSpoofedRealm(cur realm, t *testing.T) {
+func TestStore_MutationsRejectSpoofedRealm(cur realm, t *testing.T) {
 	s := NewStore()
 	token, ledger := newVoucherTokenForTest(cur, "Spoof Voucher", "SPF")
 	vou := NewVoucher(token, ledger)
@@ -280,7 +280,7 @@ func TestStoreMutationsRejectSpoofedRealm(cur realm, t *testing.T) {
 	}
 }
 
-func TestStoreRemoveMissingEntries(cur realm, t *testing.T) {
+func TestStore_RemoveMissingEntries(cur realm, t *testing.T) {
 	s := NewStore()
 	cases := []struct {
 		name   string

@@ -14,7 +14,7 @@ func TestAsIBCApp(t *testing.T) {
 	}
 }
 
-func TestProxyPathHelpers(t *testing.T) {
+func TestProxyPkgPath_AndProductionImplPath(t *testing.T) {
 	cases := []struct {
 		name string
 		run  func() string

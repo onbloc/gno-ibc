@@ -19,7 +19,7 @@ func main(cur realm) {
 	access.GrantRole(cross(cur), access.RelayerRole, chain.PackageAddress("gno.land/r/onbloc/ibc/union/core"))
 	access.GrantRole(cross(cur), access.RelayerRole, chain.PackageAddress("gno.land/r/onbloc/ibc/union/lightclients/cometbls"))
 	access.GrantRole(cross(cur), access.RelayerRole, chain.PackageAddress("gno.land/r/onbloc/ibc/union/lightclients/statelensics23mpt"))
-	access.GrantRole(cross(cur), access.RelayerRole, chain.PackageAddress("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/smoke"))
+	access.GrantRole(cross(cur), access.RelayerRole, chain.PackageAddress("gno.land/r/onbloc/ibc/testing/mock/lightclient"))
 
 	core.UpdateImpl(cross(cur), "gno.land/r/onbloc/ibc/union/core/v1")
 	zkgm.UpdateImpl(cross(cur), "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1")

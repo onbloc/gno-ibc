@@ -51,10 +51,8 @@ run_smoke_node() {
     -resolver "local=$GNO_IBC_ROOT/gno.land/r/onbloc/ibc/union/core" \
     -resolver "local=$GNO_IBC_ROOT/gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm" \
     -resolver "local=$GNO_IBC_ROOT/gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/smoke" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/realcometbls" \
-    -paths "gno.land/r/onbloc/ibc/union/core,gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm,gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1,gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/smoke,gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e,gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/realcometbls" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/r/onbloc/ibc/testing/mock/lightclient" \
+    -paths "gno.land/r/onbloc/ibc/union/core,gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm,gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1,gno.land/r/onbloc/ibc/testing/mock/lightclient" \
     -no-web \
     -node-rpc-listener "$RPC_LISTENER"
 }

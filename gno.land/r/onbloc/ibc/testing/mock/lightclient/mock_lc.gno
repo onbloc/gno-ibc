@@ -1,4 +1,8 @@
-package smoke
+// Package lightclient provides a permissive light client for IBC smoke and e2e
+// tests. Every proof verification succeeds and the client always reports Active,
+// so test flows can exercise the core/app realms without real counterparty
+// proofs.
+package lightclient
 
 import (
 	"errors"
@@ -8,10 +12,12 @@ import (
 	"gno.land/r/onbloc/ibc/union/core"
 )
 
-const MockClientType = types.ClientType("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/smoke/mock")
+const MockClientType = types.ClientType("gno.land/r/onbloc/ibc/testing/mock/lightclient")
 
 type mockLightClient struct{}
 
+// RegisterMockLightClient registers the mock client implementation under
+// MockClientType, unless it is already registered.
 func RegisterMockLightClient(cur realm) {
 	if !core.HasClient(MockClientType) {
 		core.RegisterClient(cross(cur), MockClientType, mockClientImpl)

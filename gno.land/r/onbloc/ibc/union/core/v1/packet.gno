@@ -1,6 +1,8 @@
 package impl
 
 import (
+	"time"
+
 	"gno.land/p/onbloc/ibc/union/app"
 	"gno.land/p/onbloc/ibc/union/types"
 	core "gno.land/r/onbloc/ibc/union/core"
@@ -90,7 +92,7 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 		panic(err)
 	}
 
-	now := core.NowNanos()
+	nanoTimestamp := uint64(time.Now().UnixNano())
 
 	// reference iterates packets.into_iter().zip(relayer_msgs) (contract.rs L1751):
 	// each packet is paired with its relayer msg, so a packet without a matching
@@ -99,7 +101,7 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 		packet := msg.Packets[i]
 		relayerMsg := msg.RelayerMsgs[i]
 
-		ch, skip := c.acceptRecvPacket(0, rlm, packet, destinationChannelId, now)
+		ch, skip := c.acceptRecvPacket(0, rlm, packet, destinationChannelId, nanoTimestamp)
 		if skip {
 			continue
 		}
@@ -144,7 +146,7 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 		panic(makeError(core.ErrIntentNotSupported))
 	}
 
-	now := core.NowNanos()
+	nanoTimestamp := uint64(time.Now().UnixNano())
 
 	// reference iterates packets.into_iter().zip(market_maker_msgs) (contract.rs
 	// L1751, intent path): a packet without a matching market-maker msg is not
@@ -153,7 +155,7 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 		packet := msg.Packets[i]
 		marketMakerMsg := msg.MarketMakerMessages[i]
 
-		ch, skip := c.acceptRecvPacket(0, rlm, packet, destinationChannelId, now)
+		ch, skip := c.acceptRecvPacket(0, rlm, packet, destinationChannelId, nanoTimestamp)
 		if skip {
 			continue
 		}

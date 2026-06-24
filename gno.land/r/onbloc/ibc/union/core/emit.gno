@@ -112,11 +112,6 @@ func CommitPacketsHash(packets []types.Packet) types.H256 {
 	return commitPacketsHash(packets)
 }
 
-// NowNanos returns the current block time in nanoseconds (the recv-timeout clock).
-func NowNanos() uint64 {
-	return nowNanos()
-}
-
 // EmitPacketSend emits the PacketSend host event.
 func EmitPacketSend(packet types.Packet, sourceChannel types.Channel, sourceConnection types.Connection) {
 	emitPacketSendEvent(packet, sourceChannel, sourceConnection)

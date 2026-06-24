@@ -57,6 +57,9 @@ type IStore interface {
 	RemoveChannelBalanceV2(_ int, rlm realm, key string)
 	GetChannelBalanceV2(key string) (*u256.Uint, bool)
 
+	AddLockedNative(_ int, rlm realm, denom string, amount *u256.Uint)
+	GetLockedNative(denom string) (*u256.Uint, bool)
+
 	SetMetadataImageOf(_ int, rlm realm, denom string, image [32]byte)
 	GetMetadataImageOf(denom string) ([32]byte, bool)
 

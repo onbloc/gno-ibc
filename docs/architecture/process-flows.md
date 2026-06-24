@@ -22,25 +22,23 @@ sequenceDiagram
     autonumber
     participant Admin as Admin / relayer
     participant Loader as Light-client loader
-    participant Core as Core proxy
+    participant Core as Core realm
     participant Access as Access realm
-    participant CoreV1 as Core v1
     participant LC as Light-client implementation
 
     Admin->>Loader: RegisterClient()
     Loader->>Core: RegisterClient(clientType, impl)
     Core->>Access: authorize registration
-    Core->>CoreV1: install client type
-    CoreV1->>LC: bind verifier implementation
+    Core->>Core: install client type through v1
+    Core->>LC: bind verifier implementation
 
     Admin->>Core: CreateClient(clientState, consensusState)
-    Core->>CoreV1: instantiate client
-    CoreV1->>LC: store trusted counterparty state
-    LC-->>CoreV1: client id
+    Core->>Core: instantiate client through v1
+    Core->>LC: store trusted counterparty state
+    LC-->>Core: client id
 
     Admin->>Core: UpdateClient(header)
-    Core->>CoreV1: route update
-    CoreV1->>LC: verify and store latest consensus state
+    Core->>LC: verify and store latest consensus state
 ```
 
 The loader realms, for example `cometbls.RegisterClient` ([lightclients/cometbls/register.gno](../../gno.land/r/onbloc/ibc/union/lightclients/cometbls/register.gno)) and `statelensics23mpt.RegisterClient` ([lightclients/statelensics23mpt/register.gno](../../gno.land/r/onbloc/ibc/union/lightclients/statelensics23mpt/register.gno)), call `core.RegisterClient` ([core/client.gno](../../gno.land/r/onbloc/ibc/union/core/client.gno)) with the implementation constructor for their client type. `core.CreateClient` then creates a concrete client id from the counterparty chain's initial client and consensus state. Later packet proofs are verified against that stored consensus state.
@@ -50,22 +48,20 @@ The loader realms, for example `cometbls.RegisterClient` ([lightclients/cometbls
 App registration is local wiring. It does not involve the relayer or the
 counterparty chain.
 
-1. The ZKGM proxy calls `RegisterCoreApp`.
+1. The ZKGM realm calls `RegisterCoreApp`.
 2. Core binds the caller's package path as the app port.
 3. Receiver realms register with ZKGM for `OP_CALL` dispatch.
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant ZKGM as ZKGM proxy
-    participant Core as Core proxy
-    participant CoreV1 as Core v1
+    participant ZKGM as ZKGM realm
+    participant Core as Core realm
     participant Receiver as Receiver realm
 
     ZKGM->>Core: RegisterCoreApp()
-    Core->>CoreV1: RegisterApp(port = caller pkgpath)
-    CoreV1-->>Core: app registered
-    Core-->>ZKGM: registration complete
+    Core->>Core: RegisterApp(port = caller pkgpath)
+    Core-->>ZKGM: app registered
 
     Receiver->>ZKGM: RegisterReceiver(receiver)
     ZKGM-->>Receiver: receiver registered for OP_CALL
@@ -78,7 +74,7 @@ sequenceDiagram
 A user sends local coin out to the counterparty chain.
 
 1. The user calls `zkgm.Send` or `zkgm.SendRaw` as an EOA and attaches the coin.
-2. ZKGM v1 validates the order and escrows the native coin in the proxy realm.
+2. The ZKGM realm validates the order through its v1 implementation and escrows the native coin.
 3. Core writes the packet commitment and emits `PacketSend`.
 4. The relayer proves that packet to the counterparty chain.
 
@@ -86,19 +82,16 @@ A user sends local coin out to the counterparty chain.
 sequenceDiagram
     autonumber
     participant User
-    participant ZKGM as ZKGM proxy
-    participant ZKGMV1 as ZKGM v1
-    participant Core as Core proxy
-    participant CoreV1 as Core v1
+    participant ZKGM as ZKGM realm
+    participant Core as Core realm
     participant Relayer
     participant Counterparty
 
     User->>ZKGM: Send / SendRaw with native funds
-    ZKGM->>ZKGMV1: forward send request
-    ZKGMV1->>ZKGMV1: validate order and escrow funds
-    ZKGMV1->>Core: SendPacket(packet)
-    Core->>CoreV1: commit packet
-    CoreV1-->>Relayer: PacketSend event + commitment
+    ZKGM->>ZKGM: validate through v1 and escrow funds
+    ZKGM->>Core: SendPacket(packet)
+    Core->>Core: commit packet through v1
+    Core-->>Relayer: PacketSend event + commitment
     Relayer->>Counterparty: submit packet + membership proof
     Counterparty-->>Relayer: acknowledgement or later timeout evidence
 ```
@@ -113,7 +106,7 @@ proof into local core, and core dispatches the app callback.
 1. The relayer calls `core.PacketRecv` with packets and proof.
 2. Core verifies the proof through the channel's light client.
 3. Core dispatches `IApp.OnRecvPacket` to the destination app.
-4. ZKGM v1 executes the instruction and writes an acknowledgement through core.
+4. The ZKGM realm executes the instruction through its v1 implementation and returns an acknowledgement.
 5. The relayer proves that acknowledgement back to the counterparty.
 
 ```mermaid
@@ -121,21 +114,18 @@ sequenceDiagram
     autonumber
     participant Counterparty
     participant Relayer
-    participant Core as Core proxy
-    participant CoreV1 as Core v1
+    participant Core as Core realm
     participant LC as Light client
-    participant ZKGM as ZKGM proxy
-    participant ZKGMV1 as ZKGM v1
+    participant ZKGM as ZKGM realm
 
     Counterparty-->>Relayer: packet commitment
     Relayer->>Core: PacketRecv(packets, proof)
-    Core->>CoreV1: route receive
-    CoreV1->>LC: VerifyMembership(proof)
-    LC-->>CoreV1: packet commitment verified
-    CoreV1->>ZKGM: IApp.OnRecvPacket(packet)
-    ZKGM->>ZKGMV1: decode and dispatch instruction
-    ZKGMV1-->>CoreV1: acknowledgement
-    CoreV1-->>Relayer: WriteAck event + acknowledgement
+    Core->>LC: VerifyMembership(proof)
+    LC-->>Core: packet commitment verified
+    Core->>ZKGM: IApp.OnRecvPacket(packet)
+    ZKGM->>ZKGM: decode and dispatch through v1
+    ZKGM-->>Core: acknowledgement
+    Core-->>Relayer: WriteAck event + acknowledgement
     Relayer->>Counterparty: submit acknowledgement proof
 ```
 

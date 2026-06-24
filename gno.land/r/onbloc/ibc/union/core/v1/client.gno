@@ -12,9 +12,7 @@ import (
 // Union reference:
 // https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/core/src/contract.rs#L849-L865
 func (c *coreV1) RegisterClient(_ int, rlm realm, clientType types.ClientType, clientImpl lightclient.ClientImpl) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	if clientImpl == nil {
 		panic("caller not authorized to register client: unauthorized")
@@ -32,9 +30,7 @@ func (c *coreV1) HasClient(clientType types.ClientType) bool {
 // the submitted state bytes, then lets the light client verify creation against
 // that freshly stored state.
 func (c *coreV1) CreateClient(_ int, rlm realm, msg types.MsgCreateClient) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	creator := rlm.Previous().Address()
 	relayer := resolveRelayer(creator, msg.Relayer)
@@ -92,9 +88,7 @@ func (c *coreV1) initClient(_ int, rlm realm, clientId types.ClientId, clientSta
 // updates its own state, and mirrors the resulting state bytes for queries and
 // counterparty proofs.
 func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	lc, err := c.getActiveClient(msg.ClientId)
 	if err != nil {
@@ -127,9 +121,7 @@ func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) {
 }
 
 func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateClient) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	clientImpl, ok := c.store.GetClientImpl(msg.ClientId)
 	if !ok {
@@ -155,9 +147,7 @@ func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateCli
 // mirror / ClientStatePath commitment before emitting the event.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/core/src/contract.rs#L1048-L1093
 func (c *coreV1) Misbehaviour(_ int, rlm realm, msg types.MsgMisbehaviour) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	lc, err := c.getActiveClient(msg.ClientId)
 	if err != nil {

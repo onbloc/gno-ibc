@@ -13,6 +13,12 @@ func assertIsIBCHost(cur realm) {
 	}
 }
 
+func assertIsRlmCurrent(_ int, rlm realm) {
+	if !rlm.IsCurrent() {
+		panic(ErrSpoofedRealm)
+	}
+}
+
 func assertIsNotPaused() {
 	if paused {
 		panic("paused")

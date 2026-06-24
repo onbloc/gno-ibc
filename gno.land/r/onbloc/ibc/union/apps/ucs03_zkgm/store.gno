@@ -99,9 +99,7 @@ func NewStore() *Store {
 
 // SetTokenOrigin records the mint path for a wrapped denom.
 func (s *Store) SetTokenOrigin(_ int, rlm realm, denom string, path *u256.Uint) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	pathClone := u256.Zero().Set(path).Clone()
 
@@ -120,9 +118,7 @@ func (s *Store) GetTokenOrigin(denom string) (*u256.Uint, bool) {
 
 // SetChannelBalanceV2 stores the escrow balance for a channel-balance key.
 func (s *Store) SetChannelBalanceV2(_ int, rlm realm, key string, amount *u256.Uint) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	calculatedAmount := u256.Zero().Set(amount).Clone()
 
@@ -131,9 +127,7 @@ func (s *Store) SetChannelBalanceV2(_ int, rlm realm, key string, amount *u256.U
 
 // RemoveChannelBalanceV2 clears a drained channel-balance entry.
 func (s *Store) RemoveChannelBalanceV2(_ int, rlm realm, key string) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.channelBalanceV2.Remove(key)
 }
@@ -152,9 +146,7 @@ func (s *Store) GetChannelBalanceV2(key string) (*u256.Uint, bool) {
 // Locked native remains in proxy escrow but is excluded from channel balances.
 // Invariant: proxy balance == sum(channelBalanceV2) + sum(lockedNative).
 func (s *Store) AddLockedNative(_ int, rlm realm, denom string, amount *u256.Uint) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	total := u256.Zero()
 	if cur, ok := s.lockedNative.Get(denom); ok {
@@ -178,9 +170,7 @@ func (s *Store) GetLockedNative(denom string) (*u256.Uint, bool) {
 
 // SetMetadataImageOf records a wrapped denom's metadata image.
 func (s *Store) SetMetadataImageOf(_ int, rlm realm, denom string, image [32]byte) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.metadataImageOf.Set(denom, image)
 }
@@ -197,9 +187,7 @@ func (s *Store) GetMetadataImageOf(denom string) ([32]byte, bool) {
 
 // SetForeignToken records the origin token bytes for a wrapped denom.
 func (s *Store) SetForeignToken(_ int, rlm realm, denom string, token []byte) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.hashToForeignToken.Set(denom, token)
 }
@@ -216,9 +204,7 @@ func (s *Store) GetForeignToken(denom string) ([]byte, bool) {
 
 // SetInFlightPacket records the parent packet awaiting a forwarded child.
 func (s *Store) SetInFlightPacket(_ int, rlm realm, packetHash string, parent types.Packet) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.inFlightPacket.Set(packetHash, parent)
 }
@@ -235,18 +221,14 @@ func (s *Store) GetInFlightPacket(packetHash string) (types.Packet, bool) {
 
 // RemoveInFlightPacket clears a resolved forwarded-child entry.
 func (s *Store) RemoveInFlightPacket(_ int, rlm realm, packetHash string) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.inFlightPacket.Remove(packetHash)
 }
 
 // SetTokenBucket stores the rate-limit bucket for a denom.
 func (s *Store) SetTokenBucket(_ int, rlm realm, denom string, bucket *tb.TokenBucket) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.tokenBucket.Set(denom, bucket)
 }
@@ -263,18 +245,14 @@ func (s *Store) GetTokenBucket(denom string) (*tb.TokenBucket, bool) {
 
 // RemoveTokenBucket clears a denom's rate-limit bucket.
 func (s *Store) RemoveTokenBucket(_ int, rlm realm, denom string) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.tokenBucket.Remove(denom)
 }
 
 // SetVoucher stores the wrapped voucher for an ibc denom.
 func (s *Store) SetVoucher(_ int, rlm realm, ibcDenom string, v *Voucher) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.vouchers.Set(ibcDenom, v)
 }
@@ -296,9 +274,7 @@ func (s *Store) HasVoucher(ibcDenom string) bool {
 
 // SetReceiver registers a Zkgmable callback target at a package path.
 func (s *Store) SetReceiver(_ int, rlm realm, path string, receiver z.Zkgmable) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.receivers.Set(path, receiver)
 }
@@ -315,9 +291,7 @@ func (s *Store) GetReceiver(path string) (z.Zkgmable, bool) {
 
 // SetRateLimitDisabled toggles the global rate-limit kill switch.
 func (s *Store) SetRateLimitDisabled(_ int, rlm realm, disabled bool) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.rateLimitDisabled = disabled
 }

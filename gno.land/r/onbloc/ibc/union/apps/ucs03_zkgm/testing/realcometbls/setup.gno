@@ -18,8 +18,10 @@ type ChannelPair struct {
 	Destination  types.ChannelId
 }
 
-var testClientSeq uint32
-var testConnectionSeq uint32
+var (
+	testClientSeq     uint32
+	testConnectionSeq uint32
+)
 
 func nextTestClientId() types.ClientId {
 	testClientSeq++

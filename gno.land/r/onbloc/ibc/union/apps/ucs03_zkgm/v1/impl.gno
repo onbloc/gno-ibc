@@ -8,7 +8,7 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
-	core "gno.land/r/onbloc/ibc/union/core"
+	"gno.land/r/onbloc/ibc/union/core"
 )
 
 // ucs03ZkgmV1 is the v1 implementation of the zkgm app. It holds the injected
@@ -59,7 +59,6 @@ func (v *ucs03ZkgmV1) OnChannelOpenConfirm(_ int, rlm realm, channelId types.Cha
 	if !rlm.IsCurrent() {
 		panic(errSpoofedRealm)
 	}
-
 }
 
 // Channel closing is not supported by zkgm (reference returns an error).

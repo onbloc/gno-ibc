@@ -3,6 +3,7 @@ package zkgm
 import (
 	"testing"
 
+	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	"gno.land/r/onbloc/ibc/union/access"
 
@@ -16,12 +17,7 @@ import (
 // builds the active impl. The model rejects non-admin callers and unregistered
 // paths.
 
-const (
-	testImplPathA = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
-	testImplPathB = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v2"
-)
-
-func TestUpdateImplRejectsNonAdmin(cur realm, t *testing.T) {
+func TestUpdateImpl_RejectsNonAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	implConstructors[testImplPathA] = func(store IStore) IApp { return &dummyImpl{} }
 
@@ -33,7 +29,7 @@ func TestUpdateImplRejectsNonAdmin(cur realm, t *testing.T) {
 	}
 }
 
-func TestUpdateImplRejectsUnregisteredPath(cur realm, t *testing.T) {
+func TestUpdateImpl_RejectsUnregisteredPath(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 
 	// Set the admin realm inside the abort closure so the admin gate's
@@ -45,7 +41,7 @@ func TestUpdateImplRejectsUnregisteredPath(cur realm, t *testing.T) {
 	})
 }
 
-func TestUpdateImplByAdminInstallsImpl(cur realm, t *testing.T) {
+func TestUpdateImpl_ByAdminInstallsImpl(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	implConstructors[testImplPathA] = func(store IStore) IApp { return &dummyImpl{} }
 
@@ -60,7 +56,7 @@ func TestUpdateImplByAdminInstallsImpl(cur realm, t *testing.T) {
 	}
 }
 
-func TestUpdateImplSwapsToLatestTarget(cur realm, t *testing.T) {
+func TestUpdateImpl_SwapsToLatestTarget(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	first := &dummyImpl{}
 	second := &dummyImpl{}
@@ -84,7 +80,7 @@ func TestUpdateImplSwapsToLatestTarget(cur realm, t *testing.T) {
 	}
 }
 
-func TestRegisterCoreAppRegistersProxyAndRejectsDuplicate(cur realm, t *testing.T) {
+func TestRegisterCoreApp_RegistersProxyAndRejectsDuplicate(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
 	core.UpdateImpl(cross(cur), "gno.land/r/onbloc/ibc/union/core/v1")
 	RegisterCoreApp(cross(cur))
@@ -98,7 +94,35 @@ func TestRegisterCoreAppRegistersProxyAndRejectsDuplicate(cur realm, t *testing.
 	})
 }
 
-func TestProxyAddressIsCaptured(cur realm, t *testing.T) {
+func TestUpdateImpl_PreservesProxyStoreState(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+	first := &dummyImpl{}
+	second := &dummyImpl{}
+	implConstructors[testImplPathA] = func(store IStore) IApp { return first }
+	implConstructors[testImplPathB] = func(store IStore) IApp { return second }
+
+	channelKey := "upgrade-continuity/channel-balance"
+	inFlightKey := "upgrade-continuity/in-flight"
+	parent := core.NewPacket(10, 11, []byte("parent"), 100)
+
+	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+	UpdateImpl(cross(cur), testImplPathA)
+	store.SetChannelBalanceV2(0, cur, channelKey, u256.NewUint(40))
+	store.SetInFlightPacket(0, cur, inFlightKey, parent)
+	UpdateImpl(cross(cur), testImplPathB)
+
+	balance, ok := store.GetChannelBalanceV2(channelKey)
+	uassert.True(t, ok)
+	uassert.Equal(t, "40", balance.ToString())
+
+	popped, ok := store.GetInFlightPacket(inFlightKey)
+	uassert.True(t, ok)
+	uassert.Equal(t, "parent", string(popped.Data))
+	uassert.True(t, currentImpl == second)
+	uassert.True(t, currentImpl != first)
+}
+
+func TestProxyAddress_IsCaptured(cur realm, t *testing.T) {
 	// proxyAddress is captured in upgrade.gno's init; it must be a real address.
 	if ProxyAddress() == "" {
 		t.Fatal("ProxyAddress must return the captured proxy realm address")

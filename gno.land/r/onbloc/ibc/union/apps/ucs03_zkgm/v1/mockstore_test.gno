@@ -9,12 +9,10 @@ import (
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
 
-// mockStore is an in-memory zkgm.IStore for the unit tests. The production store
-// lives in the proxy realm, so its borrow-rule setters can only be driven from
-// that realm; a test in this realm cannot mutate it without tripping the
-// readonly-object guard. This mock is backed by plain maps owned by the test
-// realm, so the injected impl can read and write it directly. It mirrors only
-// state — no realm semantics — which is all the per-function tests exercise.
+// mockStore is an in-memory zkgm.IStore used by unit tests.
+//
+// Unlike the production store, which is owned by the proxy realm, mockStore is
+// backed by test-owned maps and can be mutated directly by injected test code.
 type mockStore struct {
 	tokenOrigin       map[string]*u256.Uint
 	channelBalanceV2  map[string]*u256.Uint

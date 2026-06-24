@@ -263,7 +263,10 @@ func (c *coreV1) ChannelCloseInit(_ int, rlm realm, msg types.MsgChannelCloseIni
 	updated := c.closedChannel(channel)
 	c.store.SaveChannel(0, rlm, msg.ChannelId, updated)
 
-	a, _ := c.store.GetAppByPortId(portId)
+	a, ok := c.store.GetAppByPortId(portId)
+	if !ok {
+		panic("port " + string(portId) + " not found")
+	}
 	a.OnChannelCloseInit(cross(rlm), msg.ChannelId, relayer)
 	core.EmitChannelCloseInit(portId, msg.ChannelId, updated)
 }
@@ -307,7 +310,10 @@ func (c *coreV1) ChannelCloseConfirm(_ int, rlm realm, msg types.MsgChannelClose
 	updated := c.closedChannel(channel)
 	c.store.SaveChannel(0, rlm, msg.ChannelId, updated)
 
-	a, _ := c.store.GetAppByPortId(portId)
+	a, ok := c.store.GetAppByPortId(portId)
+	if !ok {
+		panic("port " + string(portId) + " not found")
+	}
 	a.OnChannelCloseConfirm(cross(rlm), msg.ChannelId, relayer)
 	core.EmitChannelCloseConfirm(portId, msg.ChannelId, updated)
 }

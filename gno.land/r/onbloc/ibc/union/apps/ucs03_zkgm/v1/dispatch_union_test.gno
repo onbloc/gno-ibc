@@ -36,10 +36,52 @@ func TestUnionVerifyInternal(cur realm, t *testing.T) {
 			instr:   z.Instruction{Version: z.INSTR_VERSION_0, Opcode: 99},
 			wantErr: "unsupported opcode",
 		},
+		{
+			name:    "malformed call",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_CALL, Operand: []byte{0x01}},
+			wantErr: "invalid",
+		},
+		{
+			name:    "malformed batch",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_BATCH, Operand: []byte{0x01}},
+			wantErr: "invalid",
+		},
+		{
+			name:    "malformed forward",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_FORWARD, Operand: []byte{0x01}},
+			wantErr: "invalid",
+		},
+		{
+			name:    "malformed token order",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_2, Opcode: z.OP_TOKEN_ORDER, Operand: []byte{0x01}},
+			wantErr: "invalid",
+		},
+		{
+			name:    "wrong call version",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_1, Opcode: z.OP_CALL, Operand: []byte("anything")},
+			wantErr: "unsupported call version",
+		},
+		{
+			name:    "wrong batch version",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_1, Opcode: z.OP_BATCH, Operand: []byte("anything")},
+			wantErr: "unsupported batch version",
+		},
+		{
+			name:    "wrong forward version",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_1, Opcode: z.OP_FORWARD, Operand: []byte("anything")},
+			wantErr: "unsupported forward version",
+		},
+		{
+			name:    "wrong token order version",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_TOKEN_ORDER, Operand: []byte("anything")},
+			wantErr: "unsupported token order version",
+		},
 	}
 
 	for _, tc := range cases {
-		err := v.verifyInternal(0, cur, newFunds(nil), types.ChannelId(1), u256.Zero(), tc.instr)
-		uassert.ErrorContains(t, err, tc.wantErr)
+		t.Run(tc.name, func(t *testing.T) {
+			err := v.verifyInternal(0, cur, newFunds(nil), types.ChannelId(1), u256.Zero(), tc.instr)
+			uassert.ErrorContains(t, err, tc.wantErr)
+		})
 	}
 }

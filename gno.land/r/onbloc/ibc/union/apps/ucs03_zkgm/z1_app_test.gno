@@ -14,7 +14,7 @@ import (
 // handshake. Version enforcement now lives in the impl (v1/impl_test), and the
 // caller gate is covered by z2.
 
-func TestAppDelegatesAllReceiversToImpl(cur realm, t *testing.T) {
+func TestApp_DelegatesAllReceiversToImpl(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	currentImpl = d
@@ -53,7 +53,7 @@ func TestAppDelegatesAllReceiversToImpl(cur realm, t *testing.T) {
 	})
 }
 
-func TestAppPausedBlocksAllCallbacks(cur realm, t *testing.T) {
+func TestApp_PausedBlocksAllCallbacks(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	currentImpl = d

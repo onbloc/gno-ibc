@@ -3,6 +3,7 @@ package zkgm
 import (
 	"testing"
 
+	"gno.land/p/demo/tokens/grc20"
 	u256 "gno.land/p/gnoswap/uint256"
 	types "gno.land/p/onbloc/ibc/union/types"
 
@@ -37,6 +38,9 @@ type dummyImpl struct {
 	lastChannelId       types.ChannelId
 	lastCounterpartyId  types.ChannelId
 	lastCounterpartyVer string
+	lastTimeout         types.Timestamp
+	lastSalt            [32]byte
+	lastInstruction     z.Instruction
 
 	tokenBucket          *tb.TokenBucket
 	tokenBucketErr       error
@@ -109,7 +113,21 @@ func (d *dummyImpl) OnTimeoutPacket(_ int, rlm realm, packet types.Packet, relay
 
 func (d *dummyImpl) Send(_ int, rlm realm, channelId types.ChannelId, timeoutTimestamp types.Timestamp, salt [32]byte, instruction z.Instruction) types.Packet {
 	d.sendCalled = true
-	return types.Packet{}
+	d.lastChannelId = channelId
+	d.lastTimeout = timeoutTimestamp
+	d.lastSalt = salt
+	d.lastInstruction = instruction
+	return core.NewPacket(channelId, 0, instruction.Operand, timeoutTimestamp)
+}
+
+type dummyReceiver struct{}
+
+func (d *dummyReceiver) OnZkgm(cur realm, env z.CallEnv) error {
+	return nil
+}
+
+func (d *dummyReceiver) OnIntentZkgm(cur realm, env z.IntentCallEnv) error {
+	return nil
 }
 
 func (d *dummyImpl) GetTokenBucket(denom string) (*tb.TokenBucket, error) {
@@ -149,4 +167,8 @@ func installImplForTest(path string, target IApp) {
 	implConstructors[path] = func(store IStore) IApp { return target }
 	currentImplPath = path
 	currentImpl = target
+}
+
+func newVoucherTokenForTest(cur realm, name string, symbol string) (*grc20.Token, *grc20.PrivateLedger) {
+	return grc20.NewToken(0, cur, name, symbol, 6)
 }

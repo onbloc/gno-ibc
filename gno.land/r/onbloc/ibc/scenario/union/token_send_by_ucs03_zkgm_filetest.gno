@@ -15,11 +15,11 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 
-	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	"gno.land/r/onbloc/ibc/union/access"
+	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
-	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
 )
 
 const (
@@ -192,6 +192,7 @@ type mockLightClient struct{}
 func (m *mockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
 func (m *mockLightClient) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
 func (m *mockLightClient) GetTimestamp() types.Timestamp                         { return types.Timestamp(1) }
+
 func (m *mockLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
 	return types.Timestamp(1), nil
 }

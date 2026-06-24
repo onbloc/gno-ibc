@@ -131,20 +131,67 @@ Stateless libraries. They define shared types and interfaces, and provide codecs
 | `verifier/evm/mpt`     | EVVM Merkle-Patricia-Trie proof verification.                                                                              | —                                                       |
 | `verifier/evm/storage` | EVM storage-slot proof verification used by state-lens clients.                                                            | —                                                       |
 
-## How a Packet Flows
+## Process Flows
 
-The pieces above compose into one path.\
-A receive (`RecvPacket`) is the most illustrative:
+Every public action follows the same proxy → implementation → pure-package layering.\
+The four flows below — registering a light client, registering an app, sending coin out, and receiving it — cover the common lifecycle, including where the relayer and the counterparty Union chain come in.
 
-1. **Relayer → core proxy.** A relayer submits the packet and proof to the `ibc/union/core` proxy. The proxy checks access gates and forwards to `core/v1`.
-2. **Proof verification.** `core/v1` resolves the channel's light client (`lightclient.Interface`) and calls `VerifyMembership`.\
-   Inactive clients are rejected **before** any proof bytes are decoded.\
-   CometBLS or state-lens packages do the actual cryptographic verification.
-3. **Core → app.** Core looks up the destination app in its registry and dispatches the `IApp.OnRecvPacket` callback to the ZKGM proxy.
-4. **ZKGM proxy → v1 dispatch.** The proxy forwards to `ucs03_zkgm/v1`, which decodes the packet envelope (via the `zkgm` pure package)\
+> Throughout, a **relayer** is an off-chain process that watches both chains.\
+> It carries packets and proofs between them: it reads a committed packet on the source chain, proves it to the destination chain, then reads the resulting acknowledgement and proves it back.\
+> Nothing moves between chains without a relayer; the chains never talk directly.
+
+### 1. Register a Light Client
+
+A light client lets this chain verify the counterparty Union chain's state. Registration is two distinct steps:
+
+1. **Register the client _type_.** `core.RegisterClient(clientType, clientImpl)` ([core/client.gno](../gno.land/r/onbloc/ibc/union/core/client.gno)) installs a light-client implementation under a type name — `cometbls` or `state-lens/ics23/mpt`.\
+   This is relayer/admin-gated through the access realm and only registers the _code_ that knows how to verify that client kind.
+2. **Create a client _instance_.** `core.CreateClient(msg)` takes a `ClientType`, the counterparty's initial `ClientStateBytes`, and `ConsensusStateBytes`, then asks the registered implementation to instantiate a concrete client and assigns it a client id.\
+   The `ClientState`/`ConsensusState` bytes are a snapshot of the counterparty Union chain (its chain id, latest height, and a trusted consensus root) — supplied by the relayer that bootstraps the connection.
+
+From here the relayer keeps the client fresh with `core.UpdateClient`, feeding new counterparty headers so the client can verify proofs at later heights.\
+All later proof verification (steps 3–4 below) runs against the consensus state held by this client.
+
+### 2. Register an App
+
+An app realm (here, ZKGM) must register with core before it can send or receive packets, so core can route packet callbacks to it.
+
+1. **App self-registers.** `ucs03_zkgm` calls `RegisterCoreApp` ([apps/ucs03_zkgm/register.gno](../gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/register.gno)), which crosses into `core.RegisterApp(AsIBCApp())`.\
+   Core derives the **port id from the caller's package path**, so the app's identity is its realm path and no separate id needs minting. (`core.RegisterAppForPort` is the admin-only override for binding a port explicitly.)
+2. **App registers its receivers.** For ZKGM's `OP_CALL` opcode, a downstream contract registers itself with `zkgm.RegisterReceiver(receiver)` from its own realm, keyed by that realm's package path.\
+   Core has no part in this; it is internal ZKGM routing for who handles an inbound call.
+
+No relayer or counterparty is involved in registration — it is purely local wiring.\
+It only matters once a channel is opened over the registered client and packets start flowing through the registered port.
+
+### 3. Packet Send
+
+A user sends coin out to the counterparty chain.
+
+1. **User → ZKGM proxy.** The user calls `zkgm.Send` / `zkgm.SendRaw` ([apps/ucs03_zkgm/transfer.gno](../gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/transfer.gno)) **as an EOA**, attaching the coin to move.\
+   The proxy forwards to `ucs03_zkgm/v1`.
+2. **Escrow.** v1 captures the attached coins via `unsafe.OriginSend()`, and `requireSentCoin` asserts they exactly match the order's `BaseToken`/`BaseAmount`.\
+   The coins are **escrowed in the proxy realm's account**, and the per-channel escrow balance is increased (`channel_balance.gno`).
+3. **Commit + emit.** v1 encodes the ZKGM packet envelope and calls `core.SendPacket` ([core/v1/packet.gno](../gno.land/r/onbloc/ibc/union/core/v1/packet.gno)).\
+   Core checks the channel is open, writes a **packet commitment** at `BatchPacketsPath(...)` (value `COMMITMENT_MAGIC`), and emits a `PacketSend` event.
+
+The commitment and event are the hand-off point: the **relayer** sees `PacketSend`, reads the commitment, and submits it with a membership proof to the counterparty Union chain, which runs its own verification and credits the recipient.\
+The escrowed coin stays locked in the proxy account until a matching acknowledgement or timeout comes back.
+
+### 4. Packet Receive
+
+The inverse: a packet arrives from the counterparty and releases coin here. This path exercises every layer.
+
+1. **Relayer → core proxy.** The relayer calls `core.PacketRecv(msg)` ([core/core.gno](../gno.land/r/onbloc/ibc/union/core/core.gno)), where `msg` carries the `Packets`, per-packet `RelayerMsgs`, the `Proof`, and the `ProofHeight`.\
+   This entrypoint is relayer-gated through the access realm.
+2. **Proof verification.** `core/v1` resolves the channel's light client (`lightclient.Interface`) and calls `VerifyMembership` against the consensus state at `ProofHeight` — proving the counterparty really committed this packet.\
+   Inactive clients are rejected **before** any proof bytes are decoded (see the light-client proof rules in [AGENTS.md](../AGENTS.md)); CometBLS or state-lens packages do the actual cryptographic verification.
+3. **Core → app.** Core records the packet receipt, looks up the destination app by port, and dispatches `IApp.OnRecvPacket` into the ZKGM proxy (pairing each packet with its `RelayerMsg`).
+4. **ZKGM v1 dispatch.** The proxy forwards to `ucs03_zkgm/v1`, which decodes the envelope (via the `zkgm` pure package)\
    and routes each instruction through the opcode dispatcher (`dispatch.gno`): Call, TokenOrder, Batch, or Forward.
-5. **Effects.** TokenOrder mints/unescrows GRC20 vouchers and charges the rate-limit `tokenbucket`;\
-   Call invokes a registered receiver; Batch and Forward recurse through the same dispatcher.\
-   The resulting acknowledgement is written back through core.
+5. **TokenOrder effects.** The TokenOrder decreases the channel balance and sends coin from the proxy escrow account to the receiver (`escrow.gno`, via a realm-send banker).\
+   It charges the rate-limit `tokenbucket` and pays the relayer its fee.
+6. **Acknowledgement.** Core writes the acknowledgement at `BatchReceiptsPath(...)` and emits `WriteAck`.\
+   The relayer reads this ack and proves it back to the counterparty so the original send can settle (or refund on failure). Forward packets defer this step via the async-ack path.
 
-Send, acknowledgement, and timeout follow the inverse path through the same proxy → implementation → pure-package layering.
+Acknowledgement and timeout on the sending side follow the same proxy → implementation → pure-package layering in reverse, consuming the ack/timeout proof the relayer brings back.

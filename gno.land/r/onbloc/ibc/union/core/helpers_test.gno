@@ -7,7 +7,7 @@ import (
 )
 
 func requireSelectorProtectedForTest(cur realm, selector manager.Selector) {
-	if role := access.GetFunctionRole(cross(cur), selector); role == manager.PublicRole {
+	if role := access.GetFunctionRole(cur.PkgPath(), selector); role == manager.PublicRole {
 		panic("test selector must not be public")
 	}
 }

@@ -146,19 +146,19 @@ func emitCreateClientEvent(clientId types.ClientId, clientType types.ClientType,
 	)
 }
 
-func emitUpdateClientEvent(clientId types.ClientId, counterpartyHeight types.Height) {
+func emitUpdateClientEvent(clientId types.ClientId, height types.Height) {
 	chain.Emit(
 		UpdateClientEvent,
 		"client_id", clientId.String(),
-		"counterparty_height", counterpartyHeight.String(),
+		"height", height.String(),
 	)
 }
 
-func emitForceUpdateClientEvent(clientId types.ClientId, counterpartyHeight types.Height) {
+func emitForceUpdateClientEvent(clientId types.ClientId, height types.Height) {
 	chain.Emit(
 		ForceUpdateClientEvent,
 		"client_id", clientId.String(),
-		"counterparty_height", counterpartyHeight.String(),
+		"height", height.String(),
 	)
 }
 

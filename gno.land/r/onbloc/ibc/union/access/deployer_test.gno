@@ -20,25 +20,25 @@ func TestResetAccessBootstrapsInitialAdmin(cur realm, t *testing.T) {
 		{
 			name: "initial admin receives active admin role",
 			ok: func() bool {
-				return HasRole(cur, manager.AdminRole, initialAdmin).IsMember
+				return HasRole(manager.AdminRole, initialAdmin).IsMember
 			},
 		},
 		{
 			name: "initial admin can manage targets",
 			ok: func() bool {
-				return CanManageTarget(cur, initialAdmin).Immediate
+				return CanManageTarget(initialAdmin).Immediate
 			},
 		},
 		{
 			name: "initial admin does not receive relayer role",
 			ok: func() bool {
-				return !HasRole(cur, RelayerRole, initialAdmin).IsMember
+				return !HasRole(RelayerRole, initialAdmin).IsMember
 			},
 		},
 		{
 			name: "relayer account cannot manage targets by default",
 			ok: func() bool {
-				return !CanManageTarget(cur, relayer).Immediate
+				return !CanManageTarget(relayer).Immediate
 			},
 		},
 	}
@@ -62,13 +62,13 @@ func TestResetAccessUsesDefaultAdminAddress(cur realm, t *testing.T) {
 		{
 			name: "default admin address receives admin role",
 			ok: func() bool {
-				return HasRole(cur, manager.AdminRole, DefaultAdminAddress).IsMember
+				return HasRole(manager.AdminRole, DefaultAdminAddress).IsMember
 			},
 		},
 		{
 			name: "default admin address can manage targets",
 			ok: func() bool {
-				return CanManageTarget(cur, DefaultAdminAddress).Immediate
+				return CanManageTarget(DefaultAdminAddress).Immediate
 			},
 		},
 	}

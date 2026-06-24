@@ -12,7 +12,7 @@ import (
 const accessManagerUnauthorizedCallError = access.ErrAccessManagerUnauthorizedCall
 
 func denySelectorForTest(cur realm, selector manager.Selector) manager.RoleId {
-	previousRole := access.GetFunctionRole(cross(cur), selector)
+	previousRole := access.GetFunctionRole(cur.PkgPath(), selector)
 	if previousRole == manager.PublicRole {
 		panic("test selector must not be public")
 	}

@@ -16,12 +16,12 @@ func TestGrantRoleDirectManagement(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(admin))
 	GrantRole(cross(cur), RelayerRole, relayer)
-	if !HasRole(cur, RelayerRole, relayer).IsMember {
+	if !HasRole(RelayerRole, relayer).IsMember {
 		t.Fatal("admin must be able to grant role through shared access")
 	}
 
 	RevokeRole(cross(cur), RelayerRole, relayer)
-	if HasRole(cur, RelayerRole, relayer).IsMember {
+	if HasRole(RelayerRole, relayer).IsMember {
 		t.Fatal("admin must be able to revoke role through shared access")
 	}
 }
@@ -36,7 +36,7 @@ func TestGrantRoleRejectsNonAdmin(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, ErrAccessManagerUnauthorizedAccount, func(cur realm) {
 		GrantRole(cross(cur), RelayerRole, relayer)
 	})
-	if HasRole(cur, RelayerRole, relayer).IsMember {
+	if HasRole(RelayerRole, relayer).IsMember {
 		t.Fatal("rejected grant must not add the relayer")
 	}
 }
@@ -76,10 +76,10 @@ func TestRoleMembershipRejectsNonAdmin(cur realm, t *testing.T) {
 			})
 		})
 	}
-	if HasRole(cur, RelayerRole, caller).IsMember {
+	if HasRole(RelayerRole, caller).IsMember {
 		t.Fatal("rejected grant must not add caller")
 	}
-	if !HasRole(cur, RelayerRole, relayer).IsMember {
+	if !HasRole(RelayerRole, relayer).IsMember {
 		t.Fatal("rejected revoke must not remove relayer")
 	}
 }
@@ -90,12 +90,12 @@ func TestSetFunctionRoleDirectManagement(cur realm, t *testing.T) {
 	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
-	if CanCall(cross(cur), "set_hook", caller).Immediate {
+	if CanCall(cur.PkgPath(), "set_hook", caller).Immediate {
 		t.Fatal("non-admin caller must not be authorized before role update")
 	}
 
 	SetFunctionRole(cross(cur), "set_hook", manager.PublicRole)
-	if !CanCall(cross(cur), "set_hook", caller).Immediate {
+	if !CanCall(cur.PkgPath(), "set_hook", caller).Immediate {
 		t.Fatal("public role assignment must authorize arbitrary caller")
 	}
 }
@@ -111,13 +111,13 @@ func TestSetFunctionRolesDirectManagement(cur realm, t *testing.T) {
 
 	for _, selector := range selectors {
 		t.Run(string(selector), func(t *testing.T) {
-			if GetFunctionRole(cross(cur), selector) != manager.PublicRole {
+			if GetFunctionRole(cur.PkgPath(), selector) != manager.PublicRole {
 				t.Fatalf("%s must be assigned public role", selector)
 			}
-			if GetTargetFunctionRole(cross(cur), selector) != manager.PublicRole {
+			if GetTargetFunctionRole(cur.PkgPath(), selector) != manager.PublicRole {
 				t.Fatalf("%s must be assigned public target role", selector)
 			}
-			if !CanCall(cross(cur), selector, caller).Immediate {
+			if !CanCall(cur.PkgPath(), selector, caller).Immediate {
 				t.Fatalf("%s must authorize arbitrary caller after public role assignment", selector)
 			}
 		})
@@ -133,7 +133,7 @@ func TestSetFunctionRoleRejectsNonAdmin(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, ErrAccessManagerUnauthorizedAccount, func(cur realm) {
 		SetFunctionRole(cur, "set_hook", manager.PublicRole)
 	})
-	if GetFunctionRole(cross(cur), "set_hook") != manager.AdminRole {
+	if GetFunctionRole(cur.PkgPath(), "set_hook") != manager.AdminRole {
 		t.Fatal("rejected role update must not change selector role")
 	}
 }
@@ -193,16 +193,16 @@ func TestManagerAdminProtectedSurfacesRejectNonAdmin(cur realm, t *testing.T) {
 			})
 		})
 	}
-	if GetRoleAdmin(cur, RelayerRole) != manager.AdminRole {
+	if GetRoleAdmin(RelayerRole) != manager.AdminRole {
 		t.Fatal("rejected SetRoleAdmin must not change role admin")
 	}
-	if GetRoleGrantDelay(cur, RelayerRole) != 0 {
+	if GetRoleGrantDelay(RelayerRole) != 0 {
 		t.Fatal("rejected SetGrantDelay must not change grant delay")
 	}
-	if GetFunctionRole(cross(cur), "set_hook") != manager.AdminRole {
+	if GetFunctionRole(cur.PkgPath(), "set_hook") != manager.AdminRole {
 		t.Fatal("rejected SetFunctionRole must not change selector role")
 	}
-	if IsTargetClosed(cross(cur)) {
+	if IsTargetClosed(cur.PkgPath()) {
 		t.Fatal("rejected SetTargetClosed must not close target")
 	}
 }
@@ -233,20 +233,20 @@ func TestRoleConfigurationSurface(cur realm, t *testing.T) {
 	SetRoleAdmin(cross(cur), RelayerRole, roleAdminRole)
 	SetGrantDelay(cross(cur), RelayerRole, 5)
 
-	if GetRoleAdmin(cur, RelayerRole) != roleAdminRole {
+	if GetRoleAdmin(RelayerRole) != roleAdminRole {
 		t.Fatal("SetRoleAdmin must update role admin")
 	}
-	if GetRoleGrantDelay(cur, RelayerRole) != 5 {
+	if GetRoleGrantDelay(RelayerRole) != 5 {
 		t.Fatal("SetGrantDelay must update role grant delay")
 	}
-	if !CanAdminRole(cur, RelayerRole, roleAdmin).Immediate {
+	if !CanAdminRole(RelayerRole, roleAdmin).Immediate {
 		t.Fatal("role admin member must be able to administer relayer role")
 	}
 
 	SetGrantDelay(cross(cur), RelayerRole, 0)
 	testing.SetRealm(testing.NewUserRealm(roleAdmin))
 	GrantRole(cross(cur), RelayerRole, relayer)
-	membership := HasRole(cur, RelayerRole, relayer)
+	membership := HasRole(RelayerRole, relayer)
 	if !membership.IsMember {
 		t.Fatal("GrantRole must add active relayer when grant delay is zero")
 	}
@@ -265,7 +265,7 @@ func TestRenounceRoleSurface(cur realm, t *testing.T) {
 		RenounceRole(cross(cur), RelayerRole, admin)
 	})
 	RenounceRole(cross(cur), RelayerRole, relayer)
-	if HasRole(cur, RelayerRole, relayer).IsMember {
+	if HasRole(RelayerRole, relayer).IsMember {
 		t.Fatal("RenounceRole must revoke caller membership")
 	}
 }
@@ -278,26 +278,26 @@ func TestTargetConfigurationSurface(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(admin))
 	SetFunctionRole(cross(cur), "set_hook", manager.PublicRole)
 
-	if GetTargetFunctionRole(cross(cur), "set_hook") != manager.PublicRole {
+	if GetTargetFunctionRole(cur.PkgPath(), "set_hook") != manager.PublicRole {
 		t.Fatal("SetFunctionRole must update inferred target selector role")
 	}
-	if !CanManageTarget(cur, admin).Immediate {
+	if !CanManageTarget(admin).Immediate {
 		t.Fatal("admin role member must be able to manage targets")
 	}
-	if !IsAuthorized(cross(cur), "set_hook", caller) {
+	if !IsAuthorized(cur.PkgPath(), "set_hook", caller) {
 		t.Fatal("public selector must authorize arbitrary caller")
 	}
 
 	SetTargetClosed(cross(cur), true)
-	if !IsTargetClosed(cross(cur)) {
+	if !IsTargetClosed(cur.PkgPath()) {
 		t.Fatal("SetTargetClosed must close inferred target")
 	}
-	if CanCall(cross(cur), "set_hook", caller).Immediate {
+	if CanCall(cur.PkgPath(), "set_hook", caller).Immediate {
 		t.Fatal("closed target must reject authorized caller")
 	}
 
 	SetTargetClosed(cross(cur), false)
-	if !CanCall(cross(cur), "set_hook", caller).Immediate {
+	if !CanCall(cur.PkgPath(), "set_hook", caller).Immediate {
 		t.Fatal("reopened target must restore selector authorization")
 	}
 }
@@ -306,7 +306,7 @@ func TestUnionDeployerRelayerSelectorSetup(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	resetAccess(admin)
 
-	if HasRole(cur, RelayerRole, admin).IsMember {
+	if HasRole(RelayerRole, admin).IsMember {
 		t.Fatal("initial admin must not receive relayer role during access-manager bootstrap")
 	}
 	for _, selector := range types.RelayerSelectors() {

@@ -6,14 +6,14 @@ import (
 	"gno.land/p/nt/uassert/v0"
 )
 
-func TestAssertIsIBCHost(cur realm, t *testing.T) {
+func TestAssertIsCoreRealm(cur realm, t *testing.T) {
 	cases := []struct {
 		name      string
 		caller    string
 		wantAbort string
 	}{
 		{"core caller", coreRealmPath, ""},
-		{"non-core caller", "gno.land/r/onbloc/ibc/notcore", "ibc host only"},
+		{"non-core caller", "gno.land/r/onbloc/ibc/notcore", ErrNotCoreRealm},
 	}
 
 	for _, tc := range cases {
@@ -22,12 +22,12 @@ func TestAssertIsIBCHost(cur realm, t *testing.T) {
 
 		if tc.wantAbort != "" {
 			uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
-				assertIsIBCHost(cross(cur))
+				assertIsCoreRealm(cross(cur))
 			})
 			continue
 		}
 
-		assertIsIBCHost(cross(cur))
+		assertIsCoreRealm(cross(cur))
 	}
 }
 

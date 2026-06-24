@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	u256 "gno.land/p/gnoswap/uint256"
-	types "gno.land/p/onbloc/ibc/union/types"
 	"gno.land/p/nt/uassert/v0"
+	"gno.land/p/onbloc/ibc/union/types"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
 )
 
@@ -47,7 +47,7 @@ func TestGetChannelBalanceV2DelegatesToImpl(cur realm, t *testing.T) {
 	got, err := GetChannelBalanceV2(types.ChannelId(7), path, "ugnot", []byte("quote"))
 	uassert.NoError(t, err)
 	uassert.Equal(t, "44", got.ToString())
-	uassert.Equal(t, types.ChannelId(7), target.lastBalanceChannelId)
+	uassert.Equal(t, uint32(7), uint32(target.lastBalanceChannelId))
 	uassert.Equal(t, "11", target.lastBalancePath.ToString())
 	uassert.Equal(t, "ugnot", target.lastBalanceBaseToken)
 	uassert.Equal(t, "quote", string(target.lastBalanceQuote))

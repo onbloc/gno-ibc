@@ -24,6 +24,7 @@ type mockStore struct {
 	tokenBucket       map[string]*tb.TokenBucket
 	vouchers          map[string]*zkgm.Voucher
 	receivers         map[string]z.Zkgmable
+	lockedNative      map[string]*u256.Uint
 	rateLimitDisabled bool
 }
 
@@ -39,6 +40,7 @@ func newMockStore() *mockStore {
 		tokenBucket:      map[string]*tb.TokenBucket{},
 		vouchers:         map[string]*zkgm.Voucher{},
 		receivers:        map[string]z.Zkgmable{},
+		lockedNative:     map[string]*u256.Uint{},
 		// Match NewStore: rate limiting is opt-in (disabled by default).
 		rateLimitDisabled: true,
 	}
@@ -63,6 +65,20 @@ func (m *mockStore) RemoveChannelBalanceV2(_ int, rlm realm, key string) {
 
 func (m *mockStore) GetChannelBalanceV2(key string) (*u256.Uint, bool) {
 	v, ok := m.channelBalanceV2[key]
+	return v, ok
+}
+
+func (m *mockStore) AddLockedNative(_ int, rlm realm, denom string, amount *u256.Uint) {
+	total := u256.Zero()
+	if cur, ok := m.lockedNative[denom]; ok {
+		total.Set(cur)
+	}
+	total.Add(total, amount)
+	m.lockedNative[denom] = total
+}
+
+func (m *mockStore) GetLockedNative(denom string) (*u256.Uint, bool) {
+	v, ok := m.lockedNative[denom]
 	return v, ok
 }
 

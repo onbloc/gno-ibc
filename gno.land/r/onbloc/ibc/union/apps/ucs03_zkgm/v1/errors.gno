@@ -32,6 +32,7 @@ const (
 	errEurekaUnsupported     = "eureka mode not supported"
 	errInvalidCallSender     = "invalid call sender"
 	errReceiverNotRegistered = "receiver not registered"
+	errIsOnlyMakerAck        = "is only maker ack"
 
 	// forward
 	errInvalidForwardInstruction = "invalid forward instruction"
@@ -54,6 +55,14 @@ const (
 	// coins / channel balance
 	errCoinMismatch            = "zkgm/coins: sent coin mismatch"
 	errChannelBalanceUnderflow = "zkgm/channel_balance: underflow"
+
+	// errGRC20Unsupported is returned when a token order's base denom is a GRC20
+	// token registered in grc20reg (other than zkgm's own ibc/ vouchers). zkgm only
+	// escrows native coins (pushed via -send) and the vouchers it issues; escrowing
+	// a foreign GRC20 would require an Approve/TransferFrom pull path that is not yet
+	// implemented. Detected explicitly so it fails with a clear message instead of
+	// being misclassified as native and surfacing errCoinMismatch.
+	errGRC20Unsupported = "grc20 token escrow not yet supported"
 
 	// ErrSpoofedRealm guards non-crossing (_ int, rlm realm, ...) entrypoints: the
 	// passed rlm must be the current crossing frame, not a forged or stale token.

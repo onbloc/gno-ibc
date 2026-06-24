@@ -50,6 +50,7 @@ type Store struct {
 	tokenBucket        *bptree.BPTree // denom -> *tb.TokenBucket
 	vouchers           *bptree.BPTree // ibcDenom -> *Voucher
 	receivers          *bptree.BPTree // pkgPath -> z.Zkgmable
+	lockedNative       *bptree.BPTree // denom -> *u256.Uint (permanently locked native)
 	rateLimitDisabled  bool
 }
 
@@ -63,6 +64,7 @@ func NewStore() *Store {
 		tokenBucket:        bptree.NewBPTree32(),
 		vouchers:           bptree.NewBPTree32(),
 		receivers:          bptree.NewBPTree32(),
+		lockedNative:       bptree.NewBPTree32(),
 		// Rate limiting is opt-in: enabled per-denom by an admin who first
 		// configures a token bucket (see SetBucketConfig). With it enabled, a denom
 		// without a bucket is rejected (union TokenBucketIsAbsent), so it must stay
@@ -115,6 +117,39 @@ func (s *Store) RemoveChannelBalanceV2(_ int, rlm realm, key string) {
 // GetChannelBalanceV2 returns the escrow balance for a key.
 func (s *Store) GetChannelBalanceV2(key string) (*u256.Uint, bool) {
 	v, ok := s.channelBalanceV2.Get(key)
+	if !ok {
+		return nil, false
+	}
+
+	return v.(*u256.Uint), true
+}
+
+// AddLockedNative records native escrow that has been permanently locked by a
+// burn-address settlement. gno cannot destroy native supply, so a "burned"
+// native stays in the proxy escrow account; the burn decrements its channel
+// balance (removing it from the spendable escrow pool), and this counter tracks
+// the locked total per denom so the coins are accounted rather than left as an
+// orphaned surplus. It mirrors the transfer app's totalEscrow-style accounting
+// and has no union counterpart (union burns the supply outright). The invariant
+// preserved is: proxy native balance == sum(channelBalanceV2) + sum(lockedNative).
+func (s *Store) AddLockedNative(_ int, rlm realm, denom string, amount *u256.Uint) {
+	if !rlm.IsCurrent() {
+		panic(ErrSpoofedRealm)
+	}
+
+	total := u256.Zero()
+	if cur, ok := s.lockedNative.Get(denom); ok {
+		total.Set(cur.(*u256.Uint))
+	}
+
+	total.Add(total, amount)
+
+	s.lockedNative.Set(denom, total.Clone())
+}
+
+// GetLockedNative returns the total native permanently locked for a denom.
+func (s *Store) GetLockedNative(denom string) (*u256.Uint, bool) {
+	v, ok := s.lockedNative.Get(denom)
 	if !ok {
 		return nil, false
 	}

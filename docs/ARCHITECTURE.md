@@ -1,10 +1,10 @@
 # Project Architecture
 
-This document is a map of the first-party Gno packages and realms in this repository.
-It explains how the pure packages (`p/`) and stateful realms (`r/`) under the `onbloc` namespace fit together,
+This document is a map of the first-party Gno packages and realms in this repository.\
+It explains how the pure packages (`p/`) and stateful realms (`r/`) under the `onbloc` namespace fit together,\
 what each one is responsible for, and how an IBC packet flows through them.
 
-For per-module detail, follow the linked `README.md` of each component.
+For per-module detail, follow the linked `README.md` of each component.\
 For spec-level comparisons against the upstream references, see the [documentation index](README.md).
 
 ## Contracts
@@ -38,15 +38,15 @@ gno.land/
 
 ## Layer Model
 
-The system is split into stateless **pure packages** (reusable libraries, no on-chain state)
-and stateful **realms** (persistent contracts).
-Realms further use an **upgradeable proxy / implementation** split:
-a stable proxy realm owns identity, storage, and access gates,
+The system is split into stateless **pure packages** (reusable libraries, no on-chain state) \
+and stateful **realms** (persistent contracts). \
+Realms further use an **upgradeable proxy / implementation** split: \
+a stable proxy realm owns identity, storage, and access gates, \
 while a swappable `v1` implementation realm holds the protocol logic behind an interface.
 
-Each box is one runtime layer.
-A public-facing realm (proxy) keeps the stable identity and forwards to its swappable `v1` implementation;
-arrows show the call direction.
+Each box is one runtime layer. \
+A public-facing realm (proxy) keeps the stable identity and forwards to its swappable `v1` implementation; \
+arrows show the call direction. \
 Everything ultimately depends on the pure packages at the bottom.
 
 ```
@@ -94,10 +94,10 @@ Stateful contracts. Each public-facing realm is an upgradeable proxy that delega
 
 ### Why the proxy / implementation split
 
-The proxy realm keeps a **stable package path** (so other realms can import it once and never re-wire) and holds all persistent state,
-while protocol logic lives in a replaceable `v1` realm.
-Upgrading swaps the installed implementation through the proxy's `upgrade.gno` registration point,
-without moving state or changing the import path callers depend on.
+The proxy realm keeps a **stable package path** (so other realms can import it once and never re-wire) and holds all persistent state, \
+while protocol logic lives in a replaceable `v1` realm. \
+Upgrading swaps the installed implementation through the proxy's `upgrade.gno` registration point, \
+without moving state or changing the import path callers depend on. \
 See the [core](../gno.land/r/onbloc/ibc/union/core/README.md) and [ZKGM proxy](../gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/README.md) READMEs for the file-by-file breakdown.
 
 ## Pure Packages (`p/onbloc`)
@@ -133,21 +133,21 @@ Stateless libraries. They define shared types and interfaces, and provide codecs
 
 ## How a Packet Flows
 
-The pieces above compose into one path.
+The pieces above compose into one path.\
 A receive (`RecvPacket`) is the most illustrative:
 
 1. **Relayer → core proxy.** A relayer submits the packet and proof to the `ibc/union/core` proxy. The proxy checks access gates and forwards to `core/v1`.
-2. **Proof verification.** `core/v1` resolves the channel's light client (`lightclient.Interface`) and calls `VerifyMembership`.
-   Inactive clients are rejected **before** any proof bytes are decoded (see the light-client proof rules in [AGENTS.md](../AGENTS.md)).
+2. **Proof verification.** `core/v1` resolves the channel's light client (`lightclient.Interface`) and calls `VerifyMembership`.\
+   Inactive clients are rejected **before** any proof bytes are decoded (see the light-client proof rules in [AGENTS.md](../AGENTS.md)).\
    CometBLS or state-lens packages do the actual cryptographic verification.
 3. **Core → app.** Core looks up the destination app in its registry and dispatches the `IApp.OnRecvPacket` callback to the ZKGM proxy.
-4. **ZKGM proxy → v1 dispatch.** The proxy forwards to `ucs03_zkgm/v1`, which decodes the packet envelope (via the `zkgm` pure package)
+4. **ZKGM proxy → v1 dispatch.** The proxy forwards to `ucs03_zkgm/v1`, which decodes the packet envelope (via the `zkgm` pure package)\
    and routes each instruction through the opcode dispatcher (`dispatch.gno`): Call, TokenOrder, Batch, or Forward.
-5. **Effects.** TokenOrder mints/unescrows GRC20 vouchers and charges the rate-limit `tokenbucket`;
-   Call invokes a registered receiver; Batch and Forward recurse through the same dispatcher.
+5. **Effects.** TokenOrder mints/unescrows GRC20 vouchers and charges the rate-limit `tokenbucket`;\
+   Call invokes a registered receiver; Batch and Forward recurse through the same dispatcher.\
    The resulting acknowledgement is written back through core.
 
-Send, acknowledgement, and timeout follow the inverse path through the same proxy → implementation → pure-package layering.
+Send, acknowledgement, and timeout follow the inverse path through the same proxy → implementation → pure-package layering.\
 The ZKGM-specific invariants (batch ack rules, forward async path, byte-safety) are detailed in [AGENTS.md](../AGENTS.md).
 
 ## Where to Go Next

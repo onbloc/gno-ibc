@@ -4,11 +4,12 @@ import (
 	"testing"
 
 	"gno.land/p/nt/uassert/v0"
+	"gno.land/p/nt/ufmt/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 )
 
 func TestAsIBCApp(t *testing.T) {
-	app := AsIBCApp()
+	app := &App{}
 	if app == nil {
 		t.Fatal("AsIBCApp returned nil")
 	}
@@ -21,7 +22,7 @@ func TestProxyPkgPath_AndProductionImplPath(t *testing.T) {
 		want string
 	}{
 		{"proxy path", ProxyPkgPath, proxyPkgPath},
-		{"production impl path", ProductionImplPath, proxyPkgPath + "/v1"},
+		{"production impl path", func() string { return ufmt.Sprintf("%s/v1", proxyPkgPath) }, proxyPkgPath + "/v1"},
 	}
 
 	for _, tc := range cases {

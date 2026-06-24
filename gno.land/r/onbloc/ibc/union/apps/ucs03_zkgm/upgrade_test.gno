@@ -167,7 +167,7 @@ func TestUpdateImpl(cur realm, t *testing.T) {
 			packet := core.NewPacket(1, 2, []byte("d"), 0)
 			// Drive a packet through the proxy; only the latest impl must receive it.
 			testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-			AsIBCApp().OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
+			(&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
 
 			if first.recvCalled {
 				t.Errorf("%s: displaced impl must not receive packets", tc.name)

@@ -39,7 +39,7 @@ surface that is intentionally not applicable to the Gno runtime or local state
 model.
 
 For the cross-module comparison guide, see
-[docs/ibc-union-spec-comparison.md](../../../../../../../docs/ibc-union-spec-comparison.md).
+[docs/spec-comparisons/ibc-union-spec-comparison.md](../../../../../../../docs/spec-comparisons/ibc-union-spec-comparison.md).
 
 ### Execute
 

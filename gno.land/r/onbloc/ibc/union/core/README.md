@@ -40,7 +40,7 @@ variants as the row source. `-` means this proxy does not expose a matching Gno
 public surface.
 
 For the cross-module comparison guide, see
-[docs/ibc-union-spec-comparison.md](../../../../../../docs/ibc-union-spec-comparison.md).
+[docs/spec-comparisons/ibc-union-spec-comparison.md](../../../../../../docs/spec-comparisons/ibc-union-spec-comparison.md).
 
 ### Client
 
@@ -108,8 +108,8 @@ For the cross-module comparison guide, see
 | [GetChannels](getters.gno) | `QueryMsg::GetChannels` | [query.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/msg/src/query.rs#L30), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L2155) | Gno returns stored channels; Union filters by contract. |
 | [GetBatchPackets](getters.gno) | `QueryMsg::GetBatchPackets` | [query.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/msg/src/query.rs#L32), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L2168) | Reads a committed packet batch hash. |
 | [GetBatchReceipts](getters.gno) | `QueryMsg::GetBatchReceipts` | [query.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/msg/src/query.rs#L34), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L2172) | Reads a committed ack batch hash. |
-| [GetCommittedMembershipProof](packet.gno) | `QueryMsg::GetCommittedMembershipProof` | [query.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/msg/src/query.rs#L36), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L2176) | Reads cached membership proof commitment. |
-| [GetCommittedNonMembershipProof](packet.gno) | `QueryMsg::GetCommittedNonMembershipProof` | [query.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/msg/src/query.rs#L42), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L2192) | Reads cached non-membership proof commitment. |
+| [GetCommittedMembershipProof](getters.gno) | `QueryMsg::GetCommittedMembershipProof` | [query.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/msg/src/query.rs#L36), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L2176) | Reads cached membership proof commitment. |
+| [GetCommittedNonMembershipProof](getters.gno) | `QueryMsg::GetCommittedNonMembershipProof` | [query.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/msg/src/query.rs#L42), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L2192) | Reads cached non-membership proof commitment. |
 | [GetClientImpl](getters.gno) | `QueryMsg::GetClientImpl` | [query.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/msg/src/query.rs#L48), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L2120) | Best-effort query returning the registered client type as the Gno impl identifier. |
 | [GetRegisteredClientType](getters.gno) | `QueryMsg::GetRegisteredClientType` | [query.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/msg/src/query.rs#L50), [contract.rs](https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L2123) | Reports whether a client type is registered. |
 

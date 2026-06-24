@@ -107,7 +107,7 @@ curl -s -X POST http://23.20.153.250:8546/graphql/query \
 Store permanent logs under:
 
 ```text
-docs/zkgm-packet-send/sends/
+docs/guides/zkgm-packet-send/sends/
 ```
 
 Each send record should include:

@@ -62,8 +62,8 @@ gno test -v ./gno.land/p/onbloc/ibc/union/zkgm
 
 When changing core, ZKGM, or access behavior, compare the Gno surface against
 the pinned Union reference links collected in
-[docs/ibc-union-spec-comparison.md](docs/ibc-union-spec-comparison.md) and
-[docs/access-management.md](docs/access-management.md). Runtime wrapper
+[docs/spec-comparisons/ibc-union-spec-comparison.md](docs/spec-comparisons/ibc-union-spec-comparison.md) and
+[docs/spec-comparisons/access-management.md](docs/spec-comparisons/access-management.md). Runtime wrapper
 differences such as `cur realm`, direct function arguments, or absent CosmWasm
 `Response` wrappers are expected Gno model differences unless they change state,
 events, authorization, or protocol-visible data.
@@ -71,10 +71,10 @@ events, authorization, or protocol-visible data.
 ## Development References
 
 - [Documentation index](docs/README.md)
-- [TX Indexer Guide](docs/tx-indexer.md)
-- [ZKGM Packet Send Guide](docs/zkgm-packet-send-guide.md)
-- [ZKGM Batch Call-Recv Pattern](docs/zkgm-batch-call-recv.md)
-- [IBC Native Function Gas Table](docs/ibc-native-gas.md)
+- [TX Indexer Guide](docs/guides/tx-indexer.md)
+- [ZKGM Packet Send Guide](docs/guides/zkgm-packet-send-guide.md)
+- [ZKGM Batch Call-Recv Pattern](docs/references/zkgm-batch-call-recv.md)
+- [IBC Native Function Gas Table](docs/references/ibc-native-gas.md)
 - [Tools overview](tools/README.md)
 - [Third-party mirror workflow](third_party/README.md)
 

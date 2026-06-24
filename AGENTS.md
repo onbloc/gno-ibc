@@ -275,7 +275,7 @@ IBC voucher tokens (minted on RecvPacket for cross-chain tokens) use **GRC20 tok
 
 ## ZKGM Porting Notes
 
-The ZKGM port is tracked in `docs/ibc-union-spec-comparison.md` and the relevant package/realm README files. Before changing ZKGM code, read the current comparison and local module docs first. The main implementation paths are:
+The ZKGM port is tracked in `docs/spec-comparisons/ibc-union-spec-comparison.md` and the relevant package/realm README files. Before changing ZKGM code, read the current comparison and local module docs first. The main implementation paths are:
 
 - ABI/types: `gno.land/p/onbloc/ibc/union/zkgm/`
 - Proxy realm source: `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/`
@@ -392,7 +392,7 @@ A TokenOrderV2 INITIALIZE `SendRaw` consumes ~50.7M gas on the dev chain. Use `-
 
 Source files live under `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/`, but a testnet deployment may publish them under a chain-specific namespace. For `maketx call -pkgpath`, use the *deployed* path. The authoritative deployed path is the `port_id` attribute of `ChannelOpenInit` / `ChannelOpenAck` / `ChannelOpenConfirm` events surfaced by the tx-indexer.
 
-### Indexer GraphQL quirks (see `docs/tx-indexer.md`)
+### Indexer GraphQL quirks (see `docs/guides/tx-indexer.md`)
 
 - Top-level latest-block field is `latestBlockHeight`, not `getLatestBlockHeight`.
 - `getBlocks` takes `order: { height: DESC }`; `heightAndIndex` is rejected.

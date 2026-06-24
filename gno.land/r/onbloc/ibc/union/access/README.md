@@ -16,7 +16,7 @@ take the target path explicitly when they inspect per-target configuration.
 
 ## References
 
-- [Repository comparison guide](../../../../../../docs/access-management.md)
+- [Repository comparison guide](../../../../../../docs/spec-comparisons/access-management.md)
 - OpenZeppelin Contracts:
   [`AccessManager` v5.6.1](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/v5.6.1/contracts/access/manager)
 - Union CosmWasm:

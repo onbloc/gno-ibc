@@ -6,7 +6,7 @@ Pure Gno port of the core permission model from OpenZeppelin Contracts
 Reference:
 
 - Repository comparison guide:
-  [docs/access-management.md](../../../../../docs/access-management.md)
+  [docs/spec-comparisons/access-management.md](../../../../../docs/spec-comparisons/access-management.md)
 - OpenZeppelin Access Management concept guide:
   [Access Management](https://docs.openzeppelin.com/contracts/5.x/access-control#access-management)
 - OpenZeppelin Contracts `AccessManager` API reference:

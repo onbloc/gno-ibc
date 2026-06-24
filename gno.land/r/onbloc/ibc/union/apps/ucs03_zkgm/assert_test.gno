@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"gno.land/p/nt/uassert/v0"
+	"gno.land/p/onbloc/ibc/union/types"
 )
 
 func TestAssertIsIBCHost(cur realm, t *testing.T) {
@@ -29,6 +30,13 @@ func TestAssertIsIBCHost(cur realm, t *testing.T) {
 
 		assertIsIBCHost(cross(cur))
 	}
+}
+
+func TestEmitRecvErrorRejectsNonProxyRealm(cur realm, t *testing.T) {
+	uassert.AbortsContains(t, cur, ErrNotProxyRealm, func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(proxyPkgPath + "/v1"))
+		EmitRecvError(0, cur, types.ChannelId(1), types.ChannelId(2), "test")
+	})
 }
 
 func TestAssertNotPaused(cur realm, t *testing.T) {

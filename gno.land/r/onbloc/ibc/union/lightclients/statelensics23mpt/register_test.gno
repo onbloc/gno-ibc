@@ -5,7 +5,7 @@ import (
 
 	"gno.land/p/nt/uassert/v0"
 	"gno.land/r/onbloc/ibc/union/access"
-	core "gno.land/r/onbloc/ibc/union/core"
+	"gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
 )
 

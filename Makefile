@@ -93,7 +93,9 @@ COVERAGE_DIR := coverage
 
 # First-party gno packages. Third-party mirrors under gno.land/p/{aib,gnoswap,nt,onbloc}
 # and gno.land/r/aib are dependency inputs only, so local and CI tests skip them.
-USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/onbloc gno.land/r/onbloc -name gnomod.toml | sort))
+# Packages under any ignore/ directory are excluded too (scratch/scenario realms
+# that are not part of the first-party test suite).
+USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/onbloc gno.land/r/onbloc -name gnomod.toml | grep -v '/ignore/' | sort))
 TEST_GNO_PKGS := $(if $(PKG),$(addprefix ./,$(patsubst ./%,%,$(PKG))),$(USER_GNO_PKGS))
 GNO_TEST_FLAGS := -v$(if $(RUN), -run "$(RUN)")
 

@@ -8,7 +8,7 @@ import (
 
 // proxyPkgPath is this proxy realm's package path — the stable IBC port id that
 // core keys the App registration under.
-const proxyPkgPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+var proxyPkgPath string
 
 func ProxyPkgPath() string {
 	return proxyPkgPath

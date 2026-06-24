@@ -37,7 +37,9 @@ var store *Store
 // proxy package rather than inside the injected Store.
 var paused bool
 
-func init() {
+func init(cur realm) {
+	proxyPkgPath = cur.PkgPath()
+
 	store = NewStore()
 }
 

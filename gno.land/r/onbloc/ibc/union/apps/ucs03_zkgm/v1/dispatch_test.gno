@@ -124,9 +124,12 @@ func TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts(cur realm, t *testing.T
 	uassert.False(t, hasOrigin)
 }
 
-func TestRecvTokenOrderSolveFallsBackToMarketMaker(cur realm, t *testing.T) {
+func TestRecvTokenOrderSolveOnlyMakerRevertsRecv(cur realm, t *testing.T) {
 	// A solve order is maker-only (union routes it to market_maker_fill_v2). With
-	// no voucher for the quote denom, the fill is maker-only.
+	// no voucher for the quote denom the fill is maker-only — and union reverts the
+	// whole recv tx on an only-maker outcome (reply returns Err(OnlyMaker),
+	// contract.rs L2545). OnRecvPacket mirrors this by panicking, so the only-maker
+	// sentinel is never committed as a success ack.
 	order := z.TokenOrderV2{
 		Kind:        z.TOKEN_ORDER_KIND_SOLVE,
 		Sender:      []byte(testAddress("solve-recv-sndr")),
@@ -139,10 +142,9 @@ func TestRecvTokenOrderSolveFallsBackToMarketMaker(cur realm, t *testing.T) {
 	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(1), data, 0)
 
-	res := newTestImpl().OnRecvPacket(0, cur, packet, address("g1relayer"), nil)
-
-	uassert.True(t, res.Status == types.PacketStatusSuccess)
-	uassert.Equal(t, string(z.ACK_ERR_ONLY_MAKER), string(res.Acknowledgement))
+	uassert.AbortsContains(t, cur, "only maker", func(cur realm) {
+		newTestImpl().OnRecvPacket(0, cur, packet, address("g1relayer"), nil)
+	})
 }
 
 // Each decode* helper accepts exactly one instruction version and rejects all

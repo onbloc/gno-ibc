@@ -97,6 +97,17 @@ func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relaye
 		return failureResult(universalErrorAck())
 	}
 
+	// An only-maker outcome (a maker-only fill that could not be satisfied, or
+	// an only-maker child anywhere in a batch) must revert the whole recv tx —
+	// no ack is written and any already-applied batch-child mutations are rolled
+	// back. This mirrors union's reply handler returning Err(OnlyMaker) for both
+	// the single-instruction and batch cases (contract.rs L2530, L2545), and the
+	// symmetric guard already in OnIntentRecvPacket. Core does not recover recv
+	// panics, so this reverts atomically.
+	if isOnlyMakerAck(res.Acknowledgement) {
+		panic(errIsOnlyMakerAck)
+	}
+
 	return res
 }
 

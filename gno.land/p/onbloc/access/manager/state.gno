@@ -62,17 +62,18 @@ func (state *State) HasRole(role RoleId, account address) HasRoleResult {
 		return NewHasRoleResult(false)
 	}
 
+	now := CurrentTimePoint()
 	storedAccess := roleConfig.rawAccess(account)
 	if storedAccess.Since.IsZero() {
 		return NewHasRoleResult(false)
 	}
 
-	access := roleConfig.access(account, CurrentTimePoint())
+	access := roleConfig.access(account, now)
 	if access.Since.IsZero() {
-		return NewHasRoleResultWithDelay(false, storedAccess.Delay)
+		return NewHasRoleResultWithDelay(false, storedAccess.executionDelayAt(now))
 	}
 
-	return NewHasRoleResultWithDelay(true, access.Delay)
+	return NewHasRoleResultWithDelay(true, access.executionDelayAt(now))
 }
 
 // GetRoleAdmin returns the admin role for role, defaulting to AdminRole.
@@ -107,7 +108,7 @@ func (state *State) GetRoleGrantDelay(role RoleId) Delay {
 		return 0
 	}
 
-	return roleConfig.grantDelay()
+	return roleConfig.grantDelayAt(CurrentTimePoint())
 }
 
 // GetTargetFunctionRole returns the role required for target selector.
@@ -131,7 +132,7 @@ func (state *State) GetTargetAdminDelay(target string) Delay {
 		return 0
 	}
 
-	return targetConfig.adminDelay()
+	return targetConfig.adminDelayAt(CurrentTimePoint())
 }
 
 // IsTargetClosed reports whether target is closed.
@@ -159,7 +160,8 @@ func (state *State) GetNonce(operationId OperationId) Nonce {
 // =============================================== ROLE MANAGEMENT ===============================================
 
 // GrantRole grants role membership to account and returns true for a new member.
-// This Gno port retains grant delay but intentionally omits OZ execution delay.
+// This Gno port retains grant delay and execution delay in a Gno-native state
+// transition library.
 // OpenZeppelin references:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L233-L236
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L271-L298
@@ -170,13 +172,19 @@ func (state *State) GrantRole(role RoleId, account address) bool {
 // GrantRoleWithExecutionDelay grants role membership to account with a call
 // execution delay after the membership becomes active.
 func (state *State) GrantRoleWithExecutionDelay(role RoleId, account address, executionDelay Delay) bool {
+	newMember, _ := state.GrantRoleWithExecutionDelayEffect(role, account, executionDelay)
+
+	return newMember
+}
+
+func (state *State) GrantRoleWithExecutionDelayEffect(role RoleId, account address, executionDelay Delay) (bool, TimePoint) {
 	if role == PublicRole {
 		panic(errorWithDetails(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
 	}
 
 	state.ensureRole(role)
 
-	return state.getRole(role).grant(account, CurrentTimePoint(), executionDelay)
+	return state.getRole(role).grantWithEffect(account, CurrentTimePoint(), executionDelay)
 }
 
 // RevokeRole revokes role membership from account and reports whether it existed.
@@ -228,13 +236,13 @@ func (state *State) SetRoleGuardian(role RoleId, guardian RoleId) {
 // OpenZeppelin references:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L261-L264
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L357-L371
-func (state *State) SetGrantDelay(role RoleId, delay Delay) {
+func (state *State) SetGrantDelay(role RoleId, delay Delay) TimePoint {
 	if role == PublicRole {
 		panic(errorWithDetails(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
 	}
 
 	state.ensureRole(role)
-	state.getRole(role).setGrantDelay(delay)
+	return state.getRole(role).setGrantDelay(delay, CurrentTimePoint())
 }
 
 // ============================================= FUNCTION MANAGEMENT ==============================================
@@ -257,9 +265,9 @@ func (state *State) SetTargetFunctionRoles(target string, selectors []Selector, 
 
 // SetTargetAdminDelay sets the delay required before target configuration
 // operations can be consumed.
-func (state *State) SetTargetAdminDelay(target string, delay Delay) {
+func (state *State) SetTargetAdminDelay(target string, delay Delay) TimePoint {
 	state.ensureTarget(target)
-	state.getTarget(target).setAdminDelay(delay)
+	return state.getTarget(target).setAdminDelayWithSetback(delay, CurrentTimePoint())
 }
 
 // =============================================== MODE MANAGEMENT ================================================

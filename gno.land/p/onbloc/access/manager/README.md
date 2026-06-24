@@ -35,6 +35,8 @@ The model follows OpenZeppelin's `AccessManager` shape:
 - each role has an admin role, guardian role, grant delay, and member access
   records;
 - a member access record has an activation timePoint and execution delay;
+- role grant delay, target admin delay, and member execution-delay reductions
+  use Union/OZ delayed-value update semantics instead of changing immediately;
 - delayed operations are keyed by caller, target, selector, and `dataHash`;
 - target administration can require a target-specific admin delay;
 - current `TimePoint` is represented as Unix seconds in an `int64` wrapper and
@@ -124,6 +126,7 @@ Types:
 - `Selector`
 - `TimePoint`
 - `Delay`
+- `DelayedValue`
 - `State`
 - `RoleConfig`
 - `Access`
@@ -138,6 +141,7 @@ Constants:
 
 - `AdminRole`
 - `PublicRole`
+- `MinSetback`
 
 Constructors:
 
@@ -145,6 +149,7 @@ Constructors:
 - `NewSelector`
 - `NewTimePoint`
 - `NewDelay`
+- `NewDelayedValue`
 - `NewState`
 - `NewRoleConfig`
 - `NewAccess`
@@ -165,6 +170,8 @@ Delay helpers:
 
 - `Delay.Uint32`
 - `Delay.String`
+- `DelayedValue.Get`
+- `DelayedValue.WithUpdate`
 
 TimePoint helpers:
 

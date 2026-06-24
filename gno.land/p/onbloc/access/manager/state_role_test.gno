@@ -8,7 +8,7 @@ import (
 
 func TestRoleConfigManagesNilMembersMap(t *testing.T) {
 	account := testutils.TestAddress("member")
-	roleConfig := &RoleConfig{GrantDelay: 5, Members: make(map[address]Access)}
+	roleConfig := &RoleConfig{GrantDelay: NewDelayedValue(5), Members: make(map[address]Access)}
 	now := NewTimePoint(100)
 
 	if roleConfig.hasMember(account, now) {
@@ -17,7 +17,7 @@ func TestRoleConfigManagesNilMembersMap(t *testing.T) {
 	if !roleConfig.grant(account, now, 3) {
 		t.Fatal("first grant must report a new member")
 	}
-	if roleConfig.Members[account].Delay != 3 {
+	if roleConfig.Members[account].executionDelayAt(now) != 3 {
 		t.Fatal("grant must store execution delay")
 	}
 	if roleConfig.Members == nil {
@@ -82,8 +82,8 @@ func TestRoleConfigAdminAndGrantDelay(t *testing.T) {
 	}
 	for _, tc := range delayTests {
 		t.Run(tc.name, func(t *testing.T) {
-			roleConfig.setGrantDelay(tc.delay)
-			if got := roleConfig.grantDelay(); got != tc.delay {
+			effect := roleConfig.setGrantDelay(tc.delay, NewTimePoint(100))
+			if got := roleConfig.grantDelayAt(effect); got != tc.delay {
 				t.Fatalf("grantDelay() = %d, want %d", got, tc.delay)
 			}
 		})

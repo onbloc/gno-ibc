@@ -20,7 +20,7 @@ type RoleConfig struct {
 	Members    map[address]Access
 	Admin      RoleId
 	Guardian   RoleId
-	GrantDelay Delay
+	GrantDelay DelayedValue
 }
 
 func NewRoleConfig(admin RoleId, grantDelay Delay) *RoleConfig {
@@ -28,19 +28,29 @@ func NewRoleConfig(admin RoleId, grantDelay Delay) *RoleConfig {
 		Members:    make(map[address]Access),
 		Admin:      admin,
 		Guardian:   AdminRole,
-		GrantDelay: grantDelay,
+		GrantDelay: NewDelayedValue(grantDelay),
 	}
 }
 
 func (roleConfig *RoleConfig) grant(account address, now TimePoint, executionDelay Delay) bool {
-	_, found := roleConfig.Members[account]
+	newMember, _ := roleConfig.grantWithEffect(account, now, executionDelay)
+
+	return newMember
+}
+
+func (roleConfig *RoleConfig) grantWithEffect(account address, now TimePoint, executionDelay Delay) (bool, TimePoint) {
+	access, found := roleConfig.Members[account]
 	if found {
-		return false
+		updatedAccess, effect := access.withExecutionDelayUpdate(now, executionDelay)
+		roleConfig.Members[account] = updatedAccess
+
+		return false, effect
 	}
 
-	roleConfig.Members[account] = NewAccessWithDelay(now, roleConfig.GrantDelay, executionDelay)
+	access = NewAccessWithDelay(now, roleConfig.grantDelayAt(now), executionDelay)
+	roleConfig.Members[account] = access
 
-	return true
+	return true, access.Since
 }
 
 func (roleConfig *RoleConfig) revoke(account address) bool {
@@ -90,10 +100,17 @@ func (roleConfig *RoleConfig) guardianRole() RoleId {
 	return roleConfig.Guardian
 }
 
-func (roleConfig *RoleConfig) setGrantDelay(delay Delay) {
-	roleConfig.GrantDelay = delay
+func (roleConfig *RoleConfig) setGrantDelay(delay Delay, now TimePoint) TimePoint {
+	grantDelay, effect := roleConfig.GrantDelay.WithUpdate(now, delay, MinSetback)
+	roleConfig.GrantDelay = grantDelay
+
+	return effect
+}
+
+func (roleConfig *RoleConfig) grantDelayAt(now TimePoint) Delay {
+	return roleConfig.GrantDelay.Get(now)
 }
 
 func (roleConfig *RoleConfig) grantDelay() Delay {
-	return roleConfig.GrantDelay
+	return roleConfig.grantDelayAt(CurrentTimePoint())
 }

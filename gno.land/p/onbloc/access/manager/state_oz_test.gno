@@ -38,10 +38,13 @@ func TestOZGetTargetAdminDelayReturnsConfiguredDelayOrZeroDefault(t *testing.T) 
 		t.Fatal("unset target admin delay must default to zero")
 	}
 
-	state.SetTargetAdminDelay(ozTarget, 10)
+	effect := state.SetTargetAdminDelay(ozTarget, 10)
 
-	if state.GetTargetAdminDelay(ozTarget) != 10 {
-		t.Fatal("target admin delay must return the configured delay")
+	if state.GetTargetAdminDelay(ozTarget) != 0 {
+		t.Fatal("target admin delay must remain unchanged before setback")
+	}
+	if state.Targets[ozTarget].AdminDelay.Get(effect) != 10 {
+		t.Fatal("target admin delay must return configured delay at effect time")
 	}
 }
 
@@ -86,10 +89,13 @@ func TestOZGetRoleGrantDelayReturnsConfiguredDelayOrZeroDefault(t *testing.T) {
 		t.Fatal("unset role grant delay must default to zero")
 	}
 
-	state.SetGrantDelay(ozRole, 11)
+	effect := state.SetGrantDelay(ozRole, 11)
 
-	if state.GetRoleGrantDelay(ozRole) != 11 {
-		t.Fatal("role grant delay must return the configured delay")
+	if state.GetRoleGrantDelay(ozRole) != 0 {
+		t.Fatal("role grant delay must remain unchanged before setback")
+	}
+	if state.Roles[ozRole].GrantDelay.Get(effect) != 11 {
+		t.Fatal("role grant delay must return configured delay at effect time")
 	}
 }
 
@@ -206,7 +212,8 @@ func TestOZHasRolePendingGrantReturnsExecutionDelay(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
 
-	state.SetGrantDelay(ozRole, 10)
+	state.ensureRole(ozRole)
+	state.Roles[ozRole].GrantDelay = NewDelayedValue(10)
 	state.GrantRoleWithExecutionDelay(ozRole, caller, 7)
 
 	result := state.HasRole(ozRole, caller)
@@ -224,7 +231,8 @@ func TestOZHasRolePendingGrantReturnsFalse(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
 
-	state.SetGrantDelay(ozRole, 10)
+	state.ensureRole(ozRole)
+	state.Roles[ozRole].GrantDelay = NewDelayedValue(10)
 	state.GrantRole(ozRole, caller)
 
 	result := state.HasRole(ozRole, caller)
@@ -337,14 +345,15 @@ func TestOZGrantRoleRejectsPublicRole(t *testing.T) {
 func TestOZGrantRoleWithGrantAndExecutionDelayDefersMemberButReportsDelay(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
-	state.SetGrantDelay(ozRole, 10)
+	state.ensureRole(ozRole)
+	state.Roles[ozRole].GrantDelay = NewDelayedValue(10)
 
 	if !state.GrantRoleWithExecutionDelay(ozRole, caller, 3) {
 		t.Fatal("new grant must report a new member")
 	}
 
 	access := state.Roles[ozRole].Members[caller]
-	if !access.Since.After(CurrentTimePoint()) || access.Delay != 3 {
+	if !access.Since.After(CurrentTimePoint()) || access.executionDelayAt(CurrentTimePoint()) != 3 {
 		t.Fatal("grant must store future effective timepoint and execution delay")
 	}
 
@@ -359,7 +368,8 @@ func TestOZGrantRoleWithGrantAndExecutionDelayDefersMemberButReportsDelay(t *tes
 func TestOZGrantRoleWithGrantDelayDefersNewMember(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
-	state.SetGrantDelay(ozRole, 10)
+	state.ensureRole(ozRole)
+	state.Roles[ozRole].GrantDelay = NewDelayedValue(10)
 
 	if !state.GrantRole(ozRole, caller) {
 		t.Fatal("new grant must report a new member")
@@ -387,7 +397,7 @@ func TestOZGrantRoleWithExecutionDelayActivatesNewMember(t *testing.T) {
 	}
 
 	access := state.Roles[ozRole].Members[caller]
-	if access.Since.After(CurrentTimePoint()) || access.Delay != 6 {
+	if access.Since.After(CurrentTimePoint()) || access.executionDelayAt(CurrentTimePoint()) != 6 {
 		t.Fatal("grant without grant delay must be active and store execution delay")
 	}
 
@@ -418,7 +428,8 @@ func TestOZGrantRoleWithoutGrantDelayActivatesNewMember(t *testing.T) {
 func TestOZRevokeRoleRemovesPendingGrant(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
-	state.SetGrantDelay(ozRole, 10)
+	state.ensureRole(ozRole)
+	state.Roles[ozRole].GrantDelay = NewDelayedValue(10)
 	state.GrantRole(ozRole, caller)
 
 	if !state.RevokeRole(ozRole, caller) {

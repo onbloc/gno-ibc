@@ -104,7 +104,8 @@ func TestTargetAdminDelaySchedulesTargetConfiguration(t *testing.T) {
 	admin := testutils.TestAddress("admin")
 	state := NewState()
 	state.GrantRole(AdminRole, admin)
-	state.SetTargetAdminDelay("target", 8)
+	state.ensureTarget("target")
+	state.Targets["target"].AdminDelay = NewDelayedValue(8)
 
 	result := state.CanManageTargetPath(admin, "target")
 	if result.Immediate || !result.Authorized || result.Delay != 8 {

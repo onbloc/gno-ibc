@@ -125,6 +125,11 @@ This realm applies Union/OZ delay policy to Gno targets without a generic
 manager-side executor:
 
 - `GrantRoleWithExecutionDelay` stores account execution delay.
+- Regranting an existing member updates its execution delay using Union/OZ
+  delayed-value semantics; decreasing the delay remains pending until the
+  required setback.
+- `SetGrantDelay` and `SetTargetAdminDelay` use Union/OZ min-setback policy, so
+  getters keep returning the current value until the new value's effect time.
 - `Schedule` records delayed calls for target selectors when `CanCall` returns
   delayed authorization.
 - `ScheduleTargetAdmin` records delayed target-configuration changes when
@@ -134,7 +139,9 @@ manager-side executor:
 - `Set*Delayed` management functions consume target-admin scheduled operations
   before applying the state transition.
 - Managed realms use `AssertCanCallOrConsume` to consume delayed target
-  operations from their original public entrypoints.
+  operations from their original public entrypoints. If a previously scheduled
+  operation exists and the caller later becomes immediate, the guard still
+  consumes that ready schedule to match Union/OZ execution behavior.
 
 The intentional runtime difference is generic execution. Union executes encoded
 CosmWasm messages through the manager. Gno target realms must be invoked again

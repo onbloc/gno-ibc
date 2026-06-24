@@ -22,6 +22,41 @@ func (d Delay) String() string {
 	return strconv.FormatUint(uint64(d), 10)
 }
 
+type DelayedValue struct {
+	Effect      TimePoint
+	ValueBefore Delay
+	ValueAfter  Delay
+}
+
+func NewDelayedValue(delay Delay) DelayedValue {
+	return DelayedValue{
+		ValueAfter: delay,
+	}
+}
+
+func (d DelayedValue) Get(now TimePoint) Delay {
+	if d.Effect.IsZero() || !d.Effect.After(now) {
+		return d.ValueAfter
+	}
+
+	return d.ValueBefore
+}
+
+func (d DelayedValue) WithUpdate(now TimePoint, newValue Delay, minSetback Delay) (DelayedValue, TimePoint) {
+	value := d.Get(now)
+	setback := minSetback
+	if value > newValue && value-newValue > setback {
+		setback = value - newValue
+	}
+
+	effect := now + TimePoint(setback)
+	return DelayedValue{
+		Effect:      effect,
+		ValueBefore: value,
+		ValueAfter:  newValue,
+	}, effect
+}
+
 type CanCallResult struct {
 	Immediate  bool
 	Authorized bool

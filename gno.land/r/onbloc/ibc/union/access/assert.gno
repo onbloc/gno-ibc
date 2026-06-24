@@ -30,6 +30,11 @@ func AssertCanCallOrConsume(_ int, rlm realm, selector manager.Selector, dataHas
 	target := rlm.PkgPath()
 	result := accessState.CanCall(caller, target, selector)
 	if result.Immediate {
+		operationId := manager.HashOperation(caller, target, selector, dataHash)
+		if accessState.GetSchedule(operationId).IsSet() {
+			operationId, nonce := accessState.ConsumeScheduledOp(caller, target, selector, dataHash)
+			emitOperationExecutedEvent(operationId, caller, target, selector, dataHash, nonce)
+		}
 		return
 	}
 	if !result.Authorized {
@@ -59,6 +64,11 @@ func assertCanManageTargetOrConsume(_ int, rlm realm, target string, selector ma
 	caller := rlm.Previous().Address()
 	result := accessState.CanManageTargetPath(caller, target)
 	if result.Immediate {
+		operationId := manager.HashOperation(caller, target, selector, dataHash)
+		if accessState.GetSchedule(operationId).IsSet() {
+			operationId, nonce := accessState.ConsumeScheduledOp(caller, target, selector, dataHash)
+			emitOperationExecutedEvent(operationId, caller, target, selector, dataHash, nonce)
+		}
 		return
 	}
 	if !result.Authorized {

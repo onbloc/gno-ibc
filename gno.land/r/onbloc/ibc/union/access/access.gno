@@ -21,10 +21,9 @@ func GrantRole(cur realm, role manager.RoleId, account address) bool {
 func GrantRoleWithExecutionDelay(cur realm, role manager.RoleId, account address, executionDelay manager.Delay) bool {
 	assertCanAdminRole(0, cur, role)
 
-	newMember := accessState.GrantRoleWithExecutionDelay(role, account, executionDelay)
-	access := accessState.Roles[role].Members[account]
+	newMember, effect := accessState.GrantRoleWithExecutionDelayEffect(role, account, executionDelay)
 
-	emitRoleGrantedEvent(role, account, access.Since, access.Delay, newMember)
+	emitRoleGrantedEvent(role, account, effect, executionDelay, newMember)
 
 	return newMember
 }
@@ -99,9 +98,9 @@ func SetRoleGuardian(cur realm, role manager.RoleId, guardian manager.RoleId) {
 func SetGrantDelay(cur realm, role manager.RoleId, delay manager.Delay) {
 	assertCanManageTarget(0, cur)
 
-	accessState.SetGrantDelay(role, delay)
+	effect := accessState.SetGrantDelay(role, delay)
 
-	emitRoleGrantDelayChangedEvent(role, delay, manager.CurrentTimePoint())
+	emitRoleGrantDelayChangedEvent(role, delay, effect)
 }
 
 // SetFunctionRole sets the role for selector on the calling realm's target path.
@@ -156,18 +155,18 @@ func SetTargetAdminDelay(cur realm, delay manager.Delay) {
 	assertCanManageTarget(0, cur)
 
 	target := cur.Previous().PkgPath()
-	accessState.SetTargetAdminDelay(target, delay)
+	effect := accessState.SetTargetAdminDelay(target, delay)
 
-	emitTargetAdminDelayUpdatedEvent(target, delay, manager.CurrentTimePoint())
+	emitTargetAdminDelayUpdatedEvent(target, delay, effect)
 }
 
 func SetTargetAdminDelayDelayed(cur realm, delay manager.Delay, dataHash string) {
 	target := cur.Previous().PkgPath()
 	assertCanManageTargetOrConsume(0, cur, target, manager.SelectorSetTargetAdminDelay, dataHash)
 
-	accessState.SetTargetAdminDelay(target, delay)
+	effect := accessState.SetTargetAdminDelay(target, delay)
 
-	emitTargetAdminDelayUpdatedEvent(target, delay, manager.CurrentTimePoint())
+	emitTargetAdminDelayUpdatedEvent(target, delay, effect)
 }
 
 // SetTargetClosed sets whether the calling realm's target path is closed.

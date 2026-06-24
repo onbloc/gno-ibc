@@ -236,14 +236,17 @@ func TestRoleConfigurationSurface(cur realm, t *testing.T) {
 	if GetRoleAdmin(RelayerRole) != roleAdminRole {
 		t.Fatal("SetRoleAdmin must update role admin")
 	}
-	if GetRoleGrantDelay(RelayerRole) != 5 {
-		t.Fatal("SetGrantDelay must update role grant delay")
+	if GetRoleGrantDelay(RelayerRole) != 0 {
+		t.Fatal("SetGrantDelay must defer role grant delay until setback")
+	}
+	if accessState.Roles[RelayerRole].GrantDelay.ValueAfter != 5 {
+		t.Fatal("SetGrantDelay must store pending role grant delay")
 	}
 	if !CanAdminRole(RelayerRole, roleAdmin).Immediate {
 		t.Fatal("role admin member must be able to administer relayer role")
 	}
 
-	SetGrantDelay(cross(cur), RelayerRole, 0)
+	accessState.Roles[RelayerRole].GrantDelay = manager.NewDelayedValue(0)
 	testing.SetRealm(testing.NewUserRealm(roleAdmin))
 	GrantRole(cross(cur), RelayerRole, relayer)
 	membership := HasRole(RelayerRole, relayer)

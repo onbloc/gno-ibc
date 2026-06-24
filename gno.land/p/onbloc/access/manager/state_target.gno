@@ -3,7 +3,7 @@ package manager
 type TargetConfig struct {
 	FunctionRoles map[Selector]RoleId
 	Closed        bool
-	AdminDelay    Delay
+	AdminDelay    DelayedValue
 }
 
 func NewTargetConfig(closed bool) *TargetConfig {
@@ -45,11 +45,22 @@ func (targetConfig *TargetConfig) isClosed() bool {
 }
 
 func (targetConfig *TargetConfig) setAdminDelay(delay Delay) {
-	targetConfig.AdminDelay = delay
+	targetConfig.AdminDelay = NewDelayedValue(delay)
+}
+
+func (targetConfig *TargetConfig) setAdminDelayWithSetback(delay Delay, now TimePoint) TimePoint {
+	adminDelay, effect := targetConfig.AdminDelay.WithUpdate(now, delay, MinSetback)
+	targetConfig.AdminDelay = adminDelay
+
+	return effect
+}
+
+func (targetConfig *TargetConfig) adminDelayAt(now TimePoint) Delay {
+	return targetConfig.AdminDelay.Get(now)
 }
 
 func (targetConfig *TargetConfig) adminDelay() Delay {
-	return targetConfig.AdminDelay
+	return targetConfig.adminDelayAt(CurrentTimePoint())
 }
 
 func (targetConfig *TargetConfig) ensureFunctionRoles() {

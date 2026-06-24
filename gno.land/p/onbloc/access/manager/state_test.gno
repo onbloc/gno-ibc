@@ -112,7 +112,8 @@ func TestGrantAndRevokeRole(t *testing.T) {
 func TestGrantDelayDefersMembership(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
-	state.SetGrantDelay(testRole, 10)
+	state.ensureRole(testRole)
+	state.Roles[testRole].GrantDelay = NewDelayedValue(10)
 	state.GrantRole(testRole, caller)
 
 	if state.HasRole(testRole, caller).IsMember {
@@ -128,7 +129,8 @@ func TestGrantRoleForExistingMemberPreservesEffectiveTimePoint(t *testing.T) {
 	state := NewState()
 	state.GrantRole(testRole, caller)
 	previousSince := state.Roles[testRole].Members[caller].Since
-	state.SetGrantDelay(testRole, 10)
+	state.ensureRole(testRole)
+	state.Roles[testRole].GrantDelay = NewDelayedValue(10)
 
 	if state.GrantRole(testRole, caller) {
 		t.Fatal("existing grant must not report a new member")

@@ -113,8 +113,15 @@ func TestTargetAdminDelaySurface(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(admin))
 	SetTargetAdminDelay(cross(cur), 6)
+	if GetTargetAdminDelay(cur.PkgPath()) != 0 {
+		t.Fatal("SetTargetAdminDelay must defer target delay until setback")
+	}
+	if accessState.Targets[cur.PkgPath()].AdminDelay.ValueAfter != 6 {
+		t.Fatal("SetTargetAdminDelay must store pending target delay")
+	}
+	accessState.Targets[cur.PkgPath()].AdminDelay = manager.NewDelayedValue(6)
 	if GetTargetAdminDelay(cur.PkgPath()) != 6 {
-		t.Fatal("SetTargetAdminDelay must update target delay")
+		t.Fatal("fixture target delay must be active")
 	}
 	if CanManageTargetPath(cur.PkgPath(), admin).Immediate {
 		t.Fatal("target admin delay must make target management delayed")

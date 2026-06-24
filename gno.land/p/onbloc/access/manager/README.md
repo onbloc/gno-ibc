@@ -215,6 +215,8 @@ Authorization:
 Delayed operations:
 
 - `HashOperation`
+- `GetSchedule`
+- `GetNonce`
 - `Schedule`
 - `ScheduleTargetAdmin`
 - `Cancel`

@@ -37,7 +37,7 @@ surface tables.
 | Role configuration | `LabelRole`, `SetRoleAdmin`, `SetRoleGuardian`, `SetGrantDelay`, `GetRoleAdmin`, `GetRoleGuardian`, `GetRoleGrantDelay` |
 | Target configuration | `SetFunctionRole`, `SetFunctionRoleDelayed`, `SetFunctionRoles`, `SetFunctionRolesDelayed`, `SetTargetAdminDelay`, `SetTargetAdminDelayDelayed`, `SetTargetClosed`, `SetTargetClosedDelayed`, `GetFunctionRole`, `GetTargetFunctionRole`, `GetTargetAdminDelay`, `IsTargetClosed` |
 | Authorization | `AssertCanCall`, `AssertCanCallOrConsume`, `CanCall`, `IsAuthorized`, `CanAdminRole`, `CanManageTarget`, `CanManageTargetPath` |
-| Delayed operations | `HashOperation`, `Schedule`, `ScheduleTargetAdmin`, `Cancel`, `GetSchedule` |
+| Delayed operations | `HashOperation`, `Schedule`, `ScheduleTargetAdmin`, `Cancel`, `GetSchedule`, `GetNonce` |
 | Events | `RoleLabel`, `RoleGranted`, `RoleRevoked`, `RoleAdminChanged`, `RoleGuardianChanged`, `RoleGrantDelayChanged`, `TargetClosed`, `TargetAdminDelayUpdated`, `TargetFunctionRoleUpdated`, `OperationScheduled`, `OperationExecuted`, `OperationCanceled` |
 
 The pure package defines the event schema, but the access realm emits events so

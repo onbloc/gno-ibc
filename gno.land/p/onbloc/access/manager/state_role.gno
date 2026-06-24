@@ -70,6 +70,10 @@ func (roleConfig *RoleConfig) access(account address, now TimePoint) Access {
 	return access
 }
 
+func (roleConfig *RoleConfig) rawAccess(account address) Access {
+	return roleConfig.Members[account]
+}
+
 func (roleConfig *RoleConfig) setAdmin(admin RoleId) {
 	roleConfig.Admin = admin
 }

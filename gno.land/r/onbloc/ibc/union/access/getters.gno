@@ -87,5 +87,9 @@ func HashOperation(caller address, targetPath string, selector manager.Selector,
 }
 
 func GetSchedule(operationId manager.OperationId) manager.Schedule {
-	return accessState.Schedules[operationId]
+	return accessState.GetSchedule(operationId)
+}
+
+func GetNonce(operationId manager.OperationId) manager.Nonce {
+	return accessState.GetNonce(operationId)
 }

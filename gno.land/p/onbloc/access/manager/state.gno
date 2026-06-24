@@ -62,9 +62,14 @@ func (state *State) HasRole(role RoleId, account address) HasRoleResult {
 		return NewHasRoleResult(false)
 	}
 
+	storedAccess := roleConfig.rawAccess(account)
+	if storedAccess.Since.IsZero() {
+		return NewHasRoleResult(false)
+	}
+
 	access := roleConfig.access(account, CurrentTimePoint())
 	if access.Since.IsZero() {
-		return NewHasRoleResult(false)
+		return NewHasRoleResultWithDelay(false, storedAccess.Delay)
 	}
 
 	return NewHasRoleResultWithDelay(true, access.Delay)
@@ -136,6 +141,19 @@ func (state *State) IsTargetClosed(target string) bool {
 	targetConfig := state.getTarget(target)
 
 	return targetConfig != nil && targetConfig.isClosed()
+}
+
+func (state *State) GetSchedule(operationId OperationId) Schedule {
+	schedule := state.getSchedule(operationId)
+	if schedule.isExpired(CurrentTimePoint()) {
+		schedule.Timepoint = 0
+	}
+
+	return schedule
+}
+
+func (state *State) GetNonce(operationId OperationId) Nonce {
+	return state.getSchedule(operationId).Nonce
 }
 
 // =============================================== ROLE MANAGEMENT ===============================================

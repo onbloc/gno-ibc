@@ -117,6 +117,7 @@ function body.
 - `CanManageTargetPath`
 - `HashOperation`
 - `GetSchedule`
+- `GetNonce`
 
 ## Delayed Operations
 

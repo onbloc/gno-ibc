@@ -13,9 +13,6 @@ const (
 	ozSelector  Selector = "0x12345678"
 )
 
-// OpenZeppelin tests for account execution delay and target admin delay are
-// intentionally not ported while the Gno manager excludes delayed execution.
-
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L369-L378
 func TestOZGetTargetFunctionRoleReturnsConfiguredRoleOrAdminDefault(t *testing.T) {
@@ -33,6 +30,22 @@ func TestOZGetTargetFunctionRoleReturnsConfiguredRoleOrAdminDefault(t *testing.T
 }
 
 // OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L381-L410
+func TestOZGetTargetAdminDelayReturnsConfiguredDelayOrZeroDefault(t *testing.T) {
+	state := NewState()
+
+	if state.GetTargetAdminDelay(ozTarget) != 0 {
+		t.Fatal("unset target admin delay must default to zero")
+	}
+
+	state.SetTargetAdminDelay(ozTarget, 10)
+
+	if state.GetTargetAdminDelay(ozTarget) != 10 {
+		t.Fatal("target admin delay must return the configured delay")
+	}
+}
+
+// OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L414-L427
 func TestOZGetRoleAdminReturnsConfiguredAdminOrAdminDefault(t *testing.T) {
 	state := NewState()
@@ -45,6 +58,22 @@ func TestOZGetRoleAdminReturnsConfiguredAdminOrAdminDefault(t *testing.T) {
 
 	if state.GetRoleAdmin(ozRole) != ozAdminRole {
 		t.Fatal("role admin must return the configured admin role")
+	}
+}
+
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L430-L443
+func TestOZGetRoleGuardianReturnsConfiguredGuardianOrAdminDefault(t *testing.T) {
+	state := NewState()
+
+	if state.GetRoleGuardian(ozRole) != AdminRole {
+		t.Fatal("unset role guardian must default to admin role")
+	}
+
+	state.SetRoleGuardian(ozRole, ozAdminRole)
+
+	if state.GetRoleGuardian(ozRole) != ozAdminRole {
+		t.Fatal("role guardian must return the configured guardian role")
 	}
 }
 
@@ -93,6 +122,72 @@ func TestOZCanCallPublicRoleReturnsTrue(t *testing.T) {
 	}
 }
 
+// OpenZeppelin references:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L678-L723
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L726-L757
+func TestOZGetScheduleAndNonceReturnScheduledOperationOrZeroDefault(t *testing.T) {
+	caller := testutils.TestAddress("caller")
+	state := NewState()
+	state.GrantRoleWithExecutionDelay(ozRole, caller, 10)
+	state.SetTargetFunctionRole(ozTarget, ozSelector, ozRole)
+
+	operationId := HashOperation(caller, ozTarget, ozSelector, "args")
+	if state.GetSchedule(operationId).IsSet() {
+		t.Fatal("missing schedule must return zero timepoint")
+	}
+	if state.GetNonce(operationId) != 0 {
+		t.Fatal("missing schedule nonce must default to zero")
+	}
+
+	when := CurrentTimePoint() + 10
+	scheduledId, nonce := state.Schedule(caller, ozTarget, ozSelector, "args", when)
+	if scheduledId != operationId || nonce != 1 {
+		t.Fatal("schedule must return deterministic operation id and first nonce")
+	}
+
+	schedule := state.GetSchedule(operationId)
+	if !schedule.Timepoint.Equal(when) || schedule.Nonce != 1 {
+		t.Fatal("get schedule must return stored timepoint and nonce")
+	}
+	if state.GetNonce(operationId) != 1 {
+		t.Fatal("get nonce must return stored nonce")
+	}
+}
+
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L710-L716
+func TestOZGetScheduleReturnsZeroForExpiredOperation(t *testing.T) {
+	caller := testutils.TestAddress("caller")
+	state := NewState()
+	operationId := HashOperation(caller, ozTarget, ozSelector, "expired")
+	state.Schedules[operationId] = NewSchedule(CurrentTimePoint()-TimePoint(OperationExpiration)-1, 3)
+
+	schedule := state.GetSchedule(operationId)
+	if schedule.IsSet() {
+		t.Fatal("expired schedule must return zero timepoint")
+	}
+	if schedule.Nonce != 3 || state.GetNonce(operationId) != 3 {
+		t.Fatal("expired schedule must preserve nonce")
+	}
+}
+
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L760-L764
+func TestOZHashOperationIsDeterministicAndInputSensitive(t *testing.T) {
+	caller := testutils.TestAddress("caller")
+
+	operationId := HashOperation(caller, ozTarget, ozSelector, "args")
+	if operationId == "" {
+		t.Fatal("hash operation must return an operation id")
+	}
+	if operationId != HashOperation(caller, ozTarget, ozSelector, "args") {
+		t.Fatal("hash operation must be deterministic")
+	}
+	if operationId == HashOperation(caller, ozTarget, ozSelector, "different") {
+		t.Fatal("hash operation must include operation data")
+	}
+}
+
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L591-L604
 func TestOZHasRolePublicRoleReturnsTrue(t *testing.T) {
@@ -102,6 +197,24 @@ func TestOZHasRolePublicRoleReturnsTrue(t *testing.T) {
 	result := state.HasRole(PublicRole, caller)
 	if !result.IsMember {
 		t.Fatal("public role must be held by every account")
+	}
+}
+
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L613-L617
+func TestOZHasRolePendingGrantReturnsExecutionDelay(t *testing.T) {
+	caller := testutils.TestAddress("caller")
+	state := NewState()
+
+	state.SetGrantDelay(ozRole, 10)
+	state.GrantRoleWithExecutionDelay(ozRole, caller, 7)
+
+	result := state.HasRole(ozRole, caller)
+	if result.IsMember {
+		t.Fatal("grant delay must keep role inactive before effect")
+	}
+	if result.ExecutionDelay != 7 {
+		t.Fatal("pending grant must still report stored execution delay")
 	}
 }
 
@@ -117,6 +230,23 @@ func TestOZHasRolePendingGrantReturnsFalse(t *testing.T) {
 	result := state.HasRole(ozRole, caller)
 	if result.IsMember {
 		t.Fatal("grant delay must keep role inactive before effect")
+	}
+}
+
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L650-L656
+func TestOZHasRoleGrantedRoleReturnsExecutionDelay(t *testing.T) {
+	caller := testutils.TestAddress("caller")
+	state := NewState()
+
+	state.GrantRoleWithExecutionDelay(ozRole, caller, 6)
+
+	result := state.HasRole(ozRole, caller)
+	if !result.IsMember {
+		t.Fatal("granted role must be active without grant delay")
+	}
+	if result.ExecutionDelay != 6 {
+		t.Fatal("granted role must report stored execution delay")
 	}
 }
 
@@ -144,6 +274,23 @@ func TestOZHasRoleMissingRoleReturnsFalse(t *testing.T) {
 	if result.IsMember {
 		t.Fatal("missing role must not be active")
 	}
+}
+
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L857-L877
+func TestOZSetRoleGuardianSetsUnlockedRoleAndRejectsLockedRoles(t *testing.T) {
+	state := NewState()
+	state.SetRoleGuardian(ozRole, ozAdminRole)
+	if state.GetRoleGuardian(ozRole) != ozAdminRole {
+		t.Fatal("unlocked role guardian must be configurable")
+	}
+
+	mustPanic(t, func() {
+		state.SetRoleGuardian(PublicRole, AdminRole)
+	})
+	mustPanic(t, func() {
+		state.SetRoleGuardian(AdminRole, AdminRole)
+	})
 }
 
 // OpenZeppelin reference:
@@ -186,6 +333,28 @@ func TestOZGrantRoleRejectsPublicRole(t *testing.T) {
 }
 
 // OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L1197-L1241
+func TestOZGrantRoleWithGrantAndExecutionDelayDefersMemberButReportsDelay(t *testing.T) {
+	caller := testutils.TestAddress("caller")
+	state := NewState()
+	state.SetGrantDelay(ozRole, 10)
+
+	if !state.GrantRoleWithExecutionDelay(ozRole, caller, 3) {
+		t.Fatal("new grant must report a new member")
+	}
+
+	access := state.Roles[ozRole].Members[caller]
+	if !access.Since.After(CurrentTimePoint()) || access.Delay != 3 {
+		t.Fatal("grant must store future effective timepoint and execution delay")
+	}
+
+	result := state.HasRole(ozRole, caller)
+	if result.IsMember || result.ExecutionDelay != 3 {
+		t.Fatal("pending member must be inactive while still reporting execution delay")
+	}
+}
+
+// OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L1198-L1241
 func TestOZGrantRoleWithGrantDelayDefersNewMember(t *testing.T) {
 	caller := testutils.TestAddress("caller")
@@ -204,6 +373,27 @@ func TestOZGrantRoleWithGrantDelayDefersNewMember(t *testing.T) {
 	result := state.HasRole(ozRole, caller)
 	if result.IsMember {
 		t.Fatal("new member must not be active before grant delay")
+	}
+}
+
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L1280-L1307
+func TestOZGrantRoleWithExecutionDelayActivatesNewMember(t *testing.T) {
+	caller := testutils.TestAddress("caller")
+	state := NewState()
+
+	if !state.GrantRoleWithExecutionDelay(ozRole, caller, 6) {
+		t.Fatal("new grant must report a new member")
+	}
+
+	access := state.Roles[ozRole].Members[caller]
+	if access.Since.After(CurrentTimePoint()) || access.Delay != 6 {
+		t.Fatal("grant without grant delay must be active and store execution delay")
+	}
+
+	result := state.HasRole(ozRole, caller)
+	if !result.IsMember || result.ExecutionDelay != 6 {
+		t.Fatal("new member must be active with execution delay")
 	}
 }
 

@@ -21,11 +21,11 @@ import (
 	"gno.land/p/nt/ufmt/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
-	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	"gno.land/r/onbloc/ibc/union/access"
+	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
-	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
 )
 
 const (
@@ -267,6 +267,7 @@ type mockL1Client struct{}
 func (m *mockL1Client) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
 func (m *mockL1Client) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
 func (m *mockL1Client) GetTimestamp() types.Timestamp                         { return types.Timestamp(1) }
+
 func (m *mockL1Client) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
 	return types.Timestamp(1), nil
 }

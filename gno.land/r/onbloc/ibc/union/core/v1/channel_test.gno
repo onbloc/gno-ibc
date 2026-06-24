@@ -71,7 +71,14 @@ func TestChannelOpenInitRequiresOpenConnection(cur realm, t *testing.T) {
 
 func TestChannelOpenTry(cur realm, t *testing.T) {
 	v := newTestImpl()
-	portId, mApp := setupChannelEnv(cur, v)
+	ms := v.store.(*mockStore)
+	lc := &mockLightClient{}
+	clientId := createClient(cur, v, lc, nil, nil)
+	ms.SaveConnection(0, cur, types.ConnectionId(1),
+		core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+	portId := types.Bytes("app-port")
+	mApp := &mockApp{}
+	ms.registerApp(portId, mApp)
 
 	v.ChannelOpenTry(0, cur, openTryMsg(portId))
 	chId := v.store.(*mockStore).currentChannelId()
@@ -80,6 +87,7 @@ func TestChannelOpenTry(cur realm, t *testing.T) {
 	uassert.True(t, ok)
 	uassert.True(t, ch.State == types.ChannelStateTryOpen)
 	uassert.Equal(t, 1, mApp.openTry)
+	uassert.Equal(t, 1, lc.membershipCalls)
 }
 
 func TestChannelOpenTryProofFailureAborts(cur realm, t *testing.T) {
@@ -147,7 +155,14 @@ func TestChannelOpenTryRejectsInactiveClient(cur realm, t *testing.T) {
 
 func TestChannelOpenAckMovesInitToOpen(cur realm, t *testing.T) {
 	v := newTestImpl()
-	portId, mApp := setupChannelEnv(cur, v)
+	ms := v.store.(*mockStore)
+	lc := &mockLightClient{}
+	clientId := createClient(cur, v, lc, nil, nil)
+	ms.SaveConnection(0, cur, types.ConnectionId(1),
+		core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+	portId := types.Bytes("app-port")
+	mApp := &mockApp{}
+	ms.registerApp(portId, mApp)
 	v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{
 		PortId: portId, ConnectionId: types.ConnectionId(1), Version: "v1",
 	})
@@ -165,6 +180,7 @@ func TestChannelOpenAckMovesInitToOpen(cur realm, t *testing.T) {
 	uassert.True(t, ch.State == types.ChannelStateOpen)
 	uassert.Equal(t, uint32(9), uint32(ch.CounterpartyChannelId))
 	uassert.Equal(t, 1, mApp.openAck)
+	uassert.Equal(t, 1, lc.membershipCalls)
 }
 
 // Converted from Union channel_open_ack_not_found.
@@ -393,4 +409,184 @@ func TestForceChannelOpenConfirmSkipsProofVerification(cur realm, t *testing.T) 
 	ch, _ := v.store.GetChannel(chId)
 	uassert.True(t, ch.State == types.ChannelStateOpen)
 	uassert.Equal(t, 1, mApp.openConfirm)
+}
+
+func TestPrivateChannelOpenTry(cur realm, t *testing.T) {
+	cases := []struct {
+		name      string
+		verify    bool
+		lc        *mockLightClient
+		malleate  func(*types.MsgChannelOpenTry)
+		wantPanic string
+		wantCalls int
+	}{
+		{"verified", true, &mockLightClient{}, func(msg *types.MsgChannelOpenTry) {}, "", 1},
+		{"unverified", false, &mockLightClient{}, func(msg *types.MsgChannelOpenTry) {}, "", 0},
+		{"invalid state", false, &mockLightClient{}, func(msg *types.MsgChannelOpenTry) {
+			msg.Channel.State = types.ChannelStateOpen
+		}, "invalid channel state", 0},
+		{"invalid counterparty channel", false, &mockLightClient{}, func(msg *types.MsgChannelOpenTry) {
+			msg.Channel.CounterpartyChannelId = 0
+		}, "invalid counterparty channel id", 0},
+		{"proof failure", true, &mockLightClient{membershipErr: "bad proof"}, func(msg *types.MsgChannelOpenTry) {}, "bad proof", 1},
+		{"inactive client", true, &mockLightClient{status: lightclient.Expired}, func(msg *types.MsgChannelOpenTry) {}, "client is not active", 0},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			ms := v.store.(*mockStore)
+			clientId := createClient(cur, v, tc.lc, nil, nil)
+			ms.SaveConnection(0, cur, types.ConnectionId(1),
+				core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+			portId := types.Bytes("app-port")
+			ms.registerApp(portId, &mockApp{})
+			msg := openTryMsg(portId)
+			tc.malleate(&msg)
+
+			run := func(cur realm) {
+				v.channelOpenTry(0, cur, msg, tc.verify)
+			}
+			if tc.wantPanic != "" {
+				uassert.AbortsContains(t, cur, tc.wantPanic, run)
+			} else {
+				uassert.NotAborts(t, cur, run)
+				ch, ok := v.store.GetChannel(types.ChannelId(1))
+				uassert.True(t, ok)
+				uassert.True(t, ch.State == types.ChannelStateTryOpen)
+			}
+			uassert.Equal(t, tc.wantCalls, tc.lc.membershipCalls)
+		})
+	}
+}
+
+func TestPrivateChannelOpenAck(cur realm, t *testing.T) {
+	cases := []struct {
+		name      string
+		verify    bool
+		lc        *mockLightClient
+		state     types.ChannelState
+		wantPanic string
+		wantCalls int
+	}{
+		{"verified", true, &mockLightClient{}, types.ChannelStateInit, "", 1},
+		{"unverified", false, &mockLightClient{}, types.ChannelStateInit, "", 0},
+		{"wrong state", false, &mockLightClient{}, types.ChannelStateTryOpen, "invalid channel state", 0},
+		{"proof failure", true, &mockLightClient{membershipErr: "bad proof"}, types.ChannelStateInit, "bad proof", 1},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			ms := v.store.(*mockStore)
+			clientId := createClient(cur, v, tc.lc, nil, nil)
+			ms.SaveConnection(0, cur, types.ConnectionId(1),
+				core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+			portId := types.Bytes("app-port")
+			ms.registerApp(portId, &mockApp{})
+			chId := v.store.NextChannelId(0, cur)
+			v.store.CreateChannel(0, cur, chId, types.Channel{
+				State:              tc.state,
+				ConnectionId:       types.ConnectionId(1),
+				CounterpartyPortId: types.Bytes("cp-port"),
+				Version:            "v1",
+			}, portId)
+
+			msg := types.MsgChannelOpenAck{
+				ChannelId:             chId,
+				CounterpartyChannelId: types.ChannelId(9),
+				CounterpartyVersion:   "v1",
+				ProofHeight:           10,
+				ProofTry:              []byte("proof"),
+			}
+			run := func(cur realm) {
+				v.channelOpenAck(0, cur, msg, tc.verify)
+			}
+			if tc.wantPanic != "" {
+				uassert.AbortsContains(t, cur, tc.wantPanic, run)
+			} else {
+				uassert.NotAborts(t, cur, run)
+				ch, _ := v.store.GetChannel(chId)
+				uassert.True(t, ch.State == types.ChannelStateOpen)
+			}
+			uassert.Equal(t, tc.wantCalls, tc.lc.membershipCalls)
+		})
+	}
+}
+
+func TestPrivateChannelOpenConfirm(cur realm, t *testing.T) {
+	cases := []struct {
+		name                  string
+		verify                bool
+		lc                    *mockLightClient
+		state                 types.ChannelState
+		counterpartyChannelId types.ChannelId
+		wantPanic             string
+		wantCalls             int
+	}{
+		{"verified", true, &mockLightClient{}, types.ChannelStateTryOpen, types.ChannelId(9), "", 1},
+		{"unverified", false, &mockLightClient{}, types.ChannelStateTryOpen, types.ChannelId(9), "", 0},
+		{"wrong state", false, &mockLightClient{}, types.ChannelStateInit, types.ChannelId(9), "invalid channel state", 0},
+		{"zero counterparty channel", false, &mockLightClient{}, types.ChannelStateTryOpen, 0, "invalid counterparty channel id", 0},
+		{"proof failure", true, &mockLightClient{membershipErr: "bad proof"}, types.ChannelStateTryOpen, types.ChannelId(9), "bad proof", 1},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			ms := v.store.(*mockStore)
+			clientId := createClient(cur, v, tc.lc, nil, nil)
+			ms.SaveConnection(0, cur, types.ConnectionId(1),
+				core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+			portId := types.Bytes("app-port")
+			ms.registerApp(portId, &mockApp{})
+			chId := v.store.NextChannelId(0, cur)
+			v.store.CreateChannel(0, cur, chId, types.Channel{
+				State:                 tc.state,
+				ConnectionId:          types.ConnectionId(1),
+				CounterpartyChannelId: tc.counterpartyChannelId,
+				CounterpartyPortId:    types.Bytes("cp-port"),
+				Version:               "v1",
+			}, portId)
+
+			msg := types.MsgChannelOpenConfirm{
+				ChannelId:   chId,
+				ProofHeight: 10,
+				ProofAck:    []byte("proof"),
+			}
+			run := func(cur realm) {
+				v.channelOpenConfirm(0, cur, msg, tc.verify)
+			}
+			if tc.wantPanic != "" {
+				uassert.AbortsContains(t, cur, tc.wantPanic, run)
+			} else {
+				uassert.NotAborts(t, cur, run)
+				ch, _ := v.store.GetChannel(chId)
+				uassert.True(t, ch.State == types.ChannelStateOpen)
+			}
+			uassert.Equal(t, tc.wantCalls, tc.lc.membershipCalls)
+		})
+	}
+}
+
+func TestClosedChannel(cur realm, t *testing.T) {
+	v := newTestImpl()
+	counterpartyPort := types.Bytes("cp-port")
+	original := types.Channel{
+		State:                 types.ChannelStateOpen,
+		ConnectionId:          types.ConnectionId(1),
+		CounterpartyChannelId: types.ChannelId(9),
+		CounterpartyPortId:    counterpartyPort,
+		Version:               "v1",
+	}
+
+	closed := v.closedChannel(original)
+	counterpartyPort[0] = 'X'
+
+	uassert.True(t, closed.State == types.ChannelStateClosed)
+	uassert.Equal(t, uint32(original.ConnectionId), uint32(closed.ConnectionId))
+	uassert.Equal(t, uint32(original.CounterpartyChannelId), uint32(closed.CounterpartyChannelId))
+	uassert.Equal(t, "cp-port", string(closed.CounterpartyPortId))
+	uassert.Equal(t, "v1", closed.Version)
+	uassert.True(t, original.State == types.ChannelStateOpen)
 }

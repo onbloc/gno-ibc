@@ -27,7 +27,8 @@ func TestConnectionOpenInit(cur realm, t *testing.T) {
 
 func TestConnectionOpenTryVerifiesAndSaves(cur realm, t *testing.T) {
 	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
+	lc := &mockLightClient{}
+	clientId := createClient(cur, v, lc, nil, nil)
 
 	v.ConnectionOpenTry(0, cur, types.MsgConnectionOpenTry{
 		ClientId:                 clientId,
@@ -41,6 +42,7 @@ func TestConnectionOpenTryVerifiesAndSaves(cur realm, t *testing.T) {
 	uassert.True(t, ok)
 	uassert.True(t, conn.State == types.ConnectionStateTryOpen)
 	uassert.Equal(t, uint32(3), uint32(conn.CounterpartyConnectionId))
+	uassert.Equal(t, 1, lc.membershipCalls)
 }
 
 func TestConnectionOpenTryProofFailureAborts(cur realm, t *testing.T) {
@@ -60,7 +62,8 @@ func TestConnectionOpenTryProofFailureAborts(cur realm, t *testing.T) {
 
 func TestConnectionOpenAckMovesInitToOpen(cur realm, t *testing.T) {
 	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
+	lc := &mockLightClient{}
+	clientId := createClient(cur, v, lc, nil, nil)
 	v.ConnectionOpenInit(0, cur, types.MsgConnectionOpenInit{ClientId: clientId, CounterpartyClientId: types.ClientId(7)})
 
 	v.ConnectionOpenAck(0, cur, types.MsgConnectionOpenAck{
@@ -73,6 +76,7 @@ func TestConnectionOpenAckMovesInitToOpen(cur realm, t *testing.T) {
 	conn, _ := v.store.GetConnection(types.ConnectionId(1))
 	uassert.True(t, conn.State == types.ConnectionStateOpen)
 	uassert.Equal(t, uint32(5), uint32(conn.CounterpartyConnectionId))
+	uassert.Equal(t, 1, lc.membershipCalls)
 }
 
 func TestConnectionOpenAckWrongStateAborts(cur realm, t *testing.T) {
@@ -202,6 +206,130 @@ func TestForceConnectionOpenConfirmBypassesProofVerification(cur realm, t *testi
 	conn, ok := v.store.GetConnection(id)
 	uassert.True(t, ok)
 	uassert.True(t, conn.State == types.ConnectionStateOpen)
+}
+
+func TestPrivateConnectionOpenTry(cur realm, t *testing.T) {
+	cases := []struct {
+		name      string
+		lc        *mockLightClient
+		verify    bool
+		wantPanic string
+		wantCalls int
+	}{
+		{"verified", &mockLightClient{}, true, "", 1},
+		{"unverified", &mockLightClient{}, false, "", 0},
+		{"proof failure", &mockLightClient{membershipErr: "bad proof"}, true, "bad proof", 1},
+		{"inactive client", &mockLightClient{status: lightclient.Expired}, true, "client is not active", 0},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			clientId := createClient(cur, v, tc.lc, nil, nil)
+			msg := types.MsgConnectionOpenTry{
+				ClientId:                 clientId,
+				CounterpartyClientId:     types.ClientId(7),
+				CounterpartyConnectionId: types.ConnectionId(3),
+				ProofHeight:              10,
+				ProofInit:                []byte("proof"),
+			}
+			run := func(cur realm) {
+				v.connectionOpenTry(0, cur, msg, tc.verify)
+			}
+			if tc.wantPanic != "" {
+				uassert.AbortsContains(t, cur, tc.wantPanic, run)
+			} else {
+				uassert.NotAborts(t, cur, run)
+				conn, ok := v.store.GetConnection(types.ConnectionId(1))
+				uassert.True(t, ok)
+				uassert.True(t, conn.State == types.ConnectionStateTryOpen)
+			}
+			uassert.Equal(t, tc.wantCalls, tc.lc.membershipCalls)
+		})
+	}
+}
+
+func TestPrivateConnectionOpenAck(cur realm, t *testing.T) {
+	cases := []struct {
+		name      string
+		state     types.ConnectionState
+		verify    bool
+		lc        *mockLightClient
+		wantPanic string
+		wantCalls int
+	}{
+		{"verified", types.ConnectionStateInit, true, &mockLightClient{}, "", 1},
+		{"unverified", types.ConnectionStateInit, false, &mockLightClient{}, "", 0},
+		{"wrong state", types.ConnectionStateTryOpen, false, &mockLightClient{}, "invalid connection state", 0},
+		{"proof failure", types.ConnectionStateInit, true, &mockLightClient{membershipErr: "bad proof"}, "bad proof", 1},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			clientId := createClient(cur, v, tc.lc, nil, nil)
+			id := v.store.NextConnectionId(0, cur)
+			v.store.SaveConnection(0, cur, id, core.NewConnection(tc.state, clientId, types.ClientId(7), 0))
+			msg := types.MsgConnectionOpenAck{
+				ConnectionId:             id,
+				CounterpartyConnectionId: types.ConnectionId(5),
+				ProofHeight:              10,
+				ProofTry:                 []byte("proof"),
+			}
+			run := func(cur realm) {
+				v.connectionOpenAck(0, cur, msg, tc.verify)
+			}
+			if tc.wantPanic != "" {
+				uassert.AbortsContains(t, cur, tc.wantPanic, run)
+			} else {
+				uassert.NotAborts(t, cur, run)
+				conn, _ := v.store.GetConnection(id)
+				uassert.True(t, conn.State == types.ConnectionStateOpen)
+			}
+			uassert.Equal(t, tc.wantCalls, tc.lc.membershipCalls)
+		})
+	}
+}
+
+func TestPrivateConnectionOpenConfirm(cur realm, t *testing.T) {
+	cases := []struct {
+		name      string
+		state     types.ConnectionState
+		verify    bool
+		lc        *mockLightClient
+		wantPanic string
+		wantCalls int
+	}{
+		{"verified", types.ConnectionStateTryOpen, true, &mockLightClient{}, "", 1},
+		{"unverified", types.ConnectionStateTryOpen, false, &mockLightClient{}, "", 0},
+		{"wrong state", types.ConnectionStateInit, false, &mockLightClient{}, "invalid connection state", 0},
+		{"proof failure", types.ConnectionStateTryOpen, true, &mockLightClient{membershipErr: "bad proof"}, "bad proof", 1},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			clientId := createClient(cur, v, tc.lc, nil, nil)
+			id := v.store.NextConnectionId(0, cur)
+			v.store.SaveConnection(0, cur, id, core.NewConnection(tc.state, clientId, types.ClientId(7), types.ConnectionId(5)))
+			msg := types.MsgConnectionOpenConfirm{
+				ConnectionId: id,
+				ProofHeight:  10,
+				ProofAck:     []byte("proof"),
+			}
+			run := func(cur realm) {
+				v.connectionOpenConfirm(0, cur, msg, tc.verify)
+			}
+			if tc.wantPanic != "" {
+				uassert.AbortsContains(t, cur, tc.wantPanic, run)
+			} else {
+				uassert.NotAborts(t, cur, run)
+				conn, _ := v.store.GetConnection(id)
+				uassert.True(t, conn.State == types.ConnectionStateOpen)
+			}
+			uassert.Equal(t, tc.wantCalls, tc.lc.membershipCalls)
+		})
+	}
 }
 
 // --- ensureConnectionState ---

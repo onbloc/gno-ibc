@@ -21,6 +21,12 @@ func TestGetClientGetters(cur realm, t *testing.T) {
 	v.store.SaveClientState(0, cur, clientId, []byte("client-state"))
 	v.store.SaveConsensusState(0, cur, clientId, types.NewHeight(5), []byte("consensus-5"))
 
+	gotLc, ok := v.GetLightClient(clientId)
+	uassert.True(t, ok)
+	uassert.True(t, gotLc == lc)
+	uassert.True(t, v.GetRegisteredClientType(testClientType))
+	uassert.False(t, v.GetRegisteredClientType(types.ClientType("missing")))
+
 	status, err := v.GetStatus(clientId)
 	uassert.NoError(t, err)
 	uassert.True(t, status == types.StatusActive)
@@ -53,14 +59,58 @@ func TestGetClientGetters(cur realm, t *testing.T) {
 func TestGetMissingClient(cur realm, t *testing.T) {
 	v := newTestImpl()
 
-	_, err := v.GetStatus(types.ClientId(99))
-	uassert.ErrorIs(t, err, makeError(core.ErrClientNotFound))
-	_, err = v.GetClientType(types.ClientId(99))
-	uassert.ErrorIs(t, err, makeError(core.ErrClientNotFound))
-	_, err = v.GetLatestHeight(types.ClientId(99))
-	uassert.ErrorIs(t, err, makeError(core.ErrClientNotFound))
-	_, err = v.GetClientStateBytes(types.ClientId(99))
-	uassert.ErrorIs(t, err, makeError(core.ErrClientStateNotFound))
+	cases := []struct {
+		name string
+		run  func() error
+		want error
+	}{
+		{"status", func() error {
+			_, err := v.GetStatus(types.ClientId(99))
+			return err
+		}, makeError(core.ErrClientNotFound)},
+		{"client type", func() error {
+			_, err := v.GetClientType(types.ClientId(99))
+			return err
+		}, makeError(core.ErrClientNotFound)},
+		{"client impl", func() error {
+			_, err := v.GetClientImpl(types.ClientId(99))
+			return err
+		}, makeError(core.ErrClientNotFound)},
+		{"latest height", func() error {
+			_, err := v.GetLatestHeight(types.ClientId(99))
+			return err
+		}, makeError(core.ErrClientNotFound)},
+		{"timestamp at height", func() error {
+			_, err := v.GetTimestampAtHeight(types.ClientId(99), 7)
+			return err
+		}, makeError(core.ErrClientNotFound)},
+		{"client state", func() error {
+			_, err := v.GetClientStateBytes(types.ClientId(99))
+			return err
+		}, makeError(core.ErrClientStateNotFound)},
+		{"consensus state", func() error {
+			_, err := v.GetConsensusStateBytes(types.ClientId(99), types.NewHeight(7))
+			return err
+		}, makeError(core.ErrConsensusStateNotFound)},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.ErrorIs(t, tc.run(), tc.want)
+		})
+	}
+
+	_, ok := v.GetLightClient(types.ClientId(99))
+	uassert.False(t, ok)
+}
+
+func TestGetTimestampAtHeightPropagatesClientError(cur realm, t *testing.T) {
+	v := newTestImpl()
+	clientId := createClient(cur, v, &mockLightClient{timestampErr: "height missing"}, nil, nil)
+
+	_, err := v.GetTimestampAtHeight(clientId, 7)
+
+	uassert.ErrorContains(t, err, "height missing")
 }
 
 func TestGetFrozenStatus(cur realm, t *testing.T) {
@@ -74,9 +124,12 @@ func TestGetFrozenStatus(cur realm, t *testing.T) {
 
 func TestGetBestEffortGetters(cur realm, t *testing.T) {
 	v := newTestImpl()
+	ms := v.store.(*mockStore)
+	ms.channels[1] = types.Channel{State: types.ChannelStateOpen, ConnectionId: types.ConnectionId(1)}
+	ms.channels[2] = types.Channel{State: types.ChannelStateClosed, ConnectionId: types.ConnectionId(2)}
 
 	channels, _ := v.GetChannels()
-	uassert.Equal(t, 0, len(channels))
+	uassert.Equal(t, 2, len(channels))
 }
 
 func TestGetConnectionAndChannel(cur realm, t *testing.T) {
@@ -96,6 +149,71 @@ func TestGetConnectionAndChannel(cur realm, t *testing.T) {
 
 	_, err = v.GetConnection(types.ConnectionId(99))
 	uassert.ErrorIs(t, err, makeError(core.ErrConnectionNotFound))
+
+	_, err = v.GetChannel(types.ChannelId(99))
+	uassert.ErrorIs(t, err, makeError(core.ErrChannelNotFound))
+}
+
+func TestGetBatchCommitmentGetters(cur realm, t *testing.T) {
+	v := newTestImpl()
+	ms := v.store.(*mockStore)
+	packetHash := types.Keccak([]byte("batch-packets"))
+	receiptHash := types.Keccak([]byte("batch-receipts"))
+	packetValue := types.Keccak([]byte("packet-value"))
+	receiptValue := types.Keccak([]byte("receipt-value"))
+
+	cases := []struct {
+		name      string
+		seed      func()
+		run       func() (types.H256, error)
+		want      types.H256
+		wantError error
+	}{
+		{
+			name: "batch packets",
+			seed: func() {
+				ms.SaveBatchPackets(0, cur, types.ChannelId(1), packetHash, packetValue)
+			},
+			run:  func() (types.H256, error) { return v.GetBatchPacketsCommitment(packetHash) },
+			want: packetValue,
+		},
+		{
+			name:      "missing batch packets",
+			run:       func() (types.H256, error) { return v.GetBatchPacketsCommitment(packetHash) },
+			wantError: makeError(core.ErrBatchPacketsNotFound),
+		},
+		{
+			name: "batch receipts",
+			seed: func() {
+				ms.SaveBatchReceipts(0, cur, types.ChannelId(1), receiptHash, receiptValue)
+			},
+			run:  func() (types.H256, error) { return v.GetBatchReceiptsCommitment(receiptHash) },
+			want: receiptValue,
+		},
+		{
+			name:      "missing batch receipts",
+			run:       func() (types.H256, error) { return v.GetBatchReceiptsCommitment(receiptHash) },
+			wantError: makeError(core.ErrBatchReceiptsNotFound),
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			v = newTestImpl()
+			ms = v.store.(*mockStore)
+			if tc.seed != nil {
+				tc.seed()
+			}
+
+			got, err := tc.run()
+			if tc.wantError != nil {
+				uassert.ErrorIs(t, err, tc.wantError)
+				return
+			}
+			uassert.NoError(t, err)
+			uassert.True(t, got == tc.want)
+		})
+	}
 }
 
 func TestGetCommittedProofGetters(cur realm, t *testing.T) {

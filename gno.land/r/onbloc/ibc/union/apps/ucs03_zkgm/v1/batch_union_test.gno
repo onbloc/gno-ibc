@@ -3,10 +3,10 @@ package impl
 import (
 	"testing"
 
-	types "gno.land/p/onbloc/ibc/union/types"
-
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
+
+	"gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 )
 

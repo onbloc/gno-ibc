@@ -10,19 +10,25 @@ import (
 // mockLightClient is a configurable lightclient.Interface for the client tests.
 // Zero value is an Active client whose verifications succeed.
 type mockLightClient struct {
-	status           lightclient.Status
-	latestHeight     uint64
-	createErr        string
-	headerErr        string
-	membershipErr    string
-	nonMembershipErr string
-	timestampAtHt    types.Timestamp
-	update           types.StateUpdate
-	creationWrites   map[string][]byte
-	implCalls        int
-	implClient       lightclient.Interface
-	implCS           []byte
-	implCons         []byte
+	status             lightclient.Status
+	latestHeight       uint64
+	createErr          string
+	headerErr          string
+	membershipErr      string
+	nonMembershipErr   string
+	misbehaviourErr    string
+	misbehaviourState  []byte
+	timestampAtHt      types.Timestamp
+	timestampErr       string
+	update             types.StateUpdate
+	creationWrites     map[string][]byte
+	membershipCalls    int
+	nonMembershipCalls int
+	misbehaviourCalls  int
+	implCalls          int
+	implClient         lightclient.Interface
+	implCS             []byte
+	implCons           []byte
 }
 
 var _ lightclient.Interface = (*mockLightClient)(nil)
@@ -38,6 +44,7 @@ func (l *mockLightClient) ClientImpl(clientStateBytes, consensusStateBytes []byt
 }
 
 func (l *mockLightClient) VerifyMembership(height uint64, key, proof, value []byte) error {
+	l.membershipCalls++
 	if l.membershipErr != "" {
 		return errors.New(l.membershipErr)
 	}
@@ -45,6 +52,7 @@ func (l *mockLightClient) VerifyMembership(height uint64, key, proof, value []by
 }
 
 func (l *mockLightClient) VerifyNonMembership(height uint64, key, proof []byte) error {
+	l.nonMembershipCalls++
 	if l.nonMembershipErr != "" {
 		return errors.New(l.nonMembershipErr)
 	}
@@ -54,6 +62,9 @@ func (l *mockLightClient) VerifyNonMembership(height uint64, key, proof []byte) 
 func (l *mockLightClient) GetTimestamp() types.Timestamp { return 0 }
 
 func (l *mockLightClient) GetTimestampAtHeight(height uint64) (types.Timestamp, error) {
+	if l.timestampErr != "" {
+		return 0, errors.New(l.timestampErr)
+	}
 	return l.timestampAtHt, nil
 }
 
@@ -83,5 +94,9 @@ func (l *mockLightClient) VerifyCreation(caller address, relayer address) (types
 }
 
 func (l *mockLightClient) Misbehaviour(caller address, misbehaviour []byte, relayer address) ([]byte, error) {
-	return nil, nil
+	l.misbehaviourCalls++
+	if l.misbehaviourErr != "" {
+		return nil, errors.New(l.misbehaviourErr)
+	}
+	return l.misbehaviourState, nil
 }

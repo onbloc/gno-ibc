@@ -7,9 +7,23 @@ import (
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	u256 "gno.land/p/gnoswap/uint256"
-	z "gno.land/p/onbloc/ibc/union/zkgm"
 	"gno.land/p/nt/uassert/v0"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 )
+
+func TestMetadataImage(t *testing.T) {
+	meta := z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    []byte("init"),
+	}
+	ref := z.MetadataImage(meta)
+
+	uassert.True(t, ref == z.MetadataImage(meta))
+	uassert.False(t, ref == z.MetadataImage(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    []byte("init-2"),
+	}))
+}
 
 // PredictWrappedToken is a pure keccak derivation: deterministic, ibc-prefixed,
 // and distinct for any change of path, channel, or base token. A nil path must

@@ -8,49 +8,52 @@ import (
 	"gno.land/p/nt/uassert/v0"
 )
 
-// parseCoins: well-formed inputs, the empty/blank edge cases, and the two
-// malformed shapes that abort (missing amount, missing denom).
-func TestParseCoins(t *testing.T) {
+// parseCoins: well-formed inputs, the empty/blank edge cases, and malformed
+// shapes that abort before coin construction.
+func TestParseCoins(cur realm, t *testing.T) {
 	cases := []struct {
-		name  string
-		input string
-		want  chain.Coins
+		name      string
+		input     string
+		want      chain.Coins
+		wantPanic string
 	}{
-		{"empty string", "", nil},
-		{"single coin", "100ugnot", chain.NewCoins(chain.NewCoin("ugnot", 100))},
+		{"empty string", "", nil, ""},
+		{"single coin", "100ugnot", chain.NewCoins(chain.NewCoin("ugnot", 100)), ""},
 		{
 			"multiple coins",
 			"100ugnot,50uatom",
 			chain.NewCoins(chain.NewCoin("ugnot", 100), chain.NewCoin("uatom", 50)),
+			"",
 		},
-		{"trailing comma skips empty part", "100ugnot,", chain.NewCoins(chain.NewCoin("ugnot", 100))},
-		{"leading comma skips empty part", ",100ugnot", chain.NewCoins(chain.NewCoin("ugnot", 100))},
-		{"zero amount", "0ugnot", chain.NewCoins(chain.NewCoin("ugnot", 0))},
+		{"trailing comma skips empty part", "100ugnot,", chain.NewCoins(chain.NewCoin("ugnot", 100)), ""},
+		{"leading comma skips empty part", ",100ugnot", chain.NewCoins(chain.NewCoin("ugnot", 100)), ""},
+		{"zero amount", "0ugnot", chain.NewCoins(chain.NewCoin("ugnot", 0)), ""},
+		{"missing amount", "ugnot", nil, "zkgm/coins: invalid coin"},
+		{"missing denom", "100", nil, "zkgm/coins: invalid coin"},
+		{"missing amount in second part", "100ugnot,uatom", nil, "zkgm/coins: invalid coin"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			if tc.wantPanic != "" {
+				uassert.PanicsContains(t, cur, tc.wantPanic, func() {
+					parseCoins(tc.input)
+				})
+				return
+			}
 			got := parseCoins(tc.input)
 			uassert.Equal(t, tc.want.String(), got.String())
 		})
 	}
 }
 
-func TestParseCoinsAborts(cur realm, t *testing.T) {
-	cases := []struct {
-		name  string
-		input string
-	}{
-		{"missing amount", "ugnot"},
-		{"missing denom", "100"},
-		{"missing amount in second part", "100ugnot,uatom"},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			uassert.PanicsContains(t, cur, "zkgm/coins: invalid coin", func() {
-				parseCoins(tc.input)
-			})
-		})
-	}
+func TestNewFunds(t *testing.T) {
+	sent := chain.NewCoins(chain.NewCoin("ugnot", 10))
+	f := newFunds(sent)
+
+	f.coins[0].Amount = 4
+
+	uassert.Equal(t, int64(10), sent[0].Amount)
+	uassert.Equal(t, int64(4), f.coins[0].Amount)
 }
 
 // funds.sub mirrors the reference contract's funds.sub(coin): it deducts a
@@ -90,6 +93,24 @@ func TestFundsSub(t *testing.T) {
 			}
 			uassert.NoError(t, err)
 			uassert.Equal(t, tc.wantEmpty, f.isEmpty())
+		})
+	}
+}
+
+func TestFundsIsEmpty(t *testing.T) {
+	cases := []struct {
+		name string
+		have chain.Coins
+		want bool
+	}{
+		{"nil funds", nil, true},
+		{"zero coin", chain.NewCoins(chain.NewCoin("ugnot", 0)), true},
+		{"non-zero coin", chain.NewCoins(chain.NewCoin("ugnot", 1)), false},
+		{"mixed zero and non-zero", chain.NewCoins(chain.NewCoin("ugnot", 0), chain.NewCoin("foo", 1)), false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.Equal(t, tc.want, newFunds(tc.have).isEmpty())
 		})
 	}
 }

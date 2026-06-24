@@ -7,6 +7,7 @@ import (
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
 	"gno.land/p/onbloc/ibc/union/types"
+	"gno.land/r/onbloc/ibc/union/access"
 )
 
 // --- Helpers ---
@@ -185,6 +186,28 @@ func TestBatchReceiptsPathDiffers(cur realm, t *testing.T) {
 	}
 	if types.BatchReceiptsPath(types.MustCommit(types.CommitPacket(p))) != types.MustCommit(types.PacketAcknowledgementPath(p)) {
 		t.Error("packet acknowledgement path must use Union batch receipts path")
+	}
+}
+
+func TestRenderShowsNextClientID(cur realm, t *testing.T) {
+	resetStore(cur)
+
+	cases := []struct {
+		name string
+		want string
+		step func()
+	}{
+		{"initial", "next client id: 1", func() {}},
+		{"after increment", "next client id: 2", func() { store.nextClientId() }},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.step()
+			if got := Render(""); got != tc.want {
+				t.Fatalf("Render: got %q want %q", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -373,41 +396,76 @@ func TestGetChannelNotFoundPanics(cur realm, t *testing.T) {
 func TestRestrictedPacketEntrypointsRejectNonAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
 
-	prevPacketRecv := denySelectorForTest(cur, SelectorPacketRecv)
+	requireSelectorProtectedForTest(cur, SelectorPacketRecv)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		PacketRecv(cross(cur), types.MsgPacketRecv{})
 	})
-	restoreSelectorForTest(cur, SelectorPacketRecv, prevPacketRecv)
 
-	prevIntentPacketRecv := denySelectorForTest(cur, SelectorIntentPacketRecv)
+	requireSelectorProtectedForTest(cur, SelectorIntentPacketRecv)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{})
 	})
-	restoreSelectorForTest(cur, SelectorIntentPacketRecv, prevIntentPacketRecv)
 
-	prevPacketAck := denySelectorForTest(cur, SelectorPacketAck)
+	requireSelectorProtectedForTest(cur, SelectorPacketAck)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{})
 	})
-	restoreSelectorForTest(cur, SelectorPacketAck, prevPacketAck)
 
-	prevPacketTimeout := denySelectorForTest(cur, SelectorPacketTimeout)
+	requireSelectorProtectedForTest(cur, SelectorPacketTimeout)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		PacketTimeout(cross(cur), types.MsgPacketTimeout{})
 	})
-	restoreSelectorForTest(cur, SelectorPacketTimeout, prevPacketTimeout)
 
-	prevBatchSend := denySelectorForTest(cur, SelectorBatchSend)
+	requireSelectorProtectedForTest(cur, SelectorBatchSend)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		BatchSend(cross(cur), types.MsgBatchSend{})
 	})
-	restoreSelectorForTest(cur, SelectorBatchSend, prevBatchSend)
 
-	prevBatchAcks := denySelectorForTest(cur, SelectorBatchAcks)
+	requireSelectorProtectedForTest(cur, SelectorBatchAcks)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		BatchAcks(cross(cur), types.MsgBatchAcks{})
 	})
-	restoreSelectorForTest(cur, SelectorBatchAcks, prevBatchAcks)
+}
+
+func TestRestrictedPacketEntrypointsAllowRelayerRealmCallToReachImpl(cur realm, t *testing.T) {
+	resetStore(cur)
+	oldImpl := currentImpl
+	currentImpl = nil
+	defer func() {
+		currentImpl = oldImpl
+	}()
+
+	authorizedRelayer := testutils.TestAddress("authorized-relayer")
+	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+	access.GrantRole(cross(cur), RelayerRole, authorizedRelayer)
+	defer func() {
+		testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+		access.RevokeRole(cross(cur), RelayerRole, authorizedRelayer)
+	}()
+
+	tests := []struct {
+		name   string
+		caller address
+		run    func(cur realm)
+	}{
+		{"packet recv", authorizedRelayer, func(cur realm) { PacketRecv(cross(cur), types.MsgPacketRecv{}) }},
+		{"intent packet recv", authorizedRelayer, func(cur realm) { IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{}) }},
+		{"packet acknowledgement", authorizedRelayer, func(cur realm) { PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{}) }},
+		{"packet timeout", authorizedRelayer, func(cur realm) { PacketTimeout(cross(cur), types.MsgPacketTimeout{}) }},
+		{"commit membership proof", access.DefaultAdminAddress, func(cur realm) { CommitMembershipProof(cross(cur), types.MsgCommitMembershipProof{}) }},
+		{"commit non-membership proof", access.DefaultAdminAddress, func(cur realm) { CommitNonMembershipProof(cross(cur), types.MsgCommitNonMembershipProof{}) }},
+		{"batch send", authorizedRelayer, func(cur realm) { BatchSend(cross(cur), types.MsgBatchSend{}) }},
+		{"batch acks", authorizedRelayer, func(cur realm) { BatchAcks(cross(cur), types.MsgBatchAcks{}) }},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.AbortsContains(t, cur, "implementation not installed", func(cur realm) {
+				testing.SetRealm(testing.NewUserRealm(tc.caller))
+				tc.run(cur)
+			})
+		})
+	}
 }
 
 // --- types.Channel state machine ---
@@ -435,97 +493,6 @@ func TestChannelStateTransitions(cur realm, t *testing.T) {
 	}
 }
 
-func TestChannelEventAttrsOmitsCounterpartyChannelIdForOpenInit(cur realm, t *testing.T) {
-	attrs := channelOpenInitEventAttrs(
-		types.Bytes("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"),
-		types.ChannelId(1),
-		types.Channel{
-			State:                 types.ChannelStateInit,
-			ConnectionId:          types.ConnectionId(2),
-			CounterpartyChannelId: types.ChannelId(0),
-			CounterpartyPortId:    types.Bytes("counterparty"),
-			Version:               "ucs03-zkgm-0",
-		},
-	)
-
-	want := []string{
-		"port_id", "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
-		"channel_id", "1",
-		"counterparty_port_id", "0x636f756e7465727061727479",
-		"connection_id", "2",
-		"version", "ucs03-zkgm-0",
-	}
-	assertStringSliceEqual(t, attrs, want)
-	assertAttrMissing(t, attrs, "counterparty_channel_id")
-}
-
-func TestChannelOpenTryEventAttrs(cur realm, t *testing.T) {
-	attrs := channelOpenTryEventAttrs(
-		types.Bytes("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"),
-		types.ChannelId(1),
-		types.Channel{
-			State:                 types.ChannelStateOpen,
-			ConnectionId:          types.ConnectionId(2),
-			CounterpartyChannelId: types.ChannelId(7),
-			CounterpartyPortId:    types.Bytes("counterparty"),
-			Version:               "ucs03-zkgm-0",
-		},
-		"counterparty-v1",
-	)
-
-	assertStringSliceEqual(t, attrs, []string{
-		"port_id", "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
-		"channel_id", "1",
-		"counterparty_port_id", "0x636f756e7465727061727479",
-		"counterparty_channel_id", "7",
-		"connection_id", "2",
-		"counterparty_version", "counterparty-v1",
-	})
-}
-
-func TestChannelOpenAckConfirmEventAttrs(cur realm, t *testing.T) {
-	attrs := channelOpenAckConfirmEventAttrs(
-		types.Bytes("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"),
-		types.ChannelId(1),
-		types.Channel{
-			State:                 types.ChannelStateOpen,
-			ConnectionId:          types.ConnectionId(2),
-			CounterpartyChannelId: types.ChannelId(7),
-			CounterpartyPortId:    types.Bytes("counterparty"),
-			Version:               "ucs03-zkgm-0",
-		},
-	)
-
-	assertStringSliceEqual(t, attrs, []string{
-		"port_id", "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
-		"channel_id", "1",
-		"counterparty_port_id", "0x636f756e7465727061727479",
-		"counterparty_channel_id", "7",
-		"connection_id", "2",
-	})
-}
-
-func TestChannelCloseEventAttrs(cur realm, t *testing.T) {
-	attrs := channelCloseEventAttrs(
-		types.Bytes("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"),
-		types.ChannelId(1),
-		types.Channel{
-			State:                 types.ChannelStateClosed,
-			ConnectionId:          types.ConnectionId(2),
-			CounterpartyChannelId: types.ChannelId(7),
-			CounterpartyPortId:    types.Bytes("counterparty"),
-			Version:               "ucs03-zkgm-0",
-		},
-	)
-
-	assertStringSliceEqual(t, attrs, []string{
-		"port_id", "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
-		"channel_id", "1",
-		"counterparty_port_id", "0x636f756e7465727061727479",
-		"counterparty_channel_id", "7",
-	})
-}
-
 // --- Port / channel ownership ---
 
 func TestGetAppByPortIdPanicsWhenMissing(cur realm, t *testing.T) {
@@ -546,10 +513,9 @@ func TestGetChannelOwnerPanicsWhenMissing(cur realm, t *testing.T) {
 
 func TestForceUpdateClientPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	previousRole := denySelectorForTest(cur, SelectorForceUpdateClient)
+	requireSelectorProtectedForTest(cur, SelectorForceUpdateClient)
 
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		ForceUpdateClient(cross(cur), types.NewMsgForceUpdateClient(types.ClientId(0), nil, nil))
 	})
-	restoreSelectorForTest(cur, SelectorForceUpdateClient, previousRole)
 }

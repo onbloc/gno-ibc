@@ -13,8 +13,10 @@ import (
 
 var Relayer = address("g1relayer")
 
-var testClientSeq uint32
-var testConnectionSeq uint32
+var (
+	testClientSeq     uint32
+	testConnectionSeq uint32
+)
 
 func nextTestClientId() types.ClientId {
 	testClientSeq++

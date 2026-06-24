@@ -26,7 +26,8 @@ func (mr MerkleRoot) Empty() bool {
 // size != tmhash.Size.
 func validateHash(h []byte) error {
 	if len(h) > 0 && len(h) != sha256.Size {
-		return ufmt.Errorf("expected size to be %d bytes, got %d bytes",
+		return ufmt.Errorf(
+			"expected size to be %d bytes, got %d bytes",
 			sha256.Size,
 			len(h),
 		)

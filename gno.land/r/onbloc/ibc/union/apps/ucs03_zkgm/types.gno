@@ -26,6 +26,9 @@ type IApp interface {
 	IAppIntent
 
 	IAppTransfer
+
+	// Read-only relayer/tooling query surface.
+	IAppGetter
 }
 
 type IAppIntent interface {
@@ -37,6 +40,13 @@ type IAppIntent interface {
 // Instruction rather than a token-transfer shaped argument list.
 type IAppTransfer interface {
 	Send(_ int, rlm realm, channelId types.ChannelId, timeoutTimestamp types.Timestamp, salt [32]byte, instruction z.Instruction) types.Packet
+}
+
+// IAppGetter is the read-only query surface implemented by the impl and exposed
+// by the proxy's getters.gno.
+type IAppGetter interface {
+	GetTokenBucket(denom string) (*tb.TokenBucket, error)
+	GetChannelBalanceV2(channelId types.ChannelId, path *u256.Uint, baseToken string, quoteToken []byte) (*u256.Uint, error)
 }
 
 type IStore interface {

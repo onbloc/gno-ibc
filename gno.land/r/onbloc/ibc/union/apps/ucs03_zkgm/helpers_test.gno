@@ -4,9 +4,11 @@ import (
 	"testing"
 
 	"gno.land/p/demo/tokens/grc20"
+	u256 "gno.land/p/gnoswap/uint256"
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
 	"gno.land/r/onbloc/ibc/union/access"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
@@ -39,6 +41,15 @@ type dummyImpl struct {
 	lastTimeout         types.Timestamp
 	lastSalt            [32]byte
 	lastInstruction     z.Instruction
+
+	tokenBucket          *tb.TokenBucket
+	tokenBucketErr       error
+	channelBalance       *u256.Uint
+	channelBalanceErr    error
+	lastBalanceChannelId types.ChannelId
+	lastBalancePath      *u256.Uint
+	lastBalanceBaseToken string
+	lastBalanceQuote     []byte
 }
 
 var _ IApp = &dummyImpl{}
@@ -117,6 +128,19 @@ func (d *dummyReceiver) OnZkgm(cur realm, env z.CallEnv) error {
 
 func (d *dummyReceiver) OnIntentZkgm(cur realm, env z.IntentCallEnv) error {
 	return nil
+}
+
+func (d *dummyImpl) GetTokenBucket(denom string) (*tb.TokenBucket, error) {
+	return d.tokenBucket, d.tokenBucketErr
+}
+
+func (d *dummyImpl) GetChannelBalanceV2(channelId types.ChannelId, path *u256.Uint, baseToken string, quoteToken []byte) (*u256.Uint, error) {
+	d.lastBalanceChannelId = channelId
+	d.lastBalancePath = path
+	d.lastBalanceBaseToken = baseToken
+	d.lastBalanceQuote = quoteToken
+
+	return d.channelBalance, d.channelBalanceErr
 }
 
 // resetZkgmForTest returns the proxy package state to a clean baseline. The

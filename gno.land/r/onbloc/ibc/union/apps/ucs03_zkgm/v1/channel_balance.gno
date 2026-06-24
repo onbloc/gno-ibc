@@ -23,7 +23,9 @@ func (v *ucs03ZkgmV1) increaseChannelBalanceV2(_ int, rlm realm, channelId types
 		curAmount = u256.Zero()
 	}
 
-	v.store.SetChannelBalanceV2(0, rlm, key, new(u256.Uint).Add(curAmount, amount))
+	calculatedAmount := u256.Zero().Add(curAmount, amount)
+
+	v.store.SetChannelBalanceV2(0, rlm, key, calculatedAmount)
 }
 
 // decreaseChannelBalanceV2 subtracts from the escrow balance, erroring on underflow and preserving a zero entry.
@@ -36,8 +38,9 @@ func (v *ucs03ZkgmV1) decreaseChannelBalanceV2(_ int, rlm realm, channelId types
 		return makeError(errChannelBalanceUnderflow)
 	}
 
-	next := new(u256.Uint).Sub(curAmount, amount)
-	v.store.SetChannelBalanceV2(0, rlm, key, next)
+	calculatedAmount := u256.Zero().Sub(curAmount, amount)
+
+	v.store.SetChannelBalanceV2(0, rlm, key, calculatedAmount)
 
 	return nil
 }

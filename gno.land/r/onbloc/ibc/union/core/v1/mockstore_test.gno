@@ -23,35 +23,39 @@ type mockClient struct {
 }
 
 type mockStore struct {
-	seq           uint32
-	registry      map[string]lightclient.ClientImpl
-	clients       map[uint32]*mockClient
-	connSeq       uint32
-	connections   map[uint32]types.Connection
-	chanSeq       uint32
-	channels      map[uint32]types.Channel
-	channelOwners map[uint32]types.Bytes
-	ports         map[string]app.IApp
-	commitments   map[string]types.H256 // per-packet source commitment
-	receipts      map[string]types.H256 // per-packet destination receipt / ack
-	batchPackets  map[string]types.H256
-	batchReceipts map[string]types.H256
+	seq                 uint32
+	registry            map[string]lightclient.ClientImpl
+	clients             map[uint32]*mockClient
+	connSeq             uint32
+	connections         map[uint32]types.Connection
+	chanSeq             uint32
+	channels            map[uint32]types.Channel
+	channelOwners       map[uint32]types.Bytes
+	ports               map[string]app.IApp
+	commitments         map[string]types.H256 // per-packet source commitment
+	receipts            map[string]types.H256 // per-packet destination receipt / ack
+	batchPackets        map[string]types.H256
+	batchReceipts       map[string]types.H256
+	membershipProofs    map[string]types.H256
+	nonMembershipProofs map[string]types.H256
 }
 
 var _ core.IStore = (*mockStore)(nil)
 
 func newMockStore() *mockStore {
 	return &mockStore{
-		registry:      map[string]lightclient.ClientImpl{},
-		clients:       map[uint32]*mockClient{},
-		connections:   map[uint32]types.Connection{},
-		channels:      map[uint32]types.Channel{},
-		channelOwners: map[uint32]types.Bytes{},
-		ports:         map[string]app.IApp{},
-		commitments:   map[string]types.H256{},
-		receipts:      map[string]types.H256{},
-		batchPackets:  map[string]types.H256{},
-		batchReceipts: map[string]types.H256{},
+		registry:            map[string]lightclient.ClientImpl{},
+		clients:             map[uint32]*mockClient{},
+		connections:         map[uint32]types.Connection{},
+		channels:            map[uint32]types.Channel{},
+		channelOwners:       map[uint32]types.Bytes{},
+		ports:               map[string]app.IApp{},
+		commitments:         map[string]types.H256{},
+		receipts:            map[string]types.H256{},
+		batchPackets:        map[string]types.H256{},
+		batchReceipts:       map[string]types.H256{},
+		membershipProofs:    map[string]types.H256{},
+		nonMembershipProofs: map[string]types.H256{},
 	}
 }
 
@@ -62,6 +66,16 @@ func packetKey(packet types.Packet) string {
 		packet.DestinationChannelId.String() + "|" +
 		string(packet.Data) + "|" +
 		packet.TimeoutTimestamp.String()
+}
+
+func membershipProofKey(clientId types.ClientId, proofHeight uint64, path []byte) string {
+	key := types.MembershipProofPath(clientId, proofHeight, path)
+	return string(key[:])
+}
+
+func nonMembershipProofKey(clientId types.ClientId, proofHeight uint64, path []byte) string {
+	key := types.NonMembershipProofPath(clientId, proofHeight, path)
+	return string(key[:])
 }
 
 func (m *mockStore) HasPacketCommitment(packet types.Packet) bool {
@@ -109,9 +123,11 @@ func (m *mockStore) SaveBatchReceipts(_ int, rlm realm, channelId types.ChannelI
 }
 
 func (m *mockStore) SaveMembershipProof(_ int, rlm realm, clientId types.ClientId, proofHeight uint64, path []byte, value types.H256) {
+	m.membershipProofs[membershipProofKey(clientId, proofHeight, path)] = value
 }
 
 func (m *mockStore) SaveNonMembershipProof(_ int, rlm realm, clientId types.ClientId, proofHeight uint64, path []byte, value types.H256) {
+	m.nonMembershipProofs[nonMembershipProofKey(clientId, proofHeight, path)] = value
 }
 
 func (m *mockStore) ClientStateBytes(clientId types.ClientId) ([]byte, bool) {
@@ -139,6 +155,16 @@ func (m *mockStore) BatchPacketsAt(batchHash types.H256) (types.H256, bool) {
 func (m *mockStore) BatchReceiptsAt(batchHash types.H256) (types.H256, bool) {
 	v, ok := m.batchReceipts[string(batchHash[:])]
 	return v, ok
+}
+
+func (m *mockStore) MembershipProofAt(clientId types.ClientId, proofHeight uint64, path []byte) (types.H256, bool) {
+	v, ok := m.membershipProofs[membershipProofKey(clientId, proofHeight, path)]
+	return v, ok
+}
+
+func (m *mockStore) HasNonMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) bool {
+	_, ok := m.nonMembershipProofs[nonMembershipProofKey(clientId, proofHeight, path)]
+	return ok
 }
 
 // registerApp is a test helper that installs an app at a port id.

@@ -77,7 +77,9 @@ func (s *Store) SetTokenOrigin(_ int, rlm realm, denom string, path *u256.Uint) 
 		panic(ErrSpoofedRealm)
 	}
 
-	s.tokenOrigin.Set(denom, path)
+	pathClone := u256.Zero().Set(path).Clone()
+
+	s.tokenOrigin.Set(denom, pathClone)
 }
 
 // GetTokenOrigin returns the recorded mint path for a denom.
@@ -96,7 +98,9 @@ func (s *Store) SetChannelBalanceV2(_ int, rlm realm, key string, amount *u256.U
 		panic(ErrSpoofedRealm)
 	}
 
-	s.channelBalanceV2.Set(key, amount)
+	calculatedAmount := u256.Zero().Set(amount).Clone()
+
+	s.channelBalanceV2.Set(key, calculatedAmount)
 }
 
 // RemoveChannelBalanceV2 clears a drained channel-balance entry.

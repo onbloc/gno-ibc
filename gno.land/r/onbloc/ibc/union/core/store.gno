@@ -459,6 +459,18 @@ func (s *Store) BatchReceiptsAt(batchHash types.H256) (types.H256, bool) {
 	return s.getCommitment(types.BatchReceiptsPath(batchHash))
 }
 
+// MembershipProofAt returns the committed membership proof value for the
+// client/height/path key.
+func (s *Store) MembershipProofAt(clientId types.ClientId, proofHeight uint64, path []byte) (types.H256, bool) {
+	return s.getMembershipProof(clientId, proofHeight, path)
+}
+
+// HasNonMembershipProof reports whether a non-membership proof was committed
+// for the client/height/path key.
+func (s *Store) HasNonMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) bool {
+	return s.hasNonMembershipProof(clientId, proofHeight, path)
+}
+
 // --- Key helpers ---
 
 func connectionKey(id types.ConnectionId) string {

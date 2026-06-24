@@ -5,7 +5,9 @@ import (
 
 	"gno.land/p/nt/uassert/v0"
 	"gno.land/r/onbloc/ibc/union/access"
+
 	core "gno.land/r/onbloc/ibc/union/core"
+	_ "gno.land/r/onbloc/ibc/union/core/v1"
 )
 
 // z1_proxy_test covers upgrade.gno's swap model. An impl realm registers its
@@ -78,13 +80,16 @@ func TestUpdateImplSwapsToLatestTarget(cur realm, t *testing.T) {
 }
 
 func TestRegisterCoreAppRegistersProxyAndRejectsDuplicate(cur realm, t *testing.T) {
-	RegisterCoreApp(cur)
+	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+	core.UpdateImpl(cross(cur), "gno.land/r/onbloc/ibc/union/core/v1")
+	RegisterCoreApp(cross(cur))
 	if !core.HasApp([]byte(ProxyPkgPath())) {
 		t.Fatal("RegisterCoreApp must register the proxy package path")
 	}
 
-	uassert.AbortsContains(t, cur, "port already registered", func(_ realm) {
-		RegisterCoreApp(cur)
+	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+	uassert.AbortsContains(t, cur, "already registered", func(cur realm) {
+		RegisterCoreApp(cross(cur))
 	})
 }
 

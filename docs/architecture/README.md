@@ -20,9 +20,8 @@ gno.land/
 │   │   │   ├── cometbls/                 # CometBLS client loader realm
 │   │   │   └── statelensics23mpt/        # state-lens ICS23/MPT client loader realm
 │   │   ├── apps/
-│   │   │   ├── ucs03_zkgm/               # UCS03-ZKGM app proxy
-│   │   │   │   └── v1/                    #   └─ installed ZKGM implementation (IApp)
-│   │   │   └── transfer/                 # reference fungible-token transfer app
+│   │   │   └── ucs03_zkgm/               # UCS03-ZKGM app proxy
+│   │   │       └── v1/                    #   └─ installed ZKGM implementation (IApp)
 │   │   └── access/                       # shared access authority realm
 │
 └── p/onbloc/                             # packages (stateless)
@@ -55,7 +54,7 @@ entered first for send and receive paths. Detailed packet call sequences live in
 sequenceDiagram
     participant User
     participant Relayer
-    participant App as App realms<br/>ZKGM, Transfer
+    participant App as App realm<br/>ZKGM
     participant Core as Core realm<br/>IBC Union host
     participant Support as Support realms<br/>Access, light-client loaders
     participant Pure as Pure packages<br/>types, app, lightclient, zkgm
@@ -94,7 +93,6 @@ Stateful contracts. Each public-facing realm is an upgradeable proxy that delega
 | `ibc/union/lightclients/statelensics23mpt` | Loader realm that registers the state-lens ICS23/MPT light-client implementation with core.                                                                                         | —                                                                  |
 | `ibc/union/apps/ucs03_zkgm`    | Proxy realm for the UCS03-ZKGM app. Owns app identity, store, access gates, receiver registry, voucher-ledger capabilities, and the user-facing `Send`/`SendRaw` surface.             | [README](../../gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/README.md) |
 | `ibc/union/apps/ucs03_zkgm/v1` | Installed ZKGM implementation behind `IApp`. Holds opcode dispatch (Call, TokenOrder, Batch, Forward), escrow/voucher accounting, and rate limiting.                                  | —                                                                  |
-| `ibc/union/apps/transfer`      | Reference fungible-token transfer app (forked from gno-realms).                                                                                                                       | [README](../../gno.land/r/onbloc/ibc/union/apps/transfer/README.md) |
 | `ibc/union/access`             | Shared access authority. Owns the `manager.State` from `p/onbloc/access/manager`; core and app realms share it as a single authority, keyed per target by package path.               | [README](../../gno.land/r/onbloc/ibc/union/access/README.md)       |
 
 ### Why the proxy / implementation split

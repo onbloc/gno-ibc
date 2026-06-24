@@ -437,7 +437,10 @@ Naming convention: `z{category}{letter}_{description}_filetest.gno`
 
 **core realm**: `z1*` = create client, `z2*` = update client, `z3*` = send packet, `z5*` = acknowledgement, `z6*` = timeout, `z7*` = recv packet, `z8*` = misbehaviour
 
-**transfer app**: `z0*` = init, `z1*` = send packet, `z2*` = ack packet, `z3*` = timeout, `z4*` = recv packet, `z5*` = Transfer function. Double letters (e.g. `z1aa`) = IBC voucher token variant (vs `z1a` = native token)
+**ZKGM app**: filetests live under `apps/ucs03_zkgm/testing/` and use
+directory-local scenario prefixes. Keep new tests near the behavior they cover
+and continue the nearby `z*` / `zs*` prefix pattern instead of reusing the
+removed legacy numbering.
 
 `zz_*_example_filetest.gno` = documentation examples (referenced from README)
 

@@ -11,10 +11,14 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-var store *Store
+var (
+	store        *Store
+	proxyPkgPath string
+)
 
-func init() {
+func init(cur realm) {
 	store = newStore()
+	proxyPkgPath = cur.PkgPath()
 }
 
 // Store is the proxy-owned persistent state. It is a flat data layer: clients,

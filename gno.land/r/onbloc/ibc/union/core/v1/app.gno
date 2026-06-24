@@ -16,5 +16,5 @@ func (c *coreV1) RegisterApp(_ int, rlm realm, a app.IApp) {
 	caller := rlm.Previous().PkgPath()
 	portId := types.Bytes(caller)
 	c.store.RegisterAppAtPort(0, rlm, portId, a)
-	core.EmitAppRegistered(portId, caller, false)
+	core.EmitAppRegistered(0, rlm, portId, caller, false)
 }

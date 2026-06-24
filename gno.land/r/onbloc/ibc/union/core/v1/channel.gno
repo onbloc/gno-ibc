@@ -36,7 +36,7 @@ func (c *coreV1) ChannelOpenInit(_ int, rlm realm, msg types.MsgChannelOpenInit)
 	}
 
 	a.OnChannelOpenInit(cross(rlm), msg.ConnectionId, channelId, msg.Version, relayer)
-	core.EmitChannelOpenInit(portId, channelId, channel, connection)
+	core.EmitChannelOpenInit(0, rlm, portId, channelId, channel, connection)
 }
 
 // ChannelOpenTry proves a counterparty Init and opens the local channel in
@@ -95,7 +95,7 @@ func (c *coreV1) channelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry, v
 
 	a.OnChannelOpenTry(cross(rlm), msg.Channel.ConnectionId, channelId, msg.Channel.Version, msg.CounterpartyVersion, relayer)
 
-	core.EmitChannelOpenTry(portId, channelId, msg.Channel, msg.CounterpartyVersion, connection)
+	core.EmitChannelOpenTry(0, rlm, portId, channelId, msg.Channel, msg.CounterpartyVersion, connection)
 }
 
 // ChannelOpenAck proves the counterparty TryOpen and moves the local Init
@@ -162,7 +162,7 @@ func (c *coreV1) channelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck, v
 
 	a.OnChannelOpenAck(cross(rlm), msg.ChannelId, msg.CounterpartyChannelId, msg.CounterpartyVersion, relayer)
 
-	core.EmitChannelOpenAck(portId, msg.ChannelId, updated, connection)
+	core.EmitChannelOpenAck(0, rlm, portId, msg.ChannelId, updated, connection)
 }
 
 // ChannelOpenConfirm proves the counterparty Open and moves the local TryOpen
@@ -233,7 +233,7 @@ func (c *coreV1) channelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenCo
 
 	a.OnChannelOpenConfirm(cross(rlm), msg.ChannelId, relayer)
 
-	core.EmitChannelOpenConfirm(portId, msg.ChannelId, updated, connection)
+	core.EmitChannelOpenConfirm(0, rlm, portId, msg.ChannelId, updated, connection)
 }
 
 // ChannelCloseInit closes an Open channel locally and notifies its app.
@@ -268,7 +268,7 @@ func (c *coreV1) ChannelCloseInit(_ int, rlm realm, msg types.MsgChannelCloseIni
 		panic("port " + string(portId) + " not found")
 	}
 	a.OnChannelCloseInit(cross(rlm), msg.ChannelId, relayer)
-	core.EmitChannelCloseInit(portId, msg.ChannelId, updated, connection)
+	core.EmitChannelCloseInit(0, rlm, portId, msg.ChannelId, updated, connection)
 }
 
 // ChannelCloseConfirm proves the counterparty Closed and closes the local
@@ -315,7 +315,7 @@ func (c *coreV1) ChannelCloseConfirm(_ int, rlm realm, msg types.MsgChannelClose
 		panic("port " + string(portId) + " not found")
 	}
 	a.OnChannelCloseConfirm(cross(rlm), msg.ChannelId, relayer)
-	core.EmitChannelCloseConfirm(portId, msg.ChannelId, updated, connection)
+	core.EmitChannelCloseConfirm(0, rlm, portId, msg.ChannelId, updated, connection)
 }
 
 // closedChannel returns a Closed copy of channel without mutating the store-owned

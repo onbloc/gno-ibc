@@ -2,7 +2,7 @@
 
 ## Architecture
 
-- [Project Architecture](architecture.md) — map of the first-party `onbloc`
+- [Project Architecture](ARCHITECTURE.md) — map of the first-party `onbloc`
   pure packages and realms, the proxy/implementation split, and how a packet
   flows through the layers
 

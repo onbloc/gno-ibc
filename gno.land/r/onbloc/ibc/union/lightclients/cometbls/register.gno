@@ -4,7 +4,7 @@ import (
 	"gno.land/p/onbloc/ibc/union/lightclient"
 	cometblsp "gno.land/p/onbloc/ibc/union/lightclient/cometbls"
 	"gno.land/p/onbloc/ibc/union/types"
-	core "gno.land/r/onbloc/ibc/union/core"
+	"gno.land/r/onbloc/ibc/union/core"
 )
 
 const ClientType = types.ClientType(cometblsp.ClientType)

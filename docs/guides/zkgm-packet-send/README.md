@@ -10,9 +10,9 @@ the operand and the common page to broadcast and verify the packet.
 
 | Document | Use when |
 |---|---|
-| [Common SendRaw Procedure](zkgm-packet-send/common.md) | You need the shared `SendRaw` command, broadcast verification, handoff checklist, and operational hazards. |
-| [TokenOrderV2 INITIALIZE](zkgm-packet-send/initialize.md) | You are sending a native token for the first time over a channel and must create the wrapped token on Union. |
-| [TokenOrderV2 ESCROW](zkgm-packet-send/escrow.md) | The wrapped token already exists on Union and you are sending a later native-token transfer over the same channel. |
+| [Common SendRaw Procedure](common.md) | You need the shared `SendRaw` command, broadcast verification, handoff checklist, and operational hazards. |
+| [TokenOrderV2 INITIALIZE](initialize.md) | You are sending a native token for the first time over a channel and must create the wrapped token on Union. |
+| [TokenOrderV2 ESCROW](escrow.md) | The wrapped token already exists on Union and you are sending a later native-token transfer over the same channel. |
 
 ## Current Testnet Reference
 
@@ -47,4 +47,4 @@ version = 2
 opcode  = 3
 ```
 
-See [Common SendRaw Procedure](zkgm-packet-send/common.md) before broadcasting.
+See [Common SendRaw Procedure](common.md) before broadcasting.

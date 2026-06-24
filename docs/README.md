@@ -26,7 +26,7 @@ testnet flows.
 
 - [TX Indexer Guide](guides/tx-indexer.md) — querying IBC transactions and
   events via the deployed tx-indexer
-- [ZKGM Packet Send Guide](guides/zkgm-packet-send-guide.md) — index for common
+- [ZKGM Packet Send Guide](guides/zkgm-packet-send/) — index for common
   SendRaw steps and per-kind TokenOrderV2 INITIALIZE / ESCROW procedures
 
 ## References

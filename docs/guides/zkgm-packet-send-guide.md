@@ -1,7 +1,7 @@
 # ZKGM Packet Send Guide
 
-This guide collects the operational procedure for broadcasting ZKGM `TokenOrderV2`
-packets from the Gno side when requested by the Union team.
+This guide presents the operational procedure for broadcasting ZKGM `TokenOrderV2`
+packets from the Gno side when requested by Union.
 
 Start here to choose the correct send kind, then use the per-kind page to build
 the operand and the common page to broadcast and verify the packet.

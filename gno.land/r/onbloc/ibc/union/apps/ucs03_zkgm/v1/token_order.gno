@@ -444,20 +444,9 @@ func (v *ucs03ZkgmV1) settleEscrowedV2(_ int, rlm realm, sourceChannelId types.C
 	return v.localTokenUnescrow(0, rlm, baseDenom, recipient, order.BaseAmount)
 }
 
-// burnEscrowedV2 is the burn-address branch of acknowledgeTokenOrderV2's
-// market-maker ESCROW/INITIALIZE case (union contract.rs L1030-1042): decrease
-// the escrowed channel balance (as settleEscrowedV2 does), then destroy the base
-// instead of releasing it to the maker.
-//
-//   - wrapped voucher (`ibc/`): truly burned via grc20 burn from the proxy escrow,
-//     reducing supply exactly like union's BurnTokens.
-//   - native: gno cannot destroy native supply. Decrementing the channel balance
-//     above already removes it from the spendable escrow pool; the now-unbacked
-//     coins stay LOCKED in the proxy escrow and are recorded in the dedicated
-//     locked-native accounting (AddLockedNative) so they are tracked, not left as
-//     an orphaned surplus — mirroring how the transfer app always accounts escrowed
-//     native. This preserves proxy balance == sum(channelBalanceV2) + sum(locked).
-//     No coins are shipped to a dead address.
+// burnEscrowedV2 removes the escrowed channel balance and finalizes the base
+// token as burned instead of releasing it to the maker.
+// Vouchers are supply-burned; native coins are kept locked in proxy escrow.
 func (v *ucs03ZkgmV1) burnEscrowedV2(_ int, rlm realm, sourceChannelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
 	if err := v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
 		return err

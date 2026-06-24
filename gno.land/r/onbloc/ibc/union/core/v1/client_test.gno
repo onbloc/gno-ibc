@@ -19,23 +19,28 @@ func createClient(cur realm, v *coreV1, lc *mockLightClient, clientState, consen
 }
 
 func TestRegisterClientRejectsNil(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 
 	uassert.AbortsContains(t, cur, "unauthorized", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.RegisterClient(0, cur, testClientType, nil)
 	})
 }
 
 func TestRegisterClientRejectsDuplicate(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	v.RegisterClient(0, cur, testClientType, (&mockLightClient{}).ClientImpl)
 
 	uassert.AbortsContains(t, cur, "client type already exists", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.RegisterClient(0, cur, testClientType, (&mockLightClient{}).ClientImpl)
 	})
 }
 
 func TestHasClient(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	cases := []struct {
 		name string
 		seed func(*coreV1)
@@ -56,14 +61,17 @@ func TestHasClient(cur realm, t *testing.T) {
 }
 
 func TestCreateClientRejectsUnregisteredType(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 
 	uassert.AbortsContains(t, cur, "client type not found", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.CreateClient(0, cur, types.NewMsgCreateClient(testClientType, nil, nil))
 	})
 }
 
 func TestCreateClientRegistersAndVerifies(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	lc := &mockLightClient{latestHeight: 1}
 
@@ -83,6 +91,7 @@ func TestCreateClientRegistersAndVerifies(cur realm, t *testing.T) {
 }
 
 func TestCreateClientStoresClientImplResult(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	created := &mockLightClient{latestHeight: 2}
 	clientImpl := &mockLightClient{latestHeight: 9, implClient: created}
@@ -100,15 +109,18 @@ func TestCreateClientStoresClientImplResult(cur realm, t *testing.T) {
 }
 
 func TestCreateClientVerifyCreationFailureAborts(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	lc := &mockLightClient{createErr: "bad genesis"}
 
 	uassert.AbortsContains(t, cur, "create client: bad genesis", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		createClient(cur, v, lc, nil, nil)
 	})
 }
 
 func TestCreateClientPersistsCreationStorageWrites(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	lc := &mockLightClient{creationWrites: map[string][]byte{"create-key": []byte("create-value")}}
 
@@ -119,6 +131,7 @@ func TestCreateClientPersistsCreationStorageWrites(cur realm, t *testing.T) {
 }
 
 func TestInitClient(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	cases := []struct {
 		name        string
 		seed        func(*coreV1) (types.ClientId, *mockLightClient)
@@ -176,6 +189,7 @@ func TestInitClient(cur realm, t *testing.T) {
 			v := newTestImpl()
 			clientId, _ := tc.seed(v)
 			run := func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				height := v.initClient(0, cur, clientId, []byte("client-state"), []byte("consensus-state"), cur.Previous().Address())
 				uassert.Equal(t, tc.wantHeight, height.RevisionHeight)
 			}
@@ -194,6 +208,7 @@ func TestInitClient(cur realm, t *testing.T) {
 }
 
 func TestUpdateClientSavesStateAndConsensus(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	lc := &mockLightClient{update: types.StateUpdate{
 		Height:              7,
@@ -216,34 +231,41 @@ func TestUpdateClientSavesStateAndConsensus(cur realm, t *testing.T) {
 }
 
 func TestUpdateClientUnknownClientAborts(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 
 	uassert.AbortsContains(t, cur, "not found", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.UpdateClient(0, cur, types.MsgUpdateClient{ClientId: types.ClientId(99)})
 	})
 }
 
 func TestUpdateClientInactiveAborts(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	lc := &mockLightClient{status: lightclient.Expired}
 	clientId := createClient(cur, v, lc, nil, nil)
 
 	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.UpdateClient(0, cur, types.MsgUpdateClient{ClientId: clientId, ClientMessage: []byte("h")})
 	})
 }
 
 func TestUpdateClientVerifyHeaderFailureAborts(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	lc := &mockLightClient{headerErr: "stale header"}
 	clientId := createClient(cur, v, lc, nil, nil)
 
 	uassert.AbortsContains(t, cur, "update client: stale header", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.UpdateClient(0, cur, types.MsgUpdateClient{ClientId: clientId, ClientMessage: []byte("h")})
 	})
 }
 
 func TestForceUpdateClientRebuildsSubmittedState(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	lc := &mockLightClient{latestHeight: 1}
 	clientId := createClient(cur, v, lc, []byte("old-client"), []byte("old-consensus"))
@@ -257,6 +279,7 @@ func TestForceUpdateClientRebuildsSubmittedState(cur realm, t *testing.T) {
 }
 
 func TestForceUpdateClientReplacesExistingClient(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	initial := &mockLightClient{latestHeight: 1}
 	rebuilt := &mockLightClient{latestHeight: 4}
@@ -277,14 +300,17 @@ func TestForceUpdateClientReplacesExistingClient(cur realm, t *testing.T) {
 }
 
 func TestForceUpdateClientUnknownClientAborts(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 
 	uassert.AbortsContains(t, cur, "not found", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.ForceUpdateClient(0, cur, types.NewMsgForceUpdateClient(types.ClientId(99), nil, nil))
 	})
 }
 
 func TestMisbehaviourUpdatesClientState(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	cases := []struct {
 		name      string
 		initial   []byte
@@ -321,6 +347,7 @@ func TestMisbehaviourUpdatesClientState(cur realm, t *testing.T) {
 }
 
 func TestMisbehaviourRejectsInvalidMessages(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	cases := []struct {
 		name      string
 		setup     func(*coreV1) (types.MsgMisbehaviour, *mockLightClient)
@@ -361,6 +388,7 @@ func TestMisbehaviourRejectsInvalidMessages(cur realm, t *testing.T) {
 			msg, lc := tc.setup(v)
 
 			uassert.AbortsContains(t, cur, tc.wantPanic, func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v.Misbehaviour(0, cur, msg)
 			})
 			if lc != nil {
@@ -371,6 +399,7 @@ func TestMisbehaviourRejectsInvalidMessages(cur realm, t *testing.T) {
 }
 
 func TestGetActiveClient(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	cases := []struct {
 		name      string
 		seed      func(*coreV1) types.ClientId
@@ -403,6 +432,7 @@ func TestGetActiveClient(cur realm, t *testing.T) {
 			v := newTestImpl()
 			clientId := tc.seed(v)
 			run := func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				lc, err := v.getActiveClient(clientId)
 				if err != nil {
 					panic(err)
@@ -421,6 +451,7 @@ func TestGetActiveClient(cur realm, t *testing.T) {
 }
 
 func TestVerifyMembership(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	cases := []struct {
 		name        string
 		lc          *mockLightClient
@@ -444,6 +475,7 @@ func TestVerifyMembership(cur realm, t *testing.T) {
 			}
 
 			run := func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v.verifyMembership(clientId, types.NewHeight(3), []byte("proof"), []byte("key"), []byte("value"))
 			}
 			if tc.wantPanic != "" {

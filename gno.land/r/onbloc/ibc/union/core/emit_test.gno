@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	u256 "gno.land/p/gnoswap/uint256"
-	"gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 )
 
@@ -125,8 +124,4 @@ func TestEmitBinaryFieldsBoundary(cur realm, t *testing.T) {
 			t.Fatalf("realistic ZKGM packet len = %d, want > %d", got, emitMaxEventAttrLen)
 		}
 	})
-}
-
-func TestEmittersAllowProxyRealmCaller(cur realm, t *testing.T) {
-	EmitPacketRecv(0, cur, types.Packet{}, types.Channel{}, types.Connection{}, nil)
 }

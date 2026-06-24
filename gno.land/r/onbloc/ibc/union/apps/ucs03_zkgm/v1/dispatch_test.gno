@@ -186,6 +186,7 @@ func TestRecvForwardExecuteErrorReturnsFailure(cur realm, t *testing.T) {
 	})
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), data, 0)
 
+	testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
 	res := newTestImpl().OnRecvPacket(0, cur, packet, address(testAddress("relayer")), nil)
 
 	uassert.True(t, res.Status == types.PacketStatusFailure)
@@ -195,6 +196,7 @@ func TestRecvForwardExecuteErrorReturnsFailure(cur realm, t *testing.T) {
 func TestRecvMalformedPacketReturnsFailure(cur realm, t *testing.T) {
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), []byte{0x01}, 0)
 
+	testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
 	res := newTestImpl().OnRecvPacket(0, cur, packet, address(testAddress("relayer")), nil)
 
 	uassert.True(t, res.Status == types.PacketStatusFailure)
@@ -293,6 +295,7 @@ func TestRecvTokenOrderInitializeMissingMetadataReturnsFailureAck(cur realm, t *
 	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(1), data, 0)
 
+	testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
 	res := newTestImpl().OnRecvPacket(0, cur, packet, address(testAddress("relayer")), nil)
 
 	uassert.True(t, res.Status == types.PacketStatusFailure)

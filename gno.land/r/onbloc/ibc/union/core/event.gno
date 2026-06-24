@@ -36,68 +36,84 @@ const (
 	CommitNonMembershipEvent   = "CommitNonMembershipProof"
 )
 
-func channelOpenInitEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel) []string {
+func channelOpenInitEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) []string {
 	return []string{
 		"port_id", string(portId),
 		"channel_id", channelId.String(),
 		"counterparty_port_id", channel.CounterpartyPortId.String(),
 		"connection_id", channel.ConnectionId.String(),
+		"connection_client_id", connection.ClientId.String(),
+		"connection_counterparty_client_id", connection.CounterpartyClientId.String(),
+		"connection_counterparty_connection_id", connection.CounterpartyConnectionId.String(),
 		"version", channel.Version,
 	}
 }
 
-func channelOpenTryEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel, counterpartyVersion string) []string {
+func channelOpenTryEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel, counterpartyVersion string, connection types.Connection) []string {
 	return []string{
 		"port_id", string(portId),
 		"channel_id", channelId.String(),
 		"counterparty_port_id", channel.CounterpartyPortId.String(),
 		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
 		"connection_id", channel.ConnectionId.String(),
+		"connection_client_id", connection.ClientId.String(),
+		"connection_counterparty_client_id", connection.CounterpartyClientId.String(),
+		"connection_counterparty_connection_id", connection.CounterpartyConnectionId.String(),
+		"version", channel.Version,
 		"counterparty_version", counterpartyVersion,
 	}
 }
 
-func channelOpenAckConfirmEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel) []string {
+func channelOpenAckConfirmEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) []string {
 	return []string{
 		"port_id", string(portId),
 		"channel_id", channelId.String(),
 		"counterparty_port_id", channel.CounterpartyPortId.String(),
 		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
 		"connection_id", channel.ConnectionId.String(),
+		"connection_client_id", connection.ClientId.String(),
+		"connection_counterparty_client_id", connection.CounterpartyClientId.String(),
+		"connection_counterparty_connection_id", connection.CounterpartyConnectionId.String(),
+		"version", channel.Version,
 	}
 }
 
-func channelCloseEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel) []string {
+func channelCloseEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) []string {
 	return []string{
 		"port_id", string(portId),
 		"channel_id", channelId.String(),
 		"counterparty_port_id", channel.CounterpartyPortId.String(),
 		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
+		"connection_id", channel.ConnectionId.String(),
+		"connection_client_id", connection.ClientId.String(),
+		"connection_counterparty_client_id", connection.CounterpartyClientId.String(),
+		"connection_counterparty_connection_id", connection.CounterpartyConnectionId.String(),
+		"version", channel.Version,
 	}
 }
 
-func emitChannelOpenInitEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
-	chain.Emit(ChannelOpenInitEvent, channelOpenInitEventAttrs(portId, channelId, channel)...)
+func emitChannelOpenInitEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+	chain.Emit(ChannelOpenInitEvent, channelOpenInitEventAttrs(portId, channelId, channel, connection)...)
 }
 
-func emitChannelOpenTryEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel, counterpartyVersion string) {
-	chain.Emit(ChannelOpenTryEvent, channelOpenTryEventAttrs(portId, channelId, channel, counterpartyVersion)...)
+func emitChannelOpenTryEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel, counterpartyVersion string, connection types.Connection) {
+	chain.Emit(ChannelOpenTryEvent, channelOpenTryEventAttrs(portId, channelId, channel, counterpartyVersion, connection)...)
 }
 
-func emitChannelOpenAckEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
-	chain.Emit(ChannelOpenAckEvent, channelOpenAckConfirmEventAttrs(portId, channelId, channel)...)
+func emitChannelOpenAckEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+	chain.Emit(ChannelOpenAckEvent, channelOpenAckConfirmEventAttrs(portId, channelId, channel, connection)...)
 }
 
-func emitChannelOpenConfirmEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
-	chain.Emit(ChannelOpenConfirmEvent, channelOpenAckConfirmEventAttrs(portId, channelId, channel)...)
+func emitChannelOpenConfirmEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+	chain.Emit(ChannelOpenConfirmEvent, channelOpenAckConfirmEventAttrs(portId, channelId, channel, connection)...)
 }
 
-func emitChannelCloseInitEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
-	chain.Emit(ChannelCloseInitEvent, channelCloseEventAttrs(portId, channelId, channel)...)
+func emitChannelCloseInitEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+	chain.Emit(ChannelCloseInitEvent, channelCloseEventAttrs(portId, channelId, channel, connection)...)
 }
 
-func emitChannelCloseConfirmEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
-	chain.Emit(ChannelCloseConfirmEvent, channelCloseEventAttrs(portId, channelId, channel)...)
+func emitChannelCloseConfirmEvent(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+	chain.Emit(ChannelCloseConfirmEvent, channelCloseEventAttrs(portId, channelId, channel, connection)...)
 }
 
 func emitConnectionOpenInitEvent(connectionId types.ConnectionId, clientId types.ClientId, counterpartyClientId types.ClientId) {

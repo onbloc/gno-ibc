@@ -44,26 +44,6 @@
 
 ---
 
-## Architecture Decision Records (ADRs)
-
-**Every non-trivial AI-assisted PR must include an ADR.**
-This documents what the AI understood so reviewers can verify assumptions and future contributors can build on it.
-
-| Scope | Directory |
-|-------|-----------|
-| gno.land | `gno.land/adr/` |
-
-**Naming**: `pr<number>_<description>.md`.
-Use `prxxxx_` if PR number unknown.
-
-**Include**: context, decision, alternatives considered, consequences.
-See `gno.land/adr/` for examples.
-Match detail to complexity.
-
-Skip ADRs for: trivial bug fixes, formatting, simple tests, docs-only changes.
-
----
-
 ## Don'ts
 
 - `git push --force` — never force push unless explicitly asked.
@@ -72,7 +52,6 @@ Skip ADRs for: trivial bug fixes, formatting, simple tests, docs-only changes.
 - Modify `gno.land/genesis/` — only if that's the task.
 - Goroutines/OS calls in `.gno` — never works.
 - Break `gno.land/p/demo/` backwards-compat — needs discussion.
-- AI-assisted PRs without an ADR.
 
 ---
 
@@ -499,7 +478,6 @@ uassert.Equal(t, expected, actual)
 - **GnoVM** — the interpreter
 - **gno.land** — the blockchain
 - **Gnolang** — the language
-- **ADR** — architecture decision record
 - **ABCI** — app-to-consensus interface
 
 ---

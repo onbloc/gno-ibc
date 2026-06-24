@@ -6,6 +6,12 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
+var testConnection = types.Connection{
+	ClientId:                 types.ClientId(10),
+	CounterpartyClientId:     types.ClientId(20),
+	CounterpartyConnectionId: types.ConnectionId(30),
+}
+
 func TestChannelOpenInitEventAttrs(cur realm, t *testing.T) {
 	attrs := channelOpenInitEventAttrs(
 		types.Bytes("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"),
@@ -17,6 +23,7 @@ func TestChannelOpenInitEventAttrs(cur realm, t *testing.T) {
 			CounterpartyPortId:    types.Bytes("counterparty"),
 			Version:               "ucs03-zkgm-0",
 		},
+		testConnection,
 	)
 
 	assertStringSliceEqual(t, attrs, []string{
@@ -24,6 +31,9 @@ func TestChannelOpenInitEventAttrs(cur realm, t *testing.T) {
 		"channel_id", "1",
 		"counterparty_port_id", "0x636f756e7465727061727479",
 		"connection_id", "2",
+		"connection_client_id", "10",
+		"connection_counterparty_client_id", "20",
+		"connection_counterparty_connection_id", "30",
 		"version", "ucs03-zkgm-0",
 	})
 	assertAttrMissing(t, attrs, "counterparty_channel_id")
@@ -41,6 +51,7 @@ func TestChannelOpenTryEventAttrs(cur realm, t *testing.T) {
 			Version:               "ucs03-zkgm-0",
 		},
 		"counterparty-v1",
+		testConnection,
 	)
 
 	assertStringSliceEqual(t, attrs, []string{
@@ -49,6 +60,10 @@ func TestChannelOpenTryEventAttrs(cur realm, t *testing.T) {
 		"counterparty_port_id", "0x636f756e7465727061727479",
 		"counterparty_channel_id", "7",
 		"connection_id", "2",
+		"connection_client_id", "10",
+		"connection_counterparty_client_id", "20",
+		"connection_counterparty_connection_id", "30",
+		"version", "ucs03-zkgm-0",
 		"counterparty_version", "counterparty-v1",
 	})
 }
@@ -64,6 +79,7 @@ func TestChannelOpenAckConfirmEventAttrs(cur realm, t *testing.T) {
 			CounterpartyPortId:    types.Bytes("counterparty"),
 			Version:               "ucs03-zkgm-0",
 		},
+		testConnection,
 	)
 
 	assertStringSliceEqual(t, attrs, []string{
@@ -72,6 +88,10 @@ func TestChannelOpenAckConfirmEventAttrs(cur realm, t *testing.T) {
 		"counterparty_port_id", "0x636f756e7465727061727479",
 		"counterparty_channel_id", "7",
 		"connection_id", "2",
+		"connection_client_id", "10",
+		"connection_counterparty_client_id", "20",
+		"connection_counterparty_connection_id", "30",
+		"version", "ucs03-zkgm-0",
 	})
 }
 
@@ -86,6 +106,7 @@ func TestChannelCloseEventAttrs(cur realm, t *testing.T) {
 			CounterpartyPortId:    types.Bytes("counterparty"),
 			Version:               "ucs03-zkgm-0",
 		},
+		testConnection,
 	)
 
 	assertStringSliceEqual(t, attrs, []string{
@@ -93,6 +114,11 @@ func TestChannelCloseEventAttrs(cur realm, t *testing.T) {
 		"channel_id", "1",
 		"counterparty_port_id", "0x636f756e7465727061727479",
 		"counterparty_channel_id", "7",
+		"connection_id", "2",
+		"connection_client_id", "10",
+		"connection_counterparty_client_id", "20",
+		"connection_counterparty_connection_id", "30",
+		"version", "ucs03-zkgm-0",
 	})
 }
 

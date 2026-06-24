@@ -46,6 +46,16 @@ type Store struct {
 	membershipProofs    map[types.H256]types.H256
 	nonMembershipProofs map[types.H256]types.H256
 
+	// packetData holds the raw packet payload (packet.Data) keyed by the packet
+	// commitment hash. The commitment map only records a fixed-size magic value,
+	// so the payload itself is not otherwise recoverable on-chain. Off-chain
+	// consumers read the packet_hash emitted in packet events (which is exactly
+	// this key) and fetch the full payload through GetPacketData, instead of from
+	// the event's packet_data attribute, which truncates large payloads. The Store
+	// only exposes Get/Set/Remove primitives over this tree; the impl (core/v1)
+	// owns the lifecycle — writing on send and removing on acknowledgement/timeout.
+	packetData *bptree.BPTree // string(packetHash[:]) → []byte
+
 	ports map[string]app.IApp
 }
 
@@ -78,6 +88,7 @@ func newStore() *Store {
 		commitments:         make(map[types.H256]types.H256),
 		membershipProofs:    make(map[types.H256]types.H256),
 		nonMembershipProofs: make(map[types.H256]types.H256),
+		packetData:          bptree.NewBPTree32(),
 		ports:               make(map[string]app.IApp),
 	}
 }
@@ -451,6 +462,38 @@ func (s *Store) ConsensusStateBytes(clientId types.ClientId, height types.Height
 // commitment is keyed by the global batch path, so no channel id is required.
 func (s *Store) BatchPacketsAt(batchHash types.H256) (types.H256, bool) {
 	return s.getCommitment(types.BatchPacketsPath(batchHash))
+}
+
+// SetPacketData stores the raw packet payload under a packet hash. It is a pure
+// primitive: the impl owns when to call it (on send) and how the hash is derived.
+func (s *Store) SetPacketData(_ int, rlm realm, packetHash types.H256, data []byte) {
+	if !rlm.IsCurrent() {
+		panic(ErrSpoofedRealm)
+	}
+
+	s.packetData.Set(string(packetHash[:]), types.CloneBytes(data))
+}
+
+// GetPacketData returns the raw packet payload stored under a packet hash, or
+// (nil, false) when none is stored. The returned slice is a clone, safe to read
+// across realm boundaries.
+func (s *Store) GetPacketData(packetHash types.H256) ([]byte, bool) {
+	v, found := s.packetData.Get(string(packetHash[:]))
+	if !found {
+		return nil, false
+	}
+
+	return types.CloneBytes(v.([]byte)), true
+}
+
+// RemovePacketData drops the payload stored under a packet hash. It is a pure
+// primitive: the impl owns when to call it (on acknowledgement/timeout).
+func (s *Store) RemovePacketData(_ int, rlm realm, packetHash types.H256) {
+	if !rlm.IsCurrent() {
+		panic(ErrSpoofedRealm)
+	}
+
+	s.packetData.Remove(string(packetHash[:]))
 }
 
 // BatchReceiptsAt returns the batch receipt commitment for a batch hash. The

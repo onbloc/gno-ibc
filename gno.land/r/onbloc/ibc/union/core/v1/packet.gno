@@ -55,6 +55,9 @@ func (c *coreV1) SendPacket(_ int, rlm realm, sourceChannelId types.ChannelId, t
 	}
 
 	c.store.CommitPacket(0, rlm, packet)
+	// Retain the raw payload so off-chain consumers can fetch it by packet_hash
+	// (see GetPacketData); the matching cleanup is in markPacketAcknowledged.
+	c.store.SetPacketData(0, rlm, core.CommitPacketHash(packet), packet.Data)
 
 	core.EmitPacketSend(packet, channel, connection)
 
@@ -288,6 +291,10 @@ func (c *coreV1) markPacketAcknowledged(_ int, rlm realm, packet types.Packet) {
 	}
 
 	c.store.SetPacketAcknowledged(0, rlm, packet)
+	// The packet is retired (acknowledged or timed out); drop its retained payload
+	// so the store does not keep in-flight packet data indefinitely. Both the ack
+	// and timeout paths funnel through here, so this is the single cleanup point.
+	c.store.RemovePacketData(0, rlm, core.CommitPacketHash(packet))
 }
 
 // CommitMembershipProof verifies and records a membership proof for later reuse.

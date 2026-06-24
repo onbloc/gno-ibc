@@ -1,6 +1,8 @@
 package core
 
 import (
+	"encoding/hex"
+
 	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 )
@@ -73,6 +75,21 @@ func GetBatchPackets(batchHash types.H256) (types.H256, error) {
 // error when no batch receipt commitment is stored for that hash.
 func GetBatchReceipts(batchHash types.H256) (types.H256, error) {
 	return mustGetImpl().GetBatchReceiptsCommitment(batchHash)
+}
+
+// GetPacketData returns the raw packet payload (packet.Data) retained for a
+// packet commitment hash — the packet_hash emitted in every packet event. It
+// lets off-chain consumers fetch the full payload by hash instead of from the
+// event's packet_data attribute, which truncates large payloads. Returns an
+// error once the packet has been retired (acknowledged/timed out) or if it was
+// never sent from this chain.
+func GetPacketData(packetHash types.H256) (string, error) {
+	data, err := mustGetImpl().GetPacketData(packetHash)
+	if err != nil {
+		return "", err
+	}
+
+	return "0x" + hex.EncodeToString(data), nil
 }
 
 // GetCommittedMembershipProof returns the committed membership proof value for

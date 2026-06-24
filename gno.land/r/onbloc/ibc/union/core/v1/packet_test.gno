@@ -110,6 +110,26 @@ func TestSendPacketCommits(cur realm, t *testing.T) {
 	uassert.True(t, v.store.HasPacketCommitment(packet))
 }
 
+// SendPacket retains the raw payload under the packet hash so off-chain
+// consumers can read it through GetPacketData; markPacketAcknowledged — the
+// shared ack/timeout retire point — clears it.
+func TestSendPacketRetainsAndRetiresPacketData(cur realm, t *testing.T) {
+	v := newTestImpl()
+	chId, _, _ := setupOpenChannel(cur, v)
+
+	packet := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("retained-payload"))
+	hash := core.CommitPacketHash(packet)
+
+	got, err := v.GetPacketData(hash)
+	uassert.NoError(t, err)
+	uassert.Equal(t, "retained-payload", string(got))
+
+	v.markPacketAcknowledged(0, cur, packet)
+
+	_, err = v.GetPacketData(hash)
+	uassert.ErrorContains(t, err, core.ErrPacketDataNotFound)
+}
+
 func TestSendPacketTimeoutMustBeSet(cur realm, t *testing.T) {
 	v := newTestImpl()
 	chId, _, _ := setupOpenChannel(cur, v)

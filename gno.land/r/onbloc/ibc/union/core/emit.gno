@@ -138,8 +138,8 @@ func EmitPacketTimeout(packet types.Packet, sourceChannel types.Channel, connect
 }
 
 // EmitWriteAck emits the WriteAck host event.
-func EmitWriteAck(channelId types.ChannelId, packet types.Packet, acknowledgement []byte) {
-	emitWriteAckEvent(channelId, packet, acknowledgement)
+func EmitWriteAck(packet types.Packet, channel types.Channel, connection types.Connection, acknowledgement []byte) {
+	emitWriteAckEvent(packet, channel, connection, acknowledgement)
 }
 
 // EmitBatchSend emits the BatchSend host event.

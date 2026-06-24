@@ -179,18 +179,8 @@ func (c *coreV1) Misbehaviour(_ int, rlm realm, msg types.MsgMisbehaviour) {
 	core.EmitMisbehaviour(msg.ClientId)
 }
 
-// VerifyClientMembership verifies a membership proof against a registered, active
-// light client. It does not commit the verified value into the host state.
-func (c *coreV1) VerifyClientMembership(_ int, rlm realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
-
-	c.verifyMembership(clientId, proofHeight, proof, path, value)
-}
-
 // verifyMembership checks a membership proof against a registered, active light
-// client. Shared by VerifyClientMembership and the connection/channel handshakes.
+// client. Shared by the connection/channel handshakes.
 func (c *coreV1) verifyMembership(clientId types.ClientId, height types.Height, proof, key, value []byte) {
 	lc, err := c.getActiveClient(clientId)
 	if err != nil {

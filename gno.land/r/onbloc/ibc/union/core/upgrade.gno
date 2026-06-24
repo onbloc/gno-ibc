@@ -9,10 +9,9 @@ import (
 // upgrade.gno is the single admin-gated swap point for the IBC host logic. The
 // proxy keeps the Store and identity stable across upgrades; only `impl` changes.
 //
-// Activation note: core's public entrypoints will delegate to `impl` once the
-// logic and its tests are migrated to the impl realm. core's own package tests
-// cannot import the impl realm (import cycle), so flipping the entrypoints is a
-// coordinated step done per subsystem alongside moving its tests.
+// Activation note: core's public entrypoints delegate to the installed impl.
+// The impl realm registers its constructor from init(), and UpdateImpl injects
+// the proxy-owned Store before any delegated entrypoint can run.
 var (
 	currentImplPath  string
 	currentImpl      ICore

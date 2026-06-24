@@ -32,7 +32,7 @@ func TestRecvGateRejectsEphemeralCaller(cur realm, t *testing.T) {
 	packet := setupGateImpl(cur)
 	testing.SetRealm(testing.NewUserRealm(address(testutils.TestAddress("eoa"))))
 	uassert.AbortsContains(t, cur, "ibc host only", func() {
-		AsIBCApp().OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
+		(&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
 	})
 }
 
@@ -48,7 +48,7 @@ func TestAckGateRejectsEphemeralCaller(cur realm, t *testing.T) {
 	packet := setupGateImpl(cur)
 	testing.SetRealm(testing.NewUserRealm(address(testutils.TestAddress("eoa"))))
 	uassert.AbortsContains(t, cur, "ibc host only", func() {
-		AsIBCApp().OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
+		(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
 	})
 }
 
@@ -56,7 +56,7 @@ func TestTimeoutGateRejectsEphemeralCaller(cur realm, t *testing.T) {
 	packet := setupGateImpl(cur)
 	testing.SetRealm(testing.NewUserRealm(address(testutils.TestAddress("eoa"))))
 	uassert.AbortsContains(t, cur, "ibc host only", func() {
-		AsIBCApp().OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
+		(&App{}).OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
 	})
 }
 
@@ -64,7 +64,7 @@ func TestRecvGateRejectsProxyCaller(cur realm, t *testing.T) {
 	packet := setupGateImpl(cur)
 	testing.SetRealm(testing.NewCodeRealm(proxyPkgPath))
 	uassert.AbortsContains(t, cur, "ibc host only", func() {
-		AsIBCApp().OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
+		(&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
 	})
 }
 
@@ -72,7 +72,7 @@ func TestAckGateRejectsProxyCaller(cur realm, t *testing.T) {
 	packet := setupGateImpl(cur)
 	testing.SetRealm(testing.NewCodeRealm(proxyPkgPath))
 	uassert.AbortsContains(t, cur, "ibc host only", func() {
-		AsIBCApp().OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
+		(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
 	})
 }
 
@@ -80,7 +80,7 @@ func TestTimeoutGateRejectsProxyCaller(cur realm, t *testing.T) {
 	packet := setupGateImpl(cur)
 	testing.SetRealm(testing.NewCodeRealm(proxyPkgPath))
 	uassert.AbortsContains(t, cur, "ibc host only", func() {
-		AsIBCApp().OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
+		(&App{}).OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
 	})
 }
 
@@ -88,7 +88,7 @@ func TestRecvGateAllowsCoreCaller(cur realm, t *testing.T) {
 	packet := setupGateImpl(cur)
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	uassert.NotAborts(t, cur, func() {
-		AsIBCApp().OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
+		(&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
 	})
 }
 
@@ -104,7 +104,7 @@ func TestAckGateAllowsCoreCaller(cur realm, t *testing.T) {
 	packet := setupGateImpl(cur)
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	uassert.NotAborts(t, cur, func() {
-		AsIBCApp().OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
+		(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
 	})
 }
 
@@ -112,6 +112,6 @@ func TestTimeoutGateAllowsCoreCaller(cur realm, t *testing.T) {
 	packet := setupGateImpl(cur)
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	uassert.NotAborts(t, cur, func() {
-		AsIBCApp().OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
+		(&App{}).OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
 	})
 }

@@ -12,7 +12,7 @@ import "gno.land/p/demo/tokens/grc20"
 //
 // SECURITY: Ledger() hands out the mint/burn capability. The impl-facing access
 // to vouchers must be gated (the impl boundary), never exposed as an open public
-// getter, or any realm could mint. See VOUCHER_ANALYSIS.md.
+// getter, or any realm could mint.
 type Voucher struct {
 	token  *grc20.Token
 	ledger *grc20.PrivateLedger

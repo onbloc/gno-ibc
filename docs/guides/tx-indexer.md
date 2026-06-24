@@ -141,11 +141,11 @@ The following table lists common IBC event types used for filtering:
 
 | IBC Action | Event Type | pkg_path |
 |------------|------------|----------|
-| Create client | `create_client` | `gno.land/r/core/ibc/v1` |
-| Update client | `update_client` | `gno.land/r/core/ibc/v1` |
-| Send packet | `send_packet` | `gno.land/r/core/ibc/v1` |
-| Acknowledge packet | `write_acknowledgement` | `gno.land/r/core/ibc/v1` |
-| Timeout packet | `timeout_packet` | `gno.land/r/core/ibc/v1` |
+| Create client | `CreateClient` | `gno.land/r/onbloc/ibc/union/core` |
+| Update client | `UpdateClient` | `gno.land/r/onbloc/ibc/union/core` |
+| Send packet | `PacketSend` | `gno.land/r/onbloc/ibc/union/core` |
+| Acknowledge packet | `WriteAck` / `PacketAck` | `gno.land/r/onbloc/ibc/union/core` |
+| Timeout packet | `PacketTimeout` | `gno.land/r/onbloc/ibc/union/core` |
 
 To narrow results by a specific client or connection, add an `attrs` filter:
 
@@ -171,7 +171,7 @@ query getPacketSendByMultipleAttrs {
         events: {
           GnoEvent: {
             type: { eq: "PacketSend" }
-            pkg_path: { eq: "gno.land/r/onbloc/unionibc/v1/core" }
+            pkg_path: { eq: "gno.land/r/onbloc/ibc/union/core" }
             _and: [
               {
                 attrs: {

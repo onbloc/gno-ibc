@@ -7,10 +7,6 @@ import (
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 )
 
-// TODO: cap batch.Instructions length once the upstream Solidity reference
-// confirms a value (Reviewer flagged unbounded recursion as a DoS vector —
-// each child runs full dispatchExecutePacket incl. abi decode + keccak).
-
 // verifyBatch verifies each allowed child instruction against the shared funds budget.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2941-L2967
 func (v *ucs03ZkgmV1) verifyBatch(_ int, rlm realm, funds *funds, channelId types.ChannelId, path *u256.Uint, batch z.Batch) error {
@@ -32,6 +28,9 @@ func (v *ucs03ZkgmV1) verifyBatch(_ int, rlm realm, funds *funds, channelId type
 func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relayer address, relayerMsg []byte, salt [32]byte, path *u256.Uint, batch z.Batch, intent bool) ([]byte, error) {
 	acks := make([][]byte, len(batch.Instructions))
 
+	// NOTE: batch.Instructions remains uncapped until the Union reference defines
+	// a maximum. Each child runs dispatchExecutePacket, including ABI decode and
+	// keccak work, so execution cost scales with child count.
 	for i, instruction := range batch.Instructions {
 		if !isAllowedBatchInstruction(instruction.Opcode) {
 			return nil, makeError(errInvalidBatchInstruction)
@@ -48,10 +47,11 @@ func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relaye
 		if len(childAck) == 0 {
 			panic("batch child returned empty ack")
 		}
-		// Spec: a single only-maker child aborts the entire batch. Already-processed
-		// children's state mutations stand (per Union v0 spec). The outer ack signals
-		// "filled by maker, replay later" so the relayer retries against a market-maker
-		// fill.
+		// A single only-maker child aborts the entire batch: return the sentinel up
+		// to the recv boundary (OnRecvPacket / OnIntentRecvPacket), which panics on
+		// it and reverts the whole recv tx — so already-processed children's
+		// mutations do NOT stand. Mirrors union's reply handler returning
+		// Err(OnlyMaker) on an only-maker batch ack (contract.rs L2528-2530).
 		if isOnlyMakerAck(childAck) {
 			return types.CloneBytes(z.ACK_ERR_ONLY_MAKER), nil
 		}

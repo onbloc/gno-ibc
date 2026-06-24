@@ -482,7 +482,7 @@ func channelKey(id types.ChannelId) string {
 }
 
 func setChainParam(key string, value []byte) {
-	// TODO find a way to assert this write in tests (difficult since params does
+	// NOTE: find a way to assert this write in tests (difficult since params does
 	// not expose getters)
 	params.SetBytes(key, value)
 }

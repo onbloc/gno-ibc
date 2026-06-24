@@ -23,35 +23,35 @@ func GetRoleGrantDelay(role manager.RoleId) manager.Delay {
 	return accessState.GetRoleGrantDelay(role)
 }
 
-// GetFunctionRole returns the selector role for the calling realm's target path.
+// GetFunctionRole returns the selector role for targetPath.
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L1091-L1107
 func GetFunctionRole(targetPath string, selector manager.Selector) manager.RoleId {
 	return GetTargetFunctionRole(targetPath, selector)
 }
 
-// GetTargetFunctionRole returns the selector role for the calling realm's target path.
+// GetTargetFunctionRole returns the selector role for targetPath.
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L1091-L1107
 func GetTargetFunctionRole(targetPath string, selector manager.Selector) manager.RoleId {
 	return accessState.GetTargetFunctionRole(targetPath, selector)
 }
 
-// IsTargetClosed reports whether the calling realm's target path is closed.
+// IsTargetClosed reports whether targetPath is closed.
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L1082-L1089
 func IsTargetClosed(targetPath string) bool {
 	return accessState.IsTargetClosed(targetPath)
 }
 
-// CanCall reports whether caller can call selector on the calling realm's target path.
+// CanCall reports whether caller can call selector on targetPath.
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L1033-L1068
 func CanCall(targetPath string, selector manager.Selector, caller address) manager.CanCallResult {
 	return accessState.CanCall(caller, targetPath, selector)
 }
 
-// IsAuthorized reports immediate call authorization for the calling realm's target path.
+// IsAuthorized reports immediate call authorization for targetPath.
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L1033-L1068
 func IsAuthorized(targetPath string, selector manager.Selector, caller address) bool {

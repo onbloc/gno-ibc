@@ -97,6 +97,17 @@ func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relaye
 		return failureResult(universalErrorAck())
 	}
 
+	// An only-maker outcome (a maker-only fill that could not be satisfied, or
+	// an only-maker child anywhere in a batch) must revert the whole recv tx —
+	// no ack is written and any already-applied batch-child mutations are rolled
+	// back. This mirrors union's reply handler returning Err(OnlyMaker) for both
+	// the single-instruction and batch cases (contract.rs L2530, L2545), and the
+	// symmetric guard already in OnIntentRecvPacket. Core does not recover recv
+	// panics, so this reverts atomically.
+	if isOnlyMakerAck(res.Acknowledgement) {
+		panic(errIsOnlyMakerAck)
+	}
+
 	return res
 }
 
@@ -187,9 +198,9 @@ func (v *ucs03ZkgmV1) Send(_ int, rlm realm, channelId types.ChannelId, timeoutT
 
 	funds := newFunds(parseCoins(""))
 
-	// Native coins the user attached with -send land at the proxy escrow account
-	// OriginSend is the chain-root coin envelope, readable here regardless of the proxy frame in between,
-	// so we seed the escrow budget from it.
+	// SAFE: native coins attached with -send live on the chain-root envelope,
+	// not on rlm.Previous(). Guard direct user calls before reading
+	// unsafe.OriginSend(), then seed the proxy escrow budget from it.
 	if rlm.Previous().IsUserCall() {
 		sentCoins := unsafe.OriginSend()
 		funds = newFunds(sentCoins)

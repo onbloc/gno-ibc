@@ -42,7 +42,7 @@ The Makefile (`VENDOR_*` blocks) is the source of truth — keep this table in s
 
 | Workspace path                  | Used by |
 | ------------------------------- | ------- |
-| `gno.land/p/gnoswap/uint256/`   | ZKGM port, CometBLS light client, `p/core/_smoke/` |
+| `gno.land/p/gnoswap/uint256/`   | ZKGM port, CometBLS light client, smoke tests |
 
 ### `third_party/gno-realms` → `gno.land/<rel>/`
 

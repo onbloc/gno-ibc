@@ -14,9 +14,9 @@ state-lens light clients, access management, and the UCS03 ZKGM app.
 ## Documentation
 
 - [Project architecture](docs/ARCHITECTURE.md)
-- [Documentation index](docs/README.md)
-- [IBC Union spec comparison](docs/spec-comparisons/ibc-union-spec-comparison.md)
-- [Access management comparison](docs/spec-comparisons/access-management.md)
+- [Spec comparisons](docs/spec-comparisons)
+- [References](docs/references)
+- [Guides](docs/guides)
 
 ## Contributing
 

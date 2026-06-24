@@ -192,7 +192,12 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 // failure cannot leave orphan origin state.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2309-L2413
 func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.ChannelId, path *u256.Uint, baseToken []byte, wrappedToken string, receiver address, relayer address, baseAmount *u256.Uint, quoteAmount *u256.Uint, metadata *z.TokenMetadata, canDeploy bool) (types.RecvPacketResult, error) {
-	fee := new(u256.Uint).Sub(baseAmount, quoteAmount)
+	// fee = base - quote; reject a quote that exceeds base instead of wrapping
+	// around to a near-2^256 fee that would only later trip amountInt64.
+	fee, underflow := u256.Zero().SubOverflow(baseAmount, quoteAmount)
+	if underflow {
+		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), makeError(errTokenOrderFeeUnderflow)
+	}
 
 	if _, err := amountInt64(quoteAmount); err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
@@ -271,7 +276,12 @@ func (v *ucs03ZkgmV1) protocolFillUnescrowV2(_ int, rlm realm, channelId types.C
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
-	fee := new(u256.Uint).Sub(baseAmount, quoteAmount)
+	// fee = base - quote; reject a quote that exceeds base instead of wrapping
+	// around to a near-2^256 fee that would only later trip amountInt64.
+	fee, underflow := u256.Zero().SubOverflow(baseAmount, quoteAmount)
+	if underflow {
+		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), makeError(errTokenOrderFeeUnderflow)
+	}
 
 	if _, err := amountInt64(baseAmount); err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err

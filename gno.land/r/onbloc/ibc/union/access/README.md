@@ -7,12 +7,13 @@ This realm owns the `manager.State` from
 authority, while each managed realm remains a separate target keyed by its
 package path.
 
-Authorization guards use the non-crossing `AssertCanCall(0, cur, selector)`
-form. The caller passes its current realm value, and access derives the target
-from `rlm.PkgPath()` and the caller from `rlm.Previous().Address()`.
-Management functions are crossing calls; per-target mutations derive the target
-from the previous realm package path. Query getters are plain read surfaces that
-take the target path explicitly when they inspect per-target configuration.
+Authorization guards use the non-crossing `AssertCanCall(0, cur, selector)` or
+`AssertCanCallOrConsume(0, cur, selector, dataHash)` form. The caller passes its
+current realm value, and access derives the target from `rlm.PkgPath()` and the
+caller from `rlm.Previous().Address()`. Management functions are crossing calls;
+per-target mutations derive the target from the previous realm package path.
+Query getters are plain read surfaces that take the target path explicitly when
+they inspect per-target configuration.
 
 ## References
 
@@ -61,14 +62,24 @@ selector groups and tests.
 ## Management Surface
 
 - `GrantRole`
+- `GrantRoleWithExecutionDelay`
 - `RevokeRole`
 - `RenounceRole`
 - `LabelRole`
 - `SetRoleAdmin`
+- `SetRoleGuardian`
 - `SetGrantDelay`
 - `SetFunctionRole`
+- `SetFunctionRoleDelayed`
 - `SetFunctionRoles`
+- `SetFunctionRolesDelayed`
+- `SetTargetAdminDelay`
+- `SetTargetAdminDelayDelayed`
 - `SetTargetClosed`
+- `SetTargetClosedDelayed`
+- `Schedule`
+- `ScheduleTargetAdmin`
+- `Cancel`
 
 This realm emits management events after successful state transitions. Event
 type and attribute key constants live in the pure manager package, but emission
@@ -77,25 +88,54 @@ stays here so events are attributed to the state-owning realm.
 ## Authorization Surface
 
 - `AssertCanCall`
+- `AssertCanCallOrConsume`
 
 `AssertCanCall` is intentionally non-crossing. Managed realms call it with
 their own `cur realm`, so the asserted target is the managed realm itself. A
 spoofed realm value is rejected with `ErrorSpoofedRealm`.
 
+`AssertCanCallOrConsume` is the Gno-native delayed execution guard. If the
+caller can execute immediately, it returns. If the caller is authorized only
+with delay, it consumes the scheduled operation identified by caller, target,
+selector, and `dataHash` before the managed realm continues its original
+function body.
+
 ## Query Surface
 
 - `HasRole`
 - `GetRoleAdmin`
+- `GetRoleGuardian`
 - `GetRoleGrantDelay`
 - `GetFunctionRole`
 - `GetTargetFunctionRole`
+- `GetTargetAdminDelay`
 - `IsTargetClosed`
 - `CanCall`
 - `IsAuthorized`
 - `CanAdminRole`
 - `CanManageTarget`
+- `CanManageTargetPath`
+- `HashOperation`
+- `GetSchedule`
 
-Only `GrantDelay` is retained from the OpenZeppelin delay model. Account
-execution delay, target admin delay, guardian role configuration, scheduling,
-execution, and cancellation are intentionally not exposed yet because the
-delayed operation surface is not implemented.
+## Delayed Operations
+
+This realm applies Union/OZ delay policy to Gno targets without a generic
+manager-side executor:
+
+- `GrantRoleWithExecutionDelay` stores account execution delay.
+- `Schedule` records delayed calls for target selectors when `CanCall` returns
+  delayed authorization.
+- `ScheduleTargetAdmin` records delayed target-configuration changes when
+  `GetTargetAdminDelay(target)` is non-zero.
+- `Cancel` accepts the original caller, `AdminRole`, or the required role's
+  guardian.
+- `Set*Delayed` management functions consume target-admin scheduled operations
+  before applying the state transition.
+- Managed realms use `AssertCanCallOrConsume` to consume delayed target
+  operations from their original public entrypoints.
+
+The intentional runtime difference is generic execution. Union executes encoded
+CosmWasm messages through the manager. Gno target realms must be invoked again
+through the original function, passing the same `dataHash` to the access guard
+so the scheduled operation can be consumed.

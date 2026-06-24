@@ -124,14 +124,9 @@ func (s *Store) GetChannelBalanceV2(key string) (*u256.Uint, bool) {
 	return v.(*u256.Uint), true
 }
 
-// AddLockedNative records native escrow that has been permanently locked by a
-// burn-address settlement. gno cannot destroy native supply, so a "burned"
-// native stays in the proxy escrow account; the burn decrements its channel
-// balance (removing it from the spendable escrow pool), and this counter tracks
-// the locked total per denom so the coins are accounted rather than left as an
-// orphaned surplus. It mirrors the transfer app's totalEscrow-style accounting
-// and has no union counterpart (union burns the supply outright). The invariant
-// preserved is: proxy native balance == sum(channelBalanceV2) + sum(lockedNative).
+// AddLockedNative tracks native escrow locked after burn-address settlement.
+// Locked native remains in proxy escrow but is excluded from channel balances.
+// Invariant: proxy balance == sum(channelBalanceV2) + sum(lockedNative).
 func (s *Store) AddLockedNative(_ int, rlm realm, denom string, amount *u256.Uint) {
 	if !rlm.IsCurrent() {
 		panic(ErrSpoofedRealm)

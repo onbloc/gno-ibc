@@ -9,4 +9,6 @@ const (
 	ErrInvalidSaltLength        = "invalid salt length"
 	ErrTokenBucketNotFound      = "token bucket not found"
 	ErrChannelBalanceV2NotFound = "channel balance v2 not found"
+	ErrLockedNativeOverflow     = "locked native total overflows uint256"
+	ErrInterfaceConversion      = "interface conversion failed"
 )

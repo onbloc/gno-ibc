@@ -16,27 +16,20 @@ configuration.
 
 ## References
 
-- Repository comparison guide:
-  [docs/access-management.md](../../../../../../docs/access-management.md)
-- OpenZeppelin Contracts `AccessManager` v5.6.1:
-  https://github.com/OpenZeppelin/openzeppelin-contracts/tree/v5.6.1/contracts/access/manager
-- Union CosmWasm `access-manager`:
-  https://github.com/unionlabs/union/tree/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager
-- Union CosmWasm `access-managed`:
-  https://github.com/unionlabs/union/tree/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-managed
-- Union core initializes its managed authority from `access_managed_init_msg`:
-  https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L592-L604
-- Union UCS03-ZKGM initializes its managed authority from
-  `access_managed_init_msg`:
-  https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/app/ucs03-zkgm/src/contract.rs#L67-L75
-- Union deployer role ids:
-  https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L65-L68
-- Union deployer core relayer selector wiring:
-  https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L1823-L1837
-- Union deployer UCS03-ZKGM role wiring:
-  https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L1839-L1867
-- Union deployer role labels:
-  https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L1871-L1908
+- [Repository comparison guide](../../../../../../docs/access-management.md)
+- OpenZeppelin Contracts:
+  [`AccessManager` v5.6.1](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/v5.6.1/contracts/access/manager)
+- Union CosmWasm:
+  [`access-manager`](https://github.com/unionlabs/union/tree/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager),
+  [`access-managed`](https://github.com/unionlabs/union/tree/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-managed)
+- Union managed authority initialization:
+  [core `access_managed_init_msg`](https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/core/src/contract.rs#L592-L604),
+  [UCS03-ZKGM `access_managed_init_msg`](https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/app/ucs03-zkgm/src/contract.rs#L67-L75)
+- Union deployer:
+  [role ids](https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L65-L68),
+  [core relayer selector wiring](https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L1823-L1837),
+  [UCS03-ZKGM role wiring](https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L1839-L1867),
+  [role labels](https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L1871-L1908)
 
 ## Bootstrap
 

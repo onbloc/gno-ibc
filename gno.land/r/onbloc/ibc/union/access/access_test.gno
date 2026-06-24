@@ -302,6 +302,65 @@ func TestTargetConfigurationSurface(cur realm, t *testing.T) {
 	}
 }
 
+func TestExplicitTargetPathGetters(cur realm, t *testing.T) {
+	admin := testutils.TestAddress("access-admin")
+	relayer := testutils.TestAddress("access-relayer")
+	caller := testutils.TestAddress("access-caller")
+	resetAccess(admin)
+	testing.SetRealm(testing.NewUserRealm(admin))
+	GrantRole(cross(cur), RelayerRole, relayer)
+
+	selector := types.RelayerSelectors()[0]
+	tests := []struct {
+		name string
+		run  func() bool
+		want bool
+	}{
+		{
+			name: "core target relayer role",
+			run: func() bool {
+				return GetFunctionRole(CoreRealmPath, selector) == RelayerRole &&
+					GetTargetFunctionRole(CoreRealmPath, selector) == RelayerRole
+			},
+			want: true,
+		},
+		{
+			name: "current target falls back to admin role",
+			run: func() bool {
+				return GetFunctionRole(cur.PkgPath(), selector) == manager.AdminRole
+			},
+			want: true,
+		},
+		{
+			name: "relayer authorized for explicit core target",
+			run: func() bool {
+				return IsAuthorized(CoreRealmPath, selector, relayer)
+			},
+			want: true,
+		},
+		{
+			name: "ordinary caller rejected for explicit core target",
+			run: func() bool {
+				return CanCall(CoreRealmPath, selector, caller).Immediate
+			},
+			want: false,
+		},
+		{
+			name: "core target open by default",
+			run: func() bool {
+				return IsTargetClosed(CoreRealmPath)
+			},
+			want: false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.Equal(t, tc.want, tc.run())
+		})
+	}
+}
+
 func TestUnionDeployerRelayerSelectorSetup(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	resetAccess(admin)

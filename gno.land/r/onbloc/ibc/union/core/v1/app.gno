@@ -7,8 +7,7 @@ import (
 )
 
 // app.gno: the IBC application registry. RegisterApp installs the calling realm's
-// app under its package path; re-registration is rejected by the store. The
-// admin-gated RegisterAppForPort stays on the proxy.
+// app under its package path; re-registration is rejected by the store.
 func (c *coreV1) RegisterApp(_ int, rlm realm, a app.IApp) {
 	if !rlm.IsCurrent() {
 		panic(errSpoofedRealm)

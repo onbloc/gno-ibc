@@ -57,12 +57,6 @@ func ForceUpdateClient(cur realm, msg types.MsgForceUpdateClient) {
 	mustGetImpl().ForceUpdateClient(0, cur, msg)
 }
 
-// VerifyClientMembership verifies a membership proof against a registered light
-// client. It does not commit the verified value into this realm's state.
-func VerifyClientMembership(cur realm, clientId types.ClientId, proofHeight types.Height, proof, path, value []byte) {
-	mustGetImpl().VerifyClientMembership(0, cur, clientId, proofHeight, proof, path, value)
-}
-
 // Misbehaviour freezes a client after a valid misbehaviour proof, delegating to
 // the installed impl.
 //

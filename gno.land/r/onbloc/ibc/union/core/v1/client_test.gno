@@ -188,30 +188,3 @@ func TestForceUpdateClientUnknownClientAborts(cur realm, t *testing.T) {
 		v.ForceUpdateClient(0, cur, types.NewMsgForceUpdateClient(types.ClientId(99), nil, nil))
 	})
 }
-
-func TestVerifyClientMembershipActivePasses(cur realm, t *testing.T) {
-	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
-
-	uassert.NotAborts(t, cur, func() {
-		v.VerifyClientMembership(0, cur, clientId, types.NewHeight(1), []byte("proof"), []byte("path"), []byte("value"))
-	})
-}
-
-func TestVerifyClientMembershipInactiveAborts(cur realm, t *testing.T) {
-	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{status: lightclient.Expired}, nil, nil)
-
-	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
-		v.VerifyClientMembership(0, cur, clientId, types.NewHeight(1), []byte("proof"), []byte("path"), []byte("value"))
-	})
-}
-
-func TestVerifyClientMembershipProofFailureAborts(cur realm, t *testing.T) {
-	v := newTestImpl()
-	clientId := createClient(cur, v, &mockLightClient{membershipErr: "bad proof"}, nil, nil)
-
-	uassert.AbortsContains(t, cur, "bad proof", func(cur realm) {
-		v.VerifyClientMembership(0, cur, clientId, types.NewHeight(1), []byte("proof"), []byte("path"), []byte("value"))
-	})
-}

@@ -474,15 +474,8 @@ func (v *ucs03ZkgmV1) burnEscrowedV2(_ int, rlm realm, sourceChannelId types.Cha
 	return nil
 }
 
-// localTokenEscrow takes custody of the base token being sent. The denom class
-// is decided positively, mirroring the transfer app's classification:
-//   - `ibc/` prefix: a zkgm-issued voucher — moved into the proxy escrow via the
-//     voucher ledger (zkgm is the issuer, so no allowance is needed).
-//   - registered in grc20reg: a foreign GRC20 — rejected with a clear error,
-//     because escrowing it would need an Approve/TransferFrom pull path that is
-//     not yet implemented (NOT silently treated as native).
-//   - otherwise: a native coin already pushed to the proxy via -send; the budget
-//     is verified against the attached funds.
+// localTokenEscrow takes custody of the base token for a local send.
+// Native funds must already be attached; foreign GRC20 escrow is not supported.
 func (v *ucs03ZkgmV1) localTokenEscrow(_ int, rlm realm, denom, sender string, funds *funds, amount *u256.Uint) error {
 	switch {
 	case strings.HasPrefix(denom, ibcDenomPrefix):

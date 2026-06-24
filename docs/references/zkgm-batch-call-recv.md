@@ -68,7 +68,7 @@ Applications should therefore not assume rollback semantics across batch
 boundaries.
 
 If a child panics, the panic is converted into `ACK_ERR_ONLY_MAKER`, and batch
-execution terminates according to the current ZKGM v0 execution rules.
+execution terminates according to the current ZKGM v1 execution rules.
 
 ---
 
@@ -100,8 +100,8 @@ package myapp
 import (
 	"errors"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
-	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
+	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
 
 var receiver = &MyReceiver{}
@@ -192,7 +192,7 @@ application encoding, such as a plain string, ABI payload, protobuf message, or
 another domain-specific byte format.
 
 Batch children are currently limited to `OP_TOKEN_ORDER` and `OP_CALL`.
-Nested `OP_BATCH` and direct `OP_FORWARD` children are rejected in v0.
+Nested `OP_BATCH` and direct `OP_FORWARD` children are rejected in v1.
 
 ---
 
@@ -200,5 +200,5 @@ Nested `OP_BATCH` and direct `OP_FORWARD` children are rejected in v0.
 
 | File | What it covers |
 |---|---|
-| `gno.land/r/core/ibc/v1/apps/zkgm/v0/impl/z_call_recv_test.gno` | Unit test for `executeBatch` with `TOKEN_ORDER_KIND_INITIALIZE` + `CALL`. It asserts a successful outer ack, two child acks, voucher balance changes, and receiver invocation. |
-| `gno.land/r/core/ibc/v1/apps/zkgm/testing/e2e/scenarios/z24_v1_recv_batch_token_order_and_call_filetest.gno` | E2E filetest for full `PacketRecv` with a mock light client. It verifies the voucher balance, receiver call count, captured calldata, packet receipt, and written acknowledgement. |
+| `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1/batch_test.gno` | Unit test coverage for `executeBatch` with `TOKEN_ORDER_KIND_INITIALIZE` + `CALL`, including ack and side-effect behavior. |
+| `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios/z24_v1_recv_batch_token_order_and_call_filetest.gno` | E2E filetest for full `PacketRecv` with a mock light client. It verifies the voucher balance, receiver call count, captured calldata, packet receipt, and written acknowledgement. |

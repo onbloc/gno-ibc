@@ -14,8 +14,8 @@ import (
 // CometblsLightClient is the stateful object implementing lightclient.Interface.
 //
 // It holds the client state and the consensus states keyed by height, mirroring
-// the realm adapter's per-client entry but as a self-contained pure object: the
-// adapter routes by clientId into realm storage, whereas this object owns its
+// the host store's per-client entry as a self-contained pure object. The core
+// host routes by clientId to the stored light-client object; this object owns its
 // own state and is verified directly against lightclient.Interface.
 type CometblsLightClient struct {
 	clientState            *ClientState
@@ -180,7 +180,7 @@ func (c *CometblsLightClient) Misbehaviour(caller address, misbehaviour []byte, 
 
 // updateState creates or updates the consensus state for a verified header and
 // advances the latest height when the header is newer. It mirrors Union's
-// UpdateState (11-cometbls/update.go).
+// update_state in Union's cometbls client.
 // Union reference:
 // https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/cometbls/src/client.rs#L283-L309
 func (c *CometblsLightClient) updateState(clientState *ClientState, trustedConsensusState *ConsensusState, header *Header) types.StateUpdate {

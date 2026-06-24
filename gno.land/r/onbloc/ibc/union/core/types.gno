@@ -17,8 +17,8 @@ import (
 // recovery entrypoints (Force* handshake overrides) and the read-only queries
 // stay on the proxy: authorization is not swappable, and queries are pure views.
 //
-// Migration is incremental: the client subsystem is implemented in core/v1; the
-// remaining methods are present on ICore and stubbed in the impl until migrated.
+// core/v1 currently implements the client, connection, channel, packet, app
+// registry, and query surfaces behind this interface.
 type ICore interface {
 	// --- Client ---
 	RegisterClient(_ int, rlm realm, typ types.ClientType, impl lightclient.ClientImpl)
@@ -73,8 +73,8 @@ type ICore interface {
 
 // ICoreGetter is the read-only query surface, implemented by the impl and exposed by
 // the proxy's getters.gno. Queries that fail on a missing lookup return an error.
-// The best-effort method GetRegisteredClientType has no direct gno equivalent — see
-// getters.gno for the notes.
+// Best-effort Union query mirrors, such as GetClientImpl, return Gno-native
+// identifiers; see getters.gno for the notes.
 type ICoreGetter interface {
 	GetStatus(clientId types.ClientId) (types.Status, error)
 	GetClientType(clientId types.ClientId) (types.ClientType, error)
@@ -100,8 +100,8 @@ type ICoreGetter interface {
 // commitment mirror) stays private to the Store — the impl operates by id, so the
 // encapsulation survives impl upgrades.
 //
-// IStore grows with the impl: it currently exposes the client subsystem; the
-// connection/channel/packet/app operations are added as those subsystems migrate.
+// IStore exposes the client, connection, channel, packet, app registry, proof,
+// batch, and query-support operations used by the installed impl.
 type IStore interface {
 	// --- Client ---
 	RegisterClient(_ int, rlm realm, typ types.ClientType, impl lightclient.ClientImpl)

@@ -1,3 +1,3 @@
-// Package union holds end-to-end scenario filetests for the union IBC host
-// (core) + ucs03-zkgm app. .gnoa files are work-in-progress scaffolds.
+// Package union holds end-to-end scenario filetests for Union IBC core and
+// ucs03-zkgm app interactions.
 package union

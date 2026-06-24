@@ -9,38 +9,60 @@ import (
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
 )
 
-// store is the proxy-owned singleton holding all persistent domain state. It is
-// the dependency injected into the implementation realm: the impl receives this
-// pointer and mutates state through the SetXXX(_ int, rlm realm, ...) methods,
-// whose trailing realm token carries the caller frame so the write satisfies the
-// interrealm borrow rule. Reads use plain getters (no mutation, no realm token).
-//
-// Mapping to the reference CosmWasm contract (state.rs):
-//
-//	tokenOrigin        <- TOKEN_ORIGIN          Map<denom, U256>
-//	channelBalanceV2   <- CHANNEL_BALANCE_V2    Map<(channel,path,base,quote), U256>
-//	metadataImageOf    <- METADATA_IMAGE_OF     Map<denom, H256>
-//	hashToForeignToken <- HASH_TO_FOREIGN_TOKEN Map<denom, Bytes>
-//	inFlightPacket     <- IN_FLIGHT_PACKET      Map<packetHash, Packet>
-//	tokenBucket        <- TOKEN_BUCKET          Map<denom, TokenBucket>
-//	rateLimitDisabled  <- CONFIG.rate_limit_disabled
-//
-// CONFIG.{admin,ibc_host} are not duplicated here: they are sourced from core.
-// The CosmWasm code_id fields (token_minter/dummy/cw_account) and the
-// transaction-scratch items (EXECUTING_PACKET, EXECUTION_ACK, MARKET_MAKER, ...)
-// are intentionally omitted: gno calls are synchronous, so that data is carried
-// as parameters/locals instead of persisted across submessage hops.
-var store *Store
+var (
+	// store is the proxy-owned singleton holding all persistent domain state. It is
+	// the dependency injected into the implementation realm: the impl receives this
+	// pointer and mutates state through the SetXXX(_ int, rlm realm, ...) methods,
+	// whose trailing realm token carries the caller frame so the write satisfies the
+	// interrealm borrow rule. Reads use plain getters (no mutation, no realm token).
+	//
+	// Mapping to the reference CosmWasm contract (state.rs):
+	//
+	//	tokenOrigin        <- TOKEN_ORIGIN          Map<denom, U256>
+	//	channelBalanceV2   <- CHANNEL_BALANCE_V2    Map<(channel,path,base,quote), U256>
+	//	metadataImageOf    <- METADATA_IMAGE_OF     Map<denom, H256>
+	//	hashToForeignToken <- HASH_TO_FOREIGN_TOKEN Map<denom, Bytes>
+	//	inFlightPacket     <- IN_FLIGHT_PACKET      Map<packetHash, Packet>
+	//	tokenBucket        <- TOKEN_BUCKET          Map<denom, TokenBucket>
+	//	rateLimitDisabled  <- CONFIG.rate_limit_disabled
+	//
+	// CONFIG.{admin,ibc_host} are not duplicated here: they are sourced from core.
+	// The CosmWasm code_id fields (token_minter/dummy/cw_account) and the
+	// transaction-scratch items (EXECUTING_PACKET, EXECUTION_ACK, MARKET_MAKER, ...)
+	// are intentionally omitted: gno calls are synchronous, so that data is carried
+	// as parameters/locals instead of persisted across submessage hops.
+	store *Store
 
-// paused is a proxy-level gate checked by the App receivers before delegating to
-// the impl. It is governance state, not impl-visible state, so it lives on the
-// proxy package rather than inside the injected Store.
-var paused bool
+	// paused is a proxy-level gate checked by the App receivers before delegating to
+	// the impl. It is governance state, not impl-visible state, so it lives on the
+	// proxy package rather than inside the injected Store.
+	paused bool
+
+	// upgrade.gno is the single admin-gated swap point for the zkgm app logic. The
+	// proxy keeps the Store, identity, and escrow funds stable across upgrades; only
+	// the installed impl changes.
+	//
+	// The swap is two-phase, mirroring core's host upgrade model: an impl realm
+	// registers its constructor under its own package path via RegisterImpl (from its
+	// init), and the admin later activates a registered path via UpdateImpl. The
+	// proxy injects its own Store into the constructor, so the store needs no public
+	// getter — the only way to obtain it is through this gated install.
+	proxyPkgPath     string  = ""
+	proxyAddress     address = ""
+	currentImplPath  string
+	currentImpl      IApp
+	implConstructors map[string]func(store IStore) IApp
+)
 
 func init(cur realm) {
-	proxyPkgPath = cur.PkgPath()
-
 	store = NewStore()
+	paused = false
+
+	proxyPkgPath = cur.PkgPath()
+	proxyAddress = cur.Address()
+	currentImpl = nil
+	currentImplPath = ""
+	implConstructors = make(map[string]func(store IStore) IApp)
 }
 
 type Store struct {

@@ -6,27 +6,8 @@ import (
 	"gno.land/r/onbloc/ibc/union/access"
 )
 
-// upgrade.gno is the single admin-gated swap point for the zkgm app logic. The
-// proxy keeps the Store, identity, and escrow funds stable across upgrades; only
-// the installed impl changes.
-//
-// The swap is two-phase, mirroring core's host upgrade model: an impl realm
-// registers its constructor under its own package path via RegisterImpl (from its
-// init), and the admin later activates a registered path via UpdateImpl. The
-// proxy injects its own Store into the constructor, so the store needs no public
-// getter — the only way to obtain it is through this gated install.
-var (
-	proxyAddress     address = ""
-	currentImplPath  string
-	currentImpl      IApp
-	implConstructors map[string]func(store IStore) IApp
-)
-
-func init(cur realm) {
-	proxyAddress = cur.Address()
-	currentImpl = nil
-	currentImplPath = ""
-	implConstructors = make(map[string]func(store IStore) IApp)
+func ProxyPkgPath() string {
+	return proxyPkgPath
 }
 
 func ProxyAddress() address {

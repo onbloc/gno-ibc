@@ -55,8 +55,8 @@ const (
 	// ErrSpoofedRealm guards non-crossing (_ int, rlm realm, ...) entrypoints:
 	// the passed rlm must be the current crossing frame, not a forged or stale
 	// token replayed by a caller.
-	ErrSpoofedRealm           = "rlm does not match the current crossing frame"
-	ErrEventEmitterWrongRealm = "event emitter must run in proxy realm"
+	ErrSpoofedRealm  = "rlm does not match the current crossing frame"
+	ErrNotProxyRealm = "rlm is not proxy realm"
 )
 
 func makeError(msgs ...string) error {

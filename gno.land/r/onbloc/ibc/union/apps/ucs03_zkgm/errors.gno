@@ -5,7 +5,7 @@ package zkgm
 // replayed by a caller.
 const (
 	ErrSpoofedRealm             = "rlm does not match the current crossing frame"
-	ErrEventEmitterWrongRealm   = "event emitter must run in proxy realm"
+	ErrNotProxyRealm            = "rlm is not proxy realm"
 	ErrInvalidSaltLength        = "invalid salt length"
 	ErrTokenBucketNotFound      = "token bucket not found"
 	ErrChannelBalanceV2NotFound = "channel balance v2 not found"

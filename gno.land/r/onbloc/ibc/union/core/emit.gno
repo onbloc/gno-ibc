@@ -66,33 +66,33 @@ func ChannelValue(channel types.Channel) types.H256 {
 }
 
 // EmitChannelOpenInit emits the ChannelOpenInit host event.
-func EmitChannelOpenInit(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
-	emitChannelOpenInitEvent(portId, channelId, channel)
+func EmitChannelOpenInit(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+	emitChannelOpenInitEvent(portId, channelId, channel, connection)
 }
 
 // EmitChannelOpenTry emits the ChannelOpenTry host event.
-func EmitChannelOpenTry(portId types.Bytes, channelId types.ChannelId, channel types.Channel, counterpartyVersion string) {
-	emitChannelOpenTryEvent(portId, channelId, channel, counterpartyVersion)
+func EmitChannelOpenTry(portId types.Bytes, channelId types.ChannelId, channel types.Channel, counterpartyVersion string, connection types.Connection) {
+	emitChannelOpenTryEvent(portId, channelId, channel, counterpartyVersion, connection)
 }
 
 // EmitChannelOpenAck emits the ChannelOpenAck host event.
-func EmitChannelOpenAck(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
-	emitChannelOpenAckEvent(portId, channelId, channel)
+func EmitChannelOpenAck(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+	emitChannelOpenAckEvent(portId, channelId, channel, connection)
 }
 
 // EmitChannelOpenConfirm emits the ChannelOpenConfirm host event.
-func EmitChannelOpenConfirm(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
-	emitChannelOpenConfirmEvent(portId, channelId, channel)
+func EmitChannelOpenConfirm(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+	emitChannelOpenConfirmEvent(portId, channelId, channel, connection)
 }
 
 // EmitChannelCloseInit emits the ChannelCloseInit host event.
-func EmitChannelCloseInit(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
-	emitChannelCloseInitEvent(portId, channelId, channel)
+func EmitChannelCloseInit(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+	emitChannelCloseInitEvent(portId, channelId, channel, connection)
 }
 
 // EmitChannelCloseConfirm emits the ChannelCloseConfirm host event.
-func EmitChannelCloseConfirm(portId types.Bytes, channelId types.ChannelId, channel types.Channel) {
-	emitChannelCloseConfirmEvent(portId, channelId, channel)
+func EmitChannelCloseConfirm(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+	emitChannelCloseConfirmEvent(portId, channelId, channel, connection)
 }
 
 // EmitAppRegistered emits the AppRegistered host event.

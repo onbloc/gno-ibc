@@ -68,6 +68,16 @@ differences such as `cur realm`, direct function arguments, or absent CosmWasm
 `Response` wrappers are expected Gno model differences unless they change state,
 events, authorization, or protocol-visible data.
 
+## Development References
+
+- [Documentation index](docs/README.md)
+- [TX Indexer Guide](docs/tx-indexer.md)
+- [ZKGM Packet Send Guide](docs/zkgm-packet-send-guide.md)
+- [ZKGM Batch Call-Recv Pattern](docs/zkgm-batch-call-recv.md)
+- [IBC Native Function Gas Table](docs/ibc-native-gas.md)
+- [Tools overview](tools/README.md)
+- [Third-party mirror workflow](third_party/README.md)
+
 ## Reporting Failures
 
 Use the repository's issue and pull request discussions for design questions,

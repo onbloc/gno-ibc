@@ -195,7 +195,7 @@ func TestTokenBucket(cur realm, t *testing.T) {
 func TestVoucherStore(cur realm, t *testing.T) {
 	s := NewStore()
 	token, ledger := newVoucherTokenForTest(cur, "Store Voucher", "SVOU")
-	vou := NewVoucher(0, cur, token, ledger)
+	vou := NewVoucher(token, ledger)
 
 	uassert.False(t, s.HasVoucher("ibc/store-voucher"))
 	s.SetVoucher(0, cur, "ibc/store-voucher", vou)
@@ -248,7 +248,7 @@ func TestRateLimitDisabled(cur realm, t *testing.T) {
 func TestStoreMutationsRejectSpoofedRealm(cur realm, t *testing.T) {
 	s := NewStore()
 	token, ledger := newVoucherTokenForTest(cur, "Spoof Voucher", "SPF")
-	vou := NewVoucher(0, cur, token, ledger)
+	vou := NewVoucher(token, ledger)
 	bucket := mustTokenBucketForTest(t, 100, 10, 1)
 	packet := types.NewPacket(1, 2, []byte("parent"), 100)
 	spoofedRealm := cur.Previous()

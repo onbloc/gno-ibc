@@ -47,7 +47,9 @@ func TestGetChannelBalanceV2DelegatesToImpl(cur realm, t *testing.T) {
 	got, err := GetChannelBalanceV2(types.ChannelId(7), path, "ugnot", []byte("quote"))
 	uassert.NoError(t, err)
 	uassert.Equal(t, "44", got.ToString())
-	uassert.Equal(t, types.ChannelId(7), target.lastBalanceChannelId)
+	if types.ChannelId(7) != target.lastBalanceChannelId {
+		t.Fatalf("expected channel id %v, got %v", types.ChannelId(7), target.lastBalanceChannelId)
+	}
 	uassert.Equal(t, "11", target.lastBalancePath.ToString())
 	uassert.Equal(t, "ugnot", target.lastBalanceBaseToken)
 	uassert.Equal(t, "quote", string(target.lastBalanceQuote))

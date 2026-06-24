@@ -759,3 +759,431 @@ func mustDecodeTokenMetadata(bz []byte) z.TokenMetadata {
 	}
 	return meta
 }
+
+type protocolFillMintCase struct {
+	name           string
+	path           *u256.Uint
+	channelId      types.ChannelId
+	baseAmount     *u256.Uint
+	quoteAmount    *u256.Uint
+	metadata       *z.TokenMetadata
+	canDeploy      bool
+	preDeploy      bool // pre-set foreign token
+	expectSuccess  bool
+	expectReceiver int64
+	expectRelayer  int64
+	expectDeployed bool
+}
+
+func TestProtocolFillMint(cur realm, t *testing.T) {
+	validMetadata := mustDecodeTokenMetadata(mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Test Token", Symbol: "TST", Decimals: 18}),
+	}))
+
+	invalidDecimalsMetadata := mustDecodeTokenMetadata(mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Invalid", Symbol: "INV", Decimals: 19}), // > MaxDecimals (18)
+	}))
+
+	cases := []protocolFillMintCase{
+		{
+			name:           "happy path - mints to receiver and relayer with deployment",
+			path:           u256.NewUint(5),
+			channelId:      types.ChannelId(5),
+			baseAmount:     u256.NewUint(100),
+			quoteAmount:    u256.NewUint(95),
+			metadata:       &validMetadata,
+			canDeploy:      true,
+			expectSuccess:  true,
+			expectReceiver: 95,
+			expectRelayer:  5,
+			expectDeployed: true,
+		},
+		{
+			name:           "zero quote amount - skips receiver mint",
+			path:           u256.NewUint(10),
+			channelId:      types.ChannelId(10),
+			baseAmount:     u256.NewUint(100),
+			quoteAmount:    u256.NewUint(0),
+			metadata:       &validMetadata,
+			canDeploy:      true,
+			expectSuccess:  true,
+			expectReceiver: 0,
+			expectRelayer:  100,
+			expectDeployed: true,
+		},
+		{
+			name:           "zero fee - skips relayer mint",
+			path:           u256.NewUint(15),
+			channelId:      types.ChannelId(15),
+			baseAmount:     u256.NewUint(100),
+			quoteAmount:    u256.NewUint(100),
+			metadata:       &validMetadata,
+			canDeploy:      true,
+			expectSuccess:  true,
+			expectReceiver: 100,
+			expectRelayer:  0,
+			expectDeployed: true,
+		},
+		{
+			name:           "zero amounts - skips both mints but deploys state",
+			path:           u256.NewUint(20),
+			channelId:      types.ChannelId(20),
+			baseAmount:     u256.NewUint(0),
+			quoteAmount:    u256.NewUint(0),
+			metadata:       &validMetadata,
+			canDeploy:      true,
+			expectSuccess:  true,
+			expectReceiver: 0,
+			expectRelayer:  0,
+			expectDeployed: false, // no mint = no voucher created, cannot read metadata
+		},
+		{
+			name:           "already deployed - skips deployment but still mints",
+			path:           u256.NewUint(25),
+			channelId:      types.ChannelId(25),
+			baseAmount:     u256.NewUint(100),
+			quoteAmount:    u256.NewUint(90),
+			metadata:       &validMetadata,
+			canDeploy:      true,
+			preDeploy:      true,
+			expectSuccess:  true,
+			expectReceiver: 90,
+			expectRelayer:  10,
+			expectDeployed: false, // already deployed, no update
+		},
+		{
+			name:           "canDeploy false - skips deployment but still mints",
+			path:           u256.NewUint(30),
+			channelId:      types.ChannelId(30),
+			baseAmount:     u256.NewUint(100),
+			quoteAmount:    u256.NewUint(80),
+			metadata:       &validMetadata,
+			canDeploy:      false,
+			expectSuccess:  true,
+			expectReceiver: 80,
+			expectRelayer:  20,
+			expectDeployed: false,
+		},
+		{
+			name:           "invalid decimals - returns failure",
+			path:           u256.NewUint(35),
+			channelId:      types.ChannelId(35),
+			baseAmount:     u256.NewUint(100),
+			quoteAmount:    u256.NewUint(95),
+			metadata:       &invalidDecimalsMetadata,
+			canDeploy:      true,
+			expectSuccess:  false,
+			expectReceiver: 0,
+			expectRelayer:  0,
+			expectDeployed: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(cur realm, t *testing.T) {
+			v := newTestImpl()
+
+			baseToken := []byte("ugnot")
+			path := tc.path
+			channelId := tc.channelId
+			receiver := testAddress("mint-rx")
+			relayer := testAddress("mint-rly")
+
+			image := z.MetadataImage(*tc.metadata)
+			wrappedToken := z.PredictWrappedTokenV2(path, uint32(channelId), baseToken, image)
+
+			// Pre-deploy if testing already-deployed case
+			if tc.preDeploy {
+				testStore.SetForeignToken(0, cur, wrappedToken, baseToken)
+				expectedPath, _ := z.UpdateChannelPath(path, uint32(channelId))
+				testStore.SetTokenOrigin(0, cur, wrappedToken, expectedPath)
+				testStore.SetMetadataImageOf(0, cur, wrappedToken, image)
+				uassert.NoError(t, v.mintVoucher(0, cur, wrappedToken, image, "Test Token", "TST", 18, receiver, u256.NewUint(0)))
+			}
+
+			res, err := v.protocolFillMint(0, cur, channelId, path, baseToken, wrappedToken, address(receiver), address(relayer), tc.baseAmount, tc.quoteAmount, tc.metadata, tc.canDeploy)
+
+			if tc.expectSuccess {
+				uassert.NoError(t, err)
+				uassert.True(t, res.Status == types.PacketStatusSuccess)
+			} else {
+				uassert.NoError(t, err)
+				uassert.True(t, res.Status == types.PacketStatusFailure)
+			}
+
+			uassert.Equal(t, tc.expectReceiver, voucherBalanceOf(wrappedToken, address(receiver)))
+			uassert.Equal(t, tc.expectRelayer, voucherBalanceOf(wrappedToken, address(relayer)))
+
+			if tc.expectDeployed {
+				origin, ok := testStore.GetTokenOrigin(wrappedToken)
+				uassert.True(t, ok, "token origin should be set")
+				expectedPath, err := z.UpdateChannelPath(path, uint32(channelId))
+				uassert.NoError(t, err)
+				uassert.Equal(t, expectedPath.ToString(), origin.ToString())
+
+				_, ok = testStore.GetForeignToken(wrappedToken)
+				uassert.True(t, ok, "foreign token should be set")
+
+				_, ok = testStore.GetMetadataImageOf(wrappedToken)
+				uassert.True(t, ok, "metadata image should be set")
+
+				uassert.Equal(t, "Test Token", voucherNameOf(wrappedToken))
+				uassert.Equal(t, "TST", voucherSymbolOf(wrappedToken))
+				uassert.Equal(t, 18, voucherDecimalsOf(wrappedToken))
+			}
+		})
+	}
+}
+
+type protocolFillUnescrowV2Case struct {
+	name           string
+	path           *u256.Uint
+	channelId      types.ChannelId
+	baseAmount     *u256.Uint
+	quoteAmount    *u256.Uint
+	initialBalance *u256.Uint // initial channel balance to set
+	expectSuccess  bool
+	expectReceiver int64
+	expectRelayer  int64
+	expectError    string // substring of error message for failure cases
+}
+
+func TestProtocolFillUnescrowV2(cur realm, t *testing.T) {
+	cases := []protocolFillUnescrowV2Case{
+		{
+			name:           "happy path - unescrows to receiver and relayer",
+			path:           u256.NewUint(40),
+			channelId:      types.ChannelId(40),
+			baseAmount:     u256.NewUint(100),
+			quoteAmount:    u256.NewUint(95),
+			initialBalance: u256.NewUint(100),
+			expectSuccess:  true,
+			expectReceiver: 95,
+			expectRelayer:  5,
+		},
+		{
+			name:           "zero quote amount - skips receiver unescrow",
+			path:           u256.NewUint(41),
+			channelId:      types.ChannelId(41),
+			baseAmount:     u256.NewUint(100),
+			quoteAmount:    u256.NewUint(0),
+			initialBalance: u256.NewUint(100),
+			expectSuccess:  true,
+			expectReceiver: 0,
+			expectRelayer:  100,
+		},
+		{
+			name:           "zero fee - skips relayer unescrow",
+			path:           u256.NewUint(42),
+			channelId:      types.ChannelId(42),
+			baseAmount:     u256.NewUint(100),
+			quoteAmount:    u256.NewUint(100),
+			initialBalance: u256.NewUint(100),
+			expectSuccess:  true,
+			expectReceiver: 100,
+			expectRelayer:  0,
+		},
+		{
+			name:           "zero amounts - skips both unescrows",
+			path:           u256.NewUint(43),
+			channelId:      types.ChannelId(43),
+			baseAmount:     u256.NewUint(0),
+			quoteAmount:    u256.NewUint(0),
+			initialBalance: u256.NewUint(0),
+			expectSuccess:  true,
+			expectReceiver: 0,
+			expectRelayer:  0,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(cur realm, t *testing.T) {
+			v := newTestImpl()
+
+			baseToken := []byte("ugnot")
+			path := tc.path
+			channelId := tc.channelId
+			quoteToken := []byte("ibc/test-quote-" + path.ToString())
+			receiver := testAddress("unescrow-rx")
+			relayer := testAddress("unescrow-rly")
+
+			// Set token origin so localTokenUnescrow can recognize the voucher
+			testStore.SetTokenOrigin(0, cur, string(quoteToken), path)
+			// Mint initial voucher to proxy for unescrow
+			uassert.NoError(t, v.mintVoucher(0, cur, string(quoteToken), [32]byte{}, "", "", 0, cur.Address().String(), tc.initialBalance))
+
+			// Set up channel balance: decreaseChannelBalanceV2 uses (quote, base) order
+			v.increaseChannelBalanceV2(0, cur, channelId, path, quoteToken, baseToken, tc.initialBalance)
+
+			res, err := v.protocolFillUnescrowV2(0, cur, channelId, path, baseToken, string(quoteToken), address(receiver), address(relayer), tc.baseAmount, tc.quoteAmount)
+
+			if tc.expectSuccess {
+				uassert.NoError(t, err)
+				uassert.True(t, res.Status == types.PacketStatusSuccess)
+
+				// Check receiver and relayer balances via voucher
+				uassert.Equal(t, tc.expectReceiver, voucherBalanceOf(string(quoteToken), address(receiver)))
+				uassert.Equal(t, tc.expectRelayer, voucherBalanceOf(string(quoteToken), address(relayer)))
+			}
+		})
+	}
+}
+
+func TestEncodeTokenOrderSuccessAck(cur realm, t *testing.T) {
+	protocolFT := fillTypeProtocol()
+	marketMakerFT := fillTypeMarketMaker()
+
+	// Protocol fill type without market maker
+	ack1, err := encodeTokenOrderSuccessAck(protocolFT, nil)
+	uassert.NoError(t, err)
+
+	decoded1, err := z.DecodeAck(ack1)
+	uassert.NoError(t, err)
+	uassert.True(t, decoded1.Tag.Eq(tagAckSuccess()))
+
+	innerAck1, err := z.DecodeTokenOrderAck(decoded1.InnerAck)
+	uassert.NoError(t, err)
+	uassert.True(t, innerAck1.FillType.Eq(protocolFT))
+	uassert.Equal(t, 0, len(innerAck1.MarketMaker))
+
+	// Market maker fill type with market maker address
+	makerAddr := testAddress("test-maker")
+	ack2, err := encodeTokenOrderSuccessAck(marketMakerFT, []byte(makerAddr))
+	uassert.NoError(t, err)
+
+	decoded2, err := z.DecodeAck(ack2)
+	uassert.NoError(t, err)
+	uassert.True(t, decoded2.Tag.Eq(tagAckSuccess()))
+
+	innerAck2, err := z.DecodeTokenOrderAck(decoded2.InnerAck)
+	uassert.NoError(t, err)
+	uassert.True(t, innerAck2.FillType.Eq(marketMakerFT))
+	uassert.Equal(t, makerAddr, string(innerAck2.MarketMaker))
+
+	// Protocol fill type with empty market maker (should still encode)
+	ack3, err := encodeTokenOrderSuccessAck(protocolFT, []byte{})
+	uassert.NoError(t, err)
+
+	decoded3, err := z.DecodeAck(ack3)
+	uassert.NoError(t, err)
+	uassert.True(t, decoded3.Tag.Eq(tagAckSuccess()))
+
+	innerAck3, err := z.DecodeTokenOrderAck(decoded3.InnerAck)
+	uassert.NoError(t, err)
+	uassert.True(t, innerAck3.FillType.Eq(protocolFT))
+	uassert.Equal(t, 0, len(innerAck3.MarketMaker))
+}
+
+type marketMakerFillV2Case struct {
+	name             string
+	quoteToken       string
+	makerBalance     *u256.Uint // initial balance to mint to maker
+	quoteAmount      *u256.Uint
+	relayerMsg       []byte
+	expectSuccess    bool
+	expectAckOnlyMaker bool
+	expectMakerBalance int64
+	expectReceiverBalance int64
+	expectMarketMaker string
+}
+
+func TestMarketMakerFillV2(cur realm, t *testing.T) {
+	cases := []marketMakerFillV2Case{
+		{
+			name:                 "happy path - transfer succeeds",
+			quoteToken:           "ibc/mm-happy",
+			makerBalance:         u256.NewUint(50),
+			quoteAmount:          u256.NewUint(50),
+			relayerMsg:           nil,
+			expectSuccess:        true,
+			expectAckOnlyMaker:    false,
+			expectMakerBalance:    0,
+			expectReceiverBalance: 50,
+			expectMarketMaker:     "", // will be set to relayer (maker) at runtime
+		},
+		{
+			name:                 "no voucher exists - returns only maker",
+			quoteToken:           "ibc/mm-no-voucher",
+			makerBalance:         u256.NewUint(0),
+			quoteAmount:          u256.NewUint(10),
+			relayerMsg:           nil,
+			expectSuccess:        true,
+			expectAckOnlyMaker:    true,
+			expectMakerBalance:    0,
+			expectReceiverBalance: 0,
+			expectMarketMaker:     "",
+		},
+		{
+			name:                 "insufficient balance - returns only maker",
+			quoteToken:           "ibc/mm-insuf",
+			makerBalance:         u256.NewUint(10),
+			quoteAmount:          u256.NewUint(50),
+			relayerMsg:           nil,
+			expectSuccess:        true,
+			expectAckOnlyMaker:    true,
+			expectMakerBalance:    10,
+			expectReceiverBalance: 0,
+			expectMarketMaker:     "",
+		},
+		{
+			name:                 "with relayer msg - uses msg as market maker",
+			quoteToken:           "ibc/mm-msg",
+			makerBalance:         u256.NewUint(30),
+			quoteAmount:          u256.NewUint(30),
+			relayerMsg:           []byte("custom-mm-maker"),
+			expectSuccess:        true,
+			expectAckOnlyMaker:    false,
+			expectMakerBalance:    0,
+			expectReceiverBalance: 30,
+			expectMarketMaker:     "custom-mm-maker",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(cur realm, t *testing.T) {
+			v := newTestImpl()
+
+			maker := testAddress(tc.name[:10] + "-mk")
+			receiver := testAddress(tc.name[:10] + "-rx")
+
+			// Mint initial balance to maker
+			if !tc.makerBalance.IsZero() {
+				uassert.NoError(t, v.mintVoucher(0, cur, tc.quoteToken, [32]byte{}, "", "", 0, maker, tc.makerBalance))
+			}
+
+			order := z.TokenOrderV2{
+				Receiver:    []byte(receiver),
+				QuoteToken:  []byte(tc.quoteToken),
+				QuoteAmount: tc.quoteAmount,
+			}
+
+			res, err := v.marketMakerFillV2(0, cur, address(maker), tc.relayerMsg, order)
+
+			uassert.NoError(t, err)
+			uassert.True(t, res.Status == types.PacketStatusSuccess)
+
+			if tc.expectAckOnlyMaker {
+				uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, res.Acknowledgement))
+			} else {
+				ack, err := z.DecodeAck(res.Acknowledgement)
+				uassert.NoError(t, err)
+				uassert.True(t, ack.Tag.Eq(tagAckSuccess()))
+
+				innerAck, err := z.DecodeTokenOrderAck(ack.InnerAck)
+				uassert.NoError(t, err)
+				uassert.True(t, innerAck.FillType.Eq(fillTypeMarketMaker()))
+				if tc.expectMarketMaker != "" {
+					uassert.Equal(t, tc.expectMarketMaker, string(innerAck.MarketMaker))
+				} else {
+					// When nil relayerMsg, marketMaker defaults to relayer (maker)
+					uassert.Equal(t, maker, string(innerAck.MarketMaker))
+				}
+			}
+
+			uassert.Equal(t, tc.expectMakerBalance, voucherBalanceOf(tc.quoteToken, address(maker)))
+			uassert.Equal(t, tc.expectReceiverBalance, voucherBalanceOf(tc.quoteToken, address(receiver)))
+		})
+	}
+}

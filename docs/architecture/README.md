@@ -48,24 +48,39 @@ Realms further use an **upgradeable proxy / implementation** split: \
 a stable proxy realm owns identity, storage, and access gates, \
 while a swappable `v1` implementation realm holds the protocol logic behind an interface.
 
-Each box is one runtime layer. \
-A public-facing realm (proxy) keeps the stable identity and forwards to its swappable `v1` implementation; \
-arrows show the call direction. \
-Everything ultimately depends on the pure packages at the bottom.
+The diagram is a high-level sequence view: it shows which runtime boundary is \
+entered first for send and receive paths. Detailed packet call sequences live in [Process Flows](process-flows.md).
 
 ```mermaid
-flowchart TD
-    callers["Users / Relayers"]
-    appLayer["App Realms<br/>ucs03_zkgm proxy -> v1<br/>transfer app"]
-    coreLayer["Core and Support Realms<br/>core proxy -> core/v1<br/>access authority, light-client loaders"]
-    pureLayer["Pure Packages<br/>types, app, lightclient, zkgm, tokenbucket<br/>access/manager, encoding, verifier"]
+sequenceDiagram
+    participant User
+    participant Relayer
+    participant App as App realms<br/>ZKGM, Transfer
+    participant Core as Core realm<br/>IBC Union host
+    participant Support as Support realms<br/>Access, light-client loaders
+    participant Pure as Pure packages<br/>types, app, lightclient, zkgm
 
-    callers -->|"user sends / app calls"| appLayer
-    callers -->|"relayer recv / ack / timeout"| coreLayer
-    appLayer -->|"SendPacket"| coreLayer
-    coreLayer -->|"IApp callbacks"| appLayer
-    coreLayer -->|"imports"| pureLayer
+    Note over App,Support: Stateful realm boundary: r/onbloc
+    Note over Pure: Stateless package boundary: p/onbloc
+
+    Note over User,Core: Send path
+    User->>App: Send / SendRaw
+    App->>Pure: encode and validate app data
+    App->>Core: SendPacket
+    Core->>Pure: commit path and event encoding
+
+    Note over Relayer,App: Recv / Ack / Timeout
+    Relayer->>Core: Recv / Ack / Timeout with proof
+    Core->>Support: authorize caller and resolve light client
+    Core->>Pure: verify paths and commitments
+    Core->>App: IApp callback
+    App->>Pure: decode and execute app instruction
 ```
+
+`ZKGM realm` and `Core realm` each include their stable proxy identity and
+their installed `v1` implementation. The diagram groups them at the realm level
+so the ownership boundaries stay readable; the exact send/receive sequences are
+covered in [Process Flows](process-flows.md).
 
 ## Realms (`r/onbloc`)
 

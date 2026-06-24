@@ -21,11 +21,7 @@ type Voucher struct {
 // NewVoucher builds a Voucher value. Provided as a crossing-safe constructor so
 // the impl realm can assemble one (v2 borrow rule #1 forbids constructing a
 // foreign-stamped composite literal directly).
-func NewVoucher(_ int, rlm realm, token *grc20.Token, ledger *grc20.PrivateLedger) *Voucher {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
-
+func NewVoucher(token *grc20.Token, ledger *grc20.PrivateLedger) *Voucher {
 	return &Voucher{token: token, ledger: ledger}
 }
 

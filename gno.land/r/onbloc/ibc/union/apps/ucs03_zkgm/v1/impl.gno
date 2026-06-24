@@ -1,6 +1,8 @@
 package impl
 
 import (
+	"chain/runtime/unsafe"
+
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -183,11 +185,15 @@ func (v *ucs03ZkgmV1) Send(_ int, rlm realm, channelId types.ChannelId, timeoutT
 
 	sender := rlm.Previous().Address().String()
 
-	// TODO(escrow): the sent-coin funds previously arrived from the proxy
-	// (OriginSend captured at the EOA boundary). With the IStore-only injection
-	// the impl no longer receives it; wiring the escrow envelope from the proxy
-	// remains the open migration item.
 	funds := newFunds(parseCoins(""))
+
+	// SAFE: native coins attached with -send live on the chain-root envelope,
+	// not on rlm.Previous(). Guard direct user calls before reading
+	// unsafe.OriginSend(), then seed the proxy escrow budget from it.
+	if rlm.Previous().IsUserCall() {
+		sentCoins := unsafe.OriginSend()
+		funds = newFunds(sentCoins)
+	}
 
 	if err := v.verifyInternal(0, rlm, funds, channelId, u256.Zero(), instruction); err != nil {
 		panic(err)

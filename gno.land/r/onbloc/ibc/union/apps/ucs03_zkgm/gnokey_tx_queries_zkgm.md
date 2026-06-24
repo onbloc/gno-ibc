@@ -103,8 +103,8 @@ The emitted events must include `PacketSend`.
 ## 4. SendRaw TokenOrder Initialize
 
 `zkgm.SendRaw` is the `maketx call` wrapper for TokenOrder sends that need
-banker coins. `maketx run` cannot make `banker.OriginSend()` visible to
-`zkgm.Send`, but direct `maketx call` with `-send` can.
+attached native coins. `maketx run` cannot make `unsafe.OriginSend()` visible
+to `zkgm.Send`, but direct `maketx call` with `-send` can.
 
 First generate a fresh channel pair and the raw instruction arguments:
 

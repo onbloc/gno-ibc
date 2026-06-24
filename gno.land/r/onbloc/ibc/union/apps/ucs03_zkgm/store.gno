@@ -158,13 +158,8 @@ func (s *Store) AddLockedNative(_ int, rlm realm, denom string, amount *u256.Uin
 
 	totalLockedAmount := u256.Zero()
 
-	lockedNativeAmountAny, exists := s.lockedNative.Get(denom)
-	if exists {
-		lockedNativeAmount, ok := lockedNativeAmountAny.(*u256.Uint)
-		if !ok {
-			panic(ErrInterfaceConversion)
-		}
-
+	lockedNativeAmount, exists := s.GetLockedNative(denom)
+	if exists && lockedNativeAmount != nil {
 		totalLockedAmount = u256.Zero().Set(lockedNativeAmount)
 	}
 
@@ -186,7 +181,12 @@ func (s *Store) GetLockedNative(denom string) (*u256.Uint, bool) {
 		return nil, false
 	}
 
-	return v.(*u256.Uint), true
+	lockedNativeAmount, ok := v.(*u256.Uint)
+	if !ok {
+		panic(ErrInterfaceConversion)
+	}
+
+	return lockedNativeAmount, true
 }
 
 // SetMetadataImageOf records a wrapped denom's metadata image.

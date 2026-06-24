@@ -8,7 +8,7 @@
 #   ./run-v1-ibc-smoke-node-gnoland.sh                              # resume or fresh start
 #   ./run-v1-ibc-smoke-node-gnoland.sh --reset                      # wipe state, start from block 0
 #   ./run-v1-ibc-smoke-node-gnoland.sh --chainid mychain --reset     # custom chain ID
-#   ./run-v1-ibc-smoke-node-gnoland.sh --exclude gno.land/r/foo/bar # exclude a package from genesis
+#   ./run-v1-ibc-smoke-node-gnoland.sh --exclude gno.land/r/foo/bar --reset  # exclude a package from genesis
 #
 # Logs are written to $CACHE_DIR/gnoland.log and also printed to the terminal.
 # To follow logs in another terminal:
@@ -40,15 +40,26 @@ fi
 
 # ── flags ─────────────────────────────────────────────────────────────────────
 RESET=false
+CHAINID_SET=false
 EXCLUDE_ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --reset) RESET=true; shift ;;
-    --chainid) CHAIN_ID="$2"; shift 2 ;;
+    --chainid) CHAIN_ID="$2"; CHAINID_SET=true; shift 2 ;;
     --exclude) EXCLUDE_ARGS+=(--exclude "$2"); shift 2 ;;
     *) echo "unknown flag: $1"; exit 1 ;;
   esac
 done
+
+if $CHAINID_SET && ! $RESET; then
+  echo "error: --chainid only takes effect on a fresh chain; use --reset to reinitialize"
+  exit 1
+fi
+
+if [[ ${#EXCLUDE_ARGS[@]} -gt 0 && -f "$DATA_DIR/genesis.json" && $RESET == false ]]; then
+  echo "error: --exclude only takes effect on a fresh chain; use --reset to reinitialize"
+  exit 1
+fi
 
 if $RESET; then
   echo ">> wiping node state: $DATA_DIR"
@@ -65,7 +76,10 @@ if [ ! -f "$GENESIS_TXS" ]; then
     --ibc-root "$GNO_IBC_ROOT" \
     --gno-root "$GNO_ROOT" \
     --output "$GENESIS_TXS" \
-    "${EXCLUDE_ARGS[@]+"${EXCLUDE_ARGS[@]}"}"
+    ${EXCLUDE_ARGS[@]:+"${EXCLUDE_ARGS[@]}"}
+elif [[ ${#EXCLUDE_ARGS[@]} -gt 0 ]]; then
+  echo "warning: --exclude has no effect because genesis txs are already cached at $GENESIS_TXS"
+  echo "         run with --reset to regenerate"
 fi
 
 # ── 2. Prepare config (idempotent) ───────────────────────────────────────────

@@ -44,10 +44,16 @@ def scan_modules(root: str) -> dict[str, str]:
     """Walk root for gnomod.toml files. Returns {pkgpath: dirpath}.
 
     Packages with genesis_exclude = true in their gnomod.toml are omitted.
+    Directories with only test files (_test.gno, _filetest.gno) are excluded.
     """
     packages: dict[str, str] = {}
     for dirpath, _, filenames in os.walk(root):
         if "gnomod.toml" not in filenames:
+            continue
+        if not any(
+            f.endswith(".gno") and not f.endswith("_test.gno") and not f.endswith("_filetest.gno")
+            for f in filenames
+        ):
             continue
         with open(os.path.join(dirpath, "gnomod.toml"), encoding="utf-8") as f:
             content = f.read()
@@ -110,13 +116,6 @@ def topological_sort(
     return result
 
 
-def has_source_files(dirpath: str) -> bool:
-    for fname in os.listdir(dirpath):
-        if fname.endswith(".gno") and not fname.endswith("_test.gno") and not fname.endswith("_filetest.gno"):
-            return True
-    return False
-
-
 def make_addpkg_tx(pkgpath: str, dirpath: str) -> dict:
     files = read_gno_files(dirpath)
     if not files:
@@ -150,8 +149,7 @@ def main() -> None:
 
     genesis_pkgs = set(scan_modules(os.path.join(args.gno_root, "examples")))
     all_packages = scan_modules(os.path.join(args.ibc_root, "gno.land"))
-    explicit_exclude = args.exclude
-    emit = {pkg for pkg in all_packages if pkg not in genesis_pkgs and not any(pkg == ex or pkg.startswith(ex + "/") for ex in explicit_exclude) and has_source_files(all_packages[pkg])}
+    emit = {pkg for pkg in all_packages if pkg not in genesis_pkgs and not any(pkg == ex or pkg.startswith(ex + "/") for ex in args.exclude)}
     ordered = topological_sort(all_packages, emit)
 
     written = 0

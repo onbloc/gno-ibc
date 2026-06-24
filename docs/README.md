@@ -2,9 +2,11 @@
 
 ## Architecture
 
-- [Project Architecture](ARCHITECTURE.md) — map of the first-party `onbloc`
+- [Project Architecture](architecture/) — map of the first-party `onbloc`
   pure packages and realms, the proxy/implementation split, and how a packet
   flows through the layers
+- [Process Flows](architecture/process-flows.md) — lifecycle flows for
+  light-client registration, app registration, packet send, and packet receive
 
 ## Spec Comparisons
 

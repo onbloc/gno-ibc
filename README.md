@@ -13,7 +13,7 @@ state-lens light clients, access management, and the UCS03 ZKGM app.
 
 ## Documentation
 
-- [Project architecture](docs/ARCHITECTURE.md)
+- [Project architecture](docs/architecture/)
 - [Spec comparisons](docs/spec-comparisons)
 - [References](docs/references)
 - [Guides](docs/guides)

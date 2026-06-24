@@ -27,6 +27,7 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/ufmt/v0"
+	fixture "gno.land/p/onbloc/ibc/testing/zkgm/fixture"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
 	scenariocometbls "gno.land/r/onbloc/ibc/scenario/helper/cometbls"
@@ -71,7 +72,7 @@ func main(cur realm) {
 	// are deterministic, so the packet (and its commitment) can be built up front.
 	channelId := types.ChannelId(1)
 	sourceChannel := types.ChannelId(2)
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
+	meta := tokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 	order := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
@@ -83,7 +84,7 @@ func main(cur realm) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    meta,
 	}
-	packet := core.NewPacket(sourceChannel, channelId, mustPacketData(mustOrderInstruction(order)), types.Timestamp(1<<62))
+	packet := core.NewPacket(sourceChannel, channelId, packetData(orderInstruction(order)), types.Timestamp(1<<62))
 
 	// The L2 storage root that commits the recv packet, and the inline EVM-MPT
 	// proof against it.
@@ -120,8 +121,8 @@ func main(cur realm) {
 		StorageRootOffset: 32,
 	}
 	genesisConsensus := &ics23mpt.ConsensusState{Timestamp: 1, StateRoot: make([]byte, 32), StorageRoot: make([]byte, 32)}
-	clientStateBytes := mustEncodeClientState(*clientState)
-	consensusStateBytes := mustEncodeConsensusState(*genesisConsensus)
+	clientStateBytes := fixture.Must(ics23mpt.EncodeClientState(*clientState))
+	consensusStateBytes := fixture.Must(ics23mpt.EncodeConsensusState(*genesisConsensus))
 
 	clientType := types.ClientType(ics23mpt.ClientType)
 	core.RegisterClient(cross(cur), clientType, newStateLensClient)
@@ -148,7 +149,7 @@ func main(cur realm) {
 		L2ConsensusStateProof: l1Proof,
 		L2ConsensusState:      l2Consensus,
 	}
-	core.UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, mustEncodeHeader(header)))
+	core.UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, fixture.Must(ics23mpt.EncodeHeader(header))))
 	latest, _ := core.GetLatestHeight(clientId)
 	ufmt.Printf("[INFO] state-lens latest height after L1-proven update: %d\n", latest)
 	ufmt.Println("[EXPECTED] state-lens latest height should be 100 (L2 consensus added via the real L1)")
@@ -261,35 +262,21 @@ func compactEncode(leaf bool, ns []byte) []byte {
 	return out
 }
 
-func mustOrderInstruction(order z.TokenOrderV2) z.Instruction {
-	operand, err := z.EncodeTokenOrderV2(order)
-	if err != nil {
-		panic(err)
-	}
-
-	return z.Instruction{Version: z.INSTR_VERSION_2, Opcode: z.OP_TOKEN_ORDER, Operand: operand}
+// orderInstruction / packetData wrap the fixture toolkit for this scenario's
+// fixed shape: a v2 TokenOrder top-level instruction in a zero-salt, path-0
+// packet.
+func orderInstruction(order z.TokenOrderV2) z.Instruction {
+	return fixture.Instruction(z.INSTR_VERSION_2, z.OP_TOKEN_ORDER, fixture.Must(z.EncodeTokenOrderV2(order)))
 }
 
-func mustPacketData(instr z.Instruction) []byte {
-	data, err := z.EncodeZkgmPacket(z.ZkgmPacket{Path: u256.Zero(), Instruction: instr})
-	if err != nil {
-		panic(err)
-	}
-
-	return data
+func packetData(instr z.Instruction) []byte {
+	return fixture.EncodePacket(fixture.Packet([32]byte{}, 0, instr))
 }
 
-func mustTokenMetadata(implementation string, ti z.TokenInitializer) []byte {
-	initBytes, err := z.EncodeTokenInitializer(ti)
-	if err != nil {
-		panic(err)
-	}
-	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes})
-	if err != nil {
-		panic(err)
-	}
+func tokenMetadata(implementation string, ti z.TokenInitializer) []byte {
+	initBytes := fixture.Must(z.EncodeTokenInitializer(ti))
 
-	return meta
+	return fixture.Must(z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes}))
 }
 
 func mustDecodeMeta(bz []byte) z.TokenMetadata {
@@ -299,33 +286,6 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 	}
 
 	return meta
-}
-
-func mustEncodeClientState(cs ics23mpt.ClientState) []byte {
-	bz, err := ics23mpt.EncodeClientState(cs)
-	if err != nil {
-		panic(err)
-	}
-
-	return bz
-}
-
-func mustEncodeConsensusState(cs ics23mpt.ConsensusState) []byte {
-	bz, err := ics23mpt.EncodeConsensusState(cs)
-	if err != nil {
-		panic(err)
-	}
-
-	return bz
-}
-
-func mustEncodeHeader(h ics23mpt.Header) []byte {
-	bz, err := ics23mpt.EncodeHeader(h)
-	if err != nil {
-		panic(err)
-	}
-
-	return bz
 }
 
 // Output:

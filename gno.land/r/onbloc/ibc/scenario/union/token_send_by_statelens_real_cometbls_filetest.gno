@@ -26,6 +26,7 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/ufmt/v0"
+	fixture "gno.land/p/onbloc/ibc/testing/zkgm/fixture"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
 	scenariocometbls "gno.land/r/onbloc/ibc/scenario/helper/cometbls"
@@ -62,7 +63,7 @@ func main(cur realm) {
 
 	channelId := types.ChannelId(1)
 	counterpartyChannel := types.ChannelId(2)
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
+	meta := tokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 	initOrder := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
@@ -74,7 +75,7 @@ func main(cur realm) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    meta,
 	}
-	initPacket := core.NewPacket(counterpartyChannel, channelId, mustPacketData(mustOrderInstruction(initOrder)), types.Timestamp(1<<62))
+	initPacket := core.NewPacket(counterpartyChannel, channelId, packetData(orderInstruction(initOrder)), types.Timestamp(1<<62))
 
 	// The funding consensus is seeded directly at state-lens creation, so the
 	// recv does not exercise the L1 (it only checks the L1 is Active via Status).
@@ -104,7 +105,7 @@ func main(cur realm) {
 	fundConsensus := &ics23mpt.ConsensusState{Timestamp: 1, StateRoot: make([]byte, 32), StorageRoot: fundRoot}
 	stateLensType := types.ClientType(ics23mpt.ClientType)
 	core.RegisterClient(cross(cur), stateLensType, newStateLensClient)
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(stateLensType, mustEncodeClientState(*clientState), mustEncodeConsensusState(*fundConsensus)))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(stateLensType, fixture.Must(ics23mpt.EncodeClientState(*clientState)), fixture.Must(ics23mpt.EncodeConsensusState(*fundConsensus))))
 	clientId := types.ClientId(2)
 
 	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
@@ -134,7 +135,7 @@ func main(cur realm) {
 	}
 
 	testing.SetRealm(testing.NewUserRealm(senderAddr))
-	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(escrowOrder))
+	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, orderInstruction(escrowOrder))
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 
 	ufmt.Printf("[INFO] sender voucher balance after send: %d\n", zkgm.VoucherBalanceOf(quoteToken, senderAddr))
@@ -145,7 +146,7 @@ func main(cur realm) {
 	// --- SCENARIO 3: acknowledge the sent packet, proven through the real cometbls L1 ---
 	ufmt.Println("")
 	ufmt.Println("[SCENARIO] 3. Acknowledge via state-lens, with the ack L2 consensus proven by the real cometbls L1")
-	ack := mustSuccessAck(mustProtocolTokenOrderAck())
+	ack := fixture.SuccessAck(fixture.ProtocolFillAck())
 	ackCommitment := types.CommitAcks([][]byte{ack})
 	ackRoot, ackProof := buildMembershipProof(types.BatchReceiptsPath(core.CommitPacketsHash([]types.Packet{sendPacket})), ackCommitment[:])
 
@@ -163,7 +164,7 @@ func main(cur realm) {
 		L2ConsensusStateProof: l1Proof,
 		L2ConsensusState:      l2AckConsensus,
 	}
-	core.UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, mustEncodeHeader(header)))
+	core.UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, fixture.Must(ics23mpt.EncodeHeader(header))))
 
 	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{ack}, ackProof, ackHeight))
 
@@ -269,35 +270,21 @@ func compactEncode(leaf bool, ns []byte) []byte {
 	return out
 }
 
-func mustOrderInstruction(order z.TokenOrderV2) z.Instruction {
-	operand, err := z.EncodeTokenOrderV2(order)
-	if err != nil {
-		panic(err)
-	}
-
-	return z.Instruction{Version: z.INSTR_VERSION_2, Opcode: z.OP_TOKEN_ORDER, Operand: operand}
+// orderInstruction / packetData wrap the fixture toolkit for this scenario's
+// fixed shape: a v2 TokenOrder top-level instruction in a zero-salt, path-0
+// packet.
+func orderInstruction(order z.TokenOrderV2) z.Instruction {
+	return fixture.Instruction(z.INSTR_VERSION_2, z.OP_TOKEN_ORDER, fixture.Must(z.EncodeTokenOrderV2(order)))
 }
 
-func mustPacketData(instr z.Instruction) []byte {
-	data, err := z.EncodeZkgmPacket(z.ZkgmPacket{Path: u256.Zero(), Instruction: instr})
-	if err != nil {
-		panic(err)
-	}
-
-	return data
+func packetData(instr z.Instruction) []byte {
+	return fixture.EncodePacket(fixture.Packet([32]byte{}, 0, instr))
 }
 
-func mustTokenMetadata(implementation string, ti z.TokenInitializer) []byte {
-	initBytes, err := z.EncodeTokenInitializer(ti)
-	if err != nil {
-		panic(err)
-	}
-	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes})
-	if err != nil {
-		panic(err)
-	}
+func tokenMetadata(implementation string, ti z.TokenInitializer) []byte {
+	initBytes := fixture.Must(z.EncodeTokenInitializer(ti))
 
-	return meta
+	return fixture.Must(z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes}))
 }
 
 func mustDecodeMeta(bz []byte) z.TokenMetadata {
@@ -307,51 +294,6 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 	}
 
 	return meta
-}
-
-func mustProtocolTokenOrderAck() []byte {
-	bz, err := z.EncodeTokenOrderAck(z.TokenOrderAck{FillType: new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:])})
-	if err != nil {
-		panic(err)
-	}
-
-	return bz
-}
-
-func mustSuccessAck(inner []byte) []byte {
-	ack, err := z.EncodeAck(z.Ack{Tag: new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:]), InnerAck: inner})
-	if err != nil {
-		panic(err)
-	}
-
-	return ack
-}
-
-func mustEncodeClientState(cs ics23mpt.ClientState) []byte {
-	bz, err := ics23mpt.EncodeClientState(cs)
-	if err != nil {
-		panic(err)
-	}
-
-	return bz
-}
-
-func mustEncodeConsensusState(cs ics23mpt.ConsensusState) []byte {
-	bz, err := ics23mpt.EncodeConsensusState(cs)
-	if err != nil {
-		panic(err)
-	}
-
-	return bz
-}
-
-func mustEncodeHeader(h ics23mpt.Header) []byte {
-	bz, err := ics23mpt.EncodeHeader(h)
-	if err != nil {
-		panic(err)
-	}
-
-	return bz
 }
 
 // Output:

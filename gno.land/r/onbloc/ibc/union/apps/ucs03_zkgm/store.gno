@@ -156,14 +156,27 @@ func (s *Store) AddLockedNative(_ int, rlm realm, denom string, amount *u256.Uin
 		panic(ErrSpoofedRealm)
 	}
 
-	total := u256.Zero()
-	if cur, ok := s.lockedNative.Get(denom); ok {
-		total.Set(cur.(*u256.Uint))
+	totalLockedAmount := u256.Zero()
+
+	lockedNativeAmountAny, exists := s.lockedNative.Get(denom)
+	if exists {
+		lockedNativeAmount, ok := lockedNativeAmountAny.(*u256.Uint)
+		if !ok {
+			panic(ErrInterfaceConversion)
+		}
+
+		totalLockedAmount = u256.Zero().Set(lockedNativeAmount)
 	}
 
-	total.Add(total, amount)
+	// Reject a wraparound past 2^256-1 rather than silently storing a smaller
+	// totalLockedAmount, which would break the proxy balance invariant.
+	// Astronomically unreachable for real coin supplies, but guarded for safety.
+	totalLockedAmount, overflow := u256.Zero().AddOverflow(totalLockedAmount, amount)
+	if overflow {
+		panic(ErrLockedNativeOverflow)
+	}
 
-	s.lockedNative.Set(denom, total.Clone())
+	s.lockedNative.Set(denom, totalLockedAmount.Clone())
 }
 
 // GetLockedNative returns the total native permanently locked for a denom.

@@ -10,7 +10,7 @@ RPC_LISTENER="${RPC_LISTENER:-0.0.0.0:26657}"
 CHAIN_ID="${CHAIN_ID:-dev}"
 SMOKE_KEY_NAME="${SMOKE_KEY_NAME:-test1}"
 SMOKE_GAS_FEE="${SMOKE_GAS_FEE:-1000000ugnot}"
-SMOKE_GAS_WANTED="${SMOKE_GAS_WANTED:-90000000}"
+SMOKE_GAS_WANTED="${SMOKE_GAS_WANTED:-200000000}"
 TEST1_MNEMONIC="${TEST1_MNEMONIC:-source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast}"
 
 init_smoke_env() {
@@ -29,27 +29,32 @@ cleanup_smoke_env() {
 }
 
 run_smoke_node() {
-  # local resolvers map each on-disk gno.land/{p,r}/core/ibc directory to the
-  # onbloc/{ibc,unionibc} module path it declares; unneeded once directories
-  # match module paths, required while the directory layout is kept.
+  local genesis_txs="$WORKDIR/ibc-genesis-txs.jsonl"
+
+  python3 "$GNO_IBC_ROOT/tools/gen-ibc-genesis-txs.py" \
+    --ibc-root "$GNO_IBC_ROOT" \
+    --gno-root "$GNO_ROOT" \
+    --output "$genesis_txs"
+
+  # local resolvers map each on-disk gno.land/{p,r}/onbloc/ibc directory to the
+  # module path it declares; unneeded once directories match module paths.
   gnodev local \
     -root "$GNO_ROOT" \
+    -home "$WORKDIR/gnodev-home" \
+    -txs-file "$genesis_txs" \
     -resolver "root=$GNO_IBC_ROOT" \
     -resolver "root=$GNO_ROOT/examples" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/p/core/ibc/zkgm" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/p/core/tokenbucket" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/p/core/ibc/lightclients/cometbls" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/p/core/ibc/lightclients/statelensics23mpt" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/core" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/lightclients/cometbls" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/lightclients/statelensics23mpt" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm/v0/impl" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm/v0/loader" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm/testing/loader" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm/testing/realcometbls" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/r/core/ibc/v1/apps/zkgm/testing/e2e" \
-    -paths "gno.land/r/onbloc/unionibc/v1/core,gno.land/r/onbloc/unionibc/v1/lightclients/cometbls,gno.land/r/onbloc/unionibc/v1/lightclients/statelensics23mpt,gno.land/r/onbloc/unionibc/v1/apps/zkgm,gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl,gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/loader,gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/p/onbloc/ibc/union/zkgm" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/p/onbloc/ibc/union/zkgm/tokenbucket" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/p/onbloc/ibc/union/lightclient/cometbls" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/p/onbloc/ibc/union/lightclient/state_lens/ics23_mpt" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/r/onbloc/ibc/union/core" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/smoke" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e" \
+    -resolver "local=$GNO_IBC_ROOT/gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/realcometbls" \
+    -paths "gno.land/r/onbloc/ibc/union/core,gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm,gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1,gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/smoke,gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e,gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/realcometbls" \
     -no-web \
     -node-rpc-listener "$RPC_LISTENER"
 }
@@ -99,19 +104,48 @@ setup_smoke_chain() {
   recover_smoke_key
 }
 
+is_retryable_maketx_failure() {
+  local log="$1"
+  grep -q 'signature verification failed; verify correct account, sequence, and chain-id' "$log"
+}
+
+maketx_run_once() {
+  local script="$1"
+  local log="$2"
+  echo "" | gnokey maketx run -insecure-password-stdin \
+    -home "$KEYBASE" \
+    -gas-fee "$SMOKE_GAS_FEE" -gas-wanted "$SMOKE_GAS_WANTED" \
+    -broadcast -chainid "$CHAIN_ID" -remote "$RPC_ENDPOINT" \
+    "$SMOKE_KEY_NAME" "$script" 2>&1 | tee "$log"
+}
+
 maketx_run() {
   local script="$1"
   local log="$2"
   echo "--- maketx run: $(basename "$script") ---"
-  if ! echo "" | gnokey maketx run -insecure-password-stdin \
-    -home "$KEYBASE" \
-    -gas-fee "$SMOKE_GAS_FEE" -gas-wanted "$SMOKE_GAS_WANTED" \
-    -broadcast -chainid "$CHAIN_ID" -remote "$RPC_ENDPOINT" \
-    "$SMOKE_KEY_NAME" "$script" 2>&1 | tee "$log"; then
+  if ! maketx_run_once "$script" "$log"; then
+    if is_retryable_maketx_failure "$log"; then
+      echo "WARN: signature/sequence check failed; retrying maketx run ($(basename "$script"))"
+      sleep 2
+      if maketx_run_once "$script" "$log"; then
+        echo "--- end maketx run ---"
+        return
+      fi
+    fi
     echo "FAIL: maketx run failed ($(basename "$script"))"
     exit 1
   fi
   echo "--- end maketx run ---"
+}
+
+maketx_call_once() {
+  local log="$1"
+  shift
+  echo "" | gnokey maketx call -insecure-password-stdin \
+    -home "$KEYBASE" \
+    -gas-fee "$SMOKE_GAS_FEE" -gas-wanted "$SMOKE_GAS_WANTED" \
+    -broadcast -chainid "$CHAIN_ID" -remote "$RPC_ENDPOINT" \
+    "$@" "$SMOKE_KEY_NAME" 2>&1 | tee "$log"
 }
 
 # maketx_call <log> <gnokey maketx call flags...>. Unlike maketx run, a direct
@@ -120,11 +154,15 @@ maketx_call() {
   local log="$1"
   shift
   echo "--- maketx call ---"
-  if ! echo "" | gnokey maketx call -insecure-password-stdin \
-    -home "$KEYBASE" \
-    -gas-fee "$SMOKE_GAS_FEE" -gas-wanted "$SMOKE_GAS_WANTED" \
-    -broadcast -chainid "$CHAIN_ID" -remote "$RPC_ENDPOINT" \
-    "$@" "$SMOKE_KEY_NAME" 2>&1 | tee "$log"; then
+  if ! maketx_call_once "$log" "$@"; then
+    if is_retryable_maketx_failure "$log"; then
+      echo "WARN: signature/sequence check failed; retrying maketx call"
+      sleep 2
+      if maketx_call_once "$log" "$@"; then
+        echo "--- end maketx call ---"
+        return
+      fi
+    fi
     echo "FAIL: maketx call failed"
     exit 1
   fi

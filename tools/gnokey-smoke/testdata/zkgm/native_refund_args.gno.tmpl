@@ -3,15 +3,12 @@ package main
 import (
 	"encoding/hex"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
+
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 )
 
 func main(cur realm) {
-	e2e.RegisterMockLightClient(cross(cur))
-	pair := e2e.OpenE2EChannelPair(cross(cur))
-
 	order := z.TokenOrderV2{
 		Sender:      []byte("@REFUND_RECIPIENT@"),
 		Receiver:    []byte("counterparty-receiver"),
@@ -25,8 +22,24 @@ func main(cur realm) {
 	if err != nil {
 		panic(err)
 	}
+	instruction := z.Instruction{
+		Version: z.INSTR_VERSION_2,
+		Opcode:  z.OP_TOKEN_ORDER,
+		Operand: operand,
+	}
 
-	println("source_channel", pair.Source.String())
-	println("destination_channel", pair.Destination.String())
+	var salt [32]byte
+	packetData, err := z.EncodeZkgmPacket(z.ZkgmPacket{
+		Salt:        z.DeriveSenderSalt([]byte("@SMOKE_KEY_ADDRESS@"), salt),
+		Path:        u256.Zero(),
+		Instruction: instruction,
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	println("source_channel", "@REFUND_SOURCE@")
+	println("destination_channel", "@REFUND_DEST@")
 	println("operand_hex", hex.EncodeToString(operand))
+	println("packet_data_hex", hex.EncodeToString(packetData))
 }

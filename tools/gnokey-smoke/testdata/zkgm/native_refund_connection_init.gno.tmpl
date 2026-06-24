@@ -6,5 +6,5 @@ import (
 )
 
 func main(cur realm) {
-	core.ConnectionOpenInit(cross(cur), types.NewMsgConnectionOpenInit(types.ClientId(@COMETBLS_ID@), types.ClientId(99)))
+	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(types.ClientId(@CLIENT_ID@), types.ClientId(99)))
 }

@@ -3,9 +3,10 @@ package zkgm
 import u256 "gno.land/p/gnoswap/uint256"
 
 // BURN_ADDRESS is the canonical zero burn address: bech32 of 20 zero bytes with
-// the gno `g` HRP, matching union's get_burn_address = addr_humanize([0;20])
-// (contract.rs L3211). A market-maker ack naming this address burns the escrow
-// instead of releasing it.
+// the gno `g` HRP, matching union's get_burn_address = addr_humanize([0;20]).
+// A market-maker ack naming this address burns the escrow instead of releasing it.
+//
+// reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L3211
 const BURN_ADDRESS = "g1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqluuxe"
 
 // ZkgmPacket is the outer ZKGM packet envelope.

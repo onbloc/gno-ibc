@@ -35,8 +35,8 @@ Plain `abi.encode` treats the struct as one dynamic function argument and
 prepends an extra 32-byte head offset. Union's ZKGM wire format uses the
 `_params` flavor, where the struct fields are encoded as the top-level tuple.
 In this repo, prefer `z.EncodeTokenOrderV2` and `z.EncodeTokenMetadata` from
-the module import path `gno.land/p/onbloc/unionibc/zkgm` (source tree:
-`gno.land/p/core/ibc/zkgm`).
+the module import path `gno.land/p/onbloc/ibc/union/zkgm` (source tree:
+`gno.land/p/onbloc/ibc/union/zkgm`).
 
 Field mapping for native-token `INITIALIZE`:
 

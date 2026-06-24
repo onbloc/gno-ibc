@@ -35,7 +35,7 @@ func Zkgmable(cur realm) z.Zkgmable {
 // write mutable package state across realms; omitting it causes Gno to
 // panic at the cross(cur)-realm boundary. Per-field accessors return scalars
 // or strings to avoid exposing tainted []byte/*u256.Uint to callers (see
-// AGENT.md "Cross-Realm Reads: Tainted Slices and Pointers").
+// AGENTS.md "Cross-Realm Reads: Tainted Slices and Pointers").
 
 // Reset clears all captured state on the singleton receiver.
 func Reset(cur realm) {

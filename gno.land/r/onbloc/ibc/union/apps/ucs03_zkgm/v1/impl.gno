@@ -197,9 +197,9 @@ func (v *ucs03ZkgmV1) Send(_ int, rlm realm, channelId types.ChannelId, timeoutT
 
 	funds := newFunds(parseCoins(""))
 
-	// Native coins the user attached with -send land at the proxy escrow account
-	// OriginSend is the chain-root coin envelope, readable here regardless of the proxy frame in between,
-	// so we seed the escrow budget from it.
+	// SAFE: native coins attached with -send live on the chain-root envelope,
+	// not on rlm.Previous(). Guard direct user calls before reading
+	// unsafe.OriginSend(), then seed the proxy escrow budget from it.
 	if rlm.Previous().IsUserCall() {
 		sentCoins := unsafe.OriginSend()
 		funds = newFunds(sentCoins)

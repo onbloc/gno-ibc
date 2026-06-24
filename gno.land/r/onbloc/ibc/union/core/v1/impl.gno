@@ -4,8 +4,8 @@
 // the swappable protocol logic and is injected with the proxy-owned store
 // (core.IStore) at install time.
 //
-// Migration status: the client subsystem is implemented here. Connection,
-// channel, and packet handling follow the same shape and are migrated next.
+// core/v1 implements the client, connection, channel, packet, app registry, and
+// query surfaces behind the proxy's ICore interface.
 package impl
 
 import (

@@ -34,6 +34,8 @@ const (
 	PacketTimeoutEvent         = "PacketTimeout"
 	CommitMembershipProofEvent = "CommitMembershipProof"
 	CommitNonMembershipEvent   = "CommitNonMembershipProof"
+
+	maxEventAttrValueLen = 1024
 )
 
 func channelOpenInitEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) []string {
@@ -212,11 +214,35 @@ func emitBatchAcksEvent(channelId types.ChannelId, packetHash, batchHash types.H
 	)
 }
 
-func emitPacketSendEvent(packet types.Packet, sourceChannel types.Channel, sourceConnection types.Connection) {
-	chain.Emit(
-		PacketSendEvent,
+func packetEventBaseAttrs(packet types.Packet) []string {
+	attrs := []string{
 		"packet_hash", commitPacketHash(packet).String(),
-		"packet_data", hexAttr(packet.Data),
+	}
+	return append(attrs, eventAttrColumns("packet_data", hexAttr(packet.Data))...)
+}
+
+func eventAttrColumns(key string, value string) []string {
+	if len(value) == 0 {
+		return []string{key + "[0]", ""}
+	}
+
+	parts := (len(value) + maxEventAttrValueLen - 1) / maxEventAttrValueLen
+	attrs := make([]string, 0, parts*2)
+	for index := 0; index < parts; index++ {
+		start := index * maxEventAttrValueLen
+		end := start + maxEventAttrValueLen
+		if end > len(value) {
+			end = len(value)
+		}
+		attrs = append(attrs, key+"["+strconv.Itoa(index)+"]", value[start:end])
+	}
+
+	return attrs
+}
+
+func emitPacketSendEvent(packet types.Packet, sourceChannel types.Channel, sourceConnection types.Connection) {
+	attrs := packetEventBaseAttrs(packet)
+	attrs = append(attrs,
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_channel_version", sourceChannel.Version,
 		"source_connection_id", sourceChannel.ConnectionId.String(),
@@ -226,13 +252,12 @@ func emitPacketSendEvent(packet types.Packet, sourceChannel types.Channel, sourc
 		"destination_connection_client_id", sourceConnection.CounterpartyClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
 	)
+	chain.Emit(PacketSendEvent, attrs...)
 }
 
 func emitPacketRecvEvent(eventType string, packet types.Packet, destinationChannel types.Channel, connection types.Connection, msgAttrName string, msg []byte) {
-	chain.Emit(
-		eventType,
-		"packet_hash", commitPacketHash(packet).String(),
-		"packet_data", hexAttr(packet.Data),
+	attrs := packetEventBaseAttrs(packet)
+	attrs = append(attrs,
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_connection_id", connection.CounterpartyConnectionId.String(),
 		"source_connection_client_id", connection.CounterpartyClientId.String(),
@@ -243,13 +268,12 @@ func emitPacketRecvEvent(eventType string, packet types.Packet, destinationChann
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
 		msgAttrName, hexAttr(msg),
 	)
+	chain.Emit(eventType, attrs...)
 }
 
 func emitWriteAckEvent(packet types.Packet, destinationChannel types.Channel, connection types.Connection, acknowledgement []byte) {
-	chain.Emit(
-		WriteAckEvent,
-		"packet_hash", commitPacketHash(packet).String(),
-		"packet_data", hexAttr(packet.Data),
+	attrs := packetEventBaseAttrs(packet)
+	attrs = append(attrs,
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_connection_id", connection.CounterpartyConnectionId.String(),
 		"source_connection_client_id", connection.CounterpartyClientId.String(),
@@ -260,13 +284,12 @@ func emitWriteAckEvent(packet types.Packet, destinationChannel types.Channel, co
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
 		"acknowledgement", hexAttr(acknowledgement),
 	)
+	chain.Emit(WriteAckEvent, attrs...)
 }
 
 func emitPacketAckEvent(packet types.Packet, sourceChannel types.Channel, connection types.Connection, acknowledgement []byte) {
-	chain.Emit(
-		PacketAckEvent,
-		"packet_hash", commitPacketHash(packet).String(),
-		"packet_data", hexAttr(packet.Data),
+	attrs := packetEventBaseAttrs(packet)
+	attrs = append(attrs,
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_channel_version", sourceChannel.Version,
 		"source_connection_id", sourceChannel.ConnectionId.String(),
@@ -277,13 +300,12 @@ func emitPacketAckEvent(packet types.Packet, sourceChannel types.Channel, connec
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
 		"acknowledgement", hexAttr(acknowledgement),
 	)
+	chain.Emit(PacketAckEvent, attrs...)
 }
 
 func emitPacketTimeoutEvent(packet types.Packet, sourceChannel types.Channel, connection types.Connection) {
-	chain.Emit(
-		PacketTimeoutEvent,
-		"packet_hash", commitPacketHash(packet).String(),
-		"packet_data", hexAttr(packet.Data),
+	attrs := packetEventBaseAttrs(packet)
+	attrs = append(attrs,
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_channel_version", sourceChannel.Version,
 		"source_connection_id", sourceChannel.ConnectionId.String(),
@@ -293,6 +315,7 @@ func emitPacketTimeoutEvent(packet types.Packet, sourceChannel types.Channel, co
 		"destination_connection_client_id", connection.CounterpartyClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
 	)
+	chain.Emit(PacketTimeoutEvent, attrs...)
 }
 
 func emitCommitMembershipProofEvent(msg types.MsgCommitMembershipProof) {

@@ -552,10 +552,6 @@ func (v *ucs03ZkgmV1) trimInstructionAmounts(_ int, rlm realm, instruction z.Ins
 }
 
 func (v *ucs03ZkgmV1) trimBatchInstruction(_ int, rlm realm, instruction z.Instruction, sender string) (z.Instruction, error) {
-	if instruction.Version != z.INSTR_VERSION_0 {
-		return instruction, nil
-	}
-
 	batch, err := z.DecodeBatch(instruction.Operand)
 	if err != nil {
 		return instruction, err

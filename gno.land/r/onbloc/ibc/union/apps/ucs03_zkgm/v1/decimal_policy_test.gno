@@ -252,30 +252,31 @@ func TestReInitializeSameIBCDenomPreservesDecimals(cur realm, t *testing.T) {
 	uassert.Equal(t, int64(20), voucherBalanceOf(ibcDenom, address(rx)))
 }
 
-func TestTrimAmount(cur realm, t *testing.T) {
+func TestWireAmountToLocal(cur realm, t *testing.T) {
 	tests := []struct {
-		name            string
-		tokenDecimals   uint8
-		amount          uint64
-		expectedTrimmed uint64
-		expectedDust    uint64
+		name          string
+		tokenDecimals uint8
+		amount        uint64
+		expectedLocal uint64
+		expectError   string
 	}{
-		{"with dust", 18, 123456700000000000, 123456000000000000, 700000000000},
-		{"no dust", 18, 1000000000000000000, 1000000000000000000, 0},
-		{"target decimals only", 6, 1234560, 1234560, 0},
-		{"less than target decimals", 4, 12345, 12345, 0},
+		{"with dust", 18, 123456700000000000, 0, "decimal dust is not allowed"},
+		{"no dust", 18, 1000000000000000000, 1000000, ""},
+		{"target decimals only", 6, 1234560, 1234560, ""},
+		{"less than target decimals", 4, 12345, 12345, ""},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			amount := u256.NewUint(tc.amount)
-			result := trimAmount(tc.tokenDecimals, amount)
+			got, err := wireAmountToLocal(tc.tokenDecimals, amount)
+			if tc.expectError != "" {
+				uassert.ErrorContains(t, err, tc.expectError)
+				return
+			}
 
-			expectedTrimmed := u256.NewUint(tc.expectedTrimmed)
-			expectedDust := u256.NewUint(tc.expectedDust)
-
-			uassert.Equal(t, expectedTrimmed.ToString(), result.Trimmed.ToString())
-			uassert.Equal(t, expectedDust.ToString(), result.Dust.ToString())
+			uassert.NoError(t, err)
+			uassert.Equal(t, u256.NewUint(tc.expectedLocal).ToString(), got.ToString())
 		})
 	}
 }
@@ -523,7 +524,7 @@ func TestDecodeLocalOrderInstruction(cur realm, t *testing.T) {
 	}
 }
 
-func TestTrimAmountMaxInt64Boundary(cur realm, t *testing.T) {
+func TestWireAmountToLocalMaxInt64Boundary(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	denom := "ibc/max64-boundary"
@@ -531,41 +532,39 @@ func TestTrimAmountMaxInt64Boundary(cur realm, t *testing.T) {
 	v.mintVoucher(0, cur, denom, [32]byte{}, "Large", "LARGE", 18, sender, u256.NewUint(9223372036854775807))
 
 	tests := []struct {
-		name          string
-		baseAmount    uint64
-		expectTrimmed uint64
-		expectDust    uint64
+		name        string
+		baseAmount  uint64
+		expectLocal uint64
+		expectError string
 	}{
 		{
-			name:          "MaxInt64 - 18dec gets trimmed",
-			baseAmount:    9223372036854775807,
-			expectTrimmed: 9223372000000000000,
-			expectDust:    36854775807,
+			name:        "MaxInt64 - 18dec rejects dust",
+			baseAmount:  9223372036854775807,
+			expectError: "decimal dust is not allowed",
 		},
 		{
-			name:          "MaxInt64/2 - 18dec gets trimmed",
-			baseAmount:    4611686018427387903,
-			expectTrimmed: 4611686000000000000,
-			expectDust:    18427387903,
+			name:        "MaxInt64/2 - 18dec rejects dust",
+			baseAmount:  4611686018427387903,
+			expectError: "decimal dust is not allowed",
 		},
 		{
-			name:          "Near MaxInt64 - 18dec gets trimmed",
-			baseAmount:    9000000000000000000,
-			expectTrimmed: 9000000000000000000,
-			expectDust:    0,
+			name:        "Near MaxInt64 - 18dec converts cleanly",
+			baseAmount:  9000000000000000000,
+			expectLocal: 9000000,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			amount := u256.NewUint(tc.baseAmount)
-			result := trimAmount(18, amount)
+			got, err := wireAmountToLocal(18, amount)
+			if tc.expectError != "" {
+				uassert.ErrorContains(t, err, tc.expectError)
+				return
+			}
 
-			expectedTrimmed := u256.NewUint(tc.expectTrimmed)
-			expectedDust := u256.NewUint(tc.expectDust)
-
-			uassert.Equal(t, expectedTrimmed.ToString(), result.Trimmed.ToString())
-			uassert.Equal(t, expectedDust.ToString(), result.Dust.ToString())
+			uassert.NoError(t, err)
+			uassert.Equal(t, u256.NewUint(tc.expectLocal).ToString(), got.ToString())
 		})
 	}
 }

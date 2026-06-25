@@ -14,62 +14,28 @@ const (
 	targetDecimals = 6
 )
 
-// powersOf10[exp] = 10^exp for exp in 0..12 (max decimals 18 - target 6)
-var powersOf10 = [13]*u256.Uint{
-	u256.NewUint(1),             // 10^0
-	u256.NewUint(10),            // 10^1
-	u256.NewUint(100),           // 10^2
-	u256.NewUint(1000),          // 10^3
-	u256.NewUint(10000),         // 10^4
-	u256.NewUint(100000),        // 10^5
-	u256.NewUint(1000000),       // 10^6
-	u256.NewUint(10000000),      // 10^7
-	u256.NewUint(100000000),     // 10^8
-	u256.NewUint(1000000000),    // 10^9
-	u256.NewUint(10000000000),   // 10^10
-	u256.NewUint(100000000000),  // 10^11
-	u256.NewUint(1000000000000), // 10^12
-}
-
 // TokenInfo captures token metadata for decimal trimming in a single lookup.
 type TokenInfo struct {
 	decimals  uint8
 	isVoucher bool
 }
 
-type TrimResult struct {
-	Trimmed *u256.Uint
-	Dust    *u256.Uint
-}
-
 func decimalFactor(tokenDecimals uint8) (*u256.Uint, error) {
 	if tokenDecimals <= targetDecimals {
-		return powersOf10[0], nil
+		return u256.NewUint(1), nil
 	}
 
 	exp := tokenDecimals - targetDecimals
-	if int(exp) >= len(powersOf10) {
+	if exp > 12 {
 		return nil, makeError(errUnsupportedTokenDecimals)
 	}
 
-	return powersOf10[exp], nil
-}
-
-func trimAmount(tokenDecimals uint8, amount *u256.Uint) TrimResult {
-	if tokenDecimals <= targetDecimals {
-		return TrimResult{Trimmed: amount, Dust: u256.Zero()}
+	factor := u256.NewUint(1)
+	for i := uint8(0); i < exp; i++ {
+		factor.Mul(factor, u256.NewUint(10))
 	}
 
-	factor, err := decimalFactor(tokenDecimals)
-	if err != nil {
-		panic(err)
-	}
-
-	quotient := u256.Zero().Div(amount, factor)
-	trimmed := u256.Zero().Mul(quotient, factor)
-	dust := u256.Zero().Sub(amount, trimmed)
-
-	return TrimResult{Trimmed: trimmed, Dust: dust}
+	return factor, nil
 }
 
 func scaleLocalAmount(tokenDecimals uint8, amount *u256.Uint) (*u256.Uint, error) {
@@ -90,17 +56,17 @@ func wireAmountToLocal(tokenDecimals uint8, amount *u256.Uint) (*u256.Uint, erro
 		return amount, nil
 	}
 
-	result := trimAmount(tokenDecimals, amount)
-	if !result.Dust.IsZero() {
-		return nil, makeError(errDecimalDust)
-	}
-
 	factor, err := decimalFactor(tokenDecimals)
 	if err != nil {
 		return nil, err
 	}
 
-	return u256.Zero().Div(amount, factor), nil
+	quotient := u256.Zero().Div(amount, factor)
+	if !u256.Zero().Sub(amount, u256.Zero().Mul(quotient, factor)).IsZero() {
+		return nil, makeError(errDecimalDust)
+	}
+
+	return quotient, nil
 }
 
 // mintVoucher mints `amount` of the wrapped grc20 voucher for ibcDenom to

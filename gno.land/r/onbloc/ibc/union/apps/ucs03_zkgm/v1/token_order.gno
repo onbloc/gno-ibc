@@ -584,7 +584,7 @@ func (v *ucs03ZkgmV1) scaleOutgoingForwardInstruction(_ int, rlm realm, instruct
 		return instruction, err
 	}
 
-	if len(scaledChild.Operand) == len(forward.Instruction.Operand) && bytes.Equal(scaledChild.Operand, forward.Instruction.Operand) {
+	if bytes.Equal(scaledChild.Operand, forward.Instruction.Operand) {
 		return instruction, nil
 	}
 

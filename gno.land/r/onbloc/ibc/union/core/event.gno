@@ -282,7 +282,7 @@ func emitWriteAckEvent(packet types.Packet, acknowledgement []byte) {
 func emitPacketAckEvent(packet types.Packet, acknowledgement []byte, maker address) {
 	chain.Emit(
 		PacketAckEvent,
-		"channel_id", packet.SourceChannelId.String(),
+		"source_channel_id", packet.SourceChannelId.String(),
 		"packet_hash", commitPacketHash(packet).String(),
 		"acknowledgement", hexAttr(acknowledgement),
 		"maker", maker.String(),

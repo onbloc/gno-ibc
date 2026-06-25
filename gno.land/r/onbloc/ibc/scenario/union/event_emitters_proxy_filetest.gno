@@ -745,7 +745,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "PacketAck",
 //     "attrs": [
 //       {
-//         "key": "channel_id",
+//         "key": "source_channel_id",
 //         "value": "1"
 //       },
 //       {
@@ -767,7 +767,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "PacketAck",
 //     "attrs": [
 //       {
-//         "key": "channel_id",
+//         "key": "source_channel_id",
 //         "value": "1"
 //       },
 //       {

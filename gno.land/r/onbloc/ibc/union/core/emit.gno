@@ -148,24 +148,24 @@ func EmitPacketSend(_ int, rlm realm, packet types.Packet, sourceChannel types.C
 }
 
 // EmitPacketRecv emits the PacketRecv host event.
-func EmitPacketRecv(_ int, rlm realm, packet types.Packet, channel types.Channel, connection types.Connection, relayerMsg []byte) {
+func EmitPacketRecv(_ int, rlm realm, packet types.Packet, relayer address, relayerMsg []byte) {
 	assertIsRlmCurrent(0, rlm)
 	assertIsProxyRealm(0, rlm)
-	emitPacketRecvEvent(PacketRecvEvent, packet, channel, connection, "maker_msg", relayerMsg)
+	emitPacketRecvEvent(PacketRecvEvent, packet, relayer, relayerMsg)
 }
 
 // EmitIntentPacketRecv emits the IntentPacketRecv host event.
-func EmitIntentPacketRecv(_ int, rlm realm, packet types.Packet, channel types.Channel, connection types.Connection, marketMakerMsg []byte) {
+func EmitIntentPacketRecv(_ int, rlm realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) {
 	assertIsRlmCurrent(0, rlm)
 	assertIsProxyRealm(0, rlm)
-	emitPacketRecvEvent(IntentPacketRecvEvent, packet, channel, connection, "market_maker_msg", marketMakerMsg)
+	emitPacketRecvEvent(IntentPacketRecvEvent, packet, marketMaker, marketMakerMsg)
 }
 
 // EmitPacketAck emits the PacketAck host event.
-func EmitPacketAck(_ int, rlm realm, packet types.Packet, sourceChannel types.Channel, connection types.Connection, acknowledgement []byte) {
+func EmitPacketAck(_ int, rlm realm, packet types.Packet, acknowledgement []byte, relayer address) {
 	assertIsRlmCurrent(0, rlm)
 	assertIsProxyRealm(0, rlm)
-	emitPacketAckEvent(packet, sourceChannel, connection, acknowledgement)
+	emitPacketAckEvent(packet, acknowledgement, relayer)
 }
 
 // EmitPacketTimeout emits the PacketTimeout host event.
@@ -176,10 +176,10 @@ func EmitPacketTimeout(_ int, rlm realm, packet types.Packet, sourceChannel type
 }
 
 // EmitWriteAck emits the WriteAck host event.
-func EmitWriteAck(_ int, rlm realm, packet types.Packet, channel types.Channel, connection types.Connection, acknowledgement []byte) {
+func EmitWriteAck(_ int, rlm realm, packet types.Packet, acknowledgement []byte) {
 	assertIsRlmCurrent(0, rlm)
 	assertIsProxyRealm(0, rlm)
-	emitWriteAckEvent(packet, channel, connection, acknowledgement)
+	emitWriteAckEvent(packet, acknowledgement)
 }
 
 // EmitBatchSend emits the BatchSend host event.

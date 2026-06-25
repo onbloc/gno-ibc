@@ -70,6 +70,11 @@ func (v *ucs03ZkgmV1) OnChannelCloseConfirm(_ int, rlm realm, channelId types.Ch
 func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {
 	assertIsRlmCurrent(0, rlm)
 
+	if core.PacketDataTooLarge(packet.Data) {
+		zkgm.EmitRecvError(0, rlm, packet.SourceChannelId, packet.DestinationChannelId, core.ErrPacketDataTooLarge)
+		return failureResult(universalErrorAck())
+	}
+
 	zp, err := z.DecodeZkgmPacket(types.CloneBytes(packet.Data))
 	if err != nil {
 		zkgm.EmitRecvError(0, rlm, packet.SourceChannelId, packet.DestinationChannelId, err.Error())
@@ -102,6 +107,11 @@ func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relaye
 // maker funding.
 func (v *ucs03ZkgmV1) OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
 	assertIsRlmCurrent(0, rlm)
+
+	if core.PacketDataTooLarge(packet.Data) {
+		zkgm.EmitRecvError(0, rlm, packet.SourceChannelId, packet.DestinationChannelId, core.ErrPacketDataTooLarge)
+		return failureResult(universalErrorAck())
+	}
 
 	zp, err := z.DecodeZkgmPacket(types.CloneBytes(packet.Data))
 	if err != nil {

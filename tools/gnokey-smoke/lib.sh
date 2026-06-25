@@ -36,22 +36,11 @@ run_smoke_node() {
     --gno-root "$GNO_ROOT" \
     --output "$genesis_txs"
 
-  # local resolvers map each on-disk gno.land/{p,r}/onbloc/ibc directory to the
-  # module path it declares; unneeded once directories match module paths.
   gnodev local \
+    -C "$GNO_IBC_ROOT" \
     -root "$GNO_ROOT" \
     -home "$WORKDIR/gnodev-home" \
     -txs-file "$genesis_txs" \
-    -resolver "root=$GNO_IBC_ROOT" \
-    -resolver "root=$GNO_ROOT/examples" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/p/onbloc/ibc/union/zkgm" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/p/onbloc/ibc/union/zkgm/tokenbucket" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/p/onbloc/ibc/union/lightclient/cometbls" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/p/onbloc/ibc/union/lightclient/state_lens/ics23_mpt" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/r/onbloc/ibc/union/core" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" \
-    -resolver "local=$GNO_IBC_ROOT/gno.land/r/onbloc/ibc/testing/mock/lightclient" \
     -paths "gno.land/r/onbloc/ibc/union/core,gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm,gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1,gno.land/r/onbloc/ibc/testing/mock/lightclient" \
     -no-web \
     -node-rpc-listener "$RPC_LISTENER"

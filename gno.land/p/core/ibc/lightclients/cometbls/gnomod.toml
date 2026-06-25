@@ -1,7 +1,0 @@
-module = "gno.land/p/onbloc/ibc/lightclients/cometbls"
-gno = "0.9"
-
-[require]
-"gno.land/p/aib/ics23" = "v0.0.0"
-"gno.land/p/aib/ibc/types" = "v0.0.0"
-"gno.land/p/core/encoding/abi" = "v0.0.0"

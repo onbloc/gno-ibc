@@ -1,0 +1,2 @@
+module = "gno.land/r/onbloc/ibc/testing/mock/lightclient"
+gno = "0.9"

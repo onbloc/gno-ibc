@@ -1,16 +1,16 @@
 // Recv-side happy path: open a channel pair, then submit a TokenOrderV2
-// {Kind=ESCROW} packet via core.PacketRecv. dispatchExecute → executeTokenOrderV2
+// {Kind=ESCROW} packet via core.PacketRecv. dispatchExecutePacket → executeTokenOrderV2
 // mints the quote-token voucher on the destination side; we read the resulting
 // balance via impl.VoucherBalanceOf to confirm the handler/dispatch path ran
 // end-to-end (not just verifyXxx).
 package main
 
 import (
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/onbloc/unionibc/v1/core"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
 	impl "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 func main() {
@@ -18,7 +18,7 @@ func main() {
 	pair := e2e.OpenE2EChannelPair(cross)
 
 	receiver := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
-	quoteDenom := impl.PredictWrappedTokenV1(u256.Zero(), uint32(pair.Destination), []byte("ugnot"))
+	quoteDenom := impl.PredictWrappedToken(u256.Zero(), uint32(pair.Destination), []byte("ugnot"))
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),

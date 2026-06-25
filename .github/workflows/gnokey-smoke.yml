@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  gnokey-smoke:
+  gnokey-query-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -32,5 +32,17 @@ jobs:
       - name: Setup gno
         uses: ./.github/actions/setup-gno
 
-      - name: Run gnokey smoke tests
-        run: make test-gnokey-query-smoke
+      - name: Run gnokey query smoke tests
+        run: make test-gnokey-qeval-smoke
+
+  zkgm-native-refund-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup gno
+        uses: ./.github/actions/setup-gno
+
+      - name: Run gnokey native refund tests
+        run: make test-zkgm-native-refund-smoke

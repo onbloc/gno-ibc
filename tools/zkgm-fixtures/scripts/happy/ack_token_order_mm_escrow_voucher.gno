@@ -7,12 +7,12 @@ package main
 import (
 	"chain/runtime"
 
-	z "gno.land/p/onbloc/unionibc/zkgm"
 	u256 "gno.land/p/gnoswap/uint256"
-	core "gno.land/r/onbloc/unionibc/v1/core"
+	z "gno.land/p/onbloc/unionibc/zkgm"
 	zkgm "gno.land/r/onbloc/unionibc/v1/apps/zkgm"
 	e2e "gno.land/r/onbloc/unionibc/v1/apps/zkgm/testing/e2e"
 	impl "gno.land/r/onbloc/unionibc/v1/apps/zkgm/v0/impl"
+	core "gno.land/r/onbloc/unionibc/v1/core"
 )
 
 func main() {
@@ -22,7 +22,7 @@ func main() {
 	sender := runtime.OriginCaller().String()
 	marketMaker := "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
 	baseToken := []byte("ugnot-mm-ack")
-	voucherDenom := impl.PredictWrappedTokenV1(
+	voucherDenom := impl.PredictWrappedToken(
 		u256.Zero(),
 		uint32(pair.Destination),
 		baseToken,

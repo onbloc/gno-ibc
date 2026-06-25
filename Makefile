@@ -23,13 +23,9 @@ GO_BIN_DIR := $(shell go env GOPATH)/bin
 GNO_BIN    := $(GO_BIN_DIR)/gno
 GNO_SHORT  := $(shell echo $(GNO_COMMIT) | cut -c1-7)
 
-ABI_FIXTURES_DIR := tools/abi-fixtures
-ABI_VECTORS      := gno.land/p/core/encoding/abi/testdata/vectors.json
-ABI_VECTORS_GNO  := gno.land/p/core/ibc/zkgm/vectors_fixture_test.gno
-
 ZKGM_FIXTURES_DIR     := tools/zkgm-fixtures
-ZKGM_SCENARIOS        := gno.land/p/core/ibc/zkgm/testdata/scenarios.json
-ZKGM_SCENARIOS_GNO    := gno.land/p/core/ibc/zkgm/scenarios_fixture_test.gno
+ZKGM_SCENARIOS        := gno.land/p/onbloc/ibc/zkgm/testdata/scenarios.json
+ZKGM_SCENARIOS_GNO    := gno.land/p/onbloc/ibc/zkgm/scenarios_fixture_test.gno
 
 # Submodule pins (.gitmodules + tree gitlinks) are the source of truth; the
 # gno.land/<rel>/ mirrors built by `make vendor` are .gitignored.
@@ -89,15 +85,19 @@ vendor-flags = $(if $(filter undefined,$(origin FLAGS_$(subst /,_,$(1)))),$(STD_
 # rsync only auto-creates the leaf dest dir, so mkdir -p covers intermediates.
 vendor-cmd = mkdir -p $(dir gno.land/$(2)) && rsync $(RSYNC_BASE) $(call vendor-flags,$(2)) $(1)/$(2)/ gno.land/$(2)/
 
-.PHONY: help install-gno verify-gno vendor fmt test test-cover test-smoke test-gnokey-query-smoke test-gnokey-qeval-smoke test-zkgm-native-refund-smoke clean-gno-cache refresh-abi-vectors refresh-zkgm-scenarios derive-sender-salt-vectors generate generate-check
+.PHONY: help install-gno verify-gno vendor fmt test test-cover test-smoke test-gnokey-query-smoke test-gnokey-qeval-smoke test-zkgm-native-refund-smoke clean-gno-cache refresh-zkgm-scenarios derive-sender-salt-vectors generate generate-check
 
-PROTOGEN_PKGS := gno.land/p/core/ibc/lightclients/cometbls
+PROTOGEN_PKGS := gno.land/p/onbloc/ibc/union/lightclient/cometbls
 
 COVERAGE_DIR := coverage
 
 # First-party gno packages. Third-party mirrors under gno.land/p/{aib,gnoswap,nt,onbloc}
 # and gno.land/r/aib are dependency inputs only, so local and CI tests skip them.
-USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/core gno.land/r/core -name gnomod.toml | sort))
+# Packages under any ignore/ directory are excluded too (scratch/scenario realms
+# that are not part of the first-party test suite).
+USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/onbloc gno.land/r/onbloc -name gnomod.toml | grep -v '/ignore/' | sort))
+TEST_GNO_PKGS := $(if $(PKG),$(addprefix ./,$(patsubst ./%,%,$(PKG))),$(USER_GNO_PKGS))
+GNO_TEST_FLAGS := -v$(if $(RUN), -run "$(RUN)")
 
 help:
 	@echo "Targets:"
@@ -106,13 +106,14 @@ help:
 	@echo "  vendor                — mirror sparse third_party package sub-paths into gno.land/"
 	@echo "  fmt                   — gofumpt -w on uncommitted .go/.gno files (modified, staged, untracked)"
 	@echo "  test                  — verify-gno + vendor, then run first-party gno tests"
+	@echo "    PKG=<path>          — run only one or more packages/realms (for example, PKG=gno.land/r/onbloc/ibc/union/core)"
+	@echo "    RUN=<name>          — pass a test-name regex to gno test -run"
 	@echo "  test-cover            — same as test, plus -cover (needs gno PR #4241; override GNO_COMMIT)"
 	@echo "  test-smoke            — run only the env-prep smoke tests"
 	@echo "  test-gnokey-query-smoke — run the full gnokey smoke suite"
 	@echo "  test-gnokey-qeval-smoke — run only the gnokey maketx/qeval core smoke suite"
 	@echo "  test-zkgm-native-refund-smoke — run only the ZKGM native refund gnokey smoke suite"
 	@echo "  clean-gno-cache       — remove the cloned gno repo (forces re-clone next install)"
-	@echo "  refresh-abi-vectors   — regenerate ABI ground-truth vectors via the Rust harness"
 	@echo "  refresh-zkgm-scenarios — regenerate handler/dispatch end-to-end ZKGM scenarios via the Rust harness"
 	@echo "  derive-sender-salt-vectors — print DeriveSenderSalt bootstrap vectors via the Rust harness"
 	@echo "  generate              — regenerate _pb_gen.gno codecs from //gno:protobuf-tagged structs"
@@ -180,20 +181,10 @@ fmt:
 	echo "ok: formatted $$(echo "$$files" | wc -l | tr -d ' ') file(s)"
 
 test: verify-gno vendor
-	@for pkg in $(USER_GNO_PKGS); do \
-		echo "==> gno test -v $$pkg"; \
-		gno test -v "$$pkg" || exit $$?; \
+	@for pkg in $(TEST_GNO_PKGS); do \
+		echo "==> gno test $(GNO_TEST_FLAGS) $$pkg"; \
+		gno test $(GNO_TEST_FLAGS) "$$pkg" || exit $$?; \
 	done
-
-# Coverage requires a gno toolchain that includes gnolang/gno#4241
-# (`-cover` / `-coverprofile`). Override GNO_COMMIT on the make command line
-# to point at a build that has those flags, e.g.
-#   make test-cover GNO_COMMIT=57ad9a4a35daf50bdca5617fc89725a666a9c94b
-# The .github/workflows/gno-coverage.yml workflow does this automatically.
-test-cover: verify-gno vendor
-	@mkdir -p $(COVERAGE_DIR)
-	@gno test -cover -coverprofile=$(COVERAGE_DIR)/profile.txt -v $(USER_GNO_PKGS) 2>&1 \
-		| tee $(COVERAGE_DIR)/output.log
 
 test-smoke: verify-gno
 	@gno test ./gno.land/p/core/_smoke/ -v
@@ -210,17 +201,6 @@ test-zkgm-native-refund-smoke: verify-gno vendor
 clean-gno-cache:
 	@rm -rf $(GNO_CACHE)
 	@echo "removed $(GNO_CACHE)"
-
-# Regenerates ABI test vectors against Union's `sol!` macro definitions.
-# Single canonical fixture lives next to the gno tests that consume it.
-# CI re-runs this and asserts the committed bytes match.
-refresh-abi-vectors:
-	@command -v cargo >/dev/null 2>&1 || { \
-		echo "ERROR: 'cargo' not found on PATH. Install Rust toolchain (rustup) to refresh ABI vectors."; exit 1; }
-	@echo ">> regenerating $(ABI_VECTORS)"
-	@cargo run --release --quiet -p abi-fixtures > $(ABI_VECTORS)
-	@python3 -c 'from pathlib import Path; src = Path("$(ABI_VECTORS)").read_text(); assert "\x60" not in src, "vectors.json contains a backtick; cannot embed in Gno raw string"; Path("$(ABI_VECTORS_GNO)").write_text("package zkgm\n\nconst fixtureVectorsJSON = `" + src + "`\n")'
-	@echo "ok: vectors written to $(ABI_VECTORS) and $(ABI_VECTORS_GNO) ($$(grep -c '"name":' $(ABI_VECTORS)) scenarios)"
 
 # Regenerates handler/dispatch end-to-end ZKGM scenarios (full ZkgmPacket
 # envelopes + matching Ack pairs) against Union's `sol!` macro definitions.

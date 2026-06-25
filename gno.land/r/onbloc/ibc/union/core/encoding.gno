@@ -119,6 +119,12 @@ func HexAttrLen(b []byte) int {
 	return len(b)*2 + 2
 }
 
+// PacketDataTooLarge reports whether packet data would exceed the event
+// attribute budget after hexAttr encoding.
+func PacketDataTooLarge(data []byte) bool {
+	return HexAttrLen(data) > MaxPacketDataEventSize
+}
+
 func h256String(h types.H256) string {
 	return hexString(h[:])
 }

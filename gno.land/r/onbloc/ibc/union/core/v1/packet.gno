@@ -64,7 +64,6 @@ func (c *coreV1) SendPacket(_ int, rlm realm, sourceChannelId types.ChannelId, t
 // dispatches each to its app, recording receipts and sync acks.
 func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 	assertIsRlmCurrent(0, rlm)
-	assertPacketsDataSize(msg.Packets)
 
 	relayer := rlm.Previous().Address()
 
@@ -99,24 +98,23 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 		packet := msg.Packets[i]
 		relayerMsg := msg.RelayerMsgs[i]
 
-		ch, skip := c.acceptRecvPacket(0, rlm, packet, destinationChannelId, nanoTimestamp)
+		skip := c.acceptRecvPacket(0, rlm, packet, destinationChannelId, nanoTimestamp)
 		if skip {
 			continue
 		}
 
 		res := a.OnRecvPacket(cross(rlm), packet, relayer, relayerMsg)
-		if err := c.commitSyncAck(0, rlm, packet, res, ch, connection); err != nil {
+		if err := c.commitSyncAck(0, rlm, packet, res); err != nil {
 			panic(err)
 		}
 
-		core.EmitPacketRecv(0, rlm, packet, ch, connection, relayerMsg)
+		core.EmitPacketRecv(0, rlm, packet, relayer, relayerMsg)
 	}
 }
 
 // IntentPacketRecv settles packets on the proofless market-maker fast path.
 func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRecv) {
 	assertIsRlmCurrent(0, rlm)
-	assertPacketsDataSize(msg.Packets)
 
 	marketMaker := rlm.Previous().Address()
 
@@ -125,12 +123,6 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 	}
 
 	destinationChannelId := msg.Packets[0].DestinationChannelId
-	channel, err := c.getChannel(destinationChannelId)
-	if err != nil {
-		panic(err)
-	}
-
-	connection := c.ensureConnectionState(channel.ConnectionId)
 
 	portId, _ := c.store.GetChannelOwner(destinationChannelId)
 	a, err := c.getAppAtPort(portId)
@@ -152,17 +144,17 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 		packet := msg.Packets[i]
 		marketMakerMsg := msg.MarketMakerMessages[i]
 
-		ch, skip := c.acceptRecvPacket(0, rlm, packet, destinationChannelId, nanoTimestamp)
+		skip := c.acceptRecvPacket(0, rlm, packet, destinationChannelId, nanoTimestamp)
 		if skip {
 			continue
 		}
 
 		res := intentApp.OnIntentRecvPacket(cross(rlm), packet, marketMaker, marketMakerMsg)
-		if err := c.commitSyncAck(0, rlm, packet, res, ch, connection); err != nil {
+		if err := c.commitSyncAck(0, rlm, packet, res); err != nil {
 			panic(err)
 		}
 
-		core.EmitIntentPacketRecv(0, rlm, packet, ch, connection, marketMakerMsg)
+		core.EmitIntentPacketRecv(0, rlm, packet, marketMaker, marketMakerMsg)
 	}
 }
 
@@ -206,7 +198,7 @@ func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAckn
 		c.markPacketAcknowledged(0, rlm, packet)
 
 		a.OnAcknowledgementPacket(cross(rlm), packet, ack, relayer)
-		core.EmitPacketAck(0, rlm, packet, channel, connection, ack)
+		core.EmitPacketAck(0, rlm, packet, ack, relayer)
 	}
 }
 
@@ -381,7 +373,6 @@ func (c *coreV1) BatchAcks(_ int, rlm realm, msg types.MsgBatchAcks) {
 // received packet. Only the channel's port owner may write it.
 func (c *coreV1) WriteAcknowledgement(_ int, rlm realm, msg types.MsgWriteAcknowledgement) {
 	assertIsRlmCurrent(0, rlm)
-	assertPacketDataSize(msg.Packet.Data)
 
 	if len(msg.Acknowledgement) == 0 {
 		panic(makeError(core.ErrAcknowledgementEmpty))
@@ -407,21 +398,16 @@ func (c *coreV1) WriteAcknowledgement(_ int, rlm realm, msg types.MsgWriteAcknow
 		panic(makeError(core.ErrAcknowledgementAlreadyWritten))
 	}
 
-	channel, err := c.getChannel(channelId)
-	if err != nil {
-		panic(err)
-	}
-
-	connection := c.ensureConnectionState(channel.ConnectionId)
 	c.store.CommitAcknowledgement(0, rlm, msg.Packet, msg.Acknowledgement)
-	core.EmitWriteAck(0, rlm, msg.Packet, channel, connection, msg.Acknowledgement)
+
+	core.EmitWriteAck(0, rlm, msg.Packet, msg.Acknowledgement)
 }
 
 // --- shared recv helpers ---
 
 // acceptRecvPacket validates recv-path invariants and records a packet receipt,
 // returning skip=true for an already-received (duplicate) packet.
-func (c *coreV1) acceptRecvPacket(_ int, rlm realm, packet types.Packet, batchChannelId types.ChannelId, now uint64) (types.Channel, bool) {
+func (c *coreV1) acceptRecvPacket(_ int, rlm realm, packet types.Packet, batchChannelId types.ChannelId, now uint64) bool {
 	if packet.DestinationChannelId != batchChannelId {
 		panic(makeError(core.ErrBatchSameChannelOnly))
 	}
@@ -440,17 +426,17 @@ func (c *coreV1) acceptRecvPacket(_ int, rlm realm, packet types.Packet, batchCh
 	}
 
 	if c.store.HasPacketReceipt(packet) {
-		return channel, true
+		return true
 	}
 
 	c.store.SetPacketReceipt(0, rlm, packet)
 
-	return channel, false
+	return false
 }
 
 // commitSyncAck records a synchronous recv result as receipt evidence. Sync
 // success/failure must carry a non-empty acknowledgement; async is deferred.
-func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, res types.RecvPacketResult, channel types.Channel, connection types.Connection) error {
+func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, res types.RecvPacketResult) error {
 	switch res.Status {
 	case types.PacketStatusAsync:
 		return nil
@@ -460,7 +446,7 @@ func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, res types.
 		}
 
 		c.store.CommitAcknowledgement(0, rlm, packet, res.Acknowledgement)
-		core.EmitWriteAck(0, rlm, packet, channel, connection, res.Acknowledgement)
+		core.EmitWriteAck(0, rlm, packet, res.Acknowledgement)
 
 		return nil
 	default:

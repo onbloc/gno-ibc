@@ -745,52 +745,20 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "PacketAck",
 //     "attrs": [
 //       {
+//         "key": "channel_id",
+//         "value": "1"
+//       },
+//       {
 //         "key": "packet_hash",
 //         "value": "0x78d9f4b7158b264f6ef8f55e9813d031144ff42f65919227c79fb20e1fc2ed70"
 //       },
 //       {
-//         "key": "packet_data_size",
-//         "value": "514"
-//       },
-//       {
-//         "key": "packet_data[0]",
-//         "value": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000a6576656e742d63616c6c00000000000000000000000000000000000000000000"
-//       },
-//       {
-//         "key": "source_channel_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "source_channel_version",
-//         "value": "event-v1"
-//       },
-//       {
-//         "key": "source_connection_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "source_connection_client_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_channel_id",
-//         "value": "7"
-//       },
-//       {
-//         "key": "destination_connection_id",
-//         "value": "77"
-//       },
-//       {
-//         "key": "destination_connection_client_id",
-//         "value": "99"
-//       },
-//       {
-//         "key": "timeout_timestamp",
-//         "value": "1"
-//       },
-//       {
 //         "key": "acknowledgement",
 //         "value": "0x61636b2d73656e642d31"
+//       },
+//       {
+//         "key": "maker",
+//         "value": "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
@@ -799,56 +767,20 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "PacketAck",
 //     "attrs": [
 //       {
+//         "key": "channel_id",
+//         "value": "1"
+//       },
+//       {
 //         "key": "packet_hash",
 //         "value": "0x7a8d7e00a6f9fd5ecd531cfe519b412f070d564624509bf620df6845b1cce967"
 //       },
 //       {
-//         "key": "packet_data_size",
-//         "value": "1794"
-//       },
-//       {
-//         "key": "packet_data[0]",
-//         "value": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000002a00000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000016000000000000000000000000000000000000000000000000000000000000001c000000000000000000000000000000000000000000000000000000000000f4240000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000f42400000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000026000000000000000000000000000000000000000000000000000000000000000"
-//       },
-//       {
-//         "key": "packet_data[1]",
-//         "value": "2867316a67386d74757475396b6868667763346e786d756863706674663070616a6468667673716635000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002a30783566626537346132383366373935346631306161303463326564663535353738383131616562303300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000575676e6f74000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002a3078443366434244326144324442394632303466363030373746383734433631353944373730303044660000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000156576656e742d736f6c7665722d6d657461646174610000000000000000000000"
-//       },
-//       {
-//         "key": "source_channel_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "source_channel_version",
-//         "value": "event-v1"
-//       },
-//       {
-//         "key": "source_connection_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "source_connection_client_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_channel_id",
-//         "value": "7"
-//       },
-//       {
-//         "key": "destination_connection_id",
-//         "value": "77"
-//       },
-//       {
-//         "key": "destination_connection_client_id",
-//         "value": "99"
-//       },
-//       {
-//         "key": "timeout_timestamp",
-//         "value": "1"
-//       },
-//       {
 //         "key": "acknowledgement",
 //         "value": "0x61636b2d73656e642d32"
+//       },
+//       {
+//         "key": "maker",
+//         "value": "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
@@ -997,48 +929,12 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "WriteAck",
 //     "attrs": [
 //       {
-//         "key": "packet_hash",
-//         "value": "0x2e925a980b459b69e205479571e2988b99ffb77d7eae552bbe4107b5e2857599"
-//       },
-//       {
-//         "key": "packet_data_size",
-//         "value": "26"
-//       },
-//       {
-//         "key": "packet_data[0]",
-//         "value": "0x6576656e742d726563762d31"
-//       },
-//       {
-//         "key": "source_channel_id",
-//         "value": "90"
-//       },
-//       {
-//         "key": "source_connection_id",
-//         "value": "77"
-//       },
-//       {
-//         "key": "source_connection_client_id",
-//         "value": "99"
-//       },
-//       {
 //         "key": "destination_channel_id",
 //         "value": "1"
 //       },
 //       {
-//         "key": "destination_channel_version",
-//         "value": "event-v1"
-//       },
-//       {
-//         "key": "destination_connection_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_client_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "timeout_timestamp",
-//         "value": "4611686018427387904"
+//         "key": "packet_hash",
+//         "value": "0x2e925a980b459b69e205479571e2988b99ffb77d7eae552bbe4107b5e2857599"
 //       },
 //       {
 //         "key": "acknowledgement",
@@ -1051,48 +947,16 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "PacketRecv",
 //     "attrs": [
 //       {
-//         "key": "packet_hash",
-//         "value": "0x2e925a980b459b69e205479571e2988b99ffb77d7eae552bbe4107b5e2857599"
-//       },
-//       {
-//         "key": "packet_data_size",
-//         "value": "26"
-//       },
-//       {
-//         "key": "packet_data[0]",
-//         "value": "0x6576656e742d726563762d31"
-//       },
-//       {
-//         "key": "source_channel_id",
-//         "value": "90"
-//       },
-//       {
-//         "key": "source_connection_id",
-//         "value": "77"
-//       },
-//       {
-//         "key": "source_connection_client_id",
-//         "value": "99"
-//       },
-//       {
 //         "key": "destination_channel_id",
 //         "value": "1"
 //       },
 //       {
-//         "key": "destination_channel_version",
-//         "value": "event-v1"
+//         "key": "packet_hash",
+//         "value": "0x2e925a980b459b69e205479571e2988b99ffb77d7eae552bbe4107b5e2857599"
 //       },
 //       {
-//         "key": "destination_connection_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_client_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "timeout_timestamp",
-//         "value": "4611686018427387904"
+//         "key": "maker",
+//         "value": "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
 //       },
 //       {
 //         "key": "maker_msg",
@@ -1105,48 +969,12 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "WriteAck",
 //     "attrs": [
 //       {
-//         "key": "packet_hash",
-//         "value": "0x72e4fcb14058a989cb243a46e9583fe569909b915ffe4edf5f1ca9609db20083"
-//       },
-//       {
-//         "key": "packet_data_size",
-//         "value": "26"
-//       },
-//       {
-//         "key": "packet_data[0]",
-//         "value": "0x6576656e742d726563762d32"
-//       },
-//       {
-//         "key": "source_channel_id",
-//         "value": "90"
-//       },
-//       {
-//         "key": "source_connection_id",
-//         "value": "77"
-//       },
-//       {
-//         "key": "source_connection_client_id",
-//         "value": "99"
-//       },
-//       {
 //         "key": "destination_channel_id",
 //         "value": "1"
 //       },
 //       {
-//         "key": "destination_channel_version",
-//         "value": "event-v1"
-//       },
-//       {
-//         "key": "destination_connection_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_client_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "timeout_timestamp",
-//         "value": "4611686018427387904"
+//         "key": "packet_hash",
+//         "value": "0x72e4fcb14058a989cb243a46e9583fe569909b915ffe4edf5f1ca9609db20083"
 //       },
 //       {
 //         "key": "acknowledgement",
@@ -1159,48 +987,16 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "PacketRecv",
 //     "attrs": [
 //       {
-//         "key": "packet_hash",
-//         "value": "0x72e4fcb14058a989cb243a46e9583fe569909b915ffe4edf5f1ca9609db20083"
-//       },
-//       {
-//         "key": "packet_data_size",
-//         "value": "26"
-//       },
-//       {
-//         "key": "packet_data[0]",
-//         "value": "0x6576656e742d726563762d32"
-//       },
-//       {
-//         "key": "source_channel_id",
-//         "value": "90"
-//       },
-//       {
-//         "key": "source_connection_id",
-//         "value": "77"
-//       },
-//       {
-//         "key": "source_connection_client_id",
-//         "value": "99"
-//       },
-//       {
 //         "key": "destination_channel_id",
 //         "value": "1"
 //       },
 //       {
-//         "key": "destination_channel_version",
-//         "value": "event-v1"
+//         "key": "packet_hash",
+//         "value": "0x72e4fcb14058a989cb243a46e9583fe569909b915ffe4edf5f1ca9609db20083"
 //       },
 //       {
-//         "key": "destination_connection_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_client_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "timeout_timestamp",
-//         "value": "4611686018427387904"
+//         "key": "maker",
+//         "value": "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
 //       },
 //       {
 //         "key": "maker_msg",
@@ -1249,48 +1045,12 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "WriteAck",
 //     "attrs": [
 //       {
-//         "key": "packet_hash",
-//         "value": "0x5903360eb9bb521e532b827510363708a8e0c10cf58ce5cd331399623ad5c27b"
-//       },
-//       {
-//         "key": "packet_data_size",
-//         "value": "26"
-//       },
-//       {
-//         "key": "packet_data[0]",
-//         "value": "0x6576656e742d696e74656e74"
-//       },
-//       {
-//         "key": "source_channel_id",
-//         "value": "91"
-//       },
-//       {
-//         "key": "source_connection_id",
-//         "value": "77"
-//       },
-//       {
-//         "key": "source_connection_client_id",
-//         "value": "99"
-//       },
-//       {
 //         "key": "destination_channel_id",
 //         "value": "1"
 //       },
 //       {
-//         "key": "destination_channel_version",
-//         "value": "event-v1"
-//       },
-//       {
-//         "key": "destination_connection_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_client_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "timeout_timestamp",
-//         "value": "4611686018427387904"
+//         "key": "packet_hash",
+//         "value": "0x5903360eb9bb521e532b827510363708a8e0c10cf58ce5cd331399623ad5c27b"
 //       },
 //       {
 //         "key": "acknowledgement",
@@ -1303,51 +1063,19 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "IntentPacketRecv",
 //     "attrs": [
 //       {
-//         "key": "packet_hash",
-//         "value": "0x5903360eb9bb521e532b827510363708a8e0c10cf58ce5cd331399623ad5c27b"
-//       },
-//       {
-//         "key": "packet_data_size",
-//         "value": "26"
-//       },
-//       {
-//         "key": "packet_data[0]",
-//         "value": "0x6576656e742d696e74656e74"
-//       },
-//       {
-//         "key": "source_channel_id",
-//         "value": "91"
-//       },
-//       {
-//         "key": "source_connection_id",
-//         "value": "77"
-//       },
-//       {
-//         "key": "source_connection_client_id",
-//         "value": "99"
-//       },
-//       {
 //         "key": "destination_channel_id",
 //         "value": "1"
 //       },
 //       {
-//         "key": "destination_channel_version",
-//         "value": "event-v1"
+//         "key": "packet_hash",
+//         "value": "0x5903360eb9bb521e532b827510363708a8e0c10cf58ce5cd331399623ad5c27b"
 //       },
 //       {
-//         "key": "destination_connection_id",
-//         "value": "1"
+//         "key": "maker",
+//         "value": "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
 //       },
 //       {
-//         "key": "destination_connection_client_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "timeout_timestamp",
-//         "value": "4611686018427387904"
-//       },
-//       {
-//         "key": "market_maker_msg",
+//         "key": "maker_msg",
 //         "value": "0x6d61726b65742d6d616b65722d6d7367"
 //       }
 //     ],
@@ -1357,48 +1085,16 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "PacketRecv",
 //     "attrs": [
 //       {
-//         "key": "packet_hash",
-//         "value": "0xa95670a052ae50cb85b4baf83596b9f36ebb5b2026165fbe737db02d8b6462e9"
-//       },
-//       {
-//         "key": "packet_data_size",
-//         "value": "24"
-//       },
-//       {
-//         "key": "packet_data[0]",
-//         "value": "0x6576656e742d6173796e63"
-//       },
-//       {
-//         "key": "source_channel_id",
-//         "value": "92"
-//       },
-//       {
-//         "key": "source_connection_id",
-//         "value": "77"
-//       },
-//       {
-//         "key": "source_connection_client_id",
-//         "value": "99"
-//       },
-//       {
 //         "key": "destination_channel_id",
 //         "value": "1"
 //       },
 //       {
-//         "key": "destination_channel_version",
-//         "value": "event-v1"
+//         "key": "packet_hash",
+//         "value": "0xa95670a052ae50cb85b4baf83596b9f36ebb5b2026165fbe737db02d8b6462e9"
 //       },
 //       {
-//         "key": "destination_connection_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_client_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "timeout_timestamp",
-//         "value": "4611686018427387904"
+//         "key": "maker",
+//         "value": "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
 //       },
 //       {
 //         "key": "maker_msg",
@@ -1411,48 +1107,12 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "WriteAck",
 //     "attrs": [
 //       {
-//         "key": "packet_hash",
-//         "value": "0xa95670a052ae50cb85b4baf83596b9f36ebb5b2026165fbe737db02d8b6462e9"
-//       },
-//       {
-//         "key": "packet_data_size",
-//         "value": "24"
-//       },
-//       {
-//         "key": "packet_data[0]",
-//         "value": "0x6576656e742d6173796e63"
-//       },
-//       {
-//         "key": "source_channel_id",
-//         "value": "92"
-//       },
-//       {
-//         "key": "source_connection_id",
-//         "value": "77"
-//       },
-//       {
-//         "key": "source_connection_client_id",
-//         "value": "99"
-//       },
-//       {
 //         "key": "destination_channel_id",
 //         "value": "1"
 //       },
 //       {
-//         "key": "destination_channel_version",
-//         "value": "event-v1"
-//       },
-//       {
-//         "key": "destination_connection_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_client_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "timeout_timestamp",
-//         "value": "4611686018427387904"
+//         "key": "packet_hash",
+//         "value": "0xa95670a052ae50cb85b4baf83596b9f36ebb5b2026165fbe737db02d8b6462e9"
 //       },
 //       {
 //         "key": "acknowledgement",
@@ -1665,48 +1325,12 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "WriteAck",
 //     "attrs": [
 //       {
-//         "key": "packet_hash",
-//         "value": "0x7bf8b2199e74916681e58171af1e1491c0d3197ab60389fbf8b937906693f75e"
-//       },
-//       {
-//         "key": "packet_data_size",
-//         "value": "4"
-//       },
-//       {
-//         "key": "packet_data[0]",
-//         "value": "0x01"
-//       },
-//       {
-//         "key": "source_channel_id",
-//         "value": "22"
-//       },
-//       {
-//         "key": "source_connection_id",
-//         "value": "77"
-//       },
-//       {
-//         "key": "source_connection_client_id",
-//         "value": "99"
-//       },
-//       {
 //         "key": "destination_channel_id",
 //         "value": "3"
 //       },
 //       {
-//         "key": "destination_channel_version",
-//         "value": "ucs03-zkgm-0"
-//       },
-//       {
-//         "key": "destination_connection_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_client_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "timeout_timestamp",
-//         "value": "4611686018427387904"
+//         "key": "packet_hash",
+//         "value": "0x7bf8b2199e74916681e58171af1e1491c0d3197ab60389fbf8b937906693f75e"
 //       },
 //       {
 //         "key": "acknowledgement",
@@ -1719,48 +1343,16 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "PacketRecv",
 //     "attrs": [
 //       {
-//         "key": "packet_hash",
-//         "value": "0x7bf8b2199e74916681e58171af1e1491c0d3197ab60389fbf8b937906693f75e"
-//       },
-//       {
-//         "key": "packet_data_size",
-//         "value": "4"
-//       },
-//       {
-//         "key": "packet_data[0]",
-//         "value": "0x01"
-//       },
-//       {
-//         "key": "source_channel_id",
-//         "value": "22"
-//       },
-//       {
-//         "key": "source_connection_id",
-//         "value": "77"
-//       },
-//       {
-//         "key": "source_connection_client_id",
-//         "value": "99"
-//       },
-//       {
 //         "key": "destination_channel_id",
 //         "value": "3"
 //       },
 //       {
-//         "key": "destination_channel_version",
-//         "value": "ucs03-zkgm-0"
+//         "key": "packet_hash",
+//         "value": "0x7bf8b2199e74916681e58171af1e1491c0d3197ab60389fbf8b937906693f75e"
 //       },
 //       {
-//         "key": "destination_connection_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_client_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "timeout_timestamp",
-//         "value": "4611686018427387904"
+//         "key": "maker",
+//         "value": "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
 //       },
 //       {
 //         "key": "maker_msg",

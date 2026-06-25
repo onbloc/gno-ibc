@@ -71,17 +71,11 @@ type CanCallResult struct {
 	Delay      Delay
 }
 
-func NewCanCallResult(immediate bool) CanCallResult {
+func NewCanCallResult(immediate bool, authorized bool, delay Delay) CanCallResult {
 	return CanCallResult{
 		Immediate:  immediate,
-		Authorized: immediate,
-	}
-}
-
-func NewDelayedCanCallResult(delay Delay) CanCallResult {
-	return CanCallResult{
-		Authorized: true,
 		Delay:      delay,
+		Authorized: authorized,
 	}
 }
 
@@ -90,13 +84,7 @@ type HasRoleResult struct {
 	ExecutionDelay Delay
 }
 
-func NewHasRoleResult(isMember bool) HasRoleResult {
-	return HasRoleResult{
-		IsMember: isMember,
-	}
-}
-
-func NewHasRoleResultWithDelay(isMember bool, executionDelay Delay) HasRoleResult {
+func NewHasRoleResult(isMember bool, executionDelay Delay) HasRoleResult {
 	return HasRoleResult{
 		IsMember:       isMember,
 		ExecutionDelay: executionDelay,

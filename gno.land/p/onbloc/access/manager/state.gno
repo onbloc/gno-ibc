@@ -26,21 +26,21 @@ func NewState() State {
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L140-L156
 func (state *State) CanCall(caller address, target string, selector Selector) CanCallResult {
 	if state.IsTargetClosed(target) {
-		return NewCanCallResult(false)
+		return NewCanCallResult(false, false, 0)
 	}
 
 	role := state.GetTargetFunctionRole(target, selector)
 
 	membership := state.HasRole(role, caller)
 	if !membership.IsMember {
-		return NewCanCallResult(false)
+		return NewCanCallResult(false, false, 0)
 	}
 
 	if membership.ExecutionDelay > 0 {
-		return NewDelayedCanCallResult(membership.ExecutionDelay)
+		return NewCanCallResult(false, true, membership.ExecutionDelay)
 	}
 
-	return NewCanCallResult(true)
+	return NewCanCallResult(true, true, 0)
 }
 
 // IsAuthorized is a boolean convenience wrapper around CanCall.
@@ -56,26 +56,26 @@ func (state *State) IsAuthorized(caller address, target string, selector Selecto
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L211-L220
 func (state *State) HasRole(role RoleId, account address) HasRoleResult {
 	if role == PublicRole {
-		return NewHasRoleResult(true)
+		return NewHasRoleResult(true, 0)
 	}
 
 	roleConfig := state.getRole(role)
 	if roleConfig == nil {
-		return NewHasRoleResult(false)
+		return NewHasRoleResult(false, 0)
 	}
 
 	now := CurrentTimePoint()
 	storedAccess := roleConfig.rawAccess(account)
 	if storedAccess.Since.IsZero() {
-		return NewHasRoleResult(false)
+		return NewHasRoleResult(false, 0)
 	}
 
 	access := roleConfig.access(account, now)
 	if access.Since.IsZero() {
-		return NewHasRoleResultWithDelay(false, storedAccess.executionDelayAt(now))
+		return NewHasRoleResult(false, storedAccess.executionDelayAt(now))
 	}
 
-	return NewHasRoleResultWithDelay(true, access.executionDelayAt(now))
+	return NewHasRoleResult(true, access.executionDelayAt(now))
 }
 
 // GetRoleAdmin returns the admin role for role, defaulting to AdminRole.
@@ -396,14 +396,14 @@ func (state *State) CanAdminRole(role RoleId, caller address) CanCallResult {
 
 	membership := state.HasRole(adminRole, caller)
 	if !membership.IsMember {
-		return NewCanCallResult(false)
+		return NewCanCallResult(false, false, 0)
 	}
 
 	if membership.ExecutionDelay > 0 {
-		return NewDelayedCanCallResult(membership.ExecutionDelay)
+		return NewCanCallResult(false, true, membership.ExecutionDelay)
 	}
 
-	return NewCanCallResult(true)
+	return NewCanCallResult(true, true, 0)
 }
 
 // CanManageTarget reports whether caller can manage target configuration.
@@ -413,14 +413,14 @@ func (state *State) CanAdminRole(role RoleId, caller address) CanCallResult {
 func (state *State) CanManageTarget(caller address) CanCallResult {
 	membership := state.HasRole(AdminRole, caller)
 	if !membership.IsMember {
-		return NewCanCallResult(false)
+		return NewCanCallResult(false, false, 0)
 	}
 
 	if membership.ExecutionDelay > 0 {
-		return NewDelayedCanCallResult(membership.ExecutionDelay)
+		return NewCanCallResult(false, true, membership.ExecutionDelay)
 	}
 
-	return NewCanCallResult(true)
+	return NewCanCallResult(true, true, 0)
 }
 
 func (state *State) CanManageTargetPath(caller address, target string) CanCallResult {
@@ -431,7 +431,7 @@ func (state *State) CanManageTargetPath(caller address, target string) CanCallRe
 
 	adminDelay := state.GetTargetAdminDelay(target)
 	if adminDelay > 0 {
-		return NewDelayedCanCallResult(adminDelay)
+		return NewCanCallResult(false, true, adminDelay)
 	}
 
 	return result

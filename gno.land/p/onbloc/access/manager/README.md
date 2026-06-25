@@ -160,9 +160,7 @@ Constructors:
 - `NewAccessWithDelay`
 - `NewTargetConfig`
 - `NewCanCallResult`
-- `NewDelayedCanCallResult`
 - `NewHasRoleResult`
-- `NewHasRoleResultWithDelay`
 - `NewSchedule`
 
 Role helpers:

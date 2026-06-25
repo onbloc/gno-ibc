@@ -558,6 +558,8 @@ func (v *ucs03ZkgmV1) scaleOutgoingTokenOrderV2Instruction(_ int, rlm realm, ins
 
 func (v *ucs03ZkgmV1) scaleOutgoingInstructionAmounts(_ int, rlm realm, instruction z.Instruction) (z.Instruction, error) {
 	switch instruction.Opcode {
+	case z.OP_FORWARD:
+		return v.scaleOutgoingForwardInstruction(0, rlm, instruction)
 	case z.OP_BATCH:
 		return v.scaleOutgoingBatchInstruction(0, rlm, instruction)
 	case z.OP_TOKEN_ORDER:
@@ -565,6 +567,40 @@ func (v *ucs03ZkgmV1) scaleOutgoingInstructionAmounts(_ int, rlm realm, instruct
 	default:
 		return instruction, nil
 	}
+}
+
+func (v *ucs03ZkgmV1) scaleOutgoingForwardInstruction(_ int, rlm realm, instruction z.Instruction) (z.Instruction, error) {
+	if instruction.Version != z.INSTR_VERSION_0 {
+		return instruction, makeError(errUnsupportedForwardVersion)
+	}
+
+	forward, err := z.DecodeForward(instruction.Operand)
+	if err != nil {
+		return instruction, err
+	}
+
+	scaledChild, err := v.scaleOutgoingInstructionAmounts(0, rlm, forward.Instruction)
+	if err != nil {
+		return instruction, err
+	}
+
+	if len(scaledChild.Operand) == len(forward.Instruction.Operand) && bytes.Equal(scaledChild.Operand, forward.Instruction.Operand) {
+		return instruction, nil
+	}
+
+	scaledForward := forward
+	scaledForward.Instruction = scaledChild
+
+	scaledOperand, err := z.EncodeForward(scaledForward)
+	if err != nil {
+		return instruction, err
+	}
+
+	return z.Instruction{
+		Version: instruction.Version,
+		Opcode:  z.OP_FORWARD,
+		Operand: scaledOperand,
+	}, nil
 }
 
 func (v *ucs03ZkgmV1) scaleOutgoingBatchInstruction(_ int, rlm realm, instruction z.Instruction) (z.Instruction, error) {

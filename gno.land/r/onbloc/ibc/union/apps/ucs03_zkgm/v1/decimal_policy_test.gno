@@ -373,6 +373,94 @@ func TestScaleOutgoingTokenOrderInstruction(cur realm, t *testing.T) {
 	}
 }
 
+func TestScaleOutgoingForwardInstruction(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	denom := "ibc/FORWARD-SCALE"
+	sender := testAddress("fwd-scale-sender")
+	v.mintVoucher(0, cur, denom, [32]byte{}, "Forward", "FWD", 18, sender, u256.NewUint(1000000000000000000))
+
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		Receiver:    []byte(testAddress("fwd-scale-receiver")),
+		BaseToken:   []byte(denom),
+		BaseAmount:  u256.NewUint(123456),
+		QuoteToken:  []byte("ibc/FORWARD-OUT"),
+		QuoteAmount: u256.NewUint(123000),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+
+	forward := z.Forward{
+		Path:             u256.NewUint(12),
+		TimeoutTimestamp: 999,
+		Instruction:      batchMustOrderInstruction(order),
+	}
+
+	instruction := z.Instruction{
+		Version: z.INSTR_VERSION_0,
+		Opcode:  z.OP_FORWARD,
+		Operand: mustForwardBytes(forward),
+	}
+
+	scaled, err := v.scaleOutgoingInstructionAmounts(0, cur, instruction)
+	uassert.NoError(t, err)
+
+	gotForward, err := z.DecodeForward(scaled.Operand)
+	uassert.NoError(t, err)
+
+	gotOrder, err := z.DecodeTokenOrderV2(gotForward.Instruction.Operand)
+	uassert.NoError(t, err)
+	uassert.Equal(t, u256.NewUint(123456000000000000).ToString(), gotOrder.BaseAmount.ToString())
+	uassert.Equal(t, u256.NewUint(123000000000000000).ToString(), gotOrder.QuoteAmount.ToString())
+}
+
+func TestScaleOutgoingForwardBatchInstruction(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	denom := "ibc/FORWARD-BATCH-SCALE"
+	sender := testAddress("fwd-batch-sender")
+	v.mintVoucher(0, cur, denom, [32]byte{}, "ForwardBatch", "FWDB", 18, sender, u256.NewUint(1000000000000000000))
+
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		Receiver:    []byte(testAddress("fwd-batch-receiver")),
+		BaseToken:   []byte(denom),
+		BaseAmount:  u256.NewUint(654321),
+		QuoteToken:  []byte("ibc/FORWARD-BATCH-OUT"),
+		QuoteAmount: u256.NewUint(654000),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+
+	forward := z.Forward{
+		Path:             u256.NewUint(12),
+		TimeoutTimestamp: 999,
+		Instruction: batchMustBatchInstruction(z.Batch{Instructions: []z.Instruction{
+			batchMustCallInstruction(batchCall(sender, "")),
+			batchMustOrderInstruction(order),
+		}}),
+	}
+
+	instruction := z.Instruction{
+		Version: z.INSTR_VERSION_0,
+		Opcode:  z.OP_FORWARD,
+		Operand: mustForwardBytes(forward),
+	}
+
+	scaled, err := v.scaleOutgoingInstructionAmounts(0, cur, instruction)
+	uassert.NoError(t, err)
+
+	gotForward, err := z.DecodeForward(scaled.Operand)
+	uassert.NoError(t, err)
+
+	gotBatch, err := z.DecodeBatch(gotForward.Instruction.Operand)
+	uassert.NoError(t, err)
+
+	gotOrder, err := z.DecodeTokenOrderV2(gotBatch.Instructions[1].Operand)
+	uassert.NoError(t, err)
+	uassert.Equal(t, u256.NewUint(654321000000000000).ToString(), gotOrder.BaseAmount.ToString())
+	uassert.Equal(t, u256.NewUint(654000000000000000).ToString(), gotOrder.QuoteAmount.ToString())
+}
+
 func TestDecodeLocalOrderInstruction(cur realm, t *testing.T) {
 	v := newTestImpl()
 

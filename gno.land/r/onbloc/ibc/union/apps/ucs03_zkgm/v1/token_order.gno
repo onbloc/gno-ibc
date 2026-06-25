@@ -496,3 +496,93 @@ func (v *ucs03ZkgmV1) refundIBCVoucher(_ int, rlm realm, baseToken []byte, recip
 
 	return v.mintVoucher(0, rlm, baseDenom, image, "", "", 0, recipient, amount)
 }
+
+func (v *ucs03ZkgmV1) trimTokenOrderInstruction(_ int, rlm realm, instruction z.Instruction, sender string) (z.Instruction, error) {
+	if instruction.Version != z.INSTR_VERSION_2 {
+		return instruction, nil
+	}
+
+	order, err := z.DecodeTokenOrderV2(instruction.Operand)
+	if err != nil {
+		return instruction, err
+	}
+
+	if !v.shouldTrim(0, rlm, order.BaseToken) {
+		return instruction, nil
+	}
+
+	baseDecimals := v.getTokenDecimals(0, rlm, order.BaseToken)
+	baseTrim := trimAmount(baseDecimals, order.BaseAmount)
+
+	if order.QuoteAmount.Cmp(baseTrim.Trimmed) > 0 {
+		return instruction, makeError(errQuoteAmountTooLarge)
+	}
+
+	if baseTrim.Dust.IsZero() {
+		return instruction, nil
+	}
+
+	trimmedOrder := order
+	trimmedOrder.BaseAmount = baseTrim.Trimmed
+
+	trimmedOperand, err := z.EncodeTokenOrderV2(trimmedOrder)
+	if err != nil {
+		return instruction, err
+	}
+
+	trimmedInstruction := z.Instruction{
+		Version: instruction.Version,
+		Opcode:  z.OP_TOKEN_ORDER,
+		Operand: trimmedOperand,
+	}
+
+	return trimmedInstruction, nil
+}
+
+func (v *ucs03ZkgmV1) trimInstructionAmounts(_ int, rlm realm, instruction z.Instruction, sender string) (z.Instruction, error) {
+	switch instruction.Opcode {
+	case z.OP_BATCH:
+		return v.trimBatchInstruction(0, rlm, instruction, sender)
+	case z.OP_FORWARD:
+		return instruction, nil
+	case z.OP_TOKEN_ORDER:
+		return v.trimTokenOrderInstruction(0, rlm, instruction, sender)
+	default:
+		return instruction, nil
+	}
+}
+
+func (v *ucs03ZkgmV1) trimBatchInstruction(_ int, rlm realm, instruction z.Instruction, sender string) (z.Instruction, error) {
+	if instruction.Version != z.INSTR_VERSION_0 {
+		return instruction, nil
+	}
+
+	batch, err := z.DecodeBatch(instruction.Operand)
+	if err != nil {
+		return instruction, err
+	}
+
+	trimmedChildren := make([]z.Instruction, len(batch.Instructions))
+
+	for i, child := range batch.Instructions {
+		trimmedChild, err := v.trimInstructionAmounts(0, rlm, child, sender)
+		if err != nil {
+			return instruction, err
+		}
+		trimmedChildren[i] = trimmedChild
+	}
+
+	trimmedBatch := z.Batch{Instructions: trimmedChildren}
+	trimmedOperand, err := z.EncodeBatch(trimmedBatch)
+	if err != nil {
+		return instruction, err
+	}
+
+	trimmedInstruction := z.Instruction{
+		Version: instruction.Version,
+		Opcode:  z.OP_BATCH,
+		Operand: trimmedOperand,
+	}
+
+	return trimmedInstruction, nil
+}

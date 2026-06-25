@@ -10,6 +10,34 @@ import (
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
 
+const (
+	targetDecimals = 6
+)
+
+type TrimResult struct {
+	Trimmed *u256.Uint
+	Dust    *u256.Uint
+}
+
+func trimAmount(tokenDecimals uint8, amount *u256.Uint) TrimResult {
+	if tokenDecimals <= targetDecimals {
+		return TrimResult{Trimmed: amount, Dust: u256.Zero()}
+	}
+
+	exp := tokenDecimals - targetDecimals
+
+	factor := u256.NewUint(1)
+	for i := uint8(0); i < exp; i++ {
+		factor = factor.Mul(factor, u256.NewUint(10))
+	}
+
+	quotient := new(u256.Uint).Div(amount, factor)
+	trimmed := new(u256.Uint).Mul(quotient, factor)
+	dust := new(u256.Uint).Sub(amount, trimmed)
+
+	return TrimResult{Trimmed: trimmed, Dust: dust}
+}
+
 // mintVoucher mints `amount` of the wrapped grc20 voucher for ibcDenom to
 // receiver, creating the voucher token on first use. The grc20 ledger capability
 // lives in the proxy-owned store, so mint/burn rights survive impl upgrades.
@@ -106,4 +134,29 @@ func amountInt64(amount *u256.Uint) (int64, error) {
 	}
 
 	return amount.Int64(), nil
+}
+
+// shouldTrim reports whether denom should be trimmed to 6 decimals.
+// Only registered ibc/ vouchers are trimmed because they may use up to 18 decimals.
+// Native denoms (i.e., ugnot) already use 6 decimals and are left unchanged in v1.
+func (v *ucs03ZkgmV1) shouldTrim(_ int, rlm realm, denom []byte) bool {
+	denomStr := string(denom)
+
+	if strings.HasPrefix(denomStr, "ibc/") {
+		if _, ok := v.store.GetVoucher(denomStr); ok {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (v *ucs03ZkgmV1) getTokenDecimals(_ int, rlm realm, denom []byte) uint8 {
+	denomStr := string(denom)
+
+	if vou, ok := v.store.GetVoucher(denomStr); ok {
+		return uint8(vou.Token().GetDecimals())
+	}
+
+	return targetDecimals
 }

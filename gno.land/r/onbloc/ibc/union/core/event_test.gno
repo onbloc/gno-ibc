@@ -235,27 +235,6 @@ func TestEventAttrColumnsBoundary(cur realm, t *testing.T) {
 	}
 }
 
-func TestPacketDataEventSizeMatchesHexAttr(cur realm, t *testing.T) {
-	testCases := []struct {
-		name string
-		data []byte
-	}{
-		{"empty", []byte{}},
-		{"single byte", []byte{0x01}},
-		{"small packet", []byte("fixed-small-packet")},
-		{"boundary", make([]byte, (MaxPacketDataEventSize-2)/2)},
-		{"real zkgm packet", mustEncodeRealZkgmPacket(t)},
-	}
-
-	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			if got, want := PacketDataEventSize(tc.data), len(hexAttr(tc.data)); got != want {
-				t.Fatalf("packet data event size: got %d want %d", got, want)
-			}
-		})
-	}
-}
-
 func assertEventAttrColumnLens(t *testing.T, attrs []string, key string, value string, wantLens []int) {
 	if len(attrs) != len(wantLens)*2 {
 		t.Fatalf("attr len: got %d want %d attrs=%v", len(attrs), len(wantLens)*2, attrs)

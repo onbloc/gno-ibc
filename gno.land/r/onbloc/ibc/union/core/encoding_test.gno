@@ -241,6 +241,32 @@ func TestHexEncoding(cur realm, t *testing.T) {
 	}
 }
 
+func TestHexAttrLen(cur realm, t *testing.T) {
+	tests := []struct {
+		name string
+		data []byte
+	}{
+		{"empty", []byte{}},
+		{"single byte", []byte{0x01}},
+		{"small packet", []byte("fixed-small-packet")},
+		{"boundary", make([]byte, (MaxPacketDataEventSize-2)/2)},
+		{"real zkgm packet", mustEncodeRealZkgmPacket(t)},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assertHexAttrLen(t, tc.data)
+		})
+	}
+}
+
+func assertHexAttrLen(t *testing.T, data []byte) {
+	t.Helper()
+	if got, want := HexAttrLen(data), len(hexAttr(data)); got != want {
+		t.Fatalf("hex attr len: got %d want %d", got, want)
+	}
+}
+
 func TestCloning(cur realm, t *testing.T) {
 	cases := []struct {
 		name   string

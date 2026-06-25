@@ -12,7 +12,7 @@ func assertIsRlmCurrent(_ int, rlm realm) {
 }
 
 func assertPacketDataSize(data []byte) {
-	if core.PacketDataEventSize(data) > core.MaxPacketDataEventSize {
+	if core.HexAttrLen(data) > core.MaxPacketDataEventSize {
 		panic(makeError(core.ErrPacketDataTooLarge))
 	}
 }

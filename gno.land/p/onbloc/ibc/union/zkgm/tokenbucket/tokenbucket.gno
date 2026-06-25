@@ -7,9 +7,10 @@ import (
 )
 
 var (
-	ErrZeroCapacity      = errors.New("tokenbucket: capacity must not be zero")
-	ErrZeroRefillRate    = errors.New("tokenbucket: refill rate must not be zero")
-	ErrRateLimitExceeded = errors.New("tokenbucket: rate limit exceeded")
+	ErrZeroCapacity         = errors.New("tokenbucket: capacity must not be zero")
+	ErrZeroRefillRate       = errors.New("tokenbucket: refill rate must not be zero")
+	ErrRateLimitExceeded    = errors.New("tokenbucket: rate limit exceeded")
+	ErrTokenBucketUnderflow = errors.New("tokenbucket: token bucket underflow")
 )
 
 type TokenBucket struct {
@@ -46,7 +47,11 @@ func (tb *TokenBucket) Refill(now *u256.Uint) {
 		return
 	}
 
-	elapsed := new(u256.Uint).Sub(now, tb.LastRefill)
+	elapsed, underflow := u256.Zero().SubOverflow(now, tb.LastRefill)
+	if underflow {
+		panic(ErrTokenBucketUnderflow)
+	}
+
 	toRefill := saturatingMul(tb.RefillRate, elapsed)
 	tb.Available = min(tb.Capacity, saturatingAdd(tb.Available, toRefill))
 	tb.LastRefill.Set(now)
@@ -63,7 +68,7 @@ func (tb *TokenBucket) RateLimit(amount *u256.Uint, now *u256.Uint) error {
 		return ErrRateLimitExceeded
 	}
 
-	tb.Available.Sub(tb.Available, amount)
+	tb.Available = u256.Zero().Sub(tb.Available, amount)
 
 	return nil
 }
@@ -91,18 +96,18 @@ func (tb *TokenBucket) Update(capacity *u256.Uint, refillRate *u256.Uint, reset 
 }
 
 func saturatingAdd(x *u256.Uint, y *u256.Uint) *u256.Uint {
-	z, overflow := new(u256.Uint).AddOverflow(x, y)
+	z, overflow := u256.Zero().AddOverflow(x, y)
 	if overflow {
-		return new(u256.Uint).SetAllOne()
+		return u256.Zero().SetAllOne()
 	}
 
 	return z
 }
 
 func saturatingMul(x *u256.Uint, y *u256.Uint) *u256.Uint {
-	z, overflow := new(u256.Uint).MulOverflow(x, y)
+	z, overflow := u256.Zero().MulOverflow(x, y)
 	if overflow {
-		return new(u256.Uint).SetAllOne()
+		return u256.Zero().SetAllOne()
 	}
 
 	return z

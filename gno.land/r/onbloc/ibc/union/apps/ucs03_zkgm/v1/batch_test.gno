@@ -15,7 +15,6 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
-	"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -161,9 +160,9 @@ func TestVerifyBatch(cur realm, t *testing.T) {
 }
 
 func TestExecuteBatchPropagatesOnlyMakerAndSkipsRemainingChildren(cur realm, t *testing.T) {
-	mock.Reset(cross(cur))
+	Reset(cross(cur))
 	testStore = newMockStore()
-	testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
+	testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
 
 	onlyMakerOrder := z.TokenOrderV2{
 		Kind:        z.TOKEN_ORDER_KIND_SOLVE,
@@ -184,13 +183,13 @@ func TestExecuteBatchPropagatesOnlyMakerAndSkipsRemainingChildren(cur realm, t *
 
 	uassert.NoError(t, err)
 	uassert.True(t, bytes.Equal(z.ACK_ERR_ONLY_MAKER, ack))
-	uassert.Equal(t, 0, mock.Calls(cross(cur)))
+	uassert.Equal(t, 0, Calls(cross(cur)))
 }
 
 func TestExecuteBatchRunsTokenOrderThenCall(cur realm, t *testing.T) {
-	mock.Reset(cross(cur))
+	Reset(cross(cur))
 	testStore = newMockStore()
-	testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
+	testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
 
 	v := newTestImpl()
 	path := u256.Zero()
@@ -224,10 +223,10 @@ func TestExecuteBatchRunsTokenOrderThenCall(cur realm, t *testing.T) {
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(21), voucherBalanceOf(quoteDenom, address(receiver)))
 	uassert.Equal(t, int64(79), voucherBalanceOf(quoteDenom, address(relayer)))
-	uassert.Equal(t, 1, mock.Calls(cross(cur)))
-	uassert.Equal(t, "post-transfer-action", mock.LastCalldata(cross(cur)))
-	uassert.Equal(t, relayer, mock.LastRelayer(cross(cur)))
-	uassert.Equal(t, "relay-msg", mock.LastRelayerMsg(cross(cur)))
+	uassert.Equal(t, 1, Calls(cross(cur)))
+	uassert.Equal(t, "post-transfer-action", LastCalldata(cross(cur)))
+	uassert.Equal(t, relayer, LastRelayer(cross(cur)))
+	uassert.Equal(t, "relay-msg", LastRelayerMsg(cross(cur)))
 
 	outerAck, err := z.DecodeAck(ackBytes)
 	uassert.NoError(t, err)

@@ -10,6 +10,7 @@ import (
 )
 
 func TestGetClientGetters(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	lc := &mockLightClient{latestHeight: 42, timestampAtHt: types.Timestamp(123)}
 	clientId := createClient(cur, v, lc, nil, nil)
@@ -57,6 +58,7 @@ func TestGetClientGetters(cur realm, t *testing.T) {
 }
 
 func TestGetMissingClient(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 
 	cases := []struct {
@@ -105,6 +107,7 @@ func TestGetMissingClient(cur realm, t *testing.T) {
 }
 
 func TestGetTimestampAtHeightPropagatesClientError(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{timestampErr: "height missing"}, nil, nil)
 
@@ -114,6 +117,7 @@ func TestGetTimestampAtHeightPropagatesClientError(cur realm, t *testing.T) {
 }
 
 func TestGetFrozenStatus(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{status: lightclient.Frozen}, nil, nil)
 
@@ -123,6 +127,7 @@ func TestGetFrozenStatus(cur realm, t *testing.T) {
 }
 
 func TestGetBestEffortGetters(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	ms := v.store.(*mockStore)
 	ms.channels[1] = types.Channel{State: types.ChannelStateOpen, ConnectionId: types.ConnectionId(1)}
@@ -133,6 +138,7 @@ func TestGetBestEffortGetters(cur realm, t *testing.T) {
 }
 
 func TestGetConnectionAndChannel(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	ms := v.store.(*mockStore)
 	ms.SaveConnection(0, cur, types.ConnectionId(1),
@@ -155,6 +161,7 @@ func TestGetConnectionAndChannel(cur realm, t *testing.T) {
 }
 
 func TestGetBatchCommitmentGetters(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	ms := v.store.(*mockStore)
 	packetHash := types.Keccak([]byte("batch-packets"))
@@ -217,6 +224,7 @@ func TestGetBatchCommitmentGetters(cur realm, t *testing.T) {
 }
 
 func TestGetCommittedProofGetters(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	clientId := types.ClientId(7)
 	path := types.Bytes("clients/7/consensusStates/11")

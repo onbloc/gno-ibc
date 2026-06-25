@@ -9,10 +9,12 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
-	"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
+// mockReceiverPath is the registry key the dispatch tests register the inline
+// mock receiver under (see mock_receiver_test.gno). It is a stable identifier,
+// not a deployed realm path.
 const mockReceiverPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"
 
 func TestExecuteCall(cur realm, t *testing.T) {
@@ -40,10 +42,10 @@ func TestExecuteCall(cur realm, t *testing.T) {
 				ContractAddress:  []byte(mockReceiverPath),
 				ContractCalldata: []byte("calldata"),
 			},
-			relayer:     address("g1relayer"),
-			relayerMsg:  []byte("relay-msg"),
+			relayer:    address("g1relayer"),
+			relayerMsg: []byte("relay-msg"),
 			setup: func() {
-				testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
+				testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
 			},
 			wantStatus:      types.PacketStatusSuccess,
 			wantCalls:       1,
@@ -52,15 +54,15 @@ func TestExecuteCall(cur realm, t *testing.T) {
 				ack, err := z.DecodeAck(res.Acknowledgement)
 				uassert.NoError(t, err)
 				uassert.True(t, ack.Tag.Eq(tagAckSuccess()))
-				uassert.Equal(t, "7", mock.LastSourceChannel(cross(cur)))
-				uassert.Equal(t, "8", mock.LastDestinationChannel(cross(cur)))
-				uassert.Equal(t, "sender", mock.LastSender(cross(cur)))
-				uassert.Equal(t, "calldata", mock.LastCalldata(cross(cur)))
-				uassert.Equal(t, "g1relayer", mock.LastCaller(cross(cur)))
-				uassert.Equal(t, "g1relayer", mock.LastRelayer(cross(cur)))
-				uassert.Equal(t, "relay-msg", mock.LastRelayerMsg(cross(cur)))
-				uassert.Equal(t, "9", mock.LastPathDec(cross(cur)))
-				uassert.Equal(t, z.PredictCallProxyAccount(path, types.ChannelId(8), []byte("sender")), mock.LastProxyAccount(cross(cur)))
+				uassert.Equal(t, "7", LastSourceChannel(cross(cur)))
+				uassert.Equal(t, "8", LastDestinationChannel(cross(cur)))
+				uassert.Equal(t, "sender", LastSender(cross(cur)))
+				uassert.Equal(t, "calldata", LastCalldata(cross(cur)))
+				uassert.Equal(t, "g1relayer", LastCaller(cross(cur)))
+				uassert.Equal(t, "g1relayer", LastRelayer(cross(cur)))
+				uassert.Equal(t, "relay-msg", LastRelayerMsg(cross(cur)))
+				uassert.Equal(t, "9", LastPathDec(cross(cur)))
+				uassert.Equal(t, z.PredictCallProxyAccount(path, types.ChannelId(8), []byte("sender")), LastProxyAccount(cross(cur)))
 			},
 		},
 		{
@@ -70,11 +72,11 @@ func TestExecuteCall(cur realm, t *testing.T) {
 				ContractAddress:  []byte(mockReceiverPath),
 				ContractCalldata: []byte("calldata"),
 			},
-			intent:      true,
-			relayer:     address("g1maker"),
-			relayerMsg:  []byte("mm-msg"),
+			intent:     true,
+			relayer:    address("g1maker"),
+			relayerMsg: []byte("mm-msg"),
 			setup: func() {
-				testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
+				testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
 			},
 			wantStatus:      types.PacketStatusSuccess,
 			wantCalls:       0,
@@ -83,8 +85,8 @@ func TestExecuteCall(cur realm, t *testing.T) {
 				ack, err := z.DecodeAck(res.Acknowledgement)
 				uassert.NoError(t, err)
 				uassert.True(t, ack.Tag.Eq(tagAckSuccess()))
-				uassert.Equal(t, "calldata", mock.LastIntentCalldata(cross(cur)))
-				uassert.Equal(t, "g1maker", mock.LastIntentMarketMaker(cross(cur)))
+				uassert.Equal(t, "calldata", LastIntentCalldata(cross(cur)))
+				uassert.Equal(t, "g1maker", LastIntentMarketMaker(cross(cur)))
 			},
 		},
 		{
@@ -95,8 +97,8 @@ func TestExecuteCall(cur realm, t *testing.T) {
 			},
 			relayer: address("g1relayer"),
 			setup: func() {
-				testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
-				mock.SetError(cross(cur), "receiver failed")
+				testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
+				SetError(cross(cur), "receiver failed")
 			},
 			wantStatus:       types.PacketStatusFailure,
 			wantFailureInner: "receiver failed",
@@ -109,8 +111,8 @@ func TestExecuteCall(cur realm, t *testing.T) {
 			},
 			relayer: address("g1relayer"),
 			setup: func() {
-				testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
-				mock.SetPanic(cross(cur), "boom")
+				testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
+				SetPanic(cross(cur), "boom")
 			},
 			wantStatus:    types.PacketStatusSuccess,
 			wantOnlyMaker: true,
@@ -145,8 +147,8 @@ func TestExecuteCall(cur realm, t *testing.T) {
 			intent:  true,
 			relayer: address("g1relayer"),
 			setup: func() {
-				testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
-				mock.SetError(cross(cur), "intent receiver failed")
+				testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
+				SetError(cross(cur), "intent receiver failed")
 			},
 			wantStatus:    types.PacketStatusSuccess,
 			wantOnlyMaker: true,
@@ -155,7 +157,7 @@ func TestExecuteCall(cur realm, t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			mock.Reset(cross(cur))
+			Reset(cross(cur))
 			if tc.setup != nil {
 				tc.setup()
 			}
@@ -177,8 +179,8 @@ func TestExecuteCall(cur realm, t *testing.T) {
 				return
 			}
 
-			uassert.Equal(t, tc.wantCalls, mock.Calls(cross(cur)))
-			uassert.Equal(t, tc.wantIntentCalls, mock.IntentCalls(cross(cur)))
+			uassert.Equal(t, tc.wantCalls, Calls(cross(cur)))
+			uassert.Equal(t, tc.wantIntentCalls, IntentCalls(cross(cur)))
 			if tc.assertions != nil {
 				tc.assertions(res)
 			}
@@ -187,9 +189,9 @@ func TestExecuteCall(cur realm, t *testing.T) {
 }
 
 func TestIntentRecvOnlyMakerCallAborts(cur realm, t *testing.T) {
-	mock.Reset(cross(cur))
-	testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
-	mock.SetPanic(cross(cur), "boom")
+	Reset(cross(cur))
+	testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
+	SetPanic(cross(cur), "boom")
 	data := mustZkgmPacketBytes(batchMustCallInstruction(z.Call{
 		Sender:          []byte("sender"),
 		ContractAddress: []byte(mockReceiverPath),
@@ -300,26 +302,26 @@ func TestTimeoutCall(cur realm, t *testing.T) {
 }
 
 func TestSafeCallOnZkgm(cur realm, t *testing.T) {
-	mock.Reset(cross(cur))
-	testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
-	receiver := mock.Zkgmable(cross(cur))
+	Reset(cross(cur))
+	testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
+	receiver := Zkgmable(cross(cur))
 	env := z.CallEnv{Caller: "relayer"}
 
 	cases := []struct {
-		name          string
-		setup         func()
-		wantErr       bool
-		wantPanicked  bool
+		name         string
+		setup        func()
+		wantErr      bool
+		wantPanicked bool
 	}{
 		{
-			name:     "receiver success returns nil no-panic",
-			wantErr:  false,
+			name:         "receiver success returns nil no-panic",
+			wantErr:      false,
 			wantPanicked: false,
 		},
 		{
 			name: "receiver error returns error no-panic",
 			setup: func() {
-				mock.SetError(cross(cur), "call failed")
+				SetError(cross(cur), "call failed")
 			},
 			wantErr:      true,
 			wantPanicked: false,
@@ -327,7 +329,7 @@ func TestSafeCallOnZkgm(cur realm, t *testing.T) {
 		{
 			name: "receiver panic returns nil panicked",
 			setup: func() {
-				mock.SetPanic(cross(cur), "boom")
+				SetPanic(cross(cur), "boom")
 			},
 			wantErr:      false,
 			wantPanicked: true,
@@ -336,8 +338,8 @@ func TestSafeCallOnZkgm(cur realm, t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			mock.Reset(cross(cur))
-			testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
+			Reset(cross(cur))
+			testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
 			if tc.setup != nil {
 				tc.setup()
 			}
@@ -354,26 +356,26 @@ func TestSafeCallOnZkgm(cur realm, t *testing.T) {
 }
 
 func TestSafeCallOnIntentZkgm(cur realm, t *testing.T) {
-	mock.Reset(cross(cur))
-	testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
-	receiver := mock.Zkgmable(cross(cur))
+	Reset(cross(cur))
+	testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
+	receiver := Zkgmable(cross(cur))
 	env := z.IntentCallEnv{Caller: "maker"}
 
 	cases := []struct {
-		name          string
-		setup         func()
-		wantErr       bool
-		wantPanicked  bool
+		name         string
+		setup        func()
+		wantErr      bool
+		wantPanicked bool
 	}{
 		{
-			name:     "receiver success returns nil no-panic",
-			wantErr:  false,
+			name:         "receiver success returns nil no-panic",
+			wantErr:      false,
 			wantPanicked: false,
 		},
 		{
 			name: "receiver error returns error no-panic",
 			setup: func() {
-				mock.SetError(cross(cur), "intent failed")
+				SetError(cross(cur), "intent failed")
 			},
 			wantErr:      true,
 			wantPanicked: false,
@@ -381,7 +383,7 @@ func TestSafeCallOnIntentZkgm(cur realm, t *testing.T) {
 		{
 			name: "receiver panic returns nil panicked",
 			setup: func() {
-				mock.SetPanic(cross(cur), "intent boom")
+				SetPanic(cross(cur), "intent boom")
 			},
 			wantErr:      false,
 			wantPanicked: true,
@@ -390,8 +392,8 @@ func TestSafeCallOnIntentZkgm(cur realm, t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			mock.Reset(cross(cur))
-			testStore.SetReceiver(0, cur, mockReceiverPath, mock.Zkgmable(cross(cur)))
+			Reset(cross(cur))
+			testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
 			if tc.setup != nil {
 				tc.setup()
 			}

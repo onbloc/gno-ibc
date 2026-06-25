@@ -23,7 +23,12 @@ func (v *ucs03ZkgmV1) increaseChannelBalanceV2(_ int, rlm realm, channelId types
 		curAmount = u256.Zero()
 	}
 
-	calculatedAmount := u256.Zero().Add(curAmount, amount)
+	// silently storing a smaller balance. This entrypoint returns no error,
+	// so an overflow aborts the tx via panic.
+	calculatedAmount, overflow := u256.Zero().AddOverflow(curAmount, amount)
+	if overflow {
+		panic(errChannelBalanceOverflow)
+	}
 
 	v.store.SetChannelBalanceV2(0, rlm, key, calculatedAmount)
 }
@@ -38,7 +43,11 @@ func (v *ucs03ZkgmV1) decreaseChannelBalanceV2(_ int, rlm realm, channelId types
 		return makeError(errChannelBalanceUnderflow)
 	}
 
-	calculatedAmount := u256.Zero().Sub(curAmount, amount)
+	// This entrypoint returns an error, so an underflow aborts the tx via return.
+	calculatedAmount, underflow := u256.Zero().SubOverflow(curAmount, amount)
+	if underflow {
+		return makeError(errChannelBalanceUnderflow)
+	}
 
 	v.store.SetChannelBalanceV2(0, rlm, key, calculatedAmount)
 

@@ -25,7 +25,8 @@ const (
 )
 
 func emitZkgmImplUpdatedEvent(callerPkgPath string, oldImplPath string, newImplPath string, allowed []string) {
-	chain.Emit(ZkgmImplUpdatedEvent,
+	chain.Emit(
+		ZkgmImplUpdatedEvent,
 		"caller_pkg_path", callerPkgPath,
 		"old_impl_path", oldImplPath,
 		"new_impl_path", newImplPath,
@@ -34,7 +35,8 @@ func emitZkgmImplUpdatedEvent(callerPkgPath string, oldImplPath string, newImplP
 }
 
 func emitZkgmImplForceSetEvent(admin address, oldImplPath string, implCleared bool, allowed []string) {
-	chain.Emit(ZkgmImplForceSetEvent,
+	chain.Emit(
+		ZkgmImplForceSetEvent,
 		"admin", admin.String(),
 		"old_impl_path", oldImplPath,
 		"impl_cleared", strconv.FormatBool(implCleared),
@@ -43,19 +45,22 @@ func emitZkgmImplForceSetEvent(admin address, oldImplPath string, implCleared bo
 }
 
 func emitZkgmPausedEvent(admin address) {
-	chain.Emit(ZkgmPausedEvent,
+	chain.Emit(
+		ZkgmPausedEvent,
 		"admin", admin.String(),
 	)
 }
 
 func emitZkgmUnpausedEvent(admin address) {
-	chain.Emit(ZkgmUnpausedEvent,
+	chain.Emit(
+		ZkgmUnpausedEvent,
 		"admin", admin.String(),
 	)
 }
 
 func emitZkgmRateLimitBucketConfiguredEvent(admin address, denom string, capacity *u256.Uint, refillRate *u256.Uint) {
-	chain.Emit(ZkgmRateLimitBucketConfiguredEvent,
+	chain.Emit(
+		ZkgmRateLimitBucketConfiguredEvent,
 		"admin", admin.String(),
 		"denom", denom,
 		"capacity", capacity.ToString(),
@@ -64,20 +69,23 @@ func emitZkgmRateLimitBucketConfiguredEvent(admin address, denom string, capacit
 }
 
 func emitZkgmRateLimitDisabledSetEvent(admin address, disabled bool) {
-	chain.Emit(ZkgmRateLimitDisabledSetEvent,
+	chain.Emit(
+		ZkgmRateLimitDisabledSetEvent,
 		"admin", admin.String(),
 		"disabled", strconv.FormatBool(disabled),
 	)
 }
 
 func emitZkgmReceiverRegisteredEvent(receiverPkgPath string) {
-	chain.Emit(ZkgmReceiverRegisteredEvent,
+	chain.Emit(
+		ZkgmReceiverRegisteredEvent,
 		"receiver_pkg_path", receiverPkgPath,
 	)
 }
 
 func emitZkgmNativeReleasedEvent(callerPkgPath string, denom string, recipient address, amount int64) {
-	chain.Emit(ZkgmNativeReleasedEvent,
+	chain.Emit(
+		ZkgmNativeReleasedEvent,
 		"caller_pkg_path", callerPkgPath,
 		"denom", denom,
 		"recipient", recipient.String(),
@@ -86,21 +94,24 @@ func emitZkgmNativeReleasedEvent(callerPkgPath string, denom string, recipient a
 }
 
 func emitZkgmForwardInFlightSetEvent(packetHash types.H256, parentPacketHash types.H256) {
-	chain.Emit(ZkgmForwardInFlightSetEvent,
+	chain.Emit(
+		ZkgmForwardInFlightSetEvent,
 		"packet_hash", packetHash.String(),
 		"parent_packet_hash", parentPacketHash.String(),
 	)
 }
 
 func emitZkgmForwardInFlightPoppedEvent(packetHash types.H256, found bool) {
-	chain.Emit(ZkgmForwardInFlightPoppedEvent,
+	chain.Emit(
+		ZkgmForwardInFlightPoppedEvent,
 		"packet_hash", packetHash.String(),
 		"found", strconv.FormatBool(found),
 	)
 }
 
-func EmitRecvError(sourceChannel types.ChannelId, destinationChannel types.ChannelId, reason string) {
-	chain.Emit(ZkgmRecvErrorEvent,
+func emitRecvError(sourceChannel types.ChannelId, destinationChannel types.ChannelId, reason string) {
+	chain.Emit(
+		ZkgmRecvErrorEvent,
 		"source_channel", sourceChannel.String(),
 		"destination_channel", destinationChannel.String(),
 		"reason", reason,

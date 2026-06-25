@@ -4,52 +4,66 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-// emit.gno exposes the host event emitters the injected impl calls so that
-// events are emitted from the core (proxy) realm, keeping the IBC host as the
-// stable event source across impl upgrades. Mirrors EmitRecvError used by the
-
 // EmitRegisterClient emits the RegisterClient host event.
-func EmitRegisterClient(clientType types.ClientType) {
+func EmitRegisterClient(_ int, rlm realm, clientType types.ClientType) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitRegisterClientEvent(clientType)
 }
 
 // EmitCreateClient emits the CreateClient host event.
-func EmitCreateClient(clientId types.ClientId, clientType types.ClientType, counterpartyChainId string) {
+func EmitCreateClient(_ int, rlm realm, clientId types.ClientId, clientType types.ClientType, counterpartyChainId string) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitCreateClientEvent(clientId, clientType, counterpartyChainId)
 }
 
 // EmitUpdateClient emits the UpdateClient host event.
-func EmitUpdateClient(clientId types.ClientId, height types.Height) {
+func EmitUpdateClient(_ int, rlm realm, clientId types.ClientId, height types.Height) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitUpdateClientEvent(clientId, height)
 }
 
 // EmitForceUpdateClient emits the ForceUpdateClient host event.
-func EmitForceUpdateClient(clientId types.ClientId, height types.Height) {
+func EmitForceUpdateClient(_ int, rlm realm, clientId types.ClientId, height types.Height) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitForceUpdateClientEvent(clientId, height)
 }
 
 // EmitMisbehaviour emits the Misbehaviour host event.
-func EmitMisbehaviour(clientId types.ClientId) {
+func EmitMisbehaviour(_ int, rlm realm, clientId types.ClientId) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitMisbehaviourEvent(clientId)
 }
 
 // EmitConnectionOpenInit emits the ConnectionOpenInit host event.
-func EmitConnectionOpenInit(connectionId types.ConnectionId, clientId, counterpartyClientId types.ClientId) {
+func EmitConnectionOpenInit(_ int, rlm realm, connectionId types.ConnectionId, clientId, counterpartyClientId types.ClientId) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitConnectionOpenInitEvent(connectionId, clientId, counterpartyClientId)
 }
 
 // EmitConnectionOpenTry emits the ConnectionOpenTry host event.
-func EmitConnectionOpenTry(connectionId types.ConnectionId, clientId, counterpartyClientId types.ClientId, counterpartyConnectionId types.ConnectionId) {
+func EmitConnectionOpenTry(_ int, rlm realm, connectionId types.ConnectionId, clientId, counterpartyClientId types.ClientId, counterpartyConnectionId types.ConnectionId) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitConnectionOpenTryEvent(connectionId, clientId, counterpartyClientId, counterpartyConnectionId)
 }
 
 // EmitConnectionOpenAck emits the ConnectionOpenAck host event.
-func EmitConnectionOpenAck(connectionId types.ConnectionId, clientId, counterpartyClientId types.ClientId, counterpartyConnectionId types.ConnectionId) {
+func EmitConnectionOpenAck(_ int, rlm realm, connectionId types.ConnectionId, clientId, counterpartyClientId types.ClientId, counterpartyConnectionId types.ConnectionId) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitConnectionOpenAckEvent(connectionId, clientId, counterpartyClientId, counterpartyConnectionId)
 }
 
 // EmitConnectionOpenConfirm emits the ConnectionOpenConfirm host event.
-func EmitConnectionOpenConfirm(connectionId types.ConnectionId, clientId, counterpartyClientId types.ClientId, counterpartyConnectionId types.ConnectionId) {
+func EmitConnectionOpenConfirm(_ int, rlm realm, connectionId types.ConnectionId, clientId, counterpartyClientId types.ClientId, counterpartyConnectionId types.ConnectionId) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitConnectionOpenConfirmEvent(connectionId, clientId, counterpartyClientId, counterpartyConnectionId)
 }
 
@@ -66,37 +80,51 @@ func ChannelValue(channel types.Channel) types.H256 {
 }
 
 // EmitChannelOpenInit emits the ChannelOpenInit host event.
-func EmitChannelOpenInit(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+func EmitChannelOpenInit(_ int, rlm realm, portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitChannelOpenInitEvent(portId, channelId, channel, connection)
 }
 
 // EmitChannelOpenTry emits the ChannelOpenTry host event.
-func EmitChannelOpenTry(portId types.Bytes, channelId types.ChannelId, channel types.Channel, counterpartyVersion string, connection types.Connection) {
+func EmitChannelOpenTry(_ int, rlm realm, portId types.Bytes, channelId types.ChannelId, channel types.Channel, counterpartyVersion string, connection types.Connection) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitChannelOpenTryEvent(portId, channelId, channel, counterpartyVersion, connection)
 }
 
 // EmitChannelOpenAck emits the ChannelOpenAck host event.
-func EmitChannelOpenAck(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+func EmitChannelOpenAck(_ int, rlm realm, portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitChannelOpenAckEvent(portId, channelId, channel, connection)
 }
 
 // EmitChannelOpenConfirm emits the ChannelOpenConfirm host event.
-func EmitChannelOpenConfirm(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+func EmitChannelOpenConfirm(_ int, rlm realm, portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitChannelOpenConfirmEvent(portId, channelId, channel, connection)
 }
 
 // EmitChannelCloseInit emits the ChannelCloseInit host event.
-func EmitChannelCloseInit(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+func EmitChannelCloseInit(_ int, rlm realm, portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitChannelCloseInitEvent(portId, channelId, channel, connection)
 }
 
 // EmitChannelCloseConfirm emits the ChannelCloseConfirm host event.
-func EmitChannelCloseConfirm(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+func EmitChannelCloseConfirm(_ int, rlm realm, portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitChannelCloseConfirmEvent(portId, channelId, channel, connection)
 }
 
 // EmitAppRegistered emits the AppRegistered host event.
-func EmitAppRegistered(portId []byte, registrarPkgPath string, adminOverride bool) {
+func EmitAppRegistered(_ int, rlm realm, portId []byte, registrarPkgPath string, adminOverride bool) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitAppRegisteredEvent(portId, registrarPkgPath, adminOverride)
 }
 
@@ -113,51 +141,71 @@ func CommitPacketsHash(packets []types.Packet) types.H256 {
 }
 
 // EmitPacketSend emits the PacketSend host event.
-func EmitPacketSend(packet types.Packet, sourceChannel types.Channel, sourceConnection types.Connection) {
+func EmitPacketSend(_ int, rlm realm, packet types.Packet, sourceChannel types.Channel, sourceConnection types.Connection) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitPacketSendEvent(packet, sourceChannel, sourceConnection)
 }
 
 // EmitPacketRecv emits the PacketRecv host event.
-func EmitPacketRecv(packet types.Packet, channel types.Channel, connection types.Connection, relayerMsg []byte) {
+func EmitPacketRecv(_ int, rlm realm, packet types.Packet, channel types.Channel, connection types.Connection, relayerMsg []byte) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitPacketRecvEvent(PacketRecvEvent, packet, channel, connection, "maker_msg", relayerMsg)
 }
 
 // EmitIntentPacketRecv emits the IntentPacketRecv host event.
-func EmitIntentPacketRecv(packet types.Packet, channel types.Channel, connection types.Connection, marketMakerMsg []byte) {
+func EmitIntentPacketRecv(_ int, rlm realm, packet types.Packet, channel types.Channel, connection types.Connection, marketMakerMsg []byte) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitPacketRecvEvent(IntentPacketRecvEvent, packet, channel, connection, "market_maker_msg", marketMakerMsg)
 }
 
 // EmitPacketAck emits the PacketAck host event.
-func EmitPacketAck(packet types.Packet, sourceChannel types.Channel, connection types.Connection, acknowledgement []byte) {
+func EmitPacketAck(_ int, rlm realm, packet types.Packet, sourceChannel types.Channel, connection types.Connection, acknowledgement []byte) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitPacketAckEvent(packet, sourceChannel, connection, acknowledgement)
 }
 
 // EmitPacketTimeout emits the PacketTimeout host event.
-func EmitPacketTimeout(packet types.Packet, sourceChannel types.Channel, connection types.Connection) {
+func EmitPacketTimeout(_ int, rlm realm, packet types.Packet, sourceChannel types.Channel, connection types.Connection) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitPacketTimeoutEvent(packet, sourceChannel, connection)
 }
 
 // EmitWriteAck emits the WriteAck host event.
-func EmitWriteAck(packet types.Packet, channel types.Channel, connection types.Connection, acknowledgement []byte) {
+func EmitWriteAck(_ int, rlm realm, packet types.Packet, channel types.Channel, connection types.Connection, acknowledgement []byte) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitWriteAckEvent(packet, channel, connection, acknowledgement)
 }
 
 // EmitBatchSend emits the BatchSend host event.
-func EmitBatchSend(channelId types.ChannelId, packetHash, batchHash types.H256) {
+func EmitBatchSend(_ int, rlm realm, channelId types.ChannelId, packetHash, batchHash types.H256) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitBatchSendEvent(channelId, packetHash, batchHash)
 }
 
 // EmitBatchAcks emits the BatchAcks host event.
-func EmitBatchAcks(channelId types.ChannelId, packetHash, batchHash types.H256) {
+func EmitBatchAcks(_ int, rlm realm, channelId types.ChannelId, packetHash, batchHash types.H256) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitBatchAcksEvent(channelId, packetHash, batchHash)
 }
 
 // EmitCommitMembershipProof emits the CommitMembershipProof host event.
-func EmitCommitMembershipProof(msg types.MsgCommitMembershipProof) {
+func EmitCommitMembershipProof(_ int, rlm realm, msg types.MsgCommitMembershipProof) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitCommitMembershipProofEvent(msg)
 }
 
 // EmitCommitNonMembershipProof emits the CommitNonMembershipProof host event.
-func EmitCommitNonMembershipProof(msg types.MsgCommitNonMembershipProof) {
+func EmitCommitNonMembershipProof(_ int, rlm realm, msg types.MsgCommitNonMembershipProof) {
+	assertIsRlmCurrent(0, rlm)
+	assertIsProxyRealm(0, rlm)
 	emitCommitNonMembershipProofEvent(msg)
 }

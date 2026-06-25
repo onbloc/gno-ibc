@@ -42,6 +42,51 @@ func TestIncreaseChannelBalanceV2(cur realm, t *testing.T) {
 	}
 }
 
+// increaseChannelBalanceV2 panics on uint256 overflow instead of silently
+// wrapping the escrow balance back below its prior value. The balance is seeded
+// directly in the store so a near-2^256 starting point is reachable, then a
+// deposit that would cross the ceiling is rejected and the stored balance is left
+// untouched.
+func TestIncreaseChannelBalanceV2Overflow(cur realm, t *testing.T) {
+	maxU256 := func() *u256.Uint { return new(u256.Uint).SetAllOne() }
+
+	cases := []struct {
+		name      string
+		seed      *u256.Uint
+		add       *u256.Uint
+		wantPanic bool
+		wantBal   *u256.Uint
+	}{
+		{"max plus one overflows", maxU256(), u256.NewUint(1), true, maxU256()},
+		{"max plus large overflows", maxU256(), maxU256(), true, maxU256()},
+		{"max plus zero stays max", maxU256(), u256.NewUint(0), false, maxU256()},
+		{"sum to exactly max does not overflow", u256.Zero().Sub(maxU256(), u256.NewUint(5)), u256.NewUint(5), false, maxU256()},
+	}
+	v := newTestImpl()
+	path := u256.Zero()
+	quote := []byte("uosmo")
+	for i, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			chanId := types.ChannelId(300 + i)
+			base := []byte("incof-" + tc.name)
+			key := ChannelBalanceKeyV2(chanId, path, base, quote)
+			testStore.SetChannelBalanceV2(0, cur, key, tc.seed)
+
+			if tc.wantPanic {
+				uassert.PanicsContains(t, cur, "overflow", func() {
+					v.increaseChannelBalanceV2(0, cur, chanId, path, base, quote, tc.add)
+				})
+			} else {
+				v.increaseChannelBalanceV2(0, cur, chanId, path, base, quote, tc.add)
+			}
+
+			got, ok := testStore.GetChannelBalanceV2(key)
+			uassert.True(t, ok)
+			uassert.True(t, got.Eq(tc.wantBal))
+		})
+	}
+}
+
 // decreaseChannelBalanceV2 spends escrow: a partial spend leaves a remainder, an
 // exact spend preserves a zero entry, an over-spend underflows, and a zero spend
 // on an empty balance underflows.

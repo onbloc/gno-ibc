@@ -28,8 +28,8 @@ func nextTestConnectionId() types.ConnectionId {
 	return types.ConnectionId(testConnectionSeq)
 }
 
-func tagAckSuccessU256() *u256.Uint    { return new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:]) }
-func fillTypeProtocolU256() *u256.Uint { return new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:]) }
+func tagAckSuccessU256() *u256.Uint    { return u256.Zero().SetBytes(z.TAG_ACK_SUCCESS[:]) }
+func fillTypeProtocolU256() *u256.Uint { return u256.Zero().SetBytes(z.FILL_TYPE_PROTOCOL[:]) }
 
 type ChannelPair struct {
 	ClientId     types.ClientId

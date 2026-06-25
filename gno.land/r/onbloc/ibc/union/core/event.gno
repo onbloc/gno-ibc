@@ -225,8 +225,12 @@ func packetEventBaseAttrs(packet types.Packet) []string {
 	return append(attrs, eventAttrColumns("packet_data", packetData)...)
 }
 
+// PacketDataEventSize returns the length of packet data after hexAttr encoding.
+//
+// It avoids building the encoded string on the packet entrypoint validation path,
+// while matching the emitted packet_data_size and packet_data column budget.
 func PacketDataEventSize(data []byte) int {
-	return len(hexAttr(data))
+	return len(data)*2 + 2
 }
 
 func eventAttrColumns(key string, value string) []string {

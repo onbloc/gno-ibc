@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 
 	"gno.land/p/onbloc/ibc/union/types"
@@ -113,4 +114,8 @@ func hexAttr(b []byte) string {
 
 func h256String(h types.H256) string {
 	return hexString(h[:])
+}
+
+func base64String(b []byte) string {
+	return base64.StdEncoding.EncodeToString(b)
 }

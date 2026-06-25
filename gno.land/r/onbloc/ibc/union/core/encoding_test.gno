@@ -1,8 +1,12 @@
 package core
 
 import (
+	"encoding/hex"
+	"strings"
 	"testing"
 
+	"gno.land/p/nt/uassert/v0"
+	"gno.land/p/nt/ufmt/v0"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
@@ -238,6 +242,115 @@ func TestHexEncoding(cur realm, t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, tc.assert)
+	}
+}
+
+// TestHexVsBase64Encoding feeds the same byte input to hexString and
+// base64String and compares the two encodings side by side across byte lengths.
+// For each length it asserts the expected output string and the expected string
+// length: hex is "0x" + 2 chars/byte (2 + 2n), base64 is 4 chars per 3-byte
+// group with padding (4 * ceil(n/3)). The two encodings of the same bytes must
+// always differ.
+func TestHexVsBase64Encoding(cur realm, t *testing.T) {
+	// repeating 0x00 0x0f 0xff pattern so each extra byte changes both encodings.
+	sample := func(n int) []byte {
+		pattern := []byte{0x00, 0x0f, 0xff}
+		out := make([]byte, n)
+		for i := 0; i < n; i++ {
+			out[i] = pattern[i%len(pattern)]
+		}
+		return out
+	}
+
+	cases := []struct {
+		n int
+		// wantHexLen/wantBase64Len are the predicted output string lengths:
+		// hex = 2 ("0x") + 2*n, base64 = 4 * ceil(n/3). Spelled out per case so
+		// the expectation is explicit, and cross-checked against the formula.
+		wantHexLen    int
+		wantBase64Len int
+	}{
+		{
+			n:             0,
+			wantHexLen:    2,
+			wantBase64Len: 0,
+		},
+		{
+			n:             1,
+			wantHexLen:    4,
+			wantBase64Len: 4,
+		},
+		{
+			n:             2,
+			wantHexLen:    6,
+			wantBase64Len: 4,
+		},
+		{
+			n:             3,
+			wantHexLen:    8,
+			wantBase64Len: 4,
+		},
+		{
+			n:             4,
+			wantHexLen:    10,
+			wantBase64Len: 8,
+		},
+		{
+			n:             5,
+			wantHexLen:    12,
+			wantBase64Len: 8,
+		},
+		{
+			n:             6,
+			wantHexLen:    14,
+			wantBase64Len: 8,
+		},
+		{
+			n:             100,
+			wantHexLen:    202,
+			wantBase64Len: 136,
+		},
+		{ // ZKGM Packet Size Test
+			n:             800,
+			wantHexLen:    1602,
+			wantBase64Len: 1068,
+		},
+		{
+			n:             1000,
+			wantHexLen:    2002,
+			wantBase64Len: 1336,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(ufmt.Sprintf("len_%d", tc.n), func(t *testing.T) {
+			in := sample(tc.n)
+
+			gotHex := hexString(in)
+			gotB64 := base64String(in)
+
+			// the hand-written predicted lengths must match the length formulas
+			// (hex = 2 + 2n, base64 = 4 * ceil(n/3)). This guards the table itself.
+			uassert.Equal(t, 2+2*tc.n, tc.wantHexLen)
+			uassert.Equal(t, 4*((tc.n+2)/3), tc.wantBase64Len)
+
+			// predicted output lengths hold at every size.
+			uassert.Equal(t, tc.wantHexLen, len(gotHex))
+			uassert.Equal(t, tc.wantBase64Len, len(gotB64))
+
+			// hex is always the "0x" prefix followed by lowercase hex; decoding
+			// the body must round-trip back to the original bytes at any length.
+			uassert.True(t, strings.HasPrefix(gotHex, "0x"))
+			decoded, err := hex.DecodeString(gotHex[2:])
+			uassert.NoError(t, err)
+			uassert.Equal(t, string(in), string(decoded))
+
+			// the two encodings of identical bytes must never collide
+			// (the empty input is the sole exception: "0x" vs "").
+			if tc.n > 0 && gotHex == gotB64 {
+				t.Errorf("hex and base64 must differ for the same input: %q", gotHex)
+			}
+		})
 	}
 }
 

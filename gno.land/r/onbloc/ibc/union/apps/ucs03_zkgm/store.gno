@@ -148,14 +148,22 @@ func (s *Store) GetChannelBalanceV2(key string) (*u256.Uint, bool) {
 func (s *Store) AddLockedNative(_ int, rlm realm, denom string, amount *u256.Uint) {
 	assertIsRlmCurrent(0, rlm)
 
-	total := u256.Zero()
-	if cur, ok := s.lockedNative.Get(denom); ok {
-		total.Set(cur.(*u256.Uint))
+	totalLockedAmount := u256.Zero()
+
+	lockedNativeAmount, exists := s.GetLockedNative(denom)
+	if exists && lockedNativeAmount != nil {
+		totalLockedAmount = u256.Zero().Set(lockedNativeAmount)
 	}
 
-	total.Add(total, amount)
+	// Reject a wraparound past 2^256-1 rather than silently storing a smaller
+	// totalLockedAmount, which would break the proxy balance invariant.
+	// Astronomically unreachable for real coin supplies, but guarded for safety.
+	totalLockedAmount, overflow := u256.Zero().AddOverflow(totalLockedAmount, amount)
+	if overflow {
+		panic(ErrLockedNativeOverflow)
+	}
 
-	s.lockedNative.Set(denom, total.Clone())
+	s.lockedNative.Set(denom, totalLockedAmount.Clone())
 }
 
 // GetLockedNative returns the total native permanently locked for a denom.
@@ -165,7 +173,12 @@ func (s *Store) GetLockedNative(denom string) (*u256.Uint, bool) {
 		return nil, false
 	}
 
-	return v.(*u256.Uint), true
+	lockedNativeAmount, ok := v.(*u256.Uint)
+	if !ok {
+		panic(ErrInterfaceConversion)
+	}
+
+	return lockedNativeAmount, true
 }
 
 // SetMetadataImageOf records a wrapped denom's metadata image.

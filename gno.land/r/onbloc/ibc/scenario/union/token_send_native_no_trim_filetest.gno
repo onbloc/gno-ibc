@@ -10,12 +10,12 @@ import (
 	"testing"
 
 	"gno.land/p/nt/ufmt/v0"
-	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
 	u256 "gno.land/p/gnoswap/uint256"
 
+	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 	"gno.land/r/onbloc/ibc/union/access"
 
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
@@ -26,12 +26,11 @@ import (
 )
 
 const (
-	coreImplPath   = "gno.land/r/onbloc/ibc/union/core/v1"
-	zkgmImplPath   = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
-	adminAddr      = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
-	senderAddr     = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
-	receiverAddr   = address("g1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqlldmu")
-	mockClientType = types.ClientType("scenario-mock-lc")
+	coreImplPath = "gno.land/r/onbloc/ibc/union/core/v1"
+	zkgmImplPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
+	adminAddr    = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
+	senderAddr   = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+	receiverAddr = address("g1qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqlldmu")
 )
 
 func main(cur realm) {
@@ -42,11 +41,10 @@ func main(cur realm) {
 	zkgm.SetRateLimitDisabled(cross(cur), true)
 	zkgm.RegisterCoreApp(cross(cur))
 	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
+	access.GrantRole(cross(cur), access.RelayerRole, mocklc.MockClientAddress(cross(cur)))
 
-	core.RegisterClient(cross(cur), mockClientType, func(_, _ []byte) (lightclient.Interface, error) {
-		return &mockLightClient{}, nil
-	})
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(mockClientType, nil, nil))
+	mocklc.RegisterMockLightClient(cross(cur))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(mocklc.MockClientType, nil, nil))
 	clientId := types.ClientId(1)
 
 	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
@@ -110,35 +108,6 @@ func mustOrderInstruction(order z.TokenOrderV2) z.Instruction {
 	}
 	return z.Instruction{Version: z.INSTR_VERSION_2, Opcode: z.OP_TOKEN_ORDER, Operand: operand}
 }
-
-type mockLightClient struct{}
-
-func (m *mockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
-func (m *mockLightClient) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
-func (m *mockLightClient) GetTimestamp() types.Timestamp                         { return types.Timestamp(1) }
-
-func (m *mockLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
-	return types.Timestamp(1), nil
-}
-func (m *mockLightClient) GetLatestHeight() uint64        { return 1 }
-func (m *mockLightClient) GetCounterpartyChainID() string { return "mock-chain" }
-func (m *mockLightClient) Status() lightclient.Status     { return lightclient.Active }
-
-func (m *mockLightClient) VerifyHeader(_ address, header []byte, _ address) (types.StateUpdate, error) {
-	return types.StateUpdate{Height: 1, ClientStateBytes: header, ConsensusStateBytes: header}, nil
-}
-
-func (m *mockLightClient) VerifyCreation(address, address) (types.ClientCreationResult, error) {
-	return types.ClientCreationResult{}, nil
-}
-
-func (m *mockLightClient) Misbehaviour(address, []byte, address) ([]byte, error) {
-	return nil, mockError("mock: misbehaviour unsupported")
-}
-
-type mockError string
-
-func (e mockError) Error() string { return string(e) }
 
 // Output:
 // [SCENARIO] Bootstrap IBC host and open client/connection/channel

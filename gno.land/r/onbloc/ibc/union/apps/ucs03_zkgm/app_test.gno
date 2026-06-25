@@ -51,11 +51,11 @@ func TestOnChannelOpenInit_OnlyIbc(cur realm, t *testing.T) {
 	currentImpl = d
 
 	// Do NOT impersonate core - call from a non-core realm
-	uassert.AbortsContains(t, cur, "ibc host only", func() {
+	uassert.AbortsContains(t, cur, ErrNotCoreRealm, func() {
 		(&App{}).OnChannelOpenInit(cross(cur), 1, 2, Version, address("g1relayer"))
 	})
 
-	// impl should not be called when caller is not IBC host
+	// impl should not be called when caller is not core realm
 	if d.openInitCalled {
 		t.Fatal("OnChannelOpenInit must not delegate for non-IBC caller")
 	}
@@ -112,11 +112,11 @@ func TestOnChannelOpenTry_OnlyIbc(cur realm, t *testing.T) {
 	currentImpl = d
 
 	// Do NOT impersonate core - call from a non-core realm
-	uassert.AbortsContains(t, cur, "ibc host only", func() {
+	uassert.AbortsContains(t, cur, ErrNotCoreRealm, func() {
 		(&App{}).OnChannelOpenTry(cross(cur), 1, 2, Version, Version, address("g1relayer"))
 	})
 
-	// impl should not be called when caller is not IBC host
+	// impl should not be called when caller is not core realm
 	if d.openTryCalled {
 		t.Fatal("OnChannelOpenTry must not delegate for non-IBC caller")
 	}
@@ -174,11 +174,11 @@ func TestOnChannelCloseInit_OnlyIbc(cur realm, t *testing.T) {
 
 	// Do NOT impersonate core - call from a non-core realm
 	// The caller gate runs before the close rejection
-	uassert.AbortsContains(t, cur, "ibc host only", func() {
+	uassert.AbortsContains(t, cur, ErrNotCoreRealm, func() {
 		(&App{}).OnChannelCloseInit(cross(cur), 2, address("g1relayer"))
 	})
 
-	// impl should not be called when caller is not IBC host
+	// impl should not be called when caller is not core realm
 	if d.closeInitCalled {
 		t.Fatal("OnChannelCloseInit must not delegate for non-IBC caller")
 	}
@@ -214,11 +214,11 @@ func TestOnChannelCloseConfirm_OnlyIbc(cur realm, t *testing.T) {
 
 	// Do NOT impersonate core - call from a non-core realm
 	// The caller gate runs before the close rejection
-	uassert.AbortsContains(t, cur, "ibc host only", func() {
+	uassert.AbortsContains(t, cur, ErrNotCoreRealm, func() {
 		(&App{}).OnChannelCloseConfirm(cross(cur), 2, address("g1relayer"))
 	})
 
-	// impl should not be called when caller is not IBC host
+	// impl should not be called when caller is not core realm
 	if d.closeConfirmCalled {
 		t.Fatal("OnChannelCloseConfirm must not delegate for non-IBC caller")
 	}
@@ -348,9 +348,9 @@ func TestOnChannelCloseConfirm_PausedBlocks(cur realm, t *testing.T) {
 // Additional Union-aligned Tests
 // ============================================================================
 
-// Test all IBC host caller validation for channel callbacks
+// Test all core realm caller validation for channel callbacks
 // Ensures only core realm can call channel handshake methods
-func TestAllChannelCallbacksRequireIbcHost(cur realm, t *testing.T) {
+func TestAllChannelCallbacksRequireCoreRealm(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 	d := &dummyImpl{}
 	currentImpl = d
@@ -368,7 +368,7 @@ func TestAllChannelCallbacksRequireIbcHost(cur realm, t *testing.T) {
 	for i, cb := range callbacks {
 		resetZkgmForTest(cur)
 		currentImpl = d
-		uassert.AbortsContains(t, cur, "ibc host only", func() { cb() })
+		uassert.AbortsContains(t, cur, ErrNotCoreRealm, func() { cb() })
 
 		// Verify no delegation happened
 		if d.openInitCalled || d.openTryCalled || d.openAckCalled || d.openConfirmCalled || d.closeInitCalled || d.closeConfirmCalled {
@@ -413,7 +413,7 @@ func TestOnRecvPacket_OnlyIbc(cur realm, t *testing.T) {
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Non-IBC caller is rejected
-	uassert.AbortsContains(t, cur, "ibc host only", func() {
+	uassert.AbortsContains(t, cur, ErrNotCoreRealm, func() {
 		(&App{}).OnRecvPacket(cross(cur), packet, address("g1relayer"), nil)
 	})
 
@@ -433,7 +433,7 @@ func TestOnIntentRecvPacket_OnlyIbc(cur realm, t *testing.T) {
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Non-IBC caller is rejected
-	uassert.AbortsContains(t, cur, "ibc host only", func() {
+	uassert.AbortsContains(t, cur, ErrNotCoreRealm, func() {
 		(&App{}).OnIntentRecvPacket(cross(cur), packet, address("g1maker"), nil)
 	})
 
@@ -453,7 +453,7 @@ func TestOnAcknowledgementPacket_OnlyIbc(cur realm, t *testing.T) {
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Non-IBC caller is rejected
-	uassert.AbortsContains(t, cur, "ibc host only", func() {
+	uassert.AbortsContains(t, cur, ErrNotCoreRealm, func() {
 		(&App{}).OnAcknowledgementPacket(cross(cur), packet, []byte{0x01}, address("g1relayer"))
 	})
 
@@ -473,7 +473,7 @@ func TestOnTimeoutPacket_OnlyIbc(cur realm, t *testing.T) {
 	packet := core.NewPacket(1, 2, []byte("data"), 0)
 
 	// Non-IBC caller is rejected
-	uassert.AbortsContains(t, cur, "ibc host only", func() {
+	uassert.AbortsContains(t, cur, ErrNotCoreRealm, func() {
 		(&App{}).OnTimeoutPacket(cross(cur), packet, address("g1relayer"))
 	})
 

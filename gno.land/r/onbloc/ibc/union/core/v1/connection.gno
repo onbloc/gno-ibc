@@ -43,7 +43,7 @@ func (c *coreV1) connectionOpenTry(_ int, rlm realm, msg types.MsgConnectionOpen
 		expectedConnection := core.NewConnection(types.ConnectionStateInit, msg.CounterpartyClientId, msg.ClientId, 0)
 		key := types.ConnectionPath(msg.CounterpartyConnectionId)
 		value := core.ConnectionValue(expectedConnection)
-		c.verifyMembership(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
+		c.verifyMembership(msg.ClientId, types.NewHeight(0, msg.ProofHeight), msg.ProofInit, key[:], value[:])
 	}
 
 	c.store.SaveConnection(0, rlm, connectionId, connection)
@@ -80,7 +80,7 @@ func (c *coreV1) connectionOpenAck(_ int, rlm realm, msg types.MsgConnectionOpen
 		expectedConnection := core.NewConnection(types.ConnectionStateTryOpen, connection.CounterpartyClientId, connection.ClientId, msg.ConnectionId)
 		key := types.ConnectionPath(msg.CounterpartyConnectionId)
 		value := core.ConnectionValue(expectedConnection)
-		c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofTry, key[:], value[:])
+		c.verifyMembership(connection.ClientId, types.NewHeight(0, msg.ProofHeight), msg.ProofTry, key[:], value[:])
 	}
 
 	// Build a fresh connection rather than mutating the store-owned one (the
@@ -123,7 +123,7 @@ func (c *coreV1) connectionOpenConfirm(_ int, rlm realm, msg types.MsgConnection
 		expectedConnection := core.NewConnection(types.ConnectionStateOpen, connection.CounterpartyClientId, connection.ClientId, msg.ConnectionId)
 		key := types.ConnectionPath(counterpartyConnectionId)
 		value := core.ConnectionValue(expectedConnection)
-		c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofAck, key[:], value[:])
+		c.verifyMembership(connection.ClientId, types.NewHeight(0, msg.ProofHeight), msg.ProofAck, key[:], value[:])
 	}
 
 	// Build a fresh connection rather than mutating the store-owned one.

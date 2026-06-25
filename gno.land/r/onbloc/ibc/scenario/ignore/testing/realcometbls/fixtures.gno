@@ -196,7 +196,7 @@ func clientStateBytes(trustingPeriod uint64, frozenHeight types.Height) []byte {
 		ChainID:         DevnetChainID,
 		TrustingPeriod:  trustingPeriod,
 		MaxClockDrift:   100 * 365 * 24 * 3600 * 1_000_000_000,
-		LatestHeight:    types.NewHeight(uint64(DevnetHeight - 1)),
+		LatestHeight:    types.NewHeight(0, uint64(DevnetHeight-1)),
 		FrozenHeight:    frozenHeight,
 		ContractAddress: mustH256("0cf2ffe8f45a20514018173d3007644817a9767dc0fbdb246696fd9c261ce3bc"),
 	})
@@ -427,7 +427,7 @@ func OneExistenceProofStub(cur realm) []byte {
 }
 
 func devnetHeader(proof []byte) cometblsp.Header {
-	trustedHeight := types.NewHeight(uint64(DevnetHeight - 1))
+	trustedHeight := types.NewHeight(0, uint64(DevnetHeight-1))
 
 	return cometblsp.Header{
 		SignedHeader: &cometblsp.LightHeader{

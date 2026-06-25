@@ -22,7 +22,7 @@ type rootGetterImpl struct {
 
 func newRootGetterImpl() *rootGetterImpl {
 	return &rootGetterImpl{
-		lc:       &mockClient{status: types.StatusActive, height: types.NewHeight(77), timestamp: types.Timestamp(123)},
+		lc:       &mockClient{status: types.StatusActive, height: types.NewHeight(0, 77), timestamp: types.Timestamp(123)},
 		packet:   types.Keccak([]byte("packet-commitment")),
 		receipt:  types.Keccak([]byte("receipt-commitment")),
 		proof:    types.Keccak([]byte("membership-proof")),
@@ -195,11 +195,11 @@ func TestRootScalarGetterWrappers(cur realm, t *testing.T) {
 		}, "", ErrClientNotFound},
 		{"latest height", func() (string, error) {
 			got, err := GetLatestHeight(types.ClientId(7))
-			return types.NewHeight(got).String(), err
-		}, types.NewHeight(77).String(), ""},
+			return types.NewHeight(0, got).String(), err
+		}, types.NewHeight(0, 77).String(), ""},
 		{"latest height missing", func() (string, error) {
 			got, err := GetLatestHeight(types.ClientId(8))
-			return types.NewHeight(got).String(), err
+			return types.NewHeight(0, got).String(), err
 		}, "", ErrClientNotFound},
 		{"timestamp", func() (string, error) {
 			got, err := GetTimestampAtHeight(types.ClientId(7), 11)
@@ -241,10 +241,10 @@ func TestRootByteGetterWrappers(cur realm, t *testing.T) {
 			return GetClientState(types.ClientId(8))
 		}, "", ErrClientStateNotFound},
 		{"consensus state", func() ([]byte, error) {
-			return GetConsensusState(types.ClientId(7), types.NewHeight(11))
+			return GetConsensusState(types.ClientId(7), types.NewHeight(0, 11))
 		}, "consensus-state", ""},
 		{"consensus state missing", func() ([]byte, error) {
-			return GetConsensusState(types.ClientId(7), types.NewHeight(12))
+			return GetConsensusState(types.ClientId(7), types.NewHeight(0, 12))
 		}, "", ErrConsensusStateNotFound},
 	}
 

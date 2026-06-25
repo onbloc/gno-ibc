@@ -14,8 +14,8 @@ func validClientState() ClientState {
 		TrustingPeriod:  1000,
 		UnbondingPeriod: 2000,
 		MaxClockDrift:   100,
-		FrozenHeight:    types.NewHeight(0),
-		LatestHeight:    types.NewHeight(100),
+		FrozenHeight:    types.NewHeight(0, 0),
+		LatestHeight:    types.NewHeight(0, 100),
 	}
 }
 
@@ -32,7 +32,7 @@ func TestClientState_Validate(t *testing.T) {
 		{"zero trusting period", func(cs *ClientState) { cs.TrustingPeriod = 0 }, "trusting period"},
 		{"zero unbonding period", func(cs *ClientState) { cs.UnbondingPeriod = 0 }, "unbonding period"},
 		{"zero max clock drift", func(cs *ClientState) { cs.MaxClockDrift = 0 }, "max clock drift"},
-		{"zero latest height", func(cs *ClientState) { cs.LatestHeight = types.NewHeight(0) }, "latest height"},
+		{"zero latest height", func(cs *ClientState) { cs.LatestHeight = types.NewHeight(0, 0) }, "latest height"},
 		{"trusting period not less than unbonding", func(cs *ClientState) { cs.TrustingPeriod = cs.UnbondingPeriod }, "trusting period"},
 	}
 
@@ -94,8 +94,8 @@ func TestNewClientState(t *testing.T) {
 			trustingPeriod:  1000,
 			unbondingPeriod: 2000,
 			maxClockDrift:   100,
-			frozenHeight:    types.NewHeight(0),
-			latestHeight:    types.NewHeight(100),
+			frozenHeight:    types.NewHeight(0, 0),
+			latestHeight:    types.NewHeight(0, 100),
 			contractAddress: types.H256{1, 2, 3},
 			wantNil:         false,
 			assert: func(t *testing.T, cs *ClientState) {
@@ -128,8 +128,8 @@ func TestNewClientState(t *testing.T) {
 			trustingPeriod:  1000,
 			unbondingPeriod: 2000,
 			maxClockDrift:   100,
-			frozenHeight:    types.NewHeight(0),
-			latestHeight:    types.NewHeight(50),
+			frozenHeight:    types.NewHeight(0, 0),
+			latestHeight:    types.NewHeight(0, 50),
 			contractAddress: types.H256{},
 			wantNil:         false,
 			assert: func(t *testing.T, cs *ClientState) {
@@ -144,8 +144,8 @@ func TestNewClientState(t *testing.T) {
 			trustingPeriod:  1000,
 			unbondingPeriod: 2000,
 			maxClockDrift:   100,
-			frozenHeight:    types.NewHeight(123),
-			latestHeight:    types.NewHeight(200),
+			frozenHeight:    types.NewHeight(0, 123),
+			latestHeight:    types.NewHeight(0, 200),
 			contractAddress: types.H256{},
 			wantNil:         false,
 			assert: func(t *testing.T, cs *ClientState) {
@@ -160,8 +160,8 @@ func TestNewClientState(t *testing.T) {
 			trustingPeriod:  1000,
 			unbondingPeriod: 2000,
 			maxClockDrift:   100,
-			frozenHeight:    types.NewHeight(0),
-			latestHeight:    types.NewHeight(100),
+			frozenHeight:    types.NewHeight(0, 0),
+			latestHeight:    types.NewHeight(0, 100),
 			contractAddress: types.H256{},
 			wantNil:         false,
 			assert: func(t *testing.T, cs *ClientState) {
@@ -178,8 +178,8 @@ func TestNewClientState(t *testing.T) {
 			trustingPeriod:  1,
 			unbondingPeriod: ^uint64(0),
 			maxClockDrift:   ^uint64(0),
-			frozenHeight:    types.NewHeight(0),
-			latestHeight:    types.NewHeight(^uint64(0)),
+			frozenHeight:    types.NewHeight(0, 0),
+			latestHeight:    types.NewHeight(0, ^uint64(0)),
 			contractAddress: types.H256{255, 255, 255},
 			wantNil:         false,
 			assert: func(t *testing.T, cs *ClientState) {
@@ -232,13 +232,13 @@ func TestClientState_Getters(t *testing.T) {
 		wantRevHeight  uint64
 		wantClientType string
 	}{
-		{"valid basic", "test-chain", types.NewHeight(100), "test-chain", 100, ClientType},
-		{"empty chain id", "", types.NewHeight(50), "", 50, ClientType},
-		{"chain id with spaces", "  test  ", types.NewHeight(200), "  test  ", 200, ClientType},
-		{"zero height", "test-chain", types.NewHeight(0), "test-chain", 0, ClientType},
-		{"max height", "test-chain", types.NewHeight(^uint64(0)), "test-chain", ^uint64(0), ClientType},
-		{"numeric chain id", "12345", types.NewHeight(999), "12345", 999, ClientType},
-		{"special chars chain id", "chain_0-test", types.NewHeight(1), "chain_0-test", 1, ClientType},
+		{"valid basic", "test-chain", types.NewHeight(0, 100), "test-chain", 100, ClientType},
+		{"empty chain id", "", types.NewHeight(0, 50), "", 50, ClientType},
+		{"chain id with spaces", "  test  ", types.NewHeight(0, 200), "  test  ", 200, ClientType},
+		{"zero height", "test-chain", types.NewHeight(0, 0), "test-chain", 0, ClientType},
+		{"max height", "test-chain", types.NewHeight(0, ^uint64(0)), "test-chain", ^uint64(0), ClientType},
+		{"numeric chain id", "12345", types.NewHeight(0, 999), "12345", 999, ClientType},
+		{"special chars chain id", "chain_0-test", types.NewHeight(0, 1), "chain_0-test", 1, ClientType},
 	}
 
 	for _, tc := range cases {
@@ -248,7 +248,7 @@ func TestClientState_Getters(t *testing.T) {
 				1000,
 				2000,
 				100,
-				types.NewHeight(0),
+				types.NewHeight(0, 0),
 				tc.latestHeight,
 				types.H256{},
 			)

@@ -96,7 +96,7 @@ func DecodeHeader(buf []byte) (*Header, error) {
 	nvh := vals[4].([32]byte)
 	ah := vals[5].([32]byte)
 
-	trustedHeight := types.NewHeight(vals[6].(uint64))
+	trustedHeight := types.NewHeight(0, vals[6].(uint64))
 
 	return &Header{
 		SignedHeader: &LightHeader{

@@ -1007,12 +1007,12 @@ func TestVerifyNonMembership(cur realm, t *testing.T) {
 
 			if tc.wantNoAbort {
 				uassert.NotAborts(t, cur, func() {
-					v.verifyNonMembership(clientId, types.NewHeight(1), []byte("proof"), []byte("path"))
+					v.verifyNonMembership(clientId, types.NewHeight(0, 1), []byte("proof"), []byte("path"))
 				})
 			} else {
 				uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
 					testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-					v.verifyNonMembership(clientId, types.NewHeight(1), []byte("proof"), []byte("path"))
+					v.verifyNonMembership(clientId, types.NewHeight(0, 1), []byte("proof"), []byte("path"))
 				})
 			}
 			uassert.Equal(t, tc.wantCalls, tc.lc.nonMembershipCalls)

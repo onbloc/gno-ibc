@@ -157,7 +157,6 @@ Constructors:
 - `NewState`
 - `NewRoleConfig`
 - `NewAccess`
-- `NewAccessWithDelay`
 - `NewTargetConfig`
 - `NewCanCallResult`
 - `NewHasRoleResult`

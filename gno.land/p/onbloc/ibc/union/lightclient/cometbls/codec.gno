@@ -55,8 +55,8 @@ func DecodeClientState(buf []byte) (*ClientState, error) {
 	chainID := trimNullBytes(chainIdWord)
 	trustingPeriod := vals[1].(uint64)
 	maxClockDrift := vals[2].(uint64)
-	frozenHeight := types.NewHeight(vals[3].(uint64))
-	latestHeight := types.NewHeight(vals[4].(uint64))
+	frozenHeight := types.NewHeight(0, vals[3].(uint64))
+	latestHeight := types.NewHeight(0, vals[4].(uint64))
 	contractAddress := vals[5].([32]byte)
 
 	return NewClientState(

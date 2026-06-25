@@ -77,7 +77,7 @@ func (c *coreV1) channelOpenTry(_ int, rlm realm, msg types.MsgChannelOpenTry, v
 		)
 		key := types.ChannelPath(msg.Channel.CounterpartyChannelId)
 		value := core.ChannelValue(expectedChannel)
-		c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
+		c.verifyMembership(connection.ClientId, types.NewHeight(0, msg.ProofHeight), msg.ProofInit, key[:], value[:])
 	}
 
 	c.store.CreateChannel(0, rlm, channelId, msg.Channel, portId)
@@ -133,7 +133,7 @@ func (c *coreV1) channelOpenAck(_ int, rlm realm, msg types.MsgChannelOpenAck, v
 		)
 		key := types.ChannelPath(msg.CounterpartyChannelId)
 		value := core.ChannelValue(expectedChannel)
-		c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofTry, key[:], value[:])
+		c.verifyMembership(connection.ClientId, types.NewHeight(0, msg.ProofHeight), msg.ProofTry, key[:], value[:])
 	}
 
 	updated := core.NewChannel(
@@ -200,7 +200,7 @@ func (c *coreV1) channelOpenConfirm(_ int, rlm realm, msg types.MsgChannelOpenCo
 		)
 		key := types.ChannelPath(channel.CounterpartyChannelId)
 		value := core.ChannelValue(expectedChannel)
-		c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofAck, key[:], value[:])
+		c.verifyMembership(connection.ClientId, types.NewHeight(0, msg.ProofHeight), msg.ProofAck, key[:], value[:])
 	}
 
 	updated := core.NewChannel(
@@ -287,7 +287,7 @@ func (c *coreV1) ChannelCloseConfirm(_ int, rlm realm, msg types.MsgChannelClose
 	)
 	key := types.ChannelPath(channel.CounterpartyChannelId)
 	value := core.ChannelValue(expectedChannel)
-	c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.ProofInit, key[:], value[:])
+	c.verifyMembership(connection.ClientId, types.NewHeight(0, msg.ProofHeight), msg.ProofInit, key[:], value[:])
 
 	updated := c.closedChannel(channel)
 	c.store.SaveChannel(0, rlm, msg.ChannelId, updated)

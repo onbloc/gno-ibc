@@ -569,7 +569,7 @@ func TestClientByteStore(cur realm, t *testing.T) {
 		}},
 		{"save consensus state", func(t *testing.T) {
 			c := addMockClient(&mockClient{})
-			height := types.NewHeight(10)
+			height := types.NewHeight(0, 10)
 			in := []byte{4, 5, 6}
 
 			c.saveConsensusState(height, in)
@@ -711,7 +711,7 @@ func TestStoreMutationsRejectSpoofedRealm(cur realm, t *testing.T) {
 		{
 			name: "save consensus state",
 			run: func(s *Store) {
-				s.SaveConsensusState(0, spoofedRealm, clientId, types.NewHeight(1), []byte("consensus-state"))
+				s.SaveConsensusState(0, spoofedRealm, clientId, types.NewHeight(0, 1), []byte("consensus-state"))
 			},
 		},
 		{
@@ -856,7 +856,7 @@ func TestStoreMissingClientWritesReturnFalse(cur realm, t *testing.T) {
 			return s.SaveClientState(0, cur, types.ClientId(404), []byte("client-state"))
 		}},
 		{"save consensus state", func(s *Store) bool {
-			return s.SaveConsensusState(0, cur, types.ClientId(404), types.NewHeight(9), []byte("consensus-state"))
+			return s.SaveConsensusState(0, cur, types.ClientId(404), types.NewHeight(0, 9), []byte("consensus-state"))
 		}},
 	}
 

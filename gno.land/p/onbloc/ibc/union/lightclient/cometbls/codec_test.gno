@@ -13,8 +13,8 @@ func TestClientStateCodecRoundTrip(t *testing.T) {
 		TrustingPeriod:  100,
 		UnbondingPeriod: 200,
 		MaxClockDrift:   30,
-		FrozenHeight:    types.NewHeight(0),
-		LatestHeight:    types.NewHeight(42),
+		FrozenHeight:    types.NewHeight(0, 0),
+		LatestHeight:    types.NewHeight(0, 42),
 		ContractAddress: types.H256(repeat32Arr(0xAB)),
 	}
 

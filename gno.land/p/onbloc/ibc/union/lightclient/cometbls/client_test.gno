@@ -64,7 +64,7 @@ func TestNewCometblsLightClientBuildsClientFromState(t *testing.T) {
 
 	clientState := validClientState()
 	clientState.ChainID = "reinit-chain"
-	clientState.LatestHeight = types.NewHeight(77)
+	clientState.LatestHeight = types.NewHeight(0, 77)
 	clientStateBytes, err := EncodeClientState(&clientState)
 	if err != nil {
 		t.Fatalf("EncodeClientState: %v", err)
@@ -93,7 +93,7 @@ func TestNewCometblsLightClientBuildsClientFromState(t *testing.T) {
 	if nextClient.GetCounterpartyChainID() != "reinit-chain" {
 		t.Fatalf("chain id: got %q want reinit-chain", nextClient.GetCounterpartyChainID())
 	}
-	got, found := nextClient.getConsensusState(types.NewHeight(77))
+	got, found := nextClient.getConsensusState(types.NewHeight(0, 77))
 	if !found {
 		t.Fatal("new consensus state not stored")
 	}
@@ -136,7 +136,7 @@ func TestGetTimestamp(t *testing.T) {
 		{
 			name: "missing latest consensus state",
 			malleate: func(c *CometblsLightClient) {
-				c.clientState.LatestHeight = types.NewHeight(999)
+				c.clientState.LatestHeight = types.NewHeight(0, 999)
 			},
 			want: 0,
 		},
@@ -190,7 +190,7 @@ func TestStatus(t *testing.T) {
 		{
 			name: "missing latest consensus state is expired",
 			malleate: func(c *CometblsLightClient) {
-				c.clientState.LatestHeight = types.NewHeight(999)
+				c.clientState.LatestHeight = types.NewHeight(0, 999)
 			},
 			want: lightclient.Expired,
 		},
@@ -349,7 +349,7 @@ func TestUpdateState(t *testing.T) {
 			name:                 "stores consensus and advances latest height",
 			trustedHeight:        100,
 			signedHeight:         101,
-			wantLatestHeight:     types.NewHeight(101),
+			wantLatestHeight:     types.NewHeight(0, 101),
 			wantUpdateHeight:     101,
 			wantClientStateBytes: true,
 		},
@@ -357,14 +357,14 @@ func TestUpdateState(t *testing.T) {
 			name:             "stores older height without regressing latest height",
 			trustedHeight:    50,
 			signedHeight:     60,
-			wantLatestHeight: types.NewHeight(100),
+			wantLatestHeight: types.NewHeight(0, 100),
 			wantUpdateHeight: 60,
 		},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			c := newTestClient(t)
-			trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
+			trustedConsensusState, found := c.getConsensusState(types.NewHeight(0, 100))
 			if !found {
 				t.Fatal("trusted consensus state missing")
 			}
@@ -386,7 +386,7 @@ func TestUpdateState(t *testing.T) {
 			if len(update.ConsensusStateBytes) == 0 {
 				t.Fatal("update must include consensus state bytes")
 			}
-			got, found := c.getConsensusState(types.NewHeight(tc.signedHeight))
+			got, found := c.getConsensusState(types.NewHeight(0, tc.signedHeight))
 			if !found {
 				t.Fatalf("consensus state for height %d not stored", tc.signedHeight)
 			}
@@ -406,7 +406,7 @@ func TestMakeStateUpdate(t *testing.T) {
 		NextValidatorsHash: repeat32(0xCD),
 	}
 
-	update := makeStateUpdate(types.NewHeight(123), consensusState)
+	update := makeStateUpdate(types.NewHeight(0, 123), consensusState)
 
 	if update.Height != 123 {
 		t.Fatalf("height: got %d want 123", update.Height)
@@ -421,7 +421,7 @@ func TestMakeStateUpdate(t *testing.T) {
 
 func TestConsensusStateStorage(t *testing.T) {
 	c := newTestClient(t)
-	height := types.NewHeight(123)
+	height := types.NewHeight(0, 123)
 	consensusState := &ConsensusState{
 		Timestamp:          456,
 		Root:               MerkleRoot{Hash: repeat32(0x10)},

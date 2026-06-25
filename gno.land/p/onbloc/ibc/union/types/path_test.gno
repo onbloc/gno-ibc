@@ -86,25 +86,25 @@ func TestConsensusStatePath(t *testing.T) {
 		{
 			name:     "client zero height zero",
 			clientId: 0,
-			height:   NewHeight(0),
+			height:   NewHeight(0, 0),
 			want:     "255ace0592d6d0057743ec81f2494d71fe5466986a2fd6f28c632dc1ef83d48b",
 		},
 		{
 			name:     "client one height one",
 			clientId: 1,
-			height:   NewHeight(1),
+			height:   NewHeight(0, 1),
 			want:     "525876128d9eb0ad1b9e0d64c9c51b1cd33790861c401ad2e3df0f670ce6a2a4",
 		},
 		{
 			name:     "large client id and height",
 			clientId: 9999,
-			height:   NewHeight(10000),
+			height:   NewHeight(0, 10000),
 			want:     "fc6914b44a62783902266b77f2c3263f0a98cba9721d52bd6ba8dc9ae94b14aa",
 		},
 		{
 			name:     "max uint64 height",
 			clientId: 1,
-			height:   NewHeight(0xFFFFFFFFFFFFFFFF),
+			height:   NewHeight(0, 0xFFFFFFFFFFFFFFFF),
 			want:     "7ac1c4b72613bd80238651b90f837b345cd7250bf414b8b4cf36282a9aaa1c9e",
 		},
 	}

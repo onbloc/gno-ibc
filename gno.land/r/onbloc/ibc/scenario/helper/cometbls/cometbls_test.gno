@@ -34,7 +34,7 @@ func TestProveConsensusAcceptedByRealClient(t *testing.T) {
 			TrustingPeriod:  1 << 62,
 			UnbondingPeriod: 1 << 63,
 			MaxClockDrift:   1 << 30,
-			LatestHeight:    types.NewHeight(l1Height),
+			LatestHeight:    types.NewHeight(0, l1Height),
 			ContractAddress: contractAddr,
 		},
 		&lc.ConsensusState{
@@ -53,7 +53,7 @@ func TestProveConsensusAcceptedByRealClient(t *testing.T) {
 		t.Fatalf("L1 client status: got %v, want Active", status)
 	}
 
-	consensusPath := types.ConsensusStatePath(l2ClientId, types.NewHeight(l2Height))
+	consensusPath := types.ConsensusStatePath(l2ClientId, types.NewHeight(0, l2Height))
 	valueHash := keccak256.Sum256(l2Consensus)
 
 	if err := client.VerifyMembership(l1Height, consensusPath[:], proof, valueHash[:]); err != nil {

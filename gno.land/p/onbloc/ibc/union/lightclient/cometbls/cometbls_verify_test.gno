@@ -61,7 +61,7 @@ func TestVerifyHeader(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			c := newTestClient(t)
-			trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
+			trustedConsensusState, found := c.getConsensusState(types.NewHeight(0, 100))
 			if !found {
 				t.Fatal("trusted consensus state missing")
 			}
@@ -378,7 +378,7 @@ func newDevnetMisbehaviourHeaderClient(t *testing.T) (*CometblsLightClient, *Hea
 			"09BF9F36F380B6D0EEAABF066503A1B6E01DCC965D968D7694E01B1755E6BDD2" +
 			"1C7A80B41682748F9B7151714BE34AA79AAD48BBB2A84525F6CDF812658C6E4F",
 	)
-	trustedHeight := types.NewHeight(uint64(devnetHeight - 1))
+	trustedHeight := types.NewHeight(0, uint64(devnetHeight-1))
 	clientState := &ClientState{
 		ChainID:         devnetChainID,
 		TrustingPeriod:  devnetTrusting,

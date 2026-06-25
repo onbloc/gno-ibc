@@ -11,9 +11,9 @@ func TestAccessIsActiveAt(t *testing.T) {
 		want   bool
 	}{
 		{"zero", Access{}, false},
-		{"future", NewAccess(NewTimePoint(101)), false},
-		{"current", NewAccess(now), true},
-		{"past", NewAccess(NewTimePoint(99)), true},
+		{"future", NewAccess(NewTimePoint(101), 0, 0), false},
+		{"current", NewAccess(now, 0, 0), true},
+		{"past", NewAccess(NewTimePoint(99), 0, 0), true},
 	}
 
 	for _, tc := range tests {

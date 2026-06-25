@@ -62,7 +62,7 @@ func makeStoreKey(addr types.H256, key []byte) []byte {
 // different realm (the consuming scenario realm), so a bound object cannot be
 // constructed at the call site.
 func ProveConsensus(contractAddr types.H256, l2ClientId types.ClientId, l2Height uint64, l2ConsensusState []byte) (proof, root []byte) {
-	consensusPath := types.ConsensusStatePath(l2ClientId, types.NewHeight(l2Height))
+	consensusPath := types.ConsensusStatePath(l2ClientId, types.NewHeight(0, l2Height))
 	valueHash := keccak256.Sum256(l2ConsensusState)
 	value := valueHash[:]
 
@@ -110,7 +110,7 @@ func SeededClientBytes(contractAddr types.H256, l1Height uint64, root []byte) (c
 		TrustingPeriod:  1 << 62,
 		UnbondingPeriod: 1 << 63,
 		MaxClockDrift:   1 << 30,
-		LatestHeight:    types.NewHeight(l1Height),
+		LatestHeight:    types.NewHeight(0, l1Height),
 		ContractAddress: addr,
 	}
 	consensusState := &lc.ConsensusState{

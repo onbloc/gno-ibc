@@ -13,7 +13,7 @@ import (
 // SignedHeader = *cometblszk.LightHeader with TimeSeconds/TimeNanos,
 // *types.Height, []byte hashes).
 func newTestHeader(height, sec int64, nanos int32, trusted uint64, zkp []byte) *Header {
-	th := types.NewHeight(trusted)
+	th := types.NewHeight(0, trusted)
 	return &Header{
 		SignedHeader: &LightHeader{
 			Height:             height,
@@ -193,7 +193,7 @@ func TestDecodeHeaderUnionFixture(t *testing.T) {
 }
 
 func TestEncodeDecodeHeaderRoundTrip(t *testing.T) {
-	th := types.NewHeight(3405691581)
+	th := types.NewHeight(0, 3405691581)
 	original := &Header{
 		SignedHeader: &LightHeader{
 			Height:             3405691582,
@@ -261,14 +261,14 @@ func TestHeaderValidateBasic(t *testing.T) {
 		{
 			name: "trusted height equals header height",
 			setup: func(h *Header) {
-				h.TrustedHeight = heightPtr(types.NewHeight(uint64(h.SignedHeader.Height)))
+				h.TrustedHeight = heightPtr(types.NewHeight(0, uint64(h.SignedHeader.Height)))
 			},
 			wantErr: "must be less than header height",
 		},
 		{
 			name: "trusted height greater than header height",
 			setup: func(h *Header) {
-				h.TrustedHeight = heightPtr(types.NewHeight(uint64(h.SignedHeader.Height + 1)))
+				h.TrustedHeight = heightPtr(types.NewHeight(0, uint64(h.SignedHeader.Height+1)))
 			},
 			wantErr: "must be less than header height",
 		},
@@ -333,7 +333,7 @@ func updateStateTestHeader(trustedHeight, signedHeight uint64, timestamp uint64)
 
 func TestUpdateStateStoresConsensusAndAdvancesLatestHeight(t *testing.T) {
 	c := newTestClient(t)
-	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
+	trustedConsensusState, found := c.getConsensusState(types.NewHeight(0, 100))
 	if !found {
 		t.Fatal("trusted consensus state missing")
 	}
@@ -343,7 +343,7 @@ func TestUpdateStateStoresConsensusAndAdvancesLatestHeight(t *testing.T) {
 
 	update := c.updateState(c.clientState, trustedConsensusState, h)
 
-	if c.clientState.LatestHeight != types.NewHeight(101) {
+	if c.clientState.LatestHeight != types.NewHeight(0, 101) {
 		t.Fatalf("latest height: got %s want 101", c.clientState.LatestHeight)
 	}
 	if update.Height != 101 {
@@ -355,7 +355,7 @@ func TestUpdateStateStoresConsensusAndAdvancesLatestHeight(t *testing.T) {
 	if len(update.ConsensusStateBytes) == 0 {
 		t.Fatal("update must include consensus state bytes for new height")
 	}
-	got, found := c.getConsensusState(types.NewHeight(101))
+	got, found := c.getConsensusState(types.NewHeight(0, 101))
 	if !found {
 		t.Fatal("consensus state for height 101 not stored")
 	}
@@ -368,7 +368,7 @@ func TestUpdateStateStoresConsensusAndAdvancesLatestHeight(t *testing.T) {
 
 func TestUpdateStateStoresOlderHeightWithoutRegressingLatestHeight(t *testing.T) {
 	c := newTestClient(t)
-	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
+	trustedConsensusState, found := c.getConsensusState(types.NewHeight(0, 100))
 	if !found {
 		t.Fatal("trusted consensus state missing")
 	}
@@ -376,7 +376,7 @@ func TestUpdateStateStoresOlderHeightWithoutRegressingLatestHeight(t *testing.T)
 
 	update := c.updateState(c.clientState, trustedConsensusState, h)
 
-	if c.clientState.LatestHeight != types.NewHeight(100) {
+	if c.clientState.LatestHeight != types.NewHeight(0, 100) {
 		t.Fatalf("latest height regressed: got %s want 100", c.clientState.LatestHeight)
 	}
 	if update.Height != 60 {
@@ -388,7 +388,7 @@ func TestUpdateStateStoresOlderHeightWithoutRegressingLatestHeight(t *testing.T)
 	if len(update.ConsensusStateBytes) == 0 {
 		t.Fatal("older update must still include consensus state bytes")
 	}
-	if _, found := c.getConsensusState(types.NewHeight(60)); !found {
+	if _, found := c.getConsensusState(types.NewHeight(0, 60)); !found {
 		t.Fatal("older valid consensus state should still be stored")
 	}
 }
@@ -420,7 +420,7 @@ func TestVerifyHeaderDuplicateHeightShortCircuitsBeforeZKP(t *testing.T) {
 
 func TestVerifyHeaderChecksHeightBeforeExpiry(t *testing.T) {
 	c := newTestClient(t)
-	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
+	trustedConsensusState, found := c.getConsensusState(types.NewHeight(0, 100))
 	if !found {
 		t.Fatal("trusted consensus state missing")
 	}
@@ -433,7 +433,7 @@ func TestVerifyHeaderChecksHeightBeforeExpiry(t *testing.T) {
 
 func TestVerifyHeaderChecksTimestampBeforeExpiry(t *testing.T) {
 	c := newTestClient(t)
-	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
+	trustedConsensusState, found := c.getConsensusState(types.NewHeight(0, 100))
 	if !found {
 		t.Fatal("trusted consensus state missing")
 	}
@@ -446,7 +446,7 @@ func TestVerifyHeaderChecksTimestampBeforeExpiry(t *testing.T) {
 
 func TestVerifyHeaderExpiryBoundaryMatchesUnion(t *testing.T) {
 	c := newTestClient(t)
-	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
+	trustedConsensusState, found := c.getConsensusState(types.NewHeight(0, 100))
 	if !found {
 		t.Fatal("trusted consensus state missing")
 	}
@@ -459,7 +459,7 @@ func TestVerifyHeaderExpiryBoundaryMatchesUnion(t *testing.T) {
 
 func TestVerifyHeaderMaxClockDriftOverflowMatchesUnion(t *testing.T) {
 	c := newTestClient(t)
-	trustedConsensusState, found := c.getConsensusState(types.NewHeight(100))
+	trustedConsensusState, found := c.getConsensusState(types.NewHeight(0, 100))
 	if !found {
 		t.Fatal("trusted consensus state missing")
 	}

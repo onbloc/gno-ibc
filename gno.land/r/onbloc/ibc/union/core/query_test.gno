@@ -33,7 +33,7 @@ func TestQueryConsensusStateReturnsHex(cur realm, t *testing.T) {
 	clientId := registerMockClient(&mockClient{status: types.StatusActive})
 	raw := []byte("consensus-state-bytes")
 	height := uint64(42)
-	store.SaveConsensusState(0, cur, clientId, types.NewHeight(height), raw)
+	store.SaveConsensusState(0, cur, clientId, types.NewHeight(0, height), raw)
 
 	got := QueryConsensusState(clientId, height)
 	want := hexString(raw)
@@ -49,7 +49,7 @@ func TestQueryConsensusStateMissingReturnsEmpty(cur realm, t *testing.T) {
 func TestQueryConsensusStateWrongHeightReturnsEmpty(cur realm, t *testing.T) {
 	resetStore(cur)
 	clientId := registerMockClient(&mockClient{status: types.StatusActive})
-	store.SaveConsensusState(0, cur, clientId, types.NewHeight(10), []byte("cs"))
+	store.SaveConsensusState(0, cur, clientId, types.NewHeight(0, 10), []byte("cs"))
 
 	uassert.Equal(t, "", QueryConsensusState(clientId, 99))
 }

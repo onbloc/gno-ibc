@@ -63,7 +63,7 @@ func (c *coreV1) initClient(_ int, rlm realm, clientId types.ClientId, clientSta
 
 	c.store.SaveClientState(0, rlm, clientId, clientStateBytes)
 
-	height := types.NewHeight(lc.GetLatestHeight())
+	height := types.NewHeight(0, lc.GetLatestHeight())
 	c.store.SaveConsensusState(0, rlm, clientId, height, consensusStateBytes)
 
 	// union threads info.sender as the caller; gno derives the authenticated
@@ -103,7 +103,7 @@ func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) {
 		panic("update client: " + err.Error())
 	}
 
-	height := types.NewHeight(update.Height)
+	height := types.NewHeight(0, update.Height)
 
 	if len(update.ClientStateBytes) != 0 {
 		c.store.SaveClientState(0, rlm, msg.ClientId, update.ClientStateBytes)

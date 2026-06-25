@@ -107,7 +107,7 @@ func addMockConnection(state types.ConnectionState) types.ConnectionId {
 
 func setupOpenChannel(t *testing.T) (types.Bytes, types.ConnectionId, types.ChannelId) {
 	t.Helper()
-	clientId := addMockClient(&mockClient{chainId: "union-1", height: types.NewHeight(100), status: types.StatusActive}).id
+	clientId := addMockClient(&mockClient{chainId: "union-1", height: types.NewHeight(0, 100), status: types.StatusActive}).id
 
 	connId := store.nextConnectionId()
 	store.saveConnection(connId, types.Connection{
@@ -144,10 +144,10 @@ func TestClientStatePathUnique(cur realm, t *testing.T) {
 }
 
 func TestConsensusStatePathUnique(cur realm, t *testing.T) {
-	if types.ConsensusStatePath(1, types.NewHeight(10)) == types.ConsensusStatePath(1, types.NewHeight(11)) {
+	if types.ConsensusStatePath(1, types.NewHeight(0, 10)) == types.ConsensusStatePath(1, types.NewHeight(0, 11)) {
 		t.Error("different heights must produce different paths")
 	}
-	if types.ConsensusStatePath(1, types.NewHeight(10)) == types.ConsensusStatePath(2, types.NewHeight(10)) {
+	if types.ConsensusStatePath(1, types.NewHeight(0, 10)) == types.ConsensusStatePath(2, types.NewHeight(0, 10)) {
 		t.Error("different client IDs must produce different paths")
 	}
 }
@@ -218,7 +218,7 @@ func TestUnionPathReferenceVectors(cur realm, t *testing.T) {
 	batchHash := types.MustCommit(types.CommitPackets([]types.Packet{packet}))
 
 	assertH256Hex(t, "client state", types.ClientStatePath(4), "0x17ef568e3e12ab5b9c7254a8d58478811de00f9e6eb34345acd53bf8fd09d3ec")
-	assertH256Hex(t, "consensus state", types.ConsensusStatePath(4, types.NewHeight(10)), "0xa1776da6f811742b0b6e4f3e386ffa26edc18b9096a5d56e6d8c6366d1f86b32")
+	assertH256Hex(t, "consensus state", types.ConsensusStatePath(4, types.NewHeight(0, 10)), "0xa1776da6f811742b0b6e4f3e386ffa26edc18b9096a5d56e6d8c6366d1f86b32")
 	assertH256Hex(t, "connection", types.ConnectionPath(100), "0x303c03027bd4a34f7fcda516f1651933dbc8cbe20bd53649eb722d1f989225cb")
 	assertH256Hex(t, "channel", types.ChannelPath(7), "0x3be6fd20d5acfde5b873b48692cd31f4d3c7e8ee8a813af4696af8859e5ca6c6")
 	assertH256Hex(t, "batch packets", types.BatchPacketsPath(batchHash), "0x6e9f48cf5c51df29586a27c6219e1168517e3f2dc179371cf7069796ccb01229")

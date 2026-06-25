@@ -21,7 +21,7 @@ func queryClientStateHex(clientId types.ClientId) string {
 }
 
 func queryConsensusStateHex(clientId types.ClientId, height uint64) string {
-	bz, err := GetConsensusState(clientId, types.NewHeight(height))
+	bz, err := GetConsensusState(clientId, types.NewHeight(0, height))
 	if err != nil {
 		return ""
 	}

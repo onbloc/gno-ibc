@@ -87,7 +87,7 @@ func TestCreateClientRegistersAndVerifies(cur realm, t *testing.T) {
 
 	mc := v.store.(*mockStore).clients[uint32(clientId)]
 	uassert.Equal(t, "client-state", string(mc.clientState))
-	uassert.Equal(t, "consensus-state", string(mc.consensus[types.NewHeight(1).String()]))
+	uassert.Equal(t, "consensus-state", string(mc.consensus[types.NewHeight(0, 1).String()]))
 }
 
 func TestCreateClientStoresClientImplResult(cur realm, t *testing.T) {
@@ -105,7 +105,7 @@ func TestCreateClientStoresClientImplResult(cur realm, t *testing.T) {
 	uassert.True(t, ok)
 	uassert.True(t, got == lightclient.Interface(created))
 	mc := v.store.(*mockStore).clients[uint32(clientId)]
-	uassert.Equal(t, "impl-consensus", string(mc.consensus[types.NewHeight(2).String()]))
+	uassert.Equal(t, "impl-consensus", string(mc.consensus[types.NewHeight(0, 2).String()]))
 }
 
 func TestCreateClientVerifyCreationFailureAborts(cur realm, t *testing.T) {
@@ -157,7 +157,7 @@ func TestInitClient(cur realm, t *testing.T) {
 			wantHeight:  5,
 			wantState:   "client-state",
 			wantStore:   "v",
-			wantConsKey: types.NewHeight(5).String(),
+			wantConsKey: types.NewHeight(0, 5).String(),
 		},
 		{
 			name: "stores creation writes at initial height",
@@ -173,7 +173,7 @@ func TestInitClient(cur realm, t *testing.T) {
 			wantHeight:  1,
 			wantState:   "client-state",
 			wantStore:   "v",
-			wantConsKey: types.NewHeight(1).String(),
+			wantConsKey: types.NewHeight(0, 1).String(),
 		},
 		{
 			name: "missing client",
@@ -223,7 +223,7 @@ func TestUpdateClientSavesStateAndConsensus(cur realm, t *testing.T) {
 		ClientMessage: []byte("header"),
 	})
 
-	height := types.NewHeight(7)
+	height := types.NewHeight(0, 7)
 	mc := v.store.(*mockStore).clients[uint32(clientId)]
 	uassert.Equal(t, "client-state", string(mc.clientState))
 	uassert.Equal(t, "consensus-state", string(mc.consensus[height.String()]))
@@ -275,7 +275,7 @@ func TestForceUpdateClientRebuildsSubmittedState(cur realm, t *testing.T) {
 
 	mc := v.store.(*mockStore).clients[uint32(clientId)]
 	uassert.Equal(t, "new-client", string(mc.clientState))
-	uassert.Equal(t, "new-consensus", string(mc.consensus[types.NewHeight(3).String()]))
+	uassert.Equal(t, "new-consensus", string(mc.consensus[types.NewHeight(0, 3).String()]))
 }
 
 func TestForceUpdateClientReplacesExistingClient(cur realm, t *testing.T) {
@@ -296,7 +296,7 @@ func TestForceUpdateClientReplacesExistingClient(cur realm, t *testing.T) {
 	uassert.True(t, ok)
 	uassert.True(t, got == lightclient.Interface(rebuilt))
 	mc := v.store.(*mockStore).clients[uint32(clientId)]
-	uassert.Equal(t, "new-consensus", string(mc.consensus[types.NewHeight(4).String()]))
+	uassert.Equal(t, "new-consensus", string(mc.consensus[types.NewHeight(0, 4).String()]))
 }
 
 func TestForceUpdateClientUnknownClientAborts(cur realm, t *testing.T) {
@@ -476,7 +476,7 @@ func TestVerifyMembership(cur realm, t *testing.T) {
 
 			run := func(cur realm) {
 				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-				v.verifyMembership(clientId, types.NewHeight(3), []byte("proof"), []byte("key"), []byte("value"))
+				v.verifyMembership(clientId, types.NewHeight(0, 3), []byte("proof"), []byte("key"), []byte("value"))
 			}
 			if tc.wantPanic != "" {
 				uassert.AbortsContains(t, cur, tc.wantPanic, run)

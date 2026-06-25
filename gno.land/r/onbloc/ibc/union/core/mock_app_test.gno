@@ -34,7 +34,7 @@ type mockClient struct {
 }
 
 func (m *mockClient) VerifyMembership(height uint64, key, proof, value []byte) error {
-	m.membershipHeights = append(m.membershipHeights, types.NewHeight(height))
+	m.membershipHeights = append(m.membershipHeights, types.NewHeight(0, height))
 	m.membershipKeys = append(m.membershipKeys, key)
 	m.membershipProofs = append(m.membershipProofs, proof)
 	m.membershipValues = append(m.membershipValues, value)
@@ -42,7 +42,7 @@ func (m *mockClient) VerifyMembership(height uint64, key, proof, value []byte) e
 }
 
 func (m *mockClient) VerifyNonMembership(height uint64, key, proof []byte) error {
-	m.nonMembershipHeights = append(m.nonMembershipHeights, types.NewHeight(height))
+	m.nonMembershipHeights = append(m.nonMembershipHeights, types.NewHeight(0, height))
 	m.nonMembershipKeys = append(m.nonMembershipKeys, key)
 	m.nonMembershipProofs = append(m.nonMembershipProofs, proof)
 	return nil

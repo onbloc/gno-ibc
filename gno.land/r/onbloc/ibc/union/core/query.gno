@@ -20,7 +20,7 @@ func QueryClientState(clientId types.ClientId) string {
 // QueryConsensusState returns the consensus state bytes at a given height as a
 // hex string, or an empty string when missing.
 func QueryConsensusState(clientId types.ClientId, height uint64) string {
-	bz, ok := store.ConsensusStateBytes(clientId, types.NewHeight(height))
+	bz, ok := store.ConsensusStateBytes(clientId, types.NewHeight(0, height))
 	if !ok {
 		return ""
 	}

@@ -20,7 +20,7 @@ func TestGetClientGetters(cur realm, t *testing.T) {
 	})
 	// UpdateClient with a zero-height update writes nothing; set state explicitly.
 	v.store.SaveClientState(0, cur, clientId, []byte("client-state"))
-	v.store.SaveConsensusState(0, cur, clientId, types.NewHeight(5), []byte("consensus-5"))
+	v.store.SaveConsensusState(0, cur, clientId, types.NewHeight(0, 5), []byte("consensus-5"))
 
 	gotLc, ok := v.GetLightClient(clientId)
 	uassert.True(t, ok)
@@ -44,7 +44,7 @@ func TestGetClientGetters(cur realm, t *testing.T) {
 	uassert.NoError(t, err)
 	uassert.Equal(t, "client-state", string(cs))
 
-	cons, err := v.GetConsensusStateBytes(clientId, types.NewHeight(5))
+	cons, err := v.GetConsensusStateBytes(clientId, types.NewHeight(0, 5))
 	uassert.NoError(t, err)
 	uassert.Equal(t, "consensus-5", string(cons))
 
@@ -91,7 +91,7 @@ func TestGetMissingClient(cur realm, t *testing.T) {
 			return err
 		}, makeError(core.ErrClientStateNotFound)},
 		{"consensus state", func() error {
-			_, err := v.GetConsensusStateBytes(types.ClientId(99), types.NewHeight(7))
+			_, err := v.GetConsensusStateBytes(types.ClientId(99), types.NewHeight(0, 7))
 			return err
 		}, makeError(core.ErrConsensusStateNotFound)},
 	}

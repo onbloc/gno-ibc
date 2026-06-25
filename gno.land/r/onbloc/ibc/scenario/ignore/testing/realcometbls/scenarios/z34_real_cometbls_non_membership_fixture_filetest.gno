@@ -12,7 +12,7 @@ func main(cur realm) {
 	clientId := realcometbls.CreateSyntheticCometBLSClient(cross(cur))
 	realadapter.NewAdapter(cross(cur)).VerifyNonMembership(
 		clientId,
-		types.NewHeight(uint64(realcometbls.DevnetHeight-1)),
+		types.NewHeight(0, uint64(realcometbls.DevnetHeight-1)),
 		realcometbls.SyntheticNonMembershipProof(cross(cur)),
 		realcometbls.SyntheticNonMembershipKey(cross(cur)),
 	)

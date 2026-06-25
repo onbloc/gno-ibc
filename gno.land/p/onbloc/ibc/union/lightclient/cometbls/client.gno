@@ -107,7 +107,7 @@ func (c *CometblsLightClient) prepareProof(clientState *ClientState, height uint
 		)
 	}
 
-	consensusState, found := c.getConsensusState(types.NewHeight(height))
+	consensusState, found := c.getConsensusState(types.NewHeight(0, height))
 	if !found {
 		return nil, nil, aibtypes.MerklePath{}, errorWithDetails(ErrInvalidConsensus, "please ensure the proof was constructed against a height that exists on the client")
 	}
@@ -229,7 +229,7 @@ func (c *CometblsLightClient) GetTimestamp() types.Timestamp {
 }
 
 func (c *CometblsLightClient) GetTimestampAtHeight(height uint64) (types.Timestamp, error) {
-	consensusState, found := c.getConsensusState(types.NewHeight(height))
+	consensusState, found := c.getConsensusState(types.NewHeight(0, height))
 	if !found {
 		return 0, errorWithDetails(ErrInvalidConsensus, "no consensus state at height")
 	}

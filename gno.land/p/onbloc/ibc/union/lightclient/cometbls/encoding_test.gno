@@ -43,7 +43,7 @@ func TestEncodeHeaderAdditional(t *testing.T) {
 			name: "nil signed header",
 			header: &Header{
 				SignedHeader:       nil,
-				TrustedHeight:      heightPtr(types.NewHeight(1)),
+				TrustedHeight:      heightPtr(types.NewHeight(0, 1)),
 				ZeroKnowledgeProof: []byte{0x01},
 			},
 			wantErr: "nil header",
@@ -583,7 +583,7 @@ func TestEncodeMisbehaviourAdditional(t *testing.T) {
 			m: &Misbehaviour{
 				Header1: &Header{
 					SignedHeader:       nil,
-					TrustedHeight:      heightPtr(types.NewHeight(1)),
+					TrustedHeight:      heightPtr(types.NewHeight(0, 1)),
 					ZeroKnowledgeProof: []byte{0x01},
 				},
 				Header2: validHeader,
@@ -596,7 +596,7 @@ func TestEncodeMisbehaviourAdditional(t *testing.T) {
 				Header1: validHeader,
 				Header2: &Header{
 					SignedHeader:       nil,
-					TrustedHeight:      heightPtr(types.NewHeight(1)),
+					TrustedHeight:      heightPtr(types.NewHeight(0, 1)),
 					ZeroKnowledgeProof: []byte{0x01},
 				},
 			},
@@ -967,7 +967,7 @@ func TestEncodeDecodeHeaderRoundTripAdditional(t *testing.T) {
 						NextValidatorsHash: repeat32(0x22),
 						AppHash:            repeat32(0x33),
 					},
-					TrustedHeight:      heightPtr(types.NewHeight(10)),
+					TrustedHeight:      heightPtr(types.NewHeight(0, 10)),
 					ZeroKnowledgeProof: []byte{0xFF},
 				}
 			}(),

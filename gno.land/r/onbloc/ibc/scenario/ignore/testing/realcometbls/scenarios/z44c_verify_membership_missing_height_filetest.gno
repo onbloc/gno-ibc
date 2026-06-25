@@ -12,7 +12,7 @@ func main(cur realm) {
 	clientId := realcometbls.CreateRealCometBLSClient(cross(cur))
 	realadapter.NewAdapter(cross(cur)).VerifyMembership(
 		clientId,
-		types.NewHeight(uint64(realcometbls.DevnetHeight)),
+		types.NewHeight(0, uint64(realcometbls.DevnetHeight)),
 		realcometbls.TwoExistenceProofStubs(cross(cur)),
 		[]byte("key"),
 		[]byte("value"),

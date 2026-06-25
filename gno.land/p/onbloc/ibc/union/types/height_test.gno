@@ -27,9 +27,9 @@ func TestNewHeight(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := NewHeight(tc.height)
+			got := NewHeight(0, tc.height)
 			if got != tc.want {
-				t.Fatalf("NewHeight(%v) = %v, want %v", tc.height, got, tc.want)
+				t.Fatalf("NewHeight(0, %v) = %v, want %v", tc.height, got, tc.want)
 			}
 		})
 	}

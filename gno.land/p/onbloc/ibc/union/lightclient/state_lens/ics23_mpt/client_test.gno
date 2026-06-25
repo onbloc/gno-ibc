@@ -421,7 +421,7 @@ func TestVerifyHeader(t *testing.T) {
 					if tt.l1.gotHeight != tt.headerObj.L1Height {
 						t.Errorf("L1 height: got %d want %d", tt.l1.gotHeight, tt.headerObj.L1Height)
 					}
-					wantPath := types.ConsensusStatePath(types.ClientId(7), types.NewHeight(tt.headerObj.L2Height))
+					wantPath := types.ConsensusStatePath(types.ClientId(7), types.NewHeight(0, tt.headerObj.L2Height))
 					if !bytes.Equal(tt.l1.gotKey, wantPath[:]) {
 						t.Errorf("L1 key mismatch")
 					}
@@ -460,8 +460,8 @@ func TestUpdateState(t *testing.T) {
 		wantClientBytes   bool
 		wantConsensusTime uint64
 	}{
-		{name: "newer header advances latest height", initialHeight: types.NewHeight(10), headerHeight: types.NewHeight(11), wantLatestHeight: types.NewHeight(11), wantClientBytes: true, wantConsensusTime: 67890},
-		{name: "older header stores consensus without advancing latest height", initialHeight: types.NewHeight(10), headerHeight: types.NewHeight(9), wantLatestHeight: types.NewHeight(10), wantConsensusTime: 67890},
+		{name: "newer header advances latest height", initialHeight: types.NewHeight(0, 10), headerHeight: types.NewHeight(0, 11), wantLatestHeight: types.NewHeight(0, 11), wantClientBytes: true, wantConsensusTime: 67890},
+		{name: "older header stores consensus without advancing latest height", initialHeight: types.NewHeight(0, 10), headerHeight: types.NewHeight(0, 9), wantLatestHeight: types.NewHeight(0, 10), wantConsensusTime: 67890},
 	}
 
 	for _, tt := range tests {

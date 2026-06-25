@@ -80,7 +80,7 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 
 	proofKey := types.BatchPacketsPath(core.CommitPacketsHash(msg.Packets))
 	magic := types.COMMITMENT_MAGIC
-	c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, proofKey[:], magic[:])
+	c.verifyMembership(connection.ClientId, types.NewHeight(0, msg.ProofHeight), msg.Proof, proofKey[:], magic[:])
 
 	portId, _ := c.store.GetChannelOwner(destinationChannelId)
 	a, err := c.getAppAtPort(portId)
@@ -184,7 +184,7 @@ func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAckn
 
 	commitmentKey := types.BatchReceiptsPath(core.CommitPacketsHash(msg.Packets))
 	commitmentValue := types.CommitAcks(msg.Acknowledgements)
-	c.verifyMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, commitmentKey[:], commitmentValue[:])
+	c.verifyMembership(connection.ClientId, types.NewHeight(0, msg.ProofHeight), msg.Proof, commitmentKey[:], commitmentValue[:])
 
 	portId, _ := c.store.GetChannelOwner(sourceChannelId)
 	a, _ := c.store.GetAppByPortId(portId)
@@ -240,7 +240,7 @@ func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 	}
 
 	commitmentKey := types.BatchReceiptsPath(core.CommitPacketHash(packet))
-	c.verifyNonMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, commitmentKey[:])
+	c.verifyNonMembership(connection.ClientId, types.NewHeight(0, msg.ProofHeight), msg.Proof, commitmentKey[:])
 
 	c.markPacketAcknowledged(0, rlm, packet)
 
@@ -284,7 +284,7 @@ func (c *coreV1) markPacketAcknowledged(_ int, rlm realm, packet types.Packet) {
 func (c *coreV1) CommitMembershipProof(_ int, rlm realm, msg types.MsgCommitMembershipProof) {
 	assertIsRlmCurrent(0, rlm)
 
-	c.verifyMembership(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, msg.Path, msg.Value)
+	c.verifyMembership(msg.ClientId, types.NewHeight(0, msg.ProofHeight), msg.Proof, msg.Path, msg.Value)
 	c.store.SaveMembershipProof(0, rlm, msg.ClientId, msg.ProofHeight, msg.Path, types.Keccak(msg.Value))
 	core.EmitCommitMembershipProof(0, rlm, msg)
 }
@@ -297,7 +297,7 @@ func (c *coreV1) CommitNonMembershipProof(_ int, rlm realm, msg types.MsgCommitN
 		panic(makeError(core.ErrClientNotFound, msg.ClientId.String()))
 	}
 
-	c.verifyNonMembership(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, msg.Path)
+	c.verifyNonMembership(msg.ClientId, types.NewHeight(0, msg.ProofHeight), msg.Proof, msg.Path)
 	c.store.SaveNonMembershipProof(0, rlm, msg.ClientId, msg.ProofHeight, msg.Path, types.NON_MEMBERSHIP_COMMITMENT_VALUE)
 	core.EmitCommitNonMembershipProof(0, rlm, msg)
 }

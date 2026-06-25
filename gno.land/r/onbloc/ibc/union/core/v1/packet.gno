@@ -54,7 +54,7 @@ func (c *coreV1) SendPacket(_ int, rlm realm, sourceChannelId types.ChannelId, t
 
 	c.store.CommitPacket(0, rlm, packet)
 
-	core.EmitPacketSend(packet, channel, connection)
+	core.EmitPacketSend(0, rlm, packet, channel, connection)
 
 	return packet
 }
@@ -107,7 +107,7 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 			panic(err)
 		}
 
-		core.EmitPacketRecv(packet, ch, connection, relayerMsg)
+		core.EmitPacketRecv(0, rlm, packet, ch, connection, relayerMsg)
 	}
 }
 
@@ -159,7 +159,7 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 			panic(err)
 		}
 
-		core.EmitIntentPacketRecv(packet, ch, connection, marketMakerMsg)
+		core.EmitIntentPacketRecv(0, rlm, packet, ch, connection, marketMakerMsg)
 	}
 }
 
@@ -202,7 +202,7 @@ func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAckn
 		c.markPacketAcknowledged(0, rlm, packet)
 
 		a.OnAcknowledgementPacket(cross(rlm), packet, ack, relayer)
-		core.EmitPacketAck(packet, channel, connection, ack)
+		core.EmitPacketAck(0, rlm, packet, channel, connection, ack)
 	}
 }
 
@@ -256,7 +256,7 @@ func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 	a, _ := c.store.GetAppByPortId(portId)
 	a.OnTimeoutPacket(cross(rlm), packet, relayer)
 
-	core.EmitPacketTimeout(packet, channel, connection)
+	core.EmitPacketTimeout(0, rlm, packet, channel, connection)
 }
 
 // markPacketAcknowledged is the source-side acknowledge/timeout state machine.
@@ -286,7 +286,7 @@ func (c *coreV1) CommitMembershipProof(_ int, rlm realm, msg types.MsgCommitMemb
 
 	c.verifyMembership(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, msg.Path, msg.Value)
 	c.store.SaveMembershipProof(0, rlm, msg.ClientId, msg.ProofHeight, msg.Path, types.Keccak(msg.Value))
-	core.EmitCommitMembershipProof(msg)
+	core.EmitCommitMembershipProof(0, rlm, msg)
 }
 
 // CommitNonMembershipProof verifies and records a non-membership proof.
@@ -299,7 +299,7 @@ func (c *coreV1) CommitNonMembershipProof(_ int, rlm realm, msg types.MsgCommitN
 
 	c.verifyNonMembership(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, msg.Path)
 	c.store.SaveNonMembershipProof(0, rlm, msg.ClientId, msg.ProofHeight, msg.Path, types.NON_MEMBERSHIP_COMMITMENT_VALUE)
-	core.EmitCommitNonMembershipProof(msg)
+	core.EmitCommitNonMembershipProof(0, rlm, msg)
 }
 
 // BatchSend aggregates several already-committed packets into a single batch
@@ -325,7 +325,7 @@ func (c *coreV1) BatchSend(_ int, rlm realm, msg types.MsgBatchSend) {
 		}
 
 		packetHash := core.CommitPacketsHash([]types.Packet{packet})
-		core.EmitBatchSend(channelId, packetHash, batchHash)
+		core.EmitBatchSend(0, rlm, channelId, packetHash, batchHash)
 	}
 
 	c.store.SaveBatchPackets(0, rlm, channelId, batchHash, types.COMMITMENT_MAGIC)
@@ -353,7 +353,7 @@ func (c *coreV1) BatchAcks(_ int, rlm realm, msg types.MsgBatchAcks) {
 		}
 
 		packetHash := core.CommitPacketsHash([]types.Packet{packet})
-		core.EmitBatchAcks(channelId, packetHash, batchHash)
+		core.EmitBatchAcks(0, rlm, channelId, packetHash, batchHash)
 
 		commitment, ok := c.store.AcknowledgementReceipt(channelId, packet)
 		if !ok {
@@ -402,7 +402,7 @@ func (c *coreV1) WriteAcknowledgement(_ int, rlm realm, msg types.MsgWriteAcknow
 	}
 
 	c.store.CommitAcknowledgement(0, rlm, msg.Packet, msg.Acknowledgement)
-	core.EmitWriteAck(channelId, msg.Packet, msg.Acknowledgement)
+	core.EmitWriteAck(0, rlm, channelId, msg.Packet, msg.Acknowledgement)
 }
 
 // --- shared recv helpers ---
@@ -448,7 +448,7 @@ func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, res types.
 		}
 
 		c.store.CommitAcknowledgement(0, rlm, packet, res.Acknowledgement)
-		core.EmitWriteAck(packet.DestinationChannelId, packet, res.Acknowledgement)
+		core.EmitWriteAck(0, rlm, packet.DestinationChannelId, packet, res.Acknowledgement)
 
 		return nil
 	default:

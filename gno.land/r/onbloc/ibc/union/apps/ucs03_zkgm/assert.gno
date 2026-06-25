@@ -19,6 +19,12 @@ func assertIsRlmCurrent(_ int, rlm realm) {
 	}
 }
 
+func assertIsProxyRealm(_ int, rlm realm) {
+	if rlm.PkgPath() != proxyPkgPath {
+		panic(ErrNotProxyRealm)
+	}
+}
+
 func assertIsNotPaused() {
 	if paused {
 		panic("paused")

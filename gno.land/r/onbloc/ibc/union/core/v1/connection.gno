@@ -16,7 +16,7 @@ func (c *coreV1) ConnectionOpenInit(_ int, rlm realm, msg types.MsgConnectionOpe
 	connectionId := c.store.NextConnectionId(0, rlm)
 	connection := core.NewConnection(types.ConnectionStateInit, msg.ClientId, msg.CounterpartyClientId, 0)
 	c.store.SaveConnection(0, rlm, connectionId, connection)
-	core.EmitConnectionOpenInit(connectionId, msg.ClientId, msg.CounterpartyClientId)
+	core.EmitConnectionOpenInit(0, rlm, connectionId, msg.ClientId, msg.CounterpartyClientId)
 }
 
 // ConnectionOpenTry acknowledges a counterparty Init by proving it and moving to
@@ -47,7 +47,7 @@ func (c *coreV1) connectionOpenTry(_ int, rlm realm, msg types.MsgConnectionOpen
 	}
 
 	c.store.SaveConnection(0, rlm, connectionId, connection)
-	core.EmitConnectionOpenTry(connectionId, msg.ClientId, msg.CounterpartyClientId, msg.CounterpartyConnectionId)
+	core.EmitConnectionOpenTry(0, rlm, connectionId, msg.ClientId, msg.CounterpartyClientId, msg.CounterpartyConnectionId)
 }
 
 // ConnectionOpenAck proves the counterparty TryOpen and moves the local Init
@@ -88,7 +88,7 @@ func (c *coreV1) connectionOpenAck(_ int, rlm realm, msg types.MsgConnectionOpen
 	updated := core.NewConnection(types.ConnectionStateOpen, connection.ClientId, connection.CounterpartyClientId, msg.CounterpartyConnectionId)
 	c.store.SaveConnection(0, rlm, msg.ConnectionId, updated)
 
-	core.EmitConnectionOpenAck(msg.ConnectionId, connection.ClientId, connection.CounterpartyClientId, msg.CounterpartyConnectionId)
+	core.EmitConnectionOpenAck(0, rlm, msg.ConnectionId, connection.ClientId, connection.CounterpartyClientId, msg.CounterpartyConnectionId)
 }
 
 // ConnectionOpenConfirm proves the counterparty Open and moves the local TryOpen
@@ -130,7 +130,7 @@ func (c *coreV1) connectionOpenConfirm(_ int, rlm realm, msg types.MsgConnection
 	updated := core.NewConnection(types.ConnectionStateOpen, connection.ClientId, connection.CounterpartyClientId, counterpartyConnectionId)
 	c.store.SaveConnection(0, rlm, msg.ConnectionId, updated)
 
-	core.EmitConnectionOpenConfirm(msg.ConnectionId, connection.ClientId, connection.CounterpartyClientId, counterpartyConnectionId)
+	core.EmitConnectionOpenConfirm(0, rlm, msg.ConnectionId, connection.ClientId, connection.CounterpartyClientId, counterpartyConnectionId)
 }
 
 // ensureConnectionState returns the connection for connectionId, requiring it to

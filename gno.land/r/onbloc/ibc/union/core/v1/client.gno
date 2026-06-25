@@ -18,7 +18,7 @@ func (c *coreV1) RegisterClient(_ int, rlm realm, clientType types.ClientType, c
 		panic("caller not authorized to register client: unauthorized")
 	}
 	c.store.RegisterClient(0, rlm, clientType, clientImpl)
-	core.EmitRegisterClient(clientType)
+	core.EmitRegisterClient(0, rlm, clientType)
 }
 
 // HasClient reports whether a light client is registered for a client type.
@@ -48,7 +48,7 @@ func (c *coreV1) CreateClient(_ int, rlm realm, msg types.MsgCreateClient) {
 	clientId := c.store.AddClient(0, rlm, msg.ClientType, creator, lc)
 	c.initClient(0, rlm, clientId, msg.ClientStateBytes, msg.ConsensusStateBytes, relayer)
 
-	core.EmitCreateClient(clientId, msg.ClientType, lc.GetCounterpartyChainID())
+	core.EmitCreateClient(0, rlm, clientId, msg.ClientType, lc.GetCounterpartyChainID())
 }
 
 // initClient mirrors the submitted client/consensus state for a stored client,
@@ -117,7 +117,7 @@ func (c *coreV1) UpdateClient(_ int, rlm realm, msg types.MsgUpdateClient) {
 		c.store.SaveClientStore(0, rlm, msg.ClientId, k, v)
 	}
 
-	core.EmitUpdateClient(msg.ClientId, height)
+	core.EmitUpdateClient(0, rlm, msg.ClientId, height)
 }
 
 func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateClient) {
@@ -138,7 +138,7 @@ func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateCli
 	caller := rlm.Previous().Address()
 	height := c.initClient(0, rlm, msg.ClientId, msg.ClientStateBytes, msg.ConsensusStateBytes, caller)
 
-	core.EmitForceUpdateClient(msg.ClientId, height)
+	core.EmitForceUpdateClient(0, rlm, msg.ClientId, height)
 }
 
 // Misbehaviour verifies a misbehaviour message against an active light client and
@@ -166,7 +166,7 @@ func (c *coreV1) Misbehaviour(_ int, rlm realm, msg types.MsgMisbehaviour) {
 		c.store.SaveClientState(0, rlm, msg.ClientId, clientStateBytes)
 	}
 
-	core.EmitMisbehaviour(msg.ClientId)
+	core.EmitMisbehaviour(0, rlm, msg.ClientId)
 }
 
 // verifyMembership checks a membership proof against a registered, active light

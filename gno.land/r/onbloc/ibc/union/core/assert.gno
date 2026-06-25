@@ -5,3 +5,9 @@ func assertIsRlmCurrent(_ int, rlm realm) {
 		panic(ErrSpoofedRealm)
 	}
 }
+
+func assertIsProxyRealm(_ int, rlm realm) {
+	if rlm.PkgPath() != proxyPkgPath {
+		panic(ErrNotProxyRealm)
+	}
+}

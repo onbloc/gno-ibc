@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"bytes"
 	"strings"
 
 	types "gno.land/p/onbloc/ibc/union/types"
@@ -507,12 +508,12 @@ func (v *ucs03ZkgmV1) trimTokenOrderInstruction(_ int, rlm realm, instruction z.
 		return instruction, err
 	}
 
-	if !v.shouldTrim(0, rlm, order.BaseToken) {
+	info := v.parseTokenInfo(0, rlm, order.BaseToken)
+	if !info.isVoucher {
 		return instruction, nil
 	}
 
-	baseDecimals := v.getTokenDecimals(0, rlm, order.BaseToken)
-	baseTrim := trimAmount(baseDecimals, order.BaseAmount)
+	baseTrim := trimAmount(info.decimals, order.BaseAmount)
 
 	if order.QuoteAmount.Cmp(baseTrim.Trimmed) > 0 {
 		return instruction, makeError(errQuoteAmountTooLarge)
@@ -543,8 +544,6 @@ func (v *ucs03ZkgmV1) trimInstructionAmounts(_ int, rlm realm, instruction z.Ins
 	switch instruction.Opcode {
 	case z.OP_BATCH:
 		return v.trimBatchInstruction(0, rlm, instruction, sender)
-	case z.OP_FORWARD:
-		return instruction, nil
 	case z.OP_TOKEN_ORDER:
 		return v.trimTokenOrderInstruction(0, rlm, instruction, sender)
 	default:
@@ -563,13 +562,23 @@ func (v *ucs03ZkgmV1) trimBatchInstruction(_ int, rlm realm, instruction z.Instr
 	}
 
 	trimmedChildren := make([]z.Instruction, len(batch.Instructions))
+	modified := false
 
 	for i, child := range batch.Instructions {
 		trimmedChild, err := v.trimInstructionAmounts(0, rlm, child, sender)
 		if err != nil {
 			return instruction, err
 		}
+		// track if any child was modified
+		if len(trimmedChild.Operand) != len(child.Operand) || !bytes.Equal(trimmedChild.Operand, child.Operand) {
+			modified = true
+		}
 		trimmedChildren[i] = trimmedChild
+	}
+
+	// return original instruction if no children were modified
+	if !modified {
+		return instruction, nil
 	}
 
 	trimmedBatch := z.Batch{Instructions: trimmedChildren}

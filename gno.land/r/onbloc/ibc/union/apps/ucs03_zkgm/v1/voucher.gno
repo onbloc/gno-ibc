@@ -14,6 +14,29 @@ const (
 	targetDecimals = 6
 )
 
+// powersOf10[exp] = 10^exp for exp in 0..12 (max decimals 18 - target 6)
+var powersOf10 = [13]*u256.Uint{
+	u256.NewUint(1),             // 10^0
+	u256.NewUint(10),            // 10^1
+	u256.NewUint(100),           // 10^2
+	u256.NewUint(1000),          // 10^3
+	u256.NewUint(10000),         // 10^4
+	u256.NewUint(100000),        // 10^5
+	u256.NewUint(1000000),       // 10^6
+	u256.NewUint(10000000),      // 10^7
+	u256.NewUint(100000000),     // 10^8
+	u256.NewUint(1000000000),    // 10^9
+	u256.NewUint(10000000000),   // 10^10
+	u256.NewUint(100000000000),  // 10^11
+	u256.NewUint(1000000000000), // 10^12
+}
+
+// TokenInfo captures token metadata for decimal trimming in a single lookup.
+type TokenInfo struct {
+	decimals  uint8
+	isVoucher bool
+}
+
 type TrimResult struct {
 	Trimmed *u256.Uint
 	Dust    *u256.Uint
@@ -25,15 +48,11 @@ func trimAmount(tokenDecimals uint8, amount *u256.Uint) TrimResult {
 	}
 
 	exp := tokenDecimals - targetDecimals
+	factor := powersOf10[exp]
 
-	factor := u256.NewUint(1)
-	for i := uint8(0); i < exp; i++ {
-		factor = factor.Mul(factor, u256.NewUint(10))
-	}
-
-	quotient := new(u256.Uint).Div(amount, factor)
-	trimmed := new(u256.Uint).Mul(quotient, factor)
-	dust := new(u256.Uint).Sub(amount, trimmed)
+	quotient := u256.Zero().Div(amount, factor)
+	trimmed := u256.Zero().Mul(quotient, factor)
+	dust := u256.Zero().Sub(amount, trimmed)
 
 	return TrimResult{Trimmed: trimmed, Dust: dust}
 }
@@ -136,27 +155,17 @@ func amountInt64(amount *u256.Uint) (int64, error) {
 	return amount.Int64(), nil
 }
 
-// shouldTrim reports whether denom should be trimmed to 6 decimals.
-// Only registered ibc/ vouchers are trimmed because they may use up to 18 decimals.
-// Native denoms (i.e., ugnot) already use 6 decimals and are left unchanged in v1.
-func (v *ucs03ZkgmV1) shouldTrim(_ int, rlm realm, denom []byte) bool {
-	denomStr := string(denom)
-
-	if strings.HasPrefix(denomStr, "ibc/") {
-		if _, ok := v.store.GetVoucher(denomStr); ok {
-			return true
-		}
-	}
-
-	return false
-}
-
-func (v *ucs03ZkgmV1) getTokenDecimals(_ int, rlm realm, denom []byte) uint8 {
+// parseTokenInfo extracts token metadata (decimals + voucher status) in a
+// single lookup, combining the logic of the former shouldTrim/getTokenDecimals.
+func (v *ucs03ZkgmV1) parseTokenInfo(_ int, rlm realm, denom []byte) TokenInfo {
 	denomStr := string(denom)
 
 	if vou, ok := v.store.GetVoucher(denomStr); ok {
-		return uint8(vou.Token().GetDecimals())
+		return TokenInfo{
+			decimals:  uint8(vou.Token().GetDecimals()),
+			isVoucher: true,
+		}
 	}
 
-	return targetDecimals
+	return TokenInfo{decimals: targetDecimals, isVoucher: false}
 }

@@ -278,7 +278,7 @@ func TestTrimAmount(cur realm, t *testing.T) {
 	}
 }
 
-func TestShouldTrimVouchers(cur realm, t *testing.T) {
+func TestParseTokenInfo(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	// Create an 18-dec voucher first
@@ -287,21 +287,19 @@ func TestShouldTrimVouchers(cur realm, t *testing.T) {
 
 	tests := []struct {
 		denom          string
-		expectTrim     bool
+		expectVoucher  bool
 		expectDecimals uint8
 	}{
 		{denom, true, 18},
-		{"ugnot", false, 0},
-		{"unknown", false, 0},
+		{"ugnot", false, 6},   // native tokens use target decimals
+		{"unknown", false, 6}, // unknown tokens use target decimals
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.denom, func(t *testing.T) {
-			uassert.Equal(t, tc.expectTrim, v.shouldTrim(0, cur, []byte(tc.denom)))
-			if tc.expectTrim {
-				decimals := v.getTokenDecimals(0, cur, []byte(tc.denom))
-				uassert.Equal(t, tc.expectDecimals, decimals)
-			}
+			info := v.parseTokenInfo(0, cur, []byte(tc.denom))
+			uassert.Equal(t, tc.expectVoucher, info.isVoucher)
+			uassert.Equal(t, tc.expectDecimals, info.decimals)
 		})
 	}
 }

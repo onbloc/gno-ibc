@@ -15,9 +15,7 @@ import (
 // SendPacket commits a packet for the caller's port. Per the spec the timeout
 // height is always zero; only the timeout timestamp is meaningful.
 func (c *coreV1) SendPacket(_ int, rlm realm, sourceChannelId types.ChannelId, timeoutTimestamp types.Timestamp, data []byte) types.Packet {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	if timeoutTimestamp == 0 {
 		panic(makeError(core.ErrTimeoutMustBeSet))
@@ -56,7 +54,7 @@ func (c *coreV1) SendPacket(_ int, rlm realm, sourceChannelId types.ChannelId, t
 
 	c.store.CommitPacket(0, rlm, packet)
 
-	core.EmitPacketSend(packet, channel, connection)
+	core.EmitPacketSend(0, rlm, packet, channel, connection)
 
 	return packet
 }
@@ -64,9 +62,7 @@ func (c *coreV1) SendPacket(_ int, rlm realm, sourceChannelId types.ChannelId, t
 // PacketRecv proves a batch of packets committed on the counterparty and
 // dispatches each to its app, recording receipts and sync acks.
 func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	relayer := rlm.Previous().Address()
 
@@ -107,19 +103,17 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 		}
 
 		res := a.OnRecvPacket(cross(rlm), packet, relayer, relayerMsg)
-		if err := c.commitSyncAck(0, rlm, packet, res); err != nil {
+		if err := c.commitSyncAck(0, rlm, packet, res, ch, connection); err != nil {
 			panic(err)
 		}
 
-		core.EmitPacketRecv(packet, ch, connection, relayerMsg)
+		core.EmitPacketRecv(0, rlm, packet, ch, connection, relayerMsg)
 	}
 }
 
 // IntentPacketRecv settles packets on the proofless market-maker fast path.
 func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRecv) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	marketMaker := rlm.Previous().Address()
 
@@ -161,19 +155,17 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 		}
 
 		res := intentApp.OnIntentRecvPacket(cross(rlm), packet, marketMaker, marketMakerMsg)
-		if err := c.commitSyncAck(0, rlm, packet, res); err != nil {
+		if err := c.commitSyncAck(0, rlm, packet, res, ch, connection); err != nil {
 			panic(err)
 		}
 
-		core.EmitIntentPacketRecv(packet, ch, connection, marketMakerMsg)
+		core.EmitIntentPacketRecv(0, rlm, packet, ch, connection, marketMakerMsg)
 	}
 }
 
 // PacketAcknowledgement proves the counterparty's acks and notifies the app.
 func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAcknowledgement) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	relayer := rlm.Previous().Address()
 
@@ -210,16 +202,14 @@ func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAckn
 		c.markPacketAcknowledged(0, rlm, packet)
 
 		a.OnAcknowledgementPacket(cross(rlm), packet, ack, relayer)
-		core.EmitPacketAck(packet, channel, connection, ack)
+		core.EmitPacketAck(0, rlm, packet, channel, connection, ack)
 	}
 }
 
 // PacketTimeout proves the counterparty never received the packet and notifies
 // the app to refund.
 func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	relayer := rlm.Previous().Address()
 	packet := msg.Packet
@@ -266,7 +256,7 @@ func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 	a, _ := c.store.GetAppByPortId(portId)
 	a.OnTimeoutPacket(cross(rlm), packet, relayer)
 
-	core.EmitPacketTimeout(packet, channel, connection)
+	core.EmitPacketTimeout(0, rlm, packet, channel, connection)
 }
 
 // markPacketAcknowledged is the source-side acknowledge/timeout state machine.
@@ -292,20 +282,16 @@ func (c *coreV1) markPacketAcknowledged(_ int, rlm realm, packet types.Packet) {
 
 // CommitMembershipProof verifies and records a membership proof for later reuse.
 func (c *coreV1) CommitMembershipProof(_ int, rlm realm, msg types.MsgCommitMembershipProof) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	c.verifyMembership(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, msg.Path, msg.Value)
 	c.store.SaveMembershipProof(0, rlm, msg.ClientId, msg.ProofHeight, msg.Path, types.Keccak(msg.Value))
-	core.EmitCommitMembershipProof(msg)
+	core.EmitCommitMembershipProof(0, rlm, msg)
 }
 
 // CommitNonMembershipProof verifies and records a non-membership proof.
 func (c *coreV1) CommitNonMembershipProof(_ int, rlm realm, msg types.MsgCommitNonMembershipProof) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	if !c.store.ClientExists(msg.ClientId) {
 		panic(makeError(core.ErrClientNotFound, msg.ClientId.String()))
@@ -313,15 +299,13 @@ func (c *coreV1) CommitNonMembershipProof(_ int, rlm realm, msg types.MsgCommitN
 
 	c.verifyNonMembership(msg.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, msg.Path)
 	c.store.SaveNonMembershipProof(0, rlm, msg.ClientId, msg.ProofHeight, msg.Path, types.NON_MEMBERSHIP_COMMITMENT_VALUE)
-	core.EmitCommitNonMembershipProof(msg)
+	core.EmitCommitNonMembershipProof(0, rlm, msg)
 }
 
 // BatchSend aggregates several already-committed packets into a single batch
 // commitment.
 func (c *coreV1) BatchSend(_ int, rlm realm, msg types.MsgBatchSend) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	if len(msg.Packets) < 2 {
 		panic(makeError(core.ErrNotEnoughPackets))
@@ -341,7 +325,7 @@ func (c *coreV1) BatchSend(_ int, rlm realm, msg types.MsgBatchSend) {
 		}
 
 		packetHash := core.CommitPacketsHash([]types.Packet{packet})
-		core.EmitBatchSend(channelId, packetHash, batchHash)
+		core.EmitBatchSend(0, rlm, channelId, packetHash, batchHash)
 	}
 
 	c.store.SaveBatchPackets(0, rlm, channelId, batchHash, types.COMMITMENT_MAGIC)
@@ -349,9 +333,7 @@ func (c *coreV1) BatchSend(_ int, rlm realm, msg types.MsgBatchSend) {
 
 // BatchAcks aggregates the acks of several received packets into a batch receipt.
 func (c *coreV1) BatchAcks(_ int, rlm realm, msg types.MsgBatchAcks) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	if len(msg.Packets) < 2 {
 		panic(makeError(core.ErrNotEnoughPackets))
@@ -371,7 +353,7 @@ func (c *coreV1) BatchAcks(_ int, rlm realm, msg types.MsgBatchAcks) {
 		}
 
 		packetHash := core.CommitPacketsHash([]types.Packet{packet})
-		core.EmitBatchAcks(channelId, packetHash, batchHash)
+		core.EmitBatchAcks(0, rlm, channelId, packetHash, batchHash)
 
 		commitment, ok := c.store.AcknowledgementReceipt(channelId, packet)
 		if !ok {
@@ -393,9 +375,7 @@ func (c *coreV1) BatchAcks(_ int, rlm realm, msg types.MsgBatchAcks) {
 // WriteAcknowledgement commits a (previously deferred) acknowledgement for a
 // received packet. Only the channel's port owner may write it.
 func (c *coreV1) WriteAcknowledgement(_ int, rlm realm, msg types.MsgWriteAcknowledgement) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	if len(msg.Acknowledgement) == 0 {
 		panic(makeError(core.ErrAcknowledgementEmpty))
@@ -421,8 +401,14 @@ func (c *coreV1) WriteAcknowledgement(_ int, rlm realm, msg types.MsgWriteAcknow
 		panic(makeError(core.ErrAcknowledgementAlreadyWritten))
 	}
 
+	channel, err := c.getChannel(channelId)
+	if err != nil {
+		panic(err)
+	}
+
+	connection := c.ensureConnectionState(channel.ConnectionId)
 	c.store.CommitAcknowledgement(0, rlm, msg.Packet, msg.Acknowledgement)
-	core.EmitWriteAck(channelId, msg.Packet, msg.Acknowledgement)
+	core.EmitWriteAck(0, rlm, msg.Packet, channel, connection, msg.Acknowledgement)
 }
 
 // --- shared recv helpers ---
@@ -458,7 +444,7 @@ func (c *coreV1) acceptRecvPacket(_ int, rlm realm, packet types.Packet, batchCh
 
 // commitSyncAck records a synchronous recv result as receipt evidence. Sync
 // success/failure must carry a non-empty acknowledgement; async is deferred.
-func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, res types.RecvPacketResult) error {
+func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, res types.RecvPacketResult, channel types.Channel, connection types.Connection) error {
 	switch res.Status {
 	case types.PacketStatusAsync:
 		return nil
@@ -468,7 +454,7 @@ func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, res types.
 		}
 
 		c.store.CommitAcknowledgement(0, rlm, packet, res.Acknowledgement)
-		core.EmitWriteAck(packet.DestinationChannelId, packet, res.Acknowledgement)
+		core.EmitWriteAck(0, rlm, packet, channel, connection, res.Acknowledgement)
 
 		return nil
 	default:

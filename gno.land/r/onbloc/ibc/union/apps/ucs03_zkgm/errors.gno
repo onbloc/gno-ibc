@@ -5,7 +5,11 @@ package zkgm
 // replayed by a caller.
 const (
 	ErrSpoofedRealm             = "rlm does not match the current crossing frame"
+	ErrNotProxyRealm            = "rlm is not proxy realm"
+	ErrNotCoreRealm             = "rlm is not core realm"
 	ErrInvalidSaltLength        = "invalid salt length"
 	ErrTokenBucketNotFound      = "token bucket not found"
 	ErrChannelBalanceV2NotFound = "channel balance v2 not found"
+	ErrLockedNativeOverflow     = "locked native total overflows uint256"
+	ErrInterfaceConversion      = "interface conversion failed"
 )

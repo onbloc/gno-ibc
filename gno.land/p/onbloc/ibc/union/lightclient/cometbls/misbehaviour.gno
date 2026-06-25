@@ -7,7 +7,7 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-var FrozenHeight = types.NewHeightWithRevision(0, 1)
+var FrozenHeight = types.NewHeight(0, 1)
 
 type Misbehaviour struct {
 	Header1 *Header

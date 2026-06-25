@@ -5,16 +5,21 @@ type Access struct {
 	Delay DelayedValue
 }
 
-func NewAccess(since TimePoint) Access {
-	return Access{
-		Since: since,
+func NewAccess(since TimePoint, delays ...Delay) Access {
+	if len(delays) == 0 {
+		return Access{
+			Since: since,
+		}
 	}
-}
-
-func NewAccessWithDelay(since TimePoint, grantDelay Delay, executionDelay Delay) Access {
+	if len(delays) != 2 {
+		panic("access requires zero or two delay arguments")
+	}
 	if since.IsZero() {
 		return Access{Since: 0}
 	}
+
+	grantDelay := delays[0]
+	executionDelay := delays[1]
 
 	return Access{
 		Since: since + TimePoint(grantDelay),

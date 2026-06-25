@@ -4,24 +4,24 @@ import "testing"
 
 func TestNewHeight(t *testing.T) {
 	tests := []struct {
-		name  string
+		name   string
 		height uint64
-		want  Height
+		want   Height
 	}{
 		{
-			name:  "zero height",
+			name:   "zero height",
 			height: 0,
-			want:  Height{RevisionNumber: 0, RevisionHeight: 0},
+			want:   Height{RevisionNumber: 0, RevisionHeight: 0},
 		},
 		{
-			name:  "single height",
+			name:   "single height",
 			height: 1,
-			want:  Height{RevisionNumber: 0, RevisionHeight: 1},
+			want:   Height{RevisionNumber: 0, RevisionHeight: 1},
 		},
 		{
-			name:  "large height",
+			name:   "large height",
 			height: 1000000,
-			want:  Height{RevisionNumber: 0, RevisionHeight: 1000000},
+			want:   Height{RevisionNumber: 0, RevisionHeight: 1000000},
 		},
 	}
 
@@ -35,7 +35,7 @@ func TestNewHeight(t *testing.T) {
 	}
 }
 
-func TestNewHeightWithRevision(t *testing.T) {
+func TestNewHeightRevisionArgs(t *testing.T) {
 	tests := []struct {
 		name     string
 		revision uint64
@@ -76,9 +76,9 @@ func TestNewHeightWithRevision(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := NewHeightWithRevision(tc.revision, tc.height)
+			got := NewHeight(tc.revision, tc.height)
 			if got != tc.want {
-				t.Fatalf("NewHeightWithRevision(%v, %v) = %v, want %v", tc.revision, tc.height, got, tc.want)
+				t.Fatalf("NewHeight(%v, %v) = %v, want %v", tc.revision, tc.height, got, tc.want)
 			}
 		})
 	}

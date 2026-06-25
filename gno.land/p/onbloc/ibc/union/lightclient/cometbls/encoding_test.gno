@@ -149,7 +149,7 @@ func TestEncodeHeaderAdditional(t *testing.T) {
 		{
 			name: "non-nil trusted height extracts revision height",
 			header: cloneTestHeaderWith(func(h *Header) {
-				h.TrustedHeight = heightPtr(types.NewHeightWithRevision(5, 42))
+				h.TrustedHeight = heightPtr(types.NewHeight(5, 42))
 			}),
 		},
 		// Edge cases

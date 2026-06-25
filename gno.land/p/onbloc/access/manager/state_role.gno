@@ -47,7 +47,7 @@ func (roleConfig *RoleConfig) grantWithEffect(account address, now TimePoint, ex
 		return false, effect
 	}
 
-	access = NewAccessWithDelay(now, roleConfig.grantDelayAt(now), executionDelay)
+	access = NewAccess(now, roleConfig.grantDelayAt(now), executionDelay)
 	roleConfig.Members[account] = access
 
 	return true, access.Since

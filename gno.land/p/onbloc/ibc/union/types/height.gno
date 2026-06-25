@@ -18,14 +18,17 @@ type Height struct {
 	RevisionHeight uint64
 }
 
-// NewHeight returns a Height with no revision.
-func NewHeight(height uint64) Height {
-	return Height{RevisionNumber: 0, RevisionHeight: height}
-}
+// NewHeight returns a Height with no revision when called with one argument, or
+// with an explicit revision when called as NewHeight(revision, height).
+func NewHeight(revisionOrHeight uint64, height ...uint64) Height {
+	if len(height) == 0 {
+		return Height{RevisionNumber: 0, RevisionHeight: revisionOrHeight}
+	}
+	if len(height) != 1 {
+		panic("height requires one height or revision and height")
+	}
 
-// NewHeightWithRevision returns a Height carrying both a revision and a height.
-func NewHeightWithRevision(revision, height uint64) Height {
-	return Height{RevisionNumber: revision, RevisionHeight: height}
+	return Height{RevisionNumber: revisionOrHeight, RevisionHeight: height[0]}
 }
 
 // IsZero reports whether the height is the zero value (no revision, zero

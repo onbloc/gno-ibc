@@ -41,7 +41,7 @@ func (h *Header) ConsensusState() *ConsensusState {
 // GetHeight returns the height of the signed (untrusted) header. CometBLS
 // carries a single revision, so it shares the trusted height's revision number.
 func (h *Header) GetHeight() types.Height {
-	return types.NewHeightWithRevision(h.TrustedHeight.RevisionNumber, uint64(h.SignedHeader.Height))
+	return types.NewHeight(h.TrustedHeight.RevisionNumber, uint64(h.SignedHeader.Height))
 }
 
 func (h *Header) GetTime() time.Time {

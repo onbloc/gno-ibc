@@ -295,7 +295,7 @@ func TestHeaderGetHeightPreservesTrustedRevision(t *testing.T) {
 	// Union reference: update_state rebuilds the untrusted height with the
 	// trusted height revision.
 	h := newTestHeader(42, 1000, 500, 10, []byte{0xAA})
-	h.TrustedHeight = heightPtr(types.NewHeightWithRevision(7, 10))
+	h.TrustedHeight = heightPtr(types.NewHeight(7, 10))
 
 	got := h.GetHeight()
 	if got.RevisionNumber != 7 {

@@ -238,6 +238,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "1234567890"
 //       },
 //       {
+//         "key": "delay",
+//         "value": "0"
+//       },
+//       {
 //         "key": "new_member",
 //         "value": "true"
 //       }

@@ -56,7 +56,7 @@ const (
 	// coins / channel balance
 	errCoinMismatch            = "zkgm/coins: sent coin mismatch"
 	errChannelBalanceUnderflow = "zkgm/channel_balance: underflow"
-	errQuoteAmountTooLarge     = "quote amount exceeds trimmed base amount"
+	errQuoteAmountTooLarge     = "zkgm/token_order: quote amount exceeds trimmed base amount"
 	errChannelBalanceOverflow  = "zkgm/channel_balance: overflow"
 
 	// errGRC20Unsupported is returned when a token order's base denom is a GRC20

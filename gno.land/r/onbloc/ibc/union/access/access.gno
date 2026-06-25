@@ -18,6 +18,8 @@ func GrantRole(cur realm, role manager.RoleId, account address) bool {
 
 // GrantRoleWithExecutionDelay grants role membership with a Union-style
 // execution delay for calls guarded by that role.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L253-L283
 func GrantRoleWithExecutionDelay(cur realm, role manager.RoleId, account address, executionDelay manager.Delay) bool {
 	assertCanAdminRole(0, cur, role)
 
@@ -84,6 +86,8 @@ func SetRoleAdmin(cur realm, role manager.RoleId, admin manager.RoleId) {
 
 // SetRoleGuardian sets the guardian role that may cancel scheduled operations
 // for role.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L337-L350
 func SetRoleGuardian(cur realm, role manager.RoleId, guardian manager.RoleId) {
 	assertCanManageTarget(0, cur)
 
@@ -115,6 +119,10 @@ func SetFunctionRole(cur realm, selector manager.Selector, role manager.RoleId) 
 	emitTargetFunctionRoleUpdatedEvent(target, selector, role)
 }
 
+// SetFunctionRoleDelayed sets the caller target's selector role after consuming
+// a scheduled target-admin operation.
+// Union delayed execution reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L498-L528
 func SetFunctionRoleDelayed(cur realm, selector manager.Selector, role manager.RoleId, dataHash string) {
 	target := cur.Previous().PkgPath()
 	assertCanManageTargetOrConsume(0, cur, target, manager.SelectorSetFunctionRole, dataHash)
@@ -138,6 +146,10 @@ func SetFunctionRoles(cur realm, selectors []manager.Selector, role manager.Role
 	}
 }
 
+// SetFunctionRolesDelayed sets multiple caller target selector roles after
+// consuming a scheduled target-admin operation.
+// Union delayed execution reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L498-L528
 func SetFunctionRolesDelayed(cur realm, selectors []manager.Selector, role manager.RoleId, dataHash string) {
 	target := cur.Previous().PkgPath()
 	assertCanManageTargetOrConsume(0, cur, target, manager.SelectorSetFunctionRoles, dataHash)
@@ -151,6 +163,8 @@ func SetFunctionRolesDelayed(cur realm, selectors []manager.Selector, role manag
 
 // SetTargetAdminDelay sets the delay for future target administration changes
 // on the calling realm's target path.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L367-L380
 func SetTargetAdminDelay(cur realm, delay manager.Delay) {
 	assertCanManageTarget(0, cur)
 
@@ -160,6 +174,10 @@ func SetTargetAdminDelay(cur realm, delay manager.Delay) {
 	emitTargetAdminDelayUpdatedEvent(target, delay, effect)
 }
 
+// SetTargetAdminDelayDelayed sets the caller target admin delay after consuming
+// a scheduled target-admin operation.
+// Union delayed execution reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L498-L528
 func SetTargetAdminDelayDelayed(cur realm, delay manager.Delay, dataHash string) {
 	target := cur.Previous().PkgPath()
 	assertCanManageTargetOrConsume(0, cur, target, manager.SelectorSetTargetAdminDelay, dataHash)
@@ -181,6 +199,10 @@ func SetTargetClosed(cur realm, closed bool) {
 	emitTargetClosedEvent(target, closed)
 }
 
+// SetTargetClosedDelayed sets the caller target closed flag after consuming a
+// scheduled target-admin operation.
+// Union delayed execution reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L498-L528
 func SetTargetClosedDelayed(cur realm, closed bool, dataHash string) {
 	target := cur.Previous().PkgPath()
 	assertCanManageTargetOrConsume(0, cur, target, manager.SelectorSetTargetClosed, dataHash)
@@ -190,11 +212,11 @@ func SetTargetClosedDelayed(cur realm, closed bool, dataHash string) {
 	emitTargetClosedEvent(target, closed)
 }
 
+// Schedule schedules a delayed operation for target selector and returns its
+// operation id.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L437-L472
 func Schedule(cur realm, target string, selector manager.Selector, dataHash string, when manager.TimePoint) manager.OperationId {
-	if !cur.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
-
 	caller := cur.Previous().Address()
 	operationId, nonce := accessState.Schedule(caller, target, selector, dataHash, when)
 
@@ -203,11 +225,11 @@ func Schedule(cur realm, target string, selector manager.Selector, dataHash stri
 	return operationId
 }
 
+// ScheduleTargetAdmin schedules a delayed target-admin operation and returns
+// its operation id.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L860-L897
 func ScheduleTargetAdmin(cur realm, target string, selector manager.Selector, dataHash string, when manager.TimePoint) manager.OperationId {
-	if !cur.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
-
 	caller := cur.Previous().Address()
 	operationId, nonce := accessState.ScheduleTargetAdmin(caller, target, selector, dataHash, when)
 
@@ -216,11 +238,11 @@ func ScheduleTargetAdmin(cur realm, target string, selector manager.Selector, da
 	return operationId
 }
 
+// Cancel cancels a scheduled operation proposed by caller and returns its
+// operation id.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L478-L492
 func Cancel(cur realm, caller address, target string, selector manager.Selector, dataHash string) manager.OperationId {
-	if !cur.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
-
 	msgSender := cur.Previous().Address()
 	operationId, nonce := accessState.Cancel(msgSender, caller, target, selector, dataHash)
 

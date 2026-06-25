@@ -6,6 +6,9 @@ type TargetConfig struct {
 	AdminDelay    DelayedValue
 }
 
+// NewTargetConfig returns a target configuration with the provided closed flag.
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L65-L70
 func NewTargetConfig(closed bool) *TargetConfig {
 	return &TargetConfig{
 		FunctionRoles: make(map[Selector]RoleId),

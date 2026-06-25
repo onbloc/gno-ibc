@@ -13,7 +13,7 @@ Reference:
   [`AccessManager` API](https://docs.openzeppelin.com/contracts/5.x/api/access#AccessManager)
 - OpenZeppelin Contracts `AccessManager` v5.6.1:
   [`contracts/access/manager`](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/v5.6.1/contracts/access/manager)
-- Union CosmWasm `access-manager`:
+- Union CosmWasm `access-manager` adaptation:
   [`cosmwasm/access-manager`](https://github.com/unionlabs/union/tree/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager)
 
 This package is a state transition library, not a realm. It does not own
@@ -36,19 +36,19 @@ The model follows OpenZeppelin's `AccessManager` shape:
   records;
 - a member access record has an activation timePoint and execution delay;
 - role grant delay, target admin delay, and member execution-delay reductions
-  use Union/OZ delayed-value update semantics instead of changing immediately;
-- role labels are stored for discoverability queries and emitted as events by
-  the consuming realm;
+  use OpenZeppelin delayed-value update semantics instead of changing
+  immediately;
+- role labels are stored as a Union-facing extension for discoverability
+  queries;
 - delayed operations are keyed by caller, target, selector, and `dataHash`;
 - target administration can require a target-specific admin delay;
 - current `TimePoint` is represented as Unix seconds in an `int64` wrapper and
   read from Gno block time with `time.Now().Unix()`;
 - `CanCall` returns whether a call is immediate, delayed, or unauthorized.
 
-Role labels follow OpenZeppelin's event-only model from the pure package's
-perspective: labels are not stored in `State`. This package only defines the
-Union/OZ event type and attribute names plus role-lock validation; the consuming
-realm must emit `RoleLabel` so the event is attributed to the state-owning
+Role labels are not part of OpenZeppelin's core `AccessManager` state. This
+package stores them as a Union-facing extension; the consuming realm remains
+responsible for emitting events so attribution belongs to the state-owning
 realm.
 
 ## Reference Map
@@ -66,7 +66,8 @@ are still aligned with the source models:
 - OpenZeppelin defines the target/function role model, admin role behavior,
   public role behavior, target closure, and delayed operation concepts:
   [`AccessManager` source](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/v5.6.1/contracts/access/manager)
-- Union's `access-manager` ports the OpenZeppelin manager to CosmWasm. Its init
+- Union's `access-manager` ports the OpenZeppelin manager to CosmWasm and adds
+  the role-label query surface consumed by the Union-facing realm. Its init
   grants `ADMIN_ROLE` to `InitMsg.initial_admin`:
   [`init` authority grant](https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/lib.rs#L135-L154)
 

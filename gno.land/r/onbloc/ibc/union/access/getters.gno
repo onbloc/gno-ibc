@@ -2,18 +2,30 @@ package access
 
 import "gno.land/p/onbloc/access/manager"
 
+// AdminRole returns the global administrator role id.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L32-L40
 func AdminRole() manager.RoleId {
 	return manager.AdminRole
 }
 
+// PublicRole returns the role id automatically authorized for all callers.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L41-L49
 func PublicRole() manager.RoleId {
 	return manager.PublicRole
 }
 
+// Expiration returns the scheduled operation expiration delay.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L50-L60
 func Expiration() manager.Delay {
 	return manager.OperationExpiration
 }
 
+// MinSetback returns the minimum setback for grant and admin delay updates.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L62-L64
 func MinSetback() manager.Delay {
 	return manager.MinSetback
 }
@@ -25,14 +37,24 @@ func HasRole(role manager.RoleId, account address) manager.HasRoleResult {
 	return accessState.HasRole(role, account)
 }
 
+// GetAccess returns membership activation and execution delay details for
+// account and role.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L167-L178
 func GetAccess(role manager.RoleId, account address) manager.FullAccess {
 	return accessState.GetAccess(role, account)
 }
 
+// GetRoleLabel returns the label for role and whether one is set.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L215-L231
 func GetRoleLabel(role manager.RoleId) (string, bool) {
 	return accessState.GetRoleLabel(role)
 }
 
+// GetRoleLabels returns labels for each role, preserving input order.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L215-L231
 func GetRoleLabels(roles []manager.RoleId) []manager.RoleLabel {
 	return accessState.GetRoleLabels(roles)
 }
@@ -45,6 +67,8 @@ func GetRoleAdmin(role manager.RoleId) manager.RoleId {
 }
 
 // GetRoleGuardian returns the guardian role configured for role.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L141-L151
 func GetRoleGuardian(role manager.RoleId) manager.RoleId {
 	return accessState.GetRoleGuardian(role)
 }
@@ -71,6 +95,8 @@ func GetTargetFunctionRole(targetPath string, selector manager.Selector) manager
 }
 
 // GetTargetAdminDelay returns the admin delay configured for targetPath.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L119-L127
 func GetTargetAdminDelay(targetPath string) manager.Delay {
 	return accessState.GetTargetAdminDelay(targetPath)
 }
@@ -97,27 +123,44 @@ func IsAuthorized(targetPath string, selector manager.Selector, caller address) 
 }
 
 // CanAdminRole reports whether caller can administer role.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L860-L897
 func CanAdminRole(role manager.RoleId, caller address) manager.CanCallResult {
 	return accessState.CanAdminRole(role, caller)
 }
 
 // CanManageTarget reports whether caller can manage target configuration.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L860-L897
 func CanManageTarget(caller address) manager.CanCallResult {
 	return accessState.CanManageTarget(caller)
 }
 
+// CanManageTargetPath reports whether caller can manage targetPath, including
+// the target admin delay.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L860-L897
 func CanManageTargetPath(targetPath string, caller address) manager.CanCallResult {
 	return accessState.CanManageTargetPath(caller, targetPath)
 }
 
+// HashOperation returns the delayed operation id for the provided call tuple.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L215-L224
 func HashOperation(caller address, targetPath string, selector manager.Selector, dataHash string) manager.OperationId {
 	return manager.HashOperation(caller, targetPath, selector, dataHash)
 }
 
+// GetSchedule returns a non-expired scheduled operation or the zero schedule.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L194-L203
 func GetSchedule(operationId manager.OperationId) manager.Schedule {
 	return accessState.GetSchedule(operationId)
 }
 
+// GetNonce returns the latest nonce for operationId.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L205-L213
 func GetNonce(operationId manager.OperationId) manager.Nonce {
 	return accessState.GetNonce(operationId)
 }

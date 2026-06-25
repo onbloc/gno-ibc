@@ -5,6 +5,10 @@ type Access struct {
 	Delay DelayedValue
 }
 
+// NewAccess returns an access record whose membership becomes active after the
+// role grant delay and whose guarded calls use executionDelay.
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L72-L79
 func NewAccess(since TimePoint, grantDelay Delay, executionDelay Delay) Access {
 	if since.IsZero() {
 		return Access{Since: 0}

@@ -9,6 +9,7 @@ type State struct {
 	Labels    map[RoleId]string
 }
 
+// NewState returns an empty access manager state.
 func NewState() State {
 	return State{
 		Roles:     make(map[RoleId]*RoleConfig),
@@ -92,6 +93,8 @@ func (state *State) GetRoleAdmin(role RoleId) RoleId {
 
 // GetRoleGuardian returns the guardian role allowed to cancel delayed
 // operations for role.
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L188-L191
 func (state *State) GetRoleGuardian(role RoleId) RoleId {
 	roleConfig := state.getRole(role)
 	if roleConfig == nil {
@@ -128,6 +131,8 @@ func (state *State) GetTargetFunctionRole(target string, selector Selector) Role
 
 // GetTargetAdminDelay returns the delay required before target configuration
 // changes can be consumed.
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L178-L181
 func (state *State) GetTargetAdminDelay(target string) Delay {
 	targetConfig := state.getTarget(target)
 	if targetConfig == nil {
@@ -146,6 +151,10 @@ func (state *State) IsTargetClosed(target string) bool {
 	return targetConfig != nil && targetConfig.isClosed()
 }
 
+// GetSchedule returns a non-expired scheduled operation or the zero schedule if
+// it is unset, executed, canceled, or expired.
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L429-L433
 func (state *State) GetSchedule(operationId OperationId) Schedule {
 	schedule := state.getSchedule(operationId)
 	if schedule.isExpired(CurrentTimePoint()) {
@@ -155,10 +164,17 @@ func (state *State) GetSchedule(operationId OperationId) Schedule {
 	return schedule
 }
 
+// GetNonce returns the latest nonce for operationId, or zero if it was never
+// scheduled.
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L435-L438
 func (state *State) GetNonce(operationId OperationId) Nonce {
 	return state.getSchedule(operationId).Nonce
 }
 
+// GetAccess returns the full access timing details for account and role.
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L198-L209
 func (state *State) GetAccess(role RoleId, account address) FullAccess {
 	roleConfig := state.getRole(role)
 	if roleConfig == nil {
@@ -168,6 +184,9 @@ func (state *State) GetAccess(role RoleId, account address) FullAccess {
 	return roleConfig.rawAccess(account).fullAt(CurrentTimePoint())
 }
 
+// GetRoleLabel returns the stored Gno label for role and whether one is set.
+// Union query extension reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L215-L231
 func (state *State) GetRoleLabel(role RoleId) (string, bool) {
 	if state.Labels == nil {
 		state.Labels = make(map[RoleId]string)
@@ -177,6 +196,9 @@ func (state *State) GetRoleLabel(role RoleId) (string, bool) {
 	return label, found
 }
 
+// GetRoleLabels returns stored Gno labels for each role, preserving input order.
+// Union query extension reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L215-L231
 func (state *State) GetRoleLabels(roles []RoleId) []RoleLabel {
 	labels := make([]RoleLabel, len(roles))
 	for i := range roles {
@@ -193,6 +215,9 @@ func (state *State) GetRoleLabels(roles []RoleId) []RoleLabel {
 
 // =============================================== ROLE MANAGEMENT ===============================================
 
+// LabelRole stores human-readable metadata for an unlocked role.
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L226-L231
 func (state *State) LabelRole(role RoleId, label string) {
 	RequireUnlockedConfigRole(role)
 	if state.Labels == nil {
@@ -214,12 +239,19 @@ func (state *State) GrantRole(role RoleId, account address) bool {
 
 // GrantRoleWithExecutionDelay grants role membership to account with a call
 // execution delay after the membership becomes active.
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L233-L236
 func (state *State) GrantRoleWithExecutionDelay(role RoleId, account address, executionDelay Delay) bool {
 	newMember, _ := state.GrantRoleWithExecutionDelayEffect(role, account, executionDelay)
 
 	return newMember
 }
 
+// GrantRoleWithExecutionDelayEffect grants role membership and returns whether
+// account is new plus the timepoint at which the grant or delay update takes
+// effect.
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L271-L298
 func (state *State) GrantRoleWithExecutionDelayEffect(role RoleId, account address, executionDelay Delay) (bool, TimePoint) {
 	if role == PublicRole {
 		panic(errorWithDetails(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
@@ -268,6 +300,9 @@ func (state *State) SetRoleAdmin(role RoleId, admin RoleId) {
 
 // SetRoleGuardian sets the role that can cancel scheduled operations requiring
 // role.
+// OpenZeppelin references:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L256-L259
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L339-L355
 func (state *State) SetRoleGuardian(role RoleId, guardian RoleId) {
 	RequireUnlockedConfigRole(role)
 
@@ -308,6 +343,9 @@ func (state *State) SetTargetFunctionRoles(target string, selectors []Selector, 
 
 // SetTargetAdminDelay sets the delay required before target configuration
 // operations can be consumed.
+// OpenZeppelin references:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L395-L410
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L619-L638
 func (state *State) SetTargetAdminDelay(target string, delay Delay) TimePoint {
 	state.ensureTarget(target)
 	return state.getTarget(target).setAdminDelayWithSetback(delay, CurrentTimePoint())
@@ -326,6 +364,10 @@ func (state *State) SetTargetClosed(target string, closed bool) {
 
 // ============================================= DELAYED OPERATIONS ================================================
 
+// Schedule schedules a delayed operation for caller and returns its operation id
+// and nonce.
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L440-L489
 func (state *State) Schedule(caller address, target string, selector Selector, dataHash string, when TimePoint) (OperationId, Nonce) {
 	result := state.CanCall(caller, target, selector)
 	if !result.Authorized || result.Immediate {
@@ -335,6 +377,11 @@ func (state *State) Schedule(caller address, target string, selector Selector, d
 	return state.scheduleWithDelay(caller, target, selector, dataHash, when, result.Delay)
 }
 
+// ScheduleTargetAdmin schedules a delayed target-admin operation for caller and
+// returns its operation id and nonce.
+// OpenZeppelin references:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L440-L489
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L619-L638
 func (state *State) ScheduleTargetAdmin(caller address, target string, selector Selector, dataHash string, when TimePoint) (OperationId, Nonce) {
 	result := state.CanManageTargetPath(caller, target)
 	if !result.Authorized || result.Immediate {
@@ -344,6 +391,10 @@ func (state *State) ScheduleTargetAdmin(caller address, target string, selector 
 	return state.scheduleWithDelay(caller, target, selector, dataHash, when, result.Delay)
 }
 
+// Cancel cancels a scheduled operation when msgSender is its proposer, a global
+// admin, or a guardian of the targeted function role.
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L526-L547
 func (state *State) Cancel(msgSender address, caller address, target string, selector Selector, dataHash string) (OperationId, Nonce) {
 	operationId := HashOperation(caller, target, selector, dataHash)
 	schedule := state.getSchedule(operationId)
@@ -365,6 +416,10 @@ func (state *State) Cancel(msgSender address, caller address, target string, sel
 	return operationId, schedule.Nonce
 }
 
+// ConsumeScheduledOp consumes a ready scheduled operation and returns its
+// operation id and nonce.
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L550-L580
 func (state *State) ConsumeScheduledOp(caller address, target string, selector Selector, dataHash string) (OperationId, Nonce) {
 	operationId := HashOperation(caller, target, selector, dataHash)
 	schedule := state.getSchedule(operationId)
@@ -423,6 +478,12 @@ func (state *State) CanManageTarget(caller address) CanCallResult {
 	return NewCanCallResult(true, true, 0)
 }
 
+// CanManageTargetPath reports whether caller can manage target configuration,
+// including the target admin delay when immediate admin access is otherwise
+// available.
+// OpenZeppelin references:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L619-L638
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L640-L650
 func (state *State) CanManageTargetPath(caller address, target string) CanCallResult {
 	result := state.CanManageTarget(caller)
 	if !result.Authorized || !result.Immediate {

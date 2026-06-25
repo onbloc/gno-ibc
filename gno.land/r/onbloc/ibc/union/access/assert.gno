@@ -21,6 +21,10 @@ func AssertCanCall(_ int, rlm realm, selector manager.Selector) {
 	}
 }
 
+// AssertCanCallOrConsume panics unless caller can call selector immediately or
+// consumes a ready scheduled operation for the calling realm's target path.
+// Union reference:
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/manager/msg.rs#L514-L528
 func AssertCanCallOrConsume(_ int, rlm realm, selector manager.Selector, dataHash string) {
 	if !rlm.IsCurrent() {
 		panic(ErrSpoofedRealm)

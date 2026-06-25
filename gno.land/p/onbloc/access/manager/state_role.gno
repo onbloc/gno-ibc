@@ -4,14 +4,17 @@ import "strconv"
 
 type RoleId uint64
 
+// NewRoleId returns a role identifier.
 func NewRoleId(id uint64) RoleId {
 	return RoleId(id)
 }
 
+// Uint64 returns r as a uint64.
 func (r RoleId) Uint64() uint64 {
 	return uint64(r)
 }
 
+// String returns r as a base-10 string.
 func (r RoleId) String() string {
 	return strconv.FormatUint(uint64(r), 10)
 }
@@ -23,6 +26,10 @@ type RoleConfig struct {
 	GrantDelay DelayedValue
 }
 
+// NewRoleConfig returns a role configuration with admin, guardian defaulting to
+// AdminRole, and the initial grant delay.
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L81-L90
 func NewRoleConfig(admin RoleId, grantDelay Delay) *RoleConfig {
 	return &RoleConfig{
 		Members:    make(map[address]Access),

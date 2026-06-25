@@ -14,6 +14,9 @@ const (
 	SelectorSetTargetAdminDelay Selector = "set_target_admin_delay"
 )
 
+// HashOperation returns the identifier for a delayed operation.
+// OpenZeppelin reference:
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L582-L588
 func HashOperation(caller address, target string, selector Selector, dataHash string) OperationId {
 	sum := sha256.Sum256([]byte(caller.String() + "/" + target + "/" + string(selector) + "/" + dataHash))
 

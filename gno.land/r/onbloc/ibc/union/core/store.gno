@@ -11,10 +11,14 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
-var store *Store
+var (
+	store        *Store
+	proxyPkgPath string
+)
 
-func init() {
+func init(cur realm) {
 	store = newStore()
+	proxyPkgPath = cur.PkgPath()
 }
 
 // Store is the proxy-owned persistent state. It is a flat data layer: clients,
@@ -102,9 +106,7 @@ var _ IStore = (*Store)(nil)
 
 // RegisterClient stores a factory function for typ in the client registry.
 func (s *Store) RegisterClient(_ int, rlm realm, typ types.ClientType, impl lightclient.ClientImpl) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.registerClient(typ, impl)
 }
@@ -123,9 +125,7 @@ func (s *Store) HasRegisteredClient(typ types.ClientType) bool {
 // AddClient allocates a new client id and stores the light client object,
 // returning the assigned id.
 func (s *Store) AddClient(_ int, rlm realm, typ types.ClientType, creator address, lc lightclient.Interface) types.ClientId {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	return s.addClient(s.nextClientId(), typ, creator, lc).id
 }
@@ -139,9 +139,7 @@ func (s *Store) GetClientImpl(clientId types.ClientId) (lightclient.ClientImpl, 
 // SaveClientStore records a light client storage write (result StorageWrites),
 // returning false when the client is unknown.
 func (s *Store) SaveClientStore(_ int, rlm realm, clientId types.ClientId, key string, value []byte) bool {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	c := s.getClient(clientId)
 	if c == nil {
@@ -173,9 +171,7 @@ func (s *Store) GetLightClient(clientId types.ClientId) (lightclient.Interface, 
 // SetLightClient replaces a client's light client object (force-update recovery),
 // returning false when the client is unknown.
 func (s *Store) SetLightClient(_ int, rlm realm, clientId types.ClientId, lc lightclient.Interface) bool {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	c := s.getClient(clientId)
 	if c == nil {
@@ -190,9 +186,7 @@ func (s *Store) SetLightClient(_ int, rlm realm, clientId types.ClientId, lc lig
 // SaveClientState mirrors the client state bytes for queries and counterparty
 // proofs, returning false when the client is unknown.
 func (s *Store) SaveClientState(_ int, rlm realm, clientId types.ClientId, clientStateBytes []byte) bool {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	c := s.getClient(clientId)
 	if c == nil {
@@ -207,9 +201,7 @@ func (s *Store) SaveClientState(_ int, rlm realm, clientId types.ClientId, clien
 // SaveConsensusState records the consensus state at height, returning false when
 // the client is unknown.
 func (s *Store) SaveConsensusState(_ int, rlm realm, clientId types.ClientId, height types.Height, consensusStateBytes []byte) bool {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	c := s.getClient(clientId)
 	if c == nil {
@@ -223,18 +215,14 @@ func (s *Store) SaveConsensusState(_ int, rlm realm, clientId types.ClientId, he
 
 // NextConnectionId allocates the next connection id from the sequence.
 func (s *Store) NextConnectionId(_ int, rlm realm) types.ConnectionId {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	return s.nextConnectionId()
 }
 
 // SaveConnection persists a connection and mirrors its commitment.
 func (s *Store) SaveConnection(_ int, rlm realm, connectionId types.ConnectionId, connection types.Connection) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.saveConnection(connectionId, connection)
 }
@@ -246,27 +234,21 @@ func (s *Store) GetConnection(connectionId types.ConnectionId) (types.Connection
 
 // NextChannelId allocates the next channel id from the sequence.
 func (s *Store) NextChannelId(_ int, rlm realm) types.ChannelId {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	return s.nextChannelId()
 }
 
 // CreateChannel persists a new channel owned by portId and mirrors its commitment.
 func (s *Store) CreateChannel(_ int, rlm realm, channelId types.ChannelId, channel types.Channel, portId types.Bytes) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.createChannel(channelId, channel, portId)
 }
 
 // SaveChannel updates a stored channel and mirrors its commitment.
 func (s *Store) SaveChannel(_ int, rlm realm, channelId types.ChannelId, channel types.Channel) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.saveChannel(channelId, channel)
 }
@@ -328,9 +310,7 @@ func (s *Store) HasApp(portId types.Bytes) bool {
 // RegisterAppAtPort installs an app at portId, panicking if one is already
 // registered there.
 func (s *Store) RegisterAppAtPort(_ int, rlm realm, portId types.Bytes, a app.IApp) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	key := portKey(portId)
 	if _, ok := s.ports[key]; ok {
@@ -348,9 +328,7 @@ func (s *Store) HasPacketCommitment(packet types.Packet) bool {
 
 // CommitPacket records the source-side commitment for a sent packet.
 func (s *Store) CommitPacket(_ int, rlm realm, packet types.Packet) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.setCommitment(packetCommitmentPath(packet), types.COMMITMENT_MAGIC)
 }
@@ -361,9 +339,7 @@ func (s *Store) CommitPacket(_ int, rlm realm, packet types.Packet) {
 // flip stays in memory only — the chain-param commitment keeps recording that
 // the packet was sent.
 func (s *Store) SetPacketAcknowledged(_ int, rlm realm, packet types.Packet) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.setCommitmentMem(packetCommitmentPath(packet), types.COMMITMENT_MAGIC_ACK)
 }
@@ -376,18 +352,14 @@ func (s *Store) HasPacketReceipt(packet types.Packet) bool {
 
 // SetPacketReceipt records a destination-side receipt (replay protection).
 func (s *Store) SetPacketReceipt(_ int, rlm realm, packet types.Packet) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.setCommitment(packetAcknowledgementPath(packet), types.COMMITMENT_MAGIC)
 }
 
 // CommitAcknowledgement records the acknowledgement for a received packet.
 func (s *Store) CommitAcknowledgement(_ int, rlm realm, packet types.Packet, ack []byte) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.setCommitment(packetAcknowledgementPath(packet), types.CommitAcks([][]byte{ack}))
 }
@@ -404,36 +376,28 @@ func (s *Store) PacketCommitment(channelId types.ChannelId, packet types.Packet)
 
 // SaveBatchPackets records a batch commitment under batchHash.
 func (s *Store) SaveBatchPackets(_ int, rlm realm, channelId types.ChannelId, batchHash, value types.H256) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.setCommitment(types.BatchPacketsPath(batchHash), value)
 }
 
 // SaveBatchReceipts records a batch receipt under batchHash.
 func (s *Store) SaveBatchReceipts(_ int, rlm realm, channelId types.ChannelId, batchHash, value types.H256) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.setCommitment(types.BatchReceiptsPath(batchHash), value)
 }
 
 // SaveMembershipProof records a verified membership commitment.
 func (s *Store) SaveMembershipProof(_ int, rlm realm, clientId types.ClientId, proofHeight uint64, path []byte, value types.H256) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.saveMembershipProof(clientId, proofHeight, path, value)
 }
 
 // SaveNonMembershipProof records a verified non-membership commitment.
 func (s *Store) SaveNonMembershipProof(_ int, rlm realm, clientId types.ClientId, proofHeight uint64, path []byte, value types.H256) {
-	if !rlm.IsCurrent() {
-		panic(ErrSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	s.saveNonMembershipProof(clientId, proofHeight, path, value)
 }

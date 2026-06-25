@@ -10,6 +10,7 @@ import (
 )
 
 func TestConnectionOpenInit(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
 
@@ -26,6 +27,7 @@ func TestConnectionOpenInit(cur realm, t *testing.T) {
 }
 
 func TestConnectionOpenTryVerifiesAndSaves(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	lc := &mockLightClient{}
 	clientId := createClient(cur, v, lc, nil, nil)
@@ -46,10 +48,12 @@ func TestConnectionOpenTryVerifiesAndSaves(cur realm, t *testing.T) {
 }
 
 func TestConnectionOpenTryProofFailureAborts(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{membershipErr: "bad proof"}, nil, nil)
 
 	uassert.AbortsContains(t, cur, "bad proof", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.ConnectionOpenTry(0, cur, types.MsgConnectionOpenTry{
 			ClientId:                 clientId,
 			CounterpartyClientId:     types.ClientId(7),
@@ -61,6 +65,7 @@ func TestConnectionOpenTryProofFailureAborts(cur realm, t *testing.T) {
 }
 
 func TestConnectionOpenAckMovesInitToOpen(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	lc := &mockLightClient{}
 	clientId := createClient(cur, v, lc, nil, nil)
@@ -80,6 +85,7 @@ func TestConnectionOpenAckMovesInitToOpen(cur realm, t *testing.T) {
 }
 
 func TestConnectionOpenAckWrongStateAborts(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
 	// TryOpen (not Init) is the wrong state for an ack.
@@ -92,6 +98,7 @@ func TestConnectionOpenAckWrongStateAborts(cur realm, t *testing.T) {
 	})
 
 	uassert.AbortsContains(t, cur, "invalid connection state", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.ConnectionOpenAck(0, cur, types.MsgConnectionOpenAck{
 			ConnectionId:             types.ConnectionId(1),
 			CounterpartyConnectionId: types.ConnectionId(5),
@@ -102,6 +109,7 @@ func TestConnectionOpenAckWrongStateAborts(cur realm, t *testing.T) {
 }
 
 func TestConnectionOpenConfirmMovesTryOpenToOpen(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
 	v.ConnectionOpenTry(0, cur, types.MsgConnectionOpenTry{
@@ -123,9 +131,11 @@ func TestConnectionOpenConfirmMovesTryOpenToOpen(cur realm, t *testing.T) {
 }
 
 func TestConnectionOpenAckUnknownAborts(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 
 	uassert.AbortsContains(t, cur, "not found", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.ConnectionOpenAck(0, cur, types.MsgConnectionOpenAck{ConnectionId: types.ConnectionId(99), ProofTry: []byte("p")})
 	})
 }
@@ -133,9 +143,11 @@ func TestConnectionOpenAckUnknownAborts(cur realm, t *testing.T) {
 // Converted from Union connection_open_try_client_not_found:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/connection/ibc.rs#L170-L226
 func TestConnectionOpenTryClientNotFound(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 
 	uassert.AbortsContains(t, cur, "client not found, 1", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.ConnectionOpenTry(0, cur, types.MsgConnectionOpenTry{
 			ClientId:                 types.ClientId(1),
 			CounterpartyClientId:     types.ClientId(2),
@@ -151,6 +163,7 @@ func TestConnectionOpenTryClientNotFound(cur realm, t *testing.T) {
 // A frozen client makes the proof-verifying path abort ("client is not active");
 // the Force variant must skip verification and still save the connection.
 func TestForceConnectionOpenTryBypassesProofVerification(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{status: lightclient.Frozen}, nil, nil)
 
@@ -171,6 +184,7 @@ func TestForceConnectionOpenTryBypassesProofVerification(cur realm, t *testing.T
 // Converted from Union force_connection_open_ack dispatch:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L223-L234
 func TestForceConnectionOpenAckBypassesProofVerification(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{status: lightclient.Frozen}, nil, nil)
 	id := v.store.NextConnectionId(0, cur)
@@ -192,6 +206,7 @@ func TestForceConnectionOpenAckBypassesProofVerification(cur realm, t *testing.T
 // Converted from Union force_connection_open_confirm dispatch:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/contract.rs#L247-L258
 func TestForceConnectionOpenConfirmBypassesProofVerification(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{status: lightclient.Frozen}, nil, nil)
 	id := v.store.NextConnectionId(0, cur)
@@ -209,6 +224,7 @@ func TestForceConnectionOpenConfirmBypassesProofVerification(cur realm, t *testi
 }
 
 func TestPrivateConnectionOpenTry(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	cases := []struct {
 		name      string
 		lc        *mockLightClient
@@ -234,6 +250,7 @@ func TestPrivateConnectionOpenTry(cur realm, t *testing.T) {
 				ProofInit:                []byte("proof"),
 			}
 			run := func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v.connectionOpenTry(0, cur, msg, tc.verify)
 			}
 			if tc.wantPanic != "" {
@@ -250,6 +267,7 @@ func TestPrivateConnectionOpenTry(cur realm, t *testing.T) {
 }
 
 func TestPrivateConnectionOpenAck(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	cases := []struct {
 		name      string
 		state     types.ConnectionState
@@ -277,6 +295,7 @@ func TestPrivateConnectionOpenAck(cur realm, t *testing.T) {
 				ProofTry:                 []byte("proof"),
 			}
 			run := func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v.connectionOpenAck(0, cur, msg, tc.verify)
 			}
 			if tc.wantPanic != "" {
@@ -292,6 +311,7 @@ func TestPrivateConnectionOpenAck(cur realm, t *testing.T) {
 }
 
 func TestPrivateConnectionOpenConfirm(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	cases := []struct {
 		name      string
 		state     types.ConnectionState
@@ -318,6 +338,7 @@ func TestPrivateConnectionOpenConfirm(cur realm, t *testing.T) {
 				ProofAck:     []byte("proof"),
 			}
 			run := func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v.connectionOpenConfirm(0, cur, msg, tc.verify)
 			}
 			if tc.wantPanic != "" {
@@ -335,17 +356,20 @@ func TestPrivateConnectionOpenConfirm(cur realm, t *testing.T) {
 // --- ensureConnectionState ---
 
 func TestEnsureConnectionOpenPanicsOnInit(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
 	id := v.store.NextConnectionId(0, cur)
 	v.store.SaveConnection(0, cur, id, core.NewConnection(types.ConnectionStateInit, clientId, types.ClientId(7), 0))
 
 	uassert.AbortsContains(t, cur, "invalid connection state", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.ensureConnectionState(id)
 	})
 }
 
 func TestEnsureConnectionOpenSucceeds(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
 	id := v.store.NextConnectionId(0, cur)
@@ -356,6 +380,7 @@ func TestEnsureConnectionOpenSucceeds(cur realm, t *testing.T) {
 }
 
 func TestEnsureConnectionOpenAllowsMissingCounterpartyConnectionId(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
 	id := v.store.NextConnectionId(0, cur)

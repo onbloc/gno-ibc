@@ -10,6 +10,10 @@ import (
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 )
 
+const (
+	zkgmProxyRealmPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+)
+
 // Crossing test shims for the send-side verify path. The production verify
 // methods take the borrow form (0, rlm) and read the sender from
 // rlm.Previous().Address() (MessageInfo was removed). A direct non-crossing test

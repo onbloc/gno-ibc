@@ -6,9 +6,9 @@ import (
 	"gno.land/p/onbloc/access/manager"
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	"gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
-	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 )
 
 func main(cur realm) {

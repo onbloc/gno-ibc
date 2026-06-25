@@ -11,22 +11,18 @@ import (
 
 // ConnectionOpenInit starts a connection in the Init state.
 func (c *coreV1) ConnectionOpenInit(_ int, rlm realm, msg types.MsgConnectionOpenInit) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	connectionId := c.store.NextConnectionId(0, rlm)
 	connection := core.NewConnection(types.ConnectionStateInit, msg.ClientId, msg.CounterpartyClientId, 0)
 	c.store.SaveConnection(0, rlm, connectionId, connection)
-	core.EmitConnectionOpenInit(connectionId, msg.ClientId, msg.CounterpartyClientId)
+	core.EmitConnectionOpenInit(0, rlm, connectionId, msg.ClientId, msg.CounterpartyClientId)
 }
 
 // ConnectionOpenTry acknowledges a counterparty Init by proving it and moving to
 // TryOpen.
 func (c *coreV1) ConnectionOpenTry(_ int, rlm realm, msg types.MsgConnectionOpenTry) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	c.connectionOpenTry(0, rlm, msg, true)
 }
@@ -34,9 +30,7 @@ func (c *coreV1) ConnectionOpenTry(_ int, rlm realm, msg types.MsgConnectionOpen
 // ForceConnectionOpenTry is the admin recovery variant of ConnectionOpenTry that
 // skips counterparty proof verification.
 func (c *coreV1) ForceConnectionOpenTry(_ int, rlm realm, msg types.MsgConnectionOpenTry) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	c.connectionOpenTry(0, rlm, msg, false)
 }
@@ -53,15 +47,13 @@ func (c *coreV1) connectionOpenTry(_ int, rlm realm, msg types.MsgConnectionOpen
 	}
 
 	c.store.SaveConnection(0, rlm, connectionId, connection)
-	core.EmitConnectionOpenTry(connectionId, msg.ClientId, msg.CounterpartyClientId, msg.CounterpartyConnectionId)
+	core.EmitConnectionOpenTry(0, rlm, connectionId, msg.ClientId, msg.CounterpartyClientId, msg.CounterpartyConnectionId)
 }
 
 // ConnectionOpenAck proves the counterparty TryOpen and moves the local Init
 // connection to Open.
 func (c *coreV1) ConnectionOpenAck(_ int, rlm realm, msg types.MsgConnectionOpenAck) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	c.connectionOpenAck(0, rlm, msg, true)
 }
@@ -69,9 +61,7 @@ func (c *coreV1) ConnectionOpenAck(_ int, rlm realm, msg types.MsgConnectionOpen
 // ForceConnectionOpenAck is the admin recovery variant of ConnectionOpenAck that
 // skips counterparty proof verification.
 func (c *coreV1) ForceConnectionOpenAck(_ int, rlm realm, msg types.MsgConnectionOpenAck) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	c.connectionOpenAck(0, rlm, msg, false)
 }
@@ -98,15 +88,13 @@ func (c *coreV1) connectionOpenAck(_ int, rlm realm, msg types.MsgConnectionOpen
 	updated := core.NewConnection(types.ConnectionStateOpen, connection.ClientId, connection.CounterpartyClientId, msg.CounterpartyConnectionId)
 	c.store.SaveConnection(0, rlm, msg.ConnectionId, updated)
 
-	core.EmitConnectionOpenAck(msg.ConnectionId, connection.ClientId, connection.CounterpartyClientId, msg.CounterpartyConnectionId)
+	core.EmitConnectionOpenAck(0, rlm, msg.ConnectionId, connection.ClientId, connection.CounterpartyClientId, msg.CounterpartyConnectionId)
 }
 
 // ConnectionOpenConfirm proves the counterparty Open and moves the local TryOpen
 // connection to Open.
 func (c *coreV1) ConnectionOpenConfirm(_ int, rlm realm, msg types.MsgConnectionOpenConfirm) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	c.connectionOpenConfirm(0, rlm, msg, true)
 }
@@ -114,9 +102,7 @@ func (c *coreV1) ConnectionOpenConfirm(_ int, rlm realm, msg types.MsgConnection
 // ForceConnectionOpenConfirm is the admin recovery variant of
 // ConnectionOpenConfirm that skips counterparty proof verification.
 func (c *coreV1) ForceConnectionOpenConfirm(_ int, rlm realm, msg types.MsgConnectionOpenConfirm) {
-	if !rlm.IsCurrent() {
-		panic(errSpoofedRealm)
-	}
+	assertIsRlmCurrent(0, rlm)
 
 	c.connectionOpenConfirm(0, rlm, msg, false)
 }
@@ -144,7 +130,7 @@ func (c *coreV1) connectionOpenConfirm(_ int, rlm realm, msg types.MsgConnection
 	updated := core.NewConnection(types.ConnectionStateOpen, connection.ClientId, connection.CounterpartyClientId, counterpartyConnectionId)
 	c.store.SaveConnection(0, rlm, msg.ConnectionId, updated)
 
-	core.EmitConnectionOpenConfirm(msg.ConnectionId, connection.ClientId, connection.CounterpartyClientId, counterpartyConnectionId)
+	core.EmitConnectionOpenConfirm(0, rlm, msg.ConnectionId, connection.ClientId, connection.CounterpartyClientId, counterpartyConnectionId)
 }
 
 // ensureConnectionState returns the connection for connectionId, requiring it to

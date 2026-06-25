@@ -55,6 +55,7 @@ func setupOpenChannelWithoutApp(cur realm, v *coreV1, portId types.Bytes) types.
 }
 
 func TestGetAppAtPort(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	cases := []struct {
 		name      string
 		seed      func(*mockStore) types.Bytes
@@ -82,6 +83,7 @@ func TestGetAppAtPort(cur realm, t *testing.T) {
 			v := newTestImpl()
 			port := tc.seed(v.store.(*mockStore))
 			run := func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				a, err := v.getAppAtPort(port)
 				if err != nil {
 					panic(err)
@@ -100,6 +102,7 @@ func TestGetAppAtPort(cur realm, t *testing.T) {
 }
 
 func TestSendPacketCommits(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	chId, _, _ := setupOpenChannel(cur, v)
 
@@ -131,15 +134,18 @@ func TestSendPacketRetainsAndRetiresPacketData(cur realm, t *testing.T) {
 }
 
 func TestSendPacketTimeoutMustBeSet(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	chId, _, _ := setupOpenChannel(cur, v)
 
 	uassert.AbortsContains(t, cur, "timeout must be set", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.SendPacket(0, cur, chId, types.Timestamp(0), []byte("data"))
 	})
 }
 
 func TestSendPacketUnauthorizedSender(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	ms := v.store.(*mockStore)
 	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
@@ -153,11 +159,13 @@ func TestSendPacketUnauthorizedSender(cur realm, t *testing.T) {
 	v.ChannelOpenAck(0, cur, types.MsgChannelOpenAck{ChannelId: chId, CounterpartyChannelId: types.ChannelId(9), CounterpartyVersion: "v1", ProofHeight: 10, ProofTry: []byte("p")})
 
 	uassert.AbortsContains(t, cur, "authorized to send", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("data"))
 	})
 }
 
 func TestPacketRecv(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
 		name string
 		run  func(cur realm, t *testing.T)
@@ -166,6 +174,7 @@ func TestPacketRecv(cur realm, t *testing.T) {
 		{
 			name: "dispatches and receipts",
 			run: func(cur realm, t *testing.T) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, mApp := setupOpenChannel(cur, v)
 				packet := recvPacket(chId, "recv-data")
@@ -188,6 +197,7 @@ func TestPacketRecv(cur realm, t *testing.T) {
 			// only the first packet is received; the second is left undispatched.
 			name: "shorter relayer messages drops unpaired",
 			run: func(cur realm, t *testing.T) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, mApp := setupOpenChannel(cur, v)
 				packet0 := recvPacket(chId, "recv-0")
@@ -210,6 +220,7 @@ func TestPacketRecv(cur realm, t *testing.T) {
 		{
 			name: "duplicate skipped",
 			run: func(cur realm, t *testing.T) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, mApp := setupOpenChannel(cur, v)
 				packet := recvPacket(chId, "dup-data")
@@ -224,6 +235,7 @@ func TestPacketRecv(cur realm, t *testing.T) {
 		{
 			name: "fewer relayer messages than packets",
 			run: func(cur realm, t *testing.T) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, mApp := setupOpenChannel(cur, v)
 				p1 := recvPacket(chId, "recv-len-1")
@@ -244,6 +256,7 @@ func TestPacketRecv(cur realm, t *testing.T) {
 		{
 			name: "more relayer messages than packets",
 			run: func(cur realm, t *testing.T) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, mApp := setupOpenChannel(cur, v)
 				p1 := recvPacket(chId, "recv-len-1")
@@ -264,6 +277,7 @@ func TestPacketRecv(cur realm, t *testing.T) {
 		{
 			name: "async leaves magic receipt",
 			run: func(cur realm, t *testing.T) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, mApp := setupOpenChannel(cur, v)
 				mApp.recvStatus = types.PacketStatusAsync
@@ -285,6 +299,7 @@ func TestPacketRecv(cur realm, t *testing.T) {
 			name: "empty packet batch",
 			want: "not enough packets",
 			run: func(cur realm, t *testing.T) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				v.PacketRecv(0, cur, types.MsgPacketRecv{})
 			},
@@ -293,6 +308,7 @@ func TestPacketRecv(cur realm, t *testing.T) {
 			name: "mixed destination channels",
 			want: "batch must use the same channel",
 			run: func(cur realm, t *testing.T) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannel(cur, v)
 				p1 := recvPacket(chId, "mixed-1")
@@ -309,6 +325,7 @@ func TestPacketRecv(cur realm, t *testing.T) {
 			name: "expired packet",
 			want: "packet timeout expired",
 			run: func(cur realm, t *testing.T) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannel(cur, v)
 				packet := recvPacket(chId, "expired")
@@ -325,6 +342,7 @@ func TestPacketRecv(cur realm, t *testing.T) {
 			name: "proof failure",
 			want: "bad proof",
 			run: func(cur realm, t *testing.T) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				ms := v.store.(*mockStore)
 				clientId := createClient(cur, v, &mockLightClient{membershipErr: "bad proof"}, nil, nil)
@@ -345,6 +363,7 @@ func TestPacketRecv(cur realm, t *testing.T) {
 			name: "missing port app",
 			want: "port not found, missing-port",
 			run: func(cur realm, t *testing.T) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId := setupOpenChannelWithoutApp(cur, v, types.Bytes("missing-port"))
 				packet := recvPacket(chId, "missing-port-recv")
@@ -363,6 +382,7 @@ func TestPacketRecv(cur realm, t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.want != "" {
 				uassert.AbortsContains(t, cur, tc.want, func(cur realm) {
+					testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 					tc.run(cur, t)
 				})
 				return
@@ -373,6 +393,7 @@ func TestPacketRecv(cur realm, t *testing.T) {
 }
 
 func TestIntentPacketRecvDispatchesAndReceipts(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	chId, _, mApp := setupOpenChannel(cur, v)
 	packet := recvPacket(chId, "intent")
@@ -390,6 +411,7 @@ func TestIntentPacketRecvDispatchesAndReceipts(cur realm, t *testing.T) {
 }
 
 func TestIntentPacketRecvMarketMakerMessageLengthMismatchIsPartial(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
 		name      string
 		msgs      [][]byte
@@ -421,6 +443,7 @@ func TestIntentPacketRecvMarketMakerMessageLengthMismatchIsPartial(cur realm, t 
 }
 
 func TestIntentPacketRecvDuplicateSkipped(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	chId, _, mApp := setupOpenChannel(cur, v)
 	packet := recvPacket(chId, "intent-dup")
@@ -436,6 +459,7 @@ func TestIntentPacketRecvDuplicateSkipped(cur realm, t *testing.T) {
 }
 
 func TestIntentPacketRecvRejectsInvalidSyncResult(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
 		name      string
 		status    types.PacketStatus
@@ -456,6 +480,7 @@ func TestIntentPacketRecvRejectsInvalidSyncResult(cur realm, t *testing.T) {
 			packet := recvPacket(chId, tc.packetKey)
 
 			uassert.AbortsContains(t, cur, tc.want, func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v.IntentPacketRecv(0, cur, types.MsgIntentPacketRecv{
 					Packets:             []types.Packet{packet},
 					MarketMakerMessages: [][]byte{[]byte("mm")},
@@ -482,6 +507,7 @@ func setupOpenChannelWithClient(cur realm, v *coreV1, lc *mockLightClient, portI
 }
 
 func TestPacketMembershipEntrypointsInactiveClientAbortBeforeVerification(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
 		name string
 		run  func(cur realm, v *coreV1, lc *mockLightClient)
@@ -489,6 +515,7 @@ func TestPacketMembershipEntrypointsInactiveClientAbortBeforeVerification(cur re
 		{
 			name: "packet recv",
 			run: func(cur realm, v *coreV1, lc *mockLightClient) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				chId := setupOpenChannelWithClient(cur, v, lc, types.Bytes(cur.Previous().PkgPath()))
 				packet := recvPacket(chId, "inactive-recv")
 				v.PacketRecv(0, cur, types.MsgPacketRecv{
@@ -502,6 +529,7 @@ func TestPacketMembershipEntrypointsInactiveClientAbortBeforeVerification(cur re
 		{
 			name: "packet acknowledgement",
 			run: func(cur realm, v *coreV1, lc *mockLightClient) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				chId := setupOpenChannelWithClient(cur, v, lc, types.Bytes(cur.Previous().PkgPath()))
 				packet := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("inactive-ack"))
 				v.PacketAcknowledgement(0, cur, types.MsgPacketAcknowledgement{
@@ -515,6 +543,7 @@ func TestPacketMembershipEntrypointsInactiveClientAbortBeforeVerification(cur re
 		{
 			name: "commit membership proof",
 			run: func(cur realm, v *coreV1, lc *mockLightClient) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				clientId := createClient(cur, v, lc, nil, nil)
 				v.CommitMembershipProof(0, cur, types.MsgCommitMembershipProof{
 					ClientId:    clientId,
@@ -533,6 +562,7 @@ func TestPacketMembershipEntrypointsInactiveClientAbortBeforeVerification(cur re
 			lc := &mockLightClient{status: "Frozen", timestampAtHt: farFuture}
 
 			uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				tc.run(cur, v, lc)
 			})
 			uassert.Equal(t, 0, lc.membershipCalls)
@@ -541,11 +571,13 @@ func TestPacketMembershipEntrypointsInactiveClientAbortBeforeVerification(cur re
 }
 
 func TestPacketRecvRejectsMissingPortApp(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	chId := setupOpenChannelWithoutApp(cur, v, types.Bytes("missing-port"))
 	packet := recvPacket(chId, "missing-port-recv")
 
 	uassert.AbortsContains(t, cur, "port not found, missing-port", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.PacketRecv(0, cur, types.MsgPacketRecv{
 			Packets:     []types.Packet{packet},
 			RelayerMsgs: [][]byte{[]byte("rm")},
@@ -556,11 +588,13 @@ func TestPacketRecvRejectsMissingPortApp(cur realm, t *testing.T) {
 }
 
 func TestIntentPacketRecvRejectsMissingPortApp(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	chId := setupOpenChannelWithoutApp(cur, v, types.Bytes("missing-port"))
 	packet := recvPacket(chId, "missing-port-intent")
 
 	uassert.AbortsContains(t, cur, "port not found, missing-port", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.IntentPacketRecv(0, cur, types.MsgIntentPacketRecv{
 			Packets:             []types.Packet{packet},
 			MarketMakerMessages: [][]byte{[]byte("mm")},
@@ -569,6 +603,7 @@ func TestIntentPacketRecvRejectsMissingPortApp(cur realm, t *testing.T) {
 }
 
 func TestPacketAcknowledgementMarksAndNotifies(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	lc := &mockLightClient{timestampAtHt: farFuture}
 	chId, _, mApp := setupOpenChannelWithLightClient(cur, v, lc)
@@ -586,11 +621,13 @@ func TestPacketAcknowledgementMarksAndNotifies(cur realm, t *testing.T) {
 	// A second ack of the same packet is now rejected (already acknowledged):
 	// the impl owns the state machine and aborts before re-flipping the commitment.
 	uassert.AbortsContains(t, cur, "already acknowledged", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.markPacketAcknowledged(0, cur, packet)
 	})
 }
 
 func TestPacketAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
 		name string
 		want string
@@ -600,6 +637,7 @@ func TestPacketAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "empty packet batch",
 			want: "not enough packets",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				v.PacketAcknowledgement(0, cur, types.MsgPacketAcknowledgement{})
 			},
@@ -608,6 +646,7 @@ func TestPacketAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "mixed source channels",
 			want: "batch must use the same channel",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannel(cur, v)
 				p1 := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("ack-mixed-1"))
@@ -625,6 +664,7 @@ func TestPacketAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "missing commitment",
 			want: "packet commitment not found",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannel(cur, v)
 				packet := types.Packet{SourceChannelId: chId, DestinationChannelId: types.ChannelId(9), Data: []byte("missing-ack"), TimeoutTimestamp: types.Timestamp(1000)}
@@ -640,6 +680,7 @@ func TestPacketAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "already acknowledged",
 			want: "packet already acknowledged",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannel(cur, v)
 				packet := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("ack-twice"))
@@ -663,6 +704,7 @@ func TestPacketAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
 }
 
 func TestPacketAcknowledgementLengthMismatchIsPartial(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
 		name      string
 		acks      [][]byte
@@ -698,6 +740,7 @@ func TestPacketAcknowledgementLengthMismatchIsPartial(cur realm, t *testing.T) {
 }
 
 func TestMarkPacketAcknowledged(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
 		name      string
 		setup     func(cur realm, v *coreV1, packet types.Packet)
@@ -707,6 +750,7 @@ func TestMarkPacketAcknowledged(cur realm, t *testing.T) {
 		{
 			name: "committed packet is marked acknowledged",
 			setup: func(cur realm, v *coreV1, packet types.Packet) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v.store.CommitPacket(0, cur, packet)
 			},
 			wantAck: true,
@@ -719,6 +763,7 @@ func TestMarkPacketAcknowledged(cur realm, t *testing.T) {
 		{
 			name: "already acknowledged aborts",
 			setup: func(cur realm, v *coreV1, packet types.Packet) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v.store.CommitPacket(0, cur, packet)
 				v.store.SetPacketAcknowledged(0, cur, packet)
 			},
@@ -727,6 +772,7 @@ func TestMarkPacketAcknowledged(cur realm, t *testing.T) {
 		{
 			name: "unexpected commitment value aborts as missing",
 			setup: func(cur realm, v *coreV1, packet types.Packet) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v.store.(*mockStore).commitments[packetKey(packet)] = types.H256{}
 			},
 			wantAbort: "packet commitment not found",
@@ -746,6 +792,7 @@ func TestMarkPacketAcknowledged(cur realm, t *testing.T) {
 
 			if tc.wantAbort != "" {
 				uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
+					testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 					v.markPacketAcknowledged(0, cur, packet)
 				})
 				return
@@ -760,6 +807,7 @@ func TestMarkPacketAcknowledged(cur realm, t *testing.T) {
 }
 
 func TestZ38PacketLifecycleRejectsSecondAck(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	chId, _, mApp := setupOpenChannel(cur, v)
 	packet := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("z38-double-ack"))
@@ -774,12 +822,14 @@ func TestZ38PacketLifecycleRejectsSecondAck(cur realm, t *testing.T) {
 
 	uassert.Equal(t, 1, mApp.ackCalls)
 	uassert.AbortsContains(t, cur, "packet already acknowledged", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.PacketAcknowledgement(0, cur, msg)
 	})
 	uassert.Equal(t, 1, mApp.ackCalls)
 }
 
 func TestZ38PacketLifecycleRejectsTimeoutAfterAck(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	chId, _, mApp := setupOpenChannel(cur, v)
 	packet := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("z38-timeout-after-ack"))
@@ -791,6 +841,7 @@ func TestZ38PacketLifecycleRejectsTimeoutAfterAck(cur realm, t *testing.T) {
 	})
 
 	uassert.AbortsContains(t, cur, "packet already acknowledged", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.PacketTimeout(0, cur, types.MsgPacketTimeout{
 			Packet:      packet,
 			Proof:       []byte("proof"),
@@ -802,6 +853,7 @@ func TestZ38PacketLifecycleRejectsTimeoutAfterAck(cur realm, t *testing.T) {
 }
 
 func TestPacketTimeoutRefunds(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	lc := &mockLightClient{timestampAtHt: farFuture}
 	chId, _, mApp := setupOpenChannelWithLightClient(cur, v, lc)
@@ -817,6 +869,7 @@ func TestPacketTimeoutRefunds(cur realm, t *testing.T) {
 }
 
 func TestPacketTimeoutRejectsInvalidMessages(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
 		name string
 		want string
@@ -826,6 +879,7 @@ func TestPacketTimeoutRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "missing channel",
 			want: "channel not found, 777",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				packet := types.Packet{SourceChannelId: types.ChannelId(777), DestinationChannelId: types.ChannelId(9), Data: []byte("timeout-missing-channel"), TimeoutTimestamp: types.Timestamp(1000)}
 				v.PacketTimeout(0, cur, types.MsgPacketTimeout{Packet: packet, Proof: []byte("proof"), ProofHeight: 5})
@@ -835,6 +889,7 @@ func TestPacketTimeoutRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "missing client",
 			want: "client not found, 99",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				ms := v.store.(*mockStore)
 				chId := types.ChannelId(1)
@@ -854,6 +909,7 @@ func TestPacketTimeoutRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "zero proof timestamp",
 			want: "packet timeout proof timestamp not found",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannelWithLightClient(cur, v, &mockLightClient{})
 				packet := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("timeout-zero-ts"))
@@ -864,6 +920,7 @@ func TestPacketTimeoutRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "timeout not reached",
 			want: "packet timeout not reached",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannelWithLightClient(cur, v, &mockLightClient{timestampAtHt: types.Timestamp(10)})
 				packet := v.SendPacket(0, cur, chId, farFuture, []byte("timeout-not-reached"))
@@ -874,6 +931,7 @@ func TestPacketTimeoutRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "missing commitment",
 			want: "packet commitment not found",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannel(cur, v)
 				packet := types.Packet{SourceChannelId: chId, DestinationChannelId: types.ChannelId(9), Data: []byte("timeout-missing"), TimeoutTimestamp: types.Timestamp(1000)}
@@ -890,6 +948,7 @@ func TestPacketTimeoutRejectsInvalidMessages(cur realm, t *testing.T) {
 }
 
 func TestPacketTimeoutInactiveClientAbortsBeforeVerification(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	lc := &mockLightClient{timestampAtHt: farFuture}
 	v := newTestImpl()
 	chId, _, _ := setupOpenChannelWithLightClient(cur, v, lc)
@@ -897,12 +956,14 @@ func TestPacketTimeoutInactiveClientAbortsBeforeVerification(cur realm, t *testi
 	lc.status = "Frozen"
 
 	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.PacketTimeout(0, cur, types.MsgPacketTimeout{Packet: packet, Proof: []byte("proof"), ProofHeight: 5})
 	})
 	uassert.Equal(t, 0, lc.nonMembershipCalls)
 }
 
 func TestCommitMembershipProof(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
 
@@ -914,6 +975,7 @@ func TestCommitMembershipProof(cur realm, t *testing.T) {
 }
 
 func TestCommitNonMembershipProof(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	clientId := createClient(cur, v, &mockLightClient{}, nil, nil)
 
@@ -925,11 +987,13 @@ func TestCommitNonMembershipProof(cur realm, t *testing.T) {
 }
 
 func TestCommitNonMembershipProofInactiveClientAbortsBeforeVerification(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	lc := &mockLightClient{status: "Frozen"}
 	clientId := createClient(cur, v, lc, nil, nil)
 
 	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.CommitNonMembershipProof(0, cur, types.MsgCommitNonMembershipProof{
 			ClientId: clientId, ProofHeight: 10, Proof: []byte("p"), Path: []byte("path"),
 		})
@@ -938,6 +1002,7 @@ func TestCommitNonMembershipProofInactiveClientAbortsBeforeVerification(cur real
 }
 
 func TestVerifyNonMembership(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
 		name        string
 		lc          *mockLightClient
@@ -966,6 +1031,7 @@ func TestVerifyNonMembership(cur realm, t *testing.T) {
 				})
 			} else {
 				uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
+					testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 					v.verifyNonMembership(clientId, types.NewHeight(1), []byte("proof"), []byte("path"))
 				})
 			}
@@ -975,6 +1041,7 @@ func TestVerifyNonMembership(cur realm, t *testing.T) {
 }
 
 func TestWriteAcknowledgementWritesAsyncAck(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	chId, _, mApp := setupOpenChannel(cur, v)
 	mApp.recvStatus = types.PacketStatusAsync // recv defers the ack
@@ -994,6 +1061,7 @@ func TestWriteAcknowledgementWritesAsyncAck(cur realm, t *testing.T) {
 }
 
 func TestWriteAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
 		name string
 		want string
@@ -1003,6 +1071,7 @@ func TestWriteAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "empty ack",
 			want: "acknowledgement cannot be empty",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannel(cur, v)
 				packet := recvPacket(chId, "empty-write-ack")
@@ -1013,6 +1082,7 @@ func TestWriteAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "unauthorized writer",
 			want: "caller not authorized to write ack",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				ms := v.store.(*mockStore)
 				chId := types.ChannelId(77)
@@ -1026,6 +1096,7 @@ func TestWriteAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "missing channel",
 			want: "channel not found, 777",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				packet := recvPacket(types.ChannelId(777), "missing-write-channel")
 				v.WriteAcknowledgement(0, cur, types.MsgWriteAcknowledgement{Packet: packet, Acknowledgement: []byte("ack")})
@@ -1035,6 +1106,7 @@ func TestWriteAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "missing receipt",
 			want: "packet receipt not found",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannel(cur, v)
 				packet := recvPacket(chId, "missing-write-receipt")
@@ -1045,6 +1117,7 @@ func TestWriteAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "already written",
 			want: "acknowledgement already written",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannel(cur, v)
 				packet := recvPacket(chId, "already-written-ack")
@@ -1062,6 +1135,7 @@ func TestWriteAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
 }
 
 func TestAcceptRecvPacket(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
 		name         string
 		malleate     func(cur realm, v *coreV1, packet *types.Packet, chId types.ChannelId)
@@ -1081,6 +1155,7 @@ func TestAcceptRecvPacket(cur realm, t *testing.T) {
 		{
 			name: "duplicate packet skips dispatch",
 			malleate: func(cur realm, v *coreV1, packet *types.Packet, chId types.ChannelId) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v.store.SetPacketReceipt(0, cur, *packet)
 			},
 			now:          100,
@@ -1098,6 +1173,7 @@ func TestAcceptRecvPacket(cur realm, t *testing.T) {
 		{
 			name: "missing channel aborts",
 			malleate: func(cur realm, v *coreV1, packet *types.Packet, chId types.ChannelId) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				packet.DestinationChannelId = types.ChannelId(99)
 			},
 			now:          100,
@@ -1107,6 +1183,7 @@ func TestAcceptRecvPacket(cur realm, t *testing.T) {
 		{
 			name: "closed channel aborts",
 			malleate: func(cur realm, v *coreV1, packet *types.Packet, chId types.ChannelId) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v.store.SaveChannel(0, cur, chId, types.Channel{
 					State:                 types.ChannelStateClosed,
 					ConnectionId:          types.ConnectionId(1),
@@ -1140,6 +1217,7 @@ func TestAcceptRecvPacket(cur realm, t *testing.T) {
 
 			if tc.wantAbort != "" {
 				uassert.AbortsContains(t, cur, tc.wantAbort, func(cur realm) {
+					testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 					v.acceptRecvPacket(0, cur, packet, batchChannel, tc.now)
 				})
 				return
@@ -1153,6 +1231,7 @@ func TestAcceptRecvPacket(cur realm, t *testing.T) {
 }
 
 func TestCommitSyncAck(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
 		name      string
 		result    types.RecvPacketResult
@@ -1176,7 +1255,7 @@ func TestCommitSyncAck(cur realm, t *testing.T) {
 				TimeoutTimestamp:     farFuture,
 			}
 
-			err := v.commitSyncAck(0, cur, packet, tc.result)
+			err := v.commitSyncAck(0, cur, packet, tc.result, types.Channel{}, types.Connection{})
 			if tc.wantErr != "" {
 				uassert.Equal(t, tc.wantErr, err.Error())
 				return
@@ -1190,6 +1269,7 @@ func TestCommitSyncAck(cur realm, t *testing.T) {
 }
 
 func TestSendPacketRejectsInvalidState(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
 		name string
 		want string
@@ -1199,6 +1279,7 @@ func TestSendPacketRejectsInvalidState(cur realm, t *testing.T) {
 			name: "missing channel owner",
 			want: "channel not found, 777",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				v.SendPacket(0, cur, types.ChannelId(777), types.Timestamp(1000), []byte("missing-owner-send"))
 			},
@@ -1207,6 +1288,7 @@ func TestSendPacketRejectsInvalidState(cur realm, t *testing.T) {
 			name: "missing channel record",
 			want: "channel not found, 77",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				ms := v.store.(*mockStore)
 				chId := types.ChannelId(77)
@@ -1218,6 +1300,7 @@ func TestSendPacketRejectsInvalidState(cur realm, t *testing.T) {
 			name: "closed channel",
 			want: "invalid channel state",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannel(cur, v)
 				v.store.SaveChannel(0, cur, chId, types.Channel{
@@ -1233,6 +1316,7 @@ func TestSendPacketRejectsInvalidState(cur realm, t *testing.T) {
 			name: "duplicate commitment",
 			want: "packet commitment already exists",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannel(cur, v)
 				v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("dup-send"))
@@ -1249,6 +1333,7 @@ func TestSendPacketRejectsInvalidState(cur realm, t *testing.T) {
 }
 
 func TestBatchSendAggregatesCommitments(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	chId, _, _ := setupOpenChannel(cur, v)
 	p1 := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("b1"))
@@ -1260,6 +1345,7 @@ func TestBatchSendAggregatesCommitments(cur realm, t *testing.T) {
 }
 
 func TestBatchSendRejectsUncommitted(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	chId, _, _ := setupOpenChannel(cur, v)
 	p1 := v.SendPacket(0, cur, chId, types.Timestamp(1000), []byte("b1"))
@@ -1267,11 +1353,13 @@ func TestBatchSendRejectsUncommitted(cur realm, t *testing.T) {
 	p2 := types.Packet{SourceChannelId: chId, DestinationChannelId: types.ChannelId(9), Data: []byte("b2"), TimeoutTimestamp: types.Timestamp(1000)}
 
 	uassert.AbortsContains(t, cur, "packet commitment not found", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.BatchSend(0, cur, types.MsgBatchSend{Packets: []types.Packet{p1, p2}})
 	})
 }
 
 func TestBatchAcksAggregatesReceipts(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	chId, _, _ := setupOpenChannel(cur, v)
 	p1 := recvPacket(chId, "ack-batch-1")
@@ -1292,6 +1380,7 @@ func TestBatchAcksAggregatesReceipts(cur realm, t *testing.T) {
 }
 
 func TestBatchAcksRejectsInvalidMessages(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
 		name string
 		want string
@@ -1301,6 +1390,7 @@ func TestBatchAcksRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "not enough packets",
 			want: "not enough packets",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				v.BatchAcks(0, cur, types.MsgBatchAcks{})
 			},
@@ -1309,6 +1399,7 @@ func TestBatchAcksRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "mixed destination channels",
 			want: "batch must use the same channel",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannel(cur, v)
 				p1 := recvPacket(chId, "ack-mixed-dest-1")
@@ -1321,6 +1412,7 @@ func TestBatchAcksRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "missing receipt",
 			want: "packet commitment not found",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannel(cur, v)
 				p1 := recvPacket(chId, "ack-missing-1")
@@ -1332,6 +1424,7 @@ func TestBatchAcksRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "empty ack receipt",
 			want: "acknowledgement cannot be empty",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, mApp := setupOpenChannel(cur, v)
 				mApp.recvStatus = types.PacketStatusAsync
@@ -1350,6 +1443,7 @@ func TestBatchAcksRejectsInvalidMessages(cur realm, t *testing.T) {
 			name: "ack mismatch",
 			want: "acknowledgement mismatch",
 			run: func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v := newTestImpl()
 				chId, _, _ := setupOpenChannel(cur, v)
 				p1 := recvPacket(chId, "ack-mismatch-1")
@@ -1373,6 +1467,7 @@ func TestBatchAcksRejectsInvalidMessages(cur realm, t *testing.T) {
 }
 
 func TestBatchAcksLengthMismatchPersistsProvidedAcks(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
 		name string
 		acks [][]byte

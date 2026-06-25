@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	u256 "gno.land/p/gnoswap/uint256"
+	"gno.land/p/nt/uassert/v0"
+	"gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 )
 
@@ -89,6 +91,13 @@ func assertRoundTrip(t *testing.T, data []byte) {
 	if !bytes.Equal(data, decoded) {
 		t.Errorf("round-trip mismatch:\n  in : %x\n  out: %x", data, decoded)
 	}
+}
+
+func TestEmitRegisterClientRejectsNonProxyRealm(cur realm, t *testing.T) {
+	uassert.AbortsContains(t, cur, ErrNotProxyRealm, func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(proxyPkgPath + "/v1"))
+		EmitRegisterClient(0, cur, types.ClientType("test-client"))
+	})
 }
 
 func TestEmitBinaryFieldsRoundTrip(cur realm, t *testing.T) {

@@ -1,7 +1,5 @@
 package core
 
-// assert.gno holds proxy-level trust gates shared across helper entrypoints.
-
 func assertIsRlmCurrent(_ int, rlm realm) {
 	if !rlm.IsCurrent() {
 		panic(ErrSpoofedRealm)

@@ -6,12 +6,12 @@ import (
 
 	"gno.land/p/nt/ufmt/v0"
 	"gno.land/p/onbloc/ibc/union/lightclient"
-	types "gno.land/p/onbloc/ibc/union/types"
+	"gno.land/p/onbloc/ibc/union/types"
 
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
-	core "gno.land/r/onbloc/ibc/union/core"
+	"gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
 )
 

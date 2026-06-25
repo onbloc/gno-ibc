@@ -1,7 +1,7 @@
 package zkgm
 
 import (
-	types "gno.land/p/onbloc/ibc/union/types"
+	"gno.land/p/onbloc/ibc/union/types"
 )
 
 func EmitRecvError(_ int, rlm realm, sourceChannel types.ChannelId, destinationChannel types.ChannelId, reason string) {

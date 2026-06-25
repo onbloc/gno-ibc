@@ -508,11 +508,16 @@ func (v *ucs03ZkgmV1) refundIBCVoucher(_ int, rlm realm, baseToken []byte, recip
 	return v.mintVoucher(0, rlm, baseDenom, image, "", "", 0, recipient, amount)
 }
 
-func (v *ucs03ZkgmV1) trimTokenOrderInstruction(_ int, rlm realm, instruction z.Instruction, sender string) (z.Instruction, error) {
-	if instruction.Version != z.INSTR_VERSION_2 {
-		return instruction, nil
+func (v *ucs03ZkgmV1) scaleOutgoingTokenOrderInstruction(_ int, rlm realm, instruction z.Instruction) (z.Instruction, error) {
+	switch instruction.Version {
+	case z.INSTR_VERSION_2:
+		return v.scaleOutgoingTokenOrderV2Instruction(0, rlm, instruction)
+	default:
+		return instruction, makeError(errUnsupportedTokenOrderVersion)
 	}
+}
 
+func (v *ucs03ZkgmV1) scaleOutgoingTokenOrderV2Instruction(_ int, rlm realm, instruction z.Instruction) (z.Instruction, error) {
 	order, err := z.DecodeTokenOrderV2(instruction.Operand)
 	if err != nil {
 		return instruction, err
@@ -523,81 +528,144 @@ func (v *ucs03ZkgmV1) trimTokenOrderInstruction(_ int, rlm realm, instruction z.
 		return instruction, nil
 	}
 
-	baseTrim := trimAmount(info.decimals, order.BaseAmount)
-
-	if order.QuoteAmount.Cmp(baseTrim.Trimmed) > 0 {
-		return instruction, makeError(errQuoteAmountTooLarge)
-	}
-
-	if baseTrim.Dust.IsZero() {
-		return instruction, nil
-	}
-
-	trimmedOrder := order
-	trimmedOrder.BaseAmount = baseTrim.Trimmed
-
-	trimmedOperand, err := z.EncodeTokenOrderV2(trimmedOrder)
+	scaledBaseAmount, err := scaleLocalAmount(info.decimals, order.BaseAmount)
 	if err != nil {
 		return instruction, err
 	}
 
-	trimmedInstruction := z.Instruction{
-		Version: instruction.Version,
-		Opcode:  z.OP_TOKEN_ORDER,
-		Operand: trimmedOperand,
+	scaledQuoteAmount, err := scaleLocalAmount(info.decimals, order.QuoteAmount)
+	if err != nil {
+		return instruction, err
 	}
 
-	return trimmedInstruction, nil
+	scaledOrder := order
+	scaledOrder.BaseAmount = scaledBaseAmount
+	scaledOrder.QuoteAmount = scaledQuoteAmount
+
+	scaledOperand, err := z.EncodeTokenOrderV2(scaledOrder)
+	if err != nil {
+		return instruction, err
+	}
+
+	scaledInstruction := z.Instruction{
+		Version: instruction.Version,
+		Opcode:  z.OP_TOKEN_ORDER,
+		Operand: scaledOperand,
+	}
+
+	return scaledInstruction, nil
 }
 
-func (v *ucs03ZkgmV1) trimInstructionAmounts(_ int, rlm realm, instruction z.Instruction, sender string) (z.Instruction, error) {
+func (v *ucs03ZkgmV1) scaleOutgoingInstructionAmounts(_ int, rlm realm, instruction z.Instruction) (z.Instruction, error) {
 	switch instruction.Opcode {
 	case z.OP_BATCH:
-		return v.trimBatchInstruction(0, rlm, instruction, sender)
+		return v.scaleOutgoingBatchInstruction(0, rlm, instruction)
 	case z.OP_TOKEN_ORDER:
-		return v.trimTokenOrderInstruction(0, rlm, instruction, sender)
+		return v.scaleOutgoingTokenOrderInstruction(0, rlm, instruction)
 	default:
 		return instruction, nil
 	}
 }
 
-func (v *ucs03ZkgmV1) trimBatchInstruction(_ int, rlm realm, instruction z.Instruction, sender string) (z.Instruction, error) {
+func (v *ucs03ZkgmV1) scaleOutgoingBatchInstruction(_ int, rlm realm, instruction z.Instruction) (z.Instruction, error) {
+	if instruction.Version != z.INSTR_VERSION_0 {
+		return instruction, nil
+	}
+
 	batch, err := z.DecodeBatch(instruction.Operand)
 	if err != nil {
 		return instruction, err
 	}
 
-	trimmedChildren := make([]z.Instruction, len(batch.Instructions))
+	scaledChildren := make([]z.Instruction, len(batch.Instructions))
 	modified := false
 
 	for i, child := range batch.Instructions {
-		trimmedChild, err := v.trimInstructionAmounts(0, rlm, child, sender)
+		scaledChild, err := v.scaleOutgoingInstructionAmounts(0, rlm, child)
 		if err != nil {
 			return instruction, err
 		}
-		// track if any child was modified
-		if len(trimmedChild.Operand) != len(child.Operand) || !bytes.Equal(trimmedChild.Operand, child.Operand) {
+
+		if len(scaledChild.Operand) != len(child.Operand) || !bytes.Equal(scaledChild.Operand, child.Operand) {
 			modified = true
 		}
-		trimmedChildren[i] = trimmedChild
+
+		scaledChildren[i] = scaledChild
 	}
 
-	// return original instruction if no children were modified
 	if !modified {
 		return instruction, nil
 	}
 
-	trimmedBatch := z.Batch{Instructions: trimmedChildren}
-	trimmedOperand, err := z.EncodeBatch(trimmedBatch)
+	scaledBatch := z.Batch{Instructions: scaledChildren}
+	scaledOperand, err := z.EncodeBatch(scaledBatch)
 	if err != nil {
 		return instruction, err
 	}
 
-	trimmedInstruction := z.Instruction{
+	scaledInstruction := z.Instruction{
 		Version: instruction.Version,
 		Opcode:  z.OP_BATCH,
-		Operand: trimmedOperand,
+		Operand: scaledOperand,
 	}
 
-	return trimmedInstruction, nil
+	return scaledInstruction, nil
+}
+
+func (v *ucs03ZkgmV1) decodeLocalOrderInstruction(_ int, rlm realm, instruction z.Instruction) (z.TokenOrderV2, error) {
+	switch instruction.Version {
+	case z.INSTR_VERSION_2:
+		return v.decodeLocalOrderV2Instruction(0, rlm, instruction)
+	default:
+		return z.TokenOrderV2{}, makeError(errUnsupportedTokenOrderVersion)
+	}
+}
+
+func (v *ucs03ZkgmV1) decodeLocalOrderV2Instruction(_ int, rlm realm, instruction z.Instruction) (z.TokenOrderV2, error) {
+	order, err := z.DecodeTokenOrderV2(instruction.Operand)
+	if err != nil {
+		return z.TokenOrderV2{}, err
+	}
+
+	decimals, err := v.incomingOrderDecimals(0, rlm, order)
+	if err != nil {
+		return z.TokenOrderV2{}, err
+	}
+
+	baseAmount, err := wireAmountToLocal(decimals, order.BaseAmount)
+	if err != nil {
+		return z.TokenOrderV2{}, err
+	}
+
+	quoteAmount, err := wireAmountToLocal(decimals, order.QuoteAmount)
+	if err != nil {
+		return z.TokenOrderV2{}, err
+	}
+
+	order.BaseAmount = baseAmount
+	order.QuoteAmount = quoteAmount
+
+	return order, nil
+}
+
+func (v *ucs03ZkgmV1) incomingOrderDecimals(_ int, rlm realm, order z.TokenOrderV2) (uint8, error) {
+	if info := v.parseTokenInfo(0, rlm, order.BaseToken); info.isVoucher {
+		return info.decimals, nil
+	}
+
+	if info := v.parseTokenInfo(0, rlm, order.QuoteToken); info.isVoucher {
+		return info.decimals, nil
+	}
+
+	if order.Kind == z.TOKEN_ORDER_KIND_INITIALIZE && len(order.Metadata) != 0 {
+		meta, err := z.DecodeTokenMetadata(order.Metadata)
+		if err != nil {
+			return 0, err
+		}
+
+		ti := z.DecodeTokenInitializerFromMetadata(meta)
+		return ti.Decimals, nil
+	}
+
+	return targetDecimals, nil
 }

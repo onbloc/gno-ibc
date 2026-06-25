@@ -306,40 +306,36 @@ func TestParseTokenInfo(cur realm, t *testing.T) {
 	}
 }
 
-func TestTrimTokenOrderInstruction(cur realm, t *testing.T) {
+func TestScaleOutgoingTokenOrderInstruction(cur realm, t *testing.T) {
 	v := newTestImpl()
 
-	denom := "ibc/TRIM"
-	sender := testAddress("trim-sender")
+	denom := "ibc/SCALE"
+	sender := testAddress("scale-sender")
 	v.mintVoucher(0, cur, denom, [32]byte{}, "Voucher", "VOU", 18, sender, u256.NewUint(1000000000000000000))
 
 	tests := []struct {
-		name          string
-		version       uint8
-		baseAmount    uint64
-		quoteAmount   uint64
-		expectError   string
-		expectTrimmed uint64
+		name        string
+		version     uint8
+		baseAmount  uint64
+		quoteAmount uint64
+		expectError string
+		expectBase  uint64
+		expectQuote uint64
 	}{
 		{
-			name:        "quote exceeds trimmed base",
+			name:        "scales voucher amounts",
 			version:     z.INSTR_VERSION_2,
-			baseAmount:  123456700000000000,
-			quoteAmount: 123457000000000000,
-			expectError: "quote amount exceeds trimmed base amount",
+			baseAmount:  123456,
+			quoteAmount: 123000,
+			expectBase:  123456000000000000,
+			expectQuote: 123000000000000000,
 		},
 		{
-			name:          "rewrites base amount",
-			version:       z.INSTR_VERSION_2,
-			baseAmount:    123456700000000000,
-			quoteAmount:   123456000000000000,
-			expectTrimmed: 123456000000000000,
-		},
-		{
-			name:        "unsupported version skipped",
+			name:        "unsupported version rejected",
 			version:     z.INSTR_VERSION_0,
-			baseAmount:  123456700000000000,
-			quoteAmount: 123456000000000000,
+			baseAmount:  123456,
+			quoteAmount: 123000,
+			expectError: "unsupported token order version",
 		},
 	}
 
@@ -347,7 +343,7 @@ func TestTrimTokenOrderInstruction(cur realm, t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			order := z.TokenOrderV2{
 				Sender:      []byte(sender),
-				Receiver:    []byte(testAddress("trim-receiver")),
+				Receiver:    []byte(testAddress("scale-receiver")),
 				BaseToken:   []byte(denom),
 				BaseAmount:  u256.NewUint(tc.baseAmount),
 				QuoteToken:  []byte("ibc/OUT"),
@@ -361,25 +357,80 @@ func TestTrimTokenOrderInstruction(cur realm, t *testing.T) {
 				Operand: mustEncodeTokenOrderV2(order),
 			}
 
-			trimmed, err := v.trimTokenOrderInstruction(0, cur, instruction, sender)
-
+			scaled, err := v.scaleOutgoingTokenOrderInstruction(0, cur, instruction)
 			if tc.expectError != "" {
 				uassert.ErrorContains(t, err, tc.expectError)
-			} else {
-				uassert.NoError(t, err)
-
-				if tc.version == z.INSTR_VERSION_0 {
-					// Unsupported version: should return unchanged
-					uassert.Equal(t, instruction.Version, trimmed.Version)
-					uassert.Equal(t, string(instruction.Operand), string(trimmed.Operand))
-				} else if tc.expectTrimmed > 0 {
-					// Check that BaseAmount was trimmed
-					got, err := z.DecodeTokenOrderV2(trimmed.Operand)
-					uassert.NoError(t, err)
-					uassert.Equal(t, u256.NewUint(tc.expectTrimmed).ToString(), got.BaseAmount.ToString())
-					uassert.Equal(t, order.QuoteAmount.ToString(), got.QuoteAmount.ToString())
-				}
+				return
 			}
+
+			uassert.NoError(t, err)
+
+			got, err := z.DecodeTokenOrderV2(scaled.Operand)
+			uassert.NoError(t, err)
+			uassert.Equal(t, u256.NewUint(tc.expectBase).ToString(), got.BaseAmount.ToString())
+			uassert.Equal(t, u256.NewUint(tc.expectQuote).ToString(), got.QuoteAmount.ToString())
+		})
+	}
+}
+
+func TestDecodeLocalOrderInstruction(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	meta := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "USD Coin", Symbol: "USDC", Decimals: 18}),
+	})
+
+	tests := []struct {
+		name        string
+		baseAmount  uint64
+		quoteAmount uint64
+		expectError string
+		expectBase  uint64
+		expectQuote uint64
+	}{
+		{
+			name:        "exact wire amount converts to local",
+			baseAmount:  123456000000000000,
+			quoteAmount: 123000000000000000,
+			expectBase:  123456,
+			expectQuote: 123000,
+		},
+		{
+			name:        "dust is rejected",
+			baseAmount:  123456700000000000,
+			quoteAmount: 123456000000000000,
+			expectError: "decimal dust is not allowed",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			order := z.TokenOrderV2{
+				Sender:      []byte("remote-sender"),
+				Receiver:    []byte(testAddress("local-receiver")),
+				BaseToken:   []byte("uatom"),
+				BaseAmount:  u256.NewUint(tc.baseAmount),
+				QuoteToken:  []byte("ibc/local"),
+				QuoteAmount: u256.NewUint(tc.quoteAmount),
+				Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+				Metadata:    meta,
+			}
+			instruction := z.Instruction{
+				Version: z.INSTR_VERSION_2,
+				Opcode:  z.OP_TOKEN_ORDER,
+				Operand: mustEncodeTokenOrderV2(order),
+			}
+
+			got, err := v.decodeLocalOrderInstruction(0, cur, instruction)
+			if tc.expectError != "" {
+				uassert.ErrorContains(t, err, tc.expectError)
+				return
+			}
+
+			uassert.NoError(t, err)
+			uassert.Equal(t, u256.NewUint(tc.expectBase).ToString(), got.BaseAmount.ToString())
+			uassert.Equal(t, u256.NewUint(tc.expectQuote).ToString(), got.QuoteAmount.ToString())
 		})
 	}
 }
@@ -431,20 +482,20 @@ func TestTrimAmountMaxInt64Boundary(cur realm, t *testing.T) {
 	}
 }
 
-func TestTrimAndSendMaxInt64Boundary(cur realm, t *testing.T) {
+func TestScaleOutgoingMaxInt64Boundary(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	denom := "ibc/max64-send"
 	sender := testAddress("max64-send-sender")
-	v.mintVoucher(0, cur, denom, [32]byte{}, "Max64", "MAX64", 18, sender, u256.NewUint(9223372036854775807))
+	v.mintVoucher(0, cur, denom, [32]byte{}, "Max64", "MAX64", 18, sender, u256.NewUint(9223372))
 
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
 		Receiver:    []byte(testAddress("max64-receiver")),
 		BaseToken:   []byte(denom),
-		BaseAmount:  u256.NewUint(9223372036854775807),
+		BaseAmount:  u256.NewUint(9223372),
 		QuoteToken:  []byte("ibc/out"),
-		QuoteAmount: u256.NewUint(9223372000000000000),
+		QuoteAmount: u256.NewUint(9223372),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 
@@ -454,18 +505,15 @@ func TestTrimAndSendMaxInt64Boundary(cur realm, t *testing.T) {
 		Operand: mustEncodeTokenOrderV2(order),
 	}
 
-	trimmed, err := v.trimTokenOrderInstruction(0, cur, instruction, sender)
+	scaled, err := v.scaleOutgoingTokenOrderInstruction(0, cur, instruction)
 	uassert.NoError(t, err)
 
-	got, err := z.DecodeTokenOrderV2(trimmed.Operand)
+	got, err := z.DecodeTokenOrderV2(scaled.Operand)
 	uassert.NoError(t, err)
 
 	expectedTrimmed := u256.NewUint(9223372000000000000)
 	uassert.Equal(t, expectedTrimmed.ToString(), got.BaseAmount.ToString())
-
-	expectedDust := u256.NewUint(36854775807)
-	trimResult := trimAmount(18, order.BaseAmount)
-	uassert.Equal(t, expectedDust.ToString(), trimResult.Dust.ToString())
+	uassert.Equal(t, expectedTrimmed.ToString(), got.QuoteAmount.ToString())
 }
 
 func mustEncodeTokenOrderV2(order z.TokenOrderV2) []byte {

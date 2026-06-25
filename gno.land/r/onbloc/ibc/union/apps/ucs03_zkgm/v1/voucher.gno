@@ -42,19 +42,65 @@ type TrimResult struct {
 	Dust    *u256.Uint
 }
 
+func decimalFactor(tokenDecimals uint8) (*u256.Uint, error) {
+	if tokenDecimals <= targetDecimals {
+		return powersOf10[0], nil
+	}
+
+	exp := tokenDecimals - targetDecimals
+	if int(exp) >= len(powersOf10) {
+		return nil, makeError(errUnsupportedTokenDecimals)
+	}
+
+	return powersOf10[exp], nil
+}
+
 func trimAmount(tokenDecimals uint8, amount *u256.Uint) TrimResult {
 	if tokenDecimals <= targetDecimals {
 		return TrimResult{Trimmed: amount, Dust: u256.Zero()}
 	}
 
-	exp := tokenDecimals - targetDecimals
-	factor := powersOf10[exp]
+	factor, err := decimalFactor(tokenDecimals)
+	if err != nil {
+		panic(err)
+	}
 
 	quotient := u256.Zero().Div(amount, factor)
 	trimmed := u256.Zero().Mul(quotient, factor)
 	dust := u256.Zero().Sub(amount, trimmed)
 
 	return TrimResult{Trimmed: trimmed, Dust: dust}
+}
+
+func scaleLocalAmount(tokenDecimals uint8, amount *u256.Uint) (*u256.Uint, error) {
+	factor, err := decimalFactor(tokenDecimals)
+	if err != nil {
+		return nil, err
+	}
+
+	if tokenDecimals <= targetDecimals {
+		return amount, nil
+	}
+
+	return u256.Zero().Mul(amount, factor), nil
+}
+
+func wireAmountToLocal(tokenDecimals uint8, amount *u256.Uint) (*u256.Uint, error) {
+	if tokenDecimals <= targetDecimals {
+		return amount, nil
+	}
+
+	result := trimAmount(tokenDecimals, amount)
+	if !result.Dust.IsZero() {
+		return nil, makeError(errDecimalDust)
+	}
+
+	factor, err := decimalFactor(tokenDecimals)
+	if err != nil {
+		return nil, err
+	}
+
+	return u256.Zero().Div(amount, factor), nil
 }
 
 // mintVoucher mints `amount` of the wrapped grc20 voucher for ibcDenom to

@@ -21,7 +21,7 @@ import (
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 
-	core "gno.land/r/onbloc/ibc/union/core"
+	"gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
 )
 
@@ -81,13 +81,26 @@ func main(cur realm) {
 
 	testing.SetRealm(testing.NewUserRealm(senderAddr))
 	testing.SetOriginSend(chain.NewCoins(chain.NewCoin("ugnot", 1234567)))
-	zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(initOrder))
+	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(initOrder))
 
 	bk := banker.NewReadonlyBanker()
 	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
 	ufmt.Println("[INFO] Send completed successfully (native tokens are not trimmed)")
 	ufmt.Println("[EXPECTED] native ugnot should pass through unchanged (no dust)")
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 1234567 (full amount, no trimming)")
+
+	zkgmPacket, err := z.DecodeZkgmPacket(sendPacket.Data)
+	if err != nil {
+		panic(err)
+	}
+
+	decodedOrder, err := z.DecodeTokenOrderV2(zkgmPacket.Instruction.Operand)
+	if err != nil {
+		panic(err)
+	}
+
+	ufmt.Printf("[INFO] packet BaseAmount (decoded): %d\n", decodedOrder.BaseAmount.Uint64())
+	ufmt.Println("[EXPECTED] packet BaseAmount should be 1234567 (native no-scale)")
 }
 
 func mustOrderInstruction(order z.TokenOrderV2) z.Instruction {
@@ -136,3 +149,5 @@ func (e mockError) Error() string { return string(e) }
 // [INFO] Send completed successfully (native tokens are not trimmed)
 // [EXPECTED] native ugnot should pass through unchanged (no dust)
 // [EXPECTED] proxy native escrow balance should be 1234567 (full amount, no trimming)
+// [INFO] packet BaseAmount (decoded): 1234567
+// [EXPECTED] packet BaseAmount should be 1234567 (native no-scale)

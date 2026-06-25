@@ -80,7 +80,7 @@ func (v *ucs03ZkgmV1) dispatchExecutePacket(
 
 	switch instruction.Opcode {
 	case z.OP_TOKEN_ORDER:
-		order, err := decodeOrderInstruction(instruction)
+		order, err := v.decodeLocalOrderInstruction(0, rlm, instruction)
 		if err != nil {
 			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 		}
@@ -121,7 +121,7 @@ func (v *ucs03ZkgmV1) dispatchExecutePacket(
 func (v *ucs03ZkgmV1) acknowledgeInternal(_ int, rlm realm, packet types.Packet, relayer address, salt [32]byte, path *u256.Uint, instruction z.Instruction, successful bool, ack []byte) error {
 	switch instruction.Opcode {
 	case z.OP_TOKEN_ORDER:
-		order, err := decodeOrderInstruction(instruction)
+		order, err := v.decodeLocalOrderInstruction(0, rlm, instruction)
 		if err != nil {
 			return err
 		}
@@ -164,7 +164,7 @@ func (v *ucs03ZkgmV1) acknowledgeInternal(_ int, rlm realm, packet types.Packet,
 func (v *ucs03ZkgmV1) timeoutInternal(_ int, rlm realm, packet types.Packet, salt [32]byte, path *u256.Uint, instruction z.Instruction) error {
 	switch instruction.Opcode {
 	case z.OP_TOKEN_ORDER:
-		order, err := decodeOrderInstruction(instruction)
+		order, err := v.decodeLocalOrderInstruction(0, rlm, instruction)
 		if err != nil {
 			return err
 		}
@@ -189,12 +189,18 @@ func (v *ucs03ZkgmV1) timeoutInternal(_ int, rlm realm, packet types.Packet, sal
 	}
 }
 
-// decodeOrderInstruction decodes a v2 token order, rejecting unsupported instruction versions.
+// decodeOrderInstruction is the TokenOrder version dispatch point. Add new
+// versions here, then route callers to the version-specific handler.
 func decodeOrderInstruction(instruction z.Instruction) (z.TokenOrderV2, error) {
-	if instruction.Version != z.INSTR_VERSION_2 {
+	switch instruction.Version {
+	case z.INSTR_VERSION_2:
+		return decodeTokenOrderV2Instruction(instruction)
+	default:
 		return z.TokenOrderV2{}, makeError(errUnsupportedTokenOrderVersion)
 	}
+}
 
+func decodeTokenOrderV2Instruction(instruction z.Instruction) (z.TokenOrderV2, error) {
 	return z.DecodeTokenOrderV2(instruction.Operand)
 }
 

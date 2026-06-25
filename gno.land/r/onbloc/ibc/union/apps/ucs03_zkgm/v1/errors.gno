@@ -47,8 +47,10 @@ const (
 	errBatchAckCountMismatch   = "batch ack count mismatch"
 
 	// voucher
-	errAmountOverflow  = "amount overflows int64"
-	errVoucherNotFound = "voucher not found"
+	errAmountOverflow           = "amount overflows int64"
+	errVoucherNotFound          = "voucher not found"
+	errUnsupportedTokenDecimals = "unsupported token decimals"
+	errDecimalDust              = "zkgm/token_order: decimal dust is not allowed"
 
 	// rate limit
 	errTokenBucketAbsent = "token bucket is absent"
@@ -56,7 +58,6 @@ const (
 	// coins / channel balance
 	errCoinMismatch            = "zkgm/coins: sent coin mismatch"
 	errChannelBalanceUnderflow = "zkgm/channel_balance: underflow"
-	errQuoteAmountTooLarge     = "zkgm/token_order: quote amount exceeds trimmed base amount"
 	errChannelBalanceOverflow  = "zkgm/channel_balance: overflow"
 
 	// errGRC20Unsupported is returned when a token order's base denom is a GRC20

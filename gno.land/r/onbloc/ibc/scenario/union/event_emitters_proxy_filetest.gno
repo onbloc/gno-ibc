@@ -609,6 +609,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x78d9f4b7158b264f6ef8f55e9813d031144ff42f65919227c79fb20e1fc2ed70"
 //       },
 //       {
+//         "key": "packet_data_size",
+//         "value": "514"
+//       },
+//       {
 //         "key": "packet_data[0]",
 //         "value": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000a6576656e742d63616c6c00000000000000000000000000000000000000000000"
 //       },
@@ -653,6 +657,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       {
 //         "key": "packet_hash",
 //         "value": "0x7a8d7e00a6f9fd5ecd531cfe519b412f070d564624509bf620df6845b1cce967"
+//       },
+//       {
+//         "key": "packet_data_size",
+//         "value": "1794"
 //       },
 //       {
 //         "key": "packet_data[0]",
@@ -741,6 +749,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x78d9f4b7158b264f6ef8f55e9813d031144ff42f65919227c79fb20e1fc2ed70"
 //       },
 //       {
+//         "key": "packet_data_size",
+//         "value": "514"
+//       },
+//       {
 //         "key": "packet_data[0]",
 //         "value": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000000a6576656e742d63616c6c00000000000000000000000000000000000000000000"
 //       },
@@ -789,6 +801,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       {
 //         "key": "packet_hash",
 //         "value": "0x7a8d7e00a6f9fd5ecd531cfe519b412f070d564624509bf620df6845b1cce967"
+//       },
+//       {
+//         "key": "packet_data_size",
+//         "value": "1794"
 //       },
 //       {
 //         "key": "packet_data[0]",
@@ -845,6 +861,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x52124a68f538d0aa1ece014bcb45fab024e3af6a8e277cfa56adaad68be2c357"
 //       },
 //       {
+//         "key": "packet_data_size",
+//         "value": "28"
+//       },
+//       {
 //         "key": "packet_data[0]",
 //         "value": "0x6576656e742d74696d656f7574"
 //       },
@@ -889,6 +909,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       {
 //         "key": "packet_hash",
 //         "value": "0x52124a68f538d0aa1ece014bcb45fab024e3af6a8e277cfa56adaad68be2c357"
+//       },
+//       {
+//         "key": "packet_data_size",
+//         "value": "28"
 //       },
 //       {
 //         "key": "packet_data[0]",
@@ -977,6 +1001,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x2e925a980b459b69e205479571e2988b99ffb77d7eae552bbe4107b5e2857599"
 //       },
 //       {
+//         "key": "packet_data_size",
+//         "value": "26"
+//       },
+//       {
 //         "key": "packet_data[0]",
 //         "value": "0x6576656e742d726563762d31"
 //       },
@@ -1025,6 +1053,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       {
 //         "key": "packet_hash",
 //         "value": "0x2e925a980b459b69e205479571e2988b99ffb77d7eae552bbe4107b5e2857599"
+//       },
+//       {
+//         "key": "packet_data_size",
+//         "value": "26"
 //       },
 //       {
 //         "key": "packet_data[0]",
@@ -1077,6 +1109,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x72e4fcb14058a989cb243a46e9583fe569909b915ffe4edf5f1ca9609db20083"
 //       },
 //       {
+//         "key": "packet_data_size",
+//         "value": "26"
+//       },
+//       {
 //         "key": "packet_data[0]",
 //         "value": "0x6576656e742d726563762d32"
 //       },
@@ -1125,6 +1161,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       {
 //         "key": "packet_hash",
 //         "value": "0x72e4fcb14058a989cb243a46e9583fe569909b915ffe4edf5f1ca9609db20083"
+//       },
+//       {
+//         "key": "packet_data_size",
+//         "value": "26"
 //       },
 //       {
 //         "key": "packet_data[0]",
@@ -1213,6 +1253,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x5903360eb9bb521e532b827510363708a8e0c10cf58ce5cd331399623ad5c27b"
 //       },
 //       {
+//         "key": "packet_data_size",
+//         "value": "26"
+//       },
+//       {
 //         "key": "packet_data[0]",
 //         "value": "0x6576656e742d696e74656e74"
 //       },
@@ -1261,6 +1305,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       {
 //         "key": "packet_hash",
 //         "value": "0x5903360eb9bb521e532b827510363708a8e0c10cf58ce5cd331399623ad5c27b"
+//       },
+//       {
+//         "key": "packet_data_size",
+//         "value": "26"
 //       },
 //       {
 //         "key": "packet_data[0]",
@@ -1313,6 +1361,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0xa95670a052ae50cb85b4baf83596b9f36ebb5b2026165fbe737db02d8b6462e9"
 //       },
 //       {
+//         "key": "packet_data_size",
+//         "value": "24"
+//       },
+//       {
 //         "key": "packet_data[0]",
 //         "value": "0x6576656e742d6173796e63"
 //       },
@@ -1361,6 +1413,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       {
 //         "key": "packet_hash",
 //         "value": "0xa95670a052ae50cb85b4baf83596b9f36ebb5b2026165fbe737db02d8b6462e9"
+//       },
+//       {
+//         "key": "packet_data_size",
+//         "value": "24"
 //       },
 //       {
 //         "key": "packet_data[0]",
@@ -1613,6 +1669,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x7bf8b2199e74916681e58171af1e1491c0d3197ab60389fbf8b937906693f75e"
 //       },
 //       {
+//         "key": "packet_data_size",
+//         "value": "4"
+//       },
+//       {
 //         "key": "packet_data[0]",
 //         "value": "0x01"
 //       },
@@ -1661,6 +1721,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       {
 //         "key": "packet_hash",
 //         "value": "0x7bf8b2199e74916681e58171af1e1491c0d3197ab60389fbf8b937906693f75e"
+//       },
+//       {
+//         "key": "packet_data_size",
+//         "value": "4"
 //       },
 //       {
 //         "key": "packet_data[0]",

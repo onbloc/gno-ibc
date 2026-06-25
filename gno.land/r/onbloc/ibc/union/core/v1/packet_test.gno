@@ -144,6 +144,93 @@ func TestSendPacketUnauthorizedSender(cur realm, t *testing.T) {
 	})
 }
 
+func TestAssertPacketDataSize(cur realm, t *testing.T) {
+	maxPacketDataBytes := (core.MaxPacketDataEventSize - 2) / 2
+	tests := []struct {
+		name string
+		data []byte
+		want string
+	}{
+		{"empty data", []byte{}, ""},
+		{"max hex attr size", make([]byte, maxPacketDataBytes), ""},
+		{"too large hex attr size", make([]byte, maxPacketDataBytes+1), core.ErrPacketDataTooLarge},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			run := func(cur realm) {
+				assertPacketDataSize(tc.data)
+			}
+			if tc.want != "" {
+				uassert.AbortsContains(t, cur, tc.want, run)
+				return
+			}
+			uassert.NotAborts(t, cur, run)
+		})
+	}
+}
+
+func TestPacketEntrypointsRejectOversizedPacketData(cur realm, t *testing.T) {
+	maxPacketDataBytes := (core.MaxPacketDataEventSize - 2) / 2
+	oversized := make([]byte, maxPacketDataBytes+1)
+	tests := []struct {
+		name string
+		run  func(cur realm)
+	}{
+		{
+			name: "send packet",
+			run: func(cur realm) {
+				v := newTestImpl()
+				v.SendPacket(0, cur, types.ChannelId(1), types.Timestamp(0), oversized)
+			},
+		},
+		{
+			name: "packet recv",
+			run: func(cur realm) {
+				v := newTestImpl()
+				v.PacketRecv(0, cur, types.MsgPacketRecv{Packets: []types.Packet{{Data: oversized}}})
+			},
+		},
+		{
+			name: "intent packet recv",
+			run: func(cur realm) {
+				v := newTestImpl()
+				v.IntentPacketRecv(0, cur, types.MsgIntentPacketRecv{Packets: []types.Packet{{Data: oversized}}})
+			},
+		},
+		{
+			name: "packet acknowledgement",
+			run: func(cur realm) {
+				v := newTestImpl()
+				v.PacketAcknowledgement(0, cur, types.MsgPacketAcknowledgement{Packets: []types.Packet{{Data: oversized}}})
+			},
+		},
+		{
+			name: "packet timeout",
+			run: func(cur realm) {
+				v := newTestImpl()
+				v.PacketTimeout(0, cur, types.MsgPacketTimeout{Packet: types.Packet{Data: oversized}})
+			},
+		},
+		{
+			name: "write acknowledgement",
+			run: func(cur realm) {
+				v := newTestImpl()
+				v.WriteAcknowledgement(0, cur, types.MsgWriteAcknowledgement{Packet: types.Packet{Data: oversized}})
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.AbortsContains(t, cur, core.ErrPacketDataTooLarge, func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+				tc.run(cur)
+			})
+		})
+	}
+}
+
 func TestPacketRecv(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {

@@ -182,8 +182,14 @@ func TestPacketEventBaseAttrsSplitPacketData(cur realm, t *testing.T) {
 			if attrs[0] != "packet_hash" {
 				t.Fatalf("first attr key: got %q want packet_hash", attrs[0])
 			}
+			if attrs[2] != "packet_data_size" {
+				t.Fatalf("packet data size attr key: got %q want packet_data_size", attrs[2])
+			}
+			if attrs[3] != strconv.Itoa(len(hexAttr(tc.data))) {
+				t.Fatalf("packet data size attr value: got %q want %d", attrs[3], len(hexAttr(tc.data)))
+			}
 			assertAttrMissing(t, attrs, "packet_data")
-			assertEventAttrColumnLens(t, attrs[2:], "packet_data", hexAttr(tc.data), tc.wantLens)
+			assertEventAttrColumnLens(t, attrs[4:], "packet_data", hexAttr(tc.data), tc.wantLens)
 		})
 	}
 }

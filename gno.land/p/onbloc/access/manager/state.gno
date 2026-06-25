@@ -6,6 +6,7 @@ type State struct {
 	Roles     map[RoleId]*RoleConfig
 	Targets   map[string]*TargetConfig
 	Schedules map[OperationId]Schedule
+	Labels    map[RoleId]string
 }
 
 func NewState() State {
@@ -13,6 +14,7 @@ func NewState() State {
 		Roles:     make(map[RoleId]*RoleConfig),
 		Targets:   make(map[string]*TargetConfig),
 		Schedules: make(map[OperationId]Schedule),
+		Labels:    make(map[RoleId]string),
 	}
 }
 
@@ -157,7 +159,48 @@ func (state *State) GetNonce(operationId OperationId) Nonce {
 	return state.getSchedule(operationId).Nonce
 }
 
+func (state *State) GetAccess(role RoleId, account address) FullAccess {
+	roleConfig := state.getRole(role)
+	if roleConfig == nil {
+		return Access{}.fullAt(CurrentTimePoint())
+	}
+
+	return roleConfig.rawAccess(account).fullAt(CurrentTimePoint())
+}
+
+func (state *State) GetRoleLabel(role RoleId) (string, bool) {
+	if state.Labels == nil {
+		state.Labels = make(map[RoleId]string)
+	}
+
+	label, found := state.Labels[role]
+	return label, found
+}
+
+func (state *State) GetRoleLabels(roles []RoleId) []RoleLabel {
+	labels := make([]RoleLabel, len(roles))
+	for i := range roles {
+		label, found := state.GetRoleLabel(roles[i])
+		labels[i] = RoleLabel{
+			Role:  roles[i],
+			Label: label,
+			Found: found,
+		}
+	}
+
+	return labels
+}
+
 // =============================================== ROLE MANAGEMENT ===============================================
+
+func (state *State) LabelRole(role RoleId, label string) {
+	RequireUnlockedConfigRole(role)
+	if state.Labels == nil {
+		state.Labels = make(map[RoleId]string)
+	}
+
+	state.Labels[role] = label
+}
 
 // GrantRole grants role membership to account and returns true for a new member.
 // This Gno port retains grant delay and execution delay in a Gno-native state

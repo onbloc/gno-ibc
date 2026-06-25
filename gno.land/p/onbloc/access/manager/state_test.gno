@@ -145,6 +145,64 @@ func TestGrantRoleForExistingMemberPreservesEffectiveTimePoint(t *testing.T) {
 	}
 }
 
+func TestGetAccessReturnsFullExecutionDelayState(t *testing.T) {
+	caller := testutils.TestAddress("caller")
+	state := NewState()
+
+	if access := state.GetAccess(testRole, caller); !access.Since.IsZero() || access.CurrentDelay != 0 || access.PendingDelay != 0 || !access.Effect.IsZero() {
+		t.Fatal("missing access must return zero full access")
+	}
+
+	state.GrantRoleWithExecutionDelay(testRole, caller, 10)
+	state.GrantRoleWithExecutionDelay(testRole, caller, 6)
+
+	access := state.GetAccess(testRole, caller)
+	if access.Since.IsZero() {
+		t.Fatal("full access must include membership effect time")
+	}
+	if access.CurrentDelay != 10 {
+		t.Fatal("full access must include current execution delay")
+	}
+	if access.PendingDelay != 6 {
+		t.Fatal("full access must include pending execution delay")
+	}
+	if !access.Effect.After(CurrentTimePoint()) {
+		t.Fatal("full access must include pending delay effect time")
+	}
+}
+
+func TestRoleLabels(t *testing.T) {
+	state := NewState()
+
+	if _, found := state.GetRoleLabel(testRole); found {
+		t.Fatal("missing role label must report not found")
+	}
+
+	state.LabelRole(testRole, "TEST")
+	label, found := state.GetRoleLabel(testRole)
+	if !found || label != "TEST" {
+		t.Fatal("role label must be stored")
+	}
+
+	labels := state.GetRoleLabels([]RoleId{testRole, 2})
+	if len(labels) != 2 {
+		t.Fatal("role labels query must preserve request length")
+	}
+	if labels[0].Role != testRole || labels[0].Label != "TEST" || !labels[0].Found {
+		t.Fatal("role labels query must include stored labels")
+	}
+	if labels[1].Role != 2 || labels[1].Found {
+		t.Fatal("role labels query must report missing labels")
+	}
+
+	mustPanic(t, func() {
+		state.LabelRole(AdminRole, "ADMIN")
+	})
+	mustPanic(t, func() {
+		state.LabelRole(PublicRole, "PUBLIC")
+	})
+}
+
 func TestRoleAdminDefaultsToAdminRole(t *testing.T) {
 	state := NewState()
 

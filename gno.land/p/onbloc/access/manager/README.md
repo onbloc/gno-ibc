@@ -37,6 +37,8 @@ The model follows OpenZeppelin's `AccessManager` shape:
 - a member access record has an activation timePoint and execution delay;
 - role grant delay, target admin delay, and member execution-delay reductions
   use Union/OZ delayed-value update semantics instead of changing immediately;
+- role labels are stored for discoverability queries and emitted as events by
+  the consuming realm;
 - delayed operations are keyed by caller, target, selector, and `dataHash`;
 - target administration can require a target-specific admin delay;
 - current `TimePoint` is represented as Unix seconds in an `int64` wrapper and
@@ -133,6 +135,8 @@ Types:
 - `TargetConfig`
 - `CanCallResult`
 - `HasRoleResult`
+- `FullAccess`
+- `RoleLabel`
 - `OperationId`
 - `Nonce`
 - `Schedule`
@@ -171,6 +175,7 @@ Delay helpers:
 - `Delay.Uint32`
 - `Delay.String`
 - `DelayedValue.Get`
+- `DelayedValue.GetFull`
 - `DelayedValue.WithUpdate`
 
 TimePoint helpers:
@@ -190,9 +195,13 @@ Role membership:
 - `RevokeRole`
 - `RenounceRole`
 - `HasRole`
+- `GetAccess`
 
 Role configuration:
 
+- `LabelRole`
+- `GetRoleLabel`
+- `GetRoleLabels`
 - `SetRoleAdmin`
 - `GetRoleAdmin`
 - `SetRoleGuardian`

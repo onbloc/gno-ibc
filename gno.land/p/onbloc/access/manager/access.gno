@@ -26,6 +26,17 @@ func (access Access) executionDelayAt(now TimePoint) Delay {
 	return access.Delay.Get(now)
 }
 
+func (access Access) fullAt(now TimePoint) FullAccess {
+	currentDelay, pendingDelay, effect := access.Delay.GetFull(now)
+
+	return FullAccess{
+		Since:        access.Since,
+		CurrentDelay: currentDelay,
+		PendingDelay: pendingDelay,
+		Effect:       effect,
+	}
+}
+
 func (access Access) withExecutionDelayUpdate(now TimePoint, executionDelay Delay) (Access, TimePoint) {
 	delay, effect := access.Delay.WithUpdate(now, executionDelay, 0)
 	access.Delay = delay

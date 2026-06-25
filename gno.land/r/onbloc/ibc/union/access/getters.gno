@@ -2,11 +2,39 @@ package access
 
 import "gno.land/p/onbloc/access/manager"
 
+func AdminRole() manager.RoleId {
+	return manager.AdminRole
+}
+
+func PublicRole() manager.RoleId {
+	return manager.PublicRole
+}
+
+func Expiration() manager.Delay {
+	return manager.OperationExpiration
+}
+
+func MinSetback() manager.Delay {
+	return manager.MinSetback
+}
+
 // HasRole returns role membership status for account.
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L1172-L1197
 func HasRole(role manager.RoleId, account address) manager.HasRoleResult {
 	return accessState.HasRole(role, account)
+}
+
+func GetAccess(role manager.RoleId, account address) manager.FullAccess {
+	return accessState.GetAccess(role, account)
+}
+
+func GetRoleLabel(role manager.RoleId) (string, bool) {
+	return accessState.GetRoleLabel(role)
+}
+
+func GetRoleLabels(roles []manager.RoleId) []manager.RoleLabel {
+	return accessState.GetRoleLabels(roles)
 }
 
 // GetRoleAdmin returns the admin role configured for role.

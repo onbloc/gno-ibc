@@ -66,7 +66,7 @@ func RenounceRole(cur realm, role manager.RoleId, callerConfirmation address) bo
 func LabelRole(cur realm, role manager.RoleId, label string) {
 	assertCanManageTarget(0, cur)
 
-	manager.RequireUnlockedConfigRole(role)
+	accessState.LabelRole(role, label)
 
 	emitRoleLabelEvent(role, label)
 }

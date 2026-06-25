@@ -102,10 +102,17 @@ function body.
 
 ## Query Surface
 
+- `AdminRole`
+- `PublicRole`
+- `Expiration`
+- `MinSetback`
 - `HasRole`
+- `GetAccess`
 - `GetRoleAdmin`
 - `GetRoleGuardian`
 - `GetRoleGrantDelay`
+- `GetRoleLabel`
+- `GetRoleLabels`
 - `GetFunctionRole`
 - `GetTargetFunctionRole`
 - `GetTargetAdminDelay`

@@ -42,6 +42,14 @@ func (d DelayedValue) Get(now TimePoint) Delay {
 	return d.ValueBefore
 }
 
+func (d DelayedValue) GetFull(now TimePoint) (Delay, Delay, TimePoint) {
+	if d.Effect.IsZero() || !d.Effect.After(now) {
+		return d.ValueAfter, 0, 0
+	}
+
+	return d.ValueBefore, d.ValueAfter, d.Effect
+}
+
 func (d DelayedValue) WithUpdate(now TimePoint, newValue Delay, minSetback Delay) (DelayedValue, TimePoint) {
 	value := d.Get(now)
 	setback := minSetback
@@ -93,6 +101,19 @@ func NewHasRoleResultWithDelay(isMember bool, executionDelay Delay) HasRoleResul
 		IsMember:       isMember,
 		ExecutionDelay: executionDelay,
 	}
+}
+
+type FullAccess struct {
+	Since        TimePoint
+	CurrentDelay Delay
+	PendingDelay Delay
+	Effect       TimePoint
+}
+
+type RoleLabel struct {
+	Role  RoleId
+	Label string
+	Found bool
 }
 
 type OperationId string

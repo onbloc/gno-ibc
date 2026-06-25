@@ -57,6 +57,9 @@ they are attributed to the realm that owns state.
 - ABI calldata selector extraction and execution-id stack tracking are not
   ported because Gno targets expose typed realm functions instead of encoded
   calldata.
+- AccessManaged `SetAuthority` / access-manager `UpdateAuthority` remain
+  represented by the shared access realm and per-target selector gates. There is
+  no target-local authority address to mutate in the current Gno model.
 - The deployer role policy is local deployment configuration. Current Gno role
   coverage adopts `AdminRole`, core `RelayerRole`, and `PublicRole`; ZKGM
   `PAUSER`, `UNPAUSER`, and `RATE_LIMITER` role ids are documented but not

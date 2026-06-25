@@ -214,11 +214,47 @@ func TestLabelRoleRequiresManagerAdmin(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(admin))
 	LabelRole(cross(cur), RelayerRole, "RELAYER")
+	label, found := GetRoleLabel(RelayerRole)
+	if !found || label != "RELAYER" {
+		t.Fatal("LabelRole must store role label")
+	}
+	labels := GetRoleLabels([]manager.RoleId{RelayerRole, 2})
+	if len(labels) != 2 || !labels[0].Found || labels[0].Label != "RELAYER" || labels[1].Found {
+		t.Fatal("GetRoleLabels must return stored and missing labels")
+	}
 
 	testing.SetRealm(testing.NewUserRealm(caller))
 	uassert.AbortsContains(t, cur, ErrAccessManagerUnauthorizedAccount, func(cur realm) {
 		LabelRole(cross(cur), RelayerRole, "RELAYER")
 	})
+}
+
+func TestStaticAndFullAccessQueries(cur realm, t *testing.T) {
+	admin := testutils.TestAddress("access-admin")
+	relayer := testutils.TestAddress("access-relayer")
+	resetAccess(admin)
+
+	if AdminRole() != manager.AdminRole {
+		t.Fatal("AdminRole query must return admin role")
+	}
+	if PublicRole() != manager.PublicRole {
+		t.Fatal("PublicRole query must return public role")
+	}
+	if Expiration() != manager.OperationExpiration {
+		t.Fatal("Expiration query must return operation expiration")
+	}
+	if MinSetback() != manager.MinSetback {
+		t.Fatal("MinSetback query must return min setback")
+	}
+
+	testing.SetRealm(testing.NewUserRealm(admin))
+	GrantRoleWithExecutionDelay(cross(cur), RelayerRole, relayer, 10)
+	GrantRoleWithExecutionDelay(cross(cur), RelayerRole, relayer, 6)
+
+	access := GetAccess(RelayerRole, relayer)
+	if access.Since.IsZero() || access.CurrentDelay != 10 || access.PendingDelay != 6 || !access.Effect.After(manager.CurrentTimePoint()) {
+		t.Fatal("GetAccess must expose full execution delay state")
+	}
 }
 
 func TestRoleConfigurationSurface(cur realm, t *testing.T) {

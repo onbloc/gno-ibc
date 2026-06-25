@@ -103,7 +103,7 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 		}
 
 		res := a.OnRecvPacket(cross(rlm), packet, relayer, relayerMsg)
-		if err := c.commitSyncAck(0, rlm, packet, res); err != nil {
+		if err := c.commitSyncAck(0, rlm, packet, res, ch, connection); err != nil {
 			panic(err)
 		}
 
@@ -155,7 +155,7 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 		}
 
 		res := intentApp.OnIntentRecvPacket(cross(rlm), packet, marketMaker, marketMakerMsg)
-		if err := c.commitSyncAck(0, rlm, packet, res); err != nil {
+		if err := c.commitSyncAck(0, rlm, packet, res, ch, connection); err != nil {
 			panic(err)
 		}
 
@@ -401,8 +401,14 @@ func (c *coreV1) WriteAcknowledgement(_ int, rlm realm, msg types.MsgWriteAcknow
 		panic(makeError(core.ErrAcknowledgementAlreadyWritten))
 	}
 
+	channel, err := c.getChannel(channelId)
+	if err != nil {
+		panic(err)
+	}
+
+	connection := c.ensureConnectionState(channel.ConnectionId)
 	c.store.CommitAcknowledgement(0, rlm, msg.Packet, msg.Acknowledgement)
-	core.EmitWriteAck(0, rlm, channelId, msg.Packet, msg.Acknowledgement)
+	core.EmitWriteAck(0, rlm, msg.Packet, channel, connection, msg.Acknowledgement)
 }
 
 // --- shared recv helpers ---
@@ -438,7 +444,7 @@ func (c *coreV1) acceptRecvPacket(_ int, rlm realm, packet types.Packet, batchCh
 
 // commitSyncAck records a synchronous recv result as receipt evidence. Sync
 // success/failure must carry a non-empty acknowledgement; async is deferred.
-func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, res types.RecvPacketResult) error {
+func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, res types.RecvPacketResult, channel types.Channel, connection types.Connection) error {
 	switch res.Status {
 	case types.PacketStatusAsync:
 		return nil
@@ -448,7 +454,7 @@ func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, res types.
 		}
 
 		c.store.CommitAcknowledgement(0, rlm, packet, res.Acknowledgement)
-		core.EmitWriteAck(0, rlm, packet.DestinationChannelId, packet, res.Acknowledgement)
+		core.EmitWriteAck(0, rlm, packet, channel, connection, res.Acknowledgement)
 
 		return nil
 	default:

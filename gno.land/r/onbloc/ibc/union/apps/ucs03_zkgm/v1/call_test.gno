@@ -42,8 +42,8 @@ func TestExecuteCall(cur realm, t *testing.T) {
 				ContractAddress:  []byte(mockReceiverPath),
 				ContractCalldata: []byte("calldata"),
 			},
-			relayer:     address("g1relayer"),
-			relayerMsg:  []byte("relay-msg"),
+			relayer:    address("g1relayer"),
+			relayerMsg: []byte("relay-msg"),
 			setup: func() {
 				testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
 			},
@@ -72,9 +72,9 @@ func TestExecuteCall(cur realm, t *testing.T) {
 				ContractAddress:  []byte(mockReceiverPath),
 				ContractCalldata: []byte("calldata"),
 			},
-			intent:      true,
-			relayer:     address("g1maker"),
-			relayerMsg:  []byte("mm-msg"),
+			intent:     true,
+			relayer:    address("g1maker"),
+			relayerMsg: []byte("mm-msg"),
 			setup: func() {
 				testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
 			},
@@ -308,14 +308,14 @@ func TestSafeCallOnZkgm(cur realm, t *testing.T) {
 	env := z.CallEnv{Caller: "relayer"}
 
 	cases := []struct {
-		name          string
-		setup         func()
-		wantErr       bool
-		wantPanicked  bool
+		name         string
+		setup        func()
+		wantErr      bool
+		wantPanicked bool
 	}{
 		{
-			name:     "receiver success returns nil no-panic",
-			wantErr:  false,
+			name:         "receiver success returns nil no-panic",
+			wantErr:      false,
 			wantPanicked: false,
 		},
 		{
@@ -362,14 +362,14 @@ func TestSafeCallOnIntentZkgm(cur realm, t *testing.T) {
 	env := z.IntentCallEnv{Caller: "maker"}
 
 	cases := []struct {
-		name          string
-		setup         func()
-		wantErr       bool
-		wantPanicked  bool
+		name         string
+		setup        func()
+		wantErr      bool
+		wantPanicked bool
 	}{
 		{
-			name:     "receiver success returns nil no-panic",
-			wantErr:  false,
+			name:         "receiver success returns nil no-panic",
+			wantErr:      false,
 			wantPanicked: false,
 		},
 		{

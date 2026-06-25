@@ -1091,6 +1091,7 @@ type protocolFillMintCase struct {
 	expectReceiver int64
 	expectRelayer  int64
 	expectDeployed bool
+	expectError    string // non-empty => protocolFillMint returns this error substring
 }
 
 func TestProtocolFillMint(cur realm, t *testing.T) {
@@ -1197,6 +1198,16 @@ func TestProtocolFillMint(cur realm, t *testing.T) {
 			expectRelayer:  0,
 			expectDeployed: false,
 		},
+		{
+			name:        "fee underflow - quote exceeds base returns error",
+			path:        u256.NewUint(36),
+			channelId:   types.ChannelId(36),
+			baseAmount:  u256.NewUint(50),
+			quoteAmount: u256.NewUint(80), // quote > base => fee = base - quote underflows
+			metadata:    &validMetadata,
+			canDeploy:   true,
+			expectError: "fee underflow",
+		},
 	}
 
 	for _, tc := range cases {
@@ -1222,6 +1233,14 @@ func TestProtocolFillMint(cur realm, t *testing.T) {
 			}
 
 			res, err := v.protocolFillMint(0, cur, channelId, path, baseToken, wrappedToken, address(receiver), address(relayer), tc.baseAmount, tc.quoteAmount, tc.metadata, tc.canDeploy)
+
+			if tc.expectError != "" {
+				uassert.ErrorContains(t, err, tc.expectError)
+				uassert.True(t, res.Status == types.PacketStatusUnknown)
+				uassert.Equal(t, int64(0), voucherBalanceOf(wrappedToken, address(receiver)))
+				uassert.Equal(t, int64(0), voucherBalanceOf(wrappedToken, address(relayer)))
+				return
+			}
 
 			if tc.expectSuccess {
 				uassert.NoError(t, err)
@@ -1314,6 +1333,15 @@ func TestProtocolFillUnescrowV2(cur realm, t *testing.T) {
 			expectReceiver: 0,
 			expectRelayer:  0,
 		},
+		{
+			name:           "fee underflow - quote exceeds base returns error",
+			path:           u256.NewUint(44),
+			channelId:      types.ChannelId(44),
+			baseAmount:     u256.NewUint(50),
+			quoteAmount:    u256.NewUint(80), // quote > base => fee = base - quote underflows
+			initialBalance: u256.NewUint(100),
+			expectError:    "fee underflow",
+		},
 	}
 
 	for _, tc := range cases {
@@ -1336,6 +1364,12 @@ func TestProtocolFillUnescrowV2(cur realm, t *testing.T) {
 			v.increaseChannelBalanceV2(0, cur, channelId, path, quoteToken, baseToken, tc.initialBalance)
 
 			res, err := v.protocolFillUnescrowV2(0, cur, channelId, path, baseToken, string(quoteToken), address(receiver), address(relayer), tc.baseAmount, tc.quoteAmount)
+
+			if tc.expectError != "" {
+				uassert.ErrorContains(t, err, tc.expectError)
+				uassert.True(t, res.Status == types.PacketStatusUnknown)
+				return
+			}
 
 			if tc.expectSuccess {
 				uassert.NoError(t, err)
@@ -1502,6 +1536,63 @@ func TestMarketMakerFillV2(cur realm, t *testing.T) {
 
 			uassert.Equal(t, tc.expectMakerBalance, voucherBalanceOf(tc.quoteToken, address(maker)))
 			uassert.Equal(t, tc.expectReceiverBalance, voucherBalanceOf(tc.quoteToken, address(receiver)))
+		})
+	}
+}
+
+// protocolFillMint and protocolFillUnescrowV2 compute fee = base - quote. A quote
+// that exceeds base must be rejected with errTokenOrderFeeUnderflow instead of
+// wrapping the subtraction around to a near-2^256 fee. The guard sits at the top
+// of each fill, so no mint/escrow seeding is needed to reach it; we drive both
+// fills through one table and assert the underflow branch directly.
+func TestProtocolFillFeeUnderflow(cur realm, t *testing.T) {
+	maxU256 := func() *u256.Uint { return new(u256.Uint).SetAllOne() }
+
+	v := newTestImpl()
+	channelId := types.ChannelId(700)
+	path := u256.Zero()
+	baseToken := []byte("ugnot")
+	receiver := address(testAddress("fill-uf-rx"))
+	relayer := address(testAddress("fill-uf-rly"))
+
+	// fill invokes one of the two protocol-fill paths with the given amounts.
+	mintFill := func(base, quote *u256.Uint) (types.RecvPacketResult, error) {
+		return v.protocolFillMint(0, cur, channelId, path, baseToken, "ibc/fill-underflow", receiver, relayer, base, quote, nil, false)
+	}
+	unescrowFill := func(base, quote *u256.Uint) (types.RecvPacketResult, error) {
+		return v.protocolFillUnescrowV2(0, cur, channelId, path, baseToken, "ugnot", receiver, relayer, base, quote)
+	}
+
+	cases := []struct {
+		name          string
+		fill          func(base, quote *u256.Uint) (types.RecvPacketResult, error)
+		base          *u256.Uint
+		quote         *u256.Uint
+		wantUnderflow bool
+	}{
+		{"mint quote exceeds base by one", mintFill, u256.NewUint(100), u256.NewUint(101), true},
+		{"mint quote far exceeds base", mintFill, u256.NewUint(1), maxU256(), true},
+		{"mint zero base nonzero quote", mintFill, u256.NewUint(0), u256.NewUint(1), true},
+		{"unescrow quote exceeds base by one", unescrowFill, u256.NewUint(100), u256.NewUint(101), true},
+		{"unescrow quote far exceeds base", unescrowFill, u256.NewUint(1), maxU256(), true},
+		{"unescrow zero base nonzero quote", unescrowFill, u256.NewUint(0), u256.NewUint(1), true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res, err := tc.fill(tc.base, tc.quote)
+
+			if !tc.wantUnderflow {
+				uassert.NoError(t, err)
+				return
+			}
+
+			uassert.Error(t, err)
+			uassert.ErrorContains(t, err, errTokenOrderFeeUnderflow)
+			// the underflow branch returns the unknown status with no ack so the
+			// caller treats it as a fatal decode-time failure, not a fill.
+			uassert.True(t, res.Status == types.PacketStatusUnknown)
+			uassert.Equal(t, 0, len(res.Acknowledgement))
 		})
 	}
 }

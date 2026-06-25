@@ -36,7 +36,7 @@ func PredictWrappedTokenV2(path *u256.Uint, channelId uint32, baseToken []byte, 
 		path = u256.Zero()
 	}
 
-	image := new(u256.Uint).SetBytes(metadataImage[:])
+	image := u256.Zero().SetBytes(metadataImage[:])
 
 	bz, err := abi.Encode(PredictV2Schema, []any{path, channelId, baseToken, image})
 	if err != nil {
@@ -61,7 +61,7 @@ func MetadataImage(meta TokenMetadata) [32]byte {
 
 // Uint256FromBytes32 converts a big-endian bytes32 value into a uint256.
 func Uint256FromBytes32(bz [32]byte) *u256.Uint {
-	return new(u256.Uint).SetBytes(bz[:])
+	return u256.Zero().SetBytes(bz[:])
 }
 
 // PredictCallProxyAccount returns the synthetic Gno address that represents

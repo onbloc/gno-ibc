@@ -21,6 +21,7 @@ const (
 
 	// token order
 	errInvalidUnescrow                    = "invalid token order unescrow"
+	errTokenOrderFeeUnderflow             = "token order fee underflow: quote amount exceeds base amount"
 	errUnknownTokenOrderKind              = "unknown token order kind"
 	errUnknownFillType                    = "unknown fill type"
 	errUnsupportedTokenOrderKindForAck    = "unsupported token order kind for ack"
@@ -56,6 +57,7 @@ const (
 	errCoinMismatch            = "zkgm/coins: sent coin mismatch"
 	errChannelBalanceUnderflow = "zkgm/channel_balance: underflow"
 	errQuoteAmountTooLarge     = "quote amount exceeds trimmed base amount"
+	errChannelBalanceOverflow  = "zkgm/channel_balance: overflow"
 
 	// errGRC20Unsupported is returned when a token order's base denom is a GRC20
 	// token registered in grc20reg (other than zkgm's own ibc/ vouchers). zkgm only

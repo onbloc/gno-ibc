@@ -12,6 +12,7 @@ const (
 )
 
 func TestRegisterApp(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 
 	v.RegisterApp(0, cur, &mockApp{})
@@ -21,6 +22,7 @@ func TestRegisterApp(cur realm, t *testing.T) {
 }
 
 func TestRegisterAppRejectsDuplicatePort(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	// The duplicate guard lives in the store (RegisterApp derives the caller's
 	// port and delegates). Drive it with an explicit port id, since uassert's
 	// closure crosses and would otherwise change the derived caller port.
@@ -30,6 +32,7 @@ func TestRegisterAppRejectsDuplicatePort(cur realm, t *testing.T) {
 	ms.RegisterAppAtPort(0, cur, portId, &mockApp{})
 
 	uassert.AbortsContains(t, cur, "already registered", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		ms.RegisterAppAtPort(0, cur, portId, &mockApp{})
 	})
 }

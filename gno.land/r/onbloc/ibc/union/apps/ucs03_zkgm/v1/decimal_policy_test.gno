@@ -135,6 +135,7 @@ func TestInitializeOverflowAmountReturnsFailureAckNoMint(cur realm, t *testing.T
 	}))
 	packet := core.NewPacket(types.ChannelId(1), destChan, data, 0)
 
+	testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
 	res := v.OnRecvPacket(0, cur, packet, address(testAddress("ovf-rly")), nil)
 
 	uassert.True(t, res.Status == types.PacketStatusFailure)
@@ -226,6 +227,7 @@ func TestInitializeDecimalsExceedMaxReturnsFailureAck(cur realm, t *testing.T) {
 	}))
 	packet := core.NewPacket(types.ChannelId(1), destChan, data, 0)
 
+	testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
 	res := v.OnRecvPacket(0, cur, packet, address(testAddress("ovd-rly")), nil)
 
 	uassert.True(t, res.Status == types.PacketStatusFailure)

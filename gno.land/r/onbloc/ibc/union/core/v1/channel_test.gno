@@ -39,6 +39,7 @@ func openTryMsg(portId types.Bytes) types.MsgChannelOpenTry {
 }
 
 func TestChannelOpenInit(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	portId, mApp := setupChannelEnv(cur, v)
 
@@ -57,10 +58,12 @@ func TestChannelOpenInit(cur realm, t *testing.T) {
 }
 
 func TestChannelOpenInitRequiresOpenConnection(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	portId, _ := setupChannelEnv(cur, v)
 	// Connection 2 is never opened.
 	uassert.AbortsContains(t, cur, "not found", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{
 			PortId:       portId,
 			ConnectionId: types.ConnectionId(2),
@@ -70,6 +73,7 @@ func TestChannelOpenInitRequiresOpenConnection(cur realm, t *testing.T) {
 }
 
 func TestChannelOpenTry(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	ms := v.store.(*mockStore)
 	lc := &mockLightClient{}
@@ -91,6 +95,7 @@ func TestChannelOpenTry(cur realm, t *testing.T) {
 }
 
 func TestChannelOpenTryProofFailureAborts(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	ms := v.store.(*mockStore)
 	clientId := createClient(cur, v, &mockLightClient{membershipErr: "bad proof"}, nil, nil)
@@ -100,6 +105,7 @@ func TestChannelOpenTryProofFailureAborts(cur realm, t *testing.T) {
 	ms.registerApp(portId, &mockApp{})
 
 	uassert.AbortsContains(t, cur, "bad proof", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.ChannelOpenTry(0, cur, openTryMsg(portId))
 	})
 }
@@ -108,12 +114,14 @@ func TestChannelOpenTryProofFailureAborts(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L275-L346
 func TestChannelOpenTryInvalidState(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	portId, _ := setupChannelEnv(cur, v)
 	msg := openTryMsg(portId)
 	msg.Channel.State = types.ChannelStateOpen // must be TryOpen
 
 	uassert.AbortsContains(t, cur, "invalid channel state", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.ChannelOpenTry(0, cur, msg)
 	})
 }
@@ -122,12 +130,14 @@ func TestChannelOpenTryInvalidState(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L815-L878
 func TestChannelOpenTryInvalidCounterparty(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	portId, _ := setupChannelEnv(cur, v)
 	msg := openTryMsg(portId)
 	msg.Channel.CounterpartyChannelId = 0 // Union counterparty_channel_id is non-zero
 
 	uassert.AbortsContains(t, cur, "invalid counterparty channel id", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.ChannelOpenTry(0, cur, msg)
 	})
 }
@@ -135,6 +145,7 @@ func TestChannelOpenTryInvalidCounterparty(cur realm, t *testing.T) {
 // Handler-level guard: ChannelOpenTry must reject an inactive client before it
 // persists the channel.
 func TestChannelOpenTryRejectsInactiveClient(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	ms := v.store.(*mockStore)
 	lc := &mockLightClient{status: lightclient.Expired}
@@ -145,6 +156,7 @@ func TestChannelOpenTryRejectsInactiveClient(cur realm, t *testing.T) {
 	ms.registerApp(portId, &mockApp{})
 
 	uassert.AbortsContains(t, cur, "client is not active", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.ChannelOpenTry(0, cur, openTryMsg(portId))
 	})
 
@@ -154,6 +166,7 @@ func TestChannelOpenTryRejectsInactiveClient(cur realm, t *testing.T) {
 }
 
 func TestChannelOpenAckMovesInitToOpen(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	ms := v.store.(*mockStore)
 	lc := &mockLightClient{}
@@ -187,9 +200,11 @@ func TestChannelOpenAckMovesInitToOpen(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L591-L650
 func TestChannelOpenAckNotFound(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 
 	uassert.AbortsContains(t, cur, "channel not found, 1", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.ChannelOpenAck(0, cur, types.MsgChannelOpenAck{
 			ChannelId: types.ChannelId(1), CounterpartyChannelId: types.ChannelId(9),
 			CounterpartyVersion: "v1", ProofHeight: 10, ProofTry: []byte("p"),
@@ -201,6 +216,7 @@ func TestChannelOpenAckNotFound(cur realm, t *testing.T) {
 // Option, so the host must not reject a zero counterparty id before verification.
 // Force path (verify=false) so no proof is needed.
 func TestForceChannelOpenAckAllowsZeroCounterpartyChannelId(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	portId, _ := setupChannelEnv(cur, v)
 	v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{
@@ -222,6 +238,7 @@ func TestForceChannelOpenAckAllowsZeroCounterpartyChannelId(cur realm, t *testin
 }
 
 func TestChannelOpenAckWrongStateAborts(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	portId, _ := setupChannelEnv(cur, v)
 	// TryOpen is the wrong state for an ack.
@@ -229,6 +246,7 @@ func TestChannelOpenAckWrongStateAborts(cur realm, t *testing.T) {
 	chId := v.store.(*mockStore).currentChannelId()
 
 	uassert.AbortsContains(t, cur, "invalid channel state", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.ChannelOpenAck(0, cur, types.MsgChannelOpenAck{
 			ChannelId: chId, CounterpartyChannelId: types.ChannelId(9),
 			CounterpartyVersion: "v1", ProofHeight: 10, ProofTry: []byte("p"),
@@ -237,6 +255,7 @@ func TestChannelOpenAckWrongStateAborts(cur realm, t *testing.T) {
 }
 
 func TestChannelOpenConfirmMovesTryOpenToOpen(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	portId, mApp := setupChannelEnv(cur, v)
 	v.ChannelOpenTry(0, cur, openTryMsg(portId))
@@ -255,9 +274,11 @@ func TestChannelOpenConfirmMovesTryOpenToOpen(cur realm, t *testing.T) {
 // Union reference:
 // https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/core/src/tests/channel/ibc_channel.rs#L879-L938
 func TestChannelOpenConfirmNotFound(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 
 	uassert.AbortsContains(t, cur, "channel not found, 1", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.ChannelOpenConfirm(0, cur, types.MsgChannelOpenConfirm{
 			ChannelId: types.ChannelId(1), ProofHeight: 11, ProofAck: []byte("proof"),
 		})
@@ -268,6 +289,7 @@ func TestChannelOpenConfirmNotFound(cur realm, t *testing.T) {
 // counterparty_channel_id: a TryOpen channel with a zero counterparty id must be
 // rejected before the membership proof is checked.
 func TestChannelOpenConfirmRejectsInvalidCounterpartyChannelId(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	portId, _ := setupChannelEnv(cur, v)
 	chId := v.store.NextChannelId(0, cur)
@@ -280,6 +302,7 @@ func TestChannelOpenConfirmRejectsInvalidCounterpartyChannelId(cur realm, t *tes
 	}, portId)
 
 	uassert.AbortsContains(t, cur, "invalid counterparty channel id", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.ChannelOpenConfirm(0, cur, types.MsgChannelOpenConfirm{
 			ChannelId: chId, ProofHeight: 11, ProofAck: []byte("proof"),
 		})
@@ -288,6 +311,7 @@ func TestChannelOpenConfirmRejectsInvalidCounterpartyChannelId(cur realm, t *tes
 
 // A channel that is not in TryOpen must be rejected by ChannelOpenConfirm.
 func TestChannelOpenConfirmWrongStateAborts(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	portId, _ := setupChannelEnv(cur, v)
 	chId := v.store.NextChannelId(0, cur)
@@ -300,6 +324,7 @@ func TestChannelOpenConfirmWrongStateAborts(cur realm, t *testing.T) {
 	}, portId)
 
 	uassert.AbortsContains(t, cur, "invalid channel state", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 		v.ChannelOpenConfirm(0, cur, types.MsgChannelOpenConfirm{
 			ChannelId: chId, ProofHeight: 11, ProofAck: []byte("proof"),
 		})
@@ -307,6 +332,7 @@ func TestChannelOpenConfirmWrongStateAborts(cur realm, t *testing.T) {
 }
 
 func TestChannelCloseInit(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	portId, mApp := setupChannelEnv(cur, v)
 	// Open the channel: Init -> Ack -> Open.
@@ -322,6 +348,7 @@ func TestChannelCloseInit(cur realm, t *testing.T) {
 }
 
 func TestChannelCloseConfirm(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	portId, mApp := setupChannelEnv(cur, v)
 	v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: portId, ConnectionId: types.ConnectionId(1), Version: "v1"})
@@ -350,6 +377,7 @@ func setupFrozenChannelEnv(cur realm, v *coreV1) (types.Bytes, *mockApp) {
 }
 
 func TestForceChannelOpenTrySkipsProofVerification(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	portId, mApp := setupFrozenChannelEnv(cur, v)
 
@@ -363,6 +391,7 @@ func TestForceChannelOpenTrySkipsProofVerification(cur realm, t *testing.T) {
 }
 
 func TestForceChannelOpenAckSkipsProofVerification(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	portId, mApp := setupFrozenChannelEnv(cur, v)
 	chId := v.store.NextChannelId(0, cur)
@@ -389,6 +418,7 @@ func TestForceChannelOpenAckSkipsProofVerification(cur realm, t *testing.T) {
 }
 
 func TestForceChannelOpenConfirmSkipsProofVerification(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	portId, mApp := setupFrozenChannelEnv(cur, v)
 	chId := v.store.NextChannelId(0, cur)
@@ -412,6 +442,7 @@ func TestForceChannelOpenConfirmSkipsProofVerification(cur realm, t *testing.T) 
 }
 
 func TestPrivateChannelOpenTry(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	cases := []struct {
 		name      string
 		verify    bool
@@ -445,6 +476,7 @@ func TestPrivateChannelOpenTry(cur realm, t *testing.T) {
 			tc.malleate(&msg)
 
 			run := func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v.channelOpenTry(0, cur, msg, tc.verify)
 			}
 			if tc.wantPanic != "" {
@@ -461,6 +493,7 @@ func TestPrivateChannelOpenTry(cur realm, t *testing.T) {
 }
 
 func TestPrivateChannelOpenAck(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	cases := []struct {
 		name      string
 		verify    bool
@@ -500,6 +533,7 @@ func TestPrivateChannelOpenAck(cur realm, t *testing.T) {
 				ProofTry:              []byte("proof"),
 			}
 			run := func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v.channelOpenAck(0, cur, msg, tc.verify)
 			}
 			if tc.wantPanic != "" {
@@ -515,6 +549,7 @@ func TestPrivateChannelOpenAck(cur realm, t *testing.T) {
 }
 
 func TestPrivateChannelOpenConfirm(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	cases := []struct {
 		name                  string
 		verify                bool
@@ -555,6 +590,7 @@ func TestPrivateChannelOpenConfirm(cur realm, t *testing.T) {
 				ProofAck:    []byte("proof"),
 			}
 			run := func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				v.channelOpenConfirm(0, cur, msg, tc.verify)
 			}
 			if tc.wantPanic != "" {
@@ -570,6 +606,7 @@ func TestPrivateChannelOpenConfirm(cur realm, t *testing.T) {
 }
 
 func TestClosedChannel(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	counterpartyPort := types.Bytes("cp-port")
 	original := types.Channel{

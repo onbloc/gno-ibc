@@ -83,6 +83,51 @@ func TestChannelBalanceV2(cur realm, t *testing.T) {
 	}
 }
 
+// AddLockedNative accumulates permanently-locked native escrow per denom. It
+// stores the first lock, sums subsequent locks, treats a zero add as a no-op,
+// reaches exactly 2^256-1 without tripping, and aborts on the overflow that
+// would otherwise wrap the total below its prior value (breaking the proxy
+// balance invariant). A fresh store and a distinct denom keep cases isolated.
+func TestAddLockedNative(cur realm, t *testing.T) {
+	maxU256 := func() *u256.Uint { return new(u256.Uint).SetAllOne() }
+
+	cases := []struct {
+		name      string
+		seed      *u256.Uint // nil => no pre-existing entry
+		add       *u256.Uint
+		wantAbort bool
+		wantTotal *u256.Uint
+	}{
+		{"first lock stores amount", nil, u256.NewUint(100), false, u256.NewUint(100)},
+		{"accumulates locks", u256.NewUint(100), u256.NewUint(50), false, u256.NewUint(150)},
+		{"zero add is noop", u256.NewUint(100), u256.NewUint(0), false, u256.NewUint(100)},
+		{"sum to exactly max does not overflow", u256.Zero().Sub(maxU256(), u256.NewUint(7)), u256.NewUint(7), false, maxU256()},
+		{"overflow aborts", maxU256(), u256.NewUint(1), true, maxU256()},
+	}
+
+	s := NewStore()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			denom := "ulock/" + tc.name
+			if tc.seed != nil {
+				s.AddLockedNative(0, cur, denom, tc.seed)
+			}
+
+			if tc.wantAbort {
+				uassert.AbortsContains(t, cur, ErrLockedNativeOverflow, func(cur realm) {
+					s.AddLockedNative(0, cur, denom, tc.add)
+				})
+			} else {
+				s.AddLockedNative(0, cur, denom, tc.add)
+			}
+
+			got, ok := s.GetLockedNative(denom)
+			uassert.True(t, ok)
+			uassert.True(t, got.Eq(tc.wantTotal))
+		})
+	}
+}
+
 func TestMetadataImageOf(cur realm, t *testing.T) {
 	s := NewStore()
 	imageA := [32]byte{0x01, 0x02}

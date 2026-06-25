@@ -31,8 +31,8 @@ func DequeueChannelFromPath(path *u256.Uint) (*u256.Uint, uint32) {
 		return u256.Zero(), 0
 	}
 
-	newPath := new(u256.Uint).Rsh(path, channelSlotBit)
-	low := new(u256.Uint).And(path, channelIDMaskU256())
+	newPath := u256.Zero().Rsh(path, channelSlotBit)
+	low := u256.Zero().And(path, channelIDMaskU256())
 
 	return newPath, uint32(low.Uint64())
 }
@@ -50,8 +50,8 @@ func PopChannelFromPath(path *u256.Uint) (*u256.Uint, uint32) {
 	highestIndex := uint(path.BitLen()-1) / channelSlotBit
 	channelID := GetChannelFromPath(path, int(highestIndex))
 
-	slotMask := new(u256.Uint).Lsh(channelIDMaskU256(), highestIndex*channelSlotBit)
-	basePath := new(u256.Uint).AndNot(path, slotMask)
+	slotMask := u256.Zero().Lsh(channelIDMaskU256(), highestIndex*channelSlotBit)
+	basePath := u256.Zero().AndNot(path, slotMask)
 
 	return basePath, channelID
 }
@@ -74,7 +74,7 @@ func UpdateChannelPath(path *u256.Uint, nextChannelID uint32) (*u256.Uint, error
 
 	slot := MakePathFromChannel(nextChannelID, nextHopIndex)
 
-	return new(u256.Uint).Or(slot, path), nil
+	return u256.Zero().Or(slot, path), nil
 }
 
 // GetChannelFromPath returns the channel ID stored at the given 32-bit slot
@@ -86,8 +86,8 @@ func GetChannelFromPath(path *u256.Uint, index int) uint32 {
 		return 0
 	}
 
-	shifted := new(u256.Uint).Rsh(path, uint(index)*channelSlotBit)
-	masked := new(u256.Uint).And(shifted, channelIDMaskU256())
+	shifted := u256.Zero().Rsh(path, uint(index)*channelSlotBit)
+	masked := u256.Zero().And(shifted, channelIDMaskU256())
 
 	return uint32(masked.Uint64())
 }
@@ -110,7 +110,7 @@ func MakePathFromChannel(channelID uint32, index int) *u256.Uint {
 		return u256.Zero()
 	}
 
-	return new(u256.Uint).Lsh(u256.NewUint(uint64(channelID)), uint(index)*channelSlotBit)
+	return u256.Zero().Lsh(u256.NewUint(uint64(channelID)), uint(index)*channelSlotBit)
 }
 
 // ReverseChannelPath returns a path with the same channel hops in reversed

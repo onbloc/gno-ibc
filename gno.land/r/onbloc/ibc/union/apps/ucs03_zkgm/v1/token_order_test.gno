@@ -695,6 +695,34 @@ func TestTokenOrderVerifyUnescrowV2PredictionWithImagePasses(cur realm, t *testi
 	uassert.Equal(t, int64(50), voucherBalanceOf(baseDenom, address(sender)))
 }
 
+func TestTokenOrderVerifyUnescrowVoucherBaseBurns(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	const destChan = types.ChannelId(73)
+	sender := testAddress("unesc-vouch-sender")
+	quoteToken := []byte("ugnot")
+	baseDenom := z.PredictWrappedToken(u256.Zero(), uint32(destChan), quoteToken)
+	origin, err := z.UpdateChannelPath(u256.Zero(), uint32(destChan))
+	uassert.NoError(t, err)
+	testStore.SetTokenOrigin(0, cur, baseDenom, origin)
+	uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, [32]byte{}, "", "", 0, sender, u256.NewUint(11)))
+
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(baseDenom),
+		BaseAmount:  u256.NewUint(7),
+		QuoteToken:  quoteToken,
+		QuoteAmount: u256.NewUint(7),
+		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
+	}
+
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	err = v.verifyTokenOrderV2X(cross(cur), newFunds(nil), destChan, u256.Zero(), order)
+
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(4), voucherBalanceOf(baseDenom, address(sender)))
+}
+
 func TestTokenOrderVerifyUnescrowWrongImageRejected(cur realm, t *testing.T) {
 	v := newTestImpl()
 

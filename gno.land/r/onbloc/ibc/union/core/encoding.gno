@@ -111,11 +111,11 @@ func hexAttr(b []byte) string {
 	return hexString(b)
 }
 
-// HexAttrLen returns the length of b after hexAttr encoding.
+// hexAttrLen returns the length of b after hexAttr encoding.
 //
 // It avoids building the encoded string on validation paths that only need to
 // compare against an event attribute size budget.
-func HexAttrLen(b []byte) int {
+func hexAttrLen(b []byte) int {
 	return len(b)*2 + 2
 }
 

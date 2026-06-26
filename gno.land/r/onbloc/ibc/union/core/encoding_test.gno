@@ -262,7 +262,7 @@ func TestHexAttrLen(cur realm, t *testing.T) {
 
 func assertHexAttrLen(t *testing.T, data []byte) {
 	t.Helper()
-	if got, want := HexAttrLen(data), len(hexAttr(data)); got != want {
+	if got, want := hexAttrLen(data), len(hexAttr(data)); got != want {
 		t.Fatalf("hex attr len: got %d want %d", got, want)
 	}
 }

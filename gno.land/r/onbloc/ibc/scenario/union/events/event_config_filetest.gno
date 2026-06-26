@@ -77,7 +77,7 @@ func sendWithSplitEnabled(cur realm, channelId types.ChannelId) {
 	ufmt.Printf("[INFO] oversized_packet_rejected: %t\n", core.PacketDataTooLarge(make([]byte, 16)))
 
 	packet := core.SendPacket(cross(cur), channelId, types.Timestamp(1), []byte{0xaa, 0xbb, 0xcc})
-	ufmt.Printf("[INFO] before_packet_data_size: %d\n", core.HexAttrLen(packet.Data))
+	ufmt.Printf("[INFO] before_packet_data_size: %d\n", eventConfigHexAttrLen(packet.Data))
 	ufmt.Println("[EXPECTED] before PacketSend uses packet_data[0] and packet_data[1]")
 }
 
@@ -99,8 +99,12 @@ func sendWithSplitDisabled(cur realm, channelId types.ChannelId) {
 
 	testing.SetRealm(testing.NewUserRealm(eventConfigAdminAddr))
 	packet := core.SendPacket(cross(cur), channelId, types.Timestamp(1), []byte{0xdd, 0xee, 0xff})
-	ufmt.Printf("[INFO] after_packet_data_size: %d\n", core.HexAttrLen(packet.Data))
+	ufmt.Printf("[INFO] after_packet_data_size: %d\n", eventConfigHexAttrLen(packet.Data))
 	ufmt.Println("[EXPECTED] after PacketSend uses packet_data")
+}
+
+func eventConfigHexAttrLen(b []byte) int {
+	return len(b)*2 + 2
 }
 
 type eventConfigScenarioApp struct{}

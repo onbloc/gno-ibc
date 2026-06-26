@@ -14,7 +14,7 @@ func TestPacketDataTooLarge(cur realm, t *testing.T) {
 		{"empty", []byte{}, false},
 		{"boundary", make([]byte, maxPacketDataBytes), false},
 		{"over boundary", make([]byte, maxPacketDataBytes+1), true},
-		{"real zkgm packet", realZkgmPacket, HexAttrLen(realZkgmPacket) > MaxPacketDataEventSize()},
+		{"real zkgm packet", realZkgmPacket, hexAttrLen(realZkgmPacket) > MaxPacketDataEventSize()},
 	}
 
 	for _, tc := range tests {

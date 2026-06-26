@@ -20,5 +20,5 @@ func PacketDataTooLarge(data []byte) bool {
 		return false
 	}
 
-	return HexAttrLen(data) > MaxPacketDataEventSize()
+	return hexAttrLen(data) > MaxPacketDataEventSize()
 }

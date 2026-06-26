@@ -216,7 +216,7 @@ func packetEventBaseAttrs(packet types.Packet) []string {
 	config := GetEventConfig()
 	attrs := []string{
 		"packet_hash", commitPacketHash(packet).String(),
-		"packet_data_size", strconv.Itoa(HexAttrLen(packet.Data)),
+		"packet_data_size", strconv.Itoa(hexAttrLen(packet.Data)),
 	}
 
 	packetData := hexAttr(packet.Data)

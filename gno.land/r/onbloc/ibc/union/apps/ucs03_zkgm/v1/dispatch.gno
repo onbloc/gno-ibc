@@ -121,7 +121,7 @@ func (v *ucs03ZkgmV1) dispatchExecutePacket(
 func (v *ucs03ZkgmV1) acknowledgeInternal(_ int, rlm realm, packet types.Packet, relayer address, salt [32]byte, path *u256.Uint, instruction z.Instruction, successful bool, ack []byte) error {
 	switch instruction.Opcode {
 	case z.OP_TOKEN_ORDER:
-		order, err := v.decodeLocalOrderInstruction(0, rlm, instruction)
+		order, err := v.decodeSentOrderInstruction(0, rlm, instruction)
 		if err != nil {
 			return err
 		}
@@ -164,7 +164,7 @@ func (v *ucs03ZkgmV1) acknowledgeInternal(_ int, rlm realm, packet types.Packet,
 func (v *ucs03ZkgmV1) timeoutInternal(_ int, rlm realm, packet types.Packet, salt [32]byte, path *u256.Uint, instruction z.Instruction) error {
 	switch instruction.Opcode {
 	case z.OP_TOKEN_ORDER:
-		order, err := v.decodeLocalOrderInstruction(0, rlm, instruction)
+		order, err := v.decodeSentOrderInstruction(0, rlm, instruction)
 		if err != nil {
 			return err
 		}

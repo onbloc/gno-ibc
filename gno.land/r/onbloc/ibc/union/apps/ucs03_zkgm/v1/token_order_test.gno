@@ -309,11 +309,10 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	uassert.Equal(t, 6, voucherDecimalsOf(ibcDenom))
 }
 
-func TestTokenOrderExecuteInitializeMalformedInitializerUsesDefaults(cur realm, t *testing.T) {
+func TestTokenOrderExecuteInitializeMalformedInitializerReturnsFailure(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	// Initializer is raw bytes that cannot be decoded as TokenInitializer.
-	// The protocol must fall back to ibcDenom-derived name/symbol and 0 decimals.
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
 		Implementation: []byte("grc20"),
 		Initializer:    []byte("not-valid-abi"),
@@ -335,15 +334,20 @@ func TestTokenOrderExecuteInitializeMalformedInitializerUsesDefaults(cur realm, 
 	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("fallback-relayer")), nil, [32]byte{}, u256.NewUint(3), order, false)
 
 	uassert.NoError(t, err)
-	uassert.True(t, res.Status == types.PacketStatusSuccess)
+	uassert.True(t, res.Status == types.PacketStatusFailure)
+	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
 
-	uassert.Equal(t, 0, voucherDecimalsOf(ibcDenom))
+	_, ok := testStore.GetTokenOrigin(ibcDenom)
+	uassert.False(t, ok, "malformed initializer must not set token origin")
+	_, ok = testStore.GetForeignToken(ibcDenom)
+	uassert.False(t, ok, "malformed initializer must not set foreign token")
+	_, ok = testStore.GetMetadataImageOf(ibcDenom)
+	uassert.False(t, ok, "malformed initializer must not set metadata image")
 }
 
-func TestTokenOrderExecuteInitializeEmptyInitializerUsesDefaults(cur realm, t *testing.T) {
+func TestTokenOrderExecuteInitializeEmptyInitializerReturnsFailure(cur realm, t *testing.T) {
 	v := newTestImpl()
 
-	// Empty Initializer: decimals must default to 0, symbol derived from ibcDenom.
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
 		Implementation: []byte("grc20"),
 		Initializer:    []byte{},
@@ -365,17 +369,23 @@ func TestTokenOrderExecuteInitializeEmptyInitializerUsesDefaults(cur realm, t *t
 	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("empty-init-relayer")), nil, [32]byte{}, u256.NewUint(5), order, false)
 
 	uassert.NoError(t, err)
-	uassert.True(t, res.Status == types.PacketStatusSuccess)
+	uassert.True(t, res.Status == types.PacketStatusFailure)
+	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
 
-	uassert.Equal(t, 0, voucherDecimalsOf(ibcDenom))
+	_, ok := testStore.GetTokenOrigin(ibcDenom)
+	uassert.False(t, ok, "empty initializer must not set token origin")
+	_, ok = testStore.GetForeignToken(ibcDenom)
+	uassert.False(t, ok, "empty initializer must not set foreign token")
+	_, ok = testStore.GetMetadataImageOf(ibcDenom)
+	uassert.False(t, ok, "empty initializer must not set metadata image")
 }
 
 func TestTokenOrderExecuteInitializeMintErrorDoesNotSetOrigin(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20-invalid-rx"),
-		Initializer:    []byte("init-invalid-rx"),
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Invalid Receiver", Symbol: "IRX", Decimals: 6}),
 	})
 
 	image := z.MetadataImage(mustDecodeTokenMetadata(metaBytes))

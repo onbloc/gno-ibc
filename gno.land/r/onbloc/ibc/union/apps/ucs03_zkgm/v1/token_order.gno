@@ -3,13 +3,13 @@ package impl
 import (
 	"strings"
 
-	types "gno.land/p/onbloc/ibc/union/types"
+	"gno.land/p/onbloc/ibc/union/types"
 
 	"gno.land/p/demo/tokens/grc20"
 	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	"gno.land/r/demo/defi/grc20reg"
-	core "gno.land/r/onbloc/ibc/union/core"
+	"gno.land/r/onbloc/ibc/union/core"
 )
 
 // ibcDenomPrefix is the prefix of wrapped IBC voucher denoms (mirrors
@@ -218,8 +218,8 @@ func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.Channel
 	if canDeploy && metadata != nil {
 		image = z.MetadataImage(*metadata)
 
-		ti := z.DecodeTokenInitializerFromMetadata(*metadata)
-		if ti.Decimals > grc20.MaxDecimals {
+		ti, err := z.DecodeTokenInitializerFromMetadata(*metadata)
+		if err != nil || ti.Decimals > grc20.MaxDecimals {
 			return failureResult(universalErrorAck()), nil
 		}
 

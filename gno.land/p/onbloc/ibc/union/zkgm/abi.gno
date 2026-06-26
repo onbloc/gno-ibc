@@ -1,6 +1,8 @@
 package zkgm
 
 import (
+	"errors"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/onbloc/encoding/abi"
 )
@@ -297,20 +299,15 @@ func DecodeTokenInitializer(data []byte) (TokenInitializer, error) {
 	}, nil
 }
 
-// DecodeTokenInitializerFromMetadata extracts display metadata (name, symbol,
-// decimals) from a TokenMetadata by dispatching on the Implementation field.
-// New implementation types should be added as explicit cases; unknown formats
-// return a zero-value TokenInitializer so voucher creation can proceed with
-// safe defaults derived from ibcDenom.
-func DecodeTokenInitializerFromMetadata(meta TokenMetadata) TokenInitializer {
+// DecodeTokenInitializerFromMetadata decodes a TokenInitializer from metadata
+// based on its token implementation.
+func DecodeTokenInitializerFromMetadata(meta TokenMetadata) (TokenInitializer, error) {
 	switch string(meta.Implementation) {
 	case "grc20":
-		if ti, err := DecodeTokenInitializer(meta.Initializer); err == nil {
-			return ti
-		}
+		return DecodeTokenInitializer(meta.Initializer)
 	}
 
-	return TokenInitializer{}
+	return TokenInitializer{}, errors.New("unsupported token implementation: " + string(meta.Implementation))
 }
 
 func EncodeTokenMetadata(m TokenMetadata) ([]byte, error) {

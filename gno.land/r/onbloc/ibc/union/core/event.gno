@@ -216,11 +216,11 @@ func packetEventBaseAttrs(packet types.Packet) []string {
 	config := GetEventConfig()
 	attrs := []string{
 		"packet_hash", commitPacketHash(packet).String(),
-		"packet_data_size", strconv.Itoa(hexAttrLen(packet.Data)),
 	}
 
 	packetData := hexAttr(packet.Data)
 	if config.SplitEventAttrs {
+		attrs = append(attrs, "packet_data_size", strconv.Itoa(len(packetData)))
 		return append(attrs, eventAttrColumns("packet_data", packetData, int(config.MaxEventAttrValueLen))...)
 	}
 

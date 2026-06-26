@@ -245,6 +245,7 @@ func TestEventConfigDrivesPacketDataAttrs(cur realm, t *testing.T) {
 				MaxPacketDataEventColumns: 3,
 			},
 			want: []string{
+				"packet_data_size", "6",
 				"packet_data[0]", "0x00",
 				"packet_data[1]", "01",
 			},
@@ -269,7 +270,7 @@ func TestEventConfigDrivesPacketDataAttrs(cur realm, t *testing.T) {
 			packet := NewPacket(1, 2, []byte{0x00, 0x01}, 10)
 			attrs := packetEventBaseAttrs(packet)
 
-			assertStringSliceEqual(t, attrs[4:], tc.want)
+			assertStringSliceEqual(t, attrs[2:], tc.want)
 		})
 	}
 }

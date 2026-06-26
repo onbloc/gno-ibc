@@ -466,10 +466,6 @@ func (e eventConfigMockError) Error() string {
 //         "value": "0x0b0fcb42acf152d766f6b174a40dfc7092feace9ee143387a094dbaab326c7ac"
 //       },
 //       {
-//         "key": "packet_data_size",
-//         "value": "8"
-//       },
-//       {
 //         "key": "packet_data",
 //         "value": "0xddeeff"
 //       },

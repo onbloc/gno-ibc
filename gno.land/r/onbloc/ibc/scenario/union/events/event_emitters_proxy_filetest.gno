@@ -1,5 +1,5 @@
-// PKGPATH: gno.land/r/onbloc/ibc/scenario/union
-package union
+// PKGPATH: gno.land/r/onbloc/ibc/scenario/union/events
+package events
 
 import (
 	"testing"

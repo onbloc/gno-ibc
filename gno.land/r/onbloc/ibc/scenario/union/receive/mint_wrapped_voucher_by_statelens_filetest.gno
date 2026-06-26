@@ -1,7 +1,7 @@
-// PKGPATH: gno.land/r/onbloc/ibc/scenario/union
-package union
+// PKGPATH: gno.land/r/onbloc/ibc/scenario/union/receive
+package receive
 
-// token_receive_by_statelens_filetest receives a ucs03-zkgm token packet proven by
+// mint_wrapped_voucher_by_statelens_filetest receives a ucs03-zkgm token packet proven by
 // the real state-lens/ics23-mpt light client. It builds a single-leaf EVM-MPT
 // storage proof inline (no exported builder exists), seeds the client's consensus
 // storage root with it, Force-opens the handshake, and asserts the host mints the
@@ -39,21 +39,30 @@ const (
 )
 
 func main(cur realm) {
-	// --- SCENARIO 1: install impls, build the proof, open a state-lens channel ---
-	ufmt.Println("[SCENARIO] 1. Open a channel backed by the real state-lens/ics23-mpt light client")
-	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.UpdateImpl(cross(cur), coreImplPath)
-	zkgm.UpdateImpl(cross(cur), zkgmImplPath)
-	zkgm.SetRateLimitDisabled(cross(cur), true)
-	zkgm.RegisterCoreApp(cross(cur))
+	fx := buildRecvFixture()
 
-	// The relayer-gated host entrypoints (register/create client, handshake,
-	// packet recv) require RELAYER. Grant it to the admin so this single-actor
-	// scenario can drive the full flow.
-	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
+	println("[SCENARIO] 1. Open a channel backed by the real state-lens/ics23-mpt light client")
+	openStateLensChannel(cur, fx.storageRoot, fx.sourceChannel)
+	println("")
 
-	// The first channel opened is ChannelId(1); the wrapped denom and the packet
-	// are deterministic, so the packet (and its commitment) can be built up front.
+	println("[SCENARIO] 2. Receive INITIALIZE order proven by the state-lens MPT proof (mint 100)")
+	receiveProvenOrder(cur, fx.packet, fx.packetProof, fx.quoteToken)
+}
+
+// recvFixture holds the deterministic packet, its proof, and the storage root the
+// scenario builds up front and threads through its steps.
+type recvFixture struct {
+	sourceChannel types.ChannelId
+	storageRoot   []byte
+	packet        types.Packet
+	packetProof   []byte
+	quoteToken    string
+}
+
+// buildRecvFixture builds the deterministic recv packet and the single-leaf EVM-MPT
+// proof + storage root that commits it. The first channel opened is ChannelId(1),
+// so the wrapped denom and the packet are known up front.
+func buildRecvFixture() recvFixture {
 	channelId := types.ChannelId(1)
 	sourceChannel := types.ChannelId(2)
 	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
@@ -69,10 +78,31 @@ func main(cur realm) {
 		Metadata:    meta,
 	}
 	packet := core.NewPacket(sourceChannel, channelId, mustPacketData(mustOrderInstruction(order)), types.Timestamp(1<<62))
-
-	// Build the EVM-MPT storage proof for this packet's commitment and the storage
-	// root that commits it; the client's consensus state is seeded with that root.
 	storageRoot, packetProof := buildPacketMembershipProof(packet)
+
+	return recvFixture{
+		sourceChannel: sourceChannel,
+		storageRoot:   storageRoot,
+		packet:        packet,
+		packetProof:   packetProof,
+		quoteToken:    quoteToken,
+	}
+}
+
+// openStateLensChannel installs the impls, registers the mock L1 and the real
+// state-lens client (seeding its consensus with storageRoot), and Force-opens the
+// connection/channel.
+//
+// It is kept inline (not split further): every admin/relayer core entrypoint
+// authorizes the caller via cur.Previous(), so testing.SetRealm and the cross(cur)
+// call must run in the same frame for the admin user to be seen as the caller.
+func openStateLensChannel(cur realm, storageRoot []byte, sourceChannel types.ChannelId) {
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	core.UpdateImpl(cross(cur), coreImplPath)
+	zkgm.UpdateImpl(cross(cur), zkgmImplPath)
+	zkgm.SetRateLimitDisabled(cross(cur), true)
+	zkgm.RegisterCoreApp(cross(cur))
+	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
 
 	clientState := &ics23mpt.ClientState{
 		L2ChainID:         "l2-chain",
@@ -133,10 +163,12 @@ func main(cur realm) {
 	ufmt.Printf("[INFO] channel opened (source=%s destination=%s)\n", sourceChannel.String(), opened.String())
 	ufmt.Println("[EXPECTED] client type should be state-lens/ics23/mpt (real, not mock)")
 	ufmt.Println("[EXPECTED] destination channel should be 1")
+}
 
-	// --- SCENARIO 2: receive the packet proven by the state-lens MPT proof ---
-	ufmt.Println("")
-	ufmt.Println("[SCENARIO] 2. Receive INITIALIZE order proven by the state-lens MPT proof (mint 100)")
+// receiveProvenOrder receives the packet proven by the inline state-lens MPT proof
+// and asserts the receipt is recorded and the wrapped voucher is minted.
+func receiveProvenOrder(cur realm, packet types.Packet, packetProof []byte, quoteToken string) {
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, packetProof, statelensProofHeight))
 
 	_, receiptErr := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))

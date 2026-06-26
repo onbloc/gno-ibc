@@ -1,7 +1,7 @@
-// PKGPATH: gno.land/r/onbloc/ibc/scenario/union
-package union
+// PKGPATH: gno.land/r/onbloc/ibc/scenario/union/receive
+package receive
 
-// token_receive_by_ucs03_zkgm_filetest receives ucs03-zkgm token packets through the
+// mint_wrapped_voucher_by_ucs03_zkgm_filetest receives ucs03-zkgm token packets through the
 // upgradeable union IBC host (permissive mock light client) and asserts a wrapped
 // voucher is minted to the local receiver on each received packet: an INITIALIZE
 // order deploys and mints the wrapped token, a following ESCROW order mints more of
@@ -35,17 +35,35 @@ const (
 )
 
 func main(cur realm) {
-	// --- SCENARIO 1: bootstrap (admin) — kept inline so each core call is a
-	// direct origin call: runtime.AssertOriginCall requires <= 2 call frames. ---
-	ufmt.Println("[SCENARIO] 1. Bootstrap IBC host and open client/connection/channel")
+	println("[SCENARIO] 1. Bootstrap IBC host and open client/connection/channel")
+	channelId := bootstrap(cur)
+	println("")
+
+	// The wrapped denom is deterministic for (path=0, channel, base=ugnot, image),
+	// so it is derived once here and reused by both received orders below.
+	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
+	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
+
+	println("[SCENARIO] 2. Receive INITIALIZE order: deploy wrapped token and mint 100 to receiver A")
+	receiveInitializeOrder(cur, channelId, quoteToken, meta)
+	println("")
+
+	println("[SCENARIO] 3. Receive ESCROW order: mint 50 of the same wrapped token to receiver B")
+	receiveEscrowOrder(cur, channelId, quoteToken)
+}
+
+// bootstrap installs the core/zkgm impls, grants the admin the relayer role, and
+// opens a client/connection/channel backed by the permissive mock light client.
+//
+// It is kept inline (not split further): every admin/relayer core entrypoint
+// authorizes the caller via cur.Previous(), so testing.SetRealm and the cross(cur)
+// call must run in the same frame for the admin user to be seen as the caller.
+func bootstrap(cur realm) types.ChannelId {
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.UpdateImpl(cross(cur), coreImplPath)
 	zkgm.UpdateImpl(cross(cur), zkgmImplPath)
 	zkgm.SetRateLimitDisabled(cross(cur), true)
 	zkgm.RegisterCoreApp(cross(cur))
-
-	// The relayer-gated host entrypoints require RELAYER. Grant it to the admin so
-	// this single-actor scenario can drive the full flow.
 	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
 
 	core.RegisterClient(cross(cur), mockClientType, func(_, _ []byte) (lightclient.Interface, error) {
@@ -62,19 +80,19 @@ func main(cur realm) {
 	core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1relayer"))
 	channelId := types.ChannelId(1)
 	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(channelId, zkgm.Version, types.ChannelId(2), nil, 1, "g1relayer"))
+
 	ufmt.Printf("[INFO] handshake opened: client=%s connection=%s channel=%s\n", clientId.String(), connectionId.String(), channelId.String())
 	ufmt.Println("[EXPECTED] client should be 1")
 	ufmt.Println("[EXPECTED] connection should be 1")
 	ufmt.Println("[EXPECTED] channel should be 1")
 
-	// The wrapped denom is deterministic for (path=0, channel, base=ugnot, image).
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
-	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
+	return channelId
+}
 
-	// --- SCENARIO 2: receive an INITIALIZE order, minting to receiver A ---
-	ufmt.Println("")
-	ufmt.Println("[SCENARIO] 2. Receive INITIALIZE order: deploy wrapped token and mint 100 to receiver A")
-	initOrder := z.TokenOrderV2{
+// receiveInitializeOrder receives an INITIALIZE TokenOrder that deploys the wrapped
+// voucher and mints its full amount to receiver A.
+func receiveInitializeOrder(cur realm, channelId types.ChannelId, quoteToken string, meta []byte) {
+	order := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
 		Receiver:    []byte(receiverAAddr.String()),
 		BaseToken:   []byte("ugnot"),
@@ -84,21 +102,22 @@ func main(cur realm) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    meta,
 	}
-	initPacket := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(initOrder)), types.Timestamp(1<<62))
+	packet := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(order)), types.Timestamp(1<<62))
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{initPacket}, [][]byte{nil}, nil, 1))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
 
 	ufmt.Printf("[INFO] minted token (wrapped voucher): %s\n", quoteToken)
 	ufmt.Println("[INFO] minted token wraps base token: ugnot")
 	ufmt.Printf("[INFO] receiver A balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, receiverAAddr))
 	ufmt.Println("[EXPECTED] minted token should be the ibc/ wrapped voucher of base ugnot")
 	ufmt.Println("[EXPECTED] receiver A balance should be 100 (full INITIALIZE amount minted)")
+}
 
-	// --- SCENARIO 3: receive an ESCROW order for the same asset, minting to receiver B ---
-	ufmt.Println("")
-	ufmt.Println("[SCENARIO] 3. Receive ESCROW order: mint 50 of the same wrapped token to receiver B")
-	escrowOrder := z.TokenOrderV2{
+// receiveEscrowOrder receives an ESCROW TokenOrder for the same asset and mints to
+// receiver B, leaving receiver A's balance untouched.
+func receiveEscrowOrder(cur realm, channelId types.ChannelId, quoteToken string) {
+	order := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
 		Receiver:    []byte(receiverBAddr.String()),
 		BaseToken:   []byte("ugnot"),
@@ -107,10 +126,10 @@ func main(cur realm) {
 		QuoteAmount: u256.NewUint(50),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	escrowPacket := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(escrowOrder)), types.Timestamp(1<<62))
+	packet := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(order)), types.Timestamp(1<<62))
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{escrowPacket}, [][]byte{nil}, nil, 1))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
 
 	ufmt.Printf("[INFO] minted token (same wrapped voucher): %s\n", quoteToken)
 	ufmt.Printf("[INFO] receiver B balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, receiverBAddr))

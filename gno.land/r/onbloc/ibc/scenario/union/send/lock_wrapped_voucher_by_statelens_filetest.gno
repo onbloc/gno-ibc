@@ -1,7 +1,7 @@
-// PKGPATH: gno.land/r/onbloc/ibc/scenario/union
-package union
+// PKGPATH: gno.land/r/onbloc/ibc/scenario/union/send
+package send
 
-// token_send_by_statelens_filetest funds a sender, escrows (locks) a ucs03-zkgm
+// lock_wrapped_voucher_by_statelens_filetest funds a sender, escrows (locks) a ucs03-zkgm
 // voucher, then acknowledges the sent packet with an acknowledgement proven by the
 // real state-lens/ics23-mpt light client, asserting the escrow stays locked. The
 // funding recv and the ack prove different commitments, so they use two consensus
@@ -41,18 +41,35 @@ const (
 )
 
 func main(cur realm) {
-	// --- SCENARIO 1: open a state-lens channel and fund the sender ---
-	ufmt.Println("[SCENARIO] 1. Open a state-lens-backed channel and fund the sender via a proven recv")
-	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.UpdateImpl(cross(cur), coreImplPath)
-	zkgm.UpdateImpl(cross(cur), zkgmImplPath)
-	zkgm.SetRateLimitDisabled(cross(cur), true)
-	zkgm.RegisterCoreApp(cross(cur))
+	fx := buildSendFixture()
 
-	// The relayer-gated host entrypoints require RELAYER. Grant it to the admin so
-	// this single-actor scenario can drive the full flow.
-	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
+	println("[SCENARIO] 1. Open a state-lens-backed channel and fund the sender via a proven recv")
+	clientId := openAndFundSender(cur, fx.fundRoot, fx.initPacket, fx.fundProof, fx.counterpartyChannel, fx.quoteToken)
+	println("")
 
+	println("[SCENARIO] 2. Send ESCROW order locking 40 of the voucher")
+	sendPacket := sendEscrowOrder(cur, fx.channelId, fx.quoteToken)
+	println("")
+
+	println("[SCENARIO] 3. Acknowledge the sent packet with a state-lens MPT proof (escrow no-op)")
+	acknowledgeWithProof(cur, clientId, sendPacket, fx.quoteToken)
+}
+
+// sendFixture holds the deterministic funding packet, its proof, and the storage
+// root the scenario builds up front and threads through its steps.
+type sendFixture struct {
+	channelId           types.ChannelId
+	counterpartyChannel types.ChannelId
+	fundRoot            []byte
+	initPacket          types.Packet
+	fundProof           []byte
+	quoteToken          string
+}
+
+// buildSendFixture builds the deterministic funding packet and the single-leaf
+// EVM-MPT proof + storage root that commits it. The first channel opened is
+// ChannelId(1), so the wrapped denom and the packet are known up front.
+func buildSendFixture() sendFixture {
 	channelId := types.ChannelId(1)
 	counterpartyChannel := types.ChannelId(2)
 	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
@@ -68,10 +85,33 @@ func main(cur realm) {
 		Metadata:    meta,
 	}
 	initPacket := core.NewPacket(counterpartyChannel, channelId, mustPacketData(mustOrderInstruction(initOrder)), types.Timestamp(1<<62))
-
-	// Seed the client's (fund-height) consensus with the storage root that commits
-	// the funding packet, then open the channel.
 	fundRoot, fundProof := buildMembershipProof(types.BatchPacketsPath(core.CommitPacketsHash([]types.Packet{initPacket})), commitmentMagic())
+
+	return sendFixture{
+		channelId:           channelId,
+		counterpartyChannel: counterpartyChannel,
+		fundRoot:            fundRoot,
+		initPacket:          initPacket,
+		fundProof:           fundProof,
+		quoteToken:          quoteToken,
+	}
+}
+
+// openAndFundSender installs the impls, registers the mock L1 and the real
+// state-lens client (seeding its fund-height consensus with fundRoot), Force-opens
+// the connection/channel, and receives the proven funding packet. It returns the
+// state-lens client id.
+//
+// It is kept inline (not split further): every admin/relayer core entrypoint
+// authorizes the caller via cur.Previous(), so testing.SetRealm and the cross(cur)
+// call must run in the same frame for the admin user to be seen as the caller.
+func openAndFundSender(cur realm, fundRoot []byte, initPacket types.Packet, fundProof []byte, counterpartyChannel types.ChannelId, quoteToken string) types.ClientId {
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	core.UpdateImpl(cross(cur), coreImplPath)
+	zkgm.UpdateImpl(cross(cur), zkgmImplPath)
+	zkgm.SetRateLimitDisabled(cross(cur), true)
+	zkgm.RegisterCoreApp(cross(cur))
+	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
 
 	clientState := &ics23mpt.ClientState{
 		L2ChainID:         "l2-chain",
@@ -127,10 +167,13 @@ func main(cur realm) {
 	ufmt.Printf("[INFO] sender voucher balance after fund: %d\n", zkgm.VoucherBalanceOf(quoteToken, senderAddr))
 	ufmt.Println("[EXPECTED] sender voucher balance after fund should be 100")
 
-	// --- SCENARIO 2: send (escrow/lock) 40 of the voucher ---
-	ufmt.Println("")
-	ufmt.Println("[SCENARIO] 2. Send ESCROW order locking 40 of the voucher")
-	escrowOrder := z.TokenOrderV2{
+	return clientId
+}
+
+// sendEscrowOrder sends an ESCROW TokenOrder that locks 40 of the voucher into the
+// proxy escrow, and returns the produced packet for later acknowledgement.
+func sendEscrowOrder(cur realm, channelId types.ChannelId, quoteToken string) types.Packet {
+	order := z.TokenOrderV2{
 		Sender:      []byte(senderAddr.String()),
 		Receiver:    []byte("remote-receiver"),
 		BaseToken:   []byte(quoteToken),
@@ -141,22 +184,25 @@ func main(cur realm) {
 	}
 
 	testing.SetRealm(testing.NewUserRealm(senderAddr))
-	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(escrowOrder))
-	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
 
 	ufmt.Printf("[INFO] sender voucher balance after send: %d\n", zkgm.VoucherBalanceOf(quoteToken, senderAddr))
 	ufmt.Printf("[INFO] proxy escrow balance after send: %d\n", zkgm.VoucherBalanceOf(quoteToken, zkgm.ProxyAddress()))
 	ufmt.Println("[EXPECTED] sender voucher balance after send should be 60 (100 - 40 escrowed)")
 	ufmt.Println("[EXPECTED] proxy escrow balance after send should be 40 (locked)")
 
-	// --- SCENARIO 3: acknowledge the sent packet, proven by the state-lens client ---
-	ufmt.Println("")
-	ufmt.Println("[SCENARIO] 3. Acknowledge the sent packet with a state-lens MPT proof (escrow no-op)")
+	return sendPacket
+}
+
+// acknowledgeWithProof adds the ack-height consensus via a crafted UpdateClient
+// header, then acknowledges the sent packet with the inline state-lens MPT proof.
+// The protocol-fill ack is a no-op for an escrow, so the lock holds.
+func acknowledgeWithProof(cur realm, clientId types.ClientId, sendPacket types.Packet, quoteToken string) {
 	ack := mustSuccessAck(mustProtocolTokenOrderAck())
 	ackCommitment := types.CommitAcks([][]byte{ack})
 	ackRoot, ackProof := buildMembershipProof(types.BatchReceiptsPath(core.CommitPacketsHash([]types.Packet{sendPacket})), ackCommitment[:])
 
-	// Add the ack-height consensus state via a crafted UpdateClient header.
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	header := ics23mpt.Header{
 		L1Height:              fundHeight,
 		L2Height:              ackHeight,

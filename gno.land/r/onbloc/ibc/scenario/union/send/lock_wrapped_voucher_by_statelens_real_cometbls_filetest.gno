@@ -1,7 +1,7 @@
-// PKGPATH: gno.land/r/onbloc/ibc/scenario/union
-package union
+// PKGPATH: gno.land/r/onbloc/ibc/scenario/union/send
+package send
 
-// token_send_by_statelens_real_cometbls_filetest funds a sender, escrows (locks)
+// lock_wrapped_voucher_by_statelens_real_cometbls_filetest funds a sender, escrows (locks)
 // a ucs03-zkgm voucher, then acknowledges the sent packet with an
 // acknowledgement proven by the real state-lens/ics23-mpt light client whose L1
 // is a REAL cometbls light client (not a mock).
@@ -52,17 +52,40 @@ const (
 )
 
 func main(cur realm) {
-	// --- SCENARIO 1: open a state-lens channel (real cometbls L1) and fund the sender ---
-	ufmt.Println("[SCENARIO] 1. Open a state-lens channel whose L1 is a REAL cometbls client and fund the sender")
-	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.UpdateImpl(cross(cur), coreImplPath)
-	zkgm.UpdateImpl(cross(cur), zkgmImplPath)
-	zkgm.SetRateLimitDisabled(cross(cur), true)
-	zkgm.RegisterCoreApp(cross(cur))
-	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
+	fx := buildSendFixture()
 
+	println("[SCENARIO] 1. Open a state-lens channel whose L1 is a REAL cometbls client and fund the sender")
+	clientId, l1ClientId := openAndFundSender(cur, fx.l1Contract, fx.fundRoot, fx.initPacket, fx.fundProof, fx.counterpartyChannel, fx.quoteToken)
+	println("")
+
+	println("[SCENARIO] 2. Send ESCROW order locking 40 of the voucher")
+	sendPacket := sendEscrowOrder(cur, fx.channelId, fx.quoteToken)
+	println("")
+
+	println("[SCENARIO] 3. Acknowledge via state-lens, with the ack L2 consensus proven by the real cometbls L1")
+	acknowledgeWithCometblsProof(cur, fx.l1Contract, l1ClientId, clientId, sendPacket, fx.quoteToken)
+}
+
+// sendFixture holds the deterministic funding packet, its proof, and the storage
+// root the scenario builds up front and threads through its steps.
+type sendFixture struct {
+	channelId           types.ChannelId
+	counterpartyChannel types.ChannelId
+	l1Contract          types.H256
+	fundRoot            []byte
+	initPacket          types.Packet
+	fundProof           []byte
+	quoteToken          string
+}
+
+// buildSendFixture builds the deterministic funding packet and the single-leaf
+// EVM-MPT proof + storage root that commits it. The first channel opened is
+// ChannelId(1) and a zero L1 contract address is used for the proof and the seeded
+// client (they match), so the wrapped denom and the packet are known up front.
+func buildSendFixture() sendFixture {
 	channelId := types.ChannelId(1)
 	counterpartyChannel := types.ChannelId(2)
+	var l1Contract types.H256
 	meta := tokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 	initOrder := z.TokenOrderV2{
@@ -76,15 +99,40 @@ func main(cur realm) {
 		Metadata:    meta,
 	}
 	initPacket := core.NewPacket(counterpartyChannel, channelId, packetData(orderInstruction(initOrder)), types.Timestamp(1<<62))
-
-	// The funding consensus is seeded directly at state-lens creation, so the
-	// recv does not exercise the L1 (it only checks the L1 is Active via Status).
+	// The funding consensus is seeded directly at state-lens creation, so the recv
+	// does not exercise the L1 (it only checks the L1 is Active via Status).
 	fundRoot, fundProof := buildMembershipProof(types.BatchPacketsPath(core.CommitPacketsHash([]types.Packet{initPacket})), commitmentMagic())
+
+	return sendFixture{
+		channelId:           channelId,
+		counterpartyChannel: counterpartyChannel,
+		l1Contract:          l1Contract,
+		fundRoot:            fundRoot,
+		initPacket:          initPacket,
+		fundProof:           fundProof,
+		quoteToken:          quoteToken,
+	}
+}
+
+// openAndFundSender creates the real cometbls L1 client (placeholder root, id 1)
+// and the state-lens L2 client (funding consensus, id 2), Force-opens the
+// connection/channel, and receives the proven funding packet. It returns the
+// state-lens client id and the L1 client id.
+//
+// It is kept inline (not split further): every admin/relayer core entrypoint
+// authorizes the caller via cur.Previous(), so testing.SetRealm and the cross(cur)
+// call must run in the same frame for the admin user to be seen as the caller.
+func openAndFundSender(cur realm, l1Contract types.H256, fundRoot []byte, initPacket types.Packet, fundProof []byte, counterpartyChannel types.ChannelId, quoteToken string) (types.ClientId, types.ClientId) {
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	core.UpdateImpl(cross(cur), coreImplPath)
+	zkgm.UpdateImpl(cross(cur), zkgmImplPath)
+	zkgm.SetRateLimitDisabled(cross(cur), true)
+	zkgm.RegisterCoreApp(cross(cur))
+	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
 
 	// Create the real cometbls L1 client (id 1) with a placeholder root: it only
 	// needs to be Active until the ack, when it is re-seeded to commit the ack
 	// consensus (the ack receipt is not known until after Send).
-	var l1Contract types.H256
 	placeholderRoot := make([]byte, 32)
 	l1CSBytes, l1ConsBytes := scenariocometbls.SeededClientBytes(l1Contract, l1Height, placeholderRoot)
 	l1ClientType := types.ClientType(scenariocometbls.ClientType)
@@ -121,10 +169,13 @@ func main(cur realm) {
 	ufmt.Printf("[INFO] sender voucher balance after fund: %d\n", zkgm.VoucherBalanceOf(quoteToken, senderAddr))
 	ufmt.Println("[EXPECTED] sender voucher balance after fund should be 100")
 
-	// --- SCENARIO 2: send (escrow/lock) 40 of the voucher ---
-	ufmt.Println("")
-	ufmt.Println("[SCENARIO] 2. Send ESCROW order locking 40 of the voucher")
-	escrowOrder := z.TokenOrderV2{
+	return clientId, l1ClientId
+}
+
+// sendEscrowOrder sends an ESCROW TokenOrder that locks 40 of the voucher into the
+// proxy escrow, and returns the produced packet for later acknowledgement.
+func sendEscrowOrder(cur realm, channelId types.ChannelId, quoteToken string) types.Packet {
+	order := z.TokenOrderV2{
 		Sender:      []byte(senderAddr.String()),
 		Receiver:    []byte("remote-receiver"),
 		BaseToken:   []byte(quoteToken),
@@ -135,17 +186,22 @@ func main(cur realm) {
 	}
 
 	testing.SetRealm(testing.NewUserRealm(senderAddr))
-	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, orderInstruction(escrowOrder))
-	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, orderInstruction(order))
 
 	ufmt.Printf("[INFO] sender voucher balance after send: %d\n", zkgm.VoucherBalanceOf(quoteToken, senderAddr))
 	ufmt.Printf("[INFO] proxy escrow balance after send: %d\n", zkgm.VoucherBalanceOf(quoteToken, zkgm.ProxyAddress()))
 	ufmt.Println("[EXPECTED] sender voucher balance after send should be 60 (100 - 40 escrowed)")
 	ufmt.Println("[EXPECTED] proxy escrow balance after send should be 40 (locked)")
 
-	// --- SCENARIO 3: acknowledge the sent packet, proven through the real cometbls L1 ---
-	ufmt.Println("")
-	ufmt.Println("[SCENARIO] 3. Acknowledge via state-lens, with the ack L2 consensus proven by the real cometbls L1")
+	return sendPacket
+}
+
+// acknowledgeWithCometblsProof builds the ack L2 consensus and the inline L1
+// membership proof committing it, re-seeds the L1 so its consensus root matches
+// (ForceUpdateClient), adds the L2 consensus via UpdateClient (driving the genuine
+// cometbls VerifyMembership), then acknowledges the sent packet. The protocol-fill
+// ack is a no-op for an escrow, so the lock holds.
+func acknowledgeWithCometblsProof(cur realm, l1Contract types.H256, l1ClientId, clientId types.ClientId, sendPacket types.Packet, quoteToken string) {
 	ack := fixture.SuccessAck(fixture.ProtocolFillAck())
 	ackCommitment := types.CommitAcks([][]byte{ack})
 	ackRoot, ackProof := buildMembershipProof(types.BatchReceiptsPath(core.CommitPacketsHash([]types.Packet{sendPacket})), ackCommitment[:])
@@ -156,6 +212,8 @@ func main(cur realm) {
 	l2AckConsensus := makeConsensusBytes(2, make([]byte, 32), ackRoot)
 	l1Proof, l1Root := scenariocometbls.ProveConsensus(l1Contract, types.ClientId(l2ClientID), ackHeight, l2AckConsensus)
 	reseedCSBytes, reseedConsBytes := scenariocometbls.SeededClientBytes(l1Contract, l1Height, l1Root)
+
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.ForceUpdateClient(cross(cur), types.NewMsgForceUpdateClient(l1ClientId, reseedCSBytes, reseedConsBytes))
 
 	header := ics23mpt.Header{

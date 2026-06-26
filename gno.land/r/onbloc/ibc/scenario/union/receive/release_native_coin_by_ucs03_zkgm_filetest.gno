@@ -1,7 +1,7 @@
-// PKGPATH: gno.land/r/onbloc/ibc/scenario/union
-package union
+// PKGPATH: gno.land/r/onbloc/ibc/scenario/union/receive
+package receive
 
-// token_receive_native_by_ucs03_zkgm_filetest exercises the native-coin release
+// release_native_coin_by_ucs03_zkgm_filetest exercises the native-coin release
 // path on receive. It first locks native ugnot in the proxy escrow (a user send
 // funded via the attached-coin OriginSend envelope), then receives an UNESCROW
 // packet whose base covers the quote. The protocol-fill unescrow decreases the
@@ -20,11 +20,11 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 
-	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	"gno.land/r/onbloc/ibc/union/access"
+	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
-	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
 )
 
 const (
@@ -42,15 +42,30 @@ const (
 )
 
 func main(cur realm) {
-	// --- SCENARIO 1: bootstrap (admin) — kept inline so each core call is a
-	// direct origin call: runtime.AssertOriginCall requires <= 2 call frames. ---
-	ufmt.Println("[SCENARIO] 1. Bootstrap IBC host and open client/connection/channel")
+	println("[SCENARIO] 1. Bootstrap IBC host and open client/connection/channel")
+	channelId := bootstrap(cur)
+	println("")
+
+	println("[SCENARIO] 2. Lock 40ugnot into proxy escrow (native ESCROW send funded by attached coins)")
+	lockNativeEscrow(cur, channelId)
+	println("")
+
+	println("[SCENARIO] 3. Receive UNESCROW order: release 40ugnot from escrow back to the user")
+	receiveUnescrowOrder(cur, channelId)
+}
+
+// bootstrap installs the core/zkgm impls, grants the admin the relayer role, and
+// opens a client/connection/channel backed by the permissive mock light client.
+//
+// It is kept inline (not split further): every admin/relayer core entrypoint
+// authorizes the caller via cur.Previous(), so testing.SetRealm and the cross(cur)
+// call must run in the same frame for the admin user to be seen as the caller.
+func bootstrap(cur realm) types.ChannelId {
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.UpdateImpl(cross(cur), coreImplPath)
 	zkgm.UpdateImpl(cross(cur), zkgmImplPath)
 	zkgm.SetRateLimitDisabled(cross(cur), true)
 	zkgm.RegisterCoreApp(cross(cur))
-
 	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
 
 	core.RegisterClient(cross(cur), mockClientType, func(_, _ []byte) (lightclient.Interface, error) {
@@ -67,18 +82,20 @@ func main(cur realm) {
 	core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1relayer"))
 	channelId := types.ChannelId(1)
 	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(channelId, zkgm.Version, types.ChannelId(2), nil, 1, "g1relayer"))
+
 	ufmt.Printf("[INFO] handshake opened: client=%s connection=%s channel=%s\n", clientId.String(), connectionId.String(), channelId.String())
 	ufmt.Println("[EXPECTED] client should be 1")
 	ufmt.Println("[EXPECTED] connection should be 1")
 	ufmt.Println("[EXPECTED] channel should be 1")
 
-	bk := banker.NewReadonlyBanker()
-	proxy := zkgm.ProxyAddress()
+	return channelId
+}
 
-	// --- SCENARIO 2: lock native ugnot into the proxy escrow via a user send ---
-	ufmt.Println("")
-	ufmt.Println("[SCENARIO] 2. Lock 40ugnot into proxy escrow (native ESCROW send funded by attached coins)")
-	lockOrder := z.TokenOrderV2{
+// lockNativeEscrow locks 40 native ugnot into the proxy escrow via a user ESCROW
+// send. IssueCoins reproduces the -send deposit landing at the proxy; SetOriginSend
+// reproduces the envelope the impl reads to seed the escrow budget.
+func lockNativeEscrow(cur realm, channelId types.ChannelId) {
+	order := z.TokenOrderV2{
 		Sender:      []byte(userAddr.String()),
 		Receiver:    []byte("remote-receiver"),
 		BaseToken:   []byte("ugnot"),
@@ -87,22 +104,24 @@ func main(cur realm) {
 		QuoteAmount: u256.NewUint(40),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	// IssueCoins reproduces the -send deposit landing at the proxy; SetOriginSend
-	// reproduces the envelope the impl reads to seed the escrow budget.
+
+	proxy := zkgm.ProxyAddress()
 	testing.IssueCoins(proxy, chain.NewCoins(chain.NewCoin("ugnot", 40)))
 	testing.SetRealm(testing.NewUserRealm(userAddr))
 	testing.SetOriginSend(chain.NewCoins(chain.NewCoin("ugnot", 40)))
-	_ = zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(lockOrder))
+	_ = zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
 
+	bk := banker.NewReadonlyBanker()
 	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
 	ufmt.Printf("[INFO] user native balance: %d\n", bk.GetCoins(userAddr).AmountOf("ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (locked)")
 	ufmt.Println("[EXPECTED] user native balance should be 0 (still escrowed)")
+}
 
-	// --- SCENARIO 3: receive an UNESCROW packet that releases the native back ---
-	ufmt.Println("")
-	ufmt.Println("[SCENARIO] 3. Receive UNESCROW order: release 40ugnot from escrow back to the user")
-	unescrowOrder := z.TokenOrderV2{
+// receiveUnescrowOrder receives an UNESCROW order that releases the escrowed native
+// ugnot from the proxy back to the user via the banker.
+func receiveUnescrowOrder(cur realm, channelId types.ChannelId) {
+	order := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
 		Receiver:    []byte(userAddr.String()),
 		BaseToken:   []byte(quoteWrapped),
@@ -111,11 +130,13 @@ func main(cur realm) {
 		QuoteAmount: u256.NewUint(40),
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
-	unescrowPacket := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(unescrowOrder)), types.Timestamp(1<<62))
+	packet := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(order)), types.Timestamp(1<<62))
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{unescrowPacket}, [][]byte{nil}, nil, 1))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
 
+	bk := banker.NewReadonlyBanker()
+	proxy := zkgm.ProxyAddress()
 	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
 	ufmt.Printf("[INFO] user native balance: %d\n", bk.GetCoins(userAddr).AmountOf("ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 0 (released)")

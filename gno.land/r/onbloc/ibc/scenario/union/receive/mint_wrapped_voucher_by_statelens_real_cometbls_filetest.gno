@@ -1,11 +1,11 @@
-// PKGPATH: gno.land/r/onbloc/ibc/scenario/union
-package union
+// PKGPATH: gno.land/r/onbloc/ibc/scenario/union/receive
+package receive
 
-// token_receive_by_statelens_real_cometbls_filetest receives a ucs03-zkgm token
+// mint_wrapped_voucher_by_statelens_real_cometbls_filetest receives a ucs03-zkgm token
 // packet proven by the real state-lens/ics23-mpt light client whose L1 is a REAL
 // cometbls light client (not a mock).
 //
-// Unlike token_receive_by_statelens_filetest — which seeds the L2 consensus at
+// Unlike mint_wrapped_voucher_by_statelens_filetest — which seeds the L2 consensus at
 // client creation and stubs the L1 with a mockL1Client — this scenario adds the
 // L2 consensus via UpdateClient. That drives the state-lens VerifyHeader path,
 // which asks the L1 cometbls client to prove the L2 consensus state is committed
@@ -58,18 +58,38 @@ const (
 )
 
 func main(cur realm) {
-	// --- SCENARIO 1: install impls, build the L1 + L2 proofs, open the channel ---
-	ufmt.Println("[SCENARIO] 1. Open a state-lens channel whose L1 is a REAL cometbls client")
-	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.UpdateImpl(cross(cur), coreImplPath)
-	zkgm.UpdateImpl(cross(cur), zkgmImplPath)
-	zkgm.SetRateLimitDisabled(cross(cur), true)
-	zkgm.RegisterCoreApp(cross(cur))
+	fx := buildRecvFixture()
 
-	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
+	println("[SCENARIO] 1. Open a state-lens channel whose L1 is a REAL cometbls client")
+	clientId := openCometblsStateLensChannel(cur, fx.l1Contract, fx.l1Root, fx.sourceChannel)
+	println("")
 
-	// The first channel opened is ChannelId(1); the wrapped denom and the packet
-	// are deterministic, so the packet (and its commitment) can be built up front.
+	println("[SCENARIO] 2. UpdateClient: add the L2 consensus, proven by the real cometbls L1")
+	updateL2Consensus(cur, clientId, fx.l1Proof, fx.l2Consensus)
+	println("")
+
+	println("[SCENARIO] 3. Receive INITIALIZE order proven by the state-lens MPT proof (mint 100)")
+	receiveProvenOrder(cur, fx.packet, fx.packetProof, fx.quoteToken)
+}
+
+// recvFixture holds the deterministic packet, proofs, and consensus blobs the
+// scenario builds up front and threads through its steps.
+type recvFixture struct {
+	sourceChannel types.ChannelId
+	l1Contract    types.H256
+	l1Root        []byte
+	l1Proof       []byte
+	l2Consensus   []byte
+	packet        types.Packet
+	packetProof   []byte
+	quoteToken    string
+}
+
+// buildRecvFixture builds the deterministic recv packet, its inline EVM-MPT proof,
+// and the L1 membership proof + cometbls root committing the L2 consensus. The
+// first channel opened is ChannelId(1) and a zero L1 contract address is used for
+// the proof and the seeded client (they match), so everything is known up front.
+func buildRecvFixture() recvFixture {
 	channelId := types.ChannelId(1)
 	sourceChannel := types.ChannelId(2)
 	meta := tokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
@@ -86,19 +106,40 @@ func main(cur realm) {
 	}
 	packet := core.NewPacket(sourceChannel, channelId, packetData(orderInstruction(order)), types.Timestamp(1<<62))
 
-	// The L2 storage root that commits the recv packet, and the inline EVM-MPT
-	// proof against it.
+	// storageRoot commits the recv packet; l2Consensus stores it at the client
+	// offsets (state_root@0, storage_root@32, timestamp@64).
 	storageRoot, packetProof := buildPacketMembershipProof(packet)
-
-	// The L2 consensus blob the state-lens client will store at l2ProofHeight: its
-	// storage root commits the packet (offsets: state_root@0, storage_root@32,
-	// timestamp@64).
 	l2Consensus := makeConsensusBytes(1, make([]byte, 32), storageRoot)
 
-	// Build the L1 membership proof + the cometbls root committing it. A zero L1
-	// contract address is used for the proof and the seeded client (they match).
 	var l1Contract types.H256
 	l1Proof, l1Root := scenariocometbls.ProveConsensus(l1Contract, types.ClientId(l2ClientID), l2ProofHeight, l2Consensus)
+
+	return recvFixture{
+		sourceChannel: sourceChannel,
+		l1Contract:    l1Contract,
+		l1Root:        l1Root,
+		l1Proof:       l1Proof,
+		l2Consensus:   l2Consensus,
+		packet:        packet,
+		packetProof:   packetProof,
+		quoteToken:    quoteToken,
+	}
+}
+
+// openCometblsStateLensChannel creates the real cometbls L1 client (seeded with
+// l1Root), creates the state-lens L2 client with a genesis-only consensus, and
+// Force-opens the connection/channel. It returns the state-lens client id.
+//
+// It is kept inline (not split further): every admin/relayer core entrypoint
+// authorizes the caller via cur.Previous(), so testing.SetRealm and the cross(cur)
+// call must run in the same frame for the admin user to be seen as the caller.
+func openCometblsStateLensChannel(cur realm, l1Contract types.H256, l1Root []byte, sourceChannel types.ChannelId) types.ClientId {
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	core.UpdateImpl(cross(cur), coreImplPath)
+	zkgm.UpdateImpl(cross(cur), zkgmImplPath)
+	zkgm.SetRateLimitDisabled(cross(cur), true)
+	zkgm.RegisterCoreApp(cross(cur))
+	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
 
 	// Create the real cometbls L1 client (id 1) seeded with that root. The
 	// register/create calls are made here (as the relayer-authorized admin),
@@ -140,9 +181,13 @@ func main(cur realm) {
 	core.ForceChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(opened, zkgm.Version, sourceChannel, nil, 0, "g1relayer"))
 	ufmt.Printf("[INFO] state-lens channel opened (source=%s destination=%s)\n", sourceChannel.String(), opened.String())
 
-	// --- SCENARIO 2: add the L2 consensus via UpdateClient, proven by the L1 ---
-	ufmt.Println("")
-	ufmt.Println("[SCENARIO] 2. UpdateClient: add the L2 consensus, proven by the real cometbls L1")
+	return clientId
+}
+
+// updateL2Consensus adds the L2 consensus at l2ProofHeight via UpdateClient, which
+// drives VerifyHeader -> the real cometbls L1's VerifyMembership on l1Proof.
+func updateL2Consensus(cur realm, clientId types.ClientId, l1Proof, l2Consensus []byte) {
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	header := ics23mpt.Header{
 		L1Height:              l1Height,
 		L2Height:              l2ProofHeight,
@@ -153,10 +198,12 @@ func main(cur realm) {
 	latest, _ := core.GetLatestHeight(clientId)
 	ufmt.Printf("[INFO] state-lens latest height after L1-proven update: %d\n", latest)
 	ufmt.Println("[EXPECTED] state-lens latest height should be 100 (L2 consensus added via the real L1)")
+}
 
-	// --- SCENARIO 3: receive the packet proven by the freshly-added consensus ---
-	ufmt.Println("")
-	ufmt.Println("[SCENARIO] 3. Receive INITIALIZE order proven by the state-lens MPT proof (mint 100)")
+// receiveProvenOrder receives the packet proven by the freshly-added consensus and
+// asserts the receipt is recorded and the wrapped voucher is minted.
+func receiveProvenOrder(cur realm, packet types.Packet, packetProof []byte, quoteToken string) {
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, packetProof, l2ProofHeight))
 
 	_, receiptErr := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))
@@ -183,7 +230,7 @@ func newStateLensClient(csBytes, consBytes []byte) (lightclient.Interface, error
 
 // buildPacketMembershipProof returns (storageRoot, encodedProof) for a
 // single-leaf EVM-MPT proving the packet's BatchPackets commitment path stores
-// COMMITMENT_MAGIC. Mirrors token_receive_by_statelens_filetest.
+// COMMITMENT_MAGIC. Mirrors mint_wrapped_voucher_by_statelens_filetest.
 func buildPacketMembershipProof(packet types.Packet) ([]byte, []byte) {
 	batchHash := core.CommitPacketsHash([]types.Packet{packet})
 	path := types.BatchPacketsPath(batchHash)

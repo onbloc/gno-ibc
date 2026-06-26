@@ -1,7 +1,7 @@
-// PKGPATH: gno.land/r/onbloc/ibc/scenario/union
-package union
+// PKGPATH: gno.land/r/onbloc/ibc/scenario/union/send
+package send
 
-// token_send_by_ucs03_zkgm_filetest walks a full ucs03-zkgm token send through the
+// lock_wrapped_voucher_by_ucs03_zkgm_filetest walks a full ucs03-zkgm token send through the
 // upgradeable union IBC host (permissive mock light client) and asserts the escrowed
 // token stays locked in the proxy after the acknowledgement.
 
@@ -32,17 +32,39 @@ const (
 )
 
 func main(cur realm) {
-	// --- SCENARIO 1: bootstrap (admin) — kept inline so each core call is a
-	// direct origin call: runtime.AssertOriginCall requires <= 2 call frames. ---
-	ufmt.Println("[SCENARIO] 1. Bootstrap IBC host and open client/connection/channel")
+	println("[SCENARIO] 1. Bootstrap IBC host and open client/connection/channel")
+	channelId := bootstrap(cur)
+	println("")
+
+	// The wrapped denom is deterministic for (path=0, channel, base=ugnot, image),
+	// so it is derived once here and reused by the recv funding and the send below.
+	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
+	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
+
+	println("[SCENARIO] 2. Fund sender with wrapped voucher via INITIALIZE recv (amount 100)")
+	fundSenderViaInitialize(cur, channelId, quoteToken, meta)
+	println("")
+
+	println("[SCENARIO] 3. Send ESCROW order locking 40 of the voucher")
+	sendPacket := sendEscrowOrder(cur, channelId, quoteToken)
+	println("")
+
+	println("[SCENARIO] 4. Acknowledge with protocol-fill success (no-op for escrow)")
+	acknowledgeEscrow(cur, sendPacket, quoteToken)
+}
+
+// bootstrap installs the core/zkgm impls, grants the admin the relayer role, and
+// opens a client/connection/channel backed by the permissive mock light client.
+//
+// It is kept inline (not split further): every admin/relayer core entrypoint
+// authorizes the caller via cur.Previous(), so testing.SetRealm and the cross(cur)
+// call must run in the same frame for the admin user to be seen as the caller.
+func bootstrap(cur realm) types.ChannelId {
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.UpdateImpl(cross(cur), coreImplPath)
 	zkgm.UpdateImpl(cross(cur), zkgmImplPath)
 	zkgm.SetRateLimitDisabled(cross(cur), true)
 	zkgm.RegisterCoreApp(cross(cur))
-
-	// The relayer-gated host entrypoints require RELAYER. Grant it to the admin so
-	// this single-actor scenario can drive the full flow.
 	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
 
 	core.RegisterClient(cross(cur), mockClientType, func(_, _ []byte) (lightclient.Interface, error) {
@@ -59,17 +81,19 @@ func main(cur realm) {
 	core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1relayer"))
 	channelId := types.ChannelId(1)
 	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(channelId, zkgm.Version, types.ChannelId(2), nil, 1, "g1relayer"))
+
 	ufmt.Printf("[INFO] handshake opened: client=%s connection=%s channel=%s\n", clientId.String(), connectionId.String(), channelId.String())
 	ufmt.Println("[EXPECTED] client should be 1")
 	ufmt.Println("[EXPECTED] connection should be 1")
 	ufmt.Println("[EXPECTED] channel should be 1")
 
-	// --- SCENARIO 2: fund the sender with a wrapped voucher via an INITIALIZE recv ---
-	ufmt.Println("")
-	ufmt.Println("[SCENARIO] 2. Fund sender with wrapped voucher via INITIALIZE recv (amount 100)")
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
-	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
-	initOrder := z.TokenOrderV2{
+	return channelId
+}
+
+// fundSenderViaInitialize mints 100 of the wrapped voucher to the sender by
+// receiving an INITIALIZE TokenOrder addressed to it.
+func fundSenderViaInitialize(cur realm, channelId types.ChannelId, quoteToken string, meta []byte) {
+	order := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
 		Receiver:    []byte(senderAddr.String()),
 		BaseToken:   []byte("ugnot"),
@@ -79,10 +103,10 @@ func main(cur realm) {
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    meta,
 	}
-	initPacket := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(initOrder)), types.Timestamp(1<<62))
+	packet := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(order)), types.Timestamp(1<<62))
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{initPacket}, [][]byte{nil}, nil, 1))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
 
 	// Balances are read back through the proxy's VoucherBalanceOf, the stable public
 	// surface for wrapped-voucher balances (proxy-owned escrow amount).
@@ -91,11 +115,12 @@ func main(cur realm) {
 	ufmt.Printf("[INFO] minted to sender %s, balance: %d\n", senderAddr.String(), zkgm.VoucherBalanceOf(quoteToken, senderAddr))
 	ufmt.Println("[EXPECTED] minted token should be the ibc/ wrapped voucher of base ugnot")
 	ufmt.Println("[EXPECTED] sender voucher balance should be 100 (full INITIALIZE amount minted)")
+}
 
-	// --- SCENARIO 3: send the ESCROW order that locks 40 of the voucher ---
-	ufmt.Println("")
-	ufmt.Println("[SCENARIO] 3. Send ESCROW order locking 40 of the voucher")
-	escrowOrder := z.TokenOrderV2{
+// sendEscrowOrder sends an ESCROW TokenOrder that locks 40 of the voucher into the
+// proxy escrow, and returns the produced packet for later acknowledgement.
+func sendEscrowOrder(cur realm, channelId types.ChannelId, quoteToken string) types.Packet {
+	order := z.TokenOrderV2{
 		Sender:      []byte(senderAddr.String()),
 		Receiver:    []byte("remote-receiver"),
 		BaseToken:   []byte(quoteToken),
@@ -106,7 +131,7 @@ func main(cur realm) {
 	}
 
 	testing.SetRealm(testing.NewUserRealm(senderAddr))
-	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(escrowOrder))
+	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
 
 	ufmt.Printf("[INFO] locked token (escrowed into proxy): %s\n", quoteToken)
 	ufmt.Printf("[INFO] locked into proxy escrow %s\n", zkgm.ProxyAddress().String())
@@ -116,9 +141,12 @@ func main(cur realm) {
 	ufmt.Println("[EXPECTED] sender voucher balance should be 60 (100 - 40 escrowed)")
 	ufmt.Println("[EXPECTED] proxy escrow balance should be 40 (locked)")
 
-	// --- SCENARIO 4: ack — protocol-fill success is a no-op for an escrow, so the lock holds ---
-	ufmt.Println("")
-	ufmt.Println("[SCENARIO] 4. Acknowledge with protocol-fill success (no-op for escrow)")
+	return sendPacket
+}
+
+// acknowledgeEscrow acknowledges the sent packet with a protocol-fill success ack,
+// which is a no-op for an escrow, so the lock holds.
+func acknowledgeEscrow(cur realm, sendPacket types.Packet, quoteToken string) {
 	ack := mustSuccessAck(mustProtocolTokenOrderAck())
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))

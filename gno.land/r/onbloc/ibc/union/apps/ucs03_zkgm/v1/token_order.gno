@@ -489,7 +489,10 @@ func (v *ucs03ZkgmV1) localTokenEscrow(_ int, rlm realm, denom, sender string, f
 		return makeError(errZeroAmount)
 	}
 
-	class, token := v.classifyLocalAsset(0, rlm, denom)
+	class, token, err := v.classifyLocalAsset(0, rlm, denom)
+	if err != nil {
+		return err
+	}
 	switch class {
 	case zkgm.AssetClassVoucher:
 		return v.transferVoucher(0, rlm, denom, address(sender), rlm.Address(), amount)
@@ -511,7 +514,11 @@ func (v *ucs03ZkgmV1) localTokenUnescrow(_ int, rlm realm, denom, recipient stri
 		return makeError(errZeroAmount)
 	}
 
-	class, token := v.classifyLocalAsset(0, rlm, denom)
+	class, token, err := v.classifyLocalAsset(0, rlm, denom)
+	if err != nil {
+		return err
+	}
+
 	switch class {
 	case zkgm.AssetClassVoucher:
 		return v.transferVoucher(0, rlm, denom, rlm.Address(), address(recipient), amount)
@@ -522,25 +529,31 @@ func (v *ucs03ZkgmV1) localTokenUnescrow(_ int, rlm realm, denom, recipient stri
 	}
 }
 
-func (v *ucs03ZkgmV1) classifyLocalAsset(_ int, rlm realm, denom string) (string, *grc20.Token) {
+func (v *ucs03ZkgmV1) classifyLocalAsset(_ int, rlm realm, denom string) (string, *grc20.Token, error) {
 	if strings.HasPrefix(denom, ibcDenomPrefix) {
-		v.store.SetAssetClass(0, rlm, denom, zkgm.AssetClassVoucher)
-		return zkgm.AssetClassVoucher, nil
+		if _, ok := v.store.GetAssetClass(denom); !ok {
+			v.store.SetAssetClass(0, rlm, denom, zkgm.AssetClassVoucher)
+		}
+		return zkgm.AssetClassVoucher, nil, nil
 	}
 	if class, ok := v.store.GetAssetClass(denom); ok {
-		if class == zkgm.AssetClassLocalGRC20 {
-			token, _ := v.store.GetLocalGRC20Token(denom)
-			return class, token
+		if class != zkgm.AssetClassLocalGRC20 {
+			return class, nil, nil
 		}
-		return class, nil
+
+		token, ok := v.store.GetLocalGRC20Token(denom)
+		if !ok || token == nil {
+			return "", nil, makeError(errLocalGRC20TokenNotFound, denom)
+		}
+		return class, token, nil
 	}
 	if token := grc20reg.Get(denom); token != nil {
 		v.store.SetAssetClass(0, rlm, denom, zkgm.AssetClassLocalGRC20)
 		v.store.SetLocalGRC20Token(0, rlm, denom, token)
-		return zkgm.AssetClassLocalGRC20, token
+		return zkgm.AssetClassLocalGRC20, token, nil
 	}
 	v.store.SetAssetClass(0, rlm, denom, zkgm.AssetClassNative)
-	return zkgm.AssetClassNative, nil
+	return zkgm.AssetClassNative, nil, nil
 }
 
 // refundIBCVoucher re-mints an IBC voucher to recipient, preserving the stored metadata image.

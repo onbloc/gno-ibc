@@ -217,6 +217,16 @@ func TestLocalTokenUnescrowUsesPinnedGRC20AfterRegistryOverwrite(cur realm, t *t
 	uassert.Equal(t, int64(10), tokenB.BalanceOf(cur.Address()))
 }
 
+func TestLocalGRC20ClassRequiresPinnedToken(cur realm, t *testing.T) {
+	v := newTestImpl()
+	denom := "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1.missing-token"
+	testStore.SetAssetClass(0, cur, denom, zkgm.AssetClassLocalGRC20)
+
+	err := v.localTokenEscrow(0, cur, denom, testAddress("missing-token"), newFunds(nil), u256.NewUint(1))
+
+	uassert.ErrorContains(t, err, errLocalGRC20TokenNotFound)
+}
+
 func TestTokenOrderVerifyLocalGRC20InvalidAmountsDoNotMutate(cur realm, t *testing.T) {
 	cases := []struct {
 		name   string

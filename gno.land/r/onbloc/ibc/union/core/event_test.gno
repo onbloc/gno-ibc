@@ -202,6 +202,9 @@ func TestEventAttrColumnsBoundary(cur realm, t *testing.T) {
 	resetEventConfigForTest()
 
 	maxLen := int(GetEventConfig().MaxEventAttrValueLen)
+	if maxLen != 1024 {
+		t.Fatalf("configured max event attr value len = %d, want 1024", maxLen)
+	}
 	testCases := []struct {
 		name     string
 		value    string
@@ -213,12 +216,17 @@ func TestEventAttrColumnsBoundary(cur realm, t *testing.T) {
 			wantLens: []int{0},
 		},
 		{
-			name:     "one column",
+			name:     "1023 bytes stays in one column",
+			value:    fixedEventAttrColumn[:maxLen-1],
+			wantLens: []int{maxLen - 1},
+		},
+		{
+			name:     "1024 bytes stays in one full column",
 			value:    fixedEventAttrColumn,
 			wantLens: []int{maxLen},
 		},
 		{
-			name:     "two columns",
+			name:     "1025 bytes splits into full column and remainder",
 			value:    fixedEventAttrColumn + "2",
 			wantLens: []int{maxLen, 1},
 		},

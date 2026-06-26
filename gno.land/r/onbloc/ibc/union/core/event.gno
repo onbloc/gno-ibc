@@ -227,6 +227,32 @@ func packetEventBaseAttrs(packet types.Packet) []string {
 	return append(attrs, "packet_data", packetData)
 }
 
+// eventAttrColumns splits one encoded event attribute value into indexed
+// columns. Callers decide whether splitting is enabled before calling this
+// helper.
+func eventAttrColumns(key string, value string, maxValueLen int) []string {
+	if maxValueLen <= 0 {
+		panic("max event attr value len must be positive")
+	}
+
+	if len(value) == 0 {
+		return []string{key + "[0]", ""}
+	}
+
+	parts := (len(value) + maxValueLen - 1) / maxValueLen
+	attrs := make([]string, 0, parts*2)
+	for index := 0; index < parts; index++ {
+		start := index * maxValueLen
+		end := start + maxValueLen
+		if end > len(value) {
+			end = len(value)
+		}
+		attrs = append(attrs, key+"["+strconv.Itoa(index)+"]", value[start:end])
+	}
+
+	return attrs
+}
+
 func emitPacketSendEvent(packet types.Packet, sourceChannel types.Channel, sourceConnection types.Connection) {
 	attrs := packetEventBaseAttrs(packet)
 	attrs = append(

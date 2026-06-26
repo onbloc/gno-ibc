@@ -32,7 +32,6 @@ func TestGetEventConfigDefaults(cur realm, t *testing.T) {
 }
 
 func TestSetEventConfigAccessControlled(cur realm, t *testing.T) {
-	resetStore(cur)
 	defer resetEventConfigForTest()
 
 	next := EventConfig{
@@ -41,15 +40,41 @@ func TestSetEventConfigAccessControlled(cur realm, t *testing.T) {
 		MaxPacketDataEventColumns: 3,
 	}
 
-	requireSelectorProtectedForTest(cur, SelectorSetEventConfig)
-	uassert.AbortsContains(t, cur, access.ErrAccessManagerUnauthorizedCall, func(cur realm) {
-		SetEventConfig(cross(cur), next)
-	})
-	assertEventConfigEqual(t, GetEventConfig(), DefaultEventConfig())
+	tests := []struct {
+		name       string
+		admin      bool
+		wantPanic  string
+		wantConfig EventConfig
+	}{
+		{
+			name:       "unauthorized caller keeps default",
+			wantPanic:  access.ErrAccessManagerUnauthorizedCall,
+			wantConfig: DefaultEventConfig(),
+		},
+		{
+			name:       "admin caller updates config",
+			admin:      true,
+			wantConfig: next,
+		},
+	}
 
-	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
-	SetEventConfig(cross(cur), next)
-	assertEventConfigEqual(t, GetEventConfig(), next)
+	for _, tc := range tests {
+		resetStore(cur)
+		requireSelectorProtectedForTest(cur, SelectorSetEventConfig)
+
+		if tc.admin {
+			testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+		}
+
+		if tc.wantPanic != "" {
+			uassert.AbortsContains(t, cur, tc.wantPanic, func(cur realm) {
+				SetEventConfig(cross(cur), next)
+			})
+		} else {
+			SetEventConfig(cross(cur), next)
+		}
+		assertEventConfigEqual(t, GetEventConfig(), tc.wantConfig)
+	}
 }
 
 func TestSetEventConfigRejectsInvalidValues(cur realm, t *testing.T) {

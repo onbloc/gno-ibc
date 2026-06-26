@@ -17,24 +17,25 @@ package union
 
 import (
 	"crypto/keccak256"
+	"encoding/binary"
 	"testing"
 
 	"gno.land/p/onbloc/encoding/rlp"
 	"gno.land/p/onbloc/ibc/union/lightclient"
 	ics23mpt "gno.land/p/onbloc/ibc/union/lightclient/state_lens/ics23_mpt"
-	types "gno.land/p/onbloc/ibc/union/types"
+	"gno.land/p/onbloc/ibc/union/types"
 	"gno.land/p/onbloc/verifier/evm/storage"
 
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/ufmt/v0"
-	fixture "gno.land/p/onbloc/ibc/testing/zkgm/fixture"
+	"gno.land/p/onbloc/ibc/testing/zkgm/fixture"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
 	scenariocometbls "gno.land/r/onbloc/ibc/scenario/helper/cometbls"
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
-	core "gno.land/r/onbloc/ibc/union/core"
+	"gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
 )
 
@@ -218,15 +219,7 @@ func makeConsensusBytes(timestamp uint64, stateRoot, storageRoot []byte) []byte 
 	out := make([]byte, 72)
 	copy(out[0:32], stateRoot)
 	copy(out[32:64], storageRoot)
-	out[64] = byte(timestamp >> 56)
-	out[65] = byte(timestamp >> 48)
-	out[66] = byte(timestamp >> 40)
-	out[67] = byte(timestamp >> 32)
-	out[68] = byte(timestamp >> 24)
-	out[69] = byte(timestamp >> 16)
-	out[70] = byte(timestamp >> 8)
-	out[71] = byte(timestamp)
-
+	binary.BigEndian.PutUint64(out[64:], timestamp)
 	return out
 }
 

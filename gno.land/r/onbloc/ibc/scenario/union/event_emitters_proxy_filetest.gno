@@ -6,9 +6,9 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/ufmt/v0"
-	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	mock "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
@@ -46,9 +46,7 @@ func setupProxyEventEmitters(cur realm) {
 }
 
 func exerciseClientEventEmitters(cur realm) types.ClientId {
-	core.RegisterClient(cross(cur), eventMockClientType, func(_, _ []byte) (lightclient.Interface, error) {
-		return &eventMockLightClient{}, nil
-	})
+	core.RegisterClient(cross(cur), eventMockClientType, mock.NewLightClientWithMisbehaviour([]byte("event-frozen-client")))
 	core.CreateClient(cross(cur), core.NewMsgCreateClient(eventMockClientType, nil, nil))
 	clientId := types.ClientId(1)
 
@@ -221,31 +219,6 @@ func (*eventScenarioApp) OnTimeoutPacket(_ realm, _ types.Packet, _ address) {
 
 func eventAck(packet types.Packet) []byte {
 	return []byte("ack:" + string(packet.Data))
-}
-
-type eventMockLightClient struct{}
-
-func (m *eventMockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
-func (m *eventMockLightClient) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
-func (m *eventMockLightClient) GetTimestamp() types.Timestamp                         { return types.Timestamp(1) }
-
-func (m *eventMockLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
-	return types.Timestamp(1), nil
-}
-func (m *eventMockLightClient) GetLatestHeight() uint64        { return 1 }
-func (m *eventMockLightClient) GetCounterpartyChainID() string { return "mock-chain" }
-func (m *eventMockLightClient) Status() lightclient.Status     { return lightclient.Active }
-
-func (m *eventMockLightClient) VerifyHeader(_ address, header []byte, _ address) (types.StateUpdate, error) {
-	return types.StateUpdate{Height: 1, ClientStateBytes: header, ConsensusStateBytes: header}, nil
-}
-
-func (m *eventMockLightClient) VerifyCreation(address, address) (types.ClientCreationResult, error) {
-	return types.ClientCreationResult{}, nil
-}
-
-func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, error) {
-	return []byte("event-frozen-client"), nil
 }
 
 // Output:

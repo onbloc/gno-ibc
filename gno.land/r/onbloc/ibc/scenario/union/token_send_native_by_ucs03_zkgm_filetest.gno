@@ -14,17 +14,17 @@ import (
 	"testing"
 
 	"gno.land/p/nt/ufmt/v0"
-	"gno.land/p/onbloc/ibc/union/lightclient"
 	types "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
 	u256 "gno.land/p/gnoswap/uint256"
 
-	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+	mock "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 	"gno.land/r/onbloc/ibc/union/access"
+	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
-	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
 )
 
 const (
@@ -48,9 +48,7 @@ func main(cur realm) {
 
 	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
 
-	core.RegisterClient(cross(cur), mockClientType, func(_, _ []byte) (lightclient.Interface, error) {
-		return &mockLightClient{}, nil
-	})
+	core.RegisterClient(cross(cur), mockClientType, mock.NewLightClient)
 	core.CreateClient(cross(cur), core.NewMsgCreateClient(mockClientType, nil, nil))
 	clientId := types.ClientId(1)
 
@@ -134,38 +132,6 @@ func mustSuccessAck(inner []byte) []byte {
 	}
 	return ack
 }
-
-// --- permissive mock light client (accepts any proof) ---
-
-type mockLightClient struct{}
-
-func (m *mockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
-func (m *mockLightClient) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
-func (m *mockLightClient) GetTimestamp() types.Timestamp                         { return types.Timestamp(1) }
-func (m *mockLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
-	return types.Timestamp(1), nil
-}
-func (m *mockLightClient) GetLatestHeight() uint64        { return 1 }
-func (m *mockLightClient) GetCounterpartyChainID() string { return "mock-chain" }
-func (m *mockLightClient) Status() lightclient.Status     { return lightclient.Active }
-
-func (m *mockLightClient) VerifyHeader(_ address, header []byte, _ address) (types.StateUpdate, error) {
-	return types.StateUpdate{Height: 1, ClientStateBytes: header, ConsensusStateBytes: header}, nil
-}
-
-func (m *mockLightClient) VerifyCreation(address, address) (types.ClientCreationResult, error) {
-	return types.ClientCreationResult{}, nil
-}
-
-func (m *mockLightClient) Misbehaviour(address, []byte, address) ([]byte, error) {
-	return nil, errMisbehaviourUnsupported
-}
-
-var errMisbehaviourUnsupported = mockError("mock: misbehaviour unsupported")
-
-type mockError string
-
-func (e mockError) Error() string { return string(e) }
 
 // Output:
 // [SCENARIO] 1. Bootstrap IBC host and open client/connection/channel

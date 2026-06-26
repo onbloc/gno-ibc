@@ -1,0 +1,2 @@
+module = "gno.land/r/onbloc/ibc/testing/mock/receiver"
+gno = "0.9"

@@ -97,6 +97,8 @@ COVERAGE_DIR := coverage
 # that are not part of the first-party test suite).
 USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/onbloc gno.land/r/onbloc -name gnomod.toml | grep -v '/ignore/' | sort))
 TEST_GNO_PKGS := $(if $(PKG),$(addprefix ./,$(patsubst ./%,%,$(PKG))),$(USER_GNO_PKGS))
+SCENARIO_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/r/onbloc/ibc/scenario -name gnomod.toml | grep -v '/ignore/' | sort))
+SCENARIO_TEST_GNO_PKGS := $(if $(PKG),$(addprefix ./,$(patsubst ./%,%,$(PKG))),$(SCENARIO_GNO_PKGS))
 GNO_TEST_FLAGS := -v$(if $(RUN), -run "$(RUN)")
 
 help:
@@ -182,6 +184,12 @@ fmt:
 
 test: verify-gno vendor
 	@for pkg in $(TEST_GNO_PKGS); do \
+		echo "==> gno test $(GNO_TEST_FLAGS) $$pkg"; \
+		gno test $(GNO_TEST_FLAGS) "$$pkg" || exit $$?; \
+	done
+
+test-scenario: verify-gno vendor
+	@for pkg in $(SCENARIO_TEST_GNO_PKGS); do \
 		echo "==> gno test $(GNO_TEST_FLAGS) $$pkg"; \
 		gno test $(GNO_TEST_FLAGS) "$$pkg" || exit $$?; \
 	done

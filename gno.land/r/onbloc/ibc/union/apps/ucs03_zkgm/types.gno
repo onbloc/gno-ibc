@@ -1,6 +1,7 @@
 package zkgm
 
 import (
+	"gno.land/p/demo/tokens/grc20"
 	u256 "gno.land/p/gnoswap/uint256"
 	types "gno.land/p/onbloc/ibc/union/types"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
@@ -9,6 +10,12 @@ import (
 )
 
 const Version = z.PROTOCOL_VERSION
+
+const (
+	AssetClassNative     = "native"
+	AssetClassVoucher    = "voucher"
+	AssetClassLocalGRC20 = "local-grc20"
+)
 
 type IApp interface {
 	// IApp
@@ -59,6 +66,12 @@ type IStore interface {
 
 	AddLockedNative(_ int, rlm realm, denom string, amount *u256.Uint)
 	GetLockedNative(denom string) (*u256.Uint, bool)
+
+	SetAssetClass(_ int, rlm realm, denom string, class string)
+	GetAssetClass(denom string) (string, bool)
+
+	SetLocalGRC20Token(_ int, rlm realm, denom string, token *grc20.Token)
+	GetLocalGRC20Token(denom string) (*grc20.Token, bool)
 
 	SetMetadataImageOf(_ int, rlm realm, denom string, image [32]byte)
 	GetMetadataImageOf(denom string) ([32]byte, bool)

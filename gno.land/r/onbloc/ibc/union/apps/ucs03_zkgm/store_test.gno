@@ -251,6 +251,30 @@ func TestVoucherStore(cur realm, t *testing.T) {
 	uassert.True(t, got == vou)
 }
 
+func TestAssetClassStoreRecordsOnce(cur realm, t *testing.T) {
+	s := NewStore()
+
+	s.SetAssetClass(0, cur, "ugrc20", AssetClassLocalGRC20)
+	s.SetAssetClass(0, cur, "ugrc20", AssetClassNative)
+
+	got, ok := s.GetAssetClass("ugrc20")
+	uassert.True(t, ok)
+	uassert.Equal(t, AssetClassLocalGRC20, got)
+}
+
+func TestLocalGRC20TokenStoreRecordsOnce(cur realm, t *testing.T) {
+	s := NewStore()
+	tokenA, _ := newVoucherTokenForTest(cur, "Token A", "TKNA")
+	tokenB, _ := newVoucherTokenForTest(cur, "Token B", "TKNB")
+
+	s.SetLocalGRC20Token(0, cur, "ugrc20", tokenA)
+	s.SetLocalGRC20Token(0, cur, "ugrc20", tokenB)
+
+	got, ok := s.GetLocalGRC20Token("ugrc20")
+	uassert.True(t, ok)
+	uassert.True(t, got == tokenA)
+}
+
 func TestReceiver(cur realm, t *testing.T) {
 	s := NewStore()
 	cases := []struct {
@@ -305,6 +329,8 @@ func TestStore_MutationsRejectSpoofedRealm(cur realm, t *testing.T) {
 		{"set token origin", func() { s.SetTokenOrigin(0, spoofedRealm, "ibc/spoof-origin", u256.NewUint(1)) }},
 		{"set channel balance", func() { s.SetChannelBalanceV2(0, spoofedRealm, "spoof-balance", u256.NewUint(2)) }},
 		{"remove channel balance", func() { s.RemoveChannelBalanceV2(0, spoofedRealm, "spoof-balance") }},
+		{"set asset class", func() { s.SetAssetClass(0, spoofedRealm, "spoof-asset", AssetClassNative) }},
+		{"set local grc20 token", func() { s.SetLocalGRC20Token(0, spoofedRealm, "spoof-token", token) }},
 		{"set metadata image", func() { s.SetMetadataImageOf(0, spoofedRealm, "ibc/spoof-image", [32]byte{0x01}) }},
 		{"set foreign token", func() { s.SetForeignToken(0, spoofedRealm, "ibc/spoof-foreign", []byte("utoken")) }},
 		{"set inflight packet", func() { s.SetInFlightPacket(0, spoofedRealm, "spoof-packet", packet) }},

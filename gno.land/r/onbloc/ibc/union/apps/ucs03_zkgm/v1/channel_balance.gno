@@ -33,6 +33,15 @@ func (v *ucs03ZkgmV1) increaseChannelBalanceV2(_ int, rlm realm, channelId types
 	v.store.SetChannelBalanceV2(0, rlm, key, calculatedAmount)
 }
 
+func (v *ucs03ZkgmV1) ensureChannelBalanceV2(channelId types.ChannelId, path *u256.Uint, baseToken, quoteToken []byte, amount *u256.Uint) error {
+	key := ChannelBalanceKeyV2(channelId, path, baseToken, quoteToken)
+	curAmount, ok := v.store.GetChannelBalanceV2(key)
+	if !ok || curAmount == nil || curAmount.Cmp(amount) < 0 {
+		return makeError(errChannelBalanceUnderflow)
+	}
+	return nil
+}
+
 // decreaseChannelBalanceV2 subtracts from the escrow balance, erroring on underflow and preserving a zero entry.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L3241-L3268
 func (v *ucs03ZkgmV1) decreaseChannelBalanceV2(_ int, rlm realm, channelId types.ChannelId, path *u256.Uint, baseToken, quoteToken []byte, amount *u256.Uint) error {

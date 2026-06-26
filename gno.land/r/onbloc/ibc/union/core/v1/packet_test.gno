@@ -144,6 +144,127 @@ func TestSendPacketUnauthorizedSender(cur realm, t *testing.T) {
 	})
 }
 
+func TestAssertPacketDataSize(cur realm, t *testing.T) {
+	maxPacketDataBytes := (core.MaxPacketDataEventSize - 2) / 2
+	tests := []struct {
+		name string
+		data []byte
+		want string
+	}{
+		{"empty data", []byte{}, ""},
+		{"max hex attr size", make([]byte, maxPacketDataBytes), ""},
+		{"too large hex attr size", make([]byte, maxPacketDataBytes+1), core.ErrPacketDataTooLarge},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			run := func(cur realm) {
+				assertPacketDataSize(tc.data)
+			}
+			if tc.want != "" {
+				uassert.AbortsContains(t, cur, tc.want, run)
+				return
+			}
+			uassert.NotAborts(t, cur, run)
+		})
+	}
+}
+
+func TestPacketEntrypointsRejectOversizedPacketData(cur realm, t *testing.T) {
+	maxPacketDataBytes := (core.MaxPacketDataEventSize - 2) / 2
+	oversized := make([]byte, maxPacketDataBytes+1)
+	tests := []struct {
+		name string
+		run  func(cur realm)
+	}{
+		{
+			name: "send packet",
+			run: func(cur realm) {
+				v := newTestImpl()
+				v.SendPacket(0, cur, types.ChannelId(1), types.Timestamp(0), oversized)
+			},
+		},
+		{
+			name: "packet acknowledgement",
+			run: func(cur realm) {
+				v := newTestImpl()
+				v.PacketAcknowledgement(0, cur, types.MsgPacketAcknowledgement{Packets: []types.Packet{{Data: oversized}}})
+			},
+		},
+		{
+			name: "packet timeout",
+			run: func(cur realm) {
+				v := newTestImpl()
+				v.PacketTimeout(0, cur, types.MsgPacketTimeout{Packet: types.Packet{Data: oversized}})
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.AbortsContains(t, cur, core.ErrPacketDataTooLarge, func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+				tc.run(cur)
+			})
+		})
+	}
+}
+
+func TestRecvEntrypointsDispatchOversizedPacketDataWithReducedEvents(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	maxPacketDataBytes := (core.MaxPacketDataEventSize - 2) / 2
+	oversized := make([]byte, maxPacketDataBytes+1)
+	tests := []struct {
+		name       string
+		run        func(cur realm, v *coreV1, packet types.Packet)
+		wantRecv   int
+		wantIntent int
+	}{
+		{
+			name:     "packet recv",
+			wantRecv: 1,
+			run: func(cur realm, v *coreV1, packet types.Packet) {
+				v.PacketRecv(0, cur, types.MsgPacketRecv{
+					Packets:     []types.Packet{packet},
+					RelayerMsgs: [][]byte{[]byte("rm")},
+					Proof:       []byte("proof"),
+					ProofHeight: 10,
+				})
+			},
+		},
+		{
+			name:       "intent packet recv",
+			wantIntent: 1,
+			run: func(cur realm, v *coreV1, packet types.Packet) {
+				v.IntentPacketRecv(0, cur, types.MsgIntentPacketRecv{
+					Packets:             []types.Packet{packet},
+					MarketMakerMessages: [][]byte{[]byte("mm")},
+				})
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			chId, _, mApp := setupOpenChannel(cur, v)
+			packet := recvPacket(chId, "oversized")
+			packet.Data = oversized
+
+			uassert.NotAborts(t, cur, func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+				tc.run(cur, v, packet)
+			})
+
+			uassert.Equal(t, tc.wantRecv, mApp.recvCalls)
+			uassert.Equal(t, tc.wantIntent, mApp.intentRecvCalls)
+			receipt, ok := v.store.AcknowledgementReceipt(chId, packet)
+			uassert.True(t, ok)
+			uassert.True(t, receipt == types.CommitAcks([][]byte{[]byte("ack")}))
+		})
+	}
+}
+
 func TestPacketRecv(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
@@ -1022,22 +1143,53 @@ func TestVerifyNonMembership(cur realm, t *testing.T) {
 
 func TestWriteAcknowledgementWritesAsyncAck(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-	v := newTestImpl()
-	chId, _, mApp := setupOpenChannel(cur, v)
-	mApp.recvStatus = types.PacketStatusAsync // recv defers the ack
-	packet := types.Packet{
-		SourceChannelId:      types.ChannelId(9),
-		DestinationChannelId: chId,
-		Data:                 []byte("wack-data"),
-		TimeoutTimestamp:     farFuture,
+	maxPacketDataBytes := (core.MaxPacketDataEventSize - 2) / 2
+	tests := []struct {
+		name string
+		data []byte
+		seed func(cur realm, v *coreV1, packet types.Packet)
+	}{
+		{
+			name: "packet received as async",
+			data: []byte("wack-data"),
+			seed: func(cur realm, v *coreV1, packet types.Packet) {
+				v.PacketRecv(0, cur, types.MsgPacketRecv{
+					Packets:     []types.Packet{packet},
+					RelayerMsgs: [][]byte{[]byte("rm")},
+					Proof:       []byte("p"),
+					ProofHeight: 10,
+				})
+			},
+		},
+		{
+			name: "oversized packet with existing receipt",
+			data: make([]byte, maxPacketDataBytes+1),
+			seed: func(cur realm, v *coreV1, packet types.Packet) {
+				v.store.SetPacketReceipt(0, cur, packet)
+			},
+		},
 	}
-	v.PacketRecv(0, cur, types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{[]byte("rm")}, Proof: []byte("p"), ProofHeight: 10})
 
-	v.WriteAcknowledgement(0, cur, types.MsgWriteAcknowledgement{Packet: packet, Acknowledgement: []byte("late-ack")})
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			v := newTestImpl()
+			chId, _, mApp := setupOpenChannel(cur, v)
+			mApp.recvStatus = types.PacketStatusAsync // recv defers the ack
+			packet := types.Packet{
+				SourceChannelId:      types.ChannelId(9),
+				DestinationChannelId: chId,
+				Data:                 tc.data,
+				TimeoutTimestamp:     farFuture,
+			}
+			tc.seed(cur, v, packet)
 
-	receipt, ok := v.store.AcknowledgementReceipt(chId, packet)
-	uassert.True(t, ok)
-	uassert.True(t, receipt == types.CommitAcks([][]byte{[]byte("late-ack")}))
+			v.WriteAcknowledgement(0, cur, types.MsgWriteAcknowledgement{Packet: packet, Acknowledgement: []byte("late-ack")})
+
+			receipt, ok := v.store.AcknowledgementReceipt(chId, packet)
+			uassert.True(t, ok)
+			uassert.True(t, receipt == types.CommitAcks([][]byte{[]byte("late-ack")}))
+		})
+	}
 }
 
 func TestWriteAcknowledgementRejectsInvalidMessages(cur realm, t *testing.T) {
@@ -1203,7 +1355,7 @@ func TestAcceptRecvPacket(cur realm, t *testing.T) {
 				return
 			}
 
-			_, skip := v.acceptRecvPacket(0, cur, packet, batchChannel, tc.now)
+			skip := v.acceptRecvPacket(0, cur, packet, batchChannel, tc.now)
 			uassert.Equal(t, tc.wantSkip, skip)
 			uassert.Equal(t, tc.wantReceipt, v.store.HasPacketReceipt(packet))
 		})
@@ -1235,7 +1387,7 @@ func TestCommitSyncAck(cur realm, t *testing.T) {
 				TimeoutTimestamp:     farFuture,
 			}
 
-			err := v.commitSyncAck(0, cur, packet, tc.result, types.Channel{}, types.Connection{})
+			err := v.commitSyncAck(0, cur, packet, tc.result)
 			if tc.wantErr != "" {
 				uassert.Equal(t, tc.wantErr, err.Error())
 				return

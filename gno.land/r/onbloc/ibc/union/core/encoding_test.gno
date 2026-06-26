@@ -249,36 +249,13 @@ func TestHexAttrLen(cur realm, t *testing.T) {
 		{"empty", []byte{}},
 		{"single byte", []byte{0x01}},
 		{"small packet", []byte("fixed-small-packet")},
-		{"boundary", make([]byte, (MaxPacketDataEventSize-2)/2)},
+		{"large", make([]byte, 511)},
 		{"real zkgm packet", mustEncodeRealZkgmPacket(t)},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			assertHexAttrLen(t, tc.data)
-		})
-	}
-}
-
-func TestPacketDataTooLarge(cur realm, t *testing.T) {
-	maxPacketDataBytes := (MaxPacketDataEventSize - 2) / 2
-	realZkgmPacket := mustEncodeRealZkgmPacket(t)
-	tests := []struct {
-		name string
-		data []byte
-		want bool
-	}{
-		{"empty", []byte{}, false},
-		{"boundary", make([]byte, maxPacketDataBytes), false},
-		{"over boundary", make([]byte, maxPacketDataBytes+1), true},
-		{"real zkgm packet", realZkgmPacket, HexAttrLen(realZkgmPacket) > MaxPacketDataEventSize},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := PacketDataTooLarge(tc.data); got != tc.want {
-				t.Fatalf("packet data too large: got %t want %t", got, tc.want)
-			}
 		})
 	}
 }

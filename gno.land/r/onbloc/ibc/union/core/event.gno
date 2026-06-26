@@ -4,6 +4,7 @@ import (
 	"chain"
 	"strconv"
 
+	eventattr "gno.land/p/onbloc/event/attr"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
@@ -34,10 +35,6 @@ const (
 	PacketTimeoutEvent         = "PacketTimeout"
 	CommitMembershipProofEvent = "CommitMembershipProof"
 	CommitNonMembershipEvent   = "CommitNonMembershipProof"
-
-	maxEventAttrValueLen      = 1024
-	maxPacketDataEventColumns = 50
-	MaxPacketDataEventSize    = maxPacketDataEventColumns * maxEventAttrValueLen
 )
 
 func channelOpenInitEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) []string {
@@ -220,28 +217,9 @@ func packetEventBaseAttrs(packet types.Packet) []string {
 	packetData := hexAttr(packet.Data)
 	attrs := []string{
 		"packet_hash", commitPacketHash(packet).String(),
-		"packet_data_size", strconv.Itoa(len(packetData)),
+		"packet_data_size", strconv.Itoa(HexAttrLen(packet.Data)),
 	}
-	return append(attrs, eventAttrColumns("packet_data", packetData)...)
-}
-
-func eventAttrColumns(key string, value string) []string {
-	if len(value) == 0 {
-		return []string{key + "[0]", ""}
-	}
-
-	parts := (len(value) + maxEventAttrValueLen - 1) / maxEventAttrValueLen
-	attrs := make([]string, 0, parts*2)
-	for index := 0; index < parts; index++ {
-		start := index * maxEventAttrValueLen
-		end := start + maxEventAttrValueLen
-		if end > len(value) {
-			end = len(value)
-		}
-		attrs = append(attrs, key+"["+strconv.Itoa(index)+"]", value[start:end])
-	}
-
-	return attrs
+	return append(attrs, eventattr.Columns("packet_data", packetData)...)
 }
 
 func emitPacketSendEvent(packet types.Packet, sourceChannel types.Channel, sourceConnection types.Connection) {

@@ -720,12 +720,40 @@ func (v *ucs03ZkgmV1) decodeLocalOrderV2Instruction(_ int, rlm realm, instructio
 		return z.TokenOrderV2{}, err
 	}
 
+	// Keep base and quote in the same local unit before cover/fee accounting.
 	baseAmount, err := wireAmountToLocal(decimals, order.BaseAmount)
 	if err != nil {
 		return z.TokenOrderV2{}, err
 	}
 
 	quoteAmount, err := wireAmountToLocal(decimals, order.QuoteAmount)
+	if err != nil {
+		return z.TokenOrderV2{}, err
+	}
+
+	order.BaseAmount = baseAmount
+	order.QuoteAmount = quoteAmount
+
+	return order, nil
+}
+
+func (v *ucs03ZkgmV1) decodeSentOrderInstruction(_ int, rlm realm, instruction z.Instruction) (z.TokenOrderV2, error) {
+	order, err := decodeOrderInstruction(instruction)
+	if err != nil {
+		return z.TokenOrderV2{}, err
+	}
+
+	info := v.parseTokenInfo(0, rlm, order.BaseToken)
+	if !info.isVoucher {
+		return order, nil
+	}
+
+	baseAmount, err := wireAmountToLocal(info.decimals, order.BaseAmount)
+	if err != nil {
+		return z.TokenOrderV2{}, err
+	}
+
+	quoteAmount, err := wireAmountToLocal(info.decimals, order.QuoteAmount)
 	if err != nil {
 		return z.TokenOrderV2{}, err
 	}

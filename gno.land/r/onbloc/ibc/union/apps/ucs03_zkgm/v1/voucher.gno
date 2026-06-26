@@ -14,7 +14,7 @@ const (
 	targetDecimals = 6
 )
 
-// TokenInfo captures token metadata for decimal trimming in a single lookup.
+// TokenInfo captures known local voucher metadata in a single lookup.
 type TokenInfo struct {
 	decimals  uint8
 	isVoucher bool
@@ -48,7 +48,12 @@ func scaleLocalAmount(tokenDecimals uint8, amount *u256.Uint) (*u256.Uint, error
 		return amount.Clone(), nil
 	}
 
-	return u256.Zero().Mul(amount, factor), nil
+	scaled, overflow := u256.Zero().MulOverflow(amount, factor)
+	if overflow {
+		return nil, makeError(errAmountOverflow)
+	}
+
+	return scaled, nil
 }
 
 func wireAmountToLocal(tokenDecimals uint8, amount *u256.Uint) (*u256.Uint, error) {
@@ -167,8 +172,7 @@ func amountInt64(amount *u256.Uint) (int64, error) {
 	return amount.Int64(), nil
 }
 
-// parseTokenInfo extracts token metadata (decimals + voucher status) in a
-// single lookup, combining the logic of the former shouldTrim/getTokenDecimals.
+// parseTokenInfo extracts local voucher metadata in a single lookup.
 func (v *ucs03ZkgmV1) parseTokenInfo(_ int, rlm realm, denom []byte) TokenInfo {
 	denomStr := string(denom)
 
@@ -179,5 +183,5 @@ func (v *ucs03ZkgmV1) parseTokenInfo(_ int, rlm realm, denom []byte) TokenInfo {
 		}
 	}
 
-	return TokenInfo{decimals: targetDecimals, isVoucher: false}
+	return TokenInfo{isVoucher: false}
 }

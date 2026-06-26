@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"testing"
 
+	"gno.land/p/nt/uassert/v0"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
@@ -151,6 +152,9 @@ func TestConnectionOpenEventAttrs(cur realm, t *testing.T) {
 }
 
 func TestPacketEventBaseAttrsSplitPacketData(cur realm, t *testing.T) {
+	resetEventConfigForTest()
+
+	maxLen := int(GetEventConfig().MaxEventAttrValueLen)
 	testCases := []struct {
 		name     string
 		data     []byte
@@ -164,7 +168,7 @@ func TestPacketEventBaseAttrsSplitPacketData(cur realm, t *testing.T) {
 		{
 			name:     "split packet data columns",
 			data:     []byte(fixedEventAttrHalfColumn),
-			wantLens: []int{maxEventAttrValueLen, 2},
+			wantLens: []int{maxLen, 2},
 		},
 	}
 
@@ -189,12 +193,18 @@ func TestPacketEventBaseAttrsSplitPacketData(cur realm, t *testing.T) {
 				t.Fatalf("packet data size attr value: got %q want %d", attrs[3], len(hexAttr(tc.data)))
 			}
 			assertAttrMissing(t, attrs, "packet_data")
-			assertEventAttrColumnLens(t, attrs[4:], "packet_data", hexAttr(tc.data), tc.wantLens)
+			assertEventAttrColumnLens(t, attrs[4:], "packet_data", hexAttr(tc.data), tc.wantLens, maxLen)
 		})
 	}
 }
 
 func TestEventAttrColumnsBoundary(cur realm, t *testing.T) {
+	resetEventConfigForTest()
+
+	maxLen := int(GetEventConfig().MaxEventAttrValueLen)
+	if maxLen != 1024 {
+		t.Fatalf("configured max event attr value len = %d, want 1024", maxLen)
+	}
 	testCases := []struct {
 		name     string
 		value    string
@@ -206,36 +216,59 @@ func TestEventAttrColumnsBoundary(cur realm, t *testing.T) {
 			wantLens: []int{0},
 		},
 		{
-			name:     "one column",
-			value:    fixedEventAttrColumn,
-			wantLens: []int{maxEventAttrValueLen},
+			name:     "1023 bytes stays in one column",
+			value:    fixedEventAttrColumn[:maxLen-1],
+			wantLens: []int{maxLen - 1},
 		},
 		{
-			name:     "two columns",
+			name:     "1024 bytes stays in one full column",
+			value:    fixedEventAttrColumn,
+			wantLens: []int{maxLen},
+		},
+		{
+			name:     "1025 bytes splits into full column and remainder",
 			value:    fixedEventAttrColumn + "2",
-			wantLens: []int{maxEventAttrValueLen, 1},
+			wantLens: []int{maxLen, 1},
 		},
 		{
 			name:     "three columns",
 			value:    fixedEventAttrColumn + fixedEventAttrColumn + "3",
-			wantLens: []int{maxEventAttrValueLen, maxEventAttrValueLen, 1},
+			wantLens: []int{maxLen, maxLen, 1},
 		},
 		{
 			name:     "four columns",
 			value:    fixedEventAttrColumn + fixedEventAttrColumn + fixedEventAttrColumn + "4",
-			wantLens: []int{maxEventAttrValueLen, maxEventAttrValueLen, maxEventAttrValueLen, 1},
+			wantLens: []int{maxLen, maxLen, maxLen, 1},
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			attrs := eventAttrColumns("packet_data", tc.value)
-			assertEventAttrColumnLens(t, attrs, "packet_data", tc.value, tc.wantLens)
+			attrs := eventAttrColumns("packet_data", tc.value, maxLen)
+			assertEventAttrColumnLens(t, attrs, "packet_data", tc.value, tc.wantLens, maxLen)
 		})
 	}
 }
 
-func assertEventAttrColumnLens(t *testing.T, attrs []string, key string, value string, wantLens []int) {
+func TestEventAttrColumnsRejectsInvalidMaxValueLen(cur realm, t *testing.T) {
+	testCases := []struct {
+		name        string
+		maxValueLen int
+	}{
+		{"negative max value len", -1},
+		{"zero max value len", 0},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.AbortsContains(t, cur, "max event attr value len must be positive", func(cur realm) {
+				eventAttrColumns("packet_data", "0x00", tc.maxValueLen)
+			})
+		})
+	}
+}
+
+func assertEventAttrColumnLens(t *testing.T, attrs []string, key string, value string, wantLens []int, maxLen int) {
 	if len(attrs) != len(wantLens)*2 {
 		t.Fatalf("attr len: got %d want %d attrs=%v", len(attrs), len(wantLens)*2, attrs)
 	}
@@ -251,8 +284,8 @@ func assertEventAttrColumnLens(t *testing.T, attrs []string, key string, value s
 		if len(attrs[valueIndex]) != wantLen {
 			t.Fatalf("attr value[%d] len: got %d want %d", i, len(attrs[valueIndex]), wantLen)
 		}
-		if len(attrs[valueIndex]) > maxEventAttrValueLen {
-			t.Fatalf("attr value[%d] len exceeds max: got %d want <= %d", i, len(attrs[valueIndex]), maxEventAttrValueLen)
+		if len(attrs[valueIndex]) > maxLen {
+			t.Fatalf("attr value[%d] len exceeds max: got %d want <= %d", i, len(attrs[valueIndex]), maxLen)
 		}
 		rejoined += attrs[valueIndex]
 	}

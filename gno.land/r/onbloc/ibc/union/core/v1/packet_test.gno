@@ -17,6 +17,8 @@ func setupOpenChannel(cur realm, v *coreV1) (types.ChannelId, types.Bytes, *mock
 }
 
 func setupOpenChannelWithLightClient(cur realm, v *coreV1, lc *mockLightClient) (types.ChannelId, types.Bytes, *mockApp) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+
 	ms := v.store.(*mockStore)
 	clientId := createClient(cur, v, lc, nil, nil)
 	ms.SaveConnection(0, cur, types.ConnectionId(1),
@@ -40,6 +42,8 @@ func recvPacket(chId types.ChannelId, data string) types.Packet {
 }
 
 func setupOpenChannelWithoutApp(cur realm, v *coreV1, portId types.Bytes) types.ChannelId {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+
 	ms := v.store.(*mockStore)
 	clientId := createClient(cur, v, &mockLightClient{timestampAtHt: farFuture}, nil, nil)
 	ms.SaveConnection(0, cur, types.ConnectionId(1),
@@ -145,7 +149,7 @@ func TestSendPacketUnauthorizedSender(cur realm, t *testing.T) {
 }
 
 func TestAssertPacketDataSize(cur realm, t *testing.T) {
-	maxPacketDataBytes := (core.MaxPacketDataEventSize - 2) / 2
+	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
 	tests := []struct {
 		name string
 		data []byte
@@ -171,7 +175,7 @@ func TestAssertPacketDataSize(cur realm, t *testing.T) {
 }
 
 func TestPacketEntrypointsRejectOversizedPacketData(cur realm, t *testing.T) {
-	maxPacketDataBytes := (core.MaxPacketDataEventSize - 2) / 2
+	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
 	oversized := make([]byte, maxPacketDataBytes+1)
 	tests := []struct {
 		name string
@@ -212,7 +216,7 @@ func TestPacketEntrypointsRejectOversizedPacketData(cur realm, t *testing.T) {
 
 func TestRecvEntrypointsDispatchOversizedPacketDataWithReducedEvents(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-	maxPacketDataBytes := (core.MaxPacketDataEventSize - 2) / 2
+	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
 	oversized := make([]byte, maxPacketDataBytes+1)
 	tests := []struct {
 		name       string
@@ -1143,7 +1147,7 @@ func TestVerifyNonMembership(cur realm, t *testing.T) {
 
 func TestWriteAcknowledgementWritesAsyncAck(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-	maxPacketDataBytes := (core.MaxPacketDataEventSize - 2) / 2
+	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
 	tests := []struct {
 		name string
 		data []byte

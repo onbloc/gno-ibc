@@ -34,10 +34,6 @@ const (
 	PacketTimeoutEvent         = "PacketTimeout"
 	CommitMembershipProofEvent = "CommitMembershipProof"
 	CommitNonMembershipEvent   = "CommitNonMembershipProof"
-
-	maxEventAttrValueLen      = 1024
-	maxPacketDataEventColumns = 50
-	MaxPacketDataEventSize    = maxPacketDataEventColumns * maxEventAttrValueLen
 )
 
 func channelOpenInitEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) []string {
@@ -217,24 +213,37 @@ func emitBatchAcksEvent(channelId types.ChannelId, packetHash, batchHash types.H
 }
 
 func packetEventBaseAttrs(packet types.Packet) []string {
-	packetData := hexAttr(packet.Data)
+	config := GetEventConfig()
 	attrs := []string{
 		"packet_hash", commitPacketHash(packet).String(),
-		"packet_data_size", strconv.Itoa(len(packetData)),
 	}
-	return append(attrs, eventAttrColumns("packet_data", packetData)...)
+
+	packetData := hexAttr(packet.Data)
+	if config.SplitEventAttrs {
+		attrs = append(attrs, "packet_data_size", strconv.Itoa(len(packetData)))
+		return append(attrs, eventAttrColumns("packet_data", packetData, int(config.MaxEventAttrValueLen))...)
+	}
+
+	return append(attrs, "packet_data", packetData)
 }
 
-func eventAttrColumns(key string, value string) []string {
+// eventAttrColumns splits one encoded event attribute value into indexed
+// columns. Callers decide whether splitting is enabled before calling this
+// helper.
+func eventAttrColumns(key string, value string, maxValueLen int) []string {
+	if maxValueLen <= 0 {
+		panic("max event attr value len must be positive")
+	}
+
 	if len(value) == 0 {
 		return []string{key + "[0]", ""}
 	}
 
-	parts := (len(value) + maxEventAttrValueLen - 1) / maxEventAttrValueLen
+	parts := (len(value) + maxValueLen - 1) / maxValueLen
 	attrs := make([]string, 0, parts*2)
 	for index := 0; index < parts; index++ {
-		start := index * maxEventAttrValueLen
-		end := start + maxEventAttrValueLen
+		start := index * maxValueLen
+		end := start + maxValueLen
 		if end > len(value) {
 			end = len(value)
 		}

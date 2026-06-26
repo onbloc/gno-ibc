@@ -36,7 +36,7 @@ func TestUniversalErrorAck(t *testing.T) {
 }
 
 func TestRecvEntrypointsOversizedPacketDataReturnsFailureAck(cur realm, t *testing.T) {
-	maxPacketDataBytes := (core.MaxPacketDataEventSize - 2) / 2
+	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
 	oversized := make([]byte, maxPacketDataBytes+1)
 	tests := []struct {
 		name string

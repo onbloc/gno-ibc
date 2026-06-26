@@ -66,7 +66,9 @@ func sendWithSplitEnabled(cur realm, channelId types.ChannelId) {
 	ufmt.Println("[STEP] before config change: split packet_data attrs")
 
 	testing.SetRealm(testing.NewUserRealm(eventConfigAdminAddr))
-	core.SetEventConfig(cross(cur), core.NewEventConfig(true, 4, 2))
+	core.SetSplitEventAttrs(cross(cur), true)
+	core.SetMaxEventAttrValueLen(cross(cur), 4)
+	core.SetMaxPacketDataEventColumns(cross(cur), 2)
 	config := core.GetEventConfig()
 	ufmt.Printf("[INFO] split_event_attrs: %t\n", config.SplitEventAttrs)
 	ufmt.Printf("[INFO] max_event_attr_value_len: %d\n", config.MaxEventAttrValueLen)
@@ -83,7 +85,7 @@ func disableEventConfigSplit(cur realm) {
 	ufmt.Println("[STEP] update event config: disable packet_data attr splitting")
 
 	testing.SetRealm(testing.NewUserRealm(eventConfigAdminAddr))
-	core.SetEventConfig(cross(cur), core.NewEventConfig(false, 4, 2))
+	core.SetSplitEventAttrs(cross(cur), false)
 	config := core.GetEventConfig()
 	ufmt.Printf("[INFO] split_event_attrs: %t\n", config.SplitEventAttrs)
 	ufmt.Printf("[INFO] max_event_attr_value_len: %d\n", config.MaxEventAttrValueLen)

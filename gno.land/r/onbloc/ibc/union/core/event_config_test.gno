@@ -77,17 +77,105 @@ func TestSetEventConfigAccessControlled(cur realm, t *testing.T) {
 	}
 }
 
+func TestEventConfigFieldSettersAccessControlled(cur realm, t *testing.T) {
+	defer resetEventConfigForTest()
+
+	tests := []struct {
+		name       string
+		kind       string
+		wantPanic  string
+		wantConfig EventConfig
+	}{
+		{
+			name:       "split event attrs unauthorized keeps default",
+			kind:       "split event attrs unauthorized",
+			wantPanic:  access.ErrAccessManagerUnauthorizedCall,
+			wantConfig: DefaultEventConfig(),
+		},
+		{
+			name: "split event attrs admin updates field",
+			kind: "split event attrs admin",
+			wantConfig: EventConfig{
+				SplitEventAttrs:           false,
+				MaxEventAttrValueLen:      defaultMaxEventAttrValueLen,
+				MaxPacketDataEventColumns: defaultMaxPacketDataEventColumns,
+			},
+		},
+		{
+			name:       "max event attr value len unauthorized keeps default",
+			kind:       "max event attr value len unauthorized",
+			wantPanic:  access.ErrAccessManagerUnauthorizedCall,
+			wantConfig: DefaultEventConfig(),
+		},
+		{
+			name: "max event attr value len admin updates field",
+			kind: "max event attr value len admin",
+			wantConfig: EventConfig{
+				SplitEventAttrs:           true,
+				MaxEventAttrValueLen:      8,
+				MaxPacketDataEventColumns: defaultMaxPacketDataEventColumns,
+			},
+		},
+		{
+			name:       "max packet data event columns unauthorized keeps default",
+			kind:       "max packet data event columns unauthorized",
+			wantPanic:  access.ErrAccessManagerUnauthorizedCall,
+			wantConfig: DefaultEventConfig(),
+		},
+		{
+			name: "max packet data event columns admin updates field",
+			kind: "max packet data event columns admin",
+			wantConfig: EventConfig{
+				SplitEventAttrs:           true,
+				MaxEventAttrValueLen:      defaultMaxEventAttrValueLen,
+				MaxPacketDataEventColumns: 3,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		resetStore(cur)
+		requireSelectorProtectedForTest(cur, SelectorSetEventConfig)
+
+		if tc.wantPanic != "" {
+			uassert.AbortsContains(t, cur, tc.wantPanic, func(cur realm) {
+				switch tc.kind {
+				case "split event attrs unauthorized":
+					SetSplitEventAttrs(cross(cur), false)
+				case "max event attr value len unauthorized":
+					SetMaxEventAttrValueLen(cross(cur), 8)
+				case "max packet data event columns unauthorized":
+					SetMaxPacketDataEventColumns(cross(cur), 3)
+				}
+			})
+		} else {
+			testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+			switch tc.kind {
+			case "split event attrs admin":
+				SetSplitEventAttrs(cross(cur), false)
+			case "max event attr value len admin":
+				SetMaxEventAttrValueLen(cross(cur), 8)
+			case "max packet data event columns admin":
+				SetMaxPacketDataEventColumns(cross(cur), 3)
+			}
+		}
+		assertEventConfigEqual(t, GetEventConfig(), tc.wantConfig)
+	}
+}
+
 func TestSetEventConfigRejectsInvalidValues(cur realm, t *testing.T) {
 	resetStore(cur)
 
 	tests := []struct {
 		name       string
+		kind       string
 		config     EventConfig
 		wantPanic  string
 		wantConfig EventConfig
 	}{
 		{
-			name: "zero max event attr value len",
+			name: "object setter rejects zero max event attr value len",
+			kind: "object zero max event attr value len",
 			config: EventConfig{
 				SplitEventAttrs:           false,
 				MaxEventAttrValueLen:      0,
@@ -97,12 +185,25 @@ func TestSetEventConfigRejectsInvalidValues(cur realm, t *testing.T) {
 			wantConfig: DefaultEventConfig(),
 		},
 		{
-			name: "zero max packet data event columns",
+			name: "object setter rejects zero max packet data event columns",
+			kind: "object zero max packet data event columns",
 			config: EventConfig{
 				SplitEventAttrs:           true,
 				MaxEventAttrValueLen:      8,
 				MaxPacketDataEventColumns: 0,
 			},
+			wantPanic:  "max packet data event columns must be positive",
+			wantConfig: DefaultEventConfig(),
+		},
+		{
+			name:       "field setter rejects zero max event attr value len",
+			kind:       "field zero max event attr value len",
+			wantPanic:  "max event attr value len must be positive",
+			wantConfig: DefaultEventConfig(),
+		},
+		{
+			name:       "field setter rejects zero max packet data event columns",
+			kind:       "field zero max packet data event columns",
 			wantPanic:  "max packet data event columns must be positive",
 			wantConfig: DefaultEventConfig(),
 		},
@@ -113,7 +214,14 @@ func TestSetEventConfigRejectsInvalidValues(cur realm, t *testing.T) {
 			resetStore(cur)
 			uassert.AbortsContains(t, cur, tc.wantPanic, func(cur realm) {
 				testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
-				SetEventConfig(cross(cur), tc.config)
+				switch tc.kind {
+				case "object zero max event attr value len", "object zero max packet data event columns":
+					SetEventConfig(cross(cur), tc.config)
+				case "field zero max event attr value len":
+					SetMaxEventAttrValueLen(cross(cur), 0)
+				case "field zero max packet data event columns":
+					SetMaxPacketDataEventColumns(cross(cur), 0)
+				}
 			})
 			assertEventConfigEqual(t, GetEventConfig(), tc.wantConfig)
 		})

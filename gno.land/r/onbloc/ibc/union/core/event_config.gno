@@ -56,6 +56,37 @@ func SetEventConfig(cur realm, config EventConfig) {
 	setEventConfig(config)
 }
 
+// SetSplitEventAttrs updates whether large event attributes are split.
+// The caller must be authorized for SelectorSetEventConfig.
+func SetSplitEventAttrs(cur realm, splitEventAttrs bool) {
+	access.AssertCanCall(0, cur, SelectorSetEventConfig)
+
+	config := GetEventConfig()
+	config.SplitEventAttrs = splitEventAttrs
+	setEventConfig(config)
+}
+
+// SetMaxEventAttrValueLen updates the maximum value length for each split
+// event attribute column.
+// The caller must be authorized for SelectorSetEventConfig.
+func SetMaxEventAttrValueLen(cur realm, maxEventAttrValueLen uint) {
+	access.AssertCanCall(0, cur, SelectorSetEventConfig)
+
+	config := GetEventConfig()
+	config.MaxEventAttrValueLen = maxEventAttrValueLen
+	setEventConfig(config)
+}
+
+// SetMaxPacketDataEventColumns updates the packet_data split column limit.
+// The caller must be authorized for SelectorSetEventConfig.
+func SetMaxPacketDataEventColumns(cur realm, maxPacketDataEventColumns uint) {
+	access.AssertCanCall(0, cur, SelectorSetEventConfig)
+
+	config := GetEventConfig()
+	config.MaxPacketDataEventColumns = maxPacketDataEventColumns
+	setEventConfig(config)
+}
+
 func setEventConfig(config EventConfig) {
 	assertValidEventConfig(config)
 	eventConfig = config

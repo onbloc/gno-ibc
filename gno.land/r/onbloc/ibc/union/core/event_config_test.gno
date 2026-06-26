@@ -11,14 +11,23 @@ func TestGetEventConfigDefaults(cur realm, t *testing.T) {
 	resetStore(cur)
 
 	got := GetEventConfig()
-	if got.MaxEventAttrValueLen != defaultMaxEventAttrValueLen {
-		t.Fatalf("MaxEventAttrValueLen: got %d want %d", got.MaxEventAttrValueLen, defaultMaxEventAttrValueLen)
+	tests := []struct {
+		name string
+		got  int
+		want int
+	}{
+		{"split event attrs", boolToInt(got.SplitEventAttrs), 1},
+		{"max event attr value len", int(got.MaxEventAttrValueLen), defaultMaxEventAttrValueLen},
+		{"max packet data event columns", int(got.MaxPacketDataEventColumns), defaultMaxPacketDataEventColumns},
+		{"max packet data event size", MaxPacketDataEventSize(), defaultMaxEventAttrValueLen * defaultMaxPacketDataEventColumns},
 	}
-	if got.MaxPacketDataEventColumns != defaultMaxPacketDataEventColumns {
-		t.Fatalf("MaxPacketDataEventColumns: got %d want %d", got.MaxPacketDataEventColumns, defaultMaxPacketDataEventColumns)
-	}
-	if gotSize, wantSize := MaxPacketDataEventSize(), defaultMaxEventAttrValueLen*defaultMaxPacketDataEventColumns; gotSize != wantSize {
-		t.Fatalf("MaxPacketDataEventSize: got %d want %d", gotSize, wantSize)
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.got != tc.want {
+				t.Fatalf("got %d want %d", tc.got, tc.want)
+			}
+		})
 	}
 }
 
@@ -27,6 +36,7 @@ func TestSetEventConfigAccessControlled(cur realm, t *testing.T) {
 	defer resetEventConfigForTest()
 
 	next := EventConfig{
+		SplitEventAttrs:           false,
 		MaxEventAttrValueLen:      8,
 		MaxPacketDataEventColumns: 3,
 	}
@@ -52,17 +62,19 @@ func TestSetEventConfigRejectsInvalidValues(cur realm, t *testing.T) {
 		wantConfig EventConfig
 	}{
 		{
-			name: "negative max event attr value len",
+			name: "zero max event attr value len",
 			config: EventConfig{
-				MaxEventAttrValueLen:      -1,
+				SplitEventAttrs:           false,
+				MaxEventAttrValueLen:      0,
 				MaxPacketDataEventColumns: 3,
 			},
-			wantPanic:  "max event attr value len must be non-negative",
+			wantPanic:  "max event attr value len must be positive",
 			wantConfig: DefaultEventConfig(),
 		},
 		{
 			name: "zero max packet data event columns",
 			config: EventConfig{
+				SplitEventAttrs:           true,
 				MaxEventAttrValueLen:      8,
 				MaxPacketDataEventColumns: 0,
 			},
@@ -83,44 +95,58 @@ func TestSetEventConfigRejectsInvalidValues(cur realm, t *testing.T) {
 	}
 }
 
-func TestEventConfigDrivesPacketDataSplit(cur realm, t *testing.T) {
+func TestEventConfigDrivesPacketDataAttrs(cur realm, t *testing.T) {
 	resetStore(cur)
 	defer resetEventConfigForTest()
 
-	setEventConfig(EventConfig{
-		MaxEventAttrValueLen:      4,
-		MaxPacketDataEventColumns: 3,
-	})
+	tests := []struct {
+		name   string
+		config EventConfig
+		want   []string
+	}{
+		{
+			name: "split packet data",
+			config: EventConfig{
+				SplitEventAttrs:           true,
+				MaxEventAttrValueLen:      4,
+				MaxPacketDataEventColumns: 3,
+			},
+			want: []string{
+				"packet_data[0]", "0x00",
+				"packet_data[1]", "01",
+			},
+		},
+		{
+			name: "unsplit packet data",
+			config: EventConfig{
+				SplitEventAttrs:           false,
+				MaxEventAttrValueLen:      4,
+				MaxPacketDataEventColumns: 3,
+			},
+			want: []string{
+				"packet_data", "0x0001",
+			},
+		},
+	}
 
-	packet := NewPacket(1, 2, []byte{0x00, 0x01}, 10)
-	attrs := packetEventBaseAttrs(packet)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			setEventConfig(tc.config)
 
-	assertStringSliceEqual(t, attrs[4:], []string{
-		"packet_data[0]", "0x00",
-		"packet_data[1]", "01",
-	})
-}
+			packet := NewPacket(1, 2, []byte{0x00, 0x01}, 10)
+			attrs := packetEventBaseAttrs(packet)
 
-func TestEventConfigDisablesPacketDataSplit(cur realm, t *testing.T) {
-	resetStore(cur)
-	defer resetEventConfigForTest()
-
-	setEventConfig(EventConfig{
-		MaxEventAttrValueLen:      0,
-		MaxPacketDataEventColumns: 3,
-	})
-
-	packet := NewPacket(1, 2, []byte{0x00, 0x01}, 10)
-	attrs := packetEventBaseAttrs(packet)
-
-	assertStringSliceEqual(t, attrs[4:], []string{
-		"packet_data", "0x0001",
-	})
+			assertStringSliceEqual(t, attrs[4:], tc.want)
+		})
+	}
 }
 
 func assertEventConfigEqual(t *testing.T, got EventConfig, want EventConfig) {
 	t.Helper()
 
+	if got.SplitEventAttrs != want.SplitEventAttrs {
+		t.Fatalf("SplitEventAttrs: got %t want %t", got.SplitEventAttrs, want.SplitEventAttrs)
+	}
 	if got.MaxEventAttrValueLen != want.MaxEventAttrValueLen {
 		t.Fatalf("MaxEventAttrValueLen: got %d want %d", got.MaxEventAttrValueLen, want.MaxEventAttrValueLen)
 	}
@@ -131,4 +157,11 @@ func assertEventConfigEqual(t *testing.T, got EventConfig, want EventConfig) {
 
 func resetEventConfigForTest() {
 	eventConfig = DefaultEventConfig()
+}
+
+func boolToInt(v bool) int {
+	if v {
+		return 1
+	}
+	return 0
 }

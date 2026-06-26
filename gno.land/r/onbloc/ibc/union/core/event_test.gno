@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"testing"
 
-	eventattr "gno.land/p/onbloc/event/attr"
+	"gno.land/p/nt/uassert/v0"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
@@ -154,7 +154,7 @@ func TestConnectionOpenEventAttrs(cur realm, t *testing.T) {
 func TestPacketEventBaseAttrsSplitPacketData(cur realm, t *testing.T) {
 	resetEventConfigForTest()
 
-	maxLen := GetEventConfig().MaxEventAttrValueLen
+	maxLen := int(GetEventConfig().MaxEventAttrValueLen)
 	testCases := []struct {
 		name     string
 		data     []byte
@@ -201,7 +201,7 @@ func TestPacketEventBaseAttrsSplitPacketData(cur realm, t *testing.T) {
 func TestEventAttrColumnsBoundary(cur realm, t *testing.T) {
 	resetEventConfigForTest()
 
-	maxLen := GetEventConfig().MaxEventAttrValueLen
+	maxLen := int(GetEventConfig().MaxEventAttrValueLen)
 	testCases := []struct {
 		name     string
 		value    string
@@ -236,8 +236,26 @@ func TestEventAttrColumnsBoundary(cur realm, t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			attrs := eventattr.Columns("packet_data", tc.value, maxLen)
+			attrs := eventAttrColumns("packet_data", tc.value, maxLen)
 			assertEventAttrColumnLens(t, attrs, "packet_data", tc.value, tc.wantLens, maxLen)
+		})
+	}
+}
+
+func TestEventAttrColumnsRejectsInvalidMaxValueLen(cur realm, t *testing.T) {
+	testCases := []struct {
+		name        string
+		maxValueLen int
+	}{
+		{"negative max value len", -1},
+		{"zero max value len", 0},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			uassert.AbortsContains(t, cur, "max event attr value len must be positive", func(cur realm) {
+				eventAttrColumns("packet_data", "0x00", tc.maxValueLen)
+			})
 		})
 	}
 }

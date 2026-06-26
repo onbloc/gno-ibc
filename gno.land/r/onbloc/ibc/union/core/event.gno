@@ -4,7 +4,6 @@ import (
 	"chain"
 	"strconv"
 
-	eventattr "gno.land/p/onbloc/event/attr"
 	"gno.land/p/onbloc/ibc/union/types"
 )
 
@@ -214,13 +213,18 @@ func emitBatchAcksEvent(channelId types.ChannelId, packetHash, batchHash types.H
 }
 
 func packetEventBaseAttrs(packet types.Packet) []string {
-	packetData := hexAttr(packet.Data)
 	config := GetEventConfig()
 	attrs := []string{
 		"packet_hash", commitPacketHash(packet).String(),
 		"packet_data_size", strconv.Itoa(HexAttrLen(packet.Data)),
 	}
-	return append(attrs, eventattr.Columns("packet_data", packetData, config.MaxEventAttrValueLen)...)
+
+	packetData := hexAttr(packet.Data)
+	if config.SplitEventAttrs {
+		return append(attrs, eventAttrColumns("packet_data", packetData, int(config.MaxEventAttrValueLen))...)
+	}
+
+	return append(attrs, "packet_data", packetData)
 }
 
 func emitPacketSendEvent(packet types.Packet, sourceChannel types.Channel, sourceConnection types.Connection) {

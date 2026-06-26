@@ -30,35 +30,58 @@ func TestPacketDataTooLargeUsesEventConfig(cur realm, t *testing.T) {
 	resetStore(cur)
 	defer resetEventConfigForTest()
 
-	setEventConfig(EventConfig{
-		MaxEventAttrValueLen:      4,
-		MaxPacketDataEventColumns: 2,
-	})
-
-	if got, want := MaxPacketDataEventSize(), 8; got != want {
-		t.Fatalf("MaxPacketDataEventSize: got %d want %d", got, want)
+	tests := []struct {
+		name       string
+		config     EventConfig
+		data       []byte
+		wantBudget int
+		wantLarge  bool
+	}{
+		{
+			name: "split enabled within budget",
+			config: EventConfig{
+				SplitEventAttrs:           true,
+				MaxEventAttrValueLen:      4,
+				MaxPacketDataEventColumns: 2,
+			},
+			data:       make([]byte, 3),
+			wantBudget: 8,
+			wantLarge:  false,
+		},
+		{
+			name: "split enabled over budget",
+			config: EventConfig{
+				SplitEventAttrs:           true,
+				MaxEventAttrValueLen:      4,
+				MaxPacketDataEventColumns: 2,
+			},
+			data:       make([]byte, 4),
+			wantBudget: 8,
+			wantLarge:  true,
+		},
+		{
+			name: "split disabled skips budget check",
+			config: EventConfig{
+				SplitEventAttrs:           false,
+				MaxEventAttrValueLen:      4,
+				MaxPacketDataEventColumns: 2,
+			},
+			data:       make([]byte, 1024),
+			wantBudget: 8,
+			wantLarge:  false,
+		},
 	}
-	if PacketDataTooLarge(make([]byte, 3)) {
-		t.Fatal("3 raw bytes encode to 8 chars and should fit the configured budget")
-	}
-	if !PacketDataTooLarge(make([]byte, 4)) {
-		t.Fatal("4 raw bytes encode to 10 chars and should exceed the configured budget")
-	}
-}
 
-func TestPacketDataTooLargeDisabledWhenEventAttrSplitDisabled(cur realm, t *testing.T) {
-	resetStore(cur)
-	defer resetEventConfigForTest()
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			setEventConfig(tc.config)
 
-	setEventConfig(EventConfig{
-		MaxEventAttrValueLen:      0,
-		MaxPacketDataEventColumns: 2,
-	})
-
-	if got := MaxPacketDataEventSize(); got != 0 {
-		t.Fatalf("MaxPacketDataEventSize: got %d want 0", got)
-	}
-	if PacketDataTooLarge(make([]byte, 1024)) {
-		t.Fatal("packet data budget check should be disabled when event attr split is disabled")
+			if got := MaxPacketDataEventSize(); got != tc.wantBudget {
+				t.Fatalf("MaxPacketDataEventSize: got %d want %d", got, tc.wantBudget)
+			}
+			if got := PacketDataTooLarge(tc.data); got != tc.wantLarge {
+				t.Fatalf("PacketDataTooLarge: got %t want %t", got, tc.wantLarge)
+			}
+		})
 	}
 }

@@ -414,8 +414,8 @@ A bare `func main()` is still valid for filetests that do not call any crossing 
 
 Scenario test convention: use `gno.land/r/onbloc/ibc/scenario` as the current
 scenario spec source. Scenario filetests use descriptive names without a `z`
-prefix, for example `token_send_by_ucs03_zkgm_filetest.gno` and
-`token_receive_by_statelens_filetest.gno`.
+prefix, for example `send_wrapped_uatom_by_ucs03_zkgm_filetest.gno` and
+`receive_wrapped_uatom_by_ucs03_zkgm_filetest.gno`.
 
 `zz_*_example_filetest.gno` = documentation examples (referenced from README)
 

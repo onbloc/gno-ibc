@@ -644,11 +644,7 @@ func (v *ucs03ZkgmV1) scaleOutgoingForwardInstruction(_ int, rlm realm, instruct
 }
 
 func (v *ucs03ZkgmV1) scaleOutgoingBatchInstruction(_ int, rlm realm, instruction z.Instruction) (z.Instruction, error) {
-	if instruction.Version != z.INSTR_VERSION_0 {
-		return instruction, nil
-	}
-
-	batch, err := z.DecodeBatch(instruction.Operand)
+	batch, err := decodeBatchInstruction(instruction)
 	if err != nil {
 		return instruction, err
 	}

@@ -374,6 +374,32 @@ func TestScaleOutgoingTokenOrderInstruction(cur realm, t *testing.T) {
 	}
 }
 
+func TestScaleOutgoingTokenOrderLessThanTargetDecimals(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	denom := "ibc/FOUR-DEC-SCALE"
+	sender := testAddress("four-dec-sender")
+	v.mintVoucher(0, cur, denom, [32]byte{}, "Four", "FOUR", 4, sender, u256.NewUint(12345))
+
+	instruction := batchMustOrderInstruction(z.TokenOrderV2{
+		Sender:      []byte(sender),
+		Receiver:    []byte(testAddress("four-dec-receiver")),
+		BaseToken:   []byte(denom),
+		BaseAmount:  u256.NewUint(12345),
+		QuoteToken:  []byte("ibc/FOUR-DEC-OUT"),
+		QuoteAmount: u256.NewUint(12000),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	})
+
+	scaled, err := v.scaleOutgoingTokenOrderInstruction(0, cur, instruction)
+	uassert.NoError(t, err)
+
+	got, err := z.DecodeTokenOrderV2(scaled.Operand)
+	uassert.NoError(t, err)
+	uassert.Equal(t, u256.NewUint(12345).ToString(), got.BaseAmount.ToString())
+	uassert.Equal(t, u256.NewUint(12000).ToString(), got.QuoteAmount.ToString())
+}
+
 func TestScaleOutgoingForwardInstruction(cur realm, t *testing.T) {
 	v := newTestImpl()
 

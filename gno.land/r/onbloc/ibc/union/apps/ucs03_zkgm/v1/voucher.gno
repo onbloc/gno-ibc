@@ -45,7 +45,7 @@ func scaleLocalAmount(tokenDecimals uint8, amount *u256.Uint) (*u256.Uint, error
 	}
 
 	if tokenDecimals <= targetDecimals {
-		return amount, nil
+		return amount.Clone(), nil
 	}
 
 	return u256.Zero().Mul(amount, factor), nil
@@ -53,7 +53,7 @@ func scaleLocalAmount(tokenDecimals uint8, amount *u256.Uint) (*u256.Uint, error
 
 func wireAmountToLocal(tokenDecimals uint8, amount *u256.Uint) (*u256.Uint, error) {
 	if tokenDecimals <= targetDecimals {
-		return amount, nil
+		return amount.Clone(), nil
 	}
 
 	factor, err := decimalFactor(tokenDecimals)

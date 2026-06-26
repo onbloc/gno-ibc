@@ -44,8 +44,12 @@ func (v *ucs03ZkgmV1) executeForward(_ int, rlm realm, packet types.Packet, salt
 	// Forward children construct ZkgmPacket directly; their salt is namespaced via
 	// DeriveForwardSalt, not DeriveSenderSalt. Record the parent so the child's
 	// resolution can write the deferred parent ack, then dispatch via core.
+	//
+	// The child is a single next-hop packet, so it is committed with core.SendPacket:
+	// union dispatches the forward child through the ibc-host PacketSend (single send_packet) entrypoint, not batch_send.
+	// reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L1460-L1480
 	v.store.SetInFlightPacket(0, rlm, forwardInFlightKey(childPacket), packet)
-	core.BatchSend(cross(rlm), types.NewMsgBatchSend([]types.Packet{childPacket}))
+	core.SendPacket(cross(rlm), childPacket.SourceChannelId, childPacket.TimeoutTimestamp, childPacket.Data)
 
 	return core.NewRecvPacketResult(types.PacketStatusAsync, nil), nil
 }

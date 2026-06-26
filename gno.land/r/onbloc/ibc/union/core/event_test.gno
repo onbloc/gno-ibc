@@ -152,7 +152,9 @@ func TestConnectionOpenEventAttrs(cur realm, t *testing.T) {
 }
 
 func TestPacketEventBaseAttrsSplitPacketData(cur realm, t *testing.T) {
-	maxLen := eventattr.MaxValueLen()
+	resetEventConfigForTest()
+
+	maxLen := GetEventConfig().MaxEventAttrValueLen
 	testCases := []struct {
 		name     string
 		data     []byte
@@ -197,7 +199,9 @@ func TestPacketEventBaseAttrsSplitPacketData(cur realm, t *testing.T) {
 }
 
 func TestEventAttrColumnsBoundary(cur realm, t *testing.T) {
-	maxLen := eventattr.MaxValueLen()
+	resetEventConfigForTest()
+
+	maxLen := GetEventConfig().MaxEventAttrValueLen
 	testCases := []struct {
 		name     string
 		value    string
@@ -232,7 +236,7 @@ func TestEventAttrColumnsBoundary(cur realm, t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			attrs := eventattr.Columns("packet_data", tc.value)
+			attrs := eventattr.Columns("packet_data", tc.value, maxLen)
 			assertEventAttrColumnLens(t, attrs, "packet_data", tc.value, tc.wantLens, maxLen)
 		})
 	}

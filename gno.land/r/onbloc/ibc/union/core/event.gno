@@ -215,11 +215,12 @@ func emitBatchAcksEvent(channelId types.ChannelId, packetHash, batchHash types.H
 
 func packetEventBaseAttrs(packet types.Packet) []string {
 	packetData := hexAttr(packet.Data)
+	config := GetEventConfig()
 	attrs := []string{
 		"packet_hash", commitPacketHash(packet).String(),
 		"packet_data_size", strconv.Itoa(HexAttrLen(packet.Data)),
 	}
-	return append(attrs, eventattr.Columns("packet_data", packetData)...)
+	return append(attrs, eventattr.Columns("packet_data", packetData, config.MaxEventAttrValueLen)...)
 }
 
 func emitPacketSendEvent(packet types.Packet, sourceChannel types.Channel, sourceConnection types.Connection) {

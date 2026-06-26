@@ -2,10 +2,13 @@ package attr
 
 import "strconv"
 
-const maxValueLen = 1024
+// Columns splits an encoded event attribute value into indexed columns. A
+// non-positive maxValueLen leaves the value unsplit.
+func Columns(key string, value string, maxValueLen int) []string {
+	if maxValueLen <= 0 {
+		return []string{key, value}
+	}
 
-// Columns splits an encoded event attribute value into indexed columns.
-func Columns(key string, value string) []string {
 	if len(value) == 0 {
 		return []string{key + "[0]", ""}
 	}
@@ -22,9 +25,4 @@ func Columns(key string, value string) []string {
 	}
 
 	return attrs
-}
-
-// MaxValueLen returns the maximum event attribute value length.
-func MaxValueLen() int {
-	return maxValueLen
 }

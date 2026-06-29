@@ -13,17 +13,18 @@ import (
 	"testing"
 
 	"gno.land/p/nt/ufmt/v0"
-	types "gno.land/p/onbloc/ibc/union/types"
+	"gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
 	u256 "gno.land/p/gnoswap/uint256"
 
+	"gno.land/r/demo/defi/grc20reg"
+	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
-	core "gno.land/r/onbloc/ibc/union/core"
+	"gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
-	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 )
 
 const (
@@ -58,7 +59,7 @@ func main(cur realm) {
 	burnSend(cur, channelId, quoteToken, 80)
 	println("")
 
-	println("[SCENARIO] 5. Conservation: holder balance equals Σmint − Σburn")
+	println("[SCENARIO] 5. Conservation: holder balance and token total supply equal Σmint − Σburn")
 	conservation(quoteToken)
 }
 
@@ -130,8 +131,10 @@ func reportBalance(quoteToken, label string) {
 
 func conservation(quoteToken string) {
 	bal := zkgm.VoucherBalanceOf(quoteToken, holderAddr)
+	supply := grc20reg.MustGet(zkgm.ProxyPkgPath() + "." + quoteToken[len("ibc/"):]).TotalSupply()
 	ufmt.Printf("[INFO] holder balance = %d, Σmint−Σburn = %d, conserved = %t\n", bal, expected, bal == expected)
-	ufmt.Println("[EXPECTED] holder balance should equal 100 + 50 − 80 = 70 (conserved)")
+	ufmt.Printf("[INFO] token total supply = %d, Σmint−Σburn = %d, conserved = %t\n", supply, expected, supply == expected)
+	ufmt.Println("[EXPECTED] holder balance and token total supply should equal 100 + 50 − 80 = 70 (conserved)")
 }
 
 // --- encoding helpers ---
@@ -184,6 +187,7 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 // [SCENARIO] 4. UNESCROW send burns 80 from the holder
 // [INFO] holder voucher balance after burn: 70 (Σmint−Σburn = 70)
 //
-// [SCENARIO] 5. Conservation: holder balance equals Σmint − Σburn
+// [SCENARIO] 5. Conservation: holder balance and token total supply equal Σmint − Σburn
 // [INFO] holder balance = 70, Σmint−Σburn = 70, conserved = true
-// [EXPECTED] holder balance should equal 100 + 50 − 80 = 70 (conserved)
+// [INFO] token total supply = 70, Σmint−Σburn = 70, conserved = true
+// [EXPECTED] holder balance and token total supply should equal 100 + 50 − 80 = 70 (conserved)

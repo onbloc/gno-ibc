@@ -259,8 +259,8 @@ func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.Channel
 }
 
 // protocolFillUnescrowV2 releases an escrowed local asset for an unwrap order:
-// decrease the channel balance first, then send the quote to the receiver and
-// the fee to the relayer from the proxy escrow.
+// verify the channel balance, release quote and fee from proxy escrow, then
+// decrease the channel balance.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2415-L2488
 func (v *ucs03ZkgmV1) protocolFillUnescrowV2(_ int, rlm realm, channelId types.ChannelId, path *u256.Uint, baseToken []byte, quoteTokenStr string, receiver address, relayer address, baseAmount *u256.Uint, quoteAmount *u256.Uint) (types.RecvPacketResult, error) {
 	reversedPath, err := z.ReverseChannelPath(path)

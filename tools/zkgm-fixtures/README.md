@@ -78,47 +78,6 @@ This runs `cargo run --release -p zkgm-fixtures`, captures stdout, and writes th
 3. Pick a `name` that's stable (it ends up in gno test failure output) and unique.
 4. Run `make refresh-zkgm-scenarios` and commit both the updated `main.rs` and the regenerated `scenarios.json` + `scenarios_fixture_test.gno` files.
 
-## Replaying scenarios via gnokey
-
-The `scripts/` directory contains a small wrapper that turns each scenario into a `gnokey maketx run` script that invokes `zkgm.Send(...)` with the scenario's `salt`, `instruction`, `source_channel`, and `tx_timeout_timestamp`.
-
-```bash
-# Render every scenario into scripts/out/<name>.gno (no execution).
-tools/zkgm-fixtures/scripts/gen-send-script.sh --all
-
-# Render a single scenario.
-tools/zkgm-fixtures/scripts/gen-send-script.sh recv_call_eureka_true
-
-# Render and execute against a running chain.
-GNOKEY_REMOTE=tcp://127.0.0.1:26657 \
-GNOKEY_CHAINID=dev \
-GNOKEY_KEYNAME=test1 \
-tools/zkgm-fixtures/scripts/gen-send-script.sh recv_token_order_v2_escrow_protocol_fill --exec
-```
-
-The rendered scripts target the module path `gno.land/r/onbloc/unionibc/v1/apps/zkgm` (the zkgm v1 realm) and reuse `gno.land/p/onbloc/unionibc/zkgm` types. Output directory (`scripts/out/`) is gitignored — re-render whenever scenarios are regenerated.
-
-This only covers the **send** side. Replaying the recv/ack side would require a real IBC light-client proof and is out of scope for direct fixture replay; the `gno.land/r/core/ibc/v1/apps/zkgm/testing/e2e/` harness is the right place for that.
-
-### Running against `gnodev local`
-
-The zkgm packages live on disk under `gno.land/{p,r}/core/...` but declare their module name as `gno.land/{p,r}/onbloc/{ibc,unionibc}/...` in `gnomod.toml`. The default `gnodev` `root=` resolver matches directory layout to import path, so it cannot find these aliased modules; a `local=` resolver is needed per aliased package. `tools/run-v1-ibc-smoke-node.sh` launches a node with the full resolver set already configured (see `tools/gnokey-smoke/lib.sh`):
-
-```bash
-RPC_LISTENER=0.0.0.0:26657 tools/run-v1-ibc-smoke-node.sh
-```
-
-With this node running, `--exec` against the default `gnodev` `test1` keyring works without further setup:
-
-```bash
-GNOKEY_REMOTE=tcp://127.0.0.1:26657 \
-GNOKEY_CHAINID=dev \
-GNOKEY_KEYNAME=test1 \
-tools/zkgm-fixtures/scripts/gen-send-script.sh recv_call_eureka_false_empty_calldata --exec
-```
-
-The fixtures carry toy values in the inner instruction (e.g. `sender = "alice"`, `base_token = "ibc/v1-send"`), so Send-side replay will surface realm-level validation errors that are tied to those toy values — `zkgm/v1: invalid call sender` (Call.Sender doesn't match `runtime.OriginCaller()`), `zkgm/voucher: not found: ibc/v1-send` (no voucher minted on this denom), `zkgm/v1: eureka mode not supported` (v1 rejects `eureka=true`). These are evidence the harness reached the realm; they're not harness bugs. For a fully successful replay, mint the relevant vouchers / register the relevant ports beforehand and patch the rendered script to use an address the caller controls.
-
 ## Sync with Union
 
 The `sol!` struct block, opcode constants, fill-type constants, ack-tag constants, and token-order-kind constants are a verbatim copy of `union/cosmwasm/app/ucs03-zkgm/src/com.rs`. If Union ever changes the wire format, regenerate these fixtures.

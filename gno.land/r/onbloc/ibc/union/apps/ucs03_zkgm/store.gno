@@ -78,7 +78,6 @@ type Store struct {
 	vouchers           *bptree.BPTree // ibcDenom -> *Voucher
 	receivers          *bptree.BPTree // pkgPath -> z.Zkgmable
 	lockedNative       *bptree.BPTree // denom -> *u256.Uint (permanently locked native)
-	assetClass         *bptree.BPTree // denom -> string
 	localGRC20Tokens   *bptree.BPTree // denom -> *grc20.Token
 	rateLimitDisabled  bool
 }
@@ -95,7 +94,6 @@ func NewStore() *Store {
 		vouchers:           bptree.NewBPTree32(),
 		receivers:          bptree.NewBPTree32(),
 		lockedNative:       bptree.NewBPTree32(),
-		assetClass:         bptree.NewBPTree32(),
 		localGRC20Tokens:   bptree.NewBPTree32(),
 		// Rate limiting is opt-in: enabled per-denom by an admin who first
 		// configures a token bucket (see SetBucketConfig). With it enabled, a denom
@@ -187,24 +185,6 @@ func (s *Store) GetLockedNative(denom string) (*u256.Uint, bool) {
 	}
 
 	return lockedNativeAmount, true
-}
-
-// SetAssetClass records the first local custody classification for a denom.
-func (s *Store) SetAssetClass(_ int, rlm realm, denom string, class string) {
-	assertIsRlmCurrent(0, rlm)
-	if s.assetClass.Has(denom) {
-		return
-	}
-	s.assetClass.Set(denom, class)
-}
-
-// GetAssetClass returns a denom's pinned local custody classification.
-func (s *Store) GetAssetClass(denom string) (string, bool) {
-	v, ok := s.assetClass.Get(denom)
-	if !ok {
-		return "", false
-	}
-	return v.(string), true
 }
 
 // SetLocalGRC20Token pins the first registry token used for a local GRC20 denom.

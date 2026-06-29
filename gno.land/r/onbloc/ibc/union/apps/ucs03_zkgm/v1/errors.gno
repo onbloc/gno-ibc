@@ -52,7 +52,6 @@ const (
 	errVoucherNotFound          = "voucher not found"
 	errUnsupportedTokenDecimals = "unsupported token decimals"
 	errDecimalDust              = "zkgm/token_order: decimal dust is not allowed"
-	errLocalGRC20TokenNotFound  = "local GRC20 token not found"
 
 	// rate limit
 	errTokenBucketAbsent = "token bucket is absent"

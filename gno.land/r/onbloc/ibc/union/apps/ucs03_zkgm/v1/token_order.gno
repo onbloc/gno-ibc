@@ -10,7 +10,6 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	"gno.land/r/demo/defi/grc20reg"
-	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -34,16 +33,7 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channel
 
 	switch order.Kind {
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
-		baseDenom := string(order.BaseToken)
-		if err := v.localTokenEscrow(0, rlm, baseDenom, rlm.Previous().Address().String(), funds, order.BaseAmount); err != nil {
-			return err
-		}
-
-		err := v.increaseChannelBalanceV2(0, rlm, channelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
-		if err != nil {
-			return err
-		}
-		return nil
+		return v.escrowTokenOrderV2(0, rlm, funds, channelId, path, order)
 	case z.TOKEN_ORDER_KIND_UNESCROW:
 		baseDenom := string(order.BaseToken)
 
@@ -480,6 +470,15 @@ func (v *ucs03ZkgmV1) burnEscrowedV2(_ int, rlm realm, sourceChannelId types.Cha
 	return v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
 }
 
+func (v *ucs03ZkgmV1) escrowTokenOrderV2(_ int, rlm realm, funds *funds, channelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
+	baseDenom := string(order.BaseToken)
+	if err := v.localTokenEscrow(0, rlm, baseDenom, rlm.Previous().Address().String(), funds, order.BaseAmount); err != nil {
+		return err
+	}
+
+	return v.increaseChannelBalanceV2(0, rlm, channelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
+}
+
 // localTokenEscrow takes custody of the base token for a local send.
 func (v *ucs03ZkgmV1) localTokenEscrow(_ int, rlm realm, denom, sender string, funds *funds, amount *u256.Uint) error {
 	amount64, err := amountInt64(amount)
@@ -490,18 +489,15 @@ func (v *ucs03ZkgmV1) localTokenEscrow(_ int, rlm realm, denom, sender string, f
 		return makeError(errZeroAmount)
 	}
 
-	class, token, err := v.classifyLocalAsset(0, rlm, denom)
-	if err != nil {
-		return err
-	}
-	switch class {
-	case zkgm.AssetClassVoucher:
+	if strings.HasPrefix(denom, ibcDenomPrefix) {
 		return v.transferVoucher(0, rlm, denom, address(sender), rlm.Address(), amount)
-	case zkgm.AssetClassLocalGRC20:
-		return token.RealmTeller(0, rlm).TransferFrom(0, rlm, address(sender), rlm.Address(), amount64)
-	default:
-		return funds.sub(denom, amount)
 	}
+
+	if token, ok := v.localGRC20Token(0, rlm, denom); ok {
+		return token.RealmTeller(0, rlm).TransferFrom(0, rlm, address(sender), rlm.Address(), amount64)
+	}
+
+	return funds.sub(denom, amount)
 }
 
 // localTokenUnescrow releases custody of the base token (recv unwrap / refund),
@@ -515,46 +511,28 @@ func (v *ucs03ZkgmV1) localTokenUnescrow(_ int, rlm realm, denom, recipient stri
 		return makeError(errZeroAmount)
 	}
 
-	class, token, err := v.classifyLocalAsset(0, rlm, denom)
-	if err != nil {
-		return err
+	if strings.HasPrefix(denom, ibcDenomPrefix) {
+		return v.transferVoucher(0, rlm, denom, rlm.Address(), address(recipient), amount)
 	}
 
-	switch class {
-	case zkgm.AssetClassVoucher:
-		return v.transferVoucher(0, rlm, denom, rlm.Address(), address(recipient), amount)
-	case zkgm.AssetClassLocalGRC20:
+	if token, ok := v.localGRC20Token(0, rlm, denom); ok {
 		return token.RealmTeller(0, rlm).Transfer(0, rlm, address(recipient), amount64)
-	default:
-		return v.sendNative(0, rlm, denom, recipient, amount)
 	}
+
+	return v.sendNative(0, rlm, denom, recipient, amount)
 }
 
-func (v *ucs03ZkgmV1) classifyLocalAsset(_ int, rlm realm, denom string) (string, *grc20.Token, error) {
-	if strings.HasPrefix(denom, ibcDenomPrefix) {
-		if _, ok := v.store.GetAssetClass(denom); !ok {
-			v.store.SetAssetClass(0, rlm, denom, zkgm.AssetClassVoucher)
-		}
-		return zkgm.AssetClassVoucher, nil, nil
+func (v *ucs03ZkgmV1) localGRC20Token(_ int, rlm realm, denom string) (*grc20.Token, bool) {
+	if token, ok := v.store.GetLocalGRC20Token(denom); ok {
+		return token, token != nil
 	}
-	if class, ok := v.store.GetAssetClass(denom); ok {
-		if class != zkgm.AssetClassLocalGRC20 {
-			return class, nil, nil
-		}
 
-		token, ok := v.store.GetLocalGRC20Token(denom)
-		if !ok || token == nil {
-			return "", nil, makeError(errLocalGRC20TokenNotFound, denom)
-		}
-		return class, token, nil
-	}
 	if token := grc20reg.Get(denom); token != nil {
-		v.store.SetAssetClass(0, rlm, denom, zkgm.AssetClassLocalGRC20)
 		v.store.SetLocalGRC20Token(0, rlm, denom, token)
-		return zkgm.AssetClassLocalGRC20, token, nil
+		return token, true
 	}
-	v.store.SetAssetClass(0, rlm, denom, zkgm.AssetClassNative)
-	return zkgm.AssetClassNative, nil, nil
+
+	return nil, false
 }
 
 // refundIBCVoucher re-mints an IBC voucher to recipient, preserving the stored metadata image.

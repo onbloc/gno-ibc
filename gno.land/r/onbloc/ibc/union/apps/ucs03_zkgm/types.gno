@@ -11,12 +11,6 @@ import (
 
 const Version = z.PROTOCOL_VERSION
 
-const (
-	AssetClassNative     = "native"
-	AssetClassVoucher    = "voucher"
-	AssetClassLocalGRC20 = "local-grc20"
-)
-
 type IApp interface {
 	// IApp
 	OnChannelOpenInit(_ int, rlm realm, connectionId types.ConnectionId, channelId types.ChannelId, version string, relayer address)
@@ -66,9 +60,6 @@ type IStore interface {
 
 	AddLockedNative(_ int, rlm realm, denom string, amount *u256.Uint)
 	GetLockedNative(denom string) (*u256.Uint, bool)
-
-	SetAssetClass(_ int, rlm realm, denom string, class string)
-	GetAssetClass(denom string) (string, bool)
 
 	SetLocalGRC20Token(_ int, rlm realm, denom string, token *grc20.Token)
 	GetLocalGRC20Token(denom string) (*grc20.Token, bool)

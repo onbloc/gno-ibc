@@ -15,7 +15,6 @@ import (
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
 	"gno.land/r/demo/defi/grc20reg"
-	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -135,11 +134,9 @@ func TestTokenOrderVerifyLocalGRC20EscrowsAfterApproval(cur realm, t *testing.T)
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(0), token.BalanceOf(address(sender)))
 	uassert.Equal(t, int64(10), token.BalanceOf(cur.Address()))
-	v.increaseChannelBalanceV2(0, cur, types.ChannelId(1), u256.Zero(), order.BaseToken, order.QuoteToken, order.BaseAmount)
+	uassert.NoError(t, v.increaseChannelBalanceV2(0, cur, types.ChannelId(1), u256.Zero(), order.BaseToken, order.QuoteToken, order.BaseAmount))
 	balance, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(1), u256.Zero(), order.BaseToken, order.QuoteToken))
 	uassert.Equal(t, "10", balance.ToString())
-	class, _ := testStore.GetAssetClass(grc20Key)
-	uassert.Equal(t, zkgm.AssetClassLocalGRC20, class)
 	pinned, _ := testStore.GetLocalGRC20Token(grc20Key)
 	uassert.True(t, pinned == token)
 }
@@ -217,16 +214,6 @@ func TestLocalTokenUnescrowUsesPinnedGRC20AfterRegistryOverwrite(cur realm, t *t
 	uassert.Equal(t, int64(10), tokenB.BalanceOf(cur.Address()))
 }
 
-func TestLocalGRC20ClassRequiresPinnedToken(cur realm, t *testing.T) {
-	v := newTestImpl()
-	denom := "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1.missing-token"
-	testStore.SetAssetClass(0, cur, denom, zkgm.AssetClassLocalGRC20)
-
-	err := v.localTokenEscrow(0, cur, denom, testAddress("missing-token"), newFunds(nil), u256.NewUint(1))
-
-	uassert.ErrorContains(t, err, errLocalGRC20TokenNotFound)
-}
-
 func TestTokenOrderVerifyLocalGRC20InvalidAmountsDoNotMutate(cur realm, t *testing.T) {
 	cases := []struct {
 		name   string
@@ -265,7 +252,7 @@ func TestTokenOrderVerifyLocalGRC20InvalidAmountsDoNotMutate(cur realm, t *testi
 			uassert.Equal(t, int64(0), token.BalanceOf(cur.Address()))
 			_, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(3), u256.Zero(), order.BaseToken, order.QuoteToken))
 			uassert.False(t, ok)
-			_, ok = testStore.GetAssetClass(grc20Key)
+			_, ok = testStore.GetLocalGRC20Token(grc20Key)
 			uassert.False(t, ok)
 		})
 	}

@@ -6,12 +6,9 @@ package forward
 // buildForwardChild does not emit the inner instruction directly — it re-wraps it in a
 // fresh OP_FORWARD carrying the remaining path, so the next hop continues forwarding.
 // This exercises the continuation branch (a path with three channel slots: prevDest,
-// nextSource, and one remaining hop). The relay is observed the same way as the
-// single-hop case: the parent recv parks async (receipt "committed", ack deferred) and
-// a child is committed on the intermediate source channel (2). The nested child packet
-// is not reconstructed here (the dequeued continuation path's slot layout makes an exact
-// re-derivation fragile); the async parent receipt is the signal that the continuation
-// branch built and dispatched the next-hop forward.
+// nextSource, and one remaining hop). The parent recv parks async (receipt-only,
+// ack deferred), and the expected child packet is reconstructed to prove that the
+// continuation was emitted as a fresh OP_FORWARD on the intermediate source channel.
 
 import (
 	"chain"
@@ -23,12 +20,12 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 
+	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
-	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 )
 
 const (
@@ -50,9 +47,7 @@ func main(cur realm) {
 	println("")
 
 	println("[SCENARIO] 2. Receive a multi-hop OP_FORWARD: the child re-wraps the remaining hop and is relayed")
-	parent := recvMultihopForward(cur)
-	ufmt.Printf("[INFO] parent receipt: %s\n", receiptState(parent))
-	ufmt.Println("[EXPECTED] committed: the continuation branch built and dispatched the next-hop forward (async, ack deferred)")
+	recvMultihopForward(cur)
 }
 
 func bootstrap(cur realm) {
@@ -90,25 +85,59 @@ func recvMultihopForward(cur realm) types.Packet {
 		Instruction:      mustCallInstruction(call),
 	}
 	parent := core.NewPacket(types.ChannelId(101), types.ChannelId(parentChannel), saltedForwardData(salt, forward), types.Timestamp(1<<62))
+	child := deriveContinuationChild(salt, forward)
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{parent}, [][]byte{nil}, nil, 1))
+
+	zp := mustDecodeZkgmPacket(child)
+	ufmt.Printf("[INFO] parent receipt-only/committed: %t\n", receiptOnly(parent))
+	ufmt.Printf("[INFO] child packet commitment present: %t\n", packetCommitted(child))
+	ufmt.Printf("[INFO] child opcode is OP_FORWARD: %t\n", zp.Instruction.Opcode == z.OP_FORWARD)
+	ufmt.Printf("[INFO] child salt is derived: %t\n", zp.Salt == z.DeriveForwardSalt(salt))
+	ufmt.Printf("[INFO] child source channel is expected: %t\n", child.SourceChannelId == types.ChannelId(childChannel))
+	ufmt.Printf("[INFO] child destination channel is expected: %t\n", child.DestinationChannelId == types.ChannelId(102))
+	ufmt.Println("[EXPECTED] continuation paths keep forwarding instead of executing the final child")
 	return parent
 }
 
-func receiptState(packet types.Packet) string {
-	v, err := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))
+func deriveContinuationChild(parentSalt [32]byte, forward z.Forward) types.Packet {
+	childPath := pushChannel(u256.Zero(), parentChannel)
+	childPath = pushChannel(childPath, childChannel)
+	continuation := z.Forward{
+		Path:             pushChannel(u256.Zero(), finalHop),
+		TimeoutHeight:    0,
+		TimeoutTimestamp: forward.TimeoutTimestamp,
+		Instruction:      forward.Instruction,
+	}
+	childData := mustZkgmPacketData(z.ZkgmPacket{
+		Salt: z.DeriveForwardSalt(parentSalt),
+		Path: childPath,
+		Instruction: z.Instruction{
+			Version: z.INSTR_VERSION_0,
+			Opcode:  z.OP_FORWARD,
+			Operand: mustForwardBytes(continuation),
+		},
+	})
+	return core.NewPacket(types.ChannelId(childChannel), types.ChannelId(102), childData, types.Timestamp(forward.TimeoutTimestamp))
+}
+
+func receiptOnly(packet types.Packet) bool {
+	commitment, err := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))
+	return err == nil && commitment == types.COMMITMENT_MAGIC
+}
+
+func packetCommitted(packet types.Packet) bool {
+	commitment, err := core.GetBatchPackets(core.CommitPacketsHash([]types.Packet{packet}))
+	return err == nil && commitment == types.COMMITMENT_MAGIC
+}
+
+func mustDecodeZkgmPacket(packet types.Packet) z.ZkgmPacket {
+	zp, err := z.DecodeZkgmPacket(types.CloneBytes(packet.Data))
 	if err != nil {
-		return "none"
+		panic(err)
 	}
-	switch v {
-	case types.COMMITMENT_MAGIC:
-		return "committed"
-	case types.COMMITMENT_MAGIC_ACK:
-		return "acknowledged"
-	default:
-		return "ack-written"
-	}
+	return zp
 }
 
 // --- encoding helpers ---
@@ -137,11 +166,19 @@ func mustCallInstruction(call z.Call) z.Instruction {
 }
 
 func saltedForwardData(salt [32]byte, forward z.Forward) []byte {
+	return mustZkgmPacketData(z.ZkgmPacket{Salt: salt, Path: u256.Zero(), Instruction: z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_FORWARD, Operand: mustForwardBytes(forward)}})
+}
+
+func mustForwardBytes(forward z.Forward) []byte {
 	operand, err := z.EncodeForward(forward)
 	if err != nil {
 		panic(err)
 	}
-	data, err := z.EncodeZkgmPacket(z.ZkgmPacket{Salt: salt, Path: u256.Zero(), Instruction: z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_FORWARD, Operand: operand}})
+	return operand
+}
+
+func mustZkgmPacketData(zp z.ZkgmPacket) []byte {
+	data, err := z.EncodeZkgmPacket(zp)
 	if err != nil {
 		panic(err)
 	}
@@ -152,5 +189,10 @@ func saltedForwardData(salt [32]byte, forward z.Forward) []byte {
 // [SCENARIO] 1. Bootstrap and open the parent (1) and intermediate (2) channels
 //
 // [SCENARIO] 2. Receive a multi-hop OP_FORWARD: the child re-wraps the remaining hop and is relayed
-// [INFO] parent receipt: committed
-// [EXPECTED] committed: the continuation branch built and dispatched the next-hop forward (async, ack deferred)
+// [INFO] parent receipt-only/committed: true
+// [INFO] child packet commitment present: true
+// [INFO] child opcode is OP_FORWARD: true
+// [INFO] child salt is derived: true
+// [INFO] child source channel is expected: true
+// [INFO] child destination channel is expected: true
+// [EXPECTED] continuation paths keep forwarding instead of executing the final child

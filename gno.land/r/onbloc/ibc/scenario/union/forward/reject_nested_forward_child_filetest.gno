@@ -10,8 +10,7 @@ package forward
 // acknowledgement rather than parking the parent in-flight. This file contrasts the two
 // outcomes in one transcript: a valid forward (OP_CALL child) leaves the parent receipt
 // "committed" (async, ack deferred until the child resolves), while a nested-forward
-// child leaves the parent receipt "ack-written" immediately (rejected, no child
-// relayed). The synchronous failure with no in-flight parent is the assertion.
+// child leaves the parent receipt "ack-written" immediately and no child commitment.
 
 import (
 	"chain"
@@ -49,15 +48,15 @@ func main(cur realm) {
 	println("")
 
 	println("[SCENARIO] 2. A forward with an allowed OP_CALL child is accepted (parked async)")
-	validParent := recvForwardWith(cur, saltSeed(1), mustCallInstruction())
-	ufmt.Printf("[INFO] valid forward  -> parent receipt: %s\n", receiptState(validParent))
-	ufmt.Println("[EXPECTED] committed: parent parked in-flight, ack deferred until the child resolves")
+	validParent, validChild := recvForwardWith(cur, saltSeed(1), mustCallInstruction())
+	ufmt.Printf("[INFO] valid forward  -> parent receipt: %s, child commitment: %s\n", receiptState(validParent), sendState(validChild))
+	ufmt.Println("[EXPECTED] committed: parent parked in-flight, child relayed, ack deferred until the child resolves")
 	println("")
 
 	println("[SCENARIO] 3. A forward with a nested OP_FORWARD child is rejected (synchronous failure ack)")
-	nestedParent := recvForwardWith(cur, saltSeed(2), nestedForwardInstruction())
-	ufmt.Printf("[INFO] nested forward -> parent receipt: %s\n", receiptState(nestedParent))
-	ufmt.Println("[EXPECTED] ack-written: rejected by the child allowlist, no child relayed, parent not in-flight")
+	nestedParent, nestedChild := recvForwardWith(cur, saltSeed(2), nestedForwardInstruction())
+	ufmt.Printf("[INFO] nested forward -> parent receipt: %s, would-be child commitment: %s\n", receiptState(nestedParent), sendState(nestedChild))
+	ufmt.Println("[EXPECTED] ack-written: rejected by the child allowlist, would-be child absent, parent not in-flight")
 }
 
 func bootstrap(cur realm) {
@@ -85,8 +84,8 @@ func bootstrap(cur realm) {
 }
 
 // recvForwardWith receives a forward carrying the given inner instruction and returns
-// the parent packet so its receipt can be inspected.
-func recvForwardWith(cur realm, salt [32]byte, inner z.Instruction) types.Packet {
+// the parent and would-be child packets so their commitments can be inspected.
+func recvForwardWith(cur realm, salt [32]byte, inner z.Instruction) (types.Packet, types.Packet) {
 	forward := z.Forward{
 		Path:             forwardPath(parentChannel, childChannel),
 		TimeoutHeight:    0,
@@ -94,14 +93,35 @@ func recvForwardWith(cur realm, salt [32]byte, inner z.Instruction) types.Packet
 		Instruction:      inner,
 	}
 	parent := core.NewPacket(types.ChannelId(101), types.ChannelId(parentChannel), saltedForwardData(salt, forward), types.Timestamp(1<<62))
+	child := deriveChild(salt, forward)
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{parent}, [][]byte{nil}, nil, 1))
-	return parent
+	return parent, child
+}
+
+// deriveChild reconstructs the single-hop child packet exactly as buildForwardChild
+// does, so its commitment key can be looked up.
+func deriveChild(parentSalt [32]byte, forward z.Forward) types.Packet {
+	childData := mustZkgmPacketData(z.ZkgmPacket{
+		Salt:        z.DeriveForwardSalt(parentSalt),
+		Path:        forwardPath(parentChannel, childChannel),
+		Instruction: forward.Instruction,
+	})
+	return core.NewPacket(types.ChannelId(childChannel), types.ChannelId(102), childData, types.Timestamp(forward.TimeoutTimestamp))
 }
 
 func receiptState(packet types.Packet) string {
 	v, err := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))
+	return commitmentState(v, err)
+}
+
+func sendState(packet types.Packet) string {
+	v, err := core.GetBatchPackets(core.CommitPacketsHash([]types.Packet{packet}))
+	return commitmentState(v, err)
+}
+
+func commitmentState(v types.H256, err error) string {
 	if err != nil {
 		return "none"
 	}
@@ -162,13 +182,21 @@ func saltedForwardData(salt [32]byte, forward z.Forward) []byte {
 	return data
 }
 
+func mustZkgmPacketData(packet z.ZkgmPacket) []byte {
+	data, err := z.EncodeZkgmPacket(packet)
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
 // Output:
 // [SCENARIO] 1. Bootstrap and open the parent (1) and child source (2) channels
 //
 // [SCENARIO] 2. A forward with an allowed OP_CALL child is accepted (parked async)
-// [INFO] valid forward  -> parent receipt: committed
-// [EXPECTED] committed: parent parked in-flight, ack deferred until the child resolves
+// [INFO] valid forward  -> parent receipt: committed, child commitment: committed
+// [EXPECTED] committed: parent parked in-flight, child relayed, ack deferred until the child resolves
 //
 // [SCENARIO] 3. A forward with a nested OP_FORWARD child is rejected (synchronous failure ack)
-// [INFO] nested forward -> parent receipt: ack-written
-// [EXPECTED] ack-written: rejected by the child allowlist, no child relayed, parent not in-flight
+// [INFO] nested forward -> parent receipt: ack-written, would-be child commitment: none
+// [EXPECTED] ack-written: rejected by the child allowlist, would-be child absent, parent not in-flight

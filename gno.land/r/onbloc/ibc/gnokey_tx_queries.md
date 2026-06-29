@@ -307,7 +307,7 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
-	core "gno.land/r/onbloc/ibc/union/core"
+	"gno.land/r/onbloc/ibc/union/core"
 	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 )
 

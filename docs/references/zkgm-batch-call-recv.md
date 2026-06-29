@@ -201,4 +201,4 @@ Nested `OP_BATCH` and direct `OP_FORWARD` children are rejected in v1.
 | File | What it covers |
 |---|---|
 | `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1/batch_test.gno` | Unit test coverage for `executeBatch` with `TOKEN_ORDER_KIND_INITIALIZE` + `CALL`, including ack and side-effect behavior. |
-| `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e/scenarios/z24_v1_recv_batch_token_order_and_call_filetest.gno` | E2E filetest for full `PacketRecv` with a mock light client. It verifies the voucher balance, receiver call count, captured calldata, packet receipt, and written acknowledgement. |
+| `gno.land/r/onbloc/ibc/scenario/union/batch/recv_batch_token_order_and_call_filetest.gno` | Scenario filetest for full `PacketRecv` with a mock light client. It verifies the voucher balance, receiver call count, captured calldata, packet receipt, and written acknowledgement. |

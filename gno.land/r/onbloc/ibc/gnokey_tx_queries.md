@@ -204,10 +204,6 @@ This verifies that the ZKGM proxy package registered the app with core. It is
 the ZKGM-specific check that can run on a single local node before an open
 connection exists.
 
-For ZKGM opcode-level `gnokey` probes (`Send`, `SendRaw`, `PacketRecv` for
-TokenOrder/Call/Batch), see
-`gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/gnokey_tx_queries_zkgm.md`.
-
 ```sh
 cat >/tmp/check_zkgm_app.gno <<'EOF'
 package main
@@ -295,26 +291,46 @@ python3 -c 'import base64,sys; print(base64.b64decode(sys.argv[1]).hex())' '<DAT
 ## Mock ZKGM Channel Setup
 
 Use this reset-friendly setup when you only need a local mock light client and
-open ZKGM channels for `SendRaw` testing. It calls the deployed e2e helper realm,
-so the mock light client implementation lives in a realm package instead of the
-non-realm `maketx run` package.
+open ZKGM channels for `SendRaw` testing. The mock light client implementation
+lives in the realm `gno.land/r/onbloc/ibc/testing/mock/lightclient`; register it,
+grant it the relayer role, then drive the client/connection/channel handshake
+through the core entrypoints. (Assumes the core/zkgm impls are already installed
+and the caller holds the relayer role — see the setup sections above.)
 
 ```sh
 cat >/tmp/open_mock_zkgm_channels.gno <<'EOF'
 package main
 
 import (
-	e2e "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/e2e"
+	"chain"
+
+	"gno.land/p/onbloc/ibc/union/types"
+	"gno.land/r/onbloc/ibc/union/access"
+	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+	core "gno.land/r/onbloc/ibc/union/core"
+	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 )
 
-func main() {
-	e2e.RegisterMockLightClient(cross)
-	pair := e2e.OpenE2EChannelPair(cross)
+func main(cur realm) {
+	access.GrantRole(cross(cur), access.RelayerRole, chain.PackageAddress("gno.land/r/onbloc/ibc/testing/mock/lightclient"))
 
-	println("mock_client", pair.ClientId.String())
-	println("connection", pair.ConnectionId.String())
-	println("source_channel", pair.Source.String())
-	println("destination_channel", pair.Destination.String())
+	mocklc.RegisterMockLightClient(cross(cur))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(mocklc.MockClientType, nil, nil))
+	clientId := types.ClientId(1)
+
+	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
+	connectionId := types.ConnectionId(1)
+	core.ConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
+
+	portId := []byte(zkgm.ProxyPkgPath())
+	core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1relayer"))
+	channelId := types.ChannelId(1)
+	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(channelId, zkgm.Version, types.ChannelId(2), nil, 1, "g1relayer"))
+
+	println("mock_client", clientId.String())
+	println("connection", connectionId.String())
+	println("source_channel", channelId.String())
+	println("destination_channel", types.ChannelId(2).String())
 }
 EOF
 

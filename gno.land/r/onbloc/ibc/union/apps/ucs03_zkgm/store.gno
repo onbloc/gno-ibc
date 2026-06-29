@@ -22,6 +22,7 @@ var (
 	//	channelBalanceV2   <- CHANNEL_BALANCE_V2    Map<(channel,path,base,quote), U256>
 	//	metadataImageOf    <- METADATA_IMAGE_OF     Map<denom, H256>
 	//	hashToForeignToken <- HASH_TO_FOREIGN_TOKEN Map<denom, Bytes>
+	//	tokenDecimals      <- local extension       Map<denom, uint8>
 	//	inFlightPacket     <- IN_FLIGHT_PACKET      Map<packetHash, Packet>
 	//	tokenBucket        <- TOKEN_BUCKET          Map<denom, TokenBucket>
 	//	rateLimitDisabled  <- CONFIG.rate_limit_disabled
@@ -70,6 +71,7 @@ type Store struct {
 	channelBalanceV2   *bptree.BPTree // key   -> *u256.Uint  (escrow balance)
 	metadataImageOf    *bptree.BPTree // denom -> [32]byte
 	hashToForeignToken *bptree.BPTree // denom -> []byte
+	tokenDecimals      *bptree.BPTree // denom -> uint8
 	inFlightPacket     *bptree.BPTree // packetHash -> types.Packet (parent)
 	tokenBucket        *bptree.BPTree // denom -> *tb.TokenBucket
 	vouchers           *bptree.BPTree // ibcDenom -> *Voucher
@@ -84,6 +86,7 @@ func NewStore() *Store {
 		channelBalanceV2:   bptree.NewBPTree32(),
 		metadataImageOf:    bptree.NewBPTree32(),
 		hashToForeignToken: bptree.NewBPTree32(),
+		tokenDecimals:      bptree.NewBPTree32(),
 		inFlightPacket:     bptree.NewBPTree32(),
 		tokenBucket:        bptree.NewBPTree32(),
 		vouchers:           bptree.NewBPTree32(),
@@ -213,6 +216,23 @@ func (s *Store) GetForeignToken(denom string) ([]byte, bool) {
 	}
 
 	return v.([]byte), true
+}
+
+// SetTokenDecimals records the origin decimals used for wire/local scaling.
+func (s *Store) SetTokenDecimals(_ int, rlm realm, denom string, decimals uint8) {
+	assertIsRlmCurrent(0, rlm)
+
+	s.tokenDecimals.Set(denom, decimals)
+}
+
+// GetTokenDecimals returns the origin decimals used for wire/local scaling.
+func (s *Store) GetTokenDecimals(denom string) (uint8, bool) {
+	v, ok := s.tokenDecimals.Get(denom)
+	if !ok {
+		return 0, false
+	}
+
+	return v.(uint8), true
 }
 
 // SetInFlightPacket records the parent packet awaiting a forwarded child.

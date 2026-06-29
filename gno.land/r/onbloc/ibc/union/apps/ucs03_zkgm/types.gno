@@ -66,6 +66,9 @@ type IStore interface {
 	SetForeignToken(_ int, rlm realm, denom string, token []byte)
 	GetForeignToken(denom string) ([]byte, bool)
 
+	SetTokenDecimals(_ int, rlm realm, denom string, decimals uint8)
+	GetTokenDecimals(denom string) (uint8, bool)
+
 	SetInFlightPacket(_ int, rlm realm, packetHash string, parent types.Packet)
 	GetInFlightPacket(packetHash string) (types.Packet, bool)
 	RemoveInFlightPacket(_ int, rlm realm, packetHash string)

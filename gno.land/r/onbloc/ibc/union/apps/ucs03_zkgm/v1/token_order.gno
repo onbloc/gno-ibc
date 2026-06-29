@@ -257,6 +257,7 @@ func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.Channel
 		v.store.SetForeignToken(0, rlm, wrappedToken, baseToken)
 		v.store.SetTokenOrigin(0, rlm, wrappedToken, nextPath)
 		v.store.SetMetadataImageOf(0, rlm, wrappedToken, image)
+		v.store.SetTokenDecimals(0, rlm, wrappedToken, decimals)
 	}
 
 	ack, err := encodeTokenOrderSuccessAck(fillTypeProtocol(), nil)

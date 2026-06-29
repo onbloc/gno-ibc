@@ -304,6 +304,10 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	uassert.True(t, ok)
 	uassert.Equal(t, "ugnot", string(foreignToken))
 
+	decimals, ok := testStore.GetTokenDecimals(ibcDenom)
+	uassert.True(t, ok)
+	uassert.Equal(t, uint8(6), decimals)
+
 	uassert.Equal(t, "Gno Token", voucherNameOf(ibcDenom))
 	uassert.Equal(t, "GNOT", voucherSymbolOf(ibcDenom))
 	uassert.Equal(t, 6, voucherDecimalsOf(ibcDenom))
@@ -1293,6 +1297,10 @@ func TestProtocolFillMint(cur realm, t *testing.T) {
 
 				_, ok = testStore.GetMetadataImageOf(wrappedToken)
 				uassert.True(t, ok, "metadata image should be set")
+
+				decimals, ok := testStore.GetTokenDecimals(wrappedToken)
+				uassert.True(t, ok, "token decimals should be set")
+				uassert.Equal(t, uint8(18), decimals)
 
 				uassert.Equal(t, "Test Token", voucherNameOf(wrappedToken))
 				uassert.Equal(t, "TST", voucherSymbolOf(wrappedToken))

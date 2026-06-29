@@ -96,7 +96,7 @@ already has `cur realm`, when you call another function:
 - **Same realm as the caller**: pass bare `cur`. Example: helpers in
   the same package that also take `cur realm`.
 - **Different realm**: wrap with `cross(cur)`. Example: an app realm
-  calling `core.NewRecvPacketResult(cross(cur), ...)`.
+  calling `core.SendPacket(cross(cur), ...)`.
 
 The compiler error for the wrong choice is
 `cannot cur-call to external realm function X from Y`. When you see it,
@@ -196,34 +196,44 @@ The same restriction applies to foreign typed wrappers like
 realm type` because the implicit conversion runs in the caller's realm.
 `nil`, plain `[]byte`, and untyped numeric literals are unaffected.
 
-The owning realm must expose a crossing constructor whose body runs in
-the owning realm:
+Do not instantiate foreign structs or typed wrappers directly. Use a
+constructor exported by the type's home package/realm, or the wrapper already
+exposed by the realm you are importing. Match the actual constructor signature;
+simple value constructors usually do not take `cur realm`.
 
 ```gno
-// in owning realm (e.g., r/onbloc/ibc/union/core/types.gno)
-func NewRecvPacketResult(cur realm, status PacketStatus, ack []byte) RecvPacketResult {
-    return RecvPacketResult{Status: status, Ack: ack}
+// in p/onbloc/ibc/union/types/packet.gno
+func NewRecvPacketResult(status PacketStatus, acknowledgement []byte) RecvPacketResult {
+    return RecvPacketResult{Status: status, Acknowledgement: acknowledgement}
 }
 
-// in caller realm
-return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, ack)
+// in r/onbloc/ibc/union/core/types.gno
+func NewRecvPacketResult(status types.PacketStatus, acknowledgement []byte) types.RecvPacketResult {
+    return types.NewRecvPacketResult(status, acknowledgement)
+}
+
+// in a caller realm
+return core.NewRecvPacketResult(types.PacketStatusSuccess, ack)
 ```
 
-Ship a `New<Type>(cur realm, ...)` constructor for **every** type that
-foreign realms need to instantiate. In our tree the cascade required
-these constructors at minimum:
+Only add `cur realm` / `cross(cur)` to a constructor when the constructor must
+run in a specific stateful realm or call other realm functions. Do not add it
+to simple wrapper constructors like the current core type helpers.
+
+Ship a `New<Type>(...)` constructor or wrapper for every foreign type that
+other realms need to instantiate. In our tree the cascade required these
+constructors at minimum:
 
 - `core/types.gno`: `NewPacket`, `NewRecvPacketResult`, `NewConnection`,
   `NewConsensusStateUpdate`.
-- `core/msg.gno`: the full `NewMsg*` family covering every
+- `core/types.gno`: the full `NewMsg*` family covering every
   `MsgCreateClient`, `MsgPacketRecv`, `MsgChannelOpenInit`, etc.
-- `apps/ucs03_zkgm/types.gno`: `NewUpdateRequest`, `NewInFlightValue`,
-  `NewInFlightKey`, `NewSendRequest`.
 
 If a test mock or filetest panics with `cannot allocate <type>`, the fix
 is to add the missing constructor in the type's home realm and rewrite
-the call site through `pkg.NewX(cross(cur), ...)`. Empty zero-value
-returns (`return Foo{}, err`) need the same treatment: use
+the call site through `pkg.NewX(...)`, using `cross(cur)` only if that
+constructor actually requires `cur realm`. Empty zero-value returns
+(`return Foo{}, err`) need the same treatment: use
 `Foo{Status: Unknown}` field zero values via the constructor instead.
 
 ### MsgRun vs MsgCall

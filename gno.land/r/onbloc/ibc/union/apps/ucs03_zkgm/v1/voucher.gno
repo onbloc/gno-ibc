@@ -177,8 +177,13 @@ func (v *ucs03ZkgmV1) parseTokenInfo(_ int, rlm realm, denom []byte) TokenInfo {
 	denomStr := string(denom)
 
 	if vou, ok := v.store.GetVoucher(denomStr); ok {
+		decimals, ok := v.store.GetTokenDecimals(denomStr)
+		if !ok {
+			decimals = uint8(vou.Token().GetDecimals())
+		}
+
 		return TokenInfo{
-			decimals:  uint8(vou.Token().GetDecimals()),
+			decimals:  decimals,
 			isVoucher: true,
 		}
 	}

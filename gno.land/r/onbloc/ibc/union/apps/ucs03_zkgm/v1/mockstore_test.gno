@@ -19,6 +19,7 @@ type mockStore struct {
 	channelBalanceV2  map[string]*u256.Uint
 	metadataImageOf   map[string][32]byte
 	foreignToken      map[string][]byte
+	tokenDecimals     map[string]uint8
 	inFlightPacket    map[string]types.Packet
 	tokenBucket       map[string]*tb.TokenBucket
 	vouchers          map[string]*zkgm.Voucher
@@ -37,6 +38,7 @@ func newMockStore() *mockStore {
 		channelBalanceV2: map[string]*u256.Uint{},
 		metadataImageOf:  map[string][32]byte{},
 		foreignToken:     map[string][]byte{},
+		tokenDecimals:    map[string]uint8{},
 		inFlightPacket:   map[string]types.Packet{},
 		tokenBucket:      map[string]*tb.TokenBucket{},
 		vouchers:         map[string]*zkgm.Voucher{},
@@ -124,6 +126,15 @@ func (m *mockStore) SetForeignToken(_ int, rlm realm, denom string, token []byte
 
 func (m *mockStore) GetForeignToken(denom string) ([]byte, bool) {
 	v, ok := m.foreignToken[denom]
+	return v, ok
+}
+
+func (m *mockStore) SetTokenDecimals(_ int, rlm realm, denom string, decimals uint8) {
+	m.tokenDecimals[denom] = decimals
+}
+
+func (m *mockStore) GetTokenDecimals(denom string) (uint8, bool) {
+	v, ok := m.tokenDecimals[denom]
 	return v, ok
 }
 

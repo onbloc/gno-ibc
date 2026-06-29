@@ -25,9 +25,9 @@ func (v *ucs03ZkgmV1) verifyForward(_ int, rlm realm, funds *funds, channelId ty
 // executeForward builds and dispatches the next-hop packet, recording the parent for async ack settlement.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L1392-L1497
 func (v *ucs03ZkgmV1) executeForward(_ int, rlm realm, packet types.Packet, salt [32]byte, path *u256.Uint, forward z.Forward, intent bool) (types.RecvPacketResult, error) {
-	// Recv skips verifyInternal (see impl.gno OnRecvPacket flow), so this opcode check is
-	// the only line of defense on receive. Do not strip as redundant with
-	// verifyForward.
+	// Recv bypasses verifyInternal (see imp.gno OnRecvPacket flow),
+	// receive-side opcode check is the only enforcement point.
+	// Do not remove it as redundant with verifyForward.
 	if !isAllowedForwardInstruction(forward.Instruction.Opcode) {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), makeError(errInvalidForwardInstruction)
 	}
@@ -41,15 +41,12 @@ func (v *ucs03ZkgmV1) executeForward(_ int, rlm realm, packet types.Packet, salt
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
-	// Forward children construct ZkgmPacket directly; their salt is namespaced via
-	// DeriveForwardSalt, not DeriveSenderSalt. Record the parent so the child's
-	// resolution can write the deferred parent ack, then dispatch via core.
-	//
-	// The child is a single next-hop packet, so it is committed with core.SendPacket:
-	// union dispatches the forward child through the ibc-host PacketSend (single send_packet) entrypoint, not batch_send.
-	// reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L1460-L1480
+	// Forward children build ZkgmPacket directly. Their salt is derived with
+	// DeriveForwardSalt, not DeriveSenderSalt. Route the child through core so
+	// it receives a normal packet commitment, then track its parent so child
+	// resolution can write the deferred parent ack.
+	childPacket = core.SendPacket(cross(rlm), childPacket.SourceChannelId, childPacket.TimeoutTimestamp, childPacket.Data)
 	v.store.SetInFlightPacket(0, rlm, forwardInFlightKey(childPacket), packet)
-	core.SendPacket(cross(rlm), childPacket.SourceChannelId, childPacket.TimeoutTimestamp, childPacket.Data)
 
 	return core.NewRecvPacketResult(types.PacketStatusAsync, nil), nil
 }

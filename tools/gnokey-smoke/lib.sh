@@ -55,7 +55,7 @@ start_smoke_node() {
 
   local deadline=$((SECONDS + 60))
   while (( SECONDS < deadline )); do
-    if curl -sf "$RPC_URL/status" 2>/dev/null | grep -q latest_block_height; then
+    if curl -sf "$RPC_URL/status" >/dev/null 2>&1 && curl -sf "$RPC_URL/abci_info" >/dev/null 2>&1; then
       break
     fi
     if ! kill -0 "$GNODEV_PID" 2>/dev/null; then
@@ -66,7 +66,7 @@ start_smoke_node() {
     sleep 1
   done
 
-  if ! curl -sf "$RPC_URL/status" 2>/dev/null | grep -q latest_block_height; then
+  if ! curl -sf "$RPC_URL/status" >/dev/null 2>&1 || ! curl -sf "$RPC_URL/abci_info" >/dev/null 2>&1; then
     echo "gnodev not ready within 60s"
     cat "$WORKDIR/gnodev.log"
     exit 1
@@ -93,7 +93,7 @@ setup_smoke_chain() {
 
 is_retryable_maketx_failure() {
   local log="$1"
-  grep -q 'signature verification failed; verify correct account, sequence, and chain-id' "$log"
+  grep -Eq 'signature verification failed; verify correct account, sequence, and chain-id|invalid status code received, 502|cannot decode empty bytes' "$log"
 }
 
 maketx_run_once() {

@@ -24,11 +24,11 @@
 
 ## Light Client Proof Verification
 
-- Any code path that verifies membership or non-membership proofs must reject inactive clients before proof verification.
-- For v1 light client adapters (`gno.land/p/onbloc/ibc/union/lightclient/...`), put an explicit status guard in the adapter's `VerifyMembership` and `VerifyNonMembership` methods before decoding or verifying proof bytes. Only clients whose `lightclient.Status()` is `lightclient.Active` may proceed; use `types.StatusActive` only for converted public status values.
+- Any core-hosted code path that verifies membership or non-membership proofs must reject inactive clients before proof verification.
 - For Union core paths (`gno.land/r/onbloc/ibc/union/core` and versioned implementation realms such as `gno.land/r/onbloc/ibc/union/core/v1`), keep the existing core-level `lightClient.Status() == lightclient.Active` checks before every `VerifyMembership` or `VerifyNonMembership` call. Treat `gno.land/r/aib/ibc/core` as the vendored gno-realms reference path, not the active onbloc Union core path.
-- Inner light client implementations should still enforce any status checks they can determine without caller context. For example, frozen-client checks belong in the inner client, while expiration checks that need the current block time may need to stay in the adapter or core caller.
-- New light client adapters must include tests showing that frozen or expired clients cannot be used for membership or non-membership proof verification.
+- The `lightclient.Interface` adapter methods do not by themselves guarantee active-status gating. Existing object adapters such as `cometbls` and `state_lens/ics23_mpt` rely on the core caller to enforce active status before calling `VerifyMembership` or `VerifyNonMembership`; `state_lens` reports its status from the underlying L1 client.
+- Adapter implementations should still enforce status checks they own when they are not guaranteed by the caller or when they verify through another light client directly. Use `lightclient.Active` for internal status checks; use `types.StatusActive` only for converted public status values.
+- New proof-verification paths must include tests showing that frozen or expired clients cannot be used for membership or non-membership proof verification, either at the core caller boundary or inside the adapter when the adapter owns that guard.
 
 ---
 
@@ -96,7 +96,7 @@ already has `cur realm`, when you call another function:
 - **Same realm as the caller**: pass bare `cur`. Example: helpers in
   the same package that also take `cur realm`.
 - **Different realm**: wrap with `cross(cur)`. Example: an app realm
-  calling `core.NewRecvPacketResult(cross(cur), ...)`.
+  calling `core.SendPacket(cross(cur), ...)`.
 
 The compiler error for the wrong choice is
 `cannot cur-call to external realm function X from Y`. When you see it,
@@ -196,40 +196,49 @@ The same restriction applies to foreign typed wrappers like
 realm type` because the implicit conversion runs in the caller's realm.
 `nil`, plain `[]byte`, and untyped numeric literals are unaffected.
 
-The owning realm must expose a crossing constructor whose body runs in
-the owning realm:
+Do not instantiate foreign structs or typed wrappers directly. Use a
+constructor exported by the type's home package/realm, or the wrapper already
+exposed by the realm you are importing. Match the actual constructor signature;
+simple value constructors usually do not take `cur realm`.
 
 ```gno
-// in owning realm (e.g., r/onbloc/ibc/union/core/types.gno)
-func NewRecvPacketResult(cur realm, status PacketStatus, ack []byte) RecvPacketResult {
-    return RecvPacketResult{Status: status, Ack: ack}
+// in p/onbloc/ibc/union/types/packet.gno
+func NewRecvPacketResult(status PacketStatus, acknowledgement []byte) RecvPacketResult {
+    return RecvPacketResult{Status: status, Acknowledgement: acknowledgement}
 }
 
-// in caller realm
-return core.NewRecvPacketResult(cross(cur), core.PacketStatusSuccess, ack)
+// in r/onbloc/ibc/union/core/types.gno
+func NewRecvPacketResult(status types.PacketStatus, acknowledgement []byte) types.RecvPacketResult {
+    return types.NewRecvPacketResult(status, acknowledgement)
+}
+
+// in a caller realm
+return core.NewRecvPacketResult(types.PacketStatusSuccess, ack)
 ```
 
-Ship a `New<Type>(cur realm, ...)` constructor for **every** type that
-foreign realms need to instantiate. In our tree the cascade required
-these constructors at minimum:
+Only add `cur realm` / `cross(cur)` to a constructor when the constructor must
+run in a specific stateful realm or call other realm functions. Do not add it
+to simple wrapper constructors like the current core type helpers.
+
+Ship a `New<Type>(...)` constructor or wrapper for every foreign type that
+other realms need to instantiate. In our tree the cascade required these
+constructors at minimum:
 
 - `core/types.gno`: `NewPacket`, `NewRecvPacketResult`, `NewConnection`,
   `NewConsensusStateUpdate`.
-- `core/msg.gno`: the full `NewMsg*` family covering every
+- `core/types.gno`: the full `NewMsg*` family covering every
   `MsgCreateClient`, `MsgPacketRecv`, `MsgChannelOpenInit`, etc.
-- `apps/ucs03_zkgm/types.gno`: `NewUpdateRequest`, `NewInFlightValue`,
-  `NewInFlightKey`, `NewSendRequest`.
-- `apps/ucs03_zkgm/testing/e2e/helpers.gno`: `NewChannelPair`.
 
 If a test mock or filetest panics with `cannot allocate <type>`, the fix
 is to add the missing constructor in the type's home realm and rewrite
-the call site through `pkg.NewX(cross(cur), ...)`. Empty zero-value
-returns (`return Foo{}, err`) need the same treatment: use
+the call site through `pkg.NewX(...)`, using `cross(cur)` only if that
+constructor actually requires `cur realm`. Empty zero-value returns
+(`return Foo{}, err`) need the same treatment: use
 `Foo{Status: Unknown}` field zero values via the constructor instead.
 
 ### MsgRun vs MsgCall
 
-Most IBC functions require `MsgRun` (not `MsgCall`) because they take complex arguments (structs, slices of bytes). The Union IBC core realm module path is `gno.land/r/onbloc/ibc/union/core`; the vendored gno-realms core still lives at `gno.land/r/aib/ibc/core`. See filetests under `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/` for working `MsgRun` examples.
+Most IBC functions require `MsgRun` (not `MsgCall`) because they take complex arguments (structs, slices of bytes). The Union IBC core realm module path is `gno.land/r/onbloc/ibc/union/core`; the vendored gno-realms core still lives at `gno.land/r/aib/ibc/core`. See scenario filetests under `gno.land/r/onbloc/ibc/scenario/union/` for working `MsgRun` examples.
 
 ### Gno Standard Library
 
@@ -259,26 +268,26 @@ The ZKGM port is tracked in `docs/spec-comparisons/ibc-union-spec-comparison.md`
 - ABI/types: `gno.land/p/onbloc/ibc/union/zkgm/`
 - Proxy realm source: `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/`
 - v1 implementation source: `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1/`
-- Mock receiver realm source: `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock/`
+- Mock receiver helpers: `gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1/mock_receiver_test.gno` for v1 unit tests, and `gno.land/r/onbloc/ibc/testing/mock/receiver` for scenario filetests.
 
 ### Call Handler Invariants
 
 - `CallEnv.Caller` is the tx origin / relayer identity captured by the ZKGM app request, not the deterministic proxy account.
 - `CallEnv.ProxyAccount` carries `PredictCallProxyAccount(path, destinationClient, sender)`.
 - `CallEnv.Relayer` carries the core-provided relayer bytes and `RelayerMsg` carries the core-provided relayer message bytes. On direct sends, the proxy currently derives the relayer from `unsafe.OriginCaller().String()` for attribution, not authentication.
-- Receiver realms must register with `zkgm.RegisterReceiver(cross(cur), receiver)` from their own realm. Tests should use the mock receiver realm instead of directly storing receiver instances from the impl package.
+- Receiver realms must register with `zkgm.RegisterReceiver(cross(cur), receiver)` from their own realm. Tests should use the existing mock receiver helpers instead of directly storing receiver instances from the impl package.
 - Mock receiver getters that read stored `[]byte` fields must be crossing functions (`cur realm`) and should return strings/scalars, not structs containing slices.
 
 ### Batch Dispatcher Invariants
 
 The ZKGM implementation uses dispatcher helpers in `apps/ucs03_zkgm/v1/dispatch.gno`. Use these for new opcode integration:
 
-- `dispatchVerify`
-- `dispatchExecute`
-- `dispatchAck`
-- `dispatchTimeout`
+- `verifyInternal`
+- `dispatchExecutePacket`
+- `acknowledgeInternal`
+- `timeoutInternal`
 
-Batch children are intentionally limited to `OP_CALL` and `OP_TOKEN_ORDER`. Nested batch and forward children are rejected in v1. `dispatchExecute` must preserve `types.RecvPacketResult.Status`; do not reduce it to acknowledgement bytes only, or standalone Call failure status will be lost.
+Batch children are intentionally limited to `OP_CALL` and `OP_TOKEN_ORDER`. Nested batch and forward children are rejected in v1. `dispatchExecutePacket` must preserve `types.RecvPacketResult.Status`; do not reduce it to acknowledgement bytes only, or standalone Call failure status will be lost.
 
 Batch acknowledgement rules:
 
@@ -316,7 +325,7 @@ The ZKGM impl currently relies mostly on focused unit tests, not filetests. For 
 - mixed opcode batches (`Call + TokenOrder`)
 - only-maker ack propagation
 - TokenOrder refund side effects via channel balance and voucher balance
-- realm-boundary behavior through `testing/mock`
+- realm-boundary behavior through the existing mock receiver helpers
 
 ---
 
@@ -391,7 +400,7 @@ printf '\n' | gnokey maketx call -insecure-password-stdin …
 
 ### Filetests (primary test mechanism)
 
-Files named `z*_filetest.gno` in realm directories. These are integration tests that run as standalone `package main` programs with expected output matching. Filetest entrypoints take `cur realm` whenever the body needs to invoke crossing functions:
+Files named `*_filetest.gno` are integration tests that run as standalone `package main` programs with expected output matching. Name new filetests after the scenario or behavior they cover, for example `lock_native_coin_by_ucs03_zkgm_filetest.gno` or `reject_unauthorized_grant_filetest.gno`. Filetest entrypoints take `cur realm` whenever the body needs to invoke crossing functions:
 
 ```gno
 package main
@@ -412,19 +421,14 @@ func main(cur realm) {
 
 A bare `func main()` is still valid for filetests that do not call any crossing function. If the body references `cur`, the signature must take it.
 
-Scenario test convention: use `gno.land/r/onbloc/ibc/scenario` as the current
-scenario spec source. Scenario filetests use descriptive names without a `z`
-prefix, for example `send_wrapped_uatom_by_ucs03_zkgm_filetest.gno` and
-`receive_wrapped_uatom_by_ucs03_zkgm_filetest.gno`.
-
-`zz_*_example_filetest.gno` = documentation examples (referenced from README)
+Use `gno.land/r/onbloc/ibc/scenario` as the current scenario spec source. Keep scenario filetest names descriptive enough to scan by purpose: normal flows should name the lifecycle they exercise, and rejection tests should start with `reject_`.
 
 ### Unit Tests with Malleate Pattern
 
 `*_test.gno` files use table-driven tests with a `malleate` function that mutates a default valid object to test specific conditions:
 
 ```gno
-testCases := []struct {
+tests := []struct {
     name     string
     malleate func()
     expErr   string
@@ -432,7 +436,7 @@ testCases := []struct {
     {"success", func() {}, ""},
     {"failure: empty field", func() { msg.Field = "" }, "field required"},
 }
-for _, tc := range testCases {
+for _, tc := range tests {
     t.Run(tc.name, func(t *testing.T) {
         msg = newValidMsg()    // reset to valid defaults
         tc.malleate()          // apply mutation

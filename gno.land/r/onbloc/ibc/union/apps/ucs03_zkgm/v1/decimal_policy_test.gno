@@ -248,11 +248,8 @@ func TestSendBaseAmountInt64Boundary(cur realm, t *testing.T) {
 		QuoteAmount: overAmt,
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
-	// An int64-overflowing base amount is rejected. The reference increases the
-	// channel balance before escrowing (contract.rs L511-543), so the failing
-	// escrow leaves a transient balance entry; in production the verify error
-	// aborts the whole Send tx (impl.gno panics), rolling that write back. Here
-	// verify is called in isolation, so we only assert the rejection.
+	// An int64-overflowing base amount is rejected before channel balance
+	// accounting mutates.
 	err = v.verifyTokenOrderV2(0, cur, newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), chanB, u256.Zero(), orderB)
 	uassert.Error(t, err)
 }

@@ -653,7 +653,7 @@ func (v *ucs03ZkgmV1) scaleOutgoingBatchInstruction(_ int, rlm realm, instructio
 			return instruction, err
 		}
 
-		if len(scaledChild.Operand) != len(child.Operand) || !bytes.Equal(scaledChild.Operand, child.Operand) {
+		if !bytes.Equal(scaledChild.Operand, child.Operand) {
 			modified = true
 		}
 

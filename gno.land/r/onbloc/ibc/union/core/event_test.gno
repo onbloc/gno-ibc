@@ -203,12 +203,24 @@ func TestAcknowledgementEventAttrs(cur realm, t *testing.T) {
 	defer resetEventConfigForTest()
 
 	setEventConfig(EventConfig{
-		SplitEventAttrs:           true,
+		SplitEventAttrs:           false,
 		MaxEventAttrValueLen:      4,
 		MaxPacketDataEventColumns: 2,
 	})
 
 	attrs := acknowledgementEventAttrs([]byte{0, 1})
+	assertStringSliceEqual(t, attrs, []string{
+		"acknowledgement", "0x0001",
+	})
+	assertAttrMissing(t, attrs, "acknowledgement_size")
+
+	setEventConfig(EventConfig{
+		SplitEventAttrs:           true,
+		MaxEventAttrValueLen:      4,
+		MaxPacketDataEventColumns: 2,
+	})
+
+	attrs = acknowledgementEventAttrs([]byte{0, 1})
 	assertStringSliceEqual(t, attrs, []string{
 		"acknowledgement_size", "6",
 		"acknowledgement[0]", "0x00",
@@ -218,9 +230,9 @@ func TestAcknowledgementEventAttrs(cur realm, t *testing.T) {
 	largeAck := make([]byte, 4)
 	attrs = acknowledgementEventAttrs(largeAck)
 	assertStringSliceEqual(t, attrs, []string{
-		"acknowledgement_size", "10",
 		"acknowledgement_hash", types.Keccak(largeAck).String(),
 	})
+	assertAttrMissing(t, attrs, "acknowledgement_size")
 	assertAttrMissing(t, attrs, "acknowledgement")
 	assertAttrMissing(t, attrs, "acknowledgement[0]")
 }

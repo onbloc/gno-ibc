@@ -282,16 +282,14 @@ func emitPacketRecvEvent(eventType string, packet types.Packet, maker address, m
 func acknowledgementEventAttrs(acknowledgement []byte) []string {
 	config := GetEventConfig()
 	ackHex := hexAttr(acknowledgement)
-	attrs := []string{
-		"acknowledgement_size", strconv.Itoa(len(ackHex)),
+	if !config.SplitEventAttrs {
+		return []string{"acknowledgement", ackHex}
 	}
 	if len(ackHex) > MaxPacketDataEventSize() {
-		return append(attrs, "acknowledgement_hash", types.Keccak(acknowledgement).String())
+		return []string{"acknowledgement_hash", types.Keccak(acknowledgement).String()}
 	}
-	if config.SplitEventAttrs {
-		return append(attrs, eventAttrColumns("acknowledgement", ackHex, int(config.MaxEventAttrValueLen))...)
-	}
-	return append(attrs, "acknowledgement", ackHex)
+	attrs := []string{"acknowledgement_size", strconv.Itoa(len(ackHex))}
+	return append(attrs, eventAttrColumns("acknowledgement", ackHex, int(config.MaxEventAttrValueLen))...)
 }
 
 func emitWriteAckEvent(packet types.Packet, acknowledgement []byte) {

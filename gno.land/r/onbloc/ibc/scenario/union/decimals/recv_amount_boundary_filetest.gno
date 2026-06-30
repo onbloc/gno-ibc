@@ -18,12 +18,12 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 
+	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
-	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 )
 
 const (
@@ -43,15 +43,15 @@ func main(cur realm) {
 	println("")
 
 	println("[SCENARIO] 2. amount = 0: minting is skipped (QuoteAmount is zero)")
-	recvAmount(cur, channelId, "bnd-zero", "Zero", u256.NewUint(0))
+	recvAmount(cur, channelId, "bnd-zero", "Zero", u256.NewUint(0), 0, true)
 	println("")
 
 	println("[SCENARIO] 3. amount = MaxInt64: mints exactly (fits int64)")
-	recvAmount(cur, channelId, "bnd-max", "Max", u256.NewUint(maxInt64))
+	recvAmount(cur, channelId, "bnd-max", "Max", u256.NewUint(maxInt64), int64(maxInt64), true)
 	println("")
 
 	println("[SCENARIO] 4. amount = MaxInt64 + 1: overflows int64, rejected (nothing minted)")
-	recvAmount(cur, channelId, "bnd-over", "Over", new(u256.Uint).Add(u256.NewUint(maxInt64), u256.NewUint(1)))
+	recvAmount(cur, channelId, "bnd-over", "Over", new(u256.Uint).Add(u256.NewUint(maxInt64), u256.NewUint(1)), 0, false)
 }
 
 func bootstrap(cur realm) types.ChannelId {
@@ -80,7 +80,7 @@ func bootstrap(cur realm) types.ChannelId {
 
 // recvAmount receives a fresh-token INITIALIZE order of the given amount and reports
 // the resulting (int64) voucher balance.
-func recvAmount(cur realm, channelId types.ChannelId, base, name string, amount *u256.Uint) {
+func recvAmount(cur realm, channelId types.ChannelId, base, name string, amount *u256.Uint, wantBalance int64, wantSuccess bool) {
 	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: name, Symbol: "BND", Decimals: 6})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte(base), z.MetadataImage(mustDecodeMeta(meta)))
 	order := z.TokenOrderV2{
@@ -98,8 +98,61 @@ func recvAmount(cur realm, channelId types.ChannelId, base, name string, amount 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
 
-	ufmt.Printf("[INFO] requested amount %s -> minted balance %d\n", amount.ToString(), zkgm.VoucherBalanceOf(quoteToken, receiverAddr))
+	ack := expectedAck(wantSuccess)
+	ackSuccess, protocolFill := decodeAckResult(ack)
+	ackCommitted := committedAck(packet, ack)
+	balance := zkgm.VoucherBalanceOf(quoteToken, receiverAddr)
+	if balance != wantBalance || !ackCommitted || ackSuccess != wantSuccess || (wantSuccess && !protocolFill) {
+		panic("amount boundary ack/state mismatch")
+	}
+
+	ufmt.Printf("[INFO] requested amount %s -> minted balance %d\n", amount.ToString(), balance)
+	ufmt.Printf("[INFO] committed ack matches expected: %t\n", ackCommitted)
+	ufmt.Printf("[INFO] decoded ack success/protocol fill: %t/%t\n", ackSuccess, protocolFill)
 	ufmt.Printf("[INFO] receipt recorded: %t\n", receiptRecorded(packet))
+}
+
+func committedAck(packet types.Packet, ack []byte) bool {
+	got, err := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))
+	return err == nil && got == types.CommitAcks([][]byte{ack})
+}
+
+func decodeAckResult(ackBytes []byte) (bool, bool) {
+	ack, err := z.DecodeAck(ackBytes)
+	if err != nil {
+		panic(err)
+	}
+	success := ack.Tag.Eq(new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:]))
+	if !success {
+		return false, false
+	}
+
+	orderAck, err := z.DecodeTokenOrderAck(ack.InnerAck)
+	if err != nil {
+		panic(err)
+	}
+
+	return true, orderAck.FillType.Eq(new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:]))
+}
+
+func expectedAck(success bool) []byte {
+	if !success {
+		ack, err := z.EncodeAck(z.Ack{Tag: u256.NewUint(0), InnerAck: []byte{}})
+		if err != nil {
+			panic(err)
+		}
+		return ack
+	}
+
+	inner, err := z.EncodeTokenOrderAck(z.TokenOrderAck{FillType: new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:])})
+	if err != nil {
+		panic(err)
+	}
+	ack, err := z.EncodeAck(z.Ack{Tag: new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:]), InnerAck: inner})
+	if err != nil {
+		panic(err)
+	}
+	return ack
 }
 
 func receiptRecorded(packet types.Packet) bool {
@@ -150,12 +203,18 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 //
 // [SCENARIO] 2. amount = 0: minting is skipped (QuoteAmount is zero)
 // [INFO] requested amount 0 -> minted balance 0
+// [INFO] committed ack matches expected: true
+// [INFO] decoded ack success/protocol fill: true/true
 // [INFO] receipt recorded: true
 //
 // [SCENARIO] 3. amount = MaxInt64: mints exactly (fits int64)
 // [INFO] requested amount 9223372036854775807 -> minted balance 9223372036854775807
+// [INFO] committed ack matches expected: true
+// [INFO] decoded ack success/protocol fill: true/true
 // [INFO] receipt recorded: true
 //
 // [SCENARIO] 4. amount = MaxInt64 + 1: overflows int64, rejected (nothing minted)
 // [INFO] requested amount 9223372036854775808 -> minted balance 0
+// [INFO] committed ack matches expected: true
+// [INFO] decoded ack success/protocol fill: false/false
 // [INFO] receipt recorded: true

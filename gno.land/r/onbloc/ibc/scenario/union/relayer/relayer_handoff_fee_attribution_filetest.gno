@@ -103,11 +103,14 @@ func deliver(cur realm, channelId types.ChannelId, quoteToken string, meta []byt
 	packet := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(order)), types.Timestamp(1<<62))
 
 	feeBefore := zkgm.VoucherBalanceOf(quoteToken, relayerAddr)
+	recvBefore := zkgm.VoucherBalanceOf(quoteToken, receiverAddr)
 
 	testing.SetRealm(testing.NewUserRealm(relayerAddr))
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
 
 	feeAfter := zkgm.VoucherBalanceOf(quoteToken, relayerAddr)
+	recvAfter := zkgm.VoucherBalanceOf(quoteToken, receiverAddr)
+	ufmt.Printf("[INFO] relayer %s receiver voucher: %d -> %d (delta +%d)\n", label, recvBefore, recvAfter, recvAfter-recvBefore)
 	ufmt.Printf("[INFO] relayer %s fee voucher: %d -> %d (delta +%d)\n", label, feeBefore, feeAfter, feeAfter-feeBefore)
 }
 
@@ -153,8 +156,10 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 // [SCENARIO] 1. Bootstrap IBC host, open a channel, authorize two relayers
 //
 // [SCENARIO] 2. Relayer A delivers the first order (INITIALIZE): A keeps the fee
+// [INFO] relayer A receiver voucher: 0 -> 90 (delta +90)
 // [INFO] relayer A fee voucher: 0 -> 10 (delta +10)
 //
 // [SCENARIO] 3. Relayer A drops out; relayer B delivers the second order: B keeps the fee
+// [INFO] relayer B receiver voucher: 90 -> 170 (delta +80)
 // [INFO] relayer B fee voucher: 0 -> 20 (delta +20)
 // [EXPECTED] each fee follows the submitting relayer: A +10, B +20 (delivery is not bound to one relayer)

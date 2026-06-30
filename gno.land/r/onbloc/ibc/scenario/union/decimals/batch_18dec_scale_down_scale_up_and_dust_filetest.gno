@@ -4,7 +4,7 @@ package decimals
 // batch_18dec_scale_down_scale_up_and_dust_filetest covers decimal policy inside
 // OP_BATCH children. A received batch scales an 18-dec INITIALIZE amount down to
 // the 6-dec local voucher amount, a dusty batch child is rejected without minting,
-// and a sent batch locks the local voucher amount while scaling the wire packet.
+// and a sent batch submits the wire amount while locking the local voucher amount.
 
 import (
 	"chain"
@@ -53,7 +53,7 @@ func main(cur realm) {
 	recvBatchInitialize(cur, channelId, quoteToken, meta, dustWireAmount)
 	println("")
 
-	println("[SCENARIO] 4. Send OP_BATCH with voucher child: local amount scaled up in wire packet")
+	println("[SCENARIO] 4. Send OP_BATCH with voucher child: wire amount locks local voucher amount")
 	sendBatchEscrow(cur, channelId, quoteToken)
 }
 
@@ -109,9 +109,9 @@ func sendBatchEscrow(cur realm, channelId types.ChannelId, quoteToken string) {
 		Sender:      []byte(holderAddr.String()),
 		Receiver:    []byte("remote-receiver"),
 		BaseToken:   []byte(quoteToken),
-		BaseAmount:  u256.NewUint(localAmount),
+		BaseAmount:  u256.NewUint(wireAmount),
 		QuoteToken:  []byte("batchwei"),
-		QuoteAmount: u256.NewUint(localAmount),
+		QuoteAmount: u256.NewUint(wireAmount),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 
@@ -128,7 +128,7 @@ func sendBatchEscrow(cur realm, channelId types.ChannelId, quoteToken string) {
 	ufmt.Printf("[INFO] proxy voucher balance: %d -> %d\n", beforeProxy, afterProxy)
 	ufmt.Printf("[INFO] packet BaseAmount (decoded): %s\n", decodedOrder.BaseAmount.ToString())
 	ufmt.Printf("[INFO] packet QuoteAmount (decoded): %s\n", decodedOrder.QuoteAmount.ToString())
-	ufmt.Println("[EXPECTED] batch send locks 1000000 local units and writes 1000000000000000000 wire units")
+	ufmt.Println("[EXPECTED] batch send locks 1000000 local units from 1000000000000000000 wire units")
 }
 
 // --- encoding helpers ---
@@ -204,9 +204,9 @@ func mustDecodeBatchOrder(packet types.Packet) z.TokenOrderV2 {
 // [INFO] batch child wire amount: 1000000000001
 // [INFO] holder voucher balance: 1000000 -> 1000000
 //
-// [SCENARIO] 4. Send OP_BATCH with voucher child: local amount scaled up in wire packet
+// [SCENARIO] 4. Send OP_BATCH with voucher child: wire amount locks local voucher amount
 // [INFO] holder voucher balance: 1000000 -> 0
 // [INFO] proxy voucher balance: 0 -> 1000000
 // [INFO] packet BaseAmount (decoded): 1000000000000000000
 // [INFO] packet QuoteAmount (decoded): 1000000000000000000
-// [EXPECTED] batch send locks 1000000 local units and writes 1000000000000000000 wire units
+// [EXPECTED] batch send locks 1000000 local units from 1000000000000000000 wire units

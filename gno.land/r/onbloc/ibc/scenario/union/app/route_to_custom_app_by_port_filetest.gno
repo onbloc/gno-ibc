@@ -4,7 +4,7 @@ package app
 // route_to_custom_app_by_port_filetest is the BY-TYPE app scenario. Core routes IBC
 // callbacks by port to whichever app.IApp implementation is registered there — it is
 // app-agnostic. This scenario registers a CUSTOM (non-zkgm) app at the scenario
-// realm's own port and drives a channel handshake to it; the custom app records each
+// realm's own port and drives channel handshake legs to it; the custom app records each
 // callback it receives, proving core routed the handshake legs to it by port.
 
 import (
@@ -41,10 +41,10 @@ func main(cur realm) {
 	ufmt.Println("[EXPECTED] the custom (non-zkgm) app should be bound at its own port")
 	println("")
 
-	println("[SCENARIO] 2. A channel handshake to that port routes callbacks to the custom app")
+	println("[SCENARIO] 2. Full channel handshake legs to that port route callbacks to the custom app")
 	openChannel(cur, connectionId)
 	ufmt.Printf("[INFO] callbacks the custom app received: %s\n", strings.Join(routed, " -> "))
-	ufmt.Println("[EXPECTED] core should route OnChannelOpenInit then OnChannelOpenAck to the custom app")
+	ufmt.Println("[EXPECTED] core should route Init/Try/Ack/Confirm callbacks to the custom app")
 }
 
 // bootstrap installs the core impl, opens a mock-backed client/connection, and
@@ -77,8 +77,11 @@ func openChannel(cur realm, connectionId types.ConnectionId) {
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(portId, portId, connectionId, customVersion, "g1relayer"))
+	tryChannel := core.NewChannel(types.ChannelStateTryOpen, connectionId, types.ChannelId(8), types.Bytes(portId), customVersion)
+	core.ChannelOpenTry(cross(cur), core.NewMsgChannelOpenTry(portId, tryChannel, customVersion, nil, 1, "g1relayer"))
 	channelId := types.ChannelId(1)
 	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(channelId, customVersion, types.ChannelId(2), nil, 1, "g1relayer"))
+	core.ChannelOpenConfirm(cross(cur), types.NewMsgChannelOpenConfirm(types.ChannelId(2), nil, 1, "g1relayer"))
 }
 
 // --- custom IBC app: records each routed callback, accepts any channel version ---
@@ -148,6 +151,6 @@ func (e mockError) Error() string { return string(e) }
 // [INFO] custom app bound at its port: true
 // [EXPECTED] the custom (non-zkgm) app should be bound at its own port
 //
-// [SCENARIO] 2. A channel handshake to that port routes callbacks to the custom app
-// [INFO] callbacks the custom app received: OnChannelOpenInit -> OnChannelOpenAck
-// [EXPECTED] core should route OnChannelOpenInit then OnChannelOpenAck to the custom app
+// [SCENARIO] 2. Full channel handshake legs to that port route callbacks to the custom app
+// [INFO] callbacks the custom app received: OnChannelOpenInit -> OnChannelOpenTry -> OnChannelOpenAck -> OnChannelOpenConfirm
+// [EXPECTED] core should route Init/Try/Ack/Confirm callbacks to the custom app

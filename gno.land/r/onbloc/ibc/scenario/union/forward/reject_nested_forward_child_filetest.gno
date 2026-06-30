@@ -1,16 +1,17 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/forward
 package forward
 
-// reject_nested_forward_child_filetest is the BOUNDARY forward scenario (S-7.4). A
+// reject_nested_forward_child_filetest is the BOUNDARY forward scenario. A
 // forward child may only be OP_CALL, OP_TOKEN_ORDER, or OP_BATCH — a directly nested
 // OP_FORWARD child is rejected (multi-hop is expressed through the channel path, not by
 // nesting forward instructions). On receive, executeForward is the only line of defense
 // (recv skips verifyInternal), so it checks the child opcode against the allowlist and,
 // on a miss, returns an error that becomes a synchronous universal-error
 // acknowledgement rather than parking the parent in-flight. This file contrasts the two
-// outcomes in one transcript: a valid forward (OP_CALL child) leaves the parent receipt
-// "committed" (async, ack deferred until the child resolves), while a nested-forward
-// child leaves the parent receipt "ack-written" immediately and no child commitment.
+// outcomes in one transcript: valid forward children (OP_CALL, OP_TOKEN_ORDER, and
+// OP_BATCH) leave the parent receipt "committed" (async, ack deferred until the child
+// resolves), while a nested-forward child leaves the parent receipt "ack-written"
+// immediately and no child commitment.
 
 import (
 	"chain"
@@ -53,8 +54,20 @@ func main(cur realm) {
 	ufmt.Println("[EXPECTED] committed: parent parked in-flight, child relayed, ack deferred until the child resolves")
 	println("")
 
-	println("[SCENARIO] 3. A forward with a nested OP_FORWARD child is rejected (synchronous failure ack)")
-	nestedParent, nestedChild := recvForwardWith(cur, saltSeed(2), nestedForwardInstruction())
+	println("[SCENARIO] 3. A forward with an allowed OP_TOKEN_ORDER child is accepted (parked async)")
+	tokenParent, tokenChild := recvForwardWith(cur, saltSeed(2), mustTokenOrderInstruction())
+	ufmt.Printf("[INFO] token child    -> parent receipt: %s, child commitment: %s\n", receiptState(tokenParent), sendState(tokenChild))
+	ufmt.Println("[EXPECTED] committed: TokenOrder child is relayed as the forward child packet")
+	println("")
+
+	println("[SCENARIO] 4. A forward with an allowed OP_BATCH child is accepted (parked async)")
+	batchParent, batchChild := recvForwardWith(cur, saltSeed(3), mustBatchInstruction())
+	ufmt.Printf("[INFO] batch child    -> parent receipt: %s, child commitment: %s\n", receiptState(batchParent), sendState(batchChild))
+	ufmt.Println("[EXPECTED] committed: Batch child is relayed as the forward child packet")
+	println("")
+
+	println("[SCENARIO] 5. A forward with a nested OP_FORWARD child is rejected (synchronous failure ack)")
+	nestedParent, nestedChild := recvForwardWith(cur, saltSeed(4), nestedForwardInstruction())
 	ufmt.Printf("[INFO] nested forward -> parent receipt: %s, would-be child commitment: %s\n", receiptState(nestedParent), sendState(nestedChild))
 	ufmt.Println("[EXPECTED] ack-written: rejected by the child allowlist, would-be child absent, parent not in-flight")
 }
@@ -146,6 +159,31 @@ func mustCallInstruction() z.Instruction {
 	return z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_CALL, Operand: operand}
 }
 
+func mustTokenOrderInstruction() z.Instruction {
+	order := z.TokenOrderV2{
+		Sender:      []byte("forwarder"),
+		Receiver:    []byte(adminAddr.String()),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(1),
+		QuoteToken:  []byte("quote-token"),
+		QuoteAmount: u256.NewUint(1),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+	}
+	operand, err := z.EncodeTokenOrderV2(order)
+	if err != nil {
+		panic(err)
+	}
+	return z.Instruction{Version: z.INSTR_VERSION_2, Opcode: z.OP_TOKEN_ORDER, Operand: operand}
+}
+
+func mustBatchInstruction() z.Instruction {
+	operand, err := z.EncodeBatch(z.Batch{Instructions: []z.Instruction{mustCallInstruction()}})
+	if err != nil {
+		panic(err)
+	}
+	return z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_BATCH, Operand: operand}
+}
+
 // nestedForwardInstruction is an inner instruction whose opcode is OP_FORWARD, which the
 // child allowlist rejects before the operand is ever decoded.
 func nestedForwardInstruction() z.Instruction {
@@ -197,6 +235,14 @@ func mustZkgmPacketData(packet z.ZkgmPacket) []byte {
 // [INFO] valid forward  -> parent receipt: committed, child commitment: committed
 // [EXPECTED] committed: parent parked in-flight, child relayed, ack deferred until the child resolves
 //
-// [SCENARIO] 3. A forward with a nested OP_FORWARD child is rejected (synchronous failure ack)
+// [SCENARIO] 3. A forward with an allowed OP_TOKEN_ORDER child is accepted (parked async)
+// [INFO] token child    -> parent receipt: committed, child commitment: committed
+// [EXPECTED] committed: TokenOrder child is relayed as the forward child packet
+//
+// [SCENARIO] 4. A forward with an allowed OP_BATCH child is accepted (parked async)
+// [INFO] batch child    -> parent receipt: committed, child commitment: committed
+// [EXPECTED] committed: Batch child is relayed as the forward child packet
+//
+// [SCENARIO] 5. A forward with a nested OP_FORWARD child is rejected (synchronous failure ack)
 // [INFO] nested forward -> parent receipt: ack-written, would-be child commitment: none
 // [EXPECTED] ack-written: rejected by the child allowlist, would-be child absent, parent not in-flight

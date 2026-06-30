@@ -1,13 +1,14 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/settlement
 package settlement
 
-// ack_failure_refund_filetest is the BY-TYPE settlement scenario for the failure-ack
-// refund (re-targeted from the legacy e2e zs23, refund branch). A sender escrows a
-// voucher into the proxy on send; when the counterparty returns a FAILURE
-// acknowledgement, the escrow is refunded to the sender — the voucher moves back
-// from the proxy to the sender and the proxy escrow returns to zero. Both sides of
-// the refund are verified as balance diffs. (A protocol-success ack instead leaves
-// the escrow settled — that no-op branch is covered by the send/ lock tests.)
+// ack_failure_refund_filetest is the BY-TYPE settlement scenario for the universal
+// error / failure-ack refund (re-targeted from the legacy e2e zs23 refund
+// branch). A sender escrows a voucher into the proxy on send; when the counterparty
+// returns the universal-error FAILURE acknowledgement, the escrow is refunded to
+// the sender — the voucher moves back from the proxy to the sender and the proxy
+// escrow returns to zero. Both sides of the refund are verified as balance diffs.
+// (A protocol-success ack instead leaves the escrow settled — that no-op branch is
+// covered by the send/ lock tests.)
 
 import (
 	"chain"
@@ -52,8 +53,8 @@ func main(cur realm) {
 	sendPacket := sendEscrow(cur, channelId, quoteToken)
 	println("")
 
-	println("[SCENARIO] 4. A FAILURE acknowledgement refunds the escrow to the sender")
-	failureAckRefund(cur, sendPacket, quoteToken)
+	println("[SCENARIO] 4. A universal-error FAILURE acknowledgement refunds the escrow to the sender")
+	universalErrorAckRefund(cur, sendPacket, quoteToken)
 }
 
 func bootstrap(cur realm) types.ChannelId {
@@ -119,18 +120,18 @@ func sendEscrow(cur realm, channelId types.ChannelId, quoteToken string) types.P
 	return sendPacket
 }
 
-func failureAckRefund(cur realm, sendPacket types.Packet, quoteToken string) {
+func universalErrorAckRefund(cur realm, sendPacket types.Packet, quoteToken string) {
 	senderBefore := zkgm.VoucherBalanceOf(quoteToken, senderAddr)
 	proxyBefore := zkgm.VoucherBalanceOf(quoteToken, zkgm.ProxyAddress())
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{failureAck()}, nil, 1))
+	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{universalErrorAck()}, nil, 1))
 
 	senderAfter := zkgm.VoucherBalanceOf(quoteToken, senderAddr)
 	proxyAfter := zkgm.VoucherBalanceOf(quoteToken, zkgm.ProxyAddress())
 	ufmt.Printf("[INFO] sender voucher balance: %d -> %d (delta +%d)\n", senderBefore, senderAfter, senderAfter-senderBefore)
 	ufmt.Printf("[INFO] proxy escrow balance: %d -> %d (delta %d)\n", proxyBefore, proxyAfter, proxyAfter-proxyBefore)
-	ufmt.Println("[EXPECTED] failure ack refunds 40: sender 60 -> 100, proxy escrow 40 -> 0")
+	ufmt.Println("[EXPECTED] universal-error ack refunds 40: sender 60 -> 100, proxy escrow 40 -> 0")
 }
 
 // --- encoding helpers ---
@@ -171,7 +172,7 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 	return meta
 }
 
-func failureAck() []byte {
+func universalErrorAck() []byte {
 	ack, err := z.EncodeAck(z.Ack{Tag: new(u256.Uint).SetBytes(z.TAG_ACK_FAILURE[:])})
 	if err != nil {
 		panic(err)
@@ -191,7 +192,7 @@ func failureAck() []byte {
 // [INFO] proxy escrow balance: 40
 // [EXPECTED] sender 100 -> 60, proxy escrow 0 -> 40
 //
-// [SCENARIO] 4. A FAILURE acknowledgement refunds the escrow to the sender
+// [SCENARIO] 4. A universal-error FAILURE acknowledgement refunds the escrow to the sender
 // [INFO] sender voucher balance: 60 -> 100 (delta +40)
 // [INFO] proxy escrow balance: 40 -> 0 (delta -40)
-// [EXPECTED] failure ack refunds 40: sender 60 -> 100, proxy escrow 40 -> 0
+// [EXPECTED] universal-error ack refunds 40: sender 60 -> 100, proxy escrow 40 -> 0

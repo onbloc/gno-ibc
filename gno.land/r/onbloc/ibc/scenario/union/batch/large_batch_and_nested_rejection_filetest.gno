@@ -119,6 +119,7 @@ func recvNestedBatch(cur realm, channelId types.ChannelId, quoteTokens []string)
 
 	ufmt.Printf("[INFO] minted children after nested batch: %d\n", mintedChildren(quoteTokens))
 	ufmt.Printf("[INFO] packet receipt recorded: %t\n", receiptRecorded(packet))
+	ufmt.Printf("[INFO] nested failure ack committed: %t\n", ackCommitted(packet, universalErrorAck()))
 	ufmt.Println("[EXPECTED] nested batch rejected: mint count unchanged at 8; receipt recorded (failure ack)")
 }
 
@@ -135,6 +136,11 @@ func mintedChildren(quoteTokens []string) int {
 func receiptRecorded(packet types.Packet) bool {
 	_, err := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))
 	return err == nil
+}
+
+func ackCommitted(packet types.Packet, ack []byte) bool {
+	got, err := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))
+	return err == nil && got == types.CommitAck(ack)
 }
 
 // --- encoding helpers ---
@@ -183,6 +189,14 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 	return meta
 }
 
+func universalErrorAck() []byte {
+	ack, err := z.EncodeAck(z.Ack{Tag: u256.NewUint(0), InnerAck: []byte{}})
+	if err != nil {
+		panic(err)
+	}
+	return ack
+}
+
 // Output:
 // [SCENARIO] 1. Bootstrap IBC host and open a zkgm channel
 //
@@ -194,4 +208,5 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 // [SCENARIO] 3. A nested batch (batch inside batch) is rejected, minting nothing new
 // [INFO] minted children after nested batch: 8
 // [INFO] packet receipt recorded: true
+// [INFO] nested failure ack committed: true
 // [EXPECTED] nested batch rejected: mint count unchanged at 8; receipt recorded (failure ack)

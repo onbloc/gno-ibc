@@ -3,12 +3,12 @@ package batch
 
 // large_batch_and_nested_rejection_filetest is the BY-TYPE batch scenario for the
 // current batch limits (re-targeted from the legacy e2e zs89). A flat batch has no
-// length cap: an 8-child batch of INITIALIZE orders mints all eight vouchers. A
-// nested batch (a batch whose child is itself a batch) is rejected — its receive
-// writes a failure acknowledgement and mints nothing new. The mint count is the
-// observable: 8 after the flat batch, still 8 after the nested batch. (The legacy
-// exact ack-hash equality used e2e ack builders; the unchanged mint count is the
-// behavior-level proof the nested batch was rejected.)
+// length cap: an 8-child batch of INITIALIZE orders mints all eight vouchers. Nested
+// disallowed children (OP_BATCH and OP_FORWARD) are rejected — their receive writes a
+// failure acknowledgement and mints nothing new. The mint count is the observable: 8
+// after the flat batch, still 8 after each rejected batch. (The legacy exact ack-hash
+// equality used e2e ack builders; the unchanged mint count is the behavior-level proof
+// the nested child was rejected.)
 
 import (
 	"chain"
@@ -50,6 +50,10 @@ func main(cur realm) {
 
 	println("[SCENARIO] 3. A nested batch (batch inside batch) is rejected, minting nothing new")
 	recvNestedBatch(cur, channelId, quoteTokens)
+	println("")
+
+	println("[SCENARIO] 4. A forward child inside a batch is rejected, minting nothing new")
+	recvForwardChildBatch(cur, channelId, quoteTokens)
 }
 
 func bootstrap(cur realm) types.ChannelId {
@@ -123,6 +127,19 @@ func recvNestedBatch(cur realm, channelId types.ChannelId, quoteTokens []string)
 	ufmt.Println("[EXPECTED] nested batch rejected: mint count unchanged at 8; receipt recorded (failure ack)")
 }
 
+func recvForwardChildBatch(cur realm, channelId types.ChannelId, quoteTokens []string) {
+	batch := z.Batch{Instructions: []z.Instruction{mustForwardInstruction()}}
+	packet := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustBatchInstruction(batch)), types.Timestamp(1<<62))
+
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
+
+	ufmt.Printf("[INFO] minted children after forward child: %d\n", mintedChildren(quoteTokens))
+	ufmt.Printf("[INFO] packet receipt recorded: %t\n", receiptRecorded(packet))
+	ufmt.Printf("[INFO] forward-child failure ack committed: %t\n", ackCommitted(packet, universalErrorAck()))
+	ufmt.Println("[EXPECTED] OP_FORWARD child rejected: mint count unchanged at 8; receipt recorded (failure ack)")
+}
+
 func mintedChildren(quoteTokens []string) int {
 	n := 0
 	for _, qt := range quoteTokens {
@@ -159,6 +176,20 @@ func mustBatchInstruction(b z.Batch) z.Instruction {
 		panic(err)
 	}
 	return z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_BATCH, Operand: operand}
+}
+
+func mustForwardInstruction() z.Instruction {
+	forward := z.Forward{
+		Path:             u256.Zero(),
+		TimeoutHeight:    0,
+		TimeoutTimestamp: uint64(1) << 62,
+		Instruction:      mustBatchInstruction(z.Batch{}),
+	}
+	operand, err := z.EncodeForward(forward)
+	if err != nil {
+		panic(err)
+	}
+	return z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_FORWARD, Operand: operand}
 }
 
 func mustPacketData(instr z.Instruction) []byte {
@@ -210,3 +241,9 @@ func universalErrorAck() []byte {
 // [INFO] packet receipt recorded: true
 // [INFO] nested failure ack committed: true
 // [EXPECTED] nested batch rejected: mint count unchanged at 8; receipt recorded (failure ack)
+//
+// [SCENARIO] 4. A forward child inside a batch is rejected, minting nothing new
+// [INFO] minted children after forward child: 8
+// [INFO] packet receipt recorded: true
+// [INFO] forward-child failure ack committed: true
+// [EXPECTED] OP_FORWARD child rejected: mint count unchanged at 8; receipt recorded (failure ack)

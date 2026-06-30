@@ -194,14 +194,10 @@ func (v *ucs03ZkgmV1) timeoutInternal(_ int, rlm realm, packet types.Packet, sal
 func decodeOrderInstruction(instruction z.Instruction) (z.TokenOrderV2, error) {
 	switch instruction.Version {
 	case z.INSTR_VERSION_2:
-		return decodeTokenOrderV2Instruction(instruction)
+		return z.DecodeTokenOrderV2(instruction.Operand)
 	default:
 		return z.TokenOrderV2{}, makeError(errUnsupportedTokenOrderVersion)
 	}
-}
-
-func decodeTokenOrderV2Instruction(instruction z.Instruction) (z.TokenOrderV2, error) {
-	return z.DecodeTokenOrderV2(instruction.Operand)
 }
 
 // decodeCallInstruction decodes a call, rejecting unsupported instruction versions.

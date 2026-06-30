@@ -21,31 +21,46 @@ func (v *ucs03ZkgmV1) verifyInternal(_ int, rlm realm, funds *funds, channelId t
 			return err
 		}
 
-		return v.verifyTokenOrderV2(0, rlm, funds, channelId, path, order)
+		decimaledOrder, err := v.scaleDownOutboundOrder(0, rlm, order)
+		if err != nil {
+			return err
+		}
+
+		if err := v.verifyTokenOrderV2(0, rlm, funds, channelId, path, decimaledOrder); err != nil {
+			return err
+		}
 	case z.OP_BATCH:
 		batch, err := decodeBatchInstruction(instruction)
 		if err != nil {
 			return err
 		}
 
-		return v.verifyBatch(0, rlm, funds, channelId, path, batch)
+		if err := v.verifyBatch(0, rlm, funds, channelId, path, batch); err != nil {
+			return err
+		}
 	case z.OP_FORWARD:
 		forward, err := decodeForwardInstruction(instruction)
 		if err != nil {
 			return err
 		}
 
-		return v.verifyForward(0, rlm, funds, channelId, forward)
+		if err := v.verifyForward(0, rlm, funds, channelId, forward); err != nil {
+			return err
+		}
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instruction)
 		if err != nil {
 			return err
 		}
 
-		return v.verifyCall(0, rlm, call)
+		if err := v.verifyCall(0, rlm, call); err != nil {
+			return err
+		}
 	default:
 		return makeError(errUnsupportedOpcode)
 	}
+
+	return nil
 }
 
 // execFatal is a sentinel panic value.
@@ -80,12 +95,17 @@ func (v *ucs03ZkgmV1) dispatchExecutePacket(
 
 	switch instruction.Opcode {
 	case z.OP_TOKEN_ORDER:
-		order, err := v.decodeLocalOrderInstruction(0, rlm, instruction)
+		order, err := decodeOrderInstruction(instruction)
 		if err != nil {
 			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 		}
 
-		return v.executeTokenOrderV2(0, rlm, packet, relayer, relayerMsg, salt, path, order, intent)
+		decimaledOrder, err := v.scaleDownIncomingOrder(0, rlm, order)
+		if err != nil {
+			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
+		}
+
+		return v.executeTokenOrderV2(0, rlm, packet, relayer, relayerMsg, salt, path, decimaledOrder, intent)
 	case z.OP_BATCH:
 		batch, err := decodeBatchInstruction(instruction)
 		if err != nil {
@@ -121,7 +141,12 @@ func (v *ucs03ZkgmV1) dispatchExecutePacket(
 func (v *ucs03ZkgmV1) acknowledgeInternal(_ int, rlm realm, packet types.Packet, relayer address, salt [32]byte, path *u256.Uint, instruction z.Instruction, successful bool, ack []byte) error {
 	switch instruction.Opcode {
 	case z.OP_TOKEN_ORDER:
-		order, err := v.decodeSentOrderInstruction(0, rlm, instruction)
+		order, err := decodeOrderInstruction(instruction)
+		if err != nil {
+			return err
+		}
+
+		decimaledOrder, err := v.scaleDownOutboundOrder(0, rlm, order)
 		if err != nil {
 			return err
 		}
@@ -140,7 +165,7 @@ func (v *ucs03ZkgmV1) acknowledgeInternal(_ int, rlm realm, packet types.Packet,
 			hasOrderAck = true
 		}
 
-		return v.acknowledgeTokenOrderV2(0, rlm, packet, relayer, salt, path, order, orderAck, hasOrderAck)
+		return v.acknowledgeTokenOrderV2(0, rlm, packet, relayer, salt, path, decimaledOrder, orderAck, hasOrderAck)
 	case z.OP_BATCH:
 		batch, err := decodeBatchInstruction(instruction)
 		if err != nil {
@@ -164,12 +189,17 @@ func (v *ucs03ZkgmV1) acknowledgeInternal(_ int, rlm realm, packet types.Packet,
 func (v *ucs03ZkgmV1) timeoutInternal(_ int, rlm realm, packet types.Packet, salt [32]byte, path *u256.Uint, instruction z.Instruction) error {
 	switch instruction.Opcode {
 	case z.OP_TOKEN_ORDER:
-		order, err := v.decodeSentOrderInstruction(0, rlm, instruction)
+		order, err := decodeOrderInstruction(instruction)
 		if err != nil {
 			return err
 		}
 
-		return v.refundV2(0, rlm, path, packet.SourceChannelId, order)
+		decimaledOrder, err := v.scaleDownOutboundOrder(0, rlm, order)
+		if err != nil {
+			return err
+		}
+
+		return v.refundV2(0, rlm, path, packet.SourceChannelId, decimaledOrder)
 	case z.OP_BATCH:
 		batch, err := decodeBatchInstruction(instruction)
 		if err != nil {
@@ -189,15 +219,30 @@ func (v *ucs03ZkgmV1) timeoutInternal(_ int, rlm realm, packet types.Packet, sal
 	}
 }
 
-// decodeOrderInstruction is the TokenOrder version dispatch point. Add new
-// versions here, then route callers to the version-specific handler.
-func decodeOrderInstruction(instruction z.Instruction) (z.TokenOrderV2, error) {
-	switch instruction.Version {
-	case z.INSTR_VERSION_2:
-		return z.DecodeTokenOrderV2(instruction.Operand)
-	default:
-		return z.TokenOrderV2{}, makeError(errUnsupportedTokenOrderVersion)
+// scaleDownIncomingOrder resolves the decimal precision for a remote order via
+// incomingOrderDecimals (voucher BaseToken, voucher QuoteToken, INITIALIZE metadata,
+// or targetDecimals fallback) and scales the amounts down to local precision.
+func (v *ucs03ZkgmV1) scaleDownIncomingOrder(_ int, rlm realm, order z.TokenOrderV2) (z.TokenOrderV2, error) {
+	decimals, err := v.incomingOrderDecimals(0, rlm, order)
+	if err != nil {
+		return z.TokenOrderV2{}, err
 	}
+
+	return scaleDownOrderAmounts(decimals, order)
+}
+
+// scaleDownOutboundOrder scales the amounts of an outbound order down to local precision
+// for ack/timeout. Only IBC voucher BaseTokens carry wire-scaled amounts in the packet —
+// native coins and local GRC20 tokens are stored as user-provided local amounts.
+// INITIALIZE metadata.Decimals must not be used here: it describes the remote wrapped
+// token, not the local BaseToken that was escrowed.
+func (v *ucs03ZkgmV1) scaleDownOutboundOrder(_ int, rlm realm, order z.TokenOrderV2) (z.TokenOrderV2, error) {
+	info := v.parseTokenInfo(0, rlm, order.BaseToken)
+	if !info.isVoucher {
+		return order, nil
+	}
+
+	return scaleDownOrderAmounts(info.decimals, order)
 }
 
 // decodeCallInstruction decodes a call, rejecting unsupported instruction versions.
@@ -207,6 +252,19 @@ func decodeCallInstruction(instruction z.Instruction) (z.Call, error) {
 	}
 
 	return z.DecodeCall(instruction.Operand)
+}
+
+func decodeOrderInstruction(instruction z.Instruction) (z.TokenOrderV2, error) {
+	if instruction.Version != z.INSTR_VERSION_2 {
+		return z.TokenOrderV2{}, makeError(errUnsupportedTokenOrderVersion)
+	}
+
+	order, err := z.DecodeTokenOrderV2(instruction.Operand)
+	if err != nil {
+		return z.TokenOrderV2{}, err
+	}
+
+	return order, nil
 }
 
 // decodeBatchInstruction decodes a batch, rejecting unsupported instruction versions.

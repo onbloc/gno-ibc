@@ -41,6 +41,7 @@ var theMeta []byte
 func main(cur realm) {
 	println("[SCENARIO] 1. Bootstrap, deploy the token, then enable a capacity-50 bucket (refill 50/s)")
 	channelId, quoteToken := setup(cur)
+	ufmt.Printf("[INFO] bucket available after config: %d\n", available(quoteToken))
 	println("")
 
 	println("[SCENARIO] 2. A fill of 40 is within capacity -> minted")
@@ -98,7 +99,15 @@ func recvFill(cur realm, channelId types.ChannelId, quoteToken string, amount in
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{saltedPacket(channelId, salt, orderOf(z.TOKEN_ORDER_KIND_ESCROW, quoteToken, amount))}, [][]byte{nil}, nil, 1))
 
 	after := zkgm.VoucherBalanceOf(quoteToken, receiverAddr)
-	ufmt.Printf("[INFO] fill of %d: balance %d -> %d (delta +%d)\n", amount, before, after, after-before)
+	ufmt.Printf("[INFO] fill of %d: balance %d -> %d (delta +%d), bucket available %d\n", amount, before, after, after-before, available(quoteToken))
+}
+
+func available(denom string) uint64 {
+	bucket, err := zkgm.GetTokenBucket(denom)
+	if err != nil {
+		panic(err)
+	}
+	return bucket.Available.Uint64()
 }
 
 func orderOf(kind uint8, quoteToken string, amount int64) z.TokenOrderV2 {
@@ -154,12 +163,13 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 
 // Output:
 // [SCENARIO] 1. Bootstrap, deploy the token, then enable a capacity-50 bucket (refill 50/s)
+// [INFO] bucket available after config: 50
 //
 // [SCENARIO] 2. A fill of 40 is within capacity -> minted
-// [INFO] fill of 40: balance 1 -> 41 (delta +40)
+// [INFO] fill of 40: balance 1 -> 41 (delta +40), bucket available 10
 //
 // [SCENARIO] 3. A second fill of 40 exceeds the remaining capacity -> rejected (no mint)
-// [INFO] fill of 40: balance 41 -> 41 (delta +0)
+// [INFO] fill of 40: balance 41 -> 41 (delta +0), bucket available 10
 //
 // [SCENARIO] 4. After the bucket refills (SkipHeights), a fill of 40 succeeds again
-// [INFO] fill of 40: balance 41 -> 81 (delta +40)
+// [INFO] fill of 40: balance 41 -> 81 (delta +40), bucket available 10

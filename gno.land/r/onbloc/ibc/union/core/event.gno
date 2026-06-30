@@ -279,23 +279,38 @@ func emitPacketRecvEvent(eventType string, packet types.Packet, maker address, m
 	)
 }
 
+func acknowledgementEventAttrs(acknowledgement []byte) []string {
+	config := GetEventConfig()
+	ackHex := hexAttr(acknowledgement)
+	attrs := []string{
+		"acknowledgement_size", strconv.Itoa(len(ackHex)),
+	}
+	if len(ackHex) > MaxPacketDataEventSize() {
+		return append(attrs, "acknowledgement_hash", types.Keccak(acknowledgement).String())
+	}
+	if config.SplitEventAttrs {
+		return append(attrs, eventAttrColumns("acknowledgement", ackHex, int(config.MaxEventAttrValueLen))...)
+	}
+	return append(attrs, "acknowledgement", ackHex)
+}
+
 func emitWriteAckEvent(packet types.Packet, acknowledgement []byte) {
-	chain.Emit(
-		WriteAckEvent,
+	attrs := []string{
 		"destination_channel_id", packet.DestinationChannelId.String(),
 		"packet_hash", commitPacketHash(packet).String(),
-		"acknowledgement", hexAttr(acknowledgement),
-	)
+	}
+	attrs = append(attrs, acknowledgementEventAttrs(acknowledgement)...)
+	chain.Emit(WriteAckEvent, attrs...)
 }
 
 func emitPacketAckEvent(packet types.Packet, acknowledgement []byte, maker address) {
-	chain.Emit(
-		PacketAckEvent,
+	attrs := []string{
 		"source_channel_id", packet.SourceChannelId.String(),
 		"packet_hash", commitPacketHash(packet).String(),
-		"acknowledgement", hexAttr(acknowledgement),
 		"maker", maker.String(),
-	)
+	}
+	attrs = append(attrs, acknowledgementEventAttrs(acknowledgement)...)
+	chain.Emit(PacketAckEvent, attrs...)
 }
 
 func emitPacketTimeoutEvent(packet types.Packet, sourceChannel types.Channel, connection types.Connection) {

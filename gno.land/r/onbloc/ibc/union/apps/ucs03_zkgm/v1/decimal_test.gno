@@ -93,8 +93,9 @@ func TestNativeBaseAmountNotUpscaled(cur realm, t *testing.T) {
 
 	const N = int64(1_000_000) // 1 ugnot (6-dec representation)
 	const chanId = types.ChannelId(140)
+	sender := testAddress("native-noscale-sndr")
 	order := z.TokenOrderV2{
-		Sender:      []byte(testAddress("native-noscale-sndr")),
+		Sender:      []byte(sender),
 		BaseToken:   []byte("ugnot"),
 		BaseAmount:  u256.NewUint(uint64(N)),
 		QuoteToken:  []byte("ibc/out-native"),
@@ -103,7 +104,8 @@ func TestNativeBaseAmountNotUpscaled(cur realm, t *testing.T) {
 	}
 	f := newFunds(chain.NewCoins(chain.NewCoin("ugnot", N)))
 
-	err := v.verifyTokenOrderV2(0, cur, f, chanId, u256.Zero(), order)
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	err := v.verifyTokenOrderV2X(cross(cur), f, chanId, u256.Zero(), order)
 
 	uassert.NoError(t, err)
 	uassert.True(t, f.isEmpty())
@@ -194,12 +196,13 @@ func TestVerifyAndTimeoutNativeInitializeRoundTrip(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	amount := u256.NewUint(1_000_000_000_000)
+	sender := testAddress("vt-sender")
 	meta := mustEncodeTokenMetadata(z.TokenMetadata{
 		Implementation: []byte("grc20"),
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "USDC", Symbol: "USDC", Decimals: 18}),
 	})
 	order := z.TokenOrderV2{
-		Sender:      []byte(testAddress("vt-sender")),
+		Sender:      []byte(sender),
 		BaseToken:   []byte("ugnot"),
 		BaseAmount:  amount,
 		QuoteToken:  []byte("ibc/vt-native"),
@@ -211,8 +214,10 @@ func TestVerifyAndTimeoutNativeInitializeRoundTrip(cur realm, t *testing.T) {
 	const chanId = types.ChannelId(190)
 
 	testing.IssueCoins(cur.Address(), chain.NewCoins(chain.NewCoin("ugnot", 1_000_000_000_000)))
+	testing.IssueCoins(address(sender), chain.NewCoins(chain.NewCoin("ugnot", 1_000_000_000_000)))
 	f := newFunds(chain.NewCoins(chain.NewCoin("ugnot", 1_000_000_000_000)))
-	err := v.verifyInternal(0, cur, f, chanId, u256.Zero(), instruction)
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	err := v.verifyInternalX(cross(cur), f, chanId, u256.Zero(), instruction)
 	uassert.NoError(t, err)
 
 	key := ChannelBalanceKeyV2(chanId, u256.Zero(), order.BaseToken, order.QuoteToken)
@@ -277,7 +282,8 @@ func TestSendBaseAmountInt64Boundary(cur realm, t *testing.T) {
 		QuoteAmount: maxI64,
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
-	err := v.verifyTokenOrderV2(0, cur, newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), chanA, u256.Zero(), orderA)
+	testing.SetRealm(testing.NewUserRealm(address(senderA)))
+	err := v.verifyTokenOrderV2X(cross(cur), newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), chanA, u256.Zero(), orderA)
 	uassert.NoError(t, err)
 	balA, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(chanA, u256.Zero(), orderA.BaseToken, orderA.QuoteToken))
 	uassert.Equal(t, maxI64.ToString(), balA.ToString())
@@ -293,7 +299,8 @@ func TestSendBaseAmountInt64Boundary(cur realm, t *testing.T) {
 		QuoteAmount: overAmt,
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
-	err = v.verifyTokenOrderV2(0, cur, newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), chanB, u256.Zero(), orderB)
+	testing.SetRealm(testing.NewUserRealm(address(senderB)))
+	err = v.verifyTokenOrderV2X(cross(cur), newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), chanB, u256.Zero(), orderB)
 	uassert.Error(t, err)
 }
 

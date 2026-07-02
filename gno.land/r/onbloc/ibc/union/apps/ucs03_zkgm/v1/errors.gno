@@ -28,6 +28,7 @@ const (
 	errUnsupportedTokenOrderKindForRefund = "unsupported token order kind for refund"
 	errSolveNotImplemented                = "solve token order not implemented"
 	errInvalidTokenOrderDestChannel       = "invalid token order destination channel"
+	errInvalidTokenOrderSender            = "invalid token order sender"
 
 	// call
 	errEurekaUnsupported     = "eureka mode not supported"

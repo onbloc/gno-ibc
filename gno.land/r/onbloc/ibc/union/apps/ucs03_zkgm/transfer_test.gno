@@ -48,6 +48,16 @@ func TestSend_DelegatesToInstalledImpl(cur realm, t *testing.T) {
 	}
 }
 
+func TestSend_RejectsPaused(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+	currentImpl = &dummyImpl{}
+	paused = true
+
+	uassert.AbortsContains(t, cur, "paused", func(cur realm) {
+		Send(cross(cur), types.ChannelId(7), types.Timestamp(99), [32]byte{}, z.Instruction{})
+	})
+}
+
 func TestSendRaw(cur realm, t *testing.T) {
 	cases := []struct {
 		name          string

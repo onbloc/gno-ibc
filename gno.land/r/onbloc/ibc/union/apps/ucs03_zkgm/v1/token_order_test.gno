@@ -260,15 +260,17 @@ func TestTokenOrderVerifyLocalGRC20InvalidAmountsDoNotMutate(cur realm, t *testi
 
 func TestTokenOrderVerifyNativeRequiresSentCoin(cur realm, t *testing.T) {
 	v := newTestImpl()
+	sender := testAddress("v1-native-sender")
 	order := z.TokenOrderV2{
-		Sender:     []byte(testAddress("v1-native-sender")),
+		Sender:     []byte(sender),
 		BaseToken:  []byte("ugnot"),
 		BaseAmount: u256.NewUint(13),
 		QuoteToken: []byte("quote"),
 		Kind:       z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
 
-	err := v.verifyTokenOrderV2(0, cur, newFunds(chain.NewCoins(chain.NewCoin("ugnot", 13))), types.ChannelId(4), u256.Zero(), order)
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	err := v.verifyTokenOrderV2X(cross(cur), newFunds(chain.NewCoins(chain.NewCoin("ugnot", 13))), types.ChannelId(4), u256.Zero(), order)
 
 	uassert.NoError(t, err)
 }
@@ -288,7 +290,8 @@ func TestTokenOrderVerifyNativeEscrowConsumesFundsAndIncreasesChannelBalance(cur
 	}
 	f := newFunds(chain.NewCoins(chain.NewCoin("ugnot", 13)))
 
-	err := v.verifyTokenOrderV2(0, cur, f, channelId, u256.Zero(), order)
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	err := v.verifyTokenOrderV2X(cross(cur), f, channelId, u256.Zero(), order)
 
 	uassert.NoError(t, err)
 	uassert.True(t, f.isEmpty())
@@ -312,7 +315,8 @@ func TestTokenOrderVerifyVoucherBurnInsufficientBalanceRejected(cur realm, t *te
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 
-	err := v.verifyTokenOrderV2(0, cur, newFunds(nil), types.ChannelId(21), u256.Zero(), order)
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	err := v.verifyTokenOrderV2X(cross(cur), newFunds(nil), types.ChannelId(21), u256.Zero(), order)
 
 	uassert.Error(t, err)
 	uassert.Equal(t, int64(10), voucherBalanceOf(baseToken, address(sender)))
@@ -322,8 +326,9 @@ func TestTokenOrderVerifyUnescrowNativeRejectedBeforeFundsConsume(cur realm, t *
 	v := newTestImpl()
 	baseDenom := "native-unescrow"
 	testStore.SetTokenOrigin(0, cur, baseDenom, u256.Zero())
+	sender := testAddress("native-unescrow")
 	order := z.TokenOrderV2{
-		Sender:      []byte(testAddress("native-unescrow")),
+		Sender:      []byte(sender),
 		BaseToken:   []byte(baseDenom),
 		BaseAmount:  u256.NewUint(13),
 		QuoteToken:  []byte("ugnot"),
@@ -332,7 +337,8 @@ func TestTokenOrderVerifyUnescrowNativeRejectedBeforeFundsConsume(cur realm, t *
 	}
 	f := newFunds(chain.NewCoins(chain.NewCoin(baseDenom, 13)))
 
-	err := v.verifyTokenOrderV2(0, cur, f, types.ChannelId(0), u256.Zero(), order)
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	err := v.verifyTokenOrderV2X(cross(cur), f, types.ChannelId(0), u256.Zero(), order)
 
 	uassert.ErrorContains(t, err, "invalid token order unescrow")
 	uassert.False(t, f.isEmpty())
@@ -789,6 +795,14 @@ func TestTokenOrderVerifyUnescrowV1PredictionPasses(cur realm, t *testing.T) {
 	uassert.Equal(t, int64(50), voucherBalanceOf(baseDenom, address(sender)))
 }
 
+func TestTokenOrderVerifyRejectsInvalidSender(cur realm, t *testing.T) {
+	err := newTestImpl().verifyTokenOrderV2(0, cur, newFunds(nil), types.ChannelId(1), u256.Zero(), z.TokenOrderV2{
+		Sender: []byte("other"),
+	})
+
+	uassert.ErrorContains(t, err, "invalid token order sender")
+}
+
 func TestTokenOrderVerifyUnescrowV2PredictionWithImagePasses(cur realm, t *testing.T) {
 	v := newTestImpl()
 
@@ -969,7 +983,8 @@ func TestTokenOrderVerifySolveReturnsError(cur realm, t *testing.T) {
 		Kind:        z.TOKEN_ORDER_KIND_SOLVE,
 	}
 
-	err := v.verifyTokenOrderV2(0, cur, newFunds(nil), types.ChannelId(80), u256.Zero(), order)
+	testing.SetRealm(testing.NewUserRealm(address(string(order.Sender))))
+	err := v.verifyTokenOrderV2X(cross(cur), newFunds(nil), types.ChannelId(80), u256.Zero(), order)
 
 	uassert.ErrorContains(t, err, "not implemented")
 }

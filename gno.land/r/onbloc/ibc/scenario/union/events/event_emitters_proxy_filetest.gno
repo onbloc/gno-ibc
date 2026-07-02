@@ -446,7 +446,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "counterparty_port_id",
-//         "value": "0x"
+//         "value": ""
 //       },
 //       {
 //         "key": "connection_id",
@@ -484,7 +484,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "counterparty_port_id",
-//         "value": "0x"
+//         "value": ""
 //       },
 //       {
 //         "key": "counterparty_channel_id",
@@ -530,7 +530,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "counterparty_port_id",
-//         "value": "0x"
+//         "value": ""
 //       },
 //       {
 //         "key": "counterparty_channel_id",
@@ -572,7 +572,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "counterparty_port_id",
-//         "value": "0x"
+//         "value": ""
 //       },
 //       {
 //         "key": "counterparty_channel_id",
@@ -1210,7 +1210,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "counterparty_port_id",
-//         "value": "0x"
+//         "value": ""
 //       },
 //       {
 //         "key": "counterparty_channel_id",
@@ -1252,7 +1252,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "counterparty_port_id",
-//         "value": "0x"
+//         "value": ""
 //       },
 //       {
 //         "key": "counterparty_channel_id",
@@ -1312,7 +1312,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "counterparty_port_id",
-//         "value": "0x676e6f2e6c616e642f722f6f6e626c6f632f6962632f756e696f6e2f617070732f75637330335f7a6b676d"
+//         "value": "Z25vLmxhbmQvci9vbmJsb2MvaWJjL3VuaW9uL2FwcHMvdWNzMDNfemtnbQ=="
 //       },
 //       {
 //         "key": "connection_id",
@@ -1350,7 +1350,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "counterparty_port_id",
-//         "value": "0x676e6f2e6c616e642f722f6f6e626c6f632f6962632f756e696f6e2f617070732f75637330335f7a6b676d"
+//         "value": "Z25vLmxhbmQvci9vbmJsb2MvaWJjL3VuaW9uL2FwcHMvdWNzMDNfemtnbQ=="
 //       },
 //       {
 //         "key": "counterparty_channel_id",

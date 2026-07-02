@@ -40,7 +40,7 @@ func channelOpenInitEventAttrs(portId types.Bytes, channelId types.ChannelId, ch
 	return []string{
 		"port_id", string(portId),
 		"channel_id", channelId.String(),
-		"counterparty_port_id", channel.CounterpartyPortId.String(),
+		"counterparty_port_id", base64Attr(channel.CounterpartyPortId.Bytes()),
 		"connection_id", channel.ConnectionId.String(),
 		"connection_client_id", connection.ClientId.String(),
 		"connection_counterparty_client_id", connection.CounterpartyClientId.String(),
@@ -53,7 +53,7 @@ func channelOpenTryEventAttrs(portId types.Bytes, channelId types.ChannelId, cha
 	return []string{
 		"port_id", string(portId),
 		"channel_id", channelId.String(),
-		"counterparty_port_id", channel.CounterpartyPortId.String(),
+		"counterparty_port_id", base64Attr(channel.CounterpartyPortId.Bytes()),
 		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
 		"connection_id", channel.ConnectionId.String(),
 		"connection_client_id", connection.ClientId.String(),
@@ -68,7 +68,7 @@ func channelOpenAckConfirmEventAttrs(portId types.Bytes, channelId types.Channel
 	return []string{
 		"port_id", string(portId),
 		"channel_id", channelId.String(),
-		"counterparty_port_id", channel.CounterpartyPortId.String(),
+		"counterparty_port_id", base64Attr(channel.CounterpartyPortId.Bytes()),
 		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
 		"connection_id", channel.ConnectionId.String(),
 		"connection_client_id", connection.ClientId.String(),
@@ -82,7 +82,7 @@ func channelCloseEventAttrs(portId types.Bytes, channelId types.ChannelId, chann
 	return []string{
 		"port_id", string(portId),
 		"channel_id", channelId.String(),
-		"counterparty_port_id", channel.CounterpartyPortId.String(),
+		"counterparty_port_id", base64Attr(channel.CounterpartyPortId.Bytes()),
 		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
 		"connection_id", channel.ConnectionId.String(),
 		"connection_client_id", connection.ClientId.String(),

@@ -3,6 +3,7 @@ package impl
 import (
 	types "gno.land/p/onbloc/ibc/union/types"
 
+	"gno.land/p/demo/tokens/grc20"
 	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
@@ -24,6 +25,7 @@ type mockStore struct {
 	vouchers          map[string]*zkgm.Voucher
 	receivers         map[string]z.Zkgmable
 	lockedNative      map[string]*u256.Uint
+	localGRC20Tokens  map[string]*grc20.Token
 	rateLimitDisabled bool
 }
 
@@ -41,6 +43,7 @@ func newMockStore() *mockStore {
 		vouchers:         map[string]*zkgm.Voucher{},
 		receivers:        map[string]z.Zkgmable{},
 		lockedNative:     map[string]*u256.Uint{},
+		localGRC20Tokens: map[string]*grc20.Token{},
 		// Match NewStore: rate limiting is opt-in (disabled by default).
 		rateLimitDisabled: true,
 	}
@@ -79,6 +82,18 @@ func (m *mockStore) AddLockedNative(_ int, rlm realm, denom string, amount *u256
 
 func (m *mockStore) GetLockedNative(denom string) (*u256.Uint, bool) {
 	v, ok := m.lockedNative[denom]
+	return v, ok
+}
+
+func (m *mockStore) SetLocalGRC20Token(_ int, rlm realm, denom string, token *grc20.Token) {
+	if _, ok := m.localGRC20Tokens[denom]; ok {
+		return
+	}
+	m.localGRC20Tokens[denom] = token
+}
+
+func (m *mockStore) GetLocalGRC20Token(denom string) (*grc20.Token, bool) {
+	v, ok := m.localGRC20Tokens[denom]
 	return v, ok
 }
 

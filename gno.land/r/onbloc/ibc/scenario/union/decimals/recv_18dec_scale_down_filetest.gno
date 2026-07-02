@@ -4,8 +4,8 @@ package decimals
 // recv_18dec_scale_down_filetest is the BY-TYPE scenario for 18-decimal amount
 // scaling (re-targeted from the legacy e2e zs25). An 18-decimal token (1e18 wei)
 // is received via an INITIALIZE order and minted as the 6-decimal local amount.
-// An UNESCROW send then burns that local amount and scales the packet amount back
-// up on the send path.
+// An UNESCROW send then submits the 18-decimal wire amount and burns the
+// corresponding 6-decimal local voucher amount.
 
 import (
 	"chain"
@@ -50,7 +50,7 @@ func main(cur realm) {
 	recvInitialize(cur, channelId, quoteToken, meta)
 	println("")
 
-	println("[SCENARIO] 3. UNESCROW send burns the local 1e6 amount and scales packet back to 1e18")
+	println("[SCENARIO] 3. UNESCROW send with 1e18 wire amount burns the local 1e6 amount")
 	unescrowSend(cur, channelId, quoteToken)
 }
 
@@ -106,9 +106,9 @@ func unescrowSend(cur realm, channelId types.ChannelId, quoteToken string) {
 		Sender:      []byte(holderAddr.String()),
 		Receiver:    []byte("remote-receiver"),
 		BaseToken:   []byte(quoteToken),
-		BaseAmount:  u256.NewUint(localAmount),
+		BaseAmount:  u256.NewUint(weiAmount),
 		QuoteToken:  []byte("wei"),
-		QuoteAmount: u256.NewUint(localAmount),
+		QuoteAmount: u256.NewUint(weiAmount),
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
 
@@ -167,6 +167,6 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 // [INFO] holder voucher balance: 0 -> 1000000
 // [EXPECTED] minted balance should equal 1000000 (1e6 local, scaled down from 1e18 wire)
 //
-// [SCENARIO] 3. UNESCROW send burns the local 1e6 amount and scales packet back to 1e18
+// [SCENARIO] 3. UNESCROW send with 1e18 wire amount burns the local 1e6 amount
 // [INFO] holder voucher balance: 1000000 -> 0
 // [EXPECTED] UNESCROW send should burn the local 1e6 amount, leaving 0

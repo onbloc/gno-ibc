@@ -51,11 +51,11 @@ func TestIncreaseChannelBalanceV2Overflow(cur realm, t *testing.T) {
 	maxU256 := func() *u256.Uint { return new(u256.Uint).SetAllOne() }
 
 	cases := []struct {
-		name      string
-		seed      *u256.Uint
-		add       *u256.Uint
-		wantPanic bool
-		wantBal   *u256.Uint
+		name    string
+		seed    *u256.Uint
+		add     *u256.Uint
+		wantErr bool
+		wantBal *u256.Uint
 	}{
 		{"max plus one overflows", maxU256(), u256.NewUint(1), true, maxU256()},
 		{"max plus large overflows", maxU256(), maxU256(), true, maxU256()},
@@ -72,12 +72,12 @@ func TestIncreaseChannelBalanceV2Overflow(cur realm, t *testing.T) {
 			key := ChannelBalanceKeyV2(chanId, path, base, quote)
 			testStore.SetChannelBalanceV2(0, cur, key, tc.seed)
 
-			if tc.wantPanic {
-				uassert.PanicsContains(t, cur, "overflow", func() {
-					v.increaseChannelBalanceV2(0, cur, chanId, path, base, quote, tc.add)
-				})
+			if tc.wantErr {
+				err := v.increaseChannelBalanceV2(0, cur, chanId, path, base, quote, tc.add)
+				uassert.ErrorContains(t, err, errChannelBalanceOverflow)
 			} else {
-				v.increaseChannelBalanceV2(0, cur, chanId, path, base, quote, tc.add)
+				err := v.increaseChannelBalanceV2(0, cur, chanId, path, base, quote, tc.add)
+				uassert.NoError(t, err)
 			}
 
 			got, ok := testStore.GetChannelBalanceV2(key)

@@ -185,6 +185,51 @@ func TestTimeoutNativeOrderWithMetadataDoesNotTrimEscrow(cur realm, t *testing.T
 	uassert.Equal(t, u256.Zero().ToString(), bal.ToString())
 }
 
+// TestVerifyAndTimeoutNativeInitializeRoundTrip guards against the bug where
+// verifyInternal uses scaleDownIncomingOrder (which applies metadata.Decimals) on
+// the send path: escrow would store a divided amount while timeout would refund the
+// original, causing a balance mismatch. verifyInternal must use scaleDownOutboundOrder
+// so that native BaseToken amounts are stored and refunded at the same value.
+func TestVerifyAndTimeoutNativeInitializeRoundTrip(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	amount := u256.NewUint(1_000_000_000_000)
+	meta := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "USDC", Symbol: "USDC", Decimals: 18}),
+	})
+	order := z.TokenOrderV2{
+		Sender:      []byte(testAddress("vt-sender")),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  amount,
+		QuoteToken:  []byte("ibc/vt-native"),
+		QuoteAmount: amount,
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    meta,
+	}
+	instruction := batchMustOrderInstruction(order)
+	const chanId = types.ChannelId(190)
+
+	testing.IssueCoins(cur.Address(), chain.NewCoins(chain.NewCoin("ugnot", 1_000_000_000_000)))
+	f := newFunds(chain.NewCoins(chain.NewCoin("ugnot", 1_000_000_000_000)))
+	err := v.verifyInternal(0, cur, f, chanId, u256.Zero(), instruction)
+	uassert.NoError(t, err)
+
+	key := ChannelBalanceKeyV2(chanId, u256.Zero(), order.BaseToken, order.QuoteToken)
+	bal, _ := testStore.GetChannelBalanceV2(key)
+	uassert.Equal(t, amount.ToString(), bal.ToString())
+
+	err = v.timeoutInternal(
+		0, cur,
+		core.NewPacket(chanId, types.ChannelId(191), nil, 0),
+		[32]byte{}, u256.Zero(), instruction,
+	)
+	uassert.NoError(t, err)
+
+	bal, _ = testStore.GetChannelBalanceV2(key)
+	uassert.Equal(t, u256.Zero().ToString(), bal.ToString())
+}
+
 func TestInitializeOverflowAmountReturnsFailureAckNoMint(cur realm, t *testing.T) {
 	v := newTestImpl()
 
@@ -248,11 +293,6 @@ func TestSendBaseAmountInt64Boundary(cur realm, t *testing.T) {
 		QuoteAmount: overAmt,
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
-	// An int64-overflowing base amount is rejected. The reference increases the
-	// channel balance before escrowing (contract.rs L511-543), so the failing
-	// escrow leaves a transient balance entry; in production the verify error
-	// aborts the whole Send tx (impl.gno panics), rolling that write back. Here
-	// verify is called in isolation, so we only assert the rejection.
 	err = v.verifyTokenOrderV2(0, cur, newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), chanB, u256.Zero(), orderB)
 	uassert.Error(t, err)
 }
@@ -270,7 +310,7 @@ func TestVoucherDecimalsWithinLimit(cur realm, t *testing.T) {
 	}{
 		{"ibc/dl-0", "T0", 0},
 		{"ibc/dl-6", "T6", 6},
-		{"ibc/dl-18", "TK", 18}, // MaxDecimals; must succeed.
+		{"ibc/dl-18", "TK", 18},
 	} {
 		uassert.NoError(t, v.mintVoucher(0, cur, tc.denom, [32]byte{}, "T", tc.sym, tc.decimals, rx, amt))
 		uassert.Equal(t, int(tc.decimals), voucherDecimalsOf(tc.denom))
@@ -316,17 +356,15 @@ func TestReInitializeSameIBCDenomPreservesDecimals(cur realm, t *testing.T) {
 	rx := testAddress("reint-rx")
 	amt := u256.NewUint(10)
 
-	// First creation: decimals=18.
 	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "Token", "TKN", 18, rx, amt))
 	uassert.Equal(t, 18, voucherDecimalsOf(ibcDenom))
 
-	// Second call with decimals=6 must reuse the existing voucher without changing it.
 	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "Token", "TKN", 6, rx, amt))
 	uassert.Equal(t, 18, voucherDecimalsOf(ibcDenom))
 	uassert.Equal(t, int64(20), voucherBalanceOf(ibcDenom, address(rx)))
 }
 
-func TestWireAmountToLocal(cur realm, t *testing.T) {
+func TestScaleDownAmount(cur realm, t *testing.T) {
 	tests := []struct {
 		name          string
 		tokenDecimals uint8
@@ -343,7 +381,7 @@ func TestWireAmountToLocal(cur realm, t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			amount := u256.NewUint(tc.amount)
-			got, err := wireAmountToLocal(tc.tokenDecimals, amount)
+			got, err := scaleDownAmount(tc.tokenDecimals, amount)
 			if tc.expectError != "" {
 				uassert.ErrorContains(t, err, tc.expectError)
 				return
@@ -358,7 +396,6 @@ func TestWireAmountToLocal(cur realm, t *testing.T) {
 func TestParseTokenInfo(cur realm, t *testing.T) {
 	v := newTestImpl()
 
-	// Create an 18-dec voucher first
 	denom := "ibc/ABCDEF"
 	v.mintVoucher(0, cur, denom, [32]byte{}, "Test Voucher", "TVST", 18, "sender", u256.NewUint(1000000))
 
@@ -383,293 +420,7 @@ func TestParseTokenInfo(cur realm, t *testing.T) {
 	}
 }
 
-func TestDecodeSentOrderInstructionTrimsVoucherBase(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	denom := "ibc/SENT-DECODE"
-	v.mintVoucher(0, cur, denom, [32]byte{}, "Sent", "SENT", 18, testAddress("sent-decoder"), u256.NewUint(1))
-
-	order := z.TokenOrderV2{
-		Sender:      []byte(testAddress("sent-decoder")),
-		Receiver:    []byte(testAddress("sent-decoder-rx")),
-		BaseToken:   []byte(denom),
-		BaseAmount:  u256.NewUint(123456000000000000),
-		QuoteToken:  []byte("ugnot"),
-		QuoteAmount: u256.NewUint(123000000000000000),
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-	}
-
-	got, err := v.decodeSentOrderInstruction(0, cur, batchMustOrderInstruction(order))
-	uassert.NoError(t, err)
-	uassert.Equal(t, u256.NewUint(123456).ToString(), got.BaseAmount.ToString())
-	uassert.Equal(t, u256.NewUint(123000).ToString(), got.QuoteAmount.ToString())
-}
-
-func TestScaleOutgoingTokenOrderInstruction(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	denom := "ibc/SCALE"
-	sender := testAddress("scale-sender")
-	v.mintVoucher(0, cur, denom, [32]byte{}, "Voucher", "VOU", 18, sender, u256.NewUint(1000000000000000000))
-
-	tests := []struct {
-		name        string
-		version     uint8
-		baseAmount  uint64
-		quoteAmount uint64
-		expectError string
-		expectBase  uint64
-		expectQuote uint64
-	}{
-		{
-			name:        "scales voucher amounts",
-			version:     z.INSTR_VERSION_2,
-			baseAmount:  123456,
-			quoteAmount: 123000,
-			expectBase:  123456000000000000,
-			expectQuote: 123000000000000000,
-		},
-		{
-			name:        "unsupported version rejected",
-			version:     z.INSTR_VERSION_0,
-			baseAmount:  123456,
-			quoteAmount: 123000,
-			expectError: "unsupported token order version",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			order := z.TokenOrderV2{
-				Sender:      []byte(sender),
-				Receiver:    []byte(testAddress("scale-receiver")),
-				BaseToken:   []byte(denom),
-				BaseAmount:  u256.NewUint(tc.baseAmount),
-				QuoteToken:  []byte("ibc/OUT"),
-				QuoteAmount: u256.NewUint(tc.quoteAmount),
-				Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
-			}
-
-			instruction := z.Instruction{
-				Version: tc.version,
-				Opcode:  z.OP_TOKEN_ORDER,
-				Operand: mustEncodeTokenOrderV2(order),
-			}
-
-			scaled, err := v.scaleOutgoingTokenOrderInstruction(0, cur, instruction)
-			if tc.expectError != "" {
-				uassert.ErrorContains(t, err, tc.expectError)
-				return
-			}
-
-			uassert.NoError(t, err)
-
-			got, err := z.DecodeTokenOrderV2(scaled.Operand)
-			uassert.NoError(t, err)
-			uassert.Equal(t, u256.NewUint(tc.expectBase).ToString(), got.BaseAmount.ToString())
-			uassert.Equal(t, u256.NewUint(tc.expectQuote).ToString(), got.QuoteAmount.ToString())
-		})
-	}
-}
-
-func TestScaleOutgoingTokenOrderLessThanTargetDecimals(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	denom := "ibc/FOUR-DEC-SCALE"
-	sender := testAddress("four-dec-sender")
-	v.mintVoucher(0, cur, denom, [32]byte{}, "Four", "FOUR", 4, sender, u256.NewUint(12345))
-
-	instruction := batchMustOrderInstruction(z.TokenOrderV2{
-		Sender:      []byte(sender),
-		Receiver:    []byte(testAddress("four-dec-receiver")),
-		BaseToken:   []byte(denom),
-		BaseAmount:  u256.NewUint(12345),
-		QuoteToken:  []byte("ibc/FOUR-DEC-OUT"),
-		QuoteAmount: u256.NewUint(12000),
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-	})
-
-	scaled, err := v.scaleOutgoingTokenOrderInstruction(0, cur, instruction)
-	uassert.NoError(t, err)
-
-	got, err := z.DecodeTokenOrderV2(scaled.Operand)
-	uassert.NoError(t, err)
-	uassert.Equal(t, u256.NewUint(12345).ToString(), got.BaseAmount.ToString())
-	uassert.Equal(t, u256.NewUint(12000).ToString(), got.QuoteAmount.ToString())
-}
-
-func TestScaleOutgoingTokenOrderRejectsOverflow(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	denom := "ibc/SCALE-OVERFLOW"
-	sender := testAddress("scale-overflow")
-	v.mintVoucher(0, cur, denom, [32]byte{}, "Overflow", "OVF", 18, sender, u256.NewUint(1))
-
-	order := z.TokenOrderV2{
-		Sender:      []byte(sender),
-		Receiver:    []byte(testAddress("scale-overflow-rx")),
-		BaseToken:   []byte(denom),
-		BaseAmount:  u256.NewUint(1),
-		QuoteToken:  []byte("ibc/overflow-out"),
-		QuoteAmount: new(u256.Uint).SetAllOne(),
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-	}
-
-	_, err := v.scaleOutgoingTokenOrderInstruction(0, cur, batchMustOrderInstruction(order))
-	uassert.ErrorContains(t, err, errAmountOverflow)
-}
-
-func TestScaleOutgoingForwardInstruction(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	denom := "ibc/FORWARD-SCALE"
-	sender := testAddress("fwd-scale-sender")
-	v.mintVoucher(0, cur, denom, [32]byte{}, "Forward", "FWD", 18, sender, u256.NewUint(1000000000000000000))
-
-	order := z.TokenOrderV2{
-		Sender:      []byte(sender),
-		Receiver:    []byte(testAddress("fwd-scale-receiver")),
-		BaseToken:   []byte(denom),
-		BaseAmount:  u256.NewUint(123456),
-		QuoteToken:  []byte("ibc/FORWARD-OUT"),
-		QuoteAmount: u256.NewUint(123000),
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-	}
-
-	forward := z.Forward{
-		Path:             u256.NewUint(12),
-		TimeoutTimestamp: 999,
-		Instruction:      batchMustOrderInstruction(order),
-	}
-
-	instruction := z.Instruction{
-		Version: z.INSTR_VERSION_0,
-		Opcode:  z.OP_FORWARD,
-		Operand: mustForwardBytes(forward),
-	}
-
-	scaled, err := v.scaleOutgoingInstructionAmounts(0, cur, instruction)
-	uassert.NoError(t, err)
-
-	gotForward, err := z.DecodeForward(scaled.Operand)
-	uassert.NoError(t, err)
-
-	gotOrder, err := z.DecodeTokenOrderV2(gotForward.Instruction.Operand)
-	uassert.NoError(t, err)
-	uassert.Equal(t, u256.NewUint(123456000000000000).ToString(), gotOrder.BaseAmount.ToString())
-	uassert.Equal(t, u256.NewUint(123000000000000000).ToString(), gotOrder.QuoteAmount.ToString())
-}
-
-func TestScaleOutgoingForwardBatchInstruction(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	denom := "ibc/FORWARD-BATCH-SCALE"
-	sender := testAddress("fwd-batch-sender")
-	v.mintVoucher(0, cur, denom, [32]byte{}, "ForwardBatch", "FWDB", 18, sender, u256.NewUint(1000000000000000000))
-
-	order := z.TokenOrderV2{
-		Sender:      []byte(sender),
-		Receiver:    []byte(testAddress("fwd-batch-receiver")),
-		BaseToken:   []byte(denom),
-		BaseAmount:  u256.NewUint(654321),
-		QuoteToken:  []byte("ibc/FORWARD-BATCH-OUT"),
-		QuoteAmount: u256.NewUint(654000),
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-	}
-
-	forward := z.Forward{
-		Path:             u256.NewUint(12),
-		TimeoutTimestamp: 999,
-		Instruction: batchMustBatchInstruction(z.Batch{Instructions: []z.Instruction{
-			batchMustCallInstruction(batchCall(sender, "")),
-			batchMustOrderInstruction(order),
-		}}),
-	}
-
-	instruction := z.Instruction{
-		Version: z.INSTR_VERSION_0,
-		Opcode:  z.OP_FORWARD,
-		Operand: mustForwardBytes(forward),
-	}
-
-	scaled, err := v.scaleOutgoingInstructionAmounts(0, cur, instruction)
-	uassert.NoError(t, err)
-
-	gotForward, err := z.DecodeForward(scaled.Operand)
-	uassert.NoError(t, err)
-
-	gotBatch, err := z.DecodeBatch(gotForward.Instruction.Operand)
-	uassert.NoError(t, err)
-
-	gotOrder, err := z.DecodeTokenOrderV2(gotBatch.Instructions[1].Operand)
-	uassert.NoError(t, err)
-	uassert.Equal(t, u256.NewUint(654321000000000000).ToString(), gotOrder.BaseAmount.ToString())
-	uassert.Equal(t, u256.NewUint(654000000000000000).ToString(), gotOrder.QuoteAmount.ToString())
-}
-
-func TestDecodeLocalOrderInstruction(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	meta := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
-		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "USD Coin", Symbol: "USDC", Decimals: 18}),
-	})
-
-	tests := []struct {
-		name        string
-		baseAmount  uint64
-		quoteAmount uint64
-		expectError string
-		expectBase  uint64
-		expectQuote uint64
-	}{
-		{
-			name:        "exact wire amount converts to local",
-			baseAmount:  123456000000000000,
-			quoteAmount: 123000000000000000,
-			expectBase:  123456,
-			expectQuote: 123000,
-		},
-		{
-			name:        "dust is rejected",
-			baseAmount:  123456700000000000,
-			quoteAmount: 123456000000000000,
-			expectError: "decimal dust is not allowed",
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			order := z.TokenOrderV2{
-				Sender:      []byte("remote-sender"),
-				Receiver:    []byte(testAddress("local-receiver")),
-				BaseToken:   []byte("uatom"),
-				BaseAmount:  u256.NewUint(tc.baseAmount),
-				QuoteToken:  []byte("ibc/local"),
-				QuoteAmount: u256.NewUint(tc.quoteAmount),
-				Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
-				Metadata:    meta,
-			}
-			instruction := z.Instruction{
-				Version: z.INSTR_VERSION_2,
-				Opcode:  z.OP_TOKEN_ORDER,
-				Operand: mustEncodeTokenOrderV2(order),
-			}
-
-			got, err := v.decodeLocalOrderInstruction(0, cur, instruction)
-			if tc.expectError != "" {
-				uassert.ErrorContains(t, err, tc.expectError)
-				return
-			}
-
-			uassert.NoError(t, err)
-			uassert.Equal(t, u256.NewUint(tc.expectBase).ToString(), got.BaseAmount.ToString())
-			uassert.Equal(t, u256.NewUint(tc.expectQuote).ToString(), got.QuoteAmount.ToString())
-		})
-	}
-}
-
-func TestWireAmountToLocalMaxInt64Boundary(cur realm, t *testing.T) {
+func TestScaleDownAmountMaxInt64Boundary(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	denom := "ibc/max64-boundary"
@@ -702,7 +453,7 @@ func TestWireAmountToLocalMaxInt64Boundary(cur realm, t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			amount := u256.NewUint(tc.baseAmount)
-			got, err := wireAmountToLocal(18, amount)
+			got, err := scaleDownAmount(18, amount)
 			if tc.expectError != "" {
 				uassert.ErrorContains(t, err, tc.expectError)
 				return
@@ -712,40 +463,6 @@ func TestWireAmountToLocalMaxInt64Boundary(cur realm, t *testing.T) {
 			uassert.Equal(t, u256.NewUint(tc.expectLocal).ToString(), got.ToString())
 		})
 	}
-}
-
-func TestScaleOutgoingMaxInt64Boundary(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	denom := "ibc/max64-send"
-	sender := testAddress("max64-send-sender")
-	v.mintVoucher(0, cur, denom, [32]byte{}, "Max64", "MAX64", 18, sender, u256.NewUint(9223372))
-
-	order := z.TokenOrderV2{
-		Sender:      []byte(sender),
-		Receiver:    []byte(testAddress("max64-receiver")),
-		BaseToken:   []byte(denom),
-		BaseAmount:  u256.NewUint(9223372),
-		QuoteToken:  []byte("ibc/out"),
-		QuoteAmount: u256.NewUint(9223372),
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-	}
-
-	instruction := z.Instruction{
-		Version: z.INSTR_VERSION_2,
-		Opcode:  z.OP_TOKEN_ORDER,
-		Operand: mustEncodeTokenOrderV2(order),
-	}
-
-	scaled, err := v.scaleOutgoingTokenOrderInstruction(0, cur, instruction)
-	uassert.NoError(t, err)
-
-	got, err := z.DecodeTokenOrderV2(scaled.Operand)
-	uassert.NoError(t, err)
-
-	expectedTrimmed := u256.NewUint(9223372000000000000)
-	uassert.Equal(t, expectedTrimmed.ToString(), got.BaseAmount.ToString())
-	uassert.Equal(t, expectedTrimmed.ToString(), got.QuoteAmount.ToString())
 }
 
 func mustEncodeTokenOrderV2(order z.TokenOrderV2) []byte {

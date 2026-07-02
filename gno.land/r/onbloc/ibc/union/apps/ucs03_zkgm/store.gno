@@ -1,6 +1,7 @@
 package zkgm
 
 import (
+	"gno.land/p/demo/tokens/grc20"
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -77,6 +78,7 @@ type Store struct {
 	vouchers           *bptree.BPTree // ibcDenom -> *Voucher
 	receivers          *bptree.BPTree // pkgPath -> z.Zkgmable
 	lockedNative       *bptree.BPTree // denom -> *u256.Uint (permanently locked native)
+	localGRC20Tokens   *bptree.BPTree // denom -> *grc20.Token
 	rateLimitDisabled  bool
 }
 
@@ -92,6 +94,7 @@ func NewStore() *Store {
 		vouchers:           bptree.NewBPTree32(),
 		receivers:          bptree.NewBPTree32(),
 		lockedNative:       bptree.NewBPTree32(),
+		localGRC20Tokens:   bptree.NewBPTree32(),
 		// Rate limiting is opt-in: enabled per-denom by an admin who first
 		// configures a token bucket (see SetBucketConfig). With it enabled, a denom
 		// without a bucket is rejected (union TokenBucketIsAbsent), so it must stay
@@ -182,6 +185,24 @@ func (s *Store) GetLockedNative(denom string) (*u256.Uint, bool) {
 	}
 
 	return lockedNativeAmount, true
+}
+
+// SetLocalGRC20Token pins the first registry token used for a local GRC20 denom.
+func (s *Store) SetLocalGRC20Token(_ int, rlm realm, denom string, token *grc20.Token) {
+	assertIsRlmCurrent(0, rlm)
+	if s.localGRC20Tokens.Has(denom) {
+		return
+	}
+	s.localGRC20Tokens.Set(denom, token)
+}
+
+// GetLocalGRC20Token returns the pinned local GRC20 token for denom.
+func (s *Store) GetLocalGRC20Token(denom string) (*grc20.Token, bool) {
+	v, ok := s.localGRC20Tokens.Get(denom)
+	if !ok {
+		return nil, false
+	}
+	return v.(*grc20.Token), true
 }
 
 // SetMetadataImageOf records a wrapped denom's metadata image.

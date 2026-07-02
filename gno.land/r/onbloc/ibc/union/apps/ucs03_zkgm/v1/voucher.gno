@@ -10,68 +10,10 @@ import (
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
 
-const (
-	targetDecimals = 6
-)
-
 // TokenInfo captures known local voucher metadata in a single lookup.
 type TokenInfo struct {
 	decimals  uint8
 	isVoucher bool
-}
-
-func decimalFactor(tokenDecimals uint8) (*u256.Uint, error) {
-	if tokenDecimals <= targetDecimals {
-		return u256.NewUint(1), nil
-	}
-
-	exp := tokenDecimals - targetDecimals
-	if exp > 12 {
-		return nil, makeError(errUnsupportedTokenDecimals)
-	}
-
-	factor := u256.NewUint(1)
-	for i := uint8(0); i < exp; i++ {
-		factor.Mul(factor, u256.NewUint(10))
-	}
-
-	return factor, nil
-}
-
-func scaleLocalAmount(tokenDecimals uint8, amount *u256.Uint) (*u256.Uint, error) {
-	factor, err := decimalFactor(tokenDecimals)
-	if err != nil {
-		return nil, err
-	}
-
-	if tokenDecimals <= targetDecimals {
-		return amount.Clone(), nil
-	}
-
-	scaled, overflow := u256.Zero().MulOverflow(amount, factor)
-	if overflow {
-		return nil, makeError(errAmountOverflow)
-	}
-
-	return scaled, nil
-}
-
-func wireAmountToLocal(tokenDecimals uint8, amount *u256.Uint) (*u256.Uint, error) {
-	if tokenDecimals <= targetDecimals {
-		return amount.Clone(), nil
-	}
-
-	factor, err := decimalFactor(tokenDecimals)
-	if err != nil {
-		return nil, err
-	}
-
-	quotient := u256.Zero().Div(amount, factor)
-	if !u256.Zero().Sub(amount, u256.Zero().Mul(quotient, factor)).IsZero() {
-		return nil, makeError(errDecimalDust)
-	}
-
-	return quotient, nil
 }
 
 // mintVoucher mints `amount` of the wrapped grc20 voucher for ibcDenom to

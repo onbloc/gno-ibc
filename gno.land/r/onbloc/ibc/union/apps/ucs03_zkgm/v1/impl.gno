@@ -193,16 +193,12 @@ func (v *ucs03ZkgmV1) Send(_ int, rlm realm, channelId types.ChannelId, timeoutT
 		funds = newFunds(sentCoins)
 	}
 
-	if err := v.verifyInternal(0, rlm, funds, channelId, u256.Zero(), instruction); err != nil {
+	err := v.verifyInternal(0, rlm, funds, channelId, u256.Zero(), instruction)
+	if err != nil {
 		panic(err)
 	}
 
 	if err := funds.assertEmpty(); err != nil {
-		panic(err)
-	}
-
-	scaledInstruction, err := v.scaleOutgoingInstructionAmounts(0, rlm, instruction)
-	if err != nil {
 		panic(err)
 	}
 
@@ -213,7 +209,7 @@ func (v *ucs03ZkgmV1) Send(_ int, rlm realm, channelId types.ChannelId, timeoutT
 	data, err := z.EncodeZkgmPacket(z.ZkgmPacket{
 		Salt:        hashedSalt,
 		Path:        u256.Zero(),
-		Instruction: scaledInstruction,
+		Instruction: instruction,
 	})
 	if err != nil {
 		panic(err)

@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"bytes"
 	"strings"
 
 	types "gno.land/p/onbloc/ibc/union/types"
@@ -33,17 +32,7 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channel
 
 	switch order.Kind {
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
-		baseDenom := string(order.BaseToken)
-		// reference verify_token_order_v2 increases the channel balance before
-		// escrowing the funds (contract.rs L511-543); rate limiting happens only
-		// on the receive/execute side, never here.
-		v.increaseChannelBalanceV2(0, rlm, channelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
-
-		if err := v.localTokenEscrow(0, rlm, baseDenom, rlm.Previous().Address().String(), funds, order.BaseAmount); err != nil {
-			return err
-		}
-
-		return nil
+		return v.escrowTokenOrderV2(0, rlm, funds, channelId, path, order)
 	case z.TOKEN_ORDER_KIND_UNESCROW:
 		baseDenom := string(order.BaseToken)
 
@@ -269,8 +258,8 @@ func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.Channel
 }
 
 // protocolFillUnescrowV2 releases an escrowed local asset for an unwrap order:
-// decrease the channel balance first, then send the quote to the receiver and
-// the fee to the relayer from the proxy escrow.
+// verify the channel balance, release quote and fee from proxy escrow, then
+// decrease the channel balance.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2415-L2488
 func (v *ucs03ZkgmV1) protocolFillUnescrowV2(_ int, rlm realm, channelId types.ChannelId, path *u256.Uint, baseToken []byte, quoteTokenStr string, receiver address, relayer address, baseAmount *u256.Uint, quoteAmount *u256.Uint) (types.RecvPacketResult, error) {
 	reversedPath, err := z.ReverseChannelPath(path)
@@ -297,11 +286,9 @@ func (v *ucs03ZkgmV1) protocolFillUnescrowV2(_ int, rlm realm, channelId types.C
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
-	// reference decreases the escrowed balance before unescrowing (contract.rs
-	// L2437-2444); decreaseChannelBalanceV2 rejects an underflow internally. The
-	// quote/base tokens are swapped into the balance key as union does (the EVM
-	// quoteToken occupies the baseToken slot and vice versa).
-	if err := v.decreaseChannelBalanceV2(0, rlm, channelId, reversedPath, []byte(quoteTokenStr), baseToken, baseAmount); err != nil {
+	// The quote/base tokens are swapped into the balance key as union does (the
+	// EVM quoteToken occupies the baseToken slot and vice versa).
+	if err := v.ensureChannelBalanceV2(channelId, reversedPath, []byte(quoteTokenStr), baseToken, baseAmount); err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
@@ -315,6 +302,10 @@ func (v *ucs03ZkgmV1) protocolFillUnescrowV2(_ int, rlm realm, channelId types.C
 		if err := v.localTokenUnescrow(0, rlm, quoteTokenStr, string(relayer), fee); err != nil {
 			panic(execFatal{err.Error()})
 		}
+	}
+
+	if err := v.decreaseChannelBalanceV2(0, rlm, channelId, reversedPath, []byte(quoteTokenStr), baseToken, baseAmount); err != nil {
+		panic(execFatal{err.Error()})
 	}
 
 	ack, err := encodeTokenOrderSuccessAck(fillTypeProtocol(), nil)
@@ -444,61 +435,103 @@ func (v *ucs03ZkgmV1) settleEscrowedV2(_ int, rlm realm, sourceChannelId types.C
 		return err
 	}
 
-	// reference decreases the escrowed balance before unescrowing (refund_v2
-	// contract.rs L894-902 / ack L1021-1028); decreaseChannelBalanceV2 rejects an
-	// underflow internally.
-	if err := v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
+	if err := v.ensureChannelBalanceV2(sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
 		return err
 	}
 
 	baseDenom := string(order.BaseToken)
 
-	return v.localTokenUnescrow(0, rlm, baseDenom, recipient, order.BaseAmount)
+	if err := v.localTokenUnescrow(0, rlm, baseDenom, recipient, order.BaseAmount); err != nil {
+		return err
+	}
+
+	return v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
 }
 
 // burnEscrowedV2 removes the escrowed channel balance and finalizes the base
 // token as burned instead of releasing it to the maker.
 // Vouchers are supply-burned; native coins are kept locked in proxy escrow.
 func (v *ucs03ZkgmV1) burnEscrowedV2(_ int, rlm realm, sourceChannelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
-	if err := v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
+	if err := v.ensureChannelBalanceV2(sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
 		return err
 	}
 
 	baseDenom := string(order.BaseToken)
 	if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
-		return v.burnVoucher(0, rlm, baseDenom, rlm.Address().String(), order.BaseAmount)
+		if err := v.burnVoucher(0, rlm, baseDenom, rlm.Address().String(), order.BaseAmount); err != nil {
+			return err
+		}
+	} else {
+		// native: left locked in the proxy, tracked in the locked-native accounting.
+		v.store.AddLockedNative(0, rlm, baseDenom, order.BaseAmount)
 	}
 
-	// native: left locked in the proxy, tracked in the locked-native accounting.
-	v.store.AddLockedNative(0, rlm, baseDenom, order.BaseAmount)
+	return v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
+}
 
-	return nil
+func (v *ucs03ZkgmV1) escrowTokenOrderV2(_ int, rlm realm, funds *funds, channelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
+	baseDenom := string(order.BaseToken)
+	if err := v.localTokenEscrow(0, rlm, baseDenom, rlm.Previous().Address().String(), funds, order.BaseAmount); err != nil {
+		return err
+	}
+
+	return v.increaseChannelBalanceV2(0, rlm, channelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
 }
 
 // localTokenEscrow takes custody of the base token for a local send.
-// Native funds must already be attached; foreign GRC20 escrow is not supported.
 func (v *ucs03ZkgmV1) localTokenEscrow(_ int, rlm realm, denom, sender string, funds *funds, amount *u256.Uint) error {
-	switch {
-	case strings.HasPrefix(denom, ibcDenomPrefix):
-		return v.transferVoucher(0, rlm, denom, address(sender), rlm.Address(), amount)
-	case grc20reg.Get(denom) != nil:
-		return makeError(errGRC20Unsupported, denom)
-	default:
-		return funds.sub(denom, amount)
+	amount64, err := amountInt64(amount)
+	if err != nil {
+		return err
 	}
+	if amount.IsZero() {
+		return makeError(errZeroAmount)
+	}
+
+	if strings.HasPrefix(denom, ibcDenomPrefix) {
+		return v.transferVoucher(0, rlm, denom, address(sender), rlm.Address(), amount)
+	}
+
+	if token, ok := v.localGRC20Token(0, rlm, denom); ok {
+		return token.RealmTeller(0, rlm).TransferFrom(0, rlm, address(sender), rlm.Address(), amount64)
+	}
+
+	return funds.sub(denom, amount)
 }
 
 // localTokenUnescrow releases custody of the base token (recv unwrap / refund),
 // classified the same way as localTokenEscrow.
 func (v *ucs03ZkgmV1) localTokenUnescrow(_ int, rlm realm, denom, recipient string, amount *u256.Uint) error {
-	switch {
-	case strings.HasPrefix(denom, ibcDenomPrefix):
-		return v.transferVoucher(0, rlm, denom, rlm.Address(), address(recipient), amount)
-	case grc20reg.Get(denom) != nil:
-		return makeError(errGRC20Unsupported, denom)
-	default:
-		return v.sendNative(0, rlm, denom, recipient, amount)
+	amount64, err := amountInt64(amount)
+	if err != nil {
+		return err
 	}
+	if amount.IsZero() {
+		return makeError(errZeroAmount)
+	}
+
+	if strings.HasPrefix(denom, ibcDenomPrefix) {
+		return v.transferVoucher(0, rlm, denom, rlm.Address(), address(recipient), amount)
+	}
+
+	if token, ok := v.localGRC20Token(0, rlm, denom); ok {
+		return token.RealmTeller(0, rlm).Transfer(0, rlm, address(recipient), amount64)
+	}
+
+	return v.sendNative(0, rlm, denom, recipient, amount)
+}
+
+func (v *ucs03ZkgmV1) localGRC20Token(_ int, rlm realm, denom string) (*grc20.Token, bool) {
+	if token, ok := v.store.GetLocalGRC20Token(denom); ok {
+		return token, token != nil
+	}
+
+	if token := grc20reg.Get(denom); token != nil {
+		v.store.SetLocalGRC20Token(0, rlm, denom, token)
+		return token, true
+	}
+
+	return nil, false
 }
 
 // refundIBCVoucher re-mints an IBC voucher to recipient, preserving the stored metadata image.
@@ -507,206 +540,6 @@ func (v *ucs03ZkgmV1) refundIBCVoucher(_ int, rlm realm, baseToken []byte, recip
 	image, _ := v.store.GetMetadataImageOf(baseDenom)
 
 	return v.mintVoucher(0, rlm, baseDenom, image, "", "", 0, recipient, amount)
-}
-
-func (v *ucs03ZkgmV1) scaleOutgoingTokenOrderInstruction(_ int, rlm realm, instruction z.Instruction) (z.Instruction, error) {
-	switch instruction.Version {
-	case z.INSTR_VERSION_2:
-		return v.scaleOutgoingTokenOrderV2Instruction(0, rlm, instruction)
-	default:
-		return instruction, makeError(errUnsupportedTokenOrderVersion)
-	}
-}
-
-func (v *ucs03ZkgmV1) scaleOutgoingTokenOrderV2Instruction(_ int, rlm realm, instruction z.Instruction) (z.Instruction, error) {
-	order, err := z.DecodeTokenOrderV2(instruction.Operand)
-	if err != nil {
-		return instruction, err
-	}
-
-	info := v.parseTokenInfo(0, rlm, order.BaseToken)
-	if !info.isVoucher {
-		return instruction, nil
-	}
-
-	scaledBaseAmount, err := scaleLocalAmount(info.decimals, order.BaseAmount)
-	if err != nil {
-		return instruction, err
-	}
-
-	scaledQuoteAmount, err := scaleLocalAmount(info.decimals, order.QuoteAmount)
-	if err != nil {
-		return instruction, err
-	}
-
-	scaledOrder := order
-	scaledOrder.BaseAmount = scaledBaseAmount
-	scaledOrder.QuoteAmount = scaledQuoteAmount
-
-	scaledOperand, err := z.EncodeTokenOrderV2(scaledOrder)
-	if err != nil {
-		return instruction, err
-	}
-
-	scaledInstruction := z.Instruction{
-		Version: instruction.Version,
-		Opcode:  z.OP_TOKEN_ORDER,
-		Operand: scaledOperand,
-	}
-
-	return scaledInstruction, nil
-}
-
-func (v *ucs03ZkgmV1) scaleOutgoingInstructionAmounts(_ int, rlm realm, instruction z.Instruction) (z.Instruction, error) {
-	switch instruction.Opcode {
-	case z.OP_FORWARD:
-		return v.scaleOutgoingForwardInstruction(0, rlm, instruction)
-	case z.OP_BATCH:
-		return v.scaleOutgoingBatchInstruction(0, rlm, instruction)
-	case z.OP_TOKEN_ORDER:
-		return v.scaleOutgoingTokenOrderInstruction(0, rlm, instruction)
-	default:
-		return instruction, nil
-	}
-}
-
-func (v *ucs03ZkgmV1) scaleOutgoingForwardInstruction(_ int, rlm realm, instruction z.Instruction) (z.Instruction, error) {
-	if instruction.Version != z.INSTR_VERSION_0 {
-		return instruction, makeError(errUnsupportedForwardVersion)
-	}
-
-	forward, err := z.DecodeForward(instruction.Operand)
-	if err != nil {
-		return instruction, err
-	}
-
-	scaledChild, err := v.scaleOutgoingInstructionAmounts(0, rlm, forward.Instruction)
-	if err != nil {
-		return instruction, err
-	}
-
-	if bytes.Equal(scaledChild.Operand, forward.Instruction.Operand) {
-		return instruction, nil
-	}
-
-	scaledForward := forward
-	scaledForward.Instruction = scaledChild
-
-	scaledOperand, err := z.EncodeForward(scaledForward)
-	if err != nil {
-		return instruction, err
-	}
-
-	return z.Instruction{
-		Version: instruction.Version,
-		Opcode:  z.OP_FORWARD,
-		Operand: scaledOperand,
-	}, nil
-}
-
-func (v *ucs03ZkgmV1) scaleOutgoingBatchInstruction(_ int, rlm realm, instruction z.Instruction) (z.Instruction, error) {
-	batch, err := decodeBatchInstruction(instruction)
-	if err != nil {
-		return instruction, err
-	}
-
-	scaledChildren := make([]z.Instruction, len(batch.Instructions))
-	modified := false
-
-	for i, child := range batch.Instructions {
-		scaledChild, err := v.scaleOutgoingInstructionAmounts(0, rlm, child)
-		if err != nil {
-			return instruction, err
-		}
-
-		if len(scaledChild.Operand) != len(child.Operand) || !bytes.Equal(scaledChild.Operand, child.Operand) {
-			modified = true
-		}
-
-		scaledChildren[i] = scaledChild
-	}
-
-	if !modified {
-		return instruction, nil
-	}
-
-	scaledBatch := z.Batch{Instructions: scaledChildren}
-	scaledOperand, err := z.EncodeBatch(scaledBatch)
-	if err != nil {
-		return instruction, err
-	}
-
-	scaledInstruction := z.Instruction{
-		Version: instruction.Version,
-		Opcode:  z.OP_BATCH,
-		Operand: scaledOperand,
-	}
-
-	return scaledInstruction, nil
-}
-
-func (v *ucs03ZkgmV1) decodeLocalOrderInstruction(_ int, rlm realm, instruction z.Instruction) (z.TokenOrderV2, error) {
-	switch instruction.Version {
-	case z.INSTR_VERSION_2:
-		return v.decodeLocalOrderV2Instruction(0, rlm, instruction)
-	default:
-		return z.TokenOrderV2{}, makeError(errUnsupportedTokenOrderVersion)
-	}
-}
-
-func (v *ucs03ZkgmV1) decodeLocalOrderV2Instruction(_ int, rlm realm, instruction z.Instruction) (z.TokenOrderV2, error) {
-	order, err := z.DecodeTokenOrderV2(instruction.Operand)
-	if err != nil {
-		return z.TokenOrderV2{}, err
-	}
-
-	decimals, err := v.incomingOrderDecimals(0, rlm, order)
-	if err != nil {
-		return z.TokenOrderV2{}, err
-	}
-
-	// Keep base and quote in the same local unit before cover/fee accounting.
-	baseAmount, err := wireAmountToLocal(decimals, order.BaseAmount)
-	if err != nil {
-		return z.TokenOrderV2{}, err
-	}
-
-	quoteAmount, err := wireAmountToLocal(decimals, order.QuoteAmount)
-	if err != nil {
-		return z.TokenOrderV2{}, err
-	}
-
-	order.BaseAmount = baseAmount
-	order.QuoteAmount = quoteAmount
-
-	return order, nil
-}
-
-func (v *ucs03ZkgmV1) decodeSentOrderInstruction(_ int, rlm realm, instruction z.Instruction) (z.TokenOrderV2, error) {
-	order, err := decodeOrderInstruction(instruction)
-	if err != nil {
-		return z.TokenOrderV2{}, err
-	}
-
-	info := v.parseTokenInfo(0, rlm, order.BaseToken)
-	if !info.isVoucher {
-		return order, nil
-	}
-
-	baseAmount, err := wireAmountToLocal(info.decimals, order.BaseAmount)
-	if err != nil {
-		return z.TokenOrderV2{}, err
-	}
-
-	quoteAmount, err := wireAmountToLocal(info.decimals, order.QuoteAmount)
-	if err != nil {
-		return z.TokenOrderV2{}, err
-	}
-
-	order.BaseAmount = baseAmount
-	order.QuoteAmount = quoteAmount
-
-	return order, nil
 }
 
 func (v *ucs03ZkgmV1) incomingOrderDecimals(_ int, rlm realm, order z.TokenOrderV2) (uint8, error) {

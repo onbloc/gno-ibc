@@ -5,6 +5,7 @@ import (
 	"chain/banker"
 
 	u256 "gno.land/p/gnoswap/uint256"
+	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
 
 // sendNative releases `amount` of denom from the proxy escrow account to
@@ -22,6 +23,7 @@ func (v *ucs03ZkgmV1) sendNative(_ int, rlm realm, denom, receiver string, amoun
 	// draws from the proxy balance where the user's -send funds landed.
 	b := banker.NewBanker(banker.BankerTypeRealmSend, rlm)
 	b.SendCoins(rlm.Address(), address(receiver), chain.NewCoins(chain.NewCoin(denom, n)))
+	zkgm.EmitNativeReleased(0, rlm, denom, address(receiver), n)
 
 	return nil
 }

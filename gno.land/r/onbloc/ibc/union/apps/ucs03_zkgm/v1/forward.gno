@@ -5,6 +5,7 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -46,7 +47,9 @@ func (v *ucs03ZkgmV1) executeForward(_ int, rlm realm, packet types.Packet, salt
 	// it receives a normal packet commitment, then track its parent so child
 	// resolution can write the deferred parent ack.
 	childPacket = core.SendPacket(cross(rlm), childPacket.SourceChannelId, childPacket.TimeoutTimestamp, childPacket.Data)
-	v.store.SetInFlightPacket(0, rlm, forwardInFlightKey(childPacket), packet)
+	childHash := types.MustCommit(types.CommitPacket(childPacket))
+	v.store.SetInFlightPacket(0, rlm, childHash.String(), packet)
+	zkgm.EmitForwardInFlightSet(0, rlm, childHash, types.MustCommit(types.CommitPacket(packet)))
 
 	return core.NewRecvPacketResult(types.PacketStatusAsync, nil), nil
 }
@@ -62,10 +65,12 @@ func (v *ucs03ZkgmV1) handleForwardChild(_ int, rlm realm, packet types.Packet, 
 
 	parent, ok := v.store.GetInFlightPacket(key)
 	if !ok {
+		zkgm.EmitForwardInFlightPopped(0, rlm, types.MustCommit(types.CommitPacket(packet)), false)
 		return false
 	}
 
 	v.store.RemoveInFlightPacket(0, rlm, key)
+	zkgm.EmitForwardInFlightPopped(0, rlm, types.MustCommit(types.CommitPacket(packet)), true)
 	core.WriteAcknowledgement(cross(rlm), types.NewMsgWriteAcknowledgement(parent, ack))
 
 	return true

@@ -47,8 +47,10 @@ func UpdateImpl(cur realm, path string) {
 		panic("impl constructor not found")
 	}
 
+	oldImplPath := currentImplPath
 	currentImplPath = path
 	currentImpl = constructor(store)
+	emitZkgmImplUpdatedEvent(cur.Previous().PkgPath(), oldImplPath, path, []string{path})
 }
 
 // mustGetImpl returns the installed impl, panicking until the first UpdateImpl.

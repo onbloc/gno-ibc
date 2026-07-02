@@ -254,6 +254,28 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 // Events:
 // [
 //   {
+//     "type": "ZkgmImplUpdated",
+//     "attrs": [
+//       {
+//         "key": "caller_pkg_path",
+//         "value": ""
+//       },
+//       {
+//         "key": "old_impl_path",
+//         "value": ""
+//       },
+//       {
+//         "key": "new_impl_path",
+//         "value": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
+//       },
+//       {
+//         "key": "allowed_impls",
+//         "value": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
+//       }
+//     ],
+//     "pkg_path": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+//   },
+//   {
 //     "type": "RoleGranted",
 //     "attrs": [
 //       {

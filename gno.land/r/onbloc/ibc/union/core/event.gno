@@ -283,13 +283,14 @@ func emitWriteAckEvent(packet types.Packet, destinationChannel types.Channel, co
 	attrs := packetEventBaseAttrs(packet)
 	attrs = append(
 		attrs,
-		"destination_channel_id", packet.DestinationChannelId.String(),
-		"destination_connection_id", destinationChannel.ConnectionId.String(),
-		"destination_connection_client_id", connection.ClientId.String(),
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_channel_version", destinationChannel.Version,
 		"source_connection_id", connection.CounterpartyConnectionId.String(),
 		"source_connection_client_id", connection.CounterpartyClientId.String(),
+		"destination_channel_id", packet.DestinationChannelId.String(),
+		"destination_channel_version", destinationChannel.Version,
+		"destination_connection_id", destinationChannel.ConnectionId.String(),
+		"destination_connection_client_id", connection.ClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
 		"acknowledgement", hexAttr(acknowledgement),
 	)

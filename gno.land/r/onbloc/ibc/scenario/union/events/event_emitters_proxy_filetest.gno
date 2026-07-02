@@ -1017,18 +1017,6 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x6576656e742d726563762d31"
 //       },
 //       {
-//         "key": "destination_channel_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_client_id",
-//         "value": "1"
-//       },
-//       {
 //         "key": "source_channel_id",
 //         "value": "90"
 //       },
@@ -1043,6 +1031,22 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       {
 //         "key": "source_connection_client_id",
 //         "value": "99"
+//       },
+//       {
+//         "key": "destination_channel_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "destination_channel_version",
+//         "value": "event-v1"
+//       },
+//       {
+//         "key": "destination_connection_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "destination_connection_client_id",
+//         "value": "1"
 //       },
 //       {
 //         "key": "timeout_timestamp",
@@ -1093,18 +1097,6 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x6576656e742d726563762d32"
 //       },
 //       {
-//         "key": "destination_channel_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_client_id",
-//         "value": "1"
-//       },
-//       {
 //         "key": "source_channel_id",
 //         "value": "90"
 //       },
@@ -1119,6 +1111,22 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       {
 //         "key": "source_connection_client_id",
 //         "value": "99"
+//       },
+//       {
+//         "key": "destination_channel_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "destination_channel_version",
+//         "value": "event-v1"
+//       },
+//       {
+//         "key": "destination_connection_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "destination_connection_client_id",
+//         "value": "1"
 //       },
 //       {
 //         "key": "timeout_timestamp",
@@ -1205,18 +1213,6 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x6576656e742d696e74656e74"
 //       },
 //       {
-//         "key": "destination_channel_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_client_id",
-//         "value": "1"
-//       },
-//       {
 //         "key": "source_channel_id",
 //         "value": "91"
 //       },
@@ -1231,6 +1227,22 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       {
 //         "key": "source_connection_client_id",
 //         "value": "99"
+//       },
+//       {
+//         "key": "destination_channel_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "destination_channel_version",
+//         "value": "event-v1"
+//       },
+//       {
+//         "key": "destination_connection_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "destination_connection_client_id",
+//         "value": "1"
 //       },
 //       {
 //         "key": "timeout_timestamp",
@@ -1303,18 +1315,6 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x6576656e742d6173796e63"
 //       },
 //       {
-//         "key": "destination_channel_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_client_id",
-//         "value": "1"
-//       },
-//       {
 //         "key": "source_channel_id",
 //         "value": "92"
 //       },
@@ -1329,6 +1329,22 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       {
 //         "key": "source_connection_client_id",
 //         "value": "99"
+//       },
+//       {
+//         "key": "destination_channel_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "destination_channel_version",
+//         "value": "event-v1"
+//       },
+//       {
+//         "key": "destination_connection_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "destination_connection_client_id",
+//         "value": "1"
 //       },
 //       {
 //         "key": "timeout_timestamp",
@@ -1557,18 +1573,6 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x01"
 //       },
 //       {
-//         "key": "destination_channel_id",
-//         "value": "3"
-//       },
-//       {
-//         "key": "destination_connection_id",
-//         "value": "1"
-//       },
-//       {
-//         "key": "destination_connection_client_id",
-//         "value": "1"
-//       },
-//       {
 //         "key": "source_channel_id",
 //         "value": "22"
 //       },
@@ -1583,6 +1587,22 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       {
 //         "key": "source_connection_client_id",
 //         "value": "99"
+//       },
+//       {
+//         "key": "destination_channel_id",
+//         "value": "3"
+//       },
+//       {
+//         "key": "destination_channel_version",
+//         "value": "ucs03-zkgm-0"
+//       },
+//       {
+//         "key": "destination_connection_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "destination_connection_client_id",
+//         "value": "1"
 //       },
 //       {
 //         "key": "timeout_timestamp",

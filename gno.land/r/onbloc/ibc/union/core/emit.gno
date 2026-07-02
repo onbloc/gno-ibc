@@ -162,10 +162,10 @@ func EmitIntentPacketRecv(_ int, rlm realm, packet types.Packet, marketMaker add
 }
 
 // EmitPacketAck emits the PacketAck host event.
-func EmitPacketAck(_ int, rlm realm, packet types.Packet, acknowledgement []byte, relayer address) {
+func EmitPacketAck(_ int, rlm realm, packet types.Packet, sourceChannel types.Channel, connection types.Connection, acknowledgement []byte, relayer address) {
 	assertIsRlmCurrent(0, rlm)
 	assertIsProxyRealm(0, rlm)
-	emitPacketAckEvent(packet, acknowledgement, relayer)
+	emitPacketAckEvent(packet, sourceChannel, connection, acknowledgement, relayer)
 }
 
 // EmitPacketTimeout emits the PacketTimeout host event.

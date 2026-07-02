@@ -753,12 +753,16 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x78d9f4b7158b264f6ef8f55e9813d031144ff42f65919227c79fb20e1fc2ed70"
 //       },
 //       {
-//         "key": "acknowledgement",
-//         "value": "0x61636b2d73656e642d31"
-//       },
-//       {
 //         "key": "maker",
 //         "value": "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
+//       },
+//       {
+//         "key": "acknowledgement_size",
+//         "value": "22"
+//       },
+//       {
+//         "key": "acknowledgement[0]",
+//         "value": "0x61636b2d73656e642d31"
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
@@ -775,12 +779,16 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x7a8d7e00a6f9fd5ecd531cfe519b412f070d564624509bf620df6845b1cce967"
 //       },
 //       {
-//         "key": "acknowledgement",
-//         "value": "0x61636b2d73656e642d32"
-//       },
-//       {
 //         "key": "maker",
 //         "value": "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
+//       },
+//       {
+//         "key": "acknowledgement_size",
+//         "value": "22"
+//       },
+//       {
+//         "key": "acknowledgement[0]",
+//         "value": "0x61636b2d73656e642d32"
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
@@ -937,7 +945,11 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x2e925a980b459b69e205479571e2988b99ffb77d7eae552bbe4107b5e2857599"
 //       },
 //       {
-//         "key": "acknowledgement",
+//         "key": "acknowledgement_size",
+//         "value": "34"
+//       },
+//       {
+//         "key": "acknowledgement[0]",
 //         "value": "0x61636b3a6576656e742d726563762d31"
 //       }
 //     ],
@@ -977,7 +989,11 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x72e4fcb14058a989cb243a46e9583fe569909b915ffe4edf5f1ca9609db20083"
 //       },
 //       {
-//         "key": "acknowledgement",
+//         "key": "acknowledgement_size",
+//         "value": "34"
+//       },
+//       {
+//         "key": "acknowledgement[0]",
 //         "value": "0x61636b3a6576656e742d726563762d32"
 //       }
 //     ],
@@ -1053,7 +1069,11 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x5903360eb9bb521e532b827510363708a8e0c10cf58ce5cd331399623ad5c27b"
 //       },
 //       {
-//         "key": "acknowledgement",
+//         "key": "acknowledgement_size",
+//         "value": "34"
+//       },
+//       {
+//         "key": "acknowledgement[0]",
 //         "value": "0x61636b3a6576656e742d696e74656e74"
 //       }
 //     ],
@@ -1115,7 +1135,11 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0xa95670a052ae50cb85b4baf83596b9f36ebb5b2026165fbe737db02d8b6462e9"
 //       },
 //       {
-//         "key": "acknowledgement",
+//         "key": "acknowledgement_size",
+//         "value": "18"
+//       },
+//       {
+//         "key": "acknowledgement[0]",
 //         "value": "0x6c6174652d61636b"
 //       }
 //     ],
@@ -1333,7 +1357,11 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "0x7bf8b2199e74916681e58171af1e1491c0d3197ab60389fbf8b937906693f75e"
 //       },
 //       {
-//         "key": "acknowledgement",
+//         "key": "acknowledgement_size",
+//         "value": "194"
+//       },
+//       {
+//         "key": "acknowledgement[0]",
 //         "value": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000"
 //       }
 //     ],

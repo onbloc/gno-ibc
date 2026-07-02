@@ -774,7 +774,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "acknowledgement",
-//         "value": "0x61636b2d73656e642d31"
+//         "value": "YWNrLXNlbmQtMQ=="
 //       },
 //       {
 //         "key": "maker",
@@ -828,7 +828,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "acknowledgement",
-//         "value": "0x61636b2d73656e642d32"
+//         "value": "YWNrLXNlbmQtMg=="
 //       },
 //       {
 //         "key": "maker",
@@ -942,11 +942,11 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "path",
-//         "value": "0x6576656e742d6d656d626572736869702d70617468"
+//         "value": "ZXZlbnQtbWVtYmVyc2hpcC1wYXRo"
 //       },
 //       {
 //         "key": "value",
-//         "value": "0x6576656e742d6d656d626572736869702d76616c7565"
+//         "value": "ZXZlbnQtbWVtYmVyc2hpcC12YWx1ZQ=="
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
@@ -964,7 +964,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "path",
-//         "value": "0x6576656e742d6e6f6e6d656d626572736869702d70617468"
+//         "value": "ZXZlbnQtbm9ubWVtYmVyc2hpcC1wYXRo"
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
@@ -982,7 +982,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "acknowledgement",
-//         "value": "0x61636b3a6576656e742d726563762d31"
+//         "value": "YWNrOmV2ZW50LXJlY3YtMQ=="
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
@@ -1004,7 +1004,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "maker_msg",
-//         "value": "0x72656c617965722d6d73672d31"
+//         "value": "cmVsYXllci1tc2ctMQ=="
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
@@ -1022,7 +1022,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "acknowledgement",
-//         "value": "0x61636b3a6576656e742d726563762d32"
+//         "value": "YWNrOmV2ZW50LXJlY3YtMg=="
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
@@ -1044,7 +1044,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "maker_msg",
-//         "value": "0x72656c617965722d6d73672d32"
+//         "value": "cmVsYXllci1tc2ctMg=="
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
@@ -1098,7 +1098,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "acknowledgement",
-//         "value": "0x61636b3a6576656e742d696e74656e74"
+//         "value": "YWNrOmV2ZW50LWludGVudA=="
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
@@ -1120,7 +1120,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "maker_msg",
-//         "value": "0x6d61726b65742d6d616b65722d6d7367"
+//         "value": "bWFya2V0LW1ha2VyLW1zZw=="
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
@@ -1142,7 +1142,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "maker_msg",
-//         "value": "0x72656c617965722d6d73672d6173796e63"
+//         "value": "cmVsYXllci1tc2ctYXN5bmM="
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
@@ -1160,7 +1160,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "acknowledgement",
-//         "value": "0x6c6174652d61636b"
+//         "value": "bGF0ZS1hY2s="
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
@@ -1378,7 +1378,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "acknowledgement",
-//         "value": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000"
+//         "value": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
@@ -1400,7 +1400,7 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       },
 //       {
 //         "key": "maker_msg",
-//         "value": "0x"
+//         "value": ""
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"

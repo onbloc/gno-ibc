@@ -40,7 +40,7 @@ func channelOpenInitEventAttrs(portId types.Bytes, channelId types.ChannelId, ch
 	return []string{
 		"port_id", string(portId),
 		"channel_id", channelId.String(),
-		"counterparty_port_id", hexAttr(channel.CounterpartyPortId.Bytes()),
+		"counterparty_port_id", channel.CounterpartyPortId.String(),
 		"connection_id", channel.ConnectionId.String(),
 		"connection_client_id", connection.ClientId.String(),
 		"connection_counterparty_client_id", connection.CounterpartyClientId.String(),
@@ -53,7 +53,7 @@ func channelOpenTryEventAttrs(portId types.Bytes, channelId types.ChannelId, cha
 	return []string{
 		"port_id", string(portId),
 		"channel_id", channelId.String(),
-		"counterparty_port_id", hexAttr(channel.CounterpartyPortId.Bytes()),
+		"counterparty_port_id", channel.CounterpartyPortId.String(),
 		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
 		"connection_id", channel.ConnectionId.String(),
 		"connection_client_id", connection.ClientId.String(),
@@ -68,7 +68,7 @@ func channelOpenAckConfirmEventAttrs(portId types.Bytes, channelId types.Channel
 	return []string{
 		"port_id", string(portId),
 		"channel_id", channelId.String(),
-		"counterparty_port_id", hexAttr(channel.CounterpartyPortId.Bytes()),
+		"counterparty_port_id", channel.CounterpartyPortId.String(),
 		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
 		"connection_id", channel.ConnectionId.String(),
 		"connection_client_id", connection.ClientId.String(),
@@ -82,7 +82,7 @@ func channelCloseEventAttrs(portId types.Bytes, channelId types.ChannelId, chann
 	return []string{
 		"port_id", string(portId),
 		"channel_id", channelId.String(),
-		"counterparty_port_id", hexAttr(channel.CounterpartyPortId.Bytes()),
+		"counterparty_port_id", channel.CounterpartyPortId.String(),
 		"counterparty_channel_id", channel.CounterpartyChannelId.String(),
 		"connection_id", channel.ConnectionId.String(),
 		"connection_client_id", connection.ClientId.String(),
@@ -278,7 +278,7 @@ func emitPacketRecvEvent(eventType string, packet types.Packet, maker address, m
 		"packet_hash", commitPacketHash(packet).String(),
 		"maker", maker.String(),
 	}
-	attrs = append(attrs, encodedEventAttrs("maker_msg", hexAttr(msg))...)
+	attrs = append(attrs, encodedEventAttrs("maker_msg", base64Attr(msg))...)
 	chain.Emit(eventType, attrs...)
 }
 
@@ -287,7 +287,7 @@ func emitWriteAckEvent(packet types.Packet, acknowledgement []byte) {
 		"destination_channel_id", packet.DestinationChannelId.String(),
 		"packet_hash", commitPacketHash(packet).String(),
 	}
-	attrs = append(attrs, encodedEventAttrs("acknowledgement", hexAttr(acknowledgement))...)
+	attrs = append(attrs, encodedEventAttrs("acknowledgement", base64Attr(acknowledgement))...)
 	chain.Emit(WriteAckEvent, attrs...)
 }
 
@@ -304,7 +304,7 @@ func emitPacketAckEvent(packet types.Packet, sourceChannel types.Channel, connec
 		"destination_connection_client_id", connection.CounterpartyClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
 	)
-	attrs = append(attrs, encodedEventAttrs("acknowledgement", hexAttr(acknowledgement))...)
+	attrs = append(attrs, encodedEventAttrs("acknowledgement", base64Attr(acknowledgement))...)
 	attrs = append(attrs, "maker", maker.String())
 	chain.Emit(PacketAckEvent, attrs...)
 }
@@ -330,8 +330,8 @@ func emitCommitMembershipProofEvent(msg types.MsgCommitMembershipProof) {
 		"client_id", msg.ClientId.String(),
 		"proof_height", strconv.FormatUint(msg.ProofHeight, 10),
 	}
-	attrs = append(attrs, encodedEventAttrs("path", hexAttr(msg.Path))...)
-	attrs = append(attrs, encodedEventAttrs("value", hexAttr(msg.Value))...)
+	attrs = append(attrs, encodedEventAttrs("path", base64Attr(msg.Path))...)
+	attrs = append(attrs, encodedEventAttrs("value", base64Attr(msg.Value))...)
 	chain.Emit(CommitMembershipProofEvent, attrs...)
 }
 
@@ -340,6 +340,6 @@ func emitCommitNonMembershipProofEvent(msg types.MsgCommitNonMembershipProof) {
 		"client_id", msg.ClientId.String(),
 		"proof_height", strconv.FormatUint(msg.ProofHeight, 10),
 	}
-	attrs = append(attrs, encodedEventAttrs("path", hexAttr(msg.Path))...)
+	attrs = append(attrs, encodedEventAttrs("path", base64Attr(msg.Path))...)
 	chain.Emit(CommitNonMembershipEvent, attrs...)
 }

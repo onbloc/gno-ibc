@@ -121,4 +121,5 @@ func TestEmitBinaryFieldsBoundary(cur realm, t *testing.T) {
 			t.Fatalf("encoded len = %d, want > %d", got, emitMaxEventAttrLen)
 		}
 	})
+
 }

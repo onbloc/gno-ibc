@@ -36,6 +36,7 @@ type mockStore struct {
 	receipts            map[string]types.H256 // per-packet destination receipt / ack
 	batchPackets        map[string]types.H256
 	batchReceipts       map[string]types.H256
+	packetData          map[string][]byte // string(commitPacketHash[:]) → raw payload
 	membershipProofs    map[string]types.H256
 	nonMembershipProofs map[string]types.H256
 }
@@ -54,6 +55,7 @@ func newMockStore() *mockStore {
 		receipts:            map[string]types.H256{},
 		batchPackets:        map[string]types.H256{},
 		batchReceipts:       map[string]types.H256{},
+		packetData:          map[string][]byte{},
 		membershipProofs:    map[string]types.H256{},
 		nonMembershipProofs: map[string]types.H256{},
 	}
@@ -150,6 +152,23 @@ func (m *mockStore) ConsensusStateBytes(clientId types.ClientId, height types.He
 func (m *mockStore) BatchPacketsAt(batchHash types.H256) (types.H256, bool) {
 	v, ok := m.batchPackets[string(batchHash[:])]
 	return v, ok
+}
+
+func (m *mockStore) SetPacketData(_ int, rlm realm, packetHash types.H256, data []byte) {
+	m.packetData[string(packetHash[:])] = types.CloneBytes(data)
+}
+
+func (m *mockStore) GetPacketData(packetHash types.H256) ([]byte, bool) {
+	v, ok := m.packetData[string(packetHash[:])]
+	if !ok {
+		return nil, false
+	}
+
+	return types.CloneBytes(v), true
+}
+
+func (m *mockStore) RemovePacketData(_ int, rlm realm, packetHash types.H256) {
+	delete(m.packetData, string(packetHash[:]))
 }
 
 func (m *mockStore) BatchReceiptsAt(batchHash types.H256) (types.H256, bool) {

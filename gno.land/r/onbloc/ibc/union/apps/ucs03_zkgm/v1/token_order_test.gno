@@ -108,24 +108,21 @@ func TestTokenOrderAckMarketMakerBurnAddressLocksNative(cur realm, t *testing.T)
 	uassert.Equal(t, "13", locked.ToString())
 }
 
-// A token order whose base denom is a foreign GRC20 (registered in grc20reg, not
-// a zkgm ibc/ voucher) is rejected on send with a clear "grc20 not yet supported"
-// error rather than being misclassified as native and surfacing errCoinMismatch.
-func TestTokenOrderEscrowGRC20BaseRejectedWithClearError(cur realm, t *testing.T) {
+func TestTokenOrderVerifyLocalGRC20EscrowsAfterApproval(cur realm, t *testing.T) {
 	v := newTestImpl()
 
-	// grc20reg keys are fqname(callerPkgPath, slug) = pkgpath + "." + slug; the
-	// registrant here is this v1 realm, so a sender would reference the token by
-	// that full key as the order's base denom.
 	const (
 		grc20Slug = "foo-grc20-escrow"
 		grc20Key  = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1." + grc20Slug
 	)
-	token, _ := grc20.NewToken(0, cur, "Foo", "FOO", 6)
+	sender := testAddress("grc20-snd")
+	token, ledger := grc20.NewToken(0, cur, "Foo", "FOO", 6)
+	uassert.NoError(t, ledger.Mint(address(sender), 10))
+	uassert.NoError(t, ledger.ImpersonateTeller(address(sender)).Approve(0, cur, cur.Address(), 10))
 	grc20reg.Register(cross(cur), token, grc20Slug)
 
 	order := z.TokenOrderV2{
-		Sender:      []byte(testAddress("grc20-snd")),
+		Sender:      []byte(sender),
 		BaseToken:   []byte(grc20Key),
 		BaseAmount:  u256.NewUint(10),
 		QuoteToken:  []byte("quote"),
@@ -133,9 +130,132 @@ func TestTokenOrderEscrowGRC20BaseRejectedWithClearError(cur realm, t *testing.T
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 
-	err := v.verifyTokenOrderV2(0, cur, newFunds(nil), types.ChannelId(1), u256.Zero(), order)
+	err := v.localTokenEscrow(0, cur, grc20Key, sender, newFunds(nil), order.BaseAmount)
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(0), token.BalanceOf(address(sender)))
+	uassert.Equal(t, int64(10), token.BalanceOf(cur.Address()))
+	uassert.NoError(t, v.increaseChannelBalanceV2(0, cur, types.ChannelId(1), u256.Zero(), order.BaseToken, order.QuoteToken, order.BaseAmount))
+	balance, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(1), u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.Equal(t, "10", balance.ToString())
+	pinned, _ := testStore.GetLocalGRC20Token(grc20Key)
+	uassert.True(t, pinned == token)
+}
 
-	uassert.ErrorContains(t, err, "grc20 token escrow not yet supported")
+func TestTokenOrderVerifyLocalGRC20ApprovalFailureDoesNotIncreaseBalance(cur realm, t *testing.T) {
+	v := newTestImpl()
+	const (
+		grc20Slug = "foo-grc20-no-approval"
+		grc20Key  = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1." + grc20Slug
+	)
+	sender := testAddress("grc20-no-approval")
+	token, ledger := grc20.NewToken(0, cur, "No Approval", "NOAPP", 6)
+	uassert.NoError(t, ledger.Mint(address(sender), 10))
+	grc20reg.Register(cross(cur), token, grc20Slug)
+
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(grc20Key),
+		BaseAmount:  u256.NewUint(10),
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: u256.NewUint(10),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+
+	err := v.localTokenEscrow(0, cur, grc20Key, sender, newFunds(nil), order.BaseAmount)
+
+	uassert.ErrorContains(t, err, "insufficient allowance")
+	uassert.Equal(t, int64(10), token.BalanceOf(address(sender)))
+	uassert.Equal(t, int64(0), token.BalanceOf(cur.Address()))
+	_, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(2), u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.False(t, ok)
+}
+
+func TestTokenOrderVerifyLocalGRC20StrayNativeSendRejected(cur realm, t *testing.T) {
+	v := newTestImpl()
+	const (
+		grc20Slug = "foo-grc20-stray-native"
+		grc20Key  = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1." + grc20Slug
+	)
+	sender := testAddress("grc20-stray-native")
+	token, ledger := grc20.NewToken(0, cur, "Stray Native", "STRAY", 6)
+	uassert.NoError(t, ledger.Mint(address(sender), 10))
+	uassert.NoError(t, ledger.ImpersonateTeller(address(sender)).Approve(0, cur, cur.Address(), 10))
+	grc20reg.Register(cross(cur), token, grc20Slug)
+
+	f := newFunds(chain.NewCoins(chain.NewCoin("ugnot", 1)))
+	err := v.localTokenEscrow(0, cur, grc20Key, sender, f, u256.NewUint(10))
+
+	uassert.NoError(t, err)
+	uassert.ErrorContains(t, f.assertEmpty(), errCoinMismatch)
+}
+
+func TestLocalTokenUnescrowUsesPinnedGRC20AfterRegistryOverwrite(cur realm, t *testing.T) {
+	v := newTestImpl()
+	const (
+		grc20Slug = "foo-grc20-pinned-release"
+		grc20Key  = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1." + grc20Slug
+	)
+	sender := testAddress("grc20-pin-sender")
+	recipient := testAddress("grc20-pin-recipient")
+	tokenA, ledgerA := grc20.NewToken(0, cur, "Pinned A", "PINA", 6)
+	tokenB, ledgerB := grc20.NewToken(0, cur, "Pinned B", "PINB", 6)
+	uassert.NoError(t, ledgerA.Mint(address(sender), 10))
+	uassert.NoError(t, ledgerA.ImpersonateTeller(address(sender)).Approve(0, cur, cur.Address(), 10))
+	uassert.NoError(t, ledgerB.Mint(cur.Address(), 10))
+	grc20reg.Register(cross(cur), tokenA, grc20Slug)
+	uassert.NoError(t, v.localTokenEscrow(0, cur, grc20Key, sender, newFunds(nil), u256.NewUint(10)))
+
+	grc20reg.Register(cross(cur), tokenB, grc20Slug)
+	uassert.NoError(t, v.localTokenUnescrow(0, cur, grc20Key, recipient, u256.NewUint(4)))
+
+	uassert.Equal(t, int64(4), tokenA.BalanceOf(address(recipient)))
+	uassert.Equal(t, int64(6), tokenA.BalanceOf(cur.Address()))
+	uassert.Equal(t, int64(0), tokenB.BalanceOf(address(recipient)))
+	uassert.Equal(t, int64(10), tokenB.BalanceOf(cur.Address()))
+}
+
+func TestTokenOrderVerifyLocalGRC20InvalidAmountsDoNotMutate(cur realm, t *testing.T) {
+	cases := []struct {
+		name   string
+		amount *u256.Uint
+		err    string
+	}{
+		{"zero", u256.Zero(), errZeroAmount},
+		{"overflow", new(u256.Uint).Lsh(u256.NewUint(1), 63), errAmountOverflow},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			testStore = newMockStore()
+			v := newTestImpl()
+			grc20Slug := "foo-grc20-" + tc.name
+			grc20Key := "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1." + grc20Slug
+			sender := testAddress("grc20-" + tc.name)
+			token, ledger := grc20.NewToken(0, cur, "Bad Amount", "BADAMT", 6)
+			uassert.NoError(t, ledger.Mint(address(sender), 10))
+			uassert.NoError(t, ledger.ImpersonateTeller(address(sender)).Approve(0, cur, cur.Address(), 10))
+			grc20reg.Register(cross(cur), token, grc20Slug)
+
+			order := z.TokenOrderV2{
+				Sender:      []byte(sender),
+				BaseToken:   []byte(grc20Key),
+				BaseAmount:  tc.amount,
+				QuoteToken:  []byte("quote"),
+				QuoteAmount: tc.amount,
+				Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+			}
+
+			err := v.localTokenEscrow(0, cur, grc20Key, sender, newFunds(nil), order.BaseAmount)
+
+			uassert.ErrorContains(t, err, tc.err)
+			uassert.Equal(t, int64(10), token.BalanceOf(address(sender)))
+			uassert.Equal(t, int64(0), token.BalanceOf(cur.Address()))
+			_, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(3), u256.Zero(), order.BaseToken, order.QuoteToken))
+			uassert.False(t, ok)
+			_, ok = testStore.GetLocalGRC20Token(grc20Key)
+			uassert.False(t, ok)
+		})
+	}
 }
 
 func TestTokenOrderVerifyNativeRequiresSentCoin(cur realm, t *testing.T) {
@@ -303,6 +423,10 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	foreignToken, ok := testStore.GetForeignToken(ibcDenom)
 	uassert.True(t, ok)
 	uassert.Equal(t, "ugnot", string(foreignToken))
+
+	decimals, ok := testStore.GetTokenDecimals(ibcDenom)
+	uassert.True(t, ok)
+	uassert.Equal(t, uint8(6), decimals)
 
 	uassert.Equal(t, "Gno Token", voucherNameOf(ibcDenom))
 	uassert.Equal(t, "GNOT", voucherSymbolOf(ibcDenom))
@@ -693,6 +817,34 @@ func TestTokenOrderVerifyUnescrowV2PredictionWithImagePasses(cur realm, t *testi
 
 	uassert.NoError(t, err)
 	uassert.Equal(t, int64(50), voucherBalanceOf(baseDenom, address(sender)))
+}
+
+func TestTokenOrderVerifyUnescrowVoucherBaseBurns(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	const destChan = types.ChannelId(73)
+	sender := testAddress("unesc-vouch-sender")
+	quoteToken := []byte("ugnot")
+	baseDenom := z.PredictWrappedToken(u256.Zero(), uint32(destChan), quoteToken)
+	origin, err := z.UpdateChannelPath(u256.Zero(), uint32(destChan))
+	uassert.NoError(t, err)
+	testStore.SetTokenOrigin(0, cur, baseDenom, origin)
+	uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, [32]byte{}, "", "", 0, sender, u256.NewUint(11)))
+
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(baseDenom),
+		BaseAmount:  u256.NewUint(7),
+		QuoteToken:  quoteToken,
+		QuoteAmount: u256.NewUint(7),
+		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
+	}
+
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	err = v.verifyTokenOrderV2X(cross(cur), newFunds(nil), destChan, u256.Zero(), order)
+
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(4), voucherBalanceOf(baseDenom, address(sender)))
 }
 
 func TestTokenOrderVerifyUnescrowWrongImageRejected(cur realm, t *testing.T) {
@@ -1265,6 +1417,10 @@ func TestProtocolFillMint(cur realm, t *testing.T) {
 
 				_, ok = testStore.GetMetadataImageOf(wrappedToken)
 				uassert.True(t, ok, "metadata image should be set")
+
+				decimals, ok := testStore.GetTokenDecimals(wrappedToken)
+				uassert.True(t, ok, "token decimals should be set")
+				uassert.Equal(t, uint8(18), decimals)
 
 				uassert.Equal(t, "Test Token", voucherNameOf(wrappedToken))
 				uassert.Equal(t, "TST", voucherSymbolOf(wrappedToken))

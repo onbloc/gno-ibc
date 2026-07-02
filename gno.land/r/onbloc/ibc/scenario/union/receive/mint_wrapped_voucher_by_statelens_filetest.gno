@@ -171,14 +171,57 @@ func receiveProvenOrder(cur realm, packet types.Packet, packetProof []byte, quot
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, packetProof, statelensProofHeight))
 
+	ack := mustProtocolAck()
 	_, receiptErr := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))
 	receiptRecorded := receiptErr == nil
+	ackCommitted := committedAck(packet, ack)
+	ackSuccess, protocolFill := decodeAckResult(ack)
+	balance := zkgm.VoucherBalanceOf(quoteToken, receiverAddr)
+	if !receiptRecorded || !ackCommitted || !ackSuccess || !protocolFill || balance != 100 {
+		panic("state-lens mint ack/state mismatch")
+	}
+
 	ufmt.Printf("[INFO] packet receipt recorded (state-lens MPT proof verified): %t\n", receiptRecorded)
+	ufmt.Printf("[INFO] committed ack is protocol success: %t\n", ackCommitted)
+	ufmt.Printf("[INFO] decoded ack success/protocol fill: %t/%t\n", ackSuccess, protocolFill)
 	ufmt.Printf("[INFO] minted token (wrapped voucher): %s\n", quoteToken)
-	ufmt.Printf("[INFO] receiver voucher balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, receiverAddr))
+	ufmt.Printf("[INFO] receiver voucher balance: %d\n", balance)
 	ufmt.Println("[EXPECTED] packet receipt recorded (state-lens MPT proof verified): true")
+	ufmt.Println("[EXPECTED] committed ack should be the decoded protocol success Ack")
 	ufmt.Println("[EXPECTED] minted token should be the ibc/ wrapped voucher of base ugnot")
 	ufmt.Println("[EXPECTED] receiver voucher balance should be 100 (full INITIALIZE amount minted)")
+}
+
+func committedAck(packet types.Packet, ack []byte) bool {
+	got, err := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))
+	return err == nil && got == types.CommitAcks([][]byte{ack})
+}
+
+func decodeAckResult(ackBytes []byte) (bool, bool) {
+	ack, err := z.DecodeAck(ackBytes)
+	if err != nil {
+		panic(err)
+	}
+	success := ack.Tag.Eq(new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:]))
+
+	orderAck, err := z.DecodeTokenOrderAck(ack.InnerAck)
+	if err != nil {
+		panic(err)
+	}
+
+	return success, orderAck.FillType.Eq(new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:]))
+}
+
+func mustProtocolAck() []byte {
+	inner, err := z.EncodeTokenOrderAck(z.TokenOrderAck{FillType: new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:])})
+	if err != nil {
+		panic(err)
+	}
+	ack, err := z.EncodeAck(z.Ack{Tag: new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:]), InnerAck: inner})
+	if err != nil {
+		panic(err)
+	}
+	return ack
 }
 
 // buildPacketMembershipProof returns (storageRoot, encodedProof) for a single-leaf
@@ -334,8 +377,11 @@ func (e mockError) Error() string { return string(e) }
 //
 // [SCENARIO] 2. Receive INITIALIZE order proven by the state-lens MPT proof (mint 100)
 // [INFO] packet receipt recorded (state-lens MPT proof verified): true
+// [INFO] committed ack is protocol success: true
+// [INFO] decoded ack success/protocol fill: true/true
 // [INFO] minted token (wrapped voucher): ibc/e03a8753fa7f41c282b15cdc0343f660e6e65845
 // [INFO] receiver voucher balance: 100
 // [EXPECTED] packet receipt recorded (state-lens MPT proof verified): true
+// [EXPECTED] committed ack should be the decoded protocol success Ack
 // [EXPECTED] minted token should be the ibc/ wrapped voucher of base ugnot
 // [EXPECTED] receiver voucher balance should be 100 (full INITIALIZE amount minted)

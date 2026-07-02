@@ -1,31 +1,25 @@
-// PKGPATH: gno.land/r/onbloc/ibc/scenario/union/settlement
-package settlement
+// PKGPATH: gno.land/r/onbloc/ibc/scenario/union/pause
+package pause
 
-// ack_failure_refund_filetest is the BY-TYPE settlement scenario for the universal
-// error / failure-ack refund (re-targeted from the legacy e2e zs23 refund
-// branch). A sender escrows a voucher into the proxy on send; when the counterparty
-// returns the universal-error FAILURE acknowledgement, the escrow is refunded to
-// the sender — the voucher moves back from the proxy to the sender and the proxy
-// escrow returns to zero. Both sides of the refund are verified as balance diffs.
-// (A protocol-success ack instead leaves the escrow settled — that no-op branch is
-// covered by the send/ lock tests.)
+// reject_ack_while_paused_filetest verifies the source-side acknowledgement path
+// fails closed while the zkgm proxy is paused. The packet is valid and committed;
+// the panic comes from the proxy App pause gate before the impl handles the ack.
 
 import (
 	"chain"
 	"testing"
 
-	"gno.land/p/nt/ufmt/v0"
 	types "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
 	u256 "gno.land/p/gnoswap/uint256"
 
+	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
-	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 )
 
 const (
@@ -45,16 +39,19 @@ func main(cur realm) {
 	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 
-	println("[SCENARIO] 2. Fund the sender with 100 of the voucher via an INITIALIZE recv")
+	println("[SCENARIO] 2. Fund the sender, then send and commit an escrow packet")
 	fundSender(cur, channelId, quoteToken, meta)
-	println("")
-
-	println("[SCENARIO] 3. Send an ESCROW order locking 40 into the proxy")
 	sendPacket := sendEscrow(cur, channelId, quoteToken)
 	println("")
 
-	println("[SCENARIO] 4. A universal-error FAILURE acknowledgement refunds the escrow to the sender")
-	universalErrorAckRefund(cur, sendPacket, quoteToken)
+	println("[SCENARIO] 3. Admin pauses the app")
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	zkgm.Pausable(cross(cur), true)
+	println("[INFO] app paused by admin")
+	println("")
+
+	println("[SCENARIO] 4. Ack while paused is rejected")
+	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{successAckBytes()}, nil, 1))
 }
 
 func bootstrap(cur realm) types.ChannelId {
@@ -96,8 +93,6 @@ func fundSender(cur realm, channelId types.ChannelId, quoteToken string, meta []
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
-	ufmt.Printf("[INFO] sender voucher balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, senderAddr))
-	ufmt.Println("[EXPECTED] sender should hold 100")
 }
 
 func sendEscrow(cur realm, channelId types.ChannelId, quoteToken string) types.Packet {
@@ -112,26 +107,7 @@ func sendEscrow(cur realm, channelId types.ChannelId, quoteToken string) types.P
 	}
 
 	testing.SetRealm(testing.NewUserRealm(senderAddr))
-	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
-
-	ufmt.Printf("[INFO] sender voucher balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, senderAddr))
-	ufmt.Printf("[INFO] proxy escrow balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, zkgm.ProxyAddress()))
-	ufmt.Println("[EXPECTED] sender 100 -> 60, proxy escrow 0 -> 40")
-	return sendPacket
-}
-
-func universalErrorAckRefund(cur realm, sendPacket types.Packet, quoteToken string) {
-	senderBefore := zkgm.VoucherBalanceOf(quoteToken, senderAddr)
-	proxyBefore := zkgm.VoucherBalanceOf(quoteToken, zkgm.ProxyAddress())
-
-	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{universalErrorAck()}, nil, 1))
-
-	senderAfter := zkgm.VoucherBalanceOf(quoteToken, senderAddr)
-	proxyAfter := zkgm.VoucherBalanceOf(quoteToken, zkgm.ProxyAddress())
-	ufmt.Printf("[INFO] sender voucher balance: %d -> %d (delta +%d)\n", senderBefore, senderAfter, senderAfter-senderBefore)
-	ufmt.Printf("[INFO] proxy escrow balance: %d -> %d (delta %d)\n", proxyBefore, proxyAfter, proxyAfter-proxyBefore)
-	ufmt.Println("[EXPECTED] universal-error ack refunds 40: sender 60 -> 100, proxy escrow 40 -> 0")
+	return zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
 }
 
 // --- encoding helpers ---
@@ -172,8 +148,12 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 	return meta
 }
 
-func universalErrorAck() []byte {
-	ack, err := z.EncodeAck(z.Ack{Tag: new(u256.Uint).SetBytes(z.TAG_ACK_FAILURE[:])})
+func successAckBytes() []byte {
+	inner, err := z.EncodeTokenOrderAck(z.TokenOrderAck{FillType: new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:])})
+	if err != nil {
+		panic(err)
+	}
+	ack, err := z.EncodeAck(z.Ack{Tag: new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:]), InnerAck: inner})
 	if err != nil {
 		panic(err)
 	}
@@ -183,16 +163,12 @@ func universalErrorAck() []byte {
 // Output:
 // [SCENARIO] 1. Bootstrap IBC host and open a zkgm channel
 //
-// [SCENARIO] 2. Fund the sender with 100 of the voucher via an INITIALIZE recv
-// [INFO] sender voucher balance: 100
-// [EXPECTED] sender should hold 100
+// [SCENARIO] 2. Fund the sender, then send and commit an escrow packet
 //
-// [SCENARIO] 3. Send an ESCROW order locking 40 into the proxy
-// [INFO] sender voucher balance: 60
-// [INFO] proxy escrow balance: 40
-// [EXPECTED] sender 100 -> 60, proxy escrow 0 -> 40
+// [SCENARIO] 3. Admin pauses the app
+// [INFO] app paused by admin
 //
-// [SCENARIO] 4. A universal-error FAILURE acknowledgement refunds the escrow to the sender
-// [INFO] sender voucher balance: 60 -> 100 (delta +40)
-// [INFO] proxy escrow balance: 40 -> 0 (delta -40)
-// [EXPECTED] universal-error ack refunds 40: sender 60 -> 100, proxy escrow 40 -> 0
+// [SCENARIO] 4. Ack while paused is rejected
+
+// Error:
+// paused

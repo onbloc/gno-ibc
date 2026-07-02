@@ -206,11 +206,54 @@ func receiveProvenOrder(cur realm, packet types.Packet, packetProof []byte, quot
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, packetProof, l2ProofHeight))
 
+	ack := protocolAck()
 	_, receiptErr := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))
+	ackCommitted := committedAck(packet, ack)
+	ackSuccess, protocolFill := decodeAckResult(ack)
+	balance := zkgm.VoucherBalanceOf(quoteToken, receiverAddr)
+	if receiptErr != nil || !ackCommitted || !ackSuccess || !protocolFill || balance != 100 {
+		panic("state-lens cometbls mint ack/state mismatch")
+	}
+
 	ufmt.Printf("[INFO] packet receipt recorded: %t\n", receiptErr == nil)
-	ufmt.Printf("[INFO] receiver voucher balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, receiverAddr))
+	ufmt.Printf("[INFO] committed ack is protocol success: %t\n", ackCommitted)
+	ufmt.Printf("[INFO] decoded ack success/protocol fill: %t/%t\n", ackSuccess, protocolFill)
+	ufmt.Printf("[INFO] receiver voucher balance: %d\n", balance)
 	ufmt.Println("[EXPECTED] packet receipt recorded: true")
+	ufmt.Println("[EXPECTED] committed ack should be the decoded protocol success Ack")
 	ufmt.Println("[EXPECTED] receiver voucher balance should be 100 (full INITIALIZE amount minted)")
+}
+
+func committedAck(packet types.Packet, ack []byte) bool {
+	got, err := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))
+	return err == nil && got == types.CommitAcks([][]byte{ack})
+}
+
+func decodeAckResult(ackBytes []byte) (bool, bool) {
+	ack, err := z.DecodeAck(ackBytes)
+	if err != nil {
+		panic(err)
+	}
+	success := ack.Tag.Eq(new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:]))
+
+	orderAck, err := z.DecodeTokenOrderAck(ack.InnerAck)
+	if err != nil {
+		panic(err)
+	}
+
+	return success, orderAck.FillType.Eq(new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:]))
+}
+
+func protocolAck() []byte {
+	inner, err := z.EncodeTokenOrderAck(z.TokenOrderAck{FillType: new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:])})
+	if err != nil {
+		panic(err)
+	}
+	ack, err := z.EncodeAck(z.Ack{Tag: new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:]), InnerAck: inner})
+	if err != nil {
+		panic(err)
+	}
+	return ack
 }
 
 func newStateLensClient(csBytes, consBytes []byte) (lightclient.Interface, error) {
@@ -346,6 +389,9 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 //
 // [SCENARIO] 3. Receive INITIALIZE order proven by the state-lens MPT proof (mint 100)
 // [INFO] packet receipt recorded: true
+// [INFO] committed ack is protocol success: true
+// [INFO] decoded ack success/protocol fill: true/true
 // [INFO] receiver voucher balance: 100
 // [EXPECTED] packet receipt recorded: true
+// [EXPECTED] committed ack should be the decoded protocol success Ack
 // [EXPECTED] receiver voucher balance should be 100 (full INITIALIZE amount minted)

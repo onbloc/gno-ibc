@@ -1,7 +1,7 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/ratelimit
 package ratelimit
 
-// recv_rate_limit_capacity_filetest is the BY-TYPE rate-limit scenario (S-8.8). With
+// recv_rate_limit_capacity_filetest is the BY-TYPE rate-limit scenario. With
 // rate limiting enabled, the receive/fill of a quote denom is charged against that
 // denom's token bucket: a fill within the remaining capacity mints, a fill that
 // exceeds it is rejected (failure ack — nothing minted), and after the bucket refills
@@ -41,6 +41,8 @@ var theMeta []byte
 func main(cur realm) {
 	println("[SCENARIO] 1. Bootstrap, deploy the token, then enable a capacity-50 bucket (refill 50/s)")
 	channelId, quoteToken := setup(cur)
+	ufmt.Printf("[INFO] bucket available after config: %d\n", available(quoteToken))
+	ufmt.Printf("[INFO] other bucket available after config: %d\n", available("other-denom"))
 	println("")
 
 	println("[SCENARIO] 2. A fill of 40 is within capacity -> minted")
@@ -54,6 +56,14 @@ func main(cur realm) {
 	println("[SCENARIO] 4. After the bucket refills (SkipHeights), a fill of 40 succeeds again")
 	testing.SkipHeights(1) // 5s * 50/s refills the bucket to capacity
 	recvFill(cur, channelId, quoteToken, 40, [32]byte{4})
+	println("")
+
+	println("[SCENARIO] 5. A configured bucket for another denom is isolated from quote fills")
+	ufmt.Printf("[INFO] other bucket available after quote fills: %d\n", available("other-denom"))
+	println("")
+
+	println("[SCENARIO] 6. With rate limiting enabled, an unconfigured quote denom is rejected")
+	recvInitialize(cur, channelId, "unope", "Nope Token", "NOPE", 10, [32]byte{5})
 }
 
 func setup(cur realm) (types.ChannelId, string) {
@@ -88,6 +98,7 @@ func setup(cur realm) (types.ChannelId, string) {
 	// Enable rate limiting and configure the bucket for the quote denom.
 	zkgm.SetRateLimitDisabled(cross(cur), false)
 	zkgm.SetBucketConfig(cross(cur), quoteToken, u256.NewUint(50), u256.NewUint(50))
+	zkgm.SetBucketConfig(cross(cur), "other-denom", u256.NewUint(77), u256.NewUint(1))
 	return channelId, quoteToken
 }
 
@@ -98,7 +109,38 @@ func recvFill(cur realm, channelId types.ChannelId, quoteToken string, amount in
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{saltedPacket(channelId, salt, orderOf(z.TOKEN_ORDER_KIND_ESCROW, quoteToken, amount))}, [][]byte{nil}, nil, 1))
 
 	after := zkgm.VoucherBalanceOf(quoteToken, receiverAddr)
-	ufmt.Printf("[INFO] fill of %d: balance %d -> %d (delta +%d)\n", amount, before, after, after-before)
+	ufmt.Printf("[INFO] fill of %d: balance %d -> %d (delta +%d), bucket available %d\n", amount, before, after, after-before, available(quoteToken))
+}
+
+func recvInitialize(cur realm, channelId types.ChannelId, baseToken string, name string, symbol string, amount int64, salt [32]byte) {
+	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: name, Symbol: symbol, Decimals: 6})
+	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte(baseToken), z.MetadataImage(mustDecodeMeta(meta)))
+	before := zkgm.VoucherBalanceOf(quoteToken, receiverAddr)
+	packet := saltedPacket(channelId, salt, z.TokenOrderV2{
+		Sender:      []byte("remote-sender"),
+		Receiver:    []byte(receiverAddr.String()),
+		BaseToken:   []byte(baseToken),
+		BaseAmount:  u256.NewUint(uint64(amount)),
+		QuoteToken:  []byte(quoteToken),
+		QuoteAmount: u256.NewUint(uint64(amount)),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    meta,
+	})
+
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
+
+	after := zkgm.VoucherBalanceOf(quoteToken, receiverAddr)
+	ufmt.Printf("[INFO] unconfigured initialize: balance %d -> %d (delta +%d)\n", before, after, after-before)
+	ufmt.Printf("[INFO] unconfigured failure ack committed: %t\n", ackCommitted(packet, universalErrorAck()))
+}
+
+func available(denom string) uint64 {
+	bucket, err := zkgm.GetTokenBucket(denom)
+	if err != nil {
+		panic(err)
+	}
+	return bucket.Available.Uint64()
 }
 
 func orderOf(kind uint8, quoteToken string, amount int64) z.TokenOrderV2 {
@@ -120,6 +162,13 @@ func saltedPacket(channelId types.ChannelId, salt [32]byte, order z.TokenOrderV2
 		panic(err)
 	}
 	return core.NewPacket(types.ChannelId(2), channelId, data, types.Timestamp(1<<62))
+}
+
+func ackCommitted(packet types.Packet, ack []byte) bool {
+	batchHash := core.CommitPacketsHash([]types.Packet{packet})
+	got, _ := core.GetBatchReceipts(batchHash)
+	want := types.CommitAck(ack)
+	return got == want
 }
 
 // --- encoding helpers ---
@@ -152,14 +201,31 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 	return meta
 }
 
+func universalErrorAck() []byte {
+	ack, err := z.EncodeAck(z.Ack{Tag: u256.NewUint(0), InnerAck: []byte{}})
+	if err != nil {
+		panic(err)
+	}
+	return ack
+}
+
 // Output:
 // [SCENARIO] 1. Bootstrap, deploy the token, then enable a capacity-50 bucket (refill 50/s)
+// [INFO] bucket available after config: 50
+// [INFO] other bucket available after config: 77
 //
 // [SCENARIO] 2. A fill of 40 is within capacity -> minted
-// [INFO] fill of 40: balance 1 -> 41 (delta +40)
+// [INFO] fill of 40: balance 1 -> 41 (delta +40), bucket available 10
 //
 // [SCENARIO] 3. A second fill of 40 exceeds the remaining capacity -> rejected (no mint)
-// [INFO] fill of 40: balance 41 -> 41 (delta +0)
+// [INFO] fill of 40: balance 41 -> 41 (delta +0), bucket available 10
 //
 // [SCENARIO] 4. After the bucket refills (SkipHeights), a fill of 40 succeeds again
-// [INFO] fill of 40: balance 41 -> 81 (delta +40)
+// [INFO] fill of 40: balance 41 -> 81 (delta +40), bucket available 10
+//
+// [SCENARIO] 5. A configured bucket for another denom is isolated from quote fills
+// [INFO] other bucket available after quote fills: 77
+//
+// [SCENARIO] 6. With rate limiting enabled, an unconfigured quote denom is rejected
+// [INFO] unconfigured initialize: balance 0 -> 0 (delta +0)
+// [INFO] unconfigured failure ack committed: true

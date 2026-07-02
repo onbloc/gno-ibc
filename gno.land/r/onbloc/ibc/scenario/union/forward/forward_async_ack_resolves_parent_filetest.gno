@@ -61,6 +61,7 @@ func main(cur realm) {
 	println("[SCENARIO] 3. The child is acknowledged: handleForwardChild writes the deferred parent ack")
 	acknowledgeChild(cur, child)
 	ufmt.Printf("[INFO] after ack   -> parent receipt: %s, child commitment: %s\n", receiptState(parent), sendState(child))
+	ufmt.Printf("[INFO] parent ack matches child ack bytes: %t\n", ackCommitted(parent, childAck()))
 	ufmt.Println("[EXPECTED] parent receipt ack-written (deferred ack settled), child acknowledged")
 }
 
@@ -97,9 +98,8 @@ func acknowledgeChild(cur realm, child types.Packet) {
 	// The ack bytes are opaque to the forward resolution: handleForwardChild forwards
 	// them to the parent without decoding. The mock light client accepts the membership
 	// proof for any committed ack value.
-	childAck := []byte("child-resolved-ack")
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{child}, [][]byte{childAck}, nil, 1))
+	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{child}, [][]byte{childAck()}, nil, 1))
 }
 
 func buildForward() z.Forward {
@@ -135,6 +135,11 @@ func sendState(packet types.Packet) string {
 	return commitLabel(v, err)
 }
 
+func ackCommitted(packet types.Packet, ack []byte) bool {
+	got, err := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))
+	return err == nil && got == types.CommitAck(ack)
+}
+
 func commitLabel(v types.H256, err error) string {
 	if err != nil {
 		return "none"
@@ -155,6 +160,10 @@ func saltSeed(b byte) [32]byte {
 	var s [32]byte
 	s[31] = b
 	return s
+}
+
+func childAck() []byte {
+	return []byte("child-resolved-ack")
 }
 
 func forwardPath(prevDest, nextSource uint32) *u256.Uint {
@@ -202,4 +211,5 @@ func mustZkgmPacketData(zp z.ZkgmPacket) []byte {
 //
 // [SCENARIO] 3. The child is acknowledged: handleForwardChild writes the deferred parent ack
 // [INFO] after ack   -> parent receipt: ack-written, child commitment: acknowledged
+// [INFO] parent ack matches child ack bytes: true
 // [EXPECTED] parent receipt ack-written (deferred ack settled), child acknowledged

@@ -34,13 +34,19 @@ const (
 	forgedLcType  = types.ClientType("scenario-forged-lc")
 )
 
+var attemptedPacket types.Packet
+var attemptedQuoteToken string
+
 func main(cur realm) {
 	println("[SCENARIO] 1. Bootstrap with a light client that rejects every membership proof")
 	channelId := bootstrap(cur)
 	println("")
 
 	println("[SCENARIO] 2. A receive with a forged proof is rejected before any mint")
-	attemptRecv(cur, channelId)
+	abort := revive(func() { attemptRecv(cur, channelId) })
+	println("[INFO] recv abort:", abort)
+	println("[INFO] receiver voucher after rejected recv:", zkgm.VoucherBalanceOf(attemptedQuoteToken, receiverAddr))
+	println("[INFO] packet receipt after rejected recv:", receiptRecorded(attemptedPacket))
 }
 
 func bootstrap(cur realm) types.ChannelId {
@@ -71,21 +77,26 @@ func bootstrap(cur realm) types.ChannelId {
 
 func attemptRecv(cur realm, channelId types.ChannelId) {
 	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
-	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
+	attemptedQuoteToken = z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 	order := z.TokenOrderV2{
 		Sender:      []byte("attacker"),
 		Receiver:    []byte(receiverAddr.String()),
 		BaseToken:   []byte("ugnot"),
 		BaseAmount:  u256.NewUint(100),
-		QuoteToken:  []byte(quoteToken),
+		QuoteToken:  []byte(attemptedQuoteToken),
 		QuoteAmount: u256.NewUint(100),
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 		Metadata:    meta,
 	}
-	packet := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(order)), types.Timestamp(1<<62))
+	attemptedPacket = core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(order)), types.Timestamp(1<<62))
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{[]byte("forged-proof")}, nil, 1))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{attemptedPacket}, [][]byte{[]byte("forged-proof")}, nil, 1))
+}
+
+func receiptRecorded(packet types.Packet) bool {
+	_, err := core.GetBatchReceipts(core.CommitPacketsHash([]types.Packet{packet}))
+	return err == nil
 }
 
 // --- encoding helpers ---
@@ -156,6 +167,6 @@ func (m *forgedLightClient) Misbehaviour(address, []byte, address) ([]byte, erro
 // [SCENARIO] 1. Bootstrap with a light client that rejects every membership proof
 //
 // [SCENARIO] 2. A receive with a forged proof is rejected before any mint
-
-// Error:
-// forged proof: membership verification failed
+// [INFO] recv abort: forged proof: membership verification failed
+// [INFO] receiver voucher after rejected recv: 0
+// [INFO] packet receipt after rejected recv: false

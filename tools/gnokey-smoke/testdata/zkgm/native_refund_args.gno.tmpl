@@ -10,7 +10,7 @@ import (
 
 func main(cur realm) {
 	order := z.TokenOrderV2{
-		Sender:      []byte("@REFUND_RECIPIENT@"),
+		Sender:      []byte("@SMOKE_KEY_ADDRESS@"),
 		Receiver:    []byte("counterparty-receiver"),
 		BaseToken:   []byte("ugnot"),
 		BaseAmount:  u256.NewUint(100),

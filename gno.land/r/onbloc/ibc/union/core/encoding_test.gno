@@ -166,7 +166,7 @@ func TestStateValueEncoding(cur realm, t *testing.T) {
 	}
 }
 
-func TestHexEncoding(cur realm, t *testing.T) {
+func TestEncoding(cur realm, t *testing.T) {
 	cases := []struct {
 		name   string
 		assert func(*testing.T)
@@ -188,18 +188,18 @@ func TestHexEncoding(cur realm, t *testing.T) {
 			},
 		},
 		{
-			"hex attr empty",
+			"base64 attr empty",
 			func(t *testing.T) {
-				if got := hexAttr([]byte{}); got != "0x" {
-					t.Errorf("hexAttr empty: got %q want \"0x\"", got)
+				if got := base64Attr([]byte{}); got != "" {
+					t.Errorf("base64Attr empty: got %q want \"\"", got)
 				}
 			},
 		},
 		{
-			"hex attr binary",
+			"base64 attr binary",
 			func(t *testing.T) {
-				if got := hexAttr([]byte{0, 15, 255}); got != "0x000fff" {
-					t.Errorf("hexAttr binary: got %q want \"0x000fff\"", got)
+				if got := base64Attr([]byte{0, 15, 255}); got != "AA//" {
+					t.Errorf("base64Attr binary: got %q want \"AA//\"", got)
 				}
 			},
 		},
@@ -241,7 +241,7 @@ func TestHexEncoding(cur realm, t *testing.T) {
 	}
 }
 
-func TestHexAttrLen(cur realm, t *testing.T) {
+func TestBase64AttrLen(cur realm, t *testing.T) {
 	tests := []struct {
 		name string
 		data []byte
@@ -255,15 +255,15 @@ func TestHexAttrLen(cur realm, t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			assertHexAttrLen(t, tc.data)
+			assertBase64AttrLen(t, tc.data)
 		})
 	}
 }
 
-func assertHexAttrLen(t *testing.T, data []byte) {
+func assertBase64AttrLen(t *testing.T, data []byte) {
 	t.Helper()
-	if got, want := hexAttrLen(data), len(hexAttr(data)); got != want {
-		t.Fatalf("hex attr len: got %d want %d", got, want)
+	if got, want := base64AttrLen(data), len(base64Attr(data)); got != want {
+		t.Fatalf("base64 attr len: got %d want %d", got, want)
 	}
 }
 

@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/base64"
 	"encoding/hex"
 
 	"gno.land/p/onbloc/ibc/union/types"
@@ -102,21 +103,21 @@ func hexString(b []byte) string {
 	return "0x" + hex.EncodeToString(b)
 }
 
-// hexAttr encodes b as a lowercase 0x-prefixed hexadecimal string for use in
+// base64Attr encodes b as base64 for use in
 // chain.Emit attributes.
 //
-// Use hexAttr for binary attribute values. Converting arbitrary []byte values
+// Use base64Attr for binary attribute values. Converting arbitrary []byte values
 // directly to string is lossy for non-UTF-8 input.
-func hexAttr(b []byte) string {
-	return hexString(b)
+func base64Attr(b []byte) string {
+	return base64.StdEncoding.EncodeToString(b)
 }
 
-// hexAttrLen returns the length of b after hexAttr encoding.
+// base64AttrLen returns the length of b after base64Attr encoding.
 //
 // It avoids building the encoded string on validation paths that only need to
 // compare against an event attribute size budget.
-func hexAttrLen(b []byte) int {
-	return len(b)*2 + 2
+func base64AttrLen(b []byte) int {
+	return (len(b) + 2) / 3 * 4
 }
 
 func h256String(h types.H256) string {

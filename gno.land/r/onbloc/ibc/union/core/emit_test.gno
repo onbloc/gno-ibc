@@ -2,8 +2,7 @@ package core
 
 import (
 	"bytes"
-	"encoding/hex"
-	"strings"
+	"encoding/base64"
 	"testing"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -15,8 +14,7 @@ import (
 // Mirrors gno-core/gnovm/stdlibs/chain/emit_event.go MaxEventAttrLen.
 const emitMaxEventAttrLen = 1024
 
-// 2 hex chars per byte plus the "0x" prefix
-const boundaryRawLen = (emitMaxEventAttrLen - 2) / 2
+const boundaryRawLen = emitMaxEventAttrLen / 4 * 3
 
 type binaryFixture struct {
 	name string
@@ -71,10 +69,7 @@ func mustEncodeRealZkgmPacket(t *testing.T) []byte {
 
 func decodeBinaryAttr(t *testing.T, encoded string) []byte {
 	t.Helper()
-	if !strings.HasPrefix(encoded, "0x") {
-		t.Fatalf("missing 0x prefix: %q", encoded)
-	}
-	out, err := hex.DecodeString(strings.TrimPrefix(encoded, "0x"))
+	out, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		t.Fatalf("decode: %v", err)
 	}
@@ -83,7 +78,7 @@ func decodeBinaryAttr(t *testing.T, encoded string) []byte {
 
 func assertRoundTrip(t *testing.T, data []byte) {
 	t.Helper()
-	encoded := hexAttr(data)
+	encoded := base64Attr(data)
 	if len(encoded) > emitMaxEventAttrLen {
 		t.Fatalf("fixture too large for round-trip test: encoded len %d", len(encoded))
 	}
@@ -114,7 +109,7 @@ func TestEmitBinaryFieldsBoundary(cur realm, t *testing.T) {
 		for i := range raw {
 			raw[i] = byte(i)
 		}
-		if got := len(hexAttr(raw)); got != emitMaxEventAttrLen {
+		if got := len(base64Attr(raw)); got != emitMaxEventAttrLen {
 			t.Fatalf("encoded len = %d, want %d", got, emitMaxEventAttrLen)
 		}
 		assertRoundTrip(t, raw)
@@ -122,13 +117,13 @@ func TestEmitBinaryFieldsBoundary(cur realm, t *testing.T) {
 
 	t.Run("one_byte_over_limit", func(t *testing.T) {
 		raw := make([]byte, boundaryRawLen+1)
-		if got := len(hexAttr(raw)); got <= emitMaxEventAttrLen {
+		if got := len(base64Attr(raw)); got <= emitMaxEventAttrLen {
 			t.Fatalf("encoded len = %d, want > %d", got, emitMaxEventAttrLen)
 		}
 	})
 
 	t.Run("realistic_zkgm_packet_exceeds_limit", func(t *testing.T) {
-		got := len(hexAttr(mustEncodeRealZkgmPacket(t)))
+		got := len(base64Attr(mustEncodeRealZkgmPacket(t)))
 		if got <= emitMaxEventAttrLen {
 			t.Fatalf("realistic ZKGM packet len = %d, want > %d", got, emitMaxEventAttrLen)
 		}

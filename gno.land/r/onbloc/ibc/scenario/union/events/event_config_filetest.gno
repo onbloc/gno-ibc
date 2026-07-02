@@ -76,8 +76,8 @@ func sendWithSplitEnabled(cur realm, channelId types.ChannelId) {
 	ufmt.Printf("[INFO] packet_data_budget: %d\n", core.MaxPacketDataEventSize())
 	ufmt.Printf("[INFO] oversized_packet_rejected: %t\n", core.PacketDataTooLarge(make([]byte, 16)))
 
-	packet := core.SendPacket(cross(cur), channelId, types.Timestamp(1), []byte{0xaa, 0xbb, 0xcc})
-	ufmt.Printf("[INFO] before_packet_data_size: %d\n", eventConfigHexAttrLen(packet.Data))
+	packet := core.SendPacket(cross(cur), channelId, types.Timestamp(1), []byte{0xaa, 0xbb, 0xcc, 0xdd})
+	ufmt.Printf("[INFO] before_packet_data_size: %d\n", eventConfigBase64AttrLen(packet.Data))
 	ufmt.Println("[EXPECTED] before PacketSend uses packet_data[0] and packet_data[1]")
 }
 
@@ -99,12 +99,12 @@ func sendWithSplitDisabled(cur realm, channelId types.ChannelId) {
 
 	testing.SetRealm(testing.NewUserRealm(eventConfigAdminAddr))
 	packet := core.SendPacket(cross(cur), channelId, types.Timestamp(1), []byte{0xdd, 0xee, 0xff})
-	ufmt.Printf("[INFO] after_packet_data_size: %d\n", eventConfigHexAttrLen(packet.Data))
+	ufmt.Printf("[INFO] after_packet_data_size: %d\n", eventConfigBase64AttrLen(packet.Data))
 	ufmt.Println("[EXPECTED] after PacketSend uses packet_data")
 }
 
-func eventConfigHexAttrLen(b []byte) int {
-	return len(b)*2 + 2
+func eventConfigBase64AttrLen(b []byte) int {
+	return (len(b) + 2) / 3 * 4
 }
 
 type eventConfigScenarioApp struct{}
@@ -211,7 +211,7 @@ func (e eventConfigMockError) Error() string {
 // [INFO] packet_data_budget: 8
 // [INFO] oversized_packet_allowed: true
 // [STEP] after config change: emit packet_data as one attr
-// [INFO] after_packet_data_size: 8
+// [INFO] after_packet_data_size: 4
 // [EXPECTED] after PacketSend uses packet_data
 
 // Events:
@@ -409,7 +409,7 @@ func (e eventConfigMockError) Error() string {
 //     "attrs": [
 //       {
 //         "key": "packet_hash",
-//         "value": "0x11ee731648e2573710d3a4843567d7c9de8f17acc1d9aa1f5c1a1e4338809bf8"
+//         "value": "0x3a3fb4931326d6b90818564e80e7f1b4f7b7ba0368c6cc62ea66138d1b0d45f2"
 //       },
 //       {
 //         "key": "packet_data_size",
@@ -417,11 +417,11 @@ func (e eventConfigMockError) Error() string {
 //       },
 //       {
 //         "key": "packet_data[0]",
-//         "value": "0xaa"
+//         "value": "qrvM"
 //       },
 //       {
 //         "key": "packet_data[1]",
-//         "value": "bbcc"
+//         "value": "3Q=="
 //       },
 //       {
 //         "key": "source_channel_id",
@@ -467,7 +467,7 @@ func (e eventConfigMockError) Error() string {
 //       },
 //       {
 //         "key": "packet_data",
-//         "value": "0xddeeff"
+//         "value": "3e7/"
 //       },
 //       {
 //         "key": "source_channel_id",

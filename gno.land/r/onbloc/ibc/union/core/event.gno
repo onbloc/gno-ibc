@@ -218,7 +218,7 @@ func packetEventBaseAttrs(packet types.Packet) []string {
 		"packet_hash", commitPacketHash(packet).String(),
 	}
 
-	packetData := hexAttr(packet.Data)
+	packetData := base64Attr(packet.Data)
 	if config.SplitEventAttrs {
 		attrs = append(attrs, "packet_data_size", strconv.Itoa(len(packetData)))
 		return append(attrs, eventAttrColumns("packet_data", packetData, int(config.MaxEventAttrValueLen))...)
@@ -275,7 +275,7 @@ func emitPacketRecvEvent(eventType string, packet types.Packet, maker address, m
 		"destination_channel_id", packet.DestinationChannelId.String(),
 		"packet_hash", commitPacketHash(packet).String(),
 		"maker", maker.String(),
-		"maker_msg", hexAttr(msg),
+		"maker_msg", base64Attr(msg),
 	)
 }
 
@@ -284,7 +284,7 @@ func emitWriteAckEvent(packet types.Packet, acknowledgement []byte) {
 		WriteAckEvent,
 		"destination_channel_id", packet.DestinationChannelId.String(),
 		"packet_hash", commitPacketHash(packet).String(),
-		"acknowledgement", hexAttr(acknowledgement),
+		"acknowledgement", base64Attr(acknowledgement),
 	)
 }
 
@@ -300,7 +300,7 @@ func emitPacketAckEvent(packet types.Packet, sourceChannel types.Channel, connec
 		"destination_connection_id", connection.CounterpartyConnectionId.String(),
 		"destination_connection_client_id", connection.CounterpartyClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
-		"acknowledgement", hexAttr(acknowledgement),
+		"acknowledgement", base64Attr(acknowledgement),
 		"maker", maker.String(),
 	)
 	chain.Emit(PacketAckEvent, attrs...)
@@ -327,8 +327,8 @@ func emitCommitMembershipProofEvent(msg types.MsgCommitMembershipProof) {
 		CommitMembershipProofEvent,
 		"client_id", msg.ClientId.String(),
 		"proof_height", strconv.FormatUint(msg.ProofHeight, 10),
-		"path", hexAttr(msg.Path),
-		"value", hexAttr(msg.Value),
+		"path", base64Attr(msg.Path),
+		"value", base64Attr(msg.Value),
 	)
 }
 
@@ -337,6 +337,6 @@ func emitCommitNonMembershipProofEvent(msg types.MsgCommitNonMembershipProof) {
 		CommitNonMembershipEvent,
 		"client_id", msg.ClientId.String(),
 		"proof_height", strconv.FormatUint(msg.ProofHeight, 10),
-		"path", hexAttr(msg.Path),
+		"path", base64Attr(msg.Path),
 	)
 }

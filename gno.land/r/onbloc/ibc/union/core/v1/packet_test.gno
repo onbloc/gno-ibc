@@ -149,15 +149,15 @@ func TestSendPacketUnauthorizedSender(cur realm, t *testing.T) {
 }
 
 func TestAssertPacketDataSize(cur realm, t *testing.T) {
-	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
+	maxPacketDataBytes := core.MaxPacketDataEventSize() / 4 * 3
 	tests := []struct {
 		name string
 		data []byte
 		want string
 	}{
 		{"empty data", []byte{}, ""},
-		{"max hex attr size", make([]byte, maxPacketDataBytes), ""},
-		{"too large hex attr size", make([]byte, maxPacketDataBytes+1), core.ErrPacketDataTooLarge},
+		{"max base64 attr size", make([]byte, maxPacketDataBytes), ""},
+		{"too large base64 attr size", make([]byte, maxPacketDataBytes+1), core.ErrPacketDataTooLarge},
 	}
 
 	for _, tc := range tests {
@@ -175,7 +175,7 @@ func TestAssertPacketDataSize(cur realm, t *testing.T) {
 }
 
 func TestPacketEntrypointsRejectOversizedPacketData(cur realm, t *testing.T) {
-	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
+	maxPacketDataBytes := core.MaxPacketDataEventSize() / 4 * 3
 	oversized := make([]byte, maxPacketDataBytes+1)
 	tests := []struct {
 		name string
@@ -216,7 +216,7 @@ func TestPacketEntrypointsRejectOversizedPacketData(cur realm, t *testing.T) {
 
 func TestRecvEntrypointsDispatchOversizedPacketDataWithReducedEvents(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
+	maxPacketDataBytes := core.MaxPacketDataEventSize() / 4 * 3
 	oversized := make([]byte, maxPacketDataBytes+1)
 	tests := []struct {
 		name       string
@@ -1147,7 +1147,7 @@ func TestVerifyNonMembership(cur realm, t *testing.T) {
 
 func TestWriteAcknowledgementWritesAsyncAck(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
+	maxPacketDataBytes := core.MaxPacketDataEventSize() / 4 * 3
 	tests := []struct {
 		name string
 		data []byte

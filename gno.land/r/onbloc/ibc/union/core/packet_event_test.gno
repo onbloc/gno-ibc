@@ -4,7 +4,7 @@ import "testing"
 
 func TestPacketDataTooLarge(cur realm, t *testing.T) {
 	resetStore(cur)
-	maxPacketDataBytes := (MaxPacketDataEventSize() - 2) / 2
+	maxPacketDataBytes := MaxPacketDataEventSize() / 4 * 3
 	realZkgmPacket := mustEncodeRealZkgmPacket(t)
 	tests := []struct {
 		name string
@@ -14,7 +14,7 @@ func TestPacketDataTooLarge(cur realm, t *testing.T) {
 		{"empty", []byte{}, false},
 		{"boundary", make([]byte, maxPacketDataBytes), false},
 		{"over boundary", make([]byte, maxPacketDataBytes+1), true},
-		{"real zkgm packet", realZkgmPacket, hexAttrLen(realZkgmPacket) > MaxPacketDataEventSize()},
+		{"real zkgm packet", realZkgmPacket, base64AttrLen(realZkgmPacket) > MaxPacketDataEventSize()},
 	}
 
 	for _, tc := range tests {
@@ -55,7 +55,7 @@ func TestPacketDataTooLargeUsesEventConfig(cur realm, t *testing.T) {
 				MaxEventAttrValueLen:      4,
 				MaxPacketDataEventColumns: 2,
 			},
-			data:       make([]byte, 4),
+			data:       make([]byte, 7),
 			wantBudget: 8,
 			wantLarge:  true,
 		},

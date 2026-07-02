@@ -188,6 +188,30 @@ func TestEncoding(cur realm, t *testing.T) {
 			},
 		},
 		{
+			"hex attr empty",
+			func(t *testing.T) {
+				if got := hexAttr([]byte{}); got != "0x" {
+					t.Errorf("hexAttr empty: got %q want \"0x\"", got)
+				}
+			},
+		},
+		{
+			"hex attr binary",
+			func(t *testing.T) {
+				if got := hexAttr([]byte{0, 15, 255}); got != "0x000fff" {
+					t.Errorf("hexAttr binary: got %q want \"0x000fff\"", got)
+				}
+			},
+		},
+		{
+			"hex attr len",
+			func(t *testing.T) {
+				if got := hexAttrLen([]byte{0, 15, 255}); got != 8 {
+					t.Errorf("hexAttrLen: got %d want 8", got)
+				}
+			},
+		},
+		{
 			"base64 attr empty",
 			func(t *testing.T) {
 				if got := base64Attr([]byte{}); got != "" {

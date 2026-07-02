@@ -337,7 +337,7 @@ func (e eventConfigMockError) Error() string {
 //       },
 //       {
 //         "key": "counterparty_port_id",
-//         "value": ""
+//         "value": "0x"
 //       },
 //       {
 //         "key": "connection_id",
@@ -375,7 +375,7 @@ func (e eventConfigMockError) Error() string {
 //       },
 //       {
 //         "key": "counterparty_port_id",
-//         "value": ""
+//         "value": "0x"
 //       },
 //       {
 //         "key": "counterparty_channel_id",

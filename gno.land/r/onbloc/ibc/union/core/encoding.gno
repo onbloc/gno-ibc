@@ -103,8 +103,24 @@ func hexString(b []byte) string {
 	return "0x" + hex.EncodeToString(b)
 }
 
-// base64Attr encodes b as base64 for use in
+// hexAttr encodes b as a lowercase 0x-prefixed hexadecimal string for use in
 // chain.Emit attributes.
+//
+// Use hexAttr for binary attribute values. Converting arbitrary []byte values
+// directly to string is lossy for non-UTF-8 input.
+func hexAttr(b []byte) string {
+	return hexString(b)
+}
+
+// hexAttrLen returns the length of b after hexAttr encoding.
+//
+// It avoids building the encoded string on validation paths that only need to
+// compare against an event attribute size budget.
+func hexAttrLen(b []byte) int {
+	return len(b)*2 + 2
+}
+
+// base64Attr encodes b as base64 for use in chain.Emit attributes.
 //
 // Use base64Attr for binary attribute values. Converting arbitrary []byte values
 // directly to string is lossy for non-UTF-8 input.

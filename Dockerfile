@@ -1,7 +1,7 @@
 # Stage 1: Build gnoland binary
 FROM golang:1.25-alpine AS builder
 
-ARG GNO_COMMIT=a929d44ee4169288d25b80b4e974ed7343050ac9
+ARG GNO_COMMIT=7b2888c3b43ad78f5dd78c1f6f99766610e84733
 
 RUN apk add --no-cache git make gcc musl-dev
 

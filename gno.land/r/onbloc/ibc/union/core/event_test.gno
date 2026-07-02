@@ -42,7 +42,7 @@ func TestChannelOpenInitEventAttrs(cur realm, t *testing.T) {
 	assertStringSliceEqual(t, attrs, []string{
 		"port_id", "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
 		"channel_id", "1",
-		"counterparty_port_id", "Y291bnRlcnBhcnR5",
+		"counterparty_port_id", "0x636f756e7465727061727479",
 		"connection_id", "2",
 		"connection_client_id", "10",
 		"connection_counterparty_client_id", "20",
@@ -70,7 +70,7 @@ func TestChannelOpenTryEventAttrs(cur realm, t *testing.T) {
 	assertStringSliceEqual(t, attrs, []string{
 		"port_id", "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
 		"channel_id", "1",
-		"counterparty_port_id", "Y291bnRlcnBhcnR5",
+		"counterparty_port_id", "0x636f756e7465727061727479",
 		"counterparty_channel_id", "7",
 		"connection_id", "2",
 		"connection_client_id", "10",
@@ -98,7 +98,7 @@ func TestChannelOpenAckConfirmEventAttrs(cur realm, t *testing.T) {
 	assertStringSliceEqual(t, attrs, []string{
 		"port_id", "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
 		"channel_id", "1",
-		"counterparty_port_id", "Y291bnRlcnBhcnR5",
+		"counterparty_port_id", "0x636f756e7465727061727479",
 		"counterparty_channel_id", "7",
 		"connection_id", "2",
 		"connection_client_id", "10",
@@ -125,7 +125,7 @@ func TestChannelCloseEventAttrs(cur realm, t *testing.T) {
 	assertStringSliceEqual(t, attrs, []string{
 		"port_id", "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
 		"channel_id", "1",
-		"counterparty_port_id", "Y291bnRlcnBhcnR5",
+		"counterparty_port_id", "0x636f756e7465727061727479",
 		"counterparty_channel_id", "7",
 		"connection_id", "2",
 		"connection_client_id", "10",

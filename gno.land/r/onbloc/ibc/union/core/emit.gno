@@ -176,10 +176,10 @@ func EmitPacketTimeout(_ int, rlm realm, packet types.Packet, sourceChannel type
 }
 
 // EmitWriteAck emits the WriteAck host event.
-func EmitWriteAck(_ int, rlm realm, packet types.Packet, acknowledgement []byte) {
+func EmitWriteAck(_ int, rlm realm, packet types.Packet, destinationChannel types.Channel, connection types.Connection, acknowledgement []byte) {
 	assertIsRlmCurrent(0, rlm)
 	assertIsProxyRealm(0, rlm)
-	emitWriteAckEvent(packet, acknowledgement)
+	emitWriteAckEvent(packet, destinationChannel, connection, acknowledgement)
 }
 
 // EmitBatchSend emits the BatchSend host event.

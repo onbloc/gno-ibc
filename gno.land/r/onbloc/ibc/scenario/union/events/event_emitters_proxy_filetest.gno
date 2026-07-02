@@ -1005,12 +1005,48 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "WriteAck",
 //     "attrs": [
 //       {
+//         "key": "packet_hash",
+//         "value": "0x2e925a980b459b69e205479571e2988b99ffb77d7eae552bbe4107b5e2857599"
+//       },
+//       {
+//         "key": "packet_data_size",
+//         "value": "26"
+//       },
+//       {
+//         "key": "packet_data[0]",
+//         "value": "0x6576656e742d726563762d31"
+//       },
+//       {
 //         "key": "destination_channel_id",
 //         "value": "1"
 //       },
 //       {
-//         "key": "packet_hash",
-//         "value": "0x2e925a980b459b69e205479571e2988b99ffb77d7eae552bbe4107b5e2857599"
+//         "key": "destination_connection_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "destination_connection_client_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "source_channel_id",
+//         "value": "90"
+//       },
+//       {
+//         "key": "source_channel_version",
+//         "value": "event-v1"
+//       },
+//       {
+//         "key": "source_connection_id",
+//         "value": "77"
+//       },
+//       {
+//         "key": "source_connection_client_id",
+//         "value": "99"
+//       },
+//       {
+//         "key": "timeout_timestamp",
+//         "value": "4611686018427387904"
 //       },
 //       {
 //         "key": "acknowledgement",
@@ -1045,12 +1081,48 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "WriteAck",
 //     "attrs": [
 //       {
+//         "key": "packet_hash",
+//         "value": "0x72e4fcb14058a989cb243a46e9583fe569909b915ffe4edf5f1ca9609db20083"
+//       },
+//       {
+//         "key": "packet_data_size",
+//         "value": "26"
+//       },
+//       {
+//         "key": "packet_data[0]",
+//         "value": "0x6576656e742d726563762d32"
+//       },
+//       {
 //         "key": "destination_channel_id",
 //         "value": "1"
 //       },
 //       {
-//         "key": "packet_hash",
-//         "value": "0x72e4fcb14058a989cb243a46e9583fe569909b915ffe4edf5f1ca9609db20083"
+//         "key": "destination_connection_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "destination_connection_client_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "source_channel_id",
+//         "value": "90"
+//       },
+//       {
+//         "key": "source_channel_version",
+//         "value": "event-v1"
+//       },
+//       {
+//         "key": "source_connection_id",
+//         "value": "77"
+//       },
+//       {
+//         "key": "source_connection_client_id",
+//         "value": "99"
+//       },
+//       {
+//         "key": "timeout_timestamp",
+//         "value": "4611686018427387904"
 //       },
 //       {
 //         "key": "acknowledgement",
@@ -1121,12 +1193,48 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "WriteAck",
 //     "attrs": [
 //       {
+//         "key": "packet_hash",
+//         "value": "0x5903360eb9bb521e532b827510363708a8e0c10cf58ce5cd331399623ad5c27b"
+//       },
+//       {
+//         "key": "packet_data_size",
+//         "value": "26"
+//       },
+//       {
+//         "key": "packet_data[0]",
+//         "value": "0x6576656e742d696e74656e74"
+//       },
+//       {
 //         "key": "destination_channel_id",
 //         "value": "1"
 //       },
 //       {
-//         "key": "packet_hash",
-//         "value": "0x5903360eb9bb521e532b827510363708a8e0c10cf58ce5cd331399623ad5c27b"
+//         "key": "destination_connection_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "destination_connection_client_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "source_channel_id",
+//         "value": "91"
+//       },
+//       {
+//         "key": "source_channel_version",
+//         "value": "event-v1"
+//       },
+//       {
+//         "key": "source_connection_id",
+//         "value": "77"
+//       },
+//       {
+//         "key": "source_connection_client_id",
+//         "value": "99"
+//       },
+//       {
+//         "key": "timeout_timestamp",
+//         "value": "4611686018427387904"
 //       },
 //       {
 //         "key": "acknowledgement",
@@ -1183,12 +1291,48 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "WriteAck",
 //     "attrs": [
 //       {
+//         "key": "packet_hash",
+//         "value": "0xa95670a052ae50cb85b4baf83596b9f36ebb5b2026165fbe737db02d8b6462e9"
+//       },
+//       {
+//         "key": "packet_data_size",
+//         "value": "24"
+//       },
+//       {
+//         "key": "packet_data[0]",
+//         "value": "0x6576656e742d6173796e63"
+//       },
+//       {
 //         "key": "destination_channel_id",
 //         "value": "1"
 //       },
 //       {
-//         "key": "packet_hash",
-//         "value": "0xa95670a052ae50cb85b4baf83596b9f36ebb5b2026165fbe737db02d8b6462e9"
+//         "key": "destination_connection_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "destination_connection_client_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "source_channel_id",
+//         "value": "92"
+//       },
+//       {
+//         "key": "source_channel_version",
+//         "value": "event-v1"
+//       },
+//       {
+//         "key": "source_connection_id",
+//         "value": "77"
+//       },
+//       {
+//         "key": "source_connection_client_id",
+//         "value": "99"
+//       },
+//       {
+//         "key": "timeout_timestamp",
+//         "value": "4611686018427387904"
 //       },
 //       {
 //         "key": "acknowledgement",
@@ -1401,12 +1545,48 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //     "type": "WriteAck",
 //     "attrs": [
 //       {
+//         "key": "packet_hash",
+//         "value": "0x7bf8b2199e74916681e58171af1e1491c0d3197ab60389fbf8b937906693f75e"
+//       },
+//       {
+//         "key": "packet_data_size",
+//         "value": "4"
+//       },
+//       {
+//         "key": "packet_data[0]",
+//         "value": "0x01"
+//       },
+//       {
 //         "key": "destination_channel_id",
 //         "value": "3"
 //       },
 //       {
-//         "key": "packet_hash",
-//         "value": "0x7bf8b2199e74916681e58171af1e1491c0d3197ab60389fbf8b937906693f75e"
+//         "key": "destination_connection_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "destination_connection_client_id",
+//         "value": "1"
+//       },
+//       {
+//         "key": "source_channel_id",
+//         "value": "22"
+//       },
+//       {
+//         "key": "source_channel_version",
+//         "value": "ucs03-zkgm-0"
+//       },
+//       {
+//         "key": "source_connection_id",
+//         "value": "77"
+//       },
+//       {
+//         "key": "source_connection_client_id",
+//         "value": "99"
+//       },
+//       {
+//         "key": "timeout_timestamp",
+//         "value": "4611686018427387904"
 //       },
 //       {
 //         "key": "acknowledgement",

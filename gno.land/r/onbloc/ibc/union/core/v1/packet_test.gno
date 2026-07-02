@@ -1391,7 +1391,7 @@ func TestCommitSyncAck(cur realm, t *testing.T) {
 				TimeoutTimestamp:     farFuture,
 			}
 
-			err := v.commitSyncAck(0, cur, packet, tc.result)
+			err := v.commitSyncAck(0, cur, packet, types.Channel{}, types.Connection{}, tc.result)
 			if tc.wantErr != "" {
 				uassert.Equal(t, tc.wantErr, err.Error())
 				return

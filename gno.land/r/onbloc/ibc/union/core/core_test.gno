@@ -19,7 +19,6 @@ const (
 
 func resetStore(cur realm) {
 	store = newStore()
-	eventConfig = DefaultEventConfig()
 }
 
 func mustPanic(t *testing.T, fn func()) {

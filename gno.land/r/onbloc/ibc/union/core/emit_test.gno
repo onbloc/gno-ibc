@@ -12,7 +12,7 @@ import (
 )
 
 // Mirrors gno-core/gnovm/stdlibs/chain/emit_event.go MaxEventAttrLen.
-const emitMaxEventAttrLen = 1024
+const emitMaxEventAttrLen = 4096
 
 const boundaryRawLen = emitMaxEventAttrLen / 4 * 3
 
@@ -104,7 +104,7 @@ func TestEmitBinaryFieldsRoundTrip(cur realm, t *testing.T) {
 }
 
 func TestEmitBinaryFieldsBoundary(cur realm, t *testing.T) {
-	t.Run("exact_1024", func(t *testing.T) {
+	t.Run("exact_4096", func(t *testing.T) {
 		raw := make([]byte, boundaryRawLen)
 		for i := range raw {
 			raw[i] = byte(i)
@@ -119,13 +119,6 @@ func TestEmitBinaryFieldsBoundary(cur realm, t *testing.T) {
 		raw := make([]byte, boundaryRawLen+1)
 		if got := len(base64Attr(raw)); got <= emitMaxEventAttrLen {
 			t.Fatalf("encoded len = %d, want > %d", got, emitMaxEventAttrLen)
-		}
-	})
-
-	t.Run("realistic_zkgm_packet_exceeds_limit", func(t *testing.T) {
-		got := len(base64Attr(mustEncodeRealZkgmPacket(t)))
-		if got <= emitMaxEventAttrLen {
-			t.Fatalf("realistic ZKGM packet len = %d, want > %d", got, emitMaxEventAttrLen)
 		}
 	})
 }

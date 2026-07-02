@@ -16,7 +16,6 @@ import (
 // height is always zero; only the timeout timestamp is meaningful.
 func (c *coreV1) SendPacket(_ int, rlm realm, sourceChannelId types.ChannelId, timeoutTimestamp types.Timestamp, data []byte) types.Packet {
 	assertIsRlmCurrent(0, rlm)
-	assertPacketDataSize(data)
 
 	if timeoutTimestamp == 0 {
 		panic(makeError(core.ErrTimeoutMustBeSet))
@@ -161,7 +160,6 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 // PacketAcknowledgement proves the counterparty's acks and notifies the app.
 func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAcknowledgement) {
 	assertIsRlmCurrent(0, rlm)
-	assertPacketsDataSize(msg.Packets)
 
 	relayer := rlm.Previous().Address()
 
@@ -206,7 +204,6 @@ func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAckn
 // the app to refund.
 func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 	assertIsRlmCurrent(0, rlm)
-	assertPacketDataSize(msg.Packet.Data)
 
 	relayer := rlm.Previous().Address()
 	packet := msg.Packet

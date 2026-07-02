@@ -35,38 +35,6 @@ func TestUniversalErrorAck(t *testing.T) {
 	uassert.Equal(t, string(want), string(got))
 }
 
-func TestRecvEntrypointsOversizedPacketDataReturnsFailureAck(cur realm, t *testing.T) {
-	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
-	oversized := make([]byte, maxPacketDataBytes+1)
-	tests := []struct {
-		name string
-		run  func(cur realm, packet types.Packet) types.RecvPacketResult
-	}{
-		{
-			name: "packet recv",
-			run: func(cur realm, packet types.Packet) types.RecvPacketResult {
-				return newTestImpl().OnRecvPacket(0, cur, packet, address(testAddress("oversized-relayer")), nil)
-			},
-		},
-		{
-			name: "intent packet recv",
-			run: func(cur realm, packet types.Packet) types.RecvPacketResult {
-				return newTestImpl().OnIntentRecvPacket(0, cur, packet, address(testAddress("oversized-maker")), nil)
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), oversized, 0)
-
-		testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
-		res := tc.run(cur, packet)
-
-		uassert.True(t, res.Status == types.PacketStatusFailure)
-		uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
-	}
-}
-
 func TestDispatchExecutePacket(cur realm, t *testing.T) {
 	v := newTestImpl()
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), nil, 0)

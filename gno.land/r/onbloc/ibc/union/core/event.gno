@@ -34,10 +34,6 @@ const (
 	PacketTimeoutEvent         = "PacketTimeout"
 	CommitMembershipProofEvent = "CommitMembershipProof"
 	CommitNonMembershipEvent   = "CommitNonMembershipProof"
-
-	maxEventAttrValueLen      = 1024
-	maxPacketDataEventColumns = 50
-	MaxPacketDataEventSize    = maxPacketDataEventColumns * maxEventAttrValueLen
 )
 
 func channelOpenInitEventAttrs(portId types.Bytes, channelId types.ChannelId, channel types.Channel, connection types.Connection) []string {
@@ -217,24 +213,37 @@ func emitBatchAcksEvent(channelId types.ChannelId, packetHash, batchHash types.H
 }
 
 func packetEventBaseAttrs(packet types.Packet) []string {
-	packetData := hexAttr(packet.Data)
+	config := GetEventConfig()
 	attrs := []string{
 		"packet_hash", commitPacketHash(packet).String(),
-		"packet_data_size", strconv.Itoa(len(packetData)),
 	}
-	return append(attrs, eventAttrColumns("packet_data", packetData)...)
+
+	packetData := hexAttr(packet.Data)
+	if config.SplitEventAttrs {
+		attrs = append(attrs, "packet_data_size", strconv.Itoa(len(packetData)))
+		return append(attrs, eventAttrColumns("packet_data", packetData, int(config.MaxEventAttrValueLen))...)
+	}
+
+	return append(attrs, "packet_data", packetData)
 }
 
-func eventAttrColumns(key string, value string) []string {
+// eventAttrColumns splits one encoded event attribute value into indexed
+// columns. Callers decide whether splitting is enabled before calling this
+// helper.
+func eventAttrColumns(key string, value string, maxValueLen int) []string {
+	if maxValueLen <= 0 {
+		panic("max event attr value len must be positive")
+	}
+
 	if len(value) == 0 {
 		return []string{key + "[0]", ""}
 	}
 
-	parts := (len(value) + maxEventAttrValueLen - 1) / maxEventAttrValueLen
+	parts := (len(value) + maxValueLen - 1) / maxValueLen
 	attrs := make([]string, 0, parts*2)
 	for index := 0; index < parts; index++ {
-		start := index * maxEventAttrValueLen
-		end := start + maxEventAttrValueLen
+		start := index * maxValueLen
+		end := start + maxValueLen
 		if end > len(value) {
 			end = len(value)
 		}
@@ -279,14 +288,22 @@ func emitWriteAckEvent(packet types.Packet, acknowledgement []byte) {
 	)
 }
 
-func emitPacketAckEvent(packet types.Packet, acknowledgement []byte, maker address) {
-	chain.Emit(
-		PacketAckEvent,
+func emitPacketAckEvent(packet types.Packet, sourceChannel types.Channel, connection types.Connection, acknowledgement []byte, maker address) {
+	attrs := packetEventBaseAttrs(packet)
+	attrs = append(
+		attrs,
 		"source_channel_id", packet.SourceChannelId.String(),
-		"packet_hash", commitPacketHash(packet).String(),
+		"source_connection_id", sourceChannel.ConnectionId.String(),
+		"source_connection_client_id", connection.ClientId.String(),
+		"destination_channel_id", packet.DestinationChannelId.String(),
+		"destination_channel_version", sourceChannel.Version,
+		"destination_connection_id", connection.CounterpartyConnectionId.String(),
+		"destination_connection_client_id", connection.CounterpartyClientId.String(),
+		"timeout_timestamp", packet.TimeoutTimestamp.String(),
 		"acknowledgement", hexAttr(acknowledgement),
 		"maker", maker.String(),
 	)
+	chain.Emit(PacketAckEvent, attrs...)
 }
 
 func emitPacketTimeoutEvent(packet types.Packet, sourceChannel types.Channel, connection types.Connection) {

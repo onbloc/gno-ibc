@@ -24,6 +24,9 @@ const (
 	SelectorChannelCloseConfirm      manager.Selector = "channel_close_confirm"
 	SelectorCommitMembershipProof    manager.Selector = "commit_membership_proof"
 	SelectorCommitNonMembershipProof manager.Selector = "commit_non_membership_proof"
+
+	// SelectorSetEventConfig gates SetEventConfig calls.
+	SelectorSetEventConfig manager.Selector = "set_event_config"
 )
 
 const (

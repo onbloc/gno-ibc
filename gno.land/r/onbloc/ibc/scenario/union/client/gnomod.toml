@@ -1,0 +1,2 @@
+module = "gno.land/r/onbloc/ibc/scenario/union/client"
+gno = "0.9"

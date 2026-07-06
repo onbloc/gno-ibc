@@ -23,8 +23,6 @@ installed implementation realm supplies the swappable protocol logic behind the
   capability access.
 - [getters.gno](getters.gno) exposes read-only ZKGM query helpers.
 - [events.gno](events.gno) emits ZKGM proxy events.
-- [gnokey_tx_queries_zkgm.md](gnokey_tx_queries_zkgm.md) records operational
-  query examples.
 
 ## Implementation
 

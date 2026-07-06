@@ -198,7 +198,7 @@ func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAckn
 		c.markPacketAcknowledged(0, rlm, packet)
 
 		a.OnAcknowledgementPacket(cross(rlm), packet, ack, relayer)
-		core.EmitPacketAck(0, rlm, packet, ack, relayer)
+		core.EmitPacketAck(0, rlm, packet, channel, connection, ack, relayer)
 	}
 }
 

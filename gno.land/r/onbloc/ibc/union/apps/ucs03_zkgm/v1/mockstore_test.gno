@@ -3,7 +3,6 @@ package impl
 import (
 	types "gno.land/p/onbloc/ibc/union/types"
 
-	"gno.land/p/demo/tokens/grc20"
 	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
@@ -19,13 +18,11 @@ type mockStore struct {
 	channelBalanceV2  map[string]*u256.Uint
 	metadataImageOf   map[string][32]byte
 	foreignToken      map[string][]byte
-	tokenDecimals     map[string]uint8
 	inFlightPacket    map[string]types.Packet
 	tokenBucket       map[string]*tb.TokenBucket
 	vouchers          map[string]*zkgm.Voucher
 	receivers         map[string]z.Zkgmable
 	lockedNative      map[string]*u256.Uint
-	localGRC20Tokens  map[string]*grc20.Token
 	rateLimitDisabled bool
 }
 
@@ -37,13 +34,11 @@ func newMockStore() *mockStore {
 		channelBalanceV2: map[string]*u256.Uint{},
 		metadataImageOf:  map[string][32]byte{},
 		foreignToken:     map[string][]byte{},
-		tokenDecimals:    map[string]uint8{},
 		inFlightPacket:   map[string]types.Packet{},
 		tokenBucket:      map[string]*tb.TokenBucket{},
 		vouchers:         map[string]*zkgm.Voucher{},
 		receivers:        map[string]z.Zkgmable{},
 		lockedNative:     map[string]*u256.Uint{},
-		localGRC20Tokens: map[string]*grc20.Token{},
 		// Match NewStore: rate limiting is opt-in (disabled by default).
 		rateLimitDisabled: true,
 	}
@@ -85,18 +80,6 @@ func (m *mockStore) GetLockedNative(denom string) (*u256.Uint, bool) {
 	return v, ok
 }
 
-func (m *mockStore) SetLocalGRC20Token(_ int, rlm realm, denom string, token *grc20.Token) {
-	if _, ok := m.localGRC20Tokens[denom]; ok {
-		return
-	}
-	m.localGRC20Tokens[denom] = token
-}
-
-func (m *mockStore) GetLocalGRC20Token(denom string) (*grc20.Token, bool) {
-	v, ok := m.localGRC20Tokens[denom]
-	return v, ok
-}
-
 func (m *mockStore) SetMetadataImageOf(_ int, rlm realm, denom string, image [32]byte) {
 	m.metadataImageOf[denom] = image
 }
@@ -112,15 +95,6 @@ func (m *mockStore) SetForeignToken(_ int, rlm realm, denom string, token []byte
 
 func (m *mockStore) GetForeignToken(denom string) ([]byte, bool) {
 	v, ok := m.foreignToken[denom]
-	return v, ok
-}
-
-func (m *mockStore) SetTokenDecimals(_ int, rlm realm, denom string, decimals uint8) {
-	m.tokenDecimals[denom] = decimals
-}
-
-func (m *mockStore) GetTokenDecimals(denom string) (uint8, bool) {
-	v, ok := m.tokenDecimals[denom]
 	return v, ok
 }
 

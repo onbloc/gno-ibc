@@ -10,12 +10,6 @@ import (
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
 
-// TokenInfo captures known local voucher metadata in a single lookup.
-type TokenInfo struct {
-	decimals  uint8
-	isVoucher bool
-}
-
 // mintVoucher mints `amount` of the wrapped grc20 voucher for ibcDenom to
 // receiver, creating the voucher token on first use. The grc20 ledger capability
 // lives in the proxy-owned store, so mint/burn rights survive impl upgrades.
@@ -112,23 +106,4 @@ func amountInt64(amount *u256.Uint) (int64, error) {
 	}
 
 	return amount.Int64(), nil
-}
-
-// parseTokenInfo extracts local voucher metadata in a single lookup.
-func (v *ucs03ZkgmV1) parseTokenInfo(_ int, rlm realm, denom []byte) TokenInfo {
-	denomStr := string(denom)
-
-	if vou, ok := v.store.GetVoucher(denomStr); ok {
-		decimals, ok := v.store.GetTokenDecimals(denomStr)
-		if !ok {
-			decimals = uint8(vou.Token().GetDecimals())
-		}
-
-		return TokenInfo{
-			decimals:  decimals,
-			isVoucher: true,
-		}
-	}
-
-	return TokenInfo{isVoucher: false}
 }

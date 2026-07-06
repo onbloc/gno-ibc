@@ -1,11 +1,13 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/decimals
 package decimals
 
-// recv_18dec_scale_down_filetest is the BY-TYPE scenario for 18-decimal amount
-// scaling (re-targeted from the legacy e2e zs25). An 18-decimal token (1e18 wei)
-// is received via an INITIALIZE order and minted as the 6-decimal local amount.
-// An UNESCROW send then submits the 18-decimal wire amount and burns the
-// corresponding 6-decimal local voucher amount.
+// recv_18dec_no_scaling_filetest is the BY-TYPE scenario for 18-decimal amount
+// fidelity (re-targeted from the legacy e2e zs25). An 18-decimal token (1e18 wei)
+// is received via an INITIALIZE order and minted 1:1 with no amount scaling; an
+// UNESCROW send then burns the exact same 1e18 amount back to zero. The invariant
+// is verified by the minted/burned balance, which must equal the wire amount
+// exactly. (The legacy `impl.VoucherDecimalsOf` introspection was removed; the
+// unscaled balance is the observable that proves no scaling occurred.)
 
 import (
 	"chain"
@@ -35,7 +37,6 @@ const (
 
 	// weiAmount is 1e18 — a full 18-decimal unit. It fits in uint64.
 	weiAmount = uint64(1000000000000000000)
-	localAmount = uint64(1000000)
 )
 
 func main(cur realm) {
@@ -46,11 +47,11 @@ func main(cur realm) {
 	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Ether Token", Symbol: "ETH", Decimals: 18})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("wei"), z.MetadataImage(mustDecodeMeta(meta)))
 
-	println("[SCENARIO] 2. Receive an 18-dec INITIALIZE order: scaled down to 6-dec local amount")
+	println("[SCENARIO] 2. Receive an 18-dec INITIALIZE order: minted 1:1 with no scaling")
 	recvInitialize(cur, channelId, quoteToken, meta)
 	println("")
 
-	println("[SCENARIO] 3. UNESCROW send with 1e18 wire amount burns the local 1e6 amount")
+	println("[SCENARIO] 3. UNESCROW send burns the exact same 1e18 amount back to zero")
 	unescrowSend(cur, channelId, quoteToken)
 }
 
@@ -98,7 +99,7 @@ func recvInitialize(cur realm, channelId types.ChannelId, quoteToken string, met
 
 	after := zkgm.VoucherBalanceOf(quoteToken, holderAddr)
 	ufmt.Printf("[INFO] holder voucher balance: %d -> %d\n", before, after)
-	ufmt.Println("[EXPECTED] minted balance should equal 1000000 (1e6 local, scaled down from 1e18 wire)")
+	ufmt.Println("[EXPECTED] minted balance should equal 1000000000000000000 (1e18, unscaled)")
 }
 
 func unescrowSend(cur realm, channelId types.ChannelId, quoteToken string) {
@@ -119,7 +120,7 @@ func unescrowSend(cur realm, channelId types.ChannelId, quoteToken string) {
 
 	after := zkgm.VoucherBalanceOf(quoteToken, holderAddr)
 	ufmt.Printf("[INFO] holder voucher balance: %d -> %d\n", before, after)
-	ufmt.Println("[EXPECTED] UNESCROW send should burn the local 1e6 amount, leaving 0")
+	ufmt.Println("[EXPECTED] UNESCROW send should burn the full 1e18, leaving 0")
 }
 
 // --- encoding helpers ---
@@ -163,10 +164,10 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 // Output:
 // [SCENARIO] 1. Bootstrap IBC host and open a zkgm channel
 //
-// [SCENARIO] 2. Receive an 18-dec INITIALIZE order: scaled down to 6-dec local amount
-// [INFO] holder voucher balance: 0 -> 1000000
-// [EXPECTED] minted balance should equal 1000000 (1e6 local, scaled down from 1e18 wire)
+// [SCENARIO] 2. Receive an 18-dec INITIALIZE order: minted 1:1 with no scaling
+// [INFO] holder voucher balance: 0 -> 1000000000000000000
+// [EXPECTED] minted balance should equal 1000000000000000000 (1e18, unscaled)
 //
-// [SCENARIO] 3. UNESCROW send with 1e18 wire amount burns the local 1e6 amount
-// [INFO] holder voucher balance: 1000000 -> 0
-// [EXPECTED] UNESCROW send should burn the local 1e6 amount, leaving 0
+// [SCENARIO] 3. UNESCROW send burns the exact same 1e18 amount back to zero
+// [INFO] holder voucher balance: 1000000000000000000 -> 0
+// [EXPECTED] UNESCROW send should burn the full 1e18, leaving 0

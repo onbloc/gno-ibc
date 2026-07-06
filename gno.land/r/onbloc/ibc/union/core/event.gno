@@ -288,14 +288,22 @@ func emitWriteAckEvent(packet types.Packet, acknowledgement []byte) {
 	)
 }
 
-func emitPacketAckEvent(packet types.Packet, acknowledgement []byte, maker address) {
-	chain.Emit(
-		PacketAckEvent,
+func emitPacketAckEvent(packet types.Packet, sourceChannel types.Channel, connection types.Connection, acknowledgement []byte, maker address) {
+	attrs := packetEventBaseAttrs(packet)
+	attrs = append(
+		attrs,
 		"source_channel_id", packet.SourceChannelId.String(),
-		"packet_hash", commitPacketHash(packet).String(),
+		"source_connection_id", sourceChannel.ConnectionId.String(),
+		"source_connection_client_id", connection.ClientId.String(),
+		"destination_channel_id", packet.DestinationChannelId.String(),
+		"destination_channel_version", sourceChannel.Version,
+		"destination_connection_id", connection.CounterpartyConnectionId.String(),
+		"destination_connection_client_id", connection.CounterpartyClientId.String(),
+		"timeout_timestamp", packet.TimeoutTimestamp.String(),
 		"acknowledgement", hexAttr(acknowledgement),
 		"maker", maker.String(),
 	)
+	chain.Emit(PacketAckEvent, attrs...)
 }
 
 func emitPacketTimeoutEvent(packet types.Packet, sourceChannel types.Channel, connection types.Connection) {

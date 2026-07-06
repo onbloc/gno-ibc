@@ -193,7 +193,8 @@ func (v *ucs03ZkgmV1) Send(_ int, rlm realm, channelId types.ChannelId, timeoutT
 		funds = newFunds(sentCoins)
 	}
 
-	if err := v.verifyInternal(0, rlm, funds, channelId, u256.Zero(), instruction); err != nil {
+	err := v.verifyInternal(0, rlm, funds, channelId, u256.Zero(), instruction)
+	if err != nil {
 		panic(err)
 	}
 

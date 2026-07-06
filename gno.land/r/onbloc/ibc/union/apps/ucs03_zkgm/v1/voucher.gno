@@ -1,57 +1,52 @@
 package impl
 
 import (
-	"math"
 	"strings"
 
 	"gno.land/p/demo/tokens/grc20"
 	u256 "gno.land/p/gnoswap/uint256"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
 	"gno.land/r/demo/defi/grc20reg"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
 
-// mintVoucher mints `amount` of the wrapped grc20 voucher for ibcDenom to
-// receiver, creating the voucher token on first use. The grc20 ledger capability
-// lives in the proxy-owned store, so mint/burn rights survive impl upgrades.
-func (v *ucs03ZkgmV1) mintVoucher(_ int, rlm realm, ibcDenom string, image [32]byte, name, symbol string, decimals uint8, receiver string, amount *u256.Uint) error {
-	n, err := amountInt64(amount)
-	if err != nil {
-		return err
-	}
+// canonicalDecimals is the ledger precision a wrapped voucher is capped to.
+// A source token with more decimals overflows the grc20 int64 ledger,
+// so its amounts are downscaled to this precision on the way in,
+// and upscaled back on the way out.
+const canonicalDecimals = 6
 
+// mintVoucher mints amount of the wrapped voucher for ibcDenom to receiver,
+// creating the token on first use.
+// The voucher is created before the mint,
+// so a first-use mint already has the origin decimals bundled in;
+// MintScaled then downscales the origin-precision amount to the ledger.
+func (v *ucs03ZkgmV1) mintVoucher(_ int, rlm realm, ibcDenom string, image [32]byte, name, symbol string, decimals uint8, receiver string, amount *u256.Uint) error {
 	vou := v.getOrCreateVoucher(0, rlm, ibcDenom, image, name, symbol, decimals)
 
-	return vou.Ledger().Mint(address(receiver), n)
+	return vou.MintScaled(address(receiver), amount)
 }
 
 // burnVoucher burns amount of the wrapped voucher held by sender.
+// BurnScaled downscales the origin-precision amount to the ledger.
 func (v *ucs03ZkgmV1) burnVoucher(_ int, rlm realm, ibcDenom, sender string, amount *u256.Uint) error {
-	n, err := amountInt64(amount)
-	if err != nil {
-		return err
-	}
-
 	vou, ok := v.store.GetVoucher(ibcDenom)
 	if !ok {
 		return makeError(errVoucherNotFound, ibcDenom)
 	}
 
-	return vou.Ledger().Burn(address(sender), n)
+	return vou.BurnScaled(address(sender), amount)
 }
 
 // transferVoucher moves amount of the wrapped voucher between holders (market-maker fill).
+// TransferScaled downscales the origin-precision amount to the ledger.
 func (v *ucs03ZkgmV1) transferVoucher(_ int, rlm realm, ibcDenom string, from, to address, amount *u256.Uint) error {
-	n, err := amountInt64(amount)
-	if err != nil {
-		return err
-	}
-
 	vou, ok := v.store.GetVoucher(ibcDenom)
 	if !ok {
 		return makeError(errVoucherNotFound, ibcDenom)
 	}
 
-	return vou.Ledger().Transfer(from, to, n)
+	return vou.TransferScaled(from, to, amount)
 }
 
 // getOrCreateVoucher returns the wrapped grc20 voucher for ibcDenom, creating and registering it on first use.
@@ -66,13 +61,47 @@ func (v *ucs03ZkgmV1) getOrCreateVoucher(_ int, rlm realm, ibcDenom string, imag
 
 	symbol = sanitizeVoucherSymbol(symbol, ibcDenom)
 
-	token, ledger := grc20.NewToken(0, rlm, name, symbol, int(decimals))
+	// The grc20 ledger is int64,
+	// so a source token above canonicalDecimals is created at canonicalDecimals.
+	// The origin decimals are bundled into the voucher (see Voucher.ScaleExp),
+	// so only the local ledger is downscaled; the packet keeps origin precision.
+	ledgerDecimals := decimals
+	if scaleExpForDecimals(decimals) > 0 {
+		ledgerDecimals = uint8(canonicalDecimals)
+	}
+
+	token, ledger := grc20.NewToken(0, rlm, name, symbol, int(ledgerDecimals))
 	grc20reg.Register(cross(rlm), token, strings.TrimPrefix(ibcDenom, ibcDenomPrefix))
 
-	voucher := zkgm.NewVoucher(token, ledger)
+	// originDecimals travels with the token,
+	// so every mint/burn/transfer derives the same scale from it and the ledger token,
+	// with no parallel map to keep in sync.
+	voucher := zkgm.NewVoucher(token, ledger, decimals)
 	v.store.SetVoucher(0, rlm, ibcDenom, voucher)
 
 	return voucher
+}
+
+// ledgerAmountOf downscales an origin-precision amount to the ledger amount for a denom.
+// It delegates to Voucher.ToLedgerAmount when a voucher exists,
+// otherwise it is an identity narrow for native/low-decimal denoms.
+// Used by the token-order pre-flight checks, which hold only a denom string.
+func (v *ucs03ZkgmV1) ledgerAmountOf(ibcDenom string, amount *u256.Uint) (int64, error) {
+	if vou, ok := v.store.GetVoucher(ibcDenom); ok {
+		return vou.ToLedgerAmount(amount)
+	}
+
+	return amountInt64(amount)
+}
+
+// scaleExpOf returns the origin->ledger downscale exponent registered for a
+// denom, or 0 when no voucher exists for it (native and low-decimal tokens).
+func (v *ucs03ZkgmV1) scaleExpOf(ibcDenom string) int {
+	if vou, ok := v.store.GetVoucher(ibcDenom); ok {
+		return vou.ScaleExp()
+	}
+
+	return 0
 }
 
 // sanitizeVoucherSymbol derives a grc20-legal symbol (<=MaxSymbolLen, [A-Za-z0-9_-])
@@ -98,12 +127,22 @@ func sanitizeVoucherSymbol(candidate, ibcDenom string) string {
 	return string(out)
 }
 
-// amountInt64 narrows a uint256 amount to int64 for banker/grc20 APIs, returning
-// an error so an oversized amount surfaces as a failure ack rather than a panic.
-func amountInt64(amount *u256.Uint) (int64, error) {
-	if !amount.IsUint64() || amount.Uint64() > uint64(math.MaxInt64) {
-		return 0, makeError(errAmountOverflow)
+// scaleExpForDecimals returns the origin->ledger downscale exponent for `decimals`:
+// the low-order digits dropped so the ledger holds canonicalDecimals.
+// Tokens at or below canonicalDecimals return 0.
+// Used at creation to cap the ledger,
+// and by the INITIALIZE pre-flight check before a voucher exists.
+func scaleExpForDecimals(decimals uint8) int {
+	if int(decimals) > canonicalDecimals {
+		return int(decimals) - canonicalDecimals
 	}
 
-	return amount.Int64(), nil
+	return 0
+}
+
+// amountInt64 narrows a uint256 to int64 for the native banker/grc20 paths (no scaling).
+// It is the scaleExp-0 case of the shared downscaler,
+// kept as a named helper for the native call sites (funds.sub, sendNative).
+func amountInt64(amount *u256.Uint) (int64, error) {
+	return z.ScaleDownToInt64(amount, 0)
 }

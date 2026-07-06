@@ -282,12 +282,25 @@ func emitPacketRecvEvent(eventType string, packet types.Packet, maker address, m
 	chain.Emit(eventType, attrs...)
 }
 
-func emitWriteAckEvent(packet types.Packet, acknowledgement []byte) {
-	attrs := []string{
+func writeAckEventAttrs(packet types.Packet, destinationChannel types.Channel, connection types.Connection, acknowledgement []byte) []string {
+	attrs := packetEventBaseAttrs(packet)
+	attrs = append(
+		attrs,
+		"source_channel_id", packet.SourceChannelId.String(),
+		"source_connection_id", connection.CounterpartyConnectionId.String(),
+		"source_connection_client_id", connection.CounterpartyClientId.String(),
 		"destination_channel_id", packet.DestinationChannelId.String(),
-		"packet_hash", commitPacketHash(packet).String(),
-	}
+		"destination_channel_version", destinationChannel.Version,
+		"destination_connection_id", destinationChannel.ConnectionId.String(),
+		"destination_connection_client_id", connection.ClientId.String(),
+		"timeout_timestamp", packet.TimeoutTimestamp.String(),
+	)
 	attrs = append(attrs, encodedEventAttrs("acknowledgement", base64Attr(acknowledgement))...)
+	return attrs
+}
+
+func emitWriteAckEvent(packet types.Packet, destinationChannel types.Channel, connection types.Connection, acknowledgement []byte) {
+	attrs := writeAckEventAttrs(packet, destinationChannel, connection, acknowledgement)
 	chain.Emit(WriteAckEvent, attrs...)
 }
 

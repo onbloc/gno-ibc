@@ -202,6 +202,47 @@ func TestPacketEventBaseAttrsSplitPacketData(cur realm, t *testing.T) {
 	}
 }
 
+func TestWriteAckEventAttrs(cur realm, t *testing.T) {
+	resetEventConfigForTest()
+	defer resetEventConfigForTest()
+	setEventConfig(EventConfig{
+		SplitEventAttrs:           true,
+		MaxEventAttrValueLen:      4,
+		MaxPacketDataEventColumns: 3,
+	})
+
+	packet := types.Packet{
+		SourceChannelId:      types.ChannelId(1),
+		DestinationChannelId: types.ChannelId(2),
+		Data:                 []byte{0, 1, 2, 3},
+		TimeoutTimestamp:     types.Timestamp(4),
+	}
+	channel := types.Channel{
+		ConnectionId: types.ConnectionId(3),
+		Version:      "ucs03-zkgm-0",
+	}
+
+	attrs := writeAckEventAttrs(packet, channel, testConnection, []byte{4, 5, 6, 7})
+
+	assertStringSliceEqual(t, attrs, []string{
+		"packet_hash", commitPacketHash(packet).String(),
+		"packet_data_size", "8",
+		"packet_data[0]", "AAEC",
+		"packet_data[1]", "Aw==",
+		"source_channel_id", "1",
+		"source_connection_id", "30",
+		"source_connection_client_id", "20",
+		"destination_channel_id", "2",
+		"destination_channel_version", "ucs03-zkgm-0",
+		"destination_connection_id", "3",
+		"destination_connection_client_id", "10",
+		"timeout_timestamp", "4",
+		"acknowledgement_size", "8",
+		"acknowledgement[0]", "BAUG",
+		"acknowledgement[1]", "Bw==",
+	})
+}
+
 func TestEventAttrColumnsBoundary(cur realm, t *testing.T) {
 	resetEventConfigForTest()
 

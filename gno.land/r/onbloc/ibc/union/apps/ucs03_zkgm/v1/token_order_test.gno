@@ -65,7 +65,7 @@ func TestTokenOrderAckMarketMakerBurnAddressBurnsEscrowedVoucher(cur realm, t *t
 		QuoteAmount: amount,
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	v.increaseChannelBalanceV2(0, cur, channelId, u256.Zero(), order.BaseToken, order.QuoteToken, amount)
+	v.increaseChannelBalanceV2(0, cur, channelId, u256.Zero(), order.BaseToken, order.QuoteToken, amount.Int64())
 
 	orderAck := z.TokenOrderAck{FillType: fillTypeMarketMaker(), MarketMaker: []byte(z.BURN_ADDRESS)}
 	err := v.acknowledgeTokenOrderV2(0, cur, core.NewPacket(channelId, 0, nil, 0), address(""), [32]byte{}, u256.Zero(), order, orderAck, true)
@@ -92,7 +92,7 @@ func TestTokenOrderAckMarketMakerBurnAddressLocksNative(cur realm, t *testing.T)
 		QuoteAmount: amount,
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	v.increaseChannelBalanceV2(0, cur, channelId, u256.Zero(), order.BaseToken, order.QuoteToken, amount)
+	v.increaseChannelBalanceV2(0, cur, channelId, u256.Zero(), order.BaseToken, order.QuoteToken, amount.Int64())
 
 	orderAck := z.TokenOrderAck{FillType: fillTypeMarketMaker(), MarketMaker: []byte(z.BURN_ADDRESS)}
 	err := v.acknowledgeTokenOrderV2(0, cur, core.NewPacket(channelId, 0, nil, 0), address(""), [32]byte{}, u256.Zero(), order, orderAck, true)
@@ -470,7 +470,7 @@ func TestTokenOrderExecuteUnescrowChannelBalanceUnderflow(cur realm, t *testing.
 	quoteToken := []byte("ugnot")
 
 	// decreaseChannelBalanceV2 uses (QuoteToken, BaseToken); seed 50 so the 100-withdraw underflows.
-	v.increaseChannelBalanceV2(0, cur, destChan, u256.Zero(), quoteToken, baseToken, u256.NewUint(50))
+	v.increaseChannelBalanceV2(0, cur, destChan, u256.Zero(), quoteToken, baseToken, int64(50))
 	seeded, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(destChan, u256.Zero(), quoteToken, baseToken))
 	uassert.Equal(t, int64(50), seeded.Int64())
 
@@ -983,7 +983,7 @@ func TestRefundV2(cur realm, t *testing.T) {
 				Sender:      []byte(testAddress("refund-escrow")),
 			},
 			seed: func(v *ucs03ZkgmV1, order z.TokenOrderV2) {
-				v.increaseChannelBalanceV2(0, cur, types.ChannelId(5), u256.Zero(), order.BaseToken, order.QuoteToken, order.BaseAmount)
+				v.increaseChannelBalanceV2(0, cur, types.ChannelId(5), u256.Zero(), order.BaseToken, order.QuoteToken, order.BaseAmount.Int64())
 				uassert.NoError(t, v.mintVoucher(0, cur, string(order.BaseToken), [32]byte{}, "Escrow", "ESC", 0, cur.Address().String(), order.BaseAmount))
 			},
 			wantRecipient: 9,
@@ -1097,7 +1097,7 @@ type protocolFillMintCase struct {
 func TestProtocolFillMint(cur realm, t *testing.T) {
 	validMetadata := mustDecodeTokenMetadata(mustEncodeTokenMetadata(z.TokenMetadata{
 		Implementation: []byte("grc20"),
-		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Test Token", Symbol: "TST", Decimals: 18}),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Test Token", Symbol: "TST", Decimals: 6}),
 	}))
 
 	invalidDecimalsMetadata := mustDecodeTokenMetadata(mustEncodeTokenMetadata(z.TokenMetadata{
@@ -1229,7 +1229,7 @@ func TestProtocolFillMint(cur realm, t *testing.T) {
 				expectedPath, _ := z.UpdateChannelPath(path, uint32(channelId))
 				testStore.SetTokenOrigin(0, cur, wrappedToken, expectedPath)
 				testStore.SetMetadataImageOf(0, cur, wrappedToken, image)
-				uassert.NoError(t, v.mintVoucher(0, cur, wrappedToken, image, "Test Token", "TST", 18, receiver, u256.NewUint(0)))
+				uassert.NoError(t, v.mintVoucher(0, cur, wrappedToken, image, "Test Token", "TST", 6, receiver, u256.NewUint(0)))
 			}
 
 			res, err := v.protocolFillMint(0, cur, channelId, path, baseToken, wrappedToken, address(receiver), address(relayer), tc.baseAmount, tc.quoteAmount, tc.metadata, tc.canDeploy)
@@ -1268,7 +1268,7 @@ func TestProtocolFillMint(cur realm, t *testing.T) {
 
 				uassert.Equal(t, "Test Token", voucherNameOf(wrappedToken))
 				uassert.Equal(t, "TST", voucherSymbolOf(wrappedToken))
-				uassert.Equal(t, 18, voucherDecimalsOf(wrappedToken))
+				uassert.Equal(t, 6, voucherDecimalsOf(wrappedToken))
 			}
 		})
 	}
@@ -1361,7 +1361,7 @@ func TestProtocolFillUnescrowV2(cur realm, t *testing.T) {
 			uassert.NoError(t, v.mintVoucher(0, cur, string(quoteToken), [32]byte{}, "", "", 0, cur.Address().String(), tc.initialBalance))
 
 			// Set up channel balance: decreaseChannelBalanceV2 uses (quote, base) order
-			v.increaseChannelBalanceV2(0, cur, channelId, path, quoteToken, baseToken, tc.initialBalance)
+			v.increaseChannelBalanceV2(0, cur, channelId, path, quoteToken, baseToken, tc.initialBalance.Int64())
 
 			res, err := v.protocolFillUnescrowV2(0, cur, channelId, path, baseToken, string(quoteToken), address(receiver), address(relayer), tc.baseAmount, tc.quoteAmount)
 

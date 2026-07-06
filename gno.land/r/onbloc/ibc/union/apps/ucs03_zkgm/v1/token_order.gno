@@ -33,10 +33,16 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channel
 	switch order.Kind {
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
 		baseDenom := string(order.BaseToken)
+
+		baseTokenLedgerAmount, err := v.ledgerAmountOf(baseDenom, order.BaseAmount)
+		if err != nil {
+			return err
+		}
+
 		// reference verify_token_order_v2 increases the channel balance before
 		// escrowing the funds (contract.rs L511-543); rate limiting happens only
 		// on the receive/execute side, never here.
-		v.increaseChannelBalanceV2(0, rlm, channelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
+		v.increaseChannelBalanceV2(0, rlm, channelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount)
 
 		if err := v.localTokenEscrow(0, rlm, baseDenom, rlm.Previous().Address().String(), funds, order.BaseAmount); err != nil {
 			return err
@@ -193,18 +199,10 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2309-L2413
 func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.ChannelId, path *u256.Uint, baseToken []byte, wrappedToken string, receiver address, relayer address, baseAmount *u256.Uint, quoteAmount *u256.Uint, metadata *z.TokenMetadata, canDeploy bool) (types.RecvPacketResult, error) {
 	// fee = base - quote; reject a quote that exceeds base instead of wrapping
-	// around to a near-2^256 fee that would only later trip amountInt64.
+	// around to a near-2^256 fee that would only later trip the amount checks.
 	fee, underflow := u256.Zero().SubOverflow(baseAmount, quoteAmount)
 	if underflow {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), makeError(errTokenOrderFeeUnderflow)
-	}
-
-	if _, err := amountInt64(quoteAmount); err != nil {
-		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
-	}
-
-	if _, err := amountInt64(fee); err != nil {
-		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
 	// A deployable initialize carries the token metadata (name/symbol/decimals);
@@ -213,7 +211,16 @@ func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.Channel
 
 	name, symbol := "", ""
 
-	var decimals uint8
+	var (
+		decimals uint8
+
+		// Bound-check the amounts against the int64 ledger after downscaling.
+		// A deploying initialize derives the scale from the declared decimals,
+		// an escrow into an existing voucher from its persisted scale.
+		// The mint below re-derives the same scale,
+		// so a non-divisible or oversized amount fails gracefully here before any state write.
+		scaleExp int
+	)
 
 	if canDeploy && metadata != nil {
 		image = z.MetadataImage(*metadata)
@@ -224,6 +231,18 @@ func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.Channel
 		}
 
 		name, symbol, decimals = ti.Name, ti.Symbol, ti.Decimals
+
+		scaleExp = scaleExpForDecimals(decimals)
+	} else {
+		scaleExp = v.scaleExpOf(wrappedToken)
+	}
+
+	if _, err := z.ScaleDownToInt64(quoteAmount, scaleExp); err != nil {
+		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
+	}
+
+	if _, err := z.ScaleDownToInt64(fee, scaleExp); err != nil {
+		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
 	_, hasForeignToken := v.store.GetForeignToken(wrappedToken)
@@ -283,15 +302,19 @@ func (v *ucs03ZkgmV1) protocolFillUnescrowV2(_ int, rlm realm, channelId types.C
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), makeError(errTokenOrderFeeUnderflow)
 	}
 
-	if _, err := amountInt64(baseAmount); err != nil {
+	if _, err := v.ledgerAmountOf(quoteTokenStr, quoteAmount); err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
-	if _, err := amountInt64(quoteAmount); err != nil {
+	if _, err := v.ledgerAmountOf(quoteTokenStr, fee); err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
-	if _, err := amountInt64(fee); err != nil {
+	// The released asset is quoteToken, and base/quote/fee share its precision.
+	// The channel balance records the vault (ledger) amount, so derive it from
+	// base; quote/fee are bound-checked against the int64 ledger (0 for native).
+	baseTokenLedgerAmount, err := v.ledgerAmountOf(quoteTokenStr, baseAmount)
+	if err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
@@ -299,7 +322,7 @@ func (v *ucs03ZkgmV1) protocolFillUnescrowV2(_ int, rlm realm, channelId types.C
 	// L2437-2444); decreaseChannelBalanceV2 rejects an underflow internally. The
 	// quote/base tokens are swapped into the balance key as union does (the EVM
 	// quoteToken occupies the baseToken slot and vice versa).
-	if err := v.decreaseChannelBalanceV2(0, rlm, channelId, reversedPath, []byte(quoteTokenStr), baseToken, baseAmount); err != nil {
+	if err := v.decreaseChannelBalanceV2(0, rlm, channelId, reversedPath, []byte(quoteTokenStr), baseToken, baseTokenLedgerAmount); err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
@@ -361,7 +384,7 @@ func (v *ucs03ZkgmV1) marketMakerFillV2(_ int, rlm realm, relayer address, relay
 		return core.NewRecvPacketResult(types.PacketStatusSuccess, types.CloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 
-	if _, err := amountInt64(order.QuoteAmount); err != nil {
+	if _, err := v.ledgerAmountOf(quoteDenom, order.QuoteAmount); err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
@@ -438,14 +461,18 @@ func (v *ucs03ZkgmV1) refundV2(_ int, rlm realm, path *u256.Uint, sourceChannelI
 // releases native tokens from the proxy escrow otherwise. Shared by refundV2 and
 // the market-maker fill branch of acknowledgeTokenOrderV2.
 func (v *ucs03ZkgmV1) settleEscrowedV2(_ int, rlm realm, sourceChannelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2, recipient string) error {
-	if _, err := amountInt64(order.BaseAmount); err != nil {
+	// Base is released as the local baseToken; the channel balance records the
+	// vault (ledger) amount for that denom (0-scale for native), matching
+	// localTokenUnescrow.
+	baseTokenLedgerAmount, err := v.ledgerAmountOf(string(order.BaseToken), order.BaseAmount)
+	if err != nil {
 		return err
 	}
 
 	// reference decreases the escrowed balance before unescrowing (refund_v2
 	// contract.rs L894-902 / ack L1021-1028); decreaseChannelBalanceV2 rejects an
 	// underflow internally.
-	if err := v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
+	if err := v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount); err != nil {
 		return err
 	}
 
@@ -458,7 +485,13 @@ func (v *ucs03ZkgmV1) settleEscrowedV2(_ int, rlm realm, sourceChannelId types.C
 // token as burned instead of releasing it to the maker.
 // Vouchers are supply-burned; native coins are kept locked in proxy escrow.
 func (v *ucs03ZkgmV1) burnEscrowedV2(_ int, rlm realm, sourceChannelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
-	if err := v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
+	// Channel balance records the vault (ledger) amount for the base denom.
+	baseTokenLedgerAmount, err := v.ledgerAmountOf(string(order.BaseToken), order.BaseAmount)
+	if err != nil {
+		return err
+	}
+
+	if err := v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount); err != nil {
 		return err
 	}
 

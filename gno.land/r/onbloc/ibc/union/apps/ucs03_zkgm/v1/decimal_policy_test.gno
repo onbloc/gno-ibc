@@ -1,9 +1,5 @@
 package impl
 
-// decimal_policy_test.gno exercises token_order.gno's decimal-agnostic accounting:
-// BaseAmount is preserved verbatim through lock/mint/refund regardless of the
-// wrapped token's declared decimals, and out-of-range decimals/amounts fail closed.
-
 import (
 	"chain"
 	"math"
@@ -17,10 +13,14 @@ import (
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
-func TestInitializeDecimalsAgnosticAccounting(cur realm, t *testing.T) {
+func scaledWire(whole uint64, decimals uint8) *u256.Uint {
+	return u256.Zero().Mul(u256.NewUint(whole), z.Pow10(scaleExpForDecimals(decimals)))
+}
+
+func TestInitializeDownscalesToCanonical(cur realm, t *testing.T) {
 	v := newTestImpl()
 
-	const N = uint64(77)
+	const whole = uint64(77)
 	base := []byte("uatom")
 	relayer := address(testAddress("dag-rly"))
 
@@ -41,19 +41,76 @@ func TestInitializeDecimalsAgnosticAccounting(cur realm, t *testing.T) {
 		})
 		denom := z.PredictWrappedTokenV2(u256.NewUint(tc.path), tc.dest, base, z.MetadataImage(mustDecodeTokenMetadata(meta)))
 		rx := testAddress(tc.rxSuffix)
+		// Wire carries source-precision units; the ledger holds them downscaled to
+		// canonicalDecimals, so `whole` canonical units mint regardless of decimals.
+		wire := scaledWire(whole, tc.decimals)
 		res, err := v.executeTokenOrderV2(0, cur,
 			core.NewPacket(types.ChannelId(1), types.ChannelId(tc.dest), nil, 0),
 			relayer, nil, [32]byte{}, u256.NewUint(tc.path),
 			z.TokenOrderV2{
 				Sender: []byte("s"), Receiver: []byte(rx), BaseToken: base,
-				BaseAmount: u256.NewUint(N), QuoteToken: []byte(denom), QuoteAmount: u256.NewUint(N),
+				BaseAmount: wire, QuoteToken: []byte(denom), QuoteAmount: wire,
 				Kind: z.TOKEN_ORDER_KIND_INITIALIZE, Metadata: meta,
 			}, false)
 		uassert.NoError(t, err)
 		uassert.True(t, res.Status == types.PacketStatusSuccess)
-		uassert.Equal(t, int64(N), voucherBalanceOf(denom, address(rx)))
-		uassert.Equal(t, int(tc.decimals), voucherDecimalsOf(denom))
+		uassert.Equal(t, int64(whole), voucherBalanceOf(denom, address(rx)))
+
+		expDecimals := int(tc.decimals)
+		if expDecimals > canonicalDecimals {
+			expDecimals = canonicalDecimals
+		}
+		uassert.Equal(t, expDecimals, voucherDecimalsOf(denom))
 	}
+}
+
+func TestInitializeIndivisibleAmountFailsClosedNoMint(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "IDV", Symbol: "IDV", Decimals: 18}),
+	})
+	const destChan = types.ChannelId(155)
+	ibcDenom := z.PredictWrappedTokenV2(u256.Zero(), uint32(destChan), []byte("uatom"), z.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
+	rx := testAddress("idv-rx")
+
+	// 77 raw units carry precision below the 6-dec ledger for an 18-dec token, so
+	// the fill is rejected rather than silently truncating the low-order digits.
+	data := mustZkgmPacketBytes(batchMustOrderInstruction(z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(rx),
+		BaseToken:   []byte("uatom"),
+		BaseAmount:  u256.NewUint(77),
+		QuoteToken:  []byte(ibcDenom),
+		QuoteAmount: u256.NewUint(77),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    metaBytes,
+	}))
+	packet := core.NewPacket(types.ChannelId(1), destChan, data, 0)
+
+	testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
+	res := v.OnRecvPacket(0, cur, packet, address(testAddress("idv-rly")), nil)
+
+	uassert.True(t, res.Status == types.PacketStatusFailure)
+	uassert.Equal(t, int64(0), voucherBalanceOf(ibcDenom, address(rx)))
+}
+
+func TestSendBackUpscalesToSourcePrecision(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	// A voucher created from an 18-dec source holds canonical units; sending it
+	// back burns the canonical amount that the source-precision wire divides to.
+	ibcDenom := "ibc/roundtrip-18"
+	holder := testAddress("rt18-holder")
+	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "Round", "RND", 18, holder, scaledWire(50, 18)))
+	uassert.Equal(t, int64(50), voucherBalanceOf(ibcDenom, address(holder)))
+
+	// Burning 30 canonical units requires the source-precision wire amount; the
+	// same 30 units expressed raw (ignoring scale) is rejected.
+	uassert.Error(t, v.burnVoucher(0, cur, ibcDenom, holder, u256.NewUint(30)))
+	uassert.NoError(t, v.burnVoucher(0, cur, ibcDenom, holder, scaledWire(30, 18)))
+	uassert.Equal(t, int64(20), voucherBalanceOf(ibcDenom, address(holder)))
 }
 
 func TestBaseAmountPreservedThroughMint(cur realm, t *testing.T) {
@@ -112,6 +169,45 @@ func TestNativeBaseAmountNotUpscaled(cur realm, t *testing.T) {
 	uassert.True(t, f.isEmpty())
 	bal, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(chanId, u256.Zero(), order.BaseToken, order.QuoteToken))
 	uassert.Equal(t, u256.NewUint(uint64(N)).ToString(), bal.ToString())
+}
+
+// TestChannelBalanceHeldInVaultPrecision locks the precision invariant: escrowing a
+// downscaled 18-dec voucher records the LEDGER/vault amount in the channel balance,
+// 1:1 with the custody that actually moved — NOT the wire amount. This matches
+// Union (outstanding == vault) and keeps the balance directly reconcilable.
+func TestChannelBalanceHeldInVaultPrecision(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	ibcDenom := "ibc/chbal-voucher-18"
+	sender := testAddress("chbal-voucher-sndr")
+	const chanId = types.ChannelId(145)
+
+	// Sender holds 50 canonical (6-dec ledger) units of an 18-dec-origin voucher.
+	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "CB", "CB", 18, sender, scaledWire(50, 18)))
+	uassert.Equal(t, int64(50), voucherBalanceOf(ibcDenom, address(sender)))
+
+	// Escrow 30 canonical units, expressed on the wire as 30 * 10^12.
+	wire := scaledWire(30, 18)
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(ibcDenom),
+		BaseAmount:  wire,
+		QuoteToken:  []byte("ibc/chbal-quote"),
+		QuoteAmount: wire,
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	uassert.NoError(t, v.verifyTokenOrderV2X(cross(cur), newFunds(nil), chanId, u256.Zero(), order))
+
+	// Custody moved the LEDGER amount (30): sender 50 -> 20.
+	uassert.Equal(t, int64(20), voucherBalanceOf(ibcDenom, address(sender)))
+
+	// Channel balance holds the LEDGER amount (30) == the custody that moved,
+	// NOT the wire amount (30 * 10^12).
+	bal, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(chanId, u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.True(t, ok)
+	uassert.Equal(t, "30", bal.ToString())
 }
 
 func TestInitializeOverflowAmountReturnsFailureAckNoMint(cur realm, t *testing.T) {
@@ -190,19 +286,22 @@ func TestVoucherDecimalsWithinLimit(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	rx := testAddress("dec-limit-rx")
-	amt := u256.NewUint(1)
 
 	for _, tc := range []struct {
 		denom    string
 		sym      string
 		decimals uint8
+		expDec   int
 	}{
-		{"ibc/dl-0", "T0", 0},
-		{"ibc/dl-6", "T6", 6},
-		{"ibc/dl-18", "TK", 18}, // MaxDecimals; must succeed.
+		{"ibc/dl-0", "T0", 0, 0},
+		{"ibc/dl-6", "T6", 6, 6},
+		{"ibc/dl-18", "TK", 18, canonicalDecimals}, // MaxDecimals; capped to canonical.
 	} {
+		// One canonical unit expressed in the source precision.
+		amt := scaledWire(1, tc.decimals)
 		uassert.NoError(t, v.mintVoucher(0, cur, tc.denom, [32]byte{}, "T", tc.sym, tc.decimals, rx, amt))
-		uassert.Equal(t, int(tc.decimals), voucherDecimalsOf(tc.denom))
+		uassert.Equal(t, tc.expDec, voucherDecimalsOf(tc.denom))
+		uassert.Equal(t, int64(1), voucherBalanceOf(tc.denom, address(rx)))
 	}
 }
 
@@ -238,19 +337,25 @@ func TestInitializeDecimalsExceedMaxReturnsFailureAck(cur realm, t *testing.T) {
 	uassert.False(t, testStore.HasVoucher(ibcDenom))
 }
 
-func TestReInitializeSameIBCDenomPreservesDecimals(cur realm, t *testing.T) {
+func TestReInitializeSameIBCDenomPreservesScale(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	ibcDenom := "ibc/reint-test"
 	rx := testAddress("reint-rx")
-	amt := u256.NewUint(10)
 
-	// First creation: decimals=18.
-	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "Token", "TKN", 18, rx, amt))
-	uassert.Equal(t, 18, voucherDecimalsOf(ibcDenom))
-
-	// Second call with decimals=6 must reuse the existing voucher without changing it.
-	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "Token", "TKN", 6, rx, amt))
-	uassert.Equal(t, 18, voucherDecimalsOf(ibcDenom))
+	// First creation: decimals=18 caps the ledger to canonicalDecimals and fixes
+	// the scale exponent. 20 canonical units arrive as 20*10^scaleExp on the wire.
+	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "Token", "TKN", 18, rx, scaledWire(20, 18)))
+	uassert.Equal(t, canonicalDecimals, voucherDecimalsOf(ibcDenom))
 	uassert.Equal(t, int64(20), voucherBalanceOf(ibcDenom, address(rx)))
+
+	// A later call with a different decimals argument reuses the existing voucher:
+	// the ledger decimals and the fixed scale are preserved. A raw amount ignoring
+	// that scale is rejected...
+	uassert.Error(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "Token", "TKN", 6, rx, u256.NewUint(10)))
+
+	// ...while a correctly-scaled amount mints 10 more canonical units.
+	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "Token", "TKN", 6, rx, scaledWire(10, 18)))
+	uassert.Equal(t, canonicalDecimals, voucherDecimalsOf(ibcDenom))
+	uassert.Equal(t, int64(30), voucherBalanceOf(ibcDenom, address(rx)))
 }

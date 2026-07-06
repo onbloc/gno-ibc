@@ -1,6 +1,7 @@
 package impl
 
 import (
+	"math"
 	"testing"
 
 	types "gno.land/p/onbloc/ibc/union/types"
@@ -31,7 +32,7 @@ func TestIncreaseChannelBalanceV2(cur realm, t *testing.T) {
 			chanId := types.ChannelId(100 + i)
 			base := []byte("inc-" + tc.name)
 			for _, d := range tc.deposits {
-				v.increaseChannelBalanceV2(0, cur, chanId, path, base, quote, u256.NewUint(d))
+				v.increaseChannelBalanceV2(0, cur, chanId, path, base, quote, int64(d))
 			}
 			bal, ok := balanceOf(t, chanId, path, base, quote)
 			uassert.Equal(t, tc.wantSet, ok)
@@ -53,14 +54,14 @@ func TestIncreaseChannelBalanceV2Overflow(cur realm, t *testing.T) {
 	cases := []struct {
 		name      string
 		seed      *u256.Uint
-		add       *u256.Uint
+		add       int64
 		wantPanic bool
 		wantBal   *u256.Uint
 	}{
-		{"max plus one overflows", maxU256(), u256.NewUint(1), true, maxU256()},
-		{"max plus large overflows", maxU256(), maxU256(), true, maxU256()},
-		{"max plus zero stays max", maxU256(), u256.NewUint(0), false, maxU256()},
-		{"sum to exactly max does not overflow", u256.Zero().Sub(maxU256(), u256.NewUint(5)), u256.NewUint(5), false, maxU256()},
+		{"max plus one overflows", maxU256(), 1, true, maxU256()},
+		{"max plus large overflows", maxU256(), math.MaxInt64, true, maxU256()},
+		{"max plus zero stays max", maxU256(), 0, false, maxU256()},
+		{"sum to exactly max does not overflow", u256.Zero().Sub(maxU256(), u256.NewUint(5)), 5, false, maxU256()},
 	}
 	v := newTestImpl()
 	path := u256.Zero()
@@ -93,8 +94,8 @@ func TestIncreaseChannelBalanceV2Overflow(cur realm, t *testing.T) {
 func TestDecreaseChannelBalanceV2(cur realm, t *testing.T) {
 	cases := []struct {
 		name    string
-		seed    uint64 // 0 => leave entry unset
-		spend   uint64
+		seed    int64 // 0 => leave entry unset
+		spend   int64
 		wantErr bool
 		wantBal uint64
 		wantSet bool
@@ -114,9 +115,9 @@ func TestDecreaseChannelBalanceV2(cur realm, t *testing.T) {
 			chanId := types.ChannelId(200 + i)
 			base := []byte("dec-" + tc.name)
 			if tc.seed != 0 {
-				v.increaseChannelBalanceV2(0, cur, chanId, path, base, quote, u256.NewUint(tc.seed))
+				v.increaseChannelBalanceV2(0, cur, chanId, path, base, quote, tc.seed)
 			}
-			err := v.decreaseChannelBalanceV2(0, cur, chanId, path, base, quote, u256.NewUint(tc.spend))
+			err := v.decreaseChannelBalanceV2(0, cur, chanId, path, base, quote, tc.spend)
 			if tc.wantErr {
 				uassert.Error(t, err)
 			} else {

@@ -22,10 +22,6 @@ func MockClientAddress(cur realm) address {
 	return cur.Address()
 }
 
-func MockClientAddress(cur realm) address {
-	return cur.Address()
-}
-
 // RegisterMockLightClient registers the mock client implementation under
 // MockClientType, unless it is already registered.
 func RegisterMockLightClient(cur realm) {

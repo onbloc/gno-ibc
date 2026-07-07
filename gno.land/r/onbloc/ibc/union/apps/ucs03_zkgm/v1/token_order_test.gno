@@ -698,6 +698,7 @@ func TestTokenOrderExecuteEscrowMintErrorDoesNotSetOrigin(cur realm, t *testing.
 	path := u256.NewUint(11)
 	destChan := uint32(8)
 	quoteDenom := z.PredictWrappedToken(path, destChan, []byte("ugnot"))
+	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T", canonicalDecimals)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte("not-a-valid-address"),
@@ -846,6 +847,7 @@ func TestTokenOrderExecuteEscrowZeroFeeSkipsRelayerMint(cur realm, t *testing.T)
 	relayer := testAddress("zero-fee-relayer")
 	receiver := testAddress("zero-fee-receiver")
 	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T", canonicalDecimals)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -880,6 +882,7 @@ func TestTokenOrderExecuteEscrowZeroQuoteSkipsReceiverMint(cur realm, t *testing
 	relayer := testAddress("zero-quote-relayer")
 	receiver := testAddress("zero-quote-receiver")
 	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T", canonicalDecimals)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -907,6 +910,7 @@ func TestTokenOrderExecuteEscrowZeroAmountSkipsBothMints(cur realm, t *testing.T
 	relayer := testAddress("zero-amt-relayer")
 	receiver := testAddress("zero-amt-receiver")
 	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T", canonicalDecimals)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -924,6 +928,40 @@ func TestTokenOrderExecuteEscrowZeroAmountSkipsBothMints(cur realm, t *testing.T
 	uassert.True(t, res.Status == types.PacketStatusSuccess)
 	uassert.Equal(t, int64(0), voucherBalanceOf(quoteDenom, address(receiver)))
 	uassert.Equal(t, int64(0), voucherBalanceOf(quoteDenom, address(relayer)))
+}
+
+func TestTokenOrderExecuteEscrowUninitializedVoucherReturnsFailureAck(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	path := u256.Zero()
+	const destChan = types.ChannelId(63)
+	receiver := testAddress("uninit-escrow-rx")
+	// No prior INITIALIZE: the wrapped voucher does not exist. A same-quote ESCROW
+	// must not lazily mint it at decimals=0 (an unredeemable orphan whose scale
+	// would then diverge from a later INITIALIZE); it is rejected with a failure
+	// ack so the source refunds.
+	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(receiver),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte(quoteDenom),
+		QuoteAmount: u256.NewUint(100),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
+
+	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("uninit-escrow-rly")), nil, [32]byte{}, path, order, false)
+
+	uassert.NoError(t, err)
+	uassert.True(t, res.Status == types.PacketStatusFailure)
+	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
+	uassert.False(t, testStore.HasVoucher(quoteDenom), "rejected escrow must not create a voucher")
+	uassert.Equal(t, int64(0), voucherBalanceOf(quoteDenom, address(receiver)))
+	_, ok := testStore.GetTokenOrigin(quoteDenom)
+	uassert.False(t, ok, "rejected escrow must not set token origin")
 }
 
 func TestTokenOrderVerifyUnescrowV1PredictionPasses(cur realm, t *testing.T) {

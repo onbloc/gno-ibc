@@ -197,6 +197,7 @@ func TestExecuteBatchRunsTokenOrderThenCall(cur realm, t *testing.T) {
 	relayer := testAddress("batch-exec-relayer")
 	receiver := testAddress("batch-exec-receiver")
 	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T", canonicalDecimals)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),

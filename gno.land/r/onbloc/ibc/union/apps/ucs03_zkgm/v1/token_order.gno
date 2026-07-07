@@ -152,7 +152,18 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 			image = [32]byte{}
 			wrapped = z.PredictWrappedToken(path, destChan, order.BaseToken)
 		}
+
 		hasWrapped = true
+
+		// ESCROW targets an already-deployed wrapped voucher;
+		// the deploying first transfer of a token uses INITIALIZE (which carries the metadata).
+		// A first-seen ESCROW that matches the predicted wrapped denom has no persisted ledger/scale,
+		// so minting would lazily create the voucher at decimals=0 with no origin metadata:
+		// an unredeemable orphan whose scale then diverges from a later INITIALIZE's pre-flight check.
+		// Reject it as an invalid order so the source refunds, mirroring the INITIALIZE invalid-order handling below.
+		if quoteDenom == wrapped && !v.store.HasVoucher(wrapped) {
+			return failureResult(universalErrorAck()), nil
+		}
 	case z.TOKEN_ORDER_KIND_INITIALIZE:
 		// gno requires the metadata preimage to initialize a new wrapped token.
 		if len(order.Metadata) == 0 {

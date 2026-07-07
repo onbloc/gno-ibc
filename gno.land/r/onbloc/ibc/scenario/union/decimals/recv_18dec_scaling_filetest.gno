@@ -5,8 +5,8 @@ package decimals
 // An 18-decimal token (1e18 wei) is received via an INITIALIZE order
 // and minted into the canonical 6-dec ledger,
 // so 1e18 on the wire becomes 1e6 in the ledger.
-// An UNESCROW send then upscales that 1e6 back to 1e18 on the wire,
-// burning the voucher to zero.
+// An UNESCROW send carries 1e18 on the wire, downscales to 1e6 for the ledger burn,
+// and burns the voucher to zero.
 // The invariant is the minted/burned ledger balance:
 // the wire keeps source precision, the ledger holds the int64-safe amount.
 
@@ -20,12 +20,12 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 
+	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
-	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 )
 
 const (
@@ -53,7 +53,7 @@ func main(cur realm) {
 	recvInitialize(cur, channelId, quoteToken, meta)
 	println("")
 
-	println("[SCENARIO] 3. UNESCROW send upscales the 1e6 ledger back to 1e18 on the wire, burning to zero")
+	println("[SCENARIO] 3. UNESCROW send: wire 1e18 downscales to 1e6 ledger burn, leaving zero")
 	unescrowSend(cur, channelId, quoteToken)
 }
 
@@ -170,6 +170,6 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 // [INFO] holder voucher balance: 0 -> 1000000
 // [EXPECTED] minted ledger balance should equal 1000000 (1e18 wire downscaled to 6-dec)
 //
-// [SCENARIO] 3. UNESCROW send upscales the 1e6 ledger back to 1e18 on the wire, burning to zero
+// [SCENARIO] 3. UNESCROW send: wire 1e18 downscales to 1e6 ledger burn, leaving zero
 // [INFO] holder voucher balance: 1000000 -> 0
 // [EXPECTED] UNESCROW send should burn the full 1e6 ledger balance, leaving 0

@@ -453,6 +453,52 @@ func TestCommitmentStore(cur realm, t *testing.T) {
 	}
 }
 
+// SetPacketData / GetPacketData / RemovePacketData are pure payload primitives:
+// set-then-get returns the stored bytes, remove clears them, an unset hash reads
+// as missing, and the getter hands back a clone so a caller cannot mutate stored
+// state. Lifecycle (write on send, remove on ack/timeout) is the impl's concern,
+// tested in core/v1. A distinct hash per case keeps the store singleton isolated.
+func TestPacketDataStore(cur realm, t *testing.T) {
+	cases := []struct {
+		name string
+		run  func(*testing.T)
+	}{
+		{"set then get returns payload", func(t *testing.T) {
+			hash := types.Keccak([]byte("pd-set"))
+			store.SetPacketData(0, cur, hash, []byte("payload-set"))
+
+			got, ok := store.GetPacketData(hash)
+			uassert.True(t, ok)
+			uassert.Equal(t, "payload-set", string(got))
+		}},
+		{"remove clears payload", func(t *testing.T) {
+			hash := types.Keccak([]byte("pd-remove"))
+			store.SetPacketData(0, cur, hash, []byte("payload-remove"))
+			store.RemovePacketData(0, cur, hash)
+
+			_, ok := store.GetPacketData(hash)
+			uassert.False(t, ok)
+		}},
+		{"unset hash reads as missing", func(t *testing.T) {
+			_, ok := store.GetPacketData(types.Keccak([]byte("pd-never")))
+			uassert.False(t, ok)
+		}},
+		{"returned slice is a clone", func(t *testing.T) {
+			hash := types.Keccak([]byte("pd-clone"))
+			store.SetPacketData(0, cur, hash, []byte("payload-clone"))
+
+			got, _ := store.GetPacketData(hash)
+			got[0] = 'X' // mutating the returned copy must not affect the store
+
+			again, _ := store.GetPacketData(hash)
+			uassert.Equal(t, "payload-clone", string(again))
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, tc.run)
+	}
+}
+
 func TestPacketCommitmentStore(cur realm, t *testing.T) {
 	packet := types.NewPacket(1, 2, []byte("data"), 10)
 	batchHash := CommitPacketsHash([]types.Packet{packet})

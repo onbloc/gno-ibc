@@ -94,20 +94,6 @@ func newFunds(sent chain.Coins) *funds {
 	return f
 }
 
-// add adds the given denom and amount to the funds.
-func (f *funds) add(denom string, amount int64) error {
-	coin, ok := f.coins[denom]
-	if !ok {
-		f.coins[denom] = chain.NewCoin(denom, amount)
-		return nil
-	}
-
-	coin.Amount += amount
-	f.coins[denom] = coin
-
-	return nil
-}
-
 // sub deducts amount of denom from the attached funds, mirroring funds.sub(coin)
 // in the reference contract. It errors when the funds do not cover the amount.
 func (f *funds) sub(denom string, amount *u256.Uint) error {

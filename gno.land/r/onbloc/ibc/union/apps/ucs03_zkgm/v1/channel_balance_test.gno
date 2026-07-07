@@ -73,7 +73,7 @@ func TestIncreaseChannelBalanceV2Overflow(cur realm, t *testing.T) {
 			key := ChannelBalanceKeyV2(chanId, path, base, quote)
 			testStore.SetChannelBalanceV2(0, cur, key, tc.seed)
 
-			if tc.wantPanic {
+			if tc.wantErr {
 				uassert.Error(t, v.increaseChannelBalanceV2(0, cur, chanId, path, base, quote, tc.add))
 			} else {
 				uassert.NoError(t, v.increaseChannelBalanceV2(0, cur, chanId, path, base, quote, tc.add))

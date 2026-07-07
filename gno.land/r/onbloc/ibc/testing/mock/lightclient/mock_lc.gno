@@ -16,6 +16,10 @@ const MockClientType = types.ClientType("gno.land/r/onbloc/ibc/testing/mock/ligh
 
 type mockLightClient struct{}
 
+func MockClientAddress(cur realm) address {
+	return cur.Address()
+}
+
 // RegisterMockLightClient registers the mock client implementation under
 // MockClientType, unless it is already registered.
 func RegisterMockLightClient(cur realm) {

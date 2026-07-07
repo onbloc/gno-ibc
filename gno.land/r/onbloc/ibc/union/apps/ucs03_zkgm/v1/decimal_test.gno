@@ -1,20 +1,17 @@
 package impl
 
-// decimal_policy_test.gno exercises token_order.gno's decimal-agnostic accounting:
-// BaseAmount is preserved verbatim through lock/mint/refund regardless of the
-// wrapped token's declared decimals, and out-of-range decimals/amounts fail closed.
-
 import (
 	"chain"
 	"math"
 	"testing"
 
-	types "gno.land/p/onbloc/ibc/union/types"
+	"gno.land/p/nt/uassert/v0"
 
 	u256 "gno.land/p/gnoswap/uint256"
-	"gno.land/p/nt/uassert/v0"
+	"gno.land/p/onbloc/ibc/union/types"
+
 	z "gno.land/p/onbloc/ibc/union/zkgm"
-	core "gno.land/r/onbloc/ibc/union/core"
+	"gno.land/r/onbloc/ibc/union/core"
 )
 
 func TestInitializeDecimalsAgnosticAccounting(cur realm, t *testing.T) {
@@ -114,6 +111,125 @@ func TestNativeBaseAmountNotUpscaled(cur realm, t *testing.T) {
 	uassert.Equal(t, u256.NewUint(uint64(N)).ToString(), bal.ToString())
 }
 
+func TestAcknowledgeNativeOrderWithMetadataDoesNotTrimEscrow(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	amount := u256.NewUint(1_000_000_000_000)
+	meta := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "USDC", Symbol: "USDC", Decimals: 18}),
+	})
+	order := z.TokenOrderV2{
+		Sender:      []byte(testAddress("ack-native-sender")),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  amount,
+		QuoteToken:  []byte("ibc/ack-native"),
+		QuoteAmount: amount,
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    meta,
+	}
+	key := ChannelBalanceKeyV2(types.ChannelId(170), u256.Zero(), order.BaseToken, order.QuoteToken)
+	testStore.SetChannelBalanceV2(0, cur, key, amount)
+
+	innerAck, err := z.EncodeTokenOrderAck(z.TokenOrderAck{
+		FillType:    fillTypeMarketMaker(),
+		MarketMaker: []byte(z.BURN_ADDRESS),
+	})
+	uassert.NoError(t, err)
+
+	err = v.acknowledgeInternal(
+		0, cur,
+		core.NewPacket(types.ChannelId(170), types.ChannelId(171), nil, 0),
+		address(testAddress("ack-native-relayer")),
+		[32]byte{}, u256.Zero(), batchMustOrderInstruction(order), true, innerAck,
+	)
+	uassert.NoError(t, err)
+
+	bal, _ := testStore.GetChannelBalanceV2(key)
+	uassert.Equal(t, u256.Zero().ToString(), bal.ToString())
+
+	locked, ok := testStore.GetLockedNative("ugnot")
+	uassert.True(t, ok)
+	uassert.Equal(t, amount.ToString(), locked.ToString())
+}
+
+func TestTimeoutNativeOrderWithMetadataDoesNotTrimEscrow(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	amount := u256.NewUint(2_000_000_000_000)
+	meta := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "USDC", Symbol: "USDC", Decimals: 18}),
+	})
+	order := z.TokenOrderV2{
+		Sender:      []byte(testAddress("timeout-sender")),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  amount,
+		QuoteToken:  []byte("ibc/timeout-native"),
+		QuoteAmount: amount,
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    meta,
+	}
+	key := ChannelBalanceKeyV2(types.ChannelId(172), u256.Zero(), order.BaseToken, order.QuoteToken)
+	testStore.SetChannelBalanceV2(0, cur, key, amount)
+	testing.IssueCoins(cur.Address(), chain.NewCoins(chain.NewCoin("ugnot", 2_000_000_000_000)))
+
+	err := v.timeoutInternal(
+		0, cur,
+		core.NewPacket(types.ChannelId(172), types.ChannelId(173), nil, 0),
+		[32]byte{}, u256.Zero(), batchMustOrderInstruction(order),
+	)
+	uassert.NoError(t, err)
+
+	bal, _ := testStore.GetChannelBalanceV2(key)
+	uassert.Equal(t, u256.Zero().ToString(), bal.ToString())
+}
+
+// TestVerifyAndTimeoutNativeInitializeRoundTrip guards against the bug where
+// verifyInternal uses scaleDownIncomingOrder (which applies metadata.Decimals) on
+// the send path: escrow would store a divided amount while timeout would refund the
+// original, causing a balance mismatch. verifyInternal must use scaleDownOutboundOrder
+// so that native BaseToken amounts are stored and refunded at the same value.
+func TestVerifyAndTimeoutNativeInitializeRoundTrip(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	amount := u256.NewUint(1_000_000_000_000)
+	meta := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "USDC", Symbol: "USDC", Decimals: 18}),
+	})
+	order := z.TokenOrderV2{
+		Sender:      []byte(testAddress("vt-sender")),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  amount,
+		QuoteToken:  []byte("ibc/vt-native"),
+		QuoteAmount: amount,
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    meta,
+	}
+	instruction := batchMustOrderInstruction(order)
+	const chanId = types.ChannelId(190)
+
+	testing.IssueCoins(cur.Address(), chain.NewCoins(chain.NewCoin("ugnot", 1_000_000_000_000)))
+	f := newFunds(chain.NewCoins(chain.NewCoin("ugnot", 1_000_000_000_000)))
+	err := v.verifyInternal(0, cur, f, chanId, u256.Zero(), instruction)
+	uassert.NoError(t, err)
+
+	key := ChannelBalanceKeyV2(chanId, u256.Zero(), order.BaseToken, order.QuoteToken)
+	bal, _ := testStore.GetChannelBalanceV2(key)
+	uassert.Equal(t, amount.ToString(), bal.ToString())
+
+	err = v.timeoutInternal(
+		0, cur,
+		core.NewPacket(chanId, types.ChannelId(191), nil, 0),
+		[32]byte{}, u256.Zero(), instruction,
+	)
+	uassert.NoError(t, err)
+
+	bal, _ = testStore.GetChannelBalanceV2(key)
+	uassert.Equal(t, u256.Zero().ToString(), bal.ToString())
+}
+
 func TestInitializeOverflowAmountReturnsFailureAckNoMint(cur realm, t *testing.T) {
 	v := newTestImpl()
 
@@ -177,11 +293,6 @@ func TestSendBaseAmountInt64Boundary(cur realm, t *testing.T) {
 		QuoteAmount: overAmt,
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
-	// An int64-overflowing base amount is rejected. The reference increases the
-	// channel balance before escrowing (contract.rs L511-543), so the failing
-	// escrow leaves a transient balance entry; in production the verify error
-	// aborts the whole Send tx (impl.gno panics), rolling that write back. Here
-	// verify is called in isolation, so we only assert the rejection.
 	err = v.verifyTokenOrderV2(0, cur, newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), chanB, u256.Zero(), orderB)
 	uassert.Error(t, err)
 }
@@ -199,7 +310,7 @@ func TestVoucherDecimalsWithinLimit(cur realm, t *testing.T) {
 	}{
 		{"ibc/dl-0", "T0", 0},
 		{"ibc/dl-6", "T6", 6},
-		{"ibc/dl-18", "TK", 18}, // MaxDecimals; must succeed.
+		{"ibc/dl-18", "TK", 18},
 	} {
 		uassert.NoError(t, v.mintVoucher(0, cur, tc.denom, [32]byte{}, "T", tc.sym, tc.decimals, rx, amt))
 		uassert.Equal(t, int(tc.decimals), voucherDecimalsOf(tc.denom))
@@ -245,12 +356,119 @@ func TestReInitializeSameIBCDenomPreservesDecimals(cur realm, t *testing.T) {
 	rx := testAddress("reint-rx")
 	amt := u256.NewUint(10)
 
-	// First creation: decimals=18.
 	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "Token", "TKN", 18, rx, amt))
 	uassert.Equal(t, 18, voucherDecimalsOf(ibcDenom))
 
-	// Second call with decimals=6 must reuse the existing voucher without changing it.
 	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "Token", "TKN", 6, rx, amt))
 	uassert.Equal(t, 18, voucherDecimalsOf(ibcDenom))
 	uassert.Equal(t, int64(20), voucherBalanceOf(ibcDenom, address(rx)))
+}
+
+func TestScaleDownAmount(cur realm, t *testing.T) {
+	tests := []struct {
+		name          string
+		tokenDecimals uint8
+		amount        uint64
+		expectedLocal uint64
+		expectError   string
+	}{
+		{"with dust", 18, 123456700000000000, 0, "decimal dust is not allowed"},
+		{"no dust", 18, 1000000000000000000, 1000000, ""},
+		{"target decimals only", 6, 1234560, 1234560, ""},
+		{"less than target decimals", 4, 12345, 12345, ""},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			amount := u256.NewUint(tc.amount)
+			got, err := scaleDownAmount(tc.tokenDecimals, amount)
+			if tc.expectError != "" {
+				uassert.ErrorContains(t, err, tc.expectError)
+				return
+			}
+
+			uassert.NoError(t, err)
+			uassert.Equal(t, u256.NewUint(tc.expectedLocal).ToString(), got.ToString())
+		})
+	}
+}
+
+func TestParseTokenInfo(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	denom := "ibc/ABCDEF"
+	v.mintVoucher(0, cur, denom, [32]byte{}, "Test Voucher", "TVST", 18, "sender", u256.NewUint(1000000))
+
+	tests := []struct {
+		denom          string
+		expectVoucher  bool
+		expectDecimals uint8
+	}{
+		{denom, true, 18},
+		{"ugnot", false, 0},
+		{"unknown", false, 0},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.denom, func(t *testing.T) {
+			info := v.parseTokenInfo(0, cur, []byte(tc.denom))
+			uassert.Equal(t, tc.expectVoucher, info.isVoucher)
+			if tc.expectVoucher {
+				uassert.Equal(t, tc.expectDecimals, info.decimals)
+			}
+		})
+	}
+}
+
+func TestScaleDownAmountMaxInt64Boundary(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	denom := "ibc/max64-boundary"
+	sender := testAddress("max64-sender")
+	v.mintVoucher(0, cur, denom, [32]byte{}, "Large", "LARGE", 18, sender, u256.NewUint(9223372036854775807))
+
+	tests := []struct {
+		name        string
+		baseAmount  uint64
+		expectLocal uint64
+		expectError string
+	}{
+		{
+			name:        "MaxInt64 - 18dec rejects dust",
+			baseAmount:  9223372036854775807,
+			expectError: "decimal dust is not allowed",
+		},
+		{
+			name:        "MaxInt64/2 - 18dec rejects dust",
+			baseAmount:  4611686018427387903,
+			expectError: "decimal dust is not allowed",
+		},
+		{
+			name:        "Near MaxInt64 - 18dec converts cleanly",
+			baseAmount:  9000000000000000000,
+			expectLocal: 9000000,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			amount := u256.NewUint(tc.baseAmount)
+			got, err := scaleDownAmount(18, amount)
+			if tc.expectError != "" {
+				uassert.ErrorContains(t, err, tc.expectError)
+				return
+			}
+
+			uassert.NoError(t, err)
+			uassert.Equal(t, u256.NewUint(tc.expectLocal).ToString(), got.ToString())
+		})
+	}
+}
+
+func mustEncodeTokenOrderV2(order z.TokenOrderV2) []byte {
+	out, err := z.EncodeTokenOrderV2(order)
+	if err != nil {
+		panic(err)
+	}
+	return out
 }

@@ -1,6 +1,7 @@
 package zkgm
 
 import (
+	"gno.land/p/demo/tokens/grc20"
 	u256 "gno.land/p/gnoswap/uint256"
 	types "gno.land/p/onbloc/ibc/union/types"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
@@ -60,11 +61,17 @@ type IStore interface {
 	AddLockedNative(_ int, rlm realm, denom string, amount *u256.Uint)
 	GetLockedNative(denom string) (*u256.Uint, bool)
 
+	SetLocalGRC20Token(_ int, rlm realm, denom string, token *grc20.Token)
+	GetLocalGRC20Token(denom string) (*grc20.Token, bool)
+
 	SetMetadataImageOf(_ int, rlm realm, denom string, image [32]byte)
 	GetMetadataImageOf(denom string) ([32]byte, bool)
 
 	SetForeignToken(_ int, rlm realm, denom string, token []byte)
 	GetForeignToken(denom string) ([]byte, bool)
+
+	SetTokenDecimals(_ int, rlm realm, denom string, decimals uint8)
+	GetTokenDecimals(denom string) (uint8, bool)
 
 	SetInFlightPacket(_ int, rlm realm, packetHash string, parent types.Packet)
 	GetInFlightPacket(packetHash string) (types.Packet, bool)

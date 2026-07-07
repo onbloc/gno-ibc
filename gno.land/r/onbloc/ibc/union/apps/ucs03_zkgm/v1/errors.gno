@@ -47,8 +47,11 @@ const (
 	errBatchAckCountMismatch   = "batch ack count mismatch"
 
 	// voucher
-	errAmountOverflow  = "amount overflows int64"
-	errVoucherNotFound = "voucher not found"
+	errAmountOverflow           = "amount overflows int64"
+	errZeroAmount               = "amount must be non-zero"
+	errVoucherNotFound          = "voucher not found"
+	errUnsupportedTokenDecimals = "unsupported token decimals"
+	errDecimalDust              = "zkgm/token_order: decimal dust is not allowed"
 
 	// rate limit
 	errTokenBucketAbsent = "token bucket is absent"
@@ -57,14 +60,6 @@ const (
 	errCoinMismatch            = "zkgm/coins: sent coin mismatch"
 	errChannelBalanceUnderflow = "zkgm/channel_balance: underflow"
 	errChannelBalanceOverflow  = "zkgm/channel_balance: overflow"
-
-	// errGRC20Unsupported is returned when a token order's base denom is a GRC20
-	// token registered in grc20reg (other than zkgm's own ibc/ vouchers). zkgm only
-	// escrows native coins (pushed via -send) and the vouchers it issues; escrowing
-	// a foreign GRC20 would require an Approve/TransferFrom pull path that is not yet
-	// implemented. Detected explicitly so it fails with a clear message instead of
-	// being misclassified as native and surfacing errCoinMismatch.
-	errGRC20Unsupported = "grc20 token escrow not yet supported"
 
 	// ErrSpoofedRealm guards non-crossing (_ int, rlm realm, ...) entrypoints: the
 	// passed rlm must be the current crossing frame, not a forged or stale token.

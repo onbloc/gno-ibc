@@ -581,7 +581,7 @@ func (v *ucs03ZkgmV1) localGRC20Escrow(_ int, rlm realm, token *grc20.Token, sen
 
 	afterBalance := teller.BalanceOf(rlm.Address())
 
-	if afterBalance-beforeBalance == n {
+	if afterBalance-beforeBalance != n {
 		return makeError(errInvalidTokenOrderTransferAmount)
 	}
 
@@ -607,7 +607,7 @@ func (v *ucs03ZkgmV1) localGRC20Unescrow(_ int, rlm realm, token *grc20.Token, r
 
 	afterBalance := teller.BalanceOf(rlm.Address())
 
-	if beforeBalance-afterBalance == n {
+	if beforeBalance-afterBalance != n {
 		return makeError(errInvalidTokenOrderTransferAmount)
 	}
 

@@ -80,15 +80,15 @@ func parseCoins(s string) chain.Coins {
 // (the message's attached coins). It is decremented as each token order consumes
 // its BaseAmount during verification.
 type funds struct {
-	assets map[string]chain.Coin
+	coins map[string]chain.Coin
 }
 
 // newFunds snapshots the attached coins into a mutable spend budget.
 func newFunds(sent chain.Coins) *funds {
-	f := &funds{assets: make(map[string]chain.Coin)}
+	f := &funds{coins: make(map[string]chain.Coin)}
 
 	for _, coin := range sent {
-		f.assets[coin.Denom] = coin
+		f.coins[coin.Denom] = coin
 	}
 
 	return f
@@ -96,14 +96,14 @@ func newFunds(sent chain.Coins) *funds {
 
 // add adds the given denom and amount to the funds.
 func (f *funds) add(denom string, amount int64) error {
-	coin, ok := f.assets[denom]
+	coin, ok := f.coins[denom]
 	if !ok {
-		f.assets[denom] = chain.NewCoin(denom, amount)
+		f.coins[denom] = chain.NewCoin(denom, amount)
 		return nil
 	}
 
 	coin.Amount += amount
-	f.assets[denom] = coin
+	f.coins[denom] = coin
 
 	return nil
 }
@@ -116,7 +116,7 @@ func (f *funds) sub(denom string, amount *u256.Uint) error {
 		return err
 	}
 
-	coin, ok := f.assets[denom]
+	coin, ok := f.coins[denom]
 	if !ok {
 		return makeError(errCoinMismatch)
 	}
@@ -126,14 +126,14 @@ func (f *funds) sub(denom string, amount *u256.Uint) error {
 	}
 
 	coin.Amount -= want
-	f.assets[denom] = coin
+	f.coins[denom] = coin
 
 	return nil
 }
 
 // isEmpty reports whether every attached coin has been fully consumed.
 func (f *funds) isEmpty() bool {
-	for _, coin := range f.assets {
+	for _, coin := range f.coins {
 		if coin.Amount != 0 {
 			return false
 		}

@@ -41,9 +41,10 @@ func ScaleDownToInt64(amount *u256.Uint, scaleExp int) (int64, error) {
 		value = quotient
 	}
 
-	if !value.IsUint64() || value.Uint64() > uint64(math.MaxInt64) {
+	valueUint64, overflow := value.Uint64WithOverflow()
+	if overflow || valueUint64 > uint64(math.MaxInt64) {
 		return 0, ErrAmountOverflow
 	}
 
-	return int64(value.Uint64()), nil
+	return int64(valueUint64), nil
 }

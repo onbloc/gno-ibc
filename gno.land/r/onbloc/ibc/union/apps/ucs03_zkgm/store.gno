@@ -73,8 +73,11 @@ type Store struct {
 	inFlightPacket     *bptree.BPTree // packetHash -> types.Packet (parent)
 	tokenBucket        *bptree.BPTree // denom -> *tb.TokenBucket
 	vouchers           *bptree.BPTree // ibcDenom -> *Voucher
+	// lockedTokenAmounts is managed alongside vouchers: both track non-escrow
+	// custody of a base token (native or grc20) that zkgm cannot supply-burn,
+	// as opposed to vouchers, which zkgm mints/burns directly.
+	lockedTokenAmounts *bptree.BPTree // denom -> *u256.Uint (permanently locked base token)
 	receivers          *bptree.BPTree // pkgPath -> z.Zkgmable
-	lockedNative       *bptree.BPTree // denom -> *u256.Uint (permanently locked native)
 	rateLimitDisabled  bool
 }
 
@@ -87,8 +90,8 @@ func NewStore() *Store {
 		inFlightPacket:     bptree.NewBPTree32(),
 		tokenBucket:        bptree.NewBPTree32(),
 		vouchers:           bptree.NewBPTree32(),
+		lockedTokenAmounts: bptree.NewBPTree32(),
 		receivers:          bptree.NewBPTree32(),
-		lockedNative:       bptree.NewBPTree32(),
 		// Rate limiting is opt-in: enabled per-denom by an admin who first
 		// configures a token bucket (see SetBucketConfig). With it enabled, a denom
 		// without a bucket is rejected (union TokenBucketIsAbsent), so it must stay
@@ -140,45 +143,6 @@ func (s *Store) GetChannelBalanceV2(key string) (*u256.Uint, bool) {
 	}
 
 	return v.(*u256.Uint), true
-}
-
-// AddLockedNative tracks native escrow locked after burn-address settlement.
-// Locked native remains in proxy escrow but is excluded from channel balances.
-// Invariant: proxy balance == sum(channelBalanceV2) + sum(lockedNative).
-func (s *Store) AddLockedNative(_ int, rlm realm, denom string, amount *u256.Uint) {
-	assertIsRlmCurrent(0, rlm)
-
-	totalLockedAmount := u256.Zero()
-
-	lockedNativeAmount, exists := s.GetLockedNative(denom)
-	if exists && lockedNativeAmount != nil {
-		totalLockedAmount = u256.Zero().Set(lockedNativeAmount)
-	}
-
-	// Reject a wraparound past 2^256-1 rather than silently storing a smaller
-	// totalLockedAmount, which would break the proxy balance invariant.
-	// Astronomically unreachable for real coin supplies, but guarded for safety.
-	totalLockedAmount, overflow := u256.Zero().AddOverflow(totalLockedAmount, amount)
-	if overflow {
-		panic(ErrLockedNativeOverflow)
-	}
-
-	s.lockedNative.Set(denom, totalLockedAmount.Clone())
-}
-
-// GetLockedNative returns the total native permanently locked for a denom.
-func (s *Store) GetLockedNative(denom string) (*u256.Uint, bool) {
-	v, ok := s.lockedNative.Get(denom)
-	if !ok {
-		return nil, false
-	}
-
-	lockedNativeAmount, ok := v.(*u256.Uint)
-	if !ok {
-		panic(ErrInterfaceConversion)
-	}
-
-	return lockedNativeAmount, true
 }
 
 // SetMetadataImageOf records a wrapped denom's metadata image.
@@ -283,6 +247,46 @@ func (s *Store) GetVoucher(ibcDenom string) (*Voucher, bool) {
 // HasVoucher reports whether a voucher exists for an ibc denom.
 func (s *Store) HasVoucher(ibcDenom string) bool {
 	return s.vouchers.Has(ibcDenom)
+}
+
+// AddLockedTokenAmount tracks base-token escrow locked after burn-address settlement
+// (native or a registered grc20; a voucher is supply-burned instead via burnVoucher).
+// Locked base remains in proxy escrow but is excluded from channel balances.
+// Invariant: proxy balance == sum(channelBalanceV2) + sum(lockedTokenAmounts).
+func (s *Store) AddLockedTokenAmount(_ int, rlm realm, denom string, amount *u256.Uint) {
+	assertIsRlmCurrent(0, rlm)
+
+	totalLockedAmount := u256.Zero()
+
+	lockedTokenAmount, exists := s.GetLockedTokenAmount(denom)
+	if exists && lockedTokenAmount != nil {
+		totalLockedAmount = u256.Zero().Set(lockedTokenAmount)
+	}
+
+	// Reject a wraparound past 2^256-1 rather than silently storing a smaller
+	// totalLockedAmount, which would break the proxy balance invariant.
+	// Astronomically unreachable for real coin supplies, but guarded for safety.
+	totalLockedAmount, overflow := u256.Zero().AddOverflow(totalLockedAmount, amount)
+	if overflow {
+		panic(ErrLockedTokenAmountOverflow)
+	}
+
+	s.lockedTokenAmounts.Set(denom, totalLockedAmount.Clone())
+}
+
+// GetLockedTokenAmount returns the total base-token amount permanently locked for a denom.
+func (s *Store) GetLockedTokenAmount(denom string) (*u256.Uint, bool) {
+	v, ok := s.lockedTokenAmounts.Get(denom)
+	if !ok {
+		return nil, false
+	}
+
+	lockedTokenAmount, ok := v.(*u256.Uint)
+	if !ok {
+		panic(ErrInterfaceConversion)
+	}
+
+	return lockedTokenAmount, true
 }
 
 // SetReceiver registers a Zkgmable callback target at a package path.

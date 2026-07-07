@@ -21,21 +21,21 @@ const canonicalDecimals = 6
 // The voucher is created before the mint,
 // so a first-use mint already has the origin decimals bundled in;
 // MintScaled then downscales the origin-precision amount to the ledger.
-func (v *ucs03ZkgmV1) mintVoucher(_ int, rlm realm, ibcDenom string, image [32]byte, name, symbol string, decimals uint8, receiver string, amount *u256.Uint) error {
+func (v *ucs03ZkgmV1) mintVoucher(_ int, rlm realm, ibcDenom string, image [32]byte, name, symbol string, decimals uint8, receiver address, amount *u256.Uint) error {
 	vou := v.getOrCreateVoucher(0, rlm, ibcDenom, image, name, symbol, decimals)
 
-	return vou.MintScaled(address(receiver), amount)
+	return vou.MintScaled(receiver, amount)
 }
 
 // burnVoucher burns amount of the wrapped voucher held by sender.
 // BurnScaled downscales the origin-precision amount to the ledger.
-func (v *ucs03ZkgmV1) burnVoucher(_ int, rlm realm, ibcDenom, sender string, amount *u256.Uint) error {
+func (v *ucs03ZkgmV1) burnVoucher(_ int, rlm realm, ibcDenom string, sender address, amount *u256.Uint) error {
 	vou, ok := v.store.GetVoucher(ibcDenom)
 	if !ok {
 		return makeError(errVoucherNotFound, ibcDenom)
 	}
 
-	return vou.BurnScaled(address(sender), amount)
+	return vou.BurnScaled(sender, amount)
 }
 
 // transferVoucher moves amount of the wrapped voucher between holders (market-maker fill).

@@ -44,15 +44,15 @@ func (v *ucs03ZkgmV1) increaseChannelBalanceV2(_ int, rlm realm, channelId types
 func (v *ucs03ZkgmV1) decreaseChannelBalanceV2(_ int, rlm realm, channelId types.ChannelId, path *u256.Uint, baseToken, quoteToken []byte, amount int64) error {
 	key := ChannelBalanceKeyV2(channelId, path, baseToken, quoteToken)
 
-	amountUint64 := u256.NewUint(uint64(amount))
+	amountUint256 := u256.NewUint(uint64(amount))
 
 	curAmount, ok := v.store.GetChannelBalanceV2(key)
-	if !ok || curAmount == nil || curAmount.Cmp(amountUint64) < 0 {
+	if !ok || curAmount == nil || curAmount.Cmp(amountUint256) < 0 {
 		return makeError(errChannelBalanceUnderflow)
 	}
 
 	// This entrypoint returns an error, so an underflow aborts the tx via return.
-	calculatedAmount, underflow := u256.Zero().SubOverflow(curAmount, amountUint64)
+	calculatedAmount, underflow := u256.Zero().SubOverflow(curAmount, amountUint256)
 	if underflow {
 		return makeError(errChannelBalanceUnderflow)
 	}

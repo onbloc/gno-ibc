@@ -57,9 +57,6 @@ type IStore interface {
 	RemoveChannelBalanceV2(_ int, rlm realm, key string)
 	GetChannelBalanceV2(key string) (*u256.Uint, bool)
 
-	AddLockedNative(_ int, rlm realm, denom string, amount *u256.Uint)
-	GetLockedNative(denom string) (*u256.Uint, bool)
-
 	SetMetadataImageOf(_ int, rlm realm, denom string, image [32]byte)
 	GetMetadataImageOf(denom string) ([32]byte, bool)
 
@@ -77,6 +74,12 @@ type IStore interface {
 	SetVoucher(_ int, rlm realm, ibcDenom string, v *Voucher)
 	GetVoucher(ibcDenom string) (*Voucher, bool)
 	HasVoucher(ibcDenom string) bool
+
+	// AddLockedTokenAmount/GetLockedTokenAmount are managed alongside the
+	// voucher methods above: both cover non-escrow custody of a base token
+	// (native or grc20) that zkgm cannot supply-burn the way it burns vouchers.
+	AddLockedTokenAmount(_ int, rlm realm, denom string, amount *u256.Uint)
+	GetLockedTokenAmount(denom string) (*u256.Uint, bool)
 
 	SetReceiver(_ int, rlm realm, path string, receiver z.Zkgmable)
 	GetReceiver(path string) (z.Zkgmable, bool)

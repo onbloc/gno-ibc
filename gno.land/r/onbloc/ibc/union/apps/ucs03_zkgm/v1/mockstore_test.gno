@@ -14,31 +14,31 @@ import (
 // Unlike the production store, which is owned by the proxy realm, mockStore is
 // backed by test-owned maps and can be mutated directly by injected test code.
 type mockStore struct {
-	tokenOrigin       map[string]*u256.Uint
-	channelBalanceV2  map[string]*u256.Uint
-	metadataImageOf   map[string][32]byte
-	foreignToken      map[string][]byte
-	inFlightPacket    map[string]types.Packet
-	tokenBucket       map[string]*tb.TokenBucket
-	vouchers          map[string]*zkgm.Voucher
-	receivers         map[string]z.Zkgmable
-	lockedNative      map[string]*u256.Uint
-	rateLimitDisabled bool
+	tokenOrigin        map[string]*u256.Uint
+	channelBalanceV2   map[string]*u256.Uint
+	metadataImageOf    map[string][32]byte
+	foreignToken       map[string][]byte
+	inFlightPacket     map[string]types.Packet
+	tokenBucket        map[string]*tb.TokenBucket
+	vouchers           map[string]*zkgm.Voucher
+	lockedTokenAmounts map[string]*u256.Uint
+	receivers          map[string]z.Zkgmable
+	rateLimitDisabled  bool
 }
 
 var _ zkgm.IStore = (*mockStore)(nil)
 
 func newMockStore() *mockStore {
 	return &mockStore{
-		tokenOrigin:      map[string]*u256.Uint{},
-		channelBalanceV2: map[string]*u256.Uint{},
-		metadataImageOf:  map[string][32]byte{},
-		foreignToken:     map[string][]byte{},
-		inFlightPacket:   map[string]types.Packet{},
-		tokenBucket:      map[string]*tb.TokenBucket{},
-		vouchers:         map[string]*zkgm.Voucher{},
-		receivers:        map[string]z.Zkgmable{},
-		lockedNative:     map[string]*u256.Uint{},
+		tokenOrigin:        map[string]*u256.Uint{},
+		channelBalanceV2:   map[string]*u256.Uint{},
+		metadataImageOf:    map[string][32]byte{},
+		foreignToken:       map[string][]byte{},
+		inFlightPacket:     map[string]types.Packet{},
+		tokenBucket:        map[string]*tb.TokenBucket{},
+		vouchers:           map[string]*zkgm.Voucher{},
+		lockedTokenAmounts: map[string]*u256.Uint{},
+		receivers:          map[string]z.Zkgmable{},
 		// Match NewStore: rate limiting is opt-in (disabled by default).
 		rateLimitDisabled: true,
 	}
@@ -63,20 +63,6 @@ func (m *mockStore) RemoveChannelBalanceV2(_ int, rlm realm, key string) {
 
 func (m *mockStore) GetChannelBalanceV2(key string) (*u256.Uint, bool) {
 	v, ok := m.channelBalanceV2[key]
-	return v, ok
-}
-
-func (m *mockStore) AddLockedNative(_ int, rlm realm, denom string, amount *u256.Uint) {
-	total := u256.Zero()
-	if cur, ok := m.lockedNative[denom]; ok {
-		total.Set(cur)
-	}
-	total.Add(total, amount)
-	m.lockedNative[denom] = total
-}
-
-func (m *mockStore) GetLockedNative(denom string) (*u256.Uint, bool) {
-	v, ok := m.lockedNative[denom]
 	return v, ok
 }
 
@@ -136,6 +122,20 @@ func (m *mockStore) GetVoucher(ibcDenom string) (*zkgm.Voucher, bool) {
 func (m *mockStore) HasVoucher(ibcDenom string) bool {
 	_, ok := m.vouchers[ibcDenom]
 	return ok
+}
+
+func (m *mockStore) AddLockedTokenAmount(_ int, rlm realm, denom string, amount *u256.Uint) {
+	total := u256.Zero()
+	if cur, ok := m.lockedTokenAmounts[denom]; ok {
+		total.Set(cur)
+	}
+	total.Add(total, amount)
+	m.lockedTokenAmounts[denom] = total
+}
+
+func (m *mockStore) GetLockedTokenAmount(denom string) (*u256.Uint, bool) {
+	v, ok := m.lockedTokenAmounts[denom]
+	return v, ok
 }
 
 func (m *mockStore) SetReceiver(_ int, rlm realm, path string, receiver z.Zkgmable) {

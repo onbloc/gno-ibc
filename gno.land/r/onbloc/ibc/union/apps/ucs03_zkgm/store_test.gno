@@ -83,12 +83,12 @@ func TestChannelBalanceV2(cur realm, t *testing.T) {
 	}
 }
 
-// AddLockedNative accumulates permanently-locked native escrow per denom. It
+// AddLockedTokenAmount accumulates permanently-locked base-token escrow per denom. It
 // stores the first lock, sums subsequent locks, treats a zero add as a no-op,
 // reaches exactly 2^256-1 without tripping, and aborts on the overflow that
 // would otherwise wrap the total below its prior value (breaking the proxy
 // balance invariant). A fresh store and a distinct denom keep cases isolated.
-func TestAddLockedNative(cur realm, t *testing.T) {
+func TestAddLockedTokenAmount(cur realm, t *testing.T) {
 	maxU256 := func() *u256.Uint { return new(u256.Uint).SetAllOne() }
 
 	cases := []struct {
@@ -110,18 +110,18 @@ func TestAddLockedNative(cur realm, t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			denom := "ulock/" + tc.name
 			if tc.seed != nil {
-				s.AddLockedNative(0, cur, denom, tc.seed)
+				s.AddLockedTokenAmount(0, cur, denom, tc.seed)
 			}
 
 			if tc.wantAbort {
-				uassert.AbortsContains(t, cur, ErrLockedNativeOverflow, func(cur realm) {
-					s.AddLockedNative(0, cur, denom, tc.add)
+				uassert.AbortsContains(t, cur, ErrLockedTokenAmountOverflow, func(cur realm) {
+					s.AddLockedTokenAmount(0, cur, denom, tc.add)
 				})
 			} else {
-				s.AddLockedNative(0, cur, denom, tc.add)
+				s.AddLockedTokenAmount(0, cur, denom, tc.add)
 			}
 
-			got, ok := s.GetLockedNative(denom)
+			got, ok := s.GetLockedTokenAmount(denom)
 			uassert.True(t, ok)
 			uassert.True(t, got.Eq(tc.wantTotal))
 		})

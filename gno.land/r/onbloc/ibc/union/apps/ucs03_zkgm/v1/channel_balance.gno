@@ -27,11 +27,11 @@ func (v *ucs03ZkgmV1) increaseChannelBalanceV2(_ int, rlm realm, channelId types
 		curAmount = u256.Zero()
 	}
 
-	amountUint64 := u256.NewUint(uint64(amount))
+	amountUint256 := u256.NewUint(uint64(amount))
 
 	// silently storing a smaller balance. This entrypoint returns no error,
 	// so an overflow aborts the tx via panic.
-	calculatedAmount, overflow := u256.Zero().AddOverflow(curAmount, amountUint64)
+	calculatedAmount, overflow := u256.Zero().AddOverflow(curAmount, amountUint256)
 	if overflow {
 		panic(errChannelBalanceOverflow)
 	}

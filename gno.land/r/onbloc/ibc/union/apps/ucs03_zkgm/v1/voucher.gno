@@ -27,7 +27,10 @@ func (v *ucs03ZkgmV1) mintVoucher(_ int, rlm realm, ibcDenom string, image [32]b
 	return vou.MintScaled(receiver, amount)
 }
 
-// burnVoucher burns amount of the wrapped voucher held by sender.
+// burnVoucher burns amount of the ibc/ wrapped voucher held by sender.
+// Used on send-side UNESCROW (destroy wrapped supply before remote unwrap) and
+// maker burn-address ack (burnEscrowedV2). GRC20 and native coins are never
+// passed here — they cannot be supply-burned by this realm.
 // BurnScaled downscales the origin-precision amount to the ledger.
 func (v *ucs03ZkgmV1) burnVoucher(_ int, rlm realm, ibcDenom string, sender address, amount *u256.Uint) error {
 	vou, ok := v.store.GetVoucher(ibcDenom)
@@ -67,7 +70,7 @@ func (v *ucs03ZkgmV1) getOrCreateVoucher(_ int, rlm realm, ibcDenom string, imag
 	// so only the local ledger is downscaled; the packet keeps origin precision.
 	ledgerDecimals := decimals
 	if scaleExpForDecimals(decimals) > 0 {
-		ledgerDecimals = uint8(canonicalDecimals)
+		ledgerDecimals = canonicalDecimals
 	}
 
 	token, ledger := grc20.NewToken(0, rlm, name, symbol, int(ledgerDecimals))

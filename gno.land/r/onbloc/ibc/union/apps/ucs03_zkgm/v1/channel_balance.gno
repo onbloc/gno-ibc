@@ -19,7 +19,7 @@ func ChannelBalanceKeyV2(channelId types.ChannelId, path *u256.Uint, baseToken, 
 
 // increaseChannelBalanceV2 adds amount to the (channel, path, base, quote) escrow balance.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L3272-L3299
-func (v *ucs03ZkgmV1) increaseChannelBalanceV2(_ int, rlm realm, channelId types.ChannelId, path *u256.Uint, baseToken, quoteToken []byte, amount int64) {
+func (v *ucs03ZkgmV1) increaseChannelBalanceV2(_ int, rlm realm, channelId types.ChannelId, path *u256.Uint, baseToken, quoteToken []byte, amount int64) error {
 	key := ChannelBalanceKeyV2(channelId, path, baseToken, quoteToken)
 
 	curAmount, ok := v.store.GetChannelBalanceV2(key)
@@ -33,10 +33,12 @@ func (v *ucs03ZkgmV1) increaseChannelBalanceV2(_ int, rlm realm, channelId types
 	// so an overflow aborts the tx via panic.
 	calculatedAmount, overflow := u256.Zero().AddOverflow(curAmount, amountUint256)
 	if overflow {
-		panic(errChannelBalanceOverflow)
+		return makeError(errChannelBalanceOverflow)
 	}
 
 	v.store.SetChannelBalanceV2(0, rlm, key, calculatedAmount)
+
+	return nil
 }
 
 // decreaseChannelBalanceV2 subtracts from the escrow balance, erroring on underflow and preserving a zero entry.

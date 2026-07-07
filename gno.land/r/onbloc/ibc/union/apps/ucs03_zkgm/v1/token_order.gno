@@ -43,9 +43,20 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channel
 		// reference verify_token_order_v2 increases the channel balance before
 		// escrowing the funds (contract.rs L511-543); rate limiting happens only
 		// on the receive/execute side, never here.
-		v.increaseChannelBalanceV2(0, rlm, channelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount)
+		err = v.increaseChannelBalanceV2(0, rlm, channelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount)
+		if err != nil {
+			return err
+		}
 
-		return v.localTokenEscrow(0, rlm, baseDenom, rlm.Previous().Address(), funds, order.BaseAmount)
+		err = v.localTokenEscrow(0, rlm, baseDenom, rlm.Previous().Address(), funds, order.BaseAmount)
+		if err != nil {
+			// rollback the channel balance
+			v.decreaseChannelBalanceV2(0, rlm, channelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount)
+
+			return err
+		}
+
+		return nil
 	case z.TOKEN_ORDER_KIND_UNESCROW:
 		baseDenom := string(order.BaseToken)
 
@@ -337,18 +348,25 @@ func (v *ucs03ZkgmV1) protocolFillUnescrowV2(_ int, rlm realm, channelId types.C
 	// L2437-2444); decreaseChannelBalanceV2 rejects an underflow internally. The
 	// quote/base tokens are swapped into the balance key as union does (the EVM
 	// quoteToken occupies the baseToken slot and vice versa).
-	if err := v.decreaseChannelBalanceV2(0, rlm, channelId, reversedPath, []byte(quoteTokenStr), baseToken, baseTokenLedgerAmount); err != nil {
+	err = v.decreaseChannelBalanceV2(0, rlm, channelId, reversedPath, []byte(quoteTokenStr), baseToken, baseTokenLedgerAmount)
+	if err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
 	if !quoteAmount.IsZero() {
 		if err := v.localTokenUnescrow(0, rlm, quoteTokenStr, receiver, quoteAmount); err != nil {
+			// rollback the channel balance
+			v.increaseChannelBalanceV2(0, rlm, channelId, reversedPath, []byte(quoteTokenStr), baseToken, baseTokenLedgerAmount)
+
 			panic(execFatal{err.Error()})
 		}
 	}
 
 	if !fee.IsZero() {
 		if err := v.localTokenUnescrow(0, rlm, quoteTokenStr, relayer, fee); err != nil {
+			// rollback the channel balance
+			v.increaseChannelBalanceV2(0, rlm, channelId, reversedPath, []byte(quoteTokenStr), baseToken, baseTokenLedgerAmount)
+
 			panic(execFatal{err.Error()})
 		}
 	}
@@ -489,11 +507,20 @@ func (v *ucs03ZkgmV1) settleEscrowedV2(_ int, rlm realm, sourceChannelId types.C
 	// reference decreases the escrowed balance before unescrowing
 	// (refund_v2 contract.rs L894-902 / ack L1021-1028);
 	// decreaseChannelBalanceV2 rejects an underflow internally.
-	if err := v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount); err != nil {
+	err = v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount)
+	if err != nil {
 		return err
 	}
 
-	return v.localTokenUnescrow(0, rlm, baseDenom, recipient, order.BaseAmount)
+	err = v.localTokenUnescrow(0, rlm, baseDenom, recipient, order.BaseAmount)
+	if err != nil {
+		// rollback the channel balance
+		v.increaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount)
+
+		return err
+	}
+
+	return nil
 }
 
 // burnEscrowedV2 removes the escrowed channel balance and finalizes the base
@@ -519,7 +546,13 @@ func (v *ucs03ZkgmV1) burnEscrowedV2(_ int, rlm realm, sourceChannelId types.Cha
 	}
 
 	if isIBCTokenDenom(baseDenom) {
-		return v.burnVoucher(0, rlm, baseDenom, rlm.Address(), order.BaseAmount)
+		err = v.burnVoucher(0, rlm, baseDenom, rlm.Address(), order.BaseAmount)
+		if err != nil {
+			// rollback the channel balance
+			v.increaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount)
+
+			return err
+		}
 	}
 
 	// Native and GRC20: permanently lock proxy-held balance (no supply burn).

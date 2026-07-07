@@ -114,15 +114,15 @@ func TestVoucher(cur realm, t *testing.T) {
 				denom := "ibc/mint-basic"
 				rx := address(testAddress("mint-rx"))
 
-				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "Wrapped", "WRAP", 6, string(rx), u256.NewUint(100)))
+				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "Wrapped", "WRAP", 6, rx, u256.NewUint(100)))
 				uassert.Equal(t, int64(100), voucherBalanceOf(denom, rx))
 				uassert.Equal(t, 6, voucherDecimalsOf(denom))
 
-				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "Wrapped", "WRAP", 6, string(rx), u256.NewUint(50)))
+				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "Wrapped", "WRAP", 6, rx, u256.NewUint(50)))
 				uassert.Equal(t, int64(150), voucherBalanceOf(denom, rx))
 
 				wide := new(u256.Uint).Lsh(u256.NewUint(1), 64)
-				uassert.Error(t, v.mintVoucher(0, rlm, "ibc/mint-overflow", [32]byte{}, "X", "X", 0, string(rx), wide))
+				uassert.Error(t, v.mintVoucher(0, rlm, "ibc/mint-overflow", [32]byte{}, "X", "X", 0, rx, wide))
 			},
 		},
 		{
@@ -131,12 +131,12 @@ func TestVoucher(cur realm, t *testing.T) {
 				denom := "ibc/burn-basic"
 				holder := address(testAddress("burn-holder"))
 
-				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "B", "B", 0, string(holder), u256.NewUint(100)))
-				uassert.NoError(t, v.burnVoucher(0, rlm, denom, string(holder), u256.NewUint(40)))
+				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "B", "B", 0, holder, u256.NewUint(100)))
+				uassert.NoError(t, v.burnVoucher(0, rlm, denom, holder, u256.NewUint(40)))
 				uassert.Equal(t, int64(60), voucherBalanceOf(denom, holder))
 
-				uassert.Error(t, v.burnVoucher(0, rlm, denom, string(holder), u256.NewUint(1000)))
-				uassert.Error(t, v.burnVoucher(0, rlm, "ibc/missing", string(holder), u256.NewUint(1)))
+				uassert.Error(t, v.burnVoucher(0, rlm, denom, holder, u256.NewUint(1000)))
+				uassert.Error(t, v.burnVoucher(0, rlm, "ibc/missing", holder, u256.NewUint(1)))
 			},
 		},
 		{
@@ -146,7 +146,7 @@ func TestVoucher(cur realm, t *testing.T) {
 				holder := address(testAddress("transfer-holder"))
 				other := address(testAddress("transfer-other"))
 
-				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "T", "T", 0, string(holder), u256.NewUint(100)))
+				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "T", "T", 0, holder, u256.NewUint(100)))
 				uassert.NoError(t, v.transferVoucher(0, rlm, denom, holder, other, u256.NewUint(10)))
 				uassert.Equal(t, int64(90), voucherBalanceOf(denom, holder))
 				uassert.Equal(t, int64(10), voucherBalanceOf(denom, other))

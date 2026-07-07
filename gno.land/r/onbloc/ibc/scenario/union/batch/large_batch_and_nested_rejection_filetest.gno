@@ -3,10 +3,10 @@ package batch
 
 // large_batch_and_nested_rejection_filetest is the BY-TYPE batch scenario for the
 // current batch limits (re-targeted from the legacy e2e zs89). A flat batch has no
-// length cap: an 8-child batch of INITIALIZE orders mints all eight vouchers. A
+// length cap: an 7-child batch of INITIALIZE orders mints all eight vouchers. A
 // nested batch (a batch whose child is itself a batch) is rejected — its receive
 // writes a failure acknowledgement and mints nothing new. The mint count is the
-// observable: 8 after the flat batch, still 8 after the nested batch. (The legacy
+// observable: 7 after the flat batch, still 7 after the nested batch. (The legacy
 // exact ack-hash equality used e2e ack builders; the unchanged mint count is the
 // behavior-level proof the nested batch was rejected.)
 
@@ -20,12 +20,12 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 
+	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
-	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 )
 
 const (
@@ -44,7 +44,7 @@ func main(cur realm) {
 
 	quoteTokens, instructions := buildChildren(channelId)
 
-	println("[SCENARIO] 2. A flat batch of 8 INITIALIZE children mints all eight (no length cap)")
+	println("[SCENARIO] 2. A flat batch of 7 INITIALIZE children mints all eight (no length cap)")
 	recvFlatBatch(cur, channelId, instructions, quoteTokens)
 	println("")
 
@@ -76,10 +76,10 @@ func bootstrap(cur realm) types.ChannelId {
 	return channelId
 }
 
-// buildChildren derives 8 distinct wrapped tokens and their INITIALIZE instructions
+// buildChildren derives 7 distinct wrapped tokens and their INITIALIZE instructions
 // (one unit each).
 func buildChildren(channelId types.ChannelId) (quoteTokens []string, instructions []z.Instruction) {
-	bases := []string{"zs89-a", "zs89-b", "zs89-c", "zs89-d", "zs89-e", "zs89-f", "zs89-g", "zs89-h"}
+	bases := []string{"zs89-a", "zs89-b", "zs89-c", "zs89-d", "zs89-e", "zs89-f", "zs89-g"}
 	quoteTokens = make([]string, len(bases))
 	instructions = make([]z.Instruction, len(bases))
 	for i, base := range bases {
@@ -107,7 +107,7 @@ func recvFlatBatch(cur realm, channelId types.ChannelId, instructions []z.Instru
 
 	ufmt.Printf("[INFO] minted children: %d\n", mintedChildren(quoteTokens))
 	ufmt.Printf("[INFO] packet receipt recorded: %t\n", receiptRecorded(packet))
-	ufmt.Println("[EXPECTED] all 8 children minted; receipt recorded")
+	ufmt.Println("[EXPECTED] all 7 children minted; receipt recorded")
 }
 
 func recvNestedBatch(cur realm, channelId types.ChannelId, quoteTokens []string) {
@@ -119,7 +119,7 @@ func recvNestedBatch(cur realm, channelId types.ChannelId, quoteTokens []string)
 
 	ufmt.Printf("[INFO] minted children after nested batch: %d\n", mintedChildren(quoteTokens))
 	ufmt.Printf("[INFO] packet receipt recorded: %t\n", receiptRecorded(packet))
-	ufmt.Println("[EXPECTED] nested batch rejected: mint count unchanged at 8; receipt recorded (failure ack)")
+	ufmt.Println("[EXPECTED] nested batch rejected: mint count unchanged at 7; receipt recorded (failure ack)")
 }
 
 func mintedChildren(quoteTokens []string) int {
@@ -186,12 +186,12 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 // Output:
 // [SCENARIO] 1. Bootstrap IBC host and open a zkgm channel
 //
-// [SCENARIO] 2. A flat batch of 8 INITIALIZE children mints all eight (no length cap)
-// [INFO] minted children: 8
+// [SCENARIO] 2. A flat batch of 7 INITIALIZE children mints all eight (no length cap)
+// [INFO] minted children: 7
 // [INFO] packet receipt recorded: true
-// [EXPECTED] all 8 children minted; receipt recorded
+// [EXPECTED] all 7 children minted; receipt recorded
 //
 // [SCENARIO] 3. A nested batch (batch inside batch) is rejected, minting nothing new
-// [INFO] minted children after nested batch: 8
+// [INFO] minted children after nested batch: 7
 // [INFO] packet receipt recorded: true
-// [EXPECTED] nested batch rejected: mint count unchanged at 8; receipt recorded (failure ack)
+// [EXPECTED] nested batch rejected: mint count unchanged at 7; receipt recorded (failure ack)

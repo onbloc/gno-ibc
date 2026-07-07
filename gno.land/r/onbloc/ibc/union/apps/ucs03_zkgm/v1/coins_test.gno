@@ -50,10 +50,15 @@ func TestNewFunds(t *testing.T) {
 	sent := chain.NewCoins(chain.NewCoin("ugnot", 10))
 	f := newFunds(sent)
 
-	f.coins[0].Amount = 4
+	// Mutating the funds budget must not write through to the original sent coins:
+	// newFunds snapshots into its own map (map values are not addressable, so the
+	// coin is read out, mutated, and stored back).
+	coin := f.coins["ugnot"]
+	coin.Amount = 4
+	f.coins["ugnot"] = coin
 
 	uassert.Equal(t, int64(10), sent[0].Amount)
-	uassert.Equal(t, int64(4), f.coins[0].Amount)
+	uassert.Equal(t, int64(4), f.coins["ugnot"].Amount)
 }
 
 // funds.sub mirrors the reference contract's funds.sub(coin): it deducts a

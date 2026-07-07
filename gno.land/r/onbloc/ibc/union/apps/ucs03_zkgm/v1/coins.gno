@@ -6,7 +6,41 @@ import (
 	"strings"
 
 	u256 "gno.land/p/gnoswap/uint256"
+	"gno.land/r/demo/defi/grc20reg"
 )
+
+// ibcDenomPrefix is the prefix of wrapped IBC voucher denoms (mirrors
+// z.PredictWrappedToken*). Used to detect and trim wrapped denoms.
+const ibcDenomPrefix = "ibc/"
+
+const (
+	// IBC_TOKEN is a zkgm-issued ibc/ voucher. Supply is minted on recv and
+	// burned on send-side UNESCROW or maker burn-address ack; custody moves via
+	// transferVoucher between holders and the proxy escrow.
+	IBC_TOKEN = iota
+	// GRC20_TOKEN is a locally registered grc20 (not a zkgm voucher). Custody
+	// moves via Teller TransferFrom/Transfer; this realm cannot burn its supply.
+	GRC20_TOKEN
+	// NATIVE_COIN is a banker coin attached with tx -send. Escrow consumes the
+	// attached funds budget; unescrow releases from the proxy banker balance.
+	NATIVE_COIN
+)
+
+func isIBCTokenDenom(denom string) bool {
+	return strings.HasPrefix(denom, ibcDenomPrefix)
+}
+
+func getTokenType(denom string) int {
+	if isIBCTokenDenom(denom) {
+		return IBC_TOKEN
+	}
+
+	if token := grc20reg.Get(denom); token != nil {
+		return GRC20_TOKEN
+	}
+
+	return NATIVE_COIN
+}
 
 // parseCoins parses a comma-separated <amount><denom> string into Coins.
 func parseCoins(s string) chain.Coins {
@@ -46,15 +80,32 @@ func parseCoins(s string) chain.Coins {
 // (the message's attached coins). It is decremented as each token order consumes
 // its BaseAmount during verification.
 type funds struct {
-	coins []chain.Coin
+	assets map[string]chain.Coin
 }
 
 // newFunds snapshots the attached coins into a mutable spend budget.
 func newFunds(sent chain.Coins) *funds {
-	f := &funds{coins: make([]chain.Coin, len(sent))}
-	copy(f.coins, sent)
+	f := &funds{assets: make(map[string]chain.Coin)}
+
+	for _, coin := range sent {
+		f.assets[coin.Denom] = coin
+	}
 
 	return f
+}
+
+// add adds the given denom and amount to the funds.
+func (f *funds) add(denom string, amount int64) error {
+	coin, ok := f.assets[denom]
+	if !ok {
+		f.assets[denom] = chain.NewCoin(denom, amount)
+		return nil
+	}
+
+	coin.Amount += amount
+	f.assets[denom] = coin
+
+	return nil
 }
 
 // sub deducts amount of denom from the attached funds, mirroring funds.sub(coin)
@@ -65,25 +116,25 @@ func (f *funds) sub(denom string, amount *u256.Uint) error {
 		return err
 	}
 
-	for i := range f.coins {
-		if f.coins[i].Denom == denom {
-			if f.coins[i].Amount < want {
-				return makeError(errCoinMismatch)
-			}
-
-			f.coins[i].Amount -= want
-
-			return nil
-		}
+	coin, ok := f.assets[denom]
+	if !ok {
+		return makeError(errCoinMismatch)
 	}
 
-	return makeError(errCoinMismatch)
+	if coin.Amount < want {
+		return makeError(errCoinMismatch)
+	}
+
+	coin.Amount -= want
+	f.assets[denom] = coin
+
+	return nil
 }
 
 // isEmpty reports whether every attached coin has been fully consumed.
 func (f *funds) isEmpty() bool {
-	for i := range f.coins {
-		if f.coins[i].Amount != 0 {
+	for _, coin := range f.assets {
+		if coin.Amount != 0 {
 			return false
 		}
 	}

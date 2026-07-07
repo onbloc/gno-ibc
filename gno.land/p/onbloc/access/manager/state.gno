@@ -154,14 +154,13 @@ func (state *State) isLastAdmin(account address) bool {
 		return false
 	}
 
-	activeAdmins := 0
-	for _, access := range adminRole.Members {
-		if access.isActiveAt(now) {
-			activeAdmins++
+	for member, access := range adminRole.Members {
+		if member != account && access.isActiveAt(now) {
+			return false
 		}
 	}
 
-	return activeAdmins == 1
+	return true
 }
 
 // RenounceRole revokes caller-confirmed role membership from account.

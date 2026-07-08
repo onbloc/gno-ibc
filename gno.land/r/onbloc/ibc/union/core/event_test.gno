@@ -174,6 +174,14 @@ func TestPacketSendEventAttrsSplitPacketData(cur realm, t *testing.T) {
 			data:     []byte(fixedEventAttrHalfColumn),
 			wantLens: []int{maxLen, 2},
 		},
+		{
+			// hexAttrLen(b) = len(b)*2+2, so a (maxLen-1)-byte payload hex-encodes
+			// to exactly 2*maxLen -- packet_data_size and the split must reflect
+			// two full columns with no third, trailing empty column.
+			name:     "packet data hex-encodes to exactly two full columns",
+			data:     []byte(fixedEventAttrColumn[:maxLen-1]),
+			wantLens: []int{maxLen, maxLen},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -411,6 +419,16 @@ func TestEventAttrColumnsBoundary(cur realm, t *testing.T) {
 			name:     "four columns",
 			value:    fixedEventAttrColumn + fixedEventAttrColumn + fixedEventAttrColumn + "4",
 			wantLens: []int{maxLen, maxLen, maxLen, 1},
+		},
+		{
+			name:     "exactly two full columns, no trailing empty column",
+			value:    fixedEventAttrColumn + fixedEventAttrColumn,
+			wantLens: []int{maxLen, maxLen},
+		},
+		{
+			name:     "exactly three full columns, no trailing empty column",
+			value:    fixedEventAttrColumn + fixedEventAttrColumn + fixedEventAttrColumn,
+			wantLens: []int{maxLen, maxLen, maxLen},
 		},
 	}
 

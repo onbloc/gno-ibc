@@ -23,6 +23,13 @@ type mockApp struct {
 	recvStatus types.PacketStatus // zero -> Success
 	recvAck    []byte             // empty -> "ack" for sync results
 	recvAckSet bool               // allow tests to force an empty sync ack
+
+	// panicOnData/panicMsg let a test simulate one packet in a batch failing
+	// the app's own combined-size guard (e.g. zkgm's CombinedEventDataTooLarge)
+	// without reimplementing that check in the mock: OnRecvPacket panics with
+	// panicMsg when called for a packet whose Data matches panicOnData.
+	panicOnData string
+	panicMsg    string
 }
 
 func (a *mockApp) recvResult() types.RecvPacketResult {
@@ -68,6 +75,9 @@ func (a *mockApp) OnChannelCloseConfirm(cur realm, channelId types.ChannelId, re
 
 func (a *mockApp) OnRecvPacket(cur realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {
 	a.recvCalls++
+	if a.panicOnData != "" && string(packet.Data) == a.panicOnData {
+		panic(a.panicMsg)
+	}
 	return a.recvResult()
 }
 

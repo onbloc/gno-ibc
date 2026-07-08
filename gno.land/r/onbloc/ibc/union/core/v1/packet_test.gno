@@ -422,6 +422,113 @@ func TestPacketRecv(cur realm, t *testing.T) {
 	}
 }
 
+// TestPacketRecvProofFailureLeavesNoReceipt extends the existing "proof
+// failure" AbortsContains case in TestPacketRecv with the post-abort state
+// check E-T3 asked for. verifyMembership runs once for the whole batch before
+// the per-packet loop that calls acceptRecvPacket/SetPacketReceipt, so a bad
+// proof genuinely aborts before any receipt is written -- unlike an
+// app-level rejection (e.g. an oversized relayerMsg), where core has already
+// recorded the receipt by the time the app is even called. HasPacketCommitment
+// is asserted too even though it is a no-op here: commitment is a send-side
+// concept (only SendPacket ever calls CommitPacket, see core/v1/packet.gno)
+// and recv never touches it, so it is always false on this path.
+func TestPacketRecvProofFailureLeavesNoReceipt(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	v := newTestImpl()
+	ms := v.store.(*mockStore)
+	clientId := createClient(cur, v, &mockLightClient{membershipErr: "bad proof"}, nil, nil)
+	ms.SaveConnection(0, cur, types.ConnectionId(1),
+		core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+	port := types.Bytes(cur.Previous().PkgPath())
+	ms.registerApp(port, &mockApp{})
+	v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: port, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	chId := v.store.(*mockStore).currentChannelId()
+	ms.SaveChannel(0, cur, chId, types.Channel{State: types.ChannelStateOpen, ConnectionId: types.ConnectionId(1), CounterpartyChannelId: types.ChannelId(9), Version: "v1"})
+
+	packet := recvPacket(chId, "proof-failure-no-receipt")
+
+	uassert.AbortsContains(t, cur, "bad proof", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+		v.PacketRecv(0, cur, types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{[]byte("rm")}, Proof: []byte("p"), ProofHeight: 10})
+	})
+
+	uassert.False(t, v.store.HasPacketReceipt(packet))
+	uassert.False(t, v.store.HasPacketCommitment(packet))
+}
+
+// TestPacketRecvBatchAbortsEntirelyOnOversizedEntry is E-T2's unit-testable
+// scope. Core has no visibility into *why* an app rejects a packet (that
+// decision, e.g. zkgm's CombinedEventDataTooLarge, lives at the app layer --
+// see TestRecvEntrypointsOversizedRelayerOrMakerMsgReturnsFailureAck in the
+// zkgm impl); this mock simulates the app panicking the way that guard does.
+// What core IS responsible for, and what this test locks down, is that a
+// panic from any packet in a batch aborts the whole PacketRecv call, and that
+// no packet ordered after the panicking one is ever dispatched or receipted.
+// HasPacketCommitment is asserted too even though it is a no-op on recv (see
+// TestPacketRecvProofFailureLeavesNoReceipt).
+//
+// Whether an *earlier* packet's own state survives the abort is a chain/ABCI-
+// level guarantee this test harness cannot observe -- see the "terminating
+// panic is the assertion" note on hostile_receiver_reverts_atomically_filetest.gno.
+// That is why "oversized first" (not an earlier valid packet) is what proves
+// the batch is rejected as a whole here.
+func TestPacketRecvBatchAbortsEntirelyOnOversizedEntry(cur realm, t *testing.T) {
+	tests := []struct {
+		name          string
+		packets       func(chId types.ChannelId) []types.Packet
+		wantRecvCalls int
+		untouched     func(packets []types.Packet) types.Packet
+	}{
+		{
+			name: "oversized first leaves the later valid packet untouched",
+			packets: func(chId types.ChannelId) []types.Packet {
+				return []types.Packet{recvPacket(chId, "batch-oversized"), recvPacket(chId, "batch-valid")}
+			},
+			wantRecvCalls: 1,
+			untouched:     func(packets []types.Packet) types.Packet { return packets[1] },
+		},
+		{
+			name: "oversized in the middle stops packets ordered after it",
+			packets: func(chId types.ChannelId) []types.Packet {
+				return []types.Packet{recvPacket(chId, "batch-valid-1"), recvPacket(chId, "batch-oversized"), recvPacket(chId, "batch-valid-2")}
+			},
+			wantRecvCalls: 2,
+			untouched:     func(packets []types.Packet) types.Packet { return packets[2] },
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+			v := newTestImpl()
+			chId, _, mApp := setupOpenChannel(cur, v)
+			packets := tc.packets(chId)
+			mApp.panicOnData = "batch-oversized"
+			mApp.panicMsg = core.ErrPacketCombinedDataTooLarge
+
+			relayerMsgs := make([][]byte, len(packets))
+			for i := range relayerMsgs {
+				relayerMsgs[i] = []byte("rm")
+			}
+
+			uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+				v.PacketRecv(0, cur, types.MsgPacketRecv{
+					Packets:     packets,
+					RelayerMsgs: relayerMsgs,
+					Proof:       []byte("p"),
+					ProofHeight: 10,
+				})
+			})
+
+			uassert.Equal(t, tc.wantRecvCalls, mApp.recvCalls)
+			untouched := tc.untouched(packets)
+			uassert.False(t, v.store.HasPacketReceipt(untouched))
+			uassert.False(t, v.store.HasPacketCommitment(untouched))
+		})
+	}
+}
+
 func TestIntentPacketRecvDispatchesAndReceipts(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
@@ -1070,6 +1177,17 @@ func TestVerifyNonMembership(cur realm, t *testing.T) {
 	}
 }
 
+// TestWriteAcknowledgementWritesAsyncAck's "oversized packet with existing
+// receipt" case is intentionally unguarded: WriteAcknowledgement writes
+// whatever packet.Data/Acknowledgement combination the caller hands it,
+// with no CombinedEventDataTooLarge check of its own. Core only ever sees
+// one packet at a time here and has no way to know whether the caller is a
+// single-instruction app or a batch child whose ack could still be degraded
+// gracefully instead of aborting -- so the guard belongs to the caller, which
+// does have that context (e.g. zkgm's forward.gno checks parent.Data+ack
+// before calling this, see TestHandleForwardChildRejectsOversizedParentAck).
+// Do not add a size check here; it would take away the caller's ability to
+// choose graceful degradation over a hard abort.
 func TestWriteAcknowledgementWritesAsyncAck(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2

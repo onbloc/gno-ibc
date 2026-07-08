@@ -35,23 +35,30 @@ func TestUniversalErrorAck(t *testing.T) {
 	uassert.Equal(t, string(want), string(got))
 }
 
-func TestRecvEntrypointsOversizedPacketDataReturnsFailureAck(cur realm, t *testing.T) {
+// TestRecvEntrypointsOversizedPacketDataAborts covers a combined-oversized
+// packet.Data (relayer/maker msg absent). Core unconditionally re-emits
+// packet.Data via EmitPacketRecv/EmitIntentPacketRecv after these entrypoints
+// return, so a graceful failure result here could never actually be recorded
+// without core's own emit panicking on chain.Emit's attr-pair ceiling. The
+// guard therefore aborts up front instead of returning a failure ack -- see
+// the matching comments on OnRecvPacket/OnIntentRecvPacket.
+func TestRecvEntrypointsOversizedPacketDataAborts(cur realm, t *testing.T) {
 	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
 	oversized := make([]byte, maxPacketDataBytes+1)
 	tests := []struct {
 		name string
-		run  func(cur realm, packet types.Packet) types.RecvPacketResult
+		run  func(cur realm, packet types.Packet)
 	}{
 		{
 			name: "packet recv",
-			run: func(cur realm, packet types.Packet) types.RecvPacketResult {
-				return newTestImpl().OnRecvPacket(0, cur, packet, address(testAddress("oversized-relayer")), nil)
+			run: func(cur realm, packet types.Packet) {
+				newTestImpl().OnRecvPacket(0, cur, packet, address(testAddress("oversized-relayer")), nil)
 			},
 		},
 		{
 			name: "intent packet recv",
-			run: func(cur realm, packet types.Packet) types.RecvPacketResult {
-				return newTestImpl().OnIntentRecvPacket(0, cur, packet, address(testAddress("oversized-maker")), nil)
+			run: func(cur realm, packet types.Packet) {
+				newTestImpl().OnIntentRecvPacket(0, cur, packet, address(testAddress("oversized-maker")), nil)
 			},
 		},
 	}
@@ -59,33 +66,36 @@ func TestRecvEntrypointsOversizedPacketDataReturnsFailureAck(cur realm, t *testi
 	for _, tc := range tests {
 		packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), oversized, 0)
 
-		testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
-		res := tc.run(cur, packet)
-
-		uassert.True(t, res.Status == types.PacketStatusFailure)
-		uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
+		uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
+			testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
+			tc.run(cur, packet)
+		})
 	}
 }
 
-func TestRecvEntrypointsOversizedRelayerOrMakerMsgReturnsFailureAck(cur realm, t *testing.T) {
+// TestRecvEntrypointsOversizedRelayerOrMakerMsgAborts covers a
+// combined-oversized relayer/maker msg (packet.Data small). See
+// TestRecvEntrypointsOversizedPacketDataAborts for why this aborts instead of
+// returning a graceful failure ack.
+func TestRecvEntrypointsOversizedRelayerOrMakerMsgAborts(cur realm, t *testing.T) {
 	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
 	hugeMsg := make([]byte, maxPacketDataBytes+1)
 	smallData := []byte("small-packet-data")
 
 	tests := []struct {
 		name string
-		run  func(cur realm, packet types.Packet) types.RecvPacketResult
+		run  func(cur realm, packet types.Packet)
 	}{
 		{
 			name: "packet recv: oversized relayer msg",
-			run: func(cur realm, packet types.Packet) types.RecvPacketResult {
-				return newTestImpl().OnRecvPacket(0, cur, packet, address(testAddress("ovsz-relayer")), hugeMsg)
+			run: func(cur realm, packet types.Packet) {
+				newTestImpl().OnRecvPacket(0, cur, packet, address(testAddress("ovsz-relayer")), hugeMsg)
 			},
 		},
 		{
 			name: "intent packet recv: oversized market maker msg",
-			run: func(cur realm, packet types.Packet) types.RecvPacketResult {
-				return newTestImpl().OnIntentRecvPacket(0, cur, packet, address(testAddress("ovsz-maker")), hugeMsg)
+			run: func(cur realm, packet types.Packet) {
+				newTestImpl().OnIntentRecvPacket(0, cur, packet, address(testAddress("ovsz-maker")), hugeMsg)
 			},
 		},
 	}
@@ -93,26 +103,22 @@ func TestRecvEntrypointsOversizedRelayerOrMakerMsgReturnsFailureAck(cur realm, t
 	for _, tc := range tests {
 		packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), smallData, 0)
 
-		testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
-		res := tc.run(cur, packet)
-
-		uassert.True(t, res.Status == types.PacketStatusFailure)
-		uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
+		uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
+			testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
+			tc.run(cur, packet)
+		})
 	}
 }
 
-// TestOnRecvPacketOversizedRelayerMsgNeverDispatchesMint is E-T3's
-// unit-testable scope. A single oversized-relayerMsg recv already returns a
-// failure ack (TestRecvEntrypointsOversizedRelayerOrMakerMsgReturnsFailureAck);
-// what that test doesn't show is that decode/dispatch never ran at all -- the
-// combined-size guard at OnRecvPacket's entry fires before
-// z.DecodeZkgmPacket, so an INITIALIZE TokenOrder packed into that same
-// packet.Data can never mint. HasPacketReceipt is not asserted here: the
+// TestOnRecvPacketOversizedRelayerMsgAborts is E-T3's unit-testable scope: a
+// single oversized-relayerMsg recv aborts at OnRecvPacket's entry, before
+// z.DecodeZkgmPacket ever runs, so an INITIALIZE TokenOrder packed into that
+// same packet.Data can never mint. HasPacketReceipt is not asserted here: the
 // receipt is intentionally recorded by core before OnRecvPacket is ever
 // called (see the "async leaves magic receipt" case in
 // core/v1/packet_test.gno), so asserting its absence would contradict the
 // existing design rather than test this guard.
-func TestOnRecvPacketOversizedRelayerMsgNeverDispatchesMint(cur realm, t *testing.T) {
+func TestOnRecvPacketOversizedRelayerMsgAborts(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
@@ -138,16 +144,18 @@ func TestOnRecvPacketOversizedRelayerMsgNeverDispatchesMint(cur realm, t *testin
 	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
 	hugeRelayerMsg := make([]byte, maxPacketDataBytes+1)
 
-	testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
-	res := v.OnRecvPacket(0, cur, packet, address(testAddress("ovsz-mint-relayer")), hugeRelayerMsg)
+	uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
+		v.OnRecvPacket(0, cur, packet, address(testAddress("ovsz-mint-relayer")), hugeRelayerMsg)
+	})
 
-	uassert.True(t, res.Status == types.PacketStatusFailure)
-	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
 	uassert.False(t, testStore.HasVoucher(quoteToken))
 	uassert.Equal(t, int64(0), voucherBalanceOf(quoteToken, receiver))
 }
 
-func TestOnRecvPacketOversizedPacketDataNeverDispatchesMint(cur realm, t *testing.T) {
+// TestOnRecvPacketOversizedPacketDataAborts is the packet.Data-side
+// counterpart of TestOnRecvPacketOversizedRelayerMsgAborts.
+func TestOnRecvPacketOversizedPacketDataAborts(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
@@ -175,11 +183,11 @@ func TestOnRecvPacketOversizedPacketDataNeverDispatchesMint(cur realm, t *testin
 	}
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), data, 0)
 
-	testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
-	res := v.OnRecvPacket(0, cur, packet, address(testAddress("ovsz-data-relayer")), nil)
+	uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
+		v.OnRecvPacket(0, cur, packet, address(testAddress("ovsz-data-relayer")), nil)
+	})
 
-	uassert.True(t, res.Status == types.PacketStatusFailure)
-	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
 	uassert.False(t, testStore.HasVoucher(quoteToken))
 	uassert.Equal(t, int64(0), voucherBalanceOf(quoteToken, receiver))
 }
@@ -191,6 +199,21 @@ func TestOnAcknowledgementPacketRejectsOversizedCombinedAck(cur realm, t *testin
 
 	uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
 		newTestImpl().OnAcknowledgementPacket(0, cur, packet, hugeAck, address(testAddress("ovsz-ack-relayer")))
+	})
+}
+
+// TestOnTimeoutPacketRejectsOversizedPacketData covers the guard restored on
+// OnTimeoutPacket: EmitPacketTimeout only ever combines packet.Data with
+// fixed attrs (no relayer-supplied blob), so this can't reproduce today, but
+// the explicit reject keeps the timeout path consistent with
+// OnAcknowledgementPacket instead of relying solely on send-time enforcement.
+func TestOnTimeoutPacketRejectsOversizedPacketData(cur realm, t *testing.T) {
+	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
+	oversized := make([]byte, maxPacketDataBytes+1)
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), oversized, 0)
+
+	uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
+		newTestImpl().OnTimeoutPacket(0, cur, packet, address(testAddress("ovsz-timeout-relayer")))
 	})
 }
 

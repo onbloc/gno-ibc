@@ -28,6 +28,15 @@ const (
 	errUnsupportedTokenOrderKindForRefund = "unsupported token order kind for refund"
 	errSolveNotImplemented                = "solve token order not implemented"
 	errInvalidTokenOrderDestChannel       = "invalid token order destination channel"
+	errInvalidTokenOrderTransferAmount    = "invalid token order transfer amount"
+
+	// errMetadataDecimalsMismatch guards an INITIALIZE order's declared
+	// metadata decimals against the locally-known ground truth for its base
+	// denom (a registered grc20's real decimals, or a held voucher's recorded
+	// OriginDecimals when forwarding it onward). Left unchecked, the
+	// counterparty (or next hop) would deploy/interpret the wrapped copy at
+	// the wrong precision even though the raw amount moved correctly here.
+	errMetadataDecimalsMismatch = "token order: metadata decimals do not match the local token"
 
 	// call
 	errEurekaUnsupported     = "eureka mode not supported"
@@ -47,11 +56,8 @@ const (
 	errBatchAckCountMismatch   = "batch ack count mismatch"
 
 	// voucher
-	errAmountOverflow           = "amount overflows int64"
-	errZeroAmount               = "amount must be non-zero"
-	errVoucherNotFound          = "voucher not found"
-	errUnsupportedTokenDecimals = "unsupported token decimals"
-	errDecimalDust              = "zkgm/token_order: decimal dust is not allowed"
+	errAmountOverflow  = "amount overflows int64"
+	errVoucherNotFound = "voucher not found"
 
 	// rate limit
 	errTokenBucketAbsent = "token bucket is absent"

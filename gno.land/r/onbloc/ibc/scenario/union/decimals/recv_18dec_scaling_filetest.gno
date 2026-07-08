@@ -1,11 +1,14 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/decimals
 package decimals
 
-// recv_18dec_scale_down_filetest is the BY-TYPE scenario for 18-decimal amount
-// scaling (re-targeted from the legacy e2e zs25). An 18-decimal token (1e18 wei)
-// is received via an INITIALIZE order and minted as the 6-decimal local amount.
-// An UNESCROW send then submits the 18-decimal wire amount and burns the
-// corresponding 6-decimal local voucher amount.
+// recv_18dec_scaling_filetest is the by-type scenario for 18-decimal downscaling.
+// An 18-decimal token (1e18 wei) is received via an INITIALIZE order
+// and minted into the canonical 6-dec ledger,
+// so 1e18 on the wire becomes 1e6 in the ledger.
+// An UNESCROW send carries 1e18 on the wire, downscales to 1e6 for the ledger burn,
+// and burns the voucher to zero.
+// The invariant is the minted/burned ledger balance:
+// the wire keeps source precision, the ledger holds the int64-safe amount.
 
 import (
 	"chain"
@@ -17,12 +20,12 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 
+	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
-	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 )
 
 const (
@@ -33,9 +36,9 @@ const (
 	adminAddr  = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
 	holderAddr = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
 
-	// weiAmount is 1e18 — a full 18-decimal unit. It fits in uint64.
+	// weiAmount is 1e18 — a full 18-decimal unit on the wire. It fits in uint64.
+	// It downscales to 1e6 in the canonical 6-dec voucher ledger.
 	weiAmount = uint64(1000000000000000000)
-	localAmount = uint64(1000000)
 )
 
 func main(cur realm) {
@@ -46,11 +49,11 @@ func main(cur realm) {
 	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Ether Token", Symbol: "ETH", Decimals: 18})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("wei"), z.MetadataImage(mustDecodeMeta(meta)))
 
-	println("[SCENARIO] 2. Receive an 18-dec INITIALIZE order: scaled down to 6-dec local amount")
+	println("[SCENARIO] 2. Receive an 18-dec INITIALIZE order: wire 1e18 downscales to 1e6 ledger")
 	recvInitialize(cur, channelId, quoteToken, meta)
 	println("")
 
-	println("[SCENARIO] 3. UNESCROW send with 1e18 wire amount burns the local 1e6 amount")
+	println("[SCENARIO] 3. UNESCROW send: wire 1e18 downscales to 1e6 ledger burn, leaving zero")
 	unescrowSend(cur, channelId, quoteToken)
 }
 
@@ -98,7 +101,7 @@ func recvInitialize(cur realm, channelId types.ChannelId, quoteToken string, met
 
 	after := zkgm.VoucherBalanceOf(quoteToken, holderAddr)
 	ufmt.Printf("[INFO] holder voucher balance: %d -> %d\n", before, after)
-	ufmt.Println("[EXPECTED] minted balance should equal 1000000 (1e6 local, scaled down from 1e18 wire)")
+	ufmt.Println("[EXPECTED] minted ledger balance should equal 1000000 (1e18 wire downscaled to 6-dec)")
 }
 
 func unescrowSend(cur realm, channelId types.ChannelId, quoteToken string) {
@@ -119,7 +122,7 @@ func unescrowSend(cur realm, channelId types.ChannelId, quoteToken string) {
 
 	after := zkgm.VoucherBalanceOf(quoteToken, holderAddr)
 	ufmt.Printf("[INFO] holder voucher balance: %d -> %d\n", before, after)
-	ufmt.Println("[EXPECTED] UNESCROW send should burn the local 1e6 amount, leaving 0")
+	ufmt.Println("[EXPECTED] UNESCROW send should burn the full 1e6 ledger balance, leaving 0")
 }
 
 // --- encoding helpers ---
@@ -163,10 +166,10 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 // Output:
 // [SCENARIO] 1. Bootstrap IBC host and open a zkgm channel
 //
-// [SCENARIO] 2. Receive an 18-dec INITIALIZE order: scaled down to 6-dec local amount
+// [SCENARIO] 2. Receive an 18-dec INITIALIZE order: wire 1e18 downscales to 1e6 ledger
 // [INFO] holder voucher balance: 0 -> 1000000
-// [EXPECTED] minted balance should equal 1000000 (1e6 local, scaled down from 1e18 wire)
+// [EXPECTED] minted ledger balance should equal 1000000 (1e18 wire downscaled to 6-dec)
 //
-// [SCENARIO] 3. UNESCROW send with 1e18 wire amount burns the local 1e6 amount
+// [SCENARIO] 3. UNESCROW send: wire 1e18 downscales to 1e6 ledger burn, leaving zero
 // [INFO] holder voucher balance: 1000000 -> 0
-// [EXPECTED] UNESCROW send should burn the local 1e6 amount, leaving 0
+// [EXPECTED] UNESCROW send should burn the full 1e6 ledger balance, leaving 0

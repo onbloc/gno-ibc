@@ -23,8 +23,6 @@ func TestNewStore(t *testing.T) {
 	uassert.False(t, ok)
 	_, ok = s.GetForeignToken("denom")
 	uassert.False(t, ok)
-	_, ok = s.GetTokenDecimals("denom")
-	uassert.False(t, ok)
 	_, ok = s.GetInFlightPacket("hash")
 	uassert.False(t, ok)
 	_, ok = s.GetTokenBucket("denom")
@@ -85,12 +83,12 @@ func TestChannelBalanceV2(cur realm, t *testing.T) {
 	}
 }
 
-// AddLockedNative accumulates permanently-locked native escrow per denom. It
+// AddLockedTokenAmount accumulates permanently-locked base-token escrow per denom. It
 // stores the first lock, sums subsequent locks, treats a zero add as a no-op,
 // reaches exactly 2^256-1 without tripping, and aborts on the overflow that
 // would otherwise wrap the total below its prior value (breaking the proxy
 // balance invariant). A fresh store and a distinct denom keep cases isolated.
-func TestAddLockedNative(cur realm, t *testing.T) {
+func TestAddLockedTokenAmount(cur realm, t *testing.T) {
 	maxU256 := func() *u256.Uint { return new(u256.Uint).SetAllOne() }
 
 	cases := []struct {
@@ -112,18 +110,18 @@ func TestAddLockedNative(cur realm, t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			denom := "ulock/" + tc.name
 			if tc.seed != nil {
-				s.AddLockedNative(0, cur, denom, tc.seed)
+				s.AddLockedTokenAmount(0, cur, denom, tc.seed)
 			}
 
 			if tc.wantAbort {
-				uassert.AbortsContains(t, cur, ErrLockedNativeOverflow, func(cur realm) {
-					s.AddLockedNative(0, cur, denom, tc.add)
+				uassert.AbortsContains(t, cur, ErrLockedTokenAmountOverflow, func(cur realm) {
+					s.AddLockedTokenAmount(0, cur, denom, tc.add)
 				})
 			} else {
-				s.AddLockedNative(0, cur, denom, tc.add)
+				s.AddLockedTokenAmount(0, cur, denom, tc.add)
 			}
 
-			got, ok := s.GetLockedNative(denom)
+			got, ok := s.GetLockedTokenAmount(denom)
 			uassert.True(t, ok)
 			uassert.True(t, got.Eq(tc.wantTotal))
 		})
@@ -170,27 +168,6 @@ func TestForeignToken(cur realm, t *testing.T) {
 			got, ok := s.GetForeignToken(tc.denom)
 			uassert.True(t, ok)
 			uassert.Equal(t, string(tc.token), string(got))
-		})
-	}
-}
-
-func TestTokenDecimals(cur realm, t *testing.T) {
-	s := NewStore()
-	cases := []struct {
-		name     string
-		denom    string
-		decimals uint8
-	}{
-		{"stores zero decimals", "ibc/zero-dec", 0},
-		{"stores origin decimals", "ibc/origin-dec", 18},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			s.SetTokenDecimals(0, cur, tc.denom, tc.decimals)
-			got, ok := s.GetTokenDecimals(tc.denom)
-			uassert.True(t, ok)
-			uassert.Equal(t, tc.decimals, got)
 		})
 	}
 }
@@ -263,7 +240,7 @@ func TestTokenBucket(cur realm, t *testing.T) {
 func TestVoucherStore(cur realm, t *testing.T) {
 	s := NewStore()
 	token, ledger := newVoucherTokenForTest(cur, "Store Voucher", "SVOU")
-	vou := NewVoucher(token, ledger)
+	vou := NewVoucher(token, ledger, 0)
 
 	uassert.False(t, s.HasVoucher("ibc/store-voucher"))
 	s.SetVoucher(0, cur, "ibc/store-voucher", vou)
@@ -272,19 +249,6 @@ func TestVoucherStore(cur realm, t *testing.T) {
 	uassert.True(t, ok)
 	uassert.True(t, s.HasVoucher("ibc/store-voucher"))
 	uassert.True(t, got == vou)
-}
-
-func TestLocalGRC20TokenStoreRecordsOnce(cur realm, t *testing.T) {
-	s := NewStore()
-	tokenA, _ := newVoucherTokenForTest(cur, "Token A", "TKNA")
-	tokenB, _ := newVoucherTokenForTest(cur, "Token B", "TKNB")
-
-	s.SetLocalGRC20Token(0, cur, "ugrc20", tokenA)
-	s.SetLocalGRC20Token(0, cur, "ugrc20", tokenB)
-
-	got, ok := s.GetLocalGRC20Token("ugrc20")
-	uassert.True(t, ok)
-	uassert.True(t, got == tokenA)
 }
 
 func TestReceiver(cur realm, t *testing.T) {
@@ -329,7 +293,7 @@ func TestRateLimitDisabled(cur realm, t *testing.T) {
 func TestStore_MutationsRejectSpoofedRealm(cur realm, t *testing.T) {
 	s := NewStore()
 	token, ledger := newVoucherTokenForTest(cur, "Spoof Voucher", "SPF")
-	vou := NewVoucher(token, ledger)
+	vou := NewVoucher(token, ledger, 0)
 	bucket := mustTokenBucketForTest(t, 100, 10, 1)
 	packet := types.NewPacket(1, 2, []byte("parent"), 100)
 	spoofedRealm := cur.Previous()
@@ -341,10 +305,8 @@ func TestStore_MutationsRejectSpoofedRealm(cur realm, t *testing.T) {
 		{"set token origin", func() { s.SetTokenOrigin(0, spoofedRealm, "ibc/spoof-origin", u256.NewUint(1)) }},
 		{"set channel balance", func() { s.SetChannelBalanceV2(0, spoofedRealm, "spoof-balance", u256.NewUint(2)) }},
 		{"remove channel balance", func() { s.RemoveChannelBalanceV2(0, spoofedRealm, "spoof-balance") }},
-		{"set local grc20 token", func() { s.SetLocalGRC20Token(0, spoofedRealm, "spoof-token", token) }},
 		{"set metadata image", func() { s.SetMetadataImageOf(0, spoofedRealm, "ibc/spoof-image", [32]byte{0x01}) }},
 		{"set foreign token", func() { s.SetForeignToken(0, spoofedRealm, "ibc/spoof-foreign", []byte("utoken")) }},
-		{"set token decimals", func() { s.SetTokenDecimals(0, spoofedRealm, "ibc/spoof-decimals", 18) }},
 		{"set inflight packet", func() { s.SetInFlightPacket(0, spoofedRealm, "spoof-packet", packet) }},
 		{"remove inflight packet", func() { s.RemoveInFlightPacket(0, spoofedRealm, "spoof-packet") }},
 		{"set token bucket", func() { s.SetTokenBucket(0, spoofedRealm, "ibc/spoof-bucket", bucket) }},

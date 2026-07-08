@@ -198,7 +198,8 @@ func (v *ucs03ZkgmV1) Send(_ int, rlm realm, channelId types.ChannelId, timeoutT
 		panic(err)
 	}
 
-	if err := funds.assertEmpty(); err != nil {
+	err = funds.assertEmpty()
+	if err != nil {
 		panic(err)
 	}
 

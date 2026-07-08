@@ -412,18 +412,6 @@ func (e eventConfigMockError) Error() string {
 //         "value": "0x11ee731648e2573710d3a4843567d7c9de8f17acc1d9aa1f5c1a1e4338809bf8"
 //       },
 //       {
-//         "key": "packet_data_size",
-//         "value": "8"
-//       },
-//       {
-//         "key": "packet_data[0]",
-//         "value": "0xaa"
-//       },
-//       {
-//         "key": "packet_data[1]",
-//         "value": "bbcc"
-//       },
-//       {
 //         "key": "source_channel_id",
 //         "value": "1"
 //       },
@@ -454,6 +442,18 @@ func (e eventConfigMockError) Error() string {
 //       {
 //         "key": "timeout_timestamp",
 //         "value": "1"
+//       },
+//       {
+//         "key": "packet_data_size",
+//         "value": "8"
+//       },
+//       {
+//         "key": "packet_data[0]",
+//         "value": "0xaa"
+//       },
+//       {
+//         "key": "packet_data[1]",
+//         "value": "bbcc"
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
@@ -466,10 +466,6 @@ func (e eventConfigMockError) Error() string {
 //         "value": "0x0b0fcb42acf152d766f6b174a40dfc7092feace9ee143387a094dbaab326c7ac"
 //       },
 //       {
-//         "key": "packet_data",
-//         "value": "0xddeeff"
-//       },
-//       {
 //         "key": "source_channel_id",
 //         "value": "1"
 //       },
@@ -500,6 +496,10 @@ func (e eventConfigMockError) Error() string {
 //       {
 //         "key": "timeout_timestamp",
 //         "value": "1"
+//       },
+//       {
+//         "key": "packet_data",
+//         "value": "0xddeeff"
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"

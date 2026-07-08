@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"gno.land/p/nt/uassert/v0"
+	"gno.land/p/onbloc/ibc/union/types"
 	"gno.land/r/onbloc/ibc/union/access"
 )
 
@@ -268,9 +269,9 @@ func TestEventConfigDrivesPacketDataAttrs(cur realm, t *testing.T) {
 			setEventConfig(tc.config)
 
 			packet := NewPacket(1, 2, []byte{0x00, 0x01}, 10)
-			attrs := packetEventBaseAttrs(packet)
+			attrs := packetSendEventAttrs(packet, types.Channel{}, types.Connection{})
 
-			assertStringSliceEqual(t, attrs[2:], tc.want)
+			assertStringSliceEqual(t, attrs[len(attrs)-len(tc.want):], tc.want)
 		})
 	}
 }

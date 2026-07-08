@@ -749,6 +749,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "1"
 //       },
 //       {
+//         "key": "source_channel_version",
+//         "value": "event-v1"
+//       },
+//       {
 //         "key": "source_connection_id",
 //         "value": "1"
 //       },
@@ -801,6 +805,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       {
 //         "key": "source_channel_id",
 //         "value": "1"
+//       },
+//       {
+//         "key": "source_channel_version",
+//         "value": "event-v1"
 //       },
 //       {
 //         "key": "source_connection_id",

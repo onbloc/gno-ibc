@@ -316,6 +316,7 @@ func TestPacketAckEventAttrs(cur realm, t *testing.T) {
 	}
 	sourceChannel := types.Channel{
 		ConnectionId: types.ConnectionId(3),
+		Version:      "ucs03-zkgm-0",
 	}
 	acknowledgement := []byte{4, 5, 6, 7}
 
@@ -324,6 +325,7 @@ func TestPacketAckEventAttrs(cur realm, t *testing.T) {
 	assertStringSliceEqual(t, attrs, []string{
 		"packet_hash", commitPacketHash(packet).String(),
 		"source_channel_id", "1",
+		"source_channel_version", "ucs03-zkgm-0",
 		"source_connection_id", "3",
 		"source_connection_client_id", "10",
 		"destination_channel_id", "2",

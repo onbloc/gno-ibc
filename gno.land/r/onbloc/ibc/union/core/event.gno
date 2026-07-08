@@ -313,6 +313,7 @@ func packetAckEventAttrs(packet types.Packet, sourceChannel types.Channel, conne
 	attrs := []string{
 		"packet_hash", commitPacketHash(packet).String(),
 		"source_channel_id", packet.SourceChannelId.String(),
+		"source_channel_version", sourceChannel.Version,
 		"source_connection_id", sourceChannel.ConnectionId.String(),
 		"source_connection_client_id", connection.ClientId.String(),
 		"destination_channel_id", packet.DestinationChannelId.String(),

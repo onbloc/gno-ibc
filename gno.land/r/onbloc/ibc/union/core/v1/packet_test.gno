@@ -157,7 +157,7 @@ func TestAssertPacketDataSize(cur realm, t *testing.T) {
 	}{
 		{"empty data", []byte{}, ""},
 		{"max hex attr size", make([]byte, maxPacketDataBytes), ""},
-		{"too large hex attr size", make([]byte, maxPacketDataBytes+1), core.ErrPacketDataTooLarge},
+		{"too large hex attr size", make([]byte, maxPacketDataBytes+1), core.ErrPacketCombinedDataTooLarge},
 	}
 
 	for _, tc := range tests {
@@ -174,58 +174,24 @@ func TestAssertPacketDataSize(cur realm, t *testing.T) {
 	}
 }
 
-func TestPacketEntrypointsRejectOversizedPacketData(cur realm, t *testing.T) {
+// SendPacket is the only entrypoint that still gates on packet data size
+// directly: it is the only point where an oversized payload can be rejected
+// before it is ever committed. PacketRecv/IntentPacketRecv/PacketAcknowledgement/
+// PacketTimeout all operate on packets that already exist (sent, and possibly
+// proven on a counterparty with a different size config), so rejecting them
+// there would strand the packet with no way to resolve it; the combined
+// packet_data+ack/maker_msg budget is checked at the point each app/event
+// actually needs it instead (see TestCombinedEventDataTooLarge in core, and
+// the ZKGM OnRecvPacket/OnIntentRecvPacket entry checks).
+func TestSendPacketRejectsOversizedPacketData(cur realm, t *testing.T) {
 	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
 	oversized := make([]byte, maxPacketDataBytes+1)
-	tests := []struct {
-		name string
-		run  func(cur realm)
-	}{
-		{
-			name: "send packet",
-			run: func(cur realm) {
-				v := newTestImpl()
-				v.SendPacket(0, cur, types.ChannelId(1), types.Timestamp(0), oversized)
-			},
-		},
-		{
-			name: "packet acknowledgement",
-			run: func(cur realm) {
-				v := newTestImpl()
-				v.PacketAcknowledgement(0, cur, types.MsgPacketAcknowledgement{Packets: []types.Packet{{Data: oversized}}})
-			},
-		},
-		{
-			name: "packet timeout",
-			run: func(cur realm) {
-				v := newTestImpl()
-				v.PacketTimeout(0, cur, types.MsgPacketTimeout{Packet: types.Packet{Data: oversized}})
-			},
-		},
-		{
-			name: "packet recv",
-			run: func(cur realm) {
-				v := newTestImpl()
-				v.PacketRecv(0, cur, types.MsgPacketRecv{Packets: []types.Packet{{Data: oversized}}})
-			},
-		},
-		{
-			name: "intent packet recv",
-			run: func(cur realm) {
-				v := newTestImpl()
-				v.IntentPacketRecv(0, cur, types.MsgIntentPacketRecv{Packets: []types.Packet{{Data: oversized}}})
-			},
-		},
-	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			uassert.AbortsContains(t, cur, core.ErrPacketDataTooLarge, func(cur realm) {
-				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-				tc.run(cur)
-			})
-		})
-	}
+	uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+		v := newTestImpl()
+		v.SendPacket(0, cur, types.ChannelId(1), types.Timestamp(1000), oversized)
+	})
 }
 
 func TestPacketRecv(cur realm, t *testing.T) {

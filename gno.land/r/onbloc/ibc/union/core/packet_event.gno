@@ -22,3 +22,32 @@ func PacketDataTooLarge(data []byte) bool {
 
 	return hexAttrLen(data) > MaxPacketDataEventSize()
 }
+
+// eventColumnPairs returns the number of attr pairs encodedEventAttrs would
+// emit for data: one "<key>_size" pair plus one pair per split column.
+func eventColumnPairs(data []byte) int {
+	maxValueLen := int(GetEventConfig().MaxEventAttrValueLen)
+	columns := (hexAttrLen(data) + maxValueLen - 1) / maxValueLen
+	if columns < 1 {
+		columns = 1
+	}
+
+	return 1 + columns
+}
+
+// CombinedEventDataTooLarge reports whether fields, split together into one
+// host event, would exceed chain.Emit's 64-attr-pair ceiling. Fields within
+// PacketDataTooLarge's solo budget individually can still exceed it combined,
+// so MaxPacketDataEventColumns is reused as a shared pair budget here.
+func CombinedEventDataTooLarge(fields ...[]byte) bool {
+	if !GetEventConfig().SplitEventAttrs {
+		return false
+	}
+
+	total := 0
+	for _, data := range fields {
+		total += eventColumnPairs(data)
+	}
+
+	return total > int(GetEventConfig().MaxPacketDataEventColumns)
+}

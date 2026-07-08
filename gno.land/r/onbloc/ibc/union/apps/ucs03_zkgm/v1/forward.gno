@@ -65,6 +65,14 @@ func (v *ucs03ZkgmV1) handleForwardChild(_ int, rlm realm, packet types.Packet, 
 		return false
 	}
 
+	// The size check at OnAcknowledgementPacket's entry guards packet.Data
+	// (the child) + ack, not parent.Data + ack. The parent may be
+	// arbitrarily larger than its forwarded child, so the combination
+	// actually written to WriteAck must be checked again here.
+	if core.CombinedEventDataTooLarge(parent.Data, ack) {
+		panic(core.ErrPacketCombinedDataTooLarge)
+	}
+
 	v.store.RemoveInFlightPacket(0, rlm, key)
 	core.WriteAcknowledgement(cross(rlm), types.NewMsgWriteAcknowledgement(parent, ack))
 

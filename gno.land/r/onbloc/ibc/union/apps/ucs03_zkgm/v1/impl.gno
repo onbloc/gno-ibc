@@ -70,8 +70,8 @@ func (v *ucs03ZkgmV1) OnChannelCloseConfirm(_ int, rlm realm, channelId types.Ch
 func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {
 	assertIsRlmCurrent(0, rlm)
 
-	if core.PacketDataTooLarge(packet.Data) {
-		zkgm.EmitRecvError(0, rlm, packet.SourceChannelId, packet.DestinationChannelId, core.ErrPacketDataTooLarge)
+	if core.CombinedEventDataTooLarge(packet.Data, relayerMsg) {
+		zkgm.EmitRecvError(0, rlm, packet.SourceChannelId, packet.DestinationChannelId, core.ErrPacketCombinedDataTooLarge)
 		return failureResult(universalErrorAck())
 	}
 
@@ -98,6 +98,17 @@ func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relaye
 		panic(errIsOnlyMakerAck)
 	}
 
+	// The final ack is only known after dispatch (batch children may have
+	// embedded relayerMsg multiple times), by which point dispatch may have
+	// already mutated state (e.g. a market-maker voucher transfer). Swapping
+	// in a different ack here instead of panicking would leave that mutation
+	// standing against a failure outcome, so an oversized result reverts
+	// atomically rather than returning gracefully like the pre-dispatch check
+	// above.
+	if core.CombinedEventDataTooLarge(packet.Data, res.Acknowledgement) {
+		panic(core.ErrPacketCombinedDataTooLarge)
+	}
+
 	return res
 }
 
@@ -108,8 +119,8 @@ func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relaye
 func (v *ucs03ZkgmV1) OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
 	assertIsRlmCurrent(0, rlm)
 
-	if core.PacketDataTooLarge(packet.Data) {
-		zkgm.EmitRecvError(0, rlm, packet.SourceChannelId, packet.DestinationChannelId, core.ErrPacketDataTooLarge)
+	if core.CombinedEventDataTooLarge(packet.Data, marketMakerMsg) {
+		zkgm.EmitRecvError(0, rlm, packet.SourceChannelId, packet.DestinationChannelId, core.ErrPacketCombinedDataTooLarge)
 		return failureResult(universalErrorAck())
 	}
 
@@ -132,12 +143,26 @@ func (v *ucs03ZkgmV1) OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, 
 		panic("only maker")
 	}
 
+	// See the matching check in OnRecvPacket: the final ack size is only known
+	// after dispatch, and by then a market-maker fill may have already moved
+	// funds, so an oversized result must revert atomically, not swap acks.
+	if core.CombinedEventDataTooLarge(packet.Data, res.Acknowledgement) {
+		panic(core.ErrPacketCombinedDataTooLarge)
+	}
+
 	return res
 }
 
 // OnAcknowledgementPacket routes the ack to its instruction, or to the forwarded parent packet.
 func (v *ucs03ZkgmV1) OnAcknowledgementPacket(_ int, rlm realm, packet types.Packet, acknowledgement []byte, relayer address) {
 	assertIsRlmCurrent(0, rlm)
+
+	// acknowledgement is proven from the counterparty's commitment, so it
+	// cannot be swapped for a smaller value here; an oversized combination
+	// can only revert.
+	if core.CombinedEventDataTooLarge(packet.Data, acknowledgement) {
+		panic(core.ErrPacketCombinedDataTooLarge)
+	}
 
 	zp, err := z.DecodeZkgmPacket(types.CloneBytes(packet.Data))
 	if err != nil {

@@ -64,7 +64,6 @@ func (c *coreV1) SendPacket(_ int, rlm realm, sourceChannelId types.ChannelId, t
 // dispatches each to its app, recording receipts and sync acks.
 func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 	assertIsRlmCurrent(0, rlm)
-	assertPacketsDataSize(msg.Packets)
 
 	relayer := rlm.Previous().Address()
 
@@ -116,7 +115,6 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 // IntentPacketRecv settles packets on the proofless market-maker fast path.
 func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRecv) {
 	assertIsRlmCurrent(0, rlm)
-	assertPacketsDataSize(msg.Packets)
 
 	marketMaker := rlm.Previous().Address()
 
@@ -169,7 +167,6 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 // PacketAcknowledgement proves the counterparty's acks and notifies the app.
 func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAcknowledgement) {
 	assertIsRlmCurrent(0, rlm)
-	assertPacketsDataSize(msg.Packets)
 
 	relayer := rlm.Previous().Address()
 
@@ -214,7 +211,6 @@ func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAckn
 // the app to refund.
 func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 	assertIsRlmCurrent(0, rlm)
-	assertPacketDataSize(msg.Packet.Data)
 
 	relayer := rlm.Previous().Address()
 	packet := msg.Packet

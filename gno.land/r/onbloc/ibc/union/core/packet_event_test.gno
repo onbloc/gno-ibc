@@ -26,6 +26,57 @@ func TestPacketDataTooLarge(cur realm, t *testing.T) {
 	}
 }
 
+func TestCombinedEventDataTooLarge(cur realm, t *testing.T) {
+	resetStore(cur)
+	defer resetEventConfigForTest()
+
+	// MaxEventAttrValueLen=4 => eventColumnPairs(data) = 1 + ceil(hexAttrLen(data)/4).
+	// hexAttrLen(b) = len(b)*2+2, so: 0 bytes -> 2 pairs, 3 bytes -> 3 pairs,
+	// 5 bytes -> 4 pairs. Combined budget (MaxPacketDataEventColumns) = 5.
+	setEventConfig(EventConfig{
+		SplitEventAttrs:           true,
+		MaxEventAttrValueLen:      4,
+		MaxPacketDataEventColumns: 5,
+	})
+
+	tests := []struct {
+		name   string
+		fields [][]byte
+		want   bool
+	}{
+		{"no fields", nil, false},
+		{"single empty field", [][]byte{{}}, false},
+		{"two empty fields", [][]byte{{}, {}}, false},
+		{"three empty fields exceed shared budget", [][]byte{{}, {}, {}}, true},
+		{"fields at combined boundary", [][]byte{make([]byte, 3), {}}, false},
+		{"fields just over combined boundary", [][]byte{make([]byte, 5), {}}, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := CombinedEventDataTooLarge(tc.fields...); got != tc.want {
+				t.Fatalf("combined event data too large: got %t want %t", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestCombinedEventDataTooLargeSplitDisabled(cur realm, t *testing.T) {
+	resetStore(cur)
+	defer resetEventConfigForTest()
+
+	setEventConfig(EventConfig{
+		SplitEventAttrs:           false,
+		MaxEventAttrValueLen:      4,
+		MaxPacketDataEventColumns: 2,
+	})
+
+	huge := make([]byte, 1<<20)
+	if got := CombinedEventDataTooLarge(huge, huge); got != false {
+		t.Fatalf("combined event data too large with split disabled: got %t want false", got)
+	}
+}
+
 func TestPacketDataTooLargeUsesEventConfig(cur realm, t *testing.T) {
 	resetStore(cur)
 	defer resetEventConfigForTest()

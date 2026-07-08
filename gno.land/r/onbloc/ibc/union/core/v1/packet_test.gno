@@ -202,6 +202,20 @@ func TestPacketEntrypointsRejectOversizedPacketData(cur realm, t *testing.T) {
 				v.PacketTimeout(0, cur, types.MsgPacketTimeout{Packet: types.Packet{Data: oversized}})
 			},
 		},
+		{
+			name: "packet recv",
+			run: func(cur realm) {
+				v := newTestImpl()
+				v.PacketRecv(0, cur, types.MsgPacketRecv{Packets: []types.Packet{{Data: oversized}}})
+			},
+		},
+		{
+			name: "intent packet recv",
+			run: func(cur realm) {
+				v := newTestImpl()
+				v.IntentPacketRecv(0, cur, types.MsgIntentPacketRecv{Packets: []types.Packet{{Data: oversized}}})
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -210,61 +224,6 @@ func TestPacketEntrypointsRejectOversizedPacketData(cur realm, t *testing.T) {
 				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				tc.run(cur)
 			})
-		})
-	}
-}
-
-func TestRecvEntrypointsDispatchOversizedPacketDataWithReducedEvents(cur realm, t *testing.T) {
-	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
-	oversized := make([]byte, maxPacketDataBytes+1)
-	tests := []struct {
-		name       string
-		run        func(cur realm, v *coreV1, packet types.Packet)
-		wantRecv   int
-		wantIntent int
-	}{
-		{
-			name:     "packet recv",
-			wantRecv: 1,
-			run: func(cur realm, v *coreV1, packet types.Packet) {
-				v.PacketRecv(0, cur, types.MsgPacketRecv{
-					Packets:     []types.Packet{packet},
-					RelayerMsgs: [][]byte{[]byte("rm")},
-					Proof:       []byte("proof"),
-					ProofHeight: 10,
-				})
-			},
-		},
-		{
-			name:       "intent packet recv",
-			wantIntent: 1,
-			run: func(cur realm, v *coreV1, packet types.Packet) {
-				v.IntentPacketRecv(0, cur, types.MsgIntentPacketRecv{
-					Packets:             []types.Packet{packet},
-					MarketMakerMessages: [][]byte{[]byte("mm")},
-				})
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			v := newTestImpl()
-			chId, _, mApp := setupOpenChannel(cur, v)
-			packet := recvPacket(chId, "oversized")
-			packet.Data = oversized
-
-			uassert.NotAborts(t, cur, func(cur realm) {
-				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-				tc.run(cur, v, packet)
-			})
-
-			uassert.Equal(t, tc.wantRecv, mApp.recvCalls)
-			uassert.Equal(t, tc.wantIntent, mApp.intentRecvCalls)
-			receipt, ok := v.store.AcknowledgementReceipt(chId, packet)
-			uassert.True(t, ok)
-			uassert.True(t, receipt == types.CommitAcks([][]byte{[]byte("ack")}))
 		})
 	}
 }

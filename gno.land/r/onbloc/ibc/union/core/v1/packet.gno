@@ -64,6 +64,7 @@ func (c *coreV1) SendPacket(_ int, rlm realm, sourceChannelId types.ChannelId, t
 // dispatches each to its app, recording receipts and sync acks.
 func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 	assertIsRlmCurrent(0, rlm)
+	assertPacketsDataSize(msg.Packets)
 
 	relayer := rlm.Previous().Address()
 
@@ -115,6 +116,7 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 // IntentPacketRecv settles packets on the proofless market-maker fast path.
 func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRecv) {
 	assertIsRlmCurrent(0, rlm)
+	assertPacketsDataSize(msg.Packets)
 
 	marketMaker := rlm.Previous().Address()
 

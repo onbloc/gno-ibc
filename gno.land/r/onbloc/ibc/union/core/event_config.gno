@@ -3,7 +3,7 @@ package core
 import "gno.land/r/onbloc/ibc/union/access"
 
 const (
-	defaultMaxEventAttrValueLen      = 1024
+	defaultMaxEventAttrValueLen      = 4096
 	defaultMaxPacketDataEventColumns = 50
 )
 

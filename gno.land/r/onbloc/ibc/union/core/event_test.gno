@@ -14,7 +14,7 @@ var testConnection = types.Connection{
 	CounterpartyConnectionId: types.ConnectionId(30),
 }
 
-const fixedEventAttrHalfColumn = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
+const fixedEventAttrUnit = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
 	"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
 	"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
 	"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
@@ -23,6 +23,10 @@ const fixedEventAttrHalfColumn = "0123456789abcdef0123456789abcdef0123456789abcd
 	"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
 	"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
+// fixedEventAttrHalfColumn/fixedEventAttrColumn are sized relative to
+// defaultMaxEventAttrValueLen so the boundary tests below stay correct if
+// that default changes.
+const fixedEventAttrHalfColumn = fixedEventAttrUnit + fixedEventAttrUnit + fixedEventAttrUnit + fixedEventAttrUnit
 const fixedEventAttrColumn = fixedEventAttrHalfColumn + fixedEventAttrHalfColumn
 
 func TestChannelOpenInitEventAttrs(cur realm, t *testing.T) {
@@ -368,8 +372,8 @@ func TestEventAttrColumnsBoundary(cur realm, t *testing.T) {
 	resetEventConfigForTest()
 
 	maxLen := int(GetEventConfig().MaxEventAttrValueLen)
-	if maxLen != 1024 {
-		t.Fatalf("configured max event attr value len = %d, want 1024", maxLen)
+	if maxLen != 4096 {
+		t.Fatalf("configured max event attr value len = %d, want 4096", maxLen)
 	}
 	testCases := []struct {
 		name     string
@@ -382,17 +386,17 @@ func TestEventAttrColumnsBoundary(cur realm, t *testing.T) {
 			wantLens: []int{0},
 		},
 		{
-			name:     "1023 bytes stays in one column",
+			name:     "one byte under max stays in one column",
 			value:    fixedEventAttrColumn[:maxLen-1],
 			wantLens: []int{maxLen - 1},
 		},
 		{
-			name:     "1024 bytes stays in one full column",
+			name:     "exactly max bytes stays in one full column",
 			value:    fixedEventAttrColumn,
 			wantLens: []int{maxLen},
 		},
 		{
-			name:     "1025 bytes splits into full column and remainder",
+			name:     "one byte over max splits into full column and remainder",
 			value:    fixedEventAttrColumn + "2",
 			wantLens: []int{maxLen, 1},
 		},

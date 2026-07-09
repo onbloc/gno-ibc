@@ -1,4 +1,16 @@
 services:
+  # Union devnet service - disabled by default, enable when needed
+  # To use: docker compose --profile union-devnet up -d
+  union-devnet:
+    image: ghcr.io/unionlabs/union:latest
+    ports:
+      - "${UNION_RPC_PORT:-26657}:26657"
+      - "${UNION_REST_PORT:-1317}:1317"
+    environment:
+      - MONIKER=union-devnet
+      - CHAIN_ID=union-devnet-1
+    profiles: ["union-devnet"]
+
   gno:
     build:
       context: ../..
@@ -69,10 +81,39 @@ services:
   voyager-build:
     build:
       context: ${UNION_VOYAGER_DIR:-/Users/notjoon/union-voyager}
-      dockerfile: voyager-build.Dockerfile
+      dockerfile: /Users/notjoon/gno-ibc/e2e/union/voyager-build.Dockerfile
       args:
         BUILDKIT_INLINE_CACHE: 1
     profiles: ["voyager-build"]
     image: union-voyager-build
     volumes:
       - ./voyager-bin:/output
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  voyager:
+    image: union-voyager-build:latest
+    command: ["sh", "/entrypoint.sh"]
+    working_dir: /output
+    volumes:
+      - ${VOYAGER_CONFIG}:/config/voyager-config.gno-union.jsonc:ro
+      - /Users/notjoon/gno-ibc/e2e/union/voyager-entrypoint.sh:/entrypoint.sh:ro
+    env_file:
+      - .env.example
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      tx-indexer:
+        condition: service_started
+    profiles: ["voyager"]

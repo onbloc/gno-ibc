@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 # Build union-voyager in Linux environment
 # Build context should be the union-voyager directory
 # Rust 1.90 stable avoids nightly-only regressions in transitive crates.
@@ -18,26 +19,53 @@ RUN apt-get update && apt-get install -y \
 COPY . .
 
 # Build only binaries used by e2e/union/voyager-config.gno-union.jsonc.
-RUN cargo build --release -j1 \
+RUN --mount=type=cache,target=/usr/local/cargo/registry \
+    --mount=type=cache,target=/usr/local/cargo/git \
+    --mount=type=cache,target=/build/target \
+    cargo build --release -j1 \
     -p voyager \
     -p voyager-state-module-cosmwasm \
     -p voyager-state-module-gno \
+    -p voyager-state-module-evm \
     -p voyager-proof-module-cosmwasm \
     -p voyager-proof-module-gno \
+    -p voyager-proof-module-evm-mpt \
     -p voyager-finality-module-cometbls \
     -p voyager-finality-module-gno \
+    -p voyager-finality-module-trusted-evm \
     -p voyager-client-module-cometbls \
     -p voyager-client-module-gno \
+    -p voyager-client-module-trusted-mpt \
+    -p voyager-client-module-state-lens-ics23-ics23 \
+    -p voyager-client-module-state-lens-ics23-mpt \
     -p voyager-client-bootstrap-module-cometbls \
     -p voyager-client-bootstrap-module-gno \
+    -p voyager-client-bootstrap-module-trusted-mpt \
+    -p voyager-client-bootstrap-module-state-lens-ics23-ics23 \
+    -p voyager-client-bootstrap-module-state-lens-ics23-mpt \
     -p voyager-event-source-plugin-cosmwasm \
     -p voyager-event-source-plugin-gno \
+    -p voyager-event-source-plugin-evm \
     -p voyager-transaction-plugin-cosmos \
     -p voyager-transaction-plugin-gno \
+    -p voyager-transaction-plugin-evm \
     -p voyager-plugin-transaction-batch \
     -p voyager-client-update-plugin-cometbls \
     -p voyager-client-update-plugin-gno \
-    -p voyager-plugin-packet-timeout
+    -p voyager-client-update-plugin-trusted-mpt \
+    -p voyager-client-update-plugin-state-lens \
+    -p voyager-plugin-packet-timeout && \
+    mkdir -p /build/out/modules /build/out/plugins /build/out/release && \
+    cp /build/target/release/voyager /build/out/voyager && \
+    cp /build/target/release/voyager-state-module-* /build/out/modules/ && \
+    cp /build/target/release/voyager-proof-module-* /build/out/modules/ && \
+    cp /build/target/release/voyager-finality-module-* /build/out/modules/ && \
+    cp /build/target/release/voyager-client-module-* /build/out/modules/ && \
+    cp /build/target/release/voyager-client-bootstrap-module-* /build/out/modules/ && \
+    cp /build/target/release/voyager-event-source-plugin-* /build/out/plugins/ && \
+    cp /build/target/release/voyager-transaction-plugin-* /build/out/plugins/ && \
+    cp /build/target/release/voyager-client-update-plugin-* /build/out/plugins/ && \
+    cp /build/target/release/voyager-plugin-* /build/out/plugins/
 
 # Output stage - use debian for glibc compatibility
 FROM debian:bookworm-slim
@@ -46,18 +74,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /output/modules /output/plugins
 
-COPY --from=builder /build/target/release/voyager /output/voyager
-COPY --from=builder /build/target/release/voyager-state-module-* /output/modules/
-COPY --from=builder /build/target/release/voyager-proof-module-* /output/modules/
-COPY --from=builder /build/target/release/voyager-finality-module-* /output/modules/
-COPY --from=builder /build/target/release/voyager-client-module-* /output/modules/
-COPY --from=builder /build/target/release/voyager-client-bootstrap-module-* /output/modules/
-COPY --from=builder /build/target/release/voyager-event-source-plugin-* /output/plugins/
-COPY --from=builder /build/target/release/voyager-transaction-plugin-* /output/plugins/
-COPY --from=builder /build/target/release/voyager-client-update-plugin-* /output/plugins/
-COPY --from=builder /build/target/release/voyager-plugin-* /output/plugins/
+COPY --from=builder /build/out/voyager /output/voyager
+COPY --from=builder /build/out/modules/ /output/modules/
+COPY --from=builder /build/out/plugins/ /output/plugins/
 # Create release directory with symlinks for voyager
 RUN mkdir -p /output/release && \
-    for f in /output/modules/* /output/plugins/*; do \
-        ln -sf "../$(basename "$f")" /output/release/; \
+    for f in /output/modules/*; do \
+        ln -sf "../modules/$(basename "$f")" /output/release/; \
+    done && \
+    for f in /output/plugins/*; do \
+        ln -sf "../plugins/$(basename "$f")" /output/release/; \
     done

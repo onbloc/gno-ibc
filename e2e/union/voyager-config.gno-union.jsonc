@@ -266,6 +266,7 @@
         "chain_id": "union-devnet-1",
         "chunk_block_fetch_size": 1000,
         "ibc_host_contract_address": "union1nk3nes4ef6vcjan5tz6stf9g8p08q2kgqysx6q5exxh89zakp0msq5z79t",
+        "index_trivial_events": true,
         "refetch_delay": 20,
         "rpc_url": "http://192.168.65.254:26657"
       }
@@ -363,7 +364,7 @@
       "config": {
         "chain_id": "union-devnet-1",
         "prover_endpoints": [
-          "http://192.168.65.254:9999"
+          "https://galois.union.build:443"
         ],
         "rpc_url": "http://192.168.65.254:26657"
       }

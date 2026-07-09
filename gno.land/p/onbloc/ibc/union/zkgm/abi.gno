@@ -1,6 +1,9 @@
 package zkgm
 
 import (
+	"bytes"
+	"errors"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/onbloc/encoding/abi"
 )
@@ -297,6 +300,45 @@ func DecodeTokenInitializer(data []byte) (TokenInitializer, error) {
 	}, nil
 }
 
+// erc20InitializeSelector is the first 4 bytes of
+// keccak256("initialize(address,address,string,string,uint8)"), the ZkgmERC20
+// EVM implementation's initializer. A Gno-origin TokenMetadata targeting a
+// real EVM destination chain carries this calldata in Initializer instead of
+// the Gno-native "grc20" tag encoding, since the EVM side must be able to
+// deploy and initialize the wrapped ERC20 clone directly from packet data.
+var erc20InitializeSelector = []byte{0x84, 0x20, 0xce, 0x99}
+
+// Erc20InitializeCalldataSchema mirrors the Solidity ABI params for
+// ZkgmERC20's initialize(address authority, address minter, string name,
+// string symbol, uint8 decimals), excluding the 4-byte selector.
+var Erc20InitializeCalldataSchema = abi.Schema{Fields: []abi.Field{
+	{Type: abi.TypeAddress}, // authority
+	{Type: abi.TypeAddress}, // minter
+	{Type: abi.TypeString},  // name
+	{Type: abi.TypeString},  // symbol
+	{Type: abi.TypeUint8},   // decimals
+}}
+
+// decodeErc20InitializeCalldata decodes the EVM ZkgmERC20 initialize(...)
+// calldata format used when TokenMetadata.Implementation carries a real
+// 20-byte EVM implementation address instead of the Gno-native "grc20" tag.
+func decodeErc20InitializeCalldata(data []byte) (TokenInitializer, error) {
+	if len(data) < 4 || !bytes.Equal(data[:4], erc20InitializeSelector) {
+		return TokenInitializer{}, errors.New("zkgm: unrecognized erc20 initialize selector")
+	}
+
+	out, err := abi.Decode(Erc20InitializeCalldataSchema, data[4:])
+	if err != nil {
+		return TokenInitializer{}, err
+	}
+
+	return TokenInitializer{
+		Name:     out[2].(string),
+		Symbol:   out[3].(string),
+		Decimals: out[4].(uint8),
+	}, nil
+}
+
 // DecodeTokenInitializerFromMetadata extracts display metadata (name, symbol,
 // decimals) from a TokenMetadata by dispatching on the Implementation field.
 // New implementation types should be added as explicit cases; unknown formats
@@ -306,6 +348,15 @@ func DecodeTokenInitializerFromMetadata(meta TokenMetadata) TokenInitializer {
 	switch string(meta.Implementation) {
 	case "grc20":
 		if ti, err := DecodeTokenInitializer(meta.Initializer); err == nil {
+			return ti
+		}
+		return TokenInitializer{}
+	}
+
+	// A real EVM implementation address (e.g. ZkgmERC20) is 20 bytes and
+	// never collides with the short ASCII "grc20" tag above.
+	if len(meta.Implementation) == 20 {
+		if ti, err := decodeErc20InitializeCalldata(meta.Initializer); err == nil {
 			return ti
 		}
 	}

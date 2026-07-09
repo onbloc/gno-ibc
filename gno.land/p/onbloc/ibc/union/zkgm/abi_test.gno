@@ -1441,6 +1441,13 @@ func TestDecodeTokenInitializerFromMetadata(t *testing.T) {
 		t.Fatalf("EncodeTokenInitializer: %v", err)
 	}
 
+	// Real ZkgmERC20 implementation address and initialize(address,address,
+	// string,string,uint8) calldata for name="footoken", symbol="foo",
+	// decimals=6, captured from a live `cast calldata` run against the
+	// deployed Sepolia contract (selector 0x8420ce99).
+	evmImplementation := mustHex("af739f34ddf951cbc24fdbba4f76213688e13627")
+	evmInitializer := mustHex0x("0x8420ce9900000000000000000000000040cdff51ae7487e0b4a4d6e5f86eb15fb7c1d9f40000000000000000000000005fbe74a283f7954f10aa04c2edf55578811aeb0300000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000008666f6f746f6b656e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003666f6f0000000000000000000000000000000000000000000000000000000000")
+
 	tests := []struct {
 		name string
 		meta TokenMetadata
@@ -1464,6 +1471,26 @@ func TestDecodeTokenInitializerFromMetadata(t *testing.T) {
 		{
 			"empty implementation",
 			TokenMetadata{Implementation: []byte{}, Initializer: []byte{}},
+			TokenInitializer{},
+		},
+		{
+			"valid evm erc20 metadata",
+			TokenMetadata{Implementation: evmImplementation, Initializer: evmInitializer},
+			TokenInitializer{Name: "footoken", Symbol: "foo", Decimals: 6},
+		},
+		{
+			"evm implementation wrong selector",
+			TokenMetadata{Implementation: evmImplementation, Initializer: append([]byte{0xde, 0xad, 0xbe, 0xef}, evmInitializer[4:]...)},
+			TokenInitializer{},
+		},
+		{
+			"evm implementation truncated calldata",
+			TokenMetadata{Implementation: evmImplementation, Initializer: evmInitializer[:4]},
+			TokenInitializer{},
+		},
+		{
+			"20-byte implementation that is not valid erc20 calldata",
+			TokenMetadata{Implementation: evmImplementation, Initializer: []byte("not calldata")},
 			TokenInitializer{},
 		},
 	}

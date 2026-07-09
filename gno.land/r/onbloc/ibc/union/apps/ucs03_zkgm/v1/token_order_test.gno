@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"chain"
 	"chain/banker"
+	"encoding/hex"
 	"testing"
 	"time"
 
@@ -319,6 +320,39 @@ func TestVerifyMetadataDecimalsAcceptsGRC20Match(cur realm, t *testing.T) {
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
 		Implementation: []byte("grc20"),
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Foo", Symbol: "FOO", Decimals: 6}),
+	})
+
+	uassert.NoError(t, v.verifyMetadataDecimals(grc20Key, metaBytes))
+}
+
+// TestVerifyMetadataDecimalsAcceptsEvmErc20Match reproduces a live-testnet
+// regression: sending a Gno-native GRC20 token to a real EVM destination
+// (e.g. Sepolia) must encode TokenMetadata as the ZkgmERC20
+// initialize(address,address,string,string,uint8) calldata, since the EVM
+// side deploys the wrapped clone directly from packet data and cannot decode
+// the Gno-only "grc20" tag. Before this fix, any EVM-style metadata decoded
+// to a zero-value TokenInitializer and was rejected here with "metadata
+// decimals do not match", even though the amounts were correct.
+func TestVerifyMetadataDecimalsAcceptsEvmErc20Match(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	const (
+		grc20Slug = "foo-grc20-evm-meta-match"
+		grc20Key  = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1." + grc20Slug
+	)
+	token, _ := grc20.NewToken(0, cur, "footoken", "foo", 6)
+	grc20reg.Register(cross(cur), token, grc20Slug)
+
+	// Real ZkgmERC20 implementation address + initialize(...) calldata for
+	// name="footoken", symbol="foo", decimals=6, captured from a live
+	// `cast calldata` run against the deployed Sepolia contract.
+	implementation := mustHexBytes("af739f34ddf951cbc24fdbba4f76213688e13627")
+	initializer := mustHexBytes("8420ce9900000000000000000000000040cdff51ae7487e0b4a4d6e5f86eb15fb7c1d9f40000000000000000000000005fbe74a283f7954f10aa04c2edf55578811aeb0300000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000000000000000000000000000000000000000000060000000000000000000000000000000000000000000000000000000000000008666f6f746f6b656e0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003666f6f0000000000000000000000000000000000000000000000000000000000")
+
+	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: implementation,
+		Initializer:    initializer,
 	})
 
 	uassert.NoError(t, v.verifyMetadataDecimals(grc20Key, metaBytes))
@@ -1379,6 +1413,14 @@ func marketMakerAck(marketMaker string) z.TokenOrderAck {
 		FillType:    fillTypeMarketMaker(),
 		MarketMaker: []byte(marketMaker),
 	}
+}
+
+func mustHexBytes(s string) []byte {
+	bz, err := hex.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return bz
 }
 
 func mustEncodeTokenMetadata(meta z.TokenMetadata) []byte {

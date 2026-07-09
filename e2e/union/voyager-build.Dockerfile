@@ -22,7 +22,7 @@ COPY . .
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
     --mount=type=cache,target=/build/target \
-    cargo build --release -j1 \
+    cargo build -j1 \
     -p voyager \
     -p voyager-state-module-cosmwasm \
     -p voyager-state-module-gno \
@@ -56,16 +56,16 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     -p voyager-client-update-plugin-state-lens \
     -p voyager-plugin-packet-timeout && \
     mkdir -p /build/out/modules /build/out/plugins /build/out/release && \
-    cp /build/target/release/voyager /build/out/voyager && \
-    cp /build/target/release/voyager-state-module-* /build/out/modules/ && \
-    cp /build/target/release/voyager-proof-module-* /build/out/modules/ && \
-    cp /build/target/release/voyager-finality-module-* /build/out/modules/ && \
-    cp /build/target/release/voyager-client-module-* /build/out/modules/ && \
-    cp /build/target/release/voyager-client-bootstrap-module-* /build/out/modules/ && \
-    cp /build/target/release/voyager-event-source-plugin-* /build/out/plugins/ && \
-    cp /build/target/release/voyager-transaction-plugin-* /build/out/plugins/ && \
-    cp /build/target/release/voyager-client-update-plugin-* /build/out/plugins/ && \
-    cp /build/target/release/voyager-plugin-* /build/out/plugins/
+    cp /build/target/debug/voyager /build/out/voyager && \
+    cp /build/target/debug/voyager-state-module-* /build/out/modules/ && \
+    cp /build/target/debug/voyager-proof-module-* /build/out/modules/ && \
+    cp /build/target/debug/voyager-finality-module-* /build/out/modules/ && \
+    cp /build/target/debug/voyager-client-module-* /build/out/modules/ && \
+    cp /build/target/debug/voyager-client-bootstrap-module-* /build/out/modules/ && \
+    cp /build/target/debug/voyager-event-source-plugin-* /build/out/plugins/ && \
+    cp /build/target/debug/voyager-transaction-plugin-* /build/out/plugins/ && \
+    cp /build/target/debug/voyager-client-update-plugin-* /build/out/plugins/ && \
+    cp /build/target/debug/voyager-plugin-* /build/out/plugins/
 
 # Output stage - use debian for glibc compatibility
 FROM debian:bookworm-slim

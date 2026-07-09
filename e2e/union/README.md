@@ -4,9 +4,9 @@ This harness runs local Gno plus the Gno tx-indexer from this repo and reuses
 Union's official local devnet for Union, EVM, beacon, and Postgres. The Union
 side follows the official Union repo docs and E2E flow:
 
-- `/Users/notjoon/union/networks/README.md`
-- `/Users/notjoon/union/cosmwasm/cosmwasm.nix`
-- `/Users/notjoon/union/e2e/e2e.nix`
+- `/Users/notjoon/union-voyager/networks/README.md`
+- `/Users/notjoon/union-voyager/cosmwasm/cosmwasm.nix`
+- `/Users/notjoon/union-voyager/e2e/e2e.nix`
 
 The current Voyager config is for:
 
@@ -36,7 +36,7 @@ docker run --rm union-voyager-build:latest sh -lc \
 
 ## 1. Start Union's official devnet
 
-From `/Users/notjoon/union`:
+From `/Users/notjoon/union-voyager`:
 
 ```sh
 NO_BLOCKSCOUT=true ./networks/run-linux-devnet.sh
@@ -55,7 +55,7 @@ Union's deploy package says the manager must be deployed before the full IBC
 stack. On Linux, run:
 
 ```sh
-cd /Users/notjoon/union
+cd /Users/notjoon/union-voyager
 nix run .#cosmwasm-scripts.union-devnet.deploy-manager -- \
   --initial-admin union1jk9psyhvgkrt2cumz8eytll2244m2nnz4yt2g2 \
   --allow-dirty
@@ -67,7 +67,7 @@ Linux Nix container and proxy the container's localhost to the host Union RPC:
 
 ```sh
 docker run --rm -it \
-  -v /Users/notjoon/union:/work \
+  -v /Users/notjoon/union-voyager:/work \
   -w /work \
   --add-host host.docker.internal:host-gateway \
   nixos/nix:latest \
@@ -92,7 +92,7 @@ The current local config expects these deployed addresses:
 Verify the core contract exists:
 
 ```sh
-cd /Users/notjoon/union
+cd /Users/notjoon/union-voyager
 nix run .#uniond -- query wasm contract \
   union1nk3nes4ef6vcjan5tz6stf9g8p08q2kgqysx6q5exxh89zakp0msq5z79t \
   --node http://127.0.0.1:26657

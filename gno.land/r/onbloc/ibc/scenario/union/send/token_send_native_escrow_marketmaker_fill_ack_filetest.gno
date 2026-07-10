@@ -1,12 +1,13 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/send
 package send
 
-// lock_native_coin_by_ucs03_zkgm_filetest walks a native-coin ucs03-zkgm token
-// send through the upgradeable union IBC host (permissive mock light client). The
-// user attaches native ugnot with the call; the impl reads that send envelope via
-// OriginSend to seed the escrow budget, locks it in the proxy, and the protocol-
-// fill ack leaves it locked. Without the attached coins the send would abort with
-// a "sent coin mismatch" since the escrow budget could not cover the order.
+// token_send_native_escrow_marketmaker_fill_ack_filetest walks a native-coin
+// ucs03-zkgm ESCROW send through the upgradeable union IBC host (permissive
+// mock light client), then acknowledges it with a market-maker-fill ack instead of
+// a protocol-fill ack. When a market maker fills the order on the counterparty
+// instead of the protocol, acknowledgeTokenOrderV2 releases the escrowed base to
+// the recorded market maker rather than leaving it locked or refunding the
+// sender: the proxy's native escrow moves to the maker's address.
 
 import (
 	"chain"
@@ -33,6 +34,7 @@ const (
 
 	adminAddr      = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
 	senderAddr     = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+	makerAddr      = address("g1dyxy88p94acjnm8dmu9tfj2mv2ncvx83cagllu")
 	mockClientType = types.ClientType("scenario-mock-lc")
 )
 
@@ -45,8 +47,8 @@ func main(cur realm) {
 	sendPacket := sendNativeEscrowOrder(cur, channelId)
 	println("")
 
-	println("[SCENARIO] 3. Acknowledge with protocol-fill success (no-op for escrow)")
-	acknowledgeNativeEscrow(cur, sendPacket)
+	println("[SCENARIO] 3. A market-maker-fill ack settles the escrow to the maker (not the sender)")
+	acknowledgeMarketMakerFill(cur, sendPacket)
 }
 
 // bootstrap installs the core/zkgm impls, grants the admin the relayer role, and
@@ -86,11 +88,10 @@ func bootstrap(cur realm) types.ChannelId {
 	return channelId
 }
 
-// sendNativeEscrowOrder sends a native ESCROW order funded by attached coins. In
-// production the user attaches `-send 40ugnot`, which credits the proxy (the escrow
-// account) and shows up in the OriginSend envelope. IssueCoins reproduces the
-// deposit; SetOriginSend reproduces the envelope the impl reads to seed its escrow
-// budget. It returns the produced packet for later acknowledgement.
+// sendNativeEscrowOrder sends a native ESCROW order funded by attached
+// coins. Native ugnot needs no TokenMetadata: verifyMetadataDecimals only checks a
+// registered grc20 or a held voucher's origin decimals, and ugnot is neither, so
+// the check is a no-op and Metadata is left empty.
 func sendNativeEscrowOrder(cur realm, channelId types.ChannelId) types.Packet {
 	order := z.TokenOrderV2{
 		Sender:      []byte(senderAddr.String()),
@@ -118,17 +119,35 @@ func sendNativeEscrowOrder(cur realm, channelId types.ChannelId) types.Packet {
 	return sendPacket
 }
 
-// acknowledgeNativeEscrow acknowledges the sent packet with a protocol-fill success
-// ack, which is a no-op for an escrow, so the native coins stay locked.
-func acknowledgeNativeEscrow(cur realm, sendPacket types.Packet) {
-	ack := mustSuccessAck(mustProtocolTokenOrderAck())
+// acknowledgeMarketMakerFill acknowledges the sent packet with a market-maker-fill
+// ack: the escrowed native asset is released to the recorded maker address, not
+// refunded to the sender and not left locked.
+func acknowledgeMarketMakerFill(cur realm, sendPacket types.Packet) {
+	bk := banker.NewReadonlyBanker()
+	proxy := zkgm.ProxyAddress()
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{ack}, nil, 1))
+	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{mustMakerFillAck(makerAddr)}, nil, 1))
 
-	bk := banker.NewReadonlyBanker()
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(zkgm.ProxyAddress()).AmountOf("ugnot"))
-	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (unchanged: escrow stays locked)")
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] sender native balance: %d\n", bk.GetCoins(senderAddr).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] maker native balance: %d\n", bk.GetCoins(makerAddr).AmountOf("ugnot"))
+	ufmt.Println("[EXPECTED] proxy native escrow balance should be 0 (released to the maker)")
+	ufmt.Println("[EXPECTED] sender native balance should be 0 (unchanged: not refunded)")
+	ufmt.Println("[EXPECTED] maker native balance should be 40 (settled from the escrow)")
+}
+
+// mustMakerFillAck builds a success ack whose inner TokenOrderAck is a
+// market-maker fill designating maker as the settlement recipient.
+func mustMakerFillAck(maker address) []byte {
+	innerAck, err := z.EncodeTokenOrderAck(z.TokenOrderAck{
+		FillType:    new(u256.Uint).SetBytes(z.FILL_TYPE_MARKETMAKER[:]),
+		MarketMaker: []byte(maker.String()),
+	})
+	if err != nil {
+		panic(err)
+	}
+	return mustSuccessAck(innerAck)
 }
 
 // --- encoding helpers (pure z calls, mirroring the e2e harness) ---
@@ -139,14 +158,6 @@ func mustOrderInstruction(order z.TokenOrderV2) z.Instruction {
 		panic(err)
 	}
 	return z.Instruction{Version: z.INSTR_VERSION_2, Opcode: z.OP_TOKEN_ORDER, Operand: operand}
-}
-
-func mustProtocolTokenOrderAck() []byte {
-	bz, err := z.EncodeTokenOrderAck(z.TokenOrderAck{FillType: new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:])})
-	if err != nil {
-		panic(err)
-	}
-	return bz
 }
 
 func mustSuccessAck(inner []byte) []byte {
@@ -202,6 +213,10 @@ func (e mockError) Error() string { return string(e) }
 // [EXPECTED] send should succeed: attached 40ugnot covers the escrow order
 // [EXPECTED] proxy native escrow balance should be 40 (locked)
 //
-// [SCENARIO] 3. Acknowledge with protocol-fill success (no-op for escrow)
-// [INFO] proxy native escrow balance: 40
-// [EXPECTED] proxy native escrow balance should be 40 (unchanged: escrow stays locked)
+// [SCENARIO] 3. A market-maker-fill ack settles the escrow to the maker (not the sender)
+// [INFO] proxy native escrow balance: 0
+// [INFO] sender native balance: 0
+// [INFO] maker native balance: 40
+// [EXPECTED] proxy native escrow balance should be 0 (released to the maker)
+// [EXPECTED] sender native balance should be 0 (unchanged: not refunded)
+// [EXPECTED] maker native balance should be 40 (settled from the escrow)

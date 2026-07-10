@@ -1,15 +1,18 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/send
 package send
 
-// lock_grc20_token_by_ucs03_zkgm_filetest walks a locally-registered grc20 token
-// through a ucs03-zkgm ESCROW send. Unlike native (funded via attached -send
-// coins), a grc20 base token moves via TransferFrom: the sender must approve the
-// proxy address before Send, or the escrow order aborts with an allowance error.
+// token_send_native_escrow_protocol_fill_ack_filetest walks a native-coin ucs03-zkgm token
+// send through the upgradeable union IBC host (permissive mock light client). The
+// user attaches native ugnot with the call; the impl reads that send envelope via
+// OriginSend to seed the escrow budget, locks it in the proxy, and the protocol-
+// fill ack leaves it locked. Without the attached coins the send would abort with
+// a "sent coin mismatch" since the escrow budget could not cover the order.
 
 import (
+	"chain"
+	"chain/banker"
 	"testing"
 
-	"gno.land/p/demo/tokens/grc20"
 	"gno.land/p/nt/ufmt/v0"
 	"gno.land/p/onbloc/ibc/union/lightclient"
 	types "gno.land/p/onbloc/ibc/union/types"
@@ -17,7 +20,6 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 
-	"gno.land/r/demo/defi/grc20reg"
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
@@ -32,47 +34,19 @@ const (
 	adminAddr      = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
 	senderAddr     = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
 	mockClientType = types.ClientType("scenario-mock-lc")
-
-	grc20Slug = "grc20-happy"
 )
 
 func main(cur realm) {
-	// grc20.NewToken is a non-crossing (_ int, rlm realm, ...) call: it needs cur
-	// to still be this scenario's own ambient frame, so it must run before any
-	// testing.SetRealm below reassigns that ambient context to an EOA.
-	println("[SCENARIO] 1. Register a local grc20 token and mint 40 units to the sender")
-	token, ledger, denom := setupGRC20(cur)
-	println("")
-
-	println("[SCENARIO] 2. Bootstrap IBC host and open client/connection/channel")
+	println("[SCENARIO] 1. Bootstrap IBC host and open client/connection/channel")
 	channelId := bootstrap(cur)
 	println("")
 
-	println("[SCENARIO] 3. Send grc20 ESCROW order locking 40 units (sender pre-approves the proxy; pulled via TransferFrom)")
-	sendPacket := sendGRC20EscrowOrder(cur, channelId, token, ledger, denom)
+	println("[SCENARIO] 2. Send native ESCROW order locking 40ugnot (funded via attached send coins)")
+	sendPacket := sendNativeEscrowOrder(cur, channelId)
 	println("")
 
-	println("[SCENARIO] 4. Acknowledge with protocol-fill success (no-op for escrow)")
-	acknowledgeGRC20Escrow(cur, sendPacket, token)
-}
-
-// setupGRC20 registers a local grc20 token — this scenario realm becomes its
-// issuer — and mints 40 units to the sender. Kept separate from bootstrap/send
-// because grc20.NewToken must run before any testing.SetRealm call.
-func setupGRC20(cur realm) (*grc20.Token, *grc20.PrivateLedger, string) {
-	token, ledger := grc20.NewToken(0, cur, "Scenario GRC20", "SCN", 6)
-	grc20reg.Register(cross(cur), token, grc20Slug)
-	denom := cur.PkgPath() + "." + grc20Slug
-
-	if err := ledger.Mint(senderAddr, 40); err != nil {
-		panic(err)
-	}
-
-	ufmt.Printf("[INFO] registered grc20 denom: %s\n", denom)
-	ufmt.Printf("[INFO] sender grc20 balance: %d\n", token.BalanceOf(senderAddr))
-	ufmt.Println("[EXPECTED] sender grc20 balance should be 40 (freshly minted)")
-
-	return token, ledger, denom
+	println("[SCENARIO] 3. Acknowledge with protocol-fill success (no-op for escrow)")
+	acknowledgeNativeEscrow(cur, sendPacket)
 }
 
 // bootstrap installs the core/zkgm impls, grants the admin the relayer role, and
@@ -112,49 +86,49 @@ func bootstrap(cur realm) types.ChannelId {
 	return channelId
 }
 
-// sendGRC20EscrowOrder has the sender approve the proxy address before sending —
-// in production the sender submits a separate Approve tx against the token
-// realm; Approve here reproduces that pre-authorization — then sends the
-// ESCROW order, which pulls the approved amount via TransferFrom.
-func sendGRC20EscrowOrder(cur realm, channelId types.ChannelId, token *grc20.Token, ledger *grc20.PrivateLedger, denom string) types.Packet {
-	proxy := zkgm.ProxyAddress()
-	if err := ledger.Approve(senderAddr, proxy, 40); err != nil {
-		panic(err)
-	}
-
+// sendNativeEscrowOrder sends a native ESCROW order funded by attached coins. In
+// production the user attaches `-send 40ugnot`, which credits the proxy (the escrow
+// account) and shows up in the OriginSend envelope. IssueCoins reproduces the
+// deposit; SetOriginSend reproduces the envelope the impl reads to seed its escrow
+// budget. It returns the produced packet for later acknowledgement.
+func sendNativeEscrowOrder(cur realm, channelId types.ChannelId) types.Packet {
 	order := z.TokenOrderV2{
 		Sender:      []byte(senderAddr.String()),
 		Receiver:    []byte("remote-receiver"),
-		BaseToken:   []byte(denom),
+		BaseToken:   []byte("ugnot"),
 		BaseAmount:  u256.NewUint(40),
-		QuoteToken:  []byte("remote-grc20"),
+		QuoteToken:  []byte("remote-ugnot"),
 		QuoteAmount: u256.NewUint(40),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 
+	proxy := zkgm.ProxyAddress()
+	testing.IssueCoins(proxy, chain.NewCoins(chain.NewCoin("ugnot", 40)))
+
 	testing.SetRealm(testing.NewUserRealm(senderAddr))
+	testing.SetOriginSend(chain.NewCoins(chain.NewCoin("ugnot", 40)))
 	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
 
+	bk := banker.NewReadonlyBanker()
 	ufmt.Printf("[INFO] send produced packet on channel: %s\n", sendPacket.SourceChannelId.String())
-	ufmt.Printf("[INFO] proxy grc20 escrow balance: %d\n", token.BalanceOf(proxy))
-	ufmt.Printf("[INFO] sender grc20 balance: %d\n", token.BalanceOf(senderAddr))
-	ufmt.Println("[EXPECTED] send should succeed: approved allowance covers the escrow order")
-	ufmt.Println("[EXPECTED] proxy grc20 escrow balance should be 40 (locked)")
-	ufmt.Println("[EXPECTED] sender grc20 balance should be 0 (pulled into escrow)")
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
+	ufmt.Println("[EXPECTED] send should succeed: attached 40ugnot covers the escrow order")
+	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (locked)")
 
 	return sendPacket
 }
 
-// acknowledgeGRC20Escrow acknowledges the sent packet with a protocol-fill success
-// ack, which is a no-op for an escrow, so the grc20 units stay locked at the proxy.
-func acknowledgeGRC20Escrow(cur realm, sendPacket types.Packet, token *grc20.Token) {
+// acknowledgeNativeEscrow acknowledges the sent packet with a protocol-fill success
+// ack, which is a no-op for an escrow, so the native coins stay locked.
+func acknowledgeNativeEscrow(cur realm, sendPacket types.Packet) {
 	ack := mustSuccessAck(mustProtocolTokenOrderAck())
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{ack}, nil, 1))
 
-	ufmt.Printf("[INFO] proxy grc20 escrow balance: %d\n", token.BalanceOf(zkgm.ProxyAddress()))
-	ufmt.Println("[EXPECTED] proxy grc20 escrow balance should be 40 (unchanged: escrow stays locked)")
+	bk := banker.NewReadonlyBanker()
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(zkgm.ProxyAddress()).AmountOf("ugnot"))
+	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (unchanged: escrow stays locked)")
 }
 
 // --- encoding helpers (pure z calls, mirroring the e2e harness) ---
@@ -216,25 +190,18 @@ type mockError string
 func (e mockError) Error() string { return string(e) }
 
 // Output:
-// [SCENARIO] 1. Register a local grc20 token and mint 40 units to the sender
-// [INFO] registered grc20 denom: gno.land/r/onbloc/ibc/scenario/union/send.grc20-happy
-// [INFO] sender grc20 balance: 40
-// [EXPECTED] sender grc20 balance should be 40 (freshly minted)
-//
-// [SCENARIO] 2. Bootstrap IBC host and open client/connection/channel
+// [SCENARIO] 1. Bootstrap IBC host and open client/connection/channel
 // [INFO] handshake opened: client=1 connection=1 channel=1
 // [EXPECTED] client should be 1
 // [EXPECTED] connection should be 1
 // [EXPECTED] channel should be 1
 //
-// [SCENARIO] 3. Send grc20 ESCROW order locking 40 units (sender pre-approves the proxy; pulled via TransferFrom)
+// [SCENARIO] 2. Send native ESCROW order locking 40ugnot (funded via attached send coins)
 // [INFO] send produced packet on channel: 1
-// [INFO] proxy grc20 escrow balance: 40
-// [INFO] sender grc20 balance: 0
-// [EXPECTED] send should succeed: approved allowance covers the escrow order
-// [EXPECTED] proxy grc20 escrow balance should be 40 (locked)
-// [EXPECTED] sender grc20 balance should be 0 (pulled into escrow)
+// [INFO] proxy native escrow balance: 40
+// [EXPECTED] send should succeed: attached 40ugnot covers the escrow order
+// [EXPECTED] proxy native escrow balance should be 40 (locked)
 //
-// [SCENARIO] 4. Acknowledge with protocol-fill success (no-op for escrow)
-// [INFO] proxy grc20 escrow balance: 40
-// [EXPECTED] proxy grc20 escrow balance should be 40 (unchanged: escrow stays locked)
+// [SCENARIO] 3. Acknowledge with protocol-fill success (no-op for escrow)
+// [INFO] proxy native escrow balance: 40
+// [EXPECTED] proxy native escrow balance should be 40 (unchanged: escrow stays locked)

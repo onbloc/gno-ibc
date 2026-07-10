@@ -112,6 +112,9 @@ services:
     image: union-voyager-build:latest
     command: ["./voyager", "start", "-c", "/config/voyager-config.gno-union.jsonc"]
     working_dir: /output
+    ports:
+      - "${VOYAGER_REST_PORT:-7177}:7177"
+      - "${VOYAGER_RPC_PORT:-7178}:7178"
     volumes:
       - ${VOYAGER_CONFIG:-./voyager-config.gno-union.jsonc}:/config/voyager-config.gno-union.jsonc:ro
     extra_hosts:

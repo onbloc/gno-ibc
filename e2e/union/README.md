@@ -383,3 +383,250 @@ For a one-shot check:
 ```sh
 GOWORK=off GOCACHE=/private/tmp/gno-ibc-go-cache go run ./cmd/packet-watch --once --source-channel 1
 ```
+
+## 11. PacketSend -> Ack 확인
+
+Use this flow once both sides have an open connection and channel. The current
+validated local path is Gno channel `3` -> Union channel `2`.
+
+Capture DB baselines before sending a packet. Treat old failed rows as
+historical; only rows above the baseline matter for the current run.
+
+```sh
+docker ps --filter name=union-voyager --format 'table {{.Names}}\t{{.Status}}'
+
+docker exec union-postgres-1 psql -U postgres -d postgres -c \
+"select max(id) as queue_max from queue;
+ select max(id) as done_max from done;
+ select max(id) as failed_max from failed;
+ select count(*) as queue_count from queue;
+ select count(*) filter (where handle_at <= now()) as ready_count from queue;"
+
+docker exec union-postgres-1 psql -U postgres -d postgres -c \
+"select id, created_at, left(item::text, 2000) as item
+ from failed
+ order by id desc
+ limit 10;"
+
+docker exec union-gno-1 gnokey query vm/qeval -remote localhost:26657 \
+  -data 'gno.land/r/onbloc/ibc/union/core.QueryChannel(<gno-channel-id>)'
+```
+
+Start a one-shot watcher before broadcasting `SendRaw`; it records the packet
+hash and Gno block height.
+
+```sh
+cd e2e/union
+GOWORK=off GOCACHE=/private/tmp/gno-ibc-go-cache \
+go run ./cmd/packet-watch --once \
+  --source-channel <gno-channel-id> \
+  --destination-channel <union-channel-id>
+```
+
+Broadcast `SendRaw` from an EOA key. Do not use `gnokey maketx run` for native
+token sends; the ZKGM realm checks `cur.Previous().IsUserCall()`.
+
+```sh
+docker exec union-gno-1 sh -lc 'printf "\n" | gnokey maketx call \
+  -insecure-password-stdin \
+  -pkgpath gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm \
+  -func SendRaw \
+  -args <gno-channel-id> \
+  -args <timeout-timestamp-nanos> \
+  -args <salt-hex-without-0x> \
+  -args 2 \
+  -args 3 \
+  -args <operand-hex-without-0x> \
+  -send <amount>ugnot \
+  -gas-fee 5000000ugnot \
+  -gas-wanted 200000000 \
+  -broadcast \
+  -chainid dev \
+  -remote localhost:26657 \
+  admin'
+```
+
+For deterministic CI-style processing, enqueue the single Gno block that
+contains `PacketSend`:
+
+```sh
+docker exec union-voyager-1 ./voyager -c /config/voyager-config.gno-union.jsonc \
+  queue enqueue \
+  '{"@type":"call","@value":{"@type":"plugin","@value":{"plugin":"voyager-event-source-plugin-gno/dev","message":{"@type":"fetch_block","@value":{"height":"<gno-packet-send-height>"}}}}}'
+```
+
+Check only rows above the captured baselines. A healthy run creates
+`packet_recv`, then Union emits `wasm-write_ack`, then Voyager creates a Gno
+`packet_acknowledgement` submit.
+
+```sh
+docker exec union-postgres-1 psql -U postgres -d postgres -c \
+"select id, created_at, left(item::text, 3000) as item
+ from done
+ where id > <BASE_DONE_ID>
+   and (
+     item::text like '%update_client%' or
+     item::text like '%channel_open%' or
+     item::text like '%packet_send%' or
+     item::text like '%packet_recv%' or
+     item::text like '%write_ack%' or
+     item::text like '%acknowledgement%' or
+     item::text like '%submit_transaction%'
+   )
+ order by id;"
+
+docker exec union-postgres-1 psql -U postgres -d postgres -c \
+"select id, created_at, left(item::text, 3000) as item, message
+ from failed
+ where id > <BASE_FAILED_ID>
+ order by id;"
+```
+
+Verify the Union receive and write-ack tx:
+
+```sh
+docker exec full-dev-setup-union-0-1 uniond query txs \
+  --query "wasm-packet_recv.packet_hash='<packet-hash>'" \
+  --node tcp://localhost:26657 -o json --limit 3 --order_by desc
+
+docker exec full-dev-setup-union-0-1 uniond query txs \
+  --query "wasm-write_ack.packet_hash='<packet-hash>'" \
+  --node tcp://localhost:26657 -o json --limit 3 --order_by desc
+```
+
+If Voyager does not automatically index the Union block that contains
+`wasm-write_ack`, enqueue it:
+
+```sh
+docker exec union-voyager-1 ./voyager -c /config/voyager-config.gno-union.jsonc \
+  queue enqueue \
+  '{"@type":"call","@value":{"@type":"plugin","@value":{"plugin":"voyager-event-source-plugin-cosmwasm/union-devnet-1","message":{"@type":"fetch_block","@value":{"height":"1-<union-write-ack-height>"}}}}}'
+```
+
+Verify Gno received the acknowledgement:
+
+```sh
+curl -sS http://127.0.0.1:48546/graphql/query \
+  -H 'content-type: application/json' \
+  --data-binary '{"query":"{ getTransactions(where:{ success:{eq:true} response:{ events:{ GnoEvent:{ type:{eq:\"PacketAck\"} pkg_path:{eq:\"gno.land/r/onbloc/ibc/union/core\"} _and:[{ attrs:{ key:{eq:\"packet_hash\"} value:{eq:\"<packet-hash>\"} } }] } } } } order:{heightAndIndex:DESC}){ hash block_height response { events { ... on GnoEvent { type pkg_path attrs { key value } } } } } }"}'
+```
+
+Final checks:
+
+```sh
+docker exec union-voyager-1 ./voyager -c /config/voyager-config.gno-union.jsonc queue stats
+docker exec union-voyager-1 ./voyager -c /config/voyager-config.gno-union.jsonc queue query-failed
+
+docker exec union-gno-1 gnokey query vm/qeval -remote localhost:26657 \
+  -data 'gno.land/r/onbloc/ibc/union/core.QueryChannel(<gno-channel-id>)'
+```
+
+Success means:
+
+- Union `uniond query txs` shows a tx after the Gno PacketSend.
+- The Union tx includes `wasm-packet_recv` or `wasm-intent_packet_recv`, and a
+  `wasm-write_ack` for the same packet hash.
+- Gno later shows the packet acknowledgement path, either as a Voyager done
+  `packet_acknowledgement` / `submit_transaction` row or as a Gno
+  `PacketAck` event for the same packet hash.
+- `failed.id > <BASE_FAILED_ID>` is empty.
+- `QueryChannel(<gno-channel-id>)` remains non-empty.
+
+### Validated local run
+
+The current local E2E run validated the full path with:
+
+- Gno channel `3` -> Union channel `2`
+- Packet hash
+  `0x76c2926e67f6b246ed4f6d92faf82ab0d339c600856d5f8637ed98285750bf02`
+- Gno `PacketSend` tx
+  `zBq6fSuALZkmkb7ObbLKFMpuTwImMBF9z2tCippXz9g=` at height `9511`
+- Union `packet_recv` tx
+  `01A07D95622806E62A39689E02F051B4C893A010EC16314C233B2F66264C3B98`
+  at height `14174`
+- Gno `PacketAck` tx
+  `t39lB9LE2/P4M9p9ozFrM/FgyyKB1D/XR8vqxwQUKOM=` at height `10432`
+
+### Troubleshooting
+
+If `packet_recv` simulation or broadcast fails with
+`10-gno: new val set cannot be trusted`, the Union-side Gno client is too stale
+for the packet proof height. For local E2E recovery, force-update the existing
+Union client to the packet proof height, then retry `packet_recv`:
+
+```sh
+CREATE=$(docker exec union-voyager-1 ./voyager \
+  -c /config/voyager-config.gno-union.jsonc \
+  msg create-client --on union-devnet-1 --tracking dev \
+  --ibc-interface ibc-cosmwasm --ibc-spec-id ibc-union --client-type gno \
+  --height <gno-proof-height>)
+
+MSG=$(printf '%s' "$CREATE" | jq -c \
+  '{force_update_client:{client_id:<union-gno-client-id>, client_state_bytes: .["@value"]["@value"].datagrams[0].datagram["@value"].client_state_bytes, consensus_state_bytes: .["@value"]["@value"].datagrams[0].datagram["@value"].consensus_state_bytes}}')
+
+docker exec full-dev-setup-union-0-1 uniond tx wasm execute \
+  <union-core-contract> "$MSG" \
+  --from voyager-relayer \
+  --keyring-backend test \
+  --home /.union \
+  --chain-id union-devnet-1 \
+  --node tcp://localhost:26657 \
+  --gas 19000000 \
+  --fees 19000000au \
+  --yes \
+  --broadcast-mode sync -o json
+```
+
+The validated local values were client `4`, proof height `9555`, and Union core
+contract `union1nk3nes4ef6vcjan5tz6stf9g8p08q2kgqysx6q5exxh89zakp0msq5z79t`.
+
+If Voyager creates a ready timeout or retry row while debugging, stop Voyager
+first, then defer the row instead of deleting it:
+
+```sh
+docker exec union-postgres-1 psql -U postgres -d postgres -c \
+"update queue
+ set handle_at = now() + interval '24 hours'
+ where handle_at <= now();"
+```
+
+If the test is still before PacketSend, verify that the ZKGM proxy realm is
+deployed and registered with core:
+
+```sh
+docker exec union-gno-1 gnokey query vm/qeval -remote localhost:26657 \
+  -data 'gno.land/r/onbloc/ibc/union/core.HasApp([]byte("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"))'
+docker exec union-gno-1 gnokey query vm/qeval -remote localhost:26657 \
+  -data 'gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm.ProxyPkgPath()'
+```
+
+If `HasApp` is false and the proxy qeval says `package not found`, the local
+chain is blocked earlier than the connection/channel recovery. Deploy and
+register the ZKGM proxy first; otherwise `ChannelOpenInit` panics with
+`port not found, gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm`. The package
+declarations under `apps/ucs03_zkgm` must match that path segment for manual
+`gnokey maketx addpkg` deployments.
+
+Once the ZKGM port is registered, the next blocker is connection/channel
+creation before PacketSend. The Voyager CLI does not currently expose
+`connection-open-init` or `channel-open-init`.
+
+Use the existing Gno core recovery APIs for the shortest local path instead of
+adding Voyager CLI commands first. Scenario filetests already use this pattern:
+
+```gno
+core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(gnoClientId, unionClientId))
+core.ForceConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(connectionId, counterpartyConnectionId, nil, 0))
+core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, relayer))
+core.ForceChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(channelId, zkgm.Version, counterpartyChannelId, nil, 0, relayer))
+```
+
+`ForceConnectionOpenAck` and `ForceChannelOpenAck` are admin-gated recovery
+entrypoints. Run them only from the key that has the corresponding access
+grants, then verify `QueryConnection(<id>)` and `QueryChannel(<id>)` are
+non-empty before broadcasting PacketSend.
+
+For the validated local run, Union channel `2` is open on Union connection `3`
+and points back to Gno channel `3`; Union connection `3` points back to Gno
+connection `5`. If reusing that state, verify Gno with `QueryConnection(5)` and
+`QueryChannel(3)`.

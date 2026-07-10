@@ -389,6 +389,23 @@ go test -v ./e2e/union -run TestGnoToUnionPacketRelay
 deterministically enqueues the matching Gno and Union blocks before asserting
 the final Gno `PacketAck`.
 
+For the local admin recovery setup path, run the setup service with the known
+local ids:
+
+```sh
+cd e2e/union
+GNO_CLIENT_ID=1 \
+UNION_CLIENT_ID=4 \
+GNO_PACKET_CONNECTION_ID=5 \
+UNION_PACKET_CONNECTION_ID=3 \
+GNO_PACKET_CHANNEL_ID=3 \
+UNION_PACKET_CHANNEL_ID=2 \
+docker compose --profile setup up --no-build gno-admin-recovery
+```
+
+This only recovers the Gno side; if the Union-side channel does not already
+exist on a fresh devnet, this setup alone is not enough.
+
 ## 10. PacketSend watcher
 
 Use the watcher to observe Gno `PacketSend` events from the tx-indexer while

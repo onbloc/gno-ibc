@@ -1,13 +1,13 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/receive
 package receive
 
-// release_partially_grc20_token_by_ucs03_zkgm_filetest exercises the grc20-token
-// release path on receive when only part of the escrow is released. It first locks
-// 40 grc20 units in the proxy escrow (a user ESCROW send, funded via a pre-approved
-// TransferFrom pull), then receives an UNESCROW packet that releases 25 of those
-// units to the receiver via a plain Transfer. The channel balance decreases by the
-// released amount and the receiver's on-chain grc20 balance increases by 25, while
-// 15 units remain locked in escrow.
+// token_receive_grc20_unescrow_protocol_fill_filetest exercises the grc20-token release
+// path on receive. It first locks a locally-registered grc20 token in the proxy
+// escrow (a user ESCROW send, funded via a pre-approved TransferFrom pull), then
+// receives an UNESCROW packet whose base covers the quote. The protocol-fill
+// unescrow decreases the channel balance and hands the escrowed grc20 units back
+// to the receiver via a plain Transfer (no allowance needed for that leg), so the
+// receiver's on-chain grc20 balance must actually increase.
 
 import (
 	"testing"
@@ -34,10 +34,9 @@ const (
 
 	adminAddr      = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
 	userAddr       = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
-	receiverAddr   = address("g1dyxy88p94acjnm8dmu9tfj2mv2ncvx83cagllu")
 	mockClientType = types.ClientType("scenario-mock-lc")
 
-	grc20Slug = "grc20-partial"
+	grc20Slug = "grc20-happy"
 
 	// quoteWrapped stands in for the counterparty's wrapped denom. It only keys
 	// the channel balance (lock increases it, unescrow decreases it); the recv
@@ -61,7 +60,7 @@ func main(cur realm) {
 	lockGRC20Escrow(cur, channelId, token, ledger, denom)
 	println("")
 
-	println("[SCENARIO] 4. Receive UNESCROW order: release 25 grc20 units from escrow to the receiver")
+	println("[SCENARIO] 4. Receive UNESCROW order: release 40 grc20 units from escrow back to the user")
 	receiveUnescrowOrder(cur, channelId, token, denom)
 }
 
@@ -150,17 +149,16 @@ func lockGRC20Escrow(cur realm, channelId types.ChannelId, token *grc20.Token, l
 	ufmt.Println("[EXPECTED] user grc20 balance should be 0 (still escrowed)")
 }
 
-// receiveUnescrowOrder receives an UNESCROW order that releases part (25) of the
-// escrowed grc20 units from the proxy to the receiver via a plain Transfer,
-// leaving the remaining 15 units locked.
+// receiveUnescrowOrder receives an UNESCROW order that releases the escrowed
+// grc20 units from the proxy back to the user via a plain Transfer.
 func receiveUnescrowOrder(cur realm, channelId types.ChannelId, token *grc20.Token, denom string) {
 	order := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
-		Receiver:    []byte(receiverAddr.String()),
+		Receiver:    []byte(userAddr.String()),
 		BaseToken:   []byte(quoteWrapped),
-		BaseAmount:  u256.NewUint(25),
+		BaseAmount:  u256.NewUint(40),
 		QuoteToken:  []byte(denom),
-		QuoteAmount: u256.NewUint(25),
+		QuoteAmount: u256.NewUint(40),
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
 	packet := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(order)), types.Timestamp(1<<62))
@@ -170,9 +168,9 @@ func receiveUnescrowOrder(cur realm, channelId types.ChannelId, token *grc20.Tok
 
 	proxy := zkgm.ProxyAddress()
 	ufmt.Printf("[INFO] proxy grc20 escrow balance: %d\n", token.BalanceOf(proxy))
-	ufmt.Printf("[INFO] receiver grc20 balance: %d\n", token.BalanceOf(receiverAddr))
-	ufmt.Println("[EXPECTED] proxy grc20 escrow balance should be 15 (40 - 25 released)")
-	ufmt.Println("[EXPECTED] receiver grc20 balance should be 25 (units returned to the receiver)")
+	ufmt.Printf("[INFO] user grc20 balance: %d\n", token.BalanceOf(userAddr))
+	ufmt.Println("[EXPECTED] proxy grc20 escrow balance should be 0 (released)")
+	ufmt.Println("[EXPECTED] user grc20 balance should be 40 (units returned to the user)")
 }
 
 // --- encoding helpers (pure z calls, mirroring the e2e harness) ---
@@ -227,7 +225,7 @@ func (e mockError) Error() string { return string(e) }
 
 // Output:
 // [SCENARIO] 1. Register a local grc20 token and mint 40 units to the user
-// [INFO] registered grc20 denom: gno.land/r/onbloc/ibc/scenario/union/receive.grc20-partial
+// [INFO] registered grc20 denom: gno.land/r/onbloc/ibc/scenario/union/receive.grc20-happy
 // [INFO] user grc20 balance: 40
 // [EXPECTED] user grc20 balance should be 40 (freshly minted)
 //
@@ -243,8 +241,8 @@ func (e mockError) Error() string { return string(e) }
 // [EXPECTED] proxy grc20 escrow balance should be 40 (locked)
 // [EXPECTED] user grc20 balance should be 0 (still escrowed)
 //
-// [SCENARIO] 4. Receive UNESCROW order: release 25 grc20 units from escrow to the receiver
-// [INFO] proxy grc20 escrow balance: 15
-// [INFO] receiver grc20 balance: 25
-// [EXPECTED] proxy grc20 escrow balance should be 15 (40 - 25 released)
-// [EXPECTED] receiver grc20 balance should be 25 (units returned to the receiver)
+// [SCENARIO] 4. Receive UNESCROW order: release 40 grc20 units from escrow back to the user
+// [INFO] proxy grc20 escrow balance: 0
+// [INFO] user grc20 balance: 40
+// [EXPECTED] proxy grc20 escrow balance should be 0 (released)
+// [EXPECTED] user grc20 balance should be 40 (units returned to the user)

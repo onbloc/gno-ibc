@@ -1,7 +1,7 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/receive
 package receive
 
-// mint_wrapped_voucher_by_statelens_filetest receives a ucs03-zkgm token packet proven by
+// token_receive_native_initialize_protocol_fill_by_statelens_filetest receives a ucs03-zkgm token packet proven by
 // the real state-lens/ics23-mpt light client. It builds a single-leaf EVM-MPT
 // storage proof inline (no exported builder exists), seeds the client's consensus
 // storage root with it, Force-opens the handshake, and asserts the host mints the

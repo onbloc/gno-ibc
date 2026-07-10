@@ -1,13 +1,13 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/receive
 package receive
 
-// release_grc20_token_by_ucs03_zkgm_filetest exercises the grc20-token release
-// path on receive. It first locks a locally-registered grc20 token in the proxy
-// escrow (a user ESCROW send, funded via a pre-approved TransferFrom pull), then
-// receives an UNESCROW packet whose base covers the quote. The protocol-fill
-// unescrow decreases the channel balance and hands the escrowed grc20 units back
-// to the receiver via a plain Transfer (no allowance needed for that leg), so the
-// receiver's on-chain grc20 balance must actually increase.
+// token_receive_grc20_unescrow_underflow_rejected_filetest is the
+// EXCEPTION-path scenario for a grc20 UNESCROW recv that requests more than
+// is actually escrowed on the channel. decreaseChannelBalanceV2 rejects the
+// underflow with a real Go error, which OnRecvPacket catches and converts
+// into a graceful failure acknowledgement (no panic, unlike the
+// only-maker-ack case): nothing is released and the proxy's escrow is left
+// untouched.
 
 import (
 	"testing"
@@ -39,8 +39,8 @@ const (
 	grc20Slug = "grc20-happy"
 
 	// quoteWrapped stands in for the counterparty's wrapped denom. It only keys
-	// the channel balance (lock increases it, unescrow decreases it); the recv
-	// unescrow path does not re-derive it, so a stable placeholder is enough.
+	// the channel balance (lock increases it); the recv unescrow path does not
+	// re-derive it, so a stable placeholder is enough.
 	quoteWrapped = "remote-wrapped-grc20"
 )
 
@@ -60,8 +60,8 @@ func main(cur realm) {
 	lockGRC20Escrow(cur, channelId, token, ledger, denom)
 	println("")
 
-	println("[SCENARIO] 4. Receive UNESCROW order: release 40 grc20 units from escrow back to the user")
-	receiveUnescrowOrder(cur, channelId, token, denom)
+	println("[SCENARIO] 4. Receive an UNESCROW order requesting 100 (only 40 is escrowed) -> rejected, no release")
+	receiveOverRequestedUnescrow(cur, channelId, token, denom)
 }
 
 // setupGRC20 registers a local grc20 token — this scenario realm becomes its
@@ -144,21 +144,22 @@ func lockGRC20Escrow(cur realm, channelId types.ChannelId, token *grc20.Token, l
 	_ = zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
 
 	ufmt.Printf("[INFO] proxy grc20 escrow balance: %d\n", token.BalanceOf(proxy))
-	ufmt.Printf("[INFO] user grc20 balance: %d\n", token.BalanceOf(userAddr))
 	ufmt.Println("[EXPECTED] proxy grc20 escrow balance should be 40 (locked)")
-	ufmt.Println("[EXPECTED] user grc20 balance should be 0 (still escrowed)")
 }
 
-// receiveUnescrowOrder receives an UNESCROW order that releases the escrowed
-// grc20 units from the proxy back to the user via a plain Transfer.
-func receiveUnescrowOrder(cur realm, channelId types.ChannelId, token *grc20.Token, denom string) {
+// receiveOverRequestedUnescrow receives an UNESCROW order requesting 100, even
+// though the channel only has 40 escrowed. Base covers quote (100 >= 100), so
+// this reaches protocolFillUnescrowV2, but decreaseChannelBalanceV2 rejects the
+// underflow with a real error; OnRecvPacket converts that into a graceful
+// failure ack, so nothing is released and the escrow stays untouched.
+func receiveOverRequestedUnescrow(cur realm, channelId types.ChannelId, token *grc20.Token, denom string) {
 	order := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
 		Receiver:    []byte(userAddr.String()),
 		BaseToken:   []byte(quoteWrapped),
-		BaseAmount:  u256.NewUint(40),
+		BaseAmount:  u256.NewUint(100),
 		QuoteToken:  []byte(denom),
-		QuoteAmount: u256.NewUint(40),
+		QuoteAmount: u256.NewUint(100),
 		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
 	}
 	packet := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(order)), types.Timestamp(1<<62))
@@ -169,8 +170,8 @@ func receiveUnescrowOrder(cur realm, channelId types.ChannelId, token *grc20.Tok
 	proxy := zkgm.ProxyAddress()
 	ufmt.Printf("[INFO] proxy grc20 escrow balance: %d\n", token.BalanceOf(proxy))
 	ufmt.Printf("[INFO] user grc20 balance: %d\n", token.BalanceOf(userAddr))
-	ufmt.Println("[EXPECTED] proxy grc20 escrow balance should be 0 (released)")
-	ufmt.Println("[EXPECTED] user grc20 balance should be 40 (units returned to the user)")
+	ufmt.Println("[EXPECTED] proxy grc20 escrow balance should be 40 (unchanged: rejected, nothing released)")
+	ufmt.Println("[EXPECTED] user grc20 balance should be 0 (nothing received)")
 }
 
 // --- encoding helpers (pure z calls, mirroring the e2e harness) ---
@@ -237,12 +238,10 @@ func (e mockError) Error() string { return string(e) }
 //
 // [SCENARIO] 3. Lock 40 grc20 units into proxy escrow (user ESCROW send, pulled via TransferFrom)
 // [INFO] proxy grc20 escrow balance: 40
-// [INFO] user grc20 balance: 0
 // [EXPECTED] proxy grc20 escrow balance should be 40 (locked)
-// [EXPECTED] user grc20 balance should be 0 (still escrowed)
 //
-// [SCENARIO] 4. Receive UNESCROW order: release 40 grc20 units from escrow back to the user
-// [INFO] proxy grc20 escrow balance: 0
-// [INFO] user grc20 balance: 40
-// [EXPECTED] proxy grc20 escrow balance should be 0 (released)
-// [EXPECTED] user grc20 balance should be 40 (units returned to the user)
+// [SCENARIO] 4. Receive an UNESCROW order requesting 100 (only 40 is escrowed) -> rejected, no release
+// [INFO] proxy grc20 escrow balance: 40
+// [INFO] user grc20 balance: 0
+// [EXPECTED] proxy grc20 escrow balance should be 40 (unchanged: rejected, nothing released)
+// [EXPECTED] user grc20 balance should be 0 (nothing received)

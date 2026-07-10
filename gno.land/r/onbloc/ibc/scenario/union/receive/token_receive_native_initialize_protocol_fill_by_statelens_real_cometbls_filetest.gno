@@ -1,11 +1,11 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/receive
 package receive
 
-// mint_wrapped_voucher_by_statelens_real_cometbls_filetest receives a ucs03-zkgm token
+// token_receive_native_initialize_protocol_fill_by_statelens_real_cometbls_filetest receives a ucs03-zkgm token
 // packet proven by the real state-lens/ics23-mpt light client whose L1 is a REAL
 // cometbls light client (not a mock).
 //
-// Unlike mint_wrapped_voucher_by_statelens_filetest — which seeds the L2 consensus at
+// Unlike token_receive_native_initialize_protocol_fill_by_statelens_filetest — which seeds the L2 consensus at
 // client creation and stubs the L1 with a mockL1Client — this scenario adds the
 // L2 consensus via UpdateClient. That drives the state-lens VerifyHeader path,
 // which asks the L1 cometbls client to prove the L2 consensus state is committed
@@ -230,7 +230,7 @@ func newStateLensClient(csBytes, consBytes []byte) (lightclient.Interface, error
 
 // buildPacketMembershipProof returns (storageRoot, encodedProof) for a
 // single-leaf EVM-MPT proving the packet's BatchPackets commitment path stores
-// COMMITMENT_MAGIC. Mirrors mint_wrapped_voucher_by_statelens_filetest.
+// COMMITMENT_MAGIC. Mirrors token_receive_native_initialize_protocol_fill_by_statelens_filetest.
 func buildPacketMembershipProof(packet types.Packet) ([]byte, []byte) {
 	batchHash := core.CommitPacketsHash([]types.Packet{packet})
 	path := types.BatchPacketsPath(batchHash)

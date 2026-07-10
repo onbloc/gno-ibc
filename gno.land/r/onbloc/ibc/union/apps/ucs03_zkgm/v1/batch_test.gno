@@ -1,4 +1,4 @@
-package ucs03_zkgm
+package v1
 
 // batch_test.gno covers batch.gno's verify/acknowledge/timeout logic and the
 // funds-accounting it drives. The send-path native funds checks are exercised

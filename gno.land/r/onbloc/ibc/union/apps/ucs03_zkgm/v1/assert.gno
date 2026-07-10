@@ -1,4 +1,4 @@
-package ucs03_zkgm
+package v1
 
 func assertIsRlmCurrent(_ int, rlm realm) {
 	if !rlm.IsCurrent() {

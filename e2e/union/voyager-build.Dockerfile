@@ -15,8 +15,8 @@ RUN apt-get update && apt-get install -y \
     protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy source (build context is union-voyager root)
-COPY . .
+# Copy source from the union-voyager build context.
+COPY --from=union-src . .
 
 # Build only binaries used by e2e/union/voyager-config.gno-union.jsonc.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \

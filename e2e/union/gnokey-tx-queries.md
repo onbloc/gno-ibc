@@ -519,12 +519,12 @@ SendRaw(channelId=1, timeoutTimestamp, saltHex, version=2, opcode=3, operandHex)
 - `packet_hash`
 - `packet_data`
 - block height
-- source_channel_id = `1`, destination_channel_id = `31`
+- source_channel_id, destination_channel_id
 
 ```bash
 curl -s -X POST http://23.20.153.250:8546/graphql/query \
   -H 'Content-Type: application/json' \
-  -d '{"query":"{ getTransactions(where:{success:{eq:true},response:{events:{GnoEvent:{type:{eq:\"PacketSend\"},pkg_path:{eq:\"gno.land/r/onbloc/ibc/union/core\"},_and:[{attrs:{key:{eq:\"source_channel_id\"},value:{eq:\"1\"}}},{attrs:{key:{eq:\"destination_channel_id\"},value:{eq:\"31\"}}}]}}}},order:{heightAndIndex:DESC}){ block_height hash response { events { ...on GnoEvent { type pkg_path attrs { key value } } } } } }"}'
+  -d '{"query":"{ getTransactions(where:{success:{eq:true},response:{events:{GnoEvent:{type:{eq:\"PacketSend\"},pkg_path:{eq:\"gno.land/r/onbloc/ibc/union/core\"},_and:[{attrs:{key:{eq:\"source_channel_id\"},value:{eq:\"<source-channel-id>\"}}},{attrs:{key:{eq:\"destination_channel_id\"},value:{eq:\"<destination-channel-id>\"}}}]}}}},order:{heightAndIndex:DESC}){ block_height hash response { events { ...on GnoEvent { type pkg_path attrs { key value } } } } } }"}'
 ```
 
 ---

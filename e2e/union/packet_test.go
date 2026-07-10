@@ -33,9 +33,6 @@ func TestPacketPathCreated(t *testing.T) {
 		t.Skip("set RUN_PACKET_TESTS=1 after starting gno-whitelist and Voyager")
 	}
 
-	waitForGnoEvent(t, cfg.GnoIndexer, "CreateClient", nil)
-	waitForGnoEvent(t, cfg.GnoIndexer, "ChannelOpenConfirm", nil)
-
 	clients, err := queryUnionIBCClients(cfg.UnionREST)
 	if err != nil {
 		t.Fatalf("query Union IBC clients: %v", err)
@@ -44,6 +41,13 @@ func TestPacketPathCreated(t *testing.T) {
 		t.Fatal("no Union IBC clients found")
 	}
 	t.Logf("Union clients: %+v", clients)
+
+	channelID := os.Getenv("GNO_PACKET_CHANNEL_ID")
+	if channelID == "" {
+		channelID = "1"
+	}
+	requireGnoQEvalNonEmpty(t, cfg, "Gno connection 1", "gno.land/r/onbloc/ibc/union/core.QueryConnection(1)")
+	requireGnoQEvalNonEmpty(t, cfg, "Gno channel "+channelID, fmt.Sprintf("gno.land/r/onbloc/ibc/union/core.QueryChannel(%s)", channelID))
 }
 
 func TestGnoToUnionPacketRelay(t *testing.T) {
@@ -209,4 +213,12 @@ func amountFromCoins(coins, denom string) int64 {
 		return n
 	}
 	return 0
+}
+
+func requireGnoQEvalNonEmpty(t *testing.T, cfg config, label, expr string) {
+	t.Helper()
+	out := queryGnoQEval(t, cfg, expr)
+	if strings.Contains(out, `("" string)`) {
+		t.Fatalf("%s is not ready: %s", label, out)
+	}
 }

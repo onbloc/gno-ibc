@@ -1,12 +1,14 @@
 # Gno <> Union <> EVM Local E2E
 
 This harness runs local Gno plus the Gno tx-indexer from this repo and reuses
-Union's official local devnet for Union, EVM, beacon, and Postgres. The Union
-side follows the official Union repo docs and E2E flow:
+Union's official local devnet for Union, EVM, beacon, and Postgres. Set
+`UNION_VOYAGER_DIR` to your `union-voyager` checkout; examples below assume
+that variable is set. The Union side follows the official Union repo docs and
+E2E flow:
 
-- `/Users/notjoon/union-voyager/networks/README.md`
-- `/Users/notjoon/union-voyager/cosmwasm/cosmwasm.nix`
-- `/Users/notjoon/union-voyager/e2e/e2e.nix`
+- `$UNION_VOYAGER_DIR/networks/README.md`
+- `$UNION_VOYAGER_DIR/cosmwasm/cosmwasm.nix`
+- `$UNION_VOYAGER_DIR/e2e/e2e.nix`
 
 The current Voyager config is for:
 
@@ -14,13 +16,16 @@ The current Voyager config is for:
 - Union chain id: `union-devnet-1`
 - EVM chain id: `32382`
 
+Compose has working defaults. To override them locally, copy `.env.example` to
+`.env`; do not inject the whole example file into containers.
+
 ## 0. Rebuild rule
 
 Do not rebuild Voyager for RPC, queue, contract, or client creation failures.
 Rebuild only when one of these is true:
 
 - `e2e/union/voyager-build.Dockerfile` changed.
-- `/Users/notjoon/union-voyager` source changed and the new binary is needed.
+- `$UNION_VOYAGER_DIR` source changed and the new binary is needed.
 - A required binary is missing from `union-voyager-build:latest`.
 
 Check the existing image first:
@@ -36,7 +41,7 @@ docker run --rm union-voyager-build:latest sh -lc \
 
 ## 1. Start Union's official devnet
 
-From `/Users/notjoon/union-voyager`:
+From `$UNION_VOYAGER_DIR`:
 
 ```sh
 NO_BLOCKSCOUT=true ./networks/run-linux-devnet.sh
@@ -55,7 +60,7 @@ Union's deploy package says the manager must be deployed before the full IBC
 stack. On Linux, run:
 
 ```sh
-cd /Users/notjoon/union-voyager
+cd "$UNION_VOYAGER_DIR"
 nix run .#cosmwasm-scripts.union-devnet.deploy-manager -- \
   --initial-admin union1jk9psyhvgkrt2cumz8eytll2244m2nnz4yt2g2 \
   --allow-dirty
@@ -67,7 +72,7 @@ Linux Nix container and proxy the container's localhost to the host Union RPC:
 
 ```sh
 docker run --rm -it \
-  -v /Users/notjoon/union-voyager:/work \
+  -v "$UNION_VOYAGER_DIR":/work \
   -w /work \
   --add-host host.docker.internal:host-gateway \
   nixos/nix:latest \
@@ -92,7 +97,7 @@ The current local config expects these deployed addresses:
 Verify the core contract exists:
 
 ```sh
-cd /Users/notjoon/union-voyager
+cd "$UNION_VOYAGER_DIR"
 nix run .#uniond -- query wasm contract \
   union1nk3nes4ef6vcjan5tz6stf9g8p08q2kgqysx6q5exxh89zakp0msq5z79t \
   --node http://127.0.0.1:26657
@@ -107,7 +112,7 @@ deployer command for granting the `RELAYER` role. Do not pass `--allow-dirty`
 after the package name; this subcommand treats it as an app argument and fails.
 
 ```sh
-cd /Users/notjoon/union-voyager
+cd "$UNION_VOYAGER_DIR"
 nix run .#cosmwasm-scripts.union-devnet.whitelist-relayers -- \
   union1jk9psyhvgkrt2cumz8eytll2244m2nnz4yt2g2
 ```
@@ -117,7 +122,7 @@ the `socat` RPC proxy already running.
 
 ## 3. Start Gno and the tx-indexer
 
-From `/Users/notjoon/gno-ibc/e2e/union`:
+From `e2e/union`:
 
 ```sh
 docker compose up --no-build -d gno tx-indexer
@@ -129,7 +134,7 @@ not exist yet or the Gno Dockerfile changed, build it once and rerun the
 `--no-build` commands above:
 
 ```sh
-docker compose build gno gno-whitelist
+docker compose build gno
 ```
 
 After `gno-whitelist`, initialize the Gno Union realms. `gno-whitelist` grants
@@ -157,17 +162,16 @@ run_call -pkgpath gno.land/r/onbloc/ibc/union/lightclients/statelensics23mpt -fu
 If the rebuild rule in step 0 says a rebuild is required:
 
 ```sh
-cd /Users/notjoon/gno-ibc/e2e/union
-VOYAGER_CONFIG=/Users/notjoon/gno-ibc/e2e/union/voyager-config.gno-union.jsonc \
+cd e2e/union
 docker compose --profile voyager-build build voyager-build
 ```
 
 The compose file intentionally builds with:
 
-- context: `/Users/notjoon/union-voyager`
-- Dockerfile: `/Users/notjoon/gno-ibc/e2e/union/voyager-build.Dockerfile`
+- Voyager source context: `${UNION_VOYAGER_DIR:-../../../union-voyager}`
+- Dockerfile: `e2e/union/voyager-build.Dockerfile`
 
-This avoids accidentally building `/Users/notjoon/union-voyager/voyager-build.Dockerfile`.
+This avoids accidentally building `$UNION_VOYAGER_DIR/voyager-build.Dockerfile`.
 
 ## 5. Readiness check
 
@@ -175,7 +179,7 @@ Use explicit `127.0.0.1` host URLs. The sandbox can resolve `localhost` through
 IPv6 first and produce false negatives.
 
 ```sh
-cd /Users/notjoon/gno-ibc/e2e/union
+cd e2e/union
 GOWORK=off GOCACHE=/private/tmp/gno-ibc-go-cache \
 GNO_RPC=http://127.0.0.1:16657 \
 GNO_INDEXER=http://127.0.0.1:48546/graphql/query \
@@ -195,8 +199,7 @@ curl -f http://127.0.0.1:9596/eth/v2/beacon/blocks/head
 ## 6. Start Voyager
 
 ```sh
-cd /Users/notjoon/gno-ibc/e2e/union
-VOYAGER_CONFIG=/Users/notjoon/gno-ibc/e2e/union/voyager-config.gno-union.jsonc \
+cd e2e/union
 docker compose --profile voyager up --no-build -d postgres voyager
 docker compose logs -f voyager
 ```
@@ -303,7 +306,7 @@ gRPC server is reachable and rejected the non-gRPC curl request. If the config
 was changed, restart Voyager without rebuilding:
 
 ```sh
-cd /Users/notjoon/gno-ibc/e2e/union
+cd e2e/union
 docker compose --profile voyager up -d --force-recreate --no-build voyager
 ```
 
@@ -339,7 +342,7 @@ startup logs show it is registered. The failed queue item is a direct
 `Call::Plugin` for `voyager-transaction-plugin-evm/32382` generated after the
 EVM transaction optimizer converts `SubmitTx` to `SubmitMulticall`.
 
-Useful source paths in `/Users/notjoon/union-voyager`:
+Useful source paths in `$UNION_VOYAGER_DIR`:
 
 - `lib/voyager-core/src/lib.rs`: `Call::Plugin` queue handling.
 - `lib/voyager-core/src/context.rs`: plugin lookup and `PluginNotFound`.
@@ -369,7 +372,7 @@ Use the watcher to observe Gno `PacketSend` events from the tx-indexer while
 Voyager is running. It does not submit acknowledgements or enqueue queue work.
 
 ```sh
-cd /Users/notjoon/gno-ibc/e2e/union
+cd e2e/union
 GOWORK=off GOCACHE=/private/tmp/gno-ibc-go-cache go run ./cmd/packet-watch \
   --indexer http://127.0.0.1:48546/graphql/query \
   --source-channel <channel-id>
@@ -378,11 +381,5 @@ GOWORK=off GOCACHE=/private/tmp/gno-ibc-go-cache go run ./cmd/packet-watch \
 For a one-shot check:
 
 ```sh
-GOWORK=off GOCACHE=/private/tmp/gno-ibc-go-cache go run ./cmd/packet-watch --once --source-channel 1 --destination-channel 31
-```
-
-To include Voyager failed queue output after each detected packet:
-
-```sh
-GOWORK=off GOCACHE=/private/tmp/gno-ibc-go-cache go run ./cmd/packet-watch --queue-failed --source-channel 1
+GOWORK=off GOCACHE=/private/tmp/gno-ibc-go-cache go run ./cmd/packet-watch --once --source-channel 1
 ```

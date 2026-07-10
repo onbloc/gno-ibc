@@ -12,6 +12,7 @@ services:
     profiles: ["union-devnet"]
 
   gno:
+    image: gno-ibc-e2e-gno
     build:
       context: ../..
       dockerfile: e2e/union/gno/Dockerfile
@@ -21,8 +22,10 @@ services:
     ports:
       - "${GNO_RPC_PORT:-16657}:26657"
       - "${GNO_WEB_PORT:-18888}:8888"
-    env_file:
-      - .env.example
+    environment:
+      RELAYER_MNEMONIC: ${RELAYER_MNEMONIC:-source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast}
+      ADMIN_ADDR: ${ADMIN_ADDR:-g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5}
+      TEST_ADDR: ${TEST_ADDR:-g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:26657/status"]
       interval: 5s
@@ -45,18 +48,17 @@ services:
         condition: service_healthy
 
   gno-whitelist:
-    build:
-      context: ../..
-      dockerfile: e2e/union/gno/Dockerfile
-      args:
-        GNO_REPO: ${GNO_REPO:-https://github.com/gnolang/gno}
-        GNO_COMMIT: ${GNO_COMMIT:-master}
+    image: gno-ibc-e2e-gno
     profiles: ["setup"]
     entrypoint: ["bash", "/whitelist.sh"]
     volumes:
       - ./gno/whitelist.sh:/whitelist.sh:ro
-    env_file:
-      - .env.example
+    environment:
+      GNO_CHAIN_ID: ${GNO_CHAIN_ID:-dev}
+      GNO_GNOKEY_REMOTE: ${GNO_GNOKEY_REMOTE:-gno:26657}
+      RELAYER_MNEMONIC: ${RELAYER_MNEMONIC:-source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast}
+      TEST_MNEMONIC: ${TEST_MNEMONIC:-source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast}
+      ADMIN_MNEMONIC: ${ADMIN_MNEMONIC:-source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast}
     depends_on:
       gno:
         condition: service_healthy
@@ -70,8 +72,14 @@ services:
       - ./relayer/entrypoint.sh:/entrypoint.sh:ro
     cap_add:
       - IPC_LOCK
-    env_file:
-      - .env.example
+    environment:
+      GNO_CHAIN_ID: ${GNO_CHAIN_ID:-dev}
+      UNION_CHAIN_ID: ${UNION_CHAIN_ID:-union-devnet-1}
+      UNION_GAS_PRICE: ${UNION_GAS_PRICE:-1muno}
+      GNO_RPC_INTERNAL: ${GNO_RPC_INTERNAL:-http://gno:26657}
+      GNO_INDEXER_INTERNAL: ${GNO_INDEXER_INTERNAL:-http://tx-indexer:8546/graphql/query}
+      UNION_RPC_INTERNAL: ${UNION_RPC_INTERNAL:-http://host.docker.internal:26657}
+      RELAYER_MNEMONIC: ${RELAYER_MNEMONIC:-source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -80,14 +88,14 @@ services:
 
   voyager-build:
     build:
-      context: ${UNION_VOYAGER_DIR:-/Users/notjoon/union-voyager}
-      dockerfile: /Users/notjoon/gno-ibc/e2e/union/voyager-build.Dockerfile
+      context: .
+      dockerfile: voyager-build.Dockerfile
+      additional_contexts:
+        union-src: ${UNION_VOYAGER_DIR:-../../../union-voyager}
       args:
         BUILDKIT_INLINE_CACHE: 1
     profiles: ["voyager-build"]
     image: union-voyager-build
-    volumes:
-      - ./voyager-bin:/output
 
   postgres:
     image: postgres:16-alpine
@@ -102,13 +110,10 @@ services:
 
   voyager:
     image: union-voyager-build:latest
-    command: ["sh", "/entrypoint.sh"]
+    command: ["./voyager", "start", "-c", "/config/voyager-config.gno-union.jsonc"]
     working_dir: /output
     volumes:
-      - ${VOYAGER_CONFIG}:/config/voyager-config.gno-union.jsonc:ro
-      - /Users/notjoon/gno-ibc/e2e/union/voyager-entrypoint.sh:/entrypoint.sh:ro
-    env_file:
-      - .env.example
+      - ${VOYAGER_CONFIG:-./voyager-config.gno-union.jsonc}:/config/voyager-config.gno-union.jsonc:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

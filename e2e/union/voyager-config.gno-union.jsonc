@@ -9,7 +9,7 @@
         },
         "config": {
           "ibc_host_contract_address": "union1nk3nes4ef6vcjan5tz6stf9g8p08q2kgqysx6q5exxh89zakp0msq5z79t",
-          "rpc_url": "http://192.168.65.254:26657"
+          "rpc_url": "http://host.docker.internal:26657"
         }
       },
       {
@@ -20,7 +20,7 @@
         },
         "config": {
           "ibc_handler_address": "0xed2af2aD7FE0D92011b26A2e5D1B4dC7D12A47C5",
-          "rpc_url": "http://192.168.65.254:8545",
+          "rpc_url": "http://host.docker.internal:8545",
           "max_query_window": 9
         }
       },
@@ -46,7 +46,7 @@
         },
         "config": {
           "ibc_host_contract_address": "union1nk3nes4ef6vcjan5tz6stf9g8p08q2kgqysx6q5exxh89zakp0msq5z79t",
-          "rpc_url": "http://192.168.65.254:26657"
+          "rpc_url": "http://host.docker.internal:26657"
         }
       },
       {
@@ -57,7 +57,7 @@
         },
         "config": {
           "ibc_handler_address": "0xed2af2aD7FE0D92011b26A2e5D1B4dC7D12A47C5",
-          "rpc_url": "http://192.168.65.254:8545"
+          "rpc_url": "http://host.docker.internal:8545"
         }
       },
       {
@@ -80,7 +80,7 @@
           "consensus_type": "cometbls"
         },
         "config": {
-          "rpc_url": "http://192.168.65.254:26657"
+          "rpc_url": "http://host.docker.internal:26657"
         }
       },
       {
@@ -90,7 +90,7 @@
           "consensus_type": "trusted/evm"
         },
         "config": {
-          "rpc_url": "http://192.168.65.254:8545",
+          "rpc_url": "http://host.docker.internal:8545",
           // don't decrease this value - any less than 5 and you run into issues with reorgs
           "finality_lag": 5
         }
@@ -171,7 +171,7 @@
         },
         "config": {
           "ibc_host_contract_address": "union1nk3nes4ef6vcjan5tz6stf9g8p08q2kgqysx6q5exxh89zakp0msq5z79t",
-          "rpc_url": "http://192.168.65.254:26657"
+          "rpc_url": "http://host.docker.internal:26657"
         }
       },
       {
@@ -207,7 +207,7 @@
         },
         "config": {
         "ibc_handler_address": "0xed2af2aD7FE0D92011b26A2e5D1B4dC7D12A47C5",
-          "rpc_url": "http://192.168.65.254:8545",
+          "rpc_url": "http://host.docker.internal:8545",
           "private_key": "0x23312AE62C46C1F05DE7A772C1DD74951009BFCD08B47946E497468DEA6D7008"
         }
       }
@@ -268,7 +268,7 @@
         "ibc_host_contract_address": "union1nk3nes4ef6vcjan5tz6stf9g8p08q2kgqysx6q5exxh89zakp0msq5z79t",
         "index_trivial_events": true,
         "refetch_delay": 20,
-        "rpc_url": "http://192.168.65.254:26657"
+        "rpc_url": "http://host.docker.internal:26657"
       }
     },
     {
@@ -277,7 +277,7 @@
         "chain_id": "32382",
         "chunk_block_fetch_size": 1,
         "ibc_handler_address": "0xed2af2aD7FE0D92011b26A2e5D1B4dC7D12A47C5",
-        "rpc_url": "http://192.168.65.254:8545"
+        "rpc_url": "http://host.docker.internal:8545"
       }
     },
     {
@@ -313,7 +313,7 @@
           "name": "union-testnet"
         },
         "max_tx_size": 500000,
-        "rpc_url": "http://192.168.65.254:26657"
+        "rpc_url": "http://host.docker.internal:26657"
       }
     },
     {
@@ -333,7 +333,7 @@
             }
           ]
         },
-        "rpc_url": "http://192.168.65.254:8545"
+        "rpc_url": "http://host.docker.internal:8545"
       }
     },
     {
@@ -366,7 +366,7 @@
         "prover_endpoints": [
           "https://galois.union.build:443"
         ],
-        "rpc_url": "http://192.168.65.254:26657"
+        "rpc_url": "http://host.docker.internal:26657"
       }
     },
     {
@@ -374,7 +374,7 @@
       "config": {
         "chain_id": "32382",
         "ibc_handler_address": "0xed2af2aD7FE0D92011b26A2e5D1B4dC7D12A47C5",
-        "rpc_url": "http://192.168.65.254:8545",
+        "rpc_url": "http://host.docker.internal:8545",
         "private_key": "0x23312AE62C46C1F05DE7A772C1DD74951009BFCD08B47946E497468DEA6D7008"
       }
     },

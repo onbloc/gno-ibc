@@ -1,8 +1,23 @@
 #!/bin/bash
 set -eu
 
+key_addr() {
+  name="$1"
+  addrs=$(gnokey list 2>&1 | awk -v name="$name" '
+    $0 ~ ("(^|[[:space:]])" name "([[:space:]:-]|$)") && match($0, /addr: [^ ]+/) {
+      print substr($0, RSTART + 6, RLENGTH - 6)
+    }
+  ')
+  count=$(printf "%s\n" "$addrs" | sed '/^$/d' | wc -l | tr -d ' ')
+  [ "$count" = 1 ] || {
+    echo "expected one key named $name, got $count" >&2
+    exit 1
+  }
+  printf "%s\n" "$addrs"
+}
+
 printf "%s\n\n" "$RELAYER_MNEMONIC" | gnokey add relayer --recover --insecure-password-stdin --force >/dev/null
-RELAYER_ADDR=$(gnokey list 2>&1 | sed -n 's/.*relayer.*addr: \([^ ]*\).*/\1/p' | head -n1)
+RELAYER_ADDR=$(key_addr relayer)
 
 ADMIN_ADDR="${ADMIN_ADDR:-g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5}"
 TEST_ADDR="${TEST_ADDR:-g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x}"

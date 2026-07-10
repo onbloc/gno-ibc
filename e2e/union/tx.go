@@ -90,6 +90,23 @@ func queryGnoBalance(t *testing.T, cfg config, addr, denom string) int64 {
 	return parseCoinAmount(t, string(out), denom)
 }
 
+func queryGnoQEval(t *testing.T, cfg config, expr string) string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "docker", "compose", "exec", "-T", "gno",
+		"gnokey", "query", "vm/qeval",
+		"-remote", "localhost:26657",
+		"-data", expr,
+	)
+	cmd.Dir = cfg.GNOComposeDir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("query Gno qeval failed: %v\n%s", err, out)
+	}
+	return string(out)
+}
+
 func waitForAcknowledgement(t *testing.T, cfg config, packetHash string) indexedTx {
 	t.Helper()
 	return waitForGnoEvent(t, cfg.GnoIndexer, "PacketAck", map[string]string{"packet_hash": packetHash})

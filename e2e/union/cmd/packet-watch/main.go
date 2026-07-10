@@ -8,17 +8,15 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
 )
 
 const (
-	defaultIndexer       = "http://127.0.0.1:48546/graphql/query"
-	corePkgPath          = "gno.land/r/onbloc/ibc/union/core"
-	packetSendEventType  = "PacketSend"
-	defaultVoyagerConfig = "/config/voyager-config.gno-union.jsonc"
+	defaultIndexer      = "http://127.0.0.1:48546/graphql/query"
+	corePkgPath         = "gno.land/r/onbloc/ibc/union/core"
+	packetSendEventType = "PacketSend"
 )
 
 type eventAttr struct {
@@ -54,9 +52,6 @@ func main() {
 	destinationChannel := flag.String("destination-channel", "", "optional destination_channel_id filter")
 	interval := flag.Duration("interval", time.Second, "poll interval")
 	once := flag.Bool("once", false, "exit after the first newly printed PacketSend")
-	queueFailed := flag.Bool("queue-failed", false, "print Voyager failed queue after each detected packet")
-	voyagerContainer := flag.String("voyager-container", "union-voyager-1", "Voyager Docker container for --queue-failed")
-	voyagerConfig := flag.String("voyager-config", defaultVoyagerConfig, "Voyager config path inside the container")
 	flag.Parse()
 
 	seen := map[string]bool{}
@@ -70,7 +65,7 @@ func main() {
 	}
 
 	for {
-		printed, err := poll(client, *indexer, filters, seen, *queueFailed, *voyagerContainer, *voyagerConfig)
+		printed, err := poll(client, *indexer, filters, seen)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "packet-watch: %v\n", err)
 		}
@@ -81,7 +76,7 @@ func main() {
 	}
 }
 
-func poll(client *http.Client, indexer string, filters map[string]string, seen map[string]bool, queueFailed bool, voyagerContainer, voyagerConfig string) (bool, error) {
+func poll(client *http.Client, indexer string, filters map[string]string, seen map[string]bool) (bool, error) {
 	txs, err := queryPacketSends(client, indexer, filters)
 	if err != nil {
 		return false, err
@@ -98,9 +93,6 @@ func poll(client *http.Client, indexer string, filters map[string]string, seen m
 			}
 			seen[key] = true
 			printPacket(packet)
-			if queueFailed {
-				printQueueFailed(voyagerContainer, voyagerConfig)
-			}
 			printed = true
 		}
 	}
@@ -209,14 +201,4 @@ func printPacket(packet packetSend) {
 	fmt.Printf("destination_channel_id: %s\n", packet.DestinationChannelID)
 	fmt.Printf("timeout_timestamp: %s\n", packet.TimeoutTimestamp)
 	fmt.Printf("packet_data: %s\n", packet.PacketData)
-}
-
-func printQueueFailed(container, config string) {
-	cmd := exec.Command("docker", "exec", container, "./voyager", "-c", config, "queue", "query-failed")
-	out, err := cmd.CombinedOutput()
-	fmt.Println("voyager queue failed:")
-	if err != nil {
-		fmt.Printf("error: %v\n", err)
-	}
-	fmt.Print(string(out))
 }

@@ -42,12 +42,8 @@ func TestPacketPathCreated(t *testing.T) {
 	}
 	t.Logf("Union clients: %+v", clients)
 
-	channelID := os.Getenv("GNO_PACKET_CHANNEL_ID")
-	if channelID == "" {
-		channelID = "1"
-	}
-	requireGnoQEvalNonEmpty(t, cfg, "Gno connection 1", "gno.land/r/onbloc/ibc/union/core.QueryConnection(1)")
-	requireGnoQEvalNonEmpty(t, cfg, "Gno channel "+channelID, fmt.Sprintf("gno.land/r/onbloc/ibc/union/core.QueryChannel(%s)", channelID))
+	requireGnoQEvalNonEmpty(t, cfg, "Gno connection "+cfg.GnoPacketConnectionID, fmt.Sprintf("gno.land/r/onbloc/ibc/union/core.QueryConnection(%s)", cfg.GnoPacketConnectionID))
+	requireGnoQEvalNonEmpty(t, cfg, "Gno channel "+cfg.GnoPacketChannelID, fmt.Sprintf("gno.land/r/onbloc/ibc/union/core.QueryChannel(%s)", cfg.GnoPacketChannelID))
 }
 
 func TestGnoToUnionPacketRelay(t *testing.T) {
@@ -57,14 +53,15 @@ func TestGnoToUnionPacketRelay(t *testing.T) {
 	}
 
 	req := gnoTransferRequest{
-		ChannelID:  os.Getenv("GNO_PACKET_CHANNEL_ID"),
+		ChannelID:  cfg.GnoPacketChannelID,
 		OperandHex: os.Getenv("GNO_PACKET_OPERAND_HEX"),
 		SendCoins:  os.Getenv("GNO_PACKET_SEND_COINS"),
 		SaltHex:    os.Getenv("GNO_PACKET_SALT_HEX"),
 	}
-	if req.ChannelID == "" || req.OperandHex == "" {
-		t.Skip("set GNO_PACKET_CHANNEL_ID and pre-encoded GNO_PACKET_OPERAND_HEX to broadcast SendRaw")
+	if req.OperandHex == "" {
+		t.Skip("set pre-encoded GNO_PACKET_OPERAND_HEX to broadcast SendRaw")
 	}
+	requirePacketSetup(t, cfg)
 
 	var before int64
 	sender, denom := os.Getenv("GNO_SENDER_ADDR"), os.Getenv("GNO_BALANCE_DENOM")
@@ -80,7 +77,28 @@ func TestGnoToUnionPacketRelay(t *testing.T) {
 	if packetHash == "" {
 		t.Fatalf("PacketSend event missing packet_hash: %+v", packetSend)
 	}
+	if got := txAttr(packetSend, "PacketSend", "source_channel_id"); got != "" && got != req.ChannelID {
+		t.Fatalf("PacketSend source_channel_id = %s, want %s", got, req.ChannelID)
+	}
+	if got := txAttr(packetSend, "PacketSend", "destination_channel_id"); got != "" && got != cfg.UnionPacketChannelID {
+		t.Fatalf("PacketSend destination_channel_id = %s, want %s", got, cfg.UnionPacketChannelID)
+	}
+
+	enqueueGnoBlock(t, cfg, packetSend.BlockHeight)
+	waitVoyagerReadyEmpty(t, cfg)
+
+	packetRecv := waitForUnionEvent(t, cfg, "wasm-packet_recv", packetHash)
+	writeAck := waitForUnionEvent(t, cfg, "wasm-write_ack", packetHash)
+	t.Logf("Union packet recv tx %s at height %d; write_ack tx %s at height %d", packetRecv.Hash, packetRecv.Height, writeAck.Hash, writeAck.Height)
+
+	enqueueUnionBlock(t, cfg, writeAck.Height)
+	waitVoyagerReadyEmpty(t, cfg)
+
 	ack := waitForAcknowledgement(t, cfg, packetHash)
+	if ack.BlockHeight <= packetSend.BlockHeight {
+		t.Fatalf("PacketAck height %d must be after PacketSend height %d", ack.BlockHeight, packetSend.BlockHeight)
+	}
+	requireNoVoyagerFailed(t, cfg)
 	t.Logf("relayed packet hash %s, ack tx %s at height %d", packetHash, ack.Hash, ack.BlockHeight)
 
 	if sender != "" && denom != "" {
@@ -91,6 +109,31 @@ func TestGnoToUnionPacketRelay(t *testing.T) {
 		}
 		t.Logf("Gno balance: before=%d after=%d denom=%s", before, after, denom)
 	}
+}
+
+func requirePacketSetup(t *testing.T, cfg config) {
+	t.Helper()
+	checkGnoIndexerReady(t, cfg)
+	checkUnionReady(t, cfg)
+	requireGnoQEvalNonEmpty(t, cfg, "Gno connection "+cfg.GnoPacketConnectionID, fmt.Sprintf("gno.land/r/onbloc/ibc/union/core.QueryConnection(%s)", cfg.GnoPacketConnectionID))
+	requireGnoQEvalNonEmpty(t, cfg, "Gno channel "+cfg.GnoPacketChannelID, fmt.Sprintf("gno.land/r/onbloc/ibc/union/core.QueryChannel(%s)", cfg.GnoPacketChannelID))
+	requireNoVoyagerFailed(t, cfg)
+}
+
+func waitForUnionEvent(t *testing.T, cfg config, eventType, packetHash string) UnionTx {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Minute)
+	var last error
+	for time.Now().Before(deadline) {
+		txs, err := queryUnionTxs(cfg.UnionContainer, eventType, packetHash, 3)
+		if err == nil && len(txs) > 0 {
+			return txs[0]
+		}
+		last = err
+		time.Sleep(time.Second)
+	}
+	t.Fatalf("Union event %s packet_hash=%s not found: %v\nvoyager stats:\n%s\nvoyager failed:\n%s", eventType, packetHash, last, voyagerQueueStats(t, cfg), voyagerQueryFailed(t, cfg))
+	return UnionTx{}
 }
 
 func TestUnionToGnoPacketRelay(t *testing.T) {

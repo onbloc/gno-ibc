@@ -24,6 +24,11 @@ type Client struct {
 	ClientID string
 }
 
+type UnionTx struct {
+	Hash   string
+	Height int64
+}
+
 func httpGet(url string) ([]byte, error) {
 	resp, err := httpClient.Get(url)
 	if err != nil {
@@ -106,6 +111,48 @@ func queryUnionIBCClients(rest string) ([]Client, error) {
 		clients = append(clients, Client{ClientID: state.ClientID})
 	}
 	return clients, nil
+}
+
+func queryUnionTxs(container, eventType, packetHash string, limit int) ([]UnionTx, error) {
+	out, err := dockerExec(container, "uniond", "query", "txs",
+		"--query", fmt.Sprintf("%s.packet_hash='%s'", eventType, packetHash),
+		"--node", "tcp://localhost:26657",
+		"-o", "json",
+		"--limit", strconv.Itoa(limit),
+		"--order_by", "desc",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query Union %s: %w\n%s", eventType, err, out)
+	}
+	var resp struct {
+		Txs []struct {
+			Hash   string `json:"hash"`
+			Height string `json:"height"`
+		} `json:"txs"`
+		TxResponses []struct {
+			TxHash string `json:"txhash"`
+			Height string `json:"height"`
+		} `json:"tx_responses"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		return nil, err
+	}
+	txs := make([]UnionTx, 0, len(resp.TxResponses)+len(resp.Txs))
+	for _, tx := range resp.TxResponses {
+		height, err := strconv.ParseInt(tx.Height, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("parse Union tx height %q: %w", tx.Height, err)
+		}
+		txs = append(txs, UnionTx{Hash: tx.TxHash, Height: height})
+	}
+	for _, tx := range resp.Txs {
+		height, err := strconv.ParseInt(tx.Height, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("parse Union tx height %q: %w", tx.Height, err)
+		}
+		txs = append(txs, UnionTx{Hash: tx.Hash, Height: height})
+	}
+	return txs, nil
 }
 
 func queryEVMBalance(rpc, address string) (*big.Int, error) {

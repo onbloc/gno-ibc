@@ -2,7 +2,7 @@ services:
   # Union devnet service - disabled by default, enable when needed
   # To use: docker compose --profile union-devnet up -d
   union-devnet:
-    image: ghcr.io/unionlabs/union:latest
+    image: ${UNION_DEVNET_IMAGE:-ghcr.io/unionlabs/union:latest}
     ports:
       - "${UNION_RPC_PORT:-26657}:26657"
       - "${UNION_REST_PORT:-1317}:1317"
@@ -12,7 +12,7 @@ services:
     profiles: ["union-devnet"]
 
   gno:
-    image: gno-ibc-e2e-gno
+    image: ${GNO_E2E_IMAGE:-gno-ibc-e2e-gno:latest}
     build:
       context: ../..
       dockerfile: e2e/union/gno/Dockerfile
@@ -34,7 +34,7 @@ services:
       start_period: 120s
 
   tx-indexer:
-    image: ghcr.io/gnolang/tx-indexer:latest
+    image: ${GNO_TX_INDEXER_IMAGE:-ghcr.io/gnolang/tx-indexer:latest}
     command:
       - start
       - -remote
@@ -48,7 +48,7 @@ services:
         condition: service_healthy
 
   gno-whitelist:
-    image: gno-ibc-e2e-gno
+    image: ${GNO_E2E_IMAGE:-gno-ibc-e2e-gno:latest}
     profiles: ["setup"]
     entrypoint: ["bash", "/whitelist.sh"]
     volumes:
@@ -95,10 +95,10 @@ services:
       args:
         BUILDKIT_INLINE_CACHE: 1
     profiles: ["voyager-build"]
-    image: union-voyager-build
+    image: ${UNION_VOYAGER_IMAGE:-union-voyager-build:latest}
 
   postgres:
-    image: postgres:16-alpine
+    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgrespassword
@@ -109,7 +109,7 @@ services:
       retries: 5
 
   voyager:
-    image: union-voyager-build:latest
+    image: ${UNION_VOYAGER_IMAGE:-union-voyager-build:latest}
     command: ["./voyager", "start", "-c", "/config/voyager-config.gno-union.jsonc"]
     working_dir: /output
     ports:

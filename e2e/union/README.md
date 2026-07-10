@@ -366,6 +366,29 @@ GOWORK=off GOCACHE=/private/tmp/gno-ibc-go-cache \
 go test -v -run Packet
 ```
 
+For the CI-style Gno -> Union packet relay path, start from clean local
+volumes and run the focused test with the validated local ids:
+
+```sh
+docker compose -f e2e/union/docker-compose.yml down -v --remove-orphans
+
+RUN_PACKET_TESTS=1 \
+GNO_PACKET_CONNECTION_ID=5 \
+GNO_PACKET_CHANNEL_ID=3 \
+UNION_PACKET_CONNECTION_ID=3 \
+UNION_PACKET_CHANNEL_ID=2 \
+UNION_GNO_CLIENT_ID=4 \
+GNO_PACKET_OPERAND_HEX=<pre-encoded-token-order> \
+GNO_PACKET_SEND_COINS=1ugnot \
+GNO_COMPOSE_DIR=e2e/union \
+GOWORK=off GOCACHE=/private/tmp/gno-ibc-go-cache \
+go test -v ./e2e/union -run TestGnoToUnionPacketRelay
+```
+
+`TestGnoToUnionPacketRelay` broadcasts `SendRaw`, waits for `PacketSend`, and
+deterministically enqueues the matching Gno and Union blocks before asserting
+the final Gno `PacketAck`.
+
 ## 10. PacketSend watcher
 
 Use the watcher to observe Gno `PacketSend` events from the tx-indexer while

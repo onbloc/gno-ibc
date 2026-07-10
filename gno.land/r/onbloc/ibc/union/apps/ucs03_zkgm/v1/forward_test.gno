@@ -1,4 +1,4 @@
-package impl
+package ucs03_zkgm
 
 // forward_test.gno tests the validation and dispatch logic in forward.gno,
 // including instruction allow-listing, buildForwardChild validation,

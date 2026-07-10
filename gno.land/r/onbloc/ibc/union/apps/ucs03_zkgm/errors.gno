@@ -1,4 +1,4 @@
-package zkgm
+package ucs03_zkgm
 
 // ErrSpoofedRealm guards non-crossing (_ int, rlm realm, ...) entrypoints: the
 // passed rlm must be the current crossing frame, not a forged or stale token

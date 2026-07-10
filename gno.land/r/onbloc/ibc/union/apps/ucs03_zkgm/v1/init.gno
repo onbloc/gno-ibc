@@ -1,4 +1,4 @@
-package impl
+package ucs03_zkgm
 
 import (
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"

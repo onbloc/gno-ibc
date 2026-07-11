@@ -1,17 +1,18 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/batch
 package batch
 
-// only_maker_child_reverts_batch_filetest is the EXCEPTION-path batch scenario for
-// only-maker propagation (S-7.2). A batch child that can only be settled by a market
-// maker — here a TokenOrder whose quote token is not a known voucher, so the protocol
-// cannot mint or unescrow it — yields ACK_ERR_ONLY_MAKER. Per the batch contract, an
-// only-maker child is propagated as the parent batch acknowledgement and the remaining
-// children are skipped; core does not recover recv panics, so OnRecvPacket turns that
-// parent-level only-maker ack into a revert ("is only maker ack"). The whole batch
-// rolls back atomically: the trailing OP_CALL never reaches the receiver and any
-// earlier child mutation is undone. The only-maker child is placed first to make the
-// "remaining children skipped" semantics explicit. The terminating panic is the
-// assertion.
+// recv_batch_call_panic_full_revert_filetest is the CALL-PANIC batch scenario.
+// A batch carries an INITIALIZE TokenOrder followed by an OP_CALL to a receiver
+// configured to panic. executeCall's safeCallOnZkgm (call.gno) catches the
+// receiver panic and converts it into an ACK_ERR_ONLY_MAKER ack, not a Go error
+// (call.gno:80-83). executeBatch treats that ack the same as any other
+// only-maker child: it aborts the whole batch and returns ACK_ERR_ONLY_MAKER
+// for the parent (batch.gno:55-57). Core does not recover recv panics, so
+// OnRecvPacket turns that parent-level only-maker ack into a terminating panic
+// ("is only maker ack") that reverts the whole recv transaction — the
+// TokenOrder child that ran first and would have minted is undone along with
+// everything else. The terminating panic is the assertion (same convention as
+// recv_batch_only_maker_child_reverts_filetest.gno).
 
 import (
 	"chain"
@@ -28,7 +29,7 @@ import (
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
 	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
-	_ "gno.land/r/onbloc/ibc/testing/mock/receiver"
+	mockrcv "gno.land/r/onbloc/ibc/testing/mock/receiver"
 )
 
 const (
@@ -37,16 +38,17 @@ const (
 	mockLcPkgPath = "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 	receiverPath  = "gno.land/r/onbloc/ibc/testing/mock/receiver"
 
-	adminAddr = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
+	adminAddr    = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
+	receiverAddr = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
 )
 
 func main(cur realm) {
-	println("[SCENARIO] 1. Bootstrap IBC host and open a zkgm channel")
+	println("[SCENARIO] 1. Bootstrap IBC host, open a channel, and arm the mock receiver to panic")
 	channelId := bootstrap(cur)
 	println("")
 
-	println("[SCENARIO] 2. Receive an OP_BATCH whose first child is only-maker: the whole batch reverts")
-	recvOnlyMakerBatch(cur, channelId)
+	println("[SCENARIO] 2. Receive an OP_BATCH of [INITIALIZE TokenOrder, OP_CALL(panics)]: the whole batch reverts")
+	recvBatchWithPanickingCall(cur, channelId)
 }
 
 func bootstrap(cur realm) types.ChannelId {
@@ -70,27 +72,34 @@ func bootstrap(cur realm) types.ChannelId {
 	core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1relayer"))
 	channelId := types.ChannelId(1)
 	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(channelId, zkgm.Version, types.ChannelId(2), nil, 1, "g1relayer"))
+
+	// The mock receiver self-registers in its init; clear captured state and arm the panic.
+	mockrcv.Reset(cross(cur))
+	mockrcv.SetPanic(cross(cur), "receiver blew up")
 	return channelId
 }
 
-func recvOnlyMakerBatch(cur realm, channelId types.ChannelId) {
+func recvBatchWithPanickingCall(cur realm, channelId types.ChannelId) {
+	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
+	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
+
 	batch := z.Batch{Instructions: []z.Instruction{
-		// ESCROW with a quote token that is not a known voucher: the protocol cannot
-		// fill it, so it falls to a market-maker fill and acks ACK_ERR_ONLY_MAKER.
+		// Runs first and would mint successfully in isolation.
 		mustOrderInstruction(z.TokenOrderV2{
 			Sender:      []byte("remote-sender"),
-			Receiver:    []byte(adminAddr.String()),
-			BaseToken:   []byte("uremote"),
-			BaseAmount:  u256.NewUint(40),
-			QuoteToken:  []byte("undeployed-quote-token"),
-			QuoteAmount: u256.NewUint(40),
-			Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+			Receiver:    []byte(receiverAddr.String()),
+			BaseToken:   []byte("ugnot"),
+			BaseAmount:  u256.NewUint(100),
+			QuoteToken:  []byte(quoteToken),
+			QuoteAmount: u256.NewUint(100),
+			Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+			Metadata:    meta,
 		}),
-		// Skipped because the first child propagates only-maker.
+		// Panics inside OnZkgm; safeCallOnZkgm converts it to ACK_ERR_ONLY_MAKER.
 		mustCallInstruction(z.Call{
 			Sender:           []byte("remote-sender"),
 			ContractAddress:  []byte(receiverPath),
-			ContractCalldata: []byte("should-not-run"),
+			ContractCalldata: []byte("boom"),
 		}),
 	}}
 	packet := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustBatchInstruction(batch)), types.Timestamp(1<<62))
@@ -117,8 +126,8 @@ func mustCallInstruction(call z.Call) z.Instruction {
 	return z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_CALL, Operand: operand}
 }
 
-func mustBatchInstruction(batch z.Batch) z.Instruction {
-	operand, err := z.EncodeBatch(batch)
+func mustBatchInstruction(b z.Batch) z.Instruction {
+	operand, err := z.EncodeBatch(b)
 	if err != nil {
 		panic(err)
 	}
@@ -133,10 +142,30 @@ func mustPacketData(instr z.Instruction) []byte {
 	return data
 }
 
+func mustTokenMetadata(implementation string, ti z.TokenInitializer) []byte {
+	initBytes, err := z.EncodeTokenInitializer(ti)
+	if err != nil {
+		panic(err)
+	}
+	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes})
+	if err != nil {
+		panic(err)
+	}
+	return meta
+}
+
+func mustDecodeMeta(bz []byte) z.TokenMetadata {
+	meta, err := z.DecodeTokenMetadata(bz)
+	if err != nil {
+		panic(err)
+	}
+	return meta
+}
+
 // Output:
-// [SCENARIO] 1. Bootstrap IBC host and open a zkgm channel
+// [SCENARIO] 1. Bootstrap IBC host, open a channel, and arm the mock receiver to panic
 //
-// [SCENARIO] 2. Receive an OP_BATCH whose first child is only-maker: the whole batch reverts
+// [SCENARIO] 2. Receive an OP_BATCH of [INITIALIZE TokenOrder, OP_CALL(panics)]: the whole batch reverts
 
 // Error:
 // is only maker ack

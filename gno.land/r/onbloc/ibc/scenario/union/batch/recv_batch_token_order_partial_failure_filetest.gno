@@ -1,14 +1,20 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/batch
 package batch
 
-// large_batch_and_nested_rejection_filetest is the BY-TYPE batch scenario for the
-// current batch limits (re-targeted from the legacy e2e zs89). A flat batch has no
-// length cap: an 7-child batch of INITIALIZE orders mints all eight vouchers. A
-// nested batch (a batch whose child is itself a batch) is rejected — its receive
-// writes a failure acknowledgement and mints nothing new. The mint count is the
-// observable: 7 after the flat batch, still 7 after the nested batch. (The legacy
-// exact ack-hash equality used e2e ack builders; the unchanged mint count is the
-// behavior-level proof the nested batch was rejected.)
+// recv_batch_token_order_partial_failure_filetest is the PARTIAL-SUCCESS batch
+// scenario: one child fails for an ordinary (non-only-maker) reason while its
+// sibling commits normally. executeBatch only aborts the whole batch on a Go
+// error or an ACK_ERR_ONLY_MAKER child ack (batch.gno:41-59); an ordinary
+// business-level rejection returns (RecvPacketResult{Failure ack}, nil error),
+// so the loop just records that child's failure ack and continues. Child 0 here
+// is an ESCROW order whose quote token exactly matches the predicted (legacy,
+// no-metadata-image) wrapped denom for its base token, but no voucher was ever
+// deployed for it — the orphan-voucher guard in executeTokenOrderV2
+// (token_order.gno: ESCROW case) rejects it with a plain failure ack, not
+// ACK_ERR_ONLY_MAKER. Child 1 is an unrelated INITIALIZE order that mints
+// normally. The observable proof of "partial success": child 1 mints, child 0's
+// predicted quote token is never minted, and the packet still commits a receipt
+// (no panic — the outer batch ack is SUCCESS even though one child failed).
 
 import (
 	"chain"
@@ -42,14 +48,8 @@ func main(cur realm) {
 	channelId := bootstrap(cur)
 	println("")
 
-	quoteTokens, instructions := buildChildren(channelId)
-
-	println("[SCENARIO] 2. A flat batch of 7 INITIALIZE children mints all eight (no length cap)")
-	recvFlatBatch(cur, channelId, instructions, quoteTokens)
-	println("")
-
-	println("[SCENARIO] 3. A nested batch (batch inside batch) is rejected, minting nothing new")
-	recvNestedBatch(cur, channelId, quoteTokens)
+	println("[SCENARIO] 2. Receive a batch where child 0 (orphan ESCROW) fails and child 1 (INITIALIZE) mints")
+	recvPartialFailureBatch(cur, channelId)
 }
 
 func bootstrap(cur realm) types.ChannelId {
@@ -76,60 +76,48 @@ func bootstrap(cur realm) types.ChannelId {
 	return channelId
 }
 
-// buildChildren derives 7 distinct wrapped tokens and their INITIALIZE instructions
-// (one unit each).
-func buildChildren(channelId types.ChannelId) (quoteTokens []string, instructions []z.Instruction) {
-	bases := []string{"zs89-a", "zs89-b", "zs89-c", "zs89-d", "zs89-e", "zs89-f", "zs89-g"}
-	quoteTokens = make([]string, len(bases))
-	instructions = make([]z.Instruction, len(bases))
-	for i, base := range bases {
-		meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: base, Symbol: "ZS89", Decimals: 6})
-		quoteTokens[i] = z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte(base), z.MetadataImage(mustDecodeMeta(meta)))
-		instructions[i] = mustOrderInstruction(z.TokenOrderV2{
+func recvPartialFailureBatch(cur realm, channelId types.ChannelId) {
+	// child 0: ESCROW whose quote token matches the legacy (no metadata image)
+	// predicted wrapped denom for "orphan-base", but that denom has never been
+	// deployed via INITIALIZE — rejected as an orphan voucher (plain failure ack).
+	orphanBase := "orphan-base"
+	orphanQuote := z.PredictWrappedToken(u256.Zero(), uint32(channelId), []byte(orphanBase))
+
+	// child 1: a fresh INITIALIZE order that mints normally.
+	initBase := "fresh-base"
+	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Fresh Token", Symbol: "FRESH", Decimals: 6})
+	initQuote := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte(initBase), z.MetadataImage(mustDecodeMeta(meta)))
+
+	batch := z.Batch{Instructions: []z.Instruction{
+		mustOrderInstruction(z.TokenOrderV2{
 			Sender:      []byte("remote-sender"),
 			Receiver:    []byte(receiverAddr.String()),
-			BaseToken:   []byte(base),
-			BaseAmount:  u256.NewUint(1),
-			QuoteToken:  []byte(quoteTokens[i]),
-			QuoteAmount: u256.NewUint(1),
+			BaseToken:   []byte(orphanBase),
+			BaseAmount:  u256.NewUint(40),
+			QuoteToken:  []byte(orphanQuote),
+			QuoteAmount: u256.NewUint(40),
+			Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+		}),
+		mustOrderInstruction(z.TokenOrderV2{
+			Sender:      []byte("remote-sender"),
+			Receiver:    []byte(receiverAddr.String()),
+			BaseToken:   []byte(initBase),
+			BaseAmount:  u256.NewUint(100),
+			QuoteToken:  []byte(initQuote),
+			QuoteAmount: u256.NewUint(100),
 			Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 			Metadata:    meta,
-		})
-	}
-	return quoteTokens, instructions
-}
-
-func recvFlatBatch(cur realm, channelId types.ChannelId, instructions []z.Instruction, quoteTokens []string) {
-	packet := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustBatchInstruction(z.Batch{Instructions: instructions})), types.Timestamp(1<<62))
+		}),
+	}}
+	packet := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustBatchInstruction(batch)), types.Timestamp(1<<62))
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
 
-	ufmt.Printf("[INFO] minted children: %d\n", mintedChildren(quoteTokens))
+	ufmt.Printf("[INFO] child 0 (orphan ESCROW) quote token balance: %d\n", zkgm.VoucherBalanceOf(orphanQuote, receiverAddr))
+	ufmt.Printf("[INFO] child 1 (INITIALIZE) quote token balance: %d\n", zkgm.VoucherBalanceOf(initQuote, receiverAddr))
 	ufmt.Printf("[INFO] packet receipt recorded: %t\n", receiptRecorded(packet))
-	ufmt.Println("[EXPECTED] all 7 children minted; receipt recorded")
-}
-
-func recvNestedBatch(cur realm, channelId types.ChannelId, quoteTokens []string) {
-	nested := z.Batch{Instructions: []z.Instruction{mustBatchInstruction(z.Batch{})}}
-	packet := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustBatchInstruction(nested)), types.Timestamp(1<<62))
-
-	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
-
-	ufmt.Printf("[INFO] minted children after nested batch: %d\n", mintedChildren(quoteTokens))
-	ufmt.Printf("[INFO] packet receipt recorded: %t\n", receiptRecorded(packet))
-	ufmt.Println("[EXPECTED] nested batch rejected: mint count unchanged at 7; receipt recorded (failure ack)")
-}
-
-func mintedChildren(quoteTokens []string) int {
-	n := 0
-	for _, qt := range quoteTokens {
-		if zkgm.VoucherBalanceOf(qt, receiverAddr) == 1 {
-			n++
-		}
-	}
-	return n
+	ufmt.Println("[EXPECTED] child 0 fails closed (0 minted), child 1 mints 100, no panic, receipt recorded (partial success)")
 }
 
 func receiptRecorded(packet types.Packet) bool {
@@ -186,12 +174,8 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 // Output:
 // [SCENARIO] 1. Bootstrap IBC host and open a zkgm channel
 //
-// [SCENARIO] 2. A flat batch of 7 INITIALIZE children mints all eight (no length cap)
-// [INFO] minted children: 7
+// [SCENARIO] 2. Receive a batch where child 0 (orphan ESCROW) fails and child 1 (INITIALIZE) mints
+// [INFO] child 0 (orphan ESCROW) quote token balance: 0
+// [INFO] child 1 (INITIALIZE) quote token balance: 100
 // [INFO] packet receipt recorded: true
-// [EXPECTED] all 7 children minted; receipt recorded
-//
-// [SCENARIO] 3. A nested batch (batch inside batch) is rejected, minting nothing new
-// [INFO] minted children after nested batch: 7
-// [INFO] packet receipt recorded: true
-// [EXPECTED] nested batch rejected: mint count unchanged at 7; receipt recorded (failure ack)
+// [EXPECTED] child 0 fails closed (0 minted), child 1 mints 100, no panic, receipt recorded (partial success)

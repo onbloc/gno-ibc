@@ -1,7 +1,7 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/relayer
 package relayer
 
-// relayer_handoff_fee_attribution_filetest is the BY-TYPE relayer scenario for relayer
+// relayer_fee_follows_submitter_filetest is the BY-TYPE relayer scenario for relayer
 // hand-off / drop-out (S-5.1, S-5.2). Delivery is permissionless among relayers: a
 // packet is not bound to the relayer that produced it, so if one relayer drops out
 // another can submit the proof and complete delivery. The protocol attributes the fee

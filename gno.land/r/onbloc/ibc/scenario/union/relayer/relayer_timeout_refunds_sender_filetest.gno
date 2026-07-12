@@ -1,7 +1,7 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/relayer
 package relayer
 
-// timeout_by_any_relayer_refunds_sender_filetest is the BY-TYPE relayer scenario for
+// relayer_timeout_refunds_sender_filetest is the BY-TYPE relayer scenario for
 // timeout liveness and refund attribution (S-5.5). Timeout completion is not bound to
 // the relayer that delivered or sent the packet: any authorized relayer can prove a
 // timeout, and the refund always returns to the original sender (never to the relayer

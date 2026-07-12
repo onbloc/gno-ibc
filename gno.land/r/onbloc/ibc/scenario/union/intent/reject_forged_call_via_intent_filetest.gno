@@ -3,16 +3,19 @@ package intent
 
 // reject_forged_call_via_intent_filetest is the EXCEPTION-path intent scenario
 // (re-targeted from the legacy e2e z27). The proofless market-maker fast path
-// core.IntentPacketRecv performs no membership verification, so a forged OP_CALL
-// delivered through it must fail closed: intent calls are not fillable, the recv
-// reverts, and the registered receiver's OnZkgm handler is never reached. The
-// revert is the terminating panic, matched by the // Error: directive.
+// core.IntentPacketRecv dispatches OP_CALL to the receiver's OnIntentZkgm (not
+// OnZkgm — a separate handler intent recv always calls, whether the receiver
+// accepts or rejects it). A receiver that panics on OnIntentZkgm is caught by
+// safeCallOnIntentZkgm and converted into ACK_ERR_ONLY_MAKER; OnIntentRecvPacket
+// then panics with "only maker" rather than silently degrading, so a receiver
+// that cannot vouch for the call without a real proof reverts the whole intent
+// recv instead of committing a false success. The revert is the terminating
+// panic, matched by the // Error: directive.
 
 import (
 	"chain"
 	"testing"
 
-	"gno.land/p/nt/ufmt/v0"
 	types "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
@@ -37,11 +40,11 @@ const (
 )
 
 func main(cur realm) {
-	println("[SCENARIO] 1. Bootstrap, open a channel, and register the mock receiver")
+	println("[SCENARIO] 1. Bootstrap, open a channel, and register a mock receiver that panics on intent calls")
 	channelId := bootstrap(cur)
 	println("")
 
-	println("[SCENARIO] 2. A forged OP_CALL delivered via proofless intent recv must fail closed")
+	println("[SCENARIO] 2. A forged OP_CALL delivered via proofless intent recv is rejected: the receiver panic reverts the whole recv")
 	forgedIntentCall(cur, channelId)
 }
 
@@ -68,9 +71,16 @@ func bootstrap(cur realm) types.ChannelId {
 	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(channelId, zkgm.Version, types.ChannelId(2), nil, 1, "g1relayer"))
 
 	mockrcv.Reset(cross(cur))
+	// Intent recv always calls OnIntentZkgm (never OnZkgm). Arm it to panic, as a
+	// receiver would when it cannot vouch for a call without a real proof.
+	mockrcv.SetPanic(cross(cur), "cannot accept unproven call")
 	return channelId
 }
 
+// forgedIntentCall submits an OP_CALL through the proofless intent path. The
+// receiver's OnIntentZkgm panics (armed in bootstrap); safeCallOnIntentZkgm
+// catches it and converts it to ACK_ERR_ONLY_MAKER, and OnIntentRecvPacket
+// panics on that sentinel rather than committing a success ack.
 func forgedIntentCall(cur realm, channelId types.ChannelId) {
 	call := z.Call{
 		Sender:           []byte("attacker-sender"),
@@ -81,9 +91,6 @@ func forgedIntentCall(cur realm, channelId types.ChannelId) {
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.IntentPacketRecv(cross(cur), types.NewMsgIntentPacketRecv([]types.Packet{packet}, [][]byte{nil}))
-
-	ufmt.Printf("[INFO] mock receiver OnZkgm calls after forged intent recv: %d\n", mockrcv.Calls(cross(cur)))
-	ufmt.Println("[EXPECTED] fail closed: the forged call never reaches the receiver handler (calls = 0)")
 }
 
 // --- encoding helpers ---
@@ -105,8 +112,9 @@ func mustPacketData(instr z.Instruction) []byte {
 }
 
 // Output:
-// [SCENARIO] 1. Bootstrap, open a channel, and register the mock receiver
+// [SCENARIO] 1. Bootstrap, open a channel, and register a mock receiver that panics on intent calls
 //
-// [SCENARIO] 2. A forged OP_CALL delivered via proofless intent recv must fail closed
-// [INFO] mock receiver OnZkgm calls after forged intent recv: 0
-// [EXPECTED] fail closed: the forged call never reaches the receiver handler (calls = 0)
+// [SCENARIO] 2. A forged OP_CALL delivered via proofless intent recv is rejected: the receiver panic reverts the whole recv
+
+// Error:
+// only maker

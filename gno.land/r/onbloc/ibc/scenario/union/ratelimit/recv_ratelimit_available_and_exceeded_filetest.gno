@@ -1,13 +1,19 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/ratelimit
 package ratelimit
 
-// recv_rate_limit_capacity_filetest is the BY-TYPE rate-limit scenario (S-8.8). With
-// rate limiting enabled, the receive/fill of a quote denom is charged against that
-// denom's token bucket: a fill within the remaining capacity mints, a fill that
-// exceeds it is rejected (failure ack — nothing minted), and after the bucket refills
-// over time (testing.SkipHeights, 5s per block, refillRate tokens/second) a fill
-// succeeds again. (In the current model the rate limit is on the quote/fill side, not
-// the send side; an unconfigured bucket while enabled would reject the fill outright.)
+// recv_ratelimit_available_and_exceeded_filetest verifies the token bucket through the
+// real execution path. The rate limiter is not poked directly: each receive runs
+// executeTokenOrderV2, which calls the impl's rateLimit(quoteDenom, QuoteAmount) and so
+// charges the configured bucket. The effect is then observed by querying the bucket back
+// with zkgm.GetTokenBucket(denom) and reading Available:
+//   - a fill within capacity mints and Available drops by the filled amount,
+//   - a fill that exceeds the remaining Available is rejected (failure ack, nothing
+//     minted) and Available is left unchanged — the ErrRateLimitExceeded outcome,
+//   - after the chain clock advances (testing.SkipHeights, 5s per block) the bucket
+//     refills (refillRate/second, capped at capacity) and the next fill succeeds.
+//
+// The bucket is capacity 100, refill 10/s. Refill is lazy — GetTokenBucket reads the
+// stored bucket, which only catches up when the next rateLimit call runs during a recv.
 
 import (
 	"chain"
@@ -19,12 +25,12 @@ import (
 
 	u256 "gno.land/p/gnoswap/uint256"
 
+	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
-	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 )
 
 const (
@@ -39,21 +45,27 @@ const (
 var theMeta []byte
 
 func main(cur realm) {
-	println("[SCENARIO] 1. Bootstrap, deploy the token, then enable a capacity-50 bucket (refill 50/s)")
+	println("[SCENARIO] 1. Bootstrap, deploy the token, enable a capacity-100 refill-10/s bucket")
 	channelId, quoteToken := setup(cur)
+	ufmt.Printf("[INFO] bucket available after config: %d\n", available(quoteToken))
+	ufmt.Println("[EXPECTED] 100")
 	println("")
 
-	println("[SCENARIO] 2. A fill of 40 is within capacity -> minted")
+	println("[SCENARIO] 2. recv fill 40 (executeTokenOrderV2): minted, bucket charged via rateLimit")
 	recvFill(cur, channelId, quoteToken, 40, [32]byte{2})
 	println("")
 
-	println("[SCENARIO] 3. A second fill of 40 exceeds the remaining capacity -> rejected (no mint)")
+	println("[SCENARIO] 3. recv fill 40 again (same block): minted, bucket charged")
 	recvFill(cur, channelId, quoteToken, 40, [32]byte{3})
 	println("")
 
-	println("[SCENARIO] 4. After the bucket refills (SkipHeights), a fill of 40 succeeds again")
-	testing.SkipHeights(1) // 5s * 50/s refills the bucket to capacity
+	println("[SCENARIO] 4. recv fill 40 over the remaining 20: rate limited -> no mint, bucket unchanged")
 	recvFill(cur, channelId, quoteToken, 40, [32]byte{4})
+	println("")
+
+	println("[SCENARIO] 5. Advance the chain 10s, recv fill 40: bucket refilled to capacity, fill succeeds")
+	testing.SkipHeights(2) // 2 blocks * 5s = 10s; rateLimit refills 10/s * 10s = 100 (capped at 100)
+	recvFill(cur, channelId, quoteToken, 40, [32]byte{5})
 }
 
 func setup(cur realm) (types.ChannelId, string) {
@@ -87,18 +99,31 @@ func setup(cur realm) (types.ChannelId, string) {
 
 	// Enable rate limiting and configure the bucket for the quote denom.
 	zkgm.SetRateLimitDisabled(cross(cur), false)
-	zkgm.SetBucketConfig(cross(cur), quoteToken, u256.NewUint(50), u256.NewUint(50))
+	zkgm.SetBucketConfig(cross(cur), quoteToken, u256.NewUint(100), u256.NewUint(10))
 	return channelId, quoteToken
 }
 
+// recvFill receives an ESCROW fill of the quote denom through the core/app recv path
+// (executeTokenOrderV2 -> rateLimit) and reports the minted delta and the bucket's
+// Available read back via zkgm.GetTokenBucket before and after.
 func recvFill(cur realm, channelId types.ChannelId, quoteToken string, amount int64, salt [32]byte) {
-	before := zkgm.VoucherBalanceOf(quoteToken, receiverAddr)
+	balBefore := zkgm.VoucherBalanceOf(quoteToken, receiverAddr)
+	availBefore := available(quoteToken)
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{saltedPacket(channelId, salt, orderOf(z.TOKEN_ORDER_KIND_ESCROW, quoteToken, amount))}, [][]byte{nil}, nil, 1))
 
-	after := zkgm.VoucherBalanceOf(quoteToken, receiverAddr)
-	ufmt.Printf("[INFO] fill of %d: balance %d -> %d (delta +%d)\n", amount, before, after, after-before)
+	balAfter := zkgm.VoucherBalanceOf(quoteToken, receiverAddr)
+	availAfter := available(quoteToken)
+	ufmt.Printf("[INFO] fill %d: minted +%d, bucket available %d -> %d\n", amount, balAfter-balBefore, availBefore, availAfter)
+}
+
+func available(denom string) uint64 {
+	bucket, err := zkgm.GetTokenBucket(denom)
+	if err != nil {
+		panic(err)
+	}
+	return bucket.Available.Uint64()
 }
 
 func orderOf(kind uint8, quoteToken string, amount int64) z.TokenOrderV2 {
@@ -153,13 +178,18 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 }
 
 // Output:
-// [SCENARIO] 1. Bootstrap, deploy the token, then enable a capacity-50 bucket (refill 50/s)
+// [SCENARIO] 1. Bootstrap, deploy the token, enable a capacity-100 refill-10/s bucket
+// [INFO] bucket available after config: 100
+// [EXPECTED] 100
 //
-// [SCENARIO] 2. A fill of 40 is within capacity -> minted
-// [INFO] fill of 40: balance 1 -> 41 (delta +40)
+// [SCENARIO] 2. recv fill 40 (executeTokenOrderV2): minted, bucket charged via rateLimit
+// [INFO] fill 40: minted +40, bucket available 100 -> 60
 //
-// [SCENARIO] 3. A second fill of 40 exceeds the remaining capacity -> rejected (no mint)
-// [INFO] fill of 40: balance 41 -> 41 (delta +0)
+// [SCENARIO] 3. recv fill 40 again (same block): minted, bucket charged
+// [INFO] fill 40: minted +40, bucket available 60 -> 20
 //
-// [SCENARIO] 4. After the bucket refills (SkipHeights), a fill of 40 succeeds again
-// [INFO] fill of 40: balance 41 -> 81 (delta +40)
+// [SCENARIO] 4. recv fill 40 over the remaining 20: rate limited -> no mint, bucket unchanged
+// [INFO] fill 40: minted +0, bucket available 20 -> 20
+//
+// [SCENARIO] 5. Advance the chain 10s, recv fill 40: bucket refilled to capacity, fill succeeds
+// [INFO] fill 40: minted +40, bucket available 20 -> 60

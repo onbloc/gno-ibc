@@ -1,7 +1,7 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/access
 package access
 
-// grant_relayer_role_filetest is the NORMAL-path access scenario. The baked-in
+// role_grant_filetest is the NORMAL-path access scenario. The baked-in
 // admin (DefaultAdminAddress, which holds AdminRole from the access realm's init)
 // grants the RELAYER role to a fresh account. The account moves from unauthorized
 // to authorized for the relayer-gated core selectors — verified as a before/after

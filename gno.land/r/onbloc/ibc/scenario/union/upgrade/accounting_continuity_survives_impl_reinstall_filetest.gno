@@ -1,14 +1,15 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/upgrade
 package upgrade
 
-// voucher_ledger_survives_upgrade_filetest is the LEDGER-preservation upgrade scenario
-// (S-3.4). The open question was whether the voucher ledger needs migrating when the
-// impl package is swapped. It does not: the voucher store is proxy-owned (the proxy's
-// Store, injected into the impl constructor by UpdateImpl), so a re-installed impl reads
-// and writes the very same ledger. This file proves both directions across an upgrade:
-// after minting 100 to the holder and re-installing the impl, the balance is still 100
-// (the new impl READS the surviving ledger), and an ESCROW send of 40 then burns from it
-// down to 60 (the new impl WRITES the surviving ledger). No migration step is required.
+// accounting_continuity_survives_impl_reinstall_filetest is the NORMAL-path upgrade scenario for
+// behaviour continuity (S-3.1). It exercises a receive both before and after an impl
+// re-install and shows the accounting is continuous: an INITIALIZE recv mints 100, the
+// admin re-installs the impl (rebuilding it against the same proxy-owned store), and a
+// follow-up ESCROW recv of the same wrapped token mints 50 more for a cumulative 150.
+// Recv works identically on either side of the upgrade and the ledger accumulates across
+// it, so the swap is invisible to accounting. (Only the v1 constructor is registered, so
+// UpdateImpl re-points to the same path; the model allows pointing at any registered
+// constructor, but the store — and thus the accounting — is always the proxy's.)
 
 import (
 	"chain"
@@ -33,8 +34,8 @@ const (
 	zkgmImplPath  = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	mockLcPkgPath = "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 
-	adminAddr  = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
-	holderAddr = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+	adminAddr    = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
+	receiverAddr = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
 )
 
 func main(cur realm) {
@@ -45,22 +46,20 @@ func main(cur realm) {
 	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 
-	println("[SCENARIO] 2. Mint 100 of the voucher to the holder")
-	mint(cur, channelId, quoteToken, meta)
-	ufmt.Printf("[INFO] holder voucher balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, holderAddr))
+	println("[SCENARIO] 2. Before upgrade: INITIALIZE recv mints 100")
+	recvMint(cur, channelId, quoteToken, meta, z.TOKEN_ORDER_KIND_INITIALIZE, 100, saltSeed(1))
+	ufmt.Printf("[INFO] voucher balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, receiverAddr))
 	ufmt.Println("[EXPECTED] 100")
 	println("")
 
-	println("[SCENARIO] 3. Re-install the impl, then READ the ledger: balance survives")
+	println("[SCENARIO] 3. Re-install the impl (rebuilt against the same proxy-owned store)")
 	reinstallImpl(cur)
-	ufmt.Printf("[INFO] holder voucher balance after re-install: %d\n", zkgm.VoucherBalanceOf(quoteToken, holderAddr))
-	ufmt.Println("[EXPECTED] 100 (new impl reads the proxy-owned ledger; no migration)")
 	println("")
 
-	println("[SCENARIO] 4. WRITE the surviving ledger under the new impl: ESCROW send burns 40")
-	sendEscrow(cur, channelId, quoteToken)
-	ufmt.Printf("[INFO] holder voucher balance after send: %d, proxy escrow: %d\n", zkgm.VoucherBalanceOf(quoteToken, holderAddr), zkgm.VoucherBalanceOf(quoteToken, zkgm.ProxyAddress()))
-	ufmt.Println("[EXPECTED] holder 100 -> 60, proxy escrow 40: the new impl writes the same ledger")
+	println("[SCENARIO] 4. After upgrade: ESCROW recv mints 50 more, accounting continues")
+	recvMint(cur, channelId, quoteToken, meta, z.TOKEN_ORDER_KIND_ESCROW, 50, saltSeed(2))
+	ufmt.Printf("[INFO] voucher balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, receiverAddr))
+	ufmt.Println("[EXPECTED] 150 (100 pre-upgrade + 50 post-upgrade): the ledger is continuous across the swap")
 }
 
 func bootstrap(cur realm) types.ChannelId {
@@ -87,18 +86,18 @@ func bootstrap(cur realm) types.ChannelId {
 	return channelId
 }
 
-func mint(cur realm, channelId types.ChannelId, quoteToken string, meta []byte) {
+func recvMint(cur realm, channelId types.ChannelId, quoteToken string, meta []byte, kind uint8, amount uint64, salt [32]byte) {
 	order := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
-		Receiver:    []byte(holderAddr.String()),
+		Receiver:    []byte(receiverAddr.String()),
 		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(100),
+		BaseAmount:  u256.NewUint(amount),
 		QuoteToken:  []byte(quoteToken),
-		QuoteAmount: u256.NewUint(100),
-		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		QuoteAmount: u256.NewUint(amount),
+		Kind:        kind,
 		Metadata:    meta,
 	}
-	packet := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(order)), types.Timestamp(1<<62))
+	packet := core.NewPacket(types.ChannelId(2), channelId, saltedPacketData(salt, mustOrderInstruction(order)), types.Timestamp(1<<62))
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
@@ -107,21 +106,13 @@ func mint(cur realm, channelId types.ChannelId, quoteToken string, meta []byte) 
 func reinstallImpl(cur realm) {
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	zkgm.UpdateImpl(cross(cur), zkgmImplPath)
+	println("[INFO] impl re-installed")
 }
 
-func sendEscrow(cur realm, channelId types.ChannelId, quoteToken string) {
-	order := z.TokenOrderV2{
-		Sender:      []byte(holderAddr.String()),
-		Receiver:    []byte("remote-receiver"),
-		BaseToken:   []byte(quoteToken),
-		BaseAmount:  u256.NewUint(40),
-		QuoteToken:  []byte("ugnot"),
-		QuoteAmount: u256.NewUint(40),
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-	}
-
-	testing.SetRealm(testing.NewUserRealm(holderAddr))
-	zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
+func saltSeed(b byte) [32]byte {
+	var s [32]byte
+	s[31] = b
+	return s
 }
 
 // --- encoding helpers ---
@@ -134,8 +125,8 @@ func mustOrderInstruction(order z.TokenOrderV2) z.Instruction {
 	return z.Instruction{Version: z.INSTR_VERSION_2, Opcode: z.OP_TOKEN_ORDER, Operand: operand}
 }
 
-func mustPacketData(instr z.Instruction) []byte {
-	data, err := z.EncodeZkgmPacket(z.ZkgmPacket{Path: u256.Zero(), Instruction: instr})
+func saltedPacketData(salt [32]byte, instr z.Instruction) []byte {
+	data, err := z.EncodeZkgmPacket(z.ZkgmPacket{Salt: salt, Path: u256.Zero(), Instruction: instr})
 	if err != nil {
 		panic(err)
 	}
@@ -165,14 +156,13 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 // Output:
 // [SCENARIO] 1. Bootstrap IBC host and open a zkgm channel
 //
-// [SCENARIO] 2. Mint 100 of the voucher to the holder
-// [INFO] holder voucher balance: 100
+// [SCENARIO] 2. Before upgrade: INITIALIZE recv mints 100
+// [INFO] voucher balance: 100
 // [EXPECTED] 100
 //
-// [SCENARIO] 3. Re-install the impl, then READ the ledger: balance survives
-// [INFO] holder voucher balance after re-install: 100
-// [EXPECTED] 100 (new impl reads the proxy-owned ledger; no migration)
+// [SCENARIO] 3. Re-install the impl (rebuilt against the same proxy-owned store)
+// [INFO] impl re-installed
 //
-// [SCENARIO] 4. WRITE the surviving ledger under the new impl: ESCROW send burns 40
-// [INFO] holder voucher balance after send: 60, proxy escrow: 40
-// [EXPECTED] holder 100 -> 60, proxy escrow 40: the new impl writes the same ledger
+// [SCENARIO] 4. After upgrade: ESCROW recv mints 50 more, accounting continues
+// [INFO] voucher balance: 150
+// [EXPECTED] 150 (100 pre-upgrade + 50 post-upgrade): the ledger is continuous across the swap

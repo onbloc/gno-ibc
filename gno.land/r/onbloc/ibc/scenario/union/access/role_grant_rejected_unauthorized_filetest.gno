@@ -1,7 +1,7 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/access
 package access
 
-// reject_unauthorized_grant_filetest is the EXCEPTION-path access scenario. Only
+// role_grant_rejected_unauthorized_filetest is the EXCEPTION-path access scenario. Only
 // the admin of a role may grant it; a non-admin account is not an admin of
 // RelayerRole, so its grant attempt is rejected. The rejection is the terminating
 // panic of main, matched by the // Error: directive (the repo's convention for

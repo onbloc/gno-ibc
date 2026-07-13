@@ -25,7 +25,7 @@ func TestTokenOrderAckFailureUnderflowDoesNotReleaseEscrowedVoucher(cur realm, t
 	baseToken := "ibc/v1-underflow-voucher"
 	channelId := types.ChannelId(10)
 	amount := u256.NewUint(13)
-	uassert.NoError(t, v.mintVoucher(0, cur, baseToken, [32]byte{}, "", "", 0, cur.Address().String(), amount))
+	uassert.NoError(t, v.mintVoucher(0, cur, baseToken, [32]byte{}, "", "", 0, cur.Address(), amount))
 
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
@@ -55,7 +55,7 @@ func TestTokenOrderAckMarketMakerBurnAddressBurnsEscrowedVoucher(cur realm, t *t
 
 	// Escrowed voucher held by the proxy, plus the channel balance the ack decrease
 	// will draw down.
-	uassert.NoError(t, v.mintVoucher(0, cur, baseToken, [32]byte{}, "", "", 0, cur.Address().String(), amount))
+	uassert.NoError(t, v.mintVoucher(0, cur, baseToken, [32]byte{}, "", "", 0, cur.Address(), amount))
 
 	order := z.TokenOrderV2{
 		Sender:      []byte(testAddress("burn-snd")),
@@ -65,7 +65,7 @@ func TestTokenOrderAckMarketMakerBurnAddressBurnsEscrowedVoucher(cur realm, t *t
 		QuoteAmount: amount,
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	v.increaseChannelBalanceV2(0, cur, channelId, u256.Zero(), order.BaseToken, order.QuoteToken, amount)
+	v.increaseChannelBalanceV2(0, cur, channelId, u256.Zero(), order.BaseToken, order.QuoteToken, amount.Int64())
 
 	orderAck := z.TokenOrderAck{FillType: fillTypeMarketMaker(), MarketMaker: []byte(z.BURN_ADDRESS)}
 	err := v.acknowledgeTokenOrderV2(0, cur, core.NewPacket(channelId, 0, nil, 0), address(""), [32]byte{}, u256.Zero(), order, orderAck, true)
@@ -92,7 +92,7 @@ func TestTokenOrderAckMarketMakerBurnAddressLocksNative(cur realm, t *testing.T)
 		QuoteAmount: amount,
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	v.increaseChannelBalanceV2(0, cur, channelId, u256.Zero(), order.BaseToken, order.QuoteToken, amount)
+	v.increaseChannelBalanceV2(0, cur, channelId, u256.Zero(), order.BaseToken, order.QuoteToken, amount.Int64())
 
 	orderAck := z.TokenOrderAck{FillType: fillTypeMarketMaker(), MarketMaker: []byte(z.BURN_ADDRESS)}
 	err := v.acknowledgeTokenOrderV2(0, cur, core.NewPacket(channelId, 0, nil, 0), address(""), [32]byte{}, u256.Zero(), order, orderAck, true)
@@ -103,159 +103,330 @@ func TestTokenOrderAckMarketMakerBurnAddressLocksNative(cur realm, t *testing.T)
 	// orphaned surplus.
 	balance, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(channelId, u256.Zero(), order.BaseToken, order.QuoteToken))
 	uassert.True(t, balance.IsZero())
-	locked, ok := testStore.GetLockedNative("ugnot")
+	locked, ok := testStore.GetLockedTokenAmount("ugnot")
 	uassert.True(t, ok)
 	uassert.Equal(t, "13", locked.ToString())
 }
 
-func TestTokenOrderVerifyLocalGRC20EscrowsAfterApproval(cur realm, t *testing.T) {
+// A registered grc20 base cannot be supply-burned either (zkgm holds no mint/burn
+// capability over it, only a Teller), so the burn branch locks it exactly like
+// native: channel balance decremented, balance left parked at the proxy, and the
+// amount recorded in lockedTokenAmounts.
+func TestTokenOrderAckMarketMakerBurnAddressLocksGRC20(cur realm, t *testing.T) {
+	testStore = newMockStore()
 	v := newTestImpl()
 
+	const (
+		grc20Slug = "burn-lock-grc20"
+		grc20Key  = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1." + grc20Slug
+	)
+	token, ledger := grc20.NewToken(0, cur, "Foo", "FOO", 6)
+	grc20reg.Register(cross(cur), token, grc20Slug)
+
+	// Custody already sits at the proxy address, mirroring what a prior escrow
+	// would have left behind.
+	uassert.NoError(t, ledger.Mint(cur.Address(), 13))
+
+	channelId := types.ChannelId(13)
+	amount := u256.NewUint(13)
+	order := z.TokenOrderV2{
+		Sender:      []byte(testAddress("burn-grc20-snd")),
+		BaseToken:   []byte(grc20Key),
+		BaseAmount:  amount,
+		QuoteToken:  []byte("quote-grc20"),
+		QuoteAmount: amount,
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	v.increaseChannelBalanceV2(0, cur, channelId, u256.Zero(), order.BaseToken, order.QuoteToken, amount.Int64())
+
+	orderAck := z.TokenOrderAck{FillType: fillTypeMarketMaker(), MarketMaker: []byte(z.BURN_ADDRESS)}
+	err := v.acknowledgeTokenOrderV2(0, cur, core.NewPacket(channelId, 0, nil, 0), address(""), [32]byte{}, u256.Zero(), order, orderAck, true)
+
+	uassert.NoError(t, err)
+	balance, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(channelId, u256.Zero(), order.BaseToken, order.QuoteToken))
+	uassert.True(t, balance.IsZero())
+	locked, ok := testStore.GetLockedTokenAmount(grc20Key)
+	uassert.True(t, ok)
+	uassert.Equal(t, "13", locked.ToString())
+	uassert.Equal(t, int64(13), token.BalanceOf(cur.Address()))
+}
+
+// A token order whose base denom is a foreign GRC20 (registered in grc20reg, not
+// a zkgm ibc/ voucher) pulls custody via TransferFrom once the sender has
+// pre-approved this realm, exactly like a real allowance-gated ERC20 pull.
+func TestLocalTokenEscrowGRC20PullsApprovedFunds(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	// grc20reg keys are fqname(callerPkgPath, slug) = pkgpath + "." + slug; the
+	// registrant here is this v1 realm, so a sender would reference the token by
+	// that full key as the order's base denom.
 	const (
 		grc20Slug = "foo-grc20-escrow"
 		grc20Key  = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1." + grc20Slug
 	)
-	sender := testAddress("grc20-snd")
 	token, ledger := grc20.NewToken(0, cur, "Foo", "FOO", 6)
-	uassert.NoError(t, ledger.Mint(address(sender), 10))
-	uassert.NoError(t, ledger.ImpersonateTeller(address(sender)).Approve(0, cur, cur.Address(), 10))
 	grc20reg.Register(cross(cur), token, grc20Slug)
 
-	order := z.TokenOrderV2{
-		Sender:      []byte(sender),
-		BaseToken:   []byte(grc20Key),
-		BaseAmount:  u256.NewUint(10),
-		QuoteToken:  []byte("quote"),
-		QuoteAmount: u256.NewUint(10),
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-	}
+	sender := address(testAddress("grc20-escrow-sender"))
+	uassert.NoError(t, ledger.Mint(sender, 10))
+	uassert.NoError(t, ledger.Approve(sender, cur.Address(), 6))
 
-	err := v.localTokenEscrow(0, cur, grc20Key, sender, newFunds(nil), order.BaseAmount)
-	uassert.NoError(t, err)
-	uassert.Equal(t, int64(0), token.BalanceOf(address(sender)))
-	uassert.Equal(t, int64(10), token.BalanceOf(cur.Address()))
-	uassert.NoError(t, v.increaseChannelBalanceV2(0, cur, types.ChannelId(1), u256.Zero(), order.BaseToken, order.QuoteToken, order.BaseAmount))
-	balance, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(1), u256.Zero(), order.BaseToken, order.QuoteToken))
-	uassert.Equal(t, "10", balance.ToString())
-	pinned, _ := testStore.GetLocalGRC20Token(grc20Key)
-	uassert.True(t, pinned == token)
+	uassert.NoError(t, v.localTokenEscrow(0, cur, grc20Key, sender, newFunds(nil), u256.NewUint(6)))
+	uassert.Equal(t, int64(6), token.BalanceOf(cur.Address()))
+	uassert.Equal(t, int64(4), token.BalanceOf(sender))
 }
 
-func TestTokenOrderVerifyLocalGRC20ApprovalFailureDoesNotIncreaseBalance(cur realm, t *testing.T) {
+// Without a prior Approve, TransferFrom has no allowance to spend and the
+// escrow is rejected instead of silently falling back to native handling.
+func TestLocalTokenEscrowGRC20WithoutApprovalRejected(cur realm, t *testing.T) {
+	testStore = newMockStore()
 	v := newTestImpl()
+
 	const (
-		grc20Slug = "foo-grc20-no-approval"
+		grc20Slug = "foo-grc20-escrow-noapprove"
 		grc20Key  = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1." + grc20Slug
 	)
-	sender := testAddress("grc20-no-approval")
-	token, ledger := grc20.NewToken(0, cur, "No Approval", "NOAPP", 6)
-	uassert.NoError(t, ledger.Mint(address(sender), 10))
+	token, ledger := grc20.NewToken(0, cur, "Foo", "FOO", 6)
 	grc20reg.Register(cross(cur), token, grc20Slug)
 
-	order := z.TokenOrderV2{
-		Sender:      []byte(sender),
-		BaseToken:   []byte(grc20Key),
-		BaseAmount:  u256.NewUint(10),
-		QuoteToken:  []byte("quote"),
-		QuoteAmount: u256.NewUint(10),
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-	}
+	sender := address(testAddress("grc20-noapprove-snd"))
+	uassert.NoError(t, ledger.Mint(sender, 10))
 
-	err := v.localTokenEscrow(0, cur, grc20Key, sender, newFunds(nil), order.BaseAmount)
+	err := v.localTokenEscrow(0, cur, grc20Key, sender, newFunds(nil), u256.NewUint(6))
 
 	uassert.ErrorContains(t, err, "insufficient allowance")
-	uassert.Equal(t, int64(10), token.BalanceOf(address(sender)))
-	uassert.Equal(t, int64(0), token.BalanceOf(cur.Address()))
-	_, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(2), u256.Zero(), order.BaseToken, order.QuoteToken))
-	uassert.False(t, ok)
+	uassert.Equal(t, int64(10), token.BalanceOf(sender))
 }
 
-func TestTokenOrderVerifyLocalGRC20StrayNativeSendRejected(cur realm, t *testing.T) {
+// An allowance covering the amount does not bypass the sender's actual
+// balance: TransferFrom checks balance before spending the allowance.
+func TestLocalTokenEscrowGRC20InsufficientBalanceRejected(cur realm, t *testing.T) {
+	testStore = newMockStore()
 	v := newTestImpl()
+
 	const (
-		grc20Slug = "foo-grc20-stray-native"
+		grc20Slug = "foo-grc20-escrow-short"
 		grc20Key  = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1." + grc20Slug
 	)
-	sender := testAddress("grc20-stray-native")
-	token, ledger := grc20.NewToken(0, cur, "Stray Native", "STRAY", 6)
-	uassert.NoError(t, ledger.Mint(address(sender), 10))
-	uassert.NoError(t, ledger.ImpersonateTeller(address(sender)).Approve(0, cur, cur.Address(), 10))
+	token, ledger := grc20.NewToken(0, cur, "Foo", "FOO", 6)
 	grc20reg.Register(cross(cur), token, grc20Slug)
 
-	f := newFunds(chain.NewCoins(chain.NewCoin("ugnot", 1)))
-	err := v.localTokenEscrow(0, cur, grc20Key, sender, f, u256.NewUint(10))
+	sender := address(testAddress("grc20-short-snd"))
+	uassert.NoError(t, ledger.Mint(sender, 4))
+	uassert.NoError(t, ledger.Approve(sender, cur.Address(), 6))
 
-	uassert.NoError(t, err)
-	uassert.ErrorContains(t, f.assertEmpty(), errCoinMismatch)
+	err := v.localTokenEscrow(0, cur, grc20Key, sender, newFunds(nil), u256.NewUint(6))
+
+	uassert.ErrorContains(t, err, "insufficient balance")
+	uassert.Equal(t, int64(4), token.BalanceOf(sender))
 }
 
-func TestLocalTokenUnescrowUsesPinnedGRC20AfterRegistryOverwrite(cur realm, t *testing.T) {
+// localTokenUnescrow releases a registered grc20 token straight from proxy
+// custody: no allowance needed, since RealmTeller.Transfer moves the proxy's
+// own balance rather than pulling from someone else's.
+func TestLocalTokenUnescrowGRC20ReleasesProxyFunds(cur realm, t *testing.T) {
+	testStore = newMockStore()
 	v := newTestImpl()
+
 	const (
-		grc20Slug = "foo-grc20-pinned-release"
+		grc20Slug = "foo-grc20-unescrow"
 		grc20Key  = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1." + grc20Slug
 	)
-	sender := testAddress("grc20-pin-sender")
-	recipient := testAddress("grc20-pin-recipient")
-	tokenA, ledgerA := grc20.NewToken(0, cur, "Pinned A", "PINA", 6)
-	tokenB, ledgerB := grc20.NewToken(0, cur, "Pinned B", "PINB", 6)
-	uassert.NoError(t, ledgerA.Mint(address(sender), 10))
-	uassert.NoError(t, ledgerA.ImpersonateTeller(address(sender)).Approve(0, cur, cur.Address(), 10))
-	uassert.NoError(t, ledgerB.Mint(cur.Address(), 10))
-	grc20reg.Register(cross(cur), tokenA, grc20Slug)
-	uassert.NoError(t, v.localTokenEscrow(0, cur, grc20Key, sender, newFunds(nil), u256.NewUint(10)))
+	token, ledger := grc20.NewToken(0, cur, "Foo", "FOO", 6)
+	grc20reg.Register(cross(cur), token, grc20Slug)
 
-	grc20reg.Register(cross(cur), tokenB, grc20Slug)
-	uassert.NoError(t, v.localTokenUnescrow(0, cur, grc20Key, recipient, u256.NewUint(4)))
+	// Proxy custody is simulated by minting straight to this realm's own
+	// address, mirroring how escrow leaves funds parked at cur.Address().
+	uassert.NoError(t, ledger.Mint(cur.Address(), 10))
 
-	uassert.Equal(t, int64(4), tokenA.BalanceOf(address(recipient)))
-	uassert.Equal(t, int64(6), tokenA.BalanceOf(cur.Address()))
-	uassert.Equal(t, int64(0), tokenB.BalanceOf(address(recipient)))
-	uassert.Equal(t, int64(10), tokenB.BalanceOf(cur.Address()))
+	recipient := address(testAddress("grc20-unescrow-rx"))
+	uassert.NoError(t, v.localTokenUnescrow(0, cur, grc20Key, recipient, u256.NewUint(6)))
+
+	uassert.Equal(t, int64(4), token.BalanceOf(cur.Address()))
+	uassert.Equal(t, int64(6), token.BalanceOf(recipient))
 }
 
-func TestTokenOrderVerifyLocalGRC20InvalidAmountsDoNotMutate(cur realm, t *testing.T) {
-	cases := []struct {
-		name   string
-		amount *u256.Uint
-		err    string
-	}{
-		{"zero", u256.Zero(), errZeroAmount},
-		{"overflow", new(u256.Uint).Lsh(u256.NewUint(1), 63), errAmountOverflow},
+// A drained (or never-funded) proxy balance rejects the release instead of
+// silently falling back to native handling.
+func TestLocalTokenUnescrowGRC20InsufficientBalanceRejected(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	const (
+		grc20Slug = "foo-grc20-unescrow-short"
+		grc20Key  = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1." + grc20Slug
+	)
+	token, ledger := grc20.NewToken(0, cur, "Foo", "FOO", 6)
+	grc20reg.Register(cross(cur), token, grc20Slug)
+
+	uassert.NoError(t, ledger.Mint(cur.Address(), 4))
+
+	recipient := address(testAddress("grc20-unesc-short-rx"))
+	err := v.localTokenUnescrow(0, cur, grc20Key, recipient, u256.NewUint(6))
+
+	uassert.ErrorContains(t, err, "insufficient balance")
+	uassert.Equal(t, int64(4), token.BalanceOf(cur.Address()))
+	uassert.Equal(t, int64(0), token.BalanceOf(recipient))
+}
+
+// verifyMetadataDecimals guards an INITIALIZE order's declared metadata
+// decimals against the locally-known ground truth for its base denom: a
+// registered grc20's real decimals, or a held voucher's recorded
+// OriginDecimals when forwarding it onward. Native (or otherwise unknown)
+// denoms are out of scope.
+
+func TestVerifyMetadataDecimalsSkipsUnknownDenom(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	// "ugnot" is neither a registered grc20 nor a held voucher, so the check
+	// is a no-op regardless of what the (here nonsense) metadata claims.
+	uassert.NoError(t, v.verifyMetadataDecimals("ugnot", []byte("not even valid metadata")))
+}
+
+func TestVerifyMetadataDecimalsRejectsGRC20Mismatch(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	const (
+		grc20Slug = "foo-grc20-meta-mismatch"
+		grc20Key  = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1." + grc20Slug
+	)
+	token, _ := grc20.NewToken(0, cur, "Foo", "FOO", 6)
+	grc20reg.Register(cross(cur), token, grc20Slug)
+
+	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Foo", Symbol: "FOO", Decimals: 18}),
+	})
+
+	err := v.verifyMetadataDecimals(grc20Key, metaBytes)
+
+	uassert.ErrorContains(t, err, "metadata decimals do not match")
+}
+
+func TestVerifyMetadataDecimalsAcceptsGRC20Match(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	const (
+		grc20Slug = "foo-grc20-meta-match"
+		grc20Key  = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1." + grc20Slug
+	)
+	token, _ := grc20.NewToken(0, cur, "Foo", "FOO", 6)
+	grc20reg.Register(cross(cur), token, grc20Slug)
+
+	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Foo", Symbol: "FOO", Decimals: 6}),
+	})
+
+	uassert.NoError(t, v.verifyMetadataDecimals(grc20Key, metaBytes))
+}
+
+func TestVerifyMetadataDecimalsRejectsVoucherForwardMismatch(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	ibcDenom := "ibc/voucher-meta-mismatch"
+	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "Foo", "FOO", 18, cur.Address(), scaledWire(20, 18)))
+
+	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Foo", Symbol: "FOO", Decimals: 6}),
+	})
+
+	err := v.verifyMetadataDecimals(ibcDenom, metaBytes)
+
+	uassert.ErrorContains(t, err, "metadata decimals do not match")
+}
+
+func TestVerifyMetadataDecimalsAcceptsVoucherForwardMatch(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	ibcDenom := "ibc/voucher-meta-match"
+	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "Foo", "FOO", 18, cur.Address(), scaledWire(20, 18)))
+
+	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Foo", Symbol: "FOO", Decimals: 18}),
+	})
+
+	uassert.NoError(t, v.verifyMetadataDecimals(ibcDenom, metaBytes))
+}
+
+// verifyTokenOrderV2 wires the check in ahead of any escrow side effect, so a
+// mismatched INITIALIZE order is rejected before it ever reaches localTokenEscrow.
+func TestTokenOrderVerifyGRC20InitializeDecimalsMismatchRejectedBeforeEscrow(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	const (
+		grc20Slug = "foo-grc20-verify-mismatch"
+		grc20Key  = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1." + grc20Slug
+	)
+	token, ledger := grc20.NewToken(0, cur, "Foo", "FOO", 6)
+	grc20reg.Register(cross(cur), token, grc20Slug)
+
+	sender := address(testAddress("grc20-verify-mis-snd"))
+	uassert.NoError(t, ledger.Mint(sender, 40))
+	uassert.NoError(t, ledger.Approve(sender, cur.Address(), 40))
+
+	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Foo", Symbol: "FOO", Decimals: 18}),
+	})
+
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(grc20Key),
+		BaseAmount:  u256.NewUint(40),
+		QuoteToken:  []byte("remote-foo"),
+		QuoteAmount: u256.NewUint(40),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    metaBytes,
 	}
 
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			testStore = newMockStore()
-			v := newTestImpl()
-			grc20Slug := "foo-grc20-" + tc.name
-			grc20Key := "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1." + grc20Slug
-			sender := testAddress("grc20-" + tc.name)
-			token, ledger := grc20.NewToken(0, cur, "Bad Amount", "BADAMT", 6)
-			uassert.NoError(t, ledger.Mint(address(sender), 10))
-			uassert.NoError(t, ledger.ImpersonateTeller(address(sender)).Approve(0, cur, cur.Address(), 10))
-			grc20reg.Register(cross(cur), token, grc20Slug)
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	err := v.verifyTokenOrderV2X(cross(cur), newFunds(nil), types.ChannelId(1), u256.Zero(), order)
 
-			order := z.TokenOrderV2{
-				Sender:      []byte(sender),
-				BaseToken:   []byte(grc20Key),
-				BaseAmount:  tc.amount,
-				QuoteToken:  []byte("quote"),
-				QuoteAmount: tc.amount,
-				Kind:        z.TOKEN_ORDER_KIND_ESCROW,
-			}
+	uassert.ErrorContains(t, err, "metadata decimals do not match")
+	// Escrow never ran: the sender's full minted balance is untouched.
+	uassert.Equal(t, int64(40), token.BalanceOf(sender))
+}
 
-			err := v.localTokenEscrow(0, cur, grc20Key, sender, newFunds(nil), order.BaseAmount)
+// verifyTokenOrderV2 applies the same guard when the base is a held voucher
+// being forwarded onward, rejecting before transferVoucher ever runs.
+func TestTokenOrderVerifyVoucherInitializeDecimalsMismatchRejectedBeforeEscrow(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
 
-			uassert.ErrorContains(t, err, tc.err)
-			uassert.Equal(t, int64(10), token.BalanceOf(address(sender)))
-			uassert.Equal(t, int64(0), token.BalanceOf(cur.Address()))
-			_, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(types.ChannelId(3), u256.Zero(), order.BaseToken, order.QuoteToken))
-			uassert.False(t, ok)
-			_, ok = testStore.GetLocalGRC20Token(grc20Key)
-			uassert.False(t, ok)
-		})
+	ibcDenom := "ibc/voucher-verify-mismatch"
+	sender := address(testAddress("voucher-verify-snd"))
+	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "Foo", "FOO", 18, sender, scaledWire(20, 18)))
+
+	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Foo", Symbol: "FOO", Decimals: 6}),
+	})
+
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(ibcDenom),
+		BaseAmount:  scaledWire(20, 18),
+		QuoteToken:  []byte("remote-foo-hop2"),
+		QuoteAmount: scaledWire(20, 18),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    metaBytes,
 	}
+
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	err := v.verifyTokenOrderV2X(cross(cur), newFunds(nil), types.ChannelId(1), u256.Zero(), order)
+
+	uassert.ErrorContains(t, err, "metadata decimals do not match")
+	// Escrow never ran: the sender's full minted balance is untouched.
+	uassert.Equal(t, int64(20), voucherBalanceOf(ibcDenom, sender))
 }
 
 func TestTokenOrderVerifyNativeRequiresSentCoin(cur realm, t *testing.T) {
@@ -304,7 +475,7 @@ func TestTokenOrderVerifyVoucherBurnInsufficientBalanceRejected(cur realm, t *te
 
 	sender := testAddress("burn-insuf-sender")
 	baseToken := "ibc/burn-insuf"
-	uassert.NoError(t, v.mintVoucher(0, cur, baseToken, [32]byte{}, "", "", 0, sender, u256.NewUint(10)))
+	uassert.NoError(t, v.mintVoucher(0, cur, baseToken, [32]byte{}, "", "", 0, address(sender), u256.NewUint(10)))
 
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
@@ -430,10 +601,6 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	uassert.True(t, ok)
 	uassert.Equal(t, "ugnot", string(foreignToken))
 
-	decimals, ok := testStore.GetTokenDecimals(ibcDenom)
-	uassert.True(t, ok)
-	uassert.Equal(t, uint8(6), decimals)
-
 	uassert.Equal(t, "Gno Token", voucherNameOf(ibcDenom))
 	uassert.Equal(t, "GNOT", voucherSymbolOf(ibcDenom))
 	uassert.Equal(t, 6, voucherDecimalsOf(ibcDenom))
@@ -539,6 +706,7 @@ func TestTokenOrderExecuteEscrowMintErrorDoesNotSetOrigin(cur realm, t *testing.
 	path := u256.NewUint(11)
 	destChan := uint32(8)
 	quoteDenom := z.PredictWrappedToken(path, destChan, []byte("ugnot"))
+	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T", canonicalDecimals)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte("not-a-valid-address"),
@@ -600,7 +768,7 @@ func TestTokenOrderExecuteUnescrowChannelBalanceUnderflow(cur realm, t *testing.
 	quoteToken := []byte("ugnot")
 
 	// decreaseChannelBalanceV2 uses (QuoteToken, BaseToken); seed 50 so the 100-withdraw underflows.
-	v.increaseChannelBalanceV2(0, cur, destChan, u256.Zero(), quoteToken, baseToken, u256.NewUint(50))
+	v.increaseChannelBalanceV2(0, cur, destChan, u256.Zero(), quoteToken, baseToken, int64(50))
 	seeded, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(destChan, u256.Zero(), quoteToken, baseToken))
 	uassert.Equal(t, int64(50), seeded.Int64())
 
@@ -687,6 +855,7 @@ func TestTokenOrderExecuteEscrowZeroFeeSkipsRelayerMint(cur realm, t *testing.T)
 	relayer := testAddress("zero-fee-relayer")
 	receiver := testAddress("zero-fee-receiver")
 	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T", canonicalDecimals)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -721,6 +890,7 @@ func TestTokenOrderExecuteEscrowZeroQuoteSkipsReceiverMint(cur realm, t *testing
 	relayer := testAddress("zero-quote-relayer")
 	receiver := testAddress("zero-quote-receiver")
 	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T", canonicalDecimals)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -748,6 +918,7 @@ func TestTokenOrderExecuteEscrowZeroAmountSkipsBothMints(cur realm, t *testing.T
 	relayer := testAddress("zero-amt-relayer")
 	receiver := testAddress("zero-amt-receiver")
 	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T", canonicalDecimals)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -767,6 +938,40 @@ func TestTokenOrderExecuteEscrowZeroAmountSkipsBothMints(cur realm, t *testing.T
 	uassert.Equal(t, int64(0), voucherBalanceOf(quoteDenom, address(relayer)))
 }
 
+func TestTokenOrderExecuteEscrowUninitializedVoucherReturnsFailureAck(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	path := u256.Zero()
+	const destChan = types.ChannelId(63)
+	receiver := testAddress("uninit-escrow-rx")
+	// No prior INITIALIZE: the wrapped voucher does not exist. A same-quote ESCROW
+	// must not lazily mint it at decimals=0 (an unredeemable orphan whose scale
+	// would then diverge from a later INITIALIZE); it is rejected with a failure
+	// ack so the source refunds.
+	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(receiver),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte(quoteDenom),
+		QuoteAmount: u256.NewUint(100),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
+
+	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("uninit-escrow-rly")), nil, [32]byte{}, path, order, false)
+
+	uassert.NoError(t, err)
+	uassert.True(t, res.Status == types.PacketStatusFailure)
+	uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
+	uassert.False(t, testStore.HasVoucher(quoteDenom), "rejected escrow must not create a voucher")
+	uassert.Equal(t, int64(0), voucherBalanceOf(quoteDenom, address(receiver)))
+	_, ok := testStore.GetTokenOrigin(quoteDenom)
+	uassert.False(t, ok, "rejected escrow must not set token origin")
+}
+
 func TestTokenOrderVerifyUnescrowV1PredictionPasses(cur realm, t *testing.T) {
 	v := newTestImpl()
 
@@ -777,7 +982,7 @@ func TestTokenOrderVerifyUnescrowV1PredictionPasses(cur realm, t *testing.T) {
 	origin, err := z.UpdateChannelPath(u256.Zero(), uint32(destChan))
 	uassert.NoError(t, err)
 	testStore.SetTokenOrigin(0, cur, baseDenom, origin)
-	uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, [32]byte{}, "", "", 0, sender, u256.NewUint(100)))
+	uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, [32]byte{}, "", "", 0, address(sender), u256.NewUint(100)))
 
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
@@ -815,7 +1020,7 @@ func TestTokenOrderVerifyUnescrowV2PredictionWithImagePasses(cur realm, t *testi
 	uassert.NoError(t, err)
 	testStore.SetTokenOrigin(0, cur, baseDenom, origin)
 	testStore.SetMetadataImageOf(0, cur, baseDenom, image)
-	uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, image, "", "", 0, sender, u256.NewUint(100)))
+	uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, image, "", "", 0, address(sender), u256.NewUint(100)))
 
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
@@ -833,34 +1038,6 @@ func TestTokenOrderVerifyUnescrowV2PredictionWithImagePasses(cur realm, t *testi
 	uassert.Equal(t, int64(50), voucherBalanceOf(baseDenom, address(sender)))
 }
 
-func TestTokenOrderVerifyUnescrowVoucherBaseBurns(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	const destChan = types.ChannelId(73)
-	sender := testAddress("unesc-vouch-sender")
-	quoteToken := []byte("ugnot")
-	baseDenom := z.PredictWrappedToken(u256.Zero(), uint32(destChan), quoteToken)
-	origin, err := z.UpdateChannelPath(u256.Zero(), uint32(destChan))
-	uassert.NoError(t, err)
-	testStore.SetTokenOrigin(0, cur, baseDenom, origin)
-	uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, [32]byte{}, "", "", 0, sender, u256.NewUint(11)))
-
-	order := z.TokenOrderV2{
-		Sender:      []byte(sender),
-		BaseToken:   []byte(baseDenom),
-		BaseAmount:  u256.NewUint(7),
-		QuoteToken:  quoteToken,
-		QuoteAmount: u256.NewUint(7),
-		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
-	}
-
-	testing.SetRealm(testing.NewUserRealm(address(sender)))
-	err = v.verifyTokenOrderV2X(cross(cur), newFunds(nil), destChan, u256.Zero(), order)
-
-	uassert.NoError(t, err)
-	uassert.Equal(t, int64(4), voucherBalanceOf(baseDenom, address(sender)))
-}
-
 func TestTokenOrderVerifyUnescrowWrongImageRejected(cur realm, t *testing.T) {
 	v := newTestImpl()
 
@@ -875,7 +1052,7 @@ func TestTokenOrderVerifyUnescrowWrongImageRejected(cur realm, t *testing.T) {
 	testStore.SetTokenOrigin(0, cur, baseDenom, origin)
 	testStore.SetMetadataImageOf(0, cur, baseDenom, imageWrong)
 	// imageWrong diverges from imageCorrect used to hash baseDenom — prediction will not match.
-	uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, imageWrong, "", "", 0, sender, u256.NewUint(100)))
+	uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, imageWrong, "", "", 0, address(sender), u256.NewUint(100)))
 
 	order := z.TokenOrderV2{
 		Sender:      []byte(sender),
@@ -898,7 +1075,7 @@ func TestTokenOrderIntentVoucherMarketMakerFillTransfersMakerFunds(cur realm, t 
 	maker := testAddress("v1-intent-maker")
 	receiver := testAddress("v1-intent-receiver")
 	quoteToken := "ibc/v1-intent-quote"
-	uassert.NoError(t, v.mintVoucher(0, cur, quoteToken, [32]byte{}, "", "", 0, maker, u256.NewUint(30)))
+	uassert.NoError(t, v.mintVoucher(0, cur, quoteToken, [32]byte{}, "", "", 0, address(maker), u256.NewUint(30)))
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -951,7 +1128,7 @@ func TestTokenOrderIntentInsufficientMakerBalanceReturnsOnlyMaker(cur realm, t *
 	maker := testAddress("v1-intent-poor-maker")
 	receiver := testAddress("int-poor-rx")
 	quoteToken := "ibc/v1-intent-poor"
-	uassert.NoError(t, v.mintVoucher(0, cur, quoteToken, [32]byte{}, "", "", 0, maker, u256.NewUint(3)))
+	uassert.NoError(t, v.mintVoucher(0, cur, quoteToken, [32]byte{}, "", "", 0, address(maker), u256.NewUint(3)))
 	order := z.TokenOrderV2{
 		Receiver:    []byte(receiver),
 		BaseToken:   []byte("ugnot"),
@@ -1033,7 +1210,7 @@ func TestLocalTokenEscrow(cur realm, t *testing.T) {
 	cases := []struct {
 		name          string
 		denom         string
-		sender        string
+		sender        address
 		funds         *funds
 		seedVoucher   bool
 		amount        *u256.Uint
@@ -1109,7 +1286,7 @@ func TestRefundIBCVoucher(cur realm, t *testing.T) {
 	image := [32]byte{0xaa}
 	testStore.SetMetadataImageOf(0, cur, denom, image)
 
-	uassert.NoError(t, v.refundIBCVoucher(0, cur, []byte(denom), string(recipient), u256.NewUint(12)))
+	uassert.NoError(t, v.refundIBCVoucher(0, cur, []byte(denom), recipient, u256.NewUint(12)))
 	uassert.Equal(t, int64(12), voucherBalanceOf(denom, recipient))
 
 	gotImage, ok := testStore.GetMetadataImageOf(denom)
@@ -1117,7 +1294,7 @@ func TestRefundIBCVoucher(cur realm, t *testing.T) {
 	uassert.True(t, gotImage == image)
 
 	wide := new(u256.Uint).Lsh(u256.NewUint(1), 64)
-	uassert.ErrorContains(t, v.refundIBCVoucher(0, cur, []byte("ibc/refund-overflow"), string(recipient), wide), errAmountOverflow)
+	uassert.ErrorContains(t, v.refundIBCVoucher(0, cur, []byte("ibc/refund-overflow"), recipient, wide), errAmountOverflow)
 }
 
 func TestRefundV2(cur realm, t *testing.T) {
@@ -1150,8 +1327,8 @@ func TestRefundV2(cur realm, t *testing.T) {
 				Sender:      []byte(testAddress("refund-escrow")),
 			},
 			seed: func(v *ucs03ZkgmV1, order z.TokenOrderV2) {
-				v.increaseChannelBalanceV2(0, cur, types.ChannelId(5), u256.Zero(), order.BaseToken, order.QuoteToken, order.BaseAmount)
-				uassert.NoError(t, v.mintVoucher(0, cur, string(order.BaseToken), [32]byte{}, "Escrow", "ESC", 0, cur.Address().String(), order.BaseAmount))
+				v.increaseChannelBalanceV2(0, cur, types.ChannelId(5), u256.Zero(), order.BaseToken, order.QuoteToken, order.BaseAmount.Int64())
+				uassert.NoError(t, v.mintVoucher(0, cur, string(order.BaseToken), [32]byte{}, "Escrow", "ESC", 0, cur.Address(), order.BaseAmount))
 			},
 			wantRecipient: 9,
 			wantBalance:   "0",
@@ -1203,7 +1380,7 @@ func assertProtocolAck(t *testing.T, ackBytes []byte) {
 	uassert.True(t, orderAck.FillType.Eq(fillTypeProtocol()))
 }
 
-func assertMarketMakerAck(t *testing.T, ackBytes []byte, maker string) {
+func assertMarketMakerAck(t *testing.T, ackBytes []byte, maker address) {
 	ack, err := z.DecodeAck(ackBytes)
 	uassert.NoError(t, err)
 	uassert.True(t, ack.Tag.Eq(tagAckSuccess()))
@@ -1211,7 +1388,7 @@ func assertMarketMakerAck(t *testing.T, ackBytes []byte, maker string) {
 	orderAck, err := z.DecodeTokenOrderAck(ack.InnerAck)
 	uassert.NoError(t, err)
 	uassert.True(t, orderAck.FillType.Eq(fillTypeMarketMaker()))
-	uassert.Equal(t, maker, string(orderAck.MarketMaker))
+	uassert.Equal(t, maker, address(orderAck.MarketMaker))
 }
 
 func marketMakerAck(marketMaker string) z.TokenOrderAck {
@@ -1264,7 +1441,7 @@ type protocolFillMintCase struct {
 func TestProtocolFillMint(cur realm, t *testing.T) {
 	validMetadata := mustDecodeTokenMetadata(mustEncodeTokenMetadata(z.TokenMetadata{
 		Implementation: []byte("grc20"),
-		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Test Token", Symbol: "TST", Decimals: 18}),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Test Token", Symbol: "TST", Decimals: 6}),
 	}))
 
 	invalidDecimalsMetadata := mustDecodeTokenMetadata(mustEncodeTokenMetadata(z.TokenMetadata{
@@ -1396,7 +1573,7 @@ func TestProtocolFillMint(cur realm, t *testing.T) {
 				expectedPath, _ := z.UpdateChannelPath(path, uint32(channelId))
 				testStore.SetTokenOrigin(0, cur, wrappedToken, expectedPath)
 				testStore.SetMetadataImageOf(0, cur, wrappedToken, image)
-				uassert.NoError(t, v.mintVoucher(0, cur, wrappedToken, image, "Test Token", "TST", 18, receiver, u256.NewUint(0)))
+				uassert.NoError(t, v.mintVoucher(0, cur, wrappedToken, image, "Test Token", "TST", 6, receiver, u256.NewUint(0)))
 			}
 
 			res, err := v.protocolFillMint(0, cur, channelId, path, baseToken, wrappedToken, address(receiver), address(relayer), tc.baseAmount, tc.quoteAmount, tc.metadata, tc.canDeploy)
@@ -1433,13 +1610,9 @@ func TestProtocolFillMint(cur realm, t *testing.T) {
 				_, ok = testStore.GetMetadataImageOf(wrappedToken)
 				uassert.True(t, ok, "metadata image should be set")
 
-				decimals, ok := testStore.GetTokenDecimals(wrappedToken)
-				uassert.True(t, ok, "token decimals should be set")
-				uassert.Equal(t, uint8(18), decimals)
-
 				uassert.Equal(t, "Test Token", voucherNameOf(wrappedToken))
 				uassert.Equal(t, "TST", voucherSymbolOf(wrappedToken))
-				uassert.Equal(t, 18, voucherDecimalsOf(wrappedToken))
+				uassert.Equal(t, 6, voucherDecimalsOf(wrappedToken))
 			}
 		})
 	}
@@ -1529,10 +1702,10 @@ func TestProtocolFillUnescrowV2(cur realm, t *testing.T) {
 			// Set token origin so localTokenUnescrow can recognize the voucher
 			testStore.SetTokenOrigin(0, cur, string(quoteToken), path)
 			// Mint initial voucher to proxy for unescrow
-			uassert.NoError(t, v.mintVoucher(0, cur, string(quoteToken), [32]byte{}, "", "", 0, cur.Address().String(), tc.initialBalance))
+			uassert.NoError(t, v.mintVoucher(0, cur, string(quoteToken), [32]byte{}, "", "", 0, cur.Address(), tc.initialBalance))
 
 			// Set up channel balance: decreaseChannelBalanceV2 uses (quote, base) order
-			v.increaseChannelBalanceV2(0, cur, channelId, path, quoteToken, baseToken, tc.initialBalance)
+			v.increaseChannelBalanceV2(0, cur, channelId, path, quoteToken, baseToken, tc.initialBalance.Int64())
 
 			res, err := v.protocolFillUnescrowV2(0, cur, channelId, path, baseToken, string(quoteToken), address(receiver), address(relayer), tc.baseAmount, tc.quoteAmount)
 
@@ -1583,7 +1756,7 @@ func TestEncodeTokenOrderSuccessAck(cur realm, t *testing.T) {
 	innerAck2, err := z.DecodeTokenOrderAck(decoded2.InnerAck)
 	uassert.NoError(t, err)
 	uassert.True(t, innerAck2.FillType.Eq(marketMakerFT))
-	uassert.Equal(t, makerAddr, string(innerAck2.MarketMaker))
+	uassert.Equal(t, makerAddr, address(innerAck2.MarketMaker))
 
 	// Protocol fill type with empty market maker (should still encode)
 	ack3, err := encodeTokenOrderSuccessAck(protocolFT, []byte{})
@@ -1701,7 +1874,7 @@ func TestMarketMakerFillV2(cur realm, t *testing.T) {
 					uassert.Equal(t, tc.expectMarketMaker, string(innerAck.MarketMaker))
 				} else {
 					// When nil relayerMsg, marketMaker defaults to relayer (maker)
-					uassert.Equal(t, maker, string(innerAck.MarketMaker))
+					uassert.Equal(t, maker, address(innerAck.MarketMaker))
 				}
 			}
 

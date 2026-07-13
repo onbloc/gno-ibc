@@ -62,8 +62,8 @@ func newTestImpl() *ucs03ZkgmV1 {
 	return &ucs03ZkgmV1{store: testStore}
 }
 
-func testAddress(name string) string {
-	return string(testutils.TestAddress(name))
+func testAddress(name string) address {
+	return testutils.TestAddress(name)
 }
 
 // voucher read helpers: vouchers are proxy-owned state, so tests read them back

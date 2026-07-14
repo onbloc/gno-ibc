@@ -1,4 +1,4 @@
-package impl
+package v1
 
 // unescrow_release_test.gno covers the receive-side native RELEASE path: an
 // incoming UNESCROW order whose base covers the quote must decrease the channel

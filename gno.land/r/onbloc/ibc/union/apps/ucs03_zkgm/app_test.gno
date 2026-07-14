@@ -1,6 +1,6 @@
 // Ported from Union CosmWasm tests
 // Reference: https://github.com/unionlabs/union/blob/edaacacccc3544d69ce1fac0aa1c7e9b6fe83216/cosmwasm/app/ucs03-zkgm/src/tests.rs
-package zkgm
+package ucs03_zkgm
 
 import (
 	"testing"

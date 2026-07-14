@@ -1,4 +1,4 @@
-package impl
+package v1
 
 import (
 	"gno.land/p/onbloc/ibc/union/lightclient"

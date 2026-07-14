@@ -11,7 +11,7 @@ func assertIsRlmCurrent(_ int, rlm realm) {
 }
 
 func assertPacketDataSize(data []byte) {
-	if core.PacketDataTooLarge(data) {
+	if !core.IsValidPacketDataSize(data) {
 		panic(makeError(core.ErrPacketCombinedDataTooLarge))
 	}
 }

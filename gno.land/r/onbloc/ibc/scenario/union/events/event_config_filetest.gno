@@ -74,7 +74,7 @@ func sendWithSplitEnabled(cur realm, channelId types.ChannelId) {
 	ufmt.Printf("[INFO] max_event_attr_value_len: %d\n", config.MaxEventAttrValueLen)
 	ufmt.Printf("[INFO] max_packet_data_event_columns: %d\n", config.MaxPacketDataEventColumns)
 	ufmt.Printf("[INFO] packet_data_budget: %d\n", core.MaxPacketDataEventSize())
-	ufmt.Printf("[INFO] oversized_packet_rejected: %t\n", core.PacketDataTooLarge(make([]byte, 16)))
+	ufmt.Printf("[INFO] oversized_packet_rejected: %t\n", !core.IsValidPacketDataSize(make([]byte, 16)))
 
 	packet := core.SendPacket(cross(cur), channelId, types.Timestamp(1), []byte{0xaa, 0xbb, 0xcc})
 	ufmt.Printf("[INFO] before_packet_data_size: %d\n", eventConfigHexAttrLen(packet.Data))
@@ -91,7 +91,7 @@ func disableEventConfigSplit(cur realm) {
 	ufmt.Printf("[INFO] max_event_attr_value_len: %d\n", config.MaxEventAttrValueLen)
 	ufmt.Printf("[INFO] max_packet_data_event_columns: %d\n", config.MaxPacketDataEventColumns)
 	ufmt.Printf("[INFO] packet_data_budget: %d\n", core.MaxPacketDataEventSize())
-	ufmt.Printf("[INFO] oversized_packet_allowed: %t\n", !core.PacketDataTooLarge(make([]byte, 16)))
+	ufmt.Printf("[INFO] oversized_packet_allowed: %t\n", core.IsValidPacketDataSize(make([]byte, 16)))
 }
 
 func sendWithSplitDisabled(cur realm, channelId types.ChannelId) {

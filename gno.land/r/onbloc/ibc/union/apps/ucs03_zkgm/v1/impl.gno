@@ -70,19 +70,6 @@ func (v *ucs03ZkgmV1) OnChannelCloseConfirm(_ int, rlm realm, channelId types.Ch
 func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relayer address, relayerMsg []byte) types.RecvPacketResult {
 	assertIsRlmCurrent(0, rlm)
 
-	// core unconditionally re-emits packet.Data+relayerMsg via EmitPacketRecv
-	// after this function returns, regardless of the result handed back here —
-	// a graceful failureResult cannot stop that emit, and relayerMsg carries no
-	// independent size cap before this point. So an oversized combination can
-	// never actually be recorded as a normal failure: chain.Emit would panic on
-	// core's side anyway once it tries to split relayerMsg into that event.
-	// Panic here instead, matching the post-dispatch guard below, so the whole
-	// recv reverts atomically before any receipt/ack state is committed rather
-	// than committing a failure ack that a subsequent panic then rolls back.
-	if core.CombinedEventDataTooLarge(packet.Data, relayerMsg) {
-		panic(core.ErrPacketCombinedDataTooLarge)
-	}
-
 	zp, err := z.DecodeZkgmPacket(types.CloneBytes(packet.Data))
 	if err != nil {
 		zkgm.EmitRecvError(0, rlm, packet.SourceChannelId, packet.DestinationChannelId, err.Error())
@@ -106,17 +93,6 @@ func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relaye
 		panic(errIsOnlyMakerAck)
 	}
 
-	// The final ack is only known after dispatch (batch children may have
-	// embedded relayerMsg multiple times), by which point dispatch may have
-	// already mutated state (e.g. a market-maker voucher transfer). Swapping
-	// in a different ack here instead of panicking would leave that mutation
-	// standing against a failure outcome, so an oversized result reverts
-	// atomically rather than returning gracefully like the pre-dispatch check
-	// above.
-	if core.CombinedEventDataTooLarge(packet.Data, res.Acknowledgement) {
-		panic(core.ErrPacketCombinedDataTooLarge)
-	}
-
 	return res
 }
 
@@ -126,14 +102,6 @@ func (v *ucs03ZkgmV1) OnRecvPacket(_ int, rlm realm, packet types.Packet, relaye
 // maker funding.
 func (v *ucs03ZkgmV1) OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult {
 	assertIsRlmCurrent(0, rlm)
-
-	// See the matching guard in OnRecvPacket: core unconditionally re-emits
-	// packet.Data+marketMakerMsg via EmitIntentPacketRecv after this returns,
-	// so an oversized combination must revert atomically here rather than
-	// return a graceful failure that core's own emit can't actually honor.
-	if core.CombinedEventDataTooLarge(packet.Data, marketMakerMsg) {
-		panic(core.ErrPacketCombinedDataTooLarge)
-	}
 
 	zp, err := z.DecodeZkgmPacket(types.CloneBytes(packet.Data))
 	if err != nil {
@@ -154,26 +122,12 @@ func (v *ucs03ZkgmV1) OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, 
 		panic("only maker")
 	}
 
-	// See the matching check in OnRecvPacket: the final ack size is only known
-	// after dispatch, and by then a market-maker fill may have already moved
-	// funds, so an oversized result must revert atomically, not swap acks.
-	if core.CombinedEventDataTooLarge(packet.Data, res.Acknowledgement) {
-		panic(core.ErrPacketCombinedDataTooLarge)
-	}
-
 	return res
 }
 
 // OnAcknowledgementPacket routes the ack to its instruction, or to the forwarded parent packet.
 func (v *ucs03ZkgmV1) OnAcknowledgementPacket(_ int, rlm realm, packet types.Packet, acknowledgement []byte, relayer address) {
 	assertIsRlmCurrent(0, rlm)
-
-	// acknowledgement is proven from the counterparty's commitment, so it
-	// cannot be swapped for a smaller value here; an oversized combination
-	// can only revert.
-	if core.CombinedEventDataTooLarge(packet.Data, acknowledgement) {
-		panic(core.ErrPacketCombinedDataTooLarge)
-	}
 
 	zp, err := z.DecodeZkgmPacket(types.CloneBytes(packet.Data))
 	if err != nil {
@@ -198,18 +152,6 @@ func (v *ucs03ZkgmV1) OnAcknowledgementPacket(_ int, rlm realm, packet types.Pac
 // OnTimeoutPacket refunds the timed-out instruction, or settles the forwarded parent packet.
 func (v *ucs03ZkgmV1) OnTimeoutPacket(_ int, rlm realm, packet types.Packet, relayer address) {
 	assertIsRlmCurrent(0, rlm)
-
-	// core unconditionally re-emits packet.Data via EmitPacketTimeout after
-	// this returns. There's no relayer-supplied blob combined into that event
-	// here (unlike OnRecvPacket/OnIntentRecvPacket), so packet.Data alone
-	// normally stays well under chain.Emit's ceiling. Still, restore the
-	// explicit guard core's PacketTimeout used to have before it was moved to
-	// the app layer (bcde2349), matching OnAcknowledgementPacket's pattern, in
-	// case packet.Data was committed under a looser EventConfig than the one
-	// in effect now.
-	if core.CombinedEventDataTooLarge(packet.Data) {
-		panic(core.ErrPacketCombinedDataTooLarge)
-	}
 
 	zp, err := z.DecodeZkgmPacket(types.CloneBytes(packet.Data))
 	if err != nil {

@@ -24,8 +24,8 @@ type mockApp struct {
 	recvAck    []byte             // empty -> "ack" for sync results
 	recvAckSet bool               // allow tests to force an empty sync ack
 
-	// panicOnData/panicMsg let a test simulate one packet in a batch failing
-	// the app's own combined-size guard (e.g. zkgm's CombinedEventDataTooLarge)
+	// panicOnData/panicMsg let a test simulate one packet in a batch aborting
+	// mid-dispatch (e.g. core's own IsValidEventSize guard on EmitPacketRecv)
 	// without reimplementing that check in the mock: OnRecvPacket panics with
 	// panicMsg when called for a packet whose Data matches panicOnData.
 	panicOnData string

@@ -384,37 +384,6 @@ func TestHandleForwardChild_NoopsWhenPacketIsNotResolvable(cur realm, t *testing
 	}
 }
 
-// TestHandleForwardChildRejectsOversizedParentAck locks down the guard added
-// alongside E-C1: OnAcknowledgementPacket's entry check only validates the
-// child packet's Data combined with the incoming ack, but handleForwardChild
-// writes that ack as the *parent* packet's acknowledgement. The parent can be
-// arbitrarily larger than its forwarded child, so the combination actually
-// written to WriteAck must be re-checked here, before core.WriteAcknowledgement
-// is ever called (and before the in-flight entry is removed).
-func TestHandleForwardChildRejectsOversizedParentAck(cur realm, t *testing.T) {
-	testStore = newMockStore()
-	v := newTestImpl()
-
-	smallParent := core.NewPacket(types.ChannelId(1), types.ChannelId(2), []byte("small-parent-data"), 0)
-	child := core.NewPacket(types.ChannelId(3), types.ChannelId(4), []byte("child"), 0)
-	childKey := forwardInFlightKey(child)
-	testStore.SetInFlightPacket(0, cur, childKey, smallParent)
-
-	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
-	hugeAck := make([]byte, maxPacketDataBytes+1)
-
-	uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
-		v.handleForwardChild(0, cur, child, z.ZkgmPacket{Salt: z.DeriveForwardSalt([32]byte{0x03})}, hugeAck)
-	})
-
-	// The panic must fire before the in-flight entry is removed or
-	// core.WriteAcknowledgement is called: the parent's ack is still
-	// resolvable (e.g. by a relayer retrying with a smaller ack, if the app
-	// ever supports that) rather than silently dropped.
-	_, found := testStore.GetInFlightPacket(childKey)
-	uassert.True(t, found)
-}
-
 func forwardPath(channels ...uint32) *u256.Uint {
 	path := u256.Zero()
 	for _, channel := range channels {

@@ -48,6 +48,7 @@ type IAppGetter interface {
 	GetTokenBucket(denom string) (*tb.TokenBucket, error)
 	GetChannelBalanceV2(channelId types.ChannelId, path *u256.Uint, baseToken string, quoteToken []byte) (*u256.Uint, error)
 	GetVoucherList() ([]VoucherInfo, error)
+	GetVoucherInfo(ibcDenom string) (VoucherInfo, error)
 }
 
 type IStore interface {

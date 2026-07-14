@@ -131,3 +131,47 @@ func TestGetVoucherListReturnsAllRegisteredVouchers(cur realm, t *testing.T) {
 		})
 	}
 }
+
+func TestGetVoucherInfo(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+	rx := testAddress("voucher-info-rx")
+
+	cases := []struct {
+		name           string
+		denom          string
+		tokenName      string
+		symbol         string
+		originDecimals uint8
+		mintAmount     *u256.Uint
+		wantLedgerDec  uint8
+		wantSupply     int64
+	}{
+		{"decimals at canonical cap", "ibc/info-a", "Alpha", "ALPHA", 6, u256.NewUint(100), 6, 100},
+		{"decimals above canonical cap", "ibc/info-b", "Beta", "BETA", 8, u256.NewUint(500), 6, 5},
+	}
+
+	for _, tc := range cases {
+		uassert.NoError(t, v.mintVoucher(0, cur, tc.denom, [32]byte{}, tc.tokenName, tc.symbol, tc.originDecimals, rx, tc.mintAmount))
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			info, err := v.GetVoucherInfo(tc.denom)
+			uassert.NoError(t, err)
+			uassert.Equal(t, tc.denom, info.Denom)
+			uassert.Equal(t, tc.tokenName, info.Name)
+			uassert.Equal(t, tc.symbol, info.Symbol)
+			uassert.Equal(t, tc.originDecimals, info.OriginDecimals)
+			uassert.Equal(t, tc.wantLedgerDec, info.LedgerDecimals)
+			uassert.Equal(t, tc.wantSupply, info.TotalSupply)
+		})
+	}
+}
+
+func TestGetVoucherInfoMissingDenom(t *testing.T) {
+	v := newTestImpl()
+
+	_, err := v.GetVoucherInfo("ibc/missing-info")
+	uassert.ErrorContains(t, err, errVoucherNotFound)
+}

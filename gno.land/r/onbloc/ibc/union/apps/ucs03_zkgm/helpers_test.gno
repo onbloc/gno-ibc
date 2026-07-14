@@ -53,6 +53,8 @@ type dummyImpl struct {
 
 	voucherList    []VoucherInfo
 	voucherListErr error
+	voucherInfo    VoucherInfo
+	voucherInfoErr error
 }
 
 var _ IApp = &dummyImpl{}
@@ -148,6 +150,10 @@ func (d *dummyImpl) GetChannelBalanceV2(channelId types.ChannelId, path *u256.Ui
 
 func (d *dummyImpl) GetVoucherList() ([]VoucherInfo, error) {
 	return d.voucherList, d.voucherListErr
+}
+
+func (d *dummyImpl) GetVoucherInfo(ibcDenom string) (VoucherInfo, error) {
+	return d.voucherInfo, d.voucherInfoErr
 }
 
 // resetZkgmForTest returns the proxy package state to a clean baseline. The

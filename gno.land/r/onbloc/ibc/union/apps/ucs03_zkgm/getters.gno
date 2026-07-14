@@ -21,3 +21,8 @@ func GetChannelBalanceV2(channelId types.ChannelId, path *u256.Uint, baseToken s
 func GetVoucherList() ([]VoucherInfo, error) {
 	return mustGetImpl().GetVoucherList()
 }
+
+// GetVoucherInfo returns a snapshot of the single wrapped voucher registered for ibcDenom.
+func GetVoucherInfo(ibcDenom string) (VoucherInfo, error) {
+	return mustGetImpl().GetVoucherInfo(ibcDenom)
+}

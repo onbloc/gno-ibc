@@ -92,3 +92,25 @@ func TestGetVoucherList_PropagatesImplError(cur realm, t *testing.T) {
 		t.Fatal("missing voucher list must return nil")
 	}
 }
+
+func TestGetVoucherInfo_DelegatesToImpl(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	want := NewVoucherInfo("ibc/denom1", "Foo", "FOO", 6, 6, 100)
+	target := &dummyImpl{voucherInfo: want}
+	installImplForTest(testImplPathA, target)
+
+	got, err := GetVoucherInfo("ibc/denom1")
+	uassert.NoError(t, err)
+	uassert.Equal(t, "ibc/denom1", got.Denom)
+	uassert.Equal(t, "FOO", got.Symbol)
+}
+
+func TestGetVoucherInfo_PropagatesImplError(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+	target := &dummyImpl{voucherInfoErr: errDummyGetter}
+	installImplForTest(testImplPathA, target)
+
+	_, err := GetVoucherInfo("ibc/missing")
+	uassert.ErrorIs(t, err, errDummyGetter)
+}

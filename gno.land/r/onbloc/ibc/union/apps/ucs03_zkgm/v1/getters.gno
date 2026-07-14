@@ -40,6 +40,26 @@ func (v *ucs03ZkgmV1) GetVoucherList() ([]zkgm.VoucherInfo, error) {
 	return v.store.GetVoucherList(), nil
 }
 
+// GetVoucherInfo returns a snapshot of the single wrapped voucher registered
+// for ibcDenom. Unlike GetVoucherList, the caller already holds the key, so
+// this reads Store.GetVoucher directly and converts via the voucher's public
+// (capability-free) accessors instead of adding a Store-level method.
+func (v *ucs03ZkgmV1) GetVoucherInfo(ibcDenom string) (zkgm.VoucherInfo, error) {
+	vou, ok := v.store.GetVoucher(ibcDenom)
+	if !ok || vou == nil {
+		return zkgm.NewVoucherInfo("", "", "", 0, 0, 0), makeError(errVoucherNotFound, ibcDenom)
+	}
+
+	return zkgm.NewVoucherInfo(
+		ibcDenom,
+		vou.Token().GetName(),
+		vou.Token().GetSymbol(),
+		vou.OriginDecimals(),
+		uint8(vou.Token().GetDecimals()),
+		vou.Token().TotalSupply(),
+	), nil
+}
+
 func cloneTokenBucket(bucket *tb.TokenBucket) *tb.TokenBucket {
 	return &tb.TokenBucket{
 		Capacity:   bucket.Capacity.Clone(),

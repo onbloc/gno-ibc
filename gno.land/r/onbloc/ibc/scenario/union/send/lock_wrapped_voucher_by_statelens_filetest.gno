@@ -10,6 +10,7 @@ package send
 
 import (
 	"crypto/keccak256"
+	"encoding/binary"
 	"testing"
 
 	"gno.land/p/onbloc/encoding/rlp"
@@ -21,6 +22,7 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/ufmt/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	mock "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
@@ -134,9 +136,7 @@ func openAndFundSender(cur realm, fundRoot []byte, initPacket types.Packet, fund
 
 	// Register a mock L1 client first — state lens needs its L1ClientID resolved in the store.
 	mockL1Type := types.ClientType("mock-l1")
-	core.RegisterClient(cross(cur), mockL1Type, func(_, _ []byte) (lightclient.Interface, error) {
-		return &mockL1Client{}, nil
-	})
+	core.RegisterClient(cross(cur), mockL1Type, mock.NewLightClient)
 	core.CreateClient(cross(cur), core.NewMsgCreateClient(mockL1Type, nil, nil))
 
 	clientType := types.ClientType(ics23mpt.ClientType)
@@ -262,15 +262,7 @@ func makeConsensusBytes(timestamp uint64, stateRoot, storageRoot []byte) []byte 
 	out := make([]byte, 72)
 	copy(out[0:32], stateRoot)
 	copy(out[32:64], storageRoot)
-	out[64] = byte(timestamp >> 56)
-	out[65] = byte(timestamp >> 48)
-	out[66] = byte(timestamp >> 40)
-	out[67] = byte(timestamp >> 32)
-	out[68] = byte(timestamp >> 24)
-	out[69] = byte(timestamp >> 16)
-	out[70] = byte(timestamp >> 8)
-	out[71] = byte(timestamp)
-
+	binary.BigEndian.PutUint64(out[64:], timestamp)
 	return out
 }
 
@@ -361,39 +353,6 @@ func mustSuccessAck(inner []byte) []byte {
 	}
 	return ack
 }
-
-// --- minimal L1 light client stub ---
-
-type mockL1Client struct{}
-
-func (m *mockL1Client) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
-func (m *mockL1Client) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
-func (m *mockL1Client) GetTimestamp() types.Timestamp                         { return types.Timestamp(1) }
-
-func (m *mockL1Client) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
-	return types.Timestamp(1), nil
-}
-func (m *mockL1Client) GetLatestHeight() uint64        { return ackHeight }
-func (m *mockL1Client) GetCounterpartyChainID() string { return "l1" }
-func (m *mockL1Client) Status() lightclient.Status     { return lightclient.Active }
-
-func (m *mockL1Client) VerifyHeader(_ address, header []byte, _ address) (types.StateUpdate, error) {
-	return types.StateUpdate{Height: ackHeight}, nil
-}
-
-func (m *mockL1Client) VerifyCreation(address, address) (types.ClientCreationResult, error) {
-	return types.ClientCreationResult{}, nil
-}
-
-func (m *mockL1Client) Misbehaviour(address, []byte, address) ([]byte, error) {
-	return nil, errL1Unsupported
-}
-
-var errL1Unsupported = mockError("mock l1: unsupported")
-
-type mockError string
-
-func (e mockError) Error() string { return string(e) }
 
 // Output:
 // [SCENARIO] 1. Open a state-lens-backed channel and fund the sender via a proven recv

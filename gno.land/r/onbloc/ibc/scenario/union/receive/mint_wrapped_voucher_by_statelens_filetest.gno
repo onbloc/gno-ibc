@@ -20,6 +20,7 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/ufmt/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	mock "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
@@ -129,9 +130,7 @@ func openStateLensChannel(cur realm, storageRoot []byte, sourceChannel types.Cha
 
 	// Register a mock L1 client first — state lens needs its L1ClientID resolved in the store.
 	mockL1Type := types.ClientType("mock-l1")
-	core.RegisterClient(cross(cur), mockL1Type, func(_, _ []byte) (lightclient.Interface, error) {
-		return &mockL1Client{}, nil
-	})
+	core.RegisterClient(cross(cur), mockL1Type, mock.NewLightClient)
 	core.CreateClient(cross(cur), core.NewMsgCreateClient(mockL1Type, nil, nil))
 
 	clientType := types.ClientType(ics23mpt.ClientType)
@@ -290,40 +289,6 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 	}
 	return meta
 }
-
-// --- minimal L1 light client stub (state-lens needs an L1 client reference, but
-// VerifyMembership reads only the stored consensus root and never consults it) ---
-
-type mockL1Client struct{}
-
-func (m *mockL1Client) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
-func (m *mockL1Client) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
-func (m *mockL1Client) GetTimestamp() types.Timestamp                         { return types.Timestamp(1) }
-
-func (m *mockL1Client) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
-	return types.Timestamp(1), nil
-}
-func (m *mockL1Client) GetLatestHeight() uint64        { return statelensProofHeight }
-func (m *mockL1Client) GetCounterpartyChainID() string { return "l1" }
-func (m *mockL1Client) Status() lightclient.Status     { return lightclient.Active }
-
-func (m *mockL1Client) VerifyHeader(_ address, header []byte, _ address) (types.StateUpdate, error) {
-	return types.StateUpdate{Height: statelensProofHeight}, nil
-}
-
-func (m *mockL1Client) VerifyCreation(address, address) (types.ClientCreationResult, error) {
-	return types.ClientCreationResult{}, nil
-}
-
-func (m *mockL1Client) Misbehaviour(address, []byte, address) ([]byte, error) {
-	return nil, errL1Unsupported
-}
-
-var errL1Unsupported = mockError("mock l1: unsupported")
-
-type mockError string
-
-func (e mockError) Error() string { return string(e) }
 
 // Output:
 // [SCENARIO] 1. Open a channel backed by the real state-lens/ics23-mpt light client

@@ -3,6 +3,7 @@ package ics23mpt
 import (
 	"bytes"
 	"crypto/keccak256"
+	"encoding/binary"
 	"encoding/hex"
 	"strings"
 	"testing"
@@ -157,14 +158,7 @@ func makeConsensusBytes(timestamp uint64, stateRoot, storageRoot []byte) []byte 
 	out := make([]byte, 72)
 	copy(out[0:32], stateRoot)
 	copy(out[32:64], storageRoot)
-	out[64] = byte(timestamp >> 56)
-	out[65] = byte(timestamp >> 48)
-	out[66] = byte(timestamp >> 40)
-	out[67] = byte(timestamp >> 32)
-	out[68] = byte(timestamp >> 24)
-	out[69] = byte(timestamp >> 16)
-	out[70] = byte(timestamp >> 8)
-	out[71] = byte(timestamp)
+	binary.BigEndian.PutUint64(out[64:], timestamp)
 	return out
 }
 

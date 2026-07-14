@@ -14,18 +14,26 @@ import (
 
 const MockClientType = types.ClientType("gno.land/r/onbloc/ibc/testing/mock/lightclient")
 
-type mockLightClient struct{}
+type mockLightClient struct {
+	misbehaviourClientStateBytes []byte
+}
 
 // RegisterMockLightClient registers the mock client implementation under
 // MockClientType, unless it is already registered.
 func RegisterMockLightClient(cur realm) {
 	if !core.HasClient(MockClientType) {
-		core.RegisterClient(cross(cur), MockClientType, mockClientImpl)
+		core.RegisterClient(cross(cur), MockClientType, NewLightClient)
 	}
 }
 
-func mockClientImpl(_, _ []byte) (lightclient.Interface, error) {
+func NewLightClient(_, _ []byte) (lightclient.Interface, error) {
 	return &mockLightClient{}, nil
+}
+
+func NewLightClientWithMisbehaviour(clientStateBytes []byte) func(_, _ []byte) (lightclient.Interface, error) {
+	return func(_, _ []byte) (lightclient.Interface, error) {
+		return &mockLightClient{misbehaviourClientStateBytes: clientStateBytes}, nil
+	}
 }
 
 func (m *mockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error {
@@ -69,5 +77,9 @@ func (m *mockLightClient) VerifyCreation(address, address) (types.ClientCreation
 }
 
 func (m *mockLightClient) Misbehaviour(address, []byte, address) ([]byte, error) {
+	if m.misbehaviourClientStateBytes != nil {
+		return m.misbehaviourClientStateBytes, nil
+	}
+
 	return nil, errors.New("mock: misbehaviour unsupported")
 }

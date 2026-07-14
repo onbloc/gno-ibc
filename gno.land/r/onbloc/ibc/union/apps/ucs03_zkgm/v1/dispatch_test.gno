@@ -1,4 +1,4 @@
-package impl
+package v1
 
 import (
 	"errors"
@@ -352,7 +352,7 @@ func TestRecvTokenOrderEscrowFeeVoucherMintFailureAborts(cur realm, t *testing.T
 	// Saturate supply to MaxInt64-1. After receiver mint (+1) total = MaxInt64.
 	// Fee mint (+1) then overflows int64 → GRC20 returns error → execFatal.
 	fillAmt := u256.NewUint(uint64(math.MaxInt64) - 1)
-	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, image, "", "", 0, testAddress("sat"), fillAmt))
+	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, image, "", "", 0, address(testAddress("sat")), fillAmt))
 
 	order := z.TokenOrderV2{
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,

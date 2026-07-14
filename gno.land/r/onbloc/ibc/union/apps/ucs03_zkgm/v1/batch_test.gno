@@ -1,4 +1,4 @@
-package impl
+package v1
 
 // batch_test.gno covers batch.gno's verify/acknowledge/timeout logic and the
 // funds-accounting it drives. The send-path native funds checks are exercised
@@ -51,7 +51,7 @@ func TestVerifyBatch(cur realm, t *testing.T) {
 
 	cases := []struct {
 		name          string
-		previous      string
+		previous      address
 		channelId     types.ChannelId
 		sent          string
 		batch         z.Batch
@@ -133,7 +133,7 @@ func TestVerifyBatch(cur realm, t *testing.T) {
 	for _, tc := range cases {
 		testStore = newMockStore()
 		if tc.previous != "" {
-			testing.SetRealm(testing.NewUserRealm(address(tc.previous)))
+			testing.SetRealm(testing.NewUserRealm(tc.previous))
 		}
 		v := newTestImpl()
 		f := newFunds(parseCoins(tc.sent))
@@ -197,6 +197,7 @@ func TestExecuteBatchRunsTokenOrderThenCall(cur realm, t *testing.T) {
 	relayer := testAddress("batch-exec-relayer")
 	receiver := testAddress("batch-exec-receiver")
 	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T", canonicalDecimals)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -225,7 +226,7 @@ func TestExecuteBatchRunsTokenOrderThenCall(cur realm, t *testing.T) {
 	uassert.Equal(t, int64(79), voucherBalanceOf(quoteDenom, address(relayer)))
 	uassert.Equal(t, 1, Calls(cross(cur)))
 	uassert.Equal(t, "post-transfer-action", LastCalldata(cross(cur)))
-	uassert.Equal(t, relayer, LastRelayer(cross(cur)))
+	uassert.Equal(t, string(relayer), LastRelayer(cross(cur)))
 	uassert.Equal(t, "relay-msg", LastRelayerMsg(cross(cur)))
 
 	outerAck, err := z.DecodeAck(ackBytes)
@@ -277,10 +278,10 @@ func TestAcknowledgeBatch(cur realm, t *testing.T) {
 
 			orderA := batchRefundOrder("ack-fail-a", "ibc/batch-ack-fail-a", "quote-a", 11)
 			orderB := batchRefundOrder("ack-fail-b", "ibc/batch-ack-fail-b", "quote-b", 17)
-			v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount)
-			v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount)
-			uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "", 0, cur.Address().String(), orderA.BaseAmount))
-			uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "", 0, cur.Address().String(), orderB.BaseAmount))
+			v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount.Int64())
+			v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount.Int64())
+			uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderA.BaseAmount))
+			uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderB.BaseAmount))
 
 			batch = z.Batch{Instructions: []z.Instruction{
 				batchMustOrderInstruction(orderA),
@@ -312,14 +313,14 @@ func TestTimeoutBatchTokenOrderChildrenRefund(cur realm, t *testing.T) {
 	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
 	orderA := batchRefundOrder("timeout-a", "ibc/batch-timeout-a", "quote-a", 11)
 	orderB := batchRefundOrder("timeout-b", "ibc/batch-timeout-b", "quote-b", 17)
-	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "", 0, cur.Address().String(), orderA.BaseAmount))
-	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "", 0, cur.Address().String(), orderB.BaseAmount))
-	v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount)
-	v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount)
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderA.BaseAmount))
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderB.BaseAmount))
+	v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount.Int64())
+	v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount.Int64())
 	// Escrow the wrapped vouchers in the proxy so the timeout refund can transfer
 	// them back to each sender (settleEscrowedV2 moves ibc/ vouchers out of escrow).
-	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "", 0, cur.Address().String(), orderA.BaseAmount))
-	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "", 0, cur.Address().String(), orderB.BaseAmount))
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderA.BaseAmount))
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderB.BaseAmount))
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(orderA),
 		batchMustOrderInstruction(orderB),
@@ -334,7 +335,7 @@ func TestTimeoutBatchTokenOrderChildrenRefund(cur realm, t *testing.T) {
 	uassert.Equal(t, int64(17), voucherBalanceOf("ibc/batch-timeout-b", address(orderB.Sender)))
 }
 
-func batchCall(sender string, calldata string) z.Call {
+func batchCall(sender address, calldata string) z.Call {
 	return z.Call{
 		Sender:           []byte(sender),
 		ContractAddress:  []byte(mockReceiverPath),

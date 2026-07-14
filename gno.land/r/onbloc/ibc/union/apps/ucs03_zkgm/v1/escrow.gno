@@ -1,4 +1,4 @@
-package impl
+package v1
 
 import (
 	"chain"
@@ -12,7 +12,7 @@ import (
 // interrealm borrow rule this banker send executes in the proxy's ownership
 // context even though it is invoked from the impl call frame, so the funds leave
 // the proxy escrow rather than the impl realm.
-func (v *ucs03ZkgmV1) sendNative(_ int, rlm realm, denom, receiver string, amount *u256.Uint) error {
+func (v *ucs03ZkgmV1) sendNative(_ int, rlm realm, denom string, receiver address, amount *u256.Uint) error {
 	n, err := amountInt64(amount)
 	if err != nil {
 		return err
@@ -21,7 +21,7 @@ func (v *ucs03ZkgmV1) sendNative(_ int, rlm realm, denom, receiver string, amoun
 	// the impl operates in the proxy's ownership context, so the realm-send banker
 	// draws from the proxy balance where the user's -send funds landed.
 	b := banker.NewBanker(banker.BankerTypeRealmSend, rlm)
-	b.SendCoins(rlm.Address(), address(receiver), chain.NewCoins(chain.NewCoin(denom, n)))
+	b.SendCoins(rlm.Address(), receiver, chain.NewCoins(chain.NewCoin(denom, n)))
 
 	return nil
 }

@@ -1,7 +1,6 @@
-package zkgm
+package ucs03_zkgm
 
 import (
-	"gno.land/p/demo/tokens/grc20"
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -23,7 +22,6 @@ var (
 	//	channelBalanceV2   <- CHANNEL_BALANCE_V2    Map<(channel,path,base,quote), U256>
 	//	metadataImageOf    <- METADATA_IMAGE_OF     Map<denom, H256>
 	//	hashToForeignToken <- HASH_TO_FOREIGN_TOKEN Map<denom, Bytes>
-	//	tokenDecimals      <- local extension       Map<denom, uint8>
 	//	inFlightPacket     <- IN_FLIGHT_PACKET      Map<packetHash, Packet>
 	//	tokenBucket        <- TOKEN_BUCKET          Map<denom, TokenBucket>
 	//	rateLimitDisabled  <- CONFIG.rate_limit_disabled
@@ -72,13 +70,14 @@ type Store struct {
 	channelBalanceV2   *bptree.BPTree // key   -> *u256.Uint  (escrow balance)
 	metadataImageOf    *bptree.BPTree // denom -> [32]byte
 	hashToForeignToken *bptree.BPTree // denom -> []byte
-	tokenDecimals      *bptree.BPTree // denom -> uint8
 	inFlightPacket     *bptree.BPTree // packetHash -> types.Packet (parent)
 	tokenBucket        *bptree.BPTree // denom -> *tb.TokenBucket
 	vouchers           *bptree.BPTree // ibcDenom -> *Voucher
+	// lockedTokenAmounts is managed alongside vouchers: both track non-escrow
+	// custody of a base token (native or grc20) that zkgm cannot supply-burn,
+	// as opposed to vouchers, which zkgm mints/burns directly.
+	lockedTokenAmounts *bptree.BPTree // denom -> *u256.Uint (permanently locked base token)
 	receivers          *bptree.BPTree // pkgPath -> z.Zkgmable
-	lockedNative       *bptree.BPTree // denom -> *u256.Uint (permanently locked native)
-	localGRC20Tokens   *bptree.BPTree // denom -> *grc20.Token
 	rateLimitDisabled  bool
 }
 
@@ -88,13 +87,11 @@ func NewStore() *Store {
 		channelBalanceV2:   bptree.NewBPTree32(),
 		metadataImageOf:    bptree.NewBPTree32(),
 		hashToForeignToken: bptree.NewBPTree32(),
-		tokenDecimals:      bptree.NewBPTree32(),
 		inFlightPacket:     bptree.NewBPTree32(),
 		tokenBucket:        bptree.NewBPTree32(),
 		vouchers:           bptree.NewBPTree32(),
+		lockedTokenAmounts: bptree.NewBPTree32(),
 		receivers:          bptree.NewBPTree32(),
-		lockedNative:       bptree.NewBPTree32(),
-		localGRC20Tokens:   bptree.NewBPTree32(),
 		// Rate limiting is opt-in: enabled per-denom by an admin who first
 		// configures a token bucket (see SetBucketConfig). With it enabled, a denom
 		// without a bucket is rejected (union TokenBucketIsAbsent), so it must stay
@@ -148,63 +145,6 @@ func (s *Store) GetChannelBalanceV2(key string) (*u256.Uint, bool) {
 	return v.(*u256.Uint), true
 }
 
-// AddLockedNative tracks native escrow locked after burn-address settlement.
-// Locked native remains in proxy escrow but is excluded from channel balances.
-// Invariant: proxy balance == sum(channelBalanceV2) + sum(lockedNative).
-func (s *Store) AddLockedNative(_ int, rlm realm, denom string, amount *u256.Uint) {
-	assertIsRlmCurrent(0, rlm)
-
-	totalLockedAmount := u256.Zero()
-
-	lockedNativeAmount, exists := s.GetLockedNative(denom)
-	if exists && lockedNativeAmount != nil {
-		totalLockedAmount = u256.Zero().Set(lockedNativeAmount)
-	}
-
-	// Reject a wraparound past 2^256-1 rather than silently storing a smaller
-	// totalLockedAmount, which would break the proxy balance invariant.
-	// Astronomically unreachable for real coin supplies, but guarded for safety.
-	totalLockedAmount, overflow := u256.Zero().AddOverflow(totalLockedAmount, amount)
-	if overflow {
-		panic(ErrLockedNativeOverflow)
-	}
-
-	s.lockedNative.Set(denom, totalLockedAmount.Clone())
-}
-
-// GetLockedNative returns the total native permanently locked for a denom.
-func (s *Store) GetLockedNative(denom string) (*u256.Uint, bool) {
-	v, ok := s.lockedNative.Get(denom)
-	if !ok {
-		return nil, false
-	}
-
-	lockedNativeAmount, ok := v.(*u256.Uint)
-	if !ok {
-		panic(ErrInterfaceConversion)
-	}
-
-	return lockedNativeAmount, true
-}
-
-// SetLocalGRC20Token pins the first registry token used for a local GRC20 denom.
-func (s *Store) SetLocalGRC20Token(_ int, rlm realm, denom string, token *grc20.Token) {
-	assertIsRlmCurrent(0, rlm)
-	if s.localGRC20Tokens.Has(denom) {
-		return
-	}
-	s.localGRC20Tokens.Set(denom, token)
-}
-
-// GetLocalGRC20Token returns the pinned local GRC20 token for denom.
-func (s *Store) GetLocalGRC20Token(denom string) (*grc20.Token, bool) {
-	v, ok := s.localGRC20Tokens.Get(denom)
-	if !ok {
-		return nil, false
-	}
-	return v.(*grc20.Token), true
-}
-
 // SetMetadataImageOf records a wrapped denom's metadata image.
 func (s *Store) SetMetadataImageOf(_ int, rlm realm, denom string, image [32]byte) {
 	assertIsRlmCurrent(0, rlm)
@@ -237,23 +177,6 @@ func (s *Store) GetForeignToken(denom string) ([]byte, bool) {
 	}
 
 	return v.([]byte), true
-}
-
-// SetTokenDecimals records the origin decimals used for wire/local scaling.
-func (s *Store) SetTokenDecimals(_ int, rlm realm, denom string, decimals uint8) {
-	assertIsRlmCurrent(0, rlm)
-
-	s.tokenDecimals.Set(denom, decimals)
-}
-
-// GetTokenDecimals returns the origin decimals used for wire/local scaling.
-func (s *Store) GetTokenDecimals(denom string) (uint8, bool) {
-	v, ok := s.tokenDecimals.Get(denom)
-	if !ok {
-		return 0, false
-	}
-
-	return v.(uint8), true
 }
 
 // SetInFlightPacket records the parent packet awaiting a forwarded child.
@@ -324,6 +247,46 @@ func (s *Store) GetVoucher(ibcDenom string) (*Voucher, bool) {
 // HasVoucher reports whether a voucher exists for an ibc denom.
 func (s *Store) HasVoucher(ibcDenom string) bool {
 	return s.vouchers.Has(ibcDenom)
+}
+
+// AddLockedTokenAmount tracks base-token escrow locked after burn-address settlement
+// (native or a registered grc20; a voucher is supply-burned instead via burnVoucher).
+// Locked base remains in proxy escrow but is excluded from channel balances.
+// Invariant: proxy balance == sum(channelBalanceV2) + sum(lockedTokenAmounts).
+func (s *Store) AddLockedTokenAmount(_ int, rlm realm, denom string, amount *u256.Uint) {
+	assertIsRlmCurrent(0, rlm)
+
+	totalLockedAmount := u256.Zero()
+
+	lockedTokenAmount, exists := s.GetLockedTokenAmount(denom)
+	if exists && lockedTokenAmount != nil {
+		totalLockedAmount = u256.Zero().Set(lockedTokenAmount)
+	}
+
+	// Reject a wraparound past 2^256-1 rather than silently storing a smaller
+	// totalLockedAmount, which would break the proxy balance invariant.
+	// Astronomically unreachable for real coin supplies, but guarded for safety.
+	totalLockedAmount, overflow := u256.Zero().AddOverflow(totalLockedAmount, amount)
+	if overflow {
+		panic(ErrLockedTokenAmountOverflow)
+	}
+
+	s.lockedTokenAmounts.Set(denom, totalLockedAmount.Clone())
+}
+
+// GetLockedTokenAmount returns the total base-token amount permanently locked for a denom.
+func (s *Store) GetLockedTokenAmount(denom string) (*u256.Uint, bool) {
+	v, ok := s.lockedTokenAmounts.Get(denom)
+	if !ok {
+		return nil, false
+	}
+
+	lockedTokenAmount, ok := v.(*u256.Uint)
+	if !ok {
+		panic(ErrInterfaceConversion)
+	}
+
+	return lockedTokenAmount, true
 }
 
 // SetReceiver registers a Zkgmable callback target at a package path.

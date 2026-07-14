@@ -1,7 +1,6 @@
-package zkgm
+package ucs03_zkgm
 
 import (
-	"gno.land/p/demo/tokens/grc20"
 	u256 "gno.land/p/gnoswap/uint256"
 	types "gno.land/p/onbloc/ibc/union/types"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
@@ -58,20 +57,11 @@ type IStore interface {
 	RemoveChannelBalanceV2(_ int, rlm realm, key string)
 	GetChannelBalanceV2(key string) (*u256.Uint, bool)
 
-	AddLockedNative(_ int, rlm realm, denom string, amount *u256.Uint)
-	GetLockedNative(denom string) (*u256.Uint, bool)
-
-	SetLocalGRC20Token(_ int, rlm realm, denom string, token *grc20.Token)
-	GetLocalGRC20Token(denom string) (*grc20.Token, bool)
-
 	SetMetadataImageOf(_ int, rlm realm, denom string, image [32]byte)
 	GetMetadataImageOf(denom string) ([32]byte, bool)
 
 	SetForeignToken(_ int, rlm realm, denom string, token []byte)
 	GetForeignToken(denom string) ([]byte, bool)
-
-	SetTokenDecimals(_ int, rlm realm, denom string, decimals uint8)
-	GetTokenDecimals(denom string) (uint8, bool)
 
 	SetInFlightPacket(_ int, rlm realm, packetHash string, parent types.Packet)
 	GetInFlightPacket(packetHash string) (types.Packet, bool)
@@ -84,6 +74,12 @@ type IStore interface {
 	SetVoucher(_ int, rlm realm, ibcDenom string, v *Voucher)
 	GetVoucher(ibcDenom string) (*Voucher, bool)
 	HasVoucher(ibcDenom string) bool
+
+	// AddLockedTokenAmount/GetLockedTokenAmount are managed alongside the
+	// voucher methods above: both cover non-escrow custody of a base token
+	// (native or grc20) that zkgm cannot supply-burn the way it burns vouchers.
+	AddLockedTokenAmount(_ int, rlm realm, denom string, amount *u256.Uint)
+	GetLockedTokenAmount(denom string) (*u256.Uint, bool)
 
 	SetReceiver(_ int, rlm realm, path string, receiver z.Zkgmable)
 	GetReceiver(path string) (z.Zkgmable, bool)

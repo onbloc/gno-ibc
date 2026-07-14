@@ -1,4 +1,4 @@
-package impl
+package v1
 
 import (
 	"chain"
@@ -59,7 +59,7 @@ func TestSendNative(cur realm, t *testing.T) {
 				testing.IssueCoins(cur.Address(), chain.NewCoins(chain.NewCoin(tc.denom, tc.seedEscrow)))
 			}
 
-			err := v.sendNative(0, cur, tc.denom, tc.receiver.String(), tc.amount)
+			err := v.sendNative(0, cur, tc.denom, tc.receiver, tc.amount)
 			if tc.wantErr {
 				uassert.Error(t, err)
 			} else {

@@ -1,8 +1,6 @@
-package impl
+package v1
 
 import (
-	"strings"
-
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	"gno.land/p/demo/tokens/grc20"
@@ -11,10 +9,6 @@ import (
 	"gno.land/r/demo/defi/grc20reg"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
-
-// ibcDenomPrefix is the prefix of wrapped IBC voucher denoms (mirrors
-// z.PredictWrappedToken*). Used to detect and trim wrapped denoms.
-const ibcDenomPrefix = "ibc/"
 
 // tagAckSuccess returns a fresh copy of the success ack tag.
 func tagAckSuccess() *u256.Uint       { return z.Uint256FromBytes32(z.TAG_ACK_SUCCESS) }
@@ -32,7 +26,37 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channel
 
 	switch order.Kind {
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
-		return v.escrowTokenOrderV2(0, rlm, funds, channelId, path, order)
+		baseDenom := string(order.BaseToken)
+
+		// Verify the metadata decimals match the origin decimals.
+		if order.Kind == z.TOKEN_ORDER_KIND_INITIALIZE {
+			if err := v.verifyMetadataDecimals(baseDenom, order.Metadata); err != nil {
+				return err
+			}
+		}
+
+		baseTokenLedgerAmount, err := v.ledgerAmountOf(baseDenom, order.BaseAmount)
+		if err != nil {
+			return err
+		}
+
+		// reference verify_token_order_v2 increases the channel balance before
+		// escrowing the funds (contract.rs L511-543); rate limiting happens only
+		// on the receive/execute side, never here.
+		err = v.increaseChannelBalanceV2(0, rlm, channelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount)
+		if err != nil {
+			return err
+		}
+
+		err = v.localTokenEscrow(0, rlm, baseDenom, rlm.Previous().Address(), funds, order.BaseAmount)
+		if err != nil {
+			// rollback the channel balance
+			v.decreaseChannelBalanceV2(0, rlm, channelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount)
+
+			return err
+		}
+
+		return nil
 	case z.TOKEN_ORDER_KIND_UNESCROW:
 		baseDenom := string(order.BaseToken)
 
@@ -70,10 +94,17 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channel
 			return makeError(errInvalidUnescrow)
 		}
 
-		if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
-			return v.burnVoucher(0, rlm, baseDenom, rlm.Previous().Address().String(), order.BaseAmount)
+		// UNESCROW base on the valid path is always an ibc/ wrapped voucher (see wrappedV1/V2 check above).
+		// Burn it from the sender:
+		// supply destruction on the source chain is the correct model for IBC vouchers.
+		// GRC20 and native tokens are not valid UNESCROW bases here;
+		// they are escrowed via localTokenEscrow on INITIALIZE/ESCROW instead.
+		if isIBCTokenDenom(baseDenom) {
+			return v.burnVoucher(0, rlm, baseDenom, rlm.Previous().Address(), order.BaseAmount)
 		}
 
+		// Defensive fallback for non-ibc denoms: deduct from tx-attached native funds.
+		// Valid UNESCROW orders never reach this branch.
 		return funds.sub(baseDenom, order.BaseAmount)
 	case z.TOKEN_ORDER_KIND_SOLVE:
 		return makeError(errSolveNotImplemented)
@@ -132,7 +163,18 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 			image = [32]byte{}
 			wrapped = z.PredictWrappedToken(path, destChan, order.BaseToken)
 		}
+
 		hasWrapped = true
+
+		// ESCROW targets an already-deployed wrapped voucher;
+		// the deploying first transfer of a token uses INITIALIZE (which carries the metadata).
+		// A first-seen ESCROW that matches the predicted wrapped denom has no persisted ledger/scale,
+		// so minting would lazily create the voucher at decimals=0 with no origin metadata:
+		// an unredeemable orphan whose scale then diverges from a later INITIALIZE's pre-flight check.
+		// Reject it as an invalid order so the source refunds, mirroring the INITIALIZE invalid-order handling below.
+		if quoteDenom == wrapped && !v.store.HasVoucher(wrapped) {
+			return failureResult(universalErrorAck()), nil
+		}
 	case z.TOKEN_ORDER_KIND_INITIALIZE:
 		// gno requires the metadata preimage to initialize a new wrapped token.
 		if len(order.Metadata) == 0 {
@@ -183,18 +225,10 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2309-L2413
 func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.ChannelId, path *u256.Uint, baseToken []byte, wrappedToken string, receiver address, relayer address, baseAmount *u256.Uint, quoteAmount *u256.Uint, metadata *z.TokenMetadata, canDeploy bool) (types.RecvPacketResult, error) {
 	// fee = base - quote; reject a quote that exceeds base instead of wrapping
-	// around to a near-2^256 fee that would only later trip amountInt64.
+	// around to a near-2^256 fee that would only later trip the amount checks.
 	fee, underflow := u256.Zero().SubOverflow(baseAmount, quoteAmount)
 	if underflow {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), makeError(errTokenOrderFeeUnderflow)
-	}
-
-	if _, err := amountInt64(quoteAmount); err != nil {
-		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
-	}
-
-	if _, err := amountInt64(fee); err != nil {
-		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
 	// A deployable initialize carries the token metadata (name/symbol/decimals);
@@ -203,7 +237,16 @@ func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.Channel
 
 	name, symbol := "", ""
 
-	var decimals uint8
+	var (
+		decimals uint8
+
+		// Bound-check the amounts against the int64 ledger after downscaling.
+		// A deploying initialize derives the scale from the declared decimals,
+		// an escrow into an existing voucher from its persisted scale.
+		// The mint below re-derives the same scale,
+		// so a non-divisible or oversized amount fails gracefully here before any state write.
+		scaleExp int
+	)
 
 	if canDeploy && metadata != nil {
 		image = z.MetadataImage(*metadata)
@@ -214,6 +257,18 @@ func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.Channel
 		}
 
 		name, symbol, decimals = ti.Name, ti.Symbol, ti.Decimals
+
+		scaleExp = scaleExpForDecimals(decimals)
+	} else {
+		scaleExp = v.scaleExpOf(wrappedToken)
+	}
+
+	if _, err := z.ScaleDownToInt64(quoteAmount, scaleExp); err != nil {
+		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
+	}
+
+	if _, err := z.ScaleDownToInt64(fee, scaleExp); err != nil {
+		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
 	_, hasForeignToken := v.store.GetForeignToken(wrappedToken)
@@ -231,13 +286,13 @@ func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.Channel
 	}
 
 	if !quoteAmount.IsZero() {
-		if err := v.mintVoucher(0, rlm, wrappedToken, image, name, symbol, decimals, string(receiver), quoteAmount); err != nil {
+		if err := v.mintVoucher(0, rlm, wrappedToken, image, name, symbol, decimals, receiver, quoteAmount); err != nil {
 			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 		}
 	}
 
 	if !fee.IsZero() {
-		if err := v.mintVoucher(0, rlm, wrappedToken, image, name, symbol, decimals, string(relayer), fee); err != nil {
+		if err := v.mintVoucher(0, rlm, wrappedToken, image, name, symbol, decimals, relayer, fee); err != nil {
 			panic(execFatal{err.Error()})
 		}
 	}
@@ -246,7 +301,6 @@ func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.Channel
 		v.store.SetForeignToken(0, rlm, wrappedToken, baseToken)
 		v.store.SetTokenOrigin(0, rlm, wrappedToken, nextPath)
 		v.store.SetMetadataImageOf(0, rlm, wrappedToken, image)
-		v.store.SetTokenDecimals(0, rlm, wrappedToken, decimals)
 	}
 
 	ack, err := encodeTokenOrderSuccessAck(fillTypeProtocol(), nil)
@@ -258,8 +312,8 @@ func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.Channel
 }
 
 // protocolFillUnescrowV2 releases an escrowed local asset for an unwrap order:
-// verify the channel balance, release quote and fee from proxy escrow, then
-// decrease the channel balance.
+// decrease the channel balance first, then send the quote to the receiver and
+// the fee to the relayer from the proxy escrow.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2415-L2488
 func (v *ucs03ZkgmV1) protocolFillUnescrowV2(_ int, rlm realm, channelId types.ChannelId, path *u256.Uint, baseToken []byte, quoteTokenStr string, receiver address, relayer address, baseAmount *u256.Uint, quoteAmount *u256.Uint) (types.RecvPacketResult, error) {
 	reversedPath, err := z.ReverseChannelPath(path)
@@ -274,38 +328,47 @@ func (v *ucs03ZkgmV1) protocolFillUnescrowV2(_ int, rlm realm, channelId types.C
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), makeError(errTokenOrderFeeUnderflow)
 	}
 
-	if _, err := amountInt64(baseAmount); err != nil {
+	if _, err := v.ledgerAmountOf(quoteTokenStr, quoteAmount); err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
-	if _, err := amountInt64(quoteAmount); err != nil {
+	if _, err := v.ledgerAmountOf(quoteTokenStr, fee); err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
-	if _, err := amountInt64(fee); err != nil {
+	// The released asset is quoteToken, and base/quote/fee share its precision.
+	// The channel balance records the vault (ledger) amount, so derive it from
+	// base; quote/fee are bound-checked against the int64 ledger (0 for native).
+	baseTokenLedgerAmount, err := v.ledgerAmountOf(quoteTokenStr, baseAmount)
+	if err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
-	// The quote/base tokens are swapped into the balance key as union does (the
-	// EVM quoteToken occupies the baseToken slot and vice versa).
-	if err := v.ensureChannelBalanceV2(channelId, reversedPath, []byte(quoteTokenStr), baseToken, baseAmount); err != nil {
+	// reference decreases the escrowed balance before unescrowing (contract.rs
+	// L2437-2444); decreaseChannelBalanceV2 rejects an underflow internally. The
+	// quote/base tokens are swapped into the balance key as union does (the EVM
+	// quoteToken occupies the baseToken slot and vice versa).
+	err = v.decreaseChannelBalanceV2(0, rlm, channelId, reversedPath, []byte(quoteTokenStr), baseToken, baseTokenLedgerAmount)
+	if err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
 	if !quoteAmount.IsZero() {
-		if err := v.localTokenUnescrow(0, rlm, quoteTokenStr, string(receiver), quoteAmount); err != nil {
+		if err := v.localTokenUnescrow(0, rlm, quoteTokenStr, receiver, quoteAmount); err != nil {
+			// rollback the channel balance
+			v.increaseChannelBalanceV2(0, rlm, channelId, reversedPath, []byte(quoteTokenStr), baseToken, baseTokenLedgerAmount)
+
 			panic(execFatal{err.Error()})
 		}
 	}
 
 	if !fee.IsZero() {
-		if err := v.localTokenUnescrow(0, rlm, quoteTokenStr, string(relayer), fee); err != nil {
+		if err := v.localTokenUnescrow(0, rlm, quoteTokenStr, relayer, fee); err != nil {
+			// rollback the channel balance
+			v.increaseChannelBalanceV2(0, rlm, channelId, reversedPath, []byte(quoteTokenStr), baseToken, baseTokenLedgerAmount)
+
 			panic(execFatal{err.Error()})
 		}
-	}
-
-	if err := v.decreaseChannelBalanceV2(0, rlm, channelId, reversedPath, []byte(quoteTokenStr), baseToken, baseAmount); err != nil {
-		panic(execFatal{err.Error()})
 	}
 
 	ack, err := encodeTokenOrderSuccessAck(fillTypeProtocol(), nil)
@@ -354,7 +417,7 @@ func (v *ucs03ZkgmV1) marketMakerFillV2(_ int, rlm realm, relayer address, relay
 		return core.NewRecvPacketResult(types.PacketStatusSuccess, types.CloneBytes(z.ACK_ERR_ONLY_MAKER)), nil
 	}
 
-	if _, err := amountInt64(order.QuoteAmount); err != nil {
+	if _, err := v.ledgerAmountOf(quoteDenom, order.QuoteAmount); err != nil {
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
@@ -394,7 +457,7 @@ func (v *ucs03ZkgmV1) acknowledgeTokenOrderV2(_ int, rlm realm, packet types.Pac
 		return makeError(errUnknownFillType)
 	}
 
-	marketMaker := string(orderAck.MarketMaker)
+	marketMaker := address(orderAck.MarketMaker)
 
 	switch order.Kind {
 	case z.TOKEN_ORDER_KIND_UNESCROW:
@@ -418,9 +481,9 @@ func (v *ucs03ZkgmV1) acknowledgeTokenOrderV2(_ int, rlm realm, packet types.Pac
 func (v *ucs03ZkgmV1) refundV2(_ int, rlm realm, path *u256.Uint, sourceChannelId types.ChannelId, order z.TokenOrderV2) error {
 	switch order.Kind {
 	case z.TOKEN_ORDER_KIND_UNESCROW:
-		return v.refundIBCVoucher(0, rlm, order.BaseToken, string(order.Sender), order.BaseAmount)
+		return v.refundIBCVoucher(0, rlm, order.BaseToken, address(order.Sender), order.BaseAmount)
 	case z.TOKEN_ORDER_KIND_INITIALIZE, z.TOKEN_ORDER_KIND_ESCROW:
-		return v.settleEscrowedV2(0, rlm, sourceChannelId, path, order, string(order.Sender))
+		return v.settleEscrowedV2(0, rlm, sourceChannelId, path, order, address(order.Sender))
 	default:
 		return makeError(errUnsupportedTokenOrderKindForRefund)
 	}
@@ -430,136 +493,198 @@ func (v *ucs03ZkgmV1) refundV2(_ int, rlm realm, path *u256.Uint, sourceChannelI
 // recipient: it transfers `ibc/` vouchers from the proxy escrow address and
 // releases native tokens from the proxy escrow otherwise. Shared by refundV2 and
 // the market-maker fill branch of acknowledgeTokenOrderV2.
-func (v *ucs03ZkgmV1) settleEscrowedV2(_ int, rlm realm, sourceChannelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2, recipient string) error {
-	if _, err := amountInt64(order.BaseAmount); err != nil {
-		return err
-	}
-
-	if err := v.ensureChannelBalanceV2(sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
-		return err
-	}
-
+func (v *ucs03ZkgmV1) settleEscrowedV2(_ int, rlm realm, sourceChannelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2, recipient address) error {
+	// Base is released as the local baseToken; the channel balance records the
+	// vault (ledger) amount for that denom (0-scale for native), matching
+	// localTokenUnescrow.
 	baseDenom := string(order.BaseToken)
 
-	if err := v.localTokenUnescrow(0, rlm, baseDenom, recipient, order.BaseAmount); err != nil {
+	baseTokenLedgerAmount, err := v.ledgerAmountOf(baseDenom, order.BaseAmount)
+	if err != nil {
 		return err
 	}
 
-	return v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
+	// reference decreases the escrowed balance before unescrowing
+	// (refund_v2 contract.rs L894-902 / ack L1021-1028);
+	// decreaseChannelBalanceV2 rejects an underflow internally.
+	err = v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount)
+	if err != nil {
+		return err
+	}
+
+	err = v.localTokenUnescrow(0, rlm, baseDenom, recipient, order.BaseAmount)
+	if err != nil {
+		// rollback the channel balance
+		v.increaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount)
+
+		return err
+	}
+
+	return nil
 }
 
 // burnEscrowedV2 removes the escrowed channel balance and finalizes the base
-// token as burned instead of releasing it to the maker.
-// Vouchers are supply-burned; native coins are kept locked in proxy escrow.
+// token as burned instead of releasing it to the maker (union burn-address ack).
+// Token-type handling:
+//   - IBC voucher (ibc/): supply-burned via burnVoucher from proxy escrow.
+//   - Native coin: supply cannot be destroyed; coins stay in the proxy banker
+//     balance and are tracked in locked-base accounting.
+//   - GRC20: same as native — no mint/burn capability over foreign tokens;
+//     balance stays at the proxy and is tracked in locked-base accounting.
 func (v *ucs03ZkgmV1) burnEscrowedV2(_ int, rlm realm, sourceChannelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
-	if err := v.ensureChannelBalanceV2(sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount); err != nil {
+	// Channel balance records the vault (ledger) amount for the base denom.
+	baseDenom := string(order.BaseToken)
+
+	baseTokenLedgerAmount, err := v.ledgerAmountOf(baseDenom, order.BaseAmount)
+	if err != nil {
 		return err
 	}
 
-	baseDenom := string(order.BaseToken)
-	if strings.HasPrefix(baseDenom, ibcDenomPrefix) {
-		if err := v.burnVoucher(0, rlm, baseDenom, rlm.Address().String(), order.BaseAmount); err != nil {
+	err = v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount)
+	if err != nil {
+		return err
+	}
+
+	if isIBCTokenDenom(baseDenom) {
+		err = v.burnVoucher(0, rlm, baseDenom, rlm.Address(), order.BaseAmount)
+		if err != nil {
+			// rollback the channel balance
+			v.increaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount)
+
 			return err
 		}
-	} else {
-		// native: left locked in the proxy, tracked in the locked-native accounting.
-		v.store.AddLockedNative(0, rlm, baseDenom, order.BaseAmount)
 	}
 
-	return v.decreaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
+	// Native and GRC20: permanently lock proxy-held balance (no supply burn).
+	v.store.AddLockedTokenAmount(0, rlm, baseDenom, order.BaseAmount)
+
+	return nil
 }
 
-func (v *ucs03ZkgmV1) escrowTokenOrderV2(_ int, rlm realm, funds *funds, channelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
-	baseDenom := string(order.BaseToken)
-	if err := v.localTokenEscrow(0, rlm, baseDenom, rlm.Previous().Address().String(), funds, order.BaseAmount); err != nil {
-		return err
+// localTokenEscrow takes custody of the base token for a local INITIALIZE/ESCROW
+// send. Classification mirrors getTokenType:
+//   - IBC voucher: transfer into proxy escrow (no burn on outbound escrow).
+//   - GRC20: TransferFrom sender into proxy; requires prior approval.
+//   - Native: deduct from tx-attached -send funds held in the funds budget.
+func (v *ucs03ZkgmV1) localTokenEscrow(_ int, rlm realm, denom string, sender address, funds *funds, amount *u256.Uint) error {
+	switch getTokenType(denom) {
+	case IBC_TOKEN:
+		return v.transferVoucher(0, rlm, denom, sender, rlm.Address(), amount)
+	case GRC20_TOKEN:
+		return v.localGRC20Escrow(0, rlm, grc20reg.Get(denom), sender, amount)
+	case NATIVE_COIN:
+		return funds.sub(denom, amount)
 	}
 
-	return v.increaseChannelBalanceV2(0, rlm, channelId, path, order.BaseToken, order.QuoteToken, order.BaseAmount)
+	return nil
 }
 
-// localTokenEscrow takes custody of the base token for a local send.
-func (v *ucs03ZkgmV1) localTokenEscrow(_ int, rlm realm, denom, sender string, funds *funds, amount *u256.Uint) error {
-	amount64, err := amountInt64(amount)
-	if err != nil {
-		return err
-	}
-	if amount.IsZero() {
-		return makeError(errZeroAmount)
-	}
-
-	if strings.HasPrefix(denom, ibcDenomPrefix) {
-		return v.transferVoucher(0, rlm, denom, address(sender), rlm.Address(), amount)
-	}
-
-	if token, ok := v.localGRC20Token(0, rlm, denom); ok {
-		return token.RealmTeller(0, rlm).TransferFrom(0, rlm, address(sender), rlm.Address(), amount64)
+// localTokenUnescrow releases custody of the base token (recv unwrap / refund /
+// settleEscrowedV2). Classification mirrors localTokenEscrow:
+//   - IBC voucher: transfer from proxy escrow to recipient (not a mint).
+//   - GRC20: Transfer from proxy custody to recipient.
+//   - Native: sendNative from the proxy banker balance.
+func (v *ucs03ZkgmV1) localTokenUnescrow(_ int, rlm realm, denom string, recipient address, amount *u256.Uint) error {
+	switch getTokenType(denom) {
+	case IBC_TOKEN:
+		return v.transferVoucher(0, rlm, denom, rlm.Address(), recipient, amount)
+	case GRC20_TOKEN:
+		return v.localGRC20Unescrow(0, rlm, grc20reg.Get(denom), recipient, amount)
+	case NATIVE_COIN:
+		return v.sendNative(0, rlm, denom, recipient, amount)
 	}
 
-	return funds.sub(denom, amount)
-}
-
-// localTokenUnescrow releases custody of the base token (recv unwrap / refund),
-// classified the same way as localTokenEscrow.
-func (v *ucs03ZkgmV1) localTokenUnescrow(_ int, rlm realm, denom, recipient string, amount *u256.Uint) error {
-	amount64, err := amountInt64(amount)
-	if err != nil {
-		return err
-	}
-	if amount.IsZero() {
-		return makeError(errZeroAmount)
-	}
-
-	if strings.HasPrefix(denom, ibcDenomPrefix) {
-		return v.transferVoucher(0, rlm, denom, rlm.Address(), address(recipient), amount)
-	}
-
-	if token, ok := v.localGRC20Token(0, rlm, denom); ok {
-		return token.RealmTeller(0, rlm).Transfer(0, rlm, address(recipient), amount64)
-	}
-
-	return v.sendNative(0, rlm, denom, recipient, amount)
-}
-
-func (v *ucs03ZkgmV1) localGRC20Token(_ int, rlm realm, denom string) (*grc20.Token, bool) {
-	if token, ok := v.store.GetLocalGRC20Token(denom); ok {
-		return token, token != nil
-	}
-
-	if token := grc20reg.Get(denom); token != nil {
-		v.store.SetLocalGRC20Token(0, rlm, denom, token)
-		return token, true
-	}
-
-	return nil, false
+	return nil
 }
 
 // refundIBCVoucher re-mints an IBC voucher to recipient, preserving the stored metadata image.
-func (v *ucs03ZkgmV1) refundIBCVoucher(_ int, rlm realm, baseToken []byte, recipient string, amount *u256.Uint) error {
+func (v *ucs03ZkgmV1) refundIBCVoucher(_ int, rlm realm, baseToken []byte, recipient address, amount *u256.Uint) error {
 	baseDenom := string(baseToken)
 	image, _ := v.store.GetMetadataImageOf(baseDenom)
 
 	return v.mintVoucher(0, rlm, baseDenom, image, "", "", 0, recipient, amount)
 }
 
-func (v *ucs03ZkgmV1) incomingOrderDecimals(_ int, rlm realm, order z.TokenOrderV2) (uint8, error) {
-	if info := v.parseTokenInfo(0, rlm, order.BaseToken); info.isVoucher {
-		return info.decimals, nil
+// localGRC20Escrow takes custody of a locally-registered grc20 token (not a
+// zkgm-issued voucher) for a local send. Unlike native's -send, custody moves
+// via TransferFrom, so the sender must have pre-approved this realm.
+func (v *ucs03ZkgmV1) localGRC20Escrow(_ int, rlm realm, token *grc20.Token, sender address, amount *u256.Uint) error {
+	n, err := amountInt64(amount)
+	if err != nil {
+		return err
 	}
 
-	if info := v.parseTokenInfo(0, rlm, order.QuoteToken); info.isVoucher {
-		return info.decimals, nil
+	teller := token.RealmTeller(0, rlm)
+
+	beforeBalance := teller.BalanceOf(rlm.Address())
+
+	err = teller.TransferFrom(0, rlm, sender, rlm.Address(), n)
+	if err != nil {
+		return err
 	}
 
-	if order.Kind == z.TOKEN_ORDER_KIND_INITIALIZE && len(order.Metadata) != 0 {
-		meta, err := z.DecodeTokenMetadata(order.Metadata)
-		if err != nil {
-			return 0, err
-		}
+	afterBalance := teller.BalanceOf(rlm.Address())
 
-		ti := z.DecodeTokenInitializerFromMetadata(meta)
-		return ti.Decimals, nil
+	if afterBalance-beforeBalance != n {
+		return makeError(errInvalidTokenOrderTransferAmount)
 	}
 
-	return targetDecimals, nil
+	return nil
+}
+
+// localGRC20Unescrow releases a locally-registered grc20 token from proxy
+// custody (recv unwrap / refund), mirroring localGRC20Escrow.
+func (v *ucs03ZkgmV1) localGRC20Unescrow(_ int, rlm realm, token *grc20.Token, recipient address, amount *u256.Uint) error {
+	n, err := amountInt64(amount)
+	if err != nil {
+		return err
+	}
+
+	teller := token.RealmTeller(0, rlm)
+
+	beforeBalance := teller.BalanceOf(rlm.Address())
+
+	err = teller.Transfer(0, rlm, recipient, n)
+	if err != nil {
+		return err
+	}
+
+	afterBalance := teller.BalanceOf(rlm.Address())
+
+	if beforeBalance-afterBalance != n {
+		return makeError(errInvalidTokenOrderTransferAmount)
+	}
+
+	return nil
+}
+
+// verifyMetadataDecimals rejects an INITIALIZE order whose declared metadata
+// decimals do not match the locally-known ground truth for baseDenom: a
+// registered grc20's real decimals, or a held voucher's recorded
+// OriginDecimals when forwarding it onward. baseDenom that is native (or
+// otherwise unknown here) is out of scope for this check. Left unchecked, a
+// wrong declaration would still move the correct raw amount here but cause
+// the counterparty (or next hop) to deploy/interpret the wrapped copy at the
+// wrong precision.
+func (v *ucs03ZkgmV1) verifyMetadataDecimals(baseDenom string, metadata []byte) error {
+	var originDecimals uint8
+
+	if token := grc20reg.Get(baseDenom); token != nil {
+		originDecimals = uint8(token.GetDecimals())
+	} else if vou, ok := v.store.GetVoucher(baseDenom); ok {
+		originDecimals = vou.OriginDecimals()
+	} else {
+		return nil
+	}
+
+	meta, err := z.DecodeTokenMetadata(metadata)
+	if err != nil {
+		return err
+	}
+
+	if z.DecodeTokenInitializerFromMetadata(meta).Decimals != originDecimals {
+		return makeError(errMetadataDecimalsMismatch)
+	}
+
+	return nil
 }

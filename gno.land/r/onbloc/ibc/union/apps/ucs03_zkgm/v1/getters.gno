@@ -1,4 +1,4 @@
-package impl
+package v1
 
 import (
 	u256 "gno.land/p/gnoswap/uint256"

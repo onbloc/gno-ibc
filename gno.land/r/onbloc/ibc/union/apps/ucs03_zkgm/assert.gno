@@ -1,4 +1,4 @@
-package zkgm
+package ucs03_zkgm
 
 import "gno.land/r/onbloc/ibc/union/access"
 

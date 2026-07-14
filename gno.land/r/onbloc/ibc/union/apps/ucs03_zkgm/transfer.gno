@@ -1,4 +1,4 @@
-package zkgm
+package ucs03_zkgm
 
 import (
 	"encoding/hex"

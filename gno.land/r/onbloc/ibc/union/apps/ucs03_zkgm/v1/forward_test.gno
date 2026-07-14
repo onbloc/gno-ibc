@@ -1,4 +1,4 @@
-package impl
+package v1
 
 // forward_test.gno tests the validation and dispatch logic in forward.gno,
 // including instruction allow-listing, buildForwardChild validation,

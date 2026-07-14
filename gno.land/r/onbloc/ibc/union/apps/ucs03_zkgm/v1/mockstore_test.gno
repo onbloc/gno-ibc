@@ -1,6 +1,8 @@
 package v1
 
 import (
+	"sort"
+
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -119,9 +121,28 @@ func (m *mockStore) GetVoucher(ibcDenom string) (*zkgm.Voucher, bool) {
 	return v, ok
 }
 
-func (m *mockStore) GetVoucherList() []zkgm.VoucherInfo {
-	list := make([]zkgm.VoucherInfo, 0, len(m.vouchers))
-	for denom, voucher := range m.vouchers {
+// GetVoucherList paginates over denoms in sorted order to match the real
+// Store's bptree-ordered iteration, so pagination tests behave the same
+// against either store.
+func (m *mockStore) GetVoucherList(offset, count int) []zkgm.VoucherInfo {
+	denoms := make([]string, 0, len(m.vouchers))
+	for denom := range m.vouchers {
+		denoms = append(denoms, denom)
+	}
+	sort.Strings(denoms)
+
+	list := []zkgm.VoucherInfo{}
+	if offset < 0 || offset >= len(denoms) || count <= 0 {
+		return list
+	}
+
+	end := offset + count
+	if end > len(denoms) {
+		end = len(denoms)
+	}
+
+	for _, denom := range denoms[offset:end] {
+		voucher := m.vouchers[denom]
 		list = append(list, zkgm.NewVoucherInfo(
 			denom,
 			voucher.Token().GetName(),

@@ -16,10 +16,10 @@ func GetChannelBalanceV2(channelId types.ChannelId, path *u256.Uint, baseToken s
 	return mustGetImpl().GetChannelBalanceV2(channelId, path, baseToken, quoteToken)
 }
 
-// GetVoucherList returns a snapshot of every wrapped voucher token currently
-// registered with this app instance.
-func GetVoucherList() ([]VoucherInfo, error) {
-	return mustGetImpl().GetVoucherList()
+// GetVoucherList returns a page of up to count wrapped voucher tokens starting
+// at offset, ordered by denom.
+func GetVoucherList(offset, count int) ([]VoucherInfo, error) {
+	return mustGetImpl().GetVoucherList(offset, count)
 }
 
 // GetVoucherInfo returns a snapshot of the single wrapped voucher registered for ibcDenom.

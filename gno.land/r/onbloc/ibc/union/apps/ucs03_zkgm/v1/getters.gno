@@ -31,13 +31,13 @@ func (v *ucs03ZkgmV1) GetChannelBalanceV2(channelId types.ChannelId, path *u256.
 	return balance.Clone(), nil
 }
 
-// GetVoucherList returns a snapshot of every wrapped voucher token currently
-// registered with this app instance. An instance with no vouchers yet is not
-// an error condition, so this returns an empty slice rather than failing; the
-// error return exists only to match the calling convention shared by every
-// other IAppGetter method and is always nil.
-func (v *ucs03ZkgmV1) GetVoucherList() ([]zkgm.VoucherInfo, error) {
-	return v.store.GetVoucherList(), nil
+// GetVoucherList returns a page of up to count wrapped voucher tokens starting
+// at offset, ordered by denom. An empty page (e.g. offset past the end, or no
+// vouchers registered yet) is not an error condition, so this returns an empty
+// slice rather than failing; the error return exists only to match the
+// calling convention shared by every other IAppGetter method and is always nil.
+func (v *ucs03ZkgmV1) GetVoucherList(offset, count int) ([]zkgm.VoucherInfo, error) {
+	return v.store.GetVoucherList(offset, count), nil
 }
 
 // GetVoucherInfo returns a snapshot of the single wrapped voucher registered

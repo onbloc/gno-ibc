@@ -85,7 +85,7 @@ func TestGetVoucherListReturnsAllRegisteredVouchers(cur realm, t *testing.T) {
 	testStore = newMockStore()
 	v := newTestImpl()
 
-	got, err := v.GetVoucherList()
+	got, err := v.GetVoucherList(0, 10)
 	uassert.NoError(t, err)
 	uassert.Equal(t, 0, len(got))
 
@@ -110,7 +110,7 @@ func TestGetVoucherListReturnsAllRegisteredVouchers(cur realm, t *testing.T) {
 		uassert.NoError(t, v.mintVoucher(0, cur, tc.denom, [32]byte{}, tc.tokenName, tc.symbol, tc.originDecimals, rx, tc.mintAmount))
 	}
 
-	got, err = v.GetVoucherList()
+	got, err = v.GetVoucherList(0, len(cases))
 	uassert.NoError(t, err)
 	uassert.Equal(t, len(cases), len(got))
 
@@ -128,6 +128,44 @@ func TestGetVoucherListReturnsAllRegisteredVouchers(cur realm, t *testing.T) {
 			uassert.Equal(t, tc.originDecimals, info.OriginDecimals)
 			uassert.Equal(t, tc.wantLedgerDec, info.LedgerDecimals)
 			uassert.Equal(t, tc.wantSupply, info.TotalSupply)
+		})
+	}
+}
+
+// GetVoucherList pages over denoms in sorted order, since the vouchers tree
+// only ever grows (no deletion) and an unbounded single call would let the
+// response/gas cost grow unboundedly with usage.
+func TestGetVoucherListPagination(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+	rx := testAddress("voucher-page-rx")
+
+	denoms := []string{"ibc/page-a", "ibc/page-b", "ibc/page-c"}
+	for _, denom := range denoms {
+		uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, denom, "SYM", 6, rx, u256.NewUint(1)))
+	}
+
+	cases := []struct {
+		name       string
+		offset     int
+		count      int
+		wantDenoms []string
+	}{
+		{"first page", 0, 2, []string{"ibc/page-a", "ibc/page-b"}},
+		{"second page", 2, 2, []string{"ibc/page-c"}},
+		{"offset past end returns empty", 3, 2, []string{}},
+		{"zero count returns empty", 0, 0, []string{}},
+		{"count beyond remaining is clamped", 0, 10, []string{"ibc/page-a", "ibc/page-b", "ibc/page-c"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := v.GetVoucherList(tc.offset, tc.count)
+			uassert.NoError(t, err)
+			uassert.Equal(t, len(tc.wantDenoms), len(got))
+			for i, denom := range tc.wantDenoms {
+				uassert.Equal(t, denom, got[i].Denom)
+			}
 		})
 	}
 }

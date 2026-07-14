@@ -244,12 +244,15 @@ func (s *Store) GetVoucher(ibcDenom string) (*Voucher, bool) {
 	return v.(*Voucher), true
 }
 
-func (s *Store) GetVoucherList() []VoucherInfo {
+// GetVoucherList returns a page of up to count vouchers starting at offset,
+// ordered by denom. The vouchers tree only grows (there is no voucher
+// deletion), so pagination keeps a single call's gas/response size bounded
+// regardless of how many wrapped tokens have been registered over time.
+func (s *Store) GetVoucherList(offset, count int) []VoucherInfo {
 	voucherList := []VoucherInfo{}
 
-	// Iterate over all vouchers in the BPTree. Empty start/end bounds walk every
-	// entry; the callback returns false to keep iterating (true stops early).
-	s.vouchers.Iterate("", "", func(key string, value interface{}) bool {
+	// The callback returns false to keep iterating (true stops early).
+	s.vouchers.IterateByOffset(offset, count, func(key string, value interface{}) bool {
 		voucher, ok := value.(*Voucher)
 		if !ok {
 			panic(ErrInterfaceConversion)

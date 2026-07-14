@@ -51,10 +51,12 @@ type dummyImpl struct {
 	lastBalanceBaseToken string
 	lastBalanceQuote     []byte
 
-	voucherList    []VoucherInfo
-	voucherListErr error
-	voucherInfo    VoucherInfo
-	voucherInfoErr error
+	voucherList       []VoucherInfo
+	voucherListErr    error
+	lastVoucherOffset int
+	lastVoucherCount  int
+	voucherInfo       VoucherInfo
+	voucherInfoErr    error
 }
 
 var _ IApp = &dummyImpl{}
@@ -148,7 +150,10 @@ func (d *dummyImpl) GetChannelBalanceV2(channelId types.ChannelId, path *u256.Ui
 	return d.channelBalance, d.channelBalanceErr
 }
 
-func (d *dummyImpl) GetVoucherList() ([]VoucherInfo, error) {
+func (d *dummyImpl) GetVoucherList(offset, count int) ([]VoucherInfo, error) {
+	d.lastVoucherOffset = offset
+	d.lastVoucherCount = count
+
 	return d.voucherList, d.voucherListErr
 }
 

@@ -255,7 +255,7 @@ func TestVoucherStore(cur realm, t *testing.T) {
 func TestStoreGetVoucherList(cur realm, t *testing.T) {
 	s := NewStore()
 
-	uassert.Equal(t, 0, len(s.GetVoucherList()))
+	uassert.Equal(t, 0, len(s.GetVoucherList(0, 10)))
 
 	cases := []struct {
 		name       string
@@ -277,7 +277,7 @@ func TestStoreGetVoucherList(cur realm, t *testing.T) {
 		}
 	}
 
-	got := s.GetVoucherList()
+	got := s.GetVoucherList(0, len(cases))
 	uassert.Equal(t, len(cases), len(got))
 
 	byDenom := map[string]VoucherInfo{}
@@ -292,6 +292,42 @@ func TestStoreGetVoucherList(cur realm, t *testing.T) {
 			uassert.Equal(t, tc.tokenName, info.Name)
 			uassert.Equal(t, tc.symbol, info.Symbol)
 			uassert.Equal(t, tc.wantSupply, info.TotalSupply)
+		})
+	}
+}
+
+// GetVoucherList pages by offset/count in denom-sorted order (bptree's
+// natural key order), since the vouchers tree only ever grows and an
+// unbounded single call would let the response/gas cost grow with usage.
+func TestStoreGetVoucherListPagination(cur realm, t *testing.T) {
+	s := NewStore()
+
+	denoms := []string{"ibc/page-a", "ibc/page-b", "ibc/page-c"}
+	for _, denom := range denoms {
+		token, ledger := newVoucherTokenForTest(cur, denom, "SYM")
+		s.SetVoucher(0, cur, denom, NewVoucher(token, ledger, 6))
+	}
+
+	cases := []struct {
+		name       string
+		offset     int
+		count      int
+		wantDenoms []string
+	}{
+		{"first page", 0, 2, []string{"ibc/page-a", "ibc/page-b"}},
+		{"second page", 2, 2, []string{"ibc/page-c"}},
+		{"offset past end returns empty", 3, 2, []string{}},
+		{"zero count returns empty", 0, 0, []string{}},
+		{"count beyond remaining is clamped", 0, 10, []string{"ibc/page-a", "ibc/page-b", "ibc/page-c"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := s.GetVoucherList(tc.offset, tc.count)
+			uassert.Equal(t, len(tc.wantDenoms), len(got))
+			for i, denom := range tc.wantDenoms {
+				uassert.Equal(t, denom, got[i].Denom)
+			}
 		})
 	}
 }

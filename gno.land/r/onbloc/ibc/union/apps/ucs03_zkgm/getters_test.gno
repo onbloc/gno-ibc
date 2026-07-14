@@ -74,11 +74,13 @@ func TestGetVoucherList_DelegatesToImpl(cur realm, t *testing.T) {
 	target := &dummyImpl{voucherList: want}
 	installImplForTest(testImplPathA, target)
 
-	got, err := GetVoucherList()
+	got, err := GetVoucherList(2, 5)
 	uassert.NoError(t, err)
 	uassert.Equal(t, 1, len(got))
 	uassert.Equal(t, "ibc/denom1", got[0].Denom)
 	uassert.Equal(t, "FOO", got[0].Symbol)
+	uassert.Equal(t, 2, target.lastVoucherOffset)
+	uassert.Equal(t, 5, target.lastVoucherCount)
 }
 
 func TestGetVoucherList_PropagatesImplError(cur realm, t *testing.T) {
@@ -86,7 +88,7 @@ func TestGetVoucherList_PropagatesImplError(cur realm, t *testing.T) {
 	target := &dummyImpl{voucherListErr: errDummyGetter}
 	installImplForTest(testImplPathA, target)
 
-	got, err := GetVoucherList()
+	got, err := GetVoucherList(0, 10)
 	uassert.ErrorIs(t, err, errDummyGetter)
 	if got != nil {
 		t.Fatal("missing voucher list must return nil")

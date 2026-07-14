@@ -45,8 +45,8 @@ func (v *ucs03ZkgmV1) executeForward(_ int, rlm realm, packet types.Packet, salt
 	// DeriveForwardSalt, not DeriveSenderSalt. Route the child through core so
 	// it receives a normal packet commitment, then track its parent so child
 	// resolution can write the deferred parent ack.
-	childPacket = core.SendPacket(cross(rlm), childPacket.SourceChannelId, childPacket.TimeoutTimestamp, childPacket.Data)
 	v.store.SetInFlightPacket(0, rlm, forwardInFlightKey(childPacket), packet)
+	core.SendPacket(cross(rlm), childPacket.SourceChannelId, childPacket.TimeoutTimestamp, childPacket.Data)
 
 	return core.NewRecvPacketResult(types.PacketStatusAsync, nil), nil
 }

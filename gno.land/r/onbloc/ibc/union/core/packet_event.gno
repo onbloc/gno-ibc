@@ -3,11 +3,11 @@ package core
 // MaxPacketDataEventSize returns the configured packet_data event budget after
 // hexAttr encoding.
 //
-// The budget is MaxPacketDataEventColumns * MaxEventAttrValueLen and is
-// enforced only when SplitEventAttrs is true.
+// The budget is MaxEventAttrPairs * MaxEventAttrValueLen and is enforced only
+// when SplitEventAttrs is true.
 func MaxPacketDataEventSize() int {
 	config := GetEventConfig()
-	return int(config.MaxPacketDataEventColumns * config.MaxEventAttrValueLen)
+	return int(config.MaxEventAttrPairs * config.MaxEventAttrValueLen)
 }
 
 // IsValidPacketDataSize reports whether data stays within the configured
@@ -38,8 +38,7 @@ func eventColumnPairs(data []byte) int {
 // IsValidEventSize reports whether fields, split together into one host
 // event, stay within chain.Emit's 64-attr-pair ceiling. Fields within
 // IsValidPacketDataSize's solo budget individually can still exceed it
-// combined, so MaxPacketDataEventColumns is reused as a shared pair budget
-// here.
+// combined, so MaxEventAttrPairs also serves as the shared pair budget here.
 func IsValidEventSize(fields ...[]byte) bool {
 	if !GetEventConfig().SplitEventAttrs {
 		return true
@@ -50,5 +49,5 @@ func IsValidEventSize(fields ...[]byte) bool {
 		total += eventColumnPairs(data)
 	}
 
-	return total <= int(GetEventConfig().MaxPacketDataEventColumns)
+	return total <= int(GetEventConfig().MaxEventAttrPairs)
 }

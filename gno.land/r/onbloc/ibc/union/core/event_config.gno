@@ -3,8 +3,8 @@ package core
 import "gno.land/r/onbloc/ibc/union/access"
 
 const (
-	defaultMaxEventAttrValueLen      = 4096
-	defaultMaxPacketDataEventColumns = 50
+	defaultMaxEventAttrValueLen = 4096
+	defaultMaxEventAttrPairs    = 50
 )
 
 var eventConfig = DefaultEventConfig()
@@ -19,27 +19,32 @@ type EventConfig struct {
 	// attribute column.
 	MaxEventAttrValueLen uint
 
-	// MaxPacketDataEventColumns is the maximum number of packet_data columns
-	// allowed when packet_data size checks are enforced.
-	MaxPacketDataEventColumns uint
+	// MaxEventAttrPairs is the shared key/value attr-pair budget for one host
+	// event: both the max packet_data columns allowed when packet_data size
+	// checks are enforced solo, and the combined pair budget IsValidEventSize
+	// checks across packet_data plus whatever else lands in the same event
+	// (ack, relayerMsg, marketMakerMsg). Mirrors chain.Emit's own
+	// MaxEventPairs ceiling (64), kept comfortably under it to leave room for
+	// the event's other fixed attrs.
+	MaxEventAttrPairs uint
 }
 
 // NewEventConfig constructs an EventConfig value. SetEventConfig validates the
 // value before storing it.
-func NewEventConfig(splitEventAttrs bool, maxEventAttrValueLen uint, maxPacketDataEventColumns uint) EventConfig {
+func NewEventConfig(splitEventAttrs bool, maxEventAttrValueLen uint, maxEventAttrPairs uint) EventConfig {
 	return EventConfig{
-		SplitEventAttrs:           splitEventAttrs,
-		MaxEventAttrValueLen:      maxEventAttrValueLen,
-		MaxPacketDataEventColumns: maxPacketDataEventColumns,
+		SplitEventAttrs:      splitEventAttrs,
+		MaxEventAttrValueLen: maxEventAttrValueLen,
+		MaxEventAttrPairs:    maxEventAttrPairs,
 	}
 }
 
 // DefaultEventConfig returns the default host event attribute policy.
 func DefaultEventConfig() EventConfig {
 	return EventConfig{
-		SplitEventAttrs:           true,
-		MaxEventAttrValueLen:      defaultMaxEventAttrValueLen,
-		MaxPacketDataEventColumns: defaultMaxPacketDataEventColumns,
+		SplitEventAttrs:      true,
+		MaxEventAttrValueLen: defaultMaxEventAttrValueLen,
+		MaxEventAttrPairs:    defaultMaxEventAttrPairs,
 	}
 }
 
@@ -77,13 +82,13 @@ func SetMaxEventAttrValueLen(cur realm, maxEventAttrValueLen uint) {
 	setEventConfig(config)
 }
 
-// SetMaxPacketDataEventColumns updates the packet_data split column limit.
+// SetMaxEventAttrPairs updates the shared event attr-pair budget.
 // The caller must be authorized for SelectorSetEventConfig.
-func SetMaxPacketDataEventColumns(cur realm, maxPacketDataEventColumns uint) {
+func SetMaxEventAttrPairs(cur realm, maxEventAttrPairs uint) {
 	access.AssertCanCall(0, cur, SelectorSetEventConfig)
 
 	config := GetEventConfig()
-	config.MaxPacketDataEventColumns = maxPacketDataEventColumns
+	config.MaxEventAttrPairs = maxEventAttrPairs
 	setEventConfig(config)
 }
 
@@ -96,7 +101,7 @@ func assertValidEventConfig(config EventConfig) {
 	if config.MaxEventAttrValueLen == 0 {
 		panic("max event attr value len must be positive")
 	}
-	if config.MaxPacketDataEventColumns == 0 {
-		panic("max packet data event columns must be positive")
+	if config.MaxEventAttrPairs == 0 {
+		panic("max event attr pairs must be positive")
 	}
 }

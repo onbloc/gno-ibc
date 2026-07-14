@@ -32,11 +32,11 @@ func TestIsValidEventSize(cur realm, t *testing.T) {
 
 	// MaxEventAttrValueLen=4 => eventColumnPairs(data) = 1 + ceil(hexAttrLen(data)/4).
 	// hexAttrLen(b) = len(b)*2+2, so: 0 bytes -> 2 pairs, 3 bytes -> 3 pairs,
-	// 5 bytes -> 4 pairs. Combined budget (MaxPacketDataEventColumns) = 5.
+	// 5 bytes -> 4 pairs. Combined budget (MaxEventAttrPairs) = 5.
 	setEventConfig(EventConfig{
-		SplitEventAttrs:           true,
-		MaxEventAttrValueLen:      4,
-		MaxPacketDataEventColumns: 5,
+		SplitEventAttrs:      true,
+		MaxEventAttrValueLen: 4,
+		MaxEventAttrPairs:    5,
 	})
 
 	tests := []struct {
@@ -66,9 +66,9 @@ func TestIsValidEventSizeSplitDisabled(cur realm, t *testing.T) {
 	defer resetEventConfigForTest()
 
 	setEventConfig(EventConfig{
-		SplitEventAttrs:           false,
-		MaxEventAttrValueLen:      4,
-		MaxPacketDataEventColumns: 2,
+		SplitEventAttrs:      false,
+		MaxEventAttrValueLen: 4,
+		MaxEventAttrPairs:    2,
 	})
 
 	huge := make([]byte, 1<<20)
@@ -91,9 +91,9 @@ func TestIsValidPacketDataSizeUsesEventConfig(cur realm, t *testing.T) {
 		{
 			name: "split enabled within budget",
 			config: EventConfig{
-				SplitEventAttrs:           true,
-				MaxEventAttrValueLen:      4,
-				MaxPacketDataEventColumns: 2,
+				SplitEventAttrs:      true,
+				MaxEventAttrValueLen: 4,
+				MaxEventAttrPairs:    2,
 			},
 			data:       make([]byte, 3),
 			wantBudget: 8,
@@ -102,9 +102,9 @@ func TestIsValidPacketDataSizeUsesEventConfig(cur realm, t *testing.T) {
 		{
 			name: "split enabled over budget",
 			config: EventConfig{
-				SplitEventAttrs:           true,
-				MaxEventAttrValueLen:      4,
-				MaxPacketDataEventColumns: 2,
+				SplitEventAttrs:      true,
+				MaxEventAttrValueLen: 4,
+				MaxEventAttrPairs:    2,
 			},
 			data:       make([]byte, 4),
 			wantBudget: 8,
@@ -113,9 +113,9 @@ func TestIsValidPacketDataSizeUsesEventConfig(cur realm, t *testing.T) {
 		{
 			name: "split disabled skips budget check",
 			config: EventConfig{
-				SplitEventAttrs:           false,
-				MaxEventAttrValueLen:      4,
-				MaxPacketDataEventColumns: 2,
+				SplitEventAttrs:      false,
+				MaxEventAttrValueLen: 4,
+				MaxEventAttrPairs:    2,
 			},
 			data:       make([]byte, 1024),
 			wantBudget: 8,

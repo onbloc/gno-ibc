@@ -64,3 +64,31 @@ func TestGetChannelBalanceV2_PropagatesImplError(cur realm, t *testing.T) {
 		t.Fatal("missing channel balance must return nil")
 	}
 }
+
+func TestGetVoucherList_DelegatesToImpl(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	want := []VoucherInfo{
+		NewVoucherInfo("ibc/denom1", "Foo", "FOO", 6, 6, 100),
+	}
+	target := &dummyImpl{voucherList: want}
+	installImplForTest(testImplPathA, target)
+
+	got, err := GetVoucherList()
+	uassert.NoError(t, err)
+	uassert.Equal(t, 1, len(got))
+	uassert.Equal(t, "ibc/denom1", got[0].Denom)
+	uassert.Equal(t, "FOO", got[0].Symbol)
+}
+
+func TestGetVoucherList_PropagatesImplError(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+	target := &dummyImpl{voucherListErr: errDummyGetter}
+	installImplForTest(testImplPathA, target)
+
+	got, err := GetVoucherList()
+	uassert.ErrorIs(t, err, errDummyGetter)
+	if got != nil {
+		t.Fatal("missing voucher list must return nil")
+	}
+}

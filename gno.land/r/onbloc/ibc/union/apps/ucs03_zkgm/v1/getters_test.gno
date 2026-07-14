@@ -80,3 +80,54 @@ func TestGetChannelBalanceV2MissingKey(t *testing.T) {
 		t.Fatal("missing channel balance must return nil")
 	}
 }
+
+func TestGetVoucherListReturnsAllRegisteredVouchers(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	got, err := v.GetVoucherList()
+	uassert.NoError(t, err)
+	uassert.Equal(t, 0, len(got))
+
+	rx := testAddress("voucher-list-rx")
+	cases := []struct {
+		name           string
+		denom          string
+		tokenName      string
+		symbol         string
+		originDecimals uint8
+		mintAmount     *u256.Uint
+		wantLedgerDec  uint8
+		wantSupply     int64
+	}{
+		// decimals == canonicalDecimals: no ledger downscale, TotalSupply matches the minted amount.
+		{"decimals at canonical cap", "ibc/list-a", "Alpha", "ALPHA", 6, u256.NewUint(100), 6, 100},
+		// decimals > canonicalDecimals: ledger is capped to 6, so 500 origin units mint as 5 ledger units.
+		{"decimals above canonical cap", "ibc/list-b", "Beta", "BETA", 8, u256.NewUint(500), 6, 5},
+	}
+
+	for _, tc := range cases {
+		uassert.NoError(t, v.mintVoucher(0, cur, tc.denom, [32]byte{}, tc.tokenName, tc.symbol, tc.originDecimals, rx, tc.mintAmount))
+	}
+
+	got, err = v.GetVoucherList()
+	uassert.NoError(t, err)
+	uassert.Equal(t, len(cases), len(got))
+
+	byDenom := map[string]zkgm.VoucherInfo{}
+	for _, info := range got {
+		byDenom[info.Denom] = info
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			info, ok := byDenom[tc.denom]
+			uassert.True(t, ok)
+			uassert.Equal(t, tc.tokenName, info.Name)
+			uassert.Equal(t, tc.symbol, info.Symbol)
+			uassert.Equal(t, tc.originDecimals, info.OriginDecimals)
+			uassert.Equal(t, tc.wantLedgerDec, info.LedgerDecimals)
+			uassert.Equal(t, tc.wantSupply, info.TotalSupply)
+		})
+	}
+}

@@ -119,6 +119,22 @@ func (m *mockStore) GetVoucher(ibcDenom string) (*zkgm.Voucher, bool) {
 	return v, ok
 }
 
+func (m *mockStore) GetVoucherList() []zkgm.VoucherInfo {
+	list := make([]zkgm.VoucherInfo, 0, len(m.vouchers))
+	for denom, voucher := range m.vouchers {
+		list = append(list, zkgm.NewVoucherInfo(
+			denom,
+			voucher.Token().GetName(),
+			voucher.Token().GetSymbol(),
+			voucher.OriginDecimals(),
+			uint8(voucher.Token().GetDecimals()),
+			voucher.Token().TotalSupply(),
+		))
+	}
+
+	return list
+}
+
 func (m *mockStore) HasVoucher(ibcDenom string) bool {
 	_, ok := m.vouchers[ibcDenom]
 	return ok

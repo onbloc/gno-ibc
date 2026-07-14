@@ -244,6 +244,33 @@ func (s *Store) GetVoucher(ibcDenom string) (*Voucher, bool) {
 	return v.(*Voucher), true
 }
 
+func (s *Store) GetVoucherList() []VoucherInfo {
+	voucherList := []VoucherInfo{}
+
+	// Iterate over all vouchers in the BPTree. Empty start/end bounds walk every
+	// entry; the callback returns false to keep iterating (true stops early).
+	s.vouchers.Iterate("", "", func(key string, value interface{}) bool {
+		voucher, ok := value.(*Voucher)
+		if !ok {
+			panic(ErrInterfaceConversion)
+		}
+
+		voucherInfo := VoucherInfo{
+			Denom:          key,
+			Name:           voucher.token.GetName(),
+			Symbol:         voucher.token.GetSymbol(),
+			OriginDecimals: voucher.originDecimals,
+			LedgerDecimals: uint8(voucher.token.GetDecimals()),
+			TotalSupply:    voucher.token.TotalSupply(),
+		}
+		voucherList = append(voucherList, voucherInfo)
+
+		return false // continue iteration
+	})
+
+	return voucherList
+}
+
 // HasVoucher reports whether a voucher exists for an ibc denom.
 func (s *Store) HasVoucher(ibcDenom string) bool {
 	return s.vouchers.Has(ibcDenom)

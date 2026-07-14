@@ -50,6 +50,9 @@ type dummyImpl struct {
 	lastBalancePath      *u256.Uint
 	lastBalanceBaseToken string
 	lastBalanceQuote     []byte
+
+	voucherList    []VoucherInfo
+	voucherListErr error
 }
 
 var _ IApp = &dummyImpl{}
@@ -141,6 +144,10 @@ func (d *dummyImpl) GetChannelBalanceV2(channelId types.ChannelId, path *u256.Ui
 	d.lastBalanceQuote = quoteToken
 
 	return d.channelBalance, d.channelBalanceErr
+}
+
+func (d *dummyImpl) GetVoucherList() ([]VoucherInfo, error) {
+	return d.voucherList, d.voucherListErr
 }
 
 // resetZkgmForTest returns the proxy package state to a clean baseline. The

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	u256 "gno.land/p/gnoswap/uint256"
+	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
 	types "gno.land/p/onbloc/ibc/union/types"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
@@ -249,6 +250,50 @@ func TestVoucherStore(cur realm, t *testing.T) {
 	uassert.True(t, ok)
 	uassert.True(t, s.HasVoucher("ibc/store-voucher"))
 	uassert.True(t, got == vou)
+}
+
+func TestStoreGetVoucherList(cur realm, t *testing.T) {
+	s := NewStore()
+
+	uassert.Equal(t, 0, len(s.GetVoucherList()))
+
+	cases := []struct {
+		name       string
+		denom      string
+		tokenName  string
+		symbol     string
+		mintAmount int64
+		wantSupply int64
+	}{
+		{"alpha voucher with balance", "ibc/store-list-a", "Alpha", "ALPHA", 42, 42},
+		{"beta voucher with no mint yet", "ibc/store-list-b", "Beta", "BETA", 0, 0},
+	}
+
+	for _, tc := range cases {
+		token, ledger := newVoucherTokenForTest(cur, tc.tokenName, tc.symbol)
+		s.SetVoucher(0, cur, tc.denom, NewVoucher(token, ledger, 6))
+		if tc.mintAmount > 0 {
+			uassert.NoError(t, ledger.Mint(address(testutils.TestAddress("list-rx")), tc.mintAmount))
+		}
+	}
+
+	got := s.GetVoucherList()
+	uassert.Equal(t, len(cases), len(got))
+
+	byDenom := map[string]VoucherInfo{}
+	for _, info := range got {
+		byDenom[info.Denom] = info
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			info, ok := byDenom[tc.denom]
+			uassert.True(t, ok)
+			uassert.Equal(t, tc.tokenName, info.Name)
+			uassert.Equal(t, tc.symbol, info.Symbol)
+			uassert.Equal(t, tc.wantSupply, info.TotalSupply)
+		})
+	}
 }
 
 func TestReceiver(cur realm, t *testing.T) {

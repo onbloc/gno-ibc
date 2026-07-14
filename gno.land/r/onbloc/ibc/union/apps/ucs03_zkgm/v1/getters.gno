@@ -31,6 +31,15 @@ func (v *ucs03ZkgmV1) GetChannelBalanceV2(channelId types.ChannelId, path *u256.
 	return balance.Clone(), nil
 }
 
+// GetVoucherList returns a snapshot of every wrapped voucher token currently
+// registered with this app instance. An instance with no vouchers yet is not
+// an error condition, so this returns an empty slice rather than failing; the
+// error return exists only to match the calling convention shared by every
+// other IAppGetter method and is always nil.
+func (v *ucs03ZkgmV1) GetVoucherList() ([]zkgm.VoucherInfo, error) {
+	return v.store.GetVoucherList(), nil
+}
+
 func cloneTokenBucket(bucket *tb.TokenBucket) *tb.TokenBucket {
 	return &tb.TokenBucket{
 		Capacity:   bucket.Capacity.Clone(),

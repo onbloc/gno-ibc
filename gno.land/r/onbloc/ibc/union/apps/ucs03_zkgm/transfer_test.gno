@@ -50,11 +50,49 @@ func TestSend_DelegatesToInstalledImpl(cur realm, t *testing.T) {
 
 func TestSend_RejectsPaused(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
-	currentImpl = &dummyImpl{}
+
+	d := &dummyImpl{}
+	currentImpl = d
 	paused = true
 
 	uassert.AbortsContains(t, cur, "paused", func(cur realm) {
 		Send(cross(cur), types.ChannelId(7), types.Timestamp(99), [32]byte{}, z.Instruction{})
+	})
+
+	uassert.False(t, d.sendCalled)
+}
+
+func TestSendRaw_RejectsPaused(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	d := &dummyImpl{}
+	currentImpl = d
+	paused = true
+
+	uassert.AbortsContains(t, cur, "paused", func(cur realm) {
+		SendRaw(cross(cur), 7, 99, "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20", z.INSTR_VERSION_0, z.OP_CALL, "00")
+	})
+
+	uassert.False(t, d.sendCalled)
+}
+
+func TestSend_PausedBlocksBeforeImplCheck(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	paused = true
+
+	uassert.AbortsContains(t, cur, "paused", func(cur realm) {
+		Send(cross(cur), types.ChannelId(7), types.Timestamp(99), [32]byte{}, z.Instruction{})
+	})
+}
+
+func TestSendRaw_PausedBlocksBeforeImplCheck(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	paused = true
+
+	uassert.AbortsContains(t, cur, "paused", func(cur realm) {
+		SendRaw(cross(cur), 7, 99, "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20", z.INSTR_VERSION_0, z.OP_CALL, "00")
 	})
 }
 

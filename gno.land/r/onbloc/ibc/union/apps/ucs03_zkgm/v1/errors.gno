@@ -28,7 +28,6 @@ const (
 	errUnsupportedTokenOrderKindForRefund = "unsupported token order kind for refund"
 	errSolveNotImplemented                = "solve token order not implemented"
 	errInvalidTokenOrderDestChannel       = "invalid token order destination channel"
-	errInvalidTokenOrderSender            = "invalid token order sender"
 	errInvalidTokenOrderTransferAmount    = "invalid token order transfer amount"
 
 	// errMetadataDecimalsMismatch guards an INITIALIZE order's declared

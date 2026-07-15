@@ -20,10 +20,6 @@ func fillTypeMarketMaker() *u256.Uint { return z.Uint256FromBytes32(z.FILL_TYPE_
 // or consume native funds, then escrow the channel balance.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L419-L547
 func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
-	if string(order.Sender) != rlm.Previous().Address().String() {
-		return makeError(errInvalidTokenOrderSender)
-	}
-
 	if path == nil {
 		path = u256.Zero()
 	}

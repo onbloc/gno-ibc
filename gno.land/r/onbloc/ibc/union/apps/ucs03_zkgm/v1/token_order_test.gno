@@ -1000,14 +1000,6 @@ func TestTokenOrderVerifyUnescrowV1PredictionPasses(cur realm, t *testing.T) {
 	uassert.Equal(t, int64(50), voucherBalanceOf(baseDenom, address(sender)))
 }
 
-func TestTokenOrderVerifyRejectsInvalidSender(cur realm, t *testing.T) {
-	err := newTestImpl().verifyTokenOrderV2(0, cur, newFunds(nil), types.ChannelId(1), u256.Zero(), z.TokenOrderV2{
-		Sender: []byte("other"),
-	})
-
-	uassert.ErrorContains(t, err, "invalid token order sender")
-}
-
 func TestTokenOrderVerifyUnescrowV2PredictionWithImagePasses(cur realm, t *testing.T) {
 	v := newTestImpl()
 

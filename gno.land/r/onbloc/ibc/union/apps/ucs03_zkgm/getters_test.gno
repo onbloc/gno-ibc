@@ -116,3 +116,23 @@ func TestGetVoucherInfo_PropagatesImplError(cur realm, t *testing.T) {
 	_, err := GetVoucherInfo("ibc/missing")
 	uassert.ErrorIs(t, err, errDummyGetter)
 }
+
+func TestGetVoucherSize_DelegatesToImpl(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	target := &dummyImpl{voucherSize: 3}
+	installImplForTest(testImplPathA, target)
+
+	got, err := GetVoucherSize()
+	uassert.NoError(t, err)
+	uassert.Equal(t, 3, got)
+}
+
+func TestGetVoucherSize_PropagatesImplError(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+	target := &dummyImpl{voucherSizeErr: errDummyGetter}
+	installImplForTest(testImplPathA, target)
+
+	_, err := GetVoucherSize()
+	uassert.ErrorIs(t, err, errDummyGetter)
+}

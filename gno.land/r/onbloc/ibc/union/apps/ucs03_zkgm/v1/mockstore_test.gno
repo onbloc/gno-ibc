@@ -161,6 +161,11 @@ func (m *mockStore) HasVoucher(ibcDenom string) bool {
 	return ok
 }
 
+// GetVoucherSize returns the total number of registered vouchers.
+func (m *mockStore) GetVoucherSize() int {
+	return len(m.vouchers)
+}
+
 func (m *mockStore) AddLockedTokenAmount(_ int, rlm realm, denom string, amount *u256.Uint) {
 	total := u256.Zero()
 	if cur, ok := m.lockedTokenAmounts[denom]; ok {

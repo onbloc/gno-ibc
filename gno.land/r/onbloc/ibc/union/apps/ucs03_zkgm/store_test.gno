@@ -332,6 +332,21 @@ func TestStoreGetVoucherListPagination(cur realm, t *testing.T) {
 	}
 }
 
+// GetVoucherSize gives callers the total key count needed to drive
+// GetVoucherList's offset/count pagination to completion.
+func TestStoreGetVoucherSize(cur realm, t *testing.T) {
+	s := NewStore()
+
+	uassert.Equal(t, 0, s.GetVoucherSize())
+
+	denoms := []string{"ibc/size-a", "ibc/size-b", "ibc/size-c"}
+	for i, denom := range denoms {
+		token, ledger := newVoucherTokenForTest(cur, denom, "SYM")
+		s.SetVoucher(0, cur, denom, NewVoucher(token, ledger, 6))
+		uassert.Equal(t, i+1, s.GetVoucherSize())
+	}
+}
+
 func TestReceiver(cur realm, t *testing.T) {
 	s := NewStore()
 	cases := []struct {

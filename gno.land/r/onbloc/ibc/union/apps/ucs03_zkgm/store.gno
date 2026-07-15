@@ -258,20 +258,25 @@ func (s *Store) GetVoucherList(offset, count int) []VoucherInfo {
 			panic(ErrInterfaceConversion)
 		}
 
-		voucherInfo := VoucherInfo{
-			Denom:          key,
-			Name:           voucher.token.GetName(),
-			Symbol:         voucher.token.GetSymbol(),
-			OriginDecimals: voucher.originDecimals,
-			LedgerDecimals: uint8(voucher.token.GetDecimals()),
-			TotalSupply:    voucher.token.TotalSupply(),
-		}
-		voucherList = append(voucherList, voucherInfo)
+		voucherList = append(voucherList, NewVoucherInfo(
+			key,
+			voucher.token.GetName(),
+			voucher.token.GetSymbol(),
+			voucher.originDecimals,
+			uint8(voucher.token.GetDecimals()),
+			voucher.token.TotalSupply(),
+		))
 
 		return false // continue iteration
 	})
 
 	return voucherList
+}
+
+// GetVoucherSize returns the total number of registered vouchers, i.e. the
+// key count callers need to drive GetVoucherList's offset/count pagination.
+func (s *Store) GetVoucherSize() int {
+	return s.vouchers.Size()
 }
 
 // HasVoucher reports whether a voucher exists for an ibc denom.

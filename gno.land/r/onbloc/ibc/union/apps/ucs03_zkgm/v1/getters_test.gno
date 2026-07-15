@@ -213,3 +213,24 @@ func TestGetVoucherInfoMissingDenom(t *testing.T) {
 	_, err := v.GetVoucherInfo("ibc/missing-info")
 	uassert.ErrorContains(t, err, errVoucherNotFound)
 }
+
+// GetVoucherSize gives callers the total key count needed to drive
+// GetVoucherList's offset/count pagination to completion.
+func TestGetVoucherSize(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+	rx := testAddress("voucher-size-rx")
+
+	got, err := v.GetVoucherSize()
+	uassert.NoError(t, err)
+	uassert.Equal(t, 0, got)
+
+	denoms := []string{"ibc/size-a", "ibc/size-b", "ibc/size-c"}
+	for i, denom := range denoms {
+		uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, denom, "SYM", 6, rx, u256.NewUint(1)))
+
+		got, err = v.GetVoucherSize()
+		uassert.NoError(t, err)
+		uassert.Equal(t, i+1, got)
+	}
+}

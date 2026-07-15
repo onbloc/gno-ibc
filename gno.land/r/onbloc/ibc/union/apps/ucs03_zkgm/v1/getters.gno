@@ -40,6 +40,13 @@ func (v *ucs03ZkgmV1) GetVoucherList(offset, count int) ([]zkgm.VoucherInfo, err
 	return v.store.GetVoucherList(offset, count), nil
 }
 
+// GetVoucherSize returns the total number of registered vouchers. Like
+// GetVoucherList, the error return exists only to match the calling
+// convention shared by every other IAppGetter method and is always nil.
+func (v *ucs03ZkgmV1) GetVoucherSize() (int, error) {
+	return v.store.GetVoucherSize(), nil
+}
+
 // GetVoucherInfo returns a snapshot of the single wrapped voucher registered
 // for ibcDenom. Unlike GetVoucherList, the caller already holds the key, so
 // this reads Store.GetVoucher directly and converts via the voucher's public

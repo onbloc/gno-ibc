@@ -26,3 +26,9 @@ func GetVoucherList(offset, count int) ([]VoucherInfo, error) {
 func GetVoucherInfo(ibcDenom string) (VoucherInfo, error) {
 	return mustGetImpl().GetVoucherInfo(ibcDenom)
 }
+
+// GetVoucherSize returns the total number of registered vouchers, i.e. the
+// key count callers need to drive GetVoucherList's offset/count pagination.
+func GetVoucherSize() (int, error) {
+	return mustGetImpl().GetVoucherSize()
+}

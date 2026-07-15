@@ -42,7 +42,7 @@ func main(cur realm) {
 	channelId := bootstrap(cur)
 	println("")
 
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Batch Ether Token", Symbol: "BETH", Decimals: 18})
+	meta := mustTokenMetadata("\xaf\x73\x9f\x34\xdd\xf9\x51\xcb\xc2\x4f\xdb\xba\x4f\x76\x21\x36\x88\xe1\x36\x27", z.TokenInitializer{Name: "Batch Ether Token", Symbol: "BETH", Decimals: 18})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("batchwei"), z.MetadataImage(mustDecodeMeta(meta)))
 
 	println("[SCENARIO] 2. Receive OP_BATCH with 18-dec INITIALIZE child: scaled down to 6-dec local")

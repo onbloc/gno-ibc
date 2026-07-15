@@ -47,7 +47,7 @@ func main(cur realm) {
 
 	// The wrapped denom is deterministic for (path=0, channel, base=uatom, image),
 	// so it is derived once here and reused by the recv funding and the send below.
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "USD Coin", Symbol: "USDC", Decimals: 18})
+	meta := mustTokenMetadata("\xaf\x73\x9f\x34\xdd\xf9\x51\xcb\xc2\x4f\xdb\xba\x4f\x76\x21\x36\x88\xe1\x36\x27", z.TokenInitializer{Name: "USD Coin", Symbol: "USDC", Decimals: 18})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("uatom"), z.MetadataImage(mustDecodeMeta(meta)))
 
 	println("[SCENARIO] 2. Fund sender with an 18-decimal voucher via INITIALIZE recv (wire amount trimmed to ledger)")
@@ -237,7 +237,7 @@ func (e mockError) Error() string { return string(e) }
 // [EXPECTED] channel should be 1
 //
 // [SCENARIO] 2. Fund sender with an 18-decimal voucher via INITIALIZE recv (wire amount trimmed to ledger)
-// [INFO] minted 18-decimal voucher: ibc/f5bb2d8e2e450ba45c889df6df11dcc178d074c9
+// [INFO] minted 18-decimal voucher: ibc/508ef9face982ec6d26a9d7370e1625abd61c747
 // [INFO] packet BaseAmount (18-decimal wire): 123456000000000000
 // [INFO] sender g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm ledger balance: 123456
 // [EXPECTED] sender ledger balance should be 123456 (wire / 10^12)

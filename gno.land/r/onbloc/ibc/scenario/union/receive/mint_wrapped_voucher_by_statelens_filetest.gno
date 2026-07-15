@@ -65,7 +65,7 @@ type recvFixture struct {
 func buildRecvFixture() recvFixture {
 	channelId := types.ChannelId(1)
 	sourceChannel := types.ChannelId(2)
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
+	meta := mustTokenMetadata("\xaf\x73\x9f\x34\xdd\xf9\x51\xcb\xc2\x4f\xdb\xba\x4f\x76\x21\x36\x88\xe1\x36\x27", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 	order := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
@@ -334,7 +334,7 @@ func (e mockError) Error() string { return string(e) }
 //
 // [SCENARIO] 2. Receive INITIALIZE order proven by the state-lens MPT proof (mint 100)
 // [INFO] packet receipt recorded (state-lens MPT proof verified): true
-// [INFO] minted token (wrapped voucher): ibc/e03a8753fa7f41c282b15cdc0343f660e6e65845
+// [INFO] minted token (wrapped voucher): ibc/d3f2c0b48d7b05e97bae1249f2f3a1be880d2d9c
 // [INFO] receiver voucher balance: 100
 // [EXPECTED] packet receipt recorded (state-lens MPT proof verified): true
 // [EXPECTED] minted token should be the ibc/ wrapped voucher of base ugnot

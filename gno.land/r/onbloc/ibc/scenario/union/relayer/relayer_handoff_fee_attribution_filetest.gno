@@ -47,7 +47,7 @@ func main(cur realm) {
 	channelId := bootstrap(cur)
 	println("")
 
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Relay Token", Symbol: "RLY", Decimals: 6})
+	meta := mustTokenMetadata("\xaf\x73\x9f\x34\xdd\xf9\x51\xcb\xc2\x4f\xdb\xba\x4f\x76\x21\x36\x88\xe1\x36\x27", z.TokenInitializer{Name: "Relay Token", Symbol: "RLY", Decimals: 6})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("urly"), z.MetadataImage(mustDecodeMeta(meta)))
 
 	println("[SCENARIO] 2. Relayer A delivers the first order (INITIALIZE): A keeps the fee")

@@ -41,7 +41,7 @@ func main(cur realm) {
 
 	// The wrapped denom is deterministic for (path=0, channel, base=ugnot, image),
 	// so it is derived once here and reused by both received orders below.
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
+	meta := mustTokenMetadata("\xaf\x73\x9f\x34\xdd\xf9\x51\xcb\xc2\x4f\xdb\xba\x4f\x76\x21\x36\x88\xe1\x36\x27", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 
 	println("[SCENARIO] 2. Receive INITIALIZE order: deploy wrapped token and mint 100 to receiver A")
@@ -218,14 +218,14 @@ func (e mockError) Error() string { return string(e) }
 // [EXPECTED] channel should be 1
 //
 // [SCENARIO] 2. Receive INITIALIZE order: deploy wrapped token and mint 100 to receiver A
-// [INFO] minted token (wrapped voucher): ibc/e03a8753fa7f41c282b15cdc0343f660e6e65845
+// [INFO] minted token (wrapped voucher): ibc/d3f2c0b48d7b05e97bae1249f2f3a1be880d2d9c
 // [INFO] minted token wraps base token: ugnot
 // [INFO] receiver A balance: 100
 // [EXPECTED] minted token should be the ibc/ wrapped voucher of base ugnot
 // [EXPECTED] receiver A balance should be 100 (full INITIALIZE amount minted)
 //
 // [SCENARIO] 3. Receive ESCROW order: mint 50 of the same wrapped token to receiver B
-// [INFO] minted token (same wrapped voucher): ibc/e03a8753fa7f41c282b15cdc0343f660e6e65845
+// [INFO] minted token (same wrapped voucher): ibc/d3f2c0b48d7b05e97bae1249f2f3a1be880d2d9c
 // [INFO] receiver B balance: 50
 // [INFO] receiver A balance (unchanged): 100
 // [EXPECTED] minted token should be the same ibc/ voucher as receive #1

@@ -42,7 +42,7 @@ func main(cur realm) {
 
 	// The wrapped denom is deterministic for (path=0, channel, base=uatom, image),
 	// so it is derived once here and reused by both received orders below.
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "USD Coin", Symbol: "USDC", Decimals: 18})
+	meta := mustTokenMetadata("\xaf\x73\x9f\x34\xdd\xf9\x51\xcb\xc2\x4f\xdb\xba\x4f\x76\x21\x36\x88\xe1\x36\x27", z.TokenInitializer{Name: "USD Coin", Symbol: "USDC", Decimals: 18})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("uatom"), z.MetadataImage(mustDecodeMeta(meta)))
 
 	println("[SCENARIO] 2. Receive exact 18-decimal INITIALIZE order: mint trimmed value to receiver A")

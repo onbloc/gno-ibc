@@ -49,7 +49,7 @@ func TestPredictWrappedTokenV2(t *testing.T) {
 	path := u256.NewUint(5)
 	base := []byte("ugnot")
 	image := MetadataImage(TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: []byte("\xaf\x73\x9f\x34\xdd\xf9\x51\xcb\xc2\x4f\xdb\xba\x4f\x76\x21\x36\x88\xe1\x36\x27"),
 		Initializer:    []byte("init-a"),
 	})
 
@@ -57,7 +57,7 @@ func TestPredictWrappedTokenV2(t *testing.T) {
 	baseDenom := PredictWrappedTokenV2(path, 7, base, image)
 
 	otherImage := MetadataImage(TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: []byte("\xaf\x73\x9f\x34\xdd\xf9\x51\xcb\xc2\x4f\xdb\xba\x4f\x76\x21\x36\x88\xe1\x36\x27"),
 		Initializer:    []byte("init-b"),
 	})
 
@@ -102,8 +102,8 @@ func TestMetadataImage(t *testing.T) {
 	}{
 		{
 			"changes with metadata",
-			TokenMetadata{Implementation: []byte("grc20"), Initializer: []byte("init-a")},
-			TokenMetadata{Implementation: []byte("grc20"), Initializer: []byte("init-b")},
+			TokenMetadata{Implementation: []byte("\xaf\x73\x9f\x34\xdd\xf9\x51\xcb\xc2\x4f\xdb\xba\x4f\x76\x21\x36\x88\xe1\x36\x27"), Initializer: []byte("init-a")},
+			TokenMetadata{Implementation: []byte("\xaf\x73\x9f\x34\xdd\xf9\x51\xcb\xc2\x4f\xdb\xba\x4f\x76\x21\x36\x88\xe1\x36\x27"), Initializer: []byte("init-b")},
 			false,
 		},
 		{

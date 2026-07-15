@@ -364,7 +364,7 @@ func TestTokenMetadataRoundTrip(t *testing.T) {
 		},
 		{
 			name: "grc20 implementation",
-			m:    TokenMetadata{Implementation: []byte("grc20"), Initializer: mustHex("deadbeef")},
+			m:    TokenMetadata{Implementation: []byte("\xaf\x73\x9f\x34\xdd\xf9\x51\xcb\xc2\x4f\xdb\xba\x4f\x76\x21\x36\x88\xe1\x36\x27"), Initializer: mustHex("deadbeef")},
 		},
 		{
 			name: "large initializer",
@@ -1447,13 +1447,13 @@ func TestDecodeTokenInitializerFromMetadata(t *testing.T) {
 		want TokenInitializer
 	}{
 		{
-			"valid grc20 metadata",
-			TokenMetadata{Implementation: []byte("grc20"), Initializer: validInit},
+			"valid metadata",
+			TokenMetadata{Implementation: []byte("\xaf\x73\x9f\x34\xdd\xf9\x51\xcb\xc2\x4f\xdb\xba\x4f\x76\x21\x36\x88\xe1\x36\x27"), Initializer: validInit},
 			TokenInitializer{Name: "Test Token", Symbol: "TST", Decimals: 18},
 		},
 		{
-			"invalid grc20 initializer",
-			TokenMetadata{Implementation: []byte("grc20"), Initializer: []byte("truncated")},
+			"invalid initializer",
+			TokenMetadata{Implementation: []byte("\xaf\x73\x9f\x34\xdd\xf9\x51\xcb\xc2\x4f\xdb\xba\x4f\x76\x21\x36\x88\xe1\x36\x27"), Initializer: []byte("truncated")},
 			TokenInitializer{},
 		},
 		{

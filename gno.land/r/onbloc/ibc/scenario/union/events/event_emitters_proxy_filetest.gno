@@ -36,6 +36,7 @@ func main(cur realm) {
 	exerciseChannelCloseEventEmitters(cur, eventChannelId, closeConfirmChannelId)
 	exerciseZkgmRecvErrorEmitter(cur, connectionId)
 	exerciseMisbehaviourEmitter(cur, clientId)
+	exerciseZkgmAdminEventEmitters(cur)
 }
 
 func setupProxyEventEmitters(cur realm) {
@@ -60,6 +61,14 @@ func exerciseClientEventEmitters(cur realm) types.ClientId {
 
 func exerciseMisbehaviourEmitter(cur realm, clientId types.ClientId) {
 	core.Misbehaviour(cross(cur), types.NewMsgMisbehaviour(clientId, []byte("event-misbehaviour"), "g1relayer"))
+}
+
+func exerciseZkgmAdminEventEmitters(cur realm) {
+	zkgm.SetBucketConfig(cross(cur), "event-bucket-denom", u256.NewUint(1000), u256.NewUint(10))
+	zkgm.SetRateLimitDisabled(cross(cur), true)
+	zkgm.Pausable(cross(cur), true)
+	zkgm.Pausable(cross(cur), false)
+	zkgm.RegisterReceiver(cross(cur), &eventReceiver{})
 }
 
 func exerciseConnectionEventEmitters(cur realm, clientId types.ClientId) types.ConnectionId {
@@ -223,6 +232,12 @@ func eventAck(packet types.Packet) []byte {
 	return []byte("ack:" + string(packet.Data))
 }
 
+type eventReceiver struct{}
+
+func (*eventReceiver) OnZkgm(_ realm, _ z.CallEnv) error { return nil }
+
+func (*eventReceiver) OnIntentZkgm(_ realm, _ z.IntentCallEnv) error { return nil }
+
 type eventMockLightClient struct{}
 
 func (m *eventMockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
@@ -253,6 +268,28 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 
 // Events:
 // [
+//   {
+//     "type": "ZkgmImplUpdated",
+//     "attrs": [
+//       {
+//         "key": "caller_pkg_path",
+//         "value": ""
+//       },
+//       {
+//         "key": "old_impl_path",
+//         "value": ""
+//       },
+//       {
+//         "key": "new_impl_path",
+//         "value": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
+//       },
+//       {
+//         "key": "allowed_impls",
+//         "value": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
+//       }
+//     ],
+//     "pkg_path": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+//   },
 //   {
 //     "type": "RoleGranted",
 //     "attrs": [
@@ -1818,5 +1855,71 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
+//   },
+//   {
+//     "type": "ZkgmRateLimitBucketConfigured",
+//     "attrs": [
+//       {
+//         "key": "admin",
+//         "value": "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
+//       },
+//       {
+//         "key": "denom",
+//         "value": "event-bucket-denom"
+//       },
+//       {
+//         "key": "capacity",
+//         "value": "1000"
+//       },
+//       {
+//         "key": "refill_rate",
+//         "value": "10"
+//       }
+//     ],
+//     "pkg_path": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+//   },
+//   {
+//     "type": "ZkgmRateLimitDisabledSet",
+//     "attrs": [
+//       {
+//         "key": "admin",
+//         "value": "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
+//       },
+//       {
+//         "key": "disabled",
+//         "value": "true"
+//       }
+//     ],
+//     "pkg_path": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+//   },
+//   {
+//     "type": "ZkgmPaused",
+//     "attrs": [
+//       {
+//         "key": "admin",
+//         "value": "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
+//       }
+//     ],
+//     "pkg_path": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+//   },
+//   {
+//     "type": "ZkgmUnpaused",
+//     "attrs": [
+//       {
+//         "key": "admin",
+//         "value": "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
+//       }
+//     ],
+//     "pkg_path": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+//   },
+//   {
+//     "type": "ZkgmReceiverRegistered",
+//     "attrs": [
+//       {
+//         "key": "receiver_pkg_path",
+//         "value": ""
+//       }
+//     ],
+//     "pkg_path": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 //   }
 // ]

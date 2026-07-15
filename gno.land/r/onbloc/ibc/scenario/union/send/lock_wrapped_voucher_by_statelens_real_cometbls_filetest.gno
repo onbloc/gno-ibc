@@ -15,6 +15,7 @@ package send
 // scenario-controlled root is seeded rather than anchored to a devnet chain.
 
 import (
+	"encoding/hex"
 	"crypto/keccak256"
 	"testing"
 
@@ -86,7 +87,7 @@ func buildSendFixture() sendFixture {
 	channelId := types.ChannelId(1)
 	counterpartyChannel := types.ChannelId(2)
 	var l1Contract types.H256
-	meta := tokenMetadata("\xaf\x73\x9f\x34\xdd\xf9\x51\xcb\xc2\x4f\xdb\xba\x4f\x76\x21\x36\x88\xe1\x36\x27", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
+	meta := tokenMetadata("af739f34ddf951cbc24fdbba4f76213688e13627", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 	initOrder := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
@@ -339,10 +340,15 @@ func packetData(instr z.Instruction) []byte {
 	return fixture.EncodePacket(fixture.Packet([32]byte{}, 0, instr))
 }
 
-func tokenMetadata(implementation string, ti z.TokenInitializer) []byte {
+func tokenMetadata(implementationHex string, ti z.TokenInitializer) []byte {
+	implementation, err := hex.DecodeString(implementationHex)
+	if err != nil {
+		panic(err)
+	}
+
 	initBytes := fixture.Must(z.EncodeTokenInitializer(ti))
 
-	return fixture.Must(z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes}))
+	return fixture.Must(z.EncodeTokenMetadata(z.TokenMetadata{Implementation: implementation, Initializer: initBytes}))
 }
 
 func mustDecodeMeta(bz []byte) z.TokenMetadata {

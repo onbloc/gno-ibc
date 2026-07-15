@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"encoding/hex"
 	"time"
 
 	types "gno.land/p/onbloc/ibc/union/types"
@@ -13,6 +14,21 @@ import (
 const (
 	zkgmProxyRealmPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
+
+// zkgmERC20ImplHex is the ZkgmERC20 implementation contract address (Sepolia
+// deploy) carried as TokenMetadata.Implementation for EVM-destined wrapped
+// tokens; see gno.land/p/onbloc/ibc/union/zkgm/abi.gno's tokenInitializerSelector doc.
+const zkgmERC20ImplHex = "af739f34ddf951cbc24fdbba4f76213688e13627"
+
+func mustHexBytes(s string) []byte {
+	bz, err := hex.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return bz
+}
+
+var zkgmERC20Impl = mustHexBytes(zkgmERC20ImplHex)
 
 // Crossing test shims for the send-side verify path. The production verify
 // methods take the borrow form (0, rlm) and read the sender from

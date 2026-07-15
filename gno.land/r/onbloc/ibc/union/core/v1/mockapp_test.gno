@@ -1,4 +1,4 @@
-package v1
+package core
 
 import (
 	"gno.land/p/onbloc/ibc/union/app"

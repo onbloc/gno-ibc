@@ -24,6 +24,10 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2X(cur realm, funds *funds, channelId typ
 	return v.verifyTokenOrderV2(0, cur, funds, channelId, path, order)
 }
 
+func (v *ucs03ZkgmV1) verifyInternalX(cur realm, funds *funds, channelId types.ChannelId, path *u256.Uint, instruction z.Instruction) error {
+	return v.verifyInternal(0, cur, funds, channelId, path, instruction)
+}
+
 func (v *ucs03ZkgmV1) verifyBatchX(cur realm, funds *funds, channelId types.ChannelId, path *u256.Uint, batch z.Batch) error {
 	return v.verifyBatch(0, cur, funds, channelId, path, batch)
 }

@@ -49,7 +49,7 @@ func TestPredictWrappedTokenV2(t *testing.T) {
 	path := u256.NewUint(5)
 	base := []byte("ugnot")
 	image := MetadataImage(TokenMetadata{
-		Implementation: mustHex("af739f34ddf951cbc24fdbba4f76213688e13627"),
+		Implementation: mustHex(zkgmERC20ImplHex),
 		Initializer:    []byte("init-a"),
 	})
 
@@ -57,7 +57,7 @@ func TestPredictWrappedTokenV2(t *testing.T) {
 	baseDenom := PredictWrappedTokenV2(path, 7, base, image)
 
 	otherImage := MetadataImage(TokenMetadata{
-		Implementation: mustHex("af739f34ddf951cbc24fdbba4f76213688e13627"),
+		Implementation: mustHex(zkgmERC20ImplHex),
 		Initializer:    []byte("init-b"),
 	})
 
@@ -102,8 +102,8 @@ func TestMetadataImage(t *testing.T) {
 	}{
 		{
 			"changes with metadata",
-			TokenMetadata{Implementation: mustHex("af739f34ddf951cbc24fdbba4f76213688e13627"), Initializer: []byte("init-a")},
-			TokenMetadata{Implementation: mustHex("af739f34ddf951cbc24fdbba4f76213688e13627"), Initializer: []byte("init-b")},
+			TokenMetadata{Implementation: mustHex(zkgmERC20ImplHex), Initializer: []byte("init-a")},
+			TokenMetadata{Implementation: mustHex(zkgmERC20ImplHex), Initializer: []byte("init-b")},
 			false,
 		},
 		{

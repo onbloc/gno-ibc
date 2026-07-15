@@ -15,6 +15,13 @@ import (
 	u256 "gno.land/p/gnoswap/uint256"
 )
 
+// zkgmERC20ImplHex is a real ZkgmERC20 implementation contract address
+// observed on a Sepolia deploy (see the TokenMetadata.Implementation docs on
+// tokenInitializerSelector in abi.gno), used in tests as TokenMetadata.
+// Implementation instead of an arbitrary placeholder so test data matches the
+// wire format every wrapped token actually carries.
+const zkgmERC20ImplHex = "af739f34ddf951cbc24fdbba4f76213688e13627"
+
 func TestUnionRealWorldDecoding(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -364,7 +371,7 @@ func TestTokenMetadataRoundTrip(t *testing.T) {
 		},
 		{
 			name: "grc20 implementation",
-			m:    TokenMetadata{Implementation: mustHex("af739f34ddf951cbc24fdbba4f76213688e13627"), Initializer: mustHex("deadbeef")},
+			m:    TokenMetadata{Implementation: mustHex(zkgmERC20ImplHex), Initializer: mustHex("deadbeef")},
 		},
 		{
 			name: "large initializer",
@@ -1448,12 +1455,12 @@ func TestDecodeTokenInitializerFromMetadata(t *testing.T) {
 	}{
 		{
 			"valid metadata",
-			TokenMetadata{Implementation: mustHex("af739f34ddf951cbc24fdbba4f76213688e13627"), Initializer: validInit},
+			TokenMetadata{Implementation: mustHex(zkgmERC20ImplHex), Initializer: validInit},
 			TokenInitializer{Name: "Test Token", Symbol: "TST", Decimals: 18},
 		},
 		{
 			"invalid initializer",
-			TokenMetadata{Implementation: mustHex("af739f34ddf951cbc24fdbba4f76213688e13627"), Initializer: []byte("truncated")},
+			TokenMetadata{Implementation: mustHex(zkgmERC20ImplHex), Initializer: []byte("truncated")},
 			TokenInitializer{},
 		},
 		{

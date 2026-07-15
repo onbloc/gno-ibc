@@ -252,7 +252,7 @@ func (s *Store) GetVoucherList(offset, count int) []VoucherInfo {
 	voucherList := []VoucherInfo{}
 
 	// The callback returns false to keep iterating (true stops early).
-	s.vouchers.IterateByOffset(offset, count, func(key string, value interface{}) bool {
+	s.vouchers.IterateByOffset(offset, count, func(key string, value any) bool {
 		voucher, ok := value.(*Voucher)
 		if !ok {
 			panic(ErrInterfaceConversion)

@@ -93,10 +93,16 @@ type TokenMetadata struct {
 }
 
 // TokenInitializer holds token display metadata; decimals are metadata only, never used for scaling.
+// Authority and Minter are the ZkgmERC20 initialize(...) EVM addresses (20 bytes each): the admin
+// authority, and the address granted the minter role (the EVM ZKGM contract, named `zkgm` in the
+// Solidity signature — see docs/guides/zkgm-packet-send/initialize.md). Leave them nil to encode
+// the zero address, the default for callers that don't care about a real EVM authority/minter.
 type TokenInitializer struct {
-	Name     string
-	Symbol   string
-	Decimals uint8
+	Authority []byte
+	Minter    []byte
+	Name      string
+	Symbol    string
+	Decimals  uint8
 }
 
 // SolverMetadata carries market maker solver data.

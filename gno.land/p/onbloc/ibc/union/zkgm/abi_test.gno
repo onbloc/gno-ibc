@@ -604,10 +604,10 @@ func TestDecodeZkgmPacketErrors(t *testing.T) {
 
 func TestEncodeForward(t *testing.T) {
 	tests := []struct {
-		name             string
-		f                Forward
-		wantPath         string
-		wantTimeoutHeight uint64
+		name                 string
+		f                    Forward
+		wantPath             string
+		wantTimeoutHeight    uint64
 		wantTimeoutTimestamp uint64
 	}{
 		{
@@ -618,8 +618,8 @@ func TestEncodeForward(t *testing.T) {
 				TimeoutTimestamp: 0,
 				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte{}},
 			},
-			wantPath:         "0",
-			wantTimeoutHeight: 0,
+			wantPath:             "0",
+			wantTimeoutHeight:    0,
 			wantTimeoutTimestamp: 0,
 		},
 		{
@@ -630,8 +630,8 @@ func TestEncodeForward(t *testing.T) {
 				TimeoutTimestamp: 2000,
 				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_BATCH, Operand: []byte{}},
 			},
-			wantPath:         "456",
-			wantTimeoutHeight: 1000,
+			wantPath:             "456",
+			wantTimeoutHeight:    1000,
 			wantTimeoutTimestamp: 2000,
 		},
 		{
@@ -642,8 +642,8 @@ func TestEncodeForward(t *testing.T) {
 				TimeoutTimestamp: 18446744073709551615,
 				Instruction:      Instruction{Version: INSTR_VERSION_1, Opcode: OP_TOKEN_ORDER, Operand: []byte{0xab}},
 			},
-			wantPath:         "99999",
-			wantTimeoutHeight: 18446744073709551615,
+			wantPath:             "99999",
+			wantTimeoutHeight:    18446744073709551615,
 			wantTimeoutTimestamp: 18446744073709551615,
 		},
 		{
@@ -654,8 +654,8 @@ func TestEncodeForward(t *testing.T) {
 				TimeoutTimestamp: 10000,
 				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: bytes.Repeat([]byte{0xcc}, 100)},
 			},
-			wantPath:         "12345",
-			wantTimeoutHeight: 5000,
+			wantPath:             "12345",
+			wantTimeoutHeight:    5000,
 			wantTimeoutTimestamp: 10000,
 		},
 	}
@@ -685,10 +685,10 @@ func TestEncodeForward(t *testing.T) {
 
 func TestDecodeForward(t *testing.T) {
 	tests := []struct {
-		name       string
-		data       []byte
-		want       Forward
-		wantErr    bool
+		name    string
+		data    []byte
+		want    Forward
+		wantErr bool
 	}{
 		{
 			name:    "empty",
@@ -708,13 +708,13 @@ func TestDecodeForward(t *testing.T) {
 		{
 			name: "minimal values",
 			data: mustEncodeForward(Forward{
-				Path: u256.NewUint(0),
+				Path:             u256.NewUint(0),
 				TimeoutHeight:    0,
 				TimeoutTimestamp: 0,
 				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte{}},
 			}),
 			want: Forward{
-				Path: u256.NewUint(0),
+				Path:             u256.NewUint(0),
 				TimeoutHeight:    0,
 				TimeoutTimestamp: 0,
 				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte{}},
@@ -723,13 +723,13 @@ func TestDecodeForward(t *testing.T) {
 		{
 			name: "typical values",
 			data: mustEncodeForward(Forward{
-				Path: u256.NewUint(123),
+				Path:             u256.NewUint(123),
 				TimeoutHeight:    5000,
 				TimeoutTimestamp: 10000,
 				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_BATCH, Operand: []byte{0xab, 0xcd}},
 			}),
 			want: Forward{
-				Path: u256.NewUint(123),
+				Path:             u256.NewUint(123),
 				TimeoutHeight:    5000,
 				TimeoutTimestamp: 10000,
 				Instruction:      Instruction{Version: INSTR_VERSION_0, Opcode: OP_BATCH, Operand: []byte{0xab, 0xcd}},
@@ -738,13 +738,13 @@ func TestDecodeForward(t *testing.T) {
 		{
 			name: "large path and timeouts",
 			data: mustEncodeForward(Forward{
-				Path: u256.NewUint(18446744073709551615),
+				Path:             u256.NewUint(18446744073709551615),
 				TimeoutHeight:    18446744073709551615,
 				TimeoutTimestamp: 18446744073709551615,
 				Instruction:      Instruction{Version: INSTR_VERSION_1, Opcode: OP_TOKEN_ORDER, Operand: []byte{0xff}},
 			}),
 			want: Forward{
-				Path: u256.NewUint(18446744073709551615),
+				Path:             u256.NewUint(18446744073709551615),
 				TimeoutHeight:    18446744073709551615,
 				TimeoutTimestamp: 18446744073709551615,
 				Instruction:      Instruction{Version: INSTR_VERSION_1, Opcode: OP_TOKEN_ORDER, Operand: []byte{0xff}},
@@ -865,13 +865,13 @@ func TestCallRoundTrip(t *testing.T) {
 
 func TestEncodeBatch(t *testing.T) {
 	tests := []struct {
-		name             string
-		b                Batch
-		wantInstrCount   int
+		name           string
+		b              Batch
+		wantInstrCount int
 	}{
 		{
-			name: "empty instructions",
-			b:    Batch{Instructions: []Instruction{}},
+			name:           "empty instructions",
+			b:              Batch{Instructions: []Instruction{}},
 			wantInstrCount: 0,
 		},
 		{
@@ -1196,7 +1196,19 @@ func TestTokenInitializerRoundTrip(t *testing.T) {
 			name: "long name and symbol",
 			ti:   TokenInitializer{Name: "Very Long Token Name With Many Words", Symbol: "VLONG", Decimals: 12},
 		},
+		{
+			name: "explicit authority and minter",
+			ti: TokenInitializer{
+				Authority: bytes.Repeat([]byte{0x11}, 20),
+				Minter:    bytes.Repeat([]byte{0x22}, 20),
+				Name:      "Real Token",
+				Symbol:    "REAL",
+				Decimals:  18,
+			},
+		},
 	}
+
+	zeroAddr := make([]byte, 20)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1224,7 +1236,56 @@ func TestTokenInitializerRoundTrip(t *testing.T) {
 			if decoded.Decimals != tt.ti.Decimals {
 				t.Fatalf("decimals: got %d want %d", decoded.Decimals, tt.ti.Decimals)
 			}
+
+			wantAuthority := tt.ti.Authority
+			if len(wantAuthority) == 0 {
+				wantAuthority = zeroAddr
+			}
+			if !bytes.Equal(decoded.Authority, wantAuthority) {
+				t.Fatalf("authority: got %x want %x", decoded.Authority, wantAuthority)
+			}
+
+			wantMinter := tt.ti.Minter
+			if len(wantMinter) == 0 {
+				wantMinter = zeroAddr
+			}
+			if !bytes.Equal(decoded.Minter, wantMinter) {
+				t.Fatalf("minter: got %x want %x", decoded.Minter, wantMinter)
+			}
 		})
+	}
+}
+
+// TestDecodeTokenInitializer_RealSepoliaCalldata decodes an initialize(...)
+// calldata blob captured from a real ZkgmERC20 send on Sepolia (name=erctoken,
+// symbol=erct, decimals=18), confirming DecodeTokenInitializer recovers the
+// real, non-zero authority/minter addresses a live EVM chain actually sends
+// rather than the all-zero placeholders EncodeTokenInitializer defaults to.
+func TestDecodeTokenInitializer_RealSepoliaCalldata(t *testing.T) {
+	data := mustHex("8420ce9900000000000000000000000040cdff51ae7487e0b4a4d6e5f86eb15fb7c1d9f40000000000000000000000005fbe74a283f7954f10aa04c2edf55578811aeb0300000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000000000000000000000000000000000000000000120000000000000000000000000000000000000000000000000000000000000008657263746f6b656e00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000046572637400000000000000000000000000000000000000000000000000000000")
+
+	decoded, err := DecodeTokenInitializer(data)
+	if err != nil {
+		t.Fatalf("DecodeTokenInitializer: %v", err)
+	}
+
+	wantAuthority := mustHex("40cdff51ae7487e0b4a4d6e5f86eb15fb7c1d9f4")
+	wantMinter := mustHex("5fbe74a283f7954f10aa04c2edf55578811aeb03")
+
+	if !bytes.Equal(decoded.Authority, wantAuthority) {
+		t.Fatalf("authority: got %x want %x", decoded.Authority, wantAuthority)
+	}
+	if !bytes.Equal(decoded.Minter, wantMinter) {
+		t.Fatalf("minter: got %x want %x", decoded.Minter, wantMinter)
+	}
+	if decoded.Name != "erctoken" {
+		t.Fatalf("name: got %q want %q", decoded.Name, "erctoken")
+	}
+	if decoded.Symbol != "erct" {
+		t.Fatalf("symbol: got %q want %q", decoded.Symbol, "erct")
+	}
+	if decoded.Decimals != 18 {
+		t.Fatalf("decimals: got %d want 18", decoded.Decimals)
 	}
 }
 
@@ -1292,9 +1353,9 @@ func TestDecodeAckErrors(t *testing.T) {
 
 func TestEncodeBatchAck(t *testing.T) {
 	tests := []struct {
-		name              string
-		ba                BatchAck
-		wantAckCount      int
+		name         string
+		ba           BatchAck
+		wantAckCount int
 	}{
 		{
 			name:         "empty acknowledgements",
@@ -1478,8 +1539,8 @@ func TestDecodeTokenInitializerFromMetadata(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := DecodeTokenInitializerFromMetadata(tt.meta)
-			if got != tt.want {
-				t.Fatalf("got %v want %v", got, tt.want)
+			if got.Name != tt.want.Name || got.Symbol != tt.want.Symbol || got.Decimals != tt.want.Decimals {
+				t.Fatalf("got %+v want %+v", got, tt.want)
 			}
 		})
 	}

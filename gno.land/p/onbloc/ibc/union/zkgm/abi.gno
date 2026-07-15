@@ -296,14 +296,25 @@ func DecodeTokenOrderV2(data []byte) (TokenOrderV2, error) {
 }
 
 // EncodeTokenInitializer encodes the ZkgmERC20 initialize(...) calldata
-// carried in TokenMetadata.Initializer. authority/minter are zero-address
-// placeholders: callers that need a real EVM authority/minter (production
-// sends targeting a real chain) must build the calldata themselves, e.g. via
-// `cast calldata`, and are not expected to go through this helper.
+// carried in TokenMetadata.Initializer. i.Authority/i.Minter default to the
+// zero address when nil; callers that need a real EVM authority/minter
+// (production sends targeting a real chain) set them explicitly.
 func EncodeTokenInitializer(i TokenInitializer) ([]byte, error) {
+	// Authority/Minter are EVM-only addresses (the Gno chain has no notion of
+	// either); fill with the 20-byte zero address when the caller left them nil.
+	authority := i.Authority
+	if len(authority) == 0 {
+		authority = make([]byte, 20)
+	}
+
+	minter := i.Minter
+	if len(minter) == 0 {
+		minter = make([]byte, 20)
+	}
+
 	body, err := abi.Encode(TokenInitializerSchema, []any{
-		make([]byte, 20), // authority
-		make([]byte, 20), // minter
+		authority,
+		minter,
 		i.Name,
 		i.Symbol,
 		i.Decimals,
@@ -316,9 +327,9 @@ func EncodeTokenInitializer(i TokenInitializer) ([]byte, error) {
 }
 
 // DecodeTokenInitializer decodes the ZkgmERC20 initialize(...) calldata
-// carried in TokenMetadata.Initializer. authority/minter are discarded:
-// TokenInitializer only carries what a receiving Gno chain needs to create
-// the local voucher token.
+// carried in TokenMetadata.Initializer, round-tripping every field encoded by
+// EncodeTokenInitializer (including Authority/Minter, which a receiving Gno
+// chain otherwise has no use for beyond display/reconstruction).
 func DecodeTokenInitializer(data []byte) (TokenInitializer, error) {
 	if len(data) < 4 || !bytes.Equal(data[:4], tokenInitializerSelector) {
 		return TokenInitializer{}, errors.New("zkgm: unrecognized token initializer selector")
@@ -330,9 +341,11 @@ func DecodeTokenInitializer(data []byte) (TokenInitializer, error) {
 	}
 
 	return TokenInitializer{
-		Name:     out[2].(string),
-		Symbol:   out[3].(string),
-		Decimals: out[4].(uint8),
+		Authority: out[0].([]byte),
+		Minter:    out[1].([]byte),
+		Name:      out[2].(string),
+		Symbol:    out[3].(string),
+		Decimals:  out[4].(uint8),
 	}, nil
 }
 

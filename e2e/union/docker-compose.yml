@@ -38,6 +38,7 @@ services:
     entrypoint: ["bash", "/whitelist.sh"]
     volumes:
       - ./gno/whitelist.sh:/whitelist.sh:ro
+      - ${VOYAGER_CONFIG:-./voyager-config.gno-union.jsonc}:/voyager-config.gno-union.jsonc:ro
     environment:
       GNO_CHAIN_ID: ${GNO_CHAIN_ID:-dev}
       GNO_GNOKEY_REMOTE: ${GNO_GNOKEY_REMOTE:-gno:26657}
@@ -53,7 +54,6 @@ services:
     entrypoint: ["bash", "/bootstrap.sh"]
     volumes:
       - ./gno/bootstrap.sh:/bootstrap.sh:ro
-      - ./gno/bootstrap.gno:/bootstrap.gno:ro
     environment:
       GNO_CHAIN_ID: ${GNO_CHAIN_ID:-dev}
       GNO_GNOKEY_REMOTE: ${GNO_GNOKEY_REMOTE:-gno:26657}
@@ -68,7 +68,6 @@ services:
     entrypoint: ["bash", "/admin-recovery.sh"]
     volumes:
       - ./gno/admin-recovery.sh:/admin-recovery.sh:ro
-      - ./gno/admin-recovery.gno:/admin-recovery.gno:ro
     environment:
       GNO_CHAIN_ID: ${GNO_CHAIN_ID:-dev}
       GNO_GNOKEY_REMOTE: ${GNO_GNOKEY_REMOTE:-gno:26657}

@@ -173,6 +173,47 @@ func queryUnionTxs(container, eventType, packetHash string, limit int) ([]UnionT
 	return txs, nil
 }
 
+func requireUnionEventOrder(container, txHash, before, after string) error {
+	out, err := dockerExec(container, "uniond", "query", "tx", txHash,
+		"--node", "tcp://localhost:26657",
+		"-o", "json",
+	)
+	if err != nil {
+		return fmt.Errorf("query Union tx %s: %w\n%s", txHash, err, out)
+	}
+	if err := checkUnionEventOrder([]byte(out), before, after); err != nil {
+		return fmt.Errorf("Union tx %s: %w", txHash, err)
+	}
+	return nil
+}
+
+func checkUnionEventOrder(body []byte, before, after string) error {
+	var resp struct {
+		Events []struct {
+			Type string `json:"type"`
+		} `json:"events"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return fmt.Errorf("decode transaction events: %w", err)
+	}
+	beforeIndex, afterIndex := -1, -1
+	for i, event := range resp.Events {
+		if beforeIndex < 0 && event.Type == before {
+			beforeIndex = i
+		}
+		if afterIndex < 0 && event.Type == after {
+			afterIndex = i
+		}
+	}
+	if beforeIndex < 0 || afterIndex < 0 {
+		return fmt.Errorf("missing ordered events %q and %q", before, after)
+	}
+	if beforeIndex >= afterIndex {
+		return fmt.Errorf("event %q at index %d must precede %q at index %d", before, beforeIndex, after, afterIndex)
+	}
+	return nil
+}
+
 func queryEVMBlockNumber(rpc string) (uint64, error) {
 	n, err := evmHexBig(rpc, "eth_blockNumber", []any{})
 	if err != nil {

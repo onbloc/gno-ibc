@@ -38,14 +38,16 @@ printf "%s\n\n" "$ADMIN_MNEMONIC" | gnokey add admin --recover --insecure-passwo
 ADMIN_ADDR=$(key_addr admin)
 
 echo "Running Gno admin recovery as $ADMIN_ADDR"
-printf "\n" | gnokey maketx run \
+printf "\n" | gnokey maketx call \
   -gas-fee 1000000ugnot \
   -gas-wanted 90000000 \
   -broadcast \
   -chainid "$GNO_CHAIN_ID" \
   -remote "$GNO_GNOKEY_REMOTE" \
   -insecure-password-stdin \
-  admin /admin-recovery.gno
+  -pkgpath gno.land/r/onbloc/ibc/union/testing/e2e_setup \
+  -func Recover \
+  admin
 
 non_empty_query "$query_connection" || {
   echo "QueryConnection(5) is empty after recovery" >&2

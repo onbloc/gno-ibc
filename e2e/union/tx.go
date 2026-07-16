@@ -139,7 +139,27 @@ func forceUpdateUnionGnoClient(t *testing.T, cfg config, proofHeight int64) {
 	if err != nil {
 		t.Fatalf("force-update Union Gno client %s: %v\n%s", cfg.UnionGnoClientID, err, out)
 	}
+	if err := checkCosmosTxResponse([]byte(out)); err != nil {
+		t.Fatalf("force-update Union Gno client %s: %v\n%s", cfg.UnionGnoClientID, err, out)
+	}
 	t.Logf("force-updated Union Gno client %s at Gno height %d: %s", cfg.UnionGnoClientID, proofHeight, out)
+}
+
+func checkCosmosTxResponse(body []byte) error {
+	var resp struct {
+		Code   *uint32 `json:"code"`
+		RawLog string  `json:"raw_log"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return fmt.Errorf("parse transaction response: %w", err)
+	}
+	if resp.Code == nil {
+		return fmt.Errorf("transaction response missing code")
+	}
+	if *resp.Code != 0 {
+		return fmt.Errorf("transaction failed with code %d: %s", *resp.Code, resp.RawLog)
+	}
+	return nil
 }
 
 func clientStatesFromCreate(body []byte) (string, string, error) {
@@ -213,7 +233,11 @@ func voyagerMaxID(t *testing.T, cfg config, table string) int64 {
 
 func voyagerRowsAfter(t *testing.T, cfg config, table string, id int64) string {
 	t.Helper()
-	query := fmt.Sprintf("select id || ' ' || item::text from %s where id > %d order by id", table, id)
+	item := "item::text"
+	if table == "failed" {
+		item += " || ' ' || replace(message, E'\\n', ' ')"
+	}
+	query := fmt.Sprintf("select id || ' ' || %s from %s where id > %d order by id", item, table, id)
 	out, err := dockerExec(cfg.PostgresContainer, "psql", "-U", "postgres", "-d", "postgres", "-At", "-c", query)
 	if err != nil {
 		t.Fatalf("query new Voyager %s rows: %v\n%s", table, err, out)

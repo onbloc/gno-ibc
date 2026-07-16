@@ -1,0 +1,2 @@
+module = "gno.land/r/onbloc/ibc/union/testing/e2e_setup"
+gno = "0.9"

@@ -92,6 +92,12 @@ func TestGnoToUnionPacketRelay(t *testing.T) {
 	writeAck := waitForUnionEvent(t, cfg, "wasm-write_ack", packetHash)
 	requireOneUnionEvent(t, cfg, "wasm-packet_recv", packetHash)
 	requireOneUnionEvent(t, cfg, "wasm-write_ack", packetHash)
+	if packetRecv.Hash != writeAck.Hash {
+		t.Fatalf("Union packet_recv tx %s differs from write_ack tx %s", packetRecv.Hash, writeAck.Hash)
+	}
+	if err := requireUnionEventOrder(cfg.UnionContainer, packetRecv.Hash, "wasm-packet_recv", "wasm-write_ack"); err != nil {
+		t.Fatal(err)
+	}
 	t.Logf("Union packet recv tx %s at height %d; write_ack tx %s at height %d", packetRecv.Hash, packetRecv.Height, writeAck.Hash, writeAck.Height)
 
 	enqueueUnionBlock(t, cfg, writeAck.Height)
@@ -101,6 +107,7 @@ func TestGnoToUnionPacketRelay(t *testing.T) {
 	if ack.BlockHeight <= packetSend.BlockHeight {
 		t.Fatalf("PacketAck height %d must be after PacketSend height %d", ack.BlockHeight, packetSend.BlockHeight)
 	}
+	waitVoyagerReadyEmpty(t, cfg)
 	requireNoNewVoyagerFailed(t, cfg, baseline)
 	if done := voyagerRowsAfter(t, cfg, "done", baseline.Done); !strings.Contains(done, packetHash) {
 		t.Fatalf("Voyager done rows do not contain packet %s:\n%s", packetHash, done)

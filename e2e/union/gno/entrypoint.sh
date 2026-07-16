@@ -16,8 +16,8 @@ key_addr() {
   printf "%s\n" "$addrs"
 }
 
-printf "%s\n\n" "$RELAYER_MNEMONIC" | gnokey add relayer --recover --insecure-password-stdin --force >/dev/null
-RELAYER_ADDR=$(key_addr relayer)
+printf "%s\n\n" "$TEST_MNEMONIC" | gnokey add sender --recover --insecure-password-stdin --force >/dev/null
+SENDER_ADDR=$(key_addr sender)
 
 ADMIN_ADDR="${ADMIN_ADDR:-g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5}"
 TEST_ADDR="${TEST_ADDR:-g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x}"
@@ -32,7 +32,7 @@ add_account() {
 
 add_account "${ADMIN_ADDR}=100000000000ugnot"
 add_account "${TEST_ADDR}=100000000000ugnot"
-add_account "${RELAYER_ADDR}=100000000000ugnot"
+add_account "${SENDER_ADDR}=100000000000ugnot"
 
 exec gnodev local \
   -C /gno-ibc \

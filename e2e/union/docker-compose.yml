@@ -1,29 +1,14 @@
 services:
-  # Union devnet service - disabled by default, enable when needed
-  # To use: docker compose --profile union-devnet up -d
-  union-devnet:
-    image: ${UNION_DEVNET_IMAGE:-ghcr.io/unionlabs/union:latest}
-    ports:
-      - "${UNION_RPC_PORT:-26657}:26657"
-      - "${UNION_REST_PORT:-1317}:1317"
-    environment:
-      - MONIKER=union-devnet
-      - CHAIN_ID=union-devnet-1
-    profiles: ["union-devnet"]
-
   gno:
-    image: ${GNO_E2E_IMAGE:-gno-ibc-e2e-gno:latest}
+    image: gno-ibc-e2e-gno:${GNO_COMMIT:?load ../../.gno-version with --env-file}
     build:
       context: ../..
       dockerfile: e2e/union/gno/Dockerfile
-      args:
-        GNO_REPO: ${GNO_REPO:-https://github.com/gnolang/gno}
-        GNO_COMMIT: ${GNO_COMMIT:-master}
     ports:
       - "${GNO_RPC_PORT:-16657}:26657"
       - "${GNO_WEB_PORT:-18888}:8888"
     environment:
-      RELAYER_MNEMONIC: ${RELAYER_MNEMONIC:-source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast}
+      TEST_MNEMONIC: ${TEST_MNEMONIC}
       ADMIN_ADDR: ${ADMIN_ADDR:-g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5}
       TEST_ADDR: ${TEST_ADDR:-g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x}
     healthcheck:
@@ -34,7 +19,7 @@ services:
       start_period: 120s
 
   tx-indexer:
-    image: ${GNO_TX_INDEXER_IMAGE:-ghcr.io/gnolang/tx-indexer:latest}
+    image: ${GNO_TX_INDEXER_IMAGE:-ghcr.io/gnolang/tx-indexer@sha256:7e4e7be2ac7deb60cce02867ddf6975be32cbd41e5cbaf7cd5637908858063e2}
     command:
       - start
       - -remote
@@ -48,7 +33,7 @@ services:
         condition: service_healthy
 
   gno-whitelist:
-    image: ${GNO_E2E_IMAGE:-gno-ibc-e2e-gno:latest}
+    image: gno-ibc-e2e-gno:${GNO_COMMIT:?load ../../.gno-version with --env-file}
     profiles: ["setup"]
     entrypoint: ["bash", "/whitelist.sh"]
     volumes:
@@ -56,71 +41,44 @@ services:
     environment:
       GNO_CHAIN_ID: ${GNO_CHAIN_ID:-dev}
       GNO_GNOKEY_REMOTE: ${GNO_GNOKEY_REMOTE:-gno:26657}
-      RELAYER_MNEMONIC: ${RELAYER_MNEMONIC:-source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast}
-      TEST_MNEMONIC: ${TEST_MNEMONIC:-source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast}
-      ADMIN_MNEMONIC: ${ADMIN_MNEMONIC:-source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast}
+      TEST_MNEMONIC: ${TEST_MNEMONIC}
+      ADMIN_MNEMONIC: ${ADMIN_MNEMONIC}
     depends_on:
       gno:
         condition: service_healthy
 
+  gno-bootstrap:
+    image: gno-ibc-e2e-gno:${GNO_COMMIT:?load ../../.gno-version with --env-file}
+    profiles: ["setup"]
+    entrypoint: ["bash", "/bootstrap.sh"]
+    volumes:
+      - ./gno/bootstrap.sh:/bootstrap.sh:ro
+      - ./gno/bootstrap.gno:/bootstrap.gno:ro
+    environment:
+      GNO_CHAIN_ID: ${GNO_CHAIN_ID:-dev}
+      GNO_GNOKEY_REMOTE: ${GNO_GNOKEY_REMOTE:-gno:26657}
+      ADMIN_MNEMONIC: ${ADMIN_MNEMONIC}
+    depends_on:
+      gno-whitelist:
+        condition: service_completed_successfully
+
   gno-admin-recovery:
-    image: ${GNO_E2E_IMAGE:-gno-ibc-e2e-gno:latest}
+    image: gno-ibc-e2e-gno:${GNO_COMMIT:?load ../../.gno-version with --env-file}
     profiles: ["setup"]
     entrypoint: ["bash", "/admin-recovery.sh"]
     volumes:
       - ./gno/admin-recovery.sh:/admin-recovery.sh:ro
+      - ./gno/admin-recovery.gno:/admin-recovery.gno:ro
     environment:
       GNO_CHAIN_ID: ${GNO_CHAIN_ID:-dev}
       GNO_GNOKEY_REMOTE: ${GNO_GNOKEY_REMOTE:-gno:26657}
-      GNO_CLIENT_ID: ${GNO_CLIENT_ID:-1}
-      UNION_CLIENT_ID: ${UNION_CLIENT_ID:-4}
-      GNO_PACKET_CONNECTION_ID: ${GNO_PACKET_CONNECTION_ID:-5}
-      UNION_PACKET_CONNECTION_ID: ${UNION_PACKET_CONNECTION_ID:-3}
-      GNO_PACKET_CHANNEL_ID: ${GNO_PACKET_CHANNEL_ID:-3}
-      UNION_PACKET_CHANNEL_ID: ${UNION_PACKET_CHANNEL_ID:-2}
-      GNO_PACKET_PORT_ID: ${GNO_PACKET_PORT_ID:-gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm}
-      GNO_PACKET_RELAYER: ${GNO_PACKET_RELAYER:-g1relayer}
-      ADMIN_MNEMONIC: ${ADMIN_MNEMONIC:-source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast}
+      ADMIN_MNEMONIC: ${ADMIN_MNEMONIC}
     depends_on:
-      gno:
-        condition: service_healthy
-
-  relayer:
-    image: ghcr.io/allinbits/ibc-v2-ts-relayer:latest
-    profiles: ["legacy-relay"]
-    entrypoint: ["/entrypoint.sh"]
-    command: ["ibc-v2-ts-relayer", "relay"]
-    volumes:
-      - ./relayer/entrypoint.sh:/entrypoint.sh:ro
-    cap_add:
-      - IPC_LOCK
-    environment:
-      GNO_CHAIN_ID: ${GNO_CHAIN_ID:-dev}
-      UNION_CHAIN_ID: ${UNION_CHAIN_ID:-union-devnet-1}
-      UNION_GAS_PRICE: ${UNION_GAS_PRICE:-1muno}
-      GNO_RPC_INTERNAL: ${GNO_RPC_INTERNAL:-http://gno:26657}
-      GNO_INDEXER_INTERNAL: ${GNO_INDEXER_INTERNAL:-http://tx-indexer:8546/graphql/query}
-      UNION_RPC_INTERNAL: ${UNION_RPC_INTERNAL:-http://host.docker.internal:26657}
-      RELAYER_MNEMONIC: ${RELAYER_MNEMONIC:-source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    depends_on:
-      tx-indexer:
-        condition: service_started
-
-  voyager-build:
-    build:
-      context: .
-      dockerfile: voyager-build.Dockerfile
-      additional_contexts:
-        union-src: ${UNION_VOYAGER_DIR:-../../../union-voyager}
-      args:
-        BUILDKIT_INLINE_CACHE: 1
-    profiles: ["voyager-build"]
-    image: ${UNION_VOYAGER_IMAGE:-union-voyager-build:latest}
+      gno-bootstrap:
+        condition: service_completed_successfully
 
   postgres:
-    image: ${POSTGRES_IMAGE:-postgres:16-alpine}
+    image: ${POSTGRES_IMAGE:-postgres:16.9-alpine}
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgrespassword
@@ -131,7 +89,14 @@ services:
       retries: 5
 
   voyager:
-    image: ${UNION_VOYAGER_IMAGE:-union-voyager-build:latest}
+    image: union-voyager-build:${UNION_COMMIT:?set UNION_COMMIT in .env}
+    build:
+      context: .
+      dockerfile: voyager-build.Dockerfile
+      additional_contexts:
+        union-src: ${UNION_VOYAGER_DIR:-../../../union-voyager}
+      args:
+        UNION_COMMIT: ${UNION_COMMIT:?set UNION_COMMIT in .env}
     command: ["./voyager", "start", "-c", "/config/voyager-config.gno-union.jsonc"]
     working_dir: /output
     ports:

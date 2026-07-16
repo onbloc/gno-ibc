@@ -29,6 +29,24 @@ type UnionTx struct {
 	Height int64
 }
 
+func queryUnionCore(container, contract string, query any, result any) error {
+	msg, err := json.Marshal(query)
+	if err != nil {
+		return err
+	}
+	out, err := dockerExec(container, "uniond", "query", "wasm", "contract-state", "smart", contract, string(msg), "-o", "json")
+	if err != nil {
+		return fmt.Errorf("query Union core: %w\n%s", err, out)
+	}
+	var response struct {
+		Data json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(out), &response); err != nil {
+		return err
+	}
+	return json.Unmarshal(response.Data, result)
+}
+
 func httpGet(url string) ([]byte, error) {
 	resp, err := httpClient.Get(url)
 	if err != nil {
@@ -155,10 +173,6 @@ func queryUnionTxs(container, eventType, packetHash string, limit int) ([]UnionT
 	return txs, nil
 }
 
-func queryEVMBalance(rpc, address string) (*big.Int, error) {
-	return evmHexBig(rpc, "eth_getBalance", []any{address, "latest"})
-}
-
 func queryEVMBlockNumber(rpc string) (uint64, error) {
 	n, err := evmHexBig(rpc, "eth_blockNumber", []any{})
 	if err != nil {
@@ -194,16 +208,6 @@ func queryBeaconHead(beacon string) (string, error) {
 		return "", fmt.Errorf("empty beacon head slot")
 	}
 	return resp.Data.Message.Slot, nil
-}
-
-func queryPacketCommitment(chain, port, channel, seq string) error {
-	_, err := httpGet(fmt.Sprintf("%s/ibc/core/channel/v1/channels/%s/ports/%s/packet_commitments/%s", chain, channel, port, seq))
-	return err
-}
-
-func queryAcknowledgement(chain, port, channel, seq string) error {
-	_, err := httpGet(fmt.Sprintf("%s/ibc/core/channel/v1/channels/%s/ports/%s/packet_acknowledgements/%s", chain, channel, port, seq))
-	return err
 }
 
 func evmHexBig(rpc, method string, params []any) (*big.Int, error) {

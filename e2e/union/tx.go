@@ -21,6 +21,12 @@ type gnoTransferRequest struct {
 	SendCoins        string
 }
 
+type voyagerBaseline struct {
+	Queue  int64
+	Done   int64
+	Failed int64
+}
+
 func transferOnGno(t *testing.T, cfg config, req gnoTransferRequest) string {
 	t.Helper()
 	if req.TimeoutTimestamp == "" {
@@ -93,6 +99,86 @@ func enqueueVoyagerFetchBlock(t *testing.T, cfg config, plugin, height string) {
 	voyagerCLI(t, cfg, "queue", "enqueue", string(body))
 }
 
+func forceUpdateUnionGnoClient(t *testing.T, cfg config, proofHeight int64) {
+	t.Helper()
+	create := voyagerCLI(t, cfg, "msg", "create-client",
+		"--on", cfg.UnionChainID,
+		"--tracking", cfg.GNOChainID,
+		"--ibc-interface", "ibc-cosmwasm",
+		"--ibc-spec-id", "ibc-union",
+		"--client-type", "gno",
+		"--height", strconv.FormatInt(proofHeight, 10),
+	)
+	clientState, consensusState, err := clientStatesFromCreate([]byte(create))
+	if err != nil {
+		t.Fatalf("parse Voyager create-client output: %v\n%s", err, create)
+	}
+	clientID, err := strconv.ParseUint(cfg.UnionGnoClientID, 10, 32)
+	if err != nil {
+		t.Fatalf("parse Union Gno client id %q: %v", cfg.UnionGnoClientID, err)
+	}
+	msg, err := json.Marshal(map[string]any{"force_update_client": map[string]any{
+		"client_id":             clientID,
+		"client_state_bytes":    clientState,
+		"consensus_state_bytes": consensusState,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := dockerExec(cfg.UnionContainer,
+		"uniond", "tx", "wasm", "execute", cfg.UnionCoreContract, string(msg),
+		"--from", cfg.UnionSignerKey,
+		"--keyring-backend", "test",
+		"--home", "/.union",
+		"--chain-id", cfg.UnionChainID,
+		"--node", "tcp://localhost:26657",
+		"--gas", "19000000",
+		"--fees", "19000000au",
+		"--yes", "--broadcast-mode", "block", "-o", "json",
+	)
+	if err != nil {
+		t.Fatalf("force-update Union Gno client %s: %v\n%s", cfg.UnionGnoClientID, err, out)
+	}
+	t.Logf("force-updated Union Gno client %s at Gno height %d: %s", cfg.UnionGnoClientID, proofHeight, out)
+}
+
+func clientStatesFromCreate(body []byte) (string, string, error) {
+	var value any
+	if err := json.Unmarshal(body, &value); err != nil {
+		return "", "", err
+	}
+	clientState, ok := findString(value, "client_state_bytes")
+	if !ok {
+		return "", "", fmt.Errorf("client_state_bytes not found")
+	}
+	consensusState, ok := findString(value, "consensus_state_bytes")
+	if !ok {
+		return "", "", fmt.Errorf("consensus_state_bytes not found")
+	}
+	return clientState, consensusState, nil
+}
+
+func findString(value any, key string) (string, bool) {
+	switch value := value.(type) {
+	case map[string]any:
+		if found, ok := value[key].(string); ok {
+			return found, true
+		}
+		for _, child := range value {
+			if found, ok := findString(child, key); ok {
+				return found, true
+			}
+		}
+	case []any:
+		for _, child := range value {
+			if found, ok := findString(child, key); ok {
+				return found, true
+			}
+		}
+	}
+	return "", false
+}
+
 func voyagerQueueStats(t *testing.T, cfg config) string {
 	t.Helper()
 	return voyagerCLI(t, cfg, "queue", "stats")
@@ -103,15 +189,42 @@ func voyagerQueryFailed(t *testing.T, cfg config) string {
 	return voyagerCLI(t, cfg, "queue", "query-failed")
 }
 
-func requireNoVoyagerFailed(t *testing.T, cfg config) {
+func captureVoyagerBaseline(t *testing.T, cfg config) voyagerBaseline {
 	t.Helper()
-	out := strings.TrimSpace(voyagerQueryFailed(t, cfg))
-	if out != "[]" {
-		if strings.Contains(out, "10-gno: new val set cannot be trusted") {
-			// TODO: generate client-state bytes and submit Union force_update_client, then retry packet_recv once.
-			t.Fatalf("Voyager has stale-client failures; TODO: force_update_client recovery is intentionally not implemented yet:\n%s", out)
-		}
-		t.Fatalf("Voyager failed queue is not empty:\n%s", out)
+	return voyagerBaseline{
+		Queue:  voyagerMaxID(t, cfg, "queue"),
+		Done:   voyagerMaxID(t, cfg, "done"),
+		Failed: voyagerMaxID(t, cfg, "failed"),
+	}
+}
+
+func voyagerMaxID(t *testing.T, cfg config, table string) int64 {
+	t.Helper()
+	out, err := dockerExec(cfg.PostgresContainer, "psql", "-U", "postgres", "-d", "postgres", "-At", "-c", "select coalesce(max(id),0) from "+table)
+	if err != nil {
+		t.Fatalf("query Voyager %s baseline: %v\n%s", table, err, out)
+	}
+	n, err := strconv.ParseInt(strings.TrimSpace(out), 10, 64)
+	if err != nil {
+		t.Fatalf("parse Voyager %s baseline %q: %v", table, out, err)
+	}
+	return n
+}
+
+func voyagerRowsAfter(t *testing.T, cfg config, table string, id int64) string {
+	t.Helper()
+	query := fmt.Sprintf("select id || ' ' || item::text from %s where id > %d order by id", table, id)
+	out, err := dockerExec(cfg.PostgresContainer, "psql", "-U", "postgres", "-d", "postgres", "-At", "-c", query)
+	if err != nil {
+		t.Fatalf("query new Voyager %s rows: %v\n%s", table, err, out)
+	}
+	return strings.TrimSpace(out)
+}
+
+func requireNoNewVoyagerFailed(t *testing.T, cfg config, baseline voyagerBaseline) {
+	t.Helper()
+	if rows := voyagerRowsAfter(t, cfg, "failed", baseline.Failed); rows != "" {
+		t.Fatalf("new Voyager failed rows:\n%s", rows)
 	}
 }
 
@@ -202,11 +315,6 @@ func queryGnoQEval(t *testing.T, cfg config, expr string) string {
 		t.Fatalf("query Gno qeval failed: %v\n%s", err, out)
 	}
 	return string(out)
-}
-
-func waitForAcknowledgement(t *testing.T, cfg config, packetHash string) indexedTx {
-	t.Helper()
-	return waitForGnoEvent(t, cfg.GnoIndexer, "PacketAck", map[string]string{"packet_hash": packetHash})
 }
 
 func parseCoinAmount(t *testing.T, out, denom string) int64 {

@@ -20,13 +20,14 @@ key_addr() {
   printf "%s\n" "$addrs"
 }
 
-printf "%s\n\n" "$RELAYER_MNEMONIC" | gnokey add relayer --recover --insecure-password-stdin --force >/dev/null
-RELAYER_ADDR=$(key_addr relayer)
-
 printf "%s\n\n" "$ADMIN_MNEMONIC" | gnokey add admin --recover --insecure-password-stdin --force >/dev/null
 ADMIN_ADDR=$(key_addr admin)
+[ "$ADMIN_ADDR" = "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5" ] || {
+  echo "admin mnemonic does not match the Voyager Gno signer" >&2
+  exit 1
+}
 
-echo "Granting Gno Union relayer role to $RELAYER_ADDR with admin $ADMIN_ADDR"
+echo "Granting Gno Union relayer role to $ADMIN_ADDR"
 printf "\n" | gnokey maketx call \
   -gas-fee 1000000ugnot \
   -gas-wanted 90000000 \
@@ -37,5 +38,5 @@ printf "\n" | gnokey maketx call \
   -pkgpath gno.land/r/onbloc/ibc/union/access \
   -func GrantRole \
   -args 1 \
-  -args "$RELAYER_ADDR" \
+  -args "$ADMIN_ADDR" \
   admin

@@ -210,6 +210,54 @@ func TestChannelBalanceHeldInVaultPrecision(cur realm, t *testing.T) {
 	uassert.Equal(t, "30", bal.ToString())
 }
 
+func TestTimeoutNativeOrderWithMetadataDoesNotTrimEscrow(cur realm, t *testing.T) {
+	v := newTestImpl()
+	amount := u256.NewUint(2_000_000_000_000)
+	meta := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "USDC", Symbol: "USDC", Decimals: 18}),
+	})
+	order := z.TokenOrderV2{
+		Sender: []byte(testAddress("timeout-sender")), BaseToken: []byte("ugnot"), BaseAmount: amount,
+		QuoteToken: []byte("ibc/timeout-native"), QuoteAmount: amount,
+		Kind: z.TOKEN_ORDER_KIND_INITIALIZE, Metadata: meta,
+	}
+	key := ChannelBalanceKeyV2(types.ChannelId(172), u256.Zero(), order.BaseToken, order.QuoteToken)
+	testStore.SetChannelBalanceV2(0, cur, key, amount)
+	testing.IssueCoins(cur.Address(), chain.NewCoins(chain.NewCoin("ugnot", 2_000_000_000_000)))
+
+	err := v.timeoutInternal(0, cur, core.NewPacket(172, 173, nil, 0), [32]byte{}, u256.Zero(), batchMustOrderInstruction(order))
+	uassert.NoError(t, err)
+	bal, _ := testStore.GetChannelBalanceV2(key)
+	uassert.Equal(t, u256.Zero().ToString(), bal.ToString())
+}
+
+func TestVerifyAndTimeoutNativeInitializeRoundTrip(cur realm, t *testing.T) {
+	v := newTestImpl()
+	amount := u256.NewUint(1_000_000_000_000)
+	meta := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "USDC", Symbol: "USDC", Decimals: 18}),
+	})
+	order := z.TokenOrderV2{
+		Sender: []byte(testAddress("vt-sender")), BaseToken: []byte("ugnot"), BaseAmount: amount,
+		QuoteToken: []byte("ibc/vt-native"), QuoteAmount: amount,
+		Kind: z.TOKEN_ORDER_KIND_INITIALIZE, Metadata: meta,
+	}
+	instruction := batchMustOrderInstruction(order)
+	const chanId = types.ChannelId(190)
+	testing.IssueCoins(cur.Address(), chain.NewCoins(chain.NewCoin("ugnot", 1_000_000_000_000)))
+	f := newFunds(chain.NewCoins(chain.NewCoin("ugnot", 1_000_000_000_000)))
+	uassert.NoError(t, v.verifyInternal(0, cur, f, chanId, u256.Zero(), instruction))
+
+	key := ChannelBalanceKeyV2(chanId, u256.Zero(), order.BaseToken, order.QuoteToken)
+	bal, _ := testStore.GetChannelBalanceV2(key)
+	uassert.Equal(t, amount.ToString(), bal.ToString())
+	uassert.NoError(t, v.timeoutInternal(0, cur, core.NewPacket(chanId, 191, nil, 0), [32]byte{}, u256.Zero(), instruction))
+	bal, _ = testStore.GetChannelBalanceV2(key)
+	uassert.Equal(t, u256.Zero().ToString(), bal.ToString())
+}
+
 func TestInitializeOverflowAmountReturnsFailureAckNoMint(cur realm, t *testing.T) {
 	v := newTestImpl()
 

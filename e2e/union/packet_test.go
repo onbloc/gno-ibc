@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"os"
 	"strconv"
 	"strings"
@@ -62,6 +61,8 @@ func TestGnoToUnionPacketRelay(t *testing.T) {
 		t.Skip("set pre-encoded GNO_PACKET_OPERAND_HEX to broadcast SendRaw")
 	}
 	requirePacketSetup(t, cfg)
+	baseline := captureVoyagerBaseline(t, cfg)
+	packetSendBaseline := latestGnoEventHeight(cfg.GnoIndexer, "PacketSend", map[string]string{"source_channel_id": req.ChannelID})
 
 	var before int64
 	sender, denom := os.Getenv("GNO_SENDER_ADDR"), os.Getenv("GNO_BALANCE_DENOM")
@@ -72,7 +73,7 @@ func TestGnoToUnionPacketRelay(t *testing.T) {
 	out := transferOnGno(t, cfg, req)
 	t.Logf("Gno SendRaw output:\n%s", out)
 
-	packetSend := waitForGnoEvent(t, cfg.GnoIndexer, "PacketSend", map[string]string{"source_channel_id": req.ChannelID})
+	packetSend := waitForNewGnoEvent(t, cfg, "PacketSend", map[string]string{"source_channel_id": req.ChannelID}, packetSendBaseline, baseline)
 	packetHash := txAttr(packetSend, "PacketSend", "packet_hash")
 	if packetHash == "" {
 		t.Fatalf("PacketSend event missing packet_hash: %+v", packetSend)
@@ -87,18 +88,27 @@ func TestGnoToUnionPacketRelay(t *testing.T) {
 	enqueueGnoBlock(t, cfg, packetSend.BlockHeight)
 	waitVoyagerReadyEmpty(t, cfg)
 
-	packetRecv := waitForUnionEvent(t, cfg, "wasm-packet_recv", packetHash)
+	packetRecv := waitForUnionReceive(t, cfg, packetHash, packetSend.BlockHeight, &baseline)
 	writeAck := waitForUnionEvent(t, cfg, "wasm-write_ack", packetHash)
+	requireOneUnionEvent(t, cfg, "wasm-packet_recv", packetHash)
+	requireOneUnionEvent(t, cfg, "wasm-write_ack", packetHash)
 	t.Logf("Union packet recv tx %s at height %d; write_ack tx %s at height %d", packetRecv.Hash, packetRecv.Height, writeAck.Hash, writeAck.Height)
 
 	enqueueUnionBlock(t, cfg, writeAck.Height)
 	waitVoyagerReadyEmpty(t, cfg)
 
-	ack := waitForAcknowledgement(t, cfg, packetHash)
+	ack := waitForNewGnoEvent(t, cfg, "PacketAck", map[string]string{"packet_hash": packetHash}, packetSend.BlockHeight, baseline)
 	if ack.BlockHeight <= packetSend.BlockHeight {
 		t.Fatalf("PacketAck height %d must be after PacketSend height %d", ack.BlockHeight, packetSend.BlockHeight)
 	}
-	requireNoVoyagerFailed(t, cfg)
+	requireNoNewVoyagerFailed(t, cfg, baseline)
+	if done := voyagerRowsAfter(t, cfg, "done", baseline.Done); !strings.Contains(done, packetHash) {
+		t.Fatalf("Voyager done rows do not contain packet %s:\n%s", packetHash, done)
+	}
+	acks, err := queryGnoEvents(cfg.GnoIndexer, "PacketAck", map[string]string{"packet_hash": packetHash})
+	if err != nil || len(acks) != 1 {
+		t.Fatalf("PacketAck count = %d, want 1: %v", len(acks), err)
+	}
 	t.Logf("relayed packet hash %s, ack tx %s at height %d", packetHash, ack.Hash, ack.BlockHeight)
 
 	if sender != "" && denom != "" {
@@ -111,13 +121,93 @@ func TestGnoToUnionPacketRelay(t *testing.T) {
 	}
 }
 
+func waitForUnionReceive(t *testing.T, cfg config, packetHash string, proofHeight int64, baseline *voyagerBaseline) UnionTx {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Minute)
+	recovered := false
+	for time.Now().Before(deadline) {
+		txs, err := queryUnionTxs(cfg.UnionContainer, "wasm-packet_recv", packetHash, 2)
+		if err == nil && len(txs) > 0 {
+			return txs[0]
+		}
+		failed := voyagerRowsAfter(t, cfg, "failed", baseline.Failed)
+		if onlyStaleClientFailures(failed) && !recovered {
+			forceUpdateUnionGnoClient(t, cfg, proofHeight)
+			baseline.Failed = voyagerMaxID(t, cfg, "failed")
+			enqueueGnoBlock(t, cfg, proofHeight)
+			recovered = true
+		} else if failed != "" && !onlyStaleClientFailures(failed) {
+			t.Fatalf("Voyager failed before Union receive:\n%s", failed)
+		}
+		time.Sleep(time.Second)
+	}
+	t.Fatalf("Union packet receive not found after stale-client recovery=%t\nqueue stats:\n%s\nnew queue:\n%s\nnew failed:\n%s", recovered, voyagerQueueStats(t, cfg), voyagerRowsAfter(t, cfg, "queue", baseline.Queue), voyagerRowsAfter(t, cfg, "failed", baseline.Failed))
+	return UnionTx{}
+}
+
+func onlyStaleClientFailures(rows string) bool {
+	if rows == "" {
+		return false
+	}
+	for _, row := range strings.Split(rows, "\n") {
+		if !strings.Contains(row, "10-gno: new val set cannot be trusted") {
+			return false
+		}
+	}
+	return true
+}
+
 func requirePacketSetup(t *testing.T, cfg config) {
 	t.Helper()
 	checkGnoIndexerReady(t, cfg)
 	checkUnionReady(t, cfg)
 	requireGnoQEvalNonEmpty(t, cfg, "Gno connection "+cfg.GnoPacketConnectionID, fmt.Sprintf("gno.land/r/onbloc/ibc/union/core.QueryConnection(%s)", cfg.GnoPacketConnectionID))
 	requireGnoQEvalNonEmpty(t, cfg, "Gno channel "+cfg.GnoPacketChannelID, fmt.Sprintf("gno.land/r/onbloc/ibc/union/core.QueryChannel(%s)", cfg.GnoPacketChannelID))
-	requireNoVoyagerFailed(t, cfg)
+	requireUnionPacketSetup(t, cfg)
+}
+
+func requireUnionPacketSetup(t *testing.T, cfg config) {
+	t.Helper()
+	var status string
+	if err := queryUnionCore(cfg.UnionContainer, cfg.UnionCoreContract, map[string]any{"get_status": map[string]any{"client_id": mustUint32(t, cfg.UnionGnoClientID)}}, &status); err != nil || status != "active" {
+		t.Fatalf("Union Gno client %s status = %q: %v", cfg.UnionGnoClientID, status, err)
+	}
+	var connection struct {
+		State                    string `json:"state"`
+		ClientID                 uint32 `json:"client_id"`
+		CounterpartyClientID     uint32 `json:"counterparty_client_id"`
+		CounterpartyConnectionID uint32 `json:"counterparty_connection_id"`
+	}
+	if err := queryUnionCore(cfg.UnionContainer, cfg.UnionCoreContract, map[string]any{"get_connection": map[string]any{"connection_id": mustUint32(t, cfg.UnionPacketConnectionID)}}, &connection); err != nil || connection.State != "open" || connection.ClientID != mustUint32(t, cfg.UnionGnoClientID) || connection.CounterpartyClientID != 1 || connection.CounterpartyConnectionID != mustUint32(t, cfg.GnoPacketConnectionID) {
+		t.Fatalf("Union connection %s differs: %+v: %v", cfg.UnionPacketConnectionID, connection, err)
+	}
+	var channel struct {
+		State                 string `json:"state"`
+		ConnectionID          uint32 `json:"connection_id"`
+		CounterpartyChannelID uint32 `json:"counterparty_channel_id"`
+		CounterpartyPortID    []byte `json:"counterparty_port_id"`
+		Version               string `json:"version"`
+	}
+	if err := queryUnionCore(cfg.UnionContainer, cfg.UnionCoreContract, map[string]any{"get_channel": map[string]any{"channel_id": mustUint32(t, cfg.UnionPacketChannelID)}}, &channel); err != nil || channel.State != "open" || channel.ConnectionID != mustUint32(t, cfg.UnionPacketConnectionID) || channel.CounterpartyChannelID != mustUint32(t, cfg.GnoPacketChannelID) || string(channel.CounterpartyPortID) != "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm" || channel.Version != "ucs03-zkgm-0" {
+		t.Fatalf("Union channel %s differs: %+v: %v", cfg.UnionPacketChannelID, channel, err)
+	}
+}
+
+func mustUint32(t *testing.T, value string) uint32 {
+	t.Helper()
+	n, err := strconv.ParseUint(value, 10, 32)
+	if err != nil {
+		t.Fatalf("parse id %q: %v", value, err)
+	}
+	return uint32(n)
+}
+
+func requireOneUnionEvent(t *testing.T, cfg config, eventType, packetHash string) {
+	t.Helper()
+	txs, err := queryUnionTxs(cfg.UnionContainer, eventType, packetHash, 2)
+	if err != nil || len(txs) != 1 {
+		t.Fatalf("Union %s count = %d, want 1: %v", eventType, len(txs), err)
+	}
 }
 
 func waitForUnionEvent(t *testing.T, cfg config, eventType, packetHash string) UnionTx {
@@ -186,6 +276,34 @@ func waitForGnoEvent(t *testing.T, indexer, eventType string, attrs map[string]s
 	return indexedTx{}
 }
 
+func latestGnoEventHeight(indexer, eventType string, attrs map[string]string) int64 {
+	txs, err := queryGnoEvents(indexer, eventType, attrs)
+	if err != nil || len(txs) == 0 {
+		return 0
+	}
+	return txs[0].BlockHeight
+}
+
+func waitForNewGnoEvent(t *testing.T, cfg config, eventType string, attrs map[string]string, after int64, baseline voyagerBaseline) indexedTx {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Minute)
+	var last error
+	for time.Now().Before(deadline) {
+		txs, err := queryGnoEvents(cfg.GnoIndexer, eventType, attrs)
+		if err == nil {
+			for _, tx := range txs {
+				if tx.BlockHeight > after {
+					return tx
+				}
+			}
+		}
+		last = err
+		time.Sleep(time.Second)
+	}
+	t.Fatalf("new Gno event %s attrs=%v not found: %v\nqueue stats:\n%s\nnew queue:\n%s\nnew failed:\n%s\nnew done:\n%s", eventType, attrs, last, voyagerQueueStats(t, cfg), voyagerRowsAfter(t, cfg, "queue", baseline.Queue), voyagerRowsAfter(t, cfg, "failed", baseline.Failed), voyagerRowsAfter(t, cfg, "done", baseline.Done))
+	return indexedTx{}
+}
+
 func queryGnoEvents(indexer, eventType string, attrs map[string]string) ([]indexedTx, error) {
 	var ands []string
 	for k, v := range attrs {
@@ -210,11 +328,14 @@ func queryGnoEvents(indexer, eventType string, attrs map[string]string) ([]index
 	if err != nil {
 		return nil, err
 	}
-	resp, err := http.Post(indexer, "application/json", bytes.NewReader(body))
+	resp, err := httpClient.Post(indexer, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("indexer HTTP %d", resp.StatusCode)
+	}
 	var out struct {
 		Data struct {
 			GetTransactions []indexedTx `json:"getTransactions"`

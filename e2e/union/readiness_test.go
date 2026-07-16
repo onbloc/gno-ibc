@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"testing"
 	"time"
 )
@@ -46,15 +45,6 @@ func TestBeaconReady(t *testing.T) {
 
 func TestPostgresReady(t *testing.T) {
 	checkPostgresReady(t, loadConfig())
-}
-
-func TestGnoUnionEVMPacketFlow(t *testing.T) {
-	cfg := loadConfig()
-	if !cfg.RunPacketTests {
-		t.Skip("set RUN_PACKET_TESTS=1 after Voyager creates clients/channels")
-	}
-
-	t.Skip("packet flow is covered by packet_test.go")
 }
 
 func checkGnoReady(t *testing.T, cfg config) {
@@ -126,7 +116,7 @@ func checkPostgresReady(t *testing.T, cfg config) {
 func waitHTTP(t *testing.T, url string) {
 	t.Helper()
 	wait(t, url, func() error {
-		resp, err := http.Get(url)
+		resp, err := httpClient.Get(url)
 		if err != nil {
 			return err
 		}
@@ -139,38 +129,11 @@ func waitHTTP(t *testing.T, url string) {
 	})
 }
 
-func waitJSONRPC(t *testing.T, url, method string) {
-	t.Helper()
-	wait(t, url, func() error {
-		req := map[string]any{"jsonrpc": "2.0", "id": 1, "method": method, "params": []any{}}
-		body, err := json.Marshal(req)
-		if err != nil {
-			return err
-		}
-		resp, err := http.Post(url, "application/json", bytes.NewReader(body))
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-		var out struct {
-			Result string `json:"result"`
-			Error  any    `json:"error"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-			return err
-		}
-		if out.Error != nil || out.Result == "" {
-			return fmt.Errorf("bad JSON-RPC response: result=%q error=%v", out.Result, out.Error)
-		}
-		return nil
-	})
-}
-
 func waitGraphQL(t *testing.T, url string) {
 	t.Helper()
 	wait(t, url, func() error {
 		body := bytes.NewBufferString(`{"query":"{ latestBlockHeight }"}`)
-		resp, err := http.Post(url, "application/json", body)
+		resp, err := httpClient.Post(url, "application/json", body)
 		if err != nil {
 			return err
 		}
@@ -178,6 +141,20 @@ func waitGraphQL(t *testing.T, url string) {
 		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			b, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
 			return fmt.Errorf("HTTP %d: %s", resp.StatusCode, b)
+		}
+		var out struct {
+			Data struct {
+				LatestBlockHeight int64 `json:"latestBlockHeight"`
+			} `json:"data"`
+			Errors []struct {
+				Message string `json:"message"`
+			} `json:"errors"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+			return err
+		}
+		if len(out.Errors) != 0 {
+			return fmt.Errorf("GraphQL: %s", out.Errors[0].Message)
 		}
 		return nil
 	})

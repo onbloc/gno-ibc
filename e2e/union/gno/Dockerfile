@@ -1,15 +1,16 @@
 FROM golang:1.26.0-alpine AS builder
 
-ARG GNO_REPO
-ARG GNO_COMMIT
-
 RUN apk add --no-cache git make
-RUN git clone --filter=blob:none "$GNO_REPO" /src/gno
+COPY .gno-version /tmp/gno-version
+RUN set -eu; . /tmp/gno-version; \
+    test -n "$GNO_REPO"; test -n "$GNO_COMMIT"; \
+    git clone --filter=blob:none "$GNO_REPO" /src/gno; \
+    git -C /src/gno checkout "$GNO_COMMIT"
 WORKDIR /src/gno
-RUN git checkout "$GNO_COMMIT"
 RUN cd contribs/gnodev && go build -o /usr/local/bin/gnodev .
 RUN cd gno.land/cmd/gnokey && go build -o /usr/local/bin/gnokey .
 RUN cd gnovm/cmd/gno && go build -o /usr/local/bin/gno .
+RUN rm -rf /src/gno/.git
 
 FROM alpine:3.21
 

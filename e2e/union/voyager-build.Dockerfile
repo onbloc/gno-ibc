@@ -4,6 +4,7 @@
 # Rust 1.90 stable avoids nightly-only regressions in transitive crates.
 FROM rust:1.90-bookworm AS builder
 ENV RUSTC_BOOTSTRAP=1
+ARG UNION_COMMIT
 
 WORKDIR /build
 
@@ -13,10 +14,14 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     clang \
     protobuf-compiler \
+	git \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy source from the union-voyager build context.
 COPY --from=union-src . .
+RUN test -n "$UNION_COMMIT" && \
+    test "$(git rev-parse HEAD)" = "$UNION_COMMIT" && \
+    test -z "$(git status --porcelain)"
 
 # Build only binaries used by e2e/union/voyager-config.gno-union.jsonc.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \

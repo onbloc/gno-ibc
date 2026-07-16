@@ -33,7 +33,6 @@ func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relaye
 	// keccak work, so execution cost scales with child count.
 	for i, instruction := range batch.Instructions {
 		if !isAllowedBatchInstruction(instruction.Opcode) {
-			//  returning an error could leave earlier child mutations committed.
 			panic(execFatal{makeError(errInvalidBatchInstruction).Error()})
 		}
 
@@ -41,7 +40,7 @@ func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relaye
 
 		childRes, err := v.dispatchExecutePacket(0, rlm, packet, relayer, relayerMsg, childSalt, path, instruction, intent)
 		if err != nil {
-			return nil, err
+			panic(execFatal{err.Error()})
 		}
 
 		childAck := childRes.Acknowledgement
@@ -63,10 +62,15 @@ func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relaye
 
 	batchAckBytes, err := z.EncodeBatchAck(z.BatchAck{Acknowledgements: acks})
 	if err != nil {
-		return nil, err
+		panic(execFatal{err.Error()})
 	}
 
-	return z.EncodeAck(z.Ack{Tag: tagAckSuccess(), InnerAck: batchAckBytes})
+	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess(), InnerAck: batchAckBytes})
+	if err != nil {
+		panic(execFatal{err.Error()})
+	}
+
+	return ack, nil
 }
 
 // acknowledgeBatch fans the outer ack out to each child instruction.

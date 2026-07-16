@@ -2,6 +2,7 @@ package unione2e
 
 import (
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,6 +28,28 @@ type Client struct {
 type UnionTx struct {
 	Hash   string
 	Height int64
+}
+
+type BeaconSync struct {
+	HeadSlot     uint64
+	SyncDistance uint64
+	IsSyncing    bool
+	ELOffline    bool
+}
+
+type EVMLog struct {
+	Address         string   `json:"address"`
+	Topics          []string `json:"topics"`
+	Data            string   `json:"data"`
+	BlockNumber     string   `json:"blockNumber"`
+	TransactionHash string   `json:"transactionHash"`
+}
+
+type EVMReceipt struct {
+	TransactionHash string   `json:"transactionHash"`
+	BlockNumber     string   `json:"blockNumber"`
+	Status          string   `json:"status"`
+	Logs            []EVMLog `json:"logs"`
 }
 
 func queryUnionCore(container, contract string, query any, result any) error {
@@ -92,10 +115,21 @@ func queryUnionStatus(rpc string) (*StatusResponse, error) {
 }
 
 func queryUnionBalance(rest, address, denom string) (int64, error) {
+	balance, err := queryUnionBalanceBig(rest, address, denom)
+	if err != nil {
+		return 0, err
+	}
+	if !balance.IsInt64() {
+		return 0, fmt.Errorf("balance %s%s exceeds int64", balance, denom)
+	}
+	return balance.Int64(), nil
+}
+
+func queryUnionBalanceBig(rest, address, denom string) (*big.Int, error) {
 	u := fmt.Sprintf("%s/cosmos/bank/v1beta1/balances/%s/by_denom?denom=%s", rest, address, url.QueryEscape(denom))
 	body, err := httpGet(u)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	var resp struct {
 		Balance struct {
@@ -103,12 +137,16 @@ func queryUnionBalance(rest, address, denom string) (int64, error) {
 		} `json:"balance"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
-		return 0, err
+		return nil, err
 	}
 	if resp.Balance.Amount == "" {
-		return 0, nil
+		return new(big.Int), nil
 	}
-	return strconv.ParseInt(resp.Balance.Amount, 10, 64)
+	balance := new(big.Int)
+	if _, ok := balance.SetString(resp.Balance.Amount, 10); !ok {
+		return nil, fmt.Errorf("bad %s balance %q", denom, resp.Balance.Amount)
+	}
+	return balance, nil
 }
 
 func queryUnionIBCClients(rest string) ([]Client, error) {
@@ -230,51 +268,201 @@ func queryEVMChainID(rpc string) (uint64, error) {
 	return n.Uint64(), nil
 }
 
-func queryBeaconHead(beacon string) (string, error) {
-	body, err := httpGet(beacon + "/eth/v2/beacon/blocks/head")
+func queryEVMCode(rpc, address string) ([]byte, error) {
+	var result string
+	if err := evmRPC(rpc, "eth_getCode", []any{address, "latest"}, &result); err != nil {
+		return nil, err
+	}
+	return decodeHex(result)
+}
+
+func queryEVMReceipt(rpc, txHash string) (EVMReceipt, error) {
+	var receipt EVMReceipt
+	if err := evmRPC(rpc, "eth_getTransactionReceipt", []any{txHash}, &receipt); err != nil {
+		return EVMReceipt{}, err
+	}
+	if receipt.TransactionHash == "" {
+		return EVMReceipt{}, fmt.Errorf("receipt %s not found", txHash)
+	}
+	return receipt, nil
+}
+
+func queryEVMLogs(rpc, address string, fromBlock uint64, topics ...string) ([]EVMLog, error) {
+	filter := map[string]any{
+		"address":   address,
+		"fromBlock": fmt.Sprintf("0x%x", fromBlock),
+		"toBlock":   "latest",
+		"topics":    topics,
+	}
+	var logs []EVMLog
+	if err := evmRPC(rpc, "eth_getLogs", []any{filter}, &logs); err != nil {
+		return nil, err
+	}
+	return logs, nil
+}
+
+func evmCall(rpc, to, data string) ([]byte, error) {
+	var result string
+	if err := evmRPC(rpc, "eth_call", []any{map[string]string{"to": to, "data": data}, "latest"}, &result); err != nil {
+		return nil, err
+	}
+	return decodeHex(result)
+}
+
+func evmUint32CallData(selector string, value uint32) string {
+	return selector + fmt.Sprintf("%064x", value)
+}
+
+func evmAddressCallData(selector, address string) (string, error) {
+	address = strings.TrimPrefix(address, "0x")
+	if len(address) != 40 {
+		return "", fmt.Errorf("bad EVM address %q", address)
+	}
+	return selector + strings.Repeat("0", 24) + strings.ToLower(address), nil
+}
+
+func abiUint(data []byte, word int) (uint64, error) {
+	value, err := abiWord(data, word)
+	if err != nil {
+		return 0, err
+	}
+	return new(big.Int).SetBytes(value).Uint64(), nil
+}
+
+func abiAddress(data []byte, word int) (string, error) {
+	value, err := abiWord(data, word)
 	if err != nil {
 		return "", err
+	}
+	return "0x" + hex.EncodeToString(value[12:]), nil
+}
+
+func abiBytes(data []byte, word int) ([]byte, error) {
+	offsetWord, err := abiWord(data, word)
+	if err != nil {
+		return nil, err
+	}
+	offset := int(new(big.Int).SetBytes(offsetWord).Uint64())
+	if offset+32 > len(data) {
+		return nil, fmt.Errorf("ABI offset %d outside %d bytes", offset, len(data))
+	}
+	length := int(new(big.Int).SetBytes(data[offset : offset+32]).Uint64())
+	if offset+32+length > len(data) {
+		return nil, fmt.Errorf("ABI length %d outside %d bytes", length, len(data))
+	}
+	return data[offset+32 : offset+32+length], nil
+}
+
+func abiString(data []byte, word int) (string, error) {
+	value, err := abiBytes(data, word)
+	return string(value), err
+}
+
+func abiWord(data []byte, word int) ([]byte, error) {
+	start := word * 32
+	if start+32 > len(data) {
+		return nil, fmt.Errorf("ABI word %d outside %d bytes", word, len(data))
+	}
+	return data[start : start+32], nil
+}
+
+func decodeHex(value string) ([]byte, error) {
+	value = strings.TrimPrefix(value, "0x")
+	if value == "" {
+		return nil, nil
+	}
+	return hex.DecodeString(value)
+}
+
+func queryBeaconSync(beacon string) (BeaconSync, error) {
+	body, err := httpGet(beacon + "/eth/v1/node/syncing")
+	if err != nil {
+		return BeaconSync{}, err
 	}
 	var resp struct {
 		Data struct {
-			Message struct {
-				Slot string `json:"slot"`
-			} `json:"message"`
+			HeadSlot     string `json:"head_slot"`
+			SyncDistance string `json:"sync_distance"`
+			IsSyncing    bool   `json:"is_syncing"`
+			ELOffline    bool   `json:"el_offline"`
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &resp); err != nil {
-		return "", err
+		return BeaconSync{}, err
 	}
-	if resp.Data.Message.Slot == "" {
-		return "", fmt.Errorf("empty beacon head slot")
+	head, err := strconv.ParseUint(resp.Data.HeadSlot, 10, 64)
+	if err != nil {
+		return BeaconSync{}, fmt.Errorf("parse beacon head slot: %w", err)
 	}
-	return resp.Data.Message.Slot, nil
+	distance, err := strconv.ParseUint(resp.Data.SyncDistance, 10, 64)
+	if err != nil {
+		return BeaconSync{}, fmt.Errorf("parse beacon sync distance: %w", err)
+	}
+	return BeaconSync{
+		HeadSlot:     head,
+		SyncDistance: distance,
+		IsSyncing:    resp.Data.IsSyncing,
+		ELOffline:    resp.Data.ELOffline,
+	}, nil
+}
+
+func queryBeaconFinalizedEpoch(beacon string) (uint64, error) {
+	body, err := httpGet(beacon + "/eth/v1/beacon/states/head/finality_checkpoints")
+	if err != nil {
+		return 0, err
+	}
+	var resp struct {
+		Data struct {
+			Finalized struct {
+				Epoch string `json:"epoch"`
+			} `json:"finalized"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return 0, err
+	}
+	epoch, err := strconv.ParseUint(resp.Data.Finalized.Epoch, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("parse finalized epoch: %w", err)
+	}
+	return epoch, nil
 }
 
 func evmHexBig(rpc, method string, params []any) (*big.Int, error) {
+	var result string
+	if err := evmRPC(rpc, method, params, &result); err != nil {
+		return nil, err
+	}
+	n := new(big.Int)
+	if _, ok := n.SetString(strings.TrimPrefix(result, "0x"), 16); !ok {
+		return nil, fmt.Errorf("bad hex result for %s: %q", method, result)
+	}
+	return n, nil
+}
+
+func evmRPC(rpc, method string, params []any, result any) error {
 	req := map[string]any{"jsonrpc": "2.0", "id": 1, "method": method, "params": params}
 	body, err := json.Marshal(req)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	resp, err := httpClient.Post(rpc, "application/json", bytes.NewReader(body))
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer resp.Body.Close()
 	var out struct {
-		Result string          `json:"result"`
+		Result json.RawMessage `json:"result"`
 		Error  json.RawMessage `json:"error"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return nil, err
+		return err
 	}
 	if len(out.Error) != 0 && string(out.Error) != "null" {
-		return nil, fmt.Errorf("json-rpc %s error: %s", method, out.Error)
+		return fmt.Errorf("json-rpc %s error: %s", method, out.Error)
 	}
-	n := new(big.Int)
-	if _, ok := n.SetString(strings.TrimPrefix(out.Result, "0x"), 16); !ok {
-		return nil, fmt.Errorf("bad hex result for %s: %q", method, out.Result)
+	if len(out.Result) == 0 || string(out.Result) == "null" {
+		return fmt.Errorf("json-rpc %s returned null", method)
 	}
-	return n, nil
+	return json.Unmarshal(out.Result, result)
 }

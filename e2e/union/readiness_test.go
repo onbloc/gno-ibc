@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -77,15 +78,28 @@ func checkUnionReady(t *testing.T, cfg config) {
 func checkEVMReady(t *testing.T, cfg config) {
 	t.Helper()
 	wait(t, cfg.EVMRPC, func() error {
-		if _, err := queryEVMBlockNumber(cfg.EVMRPC); err != nil {
+		before, err := queryEVMBlockNumber(cfg.EVMRPC)
+		if err != nil {
 			return err
 		}
 		chainID, err := queryEVMChainID(cfg.EVMRPC)
 		if err != nil {
 			return err
 		}
-		if chainID == 0 {
-			return fmt.Errorf("empty EVM chain id")
+		wantChainID, err := strconv.ParseUint(cfg.EVMChainID, 10, 64)
+		if err != nil {
+			return fmt.Errorf("parse configured EVM chain id: %w", err)
+		}
+		if chainID != wantChainID {
+			return fmt.Errorf("EVM chain id = %d, want %d", chainID, wantChainID)
+		}
+		time.Sleep(4 * time.Second)
+		after, err := queryEVMBlockNumber(cfg.EVMRPC)
+		if err != nil {
+			return err
+		}
+		if after <= before {
+			return fmt.Errorf("EVM head did not advance: before=%d after=%d", before, after)
 		}
 		return nil
 	})
@@ -94,8 +108,21 @@ func checkEVMReady(t *testing.T, cfg config) {
 func checkBeaconReady(t *testing.T, cfg config) {
 	t.Helper()
 	wait(t, cfg.BeaconAPI, func() error {
-		_, err := queryBeaconHead(cfg.BeaconAPI)
-		return err
+		sync, err := queryBeaconSync(cfg.BeaconAPI)
+		if err != nil {
+			return err
+		}
+		if sync.IsSyncing || sync.ELOffline || sync.SyncDistance != 0 {
+			return fmt.Errorf("beacon is not ready: %+v", sync)
+		}
+		finalized, err := queryBeaconFinalizedEpoch(cfg.BeaconAPI)
+		if err != nil {
+			return err
+		}
+		if finalized == 0 {
+			return fmt.Errorf("beacon has not finalized a non-genesis epoch")
+		}
+		return nil
 	})
 }
 

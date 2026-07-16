@@ -1,9 +1,36 @@
 package unione2e
 
 import (
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return fn(req)
+}
+
+func TestQueryUnionBalanceBig(t *testing.T) {
+	originalClient := httpClient
+	httpClient = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"balance":{"amount":"9999999999999999999999999"}}`)),
+		}, nil
+	})}
+	defer func() { httpClient = originalClient }()
+
+	balance, err := queryUnionBalanceBig("http://union-rest", "union1sender", "au")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := balance.String(), "9999999999999999999999999"; got != want {
+		t.Fatalf("balance=%s want=%s", got, want)
+	}
+}
 
 func TestClientStatesFromCreate(t *testing.T) {
 	client, consensus, err := clientStatesFromCreate([]byte(`{"@value":{"datagrams":[{"datagram":{"@value":{"client_state_bytes":"client","consensus_state_bytes":"consensus"}}}]}}`))

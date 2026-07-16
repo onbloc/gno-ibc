@@ -77,6 +77,11 @@ func enqueueUnionBlock(t *testing.T, cfg config, height int64) {
 	enqueueVoyagerFetchBlock(t, cfg, "voyager-event-source-plugin-cosmwasm/"+cfg.UnionChainID, "1-"+strconv.FormatInt(height, 10))
 }
 
+func enqueueEVMBlock(t *testing.T, cfg config, height uint64) {
+	t.Helper()
+	voyagerCLI(t, cfg, "index", cfg.EVMChainID, "--exact", strconv.FormatUint(height, 10), "--enqueue")
+}
+
 func enqueueVoyagerFetchBlock(t *testing.T, cfg config, plugin, height string) {
 	t.Helper()
 	msg := map[string]any{
@@ -150,7 +155,50 @@ func forceUpdateUnionGnoClient(t *testing.T, cfg config, proofHeight int64) {
 	t.Logf("force-updated Union Gno client %s at Gno height %d: %s", cfg.UnionGnoClientID, proofHeight, out)
 }
 
-func waitForUnionTx(t *testing.T, cfg config, txHash string) {
+func broadcastUnionPacket(t *testing.T, cfg config, instruction string) string {
+	t.Helper()
+	if instruction == "" {
+		t.Fatal("empty Union EVM instruction")
+	}
+	if !strings.HasPrefix(instruction, "0x") {
+		instruction = "0x" + instruction
+	}
+	msg, err := json.Marshal(map[string]any{"send": map[string]any{
+		"channel_id":        mustUint32(t, cfg.UnionEVMChannelID),
+		"timeout_height":    "0",
+		"timeout_timestamp": strconv.FormatInt(time.Now().Add(time.Hour).UnixNano(), 10),
+		"salt":              getenv("UNION_EVM_PACKET_SALT", "0x0000000000000000000000000000000000000000000000000000000000000001"),
+		"instruction":       instruction,
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := dockerExec(cfg.UnionContainer,
+		"uniond", "tx", "wasm", "execute", cfg.UnionZKGMContract, string(msg),
+		"--amount", "10au",
+		"--from", cfg.UnionPacketSignerKey,
+		"--keyring-backend", "test",
+		"--home", "/.union",
+		"--chain-id", cfg.UnionChainID,
+		"--node", "tcp://localhost:26657",
+		"--gas", "19000000",
+		"--fees", "19000000au",
+		"--yes", "--broadcast-mode", "sync", "-o", "json",
+	)
+	if err != nil {
+		t.Fatalf("broadcast Union EVM packet: %v\n%s", err, out)
+	}
+	if err := checkCosmosTxResponse([]byte(out)); err != nil {
+		t.Fatalf("broadcast Union EVM packet: %v\n%s", err, out)
+	}
+	txHash, err := cosmosTxHash([]byte(out))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return waitForUnionTx(t, cfg, txHash)
+}
+
+func waitForUnionTx(t *testing.T, cfg config, txHash string) string {
 	t.Helper()
 	deadline := time.Now().Add(30 * time.Second)
 	var out string
@@ -162,11 +210,12 @@ func waitForUnionTx(t *testing.T, cfg config, txHash string) {
 			if err := checkCosmosTxResponse([]byte(out)); err != nil {
 				t.Fatalf("Union tx %s: %v\n%s", txHash, err, out)
 			}
-			return
+			return out
 		}
 		time.Sleep(time.Second)
 	}
 	t.Fatalf("Union tx %s was not committed:\n%s", txHash, out)
+	return ""
 }
 
 func checkCosmosTxResponse(body []byte) error {

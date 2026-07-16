@@ -4,13 +4,15 @@ package batch
 // reject_nested_batch_child_filetest is the BY-TYPE batch scenario for the
 // current batch limits (re-targeted from the legacy e2e zs89). A flat batch has no
 // length cap: an 7-child batch of INITIALIZE orders mints all eight vouchers. A
-// nested batch (a batch whose child is itself a batch) is rejected by aborting the
-// whole recv transaction: executeBatch panics with execFatal on the disallowed
-// opcode, which propagates uncaught out of OnRecvPacket (core does not recover recv
-// panics), the same revert semantics as an only-maker child. This matters because a
-// plain error return here would let OnRecvPacket commit a failure ack while any
-// preceding child's mutations stayed committed — a double-payment when the source
-// chain later refunds on that failure ack. The terminating panic is the assertion.
+//
+// Nested batches, where a child is itself a batch, abort the entire recv
+// transaction. executeBatch panics with execFatal on the disallowed opcode, and
+// the panic propagates out of OnRecvPacket because recv panics are not recovered.
+//
+// Returning an error instead would allow OnRecvPacket to commit a failure ack
+// after earlier child mutations had already been committed. If the source chain
+// then refunds that ack, the result would be a double payment. The terminating
+// panic is therefore the assertion.
 
 import (
 	"chain"

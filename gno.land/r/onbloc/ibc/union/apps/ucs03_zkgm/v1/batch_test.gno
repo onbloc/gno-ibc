@@ -40,8 +40,9 @@ func TestIsAllowedBatchInstruction(t *testing.T) {
 
 func TestVerifyBatch(cur realm, t *testing.T) {
 	callSender := testAddress("batch-call-caller")
-	exactOrderA := batchRefundOrder("batch-exact-a", "ugnot", "quote-exact-a", 60)
-	exactOrderB := batchRefundOrder("batch-exact-b", "ugnot", "quote-exact-b", 40)
+	tokenSender := testAddress("batch-token-caller")
+	exactOrderA := batchRefundOrder("batch-token-caller", "ugnot", "quote-exact-a", 60)
+	exactOrderB := batchRefundOrder("batch-token-caller", "ugnot", "quote-exact-b", 40)
 
 	type channelBalance struct {
 		channelId types.ChannelId
@@ -79,6 +80,7 @@ func TestVerifyBatch(cur realm, t *testing.T) {
 		},
 		{
 			name:      "exact total native consumption passes",
+			previous:  tokenSender,
 			channelId: types.ChannelId(92),
 			sent:      "100ugnot",
 			batch: z.Batch{Instructions: []z.Instruction{
@@ -92,39 +94,43 @@ func TestVerifyBatch(cur realm, t *testing.T) {
 		},
 		{
 			name:      "duplicate native consumption rejected",
+			previous:  tokenSender,
 			channelId: types.ChannelId(91),
 			sent:      "100ugnot",
 			batch: z.Batch{Instructions: []z.Instruction{
-				batchMustOrderInstruction(batchRefundOrder("batch-dup-a", "ugnot", "quote-dup-a", 100)),
-				batchMustOrderInstruction(batchRefundOrder("batch-dup-b", "ugnot", "quote-dup-b", 100)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "ugnot", "quote-dup-a", 100)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "ugnot", "quote-dup-b", 100)),
 			}},
 			wantVerifyErr: "sent coin mismatch",
 		},
 		{
 			name:      "leftover native rejected by drain check",
+			previous:  tokenSender,
 			channelId: types.ChannelId(93),
 			sent:      "100ugnot",
 			batch: z.Batch{Instructions: []z.Instruction{
-				batchMustOrderInstruction(batchRefundOrder("batch-left", "ugnot", "quote-leftover", 60)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "ugnot", "quote-leftover", 60)),
 			}},
 			wantDrainErr: "sent coin mismatch",
 		},
 		{
 			name:      "multi denom exact passes",
+			previous:  tokenSender,
 			channelId: types.ChannelId(95),
 			sent:      "100ugnot,50foo",
 			batch: z.Batch{Instructions: []z.Instruction{
-				batchMustOrderInstruction(batchRefundOrder("batch-denom-a", "ugnot", "quote-denom-a", 100)),
-				batchMustOrderInstruction(batchRefundOrder("batch-denom-b", "foo", "quote-denom-b", 50)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "ugnot", "quote-denom-a", 100)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "foo", "quote-denom-b", 50)),
 			}},
 		},
 		{
 			name:      "multi denom shortfall rejected",
+			previous:  tokenSender,
 			channelId: types.ChannelId(96),
 			sent:      "100ugnot,40foo",
 			batch: z.Batch{Instructions: []z.Instruction{
-				batchMustOrderInstruction(batchRefundOrder("batch-denom-sa", "ugnot", "quote-denom-sa", 100)),
-				batchMustOrderInstruction(batchRefundOrder("batch-denom-sb", "foo", "quote-denom-sb", 50)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "ugnot", "quote-denom-sa", 100)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "foo", "quote-denom-sb", 50)),
 			}},
 			wantVerifyErr: "sent coin mismatch",
 		},

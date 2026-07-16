@@ -33,7 +33,9 @@ func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relaye
 	// keccak work, so execution cost scales with child count.
 	for i, instruction := range batch.Instructions {
 		if !isAllowedBatchInstruction(instruction.Opcode) {
-			return nil, makeError(errInvalidBatchInstruction)
+			// execFatal forces a full revert: prior children may have already
+			// committed mutations (e.g. a mint) that must not survive this failure.
+			panic(execFatal{makeError(errInvalidBatchInstruction).Error()})
 		}
 
 		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), salt)

@@ -46,7 +46,7 @@ func loadConfig() config {
 		VoyagerContainer:        getenv("VOYAGER_CONTAINER", "union-voyager-1"),
 		VoyagerConfig:           getenv("VOYAGER_CONFIG_PATH", "/config/voyager-config.gno-union.jsonc"),
 		PostgresContainer:       getenv("POSTGRES_CONTAINER", "union-postgres-1"),
-		UnionGnoClientID:        getenv("UNION_GNO_CLIENT_ID", "4"),
+		UnionGnoClientID:        getenv("UNION_GNO_CLIENT_ID", "1"),
 		UnionCoreContract:       getenv("UNION_CORE_CONTRACT", "union1nk3nes4ef6vcjan5tz6stf9g8p08q2kgqysx6q5exxh89zakp0msq5z79t"),
 		UnionSignerKey:          getenv("UNION_SIGNER_KEY", "voyager-relayer"),
 		EVMRPC:                  getenv("EVM_RPC", "http://localhost:8545"),

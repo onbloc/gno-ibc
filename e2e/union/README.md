@@ -30,7 +30,7 @@ nix run .#cosmwasm-scripts.union-devnet.whitelist-relayers -- \
   union1jk9psyhvgkrt2cumz8eytll2244m2nnz4yt2g2
 ```
 
-The deployed Union state must contain client `4`, connection `3`, and channel
+The deployed Union state must contain client `1`, connection `3`, and channel
 `2`. `TestGnoToUnionPacketRelay` validates their full counterparty IDs, port,
 version, and open state before sending. The current contract addresses are in
 `voyager-config.gno-union.jsonc`.

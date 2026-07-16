@@ -192,10 +192,10 @@ func requireUnionPacketSetup(t *testing.T, cfg config) {
 		State                 string `json:"state"`
 		ConnectionID          uint32 `json:"connection_id"`
 		CounterpartyChannelID uint32 `json:"counterparty_channel_id"`
-		CounterpartyPortID    []byte `json:"counterparty_port_id"`
+		CounterpartyPortID    string `json:"counterparty_port_id"`
 		Version               string `json:"version"`
 	}
-	if err := queryUnionCore(cfg.UnionContainer, cfg.UnionCoreContract, map[string]any{"get_channel": map[string]any{"channel_id": mustUint32(t, cfg.UnionPacketChannelID)}}, &channel); err != nil || channel.State != "open" || channel.ConnectionID != mustUint32(t, cfg.UnionPacketConnectionID) || channel.CounterpartyChannelID != mustUint32(t, cfg.GnoPacketChannelID) || string(channel.CounterpartyPortID) != "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm" || channel.Version != "ucs03-zkgm-0" {
+	if err := queryUnionCore(cfg.UnionContainer, cfg.UnionCoreContract, map[string]any{"get_channel": map[string]any{"channel_id": mustUint32(t, cfg.UnionPacketChannelID)}}, &channel); err != nil || channel.State != "open" || channel.ConnectionID != mustUint32(t, cfg.UnionPacketConnectionID) || channel.CounterpartyChannelID != mustUint32(t, cfg.GnoPacketChannelID) || channel.CounterpartyPortID != fmt.Sprintf("0x%x", []byte("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm")) || channel.Version != "ucs03-zkgm-0" {
 		t.Fatalf("Union channel %s differs: %+v: %v", cfg.UnionPacketChannelID, channel, err)
 	}
 }

@@ -18,7 +18,7 @@ const (
 	PkgPath = "gno.land/r/onbloc/ibc/union/testing/e2e_setup"
 
 	gnoClientId       = types.ClientId(1)
-	unionClientId     = types.ClientId(4)
+	unionClientId     = types.ClientId(1)
 	gnoConnectionId   = types.ConnectionId(5)
 	unionConnectionId = types.ConnectionId(3)
 	gnoChannelId      = types.ChannelId(3)

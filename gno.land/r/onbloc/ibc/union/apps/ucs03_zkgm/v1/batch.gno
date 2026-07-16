@@ -47,7 +47,9 @@ func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relaye
 
 		childAck := childRes.Acknowledgement
 		if len(childAck) == 0 {
-			panic("batch child returned empty ack")
+			// execFatal: prior children may have already committed mutations
+			// that must not survive this invariant violation.
+			panic(execFatal{"batch child returned empty ack"})
 		}
 		// A single only-maker child aborts the entire batch: return the sentinel up
 		// to the recv boundary (OnRecvPacket / OnIntentRecvPacket), which panics on

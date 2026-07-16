@@ -67,7 +67,8 @@ VENDOR_GNOREALMS_RELS := \
 	p/aib/ibc/lightclient/tendermint \
 	p/aib/ibc/lightclient/tendermint/testing \
 	p/aib/ibc/types \
-	r/aib/ibc/core
+	r/aib/ibc/core \
+	r/aib/ibc/apps/transfer
 
 RSYNC_BASE   := -a --delete
 STD_EXCLUDES := --delete-excluded --exclude='*_test.gno' --exclude='*_filetest.gno'

@@ -6,4 +6,4 @@
 	url = https://github.com/gnoswap-labs/gnoswap.git
 [submodule "third_party/gno-realms"]
 	path = third_party/gno-realms
-	url = https://github.com/allinbits/gno-realms.git
+	url = https://github.com/onbloc/gno-realms.git

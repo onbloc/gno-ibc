@@ -1,4 +1,4 @@
-package zkgm
+package ucs03_zkgm
 
 import (
 	"encoding/hex"
@@ -9,6 +9,8 @@ import (
 )
 
 func Send(cur realm, channelId types.ChannelId, timeoutTimestamp types.Timestamp, salt [32]byte, instruction z.Instruction) types.Packet {
+	assertIsNotPaused()
+
 	return mustGetImpl().Send(0, cur, channelId, timeoutTimestamp, salt, instruction)
 }
 
@@ -23,6 +25,8 @@ func Send(cur realm, channelId types.ChannelId, timeoutTimestamp types.Timestamp
 //   - opcode: instruction opcode (0=Forward, 1=Call, 2=Batch, 3=TokenOrder).
 //   - operandHex: ABI-encoded instruction operand as hex; 0x prefix optional.
 func SendRaw(cur realm, channelId uint32, timeoutTimestamp uint64, saltHex string, version uint8, opcode uint8, operandHex string) types.Packet {
+	assertIsNotPaused()
+
 	saltBytes, err := parseHex(saltHex)
 	if err != nil {
 		panic(err)

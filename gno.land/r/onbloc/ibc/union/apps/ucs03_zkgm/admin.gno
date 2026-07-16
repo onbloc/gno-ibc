@@ -1,4 +1,4 @@
-package zkgm
+package ucs03_zkgm
 
 import (
 	"time"
@@ -21,6 +21,7 @@ func SetBucketConfig(cur realm, denom string, capacity *u256.Uint, refillRate *u
 		}
 
 		store.SetTokenBucket(0, cur, denom, newBucket)
+		emitZkgmRateLimitBucketConfiguredEvent(cur.Previous().Address(), denom, capacity, refillRate)
 
 		return
 	}
@@ -29,16 +30,24 @@ func SetBucketConfig(cur realm, denom string, capacity *u256.Uint, refillRate *u
 	if err != nil {
 		panic(err)
 	}
+
+	emitZkgmRateLimitBucketConfiguredEvent(cur.Previous().Address(), denom, capacity, refillRate)
 }
 
 // SetRateLimitDisabled toggles the global rate-limit kill switch.
 func SetRateLimitDisabled(cur realm, disabled bool) {
 	access.AssertCanCall(0, cur, SelectorSetRateLimitDisabled)
 	store.SetRateLimitDisabled(0, cur, disabled)
+	emitZkgmRateLimitDisabledSetEvent(cur.Previous().Address(), disabled)
 }
 
 // Pausable toggles the global pause gate checked by every App receiver.
 func Pausable(cur realm, p bool) {
 	access.AssertCanCall(0, cur, SelectorPausable)
 	paused = p
+	if p {
+		emitZkgmPausedEvent(cur.Previous().Address())
+	} else {
+		emitZkgmUnpausedEvent(cur.Previous().Address())
+	}
 }

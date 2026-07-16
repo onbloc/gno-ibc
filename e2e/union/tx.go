@@ -134,7 +134,7 @@ func forceUpdateUnionGnoClient(t *testing.T, cfg config, proofHeight int64) {
 		"--node", "tcp://localhost:26657",
 		"--gas", "19000000",
 		"--fees", "19000000au",
-		"--yes", "--broadcast-mode", "block", "-o", "json",
+		"--yes", "--broadcast-mode", "sync", "-o", "json",
 	)
 	if err != nil {
 		t.Fatalf("force-update Union Gno client %s: %v\n%s", cfg.UnionGnoClientID, err, out)
@@ -142,7 +142,31 @@ func forceUpdateUnionGnoClient(t *testing.T, cfg config, proofHeight int64) {
 	if err := checkCosmosTxResponse([]byte(out)); err != nil {
 		t.Fatalf("force-update Union Gno client %s: %v\n%s", cfg.UnionGnoClientID, err, out)
 	}
+	txHash, err := cosmosTxHash([]byte(out))
+	if err != nil {
+		t.Fatalf("force-update Union Gno client %s: %v\n%s", cfg.UnionGnoClientID, err, out)
+	}
+	waitForUnionTx(t, cfg, txHash)
 	t.Logf("force-updated Union Gno client %s at Gno height %d: %s", cfg.UnionGnoClientID, proofHeight, out)
+}
+
+func waitForUnionTx(t *testing.T, cfg config, txHash string) {
+	t.Helper()
+	deadline := time.Now().Add(30 * time.Second)
+	var out string
+	for time.Now().Before(deadline) {
+		var err error
+		out, err = dockerExec(cfg.UnionContainer, "uniond", "query", "tx", txHash,
+			"--node", "tcp://localhost:26657", "-o", "json")
+		if err == nil {
+			if err := checkCosmosTxResponse([]byte(out)); err != nil {
+				t.Fatalf("Union tx %s: %v\n%s", txHash, err, out)
+			}
+			return
+		}
+		time.Sleep(time.Second)
+	}
+	t.Fatalf("Union tx %s was not committed:\n%s", txHash, out)
 }
 
 func checkCosmosTxResponse(body []byte) error {
@@ -160,6 +184,19 @@ func checkCosmosTxResponse(body []byte) error {
 		return fmt.Errorf("transaction failed with code %d: %s", *resp.Code, resp.RawLog)
 	}
 	return nil
+}
+
+func cosmosTxHash(body []byte) (string, error) {
+	var resp struct {
+		TxHash string `json:"txhash"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		return "", fmt.Errorf("parse transaction response: %w", err)
+	}
+	if resp.TxHash == "" {
+		return "", fmt.Errorf("transaction response missing txhash")
+	}
+	return resp.TxHash, nil
 }
 
 func clientStatesFromCreate(body []byte) (string, string, error) {
@@ -250,28 +287,6 @@ func requireNoNewVoyagerFailed(t *testing.T, cfg config, baseline voyagerBaselin
 	if rows := voyagerRowsAfter(t, cfg, "failed", baseline.Failed); rows != "" {
 		t.Fatalf("new Voyager failed rows:\n%s", rows)
 	}
-}
-
-func waitVoyagerReadyEmpty(t *testing.T, cfg config) {
-	t.Helper()
-	deadline := time.Now().Add(2 * time.Minute)
-	var last string
-	for time.Now().Before(deadline) {
-		last = voyagerQueueStats(t, cfg)
-		if queueReadyIsZero(last) {
-			return
-		}
-		time.Sleep(time.Second)
-	}
-	t.Fatalf("Voyager ready queue did not drain:\n%s\nfailed:\n%s", last, voyagerQueryFailed(t, cfg))
-}
-
-func queueReadyIsZero(stats string) bool {
-	s := strings.ToLower(strings.ReplaceAll(stats, " ", ""))
-	return strings.Contains(s, `"ready":0`) ||
-		strings.Contains(s, "ready:0") ||
-		strings.Contains(s, "ready|0") ||
-		strings.Contains(s, "ready0")
 }
 
 func signAndBroadcastGnoCall(t *testing.T, cfg config, keyName, pkgPath, funcName, sendCoins string, args ...string) string {

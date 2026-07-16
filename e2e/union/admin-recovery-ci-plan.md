@@ -118,7 +118,7 @@ recovery, send one Gno `SendRaw`, then let Voyager relay it to Gno `PacketAck`.
    GNO_PACKET_CHANNEL_ID=3 \
    UNION_PACKET_CONNECTION_ID=3 \
    UNION_PACKET_CHANNEL_ID=2 \
-   UNION_GNO_CLIENT_ID=4 \
+   UNION_GNO_CLIENT_ID=1 \
    GNO_PACKET_OPERAND_HEX=<pre-encoded-token-order> \
    GNO_PACKET_SEND_COINS=1ugnot \
    GNO_COMPOSE_DIR=e2e/union \
@@ -136,7 +136,7 @@ Run fresh Compose once and record:
 - whether Union devnet already has:
   - core contract address
   - ZKGM contract address
-  - Gno client `4`
+  - Gno client `1`
   - connection `3`
   - channel `2`
 - exact container name for `uniond`
@@ -214,7 +214,7 @@ If CI hits:
 implement the already documented recovery:
 
 - generate Gno client-state bytes with Voyager `msg create-client --height`
-- broadcast Union `force_update_client` for existing Union Gno client `4`
+- broadcast Union `force_update_client` for existing Union Gno client `1`
 - retry `packet_recv` once
 
 Exit criteria:
@@ -244,4 +244,3 @@ Skip GitHub Actions until the local command works from a clean Compose project.
   Packet sending must remain `maketx call`.
 - Do not add Voyager connection/channel CLI work unless admin recovery cannot
   make the fixed state. That is a larger feature and not needed for this proof.
-

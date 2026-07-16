@@ -81,9 +81,11 @@ go test -v . -run '^TestGnoToUnionPacketRelay$'
 ```
 
 The test captures Voyager queue/done/failed baselines, ignores historical
-failures, checks exactly one receive/write-ack/ack for the packet hash, and
-performs one bounded `force_update_client` retry for the known stale Gno client
-failure.
+failures, and checks exactly one receive/write-ack/ack for the packet hash. If
+receive stalls or Voyager reports the known stale Gno client error, it performs
+one bounded `force_update_client` for Union client `1` and retries the block.
+Future timeout jobs may remain in Voyager's ready queue, so completion is
+proved by packet events, new done rows, and the absence of new failed rows.
 
 ## Troubleshooting
 

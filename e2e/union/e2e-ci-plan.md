@@ -107,7 +107,7 @@ CI flow should become:
 6. enqueue Union `write_ack` block
 7. wait Gno `PacketAck`
 8. assert no new Voyager failed rows
-9. assert Voyager queue has no ready rows
+9. assert new Voyager done rows contain the packet hash
 
 ### 3. Add setup validation
 
@@ -126,7 +126,7 @@ GNO_PACKET_CONNECTION_ID=5
 GNO_PACKET_CHANNEL_ID=3
 UNION_PACKET_CONNECTION_ID=3
 UNION_PACKET_CHANNEL_ID=2
-UNION_GNO_CLIENT_ID=4
+UNION_GNO_CLIENT_ID=1
 ```
 
 ### 4. Handle stale Union-side Gno client
@@ -161,7 +161,7 @@ Create a CI artifact containing:
   - connection `5`
   - channel `3`
 - Union devnet state with:
-  - Union Gno client `4`
+- Union Gno client `1`
   - connection `3`
   - channel `2`
   - ZKGM contracts deployed
@@ -238,7 +238,7 @@ Exit criteria:
 
 - A clean local Compose run sends one packet and observes `PacketAck`.
 - No new Voyager failed rows.
-- Queue `ready` count returns to `0`.
+- New Voyager done rows contain the packet hash.
 
 ### Phase 3: Add PR CI packet relay job
 
@@ -254,7 +254,7 @@ GNO_PACKET_CONNECTION_ID=5 \
 GNO_PACKET_CHANNEL_ID=3 \
 UNION_PACKET_CONNECTION_ID=3 \
 UNION_PACKET_CHANNEL_ID=2 \
-UNION_GNO_CLIENT_ID=4 \
+UNION_GNO_CLIENT_ID=1 \
 GNO_PACKET_OPERAND_HEX=<fixture> \
 GNO_PACKET_SEND_COINS=1ugnot \
 go test -v ./e2e/union -run TestGnoToUnionPacketRelay
@@ -339,7 +339,7 @@ The packet relay test must assert more than event presence:
   `wasm-write_ack`, and one Gno `PacketAck` for the packet hash within the run
   baseline
 - no new Voyager failed rows after baseline
-- Voyager queue has no ready rows at the end
+- new Voyager done rows contain the packet hash
 
 ## Snapshot Compatibility
 
@@ -371,7 +371,7 @@ Treat these as hard failures:
 - no Union `wasm-write_ack`
 - no Gno `PacketAck`
 - new Voyager failed rows after baseline
-- Voyager queue has ready rows after timeout window
+- new Voyager done rows do not contain the packet hash
 
 Treat these as setup failures:
 

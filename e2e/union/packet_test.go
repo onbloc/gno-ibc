@@ -86,7 +86,6 @@ func TestGnoToUnionPacketRelay(t *testing.T) {
 	}
 
 	enqueueGnoBlock(t, cfg, packetSend.BlockHeight)
-	waitVoyagerReadyEmpty(t, cfg)
 
 	packetRecv := waitForUnionReceive(t, cfg, packetHash, packetSend.BlockHeight, &baseline)
 	writeAck := waitForUnionEvent(t, cfg, "wasm-write_ack", packetHash)
@@ -101,13 +100,11 @@ func TestGnoToUnionPacketRelay(t *testing.T) {
 	t.Logf("Union packet recv tx %s at height %d; write_ack tx %s at height %d", packetRecv.Hash, packetRecv.Height, writeAck.Hash, writeAck.Height)
 
 	enqueueUnionBlock(t, cfg, writeAck.Height)
-	waitVoyagerReadyEmpty(t, cfg)
 
 	ack := waitForNewGnoEvent(t, cfg, "PacketAck", map[string]string{"packet_hash": packetHash}, packetSend.BlockHeight, baseline)
 	if ack.BlockHeight <= packetSend.BlockHeight {
 		t.Fatalf("PacketAck height %d must be after PacketSend height %d", ack.BlockHeight, packetSend.BlockHeight)
 	}
-	waitVoyagerReadyEmpty(t, cfg)
 	requireNoNewVoyagerFailed(t, cfg, baseline)
 	if done := voyagerRowsAfter(t, cfg, "done", baseline.Done); !strings.Contains(done, packetHash) {
 		t.Fatalf("Voyager done rows do not contain packet %s:\n%s", packetHash, done)
@@ -131,6 +128,7 @@ func TestGnoToUnionPacketRelay(t *testing.T) {
 func waitForUnionReceive(t *testing.T, cfg config, packetHash string, proofHeight int64, baseline *voyagerBaseline) UnionTx {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Minute)
+	recoveryAt := time.Now().Add(15 * time.Second)
 	recovered := false
 	for time.Now().Before(deadline) {
 		txs, err := queryUnionTxs(cfg.UnionContainer, "wasm-packet_recv", packetHash, 2)
@@ -145,6 +143,10 @@ func waitForUnionReceive(t *testing.T, cfg config, packetHash string, proofHeigh
 			recovered = true
 		} else if failed != "" && !onlyStaleClientFailures(failed) {
 			t.Fatalf("Voyager failed before Union receive:\n%s", failed)
+		} else if !recovered && time.Now().After(recoveryAt) {
+			forceUpdateUnionGnoClient(t, cfg, proofHeight)
+			enqueueGnoBlock(t, cfg, proofHeight)
+			recovered = true
 		}
 		time.Sleep(time.Second)
 	}

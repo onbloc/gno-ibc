@@ -31,6 +31,16 @@ func TestCheckCosmosTxResponse(t *testing.T) {
 	}
 }
 
+func TestCosmosTxHash(t *testing.T) {
+	hash, err := cosmosTxHash([]byte(`{"code":0,"txhash":"ABC123"}`))
+	if err != nil || hash != "ABC123" {
+		t.Fatalf("hash=%q err=%v", hash, err)
+	}
+	if _, err := cosmosTxHash([]byte(`{"code":0}`)); err == nil {
+		t.Fatal("missing txhash accepted")
+	}
+}
+
 func TestCheckUnionEventOrder(t *testing.T) {
 	ordered := []byte(`{"events":[{"type":"wasm-packet_recv"},{"type":"wasm-write_ack"}]}`)
 	if err := checkUnionEventOrder(ordered, "wasm-packet_recv", "wasm-write_ack"); err != nil {

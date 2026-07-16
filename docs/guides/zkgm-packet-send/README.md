@@ -11,7 +11,7 @@ the operand and the common page to broadcast and verify the packet.
 | Document | Use when |
 |---|---|
 | [Common SendRaw Procedure](common.md) | You need the shared `SendRaw` command, broadcast verification, handoff checklist, and operational hazards. |
-| [TokenOrderV2 INITIALIZE](initialize.md) | You are sending a native token for the first time over a channel and must create the wrapped token on Union. |
+| [TokenOrderV2 INITIALIZE](initialize.md) | You are sending a native token for the first time over a channel and must create the wrapped token on EVM or CosmWasm Union. |
 | [TokenOrderV2 ESCROW](escrow.md) | The wrapped token already exists on Union and you are sending a later native-token transfer over the same channel. |
 
 ## Current Testnet Reference
@@ -33,8 +33,9 @@ channel state from a recent `ChannelOpenAck` event before broadcasting.
 ## Choosing the Send Kind
 
 Use `INITIALIZE` for the first native-token send over a channel. This creates
-the wrapped token on Union. It carries `TokenMetadata`, requires Union's
-`ZkgmERC20` implementation address, and must use the predicted `quote_token`.
+the wrapped token on Union. It carries `TokenMetadata` and must use the
+predicted `quote_token`. EVM uses a `ZkgmERC20` implementation and raw
+20-byte addresses; CosmWasm uses CW20 JSON metadata and Bech32 address bytes.
 
 Use `ESCROW` for later sends of the same native token over the same channel
 after the `INITIALIZE` has been processed on Union. It reuses the known wrapped

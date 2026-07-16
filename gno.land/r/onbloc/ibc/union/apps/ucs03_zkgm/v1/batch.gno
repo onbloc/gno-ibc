@@ -33,8 +33,7 @@ func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relaye
 	// keccak work, so execution cost scales with child count.
 	for i, instruction := range batch.Instructions {
 		if !isAllowedBatchInstruction(instruction.Opcode) {
-			// execFatal forces a full revert: prior children may have already
-			// committed mutations (e.g. a mint) that must not survive this failure.
+			//  returning an error could leave earlier child mutations committed.
 			panic(execFatal{makeError(errInvalidBatchInstruction).Error()})
 		}
 

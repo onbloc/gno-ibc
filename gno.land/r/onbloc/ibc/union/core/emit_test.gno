@@ -13,7 +13,7 @@ import (
 )
 
 // Mirrors gno-core/gnovm/stdlibs/chain/emit_event.go MaxEventAttrLen.
-const emitMaxEventAttrLen = 1024
+const emitMaxEventAttrLen = 4096
 
 // 2 hex chars per byte plus the "0x" prefix
 const boundaryRawLen = (emitMaxEventAttrLen - 2) / 2
@@ -50,7 +50,7 @@ func mustEncodeRealZkgmPacket(t *testing.T) []byte {
 	callBytes, err := z.EncodeCall(z.Call{
 		Sender:           []byte("sender"),
 		ContractAddress:  []byte("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/testing/mock"),
-		ContractCalldata: pseudoRandomBytes(0xBADC0DE, 480),
+		ContractCalldata: pseudoRandomBytes(0xBADC0DE, 1536),
 	})
 	if err != nil {
 		t.Fatalf("encode call: %v", err)
@@ -109,7 +109,7 @@ func TestEmitBinaryFieldsRoundTrip(cur realm, t *testing.T) {
 }
 
 func TestEmitBinaryFieldsBoundary(cur realm, t *testing.T) {
-	t.Run("exact_1024", func(t *testing.T) {
+	t.Run("exact_max", func(t *testing.T) {
 		raw := make([]byte, boundaryRawLen)
 		for i := range raw {
 			raw[i] = byte(i)

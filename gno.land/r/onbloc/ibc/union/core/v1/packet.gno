@@ -104,11 +104,11 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 		}
 
 		res := a.OnRecvPacket(cross(rlm), packet, relayer, relayerMsg)
-		if err := c.commitSyncAck(0, rlm, packet, res); err != nil {
+		if err := c.commitSyncAck(0, rlm, packet, channel, connection, res); err != nil {
 			panic(err)
 		}
 
-		core.EmitPacketRecv(0, rlm, packet, relayer, relayerMsg)
+		core.EmitPacketRecv(0, rlm, packet, channel, connection, relayerMsg)
 	}
 }
 
@@ -123,6 +123,12 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 	}
 
 	destinationChannelId := msg.Packets[0].DestinationChannelId
+
+	channel, err := c.getChannel(destinationChannelId)
+	if err != nil {
+		panic(err)
+	}
+	connection := c.ensureConnectionState(channel.ConnectionId)
 
 	portId, _ := c.store.GetChannelOwner(destinationChannelId)
 	a, err := c.getAppAtPort(portId)
@@ -150,18 +156,17 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 		}
 
 		res := intentApp.OnIntentRecvPacket(cross(rlm), packet, marketMaker, marketMakerMsg)
-		if err := c.commitSyncAck(0, rlm, packet, res); err != nil {
+		if err := c.commitSyncAck(0, rlm, packet, channel, connection, res); err != nil {
 			panic(err)
 		}
 
-		core.EmitIntentPacketRecv(0, rlm, packet, marketMaker, marketMakerMsg)
+		core.EmitIntentPacketRecv(0, rlm, packet, channel, connection, marketMakerMsg)
 	}
 }
 
 // PacketAcknowledgement proves the counterparty's acks and notifies the app.
 func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAcknowledgement) {
 	assertIsRlmCurrent(0, rlm)
-	assertPacketsDataSize(msg.Packets)
 
 	relayer := rlm.Previous().Address()
 
@@ -198,7 +203,7 @@ func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAckn
 		c.markPacketAcknowledged(0, rlm, packet)
 
 		a.OnAcknowledgementPacket(cross(rlm), packet, ack, relayer)
-		core.EmitPacketAck(0, rlm, packet, channel, connection, ack, relayer)
+		core.EmitPacketAck(0, rlm, packet, channel, connection, ack)
 	}
 }
 
@@ -206,7 +211,6 @@ func (c *coreV1) PacketAcknowledgement(_ int, rlm realm, msg types.MsgPacketAckn
 // the app to refund.
 func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 	assertIsRlmCurrent(0, rlm)
-	assertPacketDataSize(msg.Packet.Data)
 
 	relayer := rlm.Previous().Address()
 	packet := msg.Packet
@@ -398,9 +402,15 @@ func (c *coreV1) WriteAcknowledgement(_ int, rlm realm, msg types.MsgWriteAcknow
 		panic(makeError(core.ErrAcknowledgementAlreadyWritten))
 	}
 
+	channel, err := c.getChannel(channelId)
+	if err != nil {
+		panic(err)
+	}
+	connection := c.ensureConnectionState(channel.ConnectionId)
+
 	c.store.CommitAcknowledgement(0, rlm, msg.Packet, msg.Acknowledgement)
 
-	core.EmitWriteAck(0, rlm, msg.Packet, msg.Acknowledgement)
+	core.EmitWriteAck(0, rlm, msg.Packet, channel, connection, msg.Acknowledgement)
 }
 
 // --- shared recv helpers ---
@@ -436,7 +446,7 @@ func (c *coreV1) acceptRecvPacket(_ int, rlm realm, packet types.Packet, batchCh
 
 // commitSyncAck records a synchronous recv result as receipt evidence. Sync
 // success/failure must carry a non-empty acknowledgement; async is deferred.
-func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, res types.RecvPacketResult) error {
+func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, channel types.Channel, connection types.Connection, res types.RecvPacketResult) error {
 	switch res.Status {
 	case types.PacketStatusAsync:
 		return nil
@@ -446,7 +456,7 @@ func (c *coreV1) commitSyncAck(_ int, rlm realm, packet types.Packet, res types.
 		}
 
 		c.store.CommitAcknowledgement(0, rlm, packet, res.Acknowledgement)
-		core.EmitWriteAck(0, rlm, packet, res.Acknowledgement)
+		core.EmitWriteAck(0, rlm, packet, channel, connection, res.Acknowledgement)
 
 		return nil
 	default:

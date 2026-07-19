@@ -4,18 +4,13 @@ import (
 	"gno.land/p/onbloc/json"
 )
 
-// ForwardMemo mirrors the full PFM (Packet Forward Middleware) {"forward":
-// {...}} shape used elsewhere in the Cosmos ecosystem verbatim, so AtomOne-
-// side tooling that already knows how to build PFM memos can reuse that
-// without learning a bespoke schema.
+// ForwardMemo mirrors the Cosmos ecosystem's PFM {"forward": {...}} shape
+// verbatim, so existing AtomOne-side tooling can reuse it as-is.
 //
-// Only Receiver and Timeout are read today (see v1/impl.gno's
-// OnTransferRecv): the destination ZKGM channel comes from the denom
-// registry (../store.gno's DenomConfig), not the memo, so Port/Channel have
-// no use yet, and multi-hop retry-on-timeout is out of scope for now (see
-// issue #134). They're still parsed and kept on the struct so the full
-// schema stays visible in one place, and so using them later is just a
-// field access at the call site, not a parser change.
+// Only Receiver and Timeout are read today; Port/Channel/Retries are parsed
+// and kept but unused (channel comes from store.go's DenomConfig instead, and
+// multi-hop retry is out of scope — see issue #134), so the full schema stays
+// visible and using them later needs no parser change.
 type ForwardMemo struct {
 	Receiver string
 	Port     string
@@ -25,13 +20,10 @@ type ForwardMemo struct {
 }
 
 // parseForwardMemo returns (memo, true) for a valid {"forward": {"receiver":
-// "..."}} payload. It returns (zero, false) for anything else — an empty
-// memo, malformed JSON, a memo meant for something other than forwarding, or
-// a forward object missing/blank receiver. Callers treat false as "this
-// transfer is not a forward request", not as an error: not every ICS20
-// transfer through this hook is meant to be forwarded. Every field besides
-// Receiver is best-effort: absent or malformed leaves it at its zero value
-// rather than failing the whole parse.
+// "..."}} payload, or (zero, false) for anything else (empty/malformed memo,
+// non-forward memo, missing/blank receiver) — false just means "not a
+// forward request", not an error. Fields besides Receiver are best-effort:
+// absent or malformed leaves them at zero rather than failing the parse.
 func parseForwardMemo(raw string) (ForwardMemo, bool) {
 	if raw == "" {
 		return ForwardMemo{}, false

@@ -45,16 +45,44 @@ func NewDenomConfig(zkgmChannelId types.ChannelId, quoteToken, metadata []byte) 
 	}
 }
 
+// PendingForward is what OnTransferRecv records right before calling
+// zkgm.Send, keyed by the outbound ZKGM packet's commitment hash (the same
+// key zkgm.GetSendResult/ClearSendResult use), so that once the packet's
+// ack/timeout result is known, ResolveForward knows which original ICS20
+// packet's deferred acknowledgement to resolve via the installed
+// TransferAckResolver.
+type PendingForward struct {
+	// SourceClient is the ICS20 clientID the original AtomOne packet arrived
+	// on. Together with Sequence, this is the same correlation pair
+	// OnTransferRecv itself was called with, and what TransferAckResolver
+	// resolves against — no new identifier is introduced.
+	SourceClient string
+	// Sequence is the original AtomOne packet's sequence on SourceClient.
+	Sequence uint64
+}
+
+// NewPendingForward constructs a PendingForward. Foreign realms (e.g. v1's
+// impl) must go through this instead of a struct literal — see
+// NewDenomConfig's doc comment for why.
+func NewPendingForward(sourceClient string, sequence uint64) PendingForward {
+	return PendingForward{
+		SourceClient: sourceClient,
+		Sequence:     sequence,
+	}
+}
+
 // Store is the proxy-owned persistent state, injected into the impl via
 // RegisterImpl/UpdateImpl so it survives impl upgrades (mirrors
 // apps/ucs03_zkgm/store.gno's Store).
 type Store struct {
-	denomConfigs *bptree.BPTree // ICS20 base denom -> DenomConfig
+	denomConfigs    *bptree.BPTree // ICS20 base denom -> DenomConfig
+	pendingForwards *bptree.BPTree // packetHash -> PendingForward
 }
 
 func NewStore() *Store {
 	return &Store{
-		denomConfigs: bptree.NewBPTree32(),
+		denomConfigs:    bptree.NewBPTree32(),
+		pendingForwards: bptree.NewBPTree32(),
 	}
 }
 
@@ -85,4 +113,30 @@ func (s *Store) GetDenomConfig(baseDenom string) (DenomConfig, bool) {
 // HasDenomConfig reports whether baseDenom has a registered forward-path config.
 func (s *Store) HasDenomConfig(baseDenom string) bool {
 	return s.denomConfigs.Has(baseDenom)
+}
+
+// SetPendingForward records a forward attempt's correlation info, keyed by
+// the outbound ZKGM packet's commitment hash.
+func (s *Store) SetPendingForward(_ int, rlm realm, packetHash string, info PendingForward) {
+	assertIsRlmCurrent(0, rlm)
+
+	s.pendingForwards.Set(packetHash, info)
+}
+
+// GetPendingForward returns the correlation info recorded for a packet hash, if any.
+func (s *Store) GetPendingForward(packetHash string) (PendingForward, bool) {
+	v, found := s.pendingForwards.Get(packetHash)
+	if !found {
+		return PendingForward{}, false
+	}
+
+	return v.(PendingForward), true
+}
+
+// RemovePendingForward clears a resolved (or no-longer-relevant) pending
+// forward record.
+func (s *Store) RemovePendingForward(_ int, rlm realm, packetHash string) {
+	assertIsRlmCurrent(0, rlm)
+
+	s.pendingForwards.Remove(packetHash)
 }

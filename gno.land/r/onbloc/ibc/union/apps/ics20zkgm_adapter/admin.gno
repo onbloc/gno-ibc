@@ -1,10 +1,18 @@
 package ics20zkgm_adapter
 
-import "gno.land/r/onbloc/ibc/union/access"
+import (
+	"gno.land/p/nt/ufmt/v0"
+	z "gno.land/p/onbloc/ibc/union/zkgm"
+	"gno.land/r/onbloc/ibc/union/access"
+)
+
+// requiredMetadataDecimals: apps/transfer always mints vouchers at 0
+// decimals, so cfg.Metadata must declare the same. Checked at registration
+// instead of leaving it to fail on someone else's first forward.
+const requiredMetadataDecimals = 0
 
 // RegisterDenom registers (or replaces) the forward-path (AtomOne -> EVM)
-// config for an ICS20 base denom. See DenomConfig in store.gno for what each
-// field means and how it must be computed off-chain. Admin-only.
+// config for an ICS20 base denom. See DenomConfig in store.gno. Admin-only.
 func RegisterDenom(cur realm, baseDenom string, cfg DenomConfig) {
 	access.AssertCanCall(0, cur, SelectorRegisterDenom)
 
@@ -16,6 +24,14 @@ func RegisterDenom(cur realm, baseDenom string, cfg DenomConfig) {
 	}
 	if len(cfg.Metadata) == 0 {
 		panic("ics20zkgm_adapter: metadata cannot be empty")
+	}
+
+	meta, err := z.DecodeTokenMetadata(cfg.Metadata)
+	if err != nil {
+		panic("ics20zkgm_adapter: invalid metadata: " + err.Error())
+	}
+	if decimals := z.DecodeTokenInitializerFromMetadata(meta).Decimals; decimals != requiredMetadataDecimals {
+		panic(ufmt.Sprintf("ics20zkgm_adapter: metadata decimals must be %d, got %d", requiredMetadataDecimals, decimals))
 	}
 
 	store.SetDenomConfig(0, cur, baseDenom, cfg)
@@ -35,4 +51,24 @@ func UnregisterDenom(cur realm, baseDenom string) {
 // forward-path config.
 func GetDenomConfig(baseDenom string) (DenomConfig, bool) {
 	return store.GetDenomConfig(baseDenom)
+}
+
+// transferAckResolver is the installed TransferAckResolver (see types.gno).
+var transferAckResolver TransferAckResolver
+
+// SetTransferAckResolver installs the resolver ResolveForward calls to settle
+// the original ICS20 packet's deferred ack. Admin-only.
+func SetTransferAckResolver(cur realm, r TransferAckResolver) {
+	access.AssertCanCall(0, cur, SelectorSetTransferAckResolver)
+
+	transferAckResolver = r
+}
+
+// MustGetTransferAckResolver panics until SetTransferAckResolver is called.
+func MustGetTransferAckResolver() TransferAckResolver {
+	if transferAckResolver == nil {
+		panic("ics20zkgm_adapter: transfer ack resolver not installed")
+	}
+
+	return transferAckResolver
 }

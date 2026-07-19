@@ -16,6 +16,11 @@ const (
 	errInvalidAmount      = "ics20zkgm_adapter: invalid amount"
 	errInvalidReceiver    = "ics20zkgm_adapter: invalid receiver"
 	errEncodeTokenOrder   = "ics20zkgm_adapter: encode token order"
+
+	// forward resolution (ResolveForward)
+	errPendingForwardNotFound = "ics20zkgm_adapter: no pending forward for this packet hash"
+	errForwardNotYetResolved  = "ics20zkgm_adapter: forward packet result not yet resolved"
+	errWriteHookAckFailed     = "ics20zkgm_adapter: write hook ack failed"
 )
 
 func makeError(msgs ...string) error {

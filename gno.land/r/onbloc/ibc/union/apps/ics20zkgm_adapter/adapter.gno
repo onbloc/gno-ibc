@@ -16,6 +16,13 @@ var (
 	_ z.Zkgmable            = (*Adapter)(nil)
 )
 
+// NewAdapter constructs an Adapter. Foreign realms (e.g. a deploy script
+// calling transfer.SetHook/zkgm.RegisterReceiver) must go through this
+// instead of a struct literal — see NewDenomConfig's doc comment for why.
+func NewAdapter() *Adapter {
+	return &Adapter{}
+}
+
 // Address implements transfer.TransferHook. It returns the proxy's own
 // address, which stays stable across impl upgrades.
 func (a *Adapter) Address() address {
@@ -37,4 +44,15 @@ func (a *Adapter) OnZkgm(cur realm, env z.CallEnv) error {
 // OnIntentZkgm implements z.Zkgmable.
 func (a *Adapter) OnIntentZkgm(cur realm, env z.IntentCallEnv) error {
 	return mustGetImpl().OnIntentZkgm(0, cur, env)
+}
+
+// ResolveForward is permissionless (see store.go's PendingForward doc
+// comment): anyone — typically a relayer, after observing the outbound ZKGM
+// packet's ack success, ack failure, or timeout via zkgm.GetSendResult —
+// can call it to push the confirmed result onto the original AtomOne
+// packet's deferred acknowledgement. A plain package-level function (not an
+// Adapter method) so it's directly callable via `maketx call`, matching
+// apps/ucs03_zkgm's Send/SendRaw.
+func ResolveForward(cur realm, packetHash string) error {
+	return mustGetImpl().ResolveForward(0, cur, packetHash)
 }

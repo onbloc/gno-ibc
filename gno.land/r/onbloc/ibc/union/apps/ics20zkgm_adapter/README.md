@@ -43,3 +43,24 @@ The order `Kind` is always `TOKEN_ORDER_KIND_INITIALIZE`, never `ESCROW` —
 see the doc comment on `v1/impl.gno`'s `OnTransferRecv` for why (verified
 against the actual EVM contract in `union-voyager`: deploy is skipped
 idempotently if the wrapped token already exists).
+
+## Async ack resolution (forward direction)
+
+The forwarded ZKGM packet's ack/timeout arrives long after `OnTransferRecv`
+returns, so the original ICS20 packet's acknowledgement can't be written
+immediately. Instead of sending a brand-new refund packet (which could
+itself fail to be received — see `async-ack-design-ko.md` for why that
+design was discarded), the adapter defers the original packet's ack:
+
+- `OnTransferRecv` records `PendingForward{SourceClient, Sequence}` keyed by
+  the outbound ZKGM packet's commitment hash, then returns
+  `transfer.ErrHookAsync` so `apps/transfer` defers the original packet's
+  ack (`store.gno`, `v1/forward.gno`).
+- `ResolveForward(packetHash)` is permissionless — typically called by a
+  relayer once `apps/ucs03_zkgm`'s `GetSendResult` reports the packet
+  resolved — and pushes the confirmed success/failure onto the original
+  ICS20 packet's deferred acknowledgement via the installed
+  `TransferAckResolver` (`v1/resolve.gno`).
+- `TransferAckResolver` (`v1/transfer_ack_resolver.gno`) delegates to
+  `apps/transfer`'s `WriteHookAck`; an admin must install it once via
+  `SetTransferAckResolver`. See `async-ack-design-ko.md` for the full design.

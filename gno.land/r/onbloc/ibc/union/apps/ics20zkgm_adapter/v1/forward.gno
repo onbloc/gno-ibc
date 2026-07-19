@@ -8,31 +8,32 @@ import (
 	"time"
 
 	u256 "gno.land/p/gnoswap/uint256"
+	"gno.land/p/nt/fqname/v0"
 	types "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	"gno.land/r/aib/ibc/apps/transfer"
+	adapter "gno.land/r/onbloc/ibc/union/apps/ics20zkgm_adapter"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
 
-// defaultForwardTimeout is used when the memo omits (or has an unparseable)
-// timeout duration. It only bounds the outbound ZKGM packet's own expiry;
-// if it fires, the escrowed voucher refunds back to this adapter's own
-// address via zkgm's normal refund path (see forward.go doc on OnTransferRecv
-// in impl.gno), not to the original AtomOne sender.
+// defaultForwardTimeout bounds the outbound ZKGM packet's own expiry when the
+// memo omits (or has an unparseable) timeout. On timeout the escrowed
+// voucher refunds to this adapter, not the original AtomOne sender.
 const defaultForwardTimeout = 24 * time.Hour
 
 // OnTransferRecv implements adapter.IImpl. Forward direction: AtomOne -> EVM.
-// See the doc comment in impl.gno for the Kind=INITIALIZE rationale.
+//
+// Always uses Kind = TOKEN_ORDER_KIND_INITIALIZE, never ESCROW: resending
+// INITIALIZE for an already-deployed wrapped token is an idempotent mint-only
+// no-op, while ESCROW reverts if the token isn't deployed yet.
 func (i *Impl) OnTransferRecv(_ int, rlm realm, sourceClient string, sequence uint64, data transfer.FungibleTokenPacketData, denom transfer.Denom) error {
 	memo, ok := parseForwardMemo(data.Memo)
 	if !ok {
 		return nil
 	}
 
-	// Forwarding requires the mint to have landed on this adapter (the ICS20
-	// receiver must be set to our own address; the real recipient lives in
-	// memo.Receiver instead). Otherwise we'd approve/send against a voucher
-	// balance we don't actually hold.
+	// The mint must have landed on this adapter — the real recipient lives
+	// in memo.Receiver, not data.Receiver.
 	if data.Receiver != rlm.Address().String() {
 		return makeError(errReceiverNotAdapter, data.Receiver, rlm.Address().String())
 	}
@@ -62,10 +63,15 @@ func (i *Impl) OnTransferRecv(_ int, rlm realm, sourceClient string, sequence ui
 	baseAmount := u256.NewUintFromInt64(amount)
 	quoteAmount := u256.NewUintFromInt64(amount)
 
+	// grc20reg keys are qualified by the registering realm's own pkgpath
+	// (see transfer.PkgPath's doc comment) -- the bare hash alone wouldn't
+	// resolve, and ZKGM would misclassify this voucher as a native coin.
+	baseToken := fqname.Construct(transfer.PkgPath(), denom.HashHex())
+
 	order := z.TokenOrderV2{
 		Sender:      []byte(rlm.Address().String()),
 		Receiver:    receiver,
-		BaseToken:   []byte(denom.HashHex()),
+		BaseToken:   []byte(baseToken),
 		BaseAmount:  baseAmount,
 		QuoteToken:  cfg.QuoteToken,
 		QuoteAmount: quoteAmount,
@@ -87,22 +93,24 @@ func (i *Impl) OnTransferRecv(_ int, rlm realm, sourceClient string, sequence ui
 	salt := deriveForwardSalt(sourceClient, sequence)
 	timeoutTimestamp := forwardTimeoutTimestamp(memo.Timeout)
 
-	// Intentionally not recovered: any panic here (e.g. from zkgm.Send after
-	// it has already escrowed the voucher) must revert this whole tx so the
-	// ICS20 recv never commits — see the OnTransferRecv/zkgm.Send discussion:
-	// a caught-and-swallowed panic could leave the voucher escrowed with no
-	// packet ever sent, whereas an uncommitted recv lets AtomOne's own
-	// packet timeout refund the original sender.
-	zkgm.Send(cross(rlm), cfg.ZkgmChannelId, timeoutTimestamp, salt, instruction)
+	// Intentionally not recovered: a panic here (e.g. zkgm.Send after it has
+	// already escrowed the voucher) must revert this whole tx, so AtomOne's
+	// own packet timeout can refund the original sender instead.
+	pkt := zkgm.Send(cross(rlm), cfg.ZkgmChannelId, timeoutTimestamp, salt, instruction)
 
-	return nil
+	// Lets ResolveForward(packetHash) find the original packet once
+	// zkgm.GetSendResult reports this send's result. See store.go.
+	packetHash := types.MustCommit(types.CommitPacket(pkt)).String()
+	i.store.SetPendingForward(0, rlm, packetHash, adapter.NewPendingForward(sourceClient, sequence))
+
+	// Defers this ICS20 packet's own ack until ResolveForward later confirms
+	// the ZKGM send's outcome (see WriteHookAck) — not a real failure.
+	return transfer.ErrHookAsync
 }
 
-// deriveForwardSalt derives a per-packet-unique ZKGM send salt from the
-// underlying IBC packet's (sourceClient, sequence). sequence is already
-// guaranteed unique per source client by core, so this needs no counter of
-// its own (see the design discussion: reusing an existing guarantee beats
-// introducing new state we'd have to maintain correctly forever).
+// deriveForwardSalt derives a per-packet-unique ZKGM send salt from
+// (sourceClient, sequence) — already unique per source client by core, so no
+// extra counter state is needed.
 func deriveForwardSalt(sourceClient string, sequence uint64) [32]byte {
 	var seqBytes [8]byte
 	binary.BigEndian.PutUint64(seqBytes[:], sequence)

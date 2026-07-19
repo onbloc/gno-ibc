@@ -14,6 +14,12 @@ func Send(cur realm, channelId types.ChannelId, timeoutTimestamp types.Timestamp
 	return mustGetImpl().Send(0, cur, channelId, timeoutTimestamp, salt, instruction)
 }
 
+// ClearSendResult clears a consumed send-result record (see
+// GetSendResult). Restricted to the realm that originally sent the packet.
+func ClearSendResult(cur realm, packetHash string) {
+	mustGetImpl().ClearSendResult(0, cur, packetHash)
+}
+
 // SendRaw sends a ZKGM packet from hex-encoded instruction fields. Use this
 // entry point from gnokey maketx call (not maketx run) so OriginSend captures
 // any native coins attached with -send for escrow-bearing instructions.

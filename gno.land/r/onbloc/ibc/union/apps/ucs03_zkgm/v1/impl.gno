@@ -147,6 +147,8 @@ func (v *ucs03ZkgmV1) OnAcknowledgementPacket(_ int, rlm realm, packet types.Pac
 	if err := v.acknowledgeInternal(0, rlm, packet, relayer, zp.Salt, zp.Path, zp.Instruction, successful, outerAck.InnerAck); err != nil {
 		panic(err.Error())
 	}
+
+	v.emitSendResultResolved(0, rlm, packet, successful, outerAck.InnerAck)
 }
 
 // OnTimeoutPacket refunds the timed-out instruction, or settles the forwarded parent packet.
@@ -165,6 +167,8 @@ func (v *ucs03ZkgmV1) OnTimeoutPacket(_ int, rlm realm, packet types.Packet, rel
 	if err := v.timeoutInternal(0, rlm, packet, zp.Salt, zp.Path, zp.Instruction); err != nil {
 		panic(err.Error())
 	}
+
+	v.emitSendResultResolved(0, rlm, packet, false, universalErrorAck())
 }
 
 // Send verifies the instruction against the attached funds, namespaces the salt, and emits the packet through core.
@@ -206,7 +210,11 @@ func (v *ucs03ZkgmV1) Send(_ int, rlm realm, channelId types.ChannelId, timeoutT
 		panic(err)
 	}
 
-	return core.SendPacket(cross(rlm), channelId, timeoutTimestamp, data)
+	pkt := core.SendPacket(cross(rlm), channelId, timeoutTimestamp, data)
+
+	v.store.SetSendResultTracked(0, rlm, sendResultKey(pkt), rlm.Previous().PkgPath())
+
+	return pkt
 }
 
 // enforceVersion rejects channels that do not speak the zkgm protocol version.

@@ -12,4 +12,5 @@ const (
 	ErrChannelBalanceV2NotFound  = "channel balance v2 not found"
 	ErrLockedTokenAmountOverflow = "locked token amount overflows uint256"
 	ErrInterfaceConversion       = "interface conversion failed"
+	ErrNotSendResultTracker      = "caller did not send this packet"
 )

@@ -40,6 +40,11 @@ type IAppIntent interface {
 // Instruction rather than a token-transfer shaped argument list.
 type IAppTransfer interface {
 	Send(_ int, rlm realm, channelId types.ChannelId, timeoutTimestamp types.Timestamp, salt [32]byte, instruction z.Instruction) types.Packet
+
+	// ClearSendResult clears a consumed send-result record (see
+	// IAppGetter.GetSendResult). Restricted to the realm that originally
+	// sent the packet.
+	ClearSendResult(_ int, rlm realm, packetHash string)
 }
 
 // IAppGetter is the read-only query surface implemented by the impl and exposed
@@ -47,6 +52,13 @@ type IAppTransfer interface {
 type IAppGetter interface {
 	GetTokenBucket(denom string) (*tb.TokenBucket, error)
 	GetChannelBalanceV2(channelId types.ChannelId, path *u256.Uint, baseToken string, quoteToken []byte) (*u256.Uint, error)
+
+	// GetSendResult returns the recorded ack/timeout result for a packet
+	// previously returned by Send, keyed by its commitment hash
+	// (types.MustCommit(types.CommitPacket(pkt))). found is false if the
+	// packet was never sent via Send (e.g. a Forward child); resolved is
+	// false if it was sent but its ack/timeout hasn't arrived yet.
+	GetSendResult(packetHash string) (successful bool, ack []byte, resolved bool, found bool)
 }
 
 type IStore interface {
@@ -83,6 +95,11 @@ type IStore interface {
 
 	SetReceiver(_ int, rlm realm, path string, receiver z.Zkgmable)
 	GetReceiver(path string) (z.Zkgmable, bool)
+
+	SetSendResultTracked(_ int, rlm realm, packetHash string, trackerPkgPath string)
+	SetSendResultResolved(_ int, rlm realm, packetHash string, successful bool, ack []byte) (trackerPkgPath string, found bool)
+	GetSendResult(packetHash string) (successful bool, ack []byte, resolved bool, found bool)
+	RemoveSendResult(_ int, rlm realm, packetHash string, callerPkgPath string)
 
 	SetRateLimitDisabled(_ int, rlm realm, disabled bool)
 	RateLimitDisabled() bool

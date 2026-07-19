@@ -21,6 +21,7 @@ const (
 	ZkgmForwardInFlightSetEvent        = "ZkgmForwardInFlightSet"
 	ZkgmForwardInFlightPoppedEvent     = "ZkgmForwardInFlightPopped"
 	ZkgmRecvErrorEvent                 = "ZkgmRecvError"
+	ZkgmSendResultResolvedEvent        = "ZkgmSendResultResolved"
 )
 
 func emitZkgmImplUpdatedEvent(callerPkgPath string, oldImplPath string, newImplPath string, allowed []string) {
@@ -69,6 +70,15 @@ func emitZkgmReceiverRegisteredEvent(receiverPkgPath string) {
 	chain.Emit(
 		ZkgmReceiverRegisteredEvent,
 		"receiver_pkg_path", receiverPkgPath,
+	)
+}
+
+func emitZkgmSendResultResolvedEvent(packetHash string, trackerPkgPath string, successful bool) {
+	chain.Emit(
+		ZkgmSendResultResolvedEvent,
+		"packet_hash", packetHash,
+		"tracker_pkg_path", trackerPkgPath,
+		"successful", strconv.FormatBool(successful),
 	)
 }
 

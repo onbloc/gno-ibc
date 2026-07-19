@@ -143,6 +143,13 @@ func (d *dummyImpl) GetChannelBalanceV2(channelId types.ChannelId, path *u256.Ui
 	return d.channelBalance, d.channelBalanceErr
 }
 
+func (d *dummyImpl) GetSendResult(packetHash string) (successful bool, ack []byte, resolved bool, found bool) {
+	return false, nil, false, false
+}
+
+func (d *dummyImpl) ClearSendResult(_ int, rlm realm, packetHash string) {
+}
+
 // resetZkgmForTest returns the proxy package state to a clean baseline. The
 // upgrade model holds the registered impl constructors, the active impl pointer,
 // and the `paused` gate.

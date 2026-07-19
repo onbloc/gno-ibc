@@ -78,7 +78,22 @@ type Store struct {
 	// as opposed to vouchers, which zkgm mints/burns directly.
 	lockedTokenAmounts *bptree.BPTree // denom -> *u256.Uint (permanently locked base token)
 	receivers          *bptree.BPTree // pkgPath -> z.Zkgmable
+	sendResults        *bptree.BPTree // packetHash -> sendResult
 	rateLimitDisabled  bool
+}
+
+// sendResult is what Send automatically records for every packet it sends,
+// making the eventual ack/timeout result queryable via GetSendResult instead
+// of ZKGM having to call back into another realm (see
+// ../ics20zkgm_adapter/async-ack-design-ko.md for why).
+//
+// TrackerPkgPath is captured from the Send caller's own frame, so it can't be
+// spoofed; it gates RemoveSendResult against griefing by an unrelated realm.
+type sendResult struct {
+	TrackerPkgPath string
+	Resolved       bool
+	Successful     bool
+	Ack            []byte
 }
 
 func NewStore() *Store {
@@ -92,6 +107,7 @@ func NewStore() *Store {
 		vouchers:           bptree.NewBPTree32(),
 		lockedTokenAmounts: bptree.NewBPTree32(),
 		receivers:          bptree.NewBPTree32(),
+		sendResults:        bptree.NewBPTree32(),
 		// Rate limiting is opt-in: enabled per-denom by an admin who first
 		// configures a token bucket (see SetBucketConfig). With it enabled, a denom
 		// without a bucket is rejected (union TokenBucketIsAbsent), so it must stay
@@ -304,6 +320,68 @@ func (s *Store) GetReceiver(path string) (z.Zkgmable, bool) {
 	}
 
 	return r.(z.Zkgmable), true
+}
+
+// SetSendResultTracked records that packetHash was sent by trackerPkgPath and
+// its result is not yet known. Called from Send() right after
+// core.SendPacket returns.
+func (s *Store) SetSendResultTracked(_ int, rlm realm, packetHash string, trackerPkgPath string) {
+	assertIsRlmCurrent(0, rlm)
+
+	s.sendResults.Set(packetHash, sendResult{TrackerPkgPath: trackerPkgPath})
+}
+
+// SetSendResultResolved records a tracked packet's final ack/timeout result,
+// returning the tracker's package path for the caller to emit an event with.
+// found is false (a no-op) if packetHash was never tracked — e.g. a Forward
+// child, which is sent via core.SendPacket directly rather than Send().
+func (s *Store) SetSendResultResolved(_ int, rlm realm, packetHash string, successful bool, ack []byte) (trackerPkgPath string, found bool) {
+	assertIsRlmCurrent(0, rlm)
+
+	v, ok := s.sendResults.Get(packetHash)
+	if !ok {
+		return "", false
+	}
+
+	out := v.(sendResult)
+	out.Resolved = true
+	out.Successful = successful
+	out.Ack = ack
+	s.sendResults.Set(packetHash, out)
+
+	return out.TrackerPkgPath, true
+}
+
+// GetSendResult returns the recorded result for a tracked packet hash. found
+// is false if the packet was never tracked; resolved is false if it was
+// tracked but its ack/timeout hasn't arrived yet.
+func (s *Store) GetSendResult(packetHash string) (successful bool, ack []byte, resolved bool, found bool) {
+	v, ok := s.sendResults.Get(packetHash)
+	if !ok {
+		return false, nil, false, false
+	}
+
+	out := v.(sendResult)
+	return out.Successful, out.Ack, out.Resolved, true
+}
+
+// RemoveSendResult clears a consumed (or no-longer-relevant) tracked result.
+// Restricted to the realm that originally sent the packet (the tracker) —
+// see sendResult's doc comment for why.
+func (s *Store) RemoveSendResult(_ int, rlm realm, packetHash string, callerPkgPath string) {
+	assertIsRlmCurrent(0, rlm)
+
+	v, ok := s.sendResults.Get(packetHash)
+	if !ok {
+		return
+	}
+
+	out := v.(sendResult)
+	if out.TrackerPkgPath != callerPkgPath {
+		panic(ErrNotSendResultTracker)
+	}
+
+	s.sendResults.Remove(packetHash)
 }
 
 // SetRateLimitDisabled toggles the global rate-limit kill switch.

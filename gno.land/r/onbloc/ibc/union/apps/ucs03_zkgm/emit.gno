@@ -33,3 +33,11 @@ func EmitForwardInFlightPopped(_ int, rlm realm, packetHash types.H256, found bo
 	}
 	emitZkgmForwardInFlightPoppedEvent(packetHash, found)
 }
+
+func EmitSendResultResolved(_ int, rlm realm, packetHash string, trackerPkgPath string, successful bool) {
+	assertIsRlmCurrent(0, rlm)
+	if rlm.PkgPath() != proxyPkgPath {
+		return
+	}
+	emitZkgmSendResultResolvedEvent(packetHash, trackerPkgPath, successful)
+}

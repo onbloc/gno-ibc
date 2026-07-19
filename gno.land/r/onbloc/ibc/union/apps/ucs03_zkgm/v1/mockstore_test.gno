@@ -23,7 +23,17 @@ type mockStore struct {
 	vouchers           map[string]*zkgm.Voucher
 	lockedTokenAmounts map[string]*u256.Uint
 	receivers          map[string]z.Zkgmable
+	sendResults        map[string]mockSendResult
 	rateLimitDisabled  bool
+}
+
+// mockSendResult mirrors the proxy's unexported sendResult, since the
+// test-owned mockStore can't reuse it.
+type mockSendResult struct {
+	TrackerPkgPath string
+	Resolved       bool
+	Successful     bool
+	Ack            []byte
 }
 
 var _ zkgm.IStore = (*mockStore)(nil)
@@ -39,6 +49,7 @@ func newMockStore() *mockStore {
 		vouchers:           map[string]*zkgm.Voucher{},
 		lockedTokenAmounts: map[string]*u256.Uint{},
 		receivers:          map[string]z.Zkgmable{},
+		sendResults:        map[string]mockSendResult{},
 		// Match NewStore: rate limiting is opt-in (disabled by default).
 		rateLimitDisabled: true,
 	}
@@ -145,6 +156,41 @@ func (m *mockStore) SetReceiver(_ int, rlm realm, path string, receiver z.Zkgmab
 func (m *mockStore) GetReceiver(path string) (z.Zkgmable, bool) {
 	v, ok := m.receivers[path]
 	return v, ok
+}
+
+func (m *mockStore) SetSendResultTracked(_ int, rlm realm, packetHash string, trackerPkgPath string) {
+	m.sendResults[packetHash] = mockSendResult{TrackerPkgPath: trackerPkgPath}
+}
+
+func (m *mockStore) SetSendResultResolved(_ int, rlm realm, packetHash string, successful bool, ack []byte) (string, bool) {
+	out, ok := m.sendResults[packetHash]
+	if !ok {
+		return "", false
+	}
+	out.Resolved = true
+	out.Successful = successful
+	out.Ack = ack
+	m.sendResults[packetHash] = out
+	return out.TrackerPkgPath, true
+}
+
+func (m *mockStore) GetSendResult(packetHash string) (successful bool, ack []byte, resolved bool, found bool) {
+	out, ok := m.sendResults[packetHash]
+	if !ok {
+		return false, nil, false, false
+	}
+	return out.Successful, out.Ack, out.Resolved, true
+}
+
+func (m *mockStore) RemoveSendResult(_ int, rlm realm, packetHash string, callerPkgPath string) {
+	out, ok := m.sendResults[packetHash]
+	if !ok {
+		return
+	}
+	if out.TrackerPkgPath != callerPkgPath {
+		panic(zkgm.ErrNotSendResultTracker)
+	}
+	delete(m.sendResults, packetHash)
 }
 
 func (m *mockStore) SetRateLimitDisabled(_ int, rlm realm, disabled bool) {

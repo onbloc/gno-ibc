@@ -3,7 +3,6 @@ package e2e_setup
 import (
 	"chain"
 	"chain/runtime"
-	"chain/runtime/unsafe"
 
 	"gno.land/p/onbloc/access/manager"
 	"gno.land/p/onbloc/ibc/union/types"
@@ -32,7 +31,7 @@ func PackageAddress(path string) string { return chain.PackageAddress(path).Stri
 
 func Bootstrap(cur realm) {
 	runtime.AssertOriginCall()
-	requireAdmin()
+	requireAdmin(cur)
 	core.UpdateImpl(cross(cur), "gno.land/r/onbloc/ibc/union/core/v1")
 	zkgm.UpdateImpl(cross(cur), "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1")
 	if !core.HasApp([]byte(zkgm.ProxyPkgPath())) {
@@ -48,7 +47,7 @@ func Bootstrap(cur realm) {
 
 func Recover(cur realm) {
 	runtime.AssertOriginCall()
-	admin := requireAdmin()
+	admin := requireAdmin(cur)
 	if core.QueryConnection(gnoConnectionId) == "" {
 		for id := types.ConnectionId(1); id <= gnoConnectionId; id++ {
 			if core.QueryConnection(id) == "" {
@@ -72,9 +71,11 @@ func Recover(cur realm) {
 	requireChannel()
 }
 
-func requireAdmin() address {
-	// SAFE: setup authorization is intentionally bound to the transaction origin.
-	caller := unsafe.OriginCaller()
+func requireAdmin(cur realm) address {
+	if !cur.IsCurrent() {
+		panic("e2e setup realm is not current")
+	}
+	caller := cur.Previous().Address()
 	if !access.HasRole(manager.AdminRole, caller).IsMember {
 		panic("e2e setup caller is not admin")
 	}

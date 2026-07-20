@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   full-cycle:
-    runs-on: [self-hosted, linux]
+    runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
       - name: Check out gno-ibc

@@ -35,7 +35,7 @@ add_account "${TEST_ADDR}=100000000000ugnot"
 add_account "${SENDER_ADDR}=100000000000ugnot"
 
 exec gnodev local \
-  -C /gno-ibc \
+  -C /gno-ibc/gno.land/r/onbloc/ibc/union/testing/e2e_setup \
   -root /gnoroot \
   -extra-root /gno-ibc \
   -node-rpc-listener 0.0.0.0:26657 \

@@ -42,6 +42,7 @@ jobs:
         env:
           UNION_VOYAGER_DIR: ${{ github.workspace }}/union-voyager
           E2E_ARTIFACT_DIR: ${{ github.workspace }}/artifacts
+          DEVNET_LINUX_SYSTEM: x86_64-linux
           TEST_MNEMONIC: ${{ secrets.GNO_E2E_MNEMONIC }}
           ADMIN_MNEMONIC: ${{ secrets.GNO_E2E_MNEMONIC }}
           TRUSTED_MPT_PRIVATE_KEY: ${{ secrets.TRUSTED_MPT_E2E_PRIVATE_KEY }}

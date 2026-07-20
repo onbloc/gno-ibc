@@ -2,6 +2,8 @@ name: Gno Union EVM full cycle
 
 on:
   workflow_dispatch:
+  push:
+    branches: [e2e-test]
   schedule:
     - cron: "17 18 * * *"
 

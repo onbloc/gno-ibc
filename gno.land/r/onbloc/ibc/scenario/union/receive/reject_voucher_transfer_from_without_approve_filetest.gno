@@ -13,7 +13,7 @@ import (
 
 	"gno.land/p/nt/ufmt/v0"
 	"gno.land/p/onbloc/ibc/union/lightclient"
-	types "gno.land/p/onbloc/ibc/union/types"
+	"gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
 	"gno.land/p/demo/tokens/grc20"

@@ -155,6 +155,13 @@ func (v *ucs03ZkgmV1) acknowledgeInternal(_ int, rlm realm, packet types.Packet,
 		}
 
 		return v.acknowledgeCall(0, rlm, packet, path, call)
+	case z.OP_FORWARD:
+		forward, err := decodeForwardInstruction(instruction)
+		if err != nil {
+			return err
+		}
+
+		return v.acknowledgeInternal(0, rlm, packet, relayer, salt, forward.Path, forward.Instruction, successful, ack)
 	default:
 		return makeError(errUnsupportedOpcode)
 	}
@@ -184,6 +191,13 @@ func (v *ucs03ZkgmV1) timeoutInternal(_ int, rlm realm, packet types.Packet, sal
 		}
 
 		return v.timeoutCall(0, rlm, packet, path, call)
+	case z.OP_FORWARD:
+		forward, err := decodeForwardInstruction(instruction)
+		if err != nil {
+			return err
+		}
+
+		return v.timeoutInternal(0, rlm, packet, salt, forward.Path, forward.Instruction)
 	default:
 		return makeError(errUnsupportedOpcode)
 	}

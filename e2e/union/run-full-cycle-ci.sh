@@ -18,10 +18,12 @@ compose_started=0
 mkdir -p "$artifacts"
 exec > >(tee "$artifacts/run.log") 2>&1
 
-for command in cargo cast curl docker git go jq openssl; do
+for command in cargo cast curl docker git go jq make openssl rsync; do
   command -v "$command" >/dev/null || { echo "missing required command: $command" >&2; exit 2; }
 done
 docker compose version >/dev/null
+
+make -C "$repo_root" vendor
 
 default_test_mnemonic=$(sed -n 's/^TEST_MNEMONIC=//p' "$script_dir/.env.example")
 [[ -n $default_test_mnemonic ]] || { echo "TEST_MNEMONIC is missing from .env.example" >&2; exit 2; }

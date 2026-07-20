@@ -57,15 +57,6 @@ call_setup() {
     admin
 }
 
-latest_id() {
-  query=$1
-  id=1
-  while non_empty_query "gno.land/r/onbloc/ibc/union/core.$query($id)"; do
-    id=$((id + 1))
-  done
-  echo $((id - 1))
-}
-
 find_client() {
   type=$1
   id=1
@@ -93,40 +84,6 @@ case "${TOPOLOGY_ACTION:-legacy}" in
     id=$(find_client "$CLIENT_TYPE")
     [ "$id" -gt 0 ] || { echo "no Gno $CLIENT_TYPE client found" >&2; exit 1; }
     echo "GNO_CLIENT_ID=$id"
-    exit
-    ;;
-  init-connection)
-    require_env GNO_CLIENT_ID
-    require_env COUNTERPARTY_CLIENT_ID
-    before=$(latest_id QueryConnection)
-    call_setup OpenConnectionInit "$GNO_CLIENT_ID" "$COUNTERPARTY_CLIENT_ID"
-    id=$(latest_id QueryConnection)
-    [ "$id" -gt "$before" ] || { echo "Gno connection was not created" >&2; exit 1; }
-    echo "GNO_PACKET_CONNECTION_ID=$id"
-    exit
-    ;;
-  ack-connection)
-    require_env GNO_PACKET_CONNECTION_ID
-    require_env COUNTERPARTY_CONNECTION_ID
-    call_setup ForceConnectionOpenAck "$GNO_PACKET_CONNECTION_ID" "$COUNTERPARTY_CONNECTION_ID"
-    echo "GNO_PACKET_CONNECTION_ID=$GNO_PACKET_CONNECTION_ID"
-    exit
-    ;;
-  init-channel)
-    require_env GNO_PACKET_CONNECTION_ID
-    require_env COUNTERPARTY_PORT_ID
-    before=$(latest_id QueryChannel)
-    call_setup OpenChannelInit "$GNO_PACKET_CONNECTION_ID" "$COUNTERPARTY_PORT_ID"
-    id=$(latest_id QueryChannel)
-    [ "$id" -gt "$before" ] || { echo "Gno channel was not created" >&2; exit 1; }
-    echo "GNO_PACKET_CHANNEL_ID=$id"
-    exit
-    ;;
-  ack-channel)
-    require_env GNO_PACKET_CHANNEL_ID
-    require_env COUNTERPARTY_CHANNEL_ID
-    call_setup ForceChannelOpenAck "$GNO_PACKET_CHANNEL_ID" "$COUNTERPARTY_CHANNEL_ID"
-    echo "GNO_PACKET_CHANNEL_ID=$GNO_PACKET_CHANNEL_ID"
     exit
     ;;
   legacy) ;;

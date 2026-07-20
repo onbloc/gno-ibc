@@ -40,7 +40,7 @@ VOYAGER_RAW_KEY=$(awk '
   echo "Voyager Gno signer key not found" >&2
   exit 1
 }
-[ "$(raw-key-address "$VOYAGER_RAW_KEY")" = "$ADMIN_ADDR" ] || {
+[ "${VOYAGER_RAW_KEY,,}" = "$(printf '%s\n' "$ADMIN_MNEMONIC" | mnemonic-raw-key)" ] || {
   echo "admin mnemonic does not match the Voyager Gno signer key" >&2
   exit 1
 }

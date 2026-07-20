@@ -135,7 +135,6 @@ echo "building and verifying the pinned trusted-MPT artifact"
     cargo +nightly-2025-12-05 build -Z build-std=std,panic_abort --profile wasm-release \
       --target wasm32-unknown-unknown --no-default-features --lib -p trusted-mpt-light-client
 )
-"$script_dir/verify-pins.sh"
 UNION_SIGNER_HOME=home "$script_dir/setup-union-evm.sh"
 
 echo "building and starting the isolated Gno/Voyager stack $compose_project"

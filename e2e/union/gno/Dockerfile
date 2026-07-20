@@ -9,9 +9,6 @@ RUN set -eu; . /tmp/gno-version; \
 WORKDIR /src/gno
 RUN cd contribs/gnodev && go build -o /usr/local/bin/gnodev .
 RUN cd gno.land/cmd/gnokey && go build -o /usr/local/bin/gnokey .
-RUN cd gnovm/cmd/gno && go build -o /usr/local/bin/gno .
-COPY e2e/union/gno/testdata/raw-key-address/main.go /tmp/raw-key-address.go
-RUN go build -o /usr/local/bin/raw-key-address /tmp/raw-key-address.go
 COPY e2e/union/gno/testdata/mnemonic-raw-key/ /tmp/mnemonic-raw-key/
 RUN go test /tmp/mnemonic-raw-key/*.go && \
     go build -o /usr/local/bin/mnemonic-raw-key /tmp/mnemonic-raw-key/main.go
@@ -23,8 +20,6 @@ RUN apk add --no-cache bash curl
 
 COPY --from=builder /usr/local/bin/gnodev /usr/local/bin/gnodev
 COPY --from=builder /usr/local/bin/gnokey /usr/local/bin/gnokey
-COPY --from=builder /usr/local/bin/gno /usr/local/bin/gno
-COPY --from=builder /usr/local/bin/raw-key-address /usr/local/bin/raw-key-address
 COPY --from=builder /usr/local/bin/mnemonic-raw-key /usr/local/bin/mnemonic-raw-key
 COPY --from=builder /src/gno /gnoroot
 

@@ -24,30 +24,6 @@ func TestDevnetReadiness(t *testing.T) {
 	}
 }
 
-func TestGnoReady(t *testing.T) {
-	checkGnoReady(t, loadConfig())
-}
-
-func TestGnoIndexerReady(t *testing.T) {
-	checkGnoIndexerReady(t, loadConfig())
-}
-
-func TestUnionReady(t *testing.T) {
-	checkUnionReady(t, loadConfig())
-}
-
-func TestEVMReady(t *testing.T) {
-	checkEVMReady(t, loadConfig())
-}
-
-func TestBeaconReady(t *testing.T) {
-	checkBeaconReady(t, loadConfig())
-}
-
-func TestPostgresReady(t *testing.T) {
-	checkPostgresReady(t, loadConfig())
-}
-
 func checkGnoReady(t *testing.T, cfg config) {
 	t.Helper()
 	waitHTTP(t, cfg.GNORPC+"/status")

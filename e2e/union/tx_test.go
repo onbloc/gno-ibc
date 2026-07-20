@@ -1,11 +1,26 @@
 package unione2e
 
 import (
+	"errors"
 	"io"
 	"net/http"
 	"strings"
 	"testing"
 )
+
+func TestRetrySequenceMismatch(t *testing.T) {
+	attempts := 0
+	out, err := retrySequenceMismatch(func() (string, error) {
+		attempts++
+		if attempts == 1 {
+			return "account sequence mismatch", errors.New("broadcast failed")
+		}
+		return "ok", nil
+	})
+	if err != nil || out != "ok" || attempts != 2 {
+		t.Fatalf("out=%q err=%v attempts=%d", out, err, attempts)
+	}
+}
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
 

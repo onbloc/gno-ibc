@@ -180,9 +180,14 @@ func queryUnionTxs(container, eventType, packetHash string, limit int) ([]UnionT
 	if err != nil {
 		return nil, fmt.Errorf("query Union %s: %w\n%s", eventType, err, out)
 	}
+	return parseUnionTxs([]byte(out))
+}
+
+func parseUnionTxs(body []byte) ([]UnionTx, error) {
 	var resp struct {
 		Txs []struct {
 			Hash   string `json:"hash"`
+			TxHash string `json:"txhash"`
 			Height string `json:"height"`
 		} `json:"txs"`
 		TxResponses []struct {
@@ -190,7 +195,7 @@ func queryUnionTxs(container, eventType, packetHash string, limit int) ([]UnionT
 			Height string `json:"height"`
 		} `json:"tx_responses"`
 	}
-	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+	if err := json.Unmarshal(body, &resp); err != nil {
 		return nil, err
 	}
 	txs := make([]UnionTx, 0, len(resp.TxResponses)+len(resp.Txs))
@@ -202,11 +207,18 @@ func queryUnionTxs(container, eventType, packetHash string, limit int) ([]UnionT
 		txs = append(txs, UnionTx{Hash: tx.TxHash, Height: height})
 	}
 	for _, tx := range resp.Txs {
+		hash := tx.Hash
+		if hash == "" {
+			hash = tx.TxHash
+		}
+		if hash == "" {
+			continue
+		}
 		height, err := strconv.ParseInt(tx.Height, 10, 64)
 		if err != nil {
 			return nil, fmt.Errorf("parse Union tx height %q: %w", tx.Height, err)
 		}
-		txs = append(txs, UnionTx{Hash: tx.Hash, Height: height})
+		txs = append(txs, UnionTx{Hash: hash, Height: height})
 	}
 	return txs, nil
 }

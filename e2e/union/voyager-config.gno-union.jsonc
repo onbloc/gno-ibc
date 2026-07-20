@@ -208,7 +208,7 @@
         "config": {
         "ibc_handler_address": "0xed2af2aD7FE0D92011b26A2e5D1B4dC7D12A47C5",
           "rpc_url": "http://host.docker.internal:8545",
-          "private_key": "0x23312AE62C46C1F05DE7A772C1DD74951009BFCD08B47946E497468DEA6D7008"
+          "private_key": "__TRUSTED_MPT_PRIVATE_KEY__"
         }
       }
     ]
@@ -251,7 +251,7 @@
       "config": {
         "chain_id": "dev",
         "client_configs": {
-          "max_batch_size": 5,
+          "max_batch_size": 1,
           "max_wait_time": {
             "nanos": 0,
             "secs": 10
@@ -305,7 +305,7 @@
         "keyring": {
           "keys": [
             {
-              "key": "0xaa820fa947beb242032a41b6dc9a8b9c37d8f5fbcda0966b1ec80335b10a7d6f",
+              "key": "__UNION_PRIVATE_KEY__",
               "name": "union-devnet-1-key-1",
               "type": "raw"
             }
@@ -329,7 +329,7 @@
             {
               "type": "raw",
               "name": "sepolia-key-1",
-              "key": "0x4e9444a6efd6d42725a250b650a781da2737ea308c839eaccb0f7f3dbd2fea77"
+              "key": "__EVM_PRIVATE_KEY__"
             }
           ]
         },
@@ -344,7 +344,7 @@
         "keyring": {
           "keys": [
             {
-              "key": "0xea97b9fddb7e6bf6867090a7a819657047949fbb9466d617f940538efd888605",
+              "key": "__GNO_PRIVATE_KEY__",
               "name": "gno-devnet-key-1",
               "type": "raw"
             }
@@ -375,7 +375,7 @@
         "chain_id": "32382",
         "ibc_handler_address": "0xed2af2aD7FE0D92011b26A2e5D1B4dC7D12A47C5",
         "rpc_url": "http://host.docker.internal:8545",
-        "private_key": "0x23312AE62C46C1F05DE7A772C1DD74951009BFCD08B47946E497468DEA6D7008"
+        "private_key": "__TRUSTED_MPT_PRIVATE_KEY__"
       }
     },
     {

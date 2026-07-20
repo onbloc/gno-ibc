@@ -85,6 +85,14 @@ func TestQueryConnectionMissingReturnsEmpty(cur realm, t *testing.T) {
 	uassert.Equal(t, "", QueryConnection(types.ConnectionId(999)))
 }
 
+func TestQueryConnectionState(cur realm, t *testing.T) {
+	resetStore(cur)
+	id := store.nextConnectionId()
+	store.saveConnection(id, types.NewConnection(types.ConnectionStateOpen, 1, 2, 3))
+	uassert.Equal(t, "3", QueryConnectionState(id))
+	uassert.Equal(t, "0", QueryConnectionState(types.ConnectionId(999)))
+}
+
 // --- QueryChannel ---
 
 func TestQueryChannelReturnsABIHex(cur realm, t *testing.T) {
@@ -105,6 +113,13 @@ func TestQueryChannelReturnsABIHex(cur realm, t *testing.T) {
 func TestQueryChannelMissingReturnsEmpty(cur realm, t *testing.T) {
 	resetStore(cur)
 	uassert.Equal(t, "", QueryChannel(types.ChannelId(999)))
+}
+
+func TestQueryChannelState(cur realm, t *testing.T) {
+	resetStore(cur)
+	_, _, channelId := setupOpenChannel(t)
+	uassert.Equal(t, "3", QueryChannelState(channelId))
+	uassert.Equal(t, "0", QueryChannelState(types.ChannelId(999)))
 }
 
 // --- GetClientStatus ---

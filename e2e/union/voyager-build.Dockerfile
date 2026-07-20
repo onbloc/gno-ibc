@@ -2,9 +2,10 @@
 # Build union-voyager in Linux environment
 # Build context should be the union-voyager directory
 # Rust 1.90 stable avoids nightly-only regressions in transitive crates.
-FROM rust:1.90-bookworm AS builder
+FROM rust:1.90-bookworm@sha256:3914072ca0c3b8aad871db9169a651ccfce30cf58303e5d6f2db16d1d8a7e58f AS builder
 ENV RUSTC_BOOTSTRAP=1
 ARG UNION_COMMIT
+LABEL org.opencontainers.image.revision=$UNION_COMMIT
 
 WORKDIR /build
 
@@ -14,14 +15,11 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     clang \
     protobuf-compiler \
-	git \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy source from the union-voyager build context.
 COPY --from=union-src . .
-RUN test -n "$UNION_COMMIT" && \
-    test "$(git rev-parse HEAD)" = "$UNION_COMMIT" && \
-    test -z "$(git status --porcelain)"
+RUN test -n "$UNION_COMMIT"
 
 # Build only binaries used by e2e/union/voyager-config.gno-union.jsonc.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
@@ -73,7 +71,9 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cp /build/target/debug/voyager-plugin-* /build/out/plugins/
 
 # Output stage - use debian for glibc compatibility
-FROM debian:bookworm-slim
+FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
+ARG UNION_COMMIT
+LABEL org.opencontainers.image.revision=$UNION_COMMIT
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/* \

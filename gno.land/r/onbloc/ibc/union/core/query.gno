@@ -53,6 +53,16 @@ func QueryConnection(connectionId types.ConnectionId) string {
 	return hexString(bz)
 }
 
+// QueryConnectionState returns the numeric state of a connection, or "0"
+// when the connection is missing.
+func QueryConnectionState(connectionId types.ConnectionId) string {
+	conn, ok := store.GetConnection(connectionId)
+	if !ok {
+		return "0"
+	}
+	return strconv.FormatUint(uint64(conn.State), 10)
+}
+
 // QueryChannel returns the ABI-encoded channel as a hex string, or an empty
 // string when the channel is missing.
 func QueryChannel(channelId types.ChannelId) string {
@@ -66,6 +76,16 @@ func QueryChannel(channelId types.ChannelId) string {
 	}
 
 	return hexString(bz)
+}
+
+// QueryChannelState returns the numeric state of a channel, or "0" when the
+// channel is missing.
+func QueryChannelState(channelId types.ChannelId) string {
+	channel, ok := store.GetChannel(channelId)
+	if !ok {
+		return "0"
+	}
+	return strconv.FormatUint(uint64(channel.State), 10)
 }
 
 // GetClientStatus returns the client status as a uint8 string ("1"=Active,

@@ -1,4 +1,4 @@
-FROM golang:1.26.0-alpine AS builder
+FROM golang:1.26.0-alpine@sha256:d4c4845f5d60c6a974c6000ce58ae079328d03ab7f721a0734277e69905473e5 AS builder
 
 RUN apk add --no-cache git make
 COPY .gno-version /tmp/gno-version
@@ -14,7 +14,7 @@ COPY e2e/union/gno/testdata/raw-key-address/main.go /tmp/raw-key-address.go
 RUN go build -o /usr/local/bin/raw-key-address /tmp/raw-key-address.go
 RUN rm -rf /src/gno/.git
 
-FROM alpine:3.21
+FROM alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
 
 RUN apk add --no-cache bash curl
 

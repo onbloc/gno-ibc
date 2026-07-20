@@ -57,6 +57,18 @@ func dockerExec(container string, args ...string) (string, error) {
 	return string(out), err
 }
 
+func retrySequenceMismatch(run func() (string, error)) (string, error) {
+	var out string
+	var err error
+	for range 5 {
+		out, err = run()
+		if err == nil || !strings.Contains(out, "account sequence mismatch") {
+			return out, err
+		}
+	}
+	return out, err
+}
+
 func voyagerCLI(t *testing.T, cfg config, args ...string) string {
 	t.Helper()
 	cmdArgs := append([]string{"./voyager", "-c", cfg.VoyagerConfig}, args...)
@@ -130,17 +142,19 @@ func forceUpdateUnionGnoClient(t *testing.T, cfg config, proofHeight int64) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := dockerExec(cfg.UnionContainer,
-		"uniond", "tx", "wasm", "execute", cfg.UnionCoreContract, string(msg),
-		"--from", cfg.UnionSignerKey,
-		"--keyring-backend", "test",
-		"--home", "/.union",
-		"--chain-id", cfg.UnionChainID,
-		"--node", "tcp://localhost:26657",
-		"--gas", "19000000",
-		"--fees", "19000000au",
-		"--yes", "--broadcast-mode", "sync", "-o", "json",
-	)
+	out, err := retrySequenceMismatch(func() (string, error) {
+		return dockerExec(cfg.UnionContainer,
+			"uniond", "tx", "wasm", "execute", cfg.UnionCoreContract, string(msg),
+			"--from", cfg.UnionSignerKey,
+			"--keyring-backend", "test",
+			"--home", cfg.UnionSignerHome,
+			"--chain-id", cfg.UnionChainID,
+			"--node", "tcp://localhost:26657",
+			"--gas", "19000000",
+			"--fees", "19000000au",
+			"--yes", "--broadcast-mode", "sync", "-o", "json",
+		)
+	})
 	if err != nil {
 		t.Fatalf("force-update Union Gno client %s: %v\n%s", cfg.UnionGnoClientID, err, out)
 	}
@@ -173,18 +187,20 @@ func broadcastUnionPacket(t *testing.T, cfg config, instruction string) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out, err := dockerExec(cfg.UnionContainer,
-		"uniond", "tx", "wasm", "execute", cfg.UnionZKGMContract, string(msg),
-		"--amount", "10au",
-		"--from", cfg.UnionPacketSignerKey,
-		"--keyring-backend", "test",
-		"--home", "/.union",
-		"--chain-id", cfg.UnionChainID,
-		"--node", "tcp://localhost:26657",
-		"--gas", "19000000",
-		"--fees", "19000000au",
-		"--yes", "--broadcast-mode", "sync", "-o", "json",
-	)
+	out, err := retrySequenceMismatch(func() (string, error) {
+		return dockerExec(cfg.UnionContainer,
+			"uniond", "tx", "wasm", "execute", cfg.UnionZKGMContract, string(msg),
+			"--amount", "10au",
+			"--from", cfg.UnionPacketSignerKey,
+			"--keyring-backend", "test",
+			"--home", cfg.UnionSignerHome,
+			"--chain-id", cfg.UnionChainID,
+			"--node", "tcp://localhost:26657",
+			"--gas", "19000000",
+			"--fees", "19000000au",
+			"--yes", "--broadcast-mode", "sync", "-o", "json",
+		)
+	})
 	if err != nil {
 		t.Fatalf("broadcast Union EVM packet: %v\n%s", err, out)
 	}

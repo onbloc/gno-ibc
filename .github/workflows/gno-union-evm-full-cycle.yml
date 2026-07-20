@@ -1,0 +1,52 @@
+name: Gno Union EVM full cycle
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 18 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gno-union-evm-full-cycle
+  cancel-in-progress: false
+
+jobs:
+  full-cycle:
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 180
+    steps:
+      - name: Check out gno-ibc
+        uses: actions/checkout@v4
+        with:
+          path: gno-ibc
+
+      - name: Check out pinned Union
+        uses: actions/checkout@v4
+        with:
+          repository: unionlabs/union
+          ref: b671c959cc7cebd2dbb65aaee8c15164d0cc4284
+          path: union-voyager
+
+      - name: Run full cycle
+        working-directory: gno-ibc
+        env:
+          UNION_VOYAGER_DIR: ${{ github.workspace }}/union-voyager
+          E2E_ARTIFACT_DIR: ${{ github.workspace }}/artifacts
+          TEST_MNEMONIC: ${{ secrets.GNO_E2E_MNEMONIC }}
+          ADMIN_MNEMONIC: ${{ secrets.GNO_E2E_MNEMONIC }}
+          TRUSTED_MPT_PRIVATE_KEY: ${{ secrets.TRUSTED_MPT_E2E_PRIVATE_KEY }}
+          UNION_PRIVATE_KEY: ${{ secrets.UNION_E2E_PRIVATE_KEY }}
+          EVM_PRIVATE_KEY: ${{ secrets.EVM_E2E_PRIVATE_KEY }}
+          GNO_PRIVATE_KEY: ${{ secrets.GNO_E2E_PRIVATE_KEY }}
+        run: e2e/union/run-full-cycle-ci.sh
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gno-union-evm-full-cycle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts
+          if-no-files-found: warn
+          retention-days: 7

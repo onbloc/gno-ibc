@@ -72,12 +72,21 @@ services:
       GNO_CHAIN_ID: ${GNO_CHAIN_ID:-dev}
       GNO_GNOKEY_REMOTE: ${GNO_GNOKEY_REMOTE:-gno:26657}
       ADMIN_MNEMONIC: ${ADMIN_MNEMONIC}
+      TOPOLOGY_ACTION: ${TOPOLOGY_ACTION:-legacy}
+      CLIENT_TYPE: ${CLIENT_TYPE:-}
+      GNO_CLIENT_ID: ${GNO_CLIENT_ID:-}
+      COUNTERPARTY_CLIENT_ID: ${COUNTERPARTY_CLIENT_ID:-}
+      GNO_PACKET_CONNECTION_ID: ${GNO_PACKET_CONNECTION_ID:-}
+      COUNTERPARTY_CONNECTION_ID: ${COUNTERPARTY_CONNECTION_ID:-}
+      COUNTERPARTY_PORT_ID: ${COUNTERPARTY_PORT_ID:-}
+      GNO_PACKET_CHANNEL_ID: ${GNO_PACKET_CHANNEL_ID:-}
+      COUNTERPARTY_CHANNEL_ID: ${COUNTERPARTY_CHANNEL_ID:-}
     depends_on:
       gno-bootstrap:
         condition: service_completed_successfully
 
   postgres:
-    image: ${POSTGRES_IMAGE:-postgres:16.9-alpine}
+    image: ${POSTGRES_IMAGE:?set POSTGRES_IMAGE to a pinned digest}
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgrespassword

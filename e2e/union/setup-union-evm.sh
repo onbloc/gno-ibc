@@ -12,6 +12,8 @@ TRUSTED_MPT_WASM=${TRUSTED_MPT_WASM:-"$UNION_VOYAGER_DIR/target/wasm32-unknown-u
 CLIENT_TYPE=trusted/evm/mpt
 SALT=lightclients/trusted/evm/mpt
 
+UNION_VOYAGER_DIR="$UNION_VOYAGER_DIR" TRUSTED_MPT_WASM="$TRUSTED_MPT_WASM" "$(dirname "$0")/verify-pins.sh"
+
 uniond() {
 	docker exec "$UNION_CONTAINER" uniond "$@"
 }

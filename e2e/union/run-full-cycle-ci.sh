@@ -113,26 +113,10 @@ if [[ -z ${TRUSTED_MPT_PRIVATE_KEY:-} ]]; then
   TRUSTED_MPT_PRIVATE_KEY="0x$(openssl rand -hex 32)"
   export TRUSTED_MPT_PRIVATE_KEY
 fi
-if [[ -z ${UNION_PRIVATE_KEY:-} ]]; then
-  union_raw_key=$(docker exec "$UNION_CONTAINER" uniond keys export alice \
-    --keyring-backend test --home home --unsafe --unarmored-hex 2>/dev/null)
-  union_raw_key=${union_raw_key//$'\r'/}
-  union_raw_key=${union_raw_key//$'\n'/}
-  UNION_PRIVATE_KEY="0x${union_raw_key#0x}"
-  export UNION_PRIVATE_KEY
-fi
 if [[ -z ${EVM_PRIVATE_KEY:-} ]]; then
   evm_raw_key=$(tr -d '[:space:]' <"$union_repo/networks/genesis/devnet-eth/dev-key0.prv")
   EVM_PRIVATE_KEY="0x${evm_raw_key#0x}"
   export EVM_PRIVATE_KEY
-fi
-for name in TRUSTED_MPT_PRIVATE_KEY UNION_PRIVATE_KEY EVM_PRIVATE_KEY; do
-  [[ ${!name} =~ ^0x[0-9a-fA-F]{64}$ ]] || { echo "could not derive a valid $name" >&2; exit 2; }
-done
-if [[ -n ${GITHUB_ACTIONS:-} ]]; then
-  for name in TEST_MNEMONIC ADMIN_MNEMONIC TRUSTED_MPT_PRIVATE_KEY UNION_PRIVATE_KEY EVM_PRIVATE_KEY; do
-    printf '::add-mask::%s\n' "${!name}"
-  done
 fi
 
 echo "deploying pinned Union contracts"
@@ -163,13 +147,26 @@ UNION_SIGNER_HOME=home "$script_dir/setup-union-evm.sh"
 
 echo "building and starting the isolated Gno/Voyager stack $compose_project"
 compose --profile voyager build gno voyager
+if [[ -z ${UNION_PRIVATE_KEY:-} ]]; then
+  union_mnemonic=$(sed -n 's/^[[:space:]]*alice = "\(.*\)";/\1/p' \
+    "$union_repo/networks/mkCosmosDevnet.nix")
+  [[ -n $union_mnemonic ]] || { echo "could not discover the pinned Union devnet mnemonic" >&2; exit 2; }
+  UNION_PRIVATE_KEY=$(printf '%s\n' "$union_mnemonic" | \
+    compose run --rm --no-deps -T --entrypoint mnemonic-raw-key gno)
+  export UNION_PRIVATE_KEY
+fi
 if [[ -z ${GNO_PRIVATE_KEY:-} ]]; then
   GNO_PRIVATE_KEY=$(printf '%s\n' "$TEST_MNEMONIC" | \
     compose run --rm --no-deps -T --entrypoint mnemonic-raw-key gno)
   export GNO_PRIVATE_KEY
 fi
+for name in TRUSTED_MPT_PRIVATE_KEY UNION_PRIVATE_KEY EVM_PRIVATE_KEY GNO_PRIVATE_KEY; do
+  [[ ${!name} =~ ^0x[0-9a-fA-F]{64}$ ]] || { echo "could not derive a valid $name" >&2; exit 2; }
+done
 if [[ -n ${GITHUB_ACTIONS:-} ]]; then
-  printf '::add-mask::%s\n' "$GNO_PRIVATE_KEY"
+  for name in TEST_MNEMONIC ADMIN_MNEMONIC TRUSTED_MPT_PRIVATE_KEY UNION_PRIVATE_KEY EVM_PRIVATE_KEY GNO_PRIVATE_KEY; do
+    printf '::add-mask::%s\n' "${!name}"
+  done
 fi
 VOYAGER_CONFIG_OUTPUT="$VOYAGER_CONFIG" "$script_dir/render-voyager-config.sh"
 compose_started=1

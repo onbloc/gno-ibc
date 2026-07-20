@@ -46,6 +46,30 @@ func Bootstrap(cur realm) {
 	}
 }
 
+func OpenConnectionInit(cur realm, clientId, counterpartyClientId uint32) {
+	runtime.AssertOriginCall()
+	requireAdmin()
+	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(types.ClientId(clientId), types.ClientId(counterpartyClientId)))
+}
+
+func ForceConnectionOpenAck(cur realm, connectionId, counterpartyConnectionId uint32) {
+	runtime.AssertOriginCall()
+	requireAdmin()
+	core.ForceConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(types.ConnectionId(connectionId), types.ConnectionId(counterpartyConnectionId), nil, 0))
+}
+
+func OpenChannelInit(cur realm, connectionId uint32, counterpartyPortId string) {
+	runtime.AssertOriginCall()
+	admin := requireAdmin()
+	core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit([]byte(portId), []byte(counterpartyPortId), types.ConnectionId(connectionId), zkgm.Version, admin.String()))
+}
+
+func ForceChannelOpenAck(cur realm, channelId, counterpartyChannelId uint32) {
+	runtime.AssertOriginCall()
+	admin := requireAdmin()
+	core.ForceChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(types.ChannelId(channelId), zkgm.Version, types.ChannelId(counterpartyChannelId), nil, 0, admin.String()))
+}
+
 func Recover(cur realm) {
 	runtime.AssertOriginCall()
 	admin := requireAdmin()

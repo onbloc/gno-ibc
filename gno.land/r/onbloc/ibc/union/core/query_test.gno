@@ -26,6 +26,13 @@ func TestQueryClientStateMissingReturnsEmpty(cur realm, t *testing.T) {
 	uassert.Equal(t, "", QueryClientState(types.ClientId(999)))
 }
 
+func TestQueryClientType(cur realm, t *testing.T) {
+	resetStore(cur)
+	clientId := registerMockClient(&mockClient{status: types.StatusActive})
+	uassert.Equal(t, string(mockType), QueryClientType(clientId))
+	uassert.Equal(t, "", QueryClientType(types.ClientId(999)))
+}
+
 // --- QueryConsensusState ---
 
 func TestQueryConsensusStateReturnsHex(cur realm, t *testing.T) {

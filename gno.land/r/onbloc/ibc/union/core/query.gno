@@ -17,6 +17,16 @@ func QueryClientState(clientId types.ClientId) string {
 	return hexString(bz)
 }
 
+// QueryClientType returns the registered type of a client, or an empty string
+// when the client is missing.
+func QueryClientType(clientId types.ClientId) string {
+	typ, ok := store.ClientType(clientId)
+	if !ok {
+		return ""
+	}
+	return string(typ)
+}
+
 // QueryConsensusState returns the consensus state bytes at a given height as a
 // hex string, or an empty string when missing.
 func QueryConsensusState(clientId types.ClientId, height uint64) string {

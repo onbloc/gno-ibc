@@ -77,7 +77,7 @@ ensure_client() {
   id=$($finder "$wanted")
   if [[ $id -eq 0 ]]; then
     voyager msg create-client "$@" --ibc-spec-id ibc-union --client-type "$wanted" --height finalized --enqueue >/dev/null
-    id=$(wait_client "$finder" "$wanted")
+    id=$(wait_client "$finder" "$wanted") || return
   fi
   echo "$id"
 }

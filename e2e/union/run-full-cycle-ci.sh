@@ -16,13 +16,14 @@ union_started=0
 compose_started=0
 
 mkdir -p "$artifacts"
+exec > >(tee "$artifacts/run.log") 2>&1
 
 for command in cargo cast curl docker git jq nix openssl rg; do
   command -v "$command" >/dev/null || { echo "missing required command: $command" >&2; exit 2; }
 done
 docker compose version >/dev/null
 
-for name in TEST_MNEMONIC ADMIN_MNEMONIC TRUSTED_MPT_PRIVATE_KEY UNION_PRIVATE_KEY EVM_PRIVATE_KEY GNO_PRIVATE_KEY; do
+for name in TEST_MNEMONIC ADMIN_MNEMONIC TRUSTED_MPT_PRIVATE_KEY UNION_PRIVATE_KEY EVM_PRIVATE_KEY; do
   [[ -n ${!name:-} ]] || { echo "missing required secret: $name" >&2; exit 2; }
   if [[ -n ${GITHUB_ACTIONS:-} ]]; then
     printf '::add-mask::%s\n' "${!name}"
@@ -54,7 +55,7 @@ diagnostics() {
 cleanup() {
   status=$?
   trap - EXIT INT TERM
-  if ((status != 0)); then diagnostics; fi
+  diagnostics
   if ((compose_started)); then
     compose --profile setup --profile voyager down -v --remove-orphans >/dev/null 2>&1 || true
   fi
@@ -98,8 +99,6 @@ export UNION_VOYAGER_DIR="$union_repo"
 export VOYAGER_CONFIG="$runtime_dir/voyager-config.jsonc"
 export NO_BLOCKSCOUT=true
 
-VOYAGER_CONFIG_OUTPUT="$VOYAGER_CONFIG" "$script_dir/render-voyager-config.sh"
-
 echo "starting isolated Union/EVM devnet $union_project"
 union_started=1
 DEVNET_PROJECT_NAME="$union_project" DEVNET_ACTION=up "$union_repo/networks/run-linux-devnet.sh"
@@ -141,6 +140,15 @@ UNION_SIGNER_HOME=home "$script_dir/setup-union-evm.sh"
 
 echo "building and starting the isolated Gno/Voyager stack $compose_project"
 compose --profile voyager build gno voyager
+if [[ -z ${GNO_PRIVATE_KEY:-} ]]; then
+  GNO_PRIVATE_KEY=$(printf '%s\n' "$TEST_MNEMONIC" | \
+    compose run --rm --no-deps -T --entrypoint mnemonic-raw-key gno)
+  export GNO_PRIVATE_KEY
+fi
+if [[ -n ${GITHUB_ACTIONS:-} ]]; then
+  printf '::add-mask::%s\n' "$GNO_PRIVATE_KEY"
+fi
+VOYAGER_CONFIG_OUTPUT="$VOYAGER_CONFIG" "$script_dir/render-voyager-config.sh"
 compose_started=1
 compose --profile voyager up -d gno tx-indexer postgres voyager
 wait_http Gno http://localhost:16657/status

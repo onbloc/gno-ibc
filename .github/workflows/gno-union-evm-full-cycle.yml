@@ -25,7 +25,7 @@ jobs:
       - name: Check out pinned Union
         uses: actions/checkout@v4
         with:
-          repository: unionlabs/union
+          repository: onbloc/union-voyager
           ref: b671c959cc7cebd2dbb65aaee8c15164d0cc4284
           path: union-voyager
 
@@ -39,11 +39,10 @@ jobs:
           TRUSTED_MPT_PRIVATE_KEY: ${{ secrets.TRUSTED_MPT_E2E_PRIVATE_KEY }}
           UNION_PRIVATE_KEY: ${{ secrets.UNION_E2E_PRIVATE_KEY }}
           EVM_PRIVATE_KEY: ${{ secrets.EVM_E2E_PRIVATE_KEY }}
-          GNO_PRIVATE_KEY: ${{ secrets.GNO_E2E_PRIVATE_KEY }}
         run: e2e/union/run-full-cycle-ci.sh
 
-      - name: Upload failure diagnostics
-        if: failure()
+      - name: Upload diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gno-union-evm-full-cycle-${{ github.run_id }}-${{ github.run_attempt }}

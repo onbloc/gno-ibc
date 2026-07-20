@@ -3,7 +3,12 @@ set -eu
 
 script_dir=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
 UNION_COMMIT=$(sed -n 's/^UNION_COMMIT=//p' "$script_dir/.env.example")
-TRUSTED_MPT_WASM_SHA256=$(sed -n 's/^TRUSTED_MPT_WASM_SHA256=//p' "$script_dir/.env.example")
+case $(uname -m) in
+	x86_64) checksum_name=TRUSTED_MPT_WASM_SHA256_X86_64 ;;
+	aarch64|arm64) checksum_name=TRUSTED_MPT_WASM_SHA256_AARCH64 ;;
+	*) echo "unsupported build architecture: $(uname -m)" >&2; exit 2 ;;
+esac
+TRUSTED_MPT_WASM_SHA256=$(sed -n "s/^$checksum_name=//p" "$script_dir/.env.example")
 
 UNION_VOYAGER_DIR=${UNION_VOYAGER_DIR:-"$script_dir/../../../union-voyager"}
 TRUSTED_MPT_WASM=${TRUSTED_MPT_WASM:-"$UNION_VOYAGER_DIR/target/wasm32-unknown-unknown/wasm-release/trusted_mpt_light_client.wasm"}

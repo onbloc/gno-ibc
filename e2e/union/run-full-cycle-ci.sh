@@ -18,17 +18,15 @@ compose_started=0
 mkdir -p "$artifacts"
 exec > >(tee "$artifacts/run.log") 2>&1
 
-for command in cargo cast curl docker git jq openssl; do
+for command in cargo cast curl docker git go jq openssl; do
   command -v "$command" >/dev/null || { echo "missing required command: $command" >&2; exit 2; }
 done
 docker compose version >/dev/null
 
-for name in TEST_MNEMONIC ADMIN_MNEMONIC TRUSTED_MPT_PRIVATE_KEY UNION_PRIVATE_KEY EVM_PRIVATE_KEY; do
-  [[ -n ${!name:-} ]] || { echo "missing required secret: $name" >&2; exit 2; }
-  if [[ -n ${GITHUB_ACTIONS:-} ]]; then
-    printf '::add-mask::%s\n' "${!name}"
-  fi
-done
+default_test_mnemonic=$(sed -n 's/^TEST_MNEMONIC=//p' "$script_dir/.env.example")
+[[ -n $default_test_mnemonic ]] || { echo "TEST_MNEMONIC is missing from .env.example" >&2; exit 2; }
+export TEST_MNEMONIC=${TEST_MNEMONIC:-$default_test_mnemonic}
+export ADMIN_MNEMONIC=${ADMIN_MNEMONIC:-$TEST_MNEMONIC}
 
 compose() {
   docker compose --project-name "$compose_project" \
@@ -110,6 +108,32 @@ UNION_CONTAINER=$(docker ps --filter "label=com.docker.compose.project=$union_pr
   --filter publish=26657 --format '{{.Names}}' | head -n 1)
 [[ -n $UNION_CONTAINER ]] || { echo "could not discover isolated Union container" >&2; exit 1; }
 export UNION_CONTAINER
+
+if [[ -z ${TRUSTED_MPT_PRIVATE_KEY:-} ]]; then
+  TRUSTED_MPT_PRIVATE_KEY="0x$(openssl rand -hex 32)"
+  export TRUSTED_MPT_PRIVATE_KEY
+fi
+if [[ -z ${UNION_PRIVATE_KEY:-} ]]; then
+  union_raw_key=$(docker exec "$UNION_CONTAINER" uniond keys export alice \
+    --keyring-backend test --home home --unsafe --unarmored-hex 2>/dev/null)
+  union_raw_key=${union_raw_key//$'\r'/}
+  union_raw_key=${union_raw_key//$'\n'/}
+  UNION_PRIVATE_KEY="0x${union_raw_key#0x}"
+  export UNION_PRIVATE_KEY
+fi
+if [[ -z ${EVM_PRIVATE_KEY:-} ]]; then
+  evm_raw_key=$(tr -d '[:space:]' <"$union_repo/networks/genesis/devnet-eth/dev-key0.prv")
+  EVM_PRIVATE_KEY="0x${evm_raw_key#0x}"
+  export EVM_PRIVATE_KEY
+fi
+for name in TRUSTED_MPT_PRIVATE_KEY UNION_PRIVATE_KEY EVM_PRIVATE_KEY; do
+  [[ ${!name} =~ ^0x[0-9a-fA-F]{64}$ ]] || { echo "could not derive a valid $name" >&2; exit 2; }
+done
+if [[ -n ${GITHUB_ACTIONS:-} ]]; then
+  for name in TEST_MNEMONIC ADMIN_MNEMONIC TRUSTED_MPT_PRIVATE_KEY UNION_PRIVATE_KEY EVM_PRIVATE_KEY; do
+    printf '::add-mask::%s\n' "${!name}"
+  done
+fi
 
 echo "deploying pinned Union contracts"
 "$union_repo/networks/run-linux-nix.sh" cosmwasm-scripts.union-devnet.deploy-manager \

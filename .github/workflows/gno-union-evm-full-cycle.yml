@@ -2,8 +2,9 @@ name: Gno Union EVM full cycle
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
-    branches: [e2e-test]
+    branches: [main]
   schedule:
     - cron: "17 18 * * *"
 
@@ -43,11 +44,6 @@ jobs:
           UNION_VOYAGER_DIR: ${{ github.workspace }}/union-voyager
           E2E_ARTIFACT_DIR: ${{ github.workspace }}/artifacts
           DEVNET_LINUX_SYSTEM: x86_64-linux
-          TEST_MNEMONIC: ${{ secrets.GNO_E2E_MNEMONIC }}
-          ADMIN_MNEMONIC: ${{ secrets.GNO_E2E_MNEMONIC }}
-          TRUSTED_MPT_PRIVATE_KEY: ${{ secrets.TRUSTED_MPT_E2E_PRIVATE_KEY }}
-          UNION_PRIVATE_KEY: ${{ secrets.UNION_E2E_PRIVATE_KEY }}
-          EVM_PRIVATE_KEY: ${{ secrets.EVM_E2E_PRIVATE_KEY }}
         run: e2e/union/run-full-cycle-ci.sh
 
       - name: Upload diagnostics

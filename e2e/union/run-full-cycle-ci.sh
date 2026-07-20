@@ -18,7 +18,7 @@ compose_started=0
 mkdir -p "$artifacts"
 exec > >(tee "$artifacts/run.log") 2>&1
 
-for command in cargo cast curl docker git jq nix openssl rg; do
+for command in cargo cast curl docker git jq openssl rg; do
   command -v "$command" >/dev/null || { echo "missing required command: $command" >&2; exit 2; }
 done
 docker compose version >/dev/null

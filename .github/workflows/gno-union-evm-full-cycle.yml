@@ -31,6 +31,12 @@ jobs:
           ref: b671c959cc7cebd2dbb65aaee8c15164d0cc4284
           path: union-voyager
 
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1.9.0
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install nightly-2025-12-05 --profile minimal --component rust-src
+
       - name: Run full cycle
         working-directory: gno-ibc
         env:

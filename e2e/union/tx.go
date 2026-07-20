@@ -251,7 +251,16 @@ func cosmosTxHash(body []byte) (string, error) {
 func clientStatesFromCreate(body []byte) (string, string, error) {
 	var value any
 	if err := json.Unmarshal(body, &value); err != nil {
-		return "", "", err
+		value = nil
+		lines := strings.Split(strings.TrimSpace(string(body)), "\n")
+		for i := len(lines) - 1; i >= 0; i-- {
+			if json.Unmarshal([]byte(lines[i]), &value) == nil {
+				break
+			}
+		}
+		if value == nil {
+			return "", "", err
+		}
 	}
 	clientState, ok := findString(value, "client_state_bytes")
 	if !ok {

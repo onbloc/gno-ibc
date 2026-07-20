@@ -33,9 +33,13 @@ func TestQueryUnionBalanceBig(t *testing.T) {
 }
 
 func TestClientStatesFromCreate(t *testing.T) {
-	client, consensus, err := clientStatesFromCreate([]byte(`{"@value":{"datagrams":[{"datagram":{"@value":{"client_state_bytes":"client","consensus_state_bytes":"consensus"}}}]}}`))
+	body := []byte("\x1b[34mDEBUG\x1b[0m preparing client state\n" + `{"@value":{"datagrams":[{"datagram":{"@value":{"client_state_bytes":"client","consensus_state_bytes":"consensus"}}}]}}`)
+	client, consensus, err := clientStatesFromCreate(body)
 	if err != nil || client != "client" || consensus != "consensus" {
 		t.Fatalf("got client=%q consensus=%q err=%v", client, consensus, err)
+	}
+	if _, _, err := clientStatesFromCreate([]byte("DEBUG only")); err == nil {
+		t.Fatal("expected invalid non-JSON output to fail")
 	}
 }
 

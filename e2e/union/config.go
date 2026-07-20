@@ -68,7 +68,7 @@ func loadConfig() config {
 		UnionCoreContract:       getenv("UNION_CORE_CONTRACT", "union1nk3nes4ef6vcjan5tz6stf9g8p08q2kgqysx6q5exxh89zakp0msq5z79t"),
 		UnionZKGMContract:       getenv("UNION_ZKGM_CONTRACT", "union1rfz3ytg6l60wxk5rxsk27jvn2907cyav04sz8kde3xhmmf9nplxqr8y05c"),
 		UnionTokenMinter:        getenv("UNION_TOKEN_MINTER", "union1tylj088axudzec7jmfenw9n7swhlg9y7h0ctmfnw8j2z0pqkvj2qkajn8m"),
-		UnionSignerKey:          getenv("UNION_SIGNER_KEY", "voyager-relayer"),
+		UnionSignerKey:          getenv("UNION_SIGNER_KEY", "voyager-admin"),
 		UnionPacketSignerKey:    getenv("UNION_PACKET_SIGNER_KEY", "voyager-admin"),
 		UnionPacketSender:       getenv("UNION_PACKET_SENDER", "union1jk9psyhvgkrt2cumz8eytll2244m2nnz4yt2g2"),
 		UnionEVMConnectionID:    getenv("UNION_EVM_CONNECTION_ID", "6"),

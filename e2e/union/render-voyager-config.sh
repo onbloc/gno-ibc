@@ -18,7 +18,7 @@ sed \
   -e "s/__GNO_PRIVATE_KEY__/$GNO_PRIVATE_KEY/g" \
   "$template" >"$output"
 
-if rg -n '__[A-Z0-9_]+__' "$output" >/dev/null; then
+if grep -En '__[A-Z0-9_]+__' "$output" >/dev/null; then
   echo "unrendered Voyager config placeholder" >&2
   exit 1
 fi

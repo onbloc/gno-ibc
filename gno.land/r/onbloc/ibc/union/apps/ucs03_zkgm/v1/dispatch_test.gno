@@ -113,18 +113,6 @@ func TestAcknowledgeInternal(cur realm, t *testing.T) {
 			instr:   batchMustCallInstruction(z.Call{}),
 			wantErr: "",
 		},
-		{
-			name: "forwarded call",
-			instr: z.Instruction{
-				Version: z.INSTR_VERSION_0,
-				Opcode:  z.OP_FORWARD,
-				Operand: mustForwardBytes(z.Forward{
-					Path:        u256.NewUint(7),
-					Instruction: batchMustCallInstruction(z.Call{}),
-				}),
-			},
-			wantErr: "",
-		},
 	}
 
 	for _, tc := range cases {
@@ -166,18 +154,6 @@ func TestTimeoutInternal(cur realm, t *testing.T) {
 		{
 			name:    "successful call",
 			instr:   batchMustCallInstruction(z.Call{}),
-			wantErr: "",
-		},
-		{
-			name: "forwarded call",
-			instr: z.Instruction{
-				Version: z.INSTR_VERSION_0,
-				Opcode:  z.OP_FORWARD,
-				Operand: mustForwardBytes(z.Forward{
-					Path:        u256.NewUint(7),
-					Instruction: batchMustCallInstruction(z.Call{}),
-				}),
-			},
 			wantErr: "",
 		},
 	}

@@ -1,4 +1,4 @@
-package v1
+package ucs03_zkgm
 
 // forward_test.gno tests the validation and dispatch logic in forward.gno,
 // including instruction allow-listing, buildForwardChild validation,
@@ -243,7 +243,10 @@ func TestBuildForwardChild(cur realm, t *testing.T) {
 				TimeoutTimestamp: tc.timeoutTimestamp,
 				Instruction:      batchMustCallInstruction(batchCall("sender", "")),
 			})
-			uassert.ErrorIs(t, err, makeError(tc.wantErr))
+			// uassert.ErrorIs now does real errors.Is identity checking, and
+			// makeError allocates a fresh error each call, so two makeError(x)
+			// calls with the same text are never Is-equal; compare by message.
+			uassert.ErrorContains(t, err, tc.wantErr)
 			uassert.Equal(t, uint32(0), uint32(child.SourceChannelId))
 			uassert.True(t, len(child.Data) == 0)
 		})

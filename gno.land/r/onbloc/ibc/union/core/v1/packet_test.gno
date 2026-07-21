@@ -1,4 +1,4 @@
-package v1
+package core
 
 import (
 	"testing"
@@ -157,7 +157,7 @@ func TestAssertPacketDataSize(cur realm, t *testing.T) {
 	}{
 		{"empty data", []byte{}, ""},
 		{"max hex attr size", make([]byte, maxPacketDataBytes), ""},
-		{"too large hex attr size", make([]byte, maxPacketDataBytes+1), core.ErrPacketDataTooLarge},
+		{"too large hex attr size", make([]byte, maxPacketDataBytes+1), core.ErrPacketCombinedDataTooLarge},
 	}
 
 	for _, tc := range tests {
@@ -174,99 +174,24 @@ func TestAssertPacketDataSize(cur realm, t *testing.T) {
 	}
 }
 
-func TestPacketEntrypointsRejectOversizedPacketData(cur realm, t *testing.T) {
+// SendPacket is the only entrypoint that gates on packet data size up front,
+// before the packet is ever committed. PacketRecv/IntentPacketRecv/
+// PacketAcknowledgement/PacketTimeout all operate on packets that already
+// exist (sent, and possibly proven on a counterparty with a different size
+// config), so there is no equivalent up-front rejection for them; instead,
+// the combined packet_data+ack/relayerMsg/marketMakerMsg budget is enforced
+// by core's own EmitPacketRecv/EmitIntentPacketRecv/EmitWriteAck/
+// EmitPacketTimeout/EmitPacketAck (see TestIsValidEventSize in core), so an
+// oversized combination aborts the whole call once core tries to emit it.
+func TestSendPacketRejectsOversizedPacketData(cur realm, t *testing.T) {
 	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
 	oversized := make([]byte, maxPacketDataBytes+1)
-	tests := []struct {
-		name string
-		run  func(cur realm)
-	}{
-		{
-			name: "send packet",
-			run: func(cur realm) {
-				v := newTestImpl()
-				v.SendPacket(0, cur, types.ChannelId(1), types.Timestamp(0), oversized)
-			},
-		},
-		{
-			name: "packet acknowledgement",
-			run: func(cur realm) {
-				v := newTestImpl()
-				v.PacketAcknowledgement(0, cur, types.MsgPacketAcknowledgement{Packets: []types.Packet{{Data: oversized}}})
-			},
-		},
-		{
-			name: "packet timeout",
-			run: func(cur realm) {
-				v := newTestImpl()
-				v.PacketTimeout(0, cur, types.MsgPacketTimeout{Packet: types.Packet{Data: oversized}})
-			},
-		},
-	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			uassert.AbortsContains(t, cur, core.ErrPacketDataTooLarge, func(cur realm) {
-				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-				tc.run(cur)
-			})
-		})
-	}
-}
-
-func TestRecvEntrypointsDispatchOversizedPacketDataWithReducedEvents(cur realm, t *testing.T) {
-	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
-	oversized := make([]byte, maxPacketDataBytes+1)
-	tests := []struct {
-		name       string
-		run        func(cur realm, v *coreV1, packet types.Packet)
-		wantRecv   int
-		wantIntent int
-	}{
-		{
-			name:     "packet recv",
-			wantRecv: 1,
-			run: func(cur realm, v *coreV1, packet types.Packet) {
-				v.PacketRecv(0, cur, types.MsgPacketRecv{
-					Packets:     []types.Packet{packet},
-					RelayerMsgs: [][]byte{[]byte("rm")},
-					Proof:       []byte("proof"),
-					ProofHeight: 10,
-				})
-			},
-		},
-		{
-			name:       "intent packet recv",
-			wantIntent: 1,
-			run: func(cur realm, v *coreV1, packet types.Packet) {
-				v.IntentPacketRecv(0, cur, types.MsgIntentPacketRecv{
-					Packets:             []types.Packet{packet},
-					MarketMakerMessages: [][]byte{[]byte("mm")},
-				})
-			},
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			v := newTestImpl()
-			chId, _, mApp := setupOpenChannel(cur, v)
-			packet := recvPacket(chId, "oversized")
-			packet.Data = oversized
-
-			uassert.NotAborts(t, cur, func(cur realm) {
-				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-				tc.run(cur, v, packet)
-			})
-
-			uassert.Equal(t, tc.wantRecv, mApp.recvCalls)
-			uassert.Equal(t, tc.wantIntent, mApp.intentRecvCalls)
-			receipt, ok := v.store.AcknowledgementReceipt(chId, packet)
-			uassert.True(t, ok)
-			uassert.True(t, receipt == types.CommitAcks([][]byte{[]byte("ack")}))
-		})
-	}
+	uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+		v := newTestImpl()
+		v.SendPacket(0, cur, types.ChannelId(1), types.Timestamp(1000), oversized)
+	})
 }
 
 func TestPacketRecv(cur realm, t *testing.T) {
@@ -493,6 +418,185 @@ func TestPacketRecv(cur realm, t *testing.T) {
 				return
 			}
 			tc.run(cur, t)
+		})
+	}
+}
+
+// TestPacketRecvProofFailureLeavesNoReceipt extends the existing "proof
+// failure" AbortsContains case in TestPacketRecv with the post-abort state
+// check E-T3 asked for. verifyMembership runs once for the whole batch before
+// the per-packet loop that calls acceptRecvPacket/SetPacketReceipt, so a bad
+// proof genuinely aborts before any receipt is written -- unlike an
+// app-level rejection (e.g. an oversized relayerMsg), where core has already
+// recorded the receipt by the time the app is even called. HasPacketCommitment
+// is asserted too even though it is a no-op here: commitment is a send-side
+// concept (only SendPacket ever calls CommitPacket, see core/v1/packet.gno)
+// and recv never touches it, so it is always false on this path.
+func TestPacketRecvProofFailureLeavesNoReceipt(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	v := newTestImpl()
+	ms := v.store.(*mockStore)
+	clientId := createClient(cur, v, &mockLightClient{membershipErr: "bad proof"}, nil, nil)
+	ms.SaveConnection(0, cur, types.ConnectionId(1),
+		core.NewConnection(types.ConnectionStateOpen, clientId, types.ClientId(7), types.ConnectionId(2)))
+	port := types.Bytes(cur.Previous().PkgPath())
+	ms.registerApp(port, &mockApp{})
+	v.ChannelOpenInit(0, cur, types.MsgChannelOpenInit{PortId: port, ConnectionId: types.ConnectionId(1), Version: "v1"})
+	chId := v.store.(*mockStore).currentChannelId()
+	ms.SaveChannel(0, cur, chId, types.Channel{State: types.ChannelStateOpen, ConnectionId: types.ConnectionId(1), CounterpartyChannelId: types.ChannelId(9), Version: "v1"})
+
+	packet := recvPacket(chId, "proof-failure-no-receipt")
+
+	uassert.AbortsContains(t, cur, "bad proof", func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+		v.PacketRecv(0, cur, types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{[]byte("rm")}, Proof: []byte("p"), ProofHeight: 10})
+	})
+
+	uassert.False(t, v.store.HasPacketReceipt(packet))
+	uassert.False(t, v.store.HasPacketCommitment(packet))
+}
+
+// TestPacketRecvBatchAbortsEntirelyOnOversizedEntry is E-T2's unit-testable
+// scope. This mock simulates an app panicking for an arbitrary reason --
+// mirroring the panic core's own EmitPacketRecv now raises when
+// packet.Data+relayerMsg exceeds the combined event budget (see
+// TestRecvEntrypointsRejectOversizedCombinedPacket for that guard tested end
+// to end), without needing a real oversized payload here. What this test
+// locks down is that a panic from any packet in a batch aborts the whole
+// PacketRecv call, and that no packet ordered after the panicking one is
+// ever dispatched or receipted.
+// HasPacketCommitment is asserted too even though it is a no-op on recv (see
+// TestPacketRecvProofFailureLeavesNoReceipt).
+//
+// Whether an *earlier* packet's own state survives the abort is a chain/ABCI-
+// level guarantee this test harness cannot observe -- see the "terminating
+// panic is the assertion" note on hostile_receiver_reverts_atomically_filetest.gno.
+// That is why "oversized first" (not an earlier valid packet) is what proves
+// the batch is rejected as a whole here.
+func TestPacketRecvBatchAbortsEntirelyOnOversizedEntry(cur realm, t *testing.T) {
+	tests := []struct {
+		name          string
+		packets       func(chId types.ChannelId) []types.Packet
+		wantRecvCalls int
+		untouched     func(packets []types.Packet) types.Packet
+	}{
+		{
+			name: "oversized first leaves the later valid packet untouched",
+			packets: func(chId types.ChannelId) []types.Packet {
+				return []types.Packet{recvPacket(chId, "batch-oversized"), recvPacket(chId, "batch-valid")}
+			},
+			wantRecvCalls: 1,
+			untouched:     func(packets []types.Packet) types.Packet { return packets[1] },
+		},
+		{
+			name: "oversized in the middle stops packets ordered after it",
+			packets: func(chId types.ChannelId) []types.Packet {
+				return []types.Packet{recvPacket(chId, "batch-valid-1"), recvPacket(chId, "batch-oversized"), recvPacket(chId, "batch-valid-2")}
+			},
+			wantRecvCalls: 2,
+			untouched:     func(packets []types.Packet) types.Packet { return packets[2] },
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+			v := newTestImpl()
+			chId, _, mApp := setupOpenChannel(cur, v)
+			packets := tc.packets(chId)
+			mApp.panicOnData = "batch-oversized"
+			mApp.panicMsg = core.ErrPacketCombinedDataTooLarge
+
+			relayerMsgs := make([][]byte, len(packets))
+			for i := range relayerMsgs {
+				relayerMsgs[i] = []byte("rm")
+			}
+
+			uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+				v.PacketRecv(0, cur, types.MsgPacketRecv{
+					Packets:     packets,
+					RelayerMsgs: relayerMsgs,
+					Proof:       []byte("p"),
+					ProofHeight: 10,
+				})
+			})
+
+			uassert.Equal(t, tc.wantRecvCalls, mApp.recvCalls)
+			untouched := tc.untouched(packets)
+			uassert.False(t, v.store.HasPacketReceipt(untouched))
+			uassert.False(t, v.store.HasPacketCommitment(untouched))
+		})
+	}
+}
+
+// TestRecvEntrypointsRejectOversizedCombinedPacket drives PacketRecv and
+// IntentPacketRecv with a genuinely oversized packet.Data or paired
+// relayer/maker msg (not a mocked app panic), proving EmitPacketRecv and
+// EmitIntentPacketRecv's own IsValidEventSize guard fires end to end.
+// Mirrors the pattern in TestWriteAcknowledgementWritesAsyncAck's oversized
+// case, which covers the equivalent guard on EmitWriteAck.
+func TestRecvEntrypointsRejectOversizedCombinedPacket(cur realm, t *testing.T) {
+	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
+	oversized := make([]byte, maxPacketDataBytes+1)
+	small := []byte("small")
+
+	tests := []struct {
+		name string
+		data []byte
+		msg  []byte
+		run  func(cur realm, v *coreV1, packet types.Packet, msg []byte)
+	}{
+		{
+			name: "packet recv: oversized packet.Data",
+			data: oversized,
+			msg:  small,
+			run: func(cur realm, v *coreV1, packet types.Packet, msg []byte) {
+				v.PacketRecv(0, cur, types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{msg}, Proof: []byte("p"), ProofHeight: 10})
+			},
+		},
+		{
+			name: "packet recv: oversized relayer msg",
+			data: small,
+			msg:  oversized,
+			run: func(cur realm, v *coreV1, packet types.Packet, msg []byte) {
+				v.PacketRecv(0, cur, types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{msg}, Proof: []byte("p"), ProofHeight: 10})
+			},
+		},
+		{
+			name: "intent packet recv: oversized packet.Data",
+			data: oversized,
+			msg:  small,
+			run: func(cur realm, v *coreV1, packet types.Packet, msg []byte) {
+				v.IntentPacketRecv(0, cur, types.MsgIntentPacketRecv{Packets: []types.Packet{packet}, MarketMakerMessages: [][]byte{msg}})
+			},
+		},
+		{
+			name: "intent packet recv: oversized market maker msg",
+			data: small,
+			msg:  oversized,
+			run: func(cur realm, v *coreV1, packet types.Packet, msg []byte) {
+				v.IntentPacketRecv(0, cur, types.MsgIntentPacketRecv{Packets: []types.Packet{packet}, MarketMakerMessages: [][]byte{msg}})
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+			v := newTestImpl()
+			chId, _, _ := setupOpenChannel(cur, v)
+			packet := types.Packet{
+				SourceChannelId:      types.ChannelId(9),
+				DestinationChannelId: chId,
+				Data:                 tc.data,
+				TimeoutTimestamp:     farFuture,
+			}
+
+			uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+				tc.run(cur, v, packet, tc.msg)
+			})
 		})
 	}
 }
@@ -844,6 +948,54 @@ func TestPacketAcknowledgementLengthMismatchIsPartial(cur realm, t *testing.T) {
 	}
 }
 
+// TestPacketAcknowledgementRejectsOversizedCombinedAck drives
+// PacketAcknowledgement with a genuinely oversized packet.Data or
+// counterparty-proven acknowledgement (not a mocked app panic), proving
+// EmitPacketAck's own IsValidEventSize guard fires end to end. The
+// acknowledgement is proven from the counterparty's commitment, so unlike
+// WriteAcknowledgement it can never be swapped for a smaller value here --
+// see the matching note on OnAcknowledgementPacket in zkgm's impl.gno.
+func TestPacketAcknowledgementRejectsOversizedCombinedAck(cur realm, t *testing.T) {
+	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
+	oversized := make([]byte, maxPacketDataBytes+1)
+	small := []byte("small")
+
+	tests := []struct {
+		name string
+		data []byte
+		ack  []byte
+	}{
+		{"oversized packet.Data", oversized, small},
+		{"oversized acknowledgement", small, oversized},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+			v := newTestImpl()
+			lc := &mockLightClient{timestampAtHt: farFuture}
+			chId, _, _ := setupOpenChannelWithLightClient(cur, v, lc)
+			packet := types.Packet{
+				SourceChannelId:      chId,
+				DestinationChannelId: types.ChannelId(9),
+				Data:                 tc.data,
+				TimeoutTimestamp:     farFuture,
+			}
+			v.store.CommitPacket(0, cur, packet)
+
+			uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+				v.PacketAcknowledgement(0, cur, types.MsgPacketAcknowledgement{
+					Packets:          []types.Packet{packet},
+					Acknowledgements: [][]byte{tc.ack},
+					Proof:            []byte("proof"),
+					ProofHeight:      10,
+				})
+			})
+		})
+	}
+}
+
 func TestMarkPacketAcknowledged(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
@@ -971,6 +1123,38 @@ func TestPacketTimeoutRefunds(cur realm, t *testing.T) {
 	})
 
 	uassert.Equal(t, 1, mApp.timeoutCalls)
+}
+
+// TestPacketTimeoutRejectsOversizedPacketData seeds a packet commitment
+// directly (bypassing SendPacket's own assertPacketDataSize gate, the same
+// way TestWriteAcknowledgementWritesAsyncAck's oversized case seeds a
+// receipt) so an oversized packet.Data can reach PacketTimeout as if it had
+// been committed under a looser EventConfig. Proves EmitPacketTimeout's own
+// IsValidEventSize guard fires.
+func TestPacketTimeoutRejectsOversizedPacketData(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	v := newTestImpl()
+	lc := &mockLightClient{timestampAtHt: farFuture}
+	chId, _, _ := setupOpenChannelWithLightClient(cur, v, lc)
+
+	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
+	oversized := make([]byte, maxPacketDataBytes+1)
+	packet := types.Packet{
+		SourceChannelId:      chId,
+		DestinationChannelId: types.ChannelId(9),
+		Data:                 oversized,
+		TimeoutTimestamp:     types.Timestamp(1000),
+	}
+	v.store.CommitPacket(0, cur, packet)
+
+	uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+		v.PacketTimeout(0, cur, types.MsgPacketTimeout{
+			Packet:      packet,
+			Proof:       []byte("proof"),
+			ProofHeight: 5,
+		})
+	})
 }
 
 func TestPacketTimeoutRejectsInvalidMessages(cur realm, t *testing.T) {
@@ -1145,13 +1329,22 @@ func TestVerifyNonMembership(cur realm, t *testing.T) {
 	}
 }
 
+// TestWriteAcknowledgementWritesAsyncAck's "oversized packet with existing
+// receipt" case now aborts: EmitWriteAck (called at the end of
+// WriteAcknowledgement) guards its own packet.Data/Acknowledgement
+// combination with IsValidEventSize, so an oversized pair can no longer
+// reach chain.Emit regardless of caller. zkgm's forward.gno used to
+// re-check parent.Data+ack before calling WriteAcknowledgement, but that
+// guard was redundant with this one and has been removed; core no longer
+// relies on every caller checking for itself.
 func TestWriteAcknowledgementWritesAsyncAck(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
 	tests := []struct {
-		name string
-		data []byte
-		seed func(cur realm, v *coreV1, packet types.Packet)
+		name       string
+		data       []byte
+		seed       func(cur realm, v *coreV1, packet types.Packet)
+		wantAborts bool
 	}{
 		{
 			name: "packet received as async",
@@ -1171,6 +1364,7 @@ func TestWriteAcknowledgementWritesAsyncAck(cur realm, t *testing.T) {
 			seed: func(cur realm, v *coreV1, packet types.Packet) {
 				v.store.SetPacketReceipt(0, cur, packet)
 			},
+			wantAborts: true,
 		},
 	}
 
@@ -1186,6 +1380,14 @@ func TestWriteAcknowledgementWritesAsyncAck(cur realm, t *testing.T) {
 				TimeoutTimestamp:     farFuture,
 			}
 			tc.seed(cur, v, packet)
+
+			if tc.wantAborts {
+				uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
+					testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+					v.WriteAcknowledgement(0, cur, types.MsgWriteAcknowledgement{Packet: packet, Acknowledgement: []byte("late-ack")})
+				})
+				return
+			}
 
 			v.WriteAcknowledgement(0, cur, types.MsgWriteAcknowledgement{Packet: packet, Acknowledgement: []byte("late-ack")})
 
@@ -1391,7 +1593,13 @@ func TestCommitSyncAck(cur realm, t *testing.T) {
 				TimeoutTimestamp:     farFuture,
 			}
 
-			err := v.commitSyncAck(0, cur, packet, tc.result)
+			channel := types.Channel{
+				ConnectionId: types.ConnectionId(1),
+				Version:      "v1",
+			}
+			connection := core.NewConnection(types.ConnectionStateOpen, types.ClientId(1), types.ClientId(7), types.ConnectionId(2))
+
+			err := v.commitSyncAck(0, cur, packet, channel, connection, tc.result)
 			if tc.wantErr != "" {
 				uassert.Equal(t, tc.wantErr, err.Error())
 				return

@@ -1,4 +1,4 @@
-package v1
+package ucs03_zkgm
 
 import (
 	u256 "gno.land/p/gnoswap/uint256"

@@ -1,4 +1,4 @@
-package v1
+package ucs03_zkgm
 
 import (
 	"time"
@@ -22,6 +22,10 @@ const (
 // the verify path observes, exactly as the proxy Send entry does in production.
 func (v *ucs03ZkgmV1) verifyTokenOrderV2X(cur realm, funds *funds, channelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
 	return v.verifyTokenOrderV2(0, cur, funds, channelId, path, order)
+}
+
+func (v *ucs03ZkgmV1) verifyInternalX(cur realm, funds *funds, channelId types.ChannelId, path *u256.Uint, instruction z.Instruction) error {
+	return v.verifyInternal(0, cur, funds, channelId, path, instruction)
 }
 
 func (v *ucs03ZkgmV1) verifyBatchX(cur realm, funds *funds, channelId types.ChannelId, path *u256.Uint, batch z.Batch) error {

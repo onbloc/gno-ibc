@@ -1,4 +1,4 @@
-package v1
+package ucs03_zkgm
 
 // impl_test.gno covers impl.gno's IBC App receiver surface: channel-handshake
 // version enforcement and the closed-channel policy. The packet lifecycle

@@ -111,8 +111,8 @@ func (s *Store) SetTokenOrigin(_ int, rlm realm, denom string, path *u256.Uint) 
 
 // GetTokenOrigin returns the recorded mint path for a denom.
 func (s *Store) GetTokenOrigin(denom string) (*u256.Uint, bool) {
-	v, ok := s.tokenOrigin.Get(denom)
-	if !ok {
+	v := s.tokenOrigin.Get(denom)
+	if v == nil {
 		return nil, false
 	}
 
@@ -137,8 +137,8 @@ func (s *Store) RemoveChannelBalanceV2(_ int, rlm realm, key string) {
 
 // GetChannelBalanceV2 returns the escrow balance for a key.
 func (s *Store) GetChannelBalanceV2(key string) (*u256.Uint, bool) {
-	v, ok := s.channelBalanceV2.Get(key)
-	if !ok {
+	v := s.channelBalanceV2.Get(key)
+	if v == nil {
 		return nil, false
 	}
 
@@ -154,8 +154,8 @@ func (s *Store) SetMetadataImageOf(_ int, rlm realm, denom string, image [32]byt
 
 // GetMetadataImageOf returns a wrapped denom's metadata image.
 func (s *Store) GetMetadataImageOf(denom string) ([32]byte, bool) {
-	v, ok := s.metadataImageOf.Get(denom)
-	if !ok {
+	v := s.metadataImageOf.Get(denom)
+	if v == nil {
 		return [32]byte{}, false
 	}
 
@@ -171,8 +171,8 @@ func (s *Store) SetForeignToken(_ int, rlm realm, denom string, token []byte) {
 
 // GetForeignToken returns the origin token bytes for a wrapped denom.
 func (s *Store) GetForeignToken(denom string) ([]byte, bool) {
-	v, ok := s.hashToForeignToken.Get(denom)
-	if !ok {
+	v := s.hashToForeignToken.Get(denom)
+	if v == nil {
 		return nil, false
 	}
 
@@ -188,8 +188,8 @@ func (s *Store) SetInFlightPacket(_ int, rlm realm, packetHash string, parent ty
 
 // GetInFlightPacket returns the parent packet for a forwarded-child hash.
 func (s *Store) GetInFlightPacket(packetHash string) (types.Packet, bool) {
-	v, ok := s.inFlightPacket.Get(packetHash)
-	if !ok {
+	v := s.inFlightPacket.Get(packetHash)
+	if v == nil {
 		return types.Packet{}, false
 	}
 
@@ -212,8 +212,8 @@ func (s *Store) SetTokenBucket(_ int, rlm realm, denom string, bucket *tb.TokenB
 
 // GetTokenBucket returns the rate-limit bucket for a denom.
 func (s *Store) GetTokenBucket(denom string) (*tb.TokenBucket, bool) {
-	v, ok := s.tokenBucket.Get(denom)
-	if !ok {
+	v := s.tokenBucket.Get(denom)
+	if v == nil {
 		return nil, false
 	}
 
@@ -236,8 +236,8 @@ func (s *Store) SetVoucher(_ int, rlm realm, ibcDenom string, v *Voucher) {
 
 // GetVoucher returns the wrapped voucher for an ibc denom.
 func (s *Store) GetVoucher(ibcDenom string) (*Voucher, bool) {
-	v, ok := s.vouchers.Get(ibcDenom)
-	if !ok {
+	v := s.vouchers.Get(ibcDenom)
+	if v == nil {
 		return nil, false
 	}
 
@@ -311,8 +311,8 @@ func (s *Store) AddLockedTokenAmount(_ int, rlm realm, denom string, amount *u25
 
 // GetLockedTokenAmount returns the total base-token amount permanently locked for a denom.
 func (s *Store) GetLockedTokenAmount(denom string) (*u256.Uint, bool) {
-	v, ok := s.lockedTokenAmounts.Get(denom)
-	if !ok {
+	v := s.lockedTokenAmounts.Get(denom)
+	if v == nil {
 		return nil, false
 	}
 
@@ -333,8 +333,8 @@ func (s *Store) SetReceiver(_ int, rlm realm, path string, receiver z.Zkgmable) 
 
 // GetReceiver returns the callback target registered at a package path.
 func (s *Store) GetReceiver(path string) (z.Zkgmable, bool) {
-	r, ok := s.receivers.Get(path)
-	if !ok {
+	r := s.receivers.Get(path)
+	if r == nil {
 		return nil, false
 	}
 

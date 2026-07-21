@@ -45,7 +45,7 @@ const (
 )
 
 func main(cur realm) {
-	// grc20.NewToken is a non-crossing (_ int, rlm realm, ...) call: it needs cur
+	// grc20.NewToken is a non-crossing (..., rlm realm) call: it needs cur
 	// to still be this scenario's own ambient frame, so it must run before any
 	// testing.SetRealm below reassigns that ambient context to an EOA.
 	println("[SCENARIO] 1. Register a local grc20 token and mint 40 units to the user")
@@ -68,9 +68,8 @@ func main(cur realm) {
 // issuer — and mints 40 units to the user. Kept separate from bootstrap/lock
 // because grc20.NewToken must run before any testing.SetRealm call.
 func setupGRC20(cur realm) (*grc20.Token, *grc20.PrivateLedger, string) {
-	token, ledger := grc20.NewToken(0, cur, "Scenario GRC20", "SCN", 6)
-	grc20reg.Register(cross(cur), token, grc20Slug)
-	denom := cur.PkgPath() + "." + grc20Slug
+	token, ledger := grc20.NewToken("Scenario GRC20", "SCN", 6, 0, cur)
+	denom := grc20reg.Register(cross(cur), token, grc20Slug)
 
 	if err := ledger.Mint(userAddr, 40); err != nil {
 		panic(err)
@@ -225,7 +224,7 @@ func (e mockError) Error() string { return string(e) }
 
 // Output:
 // [SCENARIO] 1. Register a local grc20 token and mint 40 units to the user
-// [INFO] registered grc20 denom: gno.land/r/onbloc/ibc/scenario/union/receive.grc20-happy
+// [INFO] registered grc20 denom: gno.land/r/onbloc/ibc/scenario/union/receive.SCN
 // [INFO] user grc20 balance: 40
 // [EXPECTED] user grc20 balance should be 40 (freshly minted)
 //

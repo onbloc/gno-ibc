@@ -398,7 +398,7 @@ func TestRecvBatchInvalidChildAbortsAfterPriorChildRan(cur realm, t *testing.T) 
 	const destChan = types.ChannelId(72)
 	receiver := testAddress("batch-inv-child-rx")
 	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
-	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T", canonicalDecimals)
+	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "BAT1", canonicalDecimals)
 
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
@@ -443,7 +443,7 @@ func TestRecvBatchChildDecodeErrorAbortsAfterPriorChildRan(cur realm, t *testing
 	const destChan = types.ChannelId(73)
 	receiver := testAddress("batch-decode-err-rx")
 	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
-	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T", canonicalDecimals)
+	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "BAT2", canonicalDecimals)
 
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),

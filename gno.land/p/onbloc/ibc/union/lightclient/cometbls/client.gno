@@ -270,8 +270,8 @@ func (c *CometblsLightClient) hasConsensusState(height types.Height) bool {
 }
 
 func (c *CometblsLightClient) getConsensusState(height types.Height) (*ConsensusState, bool) {
-	v, found := c.consensusStateByHeight.Get(heightKey(height))
-	if !found {
+	v := c.consensusStateByHeight.Get(heightKey(height))
+	if v == nil {
 		return nil, false
 	}
 

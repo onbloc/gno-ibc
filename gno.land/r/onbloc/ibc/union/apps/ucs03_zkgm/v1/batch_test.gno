@@ -203,7 +203,8 @@ func TestExecuteBatchRunsTokenOrderThenCall(cur realm, t *testing.T) {
 	relayer := testAddress("batch-exec-relayer")
 	receiver := testAddress("batch-exec-receiver")
 	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
-	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T", canonicalDecimals)
+	_, err := v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T1", canonicalDecimals)
+	uassert.NoError(t, err)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -286,8 +287,8 @@ func TestAcknowledgeBatch(cur realm, t *testing.T) {
 			orderB := batchRefundOrder("ack-fail-b", "ibc/batch-ack-fail-b", "quote-b", 17)
 			v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount.Int64())
 			v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount.Int64())
-			uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderA.BaseAmount))
-			uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderB.BaseAmount))
+			uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "BFAA", 0, cur.Address(), orderA.BaseAmount))
+			uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "BFAB", 0, cur.Address(), orderB.BaseAmount))
 
 			batch = z.Batch{Instructions: []z.Instruction{
 				batchMustOrderInstruction(orderA),
@@ -319,14 +320,14 @@ func TestTimeoutBatchTokenOrderChildrenRefund(cur realm, t *testing.T) {
 	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
 	orderA := batchRefundOrder("timeout-a", "ibc/batch-timeout-a", "quote-a", 11)
 	orderB := batchRefundOrder("timeout-b", "ibc/batch-timeout-b", "quote-b", 17)
-	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderA.BaseAmount))
-	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderB.BaseAmount))
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "BTOA", 0, cur.Address(), orderA.BaseAmount))
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "BTOB", 0, cur.Address(), orderB.BaseAmount))
 	v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount.Int64())
 	v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount.Int64())
 	// Escrow the wrapped vouchers in the proxy so the timeout refund can transfer
 	// them back to each sender (settleEscrowedV2 moves ibc/ vouchers out of escrow).
-	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderA.BaseAmount))
-	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderB.BaseAmount))
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "BTOA", 0, cur.Address(), orderA.BaseAmount))
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "BTOB", 0, cur.Address(), orderB.BaseAmount))
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(orderA),
 		batchMustOrderInstruction(orderB),

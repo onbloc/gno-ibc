@@ -5,6 +5,7 @@ import (
 
 	"gno.land/p/demo/tokens/grc20"
 	u256 "gno.land/p/gnoswap/uint256"
+	"gno.land/p/nt/fqname/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	"gno.land/r/demo/defi/grc20reg"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
@@ -22,7 +23,10 @@ const canonicalDecimals = 6
 // so a first-use mint already has the origin decimals bundled in;
 // MintScaled then downscales the origin-precision amount to the ledger.
 func (v *ucs03ZkgmV1) mintVoucher(_ int, rlm realm, ibcDenom string, image [32]byte, name, symbol string, decimals uint8, receiver address, amount *u256.Uint) error {
-	vou := v.getOrCreateVoucher(0, rlm, ibcDenom, image, name, symbol, decimals)
+	vou, err := v.getOrCreateVoucher(0, rlm, ibcDenom, image, name, symbol, decimals)
+	if err != nil {
+		return err
+	}
 
 	return vou.MintScaled(receiver, amount)
 }
@@ -53,9 +57,9 @@ func (v *ucs03ZkgmV1) transferVoucher(_ int, rlm realm, ibcDenom string, from, t
 }
 
 // getOrCreateVoucher returns the wrapped grc20 voucher for ibcDenom, creating and registering it on first use.
-func (v *ucs03ZkgmV1) getOrCreateVoucher(_ int, rlm realm, ibcDenom string, image [32]byte, name, symbol string, decimals uint8) *zkgm.Voucher {
+func (v *ucs03ZkgmV1) getOrCreateVoucher(_ int, rlm realm, ibcDenom string, image [32]byte, name, symbol string, decimals uint8) (*zkgm.Voucher, error) {
 	if vou, ok := v.store.GetVoucher(ibcDenom); ok {
-		return vou
+		return vou, nil
 	}
 
 	if name == "" {
@@ -63,6 +67,16 @@ func (v *ucs03ZkgmV1) getOrCreateVoucher(_ int, rlm realm, ibcDenom string, imag
 	}
 
 	symbol = sanitizeVoucherSymbol(symbol, ibcDenom)
+
+	// grc20reg keys its registry by (registering realm, token symbol) and
+	// panics on a repeat key. Every voucher this realm registers shares the
+	// same realm path, so a symbol collision here always means a different
+	// ibcDenom already claimed this symbol. Check the prospective key
+	// ourselves so that case fails with a controlled error instead of a panic.
+	key := fqname.Construct(rlm.PkgPath(), symbol)
+	if grc20reg.Get(key) != nil {
+		return nil, makeError(errVoucherSymbolAlreadyRegistered, symbol)
+	}
 
 	// The grc20 ledger is int64,
 	// so a source token above canonicalDecimals is created at canonicalDecimals.
@@ -73,7 +87,7 @@ func (v *ucs03ZkgmV1) getOrCreateVoucher(_ int, rlm realm, ibcDenom string, imag
 		ledgerDecimals = canonicalDecimals
 	}
 
-	token, ledger := grc20.NewToken(0, rlm, name, symbol, int(ledgerDecimals))
+	token, ledger := grc20.NewToken(name, symbol, int(ledgerDecimals), 0, rlm)
 	grc20reg.Register(cross(rlm), token, strings.TrimPrefix(ibcDenom, ibcDenomPrefix))
 
 	// originDecimals travels with the token,
@@ -82,7 +96,7 @@ func (v *ucs03ZkgmV1) getOrCreateVoucher(_ int, rlm realm, ibcDenom string, imag
 	voucher := zkgm.NewVoucher(token, ledger, decimals)
 	v.store.SetVoucher(0, rlm, ibcDenom, voucher)
 
-	return voucher
+	return voucher, nil
 }
 
 // ledgerAmountOf downscales an origin-precision amount to the ledger amount for a denom.

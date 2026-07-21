@@ -64,41 +64,43 @@ func TestGetMissingClient(cur realm, t *testing.T) {
 	cases := []struct {
 		name string
 		run  func() error
-		want error
+		want string
 	}{
 		{"status", func() error {
 			_, err := v.GetStatus(types.ClientId(99))
 			return err
-		}, makeError(core.ErrClientNotFound)},
+		}, core.ErrClientNotFound},
 		{"client type", func() error {
 			_, err := v.GetClientType(types.ClientId(99))
 			return err
-		}, makeError(core.ErrClientNotFound)},
+		}, core.ErrClientNotFound},
 		{"client impl", func() error {
 			_, err := v.GetClientImpl(types.ClientId(99))
 			return err
-		}, makeError(core.ErrClientNotFound)},
+		}, core.ErrClientNotFound},
 		{"latest height", func() error {
 			_, err := v.GetLatestHeight(types.ClientId(99))
 			return err
-		}, makeError(core.ErrClientNotFound)},
+		}, core.ErrClientNotFound},
 		{"timestamp at height", func() error {
 			_, err := v.GetTimestampAtHeight(types.ClientId(99), 7)
 			return err
-		}, makeError(core.ErrClientNotFound)},
+		}, core.ErrClientNotFound},
 		{"client state", func() error {
 			_, err := v.GetClientStateBytes(types.ClientId(99))
 			return err
-		}, makeError(core.ErrClientStateNotFound)},
+		}, core.ErrClientStateNotFound},
 		{"consensus state", func() error {
 			_, err := v.GetConsensusStateBytes(types.ClientId(99), types.NewHeight(7))
 			return err
-		}, makeError(core.ErrConsensusStateNotFound)},
+		}, core.ErrConsensusStateNotFound},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			uassert.ErrorIs(t, tc.run(), tc.want)
+			// uassert.ErrorIs now does real errors.Is identity checking, and
+			// makeError allocates a fresh error each call, so compare by message.
+			uassert.ErrorContains(t, tc.run(), tc.want)
 		})
 	}
 
@@ -153,11 +155,13 @@ func TestGetConnectionAndChannel(cur realm, t *testing.T) {
 	uassert.NoError(t, err)
 	uassert.True(t, ch.State == types.ChannelStateOpen)
 
+	// uassert.ErrorIs now does real errors.Is identity checking, and makeError
+	// allocates a fresh error each call, so compare by message instead.
 	_, err = v.GetConnection(types.ConnectionId(99))
-	uassert.ErrorIs(t, err, makeError(core.ErrConnectionNotFound))
+	uassert.ErrorContains(t, err, core.ErrConnectionNotFound)
 
 	_, err = v.GetChannel(types.ChannelId(99))
-	uassert.ErrorIs(t, err, makeError(core.ErrChannelNotFound))
+	uassert.ErrorContains(t, err, core.ErrChannelNotFound)
 }
 
 func TestGetBatchCommitmentGetters(cur realm, t *testing.T) {
@@ -174,7 +178,7 @@ func TestGetBatchCommitmentGetters(cur realm, t *testing.T) {
 		seed      func()
 		run       func() (types.H256, error)
 		want      types.H256
-		wantError error
+		wantError string
 	}{
 		{
 			name: "batch packets",
@@ -187,7 +191,7 @@ func TestGetBatchCommitmentGetters(cur realm, t *testing.T) {
 		{
 			name:      "missing batch packets",
 			run:       func() (types.H256, error) { return v.GetBatchPacketsCommitment(packetHash) },
-			wantError: makeError(core.ErrBatchPacketsNotFound),
+			wantError: core.ErrBatchPacketsNotFound,
 		},
 		{
 			name: "batch receipts",
@@ -200,7 +204,7 @@ func TestGetBatchCommitmentGetters(cur realm, t *testing.T) {
 		{
 			name:      "missing batch receipts",
 			run:       func() (types.H256, error) { return v.GetBatchReceiptsCommitment(receiptHash) },
-			wantError: makeError(core.ErrBatchReceiptsNotFound),
+			wantError: core.ErrBatchReceiptsNotFound,
 		},
 	}
 
@@ -213,8 +217,10 @@ func TestGetBatchCommitmentGetters(cur realm, t *testing.T) {
 			}
 
 			got, err := tc.run()
-			if tc.wantError != nil {
-				uassert.ErrorIs(t, err, tc.wantError)
+			if tc.wantError != "" {
+				// uassert.ErrorIs now does real errors.Is identity checking, and
+				// makeError allocates a fresh error each call, so compare by message.
+				uassert.ErrorContains(t, err, tc.wantError)
 				return
 			}
 			uassert.NoError(t, err)
@@ -238,6 +244,8 @@ func TestGetCommittedProofGetters(cur realm, t *testing.T) {
 	uassert.True(t, v.GetCommittedNonMembershipProof(clientId, 10, path))
 
 	_, err = v.GetCommittedMembershipProofCommitment(clientId, 11, path)
-	uassert.ErrorIs(t, err, makeError(core.ErrMembershipProofNotFound))
+	// uassert.ErrorIs now does real errors.Is identity checking, and makeError
+	// allocates a fresh error each call, so compare by message instead.
+	uassert.ErrorContains(t, err, core.ErrMembershipProofNotFound)
 	uassert.False(t, v.GetCommittedNonMembershipProof(clientId, 11, path))
 }

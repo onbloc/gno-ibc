@@ -23,7 +23,7 @@ const (
 	ErrTimeoutMustBeSet              = "timeout must be set"
 	ErrPacketCommitmentAlreadyExists = "packet commitment already exists"
 	ErrPacketCommitmentNotFound      = "packet commitment not found"
-	ErrPacketDataTooLarge            = "packet data too large"
+	ErrPacketCombinedDataTooLarge    = "packet combined data too large"
 	ErrPacketAlreadyAcknowledged     = "packet already acknowledged"
 	ErrPacketReceiptNotFound         = "packet receipt not found"
 	ErrNotEnoughPackets              = "not enough packets"

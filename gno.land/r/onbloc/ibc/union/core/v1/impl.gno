@@ -6,7 +6,7 @@
 //
 // core/v1 implements the client, connection, channel, packet, app registry, and
 // query surfaces behind the proxy's ICore interface.
-package v1
+package core
 
 import (
 	core "gno.land/r/onbloc/ibc/union/core"

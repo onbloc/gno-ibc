@@ -1,4 +1,4 @@
-package v1
+package ucs03_zkgm
 
 // batch_test.gno covers batch.gno's verify/acknowledge/timeout logic and the
 // funds-accounting it drives. The send-path native funds checks are exercised
@@ -40,8 +40,9 @@ func TestIsAllowedBatchInstruction(t *testing.T) {
 
 func TestVerifyBatch(cur realm, t *testing.T) {
 	callSender := testAddress("batch-call-caller")
-	exactOrderA := batchRefundOrder("batch-exact-a", "ugnot", "quote-exact-a", 60)
-	exactOrderB := batchRefundOrder("batch-exact-b", "ugnot", "quote-exact-b", 40)
+	tokenSender := testAddress("batch-token-caller")
+	exactOrderA := batchRefundOrder("batch-token-caller", "ugnot", "quote-exact-a", 60)
+	exactOrderB := batchRefundOrder("batch-token-caller", "ugnot", "quote-exact-b", 40)
 
 	type channelBalance struct {
 		channelId types.ChannelId
@@ -79,6 +80,7 @@ func TestVerifyBatch(cur realm, t *testing.T) {
 		},
 		{
 			name:      "exact total native consumption passes",
+			previous:  tokenSender,
 			channelId: types.ChannelId(92),
 			sent:      "100ugnot",
 			batch: z.Batch{Instructions: []z.Instruction{
@@ -92,39 +94,43 @@ func TestVerifyBatch(cur realm, t *testing.T) {
 		},
 		{
 			name:      "duplicate native consumption rejected",
+			previous:  tokenSender,
 			channelId: types.ChannelId(91),
 			sent:      "100ugnot",
 			batch: z.Batch{Instructions: []z.Instruction{
-				batchMustOrderInstruction(batchRefundOrder("batch-dup-a", "ugnot", "quote-dup-a", 100)),
-				batchMustOrderInstruction(batchRefundOrder("batch-dup-b", "ugnot", "quote-dup-b", 100)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "ugnot", "quote-dup-a", 100)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "ugnot", "quote-dup-b", 100)),
 			}},
 			wantVerifyErr: "sent coin mismatch",
 		},
 		{
 			name:      "leftover native rejected by drain check",
+			previous:  tokenSender,
 			channelId: types.ChannelId(93),
 			sent:      "100ugnot",
 			batch: z.Batch{Instructions: []z.Instruction{
-				batchMustOrderInstruction(batchRefundOrder("batch-left", "ugnot", "quote-leftover", 60)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "ugnot", "quote-leftover", 60)),
 			}},
 			wantDrainErr: "sent coin mismatch",
 		},
 		{
 			name:      "multi denom exact passes",
+			previous:  tokenSender,
 			channelId: types.ChannelId(95),
 			sent:      "100ugnot,50foo",
 			batch: z.Batch{Instructions: []z.Instruction{
-				batchMustOrderInstruction(batchRefundOrder("batch-denom-a", "ugnot", "quote-denom-a", 100)),
-				batchMustOrderInstruction(batchRefundOrder("batch-denom-b", "foo", "quote-denom-b", 50)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "ugnot", "quote-denom-a", 100)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "foo", "quote-denom-b", 50)),
 			}},
 		},
 		{
 			name:      "multi denom shortfall rejected",
+			previous:  tokenSender,
 			channelId: types.ChannelId(96),
 			sent:      "100ugnot,40foo",
 			batch: z.Batch{Instructions: []z.Instruction{
-				batchMustOrderInstruction(batchRefundOrder("batch-denom-sa", "ugnot", "quote-denom-sa", 100)),
-				batchMustOrderInstruction(batchRefundOrder("batch-denom-sb", "foo", "quote-denom-sb", 50)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "ugnot", "quote-denom-sa", 100)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "foo", "quote-denom-sb", 50)),
 			}},
 			wantVerifyErr: "sent coin mismatch",
 		},
@@ -197,7 +203,8 @@ func TestExecuteBatchRunsTokenOrderThenCall(cur realm, t *testing.T) {
 	relayer := testAddress("batch-exec-relayer")
 	receiver := testAddress("batch-exec-receiver")
 	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
-	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T", canonicalDecimals)
+	_, err := v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T1", canonicalDecimals)
+	uassert.NoError(t, err)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -280,8 +287,8 @@ func TestAcknowledgeBatch(cur realm, t *testing.T) {
 			orderB := batchRefundOrder("ack-fail-b", "ibc/batch-ack-fail-b", "quote-b", 17)
 			v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount.Int64())
 			v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount.Int64())
-			uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderA.BaseAmount))
-			uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderB.BaseAmount))
+			uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "BFAA", 0, cur.Address(), orderA.BaseAmount))
+			uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "BFAB", 0, cur.Address(), orderB.BaseAmount))
 
 			batch = z.Batch{Instructions: []z.Instruction{
 				batchMustOrderInstruction(orderA),
@@ -313,14 +320,14 @@ func TestTimeoutBatchTokenOrderChildrenRefund(cur realm, t *testing.T) {
 	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
 	orderA := batchRefundOrder("timeout-a", "ibc/batch-timeout-a", "quote-a", 11)
 	orderB := batchRefundOrder("timeout-b", "ibc/batch-timeout-b", "quote-b", 17)
-	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderA.BaseAmount))
-	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderB.BaseAmount))
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "BTOA", 0, cur.Address(), orderA.BaseAmount))
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "BTOB", 0, cur.Address(), orderB.BaseAmount))
 	v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount.Int64())
 	v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount.Int64())
 	// Escrow the wrapped vouchers in the proxy so the timeout refund can transfer
 	// them back to each sender (settleEscrowedV2 moves ibc/ vouchers out of escrow).
-	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderA.BaseAmount))
-	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderB.BaseAmount))
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "BTOA", 0, cur.Address(), orderA.BaseAmount))
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "BTOB", 0, cur.Address(), orderB.BaseAmount))
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(orderA),
 		batchMustOrderInstruction(orderB),

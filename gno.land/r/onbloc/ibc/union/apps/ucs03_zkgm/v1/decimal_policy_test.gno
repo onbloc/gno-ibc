@@ -1,4 +1,4 @@
-package v1
+package ucs03_zkgm
 
 import (
 	"chain"
@@ -153,8 +153,9 @@ func TestNativeBaseAmountNotUpscaled(cur realm, t *testing.T) {
 
 	const N = int64(1_000_000) // 1 ugnot (6-dec representation)
 	const chanId = types.ChannelId(140)
+	sender := testAddress("native-noscale-sndr")
 	order := z.TokenOrderV2{
-		Sender:      []byte(testAddress("native-noscale-sndr")),
+		Sender:      []byte(sender),
 		BaseToken:   []byte("ugnot"),
 		BaseAmount:  u256.NewUint(uint64(N)),
 		QuoteToken:  []byte("ibc/out-native"),
@@ -163,7 +164,8 @@ func TestNativeBaseAmountNotUpscaled(cur realm, t *testing.T) {
 	}
 	f := newFunds(chain.NewCoins(chain.NewCoin("ugnot", N)))
 
-	err := v.verifyTokenOrderV2(0, cur, f, chanId, u256.Zero(), order)
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	err := v.verifyTokenOrderV2X(cross(cur), f, chanId, u256.Zero(), order)
 
 	uassert.NoError(t, err)
 	uassert.True(t, f.isEmpty())
@@ -208,6 +210,86 @@ func TestChannelBalanceHeldInVaultPrecision(cur realm, t *testing.T) {
 	bal, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(chanId, u256.Zero(), order.BaseToken, order.QuoteToken))
 	uassert.True(t, ok)
 	uassert.Equal(t, "30", bal.ToString())
+}
+
+func TestTimeoutNativeOrderWithMetadataDoesNotTrimEscrow(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	amount := u256.NewUint(2_000_000_000_000)
+	meta := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "USDC", Symbol: "USDC", Decimals: 18}),
+	})
+	order := z.TokenOrderV2{
+		Sender:      []byte(testAddress("timeout-sender")),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  amount,
+		QuoteToken:  []byte("ibc/timeout-native"),
+		QuoteAmount: amount,
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    meta,
+	}
+	key := ChannelBalanceKeyV2(types.ChannelId(172), u256.Zero(), order.BaseToken, order.QuoteToken)
+	testStore.SetChannelBalanceV2(0, cur, key, amount)
+	testing.IssueCoins(cur.Address(), chain.NewCoins(chain.NewCoin("ugnot", 2_000_000_000_000)))
+
+	err := v.timeoutInternal(
+		0, cur,
+		core.NewPacket(types.ChannelId(172), types.ChannelId(173), nil, 0),
+		[32]byte{}, u256.Zero(), batchMustOrderInstruction(order),
+	)
+	uassert.NoError(t, err)
+
+	bal, _ := testStore.GetChannelBalanceV2(key)
+	uassert.Equal(t, u256.Zero().ToString(), bal.ToString())
+}
+
+// TestVerifyAndTimeoutNativeInitializeRoundTrip guards against the bug where
+// verifyInternal uses scaleDownIncomingOrder (which applies metadata.Decimals) on
+// the send path: escrow would store a divided amount while timeout would refund the
+// original, causing a balance mismatch. verifyInternal must use scaleDownOutboundOrder
+// so that native BaseToken amounts are stored and refunded at the same value.
+func TestVerifyAndTimeoutNativeInitializeRoundTrip(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	amount := u256.NewUint(1_000_000_000_000)
+	sender := testAddress("vt-sender")
+	meta := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: []byte("grc20"),
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "USDC", Symbol: "USDC", Decimals: 18}),
+	})
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  amount,
+		QuoteToken:  []byte("ibc/vt-native"),
+		QuoteAmount: amount,
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    meta,
+	}
+	instruction := batchMustOrderInstruction(order)
+	const chanId = types.ChannelId(190)
+
+	testing.IssueCoins(cur.Address(), chain.NewCoins(chain.NewCoin("ugnot", 1_000_000_000_000)))
+	testing.IssueCoins(address(sender), chain.NewCoins(chain.NewCoin("ugnot", 1_000_000_000_000)))
+	f := newFunds(chain.NewCoins(chain.NewCoin("ugnot", 1_000_000_000_000)))
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	err := v.verifyInternalX(cross(cur), f, chanId, u256.Zero(), instruction)
+	uassert.NoError(t, err)
+
+	key := ChannelBalanceKeyV2(chanId, u256.Zero(), order.BaseToken, order.QuoteToken)
+	bal, _ := testStore.GetChannelBalanceV2(key)
+	uassert.Equal(t, amount.ToString(), bal.ToString())
+
+	err = v.timeoutInternal(
+		0, cur,
+		core.NewPacket(chanId, types.ChannelId(191), nil, 0),
+		[32]byte{}, u256.Zero(), instruction,
+	)
+	uassert.NoError(t, err)
+
+	bal, _ = testStore.GetChannelBalanceV2(key)
+	uassert.Equal(t, u256.Zero().ToString(), bal.ToString())
 }
 
 func TestInitializeOverflowAmountReturnsFailureAckNoMint(cur realm, t *testing.T) {
@@ -257,7 +339,8 @@ func TestSendBaseAmountInt64Boundary(cur realm, t *testing.T) {
 		QuoteAmount: maxI64,
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
 	}
-	err := v.verifyTokenOrderV2(0, cur, newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), chanA, u256.Zero(), orderA)
+	testing.SetRealm(testing.NewUserRealm(address(senderA)))
+	err := v.verifyTokenOrderV2X(cross(cur), newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), chanA, u256.Zero(), orderA)
 	uassert.NoError(t, err)
 	balA, _ := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(chanA, u256.Zero(), orderA.BaseToken, orderA.QuoteToken))
 	uassert.Equal(t, maxI64.ToString(), balA.ToString())
@@ -278,7 +361,8 @@ func TestSendBaseAmountInt64Boundary(cur realm, t *testing.T) {
 	// escrow leaves a transient balance entry; in production the verify error
 	// aborts the whole Send tx (impl.gno panics), rolling that write back. Here
 	// verify is called in isolation, so we only assert the rejection.
-	err = v.verifyTokenOrderV2(0, cur, newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), chanB, u256.Zero(), orderB)
+	testing.SetRealm(testing.NewUserRealm(address(senderB)))
+	err = v.verifyTokenOrderV2X(cross(cur), newFunds(chain.NewCoins(chain.NewCoin("ugnot", math.MaxInt64))), chanB, u256.Zero(), orderB)
 	uassert.Error(t, err)
 }
 
@@ -293,9 +377,9 @@ func TestVoucherDecimalsWithinLimit(cur realm, t *testing.T) {
 		decimals uint8
 		expDec   int
 	}{
-		{"ibc/dl-0", "T0", 0, 0},
-		{"ibc/dl-6", "T6", 6, 6},
-		{"ibc/dl-18", "TK", 18, canonicalDecimals}, // MaxDecimals; capped to canonical.
+		{"ibc/dl-0", "DL0", 0, 0},
+		{"ibc/dl-6", "DL6", 6, 6},
+		{"ibc/dl-18", "DLK", 18, canonicalDecimals}, // MaxDecimals; capped to canonical.
 	} {
 		// One canonical unit expressed in the source precision.
 		amt := scaledWire(1, tc.decimals)

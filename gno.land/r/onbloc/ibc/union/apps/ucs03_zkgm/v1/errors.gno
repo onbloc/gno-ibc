@@ -1,4 +1,4 @@
-package v1
+package ucs03_zkgm
 
 import (
 	"errors"
@@ -56,8 +56,9 @@ const (
 	errBatchAckCountMismatch   = "batch ack count mismatch"
 
 	// voucher
-	errAmountOverflow  = "amount overflows int64"
-	errVoucherNotFound = "voucher not found"
+	errAmountOverflow                 = "amount overflows int64"
+	errVoucherNotFound                = "voucher not found"
+	errVoucherSymbolAlreadyRegistered = "voucher symbol already registered under a different denom"
 
 	// rate limit
 	errTokenBucketAbsent = "token bucket is absent"

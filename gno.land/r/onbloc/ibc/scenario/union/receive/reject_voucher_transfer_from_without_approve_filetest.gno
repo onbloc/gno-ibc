@@ -8,9 +8,9 @@ package receive
 // the pull with "insufficient allowance".
 
 import (
-	"strings"
 	"testing"
 
+	"gno.land/p/nt/fqname/v0"
 	"gno.land/p/nt/ufmt/v0"
 	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/p/onbloc/ibc/union/types"
@@ -35,6 +35,8 @@ const (
 	holderAddr     = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
 	spenderAddr    = address("g1dyxy88p94acjnm8dmu9tfj2mv2ncvx83cagllu")
 	mockClientType = types.ClientType("scenario-mock-lc")
+
+	voucherSymbol = "GNOT"
 )
 
 func main(cur realm) {
@@ -42,7 +44,7 @@ func main(cur realm) {
 	channelId := bootstrap(cur)
 	println("")
 
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
+	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: voucherSymbol, Decimals: 6})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 
 	println("[SCENARIO] 2. Receive INITIALIZE order: mint 100 wrapped voucher to holder")
@@ -118,7 +120,7 @@ func receiveInitializeOrder(cur realm, channelId types.ChannelId, quoteToken str
 // success scenario, but no zkgm.VoucherApprove ever ran, so the ledger's
 // allowance is zero and the pull must be rejected.
 func spenderPullsWithoutApproval(cur realm, quoteToken string) {
-	token := voucherToken(quoteToken)
+	token := voucherToken()
 
 	testing.SetRealm(testing.NewUserRealm(spenderAddr))
 	if err := transferFromAsCaller(cross(cur), token, holderAddr, spenderAddr, 40); err != nil {
@@ -138,10 +140,11 @@ func transferFromAsCaller(cur realm, token *grc20.Token, owner, to address, amou
 
 // voucherToken resolves the live *grc20.Token for a wrapped voucher through
 // grc20reg, keyed the same way getOrCreateVoucher registers it: proxy pkgpath
-// + "." + trimmed ibc denom. Registration runs on the proxy's own cur (not the
-// impl's), so this key stays stable across impl upgrades.
-func voucherToken(quoteToken string) *grc20.Token {
-	key := zkgm.ProxyPkgPath() + "." + strings.TrimPrefix(quoteToken, "ibc/")
+// + declared token symbol (see fqname.Construct). Registration runs on the
+// proxy's own cur (not the impl's), so this key stays stable across impl
+// upgrades.
+func voucherToken() *grc20.Token {
+	key := fqname.Construct(zkgm.ProxyPkgPath(), voucherSymbol)
 	return grc20reg.MustGet(key)
 }
 

@@ -256,8 +256,8 @@ func TestVoucherTransfer(cur realm, t *testing.T) {
 	other := testAddress("transfer-self-other")
 	receiver := testAddress("transfer-self-rx")
 
-	uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, "T", "T", 0, holder, u256.NewUint(100)))
-	uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, "T", "T", 0, other, u256.NewUint(100)))
+	uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, "TSELF", "TSELF", 0, holder, u256.NewUint(100)))
+	uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, "TSELF", "TSELF", 0, other, u256.NewUint(100)))
 
 	testing.SetRealm(testing.NewUserRealm(holder))
 	uassert.NoError(t, v.VoucherTransferX(cross(cur), denom, receiver, 25))

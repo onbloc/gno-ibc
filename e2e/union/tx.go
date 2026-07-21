@@ -72,6 +72,7 @@ func retrySequenceMismatch(run func() (string, error)) (string, error) {
 		if err == nil || !strings.Contains(out, "account sequence mismatch") {
 			return out, err
 		}
+		time.Sleep(time.Second)
 	}
 	return out, err
 }

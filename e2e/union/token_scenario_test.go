@@ -212,7 +212,7 @@ func relayGnoToUnion(t *testing.T, cfg config, operand, coins string) {
 	enqueueUnionBlock(t, cfg, write.Height)
 	waitForNewGnoEvent(t, cfg, "PacketAck", map[string]string{"packet_hash": hash}, send.BlockHeight, baseline)
 	requireOneGnoEvent(t, cfg, "PacketAck", hash)
-	requireGnoPacketCommitmentRemoved(t, cfg, hash)
+	requireGnoPacketAcknowledged(t, cfg, hash)
 	requirePacketVoyagerSuccess(t, cfg, baseline, hash)
 }
 
@@ -469,8 +469,9 @@ func queryGnoVoucherBalance(t *testing.T, cfg config, denom, owner string) int64
 	t.Helper()
 	expr := fmt.Sprintf("gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm.VoucherBalanceOf(%q,address(%q))", denom, owner)
 	out := strings.TrimSpace(queryGnoQEval(t, cfg, expr))
+	_, out, _ = strings.Cut(out, "data: ")
 	var balance int64
-	if _, err := fmt.Sscanf(out, "(%d int64)", &balance); err != nil {
+	if _, err := fmt.Sscanf(strings.TrimSpace(out), "(%d int64)", &balance); err != nil {
 		t.Fatalf("parse Gno voucher balance %q: %v", out, err)
 	}
 	return balance
@@ -580,16 +581,16 @@ func requireOneGnoEvent(t *testing.T, cfg config, eventType, hash string) {
 	}
 }
 
-func requireGnoPacketCommitmentRemoved(t *testing.T, cfg config, hash string) {
+func requireGnoPacketAcknowledged(t *testing.T, cfg config, hash string) {
 	t.Helper()
-	b := mustDecodeHex(t, hash)
-	parts := make([]string, len(b))
-	for i, value := range b {
-		parts[i] = fmt.Sprintf("0x%02x", value)
+	batchHash := strings.TrimPrefix(hash, "0x")
+	if b, err := hex.DecodeString(batchHash); err != nil || len(b) != 32 {
+		t.Fatalf("invalid packet hash %q", hash)
 	}
-	expr := "gno.land/r/onbloc/ibc/union/core.QueryCommitmentAtPath(BatchPacketsPath(H256{" + strings.Join(parts, ",") + "}))"
-	if out := queryGnoQEval(t, cfg, expr); !strings.Contains(out, `("" string)`) {
-		t.Fatalf("Gno packet commitment still exists: %s", out)
+	expr := fmt.Sprintf("gno.land/r/onbloc/ibc/union/testing/e2e_setup.QueryBatchPacketCommitment(%q)", batchHash)
+	want := "0x02" + strings.Repeat("00", 31)
+	if out := queryGnoQEval(t, cfg, expr); !strings.Contains(out, want) {
+		t.Fatalf("Gno packet commitment is not acknowledged: got %s want %s", out, want)
 	}
 }
 

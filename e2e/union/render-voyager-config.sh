@@ -11,7 +11,11 @@ for name in TRUSTED_MPT_PRIVATE_KEY UNION_PRIVATE_KEY EVM_PRIVATE_KEY GNO_PRIVAT
 done
 
 umask 077
+union_rpc=${UNION_RPC_INTERNAL:-http://host.docker.internal:26657}
+evm_rpc=${EVM_RPC_INTERNAL:-http://host.docker.internal:8545}
 sed \
+  -e "s|http://host.docker.internal:26657|$union_rpc|g" \
+  -e "s|http://host.docker.internal:8545|$evm_rpc|g" \
   -e "s/__TRUSTED_MPT_PRIVATE_KEY__/$TRUSTED_MPT_PRIVATE_KEY/g" \
   -e "s/__UNION_PRIVATE_KEY__/$UNION_PRIVATE_KEY/g" \
   -e "s/__EVM_PRIVATE_KEY__/$EVM_PRIVATE_KEY/g" \

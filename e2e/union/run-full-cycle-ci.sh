@@ -120,7 +120,10 @@ wait_http Beacon http://localhost:9596/eth/v1/beacon/headers/head
 UNION_CONTAINER=$(docker ps --filter "label=com.docker.compose.project=$union_project" \
   --filter publish=26657 --format '{{.Names}}' | head -n 1)
 [[ -n $UNION_CONTAINER ]] || { echo "could not discover isolated Union container" >&2; exit 1; }
-export UNION_CONTAINER
+EVM_CONTAINER=$(docker ps --filter "label=com.docker.compose.project=$union_project" \
+  --filter publish=8545 --format '{{.Names}}' | head -n 1)
+[[ -n $EVM_CONTAINER ]] || { echo "could not discover isolated EVM container" >&2; exit 1; }
+export UNION_CONTAINER EVM_CONTAINER
 
 if [[ -z ${TRUSTED_MPT_PRIVATE_KEY:-} ]]; then
   TRUSTED_MPT_PRIVATE_KEY="0x$(openssl rand -hex 32)"
@@ -182,13 +185,19 @@ if [[ -n ${GITHUB_ACTIONS:-} ]]; then
 fi
 VOYAGER_CONFIG_OUTPUT="$VOYAGER_CONFIG" "$script_dir/render-voyager-config.sh"
 compose_started=1
-compose --profile voyager up -d gno tx-indexer postgres voyager
+compose --profile voyager up -d gno tx-indexer postgres
+compose --profile voyager create voyager
+VOYAGER_CONTAINER=$(compose ps -q --all voyager)
+docker network connect "$union_project" "$VOYAGER_CONTAINER"
+export UNION_RPC_INTERNAL="http://$UNION_CONTAINER:26657"
+export EVM_RPC_INTERNAL="http://$EVM_CONTAINER:8545"
+VOYAGER_CONFIG_OUTPUT="$VOYAGER_CONFIG" "$script_dir/render-voyager-config.sh"
+compose --profile voyager start voyager
 wait_http Gno http://localhost:16657/status
 wait_post Gno-indexer http://localhost:48546/graphql/query '{"query":"{ latestBlockHeight }"}'
 wait_tcp Voyager localhost 7177
 
 GNO_CONTAINER=$(compose ps -q gno)
-VOYAGER_CONTAINER=$(compose ps -q voyager)
 POSTGRES_CONTAINER=$(compose ps -q postgres)
 export GNO_CONTAINER VOYAGER_CONTAINER POSTGRES_CONTAINER
 

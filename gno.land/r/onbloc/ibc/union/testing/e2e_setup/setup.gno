@@ -3,6 +3,7 @@ package e2e_setup
 import (
 	"chain"
 	"chain/runtime"
+	"encoding/hex"
 
 	"gno.land/p/onbloc/access/manager"
 	"gno.land/p/onbloc/ibc/union/types"
@@ -28,6 +29,18 @@ const (
 func Address() string { return PackageAddress(PkgPath) }
 
 func PackageAddress(path string) string { return chain.PackageAddress(path).String() }
+
+func QueryBatchPacketCommitment(batchHashHex string) string {
+	batchHash, err := hex.DecodeString(batchHashHex)
+	if err != nil {
+		panic(err)
+	}
+	commitment, err := core.GetBatchPackets(types.NewH256(batchHash))
+	if err != nil {
+		return ""
+	}
+	return commitment.String()
+}
 
 func Bootstrap(cur realm) {
 	runtime.AssertOriginCall()

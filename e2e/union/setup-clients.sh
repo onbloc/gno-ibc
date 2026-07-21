@@ -70,6 +70,14 @@ wait_client() {
   return 1
 }
 
+wait_rpc() {
+  local chain=$1 deadline=$((SECONDS + 180))
+  until voyager rpc latest-height "$chain" --finalized >/dev/null 2>&1; do
+    ((SECONDS < deadline)) || { echo "$chain finalized height was not ready within 180 seconds" >&2; return 1; }
+    sleep 2
+  done
+}
+
 ensure_client() {
   local finder=$1 wanted=$2
   shift 2
@@ -81,6 +89,10 @@ ensure_client() {
   fi
   echo "$id"
 }
+
+for chain in "$union_chain_id" "$gno_chain_id" "$evm_chain_id"; do
+  wait_rpc "$chain"
+done
 
 gno_client_id=$(ensure_client gno_client cometbls \
   --on "$gno_chain_id" --tracking "$union_chain_id" --ibc-interface ibc-gno)

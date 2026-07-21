@@ -1,9 +1,10 @@
 # Gno → Union Voyager E2E
 
-This harness proves one deterministic path:
+This harness proves two token paths using four direct packets:
 
 ```text
-Gno PacketSend → Union packet_recv → Union write_ack → Gno PacketAck
+Gno ugnot → Union CW20 → EVM ERC20
+EVM ERC20 → Union CW20 → Gno GRC20
 ```
 
 The tested inputs are pinned in `.gno-version` and `.env.example`; Compose uses
@@ -82,36 +83,35 @@ If the pinned artifact has not been built, the script stops and prints the
 exact pinned build command. Contract deployment and client registration remain
 a setup operation; packet tests never perform them implicitly.
 
-## Run the packet test
+## Run the token scenarios
 
-Pre-encode the ZKGM operand as described in the repository `AGENTS.md`, then:
-
-```sh
-RUN_PACKET_TESTS=1 \
-GNO_PACKET_OPERAND_HEX=<hex> \
-GNO_PACKET_SEND_COINS=1ugnot \
-GNO_COMPOSE_DIR=. \
-GOWORK=off GOCACHE=/private/tmp/gno-ibc-e2e-go-cache \
-go test -v . -run '^TestGnoToUnionPacketRelay$'
-```
-
-For the direct Union → Ethereum lifecycle, generate and review the
-`TokenOrderV2` instruction and predicted wrapped-token address first, then run:
+The test queries the live Union token-minter configuration, creates destination
+metadata and quote tokens, deploys Union's existing `TestERC20` to EVM, and
+broadcasts all four direct packets without a pre-written fixture:
 
 ```sh
 RUN_PACKET_TESTS=1 \
-UNION_EVM_INSTRUCTION_HEX=<hex> \
-EVM_WRAPPED_TOKEN=<predicted-address> \
+GNO_PACKET_CONNECTION_ID=<live-gno-connection> \
+GNO_PACKET_CHANNEL_ID=<live-gno-channel> \
+UNION_PACKET_CONNECTION_ID=<live-union-gno-connection> \
+UNION_PACKET_CHANNEL_ID=<live-union-gno-channel> \
+UNION_GNO_CLIENT_ID=<live-union-gno-client> \
+UNION_EVM_CONNECTION_ID=<live-union-evm-connection> \
+UNION_EVM_CHANNEL_ID=<live-union-evm-channel> \
+UNION_EVM_CLIENT_ID=<live-union-evm-client> \
+EVM_UNION_CONNECTION_ID=<live-evm-connection> \
+EVM_UNION_CHANNEL_ID=<live-evm-channel> \
+EVM_UNION_CLIENT_ID=<live-evm-client> \
+GNO_SENDER_ADDR=<gno-sender-address> \
+EVM_PRIVATE_KEY=<devnet-test-key> \
 GOWORK=off GOCACHE=/private/tmp/gno-ibc-e2e-go-cache \
-go test -v . -run '^TestUnionToEthereumPacketRelay$'
+go test -v . -run '^TestTokenBridgeScenarios$'
 ```
 
-The test captures Voyager queue/done/failed baselines, ignores historical
-failures, and checks exactly one receive/write-ack/ack for the packet hash. If
-receive stalls or Voyager reports the known stale Gno client error, it performs
-one bounded `force_update_client` for Union client `1` and retries the block.
-Future timeout jobs may remain in Voyager's ready queue, so completion is
-proved by packet events, new done rows, and the absence of new failed rows.
+Each packet checks one receive/write-ack/ack, a success acknowledgement, source
+commitment settlement, balance deltas, packet-specific Voyager done rows, and
+no failed rows after its baseline. The 18-decimal EVM asset uses an amount
+divisible by `10^12` and verifies the downscaled Gno voucher balance.
 
 ## Troubleshooting
 

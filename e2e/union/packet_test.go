@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"testing"
@@ -43,86 +42,6 @@ func TestPacketPathCreated(t *testing.T) {
 
 	requireGnoQEvalNonEmpty(t, cfg, "Gno connection "+cfg.GnoPacketConnectionID, fmt.Sprintf("gno.land/r/onbloc/ibc/union/core.QueryConnection(%s)", cfg.GnoPacketConnectionID))
 	requireGnoQEvalNonEmpty(t, cfg, "Gno channel "+cfg.GnoPacketChannelID, fmt.Sprintf("gno.land/r/onbloc/ibc/union/core.QueryChannel(%s)", cfg.GnoPacketChannelID))
-}
-
-func TestGnoToUnionPacketRelay(t *testing.T) {
-	cfg := loadConfig()
-	if !cfg.RunPacketTests {
-		t.Skip("set RUN_PACKET_TESTS=1 after Voyager creates clients/channels")
-	}
-
-	req := gnoTransferRequest{
-		ChannelID:  cfg.GnoPacketChannelID,
-		OperandHex: os.Getenv("GNO_PACKET_OPERAND_HEX"),
-		SendCoins:  os.Getenv("GNO_PACKET_SEND_COINS"),
-		SaltHex:    os.Getenv("GNO_PACKET_SALT_HEX"),
-	}
-	if req.OperandHex == "" {
-		t.Skip("set pre-encoded GNO_PACKET_OPERAND_HEX to broadcast SendRaw")
-	}
-	requirePacketSetup(t, cfg)
-	baseline := captureVoyagerBaseline(t, cfg)
-	packetSendBaseline := latestGnoEventHeight(cfg.GnoIndexer, "PacketSend", map[string]string{"source_channel_id": req.ChannelID})
-
-	var before int64
-	sender, denom := os.Getenv("GNO_SENDER_ADDR"), os.Getenv("GNO_BALANCE_DENOM")
-	if sender != "" && denom != "" {
-		before = queryGnoBalance(t, cfg, sender, denom)
-	}
-
-	out := transferOnGno(t, cfg, req)
-	t.Logf("Gno SendRaw output:\n%s", out)
-
-	packetSend := waitForNewGnoEvent(t, cfg, "PacketSend", map[string]string{"source_channel_id": req.ChannelID}, packetSendBaseline, baseline)
-	packetHash := txAttr(packetSend, "PacketSend", "packet_hash")
-	if packetHash == "" {
-		t.Fatalf("PacketSend event missing packet_hash: %+v", packetSend)
-	}
-	if got := txAttr(packetSend, "PacketSend", "source_channel_id"); got != "" && got != req.ChannelID {
-		t.Fatalf("PacketSend source_channel_id = %s, want %s", got, req.ChannelID)
-	}
-	if got := txAttr(packetSend, "PacketSend", "destination_channel_id"); got != "" && got != cfg.UnionPacketChannelID {
-		t.Fatalf("PacketSend destination_channel_id = %s, want %s", got, cfg.UnionPacketChannelID)
-	}
-
-	enqueueGnoBlock(t, cfg, packetSend.BlockHeight)
-
-	packetRecv := waitForUnionReceive(t, cfg, packetHash, packetSend.BlockHeight, &baseline)
-	writeAck := waitForUnionEvent(t, cfg, "wasm-write_ack", packetHash)
-	requireOneUnionEvent(t, cfg, "wasm-packet_recv", packetHash)
-	requireOneUnionEvent(t, cfg, "wasm-write_ack", packetHash)
-	if packetRecv.Hash != writeAck.Hash {
-		t.Fatalf("Union packet_recv tx %s differs from write_ack tx %s", packetRecv.Hash, writeAck.Hash)
-	}
-	if err := requireUnionEventOrder(cfg.UnionContainer, packetRecv.Hash, "wasm-packet_recv", "wasm-write_ack"); err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("Union packet recv tx %s at height %d; write_ack tx %s at height %d", packetRecv.Hash, packetRecv.Height, writeAck.Hash, writeAck.Height)
-
-	enqueueUnionBlock(t, cfg, writeAck.Height)
-
-	ack := waitForNewGnoEvent(t, cfg, "PacketAck", map[string]string{"packet_hash": packetHash}, packetSend.BlockHeight, baseline)
-	if ack.BlockHeight <= packetSend.BlockHeight {
-		t.Fatalf("PacketAck height %d must be after PacketSend height %d", ack.BlockHeight, packetSend.BlockHeight)
-	}
-	requireNoNewVoyagerFailed(t, cfg, baseline)
-	if done := voyagerRowsAfter(t, cfg, "done", baseline.Done); !strings.Contains(done, packetHash) {
-		t.Fatalf("Voyager done rows do not contain packet %s:\n%s", packetHash, done)
-	}
-	acks, err := queryGnoEvents(cfg.GnoIndexer, "PacketAck", map[string]string{"packet_hash": packetHash})
-	if err != nil || len(acks) != 1 {
-		t.Fatalf("PacketAck count = %d, want 1: %v", len(acks), err)
-	}
-	t.Logf("relayed packet hash %s, ack tx %s at height %d", packetHash, ack.Hash, ack.BlockHeight)
-
-	if sender != "" && denom != "" {
-		amount := amountFromCoins(req.SendCoins, denom)
-		after := queryGnoBalance(t, cfg, sender, denom)
-		if amount > 0 && after > before-amount {
-			t.Fatalf("Gno balance did not decrease enough: before=%d after=%d sent=%d%s", before, after, amount, denom)
-		}
-		t.Logf("Gno balance: before=%d after=%d denom=%s", before, after, denom)
-	}
 }
 
 func waitForUnionReceive(t *testing.T, cfg config, packetHash string, proofHeight int64, baseline *voyagerBaseline) UnionTx {
@@ -233,40 +152,6 @@ func waitForUnionEvent(t *testing.T, cfg config, eventType, packetHash string) U
 	}
 	t.Fatalf("Union event %s packet_hash=%s not found: %v\nvoyager stats:\n%s\nvoyager failed:\n%s", eventType, packetHash, last, voyagerQueueStats(t, cfg), voyagerQueryFailed(t, cfg))
 	return UnionTx{}
-}
-
-func TestUnionToGnoPacketRelay(t *testing.T) {
-	cfg := loadConfig()
-	if !cfg.RunPacketTests {
-		t.Skip("set RUN_PACKET_TESTS=1 after Voyager creates clients/channels")
-	}
-	packetHash := os.Getenv("UNION_TO_GNO_PACKET_HASH")
-	if packetHash == "" {
-		t.Skip("set UNION_TO_GNO_PACKET_HASH after broadcasting a Union packet")
-	}
-
-	tx := waitForGnoEvent(t, cfg.GnoIndexer, "PacketRecv", map[string]string{"packet_hash": packetHash})
-	t.Logf("Gno PacketRecv tx %s at height %d", tx.Hash, tx.BlockHeight)
-}
-
-func TestVoucherTokenCreation(t *testing.T) {
-	cfg := loadConfig()
-	if !cfg.RunPacketTests {
-		t.Skip("set RUN_PACKET_TESTS=1 after Voyager creates clients/channels")
-	}
-	addr, denom := os.Getenv("UNION_VOUCHER_ADDR"), os.Getenv("UNION_VOUCHER_DENOM")
-	if addr == "" || denom == "" {
-		t.Skip("set UNION_VOUCHER_ADDR and UNION_VOUCHER_DENOM to verify voucher balance")
-	}
-
-	bal, err := queryUnionBalance(cfg.UnionREST, addr, denom)
-	if err != nil {
-		t.Fatalf("query Union voucher balance: %v", err)
-	}
-	if bal <= 0 {
-		t.Fatalf("voucher balance for %s/%s is %d", addr, denom, bal)
-	}
-	t.Logf("Union voucher balance: %d%s for %s", bal, denom, addr)
 }
 
 func waitForGnoEvent(t *testing.T, indexer, eventType string, attrs map[string]string) indexedTx {

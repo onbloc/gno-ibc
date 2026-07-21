@@ -18,7 +18,7 @@ compose_started=0
 mkdir -p "$artifacts"
 exec > >(tee "$artifacts/run.log") 2>&1
 
-for command in cargo cast curl docker git go jq make openssl rsync; do
+for command in cargo cast curl docker forge git go jq make openssl rsync; do
   command -v "$command" >/dev/null || { echo "missing required command: $command" >&2; exit 2; }
 done
 docker compose version >/dev/null
@@ -64,7 +64,7 @@ cleanup() {
       "$union_repo/networks/run-linux-devnet.sh" >/dev/null 2>&1 || true
   fi
   rm -f "$runtime_dir/voyager-config.jsonc" "$runtime_dir/clients.env" \
-    "$runtime_dir/gno-union.env" "$runtime_dir/union-evm.env" "$runtime_dir/fixture.env"
+    "$runtime_dir/gno-union.env" "$runtime_dir/union-evm.env"
   rmdir "$runtime_dir" 2>/dev/null || true
   exit "$status"
 }
@@ -99,6 +99,17 @@ export UNION_VOYAGER_DIR="$union_repo"
 export VOYAGER_CONFIG="$runtime_dir/voyager-config.jsonc"
 export NO_BLOCKSCOUT=true
 
+expected_union_commit=$(sed -n 's/^UNION_COMMIT=//p' "$script_dir/.env.example")
+actual_union_commit=$(git -C "$union_repo" rev-parse HEAD)
+[[ $actual_union_commit == "$expected_union_commit" ]] || {
+  echo "Union checkout is $actual_union_commit, want $expected_union_commit" >&2
+  exit 1
+}
+[[ -z $(git -C "$union_repo" status --porcelain) ]] || {
+  echo "Union checkout must be clean" >&2
+  exit 1
+}
+
 echo "starting isolated Union/EVM devnet $union_project"
 union_started=1
 DEVNET_PROJECT_NAME="$union_project" DEVNET_ACTION=up "$union_repo/networks/run-linux-devnet.sh"
@@ -131,7 +142,6 @@ echo "deploying pinned Union contracts"
 export UNION_CORE_CONTRACT=${UNION_CORE_CONTRACT:-union1nk3nes4ef6vcjan5tz6stf9g8p08q2kgqysx6q5exxh89zakp0msq5z79t}
 export UNION_MANAGER_CONTRACT=${UNION_MANAGER_CONTRACT:-union1g8eayx25kmzmywzwq4uw44ftfpqxfz6qplnyutwqdzn92reavtmqltyh3e}
 export UNION_ZKGM_CONTRACT=${UNION_ZKGM_CONTRACT:-union1rfz3ytg6l60wxk5rxsk27jvn2907cyav04sz8kde3xhmmf9nplxqr8y05c}
-export UNION_TOKEN_MINTER=${UNION_TOKEN_MINTER:-union1tylj088axudzec7jmfenw9n7swhlg9y7h0ctmfnw8j2z0pqkvj2qkajn8m}
 export EVM_IBC_HANDLER=${EVM_IBC_HANDLER:-0xed2af2aD7FE0D92011b26A2e5D1B4dC7D12A47C5}
 export EVM_ZKGM=${EVM_ZKGM:-0x05FD55C1AbE31D3ED09A76216cA8F0372f4B2eC5}
 export EVM_ERC20_IMPL=${EVM_ERC20_IMPL:-0x999709eB04e8A30C7aceD9fd920f7e04EE6B97bA}
@@ -210,12 +220,6 @@ GNO_SENDER_ADDR=$(docker exec "$GNO_CONTAINER" gnokey list 2>&1 | \
   awk '/sender/ && match($0, /addr: [^ ]+/) { print substr($0, RSTART + 6, RLENGTH - 6); exit }')
 [[ -n $GNO_SENDER_ADDR ]] || { echo "could not discover Gno sender address" >&2; exit 1; }
 export GNO_SENDER_ADDR
-export FIXTURE_ENV_FILE="$runtime_dir/fixture.env"
-"$script_dir/generate-forward-fixture.sh"
-set -a
-# shellcheck disable=SC1090
-source "$FIXTURE_ENV_FILE"
-set +a
 
 export GNO_COMPOSE_DIR="$script_dir"
 export GNO_RPC=http://localhost:16657
@@ -225,13 +229,13 @@ export UNION_REST=http://localhost:1317
 export EVM_RPC=http://localhost:8545
 export BEACON_API=http://localhost:9596
 export VOYAGER_CONFIG_PATH=/config/voyager-config.gno-union.jsonc
-export RUN_PACKET_TESTS=0
+export RUN_PACKET_TESTS=1
 
 go_test=(go test -count=1 -v .)
 (
   cd "$script_dir"
-  GOWORK=off "${go_test[@]}" -run '^(TestDevnetReadiness|TestPacketPathCreated|TestUnionEVMTopology|TestGnoToEthereumForwardInstruction)$'
-  RUN_PACKET_TESTS=1 GOWORK=off "${go_test[@]}" -run '^TestGnoToEthereumForwardRelay$'
+  GOWORK=off "${go_test[@]}" -run '^(TestDevnetReadiness|TestPacketPathCreated|TestUnionEVMTopology)$'
+  GOWORK=off "${go_test[@]}" -run '^TestTokenBridgeScenarios$'
 )
 
-echo "full Gno -> Union -> EVM -> Union -> Gno cycle passed"
+echo "bidirectional Gno, Union, and EVM token scenarios passed"

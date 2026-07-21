@@ -23,7 +23,6 @@ type config struct {
 	UnionEVMClientID        string
 	UnionCoreContract       string
 	UnionZKGMContract       string
-	UnionTokenMinter        string
 	UnionSignerKey          string
 	UnionSignerHome         string
 	UnionPacketSignerKey    string
@@ -40,7 +39,6 @@ type config struct {
 	EVMERC20Impl            string
 	EVMManager              string
 	EVMRecipient            string
-	EVMWrappedToken         string
 	BeaconAPI               string
 	PostgresAddr            string
 	RunPacketTests          bool
@@ -68,7 +66,6 @@ func loadConfig() config {
 		UnionEVMClientID:        os.Getenv("UNION_EVM_CLIENT_ID"),
 		UnionCoreContract:       getenv("UNION_CORE_CONTRACT", "union1nk3nes4ef6vcjan5tz6stf9g8p08q2kgqysx6q5exxh89zakp0msq5z79t"),
 		UnionZKGMContract:       getenv("UNION_ZKGM_CONTRACT", "union1rfz3ytg6l60wxk5rxsk27jvn2907cyav04sz8kde3xhmmf9nplxqr8y05c"),
-		UnionTokenMinter:        getenv("UNION_TOKEN_MINTER", "union1tylj088axudzec7jmfenw9n7swhlg9y7h0ctmfnw8j2z0pqkvj2qkajn8m"),
 		UnionSignerKey:          getenv("UNION_SIGNER_KEY", "alice"),
 		UnionSignerHome:         getenv("UNION_SIGNER_HOME", "home"),
 		UnionPacketSignerKey:    getenv("UNION_PACKET_SIGNER_KEY", "alice"),
@@ -85,7 +82,6 @@ func loadConfig() config {
 		EVMERC20Impl:            getenv("EVM_ERC20_IMPL", "0x999709eB04e8A30C7aceD9fd920f7e04EE6B97bA"),
 		EVMManager:              getenv("EVM_MANAGER", "0x6C1D11bE06908656D16EBFf5667F1C45372B7c89"),
 		EVMRecipient:            getenv("EVM_RECIPIENT", "0xBe68fC2d8249eb60bfCf0e71D5A0d2F2e292c4eD"),
-		EVMWrappedToken:         os.Getenv("EVM_WRAPPED_TOKEN"),
 		BeaconAPI:               getenv("BEACON_API", "http://localhost:9596"),
 		PostgresAddr:            os.Getenv("POSTGRES_ADDR"),
 		RunPacketTests:          os.Getenv("RUN_PACKET_TESTS") == "1",

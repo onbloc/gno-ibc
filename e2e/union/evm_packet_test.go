@@ -5,8 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math/big"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -26,128 +24,6 @@ func TestUnionEVMTopology(t *testing.T) {
 		t.Skip("set RUN_PACKET_TESTS=1 to check the live Union-Ethereum topology")
 	}
 	requireUnionEVMTopology(t, cfg)
-}
-
-func TestUnionEVMInstruction(t *testing.T) {
-	cfg := loadConfig()
-	instruction := os.Getenv("UNION_EVM_INSTRUCTION_HEX")
-	if instruction == "" || cfg.EVMWrappedToken == "" {
-		t.Skip("set UNION_EVM_INSTRUCTION_HEX and EVM_WRAPPED_TOKEN")
-	}
-	requireUnionEVMInstruction(t, cfg, instruction)
-}
-
-func TestUnionToEthereumPacketRelay(t *testing.T) {
-	cfg := loadConfig()
-	if !cfg.RunPacketTests {
-		t.Skip("set RUN_PACKET_TESTS=1 after the Union-Ethereum channel is open")
-	}
-	instruction := os.Getenv("UNION_EVM_INSTRUCTION_HEX")
-	if instruction == "" || cfg.EVMWrappedToken == "" {
-		t.Skip("set UNION_EVM_INSTRUCTION_HEX and EVM_WRAPPED_TOKEN after reviewing the operand")
-	}
-
-	requireUnionEVMTopology(t, cfg)
-	requireUnionEVMInstruction(t, cfg, instruction)
-	checkEVMReady(t, cfg)
-	checkBeaconReady(t, cfg)
-
-	baseline := captureVoyagerBaseline(t, cfg)
-	evmBaseline, err := queryEVMBlockNumber(cfg.EVMRPC)
-	if err != nil {
-		t.Fatal(err)
-	}
-	senderBefore, err := queryUnionBalanceBig(cfg.UnionREST, cfg.UnionPacketSender, "au")
-	if err != nil {
-		t.Fatal(err)
-	}
-	minterBefore, err := queryUnionBalanceBig(cfg.UnionREST, cfg.UnionTokenMinter, "au")
-	if err != nil {
-		t.Fatal(err)
-	}
-	recipientBefore := queryERC20Balance(t, cfg, cfg.EVMWrappedToken, cfg.EVMRecipient)
-
-	sendTx := broadcastUnionPacket(t, cfg, instruction)
-	packetHash, sendHeight, sendHash := unionEvent(t, []byte(sendTx), "wasm-packet_send")
-	t.Logf("Union PacketSend %s at height %d tx %s", packetHash, sendHeight, sendHash)
-	enqueueUnionBlock(t, cfg, sendHeight)
-
-	recv := waitForEVMLog(t, cfg, baseline.Failed, cfg.EVMIBCHandler, packetRecvTopic, evmBaseline+1, topicUint32(mustUint32(t, cfg.EVMUnionChannelID)), packetHash)
-	ack := waitForEVMLog(t, cfg, baseline.Failed, cfg.EVMIBCHandler, writeAckTopic, evmBaseline+1, topicUint32(mustUint32(t, cfg.EVMUnionChannelID)), packetHash)
-	if recv.TransactionHash != ack.TransactionHash {
-		t.Fatalf("PacketRecv tx %s differs from WriteAck tx %s", recv.TransactionHash, ack.TransactionHash)
-	}
-	receipt, err := queryEVMReceipt(cfg.EVMRPC, recv.TransactionHash)
-	if err != nil || receipt.Status != "0x1" {
-		t.Fatalf("EVM receipt status = %q: %v", receipt.Status, err)
-	}
-	ackBytes, err := abiBytes(mustDecodeHex(t, ack.Data), 0)
-	if err != nil {
-		t.Fatalf("decode WriteAck: %v", err)
-	}
-	tag, err := abiUint(ackBytes, 0)
-	if err != nil || tag != 1 {
-		t.Fatalf("EVM acknowledgement tag = %d, want success: %v", tag, err)
-	}
-	block, err := strconv.ParseUint(strings.TrimPrefix(ack.BlockNumber, "0x"), 16, 64)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if logs, err := queryEVMLogs(cfg.EVMRPC, cfg.EVMIBCHandler, evmBaseline+1, packetRecvTopic, topicUint32(mustUint32(t, cfg.EVMUnionChannelID)), packetHash); err != nil || len(logs) != 1 {
-		t.Fatalf("PacketRecv count = %d, want 1: %v", len(logs), err)
-	}
-	if logs, err := queryEVMLogs(cfg.EVMRPC, cfg.EVMIBCHandler, evmBaseline+1, writeAckTopic, topicUint32(mustUint32(t, cfg.EVMUnionChannelID)), packetHash); err != nil || len(logs) != 1 {
-		t.Fatalf("WriteAck count = %d, want 1: %v", len(logs), err)
-	}
-	if logs, err := queryEVMLogs(cfg.EVMRPC, cfg.EVMZKGM, evmBaseline+1, createWrappedTokenTopic, topicUint32(mustUint32(t, cfg.EVMUnionChannelID)), topicAddress(cfg.EVMWrappedToken)); err != nil || len(logs) != 1 {
-		t.Fatalf("CreateWrappedToken count = %d, want 1: %v", len(logs), err)
-	}
-
-	code, err := queryEVMCode(cfg.EVMRPC, cfg.EVMWrappedToken)
-	if err != nil || len(code) == 0 {
-		t.Fatalf("wrapped token code is empty: %v", err)
-	}
-	if got := queryERC20String(t, cfg, cfg.EVMWrappedToken, "0x06fdde03"); got != "au" {
-		t.Fatalf("wrapped token name = %q, want au", got)
-	}
-	if got := queryERC20String(t, cfg, cfg.EVMWrappedToken, "0x95d89b41"); got != "au" {
-		t.Fatalf("wrapped token symbol = %q, want au", got)
-	}
-	if got := queryERC20Uint(t, cfg, cfg.EVMWrappedToken, "0x313ce567"); got != 6 {
-		t.Fatalf("wrapped token decimals = %d, want 6", got)
-	}
-	if got := queryERC20Uint(t, cfg, cfg.EVMWrappedToken, "0x18160ddd"); got != 10 {
-		t.Fatalf("wrapped token total supply = %d, want 10", got)
-	}
-	if delta := queryERC20Balance(t, cfg, cfg.EVMWrappedToken, cfg.EVMRecipient) - recipientBefore; delta != 10 {
-		t.Fatalf("recipient wrapped-token delta = %d, want 10", delta)
-	}
-
-	enqueueEVMBlock(t, cfg, block)
-	packetAck := waitForUnionEvent(t, cfg, "wasm-packet_ack", packetHash)
-	requireOneUnionEvent(t, cfg, "wasm-packet_ack", packetHash)
-	requireUnionPacketCommitmentRemoved(t, cfg, packetHash)
-	requireNoNewVoyagerFailed(t, cfg, baseline)
-	if done := voyagerRowsAfter(t, cfg, "done", baseline.Done); !strings.Contains(done, packetHash) {
-		t.Fatalf("Voyager done rows do not contain packet %s:\n%s", packetHash, done)
-	}
-
-	senderAfter, err := queryUnionBalanceBig(cfg.UnionREST, cfg.UnionPacketSender, "au")
-	if err != nil {
-		t.Fatal(err)
-	}
-	minterAfter, err := queryUnionBalanceBig(cfg.UnionREST, cfg.UnionTokenMinter, "au")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if senderAfter.Cmp(new(big.Int).Sub(new(big.Int).Set(senderBefore), big.NewInt(10))) > 0 {
-		t.Fatalf("Union sender balance did not decrease by at least 10au: before=%s after=%s", senderBefore, senderAfter)
-	}
-	minterDelta := new(big.Int).Sub(minterAfter, minterBefore)
-	if minterDelta.Cmp(big.NewInt(10)) != 0 {
-		t.Fatalf("Union token-minter delta = %s, want 10", minterDelta)
-	}
-	t.Logf("Ethereum PacketRecv/WriteAck tx %s block %d; Union PacketAck tx %s height %d", recv.TransactionHash, block, packetAck.Hash, packetAck.Height)
 }
 
 func requireUnionEVMTopology(t *testing.T, cfg config) {
@@ -254,40 +130,6 @@ func requireEVMTopology(t *testing.T, cfg config) {
 		if err != nil || len(code) == 0 {
 			t.Fatalf("%s code is empty: %v", label, err)
 		}
-	}
-}
-
-func requireUnionEVMInstruction(t *testing.T, cfg config, instruction string) {
-	t.Helper()
-	decoded := castDecode(t, "f()(uint8,uint8,bytes)", instruction)
-	if mustNumber(t, decoded[0]) != 2 || mustNumber(t, decoded[1]) != 3 {
-		t.Fatalf("instruction version/opcode = %v/%v, want 2/3", decoded[0], decoded[1])
-	}
-	order := castDecode(t, "f()(bytes,bytes,bytes,uint256,bytes,uint256,uint8,bytes)", decoded[2].(string))
-	if string(mustDecodeHex(t, order[0].(string))) != cfg.UnionPacketSender ||
-		!strings.EqualFold(order[1].(string), cfg.EVMRecipient) ||
-		string(mustDecodeHex(t, order[2].(string))) != "au" ||
-		mustNumber(t, order[3]) != 10 ||
-		!strings.EqualFold(order[4].(string), cfg.EVMWrappedToken) ||
-		mustNumber(t, order[5]) != 10 ||
-		mustNumber(t, order[6]) != 0 {
-		t.Fatalf("TokenOrderV2 does not match live fixture: %v", order[:7])
-	}
-	metadata := castDecode(t, "f()(bytes,bytes)", order[7].(string))
-	if !strings.EqualFold(metadata[0].(string), cfg.EVMERC20Impl) {
-		t.Fatalf("metadata implementation = %s, want %s", metadata[0], cfg.EVMERC20Impl)
-	}
-	initializer := metadata[1].(string)
-	if !strings.HasPrefix(strings.ToLower(initializer), "0x8420ce99") {
-		t.Fatalf("initializer selector = %.10s, want 0x8420ce99", initializer)
-	}
-	init := castDecodeInput(t, "initialize(address,address,string,string,uint8)()", initializer[10:])
-	if !strings.EqualFold(init[0].(string), cfg.EVMManager) ||
-		!strings.EqualFold(init[1].(string), cfg.EVMZKGM) ||
-		init[2].(string) != "au" ||
-		init[3].(string) != "au" ||
-		mustNumber(t, init[4]) != 6 {
-		t.Fatalf("initializer does not match live fixture: %v", init)
 	}
 }
 

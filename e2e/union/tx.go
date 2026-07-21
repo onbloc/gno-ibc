@@ -21,6 +21,13 @@ type gnoTransferRequest struct {
 	SendCoins        string
 }
 
+type unionTransferRequest struct {
+	ChannelID   string
+	Instruction string
+	Amount      string
+	Salt        string
+}
+
 type voyagerBaseline struct {
 	Queue  int64
 	Done   int64
@@ -169,28 +176,38 @@ func forceUpdateUnionGnoClient(t *testing.T, cfg config, proofHeight int64) {
 	t.Logf("force-updated Union Gno client %s at Gno height %d: %s", cfg.UnionGnoClientID, proofHeight, out)
 }
 
-func broadcastUnionPacket(t *testing.T, cfg config, instruction string) string {
+func broadcastUnionPacket(t *testing.T, cfg config, req unionTransferRequest) string {
 	t.Helper()
-	if instruction == "" {
-		t.Fatal("empty Union EVM instruction")
+	if req.Instruction == "" {
+		t.Fatal("empty Union instruction")
 	}
-	if !strings.HasPrefix(instruction, "0x") {
-		instruction = "0x" + instruction
+	if !strings.HasPrefix(req.Instruction, "0x") {
+		req.Instruction = "0x" + req.Instruction
+	}
+	if req.Salt == "" {
+		req.Salt = "0x0000000000000000000000000000000000000000000000000000000000000001"
 	}
 	msg, err := json.Marshal(map[string]any{"send": map[string]any{
-		"channel_id":        mustUint32(t, cfg.UnionEVMChannelID),
+		"channel_id":        mustUint32(t, req.ChannelID),
 		"timeout_height":    "0",
 		"timeout_timestamp": strconv.FormatInt(time.Now().Add(time.Hour).UnixNano(), 10),
-		"salt":              getenv("UNION_EVM_PACKET_SALT", "0x0000000000000000000000000000000000000000000000000000000000000001"),
-		"instruction":       instruction,
+		"salt":              req.Salt,
+		"instruction":       req.Instruction,
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
+	return broadcastUnionContract(t, cfg, cfg.UnionZKGMContract, string(msg), req.Amount)
+}
+
+func broadcastUnionContract(t *testing.T, cfg config, contract, msg, amount string) string {
+	t.Helper()
 	out, err := retrySequenceMismatch(func() (string, error) {
-		return dockerExec(cfg.UnionContainer,
-			"uniond", "tx", "wasm", "execute", cfg.UnionZKGMContract, string(msg),
-			"--amount", "10au",
+		args := []string{"uniond", "tx", "wasm", "execute", contract, msg}
+		if amount != "" {
+			args = append(args, "--amount", amount)
+		}
+		args = append(args,
 			"--from", cfg.UnionPacketSignerKey,
 			"--keyring-backend", "test",
 			"--home", cfg.UnionSignerHome,
@@ -198,14 +215,14 @@ func broadcastUnionPacket(t *testing.T, cfg config, instruction string) string {
 			"--node", "tcp://localhost:26657",
 			"--gas", "19000000",
 			"--fees", "19000000au",
-			"--yes", "--broadcast-mode", "sync", "-o", "json",
-		)
+			"--yes", "--broadcast-mode", "sync", "-o", "json")
+		return dockerExec(cfg.UnionContainer, args...)
 	})
 	if err != nil {
-		t.Fatalf("broadcast Union EVM packet: %v\n%s", err, out)
+		t.Fatalf("broadcast Union contract call: %v\n%s", err, out)
 	}
 	if err := checkCosmosTxResponse([]byte(out)); err != nil {
-		t.Fatalf("broadcast Union EVM packet: %v\n%s", err, out)
+		t.Fatalf("broadcast Union contract call: %v\n%s", err, out)
 	}
 	txHash, err := cosmosTxHash([]byte(out))
 	if err != nil {

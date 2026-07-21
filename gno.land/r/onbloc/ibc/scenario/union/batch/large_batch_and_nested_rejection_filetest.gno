@@ -11,8 +11,8 @@ package batch
 // behavior-level proof the nested batch was rejected.)
 
 import (
-	"encoding/hex"
 	"chain"
+	"encoding/hex"
 	"testing"
 
 	"gno.land/p/nt/ufmt/v0"
@@ -81,10 +81,11 @@ func bootstrap(cur realm) types.ChannelId {
 // (one unit each).
 func buildChildren(channelId types.ChannelId) (quoteTokens []string, instructions []z.Instruction) {
 	bases := []string{"zs89-a", "zs89-b", "zs89-c", "zs89-d", "zs89-e", "zs89-f", "zs89-g"}
+	symbols := []string{"ZS89A", "ZS89B", "ZS89C", "ZS89D", "ZS89E", "ZS89F", "ZS89G"}
 	quoteTokens = make([]string, len(bases))
 	instructions = make([]z.Instruction, len(bases))
 	for i, base := range bases {
-		meta := mustTokenMetadata("af739f34ddf951cbc24fdbba4f76213688e13627", z.TokenInitializer{Name: base, Symbol: "ZS89", Decimals: 6})
+		meta := mustTokenMetadata("af739f34ddf951cbc24fdbba4f76213688e13627", z.TokenInitializer{Name: base, Symbol: symbols[i], Decimals: 6})
 		quoteTokens[i] = z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte(base), z.MetadataImage(mustDecodeMeta(meta)))
 		instructions[i] = mustOrderInstruction(z.TokenOrderV2{
 			Sender:      []byte("remote-sender"),

@@ -1,4 +1,4 @@
-package ics23mpt
+package ics23_mpt
 
 const ClientType = "state-lens/ics23/mpt"
 

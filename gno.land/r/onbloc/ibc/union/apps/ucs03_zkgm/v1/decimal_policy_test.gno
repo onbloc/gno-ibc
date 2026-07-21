@@ -1,4 +1,4 @@
-package v1
+package ucs03_zkgm
 
 import (
 	"chain"
@@ -377,9 +377,9 @@ func TestVoucherDecimalsWithinLimit(cur realm, t *testing.T) {
 		decimals uint8
 		expDec   int
 	}{
-		{"ibc/dl-0", "T0", 0, 0},
-		{"ibc/dl-6", "T6", 6, 6},
-		{"ibc/dl-18", "TK", 18, canonicalDecimals}, // MaxDecimals; capped to canonical.
+		{"ibc/dl-0", "DL0", 0, 0},
+		{"ibc/dl-6", "DL6", 6, 6},
+		{"ibc/dl-18", "DLK", 18, canonicalDecimals}, // MaxDecimals; capped to canonical.
 	} {
 		// One canonical unit expressed in the source precision.
 		amt := scaledWire(1, tc.decimals)

@@ -1,4 +1,4 @@
-package ics23mpt
+package ics23_mpt
 
 import (
 	"errors"

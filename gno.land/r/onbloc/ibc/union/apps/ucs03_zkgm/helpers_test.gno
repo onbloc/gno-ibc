@@ -170,5 +170,5 @@ func installImplForTest(path string, target IApp) {
 }
 
 func newVoucherTokenForTest(cur realm, name string, symbol string) (*grc20.Token, *grc20.PrivateLedger) {
-	return grc20.NewToken(0, cur, name, symbol, 6)
+	return grc20.NewToken(name, symbol, 6, 0, cur)
 }

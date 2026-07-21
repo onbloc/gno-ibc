@@ -87,10 +87,12 @@ func TestGetOrCreateVoucher(cur realm, t *testing.T) {
 			testStore = newMockStore()
 			v := newTestImpl()
 			if tc.precreate {
-				v.getOrCreateVoucher(0, cur, tc.denom, [32]byte{}, "Original", "ORG", 4)
+				_, err := v.getOrCreateVoucher(0, cur, tc.denom, [32]byte{}, "Original", "ORG", 4)
+				uassert.NoError(t, err)
 			}
 
-			got := v.getOrCreateVoucher(0, cur, tc.denom, [32]byte{}, tc.nameArg, tc.symbolArg, tc.decimals)
+			got, err := v.getOrCreateVoucher(0, cur, tc.denom, [32]byte{}, tc.nameArg, tc.symbolArg, tc.decimals)
+			uassert.NoError(t, err)
 			stored, ok := testStore.GetVoucher(tc.denom)
 			uassert.True(t, ok)
 			uassert.True(t, got == stored)
@@ -99,6 +101,28 @@ func TestGetOrCreateVoucher(cur realm, t *testing.T) {
 			uassert.Equal(t, tc.wantDec, got.Token().GetDecimals())
 		})
 	}
+}
+
+// grc20reg keys its registry by (realm, symbol) and panics on a repeat key.
+// Every voucher this realm registers shares the same realm path, so two
+// different origin denoms that happen to declare the same symbol (e.g. USDC
+// bridged from two different chains) must fail with a controlled error
+// instead of panicking through grc20reg.Register.
+func TestGetOrCreateVoucherRejectsDuplicateSymbolAcrossDenoms(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	_, err := v.getOrCreateVoucher(0, cur, "ibc/origin-chain-a-usdc", [32]byte{}, "USD Coin", "USDC", 6)
+	uassert.NoError(t, err)
+
+	_, err = v.getOrCreateVoucher(0, cur, "ibc/origin-chain-b-usdc", [32]byte{}, "USD Coin", "USDC", 6)
+	uassert.ErrorContains(t, err, "voucher symbol already registered")
+
+	// The first denom's voucher is unaffected, and the second was never created.
+	_, ok := testStore.GetVoucher("ibc/origin-chain-a-usdc")
+	uassert.True(t, ok)
+	_, ok = testStore.GetVoucher("ibc/origin-chain-b-usdc")
+	uassert.False(t, ok)
 }
 
 // Voucher operations create and reuse wrapped grc20 tokens while preserving
@@ -114,11 +138,11 @@ func TestVoucher(cur realm, t *testing.T) {
 				denom := "ibc/mint-basic"
 				rx := address(testAddress("mint-rx"))
 
-				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "Wrapped", "WRAP", 6, rx, u256.NewUint(100)))
+				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "Wrapped", "MINTVB", 6, rx, u256.NewUint(100)))
 				uassert.Equal(t, int64(100), voucherBalanceOf(denom, rx))
 				uassert.Equal(t, 6, voucherDecimalsOf(denom))
 
-				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "Wrapped", "WRAP", 6, rx, u256.NewUint(50)))
+				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "Wrapped", "MINTVB", 6, rx, u256.NewUint(50)))
 				uassert.Equal(t, int64(150), voucherBalanceOf(denom, rx))
 
 				wide := new(u256.Uint).Lsh(u256.NewUint(1), 64)
@@ -160,7 +184,7 @@ func TestVoucher(cur realm, t *testing.T) {
 				denom := "ibc/name-fallback"
 				rx := testAddress("name-fb-rx")
 
-				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "", "SYM", 0, rx, u256.NewUint(1)))
+				uassert.NoError(t, v.mintVoucher(0, rlm, denom, [32]byte{}, "", "EMPTYNM", 0, rx, u256.NewUint(1)))
 
 				vou, ok := testStore.GetVoucher(denom)
 				uassert.True(t, ok)

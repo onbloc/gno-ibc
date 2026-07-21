@@ -1,4 +1,10 @@
-# Admin Recovery CI Setup Plan
+# Historical Admin Recovery CI Setup Plan
+
+> [!NOTE]
+> This fixed-ID, single-packet plan has been superseded by
+> `run-full-cycle-ci.sh`, which creates live topologies and validates the four
+> bidirectional token packets. Keep this document only as background for the
+> manual admin-recovery path; it is not the current CI procedure.
 
 ## Goal
 

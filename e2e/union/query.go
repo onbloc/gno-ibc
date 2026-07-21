@@ -8,7 +8,6 @@ import (
 	"io"
 	"math/big"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -19,10 +18,6 @@ var httpClient = &http.Client{Timeout: 10 * time.Second}
 type StatusResponse struct {
 	ChainID string
 	Height  int64
-}
-
-type Client struct {
-	ClientID string
 }
 
 type UnionTx struct {
@@ -114,61 +109,6 @@ func queryUnionStatus(rpc string) (*StatusResponse, error) {
 	return &StatusResponse{ChainID: resp.Result.NodeInfo.Network, Height: height}, nil
 }
 
-func queryUnionBalance(rest, address, denom string) (int64, error) {
-	balance, err := queryUnionBalanceBig(rest, address, denom)
-	if err != nil {
-		return 0, err
-	}
-	if !balance.IsInt64() {
-		return 0, fmt.Errorf("balance %s%s exceeds int64", balance, denom)
-	}
-	return balance.Int64(), nil
-}
-
-func queryUnionBalanceBig(rest, address, denom string) (*big.Int, error) {
-	u := fmt.Sprintf("%s/cosmos/bank/v1beta1/balances/%s/by_denom?denom=%s", rest, address, url.QueryEscape(denom))
-	body, err := httpGet(u)
-	if err != nil {
-		return nil, err
-	}
-	var resp struct {
-		Balance struct {
-			Amount string `json:"amount"`
-		} `json:"balance"`
-	}
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, err
-	}
-	if resp.Balance.Amount == "" {
-		return new(big.Int), nil
-	}
-	balance := new(big.Int)
-	if _, ok := balance.SetString(resp.Balance.Amount, 10); !ok {
-		return nil, fmt.Errorf("bad %s balance %q", denom, resp.Balance.Amount)
-	}
-	return balance, nil
-}
-
-func queryUnionIBCClients(rest string) ([]Client, error) {
-	body, err := httpGet(rest + "/ibc/core/client/v1/client_states")
-	if err != nil {
-		return nil, err
-	}
-	var resp struct {
-		ClientStates []struct {
-			ClientID string `json:"client_id"`
-		} `json:"client_states"`
-	}
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, err
-	}
-	clients := make([]Client, 0, len(resp.ClientStates))
-	for _, state := range resp.ClientStates {
-		clients = append(clients, Client{ClientID: state.ClientID})
-	}
-	return clients, nil
-}
-
 func queryUnionTxs(container, eventType, packetHash string, limit int) ([]UnionTx, error) {
 	out, err := dockerExec(container, "uniond", "query", "txs",
 		"--query", fmt.Sprintf("%s.packet_hash='%s'", eventType, packetHash),
@@ -221,47 +161,6 @@ func parseUnionTxs(body []byte) ([]UnionTx, error) {
 		txs = append(txs, UnionTx{Hash: hash, Height: height})
 	}
 	return txs, nil
-}
-
-func requireUnionEventOrder(container, txHash, before, after string) error {
-	out, err := dockerExec(container, "uniond", "query", "tx", txHash,
-		"--node", "tcp://localhost:26657",
-		"-o", "json",
-	)
-	if err != nil {
-		return fmt.Errorf("query Union tx %s: %w\n%s", txHash, err, out)
-	}
-	if err := checkUnionEventOrder([]byte(out), before, after); err != nil {
-		return fmt.Errorf("Union tx %s: %w", txHash, err)
-	}
-	return nil
-}
-
-func checkUnionEventOrder(body []byte, before, after string) error {
-	var resp struct {
-		Events []struct {
-			Type string `json:"type"`
-		} `json:"events"`
-	}
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return fmt.Errorf("decode transaction events: %w", err)
-	}
-	beforeIndex, afterIndex := -1, -1
-	for i, event := range resp.Events {
-		if beforeIndex < 0 && event.Type == before {
-			beforeIndex = i
-		}
-		if afterIndex < 0 && event.Type == after {
-			afterIndex = i
-		}
-	}
-	if beforeIndex < 0 || afterIndex < 0 {
-		return fmt.Errorf("missing ordered events %q and %q", before, after)
-	}
-	if beforeIndex >= afterIndex {
-		return fmt.Errorf("event %q at index %d must precede %q at index %d", before, beforeIndex, after, afterIndex)
-	}
-	return nil
 }
 
 func queryEVMBlockNumber(rpc string) (uint64, error) {

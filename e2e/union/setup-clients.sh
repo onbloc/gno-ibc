@@ -90,6 +90,16 @@ ensure_client() {
   echo "$id"
 }
 
+require_client_info() {
+  local chain=$1 id=$2 type=$3 interface=$4 info
+  info=$(voyager rpc client-info "$chain" "$id")
+  jq -e --arg type "$type" --arg interface "$interface" \
+    '.client_type == $type and .ibc_interface == $interface' <<<"$info" >/dev/null || {
+    echo "$chain client $id differs: $info" >&2
+    return 1
+  }
+}
+
 for chain in "$union_chain_id" "$gno_chain_id" "$evm_chain_id"; do
   wait_rpc "$chain"
 done
@@ -102,6 +112,11 @@ union_evm_client_id=$(ensure_client union_client trusted/evm/mpt \
   --on "$union_chain_id" --tracking "$evm_chain_id" --ibc-interface ibc-cosmwasm)
 evm_union_client_id=$(ensure_client evm_client cometbls \
   --on "$evm_chain_id" --tracking "$union_chain_id" --ibc-interface ibc-solidity)
+
+require_client_info "$gno_chain_id" "$gno_client_id" cometbls ibc-gno
+require_client_info "$union_chain_id" "$union_gno_client_id" gno ibc-cosmwasm
+require_client_info "$union_chain_id" "$union_evm_client_id" trusted/evm/mpt ibc-cosmwasm
+require_client_info "$evm_chain_id" "$evm_union_client_id" cometbls ibc-solidity
 
 umask 077
 {

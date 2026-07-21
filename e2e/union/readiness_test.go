@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"strconv"
 	"testing"
 	"time"
@@ -14,35 +13,32 @@ import (
 func TestDevnetReadiness(t *testing.T) {
 	cfg := loadConfig()
 
-	checkGnoReady(t, cfg)
-	checkGnoIndexerReady(t, cfg)
-	checkUnionReady(t, cfg)
-	checkEVMReady(t, cfg)
-	checkBeaconReady(t, cfg)
-	if cfg.PostgresAddr != "" {
-		checkPostgresReady(t, cfg)
-	}
+	checkGnoReady(t, cfg.Gno)
+	checkGnoIndexerReady(t, cfg.Gno)
+	checkUnionReady(t, cfg.Union)
+	checkEVMReady(t, cfg.EVM)
+	checkBeaconReady(t, cfg.EVM)
 }
 
-func checkGnoReady(t *testing.T, cfg config) {
+func checkGnoReady(t *testing.T, cfg gnoConfig) {
 	t.Helper()
-	waitHTTP(t, cfg.GNORPC+"/status")
+	waitHTTP(t, cfg.RPC+"/status")
 }
 
-func checkGnoIndexerReady(t *testing.T, cfg config) {
+func checkGnoIndexerReady(t *testing.T, cfg gnoConfig) {
 	t.Helper()
-	waitGraphQL(t, cfg.GnoIndexer)
+	waitGraphQL(t, cfg.Indexer)
 }
 
-func checkUnionReady(t *testing.T, cfg config) {
+func checkUnionReady(t *testing.T, cfg unionConfig) {
 	t.Helper()
-	wait(t, cfg.UnionRPC, func() error {
-		status, err := queryUnionStatus(cfg.UnionRPC)
+	wait(t, cfg.RPC, func() error {
+		status, err := queryUnionStatus(cfg.RPC)
 		if err != nil {
 			return err
 		}
-		if status.ChainID != cfg.UnionChainID {
-			return fmt.Errorf("union chain id = %q, want %q", status.ChainID, cfg.UnionChainID)
+		if status.ChainID != cfg.ChainID {
+			return fmt.Errorf("union chain id = %q, want %q", status.ChainID, cfg.ChainID)
 		}
 		if status.Height <= 0 {
 			return fmt.Errorf("union height must be positive, got %d", status.Height)
@@ -51,18 +47,18 @@ func checkUnionReady(t *testing.T, cfg config) {
 	})
 }
 
-func checkEVMReady(t *testing.T, cfg config) {
+func checkEVMReady(t *testing.T, cfg evmConfig) {
 	t.Helper()
-	wait(t, cfg.EVMRPC, func() error {
-		before, err := queryEVMBlockNumber(cfg.EVMRPC)
+	wait(t, cfg.RPC, func() error {
+		before, err := queryEVMBlockNumber(cfg.RPC)
 		if err != nil {
 			return err
 		}
-		chainID, err := queryEVMChainID(cfg.EVMRPC)
+		chainID, err := queryEVMChainID(cfg.RPC)
 		if err != nil {
 			return err
 		}
-		wantChainID, err := strconv.ParseUint(cfg.EVMChainID, 10, 64)
+		wantChainID, err := strconv.ParseUint(cfg.ChainID, 10, 64)
 		if err != nil {
 			return fmt.Errorf("parse configured EVM chain id: %w", err)
 		}
@@ -70,7 +66,7 @@ func checkEVMReady(t *testing.T, cfg config) {
 			return fmt.Errorf("EVM chain id = %d, want %d", chainID, wantChainID)
 		}
 		time.Sleep(4 * time.Second)
-		after, err := queryEVMBlockNumber(cfg.EVMRPC)
+		after, err := queryEVMBlockNumber(cfg.RPC)
 		if err != nil {
 			return err
 		}
@@ -81,7 +77,7 @@ func checkEVMReady(t *testing.T, cfg config) {
 	})
 }
 
-func checkBeaconReady(t *testing.T, cfg config) {
+func checkBeaconReady(t *testing.T, cfg evmConfig) {
 	t.Helper()
 	wait(t, cfg.BeaconAPI, func() error {
 		sync, err := queryBeaconSync(cfg.BeaconAPI)
@@ -99,20 +95,6 @@ func checkBeaconReady(t *testing.T, cfg config) {
 			return fmt.Errorf("beacon has not finalized a non-genesis epoch")
 		}
 		return nil
-	})
-}
-
-func checkPostgresReady(t *testing.T, cfg config) {
-	t.Helper()
-	if cfg.PostgresAddr == "" {
-		t.Skip("set POSTGRES_ADDR=localhost:5432 to check postgres")
-	}
-	wait(t, cfg.PostgresAddr, func() error {
-		conn, err := net.DialTimeout("tcp", cfg.PostgresAddr, 2*time.Second)
-		if err != nil {
-			return err
-		}
-		return conn.Close()
 	})
 }
 

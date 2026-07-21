@@ -2,8 +2,6 @@ package unione2e
 
 import (
 	"errors"
-	"io"
-	"net/http"
 	"strings"
 	"testing"
 )
@@ -19,31 +17,6 @@ func TestRetrySequenceMismatch(t *testing.T) {
 	})
 	if err != nil || out != "ok" || attempts != 2 {
 		t.Fatalf("out=%q err=%v attempts=%d", out, err, attempts)
-	}
-}
-
-type roundTripFunc func(*http.Request) (*http.Response, error)
-
-func (fn roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
-	return fn(req)
-}
-
-func TestQueryUnionBalanceBig(t *testing.T) {
-	originalClient := httpClient
-	httpClient = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
-		return &http.Response{
-			StatusCode: http.StatusOK,
-			Body:       io.NopCloser(strings.NewReader(`{"balance":{"amount":"9999999999999999999999999"}}`)),
-		}, nil
-	})}
-	defer func() { httpClient = originalClient }()
-
-	balance, err := queryUnionBalanceBig("http://union-rest", "union1sender", "au")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := balance.String(), "9999999999999999999999999"; got != want {
-		t.Fatalf("balance=%s want=%s", got, want)
 	}
 }
 
@@ -84,18 +57,5 @@ func TestCosmosTxHash(t *testing.T) {
 	}
 	if _, err := cosmosTxHash([]byte(`{"code":0}`)); err == nil {
 		t.Fatal("missing txhash accepted")
-	}
-}
-
-func TestCheckUnionEventOrder(t *testing.T) {
-	ordered := []byte(`{"events":[{"type":"wasm-packet_recv"},{"type":"wasm-write_ack"}]}`)
-	if err := checkUnionEventOrder(ordered, "wasm-packet_recv", "wasm-write_ack"); err != nil {
-		t.Fatalf("ordered events rejected: %v", err)
-	}
-
-	reversed := []byte(`{"events":[{"type":"wasm-write_ack"},{"type":"wasm-packet_recv"}]}`)
-	err := checkUnionEventOrder(reversed, "wasm-packet_recv", "wasm-write_ack")
-	if err == nil || !strings.Contains(err.Error(), "must precede") {
-		t.Fatalf("reversed event error = %v", err)
 	}
 }

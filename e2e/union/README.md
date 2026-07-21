@@ -10,18 +10,41 @@ EVM ERC20 → Union CW20 → Gno GRC20
 The tested inputs are pinned in `.gno-version` and `.env.example`; Compose uses
 those commits as the local Gno and Voyager image tags.
 
-## Prerequisites
+## Run the full cycle
+
+The full-cycle runner starts isolated Gno, Union, EVM, and Voyager services,
+creates live clients and topologies, runs the readiness checks and all four
+token packets, collects diagnostics, and removes the services on exit.
+
+It requires Docker Compose, Nix, Go, Foundry, Rust
+`nightly-2025-12-05`, and a clean Union Voyager checkout at the pinned commit:
+
+```sh
+export UNION_VOYAGER_DIR=/path/to/union-voyager
+git -C "$UNION_VOYAGER_DIR" checkout \
+  "$(sed -n 's/^UNION_COMMIT=//p' e2e/union/.env.example)"
+e2e/union/run-full-cycle-ci.sh
+```
+
+Local diagnostics are written under `.e2e-artifacts/`. Share `run.log` first;
+for failures, also include `voyager-failed.txt` and `gno-compose.log`. GitHub
+Actions runs the same script for pull requests, pushes to `main`, the daily
+schedule, and manual dispatch, and retains its diagnostic artifact for 7 days.
+
+## Manual setup prerequisites
+
+The commands below are for running and debugging the services individually.
 
 - Docker Compose
-- the Union Voyager checkout at the commit above (`UNION_VOYAGER_DIR`)
+- the Union Voyager checkout pinned in `.env.example` (`UNION_VOYAGER_DIR`)
 - Union's devnet running on RPC `26657`, EVM RPC `8545`, and beacon API `9596`
 - the configured Union core and ZKGM contracts
 
 Start and deploy the pinned Union checkout:
 
 ```sh
-. e2e/union/.env.example
-git -C "$UNION_VOYAGER_DIR" checkout "$UNION_COMMIT"
+git -C "$UNION_VOYAGER_DIR" checkout \
+  "$(sed -n 's/^UNION_COMMIT=//p' e2e/union/.env.example)"
 NO_BLOCKSCOUT=true "$UNION_VOYAGER_DIR/networks/run-linux-devnet.sh"
 cd "$UNION_VOYAGER_DIR"
 nix run .#cosmwasm-scripts.union-devnet.deploy-manager -- \
@@ -63,7 +86,8 @@ docker compose --env-file ../../.gno-version --env-file .env --profile setup run
 `gno-bootstrap` installs the core and ZKGM implementations, registers the app,
 and registers both light clients. `gno-admin-recovery` creates and validates
 Gno connection `5` and channel `3`; a mismatched existing record fails before
-state is written.
+state is written. These fixed IDs belong only to the manual admin-recovery
+path; the full-cycle runner creates and discovers live topology IDs.
 
 The Voyager Gno transaction key in the checked-in config and the test mnemonic
 in `.env.example` both derive to `g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5`;
@@ -117,9 +141,9 @@ divisible by `10^12` and verifies the downscaled Gno voucher balance.
 
 ```sh
 docker compose --env-file ../../.gno-version --env-file .env logs voyager
-docker exec union-voyager-1 ./voyager \
+docker compose --env-file ../../.gno-version --env-file .env exec voyager ./voyager \
   -c /config/voyager-config.gno-union.jsonc queue stats
-docker exec union-voyager-1 ./voyager \
+docker compose --env-file ../../.gno-version --env-file .env exec voyager ./voyager \
   -c /config/voyager-config.gno-union.jsonc queue query-failed
 curl -fsS http://localhost:48546/graphql/query \
   -H 'content-type: application/json' \

@@ -234,7 +234,6 @@ export GNO_COMPOSE_DIR="$script_dir"
 export GNO_RPC=http://localhost:16657
 export GNO_INDEXER=http://localhost:48546/graphql/query
 export UNION_RPC=http://localhost:26657
-export UNION_REST=http://localhost:1317
 export EVM_RPC=http://localhost:8545
 export BEACON_API=http://localhost:9596
 export VOYAGER_CONFIG_PATH=/config/voyager-config.gno-union.jsonc

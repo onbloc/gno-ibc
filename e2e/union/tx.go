@@ -11,48 +11,40 @@ import (
 	"time"
 )
 
-type gnoTransferRequest struct {
-	ChannelID        string
-	TimeoutTimestamp string
-	SaltHex          string
-	Version          string
-	Opcode           string
-	OperandHex       string
-	SendCoins        string
-}
-
-type unionTransferRequest struct {
-	ChannelID   string
-	Instruction string
-	Amount      string
-	Salt        string
-}
-
 type voyagerBaseline struct {
 	Queue  int64
 	Done   int64
 	Failed int64
 }
 
-func transferOnGno(t *testing.T, cfg config, req gnoTransferRequest) string {
+func broadcastGnoPacket(t *testing.T, cfg gnoConfig, channel, operand, sendCoins, salt string) {
 	t.Helper()
-	if req.TimeoutTimestamp == "" {
-		req.TimeoutTimestamp = fmt.Sprint(time.Now().Add(time.Hour).UnixNano())
+	cmdArgs := []string{
+		"compose", "exec", "-T", "gno",
+		"gnokey", "maketx", "call",
+		"-pkgpath", "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
+		"-func", "SendRaw",
+		"-gas-fee", "5000000ugnot",
+		"-gas-wanted", "200000000",
+		"-broadcast",
+		"-chainid", cfg.ChainID,
+		"-remote", "localhost:26657",
+		"-insecure-password-stdin",
+		"-send", sendCoins,
 	}
-	if req.SaltHex == "" {
-		req.SaltHex = "0000000000000000000000000000000000000000000000000000000000000001"
+	for _, arg := range []string{channel, fmt.Sprint(time.Now().Add(time.Hour).UnixNano()), salt, "2", "3", operand} {
+		cmdArgs = append(cmdArgs, "-args", arg)
 	}
-	if req.Version == "" {
-		req.Version = "2"
+	cmdArgs = append(cmdArgs, cfg.KeyName)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "docker", cmdArgs...)
+	cmd.Dir = cfg.ComposeDir
+	cmd.Stdin = strings.NewReader("\n")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("gnokey packet broadcast failed: %v\n%s", err, out)
 	}
-	if req.Opcode == "" {
-		req.Opcode = "3"
-	}
-	return signAndBroadcastGnoCall(t, cfg, cfg.GNOKeyName,
-		"gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm", "SendRaw",
-		req.SendCoins,
-		req.ChannelID, req.TimeoutTimestamp, req.SaltHex, req.Version, req.Opcode, req.OperandHex,
-	)
 }
 
 func dockerExec(container string, args ...string) (string, error) {
@@ -77,32 +69,32 @@ func retrySequenceMismatch(run func() (string, error)) (string, error) {
 	return out, err
 }
 
-func voyagerCLI(t *testing.T, cfg config, args ...string) string {
+func voyagerCLI(t *testing.T, cfg voyagerConfig, args ...string) string {
 	t.Helper()
-	cmdArgs := append([]string{"./voyager", "-c", cfg.VoyagerConfig}, args...)
-	out, err := dockerExec(cfg.VoyagerContainer, cmdArgs...)
+	cmdArgs := append([]string{"./voyager", "-c", cfg.ConfigPath}, args...)
+	out, err := dockerExec(cfg.Container, cmdArgs...)
 	if err != nil {
 		t.Fatalf("voyager %s failed: %v\n%s", strings.Join(args, " "), err, out)
 	}
 	return out
 }
 
-func enqueueGnoBlock(t *testing.T, cfg config, height int64) {
+func enqueueGnoBlock(t *testing.T, voyager voyagerConfig, chainID string, height int64) {
 	t.Helper()
-	enqueueVoyagerFetchBlock(t, cfg, "voyager-event-source-plugin-gno/"+cfg.GNOChainID, strconv.FormatInt(height, 10))
+	enqueueVoyagerFetchBlock(t, voyager, "voyager-event-source-plugin-gno/"+chainID, strconv.FormatInt(height, 10))
 }
 
-func enqueueUnionBlock(t *testing.T, cfg config, height int64) {
+func enqueueUnionBlock(t *testing.T, voyager voyagerConfig, chainID string, height int64) {
 	t.Helper()
-	enqueueVoyagerFetchBlock(t, cfg, "voyager-event-source-plugin-cosmwasm/"+cfg.UnionChainID, "1-"+strconv.FormatInt(height, 10))
+	enqueueVoyagerFetchBlock(t, voyager, "voyager-event-source-plugin-cosmwasm/"+chainID, "1-"+strconv.FormatInt(height, 10))
 }
 
-func enqueueEVMBlock(t *testing.T, cfg config, height uint64) {
+func enqueueEVMBlock(t *testing.T, voyager voyagerConfig, chainID string, height uint64) {
 	t.Helper()
-	voyagerCLI(t, cfg, "index", cfg.EVMChainID, "--exact", strconv.FormatUint(height, 10), "--enqueue")
+	voyagerCLI(t, voyager, "index", chainID, "--exact", strconv.FormatUint(height, 10), "--enqueue")
 }
 
-func enqueueVoyagerFetchBlock(t *testing.T, cfg config, plugin, height string) {
+func enqueueVoyagerFetchBlock(t *testing.T, cfg voyagerConfig, plugin, height string) {
 	t.Helper()
 	msg := map[string]any{
 		"@type": "call",
@@ -126,9 +118,9 @@ func enqueueVoyagerFetchBlock(t *testing.T, cfg config, plugin, height string) {
 
 func forceUpdateUnionGnoClient(t *testing.T, cfg config, proofHeight int64) {
 	t.Helper()
-	create := voyagerCLI(t, cfg, "msg", "create-client",
-		"--on", cfg.UnionChainID,
-		"--tracking", cfg.GNOChainID,
+	create := voyagerCLI(t, cfg.Voyager, "msg", "create-client",
+		"--on", cfg.Union.ChainID,
+		"--tracking", cfg.Gno.ChainID,
 		"--ibc-interface", "ibc-cosmwasm",
 		"--ibc-spec-id", "ibc-union",
 		"--client-type", "gno",
@@ -138,9 +130,9 @@ func forceUpdateUnionGnoClient(t *testing.T, cfg config, proofHeight int64) {
 	if err != nil {
 		t.Fatalf("parse Voyager create-client output: %v\n%s", err, create)
 	}
-	clientID, err := strconv.ParseUint(cfg.UnionGnoClientID, 10, 32)
+	clientID, err := strconv.ParseUint(cfg.Topology.UnionGno.ClientID, 10, 32)
 	if err != nil {
-		t.Fatalf("parse Union Gno client id %q: %v", cfg.UnionGnoClientID, err)
+		t.Fatalf("parse Union Gno client id %q: %v", cfg.Topology.UnionGno.ClientID, err)
 	}
 	msg, err := json.Marshal(map[string]any{"force_update_client": map[string]any{
 		"client_id":             clientID,
@@ -151,12 +143,12 @@ func forceUpdateUnionGnoClient(t *testing.T, cfg config, proofHeight int64) {
 		t.Fatal(err)
 	}
 	out, err := retrySequenceMismatch(func() (string, error) {
-		return dockerExec(cfg.UnionContainer,
-			"uniond", "tx", "wasm", "execute", cfg.UnionCoreContract, string(msg),
-			"--from", cfg.UnionSignerKey,
+		return dockerExec(cfg.Union.Container,
+			"uniond", "tx", "wasm", "execute", cfg.Union.Core, string(msg),
+			"--from", cfg.Union.SignerKey,
 			"--keyring-backend", "test",
-			"--home", cfg.UnionSignerHome,
-			"--chain-id", cfg.UnionChainID,
+			"--home", cfg.Union.SignerHome,
+			"--chain-id", cfg.Union.ChainID,
 			"--node", "tcp://localhost:26657",
 			"--gas", "19000000",
 			"--fees", "19000000au",
@@ -164,60 +156,51 @@ func forceUpdateUnionGnoClient(t *testing.T, cfg config, proofHeight int64) {
 		)
 	})
 	if err != nil {
-		t.Fatalf("force-update Union Gno client %s: %v\n%s", cfg.UnionGnoClientID, err, out)
+		t.Fatalf("force-update Union Gno client %s: %v\n%s", cfg.Topology.UnionGno.ClientID, err, out)
 	}
 	if err := checkCosmosTxResponse([]byte(out)); err != nil {
-		t.Fatalf("force-update Union Gno client %s: %v\n%s", cfg.UnionGnoClientID, err, out)
+		t.Fatalf("force-update Union Gno client %s: %v\n%s", cfg.Topology.UnionGno.ClientID, err, out)
 	}
 	txHash, err := cosmosTxHash([]byte(out))
 	if err != nil {
-		t.Fatalf("force-update Union Gno client %s: %v\n%s", cfg.UnionGnoClientID, err, out)
+		t.Fatalf("force-update Union Gno client %s: %v\n%s", cfg.Topology.UnionGno.ClientID, err, out)
 	}
-	waitForUnionTx(t, cfg, txHash)
-	t.Logf("force-updated Union Gno client %s at Gno height %d: %s", cfg.UnionGnoClientID, proofHeight, out)
+	waitForUnionTx(t, cfg.Union, txHash)
+	t.Logf("force-updated Union Gno client %s at Gno height %d: %s", cfg.Topology.UnionGno.ClientID, proofHeight, out)
 }
 
-func broadcastUnionPacket(t *testing.T, cfg config, req unionTransferRequest) string {
+func broadcastUnionPacket(t *testing.T, cfg unionConfig, channel, instruction, salt string) string {
 	t.Helper()
-	if req.Instruction == "" {
+	if instruction == "" {
 		t.Fatal("empty Union instruction")
 	}
-	if !strings.HasPrefix(req.Instruction, "0x") {
-		req.Instruction = "0x" + req.Instruction
-	}
-	if req.Salt == "" {
-		req.Salt = "0x0000000000000000000000000000000000000000000000000000000000000001"
-	}
 	msg, err := json.Marshal(map[string]any{"send": map[string]any{
-		"channel_id":        mustUint32(t, req.ChannelID),
+		"channel_id":        mustUint32(t, channel),
 		"timeout_height":    "0",
 		"timeout_timestamp": strconv.FormatInt(time.Now().Add(time.Hour).UnixNano(), 10),
-		"salt":              req.Salt,
-		"instruction":       req.Instruction,
+		"salt":              salt,
+		"instruction":       instruction,
 	}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	return broadcastUnionContract(t, cfg, cfg.UnionZKGMContract, string(msg), req.Amount)
+	return broadcastUnionContract(t, cfg, cfg.ZKGM, string(msg))
 }
 
-func broadcastUnionContract(t *testing.T, cfg config, contract, msg, amount string) string {
+func broadcastUnionContract(t *testing.T, cfg unionConfig, contract, msg string) string {
 	t.Helper()
 	out, err := retrySequenceMismatch(func() (string, error) {
 		args := []string{"uniond", "tx", "wasm", "execute", contract, msg}
-		if amount != "" {
-			args = append(args, "--amount", amount)
-		}
 		args = append(args,
-			"--from", cfg.UnionPacketSignerKey,
+			"--from", cfg.PacketSignerKey,
 			"--keyring-backend", "test",
-			"--home", cfg.UnionSignerHome,
-			"--chain-id", cfg.UnionChainID,
+			"--home", cfg.SignerHome,
+			"--chain-id", cfg.ChainID,
 			"--node", "tcp://localhost:26657",
 			"--gas", "19000000",
 			"--fees", "19000000au",
 			"--yes", "--broadcast-mode", "sync", "-o", "json")
-		return dockerExec(cfg.UnionContainer, args...)
+		return dockerExec(cfg.Container, args...)
 	})
 	if err != nil {
 		t.Fatalf("broadcast Union contract call: %v\n%s", err, out)
@@ -232,13 +215,13 @@ func broadcastUnionContract(t *testing.T, cfg config, contract, msg, amount stri
 	return waitForUnionTx(t, cfg, txHash)
 }
 
-func waitForUnionTx(t *testing.T, cfg config, txHash string) string {
+func waitForUnionTx(t *testing.T, cfg unionConfig, txHash string) string {
 	t.Helper()
 	deadline := time.Now().Add(30 * time.Second)
 	var out string
 	for time.Now().Before(deadline) {
 		var err error
-		out, err = dockerExec(cfg.UnionContainer, "uniond", "query", "tx", txHash,
+		out, err = dockerExec(cfg.Container, "uniond", "query", "tx", txHash,
 			"--node", "tcp://localhost:26657", "-o", "json")
 		if err == nil {
 			if err := checkCosmosTxResponse([]byte(out)); err != nil {
@@ -328,17 +311,17 @@ func findString(value any, key string) (string, bool) {
 	return "", false
 }
 
-func voyagerQueueStats(t *testing.T, cfg config) string {
+func voyagerQueueStats(t *testing.T, cfg voyagerConfig) string {
 	t.Helper()
 	return voyagerCLI(t, cfg, "queue", "stats")
 }
 
-func voyagerQueryFailed(t *testing.T, cfg config) string {
+func voyagerQueryFailed(t *testing.T, cfg voyagerConfig) string {
 	t.Helper()
 	return voyagerCLI(t, cfg, "queue", "query-failed")
 }
 
-func captureVoyagerBaseline(t *testing.T, cfg config) voyagerBaseline {
+func captureVoyagerBaseline(t *testing.T, cfg voyagerConfig) voyagerBaseline {
 	t.Helper()
 	return voyagerBaseline{
 		Queue:  voyagerMaxID(t, cfg, "queue"),
@@ -347,7 +330,7 @@ func captureVoyagerBaseline(t *testing.T, cfg config) voyagerBaseline {
 	}
 }
 
-func voyagerMaxID(t *testing.T, cfg config, table string) int64 {
+func voyagerMaxID(t *testing.T, cfg voyagerConfig, table string) int64 {
 	t.Helper()
 	out, err := dockerExec(cfg.PostgresContainer, "psql", "-U", "postgres", "-d", "postgres", "-At", "-c", "select coalesce(max(id),0) from "+table)
 	if err != nil {
@@ -360,7 +343,7 @@ func voyagerMaxID(t *testing.T, cfg config, table string) int64 {
 	return n
 }
 
-func voyagerRowsAfter(t *testing.T, cfg config, table string, id int64) string {
+func voyagerRowsAfter(t *testing.T, cfg voyagerConfig, table string, id int64) string {
 	t.Helper()
 	item := "item::text"
 	if table == "failed" {
@@ -374,48 +357,14 @@ func voyagerRowsAfter(t *testing.T, cfg config, table string, id int64) string {
 	return strings.TrimSpace(out)
 }
 
-func requireNoNewVoyagerFailed(t *testing.T, cfg config, baseline voyagerBaseline) {
+func requireNoNewVoyagerFailed(t *testing.T, cfg voyagerConfig, baseline voyagerBaseline) {
 	t.Helper()
 	if rows := voyagerRowsAfter(t, cfg, "failed", baseline.Failed); rows != "" {
 		t.Fatalf("new Voyager failed rows:\n%s", rows)
 	}
 }
 
-func signAndBroadcastGnoCall(t *testing.T, cfg config, keyName, pkgPath, funcName, sendCoins string, args ...string) string {
-	t.Helper()
-	cmdArgs := []string{
-		"compose", "exec", "-T", "gno",
-		"gnokey", "maketx", "call",
-		"-pkgpath", pkgPath,
-		"-func", funcName,
-		"-gas-fee", "5000000ugnot",
-		"-gas-wanted", "200000000",
-		"-broadcast",
-		"-chainid", cfg.GNOChainID,
-		"-remote", "localhost:26657",
-		"-insecure-password-stdin",
-	}
-	if sendCoins != "" {
-		cmdArgs = append(cmdArgs, "-send", sendCoins)
-	}
-	for _, arg := range args {
-		cmdArgs = append(cmdArgs, "-args", arg)
-	}
-	cmdArgs = append(cmdArgs, keyName)
-
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "docker", cmdArgs...)
-	cmd.Dir = cfg.GNOComposeDir
-	cmd.Stdin = strings.NewReader("\n")
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("gnokey maketx call failed: %v\n%s", err, out)
-	}
-	return string(out)
-}
-
-func queryGnoBalance(t *testing.T, cfg config, addr, denom string) int64 {
+func queryGnoBalance(t *testing.T, cfg gnoConfig, addr, denom string) int64 {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -423,7 +372,7 @@ func queryGnoBalance(t *testing.T, cfg config, addr, denom string) int64 {
 		"gnokey", "query", "bank/balances/"+addr,
 		"-remote", "localhost:26657",
 	)
-	cmd.Dir = cfg.GNOComposeDir
+	cmd.Dir = cfg.ComposeDir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("query Gno balance failed: %v\n%s", err, out)
@@ -431,7 +380,7 @@ func queryGnoBalance(t *testing.T, cfg config, addr, denom string) int64 {
 	return parseCoinAmount(t, string(out), denom)
 }
 
-func queryGnoQEval(t *testing.T, cfg config, expr string) string {
+func queryGnoQEval(t *testing.T, cfg gnoConfig, expr string) string {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -440,7 +389,7 @@ func queryGnoQEval(t *testing.T, cfg config, expr string) string {
 		"-remote", "localhost:26657",
 		"-data", expr,
 	)
-	cmd.Dir = cfg.GNOComposeDir
+	cmd.Dir = cfg.ComposeDir
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("query Gno qeval failed: %v\n%s", err, out)

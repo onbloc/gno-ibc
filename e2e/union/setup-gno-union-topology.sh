@@ -3,9 +3,6 @@ set -euo pipefail
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 voyager_container=${VOYAGER_CONTAINER:?set VOYAGER_CONTAINER}
-gno_container=${GNO_CONTAINER:?set GNO_CONTAINER}
-union_container=${UNION_CONTAINER:?set UNION_CONTAINER}
-union_core=${UNION_CORE_CONTRACT:?set UNION_CORE_CONTRACT}
 union_zkgm=${UNION_ZKGM_CONTRACT:?set UNION_ZKGM_CONTRACT}
 gno_client=${GNO_CLIENT_ID:?set GNO_CLIENT_ID}
 union_client=${UNION_GNO_CLIENT_ID:?set UNION_GNO_CLIENT_ID}
@@ -19,88 +16,12 @@ voyager() {
   docker exec "$voyager_container" ./voyager -c /config/voyager-config.gno-union.jsonc "$@"
 }
 
-union_query() {
-  docker exec "$union_container" uniond query wasm contract-state smart "$union_core" "$1" \
-    --node tcp://localhost:26657 -o json 2>/dev/null
-}
-
-gno_query_string() {
-  local output
-  output=$(docker exec "$gno_container" gnokey query vm/qeval -remote localhost:26657 -data "$1" 2>&1)
-  sed -n 's/.*("\([^"]*\)" string).*/\1/p' <<<"$output"
-}
-
-latest_gno_id() {
-  local query=$1 id=1
-  while [[ -n $(gno_query_string "gno.land/r/onbloc/ibc/union/core.$query($id)") ]]; do
-    ((id += 1))
-  done
-  echo $((id - 1))
-}
-
-find_union_connection() {
-  local id=1 result
-  while result=$(union_query "{\"get_connection\":{\"connection_id\":$id}}" ); do
-    if jq -e --argjson local "$union_client" --argjson remote "$gno_client" \
-      '.data.state == "open" and .data.client_id == $local and .data.counterparty_client_id == $remote' \
-      <<<"$result" >/dev/null; then
-      echo "$id"
-      return
-    fi
-    ((id += 1))
-  done
-  return 1
-}
-
-find_union_channel() {
-  local connection=$1 id=1 result
-  while result=$(union_query "{\"get_channel\":{\"channel_id\":$id}}" ); do
-    if jq -e --argjson connection "$connection" --arg version "$version" \
-      '.data.state == "open" and .data.connection_id == $connection and .data.version == $version' \
-      <<<"$result" >/dev/null; then
-      echo "$id"
-      return
-    fi
-    ((id += 1))
-  done
-  return 1
-}
-
-wait_for() {
-  local label=$1 finder=$2 deadline=$((SECONDS + 360)) value
-  shift 2
-  while ((SECONDS < deadline)); do
-    if value=$($finder "$@"); then
-      echo "$value"
-      return
-    fi
-    sleep 2
-  done
-  echo "$label did not open within 360 seconds" >&2
-  return 1
-}
-
-wait_gno_open() {
-  local label=$1 query=$2 before=$3 deadline=$((SECONDS + 360)) id state
-  while ((SECONDS < deadline)); do
-    id=$(latest_gno_id "$query")
-    if ((id > before)); then
-      state=$(gno_query_string "gno.land/r/onbloc/ibc/union/core.${query}State($id)")
-      if [[ $state == 3 ]]; then
-        echo "$id"
-        return
-      fi
-    fi
-    sleep 2
-  done
-  echo "$label did not open within 360 seconds" >&2
-  return 1
-}
+# shellcheck source=voyager-topology.sh
+source "$script_dir/voyager-topology.sh"
 
 voyager index "$gno_chain_id" --enqueue >/dev/null
 voyager index "$union_chain_id" --enqueue >/dev/null
 
-gno_connection_before=$(latest_gno_id QueryConnection)
 connection_op=$(jq -cn --arg chain "$union_chain_id" --argjson local "$union_client" --argjson remote "$gno_client" '
   {"@type":"call","@value":{"@type":"submit_tx","@value":{
     chain_id:$chain,datagrams:[{ibc_spec_id:"ibc-union",datagram:{
@@ -109,10 +30,14 @@ connection_op=$(jq -cn --arg chain "$union_chain_id" --argjson local "$union_cli
   }}}')
 voyager q e "$connection_op" >/dev/null
 
-union_connection=$(wait_for 'Union connection' find_union_connection)
-gno_connection=$(wait_gno_open 'Gno connection' QueryConnection "$gno_connection_before")
+union_connection=$(wait_for 'Union connection' find_connection "$union_chain_id" "$union_client" "$gno_client")
+gno_connection=$(wait_for 'Gno connection' find_connection "$gno_chain_id" "$gno_client" "$union_client")
 
-gno_channel_before=$(latest_gno_id QueryChannel)
+union_connection_state=$(ibc_state "$union_chain_id" "{\"connection\":{\"connection_id\":$union_connection}}")
+gno_connection_state=$(ibc_state "$gno_chain_id" "{\"connection\":{\"connection_id\":$gno_connection}}")
+jq -e --argjson remote "$gno_connection" '.state.counterparty_connection_id == $remote' <<<"$union_connection_state" >/dev/null
+jq -e --argjson remote "$union_connection" '.state.counterparty_connection_id == $remote' <<<"$gno_connection_state" >/dev/null
+
 union_port_hex=0x$(printf %s "$union_zkgm" | od -An -tx1 | tr -d ' \n')
 gno_port_hex=0x$(printf %s "$gno_port" | od -An -tx1 | tr -d ' \n')
 channel_op=$(jq -cn \
@@ -131,8 +56,13 @@ channel_op=$(jq -cn \
   }}}')
 voyager q e "$channel_op" >/dev/null
 
-union_channel=$(wait_for 'Union channel' find_union_channel "$union_connection")
-gno_channel=$(wait_gno_open 'Gno channel' QueryChannel "$gno_channel_before")
+union_channel=$(wait_for 'Union channel' find_channel "$union_chain_id" "$union_connection" "$gno_port_hex")
+gno_channel=$(wait_for 'Gno channel' find_channel "$gno_chain_id" "$gno_connection" "$union_port_hex")
+
+union_channel_state=$(ibc_state "$union_chain_id" "{\"channel\":{\"channel_id\":$union_channel}}")
+gno_channel_state=$(ibc_state "$gno_chain_id" "{\"channel\":{\"channel_id\":$gno_channel}}")
+jq -e --argjson remote "$gno_channel" '.state.counterparty_channel_id == $remote' <<<"$union_channel_state" >/dev/null
+jq -e --argjson remote "$union_channel" '.state.counterparty_channel_id == $remote' <<<"$gno_channel_state" >/dev/null
 
 umask 077
 {

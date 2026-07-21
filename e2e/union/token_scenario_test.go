@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -29,7 +28,6 @@ type tokenScenarioEnv struct {
 	unionMinter     string
 	unionCW20Admin  string
 	unionCW20CodeID uint64
-	unionVoyagerDir string
 }
 
 type tokenOrder struct {
@@ -78,11 +76,9 @@ func TestTokenBridgeScenarios(t *testing.T) {
 	evmSender := mustCommand(t, "cast", "wallet", "address", "--private-key", evmPrivateKey)
 	minter := queryUnionMinter(t, cfg)
 	admin, codeID := queryUnionMinterConfig(t, cfg, minter)
-	unionRepo := getenv("UNION_VOYAGER_DIR", filepath.Join("..", "..", "..", "union-voyager"))
 	env := tokenScenarioEnv{
 		cfg: cfg, gnoSender: gnoSender, evmSender: evmSender, evmPrivateKey: evmPrivateKey,
 		unionMinter: minter, unionCW20Admin: admin, unionCW20CodeID: codeID,
-		unionVoyagerDir: unionRepo,
 	}
 
 	t.Run("gno_native_to_evm", env.testGnoNativeToEVM)
@@ -479,9 +475,9 @@ func queryGnoVoucherBalance(t *testing.T, cfg config, denom, owner string) int64
 
 func deployTestERC20(t *testing.T, e tokenScenarioEnv, name, symbol string, decimals uint8) string {
 	t.Helper()
-	out := mustCommand(t, "forge", "create", "--root", e.unionVoyagerDir, "--rpc-url", e.cfg.EVMRPC,
+	out := mustCommand(t, "forge", "create", "--root", ".", "--out", t.TempDir(), "--no-cache", "--rpc-url", e.cfg.EVMRPC,
 		"--private-key", e.evmPrivateKey, "--broadcast", "--json",
-		"evm/tests/src/05-app/Zkgm.t.sol:TestERC20", "--constructor-args", name, symbol, strconv.Itoa(int(decimals)))
+		"fixtures/TestERC20.sol:TestERC20", "--constructor-args", name, symbol, strconv.Itoa(int(decimals)))
 	var response struct {
 		DeployedTo string `json:"deployedTo"`
 	}

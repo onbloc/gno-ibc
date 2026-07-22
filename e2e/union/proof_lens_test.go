@@ -214,16 +214,7 @@ func TestEVMERC20ToGnoStateLens(t *testing.T) {
 	from, err := queryEVMBlockNumber(h.cfg.EVM.RPC)
 	from = must(t, from, err)
 	receipt := broadcastEVMPacket(t, h.cfg.EVM, h.cfg.Topology.EVMGno.ChannelID, operand, time.Now().Add(time.Hour).UnixNano())
-	var sendLogs []EVMLog
-	for _, log := range receipt.Logs {
-		if len(log.Topics) > 2 && strings.EqualFold(log.Address, h.cfg.EVM.IBCHandler) && strings.EqualFold(log.Topics[0], evmPacketSendTopic) {
-			sendLogs = append(sendLogs, log)
-		}
-	}
-	if len(sendLogs) != 1 {
-		t.Fatalf("EVM PacketSend count = %d, want 1", len(sendLogs))
-	}
-	hash := sendLogs[0].Topics[2]
+	hash := evmPacketHashFromReceipt(t, h.cfg.EVM, receipt)
 
 	recv := waitForGnoEvent(t, h.cfg.Gno.Indexer, "PacketRecv", map[string]string{"packet_hash": hash})
 	write := waitForGnoEvent(t, h.cfg.Gno.Indexer, "WriteAck", map[string]string{"packet_hash": hash})

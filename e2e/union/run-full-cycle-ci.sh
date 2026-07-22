@@ -284,6 +284,7 @@ go_test=(go test -count=1 -v .)
   GOWORK=off "${go_test[@]}" -run '^(TestDevnetReadiness|TestGnoEVMDirectTopology)$'
   GOWORK=off "${go_test[@]}" -run '^TestGnoNativeToEVMProofLens$'
   GOWORK=off "${go_test[@]}" -run '^TestEVMERC20ToGnoStateLens$'
+  GOWORK=off "${go_test[@]}" -run '^TestTokenOrderInitializeEscrowUnescrowLifecycle$'
   GOWORK=off "${go_test[@]}" -run '^TestNoForceEvents$'
 )
 

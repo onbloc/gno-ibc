@@ -58,6 +58,14 @@ func queryERC20Balance(t *testing.T, cfg evmConfig, token, owner string) *big.In
 	return new(big.Int).SetBytes(must(t, value, err))
 }
 
+func queryERC20TotalSupply(t *testing.T, cfg evmConfig, token string) *big.Int {
+	t.Helper()
+	out, err := evmCall(cfg.RPC, token, "0x18160ddd")
+	out = must(t, out, err)
+	value, err := abiWord(out, 0)
+	return new(big.Int).SetBytes(must(t, value, err))
+}
+
 func topicUint32(value uint32) string {
 	return fmt.Sprintf("0x%064x", value)
 }

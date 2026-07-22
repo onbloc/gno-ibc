@@ -166,6 +166,20 @@ func broadcastEVMPacket(t *testing.T, cfg evmConfig, channel, operand string, ti
 		strconv.FormatInt(timeoutTimestamp, 10), "0x"+randomHex32(t), "(2,3,"+operand+")")
 }
 
+func evmPacketHashFromReceipt(t *testing.T, cfg evmConfig, receipt EVMReceipt) string {
+	t.Helper()
+	var hashes []string
+	for _, log := range receipt.Logs {
+		if len(log.Topics) > 2 && strings.EqualFold(log.Address, cfg.IBCHandler) && strings.EqualFold(log.Topics[0], evmPacketSendTopic) {
+			hashes = append(hashes, log.Topics[2])
+		}
+	}
+	if len(hashes) != 1 {
+		t.Fatalf("EVM PacketSend count = %d, want 1", len(hashes))
+	}
+	return hashes[0]
+}
+
 func requireEVMReceiveAndAck(t *testing.T, cfg config, from uint64, channel, hash string, recv, write EVMLog) {
 	t.Helper()
 	if recv.TransactionHash != write.TransactionHash {

@@ -122,3 +122,14 @@ restarts, allocation races, and crash-after-enqueue duplicate prevention:
 ```sh
 ./run-channel-e2e-test.sh
 ```
+
+## Protected manual workflow
+
+`Gno Union EVM full cycle` is manual-only. Its `apply` input must be enabled
+before the live job can run, and GitHub environment protection for
+`union-relayer-e2e` should require an operator review. Configure public
+deployment values as environment variables and RPC URLs, the database URL,
+and all private keys as environment secrets using the names in `.env.example`.
+The workflow checks out `union-voyager` at the pinned revision above, runs this
+same runner, and uploads only its sanitized artifact directory on success or
+failure.

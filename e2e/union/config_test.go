@@ -16,6 +16,12 @@ func TestLoadConfig(t *testing.T) {
 		"UNION_GNO_CLIENT_ID":     "union-gno-client",
 		"UNION_EVM_CONNECTION_ID": "union-evm-connection",
 		"EVM_UNION_CHANNEL_ID":    "evm-channel",
+		"GNO_EVM_CLIENT_ID":       "gno-evm-client",
+		"GNO_EVM_CONNECTION_ID":   "gno-evm-connection",
+		"GNO_EVM_CHANNEL_ID":      "gno-evm-channel",
+		"EVM_GNO_CLIENT_ID":       "evm-gno-client",
+		"EVM_GNO_CONNECTION_ID":   "evm-gno-connection",
+		"EVM_GNO_CHANNEL_ID":      "evm-gno-channel",
 		"RUN_PACKET_TESTS":        "1",
 	} {
 		t.Setenv(key, value)
@@ -35,6 +41,12 @@ func TestLoadConfig(t *testing.T) {
 		"Topology.UnionGno.ClientID":     {cfg.Topology.UnionGno.ClientID, "union-gno-client"},
 		"Topology.UnionEVM.ConnectionID": {cfg.Topology.UnionEVM.ConnectionID, "union-evm-connection"},
 		"Topology.EVM.ChannelID":         {cfg.Topology.EVM.ChannelID, "evm-channel"},
+		"Topology.GnoEVM.ClientID":       {cfg.Topology.GnoEVM.ClientID, "gno-evm-client"},
+		"Topology.GnoEVM.ConnectionID":   {cfg.Topology.GnoEVM.ConnectionID, "gno-evm-connection"},
+		"Topology.GnoEVM.ChannelID":      {cfg.Topology.GnoEVM.ChannelID, "gno-evm-channel"},
+		"Topology.EVMGno.ClientID":       {cfg.Topology.EVMGno.ClientID, "evm-gno-client"},
+		"Topology.EVMGno.ConnectionID":   {cfg.Topology.EVMGno.ConnectionID, "evm-gno-connection"},
+		"Topology.EVMGno.ChannelID":      {cfg.Topology.EVMGno.ChannelID, "evm-gno-channel"},
 	}
 	for field, values := range checks {
 		if got, want := values[0], values[1]; got != want {
@@ -56,6 +68,8 @@ func TestValidatePacketReportsAllMissingSettings(t *testing.T) {
 			UnionGno: ibcIDs{ClientID: "3", ConnectionID: "4", ChannelID: "5"},
 			UnionEVM: ibcIDs{ClientID: "6", ConnectionID: "7"},
 			EVM:      ibcIDs{ClientID: "8", ConnectionID: "9", ChannelID: "10"},
+			GnoEVM:   ibcIDs{ClientID: "11", ConnectionID: "12", ChannelID: "13"},
+			EVMGno:   ibcIDs{ClientID: "14", ConnectionID: "15", ChannelID: "16"},
 		},
 	}
 

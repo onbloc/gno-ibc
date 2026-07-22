@@ -46,8 +46,17 @@ diagnostics() {
     docker logs "$container" >"$artifacts/$container.log" 2>&1
   done < <(docker ps -a --filter "label=com.docker.compose.project=$union_project" --format '{{.Names}}')
   if [[ -n ${VOYAGER_CONTAINER:-} ]]; then
+    docker inspect --format '{{json .State}}' "$VOYAGER_CONTAINER" >"$artifacts/voyager-state.json" 2>&1
+    docker logs "$VOYAGER_CONTAINER" >"$artifacts/voyager.log" 2>&1
+    docker exec "$VOYAGER_CONTAINER" ./voyager -c /config/voyager-config.gno-union.jsonc queue stats \
+      >"$artifacts/voyager-queue-stats.txt" 2>&1
     docker exec "$VOYAGER_CONTAINER" ./voyager -c /config/voyager-config.gno-union.jsonc queue query-failed \
       >"$artifacts/voyager-failed.txt" 2>&1
+  fi
+  if [[ -n ${POSTGRES_CONTAINER:-} ]]; then
+    docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -At -c \
+      "select id, attempt, handle_at - now(), left(item::text, 2000) from queue order by id limit 100" \
+      >"$artifacts/voyager-queue.txt" 2>&1
   fi
   set -e
 }
@@ -64,7 +73,7 @@ cleanup() {
       "$union_repo/networks/run-linux-devnet.sh" >/dev/null 2>&1 || true
   fi
   rm -f "$runtime_dir/voyager-config.jsonc" "$runtime_dir/clients.env" \
-    "$runtime_dir/gno-union.env" "$runtime_dir/union-evm.env"
+    "$runtime_dir/gno-union.env" "$runtime_dir/union-evm.env" "$runtime_dir/gno-evm.env"
   rmdir "$runtime_dir" 2>/dev/null || true
   exit "$status"
 }
@@ -150,6 +159,25 @@ export EVM_ZKGM=${EVM_ZKGM:-0x05FD55C1AbE31D3ED09A76216cA8F0372f4B2eC5}
 export EVM_ERC20_IMPL=${EVM_ERC20_IMPL:-0x999709eB04e8A30C7aceD9fd920f7e04EE6B97bA}
 export EVM_MANAGER=${EVM_MANAGER:-0x6C1D11bE06908656D16EBFf5667F1C45372B7c89}
 export EVM_RECIPIENT=${EVM_RECIPIENT:-0xBe68fC2d8249eb60bfCf0e71D5A0d2F2e292c4eD}
+export EVM_DEPLOYER=${EVM_DEPLOYER:-0x86D9aC0Bab011917f57B9E9607833b4340F9D4F8}
+
+proof_lens_impl=$(cast call "$EVM_IBC_HANDLER" 'clientRegistry(string)(address)' proof-lens --rpc-url http://localhost:8545)
+if [[ $proof_lens_impl == 0x0000000000000000000000000000000000000000 ]]; then
+  echo "registering the pinned EVM Proof Lens implementation"
+  "$union_repo/networks/run-linux-nix.sh" evm-scripts.devnet.script-register-clients \
+    --deployer_pk "$EVM_DEPLOYER" \
+    --sender_pk "$EVM_RECIPIENT"
+  proof_lens_impl=$(cast call "$EVM_IBC_HANDLER" 'clientRegistry(string)(address)' proof-lens --rpc-url http://localhost:8545)
+fi
+[[ $proof_lens_impl != 0x0000000000000000000000000000000000000000 ]] || {
+  echo "EVM proof-lens registry is empty after registration" >&2
+  exit 1
+}
+[[ $(cast code "$proof_lens_impl" --rpc-url http://localhost:8545) != 0x ]] || {
+  echo "EVM proof-lens registry address $proof_lens_impl has no code" >&2
+  exit 1
+}
+export EVM_PROOF_LENS_IMPL=$proof_lens_impl
 
 echo "building and verifying the pinned trusted-MPT artifact"
 (
@@ -161,7 +189,14 @@ echo "building and verifying the pinned trusted-MPT artifact"
 UNION_SIGNER_HOME=home "$script_dir/setup-union-evm.sh"
 
 echo "building and starting the isolated Gno/Voyager stack $compose_project"
-compose --profile voyager build gno voyager
+voyager_image="union-voyager-build:$expected_union_commit"
+if [[ -z ${REBUILD_VOYAGER:-} ]] && docker image inspect "$voyager_image" >/dev/null 2>&1; then
+  echo "reusing cached Voyager image $voyager_image"
+  compose --profile voyager build gno
+else
+  echo "building Voyager image $voyager_image"
+  compose --profile voyager build gno voyager
+fi
 if [[ -z ${UNION_PRIVATE_KEY:-} ]]; then
   union_mnemonic=$(sed -n 's/^[[:space:]]*alice = "\(.*\)";/\1/p' \
     "$union_repo/networks/mkCosmosDevnet.nix")
@@ -186,7 +221,11 @@ fi
 VOYAGER_CONFIG_OUTPUT="$VOYAGER_CONFIG" "$script_dir/render-voyager-config.sh"
 compose_started=1
 compose --profile voyager up -d gno tx-indexer postgres
-compose --profile voyager create voyager
+if [[ -z ${REBUILD_VOYAGER:-} ]] && docker image inspect "$voyager_image" >/dev/null 2>&1; then
+  compose --profile voyager create --no-build voyager
+else
+  compose --profile voyager create voyager
+fi
 VOYAGER_CONTAINER=$(compose ps -q --all voyager)
 docker network connect "$union_project" "$VOYAGER_CONTAINER"
 export UNION_RPC_INTERNAL="http://$UNION_CONTAINER:26657"
@@ -218,8 +257,20 @@ set -a
 source "$TOPOLOGY_ENV_FILE"
 set +a
 
+# Gno and Union indexing are already active; start EVM once and reuse all three streams.
+docker exec "$VOYAGER_CONTAINER" ./voyager -c /config/voyager-config.gno-union.jsonc \
+  index "${EVM_CHAIN_ID:-32382}" --enqueue >/dev/null
+export VOYAGER_INDEX_STARTED=1
+
 export TOPOLOGY_ENV_FILE="$runtime_dir/union-evm.env"
 "$script_dir/setup-union-evm-topology.sh"
+set -a
+# shellcheck disable=SC1090
+source "$TOPOLOGY_ENV_FILE"
+set +a
+
+export TOPOLOGY_ENV_FILE="$runtime_dir/gno-evm.env"
+"$script_dir/setup-gno-evm-topology.sh"
 set -a
 # shellcheck disable=SC1090
 source "$TOPOLOGY_ENV_FILE"
@@ -242,8 +293,10 @@ export RUN_PACKET_TESTS=1
 go_test=(go test -count=1 -v .)
 (
   cd "$script_dir"
-  GOWORK=off "${go_test[@]}" -run '^(TestDevnetReadiness|TestPacketPathCreated|TestUnionEVMTopology)$'
+  GOWORK=off "${go_test[@]}" -run '^(TestDevnetReadiness|TestPacketPathCreated|TestUnionEVMTopology|TestGnoEVMProofLensTopology)$'
   GOWORK=off "${go_test[@]}" -run '^TestTokenBridgeScenarios$'
+  GOWORK=off "${go_test[@]}" -run '^TestGnoNativeToEVMProofLens$'
+  GOWORK=off "${go_test[@]}" -run '^TestEVMERC20ToGnoProofLens$'
 )
 
 echo "bidirectional Gno, Union, and EVM token scenarios passed"

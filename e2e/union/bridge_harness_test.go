@@ -126,7 +126,7 @@ func (h *bridgeHarness) unionCW20ToEVM(t *testing.T, baseToken string, amount in
 	enqueueUnionBlock(t, h.cfg.Voyager, h.cfg.Union.ChainID, height)
 	recv := waitForEVMLog(t, h.cfg, baseline.Failed, h.cfg.EVM.IBCHandler, packetRecvTopic, evmFrom+1, topicUint32(mustUint32(t, h.cfg.Topology.EVM.ChannelID)), hash)
 	write := waitForEVMLog(t, h.cfg, baseline.Failed, h.cfg.EVM.IBCHandler, writeAckTopic, evmFrom+1, topicUint32(mustUint32(t, h.cfg.Topology.EVM.ChannelID)), hash)
-	requireEVMReceiveAndAck(t, h.cfg, evmFrom+1, hash, recv, write)
+	requireEVMReceiveAndAck(t, h.cfg, evmFrom+1, h.cfg.Topology.EVM.ChannelID, hash, recv, write)
 	if logs, err := queryEVMLogs(h.cfg.EVM.RPC, h.cfg.EVM.ZKGM, evmFrom+1, createWrappedTokenTopic, topicUint32(mustUint32(t, h.cfg.Topology.EVM.ChannelID)), topicAddress(wrappedToken)); err != nil || len(logs) != 1 {
 		t.Fatalf("EVM CreateWrappedToken count = %d, want 1: %v", len(logs), err)
 	}
@@ -494,7 +494,7 @@ func requireUnionAckSuccess(t *testing.T, cfg unionConfig, txHash string) {
 	}
 }
 
-func requireEVMReceiveAndAck(t *testing.T, cfg config, from uint64, hash string, recv, write EVMLog) {
+func requireEVMReceiveAndAck(t *testing.T, cfg config, from uint64, channel, hash string, recv, write EVMLog) {
 	t.Helper()
 	if recv.TransactionHash != write.TransactionHash {
 		t.Fatalf("EVM PacketRecv tx %s differs from WriteAck tx %s", recv.TransactionHash, write.TransactionHash)
@@ -508,7 +508,7 @@ func requireEVMReceiveAndAck(t *testing.T, cfg config, from uint64, hash string,
 		t.Fatalf("EVM WriteAck is not success: %v", err)
 	}
 	for label, topic := range map[string]string{"PacketRecv": packetRecvTopic, "WriteAck": writeAckTopic} {
-		logs, err := queryEVMLogs(cfg.EVM.RPC, cfg.EVM.IBCHandler, from, topic, topicUint32(mustUint32(t, cfg.Topology.EVM.ChannelID)), hash)
+		logs, err := queryEVMLogs(cfg.EVM.RPC, cfg.EVM.IBCHandler, from, topic, topicUint32(mustUint32(t, channel)), hash)
 		if err != nil || len(logs) != 1 {
 			t.Fatalf("EVM %s count = %d, want 1: %v", label, len(logs), err)
 		}

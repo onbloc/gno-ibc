@@ -1,10 +1,13 @@
 # Gno → Union Voyager E2E
 
-This harness proves two token paths using four direct packets:
+This harness proves two routed token paths using four packets, plus two direct
+Proof Lens packets:
 
 ```text
 Gno ugnot → Union CW20 → EVM ERC20
 EVM ERC20 → Union CW20 → Gno GRC20
+Gno ugnot → EVM ERC20 (Proof Lens)
+EVM ERC20 → Gno GRC20 (Proof Lens)
 ```
 
 The tested inputs are pinned in `.gno-version` and `.env.example`; Compose uses
@@ -13,8 +16,8 @@ those commits as the local Gno and Voyager image tags.
 ## Run the full cycle
 
 The full-cycle runner starts isolated Gno, Union, EVM, and Voyager services,
-creates live clients and topologies, runs the readiness checks and all four
-token packets, collects diagnostics, and removes the services on exit.
+creates live clients and three topologies, runs the readiness checks and all
+six token packets, collects diagnostics, and removes the services on exit.
 
 It requires Docker Compose, Nix, Go, Foundry, Rust
 `nightly-2025-12-05`, and a clean Union Voyager checkout at the pinned commit:
@@ -30,6 +33,9 @@ Local diagnostics are written under `.e2e-artifacts/`. Share `run.log` first;
 for failures, also include `voyager-failed.txt` and `gno-compose.log`. GitHub
 Actions runs the same script for pull requests, pushes to `main`, the daily
 schedule, and manual dispatch, and retains its diagnostic artifact for 7 days.
+
+The runner reuses the pinned `union-voyager-build:<UNION_COMMIT>` image when it
+is already present. Set `REBUILD_VOYAGER=1` to rebuild it explicitly.
 
 ## Manual setup prerequisites
 

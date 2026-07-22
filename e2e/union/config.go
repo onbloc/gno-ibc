@@ -65,6 +65,8 @@ type topologyConfig struct {
 	UnionGno ibcIDs
 	UnionEVM ibcIDs
 	EVM      ibcIDs
+	GnoEVM   ibcIDs
+	EVMGno   ibcIDs
 }
 
 func loadConfig() config {
@@ -125,6 +127,16 @@ func loadConfig() config {
 				ConnectionID: os.Getenv("EVM_UNION_CONNECTION_ID"),
 				ChannelID:    os.Getenv("EVM_UNION_CHANNEL_ID"),
 			},
+			GnoEVM: ibcIDs{
+				ClientID:     os.Getenv("GNO_EVM_CLIENT_ID"),
+				ConnectionID: os.Getenv("GNO_EVM_CONNECTION_ID"),
+				ChannelID:    os.Getenv("GNO_EVM_CHANNEL_ID"),
+			},
+			EVMGno: ibcIDs{
+				ClientID:     os.Getenv("EVM_GNO_CLIENT_ID"),
+				ConnectionID: os.Getenv("EVM_GNO_CONNECTION_ID"),
+				ChannelID:    os.Getenv("EVM_GNO_CHANNEL_ID"),
+			},
 		},
 		RunPackets: os.Getenv("RUN_PACKET_TESTS") == "1",
 	}
@@ -144,6 +156,12 @@ func (c config) validatePacket() error {
 		{"EVM_UNION_CLIENT_ID", c.Topology.EVM.ClientID},
 		{"EVM_UNION_CONNECTION_ID", c.Topology.EVM.ConnectionID},
 		{"EVM_UNION_CHANNEL_ID", c.Topology.EVM.ChannelID},
+		{"GNO_EVM_CLIENT_ID", c.Topology.GnoEVM.ClientID},
+		{"GNO_EVM_CONNECTION_ID", c.Topology.GnoEVM.ConnectionID},
+		{"GNO_EVM_CHANNEL_ID", c.Topology.GnoEVM.ChannelID},
+		{"EVM_GNO_CLIENT_ID", c.Topology.EVMGno.ClientID},
+		{"EVM_GNO_CONNECTION_ID", c.Topology.EVMGno.ConnectionID},
+		{"EVM_GNO_CHANNEL_ID", c.Topology.EVMGno.ChannelID},
 		{"GNO_KEY_NAME", c.Gno.KeyName},
 		{"GNO_SENDER_ADDR", c.Gno.Sender},
 		{"UNION_SIGNER_KEY", c.Union.SignerKey},

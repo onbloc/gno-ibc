@@ -135,6 +135,15 @@
         }
       },
       {
+        "path": "./release/voyager-client-module-proof-lens",
+        "info": {
+          "client_type": "proof-lens",
+          "consensus_type": "proof-lens",
+          "ibc_interface": "ibc-solidity",
+          "ibc_spec_id": "ibc-union"
+        }
+      },
+      {
         "path": "./release/voyager-client-module-trusted-mpt",
         "info": {
           "client_type": "trusted/evm/mpt",
@@ -183,6 +192,13 @@
         "config": {
           "ibc_core_realm": "gno.land/r/onbloc/ibc/union/core",
           "rpc_url": "http://gno:26657"
+        }
+      },
+      {
+        "path": "./release/voyager-client-bootstrap-module-proof-lens",
+        "info": {
+          "client_type": "proof-lens",
+          "chain_id": "dev"
         }
       },
       {
@@ -236,14 +252,34 @@
       "path": "./release/voyager-plugin-transaction-batch",
       "config": {
         "chain_id": "32382",
-        "client_configs": {
-          "max_batch_size": 5,
-          "max_wait_time": {
-            "nanos": 0,
-            "secs": 10
-          },
-          "min_batch_size": 1
-        }
+        "client_configs": [
+          {
+            "client_id": 1,
+            "max_batch_size": 5,
+            "max_wait_time": {
+              "nanos": 0,
+              "secs": 10
+            },
+            "min_batch_size": 1
+          }
+        ]
+      }
+    },
+    {
+      "path": "./release/voyager-plugin-transaction-batch-proof-lens",
+      "config": {
+        "chain_id": "32382",
+        "client_configs": [
+          {
+            "client_id": 2,
+            "max_batch_size": 5,
+            "max_wait_time": {
+              "nanos": 0,
+              "secs": 10
+            },
+            "min_batch_size": 1
+          }
+        ]
       }
     },
     {
@@ -384,6 +420,10 @@
         "chain_id": "dev",
         "rpc_url": "http://gno:26657"
       }
+    },
+    {
+      "path": "./release/voyager-client-update-plugin-proof-lens",
+      "config": {}
     },
     {
       "path": "./release/voyager-client-update-plugin-state-lens",

@@ -21,8 +21,10 @@ voyager() {
 source "$script_dir/voyager-topology.sh"
 
 # Keep both event streams active before submitting the first handshake datagram.
-voyager index "$union_chain_id" --enqueue >/dev/null
-voyager index "$evm_chain_id" --enqueue >/dev/null
+if [[ ${VOYAGER_INDEX_STARTED:-0} != 1 ]]; then
+  voyager index "$union_chain_id" --enqueue >/dev/null
+  voyager index "$evm_chain_id" --enqueue >/dev/null
+fi
 
 connection_op=$(jq -cn --arg chain "$union_chain_id" --argjson local "$union_client" --argjson remote "$evm_client" '
   {"@type":"call","@value":{"@type":"submit_tx","@value":{

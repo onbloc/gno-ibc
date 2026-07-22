@@ -21,6 +21,15 @@ RUN apt-get update && apt-get install -y \
 COPY --from=union-src . .
 RUN test -n "$UNION_COMMIT"
 
+# Client IDs are numeric in ibc-union events, while jaq object keys are strings.
+# Patch the build copy so client-specific regular and Proof Lens batchers can coexist.
+RUN for source in \
+      voyager/plugins/transaction-batch/src/lib.rs \
+      voyager/plugins/transaction-batch-proof-lens/src/lib.rs; do \
+        sed -i 's/has(\$client_id)/has(\$client_id | tostring)/' "$source"; \
+        grep -F 'has($client_id | tostring)' "$source"; \
+    done
+
 # Build only binaries used by e2e/union/voyager-config.gno-union.jsonc.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
@@ -38,11 +47,13 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     -p voyager-finality-module-trusted-evm \
     -p voyager-client-module-cometbls \
     -p voyager-client-module-gno \
+    -p voyager-client-module-proof-lens \
     -p voyager-client-module-trusted-mpt \
     -p voyager-client-module-state-lens-ics23-ics23 \
     -p voyager-client-module-state-lens-ics23-mpt \
     -p voyager-client-bootstrap-module-cometbls \
     -p voyager-client-bootstrap-module-gno \
+    -p voyager-client-bootstrap-module-proof-lens \
     -p voyager-client-bootstrap-module-trusted-mpt \
     -p voyager-client-bootstrap-module-state-lens-ics23-ics23 \
     -p voyager-client-bootstrap-module-state-lens-ics23-mpt \
@@ -53,8 +64,10 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     -p voyager-transaction-plugin-gno \
     -p voyager-transaction-plugin-evm \
     -p voyager-plugin-transaction-batch \
+    -p voyager-plugin-transaction-batch-proof-lens \
     -p voyager-client-update-plugin-cometbls \
     -p voyager-client-update-plugin-gno \
+    -p voyager-client-update-plugin-proof-lens \
     -p voyager-client-update-plugin-trusted-mpt \
     -p voyager-client-update-plugin-state-lens \
     -p voyager-plugin-packet-timeout && \

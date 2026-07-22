@@ -2,8 +2,10 @@ package transfer
 
 import (
 	"chain"
+	"encoding/hex"
 	"strings"
 
+	"gno.land/p/aib/encoding"
 	"gno.land/p/demo/tokens/grc20"
 	"gno.land/p/nt/bptree/v0"
 	"gno.land/p/nt/seqid/v0"
@@ -11,9 +13,10 @@ import (
 )
 
 var (
-	denoms        *bptree.BPTree // ibcDenom:Denom
-	totalEscrow   *bptree.BPTree // denom:chain.Coin
-	voucherTokens *bptree.BPTree // ibcDenom:*voucher
+	denoms          *bptree.BPTree // ibcDenom:Denom
+	totalEscrow     *bptree.BPTree // denom:chain.Coin
+	voucherTokens   *bptree.BPTree // ibcDenom:*voucher
+	pendingForwards *bptree.BPTree // forwardCorrID:pendingForward
 
 	// nextVoucherID allocates a unique grc20 token id for each voucher. Voucher
 	// symbols are truncated IBC-hash prefixes that can collide, so a shared
@@ -27,10 +30,41 @@ type voucher struct {
 	ledger *grc20.PrivateLedger
 }
 
+// pendingForward correlates a forwarded ZKGM send back to the ICS20 packet
+// whose ack it must resolve (see forward.gno, zkgm_callback.gno).
+type pendingForward struct {
+	DestinationClient string
+	Sequence          uint64
+	VoucherDenom      string
+	Amount            int64
+}
+
 func init() {
 	denoms = bptree.NewBPTree32()
 	totalEscrow = bptree.NewBPTree32()
 	voucherTokens = bptree.NewBPTree32()
+	pendingForwards = bptree.NewBPTree32()
+}
+
+// forwardCorrID is the corrID zkgm.SendWithCallback echoes back.
+func forwardCorrID(sourceClient string, sequence uint64) string {
+	return sourceClient + "/" + hex.EncodeToString(encoding.Uint64ToBigEndian(sequence))
+}
+
+func setPendingForward(corrID string, p pendingForward) {
+	pendingForwards.Set(corrID, p)
+}
+
+func getPendingForward(corrID string) (pendingForward, bool) {
+	v := pendingForwards.Get(corrID)
+	if v == nil {
+		return pendingForward{}, false
+	}
+	return v.(pendingForward), true
+}
+
+func deletePendingForward(corrID string) {
+	pendingForwards.Remove(corrID)
 }
 
 func hasDenom(voucherDenom string) bool {

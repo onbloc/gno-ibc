@@ -257,6 +257,9 @@ func (a *App) OnRecvPacket(
 	// we are explicitly wrapping this emit event call in an anonymous function
 	// so that the packet data is evaluated after it has been assigned a value.
 	defer func() {
+		// For an async forward, ack_success reflects the unused placeholder
+		// ack (always true), not the real outcome - core's own missing
+		// packet ack plus the later WriteAck event are authoritative.
 		attrs := []string{
 			AttributeKeySender, data.Sender,
 			AttributeKeyReceiver, data.Receiver,
@@ -339,6 +342,11 @@ func (a *App) OnRecvPacket(
 			return types.RecvPacketResult{Status: types.PacketStatus_Failure}
 		}
 		inst := getOrCreateVoucher(0, cur, token.Denom.Base, voucherDenom)
+
+		if tryForward(cur, sourceClient, destinationClient, data.Receiver, sequence, data.Memo, voucherDenom, amount) {
+			return types.RecvPacketResult{Status: types.PacketStatus_Async}
+		}
+
 		if err := inst.ledger.Mint(address(data.Receiver), amount); err != nil {
 			ackErr = ufmt.Errorf("mint voucher error: %v", err)
 			ack = types.NewErrorAppAcknowledgement(ackErr)

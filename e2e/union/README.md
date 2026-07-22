@@ -13,18 +13,16 @@ topology. It does not start chains or deploy/register contracts.
   Proof Lens implementations/registrations.
 - The Gno transaction indexer and all three RPC endpoints are reachable.
 - PostgreSQL is reachable by Voyager.
-- `bash`, `git`, `jq`, Docker, Nix, and GNU `timeout` (`coreutils`; `gtimeout`
-  is also detected) are available. Nix must have a Linux-capable local/remote
-  builder or binary cache for Docker's architecture.
+- `bash`, `git`, `jq`, Docker, and GNU `timeout` (`coreutils`; `gtimeout` is
+  also detected) are available.
 
 The Voyager source is `union-voyager/e2e-test`, pinned in `.env.example` to
 revision `9024777562dcaa01613017cd0b958569b85e243e`. The runner rejects a
 different or dirty checkout before rendering the config. On the first live
-run it builds that checkout's `voyager-docker-image` Nix output, loads it into
-Docker, and tags it with the pinned revision. Voyager and every module/plugin
-then run inside the local container; module paths are `/bin/...` in the image.
-The runner selects `x86_64-linux` or `aarch64-linux` from `docker info` and
-rejects an incompatible `VOYAGER_NIX_SYSTEM` override.
+run it builds `voyager-build.Dockerfile` with that checkout as its context and
+tags the image with the pinned revision. The Dockerfile builds only the
+Voyager binaries referenced by `config.jsonc.template`; Voyager and its
+modules/plugins then run inside the local container.
 
 The configured signer accounts must be funded and authorized. No EVM chain ID
 or deployed address is assumed: copy all of them from the confirmed Union EVM

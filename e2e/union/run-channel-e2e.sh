@@ -162,7 +162,7 @@ voyager_container_bin=
 voyager_image=${VOYAGER_IMAGE:-"union-voyager-e2e:${UNION_VOYAGER_REVISION:0:12}"}
 voyager_image_ready=0
 voyager_config_path=/run/voyager/config.jsonc
-VOYAGER_BIN_DIR=/bin
+VOYAGER_BIN_DIR=/output/release
 export VOYAGER_BIN_DIR
 cleanup() {
   status=$?
@@ -245,7 +245,8 @@ jq -e --arg evm "$EVM_CHAIN_ID" '
 ' "$rendered_config" >/dev/null
 
 tracked=("$script_dir/.env.example" "$script_dir/README.md" "$template" \
-  "$script_dir/run-channel-e2e.sh" "$script_dir/run-channel-e2e-test.sh")
+  "$script_dir/run-channel-e2e.sh" "$script_dir/run-channel-e2e-test.sh" \
+  "$script_dir/voyager-build.Dockerfile")
 if grep -Eq '0x[0-9a-fA-F]{64}' "${tracked[@]}" || grep -Eq '[[:alpha:]][[:alnum:]+.-]*://[^/@[:space:]]+:[^/@[:space:]]+@' "${tracked[@]}"; then
   echo "tracked E2E files contain a raw private key or credential-bearing URL" >&2
   exit 1
@@ -264,17 +265,9 @@ fi
 if [[ -n $voyager_bin ]]; then
   [[ -x $voyager_bin ]] || { echo "Voyager binary is not executable: $voyager_bin" >&2; exit 2; }
 else
-  for command in docker nix; do
-    command -v "$command" >/dev/null || { echo "missing required command: $command" >&2; exit 2; }
-  done
-  case $(docker info --format '{{.Architecture}}') in
-    amd64|x86_64) docker_nix_system=x86_64-linux ;;
-    arm64|aarch64) docker_nix_system=aarch64-linux ;;
-    *) echo "unsupported Docker architecture" >&2; exit 2 ;;
-  esac
-  voyager_nix_system=${VOYAGER_NIX_SYSTEM:-$docker_nix_system}
-  [[ $voyager_nix_system =~ ^(aarch64|x86_64)-linux$ && $voyager_nix_system == "$docker_nix_system" ]] || {
-    echo "VOYAGER_NIX_SYSTEM must match Docker architecture: $docker_nix_system" >&2
+  command -v docker >/dev/null || { echo "missing required command: docker" >&2; exit 2; }
+  [[ -r $script_dir/voyager-build.Dockerfile ]] || {
+    echo "missing Voyager Dockerfile: $script_dir/voyager-build.Dockerfile" >&2
     exit 2
   }
 fi
@@ -333,27 +326,20 @@ stop_voyager() {
 }
 
 ensure_voyager_image() {
-  local image_path load_output line source=
-  local -a loaded_sources=()
+  local image_revision
   ((voyager_image_ready == 0)) || return
   echo "building Voyager image from $UNION_VOYAGER_REVISION" >&2
-  image_path=$(nix build --no-link --print-out-paths \
-    "$UNION_VOYAGER_DIR#packages.$voyager_nix_system.voyager-docker-image")
-  load_output=$(docker load --input "$image_path")
-  while IFS= read -r line; do
-    case $line in
-      "Loaded image: "*) loaded_sources+=("${line#Loaded image: }") ;;
-      "Loaded image ID: "*) loaded_sources+=("${line#Loaded image ID: }") ;;
-    esac
-  done <<<"$load_output"
-  (( ${#loaded_sources[@]} == 1 )) || { echo "Docker load returned an unexpected image set" >&2; return 1; }
-  source=${loaded_sources[0]}
-  [[ $source =~ ^voyager-image:[A-Za-z0-9_.-]+$ || $source =~ ^sha256:[0-9a-f]{64}$ ]] || {
-    echo "Docker load returned an unexpected image reference" >&2
+  docker build \
+    --file "$script_dir/voyager-build.Dockerfile" \
+    --build-arg "UNION_COMMIT=$UNION_VOYAGER_REVISION" \
+    --tag "$voyager_image" \
+    "$UNION_VOYAGER_DIR"
+  image_revision=$(docker image inspect --format \
+    '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$voyager_image")
+  [[ $image_revision == "$UNION_VOYAGER_REVISION" ]] || {
+    echo "Voyager image revision label does not match the pinned checkout" >&2
     return 1
   }
-  docker image inspect "$source" >/dev/null
-  docker tag "$source" "$voyager_image"
   voyager_image_ready=1
 }
 

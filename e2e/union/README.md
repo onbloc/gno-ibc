@@ -74,8 +74,10 @@ to `E2E_ARTIFACT_DIR`. Resume verification never broadcasts:
 
 `--resume` requires the saved mode-`0600` `E2E_STATE_FILE`, re-verifies all
 six clients and the exact connection/channel IDs, and never broadcasts by
-itself. The state binds the EVM chain ID and an IBC Handler/multicall/ZKGM
-address fingerprint, so provisional or different-network state is rejected.
+itself. The state binds the EVM chain ID and a lowercase fingerprint of the
+IBC Handler, multicall, ZKGM, CometBLS client implementation, and Proof Lens
+client implementation addresses. Changing any deployment address rejects the
+saved state instead of resuming against a different topology.
 Use both flags to continue a saved run at a known safe boundary:
 
 ```sh
@@ -128,8 +130,10 @@ restarts, allocation races, and crash-after-enqueue duplicate prevention:
 `Gno Union EVM full cycle` is manual-only. Its `apply` input must be enabled
 before the live job can run, and GitHub environment protection for
 `union-relayer-e2e` should require an operator review. Configure public
-deployment values as environment variables and RPC URLs, the database URL,
-and all private keys as environment secrets using the names in `.env.example`.
+deployment values, including `EVM_COMETBLS_CLIENT_IMPL` and
+`EVM_PROOF_LENS_CLIENT_IMPL`, as environment variables and RPC URLs, the
+database URL, and all private keys as environment secrets using the names in
+`.env.example`.
 The workflow checks out `union-voyager` at the pinned revision above, runs this
 same runner, and uploads only its sanitized artifact directory on success or
 failure.

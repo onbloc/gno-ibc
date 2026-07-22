@@ -43,7 +43,8 @@ required=(
   UNION_CHAIN_ID EVM_CHAIN_ID GNO_CHAIN_ID UNION_VOYAGER_DIR
   UNION_VOYAGER_REVISION
   UNION_IBC_HOST_CONTRACT EVM_IBC_HANDLER
-  EVM_MULTICALL GNO_IBC_CORE_REALM GNO_ZKGM_PORT
+  EVM_MULTICALL EVM_COMETBLS_CLIENT_IMPL EVM_PROOF_LENS_CLIENT_IMPL
+  GNO_IBC_CORE_REALM GNO_ZKGM_PORT
   EVM_ZKGM_CONTRACT GALOIS_PROVER_ENDPOINT
   UNION_RPC_URL EVM_RPC_URL GNO_RPC_URL GNO_TX_INDEXER_RPC_URL
   VOYAGER_DATABASE_URL TRUSTED_MPT_PRIVATE_KEY UNION_PRIVATE_KEY
@@ -88,7 +89,8 @@ fi
   echo "GNO_ZKGM_PORT must be a gno.land/r/... realm path" >&2
   exit 2
 }
-for name in EVM_IBC_HANDLER EVM_MULTICALL EVM_ZKGM_CONTRACT; do
+for name in EVM_IBC_HANDLER EVM_MULTICALL EVM_ZKGM_CONTRACT \
+  EVM_COMETBLS_CLIENT_IMPL EVM_PROOF_LENS_CLIENT_IMPL; do
   [[ ${!name} =~ ^0x[0-9a-fA-F]{40}$ ]] || {
     echo "$name must be a 20-byte hex address" >&2
     exit 2
@@ -128,7 +130,11 @@ done
 evm_ibc_handler_lc=$(tr '[:upper:]' '[:lower:]' <<<"$EVM_IBC_HANDLER")
 evm_multicall_lc=$(tr '[:upper:]' '[:lower:]' <<<"$EVM_MULTICALL")
 evm_zkgm_lc=$(tr '[:upper:]' '[:lower:]' <<<"$EVM_ZKGM_CONTRACT")
-evm_address_fingerprint=$(printf '%s\0%s\0%s\0' "$evm_ibc_handler_lc" "$evm_multicall_lc" "$evm_zkgm_lc" |
+evm_cometbls_impl_lc=$(tr '[:upper:]' '[:lower:]' <<<"$EVM_COMETBLS_CLIENT_IMPL")
+evm_proof_lens_impl_lc=$(tr '[:upper:]' '[:lower:]' <<<"$EVM_PROOF_LENS_CLIENT_IMPL")
+evm_address_fingerprint=$(printf '%s\0%s\0%s\0%s\0%s\0' \
+  "$evm_ibc_handler_lc" "$evm_multicall_lc" "$evm_zkgm_lc" \
+  "$evm_cometbls_impl_lc" "$evm_proof_lens_impl_lc" |
   git hash-object --stdin)
 
 client_configs() {

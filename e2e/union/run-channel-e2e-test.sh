@@ -55,7 +55,11 @@ case $cmd in
           row=$(tail -n 1 "$FAKE_DIR/clients.tsv")
         fi
         if [[ -z $row ]]; then
-          echo null
+          if [[ $chain == 17000 ]]; then
+            echo '{"client_type":"","ibc_interface":"ibc-solidity"}'
+          else
+            echo null
+          fi
           exit 0
         fi
         IFS=$'\t' read -r _ _ type interface _ _ _ _ _ <<<"$row"

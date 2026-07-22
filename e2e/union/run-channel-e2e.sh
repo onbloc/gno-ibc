@@ -377,11 +377,13 @@ failed_work_id() {
 client_info() {
   local output
   output=$(voyager rpc client-info "$1" "$2") || return 2
-  if jq -e 'type == "object" and (.client_type | type == "string") and (.ibc_interface | type == "string")' \
+  if jq -e '. == null or (type == "object" and .client_type == "")' \
+    <<<"$output" >/dev/null 2>&1; then
+    return 1
+  elif jq -e 'type == "object" and (.client_type | type == "string" and length > 0) and
+    (.ibc_interface | type == "string" and length > 0)' \
     <<<"$output" >/dev/null 2>&1; then
     echo "$output"
-  elif jq -e '. == null' <<<"$output" >/dev/null 2>&1; then
-    return 1
   else
     echo "malformed client-info response for $1 client $2" >&2
     return 2

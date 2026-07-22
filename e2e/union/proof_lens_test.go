@@ -3,6 +3,7 @@ package unione2e
 import (
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"strconv"
 	"strings"
 	"testing"
@@ -27,6 +28,11 @@ func requireGnoEVMDirectTopology(t *testing.T, cfg config) {
 	}
 	if got := queryGnoQEval(t, cfg.Gno, fmt.Sprintf("gno.land/r/onbloc/ibc/union/core.QueryClientType(%s)", cfg.Topology.GnoEVM.ClientID)); !strings.Contains(got, `("state-lens/ics23/mpt" string)`) {
 		t.Fatalf("Gno direct client %s is not state-lens/ics23/mpt: %s", cfg.Topology.GnoEVM.ClientID, got)
+	}
+	for _, id := range []string{cfg.Topology.Gno.ClientID, cfg.Topology.GnoEVM.ClientID} {
+		if got := queryGnoQEval(t, cfg.Gno, fmt.Sprintf("gno.land/r/onbloc/ibc/union/core.GetClientStatus(%s)", id)); !strings.Contains(got, `("1" string)`) {
+			t.Fatalf("Gno client %s is not active: %s", id, got)
+		}
 	}
 	for id, want := range map[string]string{
 		cfg.Topology.UnionGno.ClientID: "gno",
@@ -69,6 +75,12 @@ func requireGnoEVMDirectTopology(t *testing.T, cfg config) {
 	code, err := queryEVMCode(cfg.EVM.RPC, registered)
 	if code = must(t, code, err); len(code) == 0 {
 		t.Fatalf("EVM proof-lens implementation %s has no code", registered)
+	}
+	for _, id := range []string{cfg.Topology.EVM.ClientID, cfg.Topology.EVMGno.ClientID} {
+		impl := strings.Fields(mustCommand(t, "cast", "call", cfg.EVM.IBCHandler, "getClient(uint32)(address)", id, "--rpc-url", cfg.EVM.RPC))[0]
+		if frozen := strings.TrimSpace(mustCommand(t, "cast", "call", impl, "isFrozen(uint32)(bool)", id, "--rpc-url", cfg.EVM.RPC)); frozen != "false" {
+			t.Fatalf("EVM client %s is not active: frozen=%s", id, frozen)
+		}
 	}
 
 	type connection struct {
@@ -126,7 +138,7 @@ func TestGnoNativeToEVMProofLens(t *testing.T) {
 	h := newBridgeHarness(t)
 	requireGnoEVMDirectTopology(t, h.cfg)
 
-	const amount int64 = 1
+	const amount = "1"
 	tag := fmt.Sprintf("%09d", time.Now().UnixNano()%1_000_000_000)
 	metadata := tokenMetadata{name: "Gno Direct " + tag, symbol: "GND" + tag[len(tag)-3:], decimals: 6}
 	encodedMetadata := evmMetadata(t, h.cfg.EVM, metadata)
@@ -134,14 +146,14 @@ func TestGnoNativeToEVMProofLens(t *testing.T) {
 	recipientBefore := queryERC20Balance(t, h.cfg.EVM, wrappedToken, h.cfg.EVM.Recipient)
 	order := encodeTokenOrder(t, tokenOrder{
 		Sender: asciiHex(h.cfg.Gno.Sender), Receiver: h.cfg.EVM.Recipient, BaseToken: asciiHex("ugnot"),
-		QuoteToken: wrappedToken, Metadata: encodedMetadata, Amount: amount,
+		QuoteToken: wrappedToken, Metadata: encodedMetadata, Amount: amount, Kind: tokenOrderKindInitialize,
 	})
 
 	baseline := captureVoyagerBaseline(t, h.cfg.Voyager)
 	evmFrom, err := queryEVMBlockNumber(h.cfg.EVM.RPC)
 	evmFrom = must(t, evmFrom, err)
 	after := latestGnoEventHeight(h.cfg.Gno.Indexer, "PacketSend", map[string]string{"source_channel_id": h.cfg.Topology.GnoEVM.ChannelID})
-	broadcastGnoPacket(t, h.cfg.Gno, h.cfg.Topology.GnoEVM.ChannelID, order, "1ugnot", randomHex32(t))
+	broadcastGnoPacket(t, h.cfg.Gno, h.cfg.Topology.GnoEVM.ChannelID, order, "1ugnot", randomHex32(t), time.Now().Add(time.Hour).UnixNano())
 	send := waitForNewGnoEvent(t, h.cfg, "PacketSend", map[string]string{"source_channel_id": h.cfg.Topology.GnoEVM.ChannelID}, after, baseline)
 	hash := txAttr(send, "PacketSend", "packet_hash")
 	requireOneGnoEvent(t, h.cfg.Gno, "PacketSend", hash)
@@ -162,8 +174,8 @@ func TestGnoNativeToEVMProofLens(t *testing.T) {
 	if code = must(t, code, err); len(code) == 0 {
 		t.Fatalf("EVM wrapped token %s was not created", wrappedToken)
 	}
-	if got := queryERC20Balance(t, h.cfg.EVM, wrappedToken, h.cfg.EVM.Recipient) - recipientBefore; got != amount {
-		t.Fatalf("EVM wrapped-token recipient delta = %d, want %d", got, amount)
+	if got := new(big.Int).Sub(queryERC20Balance(t, h.cfg.EVM, wrappedToken, h.cfg.EVM.Recipient), recipientBefore); got.Cmp(big.NewInt(1)) != 0 {
+		t.Fatalf("EVM wrapped-token recipient delta = %s, want %s", got, amount)
 	}
 
 	waitForNewGnoEvent(t, h.cfg, "PacketAck", map[string]string{"packet_hash": hash}, send.BlockHeight, baseline)
@@ -177,12 +189,16 @@ func TestEVMERC20ToGnoStateLens(t *testing.T) {
 	h := newBridgeHarness(t)
 	requireGnoEVMDirectTopology(t, h.cfg)
 
-	const amount int64 = 1_000_000_000_000
+	const amount = "1000000000000"
+	amountInt, ok := new(big.Int).SetString(amount, 10)
+	if !ok {
+		t.Fatal("invalid test amount")
+	}
 	tag := fmt.Sprintf("%09d", time.Now().UnixNano()%1_000_000_000)
 	metadata := tokenMetadata{name: "EVM Direct " + tag, symbol: "EVD" + tag[len(tag)-3:], decimals: 18}
 	baseToken := h.deployTestERC20(t, metadata)
-	castSend(t, h.cfg.EVM, baseToken, "mint(address,uint256)", h.evmSender, strconv.FormatInt(amount, 10))
-	castSend(t, h.cfg.EVM, baseToken, "approve(address,uint256)", h.cfg.EVM.ZKGM, strconv.FormatInt(amount, 10))
+	castSend(t, h.cfg.EVM, baseToken, "mint(address,uint256)", h.evmSender, amount)
+	castSend(t, h.cfg.EVM, baseToken, "approve(address,uint256)", h.cfg.EVM.ZKGM, amount)
 
 	encodedMetadata := gnoMetadata(t, metadata)
 	wrappedToken := predictGnoWrappedToken(t, h.cfg.Topology.GnoEVM.ChannelID, mustDecodeHex(t, baseToken), encodedMetadata)
@@ -191,15 +207,13 @@ func TestEVMERC20ToGnoStateLens(t *testing.T) {
 	recipientBefore := queryGnoVoucherBalance(t, h.cfg.Gno, wrappedToken, h.cfg.Gno.Sender)
 	operand := encodeTokenOrder(t, tokenOrder{
 		Sender: h.evmSender, Receiver: asciiHex(h.cfg.Gno.Sender), BaseToken: baseToken,
-		QuoteToken: asciiHex(wrappedToken), Metadata: encodedMetadata, Amount: amount,
+		QuoteToken: asciiHex(wrappedToken), Metadata: encodedMetadata, Amount: amount, Kind: tokenOrderKindInitialize,
 	})
 
 	baseline := captureVoyagerBaseline(t, h.cfg.Voyager)
 	from, err := queryEVMBlockNumber(h.cfg.EVM.RPC)
 	from = must(t, from, err)
-	receipt := castSend(t, h.cfg.EVM, h.cfg.EVM.ZKGM,
-		"send(uint32,uint64,uint64,bytes32,(uint8,uint8,bytes))", h.cfg.Topology.EVMGno.ChannelID, "0",
-		strconv.FormatInt(time.Now().Add(time.Hour).UnixNano(), 10), "0x"+randomHex32(t), "(2,3,"+operand+")")
+	receipt := broadcastEVMPacket(t, h.cfg.EVM, h.cfg.Topology.EVMGno.ChannelID, operand, time.Now().Add(time.Hour).UnixNano())
 	var sendLogs []EVMLog
 	for _, log := range receipt.Logs {
 		if len(log.Topics) > 2 && strings.EqualFold(log.Address, h.cfg.EVM.IBCHandler) && strings.EqualFold(log.Topics[0], evmPacketSendTopic) {
@@ -234,13 +248,13 @@ func TestEVMERC20ToGnoStateLens(t *testing.T) {
 	requirePacketVoyagerSuccess(t, h.cfg.Voyager, baseline, hash)
 	requireNoForbiddenRelayPath(t, h.cfg.Voyager, baseline)
 
-	sender := senderBefore - queryERC20Balance(t, h.cfg.EVM, baseToken, h.evmSender)
-	escrow := queryERC20Balance(t, h.cfg.EVM, baseToken, h.cfg.EVM.ZKGM) - escrowBefore
+	sender := new(big.Int).Sub(senderBefore, queryERC20Balance(t, h.cfg.EVM, baseToken, h.evmSender))
+	escrow := new(big.Int).Sub(queryERC20Balance(t, h.cfg.EVM, baseToken, h.cfg.EVM.ZKGM), escrowBefore)
 	recipient := queryGnoVoucherBalance(t, h.cfg.Gno, wrappedToken, h.cfg.Gno.Sender) - recipientBefore
-	if sender != amount || escrow != amount || recipient != 1 {
-		t.Fatalf("balance deltas sender=%d escrow=%d recipient=%d, want %d/%d/1 after 10^12 decimal downscaling", sender, escrow, recipient, amount, amount)
+	if sender.Cmp(amountInt) != 0 || escrow.Cmp(amountInt) != 0 || recipient != 1 {
+		t.Fatalf("balance deltas sender=%s escrow=%s recipient=%d, want %s/%s/1 after 10^12 decimal downscaling", sender, escrow, recipient, amount, amount)
 	}
-	t.Logf("success packet=%s token=%s deltas sender=%d escrow=%d recipient=%d", hash, wrappedToken, sender, escrow, recipient)
+	t.Logf("success packet=%s token=%s deltas sender=%s escrow=%s recipient=%d", hash, wrappedToken, sender, escrow, recipient)
 }
 
 func TestNoForceEvents(t *testing.T) {

@@ -16,7 +16,7 @@ type voyagerBaseline struct {
 	Failed int64
 }
 
-func broadcastGnoPacket(t *testing.T, cfg gnoConfig, channel, operand, sendCoins, salt string) {
+func broadcastGnoPacket(t *testing.T, cfg gnoConfig, channel, operand, sendCoins, salt string, timeout int64) {
 	t.Helper()
 	cmdArgs := []string{
 		"compose", "exec", "-T", "gno",
@@ -31,7 +31,7 @@ func broadcastGnoPacket(t *testing.T, cfg gnoConfig, channel, operand, sendCoins
 		"-insecure-password-stdin",
 		"-send", sendCoins,
 	}
-	for _, arg := range []string{channel, fmt.Sprint(time.Now().Add(time.Hour).UnixNano()), salt, "2", "3", operand} {
+	for _, arg := range []string{channel, fmt.Sprint(timeout), salt, "2", "3", operand} {
 		cmdArgs = append(cmdArgs, "-args", arg)
 	}
 	cmdArgs = append(cmdArgs, cfg.KeyName)

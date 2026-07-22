@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -31,8 +32,15 @@ type tokenMetadata struct {
 
 type tokenOrder struct {
 	Sender, Receiver, BaseToken, QuoteToken, Metadata string
-	Amount                                            int64
+	Amount                                            string
+	Kind                                              uint8
 }
+
+const (
+	tokenOrderKindInitialize uint8 = iota
+	tokenOrderKindEscrow
+	tokenOrderKindUnescrow
+)
 
 func newBridgeHarness(t *testing.T) *bridgeHarness {
 	t.Helper()
@@ -75,8 +83,24 @@ func encodeMetadata(t *testing.T, implementation, initializer string) string {
 func encodeTokenOrder(t *testing.T, order tokenOrder) string {
 	t.Helper()
 	return mustCommand(t, "cast", "abi-encode", "f(bytes,bytes,bytes,uint256,bytes,uint256,uint8,bytes)",
-		order.Sender, order.Receiver, order.BaseToken, strconv.FormatInt(order.Amount, 10), order.QuoteToken,
-		strconv.FormatInt(order.Amount, 10), "0", order.Metadata)
+		order.Sender, order.Receiver, order.BaseToken, order.Amount, order.QuoteToken,
+		order.Amount, strconv.Itoa(int(order.Kind)), order.Metadata)
+}
+
+func TestEncodeTokenOrderIncludesKindAndUint256Amount(t *testing.T) {
+	const amount = "9223372036854775808"
+	encoded := encodeTokenOrder(t, tokenOrder{
+		Sender: "0x01", Receiver: "0x02", BaseToken: "0x03", QuoteToken: "0x04", Metadata: "0x05",
+		Amount: amount, Kind: tokenOrderKindUnescrow,
+	})
+	var decoded []json.RawMessage
+	out := mustCommand(t, "cast", "decode-abi", "f()(bytes,bytes,bytes,uint256,bytes,uint256,uint8,bytes)", encoded, "--json")
+	if err := json.Unmarshal([]byte(out), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded) != 8 || string(decoded[3]) != amount || string(decoded[5]) != amount || string(decoded[6]) != "2" {
+		t.Fatalf("decoded TokenOrder = %v", decoded)
+	}
 }
 
 func predictEVMWrappedToken(t *testing.T, cfg evmConfig, channel string, base []byte, metadata string) string {
@@ -133,6 +157,13 @@ func castSend(t *testing.T, cfg evmConfig, contract, signature string, args ...s
 		t.Fatalf("cast send failed: %v status=%s\n%s", err, receipt.Status, out)
 	}
 	return receipt
+}
+
+func broadcastEVMPacket(t *testing.T, cfg evmConfig, channel, operand string, timeoutTimestamp int64) EVMReceipt {
+	t.Helper()
+	return castSend(t, cfg, cfg.ZKGM,
+		"send(uint32,uint64,uint64,bytes32,(uint8,uint8,bytes))", channel, "0",
+		strconv.FormatInt(timeoutTimestamp, 10), "0x"+randomHex32(t), "(2,3,"+operand+")")
 }
 
 func requireEVMReceiveAndAck(t *testing.T, cfg config, from uint64, channel, hash string, recv, write EVMLog) {
@@ -193,6 +224,34 @@ func requirePacketVoyagerSuccess(t *testing.T, cfg voyagerConfig, baseline voyag
 	requireNoNewVoyagerFailed(t, cfg, baseline)
 	if done := voyagerRowsAfter(t, cfg, "done", baseline.Done); !strings.Contains(strings.ToLower(done), strings.ToLower(hash)) {
 		t.Fatalf("Voyager done rows do not contain packet %s:\n%s", hash, done)
+	}
+}
+
+func requireEVMToGnoFailureAckRefund(t *testing.T, h *bridgeHarness, baseline voyagerBaseline, from uint64, hash, token string, senderBefore, escrowBefore *big.Int) {
+	t.Helper()
+	recv := waitForGnoEvent(t, h.cfg.Gno.Indexer, "PacketRecv", map[string]string{"packet_hash": hash})
+	write := waitForGnoEvent(t, h.cfg.Gno.Indexer, "WriteAck", map[string]string{"packet_hash": hash})
+	requireOneGnoEvent(t, h.cfg.Gno, "PacketRecv", hash)
+	requireOneGnoEvent(t, h.cfg.Gno, "WriteAck", hash)
+	ack := mustDecodeHex(t, txEncodedAttr(write, "WriteAck", "acknowledgement"))
+	if recv.Hash != write.Hash || len(ack) < 32 || ackTag(ack) != 0 {
+		t.Fatalf("Gno failure acknowledgement differs: recv=%s write=%s ack=%x", recv.Hash, write.Hash, ack)
+	}
+
+	sourceAck := waitForEVMLog(t, h.cfg, baseline.Failed, h.cfg.EVM.IBCHandler, evmPacketAckTopic, from, topicUint32(mustUint32(t, h.cfg.Topology.EVMGno.ChannelID)), hash)
+	ack, err := abiBytes(mustDecodeHex(t, sourceAck.Data), 0)
+	if err != nil || len(ack) < 32 || ackTag(ack) != 0 {
+		t.Fatalf("EVM PacketAck is not failure: %v", err)
+	}
+	if logs, err := queryEVMLogs(h.cfg.EVM.RPC, h.cfg.EVM.IBCHandler, from, evmPacketAckTopic, topicUint32(mustUint32(t, h.cfg.Topology.EVMGno.ChannelID)), hash); err != nil || len(logs) != 1 {
+		t.Fatalf("EVM PacketAck count = %d, want 1: %v", len(logs), err)
+	}
+	requireEVMPacketInactive(t, h.cfg.EVM, hash)
+	if senderAfter, escrowAfter := queryERC20Balance(t, h.cfg.EVM, token, h.evmSender), queryERC20Balance(t, h.cfg.EVM, token, h.cfg.EVM.ZKGM); senderAfter.Cmp(senderBefore) != 0 || escrowAfter.Cmp(escrowBefore) != 0 {
+		t.Fatalf("EVM refund balances sender=%s escrow=%s, want %s/%s", senderAfter, escrowAfter, senderBefore, escrowBefore)
+	}
+	if failed := voyagerRowsAfter(t, h.cfg.Voyager, "failed", baseline.Failed); strings.Contains(strings.ToLower(failed), strings.ToLower(hash)) {
+		t.Fatalf("packet %s remains failed in Voyager:\n%s", hash, failed)
 	}
 }
 

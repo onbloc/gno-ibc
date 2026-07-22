@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math/big"
 	"strings"
 	"testing"
 	"time"
@@ -42,19 +43,19 @@ func waitForEVMLog(t *testing.T, cfg config, failedBaseline int64, address, even
 	return EVMLog{}
 }
 
-func queryERC20Balance(t *testing.T, cfg evmConfig, token, owner string) int64 {
+func queryERC20Balance(t *testing.T, cfg evmConfig, token, owner string) *big.Int {
 	t.Helper()
 	code, err := queryEVMCode(cfg.RPC, token)
 	code = must(t, code, err)
 	if len(code) == 0 {
-		return 0
+		return new(big.Int)
 	}
 	data, err := evmAddressCallData("0x70a08231", owner)
 	data = must(t, data, err)
 	out, err := evmCall(cfg.RPC, token, data)
 	out = must(t, out, err)
-	value, err := abiUint(out, 0)
-	return int64(must(t, value, err))
+	value, err := abiWord(out, 0)
+	return new(big.Int).SetBytes(must(t, value, err))
 }
 
 func topicUint32(value uint32) string {

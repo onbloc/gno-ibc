@@ -20,11 +20,6 @@ type StatusResponse struct {
 	Height  int64
 }
 
-type UnionTx struct {
-	Hash   string
-	Height int64
-}
-
 type BeaconSync struct {
 	HeadSlot     uint64
 	SyncDistance uint64
@@ -107,60 +102,6 @@ func queryUnionStatus(rpc string) (*StatusResponse, error) {
 		return nil, fmt.Errorf("empty union chain id")
 	}
 	return &StatusResponse{ChainID: resp.Result.NodeInfo.Network, Height: height}, nil
-}
-
-func queryUnionTxs(container, eventType, packetHash string, limit int) ([]UnionTx, error) {
-	out, err := dockerExec(container, "uniond", "query", "txs",
-		"--query", fmt.Sprintf("%s.packet_hash='%s'", eventType, packetHash),
-		"--node", "tcp://localhost:26657",
-		"-o", "json",
-		"--limit", strconv.Itoa(limit),
-		"--order_by", "desc",
-	)
-	if err != nil {
-		return nil, fmt.Errorf("query Union %s: %w\n%s", eventType, err, out)
-	}
-	return parseUnionTxs([]byte(out))
-}
-
-func parseUnionTxs(body []byte) ([]UnionTx, error) {
-	var resp struct {
-		Txs []struct {
-			Hash   string `json:"hash"`
-			TxHash string `json:"txhash"`
-			Height string `json:"height"`
-		} `json:"txs"`
-		TxResponses []struct {
-			TxHash string `json:"txhash"`
-			Height string `json:"height"`
-		} `json:"tx_responses"`
-	}
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil, err
-	}
-	txs := make([]UnionTx, 0, len(resp.TxResponses)+len(resp.Txs))
-	for _, tx := range resp.TxResponses {
-		height, err := strconv.ParseInt(tx.Height, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("parse Union tx height %q: %w", tx.Height, err)
-		}
-		txs = append(txs, UnionTx{Hash: tx.TxHash, Height: height})
-	}
-	for _, tx := range resp.Txs {
-		hash := tx.Hash
-		if hash == "" {
-			hash = tx.TxHash
-		}
-		if hash == "" {
-			continue
-		}
-		height, err := strconv.ParseInt(tx.Height, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("parse Union tx height %q: %w", tx.Height, err)
-		}
-		txs = append(txs, UnionTx{Hash: hash, Height: height})
-	}
-	return txs, nil
 }
 
 func queryEVMBlockNumber(rpc string) (uint64, error) {

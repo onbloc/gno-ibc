@@ -73,7 +73,7 @@ cleanup() {
       "$union_repo/networks/run-linux-devnet.sh" >/dev/null 2>&1 || true
   fi
   rm -f "$runtime_dir/voyager-config.jsonc" "$runtime_dir/clients.env" \
-    "$runtime_dir/gno-union.env" "$runtime_dir/union-evm.env" "$runtime_dir/gno-evm.env"
+    "$runtime_dir/gno-evm.env"
   rmdir "$runtime_dir" 2>/dev/null || true
   exit "$status"
 }
@@ -250,24 +250,12 @@ set -a
 source "$CLIENTS_ENV_FILE"
 set +a
 
-export TOPOLOGY_ENV_FILE="$runtime_dir/gno-union.env"
-UNION_SIGNER_HOME=home "$script_dir/setup-gno-union-topology.sh"
-set -a
-# shellcheck disable=SC1090
-source "$TOPOLOGY_ENV_FILE"
-set +a
-
-# Gno and Union indexing are already active; start EVM once and reuse all three streams.
-docker exec "$VOYAGER_CONTAINER" ./voyager -c /config/voyager-config.gno-union.jsonc \
-  index "${EVM_CHAIN_ID:-32382}" --enqueue >/dev/null
+# Continuous indexing is the only relay trigger for handshakes and packets.
+for chain in "${GNO_CHAIN_ID:-dev}" "${UNION_CHAIN_ID:-union-devnet-1}" "${EVM_CHAIN_ID:-32382}"; do
+  docker exec "$VOYAGER_CONTAINER" ./voyager -c /config/voyager-config.gno-union.jsonc \
+    index "$chain" --enqueue >/dev/null
+done
 export VOYAGER_INDEX_STARTED=1
-
-export TOPOLOGY_ENV_FILE="$runtime_dir/union-evm.env"
-"$script_dir/setup-union-evm-topology.sh"
-set -a
-# shellcheck disable=SC1090
-source "$TOPOLOGY_ENV_FILE"
-set +a
 
 export TOPOLOGY_ENV_FILE="$runtime_dir/gno-evm.env"
 "$script_dir/setup-gno-evm-topology.sh"
@@ -293,10 +281,17 @@ export RUN_PACKET_TESTS=1
 go_test=(go test -count=1 -v .)
 (
   cd "$script_dir"
-  GOWORK=off "${go_test[@]}" -run '^(TestDevnetReadiness|TestPacketPathCreated|TestUnionEVMTopology|TestGnoEVMProofLensTopology)$'
-  GOWORK=off "${go_test[@]}" -run '^TestTokenBridgeScenarios$'
+  GOWORK=off "${go_test[@]}" -run '^(TestDevnetReadiness|TestGnoEVMDirectTopology)$'
   GOWORK=off "${go_test[@]}" -run '^TestGnoNativeToEVMProofLens$'
-  GOWORK=off "${go_test[@]}" -run '^TestEVMERC20ToGnoProofLens$'
+  GOWORK=off "${go_test[@]}" -run '^TestEVMERC20ToGnoStateLens$'
+  GOWORK=off "${go_test[@]}" -run '^TestNoForceEvents$'
 )
 
-echo "bidirectional Gno, Union, and EVM token scenarios passed"
+failed_count=$(docker exec "$POSTGRES_CONTAINER" psql -U postgres -d postgres -At -c 'select count(*) from failed')
+[[ $failed_count == 0 ]] || {
+  echo "Voyager recorded $failed_count failed rows during the full-cycle run" >&2
+  docker exec "$VOYAGER_CONTAINER" ./voyager -c /config/voyager-config.gno-union.jsonc queue query-failed >&2
+  exit 1
+}
+
+echo "direct Gno-EVM Proof Lens and State Lens packets passed"

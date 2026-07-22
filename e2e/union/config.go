@@ -25,15 +25,10 @@ type gnoConfig struct {
 }
 
 type unionConfig struct {
-	RPC             string
-	ChainID         string
-	Container       string
-	Core            string
-	ZKGM            string
-	SignerKey       string
-	SignerHome      string
-	PacketSignerKey string
-	PacketSender    string
+	RPC       string
+	ChainID   string
+	Container string
+	Core      string
 }
 
 type evmConfig struct {
@@ -80,15 +75,10 @@ func loadConfig() config {
 			Sender:     os.Getenv("GNO_SENDER_ADDR"),
 		},
 		Union: unionConfig{
-			RPC:             getenv("UNION_RPC", "http://localhost:26657"),
-			ChainID:         getenv("UNION_CHAIN_ID", "union-devnet-1"),
-			Container:       getenv("UNION_CONTAINER", "full-dev-setup-union-0-1"),
-			Core:            getenv("UNION_CORE_CONTRACT", "union1nk3nes4ef6vcjan5tz6stf9g8p08q2kgqysx6q5exxh89zakp0msq5z79t"),
-			ZKGM:            getenv("UNION_ZKGM_CONTRACT", "union1rfz3ytg6l60wxk5rxsk27jvn2907cyav04sz8kde3xhmmf9nplxqr8y05c"),
-			SignerKey:       getenv("UNION_SIGNER_KEY", "alice"),
-			SignerHome:      getenv("UNION_SIGNER_HOME", "home"),
-			PacketSignerKey: getenv("UNION_PACKET_SIGNER_KEY", "alice"),
-			PacketSender:    getenv("UNION_PACKET_SENDER", "union1jk9psyhvgkrt2cumz8eytll2244m2nnz4yt2g2"),
+			RPC:       getenv("UNION_RPC", "http://localhost:26657"),
+			ChainID:   getenv("UNION_CHAIN_ID", "union-devnet-1"),
+			Container: getenv("UNION_CONTAINER", "full-dev-setup-union-0-1"),
+			Core:      getenv("UNION_CORE_CONTRACT", "union1nk3nes4ef6vcjan5tz6stf9g8p08q2kgqysx6q5exxh89zakp0msq5z79t"),
 		},
 		EVM: evmConfig{
 			RPC:        getenv("EVM_RPC", "http://localhost:8545"),
@@ -108,24 +98,16 @@ func loadConfig() config {
 		},
 		Topology: topologyConfig{
 			Gno: ibcIDs{
-				ClientID:     os.Getenv("GNO_CLIENT_ID"),
-				ConnectionID: os.Getenv("GNO_PACKET_CONNECTION_ID"),
-				ChannelID:    os.Getenv("GNO_PACKET_CHANNEL_ID"),
+				ClientID: os.Getenv("GNO_CLIENT_ID"),
 			},
 			UnionGno: ibcIDs{
-				ClientID:     os.Getenv("UNION_GNO_CLIENT_ID"),
-				ConnectionID: os.Getenv("UNION_PACKET_CONNECTION_ID"),
-				ChannelID:    os.Getenv("UNION_PACKET_CHANNEL_ID"),
+				ClientID: os.Getenv("UNION_GNO_CLIENT_ID"),
 			},
 			UnionEVM: ibcIDs{
-				ClientID:     os.Getenv("UNION_EVM_CLIENT_ID"),
-				ConnectionID: os.Getenv("UNION_EVM_CONNECTION_ID"),
-				ChannelID:    os.Getenv("UNION_EVM_CHANNEL_ID"),
+				ClientID: os.Getenv("UNION_EVM_CLIENT_ID"),
 			},
 			EVM: ibcIDs{
-				ClientID:     os.Getenv("EVM_UNION_CLIENT_ID"),
-				ConnectionID: os.Getenv("EVM_UNION_CONNECTION_ID"),
-				ChannelID:    os.Getenv("EVM_UNION_CHANNEL_ID"),
+				ClientID: os.Getenv("EVM_UNION_CLIENT_ID"),
 			},
 			GnoEVM: ibcIDs{
 				ClientID:     os.Getenv("GNO_EVM_CLIENT_ID"),
@@ -145,17 +127,9 @@ func loadConfig() config {
 func (c config) validatePacket() error {
 	required := []struct{ name, value string }{
 		{"GNO_CLIENT_ID", c.Topology.Gno.ClientID},
-		{"GNO_PACKET_CONNECTION_ID", c.Topology.Gno.ConnectionID},
-		{"GNO_PACKET_CHANNEL_ID", c.Topology.Gno.ChannelID},
 		{"UNION_GNO_CLIENT_ID", c.Topology.UnionGno.ClientID},
-		{"UNION_PACKET_CONNECTION_ID", c.Topology.UnionGno.ConnectionID},
-		{"UNION_PACKET_CHANNEL_ID", c.Topology.UnionGno.ChannelID},
 		{"UNION_EVM_CLIENT_ID", c.Topology.UnionEVM.ClientID},
-		{"UNION_EVM_CONNECTION_ID", c.Topology.UnionEVM.ConnectionID},
-		{"UNION_EVM_CHANNEL_ID", c.Topology.UnionEVM.ChannelID},
 		{"EVM_UNION_CLIENT_ID", c.Topology.EVM.ClientID},
-		{"EVM_UNION_CONNECTION_ID", c.Topology.EVM.ConnectionID},
-		{"EVM_UNION_CHANNEL_ID", c.Topology.EVM.ChannelID},
 		{"GNO_EVM_CLIENT_ID", c.Topology.GnoEVM.ClientID},
 		{"GNO_EVM_CONNECTION_ID", c.Topology.GnoEVM.ConnectionID},
 		{"GNO_EVM_CHANNEL_ID", c.Topology.GnoEVM.ChannelID},
@@ -164,10 +138,6 @@ func (c config) validatePacket() error {
 		{"EVM_GNO_CHANNEL_ID", c.Topology.EVMGno.ChannelID},
 		{"GNO_KEY_NAME", c.Gno.KeyName},
 		{"GNO_SENDER_ADDR", c.Gno.Sender},
-		{"UNION_SIGNER_KEY", c.Union.SignerKey},
-		{"UNION_SIGNER_HOME", c.Union.SignerHome},
-		{"UNION_PACKET_SIGNER_KEY", c.Union.PacketSignerKey},
-		{"UNION_PACKET_SENDER", c.Union.PacketSender},
 		{"EVM_PRIVATE_KEY", c.EVM.PrivateKey},
 		{"EVM_RECIPIENT", c.EVM.Recipient},
 	}

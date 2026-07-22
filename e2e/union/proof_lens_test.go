@@ -9,21 +9,45 @@ import (
 	"time"
 )
 
-func TestGnoEVMProofLensTopology(t *testing.T) {
+func TestGnoEVMDirectTopology(t *testing.T) {
 	cfg := loadConfig()
 	if !cfg.RunPackets {
-		t.Skip("set RUN_PACKET_TESTS=1 to check the live Gno-EVM Proof Lens topology")
+		t.Skip("set RUN_PACKET_TESTS=1 to check the live direct Gno-EVM topology")
 	}
 	if err := cfg.validatePacket(); err != nil {
 		t.Fatal(err)
 	}
-	requireGnoEVMProofLensTopology(t, cfg)
+	requireGnoEVMDirectTopology(t, cfg)
 }
 
-func requireGnoEVMProofLensTopology(t *testing.T, cfg config) {
+func requireGnoEVMDirectTopology(t *testing.T, cfg config) {
 	t.Helper()
+	if got := queryGnoQEval(t, cfg.Gno, fmt.Sprintf("gno.land/r/onbloc/ibc/union/core.QueryClientType(%s)", cfg.Topology.Gno.ClientID)); !strings.Contains(got, `("cometbls" string)`) {
+		t.Fatalf("Gno Union client %s is not cometbls: %s", cfg.Topology.Gno.ClientID, got)
+	}
 	if got := queryGnoQEval(t, cfg.Gno, fmt.Sprintf("gno.land/r/onbloc/ibc/union/core.QueryClientType(%s)", cfg.Topology.GnoEVM.ClientID)); !strings.Contains(got, `("state-lens/ics23/mpt" string)`) {
 		t.Fatalf("Gno direct client %s is not state-lens/ics23/mpt: %s", cfg.Topology.GnoEVM.ClientID, got)
+	}
+	for id, want := range map[string]string{
+		cfg.Topology.UnionGno.ClientID: "gno",
+		cfg.Topology.UnionEVM.ClientID: "trusted/evm/mpt",
+	} {
+		var clientType, status string
+		clientID := mustUint32(t, id)
+		if err := queryUnionCore(cfg.Union.Container, cfg.Union.Core, map[string]any{"get_client_type": map[string]any{"client_id": clientID}}, &clientType); err != nil || clientType != want {
+			t.Fatalf("Union client %s type = %q, want %q: %v", id, clientType, want, err)
+		}
+		if err := queryUnionCore(cfg.Union.Container, cfg.Union.Core, map[string]any{"get_status": map[string]any{"client_id": clientID}}, &status); err != nil || status != "active" {
+			t.Fatalf("Union client %s status = %q: %v", id, status, err)
+		}
+	}
+
+	unionClient := mustUint32(t, cfg.Topology.EVM.ClientID)
+	unionClientTypeData, err := evmCall(cfg.EVM.RPC, cfg.EVM.IBCHandler, evmUint32CallData("0x1296c148", unionClient))
+	unionClientTypeData = must(t, unionClientTypeData, err)
+	unionClientType, err := abiString(unionClientTypeData, 0)
+	if unionClientType = must(t, unionClientType, err); unionClientType != "cometbls" {
+		t.Fatalf("EVM Union client type = %q, want cometbls", unionClientType)
 	}
 
 	evmClient := mustUint32(t, cfg.Topology.EVMGno.ClientID)
@@ -100,7 +124,7 @@ func queryVoyagerIBCState(t *testing.T, cfg config, chain, kind, id string, resu
 
 func TestGnoNativeToEVMProofLens(t *testing.T) {
 	h := newBridgeHarness(t)
-	requireGnoEVMProofLensTopology(t, h.cfg)
+	requireGnoEVMDirectTopology(t, h.cfg)
 
 	const amount int64 = 1
 	tag := fmt.Sprintf("%09d", time.Now().UnixNano()%1_000_000_000)
@@ -123,7 +147,7 @@ func TestGnoNativeToEVMProofLens(t *testing.T) {
 	requireOneGnoEvent(t, h.cfg.Gno, "PacketSend", hash)
 
 	proofHeight := send.BlockHeight + 1 // Gno proofs expose the post-PacketSend state at the next height.
-	path := strings.TrimPrefix(mustCommand(t, "cast", "keccak", mustCommand(t, "cast", "abi-encode", "f(uint256,bytes32)", "4", hash)), "0x")
+	path := packetCommitmentPath(t, hash)
 	committedHeight := waitForUnionMembershipCommit(t, h.cfg, baseline.Failed, h.cfg.Topology.UnionGno.ClientID, proofHeight, path)
 	t.Logf("Union committed the Gno membership proof at height %d", committedHeight)
 
@@ -146,12 +170,12 @@ func TestGnoNativeToEVMProofLens(t *testing.T) {
 	requireOneGnoEvent(t, h.cfg.Gno, "PacketAck", hash)
 	requireGnoPacketAcknowledged(t, h.cfg.Gno, hash)
 	requirePacketVoyagerSuccess(t, h.cfg.Voyager, baseline, hash)
-	requireNoProofLensFallback(t, h.cfg.Voyager, baseline)
+	requireNoForbiddenRelayPath(t, h.cfg.Voyager, baseline)
 }
 
-func TestEVMERC20ToGnoProofLens(t *testing.T) {
+func TestEVMERC20ToGnoStateLens(t *testing.T) {
 	h := newBridgeHarness(t)
-	requireGnoEVMProofLensTopology(t, h.cfg)
+	requireGnoEVMDirectTopology(t, h.cfg)
 
 	const amount int64 = 1_000_000_000_000
 	tag := fmt.Sprintf("%09d", time.Now().UnixNano()%1_000_000_000)
@@ -208,7 +232,7 @@ func TestEVMERC20ToGnoProofLens(t *testing.T) {
 	}
 	requireEVMPacketInactive(t, h.cfg.EVM, hash)
 	requirePacketVoyagerSuccess(t, h.cfg.Voyager, baseline, hash)
-	requireNoProofLensFallback(t, h.cfg.Voyager, baseline)
+	requireNoForbiddenRelayPath(t, h.cfg.Voyager, baseline)
 
 	sender := senderBefore - queryERC20Balance(t, h.cfg.EVM, baseToken, h.evmSender)
 	escrow := queryERC20Balance(t, h.cfg.EVM, baseToken, h.cfg.EVM.ZKGM) - escrowBefore
@@ -217,6 +241,54 @@ func TestEVMERC20ToGnoProofLens(t *testing.T) {
 		t.Fatalf("balance deltas sender=%d escrow=%d recipient=%d, want %d/%d/1 after 10^12 decimal downscaling", sender, escrow, recipient, amount, amount)
 	}
 	t.Logf("success packet=%s token=%s deltas sender=%d escrow=%d recipient=%d", hash, wrappedToken, sender, escrow, recipient)
+}
+
+func TestNoForceEvents(t *testing.T) {
+	cfg := loadConfig()
+	if !cfg.RunPackets {
+		t.Skip("set RUN_PACKET_TESTS=1 to inspect the live full-cycle run")
+	}
+	for _, eventType := range []string{
+		"ForceUpdateClient",
+		"ForceConnectionOpenTry", "ForceConnectionOpenAck", "ForceConnectionOpenConfirm",
+		"ForceChannelOpenTry", "ForceChannelOpenAck", "ForceChannelOpenConfirm",
+	} {
+		if txs, err := queryGnoEvents(cfg.Gno.Indexer, eventType, nil); err != nil || len(txs) != 0 {
+			t.Fatalf("Gno %s count = %d, want 0: %v", eventType, len(txs), err)
+		}
+	}
+	calls, err := queryGnoForceCalls(cfg.Gno.Indexer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"ForceUpdateClient", "ForceConnectionOpen", "ForceChannelOpen"} {
+		if strings.Contains(calls, name) {
+			t.Fatalf("Gno run contains %s call: %s", name, calls)
+		}
+	}
+
+	out, err := dockerExec(cfg.Union.Container, "uniond", "query", "txs",
+		"--query", "wasm-force_update_client.client_id EXISTS",
+		"--node", "tcp://localhost:26657", "-o", "json", "--limit", "1")
+	if err != nil {
+		t.Fatalf("query Union ForceUpdateClient events: %v\n%s", err, out)
+	}
+	var response struct {
+		Txs         []json.RawMessage `json:"txs"`
+		TxResponses []json.RawMessage `json:"tx_responses"`
+	}
+	if err := json.Unmarshal([]byte(out), &response); err != nil {
+		t.Fatalf("decode Union ForceUpdateClient events: %v\n%s", err, out)
+	}
+	if len(response.Txs)+len(response.TxResponses) != 0 {
+		t.Fatalf("Union ForceUpdateClient count = %d, want 0", len(response.Txs)+len(response.TxResponses))
+	}
+}
+
+func packetCommitmentPath(t *testing.T, hash string) string {
+	t.Helper()
+	encoded := mustCommand(t, "cast", "abi-encode", "f(uint256,bytes32)", "4", hash)
+	return strings.TrimPrefix(mustCommand(t, "cast", "keccak", encoded), "0x")
 }
 
 func waitForUnionMembershipCommit(t *testing.T, cfg config, failedBaseline int64, client string, minProofHeight int64, path string) int64 {
@@ -280,12 +352,12 @@ func queryUnionMembershipCommits(cfg unionConfig, client string, minProofHeight 
 	return heights, nil
 }
 
-func requireNoProofLensFallback(t *testing.T, cfg voyagerConfig, baseline voyagerBaseline) {
+func requireNoForbiddenRelayPath(t *testing.T, cfg voyagerConfig, baseline voyagerBaseline) {
 	t.Helper()
 	for table, id := range map[string]int64{"queue": baseline.Queue, "done": baseline.Done, "failed": baseline.Failed} {
 		rows := strings.ToLower(voyagerRowsAfter(t, cfg, table, id))
 		if strings.Contains(rows, "force_update_client") || strings.Contains(rows, "intent_packet") {
-			t.Fatalf("Proof Lens packet used a forbidden fallback in %s:\n%s", table, rows)
+			t.Fatalf("direct packet used a forbidden relay path in %s:\n%s", table, rows)
 		}
 	}
 }

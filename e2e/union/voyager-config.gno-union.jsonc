@@ -153,15 +153,6 @@
         }
       },
       {
-        "path": "./release/voyager-client-module-state-lens-ics23-ics23",
-        "info": {
-          "client_type": "state-lens/ics23/ics23",
-          "consensus_type": "tendermint",
-          "ibc_interface": "ibc-solidity",
-          "ibc_spec_id": "ibc-union"
-        }
-      },
-      {
         "path": "./release/voyager-client-module-state-lens-ics23-mpt",
         "info": {
           "client_type": "state-lens/ics23/mpt",
@@ -198,13 +189,6 @@
         "path": "./release/voyager-client-bootstrap-module-proof-lens",
         "info": {
           "client_type": "proof-lens",
-          "chain_id": "dev"
-        }
-      },
-      {
-        "path": "./release/voyager-client-bootstrap-module-state-lens-ics23-ics23",
-        "info": {
-          "client_type": "state-lens/ics23/ics23",
           "chain_id": "dev"
         }
       },
@@ -429,12 +413,6 @@
       "path": "./release/voyager-client-update-plugin-state-lens",
       "config": {
         "state_lens_client_type": "state-lens/ics23/mpt"
-      }
-    },
-    {
-      "path": "./release/voyager-client-update-plugin-state-lens",
-      "config": {
-        "state_lens_client_type": "state-lens/ics23/ics23"
       }
     }
   ],

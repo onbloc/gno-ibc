@@ -154,6 +154,8 @@ UNION_VOYAGER_REVISION=$voyager_revision
 UNION_IBC_HOST_CONTRACT=union1fake
 EVM_IBC_HANDLER=0x1111111111111111111111111111111111111111
 EVM_MULTICALL=0x2222222222222222222222222222222222222222
+EVM_COMETBLS_CLIENT_IMPL=0x3333333333333333333333333333333333333333
+EVM_PROOF_LENS_CLIENT_IMPL=0x4444444444444444444444444444444444444444
 GNO_IBC_CORE_REALM=gno.land/r/onbloc/ibc/union/core
 GNO_ZKGM_PORT=gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm
 EVM_ZKGM_CONTRACT=0x5fbe74a283f7954f10aa04c2edf55578811aeb03
@@ -213,6 +215,22 @@ if run_runner --resume >"$test_dir/topology-mismatch.out" 2>&1; then
   exit 1
 fi
 grep -q 'resume state does not match this topology' "$test_dir/topology-mismatch.out"
+
+for implementation in EVM_COMETBLS_CLIENT_IMPL EVM_PROOF_LENS_CLIENT_IMPL; do
+  cp "$env_file" "$test_dir/env.original"
+  sed "s/^${implementation}=.*/${implementation}=0x5555555555555555555555555555555555555555/" \
+    "$env_file" >"$test_dir/env.changed"
+  mv "$test_dir/env.changed" "$env_file"
+  chmod 600 "$env_file"
+  cp "$test_dir/state.complete" "$test_dir/artifacts/state.json"
+  chmod 600 "$test_dir/artifacts/state.json"
+  if run_runner --resume >"$test_dir/${implementation}.out" 2>&1; then
+    echo "changed $implementation unexpectedly resumed" >&2
+    exit 1
+  fi
+  grep -q 'resume state does not match this topology' "$test_dir/${implementation}.out"
+  mv "$test_dir/env.original" "$env_file"
+done
 
 jq '.chains.sepolia=.chains.evm | del(.chains.evm,.evm_topology)' \
   "$test_dir/state.complete" >"$test_dir/artifacts/state.json"

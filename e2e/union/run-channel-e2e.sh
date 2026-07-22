@@ -68,6 +68,21 @@ if ((erc20_to_gno)); then
     echo "EVM_TEST_AMOUNT must be positive and divisible by 10^12" >&2
     exit 2
   }
+  packet_ledger_amount=${EVM_TEST_AMOUNT%000000000000}
+  # shellcheck disable=SC2071 # Equal-length decimal strings are compared lexically.
+  if ((${#packet_ledger_amount} > 19)) ||
+    { ((${#packet_ledger_amount} == 19)) && [[ $packet_ledger_amount > 9223372036854775807 ]]; }; then
+    echo "EVM_TEST_AMOUNT after 10^12 scaling must fit Gno int64" >&2
+    exit 2
+  fi
+  for name in EVM_RPC_URL GNO_RPC_URL GNO_TX_INDEXER_RPC_URL; do
+    case ${!name} in
+      *$'\n'*|*'"'*|*\\*)
+        echo "$name contains a character unsupported by the private runtime config" >&2
+        exit 2
+        ;;
+    esac
+  done
 fi
 [[ $GNO_ZKGM_PORT =~ ^gno\.land/r/[A-Za-z0-9_./-]+$ ]] || {
   echo "GNO_ZKGM_PORT must be a gno.land/r/... realm path" >&2
@@ -126,6 +141,11 @@ client_configs() {
 runtime_dir=$(mktemp -d "${TMPDIR:-/tmp}/union-channel-e2e.XXXXXX")
 rendered_config="$runtime_dir/config.jsonc"
 voyager_log="$runtime_dir/voyager.log"
+packet_cast_error="$runtime_dir/cast.stderr"
+packet_gnokey_error="$runtime_dir/gnokey.stderr"
+packet_curl_error="$runtime_dir/curl.stderr"
+packet_gnokey_config="$runtime_dir/gnokey.toml"
+packet_curl_config="$runtime_dir/curl.conf"
 artifact_dir=${E2E_ARTIFACT_DIR:-"$script_dir/channel-e2e-artifacts"}
 state_file=${E2E_STATE_FILE:-"$artifact_dir/state.json"}
 bootstrap_file="$artifact_dir/bootstrap-in-progress.json"
@@ -142,7 +162,8 @@ cleanup() {
   status=$?
   trap - EXIT INT TERM
   stop_voyager 2>/dev/null || true
-  rm -f "$rendered_config" "$voyager_log"
+  rm -f "$rendered_config" "$voyager_log" "$packet_cast_error" "$packet_gnokey_error" \
+    "$packet_curl_error" "$packet_gnokey_config" "$packet_curl_config"
   rmdir "$runtime_dir" 2>/dev/null || true
   exit "$status"
 }
@@ -150,6 +171,13 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 umask 077
+
+if ((erc20_to_gno)); then
+  printf 'remote = "%s"\n' "$GNO_RPC_URL" >"$packet_gnokey_config"
+  printf 'silent\nshow-error\nfail\nheader = "content-type: application/json"\nurl = "%s"\n' \
+    "$GNO_TX_INDEXER_RPC_URL" >"$packet_curl_config"
+  chmod 600 "$packet_gnokey_config" "$packet_curl_config"
+fi
 
 render_config() {
   local plain_configs proof_configs
@@ -603,6 +631,28 @@ packet_command() {
   "$timeout_bin" --kill-after="${stop_timeout_seconds}s" "$command_timeout_seconds" "$@"
 }
 
+packet_cast() {
+  if ! ETH_RPC_URL="$EVM_RPC_URL" packet_command cast "$@" 2>"$packet_cast_error"; then
+    echo "packet cast command failed: ${1:-unknown}" >&2
+    return 1
+  fi
+}
+
+packet_gnokey() {
+  if ! packet_command gnokey -config "$packet_gnokey_config" "$@" 2>"$packet_gnokey_error"; then
+    echo "packet gnokey command failed" >&2
+    return 1
+  fi
+}
+
+packet_curl() {
+  if ! packet_command curl --config "$packet_curl_config" --data-binary @- \
+    2>"$packet_curl_error" <<<"$1"; then
+    echo "packet indexer request failed" >&2
+    return 1
+  fi
+}
+
 decimal_sub() {
   local left=$1 right=$2 borrow=0 digit out='' i
   while [[ $left == 0* && $left != 0 ]]; do left=${left#0}; done
@@ -623,7 +673,7 @@ decimal_sub() {
 
 erc20_balance() {
   local value
-  value=$(packet_command cast call "$packet_token" 'balanceOf(address)(uint256)' "$1" --rpc-url "$EVM_RPC_URL")
+  value=$(packet_cast call "$packet_token" 'balanceOf(address)(uint256)' "$1")
   value=${value%% *}
   [[ $value =~ ^[0-9]+$ ]] || { echo "malformed ERC20 balance: $value" >&2; return 1; }
   echo "$value"
@@ -632,7 +682,7 @@ erc20_balance() {
 gno_voucher_balance() {
   local expression output
   expression="$GNO_ZKGM_PORT.VoucherBalanceOf(\"$packet_voucher\",address(\"$packet_recipient\"))"
-  output=$(packet_command gnokey query vm/qeval -remote "$GNO_RPC_URL" -data "$expression")
+  output=$(packet_gnokey query vm/qeval -data "$expression")
   [[ $output =~ \(([0-9]+)[[:space:]]+int64\) ]] || {
     echo "malformed Gno voucher balance" >&2
     return 1
@@ -645,8 +695,7 @@ gno_packet_events() {
   query=$(printf '{ getTransactions(where: { success: { eq: true } response: { events: { GnoEvent: { type: { eq: "%s" } pkg_path: { eq: "%s" } _and: [{ attrs: { key: { eq: "packet_hash" } value: { eq: "%s" } } }] } } } } order: { heightAndIndex: DESC }) { hash block_height response { events { ... on GnoEvent { type pkg_path attrs { key value } } } } } }' \
     "$event" "$GNO_IBC_CORE_REALM" "$hash")
   body=$(jq -cn --arg query "$query" '{query:$query}')
-  response=$(packet_command curl --silent --show-error --fail \
-    --header 'content-type: application/json' --data "$body" "$GNO_TX_INDEXER_RPC_URL")
+  response=$(packet_curl "$body")
   jq -e '.errors == null and (.data.getTransactions | type == "array")' <<<"$response" >/dev/null || {
     echo "malformed Gno indexer response for $event" >&2
     return 1
@@ -655,6 +704,27 @@ gno_packet_events() {
     | $tx.response.events[]
     | select(.type==$event and any(.attrs[]; .key=="packet_hash" and .value==$hash))
     | {tx_hash:$tx.hash,attrs:.attrs}]' <<<"$response"
+}
+
+wait_evm_packet_ack() {
+  local filter=$1 deadline=$((SECONDS + timeout_seconds)) logs count latest
+  while ((SECONDS < deadline)); do
+    logs=$(packet_cast rpc eth_getLogs "$filter") || return
+    count=$(jq -er 'if type=="array" then length else error("not an array") end' <<<"$logs") || {
+      echo "malformed EVM PacketAck log response" >&2
+      return 1
+    }
+    latest=$(failed_work_id)
+    [[ $latest == "$packet_failed_baseline" ]] || {
+      echo "Voyager recorded new failed work while waiting for EVM PacketAck" >&2
+      return 1
+    }
+    if ((count == 1)); then echo "$logs"; return; fi
+    ((count == 0)) || { echo "EVM PacketAck count=$count, want exactly one" >&2; return 1; }
+    sleep "$poll_seconds"
+  done
+  echo "EVM PacketAck was not visible within ${timeout_seconds}s" >&2
+  return 1
 }
 
 wait_gno_packet_event() {
@@ -1035,27 +1105,27 @@ if [[ $phase == complete ]]; then
   packet_token=$(tr '[:upper:]' '[:lower:]' <<<"$EVM_TEST_ERC20")
   packet_recipient=$GNO_RECIPIENT
   packet_amount=$EVM_TEST_AMOUNT
-  packet_sender=$(ETH_PRIVATE_KEY="$EVM_PRIVATE_KEY" packet_command cast wallet address)
+  packet_sender=$(ETH_PRIVATE_KEY="$EVM_PRIVATE_KEY" packet_cast wallet address)
   packet_sender=$(tr '[:upper:]' '[:lower:]' <<<"$packet_sender")
   [[ $packet_sender =~ ^0x[0-9a-f]{40}$ ]] || { echo "cannot derive EVM sender" >&2; exit 1; }
-  token_code=$(packet_command cast code "$packet_token" --rpc-url "$EVM_RPC_URL")
+  token_code=$(packet_cast code "$packet_token")
   [[ $token_code =~ ^0x[0-9a-fA-F]+$ && $token_code != 0x ]] || {
     echo "EVM_TEST_ERC20 has no deployed code" >&2
     exit 1
   }
-  token_decimals=$(packet_command cast call "$packet_token" 'decimals()(uint8)' --rpc-url "$EVM_RPC_URL")
+  token_decimals=$(packet_cast call "$packet_token" 'decimals()(uint8)')
   token_decimals=${token_decimals%% *}
   [[ $token_decimals == 18 ]] || { echo "EVM_TEST_ERC20 must report 18 decimals" >&2; exit 1; }
 
-  packet_salt=$(packet_command cast keccak "$packet_sender:$packet_amount:$(date +%s):$$:${runtime_dir##*.}")
+  packet_salt=$(packet_cast keccak "$packet_sender:$packet_amount:$(date +%s):$$:${runtime_dir##*.}")
   packet_tag=${packet_salt:2}
-  packet_initializer=$(packet_command cast abi-encode 'f(string,string,uint8)' \
+  packet_initializer=$(packet_cast abi-encode 'f(string,string,uint8)' \
     "Union E2E $packet_tag" "UE${packet_tag:0:6}" 18)
-  packet_metadata=$(packet_command cast abi-encode 'f(bytes,bytes)' 0x6772633230 "$packet_initializer")
-  packet_metadata_image=$(packet_command cast keccak "$packet_metadata")
-  packet_prediction=$(packet_command cast abi-encode 'f(uint256,uint32,bytes,uint256)' \
+  packet_metadata=$(packet_cast abi-encode 'f(bytes,bytes)' 0x6772633230 "$packet_initializer")
+  packet_metadata_image=$(packet_cast keccak "$packet_metadata")
+  packet_prediction=$(packet_cast abi-encode 'f(uint256,uint32,bytes,uint256)' \
     0 "$gno_channel_id" "$packet_token" "$packet_metadata_image")
-  packet_voucher_hash=$(packet_command cast keccak "$packet_prediction")
+  packet_voucher_hash=$(packet_cast keccak "$packet_prediction")
   packet_voucher=ibc/${packet_voucher_hash:2:40}
   packet_failed_baseline=$(failed_work_id)
   packet_state=$(jq -cn --arg token "$packet_token" --arg sender "$packet_sender" \
@@ -1079,9 +1149,9 @@ else
   packet_salt=$(jq -r .salt <<<"$packet_state")
   packet_tag=$(jq -r .tag <<<"$packet_state")
   [[ $packet_tag =~ ^[0-9a-fA-F]{64}$ ]] || { echo "saved packet tag is malformed" >&2; exit 2; }
-  packet_initializer=$(packet_command cast abi-encode 'f(string,string,uint8)' \
+  packet_initializer=$(packet_cast abi-encode 'f(string,string,uint8)' \
     "Union E2E $packet_tag" "UE${packet_tag:0:6}" 18)
-  packet_metadata=$(packet_command cast abi-encode 'f(bytes,bytes)' 0x6772633230 "$packet_initializer")
+  packet_metadata=$(packet_cast abi-encode 'f(bytes,bytes)' 0x6772633230 "$packet_initializer")
   packet_failed_baseline=$(jq -r .failed_work_baseline <<<"$packet_state")
 fi
 
@@ -1090,8 +1160,8 @@ if [[ $phase == packet-mint-submitting ]]; then
     echo "ERC20 mint submission is ambiguous; refusing to mint again" >&2
     exit 1
   }
-  mint_receipt=$(ETH_PRIVATE_KEY="$EVM_PRIVATE_KEY" packet_command cast send "$packet_token" \
-    'mint(address,uint256)' "$packet_sender" "$packet_amount" --rpc-url "$EVM_RPC_URL" --json)
+  mint_receipt=$(ETH_PRIVATE_KEY="$EVM_PRIVATE_KEY" packet_cast send "$packet_token" \
+    'mint(address,uint256)' "$packet_sender" "$packet_amount" --json)
   jq -e '.status=="0x1" and (.transactionHash|test("^0x[0-9a-fA-F]{64}$"))' <<<"$mint_receipt" >/dev/null || {
     echo "ERC20 mint transaction failed" >&2
     exit 1
@@ -1109,8 +1179,8 @@ if [[ $phase == packet-approve-submitting ]]; then
     echo "ERC20 approval submission is ambiguous; refusing to approve again" >&2
     exit 1
   }
-  approve_receipt=$(ETH_PRIVATE_KEY="$EVM_PRIVATE_KEY" packet_command cast send "$packet_token" \
-    'approve(address,uint256)' "$evm_zkgm_lc" "$packet_amount" --rpc-url "$EVM_RPC_URL" --json)
+  approve_receipt=$(ETH_PRIVATE_KEY="$EVM_PRIVATE_KEY" packet_cast send "$packet_token" \
+    'approve(address,uint256)' "$evm_zkgm_lc" "$packet_amount" --json)
   jq -e '.status=="0x1" and (.transactionHash|test("^0x[0-9a-fA-F]{64}$"))' <<<"$approve_receipt" >/dev/null || {
     echo "ERC20 approve transaction failed" >&2
     exit 1
@@ -1123,7 +1193,7 @@ if [[ $phase == packet-approve-submitted ]]; then
   packet_sender_before=$(erc20_balance "$packet_sender")
   packet_escrow_before=$(erc20_balance "$evm_zkgm_lc")
   packet_recipient_before=$(gno_voucher_balance)
-  packet_evm_from_block=$(packet_command cast block-number --rpc-url "$EVM_RPC_URL")
+  packet_evm_from_block=$(packet_cast block-number)
   [[ $packet_evm_from_block =~ ^[0-9]+$ ]] || { echo "malformed EVM block number" >&2; exit 1; }
   packet_state=$(jq -c --arg sender "$packet_sender_before" --arg escrow "$packet_escrow_before" \
     --arg recipient "$packet_recipient_before" --arg block "$packet_evm_from_block" \
@@ -1142,14 +1212,14 @@ if [[ $phase == packet-send-submitting ]]; then
   packet_evm_from_block=$(jq -r .evm_from_block <<<"$packet_state")
   packet_receiver_hex=0x$(printf %s "$packet_recipient" | od -An -tx1 | tr -d ' \n')
   packet_quote_hex=0x$(printf %s "$packet_voucher" | od -An -tx1 | tr -d ' \n')
-  packet_operand=$(packet_command cast abi-encode 'f(bytes,bytes,bytes,uint256,bytes,uint256,uint8,bytes)' \
+  packet_operand=$(packet_cast abi-encode 'f(bytes,bytes,bytes,uint256,bytes,uint256,uint8,bytes)' \
     "$packet_sender" "$packet_receiver_hex" "$packet_token" "$packet_amount" "$packet_quote_hex" \
     "$packet_amount" 0 "$packet_metadata")
   packet_timeout_timestamp=$((($(date +%s) + 3600) * 1000000000))
-  send_receipt=$(ETH_PRIVATE_KEY="$EVM_PRIVATE_KEY" packet_command cast send "$evm_zkgm_lc" \
+  send_receipt=$(ETH_PRIVATE_KEY="$EVM_PRIVATE_KEY" packet_cast send "$evm_zkgm_lc" \
     'send(uint32,uint64,uint64,bytes32,(uint8,uint8,bytes))' "$evm_channel_id" 0 \
     "$packet_timeout_timestamp" "$packet_salt" "(2,3,$packet_operand)" \
-    --rpc-url "$EVM_RPC_URL" --json)
+    --json)
   jq -e '.status=="0x1" and (.transactionHash|test("^0x[0-9a-fA-F]{64}$"))' <<<"$send_receipt" >/dev/null || {
     echo "ERC20 packet transaction failed" >&2
     exit 1
@@ -1193,19 +1263,14 @@ ack_filter=$(jq -cn --arg address "$EVM_IBC_HANDLER" --arg from "$packet_from_he
   --arg topic "$packet_ack_topic" \
   --arg channel "$packet_channel_topic" --arg hash "$packet_hash" \
   '{address:$address,fromBlock:$from,toBlock:"latest",topics:[$topic,$channel,$hash]}')
-evm_acks=$(packet_command cast rpc --rpc-url "$EVM_RPC_URL" eth_getLogs "$ack_filter")
-jq -e 'type=="array" and length==1' <<<"$evm_acks" >/dev/null || {
-  echo "EVM PacketAck count is not exactly one" >&2
-  exit 1
-}
+evm_acks=$(wait_evm_packet_ack "$ack_filter")
 packet_evm_ack_tx=$(jq -r '.[0].transactionHash' <<<"$evm_acks")
-evm_ack=$(packet_command cast decode-abi 'f()(bytes)' "$(jq -r '.[0].data' <<<"$evm_acks")" --json | jq -er '.[0]')
+evm_ack=$(packet_cast decode-abi 'f()(bytes)' "$(jq -r '.[0].data' <<<"$evm_acks")" --json | jq -er '.[0]')
 success_ack "$evm_ack" || { echo "EVM PacketAck is not success" >&2; exit 1; }
 
-packet_commitment_path=$(packet_command cast abi-encode 'f(uint256,bytes32)' 4 "$packet_hash")
-packet_commitment_key=$(packet_command cast keccak "$packet_commitment_path")
-packet_commitment=$(packet_command cast call "$EVM_IBC_HANDLER" 'commitments(bytes32)(bytes32)' \
-  "$packet_commitment_key" --rpc-url "$EVM_RPC_URL")
+packet_commitment_path=$(packet_cast abi-encode 'f(uint256,bytes32)' 4 "$packet_hash")
+packet_commitment_key=$(packet_cast keccak "$packet_commitment_path")
+packet_commitment=$(packet_cast call "$EVM_IBC_HANDLER" 'commitments(bytes32)(bytes32)' "$packet_commitment_key")
 packet_commitment_cleared=0x02$(printf '%062d' 0)
 packet_commitment=$(tr '[:upper:]' '[:lower:]' <<<"$packet_commitment")
 [[ $packet_commitment == "$packet_commitment_cleared" ]] || {

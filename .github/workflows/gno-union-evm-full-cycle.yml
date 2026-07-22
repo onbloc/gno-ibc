@@ -40,11 +40,6 @@ jobs:
           ref: 9024777562dcaa01613017cd0b958569b85e243e
           path: union-voyager
 
-      - name: Install Nix
-        uses: cachix/install-nix-action@08dcb3a5e62fa31e2da3d490afc4176ef55ecd72 # v30
-        with:
-          extra_nix_config: experimental-features = nix-command flakes
-
       - name: Install Foundry
         if: inputs.erc20_to_gno
         uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1.9.0

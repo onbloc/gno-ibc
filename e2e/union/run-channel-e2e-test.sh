@@ -215,6 +215,7 @@ FAKE
 chmod 700 "$fake"
 
 key() { printf '0x'; printf '%064d' 0; }
+rpc_auth=user:password
 cat >"$env_file" <<ENV
 UNION_CHAIN_ID=union-devnet-1
 EVM_CHAIN_ID=17000
@@ -229,9 +230,9 @@ GNO_ZKGM_PORT=gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm
 EVM_ZKGM_CONTRACT=0x5fbe74a283f7954f10aa04c2edf55578811aeb03
 GALOIS_PROVER_ENDPOINT=https://example.invalid
 UNION_RPC_URL=http://localhost:1
-EVM_RPC_URL=http://localhost:2
-GNO_RPC_URL=http://localhost:3
-GNO_TX_INDEXER_RPC_URL=http://localhost:4
+EVM_RPC_URL=http://$rpc_auth@localhost:2
+GNO_RPC_URL=http://$rpc_auth@localhost:3
+GNO_TX_INDEXER_RPC_URL=http://$rpc_auth@localhost:4
 VOYAGER_DATABASE_URL=postgres://localhost/test
 TRUSTED_MPT_PRIVATE_KEY=$(key)
 UNION_PRIVATE_KEY=$(key)
@@ -445,6 +446,8 @@ cat >"$fake_bin/cast" <<'FAKE_CAST'
 #!/usr/bin/env bash
 set -euo pipefail
 printf '%s\n' "$*" >>"$FAKE_DIR/packet-calls.log"
+[[ ${ETH_RPC_URL:-} == "$EVM_RPC_URL" ]] || { echo 'missing ETH_RPC_URL' >&2; exit 9; }
+if [[ ${FAKE_PACKET_TOOL_ERROR:-} == cast ]]; then echo "cast failed at $EVM_RPC_URL" >&2; exit 9; fi
 word() { printf '0x%064x\n' "$1"; }
 ack_word() { printf '0x%062d01\n' 0; }
 cmd=$1
@@ -499,8 +502,13 @@ case $cmd in
     fi
     ;;
   rpc)
-    tx_hash=$(word 4)
-    jq -cn --arg tx "$tx_hash" '[{transactionHash:$tx,data:"0x1234"}]'
+    if [[ ! -e $FAKE_DIR/packet-ack-polled ]]; then
+      touch "$FAKE_DIR/packet-ack-polled"
+      echo '[]'
+    else
+      tx_hash=$(word 4)
+      jq -cn --arg tx "$tx_hash" '[{transactionHash:$tx,data:"0x1234"}]'
+    fi
     ;;
   decode-abi) ack=$(ack_word); jq -cn --arg ack "$ack" '[$ack]' ;;
   *) exit 2 ;;
@@ -509,12 +517,17 @@ FAKE_CAST
 cat >"$fake_bin/gnokey" <<'FAKE_GNOKEY'
 #!/usr/bin/env bash
 set -euo pipefail
-if [[ -e $FAKE_DIR/packet-sent ]]; then echo '(1 int64)'; else echo '(0 int64)'; fi
+printf 'gnokey %s\n' "$*" >>"$FAKE_DIR/packet-calls.log"
+if [[ ${FAKE_PACKET_TOOL_ERROR:-} == gnokey ]]; then echo "gnokey failed at $GNO_RPC_URL" >&2; exit 9; fi
+if [[ -e $FAKE_DIR/packet-sent ]]; then echo "(${EVM_TEST_AMOUNT%000000000000} int64)"; else echo '(0 int64)'; fi
 FAKE_GNOKEY
 cat >"$fake_bin/curl" <<'FAKE_CURL'
 #!/usr/bin/env bash
 set -euo pipefail
-args=$*
+printf 'curl %s\n' "$*" >>"$FAKE_DIR/packet-calls.log"
+if [[ ${FAKE_PACKET_TOOL_ERROR:-} == curl ]]; then echo "curl failed at $GNO_TX_INDEXER_RPC_URL" >&2; exit 9; fi
+body=$(cat)
+args="$* $body"
 if [[ $args == *PacketRecv* ]]; then event=PacketRecv; tx=5; ack=
 else event=WriteAck; tx=5; ack=1
 fi
@@ -549,7 +562,7 @@ restore_packet_base() {
   cp "$test_dir/clients.complete" "$state"
   cp "$test_dir/connections.complete" "$connections"
   cp "$test_dir/channels.complete" "$channels"
-  rm -f "$test_dir"/packet-{mint,approve,send,sent} "$test_dir/failed-id"
+  rm -f "$test_dir"/packet-{mint,approve,send,sent,ack-polled} "$test_dir/failed-id"
   : >"$test_dir/packet-calls.log"
 }
 
@@ -566,6 +579,21 @@ if TEST_PACKET_AMOUNT=1 run_packet_runner --resume --apply --erc20-to-gno >"$tes
 fi
 grep -q 'divisible by 10\^12' "$test_dir/packet-amount.out"
 
+restore_packet_base "$test_dir/packet-overflow-artifacts"
+if TEST_PACKET_AMOUNT=9223372036854775808000000000000 \
+  run_packet_runner --resume --apply --erc20-to-gno >"$test_dir/packet-overflow.out" 2>&1; then
+  echo 'overflowing packet amount unexpectedly passed' >&2
+  exit 1
+fi
+grep -q 'must fit Gno int64' "$test_dir/packet-overflow.out"
+[[ ! -s $test_dir/packet-calls.log ]]
+
+restore_packet_base "$test_dir/packet-max-artifacts"
+TEST_PACKET_AMOUNT=9223372036854775807000000000000 \
+  run_packet_runner --resume --apply --erc20-to-gno >/dev/null
+jq -e '.phase=="packet-complete" and .packet.balance_deltas.recipient=="9223372036854775807"' \
+  "$TEST_ARTIFACT_DIR/state.json" >/dev/null
+
 restore_packet_base "$test_dir/packet-artifacts"
 run_packet_runner --resume --apply --erc20-to-gno >/dev/null
 jq -e '.phase=="packet-complete" and .packet.phase=="packet-complete" and
@@ -575,9 +603,21 @@ jq -e '.phase=="packet-complete" and .channels=={"evm":1,"gno":1} and
   .amounts.sent_18_decimals=="1000000000000"' "$TEST_ARTIFACT_DIR/packet-summary.json" >/dev/null
 grep -q 'abi-encode f(bytes,bytes,bytes,uint256,bytes,uint256,uint8,bytes)' "$test_dir/packet-calls.log"
 grep -q 'send(uint32,uint64,uint64,bytes32,(uint8,uint8,bytes)) 1 0 ' "$test_dir/packet-calls.log"
+[[ $(grep -c '^rpc eth_getLogs ' "$test_dir/packet-calls.log") -ge 2 ]]
+if grep -q "$rpc_auth" "$test_dir/packet-calls.log"; then echo 'credential leaked to packet argv log' >&2; exit 1; fi
 packet_writes=$(grep -Ec '^send .* (mint|approve|send)\(' "$test_dir/packet-calls.log")
 run_packet_runner --resume --apply --erc20-to-gno >/dev/null
 [[ $(grep -Ec '^send .* (mint|approve|send)\(' "$test_dir/packet-calls.log") == "$packet_writes" ]]
+
+for tool in cast gnokey curl; do
+  restore_packet_base "$test_dir/packet-$tool-error-artifacts"
+  if FAKE_PACKET_TOOL_ERROR=$tool run_packet_runner --resume --apply --erc20-to-gno \
+    >"$test_dir/packet-$tool-error.out" 2>&1; then
+    echo "$tool credential error unexpectedly passed" >&2
+    exit 1
+  fi
+  if grep -q "$rpc_auth" "$test_dir/packet-$tool-error.out"; then echo "$tool error leaked credentials" >&2; exit 1; fi
+done
 
 for stage in mint approve send; do
   restore_packet_base "$test_dir/packet-$stage-artifacts"

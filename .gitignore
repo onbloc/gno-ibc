@@ -50,6 +50,16 @@ go.work.sum
 /gno.land/p/aib/
 /gno.land/p/demo/
 /gno.land/p/moul/
-/gno.land/r/aib/
+/gno.land/r/aib/*
+# apps/transfer (and its test-only apps/testing fixture dependency) are
+# forked in as first-party (not vendored) so their diff is reviewable
+# directly in this repo; every ancestor dir needs its own negation for git
+# to look inside an otherwise-ignored parent.
+!/gno.land/r/aib/ibc/
+/gno.land/r/aib/ibc/*
+!/gno.land/r/aib/ibc/apps/
+/gno.land/r/aib/ibc/apps/*
+!/gno.land/r/aib/ibc/apps/transfer/
+!/gno.land/r/aib/ibc/apps/testing/
 /gno.land/r/demo/
 /gno.land/p/nt/*

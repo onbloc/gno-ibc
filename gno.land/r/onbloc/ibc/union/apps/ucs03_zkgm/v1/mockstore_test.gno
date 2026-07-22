@@ -23,7 +23,14 @@ type mockStore struct {
 	vouchers           map[string]*zkgm.Voucher
 	lockedTokenAmounts map[string]*u256.Uint
 	receivers          map[string]z.Zkgmable
+	sendCallbacks      map[string]z.SendCallback
+	pendingSendCorr    map[string]mockPendingSendCorr
 	rateLimitDisabled  bool
+}
+
+type mockPendingSendCorr struct {
+	CallerPkgPath string
+	CorrID        string
 }
 
 var _ zkgm.IStore = (*mockStore)(nil)
@@ -39,6 +46,8 @@ func newMockStore() *mockStore {
 		vouchers:           map[string]*zkgm.Voucher{},
 		lockedTokenAmounts: map[string]*u256.Uint{},
 		receivers:          map[string]z.Zkgmable{},
+		sendCallbacks:      map[string]z.SendCallback{},
+		pendingSendCorr:    map[string]mockPendingSendCorr{},
 		// Match NewStore: rate limiting is opt-in (disabled by default).
 		rateLimitDisabled: true,
 	}
@@ -145,6 +154,32 @@ func (m *mockStore) SetReceiver(_ int, rlm realm, path string, receiver z.Zkgmab
 func (m *mockStore) GetReceiver(path string) (z.Zkgmable, bool) {
 	v, ok := m.receivers[path]
 	return v, ok
+}
+
+func (m *mockStore) SetSendCallback(_ int, rlm realm, path string, cb z.SendCallback) {
+	m.sendCallbacks[path] = cb
+}
+
+func (m *mockStore) GetSendCallback(path string) (z.SendCallback, bool) {
+	v, ok := m.sendCallbacks[path]
+	return v, ok
+}
+
+func (m *mockStore) SetPendingSendCorr(_ int, rlm realm, packetHash string, callerPkgPath string, corrID string) {
+	m.pendingSendCorr[packetHash] = mockPendingSendCorr{CallerPkgPath: callerPkgPath, CorrID: corrID}
+}
+
+func (m *mockStore) GetPendingSendCorr(packetHash string) (callerPkgPath string, corrID string, found bool) {
+	v, ok := m.pendingSendCorr[packetHash]
+	if !ok {
+		return "", "", false
+	}
+
+	return v.CallerPkgPath, v.CorrID, true
+}
+
+func (m *mockStore) RemovePendingSendCorr(_ int, rlm realm, packetHash string) {
+	delete(m.pendingSendCorr, packetHash)
 }
 
 func (m *mockStore) SetRateLimitDisabled(_ int, rlm realm, disabled bool) {

@@ -19,3 +19,13 @@ func RegisterReceiver(cur realm, receiver z.Zkgmable) {
 	store.SetReceiver(0, cur, receiverPkgPath, receiver)
 	emitZkgmReceiverRegisteredEvent(receiverPkgPath)
 }
+
+// RegisterSendCallback records the calling realm as the notification target
+// for the outcome of packets it sends via SendWithCallback, keyed by its
+// package path. The impl looks it up via store.GetSendCallback when a
+// correlated outbound packet's ack/timeout arrives.
+func RegisterSendCallback(cur realm, cb z.SendCallback) {
+	callerPkgPath := cur.Previous().PkgPath()
+	store.SetSendCallback(0, cur, callerPkgPath, cb)
+	emitZkgmSendCallbackRegisteredEvent(callerPkgPath)
+}

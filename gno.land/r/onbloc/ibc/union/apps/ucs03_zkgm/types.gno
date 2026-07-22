@@ -84,6 +84,13 @@ type IStore interface {
 	SetReceiver(_ int, rlm realm, path string, receiver z.Zkgmable)
 	GetReceiver(path string) (z.Zkgmable, bool)
 
+	SetSendCallback(_ int, rlm realm, path string, cb z.SendCallback)
+	GetSendCallback(path string) (z.SendCallback, bool)
+
+	SetPendingSendCorr(_ int, rlm realm, packetHash string, callerPkgPath string, corrID string)
+	GetPendingSendCorr(packetHash string) (callerPkgPath string, corrID string, found bool)
+	RemovePendingSendCorr(_ int, rlm realm, packetHash string)
+
 	SetRateLimitDisabled(_ int, rlm realm, disabled bool)
 	RateLimitDisabled() bool
 }

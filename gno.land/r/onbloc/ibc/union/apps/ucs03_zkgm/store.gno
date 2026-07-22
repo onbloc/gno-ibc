@@ -83,15 +83,16 @@ type Store struct {
 	//
 	// Invariant: exactly one AddNativeEscrowTotal call (v1's localTokenEscrow,
 	// on ESCROW/INITIALIZE send) is matched by exactly one settlement that
-	// subtracts the same amount back out — fill-success, refund-on-failure/
-	// timeout, burn-address settlement, or a later UNESCROW recv. Any new
-	// native-coin settlement path must call SubNativeEscrowTotal for the same
-	// amount, or this total drifts upward forever. AddNativeEscrowTotal/
-	// SubNativeEscrowTotal deliberately panic on overflow/underflow instead of
-	// clamping — since every caller only invokes them after its real coin
-	// movement already succeeded, a mismatch here means a missing/duplicated
-	// call site, and it should fail loudly during development rather than
-	// silently drift.
+	// subtracts the same amount back out — market-maker fill settlement,
+	// refund-on-failure/timeout, burn-address settlement, or a later UNESCROW
+	// recv. A protocol-fill ack is a no-op here: the escrow stays outstanding
+	// until one of those settlements actually runs. Any new native-coin
+	// settlement path must call SubNativeEscrowTotal for the same amount, or
+	// this total drifts upward forever. AddNativeEscrowTotal/SubNativeEscrowTotal
+	// deliberately panic on overflow/underflow instead of clamping — since
+	// every caller only invokes them after its real coin movement already
+	// succeeded, a mismatch here means a missing/duplicated call site, and it
+	// should fail loudly during development rather than silently drift.
 	nativeEscrowTotal *bptree.BPTree // denom -> *u256.Uint
 	rateLimitDisabled bool
 }

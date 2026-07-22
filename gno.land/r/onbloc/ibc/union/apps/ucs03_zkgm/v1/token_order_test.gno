@@ -770,6 +770,7 @@ func TestTokenOrderExecuteUnescrowChannelBalanceUnderflow(cur realm, t *testing.
 }
 
 func TestTokenOrderExecuteUnescrowNativeFeeDistribution(cur realm, t *testing.T) {
+	testStore = newMockStore()
 	v := newTestImpl()
 
 	const destChan = types.ChannelId(41)
@@ -789,12 +790,6 @@ func TestTokenOrderExecuteUnescrowNativeFeeDistribution(cur realm, t *testing.T)
 	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
 	key := ChannelBalanceKeyV2(destChan, u256.Zero(), quoteToken, baseToken)
 	testStore.SetChannelBalanceV2(0, cur, key, order.BaseAmount)
-	// testStore is shared across the package's tests, so compare against the
-	// pre-seed baseline rather than assuming this denom starts at zero.
-	escrowBefore := u256.Zero()
-	if v, ok := testStore.GetNativeEscrowTotal(string(quoteToken)); ok {
-		escrowBefore = escrowBefore.Set(v)
-	}
 	// Seed as if a prior ESCROW already put this under custody; executeTokenOrderV2
 	// below does the actual SubNativeEscrowTotal we're testing.
 	testStore.AddNativeEscrowTotal(0, cur, string(quoteToken), order.BaseAmount)
@@ -811,10 +806,10 @@ func TestTokenOrderExecuteUnescrowNativeFeeDistribution(cur realm, t *testing.T)
 	uassert.True(t, ok)
 	uassert.True(t, balance.IsZero())
 
-	// Both unescrow legs (receiver + relayer fee) subtracted from the total,
-	// back to baseline.
-	escrowAfter, _ := testStore.GetNativeEscrowTotal(string(quoteToken))
-	uassert.Equal(t, escrowBefore.ToString(), escrowAfter.ToString())
+	// Both unescrow legs (receiver + relayer fee) subtracted from the total.
+	nativeEscrow, ok := testStore.GetNativeEscrowTotal(string(quoteToken))
+	uassert.True(t, ok)
+	uassert.True(t, nativeEscrow.IsZero())
 }
 
 func TestTokenOrderExecuteEscrowQuoteDenomMismatchFallsBackToMarketMaker(cur realm, t *testing.T) {
@@ -1198,23 +1193,25 @@ func TestIsZeroImage(t *testing.T) {
 
 func TestLocalTokenEscrow(cur realm, t *testing.T) {
 	cases := []struct {
-		name          string
-		denom         string
-		sender        address
-		funds         *funds
-		seedSymbol    string
-		amount        *u256.Uint
-		wantErr       string
-		wantFundsLeft bool
-		wantEscrowBal int64
+		name             string
+		denom            string
+		sender           address
+		funds            *funds
+		seedSymbol       string
+		amount           *u256.Uint
+		wantErr          string
+		wantFundsLeft    bool
+		wantEscrowBal    int64
+		wantNativeEscrow bool
 	}{
 		{
-			name:          "native funds deduct",
-			denom:         "ugnot",
-			sender:        testAddress("native-sender"),
-			funds:         newFunds(chain.NewCoins(chain.NewCoin("ugnot", 10))),
-			amount:        u256.NewUint(4),
-			wantFundsLeft: true,
+			name:             "native funds deduct",
+			denom:            "ugnot",
+			sender:           testAddress("native-sender"),
+			funds:            newFunds(chain.NewCoins(chain.NewCoin("ugnot", 10))),
+			amount:           u256.NewUint(4),
+			wantFundsLeft:    true,
+			wantNativeEscrow: true,
 		},
 		{
 			name:    "native insufficient funds",
@@ -1263,6 +1260,12 @@ func TestLocalTokenEscrow(cur realm, t *testing.T) {
 				uassert.Equal(t, tc.wantEscrowBal, voucherBalanceOf(tc.denom, cur.Address()))
 			} else {
 				uassert.Equal(t, tc.wantFundsLeft, !tc.funds.isEmpty())
+			}
+
+			if tc.wantNativeEscrow {
+				nativeEscrow, ok := testStore.GetNativeEscrowTotal(tc.denom)
+				uassert.True(t, ok)
+				uassert.True(t, nativeEscrow.Eq(tc.amount))
 			}
 		})
 	}

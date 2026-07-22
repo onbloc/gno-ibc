@@ -145,16 +145,26 @@ func (m *mockStore) AddNativeEscrowTotal(_ int, rlm realm, denom string, amount 
 	if cur, ok := m.nativeEscrowTotal[denom]; ok {
 		total.Set(cur)
 	}
-	total.Add(total, amount)
+
+	total, overflow := u256.Zero().AddOverflow(total, amount)
+	if overflow {
+		panic(zkgm.ErrNativeEscrowOverflow)
+	}
+
 	m.nativeEscrowTotal[denom] = total
 }
 
 func (m *mockStore) SubNativeEscrowTotal(_ int, rlm realm, denom string, amount *u256.Uint) {
 	cur, ok := m.nativeEscrowTotal[denom]
 	if !ok || cur.Cmp(amount) < 0 {
-		panic("mockStore: native escrow total underflow")
+		panic(zkgm.ErrNativeEscrowUnderflow)
 	}
-	total := u256.Zero().Sub(cur, amount)
+
+	total, underflow := u256.Zero().SubOverflow(cur, amount)
+	if underflow {
+		panic(zkgm.ErrNativeEscrowUnderflow)
+	}
+
 	m.nativeEscrowTotal[denom] = total
 }
 

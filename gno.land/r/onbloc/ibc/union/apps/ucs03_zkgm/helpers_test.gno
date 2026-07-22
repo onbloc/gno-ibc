@@ -46,6 +46,8 @@ type dummyImpl struct {
 	tokenBucketErr       error
 	channelBalance       *u256.Uint
 	channelBalanceErr    error
+	nativeEscrowTotal    *u256.Uint
+	nativeEscrowTotalErr error
 	lastBalanceChannelId types.ChannelId
 	lastBalancePath      *u256.Uint
 	lastBalanceBaseToken string
@@ -141,6 +143,10 @@ func (d *dummyImpl) GetChannelBalanceV2(channelId types.ChannelId, path *u256.Ui
 	d.lastBalanceQuote = quoteToken
 
 	return d.channelBalance, d.channelBalanceErr
+}
+
+func (d *dummyImpl) GetNativeEscrowTotal(denom string) (*u256.Uint, error) {
+	return d.nativeEscrowTotal, d.nativeEscrowTotalErr
 }
 
 // resetZkgmForTest returns the proxy package state to a clean baseline. The

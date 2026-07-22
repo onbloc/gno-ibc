@@ -78,7 +78,22 @@ type Store struct {
 	// as opposed to vouchers, which zkgm mints/burns directly.
 	lockedTokenAmounts *bptree.BPTree // denom -> *u256.Uint (permanently locked base token)
 	receivers          *bptree.BPTree // pkgPath -> z.Zkgmable
-	rateLimitDisabled  bool
+	// nativeEscrowTotal tracks total in-flight native coin per denom,
+	// denom-keyed so it reads as one value instead of a per-channel sum.
+	//
+	// Invariant: exactly one AddNativeEscrowTotal call (v1's localTokenEscrow,
+	// on ESCROW/INITIALIZE send) is matched by exactly one settlement that
+	// subtracts the same amount back out — fill-success, refund-on-failure/
+	// timeout, burn-address settlement, or a later UNESCROW recv. Any new
+	// native-coin settlement path must call SubNativeEscrowTotal for the same
+	// amount, or this total drifts upward forever. AddNativeEscrowTotal/
+	// SubNativeEscrowTotal deliberately panic on overflow/underflow instead of
+	// clamping — since every caller only invokes them after its real coin
+	// movement already succeeded, a mismatch here means a missing/duplicated
+	// call site, and it should fail loudly during development rather than
+	// silently drift.
+	nativeEscrowTotal *bptree.BPTree // denom -> *u256.Uint
+	rateLimitDisabled bool
 }
 
 func NewStore() *Store {
@@ -92,6 +107,7 @@ func NewStore() *Store {
 		vouchers:           bptree.NewBPTree32(),
 		lockedTokenAmounts: bptree.NewBPTree32(),
 		receivers:          bptree.NewBPTree32(),
+		nativeEscrowTotal:  bptree.NewBPTree32(),
 		// Rate limiting is opt-in: enabled per-denom by an admin who first
 		// configures a token bucket (see SetBucketConfig). With it enabled, a denom
 		// without a bucket is rejected (union TokenBucketIsAbsent), so it must stay
@@ -287,6 +303,60 @@ func (s *Store) GetLockedTokenAmount(denom string) (*u256.Uint, bool) {
 	}
 
 	return lockedTokenAmount, true
+}
+
+// AddNativeEscrowTotal increases the tracked native custody for denom.
+func (s *Store) AddNativeEscrowTotal(_ int, rlm realm, denom string, amount *u256.Uint) {
+	assertIsRlmCurrent(0, rlm)
+
+	total := u256.Zero()
+	if cur, ok := s.GetNativeEscrowTotal(denom); ok && cur != nil {
+		total = u256.Zero().Set(cur)
+	}
+
+	total, overflow := u256.Zero().AddOverflow(total, amount)
+	if overflow {
+		panic(ErrNativeEscrowOverflow)
+	}
+
+	s.nativeEscrowTotal.Set(denom, total.Clone())
+}
+
+// SubNativeEscrowTotal decreases the tracked native custody for denom.
+// Panics on underflow (release without a matching prior escrow). Safe without
+// a migration/lazy-init guard: store is proxy-owned and built once by this
+// package's own init() (NewStore), which only (re-)runs on a fresh publish of
+// this proxy — UpdateImpl (upgrade.gno) reuses that same store, never rebuilds it.
+func (s *Store) SubNativeEscrowTotal(_ int, rlm realm, denom string, amount *u256.Uint) {
+	assertIsRlmCurrent(0, rlm)
+
+	cur, ok := s.GetNativeEscrowTotal(denom)
+	if !ok || cur == nil || cur.Cmp(amount) < 0 {
+		panic(ErrNativeEscrowUnderflow)
+	}
+
+	total, underflow := u256.Zero().SubOverflow(cur, amount)
+	if underflow {
+		panic(ErrNativeEscrowUnderflow)
+	}
+
+	s.nativeEscrowTotal.Set(denom, total.Clone())
+}
+
+// GetNativeEscrowTotal returns the tracked escrow total for denom, or
+// (nil, false) if none has ever been escrowed.
+func (s *Store) GetNativeEscrowTotal(denom string) (*u256.Uint, bool) {
+	v := s.nativeEscrowTotal.Get(denom)
+	if v == nil {
+		return nil, false
+	}
+
+	total, ok := v.(*u256.Uint)
+	if !ok {
+		panic(ErrInterfaceConversion)
+	}
+
+	return total, true
 }
 
 // SetReceiver registers a Zkgmable callback target at a package path.

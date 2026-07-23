@@ -215,81 +215,39 @@ func readOnlyResumeCommand(command process.Command) bool {
 }
 
 type resumeExecutor struct {
-	commands       []process.Command
-	cancel         context.CancelFunc
-	stopContextErr error
-	missingKind    string
-	broadcasts     int
+	dockerTestRuntime
+	commands    []process.Command
+	cancel      context.CancelFunc
+	missingKind string
+	broadcasts  int
 }
 
 func (r *resumeExecutor) Run(ctx context.Context, command process.Command) (process.Result, error) {
 	r.commands = append(r.commands, command)
-	if command.Name == "git" {
-		if slices.Contains(command.Args, "rev-parse") {
-			return process.Result{Stdout: []byte(config.VoyagerRevision)}, nil
-		}
-		return process.Result{}, nil
-	}
-	if command.Name != "docker" || len(command.Args) == 0 {
-		return process.Result{}, errors.New("unexpected command")
-	}
-	switch command.Args[0] {
-	case "stop":
-		r.stopContextErr = ctx.Err()
-		return process.Result{}, nil
-	case "build":
-		iidFile := argumentAfter(command.Args, "--iidfile")
-		if err := os.WriteFile(iidFile, []byte(testImageID+"\n"), 0o600); err != nil {
-			return process.Result{}, err
-		}
-		return process.Result{}, nil
-	case "rm":
-		return process.Result{}, nil
-	case "image":
-		if strings.Contains(strings.Join(command.Args, " "), "Entrypoint") {
-			return process.Result{Stdout: []byte("/output/voyager")}, nil
-		}
-		return process.Result{Stdout: []byte(config.VoyagerRevision)}, nil
-	case "ps":
-		if len(r.commands) > 6 {
-			return process.Result{Stdout: []byte("union-channel-e2e-go")}, nil
-		}
-		return process.Result{}, nil
-	case "run":
-		return process.Result{Stdout: []byte("container-id")}, nil
-	case "inspect":
-		name := command.Args[len(command.Args)-1]
-		return process.Result{Stdout: []byte(strings.TrimPrefix(name, "union-channel-e2e-"))}, nil
-	case "exec":
-		return r.voyagerResponse(command.Args)
-	default:
-		return process.Result{}, errors.New("unexpected Docker command")
-	}
+	return r.dockerTestRuntime.run(ctx, command, r.voyagerResponse)
 }
-
-const testImageID = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 func (r *resumeExecutor) voyagerResponse(args []string) (process.Result, error) {
 	joined := strings.Join(args, " ")
 	switch {
-	case strings.Contains(joined, " rpc info"):
+	case joined == "rpc info":
 		return process.Result{Stdout: []byte("{}")}, nil
-	case strings.Contains(joined, " q e "):
+	case strings.HasPrefix(joined, "q e "):
 		r.broadcasts++
 		return process.Result{}, nil
-	case strings.Contains(joined, " queue query-failed"):
+	case strings.HasPrefix(joined, "queue query-failed"):
 		if r.cancel != nil {
 			r.cancel()
 		}
 		return process.Result{Stdout: []byte(`[{"id":7}]`)}, nil
-	case strings.Contains(joined, " rpc client-info "):
+	case strings.HasPrefix(joined, "rpc client-info "):
 		chain, id := trailingChainID(args)
 		clientType, ibc := expectedClient(chain, id)
 		return process.Result{Stdout: []byte(`{"client_type":"` + clientType + `","ibc_interface":"` + ibc + `"}`)}, nil
-	case strings.Contains(joined, " rpc client-meta "):
+	case strings.HasPrefix(joined, "rpc client-meta "):
 		chain, id := trailingChainID(args)
 		return process.Result{Stdout: []byte(`{"counterparty_chain_id":"` + counterparty(chain, id) + `","counterparty_height":"1"}`)}, nil
-	case strings.Contains(joined, " rpc client-state "):
+	case strings.HasPrefix(joined, "rpc client-state "):
 		chain, id := trailingChainID(args[:len(args)-1])
 		if chain == "dev.ibc" && id == 5 {
 			return process.Result{Stdout: []byte(`{"state":{"l1_client_id":1,"l2_client_id":3,"l2_chain_id":"17000"}}`)}, nil

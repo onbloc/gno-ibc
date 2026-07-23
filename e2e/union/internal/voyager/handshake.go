@@ -12,22 +12,21 @@ import (
 
 // NextConnectionID returns the first unallocated connection ID.
 func (r *Runtime) NextConnectionID(ctx context.Context, chain string) (int64, error) {
-	return r.nextIBCID(ctx, chain, "connection")
+	for id := int64(1); ; id++ {
+		_, err := r.connectionState(ctx, chain, id)
+		if errors.Is(err, ErrNotFound) {
+			return id, nil
+		}
+		if err != nil {
+			return 0, err
+		}
+	}
 }
 
 // NextChannelID returns the first unallocated channel ID.
 func (r *Runtime) NextChannelID(ctx context.Context, chain string) (int64, error) {
-	return r.nextIBCID(ctx, chain, "channel")
-}
-
-func (r *Runtime) nextIBCID(ctx context.Context, chain, kind string) (int64, error) {
 	for id := int64(1); ; id++ {
-		var err error
-		if kind == "connection" {
-			_, err = r.connectionState(ctx, chain, id)
-		} else {
-			_, err = r.channelState(ctx, chain, id)
-		}
+		_, err := r.channelState(ctx, chain, id)
 		if errors.Is(err, ErrNotFound) {
 			return id, nil
 		}

@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/process"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/state"
 )
@@ -78,7 +77,11 @@ func TestBootstrapCheckpointFailureRunsNoVoyagerWrites(t *testing.T) {
 	cfg.CleanupTimeout = 2 * time.Second
 	recorder := newFreshExecutor(cfg.StateFile)
 	old := saveBootstrap
-	saveBootstrap = func(string, state.State) error { return errors.New("checkpoint failed") }
+	startedAtCheckpoint := false
+	saveBootstrap = func(string, state.State) error {
+		startedAtCheckpoint = recorder.container
+		return errors.New("checkpoint failed")
+	}
 	t.Cleanup(func() { saveBootstrap = old })
 	runner, err := newRunner(cfg, recorder, Options{Apply: true})
 	if err != nil {
@@ -90,6 +93,29 @@ func TestBootstrapCheckpointFailureRunsNoVoyagerWrites(t *testing.T) {
 	if recorder.writes != 0 {
 		t.Fatalf("Voyager writes = %d, want zero", recorder.writes)
 	}
+	if !startedAtCheckpoint {
+		t.Fatal("bootstrap checkpoint was attempted before Voyager started")
+	}
+}
+
+func TestVoyagerStartFailureDoesNotCreateBootstrapCheckpoint(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.CommandTimeout = time.Second
+	cfg.ScenarioTimeout = time.Second
+	cfg.VoyagerStopTimeout = time.Second
+	cfg.CleanupTimeout = 2 * time.Second
+	recorder := newFreshExecutor(cfg.StateFile)
+	recorder.startErr = errors.New("start failed")
+	runner, err := newRunner(cfg, recorder, Options{Apply: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := runner.Run(context.Background()); err == nil {
+		t.Fatal("Voyager start failure unexpectedly passed")
+	}
+	if _, err := os.Stat(runner.bootstrapFile()); !os.IsNotExist(err) {
+		t.Fatalf("bootstrap checkpoint exists after Voyager start failure: %v", err)
+	}
 }
 
 type freshClient struct {
@@ -97,7 +123,7 @@ type freshClient struct {
 }
 
 type freshExecutor struct {
-	container         bool
+	dockerTestRuntime
 	connectionOpen    bool
 	channelOpen       bool
 	stateFile         string
@@ -113,52 +139,8 @@ func newFreshExecutor(stateFile string) *freshExecutor {
 	return &freshExecutor{stateFile: stateFile, clients: make(map[string]map[int64]freshClient)}
 }
 
-func (e *freshExecutor) Run(_ context.Context, command process.Command) (process.Result, error) {
-	if command.Name == "git" {
-		if slices.Contains(command.Args, "rev-parse") {
-			return process.Result{Stdout: []byte(config.VoyagerRevision)}, nil
-		}
-		return process.Result{}, nil
-	}
-	if command.Name != "docker" || len(command.Args) == 0 {
-		return process.Result{}, errors.New("unexpected command")
-	}
-	switch command.Args[0] {
-	case "build":
-		if err := os.WriteFile(argumentAfter(command.Args, "--iidfile"), []byte(testImageID+"\n"), 0o600); err != nil {
-			return process.Result{}, err
-		}
-		return process.Result{}, nil
-	case "image":
-		if strings.Contains(strings.Join(command.Args, " "), "Entrypoint") {
-			return process.Result{Stdout: []byte("/output/voyager")}, nil
-		}
-		return process.Result{Stdout: []byte(config.VoyagerRevision)}, nil
-	case "ps":
-		if e.container {
-			return process.Result{Stdout: []byte("union-channel-e2e-running")}, nil
-		}
-		return process.Result{}, nil
-	case "run":
-		e.container = true
-		return process.Result{Stdout: []byte("container-id")}, nil
-	case "inspect":
-		joined := strings.Join(command.Args, " ")
-		if strings.Contains(joined, "io.onbloc.gno-ibc.e2e.run") {
-			name := command.Args[len(command.Args)-1]
-			return process.Result{Stdout: []byte(strings.TrimPrefix(name, "union-channel-e2e-"))}, nil
-		}
-		return process.Result{Stdout: []byte("true")}, nil
-	case "stop":
-		return process.Result{}, nil
-	case "rm":
-		e.container = false
-		return process.Result{}, nil
-	case "exec":
-		return e.voyager(command.Args[7:])
-	default:
-		return process.Result{}, errors.New("unexpected Docker command")
-	}
+func (e *freshExecutor) Run(ctx context.Context, command process.Command) (process.Result, error) {
+	return e.dockerTestRuntime.run(ctx, command, e.voyager)
 }
 
 func (e *freshExecutor) voyager(args []string) (process.Result, error) {

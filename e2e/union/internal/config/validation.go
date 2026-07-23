@@ -95,7 +95,7 @@ func (c Config) validate(packet bool) error {
 	if !gnoAddressPattern.MatchString(c.GnoRecipient) {
 		return fmt.Errorf("GNO_RECIPIENT must be a Gno bech32 address")
 	}
-	if _, err := packetLedgerAmount(c.EVMTestAmount); err != nil {
+	if _, err := PacketLedgerAmount(c.EVMTestAmount); err != nil {
 		return err
 	}
 	for _, item := range []struct {
@@ -113,7 +113,8 @@ func (c Config) validate(packet bool) error {
 	return nil
 }
 
-func packetLedgerAmount(amount string) (int64, error) {
+// PacketLedgerAmount converts a validated 18-decimal amount to Gno's 6 decimals.
+func PacketLedgerAmount(amount string) (int64, error) {
 	if len(amount) <= 12 || strings.Trim(amount, "0123456789") != "" ||
 		amount[0] == '0' || !strings.HasSuffix(amount, "000000000000") {
 		return 0, fmt.Errorf("EVM_TEST_AMOUNT must be positive and divisible by 10^12")

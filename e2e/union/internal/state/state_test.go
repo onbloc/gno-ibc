@@ -1,6 +1,8 @@
 package state_test
 
 import (
+	"bytes"
+	"encoding/base64"
 	"os"
 	"path/filepath"
 	"strings"
@@ -94,6 +96,44 @@ func TestValidateRequiresSavedEVMClientsInTheirAllowlists(t *testing.T) {
 	}
 }
 
+func TestValidateCompletedPacketOutcome(t *testing.T) {
+	saved, expected := completedPacketState()
+	if err := saved.Validate(expected); err != nil {
+		t.Fatal(err)
+	}
+	tests := []struct {
+		name   string
+		change func(*state.Packet)
+	}{
+		{"non-Gno transaction hash", func(packet *state.Packet) {
+			packet.GnoReceiveTx = "0x" + strings.Repeat("1", 64)
+			packet.GnoWriteAckTx = packet.GnoReceiveTx
+		}},
+		{"different WriteAck transaction", func(packet *state.Packet) {
+			packet.GnoWriteAckTx = base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32))
+		}},
+		{"malformed balance", func(packet *state.Packet) {
+			packet.BalanceDeltas.Sender = "01"
+		}},
+		{"failed-work mismatch", func(packet *state.Packet) {
+			final := int64(1)
+			packet.FailedWorkFinal = &final
+		}},
+		{"failure without refund", func(packet *state.Packet) {
+			packet.Outcome = state.PacketOutcomeFailure
+		}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			saved, expected := completedPacketState()
+			tc.change(saved.Packet)
+			if err := saved.Validate(expected); err == nil {
+				t.Fatal("invalid completed packet unexpectedly accepted")
+			}
+		})
+	}
+}
+
 func TestLoadRejectsTrailingJSON(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
 	if err := os.WriteFile(path, []byte(`{"phase":"complete"} {}`), 0o600); err != nil {
@@ -175,4 +215,36 @@ func completeState() (state.State, state.Expected) {
 		Connections: &state.HandshakeIDs{Gno: 1, EVM: 1},
 		Channels:    &state.HandshakeIDs{Gno: 1, EVM: 1},
 	}, expected
+}
+
+func completedPacketState() (state.State, state.Expected) {
+	saved, expected := completeState()
+	expected.PacketToken = "0x6666666666666666666666666666666666666666"
+	expected.PacketRecipient = "g1" + strings.Repeat("a", 38)
+	expected.PacketAmount = "1000000000000"
+	expected.PacketLedgerAmount = 1
+	block := uint64(10)
+	final := int64(0)
+	gnoTx := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	saved.Phase = state.PhasePacketComplete
+	saved.Packet = &state.Packet{
+		Phase: state.PhasePacketComplete,
+		Token: expected.PacketToken, Sender: "0x7777777777777777777777777777777777777777",
+		Recipient: expected.PacketRecipient, Amount: expected.PacketAmount,
+		Voucher: "ibc/" + strings.Repeat("8", 40),
+		Salt:    "0x" + strings.Repeat("9", 64), Tag: strings.Repeat("9", 64),
+		FailedWorkBaseline: 0,
+		MintTx:             "0x" + strings.Repeat("a", 64), ApproveTx: "0x" + strings.Repeat("b", 64),
+		BalancesBefore: &state.Balances{Sender: "2000000000000", Escrow: "0", Recipient: "0"},
+		EVMFromBlock:   &block, SendTx: "0x" + strings.Repeat("c", 64),
+		PacketHash:   "0x" + strings.Repeat("d", 64),
+		GnoReceiveTx: gnoTx, GnoWriteAckTx: gnoTx,
+		EVMAckTx: "0x" + strings.Repeat("e", 64),
+		Outcome:  state.PacketOutcomeSuccess, CommitmentCleared: true,
+		BalanceDeltas: &state.Balances{
+			Sender: "1000000000000", Escrow: "1000000000000", Recipient: "1",
+		},
+		FailedWorkFinal: &final,
+	}
+	return saved, expected
 }

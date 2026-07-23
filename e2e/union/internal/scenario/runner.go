@@ -9,10 +9,13 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	osexec "os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
+	"github.com/onbloc/gno-ibc/e2e/union/internal/evm"
+	"github.com/onbloc/gno-ibc/e2e/union/internal/gno"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/process"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/state"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/voyager"
@@ -30,6 +33,8 @@ type Runner struct {
 	cfg     config.Config
 	exec    process.Executor
 	voyager *voyager.Runtime
+	evm     *evm.Client
+	gno     *gno.Client
 	options Options
 	current state.State
 
@@ -54,6 +59,8 @@ func newRunner(cfg config.Config, executor process.Executor, options Options) (*
 	runner := &Runner{
 		cfg: cfg, exec: executor, options: options,
 		voyager: voyager.NewWithExecutor(cfg, executor, os.Stderr),
+		evm:     evm.New(cfg, executor),
+		gno:     gno.New(cfg, executor),
 		current: newState(cfg),
 	}
 	if !options.Resume {
@@ -70,7 +77,10 @@ func newRunner(cfg config.Config, executor process.Executor, options Options) (*
 	case state.PhaseConnectionSubmitting, state.Phase("connection-prepared"),
 		state.PhaseConnectionSubmitted, state.PhaseChannelSubmitting,
 		state.Phase("channel-prepared"), state.PhaseChannelSubmitted,
-		state.PhaseComplete:
+		state.PhaseComplete, state.PhasePacketMintSubmitting,
+		state.PhasePacketMintSubmitted, state.PhasePacketApproveSubmitting,
+		state.PhasePacketApproveSubmitted, state.PhasePacketSendSubmitting,
+		state.PhasePacketSendSubmitted, state.PhasePacketComplete:
 	default:
 		return nil, fmt.Errorf("resume phase %s is not implemented", saved.Phase)
 	}
@@ -151,6 +161,13 @@ func (r *Runner) preflight(ctx context.Context) ([]byte, error) {
 	if len(bytes.TrimSpace(result.Stdout)) != 0 {
 		return nil, fmt.Errorf("union-voyager checkout must be clean")
 	}
+	if r.options.ERC20ToGno {
+		for _, name := range []string{"cast", "gnokey"} {
+			if _, err := osexec.LookPath(name); err != nil {
+				return nil, fmt.Errorf("missing required packet command: %s", name)
+			}
+		}
+	}
 	return rendered, nil
 }
 
@@ -176,6 +193,7 @@ func (r *Runner) execute(ctx context.Context, command process.Command) (process.
 }
 
 func expectedState(cfg config.Config) state.Expected {
+	packetLedgerAmount, _ := config.PacketLedgerAmount(cfg.EVMTestAmount)
 	return state.Expected{
 		VoyagerRevision:     cfg.UnionVoyagerRevision,
 		Chains:              state.Chains{Union: cfg.UnionChainID, EVM: cfg.EVMChainID, Gno: cfg.GnoChainID},
@@ -187,6 +205,7 @@ func expectedState(cfg config.Config) state.Expected {
 		PacketToken:         cfg.EVMTestERC20,
 		PacketRecipient:     cfg.GnoRecipient,
 		PacketAmount:        cfg.EVMTestAmount,
+		PacketLedgerAmount:  packetLedgerAmount,
 	}
 }
 

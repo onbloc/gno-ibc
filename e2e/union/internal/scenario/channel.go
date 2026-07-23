@@ -2,6 +2,7 @@ package scenario
 
 import (
 	"context"
+	"strings"
 
 	"github.com/onbloc/gno-ibc/e2e/union/internal/state"
 )
@@ -11,7 +12,8 @@ var saveBootstrap = state.SaveBootstrap
 // runChannelScenario establishes and verifies S1. Resume skips bootstrap and
 // never repeats an ambiguous write.
 func (r *Runner) runChannelScenario(ctx context.Context) error {
-	if r.options.Resume && r.current.Phase == state.PhaseComplete {
+	if r.options.Resume && (r.current.Phase == state.PhaseComplete ||
+		strings.HasPrefix(string(r.current.Phase), "packet-")) {
 		if err := r.verifyClientRelations(ctx); err != nil {
 			return err
 		}

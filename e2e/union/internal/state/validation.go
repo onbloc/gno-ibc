@@ -1,7 +1,9 @@
 package state
 
 import (
+	"encoding/base64"
 	"fmt"
+	"math/big"
 	"regexp"
 	"slices"
 	"strconv"
@@ -60,9 +62,9 @@ func (s State) Validate(expected Expected) error {
 		requireConnections, requireChannels = true, true
 	case PhaseFailedWork:
 		return fmt.Errorf("resume state is terminal failed-work")
-	case phasePacketMintSubmitting, phasePacketMintSubmitted,
-		phasePacketApproveSubmitting, phasePacketApproveSubmitted,
-		phasePacketSendSubmitting, phasePacketSendSubmitted, phasePacketComplete:
+	case PhasePacketMintSubmitting, PhasePacketMintSubmitted,
+		PhasePacketApproveSubmitting, PhasePacketApproveSubmitted,
+		PhasePacketSendSubmitting, PhasePacketSendSubmitted, PhasePacketComplete:
 		requireConnections, requireChannels = true, true
 		if err := s.validatePacket(expected); err != nil {
 			return err
@@ -129,15 +131,18 @@ func (s State) validatePacket(expected Expected) error {
 		packet.Phase != s.Phase {
 		return fmt.Errorf("saved packet state does not match packet settings")
 	}
-	requireMint := s.Phase != phasePacketMintSubmitting
-	requireApprove := s.Phase == phasePacketApproveSubmitted ||
-		s.Phase == phasePacketSendSubmitting ||
-		s.Phase == phasePacketSendSubmitted ||
-		s.Phase == phasePacketComplete
-	requireSendIntent := s.Phase == phasePacketSendSubmitting ||
-		s.Phase == phasePacketSendSubmitted ||
-		s.Phase == phasePacketComplete
-	requireSend := s.Phase == phasePacketSendSubmitted || s.Phase == phasePacketComplete
+	if s.FailedWork.Final == nil || packet.FailedWorkBaseline != *s.FailedWork.Final {
+		return fmt.Errorf("saved packet state has inconsistent failed-work baseline")
+	}
+	requireMint := s.Phase != PhasePacketMintSubmitting
+	requireApprove := s.Phase == PhasePacketApproveSubmitted ||
+		s.Phase == PhasePacketSendSubmitting ||
+		s.Phase == PhasePacketSendSubmitted ||
+		s.Phase == PhasePacketComplete
+	requireSendIntent := s.Phase == PhasePacketSendSubmitting ||
+		s.Phase == PhasePacketSendSubmitted ||
+		s.Phase == PhasePacketComplete
+	requireSend := s.Phase == PhasePacketSendSubmitted || s.Phase == PhasePacketComplete
 	if requireMint && !hashPattern.MatchString(packet.MintTx) {
 		return fmt.Errorf("saved packet state has no mint transaction")
 	}
@@ -151,14 +156,57 @@ func (s State) validatePacket(expected Expected) error {
 		!hashPattern.MatchString(packet.PacketHash)) {
 		return fmt.Errorf("saved packet state has no send transaction")
 	}
-	if s.Phase == phasePacketComplete &&
-		(!hashPattern.MatchString(packet.GnoReceiveTx) ||
-			!hashPattern.MatchString(packet.EVMAckTx) ||
-			packet.BalanceDeltas == nil ||
-			packet.FailedWorkFinal == nil) {
-		return fmt.Errorf("completed packet state is incomplete")
+	if s.Phase == PhasePacketComplete {
+		return s.validateCompletedPacket(expected)
 	}
 	return nil
+}
+
+func (s State) validateCompletedPacket(expected Expected) error {
+	packet := s.Packet
+	if !validGnoTxHash(packet.GnoReceiveTx) ||
+		packet.GnoWriteAckTx != packet.GnoReceiveTx ||
+		!hashPattern.MatchString(packet.EVMAckTx) ||
+		!packet.CommitmentCleared ||
+		packet.BalanceDeltas == nil ||
+		packet.FailedWorkFinal == nil ||
+		*packet.FailedWorkFinal != packet.FailedWorkBaseline {
+		return fmt.Errorf("completed packet state is incomplete")
+	}
+	for _, value := range []string{
+		packet.BalancesBefore.Sender, packet.BalancesBefore.Escrow,
+		packet.BalancesBefore.Recipient, packet.BalanceDeltas.Sender,
+		packet.BalanceDeltas.Escrow, packet.BalanceDeltas.Recipient,
+	} {
+		if !nonnegativeDecimal(value) {
+			return fmt.Errorf("completed packet state has malformed balances")
+		}
+	}
+	switch packet.Outcome {
+	case PacketOutcomeSuccess:
+		if packet.BalanceDeltas.Sender != packet.Amount ||
+			packet.BalanceDeltas.Escrow != packet.Amount ||
+			packet.BalanceDeltas.Recipient != strconv.FormatInt(expected.PacketLedgerAmount, 10) {
+			return fmt.Errorf("completed packet success deltas do not match")
+		}
+	case PacketOutcomeFailure:
+		if *packet.BalanceDeltas != (Balances{Sender: "0", Escrow: "0", Recipient: "0"}) {
+			return fmt.Errorf("completed packet failure was not fully refunded")
+		}
+	default:
+		return fmt.Errorf("completed packet state has invalid outcome")
+	}
+	return nil
+}
+
+func validGnoTxHash(value string) bool {
+	decoded, err := base64.StdEncoding.DecodeString(value)
+	return err == nil && len(decoded) == 32
+}
+
+func nonnegativeDecimal(value string) bool {
+	number, ok := new(big.Int).SetString(value, 10)
+	return ok && number.Sign() >= 0 && number.String() == value
 }
 
 func parseIDs(raw string) ([]int64, error) {

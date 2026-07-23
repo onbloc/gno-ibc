@@ -43,6 +43,17 @@ func TestLoadRejectsOverflowingCommandTimeout(t *testing.T) {
 	}
 }
 
+func TestPacketLedgerAmount(t *testing.T) {
+	if got, err := config.PacketLedgerAmount("1000000000000"); err != nil || got != 1 {
+		t.Fatalf("amount = %d, %v", got, err)
+	}
+	for _, amount := range []string{"0", "1", "01000000000000", "9223372036854775808000000000000"} {
+		if _, err := config.PacketLedgerAmount(amount); err == nil {
+			t.Fatalf("invalid amount %q unexpectedly accepted", amount)
+		}
+	}
+}
+
 func TestTopologyFingerprintMatchesFixedPoint(t *testing.T) {
 	cfg, err := config.Load("/suite", lookup(validEnvironment()), false)
 	if err != nil {

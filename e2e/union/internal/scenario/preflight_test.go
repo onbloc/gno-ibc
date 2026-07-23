@@ -106,6 +106,26 @@ func TestDryPreflightUsesOnlyReadOnlyGitChecks(t *testing.T) {
 	}
 }
 
+func TestPacketPreflightRejectsMissingCommandsBeforeDocker(t *testing.T) {
+	cfg := testConfig(t)
+	t.Setenv("PATH", t.TempDir())
+	recorder := &recordingExecutor{results: []process.Result{
+		{Stdout: []byte(config.VoyagerRevision + "\n")},
+		{},
+	}}
+	runner, err := newRunner(cfg, recorder, Options{Apply: true, ERC20ToGno: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = runner.Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "missing required packet command") {
+		t.Fatalf("error = %v", err)
+	}
+	if len(recorder.commands) != 2 {
+		t.Fatalf("commands = %#v, want only git preflight", recorder.commands)
+	}
+}
+
 type recordingExecutor struct {
 	commands []process.Command
 	results  []process.Result

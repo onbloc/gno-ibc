@@ -8,7 +8,7 @@ topology. It does not start chains or deploy/register contracts.
 
 - Gno already has Union core/ZKGM, CometBLS, and `state-lens/ics23/mpt`.
 - Union already has its manager/IBC contracts and the Voyager relayer is
-  whitelisted.
+  whitelisted. Its IBC host must also have `trusted/evm/mpt` registered.
 - EVM already has the confirmed IBC handler, multicall, ZKGM, CometBLS, and
   Proof Lens implementations/registrations.
 - The Gno transaction indexer and all three RPC endpoints are reachable.
@@ -27,6 +27,100 @@ modules/plugins then run inside the local container.
 The configured signer accounts must be funded and authorized. No EVM chain ID
 or deployed address is assumed: copy all of them from the confirmed Union EVM
 deployment record before applying.
+
+## Environment values
+
+Copy `.env.example` to a private mode-`0600` `.env`. The runner rejects a file
+readable by group or other users.
+
+| Group | Variables | How to obtain them |
+| --- | --- | --- |
+| Chain identity | `UNION_CHAIN_ID`, `EVM_CHAIN_ID`, `GNO_CHAIN_ID` | Query each RPC and compare it with the intended deployment. The local topology uses `union-devnet-1` and `dev.ibc`; the EVM ID comes from `eth_chainId`. |
+| Voyager source | `UNION_VOYAGER_DIR`, `UNION_VOYAGER_REVISION` | Check out `union-voyager/e2e-test` at the pinned SHA. The checkout must be clean. |
+| Public deployment | `UNION_IBC_HOST_CONTRACT`, `EVM_IBC_HANDLER`, `EVM_MULTICALL`, `EVM_COMETBLS_CLIENT_IMPL`, `EVM_PROOF_LENS_CLIENT_IMPL`, `GNO_IBC_CORE_REALM`, `GNO_ZKGM_PORT`, `EVM_ZKGM_CONTRACT`, `GALOIS_PROVER_ENDPOINT` | Copy from the confirmed deployment output or on-chain registry. Do not guess addresses from an older environment. |
+| Endpoints | `UNION_RPC_URL`, `EVM_RPC_URL`, `GNO_RPC_URL`, `GNO_TX_INDEXER_RPC_URL`, `VOYAGER_DATABASE_URL` | Use endpoints reachable from the Voyager container. For host services on Docker Desktop, use `host.docker.internal` instead of `localhost`. Use a dedicated PostgreSQL database for each fresh live run. |
+| Signers | `TRUSTED_MPT_PRIVATE_KEY`, `UNION_PRIVATE_KEY`, `EVM_PRIVATE_KEY`, `GNO_PRIVATE_KEY` | Supply `0x` plus 64 hex characters. Union, EVM, and Gno keys must identify funded and authorized test accounts; the trusted-MPT key may be a fresh test-only key. Store all four as secrets. |
+| Optional packet | `EVM_TEST_ERC20`, `GNO_RECIPIENT`, `EVM_TEST_AMOUNT` | Use a deployed 18-decimal mintable test token, a Gno recipient, and an amount divisible by `10^12`. |
+| Output/tuning | `E2E_ARTIFACT_DIR`, `E2E_STATE_FILE`, `VOYAGER_IMAGE`, `VOYAGER_RUST_LOG`, `VOYAGER_TIMEOUT_SECONDS`, `VOYAGER_EVM_REFRESH_SECONDS` | Defaults are suitable locally. Keep the state file under the artifact directory; increase the timeout when EVM finality is slow. The runner refreshes Voyager at most three times when a newly created EVM client remains hidden by a stale state-module read. |
+
+To create a new EVM test account, use `cast wallet new`, then fund its address
+and grant any token permissions required by the packet test. A standalone
+trusted-MPT key can be generated without printing an existing mnemonic:
+
+```sh
+openssl rand -hex 32
+# Store the result as TRUSTED_MPT_PRIVATE_KEY with a leading 0x.
+```
+
+For the public local-dev mnemonic, the repository helper derives the Cosmos/Gno
+raw key at `44'/118'/0'/0/0`. From the repository root, read the mnemonic
+without echoing it or placing it in shell history:
+
+```sh
+read -s TEST_MNEMONIC
+printf '%s' "$TEST_MNEMONIC" | go run ./e2e/union/gno/testdata/mnemonic-raw-key
+unset TEST_MNEMONIC
+```
+
+Use that result for `GNO_PRIVATE_KEY`, and for `UNION_PRIVATE_KEY` only when the
+same derived account is the funded Union relayer. Production or shared testnet
+keys should come from the environment's secret manager, not this helper.
+
+The runner does not deploy light-client contracts. Before running against a
+fresh Union chain, query `UNION_IBC_HOST_CONTRACT` and confirm that client type
+`trusted/evm/mpt` resolves to a deployed contract. If it is absent, the chain
+provisioning step must store the trusted-MPT WASM, instantiate/migrate it,
+assign the expected admin, and register it before this E2E starts.
+
+```sh
+uniond query wasm contract-state smart "$UNION_IBC_HOST_CONTRACT" \
+  '{"get_registered_client_type":{"client_type":"trusted/evm/mpt"}}' \
+  --node "$UNION_RPC_URL" -o json
+```
+
+## Structure and execution flow
+
+```text
+run-channel-e2e.sh
+  -> build focused Voyager image from the pinned union-voyager checkout
+  -> run Voyager modules/plugins in one local container
+  -> connect to Union, EVM, Gno, Gno indexer, and PostgreSQL
+  -> write sanitized state and verification artifacts
+```
+
+A fresh `--apply` run performs one ordered flow:
+
+1. Render a secret-bearing runtime config in a private temporary directory.
+2. Index Union and Gno, and save the EVM finalized height that starts this run.
+3. Create the six clients in the guide order: Gno→Union, Union→Gno,
+   Union→EVM, EVM→Union, Gno→EVM Lens, and EVM→Gno Proof Lens.
+4. Index EVM from the saved height after both EVM clients settle, read the
+   underlying clients' live metadata, calculate both Lens configs, rebuild
+   disjoint EVM batch allowlists, and restart Voyager.
+5. Initiate the connection on EVM and the ZKGM channel on Gno.
+6. Verify both sides are open and cross-reference the expected clients,
+   connection/channel IDs, ports, and `ucs03-zkgm-0` version.
+7. Reject unrelated new Voyager failed work and write sanitized artifacts.
+
+The optional `--erc20-to-gno` phase then mints and approves the configured test
+token, sends one packet, and verifies Gno receive/ack events, the EVM ack and
+commitment, and the exact balance changes.
+
+### Queue completion observation
+
+Voyager moves successfully processed queue items to PostgreSQL `done` and
+terminal errors to `failed`. Packet-related items can be correlated by the
+packet hash stored in their JSON payload. These tables are useful as a fast
+signal, but the pinned Voyager revision does not emit `pg_notify` calls and
+does not install notification triggers. The current runner therefore checks
+`failed` through the Voyager CLI and treats on-chain state/events as the final
+result.
+
+If the database provisioning later adds a versioned `done`/`failed` notification
+trigger, the listener should receive only the queue ID, query the corresponding
+row, and match the expected packet hash and event type. It must query once
+before and after `LISTEN` so a notification sent during startup cannot be lost;
+notification is a wake-up signal, while the tables remain the source of truth.
 
 ## Configure and preflight
 

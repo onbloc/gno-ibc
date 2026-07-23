@@ -35,7 +35,15 @@ case $cmd in
   start) printf 'start\n' >>"$FAKE_DIR/starts"; trap 'exit 0' TERM INT; while :; do sleep 1; done ;;
   index) ;;
   queue)
-    if [[ -s $FAKE_DIR/failed-id ]]; then jq -cn --argjson id "$(cat "$FAKE_DIR/failed-id")" '[{id:$id}]'; else echo '[]'; fi
+    case ${1:-} in
+      query-failed)
+        if [[ -s $FAKE_DIR/failed-client-event.json ]]; then cat "$FAKE_DIR/failed-client-event.json"
+        elif [[ -s $FAKE_DIR/failed-id ]]; then jq -cn --argjson id "$(cat "$FAKE_DIR/failed-id")" '[{id:$id}]'
+        else echo '[]'
+        fi
+        ;;
+      query-failed-by-id) ;;
+    esac
     ;;
   rpc)
     sub=$1 chain=${2:-} id=${3:-}; row=$(awk -F '\t' -v c="$chain" -v i="$id" '$1==c && $2==i {print; exit}' "$FAKE_DIR/clients.tsv")
@@ -55,11 +63,16 @@ case $cmd in
           row=$(tail -n 1 "$FAKE_DIR/clients.tsv")
         fi
         if [[ -z $row ]]; then
-          if [[ $chain == 17000 ]]; then
-            echo '{"client_type":"","ibc_interface":"ibc-solidity"}'
-          else
-            echo null
-          fi
+          case $chain in
+            17000) echo '{"client_type":"","ibc_interface":"ibc-solidity"}' ;;
+            dev.ibc) echo '{"client_type":"client not found","ibc_interface":"ibc-gno"}' ;;
+            *) echo "client \`$id\` not found" >&2; exit 1 ;;
+          esac
+          exit 0
+        fi
+        if [[ $chain == 17000 && -s $FAKE_DIR/evm-created-start &&
+          $(wc -l <"$FAKE_DIR/starts" | tr -d ' ') -le $(<"$FAKE_DIR/evm-created-start") ]]; then
+          echo '{"client_type":"","ibc_interface":"ibc-solidity"}'
           exit 0
         fi
         IFS=$'\t' read -r _ _ type interface _ _ _ _ _ <<<"$row"
@@ -80,6 +93,7 @@ case $cmd in
         jq -cn --argjson l1 "$l1" --argjson l2 "$l2" --arg c "$l2chain" \
           '{height:"1",state:{l1_client_id:$l1,l2_client_id:$l2,l2_chain_id:$c}}'
         ;;
+      latest-height) echo '"100"' ;;
       ibc-state)
         query=$3 kind=$(jq -r 'keys[0]' <<<"$query")
         id=$(jq -r ".${kind}.${kind}_id" <<<"$query")
@@ -123,6 +137,16 @@ case $cmd in
     if [[ -e $FAKE_DIR/race && $type == cometbls ]]; then type=intruder; rm "$FAKE_DIR/race"; fi
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
       "$chain" "$id" "$type" "$interface" "$counterparty" "$l1" "$l2" "$l2chain" "$height" >>"$FAKE_DIR/clients.tsv"
+    [[ $chain != 17000 ]] || wc -l <"$FAKE_DIR/starts" | tr -d ' ' >"$FAKE_DIR/evm-created-start"
+    if [[ ${FAKE_CLIENT_EVENT_FAILURE:-0} == 1 && $chain == dev.ibc && $type == cometbls &&
+      ! -e $FAKE_DIR/failed-client-event.json ]]; then
+      jq -cn --arg chain "$chain" --arg type "$type" --argjson client "$id" '[{id:1,item:{
+        "@type":"call","@value":{"@type":"plugin","@value":{
+          plugin:("voyager-event-source-plugin-gno/" + $chain),message:{
+            "@type":"make_chain_event","@value":{event:{
+              "@type":"create_client","@value":{client_id:$client,client_type:$type}}}}}}}}]' \
+        >"$FAKE_DIR/failed-client-event.json"
+    fi
     ;;
   q)
     op=${2:?}
@@ -186,13 +210,16 @@ run_runner() {
   (($# == 0)) || args=("$@")
   ENV_FILE="$env_file" VOYAGER_BIN="$fake" FAKE_DIR="$test_dir" \
     VOYAGER_POLL_SECONDS=0 VOYAGER_TIMEOUT_SECONDS=3 VOYAGER_COMMAND_TIMEOUT_SECONDS=3 \
+    VOYAGER_EVM_REFRESH_SECONDS=0 \
     VOYAGER_STOP_TIMEOUT_SECONDS=1 "$script_dir/run-channel-e2e.sh" "${args[@]}"
 }
 
-output=$(run_runner)
-[[ $(grep -c '^index 17000 -e$' "$log") == 1 ]]
+output=$(FAKE_CLIENT_EVENT_FAILURE=1 run_runner)
+[[ $(grep -c '^index 17000 --from 100 -e$' "$log") == 1 ]]
+[[ $(grep -n '^msg create-client .*--on 17000 .*--client-type proof-lens' "$log" | cut -d: -f1) -lt \
+  $(grep -n '^index 17000 --from 100 -e$' "$log" | cut -d: -f1) ]]
 [[ $(cut -f3 "$state" | paste -sd, -) == 'cometbls,gno,trusted/evm/mpt,cometbls,state-lens/ics23/mpt,proof-lens' ]]
-[[ $(wc -l <"$state" | tr -d ' ') == 6 && $(wc -l <"$test_dir/starts" | tr -d ' ') == 3 ]]
+[[ $(wc -l <"$state" | tr -d ' ') == 6 && $(wc -l <"$test_dir/starts" | tr -d ' ') == 5 ]]
 [[ $(awk -F '\t' '$3=="state-lens/ics23/mpt" {print $9}' "$state") == 11276137 ]]
 [[ $(awk -F '\t' '$3=="proof-lens" {print $9}' "$state") == 300 ]]
 [[ $output == *'EVM plain IDs=1 Proof Lens IDs=2'* ]]
@@ -200,6 +227,9 @@ output=$(run_runner)
 [[ $(stat -f '%Lp' "$test_dir/artifacts/state.json" 2>/dev/null || stat -c '%a' "$test_dir/artifacts/state.json") == 600 ]]
 jq -e '.phase=="complete" and .connections=={"gno":1,"evm":1} and .channels=={"gno":1,"evm":1}' \
   "$test_dir/artifacts/state.json" >/dev/null
+jq -e '.failed_work=={"baseline":0,"final":0,"repaired":[1]}' "$test_dir/artifacts/state.json" >/dev/null
+grep -q '^queue query-failed-by-id 1 -e$' "$log"
+rm "$test_dir/failed-client-event.json"
 jq -e '.chains.evm=="17000" and .evm_topology.chain_id=="17000" and
   (.evm_topology.address_fingerprint | test("^[0-9a-f]{40}$"))' \
   "$test_dir/artifacts/state.json" >/dev/null
@@ -268,11 +298,11 @@ chmod 700 "$test_dir/artifacts"
 cmp "$test_dir/checkpoint.json" "$test_dir/artifacts/state.json"
 rm "$test_dir/checkpoint.json"
 
-echo 1 >"$test_dir/failed-id"
+echo 2 >"$test_dir/failed-id"
 if run_runner --resume >"$test_dir/failed.out" 2>&1; then echo 'new failed work unexpectedly passed' >&2; exit 1; fi
 grep -q 'recorded new failed work' "$test_dir/failed.out"
-jq -e '.phase=="failed-work" and .failed_work=={"baseline":0,"final":1}' "$test_dir/artifacts/state.json" >/dev/null
-jq -e '.phase=="failed-work" and .failed_work.final==1' "$test_dir/artifacts/summary.json" >/dev/null
+jq -e '.phase=="failed-work" and .failed_work=={"baseline":0,"final":2,"repaired":[1]}' "$test_dir/artifacts/state.json" >/dev/null
+jq -e '.phase=="failed-work" and .failed_work.final==2' "$test_dir/artifacts/summary.json" >/dev/null
 rm "$test_dir/failed-id"
 
 q_before=$(grep -c '^q e ' "$log")

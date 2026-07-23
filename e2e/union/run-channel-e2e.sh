@@ -147,6 +147,7 @@ client_configs() {
 runtime_dir=$(mktemp -d "${TMPDIR:-/tmp}/union-channel-e2e.XXXXXX")
 rendered_config="$runtime_dir/config.jsonc"
 voyager_log="$runtime_dir/voyager.log"
+repaired_failed_file="$runtime_dir/repaired-failed-ids"
 packet_cast_error="$runtime_dir/cast.stderr"
 packet_gnokey_error="$runtime_dir/gnokey.stderr"
 packet_curl_error="$runtime_dir/curl.stderr"
@@ -169,7 +170,7 @@ cleanup() {
   trap - EXIT INT TERM
   stop_voyager 2>/dev/null || true
   rm -f "$rendered_config" "$voyager_log" "$packet_cast_error" "$packet_gnokey_error" \
-    "$packet_curl_error" "$packet_gnokey_config" "$packet_curl_config"
+    "$packet_curl_error" "$packet_gnokey_config" "$packet_curl_config" "$repaired_failed_file"
   rmdir "$runtime_dir" 2>/dev/null || true
   exit "$status"
 }
@@ -177,6 +178,7 @@ trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
 umask 077
+: >"$repaired_failed_file"
 
 if ((erc20_to_gno)); then
   printf 'remote = "%s"\n' "$GNO_RPC_URL" >"$packet_gnokey_config"
@@ -277,7 +279,9 @@ if ((erc20_to_gno)); then
   done
 fi
 poll_seconds=${VOYAGER_POLL_SECONDS:-2}
-timeout_seconds=${VOYAGER_TIMEOUT_SECONDS:-360}
+# Local beacon finality can take two epochs before EVM events become queryable.
+timeout_seconds=${VOYAGER_TIMEOUT_SECONDS:-900}
+evm_refresh_seconds=${VOYAGER_EVM_REFRESH_SECONDS:-60}
 command_timeout_seconds=${VOYAGER_COMMAND_TIMEOUT_SECONDS:-120}
 stop_timeout_seconds=${VOYAGER_STOP_TIMEOUT_SECONDS:-10}
 timeout_bin=${TIMEOUT_BIN:-}
@@ -294,9 +298,45 @@ voyager() {
     "$timeout_bin" --kill-after="${stop_timeout_seconds}s" "$command_timeout_seconds" \
       "$voyager_bin" -c "$rendered_config" "$@"
   else
+    # Keep CLI stdout machine-readable while the daemon retains its diagnostic filter.
     "$timeout_bin" --kill-after="${stop_timeout_seconds}s" "$command_timeout_seconds" \
-      docker exec "$voyager_container" "$voyager_container_bin" -c "$voyager_config_path" "$@"
+      docker exec --env RUST_LOG= "$voyager_container" \
+      "$voyager_container_bin" -c "$voyager_config_path" "$@"
   fi
+}
+
+voyager_enqueue() {
+  local attempt output
+  for ((attempt = 1; attempt <= 5; attempt += 1)); do
+    if output=$(voyager "$@" 2>&1); then
+      return 0
+    fi
+    if [[ $output != *"deadlock detected"* ]]; then
+      echo "Voyager enqueue failed" >&2
+      return 1
+    fi
+    # PostgreSQL aborts the deadlocked enqueue transaction, so retrying cannot duplicate its work.
+    echo "Voyager enqueue deadlocked; retrying ($attempt/5)" >&2
+    sleep "$poll_seconds"
+  done
+  echo "Voyager enqueue remained deadlocked after 5 attempts" >&2
+  return 1
+}
+
+voyager_queue_query() {
+  local attempt output
+  for ((attempt = 1; attempt <= 5; attempt += 1)); do
+    if output=$(voyager queue "$@" 2>&1); then
+      printf '%s\n' "$output"
+      return 0
+    fi
+    [[ $output == *"deadlock detected"* ]] || { echo "Voyager queue query failed" >&2; return 1; }
+    # Queue reads can deadlock with workers immediately after a restart.
+    echo "Voyager queue query deadlocked; retrying ($attempt/5)" >&2
+    sleep "$poll_seconds"
+  done
+  echo "Voyager queue query remained deadlocked after 5 attempts" >&2
+  return 1
 }
 
 stop_voyager() {
@@ -327,7 +367,8 @@ stop_voyager() {
 
 ensure_voyager_image() {
   local image_revision
-  ((voyager_image_ready == 0)) || return
+  # Restarts reuse the image built earlier in the same run.
+  ((voyager_image_ready == 0)) || return 0
   echo "building Voyager image from $UNION_VOYAGER_REVISION" >&2
   docker build \
     --file "$script_dir/voyager-build.Dockerfile" \
@@ -353,7 +394,9 @@ start_voyager() {
     voyager_container_bin=$(docker image inspect --format '{{index .Config.Entrypoint 0}}' "$voyager_image")
     [[ -n $voyager_container_bin ]] || { echo "Voyager image has no entrypoint" >&2; return 1; }
     container_name="union-channel-e2e-$$"
+    # Child modules inherit this filter, so dropped transaction errors remain observable.
     docker run --detach --name "$container_name" \
+      --env "RUST_LOG=${VOYAGER_RUST_LOG:-warn}" \
       --mount "type=bind,src=$rendered_config,dst=$voyager_config_path,readonly" \
       "$voyager_image" -c "$voyager_config_path" start >/dev/null
     voyager_container=$container_name
@@ -371,13 +414,34 @@ start_voyager() {
 }
 
 failed_work_id() {
-  voyager queue query-failed --per-page 1 | jq -er 'if length == 0 then 0 else .[0].id end'
+  voyager_queue_query query-failed --per-page 1 | jq -er 'if length == 0 then 0 else .[0].id end'
+}
+
+unrepaired_failed_work_id() {
+  voyager_queue_query query-failed --per-page 100 | jq -er \
+    --slurpfile repaired "$repaired_failed_file" --argjson baseline "$failed_work_baseline" '
+    [.[] | .id |= tonumber | .id as $failed_id
+      | select($failed_id > $baseline and ($repaired | index($failed_id)) == null)]
+    | if length == 0 then $baseline else (map(.id) | max) end
+  '
+}
+
+record_repaired_failed_work() {
+  local id=$1 repaired
+  while IFS= read -r repaired; do [[ $repaired == "$id" ]] && return; done <"$repaired_failed_file"
+  printf '%s\n' "$id" >>"$repaired_failed_file"
 }
 
 client_info() {
   local output
-  output=$(voyager rpc client-info "$1" "$2") || return 2
-  if jq -e '. == null or (type == "object" and .client_type == "")' \
+  # Missing clients are reported as null, an empty/garbled type, or an RPC error depending on the backend.
+  if ! output=$(voyager rpc client-info "$1" "$2" 2>&1); then
+    [[ $output == *client*"not found"* ]] && return 1
+    echo "client-info query failed for $1 client $2" >&2
+    return 2
+  fi
+  if jq -e '. == null or (type == "object" and (.client_type | type == "string") and
+    (.client_type == "" or (.client_type | test("client not found"; "i"))))' \
     <<<"$output" >/dev/null 2>&1; then
     return 1
   elif jq -e 'type == "object" and (.client_type | type == "string" and length > 0) and
@@ -417,6 +481,11 @@ client_state() {
   fi
 }
 
+latest_finalized_height() {
+  voyager rpc latest-height "$1" --finalized | jq -er \
+    'select(type == "string" and test("^[1-9][0-9]*$"))'
+}
+
 next_client_id() {
   local chain=$1 id=1 result
   while :; do
@@ -431,10 +500,46 @@ next_client_id() {
   done
 }
 
+requeue_failed_client_events() {
+  local chain=$1 client_id=$2 client_type=$3 failed failed_ids failed_id
+  # Resume verification has no bootstrap work to repair.
+  [[ -n ${failed_work_baseline:-} ]] || return 0
+  failed=$(voyager_queue_query query-failed --per-page 100) || return 2
+  failed_ids=$(jq -r --slurpfile repaired "$repaired_failed_file" \
+    --arg chain "$chain" --arg type "$client_type" \
+    --argjson client "$client_id" --argjson baseline "$failed_work_baseline" '
+    .[]
+    | select((.id | tonumber) > $baseline)
+    | (.id | tonumber) as $failed_id
+    | select(($repaired | index($failed_id)) == null)
+    | . as $failed
+    | .item."@value"."@value" as $plugin
+    | select(($plugin.plugin // "") | endswith("/" + $chain))
+    | $plugin.message."@value".event as $event
+    | select($event."@type" == "create_client")
+    | select(($event."@value".client_id | tonumber) == $client)
+    | select($event."@value".client_type == $type)
+    | $failed.id
+  ' <<<"$failed") || return 2
+  if [[ -n $failed_ids ]]; then
+    # A failed create event proves the transaction committed; restart to clear stale chain reads.
+    stop_voyager || return 2
+    start_voyager || return 2
+  fi
+  for failed_id in $failed_ids; do
+    # The event can race the newly committed client state; retry only this exact failed event.
+    echo "requeueing failed create-client event $failed_id for $chain client $client_id" >&2
+    voyager_enqueue queue query-failed-by-id "$failed_id" -e || return 2
+    record_repaired_failed_work "$failed_id"
+  done
+}
+
 wait_client() {
   local chain=$1 id=$2 type=$3 interface=$4 counterparty=$5
   local deadline=$((SECONDS + timeout_seconds)) info meta result
+  local evm_refreshes=0 next_evm_refresh=$((SECONDS + evm_refresh_seconds))
   while ((SECONDS < deadline)); do
+    requeue_failed_client_events "$chain" "$id" "$type" || return 2
     if info=$(client_info "$chain" "$id"); then
       if ! jq -e --arg type "$type" --arg interface "$interface" \
         '.client_type == $type and .ibc_interface == $interface' <<<"$info" >/dev/null; then
@@ -456,6 +561,14 @@ wait_client() {
     else
       result=$?
       ((result == 1)) || return "$result"
+    fi
+    if [[ $chain == "$EVM_CHAIN_ID" ]] && ((evm_refreshes < 3 && SECONDS >= next_evm_refresh)); then
+      # The pinned EVM state module can retain an empty clientTypes read across finality.
+      echo "refreshing Voyager after stale $chain client $id read ($((evm_refreshes + 1))/3)" >&2
+      stop_voyager || return 2
+      start_voyager || return 2
+      ((evm_refreshes += 1))
+      next_evm_refresh=$((SECONDS + evm_refresh_seconds))
     fi
     sleep "$poll_seconds"
   done
@@ -497,8 +610,8 @@ create_client_at() {
     return 1
   }
   echo "creating $type client at expected $chain client ID $id" >&2
-  voyager msg create-client --on "$chain" --tracking "$counterparty" \
-    --ibc-interface "$interface" --client-type "$type" "$@" -e >/dev/null
+  voyager_enqueue msg create-client --on "$chain" --tracking "$counterparty" \
+    --ibc-interface "$interface" --client-type "$type" "$@" -e
   wait_client "$chain" "$id" "$type" "$interface" "$counterparty"
 }
 
@@ -778,13 +891,14 @@ write_packet_artifact() {
 }
 
 write_state() {
-  local tmp
+  local tmp repaired
   tmp=$(mktemp "$artifact_dir/.state.XXXXXX")
+  repaired=$(jq -Rsc 'split("\n") | map(select(length > 0) | tonumber)' "$repaired_failed_file")
   if ! jq -n --arg phase "$1" --arg revision "$UNION_VOYAGER_REVISION" \
     --arg union "$UNION_CHAIN_ID" --arg evm "$EVM_CHAIN_ID" --arg gno "$GNO_CHAIN_ID" \
     --arg evm_fingerprint "$evm_address_fingerprint" \
     --arg gno_port "$GNO_ZKGM_PORT" --arg evm_port "$evm_zkgm_lc" \
-    --arg baseline "$failed_work_baseline" --arg final "${failed_work_final:-}" \
+    --arg baseline "$failed_work_baseline" --arg final "${failed_work_final:-}" --argjson repaired "$repaired" \
     --arg gu "$gno_union_client_id" --arg ug "$union_gno_client_id" \
     --arg us "$union_evm_client_id" --arg su "$evm_union_client_id" \
     --arg gs "$gno_evm_client_id" --arg sg "$evm_gno_client_id" \
@@ -794,7 +908,8 @@ write_state() {
     {phase:$phase,voyager_revision:$revision,chains:{union:$union,evm:$evm,gno:$gno},
      evm_topology:{chain_id:$evm,address_fingerprint:$evm_fingerprint},
      ports:{gno:$gno_port,evm:$evm_port},version:"ucs03-zkgm-0",
-     failed_work:{baseline:($baseline|tonumber),final:(if $final=="" then null else ($final|tonumber) end)},
+     failed_work:{baseline:($baseline|tonumber),final:(if $final=="" then null else ($final|tonumber) end),
+       repaired:$repaired},
      clients:{gno_union:($gu|tonumber),union_gno:($ug|tonumber),union_evm:($us|tonumber),
        evm_union:($su|tonumber),gno_evm:($gs|tonumber),evm_gno:($sg|tonumber)},
      allowlists:{plain:$plain,proof_lens:$proof}}
@@ -905,6 +1020,7 @@ if ((resume)); then
   packet_state=$(jq -c '.packet // null' "$state_file")
   [[ $packet_state != null ]] || packet_state=
   failed_work_baseline=$(jq -r 'if .phase=="complete" or (.phase|startswith("packet-")) then .failed_work.final else .failed_work.baseline end' "$state_file")
+  jq -r '.failed_work.repaired[]?' "$state_file" >"$repaired_failed_file"
 else
   [[ ! -e $state_file ]] || {
     echo "state already exists; use --resume to reuse its client IDs or choose a new E2E_ARTIFACT_DIR" >&2
@@ -925,9 +1041,10 @@ else
   start_voyager
   write_bootstrap_checkpoint
 
-for chain in "$UNION_CHAIN_ID" "$EVM_CHAIN_ID" "$GNO_CHAIN_ID"; do
+evm_index_from=$(latest_finalized_height "$EVM_CHAIN_ID")
+for chain in "$UNION_CHAIN_ID" "$GNO_CHAIN_ID"; do
   echo "indexing $chain"
-  voyager index "$chain" -e >/dev/null
+  voyager_enqueue index "$chain" -e
 done
 
 gno_union_client_id=$(ensure_client "$GNO_CHAIN_ID" "$UNION_CHAIN_ID" cometbls ibc-gno)
@@ -953,6 +1070,10 @@ evm_gno_client_id=$(create_client_at "$EVM_CHAIN_ID" "$GNO_CHAIN_ID" proof-lens 
   "$bootstrap_proof_id" --config "$proof_lens_config" --height "$proof_lens_height")
 require_lens_state "$EVM_CHAIN_ID" "$evm_gno_client_id" \
   "$evm_union_client_id" "$union_gno_client_id" "$GNO_CHAIN_ID"
+
+# Local beacon finality can lead geth briefly; index the saved range only after both EVM clients settle.
+echo "indexing $EVM_CHAIN_ID from finalized height $evm_index_from"
+voyager_enqueue index "$EVM_CHAIN_ID" --from "$evm_index_from" -e
 
 evm_next=$(next_client_id "$EVM_CHAIN_ID")
 plain_ids=()
@@ -997,7 +1118,7 @@ connection_op=$(jq -cn --arg chain "$EVM_CHAIN_ID" --argjson local "$evm_gno_cli
 }
 if [[ $phase == connection-submitting || $phase == connection-prepared ]]; then
   if (( ${connection_enqueue_now:-0} )); then
-    voyager q e "$connection_op" >/dev/null
+    voyager_enqueue q e "$connection_op"
     write_state connection-submitted
     phase='connection-submitted'
   else
@@ -1044,7 +1165,7 @@ channel_op=$(jq -cn --arg chain "$GNO_CHAIN_ID" --arg port "$gno_port_hex" --arg
   port_id:$port,counterparty_port_id:$cp_port,connection_id:$connection,version:"ucs03-zkgm-0"}}}]}}}')
 if [[ $phase == channel-submitting || $phase == channel-prepared ]]; then
   if (( ${channel_enqueue_now:-0} )); then
-    voyager q e "$channel_op" >/dev/null
+    voyager_enqueue q e "$channel_op"
     write_state channel-submitted
     phase='channel-submitted'
   else
@@ -1075,7 +1196,7 @@ gno_channel_state=$(wait_channel "$GNO_CHAIN_ID" "$gno_channel_id" "$gno_connect
   "$evm_channel_id" "$evm_zkgm_lc")
 evm_channel_state=$(wait_channel "$EVM_CHAIN_ID" "$evm_channel_id" "$evm_connection_id" \
   "$gno_channel_id" "$gno_port_hex")
-failed_work_final=$(failed_work_id)
+failed_work_final=$(unrepaired_failed_work_id)
 if [[ $failed_work_final != "$failed_work_baseline" ]]; then
   write_state failed-work
   write_artifacts

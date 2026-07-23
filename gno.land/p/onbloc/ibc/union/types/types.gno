@@ -71,6 +71,16 @@ func CloneBytes(b []byte) []byte {
 
 type H256 [32]byte
 
+func NewH256(bz []byte) H256 {
+	if len(bz) != 32 {
+		panic("H256 requires exactly 32 bytes")
+	}
+
+	var out H256
+	copy(out[:], bz)
+	return out
+}
+
 func (h H256) String() string {
 	return "0x" + hex.EncodeToString(h[:])
 }

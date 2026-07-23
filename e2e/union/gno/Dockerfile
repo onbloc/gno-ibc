@@ -1,0 +1,35 @@
+FROM golang:1.26.0-alpine@sha256:d4c4845f5d60c6a974c6000ce58ae079328d03ab7f721a0734277e69905473e5 AS builder
+
+RUN apk add --no-cache git make
+COPY .gno-version /tmp/gno-version
+RUN set -eu; . /tmp/gno-version; \
+    test -n "$GNO_REPO"; test -n "$GNO_COMMIT"; \
+    git clone --filter=blob:none "$GNO_REPO" /src/gno; \
+    git -C /src/gno checkout "$GNO_COMMIT"
+WORKDIR /src/gno
+RUN cd contribs/gnodev && go build -o /usr/local/bin/gnodev .
+RUN cd gno.land/cmd/gnokey && go build -o /usr/local/bin/gnokey .
+COPY e2e/union/gno/testdata/mnemonic-raw-key/ /tmp/mnemonic-raw-key/
+RUN go test /tmp/mnemonic-raw-key/*.go && \
+    go build -o /usr/local/bin/mnemonic-raw-key /tmp/mnemonic-raw-key/main.go
+RUN rm -rf /src/gno/.git
+
+FROM alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d
+
+RUN apk add --no-cache bash curl
+
+COPY --from=builder /usr/local/bin/gnodev /usr/local/bin/gnodev
+COPY --from=builder /usr/local/bin/gnokey /usr/local/bin/gnokey
+COPY --from=builder /usr/local/bin/mnemonic-raw-key /usr/local/bin/mnemonic-raw-key
+COPY --from=builder /src/gno /gnoroot
+
+COPY gno.land /gno-ibc/gno.land
+COPY e2e/union/gno/entrypoint.sh /entrypoint.sh
+
+ENV GNOROOT=/gnoroot
+
+RUN chmod +x /entrypoint.sh
+
+EXPOSE 26657 8888
+
+ENTRYPOINT ["/entrypoint.sh"]

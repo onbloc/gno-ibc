@@ -213,10 +213,10 @@ func emitBatchAcksEvent(channelId types.ChannelId, packetHash, batchHash types.H
 }
 
 // encodedEventAttrs returns the event attrs for an already-encoded value,
-// splitting it into indexed columns when SplitEventAttrs is enabled.
+// splitting it into indexed columns only when it exceeds the configured limit.
 func encodedEventAttrs(key string, value string) []string {
 	config := GetEventConfig()
-	if !config.SplitEventAttrs {
+	if !config.SplitEventAttrs || len(value) <= int(config.MaxEventAttrValueLen) {
 		return []string{key, value}
 	}
 

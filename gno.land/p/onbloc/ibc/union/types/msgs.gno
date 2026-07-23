@@ -1,8 +1,29 @@
 package types
 
+import (
+	"errors"
+)
+
 // Packet-lifecycle datagrams, mirroring the ibc-union-spec `Datagram` variants
 // that carry packets (recv / acknowledgement / timeout / intent / batch).
 // Proof heights are plain block numbers (u64), matching the spec.
+
+// ErrValidation is the sentinel returned by ValidateBasic methods. Entrypoints
+// convert it to a panic via mustValidate so malformed relayer input is rejected
+// at the boundary instead of surfacing as a nil-deref or silent no-op deeper in
+// the host.
+var ErrValidation = errors.New("msg validation failed")
+
+// validateHeight returns ErrValidation when height is zero. Proof heights of
+// zero have no corresponding consensus state and are rejected upfront so the
+// host does not forward them to light-client adapters, which vary in how they
+// handle the unset case.
+func validateHeight(height uint64) error {
+	if height == 0 {
+		return ErrValidation
+	}
+	return nil
+}
 
 // MsgPacketRecv delivers one or more packets to their destination, proven
 // against the source chain's batch commitment.
@@ -149,4 +170,93 @@ func NewMsgWriteAcknowledgement(packet Packet, acknowledgement []byte) MsgWriteA
 		Packet:          packet,
 		Acknowledgement: acknowledgement,
 	}
+}
+
+// --- ValidateBasic ---
+
+// ValidateBasic performs stateless structural validation. It rejects zero proof
+// heights and mismatched packet/relayer-msg counts so the host can burn proof
+// gas only for well-formed batches.
+func (m MsgPacketRecv) ValidateBasic() error {
+	if len(m.Packets) == 0 {
+		return ErrValidation
+	}
+	if len(m.RelayerMsgs) != len(m.Packets) {
+		return ErrValidation
+	}
+	return validateHeight(m.ProofHeight)
+}
+
+// ValidateBasic rejects zero proof heights and ack/packet count mismatches.
+func (m MsgPacketAcknowledgement) ValidateBasic() error {
+	if len(m.Packets) == 0 {
+		return ErrValidation
+	}
+	if len(m.Acknowledgements) != len(m.Packets) {
+		return ErrValidation
+	}
+	return validateHeight(m.ProofHeight)
+}
+
+// ValidateBasic rejects zero proof heights.
+func (m MsgPacketTimeout) ValidateBasic() error {
+	return validateHeight(m.ProofHeight)
+}
+
+// ValidateBasic rejects zero proof heights and empty paths/values.
+func (m MsgCommitMembershipProof) ValidateBasic() error {
+	if len(m.Path) == 0 || len(m.Value) == 0 {
+		return ErrValidation
+	}
+	return validateHeight(m.ProofHeight)
+}
+
+// ValidateBasic rejects zero proof heights and empty paths.
+func (m MsgCommitNonMembershipProof) ValidateBasic() error {
+	if len(m.Path) == 0 {
+		return ErrValidation
+	}
+	return validateHeight(m.ProofHeight)
+}
+
+// ValidateBasic rejects empty packet sets and market-maker-message count
+// mismatches.
+func (m MsgIntentPacketRecv) ValidateBasic() error {
+	if len(m.Packets) == 0 {
+		return ErrValidation
+	}
+	if len(m.MarketMakerMessages) != len(m.Packets) {
+		return ErrValidation
+	}
+	return nil
+}
+
+// ValidateBasic rejects batches with fewer than two packets (the batch minimum
+// enforced by the host) so relayers cannot cheaply exercise the batch entrypoint
+// with degenerate input.
+func (m MsgBatchSend) ValidateBasic() error {
+	if len(m.Packets) < 2 {
+		return ErrValidation
+	}
+	return nil
+}
+
+// ValidateBasic rejects batches with fewer than two packets and ack/packet count
+// mismatches.
+func (m MsgBatchAcks) ValidateBasic() error {
+	if len(m.Packets) < 2 {
+		return ErrValidation
+	}
+	if len(m.Acks) != len(m.Packets) {
+		return ErrValidation
+	}
+	return nil
+}
+
+// ValidateBasic rejects empty acknowledgements.
+func (m MsgWriteAcknowledgement) ValidateBasic() error {
+	if len(m.Acknowledgement) == 0 {
+		return ErrValidation
+	}
+	return nil
 }

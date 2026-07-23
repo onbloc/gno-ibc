@@ -449,14 +449,60 @@ func TestRestrictedPacketEntrypointsAllowRelayerRealmCallToReachImpl(cur realm, 
 		caller address
 		run    func(cur realm)
 	}{
-		{"packet recv", authorizedRelayer, func(cur realm) { PacketRecv(cross(cur), types.MsgPacketRecv{}) }},
-		{"intent packet recv", authorizedRelayer, func(cur realm) { IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{}) }},
-		{"packet acknowledgement", authorizedRelayer, func(cur realm) { PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{}) }},
-		{"packet timeout", authorizedRelayer, func(cur realm) { PacketTimeout(cross(cur), types.MsgPacketTimeout{}) }},
-		{"commit membership proof", access.DefaultAdminAddress, func(cur realm) { CommitMembershipProof(cross(cur), types.MsgCommitMembershipProof{}) }},
-		{"commit non-membership proof", access.DefaultAdminAddress, func(cur realm) { CommitNonMembershipProof(cross(cur), types.MsgCommitNonMembershipProof{}) }},
-		{"batch send", authorizedRelayer, func(cur realm) { BatchSend(cross(cur), types.MsgBatchSend{}) }},
-		{"batch acks", authorizedRelayer, func(cur realm) { BatchAcks(cross(cur), types.MsgBatchAcks{}) }},
+		{"packet recv", authorizedRelayer, func(cur realm) {
+			PacketRecv(cross(cur), types.MsgPacketRecv{
+				Packets:     []types.Packet{types.NewPacket(1, 2, []byte{0x01}, 100)},
+				RelayerMsgs: [][]byte{{0x01}},
+				ProofHeight: 1,
+			})
+		}},
+		{"intent packet recv", authorizedRelayer, func(cur realm) {
+			IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{
+				Packets:             []types.Packet{types.NewPacket(1, 2, []byte{0x01}, 100)},
+				MarketMakerMessages: [][]byte{{0x01}},
+			})
+		}},
+		{"packet acknowledgement", authorizedRelayer, func(cur realm) {
+			PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{
+				Packets:          []types.Packet{types.NewPacket(1, 2, []byte{0x01}, 100)},
+				Acknowledgements: [][]byte{{0x01}},
+				ProofHeight:      1,
+			})
+		}},
+		{"packet timeout", authorizedRelayer, func(cur realm) {
+			PacketTimeout(cross(cur), types.MsgPacketTimeout{
+				Packet:      types.NewPacket(1, 2, []byte{0x01}, 100),
+				ProofHeight: 1,
+			})
+		}},
+		{"commit membership proof", access.DefaultAdminAddress, func(cur realm) {
+			CommitMembershipProof(cross(cur), types.MsgCommitMembershipProof{
+				ProofHeight: 1,
+				Path:        []byte{0x01},
+				Value:       []byte{0x02},
+			})
+		}},
+		{"commit non-membership proof", access.DefaultAdminAddress, func(cur realm) {
+			CommitNonMembershipProof(cross(cur), types.MsgCommitNonMembershipProof{
+				ProofHeight: 1,
+				Path:        []byte{0x01},
+			})
+		}},
+		{"batch send", authorizedRelayer, func(cur realm) {
+			BatchSend(cross(cur), types.MsgBatchSend{Packets: []types.Packet{
+				types.NewPacket(1, 2, []byte{0x01}, 100),
+				types.NewPacket(1, 2, []byte{0x02}, 100),
+			}})
+		}},
+		{"batch acks", authorizedRelayer, func(cur realm) {
+			BatchAcks(cross(cur), types.MsgBatchAcks{
+				Packets: []types.Packet{
+					types.NewPacket(1, 2, []byte{0x01}, 100),
+					types.NewPacket(1, 2, []byte{0x02}, 100),
+				},
+				Acks: [][]byte{{0x01}, {0x02}},
+			})
+		}},
 	}
 
 	for _, tc := range tests {

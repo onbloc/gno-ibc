@@ -54,7 +54,7 @@ func TestWriteAcknowledgement(cur realm, t *testing.T) {
 		ack  []byte
 	}{
 		{"non-empty ack", []byte{0xaa, 0xbb}},
-		{"empty ack", nil},
+		{"single byte ack", []byte{0x01}},
 	}
 
 	for _, tc := range cases {
@@ -81,7 +81,7 @@ func TestCommitMembershipProof(cur realm, t *testing.T) {
 		height   uint64
 	}{
 		{"typical", 4, 200},
-		{"zero", 0, 0},
+		{"zero client id", 0, 200},
 	}
 
 	for _, tc := range cases {
@@ -89,7 +89,12 @@ func TestCommitMembershipProof(cur realm, t *testing.T) {
 		rec, restore := installRecordingCore()
 
 		testing.SetRealm(adminRealm)
-		CommitMembershipProof(cross(cur), types.MsgCommitMembershipProof{ClientId: tc.clientId, ProofHeight: tc.height})
+		CommitMembershipProof(cross(cur), types.MsgCommitMembershipProof{
+			ClientId:    tc.clientId,
+			ProofHeight: tc.height,
+			Path:        []byte{0x01},
+			Value:       []byte{0x02},
+		})
 
 		uassert.Equal(t, 1, rec.calls["CommitMembershipProof"])
 		uassert.Equal(t, uint64(tc.clientId), uint64(rec.commitMemMsg.ClientId))
@@ -106,7 +111,7 @@ func TestCommitNonMembershipProof(cur realm, t *testing.T) {
 		height   uint64
 	}{
 		{"typical", 5, 300},
-		{"zero", 0, 0},
+		{"zero client id", 0, 300},
 	}
 
 	for _, tc := range cases {
@@ -114,7 +119,11 @@ func TestCommitNonMembershipProof(cur realm, t *testing.T) {
 		rec, restore := installRecordingCore()
 
 		testing.SetRealm(adminRealm)
-		CommitNonMembershipProof(cross(cur), types.MsgCommitNonMembershipProof{ClientId: tc.clientId, ProofHeight: tc.height})
+		CommitNonMembershipProof(cross(cur), types.MsgCommitNonMembershipProof{
+			ClientId:    tc.clientId,
+			ProofHeight: tc.height,
+			Path:        []byte{0x01},
+		})
 
 		uassert.Equal(t, 1, rec.calls["CommitNonMembershipProof"])
 		uassert.Equal(t, uint64(tc.clientId), uint64(rec.commitNonMemMsg.ClientId))
@@ -131,7 +140,7 @@ func TestPacketRecv(cur realm, t *testing.T) {
 		packetCount int
 	}{
 		{"single packet", 150, 1},
-		{"empty batch", 0, 0},
+		{"two packets", 150, 2},
 	}
 
 	for _, tc := range cases {
@@ -139,14 +148,16 @@ func TestPacketRecv(cur realm, t *testing.T) {
 		rec, restore := installRecordingCore()
 
 		packets := make([]types.Packet, tc.packetCount)
+		relayerMsgs := make([][]byte, tc.packetCount)
 		for i := range packets {
 			packets[i] = types.NewPacket(1, 2, []byte{byte(i)}, 100)
+			relayerMsgs[i] = []byte{byte(i)}
 		}
 
 		testing.SetRealm(adminRealm)
 		access.GrantRole(cross(cur), RelayerRole, testRelayer)
 		testing.SetRealm(relayerRealm)
-		PacketRecv(cross(cur), types.MsgPacketRecv{Packets: packets, ProofHeight: tc.proofHeight})
+		PacketRecv(cross(cur), types.MsgPacketRecv{Packets: packets, RelayerMsgs: relayerMsgs, ProofHeight: tc.proofHeight})
 		testing.SetRealm(adminRealm)
 		access.RevokeRole(cross(cur), RelayerRole, testRelayer)
 
@@ -164,7 +175,7 @@ func TestIntentPacketRecv(cur realm, t *testing.T) {
 		packetCount int
 	}{
 		{"single packet", 1},
-		{"empty batch", 0},
+		{"two packets", 2},
 	}
 
 	for _, tc := range cases {
@@ -172,14 +183,16 @@ func TestIntentPacketRecv(cur realm, t *testing.T) {
 		rec, restore := installRecordingCore()
 
 		packets := make([]types.Packet, tc.packetCount)
+		marketMakerMessages := make([][]byte, tc.packetCount)
 		for i := range packets {
 			packets[i] = types.NewPacket(1, 2, []byte{byte(i)}, 100)
+			marketMakerMessages[i] = []byte{byte(i)}
 		}
 
 		testing.SetRealm(adminRealm)
 		access.GrantRole(cross(cur), RelayerRole, testRelayer)
 		testing.SetRealm(relayerRealm)
-		IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{Packets: packets})
+		IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{Packets: packets, MarketMakerMessages: marketMakerMessages})
 		testing.SetRealm(adminRealm)
 		access.RevokeRole(cross(cur), RelayerRole, testRelayer)
 
@@ -196,7 +209,7 @@ func TestPacketAcknowledgement(cur realm, t *testing.T) {
 		proofHeight uint64
 	}{
 		{"typical", 175},
-		{"zero height", 0},
+		{"other height", 200},
 	}
 
 	for _, tc := range cases {
@@ -206,7 +219,11 @@ func TestPacketAcknowledgement(cur realm, t *testing.T) {
 		testing.SetRealm(adminRealm)
 		access.GrantRole(cross(cur), RelayerRole, testRelayer)
 		testing.SetRealm(relayerRealm)
-		PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{ProofHeight: tc.proofHeight})
+		PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{
+			Packets:          []types.Packet{types.NewPacket(1, 2, []byte{0x01}, 100)},
+			Acknowledgements: [][]byte{{0x01}},
+			ProofHeight:      tc.proofHeight,
+		})
 		testing.SetRealm(adminRealm)
 		access.RevokeRole(cross(cur), RelayerRole, testRelayer)
 
@@ -223,7 +240,7 @@ func TestPacketTimeout(cur realm, t *testing.T) {
 		proofHeight uint64
 	}{
 		{"typical", 188},
-		{"zero height", 0},
+		{"other height", 200},
 	}
 
 	for _, tc := range cases {
@@ -233,7 +250,10 @@ func TestPacketTimeout(cur realm, t *testing.T) {
 		testing.SetRealm(adminRealm)
 		access.GrantRole(cross(cur), RelayerRole, testRelayer)
 		testing.SetRealm(relayerRealm)
-		PacketTimeout(cross(cur), types.MsgPacketTimeout{ProofHeight: tc.proofHeight})
+		PacketTimeout(cross(cur), types.MsgPacketTimeout{
+			Packet:      types.NewPacket(1, 2, []byte{0x01}, 100),
+			ProofHeight: tc.proofHeight,
+		})
 		testing.SetRealm(adminRealm)
 		access.RevokeRole(cross(cur), RelayerRole, testRelayer)
 
@@ -250,7 +270,7 @@ func TestBatchSend(cur realm, t *testing.T) {
 		packetCount int
 	}{
 		{"two packets", 2},
-		{"empty", 0},
+		{"three packets", 3},
 	}
 
 	for _, tc := range cases {
@@ -282,7 +302,7 @@ func TestBatchAcks(cur realm, t *testing.T) {
 		packetCount int
 	}{
 		{"two packets", 2},
-		{"empty", 0},
+		{"three packets", 3},
 	}
 
 	for _, tc := range cases {

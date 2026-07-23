@@ -58,8 +58,25 @@ const (
 	// token replayed by a caller.
 	ErrSpoofedRealm  = "rlm does not match the current crossing frame"
 	ErrNotProxyRealm = "rlm is not proxy realm"
+
+	// ErrUnregisteredClientLoader guards RegisterClient: only approved loader
+	// realm package paths may supply a light-client implementation.
+	ErrUnregisteredClientLoader = "caller is not an approved client loader"
+
+	// ErrInvalidMsg is returned when a message fails ValidateBasic at the
+	// entrypoint boundary.
+	ErrInvalidMsg = "invalid message"
 )
 
 func makeError(msgs ...string) error {
 	return errors.New(strings.Join(msgs, ", "))
+}
+
+// mustValidate panics with ErrInvalidMsg if err is non-nil. Entrypoints use it to
+// run each message's ValidateBasic at the boundary so malformed relayer input is
+// rejected before authorization and before any state interaction.
+func mustValidate(err error) {
+	if err != nil {
+		panic(makeError(ErrInvalidMsg))
+	}
 }

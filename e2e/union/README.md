@@ -4,6 +4,52 @@ This suite follows the Notion `Union Relayer 채널 연결 가이드` against th
 predeployed `union-devnet-1`, a configured Union EVM, and Gno (`dev.ibc`)
 topology. It does not start chains or deploy/register contracts.
 
+## Acceptance scenarios
+
+The Go runner is organized around five acceptance contracts:
+
+1. **S1 — Fresh channel establishment.** Index Union and Gno; create the four
+   underlying clients and two Lens clients in guide order; apply disjoint EVM
+   allowlists and index EVM; open the EVM connection and Gno channel; verify
+   all client relations, both `OPEN` handshakes, ports, version, unchanged
+   unrelated failed work, and sanitized evidence.
+2. **S2 — Completed resume.** Load and validate one complete S1 state before
+   any side effect, verify the same topology, and broadcast no client,
+   connection, or channel transaction. Reject incomplete completed state.
+3. **S3 — ERC20 EVM to Gno.** Validate token code and 18 decimals; mint,
+   approve, and send one TokenOrder; observe exactly one `PacketSend`,
+   `PacketRecv`, `WriteAck`, and `PacketAck`; require a cleared commitment,
+   exact balance deltas, unchanged unrelated failed work, and sanitized
+   evidence.
+4. **S4 — Failure acknowledgement and refund.** Given matching failure
+   acknowledgements, require a cleared commitment, full sender refund, and no
+   voucher increase; save sanitized evidence and return failure.
+5. **S5 — Ambiguous submission.** Persist intent before connection, channel,
+   mint, approve, and send writes. A `*-submitting` resume never repeats the
+   write; it advances only when the exact external result is observable and
+   otherwise fails as ambiguous.
+
+S1-S3 are protected live scenarios. S4 uses focused result classification
+unless CI provides deterministic safe failure injection. S5 uses focused
+transition tests rather than a fake multi-chain E2E.
+
+The package dependency direction is:
+
+```text
+cmd
+ ├─ config
+ └─ scenario
+     ├─ voyager ─┐
+     ├─ evm      ├─ process
+     ├─ gno      ┘
+     └─ state
+```
+
+Packages are added only when their owning phase needs them. `scenario` owns
+order, resume decisions, and evidence; external-system packages own protocol
+details; `state` owns durable data; `config` owns validation and rendering;
+`process.Executor` is the only command-execution interface.
+
 ## Prerequisites
 
 - Gno already has Union core/ZKGM, CometBLS, and `state-lens/ics23/mpt`.

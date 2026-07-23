@@ -1,13 +1,9 @@
 name: Gno Union EVM full cycle
 
 on:
+  pull_request:
   workflow_dispatch:
     inputs:
-      apply:
-        description: Broadcast live client, connection, channel, and packet transactions
-        required: true
-        type: boolean
-        default: false
       erc20_to_gno:
         description: Include the EVM ERC20 to Gno packet phase
         required: true
@@ -23,7 +19,6 @@ concurrency:
 
 jobs:
   full-cycle:
-    if: inputs.apply
     environment: union-relayer-e2e
     runs-on: ubuntu-latest
     timeout-minutes: 180
@@ -41,7 +36,7 @@ jobs:
           path: union-voyager
 
       - name: Install Foundry
-        if: inputs.erc20_to_gno
+        if: github.event_name == 'pull_request' || inputs.erc20_to_gno
         uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1.9.0
 
       - name: Install Go
@@ -51,7 +46,7 @@ jobs:
           cache: false
 
       - name: Install pinned gnokey
-        if: inputs.erc20_to_gno
+        if: github.event_name == 'pull_request' || inputs.erc20_to_gno
         working-directory: gno-ibc
         run: make install-gno
 
@@ -118,7 +113,7 @@ jobs:
         run: e2e/union/run-channel-e2e.sh --resume
 
       - name: Verify ERC20 EVM to Gno
-        if: inputs.erc20_to_gno
+        if: github.event_name == 'pull_request' || inputs.erc20_to_gno
         working-directory: gno-ibc
         run: e2e/union/run-channel-e2e.sh --resume --apply --erc20-to-gno
 

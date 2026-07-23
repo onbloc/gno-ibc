@@ -5,10 +5,12 @@ package scenario
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/process"
@@ -29,7 +31,15 @@ type Runner struct {
 	exec    process.Executor
 	voyager *voyager.Runtime
 	options Options
-	saved   *state.State
+	current state.State
+
+	evmIndexFrom     string
+	reservedEVMPlain int64
+
+	gnoConnectionEvidence json.RawMessage
+	evmConnectionEvidence json.RawMessage
+	gnoChannelEvidence    json.RawMessage
+	evmChannelEvidence    json.RawMessage
 }
 
 // New validates and loads resume state before any external command can run.
@@ -44,6 +54,7 @@ func newRunner(cfg config.Config, executor process.Executor, options Options) (*
 	runner := &Runner{
 		cfg: cfg, exec: executor, options: options,
 		voyager: voyager.NewWithExecutor(cfg, executor, os.Stderr),
+		current: newState(cfg),
 	}
 	if !options.Resume {
 		return runner, nil
@@ -55,10 +66,15 @@ func newRunner(cfg config.Config, executor process.Executor, options Options) (*
 	if err := saved.Validate(expectedState(cfg)); err != nil {
 		return nil, err
 	}
-	if saved.Phase != state.PhaseComplete {
+	switch saved.Phase {
+	case state.PhaseConnectionSubmitting, state.Phase("connection-prepared"),
+		state.PhaseConnectionSubmitted, state.PhaseChannelSubmitting,
+		state.Phase("channel-prepared"), state.PhaseChannelSubmitted,
+		state.PhaseComplete:
+	default:
 		return nil, fmt.Errorf("resume phase %s is not implemented", saved.Phase)
 	}
-	runner.saved = &saved
+	runner.current = saved
 	return runner, nil
 }
 
@@ -74,6 +90,14 @@ func (r *Runner) Run(ctx context.Context) (runErr error) {
 	repoRoot := filepath.Clean(filepath.Join(r.cfg.ScriptDir, "..", ".."))
 	if err := state.PrepareArtifacts(repoRoot, r.cfg.ScriptDir, r.cfg.ArtifactDir, r.cfg.StateFile); err != nil {
 		return err
+	}
+	if !r.options.Resume {
+		if err := state.EnsureFresh(r.cfg.StateFile, r.bootstrapFile()); err != nil {
+			return err
+		}
+		if err := saveBootstrap(r.bootstrapFile(), r.current); err != nil {
+			return err
+		}
 	}
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), r.cfg.CleanupTimeout)
@@ -93,18 +117,15 @@ func (r *Runner) Run(ctx context.Context) (runErr error) {
 }
 
 func (r *Runner) preflight(ctx context.Context) ([]byte, error) {
-	template, err := os.ReadFile(filepath.Join(r.cfg.ScriptDir, "config.jsonc.template"))
-	if err != nil {
-		return nil, fmt.Errorf("missing Voyager config template")
-	}
 	var plain, proof []int64
-	if r.saved != nil {
-		plain, proof, err = r.saved.Allowlists.IDs()
+	var err error
+	if r.options.Resume {
+		plain, proof, err = r.current.Allowlists.IDs()
 		if err != nil {
 			return nil, err
 		}
 	}
-	rendered, err := config.RenderVoyager(template, r.cfg, plain, proof)
+	rendered, err := r.renderVoyager(plain, proof)
 	if err != nil {
 		return nil, err
 	}
@@ -131,6 +152,18 @@ func (r *Runner) preflight(ctx context.Context) ([]byte, error) {
 	return rendered, nil
 }
 
+func (r *Runner) renderVoyager(plain, proof []int64) ([]byte, error) {
+	template, err := os.ReadFile(filepath.Join(r.cfg.ScriptDir, "config.jsonc.template"))
+	if err != nil {
+		return nil, fmt.Errorf("missing Voyager config template")
+	}
+	return config.RenderVoyager(template, r.cfg, plain, proof)
+}
+
+func (r *Runner) bootstrapFile() string {
+	return filepath.Join(r.cfg.ArtifactDir, "bootstrap-in-progress.json")
+}
+
 func (r *Runner) execute(ctx context.Context, command process.Command) (process.Result, error) {
 	if r.cfg.CommandTimeout <= 0 {
 		return r.exec.Run(ctx, command)
@@ -152,5 +185,19 @@ func expectedState(cfg config.Config) state.Expected {
 		PacketToken:         cfg.EVMTestERC20,
 		PacketRecipient:     cfg.GnoRecipient,
 		PacketAmount:        cfg.EVMTestAmount,
+	}
+}
+
+func newState(cfg config.Config) state.State {
+	return state.State{
+		Phase:           state.PhaseBootstrap,
+		VoyagerRevision: cfg.UnionVoyagerRevision,
+		Chains:          state.Chains{Union: cfg.UnionChainID, EVM: cfg.EVMChainID, Gno: cfg.GnoChainID},
+		EVMTopology: state.EVMTopology{
+			ChainID: cfg.EVMChainID, AddressFingerprint: cfg.TopologyFingerprint(),
+		},
+		Ports:      state.Ports{Gno: cfg.GnoZKGMPort, EVM: strings.ToLower(cfg.EVMZKGMContract)},
+		Version:    config.ChannelVersion,
+		FailedWork: state.FailedWork{Repaired: []int64{}},
 	}
 }

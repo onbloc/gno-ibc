@@ -2,6 +2,7 @@ package voyager
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -87,18 +88,34 @@ func (r *Runtime) verifyLens(ctx context.Context, want LensExpectation) error {
 	return nil
 }
 
-// VerifyConnection checks one open connection edge.
-func (r *Runtime) VerifyConnection(ctx context.Context, want ConnectionExpectation) error {
-	return r.untilVisible(ctx, fmt.Sprintf("%s connection %d", want.Chain, want.ID), func(ctx context.Context) error {
-		return r.verifyConnection(ctx, want)
+// ConnectionEvidence verifies and returns one sanitized observed connection.
+func (r *Runtime) ConnectionEvidence(ctx context.Context, want ConnectionExpectation) (json.RawMessage, error) {
+	var got connectionState
+	err := r.untilVisible(ctx, fmt.Sprintf("%s connection %d", want.Chain, want.ID), func(ctx context.Context) error {
+		var err error
+		got, err = r.connectionState(ctx, want.Chain, want.ID)
+		if err != nil {
+			return fmt.Errorf("verify %s connection %d: %w", want.Chain, want.ID, err)
+		}
+		return checkConnection(got, want)
 	})
+	if err != nil {
+		return nil, err
+	}
+	data, err := json.Marshal(struct {
+		State                    string `json:"state"`
+		ClientID                 int64  `json:"client_id"`
+		CounterpartyClientID     int64  `json:"counterparty_client_id"`
+		CounterpartyConnectionID int64  `json:"counterparty_connection_id"`
+	}{
+		State: got.Status, ClientID: got.Client.value,
+		CounterpartyClientID:     got.CounterpartyClient.value,
+		CounterpartyConnectionID: got.Counterparty.value,
+	})
+	return data, err
 }
 
-func (r *Runtime) verifyConnection(ctx context.Context, want ConnectionExpectation) error {
-	got, err := r.connectionState(ctx, want.Chain, want.ID)
-	if err != nil {
-		return fmt.Errorf("verify %s connection %d: %w", want.Chain, want.ID, err)
-	}
+func checkConnection(got connectionState, want ConnectionExpectation) error {
 	if got.Client.value != want.Client || got.CounterpartyClient.value != want.CounterpartyClient {
 		return fmt.Errorf("connection relation mismatch for %s connection %d", want.Chain, want.ID)
 	}
@@ -111,18 +128,35 @@ func (r *Runtime) verifyConnection(ctx context.Context, want ConnectionExpectati
 	return nil
 }
 
-// VerifyChannel checks one open channel edge.
-func (r *Runtime) VerifyChannel(ctx context.Context, want ChannelExpectation) error {
-	return r.untilVisible(ctx, fmt.Sprintf("%s channel %d", want.Chain, want.ID), func(ctx context.Context) error {
-		return r.verifyChannel(ctx, want)
+// ChannelEvidence verifies and returns one sanitized observed channel.
+func (r *Runtime) ChannelEvidence(ctx context.Context, want ChannelExpectation) (json.RawMessage, error) {
+	var got channelState
+	err := r.untilVisible(ctx, fmt.Sprintf("%s channel %d", want.Chain, want.ID), func(ctx context.Context) error {
+		var err error
+		got, err = r.channelState(ctx, want.Chain, want.ID)
+		if err != nil {
+			return fmt.Errorf("verify %s channel %d: %w", want.Chain, want.ID, err)
+		}
+		return checkChannel(got, want)
 	})
+	if err != nil {
+		return nil, err
+	}
+	data, err := json.Marshal(struct {
+		State                 string `json:"state"`
+		ConnectionID          int64  `json:"connection_id"`
+		CounterpartyChannelID int64  `json:"counterparty_channel_id"`
+		CounterpartyPortID    string `json:"counterparty_port_id"`
+		Version               string `json:"version"`
+	}{
+		State: got.Status, ConnectionID: got.Connection.value,
+		CounterpartyChannelID: got.Counterparty.value,
+		CounterpartyPortID:    got.Port, Version: got.Version,
+	})
+	return data, err
 }
 
-func (r *Runtime) verifyChannel(ctx context.Context, want ChannelExpectation) error {
-	got, err := r.channelState(ctx, want.Chain, want.ID)
-	if err != nil {
-		return fmt.Errorf("verify %s channel %d: %w", want.Chain, want.ID, err)
-	}
+func checkChannel(got channelState, want ChannelExpectation) error {
 	if got.Connection.value != want.Connection ||
 		!strings.EqualFold(got.Port, want.CounterpartyPort) || got.Version != want.Version {
 		return fmt.Errorf("channel relation mismatch for %s channel %d", want.Chain, want.ID)

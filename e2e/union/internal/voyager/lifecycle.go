@@ -180,12 +180,7 @@ func (r *Runtime) waitReady(ctx context.Context) error {
 // Close stops and removes Voyager. Failed cleanup retains ownership for retry.
 func (r *Runtime) Close(ctx context.Context) error {
 	if r.container == "" {
-		err := os.RemoveAll(r.runtimeDir)
-		if err == nil {
-			r.runtimeDir = ""
-			r.runID = ""
-		}
-		return err
+		return r.removeRuntimeDir()
 	}
 	result, err := r.command(ctx, process.Command{
 		Name: "docker",
@@ -196,12 +191,7 @@ func (r *Runtime) Close(ctx context.Context) error {
 	}
 	if len(bytes.TrimSpace(result.Stdout)) == 0 {
 		r.container = ""
-		err := os.RemoveAll(r.runtimeDir)
-		if err == nil {
-			r.runtimeDir = ""
-			r.runID = ""
-		}
-		return err
+		return r.removeRuntimeDir()
 	}
 	result, err = r.command(ctx, process.Command{
 		Name: "docker",
@@ -226,7 +216,11 @@ func (r *Runtime) Close(ctx context.Context) error {
 		return fmt.Errorf("remove Voyager container: %w", err)
 	}
 	r.container = ""
-	err = os.RemoveAll(r.runtimeDir)
+	return r.removeRuntimeDir()
+}
+
+func (r *Runtime) removeRuntimeDir() error {
+	err := os.RemoveAll(r.runtimeDir)
 	if err == nil {
 		r.runtimeDir = ""
 		r.runID = ""
@@ -267,6 +261,11 @@ func (r *Runtime) restart(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("read Voyager configuration for restart: %w", err)
 	}
+	return r.Restart(ctx, rendered)
+}
+
+// Restart replaces the private configuration without rebuilding the image.
+func (r *Runtime) Restart(ctx context.Context, rendered []byte) error {
 	if err := r.Close(ctx); err != nil {
 		return err
 	}

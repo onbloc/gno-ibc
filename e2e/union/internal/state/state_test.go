@@ -22,6 +22,25 @@ func TestValidateCompleteState(t *testing.T) {
 	}
 }
 
+func TestSaveBootstrapIsExclusiveAndPrivate(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bootstrap-in-progress.json")
+	saved, _ := completeState()
+	if err := state.SaveBootstrap(path, saved); err != nil {
+		t.Fatal(err)
+	}
+	if err := state.SaveBootstrap(path, saved); err == nil ||
+		!strings.Contains(err.Error(), "already exists") {
+		t.Fatalf("error = %v, want exclusive-create failure", err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode = %o, want 600", info.Mode().Perm())
+	}
+}
+
 func TestValidateRejectsTerminalFailedWork(t *testing.T) {
 	saved, expected := completeState()
 	saved.Phase = state.Phase("failed-work")

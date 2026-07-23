@@ -13,6 +13,7 @@ import (
 
 	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/process"
+	"github.com/onbloc/gno-ibc/e2e/union/internal/state"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/voyager"
 )
 
@@ -172,7 +173,7 @@ func TestRuntimeCleansUpContainerAfterDockerRunError(t *testing.T) {
 func TestFailedWorkRetriesDeadlocksAtMostFiveTimes(t *testing.T) {
 	cfg := runtimeConfig(t)
 	cfg.PollInterval = 0
-	steps := []step{{}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {}, {stdout: "id"}, {stdout: "{}"}}
+	steps := startedSteps()
 	for range 5 {
 		steps = append(steps, step{stderr: "deadlock detected", err: errors.New("deadlock")})
 	}
@@ -191,16 +192,19 @@ func TestFailedWorkRetriesDeadlocksAtMostFiveTimes(t *testing.T) {
 
 func TestFailedWorkRejectsSavedIDAheadOfQueue(t *testing.T) {
 	cfg := runtimeConfig(t)
-	recorder := &executor{steps: []step{
-		{}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {}, {stdout: "id"}, {stdout: "{}"},
-		{stdout: `[{"id":5}]`},
-	}}
+	recorder := &executor{steps: startedSteps(
+		step{stdout: `[{"id":5}]`},
+		step{stdout: `[{"id":5}]`},
+	)}
 	runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
 	if err := runtime.Start(context.Background(), []byte("{}")); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := runtime.FailedWorkID(context.Background(), int64(1<<63-1), nil); err == nil {
 		t.Fatal("saved failed-work ID ahead of Voyager queue unexpectedly accepted")
+	}
+	if _, err := runtime.FailedWorkID(context.Background(), 5, []int64{6}); err == nil {
+		t.Fatal("saved repaired ID ahead of Voyager queue unexpectedly accepted")
 	}
 }
 
@@ -224,10 +228,7 @@ func TestVerifyClientDistinguishesNotFoundMalformedAndCommandFailure(t *testing.
 				cfg.ScenarioTimeout = time.Millisecond
 				cfg.PollInterval = time.Hour
 			}
-			recorder := &executor{steps: append(
-				[]step{{}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {}, {stdout: "id"}, {stdout: "{}"}},
-				tc.result,
-			)}
+			recorder := &executor{steps: startedSteps(tc.result)}
 			runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
 			if err := runtime.Start(context.Background(), []byte("{}")); err != nil {
 				t.Fatal(err)
@@ -252,7 +253,7 @@ func TestEVMClientVerificationRestartsVoyagerAtMostThreeTimes(t *testing.T) {
 	cfg.EVMRefreshInterval = 0
 	cfg.PollInterval = time.Millisecond
 	cfg.ScenarioTimeout = 20 * time.Millisecond
-	steps := []step{{}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {}, {stdout: "id"}, {stdout: "{}"}}
+	steps := startedSteps()
 	for range 3 {
 		steps = append(steps,
 			step{stdout: "null"},
@@ -288,19 +289,22 @@ func TestTypedStateQueriesRejectMissingState(t *testing.T) {
 			return runtime.VerifyLens(context.Background(), voyager.LensExpectation{Chain: "chain", ID: 1})
 		}},
 		{"connection state", func(runtime *voyager.Runtime) error {
-			return runtime.VerifyConnection(context.Background(), voyager.ConnectionExpectation{Chain: "chain", ID: 1})
+			_, err := runtime.ConnectionEvidence(
+				context.Background(), voyager.ConnectionExpectation{Chain: "chain", ID: 1},
+			)
+			return err
 		}},
 		{"channel state", func(runtime *voyager.Runtime) error {
-			return runtime.VerifyChannel(context.Background(), voyager.ChannelExpectation{Chain: "chain", ID: 1})
+			_, err := runtime.ChannelEvidence(
+				context.Background(), voyager.ChannelExpectation{Chain: "chain", ID: 1},
+			)
+			return err
 		}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := runtimeConfig(t)
-			recorder := &executor{steps: append(
-				[]step{{}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {}, {stdout: "id"}, {stdout: "{}"}},
-				step{stdout: `{}`},
-			)}
+			recorder := &executor{steps: startedSteps(step{stdout: `{}`})}
 			runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
 			if err := runtime.Start(context.Background(), []byte("{}")); err != nil {
 				t.Fatal(err)
@@ -324,9 +328,10 @@ func TestHandshakeVerificationPollsUntilCounterpartyIDIsOpen(t *testing.T) {
 			pending: `{"state":{"state":"INIT","client_id":1,"counterparty_client_id":2}}`,
 			open:    `{"state":{"state":"OPEN","client_id":1,"counterparty_client_id":2,"counterparty_connection_id":4}}`,
 			check: func(runtime *voyager.Runtime) error {
-				return runtime.VerifyConnection(context.Background(), voyager.ConnectionExpectation{
+				_, err := runtime.ConnectionEvidence(context.Background(), voyager.ConnectionExpectation{
 					Chain: "chain", ID: 3, Client: 1, CounterpartyClient: 2, CounterpartyID: 4,
 				})
+				return err
 			},
 		},
 		{
@@ -334,20 +339,20 @@ func TestHandshakeVerificationPollsUntilCounterpartyIDIsOpen(t *testing.T) {
 			pending: `{"state":{"state":"INIT","connection_id":3,"counterparty_port_id":"port","version":"version"}}`,
 			open:    `{"state":{"state":"OPEN","connection_id":3,"counterparty_channel_id":5,"counterparty_port_id":"port","version":"version"}}`,
 			check: func(runtime *voyager.Runtime) error {
-				return runtime.VerifyChannel(context.Background(), voyager.ChannelExpectation{
+				_, err := runtime.ChannelEvidence(context.Background(), voyager.ChannelExpectation{
 					Chain: "chain", ID: 4, Connection: 3, CounterpartyID: 5,
 					CounterpartyPort: "port", Version: "version",
 				})
+				return err
 			},
 		},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := runtimeConfig(t)
-			recorder := &executor{steps: []step{
-				{}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {}, {stdout: "id"}, {stdout: "{}"},
-				{stdout: tc.pending}, {stdout: tc.open},
-			}}
+			recorder := &executor{steps: startedSteps(
+				step{stdout: tc.pending}, step{stdout: tc.open},
+			)}
 			runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
 			if err := runtime.Start(context.Background(), []byte("{}")); err != nil {
 				t.Fatal(err)
@@ -361,11 +366,10 @@ func TestHandshakeVerificationPollsUntilCounterpartyIDIsOpen(t *testing.T) {
 
 func TestVerifyClientRejectsMalformedMetadata(t *testing.T) {
 	cfg := runtimeConfig(t)
-	recorder := &executor{steps: []step{
-		{}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {}, {stdout: "id"}, {stdout: "{}"},
-		{stdout: `{"client_type":"gno","ibc_interface":"ibc-cosmwasm"}`},
-		{stdout: `{"counterparty_chain_id":"counterparty"}`},
-	}}
+	recorder := &executor{steps: startedSteps(
+		step{stdout: `{"client_type":"gno","ibc_interface":"ibc-cosmwasm"}`},
+		step{stdout: `{"counterparty_chain_id":"counterparty"}`},
+	)}
 	runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
 	if err := runtime.Start(context.Background(), []byte("{}")); err != nil {
 		t.Fatal(err)
@@ -378,10 +382,82 @@ func TestVerifyClientRejectsMalformedMetadata(t *testing.T) {
 	}
 }
 
+func TestCreateClientRepairsOnlyExactFailedEventAndPersistsIt(t *testing.T) {
+	cfg := runtimeConfig(t)
+	failed := `[{
+		"id":7,
+		"item":{"@value":{"@value":{
+			"plugin":"voyager/event/dev.ibc",
+			"message":{"@value":{"event":{"@type":"create_client","@value":{
+				"client_id":1,"client_type":"state-lens/ics23/mpt"
+			}}}}
+		}}}
+	},{
+		"id":8,
+		"item":{"@value":{"@value":{
+			"plugin":"voyager/event/other",
+			"message":{"@value":{"event":{"@type":"create_client","@value":{
+				"client_id":1,"client_type":"state-lens/ics23/mpt"
+			}}}}
+		}}}
+	}]`
+	recorder := &executor{steps: startedSteps(
+		step{stdout: "null"}, step{}, step{stdout: failed},
+		step{stdout: "union-channel-e2e-running"}, step{}, step{}, step{},
+		step{stdout: "id"}, step{stdout: "{}"}, step{},
+		step{stdout: `{"client_type":"state-lens/ics23/mpt","ibc_interface":"ibc-gno"}`},
+		step{stdout: `{"counterparty_chain_id":"17000","counterparty_height":"10"}`},
+	)}
+	runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
+	if err := runtime.Start(context.Background(), []byte("{}")); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "state.json")
+	saved := state.State{FailedWork: state.FailedWork{Repaired: []int64{}}}
+	err := runtime.CreateClient(context.Background(), voyager.ClientCreation{
+		ClientExpectation: voyager.ClientExpectation{
+			Chain: "dev.ibc", Counterparty: "17000", ClientType: "state-lens/ics23/mpt",
+			IBCInterface: "ibc-gno", ID: 1,
+		},
+	}, 3, nil, func(id int64) error {
+		saved.FailedWork.Repaired = append(saved.FailedWork.Repaired, id)
+		return state.Save(path, saved)
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := state.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(loaded.FailedWork.Repaired, []int64{7}) {
+		t.Fatalf("repaired IDs = %v", loaded.FailedWork.Repaired)
+	}
+	requeues := 0
+	for _, command := range recorder.commands {
+		if strings.Contains(strings.Join(command.Args, " "), "queue query-failed-by-id 7 -e") {
+			requeues++
+		}
+		if strings.Contains(strings.Join(command.Args, " "), "query-failed-by-id 8") {
+			t.Fatal("unrelated failed event was requeued")
+		}
+	}
+	if requeues != 1 {
+		t.Fatalf("exact requeues = %d, want one", requeues)
+	}
+}
+
 type step struct {
 	stdout, stderr string
 	err            error
 	check          func(*testing.T, context.Context, process.Command)
+}
+
+func startedSteps(extra ...step) []step {
+	return append([]step{
+		{}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"},
+		{}, {stdout: "id"}, {stdout: "{}"},
+	}, extra...)
 }
 
 type executor struct {

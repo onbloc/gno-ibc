@@ -3,9 +3,7 @@ package scenario
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"fmt"
-	"path/filepath"
 	"strings"
 
 	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
@@ -13,25 +11,9 @@ import (
 	"github.com/onbloc/gno-ibc/e2e/union/internal/voyager"
 )
 
-// RunChannel establishes and verifies S1. prepareChannel validates one loaded
-// S2 state before any later stage can broadcast; completed stages then verify
+// runChannelScenario establishes and verifies S1. Completed stages verify
 // the saved topology without repeating writes.
-func (r *Runner) RunChannel(ctx context.Context) (runErr error) {
-	rendered, err := r.preflight(ctx)
-	if err != nil {
-		return err
-	}
-	if !r.options.Apply && !r.options.Resume {
-		return nil
-	}
-	defer func() {
-		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), r.cfg.CleanupTimeout)
-		defer cancel()
-		runErr = errors.Join(runErr, r.voyager.Close(cleanupCtx))
-	}()
-	if err := r.prepareChannel(ctx, rendered); err != nil {
-		return err
-	}
+func (r *Runner) runChannelScenario(ctx context.Context) error {
 	if r.saved != nil && r.saved.Phase == state.PhaseComplete {
 		if err := r.verifyClientRelations(ctx); err != nil {
 			return err
@@ -69,14 +51,6 @@ func (r *Runner) RunChannel(ctx context.Context) (runErr error) {
 		return err
 	}
 	return r.saveChannelEvidence(ctx)
-}
-
-func (r *Runner) prepareChannel(ctx context.Context, rendered []byte) error {
-	repoRoot := filepath.Clean(filepath.Join(r.cfg.ScriptDir, "..", ".."))
-	if err := state.PrepareArtifacts(repoRoot, r.cfg.ScriptDir, r.cfg.ArtifactDir, r.cfg.StateFile); err != nil {
-		return err
-	}
-	return r.voyager.Start(ctx, rendered)
 }
 
 func (r *Runner) indexUnionAndGno(context.Context) error {

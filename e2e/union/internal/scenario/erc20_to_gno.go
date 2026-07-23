@@ -2,9 +2,9 @@ package scenario
 
 import "context"
 
-// RunERC20ToGno sends and verifies S3. A matching S4 failure continues through
+// runERC20ToGnoScenario sends and verifies S3. A matching S4 failure continues through
 // refund verification and evidence saving before requirePacketSuccess fails.
-func (r *Runner) RunERC20ToGno(ctx context.Context) error {
+func (r *Runner) runERC20ToGnoScenario(ctx context.Context) error {
 	if err := r.validateERC20(ctx); err != nil {
 		return err
 	}

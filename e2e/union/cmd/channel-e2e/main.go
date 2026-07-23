@@ -48,18 +48,13 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	if err := runner.RunChannel(ctx); err != nil {
+	if err := runner.Run(ctx); err != nil {
 		return err
 	}
 	fmt.Println("Voyager config render and preflight passed")
 	if !options.Apply && !options.Resume {
 		fmt.Println("dry preflight only; broadcasting requires --apply")
 		return nil
-	}
-	if options.ERC20ToGno {
-		if err := runner.RunERC20ToGno(ctx); err != nil {
-			return err
-		}
 	}
 	return nil
 }

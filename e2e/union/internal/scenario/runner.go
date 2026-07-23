@@ -5,6 +5,7 @@ package scenario
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -59,6 +60,36 @@ func newRunner(cfg config.Config, executor process.Executor, options Options) (*
 	}
 	runner.saved = &saved
 	return runner, nil
+}
+
+// Run owns Voyager for the complete selected scenario sequence.
+func (r *Runner) Run(ctx context.Context) (runErr error) {
+	rendered, err := r.preflight(ctx)
+	if err != nil {
+		return err
+	}
+	if !r.options.Apply && !r.options.Resume {
+		return nil
+	}
+	repoRoot := filepath.Clean(filepath.Join(r.cfg.ScriptDir, "..", ".."))
+	if err := state.PrepareArtifacts(repoRoot, r.cfg.ScriptDir, r.cfg.ArtifactDir, r.cfg.StateFile); err != nil {
+		return err
+	}
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), r.cfg.CleanupTimeout)
+		defer cancel()
+		runErr = errors.Join(runErr, r.voyager.Close(cleanupCtx))
+	}()
+	if err := r.voyager.Start(ctx, rendered); err != nil {
+		return err
+	}
+	if err := r.runChannelScenario(ctx); err != nil {
+		return err
+	}
+	if r.options.ERC20ToGno {
+		return r.runERC20ToGnoScenario(ctx)
+	}
+	return nil
 }
 
 func (r *Runner) preflight(ctx context.Context) ([]byte, error) {

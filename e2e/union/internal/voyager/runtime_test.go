@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -43,23 +44,32 @@ func TestRuntimeLifecycleUsesPinnedImageAndDirectDockerCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := commandVerbs(recorder.commands)
-	want := []string{"build", "image", "image", "ps", "run", "exec", "ps", "stop", "rm"}
+	want := []string{"build", "image", "image", "ps", "run", "exec", "ps", "inspect", "stop", "rm"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Docker verbs = %v, want %v", got, want)
 	}
 	build := recorder.commands[0]
+	iidFile := argumentAfter(build.Args, "--iidfile")
 	if !slices.Equal(build.Args, []string{
 		"build", "--file", filepath.Join(cfg.ScriptDir, "voyager-build.Dockerfile"),
 		"--build-arg", "UNION_COMMIT=" + config.VoyagerRevision,
+		"--iidfile", iidFile,
 		"--tag", cfg.VoyagerImage, cfg.UnionVoyagerDir,
 	}) {
 		t.Fatalf("build args = %#v", build.Args)
 	}
+	for _, index := range []int{1, 2} {
+		args := recorder.commands[index].Args
+		if args[len(args)-1] != testImageID {
+			t.Fatalf("image inspection used %q, want immutable image ID", args[len(args)-1])
+		}
+	}
 	run := strings.Join(recorder.commands[4].Args, " ")
 	for _, required := range []string{
+		"--label io.onbloc.gno-ibc.e2e.run=union-voyager-",
 		"--env RUST_LOG=warn",
 		"dst=/run/voyager/config.jsonc,readonly",
-		cfg.VoyagerImage + " -c /run/voyager/config.jsonc start",
+		testImageID + " -c /run/voyager/config.jsonc start",
 	} {
 		if !strings.Contains(run, required) {
 			t.Fatalf("run args %q do not contain %q", run, required)
@@ -69,7 +79,7 @@ func TestRuntimeLifecycleUsesPinnedImageAndDirectDockerCommands(t *testing.T) {
 	if !strings.Contains(exec, "/output/voyager -c /run/voyager/config.jsonc rpc info") {
 		t.Fatalf("RPC args = %q", exec)
 	}
-	if got := recorder.commands[7].Args; !slices.Equal(got[1:3], []string{"--timeout", "1"}) {
+	if got := recorder.commands[8].Args; !slices.Equal(got[1:3], []string{"--timeout", "1"}) {
 		t.Fatalf("stop args = %#v", got)
 	}
 }
@@ -114,6 +124,25 @@ func TestRuntimeRetainsContainerAfterCleanupFailure(t *testing.T) {
 	}
 }
 
+func TestRuntimeRefusesToRemoveContainerWithAnotherOwner(t *testing.T) {
+	cfg := runtimeConfig(t)
+	recorder := &executor{ownership: "another-run", steps: []step{
+		{}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {},
+		{stdout: "container-id"}, {stdout: "{}"}, {stdout: "container"},
+	}}
+	runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
+	if err := runtime.Start(context.Background(), []byte("{}")); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.Close(context.Background()); err == nil {
+		t.Fatal("container with another ownership label unexpectedly removed")
+	}
+	verbs := commandVerbs(recorder.commands)
+	if slices.Contains(verbs, "stop") || slices.Contains(verbs, "rm") {
+		t.Fatalf("foreign container received destructive command: %v", verbs)
+	}
+}
+
 func TestRuntimeCleansUpContainerAfterDockerRunError(t *testing.T) {
 	cfg := runtimeConfig(t)
 	recorder := &executor{steps: []step{
@@ -128,14 +157,14 @@ func TestRuntimeCleansUpContainerAfterDockerRunError(t *testing.T) {
 	if err := runtime.Close(context.Background()); err != nil {
 		t.Fatalf("cleanup after run failure: %v", err)
 	}
-	if got, want := commandVerbs(recorder.commands), []string{"build", "image", "image", "ps", "run", "ps", "stop", "rm"}; !slices.Equal(got, want) {
+	if got, want := commandVerbs(recorder.commands), []string{"build", "image", "image", "ps", "run", "ps", "inspect", "stop", "rm"}; !slices.Equal(got, want) {
 		t.Fatalf("Docker verbs = %v, want %v", got, want)
 	}
 	name := argumentAfter(recorder.commands[4].Args, "--name")
 	if name == "" ||
 		argumentAfter(recorder.commands[5].Args, "--filter") != "name=^/"+name+"$" ||
-		recorder.commands[6].Args[len(recorder.commands[6].Args)-1] != name ||
-		recorder.commands[7].Args[len(recorder.commands[7].Args)-1] != name {
+		recorder.commands[7].Args[len(recorder.commands[7].Args)-1] != name ||
+		recorder.commands[8].Args[len(recorder.commands[8].Args)-1] != name {
 		t.Fatalf("cleanup did not retain exact run name %q", name)
 	}
 }
@@ -356,14 +385,29 @@ type step struct {
 }
 
 type executor struct {
-	t        *testing.T
-	steps    []step
-	fallback *step
-	commands []process.Command
+	t         *testing.T
+	steps     []step
+	fallback  *step
+	ownership string
+	commands  []process.Command
 }
 
 func (e *executor) Run(ctx context.Context, command process.Command) (process.Result, error) {
 	e.commands = append(e.commands, command)
+	if command.Name == "docker" && len(command.Args) > 0 {
+		if command.Args[0] == "build" {
+			if err := os.WriteFile(argumentAfter(command.Args, "--iidfile"), []byte(testImageID+"\n"), 0o600); err != nil {
+				return process.Result{}, err
+			}
+		}
+		if command.Args[0] == "inspect" && strings.Contains(strings.Join(command.Args, " "), "io.onbloc.gno-ibc.e2e.run") {
+			if e.ownership != "" {
+				return process.Result{Stdout: []byte(e.ownership)}, nil
+			}
+			name := command.Args[len(command.Args)-1]
+			return process.Result{Stdout: []byte(strings.TrimPrefix(name, "union-channel-e2e-"))}, nil
+		}
+	}
 	if len(e.steps) == 0 {
 		if e.fallback != nil {
 			return process.Result{
@@ -380,6 +424,8 @@ func (e *executor) Run(ctx context.Context, command process.Command) (process.Re
 	}
 	return process.Result{Stdout: []byte(current.stdout), Stderr: []byte(current.stderr)}, current.err
 }
+
+const testImageID = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 func runtimeConfig(t *testing.T) config.Config {
 	t.Helper()

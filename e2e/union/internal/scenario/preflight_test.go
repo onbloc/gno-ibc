@@ -93,7 +93,7 @@ func TestDryPreflightUsesOnlyReadOnlyGitChecks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := runner.RunChannel(context.Background()); err != nil {
+	if err := runner.Run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if len(recorder.commands) != 2 {

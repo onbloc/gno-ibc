@@ -4,6 +4,7 @@ package voyager
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -18,8 +19,9 @@ import (
 )
 
 const (
-	configPath = "/run/voyager/config.jsonc"
-	binaryPath = "/output/voyager"
+	configPath     = "/run/voyager/config.jsonc"
+	binaryPath     = "/output/voyager"
+	ownershipLabel = "io.onbloc.gno-ibc.e2e.run"
 )
 
 var (
@@ -36,6 +38,8 @@ type Runtime struct {
 	progress   io.Writer
 	container  string
 	runtimeDir string
+	runID      string
+	imageID    string
 	imageReady bool
 }
 
@@ -50,15 +54,13 @@ func (r *Runtime) Start(ctx context.Context, rendered []byte) error {
 	if err != nil {
 		return fmt.Errorf("create Voyager runtime directory: %w", err)
 	}
-	if err := os.Chmod(dir, 0o700); err != nil {
-		_ = os.RemoveAll(dir)
-		return fmt.Errorf("protect Voyager runtime directory: %w", err)
-	}
 	r.runtimeDir = dir
+	r.runID = filepath.Base(dir)
 	hostConfig := filepath.Join(dir, "config.jsonc")
 	if err := os.WriteFile(hostConfig, rendered, 0o600); err != nil {
 		_ = os.RemoveAll(dir)
 		r.runtimeDir = ""
+		r.runID = ""
 		return fmt.Errorf("write Voyager configuration: %w", err)
 	}
 	if !r.imageReady {
@@ -67,7 +69,7 @@ func (r *Runtime) Start(ctx context.Context, rendered []byte) error {
 		}
 		r.imageReady = true
 	}
-	name := "union-channel-e2e-go-" + strconv.Itoa(os.Getpid())
+	name := "union-channel-e2e-" + r.runID
 	result, err := r.command(ctx, process.Command{
 		Name: "docker",
 		Args: []string{"ps", "-a", "--filter", "name=^/" + name + "$", "--format", "{{.Names}}"},
@@ -83,9 +85,10 @@ func (r *Runtime) Start(ctx context.Context, rendered []byte) error {
 		Name: "docker",
 		Args: []string{
 			"run", "--detach", "--name", name,
+			"--label", ownershipLabel + "=" + r.runID,
 			"--env", "RUST_LOG=" + r.cfg.VoyagerRustLog,
 			"--mount", "type=bind,src=" + hostConfig + ",dst=" + configPath + ",readonly",
-			r.cfg.VoyagerImage, "-c", configPath, "start",
+			r.imageID, "-c", configPath, "start",
 		},
 	})
 	if err != nil {
@@ -98,11 +101,13 @@ func (r *Runtime) Start(ctx context.Context, rendered []byte) error {
 }
 
 func (r *Runtime) build(ctx context.Context) error {
+	iidFile := filepath.Join(r.runtimeDir, "image.id")
 	_, err := r.executor.Run(ctx, process.Command{
 		Name: "docker",
 		Args: []string{
 			"build", "--file", filepath.Join(r.cfg.ScriptDir, "voyager-build.Dockerfile"),
 			"--build-arg", "UNION_COMMIT=" + r.cfg.UnionVoyagerRevision,
+			"--iidfile", iidFile,
 			"--tag", r.cfg.VoyagerImage, r.cfg.UnionVoyagerDir,
 		},
 		Stdout: r.progress,
@@ -111,11 +116,23 @@ func (r *Runtime) build(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("%w: build Voyager image", classifyContext(ctx, err))
 	}
+	imageID, err := os.ReadFile(iidFile)
+	if err != nil {
+		return fmt.Errorf("read Voyager image ID: %w", err)
+	}
+	r.imageID = string(bytes.TrimSpace(imageID))
+	digest, ok := strings.CutPrefix(r.imageID, "sha256:")
+	if !ok || len(digest) != 64 {
+		return fmt.Errorf("%w: malformed Voyager image ID", ErrMalformedResponse)
+	}
+	if _, err := hex.DecodeString(digest); err != nil {
+		return fmt.Errorf("%w: malformed Voyager image ID", ErrMalformedResponse)
+	}
 	result, err := r.command(ctx, process.Command{
 		Name: "docker",
 		Args: []string{
 			"image", "inspect", "--format",
-			`{{index .Config.Labels "org.opencontainers.image.revision"}}`, r.cfg.VoyagerImage,
+			`{{index .Config.Labels "org.opencontainers.image.revision"}}`, r.imageID,
 		},
 	})
 	if err != nil {
@@ -126,7 +143,7 @@ func (r *Runtime) build(ctx context.Context) error {
 	}
 	result, err = r.command(ctx, process.Command{
 		Name: "docker",
-		Args: []string{"image", "inspect", "--format", "{{index .Config.Entrypoint 0}}", r.cfg.VoyagerImage},
+		Args: []string{"image", "inspect", "--format", "{{index .Config.Entrypoint 0}}", r.imageID},
 	})
 	if err != nil {
 		return fmt.Errorf("inspect Voyager image entrypoint: %w", err)
@@ -166,6 +183,7 @@ func (r *Runtime) Close(ctx context.Context) error {
 		err := os.RemoveAll(r.runtimeDir)
 		if err == nil {
 			r.runtimeDir = ""
+			r.runID = ""
 		}
 		return err
 	}
@@ -181,8 +199,21 @@ func (r *Runtime) Close(ctx context.Context) error {
 		err := os.RemoveAll(r.runtimeDir)
 		if err == nil {
 			r.runtimeDir = ""
+			r.runID = ""
 		}
 		return err
+	}
+	result, err = r.command(ctx, process.Command{
+		Name: "docker",
+		Args: []string{
+			"inspect", "--format", `{{index .Config.Labels "` + ownershipLabel + `"}}`, r.container,
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("inspect Voyager container ownership: %w", err)
+	}
+	if string(bytes.TrimSpace(result.Stdout)) != r.runID {
+		return fmt.Errorf("refusing to remove Voyager container not owned by this run")
 	}
 	if _, err := r.command(ctx, process.Command{
 		Name: "docker", Args: []string{"stop", "--timeout", strconv.Itoa(int(r.cfg.VoyagerStopTimeout.Seconds())), r.container},
@@ -198,6 +229,7 @@ func (r *Runtime) Close(ctx context.Context) error {
 	err = os.RemoveAll(r.runtimeDir)
 	if err == nil {
 		r.runtimeDir = ""
+		r.runID = ""
 	}
 	return err
 }

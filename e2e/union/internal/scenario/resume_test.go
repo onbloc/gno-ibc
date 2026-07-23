@@ -44,7 +44,7 @@ func TestCompletedResumeUsesLoadedStateAndBroadcastsNothing(t *testing.T) {
 	if err := os.Remove(cfg.StateFile); err != nil {
 		t.Fatal(err)
 	}
-	if err := runner.RunChannel(ctx); err != nil {
+	if err := runner.Run(ctx); err != nil {
 		t.Fatal(err)
 	}
 	if recorder.stopContextErr != nil {
@@ -80,7 +80,7 @@ func readOnlyResumeCommand(command process.Command) bool {
 		return false
 	}
 	switch command.Args[0] {
-	case "build", "image", "ps", "run", "stop", "rm":
+	case "build", "image", "ps", "run", "inspect", "stop", "rm":
 		return true
 	case "exec":
 		if len(command.Args) < 8 {
@@ -118,7 +118,13 @@ func (r *resumeExecutor) Run(ctx context.Context, command process.Command) (proc
 	case "stop":
 		r.stopContextErr = ctx.Err()
 		return process.Result{}, nil
-	case "build", "rm":
+	case "build":
+		iidFile := argumentAfter(command.Args, "--iidfile")
+		if err := os.WriteFile(iidFile, []byte(testImageID+"\n"), 0o600); err != nil {
+			return process.Result{}, err
+		}
+		return process.Result{}, nil
+	case "rm":
 		return process.Result{}, nil
 	case "image":
 		if strings.Contains(strings.Join(command.Args, " "), "Entrypoint") {
@@ -132,12 +138,17 @@ func (r *resumeExecutor) Run(ctx context.Context, command process.Command) (proc
 		return process.Result{}, nil
 	case "run":
 		return process.Result{Stdout: []byte("container-id")}, nil
+	case "inspect":
+		name := command.Args[len(command.Args)-1]
+		return process.Result{Stdout: []byte(strings.TrimPrefix(name, "union-channel-e2e-"))}, nil
 	case "exec":
 		return r.voyagerResponse(command.Args)
 	default:
 		return process.Result{}, errors.New("unexpected Docker command")
 	}
 }
+
+const testImageID = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 func (r *resumeExecutor) voyagerResponse(args []string) (process.Result, error) {
 	joined := strings.Join(args, " ")
@@ -226,4 +237,13 @@ func slicesContain(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func argumentAfter(args []string, flag string) string {
+	for i := range len(args) - 1 {
+		if args[i] == flag {
+			return args[i+1]
+		}
+	}
+	return ""
 }

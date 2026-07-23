@@ -67,7 +67,7 @@ func TestChannelOpenTry(cur realm, t *testing.T) {
 		testing.SetRealm(adminRealm)
 		access.GrantRole(cross(cur), RelayerRole, testRelayer)
 		testing.SetRealm(relayerRealm)
-		ChannelOpenTry(cross(cur), types.MsgChannelOpenTry{CounterpartyVersion: tc.counterpartyVersion})
+		ChannelOpenTry(cross(cur), types.MsgChannelOpenTry{CounterpartyVersion: tc.counterpartyVersion, ProofHeight: 1})
 		testing.SetRealm(adminRealm)
 		access.RevokeRole(cross(cur), RelayerRole, testRelayer)
 
@@ -95,7 +95,7 @@ func TestChannelOpenAck(cur realm, t *testing.T) {
 		testing.SetRealm(adminRealm)
 		access.GrantRole(cross(cur), RelayerRole, testRelayer)
 		testing.SetRealm(relayerRealm)
-		ChannelOpenAck(cross(cur), types.MsgChannelOpenAck{ChannelId: tc.channelId, CounterpartyChannelId: tc.counterpartyChannelId})
+		ChannelOpenAck(cross(cur), types.MsgChannelOpenAck{ChannelId: tc.channelId, CounterpartyChannelId: tc.counterpartyChannelId, ProofHeight: 1})
 		testing.SetRealm(adminRealm)
 		access.RevokeRole(cross(cur), RelayerRole, testRelayer)
 
@@ -123,7 +123,7 @@ func TestChannelOpenConfirm(cur realm, t *testing.T) {
 		testing.SetRealm(adminRealm)
 		access.GrantRole(cross(cur), RelayerRole, testRelayer)
 		testing.SetRealm(relayerRealm)
-		ChannelOpenConfirm(cross(cur), types.MsgChannelOpenConfirm{ChannelId: tc.channelId})
+		ChannelOpenConfirm(cross(cur), types.MsgChannelOpenConfirm{ChannelId: tc.channelId, ProofHeight: 1})
 		testing.SetRealm(adminRealm)
 		access.RevokeRole(cross(cur), RelayerRole, testRelayer)
 
@@ -148,7 +148,7 @@ func TestForceChannelOpenTry(cur realm, t *testing.T) {
 		rec, restore := installRecordingCore()
 
 		testing.SetRealm(adminRealm)
-		ForceChannelOpenTry(cross(cur), types.MsgChannelOpenTry{CounterpartyVersion: tc.counterpartyVersion})
+		ForceChannelOpenTry(cross(cur), types.MsgChannelOpenTry{CounterpartyVersion: tc.counterpartyVersion, ProofHeight: 1})
 
 		uassert.Equal(t, 1, rec.calls["ForceChannelOpenTry"])
 		uassert.Equal(t, tc.counterpartyVersion, rec.forceChanTryMsg.CounterpartyVersion)
@@ -171,7 +171,7 @@ func TestForceChannelOpenAck(cur realm, t *testing.T) {
 		rec, restore := installRecordingCore()
 
 		testing.SetRealm(adminRealm)
-		ForceChannelOpenAck(cross(cur), types.MsgChannelOpenAck{ChannelId: tc.channelId})
+		ForceChannelOpenAck(cross(cur), types.MsgChannelOpenAck{ChannelId: tc.channelId, ProofHeight: 1})
 
 		uassert.Equal(t, 1, rec.calls["ForceChannelOpenAck"])
 		uassert.Equal(t, uint64(tc.channelId), uint64(rec.forceChanAckMsg.ChannelId))
@@ -194,7 +194,7 @@ func TestForceChannelOpenConfirm(cur realm, t *testing.T) {
 		rec, restore := installRecordingCore()
 
 		testing.SetRealm(adminRealm)
-		ForceChannelOpenConfirm(cross(cur), types.MsgChannelOpenConfirm{ChannelId: tc.channelId})
+		ForceChannelOpenConfirm(cross(cur), types.MsgChannelOpenConfirm{ChannelId: tc.channelId, ProofHeight: 1})
 
 		uassert.Equal(t, 1, rec.calls["ForceChannelOpenConfirm"])
 		uassert.Equal(t, uint64(tc.channelId), uint64(rec.forceChanConfirmMsg.ChannelId))
@@ -240,7 +240,7 @@ func TestChannelCloseConfirm(cur realm, t *testing.T) {
 		rec, restore := installRecordingCore()
 
 		testing.SetRealm(adminRealm)
-		ChannelCloseConfirm(cross(cur), types.MsgChannelCloseConfirm{ChannelId: tc.channelId})
+		ChannelCloseConfirm(cross(cur), types.MsgChannelCloseConfirm{ChannelId: tc.channelId, ProofHeight: 1})
 
 		uassert.Equal(t, 1, rec.calls["ChannelCloseConfirm"])
 		uassert.Equal(t, uint64(tc.channelId), uint64(rec.chanCloseConfirmMsg.ChannelId))

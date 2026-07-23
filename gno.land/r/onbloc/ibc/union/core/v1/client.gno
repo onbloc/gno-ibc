@@ -134,6 +134,10 @@ func (c *coreV1) ForceUpdateClient(_ int, rlm realm, msg types.MsgForceUpdateCli
 	}
 
 	c.store.SetLightClient(0, rlm, msg.ClientId, next)
+	// Clear existing consensus states so initClient's SaveConsensusState does not
+	// trip the no-silent-overwrite guard. ForceUpdate is admin-only recovery and
+	// is expected to replace the consensus history wholesale.
+	c.store.ResetConsensusStates(0, rlm, msg.ClientId)
 
 	caller := rlm.Previous().Address()
 	height := c.initClient(0, rlm, msg.ClientId, msg.ClientStateBytes, msg.ConsensusStateBytes, caller)

@@ -16,9 +16,22 @@ import (
 // (gate), and a missing impl panics.
 //
 // Gate classes:
-//   - relayer-gated: RegisterClient, CreateClient, UpdateClient, Misbehaviour
+//   - relayer-gated + loader-realm: RegisterClient (see TestRegisterClient)
+//   - relayer-gated: CreateClient, UpdateClient, Misbehaviour
 //   - admin-gated:   ForceUpdateClient
 //   - ungated:       VerifyClientMembership, HasClient
+
+// testLoaderPath is a synthetic loader-realm package path registered into the
+// clientLoaders allowlist so the proxy delegation tests can drive RegisterClient
+// without depending on the production loader realm paths.
+const testLoaderPath = "gno.land/r/onbloc/ibc/union/core/test-loader"
+
+// registerTestLoader adds testLoaderPath to the clientLoaders allowlist as admin.
+// Tests that exercise RegisterClient must call this first.
+func registerTestLoader(cur realm) {
+	testing.SetRealm(adminRealm)
+	RegisterClientLoader(cross(cur), testLoaderPath)
+}
 
 func noopClientImpl(clientStateBytes, consensusStateBytes []byte) (lightclient.Interface, error) {
 	return nil, nil
@@ -38,12 +51,14 @@ func TestRegisterClient(cur realm, t *testing.T) {
 		resetStore(cur)
 		rec, restore := installRecordingCore()
 
+		loaderRealm := testing.NewCodeRealm(testLoaderPath)
+		registerTestLoader(cur)
 		testing.SetRealm(adminRealm)
-		access.GrantRole(cross(cur), RelayerRole, testRelayer)
-		testing.SetRealm(relayerRealm)
+		access.GrantRole(cross(cur), RelayerRole, loaderRealm.Address())
+		testing.SetRealm(loaderRealm)
 		RegisterClient(cross(cur), tc.typ, noopClientImpl)
 		testing.SetRealm(adminRealm)
-		access.RevokeRole(cross(cur), RelayerRole, testRelayer)
+		access.RevokeRole(cross(cur), RelayerRole, loaderRealm.Address())
 
 		uassert.Equal(t, 1, rec.calls["RegisterClient"])
 		uassert.Equal(t, string(tc.typ), string(rec.registerClientType))
@@ -58,8 +73,29 @@ func TestRegisterClient_RejectsNonRelayer(cur realm, t *testing.T) {
 	requireSelectorProtectedForTest(cur, SelectorRegisterClient)
 
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
+		testing.SetRealm(testing.NewCodeRealm(testLoaderPath))
 		RegisterClient(cross(cur), "cometbls", noopClientImpl)
 	})
+}
+
+// TestRegisterClient_RejectsUnregisteredLoader verifies a relayer calling from a
+// realm that is not in the clientLoaders allowlist is rejected, even when it
+// holds RelayerRole and is not admin.
+func TestRegisterClient_RejectsUnregisteredLoader(cur realm, t *testing.T) {
+	resetStore(cur)
+
+	testing.SetRealm(adminRealm)
+	access.GrantRole(cross(cur), RelayerRole, testRelayer)
+
+	uassert.AbortsContains(t, cur, ErrUnregisteredClientLoader, func(cur realm) {
+		// relayerRealm is a user realm, not in the loader allowlist; testRelayer
+		// holds RelayerRole but not AdminRole.
+		testing.SetRealm(relayerRealm)
+		RegisterClient(cross(cur), "cometbls", noopClientImpl)
+	})
+
+	testing.SetRealm(adminRealm)
+	access.RevokeRole(cross(cur), RelayerRole, testRelayer)
 }
 
 func TestCreateClient(cur realm, t *testing.T) {
@@ -68,7 +104,7 @@ func TestCreateClient(cur realm, t *testing.T) {
 		msg  types.MsgCreateClient
 	}{
 		{"with state bytes", types.MsgCreateClient{ClientType: "cometbls", ClientStateBytes: []byte{0x01}, ConsensusStateBytes: []byte{0x02}, Relayer: "r1"}},
-		{"empty msg", types.MsgCreateClient{}},
+		{"different type", types.MsgCreateClient{ClientType: "state-lens", ClientStateBytes: []byte{0x03}, ConsensusStateBytes: []byte{0x04}}},
 	}
 
 	for _, tc := range cases {
@@ -109,7 +145,7 @@ func TestCreateClient_RequiresInstalledImpl(cur realm, t *testing.T) {
 	testing.SetRealm(relayerRealm)
 	uassert.AbortsContains(t, cur, "implementation not installed", func(cur realm) {
 		testing.SetRealm(relayerRealm)
-		CreateClient(cross(cur), types.MsgCreateClient{})
+		CreateClient(cross(cur), types.MsgCreateClient{ClientStateBytes: []byte{0x01}, ConsensusStateBytes: []byte{0x02}})
 	})
 	testing.SetRealm(adminRealm)
 	access.RevokeRole(cross(cur), RelayerRole, testRelayer)
@@ -121,7 +157,7 @@ func TestUpdateClient(cur realm, t *testing.T) {
 		msg  types.MsgUpdateClient
 	}{
 		{"with message", types.MsgUpdateClient{ClientId: 7, ClientMessage: []byte{0xaa}, Relayer: "r"}},
-		{"zero client id", types.MsgUpdateClient{ClientId: 0}},
+		{"other client id", types.MsgUpdateClient{ClientId: 42, ClientMessage: []byte{0xbb}}},
 	}
 
 	for _, tc := range cases {
@@ -157,7 +193,7 @@ func TestForceUpdateClient(cur realm, t *testing.T) {
 		msg  types.MsgForceUpdateClient
 	}{
 		{"recover client", types.MsgForceUpdateClient{ClientId: 3, ClientStateBytes: []byte{0x01}, ConsensusStateBytes: []byte{0x02}}},
-		{"zero client id", types.MsgForceUpdateClient{ClientId: 0}},
+		{"other client", types.MsgForceUpdateClient{ClientId: 9, ClientStateBytes: []byte{0x03}, ConsensusStateBytes: []byte{0x04}}},
 	}
 
 	for _, tc := range cases {
@@ -189,7 +225,7 @@ func TestMisbehaviour(cur realm, t *testing.T) {
 		msg  types.MsgMisbehaviour
 	}{
 		{"freeze client", types.MsgMisbehaviour{ClientId: 5, ClientMessage: []byte{0xbb}, Relayer: "r"}},
-		{"zero client id", types.MsgMisbehaviour{ClientId: 0}},
+		{"other client", types.MsgMisbehaviour{ClientId: 8, ClientMessage: []byte{0xcc}}},
 	}
 
 	for _, tc := range cases {

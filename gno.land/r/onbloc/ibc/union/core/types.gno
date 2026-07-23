@@ -115,6 +115,10 @@ type IStore interface {
 	SetLightClient(_ int, rlm realm, clientId types.ClientId, lc lightclient.Interface) bool
 	SaveClientState(_ int, rlm realm, clientId types.ClientId, clientStateBytes []byte) bool
 	SaveConsensusState(_ int, rlm realm, clientId types.ClientId, height types.Height, consensusStateBytes []byte) bool
+	// ResetConsensusStates clears all stored consensus states for clientId. Used by
+	// the admin ForceUpdateClient recovery path so SaveConsensusState's
+	// no-silent-overwrite guard does not reject the replacement.
+	ResetConsensusStates(_ int, rlm realm, clientId types.ClientId) bool
 	SaveClientStore(_ int, rlm realm, clientId types.ClientId, key string, value []byte) bool
 
 	// --- Connection ---

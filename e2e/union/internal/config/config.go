@@ -3,6 +3,7 @@ package config
 import (
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"regexp"
@@ -108,25 +109,31 @@ func Load(scriptDir string, lookup func(string) (string, bool), packet bool) (Co
 		ArtifactDir:            get("E2E_ARTIFACT_DIR"),
 		StateFile:              get("E2E_STATE_FILE"),
 	}
+
 	if cfg.ArtifactDir == "" {
 		cfg.ArtifactDir = filepath.Join(scriptDir, "channel-e2e-artifacts")
 	} else if !filepath.IsAbs(cfg.ArtifactDir) {
 		cfg.ArtifactDir = filepath.Join(scriptDir, cfg.ArtifactDir)
 	}
+
 	if cfg.StateFile == "" {
 		cfg.StateFile = filepath.Join(cfg.ArtifactDir, "state.json")
 	} else if !filepath.IsAbs(cfg.StateFile) {
 		cfg.StateFile = filepath.Join(scriptDir, cfg.StateFile)
 	}
+
 	if cfg.EVMPacketRPCURL == "" {
 		cfg.EVMPacketRPCURL = cfg.EVMRPCURL
 	}
+
 	if cfg.GnoPacketRPCURL == "" {
 		cfg.GnoPacketRPCURL = cfg.GnoRPCURL
 	}
+
 	if cfg.GnoPacketIndexerRPCURL == "" {
 		cfg.GnoPacketIndexerRPCURL = cfg.GnoTxIndexerRPCURL
 	}
+
 	cfg.VoyagerImage = get("VOYAGER_IMAGE")
 	if cfg.VoyagerImage == "" {
 		revision := cfg.UnionVoyagerRevision
@@ -135,6 +142,7 @@ func Load(scriptDir string, lookup func(string) (string, bool), packet bool) (Co
 		}
 		cfg.VoyagerImage = "union-voyager-e2e:" + revision
 	}
+
 	cfg.VoyagerRustLog = get("VOYAGER_RUST_LOG")
 	if cfg.VoyagerRustLog == "" {
 		cfg.VoyagerRustLog = "warn"
@@ -142,23 +150,23 @@ func Load(scriptDir string, lookup func(string) (string, bool), packet bool) (Co
 
 	var err error
 	if cfg.CommandTimeout, err = seconds(get("VOYAGER_COMMAND_TIMEOUT_SECONDS"), 120); err != nil {
-		return Config{}, fmt.Errorf("VOYAGER_COMMAND_TIMEOUT_SECONDS must be a positive integer")
+		return Config{}, errors.New("VOYAGER_COMMAND_TIMEOUT_SECONDS must be a positive integer")
 	}
 	if cfg.ScenarioTimeout, err = seconds(get("E2E_TIMEOUT_SECONDS"), 900); err != nil {
-		return Config{}, fmt.Errorf("E2E_TIMEOUT_SECONDS must be a positive integer")
+		return Config{}, errors.New("E2E_TIMEOUT_SECONDS must be a positive integer")
 	}
 	if cfg.PollInterval, err = nonnegativeSeconds(get("E2E_POLL_SECONDS"), 2); err != nil {
-		return Config{}, fmt.Errorf("E2E_POLL_SECONDS must be a non-negative integer")
+		return Config{}, errors.New("E2E_POLL_SECONDS must be a non-negative integer")
 	}
 	if cfg.EVMRefreshInterval, err = nonnegativeSeconds(get("VOYAGER_EVM_REFRESH_SECONDS"), 60); err != nil {
-		return Config{}, fmt.Errorf("VOYAGER_EVM_REFRESH_SECONDS must be a non-negative integer")
+		return Config{}, errors.New("VOYAGER_EVM_REFRESH_SECONDS must be a non-negative integer")
 	}
 	if cfg.VoyagerStopTimeout, err = seconds(get("VOYAGER_STOP_TIMEOUT_SECONDS"), 10); err != nil {
-		return Config{}, fmt.Errorf("VOYAGER_STOP_TIMEOUT_SECONDS must be a positive integer")
+		return Config{}, errors.New("VOYAGER_STOP_TIMEOUT_SECONDS must be a positive integer")
 	}
 	if cfg.CleanupTimeout, err = seconds(get("E2E_CLEANUP_TIMEOUT_SECONDS"), 30); err != nil ||
 		cfg.CleanupTimeout <= cfg.VoyagerStopTimeout {
-		return Config{}, fmt.Errorf("E2E_CLEANUP_TIMEOUT_SECONDS must exceed VOYAGER_STOP_TIMEOUT_SECONDS")
+		return Config{}, errors.New("E2E_CLEANUP_TIMEOUT_SECONDS must exceed VOYAGER_STOP_TIMEOUT_SECONDS")
 	}
 	if err := cfg.validate(packet); err != nil {
 		return Config{}, err
@@ -184,7 +192,7 @@ func (c Config) TopologyFingerprint() string {
 		payload.WriteByte(0)
 	}
 	body := payload.String()
-	sum := sha1.Sum([]byte(fmt.Sprintf("blob %d\x00%s", len(body), body)))
+	sum := sha1.Sum(fmt.Appendf([]byte{}, "blob %d\x00%s", len(body), body))
 	return hex.EncodeToString(sum[:])
 }
 
@@ -194,11 +202,11 @@ func seconds(raw string, fallback int64) (time.Duration, error) {
 	}
 	value, err := strconv.ParseInt(raw, 10, 64)
 	if err != nil || value <= 0 {
-		return 0, fmt.Errorf("invalid seconds")
+		return 0, errors.New("invalid seconds")
 	}
 	duration, err := time.ParseDuration(raw + "s")
 	if err != nil {
-		return 0, fmt.Errorf("invalid seconds")
+		return 0, errors.New("invalid seconds")
 	}
 	return duration, nil
 }

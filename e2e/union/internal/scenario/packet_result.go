@@ -15,16 +15,19 @@ import (
 )
 
 type packetResult struct {
-	GnoReceiveTx, GnoWriteAckTx, EVMAckTx string
-	Outcome                               state.PacketOutcome
-	Deltas                                state.Balances
-	FailedFinal                           int64
+	GnoReceiveTx  string
+	GnoWriteAckTx string
+	EVMAckTx      string
+	Outcome       state.PacketOutcome
+	Deltas        state.Balances
+	FailedFinal   int64
 }
 
 func (r *Runner) observePacket(ctx context.Context) (packetResult, error) {
 	if r.current.Phase != state.PhasePacketSendSubmitted {
 		return packetResult{}, fmt.Errorf("unsupported packet phase: %s", r.current.Phase)
 	}
+
 	packet := r.current.Packet
 	gnoEvents, err := r.gno.WaitPacket(ctx, packet.PacketHash)
 	if err != nil {
@@ -33,12 +36,14 @@ func (r *Runner) observePacket(ctx context.Context) (packetResult, error) {
 	if err := r.verifyPacketFailedWork(ctx); err != nil {
 		return packetResult{}, err
 	}
+
 	evmAck, err := r.evm.WaitAcknowledgement(
 		ctx, *packet.EVMFromBlock, r.current.Channels.EVM, packet.PacketHash,
 	)
 	if err != nil {
 		return packetResult{}, err
 	}
+
 	success, err := matchingAcknowledgementResult(gnoEvents.Acknowledgement, evmAck.Value)
 	if err != nil {
 		return packetResult{}, err
@@ -46,14 +51,17 @@ func (r *Runner) observePacket(ctx context.Context) (packetResult, error) {
 	if err := r.evm.VerifyCommitmentCleared(ctx, packet.PacketHash); err != nil {
 		return packetResult{}, err
 	}
+
 	sender, escrow, err := r.evm.Balances(ctx, packet.Sender)
 	if err != nil {
 		return packetResult{}, err
 	}
+
 	recipient, err := r.gno.VoucherBalance(ctx, packet.Voucher, packet.Recipient)
 	if err != nil {
 		return packetResult{}, err
 	}
+
 	deltas, err := classifyPacketBalances(
 		success, packet.Amount, packet.BalancesBefore,
 		&state.Balances{
@@ -63,13 +71,16 @@ func (r *Runner) observePacket(ctx context.Context) (packetResult, error) {
 	if err != nil {
 		return packetResult{}, err
 	}
+
 	if err := r.verifyPacketFailedWork(ctx); err != nil {
 		return packetResult{}, err
 	}
+
 	outcome := state.PacketOutcomeFailure
 	if success {
 		outcome = state.PacketOutcomeSuccess
 	}
+
 	return packetResult{
 		GnoReceiveTx: gnoEvents.ReceiveTx, GnoWriteAckTx: gnoEvents.WriteAckTx,
 		EVMAckTx: evmAck.Tx, Outcome: outcome, Deltas: deltas,

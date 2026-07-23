@@ -69,14 +69,17 @@ func TestRenderVoyagerConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	template, err := os.ReadFile(filepath.Join("..", "..", "config.jsonc.template"))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	rendered, err := config.RenderVoyager(template, cfg, []int64{1, 3}, []int64{2})
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if strings.Contains(string(rendered), "__EVM_CHAIN_ID__") ||
 		!strings.Contains(string(rendered), `"client_id": 3`) {
 		t.Fatal("rendered config retained a placeholder or lost the allowlist")
@@ -88,10 +91,12 @@ func TestRenderVoyagerRejectsChangedStateModuleTopology(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	template, err := os.ReadFile(filepath.Join("..", "..", "config.jsonc.template"))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	template = bytes.Replace(template, []byte(`"chain_id":"dev.ibc"`), []byte(`"chain_id":"wrong"`), 1)
 	if _, err := config.RenderVoyager(template, cfg, nil, nil); err == nil {
 		t.Fatal("changed state-module topology unexpectedly accepted")

@@ -19,6 +19,7 @@ func (r *Runner) verifyNoNewFailedWork(ctx context.Context) error {
 	if r.current.FailedWork.Final != nil {
 		baseline = *r.current.FailedWork.Final
 	}
+
 	latest, err := r.voyager.FailedWorkID(ctx, baseline, r.current.FailedWork.Repaired)
 	if err != nil {
 		return err
@@ -27,15 +28,18 @@ func (r *Runner) verifyNoNewFailedWork(ctx context.Context) error {
 		r.current.FailedWork.Final = &latest
 		return nil
 	}
+
 	r.current.FailedWork.Final = &latest
 	r.current.Phase = state.PhaseFailedWork
 	failure := fmt.Errorf("Voyager recorded new failed work after ID %d (latest %d)", baseline, latest)
+
 	if err := r.writeChannelEvidence(); err != nil {
 		return errors.Join(failure, err)
 	}
 	if err := state.Save(r.cfg.StateFile, r.current); err != nil {
 		return errors.Join(failure, err)
 	}
+
 	return failure
 }
 

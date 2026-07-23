@@ -115,11 +115,13 @@ func EnsureFresh(stateFile, bootstrapFile string) error {
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("cannot inspect state checkpoint")
 	}
+
 	if _, err := os.Lstat(bootstrapFile); err == nil {
 		return fmt.Errorf("bootstrap checkpoint already exists; refusing to enqueue clients again")
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("cannot inspect bootstrap checkpoint")
 	}
+
 	return nil
 }
 

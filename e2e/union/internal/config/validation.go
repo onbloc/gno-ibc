@@ -35,11 +35,13 @@ func (c Config) validate(packet bool) error {
 		{"EVM_PRIVATE_KEY", c.EVMPrivateKey},
 		{"GNO_PRIVATE_KEY", c.GnoPrivateKey},
 	}
+
 	for _, item := range required {
 		if item.value == "" {
 			return fmt.Errorf("missing required environment variable: %s", item.name)
 		}
 	}
+
 	if c.UnionChainID != "union-devnet-1" || c.GnoChainID != "dev.ibc" {
 		return fmt.Errorf("UNION_CHAIN_ID and GNO_CHAIN_ID must be union-devnet-1 and dev.ibc")
 	}
@@ -56,6 +58,7 @@ func (c Config) validate(packet bool) error {
 	if !gnoRealmPattern.MatchString(c.GnoZKGMPort) {
 		return fmt.Errorf("GNO_ZKGM_PORT must be a gno.land/r/... realm path")
 	}
+
 	for _, item := range []struct {
 		name  string
 		value string
@@ -83,6 +86,7 @@ func (c Config) validate(packet bool) error {
 			return fmt.Errorf("%s must be a 0x-prefixed 32-byte private key", item.name)
 		}
 	}
+
 	if !packet {
 		return nil
 	}
@@ -98,6 +102,7 @@ func (c Config) validate(packet bool) error {
 	if _, err := PacketLedgerAmount(c.EVMTestAmount); err != nil {
 		return err
 	}
+
 	for _, item := range []struct {
 		name  string
 		value string
@@ -110,6 +115,7 @@ func (c Config) validate(packet bool) error {
 			return fmt.Errorf("%s contains an unsupported character", item.name)
 		}
 	}
+
 	return nil
 }
 
@@ -119,9 +125,11 @@ func PacketLedgerAmount(amount string) (int64, error) {
 		amount[0] == '0' || !strings.HasSuffix(amount, "000000000000") {
 		return 0, fmt.Errorf("EVM_TEST_AMOUNT must be positive and divisible by 10^12")
 	}
+
 	scaled, ok := new(big.Int).SetString(amount[:len(amount)-12], 10)
 	if !ok || !scaled.IsInt64() {
 		return 0, fmt.Errorf("EVM_TEST_AMOUNT after 10^12 scaling must fit Gno int64")
 	}
+
 	return scaled.Int64(), nil
 }

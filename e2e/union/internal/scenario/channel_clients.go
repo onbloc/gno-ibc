@@ -68,14 +68,17 @@ func (r *Runner) establishLensClients(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
+
 	height, err = r.voyager.ClientHeight(ctx, r.cfg.UnionChainID, r.current.Clients.UnionGno)
 	if err != nil {
 		return err
 	}
+
 	lensConfig, _ = json.Marshal(map[string]any{
 		"l1_client_id": r.current.Clients.EVMUnion, "host_chain_id": r.cfg.EVMChainID,
 		"l2_client_id": r.current.Clients.UnionGno, "timestamp_offset": 24,
 	})
+
 	r.current.Clients.EVMGno = r.reservedEVMPlain + 1
 	if err := r.createClient(ctx, voyager.ClientCreation{
 		ClientExpectation: voyager.ClientExpectation{
@@ -86,6 +89,7 @@ func (r *Runner) establishLensClients(ctx context.Context) error {
 	}); err != nil {
 		return err
 	}
+
 	return nil
 }
 

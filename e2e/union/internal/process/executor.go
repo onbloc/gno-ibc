@@ -37,15 +37,17 @@ type OSExecutor struct{}
 func (OSExecutor) Run(ctx context.Context, command Command) (Result, error) {
 	cmd := exec.CommandContext(ctx, command.Name, command.Args...)
 	cmd.Env = append(os.Environ(), command.Env...)
+
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = command.Stdout
 	if cmd.Stdout == nil {
 		cmd.Stdout = &stdout
 	}
+
 	cmd.Stderr = command.Stderr
 	if cmd.Stderr == nil {
 		cmd.Stderr = &stderr
 	}
-	err := cmd.Run()
-	return Result{Stdout: stdout.Bytes(), Stderr: stderr.Bytes()}, err
+
+	return Result{Stdout: stdout.Bytes(), Stderr: stderr.Bytes()}, cmd.Run()
 }

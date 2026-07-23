@@ -430,7 +430,11 @@ printf '%s\n' "$*" >>"$FAKE_DIR/packet-calls.log"
 [[ ${ETH_RPC_URL:-} == "$EVM_RPC_URL" ]] || { echo 'missing ETH_RPC_URL' >&2; exit 9; }
 if [[ ${FAKE_PACKET_TOOL_ERROR:-} == cast ]]; then echo "cast failed at $EVM_RPC_URL" >&2; exit 9; fi
 word() { printf '0x%064x\n' "$1"; }
-ack_word() { printf '0x%062d01\n' 0; }
+ack_word() {
+  if [[ ${FAKE_PACKET_FAILURE_ACK:-0} == 1 ]]; then printf '0x%064d\n' 0
+  else printf '0x%062d01\n' 0
+  fi
+}
 cmd=$1
 shift
 case $cmd in
@@ -445,6 +449,10 @@ case $cmd in
         owner=$(tr '[:upper:]' '[:lower:]' <<<"$owner")
         if [[ -e $FAKE_DIR/packet-sent ]]; then
           if [[ ${FAKE_BAD_DELTAS:-0} == 1 ]]; then echo "$EVM_TEST_AMOUNT"
+          elif [[ ${FAKE_PACKET_FAILURE_ACK:-0} == 1 ]]; then
+            if [[ $owner == 0x2222222222222222222222222222222222222222 ]]; then echo "$EVM_TEST_AMOUNT"
+            else echo 0
+            fi
           elif [[ $owner == 0x2222222222222222222222222222222222222222 ]]; then echo 0
           else echo "$EVM_TEST_AMOUNT"
           fi
@@ -500,7 +508,11 @@ cat >"$fake_bin/gnokey" <<'FAKE_GNOKEY'
 set -euo pipefail
 printf 'gnokey %s\n' "$*" >>"$FAKE_DIR/packet-calls.log"
 if [[ ${FAKE_PACKET_TOOL_ERROR:-} == gnokey ]]; then echo "gnokey failed at $GNO_RPC_URL" >&2; exit 9; fi
-if [[ -e $FAKE_DIR/packet-sent ]]; then echo "(${EVM_TEST_AMOUNT%000000000000} int64)"; else echo '(0 int64)'; fi
+if [[ -e $FAKE_DIR/packet-sent && ${FAKE_PACKET_FAILURE_ACK:-0} != 1 ]]; then
+  echo "(${EVM_TEST_AMOUNT%000000000000} int64)"
+else
+  echo '(0 int64)'
+fi
 FAKE_GNOKEY
 cat >"$fake_bin/curl" <<'FAKE_CURL'
 #!/usr/bin/env bash
@@ -516,7 +528,9 @@ packet_hash=$(printf '0x%064x' 9)
 tx_hash=$(printf '0x%064x' "$tx")
 attrs=$(jq -cn --arg hash "$packet_hash" '[{key:"packet_hash",value:$hash}]')
 if [[ -n $ack ]]; then
-  ack_value=$(printf '0x%062d01' 0)
+  if [[ ${FAKE_PACKET_FAILURE_ACK:-0} == 1 ]]; then ack_value=$(printf '0x%064d' 0)
+  else ack_value=$(printf '0x%062d01' 0)
+  fi
   attrs=$(jq -cn --arg hash "$packet_hash" --arg ack "$ack_value" \
     '[{key:"packet_hash",value:$hash},{key:"acknowledgement",value:$ack}]')
 fi
@@ -621,6 +635,14 @@ if FAKE_PACKET_INJECT_FAILED=1 run_packet_runner --resume --apply --erc20-to-gno
   exit 1
 fi
 grep -q 'new failed work' "$test_dir/packet-failed.out"
+
+restore_packet_base "$test_dir/packet-refund-artifacts"
+if FAKE_PACKET_FAILURE_ACK=1 run_packet_runner --resume --apply --erc20-to-gno \
+  >"$test_dir/packet-refund.out" 2>&1; then
+  echo 'packet failure acknowledgement unexpectedly passed' >&2
+  exit 1
+fi
+grep -q 'packet failure acknowledgement and escrow refund verified' "$test_dir/packet-refund.out"
 
 restore_packet_base "$test_dir/packet-duplicate-artifacts"
 if FAKE_DUPLICATE_GNO_EVENT=1 run_packet_runner --resume --apply --erc20-to-gno >"$test_dir/packet-duplicate.out" 2>&1; then

@@ -95,9 +95,6 @@ func (r *Runner) Run(ctx context.Context) (runErr error) {
 		if err := state.EnsureFresh(r.cfg.StateFile, r.bootstrapFile()); err != nil {
 			return err
 		}
-		if err := saveBootstrap(r.bootstrapFile(), r.current); err != nil {
-			return err
-		}
 	}
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), r.cfg.CleanupTimeout)
@@ -106,6 +103,11 @@ func (r *Runner) Run(ctx context.Context) (runErr error) {
 	}()
 	if err := r.voyager.Start(ctx, rendered); err != nil {
 		return err
+	}
+	if !r.options.Resume {
+		if err := saveBootstrap(r.bootstrapFile(), r.current); err != nil {
+			return err
+		}
 	}
 	if err := r.runChannelScenario(ctx); err != nil {
 		return err

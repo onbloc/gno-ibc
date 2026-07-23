@@ -74,6 +74,26 @@ func TestValidateRejectsInconsistentFailedWork(t *testing.T) {
 	}
 }
 
+func TestValidateRequiresSavedEVMClientsInTheirAllowlists(t *testing.T) {
+	tests := []struct {
+		name   string
+		change func(*state.State)
+	}{
+		{"plain", func(saved *state.State) { saved.Allowlists.Plain = "1,2,3" }},
+		{"Proof Lens", func(saved *state.State) { saved.Allowlists.ProofLens = "6" }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			saved, expected := completeState()
+			tc.change(&saved)
+			if err := saved.Validate(expected); err == nil ||
+				!strings.Contains(err.Error(), "allowlist") {
+				t.Fatalf("error = %v, want role allowlist rejection", err)
+			}
+		})
+	}
+}
+
 func TestLoadRejectsTrailingJSON(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
 	if err := os.WriteFile(path, []byte(`{"phase":"complete"} {}`), 0o600); err != nil {

@@ -3,6 +3,7 @@ package state
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -38,6 +39,12 @@ func (s State) Validate(expected Expected) error {
 	proof, err := parseIDs(s.Allowlists.ProofLens)
 	if err != nil || len(proof) == 0 || overlaps(plain, proof) {
 		return fmt.Errorf("malformed saved EVM Proof Lens allowlist")
+	}
+	if !slices.Contains(plain, s.Clients.EVMUnion) {
+		return fmt.Errorf("saved EVM plain allowlist omits the EVM Union client")
+	}
+	if !slices.Contains(proof, s.Clients.EVMGno) {
+		return fmt.Errorf("saved EVM Proof Lens allowlist omits the EVM Gno client")
 	}
 	if err := s.validateFailedWork(); err != nil {
 		return err

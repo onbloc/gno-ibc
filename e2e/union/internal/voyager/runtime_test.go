@@ -447,6 +447,47 @@ func TestCreateClientRepairsOnlyExactFailedEventAndPersistsIt(t *testing.T) {
 	}
 }
 
+func TestCreateClientAllocationChangeRunsNoWrite(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		expected int64
+		existing int
+	}{
+		{"reserved plain", 1, 1},
+		{"reserved Proof Lens", 2, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := runtimeConfig(t)
+			steps := startedSteps()
+			for range tc.existing {
+				steps = append(steps, step{
+					stdout: `{"client_type":"cometbls","ibc_interface":"ibc-solidity"}`,
+				})
+			}
+			steps = append(steps, step{stdout: "null"})
+			recorder := &executor{steps: steps}
+			runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
+			if err := runtime.Start(context.Background(), []byte("{}")); err != nil {
+				t.Fatal(err)
+			}
+			err := runtime.CreateClient(context.Background(), voyager.ClientCreation{
+				ClientExpectation: voyager.ClientExpectation{
+					Chain: cfg.EVMChainID, Counterparty: cfg.GnoChainID,
+					ClientType: "proof-lens", IBCInterface: "ibc-solidity", ID: tc.expected,
+				},
+			}, 0, nil, func(int64) error { return nil })
+			if err == nil || !strings.Contains(err.Error(), "allocation changed") {
+				t.Fatalf("error = %v, want allocation change", err)
+			}
+			for _, command := range recorder.commands {
+				if strings.Contains(strings.Join(command.Args, " "), "msg create-client") {
+					t.Fatalf("allocation change issued create command: %v", command.Args)
+				}
+			}
+		})
+	}
+}
+
 type step struct {
 	stdout, stderr string
 	err            error

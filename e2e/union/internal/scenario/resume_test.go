@@ -58,26 +58,7 @@ func TestCompletedResumeUsesLoadedStateAndBroadcastsNothing(t *testing.T) {
 }
 
 func TestConnectionSubmittingResumeDoesNotRebroadcastWhenSlotsAreMissing(t *testing.T) {
-	cfg := testConfig(t)
-	cfg.VoyagerImage = "union-voyager-e2e:" + config.VoyagerRevision[:12]
-	cfg.VoyagerRustLog = "warn"
-	cfg.CommandTimeout = time.Second
-	cfg.ScenarioTimeout = time.Second
-	cfg.PollInterval = 0
-	cfg.VoyagerStopTimeout = time.Second
-	cfg.CleanupTimeout = 2 * time.Second
-	if err := state.PrepareArtifacts(
-		filepath.Dir(filepath.Dir(cfg.ScriptDir)), cfg.ScriptDir, cfg.ArtifactDir, cfg.StateFile,
-	); err != nil {
-		t.Fatal(err)
-	}
-	saved := completedState(cfg, 7)
-	saved.Phase = state.PhaseConnectionSubmitting
-	saved.FailedWork.Final = nil
-	saved.Channels = nil
-	if err := state.Save(cfg.StateFile, saved); err != nil {
-		t.Fatal(err)
-	}
+	cfg := resumableState(t, state.PhaseConnectionSubmitting)
 	recorder := &resumeExecutor{missingKind: "connection"}
 	runner, err := newRunner(cfg, recorder, Options{Apply: true, Resume: true})
 	if err != nil {

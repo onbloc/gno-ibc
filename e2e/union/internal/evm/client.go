@@ -42,7 +42,12 @@ type Snapshot struct {
 }
 
 // New returns a concrete EVM packet client.
-func New(cfg config.Config, executor process.Executor) *Client {
+func New(cfg config.Config) *Client {
+	return NewWithExecutor(cfg, process.OSExecutor{})
+}
+
+// NewWithExecutor returns a client using the supplied command seam.
+func NewWithExecutor(cfg config.Config, executor process.Executor) *Client {
 	return &Client{cfg: cfg, exec: executor}
 }
 

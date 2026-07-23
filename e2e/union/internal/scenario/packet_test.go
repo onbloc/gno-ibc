@@ -115,10 +115,10 @@ func TestPacketSubmittingPhasesNeverRepeatWrites(t *testing.T) {
 			cfg := testConfig(t)
 			recorder := new(recordingExecutor)
 			runner := &Runner{
-				cfg: cfg, exec: recorder, current: state.State{
+				cfg: cfg, current: state.State{
 					Phase: phase, Packet: &state.Packet{Phase: phase},
 				},
-				evm: evm.New(cfg, recorder), gno: gno.New(cfg, recorder),
+				evm: evm.NewWithExecutor(cfg, recorder), gno: gno.NewWithExecutor(cfg, recorder),
 			}
 			err := runner.runERC20ToGnoScenario(context.Background())
 			if err == nil || !strings.Contains(err.Error(), "submission is ambiguous") {
@@ -147,8 +147,8 @@ func TestPacketCheckpointFailurePreventsMint(t *testing.T) {
 		{Stdout: []byte("0x" + strings.Repeat("b", 64))},
 	}}
 	runner := &Runner{
-		cfg: cfg, exec: recorder, current: completedState(cfg, 7),
-		evm: evm.New(cfg, recorder), gno: gno.New(cfg, recorder),
+		cfg: cfg, current: completedState(cfg, 7),
+		evm: evm.NewWithExecutor(cfg, recorder), gno: gno.NewWithExecutor(cfg, recorder),
 	}
 	if err := runner.runERC20ToGnoScenario(context.Background()); err == nil {
 		t.Fatal("packet checkpoint failure unexpectedly passed")
@@ -241,8 +241,8 @@ func TestFailureAcknowledgementVerifiesRefundBeforeReturning(t *testing.T) {
 	current.Phase = state.PhasePacketSendSubmitted
 	current.Packet = validPacket(cfg, 7, state.PhasePacketSendSubmitted, "")
 	runner := &Runner{
-		cfg: cfg, exec: executor, voyager: runtime,
-		evm: evm.New(cfg, executor), gno: gno.New(cfg, executor), current: current,
+		cfg: cfg, voyager: runtime,
+		evm: evm.NewWithExecutor(cfg, executor), gno: gno.NewWithExecutor(cfg, executor), current: current,
 	}
 	err := runner.runERC20ToGnoScenario(context.Background())
 	if err == nil || !strings.Contains(err.Error(), "refund verified") {
@@ -266,11 +266,17 @@ func TestFailureAcknowledgementVerifiesRefundBeforeReturning(t *testing.T) {
 }
 
 func TestCompletedPacketResumePerformsNoPacketWrites(t *testing.T) {
-	for _, outcome := range []state.PacketOutcome{
-		state.PacketOutcomeSuccess,
-		state.PacketOutcomeFailure,
-	} {
-		t.Run(string(outcome), func(t *testing.T) {
+	tests := []struct {
+		name    string
+		outcome state.PacketOutcome
+		legacy  bool
+	}{
+		{"success", state.PacketOutcomeSuccess, false},
+		{"failure", state.PacketOutcomeFailure, false},
+		{"fixed-point success", state.PacketOutcomeSuccess, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
 			cfg := resumableState(t, state.PhaseComplete)
 			saved, err := state.Load(cfg.StateFile)
 			if err != nil {
@@ -279,7 +285,16 @@ func TestCompletedPacketResumePerformsNoPacketWrites(t *testing.T) {
 			final := int64(7)
 			saved.FailedWork.Final = &final
 			saved.Phase = state.PhasePacketComplete
-			saved.Packet = validPacket(cfg, 7, state.PhasePacketComplete, outcome)
+			saved.Packet = validPacket(cfg, 7, state.PhasePacketComplete, tc.outcome)
+			if tc.legacy {
+				legacyFinal := int64(0)
+				saved.FailedWork.Baseline = 0
+				saved.FailedWork.Final = &legacyFinal
+				saved.FailedWork.Repaired = []int64{1, 7}
+				saved.Packet.Outcome = ""
+				saved.Packet.CommitmentCleared = false
+				saved.Packet.GnoWriteAckTx = ""
+			}
 			if err := state.Save(cfg.StateFile, saved); err != nil {
 				t.Fatal(err)
 			}
@@ -300,10 +315,10 @@ func TestCompletedPacketResumePerformsNoPacketWrites(t *testing.T) {
 				t.Fatal(err)
 			}
 			runErr := runner.Run(context.Background())
-			if outcome == state.PacketOutcomeSuccess && runErr != nil {
+			if tc.outcome == state.PacketOutcomeSuccess && runErr != nil {
 				t.Fatal(runErr)
 			}
-			if outcome == state.PacketOutcomeFailure &&
+			if tc.outcome == state.PacketOutcomeFailure &&
 				(runErr == nil || !strings.Contains(runErr.Error(), "refund verified")) {
 				t.Fatalf("failure resume error = %v", runErr)
 			}

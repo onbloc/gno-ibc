@@ -50,7 +50,7 @@ func TestWaitPacketRequiresOneReceiveAndWriteAckInSameTransaction(t *testing.T) 
 	defer server.Close()
 	cfg := testConfig()
 	cfg.GnoPacketIndexerRPCURL = server.URL
-	result, err := New(cfg, nil).WaitPacket(context.Background(), packetHash)
+	result, err := NewWithExecutor(cfg, nil).WaitPacket(context.Background(), packetHash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestWaitPacketRejectsMalformedTransactionHash(t *testing.T) {
 	defer server.Close()
 	cfg := testConfig()
 	cfg.GnoPacketIndexerRPCURL = server.URL
-	_, err := New(cfg, nil).WaitPacket(context.Background(), "0x"+strings.Repeat("a", 64))
+	_, err := NewWithExecutor(cfg, nil).WaitPacket(context.Background(), "0x"+strings.Repeat("a", 64))
 	if err == nil || !strings.Contains(err.Error(), "transaction hash") {
 		t.Fatalf("error = %v", err)
 	}
@@ -94,7 +94,7 @@ func TestWaitPacketCountsWriteAckInAnotherTransaction(t *testing.T) {
 	defer server.Close()
 	cfg := testConfig()
 	cfg.GnoPacketIndexerRPCURL = server.URL
-	_, err := New(cfg, nil).WaitPacket(context.Background(), packetHash)
+	_, err := NewWithExecutor(cfg, nil).WaitPacket(context.Background(), packetHash)
 	if err == nil || !strings.Contains(err.Error(), "WriteAck count=2") {
 		t.Fatalf("error = %v", err)
 	}
@@ -102,7 +102,7 @@ func TestWaitPacketCountsWriteAckInAnotherTransaction(t *testing.T) {
 
 func TestVoucherBalanceRejectsTrailingOutput(t *testing.T) {
 	cfg := testConfig()
-	client := New(cfg, executorFunc(func(context.Context, process.Command) (process.Result, error) {
+	client := NewWithExecutor(cfg, executorFunc(func(context.Context, process.Command) (process.Result, error) {
 		return process.Result{Stdout: []byte("(1 int64) trailing")}, nil
 	}))
 	if _, err := client.VoucherBalance(

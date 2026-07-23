@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -200,12 +199,11 @@ func seconds(raw string, fallback int64) (time.Duration, error) {
 	if raw == "" {
 		return time.Duration(fallback) * time.Second, nil
 	}
-	value, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || value <= 0 {
+	if strings.Trim(raw, "0123456789") != "" {
 		return 0, errors.New("invalid seconds")
 	}
 	duration, err := time.ParseDuration(raw + "s")
-	if err != nil {
+	if err != nil || duration <= 0 {
 		return 0, errors.New("invalid seconds")
 	}
 	return duration, nil

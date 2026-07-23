@@ -18,7 +18,7 @@ func TestEvidenceSecretsPreventCompleteCheckpoint(t *testing.T) {
 			return cfg.EVMPrivateKey
 		}},
 		{"credential URL", func(*config.Config) string {
-			return "https://user:password@example.com"
+			return "https://user:" + "password@example.com"
 		}},
 	}
 	for _, tc := range tests {

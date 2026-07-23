@@ -54,9 +54,9 @@ func (s State) Validate(expected Expected) error {
 
 	requireConnections, requireChannels := false, false
 	switch s.Phase {
-	case PhaseConnectionSubmitting, "connection-prepared", PhaseConnectionSubmitted:
+	case PhaseConnectionSubmitting, PhaseConnectionPrepared, PhaseConnectionSubmitted:
 		requireConnections = true
-	case PhaseChannelSubmitting, "channel-prepared", PhaseChannelSubmitted:
+	case PhaseChannelSubmitting, PhaseChannelPrepared, PhaseChannelSubmitted:
 		requireConnections, requireChannels = true, true
 	case PhaseComplete:
 		requireConnections, requireChannels = true, true

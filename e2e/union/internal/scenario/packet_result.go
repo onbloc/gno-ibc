@@ -3,10 +3,8 @@ package scenario
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"math/big"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -265,13 +263,5 @@ func (r *Runner) writePacketEvidence() error {
 			"baseline": packet.FailedWorkBaseline, "final": *packet.FailedWorkFinal,
 		},
 	}
-	data, err := json.MarshalIndent(value, "", "  ")
-	if err != nil {
-		return fmt.Errorf("cannot encode packet artifact")
-	}
-	data = append(data, '\n')
-	if r.containsSecret(data) {
-		return fmt.Errorf("packet artifact secret scan failed")
-	}
-	return state.SaveArtifact(filepath.Join(r.cfg.ArtifactDir, "packet-summary.json"), data)
+	return r.writeEvidence("packet-summary.json", value)
 }

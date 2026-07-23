@@ -3,7 +3,6 @@
 package scenario
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,7 +15,6 @@ import (
 	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/evm"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/gno"
-	"github.com/onbloc/gno-ibc/e2e/union/internal/process"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/state"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/voyager"
 )
@@ -31,7 +29,6 @@ type Options struct {
 // Runner executes the live acceptance scenarios.
 type Runner struct {
 	cfg     config.Config
-	exec    process.Executor
 	voyager *voyager.Runtime
 	evm     *evm.Client
 	gno     *gno.Client
@@ -49,18 +46,26 @@ type Runner struct {
 
 // New validates and loads resume state before any external command can run.
 func New(cfg config.Config, options Options) (*Runner, error) {
-	return newRunner(cfg, process.OSExecutor{}, options)
+	return newRunnerWithClients(
+		cfg, options, voyager.New(cfg, os.Stderr), evm.New(cfg), gno.New(cfg),
+	)
 }
 
-func newRunner(cfg config.Config, executor process.Executor, options Options) (*Runner, error) {
+func newRunnerWithClients(
+	cfg config.Config,
+	options Options,
+	voyagerRuntime *voyager.Runtime,
+	evmClient *evm.Client,
+	gnoClient *gno.Client,
+) (*Runner, error) {
 	if options.ERC20ToGno && !options.Apply {
 		return nil, fmt.Errorf("--erc20-to-gno requires --apply")
 	}
 	runner := &Runner{
-		cfg: cfg, exec: executor, options: options,
-		voyager: voyager.NewWithExecutor(cfg, executor, os.Stderr),
-		evm:     evm.New(cfg, executor),
-		gno:     gno.New(cfg, executor),
+		cfg: cfg, options: options,
+		voyager: voyagerRuntime,
+		evm:     evmClient,
+		gno:     gnoClient,
 		current: newState(cfg),
 	}
 	if !options.Resume {
@@ -130,25 +135,8 @@ func (r *Runner) preflight(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	result, err := r.execute(ctx, process.Command{
-		Name: "git",
-		Args: []string{"-C", r.cfg.UnionVoyagerDir, "rev-parse", "HEAD"},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("UNION_VOYAGER_DIR is not a readable git checkout")
-	}
-	if string(bytes.TrimSpace(result.Stdout)) != r.cfg.UnionVoyagerRevision {
-		return nil, fmt.Errorf("union-voyager checkout does not match UNION_VOYAGER_REVISION")
-	}
-	result, err = r.execute(ctx, process.Command{
-		Name: "git",
-		Args: []string{"-C", r.cfg.UnionVoyagerDir, "status", "--porcelain"},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("UNION_VOYAGER_DIR is not a readable git checkout")
-	}
-	if len(bytes.TrimSpace(result.Stdout)) != 0 {
-		return nil, fmt.Errorf("union-voyager checkout must be clean")
+	if err := r.voyager.ValidateSource(ctx); err != nil {
+		return nil, err
 	}
 	if r.options.ERC20ToGno {
 		for _, name := range []string{"cast", "gnokey"} {
@@ -170,15 +158,6 @@ func (r *Runner) renderVoyager(plain, proof []int64) ([]byte, error) {
 
 func (r *Runner) bootstrapFile() string {
 	return filepath.Join(r.cfg.ArtifactDir, "bootstrap-in-progress.json")
-}
-
-func (r *Runner) execute(ctx context.Context, command process.Command) (process.Result, error) {
-	if r.cfg.CommandTimeout <= 0 {
-		return r.exec.Run(ctx, command)
-	}
-	commandCtx, cancel := context.WithTimeout(ctx, r.cfg.CommandTimeout)
-	defer cancel()
-	return r.exec.Run(commandCtx, command)
 }
 
 func expectedState(cfg config.Config) state.Expected {

@@ -27,7 +27,7 @@ func TestSendExtractsOnePacketForExpectedChannel(t *testing.T) {
 	executor := &fakeExecutor{outputs: [][]byte{
 		[]byte("0x01"), []byte("0x02"), []byte("0x03"), receipt,
 	}}
-	client := New(cfg, executor)
+	client := NewWithExecutor(cfg, executor)
 	result, err := client.Send(
 		context.Background(), 7,
 		"0x7777777777777777777777777777777777777777",
@@ -57,7 +57,7 @@ func TestSendRejectsDuplicatePacketSend(t *testing.T) {
 		Status: "0x1", TransactionHash: "0x" + strings.Repeat("a", 64),
 		Logs: []evmLog{log("1"), log("2")},
 	})
-	client := New(cfg, &fakeExecutor{outputs: [][]byte{
+	client := NewWithExecutor(cfg, &fakeExecutor{outputs: [][]byte{
 		[]byte("0x01"), []byte("0x02"), []byte("0x03"), receipt,
 	}})
 	_, err := client.Send(
@@ -86,7 +86,7 @@ func TestSendCountsMalformedPacketSendBeforeValidation(t *testing.T) {
 			{Address: cfg.EVMIBCHandler, Topics: []string{packetSendTopic}},
 		},
 	})
-	client := New(cfg, &fakeExecutor{outputs: [][]byte{
+	client := NewWithExecutor(cfg, &fakeExecutor{outputs: [][]byte{
 		[]byte("0x01"), []byte("0x02"), []byte("0x03"), receipt,
 	}})
 	_, err := client.Send(
@@ -109,7 +109,7 @@ func TestWaitAcknowledgementRevalidatesReturnedLog(t *testing.T) {
 		Data:            "0x00",
 		TransactionHash: "0x" + strings.Repeat("a", 64),
 	}})
-	client := New(cfg, &fakeExecutor{outputs: [][]byte{logs}})
+	client := NewWithExecutor(cfg, &fakeExecutor{outputs: [][]byte{logs}})
 	_, err := client.WaitAcknowledgement(
 		context.Background(), 1, 1, "0x"+strings.Repeat("b", 64),
 	)
@@ -121,7 +121,7 @@ func TestWaitAcknowledgementRevalidatesReturnedLog(t *testing.T) {
 func TestBalancesPreserveLargeDecimals(t *testing.T) {
 	cfg := testConfig()
 	large := "100000000000000000000000000000000000000"
-	client := New(cfg, &fakeExecutor{outputs: [][]byte{[]byte(large), []byte("0")}})
+	client := NewWithExecutor(cfg, &fakeExecutor{outputs: [][]byte{[]byte(large), []byte("0")}})
 	sender, escrow, err := client.Balances(context.Background(), "0x7777777777777777777777777777777777777777")
 	if err != nil {
 		t.Fatal(err)
@@ -142,7 +142,7 @@ func TestPrepareValidatesTokenCodeAndDecimals(t *testing.T) {
 		{"wrong decimals", [][]byte{sender, []byte("0x01"), []byte("6")}, "18 decimals"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := New(testConfig(), &fakeExecutor{outputs: tc.outputs}).
+			_, err := NewWithExecutor(testConfig(), &fakeExecutor{outputs: tc.outputs}).
 				Prepare(context.Background(), 1)
 			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 				t.Fatalf("error = %v", err)

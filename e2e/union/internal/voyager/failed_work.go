@@ -137,14 +137,10 @@ func exactFailedCreate(item failedQueueItem, want ClientExpectation) bool {
 }
 
 func (r *Runtime) retryQueue(ctx context.Context, args ...string) (process.Result, error) {
-	return r.retry(ctx, append([]string{"queue"}, args...)...)
+	return r.retryWrite(ctx, append([]string{"queue"}, args...)...)
 }
 
 func (r *Runtime) retryWrite(ctx context.Context, args ...string) (process.Result, error) {
-	return r.retry(ctx, args...)
-}
-
-func (r *Runtime) retry(ctx context.Context, args ...string) (process.Result, error) {
 	for attempt := 0; attempt < maxDeadlockRetries; attempt++ {
 		result, err := r.call(ctx, args...)
 		if err == nil {

@@ -144,6 +144,36 @@ func TestLoadRejectsTrailingJSON(t *testing.T) {
 	}
 }
 
+func TestLoadUpgradesFixedPointPacketComplete(t *testing.T) {
+	saved, expected := completedPacketState()
+	saved.Packet.Outcome = ""
+	saved.Packet.CommitmentCleared = false
+	saved.Packet.GnoWriteAckTx = ""
+	saved.Packet.FailedWorkBaseline = 7
+	*saved.Packet.FailedWorkFinal = 7
+	saved.FailedWork.Repaired = []int64{1, 7}
+
+	path := filepath.Join(t.TempDir(), "state.json")
+	if err := state.Save(path, saved); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := state.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := saved.Validate(expected); err != nil {
+		t.Fatal(err)
+	}
+	if saved.Packet.Outcome != state.PacketOutcomeSuccess ||
+		!saved.Packet.CommitmentCleared ||
+		saved.Packet.GnoWriteAckTx != saved.Packet.GnoReceiveTx ||
+		saved.FailedWork.Baseline != 7 ||
+		saved.FailedWork.Final == nil || *saved.FailedWork.Final != 7 ||
+		len(saved.FailedWork.Repaired) != 0 {
+		t.Fatalf("fixed-point packet state was not upgraded: %#v", saved)
+	}
+}
+
 func TestSaveWritesPrivateLoadableState(t *testing.T) {
 	saved, _ := completeState()
 	path := filepath.Join(t.TempDir(), "state.json")

@@ -1,11 +1,23 @@
 package scenario
 
-import "context"
+import (
+	"context"
+	"fmt"
+	"path/filepath"
+
+	"github.com/onbloc/gno-ibc/e2e/union/internal/state"
+)
 
 // RunChannel establishes and verifies S1. prepareChannel validates one loaded
 // S2 state before any later stage can broadcast; completed stages then verify
 // the saved topology without repeating writes.
 func (r *Runner) RunChannel(ctx context.Context) error {
+	if err := r.preflight(ctx); err != nil {
+		return err
+	}
+	if !r.options.Apply && !r.options.Resume {
+		return nil
+	}
 	if err := r.prepareChannel(ctx); err != nil {
 		return err
 	}
@@ -39,8 +51,15 @@ func (r *Runner) RunChannel(ctx context.Context) error {
 	return r.saveChannelEvidence(ctx)
 }
 
-func (r *Runner) prepareChannel(context.Context) error             { return nil }
-func (r *Runner) indexUnionAndGno(context.Context) error           { return nil }
+func (r *Runner) prepareChannel(context.Context) error {
+	repoRoot := filepath.Clean(filepath.Join(r.cfg.ScriptDir, "..", ".."))
+	return state.PrepareArtifacts(repoRoot, r.cfg.ScriptDir, r.cfg.ArtifactDir, r.cfg.StateFile)
+}
+
+func (r *Runner) indexUnionAndGno(context.Context) error {
+	return fmt.Errorf("live channel scenario is not implemented yet")
+}
+
 func (r *Runner) establishUnderlyingClients(context.Context) error { return nil }
 func (r *Runner) establishLensClients(context.Context) error       { return nil }
 func (r *Runner) allowlistAndIndexEVM(context.Context) error       { return nil }

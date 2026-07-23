@@ -105,6 +105,32 @@ func TestPacketBalanceClassification(t *testing.T) {
 	}
 }
 
+func TestAmountBoundaryBalanceClassification(t *testing.T) {
+	max := state.Balances{
+		Sender: maxLedgerAmount, Escrow: "0", Recipient: "0",
+	}
+	afterMax := state.Balances{
+		Sender: "0", Escrow: maxLedgerAmount, Recipient: maxLedgerAmount,
+	}
+	if _, err := classifyBoundaryBalances(true, maxLedgerAmount, max, afterMax); err != nil {
+		t.Fatal(err)
+	}
+	refunded := state.Balances{
+		Sender: overflowLedgerAmount, Escrow: "0", Recipient: "0",
+	}
+	if _, err := classifyBoundaryBalances(
+		false, overflowLedgerAmount, refunded, refunded,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := classifyBoundaryBalances(
+		false, overflowLedgerAmount, refunded,
+		state.Balances{Sender: "0", Escrow: overflowLedgerAmount, Recipient: "0"},
+	); err == nil {
+		t.Fatal("unrefunded overflow unexpectedly passed")
+	}
+}
+
 func TestPacketSubmittingPhasesNeverRepeatWrites(t *testing.T) {
 	for _, phase := range []state.Phase{
 		state.PhasePacketMintSubmitting,

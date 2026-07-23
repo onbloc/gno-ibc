@@ -141,6 +141,58 @@ func TestBalancesPreserveLargeDecimals(t *testing.T) {
 	}
 }
 
+func TestSendTokenOrderPreservesAmountAndKind(t *testing.T) {
+	cfg := testConfig()
+	packetHash := "0x" + strings.Repeat("b", 64)
+	txHash := "0x" + strings.Repeat("a", 64)
+	receipt, _ := json.Marshal(transactionReceipt{
+		Status: "0x1", TransactionHash: txHash,
+		Logs: []evmLog{{
+			Address: cfg.EVMIBCHandler,
+			Topics: []string{
+				packetSendTopic, "0x" + strings.Repeat("0", 63) + "7", packetHash,
+			},
+		}},
+	})
+	executor := &fakeExecutor{outputs: [][]byte{[]byte("0x01"), receipt}}
+	client := NewWithExecutor(cfg, executor)
+	_, err := client.SendTokenOrder(context.Background(), 7, Plan{
+		Token:   "0x6666666666666666666666666666666666666666",
+		Sender:  "0x7777777777777777777777777777777777777777",
+		Voucher: "ibc/" + strings.Repeat("8", 40),
+		Salt:    "0x" + strings.Repeat("9", 64), Metadata: "0x05",
+	}, "g1"+strings.Repeat("a", 38), "9223372036854775808", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	args := executor.commands[0].Args
+	if args[5] != "9223372036854775808" ||
+		args[7] != "9223372036854775808" || args[8] != "1" {
+		t.Fatalf("TokenOrder amount/kind args = %q", args)
+	}
+}
+
+func TestDeployTestTokenUsesRepositoryFixture(t *testing.T) {
+	cfg := testConfig()
+	cfg.ScriptDir = "/repo/e2e/union"
+	executor := &fakeExecutor{outputs: [][]byte{
+		[]byte(`{"deployedTo":"0x6666666666666666666666666666666666666666"}`),
+	}}
+	token, err := NewWithExecutor(cfg, executor).
+		DeployTestToken(context.Background(), "Boundary", "BDY", 6)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if token != "0x6666666666666666666666666666666666666666" {
+		t.Fatalf("token = %s", token)
+	}
+	command := strings.Join(executor.commands[0].Args, " ")
+	if !strings.Contains(command, "--root /repo/e2e/union") ||
+		!strings.Contains(command, "fixtures/TestERC20.sol:TestERC20") {
+		t.Fatalf("forge command = %q", command)
+	}
+}
+
 func TestPrepareValidatesTokenCodeAndDecimals(t *testing.T) {
 	sender := []byte("0x7777777777777777777777777777777777777777")
 	for _, tc := range []struct {

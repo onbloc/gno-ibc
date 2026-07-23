@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -85,12 +86,12 @@ func packetHashFromReceipt(receipt transactionReceipt, handler string, channel i
 		matches = append(matches, log)
 	}
 	if len(matches) != 1 {
-		return "", fmt.Errorf("PacketSend count is not one")
+		return "", errors.New("PacketSend count is not one")
 	}
 	if len(matches[0].Topics) < 3 ||
 		!strings.EqualFold(matches[0].Topics[1], channelTopic) ||
 		!hashPattern.MatchString(matches[0].Topics[2]) {
-		return "", fmt.Errorf("malformed PacketSend log")
+		return "", errors.New("malformed PacketSend log")
 	}
 	return matches[0].Topics[2], nil
 }
@@ -119,7 +120,7 @@ func (c *Client) WaitAcknowledgement(
 		}
 		var logs []evmLog
 		if json.Unmarshal(raw, &logs) != nil {
-			return Acknowledgement{}, fmt.Errorf("malformed EVM PacketAck log response")
+			return Acknowledgement{}, errors.New("malformed EVM PacketAck log response")
 		}
 		switch len(logs) {
 		case 0:
@@ -147,7 +148,7 @@ func (c *Client) decodeAcknowledgement(
 		!strings.EqualFold(log.Topics[2], packetHash) ||
 		!hashPattern.MatchString(log.TransactionHash) ||
 		!validHex(log.Data) {
-		return Acknowledgement{}, fmt.Errorf("malformed EVM PacketAck log")
+		return Acknowledgement{}, errors.New("malformed EVM PacketAck log")
 	}
 	raw, err := c.cast(ctx, "decode-abi", "f()(bytes)", log.Data, "--json")
 	if err != nil {
@@ -155,7 +156,7 @@ func (c *Client) decodeAcknowledgement(
 	}
 	var values []string
 	if json.Unmarshal(raw, &values) != nil || len(values) != 1 || !validHex(values[0]) {
-		return Acknowledgement{}, fmt.Errorf("malformed EVM acknowledgement")
+		return Acknowledgement{}, errors.New("malformed EVM acknowledgement")
 	}
 	return Acknowledgement{Tx: log.TransactionHash, Value: values[0]}, nil
 }
@@ -168,7 +169,7 @@ func (c *Client) VerifyCommitmentCleared(ctx context.Context, packetHash string)
 	}
 	key, err := c.cast(ctx, "keccak", string(path))
 	if err != nil || !hashPattern.Match(key) {
-		return fmt.Errorf("malformed packet commitment key")
+		return errors.New("malformed packet commitment key")
 	}
 	value, err := c.cast(
 		ctx, "call", c.cfg.EVMIBCHandler, "commitments(bytes32)(bytes32)", string(key),
@@ -177,7 +178,7 @@ func (c *Client) VerifyCommitmentCleared(ctx context.Context, packetHash string)
 		return err
 	}
 	if !strings.EqualFold(string(value), "0x02"+strings.Repeat("0", 62)) {
-		return fmt.Errorf("EVM packet commitment is still active")
+		return errors.New("EVM packet commitment is still active")
 	}
 	return nil
 }

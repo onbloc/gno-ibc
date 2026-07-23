@@ -73,17 +73,6 @@ func newRunner(cfg config.Config, executor process.Executor, options Options) (*
 	if err := saved.Validate(expectedState(cfg)); err != nil {
 		return nil, err
 	}
-	switch saved.Phase {
-	case state.PhaseConnectionSubmitting, state.Phase("connection-prepared"),
-		state.PhaseConnectionSubmitted, state.PhaseChannelSubmitting,
-		state.Phase("channel-prepared"), state.PhaseChannelSubmitted,
-		state.PhaseComplete, state.PhasePacketMintSubmitting,
-		state.PhasePacketMintSubmitted, state.PhasePacketApproveSubmitting,
-		state.PhasePacketApproveSubmitted, state.PhasePacketSendSubmitting,
-		state.PhasePacketSendSubmitted, state.PhasePacketComplete:
-	default:
-		return nil, fmt.Errorf("resume phase %s is not implemented", saved.Phase)
-	}
 	runner.current = saved
 	return runner, nil
 }

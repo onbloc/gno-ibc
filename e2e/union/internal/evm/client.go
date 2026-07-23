@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"regexp"
@@ -61,16 +62,16 @@ func (c *Client) Prepare(ctx context.Context, gnoChannel int64) (Plan, error) {
 		return Plan{}, err
 	}
 	if string(code) == "0x" || !codePattern.Match(code) {
-		return Plan{}, fmt.Errorf("EVM_TEST_ERC20 has no deployed code")
+		return Plan{}, errors.New("EVM_TEST_ERC20 has no deployed code")
 	}
 	decimals, err := c.cast(ctx, "call", token, "decimals()(uint8)")
 	decimalFields := strings.Fields(string(decimals))
 	if err != nil || len(decimalFields) == 0 || decimalFields[0] != "18" {
-		return Plan{}, fmt.Errorf("EVM_TEST_ERC20 must report 18 decimals")
+		return Plan{}, errors.New("EVM_TEST_ERC20 must report 18 decimals")
 	}
 	saltBytes := make([]byte, 32)
 	if _, err := rand.Read(saltBytes); err != nil {
-		return Plan{}, fmt.Errorf("cannot generate packet salt")
+		return Plan{}, errors.New("cannot generate packet salt")
 	}
 	salt := "0x" + hex.EncodeToString(saltBytes)
 	tag := salt[2:]
@@ -80,7 +81,7 @@ func (c *Client) Prepare(ctx context.Context, gnoChannel int64) (Plan, error) {
 	}
 	image, err := c.cast(ctx, "keccak", metadata)
 	if err != nil || !hashPattern.Match(image) {
-		return Plan{}, fmt.Errorf("malformed packet metadata hash")
+		return Plan{}, errors.New("malformed packet metadata hash")
 	}
 	prediction, err := c.cast(
 		ctx, "abi-encode", "f(uint256,uint32,bytes,uint256)",
@@ -91,7 +92,7 @@ func (c *Client) Prepare(ctx context.Context, gnoChannel int64) (Plan, error) {
 	}
 	voucherHash, err := c.cast(ctx, "keccak", string(prediction))
 	if err != nil || !hashPattern.Match(voucherHash) {
-		return Plan{}, fmt.Errorf("malformed packet voucher hash")
+		return Plan{}, errors.New("malformed packet voucher hash")
 	}
 	return Plan{
 		Sender: sender, Voucher: "ibc/" + string(voucherHash[2:42]), Salt: salt, Tag: tag,
@@ -130,7 +131,7 @@ func (c *Client) Snapshot(ctx context.Context, sender string) (Snapshot, error) 
 	}
 	block, err := strconv.ParseUint(string(raw), 10, 64)
 	if err != nil {
-		return Snapshot{}, fmt.Errorf("malformed EVM block number")
+		return Snapshot{}, errors.New("malformed EVM block number")
 	}
 	return Snapshot{Sender: senderBalance, Escrow: escrowBalance, Block: block}, nil
 }
@@ -155,11 +156,11 @@ func (c *Client) balance(ctx context.Context, account string) (string, error) {
 	}
 	fields := strings.Fields(string(raw))
 	if len(fields) == 0 {
-		return "", fmt.Errorf("malformed ERC20 balance")
+		return "", errors.New("malformed ERC20 balance")
 	}
 	value, ok := new(big.Int).SetString(fields[0], 10)
 	if !ok || value.Sign() < 0 || value.String() != fields[0] {
-		return "", fmt.Errorf("malformed ERC20 balance")
+		return "", errors.New("malformed ERC20 balance")
 	}
 	return fields[0], nil
 }

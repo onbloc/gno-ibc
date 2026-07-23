@@ -70,13 +70,16 @@ func (r *Runner) indexUnionAndGno(ctx context.Context) error {
 	if err := r.voyager.Restart(ctx, rendered); err != nil {
 		return err
 	}
+
 	r.evmIndexFrom, err = r.voyager.LatestFinalizedHeight(ctx, r.cfg.EVMChainID)
 	if err != nil {
 		return err
 	}
+
 	if err := r.voyager.Index(ctx, r.cfg.UnionChainID, ""); err != nil {
 		return err
 	}
+
 	return r.voyager.Index(ctx, r.cfg.GnoChainID, "")
 }
 
@@ -84,14 +87,17 @@ func (r *Runner) allowlistAndIndexEVM(ctx context.Context) error {
 	if err := r.voyager.Index(ctx, r.cfg.EVMChainID, r.evmIndexFrom); err != nil {
 		return err
 	}
+
 	plain, proof, err := r.voyager.EVMAllowlists(ctx)
 	if err != nil {
 		return err
 	}
+
 	r.current.Allowlists = state.Allowlists{Plain: joinIDs(plain), ProofLens: joinIDs(proof)}
 	rendered, err := r.renderVoyager(plain, proof)
 	if err != nil {
 		return err
 	}
+
 	return r.voyager.Restart(ctx, rendered)
 }

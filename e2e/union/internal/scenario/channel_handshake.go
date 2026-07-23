@@ -37,9 +37,11 @@ func (r *Runner) establishConnection(ctx context.Context) error {
 		}
 		submit = true
 	}
+
 	operation := voyager.ConnectionOperation(
 		r.cfg.EVMChainID, r.current.Clients.EVMGno, r.current.Clients.GnoEVM,
 	)
+
 	if r.current.Phase == state.PhaseConnectionSubmitting ||
 		r.current.Phase == state.Phase("connection-prepared") {
 		if submit {
@@ -65,6 +67,7 @@ func (r *Runner) establishConnection(ctx context.Context) error {
 				return fmt.Errorf("connection submission is ambiguous; refusing to enqueue it again")
 			}
 		}
+
 		r.current.Phase = state.PhaseConnectionSubmitted
 		if err := state.Save(r.cfg.StateFile, r.current); err != nil {
 			return err
@@ -150,6 +153,7 @@ func (r *Runner) verifyOpenConnections(ctx context.Context) error {
 		{Chain: r.cfg.GnoChainID, ID: s.Connections.Gno, Client: s.Clients.GnoEVM, CounterpartyClient: s.Clients.EVMGno, CounterpartyID: s.Connections.EVM},
 		{Chain: r.cfg.EVMChainID, ID: s.Connections.EVM, Client: s.Clients.EVMGno, CounterpartyClient: s.Clients.GnoEVM, CounterpartyID: s.Connections.Gno},
 	}
+
 	for i, check := range checks {
 		evidence, err := r.voyager.ConnectionEvidence(ctx, check)
 		if err != nil {
@@ -161,6 +165,7 @@ func (r *Runner) verifyOpenConnections(ctx context.Context) error {
 			r.evmConnectionEvidence = evidence
 		}
 	}
+
 	return nil
 }
 
@@ -169,11 +174,13 @@ func (r *Runner) verifyOpenChannels(ctx context.Context) error {
 	if s.Connections == nil || s.Channels == nil {
 		return fmt.Errorf("channel verification requires saved IDs")
 	}
+
 	gnoPort := "0x" + hex.EncodeToString([]byte(r.cfg.GnoZKGMPort))
 	checks := []voyager.ChannelExpectation{
 		{Chain: r.cfg.GnoChainID, ID: s.Channels.Gno, Connection: s.Connections.Gno, CounterpartyID: s.Channels.EVM, CounterpartyPort: strings.ToLower(r.cfg.EVMZKGMContract), Version: config.ChannelVersion},
 		{Chain: r.cfg.EVMChainID, ID: s.Channels.EVM, Connection: s.Connections.EVM, CounterpartyID: s.Channels.Gno, CounterpartyPort: gnoPort, Version: config.ChannelVersion},
 	}
+
 	for i, check := range checks {
 		evidence, err := r.voyager.ChannelEvidence(ctx, check)
 		if err != nil {
@@ -185,5 +192,6 @@ func (r *Runner) verifyOpenChannels(ctx context.Context) error {
 			r.evmChannelEvidence = evidence
 		}
 	}
+
 	return nil
 }

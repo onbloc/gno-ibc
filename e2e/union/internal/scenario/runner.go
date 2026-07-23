@@ -12,6 +12,7 @@ import (
 	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/process"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/state"
+	"github.com/onbloc/gno-ibc/e2e/union/internal/voyager"
 )
 
 // Options are the runner's explicit write and resume boundaries.
@@ -25,6 +26,7 @@ type Options struct {
 type Runner struct {
 	cfg     config.Config
 	exec    process.Executor
+	voyager *voyager.Runtime
 	options Options
 	saved   *state.State
 }
@@ -38,7 +40,10 @@ func newRunner(cfg config.Config, executor process.Executor, options Options) (*
 	if options.ERC20ToGno && !options.Apply {
 		return nil, fmt.Errorf("--erc20-to-gno requires --apply")
 	}
-	runner := &Runner{cfg: cfg, exec: executor, options: options}
+	runner := &Runner{
+		cfg: cfg, exec: executor, options: options,
+		voyager: voyager.NewWithExecutor(cfg, executor, os.Stderr),
+	}
 	if !options.Resume {
 		return runner, nil
 	}
@@ -53,42 +58,43 @@ func newRunner(cfg config.Config, executor process.Executor, options Options) (*
 	return runner, nil
 }
 
-func (r *Runner) preflight(ctx context.Context) error {
+func (r *Runner) preflight(ctx context.Context) ([]byte, error) {
 	template, err := os.ReadFile(filepath.Join(r.cfg.ScriptDir, "config.jsonc.template"))
 	if err != nil {
-		return fmt.Errorf("missing Voyager config template")
+		return nil, fmt.Errorf("missing Voyager config template")
 	}
 	var plain, proof []int64
 	if r.saved != nil {
 		plain, proof, err = r.saved.Allowlists.IDs()
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
-	if _, err := config.RenderVoyager(template, r.cfg, plain, proof); err != nil {
-		return err
+	rendered, err := config.RenderVoyager(template, r.cfg, plain, proof)
+	if err != nil {
+		return nil, err
 	}
 	result, err := r.execute(ctx, process.Command{
 		Name: "git",
 		Args: []string{"-C", r.cfg.UnionVoyagerDir, "rev-parse", "HEAD"},
 	})
 	if err != nil {
-		return fmt.Errorf("UNION_VOYAGER_DIR is not a readable git checkout")
+		return nil, fmt.Errorf("UNION_VOYAGER_DIR is not a readable git checkout")
 	}
 	if string(bytes.TrimSpace(result.Stdout)) != r.cfg.UnionVoyagerRevision {
-		return fmt.Errorf("union-voyager checkout does not match UNION_VOYAGER_REVISION")
+		return nil, fmt.Errorf("union-voyager checkout does not match UNION_VOYAGER_REVISION")
 	}
 	result, err = r.execute(ctx, process.Command{
 		Name: "git",
 		Args: []string{"-C", r.cfg.UnionVoyagerDir, "status", "--porcelain"},
 	})
 	if err != nil {
-		return fmt.Errorf("UNION_VOYAGER_DIR is not a readable git checkout")
+		return nil, fmt.Errorf("UNION_VOYAGER_DIR is not a readable git checkout")
 	}
 	if len(bytes.TrimSpace(result.Stdout)) != 0 {
-		return fmt.Errorf("union-voyager checkout must be clean")
+		return nil, fmt.Errorf("union-voyager checkout must be clean")
 	}
-	return nil
+	return rendered, nil
 }
 
 func (r *Runner) execute(ctx context.Context, command process.Command) (process.Result, error) {

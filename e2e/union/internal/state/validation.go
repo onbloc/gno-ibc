@@ -45,13 +45,13 @@ func (s State) Validate(expected Expected) error {
 
 	requireConnections, requireChannels := false, false
 	switch s.Phase {
-	case phaseConnectionSubmitting, "connection-prepared", phaseConnectionSubmitted:
+	case PhaseConnectionSubmitting, "connection-prepared", PhaseConnectionSubmitted:
 		requireConnections = true
-	case phaseChannelSubmitting, "channel-prepared", phaseChannelSubmitted:
+	case PhaseChannelSubmitting, "channel-prepared", PhaseChannelSubmitted:
 		requireConnections, requireChannels = true, true
 	case PhaseComplete:
 		requireConnections, requireChannels = true, true
-	case phaseFailedWork:
+	case PhaseFailedWork:
 		return fmt.Errorf("resume state is terminal failed-work")
 	case phasePacketMintSubmitting, phasePacketMintSubmitted,
 		phasePacketApproveSubmitting, phasePacketApproveSubmitted,

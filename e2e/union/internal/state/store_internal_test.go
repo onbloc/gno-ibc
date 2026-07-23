@@ -12,7 +12,7 @@ func TestSavePropagatesParentDirectorySyncFailure(t *testing.T) {
 	syncDirectory = func(string) error { return errors.New("injected sync failure") }
 	t.Cleanup(func() { syncDirectory = old })
 
-	err := Save(filepath.Join(t.TempDir(), "state.json"), State{Phase: phaseBootstrap})
+	err := Save(filepath.Join(t.TempDir(), "state.json"), State{Phase: PhaseBootstrap})
 	if err == nil || !strings.Contains(err.Error(), "sync state directory") {
 		t.Fatalf("error = %v, want directory sync failure", err)
 	}

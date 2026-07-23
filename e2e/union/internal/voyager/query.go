@@ -4,14 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
-
-	"github.com/onbloc/gno-ibc/e2e/union/internal/process"
 )
-
-const maxDeadlockRetries = 5
 
 type clientInfo struct {
 	ClientType   string `json:"client_type"`
@@ -25,10 +20,6 @@ type clientMeta struct {
 
 type stateResponse struct {
 	State json.RawMessage `json:"state"`
-}
-
-type failedQueueItem struct {
-	ID jsonID `json:"id"`
 }
 
 type jsonID struct {
@@ -183,56 +174,4 @@ func decodeStateResponse(data []byte) (json.RawMessage, error) {
 		return nil, ErrNotFound
 	}
 	return raw, nil
-}
-
-// FailedWorkID returns the latest Voyager failed-work ID.
-func (r *Runtime) FailedWorkID(ctx context.Context, baseline int64, repaired []int64) (int64, error) {
-	result, err := r.retryQueue(ctx, "query-failed", "--per-page", "100")
-	if err != nil {
-		return 0, err
-	}
-	var items []failedQueueItem
-	if json.Unmarshal(result.Stdout, &items) != nil {
-		return 0, ErrMalformedResponse
-	}
-	ignored := make(map[int64]struct{}, len(repaired))
-	for _, id := range repaired {
-		ignored[id] = struct{}{}
-	}
-	latest := baseline
-	latestSeen := int64(0)
-	for _, item := range items {
-		if !item.ID.valid {
-			return 0, ErrMalformedResponse
-		}
-		id := item.ID.value
-		if id > latestSeen {
-			latestSeen = id
-		}
-		if _, skip := ignored[id]; !skip && id > latest {
-			latest = id
-		}
-	}
-	if (len(items) == 0 && baseline != 0) || baseline > latestSeen {
-		return 0, fmt.Errorf("saved failed-work ID is ahead of Voyager queue")
-	}
-	return latest, nil
-}
-
-func (r *Runtime) retryQueue(ctx context.Context, args ...string) (process.Result, error) {
-	for attempt := 0; attempt < maxDeadlockRetries; attempt++ {
-		result, err := r.call(ctx, append([]string{"queue"}, args...)...)
-		if err == nil {
-			return result, nil
-		}
-		if !strings.Contains(string(result.Stdout)+string(result.Stderr), "deadlock detected") {
-			return process.Result{}, err
-		}
-		if attempt+1 < maxDeadlockRetries {
-			if err := pause(ctx, r.cfg.PollInterval); err != nil {
-				return process.Result{}, fmt.Errorf("%w: retry Voyager queue", classifyContext(ctx, err))
-			}
-		}
-	}
-	return process.Result{}, fmt.Errorf("%w: Voyager queue remained deadlocked after %d attempts", ErrCommand, maxDeadlockRetries)
 }

@@ -57,6 +57,123 @@ func TestCompletedResumeUsesLoadedStateAndBroadcastsNothing(t *testing.T) {
 	}
 }
 
+func TestConnectionSubmittingResumeDoesNotRebroadcastWhenSlotsAreMissing(t *testing.T) {
+	cfg := testConfig(t)
+	cfg.VoyagerImage = "union-voyager-e2e:" + config.VoyagerRevision[:12]
+	cfg.VoyagerRustLog = "warn"
+	cfg.CommandTimeout = time.Second
+	cfg.ScenarioTimeout = time.Second
+	cfg.PollInterval = 0
+	cfg.VoyagerStopTimeout = time.Second
+	cfg.CleanupTimeout = 2 * time.Second
+	if err := state.PrepareArtifacts(
+		filepath.Dir(filepath.Dir(cfg.ScriptDir)), cfg.ScriptDir, cfg.ArtifactDir, cfg.StateFile,
+	); err != nil {
+		t.Fatal(err)
+	}
+	saved := completedState(cfg, 7)
+	saved.Phase = state.PhaseConnectionSubmitting
+	saved.FailedWork.Final = nil
+	saved.Channels = nil
+	if err := state.Save(cfg.StateFile, saved); err != nil {
+		t.Fatal(err)
+	}
+	recorder := &resumeExecutor{missingKind: "connection"}
+	runner, err := newRunner(cfg, recorder, Options{Apply: true, Resume: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = runner.Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "connection submission is ambiguous") {
+		t.Fatalf("error = %v", err)
+	}
+	if recorder.broadcasts != 0 {
+		t.Fatalf("broadcasts = %d, want zero", recorder.broadcasts)
+	}
+}
+
+func TestChannelSubmittingResumeDoesNotRebroadcastWhenSlotsAreMissing(t *testing.T) {
+	cfg := resumableState(t, state.PhaseChannelSubmitting)
+	recorder := &resumeExecutor{missingKind: "channel"}
+	runner, err := newRunner(cfg, recorder, Options{Apply: true, Resume: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = runner.Run(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "channel submission is ambiguous") {
+		t.Fatalf("error = %v", err)
+	}
+	if recorder.broadcasts != 0 {
+		t.Fatalf("broadcasts = %d, want zero", recorder.broadcasts)
+	}
+}
+
+func TestSubmittingResumeAdvancesOnlyFromMatchingExternalState(t *testing.T) {
+	tests := []struct {
+		name      string
+		phase     state.Phase
+		wantPhase state.Phase
+	}{
+		{"connection", state.PhaseConnectionSubmitting, state.PhaseConnectionSubmitted},
+		{"channel", state.PhaseChannelSubmitting, state.PhaseComplete},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := resumableState(t, tc.phase)
+			recorder := new(resumeExecutor)
+			runner, err := newRunner(cfg, recorder, Options{Resume: true})
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = runner.Run(context.Background())
+			if tc.name == "connection" {
+				if err == nil || !strings.Contains(err.Error(), "has no channel IDs") {
+					t.Fatalf("error = %v", err)
+				}
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			saved, err := state.Load(cfg.StateFile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if saved.Phase != tc.wantPhase {
+				t.Fatalf("phase = %s, want %s", saved.Phase, tc.wantPhase)
+			}
+			if recorder.broadcasts != 0 {
+				t.Fatalf("broadcasts = %d, want zero", recorder.broadcasts)
+			}
+		})
+	}
+}
+
+func resumableState(t *testing.T, phase state.Phase) config.Config {
+	t.Helper()
+	cfg := testConfig(t)
+	cfg.VoyagerImage = "union-voyager-e2e:" + config.VoyagerRevision[:12]
+	cfg.VoyagerRustLog = "warn"
+	cfg.CommandTimeout = time.Second
+	cfg.ScenarioTimeout = time.Second
+	cfg.PollInterval = 0
+	cfg.VoyagerStopTimeout = time.Second
+	cfg.CleanupTimeout = 2 * time.Second
+	if err := state.PrepareArtifacts(
+		filepath.Dir(filepath.Dir(cfg.ScriptDir)), cfg.ScriptDir, cfg.ArtifactDir, cfg.StateFile,
+	); err != nil {
+		t.Fatal(err)
+	}
+	saved := completedState(cfg, 7)
+	saved.Phase = phase
+	saved.FailedWork.Final = nil
+	if phase == state.PhaseConnectionSubmitting {
+		saved.Channels = nil
+	}
+	if err := state.Save(cfg.StateFile, saved); err != nil {
+		t.Fatal(err)
+	}
+	return cfg
+}
+
 func completedState(cfg config.Config, final int64) state.State {
 	return state.State{
 		Phase: state.PhaseComplete, VoyagerRevision: cfg.UnionVoyagerRevision,
@@ -74,7 +191,7 @@ func completedState(cfg config.Config, final int64) state.State {
 
 func readOnlyResumeCommand(command process.Command) bool {
 	if command.Name == "git" {
-		return slicesContain(command.Args, "rev-parse") || slicesContain(command.Args, "status")
+		return slices.Contains(command.Args, "rev-parse") || slices.Contains(command.Args, "status")
 	}
 	if command.Name != "docker" || len(command.Args) == 0 {
 		return false
@@ -101,12 +218,14 @@ type resumeExecutor struct {
 	commands       []process.Command
 	cancel         context.CancelFunc
 	stopContextErr error
+	missingKind    string
+	broadcasts     int
 }
 
 func (r *resumeExecutor) Run(ctx context.Context, command process.Command) (process.Result, error) {
 	r.commands = append(r.commands, command)
 	if command.Name == "git" {
-		if slicesContain(command.Args, "rev-parse") {
+		if slices.Contains(command.Args, "rev-parse") {
 			return process.Result{Stdout: []byte(config.VoyagerRevision)}, nil
 		}
 		return process.Result{}, nil
@@ -155,6 +274,9 @@ func (r *resumeExecutor) voyagerResponse(args []string) (process.Result, error) 
 	switch {
 	case strings.Contains(joined, " rpc info"):
 		return process.Result{Stdout: []byte("{}")}, nil
+	case strings.Contains(joined, " q e "):
+		r.broadcasts++
+		return process.Result{}, nil
 	case strings.Contains(joined, " queue query-failed"):
 		if r.cancel != nil {
 			r.cancel()
@@ -174,12 +296,18 @@ func (r *resumeExecutor) voyagerResponse(args []string) (process.Result, error) 
 		}
 		return process.Result{Stdout: []byte(`{"state":{"l1_client_id":4,"l2_client_id":2,"l2_chain_id":"dev.ibc"}}`)}, nil
 	case strings.Contains(joined, `"connection"`):
+		if r.missingKind == "connection" {
+			return process.Result{Stdout: []byte(`{"state":null}`)}, nil
+		}
 		chain := args[len(args)-2]
 		if chain == "dev.ibc" {
 			return process.Result{Stdout: []byte(`{"state":{"state":"OPEN","client_id":5,"counterparty_client_id":6,"counterparty_connection_id":12}}`)}, nil
 		}
 		return process.Result{Stdout: []byte(`{"state":{"state":"OPEN","client_id":6,"counterparty_client_id":5,"counterparty_connection_id":11}}`)}, nil
 	case strings.Contains(joined, `"channel"`):
+		if r.missingKind == "channel" {
+			return process.Result{Stdout: []byte(`{"state":null}`)}, nil
+		}
 		chain := args[len(args)-2]
 		if chain == "dev.ibc" {
 			return process.Result{Stdout: []byte(`{"state":{"state":"OPEN","connection_id":11,"counterparty_channel_id":22,"counterparty_port_id":"0x5555555555555555555555555555555555555555","version":"ucs03-zkgm-0"}}`)}, nil
@@ -228,15 +356,6 @@ func counterparty(chain string, id int64) string {
 	default:
 		return "dev.ibc"
 	}
-}
-
-func slicesContain(values []string, want string) bool {
-	for _, value := range values {
-		if value == want {
-			return true
-		}
-	}
-	return false
 }
 
 func argumentAfter(args []string, flag string) string {

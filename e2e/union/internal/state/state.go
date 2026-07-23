@@ -5,13 +5,13 @@ package state
 type Phase string
 
 const (
-	phaseBootstrap               Phase = "bootstrap-in-progress"
-	phaseConnectionSubmitting    Phase = "connection-submitting"
-	phaseConnectionSubmitted     Phase = "connection-submitted"
-	phaseChannelSubmitting       Phase = "channel-submitting"
-	phaseChannelSubmitted        Phase = "channel-submitted"
+	PhaseBootstrap               Phase = "bootstrap-in-progress"
+	PhaseConnectionSubmitting    Phase = "connection-submitting"
+	PhaseConnectionSubmitted     Phase = "connection-submitted"
+	PhaseChannelSubmitting       Phase = "channel-submitting"
+	PhaseChannelSubmitted        Phase = "channel-submitted"
 	PhaseComplete                Phase = "complete"
-	phaseFailedWork              Phase = "failed-work"
+	PhaseFailedWork              Phase = "failed-work"
 	phasePacketMintSubmitting    Phase = "packet-mint-submitting"
 	phasePacketMintSubmitted     Phase = "packet-mint-submitted"
 	phasePacketApproveSubmitting Phase = "packet-approve-submitting"

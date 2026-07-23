@@ -25,8 +25,9 @@ func run() error {
 	flag.BoolVar(&options.Apply, "apply", false, "allow broadcasts")
 	flag.BoolVar(&options.Resume, "resume", false, "resume from saved state")
 	flag.BoolVar(&options.ERC20ToGno, "erc20-to-gno", false, "run the ERC20 EVM-to-Gno scenario")
+	flag.BoolVar(&options.AmountBoundaries, "amount-boundaries", false, "run EVM-to-Gno amount boundary scenarios")
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "usage: %s [--resume] [--apply] [--erc20-to-gno]\n", os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), "usage: %s [--resume] [--apply] [--erc20-to-gno] [--amount-boundaries]\n", os.Args[0])
 	}
 	flag.Parse()
 	if flag.NArg() != 0 {

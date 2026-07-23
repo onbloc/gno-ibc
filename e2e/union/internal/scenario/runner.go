@@ -21,9 +21,10 @@ import (
 
 // Options are the runner's explicit write and resume boundaries.
 type Options struct {
-	Apply      bool
-	Resume     bool
-	ERC20ToGno bool
+	Apply            bool
+	Resume           bool
+	ERC20ToGno       bool
+	AmountBoundaries bool
 }
 
 // Runner executes the live acceptance scenarios.
@@ -60,6 +61,9 @@ func newRunnerWithClients(
 ) (*Runner, error) {
 	if options.ERC20ToGno && !options.Apply {
 		return nil, fmt.Errorf("--erc20-to-gno requires --apply")
+	}
+	if options.AmountBoundaries && !options.ERC20ToGno {
+		return nil, fmt.Errorf("--amount-boundaries requires --erc20-to-gno")
 	}
 	runner := &Runner{
 		cfg: cfg, options: options,
@@ -117,7 +121,12 @@ func (r *Runner) Run(ctx context.Context) (runErr error) {
 		return err
 	}
 	if r.options.ERC20ToGno {
-		return r.runERC20ToGnoScenario(ctx)
+		if err := r.runERC20ToGnoScenario(ctx); err != nil {
+			return err
+		}
+		if r.options.AmountBoundaries {
+			return r.runAmountBoundaries(ctx)
+		}
 	}
 	return nil
 }
@@ -143,6 +152,11 @@ func (r *Runner) preflight(ctx context.Context) ([]byte, error) {
 			if _, err := osexec.LookPath(name); err != nil {
 				return nil, fmt.Errorf("missing required packet command: %s", name)
 			}
+		}
+	}
+	if r.options.AmountBoundaries {
+		if _, err := osexec.LookPath("forge"); err != nil {
+			return nil, fmt.Errorf("missing required packet command: forge")
 		}
 	}
 	return rendered, nil

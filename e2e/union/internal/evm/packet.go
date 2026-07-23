@@ -45,15 +45,42 @@ func (c *Client) Send(
 	evmChannel int64,
 	sender, recipient, voucher, salt, tag string,
 ) (SendResult, error) {
-	metadata, err := c.metadata(ctx, tag, sender)
+	metadata, err := c.metadata(ctx, tag, sender, 18)
 	if err != nil {
 		return SendResult{}, err
 	}
+	return c.sendTokenOrder(
+		ctx, evmChannel, c.cfg.EVMTestERC20, sender, recipient, voucher,
+		c.cfg.EVMTestAmount, salt, 0, metadata,
+	)
+}
+
+// SendTokenOrder submits one explicitly typed TokenOrder.
+func (c *Client) SendTokenOrder(
+	ctx context.Context,
+	evmChannel int64,
+	plan Plan,
+	recipient, amount string,
+	kind uint8,
+) (SendResult, error) {
+	return c.sendTokenOrder(
+		ctx, evmChannel, plan.Token, plan.Sender, recipient, plan.Voucher,
+		amount, plan.Salt, kind, plan.Metadata,
+	)
+}
+
+func (c *Client) sendTokenOrder(
+	ctx context.Context,
+	evmChannel int64,
+	token, sender, recipient, voucher, amount, salt string,
+	kind uint8,
+	metadata string,
+) (SendResult, error) {
 	operand, err := c.cast(
 		ctx, "abi-encode", "f(bytes,bytes,bytes,uint256,bytes,uint256,uint8,bytes)",
-		sender, "0x"+hex.EncodeToString([]byte(recipient)), strings.ToLower(c.cfg.EVMTestERC20),
-		c.cfg.EVMTestAmount, "0x"+hex.EncodeToString([]byte(voucher)),
-		c.cfg.EVMTestAmount, "0", metadata,
+		sender, "0x"+hex.EncodeToString([]byte(recipient)), strings.ToLower(token),
+		amount, "0x"+hex.EncodeToString([]byte(voucher)),
+		amount, strconv.Itoa(int(kind)), metadata,
 	)
 	if err != nil {
 		return SendResult{}, err

@@ -101,9 +101,9 @@ func TestGetVoucherListReturnsAllRegisteredVouchers(cur realm, t *testing.T) {
 		wantSupply     int64
 	}{
 		// decimals == canonicalDecimals: no ledger downscale, TotalSupply matches the minted amount.
-		{"decimals at canonical cap", "ibc/list-a", "Alpha", "ALPHA", 6, u256.NewUint(100), 6, 100},
+		{"decimals at canonical cap", "ibc/list-a", "Alpha", "GVLISTA", 6, u256.NewUint(100), 6, 100},
 		// decimals > canonicalDecimals: ledger is capped to 6, so 500 origin units mint as 5 ledger units.
-		{"decimals above canonical cap", "ibc/list-b", "Beta", "BETA", 8, u256.NewUint(500), 6, 5},
+		{"decimals above canonical cap", "ibc/list-b", "Beta", "GVLISTB", 8, u256.NewUint(500), 6, 5},
 	}
 
 	for _, tc := range cases {
@@ -141,8 +141,9 @@ func TestGetVoucherListPagination(cur realm, t *testing.T) {
 	rx := testAddress("voucher-page-rx")
 
 	denoms := []string{"ibc/page-a", "ibc/page-b", "ibc/page-c"}
-	for _, denom := range denoms {
-		uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, denom, "SYM", 6, rx, u256.NewUint(1)))
+	symbols := []string{"GVLPGA", "GVLPGB", "GVLPGC"}
+	for i, denom := range denoms {
+		uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, denom, symbols[i], 6, rx, u256.NewUint(1)))
 	}
 
 	cases := []struct {
@@ -185,8 +186,8 @@ func TestGetVoucherInfo(cur realm, t *testing.T) {
 		wantLedgerDec  uint8
 		wantSupply     int64
 	}{
-		{"decimals at canonical cap", "ibc/info-a", "Alpha", "ALPHA", 6, u256.NewUint(100), 6, 100},
-		{"decimals above canonical cap", "ibc/info-b", "Beta", "BETA", 8, u256.NewUint(500), 6, 5},
+		{"decimals at canonical cap", "ibc/info-a", "Alpha", "GVINFOA", 6, u256.NewUint(100), 6, 100},
+		{"decimals above canonical cap", "ibc/info-b", "Beta", "GVINFOB", 8, u256.NewUint(500), 6, 5},
 	}
 
 	for _, tc := range cases {
@@ -226,8 +227,9 @@ func TestGetVoucherSize(cur realm, t *testing.T) {
 	uassert.Equal(t, 0, got)
 
 	denoms := []string{"ibc/size-a", "ibc/size-b", "ibc/size-c"}
+	symbols := []string{"GVSIZEA", "GVSIZEB", "GVSIZEC"}
 	for i, denom := range denoms {
-		uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, denom, "SYM", 6, rx, u256.NewUint(1)))
+		uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, denom, symbols[i], 6, rx, u256.NewUint(1)))
 
 		got, err = v.GetVoucherSize()
 		uassert.NoError(t, err)

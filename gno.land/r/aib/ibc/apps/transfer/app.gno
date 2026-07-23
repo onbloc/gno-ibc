@@ -343,14 +343,20 @@ func (a *App) OnRecvPacket(
 		}
 		inst := getOrCreateVoucher(0, cur, token.Denom.Base, voucherDenom)
 
-		if tryForward(cur, sourceClient, destinationClient, data.Receiver, sequence, data.Memo, voucherDenom, amount) {
+		switch outcome, fwdErr := tryForward(cur, sourceClient, destinationClient, data.Receiver, sequence, data.Memo, voucherDenom, amount); outcome {
+		case forwardAsync:
 			return types.RecvPacketResult{Status: types.PacketStatus_Async}
-		}
-
-		if err := inst.ledger.Mint(address(data.Receiver), amount); err != nil {
-			ackErr = ufmt.Errorf("mint voucher error: %v", err)
+		case forwardFailed:
+			ackErr = fwdErr
 			ack = types.NewErrorAppAcknowledgement(ackErr)
 			return types.RecvPacketResult{Status: types.PacketStatus_Failure}
+		case forwardNone:
+			// Mint voucher tokens to the receiver
+			if err := inst.ledger.Mint(address(data.Receiver), amount); err != nil {
+				ackErr = ufmt.Errorf("mint voucher error: %v", err)
+				ack = types.NewErrorAppAcknowledgement(ackErr)
+				return types.RecvPacketResult{Status: types.PacketStatus_Failure}
+			}
 		}
 	}
 

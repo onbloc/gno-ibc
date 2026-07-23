@@ -8,6 +8,7 @@ import (
 	"gno.land/p/aib/encoding"
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/fqname/v0"
+	"gno.land/p/nt/ufmt/v0"
 	unionTypes "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
@@ -18,27 +19,37 @@ import (
 // realm's own address, not the original AtomOne sender.
 const defaultForwardTimeout = 24 * time.Hour
 
+// forwardOutcome is tryForward's three-way result.
+type forwardOutcome int
+
+const (
+	forwardNone   forwardOutcome = iota // not a forward - mint to Receiver as usual
+	forwardAsync                        // forward sent onward; this packet's ack is deferred
+	forwardFailed                       // forward was signaled but invalid before any mint - ack-error
+)
+
 // tryForward forwards onward via ZKGM when data.Receiver is zkgm's proxy
 // address (a fixed realm address, not relayer-custodied); the memo only
-// carries routing data. Returns false for any other receiver. Once receiver
-// signals forward intent, a malformed memo is a hard failure, not a
-// fallback mint to zkgm's own proxy address.
-func tryForward(cur realm, sourceClient, destinationClient, icsReceiver string, sequence uint64, memo, voucherDenom string, amount int64) bool {
+// carries routing data. Once the mint below succeeds, any later failure
+// panics instead of returning forwardFailed: an ack-error at that point
+// would let AtomOne refund the sender while the voucher stays minted here
+// too (double issuance).
+func tryForward(cur realm, sourceClient, destinationClient, icsReceiver string, sequence uint64, memo, voucherDenom string, amount int64) (forwardOutcome, error) {
 	if address(icsReceiver) != zkgm.ProxyAddress() {
-		return false
+		return forwardNone, nil
 	}
 
 	fwd, ok := parseForwardMemo(memo)
 	if !ok {
-		panic("transfer: forward: receiver is zkgm's proxy address but memo is not a valid forward instruction")
+		return forwardFailed, ufmt.Errorf("transfer: forward: receiver is zkgm's proxy address but memo is not a valid forward instruction")
 	}
 
 	inst := getVoucher(voucherDenom)
 	if inst == nil {
-		panic("transfer: forward: voucher not found for " + voucherDenom)
+		return forwardFailed, ufmt.Errorf("transfer: forward: voucher not found for %s", voucherDenom)
 	}
-	if err := inst.ledger.Mint(cur.Address(), amount); err != nil {
-		panic("transfer: forward: mint error: " + err.Error())
+	if mintErr := inst.ledger.Mint(cur.Address(), amount); mintErr != nil {
+		return forwardFailed, ufmt.Errorf("transfer: forward: mint error: %v", mintErr)
 	}
 
 	// zkgm's escrow pulls via TransferFrom, so it needs an allowance.
@@ -96,7 +107,7 @@ func tryForward(cur realm, sourceClient, destinationClient, icsReceiver string, 
 		Amount:            amount,
 	})
 
-	return true
+	return forwardAsync, nil
 }
 
 // deriveForwardSalt derives a per-packet-unique ZKGM send salt from

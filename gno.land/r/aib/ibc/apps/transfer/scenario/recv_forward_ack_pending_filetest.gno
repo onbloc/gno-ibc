@@ -1,14 +1,15 @@
 // PKGPATH: gno.land/r/aib/main
 package main
 
-// atomone_recv_forward_via_zkgm_filetest proves the AtomOne -> Gno ICS20 ->
-// Gno ZKGM leg of issue #248's single-sign design: an AtomOne recv carrying a
-// PFM-style forward memo mints the voucher to transfer's own realm address
-// instead of Receiver, and forwards it onward via zkgm.SendWithCallback,
-// deferring this packet's own ack (PacketStatus_Async).
+// recv_forward_ack_pending_filetest proves the AtomOne -> Gno ICS20 -> Gno
+// ZKGM leg of issue #248's single-sign design: an AtomOne recv whose Receiver
+// is ZKGM's own proxy address mints the voucher to transfer's own realm
+// address instead of Receiver, and forwards it onward via
+// zkgm.SendWithCallback, deferring this packet's own ack (PacketStatus_Async).
 //
 // Scope: recv -> forward send only. The ZKGM leg's ack/timeout coming back
-// (OnZkgmSendResult resolving the deferred ack) is not exercised here.
+// (OnZkgmSendResult resolving the deferred ack) is not exercised here. See
+// recv_ack_ok_filetest.gno for the non-forward control case.
 
 import (
 	"encoding/hex"

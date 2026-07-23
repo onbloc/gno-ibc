@@ -165,11 +165,6 @@ func TestPacketSendEventAttrsSplitPacketData(cur realm, t *testing.T) {
 		wantLens []int
 	}{
 		{
-			name:     "single packet data column",
-			data:     []byte("fixed-small-packet"),
-			wantLens: []int{38},
-		},
-		{
 			name:     "split packet data columns",
 			data:     []byte(fixedEventAttrHalfColumn),
 			wantLens: []int{maxLen, 2},
@@ -214,6 +209,11 @@ func TestPacketSendEventAttrsSplitPacketData(cur realm, t *testing.T) {
 	}
 }
 
+func TestEncodedEventAttrsKeepsSmallValueUnsplit(cur realm, t *testing.T) {
+	resetEventConfigForTest()
+	assertStringSliceEqual(t, encodedEventAttrs("packet_data", "0x00"), []string{"packet_data", "0x00"})
+}
+
 func TestPacketSendEventAttrs(cur realm, t *testing.T) {
 	resetEventConfigForTest()
 
@@ -240,8 +240,7 @@ func TestPacketSendEventAttrs(cur realm, t *testing.T) {
 		"destination_connection_id", "30",
 		"destination_connection_client_id", "20",
 		"timeout_timestamp", "4",
-		"packet_data_size", strconv.Itoa(len(hexAttr(packet.Data))),
-		"packet_data[0]", hexAttr(packet.Data),
+		"packet_data", hexAttr(packet.Data),
 	})
 }
 
@@ -272,10 +271,8 @@ func TestPacketRecvEventAttrs(cur realm, t *testing.T) {
 		"destination_connection_id", "3",
 		"destination_connection_client_id", "10",
 		"timeout_timestamp", "4",
-		"packet_data_size", strconv.Itoa(len(hexAttr(packet.Data))),
-		"packet_data[0]", hexAttr(packet.Data),
-		"maker_msg_size", strconv.Itoa(len(hexAttr(makerMsg))),
-		"maker_msg[0]", hexAttr(makerMsg),
+		"packet_data", hexAttr(packet.Data),
+		"maker_msg", hexAttr(makerMsg),
 	})
 }
 
@@ -306,10 +303,8 @@ func TestWriteAckEventAttrs(cur realm, t *testing.T) {
 		"destination_connection_id", "3",
 		"destination_connection_client_id", "10",
 		"timeout_timestamp", "4",
-		"packet_data_size", strconv.Itoa(len(hexAttr(packet.Data))),
-		"packet_data[0]", hexAttr(packet.Data),
-		"acknowledgement_size", strconv.Itoa(len(hexAttr(acknowledgement))),
-		"acknowledgement[0]", hexAttr(acknowledgement),
+		"packet_data", hexAttr(packet.Data),
+		"acknowledgement", hexAttr(acknowledgement),
 	})
 }
 
@@ -340,10 +335,8 @@ func TestPacketAckEventAttrs(cur realm, t *testing.T) {
 		"destination_connection_id", "30",
 		"destination_connection_client_id", "20",
 		"timeout_timestamp", "4",
-		"packet_data_size", strconv.Itoa(len(hexAttr(packet.Data))),
-		"packet_data[0]", hexAttr(packet.Data),
-		"acknowledgement_size", strconv.Itoa(len(hexAttr(acknowledgement))),
-		"acknowledgement[0]", hexAttr(acknowledgement),
+		"packet_data", hexAttr(packet.Data),
+		"acknowledgement", hexAttr(acknowledgement),
 	})
 }
 
@@ -373,8 +366,7 @@ func TestPacketTimeoutEventAttrs(cur realm, t *testing.T) {
 		"destination_connection_id", "30",
 		"destination_connection_client_id", "20",
 		"timeout_timestamp", "4",
-		"packet_data_size", strconv.Itoa(len(hexAttr(packet.Data))),
-		"packet_data[0]", hexAttr(packet.Data),
+		"packet_data", hexAttr(packet.Data),
 	})
 }
 

@@ -1,0 +1,115 @@
+services:
+  gno:
+    image: gno-ibc-e2e-gno:${GNO_COMMIT:?load ../../.gno-version with --env-file}
+    build:
+      context: ../..
+      dockerfile: e2e/union/gno/Dockerfile
+    ports:
+      - "${GNO_RPC_PORT:-16657}:26657"
+      - "${GNO_WEB_PORT:-18888}:8888"
+    environment:
+      TEST_MNEMONIC: ${TEST_MNEMONIC}
+      ADMIN_ADDR: ${ADMIN_ADDR:-g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5}
+      TEST_ADDR: ${TEST_ADDR:-g1z437dpuh5s4p64vtq09dulg6jzxpr2hd4q8r5x}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:26657/status"]
+      interval: 5s
+      timeout: 10s
+      retries: 60
+      start_period: 120s
+
+  tx-indexer:
+    image: ${GNO_TX_INDEXER_IMAGE:-ghcr.io/gnolang/tx-indexer@sha256:7e4e7be2ac7deb60cce02867ddf6975be32cbd41e5cbaf7cd5637908858063e2}
+    command:
+      - start
+      - -remote
+      - http://gno:26657
+      - -listen-address
+      - 0.0.0.0:8546
+    ports:
+      - "${GNO_INDEXER_PORT:-48546}:8546"
+    depends_on:
+      gno:
+        condition: service_healthy
+
+  gno-whitelist:
+    image: gno-ibc-e2e-gno:${GNO_COMMIT:?load ../../.gno-version with --env-file}
+    profiles: ["setup"]
+    entrypoint: ["bash", "/whitelist.sh"]
+    volumes:
+      - ./gno/whitelist.sh:/whitelist.sh:ro
+      - ${VOYAGER_CONFIG:-./voyager-config.gno-union.jsonc}:/voyager-config.gno-union.jsonc:ro
+    environment:
+      GNO_CHAIN_ID: ${GNO_CHAIN_ID:-dev}
+      GNO_GNOKEY_REMOTE: ${GNO_GNOKEY_REMOTE:-gno:26657}
+      TEST_MNEMONIC: ${TEST_MNEMONIC}
+      ADMIN_MNEMONIC: ${ADMIN_MNEMONIC}
+    depends_on:
+      gno:
+        condition: service_healthy
+
+  gno-bootstrap:
+    image: gno-ibc-e2e-gno:${GNO_COMMIT:?load ../../.gno-version with --env-file}
+    profiles: ["setup"]
+    entrypoint: ["bash", "/bootstrap.sh"]
+    volumes:
+      - ./gno/bootstrap.sh:/bootstrap.sh:ro
+    environment:
+      GNO_CHAIN_ID: ${GNO_CHAIN_ID:-dev}
+      GNO_GNOKEY_REMOTE: ${GNO_GNOKEY_REMOTE:-gno:26657}
+      ADMIN_MNEMONIC: ${ADMIN_MNEMONIC}
+    depends_on:
+      gno-whitelist:
+        condition: service_completed_successfully
+
+  gno-admin-recovery:
+    image: gno-ibc-e2e-gno:${GNO_COMMIT:?load ../../.gno-version with --env-file}
+    profiles: ["setup"]
+    entrypoint: ["bash", "/admin-recovery.sh"]
+    volumes:
+      - ./gno/admin-recovery.sh:/admin-recovery.sh:ro
+    environment:
+      GNO_CHAIN_ID: ${GNO_CHAIN_ID:-dev}
+      GNO_GNOKEY_REMOTE: ${GNO_GNOKEY_REMOTE:-gno:26657}
+      ADMIN_MNEMONIC: ${ADMIN_MNEMONIC}
+      TOPOLOGY_ACTION: ${TOPOLOGY_ACTION:-legacy}
+      CLIENT_TYPE: ${CLIENT_TYPE:-}
+    depends_on:
+      gno-bootstrap:
+        condition: service_completed_successfully
+
+  postgres:
+    image: ${POSTGRES_IMAGE:?set POSTGRES_IMAGE to a pinned digest}
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  voyager:
+    image: union-voyager-build:${UNION_COMMIT:?set UNION_COMMIT in .env}
+    build:
+      context: .
+      dockerfile: voyager-build.Dockerfile
+      additional_contexts:
+        union-src: ${UNION_VOYAGER_DIR:-../../../union-voyager}
+      args:
+        UNION_COMMIT: ${UNION_COMMIT:?set UNION_COMMIT in .env}
+    command: ["./voyager", "start", "-c", "/config/voyager-config.gno-union.jsonc"]
+    working_dir: /output
+    ports:
+      - "${VOYAGER_REST_PORT:-7177}:7177"
+      - "${VOYAGER_RPC_PORT:-7178}:7178"
+    volumes:
+      - ${VOYAGER_CONFIG:-./voyager-config.gno-union.jsonc}:/config/voyager-config.gno-union.jsonc:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      tx-indexer:
+        condition: service_started
+    profiles: ["voyager"]

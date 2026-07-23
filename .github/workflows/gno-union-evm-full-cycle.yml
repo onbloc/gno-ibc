@@ -1,0 +1,61 @@
+name: Gno Union EVM full cycle
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 18 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gno-union-evm-full-cycle
+  cancel-in-progress: false
+
+jobs:
+  full-cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Check out gno-ibc
+        uses: actions/checkout@v4
+        with:
+          path: gno-ibc
+
+      - name: Check out pinned Union
+        uses: actions/checkout@v4
+        with:
+          repository: onbloc/union-voyager
+          ref: c61ae7370f3006a47edab785cf1a0b02638b6a0f
+          path: union-voyager
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
+        with:
+          extra_nix_config: experimental-features = nix-command flakes
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1.9.0
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install nightly-2025-12-05 --profile minimal --component rust-src
+
+      - name: Run full cycle
+        working-directory: gno-ibc
+        env:
+          UNION_VOYAGER_DIR: ${{ github.workspace }}/union-voyager
+          E2E_ARTIFACT_DIR: ${{ github.workspace }}/artifacts
+          DEVNET_LINUX_SYSTEM: x86_64-linux
+        run: e2e/union/run-full-cycle-ci.sh
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gno-union-evm-full-cycle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts
+          if-no-files-found: warn
+          retention-days: 7

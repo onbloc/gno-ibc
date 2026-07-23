@@ -78,7 +78,16 @@ type Store struct {
 	// as opposed to vouchers, which zkgm mints/burns directly.
 	lockedTokenAmounts *bptree.BPTree // denom -> *u256.Uint (permanently locked base token)
 	receivers          *bptree.BPTree // pkgPath -> z.Zkgmable
+	sendCallbacks      *bptree.BPTree // pkgPath -> z.SendCallback
+	pendingSendCorr    *bptree.BPTree // packetHash -> pendingSendCorr
 	rateLimitDisabled  bool
+}
+
+// pendingSendCorr correlates an outbound packet sent via SendWithCallback
+// back to the caller that must be notified of its outcome.
+type pendingSendCorr struct {
+	CallerPkgPath string
+	CorrID        string
 }
 
 func NewStore() *Store {
@@ -92,6 +101,8 @@ func NewStore() *Store {
 		vouchers:           bptree.NewBPTree32(),
 		lockedTokenAmounts: bptree.NewBPTree32(),
 		receivers:          bptree.NewBPTree32(),
+		sendCallbacks:      bptree.NewBPTree32(),
+		pendingSendCorr:    bptree.NewBPTree32(),
 		// Rate limiting is opt-in: enabled per-denom by an admin who first
 		// configures a token bucket (see SetBucketConfig). With it enabled, a denom
 		// without a bucket is rejected (union TokenBucketIsAbsent), so it must stay
@@ -304,6 +315,50 @@ func (s *Store) GetReceiver(path string) (z.Zkgmable, bool) {
 	}
 
 	return r.(z.Zkgmable), true
+}
+
+// SetSendCallback registers a SendCallback target at a package path.
+func (s *Store) SetSendCallback(_ int, rlm realm, path string, cb z.SendCallback) {
+	assertIsRlmCurrent(0, rlm)
+
+	s.sendCallbacks.Set(path, cb)
+}
+
+// GetSendCallback returns the SendCallback registered at a package path.
+func (s *Store) GetSendCallback(path string) (z.SendCallback, bool) {
+	v := s.sendCallbacks.Get(path)
+	if v == nil {
+		return nil, false
+	}
+
+	return v.(z.SendCallback), true
+}
+
+// SetPendingSendCorr records the caller correlation for a packet sent via
+// SendWithCallback, keyed by the packet's commitment hash.
+func (s *Store) SetPendingSendCorr(_ int, rlm realm, packetHash string, callerPkgPath string, corrID string) {
+	assertIsRlmCurrent(0, rlm)
+
+	s.pendingSendCorr.Set(packetHash, pendingSendCorr{CallerPkgPath: callerPkgPath, CorrID: corrID})
+}
+
+// GetPendingSendCorr returns the caller correlation recorded for a packet hash.
+func (s *Store) GetPendingSendCorr(packetHash string) (callerPkgPath string, corrID string, found bool) {
+	v := s.pendingSendCorr.Get(packetHash)
+	if v == nil {
+		return "", "", false
+	}
+
+	corr := v.(pendingSendCorr)
+
+	return corr.CallerPkgPath, corr.CorrID, true
+}
+
+// RemovePendingSendCorr clears a resolved send-callback correlation entry.
+func (s *Store) RemovePendingSendCorr(_ int, rlm realm, packetHash string) {
+	assertIsRlmCurrent(0, rlm)
+
+	s.pendingSendCorr.Remove(packetHash)
 }
 
 // SetRateLimitDisabled toggles the global rate-limit kill switch.

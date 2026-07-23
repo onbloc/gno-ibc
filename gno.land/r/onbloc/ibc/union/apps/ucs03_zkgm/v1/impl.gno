@@ -144,9 +144,16 @@ func (v *ucs03ZkgmV1) OnAcknowledgementPacket(_ int, rlm realm, packet types.Pac
 	}
 
 	successful := outerAck.Tag != nil && outerAck.Tag.Eq(tagAckSuccess())
+
 	if err := v.acknowledgeInternal(0, rlm, packet, relayer, zp.Salt, zp.Path, zp.Instruction, successful, outerAck.InnerAck); err != nil {
 		panic(err.Error())
 	}
+
+	// A packet sent via SendWithCallback still settles through the normal
+	// opcode ack path above (e.g. TokenOrder refund-on-failure); this only
+	// additionally notifies the caller so it can resolve its own deferred
+	// ack, if it registered one.
+	v.handleSendCallback(0, rlm, packet, successful, acknowledgement)
 }
 
 // OnTimeoutPacket refunds the timed-out instruction, or settles the forwarded parent packet.
@@ -165,6 +172,11 @@ func (v *ucs03ZkgmV1) OnTimeoutPacket(_ int, rlm realm, packet types.Packet, rel
 	if err := v.timeoutInternal(0, rlm, packet, zp.Salt, zp.Path, zp.Instruction); err != nil {
 		panic(err.Error())
 	}
+
+	// See the matching note in OnAcknowledgementPacket: timeoutInternal above
+	// already handles the normal opcode refund; this only additionally
+	// notifies a registered SendWithCallback caller.
+	v.handleSendCallback(0, rlm, packet, false, universalErrorAck())
 }
 
 // Send verifies the instruction against the attached funds, namespaces the salt, and emits the packet through core.

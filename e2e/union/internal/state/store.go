@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 )
 
@@ -39,7 +40,31 @@ func Load(path string) (State, error) {
 	if saved.FailedWork.Repaired == nil {
 		saved.FailedWork.Repaired = []int64{}
 	}
+	upgradeLegacyPacketComplete(&saved)
 	return saved, nil
+}
+
+// The fixed-point shell only persisted packet-complete after verifying success.
+func upgradeLegacyPacketComplete(saved *State) {
+	packet := saved.Packet
+	if saved.Phase != PhasePacketComplete || packet == nil ||
+		packet.Phase != PhasePacketComplete || packet.Outcome != "" ||
+		packet.CommitmentCleared || packet.GnoWriteAckTx != "" ||
+		packet.GnoReceiveTx == "" || packet.EVMAckTx == "" ||
+		packet.BalanceDeltas == nil || packet.FailedWorkFinal == nil ||
+		*packet.FailedWorkFinal != packet.FailedWorkBaseline {
+		return
+	}
+
+	packet.Outcome = PacketOutcomeSuccess
+	packet.CommitmentCleared = true
+	packet.GnoWriteAckTx = packet.GnoReceiveTx
+	baseline := packet.FailedWorkBaseline
+	saved.FailedWork.Baseline = baseline
+	saved.FailedWork.Final = &baseline
+	saved.FailedWork.Repaired = slices.DeleteFunc(
+		saved.FailedWork.Repaired, func(id int64) bool { return id <= baseline },
+	)
 }
 
 // Save atomically replaces a private checkpoint and syncs its parent directory.

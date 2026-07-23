@@ -3,12 +3,16 @@ package scenario
 import (
 	"context"
 	"errors"
+	"io"
 	"os"
 	"slices"
 	"strings"
 
 	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
+	"github.com/onbloc/gno-ibc/e2e/union/internal/evm"
+	"github.com/onbloc/gno-ibc/e2e/union/internal/gno"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/process"
+	"github.com/onbloc/gno-ibc/e2e/union/internal/voyager"
 )
 
 const testImageID = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -17,6 +21,20 @@ type dockerTestRuntime struct {
 	container      bool
 	startErr       error
 	stopContextErr error
+}
+
+func newRunner(
+	cfg config.Config,
+	executor process.Executor,
+	options Options,
+) (*Runner, error) {
+	return newRunnerWithClients(
+		cfg,
+		options,
+		voyager.NewWithExecutor(cfg, executor, io.Discard),
+		evm.NewWithExecutor(cfg, executor),
+		gno.NewWithExecutor(cfg, executor),
+	)
 }
 
 func (d *dockerTestRuntime) run(

@@ -123,7 +123,7 @@ func validEnvironment() map[string]string {
 		"EVM_RPC_URL":                     "https://evm.example",
 		"GNO_RPC_URL":                     "https://gno.example",
 		"GNO_TX_INDEXER_RPC_URL":          "https://indexer.example",
-		"VOYAGER_DATABASE_URL":            "postgres://voyager:password@db/voyager",
+		"VOYAGER_DATABASE_URL":            "postgres://voyager:" + "password@db/voyager",
 		"TRUSTED_MPT_PRIVATE_KEY":         "0x" + strings.Repeat("a", 64),
 		"UNION_PRIVATE_KEY":               "0x" + strings.Repeat("b", 64),
 		"EVM_PRIVATE_KEY":                 "0x" + strings.Repeat("c", 64),

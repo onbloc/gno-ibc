@@ -44,11 +44,10 @@ jobs:
         if: inputs.erc20_to_gno
         uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1.9.0
 
-      - name: Install Go for pinned gnokey
-        if: inputs.erc20_to_gno
+      - name: Install Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
-          go-version: "1.25.9"
+          go-version: "1.26.2"
           cache: false
 
       - name: Install pinned gnokey
@@ -110,14 +109,18 @@ jobs:
             "E2E_STATE_FILE=${{ github.workspace }}/artifacts/state.json" \
             >>e2e/union/.env
 
-      - name: Run live E2E
+      - name: Establish fresh channel
         working-directory: gno-ibc
-        env:
-          RUN_PACKET: ${{ inputs.erc20_to_gno }}
-        run: |
-          args=(--apply)
-          [[ $RUN_PACKET != true ]] || args+=(--erc20-to-gno)
-          e2e/union/run-channel-e2e.sh "${args[@]}"
+        run: e2e/union/run-channel-e2e.sh --apply
+
+      - name: Verify completed resume
+        working-directory: gno-ibc
+        run: e2e/union/run-channel-e2e.sh --resume
+
+      - name: Verify ERC20 EVM to Gno
+        if: inputs.erc20_to_gno
+        working-directory: gno-ibc
+        run: e2e/union/run-channel-e2e.sh --resume --apply --erc20-to-gno
 
       - name: Upload sanitized artifacts
         if: always()

@@ -59,16 +59,17 @@ details; `state` owns durable data; `config` owns validation and rendering;
   Proof Lens implementations/registrations.
 - The Gno transaction indexer and all three RPC endpoints are reachable.
 - PostgreSQL is reachable by Voyager.
-- `bash`, `git`, `jq`, Docker, and GNU `timeout` (`coreutils`; `gtimeout` is
-  also detected) are available.
+- `bash`, `git`, Docker, and Go 1.26.2 are available.
+- The optional packet scenario also requires `cast` and `gnokey`.
 
 The Voyager source is `union-voyager/e2e-test`, pinned in `.env.example` to
 revision `9024777562dcaa01613017cd0b958569b85e243e`. The runner rejects a
 different or dirty checkout before rendering the config. On the first live
 run it builds `voyager-build.Dockerfile` with that checkout as its context and
-tags the image with the pinned revision. The Dockerfile builds only the
-Voyager binaries referenced by `config.jsonc.template`; Voyager and its
-modules/plugins then run inside the local container.
+tags the image with the pinned revision. It verifies and runs the immutable
+image ID emitted by Docker rather than the mutable tag. The Dockerfile builds
+only the Voyager binaries referenced by `config.jsonc.template`; Voyager and
+its modules/plugins then run inside the local container.
 
 The configured signer accounts must be funded and authorized. No EVM chain ID
 or deployed address is assumed: copy all of them from the confirmed Union EVM
@@ -87,7 +88,7 @@ readable by group or other users.
 | Endpoints | `UNION_RPC_URL`, `EVM_RPC_URL`, `GNO_RPC_URL`, `GNO_TX_INDEXER_RPC_URL`, `VOYAGER_DATABASE_URL` | Use endpoints reachable from the Voyager container. For host services on Docker Desktop, use `host.docker.internal` instead of `localhost`. If the host cannot resolve that name, set the optional `EVM_PACKET_RPC_URL`, `GNO_PACKET_RPC_URL`, and `GNO_PACKET_INDEXER_RPC_URL` to host-reachable URLs for the packet checks. Use a dedicated PostgreSQL database for each fresh live run. |
 | Signers | `TRUSTED_MPT_PRIVATE_KEY`, `UNION_PRIVATE_KEY`, `EVM_PRIVATE_KEY`, `GNO_PRIVATE_KEY` | Supply `0x` plus 64 hex characters. Union, EVM, and Gno keys must identify funded and authorized test accounts; the trusted-MPT key may be a fresh test-only key. Store all four as secrets. |
 | Optional packet | `EVM_TEST_ERC20`, `GNO_RECIPIENT`, `EVM_TEST_AMOUNT` | Use a deployed 18-decimal mintable test token, a Gno recipient, and an amount divisible by `10^12`. |
-| Output/tuning | `E2E_ARTIFACT_DIR`, `E2E_STATE_FILE`, `VOYAGER_IMAGE`, `VOYAGER_RUST_LOG`, `VOYAGER_TIMEOUT_SECONDS`, `VOYAGER_EVM_REFRESH_SECONDS` | Defaults are suitable locally. Keep the state file under the artifact directory; increase the timeout when EVM finality is slow. The runner refreshes Voyager at most three times when a newly created EVM client remains hidden by a stale state-module read. |
+| Output/tuning | `E2E_ARTIFACT_DIR`, `E2E_STATE_FILE`, `VOYAGER_IMAGE`, `VOYAGER_RUST_LOG`, `E2E_TIMEOUT_SECONDS`, `E2E_POLL_SECONDS`, `VOYAGER_COMMAND_TIMEOUT_SECONDS`, `VOYAGER_EVM_REFRESH_SECONDS`, `VOYAGER_STOP_TIMEOUT_SECONDS`, `E2E_CLEANUP_TIMEOUT_SECONDS` | Defaults are suitable locally. Keep the state file under the artifact directory; increase the scenario timeout when EVM finality is slow. The cleanup timeout must exceed the Docker stop timeout. The runner refreshes Voyager at most three times when a newly created EVM client remains hidden by a stale state-module read. |
 
 To create a new EVM test account, use `cast wallet new`, then fund its address
 and grant any token permissions required by the packet test. A standalone
@@ -128,6 +129,8 @@ uniond query wasm contract-state smart "$UNION_IBC_HOST_CONTRACT" \
 
 ```text
 run-channel-e2e.sh
+  -> verify and load the private mode-0600 environment
+  -> execute the scenario-first Go runner
   -> build focused Voyager image from the pinned union-voyager checkout
   -> run Voyager modules/plugins in one local container
   -> connect to Union, EVM, Gno, Gno indexer, and PostgreSQL
@@ -250,18 +253,8 @@ Mint, approval, and packet send each have a pre-submit checkpoint. If the
 process loses a command result, a later invocation refuses to repeat that
 write; inspect the saved state and the chain before choosing a new artifact
 directory. A completed packet state can be re-verified without another write.
-
-For local runner tests only, `VOYAGER_BIN` may point to a fake host executable.
-`VOYAGER_POLL_SECONDS` and `VOYAGER_TIMEOUT_SECONDS` shorten its polling.
-Normal live runs do not execute host binaries from `target/debug`.
-
-The local fake test broadcasts nothing and covers missing-client `null`
-responses, creation order, dynamic Lens heights and relations, container-style
-restarts, allocation races, and crash-after-enqueue duplicate prevention:
-
-```sh
-./run-channel-e2e-test.sh
-```
+Successful `packet-complete` checkpoints written by the fixed-point shell are
+normalized in memory and retain the same zero-write resume behavior.
 
 ## Protected manual workflow
 
@@ -272,6 +265,7 @@ deployment values, including `EVM_COMETBLS_CLIENT_IMPL` and
 `EVM_PROOF_LENS_CLIENT_IMPL`, as environment variables and RPC URLs, the
 database URL, and all private keys as environment secrets using the names in
 `.env.example`.
-The workflow checks out `union-voyager` at the pinned revision above, runs this
-same runner, and uploads only its sanitized artifact directory on success or
-failure.
+The database URL must identify the dedicated fresh Voyager database provisioned
+for the protected run. The workflow checks out `union-voyager` at the pinned
+revision above, runs fresh S1, zero-broadcast S2, and optional S3 in order, and
+uploads only its sanitized artifact directory on success or failure.

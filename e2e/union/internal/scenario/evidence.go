@@ -71,19 +71,23 @@ func (r *Runner) writeChannelEvidence() error {
 		"summary.json": r.current,
 	}
 	for name, value := range artifacts {
-		data, err := json.MarshalIndent(value, "", "  ")
-		if err != nil {
-			return fmt.Errorf("cannot encode evidence artifact")
-		}
-		data = append(data, '\n')
-		if r.containsSecret(data) {
-			return fmt.Errorf("artifact secret scan failed")
-		}
-		if err := state.SaveArtifact(filepath.Join(r.cfg.ArtifactDir, name), data); err != nil {
+		if err := r.writeEvidence(name, value); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func (r *Runner) writeEvidence(name string, value any) error {
+	data, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return fmt.Errorf("cannot encode evidence artifact")
+	}
+	data = append(data, '\n')
+	if r.containsSecret(data) {
+		return fmt.Errorf("artifact secret scan failed")
+	}
+	return state.SaveArtifact(filepath.Join(r.cfg.ArtifactDir, name), data)
 }
 
 var credentialURLPattern = regexp.MustCompile(`[[:alpha:]][[:alnum:]+.-]*://[^/@[:space:]]+:[^/@[:space:]]+@`)

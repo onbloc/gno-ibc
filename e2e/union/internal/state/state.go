@@ -11,7 +11,7 @@ const (
 	PhaseConnectionPrepared      Phase = "connection-prepared"
 	PhaseChannelSubmitting       Phase = "channel-submitting"
 	PhaseChannelSubmitted        Phase = "channel-submitted"
-	PhaseChannelPrepared		 Phase = "channel-prepared"
+	PhaseChannelPrepared         Phase = "channel-prepared"
 	PhaseComplete                Phase = "complete"
 	PhaseFailedWork              Phase = "failed-work"
 	PhasePacketMintSubmitting    Phase = "packet-mint-submitting"

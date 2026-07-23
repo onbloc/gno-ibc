@@ -43,7 +43,7 @@ func (r *Runner) establishConnection(ctx context.Context) error {
 	)
 
 	if r.current.Phase == state.PhaseConnectionSubmitting ||
-		r.current.Phase == state.Phase("connection-prepared") {
+		r.current.Phase == state.PhaseConnectionPrepared {
 		if submit {
 			if err := r.voyager.SubmitConnection(ctx, operation); err != nil {
 				return err
@@ -102,7 +102,7 @@ func (r *Runner) establishChannel(ctx context.Context) error {
 		r.cfg.GnoChainID, gnoPort, strings.ToLower(r.cfg.EVMZKGMContract), r.current.Connections.Gno,
 	)
 	if r.current.Phase == state.PhaseChannelSubmitting ||
-		r.current.Phase == state.Phase("channel-prepared") {
+		r.current.Phase == state.PhaseChannelPrepared {
 		if submit {
 			if err := r.voyager.SubmitChannel(ctx, operation); err != nil {
 				return err

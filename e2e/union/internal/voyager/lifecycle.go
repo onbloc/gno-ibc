@@ -43,9 +43,39 @@ type Runtime struct {
 	imageReady bool
 }
 
+// New creates a runtime backed by the operating-system executor.
+func New(cfg config.Config, progress io.Writer) *Runtime {
+	return NewWithExecutor(cfg, process.OSExecutor{}, progress)
+}
+
 // NewWithExecutor creates a runtime on the runner's sole command seam.
 func NewWithExecutor(cfg config.Config, executor process.Executor, progress io.Writer) *Runtime {
 	return &Runtime{cfg: cfg, executor: executor, progress: progress}
+}
+
+// ValidateSource verifies the pinned clean Voyager checkout.
+func (r *Runtime) ValidateSource(ctx context.Context) error {
+	result, err := r.command(ctx, process.Command{
+		Name: "git",
+		Args: []string{"-C", r.cfg.UnionVoyagerDir, "rev-parse", "HEAD"},
+	})
+	if err != nil {
+		return fmt.Errorf("UNION_VOYAGER_DIR is not a readable git checkout")
+	}
+	if string(bytes.TrimSpace(result.Stdout)) != r.cfg.UnionVoyagerRevision {
+		return fmt.Errorf("union-voyager checkout does not match UNION_VOYAGER_REVISION")
+	}
+	result, err = r.command(ctx, process.Command{
+		Name: "git",
+		Args: []string{"-C", r.cfg.UnionVoyagerDir, "status", "--porcelain"},
+	})
+	if err != nil {
+		return fmt.Errorf("UNION_VOYAGER_DIR is not a readable git checkout")
+	}
+	if len(bytes.TrimSpace(result.Stdout)) != 0 {
+		return fmt.Errorf("union-voyager checkout must be clean")
+	}
+	return nil
 }
 
 // Start builds and starts Voyager using a private rendered configuration.

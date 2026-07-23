@@ -49,5 +49,6 @@ func (OSExecutor) Run(ctx context.Context, command Command) (Result, error) {
 		cmd.Stderr = &stderr
 	}
 
-	return Result{Stdout: stdout.Bytes(), Stderr: stderr.Bytes()}, cmd.Run()
+	err := cmd.Run()
+	return Result{Stdout: stdout.Bytes(), Stderr: stderr.Bytes()}, err
 }

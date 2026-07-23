@@ -336,7 +336,7 @@ func TestHandshakeVerificationPollsUntilCounterpartyIDIsOpen(t *testing.T) {
 		},
 		{
 			name:    "channel",
-			pending: `{"state":{"state":"INIT","connection_id":3,"counterparty_port_id":"port","version":"version"}}`,
+			pending: `{"state":{"state":"INIT","connection_id":3,"counterparty_channel_id":null,"counterparty_port_id":"port","version":"version"}}`,
 			open:    `{"state":{"state":"OPEN","connection_id":3,"counterparty_channel_id":5,"counterparty_port_id":"port","version":"version"}}`,
 			check: func(runtime *voyager.Runtime) error {
 				_, err := runtime.ChannelEvidence(context.Background(), voyager.ChannelExpectation{

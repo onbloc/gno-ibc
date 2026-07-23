@@ -37,7 +37,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: onbloc/union-voyager
-          ref: 9024777562dcaa01613017cd0b958569b85e243e
+          ref: 82c70ec1ff84ec457e976ad94f38a5d5783b7836
           path: union-voyager
 
       - name: Install Foundry
@@ -104,7 +104,7 @@ jobs:
           done >e2e/union/.env
           printf '%s\n' \
             "UNION_VOYAGER_DIR=${{ github.workspace }}/union-voyager" \
-            'UNION_VOYAGER_REVISION=9024777562dcaa01613017cd0b958569b85e243e' \
+            'UNION_VOYAGER_REVISION=82c70ec1ff84ec457e976ad94f38a5d5783b7836' \
             "E2E_ARTIFACT_DIR=${{ github.workspace }}/artifacts" \
             "E2E_STATE_FILE=${{ github.workspace }}/artifacts/state.json" \
             >>e2e/union/.env

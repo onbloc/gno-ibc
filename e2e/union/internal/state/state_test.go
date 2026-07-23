@@ -214,7 +214,7 @@ func TestPrepareArtifactsCreatesPrivateOwnedDirectory(t *testing.T) {
 func completeState() (state.State, state.Expected) {
 	final := int64(0)
 	expected := state.Expected{
-		VoyagerRevision:     "9024777562dcaa01613017cd0b958569b85e243e",
+		VoyagerRevision:     "82c70ec1ff84ec457e976ad94f38a5d5783b7836",
 		Chains:              state.Chains{Union: "union-devnet-1", EVM: "17000", Gno: "dev.ibc"},
 		EVMChainID:          "17000",
 		TopologyFingerprint: "53b14ed7e73989ece8823a4cf115bf409ef8a046",

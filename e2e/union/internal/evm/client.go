@@ -80,7 +80,7 @@ func (c *Client) Prepare(ctx context.Context, gnoChannel int64) (Plan, error) {
 	}
 	salt := "0x" + hex.EncodeToString(saltBytes)
 	tag := salt[2:]
-	metadata, err := c.metadata(ctx, tag)
+	metadata, err := c.metadata(ctx, tag, sender)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -170,17 +170,19 @@ func (c *Client) balance(ctx context.Context, account string) (string, error) {
 	return fields[0], nil
 }
 
-func (c *Client) metadata(ctx context.Context, tag string) (string, error) {
+func (c *Client) metadata(ctx context.Context, tag, authority string) (string, error) {
 	if len(tag) != 64 {
 		return "", fmt.Errorf("malformed packet tag")
 	}
 	initializer, err := c.cast(
-		ctx, "abi-encode", "f(string,string,uint8)",
+		ctx, "abi-encode", "f(address,address,string,string,uint8)",
+		authority, strings.ToLower(c.cfg.EVMZKGMContract),
 		"Union E2E "+tag[:32], "UE"+tag[:6], "18",
 	)
 	if err != nil {
 		return "", err
 	}
+	initializer = append([]byte("0x8420ce99"), bytes.TrimPrefix(initializer, []byte("0x"))...)
 	metadata, err := c.cast(ctx, "abi-encode", "f(bytes,bytes)", "0x6772633230", string(initializer))
 	return string(metadata), err
 }

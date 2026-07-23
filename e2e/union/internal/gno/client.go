@@ -12,7 +12,9 @@ import (
 	"github.com/onbloc/gno-ibc/e2e/union/internal/process"
 )
 
-var qevalIntPattern = regexp.MustCompile(`^\(([0-9]+)[[:space:]]+int64\)[[:space:]]*$`)
+var qevalIntPattern = regexp.MustCompile(
+	`^(?:height: [0-9]+\ndata: )?\(([0-9]+)[[:space:]]+int64\)[[:space:]]*$`,
+)
 
 // Client queries Gno and its transaction indexer.
 type Client struct {

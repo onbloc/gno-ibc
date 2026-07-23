@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	VoyagerRevision = "9024777562dcaa01613017cd0b958569b85e243e"
+	VoyagerRevision = "82c70ec1ff84ec457e976ad94f38a5d5783b7836"
 	ChannelVersion  = "ucs03-zkgm-0"
 )
 

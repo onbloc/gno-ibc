@@ -112,6 +112,22 @@ func TestVoucherBalanceRejectsTrailingOutput(t *testing.T) {
 	}
 }
 
+func TestVoucherBalanceAcceptsQueryEnvelope(t *testing.T) {
+	cfg := testConfig()
+	client := NewWithExecutor(cfg, executorFunc(func(context.Context, process.Command) (process.Result, error) {
+		return process.Result{Stdout: []byte("height: 0\ndata: (1 int64)\n")}, nil
+	}))
+	balance, err := client.VoucherBalance(
+		context.Background(), "ibc/"+strings.Repeat("8", 40), "g1"+strings.Repeat("a", 38),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if balance != 1 {
+		t.Fatalf("balance = %d, want 1", balance)
+	}
+}
+
 func TestParseAcknowledgementRejectsMalformedKeys(t *testing.T) {
 	for _, attrs := range [][]attribute{
 		{

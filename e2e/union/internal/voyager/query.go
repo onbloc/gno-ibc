@@ -28,6 +28,9 @@ type jsonID struct {
 }
 
 func (id *jsonID) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		return nil
+	}
 	value, err := strconv.ParseInt(strings.Trim(string(data), `"`), 10, 64)
 	if err != nil || value < 0 {
 		return ErrMalformedResponse

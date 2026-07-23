@@ -40,6 +40,16 @@ func TestSendExtractsOnePacketForExpectedChannel(t *testing.T) {
 	if result.Tx != txHash || result.PacketHash != packetHash {
 		t.Fatalf("result = %#v", result)
 	}
+	if got := executor.commands[0].Args; !strings.Contains(
+		strings.Join(got, " "),
+		"f(address,address,string,string,uint8) 0x7777777777777777777777777777777777777777 "+
+			cfg.EVMZKGMContract,
+	) {
+		t.Fatalf("initializer command = %q", got)
+	}
+	if got := executor.commands[1].Args; got[len(got)-1] != "0x8420ce9901" {
+		t.Fatalf("initializer = %q, want selector-prefixed calldata", got[len(got)-1])
+	}
 }
 
 func TestSendRejectsDuplicatePacketSend(t *testing.T) {

@@ -64,7 +64,7 @@ func completedState(cfg config.Config, final int64) state.State {
 		EVMTopology: state.EVMTopology{ChainID: cfg.EVMChainID, AddressFingerprint: cfg.TopologyFingerprint()},
 		Ports:       state.Ports{Gno: cfg.GnoZKGMPort, EVM: cfg.EVMZKGMContract},
 		Version:     config.ChannelVersion,
-		FailedWork:  state.FailedWork{Baseline: 3, Final: &final},
+		FailedWork:  state.FailedWork{Baseline: final, Final: &final},
 		Clients:     state.Clients{GnoUnion: 1, UnionGno: 2, UnionEVM: 3, EVMUnion: 4, GnoEVM: 5, EVMGno: 6},
 		Allowlists:  state.Allowlists{Plain: "4", ProofLens: "6"},
 		Connections: &state.HandshakeIDs{Gno: 11, EVM: 12},
@@ -148,7 +148,7 @@ func (r *resumeExecutor) voyagerResponse(args []string) (process.Result, error) 
 		if r.cancel != nil {
 			r.cancel()
 		}
-		return process.Result{Stdout: []byte("[]")}, nil
+		return process.Result{Stdout: []byte(`[{"id":7}]`)}, nil
 	case strings.Contains(joined, " rpc client-info "):
 		chain, id := trailingChainID(args)
 		clientType, ibc := expectedClient(chain, id)

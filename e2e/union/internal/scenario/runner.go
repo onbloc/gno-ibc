@@ -54,6 +54,9 @@ func newRunner(cfg config.Config, executor process.Executor, options Options) (*
 	if err := saved.Validate(expectedState(cfg)); err != nil {
 		return nil, err
 	}
+	if saved.Phase != state.PhaseComplete {
+		return nil, fmt.Errorf("resume phase %s is not implemented", saved.Phase)
+	}
 	runner.saved = &saved
 	return runner, nil
 }

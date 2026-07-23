@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // ClientExpectation describes one persisted client relation.
@@ -33,8 +34,20 @@ type ChannelExpectation struct {
 
 // VerifyClient checks the immutable identity and counterparty of a client.
 func (r *Runtime) VerifyClient(ctx context.Context, want ClientExpectation) error {
+	refreshes := 0
+	nextRefresh := time.Now().Add(r.cfg.EVMRefreshInterval)
 	return r.untilVisible(ctx, fmt.Sprintf("%s client %d", want.Chain, want.ID), func(ctx context.Context) error {
-		return r.verifyClient(ctx, want)
+		err := r.verifyClient(ctx, want)
+		if !errors.Is(err, ErrNotFound) || want.Chain != r.cfg.EVMChainID ||
+			refreshes == 3 || time.Now().Before(nextRefresh) {
+			return err
+		}
+		if err := r.restart(ctx); err != nil {
+			return err
+		}
+		refreshes++
+		nextRefresh = time.Now().Add(r.cfg.EVMRefreshInterval)
+		return ErrNotFound
 	})
 }
 

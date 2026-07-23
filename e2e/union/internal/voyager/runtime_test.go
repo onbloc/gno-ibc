@@ -160,16 +160,33 @@ func TestFailedWorkRetriesDeadlocksAtMostFiveTimes(t *testing.T) {
 	}
 }
 
+func TestFailedWorkRejectsSavedIDAheadOfQueue(t *testing.T) {
+	cfg := runtimeConfig(t)
+	recorder := &executor{steps: []step{
+		{}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {}, {stdout: "id"}, {stdout: "{}"},
+		{stdout: `[{"id":5}]`},
+	}}
+	runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
+	if err := runtime.Start(context.Background(), []byte("{}")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.FailedWorkID(context.Background(), int64(1<<63-1), nil); err == nil {
+		t.Fatal("saved failed-work ID ahead of Voyager queue unexpectedly accepted")
+	}
+}
+
 func TestVerifyClientDistinguishesNotFoundMalformedAndCommandFailure(t *testing.T) {
 	tests := []struct {
 		name   string
 		result step
 		want   error
+		cancel bool
 	}{
-		{"not found", step{stdout: "null"}, voyager.ErrTimeout},
-		{"malformed", step{stdout: `{"client_type":"gno"}`}, voyager.ErrMalformedResponse},
-		{"command", step{err: errors.New("rpc failed")}, voyager.ErrCommand},
-		{"timeout", step{err: context.DeadlineExceeded}, voyager.ErrTimeout},
+		{"not found", step{stdout: "null"}, voyager.ErrTimeout, false},
+		{"malformed", step{stdout: `{"client_type":"gno"}`}, voyager.ErrMalformedResponse, false},
+		{"command", step{err: errors.New("rpc failed")}, voyager.ErrCommand, false},
+		{"timeout", step{err: context.DeadlineExceeded}, voyager.ErrTimeout, false},
+		{"canceled signal", step{err: errors.New("signal: killed")}, context.Canceled, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -186,11 +203,50 @@ func TestVerifyClientDistinguishesNotFoundMalformedAndCommandFailure(t *testing.
 			if err := runtime.Start(context.Background(), []byte("{}")); err != nil {
 				t.Fatal(err)
 			}
-			err := runtime.VerifyClient(context.Background(), voyager.ClientExpectation{Chain: "chain", ID: 1})
+			ctx := context.Background()
+			if tc.cancel {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithCancel(ctx)
+				cancel()
+			}
+			err := runtime.VerifyClient(ctx, voyager.ClientExpectation{Chain: "chain", ID: 1})
 			if !errors.Is(err, tc.want) {
 				t.Fatalf("error = %v, want %v", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestEVMClientVerificationRestartsVoyagerAtMostThreeTimes(t *testing.T) {
+	cfg := runtimeConfig(t)
+	cfg.EVMChainID = "evm"
+	cfg.EVMRefreshInterval = 0
+	cfg.PollInterval = time.Millisecond
+	cfg.ScenarioTimeout = 20 * time.Millisecond
+	steps := []step{{}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {}, {stdout: "id"}, {stdout: "{}"}}
+	for range 3 {
+		steps = append(steps,
+			step{stdout: "null"},
+			step{stdout: "container"}, step{}, step{},
+			step{}, step{stdout: "id"}, step{stdout: "{}"},
+		)
+	}
+	missing := step{stdout: "null"}
+	recorder := &executor{steps: steps, fallback: &missing}
+	runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
+	if err := runtime.Start(context.Background(), []byte("{}")); err != nil {
+		t.Fatal(err)
+	}
+	err := runtime.VerifyClient(context.Background(), voyager.ClientExpectation{Chain: cfg.EVMChainID, ID: 1})
+	if !errors.Is(err, voyager.ErrTimeout) {
+		t.Fatalf("error = %v, want timeout after bounded refreshes", err)
+	}
+	verbs := strings.Join(commandVerbs(recorder.commands), " ")
+	if got := strings.Count(verbs, "build"); got != 1 {
+		t.Fatalf("image builds = %d, want 1", got)
+	}
+	if got := strings.Count(verbs, "run"); got != 4 {
+		t.Fatalf("container starts = %d, want initial plus three refreshes", got)
 	}
 }
 
@@ -302,12 +358,19 @@ type step struct {
 type executor struct {
 	t        *testing.T
 	steps    []step
+	fallback *step
 	commands []process.Command
 }
 
 func (e *executor) Run(ctx context.Context, command process.Command) (process.Result, error) {
 	e.commands = append(e.commands, command)
 	if len(e.steps) == 0 {
+		if e.fallback != nil {
+			return process.Result{
+				Stdout: []byte(e.fallback.stdout),
+				Stderr: []byte(e.fallback.stderr),
+			}, e.fallback.err
+		}
 		return process.Result{}, errors.New("unexpected command")
 	}
 	current := e.steps[0]
@@ -320,6 +383,7 @@ func (e *executor) Run(ctx context.Context, command process.Command) (process.Re
 
 func runtimeConfig(t *testing.T) config.Config {
 	t.Helper()
+	t.Setenv("TMPDIR", t.TempDir())
 	return config.Config{
 		ScriptDir:            filepath.Join("testdata", "suite"),
 		UnionVoyagerDir:      filepath.Join("testdata", "voyager"),
@@ -329,6 +393,7 @@ func runtimeConfig(t *testing.T) config.Config {
 		CommandTimeout:       time.Second,
 		ScenarioTimeout:      time.Second,
 		PollInterval:         0,
+		EVMRefreshInterval:   time.Hour,
 		VoyagerStopTimeout:   time.Second,
 		CleanupTimeout:       2 * time.Second,
 	}

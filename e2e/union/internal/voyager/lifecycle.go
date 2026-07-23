@@ -36,6 +36,7 @@ type Runtime struct {
 	progress   io.Writer
 	container  string
 	runtimeDir string
+	imageReady bool
 }
 
 // NewWithExecutor creates a runtime on the runner's sole command seam.
@@ -60,8 +61,11 @@ func (r *Runtime) Start(ctx context.Context, rendered []byte) error {
 		r.runtimeDir = ""
 		return fmt.Errorf("write Voyager configuration: %w", err)
 	}
-	if err := r.build(ctx); err != nil {
-		return err
+	if !r.imageReady {
+		if err := r.build(ctx); err != nil {
+			return err
+		}
+		r.imageReady = true
 	}
 	name := "union-channel-e2e-go-" + strconv.Itoa(os.Getpid())
 	result, err := r.command(ctx, process.Command{
@@ -220,7 +224,21 @@ func classifyContext(ctx context.Context, err error) error {
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
 		return fmt.Errorf("%w: %w", ErrTimeout, context.DeadlineExceeded)
 	}
+	if errors.Is(ctx.Err(), context.Canceled) || errors.Is(err, context.Canceled) {
+		return context.Canceled
+	}
 	return fmt.Errorf("%w: %w", ErrCommand, err)
+}
+
+func (r *Runtime) restart(ctx context.Context) error {
+	rendered, err := os.ReadFile(filepath.Join(r.runtimeDir, "config.jsonc"))
+	if err != nil {
+		return fmt.Errorf("read Voyager configuration for restart: %w", err)
+	}
+	if err := r.Close(ctx); err != nil {
+		return err
+	}
+	return r.Start(ctx, rendered)
 }
 
 func pause(ctx context.Context, duration time.Duration) error {

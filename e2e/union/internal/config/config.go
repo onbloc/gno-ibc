@@ -63,6 +63,7 @@ type Config struct {
 	CommandTimeout         time.Duration
 	ScenarioTimeout        time.Duration
 	PollInterval           time.Duration
+	EVMRefreshInterval     time.Duration
 	VoyagerStopTimeout     time.Duration
 	CleanupTimeout         time.Duration
 }
@@ -148,6 +149,9 @@ func Load(scriptDir string, lookup func(string) (string, bool), packet bool) (Co
 	}
 	if cfg.PollInterval, err = nonnegativeSeconds(get("E2E_POLL_SECONDS"), 2); err != nil {
 		return Config{}, fmt.Errorf("E2E_POLL_SECONDS must be a non-negative integer")
+	}
+	if cfg.EVMRefreshInterval, err = nonnegativeSeconds(get("VOYAGER_EVM_REFRESH_SECONDS"), 60); err != nil {
+		return Config{}, fmt.Errorf("VOYAGER_EVM_REFRESH_SECONDS must be a non-negative integer")
 	}
 	if cfg.VoyagerStopTimeout, err = seconds(get("VOYAGER_STOP_TIMEOUT_SECONDS"), 10); err != nil {
 		return Config{}, fmt.Errorf("VOYAGER_STOP_TIMEOUT_SECONDS must be a positive integer")

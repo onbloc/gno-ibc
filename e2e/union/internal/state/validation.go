@@ -39,6 +39,9 @@ func (s State) Validate(expected Expected) error {
 	if err != nil || len(proof) == 0 || overlaps(plain, proof) {
 		return fmt.Errorf("malformed saved EVM Proof Lens allowlist")
 	}
+	if err := s.validateFailedWork(); err != nil {
+		return err
+	}
 
 	requireConnections, requireChannels := false, false
 	switch s.Phase {
@@ -69,6 +72,26 @@ func (s State) Validate(expected Expected) error {
 	if (s.Phase == PhaseComplete ||
 		strings.HasPrefix(string(s.Phase), "packet-")) && s.FailedWork.Final == nil {
 		return fmt.Errorf("completed state has no failed-work final ID")
+	}
+	if s.FailedWork.Final != nil && *s.FailedWork.Final != s.FailedWork.Baseline {
+		return fmt.Errorf("resume state has inconsistent failed-work IDs")
+	}
+	return nil
+}
+
+func (s State) validateFailedWork() error {
+	if s.FailedWork.Baseline < 0 {
+		return fmt.Errorf("resume state has invalid failed-work baseline")
+	}
+	seen := make(map[int64]struct{}, len(s.FailedWork.Repaired))
+	for _, id := range s.FailedWork.Repaired {
+		if id <= s.FailedWork.Baseline {
+			return fmt.Errorf("resume state has invalid repaired failed-work ID")
+		}
+		if _, ok := seen[id]; ok {
+			return fmt.Errorf("resume state has duplicate repaired failed-work ID")
+		}
+		seen[id] = struct{}{}
 	}
 	return nil
 }

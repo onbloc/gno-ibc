@@ -192,9 +192,7 @@ func (r *Runtime) FailedWorkID(ctx context.Context, baseline int64, repaired []i
 		return 0, err
 	}
 	var items []failedQueueItem
-	decoder := json.NewDecoder(bytes.NewReader(result.Stdout))
-	decoder.UseNumber()
-	if decoder.Decode(&items) != nil {
+	if json.Unmarshal(result.Stdout, &items) != nil {
 		return 0, ErrMalformedResponse
 	}
 	ignored := make(map[int64]struct{}, len(repaired))
@@ -202,14 +200,21 @@ func (r *Runtime) FailedWorkID(ctx context.Context, baseline int64, repaired []i
 		ignored[id] = struct{}{}
 	}
 	latest := baseline
+	latestSeen := int64(0)
 	for _, item := range items {
 		if !item.ID.valid {
 			return 0, ErrMalformedResponse
 		}
 		id := item.ID.value
+		if id > latestSeen {
+			latestSeen = id
+		}
 		if _, skip := ignored[id]; !skip && id > latest {
 			latest = id
 		}
+	}
+	if (len(items) == 0 && baseline != 0) || baseline > latestSeen {
+		return 0, fmt.Errorf("saved failed-work ID is ahead of Voyager queue")
 	}
 	return latest, nil
 }

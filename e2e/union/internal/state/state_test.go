@@ -31,6 +31,30 @@ func TestValidateRejectsTerminalFailedWork(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsInconsistentFailedWork(t *testing.T) {
+	tests := []struct {
+		name   string
+		change func(*state.State)
+	}{
+		{"negative baseline", func(saved *state.State) { saved.FailedWork.Baseline = -1 }},
+		{"final ahead of baseline", func(saved *state.State) {
+			final := int64(1)
+			saved.FailedWork.Final = &final
+		}},
+		{"repaired at baseline", func(saved *state.State) { saved.FailedWork.Repaired = []int64{0} }},
+		{"duplicate repaired", func(saved *state.State) { saved.FailedWork.Repaired = []int64{1, 1} }},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			saved, expected := completeState()
+			tc.change(&saved)
+			if err := saved.Validate(expected); err == nil {
+				t.Fatal("inconsistent failed-work state unexpectedly accepted")
+			}
+		})
+	}
+}
+
 func TestLoadRejectsTrailingJSON(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.json")
 	if err := os.WriteFile(path, []byte(`{"phase":"complete"} {}`), 0o600); err != nil {

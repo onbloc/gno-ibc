@@ -34,6 +34,30 @@ func TestInvalidResumeStateRunsNoCommands(t *testing.T) {
 	}
 }
 
+func TestIncompletePacketResumeRunsNoCommands(t *testing.T) {
+	cfg := testConfig(t)
+	if err := state.PrepareArtifacts(
+		filepath.Dir(filepath.Dir(cfg.ScriptDir)),
+		cfg.ScriptDir,
+		cfg.ArtifactDir,
+		cfg.StateFile,
+	); err != nil {
+		t.Fatal(err)
+	}
+	saved := completedState(cfg, 7)
+	saved.Phase = state.Phase("packet-complete")
+	if err := state.Save(cfg.StateFile, saved); err != nil {
+		t.Fatal(err)
+	}
+	recorder := new(recordingExecutor)
+	if _, err := newRunner(cfg, recorder, Options{Apply: true, Resume: true}); err == nil {
+		t.Fatal("incomplete packet state unexpectedly accepted")
+	}
+	if len(recorder.commands) != 0 {
+		t.Fatalf("commands = %#v, want none", recorder.commands)
+	}
+}
+
 func TestDryPreflightUsesOnlyReadOnlyGitChecks(t *testing.T) {
 	cfg := testConfig(t)
 	recorder := &recordingExecutor{results: []process.Result{

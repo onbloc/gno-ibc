@@ -58,7 +58,13 @@ type Config struct {
 	GnoPacketIndexerRPCURL string
 	ArtifactDir            string
 	StateFile              string
+	VoyagerImage           string
+	VoyagerRustLog         string
 	CommandTimeout         time.Duration
+	ScenarioTimeout        time.Duration
+	PollInterval           time.Duration
+	VoyagerStopTimeout     time.Duration
+	CleanupTimeout         time.Duration
 }
 
 // Load reads, defaults, and validates the environment without external I/O.
@@ -120,15 +126,47 @@ func Load(scriptDir string, lookup func(string) (string, bool), packet bool) (Co
 	if cfg.GnoPacketIndexerRPCURL == "" {
 		cfg.GnoPacketIndexerRPCURL = cfg.GnoTxIndexerRPCURL
 	}
+	cfg.VoyagerImage = get("VOYAGER_IMAGE")
+	if cfg.VoyagerImage == "" {
+		revision := cfg.UnionVoyagerRevision
+		if len(revision) > 12 {
+			revision = revision[:12]
+		}
+		cfg.VoyagerImage = "union-voyager-e2e:" + revision
+	}
+	cfg.VoyagerRustLog = get("VOYAGER_RUST_LOG")
+	if cfg.VoyagerRustLog == "" {
+		cfg.VoyagerRustLog = "warn"
+	}
 
 	var err error
 	if cfg.CommandTimeout, err = seconds(get("VOYAGER_COMMAND_TIMEOUT_SECONDS"), 120); err != nil {
 		return Config{}, fmt.Errorf("VOYAGER_COMMAND_TIMEOUT_SECONDS must be a positive integer")
 	}
+	if cfg.ScenarioTimeout, err = seconds(get("E2E_TIMEOUT_SECONDS"), 900); err != nil {
+		return Config{}, fmt.Errorf("E2E_TIMEOUT_SECONDS must be a positive integer")
+	}
+	if cfg.PollInterval, err = nonnegativeSeconds(get("E2E_POLL_SECONDS"), 2); err != nil {
+		return Config{}, fmt.Errorf("E2E_POLL_SECONDS must be a non-negative integer")
+	}
+	if cfg.VoyagerStopTimeout, err = seconds(get("VOYAGER_STOP_TIMEOUT_SECONDS"), 10); err != nil {
+		return Config{}, fmt.Errorf("VOYAGER_STOP_TIMEOUT_SECONDS must be a positive integer")
+	}
+	if cfg.CleanupTimeout, err = seconds(get("E2E_CLEANUP_TIMEOUT_SECONDS"), 30); err != nil ||
+		cfg.CleanupTimeout <= cfg.VoyagerStopTimeout {
+		return Config{}, fmt.Errorf("E2E_CLEANUP_TIMEOUT_SECONDS must exceed VOYAGER_STOP_TIMEOUT_SECONDS")
+	}
 	if err := cfg.validate(packet); err != nil {
 		return Config{}, err
 	}
 	return cfg, nil
+}
+
+func nonnegativeSeconds(raw string, fallback int64) (time.Duration, error) {
+	if raw == "0" {
+		return 0, nil
+	}
+	return seconds(raw, fallback)
 }
 
 // TopologyFingerprint preserves the fixed-point git blob hash.

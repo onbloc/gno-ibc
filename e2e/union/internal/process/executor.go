@@ -4,6 +4,7 @@ package process
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"os/exec"
 )
@@ -13,6 +14,9 @@ type Command struct {
 	Name string
 	Args []string
 	Env  []string
+	// Stdout and Stderr stream output instead of retaining it in Result.
+	Stdout io.Writer
+	Stderr io.Writer
 }
 
 // Result contains captured process output.
@@ -34,8 +38,14 @@ func (OSExecutor) Run(ctx context.Context, command Command) (Result, error) {
 	cmd := exec.CommandContext(ctx, command.Name, command.Args...)
 	cmd.Env = append(os.Environ(), command.Env...)
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stdout = command.Stdout
+	if cmd.Stdout == nil {
+		cmd.Stdout = &stdout
+	}
+	cmd.Stderr = command.Stderr
+	if cmd.Stderr == nil {
+		cmd.Stderr = &stderr
+	}
 	err := cmd.Run()
 	return Result{Stdout: stdout.Bytes(), Stderr: stderr.Bytes()}, err
 }

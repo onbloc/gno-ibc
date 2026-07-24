@@ -42,13 +42,12 @@ func TestSendExtractsOnePacketForExpectedChannel(t *testing.T) {
 	}
 	if got := executor.commands[0].Args; !strings.Contains(
 		strings.Join(got, " "),
-		"f(address,address,string,string,uint8) 0x7777777777777777777777777777777777777777 "+
-			cfg.EVMZKGMContract,
+		"f(string,string,uint8) Union E2E ",
 	) {
 		t.Fatalf("initializer command = %q", got)
 	}
-	if got := executor.commands[1].Args; got[len(got)-1] != "0x8420ce9901" {
-		t.Fatalf("initializer = %q, want selector-prefixed calldata", got[len(got)-1])
+	if got := executor.commands[1].Args; got[len(got)-1] != "0x01" {
+		t.Fatalf("initializer = %q, want Gno token metadata", got[len(got)-1])
 	}
 }
 

@@ -27,6 +27,8 @@ type IApp interface {
 
 	IAppTransfer
 
+	IAppVoucher
+
 	// Read-only relayer/tooling query surface.
 	IAppGetter
 }
@@ -40,6 +42,14 @@ type IAppIntent interface {
 // Instruction rather than a token-transfer shaped argument list.
 type IAppTransfer interface {
 	Send(_ int, rlm realm, channelId types.ChannelId, timeoutTimestamp types.Timestamp, salt [32]byte, instruction z.Instruction) types.Packet
+}
+
+// IAppVoucher is the wrapped-voucher self-service surface: it lets a holder
+// grant an allowance or move their own balance directly, without exposing the
+// mint/burn capability that Store's Voucher.Ledger() carries.
+type IAppVoucher interface {
+	VoucherApprove(_ int, rlm realm, ibcDenom string, spender address, amount int64) error
+	VoucherTransfer(_ int, rlm realm, ibcDenom string, to address, amount int64) error
 }
 
 // IAppGetter is the read-only query surface implemented by the impl and exposed

@@ -112,10 +112,10 @@ jobs:
         working-directory: gno-ibc
         run: e2e/union/run-channel-e2e.sh --resume
 
-      - name: Verify ERC20 EVM to Gno
+      - name: Verify packet scenarios
         if: github.event_name == 'pull_request' || inputs.erc20_to_gno
         working-directory: gno-ibc
-        run: e2e/union/run-channel-e2e.sh --resume --apply --erc20-to-gno --amount-boundaries
+        run: e2e/union/run-channel-e2e.sh --resume --apply --erc20-to-gno --amount-boundaries --gno-to-evm
 
       - name: Upload sanitized artifacts
         if: always()

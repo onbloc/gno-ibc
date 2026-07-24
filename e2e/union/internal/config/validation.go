@@ -107,6 +107,7 @@ func (c Config) validate(packet bool) error {
 		name  string
 		value string
 	}{
+		{"UNION_PACKET_RPC_URL", c.UnionPacketRPCURL},
 		{"EVM_PACKET_RPC_URL", c.EVMPacketRPCURL},
 		{"GNO_PACKET_RPC_URL", c.GnoPacketRPCURL},
 		{"GNO_PACKET_INDEXER_RPC_URL", c.GnoPacketIndexerRPCURL},

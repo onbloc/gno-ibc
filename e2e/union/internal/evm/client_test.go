@@ -193,6 +193,31 @@ func TestDeployTestTokenUsesRepositoryFixture(t *testing.T) {
 	}
 }
 
+func TestPrepareWrappedTokenUsesLiveImplementations(t *testing.T) {
+	cfg := testConfig()
+	executor := &fakeExecutor{outputs: [][]byte{
+		[]byte("0x7777777777777777777777777777777777777777"),
+		[]byte("0x8888888888888888888888888888888888888888"),
+		[]byte("0x9999999999999999999999999999999999999999"),
+		[]byte("0x01"),
+		[]byte("0x02"),
+		[]byte(`["0x99","0x01"]`),
+		[]byte("0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 0x" + strings.Repeat("0", 64)),
+	}}
+	plan, err := NewWithExecutor(cfg, executor).
+		PrepareWrappedToken(context.Background(), 7, "ugnot")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Token != "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" {
+		t.Fatalf("wrapped token = %s", plan.Token)
+	}
+	if got := strings.Join(executor.commands[6].Args, " "); !strings.Contains(
+		got, "predictWrappedTokenV2") || !strings.Contains(got, " 7 0x75676e6f74 ") {
+		t.Fatalf("prediction command = %q", got)
+	}
+}
+
 func TestPrepareValidatesTokenCodeAndDecimals(t *testing.T) {
 	sender := []byte("0x7777777777777777777777777777777777777777")
 	for _, tc := range []struct {

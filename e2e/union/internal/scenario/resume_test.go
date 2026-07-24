@@ -187,7 +187,8 @@ func readOnlyResumeCommand(command process.Command) bool {
 		operation := command.Args[7:]
 		return slices.Equal(operation, []string{"rpc", "info"}) ||
 			(len(operation) == 4 && operation[0] == "rpc" &&
-				(operation[1] == "client-info" || operation[1] == "client-meta" || operation[1] == "ibc-state")) ||
+				(operation[1] == "client-info" || operation[1] == "client-meta" ||
+					operation[1] == "ibc-state" || operation[1] == "query")) ||
 			(len(operation) == 5 && operation[0] == "rpc" && operation[1] == "client-state" &&
 				operation[4] == "--decode") ||
 			slices.Equal(operation, []string{"queue", "query-failed", "--per-page", "100"})
@@ -228,6 +229,8 @@ func (r *resumeExecutor) voyagerResponse(args []string) (process.Result, error) 
 	case strings.HasPrefix(joined, "rpc client-meta "):
 		chain, id := trailingChainID(args)
 		return process.Result{Stdout: []byte(`{"counterparty_chain_id":"` + counterparty(chain, id) + `","counterparty_height":"1"}`)}, nil
+	case strings.HasPrefix(joined, "rpc query ") && strings.Contains(joined, `"client_status"`):
+		return process.Result{Stdout: []byte(`"active"`)}, nil
 	case strings.HasPrefix(joined, "rpc client-state "):
 		chain, id := trailingChainID(args[:len(args)-1])
 		if chain == "dev.ibc" && id == 5 {

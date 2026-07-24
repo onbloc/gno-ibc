@@ -16,16 +16,17 @@ const (
 )
 
 type boundaryResult struct {
-	Name       string         `json:"name"`
-	Token      string         `json:"token"`
-	PacketHash string         `json:"packet_hash"`
-	MintTx     string         `json:"mint_tx"`
-	ApproveTx  string         `json:"approve_tx"`
-	SendTx     string         `json:"send_tx"`
-	GnoTx      string         `json:"gno_tx"`
-	EVMAckTx   string         `json:"evm_ack_tx"`
-	Success    bool           `json:"success"`
-	Deltas     state.Balances `json:"deltas"`
+	Name          string         `json:"name"`
+	Token         string         `json:"token"`
+	PacketHash    string         `json:"packet_hash"`
+	MintTx        string         `json:"mint_tx"`
+	ApproveTx     string         `json:"approve_tx"`
+	SendTx        string         `json:"send_tx"`
+	GnoTx         string         `json:"gno_tx"`
+	EVMAckTx      string         `json:"evm_ack_tx"`
+	Success       bool           `json:"success"`
+	Deltas        state.Balances `json:"deltas"`
+	VoucherSupply string         `json:"voucher_supply,omitempty"`
 }
 
 func (r *Runner) runAmountBoundaries(ctx context.Context) error {
@@ -80,6 +81,16 @@ func (r *Runner) runAmountBoundaries(ctx context.Context) error {
 	if balance != math.MaxInt64 {
 		return fmt.Errorf("cumulative overflow changed the maximum Gno voucher balance")
 	}
+	supply, err := r.gno.VoucherTotalSupply(
+		ctx, r.cfg.GnoZKGMPort+".UE"+cumulativePlan.Tag[:6],
+	)
+	if err != nil {
+		return err
+	}
+	if supply != math.MaxInt64 {
+		return fmt.Errorf("cumulative overflow changed the maximum Gno voucher supply")
+	}
+	oneMore.VoucherSupply = strconv.FormatInt(supply, 10)
 
 	return r.writeEvidence("amount-boundaries.json", []boundaryResult{
 		overflow, maximum, oneMore,
@@ -136,7 +147,7 @@ func (r *Runner) runBoundaryOrder(
 	if err := r.evm.VerifyCommitmentCleared(ctx, send.PacketHash); err != nil {
 		return boundaryResult{}, err
 	}
-	if err := r.verifyBoundaryFailedWork(ctx); err != nil {
+	if err := r.verifyNoNewFailedWork(ctx); err != nil {
 		return boundaryResult{}, err
 	}
 	senderAfter, escrowAfter, err := r.evm.TokenBalances(ctx, plan.Token, plan.Sender)
@@ -167,18 +178,6 @@ func (r *Runner) runBoundaryOrder(
 		GnoTx: gnoEvents.ReceiveTx, EVMAckTx: evmAck.Tx,
 		Success: success, Deltas: deltas,
 	}, nil
-}
-
-func (r *Runner) verifyBoundaryFailedWork(ctx context.Context) error {
-	baseline := *r.current.FailedWork.Final
-	latest, err := r.voyager.FailedWorkID(ctx, baseline, r.current.FailedWork.Repaired)
-	if err != nil {
-		return err
-	}
-	if latest != baseline {
-		return fmt.Errorf("Voyager recorded new failed work during an amount boundary packet")
-	}
-	return nil
 }
 
 func classifyBoundaryBalances(

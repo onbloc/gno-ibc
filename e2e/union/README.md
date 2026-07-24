@@ -11,4 +11,5 @@ install -m 600 .env.example .env
 ./run-channel-e2e.sh --resume --apply
 ./run-channel-e2e.sh --resume --apply --erc20-to-gno
 ./run-channel-e2e.sh --resume --apply --erc20-to-gno --amount-boundaries
+./run-channel-e2e.sh --resume --apply --erc20-to-gno --amount-boundaries --gno-to-evm
 ```

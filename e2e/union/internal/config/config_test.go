@@ -15,6 +15,9 @@ func TestLoadAppliesPacketRPCFallbacks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if cfg.UnionPacketRPCURL != cfg.UnionRPCURL {
+		t.Fatalf("Union packet RPC = %q, want %q", cfg.UnionPacketRPCURL, cfg.UnionRPCURL)
+	}
 	if cfg.EVMPacketRPCURL != cfg.EVMRPCURL {
 		t.Fatalf("EVM packet RPC = %q, want %q", cfg.EVMPacketRPCURL, cfg.EVMRPCURL)
 	}

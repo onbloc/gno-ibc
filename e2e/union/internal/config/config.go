@@ -53,6 +53,7 @@ type Config struct {
 	EVMTestERC20           string
 	GnoRecipient           string
 	EVMTestAmount          string
+	UnionPacketRPCURL      string
 	EVMPacketRPCURL        string
 	GnoPacketRPCURL        string
 	GnoPacketIndexerRPCURL string
@@ -102,6 +103,7 @@ func Load(scriptDir string, lookup func(string) (string, bool), packet bool) (Co
 		EVMTestERC20:           get("EVM_TEST_ERC20"),
 		GnoRecipient:           get("GNO_RECIPIENT"),
 		EVMTestAmount:          get("EVM_TEST_AMOUNT"),
+		UnionPacketRPCURL:      get("UNION_PACKET_RPC_URL"),
 		EVMPacketRPCURL:        get("EVM_PACKET_RPC_URL"),
 		GnoPacketRPCURL:        get("GNO_PACKET_RPC_URL"),
 		GnoPacketIndexerRPCURL: get("GNO_PACKET_INDEXER_RPC_URL"),
@@ -119,6 +121,10 @@ func Load(scriptDir string, lookup func(string) (string, bool), packet bool) (Co
 		cfg.StateFile = filepath.Join(cfg.ArtifactDir, "state.json")
 	} else if !filepath.IsAbs(cfg.StateFile) {
 		cfg.StateFile = filepath.Join(scriptDir, cfg.StateFile)
+	}
+
+	if cfg.UnionPacketRPCURL == "" {
+		cfg.UnionPacketRPCURL = cfg.UnionRPCURL
 	}
 
 	if cfg.EVMPacketRPCURL == "" {

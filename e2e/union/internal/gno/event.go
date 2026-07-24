@@ -29,12 +29,66 @@ type attribute struct {
 	Value string `json:"value"`
 }
 
+// MembershipProofEvent identifies one committed membership proof event.
+type MembershipProofEvent struct {
+	Tx string `json:"tx"`
+}
+
 // EventCount returns the number of matching core events.
 func (c *Client) EventCount(ctx context.Context, eventType, packetHash string) (int, error) {
 	events, err := c.queryEvents(
 		ctx, []string{eventType}, map[string]string{"packet_hash": packetHash},
 	)
 	return len(events), err
+}
+
+// MembershipProofEvents returns events for one exact committed-proof key.
+func (c *Client) MembershipProofEvents(
+	ctx context.Context,
+	clientID, height int64,
+	path []byte,
+) ([]MembershipProofEvent, error) {
+	events, err := c.queryEvents(ctx, []string{"CommitMembershipProof"}, map[string]string{
+		"client_id":    strconv.FormatInt(clientID, 10),
+		"proof_height": strconv.FormatInt(height, 10),
+		"path":         "0x" + hex.EncodeToString(path),
+	})
+	if err != nil {
+		return nil, err
+	}
+	result := make([]MembershipProofEvent, len(events))
+	for i := range events {
+		result[i].Tx = events[i].TxHash
+	}
+	return result, nil
+}
+
+// WaitMembershipProofEvent waits for exactly one event for the proof key.
+func (c *Client) WaitMembershipProofEvent(
+	ctx context.Context,
+	clientID, height int64,
+	path []byte,
+) (MembershipProofEvent, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, c.cfg.ScenarioTimeout)
+	defer cancel()
+	for {
+		events, err := c.MembershipProofEvents(waitCtx, clientID, height, path)
+		if err != nil {
+			return MembershipProofEvent{}, err
+		}
+		switch len(events) {
+		case 0:
+			if err := pause(waitCtx, c.cfg.PollInterval); err != nil {
+				return MembershipProofEvent{}, fmt.Errorf("Gno membership proof event was not visible: %w", err)
+			}
+		case 1:
+			return events[0], nil
+		default:
+			return MembershipProofEvent{}, fmt.Errorf(
+				"Gno membership proof event count=%d, want exactly one", len(events),
+			)
+		}
+	}
 }
 
 func (c *Client) latestEventHeight(

@@ -3,6 +3,7 @@ package voyager
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"strconv"
 	"strings"
@@ -20,6 +21,30 @@ type clientMeta struct {
 
 type stateResponse struct {
 	State json.RawMessage `json:"state"`
+}
+
+// EncodedMembershipProof asks the pinned Voyager instance to query and encode
+// an EVM proof for the deployed Gno State Lens client.
+func (r *Runtime) EncodedMembershipProof(
+	ctx context.Context,
+	chain, height, path string,
+) ([]byte, error) {
+	result, err := r.call(
+		ctx, "rpc", "ibc-proof", chain, path, "--height", height, "--encode",
+		"--ibc-interface", "ibc-gno", "--client-type", "state-lens/ics23/mpt",
+	)
+	if err != nil {
+		return nil, err
+	}
+	var encoded string
+	if json.Unmarshal(result.Stdout, &encoded) != nil {
+		return nil, ErrMalformedResponse
+	}
+	proof, err := hex.DecodeString(strings.TrimPrefix(encoded, "0x"))
+	if err != nil || len(proof) == 0 {
+		return nil, ErrMalformedResponse
+	}
+	return proof, nil
 }
 
 type jsonID struct {

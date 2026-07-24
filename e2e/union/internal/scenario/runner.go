@@ -22,11 +22,12 @@ import (
 
 // Options are the runner's explicit write and resume boundaries.
 type Options struct {
-	Apply            bool
-	Resume           bool
-	ERC20ToGno       bool
-	AmountBoundaries bool
-	GnoToEVM         bool
+	Apply                bool
+	Resume               bool
+	ForgedProofRejection bool
+	ERC20ToGno           bool
+	AmountBoundaries     bool
+	GnoToEVM             bool
 }
 
 // Runner executes the live acceptance scenarios.
@@ -65,6 +66,9 @@ func newRunnerWithClients(
 ) (*Runner, error) {
 	if options.ERC20ToGno && !options.Apply {
 		return nil, fmt.Errorf("--erc20-to-gno requires --apply")
+	}
+	if options.ForgedProofRejection && !options.Apply {
+		return nil, fmt.Errorf("--forged-proof-rejection requires --apply")
 	}
 	if options.AmountBoundaries && !options.ERC20ToGno {
 		return nil, fmt.Errorf("--amount-boundaries requires --erc20-to-gno")
@@ -158,7 +162,7 @@ func (r *Runner) preflight(ctx context.Context) ([]byte, error) {
 	if err := r.voyager.ValidateSource(ctx); err != nil {
 		return nil, err
 	}
-	if r.options.ERC20ToGno {
+	if r.options.ERC20ToGno || r.options.ForgedProofRejection {
 		for _, name := range []string{"cast", "gnokey"} {
 			if _, err := osexec.LookPath(name); err != nil {
 				return nil, fmt.Errorf("missing required packet command: %s", name)

@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gnolang/gno/tm2/pkg/crypto/keys"
+	"github.com/gnolang/gno/tm2/pkg/crypto/secp256k1"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/process"
 )
 
@@ -24,6 +26,100 @@ const (
 	DevSenderAddress  = "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
 	devSenderMnemonic = "source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast"
 )
+
+// MembershipProofTx classifies one direct proof commitment submission.
+type MembershipProofTx struct {
+	Accepted       bool   `json:"accepted"`
+	Classification string `json:"classification"`
+}
+
+// CommitMembershipProof submits one direct MsgRun with Voyager's configured
+// raw relayer key.
+func (c *Client) CommitMembershipProof(
+	ctx context.Context,
+	clientID, height int64,
+	proof, path, value []byte,
+) (MembershipProofTx, error) {
+	keyBytes, err := hex.DecodeString(strings.TrimPrefix(c.cfg.GnoPrivateKey, "0x"))
+	if err != nil || len(keyBytes) != 32 {
+		return MembershipProofTx{}, fmt.Errorf("malformed Gno relayer key")
+	}
+	home, err := os.MkdirTemp("", "union-relayer-*")
+	if err != nil {
+		return MembershipProofTx{}, fmt.Errorf("cannot create Gno relayer keyring")
+	}
+	defer os.RemoveAll(home)
+	keybase, err := keys.NewKeyBaseFromDir(home)
+	if err != nil {
+		return MembershipProofTx{}, fmt.Errorf("cannot create Gno relayer keyring")
+	}
+	var privateKey secp256k1.PrivKeySecp256k1
+	copy(privateKey[:], keyBytes)
+	if err := keybase.ImportPrivKey("relayer", privateKey, ""); err != nil {
+		return MembershipProofTx{}, fmt.Errorf("cannot import Gno relayer key")
+	}
+	source := fmt.Sprintf(`package main
+
+import (
+	core %q
+	types "gno.land/p/onbloc/ibc/union/types"
+)
+
+func main(cur realm) {
+	core.CommitMembershipProof(cross(cur), types.NewMsgCommitMembershipProof(types.ClientId(%d), %d, %s, %s, %s))
+}
+`, c.cfg.GnoIBCCoreRealm, clientID, height, gnoBytes(proof), gnoBytes(path), gnoBytes(value))
+	script := home + "/commit_membership_proof.gno"
+	if err := os.WriteFile(script, []byte(source), 0o600); err != nil {
+		return MembershipProofTx{}, fmt.Errorf("cannot write Gno proof transaction")
+	}
+	commandCtx := ctx
+	cancel := func() {}
+	if c.cfg.CommandTimeout > 0 {
+		commandCtx, cancel = context.WithTimeout(ctx, c.cfg.CommandTimeout)
+	}
+	defer cancel()
+	result, runErr := c.exec.Run(commandCtx, process.Command{
+		Name: "gnokey",
+		Args: []string{
+			"maketx", "run", "-gas-fee", "10000000ugnot", "-gas-wanted", "1000000000",
+			"-broadcast", "-chainid", c.cfg.GnoChainID, "-remote", c.cfg.GnoPacketRPCURL,
+			"-insecure-password-stdin", "-home", home, "relayer", script,
+		},
+		Stdin: strings.NewReader("\n"),
+	})
+	if runErr == nil {
+		return MembershipProofTx{Accepted: true, Classification: "accepted"}, nil
+	}
+	if commandCtx.Err() != nil {
+		return MembershipProofTx{}, commandCtx.Err()
+	}
+	output := strings.ToLower(string(result.Stdout) + "\n" + string(result.Stderr))
+	if containsAny(output, "unauthorized", "not authorized", "access denied", "permission denied") {
+		return MembershipProofTx{}, fmt.Errorf("Gno relayer is not authorized")
+	}
+	if !containsAny(output, "proof", "mpt", "root", "hash mismatch", "invalid node") {
+		return MembershipProofTx{}, fmt.Errorf("Gno proof transaction failed unexpectedly")
+	}
+	return MembershipProofTx{Classification: "proof verification rejected"}, nil
+}
+
+func gnoBytes(bz []byte) string {
+	values := make([]string, len(bz))
+	for i, value := range bz {
+		values[i] = strconv.Itoa(int(value))
+	}
+	return "[]byte{" + strings.Join(values, ", ") + "}"
+}
+
+func containsAny(value string, needles ...string) bool {
+	for _, needle := range needles {
+		if strings.Contains(value, needle) {
+			return true
+		}
+	}
+	return false
+}
 
 // SendRaw broadcasts one direct EOA SendRaw call and returns its PacketSend.
 func (c *Client) SendRaw(

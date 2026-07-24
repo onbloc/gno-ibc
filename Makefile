@@ -41,6 +41,7 @@ VENDOR_GNOLANG_RELS := \
 	p/nt/bptree/v0 \
 	p/nt/cford32/v0 \
 	p/nt/fqname/v0 \
+	p/nt/markdown/sanitize/v0 \
 	p/nt/mux/v0 \
 	p/nt/seqid/v0 \
 	p/nt/testutils/v0 \

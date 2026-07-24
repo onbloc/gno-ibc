@@ -158,6 +158,13 @@ if [[ "$PROXY_AMOUNT_AFTER" != "$PROXY_AMOUNT_INITIAL" ]]; then
   echo "FAIL: expected proxy escrow to return to '$PROXY_BAL_INITIAL' after refund, got '$PROXY_BAL_AFTER'"
   exit 1
 fi
+if ! grep -q '"type":"ZkgmNativeReleased"' "$WORKDIR/native_refund_ack.log" ||
+  ! grep -q '"key":"recipient","value":"'"$REFUND_RECIPIENT"'"' "$WORKDIR/native_refund_ack.log" ||
+  ! grep -q '"key":"amount","value":"100"' "$WORKDIR/native_refund_ack.log"; then
+  echo "FAIL: expected native refund release event for $REFUND_RECIPIENT amount 100"
+  cat "$WORKDIR/native_refund_ack.log"
+  exit 1
+fi
 if [[ "$RECIPIENT_AMOUNT_AFTER" != "$((RECIPIENT_AMOUNT_INITIAL + 100))" ]]; then
   echo "FAIL: expected recipient balance to increase by 100ugnot, before='$RECIPIENT_BAL_INITIAL' after='$RECIPIENT_BAL_AFTER'"
   exit 1

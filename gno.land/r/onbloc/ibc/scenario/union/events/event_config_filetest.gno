@@ -68,13 +68,13 @@ func sendWithSplitEnabled(cur realm, channelId types.ChannelId) {
 	testing.SetRealm(testing.NewUserRealm(eventConfigAdminAddr))
 	core.SetSplitEventAttrs(cross(cur), true)
 	core.SetMaxEventAttrValueLen(cross(cur), 4)
-	core.SetMaxPacketDataEventColumns(cross(cur), 2)
+	core.SetMaxEventAttrPairs(cross(cur), 2)
 	config := core.GetEventConfig()
 	ufmt.Printf("[INFO] split_event_attrs: %t\n", config.SplitEventAttrs)
 	ufmt.Printf("[INFO] max_event_attr_value_len: %d\n", config.MaxEventAttrValueLen)
-	ufmt.Printf("[INFO] max_packet_data_event_columns: %d\n", config.MaxPacketDataEventColumns)
+	ufmt.Printf("[INFO] max_event_attr_pairs: %d\n", config.MaxEventAttrPairs)
 	ufmt.Printf("[INFO] packet_data_budget: %d\n", core.MaxPacketDataEventSize())
-	ufmt.Printf("[INFO] oversized_packet_rejected: %t\n", core.PacketDataTooLarge(make([]byte, 16)))
+	ufmt.Printf("[INFO] oversized_packet_rejected: %t\n", !core.IsValidPacketDataSize(make([]byte, 16)))
 
 	packet := core.SendPacket(cross(cur), channelId, types.Timestamp(1), []byte{0xaa, 0xbb, 0xcc})
 	ufmt.Printf("[INFO] before_packet_data_size: %d\n", eventConfigHexAttrLen(packet.Data))
@@ -89,9 +89,9 @@ func disableEventConfigSplit(cur realm) {
 	config := core.GetEventConfig()
 	ufmt.Printf("[INFO] split_event_attrs: %t\n", config.SplitEventAttrs)
 	ufmt.Printf("[INFO] max_event_attr_value_len: %d\n", config.MaxEventAttrValueLen)
-	ufmt.Printf("[INFO] max_packet_data_event_columns: %d\n", config.MaxPacketDataEventColumns)
+	ufmt.Printf("[INFO] max_event_attr_pairs: %d\n", config.MaxEventAttrPairs)
 	ufmt.Printf("[INFO] packet_data_budget: %d\n", core.MaxPacketDataEventSize())
-	ufmt.Printf("[INFO] oversized_packet_allowed: %t\n", !core.PacketDataTooLarge(make([]byte, 16)))
+	ufmt.Printf("[INFO] oversized_packet_allowed: %t\n", core.IsValidPacketDataSize(make([]byte, 16)))
 }
 
 func sendWithSplitDisabled(cur realm, channelId types.ChannelId) {
@@ -199,7 +199,7 @@ func (e eventConfigMockError) Error() string {
 // [STEP] before config change: split packet_data attrs
 // [INFO] split_event_attrs: true
 // [INFO] max_event_attr_value_len: 4
-// [INFO] max_packet_data_event_columns: 2
+// [INFO] max_event_attr_pairs: 2
 // [INFO] packet_data_budget: 8
 // [INFO] oversized_packet_rejected: true
 // [INFO] before_packet_data_size: 8
@@ -207,7 +207,7 @@ func (e eventConfigMockError) Error() string {
 // [STEP] update event config: disable packet_data attr splitting
 // [INFO] split_event_attrs: false
 // [INFO] max_event_attr_value_len: 4
-// [INFO] max_packet_data_event_columns: 2
+// [INFO] max_event_attr_pairs: 2
 // [INFO] packet_data_budget: 8
 // [INFO] oversized_packet_allowed: true
 // [STEP] after config change: emit packet_data as one attr
@@ -412,18 +412,6 @@ func (e eventConfigMockError) Error() string {
 //         "value": "0x11ee731648e2573710d3a4843567d7c9de8f17acc1d9aa1f5c1a1e4338809bf8"
 //       },
 //       {
-//         "key": "packet_data_size",
-//         "value": "8"
-//       },
-//       {
-//         "key": "packet_data[0]",
-//         "value": "0xaa"
-//       },
-//       {
-//         "key": "packet_data[1]",
-//         "value": "bbcc"
-//       },
-//       {
 //         "key": "source_channel_id",
 //         "value": "1"
 //       },
@@ -454,6 +442,18 @@ func (e eventConfigMockError) Error() string {
 //       {
 //         "key": "timeout_timestamp",
 //         "value": "1"
+//       },
+//       {
+//         "key": "packet_data_size",
+//         "value": "8"
+//       },
+//       {
+//         "key": "packet_data[0]",
+//         "value": "0xaa"
+//       },
+//       {
+//         "key": "packet_data[1]",
+//         "value": "bbcc"
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"
@@ -466,10 +466,6 @@ func (e eventConfigMockError) Error() string {
 //         "value": "0x0b0fcb42acf152d766f6b174a40dfc7092feace9ee143387a094dbaab326c7ac"
 //       },
 //       {
-//         "key": "packet_data",
-//         "value": "0xddeeff"
-//       },
-//       {
 //         "key": "source_channel_id",
 //         "value": "1"
 //       },
@@ -500,6 +496,10 @@ func (e eventConfigMockError) Error() string {
 //       {
 //         "key": "timeout_timestamp",
 //         "value": "1"
+//       },
+//       {
+//         "key": "packet_data",
+//         "value": "0xddeeff"
 //       }
 //     ],
 //     "pkg_path": "gno.land/r/onbloc/ibc/union/core"

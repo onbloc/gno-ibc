@@ -14,7 +14,7 @@ var testConnection = types.Connection{
 	CounterpartyConnectionId: types.ConnectionId(30),
 }
 
-const fixedEventAttrHalfColumn = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
+const fixedEventAttrUnit = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
 	"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
 	"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
 	"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
@@ -23,6 +23,10 @@ const fixedEventAttrHalfColumn = "0123456789abcdef0123456789abcdef0123456789abcd
 	"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef" +
 	"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
+// fixedEventAttrHalfColumn/fixedEventAttrColumn are sized relative to
+// defaultMaxEventAttrValueLen so the boundary tests below stay correct if
+// that default changes.
+const fixedEventAttrHalfColumn = fixedEventAttrUnit + fixedEventAttrUnit + fixedEventAttrUnit + fixedEventAttrUnit
 const fixedEventAttrColumn = fixedEventAttrHalfColumn + fixedEventAttrHalfColumn
 
 func TestChannelOpenInitEventAttrs(cur realm, t *testing.T) {
@@ -151,7 +155,7 @@ func TestConnectionOpenEventAttrs(cur realm, t *testing.T) {
 	})
 }
 
-func TestPacketEventBaseAttrsSplitPacketData(cur realm, t *testing.T) {
+func TestPacketSendEventAttrsSplitPacketData(cur realm, t *testing.T) {
 	resetEventConfigForTest()
 
 	maxLen := int(GetEventConfig().MaxEventAttrValueLen)
@@ -170,6 +174,14 @@ func TestPacketEventBaseAttrsSplitPacketData(cur realm, t *testing.T) {
 			data:     []byte(fixedEventAttrHalfColumn),
 			wantLens: []int{maxLen, 2},
 		},
+		{
+			// hexAttrLen(b) = len(b)*2+2, so a (maxLen-1)-byte payload hex-encodes
+			// to exactly 2*maxLen -- packet_data_size and the split must reflect
+			// two full columns with no third, trailing empty column.
+			name:     "packet data hex-encodes to exactly two full columns",
+			data:     []byte(fixedEventAttrColumn[:maxLen-1]),
+			wantLens: []int{maxLen, maxLen},
+		},
 	}
 
 	for _, tc := range testCases {
@@ -181,29 +193,197 @@ func TestPacketEventBaseAttrsSplitPacketData(cur realm, t *testing.T) {
 				TimeoutTimestamp:     types.Timestamp(3),
 			}
 
-			attrs := packetEventBaseAttrs(packet)
+			attrs := packetSendEventAttrs(packet, types.Channel{}, types.Connection{})
 
 			if attrs[0] != "packet_hash" {
 				t.Fatalf("first attr key: got %q want packet_hash", attrs[0])
 			}
-			if attrs[2] != "packet_data_size" {
-				t.Fatalf("packet data size attr key: got %q want packet_data_size", attrs[2])
+
+			// packet_data is always the trailing segment: "packet_data_size"
+			// pair followed by len(wantLens) indexed columns.
+			packetDataAttrs := attrs[len(attrs)-(2+2*len(tc.wantLens)):]
+			if packetDataAttrs[0] != "packet_data_size" {
+				t.Fatalf("packet data size attr key: got %q want packet_data_size", packetDataAttrs[0])
 			}
-			if attrs[3] != strconv.Itoa(len(hexAttr(tc.data))) {
-				t.Fatalf("packet data size attr value: got %q want %d", attrs[3], len(hexAttr(tc.data)))
+			if packetDataAttrs[1] != strconv.Itoa(len(hexAttr(tc.data))) {
+				t.Fatalf("packet data size attr value: got %q want %d", packetDataAttrs[1], len(hexAttr(tc.data)))
 			}
 			assertAttrMissing(t, attrs, "packet_data")
-			assertEventAttrColumnLens(t, attrs[4:], "packet_data", hexAttr(tc.data), tc.wantLens, maxLen)
+			assertEventAttrColumnLens(t, packetDataAttrs[2:], "packet_data", hexAttr(tc.data), tc.wantLens, maxLen)
 		})
 	}
+}
+
+func TestPacketSendEventAttrs(cur realm, t *testing.T) {
+	resetEventConfigForTest()
+
+	packet := types.Packet{
+		SourceChannelId:      types.ChannelId(1),
+		DestinationChannelId: types.ChannelId(2),
+		Data:                 []byte{0, 1, 2, 3},
+		TimeoutTimestamp:     types.Timestamp(4),
+	}
+	sourceChannel := types.Channel{
+		ConnectionId: types.ConnectionId(3),
+		Version:      "ucs03-zkgm-0",
+	}
+
+	attrs := packetSendEventAttrs(packet, sourceChannel, testConnection)
+
+	assertStringSliceEqual(t, attrs, []string{
+		"packet_hash", commitPacketHash(packet).String(),
+		"source_channel_id", "1",
+		"source_channel_version", "ucs03-zkgm-0",
+		"source_connection_id", "3",
+		"source_connection_client_id", "10",
+		"destination_channel_id", "2",
+		"destination_connection_id", "30",
+		"destination_connection_client_id", "20",
+		"timeout_timestamp", "4",
+		"packet_data_size", strconv.Itoa(len(hexAttr(packet.Data))),
+		"packet_data[0]", hexAttr(packet.Data),
+	})
+}
+
+func TestPacketRecvEventAttrs(cur realm, t *testing.T) {
+	resetEventConfigForTest()
+
+	packet := types.Packet{
+		SourceChannelId:      types.ChannelId(1),
+		DestinationChannelId: types.ChannelId(2),
+		Data:                 []byte{0, 1, 2, 3},
+		TimeoutTimestamp:     types.Timestamp(4),
+	}
+	destinationChannel := types.Channel{
+		ConnectionId: types.ConnectionId(3),
+		Version:      "ucs03-zkgm-0",
+	}
+	makerMsg := []byte{8, 9}
+
+	attrs := packetRecvEventAttrs(packet, destinationChannel, testConnection, makerMsg)
+
+	assertStringSliceEqual(t, attrs, []string{
+		"packet_hash", commitPacketHash(packet).String(),
+		"source_channel_id", "1",
+		"source_connection_id", "30",
+		"source_connection_client_id", "20",
+		"destination_channel_id", "2",
+		"destination_channel_version", "ucs03-zkgm-0",
+		"destination_connection_id", "3",
+		"destination_connection_client_id", "10",
+		"timeout_timestamp", "4",
+		"packet_data_size", strconv.Itoa(len(hexAttr(packet.Data))),
+		"packet_data[0]", hexAttr(packet.Data),
+		"maker_msg_size", strconv.Itoa(len(hexAttr(makerMsg))),
+		"maker_msg[0]", hexAttr(makerMsg),
+	})
+}
+
+func TestWriteAckEventAttrs(cur realm, t *testing.T) {
+	resetEventConfigForTest()
+
+	packet := types.Packet{
+		SourceChannelId:      types.ChannelId(1),
+		DestinationChannelId: types.ChannelId(2),
+		Data:                 []byte{0, 1, 2, 3},
+		TimeoutTimestamp:     types.Timestamp(4),
+	}
+	destinationChannel := types.Channel{
+		ConnectionId: types.ConnectionId(3),
+		Version:      "ucs03-zkgm-0",
+	}
+	acknowledgement := []byte{4, 5, 6, 7}
+
+	attrs := writeAckEventAttrs(packet, destinationChannel, testConnection, acknowledgement)
+
+	assertStringSliceEqual(t, attrs, []string{
+		"packet_hash", commitPacketHash(packet).String(),
+		"source_channel_id", "1",
+		"source_connection_id", "30",
+		"source_connection_client_id", "20",
+		"destination_channel_id", "2",
+		"destination_channel_version", "ucs03-zkgm-0",
+		"destination_connection_id", "3",
+		"destination_connection_client_id", "10",
+		"timeout_timestamp", "4",
+		"packet_data_size", strconv.Itoa(len(hexAttr(packet.Data))),
+		"packet_data[0]", hexAttr(packet.Data),
+		"acknowledgement_size", strconv.Itoa(len(hexAttr(acknowledgement))),
+		"acknowledgement[0]", hexAttr(acknowledgement),
+	})
+}
+
+func TestPacketAckEventAttrs(cur realm, t *testing.T) {
+	resetEventConfigForTest()
+
+	packet := types.Packet{
+		SourceChannelId:      types.ChannelId(1),
+		DestinationChannelId: types.ChannelId(2),
+		Data:                 []byte{0, 1, 2, 3},
+		TimeoutTimestamp:     types.Timestamp(4),
+	}
+	sourceChannel := types.Channel{
+		ConnectionId: types.ConnectionId(3),
+		Version:      "ucs03-zkgm-0",
+	}
+	acknowledgement := []byte{4, 5, 6, 7}
+
+	attrs := packetAckEventAttrs(packet, sourceChannel, testConnection, acknowledgement)
+
+	assertStringSliceEqual(t, attrs, []string{
+		"packet_hash", commitPacketHash(packet).String(),
+		"source_channel_id", "1",
+		"source_channel_version", "ucs03-zkgm-0",
+		"source_connection_id", "3",
+		"source_connection_client_id", "10",
+		"destination_channel_id", "2",
+		"destination_connection_id", "30",
+		"destination_connection_client_id", "20",
+		"timeout_timestamp", "4",
+		"packet_data_size", strconv.Itoa(len(hexAttr(packet.Data))),
+		"packet_data[0]", hexAttr(packet.Data),
+		"acknowledgement_size", strconv.Itoa(len(hexAttr(acknowledgement))),
+		"acknowledgement[0]", hexAttr(acknowledgement),
+	})
+}
+
+func TestPacketTimeoutEventAttrs(cur realm, t *testing.T) {
+	resetEventConfigForTest()
+
+	packet := types.Packet{
+		SourceChannelId:      types.ChannelId(1),
+		DestinationChannelId: types.ChannelId(2),
+		Data:                 []byte{0, 1, 2, 3},
+		TimeoutTimestamp:     types.Timestamp(4),
+	}
+	sourceChannel := types.Channel{
+		ConnectionId: types.ConnectionId(3),
+		Version:      "ucs03-zkgm-0",
+	}
+
+	attrs := packetTimeoutEventAttrs(packet, sourceChannel, testConnection)
+
+	assertStringSliceEqual(t, attrs, []string{
+		"packet_hash", commitPacketHash(packet).String(),
+		"source_channel_id", "1",
+		"source_channel_version", "ucs03-zkgm-0",
+		"source_connection_id", "3",
+		"source_connection_client_id", "10",
+		"destination_channel_id", "2",
+		"destination_connection_id", "30",
+		"destination_connection_client_id", "20",
+		"timeout_timestamp", "4",
+		"packet_data_size", strconv.Itoa(len(hexAttr(packet.Data))),
+		"packet_data[0]", hexAttr(packet.Data),
+	})
 }
 
 func TestEventAttrColumnsBoundary(cur realm, t *testing.T) {
 	resetEventConfigForTest()
 
 	maxLen := int(GetEventConfig().MaxEventAttrValueLen)
-	if maxLen != 1024 {
-		t.Fatalf("configured max event attr value len = %d, want 1024", maxLen)
+	if maxLen != 4096 {
+		t.Fatalf("configured max event attr value len = %d, want 4096", maxLen)
 	}
 	testCases := []struct {
 		name     string
@@ -216,17 +396,17 @@ func TestEventAttrColumnsBoundary(cur realm, t *testing.T) {
 			wantLens: []int{0},
 		},
 		{
-			name:     "1023 bytes stays in one column",
+			name:     "one byte under max stays in one column",
 			value:    fixedEventAttrColumn[:maxLen-1],
 			wantLens: []int{maxLen - 1},
 		},
 		{
-			name:     "1024 bytes stays in one full column",
+			name:     "exactly max bytes stays in one full column",
 			value:    fixedEventAttrColumn,
 			wantLens: []int{maxLen},
 		},
 		{
-			name:     "1025 bytes splits into full column and remainder",
+			name:     "one byte over max splits into full column and remainder",
 			value:    fixedEventAttrColumn + "2",
 			wantLens: []int{maxLen, 1},
 		},
@@ -239,6 +419,16 @@ func TestEventAttrColumnsBoundary(cur realm, t *testing.T) {
 			name:     "four columns",
 			value:    fixedEventAttrColumn + fixedEventAttrColumn + fixedEventAttrColumn + "4",
 			wantLens: []int{maxLen, maxLen, maxLen, 1},
+		},
+		{
+			name:     "exactly two full columns, no trailing empty column",
+			value:    fixedEventAttrColumn + fixedEventAttrColumn,
+			wantLens: []int{maxLen, maxLen},
+		},
+		{
+			name:     "exactly three full columns, no trailing empty column",
+			value:    fixedEventAttrColumn + fixedEventAttrColumn + fixedEventAttrColumn,
+			wantLens: []int{maxLen, maxLen, maxLen},
 		},
 	}
 

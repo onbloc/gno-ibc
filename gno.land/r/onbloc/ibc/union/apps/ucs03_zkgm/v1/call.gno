@@ -1,4 +1,4 @@
-package impl
+package ucs03_zkgm
 
 import (
 	types "gno.land/p/onbloc/ibc/union/types"

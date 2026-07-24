@@ -58,9 +58,8 @@ func main(cur realm) {
 }
 
 func setupGRC20(cur realm) (*grc20.Token, *grc20.PrivateLedger, string) {
-	token, ledger := grc20.NewToken(0, cur, "Batch Full Failure GRC20", "BFF", 6)
-	grc20reg.Register(cross(cur), token, grc20Slug)
-	denom := cur.PkgPath() + "." + grc20Slug
+	token, ledger := grc20.NewToken("Batch Full Failure GRC20", "BFF", 6, 0, cur)
+	denom := grc20reg.Register(cross(cur), token, grc20Slug)
 
 	if err := ledger.Mint(senderAddr, 100); err != nil {
 		panic(err)
@@ -179,7 +178,7 @@ func mustFailureAck() []byte {
 
 // Output:
 // [SCENARIO] 1. Register a local grc20 token and mint 100 units to the sender
-// [INFO] registered grc20 denom: gno.land/r/onbloc/ibc/scenario/union/batch.batch-full-failure-grc20
+// [INFO] registered grc20 denom: gno.land/r/onbloc/ibc/scenario/union/batch.BFF
 // [INFO] sender grc20 balance: 100
 // [EXPECTED] sender grc20 balance should be 100 (freshly minted)
 //

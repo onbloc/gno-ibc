@@ -120,7 +120,7 @@ func fundMaker(cur realm, channelId types.ChannelId, quoteToken string, meta []b
 	// Confirm the INITIALIZE actually deployed a real grc20 token (not just an
 	// internal ledger entry): look it up in the registry and check its declared
 	// metadata and total supply, not just the maker's balance.
-	token := grc20reg.MustGet(zkgm.ProxyPkgPath() + "." + quoteToken[len("ibc/"):])
+	token := grc20reg.MustGet(zkgm.ProxyPkgPath() + ".GNOT")
 	ufmt.Printf("[INFO] deployed token name/symbol/decimals: %s/%s/%d\n", token.GetName(), token.GetSymbol(), token.GetDecimals())
 	ufmt.Printf("[INFO] deployed token total supply: %d\n", token.TotalSupply())
 	ufmt.Printf("[INFO] maker voucher balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, makerAddr))

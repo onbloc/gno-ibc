@@ -1,4 +1,4 @@
-package impl
+package core
 
 import (
 	core "gno.land/r/onbloc/ibc/union/core"

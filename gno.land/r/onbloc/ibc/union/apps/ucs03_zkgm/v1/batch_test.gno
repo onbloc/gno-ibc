@@ -1,4 +1,4 @@
-package impl
+package ucs03_zkgm
 
 // batch_test.gno covers batch.gno's verify/acknowledge/timeout logic and the
 // funds-accounting it drives. The send-path native funds checks are exercised
@@ -40,8 +40,9 @@ func TestIsAllowedBatchInstruction(t *testing.T) {
 
 func TestVerifyBatch(cur realm, t *testing.T) {
 	callSender := testAddress("batch-call-caller")
-	exactOrderA := batchRefundOrder("batch-exact-a", "ugnot", "quote-exact-a", 60)
-	exactOrderB := batchRefundOrder("batch-exact-b", "ugnot", "quote-exact-b", 40)
+	tokenSender := testAddress("batch-token-caller")
+	exactOrderA := batchRefundOrder("batch-token-caller", "ugnot", "quote-exact-a", 60)
+	exactOrderB := batchRefundOrder("batch-token-caller", "ugnot", "quote-exact-b", 40)
 
 	type channelBalance struct {
 		channelId types.ChannelId
@@ -79,6 +80,7 @@ func TestVerifyBatch(cur realm, t *testing.T) {
 		},
 		{
 			name:      "exact total native consumption passes",
+			previous:  tokenSender,
 			channelId: types.ChannelId(92),
 			sent:      "100ugnot",
 			batch: z.Batch{Instructions: []z.Instruction{
@@ -92,39 +94,43 @@ func TestVerifyBatch(cur realm, t *testing.T) {
 		},
 		{
 			name:      "duplicate native consumption rejected",
+			previous:  tokenSender,
 			channelId: types.ChannelId(91),
 			sent:      "100ugnot",
 			batch: z.Batch{Instructions: []z.Instruction{
-				batchMustOrderInstruction(batchRefundOrder("batch-dup-a", "ugnot", "quote-dup-a", 100)),
-				batchMustOrderInstruction(batchRefundOrder("batch-dup-b", "ugnot", "quote-dup-b", 100)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "ugnot", "quote-dup-a", 100)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "ugnot", "quote-dup-b", 100)),
 			}},
 			wantVerifyErr: "sent coin mismatch",
 		},
 		{
 			name:      "leftover native rejected by drain check",
+			previous:  tokenSender,
 			channelId: types.ChannelId(93),
 			sent:      "100ugnot",
 			batch: z.Batch{Instructions: []z.Instruction{
-				batchMustOrderInstruction(batchRefundOrder("batch-left", "ugnot", "quote-leftover", 60)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "ugnot", "quote-leftover", 60)),
 			}},
 			wantDrainErr: "sent coin mismatch",
 		},
 		{
 			name:      "multi denom exact passes",
+			previous:  tokenSender,
 			channelId: types.ChannelId(95),
 			sent:      "100ugnot,50foo",
 			batch: z.Batch{Instructions: []z.Instruction{
-				batchMustOrderInstruction(batchRefundOrder("batch-denom-a", "ugnot", "quote-denom-a", 100)),
-				batchMustOrderInstruction(batchRefundOrder("batch-denom-b", "foo", "quote-denom-b", 50)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "ugnot", "quote-denom-a", 100)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "foo", "quote-denom-b", 50)),
 			}},
 		},
 		{
 			name:      "multi denom shortfall rejected",
+			previous:  tokenSender,
 			channelId: types.ChannelId(96),
 			sent:      "100ugnot,40foo",
 			batch: z.Batch{Instructions: []z.Instruction{
-				batchMustOrderInstruction(batchRefundOrder("batch-denom-sa", "ugnot", "quote-denom-sa", 100)),
-				batchMustOrderInstruction(batchRefundOrder("batch-denom-sb", "foo", "quote-denom-sb", 50)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "ugnot", "quote-denom-sa", 100)),
+				batchMustOrderInstruction(batchRefundOrder("batch-token-caller", "foo", "quote-denom-sb", 50)),
 			}},
 			wantVerifyErr: "sent coin mismatch",
 		},
@@ -197,7 +203,8 @@ func TestExecuteBatchRunsTokenOrderThenCall(cur realm, t *testing.T) {
 	relayer := testAddress("batch-exec-relayer")
 	receiver := testAddress("batch-exec-receiver")
 	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
-	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T", canonicalDecimals)
+	_, err := v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "T1", canonicalDecimals)
+	uassert.NoError(t, err)
 	order := z.TokenOrderV2{
 		Sender:      []byte("sender"),
 		Receiver:    []byte(receiver),
@@ -280,8 +287,8 @@ func TestAcknowledgeBatch(cur realm, t *testing.T) {
 			orderB := batchRefundOrder("ack-fail-b", "ibc/batch-ack-fail-b", "quote-b", 17)
 			v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount.Int64())
 			v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount.Int64())
-			uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderA.BaseAmount))
-			uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderB.BaseAmount))
+			uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "BFAA", 0, cur.Address(), orderA.BaseAmount))
+			uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "BFAB", 0, cur.Address(), orderB.BaseAmount))
 
 			batch = z.Batch{Instructions: []z.Instruction{
 				batchMustOrderInstruction(orderA),
@@ -313,14 +320,14 @@ func TestTimeoutBatchTokenOrderChildrenRefund(cur realm, t *testing.T) {
 	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
 	orderA := batchRefundOrder("timeout-a", "ibc/batch-timeout-a", "quote-a", 11)
 	orderB := batchRefundOrder("timeout-b", "ibc/batch-timeout-b", "quote-b", 17)
-	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderA.BaseAmount))
-	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderB.BaseAmount))
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "BTOA", 0, cur.Address(), orderA.BaseAmount))
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "BTOB", 0, cur.Address(), orderB.BaseAmount))
 	v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderA.BaseToken, orderA.QuoteToken, orderA.BaseAmount.Int64())
 	v.increaseChannelBalanceV2(0, cur, types.ChannelId(7), path, orderB.BaseToken, orderB.QuoteToken, orderB.BaseAmount.Int64())
 	// Escrow the wrapped vouchers in the proxy so the timeout refund can transfer
 	// them back to each sender (settleEscrowedV2 moves ibc/ vouchers out of escrow).
-	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderA.BaseAmount))
-	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "", 0, cur.Address(), orderB.BaseAmount))
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderA.BaseToken), [32]byte{}, "", "BTOA", 0, cur.Address(), orderA.BaseAmount))
+	uassert.NoError(t, v.mintVoucher(0, cur, string(orderB.BaseToken), [32]byte{}, "", "BTOB", 0, cur.Address(), orderB.BaseAmount))
 	batch := z.Batch{Instructions: []z.Instruction{
 		batchMustOrderInstruction(orderA),
 		batchMustOrderInstruction(orderB),
@@ -373,6 +380,97 @@ func mustSuccessAck() []byte {
 		panic(err)
 	}
 	return ack
+}
+
+// A batch whose second child is a disallowed nested-batch instruction must
+// abort the whole recv tx even though the first child (a TokenOrder) already
+// minted before the disallowed opcode was reached. Without the executeBatch
+// fix this would return an ordinary error, letting OnRecvPacket commit a
+// failure ack while the first child's mint stays committed — and the source
+// chain's later ack-driven refund would then double-pay alongside that mint.
+func TestRecvBatchInvalidChildAbortsAfterPriorChildRan(cur realm, t *testing.T) {
+	Reset(cross(cur))
+	testStore = newMockStore()
+	testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
+
+	v := newTestImpl()
+	path := u256.Zero()
+	const destChan = types.ChannelId(72)
+	receiver := testAddress("batch-inv-child-rx")
+	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "BAT1", canonicalDecimals)
+
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(receiver),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte(quoteDenom),
+		QuoteAmount: u256.NewUint(21),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	nestedBatch := batchMustBatchInstruction(z.Batch{})
+	data := mustZkgmPacketBytes(batchMustBatchInstruction(z.Batch{
+		Instructions: []z.Instruction{batchMustOrderInstruction(order), nestedBatch},
+	}))
+	packet := core.NewPacket(types.ChannelId(71), destChan, data, 0)
+
+	relayer := testAddress("batch-inv-relayer")
+	uassert.AbortsContains(t, cur, "invalid batch instruction", func(cur realm) {
+		newTestImpl().OnRecvPacket(0, cur, packet, address(relayer), nil)
+	})
+
+	// Documents the pre-abort mint the fix must guarantee gets rolled back at
+	// the real chain's atomic-tx layer once this panic propagates uncaught
+	// out of OnRecvPacket (this in-process mock store isn't itself reverted
+	// by the panic, unlike a real node's cache-wrapped store).
+	uassert.Equal(t, int64(21), voucherBalanceOf(quoteDenom, receiver))
+}
+
+// A batch whose second child has an allowed opcode (OP_TOKEN_ORDER) but an
+// unsupported instruction version must also abort the whole recv tx, even
+// though that failure surfaces as an ordinary decode error rather than a
+// panic. Without wrapping that error as execFatal, OnRecvPacket would commit
+// a failure ack while the first child's mint stays committed — the same
+// double-payment class the disallowed-opcode fix addresses.
+func TestRecvBatchChildDecodeErrorAbortsAfterPriorChildRan(cur realm, t *testing.T) {
+	Reset(cross(cur))
+	testStore = newMockStore()
+	testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
+
+	v := newTestImpl()
+	path := u256.Zero()
+	const destChan = types.ChannelId(73)
+	receiver := testAddress("batch-decode-err-rx")
+	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "BAT2", canonicalDecimals)
+
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(receiver),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte(quoteDenom),
+		QuoteAmount: u256.NewUint(37),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	badVersionChild := batchMustOrderInstruction(order)
+	badVersionChild.Version = z.INSTR_VERSION_0 // OP_TOKEN_ORDER decode requires INSTR_VERSION_2
+	data := mustZkgmPacketBytes(batchMustBatchInstruction(z.Batch{
+		Instructions: []z.Instruction{batchMustOrderInstruction(order), badVersionChild},
+	}))
+	packet := core.NewPacket(types.ChannelId(71), destChan, data, 0)
+
+	relayer := testAddress("batch-decode-relayer")
+	uassert.AbortsContains(t, cur, "unsupported token order version", func(cur realm) {
+		newTestImpl().OnRecvPacket(0, cur, packet, address(relayer), nil)
+	})
+
+	// Same caveat as TestRecvBatchInvalidChildAbortsAfterPriorChildRan: this
+	// mock store doesn't itself revert on panic, so 37 here documents the
+	// pre-abort mint the execFatal wrap must guarantee gets rolled back at
+	// the real chain's atomic-tx layer.
+	uassert.Equal(t, int64(37), voucherBalanceOf(quoteDenom, receiver))
 }
 
 // A batch with an only-maker child aborts the whole recv tx: OnRecvPacket panics

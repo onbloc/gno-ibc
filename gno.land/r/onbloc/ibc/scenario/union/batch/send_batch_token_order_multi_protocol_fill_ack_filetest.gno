@@ -61,9 +61,8 @@ func main(cur realm) {
 }
 
 func setupGRC20(cur realm) (*grc20.Token, *grc20.PrivateLedger, string) {
-	token, ledger := grc20.NewToken(0, cur, "Batch Send GRC20", "BSG", 6)
-	grc20reg.Register(cross(cur), token, grc20Slug)
-	denom := cur.PkgPath() + "." + grc20Slug
+	token, ledger := grc20.NewToken("Batch Send GRC20", "BSG", 6, 0, cur)
+	denom := grc20reg.Register(cross(cur), token, grc20Slug)
 
 	if err := ledger.Mint(senderAddr, 100); err != nil {
 		panic(err)
@@ -206,7 +205,7 @@ func mustBatchAckBytes(childAcks [][]byte) []byte {
 
 // Output:
 // [SCENARIO] 1. Register a local grc20 token and mint 100 units to the sender
-// [INFO] registered grc20 denom: gno.land/r/onbloc/ibc/scenario/union/batch.batch-send-grc20
+// [INFO] registered grc20 denom: gno.land/r/onbloc/ibc/scenario/union/batch.BSG
 // [INFO] sender grc20 balance: 100
 // [EXPECTED] sender grc20 balance should be 100 (freshly minted)
 //

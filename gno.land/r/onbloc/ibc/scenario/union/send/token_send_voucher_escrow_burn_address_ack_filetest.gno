@@ -145,7 +145,7 @@ func acknowledgeBurnAddressFill(cur realm, sendPacket types.Packet, quoteToken s
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{mustMakerFillAck(address(z.BURN_ADDRESS))}, nil, 1))
 
-	token := grc20reg.MustGet(zkgm.ProxyPkgPath() + "." + quoteToken[len("ibc/"):])
+	token := grc20reg.MustGet(zkgm.ProxyPkgPath() + ".GNOT")
 	ufmt.Printf("[INFO] proxy escrow balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, zkgm.ProxyAddress()))
 	ufmt.Printf("[INFO] sender voucher balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, senderAddr))
 	ufmt.Printf("[INFO] deployed token total supply: %d\n", token.TotalSupply())

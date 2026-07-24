@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"gno.land/p/nt/uassert/v0"
+	"gno.land/p/onbloc/ibc/union/types"
 	"gno.land/r/onbloc/ibc/union/access"
 )
 
@@ -18,8 +19,8 @@ func TestGetEventConfigDefaults(cur realm, t *testing.T) {
 	}{
 		{"split event attrs", boolToInt(got.SplitEventAttrs), 1},
 		{"max event attr value len", int(got.MaxEventAttrValueLen), defaultMaxEventAttrValueLen},
-		{"max packet data event columns", int(got.MaxPacketDataEventColumns), defaultMaxPacketDataEventColumns},
-		{"max packet data event size", MaxPacketDataEventSize(), defaultMaxEventAttrValueLen * defaultMaxPacketDataEventColumns},
+		{"max event attr pairs", int(got.MaxEventAttrPairs), defaultMaxEventAttrPairs},
+		{"max packet data event size", MaxPacketDataEventSize(), defaultMaxEventAttrValueLen * defaultMaxEventAttrPairs},
 	}
 
 	for _, tc := range tests {
@@ -35,9 +36,9 @@ func TestSetEventConfigAccessControlled(cur realm, t *testing.T) {
 	defer resetEventConfigForTest()
 
 	next := EventConfig{
-		SplitEventAttrs:           false,
-		MaxEventAttrValueLen:      8,
-		MaxPacketDataEventColumns: 3,
+		SplitEventAttrs:      false,
+		MaxEventAttrValueLen: 8,
+		MaxEventAttrPairs:    3,
 	}
 
 	tests := []struct {
@@ -96,9 +97,9 @@ func TestEventConfigFieldSettersAccessControlled(cur realm, t *testing.T) {
 			name: "split event attrs admin updates field",
 			kind: "split event attrs admin",
 			wantConfig: EventConfig{
-				SplitEventAttrs:           false,
-				MaxEventAttrValueLen:      defaultMaxEventAttrValueLen,
-				MaxPacketDataEventColumns: defaultMaxPacketDataEventColumns,
+				SplitEventAttrs:      false,
+				MaxEventAttrValueLen: defaultMaxEventAttrValueLen,
+				MaxEventAttrPairs:    defaultMaxEventAttrPairs,
 			},
 		},
 		{
@@ -111,24 +112,24 @@ func TestEventConfigFieldSettersAccessControlled(cur realm, t *testing.T) {
 			name: "max event attr value len admin updates field",
 			kind: "max event attr value len admin",
 			wantConfig: EventConfig{
-				SplitEventAttrs:           true,
-				MaxEventAttrValueLen:      8,
-				MaxPacketDataEventColumns: defaultMaxPacketDataEventColumns,
+				SplitEventAttrs:      true,
+				MaxEventAttrValueLen: 8,
+				MaxEventAttrPairs:    defaultMaxEventAttrPairs,
 			},
 		},
 		{
-			name:       "max packet data event columns unauthorized keeps default",
-			kind:       "max packet data event columns unauthorized",
+			name:       "max event attr pairs unauthorized keeps default",
+			kind:       "max event attr pairs unauthorized",
 			wantPanic:  access.ErrAccessManagerUnauthorizedCall,
 			wantConfig: DefaultEventConfig(),
 		},
 		{
-			name: "max packet data event columns admin updates field",
-			kind: "max packet data event columns admin",
+			name: "max event attr pairs admin updates field",
+			kind: "max event attr pairs admin",
 			wantConfig: EventConfig{
-				SplitEventAttrs:           true,
-				MaxEventAttrValueLen:      defaultMaxEventAttrValueLen,
-				MaxPacketDataEventColumns: 3,
+				SplitEventAttrs:      true,
+				MaxEventAttrValueLen: defaultMaxEventAttrValueLen,
+				MaxEventAttrPairs:    3,
 			},
 		},
 	}
@@ -144,8 +145,8 @@ func TestEventConfigFieldSettersAccessControlled(cur realm, t *testing.T) {
 					SetSplitEventAttrs(cross(cur), false)
 				case "max event attr value len unauthorized":
 					SetMaxEventAttrValueLen(cross(cur), 8)
-				case "max packet data event columns unauthorized":
-					SetMaxPacketDataEventColumns(cross(cur), 3)
+				case "max event attr pairs unauthorized":
+					SetMaxEventAttrPairs(cross(cur), 3)
 				}
 			})
 		} else {
@@ -155,8 +156,8 @@ func TestEventConfigFieldSettersAccessControlled(cur realm, t *testing.T) {
 				SetSplitEventAttrs(cross(cur), false)
 			case "max event attr value len admin":
 				SetMaxEventAttrValueLen(cross(cur), 8)
-			case "max packet data event columns admin":
-				SetMaxPacketDataEventColumns(cross(cur), 3)
+			case "max event attr pairs admin":
+				SetMaxEventAttrPairs(cross(cur), 3)
 			}
 		}
 		assertEventConfigEqual(t, GetEventConfig(), tc.wantConfig)
@@ -177,22 +178,22 @@ func TestSetEventConfigRejectsInvalidValues(cur realm, t *testing.T) {
 			name: "object setter rejects zero max event attr value len",
 			kind: "object zero max event attr value len",
 			config: EventConfig{
-				SplitEventAttrs:           false,
-				MaxEventAttrValueLen:      0,
-				MaxPacketDataEventColumns: 3,
+				SplitEventAttrs:      false,
+				MaxEventAttrValueLen: 0,
+				MaxEventAttrPairs:    3,
 			},
 			wantPanic:  "max event attr value len must be positive",
 			wantConfig: DefaultEventConfig(),
 		},
 		{
-			name: "object setter rejects zero max packet data event columns",
-			kind: "object zero max packet data event columns",
+			name: "object setter rejects zero max event attr pairs",
+			kind: "object zero max event attr pairs",
 			config: EventConfig{
-				SplitEventAttrs:           true,
-				MaxEventAttrValueLen:      8,
-				MaxPacketDataEventColumns: 0,
+				SplitEventAttrs:      true,
+				MaxEventAttrValueLen: 8,
+				MaxEventAttrPairs:    0,
 			},
-			wantPanic:  "max packet data event columns must be positive",
+			wantPanic:  "max event attr pairs must be positive",
 			wantConfig: DefaultEventConfig(),
 		},
 		{
@@ -202,9 +203,9 @@ func TestSetEventConfigRejectsInvalidValues(cur realm, t *testing.T) {
 			wantConfig: DefaultEventConfig(),
 		},
 		{
-			name:       "field setter rejects zero max packet data event columns",
-			kind:       "field zero max packet data event columns",
-			wantPanic:  "max packet data event columns must be positive",
+			name:       "field setter rejects zero max event attr pairs",
+			kind:       "field zero max event attr pairs",
+			wantPanic:  "max event attr pairs must be positive",
 			wantConfig: DefaultEventConfig(),
 		},
 	}
@@ -215,12 +216,12 @@ func TestSetEventConfigRejectsInvalidValues(cur realm, t *testing.T) {
 			uassert.AbortsContains(t, cur, tc.wantPanic, func(cur realm) {
 				testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
 				switch tc.kind {
-				case "object zero max event attr value len", "object zero max packet data event columns":
+				case "object zero max event attr value len", "object zero max event attr pairs":
 					SetEventConfig(cross(cur), tc.config)
 				case "field zero max event attr value len":
 					SetMaxEventAttrValueLen(cross(cur), 0)
-				case "field zero max packet data event columns":
-					SetMaxPacketDataEventColumns(cross(cur), 0)
+				case "field zero max event attr pairs":
+					SetMaxEventAttrPairs(cross(cur), 0)
 				}
 			})
 			assertEventConfigEqual(t, GetEventConfig(), tc.wantConfig)
@@ -240,9 +241,9 @@ func TestEventConfigDrivesPacketDataAttrs(cur realm, t *testing.T) {
 		{
 			name: "split packet data",
 			config: EventConfig{
-				SplitEventAttrs:           true,
-				MaxEventAttrValueLen:      4,
-				MaxPacketDataEventColumns: 3,
+				SplitEventAttrs:      true,
+				MaxEventAttrValueLen: 4,
+				MaxEventAttrPairs:    3,
 			},
 			want: []string{
 				"packet_data_size", "6",
@@ -253,9 +254,9 @@ func TestEventConfigDrivesPacketDataAttrs(cur realm, t *testing.T) {
 		{
 			name: "unsplit packet data",
 			config: EventConfig{
-				SplitEventAttrs:           false,
-				MaxEventAttrValueLen:      4,
-				MaxPacketDataEventColumns: 3,
+				SplitEventAttrs:      false,
+				MaxEventAttrValueLen: 4,
+				MaxEventAttrPairs:    3,
 			},
 			want: []string{
 				"packet_data", "0x0001",
@@ -268,9 +269,9 @@ func TestEventConfigDrivesPacketDataAttrs(cur realm, t *testing.T) {
 			setEventConfig(tc.config)
 
 			packet := NewPacket(1, 2, []byte{0x00, 0x01}, 10)
-			attrs := packetEventBaseAttrs(packet)
+			attrs := packetSendEventAttrs(packet, types.Channel{}, types.Connection{})
 
-			assertStringSliceEqual(t, attrs[2:], tc.want)
+			assertStringSliceEqual(t, attrs[len(attrs)-len(tc.want):], tc.want)
 		})
 	}
 }
@@ -284,8 +285,8 @@ func assertEventConfigEqual(t *testing.T, got EventConfig, want EventConfig) {
 	if got.MaxEventAttrValueLen != want.MaxEventAttrValueLen {
 		t.Fatalf("MaxEventAttrValueLen: got %d want %d", got.MaxEventAttrValueLen, want.MaxEventAttrValueLen)
 	}
-	if got.MaxPacketDataEventColumns != want.MaxPacketDataEventColumns {
-		t.Fatalf("MaxPacketDataEventColumns: got %d want %d", got.MaxPacketDataEventColumns, want.MaxPacketDataEventColumns)
+	if got.MaxEventAttrPairs != want.MaxEventAttrPairs {
+		t.Fatalf("MaxEventAttrPairs: got %d want %d", got.MaxEventAttrPairs, want.MaxEventAttrPairs)
 	}
 }
 

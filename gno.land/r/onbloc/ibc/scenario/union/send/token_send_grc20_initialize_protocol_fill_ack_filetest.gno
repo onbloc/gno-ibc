@@ -60,9 +60,8 @@ func main(cur realm) {
 }
 
 func setupGRC20(cur realm) (*grc20.Token, *grc20.PrivateLedger, string) {
-	token, ledger := grc20.NewToken(0, cur, "Scenario GRC20", "SCN", 6)
-	grc20reg.Register(cross(cur), token, grc20Slug)
-	denom := cur.PkgPath() + "." + grc20Slug
+	token, ledger := grc20.NewToken("Scenario GRC20", "SCN", 6, 0, cur)
+	denom := grc20reg.Register(cross(cur), token, grc20Slug)
 
 	if err := ledger.Mint(senderAddr, 40); err != nil {
 		panic(err)
@@ -231,7 +230,7 @@ func (e mockError) Error() string { return string(e) }
 
 // Output:
 // [SCENARIO] 1. Register a local grc20 token (6 decimals) and mint 40 units to the sender
-// [INFO] registered grc20 denom: gno.land/r/onbloc/ibc/scenario/union/send.grc20-initialize-success
+// [INFO] registered grc20 denom: gno.land/r/onbloc/ibc/scenario/union/send.SCN
 // [INFO] sender grc20 balance: 40
 // [EXPECTED] sender grc20 balance should be 40 (freshly minted)
 //

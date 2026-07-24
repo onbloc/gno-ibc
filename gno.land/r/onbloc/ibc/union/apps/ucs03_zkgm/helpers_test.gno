@@ -1,4 +1,4 @@
-package zkgm
+package ucs03_zkgm
 
 import (
 	"testing"
@@ -46,10 +46,29 @@ type dummyImpl struct {
 	tokenBucketErr       error
 	channelBalance       *u256.Uint
 	channelBalanceErr    error
+	lockedTokenAmount    *u256.Uint
+	lockedTokenAmountErr error
 	lastBalanceChannelId types.ChannelId
 	lastBalancePath      *u256.Uint
 	lastBalanceBaseToken string
 	lastBalanceQuote     []byte
+
+	voucherApproveCalled  bool
+	voucherTransferCalled bool
+	voucherErr            error
+	lastVoucherDenom      string
+	lastVoucherSpender    address
+	lastVoucherTo         address
+	lastVoucherAmount     int64
+
+	voucherList       []VoucherInfo
+	voucherListErr    error
+	lastVoucherOffset int
+	lastVoucherCount  int
+	voucherInfo       VoucherInfo
+	voucherInfoErr    error
+	voucherSize       int
+	voucherSizeErr    error
 }
 
 var _ IApp = &dummyImpl{}
@@ -120,6 +139,22 @@ func (d *dummyImpl) Send(_ int, rlm realm, channelId types.ChannelId, timeoutTim
 	return core.NewPacket(channelId, 0, instruction.Operand, timeoutTimestamp)
 }
 
+func (d *dummyImpl) VoucherApprove(_ int, rlm realm, ibcDenom string, spender address, amount int64) error {
+	d.voucherApproveCalled = true
+	d.lastVoucherDenom = ibcDenom
+	d.lastVoucherSpender = spender
+	d.lastVoucherAmount = amount
+	return d.voucherErr
+}
+
+func (d *dummyImpl) VoucherTransfer(_ int, rlm realm, ibcDenom string, to address, amount int64) error {
+	d.voucherTransferCalled = true
+	d.lastVoucherDenom = ibcDenom
+	d.lastVoucherTo = to
+	d.lastVoucherAmount = amount
+	return d.voucherErr
+}
+
 type dummyReceiver struct{}
 
 func (d *dummyReceiver) OnZkgm(cur realm, env z.CallEnv) error {
@@ -141,6 +176,25 @@ func (d *dummyImpl) GetChannelBalanceV2(channelId types.ChannelId, path *u256.Ui
 	d.lastBalanceQuote = quoteToken
 
 	return d.channelBalance, d.channelBalanceErr
+}
+
+func (d *dummyImpl) GetLockedTokenAmount(denom string) (*u256.Uint, error) {
+	return d.lockedTokenAmount, d.lockedTokenAmountErr
+}
+
+func (d *dummyImpl) GetVoucherList(offset, count int) ([]VoucherInfo, error) {
+	d.lastVoucherOffset = offset
+	d.lastVoucherCount = count
+
+	return d.voucherList, d.voucherListErr
+}
+
+func (d *dummyImpl) GetVoucherInfo(ibcDenom string) (VoucherInfo, error) {
+	return d.voucherInfo, d.voucherInfoErr
+}
+
+func (d *dummyImpl) GetVoucherSize() (int, error) {
+	return d.voucherSize, d.voucherSizeErr
 }
 
 // resetZkgmForTest returns the proxy package state to a clean baseline. The
@@ -170,5 +224,5 @@ func installImplForTest(path string, target IApp) {
 }
 
 func newVoucherTokenForTest(cur realm, name string, symbol string) (*grc20.Token, *grc20.PrivateLedger) {
-	return grc20.NewToken(0, cur, name, symbol, 6)
+	return grc20.NewToken(name, symbol, 6, 0, cur)
 }

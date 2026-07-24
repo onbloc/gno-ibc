@@ -1,4 +1,4 @@
-package zkgm
+package ucs03_zkgm
 
 import (
 	z "gno.land/p/onbloc/ibc/union/zkgm"
@@ -15,5 +15,7 @@ func RegisterCoreApp(cur realm) {
 // keyed by its package path. The impl looks it up via store.GetReceiver during
 // call dispatch.
 func RegisterReceiver(cur realm, receiver z.Zkgmable) {
-	store.SetReceiver(0, cur, cur.Previous().PkgPath(), receiver)
+	receiverPkgPath := cur.Previous().PkgPath()
+	store.SetReceiver(0, cur, receiverPkgPath, receiver)
+	emitZkgmReceiverRegisteredEvent(receiverPkgPath)
 }

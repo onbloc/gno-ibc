@@ -497,8 +497,8 @@ func (c *client) saveConsensusState(height types.Height, consensusStateBytes []b
 }
 
 func (c *client) getConsensusState(height types.Height) ([]byte, bool) {
-	v, found := c.consensusByHeight.Get(string(height.Bytes()))
-	if !found {
+	v := c.consensusByHeight.Get(string(height.Bytes()))
+	if v == nil {
 		return nil, false
 	}
 
@@ -636,8 +636,8 @@ func (s *Store) saveConnection(connectionId types.ConnectionId, connection types
 }
 
 func (s *Store) getConnection(connectionId types.ConnectionId) (types.Connection, bool) {
-	v, found := s.connections.Get(connectionKey(connectionId))
-	if !found {
+	v := s.connections.Get(connectionKey(connectionId))
+	if v == nil {
 		return types.Connection{}, false
 	}
 
@@ -666,8 +666,8 @@ func (s *Store) saveChannel(channelId types.ChannelId, channel types.Channel) {
 }
 
 func (s *Store) getChannelEntry(channelId types.ChannelId) (*channelEntry, bool) {
-	v, found := s.channels.Get(channelKey(channelId))
-	if !found {
+	v := s.channels.Get(channelKey(channelId))
+	if v == nil {
 		return nil, false
 	}
 

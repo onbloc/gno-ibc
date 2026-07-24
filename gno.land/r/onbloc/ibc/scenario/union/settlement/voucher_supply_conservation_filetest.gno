@@ -131,7 +131,7 @@ func reportBalance(quoteToken, label string) {
 
 func conservation(quoteToken string) {
 	bal := zkgm.VoucherBalanceOf(quoteToken, holderAddr)
-	supply := grc20reg.MustGet(zkgm.ProxyPkgPath() + "." + quoteToken[len("ibc/"):]).TotalSupply()
+	supply := grc20reg.MustGet(zkgm.ProxyPkgPath() + ".GNOT").TotalSupply()
 	ufmt.Printf("[INFO] holder balance = %d, Σmint−Σburn = %d, conserved = %t\n", bal, expected, bal == expected)
 	ufmt.Printf("[INFO] token total supply = %d, Σmint−Σburn = %d, conserved = %t\n", supply, expected, supply == expected)
 	ufmt.Println("[EXPECTED] holder balance and token total supply should equal 100 + 50 − 80 = 70 (conserved)")

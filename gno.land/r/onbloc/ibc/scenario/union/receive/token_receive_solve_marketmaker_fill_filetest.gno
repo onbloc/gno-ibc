@@ -113,7 +113,7 @@ func fundMaker(cur realm, channelId types.ChannelId, quoteToken string, meta []b
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
 
-	token := grc20reg.MustGet(zkgm.ProxyPkgPath() + "." + quoteToken[len("ibc/"):])
+	token := grc20reg.MustGet(zkgm.ProxyPkgPath() + ".GNOT")
 	ufmt.Printf("[INFO] deployed token name/symbol/decimals: %s/%s/%d\n", token.GetName(), token.GetSymbol(), token.GetDecimals())
 	ufmt.Printf("[INFO] maker voucher balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, makerAddr))
 	ufmt.Println("[EXPECTED] deployed token should be Gno Token/GNOT/6 (matches the INITIALIZE metadata)")

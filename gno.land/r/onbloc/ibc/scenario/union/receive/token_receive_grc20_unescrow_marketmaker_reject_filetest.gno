@@ -71,9 +71,8 @@ func main(cur realm) {
 // issuer — and mints 40 units to the user. Kept separate from bootstrap/lock
 // because grc20.NewToken must run before any testing.SetRealm call.
 func setupGRC20(cur realm) (*grc20.Token, *grc20.PrivateLedger, string) {
-	token, ledger := grc20.NewToken(0, cur, "Scenario GRC20", "SCN", 6)
-	grc20reg.Register(cross(cur), token, grc20Slug)
-	denom := cur.PkgPath() + "." + grc20Slug
+	token, ledger := grc20.NewToken("Scenario GRC20", "SCN", 6, 0, cur)
+	denom := grc20reg.Register(cross(cur), token, grc20Slug)
 
 	if err := ledger.Mint(userAddr, 40); err != nil {
 		panic(err)
@@ -231,7 +230,7 @@ func (e mockError) Error() string { return string(e) }
 
 // Output:
 // [SCENARIO] 1. Register a local grc20 token and mint 40 units to the user
-// [INFO] registered grc20 denom: gno.land/r/onbloc/ibc/scenario/union/receive.grc20-happy
+// [INFO] registered grc20 denom: gno.land/r/onbloc/ibc/scenario/union/receive.SCN
 // [INFO] user grc20 balance: 40
 // [EXPECTED] user grc20 balance should be 40 (freshly minted)
 //
@@ -247,7 +246,7 @@ func (e mockError) Error() string { return string(e) }
 //
 // [SCENARIO] 4. Receive an under-quoted UNESCROW order -> maker-fill attempt fails closed and panics
 // [INFO] order BaseAmount=10, QuoteAmount=40 (under-quoted: base < quote)
-// [INFO] quote_token is the local grc20 denom itself: gno.land/r/onbloc/ibc/scenario/union/receive.grc20-happy
+// [INFO] quote_token is the local grc20 denom itself: gno.land/r/onbloc/ibc/scenario/union/receive.SCN
 // [INFO] protocolFillUnescrowV2 needs baseCovers=true, so this falls back to marketMakerFillV2
 // [INFO] marketMakerFillV2 requires the quote denom to be a registered voucher (HasVoucher)
 // [INFO] a local grc20 denom is never a voucher, so the maker-fill attempt fails closed (ACK_ERR_ONLY_MAKER)

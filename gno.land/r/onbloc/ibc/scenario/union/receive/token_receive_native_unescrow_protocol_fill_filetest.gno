@@ -7,6 +7,8 @@ package receive
 // packet whose base covers the quote. The protocol-fill unescrow decreases the
 // channel balance and hands the escrowed native coins back to the receiver via
 // the banker, so the receiver's on-chain ugnot balance must actually increase.
+// The active escrow amount is represented by the channel balance; the proxy's
+// banker balance confirms the native coin custody and release.
 
 import (
 	"chain"

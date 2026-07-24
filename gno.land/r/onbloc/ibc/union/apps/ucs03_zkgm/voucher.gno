@@ -36,6 +36,33 @@ func NewVoucher(token *grc20.Token, ledger *grc20.PrivateLedger, originDecimals 
 	return &Voucher{token: token, ledger: ledger, originDecimals: originDecimals}
 }
 
+// VoucherInfo is a read-only snapshot of a wrapped voucher's grc20 identity
+// for the voucher-list getter. It carries only scalar fields copied out of
+// Voucher/Token — no token/ledger handles — so listing vouchers never hands
+// out the mint/burn capability that *Voucher.Ledger() exposes.
+type VoucherInfo struct {
+	Denom          string
+	Name           string
+	Symbol         string
+	OriginDecimals uint8
+	LedgerDecimals uint8
+	TotalSupply    int64
+}
+
+// NewVoucherInfo is a crossing-safe constructor,
+// so the impl realm (and test doubles) can build one without tripping the
+// foreign-composite-literal rule.
+func NewVoucherInfo(denom, name, symbol string, originDecimals, ledgerDecimals uint8, totalSupply int64) VoucherInfo {
+	return VoucherInfo{
+		Denom:          denom,
+		Name:           name,
+		Symbol:         symbol,
+		OriginDecimals: originDecimals,
+		LedgerDecimals: ledgerDecimals,
+		TotalSupply:    totalSupply,
+	}
+}
+
 // Token returns the read-only token handle (safe: balances, metadata).
 func (v *Voucher) Token() *grc20.Token { return v.token }
 

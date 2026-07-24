@@ -80,3 +80,159 @@ func TestGetChannelBalanceV2MissingKey(t *testing.T) {
 		t.Fatal("missing channel balance must return nil")
 	}
 }
+
+func TestGetVoucherListReturnsAllRegisteredVouchers(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	got, err := v.GetVoucherList(0, 10)
+	uassert.NoError(t, err)
+	uassert.Equal(t, 0, len(got))
+
+	rx := testAddress("voucher-list-rx")
+	cases := []struct {
+		name           string
+		denom          string
+		tokenName      string
+		symbol         string
+		originDecimals uint8
+		mintAmount     *u256.Uint
+		wantLedgerDec  uint8
+		wantSupply     int64
+	}{
+		// decimals == canonicalDecimals: no ledger downscale, TotalSupply matches the minted amount.
+		{"decimals at canonical cap", "ibc/list-a", "Alpha", "GVLISTA", 6, u256.NewUint(100), 6, 100},
+		// decimals > canonicalDecimals: ledger is capped to 6, so 500 origin units mint as 5 ledger units.
+		{"decimals above canonical cap", "ibc/list-b", "Beta", "GVLISTB", 8, u256.NewUint(500), 6, 5},
+	}
+
+	for _, tc := range cases {
+		uassert.NoError(t, v.mintVoucher(0, cur, tc.denom, [32]byte{}, tc.tokenName, tc.symbol, tc.originDecimals, rx, tc.mintAmount))
+	}
+
+	got, err = v.GetVoucherList(0, len(cases))
+	uassert.NoError(t, err)
+	uassert.Equal(t, len(cases), len(got))
+
+	byDenom := map[string]zkgm.VoucherInfo{}
+	for _, info := range got {
+		byDenom[info.Denom] = info
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			info, ok := byDenom[tc.denom]
+			uassert.True(t, ok)
+			uassert.Equal(t, tc.tokenName, info.Name)
+			uassert.Equal(t, tc.symbol, info.Symbol)
+			uassert.Equal(t, tc.originDecimals, info.OriginDecimals)
+			uassert.Equal(t, tc.wantLedgerDec, info.LedgerDecimals)
+			uassert.Equal(t, tc.wantSupply, info.TotalSupply)
+		})
+	}
+}
+
+// GetVoucherList pages over denoms in sorted order, since the vouchers tree
+// only ever grows (no deletion) and an unbounded single call would let the
+// response/gas cost grow unboundedly with usage.
+func TestGetVoucherListPagination(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+	rx := testAddress("voucher-page-rx")
+
+	denoms := []string{"ibc/page-a", "ibc/page-b", "ibc/page-c"}
+	symbols := []string{"GVLPGA", "GVLPGB", "GVLPGC"}
+	for i, denom := range denoms {
+		uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, denom, symbols[i], 6, rx, u256.NewUint(1)))
+	}
+
+	cases := []struct {
+		name       string
+		offset     int
+		count      int
+		wantDenoms []string
+	}{
+		{"first page", 0, 2, []string{"ibc/page-a", "ibc/page-b"}},
+		{"second page", 2, 2, []string{"ibc/page-c"}},
+		{"offset past end returns empty", 3, 2, []string{}},
+		{"zero count returns empty", 0, 0, []string{}},
+		{"count beyond remaining is clamped", 0, 10, []string{"ibc/page-a", "ibc/page-b", "ibc/page-c"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := v.GetVoucherList(tc.offset, tc.count)
+			uassert.NoError(t, err)
+			uassert.Equal(t, len(tc.wantDenoms), len(got))
+			for i, denom := range tc.wantDenoms {
+				uassert.Equal(t, denom, got[i].Denom)
+			}
+		})
+	}
+}
+
+func TestGetVoucherInfo(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+	rx := testAddress("voucher-info-rx")
+
+	cases := []struct {
+		name           string
+		denom          string
+		tokenName      string
+		symbol         string
+		originDecimals uint8
+		mintAmount     *u256.Uint
+		wantLedgerDec  uint8
+		wantSupply     int64
+	}{
+		{"decimals at canonical cap", "ibc/info-a", "Alpha", "GVINFOA", 6, u256.NewUint(100), 6, 100},
+		{"decimals above canonical cap", "ibc/info-b", "Beta", "GVINFOB", 8, u256.NewUint(500), 6, 5},
+	}
+
+	for _, tc := range cases {
+		uassert.NoError(t, v.mintVoucher(0, cur, tc.denom, [32]byte{}, tc.tokenName, tc.symbol, tc.originDecimals, rx, tc.mintAmount))
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			info, err := v.GetVoucherInfo(tc.denom)
+			uassert.NoError(t, err)
+			uassert.Equal(t, tc.denom, info.Denom)
+			uassert.Equal(t, tc.tokenName, info.Name)
+			uassert.Equal(t, tc.symbol, info.Symbol)
+			uassert.Equal(t, tc.originDecimals, info.OriginDecimals)
+			uassert.Equal(t, tc.wantLedgerDec, info.LedgerDecimals)
+			uassert.Equal(t, tc.wantSupply, info.TotalSupply)
+		})
+	}
+}
+
+func TestGetVoucherInfoMissingDenom(t *testing.T) {
+	v := newTestImpl()
+
+	_, err := v.GetVoucherInfo("ibc/missing-info")
+	uassert.ErrorContains(t, err, errVoucherNotFound)
+}
+
+// GetVoucherSize gives callers the total key count needed to drive
+// GetVoucherList's offset/count pagination to completion.
+func TestGetVoucherSize(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+	rx := testAddress("voucher-size-rx")
+
+	got, err := v.GetVoucherSize()
+	uassert.NoError(t, err)
+	uassert.Equal(t, 0, got)
+
+	denoms := []string{"ibc/size-a", "ibc/size-b", "ibc/size-c"}
+	symbols := []string{"GVSIZEA", "GVSIZEB", "GVSIZEC"}
+	for i, denom := range denoms {
+		uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, denom, symbols[i], 6, rx, u256.NewUint(1)))
+
+		got, err = v.GetVoucherSize()
+		uassert.NoError(t, err)
+		uassert.Equal(t, i+1, got)
+	}
+}

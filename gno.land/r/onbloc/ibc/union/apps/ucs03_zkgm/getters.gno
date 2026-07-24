@@ -20,3 +20,20 @@ func GetChannelBalanceV2(channelId types.ChannelId, path *u256.Uint, baseToken s
 func GetNativeEscrowTotal(denom string) (*u256.Uint, error) {
 	return mustGetImpl().GetNativeEscrowTotal(denom)
 }
+
+// GetVoucherList returns a page of up to count wrapped voucher tokens starting
+// at offset, ordered by denom.
+func GetVoucherList(offset, count int) ([]VoucherInfo, error) {
+	return mustGetImpl().GetVoucherList(offset, count)
+}
+
+// GetVoucherInfo returns a snapshot of the single wrapped voucher registered for ibcDenom.
+func GetVoucherInfo(ibcDenom string) (VoucherInfo, error) {
+	return mustGetImpl().GetVoucherInfo(ibcDenom)
+}
+
+// GetVoucherSize returns the total number of registered vouchers, i.e. the
+// key count callers need to drive GetVoucherList's offset/count pagination.
+func GetVoucherSize() (int, error) {
+	return mustGetImpl().GetVoucherSize()
+}

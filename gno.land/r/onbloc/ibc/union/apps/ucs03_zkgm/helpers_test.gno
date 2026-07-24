@@ -60,6 +60,15 @@ type dummyImpl struct {
 	lastVoucherSpender    address
 	lastVoucherTo         address
 	lastVoucherAmount     int64
+
+	voucherList       []VoucherInfo
+	voucherListErr    error
+	lastVoucherOffset int
+	lastVoucherCount  int
+	voucherInfo       VoucherInfo
+	voucherInfoErr    error
+	voucherSize       int
+	voucherSizeErr    error
 }
 
 var _ IApp = &dummyImpl{}
@@ -171,6 +180,21 @@ func (d *dummyImpl) GetChannelBalanceV2(channelId types.ChannelId, path *u256.Ui
 
 func (d *dummyImpl) GetNativeEscrowTotal(denom string) (*u256.Uint, error) {
 	return d.nativeEscrowTotal, d.nativeEscrowTotalErr
+}
+
+func (d *dummyImpl) GetVoucherList(offset, count int) ([]VoucherInfo, error) {
+	d.lastVoucherOffset = offset
+	d.lastVoucherCount = count
+
+	return d.voucherList, d.voucherListErr
+}
+
+func (d *dummyImpl) GetVoucherInfo(ibcDenom string) (VoucherInfo, error) {
+	return d.voucherInfo, d.voucherInfoErr
+}
+
+func (d *dummyImpl) GetVoucherSize() (int, error) {
+	return d.voucherSize, d.voucherSizeErr
 }
 
 // resetZkgmForTest returns the proxy package state to a clean baseline. The

@@ -87,3 +87,75 @@ func TestGetNativeEscrowTotal_PropagatesImplError(cur realm, t *testing.T) {
 		t.Fatal("missing native escrow total must return nil")
 	}
 }
+
+func TestGetVoucherList_DelegatesToImpl(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	want := []VoucherInfo{
+		NewVoucherInfo("ibc/denom1", "Foo", "FOO", 6, 6, 100),
+	}
+	target := &dummyImpl{voucherList: want}
+	installImplForTest(testImplPathA, target)
+
+	got, err := GetVoucherList(2, 5)
+	uassert.NoError(t, err)
+	uassert.Equal(t, 1, len(got))
+	uassert.Equal(t, "ibc/denom1", got[0].Denom)
+	uassert.Equal(t, "FOO", got[0].Symbol)
+	uassert.Equal(t, 2, target.lastVoucherOffset)
+	uassert.Equal(t, 5, target.lastVoucherCount)
+}
+
+func TestGetVoucherList_PropagatesImplError(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+	target := &dummyImpl{voucherListErr: errDummyGetter}
+	installImplForTest(testImplPathA, target)
+
+	got, err := GetVoucherList(0, 10)
+	uassert.ErrorIs(t, err, errDummyGetter)
+	if got != nil {
+		t.Fatal("missing voucher list must return nil")
+	}
+}
+
+func TestGetVoucherInfo_DelegatesToImpl(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	want := NewVoucherInfo("ibc/denom1", "Foo", "FOO", 6, 6, 100)
+	target := &dummyImpl{voucherInfo: want}
+	installImplForTest(testImplPathA, target)
+
+	got, err := GetVoucherInfo("ibc/denom1")
+	uassert.NoError(t, err)
+	uassert.Equal(t, "ibc/denom1", got.Denom)
+	uassert.Equal(t, "FOO", got.Symbol)
+}
+
+func TestGetVoucherInfo_PropagatesImplError(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+	target := &dummyImpl{voucherInfoErr: errDummyGetter}
+	installImplForTest(testImplPathA, target)
+
+	_, err := GetVoucherInfo("ibc/missing")
+	uassert.ErrorIs(t, err, errDummyGetter)
+}
+
+func TestGetVoucherSize_DelegatesToImpl(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	target := &dummyImpl{voucherSize: 3}
+	installImplForTest(testImplPathA, target)
+
+	got, err := GetVoucherSize()
+	uassert.NoError(t, err)
+	uassert.Equal(t, 3, got)
+}
+
+func TestGetVoucherSize_PropagatesImplError(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+	target := &dummyImpl{voucherSizeErr: errDummyGetter}
+	installImplForTest(testImplPathA, target)
+
+	_, err := GetVoucherSize()
+	uassert.ErrorIs(t, err, errDummyGetter)
+}

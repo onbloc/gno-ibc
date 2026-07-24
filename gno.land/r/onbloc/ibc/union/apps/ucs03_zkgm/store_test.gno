@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	u256 "gno.land/p/gnoswap/uint256"
+	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
 	types "gno.land/p/onbloc/ibc/union/types"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
@@ -345,6 +346,101 @@ func TestVoucherStore(cur realm, t *testing.T) {
 	uassert.True(t, ok)
 	uassert.True(t, s.HasVoucher("ibc/store-voucher"))
 	uassert.True(t, got == vou)
+}
+
+func TestStoreGetVoucherList(cur realm, t *testing.T) {
+	s := NewStore()
+
+	uassert.Equal(t, 0, len(s.GetVoucherList(0, 10)))
+
+	cases := []struct {
+		name       string
+		denom      string
+		tokenName  string
+		symbol     string
+		mintAmount int64
+		wantSupply int64
+	}{
+		{"alpha voucher with balance", "ibc/store-list-a", "Alpha", "ALPHA", 42, 42},
+		{"beta voucher with no mint yet", "ibc/store-list-b", "Beta", "BETA", 0, 0},
+	}
+
+	for _, tc := range cases {
+		token, ledger := newVoucherTokenForTest(cur, tc.tokenName, tc.symbol)
+		s.SetVoucher(0, cur, tc.denom, NewVoucher(token, ledger, 6))
+		if tc.mintAmount > 0 {
+			uassert.NoError(t, ledger.Mint(address(testutils.TestAddress("list-rx")), tc.mintAmount))
+		}
+	}
+
+	got := s.GetVoucherList(0, len(cases))
+	uassert.Equal(t, len(cases), len(got))
+
+	byDenom := map[string]VoucherInfo{}
+	for _, info := range got {
+		byDenom[info.Denom] = info
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			info, ok := byDenom[tc.denom]
+			uassert.True(t, ok)
+			uassert.Equal(t, tc.tokenName, info.Name)
+			uassert.Equal(t, tc.symbol, info.Symbol)
+			uassert.Equal(t, tc.wantSupply, info.TotalSupply)
+		})
+	}
+}
+
+// GetVoucherList pages by offset/count in denom-sorted order (bptree's
+// natural key order), since the vouchers tree only ever grows and an
+// unbounded single call would let the response/gas cost grow with usage.
+func TestStoreGetVoucherListPagination(cur realm, t *testing.T) {
+	s := NewStore()
+
+	denoms := []string{"ibc/page-a", "ibc/page-b", "ibc/page-c"}
+	for _, denom := range denoms {
+		token, ledger := newVoucherTokenForTest(cur, denom, "SYM")
+		s.SetVoucher(0, cur, denom, NewVoucher(token, ledger, 6))
+	}
+
+	cases := []struct {
+		name       string
+		offset     int
+		count      int
+		wantDenoms []string
+	}{
+		{"first page", 0, 2, []string{"ibc/page-a", "ibc/page-b"}},
+		{"second page", 2, 2, []string{"ibc/page-c"}},
+		{"offset past end returns empty", 3, 2, []string{}},
+		{"zero count returns empty", 0, 0, []string{}},
+		{"count beyond remaining is clamped", 0, 10, []string{"ibc/page-a", "ibc/page-b", "ibc/page-c"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := s.GetVoucherList(tc.offset, tc.count)
+			uassert.Equal(t, len(tc.wantDenoms), len(got))
+			for i, denom := range tc.wantDenoms {
+				uassert.Equal(t, denom, got[i].Denom)
+			}
+		})
+	}
+}
+
+// GetVoucherSize gives callers the total key count needed to drive
+// GetVoucherList's offset/count pagination to completion.
+func TestStoreGetVoucherSize(cur realm, t *testing.T) {
+	s := NewStore()
+
+	uassert.Equal(t, 0, s.GetVoucherSize())
+
+	denoms := []string{"ibc/size-a", "ibc/size-b", "ibc/size-c"}
+	for i, denom := range denoms {
+		token, ledger := newVoucherTokenForTest(cur, denom, "SYM")
+		s.SetVoucher(0, cur, denom, NewVoucher(token, ledger, 6))
+		uassert.Equal(t, i+1, s.GetVoucherSize())
+	}
 }
 
 func TestReceiver(cur realm, t *testing.T) {

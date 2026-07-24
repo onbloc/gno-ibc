@@ -349,12 +349,6 @@ func DecodeTokenInitializer(data []byte) (TokenInitializer, error) {
 	}, nil
 }
 
-// DecodeTokenInitializerFromMetadata extracts the ZkgmERC20 initializer from
-// TokenMetadata without hiding malformed calldata as zero-value metadata.
-func DecodeTokenInitializerFromMetadata(meta TokenMetadata) (TokenInitializer, error) {
-	return DecodeTokenInitializer(meta.Initializer)
-}
-
 func EncodeTokenMetadata(m TokenMetadata) ([]byte, error) {
 	return abi.Encode(TokenMetadataSchema, []any{
 		m.Implementation,

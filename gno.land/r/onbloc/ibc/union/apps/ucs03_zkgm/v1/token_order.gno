@@ -251,7 +251,7 @@ func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.Channel
 	if canDeploy && metadata != nil {
 		image = z.MetadataImage(*metadata)
 
-		ti, err := z.DecodeTokenInitializerFromMetadata(*metadata)
+		ti, err := z.DecodeTokenInitializer(metadata.Initializer)
 		if err != nil {
 			// Malformed non-empty calldata mirrors an EVM proxy initialization
 			// revert. Gno deliberately rejects an empty initializer too instead
@@ -696,7 +696,7 @@ func (v *ucs03ZkgmV1) verifyMetadataDecimals(baseDenom string, metadata []byte) 
 		return err
 	}
 
-	ti, err := z.DecodeTokenInitializerFromMetadata(meta)
+	ti, err := z.DecodeTokenInitializer(meta.Initializer)
 	if err != nil {
 		return err
 	}

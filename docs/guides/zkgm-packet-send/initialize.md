@@ -1,7 +1,49 @@
 # TokenOrderV2 INITIALIZE Send
 
 Use `INITIALIZE` only for the first native-token send over a channel. It carries
-the `TokenMetadata` that creates the wrapped ERC20 on Union.
+the `TokenMetadata` that creates the wrapped token on Union.
+
+The original worked example below targets EVM Union. For CosmWasm Union, use
+the platform-specific values in the next section instead of EVM addresses and
+Solidity initializer calldata.
+
+## CosmWasm Union
+
+The local `union-devnet-1` E2E path uses CW20 metadata:
+
+- `Receiver` and `QuoteToken` are the ASCII bytes of their `union1...` Bech32
+  addresses, not raw 20-byte EVM addresses.
+- `Implementation` is the JSON bytes of
+  `{"admin":"<zkgm-admin>","code_id":<cw20-code-id>}`.
+- `Initializer` is the JSON bytes of the frissitheto CW20 init message:
+
+```json
+{
+  "init": {
+    "name": "<name>",
+    "symbol": "<symbol>",
+    "decimals": 6,
+    "initial_balances": [],
+    "mint": {
+      "minter": "<token-minter-address>",
+      "cap": null
+    },
+    "marketing": null
+  }
+}
+```
+
+ABI-encode those two byte arrays as `TokenMetadata`, compute
+`keccak256(metadata)`, and query the destination ZKGM contract with
+`predict_wrapped_token_v2` using the packet path, destination channel, base
+token bytes, and metadata hash. Put the returned `wrapped_token` Bech32 string
+into `QuoteToken` as ASCII bytes.
+
+The successful local PacketSend → Recv → Ack run used this format. An EVM
+initializer selector or a raw 20-byte receiver produces an invalid CosmWasm
+operand.
+
+## EVM Union
 
 The 2026-05-20 ugnot `INITIALIZE` at block 63 followed this procedure.
 

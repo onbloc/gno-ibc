@@ -1,0 +1,7 @@
+.git
+.cache
+.tmp
+**/target
+**/node_modules
+**/*.log
+**/coverage.out

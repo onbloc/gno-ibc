@@ -1,0 +1,127 @@
+name: Gno Union EVM full cycle
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      erc20_to_gno:
+        description: Include the EVM ERC20 to Gno packet phase
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gno-union-evm-full-cycle
+  cancel-in-progress: false
+
+jobs:
+  full-cycle:
+    environment: union-relayer-e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Check out gno-ibc
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: gno-ibc
+
+      - name: Check out pinned union-voyager
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: onbloc/union-voyager
+          ref: 82c70ec1ff84ec457e976ad94f38a5d5783b7836
+          path: union-voyager
+
+      - name: Install Foundry
+        if: github.event_name == 'pull_request' || inputs.erc20_to_gno
+        uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1.9.0
+
+      - name: Install Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.26.2"
+          cache: false
+
+      - name: Install pinned gnokey
+        if: github.event_name == 'pull_request' || inputs.erc20_to_gno
+        working-directory: gno-ibc
+        run: make install-gno
+
+      - name: Write private runner environment
+        working-directory: gno-ibc
+        env:
+          UNION_CHAIN_ID: ${{ vars.UNION_CHAIN_ID }}
+          EVM_CHAIN_ID: ${{ vars.EVM_CHAIN_ID }}
+          GNO_CHAIN_ID: ${{ vars.GNO_CHAIN_ID }}
+          UNION_IBC_HOST_CONTRACT: ${{ vars.UNION_IBC_HOST_CONTRACT }}
+          EVM_IBC_HANDLER: ${{ vars.EVM_IBC_HANDLER }}
+          EVM_MULTICALL: ${{ vars.EVM_MULTICALL }}
+          EVM_COMETBLS_CLIENT_IMPL: ${{ vars.EVM_COMETBLS_CLIENT_IMPL }}
+          EVM_PROOF_LENS_CLIENT_IMPL: ${{ vars.EVM_PROOF_LENS_CLIENT_IMPL }}
+          GNO_IBC_CORE_REALM: ${{ vars.GNO_IBC_CORE_REALM }}
+          GNO_ZKGM_PORT: ${{ vars.GNO_ZKGM_PORT }}
+          EVM_ZKGM_CONTRACT: ${{ vars.EVM_ZKGM_CONTRACT }}
+          GALOIS_PROVER_ENDPOINT: ${{ vars.GALOIS_PROVER_ENDPOINT }}
+          EVM_TEST_ERC20: ${{ vars.EVM_TEST_ERC20 }}
+          GNO_RECIPIENT: ${{ vars.GNO_RECIPIENT }}
+          EVM_TEST_AMOUNT: ${{ vars.EVM_TEST_AMOUNT }}
+          UNION_RPC_URL: ${{ secrets.UNION_RPC_URL }}
+          EVM_RPC_URL: ${{ secrets.EVM_RPC_URL }}
+          GNO_RPC_URL: ${{ secrets.GNO_RPC_URL }}
+          GNO_TX_INDEXER_RPC_URL: ${{ secrets.GNO_TX_INDEXER_RPC_URL }}
+          VOYAGER_DATABASE_URL: ${{ secrets.VOYAGER_DATABASE_URL }}
+          TRUSTED_MPT_PRIVATE_KEY: ${{ secrets.TRUSTED_MPT_PRIVATE_KEY }}
+          UNION_PRIVATE_KEY: ${{ secrets.UNION_PRIVATE_KEY }}
+          EVM_PRIVATE_KEY: ${{ secrets.EVM_PRIVATE_KEY }}
+          GNO_PRIVATE_KEY: ${{ secrets.GNO_PRIVATE_KEY }}
+        run: |
+          umask 077
+          install -d -m 700 "${{ github.workspace }}/artifacts"
+          printf '%s\n' union-channel-e2e-artifacts \
+            >"${{ github.workspace }}/artifacts/.union-channel-e2e-artifacts"
+          printf '{"run_id":"%s","run_attempt":"%s"}\n' \
+            "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" \
+            >"${{ github.workspace }}/artifacts/workflow-run.json"
+          variables=(
+            UNION_CHAIN_ID EVM_CHAIN_ID GNO_CHAIN_ID UNION_IBC_HOST_CONTRACT
+            EVM_IBC_HANDLER EVM_MULTICALL EVM_COMETBLS_CLIENT_IMPL
+            EVM_PROOF_LENS_CLIENT_IMPL GNO_IBC_CORE_REALM GNO_ZKGM_PORT
+            EVM_ZKGM_CONTRACT GALOIS_PROVER_ENDPOINT EVM_TEST_ERC20
+            GNO_RECIPIENT EVM_TEST_AMOUNT UNION_RPC_URL EVM_RPC_URL GNO_RPC_URL
+            GNO_TX_INDEXER_RPC_URL VOYAGER_DATABASE_URL TRUSTED_MPT_PRIVATE_KEY
+            UNION_PRIVATE_KEY EVM_PRIVATE_KEY GNO_PRIVATE_KEY
+          )
+          for name in "${variables[@]}"; do
+            printf '%s=%q\n' "$name" "${!name}"
+          done >e2e/union/.env
+          printf '%s\n' \
+            "UNION_VOYAGER_DIR=${{ github.workspace }}/union-voyager" \
+            'UNION_VOYAGER_REVISION=82c70ec1ff84ec457e976ad94f38a5d5783b7836' \
+            "E2E_ARTIFACT_DIR=${{ github.workspace }}/artifacts" \
+            "E2E_STATE_FILE=${{ github.workspace }}/artifacts/state.json" \
+            >>e2e/union/.env
+
+      - name: Establish fresh channel
+        working-directory: gno-ibc
+        run: e2e/union/run-channel-e2e.sh --apply
+
+      - name: Verify completed resume
+        working-directory: gno-ibc
+        run: e2e/union/run-channel-e2e.sh --resume
+
+      - name: Verify packet scenarios
+        if: github.event_name == 'pull_request' || inputs.erc20_to_gno
+        working-directory: gno-ibc
+        run: e2e/union/run-channel-e2e.sh --resume --apply --erc20-to-gno --amount-boundaries --gno-to-evm
+
+      - name: Upload sanitized artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gno-union-evm-full-cycle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts
+          if-no-files-found: warn
+          retention-days: 7

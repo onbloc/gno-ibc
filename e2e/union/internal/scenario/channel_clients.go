@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
-	"strconv"
-	"strings"
 
 	"github.com/onbloc/gno-ibc/e2e/union/internal/state"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/voyager"
@@ -129,12 +127,4 @@ func (r *Runner) verifyClientRelations(ctx context.Context) error {
 		Chain: r.cfg.EVMChainID, L2Chain: r.cfg.GnoChainID,
 		ID: s.Clients.EVMGno, L1: s.Clients.EVMUnion, L2: s.Clients.UnionGno,
 	})
-}
-
-func joinIDs(ids []int64) string {
-	values := make([]string, len(ids))
-	for i, id := range ids {
-		values[i] = strconv.FormatInt(id, 10)
-	}
-	return strings.Join(values, ",")
 }

@@ -16,7 +16,7 @@ func GetChannelBalanceV2(channelId types.ChannelId, path *u256.Uint, baseToken s
 	return mustGetImpl().GetChannelBalanceV2(channelId, path, baseToken, quoteToken)
 }
 
-// GetNativeEscrowTotal returns the total native coin tracked as escrowed for denom.
-func GetNativeEscrowTotal(denom string) (*u256.Uint, error) {
-	return mustGetImpl().GetNativeEscrowTotal(denom)
+// GetLockedTokenAmount returns the total terminally locked base-token amount for denom.
+func GetLockedTokenAmount(denom string) (*u256.Uint, error) {
+	return mustGetImpl().GetLockedTokenAmount(denom)
 }

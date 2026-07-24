@@ -529,7 +529,7 @@ func (v *ucs03ZkgmV1) settleEscrowedV2(_ int, rlm realm, sourceChannelId types.C
 //   - IBC voucher (ibc/): supply-burned via burnVoucher from proxy escrow.
 //   - Native coin: supply cannot be destroyed; coins stay in the proxy banker
 //     balance and are tracked in locked-base accounting instead of the
-//     in-flight native escrow total, since burn settlement is a terminal
+//     channel escrow balance, since burn settlement is a terminal
 //     disposition (like release/refund), not an ongoing escrow.
 //   - GRC20: same as native — no mint/burn capability over foreign tokens;
 //     balance stays at the proxy and is tracked in locked-base accounting.
@@ -558,13 +558,11 @@ func (v *ucs03ZkgmV1) burnEscrowedV2(_ int, rlm realm, sourceChannelId types.Cha
 		}
 	case NATIVE_COIN:
 		// Supply cannot be destroyed: permanently lock the proxy-held balance and
-		// leave the in-flight native escrow total, since burn settlement resolves
-		// the escrow same as release/refund.
+		// remove it from channel escrow accounting.
 		v.store.AddLockedTokenAmount(0, rlm, baseDenom, order.BaseAmount)
-		v.store.SubNativeEscrowTotal(0, rlm, baseDenom, order.BaseAmount)
 	case GRC20_TOKEN:
 		// No mint/burn capability over a foreign GRC20: same lock accounting as
-		// native, minus the native-only escrow-total decrement.
+		// native.
 		v.store.AddLockedTokenAmount(0, rlm, baseDenom, order.BaseAmount)
 	}
 
@@ -586,7 +584,6 @@ func (v *ucs03ZkgmV1) localTokenEscrow(_ int, rlm realm, denom string, sender ad
 		if err := funds.sub(denom, amount); err != nil {
 			return err
 		}
-		v.store.AddNativeEscrowTotal(0, rlm, denom, amount)
 		return nil
 	}
 
@@ -608,7 +605,6 @@ func (v *ucs03ZkgmV1) localTokenUnescrow(_ int, rlm realm, denom string, recipie
 		if err := v.sendNative(0, rlm, denom, recipient, amount); err != nil {
 			return err
 		}
-		v.store.SubNativeEscrowTotal(0, rlm, denom, amount)
 		return nil
 	}
 

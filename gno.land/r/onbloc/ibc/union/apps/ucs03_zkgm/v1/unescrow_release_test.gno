@@ -43,9 +43,6 @@ func TestTokenOrderExecuteUnescrowReleasesNativeToReceiver(cur realm, t *testing
 	// slot, so seed the same (ugnot, wrapped) pair.
 	balanceKey := ChannelBalanceKeyV2(destChan, path, []byte("ugnot"), []byte(quoteWrapped))
 	testStore.SetChannelBalanceV2(0, cur, balanceKey, u256.NewUint(40))
-	// Seed as if a prior ESCROW already put this under custody; executeTokenOrderV2
-	// below does the actual SubNativeEscrowTotal we're testing.
-	testStore.AddNativeEscrowTotal(0, cur, "ugnot", u256.NewUint(40))
 
 	escrowAcct := cur.Address() // sendNative draws from rlm.Address()
 	testing.IssueCoins(escrowAcct, chain.NewCoins(chain.NewCoin("ugnot", 40)))
@@ -75,9 +72,4 @@ func TestTokenOrderExecuteUnescrowReleasesNativeToReceiver(cur realm, t *testing
 	bal, ok := testStore.GetChannelBalanceV2(balanceKey)
 	uassert.True(t, ok)
 	uassert.True(t, bal.IsZero())
-
-	// SubNativeEscrowTotal released exactly the seeded escrow.
-	nativeEscrow, ok := testStore.GetNativeEscrowTotal("ugnot")
-	uassert.True(t, ok)
-	uassert.True(t, nativeEscrow.IsZero())
 }

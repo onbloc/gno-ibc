@@ -80,6 +80,7 @@ func TestTokenOrderAckMarketMakerBurnAddressBurnsEscrowedVoucher(cur realm, t *t
 // channel balance (matching union's accounting) and leaves the native locked in
 // the proxy — no coins are shipped to the burn address.
 func TestTokenOrderAckMarketMakerBurnAddressLocksNative(cur realm, t *testing.T) {
+	testStore = newMockStore()
 	v := newTestImpl()
 
 	channelId := types.ChannelId(12)
@@ -760,6 +761,7 @@ func TestTokenOrderExecuteUnescrowChannelBalanceUnderflow(cur realm, t *testing.
 }
 
 func TestTokenOrderExecuteUnescrowNativeFeeDistribution(cur realm, t *testing.T) {
+	testStore = newMockStore()
 	v := newTestImpl()
 
 	const destChan = types.ChannelId(41)
@@ -1174,15 +1176,15 @@ func TestIsZeroImage(t *testing.T) {
 
 func TestLocalTokenEscrow(cur realm, t *testing.T) {
 	cases := []struct {
-		name          string
-		denom         string
-		sender        address
-		funds         *funds
-		seedSymbol    string
-		amount        *u256.Uint
-		wantErr       string
-		wantFundsLeft bool
-		wantEscrowBal int64
+		name             string
+		denom            string
+		sender           address
+		funds            *funds
+		seedSymbol       string
+		amount           *u256.Uint
+		wantErr          string
+		wantFundsLeft    bool
+		wantEscrowBal    int64
 	}{
 		{
 			name:          "native funds deduct",

@@ -47,6 +47,7 @@ type IAppTransfer interface {
 type IAppGetter interface {
 	GetTokenBucket(denom string) (*tb.TokenBucket, error)
 	GetChannelBalanceV2(channelId types.ChannelId, path *u256.Uint, baseToken string, quoteToken []byte) (*u256.Uint, error)
+	GetLockedTokenAmount(denom string) (*u256.Uint, error)
 	GetVoucherList(offset, count int) ([]VoucherInfo, error)
 	GetVoucherSize() (int, error)
 	GetVoucherInfo(ibcDenom string) (VoucherInfo, error)

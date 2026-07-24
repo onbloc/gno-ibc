@@ -16,6 +16,11 @@ func GetChannelBalanceV2(channelId types.ChannelId, path *u256.Uint, baseToken s
 	return mustGetImpl().GetChannelBalanceV2(channelId, path, baseToken, quoteToken)
 }
 
+// GetLockedTokenAmount returns the total terminally locked base-token amount for denom.
+func GetLockedTokenAmount(denom string) (*u256.Uint, error) {
+	return mustGetImpl().GetLockedTokenAmount(denom)
+}
+
 // GetVoucherList returns a page of up to count wrapped voucher tokens starting
 // at offset, ordered by denom.
 func GetVoucherList(offset, count int) ([]VoucherInfo, error) {

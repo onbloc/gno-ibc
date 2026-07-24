@@ -27,6 +27,7 @@ import (
 )
 
 func TestTokenOrderExecuteUnescrowReleasesNativeToReceiver(cur realm, t *testing.T) {
+	testStore = newMockStore()
 	v := newTestImpl()
 
 	const destChan = types.ChannelId(80)

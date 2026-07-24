@@ -46,6 +46,8 @@ type dummyImpl struct {
 	tokenBucketErr       error
 	channelBalance       *u256.Uint
 	channelBalanceErr    error
+	lockedTokenAmount    *u256.Uint
+	lockedTokenAmountErr error
 	lastBalanceChannelId types.ChannelId
 	lastBalancePath      *u256.Uint
 	lastBalanceBaseToken string
@@ -150,6 +152,10 @@ func (d *dummyImpl) GetChannelBalanceV2(channelId types.ChannelId, path *u256.Ui
 	d.lastBalanceQuote = quoteToken
 
 	return d.channelBalance, d.channelBalanceErr
+}
+
+func (d *dummyImpl) GetLockedTokenAmount(denom string) (*u256.Uint, error) {
+	return d.lockedTokenAmount, d.lockedTokenAmountErr
 }
 
 func (d *dummyImpl) GetVoucherList(offset, count int) ([]VoucherInfo, error) {

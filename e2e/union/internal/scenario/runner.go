@@ -16,6 +16,7 @@ import (
 	"github.com/onbloc/gno-ibc/e2e/union/internal/evm"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/gno"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/state"
+	"github.com/onbloc/gno-ibc/e2e/union/internal/union"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/voyager"
 )
 
@@ -34,6 +35,7 @@ type Runner struct {
 	voyager *voyager.Runtime
 	evm     *evm.Client
 	gno     *gno.Client
+	union   *union.Client
 	options Options
 	current state.State
 
@@ -49,7 +51,7 @@ type Runner struct {
 // New validates and loads resume state before any external command can run.
 func New(cfg config.Config, options Options) (*Runner, error) {
 	return newRunnerWithClients(
-		cfg, options, voyager.New(cfg, os.Stderr), evm.New(cfg), gno.New(cfg),
+		cfg, options, voyager.New(cfg, os.Stderr), evm.New(cfg), gno.New(cfg), union.New(cfg),
 	)
 }
 
@@ -59,6 +61,7 @@ func newRunnerWithClients(
 	voyagerRuntime *voyager.Runtime,
 	evmClient *evm.Client,
 	gnoClient *gno.Client,
+	unionClient *union.Client,
 ) (*Runner, error) {
 	if options.ERC20ToGno && !options.Apply {
 		return nil, fmt.Errorf("--erc20-to-gno requires --apply")
@@ -77,6 +80,7 @@ func newRunnerWithClients(
 		voyager: voyagerRuntime,
 		evm:     evmClient,
 		gno:     gnoClient,
+		union:   unionClient,
 		current: newState(cfg),
 	}
 	if !options.Resume {

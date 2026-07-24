@@ -12,6 +12,7 @@ import (
 	"github.com/onbloc/gno-ibc/e2e/union/internal/evm"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/gno"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/process"
+	"github.com/onbloc/gno-ibc/e2e/union/internal/union"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/voyager"
 )
 
@@ -34,6 +35,7 @@ func newRunner(
 		voyager.NewWithExecutor(cfg, executor, io.Discard),
 		evm.NewWithExecutor(cfg, executor),
 		gno.NewWithExecutor(cfg, executor),
+		union.New(cfg),
 	)
 }
 

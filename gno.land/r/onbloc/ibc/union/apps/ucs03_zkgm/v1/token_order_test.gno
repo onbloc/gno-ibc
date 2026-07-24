@@ -10,10 +10,10 @@ import (
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	"gno.land/p/demo/tokens/grc20"
-	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
+	u256 "gno.land/p/onbloc/math/uint256"
 	"gno.land/r/demo/defi/grc20reg"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
@@ -1176,15 +1176,15 @@ func TestIsZeroImage(t *testing.T) {
 
 func TestLocalTokenEscrow(cur realm, t *testing.T) {
 	cases := []struct {
-		name             string
-		denom            string
-		sender           address
-		funds            *funds
-		seedSymbol       string
-		amount           *u256.Uint
-		wantErr          string
-		wantFundsLeft    bool
-		wantEscrowBal    int64
+		name          string
+		denom         string
+		sender        address
+		funds         *funds
+		seedSymbol    string
+		amount        *u256.Uint
+		wantErr       string
+		wantFundsLeft bool
+		wantEscrowBal int64
 	}{
 		{
 			name:          "native funds deduct",

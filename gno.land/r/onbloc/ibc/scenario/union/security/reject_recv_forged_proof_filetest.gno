@@ -17,7 +17,7 @@ import (
 	types "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
@@ -30,9 +30,9 @@ const (
 	coreImplPath = "gno.land/r/onbloc/ibc/union/core/v1"
 	zkgmImplPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 
-	adminAddr     = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
-	receiverAddr  = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
-	forgedLcType  = types.ClientType("scenario-forged-lc")
+	adminAddr    = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
+	receiverAddr = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+	forgedLcType = types.ClientType("scenario-forged-lc")
 )
 
 func main(cur realm) {
@@ -138,12 +138,14 @@ type forgedLightClient struct{}
 func (m *forgedLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error {
 	return errors.New("forged proof: membership verification failed")
 }
-func (m *forgedLightClient) VerifyNonMembership(uint64, []byte, []byte) error     { return nil }
-func (m *forgedLightClient) GetTimestamp() types.Timestamp                        { return types.Timestamp(1) }
-func (m *forgedLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) { return types.Timestamp(1), nil }
-func (m *forgedLightClient) GetLatestHeight() uint64                              { return 1 }
-func (m *forgedLightClient) GetCounterpartyChainID() string                       { return "forged-chain" }
-func (m *forgedLightClient) Status() lightclient.Status                           { return lightclient.Active }
+func (m *forgedLightClient) VerifyNonMembership(uint64, []byte, []byte) error { return nil }
+func (m *forgedLightClient) GetTimestamp() types.Timestamp                    { return types.Timestamp(1) }
+func (m *forgedLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
+	return types.Timestamp(1), nil
+}
+func (m *forgedLightClient) GetLatestHeight() uint64        { return 1 }
+func (m *forgedLightClient) GetCounterpartyChainID() string { return "forged-chain" }
+func (m *forgedLightClient) Status() lightclient.Status     { return lightclient.Active }
 
 func (m *forgedLightClient) VerifyHeader(_ address, header []byte, _ address) (types.StateUpdate, error) {
 	return types.StateUpdate{Height: 1, ClientStateBytes: header, ConsensusStateBytes: header}, nil

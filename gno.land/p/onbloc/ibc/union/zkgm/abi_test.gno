@@ -12,7 +12,7 @@ import (
 	"gno.land/p/onbloc/encoding/abi"
 	"gno.land/p/onbloc/json"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 // zkgmERC20ImplHex is a real ZkgmERC20 implementation contract address

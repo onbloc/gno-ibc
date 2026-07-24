@@ -1,6 +1,6 @@
 package zkgm
 
-import u256 "gno.land/p/gnoswap/uint256"
+import u256 "gno.land/p/onbloc/math/uint256"
 
 // BURN_ADDRESS is the canonical zero burn address: bech32 of 20 zero bytes with
 // the gno `g` HRP, matching union's get_burn_address = addr_humanize([0;20]).

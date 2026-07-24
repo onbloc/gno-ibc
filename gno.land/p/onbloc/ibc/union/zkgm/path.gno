@@ -3,7 +3,7 @@ package zkgm
 import (
 	"errors"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 // ErrChannelPathFull is returned by UpdateChannelPath when the path can no

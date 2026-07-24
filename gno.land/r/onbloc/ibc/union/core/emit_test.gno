@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	"gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 // Mirrors gno-core/gnovm/stdlibs/chain/emit_event.go MaxEventAttrLen.

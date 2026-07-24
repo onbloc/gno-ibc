@@ -4,10 +4,10 @@ import (
 	"errors"
 	"testing"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 var errDummyVoucher = errors.New("dummy voucher error")

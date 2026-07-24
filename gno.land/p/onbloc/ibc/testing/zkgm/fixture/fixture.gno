@@ -13,8 +13,8 @@
 package fixture
 
 import (
-	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 // Must unwraps an (bytes, error) encode/decode result, panicking on error. In a

@@ -3,8 +3,8 @@ package ucs03_zkgm
 import (
 	"time"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
+	u256 "gno.land/p/onbloc/math/uint256"
 	"gno.land/r/onbloc/ibc/union/access"
 )
 

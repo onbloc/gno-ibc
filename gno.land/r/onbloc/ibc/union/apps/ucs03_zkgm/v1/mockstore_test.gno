@@ -23,12 +23,12 @@ type mockStore struct {
 	vouchers           map[string]*zkgm.Voucher
 	lockedTokenAmounts map[string]*u256.Uint
 	receivers          map[string]z.Zkgmable
-	sendCallbacks      map[string]z.SendCallback
 	pendingSendCorr    map[string]mockPendingSendCorr
 	rateLimitDisabled  bool
 }
 
 type mockPendingSendCorr struct {
+	Callback      z.SendCallback
 	CallerPkgPath string
 	CorrID        string
 }
@@ -46,7 +46,6 @@ func newMockStore() *mockStore {
 		vouchers:           map[string]*zkgm.Voucher{},
 		lockedTokenAmounts: map[string]*u256.Uint{},
 		receivers:          map[string]z.Zkgmable{},
-		sendCallbacks:      map[string]z.SendCallback{},
 		pendingSendCorr:    map[string]mockPendingSendCorr{},
 		// Match NewStore: rate limiting is opt-in (disabled by default).
 		rateLimitDisabled: true,
@@ -156,26 +155,17 @@ func (m *mockStore) GetReceiver(path string) (z.Zkgmable, bool) {
 	return v, ok
 }
 
-func (m *mockStore) SetSendCallback(_ int, rlm realm, path string, cb z.SendCallback) {
-	m.sendCallbacks[path] = cb
+func (m *mockStore) SetPendingSendCorr(_ int, rlm realm, packetHash string, cb z.SendCallback, callerPkgPath string, corrID string) {
+	m.pendingSendCorr[packetHash] = mockPendingSendCorr{Callback: cb, CallerPkgPath: callerPkgPath, CorrID: corrID}
 }
 
-func (m *mockStore) GetSendCallback(path string) (z.SendCallback, bool) {
-	v, ok := m.sendCallbacks[path]
-	return v, ok
-}
-
-func (m *mockStore) SetPendingSendCorr(_ int, rlm realm, packetHash string, callerPkgPath string, corrID string) {
-	m.pendingSendCorr[packetHash] = mockPendingSendCorr{CallerPkgPath: callerPkgPath, CorrID: corrID}
-}
-
-func (m *mockStore) GetPendingSendCorr(packetHash string) (callerPkgPath string, corrID string, found bool) {
+func (m *mockStore) GetPendingSendCorr(packetHash string) (cb z.SendCallback, callerPkgPath string, corrID string, found bool) {
 	v, ok := m.pendingSendCorr[packetHash]
 	if !ok {
-		return "", "", false
+		return nil, "", "", false
 	}
 
-	return v.CallerPkgPath, v.CorrID, true
+	return v.Callback, v.CallerPkgPath, v.CorrID, true
 }
 
 func (m *mockStore) RemovePendingSendCorr(_ int, rlm realm, packetHash string) {

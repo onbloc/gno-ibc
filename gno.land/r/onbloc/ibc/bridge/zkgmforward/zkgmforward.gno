@@ -39,9 +39,8 @@ type pendingSend struct {
 func init(cur realm) {
 	sendCorr = bptree.NewBPTree32()
 	// Register as the transfer app's forward handler (admin-gated — this realm
-	// must be deployed by the transfer forward admin) and as ZKGM's send callback.
+	// must be deployed by the transfer forward admin).
 	transfer.RegisterForwardHandler(cross(cur), instance)
-	zkgm.RegisterSendCallback(cross(cur), instance)
 }
 
 // Prepare validates the forward memo before the transfer app takes custody.
@@ -82,7 +81,7 @@ func (h *handler) Execute(cur realm, req transfer.Request) {
 	salt := deriveForwardSalt(req.SourceClient, req.Sequence)
 	timeout := forwardTimeoutTimestamp(fwd.TimeoutTimestamp)
 
-	zkgm.SendWithCallback(cross(cur), unionTypes.ChannelId(fwd.Channel), timeout, salt, instruction, corrID)
+	zkgm.SendWithCallback(cross(cur), unionTypes.ChannelId(fwd.Channel), timeout, salt, instruction, corrID, instance)
 
 	sendCorr.Set(corrID, pendingSend{ClientID: req.DestinationClient, Sequence: req.Sequence})
 }

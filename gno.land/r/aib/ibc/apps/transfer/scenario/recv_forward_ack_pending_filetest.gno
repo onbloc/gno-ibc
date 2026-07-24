@@ -34,9 +34,8 @@ import (
 	unioncore "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
 
-	// The adapter's init registers it with the transfer app (as the forward
-	// handler) and with ZKGM (as the send callback). Importing it is all the
-	// wiring the bridge needs.
+	// The adapter's init registers it with the transfer app as the forward
+	// handler. Importing it is all the wiring the bridge needs.
 	_ "gno.land/r/onbloc/ibc/bridge/zkgmforward"
 )
 
@@ -108,8 +107,8 @@ func main(cur realm) {
 
 	println("[INFO] union channel opened:", unionChannelId.String())
 
-	// The forward adapter registered itself at import time (its init calls
-	// transfer.RegisterForwardHandler + zkgm.RegisterSendCallback). Its realm
+	// The forward adapter registered itself as the transfer forward handler at
+	// import time (its init calls transfer.RegisterForwardHandler). Its realm
 	// address is the forward trigger address.
 	forwardAddr := transfer.ForwardHandlerAddress().String()
 	println("[INFO] forward handler addr:", forwardAddr)

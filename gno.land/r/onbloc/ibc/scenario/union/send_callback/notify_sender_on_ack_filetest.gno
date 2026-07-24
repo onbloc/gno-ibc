@@ -74,7 +74,7 @@ func main(cur realm) {
 	// cur.Address() would keep resolving to adminAddr without this reset.
 	testing.SetRealm(testing.NewCodeRealm(scenarioPkgPath))
 
-	println("[SCENARIO] 3. Register as ZKGM's SendCallback target, approve the proxy, and send a real ESCROW order via SendWithCallback")
+	println("[SCENARIO] 3. Approve the proxy, and send a real ESCROW order via SendWithCallback")
 	sendPacket := sendEscrowOrder(cur, channelId, token, ledger, denom)
 	println("")
 
@@ -129,11 +129,10 @@ func bootstrap(cur realm) types.ChannelId {
 	return channelId
 }
 
-// sendEscrowOrder registers callback, approves the proxy, then sends the
+// sendEscrowOrder approves the proxy, then sends the
 // ESCROW order via SendWithCallback - as this realm, matching how transfer
 // calls it in production.
 func sendEscrowOrder(cur realm, channelId types.ChannelId, token *grc20.Token, ledger *grc20.PrivateLedger, denom string) types.Packet {
-	zkgm.RegisterSendCallback(cross(cur), callback)
 
 	proxy := zkgm.ProxyAddress()
 	if err := ledger.Approve(cur.Address(), proxy, 40); err != nil {
@@ -149,7 +148,7 @@ func sendEscrowOrder(cur realm, channelId types.ChannelId, token *grc20.Token, l
 		QuoteAmount: u256.NewUint(40),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
-	sendPacket := zkgm.SendWithCallback(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order), corrID)
+	sendPacket := zkgm.SendWithCallback(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order), corrID, callback)
 
 	ufmt.Printf("[INFO] send produced packet on channel: %s\n", sendPacket.SourceChannelId.String())
 	ufmt.Printf("[INFO] this realm's grc20 balance: %d\n", token.BalanceOf(cur.Address()))
@@ -240,7 +239,7 @@ func (e mockError) Error() string { return string(e) }
 // [SCENARIO] 2. Bootstrap IBC host and open client/connection/channel
 // [INFO] handshake opened: client=1 connection=1 channel=1
 //
-// [SCENARIO] 3. Register as ZKGM's SendCallback target, approve the proxy, and send a real ESCROW order via SendWithCallback
+// [SCENARIO] 3. Approve the proxy, and send a real ESCROW order via SendWithCallback
 // [INFO] send produced packet on channel: 1
 // [INFO] this realm's grc20 balance: 0
 // [INFO] proxy grc20 escrow balance: 40

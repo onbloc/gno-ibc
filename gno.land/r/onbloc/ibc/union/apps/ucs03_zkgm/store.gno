@@ -78,14 +78,16 @@ type Store struct {
 	// as opposed to vouchers, which zkgm mints/burns directly.
 	lockedTokenAmounts *bptree.BPTree // denom -> *u256.Uint (permanently locked base token)
 	receivers          *bptree.BPTree // pkgPath -> z.Zkgmable
-	sendCallbacks      *bptree.BPTree // pkgPath -> z.SendCallback
 	pendingSendCorr    *bptree.BPTree // packetHash -> pendingSendCorr
 	rateLimitDisabled  bool
 }
 
-// pendingSendCorr correlates an outbound packet sent via SendWithCallback
-// back to the caller that must be notified of its outcome.
+// pendingSendCorr correlates an outbound packet sent via SendWithCallback back
+// to the callback that must be notified of its outcome. The callback is carried
+// per-packet (supplied to SendWithCallback) rather than pre-registered, so a
+// forwarded packet can never resolve with no callback to deliver to.
 type pendingSendCorr struct {
+	Callback      z.SendCallback
 	CallerPkgPath string
 	CorrID        string
 }
@@ -101,7 +103,6 @@ func NewStore() *Store {
 		vouchers:           bptree.NewBPTree32(),
 		lockedTokenAmounts: bptree.NewBPTree32(),
 		receivers:          bptree.NewBPTree32(),
-		sendCallbacks:      bptree.NewBPTree32(),
 		pendingSendCorr:    bptree.NewBPTree32(),
 		// Rate limiting is opt-in: enabled per-denom by an admin who first
 		// configures a token bucket (see SetBucketConfig). With it enabled, a denom
@@ -317,41 +318,26 @@ func (s *Store) GetReceiver(path string) (z.Zkgmable, bool) {
 	return r.(z.Zkgmable), true
 }
 
-// SetSendCallback registers a SendCallback target at a package path.
-func (s *Store) SetSendCallback(_ int, rlm realm, path string, cb z.SendCallback) {
+// SetPendingSendCorr records the callback correlation for a packet sent via
+// SendWithCallback, keyed by the packet's commitment hash. The callback itself
+// is stored here (not in a separate registry), so it is always present when the
+// packet resolves.
+func (s *Store) SetPendingSendCorr(_ int, rlm realm, packetHash string, cb z.SendCallback, callerPkgPath string, corrID string) {
 	assertIsRlmCurrent(0, rlm)
 
-	s.sendCallbacks.Set(path, cb)
+	s.pendingSendCorr.Set(packetHash, pendingSendCorr{Callback: cb, CallerPkgPath: callerPkgPath, CorrID: corrID})
 }
 
-// GetSendCallback returns the SendCallback registered at a package path.
-func (s *Store) GetSendCallback(path string) (z.SendCallback, bool) {
-	v := s.sendCallbacks.Get(path)
-	if v == nil {
-		return nil, false
-	}
-
-	return v.(z.SendCallback), true
-}
-
-// SetPendingSendCorr records the caller correlation for a packet sent via
-// SendWithCallback, keyed by the packet's commitment hash.
-func (s *Store) SetPendingSendCorr(_ int, rlm realm, packetHash string, callerPkgPath string, corrID string) {
-	assertIsRlmCurrent(0, rlm)
-
-	s.pendingSendCorr.Set(packetHash, pendingSendCorr{CallerPkgPath: callerPkgPath, CorrID: corrID})
-}
-
-// GetPendingSendCorr returns the caller correlation recorded for a packet hash.
-func (s *Store) GetPendingSendCorr(packetHash string) (callerPkgPath string, corrID string, found bool) {
+// GetPendingSendCorr returns the callback correlation recorded for a packet hash.
+func (s *Store) GetPendingSendCorr(packetHash string) (cb z.SendCallback, callerPkgPath string, corrID string, found bool) {
 	v := s.pendingSendCorr.Get(packetHash)
 	if v == nil {
-		return "", "", false
+		return nil, "", "", false
 	}
 
 	corr := v.(pendingSendCorr)
 
-	return corr.CallerPkgPath, corr.CorrID, true
+	return corr.Callback, corr.CallerPkgPath, corr.CorrID, true
 }
 
 // RemovePendingSendCorr clears a resolved send-callback correlation entry.

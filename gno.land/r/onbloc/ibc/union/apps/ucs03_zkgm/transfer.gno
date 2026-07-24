@@ -14,22 +14,25 @@ func Send(cur realm, channelId types.ChannelId, timeoutTimestamp types.Timestamp
 	return mustGetImpl().Send(0, cur, channelId, timeoutTimestamp, salt, instruction)
 }
 
-// SendWithCallback behaves like Send, but additionally records the calling
-// realm as the notification target for this packet's ack/timeout outcome
-// (see RegisterSendCallback / z.SendCallback). corrID is an opaque
-// caller-chosen string echoed back verbatim in OnZkgmSendResult, letting the
-// caller correlate the result with its own pending state without
-// recomputing a packet hash itself. The caller must have registered via
-// RegisterSendCallback beforehand, or the result is silently undeliverable.
-func SendWithCallback(cur realm, channelId types.ChannelId, timeoutTimestamp types.Timestamp, salt [32]byte, instruction z.Instruction, corrID string) types.Packet {
+// SendWithCallback behaves like Send, but additionally records cb as the
+// notification target for this packet's ack/timeout outcome. The callback is
+// passed per-send (not pre-registered), so it is always available when the
+// packet resolves. corrID is an opaque caller-chosen string echoed back
+// verbatim in OnZkgmSendResult, letting the caller correlate the result with
+// its own pending state without recomputing a packet hash itself.
+func SendWithCallback(cur realm, channelId types.ChannelId, timeoutTimestamp types.Timestamp, salt [32]byte, instruction z.Instruction, corrID string, cb z.SendCallback) types.Packet {
 	assertIsNotPaused()
+
+	if cb == nil {
+		panic("ucs03_zkgm: SendWithCallback requires a non-nil callback")
+	}
 
 	callerPkgPath := cur.Previous().PkgPath()
 
 	packet := mustGetImpl().Send(0, cur, channelId, timeoutTimestamp, salt, instruction)
 
 	hash := types.MustCommit(types.CommitPacket(packet))
-	store.SetPendingSendCorr(0, cur, hash.String(), callerPkgPath, corrID)
+	store.SetPendingSendCorr(0, cur, hash.String(), cb, callerPkgPath, corrID)
 
 	return packet
 }

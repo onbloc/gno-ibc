@@ -17,18 +17,12 @@ import (
 func (v *ucs03ZkgmV1) handleSendCallback(_ int, rlm realm, packet types.Packet, success bool, ack []byte) bool {
 	hash := types.MustCommit(types.CommitPacket(packet)).String()
 
-	callerPkgPath, corrID, ok := v.store.GetPendingSendCorr(hash)
+	cb, callerPkgPath, corrID, ok := v.store.GetPendingSendCorr(hash)
 	if !ok {
 		return false
 	}
 
 	v.store.RemovePendingSendCorr(0, rlm, hash)
-
-	cb, ok := v.store.GetSendCallback(callerPkgPath)
-	if !ok {
-		zkgm.EmitSendResultDelivered(0, rlm, callerPkgPath, corrID, false)
-		return true
-	}
 
 	if err := cb.OnZkgmSendResult(cross(rlm), corrID, success, ack); err != nil {
 		panic(err.Error())

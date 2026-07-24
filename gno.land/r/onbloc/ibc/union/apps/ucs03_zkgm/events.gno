@@ -17,7 +17,6 @@ const (
 	ZkgmRateLimitBucketConfiguredEvent = "ZkgmRateLimitBucketConfigured"
 	ZkgmRateLimitDisabledSetEvent      = "ZkgmRateLimitDisabledSet"
 	ZkgmReceiverRegisteredEvent        = "ZkgmReceiverRegistered"
-	ZkgmSendCallbackRegisteredEvent    = "ZkgmSendCallbackRegistered"
 	ZkgmSendResultDeliveredEvent       = "ZkgmSendResultDelivered"
 	ZkgmNativeReleasedEvent            = "ZkgmNativeReleased"
 	ZkgmForwardInFlightSetEvent        = "ZkgmForwardInFlightSet"
@@ -71,13 +70,6 @@ func emitZkgmReceiverRegisteredEvent(receiverPkgPath string) {
 	chain.Emit(
 		ZkgmReceiverRegisteredEvent,
 		"receiver_pkg_path", receiverPkgPath,
-	)
-}
-
-func emitZkgmSendCallbackRegisteredEvent(callerPkgPath string) {
-	chain.Emit(
-		ZkgmSendCallbackRegisteredEvent,
-		"caller_pkg_path", callerPkgPath,
 	)
 }
 

@@ -37,16 +37,15 @@ func TestHandleSendCallback_NoopsWithoutPendingCorr(cur realm, t *testing.T) {
 	uassert.False(t, ok)
 }
 
-func TestHandleSendCallback_NotifiesRegisteredCallerAndClearsEntry(cur realm, t *testing.T) {
+func TestHandleSendCallback_NotifiesCallerAndClearsEntry(cur realm, t *testing.T) {
 	testStore = newMockStore()
 	v := newTestImpl()
 	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), []byte("data"), 1)
 	hash := types.MustCommit(types.CommitPacket(packet)).String()
 	callerPkgPath := "gno.land/r/aib/ibc/apps/transfer"
 
-	testStore.SetPendingSendCorr(0, cur, hash, callerPkgPath, "corr-1")
 	cb := &recordingSendCallback{}
-	testStore.SetSendCallback(0, cur, callerPkgPath, cb)
+	testStore.SetPendingSendCorr(0, cur, hash, cb, callerPkgPath, "corr-1")
 
 	ok := v.handleSendCallback(0, cur, packet, true, []byte("ack-bytes"))
 
@@ -56,7 +55,7 @@ func TestHandleSendCallback_NotifiesRegisteredCallerAndClearsEntry(cur realm, t 
 	uassert.True(t, cb.success)
 	uassert.Equal(t, "ack-bytes", string(cb.ack))
 
-	_, _, found := testStore.GetPendingSendCorr(hash)
+	_, _, _, found := testStore.GetPendingSendCorr(hash)
 	uassert.False(t, found)
 }
 
@@ -67,28 +66,12 @@ func TestHandleSendCallback_TimeoutReportsFailure(cur realm, t *testing.T) {
 	hash := types.MustCommit(types.CommitPacket(packet)).String()
 	callerPkgPath := "gno.land/r/aib/ibc/apps/transfer"
 
-	testStore.SetPendingSendCorr(0, cur, hash, callerPkgPath, "corr-2")
 	cb := &recordingSendCallback{}
-	testStore.SetSendCallback(0, cur, callerPkgPath, cb)
+	testStore.SetPendingSendCorr(0, cur, hash, cb, callerPkgPath, "corr-2")
 
 	ok := v.handleSendCallback(0, cur, packet, false, universalErrorAck())
 
 	uassert.True(t, ok)
 	uassert.Equal(t, 1, cb.calls)
 	uassert.False(t, cb.success)
-}
-
-func TestHandleSendCallback_ClearsEntryEvenWithoutRegisteredCallback(cur realm, t *testing.T) {
-	testStore = newMockStore()
-	v := newTestImpl()
-	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), []byte("data"), 1)
-	hash := types.MustCommit(types.CommitPacket(packet)).String()
-
-	testStore.SetPendingSendCorr(0, cur, hash, "gno.land/r/aib/ibc/apps/transfer", "corr-3")
-
-	ok := v.handleSendCallback(0, cur, packet, true, []byte("ack"))
-
-	uassert.True(t, ok)
-	_, _, found := testStore.GetPendingSendCorr(hash)
-	uassert.False(t, found)
 }

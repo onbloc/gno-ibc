@@ -213,6 +213,7 @@ func TestChannelBalanceHeldInVaultPrecision(cur realm, t *testing.T) {
 }
 
 func TestTimeoutNativeOrderWithMetadataDoesNotTrimEscrow(cur realm, t *testing.T) {
+	testStore = newMockStore()
 	v := newTestImpl()
 
 	amount := u256.NewUint(2_000_000_000_000)

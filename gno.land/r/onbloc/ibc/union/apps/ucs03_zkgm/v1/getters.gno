@@ -31,6 +31,16 @@ func (v *ucs03ZkgmV1) GetChannelBalanceV2(channelId types.ChannelId, path *u256.
 	return balance.Clone(), nil
 }
 
+// GetLockedTokenAmount returns the terminally locked base-token amount for denom.
+func (v *ucs03ZkgmV1) GetLockedTokenAmount(denom string) (*u256.Uint, error) {
+	total, ok := v.store.GetLockedTokenAmount(denom)
+	if !ok || total == nil {
+		return u256.Zero(), nil
+	}
+
+	return total.Clone(), nil
+}
+
 // GetVoucherList returns a page of up to count wrapped voucher tokens starting
 // at offset, ordered by denom. An empty page (e.g. offset past the end, or no
 // vouchers registered yet) is not an error condition, so this returns an empty

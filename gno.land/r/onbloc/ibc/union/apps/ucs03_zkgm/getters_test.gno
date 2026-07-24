@@ -65,6 +65,29 @@ func TestGetChannelBalanceV2_PropagatesImplError(cur realm, t *testing.T) {
 	}
 }
 
+func TestGetLockedTokenAmount_DelegatesToImpl(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	target := &dummyImpl{lockedTokenAmount: u256.NewUint(40)}
+	installImplForTest(testImplPathA, target)
+
+	got, err := GetLockedTokenAmount("ugnot")
+	uassert.NoError(t, err)
+	uassert.Equal(t, "40", got.ToString())
+}
+
+func TestGetLockedTokenAmount_PropagatesImplError(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+	target := &dummyImpl{lockedTokenAmountErr: errDummyGetter}
+	installImplForTest(testImplPathA, target)
+
+	got, err := GetLockedTokenAmount("ugnot")
+	uassert.ErrorIs(t, err, errDummyGetter)
+	if got != nil {
+		t.Fatal("missing locked token amount must return nil")
+	}
+}
+
 func TestGetVoucherList_DelegatesToImpl(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 

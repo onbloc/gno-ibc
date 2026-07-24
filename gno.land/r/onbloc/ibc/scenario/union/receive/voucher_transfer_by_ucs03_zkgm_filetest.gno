@@ -1,23 +1,18 @@
-// PKGPATH: gno.land/r/onbloc/ibc/scenario/union/send
-package send
+// PKGPATH: gno.land/r/onbloc/ibc/scenario/union/receive
+package receive
 
-// lock_native_coin_by_ucs03_zkgm_filetest walks a native-coin ucs03-zkgm token
-// send through the upgradeable union IBC host (permissive mock light client). The
-// user attaches native ugnot with the call; the impl reads that send envelope via
-// OriginSend to seed the escrow budget, locks it in the proxy, and the protocol-
-// fill ack leaves it locked. Without the attached coins the send would abort with
-// a "sent coin mismatch" since the escrow budget could not cover the order.
-// The active escrow amount is represented by the channel balance; protocol-fill
-// ack is a no-op for an escrow.
+// voucher_transfer_by_ucs03_zkgm_filetest walks a wrapped voucher from mint
+// (INITIALIZE recv) through the new zkgm.VoucherTransfer self-service
+// entrypoint: the receiving holder moves part of their own balance directly to
+// a third party, with no allowance/TransferFrom involved, a plain holder-to-
+// holder move.
 
 import (
-	"chain"
-	"chain/banker"
 	"testing"
 
 	"gno.land/p/nt/ufmt/v0"
 	"gno.land/p/onbloc/ibc/union/lightclient"
-	types "gno.land/p/onbloc/ibc/union/types"
+	"gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
 	u256 "gno.land/p/gnoswap/uint256"
@@ -25,7 +20,7 @@ import (
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
-	core "gno.land/r/onbloc/ibc/union/core"
+	"gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
 )
 
@@ -34,7 +29,8 @@ const (
 	zkgmImplPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 
 	adminAddr      = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
-	senderAddr     = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+	holderAddr     = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+	receiverAddr   = address("g1dyxy88p94acjnm8dmu9tfj2mv2ncvx83cagllu")
 	mockClientType = types.ClientType("scenario-mock-lc")
 )
 
@@ -43,12 +39,18 @@ func main(cur realm) {
 	channelId := bootstrap(cur)
 	println("")
 
-	println("[SCENARIO] 2. Send native ESCROW order locking 40ugnot (funded via attached send coins)")
-	sendPacket := sendNativeEscrowOrder(cur, channelId)
+	// The wrapped denom is deterministic for (path=0, channel, base=ugnot, image),
+	// so it is derived once here and reused by the recv funding and the transfer
+	// step below.
+	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
+	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
+
+	println("[SCENARIO] 2. Receive INITIALIZE order: mint 100 wrapped voucher to holder")
+	receiveInitializeOrder(cur, channelId, quoteToken, meta)
 	println("")
 
-	println("[SCENARIO] 3. Acknowledge with protocol-fill success (no-op for escrow)")
-	acknowledgeNativeEscrow(cur, sendPacket)
+	println("[SCENARIO] 3. Holder sends 40 directly to a third party via VoucherTransfer")
+	holderTransfersToThirdParty(cur, quoteToken)
 }
 
 // bootstrap installs the core/zkgm impls, grants the admin the relayer role, and
@@ -88,49 +90,41 @@ func bootstrap(cur realm) types.ChannelId {
 	return channelId
 }
 
-// sendNativeEscrowOrder sends a native ESCROW order funded by attached coins. In
-// production the user attaches `-send 40ugnot`, which credits the proxy (the escrow
-// account) and shows up in the OriginSend envelope. IssueCoins reproduces the
-// deposit; SetOriginSend reproduces the envelope the impl reads to seed its escrow
-// budget. It returns the produced packet for later acknowledgement.
-func sendNativeEscrowOrder(cur realm, channelId types.ChannelId) types.Packet {
+// receiveInitializeOrder receives an INITIALIZE TokenOrder that deploys the wrapped
+// voucher and mints its full amount to the holder.
+func receiveInitializeOrder(cur realm, channelId types.ChannelId, quoteToken string, meta []byte) {
 	order := z.TokenOrderV2{
-		Sender:      []byte(senderAddr.String()),
-		Receiver:    []byte("remote-receiver"),
+		Sender:      []byte("remote-sender"),
+		Receiver:    []byte(holderAddr.String()),
 		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(40),
-		QuoteToken:  []byte("remote-ugnot"),
-		QuoteAmount: u256.NewUint(40),
-		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte(quoteToken),
+		QuoteAmount: u256.NewUint(100),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    meta,
 	}
-
-	proxy := zkgm.ProxyAddress()
-	testing.IssueCoins(proxy, chain.NewCoins(chain.NewCoin("ugnot", 40)))
-
-	testing.SetRealm(testing.NewUserRealm(senderAddr))
-	testing.SetOriginSend(chain.NewCoins(chain.NewCoin("ugnot", 40)))
-	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
-
-	bk := banker.NewReadonlyBanker()
-	ufmt.Printf("[INFO] send produced packet on channel: %s\n", sendPacket.SourceChannelId.String())
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
-	ufmt.Println("[EXPECTED] send should succeed: attached 40ugnot covers the escrow order")
-	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (locked)")
-
-	return sendPacket
-}
-
-// acknowledgeNativeEscrow acknowledges the sent packet with a protocol-fill success
-// ack, which is a no-op for an escrow, so the native coins stay locked.
-func acknowledgeNativeEscrow(cur realm, sendPacket types.Packet) {
-	ack := mustSuccessAck(mustProtocolTokenOrderAck())
+	packet := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(order)), types.Timestamp(1<<62))
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{ack}, nil, 1))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
 
-	bk := banker.NewReadonlyBanker()
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(zkgm.ProxyAddress()).AmountOf("ugnot"))
-	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (unchanged: escrow stays locked)")
+	ufmt.Printf("[INFO] minted token (wrapped voucher): %s\n", quoteToken)
+	ufmt.Printf("[INFO] holder balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, holderAddr))
+	ufmt.Println("[EXPECTED] minted token should be the ibc/ wrapped voucher of base ugnot")
+	ufmt.Println("[EXPECTED] holder balance should be 100 (full INITIALIZE amount minted)")
+}
+
+// holderTransfersToThirdParty has the holder move 40 of their own balance
+// directly to a third party through zkgm.VoucherTransfer: no allowance, no
+// TransferFrom, just a plain self-service move of the caller's own balance.
+func holderTransfersToThirdParty(cur realm, quoteToken string) {
+	testing.SetRealm(testing.NewUserRealm(holderAddr))
+	zkgm.VoucherTransfer(cross(cur), quoteToken, receiverAddr, 40)
+
+	ufmt.Printf("[INFO] holder balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, holderAddr))
+	ufmt.Printf("[INFO] third party balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, receiverAddr))
+	ufmt.Println("[EXPECTED] holder balance should be 60 (100 - 40 transferred)")
+	ufmt.Println("[EXPECTED] third party balance should be 40 (received via VoucherTransfer)")
 }
 
 // --- encoding helpers (pure z calls, mirroring the e2e harness) ---
@@ -143,20 +137,32 @@ func mustOrderInstruction(order z.TokenOrderV2) z.Instruction {
 	return z.Instruction{Version: z.INSTR_VERSION_2, Opcode: z.OP_TOKEN_ORDER, Operand: operand}
 }
 
-func mustProtocolTokenOrderAck() []byte {
-	bz, err := z.EncodeTokenOrderAck(z.TokenOrderAck{FillType: new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:])})
+func mustPacketData(instr z.Instruction) []byte {
+	data, err := z.EncodeZkgmPacket(z.ZkgmPacket{Path: u256.Zero(), Instruction: instr})
 	if err != nil {
 		panic(err)
 	}
-	return bz
+	return data
 }
 
-func mustSuccessAck(inner []byte) []byte {
-	ack, err := z.EncodeAck(z.Ack{Tag: new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:]), InnerAck: inner})
+func mustTokenMetadata(implementation string, ti z.TokenInitializer) []byte {
+	initBytes, err := z.EncodeTokenInitializer(ti)
 	if err != nil {
 		panic(err)
 	}
-	return ack
+	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes})
+	if err != nil {
+		panic(err)
+	}
+	return meta
+}
+
+func mustDecodeMeta(bz []byte) z.TokenMetadata {
+	meta, err := z.DecodeTokenMetadata(bz)
+	if err != nil {
+		panic(err)
+	}
+	return meta
 }
 
 // --- permissive mock light client (accepts any proof) ---
@@ -166,6 +172,7 @@ type mockLightClient struct{}
 func (m *mockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
 func (m *mockLightClient) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
 func (m *mockLightClient) GetTimestamp() types.Timestamp                         { return types.Timestamp(1) }
+
 func (m *mockLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
 	return types.Timestamp(1), nil
 }
@@ -198,12 +205,14 @@ func (e mockError) Error() string { return string(e) }
 // [EXPECTED] connection should be 1
 // [EXPECTED] channel should be 1
 //
-// [SCENARIO] 2. Send native ESCROW order locking 40ugnot (funded via attached send coins)
-// [INFO] send produced packet on channel: 1
-// [INFO] proxy native escrow balance: 40
-// [EXPECTED] send should succeed: attached 40ugnot covers the escrow order
-// [EXPECTED] proxy native escrow balance should be 40 (locked)
+// [SCENARIO] 2. Receive INITIALIZE order: mint 100 wrapped voucher to holder
+// [INFO] minted token (wrapped voucher): ibc/e03a8753fa7f41c282b15cdc0343f660e6e65845
+// [INFO] holder balance: 100
+// [EXPECTED] minted token should be the ibc/ wrapped voucher of base ugnot
+// [EXPECTED] holder balance should be 100 (full INITIALIZE amount minted)
 //
-// [SCENARIO] 3. Acknowledge with protocol-fill success (no-op for escrow)
-// [INFO] proxy native escrow balance: 40
-// [EXPECTED] proxy native escrow balance should be 40 (unchanged: escrow stays locked)
+// [SCENARIO] 3. Holder sends 40 directly to a third party via VoucherTransfer
+// [INFO] holder balance: 60
+// [INFO] third party balance: 40
+// [EXPECTED] holder balance should be 60 (100 - 40 transferred)
+// [EXPECTED] third party balance should be 40 (received via VoucherTransfer)

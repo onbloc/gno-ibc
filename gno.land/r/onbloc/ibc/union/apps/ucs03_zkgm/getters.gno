@@ -15,3 +15,20 @@ func GetTokenBucket(denom string) (*tb.TokenBucket, error) {
 func GetChannelBalanceV2(channelId types.ChannelId, path *u256.Uint, baseToken string, quoteToken []byte) (*u256.Uint, error) {
 	return mustGetImpl().GetChannelBalanceV2(channelId, path, baseToken, quoteToken)
 }
+
+// GetVoucherList returns a page of up to count wrapped voucher tokens starting
+// at offset, ordered by denom.
+func GetVoucherList(offset, count int) ([]VoucherInfo, error) {
+	return mustGetImpl().GetVoucherList(offset, count)
+}
+
+// GetVoucherInfo returns a snapshot of the single wrapped voucher registered for ibcDenom.
+func GetVoucherInfo(ibcDenom string) (VoucherInfo, error) {
+	return mustGetImpl().GetVoucherInfo(ibcDenom)
+}
+
+// GetVoucherSize returns the total number of registered vouchers, i.e. the
+// key count callers need to drive GetVoucherList's offset/count pagination.
+func GetVoucherSize() (int, error) {
+	return mustGetImpl().GetVoucherSize()
+}

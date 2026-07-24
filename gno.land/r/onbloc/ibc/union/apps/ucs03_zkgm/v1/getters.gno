@@ -31,6 +31,16 @@ func (v *ucs03ZkgmV1) GetChannelBalanceV2(channelId types.ChannelId, path *u256.
 	return balance.Clone(), nil
 }
 
+// GetNativeEscrowTotal returns the total native amount tracked as escrowed for denom.
+func (v *ucs03ZkgmV1) GetNativeEscrowTotal(denom string) (*u256.Uint, error) {
+	total, ok := v.store.GetNativeEscrowTotal(denom)
+	if !ok || total == nil {
+		return u256.Zero(), nil
+	}
+
+	return total.Clone(), nil
+}
+
 func cloneTokenBucket(bucket *tb.TokenBucket) *tb.TokenBucket {
 	return &tb.TokenBucket{
 		Capacity:   bucket.Capacity.Clone(),

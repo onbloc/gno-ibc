@@ -528,12 +528,15 @@ func (v *ucs03ZkgmV1) settleEscrowedV2(_ int, rlm realm, sourceChannelId types.C
 // Token-type handling:
 //   - IBC voucher (ibc/): supply-burned via burnVoucher from proxy escrow.
 //   - Native coin: supply cannot be destroyed; coins stay in the proxy banker
-//     balance and are tracked in locked-base accounting.
+//     balance and are tracked in locked-base accounting instead of the
+//     in-flight native escrow total, since burn settlement is a terminal
+//     disposition (like release/refund), not an ongoing escrow.
 //   - GRC20: same as native — no mint/burn capability over foreign tokens;
 //     balance stays at the proxy and is tracked in locked-base accounting.
 func (v *ucs03ZkgmV1) burnEscrowedV2(_ int, rlm realm, sourceChannelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
 	// Channel balance records the vault (ledger) amount for the base denom.
 	baseDenom := string(order.BaseToken)
+	tokenType := getTokenType(baseDenom)
 
 	baseTokenLedgerAmount, err := v.ledgerAmountOf(baseDenom, order.BaseAmount)
 	if err != nil {
@@ -545,18 +548,25 @@ func (v *ucs03ZkgmV1) burnEscrowedV2(_ int, rlm realm, sourceChannelId types.Cha
 		return err
 	}
 
-	if isIBCTokenDenom(baseDenom) {
-		err = v.burnVoucher(0, rlm, baseDenom, rlm.Address(), order.BaseAmount)
-		if err != nil {
+	switch tokenType {
+	case IBC_TOKEN:
+		if err := v.burnVoucher(0, rlm, baseDenom, rlm.Address(), order.BaseAmount); err != nil {
 			// rollback the channel balance
 			v.increaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount)
 
 			return err
 		}
+	case NATIVE_COIN:
+		// Supply cannot be destroyed: permanently lock the proxy-held balance and
+		// leave the in-flight native escrow total, since burn settlement resolves
+		// the escrow same as release/refund.
+		v.store.AddLockedTokenAmount(0, rlm, baseDenom, order.BaseAmount)
+		v.store.SubNativeEscrowTotal(0, rlm, baseDenom, order.BaseAmount)
+	case GRC20_TOKEN:
+		// No mint/burn capability over a foreign GRC20: same lock accounting as
+		// native, minus the native-only escrow-total decrement.
+		v.store.AddLockedTokenAmount(0, rlm, baseDenom, order.BaseAmount)
 	}
-
-	// Native and GRC20: permanently lock proxy-held balance (no supply burn).
-	v.store.AddLockedTokenAmount(0, rlm, baseDenom, order.BaseAmount)
 
 	return nil
 }
@@ -573,7 +583,11 @@ func (v *ucs03ZkgmV1) localTokenEscrow(_ int, rlm realm, denom string, sender ad
 	case GRC20_TOKEN:
 		return v.localGRC20Escrow(0, rlm, grc20reg.Get(denom), sender, amount)
 	case NATIVE_COIN:
-		return funds.sub(denom, amount)
+		if err := funds.sub(denom, amount); err != nil {
+			return err
+		}
+		v.store.AddNativeEscrowTotal(0, rlm, denom, amount)
+		return nil
 	}
 
 	return nil
@@ -591,7 +605,11 @@ func (v *ucs03ZkgmV1) localTokenUnescrow(_ int, rlm realm, denom string, recipie
 	case GRC20_TOKEN:
 		return v.localGRC20Unescrow(0, rlm, grc20reg.Get(denom), recipient, amount)
 	case NATIVE_COIN:
-		return v.sendNative(0, rlm, denom, recipient, amount)
+		if err := v.sendNative(0, rlm, denom, recipient, amount); err != nil {
+			return err
+		}
+		v.store.SubNativeEscrowTotal(0, rlm, denom, amount)
+		return nil
 	}
 
 	return nil

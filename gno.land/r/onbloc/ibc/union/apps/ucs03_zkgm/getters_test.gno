@@ -64,3 +64,26 @@ func TestGetChannelBalanceV2_PropagatesImplError(cur realm, t *testing.T) {
 		t.Fatal("missing channel balance must return nil")
 	}
 }
+
+func TestGetNativeEscrowTotal_DelegatesToImpl(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	target := &dummyImpl{nativeEscrowTotal: u256.NewUint(40)}
+	installImplForTest(testImplPathA, target)
+
+	got, err := GetNativeEscrowTotal("ugnot")
+	uassert.NoError(t, err)
+	uassert.Equal(t, "40", got.ToString())
+}
+
+func TestGetNativeEscrowTotal_PropagatesImplError(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+	target := &dummyImpl{nativeEscrowTotalErr: errDummyGetter}
+	installImplForTest(testImplPathA, target)
+
+	got, err := GetNativeEscrowTotal("ugnot")
+	uassert.ErrorIs(t, err, errDummyGetter)
+	if got != nil {
+		t.Fatal("missing native escrow total must return nil")
+	}
+}

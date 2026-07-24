@@ -7,6 +7,9 @@ package send
 // OriginSend to seed the escrow budget, locks it in the proxy, and the protocol-
 // fill ack leaves it locked. Without the attached coins the send would abort with
 // a "sent coin mismatch" since the escrow budget could not cover the order.
+// It also checks the store-tracked native escrow total (zkgm.GetNativeEscrowTotal):
+// it rises to the locked amount on send and stays there across the protocol-fill
+// ack, since a success ack is a no-op for an escrow.
 
 import (
 	"chain"
@@ -112,8 +115,10 @@ func sendNativeEscrowOrder(cur realm, channelId types.ChannelId) types.Packet {
 	bk := banker.NewReadonlyBanker()
 	ufmt.Printf("[INFO] send produced packet on channel: %s\n", sendPacket.SourceChannelId.String())
 	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] native escrow total (ugnot): %d\n", nativeEscrowTotal("ugnot"))
 	ufmt.Println("[EXPECTED] send should succeed: attached 40ugnot covers the escrow order")
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (locked)")
+	ufmt.Println("[EXPECTED] native escrow total should be 40 (tracked in store)")
 
 	return sendPacket
 }
@@ -128,7 +133,18 @@ func acknowledgeNativeEscrow(cur realm, sendPacket types.Packet) {
 
 	bk := banker.NewReadonlyBanker()
 	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(zkgm.ProxyAddress()).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] native escrow total (ugnot): %d\n", nativeEscrowTotal("ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (unchanged: escrow stays locked)")
+	ufmt.Println("[EXPECTED] native escrow total should stay 40 (protocol-fill ack is a no-op for escrow)")
+}
+
+// nativeEscrowTotal reads back the store-tracked native escrow total for denom.
+func nativeEscrowTotal(denom string) uint64 {
+	total, err := zkgm.GetNativeEscrowTotal(denom)
+	if err != nil {
+		panic(err)
+	}
+	return total.Uint64()
 }
 
 // --- encoding helpers (pure z calls, mirroring the e2e harness) ---
@@ -199,9 +215,13 @@ func (e mockError) Error() string { return string(e) }
 // [SCENARIO] 2. Send native ESCROW order locking 40ugnot (funded via attached send coins)
 // [INFO] send produced packet on channel: 1
 // [INFO] proxy native escrow balance: 40
+// [INFO] native escrow total (ugnot): 40
 // [EXPECTED] send should succeed: attached 40ugnot covers the escrow order
 // [EXPECTED] proxy native escrow balance should be 40 (locked)
+// [EXPECTED] native escrow total should be 40 (tracked in store)
 //
 // [SCENARIO] 3. Acknowledge with protocol-fill success (no-op for escrow)
 // [INFO] proxy native escrow balance: 40
+// [INFO] native escrow total (ugnot): 40
 // [EXPECTED] proxy native escrow balance should be 40 (unchanged: escrow stays locked)
+// [EXPECTED] native escrow total should stay 40 (protocol-fill ack is a no-op for escrow)

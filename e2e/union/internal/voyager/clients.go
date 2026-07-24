@@ -13,6 +13,11 @@ import (
 
 var heightPattern = regexp.MustCompile(`^([1-9][0-9]*-)?[1-9][0-9]*$`)
 
+// HeightValue returns the numeric height from a "revision-height" string.
+func HeightValue(height string) (int64, error) {
+	return strconv.ParseInt(height[strings.LastIndex(height, "-")+1:], 10, 64)
+}
+
 // ClientCreation describes one create-client write at an expected allocation.
 type ClientCreation struct {
 	ClientExpectation

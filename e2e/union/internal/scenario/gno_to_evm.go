@@ -1,17 +1,13 @@
 package scenario
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/onbloc/gno-ibc/e2e/union/internal/evm"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/state"
+	"github.com/onbloc/gno-ibc/e2e/union/internal/voyager"
 )
 
 const (
@@ -263,7 +259,7 @@ func (r *Runner) runGnoOrder(
 	if err != nil {
 		return gnoOrderResult{}, err
 	}
-	membershipHeight, err := r.unionMembershipHeight(
+	membershipHeight, err := r.union.MembershipHeight(
 		ctx, r.current.Clients.UnionGno, send.Height+1, membershipPath,
 	)
 	if err != nil {
@@ -275,9 +271,7 @@ func (r *Runner) runGnoOrder(
 	if err != nil {
 		return gnoOrderResult{}, err
 	}
-	height, err := strconv.ParseInt(
-		proofHeight[strings.LastIndex(proofHeight, "-")+1:], 10, 64,
-	)
+	height, err := voyager.HeightValue(proofHeight)
 	if err != nil || height < membershipHeight {
 		return gnoOrderResult{}, fmt.Errorf(
 			"EVM Proof Lens height %q does not cover Union membership height %d",
@@ -314,86 +308,6 @@ func (r *Runner) runGnoOrder(
 		MembershipHeight: membershipHeight,
 		MembershipPath:   strings.TrimPrefix(membershipPath, "0x"),
 	}, nil
-}
-
-func (r *Runner) unionMembershipHeight(
-	ctx context.Context,
-	clientID, minimum int64,
-	path string,
-) (int64, error) {
-	query := fmt.Sprintf(
-		"wasm-commit_membership_proof.client_id='%d'", clientID,
-	)
-	body, _ := json.Marshal(map[string]any{
-		"jsonrpc": "2.0", "id": 1, "method": "tx_search",
-		"params": map[string]any{
-			"query": query, "prove": false, "page": "1",
-			"per_page": "100", "order_by": "desc",
-		},
-	})
-	request, err := http.NewRequestWithContext(
-		ctx, http.MethodPost, r.cfg.UnionPacketRPCURL, bytes.NewReader(body),
-	)
-	if err != nil {
-		return 0, err
-	}
-	request.Header.Set("Content-Type", "application/json")
-	client := http.Client{Timeout: r.cfg.CommandTimeout}
-	response, err := client.Do(request)
-	if err != nil {
-		return 0, err
-	}
-	defer response.Body.Close()
-	if response.StatusCode != http.StatusOK {
-		return 0, fmt.Errorf("Union tx search returned %s", response.Status)
-	}
-	var result struct {
-		Error  json.RawMessage `json:"error"`
-		Result struct {
-			Txs []struct {
-				TxResult struct {
-					Events []struct {
-						Type       string `json:"type"`
-						Attributes []struct {
-							Key, Value string
-						} `json:"attributes"`
-					} `json:"events"`
-				} `json:"tx_result"`
-			} `json:"txs"`
-		} `json:"result"`
-	}
-	if err := json.NewDecoder(io.LimitReader(response.Body, 2<<20)).Decode(&result); err != nil ||
-		len(result.Error) != 0 && string(result.Error) != "null" {
-		return 0, fmt.Errorf("malformed Union tx search response")
-	}
-	path = strings.TrimPrefix(strings.ToLower(path), "0x")
-	var matches []int64
-	for _, tx := range result.Result.Txs {
-		for _, event := range tx.TxResult.Events {
-			if event.Type != "wasm-commit_membership_proof" &&
-				event.Type != "commit_membership_proof" {
-				continue
-			}
-			attributes := make(map[string]string, len(event.Attributes))
-			for _, attribute := range event.Attributes {
-				attributes[attribute.Key] = attribute.Value
-			}
-			height, err := strconv.ParseInt(attributes["proof_height"], 10, 64)
-			if err == nil &&
-				attributes["client_id"] == strconv.FormatInt(clientID, 10) &&
-				height >= minimum &&
-				strings.TrimPrefix(strings.ToLower(attributes["path"]), "0x") == path {
-				matches = append(matches, height)
-			}
-		}
-	}
-	if len(matches) != 1 {
-		return 0, fmt.Errorf(
-			"Union membership proof count=%d for client=%d path=%s, want one",
-			len(matches), clientID, path,
-		)
-	}
-	return matches[0], nil
 }
 
 func (r *Runner) requireWrappedState(

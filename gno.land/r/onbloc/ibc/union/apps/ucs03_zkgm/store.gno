@@ -78,7 +78,7 @@ type Store struct {
 	// as opposed to vouchers, which zkgm mints/burns directly.
 	lockedTokenAmounts *bptree.BPTree // denom -> *u256.Uint (permanently locked base token)
 	receivers          *bptree.BPTree // pkgPath -> z.Zkgmable
-	rateLimitDisabled bool
+	rateLimitDisabled  bool
 }
 
 func NewStore() *Store {

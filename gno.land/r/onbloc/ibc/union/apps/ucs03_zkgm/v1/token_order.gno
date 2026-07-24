@@ -581,10 +581,7 @@ func (v *ucs03ZkgmV1) localTokenEscrow(_ int, rlm realm, denom string, sender ad
 	case GRC20_TOKEN:
 		return v.localGRC20Escrow(0, rlm, grc20reg.Get(denom), sender, amount)
 	case NATIVE_COIN:
-		if err := funds.sub(denom, amount); err != nil {
-			return err
-		}
-		return nil
+		return funds.sub(denom, amount)
 	}
 
 	return nil
@@ -602,10 +599,7 @@ func (v *ucs03ZkgmV1) localTokenUnescrow(_ int, rlm realm, denom string, recipie
 	case GRC20_TOKEN:
 		return v.localGRC20Unescrow(0, rlm, grc20reg.Get(denom), recipient, amount)
 	case NATIVE_COIN:
-		if err := v.sendNative(0, rlm, denom, recipient, amount); err != nil {
-			return err
-		}
-		return nil
+		return v.sendNative(0, rlm, denom, recipient, amount)
 	}
 
 	return nil

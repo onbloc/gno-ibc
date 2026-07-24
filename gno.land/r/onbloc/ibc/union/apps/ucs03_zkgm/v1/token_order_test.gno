@@ -272,7 +272,7 @@ func TestVerifyMetadataDecimalsRejectsGRC20Mismatch(cur realm, t *testing.T) {
 	grc20Key := grc20reg.Register(cross(cur), token, grc20Slug)
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Foo", Symbol: "FOO", Decimals: 18}),
 	})
 
@@ -290,7 +290,7 @@ func TestVerifyMetadataDecimalsAcceptsGRC20Match(cur realm, t *testing.T) {
 	grc20Key := grc20reg.Register(cross(cur), token, grc20Slug)
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Foo", Symbol: "FOO", Decimals: 6}),
 	})
 
@@ -305,7 +305,7 @@ func TestVerifyMetadataDecimalsRejectsVoucherForwardMismatch(cur realm, t *testi
 	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "Foo", "VFMIS", 18, cur.Address(), scaledWire(20, 18)))
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Foo", Symbol: "FOO", Decimals: 6}),
 	})
 
@@ -322,7 +322,7 @@ func TestVerifyMetadataDecimalsAcceptsVoucherForwardMatch(cur realm, t *testing.
 	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "Foo", "VFOK", 18, cur.Address(), scaledWire(20, 18)))
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Foo", Symbol: "FOO", Decimals: 18}),
 	})
 
@@ -344,7 +344,7 @@ func TestTokenOrderVerifyGRC20InitializeDecimalsMismatchRejectedBeforeEscrow(cur
 	uassert.NoError(t, ledger.Approve(sender, cur.Address(), 40))
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Foo", Symbol: "FOO", Decimals: 18}),
 	})
 
@@ -377,7 +377,7 @@ func TestTokenOrderVerifyVoucherInitializeDecimalsMismatchRejectedBeforeEscrow(c
 	uassert.NoError(t, v.mintVoucher(0, cur, ibcDenom, [32]byte{}, "Foo", "VVIMIS", 18, sender, scaledWire(20, 18)))
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Foo", Symbol: "FOO", Decimals: 6}),
 	})
 
@@ -493,7 +493,7 @@ func TestTokenOrderExecuteAppliesRateLimit(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6}),
 	})
 	image := z.MetadataImage(mustDecodeTokenMetadata(metaBytes))
@@ -534,7 +534,7 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	v := newTestImpl()
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6}),
 	})
 	image := z.MetadataImage(mustDecodeTokenMetadata(metaBytes))
@@ -582,7 +582,7 @@ func TestTokenOrderExecuteInitializeMalformedInitializerUsesDefaults(cur realm, 
 	// Initializer is raw bytes that cannot be decoded as TokenInitializer.
 	// The protocol must fall back to ibcDenom-derived name/symbol and 0 decimals.
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    []byte("not-valid-abi"),
 	})
 	image := z.MetadataImage(mustDecodeTokenMetadata(metaBytes))
@@ -612,7 +612,7 @@ func TestTokenOrderExecuteInitializeEmptyInitializerUsesDefaults(cur realm, t *t
 
 	// Empty Initializer: decimals must default to 0, symbol derived from ibcDenom.
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    []byte{},
 	})
 	image := z.MetadataImage(mustDecodeTokenMetadata(metaBytes))
@@ -700,7 +700,7 @@ func TestTokenOrderExecuteInitializeUnderQuoteFallsBackToMarketMaker(cur realm, 
 	v := newTestImpl()
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    []byte("init"),
 	})
 	image := z.MetadataImage(mustDecodeTokenMetadata(metaBytes))
@@ -1407,7 +1407,7 @@ type protocolFillMintCase struct {
 
 func mustProtocolFillMintMetadata(symbol string) z.TokenMetadata {
 	return mustDecodeTokenMetadata(mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Test Token", Symbol: symbol, Decimals: 6}),
 	}))
 }
@@ -1422,7 +1422,7 @@ func TestProtocolFillMint(cur realm, t *testing.T) {
 	feeUnderflowMetadata := mustProtocolFillMintMetadata("TST7")
 
 	invalidDecimalsMetadata := mustDecodeTokenMetadata(mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Invalid", Symbol: "INV", Decimals: 19}), // > MaxDecimals (18)
 	}))
 

@@ -12,6 +12,7 @@ package batch
 
 import (
 	"chain"
+	"encoding/hex"
 	"testing"
 
 	"gno.land/p/nt/ufmt/v0"
@@ -84,7 +85,7 @@ func buildChildren(channelId types.ChannelId) (quoteTokens []string, instruction
 	quoteTokens = make([]string, len(bases))
 	instructions = make([]z.Instruction, len(bases))
 	for i, base := range bases {
-		meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: base, Symbol: symbols[i], Decimals: 6})
+		meta := mustTokenMetadata("af739f34ddf951cbc24fdbba4f76213688e13627", z.TokenInitializer{Name: base, Symbol: symbols[i], Decimals: 6})
 		quoteTokens[i] = z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte(base), z.MetadataImage(mustDecodeMeta(meta)))
 		instructions[i] = mustOrderInstruction(z.TokenOrderV2{
 			Sender:      []byte("remote-sender"),
@@ -164,12 +165,16 @@ func mustPacketData(instr z.Instruction) []byte {
 	return data
 }
 
-func mustTokenMetadata(implementation string, ti z.TokenInitializer) []byte {
+func mustTokenMetadata(implementationHex string, ti z.TokenInitializer) []byte {
+	implementation, err := hex.DecodeString(implementationHex)
+	if err != nil {
+		panic(err)
+	}
 	initBytes, err := z.EncodeTokenInitializer(ti)
 	if err != nil {
 		panic(err)
 	}
-	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes})
+	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: implementation, Initializer: initBytes})
 	if err != nil {
 		panic(err)
 	}

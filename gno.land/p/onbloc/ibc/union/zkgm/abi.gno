@@ -1,6 +1,9 @@
 package zkgm
 
 import (
+	"bytes"
+	"errors"
+
 	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/onbloc/encoding/abi"
 )
@@ -78,13 +81,25 @@ var TokenMetadataSchema = abi.Schema{Fields: []abi.Field{
 	{Type: abi.TypeBytes}, // initializer
 }}
 
-// TokenInitializerSchema is a local Gno helper for the grc20 initializer
-// payload stored inside TokenMetadata.initializer. It is not a Union ZKGM
+// tokenInitializerSelector is the first 4 bytes of
+// keccak256("initialize(address,address,string,string,uint8)"), the ZkgmERC20
+// contract's initializer. Every TokenMetadata.Initializer carries this
+// calldata verbatim regardless of what the wrapped token's origin is
+// (Gno-native GRC20/native, or a real EVM ERC20): a receiving EVM chain only
+// knows how to deploy and initialize a ZkgmERC20 clone from this exact wire
+// format, so a Gno-only encoding is not a valid substitute for it.
+var tokenInitializerSelector = []byte{0x84, 0x20, 0xce, 0x99}
+
+// TokenInitializerSchema mirrors the Solidity ABI params for ZkgmERC20's
+// initialize(address authority, address minter, string name, string symbol,
+// uint8 decimals), excluding the 4-byte selector. It is not a Union ZKGM
 // top-level struct in com.rs or Types.sol.
 var TokenInitializerSchema = abi.Schema{Fields: []abi.Field{
-	{Type: abi.TypeString}, // name
-	{Type: abi.TypeString}, // symbol
-	{Type: abi.TypeUint8},  // decimals
+	{Type: abi.TypeAddress}, // authority
+	{Type: abi.TypeAddress}, // minter
+	{Type: abi.TypeString},  // name
+	{Type: abi.TypeString},  // symbol
+	{Type: abi.TypeUint8},   // decimals
 }}
 
 var SolverMetadataSchema = abi.Schema{Fields: []abi.Field{
@@ -280,37 +295,73 @@ func DecodeTokenOrderV2(data []byte) (TokenOrderV2, error) {
 	}, nil
 }
 
+// EncodeTokenInitializer encodes the ZkgmERC20 initialize(...) calldata
+// carried in TokenMetadata.Initializer. i.Authority/i.Minter default to the
+// zero address when nil; callers that need a real EVM authority/minter
+// (production sends targeting a real chain) set them explicitly.
 func EncodeTokenInitializer(i TokenInitializer) ([]byte, error) {
-	return abi.Encode(TokenInitializerSchema, []any{i.Name, i.Symbol, i.Decimals})
+	// Authority/Minter are EVM-only addresses (the Gno chain has no notion of
+	// either); fill with the 20-byte zero address when the caller left them nil.
+	authority := i.Authority
+	if len(authority) == 0 {
+		authority = make([]byte, 20)
+	}
+
+	minter := i.Minter
+	if len(minter) == 0 {
+		minter = make([]byte, 20)
+	}
+
+	body, err := abi.Encode(TokenInitializerSchema, []any{
+		authority,
+		minter,
+		i.Name,
+		i.Symbol,
+		i.Decimals,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return append(append([]byte{}, tokenInitializerSelector...), body...), nil
 }
 
+// DecodeTokenInitializer decodes the ZkgmERC20 initialize(...) calldata
+// carried in TokenMetadata.Initializer, round-tripping every field encoded by
+// EncodeTokenInitializer (including Authority/Minter, which a receiving Gno
+// chain otherwise has no use for beyond display/reconstruction).
 func DecodeTokenInitializer(data []byte) (TokenInitializer, error) {
-	out, err := abi.Decode(TokenInitializerSchema, data)
+	if len(data) < 4 || !bytes.Equal(data[:4], tokenInitializerSelector) {
+		return TokenInitializer{}, errors.New("zkgm: unrecognized token initializer selector")
+	}
+
+	out, err := abi.Decode(TokenInitializerSchema, data[4:])
 	if err != nil {
 		return TokenInitializer{}, err
 	}
 
 	return TokenInitializer{
-		Name:     out[0].(string),
-		Symbol:   out[1].(string),
-		Decimals: out[2].(uint8),
+		Authority: out[0].([]byte),
+		Minter:    out[1].([]byte),
+		Name:      out[2].(string),
+		Symbol:    out[3].(string),
+		Decimals:  out[4].(uint8),
 	}, nil
 }
 
 // DecodeTokenInitializerFromMetadata extracts display metadata (name, symbol,
-// decimals) from a TokenMetadata by dispatching on the Implementation field.
-// New implementation types should be added as explicit cases; unknown formats
-// return a zero-value TokenInitializer so voucher creation can proceed with
-// safe defaults derived from ibcDenom.
+// decimals) from a TokenMetadata. Every wrapped token, whatever its origin,
+// carries the same ZkgmERC20 initialize(...) calldata in Initializer (see
+// DecodeTokenInitializer), so this always decodes it directly; a decode
+// failure returns a zero-value TokenInitializer so voucher creation can
+// proceed with safe defaults derived from ibcDenom.
 func DecodeTokenInitializerFromMetadata(meta TokenMetadata) TokenInitializer {
-	switch string(meta.Implementation) {
-	case "grc20":
-		if ti, err := DecodeTokenInitializer(meta.Initializer); err == nil {
-			return ti
-		}
+	ti, err := DecodeTokenInitializer(meta.Initializer)
+	if err != nil {
+		return TokenInitializer{}
 	}
 
-	return TokenInitializer{}
+	return ti
 }
 
 func EncodeTokenMetadata(m TokenMetadata) ([]byte, error) {

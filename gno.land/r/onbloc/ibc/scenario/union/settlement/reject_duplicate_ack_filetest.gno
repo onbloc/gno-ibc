@@ -12,6 +12,7 @@ package settlement
 // duplicate_recv_noop.)
 
 import (
+	"encoding/hex"
 	"chain"
 	"testing"
 
@@ -75,7 +76,7 @@ func setup(cur realm) (types.ChannelId, string) {
 	channelId := types.ChannelId(1)
 	core.ChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(channelId, zkgm.Version, types.ChannelId(2), nil, 1, "g1relayer"))
 
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
+	meta := mustTokenMetadata("af739f34ddf951cbc24fdbba4f76213688e13627", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 
 	fundOrder := z.TokenOrderV2{
@@ -134,12 +135,16 @@ func mustPacketData(instr z.Instruction) []byte {
 	return data
 }
 
-func mustTokenMetadata(implementation string, ti z.TokenInitializer) []byte {
+func mustTokenMetadata(implementationHex string, ti z.TokenInitializer) []byte {
+	implementation, err := hex.DecodeString(implementationHex)
+	if err != nil {
+		panic(err)
+	}
 	initBytes, err := z.EncodeTokenInitializer(ti)
 	if err != nil {
 		panic(err)
 	}
-	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes})
+	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: implementation, Initializer: initBytes})
 	if err != nil {
 		panic(err)
 	}

@@ -36,7 +36,7 @@ func TestInitializeDownscalesToCanonical(cur realm, t *testing.T) {
 		{18, "TK", 112, 122, "dag-rx-18"},
 	} {
 		meta := mustEncodeTokenMetadata(z.TokenMetadata{
-			Implementation: []byte("grc20"),
+			Implementation: zkgmERC20Impl,
 			Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "T", Symbol: tc.sym, Decimals: tc.decimals}),
 		})
 		denom := z.PredictWrappedTokenV2(u256.NewUint(tc.path), tc.dest, base, z.MetadataImage(mustDecodeTokenMetadata(meta)))
@@ -68,7 +68,7 @@ func TestInitializeIndivisibleAmountFailsClosedNoMint(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "IDV", Symbol: "IDV", Decimals: 18}),
 	})
 	const destChan = types.ChannelId(155)
@@ -124,7 +124,7 @@ func TestBaseAmountPreservedThroughMint(cur realm, t *testing.T) {
 	receiver := testAddress("rt-receiver-mint")
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "RT", Symbol: "RT", Decimals: 6}),
 	})
 	ibcDest := z.PredictWrappedTokenV2(path, uint32(chanDest), []byte(ibcBase), z.MetadataImage(mustDecodeTokenMetadata(metaBytes)))
@@ -217,7 +217,7 @@ func TestTimeoutNativeOrderWithMetadataDoesNotTrimEscrow(cur realm, t *testing.T
 
 	amount := u256.NewUint(2_000_000_000_000)
 	meta := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "USDC", Symbol: "USDC", Decimals: 18}),
 	})
 	order := z.TokenOrderV2{
@@ -255,7 +255,7 @@ func TestVerifyAndTimeoutNativeInitializeRoundTrip(cur realm, t *testing.T) {
 	amount := u256.NewUint(1_000_000_000_000)
 	sender := testAddress("vt-sender")
 	meta := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "USDC", Symbol: "USDC", Decimals: 18}),
 	})
 	order := z.TokenOrderV2{
@@ -296,7 +296,7 @@ func TestInitializeOverflowAmountReturnsFailureAckNoMint(cur realm, t *testing.T
 	v := newTestImpl()
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "OVF", Symbol: "OVF", Decimals: 18}),
 	})
 	const destChan = types.ChannelId(150)
@@ -393,7 +393,7 @@ func TestInitializeDecimalsExceedMaxReturnsFailureAck(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer: mustEncodeTokenInitializer(z.TokenInitializer{
 			Name: "Over", Symbol: "OVD", Decimals: 19,
 		}),

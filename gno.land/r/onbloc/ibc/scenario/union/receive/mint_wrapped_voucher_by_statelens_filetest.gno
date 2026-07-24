@@ -8,6 +8,7 @@ package receive
 // wrapped voucher to the receiver.
 
 import (
+	"encoding/hex"
 	"crypto/keccak256"
 	"testing"
 
@@ -65,7 +66,7 @@ type recvFixture struct {
 func buildRecvFixture() recvFixture {
 	channelId := types.ChannelId(1)
 	sourceChannel := types.ChannelId(2)
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
+	meta := mustTokenMetadata("af739f34ddf951cbc24fdbba4f76213688e13627", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 	order := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),
@@ -271,12 +272,16 @@ func mustPacketData(instr z.Instruction) []byte {
 	return data
 }
 
-func mustTokenMetadata(implementation string, ti z.TokenInitializer) []byte {
+func mustTokenMetadata(implementationHex string, ti z.TokenInitializer) []byte {
+	implementation, err := hex.DecodeString(implementationHex)
+	if err != nil {
+		panic(err)
+	}
 	initBytes, err := z.EncodeTokenInitializer(ti)
 	if err != nil {
 		panic(err)
 	}
-	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes})
+	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: implementation, Initializer: initBytes})
 	if err != nil {
 		panic(err)
 	}
@@ -334,7 +339,7 @@ func (e mockError) Error() string { return string(e) }
 //
 // [SCENARIO] 2. Receive INITIALIZE order proven by the state-lens MPT proof (mint 100)
 // [INFO] packet receipt recorded (state-lens MPT proof verified): true
-// [INFO] minted token (wrapped voucher): ibc/e03a8753fa7f41c282b15cdc0343f660e6e65845
+// [INFO] minted token (wrapped voucher): ibc/d3f2c0b48d7b05e97bae1249f2f3a1be880d2d9c
 // [INFO] receiver voucher balance: 100
 // [EXPECTED] packet receipt recorded (state-lens MPT proof verified): true
 // [EXPECTED] minted token should be the ibc/ wrapped voucher of base ugnot

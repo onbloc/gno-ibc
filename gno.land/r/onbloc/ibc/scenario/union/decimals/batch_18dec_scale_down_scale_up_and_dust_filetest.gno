@@ -11,6 +11,7 @@ package decimals
 // the per-instruction dust rejection this scenario is documenting.
 
 import (
+	"encoding/hex"
 	"chain"
 	"testing"
 
@@ -46,7 +47,7 @@ func main(cur realm) {
 	channelId := bootstrap(cur)
 	println("")
 
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Batch Ether Token", Symbol: "BETH", Decimals: 18})
+	meta := mustTokenMetadata("af739f34ddf951cbc24fdbba4f76213688e13627", z.TokenInitializer{Name: "Batch Ether Token", Symbol: "BETH", Decimals: 18})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("batchwei"), z.MetadataImage(mustDecodeMeta(meta)))
 
 	println("[SCENARIO] 2. Receive OP_BATCH with 18-dec INITIALIZE child: scaled down to 6-dec local")
@@ -184,12 +185,16 @@ func mustPacketData(instr z.Instruction) []byte {
 	return data
 }
 
-func mustTokenMetadata(implementation string, ti z.TokenInitializer) []byte {
+func mustTokenMetadata(implementationHex string, ti z.TokenInitializer) []byte {
+	implementation, err := hex.DecodeString(implementationHex)
+	if err != nil {
+		panic(err)
+	}
 	initBytes, err := z.EncodeTokenInitializer(ti)
 	if err != nil {
 		panic(err)
 	}
-	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes})
+	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: implementation, Initializer: initBytes})
 	if err != nil {
 		panic(err)
 	}

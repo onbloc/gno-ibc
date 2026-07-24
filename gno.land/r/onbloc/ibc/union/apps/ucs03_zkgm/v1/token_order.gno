@@ -251,7 +251,13 @@ func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.Channel
 	if canDeploy && metadata != nil {
 		image = z.MetadataImage(*metadata)
 
-		ti := z.DecodeTokenInitializerFromMetadata(*metadata)
+		ti, err := z.DecodeTokenInitializer(metadata.Initializer)
+		if err != nil {
+			// Malformed non-empty calldata mirrors an EVM proxy initialization
+			// revert. Gno deliberately rejects an empty initializer too instead
+			// of creating an uninitialized zero-decimal voucher.
+			return failureResult(universalErrorAck()), nil
+		}
 		if ti.Decimals > grc20.MaxDecimals {
 			return failureResult(universalErrorAck()), nil
 		}
@@ -690,7 +696,12 @@ func (v *ucs03ZkgmV1) verifyMetadataDecimals(baseDenom string, metadata []byte) 
 		return err
 	}
 
-	if z.DecodeTokenInitializerFromMetadata(meta).Decimals != originDecimals {
+	ti, err := z.DecodeTokenInitializer(meta.Initializer)
+	if err != nil {
+		return err
+	}
+
+	if ti.Decimals != originDecimals {
 		return makeError(errMetadataDecimalsMismatch)
 	}
 

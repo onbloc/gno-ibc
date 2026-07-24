@@ -1,139 +1,105 @@
 package transfer
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
-	"time"
-
-	"gno.land/p/aib/encoding"
-	u256 "gno.land/p/gnoswap/uint256"
-	"gno.land/p/nt/fqname/v0"
-	"gno.land/p/nt/ufmt/v0"
-	unionTypes "gno.land/p/onbloc/ibc/union/types"
-	z "gno.land/p/onbloc/ibc/union/zkgm"
-	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
+	"gno.land/p/aib/ibc/types"
+	"gno.land/r/aib/ibc/core"
 )
 
-// defaultForwardTimeout bounds the outbound ZKGM packet's own expiry when the
-// memo omits a timeout. On timeout the escrowed voucher refunds to this
-// realm's own address, not the original AtomOne sender.
-const defaultForwardTimeout = 24 * time.Hour
+// This file is the transfer app's *generic* forward extension point. The app
+// stays free of any downstream protocol (ZKGM, etc.): it only knows the
+// ForwardHandler abstraction defined here. A separate adapter realm implements it,
+// imports the downstream protocol, and registers itself via
+// RegisterForwardHandler. The dependency direction is adapter -> transfer,
+// never the reverse (transfer imports nothing of the adapter or its protocol).
 
-// forwardOutcome is tryForward's three-way result.
-type forwardOutcome int
-
-const (
-	forwardNone   forwardOutcome = iota // not a forward - mint to Receiver as usual
-	forwardAsync                        // forward sent onward; this packet's ack is deferred
-	forwardFailed                       // forward was signaled but invalid before any mint - ack-error
-)
-
-// tryForward forwards onward via ZKGM when data.Receiver is zkgm's proxy
-// address (a fixed realm address, not relayer-custodied); the memo only
-// carries routing data. Once the mint below succeeds, any later failure
-// panics instead of returning forwardFailed: an ack-error at that point
-// would let AtomOne refund the sender while the voucher stays minted here
-// too (double issuance).
-func tryForward(cur realm, sourceClient, destinationClient, icsReceiver string, sequence uint64, memo, voucherDenom string, amount int64) (forwardOutcome, error) {
-	if address(icsReceiver) != zkgm.ProxyAddress() {
-		return forwardNone, nil
-	}
-
-	fwd, ok := parseForwardMemo(memo)
-	if !ok {
-		return forwardFailed, ufmt.Errorf("transfer: forward: receiver is zkgm's proxy address but memo is not a valid forward instruction")
-	}
-
-	inst := getVoucher(voucherDenom)
-	if inst == nil {
-		return forwardFailed, ufmt.Errorf("transfer: forward: voucher not found for %s", voucherDenom)
-	}
-	if mintErr := inst.ledger.Mint(cur.Address(), amount); mintErr != nil {
-		return forwardFailed, ufmt.Errorf("transfer: forward: mint error: %v", mintErr)
-	}
-
-	// zkgm's escrow pulls via TransferFrom, so it needs an allowance.
-	teller := inst.ledger.ImpersonateTeller(cur.Address())
-	if err := teller.Approve(0, cur, zkgm.ProxyAddress(), amount); err != nil {
-		panic("transfer: forward: approve error: " + err.Error())
-	}
-
-	receiver := mustDecodeHex("receiver", fwd.Receiver)
-	quoteToken := mustDecodeHex("quote_token", fwd.QuoteToken)
-	metadata, err := z.EncodeTokenMetadata(z.TokenMetadata{
-		Implementation: mustDecodeHex("metadata.implementation", fwd.Metadata.Implementation),
-		Initializer:    mustDecodeHex("metadata.initializer", fwd.Metadata.Initializer),
-	})
-	if err != nil {
-		panic("transfer: forward: encode metadata: " + err.Error())
-	}
-
-	// grc20reg keys by rlmPath.symbol, not the full IBC hash.
-	baseToken := fqname.Construct(cur.PkgPath(), VoucherSymbol(voucherDenom))
-	amountU256 := u256.NewUintFromInt64(amount)
-
-	operand, err := z.EncodeTokenOrderV2(z.TokenOrderV2{
-		Sender:      []byte(cur.Address().String()),
-		Receiver:    receiver,
-		BaseToken:   []byte(baseToken),
-		BaseAmount:  amountU256,
-		QuoteToken:  quoteToken,
-		QuoteAmount: amountU256,
-		Kind:        fwd.Kind,
-		Metadata:    metadata,
-	})
-	if err != nil {
-		panic("transfer: forward: encode token order: " + err.Error())
-	}
-
-	instruction := z.Instruction{
-		Version: z.INSTR_VERSION_2,
-		Opcode:  z.OP_TOKEN_ORDER,
-		Operand: operand,
-	}
-
-	corrID := forwardCorrID(sourceClient, sequence)
-	salt := deriveForwardSalt(sourceClient, sequence)
-	timeout := forwardTimeoutTimestamp(fwd.TimeoutTimestamp)
-
-	// Not recovered: a panic here must revert this whole tx (including the
-	// mint above) so the AtomOne packet can be resubmitted.
-	zkgm.SendWithCallback(cross(cur), unionTypes.ChannelId(fwd.Channel), timeout, salt, instruction, corrID)
-
-	setPendingForward(corrID, pendingForward{
-		DestinationClient: destinationClient,
-		Sequence:          sequence,
-		VoucherDenom:      voucherDenom,
-		Amount:            amount,
-	})
-
-	return forwardAsync, nil
+// Request carries the details of an inbound voucher recv that the app asks the
+// handler to route onward. All fields are primitives or the base-token key, so
+// the handler needs nothing else from the app.
+type Request struct {
+	// SourceClient / DestinationClient identify the inbound aib IBC packet's
+	// clients; DestinationClient is the local client whose deferred ack the
+	// handler must eventually resolve via CompleteForwardAck.
+	SourceClient      string
+	DestinationClient string
+	// Sequence is the inbound packet sequence.
+	Sequence uint64
+	// Receiver is the inbound packet Receiver (equals the handler's own address;
+	// that equality is what selects the forward path).
+	Receiver string
+	// Memo is the raw ICS20 memo, opaque to the app; the handler interprets it.
+	Memo string
+	// BaseTokenKey is the grc20reg key of the minted voucher — used by the
+	// handler to resolve the token (to escrow it) and as the cross-chain base
+	// token identifier.
+	BaseTokenKey string
+	// Amount is the voucher amount minted to the handler.
+	Amount int64
 }
 
-// deriveForwardSalt derives a per-packet-unique ZKGM send salt from
-// (sourceClient, sequence) - already unique per source client via core, so
-// no extra counter state is needed.
-func deriveForwardSalt(sourceClient string, sequence uint64) [32]byte {
-	preimage := append([]byte(sourceClient), encoding.Uint64ToBigEndian(sequence)...)
-	return sha256.Sum256(preimage)
+// ForwardHandler is implemented by a downstream-specific adapter realm and
+// registered with the transfer app via RegisterForwardHandler. The interface
+// lives here (not in the adapter) so the app depends only on the abstraction it
+// consumes, never on any concrete downstream protocol.
+type ForwardHandler interface {
+	// Prepare validates a forward request WITHOUT taking custody. A non-nil
+	// error rejects the recv (error ack / refund) BEFORE any voucher is minted,
+	// so a malformed request never strands funds. It must not move any tokens.
+	Prepare(cur realm, req Request) error
+
+	// Execute is invoked AFTER the app has minted req.Amount of the voucher to
+	// the handler's own realm address. The handler escrows/forwards the tokens
+	// and records whatever it needs to later resolve the parent packet's ack via
+	// CompleteForwardAck. It MUST panic on any failure past this point so the
+	// whole recv tx reverts (mint included) rather than acking over stranded
+	// funds; permanent input errors belong in Prepare instead.
+	Execute(cur realm, req Request)
 }
 
-// forwardTimeoutTimestamp returns memoTimeout if set, else an absolute
-// nanosecond timeout defaultForwardTimeout from now.
-func forwardTimeoutTimestamp(memoTimeout uint64) unionTypes.Timestamp {
-	if memoTimeout != 0 {
-		return unionTypes.Timestamp(memoTimeout)
-	}
-	return unionTypes.Timestamp(uint64(time.Now().Add(defaultForwardTimeout).UnixNano()))
+// ForwardHandlerAddress returns the registered handler's address (the forward
+// trigger address), or the zero address if none is registered.
+func ForwardHandlerAddress() address {
+	return forwardHandlerAddr
 }
 
-func mustDecodeHex(field, s string) []byte {
-	if len(s) >= 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X') {
-		s = s[2:]
+// isForwardReceiver reports whether an inbound recv Receiver targets the
+// registered forward handler.
+func isForwardReceiver(receiver string) bool {
+	return forwardHandler != nil && address(receiver) == forwardHandlerAddr
+}
+
+// CompleteForwardAck resolves the deferred acknowledgement of a forwarded
+// packet once its onward leg settles. Callable ONLY by the registered handler.
+//
+// On failure it burns the voucher that the onward protocol refunded to the
+// handler, so the error ack that refunds the original AtomOne sender is not
+// double-counted. The burn amount and holder come from state transfer recorded
+// at recv time, not from the caller, so a compromised handler cannot burn
+// arbitrary balances.
+func CompleteForwardAck(cur realm, clientID string, sequence uint64, success bool) {
+	if forwardHandlerPkgPath == "" || cur.Previous().PkgPath() != forwardHandlerPkgPath {
+		panic("transfer: caller is not the registered forward handler")
 	}
-	bz, err := hex.DecodeString(s)
-	if err != nil {
-		panic("transfer: forward: invalid " + field + " hex: " + err.Error())
+
+	pending, found := getPendingForward(clientID, sequence)
+	if !found {
+		panic("transfer: no pending forward for the given packet")
 	}
-	return bz
+	deletePendingForward(clientID, sequence)
+
+	var resolved types.Acknowledgement
+	if success {
+		result := types.NewResultAppAcknowledgement([]byte{byte(1)})
+		resolved = types.Acknowledgement{AppAcknowledgements: [][]byte{result.MarshalJSON()}}
+	} else {
+		inst := getVoucher(pending.VoucherDenom)
+		if inst == nil {
+			panic("transfer: forward failed but voucher not found for " + pending.VoucherDenom)
+		}
+		if err := inst.ledger.Burn(pending.HandlerAddr, pending.Amount); err != nil {
+			panic("transfer: forward refund burn failed: " + err.Error())
+		}
+		resolved = types.Acknowledgement{AppAcknowledgements: [][]byte{types.UniversalErrorAcknowledgement()}}
+	}
+
+	core.WriteAcknowledgement(cross(cur), clientID, sequence, resolved)
 }

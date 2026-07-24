@@ -320,10 +320,11 @@ func renderNode(w *mux.ResponseWriter, n *json.Node) {
 	w.Write(string(bz))
 }
 
-// grc20regKey returns the grc20reg key for a voucher ibc denom.
-// e.g. "ibc/CAEF9C..." → "gno.land/r/aib/ibc/apps/transfer.CAEF9C..."
+// grc20regKey returns the grc20reg key for a voucher ibc denom: realmPath.symbol,
+// where symbol is the IBC hash truncated to grc20's MaxSymbolLen (see
+// VoucherSymbol) — grc20reg keys by the token's symbol, not the full hash.
 func grc20regKey(ibcDenom string) string {
-	return transferRealmPath + "." + ibcDenom[len("ibc/"):]
+	return transferRealmPath + "." + VoucherSymbol(ibcDenom)
 }
 
 func nodeError(msg string, args ...any) *json.Node {

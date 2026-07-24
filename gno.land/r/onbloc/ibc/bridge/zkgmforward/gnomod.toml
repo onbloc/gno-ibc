@@ -1,0 +1,2 @@
+module = "gno.land/r/onbloc/ibc/bridge/zkgmforward"
+gno = "0.9"

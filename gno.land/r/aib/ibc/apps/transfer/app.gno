@@ -343,20 +343,48 @@ func (a *App) OnRecvPacket(
 		}
 		inst := getOrCreateVoucher(0, cur, token.Denom.Base, voucherDenom)
 
-		switch outcome, fwdErr := tryForward(cur, sourceClient, destinationClient, data.Receiver, sequence, data.Memo, voucherDenom, amount); outcome {
-		case forwardAsync:
-			return types.RecvPacketResult{Status: types.PacketStatus_Async}
-		case forwardFailed:
-			ackErr = fwdErr
-			ack = types.NewErrorAppAcknowledgement(ackErr)
-			return types.RecvPacketResult{Status: types.PacketStatus_Failure}
-		case forwardNone:
-			// Mint voucher tokens to the receiver
-			if err := inst.ledger.Mint(address(data.Receiver), amount); err != nil {
+		// If the recv is addressed to the registered forward handler, delegate
+		// the onward routing to it instead of crediting Receiver. The transfer
+		// app knows nothing about the downstream protocol; see forward.gno.
+		if isForwardReceiver(data.Receiver) {
+			req := Request{
+				SourceClient:      sourceClient,
+				DestinationClient: destinationClient,
+				Sequence:          sequence,
+				Receiver:          data.Receiver,
+				Memo:              data.Memo,
+				BaseTokenKey:      grc20regKey(voucherDenom),
+				Amount:            amount,
+			}
+			// Validate before taking custody: a rejected forward returns an error
+			// ack and refunds, with nothing minted.
+			if ackErr = forwardHandler.Prepare(cross(cur), req); ackErr != nil {
+				ack = types.NewErrorAppAcknowledgement(ackErr)
+				return types.RecvPacketResult{Status: types.PacketStatus_Failure}
+			}
+			// Take custody: mint to the handler and record the pending forward,
+			// then hand off. Execute must panic on any failure past here so the
+			// whole recv (mint included) reverts rather than acking over stranded
+			// funds; the deferred ack is resolved later via CompleteForwardAck.
+			if err := inst.ledger.Mint(forwardHandlerAddr, amount); err != nil {
 				ackErr = ufmt.Errorf("mint voucher error: %v", err)
 				ack = types.NewErrorAppAcknowledgement(ackErr)
 				return types.RecvPacketResult{Status: types.PacketStatus_Failure}
 			}
+			setPendingForward(destinationClient, sequence, pendingForward{
+				VoucherDenom: voucherDenom,
+				Amount:       amount,
+				HandlerAddr:  forwardHandlerAddr,
+			})
+			forwardHandler.Execute(cross(cur), req)
+			return types.RecvPacketResult{Status: types.PacketStatus_Async}
+		}
+
+		// Mint voucher tokens to the receiver
+		if err := inst.ledger.Mint(address(data.Receiver), amount); err != nil {
+			ackErr = ufmt.Errorf("mint voucher error: %v", err)
+			ack = types.NewErrorAppAcknowledgement(ackErr)
+			return types.RecvPacketResult{Status: types.PacketStatus_Failure}
 		}
 	}
 

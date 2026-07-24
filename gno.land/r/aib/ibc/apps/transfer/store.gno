@@ -16,7 +16,7 @@ var (
 	denoms          *bptree.BPTree // ibcDenom:Denom
 	totalEscrow     *bptree.BPTree // denom:chain.Coin
 	voucherTokens   *bptree.BPTree // ibcDenom:*voucher
-	pendingForwards *bptree.BPTree // forwardCorrID:pendingForward
+	pendingForwards *bptree.BPTree // (destClient,sequence):pendingForward
 
 	// nextVoucherID allocates a unique grc20 token id for each voucher. Voucher
 	// symbols are truncated IBC-hash prefixes that can collide, so a shared
@@ -30,13 +30,15 @@ type voucher struct {
 	ledger *grc20.PrivateLedger
 }
 
-// pendingForward correlates a forwarded ZKGM send back to the ICS20 packet
-// whose ack it must resolve (see forward.gno, zkgm_callback.gno).
+// pendingForward records what transfer needs to resolve a forwarded packet's
+// deferred ack (see forward.gno). It is keyed by the inbound packet's
+// (destinationClient, sequence). VoucherDenom/Amount/HandlerAddr let
+// CompleteForwardAck burn the onward-protocol refund on failure without
+// trusting the caller for those values.
 type pendingForward struct {
-	DestinationClient string
-	Sequence          uint64
-	VoucherDenom      string
-	Amount            int64
+	VoucherDenom string
+	Amount       int64
+	HandlerAddr  address
 }
 
 func init() {
@@ -46,25 +48,26 @@ func init() {
 	pendingForwards = bptree.NewBPTree32()
 }
 
-// forwardCorrID is the corrID zkgm.SendWithCallback echoes back.
-func forwardCorrID(sourceClient string, sequence uint64) string {
-	return sourceClient + "/" + hex.EncodeToString(encoding.Uint64ToBigEndian(sequence))
+// forwardKey keys a pending forward by the inbound packet's local client and
+// sequence — the pair CompleteForwardAck receives and WriteAcknowledgement needs.
+func forwardKey(clientID string, sequence uint64) string {
+	return clientID + "/" + hex.EncodeToString(encoding.Uint64ToBigEndian(sequence))
 }
 
-func setPendingForward(corrID string, p pendingForward) {
-	pendingForwards.Set(corrID, p)
+func setPendingForward(clientID string, sequence uint64, p pendingForward) {
+	pendingForwards.Set(forwardKey(clientID, sequence), p)
 }
 
-func getPendingForward(corrID string) (pendingForward, bool) {
-	v := pendingForwards.Get(corrID)
+func getPendingForward(clientID string, sequence uint64) (pendingForward, bool) {
+	v := pendingForwards.Get(forwardKey(clientID, sequence))
 	if v == nil {
 		return pendingForward{}, false
 	}
 	return v.(pendingForward), true
 }
 
-func deletePendingForward(corrID string) {
-	pendingForwards.Remove(corrID)
+func deletePendingForward(clientID string, sequence uint64) {
+	pendingForwards.Remove(forwardKey(clientID, sequence))
 }
 
 func hasDenom(voucherDenom string) bool {

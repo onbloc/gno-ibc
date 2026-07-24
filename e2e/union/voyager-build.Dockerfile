@@ -19,7 +19,7 @@ RUN test -n "$UNION_COMMIT"
 # Build only the binaries referenced by config.jsonc.template.
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
     --mount=type=cache,target=/usr/local/cargo/git \
-    --mount=type=cache,target=/build/target \
+    --mount=type=cache,id=union-voyager-target,target=/build/target,sharing=locked \
     cargo build -j1 \
     -p voyager \
     -p voyager-state-module-cosmwasm \
@@ -47,6 +47,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     -p voyager-transaction-plugin-cosmos \
     -p voyager-transaction-plugin-gno \
     -p voyager-transaction-plugin-evm \
+    -p voyager-plugin-packet-timeout \
     -p voyager-plugin-transaction-batch \
     -p voyager-plugin-transaction-batch-proof-lens \
     -p voyager-client-update-plugin-cometbls \

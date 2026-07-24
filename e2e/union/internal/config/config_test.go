@@ -84,8 +84,9 @@ func TestRenderVoyagerConfig(t *testing.T) {
 	}
 
 	if strings.Contains(string(rendered), "__EVM_CHAIN_ID__") ||
-		!strings.Contains(string(rendered), `"client_id": 3`) {
-		t.Fatal("rendered config retained a placeholder or lost the allowlist")
+		!strings.Contains(string(rendered), `"client_id": 3`) ||
+		!strings.Contains(string(rendered), `"path": "/output/release/voyager-plugin-packet-timeout"`) {
+		t.Fatal("rendered config retained a placeholder or lost a required plugin or allowlist")
 	}
 }
 

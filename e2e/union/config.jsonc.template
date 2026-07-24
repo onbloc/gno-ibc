@@ -32,6 +32,7 @@
     ]
   },
   "plugins": [
+    {"path":"__VOYAGER_BIN_DIR__/voyager-plugin-packet-timeout","config":{}},
     {"path":"__VOYAGER_BIN_DIR__/voyager-plugin-transaction-batch","config":{"chain_id":"union-devnet-1","client_configs":{"max_batch_size":5,"max_wait_time":{"nanos":0,"secs":10},"min_batch_size":1}}},
     {"path":"__VOYAGER_BIN_DIR__/voyager-plugin-transaction-batch","config":{"chain_id":"__EVM_CHAIN_ID__","client_configs":[]}},
     {"path":"__VOYAGER_BIN_DIR__/voyager-plugin-transaction-batch","config":{"chain_id":"dev.ibc","client_configs":{"max_batch_size":5,"max_wait_time":{"nanos":0,"secs":10},"min_batch_size":1}}},

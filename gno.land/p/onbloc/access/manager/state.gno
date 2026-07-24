@@ -134,7 +134,33 @@ func (state *State) RevokeRole(role RoleId, account address) bool {
 
 	state.ensureRole(role)
 
+	if role == AdminRole && state.isLastAdmin(account) {
+		panic(errAccessManagerLastAdmin)
+	}
+
 	return state.getRole(role).revoke(account)
+}
+
+// isLastAdmin reports whether account is the only currently active AdminRole
+// member. Prevents bricking the system by removing the final admin.
+func (state *State) isLastAdmin(account address) bool {
+	adminRole := state.getRole(AdminRole)
+	if adminRole == nil {
+		return false
+	}
+
+	now := CurrentTimePoint()
+	if !adminRole.hasMember(account, now) {
+		return false
+	}
+
+	for member, access := range adminRole.Members {
+		if member != account && access.isActiveAt(now) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // RenounceRole revokes caller-confirmed role membership from account.
@@ -164,9 +190,7 @@ func (state *State) SetRoleAdmin(role RoleId, admin RoleId) {
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L261-L264
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L357-L371
 func (state *State) SetGrantDelay(role RoleId, delay Delay) {
-	if role == PublicRole {
-		panic(errorWithDetails(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
-	}
+	RequireUnlockedConfigRole(role)
 
 	state.ensureRole(role)
 	state.getRole(role).setGrantDelay(delay)

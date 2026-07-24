@@ -127,17 +127,12 @@ func (r *Runner) Run(ctx context.Context) (runErr error) {
 	if err := r.runChannelScenario(ctx); err != nil {
 		return err
 	}
-	if r.options.ERC20ToGno {
-		if err := r.runERC20ToGnoScenario(ctx); err != nil {
-			return err
+	for _, sc := range scenarioCases {
+		if !sc.enabled(r.options) {
+			continue
 		}
-		if r.options.AmountBoundaries {
-			if err := r.runAmountBoundaries(ctx); err != nil {
-				return err
-			}
-		}
-		if r.options.GnoToEVM {
-			return r.runGnoToEVMScenarios(ctx)
+		if err := sc.run(r, ctx); err != nil {
+			return fmt.Errorf("scenario %s: %w", sc.name, err)
 		}
 	}
 	return nil

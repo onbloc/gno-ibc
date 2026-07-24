@@ -349,19 +349,10 @@ func DecodeTokenInitializer(data []byte) (TokenInitializer, error) {
 	}, nil
 }
 
-// DecodeTokenInitializerFromMetadata extracts display metadata (name, symbol,
-// decimals) from a TokenMetadata. Every wrapped token, whatever its origin,
-// carries the same ZkgmERC20 initialize(...) calldata in Initializer (see
-// DecodeTokenInitializer), so this always decodes it directly; a decode
-// failure returns a zero-value TokenInitializer so voucher creation can
-// proceed with safe defaults derived from ibcDenom.
-func DecodeTokenInitializerFromMetadata(meta TokenMetadata) TokenInitializer {
-	ti, err := DecodeTokenInitializer(meta.Initializer)
-	if err != nil {
-		return TokenInitializer{}
-	}
-
-	return ti
+// DecodeTokenInitializerFromMetadata extracts the ZkgmERC20 initializer from
+// TokenMetadata without hiding malformed calldata as zero-value metadata.
+func DecodeTokenInitializerFromMetadata(meta TokenMetadata) (TokenInitializer, error) {
+	return DecodeTokenInitializer(meta.Initializer)
 }
 
 func EncodeTokenMetadata(m TokenMetadata) ([]byte, error) {

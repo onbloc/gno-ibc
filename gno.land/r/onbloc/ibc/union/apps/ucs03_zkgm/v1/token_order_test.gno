@@ -576,73 +576,62 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	uassert.Equal(t, 6, voucherDecimalsOf(ibcDenom))
 }
 
-func TestTokenOrderExecuteInitializeMalformedInitializerUsesDefaults(cur realm, t *testing.T) {
-	v := newTestImpl()
-
-	// Initializer is raw bytes that cannot be decoded as TokenInitializer.
-	// The protocol must fall back to ibcDenom-derived name/symbol and 0 decimals.
-	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: zkgmERC20Impl,
-		Initializer:    []byte("not-valid-abi"),
-	})
-	image := z.MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	ibcDenom := z.PredictWrappedTokenV2(u256.NewUint(3), 4, []byte("ugnot"), image)
-	order := z.TokenOrderV2{
-		Sender:      []byte("sender"),
-		Receiver:    []byte(testAddress("fallback-receiver")),
-		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(50),
-		QuoteToken:  []byte(ibcDenom),
-		QuoteAmount: u256.NewUint(50),
-		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
-		Metadata:    metaBytes,
+func TestTokenOrderExecuteInitializeRejectsInvalidInitializer(cur realm, t *testing.T) {
+	tests := []struct {
+		name        string
+		initializer []byte
+	}{
+		{"malformed non-empty initializer matches EVM revert", []byte("not-valid-abi")},
+		{"empty initializer is rejected by Gno policy", nil},
 	}
-	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(4), nil, 0)
 
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("fallback-relayer")), nil, [32]byte{}, u256.NewUint(3), order, false)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			testStore = newMockStore()
+			v := newTestImpl()
 
-	uassert.NoError(t, err)
-	uassert.True(t, res.Status == types.PacketStatusSuccess)
+			metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+				Implementation: zkgmERC20Impl,
+				Initializer:    tc.initializer,
+			})
+			image := z.MetadataImage(mustDecodeTokenMetadata(metaBytes))
+			ibcDenom := z.PredictWrappedTokenV2(u256.NewUint(3), 4, []byte("ugnot"), image)
+			order := z.TokenOrderV2{
+				Sender:      []byte("sender"),
+				Receiver:    []byte(testAddress("bad-init-rx")),
+				BaseToken:   []byte("ugnot"),
+				BaseAmount:  u256.NewUint(50),
+				QuoteToken:  []byte(ibcDenom),
+				QuoteAmount: u256.NewUint(50),
+				Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+				Metadata:    metaBytes,
+			}
+			packet := core.NewPacket(types.ChannelId(1), types.ChannelId(4), nil, 0)
 
-	uassert.Equal(t, 0, voucherDecimalsOf(ibcDenom))
-}
+			res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("bad-init-relayer")), nil, [32]byte{}, u256.NewUint(3), order, false)
 
-func TestTokenOrderExecuteInitializeEmptyInitializerUsesDefaults(cur realm, t *testing.T) {
-	v := newTestImpl()
+			uassert.NoError(t, err)
+			uassert.True(t, res.Status == types.PacketStatusFailure)
+			uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
 
-	// Empty Initializer: decimals must default to 0, symbol derived from ibcDenom.
-	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: zkgmERC20Impl,
-		Initializer:    []byte{},
-	})
-	image := z.MetadataImage(mustDecodeTokenMetadata(metaBytes))
-	ibcDenom := z.PredictWrappedTokenV2(u256.NewUint(5), 6, []byte("ugnot"), image)
-	order := z.TokenOrderV2{
-		Sender:      []byte("sender"),
-		Receiver:    []byte(testAddress("empty-init-receiver")),
-		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(20),
-		QuoteToken:  []byte(ibcDenom),
-		QuoteAmount: u256.NewUint(20),
-		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
-		Metadata:    metaBytes,
+			_, ok := testStore.GetVoucher(ibcDenom)
+			uassert.False(t, ok)
+			_, ok = testStore.GetMetadataImageOf(ibcDenom)
+			uassert.False(t, ok)
+			_, ok = testStore.GetTokenOrigin(ibcDenom)
+			uassert.False(t, ok)
+			_, ok = testStore.GetForeignToken(ibcDenom)
+			uassert.False(t, ok)
+		})
 	}
-	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(6), nil, 0)
-
-	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("empty-init-relayer")), nil, [32]byte{}, u256.NewUint(5), order, false)
-
-	uassert.NoError(t, err)
-	uassert.True(t, res.Status == types.PacketStatusSuccess)
-
-	uassert.Equal(t, 0, voucherDecimalsOf(ibcDenom))
 }
 
 func TestTokenOrderExecuteInitializeMintErrorDoesNotSetOrigin(cur realm, t *testing.T) {
 	v := newTestImpl()
 
 	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
-		Implementation: []byte("grc20-invalid-rx"),
-		Initializer:    []byte("init-invalid-rx"),
+		Implementation: zkgmERC20Impl,
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Invalid Receiver", Symbol: "INVRX", Decimals: 6}),
 	})
 
 	image := z.MetadataImage(mustDecodeTokenMetadata(metaBytes))

@@ -1510,35 +1510,43 @@ func TestDecodeTokenInitializerFromMetadata(t *testing.T) {
 	}
 
 	tests := []struct {
-		name string
-		meta TokenMetadata
-		want TokenInitializer
+		name    string
+		meta    TokenMetadata
+		want    TokenInitializer
+		wantErr bool
 	}{
 		{
 			"valid metadata",
 			TokenMetadata{Implementation: mustHex(zkgmERC20ImplHex), Initializer: validInit},
 			TokenInitializer{Name: "Test Token", Symbol: "TST", Decimals: 18},
+			false,
 		},
 		{
 			"invalid initializer",
 			TokenMetadata{Implementation: mustHex(zkgmERC20ImplHex), Initializer: []byte("truncated")},
 			TokenInitializer{},
+			true,
 		},
 		{
-			"unknown implementation",
-			TokenMetadata{Implementation: []byte("unknown"), Initializer: []byte("whatever")},
+			"empty initializer",
+			TokenMetadata{Implementation: mustHex(zkgmERC20ImplHex), Initializer: nil},
 			TokenInitializer{},
-		},
-		{
-			"empty implementation",
-			TokenMetadata{Implementation: []byte{}, Initializer: []byte{}},
-			TokenInitializer{},
+			true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := DecodeTokenInitializerFromMetadata(tt.meta)
+			got, err := DecodeTokenInitializerFromMetadata(tt.meta)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("DecodeTokenInitializerFromMetadata: %v", err)
+			}
 			if got.Name != tt.want.Name || got.Symbol != tt.want.Symbol || got.Decimals != tt.want.Decimals {
 				t.Fatalf("got %+v want %+v", got, tt.want)
 			}

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	types "gno.land/p/onbloc/ibc/union/types"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 func TestPredictWrappedToken(t *testing.T) {

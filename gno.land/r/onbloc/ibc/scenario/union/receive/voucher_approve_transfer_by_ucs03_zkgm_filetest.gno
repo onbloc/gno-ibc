@@ -19,7 +19,7 @@ import (
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
 	"gno.land/p/demo/tokens/grc20"
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 
 	"gno.land/r/demo/defi/grc20reg"
 	"gno.land/r/onbloc/ibc/union/access"

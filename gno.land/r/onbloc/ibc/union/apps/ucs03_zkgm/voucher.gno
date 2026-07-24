@@ -2,8 +2,8 @@ package ucs03_zkgm
 
 import (
 	"gno.land/p/demo/tokens/grc20"
-	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 // Voucher bundles a wrapped grc20 token, its private mint/burn ledger,

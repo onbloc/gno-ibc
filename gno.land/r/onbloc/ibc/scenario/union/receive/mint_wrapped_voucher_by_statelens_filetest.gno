@@ -8,8 +8,8 @@ package receive
 // wrapped voucher to the receiver.
 
 import (
-	"encoding/hex"
 	"crypto/keccak256"
+	"encoding/hex"
 	"testing"
 
 	"gno.land/p/onbloc/encoding/rlp"
@@ -18,9 +18,9 @@ import (
 	types "gno.land/p/onbloc/ibc/union/types"
 	"gno.land/p/onbloc/verifier/evm/storage"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/ufmt/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"

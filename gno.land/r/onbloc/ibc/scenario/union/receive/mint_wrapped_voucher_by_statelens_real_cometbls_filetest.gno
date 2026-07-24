@@ -16,8 +16,8 @@ package receive
 // the genuine cometbls verification path runs and accepts it.
 
 import (
-	"encoding/hex"
 	"crypto/keccak256"
+	"encoding/hex"
 	"testing"
 
 	"gno.land/p/onbloc/encoding/rlp"
@@ -26,10 +26,10 @@ import (
 	types "gno.land/p/onbloc/ibc/union/types"
 	"gno.land/p/onbloc/verifier/evm/storage"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/ufmt/v0"
 	fixture "gno.land/p/onbloc/ibc/testing/zkgm/fixture"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 
 	scenariocometbls "gno.land/r/onbloc/ibc/scenario/helper/cometbls"
 	"gno.land/r/onbloc/ibc/union/access"

@@ -13,9 +13,9 @@ import (
 
 	types "gno.land/p/onbloc/ibc/union/types"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -96,12 +96,12 @@ func TestVerifyForward(cur realm, t *testing.T) {
 	uassert.NoError(t, err)
 
 	cases := []struct {
-		name             string
-		forward          z.Forward
-		channelId        types.ChannelId
-		funds            *funds
-		setSender        bool
-		wantErr          string
+		name      string
+		forward   z.Forward
+		channelId types.ChannelId
+		funds     *funds
+		setSender bool
+		wantErr   string
 	}{
 		{
 			name: "passes call child",
@@ -258,13 +258,13 @@ func TestExecuteForward(cur realm, t *testing.T) {
 	packet := core.NewPacket(types.ChannelId(7), types.ChannelId(8), nil, 0)
 
 	cases := []struct {
-		name             string
-		forward          z.Forward
-		intent           bool
-		wantStatus       types.PacketStatus
-		wantOnlyMaker    bool
-		wantErr          string
-		assertions       func()
+		name          string
+		forward       z.Forward
+		intent        bool
+		wantStatus    types.PacketStatus
+		wantOnlyMaker bool
+		wantErr       string
+		assertions    func()
 	}{
 		{
 			name: "intent returns only-maker ack",

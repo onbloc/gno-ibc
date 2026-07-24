@@ -9,15 +9,15 @@ package settlement
 // destroyed off-ledger.
 
 import (
-	"encoding/hex"
 	"chain"
+	"encoding/hex"
 	"testing"
 
 	"gno.land/p/nt/ufmt/v0"
 	"gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 
 	"gno.land/r/demo/defi/grc20reg"
 	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"

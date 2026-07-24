@@ -4,7 +4,7 @@ import (
 	"errors"
 	"math"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 // ErrAmountOverflow is returned when a (downscaled) amount does not fit int64,

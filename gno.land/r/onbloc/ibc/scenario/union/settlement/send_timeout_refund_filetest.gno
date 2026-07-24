@@ -20,7 +20,7 @@ import (
 	types "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
@@ -196,10 +196,12 @@ type blockClockLightClient struct{}
 func (m *blockClockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
 func (m *blockClockLightClient) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
 func (m *blockClockLightClient) GetTimestamp() types.Timestamp                         { return nowTs() }
-func (m *blockClockLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error)  { return nowTs(), nil }
-func (m *blockClockLightClient) GetLatestHeight() uint64                               { return 1 }
-func (m *blockClockLightClient) GetCounterpartyChainID() string                        { return "block-clock-chain" }
-func (m *blockClockLightClient) Status() lightclient.Status                            { return lightclient.Active }
+func (m *blockClockLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
+	return nowTs(), nil
+}
+func (m *blockClockLightClient) GetLatestHeight() uint64        { return 1 }
+func (m *blockClockLightClient) GetCounterpartyChainID() string { return "block-clock-chain" }
+func (m *blockClockLightClient) Status() lightclient.Status     { return lightclient.Active }
 
 func (m *blockClockLightClient) VerifyHeader(_ address, header []byte, _ address) (types.StateUpdate, error) {
 	return types.StateUpdate{Height: 1, ClientStateBytes: header, ConsensusStateBytes: header}, nil

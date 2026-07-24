@@ -23,7 +23,7 @@ import (
 	types "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
@@ -162,13 +162,15 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 
 type acceptingClient struct{}
 
-func (m *acceptingClient) VerifyMembership(uint64, []byte, []byte, []byte) error    { return nil }
-func (m *acceptingClient) VerifyNonMembership(uint64, []byte, []byte) error         { return nil }
-func (m *acceptingClient) GetTimestamp() types.Timestamp                            { return types.Timestamp(1) }
-func (m *acceptingClient) GetTimestampAtHeight(uint64) (types.Timestamp, error)     { return types.Timestamp(1), nil }
-func (m *acceptingClient) GetLatestHeight() uint64                                  { return 1 }
-func (m *acceptingClient) GetCounterpartyChainID() string                           { return "malicious-chain" }
-func (m *acceptingClient) Status() lightclient.Status                               { return lightclient.Active }
+func (m *acceptingClient) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
+func (m *acceptingClient) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
+func (m *acceptingClient) GetTimestamp() types.Timestamp                         { return types.Timestamp(1) }
+func (m *acceptingClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
+	return types.Timestamp(1), nil
+}
+func (m *acceptingClient) GetLatestHeight() uint64        { return 1 }
+func (m *acceptingClient) GetCounterpartyChainID() string { return "malicious-chain" }
+func (m *acceptingClient) Status() lightclient.Status     { return lightclient.Active }
 func (m *acceptingClient) VerifyHeader(_ address, h []byte, _ address) (types.StateUpdate, error) {
 	return types.StateUpdate{Height: 1, ClientStateBytes: h, ConsensusStateBytes: h}, nil
 }
@@ -184,12 +186,14 @@ type honestClient struct{}
 func (m *honestClient) VerifyMembership(uint64, []byte, []byte, []byte) error {
 	return errors.New("honest client: membership verification failed")
 }
-func (m *honestClient) VerifyNonMembership(uint64, []byte, []byte) error        { return nil }
-func (m *honestClient) GetTimestamp() types.Timestamp                           { return types.Timestamp(1) }
-func (m *honestClient) GetTimestampAtHeight(uint64) (types.Timestamp, error)    { return types.Timestamp(1), nil }
-func (m *honestClient) GetLatestHeight() uint64                                 { return 1 }
-func (m *honestClient) GetCounterpartyChainID() string                          { return "honest-chain" }
-func (m *honestClient) Status() lightclient.Status                              { return lightclient.Active }
+func (m *honestClient) VerifyNonMembership(uint64, []byte, []byte) error { return nil }
+func (m *honestClient) GetTimestamp() types.Timestamp                    { return types.Timestamp(1) }
+func (m *honestClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
+	return types.Timestamp(1), nil
+}
+func (m *honestClient) GetLatestHeight() uint64        { return 1 }
+func (m *honestClient) GetCounterpartyChainID() string { return "honest-chain" }
+func (m *honestClient) Status() lightclient.Status     { return lightclient.Active }
 func (m *honestClient) VerifyHeader(_ address, h []byte, _ address) (types.StateUpdate, error) {
 	return types.StateUpdate{Height: 1, ClientStateBytes: h, ConsensusStateBytes: h}, nil
 }

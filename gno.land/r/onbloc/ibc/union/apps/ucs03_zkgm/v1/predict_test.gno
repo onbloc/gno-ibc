@@ -13,14 +13,14 @@ import (
 
 func TestMetadataImage(t *testing.T) {
 	meta := z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    []byte("init"),
 	}
 	ref := z.MetadataImage(meta)
 
 	uassert.True(t, ref == z.MetadataImage(meta))
 	uassert.False(t, ref == z.MetadataImage(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    []byte("init-2"),
 	}))
 }

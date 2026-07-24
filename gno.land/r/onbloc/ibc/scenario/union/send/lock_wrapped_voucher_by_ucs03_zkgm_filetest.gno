@@ -6,6 +6,7 @@ package send
 // token stays locked in the proxy after the acknowledgement.
 
 import (
+	"encoding/hex"
 	"testing"
 
 	"gno.land/p/nt/ufmt/v0"
@@ -38,7 +39,7 @@ func main(cur realm) {
 
 	// The wrapped denom is deterministic for (path=0, channel, base=ugnot, image),
 	// so it is derived once here and reused by the recv funding and the send below.
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
+	meta := mustTokenMetadata("af739f34ddf951cbc24fdbba4f76213688e13627", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 
 	println("[SCENARIO] 2. Fund sender with wrapped voucher via INITIALIZE recv (amount 100)")
@@ -177,12 +178,16 @@ func mustPacketData(instr z.Instruction) []byte {
 	return data
 }
 
-func mustTokenMetadata(implementation string, ti z.TokenInitializer) []byte {
+func mustTokenMetadata(implementationHex string, ti z.TokenInitializer) []byte {
+	implementation, err := hex.DecodeString(implementationHex)
+	if err != nil {
+		panic(err)
+	}
 	initBytes, err := z.EncodeTokenInitializer(ti)
 	if err != nil {
 		panic(err)
 	}
-	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes})
+	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: implementation, Initializer: initBytes})
 	if err != nil {
 		panic(err)
 	}
@@ -254,14 +259,14 @@ func (e mockError) Error() string { return string(e) }
 // [EXPECTED] channel should be 1
 //
 // [SCENARIO] 2. Fund sender with wrapped voucher via INITIALIZE recv (amount 100)
-// [INFO] minted token (wrapped voucher): ibc/e03a8753fa7f41c282b15cdc0343f660e6e65845
+// [INFO] minted token (wrapped voucher): ibc/d3f2c0b48d7b05e97bae1249f2f3a1be880d2d9c
 // [INFO] minted token wraps base token: ugnot
 // [INFO] minted to sender g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm, balance: 100
 // [EXPECTED] minted token should be the ibc/ wrapped voucher of base ugnot
 // [EXPECTED] sender voucher balance should be 100 (full INITIALIZE amount minted)
 //
 // [SCENARIO] 3. Send ESCROW order locking 40 of the voucher
-// [INFO] locked token (escrowed into proxy): ibc/e03a8753fa7f41c282b15cdc0343f660e6e65845
+// [INFO] locked token (escrowed into proxy): ibc/d3f2c0b48d7b05e97bae1249f2f3a1be880d2d9c
 // [INFO] locked into proxy escrow g182p37d0cyvsvqpv49lqtphpj3jswwqtuyl4qyy
 // [INFO] sender voucher balance: 60
 // [INFO] proxy escrow balance: 40
@@ -270,7 +275,7 @@ func (e mockError) Error() string { return string(e) }
 // [EXPECTED] proxy escrow balance should be 40 (locked)
 //
 // [SCENARIO] 4. Acknowledge with protocol-fill success (no-op for escrow)
-// [INFO] locked token still held by proxy: ibc/e03a8753fa7f41c282b15cdc0343f660e6e65845
+// [INFO] locked token still held by proxy: ibc/d3f2c0b48d7b05e97bae1249f2f3a1be880d2d9c
 // [INFO] sender voucher balance: 60
 // [INFO] proxy escrow balance: 40
 // [EXPECTED] sender voucher balance should be 60 (unchanged: escrow stays locked)

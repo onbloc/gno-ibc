@@ -37,6 +37,11 @@ type Plan struct {
 	Decimals                                    uint8
 }
 
+// WrappedPlan identifies a Gno-origin token on EVM.
+type WrappedPlan struct {
+	Token, Sender, Metadata string
+}
+
 // Snapshot captures the source balances and search boundary before send.
 type Snapshot struct {
 	Sender, Escrow string
@@ -117,6 +122,82 @@ func (c *Client) PrepareToken(
 	}, nil
 }
 
+// PrepareWrappedToken predicts the EVM token for one Gno-origin asset.
+func (c *Client) PrepareWrappedToken(
+	ctx context.Context,
+	evmChannel int64,
+	baseToken string,
+) (WrappedPlan, error) {
+	raw, err := c.cast(ctx, "wallet", "address", "--private-key", c.cfg.EVMPrivateKey)
+	if err != nil {
+		return WrappedPlan{}, err
+	}
+	sender := strings.ToLower(string(raw))
+	if !addressPattern.MatchString(sender) {
+		return WrappedPlan{}, errors.New("cannot derive EVM sender")
+	}
+	fao, err := c.addressCall(ctx, c.cfg.EVMZKGMContract, "FAO_IMPL()(address)")
+	if err != nil {
+		return WrappedPlan{}, err
+	}
+	implementation, err := c.addressCall(ctx, fao, "ERC20_IMPL()(address)")
+	if err != nil {
+		return WrappedPlan{}, err
+	}
+	salt, err := randomSalt()
+	if err != nil {
+		return WrappedPlan{}, err
+	}
+	tag := salt[2:]
+	initializer, err := c.cast(
+		ctx, "abi-encode", "f(address,address,string,string,uint8)",
+		sender, strings.ToLower(c.cfg.EVMZKGMContract),
+		"Union Gno "+tag[:32], "UG"+tag[:6], "6",
+	)
+	if err != nil {
+		return WrappedPlan{}, err
+	}
+	initializer = append([]byte("0x8420ce99"), bytes.TrimPrefix(initializer, []byte("0x"))...)
+	metadata, err := c.cast(
+		ctx, "abi-encode", "f(bytes,bytes)", implementation, string(initializer),
+	)
+	if err != nil {
+		return WrappedPlan{}, err
+	}
+	var fields []string
+	decoded, err := c.cast(ctx, "decode-abi", "f()(bytes,bytes)", string(metadata), "--json")
+	if err != nil || json.Unmarshal(decoded, &fields) != nil || len(fields) != 2 {
+		return WrappedPlan{}, errors.New("malformed EVM token metadata")
+	}
+	prediction, err := c.cast(
+		ctx, "call", c.cfg.EVMZKGMContract,
+		"predictWrappedTokenV2(uint256,uint32,bytes,(bytes,bytes))(address,bytes32)",
+		"0", strconv.FormatInt(evmChannel, 10),
+		"0x"+hex.EncodeToString([]byte(baseToken)),
+		fmt.Sprintf("(%s,%s)", fields[0], fields[1]),
+	)
+	if err != nil {
+		return WrappedPlan{}, err
+	}
+	token := strings.ToLower(strings.Fields(string(prediction))[0])
+	if !addressPattern.MatchString(token) {
+		return WrappedPlan{}, errors.New("malformed EVM wrapped token prediction")
+	}
+	return WrappedPlan{Token: token, Sender: sender, Metadata: string(metadata)}, nil
+}
+
+func (c *Client) addressCall(ctx context.Context, address, signature string) (string, error) {
+	raw, err := c.cast(ctx, "call", strings.ToLower(address), signature)
+	if err != nil {
+		return "", err
+	}
+	fields := strings.Fields(string(raw))
+	if len(fields) == 0 || !addressPattern.MatchString(strings.ToLower(fields[0])) {
+		return "", errors.New("malformed EVM address response")
+	}
+	return strings.ToLower(fields[0]), nil
+}
+
 // WithFreshSalt returns the same token identity for another packet.
 func (p Plan) WithFreshSalt() (Plan, error) {
 	salt, err := randomSalt()
@@ -176,13 +257,9 @@ func (c *Client) SnapshotToken(ctx context.Context, token, sender string) (Snaps
 	if err != nil {
 		return Snapshot{}, err
 	}
-	raw, err := c.cast(ctx, "block-number")
+	block, err := c.BlockNumber(ctx)
 	if err != nil {
 		return Snapshot{}, err
-	}
-	block, err := strconv.ParseUint(string(raw), 10, 64)
-	if err != nil {
-		return Snapshot{}, errors.New("malformed EVM block number")
 	}
 	return Snapshot{Sender: senderBalance, Escrow: escrowBalance, Block: block}, nil
 }
@@ -200,6 +277,23 @@ func (c *Client) TokenBalances(ctx context.Context, token, sender string) (strin
 	}
 	escrowBalance, err := c.balance(ctx, token, strings.ToLower(c.cfg.EVMZKGMContract))
 	return senderBalance, escrowBalance, err
+}
+
+// TotalSupply returns one ERC20 supply.
+func (c *Client) TotalSupply(ctx context.Context, token string) (string, error) {
+	raw, err := c.cast(ctx, "call", strings.ToLower(token), "totalSupply()(uint256)")
+	if err != nil {
+		return "", err
+	}
+	fields := strings.Fields(string(raw))
+	if len(fields) == 0 {
+		return "", errors.New("malformed ERC20 total supply")
+	}
+	value, ok := new(big.Int).SetString(fields[0], 10)
+	if !ok || value.Sign() < 0 || value.String() != fields[0] {
+		return "", errors.New("malformed ERC20 total supply")
+	}
+	return fields[0], nil
 }
 
 func (c *Client) balance(ctx context.Context, token, account string) (string, error) {

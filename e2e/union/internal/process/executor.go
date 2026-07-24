@@ -11,9 +11,10 @@ import (
 
 // Command describes one external process invocation.
 type Command struct {
-	Name string
-	Args []string
-	Env  []string
+	Name  string
+	Args  []string
+	Env   []string
+	Stdin io.Reader
 	// Stdout and Stderr stream output instead of retaining it in Result.
 	Stdout io.Writer
 	Stderr io.Writer
@@ -37,6 +38,7 @@ type OSExecutor struct{}
 func (OSExecutor) Run(ctx context.Context, command Command) (Result, error) {
 	cmd := exec.CommandContext(ctx, command.Name, command.Args...)
 	cmd.Env = append(os.Environ(), command.Env...)
+	cmd.Stdin = command.Stdin
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = command.Stdout

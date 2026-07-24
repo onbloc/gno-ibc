@@ -159,6 +159,8 @@ func (e *freshExecutor) voyager(args []string) (process.Result, error) {
 		return e.clientInfo(args)
 	case strings.HasPrefix(line, "rpc client-meta "):
 		return e.clientMeta(args)
+	case strings.HasPrefix(line, "rpc query ") && strings.Contains(line, `"client_status"`):
+		return process.Result{Stdout: []byte(`"active"`)}, nil
 	case strings.HasPrefix(line, "rpc client-state "):
 		chain, _ := trailingChainID(args[:len(args)-1])
 		if chain == "dev.ibc" {

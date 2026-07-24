@@ -382,6 +382,26 @@ func TestVerifyClientRejectsMalformedMetadata(t *testing.T) {
 	}
 }
 
+func TestVerifyClientRejectsInactiveStatus(t *testing.T) {
+	cfg := runtimeConfig(t)
+	recorder := &executor{steps: startedSteps(
+		step{stdout: `{"client_type":"gno","ibc_interface":"ibc-cosmwasm"}`},
+		step{stdout: `{"counterparty_chain_id":"counterparty","counterparty_height":"10"}`},
+		step{stdout: `"frozen"`},
+	)}
+	runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
+	if err := runtime.Start(context.Background(), []byte("{}")); err != nil {
+		t.Fatal(err)
+	}
+	err := runtime.VerifyClient(context.Background(), voyager.ClientExpectation{
+		Chain: "chain", Counterparty: "counterparty", ClientType: "gno",
+		IBCInterface: "ibc-cosmwasm", ID: 1,
+	})
+	if err == nil || !strings.Contains(err.Error(), "is frozen") {
+		t.Fatalf("error = %v, want frozen status", err)
+	}
+}
+
 func TestCreateClientRepairsOnlyExactFailedEventAndPersistsIt(t *testing.T) {
 	cfg := runtimeConfig(t)
 	failed := `[{
@@ -407,6 +427,7 @@ func TestCreateClientRepairsOnlyExactFailedEventAndPersistsIt(t *testing.T) {
 		step{stdout: "id"}, step{stdout: "{}"}, step{},
 		step{stdout: `{"client_type":"state-lens/ics23/mpt","ibc_interface":"ibc-gno"}`},
 		step{stdout: `{"counterparty_chain_id":"17000","counterparty_height":"10"}`},
+		step{stdout: `"active"`},
 	)}
 	runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
 	if err := runtime.Start(context.Background(), []byte("{}")); err != nil {

@@ -1,36 +1,29 @@
 package gno
 
 import (
-	"bytes"
 	"context"
-	"encoding/base64"
-	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"regexp"
 	"strconv"
-	"strings"
 	"time"
 )
 
-var acknowledgementColumnPattern = regexp.MustCompile(`^acknowledgement\[([0-9]+)\]$`)
+var packetHashPattern = regexp.MustCompile(`^0x[0-9a-fA-F]{64}$`)
 
 // PacketEvents identifies the matching receive and acknowledgement.
 type PacketEvents struct {
 	ReceiveTx, WriteAckTx, Acknowledgement string
 }
 
-type packetEvent struct {
-	Type   string
-	TxHash string
-	Attrs  []attribute
+// PacketSend identifies one Gno-origin packet.
+type PacketSend struct {
+	Tx, PacketHash string
+	Height         int64
 }
 
-type attribute struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
+// PacketAck identifies one source-side acknowledgement.
+type PacketAck struct {
+	Tx, Value string
 }
 
 // WaitPacket requires exactly one PacketRecv and WriteAck in the same Gno transaction.
@@ -38,7 +31,10 @@ func (c *Client) WaitPacket(ctx context.Context, packetHash string) (PacketEvent
 	waitCtx, cancel := context.WithTimeout(ctx, c.cfg.ScenarioTimeout)
 	defer cancel()
 	for {
-		events, err := c.packetEvents(waitCtx, packetHash)
+		events, err := c.queryEvents(
+			waitCtx, []string{"PacketRecv", "WriteAck"},
+			map[string]string{"packet_hash": packetHash},
+		)
 		if err != nil {
 			return PacketEvents{}, err
 		}
@@ -77,150 +73,69 @@ func (c *Client) WaitPacket(ctx context.Context, packetHash string) (PacketEvent
 	}
 }
 
-func (c *Client) packetEvents(ctx context.Context, packetHash string) ([]packetEvent, error) {
-	query := fmt.Sprintf(
-		`{ getTransactions(where: { success: { eq: true } response: { events: { _or: [{ GnoEvent: { type: { eq: "PacketRecv" } pkg_path: { eq: %q } _and: [{ attrs: { key: { eq: "packet_hash" } value: { eq: %q } } }] } }, { GnoEvent: { type: { eq: "WriteAck" } pkg_path: { eq: %q } _and: [{ attrs: { key: { eq: "packet_hash" } value: { eq: %q } } }] } }] } } } order: { heightAndIndex: DESC }) { hash response { events { ... on GnoEvent { type pkg_path attrs { key value } } } } } }`,
-		c.cfg.GnoIBCCoreRealm, packetHash, c.cfg.GnoIBCCoreRealm, packetHash,
-	)
-	body, _ := json.Marshal(map[string]string{"query": query})
-	request, err := http.NewRequestWithContext(
-		ctx, http.MethodPost, c.cfg.GnoPacketIndexerRPCURL, bytes.NewReader(body),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("packet indexer request failed")
-	}
-	request.Header.Set("content-type", "application/json")
-	client := http.Client{Timeout: c.cfg.CommandTimeout}
-	response, err := client.Do(request)
-	if err != nil {
-		return nil, fmt.Errorf("packet indexer request failed")
-	}
-	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, fmt.Errorf("packet indexer request failed")
-	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, 4<<20))
-	if err != nil {
-		return nil, fmt.Errorf("packet indexer request failed")
-	}
-	var payload struct {
-		Errors any `json:"errors"`
-		Data   struct {
-			Transactions []struct {
-				Hash     string `json:"hash"`
-				Response struct {
-					Events []struct {
-						Type    string      `json:"type"`
-						PkgPath string      `json:"pkg_path"`
-						Attrs   []attribute `json:"attrs"`
-					} `json:"events"`
-				} `json:"response"`
-			} `json:"getTransactions"`
-		} `json:"data"`
-	}
-	if json.Unmarshal(data, &payload) != nil || payload.Errors != nil {
-		return nil, fmt.Errorf("malformed Gno indexer response")
-	}
-	var matches []packetEvent
-	for _, tx := range payload.Data.Transactions {
-		if !validTxHash(tx.Hash) {
-			return nil, fmt.Errorf("malformed Gno transaction hash")
+// WaitAcknowledgement returns exactly one source-side PacketAck.
+func (c *Client) WaitAcknowledgement(ctx context.Context, packetHash string) (PacketAck, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, c.cfg.ScenarioTimeout)
+	defer cancel()
+	for {
+		events, err := c.queryEvents(
+			waitCtx, []string{"PacketAck"}, map[string]string{"packet_hash": packetHash},
+		)
+		if err != nil {
+			return PacketAck{}, err
 		}
-		for _, candidate := range tx.Response.Events {
-			if (candidate.Type != "PacketRecv" && candidate.Type != "WriteAck") ||
-				candidate.PkgPath != c.cfg.GnoIBCCoreRealm ||
-				!hasAttribute(candidate.Attrs, "packet_hash", packetHash) {
-				continue
+		switch len(events) {
+		case 0:
+			if err := pause(waitCtx, c.cfg.PollInterval); err != nil {
+				return PacketAck{}, fmt.Errorf("Gno PacketAck was not visible: %w", err)
 			}
-			matches = append(matches, packetEvent{
-				Type: candidate.Type, TxHash: tx.Hash, Attrs: candidate.Attrs,
-			})
-		}
-	}
-	return matches, nil
-}
-
-func parseAcknowledgement(attrs []attribute) (string, error) {
-	direct := ""
-	directSet := false
-	size := -1
-	columns := make(map[int]string)
-	for _, attr := range attrs {
-		switch attr.Key {
-		case "acknowledgement":
-			if directSet {
-				return "", fmt.Errorf("malformed Gno acknowledgement")
-			}
-			directSet = true
-			direct = attr.Value
-		case "acknowledgement_size":
-			if size >= 0 {
-				return "", fmt.Errorf("malformed Gno acknowledgement")
-			}
-			var err error
-			size, err = strconv.Atoi(attr.Value)
-			if err != nil || size <= 0 {
-				return "", fmt.Errorf("malformed Gno acknowledgement")
-			}
-		default:
-			match := acknowledgementColumnPattern.FindStringSubmatch(attr.Key)
-			if len(match) == 0 {
-				continue
-			}
-			index, err := strconv.Atoi(match[1])
+		case 1:
+			acknowledgement, err := parseAcknowledgement(events[0].Attrs)
 			if err != nil {
-				return "", fmt.Errorf("malformed Gno acknowledgement")
+				return PacketAck{}, err
 			}
-			if _, exists := columns[index]; exists {
-				return "", fmt.Errorf("malformed Gno acknowledgement")
+			return PacketAck{Tx: events[0].TxHash, Value: acknowledgement}, nil
+		default:
+			return PacketAck{}, fmt.Errorf("Gno PacketAck count=%d, want exactly one", len(events))
+		}
+	}
+}
+
+// WaitPacketSend returns the one new send after the captured block.
+func (c *Client) WaitPacketSend(ctx context.Context, channel, after int64) (PacketSend, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, c.cfg.ScenarioTimeout)
+	defer cancel()
+	for {
+		events, err := c.queryEvents(
+			waitCtx, []string{"PacketSend"},
+			map[string]string{"source_channel_id": strconv.FormatInt(channel, 10)},
+		)
+		if err != nil {
+			return PacketSend{}, err
+		}
+		var matches []packetEvent
+		for _, event := range events {
+			if event.BlockHeight > after {
+				matches = append(matches, event)
 			}
-			columns[index] = attr.Value
 		}
-	}
-	if directSet {
-		if size >= 0 || len(columns) != 0 || !validHex(direct) {
-			return "", fmt.Errorf("malformed Gno acknowledgement")
+		if len(matches) > 1 {
+			return PacketSend{}, fmt.Errorf("new Gno PacketSend count=%d, want exactly one", len(matches))
 		}
-		return direct, nil
-	}
-	if size < 0 || len(columns) == 0 {
-		return "", fmt.Errorf("malformed Gno acknowledgement")
-	}
-	var acknowledgement strings.Builder
-	for index := range len(columns) {
-		value, exists := columns[index]
-		if !exists {
-			return "", fmt.Errorf("malformed Gno acknowledgement")
+		if len(matches) == 0 {
+			if err := pause(waitCtx, c.cfg.PollInterval); err != nil {
+				return PacketSend{}, fmt.Errorf("Gno PacketSend was not visible: %w", err)
+			}
+			continue
 		}
-		acknowledgement.WriteString(value)
-	}
-	if acknowledgement.Len() != size || !validHex(acknowledgement.String()) {
-		return "", fmt.Errorf("malformed Gno acknowledgement")
-	}
-	return acknowledgement.String(), nil
-}
-
-func validTxHash(value string) bool {
-	decoded, err := base64.StdEncoding.DecodeString(value)
-	return err == nil && len(decoded) == 32
-}
-
-func hasAttribute(attrs []attribute, key, value string) bool {
-	for _, attr := range attrs {
-		if attr.Key == key && attr.Value == value {
-			return true
+		packetHash := attributeValue(matches[0].Attrs, "packet_hash")
+		if !packetHashPattern.MatchString(packetHash) || matches[0].BlockHeight <= 0 {
+			return PacketSend{}, fmt.Errorf("malformed Gno PacketSend hash")
 		}
+		return PacketSend{
+			Tx: matches[0].TxHash, PacketHash: packetHash, Height: matches[0].BlockHeight,
+		}, nil
 	}
-	return false
-}
-
-func validHex(value string) bool {
-	value = strings.TrimPrefix(value, "0x")
-	if value == "" || len(value)%2 != 0 {
-		return false
-	}
-	_, err := hex.DecodeString(value)
-	return err == nil
 }
 
 func pause(ctx context.Context, interval time.Duration) error {

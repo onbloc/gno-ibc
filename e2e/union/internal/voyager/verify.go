@@ -67,6 +67,13 @@ func (r *Runtime) verifyClient(ctx context.Context, want ClientExpectation) erro
 	if meta.CounterpartyChainID != want.Counterparty {
 		return fmt.Errorf("client counterparty mismatch for %s client %d", want.Chain, want.ID)
 	}
+	status, err := r.clientStatus(ctx, want.Chain, want.ID)
+	if err != nil {
+		return fmt.Errorf("verify %s client %d status: %w", want.Chain, want.ID, err)
+	}
+	if status != "active" {
+		return fmt.Errorf("%s client %d is %s", want.Chain, want.ID, status)
+	}
 	return nil
 }
 

@@ -25,6 +25,7 @@ type Options struct {
 	Resume           bool
 	ERC20ToGno       bool
 	AmountBoundaries bool
+	GnoToEVM         bool
 }
 
 // Runner executes the live acceptance scenarios.
@@ -64,6 +65,12 @@ func newRunnerWithClients(
 	}
 	if options.AmountBoundaries && !options.ERC20ToGno {
 		return nil, fmt.Errorf("--amount-boundaries requires --erc20-to-gno")
+	}
+	if options.GnoToEVM && !options.ERC20ToGno {
+		return nil, fmt.Errorf("--gno-to-evm requires --erc20-to-gno")
+	}
+	if options.GnoToEVM && cfg.GnoRecipient != gno.DevSenderAddress {
+		return nil, fmt.Errorf("--gno-to-evm requires the dev Gno sender")
 	}
 	runner := &Runner{
 		cfg: cfg, options: options,
@@ -125,7 +132,12 @@ func (r *Runner) Run(ctx context.Context) (runErr error) {
 			return err
 		}
 		if r.options.AmountBoundaries {
-			return r.runAmountBoundaries(ctx)
+			if err := r.runAmountBoundaries(ctx); err != nil {
+				return err
+			}
+		}
+		if r.options.GnoToEVM {
+			return r.runGnoToEVMScenarios(ctx)
 		}
 	}
 	return nil

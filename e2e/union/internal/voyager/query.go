@@ -101,6 +101,21 @@ func (r *Runtime) clientMeta(ctx context.Context, chain string, id int64) (clien
 	return meta, nil
 }
 
+func (r *Runtime) clientStatus(ctx context.Context, chain string, id int64) (string, error) {
+	query, _ := json.Marshal(map[string]any{
+		"client_status": map[string]int64{"client_id": id},
+	})
+	result, err := r.call(ctx, "rpc", "query", chain, string(query))
+	if err != nil {
+		return "", err
+	}
+	var status string
+	if json.Unmarshal(result.Stdout, &status) != nil || status == "" {
+		return "", ErrMalformedResponse
+	}
+	return strings.ToLower(status), nil
+}
+
 func (r *Runtime) lensState(ctx context.Context, chain string, id int64) (lensState, error) {
 	result, err := r.call(ctx, "rpc", "client-state", chain, strconv.FormatInt(id, 10), "--decode")
 	if err != nil {

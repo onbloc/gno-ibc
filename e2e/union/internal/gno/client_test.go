@@ -128,6 +128,80 @@ func TestVoucherBalanceAcceptsQueryEnvelope(t *testing.T) {
 	}
 }
 
+func TestProxyAddressAcceptsQEvalAddressType(t *testing.T) {
+	cfg := testConfig()
+	client := NewWithExecutor(cfg, executorFunc(func(context.Context, process.Command) (process.Result, error) {
+		return process.Result{Stdout: []byte(
+			`height: 0` + "\n" + `data: ("g182p37d0cyvsvqpv49lqtphpj3jswwqtuyl4qyy" .uverse.address)`,
+		)}, nil
+	}))
+	address, err := client.ProxyAddress(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if address != "g182p37d0cyvsvqpv49lqtphpj3jswwqtuyl4qyy" {
+		t.Fatalf("address = %s", address)
+	}
+}
+
+func TestNativeBalanceMatchesExactDenom(t *testing.T) {
+	cfg := testConfig()
+	client := NewWithExecutor(cfg, executorFunc(func(context.Context, process.Command) (process.Result, error) {
+		return process.Result{Stdout: []byte(`data: "1myugnot, 2ugnot"`)}, nil
+	}))
+	balance, err := client.NativeBalance(context.Background(), DevSenderAddress, "ugnot")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if balance != 2 {
+		t.Fatalf("balance = %d, want 2", balance)
+	}
+}
+
+func TestSendRawUsesDevEOAAndReturnsNewPacket(t *testing.T) {
+	txHash := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	packetHash := "0x" + strings.Repeat("a", 64)
+	var requests atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		if requests.Add(1) == 1 {
+			fmt.Fprint(w, `{"data":{"getTransactions":[]}}`)
+			return
+		}
+		fmt.Fprintf(w, `{"data":{"getTransactions":[{"hash":%q,"block_height":2,`+
+			`"response":{"events":[{"type":"PacketSend","pkg_path":%q,"attrs":[`+
+			`{"key":"source_channel_id","value":"3"},{"key":"packet_hash","value":%q}]}]}}]}}`,
+			txHash, testConfig().GnoIBCCoreRealm, packetHash)
+	}))
+	defer server.Close()
+	cfg := testConfig()
+	cfg.GnoPacketIndexerRPCURL = server.URL
+	cfg.GnoRecipient = "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
+	cfg.GnoChainID = "dev.ibc"
+	var commands []process.Command
+	outputs := [][]byte{
+		nil,
+		[]byte("0. sender (local) - addr: " + cfg.GnoRecipient + " pub: key"),
+		nil,
+	}
+	client := NewWithExecutor(cfg, executorFunc(func(_ context.Context, command process.Command) (process.Result, error) {
+		commands = append(commands, command)
+		output := outputs[0]
+		outputs = outputs[1:]
+		return process.Result{Stdout: output}, nil
+	}))
+	send, err := client.SendRaw(context.Background(), 3, "0x01", "1ugnot")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if send.PacketHash != packetHash || len(commands) != 3 {
+		t.Fatalf("send = %#v, commands = %d", send, len(commands))
+	}
+	if commands[0].Stdin == nil || commands[2].Stdin == nil ||
+		!strings.Contains(strings.Join(commands[2].Args, " "), "SendRaw") {
+		t.Fatalf("gnokey commands = %#v", commands)
+	}
+}
+
 func TestParseAcknowledgementRejectsMalformedKeys(t *testing.T) {
 	for _, attrs := range [][]attribute{
 		{

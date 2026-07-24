@@ -3,11 +3,15 @@ package scenario
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
+	"github.com/onbloc/gno-ibc/e2e/union/internal/gno"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/process"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/state"
 )
@@ -123,6 +127,52 @@ func TestPacketPreflightRejectsMissingCommandsBeforeDocker(t *testing.T) {
 	}
 	if len(recorder.commands) != 2 {
 		t.Fatalf("commands = %#v, want only git preflight", recorder.commands)
+	}
+}
+
+func TestGnoToEVMRequiresDevSenderBeforeCommands(t *testing.T) {
+	cfg := testConfig(t)
+	recorder := new(recordingExecutor)
+	_, err := newRunner(
+		cfg, recorder,
+		Options{Apply: true, ERC20ToGno: true, GnoToEVM: true},
+	)
+	if err == nil || !strings.Contains(err.Error(), "dev Gno sender") {
+		t.Fatalf("error = %v, want dev sender", err)
+	}
+	if len(recorder.commands) != 0 {
+		t.Fatalf("commands = %#v, want none", recorder.commands)
+	}
+	cfg.GnoRecipient = gno.DevSenderAddress
+	if _, err := newRunner(
+		cfg, recorder,
+		Options{Apply: true, ERC20ToGno: true, GnoToEVM: true},
+	); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUnionMembershipHeightMatchesPacketPath(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost {
+			http.Error(w, "method", http.StatusMethodNotAllowed)
+			return
+		}
+		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"txs":[` +
+			`{"tx_result":{"events":[{"type":"wasm-commit_membership_proof","attributes":[` +
+			`{"key":"client_id","value":"22"},{"key":"proof_height","value":"12"},` +
+			`{"key":"path","value":"abcd"}]}]}}]}}`))
+	}))
+	defer server.Close()
+	runner := Runner{cfg: config.Config{
+		UnionPacketRPCURL: server.URL, CommandTimeout: time.Second,
+	}}
+	height, err := runner.unionMembershipHeight(context.Background(), 22, 11, "0xabcd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if height != 12 {
+		t.Fatalf("height = %d, want 12", height)
 	}
 }
 

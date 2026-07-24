@@ -35,6 +35,15 @@ func TestAcknowledgementClassification(t *testing.T) {
 	if _, err := matchingAcknowledgementResult(success, failure); err == nil {
 		t.Fatal("mismatched acknowledgement results unexpectedly passed")
 	}
+	if _, err := matchingAcknowledgementResult(
+		success, encodedAcknowledgement(1, []byte{0xab, 0xce}),
+	); err == nil {
+		t.Fatal("mismatched acknowledgement payloads unexpectedly passed")
+	}
+	uppercase := strings.ToUpper(strings.TrimPrefix(success, "0x"))
+	if got, err := matchingAcknowledgementResult(success, uppercase); err != nil || !got {
+		t.Fatalf("equivalent acknowledgement presentation = %v, %v", got, err)
+	}
 	if _, err := matchingAcknowledgementResult("0x01", "0x01"); err == nil {
 		t.Fatal("short acknowledgement unexpectedly passed")
 	}

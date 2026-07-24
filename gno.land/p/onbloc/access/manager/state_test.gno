@@ -230,3 +230,76 @@ func TestLockedPublicRoleCannotBeGrantedOrRevoked(t *testing.T) {
 		})
 	}
 }
+
+func TestSetGrantDelayRejectsLockedRoles(t *testing.T) {
+	tests := []struct {
+		name string
+		role RoleId
+	}{
+		{"admin role", AdminRole},
+		{"public role", PublicRole},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			state := NewState()
+			mustPanic(t, func() {
+				state.SetGrantDelay(tc.role, 5)
+			})
+		})
+	}
+}
+
+func TestRevokeRoleGuardsLastAdmin(t *testing.T) {
+	admin := testutils.TestAddress("admin")
+	secondAdmin := testutils.TestAddress("second-admin")
+
+	t.Run("last active admin cannot be revoked", func(t *testing.T) {
+		state := NewState()
+		state.GrantRole(AdminRole, admin)
+
+		mustPanic(t, func() {
+			state.RevokeRole(AdminRole, admin)
+		})
+		if !state.HasRole(AdminRole, admin).IsMember {
+			t.Fatal("last admin must not be removed")
+		}
+	})
+
+	t.Run("non-last admin can be revoked", func(t *testing.T) {
+		state := NewState()
+		state.GrantRole(AdminRole, admin)
+		state.GrantRole(AdminRole, secondAdmin)
+
+		if !state.RevokeRole(AdminRole, admin) {
+			t.Fatal("non-last admin must be revocable")
+		}
+		if state.HasRole(AdminRole, admin).IsMember {
+			t.Fatal("revoked admin must be removed")
+		}
+		if !state.HasRole(AdminRole, secondAdmin).IsMember {
+			t.Fatal("remaining admin must stay active")
+		}
+	})
+
+	t.Run("renounce last admin is guarded", func(t *testing.T) {
+		state := NewState()
+		state.GrantRole(AdminRole, admin)
+
+		mustPanic(t, func() {
+			state.RenounceRole(AdminRole, admin, admin)
+		})
+		if !state.HasRole(AdminRole, admin).IsMember {
+			t.Fatal("last admin must not be renounced")
+		}
+	})
+
+	t.Run("non-admin role revoke is unaffected", func(t *testing.T) {
+		caller := testutils.TestAddress("caller")
+		state := NewState()
+		state.GrantRole(testRole, caller)
+
+		if !state.RevokeRole(testRole, caller) {
+			t.Fatal("non-admin revoke must succeed")
+		}
+	})
+}

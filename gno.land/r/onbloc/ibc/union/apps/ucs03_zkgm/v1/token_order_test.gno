@@ -576,13 +576,15 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	uassert.Equal(t, 6, voucherDecimalsOf(ibcDenom))
 }
 
-func TestTokenOrderExecuteInitializeRejectsInvalidInitializer(cur realm, t *testing.T) {
+func TestTokenOrderExecuteInitializeValidatesInitializer(cur realm, t *testing.T) {
 	tests := []struct {
 		name        string
 		initializer []byte
+		wantSuccess bool
 	}{
-		{"malformed non-empty initializer matches EVM revert", []byte("not-valid-abi")},
-		{"empty initializer is rejected by Gno policy", nil},
+		{"valid zero decimals", mustEncodeTokenInitializer(z.TokenInitializer{Name: "Zero", Symbol: "ZERO", Decimals: 0}), true},
+		{"malformed non-empty initializer matches EVM revert", []byte("not-valid-abi"), false},
+		{"empty initializer is rejected by Gno policy", nil, false},
 	}
 
 	for _, tc := range tests {
@@ -611,6 +613,15 @@ func TestTokenOrderExecuteInitializeRejectsInvalidInitializer(cur realm, t *test
 			res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("bad-init-relayer")), nil, [32]byte{}, u256.NewUint(3), order, false)
 
 			uassert.NoError(t, err)
+			if tc.wantSuccess {
+				uassert.True(t, res.Status == types.PacketStatusSuccess)
+				assertProtocolAck(t, res.Acknowledgement)
+				_, ok := testStore.GetVoucher(ibcDenom)
+				uassert.True(t, ok)
+				uassert.Equal(t, 0, voucherDecimalsOf(ibcDenom))
+				return
+			}
+
 			uassert.True(t, res.Status == types.PacketStatusFailure)
 			uassert.Equal(t, string(universalErrorAck()), string(res.Acknowledgement))
 

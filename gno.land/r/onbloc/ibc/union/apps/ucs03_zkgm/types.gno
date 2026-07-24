@@ -57,6 +57,9 @@ type IAppVoucher interface {
 type IAppGetter interface {
 	GetTokenBucket(denom string) (*tb.TokenBucket, error)
 	GetChannelBalanceV2(channelId types.ChannelId, path *u256.Uint, baseToken string, quoteToken []byte) (*u256.Uint, error)
+	GetVoucherList(offset, count int) ([]VoucherInfo, error)
+	GetVoucherSize() (int, error)
+	GetVoucherInfo(ibcDenom string) (VoucherInfo, error)
 }
 
 type IStore interface {
@@ -83,6 +86,8 @@ type IStore interface {
 
 	SetVoucher(_ int, rlm realm, ibcDenom string, v *Voucher)
 	GetVoucher(ibcDenom string) (*Voucher, bool)
+	GetVoucherList(offset, count int) []VoucherInfo
+	GetVoucherSize() int
 	HasVoucher(ibcDenom string) bool
 
 	// AddLockedTokenAmount/GetLockedTokenAmount are managed alongside the

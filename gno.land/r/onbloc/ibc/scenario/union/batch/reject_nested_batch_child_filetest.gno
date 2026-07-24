@@ -1,14 +1,18 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/batch
 package batch
 
-// large_batch_and_nested_rejection_filetest is the BY-TYPE batch scenario for the
+// reject_nested_batch_child_filetest is the BY-TYPE batch scenario for the
 // current batch limits (re-targeted from the legacy e2e zs89). A flat batch has no
 // length cap: an 7-child batch of INITIALIZE orders mints all eight vouchers. A
-// nested batch (a batch whose child is itself a batch) is rejected — its receive
-// writes a failure acknowledgement and mints nothing new. The mint count is the
-// observable: 7 after the flat batch, still 7 after the nested batch. (The legacy
-// exact ack-hash equality used e2e ack builders; the unchanged mint count is the
-// behavior-level proof the nested batch was rejected.)
+//
+// Nested batches, where a child is itself a batch, abort the entire recv
+// transaction. executeBatch panics with execFatal on the disallowed opcode, and
+// the panic propagates out of OnRecvPacket because recv panics are not recovered.
+//
+// Returning an error instead would allow OnRecvPacket to commit a failure ack
+// after earlier child mutations had already been committed. If the source chain
+// then refunds that ack, the result would be a double payment. The terminating
+// panic is therefore the assertion.
 
 import (
 	"chain"
@@ -48,8 +52,8 @@ func main(cur realm) {
 	recvFlatBatch(cur, channelId, instructions, quoteTokens)
 	println("")
 
-	println("[SCENARIO] 3. A nested batch (batch inside batch) is rejected, minting nothing new")
-	recvNestedBatch(cur, channelId, quoteTokens)
+	println("[SCENARIO] 3. A nested batch (batch inside batch) reverts the whole recv tx")
+	recvNestedBatch(cur, channelId)
 }
 
 func bootstrap(cur realm) types.ChannelId {
@@ -111,16 +115,12 @@ func recvFlatBatch(cur realm, channelId types.ChannelId, instructions []z.Instru
 	ufmt.Println("[EXPECTED] all 7 children minted; receipt recorded")
 }
 
-func recvNestedBatch(cur realm, channelId types.ChannelId, quoteTokens []string) {
+func recvNestedBatch(cur realm, channelId types.ChannelId) {
 	nested := z.Batch{Instructions: []z.Instruction{mustBatchInstruction(z.Batch{})}}
 	packet := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustBatchInstruction(nested)), types.Timestamp(1<<62))
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
-
-	ufmt.Printf("[INFO] minted children after nested batch: %d\n", mintedChildren(quoteTokens))
-	ufmt.Printf("[INFO] packet receipt recorded: %t\n", receiptRecorded(packet))
-	ufmt.Println("[EXPECTED] nested batch rejected: mint count unchanged at 7; receipt recorded (failure ack)")
 }
 
 func mintedChildren(quoteTokens []string) int {
@@ -192,7 +192,7 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 // [INFO] packet receipt recorded: true
 // [EXPECTED] all 7 children minted; receipt recorded
 //
-// [SCENARIO] 3. A nested batch (batch inside batch) is rejected, minting nothing new
-// [INFO] minted children after nested batch: 7
-// [INFO] packet receipt recorded: true
-// [EXPECTED] nested batch rejected: mint count unchanged at 7; receipt recorded (failure ack)
+// [SCENARIO] 3. A nested batch (batch inside batch) reverts the whole recv tx
+
+// Error:
+// invalid batch instruction

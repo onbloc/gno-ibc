@@ -33,19 +33,20 @@ func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relaye
 	// keccak work, so execution cost scales with child count.
 	for i, instruction := range batch.Instructions {
 		if !isAllowedBatchInstruction(instruction.Opcode) {
-			return nil, makeError(errInvalidBatchInstruction)
+			panic(execFatal{makeError(errInvalidBatchInstruction).Error()})
 		}
 
 		childSalt := z.DeriveBatchSalt(u256.NewUint(uint64(i)), salt)
 
 		childRes, err := v.dispatchExecutePacket(0, rlm, packet, relayer, relayerMsg, childSalt, path, instruction, intent)
 		if err != nil {
-			return nil, err
+			panic(execFatal{err.Error()})
 		}
 
 		childAck := childRes.Acknowledgement
 		if len(childAck) == 0 {
-			panic("batch child returned empty ack")
+			// empty ack is unrecoverable once earlier children have committed.
+			panic(execFatal{"batch child returned empty ack"})
 		}
 		// A single only-maker child aborts the entire batch: return the sentinel up
 		// to the recv boundary (OnRecvPacket / OnIntentRecvPacket), which panics on
@@ -61,10 +62,15 @@ func (v *ucs03ZkgmV1) executeBatch(_ int, rlm realm, packet types.Packet, relaye
 
 	batchAckBytes, err := z.EncodeBatchAck(z.BatchAck{Acknowledgements: acks})
 	if err != nil {
-		return nil, err
+		panic(execFatal{err.Error()})
 	}
 
-	return z.EncodeAck(z.Ack{Tag: tagAckSuccess(), InnerAck: batchAckBytes})
+	ack, err := z.EncodeAck(z.Ack{Tag: tagAckSuccess(), InnerAck: batchAckBytes})
+	if err != nil {
+		panic(execFatal{err.Error()})
+	}
+
+	return ack, nil
 }
 
 // acknowledgeBatch fans the outer ack out to each child instruction.

@@ -382,6 +382,97 @@ func mustSuccessAck() []byte {
 	return ack
 }
 
+// A batch whose second child is a disallowed nested-batch instruction must
+// abort the whole recv tx even though the first child (a TokenOrder) already
+// minted before the disallowed opcode was reached. Without the executeBatch
+// fix this would return an ordinary error, letting OnRecvPacket commit a
+// failure ack while the first child's mint stays committed — and the source
+// chain's later ack-driven refund would then double-pay alongside that mint.
+func TestRecvBatchInvalidChildAbortsAfterPriorChildRan(cur realm, t *testing.T) {
+	Reset(cross(cur))
+	testStore = newMockStore()
+	testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
+
+	v := newTestImpl()
+	path := u256.Zero()
+	const destChan = types.ChannelId(72)
+	receiver := testAddress("batch-inv-child-rx")
+	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "BAT1", canonicalDecimals)
+
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(receiver),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte(quoteDenom),
+		QuoteAmount: u256.NewUint(21),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	nestedBatch := batchMustBatchInstruction(z.Batch{})
+	data := mustZkgmPacketBytes(batchMustBatchInstruction(z.Batch{
+		Instructions: []z.Instruction{batchMustOrderInstruction(order), nestedBatch},
+	}))
+	packet := core.NewPacket(types.ChannelId(71), destChan, data, 0)
+
+	relayer := testAddress("batch-inv-relayer")
+	uassert.AbortsContains(t, cur, "invalid batch instruction", func(cur realm) {
+		newTestImpl().OnRecvPacket(0, cur, packet, address(relayer), nil)
+	})
+
+	// Documents the pre-abort mint the fix must guarantee gets rolled back at
+	// the real chain's atomic-tx layer once this panic propagates uncaught
+	// out of OnRecvPacket (this in-process mock store isn't itself reverted
+	// by the panic, unlike a real node's cache-wrapped store).
+	uassert.Equal(t, int64(21), voucherBalanceOf(quoteDenom, receiver))
+}
+
+// A batch whose second child has an allowed opcode (OP_TOKEN_ORDER) but an
+// unsupported instruction version must also abort the whole recv tx, even
+// though that failure surfaces as an ordinary decode error rather than a
+// panic. Without wrapping that error as execFatal, OnRecvPacket would commit
+// a failure ack while the first child's mint stays committed — the same
+// double-payment class the disallowed-opcode fix addresses.
+func TestRecvBatchChildDecodeErrorAbortsAfterPriorChildRan(cur realm, t *testing.T) {
+	Reset(cross(cur))
+	testStore = newMockStore()
+	testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
+
+	v := newTestImpl()
+	path := u256.Zero()
+	const destChan = types.ChannelId(73)
+	receiver := testAddress("batch-decode-err-rx")
+	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "BAT2", canonicalDecimals)
+
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(receiver),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte(quoteDenom),
+		QuoteAmount: u256.NewUint(37),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	badVersionChild := batchMustOrderInstruction(order)
+	badVersionChild.Version = z.INSTR_VERSION_0 // OP_TOKEN_ORDER decode requires INSTR_VERSION_2
+	data := mustZkgmPacketBytes(batchMustBatchInstruction(z.Batch{
+		Instructions: []z.Instruction{batchMustOrderInstruction(order), badVersionChild},
+	}))
+	packet := core.NewPacket(types.ChannelId(71), destChan, data, 0)
+
+	relayer := testAddress("batch-decode-relayer")
+	uassert.AbortsContains(t, cur, "unsupported token order version", func(cur realm) {
+		newTestImpl().OnRecvPacket(0, cur, packet, address(relayer), nil)
+	})
+
+	// Same caveat as TestRecvBatchInvalidChildAbortsAfterPriorChildRan: this
+	// mock store doesn't itself revert on panic, so 37 here documents the
+	// pre-abort mint the execFatal wrap must guarantee gets rolled back at
+	// the real chain's atomic-tx layer.
+	uassert.Equal(t, int64(37), voucherBalanceOf(quoteDenom, receiver))
+}
+
 // A batch with an only-maker child aborts the whole recv tx: OnRecvPacket panics
 // on the only-maker outer ack, so no partial batch state is committed. This
 // mirrors union's reply handler returning Err(OnlyMaker) for a batch ack

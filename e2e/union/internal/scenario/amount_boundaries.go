@@ -179,38 +179,3 @@ func (r *Runner) runBoundaryOrder(
 		Success: success, Deltas: deltas,
 	}, nil
 }
-
-func classifyBoundaryBalances(
-	success bool,
-	amount string,
-	before, after state.Balances,
-) (state.Balances, error) {
-	sender, ok := decimalDifference(before.Sender, after.Sender)
-	if !ok {
-		return state.Balances{}, fmt.Errorf("ERC20 sender balance increased unexpectedly")
-	}
-	escrow, ok := decimalDifference(after.Escrow, before.Escrow)
-	if !ok {
-		return state.Balances{}, fmt.Errorf("ERC20 escrow balance decreased unexpectedly")
-	}
-	recipientBefore, err := strconv.ParseInt(before.Recipient, 10, 64)
-	if err != nil {
-		return state.Balances{}, fmt.Errorf("Gno voucher balance is malformed")
-	}
-	recipientAfter, err := strconv.ParseInt(after.Recipient, 10, 64)
-	if err != nil || recipientAfter < recipientBefore {
-		return state.Balances{}, fmt.Errorf("Gno voucher balance decreased unexpectedly")
-	}
-	recipient := recipientAfter - recipientBefore
-	if success {
-		expected, err := strconv.ParseInt(amount, 10, 64)
-		if err != nil || sender != amount || escrow != amount || recipient != expected {
-			return state.Balances{}, fmt.Errorf("successful boundary packet has incorrect balance deltas")
-		}
-	} else if sender != "0" || escrow != "0" || recipient != 0 {
-		return state.Balances{}, fmt.Errorf("failed boundary packet was not fully refunded")
-	}
-	return state.Balances{
-		Sender: sender, Escrow: escrow, Recipient: strconv.FormatInt(recipient, 10),
-	}, nil
-}

@@ -3,7 +3,6 @@ package scenario
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -429,8 +428,4 @@ func (r *Runner) requireWrappedState(
 		return fmt.Errorf("EVM wrapped token lifecycle state is incorrect")
 	}
 	return nil
-}
-
-func hexText(value string) string {
-	return "0x" + hex.EncodeToString([]byte(value))
 }

@@ -23,6 +23,7 @@ type mockStore struct {
 	vouchers           map[string]*zkgm.Voucher
 	lockedTokenAmounts map[string]*u256.Uint
 	receivers          map[string]z.Zkgmable
+	nativeEscrowTotal  map[string]*u256.Uint
 	rateLimitDisabled  bool
 }
 
@@ -39,6 +40,7 @@ func newMockStore() *mockStore {
 		vouchers:           map[string]*zkgm.Voucher{},
 		lockedTokenAmounts: map[string]*u256.Uint{},
 		receivers:          map[string]z.Zkgmable{},
+		nativeEscrowTotal:  map[string]*u256.Uint{},
 		// Match NewStore: rate limiting is opt-in (disabled by default).
 		rateLimitDisabled: true,
 	}
@@ -135,6 +137,39 @@ func (m *mockStore) AddLockedTokenAmount(_ int, rlm realm, denom string, amount 
 
 func (m *mockStore) GetLockedTokenAmount(denom string) (*u256.Uint, bool) {
 	v, ok := m.lockedTokenAmounts[denom]
+	return v, ok
+}
+
+func (m *mockStore) AddNativeEscrowTotal(_ int, rlm realm, denom string, amount *u256.Uint) {
+	total := u256.Zero()
+	if cur, ok := m.nativeEscrowTotal[denom]; ok {
+		total.Set(cur)
+	}
+
+	total, overflow := u256.Zero().AddOverflow(total, amount)
+	if overflow {
+		panic(zkgm.ErrNativeEscrowOverflow)
+	}
+
+	m.nativeEscrowTotal[denom] = total
+}
+
+func (m *mockStore) SubNativeEscrowTotal(_ int, rlm realm, denom string, amount *u256.Uint) {
+	cur, ok := m.nativeEscrowTotal[denom]
+	if !ok || cur.Cmp(amount) < 0 {
+		panic(zkgm.ErrNativeEscrowUnderflow)
+	}
+
+	total, underflow := u256.Zero().SubOverflow(cur, amount)
+	if underflow {
+		panic(zkgm.ErrNativeEscrowUnderflow)
+	}
+
+	m.nativeEscrowTotal[denom] = total
+}
+
+func (m *mockStore) GetNativeEscrowTotal(denom string) (*u256.Uint, bool) {
+	v, ok := m.nativeEscrowTotal[denom]
 	return v, ok
 }
 

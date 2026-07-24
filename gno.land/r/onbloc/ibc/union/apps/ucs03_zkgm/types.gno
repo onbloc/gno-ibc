@@ -47,6 +47,7 @@ type IAppTransfer interface {
 type IAppGetter interface {
 	GetTokenBucket(denom string) (*tb.TokenBucket, error)
 	GetChannelBalanceV2(channelId types.ChannelId, path *u256.Uint, baseToken string, quoteToken []byte) (*u256.Uint, error)
+	GetNativeEscrowTotal(denom string) (*u256.Uint, error)
 }
 
 type IStore interface {
@@ -80,6 +81,10 @@ type IStore interface {
 	// (native or grc20) that zkgm cannot supply-burn the way it burns vouchers.
 	AddLockedTokenAmount(_ int, rlm realm, denom string, amount *u256.Uint)
 	GetLockedTokenAmount(denom string) (*u256.Uint, bool)
+
+	AddNativeEscrowTotal(_ int, rlm realm, denom string, amount *u256.Uint)
+	SubNativeEscrowTotal(_ int, rlm realm, denom string, amount *u256.Uint)
+	GetNativeEscrowTotal(denom string) (*u256.Uint, bool)
 
 	SetReceiver(_ int, rlm realm, path string, receiver z.Zkgmable)
 	GetReceiver(path string) (z.Zkgmable, bool)

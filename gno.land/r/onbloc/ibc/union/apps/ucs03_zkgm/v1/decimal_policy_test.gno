@@ -213,6 +213,7 @@ func TestChannelBalanceHeldInVaultPrecision(cur realm, t *testing.T) {
 }
 
 func TestTimeoutNativeOrderWithMetadataDoesNotTrimEscrow(cur realm, t *testing.T) {
+	testStore = newMockStore()
 	v := newTestImpl()
 
 	amount := u256.NewUint(2_000_000_000_000)
@@ -231,6 +232,9 @@ func TestTimeoutNativeOrderWithMetadataDoesNotTrimEscrow(cur realm, t *testing.T
 	}
 	key := ChannelBalanceKeyV2(types.ChannelId(172), u256.Zero(), order.BaseToken, order.QuoteToken)
 	testStore.SetChannelBalanceV2(0, cur, key, amount)
+	// Seed as if the original INITIALIZE send already escrowed this; timeoutInternal
+	// below does the actual SubNativeEscrowTotal (via settleEscrowedV2's refund) we're testing.
+	testStore.AddNativeEscrowTotal(0, cur, string(order.BaseToken), amount)
 	testing.IssueCoins(cur.Address(), chain.NewCoins(chain.NewCoin("ugnot", 2_000_000_000_000)))
 
 	err := v.timeoutInternal(
@@ -242,6 +246,11 @@ func TestTimeoutNativeOrderWithMetadataDoesNotTrimEscrow(cur realm, t *testing.T
 
 	bal, _ := testStore.GetChannelBalanceV2(key)
 	uassert.Equal(t, u256.Zero().ToString(), bal.ToString())
+
+	// The timeout refund released exactly the seeded escrow.
+	nativeEscrow, ok := testStore.GetNativeEscrowTotal(string(order.BaseToken))
+	uassert.True(t, ok)
+	uassert.True(t, nativeEscrow.IsZero())
 }
 
 // TestVerifyAndTimeoutNativeInitializeRoundTrip guards against the bug where

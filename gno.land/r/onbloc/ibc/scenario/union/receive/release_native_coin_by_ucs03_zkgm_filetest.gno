@@ -7,6 +7,9 @@ package receive
 // packet whose base covers the quote. The protocol-fill unescrow decreases the
 // channel balance and hands the escrowed native coins back to the receiver via
 // the banker, so the receiver's on-chain ugnot balance must actually increase.
+// It also checks the store-tracked native escrow total (zkgm.GetNativeEscrowTotal):
+// it rises to the locked amount on send and drops back to zero once the escrow
+// is released, mirroring the proxy's on-chain balance.
 
 import (
 	"chain"
@@ -114,8 +117,19 @@ func lockNativeEscrow(cur realm, channelId types.ChannelId) {
 	bk := banker.NewReadonlyBanker()
 	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
 	ufmt.Printf("[INFO] user native balance: %d\n", bk.GetCoins(userAddr).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] native escrow total (ugnot): %d\n", nativeEscrowTotal("ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (locked)")
 	ufmt.Println("[EXPECTED] user native balance should be 0 (still escrowed)")
+	ufmt.Println("[EXPECTED] native escrow total should be 40 (tracked in store)")
+}
+
+// nativeEscrowTotal reads back the store-tracked native escrow total for denom.
+func nativeEscrowTotal(denom string) uint64 {
+	total, err := zkgm.GetNativeEscrowTotal(denom)
+	if err != nil {
+		panic(err)
+	}
+	return total.Uint64()
 }
 
 // receiveUnescrowOrder receives an UNESCROW order that releases the escrowed native
@@ -139,8 +153,10 @@ func receiveUnescrowOrder(cur realm, channelId types.ChannelId) {
 	proxy := zkgm.ProxyAddress()
 	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
 	ufmt.Printf("[INFO] user native balance: %d\n", bk.GetCoins(userAddr).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] native escrow total (ugnot): %d\n", nativeEscrowTotal("ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 0 (released)")
 	ufmt.Println("[EXPECTED] user native balance should be 40 (coins returned to the user)")
+	ufmt.Println("[EXPECTED] native escrow total should be 0 (decremented on successful unescrow)")
 }
 
 // --- encoding helpers (pure z calls, mirroring the e2e harness) ---
@@ -203,11 +219,15 @@ func (e mockError) Error() string { return string(e) }
 // [SCENARIO] 2. Lock 40ugnot into proxy escrow (native ESCROW send funded by attached coins)
 // [INFO] proxy native escrow balance: 40
 // [INFO] user native balance: 0
+// [INFO] native escrow total (ugnot): 40
 // [EXPECTED] proxy native escrow balance should be 40 (locked)
 // [EXPECTED] user native balance should be 0 (still escrowed)
+// [EXPECTED] native escrow total should be 40 (tracked in store)
 //
 // [SCENARIO] 3. Receive UNESCROW order: release 40ugnot from escrow back to the user
 // [INFO] proxy native escrow balance: 0
 // [INFO] user native balance: 40
+// [INFO] native escrow total (ugnot): 0
 // [EXPECTED] proxy native escrow balance should be 0 (released)
 // [EXPECTED] user native balance should be 40 (coins returned to the user)
+// [EXPECTED] native escrow total should be 0 (decremented on successful unescrow)

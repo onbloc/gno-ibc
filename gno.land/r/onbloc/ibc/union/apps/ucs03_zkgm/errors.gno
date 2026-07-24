@@ -12,4 +12,6 @@ const (
 	ErrChannelBalanceV2NotFound  = "channel balance v2 not found"
 	ErrLockedTokenAmountOverflow = "locked token amount overflows uint256"
 	ErrInterfaceConversion       = "interface conversion failed"
+	ErrNativeEscrowOverflow      = "native escrow total overflows uint256"
+	ErrNativeEscrowUnderflow     = "native escrow total underflows uint256"
 )

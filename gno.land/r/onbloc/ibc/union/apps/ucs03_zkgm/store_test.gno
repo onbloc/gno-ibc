@@ -31,6 +31,8 @@ func TestNewStore(t *testing.T) {
 	uassert.False(t, ok)
 	_, ok = s.GetReceiver("gno.land/r/receiver")
 	uassert.False(t, ok)
+	_, ok = s.GetNativeEscrowTotal("ugnot")
+	uassert.False(t, ok)
 }
 
 func TestTokenOrigin(cur realm, t *testing.T) {
@@ -122,6 +124,100 @@ func TestAddLockedTokenAmount(cur realm, t *testing.T) {
 			}
 
 			got, ok := s.GetLockedTokenAmount(denom)
+			uassert.True(t, ok)
+			uassert.True(t, got.Eq(tc.wantTotal))
+		})
+	}
+}
+
+// AddNativeEscrowTotal accumulates in-flight native custody per denom. It
+// stores the first escrow, sums subsequent escrows, treats a zero add as a
+// no-op, reaches exactly 2^256-1 without tripping, and aborts on the overflow
+// that would otherwise wrap the total below its prior value. A fresh store
+// and a distinct denom keep cases isolated.
+func TestAddNativeEscrowTotal(cur realm, t *testing.T) {
+	maxU256 := func() *u256.Uint { return new(u256.Uint).SetAllOne() }
+
+	cases := []struct {
+		name      string
+		seed      *u256.Uint // nil => no pre-existing entry
+		add       *u256.Uint
+		wantAbort bool
+		wantTotal *u256.Uint
+	}{
+		{"first escrow stores amount", nil, u256.NewUint(100), false, u256.NewUint(100)},
+		{"accumulates escrows", u256.NewUint(100), u256.NewUint(50), false, u256.NewUint(150)},
+		{"zero add is noop", u256.NewUint(100), u256.NewUint(0), false, u256.NewUint(100)},
+		{"sum to exactly max does not overflow", u256.Zero().Sub(maxU256(), u256.NewUint(7)), u256.NewUint(7), false, maxU256()},
+		{"overflow aborts", maxU256(), u256.NewUint(1), true, maxU256()},
+	}
+
+	s := NewStore()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			denom := "unative/" + tc.name
+			if tc.seed != nil {
+				s.AddNativeEscrowTotal(0, cur, denom, tc.seed)
+			}
+
+			if tc.wantAbort {
+				uassert.AbortsContains(t, cur, ErrNativeEscrowOverflow, func(cur realm) {
+					s.AddNativeEscrowTotal(0, cur, denom, tc.add)
+				})
+			} else {
+				s.AddNativeEscrowTotal(0, cur, denom, tc.add)
+			}
+
+			got, ok := s.GetNativeEscrowTotal(denom)
+			uassert.True(t, ok)
+			uassert.True(t, got.Eq(tc.wantTotal))
+		})
+	}
+}
+
+// SubNativeEscrowTotal releases in-flight native custody per denom. It
+// decreases a seeded total, drains exactly to zero without tripping, aborts
+// on an underflowing subtraction, and aborts the same way when the denom was
+// never escrowed at all (no prior entry to draw down).
+func TestSubNativeEscrowTotal(cur realm, t *testing.T) {
+	cases := []struct {
+		name      string
+		seed      *u256.Uint // nil => no pre-existing entry
+		sub       *u256.Uint
+		wantAbort bool
+		wantTotal *u256.Uint
+	}{
+		{"decreases seeded total", u256.NewUint(100), u256.NewUint(40), false, u256.NewUint(60)},
+		{"drains exactly to zero", u256.NewUint(100), u256.NewUint(100), false, u256.Zero()},
+		{"underflow aborts", u256.NewUint(100), u256.NewUint(101), true, u256.NewUint(100)},
+		{"missing entry aborts", nil, u256.NewUint(1), true, nil},
+	}
+
+	s := NewStore()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			denom := "unativesub/" + tc.name
+			if tc.seed != nil {
+				s.AddNativeEscrowTotal(0, cur, denom, tc.seed)
+			}
+
+			if tc.wantAbort {
+				uassert.AbortsContains(t, cur, ErrNativeEscrowUnderflow, func(cur realm) {
+					s.SubNativeEscrowTotal(0, cur, denom, tc.sub)
+				})
+
+				got, ok := s.GetNativeEscrowTotal(denom)
+				if tc.seed == nil {
+					uassert.False(t, ok)
+					return
+				}
+				uassert.True(t, ok)
+				uassert.True(t, got.Eq(tc.wantTotal))
+				return
+			}
+
+			s.SubNativeEscrowTotal(0, cur, denom, tc.sub)
+			got, ok := s.GetNativeEscrowTotal(denom)
 			uassert.True(t, ok)
 			uassert.True(t, got.Eq(tc.wantTotal))
 		})
@@ -311,6 +407,8 @@ func TestStore_MutationsRejectSpoofedRealm(cur realm, t *testing.T) {
 		{"remove inflight packet", func() { s.RemoveInFlightPacket(0, spoofedRealm, "spoof-packet") }},
 		{"set token bucket", func() { s.SetTokenBucket(0, spoofedRealm, "ibc/spoof-bucket", bucket) }},
 		{"remove token bucket", func() { s.RemoveTokenBucket(0, spoofedRealm, "ibc/spoof-bucket") }},
+		{"add native escrow total", func() { s.AddNativeEscrowTotal(0, spoofedRealm, "unative/spoof", u256.NewUint(1)) }},
+		{"sub native escrow total", func() { s.SubNativeEscrowTotal(0, spoofedRealm, "unative/spoof", u256.NewUint(1)) }},
 		{"set voucher", func() { s.SetVoucher(0, spoofedRealm, "ibc/spoof-voucher", vou) }},
 		{"set receiver", func() { s.SetReceiver(0, spoofedRealm, "gno.land/r/spoof/receiver", &dummyReceiver{}) }},
 		{"set rate limit disabled", func() { s.SetRateLimitDisabled(0, spoofedRealm, false) }},

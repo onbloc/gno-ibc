@@ -42,6 +42,18 @@ func QueryBatchPacketCommitment(batchHashHex string) string {
 	return commitment.String()
 }
 
+func QueryCommittedMembershipProof(clientId, proofHeight uint64, pathHex string) string {
+	path, err := hex.DecodeString(pathHex)
+	if err != nil {
+		panic(err)
+	}
+	commitment, err := core.GetCommittedMembershipProof(types.ClientId(clientId), proofHeight, path)
+	if err != nil {
+		return ""
+	}
+	return commitment.String()
+}
+
 func Bootstrap(cur realm) {
 	runtime.AssertOriginCall()
 	requireAdmin(cur)

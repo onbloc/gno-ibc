@@ -48,6 +48,11 @@ type Snapshot struct {
 	Block          uint64
 }
 
+// Membership identifies one EVM IBC storage proof input.
+type Membership struct {
+	Path, Value, Commitment string
+}
+
 // New returns a concrete EVM packet client.
 func New(cfg config.Config) *Client {
 	return NewWithExecutor(cfg, process.OSExecutor{})
@@ -56,6 +61,43 @@ func New(cfg config.Config) *Client {
 // NewWithExecutor returns a client using the supplied command seam.
 func NewWithExecutor(cfg config.Config, executor process.Executor) *Client {
 	return &Client{cfg: cfg, exec: executor}
+}
+
+// ChannelMembership derives the path and committed value for an open channel.
+func (c *Client) ChannelMembership(
+	ctx context.Context,
+	channel, connection, counterpartyChannel int64,
+	counterpartyPort, version string,
+) (Membership, error) {
+	encodedPath, err := c.cast(
+		ctx, "abi-encode", "f(uint256,uint256)", "3", strconv.FormatInt(channel, 10),
+	)
+	if err != nil {
+		return Membership{}, err
+	}
+	path, err := c.cast(ctx, "keccak", string(encodedPath))
+	if err != nil || !hashPattern.Match(path) {
+		return Membership{}, fmt.Errorf("malformed EVM channel path")
+	}
+	channelTuple := fmt.Sprintf(
+		"(3,%d,%d,0x%s,%s)", connection, counterpartyChannel,
+		hex.EncodeToString([]byte(counterpartyPort)), version,
+	)
+	encodedValue, err := c.cast(
+		ctx, "abi-encode", "f((uint8,uint32,uint32,bytes,string))", channelTuple,
+	)
+	if err != nil {
+		return Membership{}, err
+	}
+	value, err := c.cast(ctx, "keccak", string(encodedValue))
+	if err != nil || !hashPattern.Match(value) {
+		return Membership{}, fmt.Errorf("malformed EVM channel value")
+	}
+	commitment, err := c.cast(ctx, "keccak", string(value))
+	if err != nil || !hashPattern.Match(commitment) {
+		return Membership{}, fmt.Errorf("malformed Gno membership commitment")
+	}
+	return Membership{Path: string(path), Value: string(value), Commitment: string(commitment)}, nil
 }
 
 // Prepare validates the token and derives one fresh packet identity.

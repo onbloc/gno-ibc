@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -158,6 +160,30 @@ func TestNativeBalanceMatchesExactDenom(t *testing.T) {
 	}
 }
 
+func TestCommittedMembershipProofParsesPresentAndMissing(t *testing.T) {
+	want := "0x" + strings.Repeat("a", 64)
+	outputs := [][]byte{
+		[]byte(`("` + want + `" string)`),
+		[]byte(`("" string)`),
+	}
+	client := NewWithExecutor(testConfig(), executorFunc(func(_ context.Context, command process.Command) (process.Result, error) {
+		if !strings.Contains(strings.Join(command.Args, " "), "QueryCommittedMembershipProof(5,42,\"0102\")") {
+			t.Fatalf("command = %#v", command)
+		}
+		output := outputs[0]
+		outputs = outputs[1:]
+		return process.Result{Stdout: output}, nil
+	}))
+	got, err := client.CommittedMembershipProof(context.Background(), 5, 42, []byte{1, 2})
+	if err != nil || got != want {
+		t.Fatalf("present commitment = %q, %v", got, err)
+	}
+	got, err = client.CommittedMembershipProof(context.Background(), 5, 42, []byte{1, 2})
+	if err != nil || got != "" {
+		t.Fatalf("missing commitment = %q, %v", got, err)
+	}
+}
+
 func TestSendRawUsesDevEOAAndReturnsNewPacket(t *testing.T) {
 	txHash := base64.StdEncoding.EncodeToString(make([]byte, 32))
 	packetHash := "0x" + strings.Repeat("a", 64)
@@ -199,6 +225,65 @@ func TestSendRawUsesDevEOAAndReturnsNewPacket(t *testing.T) {
 	if commands[0].Stdin == nil || commands[2].Stdin == nil ||
 		!strings.Contains(strings.Join(commands[2].Args, " "), "SendRaw") {
 		t.Fatalf("gnokey commands = %#v", commands)
+	}
+}
+
+func TestCommitMembershipProofBuildsDirectMsgRun(t *testing.T) {
+	cfg := testConfig()
+	cfg.GnoChainID = "dev.ibc"
+	cfg.GnoPrivateKey = "0x" + strings.Repeat("1", 64)
+	var command process.Command
+	var body []byte
+	client := NewWithExecutor(cfg, executorFunc(func(_ context.Context, got process.Command) (process.Result, error) {
+		command = got
+		var err error
+		body, err = os.ReadFile(got.Args[len(got.Args)-1])
+		if err != nil {
+			return process.Result{}, err
+		}
+		return process.Result{}, nil
+	}))
+	result, err := client.CommitMembershipProof(
+		context.Background(), 5, 42, []byte{1, 2}, []byte{3}, []byte{4},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Accepted {
+		t.Fatalf("result = %#v", result)
+	}
+	if command.Name != "gnokey" ||
+		!strings.Contains(strings.Join(command.Args, " "), "maketx run") ||
+		command.Stdin == nil {
+		t.Fatalf("command = %#v", command)
+	}
+	for _, want := range []string{
+		`core.CommitMembershipProof(cross(cur)`,
+		`types.NewMsgCommitMembershipProof(types.ClientId(5), 42`,
+		`[]byte{1, 2}`, `[]byte{3}`, `[]byte{4}`,
+	} {
+		if !strings.Contains(string(body), want) {
+			t.Fatalf("body does not contain %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestCommitMembershipProofClassifiesVerifierRejection(t *testing.T) {
+	cfg := testConfig()
+	cfg.GnoChainID = "dev.ibc"
+	cfg.GnoPrivateKey = "0x" + strings.Repeat("1", 64)
+	client := NewWithExecutor(cfg, executorFunc(func(context.Context, process.Command) (process.Result, error) {
+		return process.Result{Stderr: []byte("deliver transaction failed: mpt proof hash mismatch")},
+			errors.New("exit status 1")
+	}))
+	result, err := client.CommitMembershipProof(
+		context.Background(), 5, 42, []byte{1, 2}, []byte{3}, []byte{4},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Accepted || result.Classification != "proof verification rejected" {
+		t.Fatalf("result = %#v", result)
 	}
 }
 

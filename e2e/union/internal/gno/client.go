@@ -108,3 +108,30 @@ func (c *Client) VerifyCommitmentCleared(ctx context.Context, packetHash string)
 	}
 	return nil
 }
+
+// CommittedMembershipProof returns the stored value commitment, or empty when
+// the client/height/path key has not been committed.
+func (c *Client) CommittedMembershipProof(
+	ctx context.Context,
+	clientID, height int64,
+	path []byte,
+) (string, error) {
+	raw, err := c.qeval(
+		ctx,
+		fmt.Sprintf(
+			`gno.land/r/onbloc/ibc/union/testing/e2e_setup.QueryCommittedMembershipProof(%d,%d,"%x")`,
+			clientID, height, path,
+		),
+	)
+	if err != nil {
+		return "", err
+	}
+	match := regexp.MustCompile(`\("(0x[0-9a-f]{64})"[[:space:]]+string\)`).FindSubmatch(raw)
+	if len(match) == 2 {
+		return string(match[1]), nil
+	}
+	if strings.Contains(string(raw), `("" string)`) {
+		return "", nil
+	}
+	return "", fmt.Errorf("malformed Gno membership proof commitment")
+}

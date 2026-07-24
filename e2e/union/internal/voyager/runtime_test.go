@@ -208,6 +208,72 @@ func TestFailedWorkRejectsSavedIDAheadOfQueue(t *testing.T) {
 	}
 }
 
+func TestEncodedMembershipProofUsesPinnedEncoder(t *testing.T) {
+	cfg := runtimeConfig(t)
+	recorder := &executor{steps: startedSteps(step{stdout: `"0x0102"`})}
+	runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
+	if err := runtime.Start(context.Background(), []byte("{}")); err != nil {
+		t.Fatal(err)
+	}
+	proof, err := runtime.EncodedMembershipProof(
+		context.Background(), cfg.EVMChainID, "42", `{"channel":{"channel_id":7}}`,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(proof, []byte{1, 2}) {
+		t.Fatalf("proof = %x, want 0102", proof)
+	}
+	command := strings.Join(recorder.commands[len(recorder.commands)-1].Args, " ")
+	for _, want := range []string{
+		`rpc ibc-proof ` + cfg.EVMChainID,
+		`{"channel":{"channel_id":7}} --height 42 --encode`,
+		`--ibc-interface ibc-gno --client-type state-lens/ics23/mpt`,
+	} {
+		if !strings.Contains(command, want) {
+			t.Fatalf("command %q does not contain %q", command, want)
+		}
+	}
+}
+
+func TestEncodedMembershipProofRejectsMalformedResponse(t *testing.T) {
+	cfg := runtimeConfig(t)
+	recorder := &executor{steps: startedSteps(step{stdout: `"not-hex"`})}
+	runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
+	if err := runtime.Start(context.Background(), []byte("{}")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runtime.EncodedMembershipProof(
+		context.Background(), cfg.EVMChainID, "42", `{"channel":{"channel_id":7}}`,
+	); !errors.Is(err, voyager.ErrMalformedResponse) {
+		t.Fatalf("error = %v, want malformed response", err)
+	}
+}
+
+func TestUpdateClientToWaitsForStoredHeight(t *testing.T) {
+	cfg := runtimeConfig(t)
+	recorder := &executor{steps: startedSteps(
+		step{},
+		step{stdout: `{"counterparty_chain_id":"32382","counterparty_height":"223"}`},
+		step{stdout: `{"counterparty_chain_id":"32382","counterparty_height":"258"}`},
+	)}
+	runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
+	if err := runtime.Start(context.Background(), []byte("{}")); err != nil {
+		t.Fatal(err)
+	}
+	height, err := runtime.UpdateClientTo(context.Background(), cfg.GnoChainID, 2, "256")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if height != "258" {
+		t.Fatalf("stored height = %s, want 258", height)
+	}
+	command := strings.Join(recorder.commands[6].Args, " ")
+	if !strings.Contains(command, "msg update-client "+cfg.GnoChainID+" 2 --update-to 256 -e") {
+		t.Fatalf("update command = %q", command)
+	}
+}
+
 func TestVerifyClientDistinguishesNotFoundMalformedAndCommandFailure(t *testing.T) {
 	tests := []struct {
 		name   string

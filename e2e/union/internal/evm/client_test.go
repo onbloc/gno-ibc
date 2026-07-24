@@ -141,6 +141,35 @@ func TestBalancesPreserveLargeDecimals(t *testing.T) {
 	}
 }
 
+func TestChannelMembershipUsesOpenTopology(t *testing.T) {
+	path := "0x" + strings.Repeat("a", 64)
+	value := "0x" + strings.Repeat("b", 64)
+	commitment := "0x" + strings.Repeat("c", 64)
+	executor := &fakeExecutor{outputs: [][]byte{
+		[]byte("0x01"), []byte(path), []byte("0x02"), []byte(value), []byte(commitment),
+	}}
+	got, err := NewWithExecutor(testConfig(), executor).ChannelMembership(
+		context.Background(), 7, 8, 9, "gno.land/r/example/app", "ucs03-zkgm-0",
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Path != path || got.Value != value || got.Commitment != commitment {
+		t.Fatalf("membership = %#v", got)
+	}
+	commands := make([]string, len(executor.commands))
+	for i := range executor.commands {
+		commands[i] = strings.Join(executor.commands[i].Args, " ")
+	}
+	if !strings.Contains(commands[0], "abi-encode f(uint256,uint256) 3 7") ||
+		!strings.Contains(commands[2],
+			"abi-encode f((uint8,uint32,uint32,bytes,string)) "+
+				"(3,8,9,0x676e6f2e6c616e642f722f6578616d706c652f617070,ucs03-zkgm-0)") ||
+		!strings.Contains(commands[4], "keccak "+value) {
+		t.Fatalf("commands = %#v", commands)
+	}
+}
+
 func TestSendTokenOrderPreservesAmountAndKind(t *testing.T) {
 	cfg := testConfig()
 	packetHash := "0x" + strings.Repeat("b", 64)

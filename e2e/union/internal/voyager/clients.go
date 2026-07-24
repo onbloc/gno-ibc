@@ -64,6 +64,40 @@ func (r *Runtime) ClientHeight(ctx context.Context, chain string, id int64) (str
 	return meta.CounterpartyHeight, nil
 }
 
+// UpdateClientTo enqueues an update and returns the stored height once it
+// reaches the requested target.
+func (r *Runtime) UpdateClientTo(ctx context.Context, chain string, id int64, target string) (string, error) {
+	targetHeight, err := HeightValue(target)
+	if err != nil || !heightPattern.MatchString(target) {
+		return "", ErrMalformedResponse
+	}
+	if _, err := r.retryWrite(ctx,
+		"msg", "update-client", chain, strconv.FormatInt(id, 10),
+		"--update-to", target, "-e",
+	); err != nil {
+		return "", err
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, r.cfg.ScenarioTimeout)
+	defer cancel()
+	for {
+		height, err := r.ClientHeight(waitCtx, chain, id)
+		if err != nil {
+			return "", err
+		}
+		value, err := HeightValue(height)
+		if err != nil {
+			return "", ErrMalformedResponse
+		}
+		if value >= targetHeight {
+			return height, nil
+		}
+		if err := pause(waitCtx, r.cfg.PollInterval); err != nil {
+			return "", fmt.Errorf("%w: %s client %d did not reach height %s",
+				classifyContext(waitCtx, err), chain, id, target)
+		}
+	}
+}
+
 // Index enqueues one chain index operation.
 func (r *Runtime) Index(ctx context.Context, chain, from string) error {
 	args := []string{"index", chain}

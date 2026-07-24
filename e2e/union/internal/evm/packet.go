@@ -69,7 +69,7 @@ func (c *Client) Send(
 	evmChannel int64,
 	sender, recipient, voucher, salt, tag string,
 ) (SendResult, error) {
-	metadata, err := c.metadata(ctx, tag, sender, 18)
+	metadata, err := c.metadata(ctx, tag, 18)
 	if err != nil {
 		return SendResult{}, err
 	}

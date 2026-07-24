@@ -139,7 +139,7 @@ func (c *Client) PrepareToken(
 		return Plan{}, err
 	}
 	tag := salt[2:]
-	metadata, err := c.metadata(ctx, tag, sender, decimals)
+	metadata, err := c.metadata(ctx, tag, decimals)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -390,19 +390,18 @@ func (c *Client) DeployTestToken(
 	return strings.ToLower(response.DeployedTo), nil
 }
 
-func (c *Client) metadata(ctx context.Context, tag, authority string, decimals uint8) (string, error) {
+func (c *Client) metadata(ctx context.Context, tag string, decimals uint8) (string, error) {
 	if len(tag) != 64 {
 		return "", fmt.Errorf("malformed packet tag")
 	}
+	// Gno decodes this initializer as local GRC20 metadata, not EVM contract calldata.
 	initializer, err := c.cast(
-		ctx, "abi-encode", "f(address,address,string,string,uint8)",
-		authority, strings.ToLower(c.cfg.EVMZKGMContract),
+		ctx, "abi-encode", "f(string,string,uint8)",
 		"Union E2E "+tag[:32], "UE"+tag[:6], strconv.Itoa(int(decimals)),
 	)
 	if err != nil {
 		return "", err
 	}
-	initializer = append([]byte("0x8420ce99"), bytes.TrimPrefix(initializer, []byte("0x"))...)
 	metadata, err := c.cast(ctx, "abi-encode", "f(bytes,bytes)", "0x6772633230", string(initializer))
 	return string(metadata), err
 }

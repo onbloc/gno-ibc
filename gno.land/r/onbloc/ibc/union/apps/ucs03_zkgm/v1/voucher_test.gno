@@ -8,6 +8,19 @@ import (
 	"gno.land/p/nt/uassert/v0"
 )
 
+// VoucherApproveX/VoucherTransferX are crossing test shims: the production
+// methods read the holder from rlm.Previous().Address(), which a direct
+// non-crossing call leaves empty. Driving them via testing.SetRealm(
+// testing.NewUserRealm(holder)) + cross(cur) reproduces the proxy's real call
+// shape (see call_union_test.gno for the same pattern).
+func (v *ucs03ZkgmV1) VoucherApproveX(cur realm, ibcDenom string, spender address, amount int64) error {
+	return v.VoucherApprove(0, cur, ibcDenom, spender, amount)
+}
+
+func (v *ucs03ZkgmV1) VoucherTransferX(cur realm, ibcDenom string, to address, amount int64) error {
+	return v.VoucherTransfer(0, cur, ibcDenom, to, amount)
+}
+
 // amountInt64 narrows uint256 to int64 for the banker/grc20 APIs; anything above
 // MaxInt64 must surface as an error rather than a silent wrap or panic.
 func TestAmountInt64(t *testing.T) {
@@ -199,4 +212,68 @@ func TestVoucher(cur realm, t *testing.T) {
 			tc.run(t, cur, newTestImpl())
 		})
 	}
+}
+
+// VoucherApprove/VoucherTransfer let a voucher holder self-service their own
+// balance without exposing mintVoucher/burnVoucher's supply capability.
+func TestVoucherApprove(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	denom := "ibc/approve-basic"
+	holder := testAddress("approve-holder")
+	spender := testAddress("approve-spender")
+
+	uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, "A", "A", 0, holder, u256.NewUint(100)))
+
+	testing.SetRealm(testing.NewUserRealm(holder))
+	uassert.NoError(t, v.VoucherApproveX(cross(cur), denom, spender, 40))
+
+	vou, ok := testStore.GetVoucher(denom)
+	uassert.True(t, ok)
+	uassert.Equal(t, int64(40), vou.Token().Allowance(holder, spender))
+
+	// Approve carries no mint/burn capability: the holder's own balance is untouched.
+	uassert.Equal(t, int64(100), voucherBalanceOf(denom, holder))
+}
+
+func TestVoucherApprove_UnknownVoucher(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	holder := testAddress("approve-miss-holder")
+	testing.SetRealm(testing.NewUserRealm(holder))
+
+	uassert.ErrorContains(t, v.VoucherApproveX(cross(cur), "ibc/missing-approve", testAddress("approve-miss-spender"), 1), "voucher not found")
+}
+
+func TestVoucherTransfer(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	denom := "ibc/transfer-self-service"
+	holder := testAddress("transfer-self-holder")
+	other := testAddress("transfer-self-other")
+	receiver := testAddress("transfer-self-rx")
+
+	uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, "TSELF", "TSELF", 0, holder, u256.NewUint(100)))
+	uassert.NoError(t, v.mintVoucher(0, cur, denom, [32]byte{}, "TSELF", "TSELF", 0, other, u256.NewUint(100)))
+
+	testing.SetRealm(testing.NewUserRealm(holder))
+	uassert.NoError(t, v.VoucherTransferX(cross(cur), denom, receiver, 25))
+
+	uassert.Equal(t, int64(75), voucherBalanceOf(denom, holder))
+	uassert.Equal(t, int64(25), voucherBalanceOf(denom, receiver))
+	// Only the calling holder's balance moves; other holders are untouched.
+	uassert.Equal(t, int64(100), voucherBalanceOf(denom, other))
+}
+
+func TestVoucherTransfer_UnknownVoucher(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	holder := testAddress("transfer-miss-holder")
+	testing.SetRealm(testing.NewUserRealm(holder))
+
+	uassert.ErrorContains(t, v.VoucherTransferX(cross(cur), "ibc/missing-transfer", testAddress("transfer-miss-rx"), 1), "voucher not found")
 }

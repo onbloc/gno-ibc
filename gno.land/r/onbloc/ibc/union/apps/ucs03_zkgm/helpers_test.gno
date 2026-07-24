@@ -50,6 +50,14 @@ type dummyImpl struct {
 	lastBalancePath      *u256.Uint
 	lastBalanceBaseToken string
 	lastBalanceQuote     []byte
+
+	voucherApproveCalled  bool
+	voucherTransferCalled bool
+	voucherErr            error
+	lastVoucherDenom      string
+	lastVoucherSpender    address
+	lastVoucherTo         address
+	lastVoucherAmount     int64
 }
 
 var _ IApp = &dummyImpl{}
@@ -118,6 +126,22 @@ func (d *dummyImpl) Send(_ int, rlm realm, channelId types.ChannelId, timeoutTim
 	d.lastSalt = salt
 	d.lastInstruction = instruction
 	return core.NewPacket(channelId, 0, instruction.Operand, timeoutTimestamp)
+}
+
+func (d *dummyImpl) VoucherApprove(_ int, rlm realm, ibcDenom string, spender address, amount int64) error {
+	d.voucherApproveCalled = true
+	d.lastVoucherDenom = ibcDenom
+	d.lastVoucherSpender = spender
+	d.lastVoucherAmount = amount
+	return d.voucherErr
+}
+
+func (d *dummyImpl) VoucherTransfer(_ int, rlm realm, ibcDenom string, to address, amount int64) error {
+	d.voucherTransferCalled = true
+	d.lastVoucherDenom = ibcDenom
+	d.lastVoucherTo = to
+	d.lastVoucherAmount = amount
+	return d.voucherErr
 }
 
 type dummyReceiver struct{}

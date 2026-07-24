@@ -68,9 +68,7 @@ func (v *ucs03ZkgmV1) VoucherApprove(_ int, rlm realm, ibcDenom string, spender 
 		return makeError(errVoucherNotFound, ibcDenom)
 	}
 
-	holder := rlm.Previous().Address()
-
-	return vou.Approve(holder, spender, amount)
+	return vou.Approve(0, rlm, spender, amount)
 }
 
 // VoucherTransfer lets the caller (rlm.Previous(), the address that called the
@@ -84,9 +82,7 @@ func (v *ucs03ZkgmV1) VoucherTransfer(_ int, rlm realm, ibcDenom string, to addr
 		return makeError(errVoucherNotFound, ibcDenom)
 	}
 
-	holder := rlm.Previous().Address()
-
-	return vou.Transfer(holder, to, amount)
+	return vou.Transfer(0, rlm, to, amount)
 }
 
 // getOrCreateVoucher returns the wrapped grc20 voucher for ibcDenom, creating and registering it on first use.

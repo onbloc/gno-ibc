@@ -104,15 +104,17 @@ func (v *Voucher) TransferScaled(from, to address, amount *u256.Uint) error {
 // origin precision: it is a self-service action on the holder's own balance,
 // matching the ledger units VoucherBalanceOf already reads.
 // Carries the ledger's Approve capability; callers MUST be impl-gated.
-func (v *Voucher) Approve(holder, spender address, amount int64) error {
-	return v.ledger.Approve(holder, spender, amount)
+func (v *Voucher) Approve(_ int, rlm realm, spender address, amount int64) error {
+	teller := v.ledger.ImpersonateTeller(rlm.Previous().Address())
+	return teller.Approve(0, rlm, spender, amount)
 }
 
 // Transfer moves amount of holder's ledger-precision balance to another
 // address. Same scale as Approve: no origin-precision scaling.
 // Carries the ledger's Transfer capability; callers MUST be impl-gated.
-func (v *Voucher) Transfer(holder, to address, amount int64) error {
-	return v.ledger.Transfer(holder, to, amount)
+func (v *Voucher) Transfer(_ int, rlm realm, to address, amount int64) error {
+	teller := v.ledger.ImpersonateTeller(rlm.Previous().Address())
+	return teller.Transfer(0, rlm, to, amount)
 }
 
 // VoucherApprove lets the caller grant spender an allowance on their own

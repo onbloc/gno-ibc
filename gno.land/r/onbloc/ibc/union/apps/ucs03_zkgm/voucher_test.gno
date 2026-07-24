@@ -12,6 +12,18 @@ import (
 
 var errDummyVoucher = errors.New("dummy voucher error")
 
+// voucherApproveX/voucherTransferX are crossing test shims mirroring v1's
+// VoucherApproveX/VoucherTransferX: Voucher.Approve/Transfer read holder from
+// rlm.Previous(), which only reflects testing.SetRealm's holder if this call
+// is a fresh cross() right here (see v1/voucher_test.gno for the same pattern).
+func voucherApproveX(cur realm, vou *Voucher, spender address, amount int64) error {
+	return vou.Approve(0, cur, spender, amount)
+}
+
+func voucherTransferX(cur realm, vou *Voucher, to address, amount int64) error {
+	return vou.Transfer(0, cur, to, amount)
+}
+
 // TestVoucherScaling covers the origin->ledger encapsulation:
 // an 18-dec origin wrapped by a 6-dec ledger downscales by 10^12
 // through ToLedgerAmount, MintScaled and BurnScaled,
@@ -54,15 +66,16 @@ func TestVoucherApproveTransfer(cur realm, t *testing.T) {
 
 	uassert.NoError(t, ledger.Mint(holder, 100))
 
-	uassert.NoError(t, vou.Approve(holder, spender, 40))
+	testing.SetRealm(testing.NewUserRealm(holder))
+	uassert.NoError(t, voucherApproveX(cross(cur), vou, spender, 40))
 	uassert.Equal(t, int64(40), token.Allowance(holder, spender))
 	uassert.Equal(t, int64(100), token.BalanceOf(holder)) // Approve never moves balance
 
-	uassert.NoError(t, vou.Transfer(holder, receiver, 25))
+	uassert.NoError(t, voucherTransferX(cross(cur), vou, receiver, 25))
 	uassert.Equal(t, int64(75), token.BalanceOf(holder))
 	uassert.Equal(t, int64(25), token.BalanceOf(receiver))
 
-	uassert.Error(t, vou.Transfer(holder, receiver, 1000)) // insufficient balance
+	uassert.Error(t, voucherTransferX(cross(cur), vou, receiver, 1000)) // insufficient balance
 }
 
 func TestNewVoucher(cur realm, t *testing.T) {

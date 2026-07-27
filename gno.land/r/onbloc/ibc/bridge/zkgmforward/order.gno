@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"gno.land/p/aib/encoding"
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 	unionTypes "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 )

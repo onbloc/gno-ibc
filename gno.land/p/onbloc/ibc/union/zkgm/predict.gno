@@ -4,9 +4,9 @@ import (
 	"crypto/keccak256"
 	"encoding/hex"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	abi "gno.land/p/onbloc/encoding/abi"
 	types "gno.land/p/onbloc/ibc/union/types"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 const (

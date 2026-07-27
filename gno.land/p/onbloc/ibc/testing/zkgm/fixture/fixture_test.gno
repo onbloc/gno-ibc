@@ -4,8 +4,8 @@ import (
 	"bytes"
 	"testing"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 // These tests double as usage examples: each one assembles the exact packet /

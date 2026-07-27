@@ -3,7 +3,7 @@ package abi
 import (
 	"encoding/binary"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 // Encode ABI-encodes values according to schema using Solidity's params tuple form.

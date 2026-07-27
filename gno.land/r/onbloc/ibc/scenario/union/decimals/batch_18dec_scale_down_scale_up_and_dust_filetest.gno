@@ -1,27 +1,32 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/decimals
 package decimals
 
-// batch_18dec_scale_down_scale_up_and_dust_filetest covers decimal policy inside
-// OP_BATCH children. A received batch scales an 18-dec INITIALIZE amount down to
-// the 6-dec local voucher amount, a dusty batch child is rejected without minting,
-// and a sent batch submits the wire amount while locking the local voucher amount.
+// batch_18dec_scale_down_scale_up_and_dust_filetest covers decimal policy for a
+// token moved through OP_BATCH. A received batch scales an 18-dec INITIALIZE
+// amount down to the 6-dec local voucher amount, and a sent batch submits the
+// wire amount while locking the local voucher amount. The dusty-amount check is
+// exercised as a plain (non-batch) TokenOrder recv: a dusty amount inside an
+// OP_BATCH child now aborts the whole recv tx (see reject_nested_batch_child_
+// filetest.gno for that batch-abort behavior), so it is not representative of
+// the per-instruction dust rejection this scenario is documenting.
 
 import (
 	"chain"
+	"encoding/hex"
 	"testing"
 
 	"gno.land/p/nt/ufmt/v0"
 	types "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 
+	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
-	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 )
 
 const (
@@ -42,15 +47,15 @@ func main(cur realm) {
 	channelId := bootstrap(cur)
 	println("")
 
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Batch Ether Token", Symbol: "BETH", Decimals: 18})
+	meta := mustTokenMetadata("af739f34ddf951cbc24fdbba4f76213688e13627", z.TokenInitializer{Name: "Batch Ether Token", Symbol: "BETH", Decimals: 18})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("batchwei"), z.MetadataImage(mustDecodeMeta(meta)))
 
 	println("[SCENARIO] 2. Receive OP_BATCH with 18-dec INITIALIZE child: scaled down to 6-dec local")
 	recvBatchInitialize(cur, channelId, quoteToken, meta, wireAmount)
 	println("")
 
-	println("[SCENARIO] 3. Receive OP_BATCH with dusty INITIALIZE child: rejected without minting")
-	recvBatchInitialize(cur, channelId, quoteToken, meta, dustWireAmount)
+	println("[SCENARIO] 3. Receive a plain (non-batch) dusty INITIALIZE order: rejected without minting")
+	recvInitialize(cur, channelId, quoteToken, meta, dustWireAmount)
 	println("")
 
 	println("[SCENARIO] 4. Send OP_BATCH with voucher child: wire amount locks local voucher amount")
@@ -101,6 +106,29 @@ func recvBatchInitialize(cur realm, channelId types.ChannelId, quoteToken string
 
 	after := zkgm.VoucherBalanceOf(quoteToken, holderAddr)
 	ufmt.Printf("[INFO] batch child wire amount: %d\n", amount)
+	ufmt.Printf("[INFO] holder voucher balance: %d -> %d\n", before, after)
+}
+
+func recvInitialize(cur realm, channelId types.ChannelId, quoteToken string, meta []byte, amount uint64) {
+	order := z.TokenOrderV2{
+		Sender:      []byte("remote-sender"),
+		Receiver:    []byte(holderAddr.String()),
+		BaseToken:   []byte("batchwei"),
+		BaseAmount:  u256.NewUint(amount),
+		QuoteToken:  []byte(quoteToken),
+		QuoteAmount: u256.NewUint(amount),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    meta,
+	}
+	packet := core.NewPacket(types.ChannelId(2), channelId, mustPacketData(mustOrderInstruction(order)), types.Timestamp(1<<62))
+
+	before := zkgm.VoucherBalanceOf(quoteToken, holderAddr)
+
+	testing.SetRealm(testing.NewUserRealm(adminAddr))
+	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
+
+	after := zkgm.VoucherBalanceOf(quoteToken, holderAddr)
+	ufmt.Printf("[INFO] wire amount: %d\n", amount)
 	ufmt.Printf("[INFO] holder voucher balance: %d -> %d\n", before, after)
 }
 
@@ -157,12 +185,16 @@ func mustPacketData(instr z.Instruction) []byte {
 	return data
 }
 
-func mustTokenMetadata(implementation string, ti z.TokenInitializer) []byte {
+func mustTokenMetadata(implementationHex string, ti z.TokenInitializer) []byte {
+	implementation, err := hex.DecodeString(implementationHex)
+	if err != nil {
+		panic(err)
+	}
 	initBytes, err := z.EncodeTokenInitializer(ti)
 	if err != nil {
 		panic(err)
 	}
-	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes})
+	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: implementation, Initializer: initBytes})
 	if err != nil {
 		panic(err)
 	}
@@ -200,8 +232,8 @@ func mustDecodeBatchOrder(packet types.Packet) z.TokenOrderV2 {
 // [INFO] batch child wire amount: 1000000000000000000
 // [INFO] holder voucher balance: 0 -> 1000000
 //
-// [SCENARIO] 3. Receive OP_BATCH with dusty INITIALIZE child: rejected without minting
-// [INFO] batch child wire amount: 1000000000001
+// [SCENARIO] 3. Receive a plain (non-batch) dusty INITIALIZE order: rejected without minting
+// [INFO] wire amount: 1000000000001
 // [INFO] holder voucher balance: 1000000 -> 1000000
 //
 // [SCENARIO] 4. Send OP_BATCH with voucher child: wire amount locks local voucher amount

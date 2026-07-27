@@ -5,8 +5,8 @@ import (
 
 	types "gno.land/p/onbloc/ibc/union/types"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	"gno.land/r/onbloc/ibc/union/core"
 )

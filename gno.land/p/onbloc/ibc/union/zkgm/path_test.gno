@@ -3,7 +3,7 @@ package zkgm
 import (
 	"testing"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 func TestChannelIDMaskU256(t *testing.T) {

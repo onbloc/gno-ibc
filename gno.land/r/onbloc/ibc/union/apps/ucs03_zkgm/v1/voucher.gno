@@ -4,9 +4,9 @@ import (
 	"strings"
 
 	"gno.land/p/demo/tokens/grc20"
-	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/fqname/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 	"gno.land/r/demo/defi/grc20reg"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
@@ -54,6 +54,35 @@ func (v *ucs03ZkgmV1) transferVoucher(_ int, rlm realm, ibcDenom string, from, t
 	}
 
 	return vou.TransferScaled(from, to, amount)
+}
+
+// VoucherApprove lets the caller (rlm.Previous(), the address that called the
+// proxy) grant spender an allowance on their own wrapped-voucher balance.
+// Delegates to Voucher.Approve so mint/burn stay reachable exclusively via
+// mintVoucher/burnVoucher above; this never touches Ledger() directly.
+func (v *ucs03ZkgmV1) VoucherApprove(_ int, rlm realm, ibcDenom string, spender address, amount int64) error {
+	assertIsRlmCurrent(0, rlm)
+
+	vou, ok := v.store.GetVoucher(ibcDenom)
+	if !ok {
+		return makeError(errVoucherNotFound, ibcDenom)
+	}
+
+	return vou.Approve(0, rlm, spender, amount)
+}
+
+// VoucherTransfer lets the caller (rlm.Previous(), the address that called the
+// proxy) move their own wrapped-voucher balance directly to another address.
+// Same capability scope as VoucherApprove: Transfer only, no mint/burn.
+func (v *ucs03ZkgmV1) VoucherTransfer(_ int, rlm realm, ibcDenom string, to address, amount int64) error {
+	assertIsRlmCurrent(0, rlm)
+
+	vou, ok := v.store.GetVoucher(ibcDenom)
+	if !ok {
+		return makeError(errVoucherNotFound, ibcDenom)
+	}
+
+	return vou.Transfer(0, rlm, to, amount)
 }
 
 // getOrCreateVoucher returns the wrapped grc20 voucher for ibcDenom, creating and registering it on first use.

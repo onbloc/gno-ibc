@@ -1,6 +1,6 @@
 package zkgm
 
-import u256 "gno.land/p/gnoswap/uint256"
+import u256 "gno.land/p/onbloc/math/uint256"
 
 // Zkgmable is implemented by realms that receive ZKGM Call instructions
 // dispatched from the ZKGM proxy.

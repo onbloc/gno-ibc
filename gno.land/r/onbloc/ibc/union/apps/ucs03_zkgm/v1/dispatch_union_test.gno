@@ -5,9 +5,9 @@ import (
 
 	types "gno.land/p/onbloc/ibc/union/types"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 // TestUnionVerifyInternal ports the union ucs03-zkgm verify_internal unit tests:

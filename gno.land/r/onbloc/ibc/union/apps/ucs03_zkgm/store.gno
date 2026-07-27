@@ -3,10 +3,10 @@ package ucs03_zkgm
 import (
 	types "gno.land/p/onbloc/ibc/union/types"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/bptree/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 var (
@@ -254,6 +254,41 @@ func (s *Store) GetVoucher(ibcDenom string) (*Voucher, bool) {
 	}
 
 	return v.(*Voucher), true
+}
+
+// GetVoucherList returns a page of up to count vouchers starting at offset,
+// ordered by denom. The vouchers tree only grows (there is no voucher
+// deletion), so pagination keeps a single call's gas/response size bounded
+// regardless of how many wrapped tokens have been registered over time.
+func (s *Store) GetVoucherList(offset, count int) []VoucherInfo {
+	voucherList := []VoucherInfo{}
+
+	// The callback returns false to keep iterating (true stops early).
+	s.vouchers.IterateByOffset(offset, count, func(key string, value any) bool {
+		voucher, ok := value.(*Voucher)
+		if !ok {
+			panic(ErrInterfaceConversion)
+		}
+
+		voucherList = append(voucherList, NewVoucherInfo(
+			key,
+			voucher.token.GetName(),
+			voucher.token.GetSymbol(),
+			voucher.originDecimals,
+			uint8(voucher.token.GetDecimals()),
+			voucher.token.TotalSupply(),
+		))
+
+		return false // continue iteration
+	})
+
+	return voucherList
+}
+
+// GetVoucherSize returns the total number of registered vouchers, i.e. the
+// key count callers need to drive GetVoucherList's offset/count pagination.
+func (s *Store) GetVoucherSize() int {
+	return s.vouchers.Size()
 }
 
 // HasVoucher reports whether a voucher exists for an ibc denom.

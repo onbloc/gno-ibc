@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	"gno.land/p/aib/encoding/proto"
+	"gno.land/p/gnoswap/int256"
 	"gno.land/p/nt/ufmt/v0"
-	"gno.land/p/onbloc/int256"
 )
 
 // FungibleTokenPacketData defines a struct for the packet payload
@@ -126,7 +126,7 @@ func (f FungibleTokenPacketData) ValidateBasic() error {
 		return ufmt.Errorf("unable to parse transfer amount %q: %v", f.Amount, err)
 	}
 	if amount.Sign() != 1 {
-		return ufmt.Errorf("amount must be strictly positive: got %s", amount)
+		return ufmt.Errorf("amount must be strictly positive: got %s", amount.ToString())
 	}
 	if strings.TrimSpace(f.Sender) == "" {
 		return ufmt.Errorf("sender address cannot be blank")

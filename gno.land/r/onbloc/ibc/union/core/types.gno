@@ -90,6 +90,7 @@ type ICoreGetter interface {
 	GetChannel(channelId types.ChannelId) (types.Channel, error)
 	GetBatchPacketsCommitment(batchHash types.H256) (types.H256, error)
 	GetBatchReceiptsCommitment(batchHash types.H256) (types.H256, error)
+	GetPacketData(packetHash types.H256) ([]byte, error)
 	GetCommittedMembershipProofCommitment(clientId types.ClientId, proofHeight uint64, path []byte) (types.H256, error)
 	GetCommittedNonMembershipProof(clientId types.ClientId, proofHeight uint64, path []byte) bool
 }
@@ -157,6 +158,11 @@ type IStore interface {
 	// --- Committed proofs ---
 	SaveMembershipProof(_ int, rlm realm, clientId types.ClientId, proofHeight uint64, path []byte, value types.H256)
 	SaveNonMembershipProof(_ int, rlm realm, clientId types.ClientId, proofHeight uint64, path []byte, value types.H256)
+
+	// --- Packet data payload (Get/Set/Remove primitives; impl owns lifecycle) ---
+	SetPacketData(_ int, rlm realm, packetHash types.H256, data []byte)
+	GetPacketData(packetHash types.H256) ([]byte, bool)
+	RemovePacketData(_ int, rlm realm, packetHash types.H256)
 
 	// --- Read-only query support ---
 	ClientStateBytes(clientId types.ClientId) ([]byte, bool)

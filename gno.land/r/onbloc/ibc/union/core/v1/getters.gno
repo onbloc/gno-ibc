@@ -143,6 +143,18 @@ func (c *coreV1) GetBatchPacketsCommitment(batchHash types.H256) (types.H256, er
 	return commitment, nil
 }
 
+// GetPacketData returns the raw packet payload retained for a packet commitment
+// hash, or an error once the packet has been retired (acknowledged/timed out) or
+// if it was never sent from this chain.
+func (c *coreV1) GetPacketData(packetHash types.H256) ([]byte, error) {
+	data, ok := c.store.GetPacketData(packetHash)
+	if !ok {
+		return nil, makeError(core.ErrPacketDataNotFound)
+	}
+
+	return data, nil
+}
+
 // GetBatchReceiptsCommitment returns the batch receipt commitment for a batch hash,
 // or an error when no batch receipt commitment is stored for that hash.
 func (c *coreV1) GetBatchReceiptsCommitment(batchHash types.H256) (types.H256, error) {

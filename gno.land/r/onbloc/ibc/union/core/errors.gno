@@ -33,6 +33,7 @@ const (
 	ErrPortAlreadyRegistered         = "port already registered"
 	ErrBatchPacketsNotFound          = "batch packets not found"
 	ErrBatchReceiptsNotFound         = "batch receipts not found"
+	ErrPacketDataNotFound            = "packet data not found"
 	ErrPacketAlreadyReceived         = "packet already received"
 	ErrPacketTimeoutExpired          = "packet timeout expired"
 	ErrPacketTimeoutNotReached       = "packet timeout not reached"

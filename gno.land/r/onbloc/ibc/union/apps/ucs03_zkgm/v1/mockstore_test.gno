@@ -26,7 +26,12 @@ type mockStore struct {
 	lockedTokenAmounts map[string]*u256.Uint
 	receivers          map[string]z.Zkgmable
 	pendingSendCorr    map[string]mockPendingSendCorr
+	pendingForward     map[string]types.Packet
 	rateLimitDisabled  bool
+
+	forwardHandler        z.TokenForwardHandler
+	forwardHandlerAddr    address
+	forwardHandlerPkgPath string
 }
 
 type mockPendingSendCorr struct {
@@ -49,6 +54,7 @@ func newMockStore() *mockStore {
 		lockedTokenAmounts: map[string]*u256.Uint{},
 		receivers:          map[string]z.Zkgmable{},
 		pendingSendCorr:    map[string]mockPendingSendCorr{},
+		pendingForward:     map[string]types.Packet{},
 		// Match NewStore: rate limiting is opt-in (disabled by default).
 		rateLimitDisabled: true,
 	}
@@ -201,17 +207,44 @@ func (m *mockStore) SetPendingSendCorr(_ int, rlm realm, packetHash string, cb z
 	m.pendingSendCorr[packetHash] = mockPendingSendCorr{Callback: cb, CallerPkgPath: callerPkgPath, CorrID: corrID}
 }
 
-func (m *mockStore) GetPendingSendCorr(packetHash string) (cb z.SendCallback, callerPkgPath string, corrID string, found bool) {
+func (m *mockStore) GetPendingSendCorr(packetHash string) (cb z.SendCallback, callerPkgPath string, corrID string) {
 	v, ok := m.pendingSendCorr[packetHash]
 	if !ok {
-		return nil, "", "", false
+		return nil, "", ""
 	}
 
-	return v.Callback, v.CallerPkgPath, v.CorrID, true
+	return v.Callback, v.CallerPkgPath, v.CorrID
 }
 
 func (m *mockStore) RemovePendingSendCorr(_ int, rlm realm, packetHash string) {
 	delete(m.pendingSendCorr, packetHash)
+}
+
+func (m *mockStore) SetPendingTokenForward(_ int, rlm realm, corrID string, parent types.Packet) {
+	m.pendingForward[corrID] = parent
+}
+
+func (m *mockStore) GetPendingTokenForward(corrID string) (types.Packet, bool) {
+	v, ok := m.pendingForward[corrID]
+	return v, ok
+}
+
+func (m *mockStore) RemovePendingTokenForward(_ int, rlm realm, corrID string) {
+	delete(m.pendingForward, corrID)
+}
+
+func (m *mockStore) SetTokenForwardHandler(_ int, rlm realm, handler z.TokenForwardHandler, addr address, pkgPath string) {
+	m.forwardHandler = handler
+	m.forwardHandlerAddr = addr
+	m.forwardHandlerPkgPath = pkgPath
+}
+
+func (m *mockStore) GetTokenForwardHandler() (handler z.TokenForwardHandler, addr address, pkgPath string) {
+	return m.forwardHandler, m.forwardHandlerAddr, m.forwardHandlerPkgPath
+}
+
+func (m *mockStore) IsTokenForwardReceiver(receiver address) bool {
+	return m.forwardHandler != nil && receiver == m.forwardHandlerAddr
 }
 
 func (m *mockStore) SetRateLimitDisabled(_ int, rlm realm, disabled bool) {

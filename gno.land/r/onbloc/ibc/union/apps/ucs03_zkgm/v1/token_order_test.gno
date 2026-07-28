@@ -577,6 +577,41 @@ func TestTokenOrderExecuteInitializeMintsVoucherAndSuccessAck(cur realm, t *test
 	uassert.Equal(t, 6, voucherDecimalsOf(ibcDenom))
 }
 
+// A non-ESCROW order addressed to the registered forward handler must be
+// rejected outright, not silently minted/released with no forward ever
+// triggered (Metadata only doubles as a routing memo for ESCROW).
+func TestTokenOrderExecuteRejectsNonEscrowKindAddressedToForwardHandler(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	handlerAddr := testAddress("forward-handler")
+	testStore.SetTokenForwardHandler(0, cur, mockFwd, handlerAddr, forwardHandlerPkgPathForTest)
+
+	metaBytes := mustEncodeTokenMetadata(z.TokenMetadata{
+		Implementation: zkgmERC20Impl,
+		Initializer:    mustEncodeTokenInitializer(z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6}),
+	})
+	image := z.MetadataImage(mustDecodeTokenMetadata(metaBytes))
+	ibcDenom := z.PredictWrappedTokenV2(u256.NewUint(7), 5, []byte("ugnot"), image)
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(handlerAddr),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte(ibcDenom),
+		QuoteAmount: u256.NewUint(95),
+		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
+		Metadata:    metaBytes,
+	}
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(5), nil, 0)
+
+	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("v1-relayer")), nil, [32]byte{}, u256.NewUint(7), order, false)
+
+	uassert.NoError(t, err)
+	uassert.True(t, res.Status == types.PacketStatusFailure)
+	uassert.Equal(t, int64(0), voucherBalanceOf(ibcDenom, handlerAddr))
+}
+
 func TestTokenOrderExecuteInitializeValidatesInitializer(cur realm, t *testing.T) {
 	tests := []struct {
 		name        string

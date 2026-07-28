@@ -130,6 +130,9 @@ func (d *dummyImpl) OnTimeoutPacket(_ int, rlm realm, packet types.Packet, relay
 	d.timeoutCalled = true
 }
 
+func (d *dummyImpl) CompleteTokenForwardAck(_ int, rlm realm, corrID string, success bool, innerAck []byte) {
+}
+
 func (d *dummyImpl) Send(_ int, rlm realm, channelId types.ChannelId, timeoutTimestamp types.Timestamp, salt [32]byte, instruction z.Instruction) types.Packet {
 	d.sendCalled = true
 	d.lastChannelId = channelId

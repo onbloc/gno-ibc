@@ -55,8 +55,8 @@ func TestHandleSendCallback_NotifiesCallerAndClearsEntry(cur realm, t *testing.T
 	uassert.True(t, cb.success)
 	uassert.Equal(t, "ack-bytes", string(cb.ack))
 
-	_, _, _, found := testStore.GetPendingSendCorr(hash)
-	uassert.False(t, found)
+	gotCb, _, _ := testStore.GetPendingSendCorr(hash)
+	uassert.True(t, gotCb == nil)
 }
 
 func TestHandleSendCallback_TimeoutReportsFailure(cur realm, t *testing.T) {

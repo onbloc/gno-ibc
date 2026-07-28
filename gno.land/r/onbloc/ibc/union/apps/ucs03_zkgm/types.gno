@@ -29,12 +29,20 @@ type IApp interface {
 
 	IAppVoucher
 
+	IAppTokenForward
+
 	// Read-only relayer/tooling query surface.
 	IAppGetter
 }
 
 type IAppIntent interface {
 	OnIntentRecvPacket(_ int, rlm realm, packet types.Packet, marketMaker address, marketMakerMsg []byte) types.RecvPacketResult
+}
+
+// IAppTokenForward resolves a deferred ESCROW TokenOrderV2 ack set up by a
+// z.TokenForwardHandler receiver (see v1/token_forward.gno).
+type IAppTokenForward interface {
+	CompleteTokenForwardAck(_ int, rlm realm, corrID string, success bool, innerAck []byte)
 }
 
 // IAppTransfer is the user-initiated send surface. zkgm is a general instruction
@@ -101,8 +109,16 @@ type IStore interface {
 	GetReceiver(path string) (z.Zkgmable, bool)
 
 	SetPendingSendCorr(_ int, rlm realm, packetHash string, cb z.SendCallback, callerPkgPath string, corrID string)
-	GetPendingSendCorr(packetHash string) (cb z.SendCallback, callerPkgPath string, corrID string, found bool)
+	GetPendingSendCorr(packetHash string) (cb z.SendCallback, callerPkgPath string, corrID string)
 	RemovePendingSendCorr(_ int, rlm realm, packetHash string)
+
+	SetPendingTokenForward(_ int, rlm realm, corrID string, parent types.Packet)
+	GetPendingTokenForward(corrID string) (types.Packet, bool)
+	RemovePendingTokenForward(_ int, rlm realm, corrID string)
+
+	SetTokenForwardHandler(_ int, rlm realm, handler z.TokenForwardHandler, addr address, pkgPath string)
+	GetTokenForwardHandler() (handler z.TokenForwardHandler, addr address, pkgPath string)
+	IsTokenForwardReceiver(receiver address) bool
 
 	SetRateLimitDisabled(_ int, rlm realm, disabled bool)
 	RateLimitDisabled() bool

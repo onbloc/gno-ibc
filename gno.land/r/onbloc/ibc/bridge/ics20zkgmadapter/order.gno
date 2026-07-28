@@ -1,4 +1,4 @@
-package zkgmforward
+package ics20zkgmadapter
 
 import (
 	"crypto/sha256"
@@ -6,15 +6,15 @@ import (
 	"time"
 
 	"gno.land/p/aib/encoding"
-	u256 "gno.land/p/onbloc/math/uint256"
 	unionTypes "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 // defaultForwardTimeout bounds the outbound ZKGM packet's own expiry when the
 // memo omits a timeout. On timeout the escrowed voucher refunds to this realm's
 // address, and the deferred parent ack is resolved as an error (refunding the
-// original AtomOne sender) via transfer.CompleteForwardAck.
+// original AtomOne sender) via ics20.CompleteForwardAck.
 const defaultForwardTimeout = 24 * time.Hour
 
 // buildTokenOrder encodes the ZKGM TokenOrderV2 instruction for a forward.
@@ -26,7 +26,7 @@ func buildTokenOrder(sender, baseTokenKey string, amount int64, fwd ForwardMemo)
 		Initializer:    fwd.Metadata.Initializer,
 	})
 	if err != nil {
-		panic("zkgmforward: encode metadata: " + err.Error())
+		panic("ics20zkgmadapter: encode metadata: " + err.Error())
 	}
 
 	amountU256 := u256.NewUintFromInt64(amount)
@@ -37,11 +37,13 @@ func buildTokenOrder(sender, baseTokenKey string, amount int64, fwd ForwardMemo)
 		BaseAmount:  amountU256,
 		QuoteToken:  fwd.QuoteToken,
 		QuoteAmount: amountU256,
-		Kind:        fwd.Kind,
-		Metadata:    metadata,
+		// Always ESCROW: new-asset bootstrap (INITIALIZE) is an admin-only
+		// manual step, never something a forward memo can trigger.
+		Kind:     z.TOKEN_ORDER_KIND_ESCROW,
+		Metadata: metadata,
 	})
 	if err != nil {
-		panic("zkgmforward: encode token order: " + err.Error())
+		panic("ics20zkgmadapter: encode token order: " + err.Error())
 	}
 
 	return z.Instruction{

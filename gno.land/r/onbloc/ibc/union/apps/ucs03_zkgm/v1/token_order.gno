@@ -121,6 +121,15 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 		return v.marketMakerFillV2(0, rlm, relayer, relayerMsg, order)
 	}
 
+	// Metadata doubles as a routing memo only for ESCROW (see
+	// token_forward.gno); any other kind addressed to the handler is
+	// rejected outright rather than silently minting/releasing with no
+	// forward ever triggered.
+	receiver := address(order.Receiver)
+	if v.store.IsTokenForwardReceiver(receiver) && order.Kind != z.TOKEN_ORDER_KIND_ESCROW {
+		return failureResult(universalErrorAck()), nil
+	}
+
 	if path == nil {
 		path = u256.Zero()
 	}
@@ -135,7 +144,7 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 			return failureResult(universalErrorAck()), nil
 		}
 
-		return v.protocolFillUnescrowV2(0, rlm, packet.DestinationChannelId, path, order.BaseToken, quoteDenom, address(order.Receiver), relayer, order.BaseAmount, order.QuoteAmount)
+		return v.protocolFillUnescrowV2(0, rlm, packet.DestinationChannelId, path, order.BaseToken, quoteDenom, receiver, relayer, order.BaseAmount, order.QuoteAmount)
 	}
 
 	destChan, err := tokenOrderDestinationChannel(packet.DestinationChannelId)
@@ -205,6 +214,14 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 			return failureResult(universalErrorAck()), nil
 		}
 
+		// If the recv is addressed to the registered forward handler, delegate
+		// the onward routing to it instead of crediting Receiver. ZKGM knows
+		// nothing about the downstream protocol; see token_forward.gno.
+		// Kind == ESCROW is guaranteed here (see the early guard above).
+		if v.store.IsTokenForwardReceiver(receiver) {
+			return v.executeTokenOrderForward(0, rlm, packet, path, order, relayer, wrapped)
+		}
+
 		canDeploy := order.Kind == z.TOKEN_ORDER_KIND_INITIALIZE
 
 		var metadata *z.TokenMetadata
@@ -212,7 +229,7 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 			metadata = &meta
 		}
 
-		return v.protocolFillMint(0, rlm, packet.DestinationChannelId, path, order.BaseToken, wrapped, address(order.Receiver), relayer, order.BaseAmount, order.QuoteAmount, metadata, canDeploy)
+		return v.protocolFillMint(0, rlm, packet.DestinationChannelId, path, order.BaseToken, wrapped, receiver, relayer, order.BaseAmount, order.QuoteAmount, metadata, canDeploy)
 	}
 
 	return v.marketMakerFillV2(0, rlm, relayer, relayerMsg, order)

@@ -76,7 +76,7 @@ func isForwardReceiver(receiver string) bool {
 // at recv time, not from the caller, so a compromised handler cannot burn
 // arbitrary balances.
 func CompleteForwardAck(cur realm, clientID string, sequence uint64, success bool) {
-	if forwardHandlerPkgPath == "" || cur.Previous().PkgPath() != forwardHandlerPkgPath {
+	if cur.Previous().PkgPath() != forwardHandlerPkgPath {
 		panic("transfer: caller is not the registered forward handler")
 	}
 

@@ -17,6 +17,7 @@ var (
 	totalEscrow     *bptree.BPTree // denom:chain.Coin
 	voucherTokens   *bptree.BPTree // ibcDenom:*voucher
 	pendingForwards *bptree.BPTree // (destClient,sequence):pendingForward
+	sendCorrs       *bptree.BPTree // (sourceClient,sequence):pendingSendCorr
 
 	// nextVoucherID allocates a unique grc20 token id for each voucher. Voucher
 	// symbols are truncated IBC-hash prefixes that can collide, so a shared
@@ -41,11 +42,20 @@ type pendingForward struct {
 	HandlerAddr  address
 }
 
+// pendingSendCorr correlates a TransferWithCallback send with the callback
+// that must be notified of its ack/timeout outcome.
+type pendingSendCorr struct {
+	Callback      SendCallback
+	CallerPkgPath string
+	CorrID        string
+}
+
 func init() {
 	denoms = bptree.NewBPTree32()
 	totalEscrow = bptree.NewBPTree32()
 	voucherTokens = bptree.NewBPTree32()
 	pendingForwards = bptree.NewBPTree32()
+	sendCorrs = bptree.NewBPTree32()
 }
 
 // forwardKey keys a pending forward by the inbound packet's local client and
@@ -68,6 +78,22 @@ func getPendingForward(clientID string, sequence uint64) (pendingForward, bool) 
 
 func deletePendingForward(clientID string, sequence uint64) {
 	pendingForwards.Remove(forwardKey(clientID, sequence))
+}
+
+func setPendingSendCorr(clientID string, sequence uint64, p pendingSendCorr) {
+	sendCorrs.Set(forwardKey(clientID, sequence), p)
+}
+
+func getPendingSendCorr(clientID string, sequence uint64) pendingSendCorr {
+	v := sendCorrs.Get(forwardKey(clientID, sequence))
+	if v == nil {
+		return pendingSendCorr{}
+	}
+	return v.(pendingSendCorr)
+}
+
+func removePendingSendCorr(clientID string, sequence uint64) {
+	sendCorrs.Remove(forwardKey(clientID, sequence))
 }
 
 func hasDenom(voucherDenom string) bool {

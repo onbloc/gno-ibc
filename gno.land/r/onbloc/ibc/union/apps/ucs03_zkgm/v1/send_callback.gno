@@ -17,8 +17,8 @@ import (
 func (v *ucs03ZkgmV1) handleSendCallback(_ int, rlm realm, packet types.Packet, success bool, ack []byte) bool {
 	hash := types.MustCommit(types.CommitPacket(packet)).String()
 
-	cb, callerPkgPath, corrID, ok := v.store.GetPendingSendCorr(hash)
-	if !ok {
+	cb, callerPkgPath, corrID := v.store.GetPendingSendCorr(hash)
+	if cb == nil {
 		return false
 	}
 

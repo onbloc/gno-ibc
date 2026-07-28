@@ -76,10 +76,18 @@ type Store struct {
 	// lockedTokenAmounts is managed alongside vouchers: both track non-escrow
 	// custody of a base token (native or grc20) that zkgm cannot supply-burn,
 	// as opposed to vouchers, which zkgm mints/burns directly.
-	lockedTokenAmounts *bptree.BPTree // denom -> *u256.Uint (permanently locked base token)
-	receivers          *bptree.BPTree // pkgPath -> z.Zkgmable
-	pendingSendCorr    *bptree.BPTree // packetHash -> pendingSendCorr
-	rateLimitDisabled  bool
+	lockedTokenAmounts  *bptree.BPTree // denom -> *u256.Uint (permanently locked base token)
+	receivers           *bptree.BPTree // pkgPath -> z.Zkgmable
+	pendingSendCorr     *bptree.BPTree // packetHash -> pendingSendCorr
+	pendingTokenForward *bptree.BPTree // corrID -> pendingTokenForward
+	rateLimitDisabled   bool
+
+	// tokenForwardHandler is the registered ESCROW TokenOrderV2 adapter (see
+	// v1/token_forward.gno); tokenForwardHandlerAddr is its "forward here"
+	// trigger address, tokenForwardHandlerPkgPath gates CompleteTokenForwardAck.
+	tokenForwardHandler        z.TokenForwardHandler
+	tokenForwardHandlerAddr    address
+	tokenForwardHandlerPkgPath string
 }
 
 // pendingSendCorr correlates an outbound packet sent via SendWithCallback back
@@ -92,18 +100,25 @@ type pendingSendCorr struct {
 	CorrID        string
 }
 
+// pendingTokenForward records a deferred-ack ESCROW TokenOrderV2 order for
+// CompleteTokenForwardAck, keyed by corrID.
+type pendingTokenForward struct {
+	ParentPacket types.Packet
+}
+
 func NewStore() *Store {
 	return &Store{
-		tokenOrigin:        bptree.NewBPTree32(),
-		channelBalanceV2:   bptree.NewBPTree32(),
-		metadataImageOf:    bptree.NewBPTree32(),
-		hashToForeignToken: bptree.NewBPTree32(),
-		inFlightPacket:     bptree.NewBPTree32(),
-		tokenBucket:        bptree.NewBPTree32(),
-		vouchers:           bptree.NewBPTree32(),
-		lockedTokenAmounts: bptree.NewBPTree32(),
-		receivers:          bptree.NewBPTree32(),
-		pendingSendCorr:    bptree.NewBPTree32(),
+		tokenOrigin:         bptree.NewBPTree32(),
+		channelBalanceV2:    bptree.NewBPTree32(),
+		metadataImageOf:     bptree.NewBPTree32(),
+		hashToForeignToken:  bptree.NewBPTree32(),
+		inFlightPacket:      bptree.NewBPTree32(),
+		tokenBucket:         bptree.NewBPTree32(),
+		vouchers:            bptree.NewBPTree32(),
+		lockedTokenAmounts:  bptree.NewBPTree32(),
+		receivers:           bptree.NewBPTree32(),
+		pendingSendCorr:     bptree.NewBPTree32(),
+		pendingTokenForward: bptree.NewBPTree32(),
 		// Rate limiting is opt-in: enabled per-denom by an admin who first
 		// configures a token bucket (see SetBucketConfig). With it enabled, a denom
 		// without a bucket is rejected (union TokenBucketIsAbsent), so it must stay
@@ -363,16 +378,17 @@ func (s *Store) SetPendingSendCorr(_ int, rlm realm, packetHash string, cb z.Sen
 	s.pendingSendCorr.Set(packetHash, pendingSendCorr{Callback: cb, CallerPkgPath: callerPkgPath, CorrID: corrID})
 }
 
-// GetPendingSendCorr returns the callback correlation recorded for a packet hash.
-func (s *Store) GetPendingSendCorr(packetHash string) (cb z.SendCallback, callerPkgPath string, corrID string, found bool) {
+// GetPendingSendCorr returns the callback correlation recorded for a packet
+// hash, or a nil Callback if none is recorded.
+func (s *Store) GetPendingSendCorr(packetHash string) (cb z.SendCallback, callerPkgPath string, corrID string) {
 	v := s.pendingSendCorr.Get(packetHash)
 	if v == nil {
-		return nil, "", "", false
+		return nil, "", ""
 	}
 
 	corr := v.(pendingSendCorr)
 
-	return corr.Callback, corr.CallerPkgPath, corr.CorrID, true
+	return corr.Callback, corr.CallerPkgPath, corr.CorrID
 }
 
 // RemovePendingSendCorr clears a resolved send-callback correlation entry.
@@ -380,6 +396,52 @@ func (s *Store) RemovePendingSendCorr(_ int, rlm realm, packetHash string) {
 	assertIsRlmCurrent(0, rlm)
 
 	s.pendingSendCorr.Remove(packetHash)
+}
+
+// SetPendingTokenForward records a deferred-ack ESCROW TokenOrderV2 order, keyed
+// by its corrID.
+func (s *Store) SetPendingTokenForward(_ int, rlm realm, corrID string, parent types.Packet) {
+	assertIsRlmCurrent(0, rlm)
+
+	s.pendingTokenForward.Set(corrID, pendingTokenForward{ParentPacket: parent})
+}
+
+// GetPendingTokenForward returns the recorded parent packet for a corrID.
+func (s *Store) GetPendingTokenForward(corrID string) (types.Packet, bool) {
+	v := s.pendingTokenForward.Get(corrID)
+	if v == nil {
+		return types.Packet{}, false
+	}
+
+	return v.(pendingTokenForward).ParentPacket, true
+}
+
+// RemovePendingTokenForward clears a resolved deferred-forward entry.
+func (s *Store) RemovePendingTokenForward(_ int, rlm realm, corrID string) {
+	assertIsRlmCurrent(0, rlm)
+
+	s.pendingTokenForward.Remove(corrID)
+}
+
+// SetTokenForwardHandler installs the registered forward handler (admin-gated;
+// see RegisterTokenForwardHandler in register.gno).
+func (s *Store) SetTokenForwardHandler(_ int, rlm realm, handler z.TokenForwardHandler, addr address, pkgPath string) {
+	assertIsRlmCurrent(0, rlm)
+
+	s.tokenForwardHandler = handler
+	s.tokenForwardHandlerAddr = addr
+	s.tokenForwardHandlerPkgPath = pkgPath
+}
+
+// GetTokenForwardHandler returns a nil handler if none is registered.
+func (s *Store) GetTokenForwardHandler() (handler z.TokenForwardHandler, addr address, pkgPath string) {
+	return s.tokenForwardHandler, s.tokenForwardHandlerAddr, s.tokenForwardHandlerPkgPath
+}
+
+// IsTokenForwardReceiver reports whether receiver targets the registered forward
+// handler's trigger address.
+func (s *Store) IsTokenForwardReceiver(receiver address) bool {
+	return s.tokenForwardHandler != nil && receiver == s.tokenForwardHandlerAddr
 }
 
 // SetRateLimitDisabled toggles the global rate-limit kill switch.

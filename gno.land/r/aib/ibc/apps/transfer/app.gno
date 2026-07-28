@@ -76,8 +76,10 @@ func (a *App) OnSendPacket(
 
 	// Mirror transfer.transfer(): the packet Sender is the EOA that signed
 	// the tx. unsafe.OriginCaller is tx-level identity (no cur equivalent).
+	// pendingHandlerSend is the one exception: TransferWithCallback sets
+	// Sender to its own realm address instead.
 	signer := unsafe.OriginCaller().String()
-	if data.Sender != signer {
+	if data.Sender != signer && !pendingHandlerSend {
 		return ufmt.Errorf("invalid FungibleTokenPacketData: sender %s is different from signer %s", data.Sender, signer)
 	}
 
@@ -463,6 +465,8 @@ func (a *App) OnAcknowledgementPacket(
 			AttributeKeyAckError, ack.Response.Error,
 		)
 	}
+
+	handleSendCallback(cur, sourceClient, sequence, ack.Success(), acknowledgement)
 	return nil
 }
 
@@ -490,6 +494,8 @@ func (a *App) OnTimeoutPacket(
 		AttributeKeyAmount, token.Amount,
 		AttributeKeyMemo, data.Memo,
 	)
+
+	handleSendCallback(cur, sourceClient, sequence, false, nil)
 	return nil
 }
 

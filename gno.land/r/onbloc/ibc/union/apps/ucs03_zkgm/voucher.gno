@@ -2,8 +2,8 @@ package ucs03_zkgm
 
 import (
 	"gno.land/p/demo/tokens/grc20"
-	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 // Voucher bundles a wrapped grc20 token, its private mint/burn ledger,
@@ -34,6 +34,33 @@ type Voucher struct {
 // the ledger token is created at min(originDecimals, ledger cap).
 func NewVoucher(token *grc20.Token, ledger *grc20.PrivateLedger, originDecimals uint8) *Voucher {
 	return &Voucher{token: token, ledger: ledger, originDecimals: originDecimals}
+}
+
+// VoucherInfo is a read-only snapshot of a wrapped voucher's grc20 identity
+// for the voucher-list getter. It carries only scalar fields copied out of
+// Voucher/Token — no token/ledger handles — so listing vouchers never hands
+// out the mint/burn capability that *Voucher.Ledger() exposes.
+type VoucherInfo struct {
+	Denom          string
+	Name           string
+	Symbol         string
+	OriginDecimals uint8
+	LedgerDecimals uint8
+	TotalSupply    int64
+}
+
+// NewVoucherInfo is a crossing-safe constructor,
+// so the impl realm (and test doubles) can build one without tripping the
+// foreign-composite-literal rule.
+func NewVoucherInfo(denom, name, symbol string, originDecimals, ledgerDecimals uint8, totalSupply int64) VoucherInfo {
+	return VoucherInfo{
+		Denom:          denom,
+		Name:           name,
+		Symbol:         symbol,
+		OriginDecimals: originDecimals,
+		LedgerDecimals: ledgerDecimals,
+		TotalSupply:    totalSupply,
+	}
 }
 
 // Token returns the read-only token handle (safe: balances, metadata).
@@ -97,6 +124,45 @@ func (v *Voucher) TransferScaled(from, to address, amount *u256.Uint) error {
 	}
 
 	return v.ledger.Transfer(from, to, n)
+}
+
+// Approve grants spender an allowance on holder's ledger-precision balance.
+// Unlike MintScaled/BurnScaled/TransferScaled, the amount is not scaled from
+// origin precision: it is a self-service action on the holder's own balance,
+// matching the ledger units VoucherBalanceOf already reads.
+// Carries the ledger's Approve capability; callers MUST be impl-gated.
+func (v *Voucher) Approve(_ int, rlm realm, spender address, amount int64) error {
+	teller := v.ledger.ImpersonateTeller(rlm.Previous().Address())
+	return teller.Approve(0, rlm, spender, amount)
+}
+
+// Transfer moves amount of holder's ledger-precision balance to another
+// address. Same scale as Approve: no origin-precision scaling.
+// Carries the ledger's Transfer capability; callers MUST be impl-gated.
+func (v *Voucher) Transfer(_ int, rlm realm, to address, amount int64) error {
+	teller := v.ledger.ImpersonateTeller(rlm.Previous().Address())
+	return teller.Transfer(0, rlm, to, amount)
+}
+
+// VoucherApprove lets the caller grant spender an allowance on their own
+// wrapped-voucher balance for ibcDenom, so the voucher can be used through
+// GRC20-composable flows (e.g. Gnoswap) that rely on TransferFrom.
+func VoucherApprove(cur realm, ibcDenom string, spender address, amount int64) {
+	assertIsNotPaused()
+
+	if err := mustGetImpl().VoucherApprove(0, cur, ibcDenom, spender, amount); err != nil {
+		panic(err)
+	}
+}
+
+// VoucherTransfer lets the caller move their own wrapped-voucher balance for
+// ibcDenom directly to another address.
+func VoucherTransfer(cur realm, ibcDenom string, to address, amount int64) {
+	assertIsNotPaused()
+
+	if err := mustGetImpl().VoucherTransfer(0, cur, ibcDenom, to, amount); err != nil {
+		panic(err)
+	}
 }
 
 // VoucherBalanceOf returns addr's wrapped-voucher balance for ibcDenom, or 0 if none.

@@ -3,7 +3,7 @@ package tokenbucket
 import (
 	"testing"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 func mustNew(t *testing.T, capacity uint64, refillRate uint64, now uint64) *TokenBucket {

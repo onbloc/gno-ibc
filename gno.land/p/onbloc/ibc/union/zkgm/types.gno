@@ -1,6 +1,6 @@
 package zkgm
 
-import u256 "gno.land/p/gnoswap/uint256"
+import u256 "gno.land/p/onbloc/math/uint256"
 
 // BURN_ADDRESS is the canonical zero burn address: bech32 of 20 zero bytes with
 // the gno `g` HRP, matching union's get_burn_address = addr_humanize([0;20]).
@@ -93,10 +93,16 @@ type TokenMetadata struct {
 }
 
 // TokenInitializer holds token display metadata; decimals are metadata only, never used for scaling.
+// Authority and Minter are the ZkgmERC20 initialize(...) EVM addresses (20 bytes each): the admin
+// authority, and the address granted the minter role (the EVM ZKGM contract, named `zkgm` in the
+// Solidity signature — see docs/guides/zkgm-packet-send/initialize.md). Leave them nil to encode
+// the zero address, the default for callers that don't care about a real EVM authority/minter.
 type TokenInitializer struct {
-	Name     string
-	Symbol   string
-	Decimals uint8
+	Authority []byte
+	Minter    []byte
+	Name      string
+	Symbol    string
+	Decimals  uint8
 }
 
 // SolverMetadata carries market maker solver data.

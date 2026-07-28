@@ -6,8 +6,8 @@ import (
 
 	types "gno.land/p/onbloc/ibc/union/types"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 // increaseChannelBalanceV2 accumulates deposits; a zero amount stores a zero entry.

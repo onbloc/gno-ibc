@@ -1,0 +1,2 @@
+module = "gno.land/r/onbloc/ibc/bridge/ics20zkgmadapter/scenario"
+gno = "0.9"

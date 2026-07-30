@@ -69,6 +69,9 @@ func (v *ucs03ZkgmV1) handleForwardChild(_ int, rlm realm, packet types.Packet, 
 		return false
 	}
 
+	// parent.Data is readonly-tainted (non-crossing getter into the proxy's store); clone before it crosses into core.
+	parent.Data = types.CloneBytes(parent.Data)
+
 	v.store.RemoveInFlightPacket(0, rlm, key)
 	zkgm.EmitForwardInFlightPopped(0, rlm, types.MustCommit(types.CommitPacket(packet)), true)
 	core.WriteAcknowledgement(cross(rlm), types.NewMsgWriteAcknowledgement(parent, ack))

@@ -100,6 +100,9 @@ func (v *ucs03ZkgmV1) CompleteTokenForwardAck(_ int, rlm realm, corrID string, s
 	}
 	v.store.RemovePendingTokenForward(0, rlm, corrID)
 
+	// parent.Data is readonly-tainted (non-crossing getter into the proxy's store); clone before it crosses into core.
+	parent.Data = types.CloneBytes(parent.Data)
+
 	tag := tagAckFailure()
 	if success {
 		tag = tagAckSuccess()

@@ -10,10 +10,8 @@ import (
 )
 
 func (v *ucs03ZkgmV1) executeTokenOrderForward(_ int, rlm realm, packet types.Packet, path *u256.Uint, order z.TokenOrderV2, relayer address, wrapped string) (types.RecvPacketResult, error) {
-	// A relayer fee (BaseAmount > QuoteAmount) mints a separate balance to
-	// the relayer that CompleteTokenForwardAck's failure-path burn can't
-	// reach, leaving it uncollateralized once upstream refunds the full
-	// BaseAmount. Reject fee-bearing forwards before taking custody.
+	// Reject fee-bearing forwards: a relayer fee mint can't be unwound by
+	// CompleteTokenForwardAck's failure-path burn, so it'd go uncollateralized.
 	if order.BaseAmount.Cmp(order.QuoteAmount) != 0 {
 		return failureResult(universalErrorAck()), nil
 	}
@@ -65,11 +63,10 @@ func (v *ucs03ZkgmV1) executeTokenOrderForward(_ int, rlm realm, packet types.Pa
 	return core.NewRecvPacketResult(types.PacketStatusAsync, nil), nil
 }
 
-// callForwardHandlerExecute runs the handler's Execute and converts any panic
-// it raises into execFatal. Execute lives in another realm and can't
-// construct execFatal itself, so a plain panic would otherwise be absorbed
-// by dispatchExecutePacket's recover (dispatch.gno) into a controlled
-// failure ack instead of reverting the mint this function just committed.
+// callForwardHandlerExecute converts any panic from the handler's Execute
+// into execFatal, since it runs in another realm and can't do so itself;
+// otherwise dispatchExecutePacket's recover would absorb it into a failure
+// ack instead of reverting the mint.
 func callForwardHandlerExecute(_ int, rlm realm, handler z.TokenForwardHandler, req z.TokenForwardRequest, corrID string) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -85,13 +82,10 @@ func tokenForwardCorrID(packet types.Packet) string {
 	return types.MustCommit(types.CommitPacket(packet)).String()
 }
 
-// CompleteTokenForwardAck resolves the deferred ack once the handler's onward leg
-// settles. Callable only by the registered forward handler.
-//
-// On failure it burns the wrapped voucher that the onward protocol refunded
-// to the handler (e.g. ICS20's own escrow un-escrow), so the failure ack that
-// refunds the original sender upstream is not double-counted against a
-// stranded balance on this chain. Mirrors transfer.CompleteForwardAck's burn.
+// CompleteTokenForwardAck resolves the deferred ack once the handler's
+// onward leg settles. Callable only by the registered forward handler.
+// On failure it burns the voucher the onward protocol refunded to the
+// handler, so the upstream refund isn't double-counted.
 func (v *ucs03ZkgmV1) CompleteTokenForwardAck(_ int, rlm realm, corrID string, success bool, innerAck []byte) {
 	assertIsRlmCurrent(0, rlm)
 

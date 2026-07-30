@@ -14,6 +14,8 @@
 package ics20zkgmadapter
 
 import (
+	"strconv"
+
 	"gno.land/p/nt/bptree/v0"
 	unionTypes "gno.land/p/onbloc/ibc/union/types"
 	ics20 "gno.land/r/aib/ibc/apps/transfer"
@@ -52,7 +54,7 @@ func init(cur realm) {
 // the parse error carries the specific reason.
 // Implements ics20.ForwardHandler.
 func (h *forwardZkgmHandler) Prepare(cur realm, req ics20.Request) error {
-	_, err := parseForwardMemo(req.Memo)
+	_, err := parseZkgmMemo(req.Memo)
 	return err
 }
 
@@ -62,7 +64,7 @@ func (h *forwardZkgmHandler) Prepare(cur realm, req ics20.Request) error {
 // reverts (mint included) rather than acking over stranded funds.
 // Implements ics20.ForwardHandler.
 func (h *forwardZkgmHandler) Execute(cur realm, req ics20.Request) {
-	fwd, err := parseForwardMemo(req.Memo)
+	fwd, err := parseZkgmMemo(req.Memo)
 	if err != nil {
 		// Prepare already validated the memo; reaching here means the recv path
 		// is inconsistent, so revert.
@@ -83,9 +85,15 @@ func (h *forwardZkgmHandler) Execute(cur realm, req ics20.Request) {
 	instruction := buildTokenOrder(cur.Address().String(), req.BaseTokenKey, req.Amount, fwd)
 	corrID := forwardCorrID(req.SourceClient, req.Sequence)
 	salt := deriveForwardSalt(req.SourceClient, req.Sequence)
-	timeout := forwardTimeoutTimestamp(fwd.TimeoutTimestamp)
+	timeout := forwardTimeoutTimestamp(fwd.Timeout)
 
-	zkgm.SendWithCallback(cross(cur), unionTypes.ChannelId(fwd.Channel), timeout, salt, instruction, corrID, forwardZkgmInstance)
+	// zkgm's channel is numeric; PFM's Channel field is a string.
+	channel, err := strconv.ParseUint(fwd.Channel, 10, 32)
+	if err != nil {
+		panic("ics20zkgmadapter: forward memo channel is not numeric: " + err.Error())
+	}
+
+	zkgm.SendWithCallback(cross(cur), unionTypes.ChannelId(channel), timeout, salt, instruction, corrID, forwardZkgmInstance)
 
 	sendCorr.Set(corrID, pendingSend{ClientID: req.DestinationClient, Sequence: req.Sequence})
 }

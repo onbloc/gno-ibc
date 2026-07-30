@@ -21,6 +21,12 @@ const defaultForwardTimeout = 24 * time.Hour
 // sender is this realm's address (which holds the escrowed voucher);
 // baseTokenKey is the voucher's grc20reg key.
 func buildTokenOrder(sender, baseTokenKey string, amount int64, fwd ForwardMemo) z.Instruction {
+	// Already validated as hex at parse time; cannot fail here.
+	receiver, err := hex.DecodeString(fwd.Receiver)
+	if err != nil {
+		panic("ics20zkgmadapter: forward memo receiver is not valid hex: " + err.Error())
+	}
+
 	metadata, err := z.EncodeTokenMetadata(z.TokenMetadata{
 		Implementation: fwd.Metadata.Implementation,
 		Initializer:    fwd.Metadata.Initializer,
@@ -32,7 +38,7 @@ func buildTokenOrder(sender, baseTokenKey string, amount int64, fwd ForwardMemo)
 	amountU256 := u256.NewUintFromInt64(amount)
 	operand, err := z.EncodeTokenOrderV2(z.TokenOrderV2{
 		Sender:      []byte(sender),
-		Receiver:    fwd.Receiver,
+		Receiver:    receiver,
 		BaseToken:   []byte(baseTokenKey),
 		BaseAmount:  amountU256,
 		QuoteToken:  fwd.QuoteToken,

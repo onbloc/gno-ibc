@@ -37,14 +37,14 @@ func RegisterReverseHandler(cur realm) {
 
 // Implements zkgm.TokenForwardHandler.
 func (h *forwardIcs20Handler) Prepare(cur realm, req z.TokenForwardRequest, corrID string) error {
-	_, err := parseForwardMemo(string(req.Memo))
+	_, err := parseICS20Memo(string(req.Memo))
 	return err
 }
 
 // Implements zkgm.TokenForwardHandler. Reuses corrID as the aib-side correlation
 // too, so OnTransferSendResult can resolve the ZKGM ack directly.
 func (h *forwardIcs20Handler) Execute(cur realm, req z.TokenForwardRequest, corrID string) {
-	fwd, err := parseForwardMemo(string(req.Memo))
+	fwd, err := parseICS20Memo(string(req.Memo))
 	if err != nil {
 		panic("ics20zkgmadapter: invalid memo at execute: " + err.Error())
 	}
@@ -60,7 +60,7 @@ func (h *forwardIcs20Handler) Execute(cur realm, req z.TokenForwardRequest, corr
 		panic("ics20zkgmadapter: approve error: " + err.Error())
 	}
 
-	ics20.TransferWithCallback(cross(cur), fwd.DestinationClient, fwd.AtomoneReceiver, req.BaseTokenKey, req.Amount, forwardIcs20TimeoutTimestamp(fwd.TimeoutTimestamp), fwd.Memo, corrID, forwardZkgmInstance)
+	ics20.TransferWithCallback(cross(cur), fwd.Channel, fwd.Receiver, req.BaseTokenKey, req.Amount, forwardIcs20TimeoutTimestamp(fwd.Timeout), fwd.Memo, corrID, forwardZkgmInstance)
 }
 
 // OnTransferSendResult resolves the ZKGM order's deferred ack once the onward

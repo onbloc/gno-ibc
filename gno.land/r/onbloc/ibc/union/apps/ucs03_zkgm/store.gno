@@ -100,12 +100,10 @@ type pendingSendCorr struct {
 	CorrID        string
 }
 
-// pendingTokenForward records a deferred-ack ESCROW TokenOrderV2 order for
-// CompleteTokenForwardAck, keyed by corrID. Wrapped/HandlerAddr/Amount
-// identify the voucher minted to the handler at recv time, so a failed
-// forward can burn it back — the onward protocol has already refunded it to
-// the handler, and burning here avoids double-crediting alongside the
-// failure ack's own upstream refund.
+// pendingTokenForward records a deferred-ack ESCROW TokenOrderV2 order,
+// keyed by corrID, for CompleteTokenForwardAck to resolve. Wrapped/
+// HandlerAddr/Amount identify the voucher minted to the handler, so a
+// failed forward can burn it back.
 type pendingTokenForward struct {
 	ParentPacket types.Packet
 	Wrapped      string

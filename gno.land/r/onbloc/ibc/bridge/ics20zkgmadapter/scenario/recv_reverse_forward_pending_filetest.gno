@@ -148,7 +148,7 @@ func bootstrapAibClient(cur realm) string {
 // mints the wrapped voucher to it, then forwardIcs20Handler.Execute approves
 // and sends it onward via ICS20.
 func recvReverseForward(cur realm, channelId types.ChannelId, wrapped string, adapterAddr address, clientID string) {
-	memo := ufmt.Sprintf(`{"forward":{"destination_client":%q,"atomone_receiver":"atone1reversereceiver"}}`, clientID)
+	memo := ufmt.Sprintf(`{"forward":{"receiver":"atone1reversereceiver","channel":%q}}`, clientID)
 
 	order := z.TokenOrderV2{
 		Sender:      []byte("remote-sender"),

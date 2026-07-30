@@ -7,22 +7,22 @@ import (
 	"gno.land/p/onbloc/json"
 )
 
-// ForwardMemo is a PFM-style {"forward": {...}} memo shared by both
-// forwarding legs ics20zkgmadapter implements: Channel/Receiver/QuoteToken/
-// Metadata for AtomOne->Gno->Union (order.gno), DestinationClient/
-// AtomoneReceiver/Memo for Union->Gno->AtomOne (forwardics20.gno). Only the
-// fields for the sender's direction need to be present.
+// ForwardMemo mirrors standard PFM's {"forward": {receiver, port, channel,
+// timeout, retries}} memo, shared by both legs. Port/Retries are unused.
+// QuoteToken/Metadata are a zkgm-only extension (no PFM equivalent, required
+// for a TokenOrderV2 mint) - their presence is how parseZkgmMemo/
+// parseICS20Memo tell the two directions apart. Memo is likewise ics20-only.
 type ForwardMemo struct {
-	Channel    uint32
-	Receiver   []byte
+	Receiver string
+	Port     string
+	Channel  string
+	Timeout  uint64
+	Retries  uint64
+
 	QuoteToken []byte
 	Metadata   ForwardMemoMetadata
 
-	DestinationClient string
-	AtomoneReceiver   string
-	Memo              string
-
-	TimeoutTimestamp uint64
+	Memo string
 }
 
 type ForwardMemoMetadata struct {
@@ -30,44 +30,98 @@ type ForwardMemoMetadata struct {
 	Initializer    []byte
 }
 
-// parseForwardMemo parses a forward memo, picking the branch based on
-// whether "destination_client" is set.
-func parseForwardMemo(raw string) (ForwardMemo, error) {
+// forwardObject parses raw and returns its "forward" object.
+func forwardObject(raw string) (*json.Node, error) {
 	if raw == "" {
-		return ForwardMemo{}, ufmt.Errorf("forward memo: empty")
+		return nil, ufmt.Errorf("forward memo: empty")
 	}
 
 	root, err := json.Unmarshal([]byte(raw))
 	if err != nil {
-		return ForwardMemo{}, ufmt.Errorf("forward memo: invalid json: %v", err)
+		return nil, ufmt.Errorf("forward memo: invalid json: %v", err)
 	}
 
 	fwd, err := root.GetKey("forward")
 	if err != nil {
-		return ForwardMemo{}, ufmt.Errorf("forward memo: missing \"forward\" object")
+		return nil, ufmt.Errorf("forward memo: missing \"forward\" object")
 	}
 
-	if _, err := fwd.GetKey("destination_client"); err == nil {
-		return parseICS20ForwardMemo(fwd)
+	return fwd, nil
+}
+
+// parseZkgmMemo parses the AtomOne->Gno->Union leg (forwardZkgmHandler),
+// requiring "quote_token" to catch a wrong-direction memo early.
+func parseZkgmMemo(raw string) (ForwardMemo, error) {
+	fwd, err := forwardObject(raw)
+	if err != nil {
+		return ForwardMemo{}, err
+	}
+
+	if _, err := fwd.GetKey("quote_token"); err != nil {
+		return ForwardMemo{}, ufmt.Errorf("forward memo: missing \"quote_token\" (wrong direction?)")
 	}
 
 	return parseZkgmForwardMemo(fwd)
 }
 
-// parseZkgmForwardMemo decodes the AtomOne->Gno->Union leg's fields.
-func parseZkgmForwardMemo(fwd *json.Node) (ForwardMemo, error) {
-	receiver, err := memoHex(fwd, "receiver")
+// parseICS20Memo parses the Union->Gno->AtomOne leg (forwardIcs20Handler),
+// rejecting a "quote_token" (the other leg's field).
+func parseICS20Memo(raw string) (ForwardMemo, error) {
+	fwd, err := forwardObject(raw)
 	if err != nil {
 		return ForwardMemo{}, err
 	}
 
-	channelNode, err := fwd.GetKey("channel")
-	if err != nil {
-		return ForwardMemo{}, ufmt.Errorf("forward memo: missing \"channel\"")
+	if _, err := fwd.GetKey("quote_token"); err == nil {
+		return ForwardMemo{}, ufmt.Errorf("forward memo: unexpected \"quote_token\" (wrong direction?)")
 	}
-	channelNum, err := channelNode.GetNumeric()
+
+	return parseICS20ForwardMemo(fwd)
+}
+
+// parsePFMCore reads the fields common to both legs. Receiver/Channel are
+// required; Port/Timeout/Retries are optional and unused.
+func parsePFMCore(fwd *json.Node) (receiver, port, channel string, timeout, retries uint64, err error) {
+	receiver, err = memoString(fwd, "receiver")
 	if err != nil {
-		return ForwardMemo{}, ufmt.Errorf("forward memo: \"channel\" must be numeric: %v", err)
+		return "", "", "", 0, 0, err
+	}
+
+	channel, err = memoString(fwd, "channel")
+	if err != nil {
+		return "", "", "", 0, 0, err
+	}
+
+	if portNode, perr := fwd.GetKey("port"); perr == nil {
+		port, _ = portNode.GetString()
+	}
+
+	if timeoutNode, terr := fwd.GetKey("timeout"); terr == nil {
+		if timeoutNum, nerr := timeoutNode.GetNumeric(); nerr == nil {
+			timeout = uint64(timeoutNum)
+		}
+	}
+
+	if retriesNode, rerr := fwd.GetKey("retries"); rerr == nil {
+		if retriesNum, nerr := retriesNode.GetNumeric(); nerr == nil {
+			retries = uint64(retriesNum)
+		}
+	}
+
+	return receiver, port, channel, timeout, retries, nil
+}
+
+// parseZkgmForwardMemo decodes the zkgm leg: shared PFM fields plus
+// quote_token/metadata. receiver is validated as hex and normalized here.
+func parseZkgmForwardMemo(fwd *json.Node) (ForwardMemo, error) {
+	receiver, port, channel, timeout, retries, err := parsePFMCore(fwd)
+	if err != nil {
+		return ForwardMemo{}, err
+	}
+
+	receiverBytes, err := decodeHex(receiver)
+	if err != nil {
+		return ForwardMemo{}, ufmt.Errorf("forward memo: \"receiver\" is not valid hex: %v", err)
 	}
 
 	quoteToken, err := memoHex(fwd, "quote_token")
@@ -88,50 +142,39 @@ func parseZkgmForwardMemo(fwd *json.Node) (ForwardMemo, error) {
 		return ForwardMemo{}, err
 	}
 
-	memo := ForwardMemo{
-		Channel:    uint32(channelNum),
-		Receiver:   receiver,
+	return ForwardMemo{
+		Receiver: hex.EncodeToString(receiverBytes),
+		Port:     port,
+		Channel:  channel,
+		Timeout:  timeout,
+		Retries:  retries,
 		QuoteToken: quoteToken,
 		Metadata: ForwardMemoMetadata{
 			Implementation: implementation,
 			Initializer:    initializer,
 		},
-	}
-
-	if timeoutNode, err := fwd.GetKey("timeout_timestamp"); err == nil {
-		if timeoutNum, err := timeoutNode.GetNumeric(); err == nil {
-			memo.TimeoutTimestamp = uint64(timeoutNum)
-		}
-	}
-
-	return memo, nil
+	}, nil
 }
 
-// parseICS20ForwardMemo decodes the Union->Gno->AtomOne leg's fields.
+// parseICS20ForwardMemo decodes the ics20 leg: shared PFM fields plus the
+// passthrough memo.
 func parseICS20ForwardMemo(fwd *json.Node) (ForwardMemo, error) {
-	destinationClient, err := memoString(fwd, "destination_client")
-	if err != nil {
-		return ForwardMemo{}, err
-	}
-	atomoneReceiver, err := memoString(fwd, "atomone_receiver")
+	receiver, port, channel, timeout, retries, err := parsePFMCore(fwd)
 	if err != nil {
 		return ForwardMemo{}, err
 	}
 
 	memo := ForwardMemo{
-		DestinationClient: destinationClient,
-		AtomoneReceiver:   atomoneReceiver,
+		Receiver: receiver,
+		Port:     port,
+		Channel:  channel,
+		Timeout:  timeout,
+		Retries:  retries,
 	}
 
 	if memoNode, err := fwd.GetKey("memo"); err == nil {
 		if s, err := memoNode.GetString(); err == nil {
 			memo.Memo = s
-		}
-	}
-
-	if timeoutNode, err := fwd.GetKey("timeout_timestamp"); err == nil {
-		if timeoutNum, err := timeoutNode.GetNumeric(); err == nil {
-			memo.TimeoutTimestamp = uint64(timeoutNum)
 		}
 	}
 

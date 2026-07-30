@@ -20,9 +20,9 @@ const defaultForwardTimeout = 24 * time.Hour
 // buildTokenOrder encodes the ZKGM TokenOrderV2 instruction for a forward.
 // sender is this realm's address (which holds the escrowed voucher);
 // baseTokenKey is the voucher's grc20reg key.
-func buildTokenOrder(sender, baseTokenKey string, amount int64, fwd ForwardMemo) z.Instruction {
+func buildTokenOrder(sender, baseTokenKey string, amount int64, fwd ZkgmForwardMemo) z.Instruction {
 	// Already validated as hex at parse time; cannot fail here.
-	receiver, err := hex.DecodeString(fwd.Receiver)
+	receiver, err := hex.DecodeString(fwd.Core.Receiver)
 	if err != nil {
 		panic("ics20zkgmadapter: forward memo receiver is not valid hex: " + err.Error())
 	}

@@ -14,8 +14,6 @@
 package ics20zkgmadapter
 
 import (
-	"strconv"
-
 	"gno.land/p/nt/bptree/v0"
 	unionTypes "gno.land/p/onbloc/ibc/union/types"
 	ics20 "gno.land/r/aib/ibc/apps/transfer"
@@ -85,15 +83,9 @@ func (h *forwardZkgmHandler) Execute(cur realm, req ics20.Request) {
 	instruction := buildTokenOrder(cur.Address().String(), req.BaseTokenKey, req.Amount, fwd)
 	corrID := forwardCorrID(req.SourceClient, req.Sequence)
 	salt := deriveForwardSalt(req.SourceClient, req.Sequence)
-	timeout := forwardTimeoutTimestamp(fwd.Timeout)
+	timeout := forwardTimeoutTimestamp(fwd.Core.Timeout)
 
-	// zkgm's channel is numeric; PFM's Channel field is a string.
-	channel, err := strconv.ParseUint(fwd.Channel, 10, 32)
-	if err != nil {
-		panic("ics20zkgmadapter: forward memo channel is not numeric: " + err.Error())
-	}
-
-	zkgm.SendWithCallback(cross(cur), unionTypes.ChannelId(channel), timeout, salt, instruction, corrID, forwardZkgmInstance)
+	zkgm.SendWithCallback(cross(cur), unionTypes.ChannelId(fwd.ChannelID), timeout, salt, instruction, corrID, forwardZkgmInstance)
 
 	sendCorr.Set(corrID, pendingSend{ClientID: req.DestinationClient, Sequence: req.Sequence})
 }

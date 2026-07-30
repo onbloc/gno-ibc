@@ -2,27 +2,46 @@ package ics20zkgmadapter
 
 import (
 	"encoding/hex"
+	"strconv"
+	"time"
 
 	"gno.land/p/nt/ufmt/v0"
 	"gno.land/p/onbloc/json"
+	ics20 "gno.land/r/aib/ibc/apps/transfer"
 )
 
-// ForwardMemo mirrors standard PFM's {"forward": {receiver, port, channel,
-// timeout, retries}} memo, shared by both legs. Port/Retries are unused.
-// QuoteToken/Metadata are a zkgm-only extension (no PFM equivalent, required
-// for a TokenOrderV2 mint) - their presence is how parseZkgmMemo/
-// parseICS20Memo tell the two directions apart. Memo is likewise ics20-only.
-type ForwardMemo struct {
+// PFMCore holds real PFM's {receiver, port, channel, timeout, retries}
+// fields, common to both legs. Optional fields, when present, must have the
+// right type/value or the whole memo is rejected (fail closed) instead of
+// silently defaulting - a malformed memo must fail in Prepare, before any
+// custody is taken.
+type PFMCore struct {
 	Receiver string
 	Port     string
 	Channel  string
-	Timeout  uint64
-	Retries  uint64
+	Timeout  uint64 // absolute UnixNano deadline; 0 if the memo omitted it
+}
 
+// ZkgmForwardMemo is the AtomOne->Gno->Union leg's parsed memo (order.gno).
+// QuoteToken/Metadata are a zkgm-only extension PFM has no equivalent for,
+// required for a TokenOrderV2 mint; their presence in the raw memo is how
+// parseZkgmMemo/parseICS20Memo tell the two directions apart.
+type ZkgmForwardMemo struct {
+	Core PFMCore
+	// ChannelID is Core.Channel, pre-parsed as a Union channel id: validated
+	// numeric here, so consumers never re-parse (or re-guard a parse that
+	// "cannot fail").
+	ChannelID  uint32
 	QuoteToken []byte
 	Metadata   ForwardMemoMetadata
+}
 
-	Memo string
+// ICS20ForwardMemo is the Union->Gno->AtomOne leg's parsed memo
+// (forwardics20.gno). Next is PFM's passthrough memo for the onward ICS20
+// transfer.
+type ICS20ForwardMemo struct {
+	Core PFMCore
+	Next string
 }
 
 type ForwardMemoMetadata struct {
@@ -51,14 +70,14 @@ func forwardObject(raw string) (*json.Node, error) {
 
 // parseZkgmMemo parses the AtomOne->Gno->Union leg (forwardZkgmHandler),
 // requiring "quote_token" to catch a wrong-direction memo early.
-func parseZkgmMemo(raw string) (ForwardMemo, error) {
+func parseZkgmMemo(raw string) (ZkgmForwardMemo, error) {
 	fwd, err := forwardObject(raw)
 	if err != nil {
-		return ForwardMemo{}, err
+		return ZkgmForwardMemo{}, err
 	}
 
 	if _, err := fwd.GetKey("quote_token"); err != nil {
-		return ForwardMemo{}, ufmt.Errorf("forward memo: missing \"quote_token\" (wrong direction?)")
+		return ZkgmForwardMemo{}, ufmt.Errorf("forward memo: missing \"quote_token\" (wrong direction?)")
 	}
 
 	return parseZkgmForwardMemo(fwd)
@@ -66,88 +85,111 @@ func parseZkgmMemo(raw string) (ForwardMemo, error) {
 
 // parseICS20Memo parses the Union->Gno->AtomOne leg (forwardIcs20Handler),
 // rejecting a "quote_token" (the other leg's field).
-func parseICS20Memo(raw string) (ForwardMemo, error) {
+func parseICS20Memo(raw string) (ICS20ForwardMemo, error) {
 	fwd, err := forwardObject(raw)
 	if err != nil {
-		return ForwardMemo{}, err
+		return ICS20ForwardMemo{}, err
 	}
 
 	if _, err := fwd.GetKey("quote_token"); err == nil {
-		return ForwardMemo{}, ufmt.Errorf("forward memo: unexpected \"quote_token\" (wrong direction?)")
+		return ICS20ForwardMemo{}, ufmt.Errorf("forward memo: unexpected \"quote_token\" (wrong direction?)")
 	}
 
 	return parseICS20ForwardMemo(fwd)
 }
 
-// parsePFMCore reads the fields common to both legs. Receiver/Channel are
-// required; Port/Timeout/Retries are optional and unused.
-func parsePFMCore(fwd *json.Node) (receiver, port, channel string, timeout, retries uint64, err error) {
-	receiver, err = memoString(fwd, "receiver")
+// parsePFMCore reads real PFM's shared fields. Receiver/Channel are
+// required. Port/Timeout/Retries are optional, but a present field with the
+// wrong type is rejected rather than silently defaulted.
+func parsePFMCore(fwd *json.Node) (PFMCore, error) {
+	receiver, err := memoString(fwd, "receiver")
 	if err != nil {
-		return "", "", "", 0, 0, err
+		return PFMCore{}, err
 	}
 
-	channel, err = memoString(fwd, "channel")
+	channel, err := memoString(fwd, "channel")
 	if err != nil {
-		return "", "", "", 0, 0, err
+		return PFMCore{}, err
 	}
 
-	if portNode, perr := fwd.GetKey("port"); perr == nil {
-		port, _ = portNode.GetString()
+	port, err := optionalString(fwd, "port")
+	if err != nil {
+		return PFMCore{}, err
 	}
 
-	if timeoutNode, terr := fwd.GetKey("timeout"); terr == nil {
-		if timeoutNum, nerr := timeoutNode.GetNumeric(); nerr == nil {
-			timeout = uint64(timeoutNum)
-		}
+	timeout, err := optionalTimeout(fwd)
+	if err != nil {
+		return PFMCore{}, err
 	}
 
-	if retriesNode, rerr := fwd.GetKey("retries"); rerr == nil {
-		if retriesNum, nerr := retriesNode.GetNumeric(); nerr == nil {
-			retries = uint64(retriesNum)
-		}
+	if err := rejectUnsupportedRetries(fwd); err != nil {
+		return PFMCore{}, err
 	}
 
-	return receiver, port, channel, timeout, retries, nil
+	return PFMCore{Receiver: receiver, Port: port, Channel: channel, Timeout: timeout}, nil
 }
 
-// parseZkgmForwardMemo decodes the zkgm leg: shared PFM fields plus
-// quote_token/metadata. receiver is validated as hex and normalized here.
-func parseZkgmForwardMemo(fwd *json.Node) (ForwardMemo, error) {
-	receiver, port, channel, timeout, retries, err := parsePFMCore(fwd)
+// rejectUnsupportedRetries errors if "retries" is present and non-zero:
+// neither leg implements retry-on-timeout, so silently accepting a nonzero
+// value would promise a retry that never happens. Not stored on PFMCore -
+// the only valid value is 0/absent, so there's nothing worth keeping.
+func rejectUnsupportedRetries(fwd *json.Node) error {
+	retries, err := optionalUint(fwd, "retries")
 	if err != nil {
-		return ForwardMemo{}, err
+		return err
+	}
+	if retries > 0 {
+		return ufmt.Errorf("forward memo: \"retries\" is not supported (retry-on-timeout is not implemented)")
+	}
+	return nil
+}
+
+// parseZkgmForwardMemo decodes the zkgm leg: shared PFM fields (channel must
+// be a numeric Union channel id - this leg has no "channel-N" convention)
+// plus quote_token/metadata. receiver/channel are validated here so a
+// malformed value fails before any custody is taken.
+func parseZkgmForwardMemo(fwd *json.Node) (ZkgmForwardMemo, error) {
+	core, err := parsePFMCore(fwd)
+	if err != nil {
+		return ZkgmForwardMemo{}, err
 	}
 
-	receiverBytes, err := decodeHex(receiver)
-	if err != nil {
-		return ForwardMemo{}, ufmt.Errorf("forward memo: \"receiver\" is not valid hex: %v", err)
+	if core.Port != "" {
+		return ZkgmForwardMemo{}, ufmt.Errorf("forward memo: \"port\" is not valid for this leg")
 	}
+
+	channelID, err := strconv.ParseUint(core.Channel, 10, 32)
+	if err != nil {
+		return ZkgmForwardMemo{}, ufmt.Errorf("forward memo: \"channel\" must be a numeric Union channel id: %v", err)
+	}
+
+	receiverBytes, err := decodeHex(core.Receiver)
+	if err != nil {
+		return ZkgmForwardMemo{}, ufmt.Errorf("forward memo: \"receiver\" is not valid hex: %v", err)
+	}
+	core.Receiver = hex.EncodeToString(receiverBytes)
 
 	quoteToken, err := memoHex(fwd, "quote_token")
 	if err != nil {
-		return ForwardMemo{}, err
+		return ZkgmForwardMemo{}, err
 	}
 
 	metadataNode, err := fwd.GetKey("metadata")
 	if err != nil {
-		return ForwardMemo{}, ufmt.Errorf("forward memo: missing \"metadata\"")
+		return ZkgmForwardMemo{}, ufmt.Errorf("forward memo: missing \"metadata\"")
 	}
 	implementation, err := memoHex(metadataNode, "implementation")
 	if err != nil {
-		return ForwardMemo{}, err
+		return ZkgmForwardMemo{}, err
 	}
 	initializer, err := memoHex(metadataNode, "initializer")
 	if err != nil {
-		return ForwardMemo{}, err
+		return ZkgmForwardMemo{}, err
 	}
 
-	return ForwardMemo{
-		Receiver: hex.EncodeToString(receiverBytes),
-		Port:     port,
-		Channel:  channel,
-		Timeout:  timeout,
-		Retries:  retries,
+	return ZkgmForwardMemo{
+		Core:       core,
+		ChannelID:  uint32(channelID),
 		QuoteToken: quoteToken,
 		Metadata: ForwardMemoMetadata{
 			Implementation: implementation,
@@ -156,29 +198,143 @@ func parseZkgmForwardMemo(fwd *json.Node) (ForwardMemo, error) {
 	}, nil
 }
 
-// parseICS20ForwardMemo decodes the ics20 leg: shared PFM fields plus the
-// passthrough memo.
-func parseICS20ForwardMemo(fwd *json.Node) (ForwardMemo, error) {
-	receiver, port, channel, timeout, retries, err := parsePFMCore(fwd)
+// parseICS20ForwardMemo decodes the ics20 leg: shared PFM fields plus PFM's
+// "next" passthrough memo. port, if present, must be the fixed transfer
+// port - the only one this leg ever sends through.
+func parseICS20ForwardMemo(fwd *json.Node) (ICS20ForwardMemo, error) {
+	core, err := parsePFMCore(fwd)
 	if err != nil {
-		return ForwardMemo{}, err
+		return ICS20ForwardMemo{}, err
 	}
 
-	memo := ForwardMemo{
-		Receiver: receiver,
-		Port:     port,
-		Channel:  channel,
-		Timeout:  timeout,
-		Retries:  retries,
+	if core.Port != "" && core.Port != ics20.PortID {
+		return ICS20ForwardMemo{}, ufmt.Errorf("forward memo: \"port\" must be %q, got %q", ics20.PortID, core.Port)
 	}
 
-	if memoNode, err := fwd.GetKey("memo"); err == nil {
-		if s, err := memoNode.GetString(); err == nil {
-			memo.Memo = s
-		}
+	if err := checkIcs20TimeoutBounds(core.Timeout); err != nil {
+		return ICS20ForwardMemo{}, err
 	}
 
-	return memo, nil
+	next, err := nextMemo(fwd)
+	if err != nil {
+		return ICS20ForwardMemo{}, err
+	}
+
+	return ICS20ForwardMemo{Core: core, Next: next}, nil
+}
+
+// icsMinForwardTimeout guards against a memo timeout so close to "now" that
+// truncating it down to whole seconds for aib's TimeoutTimestamp (see
+// forwardIcs20TimeoutTimestamp) could land on the current second, tripping
+// aib core's "timeout must be after now" check at Execute time instead of
+// failing cleanly here in Prepare.
+const icsMinForwardTimeout = 2 * time.Second
+
+// checkIcs20TimeoutBounds rejects a resolved timeout (0 = memo omitted it,
+// always fine) outside aib core SendPacket's actual [now, now+24h) window,
+// using the same margin forwardIcs20TimeoutTimestamp's own default already
+// stays under. A permanent out-of-range input fails here, before any
+// custody is taken, instead of panicking in Execute.
+func checkIcs20TimeoutBounds(absoluteNano uint64) error {
+	if absoluteNano == 0 {
+		return nil
+	}
+
+	now := uint64(time.Now().UnixNano())
+	if absoluteNano < now+uint64(icsMinForwardTimeout) {
+		return ufmt.Errorf("forward memo: \"timeout\" must be at least %s from now", icsMinForwardTimeout)
+	}
+	if max := now + uint64(defaultForwardIcs20Timeout); absoluteNano > max {
+		return ufmt.Errorf("forward memo: \"timeout\" must be within %s from now", defaultForwardIcs20Timeout)
+	}
+	return nil
+}
+
+// nextMemo reads PFM's "next" field, accepting either a pre-encoded string
+// or a nested object (re-marshaled to its JSON string form) - real PFM
+// implementations accept both shapes for the next hop's own memo.
+func nextMemo(fwd *json.Node) (string, error) {
+	child, err := fwd.GetKey("next")
+	if err != nil {
+		return "", nil
+	}
+
+	if child.IsString() {
+		return child.GetString()
+	}
+	if !child.IsObject() {
+		return "", ufmt.Errorf("forward memo: \"next\" must be a string or an object")
+	}
+
+	bz, err := json.Marshal(child)
+	if err != nil {
+		return "", ufmt.Errorf("forward memo: \"next\" is not valid: %v", err)
+	}
+	return string(bz), nil
+}
+
+// optionalString reads key as a string if present, rejecting any other
+// type. Absent returns "".
+func optionalString(node *json.Node, key string) (string, error) {
+	child, err := node.GetKey(key)
+	if err != nil {
+		return "", nil
+	}
+
+	s, err := child.GetString()
+	if err != nil {
+		return "", ufmt.Errorf("forward memo: %q must be a string", key)
+	}
+	return s, nil
+}
+
+// optionalUint reads key as a non-negative integer if present, rejecting
+// any other type, a negative value, or a non-integer (GetNumeric returns
+// float64, so e.g. 1.5 would otherwise silently truncate to 1). Absent
+// returns 0.
+func optionalUint(node *json.Node, key string) (uint64, error) {
+	child, err := node.GetKey(key)
+	if err != nil {
+		return 0, nil
+	}
+
+	n, err := child.GetNumeric()
+	if err != nil {
+		return 0, ufmt.Errorf("forward memo: %q must be numeric", key)
+	}
+	if n < 0 {
+		return 0, ufmt.Errorf("forward memo: %q must not be negative", key)
+	}
+	u := uint64(n)
+	if float64(u) != n {
+		return 0, ufmt.Errorf("forward memo: %q must be an integer", key)
+	}
+	return u, nil
+}
+
+// optionalTimeout reads PFM's "timeout" duration string (e.g. "10m") if
+// present, resolving it to an absolute UnixNano deadline. Absent returns 0;
+// each leg's own ...TimeoutTimestamp helper substitutes its default then.
+func optionalTimeout(node *json.Node) (uint64, error) {
+	child, err := node.GetKey("timeout")
+	if err != nil {
+		return 0, nil
+	}
+
+	s, err := child.GetString()
+	if err != nil {
+		return 0, ufmt.Errorf("forward memo: \"timeout\" must be a duration string (e.g. \"10m\")")
+	}
+
+	dur, err := time.ParseDuration(s)
+	if err != nil {
+		return 0, ufmt.Errorf("forward memo: \"timeout\" is not a valid duration: %v", err)
+	}
+	if dur <= 0 {
+		return 0, ufmt.Errorf("forward memo: \"timeout\" must be positive")
+	}
+
+	return uint64(time.Now().Add(dur).UnixNano()), nil
 }
 
 // memoHex reads a required, non-empty, hex-encoded string field off node and

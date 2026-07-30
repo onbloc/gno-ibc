@@ -60,7 +60,7 @@ func (h *forwardIcs20Handler) Execute(cur realm, req z.TokenForwardRequest, corr
 		panic("ics20zkgmadapter: approve error: " + err.Error())
 	}
 
-	ics20.TransferWithCallback(cross(cur), fwd.Channel, fwd.Receiver, req.BaseTokenKey, req.Amount, forwardIcs20TimeoutTimestamp(fwd.Timeout), fwd.Memo, corrID, forwardZkgmInstance)
+	ics20.TransferWithCallback(cross(cur), fwd.Core.Channel, fwd.Core.Receiver, req.BaseTokenKey, req.Amount, forwardIcs20TimeoutTimestamp(fwd.Core.Timeout), fwd.Next, corrID, forwardZkgmInstance)
 }
 
 // OnTransferSendResult resolves the ZKGM order's deferred ack once the onward
@@ -73,10 +73,10 @@ func (h *forwardZkgmHandler) OnTransferSendResult(cur realm, corrID string, succ
 }
 
 // aib's MsgSendPacket.TimeoutTimestamp is Unix seconds (see aib core's
-// SendPacket), unlike the Union/zkgm leg's nanosecond timestamps in order.gno.
+// SendPacket); fwd.Timeout is UnixNano (see memo.gno's optionalTimeout).
 func forwardIcs20TimeoutTimestamp(memoTimeout uint64) uint64 {
 	if memoTimeout != 0 {
-		return memoTimeout
+		return memoTimeout / uint64(time.Second)
 	}
 	return uint64(time.Now().Add(defaultForwardIcs20Timeout).Unix())
 }

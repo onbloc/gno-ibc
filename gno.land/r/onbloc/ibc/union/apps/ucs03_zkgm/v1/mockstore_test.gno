@@ -26,7 +26,7 @@ type mockStore struct {
 	lockedTokenAmounts map[string]*u256.Uint
 	receivers          map[string]z.Zkgmable
 	pendingSendCorr    map[string]mockPendingSendCorr
-	pendingForward     map[string]types.Packet
+	pendingForward     map[string]mockPendingTokenForward
 	rateLimitDisabled  bool
 
 	forwardHandler        z.TokenForwardHandler
@@ -38,6 +38,13 @@ type mockPendingSendCorr struct {
 	Callback      z.SendCallback
 	CallerPkgPath string
 	CorrID        string
+}
+
+type mockPendingTokenForward struct {
+	Parent      types.Packet
+	Wrapped     string
+	HandlerAddr address
+	Amount      *u256.Uint
 }
 
 var _ zkgm.IStore = (*mockStore)(nil)
@@ -54,14 +61,14 @@ func newMockStore() *mockStore {
 		lockedTokenAmounts: map[string]*u256.Uint{},
 		receivers:          map[string]z.Zkgmable{},
 		pendingSendCorr:    map[string]mockPendingSendCorr{},
-		pendingForward:     map[string]types.Packet{},
+		pendingForward:     map[string]mockPendingTokenForward{},
 		// Match NewStore: rate limiting is opt-in (disabled by default).
 		rateLimitDisabled: true,
 	}
 }
 
 func (m *mockStore) SetTokenOrigin(_ int, rlm realm, denom string, path *u256.Uint) {
-	m.tokenOrigin[denom] = path
+	m.tokenOrigin[denom] = path.Clone()
 }
 
 func (m *mockStore) GetTokenOrigin(denom string) (*u256.Uint, bool) {
@@ -70,7 +77,7 @@ func (m *mockStore) GetTokenOrigin(denom string) (*u256.Uint, bool) {
 }
 
 func (m *mockStore) SetChannelBalanceV2(_ int, rlm realm, key string, amount *u256.Uint) {
-	m.channelBalanceV2[key] = amount
+	m.channelBalanceV2[key] = amount.Clone()
 }
 
 func (m *mockStore) RemoveChannelBalanceV2(_ int, rlm realm, key string) {
@@ -220,13 +227,17 @@ func (m *mockStore) RemovePendingSendCorr(_ int, rlm realm, packetHash string) {
 	delete(m.pendingSendCorr, packetHash)
 }
 
-func (m *mockStore) SetPendingTokenForward(_ int, rlm realm, corrID string, parent types.Packet) {
-	m.pendingForward[corrID] = parent
+func (m *mockStore) SetPendingTokenForward(_ int, rlm realm, corrID string, parent types.Packet, wrapped string, handlerAddr address, amount *u256.Uint) {
+	m.pendingForward[corrID] = mockPendingTokenForward{Parent: parent, Wrapped: wrapped, HandlerAddr: handlerAddr, Amount: amount.Clone()}
 }
 
-func (m *mockStore) GetPendingTokenForward(corrID string) (types.Packet, bool) {
+func (m *mockStore) GetPendingTokenForward(corrID string) (parent types.Packet, wrapped string, handlerAddr address, amount *u256.Uint, found bool) {
 	v, ok := m.pendingForward[corrID]
-	return v, ok
+	if !ok {
+		return types.Packet{}, "", "", nil, false
+	}
+
+	return v.Parent, v.Wrapped, v.HandlerAddr, v.Amount, true
 }
 
 func (m *mockStore) RemovePendingTokenForward(_ int, rlm realm, corrID string) {

@@ -101,9 +101,16 @@ type pendingSendCorr struct {
 }
 
 // pendingTokenForward records a deferred-ack ESCROW TokenOrderV2 order for
-// CompleteTokenForwardAck, keyed by corrID.
+// CompleteTokenForwardAck, keyed by corrID. Wrapped/HandlerAddr/Amount
+// identify the voucher minted to the handler at recv time, so a failed
+// forward can burn it back — the onward protocol has already refunded it to
+// the handler, and burning here avoids double-crediting alongside the
+// failure ack's own upstream refund.
 type pendingTokenForward struct {
 	ParentPacket types.Packet
+	Wrapped      string
+	HandlerAddr  address
+	Amount       *u256.Uint
 }
 
 func NewStore() *Store {
@@ -399,21 +406,29 @@ func (s *Store) RemovePendingSendCorr(_ int, rlm realm, packetHash string) {
 }
 
 // SetPendingTokenForward records a deferred-ack ESCROW TokenOrderV2 order, keyed
-// by its corrID.
-func (s *Store) SetPendingTokenForward(_ int, rlm realm, corrID string, parent types.Packet) {
+// by its corrID. wrapped/handlerAddr/amount identify the voucher minted to the
+// handler, so CompleteTokenForwardAck can burn it back on a failed forward.
+func (s *Store) SetPendingTokenForward(_ int, rlm realm, corrID string, parent types.Packet, wrapped string, handlerAddr address, amount *u256.Uint) {
 	assertIsRlmCurrent(0, rlm)
 
-	s.pendingTokenForward.Set(corrID, pendingTokenForward{ParentPacket: parent})
+	s.pendingTokenForward.Set(corrID, pendingTokenForward{
+		ParentPacket: parent,
+		Wrapped:      wrapped,
+		HandlerAddr:  handlerAddr,
+		Amount:       u256.Zero().Set(amount).Clone(),
+	})
 }
 
-// GetPendingTokenForward returns the recorded parent packet for a corrID.
-func (s *Store) GetPendingTokenForward(corrID string) (types.Packet, bool) {
+// GetPendingTokenForward returns the recorded parent packet and minted-voucher
+// details for a corrID.
+func (s *Store) GetPendingTokenForward(corrID string) (parent types.Packet, wrapped string, handlerAddr address, amount *u256.Uint, found bool) {
 	v := s.pendingTokenForward.Get(corrID)
 	if v == nil {
-		return types.Packet{}, false
+		return types.Packet{}, "", "", nil, false
 	}
 
-	return v.(pendingTokenForward).ParentPacket, true
+	p := v.(pendingTokenForward)
+	return p.ParentPacket, p.Wrapped, p.HandlerAddr, p.Amount, true
 }
 
 // RemovePendingTokenForward clears a resolved deferred-forward entry.

@@ -10,6 +10,14 @@ import (
 )
 
 func (v *ucs03ZkgmV1) executeTokenOrderForward(_ int, rlm realm, packet types.Packet, path *u256.Uint, order z.TokenOrderV2, relayer address, wrapped string) (types.RecvPacketResult, error) {
+	// A relayer fee (BaseAmount > QuoteAmount) mints a separate balance to
+	// the relayer that CompleteTokenForwardAck's failure-path burn can't
+	// reach, leaving it uncollateralized once upstream refunds the full
+	// BaseAmount. Reject fee-bearing forwards before taking custody.
+	if order.BaseAmount.Cmp(order.QuoteAmount) != 0 {
+		return failureResult(universalErrorAck()), nil
+	}
+
 	handler, handlerAddr, _ := v.store.GetTokenForwardHandler()
 
 	amount, serr := z.ScaleDownToInt64(order.QuoteAmount, v.scaleExpOf(wrapped))
@@ -51,10 +59,25 @@ func (v *ucs03ZkgmV1) executeTokenOrderForward(_ int, rlm realm, packet types.Pa
 		return mintRes, merr
 	}
 
-	v.store.SetPendingTokenForward(0, rlm, corrID, packet)
-	handler.Execute(cross(rlm), req, corrID)
+	v.store.SetPendingTokenForward(0, rlm, corrID, packet, wrapped, handlerAddr, order.QuoteAmount.Clone())
+	callForwardHandlerExecute(0, rlm, handler, req, corrID)
 
 	return core.NewRecvPacketResult(types.PacketStatusAsync, nil), nil
+}
+
+// callForwardHandlerExecute runs the handler's Execute and converts any panic
+// it raises into execFatal. Execute lives in another realm and can't
+// construct execFatal itself, so a plain panic would otherwise be absorbed
+// by dispatchExecutePacket's recover (dispatch.gno) into a controlled
+// failure ack instead of reverting the mint this function just committed.
+func callForwardHandlerExecute(_ int, rlm realm, handler z.TokenForwardHandler, req z.TokenForwardRequest, corrID string) {
+	defer func() {
+		if r := recover(); r != nil {
+			panic(execFatal{extractPanicMessage(r)})
+		}
+	}()
+
+	handler.Execute(cross(rlm), req, corrID)
 }
 
 // tokenForwardCorrID derives a corrID deterministically from the packet.
@@ -64,6 +87,11 @@ func tokenForwardCorrID(packet types.Packet) string {
 
 // CompleteTokenForwardAck resolves the deferred ack once the handler's onward leg
 // settles. Callable only by the registered forward handler.
+//
+// On failure it burns the wrapped voucher that the onward protocol refunded
+// to the handler (e.g. ICS20's own escrow un-escrow), so the failure ack that
+// refunds the original sender upstream is not double-counted against a
+// stranded balance on this chain. Mirrors transfer.CompleteForwardAck's burn.
 func (v *ucs03ZkgmV1) CompleteTokenForwardAck(_ int, rlm realm, corrID string, success bool, innerAck []byte) {
 	assertIsRlmCurrent(0, rlm)
 
@@ -72,7 +100,7 @@ func (v *ucs03ZkgmV1) CompleteTokenForwardAck(_ int, rlm realm, corrID string, s
 		panic("ucs03_zkgm: caller is not the registered forward handler")
 	}
 
-	parent, found := v.store.GetPendingTokenForward(corrID)
+	parent, wrapped, handlerAddr, amount, found := v.store.GetPendingTokenForward(corrID)
 	if !found {
 		panic("ucs03_zkgm: no pending forward for corrID")
 	}
@@ -81,6 +109,10 @@ func (v *ucs03ZkgmV1) CompleteTokenForwardAck(_ int, rlm realm, corrID string, s
 	tag := tagAckFailure()
 	if success {
 		tag = tagAckSuccess()
+	} else {
+		if err := v.burnVoucher(0, rlm, wrapped, handlerAddr, amount); err != nil {
+			panic("ucs03_zkgm: token forward refund burn failed: " + err.Error())
+		}
 	}
 
 	ack, err := z.EncodeAck(z.Ack{Tag: tag, InnerAck: innerAck})

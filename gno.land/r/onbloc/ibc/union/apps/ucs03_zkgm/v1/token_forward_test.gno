@@ -87,7 +87,7 @@ func TestExecuteTokenOrderV2Forward_Success(cur realm, t *testing.T) {
 		Sender:      []byte("sender"),
 		Receiver:    []byte(handlerAddr),
 		BaseToken:   []byte("ugnot"),
-		BaseAmount:  u256.NewUint(100),
+		BaseAmount:  u256.NewUint(21),
 		QuoteToken:  []byte(quoteDenom),
 		QuoteAmount: u256.NewUint(21),
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
@@ -109,7 +109,7 @@ func TestExecuteTokenOrderV2Forward_Success(cur realm, t *testing.T) {
 
 	corrID := tokenForwardCorrID(packet)
 	uassert.Equal(t, corrID, LastForwardCorrID(cross(cur)))
-	_, found := testStore.GetPendingTokenForward(corrID)
+	_, _, _, _, found := testStore.GetPendingTokenForward(corrID)
 	uassert.True(t, found)
 }
 
@@ -147,6 +147,6 @@ func TestExecuteTokenOrderV2Forward_PrepareErrorReturnsFailureAckWithoutMintOrPe
 	uassert.Equal(t, 0, ForwardExecuteCalls(cross(cur)))
 	uassert.Equal(t, int64(0), voucherBalanceOf(quoteDenom, handlerAddr))
 
-	_, found := testStore.GetPendingTokenForward(tokenForwardCorrID(packet))
+	_, _, _, _, found := testStore.GetPendingTokenForward(tokenForwardCorrID(packet))
 	uassert.False(t, found)
 }

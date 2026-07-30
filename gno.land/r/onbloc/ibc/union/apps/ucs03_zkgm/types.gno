@@ -112,8 +112,8 @@ type IStore interface {
 	GetPendingSendCorr(packetHash string) (cb z.SendCallback, callerPkgPath string, corrID string)
 	RemovePendingSendCorr(_ int, rlm realm, packetHash string)
 
-	SetPendingTokenForward(_ int, rlm realm, corrID string, parent types.Packet)
-	GetPendingTokenForward(corrID string) (types.Packet, bool)
+	SetPendingTokenForward(_ int, rlm realm, corrID string, parent types.Packet, wrapped string, handlerAddr address, amount *u256.Uint)
+	GetPendingTokenForward(corrID string) (parent types.Packet, wrapped string, handlerAddr address, amount *u256.Uint, found bool)
 	RemovePendingTokenForward(_ int, rlm realm, corrID string)
 
 	SetTokenForwardHandler(_ int, rlm realm, handler z.TokenForwardHandler, addr address, pkgPath string)

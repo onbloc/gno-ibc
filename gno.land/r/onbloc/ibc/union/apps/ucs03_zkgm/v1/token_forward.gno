@@ -98,21 +98,35 @@ func (v *ucs03ZkgmV1) CompleteTokenForwardAck(_ int, rlm realm, corrID string, s
 	if !found {
 		panic("ucs03_zkgm: no pending forward for corrID")
 	}
-	v.store.RemovePendingTokenForward(0, rlm, corrID)
 
-	// parent.Data is readonly-tainted (non-crossing getter into the proxy's store); clone before it crosses into core.
+	// parent.Data and amount are readonly-tainted (non-crossing getter into the proxy's store);
+	// use them fully before removing the entry (removal can invalidate their backing objects).
 	parent.Data = types.CloneBytes(parent.Data)
 
+	// innerAck is the onward ICS20 leg's own ack (e.g. `{"result":"AQ=="}`), not a
+	// Union TokenOrderAck. The EVM side only decodes InnerAck as TokenOrderAck when
+	// the outer tag is success (see TokenOrder.sol's _acknowledgeTokenOrderV1 — the
+	// failure branch ignores ack entirely and refunds from order fields instead), so
+	// only the success case needs replacing with a real protocol-fill TokenOrderAck.
 	tag := tagAckFailure()
+	ackPayload := innerAck
 	if success {
 		tag = tagAckSuccess()
+
+		encoded, err := z.EncodeTokenOrderAck(z.TokenOrderAck{FillType: fillTypeProtocol(), MarketMaker: nil})
+		if err != nil {
+			panic(err.Error())
+		}
+		ackPayload = encoded
 	} else {
 		if err := v.burnVoucher(0, rlm, wrapped, handlerAddr, amount); err != nil {
 			panic("ucs03_zkgm: token forward refund burn failed: " + err.Error())
 		}
 	}
 
-	ack, err := z.EncodeAck(z.Ack{Tag: tag, InnerAck: innerAck})
+	v.store.RemovePendingTokenForward(0, rlm, corrID)
+
+	ack, err := z.EncodeAck(z.Ack{Tag: tag, InnerAck: ackPayload})
 	if err != nil {
 		panic(err.Error())
 	}

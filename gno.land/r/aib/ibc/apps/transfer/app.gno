@@ -308,6 +308,48 @@ func (a *App) OnRecvPacket(
 
 		coin := chain.NewCoin(token.Denom.IBCDenom(), transferAmount)
 
+		// A GRC20-alias token returning home, addressed to the forward
+		// handler, is forwarded onward instead of credited to Receiver —
+		// mirrors the foreign-mint branch below. Native coins aren't
+		// supported here.
+		if isGRC20Alias(coin.Denom) && isForwardReceiver(data.Receiver) {
+			req := Request{
+				SourceClient:      sourceClient,
+				DestinationClient: destinationClient,
+				Sequence:          sequence,
+				Receiver:          data.Receiver,
+				Memo:              data.Memo,
+				BaseTokenKey:      resolveGRC20Alias(coin.Denom),
+				Amount:            transferAmount,
+			}
+			// Validate before taking custody: a rejected forward returns an error
+			// ack and refunds, with nothing unescrowed.
+			if ackErr = forwardHandler.Prepare(cross(cur), req); ackErr != nil {
+				ack = types.NewErrorAppAcknowledgement(ackErr)
+				return types.RecvPacketResult{Status: types.PacketStatus_Failure}
+			}
+			// Take custody: unescrow to the handler and record the pending
+			// forward, then hand off. Execute must panic on any failure past here
+			// so the whole recv (unescrow included) reverts rather than acking
+			// over stranded funds; the deferred ack is resolved later via
+			// CompleteForwardAck.
+			if err := unescrowGRC20(0, cur, string(forwardHandlerAddr), coin); err != nil {
+				ackErr = ufmt.Errorf("unescrow GRC20 for forward error: %v", err)
+				ack = types.NewErrorAppAcknowledgement(ackErr)
+				return types.RecvPacketResult{Status: types.PacketStatus_Failure}
+			}
+			// coin.Denom is already the GRC20 alias, which is what
+			// CompleteForwardAck's isGRC20Alias(pending.VoucherDenom) check
+			// needs to skip the burn on failure.
+			setPendingForward(destinationClient, sequence, pendingForward{
+				VoucherDenom: coin.Denom,
+				Amount:       transferAmount,
+				HandlerAddr:  forwardHandlerAddr,
+			})
+			forwardHandler.Execute(cross(cur), req)
+			return types.RecvPacketResult{Status: types.PacketStatus_Async}
+		}
+
 		if isGRC20Alias(coin.Denom) {
 			ackErr = unescrowGRC20(0, cur, data.Receiver, coin)
 		} else {

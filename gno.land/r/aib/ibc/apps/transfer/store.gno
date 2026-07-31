@@ -32,10 +32,11 @@ type voucher struct {
 }
 
 // pendingForward records what transfer needs to resolve a forwarded packet's
-// deferred ack (see forward.gno). It is keyed by the inbound packet's
-// (destinationClient, sequence). VoucherDenom/Amount/HandlerAddr let
-// CompleteForwardAck burn the onward-protocol refund on failure without
-// trusting the caller for those values.
+// deferred ack (see forward.gno), keyed by the inbound packet's
+// (destinationClient, sequence). VoucherDenom is either a minted voucher's
+// ibc/<hash> denom or a GRC20 alias for a pre-existing token returning home;
+// isGRC20Alias(VoucherDenom) tells CompleteForwardAck which one it is, so it
+// knows whether to burn the onward-protocol refund on failure.
 type pendingForward struct {
 	VoucherDenom string
 	Amount       int64

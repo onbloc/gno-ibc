@@ -87,10 +87,15 @@ func CompleteForwardAck(cur realm, clientID string, sequence uint64, success boo
 	deletePendingForward(clientID, sequence)
 
 	var resolved types.Acknowledgement
-	if success {
+	switch {
+	case success:
 		result := types.NewResultAppAcknowledgement([]byte{byte(1)})
 		resolved = types.Acknowledgement{AppAcknowledgements: [][]byte{result.MarshalJSON()}}
-	} else {
+	case isGRC20Alias(pending.VoucherDenom):
+		// Pre-existing token returning home: nothing to burn, just resolve
+		// the deferred ack as failed.
+		resolved = types.Acknowledgement{AppAcknowledgements: [][]byte{types.UniversalErrorAcknowledgement()}}
+	default:
 		inst := getVoucher(pending.VoucherDenom)
 		if inst == nil {
 			panic("transfer: forward failed but voucher not found for " + pending.VoucherDenom)

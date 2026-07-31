@@ -46,6 +46,15 @@ type TokenForwardHandler interface {
 	Execute(cur realm, req TokenForwardRequest, corrID string)
 }
 
+// TokenForwardMetadataResolver is an OPTIONAL TokenForwardHandler capability:
+// resolves deploy TokenMetadata from a forward order's raw (handler-specific)
+// memo, so a first-sighting forward can deploy like INITIALIZE instead of
+// being rejected. zkgm type-asserts for it; unimplemented = today's behavior.
+type TokenForwardMetadataResolver interface {
+	// ok=false (no error) means memo has no deploy metadata (voucher already exists).
+	ResolveMetadata(memo []byte) (metadata TokenMetadata, ok bool, err error)
+}
+
 type CallEnv struct {
 	Caller             string
 	ProxyAccount       string

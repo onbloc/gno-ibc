@@ -38,10 +38,13 @@ type ZkgmForwardMemo struct {
 
 // ICS20ForwardMemo is the Union->Gno->AtomOne leg's parsed memo
 // (forwardics20.gno). Next is PFM's passthrough memo for the onward ICS20
-// transfer.
+// transfer. Metadata is optional, only needed for a first-sighting forward
+// (see TokenForwardMetadataResolver) — an already-deployed target omits it.
 type ICS20ForwardMemo struct {
-	Core PFMCore
-	Next string
+	Core        PFMCore
+	Next        string
+	Metadata    ForwardMemoMetadata
+	HasMetadata bool
 }
 
 type ForwardMemoMetadata struct {
@@ -220,7 +223,32 @@ func parseICS20ForwardMemo(fwd *json.Node) (ICS20ForwardMemo, error) {
 		return ICS20ForwardMemo{}, err
 	}
 
-	return ICS20ForwardMemo{Core: core, Next: next}, nil
+	metadata, hasMetadata, err := optionalMetadata(fwd)
+	if err != nil {
+		return ICS20ForwardMemo{}, err
+	}
+
+	return ICS20ForwardMemo{Core: core, Next: next, Metadata: metadata, HasMetadata: hasMetadata}, nil
+}
+
+// optionalMetadata reads PFM's "metadata" object if present. Absent is fine
+// (hasMetadata=false); present-but-malformed is a hard error, not a silent fallback.
+func optionalMetadata(fwd *json.Node) (ForwardMemoMetadata, bool, error) {
+	metadataNode, err := fwd.GetKey("metadata")
+	if err != nil {
+		return ForwardMemoMetadata{}, false, nil
+	}
+
+	implementation, err := memoHex(metadataNode, "implementation")
+	if err != nil {
+		return ForwardMemoMetadata{}, false, err
+	}
+	initializer, err := memoHex(metadataNode, "initializer")
+	if err != nil {
+		return ForwardMemoMetadata{}, false, err
+	}
+
+	return ForwardMemoMetadata{Implementation: implementation, Initializer: initializer}, true, nil
 }
 
 // icsMinForwardTimeout guards against a memo timeout so close to "now" that

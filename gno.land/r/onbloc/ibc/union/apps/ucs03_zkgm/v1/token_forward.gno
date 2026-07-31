@@ -9,7 +9,7 @@ import (
 	"gno.land/r/onbloc/ibc/union/core"
 )
 
-func (v *ucs03ZkgmV1) executeTokenOrderForward(_ int, rlm realm, packet types.Packet, path *u256.Uint, order z.TokenOrderV2, relayer address, wrapped string) (types.RecvPacketResult, error) {
+func (v *ucs03ZkgmV1) executeTokenOrderForward(_ int, rlm realm, packet types.Packet, path *u256.Uint, order z.TokenOrderV2, relayer address, wrapped string, meta z.TokenMetadata, metaPresent bool) (types.RecvPacketResult, error) {
 	// Reject fee-bearing forwards: a relayer fee mint can't be unwound by
 	// CompleteTokenForwardAck's failure-path burn, so it'd go uncollateralized.
 	if order.BaseAmount.Cmp(order.QuoteAmount) != 0 {
@@ -18,19 +18,35 @@ func (v *ucs03ZkgmV1) executeTokenOrderForward(_ int, rlm realm, packet types.Pa
 
 	handler, handlerAddr, _ := v.store.GetTokenForwardHandler()
 
-	amount, serr := z.ScaleDownToInt64(order.QuoteAmount, v.scaleExpOf(wrapped))
-	if serr != nil {
-		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), serr
-	}
-
 	// grc20reg keys a voucher by fqname.Construct(registering realm, symbol),
 	// not by its ibc/ denom (see grc20reg.Register / getOrCreateVoucher), so
 	// derive it the same way to honor BaseTokenKey's "grc20reg key" contract.
-	voucher, ok := v.store.GetVoucher(wrapped)
-	if !ok {
-		panic("ucs03_zkgm: voucher not found for forwarded denom " + wrapped)
+	var (
+		baseTokenKey string
+		scaleExp     int
+	)
+
+	if voucher, ok := v.store.GetVoucher(wrapped); ok {
+		baseTokenKey = fqname.Construct(rlm.PkgPath(), voucher.Token().GetSymbol())
+		scaleExp = voucher.ScaleExp()
+	} else if metaPresent {
+		// First sighting: predict the symbol/scale getOrCreateVoucher will assign below.
+		ti, terr := z.DecodeTokenInitializer(meta.Initializer)
+		if terr != nil {
+			return failureResult(universalErrorAck()), nil
+		}
+
+		baseTokenKey = fqname.Construct(rlm.PkgPath(), sanitizeVoucherSymbol(ti.Symbol, wrapped))
+		scaleExp = scaleExpForDecimals(ti.Decimals)
+	} else {
+		// Unreachable: token_order.gno rejects this case before calling here.
+		panic("ucs03_zkgm: forward target has no voucher and no deploy metadata")
 	}
-	baseTokenKey := fqname.Construct(rlm.PkgPath(), voucher.Token().GetSymbol())
+
+	amount, serr := z.ScaleDownToInt64(order.QuoteAmount, scaleExp)
+	if serr != nil {
+		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), serr
+	}
 
 	corrID := tokenForwardCorrID(packet)
 	req := z.TokenForwardRequest{
@@ -48,11 +64,16 @@ func (v *ucs03ZkgmV1) executeTokenOrderForward(_ int, rlm realm, packet types.Pa
 		return failureResult(universalErrorAck()), nil
 	}
 
+	var metadata *z.TokenMetadata
+	if metaPresent {
+		metadata = &meta
+	}
+
 	// Take custody: mint to the handler and record the pending forward, then
 	// hand off. Execute must panic on any failure past here so the whole
 	// recv (mint included) reverts rather than acking over stranded funds;
 	// the deferred ack is resolved later via CompleteTokenForwardAck.
-	mintRes, merr := v.protocolFillMint(0, rlm, packet.DestinationChannelId, path, order.BaseToken, wrapped, handlerAddr, relayer, order.BaseAmount, order.QuoteAmount, nil, false)
+	mintRes, merr := v.protocolFillMint(0, rlm, packet.DestinationChannelId, path, order.BaseToken, wrapped, handlerAddr, relayer, order.BaseAmount, order.QuoteAmount, metadata, metaPresent)
 	if merr != nil || mintRes.Status != types.PacketStatusSuccess {
 		return mintRes, merr
 	}

@@ -53,3 +53,47 @@ func (r *mockForwardHandler) Execute(cur realm, req z.TokenForwardRequest, corrI
 	r.lastReq = req
 	r.lastCorrID = corrID
 }
+
+// mockDeployableForwardHandler additionally implements z.TokenForwardMetadataResolver.
+type mockDeployableForwardHandler struct {
+	mockForwardHandler
+
+	resolveMetadata z.TokenMetadata
+	resolveHasMeta  bool
+	resolveErr      string
+}
+
+var mockDeployFwd = &mockDeployableForwardHandler{}
+
+var _ z.TokenForwardHandler = (*mockDeployableForwardHandler)(nil)
+var _ z.TokenForwardMetadataResolver = (*mockDeployableForwardHandler)(nil)
+
+func ResetDeployForwardHandler(cur realm) {
+	mockDeployFwd.prepareCalls = 0
+	mockDeployFwd.executeCalls = 0
+	mockDeployFwd.lastReq = z.TokenForwardRequest{}
+	mockDeployFwd.lastCorrID = ""
+	mockDeployFwd.prepareErr = ""
+	mockDeployFwd.resolveMetadata = z.TokenMetadata{}
+	mockDeployFwd.resolveHasMeta = false
+	mockDeployFwd.resolveErr = ""
+}
+
+func SetDeployResolveMetadata(cur realm, metadata z.TokenMetadata) {
+	mockDeployFwd.resolveMetadata = metadata
+	mockDeployFwd.resolveHasMeta = true
+}
+
+func SetDeployResolveErr(cur realm, msg string) { mockDeployFwd.resolveErr = msg }
+
+func DeployForwardPrepareCalls(cur realm) int      { return mockDeployFwd.prepareCalls }
+func DeployForwardExecuteCalls(cur realm) int      { return mockDeployFwd.executeCalls }
+func LastDeployForwardBaseTokenKey(cur realm) string { return mockDeployFwd.lastReq.BaseTokenKey }
+func LastDeployForwardAmount(cur realm) int64        { return mockDeployFwd.lastReq.Amount }
+
+func (r *mockDeployableForwardHandler) ResolveMetadata(memo []byte) (z.TokenMetadata, bool, error) {
+	if r.resolveErr != "" {
+		return z.TokenMetadata{}, false, errors.New(r.resolveErr)
+	}
+	return r.resolveMetadata, r.resolveHasMeta, nil
+}

@@ -41,6 +41,22 @@ func (h *forwardIcs20Handler) Prepare(cur realm, req z.TokenForwardRequest, corr
 	return err
 }
 
+// Implements zkgm.TokenForwardMetadataResolver.
+func (h *forwardIcs20Handler) ResolveMetadata(memo []byte) (z.TokenMetadata, bool, error) {
+	fwd, err := parseICS20Memo(string(memo))
+	if err != nil {
+		return z.TokenMetadata{}, false, err
+	}
+	if !fwd.HasMetadata {
+		return z.TokenMetadata{}, false, nil
+	}
+
+	return z.TokenMetadata{
+		Implementation: fwd.Metadata.Implementation,
+		Initializer:    fwd.Metadata.Initializer,
+	}, true, nil
+}
+
 // Implements zkgm.TokenForwardHandler. Reuses corrID as the aib-side correlation
 // too, so OnTransferSendResult can resolve the ZKGM ack directly.
 func (h *forwardIcs20Handler) Execute(cur realm, req z.TokenForwardRequest, corrID string) {

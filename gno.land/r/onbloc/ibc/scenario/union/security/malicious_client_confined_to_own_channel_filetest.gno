@@ -165,6 +165,7 @@ type acceptingClient struct{}
 func (m *acceptingClient) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
 func (m *acceptingClient) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
 func (m *acceptingClient) GetTimestamp() types.Timestamp                         { return types.Timestamp(1) }
+
 func (m *acceptingClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
 	return types.Timestamp(1), nil
 }
@@ -174,6 +175,7 @@ func (m *acceptingClient) Status() lightclient.Status     { return lightclient.A
 func (m *acceptingClient) VerifyHeader(_ address, h []byte, _ address) (types.StateUpdate, error) {
 	return types.StateUpdate{Height: 1, ClientStateBytes: h, ConsensusStateBytes: h}, nil
 }
+
 func (m *acceptingClient) VerifyCreation(address, address) (types.ClientCreationResult, error) {
 	return types.ClientCreationResult{}, nil
 }
@@ -188,6 +190,7 @@ func (m *honestClient) VerifyMembership(uint64, []byte, []byte, []byte) error {
 }
 func (m *honestClient) VerifyNonMembership(uint64, []byte, []byte) error { return nil }
 func (m *honestClient) GetTimestamp() types.Timestamp                    { return types.Timestamp(1) }
+
 func (m *honestClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
 	return types.Timestamp(1), nil
 }
@@ -197,9 +200,11 @@ func (m *honestClient) Status() lightclient.Status     { return lightclient.Acti
 func (m *honestClient) VerifyHeader(_ address, h []byte, _ address) (types.StateUpdate, error) {
 	return types.StateUpdate{Height: 1, ClientStateBytes: h, ConsensusStateBytes: h}, nil
 }
+
 func (m *honestClient) VerifyCreation(address, address) (types.ClientCreationResult, error) {
 	return types.ClientCreationResult{}, nil
 }
+
 func (m *honestClient) Misbehaviour(address, []byte, address) ([]byte, error) {
 	return nil, errors.New("honest: misbehaviour unsupported")
 }

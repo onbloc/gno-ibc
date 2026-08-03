@@ -194,8 +194,11 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 type blockClockLightClient struct{}
 
 func (m *blockClockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
-func (m *blockClockLightClient) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
-func (m *blockClockLightClient) GetTimestamp() types.Timestamp                         { return nowTs() }
+
+func (m *blockClockLightClient) VerifyNonMembership(uint64, []byte, []byte) error { return nil }
+
+func (m *blockClockLightClient) GetTimestamp() types.Timestamp { return nowTs() }
+
 func (m *blockClockLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
 	return nowTs(), nil
 }

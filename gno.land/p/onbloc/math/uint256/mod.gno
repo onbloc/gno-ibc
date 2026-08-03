@@ -18,7 +18,7 @@ func Reciprocal(m *Uint) (mu [5]uint64) {
 	}
 
 	s := bits.LeadingZeros64(m[3]) // Replace with leadingZeros(m) for general case
-	p := 255 - s                       // floor(log_2(m)), m>0
+	p := 255 - s                   // floor(log_2(m)), m>0
 
 	// 0 or a power of 2?
 
@@ -57,8 +57,8 @@ func Reciprocal(m *Uint) (mu [5]uint64) {
 
 	// First iteration: 32 -> 64
 
-	t1 := uint64(r0)                 // 2^31/y
-	t1 *= t1                         // 2^62/y^2
+	t1 := uint64(r0)             // 2^31/y
+	t1 *= t1                     // 2^62/y^2
 	t1, _ = bits.Mul64(t1, y[3]) // 2^62/y^2 * 2^64/y / 2^64 = 2^62/y
 
 	r1 := uint64(r0) << 32 // 2^63/y

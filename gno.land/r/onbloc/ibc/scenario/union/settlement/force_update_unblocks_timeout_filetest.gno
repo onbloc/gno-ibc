@@ -200,8 +200,11 @@ func mustDecodeMeta(bz []byte) z.TokenMetadata {
 type manualClockLightClient struct{}
 
 func (m *manualClockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
-func (m *manualClockLightClient) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
-func (m *manualClockLightClient) GetTimestamp() types.Timestamp                         { return types.Timestamp(clientTime) }
+
+func (m *manualClockLightClient) VerifyNonMembership(uint64, []byte, []byte) error { return nil }
+
+func (m *manualClockLightClient) GetTimestamp() types.Timestamp { return types.Timestamp(clientTime) }
+
 func (m *manualClockLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
 	return types.Timestamp(clientTime), nil
 }

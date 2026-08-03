@@ -232,7 +232,8 @@ func TestUpdateChannelPath(t *testing.T) {
 		},
 		{
 			"high-bit max hops",
-			pathFromHops(t,
+			pathFromHops(
+				t,
 				0x80000000,
 				0x80000001,
 				0x80000002,

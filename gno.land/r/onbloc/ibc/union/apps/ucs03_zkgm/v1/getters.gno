@@ -1,9 +1,9 @@
 package ucs03_zkgm
 
 import (
-	u256 "gno.land/p/gnoswap/uint256"
 	types "gno.land/p/onbloc/ibc/union/types"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
+	u256 "gno.land/p/onbloc/math/uint256"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 )
 
@@ -29,6 +29,16 @@ func (v *ucs03ZkgmV1) GetChannelBalanceV2(channelId types.ChannelId, path *u256.
 	}
 
 	return balance.Clone(), nil
+}
+
+// GetLockedTokenAmount returns the terminally locked base-token amount for denom.
+func (v *ucs03ZkgmV1) GetLockedTokenAmount(denom string) (*u256.Uint, error) {
+	total, ok := v.store.GetLockedTokenAmount(denom)
+	if !ok || total == nil {
+		return u256.Zero(), nil
+	}
+
+	return total.Clone(), nil
 }
 
 // GetVoucherList returns a page of up to count wrapped voucher tokens starting

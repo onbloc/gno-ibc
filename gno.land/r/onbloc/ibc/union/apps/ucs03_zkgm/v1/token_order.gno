@@ -4,8 +4,8 @@ import (
 	types "gno.land/p/onbloc/ibc/union/types"
 
 	"gno.land/p/demo/tokens/grc20"
-	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 	"gno.land/r/demo/defi/grc20reg"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
@@ -251,7 +251,13 @@ func (v *ucs03ZkgmV1) protocolFillMint(_ int, rlm realm, channelId types.Channel
 	if canDeploy && metadata != nil {
 		image = z.MetadataImage(*metadata)
 
-		ti := z.DecodeTokenInitializerFromMetadata(*metadata)
+		ti, err := z.DecodeTokenInitializer(metadata.Initializer)
+		if err != nil {
+			// Malformed non-empty calldata mirrors an EVM proxy initialization
+			// revert. Gno deliberately rejects an empty initializer too instead
+			// of creating an uninitialized zero-decimal voucher.
+			return failureResult(universalErrorAck()), nil
+		}
 		if ti.Decimals > grc20.MaxDecimals {
 			return failureResult(universalErrorAck()), nil
 		}
@@ -528,12 +534,15 @@ func (v *ucs03ZkgmV1) settleEscrowedV2(_ int, rlm realm, sourceChannelId types.C
 // Token-type handling:
 //   - IBC voucher (ibc/): supply-burned via burnVoucher from proxy escrow.
 //   - Native coin: supply cannot be destroyed; coins stay in the proxy banker
-//     balance and are tracked in locked-base accounting.
+//     balance and are tracked in locked-base accounting instead of the
+//     channel escrow balance, since burn settlement is a terminal
+//     disposition (like release/refund), not an ongoing escrow.
 //   - GRC20: same as native — no mint/burn capability over foreign tokens;
 //     balance stays at the proxy and is tracked in locked-base accounting.
 func (v *ucs03ZkgmV1) burnEscrowedV2(_ int, rlm realm, sourceChannelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
 	// Channel balance records the vault (ledger) amount for the base denom.
 	baseDenom := string(order.BaseToken)
+	tokenType := getTokenType(baseDenom)
 
 	baseTokenLedgerAmount, err := v.ledgerAmountOf(baseDenom, order.BaseAmount)
 	if err != nil {
@@ -545,18 +554,23 @@ func (v *ucs03ZkgmV1) burnEscrowedV2(_ int, rlm realm, sourceChannelId types.Cha
 		return err
 	}
 
-	if isIBCTokenDenom(baseDenom) {
-		err = v.burnVoucher(0, rlm, baseDenom, rlm.Address(), order.BaseAmount)
-		if err != nil {
+	switch tokenType {
+	case IBC_TOKEN:
+		if err := v.burnVoucher(0, rlm, baseDenom, rlm.Address(), order.BaseAmount); err != nil {
 			// rollback the channel balance
 			v.increaseChannelBalanceV2(0, rlm, sourceChannelId, path, order.BaseToken, order.QuoteToken, baseTokenLedgerAmount)
 
 			return err
 		}
+	case NATIVE_COIN:
+		// Supply cannot be destroyed: permanently lock the proxy-held balance and
+		// remove it from channel escrow accounting.
+		v.store.AddLockedTokenAmount(0, rlm, baseDenom, order.BaseAmount)
+	case GRC20_TOKEN:
+		// No mint/burn capability over a foreign GRC20: same lock accounting as
+		// native.
+		v.store.AddLockedTokenAmount(0, rlm, baseDenom, order.BaseAmount)
 	}
-
-	// Native and GRC20: permanently lock proxy-held balance (no supply burn).
-	v.store.AddLockedTokenAmount(0, rlm, baseDenom, order.BaseAmount)
 
 	return nil
 }
@@ -682,7 +696,12 @@ func (v *ucs03ZkgmV1) verifyMetadataDecimals(baseDenom string, metadata []byte) 
 		return err
 	}
 
-	if z.DecodeTokenInitializerFromMetadata(meta).Decimals != originDecimals {
+	ti, err := z.DecodeTokenInitializer(meta.Initializer)
+	if err != nil {
+		return err
+	}
+
+	if ti.Decimals != originDecimals {
 		return makeError(errMetadataDecimalsMismatch)
 	}
 

@@ -6,21 +6,21 @@ import (
 
 	types "gno.land/p/onbloc/ibc/union/types"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 func TestMetadataImage(t *testing.T) {
 	meta := z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    []byte("init"),
 	}
 	ref := z.MetadataImage(meta)
 
 	uassert.True(t, ref == z.MetadataImage(meta))
 	uassert.False(t, ref == z.MetadataImage(z.TokenMetadata{
-		Implementation: []byte("grc20"),
+		Implementation: zkgmERC20Impl,
 		Initializer:    []byte("init-2"),
 	}))
 }

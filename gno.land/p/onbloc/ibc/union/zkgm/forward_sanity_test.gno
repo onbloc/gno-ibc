@@ -5,7 +5,7 @@ import (
 
 	"gno.land/p/nt/uassert/v0"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 // Forward.Instruction.Operand is raw bytes, so an outer Forward whose

@@ -4,10 +4,10 @@ import (
 	"errors"
 	"testing"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	"gno.land/p/onbloc/ibc/union/types"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 var errDummyGetter = errors.New("dummy getter error")
@@ -62,6 +62,29 @@ func TestGetChannelBalanceV2_PropagatesImplError(cur realm, t *testing.T) {
 	uassert.ErrorIs(t, err, errDummyGetter)
 	if got != nil {
 		t.Fatal("missing channel balance must return nil")
+	}
+}
+
+func TestGetLockedTokenAmount_DelegatesToImpl(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	target := &dummyImpl{lockedTokenAmount: u256.NewUint(40)}
+	installImplForTest(testImplPathA, target)
+
+	got, err := GetLockedTokenAmount("ugnot")
+	uassert.NoError(t, err)
+	uassert.Equal(t, "40", got.ToString())
+}
+
+func TestGetLockedTokenAmount_PropagatesImplError(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+	target := &dummyImpl{lockedTokenAmountErr: errDummyGetter}
+	installImplForTest(testImplPathA, target)
+
+	got, err := GetLockedTokenAmount("ugnot")
+	uassert.ErrorIs(t, err, errDummyGetter)
+	if got != nil {
+		t.Fatal("missing locked token amount must return nil")
 	}
 }
 

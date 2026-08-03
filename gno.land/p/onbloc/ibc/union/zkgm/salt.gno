@@ -4,7 +4,7 @@ import (
 	"crypto/keccak256"
 	"encoding/binary"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 func DeriveBatchSalt(index *u256.Uint, salt [32]byte) [32]byte {

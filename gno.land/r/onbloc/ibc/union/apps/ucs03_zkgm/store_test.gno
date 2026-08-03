@@ -3,11 +3,11 @@ package ucs03_zkgm
 import (
 	"testing"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/testutils/v0"
 	"gno.land/p/nt/uassert/v0"
 	types "gno.land/p/onbloc/ibc/union/types"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 func TestNewStore(t *testing.T) {
@@ -31,6 +31,8 @@ func TestNewStore(t *testing.T) {
 	_, ok = s.GetVoucher("ibc/denom")
 	uassert.False(t, ok)
 	_, ok = s.GetReceiver("gno.land/r/receiver")
+	uassert.False(t, ok)
+	_, ok = s.GetLockedTokenAmount("ugnot")
 	uassert.False(t, ok)
 }
 
@@ -407,6 +409,7 @@ func TestStore_MutationsRejectSpoofedRealm(cur realm, t *testing.T) {
 		{"remove inflight packet", func() { s.RemoveInFlightPacket(0, spoofedRealm, "spoof-packet") }},
 		{"set token bucket", func() { s.SetTokenBucket(0, spoofedRealm, "ibc/spoof-bucket", bucket) }},
 		{"remove token bucket", func() { s.RemoveTokenBucket(0, spoofedRealm, "ibc/spoof-bucket") }},
+		{"add locked token amount", func() { s.AddLockedTokenAmount(0, spoofedRealm, "ulock/spoof", u256.NewUint(1)) }},
 		{"set voucher", func() { s.SetVoucher(0, spoofedRealm, "ibc/spoof-voucher", vou) }},
 		{"set receiver", func() { s.SetReceiver(0, spoofedRealm, "gno.land/r/spoof/receiver", &dummyReceiver{}) }},
 		{"set rate limit disabled", func() { s.SetRateLimitDisabled(0, spoofedRealm, false) }},

@@ -10,20 +10,21 @@ package ratelimit
 
 import (
 	"chain"
+	"encoding/hex"
 	"testing"
 
 	"gno.land/p/nt/ufmt/v0"
 	types "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 
+	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
-	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 )
 
 const (
@@ -87,7 +88,7 @@ type token struct {
 }
 
 func newToken(channelId types.ChannelId, base, name, symbol string) token {
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: name, Symbol: symbol, Decimals: 6})
+	meta := mustTokenMetadata("af739f34ddf951cbc24fdbba4f76213688e13627", z.TokenInitializer{Name: name, Symbol: symbol, Decimals: 6})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte(base), z.MetadataImage(mustDecodeMeta(meta)))
 	return token{base: base, meta: meta, quoteToken: quoteToken}
 }
@@ -182,12 +183,16 @@ func mustOrderInstruction(order z.TokenOrderV2) z.Instruction {
 	return z.Instruction{Version: z.INSTR_VERSION_2, Opcode: z.OP_TOKEN_ORDER, Operand: operand}
 }
 
-func mustTokenMetadata(implementation string, ti z.TokenInitializer) []byte {
+func mustTokenMetadata(implementationHex string, ti z.TokenInitializer) []byte {
+	implementation, err := hex.DecodeString(implementationHex)
+	if err != nil {
+		panic(err)
+	}
 	initBytes, err := z.EncodeTokenInitializer(ti)
 	if err != nil {
 		panic(err)
 	}
-	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes})
+	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: implementation, Initializer: initBytes})
 	if err != nil {
 		panic(err)
 	}

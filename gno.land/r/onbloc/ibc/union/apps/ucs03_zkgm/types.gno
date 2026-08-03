@@ -1,9 +1,9 @@
 package ucs03_zkgm
 
 import (
-	u256 "gno.land/p/gnoswap/uint256"
 	types "gno.land/p/onbloc/ibc/union/types"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
+	u256 "gno.land/p/onbloc/math/uint256"
 
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 )
@@ -27,6 +27,8 @@ type IApp interface {
 
 	IAppTransfer
 
+	IAppVoucher
+
 	// Read-only relayer/tooling query surface.
 	IAppGetter
 }
@@ -42,11 +44,20 @@ type IAppTransfer interface {
 	Send(_ int, rlm realm, channelId types.ChannelId, timeoutTimestamp types.Timestamp, salt [32]byte, instruction z.Instruction) types.Packet
 }
 
+// IAppVoucher is the wrapped-voucher self-service surface: it lets a holder
+// grant an allowance or move their own balance directly, without exposing the
+// mint/burn capability that Store's Voucher.Ledger() carries.
+type IAppVoucher interface {
+	VoucherApprove(_ int, rlm realm, ibcDenom string, spender address, amount int64) error
+	VoucherTransfer(_ int, rlm realm, ibcDenom string, to address, amount int64) error
+}
+
 // IAppGetter is the read-only query surface implemented by the impl and exposed
 // by the proxy's getters.gno.
 type IAppGetter interface {
 	GetTokenBucket(denom string) (*tb.TokenBucket, error)
 	GetChannelBalanceV2(channelId types.ChannelId, path *u256.Uint, baseToken string, quoteToken []byte) (*u256.Uint, error)
+	GetLockedTokenAmount(denom string) (*u256.Uint, error)
 	GetVoucherList(offset, count int) ([]VoucherInfo, error)
 	GetVoucherSize() (int, error)
 	GetVoucherInfo(ibcDenom string) (VoucherInfo, error)

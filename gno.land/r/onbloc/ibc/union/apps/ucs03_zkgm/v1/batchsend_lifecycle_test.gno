@@ -3,10 +3,10 @@ package ucs03_zkgm
 import (
 	"testing"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	types "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 const z36MarketMaker = "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"

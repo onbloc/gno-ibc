@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 // These cross-checks pin the toolkit's output against canonical bytes emitted by

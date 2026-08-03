@@ -15,7 +15,7 @@ import (
 	"gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
@@ -206,7 +206,7 @@ func (e mockError) Error() string { return string(e) }
 // [EXPECTED] channel should be 1
 //
 // [SCENARIO] 2. Receive INITIALIZE order: mint 100 wrapped voucher to holder
-// [INFO] minted token (wrapped voucher): ibc/e03a8753fa7f41c282b15cdc0343f660e6e65845
+// [INFO] minted token (wrapped voucher): ibc/bc24a5ad1a9fa951bc3d3e77f3b140ced355128f
 // [INFO] holder balance: 100
 // [EXPECTED] minted token should be the ibc/ wrapped voucher of base ugnot
 // [EXPECTED] holder balance should be 100 (full INITIALIZE amount minted)

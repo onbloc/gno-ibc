@@ -5,7 +5,7 @@ import (
 
 	types "gno.land/p/onbloc/ibc/union/types"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 // Precision invariant: channel balances are denominated in LOCAL VAULT precision —

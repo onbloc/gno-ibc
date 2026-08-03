@@ -9,6 +9,7 @@ package receive
 // rejected so receiver B is minted nothing.
 
 import (
+	"encoding/hex"
 	"testing"
 
 	"gno.land/p/nt/ufmt/v0"
@@ -16,7 +17,7 @@ import (
 	types "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
@@ -42,7 +43,7 @@ func main(cur realm) {
 
 	// The wrapped denom is deterministic for (path=0, channel, base=uatom, image),
 	// so it is derived once here and reused by both received orders below.
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "USD Coin", Symbol: "USDC", Decimals: 18})
+	meta := mustTokenMetadata("af739f34ddf951cbc24fdbba4f76213688e13627", z.TokenInitializer{Name: "USD Coin", Symbol: "USDC", Decimals: 18})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("uatom"), z.MetadataImage(mustDecodeMeta(meta)))
 
 	println("[SCENARIO] 2. Receive exact 18-decimal INITIALIZE order: mint trimmed value to receiver A")
@@ -156,12 +157,16 @@ func mustPacketData(instr z.Instruction) []byte {
 	return data
 }
 
-func mustTokenMetadata(implementation string, ti z.TokenInitializer) []byte {
+func mustTokenMetadata(implementationHex string, ti z.TokenInitializer) []byte {
+	implementation, err := hex.DecodeString(implementationHex)
+	if err != nil {
+		panic(err)
+	}
 	initBytes, err := z.EncodeTokenInitializer(ti)
 	if err != nil {
 		panic(err)
 	}
-	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes})
+	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: implementation, Initializer: initBytes})
 	if err != nil {
 		panic(err)
 	}
@@ -183,6 +188,7 @@ type mockLightClient struct{}
 func (m *mockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
 func (m *mockLightClient) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
 func (m *mockLightClient) GetTimestamp() types.Timestamp                         { return types.Timestamp(1) }
+
 func (m *mockLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
 	return types.Timestamp(1), nil
 }

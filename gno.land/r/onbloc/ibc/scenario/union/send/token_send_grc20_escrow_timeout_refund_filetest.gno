@@ -20,7 +20,7 @@ import (
 	types "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 
 	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/r/demo/defi/grc20reg"
@@ -189,8 +189,11 @@ func mustOrderInstruction(order z.TokenOrderV2) z.Instruction {
 type blockClockLightClient struct{}
 
 func (m *blockClockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
-func (m *blockClockLightClient) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
-func (m *blockClockLightClient) GetTimestamp() types.Timestamp                         { return nowTs() }
+
+func (m *blockClockLightClient) VerifyNonMembership(uint64, []byte, []byte) error { return nil }
+
+func (m *blockClockLightClient) GetTimestamp() types.Timestamp { return nowTs() }
+
 func (m *blockClockLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
 	return nowTs(), nil
 }

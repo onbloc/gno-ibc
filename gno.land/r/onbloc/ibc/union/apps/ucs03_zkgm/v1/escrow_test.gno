@@ -5,8 +5,8 @@ import (
 	"chain/banker"
 	"testing"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 func TestSendNative(cur realm, t *testing.T) {

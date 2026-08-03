@@ -10,6 +10,7 @@ package receive
 // recv before exercising the ESCROW mint itself.
 
 import (
+	"encoding/hex"
 	"testing"
 
 	"gno.land/p/nt/ufmt/v0"
@@ -17,7 +18,7 @@ import (
 	types "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
@@ -41,7 +42,9 @@ func main(cur realm) {
 	channelId := bootstrap(cur)
 	println("")
 
-	meta := mustTokenMetadata("grc20", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
+	// The wrapped denom is deterministic for (path=0, channel, base=ugnot, image),
+	// so it is derived once here and reused by both received orders below.
+	meta := mustTokenMetadata("af739f34ddf951cbc24fdbba4f76213688e13627", z.TokenInitializer{Name: "Gno Token", Symbol: "GNOT", Decimals: 6})
 	quoteToken := z.PredictWrappedTokenV2(u256.Zero(), uint32(channelId), []byte("ugnot"), z.MetadataImage(mustDecodeMeta(meta)))
 
 	println("[SCENARIO] 2. Deploy the wrapped token via a protocol-fill INITIALIZE recv (mint 100 to receiver A)")
@@ -157,12 +160,16 @@ func mustPacketData(instr z.Instruction) []byte {
 	return data
 }
 
-func mustTokenMetadata(implementation string, ti z.TokenInitializer) []byte {
+func mustTokenMetadata(implementationHex string, ti z.TokenInitializer) []byte {
+	implementation, err := hex.DecodeString(implementationHex)
+	if err != nil {
+		panic(err)
+	}
 	initBytes, err := z.EncodeTokenInitializer(ti)
 	if err != nil {
 		panic(err)
 	}
-	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes})
+	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: implementation, Initializer: initBytes})
 	if err != nil {
 		panic(err)
 	}
@@ -222,7 +229,7 @@ func (e mockError) Error() string { return string(e) }
 // [EXPECTED] receiver A balance should be 100 (full INITIALIZE amount minted)
 //
 // [SCENARIO] 3. Receive ESCROW order: mint 50 more of the same wrapped token to receiver B
-// [INFO] minted token (same wrapped voucher): ibc/e03a8753fa7f41c282b15cdc0343f660e6e65845
+// [INFO] minted token (same wrapped voucher): ibc/d3f2c0b48d7b05e97bae1249f2f3a1be880d2d9c
 // [INFO] receiver B balance: 50
 // [INFO] receiver A balance (unchanged): 100
 // [INFO] ESCROW recv only mints the wrapped voucher; it never locks anything on this chain

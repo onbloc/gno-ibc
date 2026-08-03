@@ -3,7 +3,7 @@ package zkgm
 import (
 	"testing"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 func TestChannelIDMaskU256(t *testing.T) {
@@ -232,7 +232,8 @@ func TestUpdateChannelPath(t *testing.T) {
 		},
 		{
 			"high-bit max hops",
-			pathFromHops(t,
+			pathFromHops(
+				t,
 				0x80000000,
 				0x80000001,
 				0x80000002,

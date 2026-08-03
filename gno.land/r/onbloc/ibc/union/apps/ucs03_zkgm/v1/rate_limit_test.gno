@@ -3,9 +3,9 @@ package ucs03_zkgm
 import (
 	"testing"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	"gno.land/p/nt/uassert/v0"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 func TestRateLimit(cur realm, t *testing.T) {

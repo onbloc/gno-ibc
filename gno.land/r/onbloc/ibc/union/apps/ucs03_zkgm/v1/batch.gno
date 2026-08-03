@@ -3,8 +3,8 @@ package ucs03_zkgm
 import (
 	types "gno.land/p/onbloc/ibc/union/types"
 
-	u256 "gno.land/p/gnoswap/uint256"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
+	u256 "gno.land/p/onbloc/math/uint256"
 )
 
 // verifyBatch verifies each allowed child instruction against the shared funds budget.

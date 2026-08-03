@@ -12,6 +12,7 @@ package send
 // by the other send/ scenarios.
 
 import (
+	"encoding/hex"
 	"testing"
 	"time"
 
@@ -20,7 +21,7 @@ import (
 	types "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
-	u256 "gno.land/p/gnoswap/uint256"
+	u256 "gno.land/p/onbloc/math/uint256"
 
 	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/r/demo/defi/grc20reg"
@@ -134,7 +135,7 @@ func sendGRC20InitializeOrder(cur realm, channelId types.ChannelId, token *grc20
 		QuoteToken:  []byte("remote-grc20"),
 		QuoteAmount: u256.NewUint(40),
 		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
-		Metadata:    mustTokenMetadata("grc20", z.TokenInitializer{Name: "Scenario GRC20", Symbol: "SCN", Decimals: 6}),
+		Metadata:    mustTokenMetadata("af739f34ddf951cbc24fdbba4f76213688e13627", z.TokenInitializer{Name: "Scenario GRC20", Symbol: "SCN", Decimals: 6}),
 	}
 
 	testing.SetRealm(testing.NewUserRealm(senderAddr))
@@ -184,12 +185,16 @@ func mustOrderInstruction(order z.TokenOrderV2) z.Instruction {
 	return z.Instruction{Version: z.INSTR_VERSION_2, Opcode: z.OP_TOKEN_ORDER, Operand: operand}
 }
 
-func mustTokenMetadata(implementation string, ti z.TokenInitializer) []byte {
+func mustTokenMetadata(implementationHex string, ti z.TokenInitializer) []byte {
+	implementation, err := hex.DecodeString(implementationHex)
+	if err != nil {
+		panic(err)
+	}
 	initBytes, err := z.EncodeTokenInitializer(ti)
 	if err != nil {
 		panic(err)
 	}
-	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: []byte(implementation), Initializer: initBytes})
+	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: implementation, Initializer: initBytes})
 	if err != nil {
 		panic(err)
 	}
@@ -202,8 +207,11 @@ func mustTokenMetadata(implementation string, ti z.TokenInitializer) []byte {
 type blockClockLightClient struct{}
 
 func (m *blockClockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
-func (m *blockClockLightClient) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
-func (m *blockClockLightClient) GetTimestamp() types.Timestamp                         { return nowTs() }
+
+func (m *blockClockLightClient) VerifyNonMembership(uint64, []byte, []byte) error { return nil }
+
+func (m *blockClockLightClient) GetTimestamp() types.Timestamp { return nowTs() }
+
 func (m *blockClockLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
 	return nowTs(), nil
 }

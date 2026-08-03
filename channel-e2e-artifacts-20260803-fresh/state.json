@@ -1,0 +1,78 @@
+{
+  "phase": "packet-complete",
+  "voyager_revision": "82c70ec1ff84ec457e976ad94f38a5d5783b7836",
+  "chains": {
+    "union": "union-devnet-1",
+    "evm": "32382",
+    "gno": "dev.ibc"
+  },
+  "evm_topology": {
+    "chain_id": "32382",
+    "address_fingerprint": "fec0e4c6fb78fd60ec6467ba984f0f18ff7d01e2"
+  },
+  "ports": {
+    "gno": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
+    "evm": "0x05fd55c1abe31d3ed09a76216ca8f0372f4b2ec5"
+  },
+  "version": "ucs03-zkgm-0",
+  "failed_work": {
+    "baseline": 0,
+    "final": 0,
+    "repaired": [
+      67,
+      20601
+    ]
+  },
+  "clients": {
+    "gno_union": 1,
+    "union_gno": 1,
+    "union_evm": 2,
+    "evm_union": 1,
+    "gno_evm": 2,
+    "evm_gno": 2
+  },
+  "allowlists": {
+    "plain": "1",
+    "proof_lens": "2"
+  },
+  "connections": {
+    "gno": 1,
+    "evm": 1
+  },
+  "channels": {
+    "gno": 1,
+    "evm": 1
+  },
+  "packet": {
+    "phase": "packet-complete",
+    "token": "0xcc9c0d582320c249e120be2d8ca732d11bbed607",
+    "sender": "0xbe68fc2d8249eb60bfcf0e71d5a0d2f2e292c4ed",
+    "recipient": "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5",
+    "amount": "1000000000000",
+    "voucher": "ibc/e4e008e26cdaac3e86ab3eacf60df8575e162d82",
+    "salt": "0xb5d3bc3195a4198ba28a3705d44da7639f08c7c95c2a247691230386cda73ee4",
+    "tag": "b5d3bc3195a4198ba28a3705d44da7639f08c7c95c2a247691230386cda73ee4",
+    "failed_work_baseline": 0,
+    "mint_tx": "0x6362b8c9d59e305e3de6aac6fa2719c1f59837292e6bb00694f784d771d3be0c",
+    "approve_tx": "0x82fe21365339daa8fdfc632f9900c225ab3d7ed54049e4c08b125ec340b35fc8",
+    "balances_before": {
+      "sender": "1000000000000",
+      "escrow": "0",
+      "recipient": "0"
+    },
+    "evm_from_block": 635,
+    "send_tx": "0x442b1f4c1ee5a01da532a6bb9936245f484ec981cb43f406ef3d1b42b294b7ab",
+    "packet_hash": "0x24130d061989b1ce5babb2811ff4f882d15091094e2d26f39bf02996f7543ddb",
+    "gno_receive_tx": "olZ1eFO8ZAXi41brym1l6CYQ60TklSHZsNA7m862A3o=",
+    "gno_write_ack_tx": "olZ1eFO8ZAXi41brym1l6CYQ60TklSHZsNA7m862A3o=",
+    "evm_ack_tx": "0x466f9b5c474b8d0a1cffaae1265c1f258687b4a5d4928ed9dc162105e4db4b32",
+    "outcome": "failure",
+    "commitment_cleared": true,
+    "balance_deltas": {
+      "sender": "0",
+      "escrow": "0",
+      "recipient": "0"
+    },
+    "failed_work_final": 0
+  }
+}

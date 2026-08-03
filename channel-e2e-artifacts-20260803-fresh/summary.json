@@ -1,0 +1,46 @@
+{
+  "phase": "complete",
+  "voyager_revision": "82c70ec1ff84ec457e976ad94f38a5d5783b7836",
+  "chains": {
+    "union": "union-devnet-1",
+    "evm": "32382",
+    "gno": "dev.ibc"
+  },
+  "evm_topology": {
+    "chain_id": "32382",
+    "address_fingerprint": "fec0e4c6fb78fd60ec6467ba984f0f18ff7d01e2"
+  },
+  "ports": {
+    "gno": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
+    "evm": "0x05fd55c1abe31d3ed09a76216ca8f0372f4b2ec5"
+  },
+  "version": "ucs03-zkgm-0",
+  "failed_work": {
+    "baseline": 0,
+    "final": 0,
+    "repaired": [
+      67,
+      20601
+    ]
+  },
+  "clients": {
+    "gno_union": 1,
+    "union_gno": 1,
+    "union_evm": 2,
+    "evm_union": 1,
+    "gno_evm": 2,
+    "evm_gno": 2
+  },
+  "allowlists": {
+    "plain": "1",
+    "proof_lens": "2"
+  },
+  "connections": {
+    "gno": 1,
+    "evm": 1
+  },
+  "channels": {
+    "gno": 1,
+    "evm": 1
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "state": "open",
+  "connection_id": 1,
+  "counterparty_channel_id": 1,
+  "counterparty_port_id": "0x05fd55c1abe31d3ed09a76216ca8f0372f4b2ec5",
+  "version": "ucs03-zkgm-0"
+}

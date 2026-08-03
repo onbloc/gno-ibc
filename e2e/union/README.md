@@ -17,7 +17,7 @@ DEVNET_PROJECT_NAME=<union-project> \
 NO_BLOCKSCOUT=true \
 ./networks/run-linux-devnet.sh
 
-docker compose -f <gno-compose-file> \
+docker compose -f e2e/union/gno-compose.yml \
   -p <gno-project> down -v --remove-orphans
 ```
 
@@ -73,6 +73,18 @@ gno.land/r/onbloc/ibc/union/core/v1
 gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm
 gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1
 gno.land/r/onbloc/ibc/union/testing/e2e_setup
+```
+
+The included Compose project builds those realms from the current checkout and
+starts both Gno and the transaction indexer. Run its setup profile exactly once
+for each fresh project to grant the required roles and invoke `Bootstrap`.
+
+```sh
+docker compose -f e2e/union/gno-compose.yml \
+  -p <gno-project> up -d --build --wait
+
+docker compose -f e2e/union/gno-compose.yml \
+  -p <gno-project> --profile setup run --rm setup
 ```
 
 Verify that the Gno RPC, tx-indexer GraphQL endpoint, and PostgreSQL are all reachable.

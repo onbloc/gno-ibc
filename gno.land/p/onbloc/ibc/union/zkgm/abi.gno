@@ -138,9 +138,14 @@ func DecodeZkgmPacket(data []byte) (ZkgmPacket, error) {
 		return ZkgmPacket{}, err
 	}
 
+	path := out[1].(*u256.Uint)
+	if !IsCanonicalPath(path) {
+		return ZkgmPacket{}, ErrNonCanonicalPath
+	}
+
 	return ZkgmPacket{
 		Salt:        out[0].([32]byte),
-		Path:        out[1].(*u256.Uint),
+		Path:        path,
 		Instruction: instructionFromValues(out[2].([]any)),
 	}, nil
 }
@@ -173,8 +178,13 @@ func DecodeForward(data []byte) (Forward, error) {
 		return Forward{}, err
 	}
 
+	path := out[0].(*u256.Uint)
+	if !IsCanonicalPath(path) {
+		return Forward{}, ErrNonCanonicalPath
+	}
+
 	return Forward{
-		Path:             out[0].(*u256.Uint),
+		Path:             path,
 		TimeoutHeight:    out[1].(uint64),
 		TimeoutTimestamp: out[2].(uint64),
 		Instruction:      instructionFromValues(out[3].([]any)),
@@ -250,6 +260,11 @@ func DecodeTokenOrderV1(data []byte) (TokenOrderV1, error) {
 		return TokenOrderV1{}, err
 	}
 
+	baseTokenPath := out[7].(*u256.Uint)
+	if !IsCanonicalPath(baseTokenPath) {
+		return TokenOrderV1{}, ErrNonCanonicalPath
+	}
+
 	return TokenOrderV1{
 		Sender:            out[0].([]byte),
 		Receiver:          out[1].([]byte),
@@ -258,7 +273,7 @@ func DecodeTokenOrderV1(data []byte) (TokenOrderV1, error) {
 		BaseTokenSymbol:   out[4].(string),
 		BaseTokenName:     out[5].(string),
 		BaseTokenDecimals: out[6].(uint8),
-		BaseTokenPath:     out[7].(*u256.Uint),
+		BaseTokenPath:     baseTokenPath,
 		QuoteToken:        out[8].([]byte),
 		QuoteAmount:       out[9].(*u256.Uint),
 	}, nil

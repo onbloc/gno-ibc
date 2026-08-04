@@ -3,33 +3,62 @@ name: Gno Union EVM full cycle
 on:
   pull_request:
   workflow_dispatch:
-    inputs:
-      erc20_to_gno:
-        description: Include the EVM ERC20 to Gno packet phase
-        required: true
-        type: boolean
-        default: true
 
 permissions:
   contents: read
-  packages: read
 
 concurrency:
-  group: gno-union-evm-full-cycle
+  group: gno-union-evm-full-cycle-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
+  images:
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/e2e-images.yml
+
   full-cycle:
+    needs: images
+    permissions:
+      contents: read
+      packages: read
     runs-on: ubuntu-latest
     timeout-minutes: 180
+    env:
+      UNION_VOYAGER_REVISION: 82c70ec1ff84ec457e976ad94f38a5d5783b7836
+      UNION_PROJECT: gno-union-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+      GNO_PROJECT: gno-union-e2e-gno-${{ github.run_id }}-${{ github.run_attempt }}
+      UNION_RPC_URL: http://host.docker.internal:26657
+      EVM_RPC_URL: http://host.docker.internal:8545
+      GNO_RPC_URL: http://host.docker.internal:16657
+      GNO_TX_INDEXER_RPC_URL: http://host.docker.internal:48546/graphql/query
+      VOYAGER_DATABASE_URL: postgresql://postgres:postgrespassword@host.docker.internal:5432/default
+      UNION_PACKET_RPC_URL: http://127.0.0.1:26657
+      EVM_PACKET_RPC_URL: http://127.0.0.1:8545
+      GNO_PACKET_RPC_URL: http://127.0.0.1:16657
+      GNO_PACKET_INDEXER_RPC_URL: http://127.0.0.1:48546/graphql/query
     steps:
       - name: Check out gno-ibc
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: gno-ibc
 
+      - name: Check out pinned union-voyager runtime
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: onbloc/union-voyager
+          ref: ${{ env.UNION_VOYAGER_REVISION }}
+          path: union-voyager
+
+      - name: Check out Union devnet deployment
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: onbloc/union-voyager
+          ref: ${{ env.UNION_VOYAGER_REVISION }}
+          path: union-deploy
+
       - name: Install Foundry
-        if: github.event_name == 'pull_request' || inputs.erc20_to_gno
         uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1.9.0
 
       - name: Install Go
@@ -39,7 +68,6 @@ jobs:
           cache: false
 
       - name: Install pinned gnokey
-        if: github.event_name == 'pull_request' || inputs.erc20_to_gno
         working-directory: gno-ibc
         run: make install-gno
 
@@ -50,37 +78,194 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Write private runner environment
-        working-directory: gno-ibc
+      - name: Validate signing secrets
         env:
-          UNION_CHAIN_ID: ${{ vars.UNION_CHAIN_ID }}
-          EVM_CHAIN_ID: ${{ vars.EVM_CHAIN_ID }}
-          GNO_CHAIN_ID: ${{ vars.GNO_CHAIN_ID }}
-          UNION_IBC_HOST_CONTRACT: ${{ vars.UNION_IBC_HOST_CONTRACT }}
-          EVM_IBC_HANDLER: ${{ vars.EVM_IBC_HANDLER }}
-          EVM_MULTICALL: ${{ vars.EVM_MULTICALL }}
-          EVM_COMETBLS_CLIENT_IMPL: ${{ vars.EVM_COMETBLS_CLIENT_IMPL }}
-          EVM_PROOF_LENS_CLIENT_IMPL: ${{ vars.EVM_PROOF_LENS_CLIENT_IMPL }}
-          GNO_IBC_CORE_REALM: ${{ vars.GNO_IBC_CORE_REALM }}
-          GNO_ZKGM_PORT: ${{ vars.GNO_ZKGM_PORT }}
-          EVM_ZKGM_CONTRACT: ${{ vars.EVM_ZKGM_CONTRACT }}
-          GALOIS_PROVER_ENDPOINT: ${{ vars.GALOIS_PROVER_ENDPOINT }}
-          EVM_TEST_ERC20: ${{ vars.EVM_TEST_ERC20 }}
-          GNO_RECIPIENT: ${{ vars.GNO_RECIPIENT }}
-          EVM_TEST_AMOUNT: ${{ vars.EVM_TEST_AMOUNT }}
-          UNION_RPC_URL: ${{ secrets.UNION_RPC_URL }}
-          EVM_RPC_URL: ${{ secrets.EVM_RPC_URL }}
-          GNO_RPC_URL: ${{ secrets.GNO_RPC_URL }}
-          GNO_TX_INDEXER_RPC_URL: ${{ secrets.GNO_TX_INDEXER_RPC_URL }}
-          VOYAGER_DATABASE_URL: ${{ secrets.VOYAGER_DATABASE_URL }}
           TRUSTED_MPT_PRIVATE_KEY: ${{ secrets.TRUSTED_MPT_PRIVATE_KEY }}
           UNION_PRIVATE_KEY: ${{ secrets.UNION_PRIVATE_KEY }}
           EVM_PRIVATE_KEY: ${{ secrets.EVM_PRIVATE_KEY }}
           GNO_PRIVATE_KEY: ${{ secrets.GNO_PRIVATE_KEY }}
-          VOYAGER_IMAGE: ${{ vars.VOYAGER_IMAGE }}
+        run: |
+          for name in TRUSTED_MPT_PRIVATE_KEY UNION_PRIVATE_KEY EVM_PRIVATE_KEY GNO_PRIVATE_KEY; do
+            [[ ${!name} =~ ^0x[0-9A-Fa-f]{64}$ ]]
+          done
+
+      - name: Resolve prebuilt images
+        working-directory: gno-ibc
+        env:
+          E2E_REGISTRY: ghcr.io
+          E2E_IMAGE_NAMESPACE: ${{ github.repository_owner }}
+          E2E_IMAGE_TAG: ${{ github.sha }}
+          UNION_VOYAGER_DIR: ${{ github.workspace }}/union-voyager
+        run: |
+          GNO_IMAGE=$(e2e/union/ensure-image.sh gno)
+          VOYAGER_IMAGE=$(e2e/union/ensure-image.sh voyager)
+          printf 'GNO_IMAGE=%s\nVOYAGER_IMAGE=%s\n' "$GNO_IMAGE" "$VOYAGER_IMAGE" >>"$GITHUB_ENV"
+
+      - name: Start Union, EVM, and PostgreSQL
+        working-directory: union-voyager
+        env:
+          DEVNET_LINUX_SYSTEM: x86_64-linux
+          DEVNET_PROJECT_NAME: ${{ env.UNION_PROJECT }}
+          NO_BLOCKSCOUT: "true"
+        run: |
+          ./networks/run-linux-devnet.sh
+          curl --fail --retry 60 --retry-connrefused --retry-delay 2 \
+            http://127.0.0.1:26657/status >/dev/null
+          cast chain-id --rpc-url "$EVM_PACKET_RPC_URL" >/dev/null
+          docker compose -p "$UNION_PROJECT" exec -T postgres \
+            pg_isready -U postgres -d default
+
+      - name: Deploy Union contracts
+        working-directory: union-deploy
+        env:
+          UNION_PRIVATE_KEY: ${{ secrets.UNION_PRIVATE_KEY }}
+        run: |
+          deploy_output="${{ github.workspace }}/artifacts/deployment"
+          install -d -m 700 "$deploy_output"
+          run_nix() {
+            docker run --rm --network host \
+              -v "$PWD:/work/union" \
+              -v "${{ github.workspace }}/artifacts:/work/artifacts" \
+              -v union-nix-store-x86_64-linux:/nix \
+              -v union-nix-cache-x86_64-linux:/root/.cache/nix \
+              -w /work/union \
+              -e NIX_CONFIG='experimental-features = nix-command flakes' \
+              nixos/nix:latest sh -lc '
+                git config --global --add safe.directory /work/union
+                target=$1
+                shift
+                nix --accept-flake-config run --impure ".#$target" -- "$@"
+              ' union-linux-nix "$@"
+          }
+          deployer=$(jq -er '."union.union-devnet-1".deployer' deployments/deployments.json)
+          manager=$(jq -er '
+            ."union.union-devnet-1".contracts
+            | to_entries[] | select(.value.name == "manager") | .key
+          ' deployments/deployments.json)
+          signer=$(run_nix cosmwasm-deployer address-of-private-key \
+            --private-key "$UNION_PRIVATE_KEY" --bech32-prefix union)
+          test "$signer" = "$deployer"
+          run_nix cosmwasm-scripts.union-devnet.deploy-manager \
+            --initial-admin "$deployer" --output /work/artifacts/deployment/manager.json
+          git apply <<'PATCH'
+          diff --git a/cosmwasm/cosmwasm.nix b/cosmwasm/cosmwasm.nix
+          --- a/cosmwasm/cosmwasm.nix
+          +++ b/cosmwasm/cosmwasm.nix
+          @@ -116,6 +116,7 @@
+                     lightclients = [
+                       "gno"
+                       "ethereum"
+          +            "trusted-mpt"
+                       "state-lens-ics23-mpt"
+                     ];
+                   }
+          PATCH
+          # The required trusted MPT client changes the checkout, and legacy bundled
+          # WASM in this revision has no embedded git metadata.
+          run_nix cosmwasm-scripts.union-devnet.deploy \
+            --allow-dirty --output /work/artifacts/deployment/contracts.json
+          run_nix cosmwasm-scripts.union-devnet.whitelist-relayers "$deployer"
+          jq -e --arg manager "$manager" '. == $manager' \
+            "$deploy_output/manager.json" >/dev/null
+          jq -e '
+            (.core | test("^union1[0-9a-z]{58}$")) and
+            (.lightclient["trusted/evm/mpt"] | test("^union1[0-9a-z]{58}$")) and
+            (.app.ucs03 | test("^union1[0-9a-z]{58}$"))
+          ' "$deploy_output/contracts.json" >/dev/null
+
+      - name: Register and discover EVM contracts
+        working-directory: union-voyager
+        env:
+          DEVNET_LINUX_SYSTEM: x86_64-linux
+          EVM_PRIVATE_KEY: ${{ secrets.EVM_PRIVATE_KEY }}
+        run: |
+          forge_container=$(docker compose -p "$UNION_PROJECT" ps -aq forge)
+          test -n "$forge_container"
+          test "$(docker wait "$forge_container")" = 0
+          forge_logs=$(docker compose -p "$UNION_PROJECT" logs --no-color forge)
+          address() {
+            printf '%s\n' "$forge_logs" | sed -n "s/.*$1:  *\(0x[0-9A-Fa-f]\{40\}\).*/\1/p" | head -1
+          }
+          deployer=$(address Deployer)
+          sender=$(address Sender)
+          handler=$(address IBCHandler)
+          zkgm=$(address UCS03)
+          multicall=$(address Multicall)
+          for value in "$deployer" "$sender" "$handler" "$zkgm" "$multicall"; do
+            [[ $value =~ ^0x[0-9A-Fa-f]{40}$ ]]
+          done
+          test "${sender,,}" = "$(cast wallet address --private-key "$EVM_PRIVATE_KEY" | tr '[:upper:]' '[:lower:]')"
+
+          ./networks/run-linux-nix.sh evm-scripts.devnet.script-register-clients \
+            --deployer_pk "$deployer" --sender_pk "$sender"
+          cometbls=$(cast call "$handler" 'clientRegistry(string)(address)' cometbls \
+            --rpc-url "$EVM_PACKET_RPC_URL")
+          proof_lens=$(cast call "$handler" 'clientRegistry(string)(address)' proof-lens \
+            --rpc-url "$EVM_PACKET_RPC_URL")
+          for value in "$cometbls" "$proof_lens"; do
+            [[ $value =~ ^0x[0-9A-Fa-f]{40}$ && $value != 0x0000000000000000000000000000000000000000 ]]
+          done
+          chain_id=$(cast chain-id --rpc-url "$EVM_PACKET_RPC_URL")
+
+          printf '%s\n' \
+            "EVM_CHAIN_ID=$chain_id" \
+            "EVM_IBC_HANDLER=${handler,,}" \
+            "EVM_MULTICALL=${multicall,,}" \
+            "EVM_COMETBLS_CLIENT_IMPL=${cometbls,,}" \
+            "EVM_PROOF_LENS_CLIENT_IMPL=${proof_lens,,}" \
+            "EVM_ZKGM_CONTRACT=${zkgm,,}" >>"$GITHUB_ENV"
+
+      - name: Start and bootstrap Gno
+        working-directory: gno-ibc
+        run: |
+          docker compose -f e2e/union/gno-compose.yml -p "$GNO_PROJECT" up -d --wait
+          docker compose -f e2e/union/gno-compose.yml -p "$GNO_PROJECT" \
+            --profile setup run --rm setup
+          curl --fail --retry 30 --retry-connrefused --retry-delay 2 \
+            "$GNO_PACKET_RPC_URL/status" >/dev/null
+          curl --fail --retry 30 --retry-connrefused --retry-delay 2 \
+            -H 'content-type: application/json' \
+            --data '{"query":"{ latestBlockHeight }"}' \
+            "$GNO_PACKET_INDEXER_RPC_URL" \
+            | jq -e '.data.latestBlockHeight | tonumber >= 0' >/dev/null
+
+      - name: Validate deployment and deploy test token
+        working-directory: gno-ibc/e2e/union
+        env:
+          EVM_PRIVATE_KEY: ${{ secrets.EVM_PRIVATE_KEY }}
+        run: |
+          test -n "$EVM_PRIVATE_KEY"
+          out=$(mktemp -d)
+          trap 'rm -rf "$out"' EXIT
+          token_json=$(forge create --root . --out "$out" --no-cache \
+            --rpc-url "$EVM_PACKET_RPC_URL" --private-key "$EVM_PRIVATE_KEY" \
+            --broadcast --json fixtures/TestERC20.sol:TestERC20 \
+            --constructor-args 'Union E2E' UE2E 18)
+          token=$(jq -er '.deployedTo | ascii_downcase' <<<"$token_json")
+          [[ $token =~ ^0x[0-9a-f]{40}$ ]]
+
+          for address in "$EVM_IBC_HANDLER" "$EVM_MULTICALL" \
+            "$EVM_COMETBLS_CLIENT_IMPL" "$EVM_PROOF_LENS_CLIENT_IMPL" \
+            "$EVM_ZKGM_CONTRACT" "$token"; do
+            code=$(cast code "$address" --rpc-url "$EVM_PACKET_RPC_URL")
+            test "$code" != 0x
+          done
+          printf 'EVM_TEST_ERC20=%s\n' "$token" >>"$GITHUB_ENV"
+
+      - name: Write private runner environment
+        working-directory: gno-ibc
+        env:
+          TRUSTED_MPT_PRIVATE_KEY: ${{ secrets.TRUSTED_MPT_PRIVATE_KEY }}
+          UNION_PRIVATE_KEY: ${{ secrets.UNION_PRIVATE_KEY }}
+          EVM_PRIVATE_KEY: ${{ secrets.EVM_PRIVATE_KEY }}
+          GNO_PRIVATE_KEY: ${{ secrets.GNO_PRIVATE_KEY }}
         run: |
           umask 077
-          test -n "$VOYAGER_IMAGE" || { echo 'VOYAGER_IMAGE repository variable is required' >&2; exit 2; }
+          union_contracts="${{ github.workspace }}/artifacts/deployment/contracts.json"
+          UNION_IBC_HOST_CONTRACT=$(jq -er .core "$union_contracts")
+          curl --fail --silent --show-error \
+            "http://127.0.0.1:1317/cosmwasm/wasm/v1/contract/$UNION_IBC_HOST_CONTRACT" \
+            | jq -e '.contract_info.code_id | tonumber > 0' >/dev/null
           install -d -m 700 "${{ github.workspace }}/artifacts"
           printf '%s\n' union-channel-e2e-artifacts \
             >"${{ github.workspace }}/artifacts/.union-channel-e2e-artifacts"
@@ -93,15 +278,25 @@ jobs:
             EVM_PROOF_LENS_CLIENT_IMPL GNO_IBC_CORE_REALM GNO_ZKGM_PORT
             EVM_ZKGM_CONTRACT GALOIS_PROVER_ENDPOINT EVM_TEST_ERC20
             GNO_RECIPIENT EVM_TEST_AMOUNT UNION_RPC_URL EVM_RPC_URL GNO_RPC_URL
-            GNO_TX_INDEXER_RPC_URL VOYAGER_DATABASE_URL TRUSTED_MPT_PRIVATE_KEY
-            UNION_PRIVATE_KEY EVM_PRIVATE_KEY GNO_PRIVATE_KEY
-            VOYAGER_IMAGE
+            GNO_TX_INDEXER_RPC_URL UNION_PACKET_RPC_URL EVM_PACKET_RPC_URL
+            GNO_PACKET_RPC_URL GNO_PACKET_INDEXER_RPC_URL VOYAGER_DATABASE_URL
+            TRUSTED_MPT_PRIVATE_KEY UNION_PRIVATE_KEY EVM_PRIVATE_KEY
+            GNO_PRIVATE_KEY VOYAGER_IMAGE UNION_VOYAGER_REVISION
           )
+          export \
+            UNION_CHAIN_ID=union-devnet-1 \
+            GNO_CHAIN_ID=dev.ibc \
+            GNO_IBC_CORE_REALM=gno.land/r/onbloc/ibc/union/core \
+            GNO_ZKGM_PORT=gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm \
+            GALOIS_PROVER_ENDPOINT=https://galois.union.build:443 \
+            GNO_RECIPIENT=g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5 \
+            EVM_TEST_AMOUNT=1000000000000 \
+            UNION_IBC_HOST_CONTRACT
           for name in "${variables[@]}"; do
+            test -n "${!name}"
             printf '%s=%q\n' "$name" "${!name}"
           done >e2e/union/.env
           printf '%s\n' \
-            'UNION_VOYAGER_REVISION=82c70ec1ff84ec457e976ad94f38a5d5783b7836' \
             "E2E_ARTIFACT_DIR=${{ github.workspace }}/artifacts" \
             "E2E_STATE_FILE=${{ github.workspace }}/artifacts/state.json" \
             >>e2e/union/.env
@@ -114,10 +309,38 @@ jobs:
         working-directory: gno-ibc
         run: e2e/union/run-channel-e2e.sh --resume
 
-      - name: Verify packet scenarios
-        if: github.event_name == 'pull_request' || inputs.erc20_to_gno
+      - name: Run packet scenario suite
         working-directory: gno-ibc
-        run: e2e/union/run-channel-e2e.sh --resume --apply --erc20-to-gno --amount-boundaries --gno-to-evm
+        run: |
+          e2e/union/run-channel-e2e.sh --resume --apply \
+            --forged-proof-rejection \
+            --erc20-to-gno \
+            --amount-boundaries \
+            --gno-to-evm
+
+      - name: Capture service logs
+        if: failure()
+        working-directory: gno-ibc
+        env:
+          TRUSTED_MPT_PRIVATE_KEY: ${{ secrets.TRUSTED_MPT_PRIVATE_KEY }}
+          UNION_PRIVATE_KEY: ${{ secrets.UNION_PRIVATE_KEY }}
+          EVM_PRIVATE_KEY: ${{ secrets.EVM_PRIVATE_KEY }}
+          GNO_PRIVATE_KEY: ${{ secrets.GNO_PRIVATE_KEY }}
+        run: |
+          install -d -m 700 "${{ github.workspace }}/artifacts"
+          docker compose -p "$UNION_PROJECT" logs --no-color \
+            >"${{ github.workspace }}/artifacts/union-devnet.log" 2>&1 || true
+          docker compose -f e2e/union/gno-compose.yml -p "$GNO_PROJECT" logs --no-color \
+            >"${{ github.workspace }}/artifacts/gno-devnet.log" 2>&1 || true
+          for secret in "$TRUSTED_MPT_PRIVATE_KEY" "$UNION_PRIVATE_KEY" \
+            "$EVM_PRIVATE_KEY" "$GNO_PRIVATE_KEY"; do
+            if grep -RFq -- "$secret" "${{ github.workspace }}/artifacts"; then
+              rm -f "${{ github.workspace }}/artifacts/union-devnet.log" \
+                "${{ github.workspace }}/artifacts/gno-devnet.log"
+              echo 'service logs contained a configured private key and were removed' >&2
+              exit 1
+            fi
+          done
 
       - name: Upload sanitized artifacts
         if: always()
@@ -127,3 +350,13 @@ jobs:
           path: artifacts
           if-no-files-found: warn
           retention-days: 7
+
+      - name: Stop fresh services
+        if: always()
+        working-directory: gno-ibc
+        run: |
+          docker compose -f e2e/union/gno-compose.yml -p "$GNO_PROJECT" \
+            down -v --remove-orphans || true
+          DEVNET_ACTION=down DEVNET_LINUX_SYSTEM=x86_64-linux \
+            DEVNET_PROJECT_NAME="$UNION_PROJECT" NO_BLOCKSCOUT=true \
+            "${{ github.workspace }}/union-voyager/networks/run-linux-devnet.sh" || true

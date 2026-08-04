@@ -90,6 +90,7 @@ func (r *Runtime) Start(ctx context.Context, rendered []byte) error {
 		Name: "docker",
 		Args: []string{
 			"run", "--detach", "--name", name,
+			"--add-host", "host.docker.internal:host-gateway",
 			"--label", ownershipLabel + "=" + r.runID,
 			"--env", "RUST_LOG=" + r.cfg.VoyagerRustLog,
 			"--mount", "type=bind,src=" + hostConfig + ",dst=" + configPath + ",readonly",

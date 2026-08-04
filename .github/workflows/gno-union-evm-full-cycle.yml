@@ -157,7 +157,8 @@ jobs:
             --private-key "$UNION_PRIVATE_KEY" --bech32-prefix union)
           test "$signer" = "$deployer"
           run_deployer deploy-contract-union-devnet \
-            --initial-admin "$deployer" --output /work/artifacts/deployment/manager.json
+            --allow-dirty --initial-admin "$deployer" \
+            --output /work/artifacts/deployment/manager.json
           run_deployer union-devnet-deploy-full \
             --allow-dirty --output /work/artifacts/deployment/contracts.json
           run_deployer union-devnet-whitelist-relayers "$deployer"

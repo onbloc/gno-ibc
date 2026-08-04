@@ -285,6 +285,10 @@ func TestCommitMembershipProofClassifiesVerifierRejection(t *testing.T) {
 	if result.Accepted || result.Classification != "proof verification rejected" {
 		t.Fatalf("result = %#v", result)
 	}
+	if result.Stderr != "deliver transaction failed: mpt proof hash mismatch" ||
+		result.CommandError != "exit status 1" {
+		t.Fatalf("diagnostic output = %#v", result)
+	}
 }
 
 func TestParseAcknowledgementRejectsMalformedKeys(t *testing.T) {

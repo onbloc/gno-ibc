@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -32,6 +33,7 @@ func (r *Runner) runForgedProofRejection(ctx context.Context) error {
 	}
 	// A finalized EVM height is not necessarily available in the Gno State Lens
 	// client. Update it first, then prove at the consensus height actually stored.
+	r.progressf("scenario forged-proof-rejection: updating Gno EVM client")
 	targetHeight, err := r.voyager.LatestFinalizedHeight(ctx, r.cfg.EVMChainID)
 	if err != nil {
 		return err
@@ -46,6 +48,7 @@ func (r *Runner) runForgedProofRejection(ctx context.Context) error {
 	if err != nil || height <= 0 {
 		return fmt.Errorf("malformed Gno EVM client height")
 	}
+	r.progressf("scenario forged-proof-rejection: client updated to EVM height %d", height)
 	membership, err := r.evm.ChannelMembership(
 		ctx,
 		r.current.Channels.EVM,
@@ -65,6 +68,7 @@ func (r *Runner) runForgedProofRejection(ctx context.Context) error {
 	if err != nil || len(value) != 32 {
 		return fmt.Errorf("malformed EVM membership value")
 	}
+	r.progressf("scenario forged-proof-rejection: generating membership proof")
 	proof, err := r.voyager.EncodedMembershipProof(
 		ctx,
 		r.cfg.EVMChainID,
@@ -90,13 +94,18 @@ func (r *Runner) runForgedProofRejection(ctx context.Context) error {
 	if committed != "" || len(events) != 0 {
 		return fmt.Errorf("membership proof key was already committed")
 	}
+	r.progressf("scenario forged-proof-rejection: submitting mutated proof")
 	rejected, err := r.gno.CommitMembershipProof(ctx, clientID, height, mutated, path, value)
+	if evidenceErr := r.writeEvidence("forged-proof-mutated-gnokey.json", rejected); evidenceErr != nil {
+		return errors.Join(err, evidenceErr)
+	}
 	if err != nil {
 		return err
 	}
 	if rejected.Accepted {
 		return fmt.Errorf("forged membership proof was accepted")
 	}
+	r.progressf("scenario forged-proof-rejection: mutated proof rejected as expected")
 	committed, err = r.gno.CommittedMembershipProof(ctx, clientID, height, path)
 	if err != nil {
 		return err
@@ -108,7 +117,11 @@ func (r *Runner) runForgedProofRejection(ctx context.Context) error {
 	if committed != "" || len(events) != 0 {
 		return fmt.Errorf("forged membership proof changed Gno state")
 	}
+	r.progressf("scenario forged-proof-rejection: submitting valid control proof")
 	control, err := r.gno.CommitMembershipProof(ctx, clientID, height, proof, path, value)
+	if evidenceErr := r.writeEvidence("forged-proof-valid-gnokey.json", control); evidenceErr != nil {
+		return errors.Join(err, evidenceErr)
+	}
 	if err != nil {
 		return err
 	}

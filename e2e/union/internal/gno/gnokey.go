@@ -31,6 +31,9 @@ const (
 type MembershipProofTx struct {
 	Accepted       bool   `json:"accepted"`
 	Classification string `json:"classification"`
+	Stdout         string `json:"stdout,omitempty"`
+	Stderr         string `json:"stderr,omitempty"`
+	CommandError   string `json:"command_error,omitempty"`
 }
 
 // CommitMembershipProof submits one direct MsgRun with Voyager's configured
@@ -88,20 +91,28 @@ func main(cur realm) {
 		},
 		Stdin: strings.NewReader("\n"),
 	})
-	if runErr == nil {
-		return MembershipProofTx{Accepted: true, Classification: "accepted"}, nil
+	tx := MembershipProofTx{
+		Stdout: string(result.Stdout),
+		Stderr: string(result.Stderr),
 	}
+	if runErr == nil {
+		tx.Accepted = true
+		tx.Classification = "accepted"
+		return tx, nil
+	}
+	tx.CommandError = runErr.Error()
 	if commandCtx.Err() != nil {
-		return MembershipProofTx{}, commandCtx.Err()
+		return tx, commandCtx.Err()
 	}
 	output := strings.ToLower(string(result.Stdout) + "\n" + string(result.Stderr))
 	if containsAny(output, "unauthorized", "not authorized", "access denied", "permission denied") {
-		return MembershipProofTx{}, fmt.Errorf("Gno relayer is not authorized")
+		return tx, fmt.Errorf("Gno relayer is not authorized")
 	}
 	if !containsAny(output, "proof", "mpt", "root", "hash mismatch", "invalid node") {
-		return MembershipProofTx{}, fmt.Errorf("Gno proof transaction failed unexpectedly")
+		return tx, fmt.Errorf("Gno proof transaction failed unexpectedly")
 	}
-	return MembershipProofTx{Classification: "proof verification rejected"}, nil
+	tx.Classification = "proof verification rejected"
+	return tx, nil
 }
 
 func gnoBytes(bz []byte) string {

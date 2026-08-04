@@ -26,20 +26,26 @@ printf '%s' "$CR_PAT" | docker login ghcr.io -u <github-user> --password-stdin
 
 export E2E_REGISTRY=ghcr.io
 export E2E_IMAGE_NAMESPACE=onbloc
-export E2E_IMAGE_TAG=$(git rev-parse HEAD)
 export UNION_VOYAGER_DIR=../union-voyager
 export UNION_VOYAGER_REVISION=82c70ec1ff84ec457e976ad94f38a5d5783b7836
 
 GNO_IMAGE=$(e2e/union/ensure-image.sh gno)
 VOYAGER_IMAGE=$(e2e/union/ensure-image.sh voyager)
-export GNO_IMAGE VOYAGER_IMAGE
+UNION_DEPLOYER_IMAGE=$(e2e/union/ensure-image.sh union-deployer)
+export GNO_IMAGE VOYAGER_IMAGE UNION_DEPLOYER_IMAGE
 ```
 
-The resolver checks GHCR first, then the local Docker store, and builds only
-when neither contains the immutable tag. Pass `--push` instead of the default
-`--load` to publish a missing image and its BuildKit registry cache.
+The resolver derives an immutable tag from each component's effective inputs,
+checks GHCR first, then the local Docker store, and builds only when neither
+contains that tag. Pass `--push` instead of the default `--load` to publish a
+missing image. Gno and Voyager also publish their BuildKit registry cache.
 Before a fallback Gno build, it runs `make vendor` so the image contains the
 ignored third-party mirrors required by the deployed realms.
+
+The Union deployer image is built by Nix and contains the complete runtime
+closure for `cosmwasm-deployer`, the manager/full deployment scripts, their
+contract configuration, and WASM files. It never contains signing keys,
+deployment addresses created by a run, or chain state.
 
 ### 1. Isolate from Existing Environments
 

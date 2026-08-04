@@ -8,8 +8,8 @@ env_file=${ENV_FILE:-"$script_dir/.env"}
   echo "missing environment file: $env_file" >&2
   exit 2
 }
-env_mode=$(stat -f '%Lp' "$env_file" 2>/dev/null ||
-  stat -c '%a' "$env_file" 2>/dev/null) || {
+env_mode=$(stat -c '%a' "$env_file" 2>/dev/null ||
+  stat -f '%Lp' "$env_file" 2>/dev/null) || {
   echo "cannot inspect environment file permissions" >&2
   exit 2
 }

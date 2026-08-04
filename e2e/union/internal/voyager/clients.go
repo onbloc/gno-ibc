@@ -39,6 +39,29 @@ func (r *Runtime) LatestFinalizedHeight(ctx context.Context, chain string) (stri
 	return height, nil
 }
 
+// WaitFinalizedHeight waits until the chain's finalized height reaches minimum.
+func (r *Runtime) WaitFinalizedHeight(ctx context.Context, chain string, minimum uint64) (string, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, r.cfg.ScenarioTimeout)
+	defer cancel()
+	for {
+		height, err := r.LatestFinalizedHeight(waitCtx, chain)
+		if err != nil {
+			return "", err
+		}
+		value, err := strconv.ParseUint(height, 10, 64)
+		if err != nil {
+			return "", ErrMalformedResponse
+		}
+		if value >= minimum {
+			return height, nil
+		}
+		if err := pause(waitCtx, r.cfg.PollInterval); err != nil {
+			return "", fmt.Errorf("%w: %s finalized height did not reach %d",
+				classifyContext(waitCtx, err), chain, minimum)
+		}
+	}
+}
+
 // NextClientID returns the first missing positive client ID.
 func (r *Runtime) NextClientID(ctx context.Context, chain string) (int64, error) {
 	for id := int64(1); ; id++ {

@@ -32,9 +32,14 @@ func (r *Runner) runForgedProofRejection(ctx context.Context) error {
 		return fmt.Errorf("forged proof scenario requires an open channel")
 	}
 	// A finalized EVM height is not necessarily available in the Gno State Lens
-	// client. Update it first, then prove at the consensus height actually stored.
+	// client. Wait until finality includes the already-open channel, update the
+	// client, then prove at the consensus height actually stored.
 	r.progressf("scenario forged-proof-rejection: updating Gno EVM client")
-	targetHeight, err := r.voyager.LatestFinalizedHeight(ctx, r.cfg.EVMChainID)
+	channelHeight, err := r.evm.BlockNumber(ctx)
+	if err != nil {
+		return err
+	}
+	targetHeight, err := r.voyager.WaitFinalizedHeight(ctx, r.cfg.EVMChainID, channelHeight)
 	if err != nil {
 		return err
 	}

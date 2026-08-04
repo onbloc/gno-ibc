@@ -44,9 +44,12 @@ jobs:
         with:
           path: gno-ibc
 
-      - name: Validate E2E launcher
+      - name: Validate E2E scripts
         working-directory: gno-ibc
-        run: e2e/union/run-channel-e2e_test.sh
+        run: |
+          e2e/union/run-channel-e2e_test.sh
+          e2e/union/image-tag_test.sh
+          e2e/union/ensure-image_test.sh
 
       - name: Check out pinned union-voyager runtime
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -54,13 +57,6 @@ jobs:
           repository: onbloc/union-voyager
           ref: ${{ env.UNION_VOYAGER_REVISION }}
           path: union-voyager
-
-      - name: Check out Union devnet deployment
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          repository: onbloc/union-voyager
-          ref: ${{ env.UNION_VOYAGER_REVISION }}
-          path: union-deploy
 
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1.9.0
@@ -94,7 +90,9 @@ jobs:
         env:
           E2E_REGISTRY: ghcr.io
           E2E_IMAGE_NAMESPACE: ${{ github.repository_owner }}
-          E2E_IMAGE_TAG: ${{ github.sha }}
+          E2E_GNO_REPOSITORY: ${{ vars.E2E_GNO_REPOSITORY }}
+          E2E_VOYAGER_REPOSITORY: ${{ vars.E2E_VOYAGER_REPOSITORY }}
+          E2E_UNION_DEPLOYER_REPOSITORY: ${{ vars.E2E_UNION_DEPLOYER_REPOSITORY }}
           UNION_VOYAGER_DIR: ${{ github.workspace }}/union-voyager
         run: |
           image_dir=$(mktemp -d)
@@ -103,13 +101,18 @@ jobs:
           gno_pid=$!
           e2e/union/ensure-image.sh voyager >"$image_dir/voyager" &
           voyager_pid=$!
+          e2e/union/ensure-image.sh union-deployer >"$image_dir/union-deployer" &
+          union_deployer_pid=$!
           status=0
           wait "$gno_pid" || status=$?
           wait "$voyager_pid" || status=$?
+          wait "$union_deployer_pid" || status=$?
           test "$status" -eq 0
           GNO_IMAGE=$(cat "$image_dir/gno")
           VOYAGER_IMAGE=$(cat "$image_dir/voyager")
-          printf 'GNO_IMAGE=%s\nVOYAGER_IMAGE=%s\n' "$GNO_IMAGE" "$VOYAGER_IMAGE" >>"$GITHUB_ENV"
+          UNION_DEPLOYER_IMAGE=$(cat "$image_dir/union-deployer")
+          printf 'GNO_IMAGE=%s\nVOYAGER_IMAGE=%s\nUNION_DEPLOYER_IMAGE=%s\n' \
+            "$GNO_IMAGE" "$VOYAGER_IMAGE" "$UNION_DEPLOYER_IMAGE" >>"$GITHUB_ENV"
 
       - name: Install gnokey from Gno image
         run: |
@@ -134,55 +137,30 @@ jobs:
             pg_isready -U postgres -d default
 
       - name: Deploy Union contracts
-        working-directory: union-deploy
+        working-directory: union-voyager
         env:
           UNION_PRIVATE_KEY: ${{ secrets.UNION_PRIVATE_KEY }}
         run: |
           deploy_output="${{ github.workspace }}/artifacts/deployment"
           install -d -m 700 "$deploy_output"
-          run_nix() {
+          run_deployer() {
             docker run --rm --network host \
-              -v "$PWD:/work/union" \
               -v "${{ github.workspace }}/artifacts:/work/artifacts" \
-              -v union-nix-store-x86_64-linux:/nix \
-              -v union-nix-cache-x86_64-linux:/root/.cache/nix \
-              -w /work/union \
-              -e NIX_CONFIG='experimental-features = nix-command flakes' \
-              nixos/nix:latest sh -lc '
-                git config --global --add safe.directory /work/union
-                target=$1
-                shift
-                nix --accept-flake-config run --impure ".#$target" -- "$@"
-              ' union-linux-nix "$@"
+              "$UNION_DEPLOYER_IMAGE" "$@"
           }
           deployer=$(jq -er '."union.union-devnet-1".deployer' deployments/deployments.json)
           manager=$(jq -er '
             ."union.union-devnet-1".contracts
             | to_entries[] | select(.value.name == "manager") | .key
           ' deployments/deployments.json)
-          signer=$(run_nix cosmwasm-deployer address-of-private-key \
+          signer=$(run_deployer cosmwasm-deployer address-of-private-key \
             --private-key "$UNION_PRIVATE_KEY" --bech32-prefix union)
           test "$signer" = "$deployer"
-          run_nix cosmwasm-scripts.union-devnet.deploy-manager \
+          run_deployer deploy-contract-union-devnet \
             --initial-admin "$deployer" --output /work/artifacts/deployment/manager.json
-          git apply <<'PATCH'
-          diff --git a/cosmwasm/cosmwasm.nix b/cosmwasm/cosmwasm.nix
-          --- a/cosmwasm/cosmwasm.nix
-          +++ b/cosmwasm/cosmwasm.nix
-          @@ -116,6 +116,7 @@
-                     lightclients = [
-                       "gno"
-                       "ethereum"
-          +            "trusted-mpt"
-                       "state-lens-ics23-mpt"
-                     ];
-                   }
-          PATCH
-          # The required trusted MPT client changes the checkout, and legacy bundled
-          # WASM in this revision has no embedded git metadata.
-          run_nix cosmwasm-scripts.union-devnet.deploy \
+          run_deployer union-devnet-deploy-full \
             --allow-dirty --output /work/artifacts/deployment/contracts.json
-          run_nix cosmwasm-scripts.union-devnet.whitelist-relayers "$deployer"
+          run_deployer union-devnet-whitelist-relayers "$deployer"
           jq -e --arg manager "$manager" '. == $manager' \
             "$deploy_output/manager.json" >/dev/null
           jq -e '

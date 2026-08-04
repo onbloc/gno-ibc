@@ -8,11 +8,17 @@ on:
     paths:
       - '.gno-version'
       - '.dockerignore'
+      - '.gitmodules'
+      - 'Makefile'
       - 'e2e/union/Dockerfile'
       - 'e2e/union/ensure-image.sh'
+      - 'e2e/union/image-tag.sh'
+      - 'e2e/union/union-deployer.nix'
+      - 'e2e/union/union-deployer-trusted-mpt.patch'
       - 'e2e/union/gno/**'
       - 'e2e/union/config.jsonc.template'
       - 'gno.land/**'
+      - 'third_party/**'
       - '.github/workflows/e2e-images.yml'
 
 permissions:
@@ -24,13 +30,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        component: [gno, voyager]
+        component: [gno, voyager, union-deployer]
     steps:
       - name: Check out gno-ibc
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: ${{ matrix.component == 'gno' && 'recursive' || 'false' }}
 
       - name: Check out pinned union-voyager
-        if: matrix.component == 'voyager'
+        if: matrix.component == 'voyager' || matrix.component == 'union-deployer'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: onbloc/union-voyager
@@ -51,9 +59,9 @@ jobs:
         env:
           E2E_REGISTRY: ghcr.io
           E2E_IMAGE_NAMESPACE: ${{ github.repository_owner }}
-          E2E_IMAGE_TAG: ${{ github.sha }}
           E2E_GNO_REPOSITORY: ${{ vars.E2E_GNO_REPOSITORY }}
           E2E_VOYAGER_REPOSITORY: ${{ vars.E2E_VOYAGER_REPOSITORY }}
+          E2E_UNION_DEPLOYER_REPOSITORY: ${{ vars.E2E_UNION_DEPLOYER_REPOSITORY }}
           UNION_VOYAGER_DIR: ${{ github.workspace }}/union-voyager
           UNION_VOYAGER_REVISION: 82c70ec1ff84ec457e976ad94f38a5d5783b7836
         run: |

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	osexec "os/exec"
 	"path/filepath"
@@ -32,13 +33,14 @@ type Options struct {
 
 // Runner executes the live acceptance scenarios.
 type Runner struct {
-	cfg     config.Config
-	voyager *voyager.Runtime
-	evm     *evm.Client
-	gno     *gno.Client
-	union   *union.Client
-	options Options
-	current state.State
+	cfg      config.Config
+	voyager  *voyager.Runtime
+	evm      *evm.Client
+	gno      *gno.Client
+	union    *union.Client
+	options  Options
+	current  state.State
+	progress io.Writer
 
 	evmIndexFrom     string
 	reservedEVMPlain int64
@@ -81,11 +83,12 @@ func newRunnerWithClients(
 	}
 	runner := &Runner{
 		cfg: cfg, options: options,
-		voyager: voyagerRuntime,
-		evm:     evmClient,
-		gno:     gnoClient,
-		union:   unionClient,
-		current: newState(cfg),
+		voyager:  voyagerRuntime,
+		evm:      evmClient,
+		gno:      gnoClient,
+		union:    unionClient,
+		current:  newState(cfg),
+		progress: os.Stderr,
 	}
 	if !options.Resume {
 		return runner, nil
@@ -103,10 +106,12 @@ func newRunnerWithClients(
 
 // Run owns Voyager for the complete selected scenario sequence.
 func (r *Runner) Run(ctx context.Context) (runErr error) {
+	r.progressf("preflight: started")
 	rendered, err := r.preflight(ctx)
 	if err != nil {
 		return err
 	}
+	r.progressf("preflight: passed")
 	if !r.options.Apply && !r.options.Resume {
 		return nil
 	}
@@ -124,26 +129,46 @@ func (r *Runner) Run(ctx context.Context) (runErr error) {
 		defer cancel()
 		runErr = errors.Join(runErr, r.voyager.Close(cleanupCtx))
 	}()
+	r.progressf("Voyager: starting")
 	if err := r.voyager.Start(ctx, rendered); err != nil {
 		return err
 	}
+	r.progressf("Voyager: ready")
 	if !r.options.Resume {
 		if err := saveBootstrap(r.bootstrapFile(), r.current); err != nil {
 			return err
 		}
 	}
+	r.progressf("channel topology: started")
 	if err := r.runChannelScenario(ctx); err != nil {
 		return err
 	}
+	r.progressf("channel topology: passed")
 	for _, sc := range scenarioCases {
 		if !sc.enabled(r.options) {
 			continue
 		}
-		if err := sc.run(r, ctx); err != nil {
-			return fmt.Errorf("scenario %s: %w", sc.name, err)
+		if err := r.runScenario(ctx, sc); err != nil {
+			return err
 		}
 	}
 	return nil
+}
+
+func (r *Runner) runScenario(ctx context.Context, sc scenarioCase) error {
+	r.progressf("scenario %s: started", sc.name)
+	if err := sc.run(r, ctx); err != nil {
+		r.progressf("scenario %s: failed: %v", sc.name, err)
+		return fmt.Errorf("scenario %s: %w", sc.name, err)
+	}
+	r.progressf("scenario %s: passed", sc.name)
+	return nil
+}
+
+func (r *Runner) progressf(format string, args ...any) {
+	if r.progress != nil {
+		fmt.Fprintf(r.progress, "e2e: "+format+"\n", args...)
+	}
 }
 
 func (r *Runner) preflight(ctx context.Context) ([]byte, error) {

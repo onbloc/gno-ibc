@@ -32,6 +32,12 @@ grep -q '^pull registry.example/onbloc/gno-ibc-e2e-gno:remote$' "$DOCKER_LOG"
 test ! -s "$MAKE_LOG"
 
 : >"$DOCKER_LOG"
+E2E_IMAGE_TAG=remote \
+UNION_VOYAGER_REVISION=82c70ec1ff84ec457e976ad94f38a5d5783b7836 \
+  "$script_dir/ensure-image.sh" union-deployer >/dev/null
+grep -q '^pull registry.example/onbloc/gno-ibc-e2e-union-deployer:remote$' "$DOCKER_LOG"
+
+: >"$DOCKER_LOG"
 E2E_IMAGE_TAG=missing "$script_dir/ensure-image.sh" gno >/dev/null
 grep -q "^-C $(cd "$script_dir/../.." && pwd -P) vendor$" "$MAKE_LOG"
 grep -q '^buildx build --target gno --progress plain --load --tag registry.example/onbloc/gno-ibc-e2e-gno:missing ' "$DOCKER_LOG"

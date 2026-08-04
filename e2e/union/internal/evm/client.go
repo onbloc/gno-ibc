@@ -394,14 +394,16 @@ func (c *Client) metadata(ctx context.Context, tag string, decimals uint8) (stri
 	if len(tag) != 64 {
 		return "", fmt.Errorf("malformed packet tag")
 	}
-	// Gno decodes this initializer as local GRC20 metadata, not EVM contract calldata.
+	const zeroAddress = "0x0000000000000000000000000000000000000000"
 	initializer, err := c.cast(
-		ctx, "abi-encode", "f(string,string,uint8)",
+		ctx, "abi-encode", "f(address,address,string,string,uint8)",
+		zeroAddress, zeroAddress,
 		"Union E2E "+tag[:32], "UE"+tag[:6], strconv.Itoa(int(decimals)),
 	)
 	if err != nil {
 		return "", err
 	}
+	initializer = append([]byte("0x8420ce99"), bytes.TrimPrefix(initializer, []byte("0x"))...)
 	metadata, err := c.cast(ctx, "abi-encode", "f(bytes,bytes)", "0x6772633230", string(initializer))
 	return string(metadata), err
 }

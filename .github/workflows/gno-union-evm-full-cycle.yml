@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: gno-union-evm-full-cycle
@@ -19,7 +20,6 @@ concurrency:
 
 jobs:
   full-cycle:
-    environment: union-relayer-e2e
     runs-on: ubuntu-latest
     timeout-minutes: 180
     steps:
@@ -27,13 +27,6 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: gno-ibc
-
-      - name: Check out pinned union-voyager
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          repository: onbloc/union-voyager
-          ref: 82c70ec1ff84ec457e976ad94f38a5d5783b7836
-          path: union-voyager
 
       - name: Install Foundry
         if: github.event_name == 'pull_request' || inputs.erc20_to_gno
@@ -49,6 +42,13 @@ jobs:
         if: github.event_name == 'pull_request' || inputs.erc20_to_gno
         working-directory: gno-ibc
         run: make install-gno
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Write private runner environment
         working-directory: gno-ibc
@@ -77,8 +77,10 @@ jobs:
           UNION_PRIVATE_KEY: ${{ secrets.UNION_PRIVATE_KEY }}
           EVM_PRIVATE_KEY: ${{ secrets.EVM_PRIVATE_KEY }}
           GNO_PRIVATE_KEY: ${{ secrets.GNO_PRIVATE_KEY }}
+          VOYAGER_IMAGE: ${{ vars.VOYAGER_IMAGE }}
         run: |
           umask 077
+          test -n "$VOYAGER_IMAGE" || { echo 'VOYAGER_IMAGE repository variable is required' >&2; exit 2; }
           install -d -m 700 "${{ github.workspace }}/artifacts"
           printf '%s\n' union-channel-e2e-artifacts \
             >"${{ github.workspace }}/artifacts/.union-channel-e2e-artifacts"
@@ -93,12 +95,12 @@ jobs:
             GNO_RECIPIENT EVM_TEST_AMOUNT UNION_RPC_URL EVM_RPC_URL GNO_RPC_URL
             GNO_TX_INDEXER_RPC_URL VOYAGER_DATABASE_URL TRUSTED_MPT_PRIVATE_KEY
             UNION_PRIVATE_KEY EVM_PRIVATE_KEY GNO_PRIVATE_KEY
+            VOYAGER_IMAGE
           )
           for name in "${variables[@]}"; do
             printf '%s=%q\n' "$name" "${!name}"
           done >e2e/union/.env
           printf '%s\n' \
-            "UNION_VOYAGER_DIR=${{ github.workspace }}/union-voyager" \
             'UNION_VOYAGER_REVISION=82c70ec1ff84ec457e976ad94f38a5d5783b7836' \
             "E2E_ARTIFACT_DIR=${{ github.workspace }}/artifacts" \
             "E2E_STATE_FILE=${{ github.workspace }}/artifacts/state.json" \

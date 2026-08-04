@@ -112,7 +112,6 @@ func validEnvironment() map[string]string {
 		"UNION_CHAIN_ID":                  "union-devnet-1",
 		"EVM_CHAIN_ID":                    "17000",
 		"GNO_CHAIN_ID":                    "dev.ibc",
-		"UNION_VOYAGER_DIR":               "/voyager",
 		"UNION_VOYAGER_REVISION":          "82c70ec1ff84ec457e976ad94f38a5d5783b7836",
 		"UNION_IBC_HOST_CONTRACT":         "union1host",
 		"EVM_IBC_HANDLER":                 "0x1111111111111111111111111111111111111111",

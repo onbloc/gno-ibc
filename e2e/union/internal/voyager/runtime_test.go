@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -20,14 +19,7 @@ import (
 func TestRuntimeLifecycleUsesPinnedImageAndDirectDockerCommands(t *testing.T) {
 	cfg := runtimeConfig(t)
 	recorder := &executor{t: t, steps: []step{
-		{check: func(t *testing.T, ctx context.Context, command process.Command) {
-			if _, hasDeadline := ctx.Deadline(); hasDeadline {
-				t.Fatal("image build unexpectedly received command timeout")
-			}
-			if command.Stdout == nil || command.Stderr == nil {
-				t.Fatal("image build progress is not streamed")
-			}
-		}},
+		{stdout: testImageID},
 		{stdout: config.VoyagerRevision},
 		{stdout: "/output/voyager"},
 		{},
@@ -45,19 +37,14 @@ func TestRuntimeLifecycleUsesPinnedImageAndDirectDockerCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := commandVerbs(recorder.commands)
-	want := []string{"build", "image", "image", "ps", "run", "exec", "ps", "inspect", "stop", "rm"}
+	want := []string{"image", "image", "image", "ps", "run", "exec", "ps", "inspect", "stop", "rm"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("Docker verbs = %v, want %v", got, want)
 	}
-	build := recorder.commands[0]
-	iidFile := argumentAfter(build.Args, "--iidfile")
-	if !slices.Equal(build.Args, []string{
-		"build", "--file", filepath.Join(cfg.ScriptDir, "voyager-build.Dockerfile"),
-		"--build-arg", "UNION_COMMIT=" + config.VoyagerRevision,
-		"--iidfile", iidFile,
-		"--tag", cfg.VoyagerImage, cfg.UnionVoyagerDir,
+	if !slices.Equal(recorder.commands[0].Args, []string{
+		"image", "inspect", "--format", "{{.Id}}", cfg.VoyagerImage,
 	}) {
-		t.Fatalf("build args = %#v", build.Args)
+		t.Fatalf("image inspect args = %#v", recorder.commands[0].Args)
 	}
 	for _, index := range []int{1, 2} {
 		args := recorder.commands[index].Args
@@ -85,11 +72,37 @@ func TestRuntimeLifecycleUsesPinnedImageAndDirectDockerCommands(t *testing.T) {
 	}
 }
 
+func TestRuntimePullsMissingImage(t *testing.T) {
+	cfg := runtimeConfig(t)
+	recorder := &executor{t: t, steps: []step{
+		{err: errors.New("missing")},
+		{check: func(t *testing.T, _ context.Context, command process.Command) {
+			if command.Stdout == nil || command.Stderr == nil {
+				t.Fatal("image pull progress is not streamed")
+			}
+		}},
+		{stdout: testImageID},
+		{stdout: config.VoyagerRevision}, {stdout: "/output/voyager"},
+		{}, {stdout: "container-id"}, {stdout: "{}"},
+		{stdout: "union-channel-e2e-go"}, {}, {},
+	}}
+	runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
+	if err := runtime.Start(context.Background(), []byte("{}")); err != nil {
+		t.Fatal(err)
+	}
+	if err := runtime.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := commandVerbs(recorder.commands[:3]), []string{"image", "pull", "image"}; !slices.Equal(got, want) {
+		t.Fatalf("image preparation verbs = %v, want %v", got, want)
+	}
+}
+
 func TestRuntimeFailsPromptlyWhenContainerExited(t *testing.T) {
 	cfg := runtimeConfig(t)
 	cfg.PollInterval = time.Hour
 	recorder := &executor{steps: []step{
-		{}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {},
+		{stdout: testImageID}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {},
 		{stdout: "container-id"},
 		{err: errors.New("not ready")},
 		{stdout: "false"},
@@ -108,7 +121,7 @@ func TestRuntimeFailsPromptlyWhenContainerExited(t *testing.T) {
 func TestRuntimeRetainsContainerAfterCleanupFailure(t *testing.T) {
 	cfg := runtimeConfig(t)
 	recorder := &executor{steps: []step{
-		{}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {},
+		{stdout: testImageID}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {},
 		{stdout: "container-id"}, {stdout: "{}"},
 		{stdout: "container"}, {err: errors.New("stop failed")},
 		{stdout: "container"}, {}, {},
@@ -128,7 +141,7 @@ func TestRuntimeRetainsContainerAfterCleanupFailure(t *testing.T) {
 func TestRuntimeRefusesToRemoveContainerWithAnotherOwner(t *testing.T) {
 	cfg := runtimeConfig(t)
 	recorder := &executor{ownership: "another-run", steps: []step{
-		{}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {},
+		{stdout: testImageID}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {},
 		{stdout: "container-id"}, {stdout: "{}"}, {stdout: "container"},
 	}}
 	runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
@@ -147,7 +160,7 @@ func TestRuntimeRefusesToRemoveContainerWithAnotherOwner(t *testing.T) {
 func TestRuntimeCleansUpContainerAfterDockerRunError(t *testing.T) {
 	cfg := runtimeConfig(t)
 	recorder := &executor{steps: []step{
-		{}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {},
+		{stdout: testImageID}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"}, {},
 		{err: errors.New("Docker start failed")},
 		{stdout: "union-channel-e2e-go"}, {}, {},
 	}}
@@ -158,7 +171,7 @@ func TestRuntimeCleansUpContainerAfterDockerRunError(t *testing.T) {
 	if err := runtime.Close(context.Background()); err != nil {
 		t.Fatalf("cleanup after run failure: %v", err)
 	}
-	if got, want := commandVerbs(recorder.commands), []string{"build", "image", "image", "ps", "run", "ps", "inspect", "stop", "rm"}; !slices.Equal(got, want) {
+	if got, want := commandVerbs(recorder.commands), []string{"image", "image", "image", "ps", "run", "ps", "inspect", "stop", "rm"}; !slices.Equal(got, want) {
 		t.Fatalf("Docker verbs = %v, want %v", got, want)
 	}
 	name := argumentAfter(recorder.commands[4].Args, "--name")
@@ -338,8 +351,8 @@ func TestEVMClientVerificationRestartsVoyagerAtMostThreeTimes(t *testing.T) {
 		t.Fatalf("error = %v, want timeout after bounded refreshes", err)
 	}
 	verbs := strings.Join(commandVerbs(recorder.commands), " ")
-	if got := strings.Count(verbs, "build"); got != 1 {
-		t.Fatalf("image builds = %d, want 1", got)
+	if got := strings.Count(verbs, "image"); got != 3 {
+		t.Fatalf("image inspections = %d, want one preparation", got)
 	}
 	if got := strings.Count(verbs, "run"); got != 4 {
 		t.Fatalf("container starts = %d, want initial plus three refreshes", got)
@@ -583,7 +596,7 @@ type step struct {
 
 func startedSteps(extra ...step) []step {
 	return append([]step{
-		{}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"},
+		{stdout: testImageID}, {stdout: config.VoyagerRevision}, {stdout: "/output/voyager"},
 		{}, {stdout: "id"}, {stdout: "{}"},
 	}, extra...)
 }
@@ -599,11 +612,6 @@ type executor struct {
 func (e *executor) Run(ctx context.Context, command process.Command) (process.Result, error) {
 	e.commands = append(e.commands, command)
 	if command.Name == "docker" && len(command.Args) > 0 {
-		if command.Args[0] == "build" {
-			if err := os.WriteFile(argumentAfter(command.Args, "--iidfile"), []byte(testImageID+"\n"), 0o600); err != nil {
-				return process.Result{}, err
-			}
-		}
 		if command.Args[0] == "inspect" && strings.Contains(strings.Join(command.Args, " "), "io.onbloc.gno-ibc.e2e.run") {
 			if e.ownership != "" {
 				return process.Result{Stdout: []byte(e.ownership)}, nil
@@ -636,7 +644,6 @@ func runtimeConfig(t *testing.T) config.Config {
 	t.Setenv("TMPDIR", t.TempDir())
 	return config.Config{
 		ScriptDir:            filepath.Join("testdata", "suite"),
-		UnionVoyagerDir:      filepath.Join("testdata", "voyager"),
 		UnionVoyagerRevision: config.VoyagerRevision,
 		VoyagerImage:         "union-voyager-e2e:" + config.VoyagerRevision[:12],
 		VoyagerRustLog:       "warn",

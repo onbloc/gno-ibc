@@ -84,12 +84,9 @@ func TestUnsupportedResumePhaseRunsNoCommands(t *testing.T) {
 	}
 }
 
-func TestDryPreflightUsesOnlyReadOnlyGitChecks(t *testing.T) {
+func TestDryPreflightRunsNoCommands(t *testing.T) {
 	cfg := testConfig(t)
-	recorder := &recordingExecutor{results: []process.Result{
-		{Stdout: []byte(config.VoyagerRevision + "\n")},
-		{},
-	}}
+	recorder := new(recordingExecutor)
 	runner, err := newRunner(cfg, recorder, Options{})
 	if err != nil {
 		t.Fatal(err)
@@ -97,23 +94,15 @@ func TestDryPreflightUsesOnlyReadOnlyGitChecks(t *testing.T) {
 	if err := runner.Run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(recorder.commands) != 2 {
-		t.Fatalf("commands = %#v, want two git checks", recorder.commands)
-	}
-	for _, command := range recorder.commands {
-		if command.Name != "git" {
-			t.Fatalf("command = %#v, want git", command)
-		}
+	if len(recorder.commands) != 0 {
+		t.Fatalf("commands = %#v, want none", recorder.commands)
 	}
 }
 
 func TestPacketPreflightRejectsMissingCommandsBeforeDocker(t *testing.T) {
 	cfg := testConfig(t)
 	t.Setenv("PATH", t.TempDir())
-	recorder := &recordingExecutor{results: []process.Result{
-		{Stdout: []byte(config.VoyagerRevision + "\n")},
-		{},
-	}}
+	recorder := new(recordingExecutor)
 	runner, err := newRunner(cfg, recorder, Options{Apply: true, ERC20ToGno: true})
 	if err != nil {
 		t.Fatal(err)
@@ -122,8 +111,8 @@ func TestPacketPreflightRejectsMissingCommandsBeforeDocker(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "missing required packet command") {
 		t.Fatalf("error = %v", err)
 	}
-	if len(recorder.commands) != 2 {
-		t.Fatalf("commands = %#v, want only git preflight", recorder.commands)
+	if len(recorder.commands) != 0 {
+		t.Fatalf("commands = %#v, want none", recorder.commands)
 	}
 }
 
@@ -176,7 +165,6 @@ func testConfig(t *testing.T) config.Config {
 		UnionChainID:           "union-devnet-1",
 		EVMChainID:             "17000",
 		GnoChainID:             "dev.ibc",
-		UnionVoyagerDir:        t.TempDir(),
 		UnionVoyagerRevision:   config.VoyagerRevision,
 		EVMIBCHandler:          "0x1111111111111111111111111111111111111111",
 		EVMMulticall:           "0x2222222222222222222222222222222222222222",

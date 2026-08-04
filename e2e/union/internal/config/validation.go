@@ -14,7 +14,6 @@ func (c Config) validate(packet bool) error {
 		{"UNION_CHAIN_ID", c.UnionChainID},
 		{"EVM_CHAIN_ID", c.EVMChainID},
 		{"GNO_CHAIN_ID", c.GnoChainID},
-		{"UNION_VOYAGER_DIR", c.UnionVoyagerDir},
 		{"UNION_VOYAGER_REVISION", c.UnionVoyagerRevision},
 		{"UNION_IBC_HOST_CONTRACT", c.UnionIBCHostContract},
 		{"EVM_IBC_HANDLER", c.EVMIBCHandler},

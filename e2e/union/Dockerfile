@@ -1,5 +1,35 @@
 # syntax=docker/dockerfile:1.7
-FROM rust:1.90-bookworm@sha256:3914072ca0c3b8aad871db9169a651ccfce30cf58303e5d6f2db16d1d8a7e58f AS builder
+
+FROM golang:1.26.0-alpine@sha256:d4c4845f5d60c6a974c6000ce58ae079328d03ab7f721a0734277e69905473e5 AS gno-builder
+
+RUN apk add --no-cache git
+COPY .gno-version /tmp/gno-version
+RUN set -eu; . /tmp/gno-version; \
+    git clone --filter=blob:none "$GNO_REPO" /src/gno; \
+    git -C /src/gno checkout "$GNO_COMMIT"
+WORKDIR /src/gno
+RUN cd contribs/gnodev && go build -o /usr/local/bin/gnodev .
+RUN cd gno.land/cmd/gnokey && go build -o /usr/local/bin/gnokey .
+RUN rm -rf /src/gno/.git
+
+FROM alpine:3.21@sha256:48b0309ca019d89d40f670aa1bc06e426dc0931948452e8491e3d65087abc07d AS gno
+
+RUN apk add --no-cache bash curl
+COPY --from=gno-builder /usr/local/bin/gnodev /usr/local/bin/gnodev
+COPY --from=gno-builder /usr/local/bin/gnokey /usr/local/bin/gnokey
+COPY --from=gno-builder /src/gno /gnoroot
+COPY gno.land /gno-ibc/gno.land
+COPY e2e/union/gno/entrypoint.sh /entrypoint.sh
+COPY e2e/union/gno/setup.sh /setup.sh
+
+ENV GNOROOT=/gnoroot
+
+RUN chmod +x /entrypoint.sh /setup.sh
+
+EXPOSE 26657 8888
+ENTRYPOINT ["/entrypoint.sh"]
+
+FROM rust:1.90-bookworm@sha256:3914072ca0c3b8aad871db9169a651ccfce30cf58303e5d6f2db16d1d8a7e58f AS voyager-builder
 
 ENV RUSTC_BOOTSTRAP=1
 ARG UNION_COMMIT
@@ -13,7 +43,7 @@ RUN apt-get update && apt-get install -y \
     protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
 
-COPY . .
+COPY --from=union-src . .
 RUN test -n "$UNION_COMMIT"
 
 # Build only the binaries referenced by config.jsonc.template.
@@ -67,7 +97,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cp /build/target/debug/voyager-client-update-plugin-* /build/out/plugins/ && \
     cp /build/target/debug/voyager-plugin-* /build/out/plugins/
 
-FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
+FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818 AS voyager
 
 ARG UNION_COMMIT
 LABEL org.opencontainers.image.revision=$UNION_COMMIT
@@ -75,9 +105,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /output/release
 
-COPY --from=builder /build/out/voyager /output/voyager
-COPY --from=builder /build/out/modules/ /output/modules/
-COPY --from=builder /build/out/plugins/ /output/plugins/
+COPY --from=voyager-builder /build/out/voyager /output/voyager
+COPY --from=voyager-builder /build/out/modules/ /output/modules/
+COPY --from=voyager-builder /build/out/plugins/ /output/plugins/
 RUN for file in /output/modules/* /output/plugins/*; do \
       ln -s "$file" "/output/release/$(basename "$file")"; \
     done

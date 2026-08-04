@@ -264,6 +264,25 @@ func TestEncodedMembershipProofRejectsMalformedResponse(t *testing.T) {
 	}
 }
 
+func TestWaitFinalizedHeightWaitsForMinimum(t *testing.T) {
+	cfg := runtimeConfig(t)
+	recorder := &executor{steps: startedSteps(
+		step{stdout: `"223"`},
+		step{stdout: `"258"`},
+	)}
+	runtime := voyager.NewWithExecutor(cfg, recorder, io.Discard)
+	if err := runtime.Start(context.Background(), []byte("{}")); err != nil {
+		t.Fatal(err)
+	}
+	height, err := runtime.WaitFinalizedHeight(context.Background(), cfg.EVMChainID, 256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if height != "258" {
+		t.Fatalf("finalized height = %s, want 258", height)
+	}
+}
+
 func TestUpdateClientToWaitsForStoredHeight(t *testing.T) {
 	cfg := runtimeConfig(t)
 	recorder := &executor{steps: startedSteps(

@@ -54,6 +54,7 @@ func TestRuntimeLifecycleUsesPinnedImageAndDirectDockerCommands(t *testing.T) {
 	}
 	run := strings.Join(recorder.commands[4].Args, " ")
 	for _, required := range []string{
+		"--add-host host.docker.internal:host-gateway",
 		"--label io.onbloc.gno-ibc.e2e.run=union-voyager-",
 		"--env RUST_LOG=warn",
 		"dst=/run/voyager/config.jsonc,readonly",

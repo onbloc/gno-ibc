@@ -1,17 +1,8 @@
 name: Build E2E images
 
 on:
+  workflow_call:
   workflow_dispatch:
-  pull_request:
-    paths:
-      - '.gno-version'
-      - '.dockerignore'
-      - 'e2e/union/Dockerfile'
-      - 'e2e/union/ensure-image.sh'
-      - 'e2e/union/gno/**'
-      - 'e2e/union/config.jsonc.template'
-      - 'gno.land/**'
-      - '.github/workflows/e2e-images.yml'
   push:
     branches: [main]
     paths:
@@ -66,5 +57,5 @@ jobs:
           UNION_VOYAGER_DIR: ${{ github.workspace }}/union-voyager
           UNION_VOYAGER_REVISION: 82c70ec1ff84ec457e976ad94f38a5d5783b7836
         run: |
-          image=$(e2e/union/ensure-image.sh '${{ matrix.component }}' --push)
-          printf '### %s\n\n`%s`\n' '${{ matrix.component }}' "$image" >>"$GITHUB_STEP_SUMMARY"
+          image=$(e2e/union/ensure-image.sh "${{ matrix.component }}" --push)
+          printf '### %s\n\n%s\n' "${{ matrix.component }}" "$image" >>"$GITHUB_STEP_SUMMARY"

@@ -2,6 +2,14 @@
 
 This runner manages Voyager and the IBC topology, but it does **not** deploy the chains, PostgreSQL, or smart contracts itself. For a completely fresh execution, prepare the external environment first in the following order.
 
+The `Gno Union EVM full cycle` workflow performs that preparation on its
+GitHub-hosted runner. It waits for the reusable image workflow, starts the
+pinned Union/EVM devnet and PostgreSQL, deploys the Union stack from the
+upstream direct-E2E deployment revision, starts Gno and its indexer, and
+derives every contract address from deployment output or an on-chain registry.
+Only private signing keys remain repository secrets; RPC endpoints and public
+deployment values are created for each workflow run.
+
 ## Fresh Environment Setup
 
 You need Docker, Nix, Foundry, `jq`, Go 1.26.x, and a clean checkout of `union-voyager` at the revision pinned in `.env.example`.

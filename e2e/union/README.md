@@ -38,6 +38,8 @@ export GNO_IMAGE VOYAGER_IMAGE
 The resolver checks GHCR first, then the local Docker store, and builds only
 when neither contains the immutable tag. Pass `--push` instead of the default
 `--load` to publish a missing image and its BuildKit registry cache.
+Before a fallback Gno build, it runs `make vendor` so the image contains the
+ignored third-party mirrors required by the deployed realms.
 
 ### 1. Isolate from Existing Environments
 

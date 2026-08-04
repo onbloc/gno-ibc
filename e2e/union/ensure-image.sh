@@ -48,6 +48,9 @@ elif docker image inspect "$image" >/dev/null 2>&1; then
     docker push "$image" >&2
   fi
 else
+  if [[ $component == gno ]]; then
+    make -C "$repo_root" vendor >&2
+  fi
   cache_args=(--progress plain)
   if docker buildx imagetools inspect "$cache" >/dev/null 2>&1; then
     cache_args+=(--cache-from "type=registry,ref=$cache")

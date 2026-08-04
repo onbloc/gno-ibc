@@ -11,10 +11,7 @@ import (
 var ErrChannelPathFull = errors.New("zkgm: channel path is full")
 
 // ErrNonCanonicalPath is returned when a channel path has a zero-value slot
-// below HopCount(path). PopChannelFromPath finds the highest set bit rather
-// than the highest occupied slot index, so a gap there makes
-// ReverseChannelPath silently compact the later slots forward instead of
-// erroring or preserving the gap - neither an involution nor an injection.
+// below HopCount(path).
 var ErrNonCanonicalPath = errors.New("zkgm: channel path is not canonical")
 
 const (

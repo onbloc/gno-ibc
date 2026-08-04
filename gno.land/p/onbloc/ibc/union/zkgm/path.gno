@@ -10,6 +10,13 @@ import (
 // longer hold another hop.
 var ErrChannelPathFull = errors.New("zkgm: channel path is full")
 
+// ErrNonCanonicalPath is returned when a channel path has a zero-value slot
+// below HopCount(path). PopChannelFromPath finds the highest set bit rather
+// than the highest occupied slot index, so a gap there makes
+// ReverseChannelPath silently compact the later slots forward instead of
+// erroring or preserving the gap - neither an involution nor an injection.
+var ErrNonCanonicalPath = errors.New("zkgm: channel path is not canonical")
+
 const (
 	channelIDMask  = uint64(0xFFFFFFFF)
 	channelSlotBit = uint(32)
@@ -100,6 +107,22 @@ func HopCount(path *u256.Uint) int {
 	}
 
 	return (path.BitLen() + int(channelSlotBit) - 1) / int(channelSlotBit)
+}
+
+// IsCanonicalPath reports whether every slot below HopCount(path) is
+// populated with a non-zero channel ID, i.e. path could have been produced
+// by a sequence of UpdateChannelPath calls. Callers that accept a path from
+// an untrusted source (wire-decoded packets) must reject non-canonical
+// paths before passing them to PopChannelFromPath/ReverseChannelPath.
+func IsCanonicalPath(path *u256.Uint) bool {
+	hops := HopCount(path)
+	for i := 0; i < hops; i++ {
+		if GetChannelFromPath(path, i) == 0 {
+			return false
+		}
+	}
+
+	return true
 }
 
 // MakePathFromChannel builds a path containing channelID at the given slot.

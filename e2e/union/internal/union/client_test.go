@@ -20,6 +20,9 @@ func TestMembershipHeightMatchesPacketPath(t *testing.T) {
 		_, _ = w.Write([]byte(`{"jsonrpc":"2.0","id":1,"result":{"txs":[` +
 			`{"tx_result":{"events":[{"type":"wasm-commit_membership_proof","attributes":[` +
 			`{"key":"client_id","value":"22"},{"key":"proof_height","value":"12"},` +
+			`{"key":"path","value":"abcd"}]},` +
+			`{"type":"wasm-commit_membership_proof","attributes":[` +
+			`{"key":"client_id","value":"22"},{"key":"proof_height","value":"13"},` +
 			`{"key":"path","value":"abcd"}]}]}}]}}`))
 	}))
 	defer server.Close()

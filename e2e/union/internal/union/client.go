@@ -31,7 +31,7 @@ func New(cfg config.Config) *Client {
 	return &Client{cfg: cfg}
 }
 
-// MembershipHeight returns the single Union commit-membership proof height
+// MembershipHeight returns the earliest Union commit-membership proof height
 // for one client and path at or after the given minimum height.
 func (c *Client) MembershipHeight(
 	ctx context.Context,
@@ -95,7 +95,7 @@ func (c *Client) membershipEvents(ctx context.Context, clientID int64) ([]event,
 
 func matchingHeight(events []event, clientID, minimum int64, path string) (int64, error) {
 	path = strings.TrimPrefix(strings.ToLower(path), "0x")
-	var matches []int64
+	var match int64
 	for _, event := range events {
 		if event.Type != "wasm-commit_membership_proof" &&
 			event.Type != "commit_membership_proof" {
@@ -110,14 +110,16 @@ func matchingHeight(events []event, clientID, minimum int64, path string) (int64
 			attributes["client_id"] == strconv.FormatInt(clientID, 10) &&
 			height >= minimum &&
 			strings.TrimPrefix(strings.ToLower(attributes["path"]), "0x") == path {
-			matches = append(matches, height)
+			if match == 0 || height < match {
+				match = height
+			}
 		}
 	}
-	if len(matches) != 1 {
+	if match == 0 {
 		return 0, fmt.Errorf(
-			"Union membership proof count=%d for client=%d path=%s, want one",
-			len(matches), clientID, path,
+			"Union membership proof not found for client=%d path=%s",
+			clientID, path,
 		)
 	}
-	return matches[0], nil
+	return match, nil
 }

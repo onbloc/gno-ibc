@@ -1,0 +1,70 @@
+name: Build E2E images
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.gno-version'
+      - '.dockerignore'
+      - 'e2e/union/Dockerfile'
+      - 'e2e/union/ensure-image.sh'
+      - 'e2e/union/gno/**'
+      - 'e2e/union/config.jsonc.template'
+      - 'gno.land/**'
+      - '.github/workflows/e2e-images.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.gno-version'
+      - '.dockerignore'
+      - 'e2e/union/Dockerfile'
+      - 'e2e/union/ensure-image.sh'
+      - 'e2e/union/gno/**'
+      - 'e2e/union/config.jsonc.template'
+      - 'gno.land/**'
+      - '.github/workflows/e2e-images.yml'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        component: [gno, voyager]
+    steps:
+      - name: Check out gno-ibc
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Check out pinned union-voyager
+        if: matrix.component == 'voyager'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: onbloc/union-voyager
+          ref: 82c70ec1ff84ec457e976ad94f38a5d5783b7836
+          path: union-voyager
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+
+      - name: Resolve or build image
+        env:
+          E2E_REGISTRY: ghcr.io
+          E2E_IMAGE_NAMESPACE: ${{ github.repository_owner }}
+          E2E_IMAGE_TAG: ${{ github.sha }}
+          E2E_GNO_REPOSITORY: ${{ vars.E2E_GNO_REPOSITORY }}
+          E2E_VOYAGER_REPOSITORY: ${{ vars.E2E_VOYAGER_REPOSITORY }}
+          UNION_VOYAGER_DIR: ${{ github.workspace }}/union-voyager
+          UNION_VOYAGER_REVISION: 82c70ec1ff84ec457e976ad94f38a5d5783b7836
+        run: |
+          image=$(e2e/union/ensure-image.sh '${{ matrix.component }}' --push)
+          printf '### %s\n\n`%s`\n' '${{ matrix.component }}' "$image" >>"$GITHUB_STEP_SUMMARY"

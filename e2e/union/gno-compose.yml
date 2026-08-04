@@ -1,9 +1,6 @@
 services:
   gno:
-    image: gno-ibc-e2e-gno:${GNO_IMAGE_TAG:-local}
-    build:
-      context: ../..
-      dockerfile: e2e/union/gno/Dockerfile
+    image: ${GNO_IMAGE:-gno-ibc-e2e-gno:local}
     ports:
       - "${GNO_RPC_PORT:-16657}:26657"
       - "${GNO_WEB_PORT:-18888}:8888"
@@ -31,7 +28,7 @@ services:
         condition: service_healthy
 
   setup:
-    image: gno-ibc-e2e-gno:${GNO_IMAGE_TAG:-local}
+    image: ${GNO_IMAGE:-gno-ibc-e2e-gno:local}
     profiles: ["setup"]
     entrypoint: ["bash", "/setup.sh"]
     environment:
@@ -39,4 +36,3 @@ services:
     depends_on:
       gno:
         condition: service_healthy
-

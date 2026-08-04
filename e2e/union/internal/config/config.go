@@ -30,7 +30,6 @@ type Config struct {
 	UnionChainID           string
 	EVMChainID             string
 	GnoChainID             string
-	UnionVoyagerDir        string
 	UnionVoyagerRevision   string
 	UnionIBCHostContract   string
 	EVMIBCHandler          string
@@ -80,7 +79,6 @@ func Load(scriptDir string, lookup func(string) (string, bool), packet bool) (Co
 		UnionChainID:           get("UNION_CHAIN_ID"),
 		EVMChainID:             get("EVM_CHAIN_ID"),
 		GnoChainID:             get("GNO_CHAIN_ID"),
-		UnionVoyagerDir:        get("UNION_VOYAGER_DIR"),
 		UnionVoyagerRevision:   get("UNION_VOYAGER_REVISION"),
 		UnionIBCHostContract:   get("UNION_IBC_HOST_CONTRACT"),
 		EVMIBCHandler:          get("EVM_IBC_HANDLER"),

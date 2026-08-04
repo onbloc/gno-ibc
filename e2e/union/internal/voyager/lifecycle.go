@@ -53,32 +53,7 @@ func NewWithExecutor(cfg config.Config, executor process.Executor, progress io.W
 	return &Runtime{cfg: cfg, executor: executor, progress: progress}
 }
 
-// ValidateSource verifies the pinned clean Voyager checkout.
-func (r *Runtime) ValidateSource(ctx context.Context) error {
-	result, err := r.command(ctx, process.Command{
-		Name: "git",
-		Args: []string{"-C", r.cfg.UnionVoyagerDir, "rev-parse", "HEAD"},
-	})
-	if err != nil {
-		return fmt.Errorf("UNION_VOYAGER_DIR is not a readable git checkout")
-	}
-	if string(bytes.TrimSpace(result.Stdout)) != r.cfg.UnionVoyagerRevision {
-		return fmt.Errorf("union-voyager checkout does not match UNION_VOYAGER_REVISION")
-	}
-	result, err = r.command(ctx, process.Command{
-		Name: "git",
-		Args: []string{"-C", r.cfg.UnionVoyagerDir, "status", "--porcelain"},
-	})
-	if err != nil {
-		return fmt.Errorf("UNION_VOYAGER_DIR is not a readable git checkout")
-	}
-	if len(bytes.TrimSpace(result.Stdout)) != 0 {
-		return fmt.Errorf("union-voyager checkout must be clean")
-	}
-	return nil
-}
-
-// Start builds and starts Voyager using a private rendered configuration.
+// Start pulls and starts Voyager using a private rendered configuration.
 func (r *Runtime) Start(ctx context.Context, rendered []byte) error {
 	dir, err := os.MkdirTemp("", "union-voyager-")
 	if err != nil {
@@ -94,7 +69,7 @@ func (r *Runtime) Start(ctx context.Context, rendered []byte) error {
 		return fmt.Errorf("write Voyager configuration: %w", err)
 	}
 	if !r.imageReady {
-		if err := r.build(ctx); err != nil {
+		if err := r.prepareImage(ctx); err != nil {
 			return err
 		}
 		r.imageReady = true
@@ -130,27 +105,25 @@ func (r *Runtime) Start(ctx context.Context, rendered []byte) error {
 	return r.waitReady(ctx)
 }
 
-func (r *Runtime) build(ctx context.Context) error {
-	iidFile := filepath.Join(r.runtimeDir, "image.id")
-	_, err := r.executor.Run(ctx, process.Command{
-		Name: "docker",
-		Args: []string{
-			"build", "--file", filepath.Join(r.cfg.ScriptDir, "voyager-build.Dockerfile"),
-			"--build-arg", "UNION_COMMIT=" + r.cfg.UnionVoyagerRevision,
-			"--iidfile", iidFile,
-			"--tag", r.cfg.VoyagerImage, r.cfg.UnionVoyagerDir,
-		},
-		Stdout: r.progress,
-		Stderr: r.progress,
+func (r *Runtime) prepareImage(ctx context.Context) error {
+	result, err := r.command(ctx, process.Command{
+		Name: "docker", Args: []string{"image", "inspect", "--format", "{{.Id}}", r.cfg.VoyagerImage},
 	})
 	if err != nil {
-		return fmt.Errorf("%w: build Voyager image", classifyContext(ctx, err))
+		if _, err := r.executor.Run(ctx, process.Command{
+			Name: "docker", Args: []string{"pull", r.cfg.VoyagerImage},
+			Stdout: r.progress, Stderr: r.progress,
+		}); err != nil {
+			return fmt.Errorf("%w: pull Voyager image", classifyContext(ctx, err))
+		}
+		result, err = r.command(ctx, process.Command{
+			Name: "docker", Args: []string{"image", "inspect", "--format", "{{.Id}}", r.cfg.VoyagerImage},
+		})
+		if err != nil {
+			return fmt.Errorf("inspect pulled Voyager image: %w", err)
+		}
 	}
-	imageID, err := os.ReadFile(iidFile)
-	if err != nil {
-		return fmt.Errorf("read Voyager image ID: %w", err)
-	}
-	r.imageID = string(bytes.TrimSpace(imageID))
+	r.imageID = string(bytes.TrimSpace(result.Stdout))
 	digest, ok := strings.CutPrefix(r.imageID, "sha256:")
 	if !ok || len(digest) != 64 {
 		return fmt.Errorf("%w: malformed Voyager image ID", ErrMalformedResponse)
@@ -158,7 +131,7 @@ func (r *Runtime) build(ctx context.Context) error {
 	if _, err := hex.DecodeString(digest); err != nil {
 		return fmt.Errorf("%w: malformed Voyager image ID", ErrMalformedResponse)
 	}
-	result, err := r.command(ctx, process.Command{
+	result, err = r.command(ctx, process.Command{
 		Name: "docker",
 		Args: []string{
 			"image", "inspect", "--format",

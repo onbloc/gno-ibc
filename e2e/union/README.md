@@ -6,6 +6,31 @@ This runner manages Voyager and the IBC topology, but it does **not** deploy the
 
 You need Docker, Nix, Foundry, `jq`, Go 1.26.x, and a clean checkout of `union-voyager` at the revision pinned in `.env.example`.
 
+## Prebuilt Images
+
+The scenario runner consumes a prebuilt Voyager image, and the Gno Compose
+project consumes a prebuilt Gno image. Authenticate Docker to GHCR, then use
+the same resolver locally and in CI:
+
+```sh
+export CR_PAT=<GitHub token with package access>
+printf '%s' "$CR_PAT" | docker login ghcr.io -u <github-user> --password-stdin
+
+export E2E_REGISTRY=ghcr.io
+export E2E_IMAGE_NAMESPACE=onbloc
+export E2E_IMAGE_TAG=$(git rev-parse HEAD)
+export UNION_VOYAGER_DIR=../union-voyager
+export UNION_VOYAGER_REVISION=82c70ec1ff84ec457e976ad94f38a5d5783b7836
+
+GNO_IMAGE=$(e2e/union/ensure-image.sh gno)
+VOYAGER_IMAGE=$(e2e/union/ensure-image.sh voyager)
+export GNO_IMAGE VOYAGER_IMAGE
+```
+
+The resolver checks GHCR first, then the local Docker store, and builds only
+when neither contains the immutable tag. Pass `--push` instead of the default
+`--load` to publish a missing image and its BuildKit registry cache.
+
 ### 1. Isolate from Existing Environments
 
 Use a new Docker project name for both Union/EVM and Gno. Do not reuse existing Docker volumes, `state.json`, or the artifact directory. Only run the following commands if you intend to actually tear down the existing environment.
@@ -58,7 +83,7 @@ Union must have the `trusted/evm/mpt` light client registered. If its address is
 
 ### 3. Gno and the Database
 
-Build a new Gno image from the current checkout and start the following services with fresh Docker volumes:
+Resolve the Gno image for the current checkout and start the following services with fresh Docker volumes:
 
 * `gnodev local -chain-id dev.ibc`
 * Gno tx-indexer
@@ -75,13 +100,13 @@ gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1
 gno.land/r/onbloc/ibc/union/testing/e2e_setup
 ```
 
-The included Compose project builds those realms from the current checkout and
-starts both Gno and the transaction indexer. Run its setup profile exactly once
+The included Compose project starts the prebuilt Gno image and transaction
+indexer. Run its setup profile exactly once
 for each fresh project to grant the required roles and invoke `Bootstrap`.
 
 ```sh
 docker compose -f e2e/union/gno-compose.yml \
-  -p <gno-project> up -d --build --wait
+  -p <gno-project> up -d --wait
 
 docker compose -f e2e/union/gno-compose.yml \
   -p <gno-project> --profile setup run --rm setup

@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"io"
-	"os"
-	"slices"
 	"strings"
 
 	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
@@ -44,23 +42,16 @@ func (d *dockerTestRuntime) run(
 	command process.Command,
 	voyager func([]string) (process.Result, error),
 ) (process.Result, error) {
-	if command.Name == "git" {
-		if slices.Contains(command.Args, "rev-parse") {
-			return process.Result{Stdout: []byte(config.VoyagerRevision)}, nil
-		}
-		return process.Result{}, nil
-	}
 	if command.Name != "docker" || len(command.Args) == 0 {
 		return process.Result{}, errors.New("unexpected command")
 	}
 	switch command.Args[0] {
-	case "build":
-		if err := os.WriteFile(argumentAfter(command.Args, "--iidfile"), []byte(testImageID+"\n"), 0o600); err != nil {
-			return process.Result{}, err
-		}
-		return process.Result{}, nil
 	case "image":
-		if strings.Contains(strings.Join(command.Args, " "), "Entrypoint") {
+		joined := strings.Join(command.Args, " ")
+		if strings.Contains(joined, "{{.Id}}") {
+			return process.Result{Stdout: []byte(testImageID)}, nil
+		}
+		if strings.Contains(joined, "Entrypoint") {
 			return process.Result{Stdout: []byte("/output/voyager")}, nil
 		}
 		return process.Result{Stdout: []byte(config.VoyagerRevision)}, nil

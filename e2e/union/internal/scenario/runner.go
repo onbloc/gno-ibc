@@ -159,9 +159,6 @@ func (r *Runner) preflight(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := r.voyager.ValidateSource(ctx); err != nil {
-		return nil, err
-	}
 	if r.options.ERC20ToGno || r.options.ForgedProofRejection {
 		for _, name := range []string{"cast", "gnokey"} {
 			if _, err := osexec.LookPath(name); err != nil {

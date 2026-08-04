@@ -7,12 +7,39 @@ GitHub-hosted runner. It waits for the reusable image workflow, starts the
 pinned Union/EVM devnet and PostgreSQL, deploys the Union stack from the
 upstream direct-E2E deployment revision, starts Gno and its indexer, and
 derives every contract address from deployment output or an on-chain registry.
-Only private signing keys remain repository secrets; RPC endpoints and public
-deployment values are created for each workflow run.
+All signing accounts are public fixtures for disposable local networks. RPC
+endpoints and fixed account identities live in `devnet.json`; contract
+addresses are always discovered from the current workflow run.
+
+## Environment Ownership
+
+| File | Responsibility |
+|---|---|
+| `Dockerfile` | Builds the Gno and Voyager images only |
+| upstream `networks/run-linux-devnet.sh` | Starts Union, EVM, and PostgreSQL |
+| `gno-compose.yml` | Starts Gno and the Gno transaction indexer |
+| `devnet.json` | Declares fixed chain IDs, endpoints, and public test accounts |
+| `provision.py` | Deploys and verifies contracts, then writes the runner environment |
+| `run-channel-e2e.sh` | Runs scenarios against the prepared environment |
+
+Compose is not invoked from the Dockerfile: image construction, service
+topology, one-shot provisioning, and scenario execution remain separate.
 
 ## Fresh Environment Setup
 
-You need Docker, Nix, Foundry, `jq`, Go 1.26.x, and a clean checkout of `union-voyager` at the revision pinned in `.env.example`.
+You need Docker, Nix, Foundry, Go 1.26.x, and a clean checkout of
+`union-voyager` at the revision pinned in `devnet.json`.
+
+The complete disposable-devnet configuration can be inspected without
+starting services:
+
+```sh
+python3 e2e/union/provision.py validate
+python3 e2e/union/provision.py export-env
+```
+
+Never reuse the keys in `devnet.json` on a persistent or externally reachable
+network.
 
 ## Prebuilt Images
 
@@ -139,7 +166,10 @@ cd e2e/union
 install -m 600 .env.example .env
 ```
 
-Populate `.env` with the chain IDs, endpoints, contract addresses, private keys, and PostgreSQL URL obtained above. Do not copy IDs or addresses from previous runs.
+Populate `.env` with the chain IDs, endpoints, contract addresses, public
+fixture keys, and PostgreSQL URL obtained above. Do not copy contract IDs or
+addresses from previous runs. The CI workflow uses `provision.py` to discover
+the dynamic values and write this file.
 
 When running ERC20 scenarios, deploy `fixtures/TestERC20.sol` to the new EVM deployment and set its address in `EVM_TEST_ERC20`.
 

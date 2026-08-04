@@ -48,9 +48,7 @@ func (r *Runner) establishConnection(ctx context.Context) error {
 			if err := r.voyager.SubmitConnection(ctx, operation); err != nil {
 				return err
 			}
-			r.progressf("connection submitted: %s/connection-%d <-> %s/connection-%d; waiting for OPEN",
-				r.cfg.GnoChainID, r.current.Connections.Gno,
-				r.cfg.EVMChainID, r.current.Connections.EVM)
+			r.progressf("connection submitted; waiting for OPEN")
 		} else {
 			gno, err := r.voyager.ConnectionPresent(
 				ctx, r.cfg.GnoChainID, r.current.Connections.Gno,
@@ -110,9 +108,7 @@ func (r *Runner) establishChannel(ctx context.Context) error {
 			if err := r.voyager.SubmitChannel(ctx, operation); err != nil {
 				return err
 			}
-			r.progressf("channel submitted: %s/channel-%d <-> %s/channel-%d; waiting for OPEN",
-				r.cfg.GnoChainID, r.current.Channels.Gno,
-				r.cfg.EVMChainID, r.current.Channels.EVM)
+			r.progressf("channel submitted; waiting for OPEN")
 		} else {
 			gno, err := r.voyager.ChannelPresent(
 				ctx, r.cfg.GnoChainID, r.current.Channels.Gno, r.current.Connections.Gno,

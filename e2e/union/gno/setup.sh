@@ -2,8 +2,8 @@
 set -eu
 
 remote=http://gno:26657
-chain_id=dev.ibc
-admin_addr=g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5
+chain_id=${GNO_CHAIN_ID:?}
+admin_addr=${GNO_ADMIN_ADDRESS:?}
 setup_pkg=gno.land/r/onbloc/ibc/union/testing/e2e_setup
 zkgm_pkg=gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm
 

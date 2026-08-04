@@ -32,7 +32,6 @@ ensure `$(go env GOPATH)/bin` is on `PATH`, then rerun `make install-gno`.
 ```bash
 make vendor                    # mirror sparse third-party packages into gno.land/
 make test                      # run first-party Gno package and realm tests
-make test-gnokey-query-smoke   # run the full gnokey smoke suite
 make refresh-zkgm-scenarios    # regenerate ZKGM handler scenario fixtures
 make generate-check            # verify generated protobuf codecs are current
 ```

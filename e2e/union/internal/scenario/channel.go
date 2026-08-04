@@ -23,15 +23,19 @@ func (r *Runner) runChannelScenario(ctx context.Context) error {
 		return r.verifyNoNewFailedWork(ctx)
 	}
 	if !r.options.Resume {
+		r.progressf("topology: indexing Union and Gno")
 		if err := r.indexUnionAndGno(ctx); err != nil {
 			return err
 		}
+		r.progressf("topology: creating underlying clients")
 		if err := r.establishUnderlyingClients(ctx); err != nil {
 			return err
 		}
+		r.progressf("topology: creating Lens clients")
 		if err := r.establishLensClients(ctx); err != nil {
 			return err
 		}
+		r.progressf("topology: indexing EVM")
 		if err := r.allowlistAndIndexEVM(ctx); err != nil {
 			return err
 		}

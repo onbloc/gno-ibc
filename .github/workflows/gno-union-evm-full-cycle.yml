@@ -44,6 +44,10 @@ jobs:
         with:
           path: gno-ibc
 
+      - name: Validate E2E launcher
+        working-directory: gno-ibc
+        run: e2e/union/run-channel-e2e_test.sh
+
       - name: Check out pinned union-voyager runtime
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:

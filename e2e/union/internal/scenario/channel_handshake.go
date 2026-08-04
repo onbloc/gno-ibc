@@ -48,6 +48,9 @@ func (r *Runner) establishConnection(ctx context.Context) error {
 			if err := r.voyager.SubmitConnection(ctx, operation); err != nil {
 				return err
 			}
+			r.progressf("connection submitted: %s/connection-%d <-> %s/connection-%d; waiting for OPEN",
+				r.cfg.GnoChainID, r.current.Connections.Gno,
+				r.cfg.EVMChainID, r.current.Connections.EVM)
 		} else {
 			gno, err := r.voyager.ConnectionPresent(
 				ctx, r.cfg.GnoChainID, r.current.Connections.Gno,
@@ -107,6 +110,9 @@ func (r *Runner) establishChannel(ctx context.Context) error {
 			if err := r.voyager.SubmitChannel(ctx, operation); err != nil {
 				return err
 			}
+			r.progressf("channel submitted: %s/channel-%d <-> %s/channel-%d; waiting for OPEN",
+				r.cfg.GnoChainID, r.current.Channels.Gno,
+				r.cfg.EVMChainID, r.current.Channels.EVM)
 		} else {
 			gno, err := r.voyager.ChannelPresent(
 				ctx, r.cfg.GnoChainID, r.current.Channels.Gno, r.current.Connections.Gno,
@@ -165,6 +171,9 @@ func (r *Runner) verifyOpenConnections(ctx context.Context) error {
 			r.evmConnectionEvidence = evidence
 		}
 	}
+	r.progressf("connection OPEN: %s/connection-%d/client-%d <-> %s/connection-%d/client-%d",
+		r.cfg.GnoChainID, s.Connections.Gno, s.Clients.GnoEVM,
+		r.cfg.EVMChainID, s.Connections.EVM, s.Clients.EVMGno)
 
 	return nil
 }
@@ -192,6 +201,12 @@ func (r *Runner) verifyOpenChannels(ctx context.Context) error {
 			r.evmChannelEvidence = evidence
 		}
 	}
+	r.progressf("channel OPEN: %s/channel-%d/connection-%d <-> %s/channel-%d/connection-%d (%s)",
+		r.cfg.GnoChainID, s.Channels.Gno, s.Connections.Gno,
+		r.cfg.EVMChainID, s.Channels.EVM, s.Connections.EVM, config.ChannelVersion)
+	r.progressf("channel ports: %s/%s <-> %s/%s",
+		r.cfg.GnoChainID, r.cfg.GnoZKGMPort,
+		r.cfg.EVMChainID, strings.ToLower(r.cfg.EVMZKGMContract))
 
 	return nil
 }

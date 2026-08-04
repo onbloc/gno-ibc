@@ -116,6 +116,8 @@ func (r *Runner) verifyClientRelations(ctx context.Context) error {
 		if err := r.voyager.VerifyClient(ctx, check); err != nil {
 			return err
 		}
+		r.progressf("client active: %s/%d -> %s (%s/%s)",
+			check.Chain, check.ID, check.Counterparty, check.ClientType, check.IBCInterface)
 	}
 	if err := r.voyager.VerifyLens(ctx, voyager.LensExpectation{
 		Chain: r.cfg.GnoChainID, L2Chain: r.cfg.EVMChainID,

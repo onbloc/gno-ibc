@@ -1,6 +1,7 @@
 package scenario
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -28,6 +29,8 @@ func TestFreshScenarioCallsSixClientsInDocumentedOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	var progress bytes.Buffer
+	runner.progress = &progress
 	if err := runner.Run(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -50,6 +53,23 @@ func TestFreshScenarioCallsSixClientsInDocumentedOrder(t *testing.T) {
 		state.PhaseConnectionSubmitting, state.PhaseChannelSubmitting,
 	}) {
 		t.Fatalf("intent phases = %v", recorder.intentPhases)
+	}
+	for _, want := range []string{
+		"e2e: client active: dev.ibc/1 -> union-devnet-1 (cometbls/ibc-gno)",
+		"e2e: client active: union-devnet-1/1 -> dev.ibc (gno/ibc-cosmwasm)",
+		"e2e: client active: union-devnet-1/2 -> 17000 (trusted/evm/mpt/ibc-cosmwasm)",
+		"e2e: client active: 17000/1 -> union-devnet-1 (cometbls/ibc-solidity)",
+		"e2e: client active: dev.ibc/2 -> 17000 (state-lens/ics23/mpt/ibc-gno)",
+		"e2e: client active: 17000/2 -> dev.ibc (proof-lens/ibc-solidity)",
+		"e2e: connection submitted: dev.ibc/connection-1 <-> 17000/connection-1; waiting for OPEN",
+		"e2e: connection OPEN: dev.ibc/connection-1/client-2 <-> 17000/connection-1/client-2",
+		"e2e: channel submitted: dev.ibc/channel-1 <-> 17000/channel-1; waiting for OPEN",
+		"e2e: channel OPEN: dev.ibc/channel-1/connection-1 <-> 17000/channel-1/connection-1 (ucs03-zkgm-0)",
+		"e2e: channel ports: dev.ibc/gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm <-> 17000/0x5555555555555555555555555555555555555555",
+	} {
+		if !strings.Contains(progress.String(), want) {
+			t.Fatalf("progress = %q, want %q", progress.String(), want)
+		}
 	}
 	saved, err := state.Load(cfg.StateFile)
 	if err != nil {

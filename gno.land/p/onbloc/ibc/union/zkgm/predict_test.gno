@@ -157,6 +157,29 @@ func TestPredictCallProxyAccount(t *testing.T) {
 	}
 }
 
+// Golden vector for our own preimage layout, not Union's final CosmWasm
+// address (which further wraps the salt via instantiate2_address_impl).
+// Computed independently via golang.org/x/crypto/sha3 (NewLegacyKeccak256).
+func TestPredictCallProxyAccountGoldenVector(t *testing.T) {
+	got := PredictCallProxyAccount(u256.NewUint(5), types.ChannelId(8), []byte("sender"))
+	want := "zkgm195eafc2fac464edad87f55490a1caad2ce38501b"
+	if got != want {
+		t.Fatalf("PredictCallProxyAccount: got %q want %q", got, want)
+	}
+}
+
+// channelId=1/"23abc" and channelId=12/"3abc" used to both hash to "123abc".
+func TestPredictCallProxyAccountNoPreimageCollision(t *testing.T) {
+	path := u256.NewUint(5)
+
+	a := PredictCallProxyAccount(path, types.ChannelId(1), []byte("23abc"))
+	b := PredictCallProxyAccount(path, types.ChannelId(12), []byte("3abc"))
+
+	if a == b {
+		t.Fatalf("PredictCallProxyAccount: distinct (channelId, sender) pairs collided onto %q", a)
+	}
+}
+
 func TestUint256FromBytes32(t *testing.T) {
 	var zero [32]byte
 

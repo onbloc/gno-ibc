@@ -168,7 +168,12 @@ jobs:
             --forged-proof-rejection \
             --erc20-to-gno \
             --amount-boundaries \
-            --gno-to-evm
+            --gno-to-evm \
+            --relayer-insufficient-balance-failover \
+            --relayer-offline-failover \
+            --relayer-balance-recovery \
+            --evm-to-gno-timeout-refund \
+            --gno-to-evm-timeout-refund
 
       - name: Verify completed resume
         working-directory: gno-ibc

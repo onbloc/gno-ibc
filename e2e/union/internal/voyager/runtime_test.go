@@ -109,14 +109,20 @@ func TestActiveQueueStats(t *testing.T) {
 	}
 }
 
-func TestWaitRetryableTransactionErrorUsesBoundedLogs(t *testing.T) {
-	executor := &dockerExecutor{logs: []byte("retryable error: out of gas")}
+func TestWaitActiveQueuePollsUntilWorkExists(t *testing.T) {
+	responses := []string{`{"total":0,"ready":0,"optimize":{}}`, `{"total":3,"ready":1,"optimize":{}}`}
+	executor := &dockerExecutor{voyager: func(args []string) (process.Result, error) {
+		response := responses[0]
+		responses = responses[1:]
+		return process.Result{Stdout: []byte(response)}, nil
+	}}
 	runtime := startRuntime(t, executor)
-	if err := runtime.WaitRetryableTransactionError(context.Background()); err != nil {
+	stats, err := runtime.WaitActiveQueue(context.Background())
+	if err != nil {
 		t.Fatal(err)
 	}
-	if executor.logTail != "200" {
-		t.Fatalf("log tail = %q, want 200", executor.logTail)
+	if stats.Total != 3 || stats.Ready != 1 || len(responses) != 0 {
+		t.Fatalf("stats = %+v, remaining responses = %d", stats, len(responses))
 	}
 }
 
@@ -282,8 +288,6 @@ type dockerExecutor struct {
 	stops, removes  int
 	execResponse    []byte
 	voyager         func([]string) (process.Result, error)
-	logs            []byte
-	logTail         string
 }
 
 func (e *dockerExecutor) Run(_ context.Context, command process.Command) (process.Result, error) {
@@ -318,9 +322,6 @@ func (e *dockerExecutor) Run(_ context.Context, command process.Command) (proces
 			return process.Result{Stdout: e.execResponse}, nil
 		}
 		return process.Result{Stdout: []byte(`{}`)}, nil
-	case "logs":
-		e.logTail = argumentAfter(command.Args, "--tail")
-		return process.Result{Stderr: e.logs}, nil
 	case "inspect":
 		if strings.Contains(strings.Join(command.Args, " "), "io.onbloc.gno-ibc.e2e.run") {
 			if e.owner != "" {

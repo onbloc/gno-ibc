@@ -24,6 +24,18 @@ func init() {
 	implConstructors = make(map[string]func(store IStore) ICore)
 }
 
+// RegisterImpl installs an impl constructor under its defining package path.
+// It is called from the impl realm's init() and is NOT access-gated; the
+// security boundary is the prefix check below plus the admin-gated UpdateImpl
+// that actually selects which registered constructor to activate.
+//
+// SAFE: this prefix check trusts that the chain reserves the
+// gno.land/r/onbloc/ibc/union/core/* namespace. If the chain permitted
+// permissionless realm deployment under that path, an attacker could squat a
+// constructor (e.g. under core/v2) and social-engineer an admin into calling
+// UpdateImpl with that path. The mitigation is namespace reservation at the
+// deployment layer; consider adding an explicit impl-path allowlist here if the
+// chain does not reserve the namespace.
 func RegisterImpl(cur realm, constructor func(store IStore) ICore) {
 	currentPath := cur.PkgPath()
 	previousPath := cur.Previous().PkgPath()

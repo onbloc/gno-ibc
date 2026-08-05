@@ -269,6 +269,15 @@ func (m *mockStore) SaveConsensusState(_ int, rlm realm, clientId types.ClientId
 	return true
 }
 
+func (m *mockStore) ResetConsensusStates(_ int, rlm realm, clientId types.ClientId) bool {
+	c, ok := m.clients[uint32(clientId)]
+	if !ok {
+		return false
+	}
+	c.consensus = map[string][]byte{}
+	return true
+}
+
 func (m *mockStore) NextConnectionId(_ int, rlm realm) types.ConnectionId {
 	m.connSeq++
 	return types.ConnectionId(m.connSeq)

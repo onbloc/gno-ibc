@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"chain/params"
 	"encoding/hex"
 
@@ -59,6 +60,7 @@ type client struct {
 	lightClient       lightclient.Interface
 	clientState       []byte
 	consensusByHeight *bptree.BPTree // string(height.Bytes()) → []byte
+	latestConsensus   types.Height // highest height with a stored consensus state
 	// clientStore holds the light client's own key/value storage writes
 	// (lightclient result StorageWrites). It stays per-client because the keys
 	// are opaque to the host; the flat commitment map only covers host-derived
@@ -188,7 +190,8 @@ func (s *Store) SaveClientState(_ int, rlm realm, clientId types.ClientId, clien
 }
 
 // SaveConsensusState records the consensus state at height, returning false when
-// the client is unknown.
+// the client is unknown. It panics when different bytes already exist at height
+// (see client.saveConsensusState).
 func (s *Store) SaveConsensusState(_ int, rlm realm, clientId types.ClientId, height types.Height, consensusStateBytes []byte) bool {
 	assertIsRlmCurrent(0, rlm)
 
@@ -198,6 +201,22 @@ func (s *Store) SaveConsensusState(_ int, rlm realm, clientId types.ClientId, he
 	}
 
 	c.saveConsensusState(height, consensusStateBytes)
+
+	return true
+}
+
+// ResetConsensusStates clears all stored consensus states for clientId, returning
+// false when the client is unknown. It is the recovery-path escape hatch for the
+// no-silent-overwrite guard in saveConsensusState.
+func (s *Store) ResetConsensusStates(_ int, rlm realm, clientId types.ClientId) bool {
+	assertIsRlmCurrent(0, rlm)
+
+	c := s.getClient(clientId)
+	if c == nil {
+		return false
+	}
+
+	c.consensusByHeight = bptree.NewBPTree32()
 
 	return true
 }
@@ -492,7 +511,20 @@ func (c *client) saveClientState(clientStateBytes []byte) {
 }
 
 func (c *client) saveConsensusState(height types.Height, consensusStateBytes []byte) {
+	// Reject rewriting a historical consensus state with different bytes. The
+	// latest height is monotonic; a relayer submitting a header whose height is
+	// below it (still reachable from some trusted height) must not be able to
+	// change the storage root that in-flight proofs were negotiated against.
+	// Idempotent re-writes (same bytes, or any write at or above the latest
+	// height) are allowed.
+	if existing, ok := c.getConsensusState(height); ok && height.LT(c.latestConsensus) && !bytes.Equal(existing, consensusStateBytes) {
+		panic("consensus state already exists at height " + height.String())
+	}
+
 	c.consensusByHeight.Set(string(height.Bytes()), types.CloneBytes(consensusStateBytes))
+	if height.GT(c.latestConsensus) {
+		c.latestConsensus = height
+	}
 	setChainParam(h256ChainParamKey(types.ConsensusStatePath(c.id, height)), h256Bytes(keccak(consensusStateBytes)))
 }
 

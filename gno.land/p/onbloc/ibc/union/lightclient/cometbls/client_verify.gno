@@ -121,11 +121,11 @@ func checkedAddUint64(a uint64, b uint64) (uint64, bool) {
 	return sum, false
 }
 
-// verifyMisbehaviour mirrors Union's cometbls verify_misbehaviour in client.rs:
-// both headers must independently verify, and the pair is accepted only when it
-// matches Union's same-height or non-increasing-time conditions.
+// verifyMisbehaviour requires both headers to independently verify and the
+// pair to match an equivocation (same-height, conflicting headers) or a
+// non-increasing-time (different-height) condition.
 // Union reference:
-// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/cometbls/src/client.rs#L256-L281
+// https://github.com/unionlabs/union/blob/3b1e861e9724601c458af278a30420cb11a72314/evm/contracts/clients/CometblsClient.sol#L280-L316
 func (c *CometblsLightClient) verifyMisbehaviour(misbehaviour *Misbehaviour, now time.Time) error {
 	headerA := misbehaviour.Header1
 	headerB := misbehaviour.Header2
@@ -152,12 +152,12 @@ func (c *CometblsLightClient) verifyMisbehaviour(misbehaviour *Misbehaviour, now
 }
 
 // isMisbehaviourPair reports whether two independently-valid headers constitute
-// accepted misbehaviour, mirroring Union's conditions: at the same height the
-// signed headers must be identical; at different heights the earlier-listed
-// header must not be strictly newer than the later one.
+// accepted misbehaviour: at the same height the signed headers must differ
+// (equivocation); at different heights the earlier-listed header must not be
+// strictly newer than the later one.
 func isMisbehaviourPair(headerA, headerB *Header) bool {
 	if headerA.SignedHeader.Height == headerB.SignedHeader.Height {
-		return signedHeadersEqual(headerA.SignedHeader, headerB.SignedHeader)
+		return !signedHeadersEqual(headerA.SignedHeader, headerB.SignedHeader)
 	}
 
 	return headerA.GetTime().UnixNano() <= headerB.GetTime().UnixNano()

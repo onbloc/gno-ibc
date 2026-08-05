@@ -12,6 +12,49 @@ type Zkgmable interface {
 	OnIntentZkgm(cur realm, env IntentCallEnv) error
 }
 
+// SendCallback is implemented by realms that want to be notified of the
+// ack/timeout outcome of a packet they sent via SendWithCallback. corrID is
+// the exact string the caller passed to SendWithCallback, echoed back
+// verbatim so the caller can resolve its own pending state without
+// recomputing a packet hash itself.
+type SendCallback interface {
+	OnZkgmSendResult(cur realm, corrID string, success bool, ack []byte) error
+}
+
+// TokenForwardRequest carries an inbound ESCROW TokenOrderV2 addressed to the
+// registered forward handler. Metadata doubles as an opaque routing memo
+// here, since ESCROW orders otherwise ignore that field.
+type TokenForwardRequest struct {
+	SourceChannel      string
+	DestinationChannel string
+	Receiver           string // handler's own registered address
+	Memo               []byte // order's raw Metadata
+	BaseTokenKey       string // grc20reg key of the minted voucher
+	Amount             int64
+}
+
+// TokenForwardHandler is registered via RegisterTokenForwardHandler to
+// receive ESCROW orders addressed to it, deferring the ack until resolved
+// via CompleteTokenForwardAck. Mirrors transfer.ForwardHandler.
+type TokenForwardHandler interface {
+	// Prepare validates req without taking custody; a non-nil error rejects
+	// the recv before any voucher is minted.
+	Prepare(cur realm, req TokenForwardRequest, corrID string) error
+
+	// Execute runs after the voucher is minted to the handler; it must panic
+	// on failure so the whole recv tx reverts.
+	Execute(cur realm, req TokenForwardRequest, corrID string)
+}
+
+// TokenForwardMetadataResolver is an OPTIONAL TokenForwardHandler capability:
+// resolves deploy TokenMetadata from a forward order's raw (handler-specific)
+// memo, so a first-sighting forward can deploy like INITIALIZE instead of
+// being rejected. zkgm type-asserts for it; unimplemented = today's behavior.
+type TokenForwardMetadataResolver interface {
+	// ok=false (no error) means memo has no deploy metadata (voucher already exists).
+	ResolveMetadata(memo []byte) (metadata TokenMetadata, ok bool, err error)
+}
+
 type CallEnv struct {
 	Caller             string
 	ProxyAccount       string

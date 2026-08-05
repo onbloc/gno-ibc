@@ -93,10 +93,12 @@ PROTOGEN_PKGS := gno.land/p/onbloc/ibc/union/lightclient/cometbls
 COVERAGE_DIR := coverage
 
 # First-party gno packages. Third-party mirrors under gno.land/p/{aib,gnoswap,nt,onbloc}
-# and gno.land/r/aib are dependency inputs only, so local and CI tests skip them.
+# and gno.land/r/aib are dependency inputs only, so local and CI tests skip them,
+# except apps/transfer (and its apps/testing test fixture) which are forked in as
+# first-party (see .gitignore) and so are included explicitly.
 # Packages under any ignore/ directory are excluded too (scratch/scenario realms
 # that are not part of the first-party test suite).
-USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/onbloc gno.land/r/onbloc -name gnomod.toml | grep -v '/ignore/' | sort))
+USER_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/p/onbloc gno.land/r/onbloc gno.land/r/aib/ibc/apps/transfer gno.land/r/aib/ibc/apps/testing -name gnomod.toml | grep -v '/ignore/' | sort))
 TEST_GNO_PKGS := $(if $(PKG),$(addprefix ./,$(patsubst ./%,%,$(PKG))),$(USER_GNO_PKGS))
 SCENARIO_GNO_PKGS := $(patsubst %/gnomod.toml,./%/,$(shell find gno.land/r/onbloc/ibc/scenario -name gnomod.toml | grep -v '/ignore/' | sort))
 SCENARIO_TEST_GNO_PKGS := $(if $(PKG),$(addprefix ./,$(patsubst ./%,%,$(PKG))),$(SCENARIO_GNO_PKGS))

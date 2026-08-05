@@ -1,0 +1,2 @@
+module = "gno.land/r/onbloc/ibc/scenario/union/token_forward"
+gno = "0.9"

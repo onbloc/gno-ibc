@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"slices"
 
-	"github.com/onbloc/gno-ibc/e2e/union/internal/state"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/voyager"
 )
 
@@ -97,7 +96,7 @@ func (r *Runner) createClient(ctx context.Context, client voyager.ClientCreation
 		func(id int64) error {
 			r.current.FailedWork.Repaired = append(r.current.FailedWork.Repaired, id)
 			slices.Sort(r.current.FailedWork.Repaired)
-			return state.Save(r.cfg.StateFile, r.current)
+			return nil
 		},
 	)
 }

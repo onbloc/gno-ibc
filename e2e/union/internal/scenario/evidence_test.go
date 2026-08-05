@@ -58,9 +58,13 @@ func TestEvidenceSecretsPreventCompleteCheckpoint(t *testing.T) {
 				t.Fatal(err)
 			}
 			runner := Runner{cfg: cfg, current: completedState(cfg, 7)}
-			runner.current.Ports.Gno = tc.secret(&runner.cfg)
+			raw, err := json.Marshal(map[string]string{"value": tc.secret(&runner.cfg)})
+			if err != nil {
+				t.Fatal(err)
+			}
+			runner.gnoConnectionEvidence = raw
 
-			err := runner.saveChannelEvidence()
+			err = runner.saveChannelEvidence()
 			if err == nil || !strings.Contains(err.Error(), "secret") {
 				t.Fatalf("error = %v, want secret scan failure", err)
 			}

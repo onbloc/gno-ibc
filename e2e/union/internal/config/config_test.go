@@ -2,6 +2,7 @@ package config_test
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +12,7 @@ import (
 )
 
 func TestLoadAppliesPacketRPCFallbacks(t *testing.T) {
-	cfg, err := config.Load("/suite", lookup(validEnvironment()), true)
+	cfg, err := load(t, validEnvironment(), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,16 +33,53 @@ func TestLoadAppliesPacketRPCFallbacks(t *testing.T) {
 func TestLoadRejectsMalformedTrustBoundaryValues(t *testing.T) {
 	env := validEnvironment()
 	env["EVM_IBC_HANDLER"] = "0x1"
-	if _, err := config.Load("/suite", lookup(env), false); err == nil ||
+	if _, err := load(t, env, false); err == nil ||
 		!strings.Contains(err.Error(), "EVM_IBC_HANDLER") {
 		t.Fatalf("error = %v, want EVM_IBC_HANDLER validation", err)
+	}
+}
+
+func TestLoadRejectsUnsafeRunnerConfig(t *testing.T) {
+	values := validEnvironment()
+	path, scriptDir := configFiles(t, values)
+	if err := os.Chmod(path, 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.Load(path, scriptDir, lookup(values), false); err == nil ||
+		!strings.Contains(err.Error(), "group or other") {
+		t.Fatalf("permissions error = %v", err)
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(scriptDir, "linked-runner.json")
+	if err := os.Symlink(path, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.Load(link, scriptDir, lookup(values), false); err == nil ||
+		!strings.Contains(err.Error(), "non-symlink") {
+		t.Fatalf("symlink error = %v", err)
+	}
+}
+
+func TestLoadRejectsPinnedValueMismatch(t *testing.T) {
+	values := validEnvironment()
+	path, scriptDir := configFiles(t, values)
+	values["UNION_CHAIN_ID"] = "other"
+	raw, _ := json.Marshal(values)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := config.Load(path, scriptDir, lookup(values), false); err == nil ||
+		!strings.Contains(err.Error(), "pinned values") {
+		t.Fatalf("pinned value error = %v", err)
 	}
 }
 
 func TestLoadRejectsOverflowingCommandTimeout(t *testing.T) {
 	env := validEnvironment()
 	env["VOYAGER_COMMAND_TIMEOUT_SECONDS"] = "9223372036854775807"
-	if _, err := config.Load("/suite", lookup(env), false); err == nil {
+	if _, err := load(t, env, false); err == nil {
 		t.Fatal("overflowing command timeout unexpectedly accepted")
 	}
 }
@@ -57,18 +95,8 @@ func TestPacketLedgerAmount(t *testing.T) {
 	}
 }
 
-func TestTopologyFingerprintMatchesFixedPoint(t *testing.T) {
-	cfg, err := config.Load("/suite", lookup(validEnvironment()), false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got, want := cfg.TopologyFingerprint(), "53b14ed7e73989ece8823a4cf115bf409ef8a046"; got != want {
-		t.Fatalf("fingerprint = %q, want %q", got, want)
-	}
-}
-
 func TestRenderVoyagerConfig(t *testing.T) {
-	cfg, err := config.Load("/suite", lookup(validEnvironment()), false)
+	cfg, err := load(t, validEnvironment(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +119,7 @@ func TestRenderVoyagerConfig(t *testing.T) {
 }
 
 func TestRenderVoyagerRejectsChangedStateModuleTopology(t *testing.T) {
-	cfg, err := config.Load("/suite", lookup(validEnvironment()), false)
+	cfg, err := load(t, validEnvironment(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +129,7 @@ func TestRenderVoyagerRejectsChangedStateModuleTopology(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	template = bytes.Replace(template, []byte(`"chain_id":"dev.ibc"`), []byte(`"chain_id":"wrong"`), 1)
+	template = bytes.Replace(template, []byte(`"chain_id":"__GNO_CHAIN_ID__"`), []byte(`"chain_id":"wrong"`), 1)
 	if _, err := config.RenderVoyager(template, cfg, nil, nil); err == nil {
 		t.Fatal("changed state-module topology unexpectedly accepted")
 	}
@@ -145,4 +173,31 @@ func lookup(values map[string]string) func(string) (string, bool) {
 		value, ok := values[name]
 		return value, ok
 	}
+}
+
+func load(t *testing.T, values map[string]string, packet bool) (config.Config, error) {
+	t.Helper()
+	path, scriptDir := configFiles(t, values)
+	return config.Load(path, scriptDir, lookup(values), packet)
+}
+
+func configFiles(t *testing.T, values map[string]string) (string, string) {
+	t.Helper()
+	scriptDir := t.TempDir()
+	path := filepath.Join(scriptDir, "runner.json")
+	raw, err := json.Marshal(values)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	devnet, err := json.Marshal(map[string]any{"runner": values})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(scriptDir, "devnet.json"), devnet, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path, scriptDir
 }

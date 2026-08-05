@@ -19,7 +19,9 @@ func RenderVoyager(template []byte, cfg Config, plain, proof []int64) ([]byte, e
 		return nil, fmt.Errorf("cannot parse Voyager config template")
 	}
 	replacements := map[string]string{
+		"__UNION_CHAIN_ID__":          cfg.UnionChainID,
 		"__EVM_CHAIN_ID__":            cfg.EVMChainID,
+		"__GNO_CHAIN_ID__":            cfg.GnoChainID,
 		"__UNION_IBC_HOST_CONTRACT__": cfg.UnionIBCHostContract,
 		"__EVM_IBC_HANDLER__":         cfg.EVMIBCHandler,
 		"__EVM_MULTICALL__":           cfg.EVMMulticall,
@@ -37,8 +39,8 @@ func RenderVoyager(template []byte, cfg Config, plain, proof []int64) ([]byte, e
 	}
 	root = walkStrings(root, func(value string) string {
 		value = strings.Replace(value, "__VOYAGER_BIN_DIR__", voyagerBinDir, 1)
-		if replacement, ok := replacements[value]; ok {
-			return replacement
+		for placeholder, replacement := range replacements {
+			value = strings.ReplaceAll(value, placeholder, replacement)
 		}
 		return value
 	})

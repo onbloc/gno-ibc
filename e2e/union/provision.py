@@ -5,7 +5,6 @@ import argparse
 import json
 import os
 import re
-import shlex
 import subprocess
 import sys
 import tempfile
@@ -21,10 +20,28 @@ UNION_ACCOUNT = re.compile(r"^union1[0-9a-z]{38}$")
 UNION_CONTRACT = re.compile(r"^union1[0-9a-z]{58}$")
 
 
+def devnet() -> dict[str, dict[str, str]]:
+    return json.loads(CONFIG_FILE.read_text())
+
+
 def config() -> dict[str, str]:
-    values = json.loads(CONFIG_FILE.read_text())
+    values = {
+        key: value for section in devnet().values() for key, value in section.items()
+    }
     values.update({key: value for key, value in os.environ.items() if key in values})
     return values
+
+
+def runner_config() -> dict[str, str]:
+    values = devnet()["runner"]
+    values.update({key: value for key, value in os.environ.items() if key in values})
+    return values
+
+
+def write_private_json(path: Path, values: dict[str, str]) -> None:
+    path.touch(mode=0o600, exist_ok=True)
+    path.chmod(0o600)
+    path.write_text(json.dumps(values, indent=2) + "\n")
 
 
 def require(values: dict[str, str], *names: str) -> None:
@@ -66,14 +83,6 @@ def validate(values: dict[str, str]) -> None:
         "EVM_PRIVATE_KEY",
         "GNO_PRIVATE_KEY",
     )
-    expected = {
-        "UNION_CHAIN_ID": "union-devnet-1",
-        "EVM_CHAIN_ID": "32382",
-        "GNO_CHAIN_ID": "dev.ibc",
-    }
-    for name, wanted in expected.items():
-        if values[name] != wanted:
-            raise SystemExit(f"{name} must be {wanted}")
     for name in (
         "TRUSTED_MPT_PRIVATE_KEY",
         "UNION_PRIVATE_KEY",
@@ -111,7 +120,7 @@ def deploy_union(values: dict[str, str]) -> None:
     output.chmod(0o700)
 
     deployments = json.loads((union_dir / "deployments/deployments.json").read_text())
-    deployment = deployments["union.union-devnet-1"]
+    deployment = deployments["union." + values["UNION_CHAIN_ID"]]
     deployer = deployment["deployer"]
     manager = next(
         address
@@ -305,50 +314,16 @@ def deploy_test_token(values: dict[str, str]) -> None:
     emit({"EVM_TEST_ERC20": token})
 
 
-def write_runner_env(values: dict[str, str]) -> None:
-    names = (
-        "UNION_CHAIN_ID",
-        "EVM_CHAIN_ID",
-        "GNO_CHAIN_ID",
-        "EVM_IBC_HANDLER",
-        "EVM_MULTICALL",
-        "EVM_COMETBLS_CLIENT_IMPL",
-        "EVM_PROOF_LENS_CLIENT_IMPL",
-        "GNO_IBC_CORE_REALM",
-        "GNO_ZKGM_PORT",
-        "EVM_ZKGM_CONTRACT",
-        "GALOIS_PROVER_ENDPOINT",
-        "EVM_TEST_ERC20",
-        "GNO_RECIPIENT",
-        "EVM_TEST_AMOUNT",
-        "UNION_RPC_URL",
-        "EVM_RPC_URL",
-        "GNO_RPC_URL",
-        "GNO_TX_INDEXER_RPC_URL",
-        "UNION_PACKET_RPC_URL",
-        "EVM_PACKET_RPC_URL",
-        "GNO_PACKET_RPC_URL",
-        "GNO_PACKET_INDEXER_RPC_URL",
-        "VOYAGER_DATABASE_URL",
-        "TRUSTED_MPT_PRIVATE_KEY",
-        "UNION_PRIVATE_KEY",
-        "EVM_PRIVATE_KEY",
-        "GNO_PRIVATE_KEY",
-        "VOYAGER_IMAGE",
-        "UNION_VOYAGER_REVISION",
-    )
+def write_runner_config(values: dict[str, str]) -> None:
     require(
         values,
-        *names,
         "E2E_DEPLOYMENT_DIR",
         "E2E_ARTIFACT_DIR",
-        "E2E_STATE_FILE",
-        "E2E_ENV_FILE",
+        "E2E_CONFIG_FILE",
     )
     deployment_dir = Path(values["E2E_DEPLOYMENT_DIR"])
     artifact_dir = Path(values["E2E_ARTIFACT_DIR"])
-    state_file = Path(values["E2E_STATE_FILE"])
-    env_file = Path(values["E2E_ENV_FILE"])
+    config_file = Path(values["E2E_CONFIG_FILE"])
     contracts = json.loads((deployment_dir / "contracts.json").read_text())
     union_host = contracts["core"]
     with urllib.request.urlopen(
@@ -374,19 +349,14 @@ def write_runner_env(values: dict[str, str]) -> None:
     )
     marker.chmod(0o600)
     workflow_run.chmod(0o600)
-    values["UNION_IBC_HOST_CONTRACT"] = union_host
-    lines = [
-        f"{name}={shlex.quote(values[name])}"
-        for name in ("UNION_IBC_HOST_CONTRACT", *names)
-    ]
-    lines.extend(
-        (
-            f"E2E_ARTIFACT_DIR={shlex.quote(str(artifact_dir))}",
-            f"E2E_STATE_FILE={shlex.quote(str(state_file))}",
-        )
-    )
-    env_file.write_text("\n".join(lines) + "\n")
-    env_file.chmod(0o600)
+    runner = runner_config()
+    runner["UNION_IBC_HOST_CONTRACT"] = union_host
+    runner["E2E_ARTIFACT_DIR"] = str(artifact_dir)
+    if values.get("E2E_STATE_FILE"):
+        runner["E2E_STATE_FILE"] = values["E2E_STATE_FILE"]
+    require(runner, *(key for key in runner if key not in {"E2E_STATE_FILE"}))
+    config_file.parent.mkdir(parents=True, exist_ok=True)
+    write_private_json(config_file, runner)
 
 
 def main() -> None:
@@ -399,7 +369,7 @@ def main() -> None:
             "deploy-union",
             "configure-evm",
             "deploy-test-token",
-            "write-runner-env",
+            "write-runner-config",
         ),
     )
     args = parser.parse_args()
@@ -416,7 +386,7 @@ def main() -> None:
     elif args.command == "deploy-test-token":
         deploy_test_token(values)
     else:
-        write_runner_env(values)
+        write_runner_config(values)
 
 
 if __name__ == "__main__":

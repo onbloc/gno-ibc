@@ -31,6 +31,13 @@ type Options struct {
 	GnoToEVM             bool
 }
 
+// Normalize enables prerequisites implied by selected scenarios.
+func (o *Options) Normalize() {
+	if o.AmountBoundaries || o.GnoToEVM {
+		o.ERC20ToGno = true
+	}
+}
+
 // Runner executes the live acceptance scenarios.
 type Runner struct {
 	cfg      config.Config
@@ -40,6 +47,7 @@ type Runner struct {
 	union    *union.Client
 	options  Options
 	current  state.State
+	packet   *state.Packet
 	progress io.Writer
 
 	evmIndexFrom     string
@@ -66,17 +74,12 @@ func newRunnerWithClients(
 	gnoClient *gno.Client,
 	unionClient *union.Client,
 ) (*Runner, error) {
+	options.Normalize()
 	if options.ERC20ToGno && !options.Apply {
 		return nil, fmt.Errorf("--erc20-to-gno requires --apply")
 	}
 	if options.ForgedProofRejection && !options.Apply {
 		return nil, fmt.Errorf("--forged-proof-rejection requires --apply")
-	}
-	if options.AmountBoundaries && !options.ERC20ToGno {
-		return nil, fmt.Errorf("--amount-boundaries requires --erc20-to-gno")
-	}
-	if options.GnoToEVM && !options.ERC20ToGno {
-		return nil, fmt.Errorf("--gno-to-evm requires --erc20-to-gno")
 	}
 	if options.GnoToEVM && cfg.GnoRecipient != gno.DevSenderAddress {
 		return nil, fmt.Errorf("--gno-to-evm requires the dev Gno sender")
@@ -120,7 +123,7 @@ func (r *Runner) Run(ctx context.Context) (runErr error) {
 		return err
 	}
 	if !r.options.Resume {
-		if err := state.EnsureFresh(r.cfg.StateFile, r.bootstrapFile()); err != nil {
+		if err := state.EnsureFresh(r.cfg.StateFile); err != nil {
 			return err
 		}
 	}
@@ -134,11 +137,6 @@ func (r *Runner) Run(ctx context.Context) (runErr error) {
 		return err
 	}
 	r.progressf("Voyager: ready")
-	if !r.options.Resume {
-		if err := saveBootstrap(r.bootstrapFile(), r.current); err != nil {
-			return err
-		}
-	}
 	r.progressf("channel topology: started")
 	if err := r.runChannelScenario(ctx); err != nil {
 		return err
@@ -207,37 +205,32 @@ func (r *Runner) renderVoyager(plain, proof []int64) ([]byte, error) {
 	return config.RenderVoyager(template, r.cfg, plain, proof)
 }
 
-func (r *Runner) bootstrapFile() string {
-	return filepath.Join(r.cfg.ArtifactDir, "bootstrap-in-progress.json")
-}
-
 func expectedState(cfg config.Config) state.Expected {
-	packetLedgerAmount, _ := config.PacketLedgerAmount(cfg.EVMTestAmount)
 	return state.Expected{
-		VoyagerRevision:     cfg.UnionVoyagerRevision,
-		Chains:              state.Chains{Union: cfg.UnionChainID, EVM: cfg.EVMChainID, Gno: cfg.GnoChainID},
-		EVMChainID:          cfg.EVMChainID,
-		TopologyFingerprint: cfg.TopologyFingerprint(),
-		GnoPort:             cfg.GnoZKGMPort,
-		EVMPort:             cfg.EVMZKGMContract,
-		Version:             config.ChannelVersion,
-		PacketToken:         cfg.EVMTestERC20,
-		PacketRecipient:     cfg.GnoRecipient,
-		PacketAmount:        cfg.EVMTestAmount,
-		PacketLedgerAmount:  packetLedgerAmount,
+		VoyagerRevision: cfg.UnionVoyagerRevision,
+		Chains:          state.Chains{Union: cfg.UnionChainID, EVM: cfg.EVMChainID, Gno: cfg.GnoChainID},
+		EVMTopology: state.EVMTopology{
+			ChainID:             cfg.EVMChainID,
+			IBCHandler:          cfg.EVMIBCHandler,
+			Multicall:           cfg.EVMMulticall,
+			ZKGM:                cfg.EVMZKGMContract,
+			CometBLSClientImpl:  cfg.EVMCometBLSClientImpl,
+			ProofLensClientImpl: cfg.EVMProofLensClientImpl,
+		},
+		GnoPort: cfg.GnoZKGMPort,
+		EVMPort: cfg.EVMZKGMContract,
+		Version: config.ChannelVersion,
 	}
 }
 
 func newState(cfg config.Config) state.State {
+	expected := expectedState(cfg)
 	return state.State{
-		Phase:           state.PhaseBootstrap,
-		VoyagerRevision: cfg.UnionVoyagerRevision,
-		Chains:          state.Chains{Union: cfg.UnionChainID, EVM: cfg.EVMChainID, Gno: cfg.GnoChainID},
-		EVMTopology: state.EVMTopology{
-			ChainID: cfg.EVMChainID, AddressFingerprint: cfg.TopologyFingerprint(),
-		},
-		Ports:      state.Ports{Gno: cfg.GnoZKGMPort, EVM: strings.ToLower(cfg.EVMZKGMContract)},
-		Version:    config.ChannelVersion,
-		FailedWork: state.FailedWork{Repaired: []int64{}},
+		VoyagerRevision: expected.VoyagerRevision,
+		Chains:          expected.Chains,
+		EVMTopology:     expected.EVMTopology,
+		Ports:           state.Ports{Gno: expected.GnoPort, EVM: strings.ToLower(expected.EVMPort)},
+		Version:         expected.Version,
+		FailedWork:      state.FailedWork{Repaired: []int64{}},
 	}
 }

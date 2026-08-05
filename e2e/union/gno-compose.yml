@@ -7,7 +7,7 @@ services:
     environment:
       TEST_MNEMONIC: ${GNO_TEST_MNEMONIC:-source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast}
       GNO_ADMIN_ADDRESS: ${GNO_ADMIN_ADDRESS:-g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5}
-      GNO_CHAIN_ID: ${GNO_CHAIN_ID:-dev.ibc}
+      GNO_CHAIN_ID: ${GNO_CHAIN_ID:?set GNO_CHAIN_ID from devnet.json}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:26657/status"]
       interval: 5s
@@ -36,7 +36,7 @@ services:
     environment:
       ADMIN_MNEMONIC: ${GNO_ADMIN_MNEMONIC:-source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast}
       GNO_ADMIN_ADDRESS: ${GNO_ADMIN_ADDRESS:-g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5}
-      GNO_CHAIN_ID: ${GNO_CHAIN_ID:-dev.ibc}
+      GNO_CHAIN_ID: ${GNO_CHAIN_ID:?set GNO_CHAIN_ID from devnet.json}
     depends_on:
       gno:
         condition: service_healthy

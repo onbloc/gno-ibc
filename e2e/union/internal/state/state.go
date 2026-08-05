@@ -1,28 +1,6 @@
 // Package state owns the durable runner checkpoint schema.
 package state
 
-// Phase is a durable scenario transition.
-type Phase string
-
-const (
-	PhaseBootstrap               Phase = "bootstrap-in-progress"
-	PhaseConnectionSubmitting    Phase = "connection-submitting"
-	PhaseConnectionSubmitted     Phase = "connection-submitted"
-	PhaseConnectionPrepared      Phase = "connection-prepared"
-	PhaseChannelSubmitting       Phase = "channel-submitting"
-	PhaseChannelSubmitted        Phase = "channel-submitted"
-	PhaseChannelPrepared         Phase = "channel-prepared"
-	PhaseComplete                Phase = "complete"
-	PhaseFailedWork              Phase = "failed-work"
-	PhasePacketMintSubmitting    Phase = "packet-mint-submitting"
-	PhasePacketMintSubmitted     Phase = "packet-mint-submitted"
-	PhasePacketApproveSubmitting Phase = "packet-approve-submitting"
-	PhasePacketApproveSubmitted  Phase = "packet-approve-submitted"
-	PhasePacketSendSubmitting    Phase = "packet-send-submitting"
-	PhasePacketSendSubmitted     Phase = "packet-send-submitted"
-	PhasePacketComplete          Phase = "packet-complete"
-)
-
 // PacketOutcome records the matching cross-chain acknowledgement result.
 type PacketOutcome string
 
@@ -31,9 +9,8 @@ const (
 	PacketOutcomeFailure PacketOutcome = "failure"
 )
 
-// State is compatible with the fixed-point shell checkpoint.
+// State is the completed client, connection, and channel topology checkpoint.
 type State struct {
-	Phase           Phase         `json:"phase"`
 	VoyagerRevision string        `json:"voyager_revision"`
 	Chains          Chains        `json:"chains"`
 	EVMTopology     EVMTopology   `json:"evm_topology"`
@@ -44,7 +21,6 @@ type State struct {
 	Allowlists      Allowlists    `json:"allowlists"`
 	Connections     *HandshakeIDs `json:"connections,omitempty"`
 	Channels        *HandshakeIDs `json:"channels,omitempty"`
-	Packet          *Packet       `json:"packet,omitempty"`
 }
 
 type Chains struct {
@@ -54,8 +30,12 @@ type Chains struct {
 }
 
 type EVMTopology struct {
-	ChainID            string `json:"chain_id"`
-	AddressFingerprint string `json:"address_fingerprint"`
+	ChainID             string `json:"chain_id"`
+	IBCHandler          string `json:"ibc_handler"`
+	Multicall           string `json:"multicall"`
+	ZKGM                string `json:"zkgm"`
+	CometBLSClientImpl  string `json:"cometbls_client_impl"`
+	ProofLensClientImpl string `json:"proof_lens_client_impl"`
 }
 
 type Ports struct {
@@ -89,7 +69,6 @@ type HandshakeIDs struct {
 }
 
 type Packet struct {
-	Phase              Phase         `json:"phase"`
 	Token              string        `json:"token"`
 	Sender             string        `json:"sender"`
 	Recipient          string        `json:"recipient"`
@@ -121,15 +100,10 @@ type Balances struct {
 
 // Expected is the current environment identity used to validate a checkpoint.
 type Expected struct {
-	VoyagerRevision     string
-	Chains              Chains
-	EVMChainID          string
-	TopologyFingerprint string
-	GnoPort             string
-	EVMPort             string
-	Version             string
-	PacketToken         string
-	PacketRecipient     string
-	PacketAmount        string
-	PacketLedgerAmount  int64
+	VoyagerRevision string
+	Chains          Chains
+	EVMTopology     EVMTopology
+	GnoPort         string
+	EVMPort         string
+	Version         string
 }

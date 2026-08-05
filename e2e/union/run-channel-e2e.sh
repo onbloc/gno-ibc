@@ -2,27 +2,22 @@
 set -euo pipefail
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
-env_file=${ENV_FILE:-"$script_dir/.env"}
+config_file=${E2E_CONFIG_FILE:-"$script_dir/runner.json"}
 
-[[ -r $env_file ]] || {
-  echo "missing environment file: $env_file" >&2
+[[ -r $config_file ]] || {
+  echo "missing runner config: $config_file" >&2
   exit 2
 }
-env_mode=$(stat -c '%a' "$env_file" 2>/dev/null ||
-  stat -f '%Lp' "$env_file" 2>/dev/null) || {
-  echo "cannot inspect environment file permissions" >&2
+config_mode=$(stat -c '%a' "$config_file" 2>/dev/null ||
+  stat -f '%Lp' "$config_file" 2>/dev/null) || {
+  echo "cannot inspect runner config permissions" >&2
   exit 2
 }
-if [[ ! $env_mode =~ ^[0-7]{3,4}$ ]] || (((8#$env_mode & 077) != 0)); then
-  echo "environment file must not be accessible by group or other users" >&2
+if [[ ! $config_mode =~ ^[0-7]{3,4}$ ]] || (((8#$config_mode & 077) != 0)); then
+  echo "runner config must not be accessible by group or other users" >&2
   exit 2
 fi
+config_file=$(cd "$(dirname "$config_file")" && pwd -P)/$(basename "$config_file")
 
-set -a
-# shellcheck disable=SC1090
-source "$env_file"
-set +a
-
-export E2E_SCRIPT_DIR=$script_dir
 cd "$script_dir"
-exec env GOWORK=off go run ./cmd/channel-e2e "$@"
+exec env GOWORK=off go run ./cmd/channel-e2e --config "$config_file" "$@"

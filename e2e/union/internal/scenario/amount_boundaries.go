@@ -30,8 +30,7 @@ type boundaryResult struct {
 }
 
 func (r *Runner) runAmountBoundaries(ctx context.Context) error {
-	if r.current.Phase != state.PhasePacketComplete ||
-		r.current.Packet.Outcome != state.PacketOutcomeSuccess {
+	if r.packet == nil || r.packet.Outcome != state.PacketOutcomeSuccess {
 		return fmt.Errorf("amount boundaries require a successful ERC20 packet")
 	}
 

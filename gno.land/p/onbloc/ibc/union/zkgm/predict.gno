@@ -2,6 +2,7 @@ package zkgm
 
 import (
 	"crypto/keccak256"
+	"encoding/binary"
 	"encoding/hex"
 
 	abi "gno.land/p/onbloc/encoding/abi"
@@ -10,8 +11,9 @@ import (
 )
 
 const (
-	ibcDenomPrefix = "ibc/"
-	tagCallProxy   = "ZKGM_CALL_PROXY"
+	ibcDenomPrefix         = "ibc/"
+	tagCallProxy           = "ZKGM_CALL_PROXY"
+	callProxyAccountPrefix = "zkgm1"
 )
 
 // PredictWrappedToken derives the legacy wrapped IBC denom for a v1 token order.
@@ -64,24 +66,29 @@ func Uint256FromBytes32(bz [32]byte) *u256.Uint {
 	return u256.Zero().SetBytes(bz[:])
 }
 
-// PredictCallProxyAccount returns the synthetic Gno address that represents
-// the given (path, destinationChannel, sender) tuple as a callable account.
-//
-// key = zkgm1<first-20-bytes-of-keccak(ZKGM_CALL_PROXY || path || channelId || sender)>
+// PredictCallProxyAccount derives a synthetic zkgm1 account for (path, channelId, sender).
+// Fixed-width path/channelId plus a length-prefixed sender keep the preimage collision-free.
+// reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L3507-L3538
 func PredictCallProxyAccount(path *u256.Uint, channelId types.ChannelId, sender []byte) string {
-	var pathBytes [32]byte
-	if path != nil {
-		pathBytes = Uint256ToBytes32(path)
+	if path == nil {
+		path = u256.Zero()
 	}
+	pathBytes := Uint256ToBytes32(path)
 
-	channel := channelId.String()
-	buf := make([]byte, 0, len(tagCallProxy)+len(pathBytes)+len(channel)+len(sender))
+	var channelBytes [4]byte
+	binary.BigEndian.PutUint32(channelBytes[:], uint32(channelId))
+
+	var senderLen [8]byte
+	binary.BigEndian.PutUint64(senderLen[:], uint64(len(sender)))
+
+	buf := make([]byte, 0, len(tagCallProxy)+len(pathBytes)+len(channelBytes)+len(senderLen)+len(sender))
 	buf = append(buf, tagCallProxy...)
 	buf = append(buf, pathBytes[:]...)
-	buf = append(buf, channel...)
+	buf = append(buf, channelBytes[:]...)
+	buf = append(buf, senderLen[:]...)
 	buf = append(buf, sender...)
 
 	h := keccak256.Sum256(buf)
 
-	return "zkgm1" + hex.EncodeToString(h[:20])
+	return callProxyAccountPrefix + hex.EncodeToString(h[:20])
 }

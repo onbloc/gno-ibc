@@ -38,6 +38,7 @@ func (r *Runner) runAmountBoundaries(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	r.progressf("scenario amount-boundaries: deployed UOF token=%s decimals=6", overflowToken)
 	overflowPlan, err := r.evm.PrepareToken(ctx, overflowToken, 6, r.current.Channels.Gno)
 	if err != nil {
 		return err
@@ -53,6 +54,7 @@ func (r *Runner) runAmountBoundaries(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	r.progressf("scenario amount-boundaries: deployed UCM token=%s decimals=6", cumulativeToken)
 	cumulativePlan, err := r.evm.PrepareToken(ctx, cumulativeToken, 6, r.current.Channels.Gno)
 	if err != nil {
 		return err
@@ -90,6 +92,8 @@ func (r *Runner) runAmountBoundaries(ctx context.Context) error {
 		return fmt.Errorf("cumulative overflow changed the maximum Gno voucher supply")
 	}
 	oneMore.VoucherSupply = strconv.FormatInt(supply, 10)
+	r.progressf("scenario amount-boundaries: cumulative maximum preserved balance=%d supply=%d",
+		balance, supply)
 
 	return r.writeEvidence("amount-boundaries.json", []boundaryResult{
 		overflow, maximum, oneMore,
@@ -104,6 +108,8 @@ func (r *Runner) runBoundaryOrder(
 	kind uint8,
 	wantSuccess bool,
 ) (boundaryResult, error) {
+	r.progressf("scenario amount-boundaries: case=%s token=%s amount=%s kind=%d expected_success=%t",
+		name, plan.Token, amount, kind, wantSuccess)
 	mintTx, err := r.evm.MintToken(ctx, plan.Token, plan.Sender, amount)
 	if err != nil {
 		return boundaryResult{}, err
@@ -126,10 +132,14 @@ func (r *Runner) runBoundaryOrder(
 	if err != nil {
 		return boundaryResult{}, err
 	}
+	r.progressf("scenario amount-boundaries: case=%s packet submitted hash=%s; waiting for Gno receive",
+		name, send.PacketHash)
 	gnoEvents, err := r.gno.WaitPacket(ctx, send.PacketHash)
 	if err != nil {
 		return boundaryResult{}, err
 	}
+	r.progressf("scenario amount-boundaries: case=%s Gno received packet (tx=%s); waiting for EVM acknowledgement",
+		name, gnoEvents.ReceiveTx)
 	evmAck, err := r.evm.WaitAcknowledgement(
 		ctx, before.Block, r.current.Channels.EVM, send.PacketHash,
 	)
@@ -171,6 +181,8 @@ func (r *Runner) runBoundaryOrder(
 	if err != nil {
 		return boundaryResult{}, fmt.Errorf("%s: %w", name, err)
 	}
+	r.progressf("scenario amount-boundaries: case=%s acknowledgement success=%t; deltas sender=%s escrow=%s recipient=%s",
+		name, success, deltas.Sender, deltas.Escrow, deltas.Recipient)
 	return boundaryResult{
 		Name: name, Token: plan.Token, PacketHash: send.PacketHash,
 		MintTx: mintTx, ApproveTx: approveTx, SendTx: send.Tx,

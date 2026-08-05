@@ -1810,12 +1810,16 @@ func TestBatchAcksRejectsInvalidMessages(cur realm, t *testing.T) {
 	}
 }
 
-func TestBatchAcksLengthMismatchPersistsProvidedAcks(cur realm, t *testing.T) {
+// TestBatchAcksRejectsAckCountMismatch covers the High-1 fix: iterating
+// msg.Acks (instead of msg.Packets) let a short or empty Acks array skip
+// validation entirely for the packets it lacked an entry for.
+func TestBatchAcksRejectsAckCountMismatch(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
 		name string
 		acks [][]byte
 	}{
+		{"empty acks", nil},
 		{"fewer acks than packets", [][]byte{[]byte("ack")}},
 		{"more acks than packets", [][]byte{[]byte("ack"), []byte("ack"), []byte("extra")}},
 	}
@@ -1824,8 +1828,8 @@ func TestBatchAcksLengthMismatchPersistsProvidedAcks(cur realm, t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			v := newTestImpl()
 			chId, _, _ := setupOpenChannel(cur, v)
-			p1 := recvPacket(chId, "batch-len-1")
-			p2 := recvPacket(chId, "batch-len-2")
+			p1 := recvPacket(chId, "batch-count-1")
+			p2 := recvPacket(chId, "batch-count-2")
 			v.PacketRecv(0, cur, types.MsgPacketRecv{
 				Packets:     []types.Packet{p1, p2},
 				RelayerMsgs: [][]byte{[]byte("rm1"), []byte("rm2")},
@@ -1833,12 +1837,46 @@ func TestBatchAcksLengthMismatchPersistsProvidedAcks(cur realm, t *testing.T) {
 				ProofHeight: 10,
 			})
 
-			v.BatchAcks(0, cur, types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: tc.acks})
+			uassert.AbortsContains(t, cur, "acknowledgement count mismatch", func(cur realm) {
+				v.BatchAcks(0, cur, types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: tc.acks})
+			})
 
 			batchHash := core.CommitPacketsHash([]types.Packet{p1, p2})
-			receipt, ok := v.store.BatchReceiptsAt(batchHash)
-			uassert.True(t, ok)
-			uassert.True(t, receipt == types.CommitAcks(tc.acks))
+			_, ok := v.store.BatchReceiptsAt(batchHash)
+			uassert.False(t, ok)
 		})
 	}
+}
+
+// TestBatchAcksEmptyAcksCannotOverwriteExistingReceipt reproduces the exact
+// exploit: a legitimately-batched receipt must survive a follow-up BatchAcks
+// call for the same packets with an empty Acks array.
+func TestBatchAcksEmptyAcksCannotOverwriteExistingReceipt(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	v := newTestImpl()
+	chId, _, _ := setupOpenChannel(cur, v)
+	p1 := recvPacket(chId, "batch-overwrite-1")
+	p2 := recvPacket(chId, "batch-overwrite-2")
+	v.PacketRecv(0, cur, types.MsgPacketRecv{
+		Packets:     []types.Packet{p1, p2},
+		RelayerMsgs: [][]byte{[]byte("rm1"), []byte("rm2")},
+		Proof:       []byte("p"),
+		ProofHeight: 10,
+	})
+
+	realAcks := [][]byte{[]byte("ack"), []byte("ack")}
+	v.BatchAcks(0, cur, types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: realAcks})
+
+	batchHash := core.CommitPacketsHash([]types.Packet{p1, p2})
+	receipt, ok := v.store.BatchReceiptsAt(batchHash)
+	uassert.True(t, ok)
+	uassert.True(t, receipt == types.CommitAcks(realAcks))
+
+	uassert.AbortsContains(t, cur, "acknowledgement count mismatch", func(cur realm) {
+		v.BatchAcks(0, cur, types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: nil})
+	})
+
+	receipt, ok = v.store.BatchReceiptsAt(batchHash)
+	uassert.True(t, ok)
+	uassert.True(t, receipt == types.CommitAcks(realAcks))
 }

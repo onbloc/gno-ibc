@@ -19,11 +19,7 @@ type packetResult struct {
 }
 
 func (r *Runner) observePacket(ctx context.Context) (packetResult, error) {
-	if r.current.Phase != state.PhasePacketSendSubmitted {
-		return packetResult{}, fmt.Errorf("unsupported packet phase: %s", r.current.Phase)
-	}
-
-	packet := r.current.Packet
+	packet := r.packet
 	gnoEvents, err := r.gno.WaitPacket(ctx, packet.PacketHash)
 	if err != nil {
 		return packetResult{}, err
@@ -84,7 +80,7 @@ func (r *Runner) observePacket(ctx context.Context) (packetResult, error) {
 }
 
 func (r *Runner) verifyPacketFailedWork(ctx context.Context) error {
-	packet := r.current.Packet
+	packet := r.packet
 	latest, err := r.voyager.FailedWorkID(
 		ctx, packet.FailedWorkBaseline, r.current.FailedWork.Repaired,
 	)
@@ -98,7 +94,7 @@ func (r *Runner) verifyPacketFailedWork(ctx context.Context) error {
 }
 
 func (r *Runner) finishPacket(result packetResult) error {
-	packet := r.current.Packet
+	packet := r.packet
 	packet.GnoReceiveTx = result.GnoReceiveTx
 	packet.GnoWriteAckTx = result.GnoWriteAckTx
 	packet.EVMAckTx = result.EVMAckTx
@@ -106,22 +102,17 @@ func (r *Runner) finishPacket(result packetResult) error {
 	packet.CommitmentCleared = true
 	packet.BalanceDeltas = &result.Deltas
 	packet.FailedWorkFinal = &result.FailedFinal
-	r.current.Phase = state.PhasePacketComplete
-	packet.Phase = state.PhasePacketComplete
 	if err := r.writePacketEvidence(); err != nil {
-		return err
-	}
-	if err := state.Save(r.cfg.StateFile, r.current); err != nil {
 		return err
 	}
 	return packetOutcomeError(result.Outcome)
 }
 
 func (r *Runner) writePacketEvidence() error {
-	packet := r.current.Packet
+	packet := r.packet
 	value := map[string]any{
-		"phase": packet.Phase, "outcome": packet.Outcome,
-		"token": packet.Token, "sender": packet.Sender,
+		"outcome": packet.Outcome,
+		"token":   packet.Token, "sender": packet.Sender,
 		"escrow":    strings.ToLower(r.cfg.EVMZKGMContract),
 		"recipient": packet.Recipient, "voucher": packet.Voucher,
 		"packet_hash": packet.PacketHash, "commitment_cleared": packet.CommitmentCleared,

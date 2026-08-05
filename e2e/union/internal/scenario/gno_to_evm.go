@@ -31,8 +31,7 @@ type gnoOrderResult struct {
 }
 
 func (r *Runner) runGnoToEVMScenarios(ctx context.Context) error {
-	if r.current.Phase != state.PhasePacketComplete ||
-		r.current.Packet.Outcome != state.PacketOutcomeSuccess {
+	if r.packet == nil || r.packet.Outcome != state.PacketOutcomeSuccess {
 		return fmt.Errorf("Gno-to-EVM scenarios require a successful ERC20 packet")
 	}
 	from, err := r.voyager.LatestFinalizedHeight(ctx, r.cfg.EVMChainID)

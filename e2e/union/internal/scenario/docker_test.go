@@ -14,7 +14,10 @@ import (
 	"github.com/onbloc/gno-ibc/e2e/union/internal/voyager"
 )
 
-const testImageID = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+const (
+	testImageID         = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	testVoyagerRevision = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+)
 
 type dockerTestRuntime struct {
 	container      bool
@@ -54,7 +57,7 @@ func (d *dockerTestRuntime) run(
 		if strings.Contains(joined, "Entrypoint") {
 			return process.Result{Stdout: []byte("/output/voyager")}, nil
 		}
-		return process.Result{Stdout: []byte(config.VoyagerRevision)}, nil
+		return process.Result{Stdout: []byte(testVoyagerRevision)}, nil
 	case "ps":
 		if d.container {
 			return process.Result{Stdout: []byte("union-channel-e2e-running")}, nil

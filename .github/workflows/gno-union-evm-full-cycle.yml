@@ -154,14 +154,14 @@ jobs:
         working-directory: gno-ibc
         run: python3 e2e/union/provision.py deploy-test-token >>"$GITHUB_ENV"
 
-      - name: Write runner environment
+      - name: Write runner config
         working-directory: gno-ibc
         env:
           E2E_DEPLOYMENT_DIR: ${{ github.workspace }}/artifacts/deployment
           E2E_ARTIFACT_DIR: ${{ github.workspace }}/artifacts
           E2E_STATE_FILE: ${{ github.workspace }}/artifacts/state.json
-          E2E_ENV_FILE: ${{ github.workspace }}/gno-ibc/e2e/union/.env
-        run: python3 e2e/union/provision.py write-runner-env
+          E2E_CONFIG_FILE: ${{ github.workspace }}/gno-ibc/e2e/union/runner.json
+        run: python3 e2e/union/provision.py write-runner-config
 
       - name: Run full scenario suite
         working-directory: gno-ibc

@@ -23,61 +23,12 @@ func TestInvalidResumeStateRunsNoCommands(t *testing.T) {
 	); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.Save(cfg.StateFile, state.State{Phase: state.PhaseComplete}); err != nil {
+	if err := state.Save(cfg.StateFile, state.State{}); err != nil {
 		t.Fatal(err)
 	}
 	recorder := new(recordingExecutor)
 	if _, err := newRunner(cfg, recorder, Options{Apply: true, Resume: true}); err == nil {
 		t.Fatal("invalid resume state unexpectedly accepted")
-	}
-	if len(recorder.commands) != 0 {
-		t.Fatalf("commands = %#v, want none", recorder.commands)
-	}
-}
-
-func TestIncompletePacketResumeRunsNoCommands(t *testing.T) {
-	cfg := testConfig(t)
-	if err := state.PrepareArtifacts(
-		filepath.Dir(filepath.Dir(cfg.ScriptDir)),
-		cfg.ScriptDir,
-		cfg.ArtifactDir,
-		cfg.StateFile,
-	); err != nil {
-		t.Fatal(err)
-	}
-	saved := completedState(cfg, 7)
-	saved.Phase = state.Phase("packet-complete")
-	if err := state.Save(cfg.StateFile, saved); err != nil {
-		t.Fatal(err)
-	}
-	recorder := new(recordingExecutor)
-	if _, err := newRunner(cfg, recorder, Options{Apply: true, Resume: true}); err == nil {
-		t.Fatal("incomplete packet state unexpectedly accepted")
-	}
-	if len(recorder.commands) != 0 {
-		t.Fatalf("commands = %#v, want none", recorder.commands)
-	}
-}
-
-func TestUnsupportedResumePhaseRunsNoCommands(t *testing.T) {
-	cfg := testConfig(t)
-	if err := state.PrepareArtifacts(
-		filepath.Dir(filepath.Dir(cfg.ScriptDir)),
-		cfg.ScriptDir,
-		cfg.ArtifactDir,
-		cfg.StateFile,
-	); err != nil {
-		t.Fatal(err)
-	}
-	saved := completedState(cfg, 7)
-	saved.Phase = state.Phase("bootstrap-in-progress")
-	saved.Channels = nil
-	if err := state.Save(cfg.StateFile, saved); err != nil {
-		t.Fatal(err)
-	}
-	recorder := new(recordingExecutor)
-	if _, err := newRunner(cfg, recorder, Options{Apply: true, Resume: true}); err == nil {
-		t.Fatal("unsupported resume phase unexpectedly accepted")
 	}
 	if len(recorder.commands) != 0 {
 		t.Fatalf("commands = %#v, want none", recorder.commands)
@@ -121,7 +72,7 @@ func TestGnoToEVMRequiresDevSenderBeforeCommands(t *testing.T) {
 	recorder := new(recordingExecutor)
 	_, err := newRunner(
 		cfg, recorder,
-		Options{Apply: true, ERC20ToGno: true, GnoToEVM: true},
+		Options{Apply: true, GnoToEVM: true},
 	)
 	if err == nil || !strings.Contains(err.Error(), "dev Gno sender") {
 		t.Fatalf("error = %v, want dev sender", err)
@@ -132,9 +83,26 @@ func TestGnoToEVMRequiresDevSenderBeforeCommands(t *testing.T) {
 	cfg.GnoRecipient = gno.DevSenderAddress
 	if _, err := newRunner(
 		cfg, recorder,
-		Options{Apply: true, ERC20ToGno: true, GnoToEVM: true},
+		Options{Apply: true, GnoToEVM: true},
 	); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDependentScenariosEnableERC20ToGno(t *testing.T) {
+	for _, options := range []Options{
+		{Apply: true, AmountBoundaries: true},
+		{Apply: true, GnoToEVM: true},
+	} {
+		cfg := testConfig(t)
+		cfg.GnoRecipient = gno.DevSenderAddress
+		runner, err := newRunner(cfg, new(recordingExecutor), options)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !runner.options.ERC20ToGno {
+			t.Fatal("ERC20-to-Gno prerequisite was not enabled")
+		}
 	}
 }
 
@@ -165,7 +133,7 @@ func testConfig(t *testing.T) config.Config {
 		UnionChainID:           "union-devnet-1",
 		EVMChainID:             "17000",
 		GnoChainID:             "dev.ibc",
-		UnionVoyagerRevision:   config.VoyagerRevision,
+		UnionVoyagerRevision:   testVoyagerRevision,
 		EVMIBCHandler:          "0x1111111111111111111111111111111111111111",
 		EVMMulticall:           "0x2222222222222222222222222222222222222222",
 		EVMCometBLSClientImpl:  "0x3333333333333333333333333333333333333333",

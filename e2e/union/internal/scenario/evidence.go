@@ -2,7 +2,6 @@ package scenario
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/onbloc/gno-ibc/e2e/union/internal/state"
-	"github.com/onbloc/gno-ibc/e2e/union/internal/voyager"
 )
 
 func (r *Runner) verifyNoNewFailedWork(ctx context.Context) error {
@@ -30,21 +28,15 @@ func (r *Runner) verifyNoNewFailedWork(ctx context.Context) error {
 	}
 
 	r.current.FailedWork.Final = &latest
-	r.current.Phase = state.PhaseFailedWork
 	failure := fmt.Errorf("Voyager recorded new failed work after ID %d (latest %d)", baseline, latest)
 
 	if err := r.writeChannelEvidence(); err != nil {
 		return errors.Join(failure, err)
 	}
-	if err := state.Save(r.cfg.StateFile, r.current); err != nil {
-		return errors.Join(failure, err)
-	}
-
 	return failure
 }
 
 func (r *Runner) saveChannelEvidence() error {
-	r.current.Phase = state.PhaseComplete
 	if err := r.writeChannelEvidence(); err != nil {
 		return err
 	}
@@ -57,18 +49,6 @@ func (r *Runner) writeChannelEvidence() error {
 		"evm-connection.json": r.evmConnectionEvidence,
 		"gno-channel.json":    r.gnoChannelEvidence,
 		"evm-channel.json":    r.evmChannelEvidence,
-		"commands.json": map[string]any{
-			"connection_open_init": voyager.ConnectionOperation(
-				r.cfg.EVMChainID, r.current.Clients.EVMGno, r.current.Clients.GnoEVM,
-			),
-			"channel_open_init": voyager.ChannelOperation(
-				r.cfg.GnoChainID,
-				"0x"+hex.EncodeToString([]byte(r.cfg.GnoZKGMPort)),
-				strings.ToLower(r.cfg.EVMZKGMContract),
-				r.current.Connections.Gno,
-			),
-		},
-		"summary.json": r.current,
 	}
 	for name, value := range artifacts {
 		if err := r.writeEvidence(name, value); err != nil {

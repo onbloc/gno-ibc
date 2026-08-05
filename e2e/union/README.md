@@ -19,7 +19,7 @@ addresses are always discovered from the current workflow run.
 | upstream `networks/run-linux-devnet.sh` | Starts Union, EVM, and PostgreSQL |
 | `gno-compose.yml` | Starts Gno and the Gno transaction indexer |
 | `devnet.json` | Declares fixed chain IDs, endpoints, and public test accounts |
-| `provision.py` | Deploys and verifies contracts, then writes the runner environment |
+| `provision.py` | Deploys and verifies contracts, then writes `runner.json` |
 | `run-channel-e2e.sh` | Runs scenarios against the prepared environment |
 
 Compose is not invoked from the Dockerfile: image construction, service
@@ -54,7 +54,7 @@ printf '%s' "$CR_PAT" | docker login ghcr.io -u <github-user> --password-stdin
 export E2E_REGISTRY=ghcr.io
 export E2E_IMAGE_NAMESPACE=onbloc
 export UNION_VOYAGER_DIR=../union-voyager
-export UNION_VOYAGER_REVISION=82c70ec1ff84ec457e976ad94f38a5d5783b7836
+export UNION_VOYAGER_REVISION=$(python3 e2e/union/provision.py export-env | sed -n 's/^UNION_VOYAGER_REVISION=//p')
 
 GNO_IMAGE=$(e2e/union/ensure-image.sh gno)
 VOYAGER_IMAGE=$(e2e/union/ensure-image.sh voyager)
@@ -103,7 +103,8 @@ NO_BLOCKSCOUT=true \
 ./networks/run-linux-devnet.sh
 ```
 
-`git status --short` must be empty, and the revision must match `UNION_VOYAGER_REVISION` in `.env.example`.
+`git status --short` must be empty, and the revision must match
+`UNION_VOYAGER_REVISION` in `devnet.json`.
 
 Wait until the Union RPC (`:26657`), EVM RPC (`:8545`), and beacon RPC (`:9596`) are all available. From the devnet deployment output, record the following values:
 
@@ -128,7 +129,7 @@ Union must have the `trusted/evm/mpt` light client registered. If its address is
 
 Resolve the Gno image for the current checkout and start the following services with fresh Docker volumes:
 
-* `gnodev local -chain-id dev.ibc`
+* `gnodev local` using `GNO_CHAIN_ID` from `devnet.json`
 * Gno tx-indexer
 * PostgreSQL for Voyager
 
@@ -148,6 +149,8 @@ indexer. Run its setup profile exactly once
 for each fresh project to grant the required roles and invoke `Bootstrap`.
 
 ```sh
+export GNO_CHAIN_ID=$(python3 e2e/union/provision.py export-env | sed -n 's/^GNO_CHAIN_ID=//p')
+
 docker compose -f e2e/union/gno-compose.yml \
   -p <gno-project> up -d --wait
 
@@ -161,34 +164,42 @@ Since Voyager runs inside Docker, use `host.docker.internal:<port>` for host end
 
 ### 4. Configure the Runner
 
+After provisioning the chains, export the discovered contract addresses and
+write the single runner config. The file is created with mode `0600`.
+
 ```sh
 cd e2e/union
-install -m 600 .env.example .env
+export E2E_DEPLOYMENT_DIR=<deployment-output>
+export E2E_ARTIFACT_DIR=./channel-e2e-artifacts-<run-id>
+export E2E_CONFIG_FILE=$PWD/runner.json
+python3 provision.py write-runner-config
 ```
 
-Populate `.env` with the chain IDs, endpoints, contract addresses, public
-fixture keys, and PostgreSQL URL obtained above. Do not copy contract IDs or
-addresses from previous runs. The CI workflow uses `provision.py` to discover
-the dynamic values and write this file.
+Static chain IDs, endpoints, public fixture keys, and the Voyager revision
+come from `devnet.json`; current deployment addresses come from the exported
+provisioning results. Do not copy contract IDs or addresses from previous runs.
 
 When running ERC20 scenarios, deploy `fixtures/TestERC20.sol` to the new EVM deployment and set its address in `EVM_TEST_ERC20`.
 
-An example configuration using both Docker-internal and host endpoints is shown below.
+Override the corresponding `devnet.json` keys in the environment before
+`write-runner-config` when local endpoints differ. Timeout tuning remains an
+environment override at runner execution time:
 
 ```sh
-UNION_RPC_URL=http://host.docker.internal:26657
-EVM_RPC_URL=http://host.docker.internal:8545
-GNO_RPC_URL=http://host.docker.internal:16657
-GNO_TX_INDEXER_RPC_URL=http://host.docker.internal:48546/graphql/query
-VOYAGER_DATABASE_URL=postgresql://<user>:<password>@host.docker.internal:<port>/<database>
+export UNION_RPC_URL=http://host.docker.internal:26657
+export EVM_RPC_URL=http://host.docker.internal:8545
+export GNO_RPC_URL=http://host.docker.internal:16657
+export GNO_TX_INDEXER_RPC_URL=http://host.docker.internal:48546/graphql/query
+export VOYAGER_DATABASE_URL=postgresql://<user>:<password>@host.docker.internal:<port>/<database>
 
-UNION_PACKET_RPC_URL=http://127.0.0.1:26657
-EVM_PACKET_RPC_URL=http://127.0.0.1:8545
-GNO_PACKET_RPC_URL=http://127.0.0.1:16657
-GNO_PACKET_INDEXER_RPC_URL=http://127.0.0.1:48546/graphql/query
+export UNION_PACKET_RPC_URL=http://127.0.0.1:26657
+export EVM_PACKET_RPC_URL=http://127.0.0.1:8545
+export GNO_PACKET_RPC_URL=http://127.0.0.1:16657
+export GNO_PACKET_INDEXER_RPC_URL=http://127.0.0.1:48546/graphql/query
 
-E2E_ARTIFACT_DIR=./channel-e2e-artifacts-<run-id>
-E2E_STATE_FILE=./channel-e2e-artifacts-<run-id>/state.json
+export E2E_ARTIFACT_DIR=./channel-e2e-artifacts-<run-id>
+export E2E_STATE_FILE=./channel-e2e-artifacts-<run-id>/state.json
+export VOYAGER_COMMAND_TIMEOUT_SECONDS=120
 ```
 
 ### 5. Run the Scenarios
@@ -199,18 +210,24 @@ First, execute the read-only preflight. For a fresh environment, run the complet
 ./run-channel-e2e.sh
 ./run-channel-e2e.sh --apply \
   --forged-proof-rejection \
-  --erc20-to-gno \
   --amount-boundaries \
   --gno-to-evm
 ```
 
-After a successful run, inspect `summary.json` and the evidence generated for each scenario. Once the runner exits, no Voyager containers with the label `io.onbloc.gno-ibc.e2e.run` should remain.
+`--amount-boundaries` and `--gno-to-evm` automatically include the prerequisite
+`--erc20-to-gno` scenario.
 
-To execute additional scenarios while keeping the same chains and deployment, preserve the existing `state.json` and `.env`, then specify only the new scenario flags.
+After a successful run, inspect `state.json` and the evidence generated for each scenario. Once the runner exits, no Voyager containers with the label `io.onbloc.gno-ibc.e2e.run` should remain.
+
+To execute additional scenarios while keeping the same chains and deployment,
+preserve the existing `state.json` and `runner.json`, then specify only the new
+scenario flags.
 
 ```sh
 ./run-channel-e2e.sh --resume --apply --<new-scenario>
 ```
+
+`state.json` checkpoints only the completed client/connection/channel topology. If a write scenario fails, discard that disposable environment and start fresh; packet writes are not crash-resumable.
 
 If the Gno realms, genesis, deployment addresses, or topology change, do **not** use `--resume`. Instead, create a new environment following the procedure above.
 

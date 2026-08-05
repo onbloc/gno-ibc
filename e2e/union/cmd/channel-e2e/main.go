@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
 
 	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
@@ -22,28 +21,30 @@ func main() {
 
 func run() error {
 	options := scenario.Options{}
+	configPath := flag.String("config", "runner.json", "runner configuration JSON")
 	flag.BoolVar(&options.Apply, "apply", false, "allow broadcasts")
 	flag.BoolVar(&options.Resume, "resume", false, "resume from saved state")
 	flag.BoolVar(&options.ForgedProofRejection, "forged-proof-rejection", false, "reject a mutated live EVM membership proof")
 	flag.BoolVar(&options.ERC20ToGno, "erc20-to-gno", false, "run the ERC20 EVM-to-Gno scenario")
-	flag.BoolVar(&options.AmountBoundaries, "amount-boundaries", false, "run EVM-to-Gno amount boundary scenarios")
-	flag.BoolVar(&options.GnoToEVM, "gno-to-evm", false, "run Gno-to-EVM lifecycle and refund scenarios")
+	flag.BoolVar(&options.AmountBoundaries, "amount-boundaries", false, "run EVM-to-Gno amount boundary scenarios (includes --erc20-to-gno)")
+	flag.BoolVar(&options.GnoToEVM, "gno-to-evm", false, "run Gno-to-EVM lifecycle and refund scenarios (includes --erc20-to-gno)")
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "usage: %s [--resume] [--apply] [--forged-proof-rejection] [--erc20-to-gno] [--amount-boundaries] [--gno-to-evm]\n", os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), "usage: %s [--config path] [--resume] [--apply] [--forged-proof-rejection] [--erc20-to-gno] [--amount-boundaries] [--gno-to-evm]\n", os.Args[0])
 	}
 	flag.Parse()
 	if flag.NArg() != 0 {
 		flag.Usage()
 		os.Exit(2)
 	}
+	options.Normalize()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	scriptDir, err := resolveScriptDir()
+	scriptDir, err := os.Getwd()
 	if err != nil {
-		return err
+		return fmt.Errorf("cannot determine working directory")
 	}
-	cfg, err := config.Load(scriptDir, os.LookupEnv, options.ERC20ToGno)
+	cfg, err := config.Load(*configPath, scriptDir, os.LookupEnv, options.ERC20ToGno)
 	if err != nil {
 		return err
 	}
@@ -60,23 +61,4 @@ func run() error {
 		return nil
 	}
 	return nil
-}
-
-func resolveScriptDir() (string, error) {
-	dir := os.Getenv("E2E_SCRIPT_DIR")
-	if dir == "" {
-		var err error
-		dir, err = os.Getwd()
-		if err != nil {
-			return "", fmt.Errorf("cannot determine working directory")
-		}
-	}
-	dir, err := filepath.Abs(dir)
-	if err != nil {
-		return "", fmt.Errorf("cannot resolve E2E script directory")
-	}
-	if info, err := os.Stat(filepath.Join(dir, "config.jsonc.template")); err != nil || !info.Mode().IsRegular() {
-		return "", fmt.Errorf("E2E_SCRIPT_DIR has no config.jsonc.template: %s", dir)
-	}
-	return dir, nil
 }

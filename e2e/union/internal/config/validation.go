@@ -37,22 +37,16 @@ func (c Config) validate(packet bool) error {
 
 	for _, item := range required {
 		if item.value == "" {
-			return fmt.Errorf("missing required environment variable: %s", item.name)
+			return fmt.Errorf("missing required runner config value: %s", item.name)
 		}
 	}
 
-	if c.UnionChainID != "union-devnet-1" || c.GnoChainID != "dev.ibc" {
-		return fmt.Errorf("UNION_CHAIN_ID and GNO_CHAIN_ID must be union-devnet-1 and dev.ibc")
-	}
 	if n, ok := new(big.Int).SetString(c.EVMChainID, 10); !ok || n.Sign() <= 0 ||
 		strings.HasPrefix(c.EVMChainID, "+") || strings.HasPrefix(c.EVMChainID, "0") {
 		return fmt.Errorf("EVM_CHAIN_ID must be a positive decimal integer")
 	}
 	if !revisionPattern.MatchString(c.UnionVoyagerRevision) {
 		return fmt.Errorf("UNION_VOYAGER_REVISION must be a lowercase 40-character commit SHA")
-	}
-	if c.UnionVoyagerRevision != VoyagerRevision {
-		return fmt.Errorf("UNION_VOYAGER_REVISION must match the pinned Voyager revision")
 	}
 	if !gnoRealmPattern.MatchString(c.GnoZKGMPort) {
 		return fmt.Errorf("GNO_ZKGM_PORT must be a gno.land/r/... realm path")
@@ -90,7 +84,7 @@ func (c Config) validate(packet bool) error {
 		return nil
 	}
 	if c.EVMTestERC20 == "" || c.GnoRecipient == "" || c.EVMTestAmount == "" {
-		return fmt.Errorf("missing required packet environment variable")
+		return fmt.Errorf("missing required packet runner config value")
 	}
 	if !addressPattern.MatchString(c.EVMTestERC20) {
 		return fmt.Errorf("EVM_TEST_ERC20 must be a 20-byte hex address")

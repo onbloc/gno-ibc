@@ -17,6 +17,7 @@ on:
       - 'e2e/union/union-deployer-trusted-mpt.patch'
       - 'e2e/union/gno/**'
       - 'e2e/union/config.jsonc.template'
+      - 'e2e/union/devnet.json'
       - 'gno.land/**'
       - 'third_party/**'
       - '.github/workflows/e2e-images.yml'
@@ -37,12 +38,16 @@ jobs:
         with:
           submodules: ${{ matrix.component == 'gno' && 'recursive' || 'false' }}
 
+      - name: Load disposable devnet configuration
+        id: devnet
+        run: python3 e2e/union/provision.py export-env >>"$GITHUB_OUTPUT"
+
       - name: Check out pinned union-voyager
         if: matrix.component == 'voyager' || matrix.component == 'union-deployer'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: onbloc/union-voyager
-          ref: 82c70ec1ff84ec457e976ad94f38a5d5783b7836
+          ref: ${{ steps.devnet.outputs.UNION_VOYAGER_REVISION }}
           path: union-voyager
 
       - name: Log in to GHCR
@@ -63,7 +68,7 @@ jobs:
           E2E_VOYAGER_REPOSITORY: ${{ vars.E2E_VOYAGER_REPOSITORY }}
           E2E_UNION_DEPLOYER_REPOSITORY: ${{ vars.E2E_UNION_DEPLOYER_REPOSITORY }}
           UNION_VOYAGER_DIR: ${{ github.workspace }}/union-voyager
-          UNION_VOYAGER_REVISION: 82c70ec1ff84ec457e976ad94f38a5d5783b7836
+          UNION_VOYAGER_REVISION: ${{ steps.devnet.outputs.UNION_VOYAGER_REVISION }}
         run: |
           image=$(e2e/union/ensure-image.sh "${{ matrix.component }}" --push)
           printf '### %s\n\n%s\n' "${{ matrix.component }}" "$image" >>"$GITHUB_STEP_SUMMARY"

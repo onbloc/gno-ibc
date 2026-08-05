@@ -10,7 +10,6 @@ import (
 const (
 	ErrClientNotActive               = "client is not active"
 	ErrInvalidConnectionState        = "invalid connection state"
-	ErrInvalidCounterpartyConnection = "invalid counterparty connection id"
 	ErrInvalidChannelState           = "invalid channel state"
 	ErrInvalidCounterpartyChannelId  = "invalid counterparty channel id"
 	ErrSyncAckEmpty                  = "sync ack cannot be empty"

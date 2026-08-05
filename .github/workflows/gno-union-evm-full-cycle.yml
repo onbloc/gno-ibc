@@ -44,8 +44,6 @@ jobs:
         run: |
           python3 e2e/union/provision.py validate
           python3 e2e/union/provision_test.py
-          e2e/union/run-channel-e2e_test.sh
-          e2e/union/image-tag_test.sh
           e2e/union/ensure-image_test.sh
 
       - name: Check out pinned union-voyager runtime

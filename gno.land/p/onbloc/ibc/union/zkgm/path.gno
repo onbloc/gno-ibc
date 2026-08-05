@@ -106,11 +106,7 @@ func HopCount(path *u256.Uint) int {
 	return (path.BitLen() + int(channelSlotBit) - 1) / int(channelSlotBit)
 }
 
-// IsCanonicalPath reports whether every slot below HopCount(path) is
-// populated with a non-zero channel ID, i.e. path could have been produced
-// by a sequence of UpdateChannelPath calls. Callers that accept a path from
-// an untrusted source (wire-decoded packets) must reject non-canonical
-// paths before passing them to PopChannelFromPath/ReverseChannelPath.
+// IsCanonicalPath reports whether all occupied channel slots are contiguous.
 func IsCanonicalPath(path *u256.Uint) bool {
 	hops := HopCount(path)
 	for i := 0; i < hops; i++ {

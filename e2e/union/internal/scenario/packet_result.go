@@ -24,6 +24,8 @@ func (r *Runner) observePacket(ctx context.Context) (packetResult, error) {
 	if err != nil {
 		return packetResult{}, err
 	}
+	r.progressf("scenario erc20-to-gno: Gno received packet (tx=%s); waiting for EVM acknowledgement",
+		gnoEvents.ReceiveTx)
 	if err := r.verifyPacketFailedWork(ctx); err != nil {
 		return packetResult{}, err
 	}
@@ -42,6 +44,8 @@ func (r *Runner) observePacket(ctx context.Context) (packetResult, error) {
 	if err := r.evm.VerifyCommitmentCleared(ctx, packet.PacketHash); err != nil {
 		return packetResult{}, err
 	}
+	r.progressf("scenario erc20-to-gno: acknowledgement success=%t (tx=%s); commitment cleared",
+		success, evmAck.Tx)
 
 	sender, escrow, err := r.evm.Balances(ctx, packet.Sender)
 	if err != nil {
@@ -66,6 +70,8 @@ func (r *Runner) observePacket(ctx context.Context) (packetResult, error) {
 	if err := r.verifyPacketFailedWork(ctx); err != nil {
 		return packetResult{}, err
 	}
+	r.progressf("scenario erc20-to-gno: balance deltas sender=%s escrow=%s recipient=%s",
+		deltas.Sender, deltas.Escrow, deltas.Recipient)
 
 	outcome := state.PacketOutcomeFailure
 	if success {

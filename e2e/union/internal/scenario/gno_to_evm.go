@@ -38,6 +38,7 @@ func (r *Runner) runGnoToEVMScenarios(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	r.progressf("scenario gno-to-evm: indexing EVM from finalized height %s", from)
 	if err := r.voyager.Index(ctx, r.cfg.EVMChainID, from); err != nil {
 		return err
 	}
@@ -59,6 +60,8 @@ func (r *Runner) runTokenLifecycle(ctx context.Context) ([]gnoOrderResult, error
 	if err != nil {
 		return nil, err
 	}
+	r.progressf("scenario gno-to-evm: lifecycle amount=%sugnot wrapped_token=%s receiver=%s",
+		nativeLifecycleAmount, plan.Token, plan.Sender)
 	proxy, err := r.gno.ProxyAddress(ctx)
 	if err != nil {
 		return nil, err
@@ -93,6 +96,7 @@ func (r *Runner) runTokenLifecycle(ctx context.Context) ([]gnoOrderResult, error
 	if proxyAfterEscrow-proxyBefore != 2 {
 		return nil, fmt.Errorf("Gno proxy did not escrow both lifecycle sends")
 	}
+	r.progressf("scenario gno-to-evm: initialize and escrow verified wrapped_balance=2 proxy_delta=2")
 
 	if _, err := r.evm.ApproveToken(ctx, plan.Token, nativeLifecycleAmount); err != nil {
 		return nil, err
@@ -118,10 +122,14 @@ func (r *Runner) runTokenLifecycle(ctx context.Context) ([]gnoOrderResult, error
 	if err != nil {
 		return nil, err
 	}
+	r.progressf("scenario gno-to-evm: step=unescrow packet submitted hash=%s; waiting for Gno receive",
+		send.PacketHash)
 	gnoReceive, err := r.gno.WaitPacket(ctx, send.PacketHash)
 	if err != nil {
 		return nil, err
 	}
+	r.progressf("scenario gno-to-evm: step=unescrow Gno received packet (tx=%s); waiting for EVM acknowledgement",
+		gnoReceive.ReceiveTx)
 	evmAck, err := r.evm.WaitAcknowledgement(
 		ctx, snapshot.Block, r.current.Channels.EVM, send.PacketHash,
 	)
@@ -157,6 +165,7 @@ func (r *Runner) runTokenLifecycle(ctx context.Context) ([]gnoOrderResult, error
 			receiverAfter-receiverBefore, proxyAfter-proxyBefore,
 		)
 	}
+	r.progressf("scenario gno-to-evm: step=unescrow acknowledgement success=true; receiver_delta=1 proxy_delta=1")
 	unescrow := gnoOrderResult{
 		Name: "unescrow", PacketHash: send.PacketHash, SourceTx: send.Tx,
 		DestinationTx: gnoReceive.ReceiveTx, AckTx: evmAck.Tx, Success: true,
@@ -205,6 +214,7 @@ func (r *Runner) runInvalidQuote(ctx context.Context) (gnoOrderResult, error) {
 	if count != 0 {
 		return gnoOrderResult{}, fmt.Errorf("invalid quote packet unexpectedly timed out")
 	}
+	r.progressf("scenario gno-to-evm: invalid quote refunded recipient_delta=1 proxy_delta=0")
 	return result, nil
 }
 
@@ -242,18 +252,24 @@ func (r *Runner) runGnoOrder(
 	}); err != nil {
 		return gnoOrderResult{}, err
 	}
+	r.progressf("scenario gno-to-evm: step=%s amount=%sugnot kind=%d wrapped_token=%s expected_success=%t",
+		name, nativeLifecycleAmount, kind, plan.Token, wantSuccess)
 	send, err := r.gno.SendRaw(
 		ctx, r.current.Channels.Gno, operand, nativeLifecycleAmount+"ugnot",
 	)
 	if err != nil {
 		return gnoOrderResult{}, err
 	}
+	r.progressf("scenario gno-to-evm: step=%s packet submitted hash=%s (tx=%s); waiting for EVM receive",
+		name, send.PacketHash, send.Tx)
 	receive, err := r.evm.WaitReceive(
 		ctx, block, r.current.Channels.EVM, send.PacketHash,
 	)
 	if err != nil {
 		return gnoOrderResult{}, err
 	}
+	r.progressf("scenario gno-to-evm: step=%s EVM received packet (tx=%s); checking proof coverage",
+		name, receive.Tx)
 	membershipPath, err := r.evm.PacketCommitmentPath(ctx, send.PacketHash)
 	if err != nil {
 		return gnoOrderResult{}, err
@@ -277,6 +293,8 @@ func (r *Runner) runGnoOrder(
 			proofHeight, membershipHeight,
 		)
 	}
+	r.progressf("scenario gno-to-evm: step=%s proof covered membership_height=%d proof_height=%s; waiting for Gno acknowledgement",
+		name, membershipHeight, proofHeight)
 	ack, err := r.gno.WaitAcknowledgement(ctx, send.PacketHash)
 	if err != nil {
 		return gnoOrderResult{}, err
@@ -298,6 +316,8 @@ func (r *Runner) runGnoOrder(
 	if err := r.verifyNoNewFailedWork(ctx); err != nil {
 		return gnoOrderResult{}, err
 	}
+	r.progressf("scenario gno-to-evm: step=%s acknowledgement success=%t (tx=%s); commitment cleared",
+		name, success, ack.Tx)
 	return gnoOrderResult{
 		Name: name, PacketHash: send.PacketHash, SourceTx: send.Tx,
 		DestinationTx: receive.Tx, AckTx: ack.Tx, Success: success,

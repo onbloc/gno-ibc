@@ -35,6 +35,9 @@ func (r *Runner) mintERC20(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	r.progressf("scenario erc20-to-gno: transfer token=%s amount=%s (18 decimals) sender=%s recipient=%s voucher=%s",
+		strings.ToLower(r.cfg.EVMTestERC20), r.cfg.EVMTestAmount, plan.Sender,
+		r.cfg.GnoRecipient, plan.Voucher)
 	r.packet = &state.Packet{
 		Token: strings.ToLower(r.cfg.EVMTestERC20), Sender: plan.Sender,
 		Recipient: r.cfg.GnoRecipient, Amount: r.cfg.EVMTestAmount,
@@ -46,6 +49,7 @@ func (r *Runner) mintERC20(ctx context.Context) error {
 		return err
 	}
 	r.packet.MintTx = tx
+	r.progressf("scenario erc20-to-gno: minted token (tx=%s)", tx)
 	return nil
 }
 
@@ -55,6 +59,7 @@ func (r *Runner) approveERC20(ctx context.Context) error {
 		return err
 	}
 	r.packet.ApproveTx = tx
+	r.progressf("scenario erc20-to-gno: approved ZKGM transfer (tx=%s)", tx)
 	return nil
 }
 
@@ -81,5 +86,7 @@ func (r *Runner) sendTokenOrder(ctx context.Context) error {
 		return err
 	}
 	packet.SendTx, packet.PacketHash = result.Tx, result.PacketHash
+	r.progressf("scenario erc20-to-gno: packet submitted hash=%s (tx=%s); waiting for Gno receive",
+		result.PacketHash, result.Tx)
 	return nil
 }

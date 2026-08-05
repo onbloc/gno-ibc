@@ -319,6 +319,32 @@ func TestSetTargetClosedTargetsExplicitPathNotCaller(cur realm, t *testing.T) {
 	}
 }
 
+// Same regression as TestSetTargetClosedTargetsExplicitPathNotCaller, for
+// SetFunctionRole and SetFunctionRoles.
+func TestSetFunctionRoleTargetsExplicitPathNotCaller(cur realm, t *testing.T) {
+	admin := testutils.TestAddress("access-admin")
+	resetAccess(admin)
+
+	testing.SetRealm(testing.NewUserRealm(admin))
+	SetFunctionRole(cross(cur), CoreRealmPath, "set_hook", manager.PublicRole)
+
+	if GetFunctionRole(CoreRealmPath, "set_hook") != manager.PublicRole {
+		t.Fatal("SetFunctionRole must update the explicitly requested target's selector role")
+	}
+	if GetFunctionRole(cur.PkgPath(), "set_hook") != manager.AdminRole {
+		t.Fatal("SetFunctionRole must not update the caller's own path")
+	}
+
+	SetFunctionRoles(cross(cur), CoreRealmPath, []manager.Selector{"dispatch"}, manager.PublicRole)
+
+	if GetFunctionRole(CoreRealmPath, "dispatch") != manager.PublicRole {
+		t.Fatal("SetFunctionRoles must update the explicitly requested target's selector role")
+	}
+	if GetFunctionRole(cur.PkgPath(), "dispatch") != manager.AdminRole {
+		t.Fatal("SetFunctionRoles must not update the caller's own path")
+	}
+}
+
 func TestExplicitTargetPathGetters(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	relayer := testutils.TestAddress("access-relayer")

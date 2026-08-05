@@ -17,13 +17,48 @@ type PacketEvents struct {
 
 // PacketSend identifies one Gno-origin packet.
 type PacketSend struct {
-	Tx, PacketHash string
-	Height         int64
+	Tx, PacketHash   string
+	Height           int64
+	TimeoutTimestamp uint64
 }
 
 // PacketAck identifies one source-side acknowledgement.
 type PacketAck struct {
 	Tx, Value string
+}
+
+// PacketTimeout identifies one source-side timeout.
+type PacketTimeout struct {
+	Tx               string
+	TimeoutTimestamp uint64
+}
+
+// WaitTimeout returns exactly one source-side PacketTimeout.
+func (c *Client) WaitTimeout(ctx context.Context, packetHash string) (PacketTimeout, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, c.cfg.ScenarioTimeout)
+	defer cancel()
+	for {
+		events, err := c.queryEvents(
+			waitCtx, []string{"PacketTimeout"}, map[string]string{"packet_hash": packetHash},
+		)
+		if err != nil {
+			return PacketTimeout{}, err
+		}
+		switch len(events) {
+		case 0:
+			if err := pause(waitCtx, c.cfg.PollInterval); err != nil {
+				return PacketTimeout{}, fmt.Errorf("Gno PacketTimeout was not visible: %w", err)
+			}
+		case 1:
+			timestamp, err := strconv.ParseUint(attributeValue(events[0].Attrs, "timeout_timestamp"), 10, 64)
+			if err != nil || timestamp == 0 {
+				return PacketTimeout{}, fmt.Errorf("malformed Gno PacketTimeout timestamp")
+			}
+			return PacketTimeout{Tx: events[0].TxHash, TimeoutTimestamp: timestamp}, nil
+		default:
+			return PacketTimeout{}, fmt.Errorf("Gno PacketTimeout count=%d, want exactly one", len(events))
+		}
+	}
 }
 
 // WaitPacket requires exactly one PacketRecv and WriteAck in the same Gno transaction.
@@ -129,11 +164,16 @@ func (c *Client) WaitPacketSend(ctx context.Context, channel, after int64) (Pack
 			continue
 		}
 		packetHash := attributeValue(matches[0].Attrs, "packet_hash")
-		if !packetHashPattern.MatchString(packetHash) || matches[0].BlockHeight <= 0 {
+		timeoutTimestamp, err := strconv.ParseUint(
+			attributeValue(matches[0].Attrs, "timeout_timestamp"), 10, 64,
+		)
+		if !packetHashPattern.MatchString(packetHash) || matches[0].BlockHeight <= 0 ||
+			err != nil || timeoutTimestamp == 0 {
 			return PacketSend{}, fmt.Errorf("malformed Gno PacketSend hash")
 		}
 		return PacketSend{
 			Tx: matches[0].TxHash, PacketHash: packetHash, Height: matches[0].BlockHeight,
+			TimeoutTimestamp: timeoutTimestamp,
 		}, nil
 	}
 }

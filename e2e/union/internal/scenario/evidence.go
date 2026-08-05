@@ -79,7 +79,9 @@ func (r *Runner) containsSecret(data []byte) bool {
 	text := string(data)
 	for _, secret := range []string{
 		r.cfg.TrustedMPTPrivateKey, r.cfg.UnionPrivateKey,
-		r.cfg.EVMPrivateKey, r.cfg.GnoPrivateKey,
+		r.cfg.EVMPrivateKey, r.cfg.RelayerEmptyPrivateKey,
+		r.cfg.RelayerOfflinePrivateKey, r.cfg.RelayerRecoveryPrivateKey,
+		r.cfg.GnoPrivateKey,
 	} {
 		if secret != "" && strings.Contains(text, secret) {
 			return true

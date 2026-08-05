@@ -211,13 +211,40 @@ First, execute the read-only preflight. For a fresh environment, run the complet
 ./run-channel-e2e.sh --apply \
   --forged-proof-rejection \
   --amount-boundaries \
-  --gno-to-evm
+  --gno-to-evm \
+  --evm-to-gno-timeout-refund \
+  --gno-to-evm-timeout-refund
 ```
 
 `--amount-boundaries` and `--gno-to-evm` automatically include the prerequisite
 `--erc20-to-gno` scenario.
 
+Relayer failover scenarios must run against a fresh disposable EVM chain. They
+use distinct zero-balance fixture signers to verify secondary takeover and
+active-queue recovery:
+
+```sh
+./run-channel-e2e.sh --resume --apply \
+  --relayer-insufficient-balance-failover \
+  --relayer-offline-failover \
+  --relayer-balance-recovery
+```
+
+The timeout-refund scenarios set a three-minute packet timeout and temporarily
+pause the destination ZKGM. Both scenarios restore the destination app before
+returning, including on failure. Run them only when the destination starts
+unpaused; Gno ZKGM does not expose a pause-state query.
+
 After a successful run, inspect `state.json` and the evidence generated for each scenario. Once the runner exits, no Voyager containers with the label `io.onbloc.gno-ibc.e2e.run` should remain.
+
+The relayer evidence records the primary and final acknowledgement signers,
+active queue state, packet transactions, and whether takeover or retry
+completed. Balance exhaustion is intentionally checked as retryable active
+work; it is not expected to enter Voyager's failed queue.
+
+Timeout evidence records pause, send, timeout, and unpause transactions plus
+the source refund deltas and cleared packet commitment. A destination receive
+or source acknowledgement fails the timeout scenario.
 
 To execute additional scenarios while keeping the same chains and deployment,
 preserve the existing `state.json` and `runner.json`, then specify only the new

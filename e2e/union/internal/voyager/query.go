@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -40,6 +41,24 @@ func (r *Runtime) ActiveQueueStats(ctx context.Context) (QueueStats, error) {
 		return QueueStats{}, ErrMalformedResponse
 	}
 	return stats, nil
+}
+
+// WaitActiveQueue waits until Voyager has work pending or ready.
+func (r *Runtime) WaitActiveQueue(ctx context.Context) (QueueStats, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, r.cfg.ScenarioTimeout)
+	defer cancel()
+	for {
+		stats, err := r.ActiveQueueStats(waitCtx)
+		if err != nil {
+			return QueueStats{}, err
+		}
+		if stats.Total > 0 {
+			return stats, nil
+		}
+		if err := pause(waitCtx, r.cfg.PollInterval); err != nil {
+			return QueueStats{}, fmt.Errorf("active queue remained empty: %w", err)
+		}
+	}
 }
 
 // EncodedMembershipProof asks the pinned Voyager instance to query and encode

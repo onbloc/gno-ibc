@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/gno"
@@ -36,17 +37,11 @@ func (r *Runner) runRelayerInsufficientBalanceFailover(ctx context.Context) erro
 		if packet.GnoEvents, err = r.gno.WaitPacket(ctx, packet.PacketHash); err != nil {
 			return err
 		}
-		if err := r.voyager.WaitRetryableTransactionError(ctx); err != nil {
-			return err
-		}
-		stats, err := r.voyager.ActiveQueueStats(ctx)
+		stats, err := r.voyager.WaitActiveQueue(ctx)
 		if err != nil {
 			return err
 		}
-		if stats.Total == 0 {
-			return fmt.Errorf("insufficient-balance work is not in the active queue")
-		}
-		r.progressf("scenario relayer-insufficient-balance-failover: primary retryable error observed active_queue=%d; starting secondary", stats.Total)
+		r.progressf("scenario relayer-insufficient-balance-failover: acknowledgement pending active_queue=%d; starting secondary", stats.Total)
 		return r.withSecondary(ctx, rendered, func(secondary *voyager.Runtime) error {
 			ackTx, err := r.finishRelayerPacket(ctx, secondary, packet)
 			if err != nil {
@@ -118,17 +113,15 @@ func (r *Runner) runRelayerBalanceRecovery(ctx context.Context) error {
 		if packet.GnoEvents, err = r.gno.WaitPacket(ctx, packet.PacketHash); err != nil {
 			return err
 		}
-		if err := r.voyager.WaitRetryableTransactionError(ctx); err != nil {
+		pendingDuration := 2 * r.cfg.EVMRefreshInterval
+		if err := r.requireAcknowledgementPending(ctx, packet, pendingDuration); err != nil {
 			return err
 		}
-		stats, err := r.voyager.ActiveQueueStats(ctx)
+		stats, err := r.voyager.WaitActiveQueue(ctx)
 		if err != nil {
 			return err
 		}
-		if stats.Total == 0 {
-			return fmt.Errorf("insufficient-balance work is not in the active queue")
-		}
-		r.progressf("scenario relayer-balance-recovery: retryable work active_queue=%d; funding signer=%s amount_wei=%s", stats.Total, address, relayerFundingWei)
+		r.progressf("scenario relayer-balance-recovery: acknowledgement remained pending for %s active_queue=%d; funding signer=%s amount_wei=%s", pendingDuration, stats.Total, address, relayerFundingWei)
 		if err := r.verifyRelayerFailedWork(ctx, r.voyager); err != nil {
 			return err
 		}
@@ -158,6 +151,19 @@ func (r *Runner) runRelayerBalanceRecovery(ctx context.Context) error {
 			"active_retry_completed": true,
 		})
 	})
+}
+
+func (r *Runner) requireAcknowledgementPending(ctx context.Context, packet relayerPacket, duration time.Duration) error {
+	waitCtx, cancel := context.WithTimeout(ctx, duration)
+	defer cancel()
+	_, err := r.evm.WaitAcknowledgement(waitCtx, packet.FromBlock, r.current.Channels.EVM, packet.PacketHash)
+	if err == nil {
+		return fmt.Errorf("zero-balance relayer unexpectedly acknowledged packet")
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	return nil
 }
 
 func (r *Runner) withSecondary(ctx context.Context, rendered []byte, run func(*voyager.Runtime) error) (runErr error) {

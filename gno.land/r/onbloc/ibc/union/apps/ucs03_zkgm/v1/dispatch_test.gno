@@ -113,6 +113,20 @@ func TestAcknowledgeInternal(cur realm, t *testing.T) {
 			instr:   batchMustCallInstruction(z.Call{}),
 			wantErr: "",
 		},
+		{
+			name:    "malformed forward",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_FORWARD, Operand: []byte{0x01}},
+			wantErr: "invalid",
+		},
+		{
+			name: "forward wrapping call",
+			instr: z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_FORWARD, Operand: mustForwardBytes(z.Forward{
+				Path:             forwardPath(9),
+				TimeoutTimestamp: 999,
+				Instruction:      batchMustCallInstruction(z.Call{}),
+			})},
+			wantErr: "",
+		},
 	}
 
 	for _, tc := range cases {
@@ -154,6 +168,20 @@ func TestTimeoutInternal(cur realm, t *testing.T) {
 		{
 			name:    "successful call",
 			instr:   batchMustCallInstruction(z.Call{}),
+			wantErr: "",
+		},
+		{
+			name:    "malformed forward",
+			instr:   z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_FORWARD, Operand: []byte{0x01}},
+			wantErr: "invalid",
+		},
+		{
+			name: "forward wrapping call",
+			instr: z.Instruction{Version: z.INSTR_VERSION_0, Opcode: z.OP_FORWARD, Operand: mustForwardBytes(z.Forward{
+				Path:             forwardPath(9),
+				TimeoutTimestamp: 999,
+				Instruction:      batchMustCallInstruction(z.Call{}),
+			})},
 			wantErr: "",
 		},
 	}
@@ -538,4 +566,154 @@ func mustTokenOrderOuterAck(orderAck z.TokenOrderAck) []byte {
 		panic(err)
 	}
 	return ack
+}
+
+func TestAcknowledgeInternalOpForwardSettlesAtForwardPath(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	sourceChannelId := types.ChannelId(1)
+	path := forwardPath(9)
+	baseToken := []byte("ibc/toplevel-fwd-ack-base")
+	quoteToken := []byte("quote")
+	sender := testAddress("fwd-ack-sender")
+	marketMaker := testAddress("fwd-ack-maker")
+
+	order := z.TokenOrderV2{
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+		Sender:      []byte(sender),
+		BaseToken:   baseToken,
+		QuoteToken:  quoteToken,
+		BaseAmount:  u256.NewUint(50),
+		QuoteAmount: u256.NewUint(50),
+	}
+
+	// Seed exactly what verifyForward (send-side) would already have
+	// recorded: the proxy holds the escrowed voucher, and the channel
+	// balance is keyed by (sourceChannelId, forward.Path, ...).
+	v.increaseChannelBalanceV2(0, cur, sourceChannelId, path, baseToken, quoteToken, order.BaseAmount.Int64())
+	uassert.NoError(t, v.mintVoucher(0, cur, string(baseToken), [32]byte{}, "Escrow Ack", "ESCFWDA", 0, cur.Address(), order.BaseAmount))
+
+	packet := core.NewPacket(sourceChannelId, types.ChannelId(2), nil, 0)
+	forwardInstr := z.Instruction{
+		Version: z.INSTR_VERSION_0,
+		Opcode:  z.OP_FORWARD,
+		Operand: mustForwardBytes(z.Forward{
+			Path:             path,
+			TimeoutTimestamp: 999,
+			Instruction:      batchMustOrderInstruction(order),
+		}),
+	}
+	orderAck, err := z.EncodeTokenOrderAck(marketMakerAck(string(marketMaker)))
+	uassert.NoError(t, err)
+
+	// path=u256.Zero() here mirrors OnAcknowledgementPacket's real call: a
+	// top-level send's zp.Path is always zero, so this is the value the
+	// OP_FORWARD branch must NOT use for settlement.
+	err = v.acknowledgeInternal(0, cur, packet, address(testAddress("fwd-ack-relayer")), [32]byte{}, u256.Zero(), forwardInstr, true, orderAck)
+
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(50), voucherBalanceOf(string(baseToken), marketMaker))
+
+	bal, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(sourceChannelId, path, baseToken, quoteToken))
+	uassert.True(t, ok)
+	uassert.Equal(t, "0", bal.ToString())
+}
+
+// TestAcknowledgeInternalOpForwardProtocolFillIsNoop covers the other
+// acknowledgeTokenOrderV2 branch for a top-level forward: a protocol-fill ack
+// (as opposed to the market-maker-fill ack in
+// TestAcknowledgeInternalOpForwardSettlesAtForwardPath) is a no-op for an
+// escrow -- the channel balance and escrowed voucher must stay untouched.
+// Before the High-1 fix this ack would panic with errUnsupportedOpcode
+// regardless of fill type, since acknowledgeInternal never reached
+// acknowledgeTokenOrderV2 for a top-level OP_FORWARD at all.
+func TestAcknowledgeInternalOpForwardProtocolFillIsNoop(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	sourceChannelId := types.ChannelId(1)
+	path := forwardPath(9)
+	baseToken := []byte("ibc/toplevel-fwd-ack-proto-base")
+	quoteToken := []byte("quote")
+	sender := testAddress("fwd-ack-proto-sndr")
+
+	order := z.TokenOrderV2{
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+		Sender:      []byte(sender),
+		BaseToken:   baseToken,
+		QuoteToken:  quoteToken,
+		BaseAmount:  u256.NewUint(50),
+		QuoteAmount: u256.NewUint(50),
+	}
+
+	v.increaseChannelBalanceV2(0, cur, sourceChannelId, path, baseToken, quoteToken, order.BaseAmount.Int64())
+	uassert.NoError(t, v.mintVoucher(0, cur, string(baseToken), [32]byte{}, "Escrow Ack Proto", "ESCFWDAP", 0, cur.Address(), order.BaseAmount))
+
+	packet := core.NewPacket(sourceChannelId, types.ChannelId(2), nil, 0)
+	forwardInstr := z.Instruction{
+		Version: z.INSTR_VERSION_0,
+		Opcode:  z.OP_FORWARD,
+		Operand: mustForwardBytes(z.Forward{
+			Path:             path,
+			TimeoutTimestamp: 999,
+			Instruction:      batchMustOrderInstruction(order),
+		}),
+	}
+	orderAck, err := z.EncodeTokenOrderAck(z.TokenOrderAck{FillType: fillTypeProtocol()})
+	uassert.NoError(t, err)
+
+	err = v.acknowledgeInternal(0, cur, packet, address(testAddress("fwd-ack-proto-rly")), [32]byte{}, u256.Zero(), forwardInstr, true, orderAck)
+
+	uassert.NoError(t, err)
+
+	// Protocol fill is a no-op: the escrow stays exactly as seeded (still
+	// backing the voucher that now exists on the destination chain).
+	uassert.Equal(t, int64(0), voucherBalanceOf(string(baseToken), sender))
+	bal, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(sourceChannelId, path, baseToken, quoteToken))
+	uassert.True(t, ok)
+	uassert.Equal(t, order.BaseAmount.ToString(), bal.ToString())
+}
+
+func TestTimeoutInternalOpForwardRefundsAtForwardPath(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	sourceChannelId := types.ChannelId(1)
+	path := forwardPath(9)
+	baseToken := []byte("ibc/toplevel-fwd-timeout-base")
+	quoteToken := []byte("quote")
+	sender := testAddress("fwd-tmo-sender")
+
+	order := z.TokenOrderV2{
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+		Sender:      []byte(sender),
+		BaseToken:   baseToken,
+		QuoteToken:  quoteToken,
+		BaseAmount:  u256.NewUint(30),
+		QuoteAmount: u256.NewUint(30),
+	}
+
+	v.increaseChannelBalanceV2(0, cur, sourceChannelId, path, baseToken, quoteToken, order.BaseAmount.Int64())
+	uassert.NoError(t, v.mintVoucher(0, cur, string(baseToken), [32]byte{}, "Escrow Timeout", "ESCFWDT", 0, cur.Address(), order.BaseAmount))
+
+	packet := core.NewPacket(sourceChannelId, types.ChannelId(2), nil, 0)
+	forwardInstr := z.Instruction{
+		Version: z.INSTR_VERSION_0,
+		Opcode:  z.OP_FORWARD,
+		Operand: mustForwardBytes(z.Forward{
+			Path:             path,
+			TimeoutTimestamp: 999,
+			Instruction:      batchMustOrderInstruction(order),
+		}),
+	}
+
+	err := v.timeoutInternal(0, cur, packet, [32]byte{}, u256.Zero(), forwardInstr)
+
+	uassert.NoError(t, err)
+	uassert.Equal(t, int64(30), voucherBalanceOf(string(baseToken), sender))
+
+	bal, ok := testStore.GetChannelBalanceV2(ChannelBalanceKeyV2(sourceChannelId, path, baseToken, quoteToken))
+	uassert.True(t, ok)
+	uassert.Equal(t, "0", bal.ToString())
 }

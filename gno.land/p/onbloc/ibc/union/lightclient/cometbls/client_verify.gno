@@ -121,9 +121,8 @@ func checkedAddUint64(a uint64, b uint64) (uint64, bool) {
 	return sum, false
 }
 
-// verifyMisbehaviour requires both headers to independently verify and the
-// pair to match an equivocation (same-height, conflicting headers) or a
-// non-increasing-time (different-height) condition.
+// verifyMisbehaviour verifies both headers and checks for same-height conflict
+// or non-increasing time across heights.
 // Union reference:
 // https://github.com/unionlabs/union/blob/3b1e861e9724601c458af278a30420cb11a72314/evm/contracts/clients/CometblsClient.sol#L280-L316
 func (c *CometblsLightClient) verifyMisbehaviour(misbehaviour *Misbehaviour, now time.Time) error {

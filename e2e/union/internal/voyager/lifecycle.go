@@ -276,6 +276,29 @@ func (r *Runtime) Restart(ctx context.Context, rendered []byte) error {
 	return r.Start(ctx, rendered)
 }
 
+// WaitRetryableTransactionError waits until this instance reports a retryable
+// insufficient-balance transaction without dumping unbounded Voyager logs.
+func (r *Runtime) WaitRetryableTransactionError(ctx context.Context) error {
+	waitCtx, cancel := context.WithTimeout(ctx, r.cfg.ScenarioTimeout)
+	defer cancel()
+	for {
+		result, err := r.command(waitCtx, process.Command{
+			Name: "docker", Args: []string{"logs", "--tail", "200", r.container},
+		})
+		if err != nil {
+			return fmt.Errorf("read Voyager logs: %w", err)
+		}
+		logs := strings.ToLower(string(result.Stdout) + string(result.Stderr))
+		if strings.Contains(logs, "retryable error") &&
+			(strings.Contains(logs, "out of gas") || strings.Contains(logs, "insufficient funds")) {
+			return nil
+		}
+		if err := pause(waitCtx, r.cfg.PollInterval); err != nil {
+			return fmt.Errorf("Voyager did not report a retryable insufficient-balance transaction: %w", err)
+		}
+	}
+}
+
 func pause(ctx context.Context, duration time.Duration) error {
 	timer := time.NewTimer(duration)
 	defer timer.Stop()

@@ -25,46 +25,49 @@ var (
 
 // Config is the validated private configuration for the live runner.
 type Config struct {
-	ScriptDir              string        `json:"-"`
-	UnionChainID           string        `json:"UNION_CHAIN_ID"`
-	EVMChainID             string        `json:"EVM_CHAIN_ID"`
-	GnoChainID             string        `json:"GNO_CHAIN_ID"`
-	UnionVoyagerRevision   string        `json:"UNION_VOYAGER_REVISION"`
-	UnionIBCHostContract   string        `json:"UNION_IBC_HOST_CONTRACT"`
-	EVMIBCHandler          string        `json:"EVM_IBC_HANDLER"`
-	EVMMulticall           string        `json:"EVM_MULTICALL"`
-	EVMCometBLSClientImpl  string        `json:"EVM_COMETBLS_CLIENT_IMPL"`
-	EVMProofLensClientImpl string        `json:"EVM_PROOF_LENS_CLIENT_IMPL"`
-	GnoIBCCoreRealm        string        `json:"GNO_IBC_CORE_REALM"`
-	GnoZKGMPort            string        `json:"GNO_ZKGM_PORT"`
-	EVMZKGMContract        string        `json:"EVM_ZKGM_CONTRACT"`
-	GaloisProverEndpoint   string        `json:"GALOIS_PROVER_ENDPOINT"`
-	UnionRPCURL            string        `json:"UNION_RPC_URL"`
-	EVMRPCURL              string        `json:"EVM_RPC_URL"`
-	GnoRPCURL              string        `json:"GNO_RPC_URL"`
-	GnoTxIndexerRPCURL     string        `json:"GNO_TX_INDEXER_RPC_URL"`
-	VoyagerDatabaseURL     string        `json:"VOYAGER_DATABASE_URL"`
-	TrustedMPTPrivateKey   string        `json:"TRUSTED_MPT_PRIVATE_KEY"`
-	UnionPrivateKey        string        `json:"UNION_PRIVATE_KEY"`
-	EVMPrivateKey          string        `json:"EVM_PRIVATE_KEY"`
-	GnoPrivateKey          string        `json:"GNO_PRIVATE_KEY"`
-	EVMTestERC20           string        `json:"EVM_TEST_ERC20"`
-	GnoRecipient           string        `json:"GNO_RECIPIENT"`
-	EVMTestAmount          string        `json:"EVM_TEST_AMOUNT"`
-	UnionPacketRPCURL      string        `json:"UNION_PACKET_RPC_URL"`
-	EVMPacketRPCURL        string        `json:"EVM_PACKET_RPC_URL"`
-	GnoPacketRPCURL        string        `json:"GNO_PACKET_RPC_URL"`
-	GnoPacketIndexerRPCURL string        `json:"GNO_PACKET_INDEXER_RPC_URL"`
-	ArtifactDir            string        `json:"E2E_ARTIFACT_DIR"`
-	StateFile              string        `json:"E2E_STATE_FILE"`
-	VoyagerImage           string        `json:"VOYAGER_IMAGE"`
-	VoyagerRustLog         string        `json:"-"`
-	CommandTimeout         time.Duration `json:"-"`
-	ScenarioTimeout        time.Duration `json:"-"`
-	PollInterval           time.Duration `json:"-"`
-	EVMRefreshInterval     time.Duration `json:"-"`
-	VoyagerStopTimeout     time.Duration `json:"-"`
-	CleanupTimeout         time.Duration `json:"-"`
+	ScriptDir                 string        `json:"-"`
+	UnionChainID              string        `json:"UNION_CHAIN_ID"`
+	EVMChainID                string        `json:"EVM_CHAIN_ID"`
+	GnoChainID                string        `json:"GNO_CHAIN_ID"`
+	UnionVoyagerRevision      string        `json:"UNION_VOYAGER_REVISION"`
+	UnionIBCHostContract      string        `json:"UNION_IBC_HOST_CONTRACT"`
+	EVMIBCHandler             string        `json:"EVM_IBC_HANDLER"`
+	EVMMulticall              string        `json:"EVM_MULTICALL"`
+	EVMCometBLSClientImpl     string        `json:"EVM_COMETBLS_CLIENT_IMPL"`
+	EVMProofLensClientImpl    string        `json:"EVM_PROOF_LENS_CLIENT_IMPL"`
+	GnoIBCCoreRealm           string        `json:"GNO_IBC_CORE_REALM"`
+	GnoZKGMPort               string        `json:"GNO_ZKGM_PORT"`
+	EVMZKGMContract           string        `json:"EVM_ZKGM_CONTRACT"`
+	GaloisProverEndpoint      string        `json:"GALOIS_PROVER_ENDPOINT"`
+	UnionRPCURL               string        `json:"UNION_RPC_URL"`
+	EVMRPCURL                 string        `json:"EVM_RPC_URL"`
+	GnoRPCURL                 string        `json:"GNO_RPC_URL"`
+	GnoTxIndexerRPCURL        string        `json:"GNO_TX_INDEXER_RPC_URL"`
+	VoyagerDatabaseURL        string        `json:"VOYAGER_DATABASE_URL"`
+	TrustedMPTPrivateKey      string        `json:"TRUSTED_MPT_PRIVATE_KEY"`
+	UnionPrivateKey           string        `json:"UNION_PRIVATE_KEY"`
+	EVMPrivateKey             string        `json:"EVM_PRIVATE_KEY"`
+	RelayerEmptyPrivateKey    string        `json:"RELAYER_EMPTY_PRIVATE_KEY"`
+	RelayerOfflinePrivateKey  string        `json:"RELAYER_OFFLINE_PRIVATE_KEY"`
+	RelayerRecoveryPrivateKey string        `json:"RELAYER_RECOVERY_PRIVATE_KEY"`
+	GnoPrivateKey             string        `json:"GNO_PRIVATE_KEY"`
+	EVMTestERC20              string        `json:"EVM_TEST_ERC20"`
+	GnoRecipient              string        `json:"GNO_RECIPIENT"`
+	EVMTestAmount             string        `json:"EVM_TEST_AMOUNT"`
+	UnionPacketRPCURL         string        `json:"UNION_PACKET_RPC_URL"`
+	EVMPacketRPCURL           string        `json:"EVM_PACKET_RPC_URL"`
+	GnoPacketRPCURL           string        `json:"GNO_PACKET_RPC_URL"`
+	GnoPacketIndexerRPCURL    string        `json:"GNO_PACKET_INDEXER_RPC_URL"`
+	ArtifactDir               string        `json:"E2E_ARTIFACT_DIR"`
+	StateFile                 string        `json:"E2E_STATE_FILE"`
+	VoyagerImage              string        `json:"VOYAGER_IMAGE"`
+	VoyagerRustLog            string        `json:"-"`
+	CommandTimeout            time.Duration `json:"-"`
+	ScenarioTimeout           time.Duration `json:"-"`
+	PollInterval              time.Duration `json:"-"`
+	EVMRefreshInterval        time.Duration `json:"-"`
+	VoyagerStopTimeout        time.Duration `json:"-"`
+	CleanupTimeout            time.Duration `json:"-"`
 }
 
 // Load reads, defaults, and validates a runner config file.
@@ -107,6 +110,9 @@ func Load(path, scriptDir string, lookup func(string) (string, bool), packet boo
 		cfg.GnoChainID != pinned.Runner.GnoChainID {
 		return Config{}, errors.New("runner config pinned values do not match devnet.json")
 	}
+	cfg.RelayerEmptyPrivateKey = pinned.Runner.RelayerEmptyPrivateKey
+	cfg.RelayerOfflinePrivateKey = pinned.Runner.RelayerOfflinePrivateKey
+	cfg.RelayerRecoveryPrivateKey = pinned.Runner.RelayerRecoveryPrivateKey
 
 	if cfg.ArtifactDir == "" {
 		cfg.ArtifactDir = filepath.Join(scriptDir, "channel-e2e-artifacts")

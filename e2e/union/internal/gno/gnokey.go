@@ -138,30 +138,30 @@ func (c *Client) SendRaw(
 	channel int64,
 	operand, sendCoins string,
 ) (PacketSend, error) {
+	return c.SendRawWithTimeout(ctx, channel, operand, sendCoins, time.Now().Add(time.Hour))
+}
+
+// SendRawWithTimeout broadcasts one direct EOA SendRaw call with an explicit timeout.
+func (c *Client) SendRawWithTimeout(
+	ctx context.Context,
+	channel int64,
+	operand, sendCoins string,
+	timeout time.Time,
+) (PacketSend, error) {
+	if !timeout.After(time.Now()) {
+		return PacketSend{}, fmt.Errorf("Gno packet timeout must be in the future")
+	}
 	before, err := c.latestEventHeight(ctx, "PacketSend", map[string]string{
 		"source_channel_id": strconv.FormatInt(channel, 10),
 	})
 	if err != nil {
 		return PacketSend{}, err
 	}
-	home, err := os.MkdirTemp("", "union-gnokey-*")
+	home, err := c.devSenderHome(ctx)
 	if err != nil {
-		return PacketSend{}, fmt.Errorf("cannot create Gno keyring")
+		return PacketSend{}, err
 	}
 	defer os.RemoveAll(home)
-	recoveryInput := strings.NewReader(devSenderMnemonic + "\n\n\n")
-	if _, err := c.runGnokey(ctx, recoveryInput,
-		"add", "-recover", "-insecure-password-stdin", "-home", home, "sender",
-	); err != nil {
-		return PacketSend{}, err
-	}
-	list, err := c.gnokey(ctx, "list", "-home", home)
-	if err != nil {
-		return PacketSend{}, err
-	}
-	if !strings.Contains(string(list), "addr: "+c.cfg.GnoRecipient+" ") {
-		return PacketSend{}, fmt.Errorf("Gno sender fixture does not match GNO_RECIPIENT")
-	}
 	salt := make([]byte, 32)
 	if _, err := rand.Read(salt); err != nil {
 		return PacketSend{}, fmt.Errorf("cannot generate packet salt")
@@ -177,9 +177,9 @@ func (c *Client) SendRaw(
 	if sendCoins != "" {
 		args = append(args, "-send", sendCoins)
 	}
-	timeout := uint64(time.Now().Add(time.Hour).UnixNano())
+	timeoutTimestamp := uint64(timeout.UnixNano())
 	for _, arg := range []string{
-		strconv.FormatInt(channel, 10), strconv.FormatUint(timeout, 10),
+		strconv.FormatInt(channel, 10), strconv.FormatUint(timeoutTimestamp, 10),
 		hex.EncodeToString(salt), "2", "3", operand,
 	} {
 		args = append(args, "-args", arg)
@@ -188,7 +188,65 @@ func (c *Client) SendRaw(
 	if _, err := c.runGnokey(ctx, strings.NewReader("\n"), args...); err != nil {
 		return PacketSend{}, err
 	}
-	return c.WaitPacketSend(ctx, channel, before)
+	send, err := c.WaitPacketSend(ctx, channel, before)
+	if err != nil {
+		return PacketSend{}, err
+	}
+	if send.TimeoutTimestamp != timeoutTimestamp {
+		return PacketSend{}, fmt.Errorf("Gno PacketSend timeout=%d, want %d", send.TimeoutTimestamp, timeoutTimestamp)
+	}
+	return send, nil
+}
+
+// SetZKGMPaused calls the ZKGM admin entrypoint directly from the dev EOA.
+func (c *Client) SetZKGMPaused(ctx context.Context, paused bool) (string, error) {
+	eventType := "ZkgmUnpaused"
+	if paused {
+		eventType = "ZkgmPaused"
+	}
+	before, err := c.latestRealmEventHeight(ctx, c.cfg.GnoZKGMPort, eventType, nil)
+	if err != nil {
+		return "", err
+	}
+	home, err := c.devSenderHome(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(home)
+	args := []string{
+		"maketx", "call", "-pkgpath", c.cfg.GnoZKGMPort, "-func", "Pausable",
+		"-gas-fee", "1000000ugnot", "-gas-wanted", "90000000",
+		"-broadcast", "-chainid", c.cfg.GnoChainID, "-remote", c.cfg.GnoPacketRPCURL,
+		"-insecure-password-stdin", "-home", home, "-args", strconv.FormatBool(paused), "sender",
+	}
+	if _, err := c.runGnokey(ctx, strings.NewReader("\n"), args...); err != nil {
+		return "", err
+	}
+	return c.waitRealmEventAfter(ctx, c.cfg.GnoZKGMPort, eventType, before)
+}
+
+func (c *Client) devSenderHome(ctx context.Context) (string, error) {
+	home, err := os.MkdirTemp("", "union-gnokey-*")
+	if err != nil {
+		return "", fmt.Errorf("cannot create Gno keyring")
+	}
+	recoveryInput := strings.NewReader(devSenderMnemonic + "\n\n\n")
+	if _, err := c.runGnokey(ctx, recoveryInput,
+		"add", "-recover", "-insecure-password-stdin", "-home", home, "sender",
+	); err != nil {
+		os.RemoveAll(home)
+		return "", err
+	}
+	list, err := c.gnokey(ctx, "list", "-home", home)
+	if err != nil {
+		os.RemoveAll(home)
+		return "", err
+	}
+	if !strings.Contains(string(list), "addr: "+DevSenderAddress+" ") {
+		os.RemoveAll(home)
+		return "", fmt.Errorf("Gno dev sender fixture address is incorrect")
+	}
+	return home, nil
 }
 
 func (c *Client) qeval(ctx context.Context, expression string) ([]byte, error) {

@@ -23,6 +23,25 @@ type stateResponse struct {
 	State json.RawMessage `json:"state"`
 }
 
+// QueueStats is the observable state of Voyager's active queue.
+type QueueStats struct {
+	Total int64 `json:"total"`
+	Ready int64 `json:"ready"`
+}
+
+// ActiveQueueStats returns counts from the shared PostgreSQL active queue.
+func (r *Runtime) ActiveQueueStats(ctx context.Context) (QueueStats, error) {
+	result, err := r.retryQueue(ctx, "stats")
+	if err != nil {
+		return QueueStats{}, err
+	}
+	var stats QueueStats
+	if json.Unmarshal(result.Stdout, &stats) != nil || stats.Total < 0 || stats.Ready < 0 || stats.Ready > stats.Total {
+		return QueueStats{}, ErrMalformedResponse
+	}
+	return stats, nil
+}
+
 // EncodedMembershipProof asks the pinned Voyager instance to query and encode
 // an EVM proof for the deployed Gno State Lens client.
 func (r *Runtime) EncodedMembershipProof(

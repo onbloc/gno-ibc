@@ -106,6 +106,23 @@ func TestDependentScenariosEnableERC20ToGno(t *testing.T) {
 	}
 }
 
+func TestPacketEnabled(t *testing.T) {
+	for _, options := range []Options{
+		{ERC20ToGno: true},
+		{AmountBoundaries: true},
+		{GnoToEVM: true},
+		{RelayerInsufficientBalanceFailover: true},
+		{RelayerOfflineFailover: true},
+		{RelayerBalanceRecovery: true},
+		{EVMToGnoTimeoutRefund: true},
+		{GnoToEVMTimeoutRefund: true},
+	} {
+		if !options.PacketEnabled() {
+			t.Fatalf("options %#v did not enable packet config", options)
+		}
+	}
+}
+
 type recordingExecutor struct {
 	commands []process.Command
 	results  []process.Result
@@ -129,21 +146,24 @@ func testConfig(t *testing.T) config.Config {
 	}
 	artifactDir := filepath.Join(t.TempDir(), "artifacts")
 	return config.Config{
-		ScriptDir:              scriptDir,
-		UnionChainID:           "union-devnet-1",
-		EVMChainID:             "17000",
-		GnoChainID:             "dev.ibc",
-		UnionVoyagerRevision:   testVoyagerRevision,
-		EVMIBCHandler:          "0x1111111111111111111111111111111111111111",
-		EVMMulticall:           "0x2222222222222222222222222222222222222222",
-		EVMCometBLSClientImpl:  "0x3333333333333333333333333333333333333333",
-		EVMProofLensClientImpl: "0x4444444444444444444444444444444444444444",
-		GnoZKGMPort:            "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
-		EVMZKGMContract:        "0x5555555555555555555555555555555555555555",
-		EVMTestERC20:           "0x6666666666666666666666666666666666666666",
-		GnoRecipient:           "g1" + strings.Repeat("a", 38),
-		EVMTestAmount:          "1000000000000",
-		ArtifactDir:            artifactDir,
-		StateFile:              filepath.Join(artifactDir, "state.json"),
+		ScriptDir:                 scriptDir,
+		UnionChainID:              "union-devnet-1",
+		EVMChainID:                "17000",
+		GnoChainID:                "dev.ibc",
+		UnionVoyagerRevision:      testVoyagerRevision,
+		EVMIBCHandler:             "0x1111111111111111111111111111111111111111",
+		EVMMulticall:              "0x2222222222222222222222222222222222222222",
+		EVMCometBLSClientImpl:     "0x3333333333333333333333333333333333333333",
+		EVMProofLensClientImpl:    "0x4444444444444444444444444444444444444444",
+		GnoZKGMPort:               "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
+		EVMZKGMContract:           "0x5555555555555555555555555555555555555555",
+		EVMTestERC20:              "0x6666666666666666666666666666666666666666",
+		GnoRecipient:              "g1" + strings.Repeat("a", 38),
+		EVMTestAmount:             "1000000000000",
+		RelayerEmptyPrivateKey:    "0x" + strings.Repeat("1", 64),
+		RelayerOfflinePrivateKey:  "0x" + strings.Repeat("2", 64),
+		RelayerRecoveryPrivateKey: "0x" + strings.Repeat("3", 64),
+		ArtifactDir:               artifactDir,
+		StateFile:                 filepath.Join(artifactDir, "state.json"),
 	}
 }

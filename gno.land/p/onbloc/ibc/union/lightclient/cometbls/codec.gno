@@ -62,7 +62,6 @@ func DecodeClientState(buf []byte) (*ClientState, error) {
 	return NewClientState(
 		chainID,
 		trustingPeriod,
-		0,
 		maxClockDrift,
 		frozenHeight,
 		latestHeight,

@@ -29,8 +29,9 @@ type PacketAck struct {
 
 // PacketTimeout identifies one source-side timeout.
 type PacketTimeout struct {
-	Tx               string
-	TimeoutTimestamp uint64
+	Tx                                         string
+	TimeoutTimestamp                           uint64
+	RefundRecipient, RefundDenom, RefundAmount string
 }
 
 // WaitTimeout returns exactly one source-side PacketTimeout.
@@ -54,7 +55,31 @@ func (c *Client) WaitTimeout(ctx context.Context, packetHash string) (PacketTime
 			if err != nil || timestamp == 0 {
 				return PacketTimeout{}, fmt.Errorf("malformed Gno PacketTimeout timestamp")
 			}
-			return PacketTimeout{Tx: events[0].TxHash, TimeoutTimestamp: timestamp}, nil
+			releases, err := c.queryRealmEvents(
+				waitCtx, c.cfg.GnoZKGMPort, []string{"ZkgmNativeReleased"}, nil,
+			)
+			if err != nil {
+				return PacketTimeout{}, err
+			}
+			var release []packetEvent
+			for _, candidate := range releases {
+				if candidate.TxHash == events[0].TxHash {
+					release = append(release, candidate)
+				}
+			}
+			if len(release) != 1 {
+				return PacketTimeout{}, fmt.Errorf("Gno timeout native release count=%d, want exactly one", len(release))
+			}
+			result := PacketTimeout{
+				Tx: events[0].TxHash, TimeoutTimestamp: timestamp,
+				RefundRecipient: attributeValue(release[0].Attrs, "recipient"),
+				RefundDenom:     attributeValue(release[0].Attrs, "denom"),
+				RefundAmount:    attributeValue(release[0].Attrs, "amount"),
+			}
+			if result.RefundRecipient == "" || result.RefundDenom == "" || result.RefundAmount == "" {
+				return PacketTimeout{}, fmt.Errorf("malformed Gno timeout native release")
+			}
+			return result, nil
 		default:
 			return PacketTimeout{}, fmt.Errorf("Gno PacketTimeout count=%d, want exactly one", len(events))
 		}

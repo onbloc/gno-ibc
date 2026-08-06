@@ -19,7 +19,7 @@ type gnoTimeoutResult struct {
 	UnpauseTx        string `json:"unpause_tx"`
 	TimeoutTimestamp uint64 `json:"timeout_timestamp"`
 	EscrowDelta      int64  `json:"escrow_delta"`
-	RefundDelta      int64  `json:"refund_delta"`
+	RefundAmount     string `json:"refund_amount"`
 }
 
 // runGnoToEVMTimeoutRefund verifies a real timeout while the destination app is paused.
@@ -36,11 +36,6 @@ func (r *Runner) runGnoToEVMTimeoutRefund(ctx context.Context) (runErr error) {
 	if err != nil {
 		return err
 	}
-	senderBefore, err := r.gno.NativeBalance(ctx, r.cfg.GnoRecipient, "ugnot")
-	if err != nil {
-		return err
-	}
-
 	cleanup := true
 	defer func() {
 		if !cleanup {
@@ -93,6 +88,10 @@ func (r *Runner) runGnoToEVMTimeoutRefund(ctx context.Context) (runErr error) {
 	if timedOut.TimeoutTimestamp != send.TimeoutTimestamp {
 		return fmt.Errorf("Gno PacketTimeout timestamp=%d, want %d", timedOut.TimeoutTimestamp, send.TimeoutTimestamp)
 	}
+	if timedOut.RefundRecipient != r.cfg.GnoRecipient || timedOut.RefundDenom != "ugnot" ||
+		timedOut.RefundAmount != nativeLifecycleAmount {
+		return fmt.Errorf("Gno timeout native refund does not match the sender, denom, and amount")
+	}
 	ackCount, err := r.gno.EventCount(ctx, "PacketAck", send.PacketHash)
 	if err != nil {
 		return err
@@ -114,13 +113,8 @@ func (r *Runner) runGnoToEVMTimeoutRefund(ctx context.Context) (runErr error) {
 	if err != nil {
 		return err
 	}
-	senderAfter, err := r.gno.NativeBalance(ctx, r.cfg.GnoRecipient, "ugnot")
-	if err != nil {
-		return err
-	}
-	if proxyAfter != proxyBefore || senderAfter != senderBefore {
-		return fmt.Errorf("timeout refund deltas proxy=%d sender=%d, want 0 and 0",
-			proxyAfter-proxyBefore, senderAfter-senderBefore)
+	if proxyAfter != proxyBefore {
+		return fmt.Errorf("timeout refund proxy delta=%d, want 0", proxyAfter-proxyBefore)
 	}
 
 	unpauseTx, err := r.evm.SetZKGMPaused(ctx, false)
@@ -134,11 +128,11 @@ func (r *Runner) runGnoToEVMTimeoutRefund(ctx context.Context) (runErr error) {
 	if err := r.verifyNoNewFailedWork(ctx); err != nil {
 		return err
 	}
-	r.progressf("scenario gno-to-evm-timeout-refund: timeout tx=%s sender_delta=0 proxy_delta=0 commitment=cleared; EVM ZKGM unpaused tx=%s",
-		timedOut.Tx, unpauseTx)
+	r.progressf("scenario gno-to-evm-timeout-refund: timeout tx=%s refund=%s%s recipient=%s proxy_delta=0 commitment=cleared; EVM ZKGM unpaused tx=%s",
+		timedOut.Tx, timedOut.RefundAmount, timedOut.RefundDenom, timedOut.RefundRecipient, unpauseTx)
 	return r.writeEvidence("gno-to-evm-timeout-refund.json", gnoTimeoutResult{
 		PacketHash: send.PacketHash, SourceTx: send.Tx, TimeoutTx: timedOut.Tx,
 		PauseTx: pauseTx, UnpauseTx: unpauseTx, TimeoutTimestamp: send.TimeoutTimestamp,
-		EscrowDelta: proxyEscrowed - proxyBefore, RefundDelta: senderAfter - senderBefore,
+		EscrowDelta: proxyEscrowed - proxyBefore, RefundAmount: timedOut.RefundAmount,
 	})
 }

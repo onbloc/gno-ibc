@@ -223,6 +223,18 @@ func (r *Runtime) Close(ctx context.Context) error {
 	return r.removeRuntimeDir()
 }
 
+// CaptureLogs writes a bounded tail of the running Voyager container logs.
+func (r *Runtime) CaptureLogs(ctx context.Context, output io.Writer) error {
+	if r.container == "" {
+		return nil
+	}
+	_, err := r.command(ctx, process.Command{
+		Name: "docker", Args: []string{"logs", "--tail", "2000", r.container},
+		Stdout: output, Stderr: output,
+	})
+	return err
+}
+
 func (r *Runtime) removeRuntimeDir() error {
 	err := os.RemoveAll(r.runtimeDir)
 	if err == nil {

@@ -142,6 +142,13 @@ func (r *Runner) Run(ctx context.Context) (runErr error) {
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), r.cfg.CleanupTimeout)
 		defer cancel()
+		if runErr != nil {
+			logFile, err := os.OpenFile(filepath.Join(r.cfg.ArtifactDir, "voyager.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+			if err == nil {
+				err = errors.Join(r.voyager.CaptureLogs(cleanupCtx, logFile), logFile.Close())
+			}
+			runErr = errors.Join(runErr, err)
+		}
 		runErr = errors.Join(runErr, r.voyager.Close(cleanupCtx))
 	}()
 	r.progressf("Voyager: starting")

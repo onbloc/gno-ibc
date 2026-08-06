@@ -1,0 +1,11 @@
+diff --git a/cosmwasm/cosmwasm.nix b/cosmwasm/cosmwasm.nix
+--- a/cosmwasm/cosmwasm.nix
++++ b/cosmwasm/cosmwasm.nix
+@@ -116,6 +116,7 @@
+           lightclients = [
+             "gno"
+             "ethereum"
++            "trusted-mpt"
+             "state-lens-ics23-mpt"
+           ];
+         }

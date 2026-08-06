@@ -1,0 +1,42 @@
+services:
+  gno:
+    image: ${GNO_IMAGE:-gno-ibc-e2e-gno:local}
+    ports:
+      - "${GNO_RPC_PORT:-16657}:26657"
+      - "${GNO_WEB_PORT:-18888}:8888"
+    environment:
+      TEST_MNEMONIC: ${GNO_TEST_MNEMONIC:-source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast}
+      GNO_ADMIN_ADDRESS: ${GNO_ADMIN_ADDRESS:-g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5}
+      GNO_CHAIN_ID: ${GNO_CHAIN_ID:?set GNO_CHAIN_ID from devnet.json}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:26657/status"]
+      interval: 5s
+      timeout: 10s
+      retries: 60
+      start_period: 120s
+
+  tx-indexer:
+    image: ghcr.io/gnolang/tx-indexer@sha256:7e4e7be2ac7deb60cce02867ddf6975be32cbd41e5cbaf7cd5637908858063e2
+    command:
+      - start
+      - -remote
+      - http://gno:26657
+      - -listen-address
+      - 0.0.0.0:8546
+    ports:
+      - "${GNO_INDEXER_PORT:-48546}:8546"
+    depends_on:
+      gno:
+        condition: service_healthy
+
+  setup:
+    image: ${GNO_IMAGE:-gno-ibc-e2e-gno:local}
+    profiles: ["setup"]
+    entrypoint: ["bash", "/setup.sh"]
+    environment:
+      ADMIN_MNEMONIC: ${GNO_ADMIN_MNEMONIC:-source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast}
+      GNO_ADMIN_ADDRESS: ${GNO_ADMIN_ADDRESS:-g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5}
+      GNO_CHAIN_ID: ${GNO_CHAIN_ID:?set GNO_CHAIN_ID from devnet.json}
+    depends_on:
+      gno:
+        condition: service_healthy

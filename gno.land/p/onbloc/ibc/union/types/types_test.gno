@@ -2,6 +2,16 @@ package types
 
 import "testing"
 
+func TestNewH256(t *testing.T) {
+	input := make([]byte, 32)
+	input[0] = 2
+	hash := NewH256(input)
+	input[0] = 3
+	if hash != COMMITMENT_MAGIC_ACK {
+		t.Fatalf("NewH256 did not copy input: %s", hash.String())
+	}
+}
+
 func TestClientIdString(t *testing.T) {
 	tests := []struct {
 		name string

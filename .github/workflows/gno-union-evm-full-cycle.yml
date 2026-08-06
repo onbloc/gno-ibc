@@ -1,0 +1,204 @@
+name: Gno Union EVM full cycle
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gno-union-evm-full-cycle-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  images:
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/e2e-images.yml
+
+  full-cycle:
+    needs: images
+    permissions:
+      contents: read
+      packages: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      UNION_PROJECT: gno-union-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+      GNO_PROJECT: gno-union-e2e-gno-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out gno-ibc
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: gno-ibc
+
+      - name: Load disposable devnet configuration
+        id: devnet
+        working-directory: gno-ibc
+        run: python3 e2e/union/provision.py export-env | tee -a "$GITHUB_ENV" >>"$GITHUB_OUTPUT"
+
+      - name: Validate E2E scripts
+        working-directory: gno-ibc
+        run: |
+          python3 e2e/union/provision.py validate
+          python3 e2e/union/provision_test.py
+          e2e/union/ensure-image_test.sh
+
+      - name: Check out pinned union-voyager runtime
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: onbloc/union-voyager
+          ref: ${{ steps.devnet.outputs.UNION_VOYAGER_REVISION }}
+          path: union-voyager
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1.9.0
+
+      - name: Install Go
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.26.2"
+          cache: false
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve prebuilt images
+        working-directory: gno-ibc
+        env:
+          E2E_REGISTRY: ghcr.io
+          E2E_IMAGE_NAMESPACE: ${{ github.repository_owner }}
+          E2E_GNO_REPOSITORY: ${{ vars.E2E_GNO_REPOSITORY }}
+          E2E_VOYAGER_REPOSITORY: ${{ vars.E2E_VOYAGER_REPOSITORY }}
+          E2E_UNION_DEPLOYER_REPOSITORY: ${{ vars.E2E_UNION_DEPLOYER_REPOSITORY }}
+          UNION_VOYAGER_DIR: ${{ github.workspace }}/union-voyager
+        run: |
+          image_dir=$(mktemp -d)
+          trap 'rm -rf "$image_dir"' EXIT
+          e2e/union/ensure-image.sh gno >"$image_dir/gno" &
+          gno_pid=$!
+          e2e/union/ensure-image.sh voyager >"$image_dir/voyager" &
+          voyager_pid=$!
+          e2e/union/ensure-image.sh union-deployer >"$image_dir/union-deployer" &
+          union_deployer_pid=$!
+          status=0
+          wait "$gno_pid" || status=$?
+          wait "$voyager_pid" || status=$?
+          wait "$union_deployer_pid" || status=$?
+          test "$status" -eq 0
+          GNO_IMAGE=$(cat "$image_dir/gno")
+          VOYAGER_IMAGE=$(cat "$image_dir/voyager")
+          UNION_DEPLOYER_IMAGE=$(cat "$image_dir/union-deployer")
+          printf 'GNO_IMAGE=%s\nVOYAGER_IMAGE=%s\nUNION_DEPLOYER_IMAGE=%s\n' \
+            "$GNO_IMAGE" "$VOYAGER_IMAGE" "$UNION_DEPLOYER_IMAGE" >>"$GITHUB_ENV"
+
+      - name: Install gnokey from Gno image
+        run: |
+          container=$(docker create "$GNO_IMAGE")
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+          docker cp "$container:/usr/local/bin/gnokey" /tmp/gnokey
+          sudo install -m 0755 /tmp/gnokey /usr/local/bin/gnokey
+          gnokey version
+
+      - name: Start Union, EVM, and PostgreSQL
+        working-directory: union-voyager
+        env:
+          DEVNET_LINUX_SYSTEM: x86_64-linux
+          DEVNET_PROJECT_NAME: ${{ env.UNION_PROJECT }}
+          NO_BLOCKSCOUT: "true"
+        run: |
+          ./networks/run-linux-devnet.sh
+          curl --fail --retry 60 --retry-connrefused --retry-delay 2 \
+            http://127.0.0.1:26657/status >/dev/null
+          cast chain-id --rpc-url "$EVM_PACKET_RPC_URL" >/dev/null
+          docker compose -p "$UNION_PROJECT" exec -T postgres \
+            pg_isready -U postgres -d default
+
+      - name: Deploy Union contracts
+        working-directory: gno-ibc
+        env:
+          UNION_VOYAGER_DIR: ${{ github.workspace }}/union-voyager
+          E2E_DEPLOYMENT_DIR: ${{ github.workspace }}/artifacts/deployment
+        run: python3 e2e/union/provision.py deploy-union
+
+      - name: Register and discover EVM contracts
+        working-directory: gno-ibc
+        env:
+          UNION_VOYAGER_DIR: ${{ github.workspace }}/union-voyager
+          DEVNET_LINUX_SYSTEM: x86_64-linux
+        run: python3 e2e/union/provision.py configure-evm >>"$GITHUB_ENV"
+
+      - name: Start and bootstrap Gno
+        working-directory: gno-ibc
+        run: |
+          docker compose -f e2e/union/gno-compose.yml -p "$GNO_PROJECT" up -d --wait
+          docker compose -f e2e/union/gno-compose.yml -p "$GNO_PROJECT" \
+            --profile setup run --rm setup
+          curl --fail --retry 30 --retry-connrefused --retry-delay 2 \
+            "$GNO_PACKET_RPC_URL/status" >/dev/null
+          curl --fail --retry 30 --retry-connrefused --retry-delay 2 \
+            -H 'content-type: application/json' \
+            --data '{"query":"{ latestBlockHeight }"}' \
+            "$GNO_PACKET_INDEXER_RPC_URL" \
+            | jq -e '.data.latestBlockHeight | tonumber >= 0' >/dev/null
+
+      - name: Validate deployment and deploy test token
+        working-directory: gno-ibc
+        run: python3 e2e/union/provision.py deploy-test-token >>"$GITHUB_ENV"
+
+      - name: Write runner config
+        working-directory: gno-ibc
+        env:
+          E2E_DEPLOYMENT_DIR: ${{ github.workspace }}/artifacts/deployment
+          E2E_ARTIFACT_DIR: ${{ github.workspace }}/artifacts
+          E2E_STATE_FILE: ${{ github.workspace }}/artifacts/state.json
+          E2E_CONFIG_FILE: ${{ github.workspace }}/gno-ibc/e2e/union/runner.json
+        run: python3 e2e/union/provision.py write-runner-config
+
+      - name: Run full scenario suite
+        working-directory: gno-ibc
+        run: |
+          e2e/union/run-channel-e2e.sh --apply \
+            --forged-proof-rejection \
+            --erc20-to-gno \
+            --amount-boundaries \
+            --gno-to-evm
+
+      - name: Verify completed resume
+        working-directory: gno-ibc
+        run: e2e/union/run-channel-e2e.sh --resume
+
+      - name: Capture service logs
+        if: failure()
+        working-directory: gno-ibc
+        run: |
+          install -d -m 700 "${{ github.workspace }}/artifacts"
+          docker compose -p "$UNION_PROJECT" logs --no-color \
+            >"${{ github.workspace }}/artifacts/union-devnet.log" 2>&1 || true
+          docker compose -f e2e/union/gno-compose.yml -p "$GNO_PROJECT" logs --no-color \
+            >"${{ github.workspace }}/artifacts/gno-devnet.log" 2>&1 || true
+
+      - name: Upload E2E artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gno-union-evm-full-cycle-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Stop fresh services
+        if: always()
+        working-directory: gno-ibc
+        run: |
+          docker compose -f e2e/union/gno-compose.yml -p "$GNO_PROJECT" \
+            down -v --remove-orphans || true
+          DEVNET_ACTION=down DEVNET_LINUX_SYSTEM=x86_64-linux \
+            DEVNET_PROJECT_NAME="$UNION_PROJECT" NO_BLOCKSCOUT=true \
+            "${{ github.workspace }}/union-voyager/networks/run-linux-devnet.sh" || true

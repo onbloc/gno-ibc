@@ -77,6 +77,10 @@ func decodeShort(elems rlp.Value) (node, error) {
 			return nil, ErrUnexpectedNode
 		}
 
+		// A leaf's value is mandatory (branch's 17th slot is optional): empty
+		// here is a real empty value, not absence.
+		// https://github.com/unionlabs/union/blob/031785bb6dc6b957c624e62bc64c184409c97d7b/lib/evm-storage-verifier/src/rlp_node_codec.rs#L168-L204
+		// https://github.com/paritytech/trie/blob/0b9bede27b33da6395e83ed13c523ed2ae913fc6/trie-db/src/lookup.rs#L792-L834
 		return &shortNode{Key: key, Val: valueNode(val.Bytes)}, nil
 	}
 
@@ -108,6 +112,7 @@ func decodeFull(elems rlp.Value) (*fullNode, error) {
 		return n, ErrUnexpectedNode
 	}
 
+	// A branch's 17th slot is an optional value; empty means none stored here.
 	if len(val.Bytes) > 0 {
 		n.Children[16] = valueNode(val.Bytes)
 	}

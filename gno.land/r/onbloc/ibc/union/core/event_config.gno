@@ -20,12 +20,13 @@ type EventConfig struct {
 	MaxEventAttrValueLen uint
 
 	// MaxEventAttrPairs is the shared key/value attr-pair budget for one host
-	// event: both the max packet_data columns allowed when packet_data size
-	// checks are enforced solo, and the combined pair budget IsValidEventSize
-	// checks across packet_data plus whatever else lands in the same event
-	// (ack, relayerMsg, marketMakerMsg). Mirrors chain.Emit's own
-	// MaxEventPairs ceiling (64), kept comfortably under it to leave room for
-	// the event's other fixed attrs.
+	// event: packet_data's solo budget (MaxPacketDataEventSize) reserves one
+	// pair here for its "<key>_size" attr, leaving MaxEventAttrPairs-1 for
+	// value columns; IsValidEventSize checks the same budget for whichever
+	// single variable-size field (ack, relayerMsg, marketMakerMsg) a
+	// lifecycle event carries -- packet_data itself is no longer part of
+	// those events. Mirrors chain.Emit's own MaxEventPairs ceiling (64), kept
+	// comfortably under it to leave room for the event's other fixed attrs.
 	MaxEventAttrPairs uint
 }
 

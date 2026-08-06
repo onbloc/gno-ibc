@@ -53,6 +53,14 @@ jobs:
           ref: ${{ steps.devnet.outputs.UNION_VOYAGER_REVISION }}
           path: union-voyager
 
+      - name: Install Nix
+        uses: DeterminateSystems/determinate-nix-action@61cbfe2efc2d4e7a8a6d56967c3c1058e846c858 # v3.21.9
+
+      - name: Cache Nix store
+        uses: DeterminateSystems/magic-nix-cache-action@565684385bcd71bad329742eefe8d12f2e765b39 # v13
+        with:
+          use-flakehub: false
+
       - name: Install Foundry
         uses: foundry-rs/foundry-toolchain@b00af27efadbc7b4ca8b82abbd903b17cc874d2a # v1.9.0
 
@@ -109,11 +117,10 @@ jobs:
       - name: Start Union, EVM, and PostgreSQL
         working-directory: union-voyager
         env:
-          DEVNET_LINUX_SYSTEM: x86_64-linux
           DEVNET_PROJECT_NAME: ${{ env.UNION_PROJECT }}
           NO_BLOCKSCOUT: "true"
         run: |
-          ./networks/run-linux-devnet.sh
+          nix --accept-flake-config run --impure .#full-dev-setup
           curl --fail --retry 60 --retry-connrefused --retry-delay 2 \
             http://127.0.0.1:26657/status >/dev/null
           cast chain-id --rpc-url "$EVM_PACKET_RPC_URL" >/dev/null
@@ -131,7 +138,7 @@ jobs:
         working-directory: gno-ibc
         env:
           UNION_VOYAGER_DIR: ${{ github.workspace }}/union-voyager
-          DEVNET_LINUX_SYSTEM: x86_64-linux
+          E2E_NATIVE_NIX: "true"
         run: python3 e2e/union/provision.py configure-evm >>"$GITHUB_ENV"
 
       - name: Start and bootstrap Gno
@@ -204,6 +211,6 @@ jobs:
         run: |
           docker compose -f e2e/union/gno-compose.yml -p "$GNO_PROJECT" \
             down -v --remove-orphans || true
-          DEVNET_ACTION=down DEVNET_LINUX_SYSTEM=x86_64-linux \
-            DEVNET_PROJECT_NAME="$UNION_PROJECT" NO_BLOCKSCOUT=true \
-            "${{ github.workspace }}/union-voyager/networks/run-linux-devnet.sh" || true
+          DEVNET_ACTION=down DEVNET_PROJECT_NAME="$UNION_PROJECT" NO_BLOCKSCOUT=true \
+            nix --accept-flake-config run --impure \
+            "${{ github.workspace }}/union-voyager#full-dev-setup" || true

@@ -74,6 +74,14 @@ def emit(values: dict[str, str]) -> None:
         print(f"{name}={value}")
 
 
+def nix_run_args(values: dict[str, str], target: str, *args: str) -> tuple[str, ...]:
+    if values.get("E2E_NATIVE_NIX") == "true":
+        return (
+            "nix", "--accept-flake-config", "run", "--impure", f".#{target}", "--", *args
+        )
+    return ("./networks/run-linux-nix.sh", target, *args)
+
+
 def validate(values: dict[str, str]) -> None:
     require(
         values,
@@ -249,12 +257,14 @@ def configure_evm(values: dict[str, str]) -> None:
         raise SystemExit("EVM fixture key does not match the pinned devnet sender")
 
     run(
-        "./networks/run-linux-nix.sh",
-        "evm-scripts.devnet.script-register-clients",
-        "--deployer_pk",
-        addresses["Deployer"],
-        "--sender_pk",
-        sender,
+        *nix_run_args(
+            values,
+            "evm-scripts.devnet.script-register-clients",
+            "--deployer_pk",
+            addresses["Deployer"],
+            "--sender_pk",
+            sender,
+        ),
         cwd=union_dir,
         stdout=sys.stderr,
     )

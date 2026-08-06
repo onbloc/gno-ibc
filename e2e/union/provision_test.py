@@ -27,6 +27,22 @@ class ProvisionTest(unittest.TestCase):
     def test_runner_config_excludes_provisioning_values(self):
         self.assertNotIn("UNION_DEPLOYER", provision.runner_config())
 
+    def test_uses_native_nix_when_requested(self):
+        self.assertEqual(
+            provision.nix_run_args(
+                {"E2E_NATIVE_NIX": "true"}, "package", "argument"
+            ),
+            (
+                "nix",
+                "--accept-flake-config",
+                "run",
+                "--impure",
+                ".#package",
+                "--",
+                "argument",
+            ),
+        )
+
     def test_grants_relayer_role_to_fixture_signers(self):
         values = provision.config()
         manager = "0x" + "f" * 40

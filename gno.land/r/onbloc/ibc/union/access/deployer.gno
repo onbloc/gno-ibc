@@ -30,8 +30,8 @@ func resetAccess(initialAdmin address) {
 	// GrantRole, not by AccessManager initialization:
 	// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L1143-L1152
 	accessState.GrantRole(manager.AdminRole, initialAdmin)
-	access := accessState.Roles[manager.AdminRole].Members[initialAdmin]
-	emitRoleGrantedEvent(manager.AdminRole, initialAdmin, access.Since, true)
+	since := accessState.GetRoleMemberSince(manager.AdminRole, initialAdmin)
+	emitRoleGrantedEvent(manager.AdminRole, initialAdmin, since, true)
 	setupRoles()
 }
 

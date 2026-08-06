@@ -10,7 +10,7 @@ func NewAccess(since TimePoint) Access {
 	}
 }
 
-func NewAccessWithDelay(since TimePoint, delay Delay) Access {
+func NewAccessWithDelay(since TimePoint, delay uint32) Access {
 	if since.IsZero() {
 		return Access{Since: 0}
 	}

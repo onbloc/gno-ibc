@@ -60,6 +60,26 @@ func (state *State) HasRole(role RoleId, account address) HasRoleResult {
 	return NewHasRoleResult(roleConfig.hasMember(account, CurrentTimePoint()))
 }
 
+// GetRoleMemberSince returns when account's role membership became active,
+// or zero if it is not a member. It corresponds to OZ/Union's since field;
+// execution-delay fields are not ported here.
+//
+// OpenZeppelin: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L205
+// Union: https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L1165
+func (state *State) GetRoleMemberSince(role RoleId, account address) TimePoint {
+	roleConfig := state.getRole(role)
+	if roleConfig == nil {
+		return 0
+	}
+
+	access, found := roleConfig.Members[account]
+	if !found {
+		return 0
+	}
+
+	return access.Since
+}
+
 // GetRoleAdmin returns the admin role for role, defaulting to AdminRole.
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L183-L186
@@ -72,16 +92,28 @@ func (state *State) GetRoleAdmin(role RoleId) RoleId {
 	return roleConfig.adminRole()
 }
 
-// GetRoleGrantDelay returns the grant delay configured for role.
-// OpenZeppelin reference:
-// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L193-L196
-func (state *State) GetRoleGrantDelay(role RoleId) Delay {
+// GetRoleGrantDelay returns the grant delay currently in effect for role. A
+// change scheduled by SetGrantDelay is not reflected until its effect timePoint.
+// OpenZeppelin: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L194-L196
+// Union: https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L1138-L1144
+func (state *State) GetRoleGrantDelay(role RoleId) uint32 {
 	roleConfig := state.getRole(role)
 	if roleConfig == nil {
 		return 0
 	}
 
-	return roleConfig.grantDelay()
+	return roleConfig.grantDelay(CurrentTimePoint())
+}
+
+// GetRoleGrantDelayEffect returns when role's scheduled grant delay change
+// takes effect. No OZ/Union equivalent; added to avoid direct field access.
+func (state *State) GetRoleGrantDelayEffect(role RoleId) TimePoint {
+	roleConfig := state.getRole(role)
+	if roleConfig == nil {
+		return 0
+	}
+
+	return roleConfig.GrantDelay.EffectDate
 }
 
 // GetTargetFunctionRole returns the role required for target selector.
@@ -185,15 +217,16 @@ func (state *State) SetRoleAdmin(role RoleId, admin RoleId) {
 	state.getRole(role).setAdmin(admin)
 }
 
-// SetGrantDelay sets the delay before future grants of role become active.
-// OpenZeppelin references:
-// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L261-L264
-// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L357-L371
-func (state *State) SetGrantDelay(role RoleId, delay Delay) {
+// SetGrantDelay schedules newDelay behind a setback; it never overwrites the
+// active delay on the spot. Callers read GetRoleGrantDelay for the current
+// value or GetRoleGrantDelayEffect for the effect timePoint.
+// OpenZeppelin: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L262-L264,L362-L371
+// Union: https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L139-L148,L314-L345
+func (state *State) SetGrantDelay(role RoleId, newDelay uint32) {
 	RequireUnlockedConfigRole(role)
 
 	state.ensureRole(role)
-	state.getRole(role).setGrantDelay(delay)
+	state.getRole(role).setGrantDelay(CurrentTimePoint(), newDelay)
 }
 
 // ============================================= FUNCTION MANAGEMENT ==============================================

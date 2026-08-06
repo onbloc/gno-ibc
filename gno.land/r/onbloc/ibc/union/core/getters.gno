@@ -98,3 +98,15 @@ func GetChannels() ([]types.Channel, error) {
 func GetChannel(channelId types.ChannelId) (types.Channel, error) {
 	return mustGetImpl().GetChannel(channelId)
 }
+
+// GetChannelOwner returns the port that owns channelId, or an error when the
+// channel is missing.
+func GetChannelOwner(channelId types.ChannelId) (string, error) {
+	return mustGetImpl().GetChannelOwner(channelId)
+}
+
+// GetPacketCommitmentExists reports whether packet already has a source-side
+// commitment.
+func GetPacketCommitmentExists(packet types.Packet) bool {
+	return mustGetImpl().GetPacketCommitmentExists(packet)
+}

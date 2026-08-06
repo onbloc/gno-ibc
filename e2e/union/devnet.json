@@ -1,6 +1,6 @@
 {
   "runner": {
-    "UNION_VOYAGER_REVISION": "82c70ec1ff84ec457e976ad94f38a5d5783b7836",
+    "UNION_VOYAGER_REVISION": "5d6b9cd62ba2776a5b8adba0d8a3be8a47edb0fe",
     "UNION_CHAIN_ID": "union-devnet-1",
     "EVM_CHAIN_ID": "32382",
     "GNO_CHAIN_ID": "dev.ibc",

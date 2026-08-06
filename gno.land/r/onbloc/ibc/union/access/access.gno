@@ -73,15 +73,16 @@ func SetRoleAdmin(cur realm, role manager.RoleId, admin manager.RoleId) {
 	emitRoleAdminChangedEvent(role, admin)
 }
 
-// SetGrantDelay sets the delay before future grants of role become active.
+// SetGrantDelay schedules delay behind a setback (manager.State.SetGrantDelay).
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L139-L148
-func SetGrantDelay(cur realm, role manager.RoleId, delay manager.Delay) {
+func SetGrantDelay(cur realm, role manager.RoleId, newDelay uint32) {
 	assertCanManageTarget(0, cur)
 
-	accessState.SetGrantDelay(role, delay)
+	accessState.SetGrantDelay(role, newDelay)
+	effect := accessState.Roles[role].GrantDelay.EffectDate
 
-	emitRoleGrantDelayChangedEvent(role, delay, manager.CurrentTimePoint())
+	emitRoleGrantDelayChangedEvent(role, newDelay, effect)
 }
 
 // SetFunctionRole sets the role for selector on targetPath.

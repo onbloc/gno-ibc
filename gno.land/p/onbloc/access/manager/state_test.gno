@@ -109,10 +109,13 @@ func TestGrantAndRevokeRole(t *testing.T) {
 	}
 }
 
+// Seeds an already-active grant delay directly, since SetGrantDelay's
+// setback needs real time to elapse; the setback itself is covered in
+// state_role_test.gno and delay_test.gno.
 func TestGrantDelayDefersMembership(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
-	state.SetGrantDelay(testRole, 10)
+	state.Roles[testRole] = NewRoleConfig(AdminRole, 10)
 	state.GrantRole(testRole, caller)
 
 	if state.HasRole(testRole, caller).IsMember {
@@ -120,6 +123,35 @@ func TestGrantDelayDefersMembership(t *testing.T) {
 	}
 	if !state.Roles[testRole].Members[caller].Since.After(CurrentTimePoint()) {
 		t.Fatal("grant delay must set activation after the current timePoint")
+	}
+}
+
+// A grant-delay change is scheduled, not applied on the spot: an admin
+// cannot shrink (or grow) a role's grant delay and have the new value
+// observed by a call made right after.
+func TestSetGrantDelayChangeIsNotImmediate(t *testing.T) {
+	caller := testutils.TestAddress("caller")
+	state := NewState()
+	before := CurrentTimePoint()
+
+	state.SetGrantDelay(testRole, 10)
+	effect := state.Roles[testRole].GrantDelay.EffectDate
+
+	if state.GetRoleGrantDelay(testRole) != 0 {
+		t.Fatal("grant delay change must not be observable before its effect timePoint")
+	}
+	if !effect.After(before) {
+		t.Fatal("grant delay change must take effect strictly in the future")
+	}
+	if effect.Int64()-before.Int64() < int64(MinSetback) {
+		t.Fatal("grant delay change must respect the minimum setback")
+	}
+
+	// The change hasn't taken effect, so a grant made right now still uses
+	// the still-active old (zero) delay and activates immediately.
+	state.GrantRole(testRole, caller)
+	if !state.HasRole(testRole, caller).IsMember {
+		t.Fatal("grant made before the delay change's effect must use the still-active old delay")
 	}
 }
 

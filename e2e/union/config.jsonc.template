@@ -54,7 +54,7 @@
     "rest_laddr":"0.0.0.0:7177",
     "rpc_laddr":"0.0.0.0:7178",
     "trace_ratio":0.05,
-    "queue":{"type":"pg-queue","database_url":"__VOYAGER_DATABASE_URL__","max_connections":60,"min_connections":50,"idle_timeout":null,"max_lifetime":null,"optimize_batch_limit":20,"retryable_error_expo_backoff_max":300.0,"retryable_error_expo_backoff_multiplier":2.0,"vacuum_on_boot":false},
+    "queue":{"type":"pg-queue","database_url":"__VOYAGER_DATABASE_URL__","idle_timeout":null,"max_lifetime":null,"optimize_batch_limit":20,"retryable_error_expo_backoff_max":300.0,"retryable_error_expo_backoff_multiplier":2.0,"vacuum_on_boot":false},
     "optimizer_delay_milliseconds":500,
     "ipc_client_request_timeout":{"secs":60,"nanos":0},
     "cache":{"state":{"capacity":10000,"time_to_live":60,"time_to_idle":60}}

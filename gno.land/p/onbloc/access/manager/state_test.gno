@@ -135,7 +135,7 @@ func TestSetGrantDelayChangeIsNotImmediate(t *testing.T) {
 	before := CurrentTimePoint()
 
 	state.SetGrantDelay(testRole, 10)
-	effect := state.Roles[testRole].GrantDelay.EffectDate
+	effect := state.GetRoleGrantDelayEffect(testRole)
 
 	if state.GetRoleGrantDelay(testRole) != 0 {
 		t.Fatal("grant delay change must not be observable before its effect timePoint")

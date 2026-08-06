@@ -60,6 +60,26 @@ func (state *State) HasRole(role RoleId, account address) HasRoleResult {
 	return NewHasRoleResult(roleConfig.hasMember(account, CurrentTimePoint()))
 }
 
+// GetRoleMemberSince returns the timePoint account's role membership
+// activates or activated (zero if account is not a member). This is the
+// `since` field of OZ/Union's getAccess/get_access; their currentDelay,
+// pendingDelay, and effect fields are execution delay and not ported here.
+// OpenZeppelin: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L205
+// Union: https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L1165
+func (state *State) GetRoleMemberSince(role RoleId, account address) TimePoint {
+	roleConfig := state.getRole(role)
+	if roleConfig == nil {
+		return 0
+	}
+
+	access, found := roleConfig.Members[account]
+	if !found {
+		return 0
+	}
+
+	return access.Since
+}
+
 // GetRoleAdmin returns the admin role for role, defaulting to AdminRole.
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L183-L186
@@ -83,6 +103,17 @@ func (state *State) GetRoleGrantDelay(role RoleId) uint32 {
 	}
 
 	return roleConfig.grantDelay(CurrentTimePoint())
+}
+
+// GetRoleGrantDelayEffect returns when role's scheduled grant delay change
+// takes effect. No OZ/Union equivalent; added to avoid direct field access.
+func (state *State) GetRoleGrantDelayEffect(role RoleId) TimePoint {
+	roleConfig := state.getRole(role)
+	if roleConfig == nil {
+		return 0
+	}
+
+	return roleConfig.GrantDelay.EffectDate
 }
 
 // GetTargetFunctionRole returns the role required for target selector.
@@ -187,8 +218,8 @@ func (state *State) SetRoleAdmin(role RoleId, admin RoleId) {
 }
 
 // SetGrantDelay schedules newDelay behind a setback; it never overwrites the
-// active delay on the spot. Callers read GetRoleGrantDelay or
-// Roles[role].GrantDelay.EffectDate for the effect timePoint.
+// active delay on the spot. Callers read GetRoleGrantDelay for the current
+// value or GetRoleGrantDelayEffect for the effect timePoint.
 // OpenZeppelin: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L262-L264,L362-L371
 // Union: https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L139-L148,L314-L345
 func (state *State) SetGrantDelay(role RoleId, newDelay uint32) {

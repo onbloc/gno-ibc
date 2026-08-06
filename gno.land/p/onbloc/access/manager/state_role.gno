@@ -67,8 +67,8 @@ func (roleConfig *RoleConfig) adminRole() RoleId {
 	return roleConfig.Admin
 }
 
-// setGrantDelay schedules newDelay behind the MinSetback setback. The
-// caller reads RoleConfig.GrantDelay.EffectDate for the effect timePoint.
+// setGrantDelay schedules newDelay behind the MinSetback setback. Callers
+// read the effect timePoint via State.GetRoleGrantDelayEffect.
 // OpenZeppelin: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L362-L371
 // Union: https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L314-L345
 func (roleConfig *RoleConfig) setGrantDelay(now TimePoint, newDelay uint32) {

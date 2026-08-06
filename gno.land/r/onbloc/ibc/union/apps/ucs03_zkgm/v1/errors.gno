@@ -45,11 +45,16 @@ const (
 	errIsOnlyMakerAck        = "is only maker ack"
 
 	// forward
-	errInvalidForwardInstruction = "invalid forward instruction"
-	errForwardMissingPrevDest    = "forward missing previous destination channel"
-	errForwardMissingNextSource  = "forward missing next source channel"
-	errForwardPrevDestMismatch   = "forward previous-destination mismatch"
-	errForwardZeroTimeout        = "forward timeout timestamp must be non-zero"
+	errInvalidForwardInstruction    = "invalid forward instruction"
+	errForwardMissingPrevDest       = "forward missing previous destination channel"
+	errForwardMissingNextSource     = "forward missing next source channel"
+	errForwardPrevDestMismatch      = "forward previous-destination mismatch"
+	errForwardZeroTimeout           = "forward timeout timestamp must be non-zero"
+	errForwardChildPacketTooLarge   = "forward child packet data too large"
+	errForwardChannelNotOwned       = "forward next-hop channel not owned by this realm"
+	errForwardChannelNotOpen        = "forward next-hop channel not open"
+	errForwardConnectionNotOpen     = "forward next-hop connection not open"
+	errForwardChildAlreadyCommitted = "forward child packet already committed"
 
 	// batch
 	errInvalidBatchInstruction = "invalid batch instruction"

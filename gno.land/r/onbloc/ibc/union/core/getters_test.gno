@@ -17,18 +17,20 @@ type rootGetterImpl struct {
 	conn      types.Connection
 	channel   types.Channel
 	channels  []types.Channel
+	committed types.Packet
 	clientErr error
 }
 
 func newRootGetterImpl() *rootGetterImpl {
 	return &rootGetterImpl{
-		lc:       &mockClient{status: types.StatusActive, height: types.NewHeight(77), timestamp: types.Timestamp(123)},
-		packet:   types.Keccak([]byte("packet-commitment")),
-		receipt:  types.Keccak([]byte("receipt-commitment")),
-		proof:    types.Keccak([]byte("membership-proof")),
-		conn:     NewConnection(types.ConnectionStateOpen, types.ClientId(7), types.ClientId(8), types.ConnectionId(9)),
-		channel:  NewChannel(types.ChannelStateOpen, types.ConnectionId(1), types.ChannelId(9), types.Bytes("counterparty"), "v1"),
-		channels: []types.Channel{NewChannel(types.ChannelStateOpen, types.ConnectionId(1), types.ChannelId(9), types.Bytes("counterparty"), "v1")},
+		lc:        &mockClient{status: types.StatusActive, height: types.NewHeight(77), timestamp: types.Timestamp(123)},
+		packet:    types.Keccak([]byte("packet-commitment")),
+		receipt:   types.Keccak([]byte("receipt-commitment")),
+		proof:     types.Keccak([]byte("membership-proof")),
+		conn:      NewConnection(types.ConnectionStateOpen, types.ClientId(7), types.ClientId(8), types.ConnectionId(9)),
+		channel:   NewChannel(types.ChannelStateOpen, types.ConnectionId(1), types.ChannelId(9), types.Bytes("counterparty"), "v1"),
+		channels:  []types.Channel{NewChannel(types.ChannelStateOpen, types.ConnectionId(1), types.ChannelId(9), types.Bytes("counterparty"), "v1")},
+		committed: NewPacket(types.ChannelId(1), types.ChannelId(2), []byte("committed-packet"), types.Timestamp(999)),
 	}
 }
 
@@ -112,6 +114,17 @@ func (i *rootGetterImpl) GetChannel(channelId types.ChannelId) (types.Channel, e
 		return types.Channel{}, makeError(ErrChannelNotFound)
 	}
 	return i.channel, nil
+}
+
+func (i *rootGetterImpl) GetChannelOwner(channelId types.ChannelId) (string, error) {
+	if channelId != 4 {
+		return "", makeError(ErrChannelNotFound)
+	}
+	return testCorePkgPath, nil
+}
+
+func (i *rootGetterImpl) GetPacketCommitmentExists(packet types.Packet) bool {
+	return types.MustCommit(types.PacketCommitmentPath(packet)) == types.MustCommit(types.PacketCommitmentPath(i.committed))
 }
 
 func (i *rootGetterImpl) GetBatchPacketsCommitment(batchHash types.H256) (types.H256, error) {
@@ -287,6 +300,15 @@ func TestRootObjectGetterWrappers(cur realm, t *testing.T) {
 	uassert.True(t, channel.State == types.ChannelStateOpen)
 	_, err = GetChannel(types.ChannelId(99))
 	uassert.ErrorContains(t, err, ErrChannelNotFound)
+
+	owner, err := GetChannelOwner(types.ChannelId(4))
+	uassert.NoError(t, err)
+	uassert.Equal(t, testCorePkgPath, owner)
+	_, err = GetChannelOwner(types.ChannelId(99))
+	uassert.ErrorContains(t, err, ErrChannelNotFound)
+
+	uassert.True(t, GetPacketCommitmentExists(impl.committed))
+	uassert.False(t, GetPacketCommitmentExists(NewPacket(types.ChannelId(9), types.ChannelId(9), []byte("different"), types.Timestamp(1))))
 }
 
 func TestRootCommitmentGetterWrappers(cur realm, t *testing.T) {

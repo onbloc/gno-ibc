@@ -118,8 +118,16 @@ func (v *ucs03ZkgmV1) timeoutCall(_ int, rlm realm, packet types.Packet, path *u
 }
 
 // safeCallOnZkgm runs the receiver and reports a failure as panicked=true.
-// revive is preferred since it also catches cross-realm aborts. The recover
-// fallback, used only when revive is unsupported, catches ordinary panics.
+//
+// Only works in test builds: revive() requires MachineOptions.ReviveEnabled,
+// which gnovm sets only in gnovm/pkg/test, never on-chain. The recover()
+// fallback can't substitute for it either — a panic crossing the cross(rlm)
+// boundary skips ordinary ancestor defers on-chain. So a panicking receiver
+// reverts the whole recv transaction in production, matching Union's own
+// CosmWasm dispatch (not its EVM one, which isolates receiver reverts via a
+// low-level self call Gno has no on-chain equivalent for). The security/
+// intent/batch scenario filetests exercise the test-only path; on a real
+// chain they'd still revert atomically, just via the raw panic.
 func safeCallOnZkgm(_ int, rlm realm, receiver z.Zkgmable, env z.CallEnv) (err error, panicked bool) {
 	if canRevive() {
 		p := revive(func() {

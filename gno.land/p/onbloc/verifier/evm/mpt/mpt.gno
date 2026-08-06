@@ -166,7 +166,7 @@ func walk(root []byte, path []byte, proof [][]byte) (walkResult, error) {
 
 				// A leaf's value is mandatory (branch's 17th slot is optional): empty
 				// here is a real empty value, not absence.
-				// https://github.com/onbloc/union-voyager/blob/be0dacded141b971c0dd6c58ddb5c61d3778f5da/lib/evm-storage-verifier/src/rlp_node_codec.rs#L168-L204
+				// https://github.com/unionlabs/union/blob/031785bb6dc6b957c624e62bc64c184409c97d7b/lib/evm-storage-verifier/src/rlp_node_codec.rs#L168-L204
 				// https://github.com/paritytech/trie/blob/0b9bede27b33da6395e83ed13c523ed2ae913fc6/trie-db/src/lookup.rs#L792-L834
 				return finishWalk(walkResult{found: true, value: value.Bytes}, proofIndex, proof)
 			}

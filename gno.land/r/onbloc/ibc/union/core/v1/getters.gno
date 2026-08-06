@@ -132,6 +132,23 @@ func (c *coreV1) GetChannel(channelId types.ChannelId) (types.Channel, error) {
 	return ch, nil
 }
 
+// GetChannelOwner returns the port that owns channelId, or an error when the
+// channel is missing.
+func (c *coreV1) GetChannelOwner(channelId types.ChannelId) (string, error) {
+	portId, ok := c.store.GetChannelOwner(channelId)
+	if !ok {
+		return "", makeError(core.ErrChannelNotFound)
+	}
+
+	return string(portId), nil
+}
+
+// GetPacketCommitmentExists reports whether packet already has a
+// source-side commitment.
+func (c *coreV1) GetPacketCommitmentExists(packet types.Packet) bool {
+	return c.store.HasPacketCommitment(packet)
+}
+
 // GetBatchPacketsCommitment returns the batch packet commitment for a batch hash,
 // or an error when no batch packet commitment is stored for that hash.
 func (c *coreV1) GetBatchPacketsCommitment(batchHash types.H256) (types.H256, error) {

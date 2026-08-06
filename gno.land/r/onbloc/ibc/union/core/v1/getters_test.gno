@@ -146,6 +146,7 @@ func TestGetConnectionAndChannel(cur realm, t *testing.T) {
 	ms.SaveConnection(0, cur, types.ConnectionId(1),
 		core.NewConnection(types.ConnectionStateOpen, types.ClientId(1), types.ClientId(7), types.ConnectionId(2)))
 	ms.channels[3] = types.Channel{State: types.ChannelStateOpen, ConnectionId: types.ConnectionId(1)}
+	ms.channelOwners[3] = types.Bytes(coreRealmPath)
 
 	conn, err := v.GetConnection(types.ConnectionId(1))
 	uassert.NoError(t, err)
@@ -162,6 +163,18 @@ func TestGetConnectionAndChannel(cur realm, t *testing.T) {
 
 	_, err = v.GetChannel(types.ChannelId(99))
 	uassert.ErrorContains(t, err, core.ErrChannelNotFound)
+
+	owner, err := v.GetChannelOwner(types.ChannelId(3))
+	uassert.NoError(t, err)
+	uassert.Equal(t, coreRealmPath, owner)
+
+	_, err = v.GetChannelOwner(types.ChannelId(99))
+	uassert.ErrorContains(t, err, core.ErrChannelNotFound)
+
+	committed := core.NewPacket(types.ChannelId(3), types.ChannelId(4), []byte("data"), types.Timestamp(999))
+	uassert.False(t, v.GetPacketCommitmentExists(committed))
+	ms.CommitPacket(0, cur, committed)
+	uassert.True(t, v.GetPacketCommitmentExists(committed))
 }
 
 func TestGetBatchCommitmentGetters(cur realm, t *testing.T) {

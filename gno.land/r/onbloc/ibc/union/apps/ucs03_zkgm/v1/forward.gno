@@ -42,6 +42,12 @@ func (v *ucs03ZkgmV1) executeForward(_ int, rlm realm, packet types.Packet, salt
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
+	// Pre-check what SendPacket would panic on, so a bad path degrades to a
+	// failure ack instead of aborting the whole recv transaction.
+	if err := verifyForwardChannel(rlm.PkgPath(), childPacket); err != nil {
+		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
+	}
+
 	// Forward children build ZkgmPacket directly. Their salt is derived with
 	// DeriveForwardSalt, not DeriveSenderSalt. Route the child through core so
 	// it receives a normal packet commitment, then track its parent so child
@@ -149,6 +155,51 @@ func buildForwardChild(packet types.Packet, path *u256.Uint, parentSalt [32]byte
 	}
 
 	return core.NewPacket(sourceChannelId, sourceChannel.CounterpartyChannelId, childBytes, types.Timestamp(forward.TimeoutTimestamp)), nil
+}
+
+// verifyForwardChannel pre-checks every condition core.SendPacket would
+// otherwise panic on for childPacket.
+func verifyForwardChannel(ownPortId string, childPacket types.Packet) error {
+	sourceChannelId := childPacket.SourceChannelId
+
+	if !core.IsValidPacketDataSize(childPacket.Data) {
+		return makeError(errForwardChildPacketTooLarge)
+	}
+
+	owner, err := core.GetChannelOwner(sourceChannelId)
+	if err != nil {
+		return err
+	}
+
+	if owner != ownPortId {
+		return makeError(errForwardChannelNotOwned)
+	}
+
+	channel, err := core.GetChannel(sourceChannelId)
+	if err != nil {
+		return err
+	}
+
+	if channel.State != types.ChannelStateOpen {
+		return makeError(errForwardChannelNotOpen)
+	}
+
+	connection, err := core.GetConnection(channel.ConnectionId)
+	if err != nil {
+		return err
+	}
+
+	if connection.State != types.ConnectionStateOpen {
+		return makeError(errForwardConnectionNotOpen)
+	}
+
+	// Two different parents can derive the same child; SendPacket would
+	// otherwise panic with ErrPacketCommitmentAlreadyExists.
+	if core.GetPacketCommitmentExists(childPacket) {
+		return makeError(errForwardChildAlreadyCommitted)
+	}
+
+	return nil
 }
 
 // isAllowedForwardInstruction reports whether opcode may be forwarded.

@@ -18,6 +18,12 @@ HEX_ADDRESS = re.compile(r"^0x[0-9a-fA-F]{40}$")
 PRIVATE_KEY = re.compile(r"^0x[0-9a-fA-F]{64}$")
 UNION_ACCOUNT = re.compile(r"^union1[0-9a-z]{38}$")
 UNION_CONTRACT = re.compile(r"^union1[0-9a-z]{58}$")
+EVM_RELAYER_ROLE = "1"
+EVM_RELAYER_KEYS = (
+    "RELAYER_EMPTY_PRIVATE_KEY",
+    "RELAYER_OFFLINE_PRIVATE_KEY",
+    "RELAYER_RECOVERY_PRIVATE_KEY",
+)
 
 
 def devnet() -> dict[str, dict[str, str]]:
@@ -81,12 +87,14 @@ def validate(values: dict[str, str]) -> None:
         "TRUSTED_MPT_PRIVATE_KEY",
         "UNION_PRIVATE_KEY",
         "EVM_PRIVATE_KEY",
+        *EVM_RELAYER_KEYS,
         "GNO_PRIVATE_KEY",
     )
     for name in (
         "TRUSTED_MPT_PRIVATE_KEY",
         "UNION_PRIVATE_KEY",
         "EVM_PRIVATE_KEY",
+        *EVM_RELAYER_KEYS,
         "GNO_PRIVATE_KEY",
     ):
         if not PRIVATE_KEY.fullmatch(values[name]):
@@ -182,12 +190,27 @@ def deploy_union(values: dict[str, str]) -> None:
             raise SystemExit("Union deployment output is incomplete")
 
 
+def grant_evm_relayer_roles(values: dict[str, str], manager: str) -> None:
+    for name in EVM_RELAYER_KEYS:
+        relayer = run(
+            "cast", "wallet", "address", "--private-key", values[name], capture=True
+        )
+        run(
+            "cast", "send", manager, "grantRole(uint64,address,uint32)",
+            EVM_RELAYER_ROLE, relayer, "0",
+            "--private-key", values["EVM_PRIVATE_KEY"],
+            "--rpc-url", values["EVM_PACKET_RPC_URL"],
+            stdout=sys.stderr,
+        )
+
+
 def configure_evm(values: dict[str, str]) -> None:
     require(
         values,
         "UNION_VOYAGER_DIR",
         "UNION_PROJECT",
         "EVM_PRIVATE_KEY",
+        *EVM_RELAYER_KEYS,
         "EVM_SENDER",
         "EVM_CHAIN_ID",
         "EVM_PACKET_RPC_URL",
@@ -201,7 +224,14 @@ def configure_evm(values: dict[str, str]) -> None:
     logs = run(*compose, "logs", "--no-color", "forge", cwd=union_dir, capture=True)
     addresses = {
         name: extract_forge_address(logs, name)
-        for name in ("Deployer", "Sender", "IBCHandler", "UCS03", "Multicall")
+        for name in (
+            "Manager",
+            "Deployer",
+            "Sender",
+            "IBCHandler",
+            "UCS03",
+            "Multicall",
+        )
     }
     sender = addresses["Sender"]
     derived_sender = run(
@@ -212,7 +242,10 @@ def configure_evm(values: dict[str, str]) -> None:
         values["EVM_PRIVATE_KEY"],
         capture=True,
     )
-    if sender.lower() != values["EVM_SENDER"].lower() or sender.lower() != derived_sender.lower():
+    if (
+        sender.lower() != values["EVM_SENDER"].lower()
+        or sender.lower() != derived_sender.lower()
+    ):
         raise SystemExit("EVM fixture key does not match the pinned devnet sender")
 
     run(
@@ -227,6 +260,7 @@ def configure_evm(values: dict[str, str]) -> None:
     )
     handler = addresses["IBCHandler"]
     rpc = values["EVM_PACKET_RPC_URL"]
+    grant_evm_relayer_roles(values, addresses["Manager"])
     cometbls = run(
         "cast",
         "call",

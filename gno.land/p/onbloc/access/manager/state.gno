@@ -60,10 +60,10 @@ func (state *State) HasRole(role RoleId, account address) HasRoleResult {
 	return NewHasRoleResult(roleConfig.hasMember(account, CurrentTimePoint()))
 }
 
-// GetRoleMemberSince returns the timePoint account's role membership
-// activates or activated (zero if account is not a member). This is the
-// `since` field of OZ/Union's getAccess/get_access; their currentDelay,
-// pendingDelay, and effect fields are execution delay and not ported here.
+// GetRoleMemberSince returns when account's role membership became active,
+// or zero if it is not a member. It corresponds to OZ/Union's since field;
+// execution-delay fields are not ported here.
+//
 // OpenZeppelin: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L205
 // Union: https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L1165
 func (state *State) GetRoleMemberSince(role RoleId, account address) TimePoint {

@@ -10,12 +10,11 @@ import (
 // validClientState returns a ClientState that passes Validate.
 func validClientState() ClientState {
 	return ClientState{
-		ChainID:         "test-chain",
-		TrustingPeriod:  1000,
-		UnbondingPeriod: 2000,
-		MaxClockDrift:   100,
-		FrozenHeight:    types.NewHeight(0),
-		LatestHeight:    types.NewHeight(100),
+		ChainID:        "test-chain",
+		TrustingPeriod: 1000,
+		MaxClockDrift:  100,
+		FrozenHeight:   types.NewHeight(0),
+		LatestHeight:   types.NewHeight(100),
 	}
 }
 
@@ -30,10 +29,9 @@ func TestClientState_Validate(t *testing.T) {
 		{"chain id too long", func(cs *ClientState) { cs.ChainID = strings.Repeat("x", MaxChainIDLen+1) }, "chain-id"},
 		{"chain id max length", func(cs *ClientState) { cs.ChainID = strings.Repeat("x", MaxChainIDLen) }, ""},
 		{"zero trusting period", func(cs *ClientState) { cs.TrustingPeriod = 0 }, "trusting period"},
-		{"zero unbonding period", func(cs *ClientState) { cs.UnbondingPeriod = 0 }, "unbonding period"},
 		{"zero max clock drift", func(cs *ClientState) { cs.MaxClockDrift = 0 }, "max clock drift"},
 		{"zero latest height", func(cs *ClientState) { cs.LatestHeight = types.NewHeight(0) }, "latest height"},
-		{"trusting period not less than unbonding", func(cs *ClientState) { cs.TrustingPeriod = cs.UnbondingPeriod }, "trusting period"},
+		{"arbitrarily large trusting period is allowed", func(cs *ClientState) { cs.TrustingPeriod = 1 << 62 }, ""},
 	}
 
 	for _, tc := range cases {
@@ -80,7 +78,6 @@ func TestNewClientState(t *testing.T) {
 		name            string
 		chainID         string
 		trustingPeriod  uint64
-		unbondingPeriod uint64
 		maxClockDrift   uint64
 		frozenHeight    types.Height
 		latestHeight    types.Height
@@ -92,7 +89,6 @@ func TestNewClientState(t *testing.T) {
 			name:            "valid all fields",
 			chainID:         "test-chain",
 			trustingPeriod:  1000,
-			unbondingPeriod: 2000,
 			maxClockDrift:   100,
 			frozenHeight:    types.NewHeight(0),
 			latestHeight:    types.NewHeight(100),
@@ -104,9 +100,6 @@ func TestNewClientState(t *testing.T) {
 				}
 				if cs.TrustingPeriod != 1000 {
 					t.Errorf("TrustingPeriod: got %d want 1000", cs.TrustingPeriod)
-				}
-				if cs.UnbondingPeriod != 2000 {
-					t.Errorf("UnbondingPeriod: got %d want 2000", cs.UnbondingPeriod)
 				}
 				if cs.MaxClockDrift != 100 {
 					t.Errorf("MaxClockDrift: got %d want 100", cs.MaxClockDrift)
@@ -126,7 +119,6 @@ func TestNewClientState(t *testing.T) {
 			name:            "zero frozen height",
 			chainID:         "test-chain",
 			trustingPeriod:  1000,
-			unbondingPeriod: 2000,
 			maxClockDrift:   100,
 			frozenHeight:    types.NewHeight(0),
 			latestHeight:    types.NewHeight(50),
@@ -142,7 +134,6 @@ func TestNewClientState(t *testing.T) {
 			name:            "non-zero frozen height",
 			chainID:         "test-chain",
 			trustingPeriod:  1000,
-			unbondingPeriod: 2000,
 			maxClockDrift:   100,
 			frozenHeight:    types.NewHeight(123),
 			latestHeight:    types.NewHeight(200),
@@ -158,7 +149,6 @@ func TestNewClientState(t *testing.T) {
 			name:            "empty contract address",
 			chainID:         "test-chain",
 			trustingPeriod:  1000,
-			unbondingPeriod: 2000,
 			maxClockDrift:   100,
 			frozenHeight:    types.NewHeight(0),
 			latestHeight:    types.NewHeight(100),
@@ -175,16 +165,15 @@ func TestNewClientState(t *testing.T) {
 		{
 			name:            "max uint64 values",
 			chainID:         "max-chain",
-			trustingPeriod:  1,
-			unbondingPeriod: ^uint64(0),
+			trustingPeriod:  ^uint64(0),
 			maxClockDrift:   ^uint64(0),
 			frozenHeight:    types.NewHeight(0),
 			latestHeight:    types.NewHeight(^uint64(0)),
 			contractAddress: types.H256{255, 255, 255},
 			wantNil:         false,
 			assert: func(t *testing.T, cs *ClientState) {
-				if cs.UnbondingPeriod != ^uint64(0) {
-					t.Errorf("UnbondingPeriod: got %d want max uint64", cs.UnbondingPeriod)
+				if cs.TrustingPeriod != ^uint64(0) {
+					t.Errorf("TrustingPeriod: got %d want max uint64", cs.TrustingPeriod)
 				}
 				if cs.MaxClockDrift != ^uint64(0) {
 					t.Errorf("MaxClockDrift: got %d want max uint64", cs.MaxClockDrift)
@@ -201,7 +190,6 @@ func TestNewClientState(t *testing.T) {
 			got := NewClientState(
 				tc.chainID,
 				tc.trustingPeriod,
-				tc.unbondingPeriod,
 				tc.maxClockDrift,
 				tc.frozenHeight,
 				tc.latestHeight,
@@ -246,7 +234,6 @@ func TestClientState_Getters(t *testing.T) {
 			cs := NewClientState(
 				tc.chainID,
 				1000,
-				2000,
 				100,
 				types.NewHeight(0),
 				tc.latestHeight,
@@ -273,9 +260,6 @@ func TestClientState_ZeroCustomFields(t *testing.T) {
 	z := cs.ZeroCustomFields()
 	if z.ChainID != cs.ChainID {
 		t.Errorf("ChainID: got %q want %q", z.ChainID, cs.ChainID)
-	}
-	if z.UnbondingPeriod != cs.UnbondingPeriod {
-		t.Errorf("UnbondingPeriod: got %d want %d", z.UnbondingPeriod, cs.UnbondingPeriod)
 	}
 	if z.LatestHeight.RevisionHeight != cs.LatestHeight.RevisionHeight {
 		t.Errorf("LatestHeight: got %d want %d", z.LatestHeight.RevisionHeight, cs.LatestHeight.RevisionHeight)

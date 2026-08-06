@@ -11,7 +11,6 @@ func TestClientStateCodecRoundTrip(t *testing.T) {
 	cs := &ClientState{
 		ChainID:         "union-devnet-1",
 		TrustingPeriod:  100,
-		UnbondingPeriod: 200,
 		MaxClockDrift:   30,
 		FrozenHeight:    types.NewHeight(0),
 		LatestHeight:    types.NewHeight(42),

@@ -28,12 +28,10 @@ type StateUpdate struct {
 	StorageWrites       map[string][]byte
 }
 
-// ClientCreationResult is the result of lightclient.Interface.VerifyCreation.
-//
-// It mirrors the Union (Rust) ClientCreationResult{client_state: Option, ...}.
-// An empty ClientStateBytes means the client state was not overwritten during
-// creation. CometBLS performs no creation-time validation and writes nothing,
-// so its result is empty; the type is kept for symmetry with other clients.
+// ClientCreationResult is the result of lightclient.Interface.VerifyCreation,
+// mirroring Union's ClientCreationResult{client_state: Option, ...}. Empty
+// ClientStateBytes means state wasn't overwritten (e.g. CometBLS never
+// overwrites, though it may still validate input via ClientState.Validate).
 type ClientCreationResult struct {
 	ClientStateBytes []byte
 	StorageWrites    map[string][]byte

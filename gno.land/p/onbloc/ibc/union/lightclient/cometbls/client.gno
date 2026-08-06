@@ -145,9 +145,15 @@ func (c *CometblsLightClient) VerifyHeader(caller address, headerBytes []byte, r
 	return c.updateState(c.clientState, consensusState, header), nil
 }
 
+// Union reference (verify_creation is a no-op there):
+// https://github.com/unionlabs/union/blob/1bb07590230e7c4d071f32ad7185be021a1a1789/cosmwasm/lightclient/cometbls/src/client.rs#L134-L141
 func (c *CometblsLightClient) VerifyCreation(caller address, relayer address) (types.ClientCreationResult, error) {
-	// CometBLS performs no creation-time validation and writes nothing, so the
-	// result is empty (mirrors Union's verify_creation).
+	// Unlike Union, we validate basic invariants (ClientState.Validate), but
+	// like Union we skip bounding TrustingPeriod (see Validate). Writes nothing.
+	if err := c.clientState.Validate(); err != nil {
+		return types.ClientCreationResult{}, err
+	}
+
 	return types.ClientCreationResult{}, nil
 }
 

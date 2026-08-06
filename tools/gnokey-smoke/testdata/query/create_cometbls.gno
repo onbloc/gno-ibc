@@ -30,7 +30,6 @@ func main(cur realm) {
 	clientState, err := cometblsp.EncodeClientState(&cometblsp.ClientState{
 		ChainID:         "union-devnet-1337",
 		TrustingPeriod:  1 << 62,
-		UnbondingPeriod: 1 << 63,
 		MaxClockDrift:   10000000000,
 		FrozenHeight:    types.Height{},
 		LatestHeight:    types.NewHeight(3405691581),

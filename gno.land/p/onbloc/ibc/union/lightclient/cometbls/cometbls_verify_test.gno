@@ -380,11 +380,10 @@ func newDevnetMisbehaviourHeaderClient(t *testing.T) (*CometblsLightClient, *Hea
 	)
 	trustedHeight := types.NewHeight(uint64(devnetHeight - 1))
 	clientState := &ClientState{
-		ChainID:         devnetChainID,
-		TrustingPeriod:  devnetTrusting,
-		UnbondingPeriod: devnetTrusting + 1,
-		MaxClockDrift:   devnetMaxDrift,
-		LatestHeight:    trustedHeight,
+		ChainID:        devnetChainID,
+		TrustingPeriod: devnetTrusting,
+		MaxClockDrift:  devnetMaxDrift,
+		LatestHeight:   trustedHeight,
 	}
 	consensusState := &ConsensusState{
 		Timestamp:          uint64(devnetTimeSeconds-1000) * 1_000_000_000,

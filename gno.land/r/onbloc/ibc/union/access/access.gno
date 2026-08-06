@@ -16,9 +16,9 @@ func GrantRole(cur realm, role manager.RoleId, account address) bool {
 	assertCanAdminRole(0, cur, role)
 
 	newMember := accessState.GrantRole(role, account)
-	access := accessState.Roles[role].Members[account]
+	since := accessState.GetRoleMemberSince(role, account)
 
-	emitRoleGrantedEvent(role, account, access.Since, newMember)
+	emitRoleGrantedEvent(role, account, since, newMember)
 
 	return newMember
 }
@@ -80,7 +80,7 @@ func SetGrantDelay(cur realm, role manager.RoleId, newDelay uint32) {
 	assertCanManageTarget(0, cur)
 
 	accessState.SetGrantDelay(role, newDelay)
-	effect := accessState.Roles[role].GrantDelay.EffectDate
+	effect := accessState.GetRoleGrantDelayEffect(role)
 
 	emitRoleGrantDelayChangedEvent(role, newDelay, effect)
 }

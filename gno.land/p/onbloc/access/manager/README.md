@@ -173,6 +173,7 @@ Role membership:
 - `RevokeRole`
 - `RenounceRole`
 - `HasRole`
+- `GetRoleMemberSince`
 
 Role configuration:
 
@@ -180,6 +181,7 @@ Role configuration:
 - `GetRoleAdmin`
 - `SetGrantDelay`
 - `GetRoleGrantDelay`
+- `GetRoleGrantDelayEffect`
 - `RequireUnlockedConfigRole`
 
 Target configuration:

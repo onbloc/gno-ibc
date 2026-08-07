@@ -94,7 +94,7 @@ func sendNativeEscrow(cur realm, channelId types.ChannelId) {
 
 	bk := banker.NewReadonlyBanker()
 	ufmt.Printf("[INFO] order base amount: %s\n", order.BaseAmount.ToString())
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
 	ufmt.Println("[EXPECTED] both should be exactly 1234567 (locked, unscaled)")
 }
 

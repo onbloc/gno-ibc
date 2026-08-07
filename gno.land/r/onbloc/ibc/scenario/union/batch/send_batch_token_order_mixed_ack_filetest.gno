@@ -134,7 +134,7 @@ func sendBatch(cur realm, channelId types.ChannelId, token *grc20.Token, ledger 
 	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustBatchInstruction(batch))
 
 	bk := banker.NewReadonlyBanker()
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
 	ufmt.Printf("[INFO] proxy grc20 escrow balance: %d\n", token.BalanceOf(proxy))
 	ufmt.Println("[EXPECTED] both escrows locked: native=40, grc20=40")
 
@@ -152,7 +152,7 @@ func acknowledgeMixed(cur realm, sendPacket types.Packet, token *grc20.Token) {
 	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{ack}, nil, 1))
 
 	bk := banker.NewReadonlyBanker()
-	ufmt.Printf("[INFO] proxy native escrow balance (child 0, protocol-fill): %d\n", bk.GetCoins(zkgm.ProxyAddress()).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance (child 0, protocol-fill): %d\n", bk.GetCoin(zkgm.ProxyAddress(), "ugnot"))
 	ufmt.Printf("[INFO] proxy grc20 escrow balance (child 1, failed): %d\n", token.BalanceOf(zkgm.ProxyAddress()))
 	ufmt.Printf("[INFO] sender grc20 balance (child 1 refunded): %d\n", token.BalanceOf(senderAddr))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (child 0 protocol-fill: unchanged)")

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
 )
@@ -79,4 +81,44 @@ func (r *Runtime) SubmitConnection(ctx context.Context, operation json.RawMessag
 func (r *Runtime) SubmitChannel(ctx context.Context, operation json.RawMessage) error {
 	_, err := r.retryWrite(ctx, "q", "e", string(operation))
 	return err
+}
+
+// ConnectionPresent resolves an ambiguous submission without another write.
+func (r *Runtime) ConnectionPresent(
+	ctx context.Context,
+	chain string,
+	id, client, counterpartyClient int64,
+) (bool, error) {
+	got, err := r.connectionState(ctx, chain, id)
+	if errors.Is(err, ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if got.Client.value != client || got.CounterpartyClient.value != counterpartyClient {
+		return false, fmt.Errorf("connection allocation race: unexpected %s connection %d", chain, id)
+	}
+	return true, nil
+}
+
+// ChannelPresent resolves an ambiguous submission without another write.
+func (r *Runtime) ChannelPresent(
+	ctx context.Context,
+	chain string,
+	id, connection int64,
+	counterpartyPort, version string,
+) (bool, error) {
+	got, err := r.channelState(ctx, chain, id)
+	if errors.Is(err, ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if got.Connection.value != connection ||
+		!strings.EqualFold(got.Port, counterpartyPort) || got.Version != version {
+		return false, fmt.Errorf("channel allocation race: unexpected %s channel %d", chain, id)
+	}
+	return true, nil
 }

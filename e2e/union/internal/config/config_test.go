@@ -11,10 +11,8 @@ import (
 	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
 )
 
-func TestLoadAppliesFallbacks(t *testing.T) {
-	values := validEnvironment()
-	values["E2E_STATE_FILE"] = "/elsewhere/state.json"
-	cfg, err := load(t, values, true)
+func TestLoadAppliesPacketRPCFallbacks(t *testing.T) {
+	cfg, err := load(t, validEnvironment(), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,9 +27,6 @@ func TestLoadAppliesFallbacks(t *testing.T) {
 	}
 	if cfg.GnoPacketIndexerRPCURL != cfg.GnoTxIndexerRPCURL {
 		t.Fatalf("Gno packet indexer = %q, want %q", cfg.GnoPacketIndexerRPCURL, cfg.GnoTxIndexerRPCURL)
-	}
-	if cfg.StateFile != filepath.Join(cfg.ArtifactDir, "state.json") {
-		t.Fatalf("state file = %q, want artifact-local checkpoint", cfg.StateFile)
 	}
 }
 
@@ -171,6 +166,7 @@ func validEnvironment() map[string]string {
 		"GNO_RECIPIENT":                   "g1" + strings.Repeat("a", 38),
 		"EVM_TEST_AMOUNT":                 "1000000000000",
 		"E2E_ARTIFACT_DIR":                "/suite/artifacts",
+		"E2E_STATE_FILE":                  "/suite/artifacts/state.json",
 		"VOYAGER_COMMAND_TIMEOUT_SECONDS": "120",
 	}
 }

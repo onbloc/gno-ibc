@@ -28,8 +28,13 @@ func run() error {
 	flag.BoolVar(&options.ERC20ToGno, "erc20-to-gno", false, "run the ERC20 EVM-to-Gno scenario")
 	flag.BoolVar(&options.AmountBoundaries, "amount-boundaries", false, "run EVM-to-Gno amount boundary scenarios (includes --erc20-to-gno)")
 	flag.BoolVar(&options.GnoToEVM, "gno-to-evm", false, "run Gno-to-EVM lifecycle and refund scenarios (includes --erc20-to-gno)")
+	flag.BoolVar(&options.RelayerInsufficientBalanceFailover, "relayer-insufficient-balance-failover", false, "use a secondary relayer when the primary EVM signer has no balance")
+	flag.BoolVar(&options.RelayerOfflineFailover, "relayer-offline-failover", false, "use a secondary relayer when the primary relayer is stopped")
+	flag.BoolVar(&options.RelayerBalanceRecovery, "relayer-balance-recovery", false, "retry active relayer work after funding its EVM signer")
+	flag.BoolVar(&options.EVMToGnoTimeoutRefund, "evm-to-gno-timeout-refund", false, "verify EVM refund after a three-minute Gno delivery timeout")
+	flag.BoolVar(&options.GnoToEVMTimeoutRefund, "gno-to-evm-timeout-refund", false, "verify Gno refund after a three-minute EVM delivery timeout")
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "usage: %s [--config path] [--resume] [--apply] [--forged-proof-rejection] [--erc20-to-gno] [--amount-boundaries] [--gno-to-evm]\n", os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), "usage: %s [--config path] [--resume] [--apply] [scenario flags]\n", os.Args[0])
 	}
 	flag.Parse()
 	if flag.NArg() != 0 {
@@ -44,7 +49,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("cannot determine working directory")
 	}
-	cfg, err := config.Load(*configPath, scriptDir, os.LookupEnv, options.ERC20ToGno)
+	cfg, err := config.Load(*configPath, scriptDir, os.LookupEnv, options.PacketEnabled())
 	if err != nil {
 		return err
 	}

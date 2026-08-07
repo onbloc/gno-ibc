@@ -23,12 +23,17 @@ import (
 
 // Options are the runner's explicit write and resume boundaries.
 type Options struct {
-	Apply                bool
-	Resume               bool
-	ForgedProofRejection bool
-	ERC20ToGno           bool
-	AmountBoundaries     bool
-	GnoToEVM             bool
+	Apply                              bool
+	Resume                             bool
+	ForgedProofRejection               bool
+	ERC20ToGno                         bool
+	AmountBoundaries                   bool
+	GnoToEVM                           bool
+	RelayerInsufficientBalanceFailover bool
+	RelayerOfflineFailover             bool
+	RelayerBalanceRecovery             bool
+	EVMToGnoTimeoutRefund              bool
+	GnoToEVMTimeoutRefund              bool
 }
 
 // Normalize enables prerequisites implied by selected scenarios.
@@ -36,6 +41,13 @@ func (o *Options) Normalize() {
 	if o.AmountBoundaries || o.GnoToEVM {
 		o.ERC20ToGno = true
 	}
+}
+
+// PacketEnabled reports whether a selected scenario uses the live packet tools.
+func (o Options) PacketEnabled() bool {
+	return o.ERC20ToGno || o.AmountBoundaries || o.GnoToEVM ||
+		o.RelayerInsufficientBalanceFailover || o.RelayerOfflineFailover ||
+		o.RelayerBalanceRecovery || o.EVMToGnoTimeoutRefund || o.GnoToEVMTimeoutRefund
 }
 
 // Runner executes the live acceptance scenarios.
@@ -75,14 +87,14 @@ func newRunnerWithClients(
 	unionClient *union.Client,
 ) (*Runner, error) {
 	options.Normalize()
-	if options.ERC20ToGno && !options.Apply {
-		return nil, fmt.Errorf("--erc20-to-gno requires --apply")
+	if options.PacketEnabled() && !options.Apply {
+		return nil, fmt.Errorf("packet scenarios require --apply")
 	}
 	if options.ForgedProofRejection && !options.Apply {
 		return nil, fmt.Errorf("--forged-proof-rejection requires --apply")
 	}
-	if options.GnoToEVM && cfg.GnoRecipient != gno.DevSenderAddress {
-		return nil, fmt.Errorf("--gno-to-evm requires the dev Gno sender")
+	if (options.GnoToEVM || options.GnoToEVMTimeoutRefund) && cfg.GnoRecipient != gno.DevSenderAddress {
+		return nil, fmt.Errorf("Gno-to-EVM scenarios require the dev Gno sender")
 	}
 	runner := &Runner{
 		cfg: cfg, options: options,
@@ -130,6 +142,13 @@ func (r *Runner) Run(ctx context.Context) (runErr error) {
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), r.cfg.CleanupTimeout)
 		defer cancel()
+		if runErr != nil {
+			logFile, err := os.OpenFile(filepath.Join(r.cfg.ArtifactDir, "voyager.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+			if err == nil {
+				err = errors.Join(r.voyager.CaptureLogs(cleanupCtx, logFile), logFile.Close())
+			}
+			runErr = errors.Join(runErr, err)
+		}
 		runErr = errors.Join(runErr, r.voyager.Close(cleanupCtx))
 	}()
 	r.progressf("Voyager: starting")
@@ -182,7 +201,7 @@ func (r *Runner) preflight(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if r.options.ERC20ToGno || r.options.ForgedProofRejection {
+	if r.options.PacketEnabled() || r.options.ForgedProofRejection {
 		for _, name := range []string{"cast", "gnokey"} {
 			if _, err := osexec.LookPath(name); err != nil {
 				return nil, fmt.Errorf("missing required packet command: %s", name)

@@ -12,11 +12,12 @@ import (
 )
 
 const (
-	packetSendTopic  = "0x635b5d234fe7abddfb29b6c8498780a3" + "175c9002c537f20a3d1bf9d0e625b5fe"
-	packetAckTopic   = "0x41d958a7d93b50b1f7541c6fc345d0c4" + "657b1e83497baa562c866611ac1f69bb"
-	packetRecvTopic  = "0xe450e03249d131499e278eeafd8e27ef" + "fcceeb40b0b95628a087aa16b4b101d5"
-	writeAckTopic    = "0x488830ba53f27b7033e966a79427476a" + "d47d550358e894bafeef8b97c6559251"
-	createTokenTopic = "0x18469840730c2cbbd67b9f99f642166" + "7b07f0169a795be80a28f182d602daf5b"
+	packetSendTopic    = "0x635b5d234fe7abddfb29b6c8498780a3" + "175c9002c537f20a3d1bf9d0e625b5fe"
+	packetAckTopic     = "0x41d958a7d93b50b1f7541c6fc345d0c4" + "657b1e83497baa562c866611ac1f69bb"
+	packetTimeoutTopic = "0x34df62ed9d26dbe71f13d2bd3f645d6c" + "d16b0c44645ef783c2ed799748c80a74"
+	packetRecvTopic    = "0xe450e03249d131499e278eeafd8e27ef" + "fcceeb40b0b95628a087aa16b4b101d5"
+	writeAckTopic      = "0x488830ba53f27b7033e966a79427476a" + "d47d550358e894bafeef8b97c6559251"
+	createTokenTopic   = "0x18469840730c2cbbd67b9f99f642166" + "7b07f0169a795be80a28f182d602daf5b"
 )
 
 type transactionReceipt struct {
@@ -40,6 +41,11 @@ type SendResult struct {
 // Acknowledgement is one observed EVM PacketAck.
 type Acknowledgement struct {
 	Tx, Value string
+}
+
+// Timeout is one observed EVM PacketTimeout.
+type Timeout struct {
+	Tx string
 }
 
 // Receive is one EVM receive/write-ack transaction.
@@ -73,9 +79,10 @@ func (c *Client) Send(
 	if err != nil {
 		return SendResult{}, err
 	}
+	timeout := uint64((time.Now().Unix() + 3600) * 1_000_000_000)
 	return c.sendTokenOrder(
 		ctx, evmChannel, c.cfg.EVMTestERC20, sender, recipient, voucher,
-		c.cfg.EVMTestAmount, salt, 0, metadata,
+		c.cfg.EVMTestAmount, salt, 0, metadata, timeout,
 	)
 }
 
@@ -87,9 +94,22 @@ func (c *Client) SendTokenOrder(
 	recipient, amount string,
 	kind uint8,
 ) (SendResult, error) {
+	timeout := uint64((time.Now().Unix() + 3600) * 1_000_000_000)
+	return c.SendTokenOrderWithTimeout(ctx, evmChannel, plan, recipient, amount, kind, timeout)
+}
+
+// SendTokenOrderWithTimeout submits one TokenOrder with an explicit timeout.
+func (c *Client) SendTokenOrderWithTimeout(
+	ctx context.Context,
+	evmChannel int64,
+	plan Plan,
+	recipient, amount string,
+	kind uint8,
+	timeout uint64,
+) (SendResult, error) {
 	return c.sendTokenOrder(
 		ctx, evmChannel, plan.Token, plan.Sender, recipient, plan.Voucher,
-		amount, plan.Salt, kind, plan.Metadata,
+		amount, plan.Salt, kind, plan.Metadata, timeout,
 	)
 }
 
@@ -99,6 +119,7 @@ func (c *Client) sendTokenOrder(
 	token, sender, recipient, voucher, amount, salt string,
 	kind uint8,
 	metadata string,
+	timeout uint64,
 ) (SendResult, error) {
 	operand, err := c.EncodeTokenOrder(
 		ctx, TokenOrder{
@@ -111,11 +132,10 @@ func (c *Client) sendTokenOrder(
 	if err != nil {
 		return SendResult{}, err
 	}
-	timeout := (time.Now().Unix() + 3600) * 1_000_000_000
 	receipt, err := c.receipt(
 		ctx, "packet", "send", strings.ToLower(c.cfg.EVMZKGMContract),
 		"send(uint32,uint64,uint64,bytes32,(uint8,uint8,bytes))",
-		strconv.FormatInt(evmChannel, 10), "0", strconv.FormatInt(timeout, 10),
+		strconv.FormatInt(evmChannel, 10), "0", strconv.FormatUint(timeout, 10),
 		salt, "(2,3,"+operand+")", "--private-key", c.cfg.EVMPrivateKey, "--json",
 	)
 	if err != nil {
@@ -126,6 +146,70 @@ func (c *Client) sendTokenOrder(
 		return SendResult{}, err
 	}
 	return SendResult{Tx: receipt.TransactionHash, PacketHash: hash}, nil
+}
+
+// WaitTimeout requires one matching PacketTimeout and rejects PacketAck.
+func (c *Client) WaitTimeout(
+	ctx context.Context,
+	fromBlock uint64,
+	channel int64,
+	packetHash string,
+) (Timeout, error) {
+	filter, _ := json.Marshal(map[string]any{
+		"address":   c.cfg.EVMIBCHandler,
+		"fromBlock": fmt.Sprintf("0x%x", fromBlock),
+		"toBlock":   "latest",
+		"topics": []any{
+			[]string{packetTimeoutTopic, packetAckTopic},
+			fmt.Sprintf("0x%064x", channel),
+			packetHash,
+		},
+	})
+	waitCtx, cancel := context.WithTimeout(ctx, c.cfg.ScenarioTimeout)
+	defer cancel()
+	for {
+		raw, err := c.cast(waitCtx, "rpc", "eth_getLogs", string(filter))
+		if err != nil {
+			return Timeout{}, err
+		}
+		var logs []evmLog
+		if json.Unmarshal(raw, &logs) != nil {
+			return Timeout{}, errors.New("malformed EVM timeout log response")
+		}
+		var timeouts, acknowledgements []evmLog
+		for _, log := range logs {
+			if len(log.Topics) == 0 {
+				continue
+			}
+			switch strings.ToLower(log.Topics[0]) {
+			case packetTimeoutTopic:
+				timeouts = append(timeouts, log)
+			case packetAckTopic:
+				acknowledgements = append(acknowledgements, log)
+			}
+		}
+		if len(acknowledgements) != 0 {
+			return Timeout{}, errors.New("EVM packet was acknowledged instead of timing out")
+		}
+		switch len(timeouts) {
+		case 0:
+			if err := pause(waitCtx, c.cfg.PollInterval); err != nil {
+				return Timeout{}, fmt.Errorf("EVM PacketTimeout was not visible: %w", err)
+			}
+		case 1:
+			log := timeouts[0]
+			if !strings.EqualFold(log.Address, c.cfg.EVMIBCHandler) ||
+				len(log.Topics) < 3 ||
+				!strings.EqualFold(log.Topics[1], fmt.Sprintf("0x%064x", channel)) ||
+				!strings.EqualFold(log.Topics[2], packetHash) ||
+				!hashPattern.MatchString(log.TransactionHash) {
+				return Timeout{}, errors.New("malformed EVM PacketTimeout log")
+			}
+			return Timeout{Tx: log.TransactionHash}, nil
+		default:
+			return Timeout{}, fmt.Errorf("EVM PacketTimeout count=%d, want exactly one", len(timeouts))
+		}
+	}
 }
 
 // BlockNumber returns the current EVM execution height.
@@ -242,6 +326,27 @@ func (c *Client) WaitReceive(
 		}
 		return Receive{Tx: receives[0].TransactionHash, Acknowledgement: values[0]}, nil
 	}
+}
+
+// PacketReceiveCount returns matching destination PacketRecv logs without waiting.
+func (c *Client) PacketReceiveCount(ctx context.Context, fromBlock uint64, channel int64, packetHash string) (int, error) {
+	filter, _ := json.Marshal(map[string]any{
+		"address":   c.cfg.EVMIBCHandler,
+		"fromBlock": fmt.Sprintf("0x%x", fromBlock),
+		"toBlock":   "latest",
+		"topics": []string{
+			packetRecvTopic, fmt.Sprintf("0x%064x", channel), packetHash,
+		},
+	})
+	raw, err := c.cast(ctx, "rpc", "eth_getLogs", string(filter))
+	if err != nil {
+		return 0, err
+	}
+	var logs []evmLog
+	if json.Unmarshal(raw, &logs) != nil {
+		return 0, errors.New("malformed EVM PacketRecv log response")
+	}
+	return len(logs), nil
 }
 
 func packetHashFromReceipt(receipt transactionReceipt, handler string, channel int64) (string, error) {

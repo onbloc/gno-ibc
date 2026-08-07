@@ -34,6 +34,37 @@ type MembershipProofEvent struct {
 	Tx string `json:"tx"`
 }
 
+func (c *Client) waitRealmEventAfter(
+	ctx context.Context,
+	realm, eventType string,
+	after int64,
+) (string, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, c.cfg.ScenarioTimeout)
+	defer cancel()
+	for {
+		events, err := c.queryRealmEvents(waitCtx, realm, []string{eventType}, nil)
+		if err != nil {
+			return "", err
+		}
+		var matches []packetEvent
+		for _, event := range events {
+			if event.BlockHeight > after {
+				matches = append(matches, event)
+			}
+		}
+		switch len(matches) {
+		case 0:
+			if err := pause(waitCtx, c.cfg.PollInterval); err != nil {
+				return "", fmt.Errorf("Gno %s event was not visible: %w", eventType, err)
+			}
+		case 1:
+			return matches[0].TxHash, nil
+		default:
+			return "", fmt.Errorf("new Gno %s event count=%d, want exactly one", eventType, len(matches))
+		}
+	}
+}
+
 // EventCount returns the number of matching core events.
 func (c *Client) EventCount(ctx context.Context, eventType, packetHash string) (int, error) {
 	events, err := c.queryEvents(
@@ -96,7 +127,15 @@ func (c *Client) latestEventHeight(
 	eventType string,
 	attrs map[string]string,
 ) (int64, error) {
-	events, err := c.queryEvents(ctx, []string{eventType}, attrs)
+	return c.latestRealmEventHeight(ctx, c.cfg.GnoIBCCoreRealm, eventType, attrs)
+}
+
+func (c *Client) latestRealmEventHeight(
+	ctx context.Context,
+	realm, eventType string,
+	attrs map[string]string,
+) (int64, error) {
+	events, err := c.queryRealmEvents(ctx, realm, []string{eventType}, attrs)
 	if err != nil || len(events) == 0 {
 		return 0, err
 	}
@@ -105,6 +144,15 @@ func (c *Client) latestEventHeight(
 
 func (c *Client) queryEvents(
 	ctx context.Context,
+	eventTypes []string,
+	attrs map[string]string,
+) ([]packetEvent, error) {
+	return c.queryRealmEvents(ctx, c.cfg.GnoIBCCoreRealm, eventTypes, attrs)
+}
+
+func (c *Client) queryRealmEvents(
+	ctx context.Context,
+	realm string,
 	eventTypes []string,
 	attrs map[string]string,
 ) ([]packetEvent, error) {
@@ -118,7 +166,7 @@ func (c *Client) queryEvents(
 		}
 		conditions = append(conditions, fmt.Sprintf(
 			`{ GnoEvent: { type: { eq: %q } pkg_path: { eq: %q } _and: [%s] } }`,
-			eventType, c.cfg.GnoIBCCoreRealm, strings.Join(attributes, " "),
+			eventType, realm, strings.Join(attributes, " "),
 		))
 	}
 	query := fmt.Sprintf(
@@ -171,7 +219,7 @@ func (c *Client) queryEvents(
 			return nil, fmt.Errorf("malformed Gno transaction hash")
 		}
 		for _, candidate := range tx.Response.Events {
-			if candidate.PkgPath != c.cfg.GnoIBCCoreRealm ||
+			if candidate.PkgPath != realm ||
 				!slices.Contains(eventTypes, candidate.Type) ||
 				!hasAttributes(candidate.Attrs, attrs) {
 				continue

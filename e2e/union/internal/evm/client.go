@@ -240,6 +240,60 @@ func (c *Client) addressCall(ctx context.Context, address, signature string) (st
 	return strings.ToLower(fields[0]), nil
 }
 
+// Address derives the EVM address for a raw private key.
+func (c *Client) Address(ctx context.Context, privateKey string) (string, error) {
+	raw, err := c.cast(ctx, "wallet", "address", "--private-key", privateKey)
+	address := strings.ToLower(string(raw))
+	if err != nil || !addressPattern.MatchString(address) {
+		return "", errors.New("cannot derive EVM address")
+	}
+	return address, nil
+}
+
+// NativeBalance returns an address's EVM gas-token balance in wei.
+func (c *Client) NativeBalance(ctx context.Context, address string) (*big.Int, error) {
+	raw, err := c.cast(ctx, "balance", strings.ToLower(address))
+	if err != nil {
+		return nil, err
+	}
+	balance, ok := new(big.Int).SetString(string(raw), 10)
+	if !ok || balance.Sign() < 0 {
+		return nil, errors.New("malformed EVM native balance")
+	}
+	return balance, nil
+}
+
+// FundNative sends gas tokens from the configured disposable EVM fixture.
+func (c *Client) FundNative(ctx context.Context, recipient, amount string) (string, error) {
+	if value, ok := new(big.Int).SetString(amount, 10); !ok || value.Sign() <= 0 {
+		return "", errors.New("native funding amount must be positive decimal wei")
+	}
+	receipt, err := c.receipt(
+		ctx, "fund relayer", "send", strings.ToLower(recipient), "--value", amount,
+		"--private-key", c.cfg.EVMPrivateKey, "--json",
+	)
+	return receipt.TransactionHash, err
+}
+
+// TransactionSender returns the signer recorded by an EVM transaction.
+func (c *Client) TransactionSender(ctx context.Context, txHash string) (string, error) {
+	raw, err := c.cast(ctx, "tx", txHash, "--json")
+	if err != nil {
+		return "", err
+	}
+	var tx struct {
+		From string `json:"from"`
+	}
+	if json.Unmarshal(raw, &tx) != nil {
+		return "", errors.New("malformed EVM transaction sender")
+	}
+	tx.From = strings.ToLower(tx.From)
+	if !addressPattern.MatchString(tx.From) {
+		return "", errors.New("malformed EVM transaction sender")
+	}
+	return tx.From, nil
+}
+
 // WithFreshSalt returns the same token identity for another packet.
 func (p Plan) WithFreshSalt() (Plan, error) {
 	salt, err := randomSalt()
@@ -336,6 +390,31 @@ func (c *Client) TotalSupply(ctx context.Context, token string) (string, error) 
 		return "", errors.New("malformed ERC20 total supply")
 	}
 	return fields[0], nil
+}
+
+// SetZKGMPaused idempotently updates the EVM ZKGM pause state.
+func (c *Client) SetZKGMPaused(ctx context.Context, paused bool) (string, error) {
+	raw, err := c.cast(ctx, "call", strings.ToLower(c.cfg.EVMZKGMContract), "paused()(bool)")
+	if err != nil {
+		return "", err
+	}
+	current, err := strconv.ParseBool(string(raw))
+	if err != nil {
+		return "", errors.New("malformed EVM ZKGM pause state")
+	}
+	if current == paused {
+		return "", nil
+	}
+	method := "unpause()"
+	if paused {
+		method = "pause()"
+	}
+	receipt, err := c.receipt(
+		ctx, "ZKGM "+strings.TrimSuffix(method, "()"), "send",
+		strings.ToLower(c.cfg.EVMZKGMContract), method,
+		"--private-key", c.cfg.EVMPrivateKey, "--json",
+	)
+	return receipt.TransactionHash, err
 }
 
 func (c *Client) balance(ctx context.Context, token, account string) (string, error) {

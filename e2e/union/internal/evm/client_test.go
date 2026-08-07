@@ -142,6 +142,60 @@ func TestBalancesPreserveLargeDecimals(t *testing.T) {
 	}
 }
 
+func TestNativeRelayerBalanceAndFunding(t *testing.T) {
+	txHash := "0x" + strings.Repeat("a", 64)
+	receipt, _ := json.Marshal(transactionReceipt{Status: "0x1", TransactionHash: txHash})
+	executor := &fakeExecutor{outputs: [][]byte{
+		[]byte("0x7777777777777777777777777777777777777777"), []byte("42"), receipt,
+	}}
+	client := NewWithExecutor(testConfig(), executor)
+	address, err := client.Address(context.Background(), "0x"+strings.Repeat("1", 64))
+	if err != nil {
+		t.Fatal(err)
+	}
+	balance, err := client.NativeBalance(context.Background(), address)
+	if err != nil || balance.String() != "42" {
+		t.Fatalf("balance = %v, %v", balance, err)
+	}
+	got, err := client.FundNative(context.Background(), address, "100")
+	if err != nil || got != txHash {
+		t.Fatalf("fund = %q, %v", got, err)
+	}
+	if command := strings.Join(executor.commands[2].Args, " "); !strings.Contains(command, "send "+address+" --value 100 --private-key") {
+		t.Fatalf("fund command = %q", command)
+	}
+}
+
+func TestTransactionSender(t *testing.T) {
+	executor := &fakeExecutor{outputs: [][]byte{[]byte(`{"from":"0x7777777777777777777777777777777777777777"}`)}}
+	sender, err := NewWithExecutor(testConfig(), executor).TransactionSender(
+		context.Background(), "0x"+strings.Repeat("a", 64),
+	)
+	if err != nil || sender != "0x7777777777777777777777777777777777777777" {
+		t.Fatalf("sender = %q, %v", sender, err)
+	}
+}
+
+func TestSetZKGMPausedOnlySendsWhenStateChanges(t *testing.T) {
+	cfg := testConfig()
+	txHash := "0x" + strings.Repeat("a", 64)
+	receipt, _ := json.Marshal(transactionReceipt{Status: "0x1", TransactionHash: txHash})
+	executor := &fakeExecutor{outputs: [][]byte{[]byte("false"), receipt, []byte("true")}}
+	client := NewWithExecutor(cfg, executor)
+	got, err := client.SetZKGMPaused(context.Background(), true)
+	if err != nil || got != txHash {
+		t.Fatalf("pause = %q, %v", got, err)
+	}
+	got, err = client.SetZKGMPaused(context.Background(), true)
+	if err != nil || got != "" {
+		t.Fatalf("idempotent pause = %q, %v", got, err)
+	}
+	if len(executor.commands) != 3 ||
+		!strings.Contains(strings.Join(executor.commands[1].Args, " "), "pause() --private-key") {
+		t.Fatalf("commands = %#v", executor.commands)
+	}
+}
+
 func TestChannelMembershipUsesOpenTopology(t *testing.T) {
 	path := "0x" + strings.Repeat("a", 64)
 	value := "0x" + strings.Repeat("b", 64)
@@ -199,6 +253,83 @@ func TestSendTokenOrderPreservesAmountAndKind(t *testing.T) {
 	if args[5] != "9223372036854775808" ||
 		args[7] != "9223372036854775808" || args[8] != "1" {
 		t.Fatalf("TokenOrder amount/kind args = %q", args)
+	}
+}
+
+func TestSendTokenOrderWithTimeoutUsesExplicitTimestamp(t *testing.T) {
+	cfg := testConfig()
+	packetHash := "0x" + strings.Repeat("b", 64)
+	receipt, _ := json.Marshal(transactionReceipt{
+		Status: "0x1", TransactionHash: "0x" + strings.Repeat("a", 64),
+		Logs: []evmLog{{
+			Address: cfg.EVMIBCHandler,
+			Topics: []string{
+				packetSendTopic, "0x" + strings.Repeat("0", 63) + "7", packetHash,
+			},
+		}},
+	})
+	executor := &fakeExecutor{outputs: [][]byte{[]byte("0x01"), receipt}}
+	_, err := NewWithExecutor(cfg, executor).SendTokenOrderWithTimeout(
+		context.Background(), 7,
+		Plan{
+			Token:   "0x6666666666666666666666666666666666666666",
+			Sender:  "0x7777777777777777777777777777777777777777",
+			Voucher: "ibc/" + strings.Repeat("8", 40), Salt: "0x" + strings.Repeat("9", 64),
+			Metadata: "0x05",
+		},
+		"g1"+strings.Repeat("a", 38), "1", 0, 123456789,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(executor.commands[1].Args, " "); !strings.Contains(got, "send(uint32,uint64,uint64,bytes32,(uint8,uint8,bytes)) 7 0 123456789 ") {
+		t.Fatalf("send command = %q", got)
+	}
+}
+
+func TestWaitTimeoutRejectsAcknowledgement(t *testing.T) {
+	cfg := testConfig()
+	packetHash := "0x" + strings.Repeat("b", 64)
+	channelTopic := "0x" + strings.Repeat("0", 63) + "7"
+	for _, tc := range []struct {
+		name    string
+		topic   string
+		wantErr string
+	}{
+		{"timeout", packetTimeoutTopic, ""},
+		{"acknowledgement", packetAckTopic, "acknowledged instead"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			logs, _ := json.Marshal([]evmLog{{
+				Address:         cfg.EVMIBCHandler,
+				Topics:          []string{tc.topic, channelTopic, packetHash},
+				TransactionHash: "0x" + strings.Repeat("a", 64),
+			}})
+			result, err := NewWithExecutor(cfg, &fakeExecutor{outputs: [][]byte{logs}}).
+				WaitTimeout(context.Background(), 1, 7, packetHash)
+			if tc.wantErr == "" {
+				if err != nil || result.Tx == "" {
+					t.Fatalf("result = %#v, error = %v", result, err)
+				}
+			} else if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("error = %v", err)
+			}
+		})
+	}
+}
+
+func TestPacketReceiveCount(t *testing.T) {
+	packetHash := "0x" + strings.Repeat("b", 64)
+	executor := &fakeExecutor{outputs: [][]byte{[]byte("[]")}}
+	count, err := NewWithExecutor(testConfig(), executor).PacketReceiveCount(
+		context.Background(), 12, 7, packetHash,
+	)
+	if err != nil || count != 0 {
+		t.Fatalf("count = %d, %v", count, err)
+	}
+	command := strings.Join(executor.commands[0].Args, " ")
+	if !strings.Contains(command, `"fromBlock":"0xc"`) || !strings.Contains(command, packetHash) {
+		t.Fatalf("command = %q", command)
 	}
 }
 

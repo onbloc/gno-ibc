@@ -1,27 +1,25 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/send
 package send
 
-// token_send_grc20_initialize_protocol_fill_ack_filetest walks a locally-registered
-// grc20 token through a ucs03-zkgm INITIALIZE send (first send of this token over
-// the channel, deploying the wrapped token on the counterparty). Unlike ESCROW,
-// an INITIALIZE order's declared TokenMetadata decimals are verified against the
-// grc20's real decimals before the escrow is taken (verifyMetadataDecimals), so
-// this file also builds and attaches valid metadata. A protocol-fill success ack
-// is a no-op, exactly like ESCROW: the escrow stays locked. Asserts the
-// GetChannelBalanceV2 ledger directly, not just the proxy bank balance.
+// token_send_grc20_escrow_burn_address_ack_filetest: GRC20 ESCROW send, then a
+// market-maker-fill ack naming BURN_ADDRESS. burnEscrowedV2's GRC20_TOKEN case
+// (token_order.gno:569-572) is identical to NATIVE_COIN, not IBC_TOKEN: no
+// burn capability over a foreign/fixed-supply asset, so it just adds to the
+// locked-token ledger — the 40 units stay at the proxy forever, TotalSupply
+// unaffected (contrast token_send_voucher_escrow_burn_address_ack_filetest,
+// where burnVoucher actually destroys supply). Previously unit-test-only.
 
 import (
-	"encoding/hex"
 	"testing"
 
 	"gno.land/p/demo/tokens/grc20"
 	"gno.land/p/nt/ufmt/v0"
-	types "gno.land/p/onbloc/ibc/union/types"
+	"gno.land/p/onbloc/ibc/union/lightclient"
+	"gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
 	u256 "gno.land/p/onbloc/math/uint256"
 
-	"gno.land/p/onbloc/ibc/union/lightclient"
 	"gno.land/r/demo/defi/grc20reg"
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
@@ -34,18 +32,19 @@ const (
 	coreImplPath = "gno.land/r/onbloc/ibc/union/core/v1"
 	zkgmImplPath = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
 
-	adminAddr      = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
-	senderAddr     = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
-	mockClientType = types.ClientType("scenario-mock-lc")
+	adminAddr        = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
+	senderAddr       = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
+	regularMakerAddr = address("g1dyxy88p94acjnm8dmu9tfj2mv2ncvx83cagllu")
+	mockClientType   = types.ClientType("scenario-mock-lc")
 
-	grc20Slug = "grc20-initialize-success"
+	grc20Slug = "grc20-burn-address"
 )
 
 func main(cur realm) {
 	// grc20.NewToken is a non-crossing (_ int, rlm realm, ...) call: it needs cur
 	// to still be this scenario's own ambient frame, so it must run before any
 	// testing.SetRealm below reassigns that ambient context to an EOA.
-	println("[SCENARIO] 1. Register a local grc20 token (6 decimals) and mint 40 units to the sender")
+	println("[SCENARIO] 1. Register a local grc20 token and mint 100 units to the sender")
 	token, ledger, denom := setupGRC20(cur)
 	println("")
 
@@ -53,35 +52,31 @@ func main(cur realm) {
 	channelId := bootstrap(cur)
 	println("")
 
-	println("[SCENARIO] 3. Send grc20 INITIALIZE order locking 40 units (sender pre-approves the proxy; pulled via TransferFrom)")
-	sendPacket := sendGRC20InitializeOrder(cur, channelId, token, ledger, denom)
+	println("[SCENARIO] 3. Send grc20 ESCROW order locking 40 units (sender pre-approves the proxy; pulled via TransferFrom)")
+	sendPacket := sendGRC20EscrowOrder(cur, channelId, token, ledger, denom)
 	println("")
 
-	println("[SCENARIO] 4. Acknowledge with protocol-fill success (no-op for INITIALIZE, same as ESCROW)")
-	acknowledgeProtocolFill(cur, channelId, sendPacket, token, denom)
+	println("[SCENARIO] 4. A market-maker-fill ack naming BURN_ADDRESS locks the escrow forever (no burn mechanism for a foreign grc20)")
+	acknowledgeBurnAddressFill(cur, channelId, sendPacket, token, denom)
 }
 
 func setupGRC20(cur realm) (*grc20.Token, *grc20.PrivateLedger, string) {
 	token, ledger := grc20.NewToken("Scenario GRC20", "SCN", 6, 0, cur)
 	denom := grc20reg.Register(cross(cur), token, grc20Slug)
 
-	if err := ledger.Mint(senderAddr, 40); err != nil {
+	if err := ledger.Mint(senderAddr, 100); err != nil {
 		panic(err)
 	}
 
 	ufmt.Printf("[INFO] registered grc20 denom: %s\n", denom)
 	ufmt.Printf("[INFO] sender grc20 balance: %d\n", token.BalanceOf(senderAddr))
-	ufmt.Println("[EXPECTED] sender grc20 balance should be 40 (freshly minted)")
+	ufmt.Println("[EXPECTED] sender grc20 balance should be 100 (freshly minted)")
 
 	return token, ledger, denom
 }
 
 // bootstrap installs the core/zkgm impls, grants the admin the relayer role, and
 // opens a client/connection/channel backed by the permissive mock light client.
-//
-// It is kept inline (not split further): every admin/relayer core entrypoint
-// authorizes the caller via cur.Previous(), so testing.SetRealm and the cross(cur)
-// call must run in the same frame for the admin user to be seen as the caller.
 func bootstrap(cur realm) types.ChannelId {
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.UpdateImpl(cross(cur), coreImplPath)
@@ -113,12 +108,11 @@ func bootstrap(cur realm) types.ChannelId {
 	return channelId
 }
 
-// sendGRC20InitializeOrder has the sender approve the proxy address before
-// sending, then sends the INITIALIZE order with TokenMetadata whose declared
-// decimals (6) match the registered grc20's real decimals, so
-// verifyMetadataDecimals passes and the order proceeds to pull the approved
-// amount via TransferFrom exactly like ESCROW.
-func sendGRC20InitializeOrder(cur realm, channelId types.ChannelId, token *grc20.Token, ledger *grc20.PrivateLedger, denom string) types.Packet {
+// sendGRC20EscrowOrder has the sender approve the proxy address before sending —
+// in production the sender submits a separate Approve tx against the token realm;
+// Approve here reproduces that pre-authorization — then sends the ESCROW order,
+// which pulls the approved amount via TransferFrom.
+func sendGRC20EscrowOrder(cur realm, channelId types.ChannelId, token *grc20.Token, ledger *grc20.PrivateLedger, denom string) types.Packet {
 	proxy := zkgm.ProxyAddress()
 	if err := ledger.Approve(senderAddr, proxy, 40); err != nil {
 		panic(err)
@@ -131,8 +125,7 @@ func sendGRC20InitializeOrder(cur realm, channelId types.ChannelId, token *grc20
 		BaseAmount:  u256.NewUint(40),
 		QuoteToken:  []byte("remote-grc20"),
 		QuoteAmount: u256.NewUint(40),
-		Kind:        z.TOKEN_ORDER_KIND_INITIALIZE,
-		Metadata:    mustTokenMetadata("af739f34ddf951cbc24fdbba4f76213688e13627", z.TokenInitializer{Name: "Scenario GRC20", Symbol: "SCN", Decimals: 6}),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 
 	ufmt.Printf("[INFO] channel balance ledger before send: %s\n", channelBalanceOrZero(channelId, order.BaseToken, order.QuoteToken).ToString())
@@ -140,30 +133,53 @@ func sendGRC20InitializeOrder(cur realm, channelId types.ChannelId, token *grc20
 	testing.SetRealm(testing.NewUserRealm(senderAddr))
 	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
 
-	ufmt.Printf("[INFO] send produced packet on channel: %s\n", sendPacket.SourceChannelId.String())
-	ufmt.Printf("[INFO] proxy grc20 escrow balance: %d\n", token.BalanceOf(proxy))
 	ufmt.Printf("[INFO] sender grc20 balance: %d\n", token.BalanceOf(senderAddr))
+	ufmt.Printf("[INFO] proxy grc20 escrow balance: %d\n", token.BalanceOf(proxy))
 	ufmt.Printf("[INFO] channel balance ledger after send: %s\n", channelBalanceOrZero(channelId, order.BaseToken, order.QuoteToken).ToString())
-	ufmt.Println("[EXPECTED] send should succeed: metadata decimals (6) match the grc20's real decimals")
+	ufmt.Println("[EXPECTED] sender grc20 balance should be 60 (100 - 40 escrowed)")
 	ufmt.Println("[EXPECTED] proxy grc20 escrow balance should be 40 (locked)")
-	ufmt.Println("[EXPECTED] sender grc20 balance should be 0 (pulled into escrow)")
 	ufmt.Println("[EXPECTED] channel balance ledger should be 40 (matches the escrowed order amount)")
 
 	return sendPacket
 }
 
-// acknowledgeProtocolFill acknowledges the sent packet with a protocol-fill
-// success ack, which is a no-op regardless of Kind, so the grc20 stays locked.
-func acknowledgeProtocolFill(cur realm, channelId types.ChannelId, sendPacket types.Packet, token *grc20.Token, denom string) {
-	ack := mustSuccessAck(mustProtocolTokenOrderAck())
-
+// acknowledgeBurnAddressFill: BURN_ADDRESS market-maker ack. GRC20_TOKEN has
+// no burn capability, so the 40 units stay custodied at the proxy forever;
+// TotalSupply is unaffected.
+func acknowledgeBurnAddressFill(cur realm, channelId types.ChannelId, sendPacket types.Packet, token *grc20.Token, denom string) {
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{ack}, nil, 1))
+	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{mustMakerFillAck(address(z.BURN_ADDRESS))}, nil, 1))
 
-	ufmt.Printf("[INFO] proxy grc20 escrow balance: %d\n", token.BalanceOf(zkgm.ProxyAddress()))
+	proxy := zkgm.ProxyAddress()
+	locked, lockedErr := zkgm.GetLockedTokenAmount(denom)
+
+	ufmt.Printf("[INFO] proxy grc20 escrow balance: %d\n", token.BalanceOf(proxy))
+	ufmt.Printf("[INFO] sender grc20 balance: %d\n", token.BalanceOf(senderAddr))
+	ufmt.Printf("[INFO] regular maker grc20 balance: %d\n", token.BalanceOf(regularMakerAddr))
+	ufmt.Printf("[INFO] burn address grc20 balance: %d\n", token.BalanceOf(address(z.BURN_ADDRESS)))
+	ufmt.Printf("[INFO] deployed token total supply: %d\n", token.TotalSupply())
 	ufmt.Printf("[INFO] channel balance ledger after ack: %s\n", channelBalanceOrZero(channelId, []byte(denom), []byte("remote-grc20")).ToString())
-	ufmt.Println("[EXPECTED] proxy grc20 escrow balance should be 40 (unchanged: escrow stays locked)")
-	ufmt.Println("[EXPECTED] channel balance ledger should be 40 (protocol-fill is a no-op; ledger and bank balance agree)")
+	ufmt.Printf("[INFO] locked token ledger amount (err=nil: %t): %s\n", lockedErr == nil, locked.ToString())
+	ufmt.Println("[EXPECTED] proxy grc20 escrow balance should still be 40 (permanently locked, not released or burned)")
+	ufmt.Println("[EXPECTED] sender grc20 balance should be 60 (unchanged: not refunded)")
+	ufmt.Println("[EXPECTED] regular maker grc20 balance should be 0 (never transferred to a maker)")
+	ufmt.Println("[EXPECTED] burn address grc20 balance should be 0 (no burn mechanism for a foreign grc20; nothing is ever sent there)")
+	ufmt.Println("[EXPECTED] deployed token total supply should be 100 (unchanged: unlike the voucher case, nothing is burned)")
+	ufmt.Println("[EXPECTED] channel balance ledger should be 0 (decreased out of channel escrow accounting)")
+	ufmt.Println("[EXPECTED] locked token ledger amount should be 40 (moved into the permanently-locked ledger)")
+}
+
+// mustMakerFillAck builds a success ack whose inner TokenOrderAck is a
+// market-maker fill designating maker as the settlement recipient.
+func mustMakerFillAck(maker address) []byte {
+	innerAck, err := z.EncodeTokenOrderAck(z.TokenOrderAck{
+		FillType:    new(u256.Uint).SetBytes(z.FILL_TYPE_MARKETMAKER[:]),
+		MarketMaker: []byte(maker.String()),
+	})
+	if err != nil {
+		panic(err)
+	}
+	return mustSuccessAck(innerAck)
 }
 
 // channelBalanceOrZero: GetChannelBalanceV2 returns "not found" (never
@@ -186,36 +202,12 @@ func mustOrderInstruction(order z.TokenOrderV2) z.Instruction {
 	return z.Instruction{Version: z.INSTR_VERSION_2, Opcode: z.OP_TOKEN_ORDER, Operand: operand}
 }
 
-func mustProtocolTokenOrderAck() []byte {
-	bz, err := z.EncodeTokenOrderAck(z.TokenOrderAck{FillType: new(u256.Uint).SetBytes(z.FILL_TYPE_PROTOCOL[:])})
-	if err != nil {
-		panic(err)
-	}
-	return bz
-}
-
 func mustSuccessAck(inner []byte) []byte {
 	ack, err := z.EncodeAck(z.Ack{Tag: new(u256.Uint).SetBytes(z.TAG_ACK_SUCCESS[:]), InnerAck: inner})
 	if err != nil {
 		panic(err)
 	}
 	return ack
-}
-
-func mustTokenMetadata(implementationHex string, ti z.TokenInitializer) []byte {
-	implementation, err := hex.DecodeString(implementationHex)
-	if err != nil {
-		panic(err)
-	}
-	initBytes, err := z.EncodeTokenInitializer(ti)
-	if err != nil {
-		panic(err)
-	}
-	meta, err := z.EncodeTokenMetadata(z.TokenMetadata{Implementation: implementation, Initializer: initBytes})
-	if err != nil {
-		panic(err)
-	}
-	return meta
 }
 
 // --- permissive mock light client (accepts any proof) ---
@@ -252,10 +244,10 @@ type mockError string
 func (e mockError) Error() string { return string(e) }
 
 // Output:
-// [SCENARIO] 1. Register a local grc20 token (6 decimals) and mint 40 units to the sender
+// [SCENARIO] 1. Register a local grc20 token and mint 100 units to the sender
 // [INFO] registered grc20 denom: gno.land/r/onbloc/ibc/scenario/union/send.SCN
-// [INFO] sender grc20 balance: 40
-// [EXPECTED] sender grc20 balance should be 40 (freshly minted)
+// [INFO] sender grc20 balance: 100
+// [EXPECTED] sender grc20 balance should be 100 (freshly minted)
 //
 // [SCENARIO] 2. Bootstrap IBC host and open client/connection/channel
 // [INFO] handshake opened: client=1 connection=1 channel=1
@@ -263,19 +255,27 @@ func (e mockError) Error() string { return string(e) }
 // [EXPECTED] connection should be 1
 // [EXPECTED] channel should be 1
 //
-// [SCENARIO] 3. Send grc20 INITIALIZE order locking 40 units (sender pre-approves the proxy; pulled via TransferFrom)
+// [SCENARIO] 3. Send grc20 ESCROW order locking 40 units (sender pre-approves the proxy; pulled via TransferFrom)
 // [INFO] channel balance ledger before send: 0
-// [INFO] send produced packet on channel: 1
+// [INFO] sender grc20 balance: 60
 // [INFO] proxy grc20 escrow balance: 40
-// [INFO] sender grc20 balance: 0
 // [INFO] channel balance ledger after send: 40
-// [EXPECTED] send should succeed: metadata decimals (6) match the grc20's real decimals
+// [EXPECTED] sender grc20 balance should be 60 (100 - 40 escrowed)
 // [EXPECTED] proxy grc20 escrow balance should be 40 (locked)
-// [EXPECTED] sender grc20 balance should be 0 (pulled into escrow)
 // [EXPECTED] channel balance ledger should be 40 (matches the escrowed order amount)
 //
-// [SCENARIO] 4. Acknowledge with protocol-fill success (no-op for INITIALIZE, same as ESCROW)
+// [SCENARIO] 4. A market-maker-fill ack naming BURN_ADDRESS locks the escrow forever (no burn mechanism for a foreign grc20)
 // [INFO] proxy grc20 escrow balance: 40
-// [INFO] channel balance ledger after ack: 40
-// [EXPECTED] proxy grc20 escrow balance should be 40 (unchanged: escrow stays locked)
-// [EXPECTED] channel balance ledger should be 40 (protocol-fill is a no-op; ledger and bank balance agree)
+// [INFO] sender grc20 balance: 60
+// [INFO] regular maker grc20 balance: 0
+// [INFO] burn address grc20 balance: 0
+// [INFO] deployed token total supply: 100
+// [INFO] channel balance ledger after ack: 0
+// [INFO] locked token ledger amount (err=nil: true): 40
+// [EXPECTED] proxy grc20 escrow balance should still be 40 (permanently locked, not released or burned)
+// [EXPECTED] sender grc20 balance should be 60 (unchanged: not refunded)
+// [EXPECTED] regular maker grc20 balance should be 0 (never transferred to a maker)
+// [EXPECTED] burn address grc20 balance should be 0 (no burn mechanism for a foreign grc20; nothing is ever sent there)
+// [EXPECTED] deployed token total supply should be 100 (unchanged: unlike the voucher case, nothing is burned)
+// [EXPECTED] channel balance ledger should be 0 (decreased out of channel escrow accounting)
+// [EXPECTED] locked token ledger amount should be 40 (moved into the permanently-locked ledger)

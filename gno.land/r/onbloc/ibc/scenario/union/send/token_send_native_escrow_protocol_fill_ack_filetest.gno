@@ -8,7 +8,9 @@ package send
 // fill ack leaves it locked. Without the attached coins the send would abort with
 // a "sent coin mismatch" since the escrow budget could not cover the order.
 // The active escrow amount is represented by the channel balance; protocol-fill
-// ack is a no-op for an escrow.
+// ack is a no-op for an escrow. Asserts the GetChannelBalanceV2 ledger directly
+// alongside the proxy bank balance, since source settlement is a no-op and a
+// missed ledger update wouldn't show up in the bank balance alone.
 
 import (
 	"chain"
@@ -48,7 +50,7 @@ func main(cur realm) {
 	println("")
 
 	println("[SCENARIO] 3. Acknowledge with protocol-fill success (no-op for escrow)")
-	acknowledgeNativeEscrow(cur, sendPacket)
+	acknowledgeNativeEscrow(cur, channelId, sendPacket)
 }
 
 // bootstrap installs the core/zkgm impls, grants the admin the relayer role, and
@@ -104,6 +106,8 @@ func sendNativeEscrowOrder(cur realm, channelId types.ChannelId) types.Packet {
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 
+	ufmt.Printf("[INFO] channel balance ledger before send: %s\n", channelBalanceOrZero(channelId, order.BaseToken, order.QuoteToken).ToString())
+
 	proxy := zkgm.ProxyAddress()
 	testing.IssueCoins(proxy, chain.NewCoins(chain.NewCoin("ugnot", 40)))
 
@@ -114,15 +118,17 @@ func sendNativeEscrowOrder(cur realm, channelId types.ChannelId) types.Packet {
 	bk := banker.NewReadonlyBanker()
 	ufmt.Printf("[INFO] send produced packet on channel: %s\n", sendPacket.SourceChannelId.String())
 	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] channel balance ledger after send: %s\n", channelBalanceOrZero(channelId, order.BaseToken, order.QuoteToken).ToString())
 	ufmt.Println("[EXPECTED] send should succeed: attached 40ugnot covers the escrow order")
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (locked)")
+	ufmt.Println("[EXPECTED] channel balance ledger should be 40 (matches the escrowed order amount)")
 
 	return sendPacket
 }
 
 // acknowledgeNativeEscrow acknowledges the sent packet with a protocol-fill success
 // ack, which is a no-op for an escrow, so the native coins stay locked.
-func acknowledgeNativeEscrow(cur realm, sendPacket types.Packet) {
+func acknowledgeNativeEscrow(cur realm, channelId types.ChannelId, sendPacket types.Packet) {
 	ack := mustSuccessAck(mustProtocolTokenOrderAck())
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
@@ -130,7 +136,19 @@ func acknowledgeNativeEscrow(cur realm, sendPacket types.Packet) {
 
 	bk := banker.NewReadonlyBanker()
 	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(zkgm.ProxyAddress()).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] channel balance ledger after ack: %s\n", channelBalanceOrZero(channelId, []byte("ugnot"), []byte("remote-ugnot")).ToString())
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (unchanged: escrow stays locked)")
+	ufmt.Println("[EXPECTED] channel balance ledger should be 40 (protocol-fill is a no-op; ledger and bank balance agree)")
+}
+
+// channelBalanceOrZero: GetChannelBalanceV2 returns "not found" (never
+// escrowed) as an error rather than a stored zero; resolve it to u256.Zero().
+func channelBalanceOrZero(channelId types.ChannelId, baseToken, quoteToken []byte) *u256.Uint {
+	balance, err := zkgm.GetChannelBalanceV2(channelId, u256.Zero(), string(baseToken), quoteToken)
+	if err != nil {
+		return u256.Zero()
+	}
+	return balance
 }
 
 // --- encoding helpers (pure z calls, mirroring the e2e harness) ---
@@ -200,11 +218,16 @@ func (e mockError) Error() string { return string(e) }
 // [EXPECTED] channel should be 1
 //
 // [SCENARIO] 2. Send native ESCROW order locking 40ugnot (funded via attached send coins)
+// [INFO] channel balance ledger before send: 0
 // [INFO] send produced packet on channel: 1
 // [INFO] proxy native escrow balance: 40
+// [INFO] channel balance ledger after send: 40
 // [EXPECTED] send should succeed: attached 40ugnot covers the escrow order
 // [EXPECTED] proxy native escrow balance should be 40 (locked)
+// [EXPECTED] channel balance ledger should be 40 (matches the escrowed order amount)
 //
 // [SCENARIO] 3. Acknowledge with protocol-fill success (no-op for escrow)
 // [INFO] proxy native escrow balance: 40
+// [INFO] channel balance ledger after ack: 40
 // [EXPECTED] proxy native escrow balance should be 40 (unchanged: escrow stays locked)
+// [EXPECTED] channel balance ledger should be 40 (protocol-fill is a no-op; ledger and bank balance agree)

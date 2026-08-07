@@ -17,13 +17,24 @@ var ErrAmountOverflow = errors.New("zkgm: amount overflows int64")
 // It is rejected so cross-chain value is conserved exactly.
 var ErrAmountNotDivisible = errors.New("zkgm: amount not divisible by token scale factor")
 
-// Pow10 returns 10^exp as a uint256.
-// exp is small (a token's decimal excess over the canonical precision),
-// so float pow is exact and sufficient.
+// Pow10 returns 10^exp as a uint256, computed by exact integer
+// exponentiation. A float64 intermediate (math.Pow10 + uint64 conversion)
+// silently saturates once 10^exp exceeds a uint64 (exp >= 20), so callers
+// must not rely on a caller-side cap to keep exp small; this computes the
+// exact value for any exp that fits in 256 bits.
 func Pow10(exp int) *u256.Uint {
-	result := math.Pow10(exp)
+	if exp < 0 {
+		return u256.Zero()
+	}
 
-	return u256.NewUint(uint64(result))
+	result := u256.NewUint(1)
+	ten := u256.NewUint(10)
+
+	for i := 0; i < exp; i++ {
+		result = result.Mul(result, ten)
+	}
+
+	return result
 }
 
 // ScaleDownToInt64 narrows an origin-precision amount to an int64 ledger amount

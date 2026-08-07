@@ -113,7 +113,7 @@ func lockNativeEscrow(cur realm, channelId types.ChannelId) {
 	_ = zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
 
 	bk := banker.NewReadonlyBanker()
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (locked)")
 }
 
@@ -139,8 +139,8 @@ func receiveOverRequestedUnescrow(cur realm, channelId types.ChannelId) {
 
 	bk := banker.NewReadonlyBanker()
 	proxy := zkgm.ProxyAddress()
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
-	ufmt.Printf("[INFO] user native balance: %d\n", bk.GetCoins(userAddr).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
+	ufmt.Printf("[INFO] user native balance: %d\n", bk.GetCoin(userAddr, "ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (unchanged: rejected, nothing released)")
 	ufmt.Println("[EXPECTED] user native balance should be 0 (nothing received)")
 }

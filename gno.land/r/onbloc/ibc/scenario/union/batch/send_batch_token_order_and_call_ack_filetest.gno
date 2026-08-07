@@ -104,7 +104,7 @@ func sendBatch(cur realm, channelId types.ChannelId) types.Packet {
 
 	bk := banker.NewReadonlyBanker()
 	ufmt.Printf("[INFO] send produced packet on channel: %s\n", sendPacket.SourceChannelId.String())
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
 	ufmt.Println("[EXPECTED] send should succeed: Call sender matches the send-time caller, TokenOrder escrows 40")
 
 	return sendPacket
@@ -121,7 +121,7 @@ func acknowledgeBatch(cur realm, sendPacket types.Packet) {
 	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{ack}, nil, 1))
 
 	bk := banker.NewReadonlyBanker()
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(zkgm.ProxyAddress()).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(zkgm.ProxyAddress(), "ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (unchanged: protocol-fill no-op, Call ack is also a no-op)")
 }
 

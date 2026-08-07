@@ -396,9 +396,7 @@ def write_runner_config(values: dict[str, str]) -> None:
     runner = runner_config()
     runner["UNION_IBC_HOST_CONTRACT"] = union_host
     runner["E2E_ARTIFACT_DIR"] = str(artifact_dir)
-    if values.get("E2E_STATE_FILE"):
-        runner["E2E_STATE_FILE"] = values["E2E_STATE_FILE"]
-    require(runner, *(key for key in runner if key not in {"E2E_STATE_FILE"}))
+    require(runner, *runner)
     config_file.parent.mkdir(parents=True, exist_ok=True)
     write_private_json(config_file, runner)
 

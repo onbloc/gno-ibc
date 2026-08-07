@@ -198,7 +198,6 @@ export GNO_PACKET_RPC_URL=http://127.0.0.1:16657
 export GNO_PACKET_INDEXER_RPC_URL=http://127.0.0.1:48546/graphql/query
 
 export E2E_ARTIFACT_DIR=./channel-e2e-artifacts-<run-id>
-export E2E_STATE_FILE=./channel-e2e-artifacts-<run-id>/state.json
 export VOYAGER_COMMAND_TIMEOUT_SECONDS=120
 ```
 

@@ -12,7 +12,6 @@ import (
 const artifactMarker = "union-channel-e2e-artifacts"
 
 var (
-	renameFile    = os.Rename
 	syncDirectory = syncParentDirectory
 )
 
@@ -134,7 +133,7 @@ func atomicWrite(path string, data []byte) error {
 	if err := temp.Close(); err != nil {
 		return fmt.Errorf("cannot close state checkpoint")
 	}
-	if err := renameFile(tempName, path); err != nil {
+	if err := os.Rename(tempName, path); err != nil {
 		return fmt.Errorf("cannot replace state checkpoint")
 	}
 	if err := syncDirectory(dir); err != nil {

@@ -29,8 +29,7 @@
     "EVM_IBC_HANDLER": "", "EVM_MULTICALL": "", "EVM_ZKGM_CONTRACT": "",
     "EVM_COMETBLS_CLIENT_IMPL": "", "EVM_PROOF_LENS_CLIENT_IMPL": "",
     "EVM_TEST_ERC20": "",
-    "E2E_ARTIFACT_DIR": "channel-e2e-artifacts",
-    "E2E_STATE_FILE": ""
+    "E2E_ARTIFACT_DIR": "channel-e2e-artifacts"
   },
   "provision": {
     "UNION_DEPLOYER": "union1jk9psyhvgkrt2cumz8eytll2244m2nnz4yt2g2",

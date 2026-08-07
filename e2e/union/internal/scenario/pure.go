@@ -92,37 +92,15 @@ func classifyPacketBalances(
 	amount string,
 	before, after *state.Balances,
 ) (state.Balances, error) {
-	sender, ok := decimalDifference(before.Sender, after.Sender)
-	if !ok {
-		return state.Balances{}, errors.New("ERC20 sender balance increased unexpectedly")
-	}
-	escrow, ok := decimalDifference(after.Escrow, before.Escrow)
-	if !ok {
-		return state.Balances{}, errors.New("ERC20 escrow balance decreased unexpectedly")
-	}
-	beforeRecipient, err := strconv.ParseInt(before.Recipient, 10, 64)
-	if err != nil {
-		return state.Balances{}, errors.New("saved packet recipient balance is malformed")
-	}
-	afterRecipient, err := strconv.ParseInt(after.Recipient, 10, 64)
-	if err != nil || afterRecipient < beforeRecipient {
-		return state.Balances{}, errors.New("Gno voucher balance decreased unexpectedly")
-	}
-	recipient := afterRecipient - beforeRecipient
+	expectedRecipient := "0"
 	if success {
 		expected, err := config.PacketLedgerAmount(amount)
 		if err != nil {
 			return state.Balances{}, err
 		}
-		if sender != amount || escrow != amount || recipient != expected {
-			return state.Balances{}, errors.New("packet balance deltas do not match the sent amount")
-		}
-	} else if sender != "0" || escrow != "0" || recipient != 0 {
-		return state.Balances{}, errors.New("packet failure did not refund the escrowed ERC20")
+		expectedRecipient = strconv.FormatInt(expected, 10)
 	}
-	return state.Balances{
-		Sender: sender, Escrow: escrow, Recipient: strconv.FormatInt(recipient, 10),
-	}, nil
+	return classifyBalances(success, amount, expectedRecipient, *before, *after)
 }
 
 func decimalDifference(left, right string) (string, bool) {
@@ -137,6 +115,14 @@ func decimalDifference(left, right string) (string, bool) {
 func classifyBoundaryBalances(
 	success bool,
 	amount string,
+	before, after state.Balances,
+) (state.Balances, error) {
+	return classifyBalances(success, amount, amount, before, after)
+}
+
+func classifyBalances(
+	success bool,
+	amount, expectedRecipient string,
 	before, after state.Balances,
 ) (state.Balances, error) {
 	sender, ok := decimalDifference(before.Sender, after.Sender)
@@ -155,17 +141,16 @@ func classifyBoundaryBalances(
 	if err != nil || recipientAfter < recipientBefore {
 		return state.Balances{}, errors.New("Gno voucher balance decreased unexpectedly")
 	}
-	recipient := recipientAfter - recipientBefore
+	recipient := strconv.FormatInt(recipientAfter-recipientBefore, 10)
 	if success {
-		expected, err := strconv.ParseInt(amount, 10, 64)
-		if err != nil || sender != amount || escrow != amount || recipient != expected {
-			return state.Balances{}, errors.New("successful boundary packet has incorrect balance deltas")
+		if sender != amount || escrow != amount || recipient != expectedRecipient {
+			return state.Balances{}, errors.New("packet balance deltas do not match the sent amount")
 		}
-	} else if sender != "0" || escrow != "0" || recipient != 0 {
-		return state.Balances{}, errors.New("failed boundary packet was not fully refunded")
+	} else if sender != "0" || escrow != "0" || recipient != "0" {
+		return state.Balances{}, errors.New("packet failure did not refund the escrowed ERC20")
 	}
 	return state.Balances{
-		Sender: sender, Escrow: escrow, Recipient: strconv.FormatInt(recipient, 10),
+		Sender: sender, Escrow: escrow, Recipient: recipient,
 	}, nil
 }
 

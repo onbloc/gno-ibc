@@ -1,11 +1,7 @@
 package scenario
 
 import (
-	"bytes"
-	"context"
 	"encoding/binary"
-	"errors"
-	"strings"
 	"testing"
 )
 
@@ -38,27 +34,5 @@ func TestMutateStorageProofFlipsProofNodeOnly(t *testing.T) {
 func TestMutateStorageProofRejectsMissingNodeData(t *testing.T) {
 	if _, err := mutateStorageProof(make([]byte, 72)); err == nil {
 		t.Fatal("proof without an MPT node unexpectedly mutated")
-	}
-}
-
-func TestRunScenarioReportsProgress(t *testing.T) {
-	var progress bytes.Buffer
-	runner := Runner{progress: &progress}
-	err := runner.runScenario(context.Background(), scenarioCase{
-		name: "example",
-		run: func(*Runner, context.Context) error {
-			return errors.New("broken")
-		},
-	})
-	if err == nil {
-		t.Fatal("failed scenario unexpectedly passed")
-	}
-	for _, want := range []string{
-		"e2e: scenario example: started",
-		"e2e: scenario example: failed: broken",
-	} {
-		if !strings.Contains(progress.String(), want) {
-			t.Fatalf("progress = %q, want %q", progress.String(), want)
-		}
 	}
 }

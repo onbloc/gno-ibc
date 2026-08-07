@@ -105,7 +105,7 @@ func sendNativeEscrowOrder(cur realm, channelId types.ChannelId) types.Packet {
 	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
 
 	bk := banker.NewReadonlyBanker()
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (locked)")
 
 	return sendPacket
@@ -123,9 +123,9 @@ func acknowledgeBurnAddressFill(cur realm, sendPacket types.Packet) {
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{mustMakerFillAck(address(z.BURN_ADDRESS))}, nil, 1))
 
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
-	ufmt.Printf("[INFO] sender native balance: %d\n", bk.GetCoins(senderAddr).AmountOf("ugnot"))
-	ufmt.Printf("[INFO] burn address native balance: %d\n", bk.GetCoins(address(z.BURN_ADDRESS)).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
+	ufmt.Printf("[INFO] sender native balance: %d\n", bk.GetCoin(senderAddr, "ugnot"))
+	ufmt.Printf("[INFO] burn address native balance: %d\n", bk.GetCoin(address(z.BURN_ADDRESS), "ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should still be 40 (permanently locked, not released)")
 	ufmt.Println("[EXPECTED] sender native balance should be 0 (unchanged: not refunded)")
 	ufmt.Println("[EXPECTED] burn address native balance should be 0 (native has no burn mechanism; nothing is ever sent there)")

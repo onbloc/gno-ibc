@@ -20,7 +20,17 @@ addresses are always discovered from the current workflow run.
 | `gno-compose.yml` | Starts Gno and the Gno transaction indexer |
 | `devnet.json` | Declares fixed chain IDs, endpoints, and public test accounts |
 | `provision.py` | Deploys and verifies contracts, then writes `runner.json` |
-| `run-channel-e2e.sh` | Runs scenarios against the prepared environment |
+| `e2e.py` | Validates configuration and exposes the command-line interface |
+| `runner.py` | Creates/verifies topology and runs the nine scenarios |
+| `voyager.py` | Owns Voyager configuration, container lifecycle, and RPC calls |
+| `run-channel-e2e.sh` | Passes the configured `runner.json` to `e2e.py` |
+
+The runner intentionally uses only Python's standard library plus the existing
+`docker`, `cast`, `gnokey`, `forge`, and Voyager CLIs. Scenarios are imperative
+functions whose statements follow the on-chain call order; there is no scenario
+DSL or adapter hierarchy. `proof_submit.go` is a narrow exception used only to
+import Voyager's raw Gno key for the forged-proof transaction, which `gnokey`
+cannot import directly.
 
 Compose is not invoked from the Dockerfile: image construction, service
 topology, one-shot provisioning, and scenario execution remain separate.
@@ -204,30 +214,37 @@ export VOYAGER_COMMAND_TIMEOUT_SECONDS=120
 
 ### 5. Run the Scenarios
 
-First, execute the read-only preflight. For a fresh environment, run the complete scenario suite **without** `--resume`.
+Inspect the fixed execution order, then execute the read-only preflight. A
+fresh run creates the topology before running the selected scenarios.
 
 ```sh
-./run-channel-e2e.sh
-./run-channel-e2e.sh --apply \
-  --forged-proof-rejection \
-  --amount-boundaries \
-  --gno-to-evm \
-  --evm-to-gno-timeout-refund \
-  --gno-to-evm-timeout-refund
+./run-channel-e2e.sh list
+./run-channel-e2e.sh preflight
+./run-channel-e2e.sh run
 ```
 
-`--amount-boundaries` and `--gno-to-evm` automatically include the prerequisite
-`--erc20-to-gno` scenario.
+`run` with no scenario names executes all nine. To run a subset, pass names
+from `list`; `amount-boundaries` and `gno-to-evm` automatically include the
+`erc20-to-gno` prerequisite.
+
+```sh
+./run-channel-e2e.sh run \
+  forged-proof-rejection \
+  amount-boundaries \
+  gno-to-evm \
+  evm-to-gno-timeout-refund \
+  gno-to-evm-timeout-refund
+```
 
 Relayer failover scenarios must run against a fresh disposable EVM chain. They
 use distinct zero-balance fixture signers to verify secondary takeover and
 active-queue recovery:
 
 ```sh
-./run-channel-e2e.sh --resume --apply \
-  --relayer-insufficient-balance-failover \
-  --relayer-offline-failover \
-  --relayer-balance-recovery
+./run-channel-e2e.sh run --resume \
+  relayer-insufficient-balance-failover \
+  relayer-offline-failover \
+  relayer-balance-recovery
 ```
 
 The timeout-refund scenarios set a three-minute packet timeout and temporarily
@@ -248,10 +265,10 @@ or source acknowledgement fails the timeout scenario.
 
 To execute additional scenarios while keeping the same chains and deployment,
 preserve the existing `state.json` and `runner.json`, then specify only the new
-scenario flags.
+scenario names.
 
 ```sh
-./run-channel-e2e.sh --resume --apply --<new-scenario>
+./run-channel-e2e.sh run --resume <new-scenario>
 ```
 
 `state.json` checkpoints only the completed client/connection/channel topology. If a write scenario fails, discard that disposable environment and start fresh; packet writes are not crash-resumable.

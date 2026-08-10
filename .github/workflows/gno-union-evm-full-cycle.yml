@@ -171,20 +171,20 @@ jobs:
       - name: Run full scenario suite
         working-directory: gno-ibc
         run: |
-          e2e/union/run-channel-e2e.sh --apply \
-            --forged-proof-rejection \
-            --erc20-to-gno \
-            --amount-boundaries \
-            --gno-to-evm \
-            --relayer-insufficient-balance-failover \
-            --relayer-offline-failover \
-            --relayer-balance-recovery \
-            --evm-to-gno-timeout-refund \
-            --gno-to-evm-timeout-refund
+          e2e/union/run-channel-e2e.sh run \
+            forged-proof-rejection \
+            erc20-to-gno \
+            amount-boundaries \
+            gno-to-evm \
+            relayer-insufficient-balance-failover \
+            relayer-offline-failover \
+            relayer-balance-recovery \
+            evm-to-gno-timeout-refund \
+            gno-to-evm-timeout-refund
 
       - name: Verify completed resume
         working-directory: gno-ibc
-        run: e2e/union/run-channel-e2e.sh --resume
+        run: e2e/union/run-channel-e2e.sh setup --resume
 
       - name: Capture service logs
         if: failure()

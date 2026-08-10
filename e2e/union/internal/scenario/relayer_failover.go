@@ -10,6 +10,7 @@ import (
 
 	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/gno"
+	"github.com/onbloc/gno-ibc/e2e/union/internal/state"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/voyager"
 )
 
@@ -18,68 +19,52 @@ const (
 )
 
 type relayerPacket struct {
-	SendTx, PacketHash string
-	FromBlock          uint64
-	GnoEvents          gno.PacketEvents
+	*state.Packet
+	GnoEvents gno.PacketEvents
 }
 
 func (r *Runner) runRelayerInsufficientBalanceFailover(ctx context.Context) error {
-	return r.withPrimaryEVMKey(ctx, r.cfg.RelayerEmptyPrivateKey, func(rendered []byte) error {
-		address, err := r.requireEmptyRelayer(ctx, r.cfg.RelayerEmptyPrivateKey)
-		if err != nil {
-			return err
-		}
-		r.progressf("scenario relayer-insufficient-balance-failover: primary signer=%s balance_wei=0", address)
-		packet, err := r.submitRelayerPacket(ctx)
-		if err != nil {
-			return err
-		}
-		if packet.GnoEvents, err = r.gno.WaitPacket(ctx, packet.PacketHash); err != nil {
-			return err
-		}
-		stats, err := r.voyager.WaitActiveQueue(ctx)
-		if err != nil {
-			return err
-		}
-		r.progressf("scenario relayer-insufficient-balance-failover: acknowledgement pending active_queue=%d; starting secondary", stats.Total)
-		return r.withSecondary(ctx, rendered, func(secondary *voyager.Runtime) error {
-			ackTx, err := r.finishRelayerPacket(ctx, secondary, packet)
-			if err != nil {
-				return err
-			}
-			secondarySigner, err := r.requireRelayerSigner(ctx, ackTx, r.cfg.EVMPrivateKey)
-			if err != nil {
-				return err
-			}
-			r.progressf("scenario relayer-insufficient-balance-failover: secondary acknowledged packet=%s tx=%s", packet.PacketHash, ackTx)
-			return r.writeEvidence("relayer-insufficient-balance-failover.json", map[string]any{
-				"primary_signer": address, "primary_balance_wei": "0",
-				"secondary_signer": secondarySigner,
-				"active_queue":     stats, "packet_hash": packet.PacketHash,
-				"transactions":        map[string]string{"send": packet.SendTx, "gno_receive": packet.GnoEvents.ReceiveTx, "evm_ack": ackTx},
-				"secondary_completed": true,
-			})
-		})
-	})
+	return r.runRelayerFailover(ctx, "relayer-insufficient-balance-failover", r.cfg.RelayerEmptyPrivateKey, false)
 }
 
 func (r *Runner) runRelayerOfflineFailover(ctx context.Context) error {
-	return r.withPrimaryEVMKey(ctx, r.cfg.RelayerOfflinePrivateKey, func(rendered []byte) error {
-		address, err := r.requireEmptyRelayer(ctx, r.cfg.RelayerOfflinePrivateKey)
+	return r.runRelayerFailover(ctx, "relayer-offline-failover", r.cfg.RelayerOfflinePrivateKey, true)
+}
+
+func (r *Runner) runRelayerFailover(ctx context.Context, name, primaryKey string, offline bool) error {
+	return r.withPrimaryEVMKey(ctx, primaryKey, func(rendered []byte) error {
+		primary, err := r.requireEmptyRelayer(ctx, primaryKey)
 		if err != nil {
 			return err
 		}
-		r.progressf("scenario relayer-offline-failover: stopping primary signer=%s", address)
-		if err := r.voyager.Close(ctx); err != nil {
-			return err
+		if offline {
+			r.progressf("scenario %s: stopping primary signer=%s", name, primary)
+			if err := r.voyager.Close(ctx); err != nil {
+				return err
+			}
 		}
 		packet, err := r.submitRelayerPacket(ctx)
 		if err != nil {
 			return err
 		}
-		return r.withSecondary(ctx, rendered, func(secondary *voyager.Runtime) error {
+		var activeQueue *voyager.QueueStats
+		if !offline {
 			if packet.GnoEvents, err = r.gno.WaitPacket(ctx, packet.PacketHash); err != nil {
 				return err
+			}
+			stats, err := r.voyager.WaitActiveQueue(ctx)
+			if err != nil {
+				return err
+			}
+			activeQueue = &stats
+			r.progressf("scenario %s: acknowledgement pending active_queue=%d; starting secondary", name, stats.Total)
+		}
+		return r.withSecondary(ctx, rendered, func(secondary *voyager.Runtime) error {
+			if offline {
+				packet.GnoEvents, err = r.gno.WaitPacket(ctx, packet.PacketHash)
+				if err != nil {
+					return err
+				}
 			}
 			ackTx, err := r.finishRelayerPacket(ctx, secondary, packet)
 			if err != nil {
@@ -89,13 +74,21 @@ func (r *Runner) runRelayerOfflineFailover(ctx context.Context) error {
 			if err != nil {
 				return err
 			}
-			r.progressf("scenario relayer-offline-failover: secondary relayed packet=%s tx=%s", packet.PacketHash, ackTx)
-			return r.writeEvidence("relayer-offline-failover.json", map[string]any{
-				"stopped_primary_signer": address, "secondary_signer": secondarySigner,
-				"packet_hash":         packet.PacketHash,
-				"transactions":        map[string]string{"send": packet.SendTx, "gno_receive": packet.GnoEvents.ReceiveTx, "evm_ack": ackTx},
-				"secondary_completed": true,
-			})
+			r.progressf("scenario %s: secondary relayed packet=%s tx=%s", name, packet.PacketHash, ackTx)
+			evidence := map[string]any{
+				"secondary_signer": secondarySigner,
+				"packet_hash":      packet.PacketHash, "secondary_completed": true,
+				"transactions": map[string]string{
+					"send": packet.SendTx, "gno_receive": packet.GnoEvents.ReceiveTx, "evm_ack": ackTx,
+				},
+			}
+			if offline {
+				evidence["stopped_primary_signer"] = primary
+			} else {
+				evidence["primary_signer"], evidence["primary_balance_wei"] = primary, "0"
+				evidence["active_queue"] = activeQueue
+			}
+			return r.writeEvidence(name+".json", evidence)
 		})
 	})
 }
@@ -156,7 +149,7 @@ func (r *Runner) runRelayerBalanceRecovery(ctx context.Context) error {
 func (r *Runner) requireAcknowledgementPending(ctx context.Context, packet relayerPacket, duration time.Duration) error {
 	waitCtx, cancel := context.WithTimeout(ctx, duration)
 	defer cancel()
-	_, err := r.evm.WaitAcknowledgement(waitCtx, packet.FromBlock, r.current.Channels.EVM, packet.PacketHash)
+	_, err := r.evm.WaitAcknowledgement(waitCtx, *packet.EVMFromBlock, r.current.Channels.EVM, packet.PacketHash)
 	if err == nil {
 		return fmt.Errorf("zero-balance relayer unexpectedly acknowledged packet")
 	}
@@ -230,30 +223,15 @@ func (r *Runner) requireEmptyRelayer(ctx context.Context, privateKey string) (st
 }
 
 func (r *Runner) submitRelayerPacket(ctx context.Context) (relayerPacket, error) {
-	plan, err := r.evm.Prepare(ctx, r.current.Channels.Gno)
+	packet, _, err := r.submitERC20Packet(ctx, 0)
 	if err != nil {
 		return relayerPacket{}, err
 	}
-	if _, err := r.evm.Mint(ctx, plan.Sender); err != nil {
-		return relayerPacket{}, err
-	}
-	if _, err := r.evm.Approve(ctx); err != nil {
-		return relayerPacket{}, err
-	}
-	snapshot, err := r.evm.Snapshot(ctx, plan.Sender)
-	if err != nil {
-		return relayerPacket{}, err
-	}
-	sent, err := r.evm.SendTokenOrder(ctx, r.current.Channels.EVM, plan, r.cfg.GnoRecipient, r.cfg.EVMTestAmount, 0)
-	if err != nil {
-		return relayerPacket{}, err
-	}
-	r.progressf("relayer scenario: packet submitted hash=%s tx=%s", sent.PacketHash, sent.Tx)
-	return relayerPacket{SendTx: sent.Tx, PacketHash: sent.PacketHash, FromBlock: snapshot.Block}, nil
+	return relayerPacket{Packet: packet}, nil
 }
 
 func (r *Runner) finishRelayerPacket(ctx context.Context, runtime *voyager.Runtime, packet relayerPacket) (string, error) {
-	ack, err := r.evm.WaitAcknowledgement(ctx, packet.FromBlock, r.current.Channels.EVM, packet.PacketHash)
+	ack, err := r.evm.WaitAcknowledgement(ctx, *packet.EVMFromBlock, r.current.Channels.EVM, packet.PacketHash)
 	if err != nil {
 		return "", err
 	}

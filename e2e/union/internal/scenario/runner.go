@@ -188,6 +188,17 @@ func (r *Runner) progressf(format string, args ...any) {
 	}
 }
 
+func (r *Runner) restoreZKGM(
+	ctx context.Context,
+	setPaused func(context.Context, bool) (string, error),
+	runErr *error,
+) {
+	cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), r.cfg.CleanupTimeout)
+	defer cancel()
+	_, err := setPaused(cleanupCtx, false)
+	*runErr = errors.Join(*runErr, err)
+}
+
 func (r *Runner) preflight(ctx context.Context) ([]byte, error) {
 	var plain, proof []int64
 	var err error

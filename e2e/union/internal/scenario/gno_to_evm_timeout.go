@@ -2,11 +2,8 @@ package scenario
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
-
-	"github.com/onbloc/gno-ibc/e2e/union/internal/evm"
 )
 
 const gnoToEVMTimeout = 3 * time.Minute
@@ -38,13 +35,9 @@ func (r *Runner) runGnoToEVMTimeoutRefund(ctx context.Context) (runErr error) {
 	}
 	cleanup := true
 	defer func() {
-		if !cleanup {
-			return
+		if cleanup {
+			r.restoreZKGM(ctx, r.evm.SetZKGMPaused, &runErr)
 		}
-		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), r.cfg.CleanupTimeout)
-		defer cancel()
-		_, cleanupErr := r.evm.SetZKGMPaused(cleanupCtx, false)
-		runErr = errors.Join(runErr, cleanupErr)
 	}()
 	pauseTx, err := r.evm.SetZKGMPaused(ctx, true)
 	if err != nil {
@@ -55,11 +48,7 @@ func (r *Runner) runGnoToEVMTimeoutRefund(ctx context.Context) (runErr error) {
 		return fmt.Errorf("EVM ZKGM was already paused")
 	}
 
-	operand, err := r.evm.EncodeTokenOrder(ctx, evm.TokenOrder{
-		Sender: hexText(r.cfg.GnoRecipient), Receiver: plan.Sender,
-		BaseToken: hexText("ugnot"), Amount: nativeLifecycleAmount,
-		QuoteToken: plan.Token, Kind: 0, Metadata: plan.Metadata,
-	})
+	operand, err := r.encodeNativeTokenOrder(ctx, r.cfg.GnoRecipient, plan, 0)
 	if err != nil {
 		return err
 	}

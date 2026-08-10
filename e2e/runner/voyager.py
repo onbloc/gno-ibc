@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import signal
 import subprocess
 import tempfile
 import time
@@ -21,13 +22,24 @@ def command(args: list[str], *, timeout: float, env: dict | None = None, stdin: 
     merged = os.environ.copy()
     if env:
         merged.update(env)
+    # start_new_session + killpg so a wedged docker child holding the captured
+    # pipe cannot defeat the timeout (else subprocess.run blocks forever in its
+    # post-kill communicate()). See CI hang: silent orphan python3+docker.
+    proc = subprocess.Popen(
+        args, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        stdin=subprocess.PIPE if stdin is not None else subprocess.DEVNULL,
+        env=merged, start_new_session=True,
+    )
     try:
-        result = subprocess.run(
-            args, text=True, capture_output=True, timeout=timeout, env=merged,
-            check=False, input=stdin,
-        )
+        out, err = proc.communicate(input=stdin, timeout=timeout)
     except subprocess.TimeoutExpired as error:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+        proc.communicate()
         raise RuntimeError(f"command timed out: {args[0]}") from error
+    result = subprocess.CompletedProcess(args, proc.returncode, out, err)
     if check and result.returncode:
         detail = result.stderr.strip() or result.stdout.strip()
         raise RuntimeError(f"command failed: {args[0]}: {detail[-2000:]}")

@@ -81,8 +81,8 @@ func TestRoleConfigGrantDelayUpdateRespectsSetback(t *testing.T) {
 	roleConfig.setGrantDelay(now, 10)
 
 	wantEffect := NewTimePoint(now.Int64() + int64(MinSetback))
-	if roleConfig.GrantDelay.EffectDate != wantEffect {
-		t.Fatalf("GrantDelay.EffectDate = %d, want %d", roleConfig.GrantDelay.EffectDate.Int64(), wantEffect.Int64())
+	if roleConfig.GrantDelay.effectDate != wantEffect {
+		t.Fatalf("GrantDelay.EffectDate = %d, want %d", roleConfig.GrantDelay.effectDate.Int64(), wantEffect.Int64())
 	}
 	if got := roleConfig.grantDelay(now); got != 0 {
 		t.Fatalf("grantDelay() before effect = %d, want 0", got)

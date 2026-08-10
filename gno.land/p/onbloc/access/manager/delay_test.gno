@@ -17,7 +17,7 @@ func TestNewDelay(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			delay := NewDelay(tc.delay)
 
-			if delay != (Delay{EffectDate: 0, ValueBefore: 0, ValueAfter: tc.delay}) {
+			if delay != (Delay{effectDate: 0, valueBefore: 0, valueAfter: tc.delay}) {
 				t.Fatalf("NewDelay(%d) = %+v", tc.delay, delay)
 			}
 			if got := delay.Get(now); got != tc.delay {
@@ -43,7 +43,7 @@ func TestDelayGet(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			delay := Delay{EffectDate: tc.at, ValueBefore: valueBefore, ValueAfter: valueAfter}
+			delay := Delay{effectDate: tc.at, valueBefore: valueBefore, valueAfter: valueAfter}
 			if got := delay.Get(now); got != tc.want {
 				t.Fatalf("Get() = %d, want %d", got, tc.want)
 			}
@@ -86,14 +86,14 @@ func TestDelayWithUpdate(t *testing.T) {
 			if !effect.Equal(wantEffect) {
 				t.Fatalf("effect = %s, want %s", effect, wantEffect)
 			}
-			if updated.EffectDate != wantEffect {
-				t.Fatalf("updated.EffectDate = %s, want %s", updated.EffectDate, wantEffect)
+			if updated.effectDate != wantEffect {
+				t.Fatalf("updated.EffectDate = %s, want %s", updated.effectDate, wantEffect)
 			}
-			if updated.ValueBefore != active {
-				t.Fatalf("updated.ValueBefore = %d, want %d (the value active at now)", updated.ValueBefore, active)
+			if updated.valueBefore != active {
+				t.Fatalf("updated.ValueBefore = %d, want %d (the value active at now)", updated.valueBefore, active)
 			}
-			if updated.ValueAfter != tc.newDelay {
-				t.Fatalf("updated.ValueAfter = %d, want %d", updated.ValueAfter, tc.newDelay)
+			if updated.valueAfter != tc.newDelay {
+				t.Fatalf("updated.ValueAfter = %d, want %d", updated.valueAfter, tc.newDelay)
 			}
 
 			if got := updated.Get(now); got != active {
@@ -116,7 +116,7 @@ func TestDelayWithUpdate(t *testing.T) {
 // one.
 func TestDelayWithUpdateAgainstPendingValue(t *testing.T) {
 	now := NewTimePoint(1_000_000)
-	pending := Delay{EffectDate: NewTimePoint(now.Int64() + 500), ValueBefore: 10, ValueAfter: 1_000}
+	pending := Delay{effectDate: NewTimePoint(now.Int64() + 500), valueBefore: 10, valueAfter: 1_000}
 
 	updated, effect := pending.WithUpdate(now, 0, MinSetback)
 
@@ -124,7 +124,7 @@ func TestDelayWithUpdateAgainstPendingValue(t *testing.T) {
 	if !effect.Equal(wantEffect) {
 		t.Fatalf("effect = %s, want %s (based on the active value 10, not the pending 1000)", effect, wantEffect)
 	}
-	if updated.ValueBefore != 10 {
-		t.Fatalf("updated.ValueBefore = %d, want 10", updated.ValueBefore)
+	if updated.valueBefore != 10 {
+		t.Fatalf("updated.ValueBefore = %d, want 10", updated.valueBefore)
 	}
 }

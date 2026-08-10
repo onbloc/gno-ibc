@@ -37,14 +37,13 @@ jobs:
       - name: Load disposable devnet configuration
         id: devnet
         working-directory: gno-ibc
-        run: python3 e2e/union/provision.py export-env | tee -a "$GITHUB_ENV" >>"$GITHUB_OUTPUT"
+        run: python3 e2e/provision.py export-env | tee -a "$GITHUB_ENV" >>"$GITHUB_OUTPUT"
 
       - name: Validate E2E scripts
         working-directory: gno-ibc
         run: |
-          python3 e2e/union/provision.py validate
-          python3 e2e/union/provision_test.py
-          e2e/union/ensure-image_test.sh
+          python3 e2e/provision.py validate
+          python3 e2e/tests/test_provision.py
 
       - name: Check out pinned union-voyager runtime
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -89,11 +88,11 @@ jobs:
         run: |
           image_dir=$(mktemp -d)
           trap 'rm -rf "$image_dir"' EXIT
-          e2e/union/ensure-image.sh gno >"$image_dir/gno" &
+          .github/scripts/ensure-image.sh gno >"$image_dir/gno" &
           gno_pid=$!
-          e2e/union/ensure-image.sh voyager >"$image_dir/voyager" &
+          .github/scripts/ensure-image.sh voyager >"$image_dir/voyager" &
           voyager_pid=$!
-          e2e/union/ensure-image.sh union-deployer >"$image_dir/union-deployer" &
+          .github/scripts/ensure-image.sh union-deployer >"$image_dir/union-deployer" &
           union_deployer_pid=$!
           status=0
           wait "$gno_pid" || status=$?
@@ -132,20 +131,20 @@ jobs:
         env:
           UNION_VOYAGER_DIR: ${{ github.workspace }}/union-voyager
           E2E_DEPLOYMENT_DIR: ${{ github.workspace }}/artifacts/deployment
-        run: python3 e2e/union/provision.py deploy-union
+        run: python3 e2e/provision.py deploy-union
 
       - name: Register and discover EVM contracts
         working-directory: gno-ibc
         env:
           UNION_VOYAGER_DIR: ${{ github.workspace }}/union-voyager
           E2E_NATIVE_NIX: "true"
-        run: python3 e2e/union/provision.py configure-evm >>"$GITHUB_ENV"
+        run: python3 e2e/provision.py configure-evm >>"$GITHUB_ENV"
 
       - name: Start and bootstrap Gno
         working-directory: gno-ibc
         run: |
-          docker compose -f e2e/union/gno-compose.yml -p "$GNO_PROJECT" up -d --wait
-          docker compose -f e2e/union/gno-compose.yml -p "$GNO_PROJECT" \
+          docker compose -f e2e/gno/compose.yml -p "$GNO_PROJECT" up -d --wait
+          docker compose -f e2e/gno/compose.yml -p "$GNO_PROJECT" \
             --profile setup run --rm setup
           curl --fail --retry 30 --retry-connrefused --retry-delay 2 \
             "$GNO_PACKET_RPC_URL/status" >/dev/null
@@ -157,7 +156,7 @@ jobs:
 
       - name: Validate deployment and deploy test token
         working-directory: gno-ibc
-        run: python3 e2e/union/provision.py deploy-test-token >>"$GITHUB_ENV"
+        run: python3 e2e/provision.py deploy-test-token >>"$GITHUB_ENV"
 
       - name: Write runner config
         working-directory: gno-ibc
@@ -165,13 +164,13 @@ jobs:
           E2E_DEPLOYMENT_DIR: ${{ github.workspace }}/artifacts/deployment
           E2E_ARTIFACT_DIR: ${{ github.workspace }}/artifacts
           E2E_STATE_FILE: ${{ github.workspace }}/artifacts/state.json
-          E2E_CONFIG_FILE: ${{ github.workspace }}/gno-ibc/e2e/union/runner.json
-        run: python3 e2e/union/provision.py write-runner-config
+          E2E_CONFIG_FILE: ${{ github.workspace }}/gno-ibc/e2e/runner.json
+        run: python3 e2e/provision.py write-runner-config
 
       - name: Run full scenario suite
         working-directory: gno-ibc
         run: |
-          e2e/union/run-channel-e2e.sh run \
+          python3 -u e2e/e2e.py run \
             forged-proof-rejection \
             erc20-to-gno \
             amount-boundaries \
@@ -184,7 +183,7 @@ jobs:
 
       - name: Verify completed resume
         working-directory: gno-ibc
-        run: e2e/union/run-channel-e2e.sh setup --resume
+        run: python3 e2e/e2e.py setup --resume
 
       - name: Capture service logs
         if: failure()
@@ -193,7 +192,7 @@ jobs:
           install -d -m 700 "${{ github.workspace }}/artifacts"
           docker compose -p "$UNION_PROJECT" logs --no-color \
             >"${{ github.workspace }}/artifacts/union-devnet.log" 2>&1 || true
-          docker compose -f e2e/union/gno-compose.yml -p "$GNO_PROJECT" logs --no-color \
+          docker compose -f e2e/gno/compose.yml -p "$GNO_PROJECT" logs --no-color \
             >"${{ github.workspace }}/artifacts/gno-devnet.log" 2>&1 || true
 
       - name: Upload E2E artifacts
@@ -209,7 +208,7 @@ jobs:
         if: always()
         working-directory: gno-ibc
         run: |
-          docker compose -f e2e/union/gno-compose.yml -p "$GNO_PROJECT" \
+          docker compose -f e2e/gno/compose.yml -p "$GNO_PROJECT" \
             down -v --remove-orphans || true
           DEVNET_ACTION=down DEVNET_PROJECT_NAME="$UNION_PROJECT" NO_BLOCKSCOUT=true \
             nix --accept-flake-config run --impure \

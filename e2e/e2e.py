@@ -10,10 +10,11 @@ import stat
 import sys
 from pathlib import Path
 
-from runner import Runner
-from voyager import SCRIPT_DIR, command
+from runner.scenarios import Runner
+from runner.voyager import SCRIPT_DIR, command
 
 
+DEFAULT_CONFIG = Path(os.getenv("E2E_CONFIG_FILE", SCRIPT_DIR / "runner.json"))
 SCENARIOS = (
     "forged-proof-rejection",
     "erc20-to-gno",
@@ -36,6 +37,10 @@ REQUIRED = (
 )
 
 
+def progress(message: str) -> None:
+    print("e2e: " + message, file=sys.stderr, flush=True)
+
+
 def plan(selected: list[str]) -> list[str]:
     unknown = next((name for name in selected if name not in SCENARIOS), None)
     if unknown:
@@ -54,7 +59,7 @@ def load_config(path: Path, packet: bool) -> dict:
         raise RuntimeError("runner config must have mode 0600")
     try:
         config = json.loads(path.read_text())
-        pinned = json.loads(Path(SCRIPT_DIR, "devnet.json").read_text())["runner"]
+        pinned = json.loads(Path(SCRIPT_DIR, "config", "devnet.json").read_text())["runner"]
     except (OSError, json.JSONDecodeError, KeyError) as error:
         raise RuntimeError(f"cannot read runner config: {error}") from error
     for name in ("UNION_VOYAGER_REVISION", "UNION_CHAIN_ID", "EVM_CHAIN_ID", "GNO_CHAIN_ID"):
@@ -150,13 +155,13 @@ def main() -> int:
     plan_parser = subcommands.add_parser("plan")
     plan_parser.add_argument("scenarios", nargs="+")
     preflight_parser = subcommands.add_parser("preflight")
-    preflight_parser.add_argument("--config", type=Path, default=Path("runner.json"))
+    preflight_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     preflight_parser.add_argument("scenarios", nargs="*")
     setup_parser = subcommands.add_parser("setup")
-    setup_parser.add_argument("--config", type=Path, default=Path("runner.json"))
+    setup_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     setup_parser.add_argument("--resume", action="store_true")
     run_parser = subcommands.add_parser("run")
-    run_parser.add_argument("--config", type=Path, default=Path("runner.json"))
+    run_parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     run_parser.add_argument("--resume", action="store_true")
     run_parser.add_argument("scenarios", nargs="*")
     args = parser.parse_args()
@@ -168,7 +173,9 @@ def main() -> int:
         if args.command == "plan":
             print(*plan(args.scenarios), sep="\n")
         elif args.command == "preflight":
+            progress("preflight: started")
             preflight(args.config, args.scenarios)
+            progress("preflight: passed")
             print("preflight passed")
         elif args.command == "setup":
             config = load_config(args.config, False)
@@ -179,7 +186,9 @@ def main() -> int:
             print("topology setup passed")
         else:
             scenarios = plan(args.scenarios or list(SCENARIOS))
+            progress("preflight: started")
             preflight(args.config, scenarios)
+            progress("preflight: passed")
             config = load_config(
                 args.config, any(name != "forged-proof-rejection" for name in scenarios))
             Runner(config, scenarios, args.resume).run()

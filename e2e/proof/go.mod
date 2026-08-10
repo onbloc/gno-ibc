@@ -1,4 +1,4 @@
-module github.com/onbloc/gno-ibc/e2e/union
+module github.com/onbloc/gno-ibc/e2e/proof
 
 go 1.26.2
 

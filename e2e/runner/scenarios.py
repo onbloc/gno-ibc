@@ -12,7 +12,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-from voyager import SCRIPT_DIR, VERSION, Voyager, command, operation, render_voyager
+from .voyager import SCRIPT_DIR, VERSION, Voyager, command, operation, render_voyager
 
 
 HASH = re.compile(r"^0x[0-9a-fA-F]{64}$")
@@ -33,7 +33,7 @@ class Runner:
         self.c = config
         self.scenarios = scenarios
         self.resume = resume
-        self.v = Voyager(config)
+        self.v = Voyager(config, self.progress)
         self.artifacts = Path(config["E2E_ARTIFACT_DIR"])
         self.state_path = Path(config["E2E_STATE_FILE"])
         self.state = self.expected_state()
@@ -144,7 +144,10 @@ class Runner:
         try:
             self.progress("Voyager: starting")
             self.v.start(rendered)
+            self.progress("Voyager: ready")
+            self.progress("channel topology: started")
             self.topology()
+            self.progress("channel topology: passed")
             methods = {
                 "forged-proof-rejection": self.forged_proof_rejection,
                 "erc20-to-gno": self.erc20_to_gno,
@@ -158,7 +161,11 @@ class Runner:
             }
             for name in self.scenarios:
                 self.progress(f"scenario {name}: started")
-                methods[name]()
+                try:
+                    methods[name]()
+                except BaseException as error:
+                    self.progress(f"scenario {name}: failed: {error}")
+                    raise
                 self.progress(f"scenario {name}: passed")
         except BaseException:
             failed = True
@@ -181,8 +188,10 @@ class Runner:
         reserved = self.v.next_id(c["EVM_CHAIN_ID"], "client")
         self.v.restart(render_voyager(c, [reserved], [reserved + 1]))
         evm_from = self.v.latest_height(c["EVM_CHAIN_ID"], True)
+        self.progress("channel topology: indexing Union and Gno")
         self.v.index(c["UNION_CHAIN_ID"])
         self.v.index(c["GNO_CHAIN_ID"])
+        self.progress("channel topology: creating clients")
         clients = self.state["clients"]
         repair = {"failed_baseline": baseline, "repaired": self.state["failed_work"]["repaired"]}
         clients["gno_union"] = self.v.create_client(
@@ -212,6 +221,7 @@ class Runner:
         )
         if clients["evm_gno"] != reserved + 1:
             raise RuntimeError("EVM Proof Lens allocation changed")
+        self.progress("channel topology: indexing EVM")
         self.v.index(c["EVM_CHAIN_ID"], evm_from)
         next_evm = self.v.next_id(c["EVM_CHAIN_ID"], "client")
         plain, proof = [], []
@@ -886,7 +896,7 @@ class Runner:
 
     def secondary(self) -> Voyager:
         plain, proof = self.allowlists()
-        runtime = Voyager(self.c)
+        runtime = Voyager(self.c, self.progress)
         runtime.start(render_voyager(self.c, plain, proof))
         return runtime
 
@@ -927,7 +937,7 @@ class Runner:
         plain, proof = self.allowlists()
         self.v.close()
         packet = self.submit_erc20()
-        secondary = Voyager(self.c)
+        secondary = Voyager(self.c, self.progress)
         try:
             secondary.start(render_voyager(self.c, plain, proof))
             # All direct observations are chain RPC reads; the secondary shares the queue DB.
@@ -1137,10 +1147,10 @@ class Runner:
 
     def submit_proof(self, client: int, height: int, proof: bytes,
                      path: bytes, value: bytes) -> dict:
-        args = ["go", "run", "proof_submit.go", self.c["GNO_IBC_CORE_REALM"],
+        args = ["go", "run", ".", self.c["GNO_IBC_CORE_REALM"],
                 str(client), str(height), proof.hex(),
                 path.hex(), value.hex(), self.c["GNO_CHAIN_ID"], self.c["GNO_PACKET_RPC_URL"]]
-        result = subprocess.run(args, cwd=SCRIPT_DIR, text=True, capture_output=True,
+        result = subprocess.run(args, cwd=SCRIPT_DIR / "proof", text=True, capture_output=True,
                                 timeout=self.c["COMMAND_TIMEOUT"], check=False,
                                 env={**os.environ, "GOWORK": "off"},
                                 input=self.c["GNO_PRIVATE_KEY"] + "\n")

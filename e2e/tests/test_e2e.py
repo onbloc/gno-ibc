@@ -4,9 +4,16 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
-SCRIPT = Path(__file__).with_name("e2e.py")
+ROOT = Path(__file__).resolve().parent.parent
+SCRIPT = ROOT / "e2e.py"
+sys.path.insert(0, str(ROOT))
+
+from runner.voyager import Voyager
+
+
 SCENARIOS = [
     "forged-proof-rejection",
     "erc20-to-gno",
@@ -68,7 +75,7 @@ class E2ERunnerTest(unittest.TestCase):
         self.assertIn("runner config must have mode 0600", result.stderr)
 
     def test_preflight_rejects_zero_contract_before_rpc_calls(self):
-        values = json.loads(Path(__file__).with_name("devnet.json").read_text())["runner"]
+        values = json.loads(Path(ROOT, "config", "devnet.json").read_text())["runner"]
         values.update({
             "UNION_IBC_HOST_CONTRACT": "union1contract",
             "EVM_IBC_HANDLER": "0x" + "0" * 40,
@@ -86,6 +93,26 @@ class E2ERunnerTest(unittest.TestCase):
 
         self.assertEqual(result.returncode, 1)
         self.assertIn("EVM_IBC_HANDLER must be a non-zero", result.stderr)
+
+    def test_wait_reports_start_heartbeat_and_completion(self):
+        messages = []
+        clock = [0]
+        responses = iter((None, None, None, {"ready": True}))
+
+        def sleep(seconds):
+            clock[0] += seconds
+
+        voyager = Voyager({"TIMEOUT": 120, "POLL": 30}, messages.append)
+        with (mock.patch("runner.voyager.time.monotonic", side_effect=lambda: clock[0]),
+              mock.patch("runner.voyager.time.sleep", side_effect=sleep)):
+            result = voyager.wait(lambda: next(responses), "packet acknowledgement")
+
+        self.assertEqual(result, {"ready": True})
+        self.assertEqual(messages, [
+            "wait packet acknowledgement: started",
+            "wait packet acknowledgement: pending (60s elapsed)",
+            "wait packet acknowledgement: passed (90s elapsed)",
+        ])
 
 
 if __name__ == "__main__":

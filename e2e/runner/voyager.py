@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 
-SCRIPT_DIR = Path(__file__).resolve().parent
+SCRIPT_DIR = Path(__file__).resolve().parent.parent
 VERSION = "ucs03-zkgm-0"
 VOYAGER_BIN = "/output/voyager"
 VOYAGER_CONFIG = "/run/voyager/config.jsonc"
@@ -45,7 +45,7 @@ def walk(value, replace):
 
 
 def render_voyager(config: dict, plain: list[int], proof: list[int]) -> str:
-    root = json.loads(Path(SCRIPT_DIR, "config.jsonc.template").read_text())
+    root = json.loads(Path(SCRIPT_DIR, "config", "config.jsonc.template").read_text())
     replacements = {
         "__UNION_CHAIN_ID__": config["UNION_CHAIN_ID"],
         "__EVM_CHAIN_ID__": config["EVM_CHAIN_ID"],
@@ -112,8 +112,9 @@ def render_voyager(config: dict, plain: list[int], proof: list[int]) -> str:
 
 
 class Voyager:
-    def __init__(self, config: dict):
+    def __init__(self, config: dict, progress=None):
         self.config = config
+        self.progress = progress or (lambda message: None)
         self.container = ""
         self.run_id = ""
         self.runtime_dir: tempfile.TemporaryDirectory | None = None
@@ -245,15 +246,24 @@ class Voyager:
         )
 
     def wait(self, query, label: str):
-        deadline = time.monotonic() + self.config["TIMEOUT"]
+        started = time.monotonic()
+        deadline = started + self.config["TIMEOUT"]
+        next_report = started + 60
         last = None
+        self.progress(f"wait {label}: started")
         while time.monotonic() < deadline:
             try:
                 value = query()
                 if value is not None:
+                    elapsed = int(time.monotonic() - started)
+                    self.progress(f"wait {label}: passed ({elapsed}s elapsed)")
                     return value
             except RuntimeError as error:
                 last = error
+            now = time.monotonic()
+            if now >= next_report:
+                self.progress(f"wait {label}: pending ({int(now - started)}s elapsed)")
+                next_report = now + 60
             time.sleep(self.config["POLL"])
         raise RuntimeError(f"{label} timed out" + (f": {last}" if last else ""))
 
@@ -297,6 +307,8 @@ class Voyager:
                       repaired: list[int] | None = None) -> int:
         repaired = repaired if repaired is not None else []
         expected = self.next_id(chain, "client")
+        label = f"client {chain}/{expected} ({client_type})"
+        self.progress(f"{label}: creating")
         args = ["msg", "create-client", "--on", chain, "--tracking", counterparty,
                 "--ibc-interface", interface, "--client-type", client_type]
         if config is not None:
@@ -334,6 +346,7 @@ class Voyager:
             time.sleep(self.config["POLL"])
         else:
             raise RuntimeError(f"client {chain}/{expected} timed out")
+        self.progress(f"{label}: active")
         return expected
 
     def failed_rows(self) -> list[dict]:

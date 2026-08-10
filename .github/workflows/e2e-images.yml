@@ -10,14 +10,15 @@ on:
       - '.dockerignore'
       - '.gitmodules'
       - 'Makefile'
-      - 'e2e/union/Dockerfile'
-      - 'e2e/union/ensure-image.sh'
-      - 'e2e/union/image-tag.sh'
-      - 'e2e/union/union-deployer.nix'
-      - 'e2e/union/union-deployer-trusted-mpt.patch'
-      - 'e2e/union/gno/**'
-      - 'e2e/union/config.jsonc.template'
-      - 'e2e/union/devnet.json'
+      - 'e2e/images/Dockerfile'
+      - '.github/scripts/ensure-image.sh'
+      - '.github/scripts/image-tag.sh'
+      - 'e2e/images/union-deployer/default.nix'
+      - 'e2e/images/union-deployer/trusted-mpt.patch'
+      - 'e2e/gno/entrypoint.sh'
+      - 'e2e/gno/setup.sh'
+      - 'e2e/config/config.jsonc.template'
+      - 'e2e/config/devnet.json'
       - 'gno.land/**'
       - 'third_party/**'
       - '.github/workflows/e2e-images.yml'
@@ -40,7 +41,7 @@ jobs:
 
       - name: Load disposable devnet configuration
         id: devnet
-        run: python3 e2e/union/provision.py export-env >>"$GITHUB_OUTPUT"
+        run: python3 e2e/provision.py export-env >>"$GITHUB_OUTPUT"
 
       - name: Check out pinned union-voyager
         if: matrix.component == 'voyager' || matrix.component == 'union-deployer'
@@ -70,5 +71,5 @@ jobs:
           UNION_VOYAGER_DIR: ${{ github.workspace }}/union-voyager
           UNION_VOYAGER_REVISION: ${{ steps.devnet.outputs.UNION_VOYAGER_REVISION }}
         run: |
-          image=$(e2e/union/ensure-image.sh "${{ matrix.component }}" --push)
+          image=$(.github/scripts/ensure-image.sh "${{ matrix.component }}" --push)
           printf '### %s\n\n%s\n' "${{ matrix.component }}" "$image" >>"$GITHUB_STEP_SUMMARY"

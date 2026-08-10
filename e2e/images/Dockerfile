@@ -19,8 +19,8 @@ COPY --from=gno-builder /usr/local/bin/gnodev /usr/local/bin/gnodev
 COPY --from=gno-builder /usr/local/bin/gnokey /usr/local/bin/gnokey
 COPY --from=gno-builder /src/gno /gnoroot
 COPY gno.land /gno-ibc/gno.land
-COPY e2e/union/gno/entrypoint.sh /entrypoint.sh
-COPY e2e/union/gno/setup.sh /setup.sh
+COPY e2e/gno/entrypoint.sh /entrypoint.sh
+COPY e2e/gno/setup.sh /setup.sh
 
 ENV GNOROOT=/gnoroot
 

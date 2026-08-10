@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-CONFIG_FILE = SCRIPT_DIR / "devnet.json"
+CONFIG_FILE = SCRIPT_DIR / "config" / "devnet.json"
 HEX_ADDRESS = re.compile(r"^0x[0-9a-fA-F]{40}$")
 PRIVATE_KEY = re.compile(r"^0x[0-9a-fA-F]{64}$")
 UNION_ACCOUNT = re.compile(r"^union1[0-9a-z]{38}$")

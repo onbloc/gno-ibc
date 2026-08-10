@@ -58,10 +58,10 @@ else
     }
     trap cleanup EXIT
     git -C "$union_dir" worktree add --detach "$build_dir/union" "$union_revision" >&2
-    git -C "$build_dir/union" apply "$script_dir/union-deployer-trusted-mpt.patch"
+    git -C "$build_dir/union" apply "$repo_root/e2e/images/union-deployer/trusted-mpt.patch"
     docker run --rm --network host \
       -v "$build_dir/union:/work/union:ro" \
-      -v "$script_dir/union-deployer.nix:/work/union-deployer.nix:ro" \
+      -v "$repo_root/e2e/images/union-deployer/default.nix:/work/union-deployer.nix:ro" \
       -v "$build_dir:/work/output" \
       -v union-deployer-nix-store-x86_64-linux:/nix \
       -v union-deployer-nix-cache-x86_64-linux:/root/.cache/nix \
@@ -106,7 +106,7 @@ else
       "${cache_args[@]}" \
       "$output" \
       --tag "$image" \
-      --file "$script_dir/Dockerfile" \
+      --file "$repo_root/e2e/images/Dockerfile" \
       "$repo_root" >&2
   fi
 fi

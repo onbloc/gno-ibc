@@ -13,8 +13,9 @@ case "$component" in
       .gno-version
       .gitmodules
       Makefile
-      e2e/union/Dockerfile
-      e2e/union/gno
+      e2e/images/Dockerfile
+      e2e/gno/entrypoint.sh
+      e2e/gno/setup.sh
       gno.land
       third_party/gno-realms
       third_party/gnolang-gno
@@ -24,14 +25,14 @@ case "$component" in
   voyager)
     inputs=(
       .dockerignore
-      e2e/union/Dockerfile
-      e2e/union/config.jsonc.template
+      e2e/images/Dockerfile
+      e2e/config/config.jsonc.template
     )
     ;;
   union-deployer)
     inputs=(
-      e2e/union/union-deployer.nix
-      e2e/union/union-deployer-trusted-mpt.patch
+      e2e/images/union-deployer/default.nix
+      e2e/images/union-deployer/trusted-mpt.patch
     )
     ;;
   *)

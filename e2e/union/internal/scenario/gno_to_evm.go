@@ -230,13 +230,7 @@ func (r *Runner) runGnoOrder(
 	if err != nil {
 		return gnoOrderResult{}, err
 	}
-	operand, err := r.evm.EncodeTokenOrder(
-		ctx, evm.TokenOrder{
-			Sender: hexText(sender), Receiver: plan.Sender,
-			BaseToken: hexText("ugnot"), Amount: nativeLifecycleAmount,
-			QuoteToken: plan.Token, Kind: kind, Metadata: plan.Metadata,
-		},
-	)
+	operand, err := r.encodeNativeTokenOrder(ctx, sender, plan, kind)
 	if err != nil {
 		return gnoOrderResult{}, err
 	}
@@ -327,6 +321,19 @@ func (r *Runner) runGnoOrder(
 		MembershipHeight: membershipHeight,
 		MembershipPath:   strings.TrimPrefix(membershipPath, "0x"),
 	}, nil
+}
+
+func (r *Runner) encodeNativeTokenOrder(
+	ctx context.Context,
+	sender string,
+	plan evm.WrappedPlan,
+	kind uint8,
+) (string, error) {
+	return r.evm.EncodeTokenOrder(ctx, evm.TokenOrder{
+		Sender: hexText(sender), Receiver: plan.Sender,
+		BaseToken: hexText("ugnot"), Amount: nativeLifecycleAmount,
+		QuoteToken: plan.Token, Kind: kind, Metadata: plan.Metadata,
+	})
 }
 
 func (r *Runner) requireWrappedState(

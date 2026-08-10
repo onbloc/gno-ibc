@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -98,6 +99,77 @@ func TestWaitPacketCountsWriteAckInAnotherTransaction(t *testing.T) {
 	cfg.GnoPacketIndexerRPCURL = server.URL
 	_, err := NewWithExecutor(cfg, nil).WaitPacket(context.Background(), packetHash)
 	if err == nil || !strings.Contains(err.Error(), "WriteAck count=2") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestWaitTimeoutReturnsMatchingEvent(t *testing.T) {
+	packetHash := "0x" + strings.Repeat("a", 64)
+	txHash := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		var body struct {
+			Query string `json:"query"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if strings.Contains(body.Query, "PacketTimeout") {
+			fmt.Fprintf(w, `{"data":{"getTransactions":[{"hash":%q,"block_height":2,`+
+				`"response":{"events":[{"type":"PacketTimeout","pkg_path":%q,"attrs":[`+
+				`{"key":"packet_hash","value":%q},{"key":"timeout_timestamp","value":"123"}]}]}}]}}`,
+				txHash, testConfig().GnoIBCCoreRealm, packetHash)
+			return
+		}
+		fmt.Fprintf(w, `{"data":{"getTransactions":[{"hash":%q,"block_height":2,`+
+			`"response":{"events":[{"type":"ZkgmNativeReleased","pkg_path":%q,"attrs":[`+
+			`{"key":"recipient","value":%q},{"key":"denom","value":"ugnot"},`+
+			`{"key":"amount","value":"1"}]}]}}]}}`,
+			txHash, testConfig().GnoZKGMPort, DevSenderAddress)
+	}))
+	defer server.Close()
+	cfg := testConfig()
+	cfg.GnoPacketIndexerRPCURL = server.URL
+	got, err := NewWithExecutor(cfg, nil).WaitTimeout(context.Background(), packetHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Tx != txHash || got.TimeoutTimestamp != 123 ||
+		got.RefundRecipient != DevSenderAddress || got.RefundDenom != "ugnot" || got.RefundAmount != "1" {
+		t.Fatalf("timeout = %#v", got)
+	}
+}
+
+func TestWaitTimeoutRejectsNativeReleaseInAnotherTransaction(t *testing.T) {
+	packetHash := "0x" + strings.Repeat("a", 64)
+	timeoutTx := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	releaseTx := base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32))
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		var body struct {
+			Query string `json:"query"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if strings.Contains(body.Query, "PacketTimeout") {
+			fmt.Fprintf(w, `{"data":{"getTransactions":[{"hash":%q,"block_height":2,`+
+				`"response":{"events":[{"type":"PacketTimeout","pkg_path":%q,"attrs":[`+
+				`{"key":"packet_hash","value":%q},{"key":"timeout_timestamp","value":"123"}]}]}}]}}`,
+				timeoutTx, testConfig().GnoIBCCoreRealm, packetHash)
+			return
+		}
+		fmt.Fprintf(w, `{"data":{"getTransactions":[{"hash":%q,"block_height":2,`+
+			`"response":{"events":[{"type":"ZkgmNativeReleased","pkg_path":%q,"attrs":[`+
+			`{"key":"recipient","value":%q},{"key":"denom","value":"ugnot"},`+
+			`{"key":"amount","value":"1"}]}]}}]}}`,
+			releaseTx, testConfig().GnoZKGMPort, DevSenderAddress)
+	}))
+	defer server.Close()
+	cfg := testConfig()
+	cfg.GnoPacketIndexerRPCURL = server.URL
+	_, err := NewWithExecutor(cfg, nil).WaitTimeout(context.Background(), packetHash)
+	if err == nil || !strings.Contains(err.Error(), "native release") {
 		t.Fatalf("error = %v", err)
 	}
 }
@@ -195,7 +267,8 @@ func TestSendRawUsesDevEOAAndReturnsNewPacket(t *testing.T) {
 		}
 		fmt.Fprintf(w, `{"data":{"getTransactions":[{"hash":%q,"block_height":2,`+
 			`"response":{"events":[{"type":"PacketSend","pkg_path":%q,"attrs":[`+
-			`{"key":"source_channel_id","value":"3"},{"key":"packet_hash","value":%q}]}]}}]}}`,
+			`{"key":"source_channel_id","value":"3"},{"key":"packet_hash","value":%q},`+
+			`{"key":"timeout_timestamp","value":"4102444800000000000"}]}]}}]}}`,
 			txHash, testConfig().GnoIBCCoreRealm, packetHash)
 	}))
 	defer server.Close()
@@ -215,16 +288,75 @@ func TestSendRawUsesDevEOAAndReturnsNewPacket(t *testing.T) {
 		outputs = outputs[1:]
 		return process.Result{Stdout: output}, nil
 	}))
-	send, err := client.SendRaw(context.Background(), 3, "0x01", "1ugnot")
+	timeout := time.Unix(4102444800, 0)
+	send, err := client.SendRawWithTimeout(context.Background(), 3, "0x01", "1ugnot", timeout)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if send.PacketHash != packetHash || len(commands) != 3 {
 		t.Fatalf("send = %#v, commands = %d", send, len(commands))
 	}
+	if send.TimeoutTimestamp != uint64(timeout.UnixNano()) ||
+		!strings.Contains(strings.Join(commands[2].Args, " "), strconv.FormatInt(timeout.UnixNano(), 10)) {
+		t.Fatalf("timeout = %d, command = %#v", send.TimeoutTimestamp, commands[2])
+	}
 	if commands[0].Stdin == nil || commands[2].Stdin == nil ||
 		!strings.Contains(strings.Join(commands[2].Args, " "), "SendRaw") {
 		t.Fatalf("gnokey commands = %#v", commands)
+	}
+}
+
+func TestSetZKGMPausedUsesDirectAdminCallAndWaitsForEvent(t *testing.T) {
+	txHash := base64.StdEncoding.EncodeToString(make([]byte, 32))
+	var requests atomic.Int64
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		var body struct {
+			Query string `json:"query"`
+		}
+		if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		if !strings.Contains(body.Query, testConfig().GnoZKGMPort) ||
+			!strings.Contains(body.Query, "ZkgmPaused") {
+			http.Error(w, "wrong query", http.StatusBadRequest)
+			return
+		}
+		if requests.Add(1) == 1 {
+			fmt.Fprint(w, `{"data":{"getTransactions":[]}}`)
+			return
+		}
+		fmt.Fprintf(w, `{"data":{"getTransactions":[{"hash":%q,"block_height":2,`+
+			`"response":{"events":[{"type":"ZkgmPaused","pkg_path":%q,"attrs":[]}]}}]}}`,
+			txHash, testConfig().GnoZKGMPort)
+	}))
+	defer server.Close()
+	cfg := testConfig()
+	cfg.GnoPacketIndexerRPCURL = server.URL
+	cfg.GnoChainID = "dev.ibc"
+	var commands []process.Command
+	outputs := [][]byte{
+		nil,
+		[]byte("0. sender (local) - addr: " + DevSenderAddress + " pub: key"),
+		nil,
+	}
+	client := NewWithExecutor(cfg, executorFunc(func(_ context.Context, command process.Command) (process.Result, error) {
+		commands = append(commands, command)
+		output := outputs[0]
+		outputs = outputs[1:]
+		return process.Result{Stdout: output}, nil
+	}))
+	got, err := client.SetZKGMPaused(context.Background(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != txHash || len(commands) != 3 {
+		t.Fatalf("tx = %q, commands = %d", got, len(commands))
+	}
+	call := strings.Join(commands[2].Args, " ")
+	if !strings.Contains(call, "maketx call") || !strings.Contains(call, "-func Pausable") ||
+		!strings.Contains(call, "-args true") || commands[2].Stdin == nil {
+		t.Fatalf("admin command = %#v", commands[2])
 	}
 }
 

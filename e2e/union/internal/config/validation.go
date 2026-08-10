@@ -32,6 +32,9 @@ func (c Config) validate(packet bool) error {
 		{"TRUSTED_MPT_PRIVATE_KEY", c.TrustedMPTPrivateKey},
 		{"UNION_PRIVATE_KEY", c.UnionPrivateKey},
 		{"EVM_PRIVATE_KEY", c.EVMPrivateKey},
+		{"RELAYER_EMPTY_PRIVATE_KEY", c.RelayerEmptyPrivateKey},
+		{"RELAYER_OFFLINE_PRIVATE_KEY", c.RelayerOfflinePrivateKey},
+		{"RELAYER_RECOVERY_PRIVATE_KEY", c.RelayerRecoveryPrivateKey},
 		{"GNO_PRIVATE_KEY", c.GnoPrivateKey},
 	}
 
@@ -73,6 +76,9 @@ func (c Config) validate(packet bool) error {
 		{"TRUSTED_MPT_PRIVATE_KEY", c.TrustedMPTPrivateKey},
 		{"UNION_PRIVATE_KEY", c.UnionPrivateKey},
 		{"EVM_PRIVATE_KEY", c.EVMPrivateKey},
+		{"RELAYER_EMPTY_PRIVATE_KEY", c.RelayerEmptyPrivateKey},
+		{"RELAYER_OFFLINE_PRIVATE_KEY", c.RelayerOfflinePrivateKey},
+		{"RELAYER_RECOVERY_PRIVATE_KEY", c.RelayerRecoveryPrivateKey},
 		{"GNO_PRIVATE_KEY", c.GnoPrivateKey},
 	} {
 		if !privateKeyPattern.MatchString(item.value) {

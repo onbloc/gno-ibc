@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/onbloc/gno-ibc/e2e/union/internal/evm"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/state"
 )
 
@@ -16,6 +18,59 @@ type packetResult struct {
 	Outcome       state.PacketOutcome
 	Deltas        state.Balances
 	FailedFinal   int64
+}
+
+func (r *Runner) submitERC20Packet(ctx context.Context, timeout time.Duration) (*state.Packet, uint64, error) {
+	if r.current.Channels == nil || r.current.FailedWork.Final == nil {
+		return nil, 0, fmt.Errorf("ERC20 packet requires a verified complete connection/channel state")
+	}
+	plan, err := r.evm.Prepare(ctx, r.current.Channels.Gno)
+	if err != nil {
+		return nil, 0, err
+	}
+	packet := &state.Packet{
+		Token: strings.ToLower(r.cfg.EVMTestERC20), Sender: plan.Sender,
+		Recipient: r.cfg.GnoRecipient, Amount: r.cfg.EVMTestAmount,
+		Voucher: plan.Voucher, Salt: plan.Salt, Tag: plan.Tag,
+		FailedWorkBaseline: *r.current.FailedWork.Final,
+	}
+	packet.MintTx, err = r.evm.Mint(ctx, plan.Sender)
+	if err != nil {
+		return nil, 0, err
+	}
+	packet.ApproveTx, err = r.evm.Approve(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	snapshot, err := r.evm.Snapshot(ctx, packet.Sender)
+	if err != nil {
+		return nil, 0, err
+	}
+	recipient, err := r.gno.VoucherBalance(ctx, packet.Voucher, packet.Recipient)
+	if err != nil {
+		return nil, 0, err
+	}
+	packet.BalancesBefore = &state.Balances{
+		Sender: snapshot.Sender, Escrow: snapshot.Escrow,
+		Recipient: strconv.FormatInt(recipient, 10),
+	}
+	packet.EVMFromBlock = &snapshot.Block
+	var sent evm.SendResult
+	var timeoutTimestamp uint64
+	if timeout == 0 {
+		sent, err = r.evm.SendTokenOrder(ctx, r.current.Channels.EVM, plan, packet.Recipient, packet.Amount, 0)
+	} else {
+		timeoutTimestamp = uint64(time.Now().Add(timeout).UnixNano())
+		sent, err = r.evm.SendTokenOrderWithTimeout(
+			ctx, r.current.Channels.EVM, plan, packet.Recipient, packet.Amount, 0, timeoutTimestamp,
+		)
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+	packet.SendTx, packet.PacketHash = sent.Tx, sent.PacketHash
+	r.progressf("ERC20 packet: submitted hash=%s tx=%s", packet.PacketHash, packet.SendTx)
+	return packet, timeoutTimestamp, nil
 }
 
 func (r *Runner) observePacket(ctx context.Context) (packetResult, error) {

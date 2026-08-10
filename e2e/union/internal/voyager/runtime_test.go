@@ -54,6 +54,18 @@ func TestRuntimeCleansUpAfterDockerRunFailure(t *testing.T) {
 	}
 }
 
+func TestRuntimeCapturesBoundedLogs(t *testing.T) {
+	executor := &dockerExecutor{logOutput: "timeout failed"}
+	runtime := startRuntime(t, executor)
+	var output strings.Builder
+	if err := runtime.CaptureLogs(context.Background(), &output); err != nil {
+		t.Fatal(err)
+	}
+	if output.String() != executor.logOutput || executor.logTail != "2000" {
+		t.Fatalf("logs = %q, tail = %q", output.String(), executor.logTail)
+	}
+}
+
 func TestEncodedMembershipProofRejectsMalformedOutput(t *testing.T) {
 	executor := &dockerExecutor{execResponse: []byte(`"not-hex"`)}
 	runtime := startRuntime(t, executor)
@@ -94,6 +106,35 @@ func TestFailedWorkRejectsIDsAheadOfQueue(t *testing.T) {
 				t.Fatal("ID ahead of queue unexpectedly accepted")
 			}
 		})
+	}
+}
+
+func TestActiveQueueStats(t *testing.T) {
+	executor := &dockerExecutor{voyager: staticResponse(`{"total":3,"ready":1,"optimize":{}}`)}
+	runtime := startRuntime(t, executor)
+	stats, err := runtime.ActiveQueueStats(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Total != 3 || stats.Ready != 1 {
+		t.Fatalf("stats = %+v", stats)
+	}
+}
+
+func TestWaitActiveQueuePollsUntilWorkExists(t *testing.T) {
+	responses := []string{`{"total":0,"ready":0,"optimize":{}}`, `{"total":3,"ready":1,"optimize":{}}`}
+	executor := &dockerExecutor{voyager: func(args []string) (process.Result, error) {
+		response := responses[0]
+		responses = responses[1:]
+		return process.Result{Stdout: []byte(response)}, nil
+	}}
+	runtime := startRuntime(t, executor)
+	stats, err := runtime.WaitActiveQueue(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stats.Total != 3 || stats.Ready != 1 || len(responses) != 0 {
+		t.Fatalf("stats = %+v, remaining responses = %d", stats, len(responses))
 	}
 }
 
@@ -259,6 +300,8 @@ type dockerExecutor struct {
 	stops, removes  int
 	execResponse    []byte
 	voyager         func([]string) (process.Result, error)
+	logOutput       string
+	logTail         string
 }
 
 func (e *dockerExecutor) Run(_ context.Context, command process.Command) (process.Result, error) {
@@ -301,6 +344,10 @@ func (e *dockerExecutor) Run(_ context.Context, command process.Command) (proces
 			return process.Result{Stdout: []byte(strings.TrimPrefix(e.container, "union-channel-e2e-"))}, nil
 		}
 		return process.Result{Stdout: []byte("true")}, nil
+	case "logs":
+		e.logTail = argumentAfter(command.Args, "--tail")
+		_, err := io.WriteString(command.Stdout, e.logOutput)
+		return process.Result{}, err
 	case "stop":
 		e.stops++
 		if e.stopErr != nil {

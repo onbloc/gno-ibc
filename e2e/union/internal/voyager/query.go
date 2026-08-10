@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -21,6 +22,43 @@ type clientMeta struct {
 
 type stateResponse struct {
 	State json.RawMessage `json:"state"`
+}
+
+// QueueStats is the observable state of Voyager's active queue.
+type QueueStats struct {
+	Total int64 `json:"total"`
+	Ready int64 `json:"ready"`
+}
+
+// ActiveQueueStats returns counts from the shared PostgreSQL active queue.
+func (r *Runtime) ActiveQueueStats(ctx context.Context) (QueueStats, error) {
+	result, err := r.retryQueue(ctx, "stats")
+	if err != nil {
+		return QueueStats{}, err
+	}
+	var stats QueueStats
+	if json.Unmarshal(result.Stdout, &stats) != nil || stats.Total < 0 || stats.Ready < 0 || stats.Ready > stats.Total {
+		return QueueStats{}, ErrMalformedResponse
+	}
+	return stats, nil
+}
+
+// WaitActiveQueue waits until Voyager has work pending or ready.
+func (r *Runtime) WaitActiveQueue(ctx context.Context) (QueueStats, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, r.cfg.ScenarioTimeout)
+	defer cancel()
+	for {
+		stats, err := r.ActiveQueueStats(waitCtx)
+		if err != nil {
+			return QueueStats{}, err
+		}
+		if stats.Total > 0 {
+			return stats, nil
+		}
+		if err := pause(waitCtx, r.cfg.PollInterval); err != nil {
+			return QueueStats{}, fmt.Errorf("active queue remained empty: %w", err)
+		}
+	}
 }
 
 // EncodedMembershipProof asks the pinned Voyager instance to query and encode

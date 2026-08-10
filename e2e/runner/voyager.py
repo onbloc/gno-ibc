@@ -139,6 +139,9 @@ class Voyager:
     def call(self, *args: str) -> str:
         if not self.container:
             raise RuntimeError("Voyager is not running")
+        # args carry no secrets (keys live in the mounted config), so naming the
+        # voyager subcommand on timeout points straight at the wedged call.
+        label = " ".join(args[:4])
         for attempt in range(5):
             try:
                 return self.docker(
@@ -146,6 +149,8 @@ class Voyager:
                     VOYAGER_BIN, "-c", VOYAGER_CONFIG, *args,
                 )
             except RuntimeError as error:
+                if "command timed out" in str(error):
+                    raise RuntimeError(f"voyager command timed out: {label}") from error
                 if "deadlock detected" not in str(error) or attempt == 4:
                     raise
                 time.sleep(self.config["POLL"])
@@ -188,6 +193,7 @@ class Voyager:
             if entrypoint != VOYAGER_BIN:
                 raise RuntimeError("Voyager image entrypoint does not match")
         self.container = "union-channel-e2e-" + self.run_id
+        self.progress("Voyager: launching container")
         self.docker(
             "run", "--detach", "--name", self.container,
             "--add-host", "host.docker.internal:host-gateway",
@@ -348,6 +354,7 @@ class Voyager:
         while time.monotonic() < deadline:
             matches = self.failed_creates(chain, expected, client_type, failed_baseline, repaired)
             if matches:
+                self.progress(f"{label}: repairing failed submissions {matches}")
                 self.restart(self.rendered)
                 for failed_id in matches:
                     self.call("queue", "query-failed-by-id", str(failed_id), "-e")
@@ -360,6 +367,7 @@ class Voyager:
                 break
             if (chain == self.config["EVM_CHAIN_ID"] and refreshes < 3 and
                     time.monotonic() >= refresh_at):
+                self.progress(f"{label}: EVM refresh restart {refreshes + 1}/3")
                 self.restart(self.rendered)
                 refreshes += 1
                 refresh_at = time.monotonic() + self.config["EVM_REFRESH"]

@@ -7,6 +7,7 @@ import re
 import stat
 import sys
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -49,6 +50,10 @@ class Runner:
         self.chain = Chain(config, self.v, self.state)
         self.checks = Checks(self.chain)
 
+        self._last_msg = "starting"
+        self._last_ts = time.monotonic()
+        self._heartbeat_stop = threading.Event()
+
     def expected_state(self) -> dict:
         return {
             "voyager_revision": self.c["UNION_VOYAGER_REVISION"],
@@ -70,7 +75,17 @@ class Runner:
         }
 
     def progress(self, message: str) -> None:
+        self._last_msg = message
+        self._last_ts = time.monotonic()
         print("e2e: " + message, file=sys.stderr, flush=True)
+
+    def heartbeat(self) -> None:
+        # Prints from a daemon thread so the phase and its stall time stay visible
+        # even while the main thread is blocked in a slow or wedged docker call.
+        while not self._heartbeat_stop.wait(30):
+            idle = int(time.monotonic() - self._last_ts)
+            print(f"e2e: heartbeat: phase={self._last_msg!r} idle={idle}s",
+                  file=sys.stderr, flush=True)
 
     def evidence(self, name: str, value) -> None:
         target = self.artifacts / name
@@ -128,6 +143,8 @@ class Runner:
         rendered = render_voyager(self.c, plain, proof)
         failed = False
 
+        heartbeat = threading.Thread(target=self.heartbeat, daemon=True)
+        heartbeat.start()
         try:
             self.progress("Voyager: starting")
             self.v.start(rendered)
@@ -161,6 +178,7 @@ class Runner:
             failed = True
             raise
         finally:
+            self._heartbeat_stop.set()
             if failed:
                 logs = self.v.logs()
                 if logs and not self.contains_secret(logs):

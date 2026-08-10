@@ -34,8 +34,10 @@ func (d Delay) WithUpdate(timestamp TimePoint, newDelay uint32, minSetback uint3
 	value := d.Get(timestamp)
 
 	setback := minSetback
-	if value > newDelay && value-newDelay > setback {
-		setback = value - newDelay
+	if value > newDelay {
+		if diff := value - newDelay; diff > setback {
+			setback = diff
+		}
 	}
 
 	effect := NewTimePoint(timestamp.Int64() + int64(setback))

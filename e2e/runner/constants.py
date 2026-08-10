@@ -1,0 +1,22 @@
+import re
+
+
+HASH = re.compile(r"^0x[0-9a-fA-F]{64}$")
+ADDRESS = re.compile(r"^0x[0-9a-f]{40}$")
+PACKET_SEND_TOPIC = "0x635b5d234fe7abddfb29b6c8498780a3175c9002c537f20a3d1bf9d0e625b5fe"
+PACKET_ACK_TOPIC = "0x41d958a7d93b50b1f7541c6fc345d0c4657b1e83497baa562c866611ac1f69bb"
+PACKET_TIMEOUT_TOPIC = "0x34df62ed9d26dbe71f13d2bd3f645d6cd16b0c44645ef783c2ed799748c80a74"
+PACKET_RECV_TOPIC = "0xe450e03249d131499e278eeafd8e27effcceeb40b0b95628a087aa16b4b101d5"
+WRITE_ACK_TOPIC = "0x488830ba53f27b7033e966a79427476ad47d550358e894bafeef8b97c6559251"
+CREATE_TOKEN_TOPIC = "0x18469840730c2cbbd67b9f99f6421667b07f0169a795be80a28f182d602daf5b"
+GNO_SENDER = "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
+GNO_TEST_RECEIVER = "g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm"
+GNO_MNEMONIC = ("source bonus chronic canvas draft south burst lottery vacant surface solve "
+                "popular case indicate oppose farm nothing bullet exhibit title speed wink action roast")
+INT64_MAX = 9223372036854775807
+NS_PER_SECOND = 1_000_000_000
+DEFAULT_TIMEOUT_NS = 3600 * NS_PER_SECOND
+ONE_ETH_WEI = "1000000000000000000"
+TIMEOUT_REFUND_SECONDS = 180
+CLEARED_COMMITMENT = "0x02" + "0" * 62
+INITIALIZE_SELECTOR = "0x8420ce99"

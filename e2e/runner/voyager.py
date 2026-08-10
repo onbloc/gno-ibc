@@ -301,6 +301,20 @@ class Voyager:
                 return item
         raise RuntimeError(f"cannot find next {kind} id")
 
+    def assert_client_relation(self, chain: str, client_id: int, client_type: str,
+                               interface: str, counterparty: str,
+                               error: str = "client relation/status mismatch") -> None:
+        info = self.client_info(chain, client_id)
+        meta = self.json("rpc", "client-meta", chain, str(client_id))
+        status_query = json.dumps(
+            {"client_status": {"client_id": client_id}}, separators=(",", ":"))
+        status = self.json("rpc", "query", chain, status_query)
+        if (not info or info.get("client_type") != client_type or
+                info.get("ibc_interface") != interface or
+                meta.get("counterparty_chain_id") != counterparty or
+                str(status).lower() != "active"):
+            raise RuntimeError(f"{error}: {chain}/{client_id}")
+
     def create_client(self, chain: str, counterparty: str, client_type: str,
                       interface: str, *, config: dict | None = None,
                       height: str = "", failed_baseline: int = 0,
@@ -328,15 +342,9 @@ class Voyager:
                     repaired.append(failed_id)
             info = self.client_info(chain, expected)
             if info:
-                meta = self.json("rpc", "client-meta", chain, str(expected))
-                status_query = json.dumps(
-                    {"client_status": {"client_id": expected}}, separators=(",", ":"))
-                status = self.json("rpc", "query", chain, status_query)
-                if (info.get("client_type") != client_type or
-                        info.get("ibc_interface") != interface or
-                        meta.get("counterparty_chain_id") != counterparty or
-                        str(status).lower() != "active"):
-                    raise RuntimeError(f"created client relation mismatch: {chain}/{expected}")
+                self.assert_client_relation(
+                    chain, expected, client_type, interface, counterparty,
+                    "created client relation mismatch")
                 break
             if (chain == self.config["EVM_CHAIN_ID"] and refreshes < 3 and
                     time.monotonic() >= refresh_at):

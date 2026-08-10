@@ -113,7 +113,7 @@ func (state *State) GetRoleGrantDelayEffect(role RoleId) TimePoint {
 		return 0
 	}
 
-	return roleConfig.GrantDelay.EffectDate
+	return roleConfig.GrantDelay.effectDate
 }
 
 // GetTargetFunctionRole returns the role required for target selector.

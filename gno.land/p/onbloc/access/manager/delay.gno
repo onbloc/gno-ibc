@@ -5,24 +5,24 @@ package manager
 // OpenZeppelin: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/utils/types/Time.sol#L61
 // Union: https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/time.rs#L16-L20
 type Delay struct {
-	EffectDate  TimePoint
-	ValueBefore uint32
-	ValueAfter  uint32
+	effectDate  TimePoint
+	valueBefore uint32
+	valueAfter  uint32
 }
 
 func NewDelay(delay uint32) Delay {
-	return Delay{EffectDate: 0, ValueBefore: 0, ValueAfter: delay}
+	return Delay{effectDate: 0, valueBefore: 0, valueAfter: delay}
 }
 
 // Get returns the value active at timestamp.
 // OpenZeppelin: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/utils/types/Time.sol#L86-L96
 // Union: https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/lib/access-manager-types/src/time.rs#L89-L103
 func (d Delay) Get(timestamp TimePoint) uint32 {
-	if d.EffectDate.After(timestamp) {
-		return d.ValueBefore
+	if d.effectDate.After(timestamp) {
+		return d.valueBefore
 	}
 
-	return d.ValueAfter
+	return d.valueAfter
 }
 
 // WithUpdate schedules newDelay to take effect at timestamp plus a setback:
@@ -40,5 +40,5 @@ func (d Delay) WithUpdate(timestamp TimePoint, newDelay uint32, minSetback uint3
 
 	effect := NewTimePoint(timestamp.Int64() + int64(setback))
 
-	return Delay{EffectDate: effect, ValueBefore: value, ValueAfter: newDelay}, effect
+	return Delay{effectDate: effect, valueBefore: value, valueAfter: newDelay}, effect
 }

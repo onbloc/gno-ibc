@@ -14,7 +14,11 @@ import (
 )
 
 func scaledWire(whole uint64, decimals uint8) *u256.Uint {
-	return u256.Zero().Mul(u256.NewUint(whole), z.Pow10(scaleExpForDecimals(decimals)))
+	scale, err := z.Pow10(scaleExpForDecimals(decimals))
+	if err != nil {
+		panic(err)
+	}
+	return u256.Zero().Mul(u256.NewUint(whole), scale)
 }
 
 func TestInitializeDownscalesToCanonical(cur realm, t *testing.T) {

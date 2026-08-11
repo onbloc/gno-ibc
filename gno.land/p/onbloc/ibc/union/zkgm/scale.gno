@@ -17,24 +17,29 @@ var ErrAmountOverflow = errors.New("zkgm: amount overflows int64")
 // It is rejected so cross-chain value is conserved exactly.
 var ErrAmountNotDivisible = errors.New("zkgm: amount not divisible by token scale factor")
 
-// Pow10 returns 10^exp as a uint256, computed by exact integer
-// exponentiation. A float64 intermediate (math.Pow10 + uint64 conversion)
-// silently saturates once 10^exp exceeds a uint64 (exp >= 20), so callers
-// must not rely on a caller-side cap to keep exp small; this computes the
-// exact value for any exp that fits in 256 bits.
-func Pow10(exp int) *u256.Uint {
+// ErrPow10Overflow is returned when 10^exp does not fit in a uint256.
+var ErrPow10Overflow = errors.New("zkgm: 10^exp overflows uint256")
+
+// Pow10 returns 10^exp as a uint256, rejecting exp too large to fit (>= 78)
+// instead of wrapping mod 2^256.
+func Pow10(exp int) (*u256.Uint, error) {
 	if exp < 0 {
-		return u256.Zero()
+		return u256.Zero(), nil
 	}
 
 	result := u256.NewUint(1)
 	ten := u256.NewUint(10)
 
 	for i := 0; i < exp; i++ {
-		result = result.Mul(result, ten)
+		next, overflow := new(u256.Uint).MulOverflow(result, ten)
+		if overflow {
+			return nil, ErrPow10Overflow
+		}
+
+		result = next
 	}
 
-	return result
+	return result, nil
 }
 
 // ScaleDownToInt64 narrows an origin-precision amount to an int64 ledger amount
@@ -44,7 +49,12 @@ func ScaleDownToInt64(amount *u256.Uint, scaleExp int) (int64, error) {
 	value := amount
 
 	if scaleExp > 0 {
-		quotient, remainder := u256.Zero().DivMod(amount, Pow10(scaleExp), u256.Zero())
+		divisor, err := Pow10(scaleExp)
+		if err != nil {
+			return 0, err
+		}
+
+		quotient, remainder := u256.Zero().DivMod(amount, divisor, u256.Zero())
 		if !remainder.IsZero() {
 			return 0, ErrAmountNotDivisible
 		}

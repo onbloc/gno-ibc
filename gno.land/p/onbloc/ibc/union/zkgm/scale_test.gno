@@ -8,12 +8,19 @@ import (
 	u256 "gno.land/p/onbloc/math/uint256"
 )
 
+func mustPow10(t *testing.T, exp int) *u256.Uint {
+	t.Helper()
+	got, err := Pow10(exp)
+	uassert.NoError(t, err)
+	return got
+}
+
 func TestPow10(t *testing.T) {
-	uassert.Equal(t, "0", Pow10(-1).ToString())
-	uassert.Equal(t, "1", Pow10(0).ToString())
-	uassert.Equal(t, "10", Pow10(1).ToString())
-	uassert.Equal(t, "1000000", Pow10(6).ToString())
-	uassert.Equal(t, "1000000000000", Pow10(12).ToString())
+	uassert.Equal(t, "0", mustPow10(t, -1).ToString())
+	uassert.Equal(t, "1", mustPow10(t, 0).ToString())
+	uassert.Equal(t, "10", mustPow10(t, 1).ToString())
+	uassert.Equal(t, "1000000", mustPow10(t, 6).ToString())
+	uassert.Equal(t, "1000000000000", mustPow10(t, 12).ToString())
 }
 
 func TestPow10BeyondUint64DoesNotSaturate(t *testing.T) {
@@ -22,9 +29,19 @@ func TestPow10BeyondUint64DoesNotSaturate(t *testing.T) {
 	// A float64 intermediate (math.Pow10 + uint64 conversion) saturates
 	// around 2^63 past this point instead of erroring, so this asserts
 	// the exact integer value instead.
-	uassert.Equal(t, "10000000000000000000", Pow10(19).ToString())
-	uassert.Equal(t, "100000000000000000000", Pow10(20).ToString())
-	uassert.Equal(t, "10000000000000000000000000000000000000000", Pow10(40).ToString())
+	uassert.Equal(t, "10000000000000000000", mustPow10(t, 19).ToString())
+	uassert.Equal(t, "100000000000000000000", mustPow10(t, 20).ToString())
+	uassert.Equal(t, "10000000000000000000000000000000000000000", mustPow10(t, 40).ToString())
+}
+
+func TestPow10OverflowsUint256(t *testing.T) {
+	// 2^256 ~= 1.16e77, so 10^77 fits and 10^78 is the first to overflow.
+	if _, err := Pow10(77); err != nil {
+		t.Fatalf("Pow10(77): unexpected error %v", err)
+	}
+	if _, err := Pow10(78); err != ErrPow10Overflow {
+		t.Fatalf("Pow10(78): got %v want %v", err, ErrPow10Overflow)
+	}
 }
 
 func TestScaleDownToInt64(t *testing.T) {

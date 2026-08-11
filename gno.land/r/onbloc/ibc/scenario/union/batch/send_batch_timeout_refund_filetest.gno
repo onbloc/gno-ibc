@@ -139,7 +139,7 @@ func sendBatch(cur realm, channelId types.ChannelId, token *grc20.Token, ledger 
 	sendPacket := zkgm.Send(cross(cur), channelId, timeoutIn(10), [32]byte{}, mustBatchInstruction(batch))
 
 	bk := banker.NewReadonlyBanker()
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
 	ufmt.Printf("[INFO] proxy grc20 escrow balance: %d\n", token.BalanceOf(proxy))
 	ufmt.Println("[EXPECTED] both escrows locked: native=40, grc20=40")
 
@@ -153,9 +153,9 @@ func timeoutBatch(cur realm, sendPacket types.Packet, token *grc20.Token) {
 	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(sendPacket, nil, 1))
 
 	bk := banker.NewReadonlyBanker()
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(zkgm.ProxyAddress()).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(zkgm.ProxyAddress(), "ugnot"))
 	ufmt.Printf("[INFO] proxy grc20 escrow balance: %d\n", token.BalanceOf(zkgm.ProxyAddress()))
-	ufmt.Printf("[INFO] sender native balance: %d\n", bk.GetCoins(senderAddr).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] sender native balance: %d\n", bk.GetCoin(senderAddr, "ugnot"))
 	ufmt.Printf("[INFO] sender grc20 balance: %d\n", token.BalanceOf(senderAddr))
 	ufmt.Println("[EXPECTED] both escrows released: proxy native=0, proxy grc20=0")
 	ufmt.Println("[EXPECTED] both refunded to sender: native=40, grc20=100 (full balance restored)")

@@ -47,7 +47,6 @@ func TestClientAccessors(t *testing.T) {
 }
 
 func TestVerifyCreationEmpty(t *testing.T) {
-	// Union reference: cometbls verify_creation returns ClientCreationResult::new().
 	c := newTestClient(t)
 	var caller, relayer address
 	res, err := c.VerifyCreation(caller, relayer)
@@ -56,6 +55,26 @@ func TestVerifyCreationEmpty(t *testing.T) {
 	}
 	if len(res.ClientStateBytes) != 0 {
 		t.Fatal("VerifyCreation must not return client state bytes")
+	}
+}
+
+func TestVerifyCreationRejectsInvalidClientState(t *testing.T) {
+	c := newTestClient(t)
+	c.clientState.TrustingPeriod = 0
+
+	var caller, relayer address
+	if _, err := c.VerifyCreation(caller, relayer); err == nil {
+		t.Fatal("VerifyCreation must reject an invalid client state")
+	}
+}
+
+func TestVerifyCreationAllowsArbitrarilyLargeTrustingPeriod(t *testing.T) {
+	c := newTestClient(t)
+	c.clientState.TrustingPeriod = 1 << 62
+
+	var caller, relayer address
+	if _, err := c.VerifyCreation(caller, relayer); err != nil {
+		t.Fatalf("VerifyCreation: %v", err)
 	}
 }
 

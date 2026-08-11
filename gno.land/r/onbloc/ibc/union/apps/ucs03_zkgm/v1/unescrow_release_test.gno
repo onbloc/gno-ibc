@@ -65,8 +65,8 @@ func TestTokenOrderExecuteUnescrowReleasesNativeToReceiver(cur realm, t *testing
 
 	// The escrowed native coins were sent back to the receiver via the banker.
 	bk := banker.NewReadonlyBanker()
-	uassert.Equal(t, int64(40), bk.GetCoins(address(receiver)).AmountOf("ugnot"))
-	uassert.Equal(t, int64(0), bk.GetCoins(escrowAcct).AmountOf("ugnot"))
+	uassert.Equal(t, int64(40), bk.GetCoin(address(receiver), "ugnot"))
+	uassert.Equal(t, int64(0), bk.GetCoin(escrowAcct, "ugnot"))
 
 	// The channel balance was fully consumed by the unescrow.
 	bal, ok := testStore.GetChannelBalanceV2(balanceKey)

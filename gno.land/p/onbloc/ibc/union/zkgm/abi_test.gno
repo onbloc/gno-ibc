@@ -585,18 +585,30 @@ func TestEncodeZkgmPacket(t *testing.T) {
 
 func TestDecodeZkgmPacketErrors(t *testing.T) {
 	tests := []struct {
-		name string
-		data []byte
+		name    string
+		data    []byte
+		wantErr error // nil means "any error"
 	}{
-		{"empty", []byte{}},
-		{"truncated", mustHex("00" + "01" + "00")},
-		{"wrong layout - invalid salt offset", mustHex("0000000000000000000000000000000000000000000000000000000000000020")},
+		{"empty", []byte{}, nil},
+		{"truncated", mustHex("00" + "01" + "00"), nil},
+		{"wrong layout - invalid salt offset", mustHex("0000000000000000000000000000000000000000000000000000000000000020"), nil},
+		{
+			"non-canonical path (gap below hop count)",
+			mustEncodeZkgmPacket(ZkgmPacket{
+				Path:        nonCanonicalPath(),
+				Instruction: Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte{}},
+			}),
+			ErrNonCanonicalPath,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := DecodeZkgmPacket(tt.data)
 			if err == nil {
 				t.Fatalf("expected error, got nil")
+			}
+			if tt.wantErr != nil && err != tt.wantErr {
+				t.Fatalf("err: got %v want %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -689,6 +701,7 @@ func TestDecodeForward(t *testing.T) {
 		data    []byte
 		want    Forward
 		wantErr bool
+		errIs   error // when set, err must equal this sentinel exactly
 	}{
 		{
 			name:    "empty",
@@ -704,6 +717,15 @@ func TestDecodeForward(t *testing.T) {
 			name:    "wrong layout",
 			data:    mustHex("00"),
 			wantErr: true,
+		},
+		{
+			name: "non-canonical path (gap below hop count)",
+			data: mustEncodeForward(Forward{
+				Path:        nonCanonicalPath(),
+				Instruction: Instruction{Version: INSTR_VERSION_0, Opcode: OP_CALL, Operand: []byte{}},
+			}),
+			wantErr: true,
+			errIs:   ErrNonCanonicalPath,
 		},
 		{
 			name: "minimal values",
@@ -758,6 +780,9 @@ func TestDecodeForward(t *testing.T) {
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error, got nil")
+				}
+				if tt.errIs != nil && err != tt.errIs {
+					t.Fatalf("err: got %v want %v", err, tt.errIs)
 				}
 				return
 			}
@@ -1040,18 +1065,35 @@ func TestEncodeTokenOrderV1(t *testing.T) {
 
 func TestDecodeTokenOrderV1Errors(t *testing.T) {
 	tests := []struct {
-		name string
-		data []byte
+		name    string
+		data    []byte
+		wantErr error // nil means "any error"
 	}{
-		{"empty", []byte{}},
-		{"truncated", mustHex("aabb")},
-		{"wrong layout", mustHex("cafe")},
+		{"empty", []byte{}, nil},
+		{"truncated", mustHex("aabb"), nil},
+		{"wrong layout", mustHex("cafe"), nil},
+		{
+			"non-canonical base token path (gap below hop count)",
+			mustEncodeTokenOrderV1(TokenOrderV1{
+				Sender:        mustHex("aa"),
+				Receiver:      mustHex("bb"),
+				BaseToken:     mustHex("00"),
+				BaseAmount:    u256.NewUint(1),
+				BaseTokenPath: nonCanonicalPath(),
+				QuoteToken:    mustHex("cc"),
+				QuoteAmount:   u256.NewUint(1),
+			}),
+			ErrNonCanonicalPath,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := DecodeTokenOrderV1(tt.data)
 			if err == nil {
 				t.Fatalf("expected error, got nil")
+			}
+			if tt.wantErr != nil && err != tt.wantErr {
+				t.Fatalf("err: got %v want %v", err, tt.wantErr)
 			}
 		})
 	}
@@ -1905,6 +1947,28 @@ func mustHex0x(s string) []byte {
 		panic("hex string missing 0x prefix")
 	}
 	return mustHex(s[2:])
+}
+
+func mustEncodeTokenOrderV1(o TokenOrderV1) []byte {
+	data, err := EncodeTokenOrderV1(o)
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
+func mustEncodeZkgmPacket(p ZkgmPacket) []byte {
+	data, err := EncodeZkgmPacket(p)
+	if err != nil {
+		panic(err)
+	}
+	return data
+}
+
+// nonCanonicalPath builds a path with a zero-value slot below HopCount(path):
+// slot0 and slot2 are occupied, slot1 is empty.
+func nonCanonicalPath() *u256.Uint {
+	return new(u256.Uint).Or(MakePathFromChannel(1, 0), MakePathFromChannel(1, 2))
 }
 
 func mustEncodeForward(f Forward) []byte {

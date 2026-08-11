@@ -88,3 +88,89 @@ func TestVerifyMisbehaviourRejectsInvalidHeaderSequenceBeforeProofVerification(t
 
 	requireErrorContains(t, err, ErrInvalidMisbehaviourHeaderSequence.Error())
 }
+
+func TestIsMisbehaviourPair(t *testing.T) {
+	cases := []struct {
+		name string
+		a    *Header
+		b    *Header
+		want bool
+	}{
+		{
+			name: "same height identical headers is not misbehaviour",
+			a:    updateStateTestHeader(100, 101, testNow+1_000_000_000),
+			b:    updateStateTestHeader(100, 101, testNow+1_000_000_000),
+			want: false,
+		},
+		{
+			name: "same height conflicting app hash is misbehaviour",
+			a:    updateStateTestHeader(100, 101, testNow+1_000_000_000),
+			b: func() *Header {
+				h := updateStateTestHeader(100, 101, testNow+1_000_000_000)
+				h.SignedHeader.AppHash[0] ^= 0xFF
+				return h
+			}(),
+			want: true,
+		},
+		{
+			name: "same height conflicting timestamp is misbehaviour",
+			a:    updateStateTestHeader(100, 101, testNow+1_000_000_000),
+			b:    updateStateTestHeader(100, 101, testNow+2_000_000_000),
+			want: true,
+		},
+		{
+			name: "different height non-increasing time is misbehaviour",
+			a:    updateStateTestHeader(100, 102, testNow+1_000_000_000),
+			b:    updateStateTestHeader(100, 101, testNow+2_000_000_000),
+			want: true,
+		},
+		{
+			name: "different height increasing time is not misbehaviour",
+			a:    updateStateTestHeader(100, 102, testNow+2_000_000_000),
+			b:    updateStateTestHeader(100, 101, testNow+1_000_000_000),
+			want: false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isMisbehaviourPair(tc.a, tc.b); got != tc.want {
+				t.Fatalf("isMisbehaviourPair: got %v want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+// Regression test: resubmitting one already-valid header as both Header1 and
+// Header2 used to freeze the client. A genuinely conflicting pair still must.
+func TestMisbehaviourRejectsIdenticalHeaderResubmission(t *testing.T) {
+	c, h := newDevnetMisbehaviourHeaderClient(t)
+
+	trustedHeight := *h.TrustedHeight
+	resubmitted := &Header{
+		SignedHeader:       cloneLightHeader(h.SignedHeader),
+		TrustedHeight:      &trustedHeight,
+		ZeroKnowledgeProof: append([]byte(nil), h.ZeroKnowledgeProof...),
+	}
+
+	var caller, relayer address
+	encoded, err := EncodeMisbehaviour(&Misbehaviour{Header1: h, Header2: resubmitted})
+	if err != nil {
+		t.Fatalf("EncodeMisbehaviour: %v", err)
+	}
+
+	if _, err := c.Misbehaviour(caller, encoded, relayer); err == nil {
+		t.Fatal("expected resubmission of an identical header to be rejected")
+	} else {
+		requireErrorContains(t, err, ErrMisbehaviourNotFound.Error())
+	}
+
+	if !c.clientState.FrozenHeight.IsZero() {
+		t.Fatal("client must not be frozen by resubmitting an identical header")
+	}
+
+	// A conflicting header at the same height must still count as misbehaviour.
+	conflicting := cloneLightHeaderWith(h.SignedHeader, func(lh *LightHeader) { lh.AppHash[0] ^= 0xFF })
+	if !isMisbehaviourPair(h, &Header{SignedHeader: conflicting, TrustedHeight: &trustedHeight}) {
+		t.Fatal("conflicting headers at the same height must be treated as misbehaviour")
+	}
+}

@@ -20,7 +20,7 @@ func TestGetEventConfigDefaults(cur realm, t *testing.T) {
 		{"split event attrs", boolToInt(got.SplitEventAttrs), 1},
 		{"max event attr value len", int(got.MaxEventAttrValueLen), defaultMaxEventAttrValueLen},
 		{"max event attr pairs", int(got.MaxEventAttrPairs), defaultMaxEventAttrPairs},
-		{"max packet data event size", MaxPacketDataEventSize(), defaultMaxEventAttrValueLen * defaultMaxEventAttrPairs},
+		{"max packet data event size", MaxPacketDataEventSize(), defaultMaxEventAttrValueLen * (defaultMaxEventAttrPairs - 1)},
 	}
 
 	for _, tc := range tests {

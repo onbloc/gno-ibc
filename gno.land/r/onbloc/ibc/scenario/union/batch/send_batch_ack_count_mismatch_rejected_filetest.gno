@@ -135,7 +135,7 @@ func sendBatch(cur realm, channelId types.ChannelId, token *grc20.Token, ledger 
 	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustBatchInstruction(batch))
 
 	bk := banker.NewReadonlyBanker()
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
 	ufmt.Printf("[INFO] proxy grc20 escrow balance: %d\n", token.BalanceOf(proxy))
 	ufmt.Println("[EXPECTED] both escrows locked: native=40, grc20=40")
 

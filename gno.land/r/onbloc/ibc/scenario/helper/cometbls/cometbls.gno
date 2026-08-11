@@ -100,15 +100,9 @@ func SeededClientBytes(contractAddr types.H256, l1Height uint64, root []byte) (c
 
 	clientState := &lc.ClientState{
 		ChainID: "l1",
-		// The seeded consensus timestamp is 1 (epoch), so the trusting period
-		// must span up to "now" or Status() reports the client Expired and the
-		// proof-verification path (getActiveClient) rejects it. A ~146-year
-		// window keeps it Active under any realistic VM clock. Unbonding must
-		// exceed trusting (ClientState.Validate), and clock drift must be
-		// non-zero. None of these affect VerifyMembership, which is all this L1
-		// is asked to do (consensus is seeded directly, never header-verified).
+		// Consensus is seeded at timestamp 1, so a huge trusting period keeps
+		// Status() Active regardless of VM clock; unused by VerifyMembership.
 		TrustingPeriod:  1 << 62,
-		UnbondingPeriod: 1 << 63,
 		MaxClockDrift:   1 << 30,
 		LatestHeight:    types.NewHeight(l1Height),
 		ContractAddress: addr,

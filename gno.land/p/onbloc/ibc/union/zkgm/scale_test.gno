@@ -8,11 +8,40 @@ import (
 	u256 "gno.land/p/onbloc/math/uint256"
 )
 
+func mustPow10(t *testing.T, exp int) *u256.Uint {
+	t.Helper()
+	got, err := Pow10(exp)
+	uassert.NoError(t, err)
+	return got
+}
+
 func TestPow10(t *testing.T) {
-	uassert.Equal(t, "1", Pow10(0).ToString())
-	uassert.Equal(t, "10", Pow10(1).ToString())
-	uassert.Equal(t, "1000000", Pow10(6).ToString())
-	uassert.Equal(t, "1000000000000", Pow10(12).ToString())
+	uassert.Equal(t, "0", mustPow10(t, -1).ToString())
+	uassert.Equal(t, "1", mustPow10(t, 0).ToString())
+	uassert.Equal(t, "10", mustPow10(t, 1).ToString())
+	uassert.Equal(t, "1000000", mustPow10(t, 6).ToString())
+	uassert.Equal(t, "1000000000000", mustPow10(t, 12).ToString())
+}
+
+func TestPow10BeyondUint64DoesNotSaturate(t *testing.T) {
+	// 10^19 is the largest power of ten that still fits in a uint64
+	// (max uint64 ~= 1.8e19); 10^20 is the first that overflows it.
+	// A float64 intermediate (math.Pow10 + uint64 conversion) saturates
+	// around 2^63 past this point instead of erroring, so this asserts
+	// the exact integer value instead.
+	uassert.Equal(t, "10000000000000000000", mustPow10(t, 19).ToString())
+	uassert.Equal(t, "100000000000000000000", mustPow10(t, 20).ToString())
+	uassert.Equal(t, "10000000000000000000000000000000000000000", mustPow10(t, 40).ToString())
+}
+
+func TestPow10OverflowsUint256(t *testing.T) {
+	// 2^256 ~= 1.16e77, so 10^77 fits and 10^78 is the first to overflow.
+	if _, err := Pow10(77); err != nil {
+		t.Fatalf("Pow10(77): unexpected error %v", err)
+	}
+	if _, err := Pow10(78); err != ErrPow10Overflow {
+		t.Fatalf("Pow10(78): got %v want %v", err, ErrPow10Overflow)
+	}
 }
 
 func TestScaleDownToInt64(t *testing.T) {
@@ -30,6 +59,7 @@ func TestScaleDownToInt64(t *testing.T) {
 		{"identity max int64", 0, u256.NewUint(uint64(math.MaxInt64)), math.MaxInt64, nil},
 		{"identity overflow int64", 0, u256.NewUint(uint64(math.MaxInt64) + 1), 0, ErrAmountOverflow},
 		{"downscale 1e18 by 12 -> 1e6", 12, wire1e18, 1000000, nil},
+		{"downscale 1e20 by 20 -> 1", 20, u256.MustFromDecimal("100000000000000000000"), 1, nil},
 		{"downscale exact multiple", 6, u256.NewUint(77000000), 77, nil},
 		{"downscale indivisible dust", 6, u256.NewUint(77000001), 0, ErrAmountNotDivisible},
 		{"downscale below one unit", 12, u256.NewUint(999999999999), 0, ErrAmountNotDivisible},

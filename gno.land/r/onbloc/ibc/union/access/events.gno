@@ -41,11 +41,11 @@ func emitRoleAdminChangedEvent(role manager.RoleId, admin manager.RoleId) {
 	)
 }
 
-func emitRoleGrantDelayChangedEvent(role manager.RoleId, delay manager.Delay, since manager.TimePoint) {
+func emitRoleGrantDelayChangedEvent(role manager.RoleId, delay uint32, since manager.TimePoint) {
 	chain.Emit(
 		manager.EventTypeRoleGrantDelayChanged,
 		manager.AttributeKeyRoleID, role.String(),
-		manager.AttributeKeyDelay, delay.String(),
+		manager.AttributeKeyDelay, strconv.FormatUint(uint64(delay), 10),
 		manager.AttributeKeySince, since.String(),
 	)
 }

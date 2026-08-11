@@ -35,7 +35,12 @@ func QueryBatchPacketCommitment(batchHashHex string) string {
 	if err != nil {
 		panic(err)
 	}
-	commitment, err := core.GetBatchPackets(types.NewH256(batchHash))
+	if len(batchHash) != 32 {
+		panic("batch hash requires exactly 32 bytes")
+	}
+	var h types.H256
+	copy(h[:], batchHash)
+	commitment, err := core.GetBatchPackets(h)
 	if err != nil {
 		return ""
 	}
@@ -73,9 +78,9 @@ func Bootstrap(cur realm) {
 func Recover(cur realm) {
 	runtime.AssertOriginCall()
 	admin := requireAdmin(cur)
-	if core.QueryConnection(gnoConnectionId) == "" {
+	if conn, _ := core.QueryConnection(gnoConnectionId); conn == "" {
 		for id := types.ConnectionId(1); id <= gnoConnectionId; id++ {
-			if core.QueryConnection(id) == "" {
+			if conn, _ := core.QueryConnection(id); conn == "" {
 				core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(gnoClientId, unionClientId))
 			}
 		}
@@ -84,9 +89,9 @@ func Recover(cur realm) {
 	}
 	requireConnection()
 
-	if core.QueryChannel(gnoChannelId) == "" {
+	if channel, _ := core.QueryChannel(gnoChannelId); channel == "" {
 		for id := types.ChannelId(1); id <= gnoChannelId; id++ {
-			if core.QueryChannel(id) == "" {
+			if channel, _ := core.QueryChannel(id); channel == "" {
 				core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit([]byte(portId), []byte(portId), gnoConnectionId, zkgm.Version, admin.String()))
 			}
 		}

@@ -16,6 +16,13 @@ func tagAckFailure() *u256.Uint       { return z.Uint256FromBytes32(z.TAG_ACK_FA
 func fillTypeProtocol() *u256.Uint    { return z.Uint256FromBytes32(z.FILL_TYPE_PROTOCOL) }
 func fillTypeMarketMaker() *u256.Uint { return z.Uint256FromBytes32(z.FILL_TYPE_MARKETMAKER) }
 
+type tokenOrderProtocolTarget struct {
+	wrapped     string
+	meta        z.TokenMetadata
+	metaPresent bool
+	hasWrapped  bool
+}
+
 // verifyTokenOrderV2 validates a token order on send: rate-limit, escrow voucher
 // or consume native funds, then escrow the channel balance.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L419-L547
@@ -121,6 +128,15 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 		return v.marketMakerFillV2(0, rlm, relayer, relayerMsg, order)
 	}
 
+	// Metadata doubles as a routing memo only for ESCROW (see
+	// token_forward.gno); any other kind addressed to the handler is
+	// rejected outright rather than silently minting/releasing with no
+	// forward ever triggered.
+	receiver := address(order.Receiver)
+	if v.store.IsTokenForwardReceiver(receiver) && order.Kind != z.TOKEN_ORDER_KIND_ESCROW {
+		return failureResult(universalErrorAck()), nil
+	}
+
 	if path == nil {
 		path = u256.Zero()
 	}
@@ -135,7 +151,7 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 			return failureResult(universalErrorAck()), nil
 		}
 
-		return v.protocolFillUnescrowV2(0, rlm, packet.DestinationChannelId, path, order.BaseToken, quoteDenom, address(order.Receiver), relayer, order.BaseAmount, order.QuoteAmount)
+		return v.protocolFillUnescrowV2(0, rlm, packet.DestinationChannelId, path, order.BaseToken, quoteDenom, receiver, relayer, order.BaseAmount, order.QuoteAmount)
 	}
 
 	destChan, err := tokenOrderDestinationChannel(packet.DestinationChannelId)
@@ -143,79 +159,123 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
 	}
 
-	// Predict the wrapped denom for an escrow/initialize order.
-	// A mismatch (or an under-quote) is not an error:
-	// the order falls back to a market-maker fill.
-	var (
-		wrapped     string
-		hasWrapped  bool
-		image       [32]byte
-		meta        z.TokenMetadata
-		metaPresent bool
-	)
-
-	switch order.Kind {
-	case z.TOKEN_ORDER_KIND_ESCROW:
-		if img, ok := v.store.GetMetadataImageOf(quoteDenom); ok && !isZeroImage(img) {
-			image = img
-			wrapped = z.PredictWrappedTokenV2(path, destChan, order.BaseToken, image)
-		} else {
-			image = [32]byte{}
-			wrapped = z.PredictWrappedToken(path, destChan, order.BaseToken)
-		}
-
-		hasWrapped = true
-
-		// ESCROW targets an already-deployed wrapped voucher;
-		// the deploying first transfer of a token uses INITIALIZE (which carries the metadata).
-		// A first-seen ESCROW that matches the predicted wrapped denom has no persisted ledger/scale,
-		// so minting would lazily create the voucher at decimals=0 with no origin metadata:
-		// an unredeemable orphan whose scale then diverges from a later INITIALIZE's pre-flight check.
-		// Reject it as an invalid order so the source refunds, mirroring the INITIALIZE invalid-order handling below.
-		if quoteDenom == wrapped && !v.store.HasVoucher(wrapped) {
-			return failureResult(universalErrorAck()), nil
-		}
-	case z.TOKEN_ORDER_KIND_INITIALIZE:
-		// gno requires the metadata preimage to initialize a new wrapped token.
-		if len(order.Metadata) == 0 {
-			return failureResult(universalErrorAck()), nil
-		}
-
-		m, derr := z.DecodeTokenMetadata(order.Metadata)
-		if derr != nil {
-			return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), derr
-		}
-
-		meta, metaPresent = m, true
-		image = z.MetadataImage(meta)
-		wrapped = z.PredictWrappedTokenV2(path, destChan, order.BaseToken, image)
-		// A quote token that does not match the deterministic wrapped denom is an
-		// invalid initialize order (union InvalidTokenOrderKind).
-		if quoteDenom != wrapped {
-			return failureResult(universalErrorAck()), nil
-		}
-
-		hasWrapped = true
+	target, reject, err := v.resolveProtocolFillTarget(0, receiver, quoteDenom, destChan, path, order)
+	if err != nil {
+		return core.NewRecvPacketResult(types.PacketStatusUnknown, nil), err
+	}
+	if reject {
+		return failureResult(universalErrorAck()), nil
 	}
 
 	// Protocol fill when the quote matches the predicted wrapped denom and the base
 	// covers the quote; otherwise fall back to a market-maker fill.
-	if hasWrapped && quoteDenom == wrapped && baseCovers {
+	if target.hasWrapped && quoteDenom == target.wrapped && baseCovers {
 		if err := v.rateLimit(0, rlm, quoteDenom, order.QuoteAmount); err != nil {
 			return failureResult(universalErrorAck()), nil
+		}
+
+		// If the recv is addressed to the registered forward handler, delegate
+		// the onward routing to it instead of crediting Receiver. ZKGM knows
+		// nothing about the downstream protocol; see token_forward.gno.
+		// Kind == ESCROW is guaranteed here (see the early guard above).
+		if v.store.IsTokenForwardReceiver(receiver) {
+			return v.executeTokenOrderForward(0, rlm, packet, path, order, relayer, target.wrapped, target.meta, target.metaPresent)
 		}
 
 		canDeploy := order.Kind == z.TOKEN_ORDER_KIND_INITIALIZE
 
 		var metadata *z.TokenMetadata
-		if metaPresent {
-			metadata = &meta
+		if target.metaPresent {
+			metadata = &target.meta
 		}
 
-		return v.protocolFillMint(0, rlm, packet.DestinationChannelId, path, order.BaseToken, wrapped, address(order.Receiver), relayer, order.BaseAmount, order.QuoteAmount, metadata, canDeploy)
+		return v.protocolFillMint(0, rlm, packet.DestinationChannelId, path, order.BaseToken, target.wrapped, receiver, relayer, order.BaseAmount, order.QuoteAmount, metadata, canDeploy)
 	}
 
 	return v.marketMakerFillV2(0, rlm, relayer, relayerMsg, order)
+}
+
+// resolveProtocolFillTarget predicts the wrapped token that an incoming
+// TokenOrderV2 may mint/release. reject=true means the order is invalid and
+// should return the universal failure ack rather than falling back to maker fill.
+func (v *ucs03ZkgmV1) resolveProtocolFillTarget(_ int, receiver address, quoteDenom string, destChan uint32, path *u256.Uint, order z.TokenOrderV2) (tokenOrderProtocolTarget, bool, error) {
+	switch order.Kind {
+	case z.TOKEN_ORDER_KIND_ESCROW:
+		return v.resolveEscrowProtocolFillTarget(0, receiver, quoteDenom, destChan, path, order)
+	case z.TOKEN_ORDER_KIND_INITIALIZE:
+		return resolveInitializeProtocolFillTarget(quoteDenom, destChan, path, order)
+	default:
+		return tokenOrderProtocolTarget{}, false, nil
+	}
+}
+
+func (v *ucs03ZkgmV1) resolveEscrowProtocolFillTarget(_ int, receiver address, quoteDenom string, destChan uint32, path *u256.Uint, order z.TokenOrderV2) (tokenOrderProtocolTarget, bool, error) {
+	target := tokenOrderProtocolTarget{hasWrapped: true}
+
+	if image, ok := v.store.GetMetadataImageOf(quoteDenom); ok && !isZeroImage(image) {
+		target.wrapped = z.PredictWrappedTokenV2(path, destChan, order.BaseToken, image)
+		return target, false, nil
+	}
+
+	meta, metaPresent, err := v.resolveForwardDeployMetadata(0, receiver, order.Metadata)
+	if err != nil {
+		return target, false, err
+	}
+
+	if metaPresent {
+		target.meta = meta
+		target.metaPresent = true
+		target.wrapped = z.PredictWrappedTokenV2(path, destChan, order.BaseToken, z.MetadataImage(meta))
+	} else {
+		target.wrapped = z.PredictWrappedToken(path, destChan, order.BaseToken)
+	}
+
+	// ESCROW targets an already-deployed voucher (INITIALIZE carries the
+	// metadata for a new one) unless a forward handler resolved deploy
+	// metadata above. Otherwise a first-seen match would lazily mint an
+	// unredeemable decimals=0 orphan, so reject it for a source refund.
+	if quoteDenom == target.wrapped && !v.store.HasVoucher(target.wrapped) && !target.metaPresent {
+		return target, true, nil
+	}
+
+	return target, false, nil
+}
+
+func (v *ucs03ZkgmV1) resolveForwardDeployMetadata(_ int, receiver address, memo []byte) (z.TokenMetadata, bool, error) {
+	if !v.store.IsTokenForwardReceiver(receiver) {
+		return z.TokenMetadata{}, false, nil
+	}
+
+	handler, _, _ := v.store.GetTokenForwardHandler()
+	resolver, ok := handler.(z.TokenForwardMetadataResolver)
+	if !ok {
+		return z.TokenMetadata{}, false, nil
+	}
+
+	return resolver.ResolveMetadata(memo)
+}
+
+func resolveInitializeProtocolFillTarget(quoteDenom string, destChan uint32, path *u256.Uint, order z.TokenOrderV2) (tokenOrderProtocolTarget, bool, error) {
+	if len(order.Metadata) == 0 {
+		return tokenOrderProtocolTarget{}, true, nil
+	}
+
+	meta, err := z.DecodeTokenMetadata(order.Metadata)
+	if err != nil {
+		return tokenOrderProtocolTarget{}, false, err
+	}
+
+	wrapped := z.PredictWrappedTokenV2(path, destChan, order.BaseToken, z.MetadataImage(meta))
+	if quoteDenom != wrapped {
+		return tokenOrderProtocolTarget{}, true, nil
+	}
+
+	return tokenOrderProtocolTarget{
+		wrapped:     wrapped,
+		meta:        meta,
+		metaPresent: true,
+		hasWrapped:  true,
+	}, false, nil
 }
 
 // protocolFillMint mints the wrapped voucher for an escrow/initialize order:

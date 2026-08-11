@@ -10,6 +10,10 @@ import (
 // longer hold another hop.
 var ErrChannelPathFull = errors.New("zkgm: channel path is full")
 
+// ErrNonCanonicalPath is returned when a channel path has a zero-value slot
+// below HopCount(path).
+var ErrNonCanonicalPath = errors.New("zkgm: channel path is not canonical")
+
 const (
 	channelIDMask  = uint64(0xFFFFFFFF)
 	channelSlotBit = uint(32)
@@ -102,6 +106,18 @@ func HopCount(path *u256.Uint) int {
 	return (path.BitLen() + int(channelSlotBit) - 1) / int(channelSlotBit)
 }
 
+// IsCanonicalPath reports whether all occupied channel slots are contiguous.
+func IsCanonicalPath(path *u256.Uint) bool {
+	hops := HopCount(path)
+	for i := 0; i < hops; i++ {
+		if GetChannelFromPath(path, i) == 0 {
+			return false
+		}
+	}
+
+	return true
+}
+
 // MakePathFromChannel builds a path containing channelID at the given slot.
 //
 // Based on Union's `make_path_from_channel` path helper.
@@ -114,11 +130,17 @@ func MakePathFromChannel(channelID uint32, index int) *u256.Uint {
 }
 
 // ReverseChannelPath returns a path with the same channel hops in reversed
-// order. Empty channel slots are skipped. Returns ErrChannelPathFull when the
-// reversed path would overflow.
+// order. Returns ErrNonCanonicalPath if path has a gap below its occupied
+// slots, or ErrChannelPathFull when the reversed path would overflow.
+//
+// Callers already pass canonical paths; the check guards future callers.
 //
 // Based on Union's `reverse_channel_path` path helper.
 func ReverseChannelPath(path *u256.Uint) (*u256.Uint, error) {
+	if !IsCanonicalPath(path) {
+		return nil, ErrNonCanonicalPath
+	}
+
 	reversed := u256.Zero()
 
 	cur := path

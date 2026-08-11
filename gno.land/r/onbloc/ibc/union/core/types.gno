@@ -88,6 +88,8 @@ type ICoreGetter interface {
 	GetConnection(connectionId types.ConnectionId) (types.Connection, error)
 	GetChannels() ([]types.Channel, error)
 	GetChannel(channelId types.ChannelId) (types.Channel, error)
+	GetChannelOwner(channelId types.ChannelId) (string, error)
+	GetPacketCommitmentExists(packet types.Packet) bool
 	GetBatchPacketsCommitment(batchHash types.H256) (types.H256, error)
 	GetBatchReceiptsCommitment(batchHash types.H256) (types.H256, error)
 	GetCommittedMembershipProofCommitment(clientId types.ClientId, proofHeight uint64, path []byte) (types.H256, error)

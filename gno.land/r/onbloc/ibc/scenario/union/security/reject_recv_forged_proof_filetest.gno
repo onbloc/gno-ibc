@@ -140,6 +140,7 @@ func (m *forgedLightClient) VerifyMembership(uint64, []byte, []byte, []byte) err
 }
 func (m *forgedLightClient) VerifyNonMembership(uint64, []byte, []byte) error { return nil }
 func (m *forgedLightClient) GetTimestamp() types.Timestamp                    { return types.Timestamp(1) }
+
 func (m *forgedLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
 	return types.Timestamp(1), nil
 }

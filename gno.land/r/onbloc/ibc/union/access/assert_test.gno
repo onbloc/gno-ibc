@@ -14,7 +14,7 @@ func TestAssertCanCall(cur realm, t *testing.T) {
 	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
-	SetFunctionRole(cross(cur), "set_hook", manager.PublicRole)
+	SetFunctionRole(cross(cur), cur.PkgPath(), "set_hook", manager.PublicRole)
 
 	tests := []struct {
 		name     string
@@ -25,14 +25,14 @@ func TestAssertCanCall(cur realm, t *testing.T) {
 		{
 			name: "authorized public selector",
 			setup: func(cur realm) {
-				SetTargetClosed(cross(cur), false)
+				SetTargetClosed(cross(cur), cur.PkgPath(), false)
 			},
 			selector: "set_hook",
 		},
 		{
 			name: "closed target",
 			setup: func(cur realm) {
-				SetTargetClosed(cross(cur), true)
+				SetTargetClosed(cross(cur), cur.PkgPath(), true)
 			},
 			selector: "set_hook",
 			aborts:   true,
@@ -40,7 +40,7 @@ func TestAssertCanCall(cur realm, t *testing.T) {
 		{
 			name: "admin selector without role",
 			setup: func(cur realm) {
-				SetTargetClosed(cross(cur), false)
+				SetTargetClosed(cross(cur), cur.PkgPath(), false)
 			},
 			selector: "grant_role",
 			aborts:   true,

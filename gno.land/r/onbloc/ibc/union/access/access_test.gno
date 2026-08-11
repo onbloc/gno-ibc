@@ -94,7 +94,7 @@ func TestSetFunctionRoleDirectManagement(cur realm, t *testing.T) {
 		t.Fatal("non-admin caller must not be authorized before role update")
 	}
 
-	SetFunctionRole(cross(cur), "set_hook", manager.PublicRole)
+	SetFunctionRole(cross(cur), cur.PkgPath(), "set_hook", manager.PublicRole)
 	if !CanCall(cur.PkgPath(), "set_hook", caller).Immediate {
 		t.Fatal("public role assignment must authorize arbitrary caller")
 	}
@@ -107,7 +107,7 @@ func TestSetFunctionRolesDirectManagement(cur realm, t *testing.T) {
 	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
-	SetFunctionRoles(cross(cur), selectors, manager.PublicRole)
+	SetFunctionRoles(cross(cur), cur.PkgPath(), selectors, manager.PublicRole)
 
 	for _, selector := range selectors {
 		t.Run(string(selector), func(t *testing.T) {
@@ -131,7 +131,7 @@ func TestSetFunctionRoleRejectsNonAdmin(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(caller))
 	uassert.AbortsContains(t, cur, ErrAccessManagerUnauthorizedAccount, func(cur realm) {
-		SetFunctionRole(cur, "set_hook", manager.PublicRole)
+		SetFunctionRole(cur, cur.PkgPath(), "set_hook", manager.PublicRole)
 	})
 	if GetFunctionRole(cur.PkgPath(), "set_hook") != manager.AdminRole {
 		t.Fatal("rejected role update must not change selector role")
@@ -168,19 +168,19 @@ func TestManagerAdminProtectedSurfacesRejectNonAdmin(cur realm, t *testing.T) {
 		{
 			name: "set function role",
 			run: func(cur realm) {
-				SetFunctionRole(cross(cur), "set_hook", manager.PublicRole)
+				SetFunctionRole(cross(cur), cur.PkgPath(), "set_hook", manager.PublicRole)
 			},
 		},
 		{
 			name: "set function roles",
 			run: func(cur realm) {
-				SetFunctionRoles(cross(cur), []manager.Selector{"set_hook", "dispatch"}, manager.PublicRole)
+				SetFunctionRoles(cross(cur), cur.PkgPath(), []manager.Selector{"set_hook", "dispatch"}, manager.PublicRole)
 			},
 		},
 		{
 			name: "set target closed",
 			run: func(cur realm) {
-				SetTargetClosed(cross(cur), true)
+				SetTargetClosed(cross(cur), cur.PkgPath(), true)
 			},
 		},
 	}
@@ -198,6 +198,9 @@ func TestManagerAdminProtectedSurfacesRejectNonAdmin(cur realm, t *testing.T) {
 	}
 	if GetRoleGrantDelay(RelayerRole) != 0 {
 		t.Fatal("rejected SetGrantDelay must not change grant delay")
+	}
+	if !GetRoleGrantDelayEffect(RelayerRole).IsZero() {
+		t.Fatal("rejected SetGrantDelay must not schedule an effect timePoint")
 	}
 	if GetFunctionRole(cur.PkgPath(), "set_hook") != manager.AdminRole {
 		t.Fatal("rejected SetFunctionRole must not change selector role")
@@ -236,8 +239,14 @@ func TestRoleConfigurationSurface(cur realm, t *testing.T) {
 	if GetRoleAdmin(RelayerRole) != roleAdminRole {
 		t.Fatal("SetRoleAdmin must update role admin")
 	}
-	if GetRoleGrantDelay(RelayerRole) != 5 {
-		t.Fatal("SetGrantDelay must update role grant delay")
+	// SetGrantDelay schedules the change; it takes a minimum setback (see
+	// manager.MinSetback) before it is observable, so the grant delay stays
+	// at its old value (zero) immediately after the call.
+	if GetRoleGrantDelay(RelayerRole) != 0 {
+		t.Fatal("SetGrantDelay change must not be observable before its setback effect timePoint")
+	}
+	if GetRoleGrantDelayEffect(RelayerRole).IsZero() {
+		t.Fatal("SetGrantDelay must schedule an effect timePoint for the pending change")
 	}
 	if !CanAdminRole(RelayerRole, roleAdmin).Immediate {
 		t.Fatal("role admin member must be able to administer relayer role")
@@ -248,7 +257,7 @@ func TestRoleConfigurationSurface(cur realm, t *testing.T) {
 	GrantRole(cross(cur), RelayerRole, relayer)
 	membership := HasRole(RelayerRole, relayer)
 	if !membership.IsMember {
-		t.Fatal("GrantRole must add active relayer when grant delay is zero")
+		t.Fatal("GrantRole must add an active relayer while both pending delay changes are still unobserved (the still-active delay remains zero)")
 	}
 }
 
@@ -276,10 +285,10 @@ func TestTargetConfigurationSurface(cur realm, t *testing.T) {
 	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
-	SetFunctionRole(cross(cur), "set_hook", manager.PublicRole)
+	SetFunctionRole(cross(cur), cur.PkgPath(), "set_hook", manager.PublicRole)
 
 	if GetTargetFunctionRole(cur.PkgPath(), "set_hook") != manager.PublicRole {
-		t.Fatal("SetFunctionRole must update inferred target selector role")
+		t.Fatal("SetFunctionRole must update the explicit target's selector role")
 	}
 	if !CanManageTarget(admin).Immediate {
 		t.Fatal("admin role member must be able to manage targets")
@@ -288,17 +297,60 @@ func TestTargetConfigurationSurface(cur realm, t *testing.T) {
 		t.Fatal("public selector must authorize arbitrary caller")
 	}
 
-	SetTargetClosed(cross(cur), true)
+	SetTargetClosed(cross(cur), cur.PkgPath(), true)
 	if !IsTargetClosed(cur.PkgPath()) {
-		t.Fatal("SetTargetClosed must close inferred target")
+		t.Fatal("SetTargetClosed must close the explicit target")
 	}
 	if CanCall(cur.PkgPath(), "set_hook", caller).Immediate {
 		t.Fatal("closed target must reject authorized caller")
 	}
 
-	SetTargetClosed(cross(cur), false)
+	SetTargetClosed(cross(cur), cur.PkgPath(), false)
 	if !CanCall(cur.PkgPath(), "set_hook", caller).Immediate {
 		t.Fatal("reopened target must restore selector authorization")
+	}
+}
+
+// Regression: target used to be inferred from the caller's own path instead
+// of taken as a parameter, so closing core would silently close the caller.
+func TestSetTargetClosedTargetsExplicitPathNotCaller(cur realm, t *testing.T) {
+	admin := testutils.TestAddress("access-admin")
+	resetAccess(admin)
+
+	testing.SetRealm(testing.NewUserRealm(admin))
+	SetTargetClosed(cross(cur), CoreRealmPath, true)
+
+	if !IsTargetClosed(CoreRealmPath) {
+		t.Fatal("SetTargetClosed must close the explicitly requested target")
+	}
+	if IsTargetClosed(cur.PkgPath()) {
+		t.Fatal("SetTargetClosed must not close the caller's own path")
+	}
+}
+
+// Same regression as TestSetTargetClosedTargetsExplicitPathNotCaller, for
+// SetFunctionRole and SetFunctionRoles.
+func TestSetFunctionRoleTargetsExplicitPathNotCaller(cur realm, t *testing.T) {
+	admin := testutils.TestAddress("access-admin")
+	resetAccess(admin)
+
+	testing.SetRealm(testing.NewUserRealm(admin))
+	SetFunctionRole(cross(cur), CoreRealmPath, "set_hook", manager.PublicRole)
+
+	if GetFunctionRole(CoreRealmPath, "set_hook") != manager.PublicRole {
+		t.Fatal("SetFunctionRole must update the explicitly requested target's selector role")
+	}
+	if GetFunctionRole(cur.PkgPath(), "set_hook") != manager.AdminRole {
+		t.Fatal("SetFunctionRole must not update the caller's own path")
+	}
+
+	SetFunctionRoles(cross(cur), CoreRealmPath, []manager.Selector{"dispatch"}, manager.PublicRole)
+
+	if GetFunctionRole(CoreRealmPath, "dispatch") != manager.PublicRole {
+		t.Fatal("SetFunctionRoles must update the explicitly requested target's selector role")
+	}
+	if GetFunctionRole(cur.PkgPath(), "dispatch") != manager.AdminRole {
+		t.Fatal("SetFunctionRoles must not update the caller's own path")
 	}
 }
 

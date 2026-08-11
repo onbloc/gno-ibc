@@ -333,6 +333,9 @@ func (c *coreV1) BatchSend(_ int, rlm realm, msg types.MsgBatchSend) {
 }
 
 // BatchAcks aggregates the acks of several received packets into a batch receipt.
+// Iterates msg.Packets (not msg.Acks) so a short or empty Acks array can't
+// skip validation for the packets it's missing entries for.
+// reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/evm/contracts/core/04-channel/IBCPacket.sol#L148-L188
 func (c *coreV1) BatchAcks(_ int, rlm realm, msg types.MsgBatchAcks) {
 	assertIsRlmCurrent(0, rlm)
 
@@ -340,15 +343,16 @@ func (c *coreV1) BatchAcks(_ int, rlm realm, msg types.MsgBatchAcks) {
 		panic(makeError(core.ErrNotEnoughPackets))
 	}
 
+	if len(msg.Acks) != len(msg.Packets) {
+		panic(makeError(core.ErrAcknowledgementCountMismatch))
+	}
+
 	channelId := msg.Packets[0].DestinationChannelId
 	batchHash := core.CommitPacketsHash(msg.Packets)
 
-	for i, ack := range msg.Acks {
-		if i >= len(msg.Packets) {
-			break
-		}
+	for i, packet := range msg.Packets {
+		ack := msg.Acks[i]
 
-		packet := msg.Packets[i]
 		if packet.DestinationChannelId != channelId {
 			panic(makeError(core.ErrBatchSameChannelOnly))
 		}

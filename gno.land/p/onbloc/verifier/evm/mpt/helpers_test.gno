@@ -2,11 +2,21 @@ package mpt
 
 import (
 	"crypto/keccak256"
+	"encoding/hex"
 
 	"gno.land/p/onbloc/encoding/rlp"
 )
 
-func node(path []byte, valueOrRef []byte) []byte {
+func mustHex(s string) []byte {
+	bz, err := hex.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+
+	return bz
+}
+
+func rawNode(path []byte, valueOrRef []byte) []byte {
 	return rlp.EncodeList(rlp.EncodeBytes(path), valueOrRef)
 }
 

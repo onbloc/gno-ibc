@@ -151,7 +151,7 @@ func EmitPacketSend(_ int, rlm realm, packet types.Packet, sourceChannel types.C
 func EmitPacketRecv(_ int, rlm realm, packet types.Packet, destinationChannel types.Channel, connection types.Connection, relayerMsg []byte) {
 	assertIsRlmCurrent(0, rlm)
 	assertIsProxyRealm(0, rlm)
-	if !IsValidEventSize(packet.Data, relayerMsg) {
+	if !IsValidEventSize(relayerMsg) {
 		panic(makeError(ErrPacketCombinedDataTooLarge))
 	}
 
@@ -162,7 +162,7 @@ func EmitPacketRecv(_ int, rlm realm, packet types.Packet, destinationChannel ty
 func EmitIntentPacketRecv(_ int, rlm realm, packet types.Packet, destinationChannel types.Channel, connection types.Connection, marketMakerMsg []byte) {
 	assertIsRlmCurrent(0, rlm)
 	assertIsProxyRealm(0, rlm)
-	if !IsValidEventSize(packet.Data, marketMakerMsg) {
+	if !IsValidEventSize(marketMakerMsg) {
 		panic(makeError(ErrPacketCombinedDataTooLarge))
 	}
 
@@ -173,7 +173,7 @@ func EmitIntentPacketRecv(_ int, rlm realm, packet types.Packet, destinationChan
 func EmitPacketAck(_ int, rlm realm, packet types.Packet, sourceChannel types.Channel, connection types.Connection, acknowledgement []byte) {
 	assertIsRlmCurrent(0, rlm)
 	assertIsProxyRealm(0, rlm)
-	if !IsValidEventSize(packet.Data, acknowledgement) {
+	if !IsValidEventSize(acknowledgement) {
 		panic(makeError(ErrPacketCombinedDataTooLarge))
 	}
 
@@ -184,10 +184,6 @@ func EmitPacketAck(_ int, rlm realm, packet types.Packet, sourceChannel types.Ch
 func EmitPacketTimeout(_ int, rlm realm, packet types.Packet, sourceChannel types.Channel, connection types.Connection) {
 	assertIsRlmCurrent(0, rlm)
 	assertIsProxyRealm(0, rlm)
-	if !IsValidEventSize(packet.Data) {
-		panic(makeError(ErrPacketCombinedDataTooLarge))
-	}
-
 	emitPacketTimeoutEvent(packet, sourceChannel, connection)
 }
 
@@ -195,7 +191,7 @@ func EmitPacketTimeout(_ int, rlm realm, packet types.Packet, sourceChannel type
 func EmitWriteAck(_ int, rlm realm, packet types.Packet, destinationChannel types.Channel, connection types.Connection, acknowledgement []byte) {
 	assertIsRlmCurrent(0, rlm)
 	assertIsProxyRealm(0, rlm)
-	if !IsValidEventSize(packet.Data, acknowledgement) {
+	if !IsValidEventSize(acknowledgement) {
 		panic(makeError(ErrPacketCombinedDataTooLarge))
 	}
 

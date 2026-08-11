@@ -106,7 +106,7 @@ func sendNativeInitializeOrder(cur realm, channelId types.ChannelId) {
 	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
 
 	bk := banker.NewReadonlyBanker()
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 1234567 (full amount, no trimming)")
 
 	zkgmPacket, err := z.DecodeZkgmPacket(sendPacket.Data)
@@ -139,6 +139,7 @@ type mockLightClient struct{}
 func (m *mockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
 func (m *mockLightClient) VerifyNonMembership(uint64, []byte, []byte) error      { return nil }
 func (m *mockLightClient) GetTimestamp() types.Timestamp                         { return types.Timestamp(1) }
+
 func (m *mockLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
 	return types.Timestamp(1), nil
 }

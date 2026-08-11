@@ -16,9 +16,9 @@ func GrantRole(cur realm, role manager.RoleId, account address) bool {
 	assertCanAdminRole(0, cur, role)
 
 	newMember := accessState.GrantRole(role, account)
-	access := accessState.Roles[role].Members[account]
+	since := accessState.GetRoleMemberSince(role, account)
 
-	emitRoleGrantedEvent(role, account, access.Since, newMember)
+	emitRoleGrantedEvent(role, account, since, newMember)
 
 	return newMember
 }
@@ -73,51 +73,49 @@ func SetRoleAdmin(cur realm, role manager.RoleId, admin manager.RoleId) {
 	emitRoleAdminChangedEvent(role, admin)
 }
 
-// SetGrantDelay sets the delay before future grants of role become active.
+// SetGrantDelay schedules delay behind a setback (manager.State.SetGrantDelay).
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L139-L148
-func SetGrantDelay(cur realm, role manager.RoleId, delay manager.Delay) {
+func SetGrantDelay(cur realm, role manager.RoleId, newDelay uint32) {
 	assertCanManageTarget(0, cur)
 
-	accessState.SetGrantDelay(role, delay)
+	accessState.SetGrantDelay(role, newDelay)
+	effect := accessState.GetRoleGrantDelayEffect(role)
 
-	emitRoleGrantDelayChangedEvent(role, delay, manager.CurrentTimePoint())
+	emitRoleGrantDelayChangedEvent(role, newDelay, effect)
 }
 
-// SetFunctionRole sets the role for selector on the calling realm's target path.
+// SetFunctionRole sets the role for selector on targetPath.
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L353-L367
-func SetFunctionRole(cur realm, selector manager.Selector, role manager.RoleId) {
+func SetFunctionRole(cur realm, targetPath string, selector manager.Selector, role manager.RoleId) {
 	assertCanManageTarget(0, cur)
 
-	target := cur.Previous().PkgPath()
-	accessState.SetTargetFunctionRole(target, selector, role)
+	accessState.SetTargetFunctionRole(targetPath, selector, role)
 
-	emitTargetFunctionRoleUpdatedEvent(target, selector, role)
+	emitTargetFunctionRoleUpdatedEvent(targetPath, selector, role)
 }
 
-// SetFunctionRoles sets the same role for selectors on the calling realm's target path.
+// SetFunctionRoles sets the same role for selectors on targetPath.
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L353-L367
-func SetFunctionRoles(cur realm, selectors []manager.Selector, role manager.RoleId) {
+func SetFunctionRoles(cur realm, targetPath string, selectors []manager.Selector, role manager.RoleId) {
 	assertCanManageTarget(0, cur)
 
-	target := cur.Previous().PkgPath()
-	accessState.SetTargetFunctionRoles(target, selectors, role)
+	accessState.SetTargetFunctionRoles(targetPath, selectors, role)
 
 	for i := range selectors {
-		emitTargetFunctionRoleUpdatedEvent(target, selectors[i], role)
+		emitTargetFunctionRoleUpdatedEvent(targetPath, selectors[i], role)
 	}
 }
 
-// SetTargetClosed sets whether the calling realm's target path is closed.
+// SetTargetClosed sets whether targetPath is closed.
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L450-L483
-func SetTargetClosed(cur realm, closed bool) {
+func SetTargetClosed(cur realm, targetPath string, closed bool) {
 	assertCanManageTarget(0, cur)
 
-	target := cur.Previous().PkgPath()
-	accessState.SetTargetClosed(target, closed)
+	accessState.SetTargetClosed(targetPath, closed)
 
-	emitTargetClosedEvent(target, closed)
+	emitTargetClosedEvent(targetPath, closed)
 }

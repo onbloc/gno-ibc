@@ -8,7 +8,7 @@ import (
 
 func TestRoleConfigManagesNilMembersMap(t *testing.T) {
 	account := testutils.TestAddress("member")
-	roleConfig := &RoleConfig{GrantDelay: 5, Members: make(map[address]Access)}
+	roleConfig := &RoleConfig{GrantDelay: NewDelay(5), Members: make(map[address]Access)}
 	now := NewTimePoint(100)
 
 	if roleConfig.hasMember(account, now) {
@@ -51,7 +51,7 @@ func TestRoleConfigManagesNilMembersMap(t *testing.T) {
 	}
 }
 
-func TestRoleConfigAdminAndGrantDelay(t *testing.T) {
+func TestRoleConfigAdmin(t *testing.T) {
 	roleConfig := NewRoleConfig(AdminRole, 0)
 
 	adminTests := []struct {
@@ -69,20 +69,49 @@ func TestRoleConfigAdminAndGrantDelay(t *testing.T) {
 			}
 		})
 	}
+}
 
-	delayTests := []struct {
-		name  string
-		delay Delay
-	}{
-		{"non-zero delay", 7},
-		{"zero delay", 0},
+// A grant delay change is not observable until MinSetback has elapsed.
+// OpenZeppelin: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L446-L478
+// Union: https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/tests.rs#L872-L924
+func TestRoleConfigGrantDelayUpdateRespectsSetback(t *testing.T) {
+	roleConfig := NewRoleConfig(AdminRole, 0)
+	now := NewTimePoint(1_000_000)
+
+	roleConfig.setGrantDelay(now, 10)
+
+	wantEffect := NewTimePoint(now.Int64() + int64(MinSetback))
+	if roleConfig.GrantDelay.effectDate != wantEffect {
+		t.Fatalf("GrantDelay.EffectDate = %d, want %d", roleConfig.GrantDelay.effectDate.Int64(), wantEffect.Int64())
 	}
-	for _, tc := range delayTests {
-		t.Run(tc.name, func(t *testing.T) {
-			roleConfig.setGrantDelay(tc.delay)
-			if got := roleConfig.grantDelay(); got != tc.delay {
-				t.Fatalf("grantDelay() = %d, want %d", got, tc.delay)
-			}
-		})
+	if got := roleConfig.grantDelay(now); got != 0 {
+		t.Fatalf("grantDelay() before effect = %d, want 0", got)
+	}
+	if got := roleConfig.grantDelay(NewTimePoint(wantEffect.Int64() - 1)); got != 0 {
+		t.Fatalf("grantDelay() one second before effect = %d, want 0", got)
+	}
+	if got := roleConfig.grantDelay(wantEffect); got != 10 {
+		t.Fatalf("grantDelay() at effect = %d, want 10", got)
+	}
+}
+
+// Regression test: shrinking an active grant delay must not let a
+// same-instant grant use the smaller value (see Delay.WithUpdate).
+func TestRoleConfigGrantDelayDecreaseCannotBypassObservationWindow(t *testing.T) {
+	account := testutils.TestAddress("member")
+	const activeDelay uint32 = 86400 // 1 day, already in effect (e.g. an observation window)
+	roleConfig := NewRoleConfig(AdminRole, activeDelay)
+	now := NewTimePoint(1_000_000)
+
+	roleConfig.setGrantDelay(now, 0) // attempt to shrink the delay to zero...
+	roleConfig.grant(account, now)   // ...and grant in the very same instant
+
+	if roleConfig.hasMember(account, now) {
+		t.Fatal("shrinking the grant delay must not let a same-instant grant activate immediately")
+	}
+
+	activation := NewTimePoint(now.Int64() + int64(activeDelay))
+	if !roleConfig.hasMember(account, activation) {
+		t.Fatal("member must activate once the delay active at grant time elapses")
 	}
 }

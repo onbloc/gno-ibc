@@ -232,7 +232,8 @@ func TestUpdateChannelPath(t *testing.T) {
 		},
 		{
 			"high-bit max hops",
-			pathFromHops(t,
+			pathFromHops(
+				t,
 				0x80000000,
 				0x80000001,
 				0x80000002,
@@ -274,6 +275,36 @@ func TestUpdateChannelPath(t *testing.T) {
 				tt.assert(t, got)
 			}
 		})
+	}
+}
+
+func TestIsCanonicalPath(t *testing.T) {
+	tests := []struct {
+		name string
+		path *u256.Uint
+		want bool
+	}{
+		{"empty", u256.Zero(), true},
+		{"single hop", MakePathFromChannel(1, 0), true},
+		{"built via UpdateChannelPath", pathFromHops(t, 3, 5, 7), true},
+		{"max hops built via UpdateChannelPath", pathFromHops(t, 1, 2, 3, 4, 5, 6, 7, 8), true},
+		{"gap at slot 1", new(u256.Uint).Or(MakePathFromChannel(3, 0), MakePathFromChannel(5, 2)), false},
+		{"gap at slot 0 only", MakePathFromChannel(1, 1), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsCanonicalPath(tt.path); got != tt.want {
+				t.Fatalf("got %v want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestReverseChannelPathRejectsNonCanonical(t *testing.T) {
+	gap := new(u256.Uint).Or(MakePathFromChannel(3, 0), MakePathFromChannel(5, 2))
+
+	if _, err := ReverseChannelPath(gap); err != ErrNonCanonicalPath {
+		t.Fatalf("err: got %v want %v", err, ErrNonCanonicalPath)
 	}
 }
 

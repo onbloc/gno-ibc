@@ -530,25 +530,22 @@ func TestPacketRecvBatchAbortsEntirelyOnOversizedEntry(cur realm, t *testing.T) 
 	}
 }
 
-// TestRecvEntrypointsRejectOversizedCombinedPacket drives PacketRecv and
-// IntentPacketRecv with a genuinely oversized packet.Data or paired
-// relayer/maker msg (not a mocked app panic), proving EmitPacketRecv and
-// EmitIntentPacketRecv's own IsValidEventSize guard fires end to end.
-// Mirrors the pattern in TestWriteAcknowledgementWritesAsyncAck's oversized
-// case, which covers the equivalent guard on EmitWriteAck.
-func TestRecvEntrypointsRejectOversizedCombinedPacket(cur realm, t *testing.T) {
+// packet_data is no longer part of PacketRecv/IntentPacketRecv, so only an
+// oversized relayer/maker msg can still abort them.
+func TestRecvEntrypointsToleratesOversizedPacketDataButRejectsOversizedMsg(cur realm, t *testing.T) {
 	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
 	oversized := make([]byte, maxPacketDataBytes+1)
 	small := []byte("small")
 
 	tests := []struct {
-		name string
-		data []byte
-		msg  []byte
-		run  func(cur realm, v *coreV1, packet types.Packet, msg []byte)
+		name      string
+		data      []byte
+		msg       []byte
+		wantAbort bool
+		run       func(cur realm, v *coreV1, packet types.Packet, msg []byte)
 	}{
 		{
-			name: "packet recv: oversized packet.Data",
+			name: "packet recv: oversized packet.Data no longer aborts",
 			data: oversized,
 			msg:  small,
 			run: func(cur realm, v *coreV1, packet types.Packet, msg []byte) {
@@ -556,15 +553,16 @@ func TestRecvEntrypointsRejectOversizedCombinedPacket(cur realm, t *testing.T) {
 			},
 		},
 		{
-			name: "packet recv: oversized relayer msg",
-			data: small,
-			msg:  oversized,
+			name:      "packet recv: oversized relayer msg still aborts",
+			data:      small,
+			msg:       oversized,
+			wantAbort: true,
 			run: func(cur realm, v *coreV1, packet types.Packet, msg []byte) {
 				v.PacketRecv(0, cur, types.MsgPacketRecv{Packets: []types.Packet{packet}, RelayerMsgs: [][]byte{msg}, Proof: []byte("p"), ProofHeight: 10})
 			},
 		},
 		{
-			name: "intent packet recv: oversized packet.Data",
+			name: "intent packet recv: oversized packet.Data no longer aborts",
 			data: oversized,
 			msg:  small,
 			run: func(cur realm, v *coreV1, packet types.Packet, msg []byte) {
@@ -572,9 +570,10 @@ func TestRecvEntrypointsRejectOversizedCombinedPacket(cur realm, t *testing.T) {
 			},
 		},
 		{
-			name: "intent packet recv: oversized market maker msg",
-			data: small,
-			msg:  oversized,
+			name:      "intent packet recv: oversized market maker msg still aborts",
+			data:      small,
+			msg:       oversized,
+			wantAbort: true,
 			run: func(cur realm, v *coreV1, packet types.Packet, msg []byte) {
 				v.IntentPacketRecv(0, cur, types.MsgIntentPacketRecv{Packets: []types.Packet{packet}, MarketMakerMessages: [][]byte{msg}})
 			},
@@ -593,10 +592,19 @@ func TestRecvEntrypointsRejectOversizedCombinedPacket(cur realm, t *testing.T) {
 				TimeoutTimestamp:     farFuture,
 			}
 
-			uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
+			if tc.wantAbort {
+				uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
+					testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+					tc.run(cur, v, packet, tc.msg)
+				})
+				return
+			}
+
+			uassert.NotAborts(t, cur, func(cur realm) {
 				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 				tc.run(cur, v, packet, tc.msg)
 			})
+			uassert.True(t, v.store.HasPacketReceipt(packet))
 		})
 	}
 }
@@ -948,25 +956,21 @@ func TestPacketAcknowledgementLengthMismatchIsPartial(cur realm, t *testing.T) {
 	}
 }
 
-// TestPacketAcknowledgementRejectsOversizedCombinedAck drives
-// PacketAcknowledgement with a genuinely oversized packet.Data or
-// counterparty-proven acknowledgement (not a mocked app panic), proving
-// EmitPacketAck's own IsValidEventSize guard fires end to end. The
-// acknowledgement is proven from the counterparty's commitment, so unlike
-// WriteAcknowledgement it can never be swapped for a smaller value here --
-// see the matching note on OnAcknowledgementPacket in zkgm's impl.gno.
-func TestPacketAcknowledgementRejectsOversizedCombinedAck(cur realm, t *testing.T) {
+// packet_data is no longer part of PacketAck, so only an oversized
+// acknowledgement can still abort it.
+func TestPacketAcknowledgementToleratesOversizedPacketDataButRejectsOversizedAck(cur realm, t *testing.T) {
 	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
 	oversized := make([]byte, maxPacketDataBytes+1)
 	small := []byte("small")
 
 	tests := []struct {
-		name string
-		data []byte
-		ack  []byte
+		name      string
+		data      []byte
+		ack       []byte
+		wantAbort bool
 	}{
-		{"oversized packet.Data", oversized, small},
-		{"oversized acknowledgement", small, oversized},
+		{name: "oversized packet.Data no longer aborts", data: oversized, ack: small},
+		{name: "oversized acknowledgement still aborts", data: small, ack: oversized, wantAbort: true},
 	}
 
 	for _, tc := range tests {
@@ -974,7 +978,7 @@ func TestPacketAcknowledgementRejectsOversizedCombinedAck(cur realm, t *testing.
 			testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 			v := newTestImpl()
 			lc := &mockLightClient{timestampAtHt: farFuture}
-			chId, _, _ := setupOpenChannelWithLightClient(cur, v, lc)
+			chId, _, mApp := setupOpenChannelWithLightClient(cur, v, lc)
 			packet := types.Packet{
 				SourceChannelId:      chId,
 				DestinationChannelId: types.ChannelId(9),
@@ -983,15 +987,26 @@ func TestPacketAcknowledgementRejectsOversizedCombinedAck(cur realm, t *testing.
 			}
 			v.store.CommitPacket(0, cur, packet)
 
-			uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
-				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-				v.PacketAcknowledgement(0, cur, types.MsgPacketAcknowledgement{
-					Packets:          []types.Packet{packet},
-					Acknowledgements: [][]byte{tc.ack},
-					Proof:            []byte("proof"),
-					ProofHeight:      10,
+			msg := types.MsgPacketAcknowledgement{
+				Packets:          []types.Packet{packet},
+				Acknowledgements: [][]byte{tc.ack},
+				Proof:            []byte("proof"),
+				ProofHeight:      10,
+			}
+
+			if tc.wantAbort {
+				uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
+					testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+					v.PacketAcknowledgement(0, cur, msg)
 				})
+				return
+			}
+
+			uassert.NotAborts(t, cur, func(cur realm) {
+				testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+				v.PacketAcknowledgement(0, cur, msg)
 			})
+			uassert.Equal(t, 1, mApp.ackCalls)
 		})
 	}
 }
@@ -1125,36 +1140,27 @@ func TestPacketTimeoutRefunds(cur realm, t *testing.T) {
 	uassert.Equal(t, 1, mApp.timeoutCalls)
 }
 
-// TestPacketTimeoutRejectsOversizedPacketData seeds a packet commitment
-// directly (bypassing SendPacket's own assertPacketDataSize gate, the same
-// way TestWriteAcknowledgementWritesAsyncAck's oversized case seeds a
-// receipt) so an oversized packet.Data can reach PacketTimeout as if it had
-// been committed under a looser EventConfig. Proves EmitPacketTimeout's own
-// IsValidEventSize guard fires.
-func TestPacketTimeoutRejectsOversizedPacketData(cur realm, t *testing.T) {
+// Regression test: a packet sent at SendPacket's own size limit used to
+// panic on timeout because EmitPacketTimeout re-checked packet.Data against
+// a stricter combined budget. packet_data is no longer part of PacketTimeout,
+// so it always times out cleanly now.
+func TestPacketTimeoutAllowsPacketDataAtSendPacketsSizeLimit(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	v := newTestImpl()
 	lc := &mockLightClient{timestampAtHt: farFuture}
-	chId, _, _ := setupOpenChannelWithLightClient(cur, v, lc)
+	chId, _, mApp := setupOpenChannelWithLightClient(cur, v, lc)
 
 	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
-	oversized := make([]byte, maxPacketDataBytes+1)
-	packet := types.Packet{
-		SourceChannelId:      chId,
-		DestinationChannelId: types.ChannelId(9),
-		Data:                 oversized,
-		TimeoutTimestamp:     types.Timestamp(1000),
-	}
-	v.store.CommitPacket(0, cur, packet)
+	packet := v.SendPacket(0, cur, chId, types.Timestamp(1000), make([]byte, maxPacketDataBytes))
 
-	uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
-		testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	uassert.NotAborts(t, cur, func() {
 		v.PacketTimeout(0, cur, types.MsgPacketTimeout{
 			Packet:      packet,
 			Proof:       []byte("proof"),
 			ProofHeight: 5,
 		})
 	})
+	uassert.Equal(t, 1, mApp.timeoutCalls)
 }
 
 func TestPacketTimeoutRejectsInvalidMessages(cur realm, t *testing.T) {
@@ -1329,22 +1335,15 @@ func TestVerifyNonMembership(cur realm, t *testing.T) {
 	}
 }
 
-// TestWriteAcknowledgementWritesAsyncAck's "oversized packet with existing
-// receipt" case now aborts: EmitWriteAck (called at the end of
-// WriteAcknowledgement) guards its own packet.Data/Acknowledgement
-// combination with IsValidEventSize, so an oversized pair can no longer
-// reach chain.Emit regardless of caller. zkgm's forward.gno used to
-// re-check parent.Data+ack before calling WriteAcknowledgement, but that
-// guard was redundant with this one and has been removed; core no longer
-// relies on every caller checking for itself.
+// packet_data is no longer part of WriteAck, so the "oversized packet"
+// case no longer aborts.
 func TestWriteAcknowledgementWritesAsyncAck(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	maxPacketDataBytes := (core.MaxPacketDataEventSize() - 2) / 2
 	tests := []struct {
-		name       string
-		data       []byte
-		seed       func(cur realm, v *coreV1, packet types.Packet)
-		wantAborts bool
+		name string
+		data []byte
+		seed func(cur realm, v *coreV1, packet types.Packet)
 	}{
 		{
 			name: "packet received as async",
@@ -1359,12 +1358,11 @@ func TestWriteAcknowledgementWritesAsyncAck(cur realm, t *testing.T) {
 			},
 		},
 		{
-			name: "oversized packet with existing receipt",
+			name: "oversized packet.Data with existing receipt no longer aborts",
 			data: make([]byte, maxPacketDataBytes+1),
 			seed: func(cur realm, v *coreV1, packet types.Packet) {
 				v.store.SetPacketReceipt(0, cur, packet)
 			},
-			wantAborts: true,
 		},
 	}
 
@@ -1380,14 +1378,6 @@ func TestWriteAcknowledgementWritesAsyncAck(cur realm, t *testing.T) {
 				TimeoutTimestamp:     farFuture,
 			}
 			tc.seed(cur, v, packet)
-
-			if tc.wantAborts {
-				uassert.AbortsContains(t, cur, core.ErrPacketCombinedDataTooLarge, func(cur realm) {
-					testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
-					v.WriteAcknowledgement(0, cur, types.MsgWriteAcknowledgement{Packet: packet, Acknowledgement: []byte("late-ack")})
-				})
-				return
-			}
 
 			v.WriteAcknowledgement(0, cur, types.MsgWriteAcknowledgement{Packet: packet, Acknowledgement: []byte("late-ack")})
 
@@ -1810,12 +1800,16 @@ func TestBatchAcksRejectsInvalidMessages(cur realm, t *testing.T) {
 	}
 }
 
-func TestBatchAcksLengthMismatchPersistsProvidedAcks(cur realm, t *testing.T) {
+// TestBatchAcksRejectsAckCountMismatch covers the High-1 fix: iterating
+// msg.Acks (instead of msg.Packets) let a short or empty Acks array skip
+// validation entirely for the packets it lacked an entry for.
+func TestBatchAcksRejectsAckCountMismatch(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
 	tests := []struct {
 		name string
 		acks [][]byte
 	}{
+		{"empty acks", nil},
 		{"fewer acks than packets", [][]byte{[]byte("ack")}},
 		{"more acks than packets", [][]byte{[]byte("ack"), []byte("ack"), []byte("extra")}},
 	}
@@ -1824,8 +1818,8 @@ func TestBatchAcksLengthMismatchPersistsProvidedAcks(cur realm, t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			v := newTestImpl()
 			chId, _, _ := setupOpenChannel(cur, v)
-			p1 := recvPacket(chId, "batch-len-1")
-			p2 := recvPacket(chId, "batch-len-2")
+			p1 := recvPacket(chId, "batch-count-1")
+			p2 := recvPacket(chId, "batch-count-2")
 			v.PacketRecv(0, cur, types.MsgPacketRecv{
 				Packets:     []types.Packet{p1, p2},
 				RelayerMsgs: [][]byte{[]byte("rm1"), []byte("rm2")},
@@ -1833,12 +1827,46 @@ func TestBatchAcksLengthMismatchPersistsProvidedAcks(cur realm, t *testing.T) {
 				ProofHeight: 10,
 			})
 
-			v.BatchAcks(0, cur, types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: tc.acks})
+			uassert.AbortsContains(t, cur, "acknowledgement count mismatch", func(cur realm) {
+				v.BatchAcks(0, cur, types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: tc.acks})
+			})
 
 			batchHash := core.CommitPacketsHash([]types.Packet{p1, p2})
-			receipt, ok := v.store.BatchReceiptsAt(batchHash)
-			uassert.True(t, ok)
-			uassert.True(t, receipt == types.CommitAcks(tc.acks))
+			_, ok := v.store.BatchReceiptsAt(batchHash)
+			uassert.False(t, ok)
 		})
 	}
+}
+
+// TestBatchAcksEmptyAcksCannotOverwriteExistingReceipt reproduces the exact
+// exploit: a legitimately-batched receipt must survive a follow-up BatchAcks
+// call for the same packets with an empty Acks array.
+func TestBatchAcksEmptyAcksCannotOverwriteExistingReceipt(cur realm, t *testing.T) {
+	testing.SetRealm(testing.NewCodeRealm(coreRealmPath))
+	v := newTestImpl()
+	chId, _, _ := setupOpenChannel(cur, v)
+	p1 := recvPacket(chId, "batch-overwrite-1")
+	p2 := recvPacket(chId, "batch-overwrite-2")
+	v.PacketRecv(0, cur, types.MsgPacketRecv{
+		Packets:     []types.Packet{p1, p2},
+		RelayerMsgs: [][]byte{[]byte("rm1"), []byte("rm2")},
+		Proof:       []byte("p"),
+		ProofHeight: 10,
+	})
+
+	realAcks := [][]byte{[]byte("ack"), []byte("ack")}
+	v.BatchAcks(0, cur, types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: realAcks})
+
+	batchHash := core.CommitPacketsHash([]types.Packet{p1, p2})
+	receipt, ok := v.store.BatchReceiptsAt(batchHash)
+	uassert.True(t, ok)
+	uassert.True(t, receipt == types.CommitAcks(realAcks))
+
+	uassert.AbortsContains(t, cur, "acknowledgement count mismatch", func(cur realm) {
+		v.BatchAcks(0, cur, types.MsgBatchAcks{Packets: []types.Packet{p1, p2}, Acks: nil})
+	})
+
+	receipt, ok = v.store.BatchReceiptsAt(batchHash)
+	uassert.True(t, ok)
+	uassert.True(t, receipt == types.CommitAcks(realAcks))
 }

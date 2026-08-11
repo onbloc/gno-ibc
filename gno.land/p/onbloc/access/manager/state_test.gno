@@ -263,21 +263,21 @@ func TestLockedPublicRoleCannotBeGrantedOrRevoked(t *testing.T) {
 	}
 }
 
-func TestSetGrantDelayRejectsLockedRoles(t *testing.T) {
-	tests := []struct {
-		name string
-		role RoleId
-	}{
-		{"admin role", AdminRole},
-		{"public role", PublicRole},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			state := NewState()
-			mustPanic(t, func() {
-				state.SetGrantDelay(tc.role, 5)
-			})
-		})
+func TestSetGrantDelayRejectsPublicRole(t *testing.T) {
+	state := NewState()
+	mustPanic(t, func() {
+		state.SetGrantDelay(PublicRole, 5)
+	})
+}
+
+// Unlike SetRoleAdmin, SetGrantDelay doesn't lock AdminRole.
+func TestSetGrantDelayAllowsAdminRole(t *testing.T) {
+	state := NewState()
+	state.SetGrantDelay(AdminRole, 5)
+
+	effect := state.GetRoleGrantDelayEffect(AdminRole)
+	if effect.IsZero() {
+		t.Fatal("SetGrantDelay must schedule a delay change for AdminRole")
 	}
 }
 

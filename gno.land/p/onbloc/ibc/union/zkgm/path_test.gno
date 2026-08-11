@@ -300,6 +300,14 @@ func TestIsCanonicalPath(t *testing.T) {
 	}
 }
 
+func TestReverseChannelPathRejectsNonCanonical(t *testing.T) {
+	gap := new(u256.Uint).Or(MakePathFromChannel(3, 0), MakePathFromChannel(5, 2))
+
+	if _, err := ReverseChannelPath(gap); err != ErrNonCanonicalPath {
+		t.Fatalf("err: got %v want %v", err, ErrNonCanonicalPath)
+	}
+}
+
 func TestReverseChannelPath(t *testing.T) {
 	tests := []struct {
 		name     string

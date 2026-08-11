@@ -78,9 +78,9 @@ func Bootstrap(cur realm) {
 func Recover(cur realm) {
 	runtime.AssertOriginCall()
 	admin := requireAdmin(cur)
-	if conn, _ := core.QueryConnection(gnoConnectionId); conn == "" {
+	if core.QueryConnection(gnoConnectionId) == "" {
 		for id := types.ConnectionId(1); id <= gnoConnectionId; id++ {
-			if conn, _ := core.QueryConnection(id); conn == "" {
+			if core.QueryConnection(id) == "" {
 				core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(gnoClientId, unionClientId))
 			}
 		}
@@ -89,9 +89,9 @@ func Recover(cur realm) {
 	}
 	requireConnection()
 
-	if channel, _ := core.QueryChannel(gnoChannelId); channel == "" {
+	if core.QueryChannel(gnoChannelId) == "" {
 		for id := types.ChannelId(1); id <= gnoChannelId; id++ {
-			if channel, _ := core.QueryChannel(id); channel == "" {
+			if core.QueryChannel(id) == "" {
 				core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit([]byte(portId), []byte(portId), gnoConnectionId, zkgm.Version, admin.String()))
 			}
 		}

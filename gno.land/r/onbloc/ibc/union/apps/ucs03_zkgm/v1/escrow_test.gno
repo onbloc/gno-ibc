@@ -66,8 +66,8 @@ func TestSendNative(cur realm, t *testing.T) {
 				uassert.NoError(t, err)
 			}
 
-			uassert.Equal(t, tc.wantEscrow, bk.GetCoins(cur.Address()).AmountOf(tc.denom))
-			uassert.Equal(t, tc.wantReceiver, bk.GetCoins(tc.receiver).AmountOf(tc.denom))
+			uassert.Equal(t, tc.wantEscrow, bk.GetCoin(cur.Address(), tc.denom))
+			uassert.Equal(t, tc.wantReceiver, bk.GetCoin(tc.receiver, tc.denom))
 		})
 	}
 }

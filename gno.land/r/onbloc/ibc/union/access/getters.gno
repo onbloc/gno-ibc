@@ -19,7 +19,7 @@ func GetRoleAdmin(role manager.RoleId) manager.RoleId {
 // GetRoleGrantDelay returns the grant delay configured for role.
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L1137-L1145
-func GetRoleGrantDelay(role manager.RoleId) manager.Delay {
+func GetRoleGrantDelay(role manager.RoleId) uint32 {
 	return accessState.GetRoleGrantDelay(role)
 }
 

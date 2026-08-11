@@ -1,0 +1,42 @@
+{
+  "runner": {
+    "UNION_VOYAGER_REVISION": "5d6b9cd62ba2776a5b8adba0d8a3be8a47edb0fe",
+    "UNION_CHAIN_ID": "union-devnet-1",
+    "EVM_CHAIN_ID": "32382",
+    "GNO_CHAIN_ID": "dev.ibc",
+    "UNION_RPC_URL": "http://host.docker.internal:26657",
+    "EVM_RPC_URL": "http://host.docker.internal:8545",
+    "GNO_RPC_URL": "http://host.docker.internal:16657",
+    "GNO_TX_INDEXER_RPC_URL": "http://host.docker.internal:48546/graphql/query",
+    "VOYAGER_DATABASE_URL": "postgresql://postgres:postgrespassword@host.docker.internal:5432/default",
+    "UNION_PACKET_RPC_URL": "http://127.0.0.1:26657",
+    "EVM_PACKET_RPC_URL": "http://127.0.0.1:8545",
+    "GNO_PACKET_RPC_URL": "http://127.0.0.1:16657",
+    "GNO_PACKET_INDEXER_RPC_URL": "http://127.0.0.1:48546/graphql/query",
+    "GNO_IBC_CORE_REALM": "gno.land/r/onbloc/ibc/union/core",
+    "GNO_ZKGM_PORT": "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm",
+    "GALOIS_PROVER_ENDPOINT": "https://galois.union.build:443",
+    "EVM_TEST_AMOUNT": "1000000000000",
+    "GNO_RECIPIENT": "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5",
+    "UNION_PRIVATE_KEY": "0xaa820fa947beb242032a41b6dc9a8b9c37d8f5fbcda0966b1ec80335b10a7d6f",
+    "EVM_PRIVATE_KEY": "0x4e9444a6efd6d42725a250b650a781da2737ea308c839eaccb0f7f3dbd2fea77",
+    "RELAYER_EMPTY_PRIVATE_KEY": "0x1111111111111111111111111111111111111111111111111111111111111111",
+    "RELAYER_OFFLINE_PRIVATE_KEY": "0x2222222222222222222222222222222222222222222222222222222222222222",
+    "RELAYER_RECOVERY_PRIVATE_KEY": "0x3333333333333333333333333333333333333333333333333333333333333333",
+    "TRUSTED_MPT_PRIVATE_KEY": "0xd9c5dc47ed678fc3e63249953866d79e5cf48418e79d8eec1a985be7393ef3b9",
+    "GNO_PRIVATE_KEY": "0xea97b9fddb7e6bf6867090a7a819657047949fbb9466d617f940538efd888605",
+    "UNION_IBC_HOST_CONTRACT": "", "VOYAGER_IMAGE": "",
+    "EVM_IBC_HANDLER": "", "EVM_MULTICALL": "", "EVM_ZKGM_CONTRACT": "",
+    "EVM_COMETBLS_CLIENT_IMPL": "", "EVM_PROOF_LENS_CLIENT_IMPL": "",
+    "EVM_TEST_ERC20": "",
+    "E2E_ARTIFACT_DIR": "channel-e2e-artifacts",
+    "E2E_STATE_FILE": ""
+  },
+  "provision": {
+    "UNION_DEPLOYER": "union1jk9psyhvgkrt2cumz8eytll2244m2nnz4yt2g2",
+    "EVM_SENDER": "0xBe68fC2d8249eb60bfCf0e71D5A0d2F2e292c4eD",
+    "GNO_TEST_MNEMONIC": "source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast",
+    "GNO_ADMIN_MNEMONIC": "source bonus chronic canvas draft south burst lottery vacant surface solve popular case indicate oppose farm nothing bullet exhibit title speed wink action roast",
+    "GNO_ADMIN_ADDRESS": "g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5"
+  }
+}

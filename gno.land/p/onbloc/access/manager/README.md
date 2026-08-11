@@ -33,6 +33,11 @@ The model follows OpenZeppelin's `AccessManager` shape:
 - an unset target function role defaults to `AdminRole`;
 - a target can be closed, rejecting calls even when the function is public;
 - each role has an admin role, grant delay, and member access records;
+- a role's grant delay is a `Delay`, not a plain scalar: `SetGrantDelay`
+  schedules the new value behind a setback (`MinSetback`), mirroring
+  OpenZeppelin's `Delay.withUpdate` / Union's `Delay::with_update`, so a
+  caller cannot shrink an active delay and grant in the same instant using
+  the smaller value;
 - a member access record has an activation timePoint;
 - current `TimePoint` is represented as Unix seconds in an `int64` wrapper and
   read from Gno block time with `time.Now().Unix()`;
@@ -126,6 +131,7 @@ Constants:
 
 - `AdminRole`
 - `PublicRole`
+- `MinSetback`
 
 Constructors:
 
@@ -148,8 +154,8 @@ Role helpers:
 
 Delay helpers:
 
-- `Delay.Uint32`
-- `Delay.String`
+- `Delay.Get`
+- `Delay.WithUpdate`
 
 TimePoint helpers:
 
@@ -167,6 +173,7 @@ Role membership:
 - `RevokeRole`
 - `RenounceRole`
 - `HasRole`
+- `GetRoleMemberSince`
 
 Role configuration:
 
@@ -174,6 +181,7 @@ Role configuration:
 - `GetRoleAdmin`
 - `SetGrantDelay`
 - `GetRoleGrantDelay`
+- `GetRoleGrantDelayEffect`
 - `RequireUnlockedConfigRole`
 
 Target configuration:
@@ -222,8 +230,9 @@ Those functions depend on EVM calldata, low-level target calls, operation hashes
 and execution context. In Gno, those concerns should be implemented by the
 realm that owns the callable surface if delayed execution is needed.
 
-`GrantDelay` is intentionally retained. It gates when a newly granted role
-becomes active and does not require the delayed execution scheduler.
+`GrantDelay` is intentionally retained, including OpenZeppelin/Union's
+setback protection for *changing* the delay itself (`Delay`/`MinSetback`),
+even though the broader delayed-operation scheduler above it is not ported.
 
 The pure package does not call `chain.Emit`. A consuming realm should emit the
 currently implemented management events after the matching state transition

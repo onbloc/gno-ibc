@@ -110,7 +110,7 @@ func lockNativeEscrow(cur realm, channelId types.ChannelId) {
 	zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
 
 	bk := banker.NewReadonlyBanker()
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 50 (locked)")
 }
 
@@ -135,9 +135,9 @@ func receiveUnescrowOrderWithFee(cur realm, channelId types.ChannelId) {
 
 	bk := banker.NewReadonlyBanker()
 	proxy := zkgm.ProxyAddress()
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
-	ufmt.Printf("[INFO] user native balance: %d\n", bk.GetCoins(userAddr).AmountOf("ugnot"))
-	ufmt.Printf("[INFO] relayer native balance: %d\n", bk.GetCoins(relayerAddr).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
+	ufmt.Printf("[INFO] user native balance: %d\n", bk.GetCoin(userAddr, "ugnot"))
+	ufmt.Printf("[INFO] relayer native balance: %d\n", bk.GetCoin(relayerAddr, "ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 0 (fully released: 40 + 10 fee)")
 	ufmt.Println("[EXPECTED] user native balance should be 40 (QuoteAmount)")
 	ufmt.Println("[EXPECTED] relayer native balance should be 10 (BaseAmount - QuoteAmount fee)")

@@ -148,6 +148,14 @@ func (v *ucs03ZkgmV1) acknowledgeInternal(_ int, rlm realm, packet types.Packet,
 		}
 
 		return v.acknowledgeBatch(0, rlm, packet, relayer, salt, path, batch, successful, ack)
+	// OP_FORWARD reference (_acknowledgeForward): https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/evm/contracts/apps/ucs/03-zkgm/Zkgm.sol#L688-L707
+	case z.OP_FORWARD:
+		forward, err := decodeForwardInstruction(instruction)
+		if err != nil {
+			return err
+		}
+
+		return v.acknowledgeInternal(0, rlm, packet, relayer, salt, forward.Path, forward.Instruction, successful, ack)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instruction)
 		if err != nil {
@@ -177,6 +185,14 @@ func (v *ucs03ZkgmV1) timeoutInternal(_ int, rlm realm, packet types.Packet, sal
 		}
 
 		return v.timeoutBatch(0, rlm, packet, salt, path, batch)
+	// OP_FORWARD reference (_timeoutForward): https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/evm/contracts/apps/ucs/03-zkgm/Zkgm.sol#L842-L851
+	case z.OP_FORWARD:
+		forward, err := decodeForwardInstruction(instruction)
+		if err != nil {
+			return err
+		}
+
+		return v.timeoutInternal(0, rlm, packet, salt, forward.Path, forward.Instruction)
 	case z.OP_CALL:
 		call, err := decodeCallInstruction(instruction)
 		if err != nil {

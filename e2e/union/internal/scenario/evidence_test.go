@@ -38,7 +38,7 @@ func TestMembershipProofOutputArtifactPreservesRawStreams(t *testing.T) {
 	}
 }
 
-func TestEvidenceSecretsPreventCompleteCheckpoint(t *testing.T) {
+func TestEvidenceRejectsSecrets(t *testing.T) {
 	tests := []struct {
 		name   string
 		secret func(*config.Config) string
@@ -57,19 +57,16 @@ func TestEvidenceSecretsPreventCompleteCheckpoint(t *testing.T) {
 			if err := os.MkdirAll(cfg.ArtifactDir, 0o700); err != nil {
 				t.Fatal(err)
 			}
-			runner := Runner{cfg: cfg, current: completedState(cfg, 7)}
+			runner := Runner{cfg: cfg}
 			raw, err := json.Marshal(map[string]string{"value": tc.secret(&runner.cfg)})
 			if err != nil {
 				t.Fatal(err)
 			}
 			runner.gnoConnectionEvidence = raw
 
-			err = runner.saveChannelEvidence()
+			err = runner.writeChannelEvidence()
 			if err == nil || !strings.Contains(err.Error(), "secret") {
 				t.Fatalf("error = %v, want secret scan failure", err)
-			}
-			if _, err := os.Stat(cfg.StateFile); !os.IsNotExist(err) {
-				t.Fatalf("complete checkpoint exists after evidence rejection: %v", err)
 			}
 		})
 	}

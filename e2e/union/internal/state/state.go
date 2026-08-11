@@ -1,4 +1,4 @@
-// Package state owns the durable runner checkpoint schema.
+// Package state owns runtime topology and evidence values.
 package state
 
 // PacketOutcome records the matching cross-chain acknowledgement result.
@@ -9,38 +9,13 @@ const (
 	PacketOutcomeFailure PacketOutcome = "failure"
 )
 
-// State is the completed client, connection, and channel topology checkpoint.
+// State tracks the current client, connection, and channel topology.
 type State struct {
-	VoyagerRevision string        `json:"voyager_revision"`
-	Chains          Chains        `json:"chains"`
-	EVMTopology     EVMTopology   `json:"evm_topology"`
-	Ports           Ports         `json:"ports"`
-	Version         string        `json:"version"`
-	FailedWork      FailedWork    `json:"failed_work"`
-	Clients         Clients       `json:"clients"`
-	Allowlists      Allowlists    `json:"allowlists"`
-	Connections     *HandshakeIDs `json:"connections,omitempty"`
-	Channels        *HandshakeIDs `json:"channels,omitempty"`
-}
-
-type Chains struct {
-	Union string `json:"union"`
-	EVM   string `json:"evm"`
-	Gno   string `json:"gno"`
-}
-
-type EVMTopology struct {
-	ChainID             string `json:"chain_id"`
-	IBCHandler          string `json:"ibc_handler"`
-	Multicall           string `json:"multicall"`
-	ZKGM                string `json:"zkgm"`
-	CometBLSClientImpl  string `json:"cometbls_client_impl"`
-	ProofLensClientImpl string `json:"proof_lens_client_impl"`
-}
-
-type Ports struct {
-	Gno string `json:"gno"`
-	EVM string `json:"evm"`
+	FailedWork  FailedWork
+	Clients     Clients
+	Allowlists  Allowlists
+	Connections *HandshakeIDs
+	Channels    *HandshakeIDs
 }
 
 type FailedWork struct {
@@ -59,8 +34,8 @@ type Clients struct {
 }
 
 type Allowlists struct {
-	Plain     string `json:"plain"`
-	ProofLens string `json:"proof_lens"`
+	Plain     []int64
+	ProofLens []int64
 }
 
 type HandshakeIDs struct {
@@ -96,14 +71,4 @@ type Balances struct {
 	Sender    string `json:"sender"`
 	Escrow    string `json:"escrow"`
 	Recipient string `json:"recipient"`
-}
-
-// Expected is the current environment identity used to validate a checkpoint.
-type Expected struct {
-	VoyagerRevision string
-	Chains          Chains
-	EVMTopology     EVMTopology
-	GnoPort         string
-	EVMPort         string
-	Version         string
 }

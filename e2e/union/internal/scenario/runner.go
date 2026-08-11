@@ -11,7 +11,6 @@ import (
 	"os"
 	osexec "os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/evm"
@@ -21,10 +20,9 @@ import (
 	"github.com/onbloc/gno-ibc/e2e/union/internal/voyager"
 )
 
-// Options are the runner's explicit write and resume boundaries.
+// Options select writes and live scenarios.
 type Options struct {
 	Apply                              bool
-	Resume                             bool
 	ForgedProofRejection               bool
 	ERC20ToGno                         bool
 	AmountBoundaries                   bool
@@ -71,7 +69,7 @@ type Runner struct {
 	evmChannelEvidence    json.RawMessage
 }
 
-// New validates and loads resume state before any external command can run.
+// New validates the selected scenarios before any external command can run.
 func New(cfg config.Config, options Options) (*Runner, error) {
 	return newRunnerWithClients(
 		cfg, options, voyager.New(cfg, os.Stderr), evm.New(cfg), gno.New(cfg), union.New(cfg),
@@ -102,20 +100,9 @@ func newRunnerWithClients(
 		evm:      evmClient,
 		gno:      gnoClient,
 		union:    unionClient,
-		current:  newState(cfg),
+		current:  state.State{FailedWork: state.FailedWork{Repaired: []int64{}}},
 		progress: os.Stderr,
 	}
-	if !options.Resume {
-		return runner, nil
-	}
-	saved, err := state.Load(cfg.StateFile)
-	if err != nil {
-		return nil, err
-	}
-	if err := saved.Validate(expectedState(cfg)); err != nil {
-		return nil, err
-	}
-	runner.current = saved
 	return runner, nil
 }
 
@@ -127,17 +114,12 @@ func (r *Runner) Run(ctx context.Context) (runErr error) {
 		return err
 	}
 	r.progressf("preflight: passed")
-	if !r.options.Apply && !r.options.Resume {
+	if !r.options.Apply {
 		return nil
 	}
 	repoRoot := filepath.Clean(filepath.Join(r.cfg.ScriptDir, "..", ".."))
-	if err := state.PrepareArtifacts(repoRoot, r.cfg.ScriptDir, r.cfg.ArtifactDir, r.cfg.StateFile); err != nil {
+	if err := state.PrepareArtifacts(repoRoot, r.cfg.ScriptDir, r.cfg.ArtifactDir); err != nil {
 		return err
-	}
-	if !r.options.Resume {
-		if err := state.EnsureFresh(r.cfg.StateFile); err != nil {
-			return err
-		}
 	}
 	defer func() {
 		cleanupCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), r.cfg.CleanupTimeout)
@@ -200,15 +182,7 @@ func (r *Runner) restoreZKGM(
 }
 
 func (r *Runner) preflight(ctx context.Context) ([]byte, error) {
-	var plain, proof []int64
-	var err error
-	if r.options.Resume {
-		plain, proof, err = r.current.Allowlists.IDs()
-		if err != nil {
-			return nil, err
-		}
-	}
-	rendered, err := r.renderVoyager(plain, proof)
+	rendered, err := r.renderVoyager(nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -233,34 +207,4 @@ func (r *Runner) renderVoyager(plain, proof []int64) ([]byte, error) {
 		return nil, fmt.Errorf("missing Voyager config template")
 	}
 	return config.RenderVoyager(template, r.cfg, plain, proof)
-}
-
-func expectedState(cfg config.Config) state.Expected {
-	return state.Expected{
-		VoyagerRevision: cfg.UnionVoyagerRevision,
-		Chains:          state.Chains{Union: cfg.UnionChainID, EVM: cfg.EVMChainID, Gno: cfg.GnoChainID},
-		EVMTopology: state.EVMTopology{
-			ChainID:             cfg.EVMChainID,
-			IBCHandler:          cfg.EVMIBCHandler,
-			Multicall:           cfg.EVMMulticall,
-			ZKGM:                cfg.EVMZKGMContract,
-			CometBLSClientImpl:  cfg.EVMCometBLSClientImpl,
-			ProofLensClientImpl: cfg.EVMProofLensClientImpl,
-		},
-		GnoPort: cfg.GnoZKGMPort,
-		EVMPort: cfg.EVMZKGMContract,
-		Version: config.ChannelVersion,
-	}
-}
-
-func newState(cfg config.Config) state.State {
-	expected := expectedState(cfg)
-	return state.State{
-		VoyagerRevision: expected.VoyagerRevision,
-		Chains:          expected.Chains,
-		EVMTopology:     expected.EVMTopology,
-		Ports:           state.Ports{Gno: expected.GnoPort, EVM: strings.ToLower(expected.EVMPort)},
-		Version:         expected.Version,
-		FailedWork:      state.FailedWork{Repaired: []int64{}},
-	}
 }

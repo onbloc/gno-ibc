@@ -164,7 +164,6 @@ jobs:
         env:
           E2E_DEPLOYMENT_DIR: ${{ github.workspace }}/artifacts/deployment
           E2E_ARTIFACT_DIR: ${{ github.workspace }}/artifacts
-          E2E_STATE_FILE: ${{ github.workspace }}/artifacts/state.json
           E2E_CONFIG_FILE: ${{ github.workspace }}/gno-ibc/e2e/union/runner.json
         run: python3 e2e/union/provision.py write-runner-config
 
@@ -181,10 +180,6 @@ jobs:
             --relayer-balance-recovery \
             --evm-to-gno-timeout-refund \
             --gno-to-evm-timeout-refund
-
-      - name: Verify completed resume
-        working-directory: gno-ibc
-        run: e2e/union/run-channel-e2e.sh --resume
 
       - name: Capture service logs
         if: failure()

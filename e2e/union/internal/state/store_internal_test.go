@@ -7,13 +7,13 @@ import (
 	"testing"
 )
 
-func TestSavePropagatesParentDirectorySyncFailure(t *testing.T) {
+func TestSaveArtifactPropagatesParentDirectorySyncFailure(t *testing.T) {
 	old := syncDirectory
 	syncDirectory = func(string) error { return errors.New("injected sync failure") }
 	t.Cleanup(func() { syncDirectory = old })
 
-	err := Save(filepath.Join(t.TempDir(), "state.json"), State{})
-	if err == nil || !strings.Contains(err.Error(), "sync state directory") {
+	err := SaveArtifact(filepath.Join(t.TempDir(), "evidence.json"), []byte("{}\n"))
+	if err == nil || !strings.Contains(err.Error(), "sync evidence directory") {
 		t.Fatalf("error = %v, want directory sync failure", err)
 	}
 }

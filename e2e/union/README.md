@@ -76,7 +76,7 @@ deployment addresses created by a run, or chain state.
 
 ### 1. Isolate from Existing Environments
 
-Use a new Docker project name for both Union/EVM and Gno. Do not reuse existing Docker volumes, `state.json`, or the artifact directory. Only run the following commands if you intend to actually tear down the existing environment.
+Use a new Docker project name for both Union/EVM and Gno. Do not reuse existing Docker volumes or the artifact directory. Only run the following commands if you intend to actually tear down the existing environment.
 
 ```sh
 cd "$UNION_VOYAGER_DIR"
@@ -198,13 +198,12 @@ export GNO_PACKET_RPC_URL=http://127.0.0.1:16657
 export GNO_PACKET_INDEXER_RPC_URL=http://127.0.0.1:48546/graphql/query
 
 export E2E_ARTIFACT_DIR=./channel-e2e-artifacts-<run-id>
-export E2E_STATE_FILE=./channel-e2e-artifacts-<run-id>/state.json
 export VOYAGER_COMMAND_TIMEOUT_SECONDS=120
 ```
 
 ### 5. Run the Scenarios
 
-First, execute the read-only preflight. For a fresh environment, run the complete scenario suite **without** `--resume`.
+First, execute the read-only preflight. Then run the selected scenarios against a fresh environment.
 
 ```sh
 ./run-channel-e2e.sh
@@ -224,7 +223,7 @@ use distinct zero-balance fixture signers to verify secondary takeover and
 active-queue recovery:
 
 ```sh
-./run-channel-e2e.sh --resume --apply \
+./run-channel-e2e.sh --apply \
   --relayer-insufficient-balance-failover \
   --relayer-offline-failover \
   --relayer-balance-recovery
@@ -235,7 +234,7 @@ pause the destination ZKGM. Both scenarios restore the destination app before
 returning, including on failure. Run them only when the destination starts
 unpaused; Gno ZKGM does not expose a pause-state query.
 
-After a successful run, inspect `state.json` and the evidence generated for each scenario. Once the runner exits, no Voyager containers with the label `io.onbloc.gno-ibc.e2e.run` should remain.
+After a successful run, inspect the evidence generated for each scenario. Once the runner exits, no Voyager containers with the label `io.onbloc.gno-ibc.e2e.run` should remain.
 
 The relayer evidence records the primary and final acknowledgement signers,
 active queue state, packet transactions, and whether takeover or retry
@@ -246,21 +245,10 @@ Timeout evidence records pause, send, timeout, and unpause transactions plus
 the source refund deltas and cleared packet commitment. A destination receive
 or source acknowledgement fails the timeout scenario.
 
-To execute additional scenarios while keeping the same chains and deployment,
-preserve the existing `state.json` and `runner.json`, then specify only the new
-scenario flags.
-
-```sh
-./run-channel-e2e.sh --resume --apply --<new-scenario>
-```
-
-`state.json` checkpoints only the completed client/connection/channel topology. If a write scenario fails, discard that disposable environment and start fresh; packet writes are not crash-resumable.
-
-If the Gno realms, genesis, deployment addresses, or topology change, do **not** use `--resume`. Instead, create a new environment following the procedure above.
+If a write scenario fails, discard that disposable environment and start fresh.
 
 ## Troubleshooting
 
 * **`valid membership proof was rejected`**: The latest finalized EVM height may not yet have been stored in the Gno `gno_evm` client. The forged-proof runner enqueues a client update, waits until the stored consensus height reaches the target, and then generates the proof using the actual stored height.
-* **`saved repaired failed-work ID is ahead of Voyager queue`**: The `state.json` file and the Voyager PostgreSQL database were created by different runs. Use the artifact directory and database endpoint from the same run, and never manually modify IDs in the state file.
 * **`client type not found`** or **`IBC_UNION_ERR_ACCESS_MANAGED`**: Either the required Union light client has not been registered on the fresh chain, or the Voyager relayer has not been added to the allowlist. Complete the deployment and whitelist steps for the pinned `union-voyager` revision before restarting the runner.
 * If the EVM handler registry returns the zero address, the `cometbls` or `proof-lens` implementation has not been deployed. Do not run any scenarios until all registry preflight checks return non-zero addresses.

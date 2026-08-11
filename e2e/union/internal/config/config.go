@@ -59,7 +59,6 @@ type Config struct {
 	GnoPacketRPCURL           string        `json:"GNO_PACKET_RPC_URL"`
 	GnoPacketIndexerRPCURL    string        `json:"GNO_PACKET_INDEXER_RPC_URL"`
 	ArtifactDir               string        `json:"E2E_ARTIFACT_DIR"`
-	StateFile                 string        `json:"E2E_STATE_FILE"`
 	VoyagerImage              string        `json:"VOYAGER_IMAGE"`
 	VoyagerRustLog            string        `json:"-"`
 	CommandTimeout            time.Duration `json:"-"`
@@ -118,12 +117,6 @@ func Load(path, scriptDir string, lookup func(string) (string, bool), packet boo
 		cfg.ArtifactDir = filepath.Join(scriptDir, "channel-e2e-artifacts")
 	} else if !filepath.IsAbs(cfg.ArtifactDir) {
 		cfg.ArtifactDir = filepath.Join(scriptDir, cfg.ArtifactDir)
-	}
-
-	if cfg.StateFile == "" {
-		cfg.StateFile = filepath.Join(cfg.ArtifactDir, "state.json")
-	} else if !filepath.IsAbs(cfg.StateFile) {
-		cfg.StateFile = filepath.Join(scriptDir, cfg.StateFile)
 	}
 
 	if cfg.UnionPacketRPCURL == "" {

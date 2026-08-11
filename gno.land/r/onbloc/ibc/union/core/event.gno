@@ -281,6 +281,7 @@ func packetRecvEventAttrs(packet types.Packet, destinationChannel types.Channel,
 		"destination_connection_client_id", connection.ClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
 	}
+	attrs = append(attrs, encodedEventAttrs("packet_data", hexAttr(packet.Data))...)
 	return append(attrs, encodedEventAttrs("maker_msg", hexAttr(msg))...)
 }
 
@@ -300,6 +301,7 @@ func writeAckEventAttrs(packet types.Packet, destinationChannel types.Channel, c
 		"destination_connection_client_id", connection.ClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
 	}
+	attrs = append(attrs, encodedEventAttrs("packet_data", hexAttr(packet.Data))...)
 	return append(attrs, encodedEventAttrs("acknowledgement", hexAttr(acknowledgement))...)
 }
 
@@ -319,6 +321,7 @@ func packetAckEventAttrs(packet types.Packet, sourceChannel types.Channel, conne
 		"destination_connection_client_id", connection.CounterpartyClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
 	}
+	attrs = append(attrs, encodedEventAttrs("packet_data", hexAttr(packet.Data))...)
 	return append(attrs, encodedEventAttrs("acknowledgement", hexAttr(acknowledgement))...)
 }
 
@@ -327,7 +330,7 @@ func emitPacketAckEvent(packet types.Packet, sourceChannel types.Channel, connec
 }
 
 func packetTimeoutEventAttrs(packet types.Packet, sourceChannel types.Channel, connection types.Connection) []string {
-	return []string{
+	attrs := []string{
 		"packet_hash", commitPacketHash(packet).String(),
 		"source_channel_id", packet.SourceChannelId.String(),
 		"source_channel_version", sourceChannel.Version,
@@ -338,6 +341,7 @@ func packetTimeoutEventAttrs(packet types.Packet, sourceChannel types.Channel, c
 		"destination_connection_client_id", connection.CounterpartyClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
 	}
+	return append(attrs, encodedEventAttrs("packet_data", hexAttr(packet.Data))...)
 }
 
 func emitPacketTimeoutEvent(packet types.Packet, sourceChannel types.Channel, connection types.Connection) {

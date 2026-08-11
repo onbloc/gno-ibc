@@ -4,4 +4,4 @@
 # the gno, gnoland, gnodev, and gnokey binaries from it.
 
 GNO_REPO=https://github.com/gnolang/gno.git
-GNO_COMMIT=959cefd916021d3a55e9b51f20d05ef618e7f357
+GNO_COMMIT=abcd20dadfc28a3b15acaf069c44ca36ef1efefc

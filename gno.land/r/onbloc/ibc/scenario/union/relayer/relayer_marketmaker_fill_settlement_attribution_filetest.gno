@@ -165,7 +165,7 @@ func sendNativeEscrowOrder(cur realm, channelId types.ChannelId) types.Packet {
 	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
 
 	bk := banker.NewReadonlyBanker()
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (locked)")
 
 	return sendPacket
@@ -183,10 +183,10 @@ func acknowledgeMarketMakerFillToB(cur realm, sendPacket types.Packet) {
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{mustMakerFillAck(relayerBAddr)}, nil, 1))
 
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
-	ufmt.Printf("[INFO] relayer B native balance: %d\n", bk.GetCoins(relayerBAddr).AmountOf("ugnot"))
-	ufmt.Printf("[INFO] relayer A native balance: %d\n", bk.GetCoins(relayerAAddr).AmountOf("ugnot"))
-	ufmt.Printf("[INFO] original sender native balance: %d\n", bk.GetCoins(senderAddr).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
+	ufmt.Printf("[INFO] relayer B native balance: %d\n", bk.GetCoin(relayerBAddr, "ugnot"))
+	ufmt.Printf("[INFO] relayer A native balance: %d\n", bk.GetCoin(relayerAAddr, "ugnot"))
+	ufmt.Printf("[INFO] original sender native balance: %d\n", bk.GetCoin(senderAddr, "ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 0 (released)")
 	ufmt.Println("[EXPECTED] relayer B native balance should be 40 (settled to the designated address)")
 	ufmt.Println("[EXPECTED] relayer A native balance should be 0 (A fronted liquidity elsewhere; A is not this ack's payee)")

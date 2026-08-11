@@ -115,7 +115,7 @@ func sendTopLevelForwardOrderTmo(cur realm, channelId types.ChannelId) types.Pac
 
 	bk := banker.NewReadonlyBanker()
 	ufmt.Printf("[INFO] send produced packet on channel: %s\n", sendPacket.SourceChannelId.String())
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
 	ufmt.Println("[EXPECTED] send should succeed: attached 40ugnot covers the escrow order")
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (locked)")
 
@@ -134,8 +134,8 @@ func timeoutRefundTmo(cur realm, sendPacket types.Packet) {
 	testing.SetRealm(testing.NewUserRealm(adminAddrTmo))
 	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(sendPacket, nil, 1))
 
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
-	ufmt.Printf("[INFO] sender native balance: %d\n", bk.GetCoins(senderAddrTmo).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
+	ufmt.Printf("[INFO] sender native balance: %d\n", bk.GetCoin(senderAddrTmo, "ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 0 (refunded)")
 	ufmt.Println("[EXPECTED] sender native balance should be 40 (escrow refunded back)")
 }

@@ -9,15 +9,13 @@ import (
 )
 
 var (
-	ErrEmptyProof       = errors.New("mpt: empty proof")
 	ErrInvalidRoot      = errors.New("mpt: invalid root length")
+	ErrMissingNode      = errors.New("mpt: proof node missing")
 	ErrUnexpectedNode   = errors.New("mpt: unexpected node shape")
 	ErrInvalidReference = errors.New("mpt: invalid child reference")
-	ErrPathMismatch     = errors.New("mpt: path mismatch")
 	ErrValueMismatch    = errors.New("mpt: value mismatch")
 	ErrKeyPresent       = errors.New("mpt: key present")
 	ErrKeyAbsent        = errors.New("mpt: key absent")
-	ErrUnusedProof      = errors.New("mpt: unused proof nodes")
 )
 
 // EmptyRoot is keccak256(rlp("")), the root of an empty Ethereum MPT.
@@ -25,265 +23,77 @@ func EmptyRoot() [32]byte {
 	return keccak256.Sum256(rlp.EncodeBytes(nil))
 }
 
-// Verify verifies an Ethereum Merkle Patricia Trie existence proof.
-//
-// root is the 32-byte trie root. key is expanded to nibbles and matched against
-// the proof path. proof contains raw RLP-encoded nodes, ordered from root to
-// leaf. value is the RLP string payload stored at the leaf or branch value slot.
+// Verify verifies an Ethereum Merkle Patricia Trie existence proof. Thin
+// wrapper around verifyProof: go-ethereum has no combined verify+compare
+// function of its own (callers compare inline at each VerifyProof call site).
 func Verify(root []byte, key []byte, value []byte, proof [][]byte) error {
-	result, err := walk(root, keybytesToNibbles(key), proof)
+	if len(root) != keccak256.Size {
+		return ErrInvalidRoot
+	}
+
+	var rootHash [32]byte
+	copy(rootHash[:], root)
+
+	// Intentional Gno/onbloc-specific deviation: go-ethereum's VerifyProof
+	// has no empty-trie shortcut and errors instead ("proof node 0 ...
+	// missing", confirmed by running it against a real empty trie), which
+	// would break storage.VerifyAbsence for a slot that was never written.
+	if rootHash == EmptyRoot() {
+		return ErrKeyAbsent
+	}
+
+	found, err := verifyProof(rootHash, key, buildProofDb(proof))
 	if err != nil {
 		return err
 	}
 
-	if !result.found {
+	if found == nil {
 		return ErrKeyAbsent
 	}
 
-	if !bytes.Equal(result.value, value) {
+	if !bytes.Equal(found, value) {
 		return ErrValueMismatch
 	}
 
 	return nil
 }
 
-// VerifyAbsence verifies that key is absent from the trie under root.
+// VerifyAbsence verifies that key is absent from the trie under root. Thin
+// wrapper around verifyProof (see Verify).
 func VerifyAbsence(root []byte, key []byte, proof [][]byte) error {
-	result, err := walk(root, keybytesToNibbles(key), proof)
+	if len(root) != keccak256.Size {
+		return ErrInvalidRoot
+	}
+
+	var rootHash [32]byte
+	copy(rootHash[:], root)
+
+	if rootHash == EmptyRoot() {
+		return nil
+	}
+
+	found, err := verifyProof(rootHash, key, buildProofDb(proof))
 	if err != nil {
 		return err
 	}
 
-	if result.found {
+	if found != nil {
 		return ErrKeyPresent
 	}
 
 	return nil
 }
 
-type walkResult struct {
-	found bool
-	value []byte
-}
-
-// isBytesNode reports whether an RLP value carries a byte payload (a string or
-// single byte) rather than a nested list.
-func isBytesNode(v rlp.Value) bool {
-	return v.Kind == rlp.KindString || v.Kind == rlp.KindByte
-}
-
-func walk(root []byte, path []byte, proof [][]byte) (walkResult, error) {
-	if len(root) != keccak256.Size {
-		return walkResult{}, ErrInvalidRoot
+// buildProofDb indexes proof by hash. No go-ethereum counterpart: VerifyProof
+// assumes its caller already holds a populated ethdb.KeyValueReader (usually
+// via Prove, which this verify-only package doesn't port). This bridges our
+// external proof [][]byte contract (what eth_getProof/IBC relaying deliver)
+// into that hash-keyed form.
+func buildProofDb(proof [][]byte) map[[32]byte][]byte {
+	db := make(map[[32]byte][]byte, len(proof))
+	for _, n := range proof {
+		db[keccak256.Sum256(n)] = n
 	}
 
-	if len(proof) == 0 {
-		emptyRoot := EmptyRoot()
-		if bytes.Equal(root, emptyRoot[:]) {
-			return walkResult{found: false}, nil
-		}
-
-		return walkResult{}, ErrEmptyProof
-	}
-
-	if err := matchHash(root, proof[0]); err != nil {
-		return walkResult{}, err
-	}
-
-	proofIndex := 0
-	node := proof[0]
-	pos := 0
-
-	for {
-		v, err := rlp.DecodeValue(node)
-		if err != nil {
-			return walkResult{}, err
-		}
-
-		if v.Kind != rlp.KindList {
-			return walkResult{}, ErrUnexpectedNode
-		}
-
-		switch len(v.List) {
-		case 17:
-			if pos == len(path) {
-				value := v.List[16]
-				if !isBytesNode(value) {
-					return walkResult{}, ErrUnexpectedNode
-				}
-
-				// A branch's 17th slot is an optional value; empty means none stored here.
-				if len(value.Bytes) == 0 {
-					return finishWalk(walkResult{found: false}, proofIndex, proof)
-				}
-
-				return finishWalk(walkResult{found: true, value: value.Bytes}, proofIndex, proof)
-			}
-
-			child := v.List[path[pos]]
-			if !isBytesNode(child) {
-				return walkResult{}, ErrUnexpectedNode
-			}
-
-			if len(child.Bytes) == 0 {
-				return finishWalk(walkResult{found: false}, proofIndex, proof)
-			}
-
-			next, nextIndex, err := resolveReference(child.Bytes, proof, proofIndex)
-			if err != nil {
-				return walkResult{}, err
-			}
-
-			proofIndex = nextIndex
-			node = next
-			pos++
-
-		case 2:
-			if !isBytesNode(v.List[0]) {
-				return walkResult{}, ErrUnexpectedNode
-			}
-
-			leaf, partial, err := compactDecode(v.List[0].Bytes)
-			if err != nil {
-				return walkResult{}, err
-			}
-
-			if !hasPrefix(path[pos:], partial) {
-				return finishWalk(walkResult{found: false}, proofIndex, proof)
-			}
-
-			pos += len(partial)
-
-			if leaf {
-				if pos != len(path) {
-					return finishWalk(walkResult{found: false}, proofIndex, proof)
-				}
-
-				value := v.List[1]
-				if !isBytesNode(value) {
-					return walkResult{}, ErrUnexpectedNode
-				}
-
-				// A leaf's value is mandatory (branch's 17th slot is optional): empty
-				// here is a real empty value, not absence.
-				// https://github.com/unionlabs/union/blob/031785bb6dc6b957c624e62bc64c184409c97d7b/lib/evm-storage-verifier/src/rlp_node_codec.rs#L168-L204
-				// https://github.com/paritytech/trie/blob/0b9bede27b33da6395e83ed13c523ed2ae913fc6/trie-db/src/lookup.rs#L792-L834
-				return finishWalk(walkResult{found: true, value: value.Bytes}, proofIndex, proof)
-			}
-
-			child := v.List[1]
-			if !isBytesNode(child) {
-				return walkResult{}, ErrUnexpectedNode
-			}
-
-			next, nextIndex, err := resolveReference(child.Bytes, proof, proofIndex)
-			if err != nil {
-				return walkResult{}, err
-			}
-
-			proofIndex = nextIndex
-			node = next
-
-		default:
-			return walkResult{}, ErrUnexpectedNode
-		}
-	}
-}
-
-func finishWalk(result walkResult, proofIndex int, proof [][]byte) (walkResult, error) {
-	if proofIndex != len(proof)-1 {
-		return walkResult{}, ErrUnusedProof
-	}
-
-	return result, nil
-}
-
-func resolveReference(ref []byte, proof [][]byte, proofIndex int) ([]byte, int, error) {
-	if len(ref) == 0 {
-		return nil, proofIndex, ErrInvalidReference
-	}
-
-	if len(ref) < keccak256.Size {
-		return ref, proofIndex, nil
-	}
-
-	if len(ref) != keccak256.Size {
-		return nil, proofIndex, ErrInvalidReference
-	}
-
-	nextIndex := proofIndex + 1
-	if nextIndex >= len(proof) {
-		return nil, proofIndex, ErrEmptyProof
-	}
-
-	if err := matchHash(ref, proof[nextIndex]); err != nil {
-		return nil, proofIndex, err
-	}
-
-	return proof[nextIndex], nextIndex, nil
-}
-
-func matchHash(expected []byte, encodedNode []byte) error {
-	h := keccak256.Sum256(encodedNode)
-	if !bytes.Equal(expected, h[:]) {
-		return ErrInvalidReference
-	}
-
-	return nil
-}
-
-func keybytesToNibbles(key []byte) []byte {
-	out := make([]byte, 0, len(key)*2)
-	for _, b := range key {
-		out = append(out, b>>4, b&0x0f)
-	}
-
-	return out
-}
-
-func compactDecode(encoded []byte) (bool, []byte, error) {
-	if len(encoded) == 0 {
-		return false, nil, ErrPathMismatch
-	}
-
-	flag := encoded[0] >> 4
-	if flag > 3 {
-		return false, nil, ErrPathMismatch
-	}
-
-	leaf := (flag & 2) != 0
-	odd := (flag & 1) != 0
-
-	out := make([]byte, 0, len(encoded)*2)
-	if odd {
-		out = append(out, encoded[0]&0x0f)
-	} else if encoded[0]&0x0f != 0 {
-		return false, nil, ErrPathMismatch
-	}
-
-	for i := 1; i < len(encoded); i++ {
-		out = append(out, encoded[i]>>4, encoded[i]&0x0f)
-	}
-	// extensions nodes must contain at least one path nibble.
-	// empty extension paths are non-canonical because they admit
-	// alternative proof encoding.
-	if !leaf && len(out) == 0 {
-		return false, nil, ErrPathMismatch
-	}
-
-	return leaf, out, nil
-}
-
-func hasPrefix(path []byte, prefix []byte) bool {
-	if len(prefix) > len(path) {
-		return false
-	}
-
-	for i := range prefix {
-		if path[i] != prefix[i] {
-			return false
-		}
-	}
-
-	return true
+	return db
 }

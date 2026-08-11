@@ -6,17 +6,8 @@ import (
 	"github.com/onbloc/gno-ibc/e2e/union/internal/state"
 )
 
-// runChannelScenario establishes and verifies S1. Resume verifies the saved topology.
+// runChannelScenario establishes and verifies S1.
 func (r *Runner) runChannelScenario(ctx context.Context) error {
-	if r.options.Resume {
-		if err := r.verifyClientRelations(ctx); err != nil {
-			return err
-		}
-		if err := r.verifyOpenHandshakes(ctx); err != nil {
-			return err
-		}
-		return r.verifyNoNewFailedWork(ctx)
-	}
 	r.progressf("topology: indexing Union and Gno")
 	if err := r.indexUnionAndGno(ctx); err != nil {
 		return err
@@ -45,7 +36,7 @@ func (r *Runner) runChannelScenario(ctx context.Context) error {
 	if err := r.verifyNoNewFailedWork(ctx); err != nil {
 		return err
 	}
-	return r.saveChannelEvidence()
+	return r.writeChannelEvidence()
 }
 
 func (r *Runner) indexUnionAndGno(ctx context.Context) error {
@@ -90,7 +81,7 @@ func (r *Runner) allowlistAndIndexEVM(ctx context.Context) error {
 		return err
 	}
 
-	r.current.Allowlists = state.Allowlists{Plain: joinIDs(plain), ProofLens: joinIDs(proof)}
+	r.current.Allowlists = state.Allowlists{Plain: plain, ProofLens: proof}
 	rendered, err := r.renderVoyager(plain, proof)
 	if err != nil {
 		return err

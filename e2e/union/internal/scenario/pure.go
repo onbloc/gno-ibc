@@ -172,11 +172,3 @@ func classifyBoundaryBalances(
 func hexText(value string) string {
 	return "0x" + hex.EncodeToString([]byte(value))
 }
-
-func joinIDs(ids []int64) string {
-	values := make([]string, len(ids))
-	for i, id := range ids {
-		values[i] = strconv.FormatInt(id, 10)
-	}
-	return strings.Join(values, ",")
-}

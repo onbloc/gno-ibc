@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
 )
 
 type forgedProofEvidence struct {
@@ -60,7 +62,7 @@ func (r *Runner) runForgedProofRejection(ctx context.Context) error {
 		r.current.Connections.EVM,
 		r.current.Channels.Gno,
 		r.cfg.GnoZKGMPort,
-		r.current.Version,
+		config.ChannelVersion,
 	)
 	if err != nil {
 		return err

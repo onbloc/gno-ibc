@@ -36,13 +36,6 @@ func (r *Runner) verifyNoNewFailedWork(ctx context.Context) error {
 	return failure
 }
 
-func (r *Runner) saveChannelEvidence() error {
-	if err := r.writeChannelEvidence(); err != nil {
-		return err
-	}
-	return state.Save(r.cfg.StateFile, r.current)
-}
-
 func (r *Runner) writeChannelEvidence() error {
 	artifacts := map[string]any{
 		"gno-connection.json": r.gnoConnectionEvidence,

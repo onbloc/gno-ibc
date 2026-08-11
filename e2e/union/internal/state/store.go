@@ -1,7 +1,6 @@
 package state
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -16,64 +15,17 @@ var (
 	syncDirectory = syncParentDirectory
 )
 
-// Load reads one private checkpoint document.
-func Load(path string) (State, error) {
-	info, err := os.Lstat(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return State{}, fmt.Errorf("missing resume state: %s", path)
-		}
-		return State{}, fmt.Errorf("cannot inspect resume state")
-	}
-	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm() != 0o600 {
-		return State{}, fmt.Errorf("resume state must be a regular mode 0600 file")
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return State{}, fmt.Errorf("cannot read resume state")
-	}
-	var saved State
-	if err := json.Unmarshal(data, &saved); err != nil {
-		return State{}, fmt.Errorf("malformed resume state")
-	}
-	if saved.FailedWork.Repaired == nil {
-		saved.FailedWork.Repaired = []int64{}
-	}
-	return saved, nil
-}
-
-// Save atomically replaces a private checkpoint and syncs its parent directory.
-func Save(path string, saved State) error {
-	data, err := json.MarshalIndent(saved, "", "  ")
-	if err != nil {
-		return fmt.Errorf("cannot encode state")
-	}
-	return atomicWrite(path, append(data, '\n'))
-}
-
 // SaveArtifact atomically writes one pre-sanitized evidence document.
 func SaveArtifact(path string, data []byte) error {
 	return atomicWrite(path, data)
 }
 
-// EnsureFresh rejects an artifact directory that already records bootstrap work.
-func EnsureFresh(stateFile string) error {
-	if _, err := os.Lstat(stateFile); err == nil {
-		return fmt.Errorf("state already exists; use --resume or choose a new E2E_ARTIFACT_DIR")
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("cannot inspect state checkpoint")
-	}
-	return nil
-}
-
 // PrepareArtifacts verifies or creates the runner-owned artifact directory.
-func PrepareArtifacts(repoRoot, scriptDir, artifactDir, stateFile string) error {
+func PrepareArtifacts(repoRoot, scriptDir, artifactDir string) error {
 	repoRoot, _ = filepath.Abs(repoRoot)
 	scriptDir, _ = filepath.Abs(scriptDir)
 	artifactDir, err := filepath.Abs(artifactDir)
-	if err != nil ||
-		filepath.Clean(stateFile) != filepath.Join(filepath.Clean(artifactDir), "state.json") ||
-		artifactDir == repoRoot ||
+	if err != nil || artifactDir == repoRoot ||
 		artifactDir == scriptDir {
 		return fmt.Errorf("unsafe E2E_ARTIFACT_DIR: %s", artifactDir)
 	}
@@ -105,9 +57,6 @@ func PrepareArtifacts(repoRoot, scriptDir, artifactDir, stateFile string) error 
 	default:
 		return fmt.Errorf("cannot inspect artifact directory")
 	}
-	if info, err := os.Lstat(stateFile); err == nil && info.Mode()&os.ModeSymlink != 0 {
-		return fmt.Errorf("runner checkpoint must not be a symlink")
-	}
 	return nil
 }
 
@@ -115,30 +64,30 @@ func atomicWrite(path string, data []byte) error {
 	dir := filepath.Dir(path)
 	temp, err := os.CreateTemp(dir, "."+filepath.Base(path)+".*")
 	if err != nil {
-		return fmt.Errorf("cannot create state checkpoint")
+		return fmt.Errorf("cannot create evidence artifact")
 	}
 	tempName := temp.Name()
 	defer os.Remove(tempName)
 	if err := temp.Chmod(0o600); err != nil {
 		temp.Close()
-		return fmt.Errorf("cannot secure state checkpoint")
+		return fmt.Errorf("cannot secure evidence artifact")
 	}
 	if _, err := temp.Write(data); err != nil {
 		temp.Close()
-		return fmt.Errorf("cannot write state checkpoint")
+		return fmt.Errorf("cannot write evidence artifact")
 	}
 	if err := temp.Sync(); err != nil {
 		temp.Close()
-		return fmt.Errorf("cannot sync state checkpoint")
+		return fmt.Errorf("cannot sync evidence artifact")
 	}
 	if err := temp.Close(); err != nil {
-		return fmt.Errorf("cannot close state checkpoint")
+		return fmt.Errorf("cannot close evidence artifact")
 	}
 	if err := renameFile(tempName, path); err != nil {
-		return fmt.Errorf("cannot replace state checkpoint")
+		return fmt.Errorf("cannot replace evidence artifact")
 	}
 	if err := syncDirectory(dir); err != nil {
-		return fmt.Errorf("cannot sync state directory: %w", err)
+		return fmt.Errorf("cannot sync evidence directory: %w", err)
 	}
 	return nil
 }

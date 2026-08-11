@@ -200,11 +200,7 @@ func (r *Runner) renderVoyagerForConfig(cfg config.Config) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("missing Voyager config template")
 	}
-	plain, proof, err := r.current.Allowlists.IDs()
-	if err != nil {
-		return nil, err
-	}
-	return config.RenderVoyager(template, cfg, plain, proof)
+	return config.RenderVoyager(template, cfg, r.current.Allowlists.Plain, r.current.Allowlists.ProofLens)
 }
 
 func (r *Runner) requireEmptyRelayer(ctx context.Context, privateKey string) (string, error) {

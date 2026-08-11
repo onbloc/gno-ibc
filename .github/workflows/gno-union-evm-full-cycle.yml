@@ -181,10 +181,6 @@ jobs:
             --evm-to-gno-timeout-refund \
             --gno-to-evm-timeout-refund
 
-      - name: Verify completed resume
-        working-directory: gno-ibc
-        run: e2e/union/run-channel-e2e.sh --resume
-
       - name: Capture service logs
         if: failure()
         working-directory: gno-ibc

@@ -10,30 +10,7 @@ import (
 	"github.com/onbloc/gno-ibc/e2e/union/internal/config"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/gno"
 	"github.com/onbloc/gno-ibc/e2e/union/internal/process"
-	"github.com/onbloc/gno-ibc/e2e/union/internal/state"
 )
-
-func TestInvalidResumeStateRunsNoCommands(t *testing.T) {
-	cfg := testConfig(t)
-	if err := state.PrepareArtifacts(
-		filepath.Dir(filepath.Dir(cfg.ScriptDir)),
-		cfg.ScriptDir,
-		cfg.ArtifactDir,
-		cfg.StateFile,
-	); err != nil {
-		t.Fatal(err)
-	}
-	if err := state.Save(cfg.StateFile, state.State{}); err != nil {
-		t.Fatal(err)
-	}
-	recorder := new(recordingExecutor)
-	if _, err := newRunner(cfg, recorder, Options{Apply: true, Resume: true}); err == nil {
-		t.Fatal("invalid resume state unexpectedly accepted")
-	}
-	if len(recorder.commands) != 0 {
-		t.Fatalf("commands = %#v, want none", recorder.commands)
-	}
-}
 
 func TestDryPreflightRunsNoCommands(t *testing.T) {
 	cfg := testConfig(t)
@@ -164,6 +141,5 @@ func testConfig(t *testing.T) config.Config {
 		RelayerOfflinePrivateKey:  "0x" + strings.Repeat("2", 64),
 		RelayerRecoveryPrivateKey: "0x" + strings.Repeat("3", 64),
 		ArtifactDir:               artifactDir,
-		StateFile:                 filepath.Join(artifactDir, "state.json"),
 	}
 }

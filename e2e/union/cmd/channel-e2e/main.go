@@ -23,7 +23,6 @@ func run() error {
 	options := scenario.Options{}
 	configPath := flag.String("config", "runner.json", "runner configuration JSON")
 	flag.BoolVar(&options.Apply, "apply", false, "allow broadcasts")
-	flag.BoolVar(&options.Resume, "resume", false, "resume from saved state")
 	flag.BoolVar(&options.ForgedProofRejection, "forged-proof-rejection", false, "reject a mutated live EVM membership proof")
 	flag.BoolVar(&options.ERC20ToGno, "erc20-to-gno", false, "run the ERC20 EVM-to-Gno scenario")
 	flag.BoolVar(&options.AmountBoundaries, "amount-boundaries", false, "run EVM-to-Gno amount boundary scenarios (includes --erc20-to-gno)")
@@ -34,7 +33,7 @@ func run() error {
 	flag.BoolVar(&options.EVMToGnoTimeoutRefund, "evm-to-gno-timeout-refund", false, "verify EVM refund after a three-minute Gno delivery timeout")
 	flag.BoolVar(&options.GnoToEVMTimeoutRefund, "gno-to-evm-timeout-refund", false, "verify Gno refund after a three-minute EVM delivery timeout")
 	flag.Usage = func() {
-		fmt.Fprintf(flag.CommandLine.Output(), "usage: %s [--config path] [--resume] [--apply] [scenario flags]\n", os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), "usage: %s [--config path] [--apply] [scenario flags]\n", os.Args[0])
 	}
 	flag.Parse()
 	if flag.NArg() != 0 {
@@ -61,7 +60,7 @@ func run() error {
 		return err
 	}
 	fmt.Println("Voyager config render and preflight passed")
-	if !options.Apply && !options.Resume {
+	if !options.Apply {
 		fmt.Println("dry preflight only; broadcasting requires --apply")
 		return nil
 	}

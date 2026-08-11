@@ -3,7 +3,8 @@ package send
 
 // token_send_voucher_escrow_protocol_fill_ack_filetest walks a full ucs03-zkgm token send through the
 // upgradeable union IBC host (permissive mock light client) and asserts the escrowed
-// token stays locked in the proxy after the acknowledgement.
+// token stays locked in the proxy after the acknowledgement, including the
+// GetChannelBalanceV2 ledger alongside the proxy voucher balance.
 
 import (
 	"encoding/hex"
@@ -51,7 +52,7 @@ func main(cur realm) {
 	println("")
 
 	println("[SCENARIO] 4. Acknowledge with protocol-fill success (no-op for escrow)")
-	acknowledgeEscrow(cur, sendPacket, quoteToken)
+	acknowledgeEscrow(cur, channelId, sendPacket, quoteToken)
 }
 
 // bootstrap installs the core/zkgm impls, grants the admin the relayer role, and
@@ -131,6 +132,8 @@ func sendEscrowOrder(cur realm, channelId types.ChannelId, quoteToken string) ty
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 
+	ufmt.Printf("[INFO] channel balance ledger before send: %s\n", channelBalanceOrZero(channelId, order.BaseToken, order.QuoteToken).ToString())
+
 	testing.SetRealm(testing.NewUserRealm(senderAddr))
 	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
 
@@ -138,16 +141,18 @@ func sendEscrowOrder(cur realm, channelId types.ChannelId, quoteToken string) ty
 	ufmt.Printf("[INFO] locked into proxy escrow %s\n", zkgm.ProxyAddress().String())
 	ufmt.Printf("[INFO] sender voucher balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, senderAddr))
 	ufmt.Printf("[INFO] proxy escrow balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, zkgm.ProxyAddress()))
+	ufmt.Printf("[INFO] channel balance ledger after send: %s\n", channelBalanceOrZero(channelId, order.BaseToken, order.QuoteToken).ToString())
 	ufmt.Println("[EXPECTED] locked token should be the same ibc/ voucher (moved from sender to proxy)")
 	ufmt.Println("[EXPECTED] sender voucher balance should be 60 (100 - 40 escrowed)")
 	ufmt.Println("[EXPECTED] proxy escrow balance should be 40 (locked)")
+	ufmt.Println("[EXPECTED] channel balance ledger should be 40 (matches the escrowed order amount)")
 
 	return sendPacket
 }
 
 // acknowledgeEscrow acknowledges the sent packet with a protocol-fill success ack,
 // which is a no-op for an escrow, so the lock holds.
-func acknowledgeEscrow(cur realm, sendPacket types.Packet, quoteToken string) {
+func acknowledgeEscrow(cur realm, channelId types.ChannelId, sendPacket types.Packet, quoteToken string) {
 	ack := mustSuccessAck(mustProtocolTokenOrderAck())
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
@@ -156,8 +161,20 @@ func acknowledgeEscrow(cur realm, sendPacket types.Packet, quoteToken string) {
 	ufmt.Printf("[INFO] locked token still held by proxy: %s\n", quoteToken)
 	ufmt.Printf("[INFO] sender voucher balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, senderAddr))
 	ufmt.Printf("[INFO] proxy escrow balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, zkgm.ProxyAddress()))
+	ufmt.Printf("[INFO] channel balance ledger after ack: %s\n", channelBalanceOrZero(channelId, []byte(quoteToken), []byte("ugnot")).ToString())
 	ufmt.Println("[EXPECTED] sender voucher balance should be 60 (unchanged: escrow stays locked)")
 	ufmt.Println("[EXPECTED] proxy escrow balance should be 40 (unchanged: escrow stays locked)")
+	ufmt.Println("[EXPECTED] channel balance ledger should be 40 (protocol-fill is a no-op; ledger and bank balance agree)")
+}
+
+// channelBalanceOrZero: GetChannelBalanceV2 returns "not found" (never
+// escrowed) as an error rather than a stored zero; resolve it to u256.Zero().
+func channelBalanceOrZero(channelId types.ChannelId, baseToken, quoteToken []byte) *u256.Uint {
+	balance, err := zkgm.GetChannelBalanceV2(channelId, u256.Zero(), string(baseToken), quoteToken)
+	if err != nil {
+		return u256.Zero()
+	}
+	return balance
 }
 
 // --- encoding helpers (pure z calls, mirroring the e2e harness) ---
@@ -266,17 +283,22 @@ func (e mockError) Error() string { return string(e) }
 // [EXPECTED] sender voucher balance should be 100 (full INITIALIZE amount minted)
 //
 // [SCENARIO] 3. Send ESCROW order locking 40 of the voucher
+// [INFO] channel balance ledger before send: 0
 // [INFO] locked token (escrowed into proxy): ibc/d3f2c0b48d7b05e97bae1249f2f3a1be880d2d9c
 // [INFO] locked into proxy escrow g182p37d0cyvsvqpv49lqtphpj3jswwqtuyl4qyy
 // [INFO] sender voucher balance: 60
 // [INFO] proxy escrow balance: 40
+// [INFO] channel balance ledger after send: 40
 // [EXPECTED] locked token should be the same ibc/ voucher (moved from sender to proxy)
 // [EXPECTED] sender voucher balance should be 60 (100 - 40 escrowed)
 // [EXPECTED] proxy escrow balance should be 40 (locked)
+// [EXPECTED] channel balance ledger should be 40 (matches the escrowed order amount)
 //
 // [SCENARIO] 4. Acknowledge with protocol-fill success (no-op for escrow)
 // [INFO] locked token still held by proxy: ibc/d3f2c0b48d7b05e97bae1249f2f3a1be880d2d9c
 // [INFO] sender voucher balance: 60
 // [INFO] proxy escrow balance: 40
+// [INFO] channel balance ledger after ack: 40
 // [EXPECTED] sender voucher balance should be 60 (unchanged: escrow stays locked)
 // [EXPECTED] proxy escrow balance should be 40 (unchanged: escrow stays locked)
+// [EXPECTED] channel balance ledger should be 40 (protocol-fill is a no-op; ledger and bank balance agree)

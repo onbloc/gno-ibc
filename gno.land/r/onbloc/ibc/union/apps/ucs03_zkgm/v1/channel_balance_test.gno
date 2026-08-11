@@ -43,11 +43,11 @@ func TestIncreaseChannelBalanceV2(cur realm, t *testing.T) {
 	}
 }
 
-// increaseChannelBalanceV2 panics on uint256 overflow instead of silently
-// wrapping the escrow balance back below its prior value. The balance is seeded
-// directly in the store so a near-2^256 starting point is reachable, then a
-// deposit that would cross the ceiling is rejected and the stored balance is left
-// untouched.
+// increaseChannelBalanceV2 returns an error on uint256 overflow instead of
+// silently wrapping the escrow balance back below its prior value. The balance
+// is seeded directly in the store so a near-2^256 starting point is reachable,
+// then a deposit that would cross the ceiling is rejected and the stored
+// balance is left untouched.
 func TestIncreaseChannelBalanceV2Overflow(cur realm, t *testing.T) {
 	maxU256 := func() *u256.Uint { return new(u256.Uint).SetAllOne() }
 

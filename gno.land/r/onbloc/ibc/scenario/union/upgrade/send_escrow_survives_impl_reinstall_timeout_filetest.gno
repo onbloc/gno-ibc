@@ -1,30 +1,31 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/upgrade
 package upgrade
 
-// send_escrow_survives_impl_reinstall_filetest is the IN-FLIGHT SEND upgrade
-// scenario. A sender has a native ESCROW send locked at the proxy. The admin
-// re-installs the impl (rebuilding it against the same proxy-owned store)
-// before the packet's acknowledgement arrives. The escrow is proxy-owned
-// state, so the new impl settles it exactly like the old one would: a failure
-// ack still refunds the sender. This mirrors forward/'s
-// inflight_survives_impl_upgrade_filetest.gno, but for a plain (non-forward)
-// TokenOrder send settling directly, not an in-flight forwarded parent.
-// Also asserts the GetChannelBalanceV2 ledger directly across the reinstall
-// boundary, so a reinstall that lost this persistent state would show up here
-// even if the bank balance alone happened to look right.
+// send_escrow_survives_impl_reinstall_timeout_filetest is the timeout
+// counterpart to send_escrow_survives_impl_reinstall_filetest. A sender has a
+// native ESCROW send locked at the proxy. The admin re-installs the impl
+// (rebuilding it against the same proxy-owned store) before the packet's
+// timeout elapses. The escrow is proxy-owned state, so the new impl settles
+// the timeout exactly like the old one would: the escrow releases and the
+// sender is refunded. Asserts the GetChannelBalanceV2 ledger directly across
+// the reinstall boundary, same as the ack-path sibling.
+//
+// Uses a block-time light client (not the fixed-timestamp mock the ack
+// sibling uses) so the packet's timeout can actually be skipped past.
 
 import (
 	"chain"
 	"chain/banker"
 	"testing"
+	"time"
 
 	"gno.land/p/nt/ufmt/v0"
+	"gno.land/p/onbloc/ibc/union/lightclient"
 	types "gno.land/p/onbloc/ibc/union/types"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 
 	u256 "gno.land/p/onbloc/math/uint256"
 
-	mocklc "gno.land/r/onbloc/ibc/testing/mock/lightclient"
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
@@ -33,9 +34,9 @@ import (
 )
 
 const (
-	coreImplPath  = "gno.land/r/onbloc/ibc/union/core/v1"
-	zkgmImplPath  = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
-	mockLcPkgPath = "gno.land/r/onbloc/ibc/testing/mock/lightclient"
+	coreImplPath   = "gno.land/r/onbloc/ibc/union/core/v1"
+	zkgmImplPath   = "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
+	blockClockType = types.ClientType("scenario-block-clock-lc")
 
 	adminAddr  = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
 	senderAddr = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
@@ -46,16 +47,17 @@ func main(cur realm) {
 	channelId := bootstrap(cur)
 	println("")
 
-	println("[SCENARIO] 2. Send native ESCROW order locking 40ugnot")
+	println("[SCENARIO] 2. Send native ESCROW order locking 40ugnot, timeout in 10s")
 	sendPacket := sendNativeEscrowOrder(cur, channelId)
 	println("")
 
-	println("[SCENARIO] 3. Re-install the impl before the ack arrives")
+	println("[SCENARIO] 3. Re-install the impl before the timeout is submitted")
 	reinstallImpl(cur, channelId)
 	println("")
 
-	println("[SCENARIO] 4. A failure ack still settles correctly under the new impl: escrow refunded")
-	acknowledgeFailureRefund(cur, channelId, sendPacket)
+	println("[SCENARIO] 4. After the timeout elapses, it still settles correctly under the new impl: escrow refunded")
+	testing.SkipHeights(3) // 3 blocks * 5s = 15s, past the 10s timeout
+	timeoutRefund(cur, channelId, sendPacket)
 }
 
 func bootstrap(cur realm) types.ChannelId {
@@ -65,10 +67,11 @@ func bootstrap(cur realm) types.ChannelId {
 	zkgm.SetRateLimitDisabled(cross(cur), true)
 	zkgm.RegisterCoreApp(cross(cur))
 	access.GrantRole(cross(cur), access.RelayerRole, adminAddr)
-	access.GrantRole(cross(cur), access.RelayerRole, chain.PackageAddress(mockLcPkgPath))
 
-	mocklc.RegisterMockLightClient(cross(cur))
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(mocklc.MockClientType, nil, nil))
+	core.RegisterClient(cross(cur), blockClockType, func(_, _ []byte) (lightclient.Interface, error) {
+		return &blockClockLightClient{}, nil
+	})
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(blockClockType, nil, nil))
 	clientId := types.ClientId(1)
 
 	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
@@ -100,7 +103,7 @@ func sendNativeEscrowOrder(cur realm, channelId types.ChannelId) types.Packet {
 
 	testing.SetRealm(testing.NewUserRealm(senderAddr))
 	testing.SetOriginSend(chain.NewCoins(chain.NewCoin("ugnot", 40)))
-	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
+	sendPacket := zkgm.Send(cross(cur), channelId, timeoutIn(10), [32]byte{}, mustOrderInstruction(order))
 
 	bk := banker.NewReadonlyBanker()
 	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
@@ -119,18 +122,18 @@ func reinstallImpl(cur realm, channelId types.ChannelId) {
 	ufmt.Println("[EXPECTED] channel balance ledger should still be 40 (persistent store survives the reinstall)")
 }
 
-// acknowledgeFailureRefund acknowledges the sent packet with a FAILURE ack under
-// the new impl: the escrowed native asset is released back to the original sender.
-func acknowledgeFailureRefund(cur realm, channelId types.ChannelId, sendPacket types.Packet) {
+// timeoutRefund submits the packet's timeout under the new impl: the escrowed
+// native asset is released back to the original sender.
+func timeoutRefund(cur realm, channelId types.ChannelId, sendPacket types.Packet) {
 	bk := banker.NewReadonlyBanker()
 	proxy := zkgm.ProxyAddress()
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{mustFailureAck()}, nil, 1))
+	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(sendPacket, nil, 1))
 
 	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
 	ufmt.Printf("[INFO] sender native balance: %d\n", bk.GetCoins(senderAddr).AmountOf("ugnot"))
-	ufmt.Printf("[INFO] channel balance ledger after ack: %s\n", channelBalanceOrZero(channelId, []byte("ugnot"), []byte("remote-ugnot")).ToString())
+	ufmt.Printf("[INFO] channel balance ledger after timeout: %s\n", channelBalanceOrZero(channelId, []byte("ugnot"), []byte("remote-ugnot")).ToString())
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 0 (refunded)")
 	ufmt.Println("[EXPECTED] sender native balance should be 40 (escrow refunded back)")
 	ufmt.Println("[EXPECTED] channel balance ledger should be 0 (decreased back by the refunded 40; ledger and bank balance agree)")
@@ -146,6 +149,12 @@ func channelBalanceOrZero(channelId types.ChannelId, baseToken, quoteToken []byt
 	return balance
 }
 
+// --- timeout helper (nanoseconds, relative to the current block time) ---
+
+func timeoutIn(seconds int64) types.Timestamp {
+	return types.Timestamp(uint64(time.Now().UnixNano()) + uint64(seconds)*1_000_000_000)
+}
+
 // --- encoding helpers ---
 
 func mustOrderInstruction(order z.TokenOrderV2) z.Instruction {
@@ -156,33 +165,61 @@ func mustOrderInstruction(order z.TokenOrderV2) z.Instruction {
 	return z.Instruction{Version: z.INSTR_VERSION_2, Opcode: z.OP_TOKEN_ORDER, Operand: operand}
 }
 
-func mustFailureAck() []byte {
-	ack, err := z.EncodeAck(z.Ack{Tag: new(u256.Uint).SetBytes(z.TAG_ACK_FAILURE[:]), InnerAck: nil})
-	if err != nil {
-		panic(err)
-	}
-	return ack
+// --- block-time light client: its timestamp follows the (skipped) chain time, so a
+// packet whose timeout has passed in chain time is provably timed out ---
+
+type blockClockLightClient struct{}
+
+func (m *blockClockLightClient) VerifyMembership(uint64, []byte, []byte, []byte) error { return nil }
+
+func (m *blockClockLightClient) VerifyNonMembership(uint64, []byte, []byte) error { return nil }
+
+func (m *blockClockLightClient) GetTimestamp() types.Timestamp { return nowTs() }
+
+func (m *blockClockLightClient) GetTimestampAtHeight(uint64) (types.Timestamp, error) {
+	return nowTs(), nil
 }
+func (m *blockClockLightClient) GetLatestHeight() uint64        { return 1 }
+func (m *blockClockLightClient) GetCounterpartyChainID() string { return "block-clock-chain" }
+func (m *blockClockLightClient) Status() lightclient.Status     { return lightclient.Active }
+
+func (m *blockClockLightClient) VerifyHeader(_ address, header []byte, _ address) (types.StateUpdate, error) {
+	return types.StateUpdate{Height: 1, ClientStateBytes: header, ConsensusStateBytes: header}, nil
+}
+
+func (m *blockClockLightClient) VerifyCreation(address, address) (types.ClientCreationResult, error) {
+	return types.ClientCreationResult{}, nil
+}
+
+func (m *blockClockLightClient) Misbehaviour(address, []byte, address) ([]byte, error) {
+	return nil, mockError("block-clock: misbehaviour unsupported")
+}
+
+func nowTs() types.Timestamp { return types.Timestamp(uint64(time.Now().UnixNano())) }
+
+type mockError string
+
+func (e mockError) Error() string { return string(e) }
 
 // Output:
 // [SCENARIO] 1. Bootstrap IBC host and open a zkgm channel
 //
-// [SCENARIO] 2. Send native ESCROW order locking 40ugnot
+// [SCENARIO] 2. Send native ESCROW order locking 40ugnot, timeout in 10s
 // [INFO] channel balance ledger before send: 0
 // [INFO] proxy native escrow balance: 40
 // [INFO] channel balance ledger after send: 40
 // [EXPECTED] proxy native escrow balance should be 40 (locked)
 // [EXPECTED] channel balance ledger should be 40 (matches the escrowed order amount)
 //
-// [SCENARIO] 3. Re-install the impl before the ack arrives
+// [SCENARIO] 3. Re-install the impl before the timeout is submitted
 // [INFO] impl re-installed against the same proxy-owned store
 // [INFO] channel balance ledger after reinstall: 40
 // [EXPECTED] channel balance ledger should still be 40 (persistent store survives the reinstall)
 //
-// [SCENARIO] 4. A failure ack still settles correctly under the new impl: escrow refunded
+// [SCENARIO] 4. After the timeout elapses, it still settles correctly under the new impl: escrow refunded
 // [INFO] proxy native escrow balance: 0
 // [INFO] sender native balance: 40
-// [INFO] channel balance ledger after ack: 0
+// [INFO] channel balance ledger after timeout: 0
 // [EXPECTED] proxy native escrow balance should be 0 (refunded)
 // [EXPECTED] sender native balance should be 40 (escrow refunded back)
 // [EXPECTED] channel balance ledger should be 0 (decreased back by the refunded 40; ledger and bank balance agree)

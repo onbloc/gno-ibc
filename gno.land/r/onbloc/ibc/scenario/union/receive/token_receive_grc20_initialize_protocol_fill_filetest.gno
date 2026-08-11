@@ -10,7 +10,9 @@ package receive
 // BaseToken as an opaque denom string for the wrapped-address prediction —
 // it never branches on whether the origin asset was native or grc20 — so
 // this file is expected to behave identically to the native version, just
-// with a grc20-shaped BaseToken.
+// with a grc20-shaped BaseToken. Also asserts the deployed grc20reg metadata
+// and that the registry-resolved token and the predicted quoteToken address
+// back the same balance ledger.
 
 import (
 	"encoding/hex"
@@ -23,6 +25,7 @@ import (
 
 	u256 "gno.land/p/onbloc/math/uint256"
 
+	"gno.land/r/demo/defi/grc20reg"
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1" // install zkgm v1 impl (init registers the constructor)
@@ -111,11 +114,24 @@ func receiveInitializeOrder(cur realm, channelId types.ChannelId, quoteToken str
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{packet}, [][]byte{nil}, nil, 1))
 
+	// grc20reg keys the deployed voucher by (proxy realm path, symbol) — see
+	// getOrCreateVoucher (voucher.gno). MustGet panics if the INITIALIZE never
+	// actually deployed it.
+	token := grc20reg.MustGet(zkgm.ProxyPkgPath() + ".USDC")
+	registryBalance := token.BalanceOf(receiverAAddr)
+	voucherBalance := zkgm.VoucherBalanceOf(quoteToken, receiverAAddr)
+
 	ufmt.Printf("[INFO] minted token (wrapped voucher): %s\n", quoteToken)
 	ufmt.Printf("[INFO] minted token wraps base token: %s\n", remoteGRC20Denom)
-	ufmt.Printf("[INFO] receiver A balance: %d\n", zkgm.VoucherBalanceOf(quoteToken, receiverAAddr))
+	ufmt.Printf("[INFO] registry token name/symbol/decimals: %s/%s/%d\n", token.GetName(), token.GetSymbol(), token.GetDecimals())
+	ufmt.Printf("[INFO] registry token total supply: %d\n", token.TotalSupply())
+	ufmt.Printf("[INFO] receiver A balance (via zkgm.VoucherBalanceOf): %d\n", voucherBalance)
+	ufmt.Printf("[INFO] receiver A balance (via registry token.BalanceOf): %d\n", registryBalance)
 	ufmt.Println("[EXPECTED] minted token should be the ibc/ wrapped voucher of the remote grc20 denom")
-	ufmt.Println("[EXPECTED] receiver A balance should be 100 (full INITIALIZE amount minted)")
+	ufmt.Println("[EXPECTED] registry token should be USD Coin/USDC/6 (matches the INITIALIZE metadata)")
+	ufmt.Println("[EXPECTED] registry token total supply should be 100 (matches the minted amount)")
+	ufmt.Println("[EXPECTED] both balance lookups should be 100: the predicted quoteToken address and the")
+	ufmt.Println("[EXPECTED] registry-resolved token back the same ledger")
 }
 
 // --- encoding helpers (pure z calls, mirroring the e2e harness) ---
@@ -203,6 +219,12 @@ func (e mockError) Error() string { return string(e) }
 // [SCENARIO] 2. Receive INITIALIZE order: deploy wrapped token and mint 100 to receiver A
 // [INFO] minted token (wrapped voucher): ibc/d466664eae44351e57e08406db2c76f8e712b8ae
 // [INFO] minted token wraps base token: gno.land/r/remote/defi/tokens.usdc
-// [INFO] receiver A balance: 100
+// [INFO] registry token name/symbol/decimals: USD Coin/USDC/6
+// [INFO] registry token total supply: 100
+// [INFO] receiver A balance (via zkgm.VoucherBalanceOf): 100
+// [INFO] receiver A balance (via registry token.BalanceOf): 100
 // [EXPECTED] minted token should be the ibc/ wrapped voucher of the remote grc20 denom
-// [EXPECTED] receiver A balance should be 100 (full INITIALIZE amount minted)
+// [EXPECTED] registry token should be USD Coin/USDC/6 (matches the INITIALIZE metadata)
+// [EXPECTED] registry token total supply should be 100 (matches the minted amount)
+// [EXPECTED] both balance lookups should be 100: the predicted quoteToken address and the
+// [EXPECTED] registry-resolved token back the same ledger

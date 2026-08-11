@@ -5,7 +5,8 @@ package send
 // the upgradeable union IBC host (permissive mock light client). The sender
 // pre-approves the proxy, the proxy pulls grc20 via TransferFrom without native
 // OriginSend, a protocol-fill success ack leaves the escrow locked, and a failure
-// ack refunds a second escrow back to the sender.
+// ack refunds a second escrow back to the sender. Asserts the GetChannelBalanceV2
+// ledger alongside the grc20 bank balance at every step.
 
 import (
 	"testing"
@@ -54,7 +55,7 @@ func main(cur realm) {
 	println("")
 
 	println("[SCENARIO] 4. Acknowledge with protocol-fill success (no-op for escrow)")
-	acknowledgeGRC20Escrow(cur, successPacket, token)
+	acknowledgeGRC20Escrow(cur, channelId, successPacket, token, denom)
 	println("")
 
 	println("[SCENARIO] 5. Send a second 30-unit ESCROW order, then refund it via a failure ack")
@@ -136,21 +137,25 @@ func sendGRC20EscrowOrder(cur realm, channelId types.ChannelId, token *grc20.Tok
 		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
 	}
 
+	ufmt.Printf("[INFO] channel balance ledger before send: %s\n", channelBalanceOrZero(channelId, order.BaseToken, order.QuoteToken).ToString())
+
 	testing.SetRealm(testing.NewUserRealm(senderAddr))
 	sendPacket := zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
 
 	ufmt.Printf("[INFO] send produced packet on channel: %s\n", sendPacket.SourceChannelId.String())
 	ufmt.Printf("[INFO] sender grc20 balance: %d\n", token.BalanceOf(senderAddr))
 	ufmt.Printf("[INFO] proxy grc20 escrow balance: %d\n", token.BalanceOf(proxy))
+	ufmt.Printf("[INFO] channel balance ledger after send: %s\n", channelBalanceOrZero(channelId, order.BaseToken, order.QuoteToken).ToString())
 	ufmt.Println("[EXPECTED] sender grc20 balance should be 60 (100 - 40 escrowed)")
 	ufmt.Println("[EXPECTED] proxy grc20 escrow balance should be 40 (locked)")
+	ufmt.Println("[EXPECTED] channel balance ledger should be 40 (matches the escrowed order amount)")
 
 	return sendPacket
 }
 
 // acknowledgeGRC20Escrow acknowledges the sent packet with a protocol-fill success
 // ack, which is a no-op for an escrow, so the grc20 units stay locked at the proxy.
-func acknowledgeGRC20Escrow(cur realm, sendPacket types.Packet, token *grc20.Token) {
+func acknowledgeGRC20Escrow(cur realm, channelId types.ChannelId, sendPacket types.Packet, token *grc20.Token, denom string) {
 	ack := mustSuccessAck(mustProtocolTokenOrderAck())
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
@@ -158,13 +163,18 @@ func acknowledgeGRC20Escrow(cur realm, sendPacket types.Packet, token *grc20.Tok
 
 	ufmt.Printf("[INFO] sender grc20 balance: %d\n", token.BalanceOf(senderAddr))
 	ufmt.Printf("[INFO] proxy grc20 escrow balance: %d\n", token.BalanceOf(zkgm.ProxyAddress()))
+	ufmt.Printf("[INFO] channel balance ledger after ack: %s\n", channelBalanceOrZero(channelId, []byte(denom), []byte("remote-grc20")).ToString())
 	ufmt.Println("[EXPECTED] sender grc20 balance should be 60 (unchanged)")
 	ufmt.Println("[EXPECTED] proxy grc20 escrow balance should be 40 (unchanged: escrow stays locked)")
+	ufmt.Println("[EXPECTED] channel balance ledger should be 40 (protocol-fill is a no-op; ledger and bank balance agree)")
 }
 
 // refundGRC20EscrowOnFailure sends a second ESCROW order locking 30 more units,
 // then acknowledges it with a failure ack, which refunds the second escrow back to
-// the sender while the first (successfully acked) escrow stays locked.
+// the sender while the first (successfully acked) escrow stays locked. Both orders
+// share the same (channelId, denom, "remote-grc20") ledger key, so the ledger
+// tracks the combined ESCROW total: 40 (first, still locked) + 30 (second) = 70,
+// then back to 40 once the second is refunded.
 func refundGRC20EscrowOnFailure(cur realm, channelId types.ChannelId, token *grc20.Token, ledger *grc20.PrivateLedger, denom string) {
 	proxy := zkgm.ProxyAddress()
 	if err := ledger.Approve(senderAddr, proxy, 30); err != nil {
@@ -186,16 +196,30 @@ func refundGRC20EscrowOnFailure(cur realm, channelId types.ChannelId, token *grc
 
 	ufmt.Printf("[INFO] sender grc20 balance after second send: %d\n", token.BalanceOf(senderAddr))
 	ufmt.Printf("[INFO] proxy grc20 escrow balance after second send: %d\n", token.BalanceOf(proxy))
+	ufmt.Printf("[INFO] channel balance ledger after second send: %s\n", channelBalanceOrZero(channelId, order.BaseToken, order.QuoteToken).ToString())
 	ufmt.Println("[EXPECTED] sender grc20 balance should be 30 (60 - 30 escrowed)")
 	ufmt.Println("[EXPECTED] proxy grc20 escrow balance should be 70 (40 + 30 escrowed)")
+	ufmt.Println("[EXPECTED] channel balance ledger should be 70 (40 + 30, matches the combined escrow)")
 
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{refundPacket}, [][]byte{mustFailureAck()}, nil, 1))
 
 	ufmt.Printf("[INFO] sender grc20 balance after failure ack: %d\n", token.BalanceOf(senderAddr))
 	ufmt.Printf("[INFO] proxy grc20 escrow balance after failure ack: %d\n", token.BalanceOf(proxy))
+	ufmt.Printf("[INFO] channel balance ledger after failure ack: %s\n", channelBalanceOrZero(channelId, order.BaseToken, order.QuoteToken).ToString())
 	ufmt.Println("[EXPECTED] sender grc20 balance should be 60 (second escrow refunded)")
 	ufmt.Println("[EXPECTED] proxy grc20 escrow balance should be 40 (only the success escrow remains)")
+	ufmt.Println("[EXPECTED] channel balance ledger should be 40 (decreased back by the refunded 30; ledger and bank balance agree)")
+}
+
+// channelBalanceOrZero: GetChannelBalanceV2 returns "not found" (never
+// escrowed) as an error rather than a stored zero; resolve it to u256.Zero().
+func channelBalanceOrZero(channelId types.ChannelId, baseToken, quoteToken []byte) *u256.Uint {
+	balance, err := zkgm.GetChannelBalanceV2(channelId, u256.Zero(), string(baseToken), quoteToken)
+	if err != nil {
+		return u256.Zero()
+	}
+	return balance
 }
 
 // --- encoding helpers (pure z calls, mirroring the e2e harness) ---
@@ -278,24 +302,33 @@ func (e mockError) Error() string { return string(e) }
 // [EXPECTED] channel should be 1
 //
 // [SCENARIO] 3. Send grc20 ESCROW order locking 40 units (sender pre-approves the proxy; pulled via TransferFrom)
+// [INFO] channel balance ledger before send: 0
 // [INFO] send produced packet on channel: 1
 // [INFO] sender grc20 balance: 60
 // [INFO] proxy grc20 escrow balance: 40
+// [INFO] channel balance ledger after send: 40
 // [EXPECTED] sender grc20 balance should be 60 (100 - 40 escrowed)
 // [EXPECTED] proxy grc20 escrow balance should be 40 (locked)
+// [EXPECTED] channel balance ledger should be 40 (matches the escrowed order amount)
 //
 // [SCENARIO] 4. Acknowledge with protocol-fill success (no-op for escrow)
 // [INFO] sender grc20 balance: 60
 // [INFO] proxy grc20 escrow balance: 40
+// [INFO] channel balance ledger after ack: 40
 // [EXPECTED] sender grc20 balance should be 60 (unchanged)
 // [EXPECTED] proxy grc20 escrow balance should be 40 (unchanged: escrow stays locked)
+// [EXPECTED] channel balance ledger should be 40 (protocol-fill is a no-op; ledger and bank balance agree)
 //
 // [SCENARIO] 5. Send a second 30-unit ESCROW order, then refund it via a failure ack
 // [INFO] sender grc20 balance after second send: 30
 // [INFO] proxy grc20 escrow balance after second send: 70
+// [INFO] channel balance ledger after second send: 70
 // [EXPECTED] sender grc20 balance should be 30 (60 - 30 escrowed)
 // [EXPECTED] proxy grc20 escrow balance should be 70 (40 + 30 escrowed)
+// [EXPECTED] channel balance ledger should be 70 (40 + 30, matches the combined escrow)
 // [INFO] sender grc20 balance after failure ack: 60
 // [INFO] proxy grc20 escrow balance after failure ack: 40
+// [INFO] channel balance ledger after failure ack: 40
 // [EXPECTED] sender grc20 balance should be 60 (second escrow refunded)
 // [EXPECTED] proxy grc20 escrow balance should be 40 (only the success escrow remains)
+// [EXPECTED] channel balance ledger should be 40 (decreased back by the refunded 30; ledger and bank balance agree)

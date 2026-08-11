@@ -1,15 +1,20 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/batch
 package batch
 
-// send_batch_token_order_multi_protocol_fill_ack_filetest is the SEND-side
+// send_batch_token_order_both_protocol_fill_ack_filetest is the SEND-side
 // counterpart to the recv-side batch files: it sends a batch of two TokenOrder
 // children (a native ESCROW and a grc20 ESCROW) through zkgm.Send, then
-// acknowledges the whole batch with a protocol-fill success for both children.
-// verifyBatch (batch.gno:12-24) runs verifyInternal per child against the
-// shared send-time funds budget: the native child consumes the attached
-// OriginSend coins, the grc20 child is pulled via a separate Approve +
-// TransferFrom, independent of the native budget. Both escrows stay locked
-// after a protocol-fill ack, since protocol-fill is a no-op for an escrow.
+// acknowledges the whole batch with the SAME protocol-fill success ack for
+// both children — not a mix of FillType values (no existing batch file mixes
+// FILL_TYPE_PROTOCOL and FILL_TYPE_MARKETMAKER within one ack; contrast
+// send_batch_token_order_mixed_ack_filetest, whose "mixed" is a per-child
+// SUCCESS/FAILURE outer-tag mix, not a FillType mix). verifyBatch
+// (batch.gno:12-24) runs verifyInternal per child against the shared
+// send-time funds budget: the native child consumes the attached OriginSend
+// coins, the grc20 child is pulled via a separate Approve + TransferFrom,
+// independent of the native budget. Both escrows stay locked after a
+// protocol-fill ack, since protocol-fill is a no-op for an escrow. Asserts
+// each child's GetChannelBalanceV2 ledger alongside its bank balance.
 
 import (
 	"chain"
@@ -57,7 +62,7 @@ func main(cur realm) {
 	println("")
 
 	println("[SCENARIO] 4. Acknowledge the batch: both children protocol-fill (no-op, escrows stay locked)")
-	acknowledgeBothProtocolFill(cur, sendPacket, token)
+	acknowledgeBothProtocolFill(cur, channelId, sendPacket, token, denom)
 }
 
 func setupGRC20(cur realm) (*grc20.Token, *grc20.PrivateLedger, string) {
@@ -107,6 +112,9 @@ func sendBatch(cur realm, channelId types.ChannelId, token *grc20.Token, ledger 
 		panic(err)
 	}
 
+	ufmt.Printf("[INFO] channel balance ledger (native) before send: %s\n", channelBalanceOrZero(channelId, []byte("ugnot"), []byte("remote-ugnot")).ToString())
+	ufmt.Printf("[INFO] channel balance ledger (grc20) before send: %s\n", channelBalanceOrZero(channelId, []byte(denom), []byte("remote-grc20")).ToString())
+
 	batch := z.Batch{Instructions: []z.Instruction{
 		mustOrderInstruction(z.TokenOrderV2{
 			Sender:      []byte(senderAddr.String()),
@@ -137,14 +145,17 @@ func sendBatch(cur realm, channelId types.ChannelId, token *grc20.Token, ledger 
 	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
 	ufmt.Printf("[INFO] proxy grc20 escrow balance: %d\n", token.BalanceOf(proxy))
 	ufmt.Printf("[INFO] sender grc20 balance: %d\n", token.BalanceOf(senderAddr))
+	ufmt.Printf("[INFO] channel balance ledger (native) after send: %s\n", channelBalanceOrZero(channelId, []byte("ugnot"), []byte("remote-ugnot")).ToString())
+	ufmt.Printf("[INFO] channel balance ledger (grc20) after send: %s\n", channelBalanceOrZero(channelId, []byte(denom), []byte("remote-grc20")).ToString())
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (locked)")
 	ufmt.Println("[EXPECTED] proxy grc20 escrow balance should be 40 (locked)")
 	ufmt.Println("[EXPECTED] sender grc20 balance should be 60 (100 - 40 escrowed)")
+	ufmt.Println("[EXPECTED] both channel balance ledgers should be 40 (matches each child's escrowed amount)")
 
 	return sendPacket
 }
 
-func acknowledgeBothProtocolFill(cur realm, sendPacket types.Packet, token *grc20.Token) {
+func acknowledgeBothProtocolFill(cur realm, channelId types.ChannelId, sendPacket types.Packet, token *grc20.Token, denom string) {
 	batchAck := mustBatchAckBytes([][]byte{
 		mustSuccessAck(mustProtocolTokenOrderAck()),
 		mustSuccessAck(mustProtocolTokenOrderAck()),
@@ -157,8 +168,21 @@ func acknowledgeBothProtocolFill(cur realm, sendPacket types.Packet, token *grc2
 	bk := banker.NewReadonlyBanker()
 	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(zkgm.ProxyAddress()).AmountOf("ugnot"))
 	ufmt.Printf("[INFO] proxy grc20 escrow balance: %d\n", token.BalanceOf(zkgm.ProxyAddress()))
+	ufmt.Printf("[INFO] channel balance ledger (native) after ack: %s\n", channelBalanceOrZero(channelId, []byte("ugnot"), []byte("remote-ugnot")).ToString())
+	ufmt.Printf("[INFO] channel balance ledger (grc20) after ack: %s\n", channelBalanceOrZero(channelId, []byte(denom), []byte("remote-grc20")).ToString())
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (unchanged: protocol-fill is a no-op)")
 	ufmt.Println("[EXPECTED] proxy grc20 escrow balance should be 40 (unchanged: protocol-fill is a no-op)")
+	ufmt.Println("[EXPECTED] both channel balance ledgers should stay 40 (protocol-fill is a no-op; ledgers and bank balances agree)")
+}
+
+// channelBalanceOrZero: GetChannelBalanceV2 returns "not found" (never
+// escrowed) as an error rather than a stored zero; resolve it to u256.Zero().
+func channelBalanceOrZero(channelId types.ChannelId, baseToken, quoteToken []byte) *u256.Uint {
+	balance, err := zkgm.GetChannelBalanceV2(channelId, u256.Zero(), string(baseToken), quoteToken)
+	if err != nil {
+		return u256.Zero()
+	}
+	return balance
 }
 
 // --- encoding helpers ---
@@ -212,16 +236,24 @@ func mustBatchAckBytes(childAcks [][]byte) []byte {
 // [SCENARIO] 2. Bootstrap IBC host and open a zkgm channel
 //
 // [SCENARIO] 3. Send a batch of [native ESCROW 40ugnot, grc20 ESCROW 40 units]
+// [INFO] channel balance ledger (native) before send: 0
+// [INFO] channel balance ledger (grc20) before send: 0
 // [INFO] send produced packet on channel: 1
 // [INFO] proxy native escrow balance: 40
 // [INFO] proxy grc20 escrow balance: 40
 // [INFO] sender grc20 balance: 60
+// [INFO] channel balance ledger (native) after send: 40
+// [INFO] channel balance ledger (grc20) after send: 40
 // [EXPECTED] proxy native escrow balance should be 40 (locked)
 // [EXPECTED] proxy grc20 escrow balance should be 40 (locked)
 // [EXPECTED] sender grc20 balance should be 60 (100 - 40 escrowed)
+// [EXPECTED] both channel balance ledgers should be 40 (matches each child's escrowed amount)
 //
 // [SCENARIO] 4. Acknowledge the batch: both children protocol-fill (no-op, escrows stay locked)
 // [INFO] proxy native escrow balance: 40
 // [INFO] proxy grc20 escrow balance: 40
+// [INFO] channel balance ledger (native) after ack: 40
+// [INFO] channel balance ledger (grc20) after ack: 40
 // [EXPECTED] proxy native escrow balance should be 40 (unchanged: protocol-fill is a no-op)
 // [EXPECTED] proxy grc20 escrow balance should be 40 (unchanged: protocol-fill is a no-op)
+// [EXPECTED] both channel balance ledgers should stay 40 (protocol-fill is a no-op; ledgers and bank balances agree)

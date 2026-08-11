@@ -32,7 +32,6 @@ func TestProveConsensusAcceptedByRealClient(t *testing.T) {
 		&lc.ClientState{
 			ChainID:         "l1",
 			TrustingPeriod:  1 << 62,
-			UnbondingPeriod: 1 << 63,
 			MaxClockDrift:   1 << 30,
 			LatestHeight:    types.NewHeight(l1Height),
 			ContractAddress: contractAddr,

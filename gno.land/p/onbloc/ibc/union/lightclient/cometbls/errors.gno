@@ -13,7 +13,6 @@ var (
 	ErrInvalidConsensus                  = errors.New("invalid consensus state")
 	ErrInvalidNextValidatorsHash         = errors.New("invalid next validators hash")
 	ErrInvalidTrustingPeriod             = errors.New("invalid trusting period")
-	ErrInvalidUnbondingPeriod            = errors.New("invalid unbonding period")
 	ErrInvalidHeaderHeight               = errors.New("invalid header height")
 	ErrInvalidMisbehaviour               = errors.New("invalid misbehaviour")
 	ErrInvalidHeader                     = errors.New("invalid header")

@@ -35,7 +35,8 @@ func TestVoucherScaling(cur realm, t *testing.T) {
 	uassert.Equal(t, uint8(18), vou.OriginDecimals())
 	uassert.Equal(t, 12, vou.ScaleExp())
 
-	oneToken := z.Pow10(18) // 1 whole 18-dec token, origin precision
+	oneToken, err := z.Pow10(18) // 1 whole 18-dec token, origin precision
+	uassert.NoError(t, err)
 
 	n, err := vou.ToLedgerAmount(oneToken)
 	uassert.NoError(t, err)

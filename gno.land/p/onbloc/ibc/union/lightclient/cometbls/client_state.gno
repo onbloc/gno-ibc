@@ -10,10 +10,11 @@ import (
 // https://github.com/cometbft/cometbft/blob/6b567cd510acb6d729869db8621ae93ac79247cf/types/genesis.go#L18-L21
 const MaxChainIDLen int = 50
 
+// Union reference (no UnbondingPeriod field):
+// https://github.com/unionlabs/union/blob/0ceb6f830211d752b7c099e4630e2c95d3c179d1/lib/cometbls-light-client-types/src/client_state.rs#L13-L31
 type ClientState struct {
 	ChainID         string
 	TrustingPeriod  uint64
-	UnbondingPeriod uint64
 	MaxClockDrift   uint64
 	FrozenHeight    types.Height
 	LatestHeight    types.Height
@@ -22,8 +23,7 @@ type ClientState struct {
 
 func NewClientState(
 	chainID string,
-	trustingPeriod,
-	unbondingPeriod uint64,
+	trustingPeriod uint64,
 	maxClockDrift uint64,
 	frozenHeight types.Height,
 	latestHeight types.Height,
@@ -32,7 +32,6 @@ func NewClientState(
 	return &ClientState{
 		ChainID:         chainID,
 		TrustingPeriod:  trustingPeriod,
-		UnbondingPeriod: unbondingPeriod,
 		MaxClockDrift:   maxClockDrift,
 		FrozenHeight:    frozenHeight,
 		LatestHeight:    latestHeight,
@@ -52,10 +51,6 @@ func (cs *ClientState) GetChainID() string {
 
 func (cs *ClientState) GetTrustingPeriod() uint64 {
 	return cs.TrustingPeriod
-}
-
-func (cs *ClientState) GetUnbondingPeriod() uint64 {
-	return cs.UnbondingPeriod
 }
 
 func (cs *ClientState) GetMaxClockDrift() uint64 {
@@ -108,9 +103,9 @@ func (cs *ClientState) Validate() error {
 		return errorWithDetails(ErrInvalidTrustingPeriod, "trusting period must be greater than zero")
 	}
 
-	if cs.UnbondingPeriod <= 0 {
-		return errorWithDetails(ErrInvalidUnbondingPeriod, "unbonding period must be greater than zero")
-	}
+	// No upper bound on TrustingPeriod: Union doesn't check it either (see
+	// VerifyCreation), relying on gating CreateClient to the relayer role.
+	// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/deployer/src/main.rs#L1786-L1830
 
 	if cs.MaxClockDrift <= 0 {
 		return errorWithDetails(ErrInvalidMaxClockDrift, "max clock drift must be greater than zero")
@@ -118,13 +113,6 @@ func (cs *ClientState) Validate() error {
 
 	if cs.GetLatestRevisionHeight() == 0 {
 		return errorWithDetails(ErrInvalidHeaderHeight, "cometbls client's latest height cannot be zero")
-	}
-
-	if cs.TrustingPeriod >= cs.UnbondingPeriod {
-		return errorWithDetails(
-			ErrInvalidTrustingPeriod,
-			ufmt.Sprintf("trusting period (%d) should be < unbonding period (%d)", cs.TrustingPeriod, cs.UnbondingPeriod),
-		)
 	}
 
 	return nil
@@ -136,8 +124,7 @@ func (cs *ClientState) ZeroCustomFields() *ClientState {
 	// copy over all chain-specified fields
 	// and leave custom fields empty
 	return &ClientState{
-		ChainID:         cs.ChainID,
-		UnbondingPeriod: cs.UnbondingPeriod,
-		LatestHeight:    cs.LatestHeight,
+		ChainID:      cs.ChainID,
+		LatestHeight: cs.LatestHeight,
 	}
 }

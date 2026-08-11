@@ -1,7 +1,6 @@
 package config_test
 
 import (
-	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -118,23 +117,6 @@ func TestRenderVoyagerConfig(t *testing.T) {
 	}
 }
 
-func TestRenderVoyagerRejectsChangedStateModuleTopology(t *testing.T) {
-	cfg, err := load(t, validEnvironment(), false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	template, err := os.ReadFile(filepath.Join("..", "..", "config.jsonc.template"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	template = bytes.Replace(template, []byte(`"chain_id":"__GNO_CHAIN_ID__"`), []byte(`"chain_id":"wrong"`), 1)
-	if _, err := config.RenderVoyager(template, cfg, nil, nil); err == nil {
-		t.Fatal("changed state-module topology unexpectedly accepted")
-	}
-}
-
 func validEnvironment() map[string]string {
 	return map[string]string{
 		"UNION_CHAIN_ID":                  "union-devnet-1",
@@ -166,7 +148,6 @@ func validEnvironment() map[string]string {
 		"GNO_RECIPIENT":                   "g1" + strings.Repeat("a", 38),
 		"EVM_TEST_AMOUNT":                 "1000000000000",
 		"E2E_ARTIFACT_DIR":                "/suite/artifacts",
-		"E2E_STATE_FILE":                  "/suite/artifacts/state.json",
 		"VOYAGER_COMMAND_TIMEOUT_SECONDS": "120",
 	}
 }

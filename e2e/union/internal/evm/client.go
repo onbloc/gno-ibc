@@ -34,7 +34,6 @@ type Client struct {
 // Plan is the durable identity needed to reconstruct one TokenOrder.
 type Plan struct {
 	Token, Sender, Voucher, Salt, Tag, Metadata string
-	Decimals                                    uint8
 }
 
 // WrappedPlan identifies a Gno-origin token on EVM.
@@ -113,13 +112,9 @@ func (c *Client) PrepareToken(
 	gnoChannel int64,
 ) (Plan, error) {
 	token = strings.ToLower(token)
-	raw, err := c.cast(ctx, "wallet", "address", "--private-key", c.cfg.EVMPrivateKey)
+	sender, err := c.Address(ctx, c.cfg.EVMPrivateKey)
 	if err != nil {
 		return Plan{}, err
-	}
-	sender := strings.ToLower(string(raw))
-	if !addressPattern.MatchString(sender) {
-		return Plan{}, fmt.Errorf("cannot derive EVM sender")
 	}
 	code, err := c.cast(ctx, "code", token)
 	if err != nil {
@@ -160,7 +155,7 @@ func (c *Client) PrepareToken(
 	}
 	return Plan{
 		Token: token, Sender: sender, Voucher: "ibc/" + string(voucherHash[2:42]),
-		Salt: salt, Tag: tag, Metadata: metadata, Decimals: decimals,
+		Salt: salt, Tag: tag, Metadata: metadata,
 	}, nil
 }
 
@@ -170,13 +165,9 @@ func (c *Client) PrepareWrappedToken(
 	evmChannel int64,
 	baseToken string,
 ) (WrappedPlan, error) {
-	raw, err := c.cast(ctx, "wallet", "address", "--private-key", c.cfg.EVMPrivateKey)
+	sender, err := c.Address(ctx, c.cfg.EVMPrivateKey)
 	if err != nil {
 		return WrappedPlan{}, err
-	}
-	sender := strings.ToLower(string(raw))
-	if !addressPattern.MatchString(sender) {
-		return WrappedPlan{}, errors.New("cannot derive EVM sender")
 	}
 	fao, err := c.addressCall(ctx, c.cfg.EVMZKGMContract, "FAO_IMPL()(address)")
 	if err != nil {

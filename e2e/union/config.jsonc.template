@@ -34,9 +34,9 @@
   "plugins": [
     {"path":"__VOYAGER_BIN_DIR__/voyager-plugin-packet-timeout","config":{}},
     {"path":"__VOYAGER_BIN_DIR__/voyager-plugin-transaction-batch","config":{"chain_id":"__UNION_CHAIN_ID__","client_configs":{"max_batch_size":5,"max_wait_time":{"nanos":0,"secs":10},"min_batch_size":1}}},
-    {"path":"__VOYAGER_BIN_DIR__/voyager-plugin-transaction-batch","config":{"chain_id":"__EVM_CHAIN_ID__","client_configs":[]}},
+    {"path":"__VOYAGER_BIN_DIR__/voyager-plugin-transaction-batch","config":{"chain_id":"__EVM_CHAIN_ID__","client_configs":__EVM_CLIENT_CONFIGS__}},
     {"path":"__VOYAGER_BIN_DIR__/voyager-plugin-transaction-batch","config":{"chain_id":"__GNO_CHAIN_ID__","client_configs":{"max_batch_size":5,"max_wait_time":{"nanos":0,"secs":10},"min_batch_size":1}}},
-    {"path":"__VOYAGER_BIN_DIR__/voyager-plugin-transaction-batch-proof-lens","config":{"chain_id":"__EVM_CHAIN_ID__","client_configs":[]}},
+    {"path":"__VOYAGER_BIN_DIR__/voyager-plugin-transaction-batch-proof-lens","config":{"chain_id":"__EVM_CHAIN_ID__","client_configs":__EVM_PROOF_LENS_CLIENT_CONFIGS__}},
     {"path":"__VOYAGER_BIN_DIR__/voyager-event-source-plugin-cosmwasm","config":{"chain_id":"__UNION_CHAIN_ID__","chunk_block_fetch_size":1000,"ibc_host_contract_address":"__UNION_IBC_HOST_CONTRACT__","refetch_delay":20,"rpc_url":"__UNION_RPC_URL__"}},
     {"path":"__VOYAGER_BIN_DIR__/voyager-event-source-plugin-evm","config":{"chain_id":"__EVM_CHAIN_ID__","chunk_block_fetch_size":1,"ibc_handler_address":"__EVM_IBC_HANDLER__","rpc_url":"__EVM_RPC_URL__"}},
     {"path":"__VOYAGER_BIN_DIR__/voyager-event-source-plugin-gno","config":{"chain_id":"__GNO_CHAIN_ID__","chunk_block_fetch_size":1000,"ibc_core_realm":"__GNO_IBC_CORE_REALM__","refetch_delay":20,"rpc_url":"__GNO_RPC_URL__"}},

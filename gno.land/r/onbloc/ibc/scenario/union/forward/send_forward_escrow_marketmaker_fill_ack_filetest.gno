@@ -112,7 +112,7 @@ func sendTopLevelForwardOrder(cur realm, channelId types.ChannelId) types.Packet
 
 	bk := banker.NewReadonlyBanker()
 	ufmt.Printf("[INFO] send produced packet on channel: %s\n", sendPacket.SourceChannelId.String())
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
 	ufmt.Println("[EXPECTED] send should succeed: attached 40ugnot covers the escrow order")
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (locked)")
 
@@ -130,9 +130,9 @@ func acknowledgeMarketMakerFill(cur realm, sendPacket types.Packet) {
 	testing.SetRealm(testing.NewUserRealm(adminAddrAck))
 	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{mustMakerFillAckAck(makerAddrAck)}, nil, 1))
 
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
-	ufmt.Printf("[INFO] sender native balance: %d\n", bk.GetCoins(senderAddrAck).AmountOf("ugnot"))
-	ufmt.Printf("[INFO] maker native balance: %d\n", bk.GetCoins(makerAddrAck).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
+	ufmt.Printf("[INFO] sender native balance: %d\n", bk.GetCoin(senderAddrAck, "ugnot"))
+	ufmt.Printf("[INFO] maker native balance: %d\n", bk.GetCoin(makerAddrAck, "ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 0 (released to the maker)")
 	ufmt.Println("[EXPECTED] sender native balance should be 0 (unchanged: not refunded)")
 	ufmt.Println("[EXPECTED] maker native balance should be 40 (settled from the escrow)")

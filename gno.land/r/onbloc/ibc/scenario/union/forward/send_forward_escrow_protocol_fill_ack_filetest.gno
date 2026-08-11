@@ -111,7 +111,7 @@ func sendTopLevelForwardOrderProto(cur realm, channelId types.ChannelId) types.P
 
 	bk := banker.NewReadonlyBanker()
 	ufmt.Printf("[INFO] send produced packet on channel: %s\n", sendPacket.SourceChannelId.String())
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
 	ufmt.Println("[EXPECTED] send should succeed: attached 40ugnot covers the escrow order")
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (locked)")
 
@@ -127,8 +127,8 @@ func acknowledgeProtocolFill(cur realm, sendPacket types.Packet) {
 	testing.SetRealm(testing.NewUserRealm(adminAddrProto))
 	core.PacketAcknowledgement(cross(cur), core.NewMsgPacketAcknowledgement([]types.Packet{sendPacket}, [][]byte{mustProtocolFillAckProto()}, nil, 1))
 
-	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoins(proxy).AmountOf("ugnot"))
-	ufmt.Printf("[INFO] sender native balance: %d\n", bk.GetCoins(senderAddrProto).AmountOf("ugnot"))
+	ufmt.Printf("[INFO] proxy native escrow balance: %d\n", bk.GetCoin(proxy, "ugnot"))
+	ufmt.Printf("[INFO] sender native balance: %d\n", bk.GetCoin(senderAddrProto, "ugnot"))
 	ufmt.Println("[EXPECTED] proxy native escrow balance should be 40 (unchanged: protocol fill is a no-op for escrow)")
 	ufmt.Println("[EXPECTED] sender native balance should be 0 (unchanged: not refunded)")
 }

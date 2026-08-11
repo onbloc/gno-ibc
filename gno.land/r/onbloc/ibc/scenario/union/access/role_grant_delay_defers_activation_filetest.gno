@@ -1,14 +1,11 @@
 // PKGPATH: gno.land/r/onbloc/ibc/scenario/union/access
 package access
 
-// role_grant_delay_defers_activation_filetest is the NORMAL-path access
-// scenario for a delayed grant. The admin configures a grant delay on
-// RelayerRole via access.SetGrantDelay, then grants the role to a fresh
-// account. Access.isActiveAt (manager/access.gno) only activates a grant once
-// the current time reaches Since (the grant time plus the configured delay),
-// so the account is NOT yet authorized for relayer-gated core selectors
-// immediately after the grant — only once the chain advances past the delay
-// does the same account become authorized, with no further action required.
+// Regression demo: SetGrantDelay used to overwrite a role's grant delay
+// immediately, letting an admin shrink an observation window and grant a
+// role in the same block. It now schedules the change behind a setback
+// (manager.MinSetback / Delay.WithUpdate), so a same-block grant still uses
+// the delay that was actually active.
 
 import (
 	"testing"
@@ -25,37 +22,53 @@ const (
 	adminAddr   = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5") // baked-in DefaultAdminAddress (holds AdminRole)
 	relayerAddr = address("g1wymu47drhr0kuq2098m792lytgtj2nyx77yrsm")
 
-	grantDelaySeconds = manager.Delay(10)
+	oneDaySeconds    = uint32(24 * 60 * 60)
+	blocksPerDay     = int64(oneDaySeconds) / 5      // 5s per block
+	blocksPerSetback = int64(manager.MinSetback) / 5 // manager.MinSetback is 5 days
 )
 
 func main(cur realm) {
-	println("[SCENARIO] 1. Admin sets a 10s grant delay on RelayerRole")
-	setGrantDelay(cur)
+	println("[SCENARIO] 1. Admin schedules a 1-day grant delay on RelayerRole")
+	setGrantDelay(cur, oneDaySeconds)
+	showGrantDelay()
+	ufmt.Println("[EXPECTED] the new delay is scheduled, not active yet")
 	println("")
 
-	println("[SCENARIO] 2. Admin grants RelayerRole to a fresh account")
+	println("[SCENARIO] 2. Advance the chain past the setback: the 1-day delay is now active")
+	testing.SkipHeights(blocksPerSetback)
+	showGrantDelay()
+	ufmt.Println("[EXPECTED] the scheduled delay is now the active grant delay")
+	println("")
+
+	println("[SCENARIO] 3. Admin tries to shrink the delay to 0 and grants the role in the same block")
+	setGrantDelay(cur, 0)
 	grantRelayer(cur)
 	showAuthorization()
-	ufmt.Println("[EXPECTED] relayer should NOT be authorized yet: the grant is pending the delay")
+	ufmt.Println("[EXPECTED] relayer should NOT be authorized yet: the shrink attempt hasn't taken effect, so the grant still used the 1-day delay that was actually active")
 	println("")
 
-	println("[SCENARIO] 3. Advance the chain past the delay: the same grant is now active")
-	testing.SkipHeights(3) // 3 blocks * 5s = 15s, past the 10s delay
+	println("[SCENARIO] 4. Advance the chain past the 1-day delay that was active at grant time")
+	testing.SkipHeights(blocksPerDay)
 	showAuthorization()
-	ufmt.Println("[EXPECTED] relayer should now be authorized, with no further admin action")
+	ufmt.Println("[EXPECTED] relayer is now authorized, exactly one day after the grant -- the shrink attempt never shortened the observation window")
 }
 
 // setGrantDelay configures the delay as the admin. Admin authorizes via
 // cur.Previous(), so SetRealm(admin) and the cross(cur) call share this frame.
-func setGrantDelay(cur realm) {
+func setGrantDelay(cur realm, newDelay uint32) {
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	access.SetGrantDelay(cross(cur), access.RelayerRole, grantDelaySeconds)
+	access.SetGrantDelay(cross(cur), access.RelayerRole, newDelay)
 }
 
 func grantRelayer(cur realm) {
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
 	newMember := access.GrantRole(cross(cur), access.RelayerRole, relayerAddr)
 	ufmt.Printf("[INFO] GrantRole returned newMember=%t\n", newMember)
+}
+
+// showGrantDelay reads the grant delay currently in effect for RelayerRole.
+func showGrantDelay() {
+	ufmt.Printf("[INFO] RelayerRole grant delay in effect: %d\n", access.GetRoleGrantDelay(access.RelayerRole))
 }
 
 // showAuthorization reads (non-crossing) the current role membership and the derived
@@ -66,15 +79,21 @@ func showAuthorization() {
 }
 
 // Output:
-// [SCENARIO] 1. Admin sets a 10s grant delay on RelayerRole
+// [SCENARIO] 1. Admin schedules a 1-day grant delay on RelayerRole
+// [INFO] RelayerRole grant delay in effect: 0
+// [EXPECTED] the new delay is scheduled, not active yet
 //
-// [SCENARIO] 2. Admin grants RelayerRole to a fresh account
+// [SCENARIO] 2. Advance the chain past the setback: the 1-day delay is now active
+// [INFO] RelayerRole grant delay in effect: 86400
+// [EXPECTED] the scheduled delay is now the active grant delay
+//
+// [SCENARIO] 3. Admin tries to shrink the delay to 0 and grants the role in the same block
 // [INFO] GrantRole returned newMember=true
 // [INFO] relayer has RelayerRole: false
 // [INFO] relayer authorized for packet_recv on core: false
-// [EXPECTED] relayer should NOT be authorized yet: the grant is pending the delay
+// [EXPECTED] relayer should NOT be authorized yet: the shrink attempt hasn't taken effect, so the grant still used the 1-day delay that was actually active
 //
-// [SCENARIO] 3. Advance the chain past the delay: the same grant is now active
+// [SCENARIO] 4. Advance the chain past the 1-day delay that was active at grant time
 // [INFO] relayer has RelayerRole: true
 // [INFO] relayer authorized for packet_recv on core: true
-// [EXPECTED] relayer should now be authorized, with no further admin action
+// [EXPECTED] relayer is now authorized, exactly one day after the grant -- the shrink attempt never shortened the observation window

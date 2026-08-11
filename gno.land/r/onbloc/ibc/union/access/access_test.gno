@@ -199,6 +199,9 @@ func TestManagerAdminProtectedSurfacesRejectNonAdmin(cur realm, t *testing.T) {
 	if GetRoleGrantDelay(RelayerRole) != 0 {
 		t.Fatal("rejected SetGrantDelay must not change grant delay")
 	}
+	if !GetRoleGrantDelayEffect(RelayerRole).IsZero() {
+		t.Fatal("rejected SetGrantDelay must not schedule an effect timePoint")
+	}
 	if GetFunctionRole(cur.PkgPath(), "set_hook") != manager.AdminRole {
 		t.Fatal("rejected SetFunctionRole must not change selector role")
 	}
@@ -236,8 +239,14 @@ func TestRoleConfigurationSurface(cur realm, t *testing.T) {
 	if GetRoleAdmin(RelayerRole) != roleAdminRole {
 		t.Fatal("SetRoleAdmin must update role admin")
 	}
-	if GetRoleGrantDelay(RelayerRole) != 5 {
-		t.Fatal("SetGrantDelay must update role grant delay")
+	// SetGrantDelay schedules the change; it takes a minimum setback (see
+	// manager.MinSetback) before it is observable, so the grant delay stays
+	// at its old value (zero) immediately after the call.
+	if GetRoleGrantDelay(RelayerRole) != 0 {
+		t.Fatal("SetGrantDelay change must not be observable before its setback effect timePoint")
+	}
+	if GetRoleGrantDelayEffect(RelayerRole).IsZero() {
+		t.Fatal("SetGrantDelay must schedule an effect timePoint for the pending change")
 	}
 	if !CanAdminRole(RelayerRole, roleAdmin).Immediate {
 		t.Fatal("role admin member must be able to administer relayer role")
@@ -248,7 +257,7 @@ func TestRoleConfigurationSurface(cur realm, t *testing.T) {
 	GrantRole(cross(cur), RelayerRole, relayer)
 	membership := HasRole(RelayerRole, relayer)
 	if !membership.IsMember {
-		t.Fatal("GrantRole must add active relayer when grant delay is zero")
+		t.Fatal("GrantRole must add an active relayer while both pending delay changes are still unobserved (the still-active delay remains zero)")
 	}
 }
 

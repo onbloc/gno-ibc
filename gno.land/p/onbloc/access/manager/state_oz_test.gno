@@ -48,6 +48,9 @@ func TestOZGetRoleAdminReturnsConfiguredAdminOrAdminDefault(t *testing.T) {
 	}
 }
 
+// Only the "before minSetback" half is exercised here (State can't
+// fast-forward real time); the "after" transition is covered by
+// Delay.WithUpdate (delay_test.gno) and state_role_test.gno.
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L446-L478
 func TestOZGetRoleGrantDelayReturnsConfiguredDelayOrZeroDefault(t *testing.T) {
@@ -59,8 +62,8 @@ func TestOZGetRoleGrantDelayReturnsConfiguredDelayOrZeroDefault(t *testing.T) {
 
 	state.SetGrantDelay(ozRole, 11)
 
-	if state.GetRoleGrantDelay(ozRole) != 11 {
-		t.Fatal("role grant delay must return the configured delay")
+	if state.GetRoleGrantDelay(ozRole) != 0 {
+		t.Fatal("grant delay change must not be observable before its setback effect timePoint")
 	}
 }
 
@@ -105,13 +108,16 @@ func TestOZHasRolePublicRoleReturnsTrue(t *testing.T) {
 	}
 }
 
+// The grant delay is seeded directly since SetGrantDelay's setback needs
+// real time to elapse (OZ's own fixture does the equivalent via the
+// harness-only $_setGrantDelay plus mining past MINSETBACK).
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L613-L617
 func TestOZHasRolePendingGrantReturnsFalse(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
+	state.Roles[ozRole] = NewRoleConfig(AdminRole, 10)
 
-	state.SetGrantDelay(ozRole, 10)
 	state.GrantRole(ozRole, caller)
 
 	result := state.HasRole(ozRole, caller)
@@ -185,12 +191,14 @@ func TestOZGrantRoleRejectsPublicRole(t *testing.T) {
 	})
 }
 
+// The grant delay is seeded directly for the same reason as
+// TestOZHasRolePendingGrantReturnsFalse above.
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L1198-L1241
 func TestOZGrantRoleWithGrantDelayDefersNewMember(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
-	state.SetGrantDelay(ozRole, 10)
+	state.Roles[ozRole] = NewRoleConfig(AdminRole, 10)
 
 	if !state.GrantRole(ozRole, caller) {
 		t.Fatal("new grant must report a new member")

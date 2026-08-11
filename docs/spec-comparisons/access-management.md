@@ -24,7 +24,7 @@ surface tables.
 | Authorization check | `AccessManaged` and `Restricted` wrappers call the authority. | Managed realms call `AssertCanCall(0, cur, selector)`. |
 | Public role | Always callable when target is open. | `PublicRole` is retained as `uint64 max`; target closure still blocks calls. |
 | Admin role | `ADMIN_ROLE = 0`. | `AdminRole = 0`. |
-| Grant delay | Retained by OpenZeppelin and Union. | Retained by `GrantDelay` and member activation time. |
+| Grant delay | Retained by OpenZeppelin and Union, including the `Delay.withUpdate`/`Delay::with_update` setback that protects delay *changes* (`MinSetback`, 5 days for both). | Retained by `GrantDelay` (a `manager.Delay`) and member activation time; `SetGrantDelay` schedules changes through the same setback formula via `manager.MinSetback`. |
 | Delayed operation execution | OpenZeppelin and Union include scheduling/execution concepts. | Not implemented; Gno keeps grant delay only. |
 
 ## Implemented Gno Surfaces

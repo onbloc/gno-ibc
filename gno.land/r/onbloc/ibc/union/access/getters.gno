@@ -23,6 +23,12 @@ func GetRoleGrantDelay(role manager.RoleId) uint32 {
 	return accessState.GetRoleGrantDelay(role)
 }
 
+// GetRoleGrantDelayEffect returns when role's scheduled grant delay change takes effect.
+// No Union equivalent.
+func GetRoleGrantDelayEffect(role manager.RoleId) manager.TimePoint {
+	return accessState.GetRoleGrantDelayEffect(role)
+}
+
 // GetFunctionRole returns the selector role for targetPath.
 // Union reference:
 // https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L1091-L1107

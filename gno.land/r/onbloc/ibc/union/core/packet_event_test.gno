@@ -95,8 +95,8 @@ func TestIsValidPacketDataSizeUsesEventConfig(cur realm, t *testing.T) {
 				MaxEventAttrValueLen: 4,
 				MaxEventAttrPairs:    2,
 			},
-			data:       make([]byte, 1),
-			wantBudget: 4,
+			data:       make([]byte, 3),
+			wantBudget: 8,
 			wantValid:  true,
 		},
 		{
@@ -106,8 +106,8 @@ func TestIsValidPacketDataSizeUsesEventConfig(cur realm, t *testing.T) {
 				MaxEventAttrValueLen: 4,
 				MaxEventAttrPairs:    2,
 			},
-			data:       make([]byte, 2),
-			wantBudget: 4,
+			data:       make([]byte, 4),
+			wantBudget: 8,
 			wantValid:  false,
 		},
 		{
@@ -118,7 +118,7 @@ func TestIsValidPacketDataSizeUsesEventConfig(cur realm, t *testing.T) {
 				MaxEventAttrPairs:    2,
 			},
 			data:       make([]byte, 1024),
-			wantBudget: 4,
+			wantBudget: 8,
 			wantValid:  true,
 		},
 	}

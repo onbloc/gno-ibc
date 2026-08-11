@@ -10,8 +10,8 @@ const (
 	DefaultAdminAddress = address("g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5")
 )
 
-func init() {
-	resetAccess(DefaultAdminAddress)
+func init(cur realm) {
+	resetAccess(cur.Previous().Address())
 }
 
 // resetAccess mirrors the deploy-time setup that Union performs through its

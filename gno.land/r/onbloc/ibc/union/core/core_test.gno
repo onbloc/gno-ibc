@@ -351,12 +351,8 @@ func TestSaveAndGetConnection(cur realm, t *testing.T) {
 	}
 
 	want := hexString(mustEncodeABI(conn.EncodeABI()))
-	gotHex, err := QueryConnection(id)
-	if err != nil {
-		t.Fatalf("QueryConnection: unexpected error %v", err)
-	}
-	if gotHex != want {
-		t.Errorf("QueryConnection: got %q want %q", gotHex, want)
+	if got := QueryConnection(id); got != want {
+		t.Errorf("QueryConnection: got %q want %q", got, want)
 	}
 }
 
@@ -367,15 +363,12 @@ func TestGetConnectionNotFoundReturnsFalse(cur realm, t *testing.T) {
 	}
 }
 
-func TestQueryConnectionUnknownReturnsError(cur realm, t *testing.T) {
+func TestQueryConnectionUnknownReturnsEmpty(cur realm, t *testing.T) {
 	resetStore(cur)
 
-	got, err := QueryConnection(types.ConnectionId(999))
+	got := QueryConnection(types.ConnectionId(999))
 	if got != "" {
 		t.Errorf("QueryConnection: got %q want empty", got)
-	}
-	if err == nil {
-		t.Error("QueryConnection: expected error for unknown connection")
 	}
 }
 

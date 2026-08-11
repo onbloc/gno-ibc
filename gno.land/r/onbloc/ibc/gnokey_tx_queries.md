@@ -265,9 +265,6 @@ Expected formats:
 
 - `GetClientType` returns the registered client type string.
 - `GetClientState` and `GetConsensusState` return the stored client bytes.
-- `QueryClientState`, `QueryConsensusState`, `QueryConnection`, `QueryChannel`,
-  and `GetClientStatus` now return `(string, error)`, matching the getters,
-  instead of a bare string with "" meaning not found.
 - `QueryConnection` and `QueryChannel` return ethabi-encoded struct bytes as
   `0x` hex.
 - `QueryBatchPackets` and `QueryBatchReceipts` return stored `H256` values as

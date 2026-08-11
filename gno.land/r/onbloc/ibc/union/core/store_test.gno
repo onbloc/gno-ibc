@@ -295,12 +295,8 @@ func TestConnectionStore(cur realm, t *testing.T) {
 			}
 
 			want := hexString(mustEncodeABI(conn.EncodeABI()))
-			gotHex, err := QueryConnection(id)
-			if err != nil {
-				t.Fatalf("QueryConnection: unexpected error %v", err)
-			}
-			if gotHex != want {
-				t.Errorf("QueryConnection: got %q want %q", gotHex, want)
+			if got := QueryConnection(id); got != want {
+				t.Errorf("QueryConnection: got %q want %q", got, want)
 			}
 		}},
 		{"get unknown connection", func(t *testing.T) {

@@ -16,16 +16,14 @@ func TestQueryClientStateReturnsHex(cur realm, t *testing.T) {
 	raw := []byte("client-state-bytes")
 	store.SaveClientState(0, cur, clientId, raw)
 
-	got, err := QueryClientState(clientId)
-	uassert.NoError(t, err)
-	uassert.Equal(t, hexString(raw), got)
+	got := QueryClientState(clientId)
+	want := hexString(raw)
+	uassert.Equal(t, want, got)
 }
 
-func TestQueryClientStateMissingReturnsError(cur realm, t *testing.T) {
+func TestQueryClientStateMissingReturnsEmpty(cur realm, t *testing.T) {
 	resetStore(cur)
-	got, err := QueryClientState(types.ClientId(999))
-	uassert.Equal(t, "", got)
-	uassert.ErrorContains(t, err, ErrClientStateNotFound)
+	uassert.Equal(t, "", QueryClientState(types.ClientId(999)))
 }
 
 // --- QueryConsensusState ---
@@ -37,27 +35,23 @@ func TestQueryConsensusStateReturnsHex(cur realm, t *testing.T) {
 	height := uint64(42)
 	store.SaveConsensusState(0, cur, clientId, types.NewHeight(height), raw)
 
-	got, err := QueryConsensusState(clientId, height)
-	uassert.NoError(t, err)
-	uassert.Equal(t, hexString(raw), got)
+	got := QueryConsensusState(clientId, height)
+	want := hexString(raw)
+	uassert.Equal(t, want, got)
 }
 
-func TestQueryConsensusStateMissingReturnsError(cur realm, t *testing.T) {
+func TestQueryConsensusStateMissingReturnsEmpty(cur realm, t *testing.T) {
 	resetStore(cur)
 	clientId := registerMockClient(&mockClient{status: types.StatusActive})
-	got, err := QueryConsensusState(clientId, 999)
-	uassert.Equal(t, "", got)
-	uassert.ErrorContains(t, err, ErrConsensusStateNotFound)
+	uassert.Equal(t, "", QueryConsensusState(clientId, 999))
 }
 
-func TestQueryConsensusStateWrongHeightReturnsError(cur realm, t *testing.T) {
+func TestQueryConsensusStateWrongHeightReturnsEmpty(cur realm, t *testing.T) {
 	resetStore(cur)
 	clientId := registerMockClient(&mockClient{status: types.StatusActive})
 	store.SaveConsensusState(0, cur, clientId, types.NewHeight(10), []byte("cs"))
 
-	got, err := QueryConsensusState(clientId, 99)
-	uassert.Equal(t, "", got)
-	uassert.ErrorContains(t, err, ErrConsensusStateNotFound)
+	uassert.Equal(t, "", QueryConsensusState(clientId, 99))
 }
 
 // --- QueryConnection ---
@@ -74,16 +68,14 @@ func TestQueryConnectionReturnsABIHex(cur realm, t *testing.T) {
 	id := store.nextConnectionId()
 	store.saveConnection(id, conn)
 
-	got, err := QueryConnection(id)
-	uassert.NoError(t, err)
-	uassert.Equal(t, hexString(mustEncodeABI(conn.EncodeABI())), got)
+	got := QueryConnection(id)
+	want := hexString(mustEncodeABI(conn.EncodeABI()))
+	uassert.Equal(t, want, got)
 }
 
-func TestQueryConnectionMissingReturnsError(cur realm, t *testing.T) {
+func TestQueryConnectionMissingReturnsEmpty(cur realm, t *testing.T) {
 	resetStore(cur)
-	got, err := QueryConnection(types.ConnectionId(999))
-	uassert.Equal(t, "", got)
-	uassert.ErrorContains(t, err, ErrConnectionNotFound)
+	uassert.Equal(t, "", QueryConnection(types.ConnectionId(999)))
 }
 
 // --- QueryChannel ---
@@ -92,22 +84,20 @@ func TestQueryChannelReturnsABIHex(cur realm, t *testing.T) {
 	resetStore(cur)
 	_, _, channelId := setupOpenChannel(t)
 
-	got, err := QueryChannel(channelId)
-	uassert.NoError(t, err)
+	got := QueryChannel(channelId)
 	uassert.NotEqual(t, "", got)
 
 	ch, ok := store.GetChannel(channelId)
 	if !ok {
 		t.Fatal("channel not found in store")
 	}
-	uassert.Equal(t, hexString(mustEncodeABI(ch.EncodeABI())), got)
+	want := hexString(mustEncodeABI(ch.EncodeABI()))
+	uassert.Equal(t, want, got)
 }
 
-func TestQueryChannelMissingReturnsError(cur realm, t *testing.T) {
+func TestQueryChannelMissingReturnsEmpty(cur realm, t *testing.T) {
 	resetStore(cur)
-	got, err := QueryChannel(types.ChannelId(999))
-	uassert.Equal(t, "", got)
-	uassert.ErrorContains(t, err, ErrChannelNotFound)
+	uassert.Equal(t, "", QueryChannel(types.ChannelId(999)))
 }
 
 // --- GetClientStatus ---
@@ -115,30 +105,22 @@ func TestQueryChannelMissingReturnsError(cur realm, t *testing.T) {
 func TestGetClientStatusActive(cur realm, t *testing.T) {
 	resetStore(cur)
 	clientId := registerMockClient(&mockClient{status: types.StatusActive})
-	got, err := GetClientStatus(clientId)
-	uassert.NoError(t, err)
-	uassert.Equal(t, strconv.FormatUint(uint64(types.StatusActive), 10), got)
+	uassert.Equal(t, strconv.FormatUint(uint64(types.StatusActive), 10), GetClientStatus(clientId))
 }
 
 func TestGetClientStatusExpired(cur realm, t *testing.T) {
 	resetStore(cur)
 	clientId := registerMockClient(&mockClient{status: types.StatusExpired})
-	got, err := GetClientStatus(clientId)
-	uassert.NoError(t, err)
-	uassert.Equal(t, strconv.FormatUint(uint64(types.StatusExpired), 10), got)
+	uassert.Equal(t, strconv.FormatUint(uint64(types.StatusExpired), 10), GetClientStatus(clientId))
 }
 
 func TestGetClientStatusFrozen(cur realm, t *testing.T) {
 	resetStore(cur)
 	clientId := registerMockClient(&mockClient{status: types.StatusFrozen})
-	got, err := GetClientStatus(clientId)
-	uassert.NoError(t, err)
-	uassert.Equal(t, strconv.FormatUint(uint64(types.StatusFrozen), 10), got)
+	uassert.Equal(t, strconv.FormatUint(uint64(types.StatusFrozen), 10), GetClientStatus(clientId))
 }
 
-func TestGetClientStatusMissingReturnsError(cur realm, t *testing.T) {
+func TestGetClientStatusMissingReturnsUnknown(cur realm, t *testing.T) {
 	resetStore(cur)
-	got, err := GetClientStatus(types.ClientId(999))
-	uassert.Equal(t, strconv.FormatUint(uint64(types.StatusUnknown), 10), got)
-	uassert.ErrorContains(t, err, ErrClientNotFound)
+	uassert.Equal(t, strconv.FormatUint(uint64(types.StatusUnknown), 10), GetClientStatus(types.ClientId(999)))
 }

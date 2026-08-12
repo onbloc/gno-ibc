@@ -22,6 +22,9 @@ import (
 var clientLoaders = map[string]bool{
 	"gno.land/r/onbloc/ibc/union/lightclients/cometbls":           true,
 	"gno.land/r/onbloc/ibc/union/lightclients/statelensics23mpt": true,
+	// Test-only loader: the permissive mock used by scenario filetests. Not
+	// present on production deployments.
+	"gno.land/r/onbloc/ibc/testing/mock/lightclient": true,
 }
 
 // RegisterClientLoader authorizes loaderPath to call RegisterClient. It is

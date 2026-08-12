@@ -45,7 +45,7 @@ func openEventConfigChannel(cur realm) types.ChannelId {
 	core.RegisterClient(cross(cur), eventConfigMockClientType, func(_, _ []byte) (lightclient.Interface, error) {
 		return &eventConfigMockLightClient{}, nil
 	})
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(eventConfigMockClientType, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(eventConfigMockClientType, []byte{1}, []byte{1}))
 	clientId := types.ClientId(1)
 
 	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))

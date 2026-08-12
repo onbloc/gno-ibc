@@ -63,7 +63,7 @@ func bootstrap(cur realm) {
 	access.GrantRole(cross(cur), access.RelayerRole, chain.PackageAddress(mockLcPkgPath))
 
 	mocklc.RegisterMockLightClient(cross(cur))
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(mocklc.MockClientType, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(mocklc.MockClientType, []byte{1}, []byte{1}))
 	clientId := types.ClientId(1)
 
 	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))

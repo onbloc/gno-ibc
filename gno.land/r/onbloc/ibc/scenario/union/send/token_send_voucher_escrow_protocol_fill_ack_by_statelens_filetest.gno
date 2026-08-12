@@ -138,7 +138,7 @@ func openAndFundSender(cur realm, fundRoot []byte, initPacket types.Packet, fund
 	core.RegisterClient(cross(cur), mockL1Type, func(_, _ []byte) (lightclient.Interface, error) {
 		return &mockL1Client{}, nil
 	})
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(mockL1Type, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(mockL1Type, []byte{1}, []byte{1}))
 
 	clientType := types.ClientType(ics23mpt.ClientType)
 	core.RegisterClient(cross(cur), clientType, func(csBytes, consBytes []byte) (lightclient.Interface, error) {
@@ -157,12 +157,12 @@ func openAndFundSender(cur realm, fundRoot []byte, initPacket types.Packet, fund
 
 	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	connectionId := types.ConnectionId(1)
-	core.ForceConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 0))
+	core.ForceConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
 
 	portId := []byte(zkgm.ProxyPkgPath())
 	core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1relayer"))
 	opened := types.ChannelId(1)
-	core.ForceChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(opened, zkgm.Version, counterpartyChannel, nil, 0, "g1relayer"))
+	core.ForceChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(opened, zkgm.Version, counterpartyChannel, nil, 1, "g1relayer"))
 
 	core.PacketRecv(cross(cur), core.NewMsgPacketRecv([]types.Packet{initPacket}, [][]byte{nil}, fundProof, fundHeight))
 	ufmt.Printf("[INFO] sender voucher balance after fund: %d\n", zkgm.VoucherBalanceOf(quoteToken, senderAddr))

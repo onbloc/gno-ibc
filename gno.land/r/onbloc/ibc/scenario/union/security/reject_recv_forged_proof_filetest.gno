@@ -55,18 +55,18 @@ func bootstrap(cur realm) types.ChannelId {
 	core.RegisterClient(cross(cur), forgedLcType, func(_, _ []byte) (lightclient.Interface, error) {
 		return &forgedLightClient{}, nil
 	})
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(forgedLcType, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(forgedLcType, []byte{1}, []byte{1}))
 	clientId := types.ClientId(1)
 
 	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	connectionId := types.ConnectionId(1)
 	// Force-open so the handshake itself does not need the (failing) membership proof.
-	core.ForceConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 0))
+	core.ForceConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
 
 	portId := []byte(zkgm.ProxyPkgPath())
 	core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1relayer"))
 	channelId := types.ChannelId(1)
-	core.ForceChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(channelId, zkgm.Version, types.ChannelId(2), nil, 0, "g1relayer"))
+	core.ForceChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(channelId, zkgm.Version, types.ChannelId(2), nil, 1, "g1relayer"))
 	return channelId
 }
 

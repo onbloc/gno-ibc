@@ -76,14 +76,14 @@ func bootstrap(cur realm) {
 	core.RegisterClient(cross(cur), maliciousType, func(_, _ []byte) (lightclient.Interface, error) {
 		return &acceptingClient{}, nil
 	})
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(maliciousType, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(maliciousType, []byte{1}, []byte{1}))
 	openChannel(cur, types.ClientId(1), types.ConnectionId(1), types.ChannelId(maliciousChannel), types.ChannelId(101))
 
 	// Client 2 + channel 2: an honest client that rejects unproven membership.
 	core.RegisterClient(cross(cur), legitType, func(_, _ []byte) (lightclient.Interface, error) {
 		return &honestClient{}, nil
 	})
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(legitType, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(legitType, []byte{1}, []byte{1}))
 	openChannel(cur, types.ClientId(2), types.ConnectionId(2), types.ChannelId(legitChannel), types.ChannelId(102))
 }
 
@@ -92,11 +92,11 @@ func bootstrap(cur realm) {
 // the scenario exercises.
 func openChannel(cur realm, clientId types.ClientId, connectionId types.ConnectionId, channelId, counterparty types.ChannelId) {
 	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
-	core.ForceConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 0))
+	core.ForceConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
 
 	portId := []byte(zkgm.ProxyPkgPath())
 	core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1relayer"))
-	core.ForceChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(channelId, zkgm.Version, counterparty, nil, 0, "g1relayer"))
+	core.ForceChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(channelId, zkgm.Version, counterparty, nil, 1, "g1relayer"))
 }
 
 func recvForged(cur realm, destChannel uint32, sourceChannel types.ChannelId, quoteToken string, meta []byte) {

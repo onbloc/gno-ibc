@@ -69,7 +69,7 @@ func bootstrap(cur realm) types.ChannelId {
 	core.RegisterClient(cross(cur), blockClockType, func(_, _ []byte) (lightclient.Interface, error) {
 		return &blockClockLightClient{}, nil
 	})
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(blockClockType, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(blockClockType, []byte{1}, []byte{1}))
 	clientId := types.ClientId(1)
 
 	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))

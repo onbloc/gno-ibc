@@ -59,7 +59,7 @@ func bootstrap(cur realm) types.ClientId {
 	core.RegisterClient(cross(cur), freezableType, func(csBytes, _ []byte) (lightclient.Interface, error) {
 		return &freezableClient{height: 1}, nil
 	})
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(freezableType, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(freezableType, []byte{1}, []byte{1}))
 	return types.ClientId(1)
 }
 

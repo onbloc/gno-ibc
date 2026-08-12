@@ -64,7 +64,7 @@ func registerSharedType(cur realm) {
 // sequentially, so expectedId is the deterministic id the caller can thread forward.
 func createInstance(cur realm, expectedId uint32) types.ClientId {
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(sharedType, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(sharedType, []byte{1}, []byte{1}))
 	return types.ClientId(expectedId)
 }
 

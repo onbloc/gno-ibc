@@ -64,7 +64,7 @@ func bootstrapProto(cur realm) types.ChannelId {
 	core.RegisterClient(cross(cur), mockClientProto, func(_, _ []byte) (lightclient.Interface, error) {
 		return &fwdProtoMockLightClient{}, nil
 	})
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(mockClientProto, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(mockClientProto, []byte{1}, []byte{1}))
 	clientId := types.ClientId(1)
 
 	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))

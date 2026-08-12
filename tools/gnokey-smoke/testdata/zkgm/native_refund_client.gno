@@ -7,5 +7,5 @@ import (
 
 func main(cur realm) {
 	lightclient.RegisterMockLightClient(cross(cur))
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(lightclient.MockClientType, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(lightclient.MockClientType, []byte{1}, []byte{1}))
 }

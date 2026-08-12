@@ -50,7 +50,7 @@ func openPacketSplitChannel(cur realm) types.ChannelId {
 	core.RegisterClient(cross(cur), packetSplitMockClientType, func(_, _ []byte) (lightclient.Interface, error) {
 		return &packetSplitMockLightClient{}, nil
 	})
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(packetSplitMockClientType, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(packetSplitMockClientType, []byte{1}, []byte{1}))
 	clientId := types.ClientId(1)
 
 	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))

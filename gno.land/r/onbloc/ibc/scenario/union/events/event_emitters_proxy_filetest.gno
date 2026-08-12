@@ -50,7 +50,7 @@ func exerciseClientEventEmitters(cur realm) types.ClientId {
 	core.RegisterClient(cross(cur), eventMockClientType, func(_, _ []byte) (lightclient.Interface, error) {
 		return &eventMockLightClient{}, nil
 	})
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(eventMockClientType, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(eventMockClientType, []byte{1}, []byte{1}))
 	clientId := types.ClientId(1)
 
 	core.UpdateClient(cross(cur), types.NewMsgUpdateClient(clientId, []byte("event-update")))

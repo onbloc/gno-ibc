@@ -18,52 +18,61 @@ func SendPacket(cur realm, sourceChannelId types.ChannelId, timeoutTimestamp typ
 // PacketRecv proves and dispatches a batch of received packets.
 func PacketRecv(cur realm, msg types.MsgPacketRecv) {
 	access.AssertCanCall(0, cur, SelectorPacketRecv)
+	mustValidate(msg.ValidateBasic())
 	mustGetImpl().PacketRecv(0, cur, msg)
 }
 
 // IntentPacketRecv settles packets on the proofless market-maker fast path.
 func IntentPacketRecv(cur realm, msg types.MsgIntentPacketRecv) {
 	access.AssertCanCall(0, cur, SelectorIntentPacketRecv)
+	mustValidate(msg.ValidateBasic())
 	mustGetImpl().IntentPacketRecv(0, cur, msg)
 }
 
 // PacketAcknowledgement proves the counterparty acks and notifies the app.
 func PacketAcknowledgement(cur realm, msg types.MsgPacketAcknowledgement) {
 	access.AssertCanCall(0, cur, SelectorPacketAck)
+	mustValidate(msg.ValidateBasic())
 	mustGetImpl().PacketAcknowledgement(0, cur, msg)
 }
 
 // PacketTimeout proves a packet was never received and notifies the app.
 func PacketTimeout(cur realm, msg types.MsgPacketTimeout) {
 	access.AssertCanCall(0, cur, SelectorPacketTimeout)
+	mustValidate(msg.ValidateBasic())
 	mustGetImpl().PacketTimeout(0, cur, msg)
 }
 
 // CommitMembershipProof verifies and records a membership proof.
 func CommitMembershipProof(cur realm, msg types.MsgCommitMembershipProof) {
 	access.AssertCanCall(0, cur, SelectorCommitMembershipProof)
+	mustValidate(msg.ValidateBasic())
 	mustGetImpl().CommitMembershipProof(0, cur, msg)
 }
 
 // CommitNonMembershipProof verifies and records a non-membership proof.
 func CommitNonMembershipProof(cur realm, msg types.MsgCommitNonMembershipProof) {
 	access.AssertCanCall(0, cur, SelectorCommitNonMembershipProof)
+	mustValidate(msg.ValidateBasic())
 	mustGetImpl().CommitNonMembershipProof(0, cur, msg)
 }
 
 // BatchSend aggregates already-committed packets into a batch commitment.
 func BatchSend(cur realm, msg types.MsgBatchSend) {
 	access.AssertCanCall(0, cur, SelectorBatchSend)
+	mustValidate(msg.ValidateBasic())
 	mustGetImpl().BatchSend(0, cur, msg)
 }
 
 // BatchAcks aggregates the acks of received packets into a batch receipt.
 func BatchAcks(cur realm, msg types.MsgBatchAcks) {
 	access.AssertCanCall(0, cur, SelectorBatchAcks)
+	mustValidate(msg.ValidateBasic())
 	mustGetImpl().BatchAcks(0, cur, msg)
 }
 
 // WriteAcknowledgement commits a deferred acknowledgement for a received packet.
 func WriteAcknowledgement(cur realm, msg types.MsgWriteAcknowledgement) {
+	mustValidate(msg.ValidateBasic())
 	mustGetImpl().WriteAcknowledgement(0, cur, msg)
 }

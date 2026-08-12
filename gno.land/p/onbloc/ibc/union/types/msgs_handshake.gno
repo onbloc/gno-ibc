@@ -162,3 +162,83 @@ type MsgChannelCloseConfirm struct {
 func NewMsgChannelCloseConfirm(channelId ChannelId, proofInit []byte, proofHeight uint64, relayer string) MsgChannelCloseConfirm {
 	return MsgChannelCloseConfirm{ChannelId: channelId, ProofInit: proofInit, ProofHeight: proofHeight, Relayer: relayer}
 }
+
+// --- ValidateBasic ---
+
+// ValidateBasic rejects empty client/consensus state bytes.
+func (m MsgCreateClient) ValidateBasic() error {
+	if len(m.ClientStateBytes) == 0 || len(m.ConsensusStateBytes) == 0 {
+		return ErrValidation
+	}
+	return nil
+}
+
+// ValidateBasic rejects empty client messages.
+func (m MsgUpdateClient) ValidateBasic() error {
+	if len(m.ClientMessage) == 0 {
+		return ErrValidation
+	}
+	return nil
+}
+
+// ValidateBasic rejects empty client/consensus state bytes.
+func (m MsgForceUpdateClient) ValidateBasic() error {
+	if len(m.ClientStateBytes) == 0 || len(m.ConsensusStateBytes) == 0 {
+		return ErrValidation
+	}
+	return nil
+}
+
+// ValidateBasic rejects empty client messages.
+func (m MsgMisbehaviour) ValidateBasic() error {
+	if len(m.ClientMessage) == 0 {
+		return ErrValidation
+	}
+	return nil
+}
+
+// ValidateBasic for MsgConnectionOpenInit is a no-op: the Init step performs
+// lazy validation (the client is checked at Try/Ack time).
+func (m MsgConnectionOpenInit) ValidateBasic() error { return nil }
+
+// ValidateBasic rejects zero proof heights.
+func (m MsgConnectionOpenTry) ValidateBasic() error {
+	return validateHeight(m.ProofHeight)
+}
+
+// ValidateBasic rejects zero proof heights.
+func (m MsgConnectionOpenAck) ValidateBasic() error {
+	return validateHeight(m.ProofHeight)
+}
+
+// ValidateBasic rejects zero proof heights.
+func (m MsgConnectionOpenConfirm) ValidateBasic() error {
+	return validateHeight(m.ProofHeight)
+}
+
+// ValidateBasic for MsgChannelOpenInit is a no-op: port ownership and connection
+// state are checked by the host.
+func (m MsgChannelOpenInit) ValidateBasic() error { return nil }
+
+// ValidateBasic rejects zero proof heights.
+func (m MsgChannelOpenTry) ValidateBasic() error {
+	return validateHeight(m.ProofHeight)
+}
+
+// ValidateBasic rejects zero proof heights.
+func (m MsgChannelOpenAck) ValidateBasic() error {
+	return validateHeight(m.ProofHeight)
+}
+
+// ValidateBasic rejects zero proof heights.
+func (m MsgChannelOpenConfirm) ValidateBasic() error {
+	return validateHeight(m.ProofHeight)
+}
+
+// ValidateBasic for MsgChannelCloseInit is a no-op.
+func (m MsgChannelCloseInit) ValidateBasic() error { return nil }
+
+// ValidateBasic rejects zero proof heights.
+func (m MsgChannelCloseConfirm) ValidateBasic() error {
+	return validateHeight(m.ProofHeight)
+}

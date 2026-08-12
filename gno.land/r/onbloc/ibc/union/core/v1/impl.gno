@@ -30,9 +30,19 @@ func NewCoreV1(s core.IStore) core.ICore {
 // The client lifecycle message constructors leave Relayer empty, so without this
 // the light-client callbacks would receive the zero address; union likewise
 // reuses info.sender as the relayer on the paths that do not carry one.
+//
+// A non-empty relayer must be a plausible gno address ("g1" prefix). Union
+// validates with addr_validate; the Gno port has no bech32 decoder, so this is a
+// coarse prefix check that rejects obviously malformed attribution strings. The
+// built-in adapters currently ignore the relayer argument, so this guards future
+// adapters that thread it into reward or attribution logic.
 func resolveRelayer(caller address, relayer string) address {
 	if relayer == "" {
 		return caller
+	}
+
+	if len(relayer) < 3 || relayer[:2] != "g1" {
+		panic("relayer is not a valid address: " + relayer)
 	}
 
 	return address(relayer)

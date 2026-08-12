@@ -31,7 +31,7 @@ func main(cur realm) {
 
 	println("[SCENARIO] 2. Creating a client of an unregistered type -> rejected")
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(unregisteredType, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(unregisteredType, []byte{1}, []byte{1}))
 }
 
 // bootstrap installs the core impl and grants the admin the relayer role so the

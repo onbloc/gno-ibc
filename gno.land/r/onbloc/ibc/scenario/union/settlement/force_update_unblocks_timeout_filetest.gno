@@ -81,7 +81,7 @@ func bootstrap(cur realm) types.ChannelId {
 	core.RegisterClient(cross(cur), manualType, func(_, _ []byte) (lightclient.Interface, error) {
 		return &manualClockLightClient{}, nil
 	})
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(manualType, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(manualType, []byte{1}, []byte{1}))
 	clientId := types.ClientId(1)
 
 	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
@@ -141,7 +141,7 @@ func forceUpdateAndTimeout(cur realm, sendPacket types.Packet, quoteToken string
 	// The fresh consensus the admin submits carries a timestamp past the packet timeout.
 	clientTime = recoverClock
 	testing.SetRealm(testing.NewUserRealm(adminAddr))
-	core.ForceUpdateClient(cross(cur), types.NewMsgForceUpdateClient(types.ClientId(1), nil, nil))
+	core.ForceUpdateClient(cross(cur), types.NewMsgForceUpdateClient(types.ClientId(1), []byte{1}, []byte{1}))
 	ufmt.Printf("[INFO] recovered client clock=%d (clock >= timeout: now provable)\n", clientTime)
 
 	core.PacketTimeout(cross(cur), types.NewMsgPacketTimeout(sendPacket, nil, 1))

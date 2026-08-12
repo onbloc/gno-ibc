@@ -215,6 +215,10 @@ func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 	relayer := rlm.Previous().Address()
 	packet := msg.Packet
 
+	if packet.TimeoutTimestamp == 0 {
+		panic(makeError(core.ErrTimeoutMustBeSet))
+	}
+
 	channel, err := c.getChannel(packet.SourceChannelId)
 	if err != nil {
 		panic(err)
@@ -226,7 +230,7 @@ func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 
 	connection := c.ensureConnectionState(channel.ConnectionId)
 
-	lc, err := c.getClient(connection.ClientId)
+	lc, err := c.getActiveClient(connection.ClientId)
 	if err != nil {
 		panic(err)
 	}
@@ -240,18 +244,14 @@ func (c *coreV1) PacketTimeout(_ int, rlm realm, msg types.MsgPacketTimeout) {
 		panic(makeError(core.ErrTimeoutProofTimestampNotFound))
 	}
 
+	if uint64(packet.TimeoutTimestamp) > uint64(proofTimestamp) {
+		panic(makeError(core.ErrPacketTimeoutNotReached))
+	}
+
 	commitmentKey := types.BatchReceiptsPath(core.CommitPacketHash(packet))
 	c.verifyNonMembership(connection.ClientId, types.NewHeight(msg.ProofHeight), msg.Proof, commitmentKey[:])
 
 	c.markPacketAcknowledged(0, rlm, packet)
-
-	if packet.TimeoutTimestamp == 0 {
-		panic(makeError(core.ErrTimeoutMustBeSet))
-	}
-
-	if uint64(packet.TimeoutTimestamp) > uint64(proofTimestamp) {
-		panic(makeError(core.ErrPacketTimeoutNotReached))
-	}
 
 	portId, _ := c.store.GetChannelOwner(packet.SourceChannelId)
 	a, _ := c.store.GetAppByPortId(portId)

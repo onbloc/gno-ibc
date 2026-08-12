@@ -290,7 +290,7 @@ func installRecordingCore() (*recordingCore, func()) {
 // testing.SetRealm on the test's behalf.
 
 // adminRealm is the user realm whose calls satisfy admin-gated selectors
-// (Force*, Commit*, RegisterAppForPort). Inline before a gated call:
+// (Force*, Commit*). Inline before a gated call:
 //
 //	testing.SetRealm(adminRealm)
 //	ForceUpdateClient(cross(cur), msg)

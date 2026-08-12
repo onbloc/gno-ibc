@@ -8,10 +8,9 @@ import (
 )
 
 // app_proxy_test.gno covers the public proxy entrypoints in app.gno:
-// RegisterApp (impl delegation), RegisterAppForPort (admin gate + store write),
-// and HasApp (store read). The channel_auth suite already covers the
-// RegisterAppForPort non-admin rejection; here we cover the success/delegation
-// paths and HasApp's true/false reporting.
+// RegisterApp (impl delegation) and HasApp (store read). The channel_auth suite
+// already covers the RegisterApp caller-path port derivation; here we cover the
+// success/delegation paths and HasApp's true/false reporting.
 
 func TestRegisterApp(cur realm, t *testing.T) {
 	app1 := &mockApp{}

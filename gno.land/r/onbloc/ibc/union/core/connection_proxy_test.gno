@@ -63,7 +63,7 @@ func TestConnectionOpenTry(cur realm, t *testing.T) {
 		testing.SetRealm(adminRealm)
 		access.GrantRole(cross(cur), RelayerRole, testRelayer)
 		testing.SetRealm(relayerRealm)
-		ConnectionOpenTry(cross(cur), types.MsgConnectionOpenTry{ClientId: tc.clientId, CounterpartyConnectionId: tc.counterpartyConnectionId})
+		ConnectionOpenTry(cross(cur), types.MsgConnectionOpenTry{ClientId: tc.clientId, CounterpartyConnectionId: tc.counterpartyConnectionId, ProofHeight: 1})
 		testing.SetRealm(adminRealm)
 		access.RevokeRole(cross(cur), RelayerRole, testRelayer)
 
@@ -92,7 +92,7 @@ func TestConnectionOpenAck(cur realm, t *testing.T) {
 		testing.SetRealm(adminRealm)
 		access.GrantRole(cross(cur), RelayerRole, testRelayer)
 		testing.SetRealm(relayerRealm)
-		ConnectionOpenAck(cross(cur), types.MsgConnectionOpenAck{ConnectionId: tc.connectionId, CounterpartyConnectionId: tc.counterpartyConnectionId})
+		ConnectionOpenAck(cross(cur), types.MsgConnectionOpenAck{ConnectionId: tc.connectionId, CounterpartyConnectionId: tc.counterpartyConnectionId, ProofHeight: 1})
 		testing.SetRealm(adminRealm)
 		access.RevokeRole(cross(cur), RelayerRole, testRelayer)
 
@@ -120,7 +120,7 @@ func TestConnectionOpenConfirm(cur realm, t *testing.T) {
 		testing.SetRealm(adminRealm)
 		access.GrantRole(cross(cur), RelayerRole, testRelayer)
 		testing.SetRealm(relayerRealm)
-		ConnectionOpenConfirm(cross(cur), types.MsgConnectionOpenConfirm{ConnectionId: tc.connectionId})
+		ConnectionOpenConfirm(cross(cur), types.MsgConnectionOpenConfirm{ConnectionId: tc.connectionId, ProofHeight: 1})
 		testing.SetRealm(adminRealm)
 		access.RevokeRole(cross(cur), RelayerRole, testRelayer)
 
@@ -145,7 +145,7 @@ func TestForceConnectionOpenTry(cur realm, t *testing.T) {
 		rec, restore := installRecordingCore()
 
 		testing.SetRealm(adminRealm)
-		ForceConnectionOpenTry(cross(cur), types.MsgConnectionOpenTry{ClientId: tc.clientId})
+		ForceConnectionOpenTry(cross(cur), types.MsgConnectionOpenTry{ClientId: tc.clientId, ProofHeight: 1})
 
 		uassert.Equal(t, 1, rec.calls["ForceConnectionOpenTry"])
 		uassert.Equal(t, uint64(tc.clientId), uint64(rec.forceConnTryMsg.ClientId))
@@ -168,7 +168,7 @@ func TestForceConnectionOpenAck(cur realm, t *testing.T) {
 		rec, restore := installRecordingCore()
 
 		testing.SetRealm(adminRealm)
-		ForceConnectionOpenAck(cross(cur), types.MsgConnectionOpenAck{ConnectionId: tc.connectionId})
+		ForceConnectionOpenAck(cross(cur), types.MsgConnectionOpenAck{ConnectionId: tc.connectionId, ProofHeight: 1})
 
 		uassert.Equal(t, 1, rec.calls["ForceConnectionOpenAck"])
 		uassert.Equal(t, uint64(tc.connectionId), uint64(rec.forceConnAckMsg.ConnectionId))
@@ -191,7 +191,7 @@ func TestForceConnectionOpenConfirm(cur realm, t *testing.T) {
 		rec, restore := installRecordingCore()
 
 		testing.SetRealm(adminRealm)
-		ForceConnectionOpenConfirm(cross(cur), types.MsgConnectionOpenConfirm{ConnectionId: tc.connectionId})
+		ForceConnectionOpenConfirm(cross(cur), types.MsgConnectionOpenConfirm{ConnectionId: tc.connectionId, ProofHeight: 1})
 
 		uassert.Equal(t, 1, rec.calls["ForceConnectionOpenConfirm"])
 		uassert.Equal(t, uint64(tc.connectionId), uint64(rec.forceConnConfirmMsg.ConnectionId))

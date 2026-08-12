@@ -174,12 +174,12 @@ func openCometblsStateLensChannel(cur realm, l1Contract types.H256, l1Root []byt
 	// Force-open connection + channel (admin variants skip the handshake proofs).
 	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))
 	connectionId := types.ConnectionId(1)
-	core.ForceConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 0))
+	core.ForceConnectionOpenAck(cross(cur), core.NewMsgConnectionOpenAck(connectionId, types.ConnectionId(77), nil, 1))
 
 	portId := []byte(zkgm.ProxyPkgPath())
 	core.ChannelOpenInit(cross(cur), core.NewMsgChannelOpenInit(portId, portId, connectionId, zkgm.Version, "g1relayer"))
 	opened := types.ChannelId(1)
-	core.ForceChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(opened, zkgm.Version, sourceChannel, nil, 0, "g1relayer"))
+	core.ForceChannelOpenAck(cross(cur), core.NewMsgChannelOpenAck(opened, zkgm.Version, sourceChannel, nil, 1, "g1relayer"))
 	ufmt.Printf("[INFO] state-lens channel opened (source=%s destination=%s)\n", sourceChannel.String(), opened.String())
 
 	return clientId

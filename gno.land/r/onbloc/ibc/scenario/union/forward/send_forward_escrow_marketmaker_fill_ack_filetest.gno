@@ -63,7 +63,7 @@ func bootstrapAck(cur realm) types.ChannelId {
 	core.RegisterClient(cross(cur), mockClientAck, func(_, _ []byte) (lightclient.Interface, error) {
 		return &fwdAckMockLightClient{}, nil
 	})
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(mockClientAck, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(mockClientAck, []byte{1}, []byte{1}))
 	clientId := types.ClientId(1)
 
 	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))

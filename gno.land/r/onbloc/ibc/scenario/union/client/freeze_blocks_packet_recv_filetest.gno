@@ -77,7 +77,7 @@ func bootstrap(cur realm) types.ChannelId {
 	core.RegisterClient(cross(cur), freezableType, func(_, _ []byte) (lightclient.Interface, error) {
 		return &freezableClient{}, nil
 	})
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(freezableType, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(freezableType, []byte{1}, []byte{1}))
 	clientId := types.ClientId(1)
 
 	core.ConnectionOpenInit(cross(cur), core.NewMsgConnectionOpenInit(clientId, types.ClientId(99)))

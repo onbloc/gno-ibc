@@ -36,7 +36,7 @@ func main(cur realm) {
 
 	println("[SCENARIO] 2. A non-admin attempts ForceUpdateClient -> rejected")
 	testing.SetRealm(testing.NewUserRealm(nonAdminAddr))
-	core.ForceUpdateClient(cross(cur), types.NewMsgForceUpdateClient(clientId, nil, nil))
+	core.ForceUpdateClient(cross(cur), types.NewMsgForceUpdateClient(clientId, []byte{1}, []byte{1}))
 }
 
 func bootstrap(cur realm) types.ClientId {
@@ -46,7 +46,7 @@ func bootstrap(cur realm) types.ClientId {
 	access.GrantRole(cross(cur), access.RelayerRole, chain.PackageAddress(mockLcPkgPath))
 
 	mocklc.RegisterMockLightClient(cross(cur))
-	core.CreateClient(cross(cur), core.NewMsgCreateClient(mocklc.MockClientType, nil, nil))
+	core.CreateClient(cross(cur), core.NewMsgCreateClient(mocklc.MockClientType, []byte{1}, []byte{1}))
 	return types.ClientId(1)
 }
 

@@ -1096,6 +1096,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "4611686018427387904"
 //       },
 //       {
+//         "key": "status",
+//         "value": "success"
+//       },
+//       {
 //         "key": "maker_msg_size",
 //         "value": "28"
 //       },
@@ -1194,6 +1198,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       {
 //         "key": "timeout_timestamp",
 //         "value": "4611686018427387904"
+//       },
+//       {
+//         "key": "status",
+//         "value": "success"
 //       },
 //       {
 //         "key": "maker_msg_size",
@@ -1332,6 +1340,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //         "value": "4611686018427387904"
 //       },
 //       {
+//         "key": "status",
+//         "value": "success"
+//       },
+//       {
 //         "key": "maker_msg_size",
 //         "value": "34"
 //       },
@@ -1380,6 +1392,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       {
 //         "key": "timeout_timestamp",
 //         "value": "4611686018427387904"
+//       },
+//       {
+//         "key": "status",
+//         "value": "async"
 //       },
 //       {
 //         "key": "maker_msg_size",
@@ -1730,6 +1746,10 @@ func (m *eventMockLightClient) Misbehaviour(address, []byte, address) ([]byte, e
 //       {
 //         "key": "timeout_timestamp",
 //         "value": "4611686018427387904"
+//       },
+//       {
+//         "key": "status",
+//         "value": "failure"
 //       },
 //       {
 //         "key": "maker_msg_size",

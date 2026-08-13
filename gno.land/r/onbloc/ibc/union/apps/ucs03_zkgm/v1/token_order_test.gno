@@ -524,6 +524,7 @@ func TestTokenOrderExecuteAppliesRateLimit(cur realm, t *testing.T) {
 	uassert.True(t, res.Status == types.PacketStatusSuccess)
 
 	// The bucket (capacity 10) is now drained to 3; a second 7-unit fill exceeds it.
+	testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
 	res, err = v.executeTokenOrderV2(0, cur, packet, address(testAddress("rate-limit-relayer")), nil, [32]byte{}, u256.NewUint(7), order, false)
 	uassert.NoError(t, err)
 	uassert.True(t, res.Status == types.PacketStatusFailure)
@@ -937,6 +938,7 @@ func TestTokenOrderExecuteEscrowUninitializedVoucherReturnsFailureAck(cur realm,
 	}
 	packet := core.NewPacket(types.ChannelId(1), destChan, nil, 0)
 
+	testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
 	res, err := v.executeTokenOrderV2(0, cur, packet, address(testAddress("uninit-escrow-rly")), nil, [32]byte{}, path, order, false)
 
 	uassert.NoError(t, err)

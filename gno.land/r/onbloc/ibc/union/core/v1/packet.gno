@@ -108,7 +108,7 @@ func (c *coreV1) PacketRecv(_ int, rlm realm, msg types.MsgPacketRecv) {
 			panic(err)
 		}
 
-		core.EmitPacketRecv(0, rlm, packet, channel, connection, relayerMsg)
+		core.EmitPacketRecv(0, rlm, packet, channel, connection, relayerMsg, res.Status)
 	}
 }
 
@@ -160,7 +160,7 @@ func (c *coreV1) IntentPacketRecv(_ int, rlm realm, msg types.MsgIntentPacketRec
 			panic(err)
 		}
 
-		core.EmitIntentPacketRecv(0, rlm, packet, channel, connection, marketMakerMsg)
+		core.EmitIntentPacketRecv(0, rlm, packet, channel, connection, marketMakerMsg, res.Status)
 	}
 }
 

@@ -260,7 +260,7 @@ func TestPacketRecvEventAttrs(cur realm, t *testing.T) {
 	}
 	makerMsg := []byte{8, 9}
 
-	attrs := packetRecvEventAttrs(packet, destinationChannel, testConnection, makerMsg)
+	attrs := packetRecvEventAttrs(packet, destinationChannel, testConnection, makerMsg, types.PacketStatusSuccess)
 
 	assertStringSliceEqual(t, attrs, []string{
 		"packet_hash", commitPacketHash(packet).String(),
@@ -272,6 +272,7 @@ func TestPacketRecvEventAttrs(cur realm, t *testing.T) {
 		"destination_connection_id", "3",
 		"destination_connection_client_id", "10",
 		"timeout_timestamp", "4",
+		"status", "success",
 		"maker_msg_size", strconv.Itoa(len(hexAttr(makerMsg))),
 		"maker_msg[0]", hexAttr(makerMsg),
 	})

@@ -162,7 +162,16 @@ func TestExecuteCall(cur realm, t *testing.T) {
 				tc.setup()
 			}
 
-			res, err := newTestImpl().executeCall(0, cur, packet, tc.relayer, tc.relayerMsg, path, tc.call, tc.intent)
+			var res types.RecvPacketResult
+			var err error
+			func(cur realm) {
+				if tc.wantFailureInner != "" {
+					// callErrAck (a failure-ack path below) emits a ZkgmRecvError, which
+					// requires the caller-passed rlm to be the proxy realm.
+					testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
+				}
+				res, err = newTestImpl().executeCall(0, cur, packet, tc.relayer, tc.relayerMsg, path, tc.call, tc.intent)
+			}(cur)
 			uassert.NoError(t, err)
 			uassert.True(t, res.Status == tc.wantStatus)
 
@@ -228,7 +237,9 @@ func TestCanRevive(cur realm, t *testing.T) {
 }
 
 func TestCallErrAck(cur realm, t *testing.T) {
-	res := callErrAck(0, cur, makeError("receiver failed"))
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(2), nil, 0)
+	testing.SetRealm(testing.NewCodeRealm(zkgmProxyRealmPath))
+	res := callErrAck(0, cur, packet, makeError("receiver failed"))
 
 	uassert.True(t, res.Status == types.PacketStatusFailure)
 	ack, err := z.DecodeAck(res.Acknowledgement)

@@ -269,7 +269,7 @@ func emitPacketSendEvent(packet types.Packet, sourceChannel types.Channel, sourc
 	chain.Emit(PacketSendEvent, packetSendEventAttrs(packet, sourceChannel, sourceConnection)...)
 }
 
-func packetRecvEventAttrs(packet types.Packet, destinationChannel types.Channel, connection types.Connection, msg []byte) []string {
+func packetRecvEventAttrs(packet types.Packet, destinationChannel types.Channel, connection types.Connection, msg []byte, status types.PacketStatus) []string {
 	attrs := []string{
 		"packet_hash", commitPacketHash(packet).String(),
 		"source_channel_id", packet.SourceChannelId.String(),
@@ -280,12 +280,13 @@ func packetRecvEventAttrs(packet types.Packet, destinationChannel types.Channel,
 		"destination_connection_id", destinationChannel.ConnectionId.String(),
 		"destination_connection_client_id", connection.ClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
+		"status", status.String(),
 	}
 	return append(attrs, encodedEventAttrs("maker_msg", hexAttr(msg))...)
 }
 
-func emitPacketRecvEvent(eventType string, packet types.Packet, destinationChannel types.Channel, connection types.Connection, msg []byte) {
-	chain.Emit(eventType, packetRecvEventAttrs(packet, destinationChannel, connection, msg)...)
+func emitPacketRecvEvent(eventType string, packet types.Packet, destinationChannel types.Channel, connection types.Connection, msg []byte, status types.PacketStatus) {
+	chain.Emit(eventType, packetRecvEventAttrs(packet, destinationChannel, connection, msg, status)...)
 }
 
 func writeAckEventAttrs(packet types.Packet, destinationChannel types.Channel, connection types.Connection, acknowledgement []byte) []string {
@@ -300,6 +301,7 @@ func writeAckEventAttrs(packet types.Packet, destinationChannel types.Channel, c
 		"destination_connection_client_id", connection.ClientId.String(),
 		"timeout_timestamp", packet.TimeoutTimestamp.String(),
 	}
+
 	return append(attrs, encodedEventAttrs("acknowledgement", hexAttr(acknowledgement))...)
 }
 

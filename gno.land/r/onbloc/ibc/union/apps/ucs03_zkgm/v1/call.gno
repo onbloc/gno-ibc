@@ -5,6 +5,7 @@ import (
 
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	u256 "gno.land/p/onbloc/math/uint256"
+	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -28,7 +29,7 @@ func (v *ucs03ZkgmV1) executeCall(_ int, rlm realm, packet types.Packet, relayer
 	// TODO: when eureka is supported, fail it closed on intent (return
 	// ACK_ERR_ONLY_MAKER) like every other opcode instead of a failure ack.
 	if call.Eureka {
-		return callErrAck(0, rlm, makeError(errEurekaUnsupported)), nil
+		return callErrAck(0, rlm, packet, makeError(errEurekaUnsupported)), nil
 	}
 
 	sender := types.CloneBytes(call.Sender)
@@ -37,7 +38,7 @@ func (v *ucs03ZkgmV1) executeCall(_ int, rlm realm, packet types.Packet, relayer
 	receiver, ok := v.store.GetReceiver(receiverPath)
 
 	if !ok || receiver == nil {
-		return callErrAck(0, rlm, makeError(errReceiverNotRegistered, receiverPath)), nil
+		return callErrAck(0, rlm, packet, makeError(errReceiverNotRegistered, receiverPath)), nil
 	}
 
 	relayerStr := string(relayer)
@@ -83,7 +84,7 @@ func (v *ucs03ZkgmV1) executeCall(_ int, rlm realm, packet types.Packet, relayer
 	}
 
 	if err != nil {
-		return callErrAck(0, rlm, err), nil
+		return callErrAck(0, rlm, packet, err), nil
 	}
 
 	return callSuccessAck()
@@ -188,13 +189,15 @@ func canRevive() (ok bool) {
 }
 
 // callErrAck encodes err as a failure acknowledgement for the call.
-func callErrAck(_ int, rlm realm, err error) types.RecvPacketResult {
+func callErrAck(_ int, rlm realm, packet types.Packet, err error) types.RecvPacketResult {
 	ack, encErr := z.EncodeAck(z.Ack{Tag: tagAckFailure(), InnerAck: []byte(err.Error())})
 	if encErr != nil {
 		// EncodeAck on a 2-field schema is essentially infallible. A failure
 		// would emit a non-Tag-prefixed ack the counterparty can't decode.
 		panic(encErr)
 	}
+
+	zkgm.EmitRecvError(0, rlm, packet.SourceChannelId, packet.DestinationChannelId, err.Error())
 
 	return failureResult(ack)
 }

@@ -21,6 +21,7 @@ const (
 	ZkgmForwardInFlightSetEvent        = "ZkgmForwardInFlightSet"
 	ZkgmForwardInFlightPoppedEvent     = "ZkgmForwardInFlightPopped"
 	ZkgmRecvErrorEvent                 = "ZkgmRecvError"
+	ZkgmAckEvent                       = "ZkgmAck"
 )
 
 func emitZkgmImplUpdatedEvent(callerPkgPath string, oldImplPath string, newImplPath string, allowed []string) {
@@ -104,5 +105,15 @@ func emitRecvError(sourceChannel types.ChannelId, destinationChannel types.Chann
 		"source_channel", sourceChannel.String(),
 		"destination_channel", destinationChannel.String(),
 		"reason", reason,
+	)
+}
+
+func emitZkgmAckEvent(packetHash types.H256, sourceChannel types.ChannelId, destinationChannel types.ChannelId, status types.PacketStatus) {
+	chain.Emit(
+		ZkgmAckEvent,
+		"packet_hash", packetHash.String(),
+		"source_channel", sourceChannel.String(),
+		"destination_channel", destinationChannel.String(),
+		"status", status.String(),
 	)
 }

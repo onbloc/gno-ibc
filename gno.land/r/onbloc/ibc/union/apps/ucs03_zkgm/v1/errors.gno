@@ -29,6 +29,9 @@ const (
 	errSolveNotImplemented                = "solve token order not implemented"
 	errInvalidTokenOrderDestChannel       = "invalid token order destination channel"
 	errInvalidTokenOrderTransferAmount    = "invalid token order transfer amount"
+	errEscrowOrphanVoucher                = "token order escrow: predicted wrapped voucher has no ledger"
+	errTokenOrderMissingMetadata          = "token order initialize: missing metadata"
+	errTokenOrderInvalidInitializeQuote   = "token order initialize: quote token does not match predicted wrapped token"
 
 	// errMetadataDecimalsMismatch guards an INITIALIZE order's declared
 	// metadata decimals against the locally-known ground truth for its base

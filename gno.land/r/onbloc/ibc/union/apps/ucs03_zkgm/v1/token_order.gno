@@ -7,6 +7,7 @@ import (
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	u256 "gno.land/p/onbloc/math/uint256"
 	"gno.land/r/demo/defi/grc20reg"
+	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -132,6 +133,7 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 	// escrowed native asset to the receiver.
 	if order.Kind == z.TOKEN_ORDER_KIND_UNESCROW && baseCovers {
 		if err := v.rateLimit(0, rlm, quoteDenom, order.QuoteAmount); err != nil {
+			zkgm.EmitRecvError(0, rlm, packet.SourceChannelId, packet.DestinationChannelId, err.Error())
 			return failureResult(universalErrorAck()), nil
 		}
 
@@ -173,11 +175,13 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 		// an unredeemable orphan whose scale then diverges from a later INITIALIZE's pre-flight check.
 		// Reject it as an invalid order so the source refunds, mirroring the INITIALIZE invalid-order handling below.
 		if quoteDenom == wrapped && !v.store.HasVoucher(wrapped) {
+			zkgm.EmitRecvError(0, rlm, packet.SourceChannelId, packet.DestinationChannelId, errEscrowOrphanVoucher)
 			return failureResult(universalErrorAck()), nil
 		}
 	case z.TOKEN_ORDER_KIND_INITIALIZE:
 		// gno requires the metadata preimage to initialize a new wrapped token.
 		if len(order.Metadata) == 0 {
+			zkgm.EmitRecvError(0, rlm, packet.SourceChannelId, packet.DestinationChannelId, errTokenOrderMissingMetadata)
 			return failureResult(universalErrorAck()), nil
 		}
 
@@ -192,6 +196,7 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 		// A quote token that does not match the deterministic wrapped denom is an
 		// invalid initialize order (union InvalidTokenOrderKind).
 		if quoteDenom != wrapped {
+			zkgm.EmitRecvError(0, rlm, packet.SourceChannelId, packet.DestinationChannelId, errTokenOrderInvalidInitializeQuote)
 			return failureResult(universalErrorAck()), nil
 		}
 
@@ -202,6 +207,7 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 	// covers the quote; otherwise fall back to a market-maker fill.
 	if hasWrapped && quoteDenom == wrapped && baseCovers {
 		if err := v.rateLimit(0, rlm, quoteDenom, order.QuoteAmount); err != nil {
+			zkgm.EmitRecvError(0, rlm, packet.SourceChannelId, packet.DestinationChannelId, err.Error())
 			return failureResult(universalErrorAck()), nil
 		}
 

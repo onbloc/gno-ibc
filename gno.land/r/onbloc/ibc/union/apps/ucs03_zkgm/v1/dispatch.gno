@@ -8,6 +8,7 @@ import (
 	"gno.land/p/nt/ufmt/v0"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	u256 "gno.land/p/onbloc/math/uint256"
+	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	core "gno.land/r/onbloc/ibc/union/core"
 )
 
@@ -73,6 +74,7 @@ func (v *ucs03ZkgmV1) dispatchExecutePacket(
 				panic(r)
 			}
 
+			zkgm.EmitRecvError(0, rlm, packet.SourceChannelId, packet.DestinationChannelId, ufmt.Sprintf("%v", r))
 			result = failureResult(universalErrorAck())
 			err = nil
 		}

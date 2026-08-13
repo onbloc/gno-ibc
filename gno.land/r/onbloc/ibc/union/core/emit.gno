@@ -148,25 +148,25 @@ func EmitPacketSend(_ int, rlm realm, packet types.Packet, sourceChannel types.C
 }
 
 // EmitPacketRecv emits the PacketRecv host event.
-func EmitPacketRecv(_ int, rlm realm, packet types.Packet, destinationChannel types.Channel, connection types.Connection, relayerMsg []byte) {
+func EmitPacketRecv(_ int, rlm realm, packet types.Packet, destinationChannel types.Channel, connection types.Connection, relayerMsg []byte, status types.PacketStatus) {
 	assertIsRlmCurrent(0, rlm)
 	assertIsProxyRealm(0, rlm)
 	if !IsValidEventSize(relayerMsg) {
 		panic(makeError(ErrPacketCombinedDataTooLarge))
 	}
 
-	emitPacketRecvEvent(PacketRecvEvent, packet, destinationChannel, connection, relayerMsg)
+	emitPacketRecvEvent(PacketRecvEvent, packet, destinationChannel, connection, relayerMsg, status)
 }
 
 // EmitIntentPacketRecv emits the IntentPacketRecv host event.
-func EmitIntentPacketRecv(_ int, rlm realm, packet types.Packet, destinationChannel types.Channel, connection types.Connection, marketMakerMsg []byte) {
+func EmitIntentPacketRecv(_ int, rlm realm, packet types.Packet, destinationChannel types.Channel, connection types.Connection, marketMakerMsg []byte, status types.PacketStatus) {
 	assertIsRlmCurrent(0, rlm)
 	assertIsProxyRealm(0, rlm)
 	if !IsValidEventSize(marketMakerMsg) {
 		panic(makeError(ErrPacketCombinedDataTooLarge))
 	}
 
-	emitPacketRecvEvent(IntentPacketRecvEvent, packet, destinationChannel, connection, marketMakerMsg)
+	emitPacketRecvEvent(IntentPacketRecvEvent, packet, destinationChannel, connection, marketMakerMsg, status)
 }
 
 // EmitPacketAck emits the PacketAck host event.

@@ -11,6 +11,22 @@ const (
 	PacketStatusAsync   PacketStatus = 3
 )
 
+// String renders the status as a lowercase word so event consumers (e.g. a
+// block explorer) can read success/failure directly instead of decoding a
+// numeric enum.
+func (s PacketStatus) String() string {
+	switch s {
+	case PacketStatusSuccess:
+		return "success"
+	case PacketStatusFailure:
+		return "failure"
+	case PacketStatusAsync:
+		return "async"
+	default:
+		return "unknown"
+	}
+}
+
 // MustBeZero is a u64 that is always zero. Union packets carry no timeout
 // height (timeouts are expressed via the timestamp), so the ABI-encoded height
 // field is fixed to zero, mirroring the ibc-union-spec MustBeZero type.

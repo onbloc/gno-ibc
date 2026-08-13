@@ -10,6 +10,14 @@ func EmitRecvError(_ int, rlm realm, sourceChannel types.ChannelId, destinationC
 	emitRecvError(sourceChannel, destinationChannel, reason)
 }
 
+func EmitAck(_ int, rlm realm, packetHash types.H256, sourceChannel types.ChannelId, destinationChannel types.ChannelId, status types.PacketStatus) {
+	assertIsRlmCurrent(0, rlm)
+	if rlm.PkgPath() != proxyPkgPath {
+		return
+	}
+	emitZkgmAckEvent(packetHash, sourceChannel, destinationChannel, status)
+}
+
 func EmitNativeReleased(_ int, rlm realm, denom string, recipient address, amount int64) {
 	assertIsRlmCurrent(0, rlm)
 	if rlm.PkgPath() != proxyPkgPath {

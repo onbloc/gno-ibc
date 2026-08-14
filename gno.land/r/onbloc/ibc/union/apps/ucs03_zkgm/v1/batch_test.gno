@@ -473,6 +473,60 @@ func TestRecvBatchChildDecodeErrorAbortsAfterPriorChildRan(cur realm, t *testing
 	uassert.Equal(t, int64(37), voucherBalanceOf(quoteDenom, receiver))
 }
 
+// A batch whose second child's quote denom is paused must abort the whole
+// recv tx via the same execFatal path as the other batch-child failures
+// above, not commit a failure ack, even though the first child already
+// minted before the pause guard was reached.
+func TestRecvBatchPausedDenomChildAbortsAfterPriorChildRan(cur realm, t *testing.T) {
+	Reset(cross(cur))
+	testStore = newMockStore()
+	testStore.SetReceiver(0, cur, mockReceiverPath, Zkgmable(cross(cur)))
+
+	v := newTestImpl()
+	path := u256.Zero()
+	const destChan = types.ChannelId(74)
+	receiver := testAddress("batch-paused-rx")
+	quoteDenom := z.PredictWrappedToken(path, uint32(destChan), []byte("ugnot"))
+	v.getOrCreateVoucher(0, cur, quoteDenom, [32]byte{}, "T", "BATP1", canonicalDecimals)
+
+	firstOrder := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(receiver),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(21),
+		QuoteToken:  []byte(quoteDenom),
+		QuoteAmount: u256.NewUint(21),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+
+	pausedQuoteDenom := "ibc/batch-paused-quote"
+	testStore.SetDenomPaused(0, cur, pausedQuoteDenom, true)
+	secondOrder := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(receiver),
+		BaseToken:   []byte("uatom"),
+		BaseAmount:  u256.NewUint(10),
+		QuoteToken:  []byte(pausedQuoteDenom),
+		QuoteAmount: u256.NewUint(10),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+
+	data := mustZkgmPacketBytes(batchMustBatchInstruction(z.Batch{
+		Instructions: []z.Instruction{batchMustOrderInstruction(firstOrder), batchMustOrderInstruction(secondOrder)},
+	}))
+	packet := core.NewPacket(types.ChannelId(71), destChan, data, 0)
+
+	relayer := testAddress("batch-paused-relayer")
+	uassert.AbortsContains(t, cur, errDenomPaused, func(cur realm) {
+		newTestImpl().OnRecvPacket(0, cur, packet, address(relayer), nil)
+	})
+
+	// Same caveat as the other batch-abort tests above: this mock store
+	// doesn't itself revert on panic, so 21 here documents the pre-abort mint
+	// that must get rolled back at the real chain's atomic-tx layer.
+	uassert.Equal(t, int64(21), voucherBalanceOf(quoteDenom, receiver))
+}
+
 // A batch with an only-maker child aborts the whole recv tx: OnRecvPacket panics
 // on the only-maker outer ack, so no partial batch state is committed. This
 // mirrors union's reply handler returning Err(OnlyMaker) for a batch ack

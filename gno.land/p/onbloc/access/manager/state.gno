@@ -1,7 +1,5 @@
 package manager
 
-import "gno.land/p/nt/ufmt/v0"
-
 type State struct {
 	Roles   map[RoleId]*RoleConfig
 	Targets map[string]*TargetConfig
@@ -48,10 +46,6 @@ func (state *State) IsAuthorized(caller address, target string, selector Selecto
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L211-L220
 func (state *State) HasRole(role RoleId, account address) HasRoleResult {
-	if role == PublicRole {
-		return NewHasRoleResult(true)
-	}
-
 	roleConfig := state.getRole(role)
 	if roleConfig == nil {
 		return NewHasRoleResult(false)
@@ -146,10 +140,6 @@ func (state *State) IsTargetClosed(target string) bool {
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L233-L236
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L271-L298
 func (state *State) GrantRole(role RoleId, account address) bool {
-	if role == PublicRole {
-		panic(errorWithDetails(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
-	}
-
 	state.ensureRole(role)
 
 	return state.getRole(role).grant(account, CurrentTimePoint())
@@ -160,10 +150,6 @@ func (state *State) GrantRole(role RoleId, account address) bool {
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L238-L240
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L300-L319
 func (state *State) RevokeRole(role RoleId, account address) bool {
-	if role == PublicRole {
-		panic(errorWithDetails(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
-	}
-
 	state.ensureRole(role)
 
 	if role == AdminRole && state.isLastAdmin(account) {
@@ -220,14 +206,10 @@ func (state *State) SetRoleAdmin(role RoleId, admin RoleId) {
 // SetGrantDelay schedules newDelay behind a setback; it never overwrites the
 // active delay on the spot. Callers read GetRoleGrantDelay for the current
 // value or GetRoleGrantDelayEffect for the effect timePoint.
-// AdminRole is not locked here (unlike SetRoleAdmin) — OZ/Union only reject PublicRole.
+// AdminRole is not locked here (unlike SetRoleAdmin).
 // OpenZeppelin: https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L262-L264,L362-L371
 // Union: https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/contract.rs#L139-L148,L314-L345
 func (state *State) SetGrantDelay(role RoleId, newDelay uint32) {
-	if role == PublicRole {
-		panic(errorWithDetails(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
-	}
-
 	state.ensureRole(role)
 	state.getRole(role).setGrantDelay(CurrentTimePoint(), newDelay)
 }

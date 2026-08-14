@@ -47,7 +47,6 @@ Currently adopted role ids:
 
 - `AdminRole = 0`
 - Core `RelayerRole = 1`, matching Union deployer's `RELAYER`
-- `PublicRole = uint64 max`
 
 Known Union deployer roles not ported yet:
 

@@ -58,7 +58,6 @@ func TestConnectionOpenPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			resetStore(cur)
-			requireSelectorProtectedForTest(cur, tc.selector)
 
 			uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 				tc.run(cross(cur))
@@ -112,7 +111,6 @@ func TestForceConnectionOpenPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			resetStore(cur)
-			requireSelectorProtectedForTest(cur, tc.selector)
 
 			uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 				tc.run(cross(cur))

@@ -7,7 +7,7 @@ import "gno.land/p/nt/ufmt/v0"
 // OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L226-L230
 func RequireUnlockedConfigRole(role RoleId) {
-	if role == AdminRole || role == PublicRole {
+	if role == AdminRole {
 		panic(errorWithDetails(errAccessManagerLockedRole, ufmt.Sprintf("role %d is locked", role)))
 	}
 }

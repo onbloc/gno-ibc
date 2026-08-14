@@ -10,7 +10,6 @@ import (
 // Gno equivalent of Union RestrictedExecuteMsg access management.
 func TestCommitMembershipProofRejectsNonAdminBeforeVerification(cur realm, t *testing.T) {
 	resetStore(cur)
-	requireSelectorProtectedForTest(cur, SelectorCommitMembershipProof)
 
 	client := &mockClient{chainId: "union-1", status: types.StatusActive}
 	clientId := registerMockClient(client)

@@ -22,7 +22,6 @@ surface tables.
 | Managed target | Contract address plus selector. | Realm package path plus selector. |
 | Caller identity | CosmWasm sender / EVM caller context. | Derived from `cur.Previous().Address()` by the access realm. |
 | Authorization check | `AccessManaged` and `Restricted` wrappers call the authority. | Managed realms call `AssertCanCall(0, cur, selector)`. |
-| Public role | Always callable when target is open. | `PublicRole` is retained as `uint64 max`; target closure still blocks calls. |
 | Admin role | `ADMIN_ROLE = 0`. | `AdminRole = 0`. |
 | Grant delay | Retained by OpenZeppelin and Union, including the `Delay.withUpdate`/`Delay::with_update` setback that protects delay *changes* (`MinSetback`, 5 days for both). | Retained by `GrantDelay` (a `manager.Delay`) and member activation time; `SetGrantDelay` schedules changes through the same setback formula via `manager.MinSetback`. |
 | Delayed operation execution | OpenZeppelin and Union include scheduling/execution concepts. | Not implemented; Gno keeps grant delay only. |
@@ -52,9 +51,11 @@ they are attributed to the realm that owns state.
   exposed. They depend on callable execution contexts that are not part of the
   current Gno access realm.
 - The deployer role policy is local deployment configuration. Current Gno role
-  coverage adopts `AdminRole`, core `RelayerRole`, and `PublicRole`; ZKGM
-  `PAUSER`, `UNPAUSER`, and `RATE_LIMITER` role ids are documented but not
-  ported until the matching selector groups and tests are introduced.
+  coverage adopts `AdminRole` and core `RelayerRole`; ZKGM `PAUSER`,
+  `UNPAUSER`, and `RATE_LIMITER` role ids are documented but not ported until
+  the matching selector groups and tests are introduced. There is no `PublicRole`
+  concept — every selector requires an explicitly granted role, defaulting to
+  `AdminRole` when unset.
 
 ## Reading Core And ZKGM Admin Rows
 

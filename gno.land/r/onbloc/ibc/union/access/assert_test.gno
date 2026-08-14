@@ -11,10 +11,12 @@ import (
 func TestAssertCanCall(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	caller := testutils.TestAddress("access-caller")
+	const hookRole manager.RoleId = 42
 	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
-	SetFunctionRole(cross(cur), cur.PkgPath(), "set_hook", manager.PublicRole)
+	GrantRole(cross(cur), hookRole, caller)
+	SetFunctionRole(cross(cur), cur.PkgPath(), "set_hook", hookRole)
 
 	tests := []struct {
 		name     string
@@ -23,7 +25,7 @@ func TestAssertCanCall(cur realm, t *testing.T) {
 		aborts   bool
 	}{
 		{
-			name: "authorized public selector",
+			name: "authorized granted selector",
 			setup: func(cur realm) {
 				SetTargetClosed(cross(cur), cur.PkgPath(), false)
 			},

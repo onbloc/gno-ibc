@@ -404,32 +404,26 @@ func TestGetChannelNotFoundPanics(cur realm, t *testing.T) {
 func TestRestrictedPacketEntrypointsRejectNonAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
 
-	requireSelectorProtectedForTest(cur, SelectorPacketRecv)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		PacketRecv(cross(cur), types.MsgPacketRecv{})
 	})
 
-	requireSelectorProtectedForTest(cur, SelectorIntentPacketRecv)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		IntentPacketRecv(cross(cur), types.MsgIntentPacketRecv{})
 	})
 
-	requireSelectorProtectedForTest(cur, SelectorPacketAck)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		PacketAcknowledgement(cross(cur), types.MsgPacketAcknowledgement{})
 	})
 
-	requireSelectorProtectedForTest(cur, SelectorPacketTimeout)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		PacketTimeout(cross(cur), types.MsgPacketTimeout{})
 	})
 
-	requireSelectorProtectedForTest(cur, SelectorBatchSend)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		BatchSend(cross(cur), types.MsgBatchSend{})
 	})
 
-	requireSelectorProtectedForTest(cur, SelectorBatchAcks)
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		BatchAcks(cross(cur), types.MsgBatchAcks{})
 	})
@@ -521,7 +515,6 @@ func TestGetChannelOwnerPanicsWhenMissing(cur realm, t *testing.T) {
 
 func TestForceUpdateClientPanicsWhenCallerIsNotAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	requireSelectorProtectedForTest(cur, SelectorForceUpdateClient)
 
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		ForceUpdateClient(cross(cur), types.NewMsgForceUpdateClient(types.ClientId(0), nil, nil))

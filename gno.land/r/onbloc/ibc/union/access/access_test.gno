@@ -87,6 +87,7 @@ func TestRoleMembershipRejectsNonAdmin(cur realm, t *testing.T) {
 func TestSetFunctionRoleDirectManagement(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	caller := testutils.TestAddress("access-caller")
+	const hookRole manager.RoleId = 42
 	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
@@ -94,31 +95,34 @@ func TestSetFunctionRoleDirectManagement(cur realm, t *testing.T) {
 		t.Fatal("non-admin caller must not be authorized before role update")
 	}
 
-	SetFunctionRole(cross(cur), cur.PkgPath(), "set_hook", manager.PublicRole)
+	GrantRole(cross(cur), hookRole, caller)
+	SetFunctionRole(cross(cur), cur.PkgPath(), "set_hook", hookRole)
 	if !CanCall(cur.PkgPath(), "set_hook", caller).Immediate {
-		t.Fatal("public role assignment must authorize arbitrary caller")
+		t.Fatal("role assignment must authorize the granted caller")
 	}
 }
 
 func TestSetFunctionRolesDirectManagement(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	caller := testutils.TestAddress("access-caller")
+	const hookRole manager.RoleId = 42
 	selectors := []manager.Selector{"set_hook", "dispatch"}
 	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
-	SetFunctionRoles(cross(cur), cur.PkgPath(), selectors, manager.PublicRole)
+	GrantRole(cross(cur), hookRole, caller)
+	SetFunctionRoles(cross(cur), cur.PkgPath(), selectors, hookRole)
 
 	for _, selector := range selectors {
 		t.Run(string(selector), func(t *testing.T) {
-			if GetFunctionRole(cur.PkgPath(), selector) != manager.PublicRole {
-				t.Fatalf("%s must be assigned public role", selector)
+			if GetFunctionRole(cur.PkgPath(), selector) != hookRole {
+				t.Fatalf("%s must be assigned the configured role", selector)
 			}
-			if GetTargetFunctionRole(cur.PkgPath(), selector) != manager.PublicRole {
-				t.Fatalf("%s must be assigned public target role", selector)
+			if GetTargetFunctionRole(cur.PkgPath(), selector) != hookRole {
+				t.Fatalf("%s must be assigned the configured target role", selector)
 			}
 			if !CanCall(cur.PkgPath(), selector, caller).Immediate {
-				t.Fatalf("%s must authorize arbitrary caller after public role assignment", selector)
+				t.Fatalf("%s must authorize the granted caller", selector)
 			}
 		})
 	}
@@ -131,7 +135,7 @@ func TestSetFunctionRoleRejectsNonAdmin(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(caller))
 	uassert.AbortsContains(t, cur, ErrAccessManagerUnauthorizedAccount, func(cur realm) {
-		SetFunctionRole(cur, cur.PkgPath(), "set_hook", manager.PublicRole)
+		SetFunctionRole(cur, cur.PkgPath(), "set_hook", 42)
 	})
 	if GetFunctionRole(cur.PkgPath(), "set_hook") != manager.AdminRole {
 		t.Fatal("rejected role update must not change selector role")
@@ -168,13 +172,13 @@ func TestManagerAdminProtectedSurfacesRejectNonAdmin(cur realm, t *testing.T) {
 		{
 			name: "set function role",
 			run: func(cur realm) {
-				SetFunctionRole(cross(cur), cur.PkgPath(), "set_hook", manager.PublicRole)
+				SetFunctionRole(cross(cur), cur.PkgPath(), "set_hook", 42)
 			},
 		},
 		{
 			name: "set function roles",
 			run: func(cur realm) {
-				SetFunctionRoles(cross(cur), cur.PkgPath(), []manager.Selector{"set_hook", "dispatch"}, manager.PublicRole)
+				SetFunctionRoles(cross(cur), cur.PkgPath(), []manager.Selector{"set_hook", "dispatch"}, 42)
 			},
 		},
 		{
@@ -282,19 +286,21 @@ func TestRenounceRoleSurface(cur realm, t *testing.T) {
 func TestTargetConfigurationSurface(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
 	caller := testutils.TestAddress("access-caller")
+	const hookRole manager.RoleId = 42
 	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
-	SetFunctionRole(cross(cur), cur.PkgPath(), "set_hook", manager.PublicRole)
+	GrantRole(cross(cur), hookRole, caller)
+	SetFunctionRole(cross(cur), cur.PkgPath(), "set_hook", hookRole)
 
-	if GetTargetFunctionRole(cur.PkgPath(), "set_hook") != manager.PublicRole {
+	if GetTargetFunctionRole(cur.PkgPath(), "set_hook") != hookRole {
 		t.Fatal("SetFunctionRole must update the explicit target's selector role")
 	}
 	if !CanManageTarget(admin).Immediate {
 		t.Fatal("admin role member must be able to manage targets")
 	}
 	if !IsAuthorized(cur.PkgPath(), "set_hook", caller) {
-		t.Fatal("public selector must authorize arbitrary caller")
+		t.Fatal("granted selector must authorize the granted caller")
 	}
 
 	SetTargetClosed(cross(cur), cur.PkgPath(), true)
@@ -332,21 +338,22 @@ func TestSetTargetClosedTargetsExplicitPathNotCaller(cur realm, t *testing.T) {
 // SetFunctionRole and SetFunctionRoles.
 func TestSetFunctionRoleTargetsExplicitPathNotCaller(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("access-admin")
+	const hookRole manager.RoleId = 42
 	resetAccess(admin)
 
 	testing.SetRealm(testing.NewUserRealm(admin))
-	SetFunctionRole(cross(cur), CoreRealmPath, "set_hook", manager.PublicRole)
+	SetFunctionRole(cross(cur), CoreRealmPath, "set_hook", hookRole)
 
-	if GetFunctionRole(CoreRealmPath, "set_hook") != manager.PublicRole {
+	if GetFunctionRole(CoreRealmPath, "set_hook") != hookRole {
 		t.Fatal("SetFunctionRole must update the explicitly requested target's selector role")
 	}
 	if GetFunctionRole(cur.PkgPath(), "set_hook") != manager.AdminRole {
 		t.Fatal("SetFunctionRole must not update the caller's own path")
 	}
 
-	SetFunctionRoles(cross(cur), CoreRealmPath, []manager.Selector{"dispatch"}, manager.PublicRole)
+	SetFunctionRoles(cross(cur), CoreRealmPath, []manager.Selector{"dispatch"}, hookRole)
 
-	if GetFunctionRole(CoreRealmPath, "dispatch") != manager.PublicRole {
+	if GetFunctionRole(CoreRealmPath, "dispatch") != hookRole {
 		t.Fatal("SetFunctionRoles must update the explicitly requested target's selector role")
 	}
 	if GetFunctionRole(cur.PkgPath(), "dispatch") != manager.AdminRole {

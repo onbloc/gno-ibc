@@ -55,7 +55,6 @@ func TestRegisterClient(cur realm, t *testing.T) {
 
 func TestRegisterClient_RejectsNonRelayer(cur realm, t *testing.T) {
 	resetStore(cur)
-	requireSelectorProtectedForTest(cur, SelectorRegisterClient)
 
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		RegisterClient(cross(cur), "cometbls", noopClientImpl)
@@ -91,7 +90,6 @@ func TestCreateClient(cur realm, t *testing.T) {
 
 func TestCreateClient_RejectsNonRelayer(cur realm, t *testing.T) {
 	resetStore(cur)
-	requireSelectorProtectedForTest(cur, SelectorCreateClient)
 
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		CreateClient(cross(cur), types.MsgCreateClient{ClientType: "cometbls"})
@@ -144,7 +142,6 @@ func TestUpdateClient(cur realm, t *testing.T) {
 
 func TestUpdateClient_RejectsNonRelayer(cur realm, t *testing.T) {
 	resetStore(cur)
-	requireSelectorProtectedForTest(cur, SelectorUpdateClient)
 
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		UpdateClient(cross(cur), types.MsgUpdateClient{ClientId: 1})
@@ -176,7 +173,6 @@ func TestForceUpdateClient(cur realm, t *testing.T) {
 
 func TestForceUpdateClient_RejectsNonAdmin(cur realm, t *testing.T) {
 	resetStore(cur)
-	requireSelectorProtectedForTest(cur, SelectorForceUpdateClient)
 
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		ForceUpdateClient(cross(cur), types.MsgForceUpdateClient{ClientId: 1})
@@ -212,7 +208,6 @@ func TestMisbehaviour(cur realm, t *testing.T) {
 
 func TestMisbehaviour_RejectsNonRelayer(cur realm, t *testing.T) {
 	resetStore(cur)
-	requireSelectorProtectedForTest(cur, SelectorMisbehaviour)
 
 	uassert.AbortsContains(t, cur, accessManagerUnauthorizedCallError, func(cur realm) {
 		Misbehaviour(cross(cur), types.MsgMisbehaviour{ClientId: 1})

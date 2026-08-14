@@ -61,7 +61,6 @@ func TestSetEventConfigAccessControlled(cur realm, t *testing.T) {
 
 	for _, tc := range tests {
 		resetStore(cur)
-		requireSelectorProtectedForTest(cur, SelectorSetEventConfig)
 
 		if tc.admin {
 			testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
@@ -136,7 +135,6 @@ func TestEventConfigFieldSettersAccessControlled(cur realm, t *testing.T) {
 
 	for _, tc := range tests {
 		resetStore(cur)
-		requireSelectorProtectedForTest(cur, SelectorSetEventConfig)
 
 		if tc.wantPanic != "" {
 			uassert.AbortsContains(t, cur, tc.wantPanic, func(cur realm) {

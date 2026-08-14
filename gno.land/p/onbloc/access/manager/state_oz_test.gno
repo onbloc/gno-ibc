@@ -73,7 +73,8 @@ func TestOZCanCallClosedTargetReturnsFalse(t *testing.T) {
 	caller := testutils.TestAddress("caller")
 	state := NewState()
 
-	state.SetTargetFunctionRole(ozTarget, ozSelector, PublicRole)
+	state.GrantRole(ozRole, caller)
+	state.SetTargetFunctionRole(ozTarget, ozSelector, ozRole)
 	state.SetTargetClosed(ozTarget, true)
 
 	result := state.CanCall(caller, ozTarget, ozSelector)
@@ -82,29 +83,38 @@ func TestOZCanCallClosedTargetReturnsFalse(t *testing.T) {
 	}
 }
 
-// OpenZeppelin reference:
-// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L177-L186
-func TestOZCanCallPublicRoleReturnsTrue(t *testing.T) {
+// Gno divergence from OpenZeppelin/Union: both reserve uint64::MAX
+// (PUBLIC_ROLE) as a sentinel that every account always holds, that cannot
+// be granted/revoked, and that authorizes any caller on an assigned selector.
+// This Gno port has no PublicRole concept, so uint64 max is an ordinary role
+// like any other — it authorizes only accounts that were explicitly granted
+// the role, and it can be granted/revoked freely.
+// OpenZeppelin reference (PUBLIC_ROLE constant and its special-cased checks):
+// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/IAccessManager.sol#L47-L48
+// Union reference (PUBLIC_ROLE = u64::MAX):
+// https://github.com/unionlabs/union/blob/8cff0ff34f6baa4cdb1e4650a08985dd05de0c5a/cosmwasm/access-manager/src/lib.rs#L23-L24
+func TestOZUint64MaxRoleIsOrdinaryRoleNotPublic(t *testing.T) {
+	const uint64MaxRole RoleId = 18446744073709551615 // uint64 max, formerly manager.PublicRole
 	caller := testutils.TestAddress("caller")
 	state := NewState()
 
-	state.SetTargetFunctionRole(ozTarget, ozSelector, PublicRole)
+	state.SetTargetFunctionRole(ozTarget, ozSelector, uint64MaxRole)
 
-	result := state.CanCall(caller, ozTarget, ozSelector)
-	if !result.Immediate {
-		t.Fatal("public role target must be callable immediately")
+	if state.HasRole(uint64MaxRole, caller).IsMember {
+		t.Fatal("uint64 max role must not be held by every account (divergence from OZ/Union PUBLIC_ROLE)")
 	}
-}
+	if state.CanCall(caller, ozTarget, ozSelector).Immediate {
+		t.Fatal("uint64 max role must not authorize an ungranted caller (divergence from OZ/Union PUBLIC_ROLE)")
+	}
 
-// OpenZeppelin reference:
-// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L591-L604
-func TestOZHasRolePublicRoleReturnsTrue(t *testing.T) {
-	caller := testutils.TestAddress("caller")
-	state := NewState()
-
-	result := state.HasRole(PublicRole, caller)
-	if !result.IsMember {
-		t.Fatal("public role must be held by every account")
+	if !state.GrantRole(uint64MaxRole, caller) {
+		t.Fatal("uint64 max role must be grantable like any ordinary role")
+	}
+	if !state.CanCall(caller, ozTarget, ozSelector).Immediate {
+		t.Fatal("granted caller must be authorized once uint64 max role is explicitly granted")
+	}
+	if !state.RevokeRole(uint64MaxRole, caller) {
+		t.Fatal("uint64 max role must be revocable like any ordinary role")
 	}
 }
 
@@ -162,32 +172,7 @@ func TestOZSetRoleAdminSetsUnlockedRoleAndRejectsLockedRoles(t *testing.T) {
 	}
 
 	mustPanic(t, func() {
-		state.SetRoleAdmin(PublicRole, AdminRole)
-	})
-	mustPanic(t, func() {
 		state.SetRoleAdmin(AdminRole, AdminRole)
-	})
-}
-
-// OpenZeppelin references:
-// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L891-L894
-// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/contracts/access/manager/AccessManager.sol#L362-L365
-func TestOZSetGrantDelayRejectsPublicRole(t *testing.T) {
-	state := NewState()
-
-	mustPanic(t, func() {
-		state.SetGrantDelay(PublicRole, 69)
-	})
-}
-
-// OpenZeppelin reference:
-// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L1191-L1194
-func TestOZGrantRoleRejectsPublicRole(t *testing.T) {
-	caller := testutils.TestAddress("caller")
-	state := NewState()
-
-	mustPanic(t, func() {
-		state.GrantRole(PublicRole, caller)
 	})
 }
 
@@ -266,17 +251,6 @@ func TestOZRevokeRoleMissingRoleHasNoEffect(t *testing.T) {
 }
 
 // OpenZeppelin reference:
-// https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L1636-L1639
-func TestOZRevokeRoleRejectsPublicRole(t *testing.T) {
-	caller := testutils.TestAddress("caller")
-	state := NewState()
-
-	mustPanic(t, func() {
-		state.RevokeRole(PublicRole, caller)
-	})
-}
-
-// OpenZeppelin reference:
 // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/5fd1781b1454fd1ef8e722282f86f9293cacf256/test/access/manager/AccessManager.test.js#L1652-L1675
 func TestOZRenounceRoleRevokesAndRejectsBadConfirmation(t *testing.T) {
 	caller := testutils.TestAddress("caller")
@@ -294,8 +268,5 @@ func TestOZRenounceRoleRevokesAndRejectsBadConfirmation(t *testing.T) {
 	state.GrantRole(ozRole, caller)
 	mustPanic(t, func() {
 		state.RenounceRole(ozRole, caller, other)
-	})
-	mustPanic(t, func() {
-		state.RenounceRole(PublicRole, caller, caller)
 	})
 }

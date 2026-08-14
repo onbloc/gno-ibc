@@ -45,23 +45,6 @@ func TestCanCallAuthorization(t *testing.T) {
 			want: false,
 		},
 		{
-			name:   "public role authorizes every account",
-			caller: caller,
-			setup: func(state *State) {
-				state.SetTargetFunctionRole("target", "selector", PublicRole)
-			},
-			want: true,
-		},
-		{
-			name:   "closed target rejects public selector",
-			caller: caller,
-			setup: func(state *State) {
-				state.SetTargetFunctionRole("target", "selector", PublicRole)
-				state.SetTargetClosed("target", true)
-			},
-			want: false,
-		},
-		{
 			name:   "active member can call",
 			caller: caller,
 			setup: func(state *State) {
@@ -69,6 +52,16 @@ func TestCanCallAuthorization(t *testing.T) {
 				state.SetTargetFunctionRole("target", "selector", testRole)
 			},
 			want: true,
+		},
+		{
+			name:   "closed target rejects active member",
+			caller: caller,
+			setup: func(state *State) {
+				state.GrantRole(testRole, caller)
+				state.SetTargetFunctionRole("target", "selector", testRole)
+				state.SetTargetClosed("target", true)
+			},
+			want: false,
 		},
 	}
 
@@ -229,7 +222,6 @@ func TestRequireUnlockedConfigRole(t *testing.T) {
 	}{
 		{"regular role", testRole, false},
 		{"admin role", AdminRole, true},
-		{"public role", PublicRole, true},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -242,32 +234,6 @@ func TestRequireUnlockedConfigRole(t *testing.T) {
 			RequireUnlockedConfigRole(tc.role)
 		})
 	}
-}
-
-func TestLockedPublicRoleCannotBeGrantedOrRevoked(t *testing.T) {
-	caller := testutils.TestAddress("caller")
-	tests := []struct {
-		name string
-		call func(state *State)
-	}{
-		{"grant", func(state *State) { state.GrantRole(PublicRole, caller) }},
-		{"revoke", func(state *State) { state.RevokeRole(PublicRole, caller) }},
-	}
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			state := NewState()
-			mustPanic(t, func() {
-				tc.call(&state)
-			})
-		})
-	}
-}
-
-func TestSetGrantDelayRejectsPublicRole(t *testing.T) {
-	state := NewState()
-	mustPanic(t, func() {
-		state.SetGrantDelay(PublicRole, 5)
-	})
 }
 
 // Unlike SetRoleAdmin, SetGrantDelay doesn't lock AdminRole.

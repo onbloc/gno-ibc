@@ -28,10 +28,9 @@ The model follows OpenZeppelin's `AccessManager` shape:
 
 - roles are `uint64` identifiers;
 - `AdminRole` is `0`;
-- `PublicRole` is `uint64 max` and every account is always a member;
 - permissions are scoped by target and selector;
 - an unset target function role defaults to `AdminRole`;
-- a target can be closed, rejecting calls even when the function is public;
+- a target can be closed, rejecting calls regardless of the caller's role;
 - each role has an admin role, grant delay, and member access records;
 - a role's grant delay is a `Delay`, not a plain scalar: `SetGrantDelay`
   schedules the new value behind a setback (`MinSetback`), mirroring
@@ -62,7 +61,8 @@ are still aligned with the source models:
   surface and the fields intentionally not ported in this Gno package:
   [`AccessManager` API](https://docs.openzeppelin.com/contracts/5.x/api/access#AccessManager)
 - OpenZeppelin defines the target/function role model, admin role behavior,
-  public role behavior, target closure, and delayed operation concepts:
+  public role behavior (not ported here), target closure, and delayed
+  operation concepts:
   [`AccessManager` source](https://github.com/OpenZeppelin/openzeppelin-contracts/tree/v5.6.1/contracts/access/manager)
 - Union's `access-manager` ports the OpenZeppelin manager to CosmWasm. Its init
   grants `ADMIN_ROLE` to `InitMsg.initial_admin`:
@@ -130,7 +130,6 @@ Types:
 Constants:
 
 - `AdminRole`
-- `PublicRole`
 - `MinSetback`
 
 Constructors:

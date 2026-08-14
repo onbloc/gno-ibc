@@ -77,6 +77,11 @@ func (v *ucs03ZkgmV1) GetVoucherInfo(ibcDenom string) (zkgm.VoucherInfo, error) 
 	), nil
 }
 
+// GetDenomPaused reports whether a denom is currently pause-gated.
+func (v *ucs03ZkgmV1) GetDenomPaused(denom string) bool {
+	return v.store.GetDenomPaused(denom)
+}
+
 func cloneTokenBucket(bucket *tb.TokenBucket) *tb.TokenBucket {
 	return &tb.TokenBucket{
 		Capacity:   bucket.Capacity.Clone(),

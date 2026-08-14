@@ -34,6 +34,7 @@ func TestNewStore(t *testing.T) {
 	uassert.False(t, ok)
 	_, ok = s.GetLockedTokenAmount("ugnot")
 	uassert.False(t, ok)
+	uassert.False(t, s.GetDenomPaused("denom"))
 }
 
 func TestTokenOrigin(cur realm, t *testing.T) {
@@ -388,6 +389,25 @@ func TestRateLimitDisabled(cur realm, t *testing.T) {
 	}
 }
 
+func TestDenomPaused(cur realm, t *testing.T) {
+	s := NewStore()
+	cases := []struct {
+		name   string
+		denom  string
+		paused bool
+	}{
+		{"pauses a denom", "ibc/denom-pause-a", true},
+		{"unpauses a denom", "ibc/denom-pause-b", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s.SetDenomPaused(0, cur, tc.denom, tc.paused)
+			uassert.Equal(t, tc.paused, s.GetDenomPaused(tc.denom))
+		})
+	}
+}
+
 func TestStore_MutationsRejectSpoofedRealm(cur realm, t *testing.T) {
 	s := NewStore()
 	token, ledger := newVoucherTokenForTest(cur, "Spoof Voucher", "SPF")
@@ -413,6 +433,7 @@ func TestStore_MutationsRejectSpoofedRealm(cur realm, t *testing.T) {
 		{"set voucher", func() { s.SetVoucher(0, spoofedRealm, "ibc/spoof-voucher", vou) }},
 		{"set receiver", func() { s.SetReceiver(0, spoofedRealm, "gno.land/r/spoof/receiver", &dummyReceiver{}) }},
 		{"set rate limit disabled", func() { s.SetRateLimitDisabled(0, spoofedRealm, false) }},
+		{"set denom paused", func() { s.SetDenomPaused(0, spoofedRealm, "ibc/spoof-denom-paused", true) }},
 	}
 
 	for _, tc := range cases {

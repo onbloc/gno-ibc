@@ -81,6 +81,18 @@ func TestGetChannelBalanceV2MissingKey(t *testing.T) {
 	}
 }
 
+func TestGetDenomPaused(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	uassert.False(t, v.GetDenomPaused("ibc/denom-not-paused"))
+
+	testStore.SetDenomPaused(0, cur, "ibc/denom-paused", true)
+	uassert.True(t, v.GetDenomPaused("ibc/denom-paused"))
+
+	testStore.SetDenomPaused(0, cur, "ibc/denom-paused", false)
+	uassert.False(t, v.GetDenomPaused("ibc/denom-paused"))
+}
+
 func TestGetVoucherListReturnsAllRegisteredVouchers(cur realm, t *testing.T) {
 	testStore = newMockStore()
 	v := newTestImpl()

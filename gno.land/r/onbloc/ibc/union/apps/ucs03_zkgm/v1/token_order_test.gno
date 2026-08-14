@@ -43,6 +43,35 @@ func TestTokenOrderAckFailureUnderflowDoesNotReleaseEscrowedVoucher(cur realm, t
 	uassert.Equal(t, int64(13), voucherBalanceOf(baseToken, cur.Address()))
 }
 
+// A paused denom also blocks ack settlement of an already in-flight packet, not just new sends.
+func TestTokenOrderAckPausedDenomRejectsMarketMakerFill(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	baseToken := "ibc/ack-paused"
+	channelId := types.ChannelId(14)
+	amount := u256.NewUint(13)
+	uassert.NoError(t, v.mintVoucher(0, cur, baseToken, [32]byte{}, "", "", 0, cur.Address(), amount))
+
+	order := z.TokenOrderV2{
+		Sender:      []byte(testAddress("ack-paused-snd")),
+		BaseToken:   []byte(baseToken),
+		BaseAmount:  amount,
+		QuoteToken:  []byte("quote"),
+		QuoteAmount: amount,
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	v.increaseChannelBalanceV2(0, cur, channelId, u256.Zero(), order.BaseToken, order.QuoteToken, amount.Int64())
+	testStore.SetDenomPaused(0, cur, baseToken, true)
+
+	orderAck := z.TokenOrderAck{FillType: fillTypeMarketMaker(), MarketMaker: []byte(z.BURN_ADDRESS)}
+	err := v.acknowledgeTokenOrderV2(0, cur, core.NewPacket(channelId, 0, nil, 0), address(""), [32]byte{}, u256.Zero(), order, orderAck, true)
+
+	uassert.ErrorContains(t, err, errDenomPaused)
+	// Still escrowed: the burn never ran.
+	uassert.Equal(t, int64(13), voucherBalanceOf(baseToken, cur.Address()))
+}
+
 // A market-maker ack naming the canonical zero burn address burns the escrowed
 // voucher instead of releasing it to the maker, mirroring union's burn-address
 // branch in acknowledge_token_order_v2 (contract.rs L1030-1042).
@@ -484,6 +513,89 @@ func TestTokenOrderVerifyUnescrowNativeRejectedBeforeFundsConsume(cur realm, t *
 
 	uassert.ErrorContains(t, err, "invalid token order unescrow")
 	uassert.False(t, f.isEmpty())
+}
+
+// A paused base denom is rejected before any escrow custody movement runs.
+func TestTokenOrderVerifyPausedDenomRejectedBeforeEscrow(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	sender := testAddress("paused-denom-sender")
+	testStore.SetDenomPaused(0, cur, "ugnot-paused", true)
+
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte("ugnot-paused"),
+		BaseAmount:  u256.NewUint(13),
+		QuoteToken:  []byte("quote-paused"),
+		QuoteAmount: u256.NewUint(13),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	f := newFunds(chain.NewCoins(chain.NewCoin("ugnot-paused", 13)))
+
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	err := v.verifyTokenOrderV2X(cross(cur), f, types.ChannelId(30), u256.Zero(), order)
+
+	uassert.ErrorContains(t, err, "denom paused")
+	// Escrow never ran: the attached funds are untouched.
+	uassert.False(t, f.isEmpty())
+}
+
+// The pause also gates UNESCROW, not just inbound custody; fixture otherwise mirrors
+// TestTokenOrderVerifyUnescrowV2PredictionWithImagePasses.
+func TestTokenOrderVerifyPausedDenomBlocksUnescrow(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	const destChan = types.ChannelId(41)
+	sender := testAddress("unesc-paused-snd")
+	quoteToken := []byte("ugnot")
+	image := [32]byte{0x01}
+	baseDenom := z.PredictWrappedTokenV2(u256.Zero(), uint32(destChan), quoteToken, image)
+	origin, err := z.UpdateChannelPath(u256.Zero(), uint32(destChan))
+	uassert.NoError(t, err)
+	testStore.SetTokenOrigin(0, cur, baseDenom, origin)
+	testStore.SetMetadataImageOf(0, cur, baseDenom, image)
+	uassert.NoError(t, v.mintVoucher(0, cur, baseDenom, image, "", "", 0, address(sender), u256.NewUint(100)))
+
+	testStore.SetDenomPaused(0, cur, baseDenom, true)
+
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte(baseDenom),
+		BaseAmount:  u256.NewUint(50),
+		QuoteToken:  quoteToken,
+		QuoteAmount: u256.NewUint(50),
+		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
+	}
+
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	err = v.verifyTokenOrderV2X(cross(cur), newFunds(nil), destChan, u256.Zero(), order)
+
+	uassert.ErrorContains(t, err, "denom paused")
+	// The voucher was never burned: the guard ran before burnVoucher.
+	uassert.Equal(t, int64(100), voucherBalanceOf(baseDenom, address(sender)))
+}
+
+func TestTokenOrderVerifyUnpausedDenomProceeds(cur realm, t *testing.T) {
+	v := newTestImpl()
+
+	sender := testAddress("unpaused-denom-snd")
+	testStore.SetDenomPaused(0, cur, "ugnot-unpaused", false)
+
+	order := z.TokenOrderV2{
+		Sender:      []byte(sender),
+		BaseToken:   []byte("ugnot-unpaused"),
+		BaseAmount:  u256.NewUint(13),
+		QuoteToken:  []byte("quote-unpaused"),
+		QuoteAmount: u256.NewUint(13),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	f := newFunds(chain.NewCoins(chain.NewCoin("ugnot-unpaused", 13)))
+
+	testing.SetRealm(testing.NewUserRealm(address(sender)))
+	err := v.verifyTokenOrderV2X(cross(cur), f, types.ChannelId(31), u256.Zero(), order)
+
+	uassert.NoError(t, err)
+	uassert.True(t, f.isEmpty())
 }
 
 // The reference applies the token-order rate limit only on the receive/execute
@@ -948,6 +1060,98 @@ func TestTokenOrderExecuteEscrowUninitializedVoucherReturnsFailureAck(cur realm,
 	uassert.False(t, ok, "rejected escrow must not set token origin")
 }
 
+// A paused quote denom aborts the recv protocol-fill mint path (execFatal panic, not a failure ack).
+func TestTokenOrderExecutePausedDenomAbortsProtocolFillMint(cur realm, t *testing.T) {
+	testStore = newMockStore()
+
+	const destChan = types.ChannelId(64)
+	receiver := testAddress("paused-mint-rx")
+	quoteDenom := z.PredictWrappedToken(u256.Zero(), uint32(destChan), []byte("ugnot"))
+	testStore.SetDenomPaused(0, cur, quoteDenom, true)
+
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(receiver),
+		BaseToken:   []byte("ugnot"),
+		BaseAmount:  u256.NewUint(100),
+		QuoteToken:  []byte(quoteDenom),
+		QuoteAmount: u256.NewUint(100),
+		Kind:        z.TOKEN_ORDER_KIND_ESCROW,
+	}
+	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
+	packet := core.NewPacket(types.ChannelId(1), destChan, data, 0)
+
+	uassert.AbortsContains(t, cur, errDenomPaused, func(cur realm) {
+		newTestImpl().OnRecvPacket(0, cur, packet, address(testAddress("paused-mint-rly")), nil)
+	})
+
+	uassert.Equal(t, int64(0), voucherBalanceOf(quoteDenom, address(receiver)))
+}
+
+// Same guard on the recv unescrow-release path.
+func TestTokenOrderExecutePausedDenomAbortsUnescrowRelease(cur realm, t *testing.T) {
+	testStore = newMockStore()
+
+	const destChan = types.ChannelId(42)
+	receiver := testAddress("paused-unesc-rx")
+	baseToken := []byte("ibc/paused-unescrow")
+	quoteToken := []byte("upaused")
+	testStore.SetDenomPaused(0, cur, string(quoteToken), true)
+
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(receiver),
+		BaseToken:   baseToken,
+		BaseAmount:  u256.NewUint(55),
+		QuoteToken:  quoteToken,
+		QuoteAmount: u256.NewUint(50),
+		Kind:        z.TOKEN_ORDER_KIND_UNESCROW,
+	}
+	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
+	packet := core.NewPacket(types.ChannelId(1), destChan, data, 0)
+	key := ChannelBalanceKeyV2(destChan, u256.Zero(), quoteToken, baseToken)
+	testStore.SetChannelBalanceV2(0, cur, key, order.BaseAmount)
+	testing.IssueCoins(cur.Address(), chain.NewCoins(chain.NewCoin(string(quoteToken), 55)))
+
+	uassert.AbortsContains(t, cur, errDenomPaused, func(cur realm) {
+		newTestImpl().OnRecvPacket(0, cur, packet, address(testAddress("paused-unesc-rly")), nil)
+	})
+
+	bk := banker.NewReadonlyBanker()
+	uassert.Equal(t, int64(0), bk.GetCoin(address(receiver), string(quoteToken)))
+}
+
+// Same guard on the market-maker fill path, via intent-recv.
+func TestTokenOrderExecutePausedDenomAbortsMarketMakerFill(cur realm, t *testing.T) {
+	testStore = newMockStore()
+	v := newTestImpl()
+
+	receiver := testAddress("paused-maker-rx")
+	makerRelayer := testAddress("paused-maker-rly")
+	quoteDenom := "ibc/paused-maker-quote"
+	testStore.SetDenomPaused(0, cur, quoteDenom, true)
+	// Absent the pause, this would succeed as a normal market-maker fill.
+	uassert.NoError(t, v.mintVoucher(0, cur, quoteDenom, [32]byte{}, "", "", 0, address(makerRelayer), u256.NewUint(100)))
+
+	order := z.TokenOrderV2{
+		Sender:      []byte("sender"),
+		Receiver:    []byte(receiver),
+		BaseToken:   []byte("remote-base"),
+		BaseAmount:  u256.NewUint(50),
+		QuoteToken:  []byte(quoteDenom),
+		QuoteAmount: u256.NewUint(50),
+		Kind:        z.TOKEN_ORDER_KIND_SOLVE,
+	}
+	data := mustZkgmPacketBytes(batchMustOrderInstruction(order))
+	packet := core.NewPacket(types.ChannelId(1), types.ChannelId(65), data, 0)
+
+	uassert.AbortsContains(t, cur, errDenomPaused, func(cur realm) {
+		newTestImpl().OnIntentRecvPacket(0, cur, packet, address(makerRelayer), nil)
+	})
+
+	uassert.Equal(t, int64(100), voucherBalanceOf(quoteDenom, address(makerRelayer)))
+}
+
 func TestTokenOrderVerifyUnescrowV1PredictionPasses(cur realm, t *testing.T) {
 	v := newTestImpl()
 
@@ -1310,6 +1514,20 @@ func TestRefundV2(cur realm, t *testing.T) {
 				Sender:     []byte(testAddress("refund-bad")),
 			},
 			wantErr: errUnsupportedTokenOrderKindForRefund,
+		},
+		{
+			// Covers both refundV2 callers: ack-failure and timeout.
+			name: "paused denom rejected before refund",
+			order: z.TokenOrderV2{
+				Kind:       z.TOKEN_ORDER_KIND_UNESCROW,
+				BaseToken:  []byte("ibc/refund-paused"),
+				BaseAmount: u256.NewUint(7),
+				Sender:     []byte(testAddress("refund-paused")),
+			},
+			seed: func(v *ucs03ZkgmV1, order z.TokenOrderV2) {
+				testStore.SetDenomPaused(0, cur, string(order.BaseToken), true)
+			},
+			wantErr: errDenomPaused,
 		},
 	}
 

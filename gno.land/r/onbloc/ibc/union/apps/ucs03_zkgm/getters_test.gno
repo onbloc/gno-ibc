@@ -159,3 +159,12 @@ func TestGetVoucherSize_PropagatesImplError(cur realm, t *testing.T) {
 	_, err := GetVoucherSize()
 	uassert.ErrorIs(t, err, errDummyGetter)
 }
+
+func TestGetDenomPaused_DelegatesToImpl(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	target := &dummyImpl{denomPaused: true}
+	installImplForTest(testImplPathA, target)
+
+	uassert.True(t, GetDenomPaused("ugnot-paused-query"))
+}

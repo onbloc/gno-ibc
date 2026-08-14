@@ -61,6 +61,7 @@ type IAppGetter interface {
 	GetVoucherList(offset, count int) ([]VoucherInfo, error)
 	GetVoucherSize() (int, error)
 	GetVoucherInfo(ibcDenom string) (VoucherInfo, error)
+	GetDenomPaused(denom string) bool
 }
 
 type IStore interface {
@@ -102,4 +103,7 @@ type IStore interface {
 
 	SetRateLimitDisabled(_ int, rlm realm, disabled bool)
 	RateLimitDisabled() bool
+
+	SetDenomPaused(_ int, rlm realm, denom string, p bool)
+	GetDenomPaused(denom string) bool
 }

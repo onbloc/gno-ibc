@@ -1,7 +1,7 @@
 package ucs03_zkgm
 
 import (
-	types "gno.land/p/onbloc/ibc/union/types"
+	"gno.land/p/onbloc/ibc/union/types"
 	tb "gno.land/p/onbloc/ibc/union/zkgm/tokenbucket"
 	u256 "gno.land/p/onbloc/math/uint256"
 )
@@ -36,4 +36,8 @@ func GetVoucherInfo(ibcDenom string) (VoucherInfo, error) {
 // key count callers need to drive GetVoucherList's offset/count pagination.
 func GetVoucherSize() (int, error) {
 	return mustGetImpl().GetVoucherSize()
+}
+
+func GetDenomPaused(denom string) bool {
+	return mustGetImpl().GetDenomPaused(denom)
 }

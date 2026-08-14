@@ -62,6 +62,8 @@ func (v *ucs03ZkgmV1) executeForward(_ int, rlm realm, packet types.Packet, salt
 
 // handleForwardChild detects a forwarded child packet resolving on ack/timeout
 // and writes the captured parent's deferred acknowledgement through core.
+// Denom pause intentionally does not gate this async ack write: it moves no
+// local asset; source-side token-order settlement remains pause-guarded.
 func (v *ucs03ZkgmV1) handleForwardChild(_ int, rlm realm, packet types.Packet, zp z.ZkgmPacket, ack []byte) bool {
 	if !z.IsForwardedPacket(zp.Salt) {
 		return false

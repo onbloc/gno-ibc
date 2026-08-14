@@ -69,6 +69,8 @@ type dummyImpl struct {
 	voucherInfoErr    error
 	voucherSize       int
 	voucherSizeErr    error
+
+	denomPaused bool
 }
 
 var _ IApp = &dummyImpl{}
@@ -195,6 +197,10 @@ func (d *dummyImpl) GetVoucherInfo(ibcDenom string) (VoucherInfo, error) {
 
 func (d *dummyImpl) GetVoucherSize() (int, error) {
 	return d.voucherSize, d.voucherSizeErr
+}
+
+func (d *dummyImpl) GetDenomPaused(denom string) bool {
+	return d.denomPaused
 }
 
 // resetZkgmForTest returns the proxy package state to a clean baseline. The

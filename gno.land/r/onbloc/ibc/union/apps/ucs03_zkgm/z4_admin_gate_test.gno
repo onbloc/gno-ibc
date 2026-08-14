@@ -131,6 +131,32 @@ func TestSetBucketConfig_RejectsInvalidBoundsByAdmin(cur realm, t *testing.T) {
 	}
 }
 
+func TestPausableDenom_RejectsNonAdmin(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	uassert.AbortsContains(t, cur, "access manager unauthorized call", func(cur realm) {
+		PausableDenom(cross(cur), "ibc/gate-denom", true)
+	})
+	if store.GetDenomPaused("ibc/gate-denom") {
+		t.Error("rejected PausableDenom must not set paused=true")
+	}
+}
+
+func TestPausableDenom_SetByAdmin(cur realm, t *testing.T) {
+	resetZkgmForTest(cur)
+
+	testing.SetRealm(testing.NewUserRealm(access.DefaultAdminAddress))
+	PausableDenom(cross(cur), "ibc/gate-denom-2", true)
+	if !store.GetDenomPaused("ibc/gate-denom-2") {
+		t.Error("PausableDenom(true) by admin must set paused=true")
+	}
+
+	PausableDenom(cross(cur), "ibc/gate-denom-2", false)
+	if store.GetDenomPaused("ibc/gate-denom-2") {
+		t.Error("PausableDenom(false) by admin must set paused=false")
+	}
+}
+
 func TestSetRateLimitDisabled_RejectsNonAdmin(cur realm, t *testing.T) {
 	resetZkgmForTest(cur)
 

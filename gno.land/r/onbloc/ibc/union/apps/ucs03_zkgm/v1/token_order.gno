@@ -1,13 +1,13 @@
 package ucs03_zkgm
 
 import (
-	types "gno.land/p/onbloc/ibc/union/types"
+	"gno.land/p/onbloc/ibc/union/types"
 
 	"gno.land/p/demo/tokens/grc20"
 	z "gno.land/p/onbloc/ibc/union/zkgm"
 	u256 "gno.land/p/onbloc/math/uint256"
 	"gno.land/r/demo/defi/grc20reg"
-	core "gno.land/r/onbloc/ibc/union/core"
+	"gno.land/r/onbloc/ibc/union/core"
 )
 
 // tagAckSuccess returns a fresh copy of the success ack tag.
@@ -22,6 +22,10 @@ func fillTypeMarketMaker() *u256.Uint { return z.Uint256FromBytes32(z.FILL_TYPE_
 func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channelId types.ChannelId, path *u256.Uint, order z.TokenOrderV2) error {
 	if path == nil {
 		path = u256.Zero()
+	}
+
+	if v.store.GetDenomPaused(string(order.BaseToken)) {
+		return makeError(errDenomPaused)
 	}
 
 	switch order.Kind {
@@ -116,6 +120,12 @@ func (v *ucs03ZkgmV1) verifyTokenOrderV2(_ int, rlm realm, funds *funds, channel
 // executeTokenOrderV2 settles a received token order: mint wrapped vouchers, release escrowed native, or fill from the market maker.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L2133-L2306
 func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet, relayer address, relayerMsg []byte, salt [32]byte, path *u256.Uint, order z.TokenOrderV2, intent bool) (types.RecvPacketResult, error) {
+	// quoteDenom is the local asset moved on recv, unlike order.BaseToken. Intentional panic, not an ack-level failure.
+	quoteDenom := string(order.QuoteToken)
+	if v.store.GetDenomPaused(quoteDenom) {
+		panic(execFatal{errDenomPaused})
+	}
+
 	// Intent packets and explicit solve orders are maker-only.
 	if intent || order.Kind == z.TOKEN_ORDER_KIND_SOLVE {
 		return v.marketMakerFillV2(0, rlm, relayer, relayerMsg, order)
@@ -125,7 +135,6 @@ func (v *ucs03ZkgmV1) executeTokenOrderV2(_ int, rlm realm, packet types.Packet,
 		path = u256.Zero()
 	}
 
-	quoteDenom := string(order.QuoteToken)
 	baseCovers := order.BaseAmount.Cmp(order.QuoteAmount) >= 0
 
 	// Direct unescrow path: an unwrap whose base covers the quote releases the
@@ -455,6 +464,11 @@ func (v *ucs03ZkgmV1) acknowledgeTokenOrderV2(_ int, rlm realm, packet types.Pac
 		return v.refundV2(0, rlm, path, sourceChannelId, order)
 	}
 
+	// Covers the market-maker-fill branches; refundV2 guards the failure/timeout path on its own.
+	if v.store.GetDenomPaused(string(order.BaseToken)) {
+		return makeError(errDenomPaused)
+	}
+
 	if orderAck.FillType.Eq(fillTypeProtocol()) {
 		return nil
 	}
@@ -485,6 +499,11 @@ func (v *ucs03ZkgmV1) acknowledgeTokenOrderV2(_ int, rlm realm, packet types.Pac
 // refundV2 returns a failed or timed-out token order's funds to the sender.
 // reference: https://github.com/unionlabs/union/blob/d91c5e94354e15801bd5f82dc658eae3b79f2dad/cosmwasm/app/ucs03-zkgm/src/contract.rs#L918-L971
 func (v *ucs03ZkgmV1) refundV2(_ int, rlm realm, path *u256.Uint, sourceChannelId types.ChannelId, order z.TokenOrderV2) error {
+	// Self-guarded: timeoutInternal calls this directly, bypassing the check above.
+	if v.store.GetDenomPaused(string(order.BaseToken)) {
+		return makeError(errDenomPaused)
+	}
+
 	switch order.Kind {
 	case z.TOKEN_ORDER_KIND_UNESCROW:
 		return v.refundIBCVoucher(0, rlm, order.BaseToken, address(order.Sender), order.BaseAmount)

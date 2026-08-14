@@ -26,6 +26,7 @@ type mockStore struct {
 	lockedTokenAmounts map[string]*u256.Uint
 	receivers          map[string]z.Zkgmable
 	rateLimitDisabled  bool
+	pausedDenoms       map[string]bool
 }
 
 var _ zkgm.IStore = (*mockStore)(nil)
@@ -43,6 +44,7 @@ func newMockStore() *mockStore {
 		receivers:          map[string]z.Zkgmable{},
 		// Match NewStore: rate limiting is opt-in (disabled by default).
 		rateLimitDisabled: true,
+		pausedDenoms:      map[string]bool{},
 	}
 }
 
@@ -195,4 +197,12 @@ func (m *mockStore) SetRateLimitDisabled(_ int, rlm realm, disabled bool) {
 
 func (m *mockStore) RateLimitDisabled() bool {
 	return m.rateLimitDisabled
+}
+
+func (m *mockStore) SetDenomPaused(_ int, rlm realm, denom string, p bool) {
+	m.pausedDenoms[denom] = p
+}
+
+func (m *mockStore) GetDenomPaused(denom string) bool {
+	return m.pausedDenoms[denom]
 }

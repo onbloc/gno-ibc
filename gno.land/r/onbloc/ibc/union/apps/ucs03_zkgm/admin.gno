@@ -51,3 +51,14 @@ func Pausable(cur realm, p bool) {
 		emitZkgmUnpausedEvent(cur.Previous().Address())
 	}
 }
+
+// PausableDenom toggles the per-denom pause gate. Gno-only: not part of the Union spec.
+func PausableDenom(cur realm, denom string, p bool) {
+	access.AssertCanCall(0, cur, SelectorPausableDenom)
+	store.SetDenomPaused(0, cur, denom, p)
+	if p {
+		emitZkgmDenomPausedEvent(cur.Previous().Address(), denom)
+	} else {
+		emitZkgmDenomUnpausedEvent(cur.Previous().Address(), denom)
+	}
+}

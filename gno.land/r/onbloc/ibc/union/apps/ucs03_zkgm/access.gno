@@ -7,4 +7,5 @@ const (
 	SelectorSetBucketConfig      manager.Selector = "set_bucket_config"
 	SelectorSetRateLimitDisabled manager.Selector = "set_rate_limit_disabled"
 	SelectorPausable             manager.Selector = "pausable"
+	SelectorPausableDenom        manager.Selector = "pausable_denom"
 )

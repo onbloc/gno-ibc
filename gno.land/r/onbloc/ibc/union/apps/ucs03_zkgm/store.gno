@@ -78,6 +78,7 @@ type Store struct {
 	// as opposed to vouchers, which zkgm mints/burns directly.
 	lockedTokenAmounts *bptree.BPTree // denom -> *u256.Uint (permanently locked base token)
 	receivers          *bptree.BPTree // pkgPath -> z.Zkgmable
+	pausedDenoms       *bptree.BPTree // denom -> bool (per-denom pause gate)
 	rateLimitDisabled  bool
 }
 
@@ -92,6 +93,7 @@ func NewStore() *Store {
 		vouchers:           bptree.NewBPTree32(),
 		lockedTokenAmounts: bptree.NewBPTree32(),
 		receivers:          bptree.NewBPTree32(),
+		pausedDenoms:       bptree.NewBPTree32(),
 		// Rate limiting is opt-in: enabled per-denom by an admin who first
 		// configures a token bucket (see SetBucketConfig). With it enabled, a denom
 		// without a bucket is rejected (union TokenBucketIsAbsent), so it must stay
@@ -339,6 +341,28 @@ func (s *Store) GetReceiver(path string) (z.Zkgmable, bool) {
 	}
 
 	return r.(z.Zkgmable), true
+}
+
+// SetDenomPaused toggles the per-denom pause gate. Unpausing removes the entry rather than storing false.
+func (s *Store) SetDenomPaused(_ int, rlm realm, denom string, p bool) {
+	assertIsRlmCurrent(0, rlm)
+
+	if !p {
+		s.pausedDenoms.Remove(denom)
+		return
+	}
+
+	s.pausedDenoms.Set(denom, p)
+}
+
+// GetDenomPaused reports whether a denom is currently paused.
+func (s *Store) GetDenomPaused(denom string) bool {
+	v := s.pausedDenoms.Get(denom)
+	if v == nil {
+		return false
+	}
+
+	return v.(bool)
 }
 
 // SetRateLimitDisabled toggles the global rate-limit kill switch.

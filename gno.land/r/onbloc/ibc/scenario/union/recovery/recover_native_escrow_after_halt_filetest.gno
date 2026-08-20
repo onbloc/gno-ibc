@@ -21,7 +21,7 @@ import (
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
-	recoveryimpl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v2_locked_recovery"
+	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v2_locked_recovery"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
 )
@@ -52,7 +52,7 @@ func main(cur realm) {
 
 	println("[SCENARIO] 2. Sender locks 1000ugnot via a native ESCROW send (active, real use)")
 	sendNativeEscrowOrder(cur, channelId)
-	channelBalanceBefore, recoveredBefore := printAccounting(channelId, "after send")
+	channelBalanceBefore := printAccounting(channelId, "after send")
 	println("")
 
 	println("[SCENARIO] 3. Union halts: admin pauses the app")
@@ -72,9 +72,8 @@ func main(cur realm) {
 	zkgm.Pausable(cross(cur), false)
 	zkgm.SendRaw(cross(cur), uint32(channelId), uint64(1<<62), zeroSaltHex, z.INSTR_VERSION_2, z.OP_TOKEN_ORDER, recoveryOperandHex([]byte(lockedDenom), []byte(remoteQuoteBase), lockedAmount, recipientAddr))
 	println("[INFO] locked escrow released")
-	channelBalanceAfter, recoveredAfter := printAccounting(channelId, "after recovery")
+	channelBalanceAfter := printAccounting(channelId, "after recovery")
 	printDelta("channel balance", channelBalanceBefore, channelBalanceAfter)
-	printDelta("recovered ledger", recoveredBefore, recoveredAfter)
 
 	bk := banker.NewReadonlyBanker()
 	ufmt.Printf("[INFO] recipient native balance: %d\n", bk.GetCoin(recipientAddr, lockedDenom))
@@ -111,10 +110,9 @@ func sendNativeEscrowOrder(cur realm, channelId types.ChannelId) {
 	zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
 }
 
-// printAccounting prints channel balance, total locked, and the recovery
-// ledger for lockedDenom, and returns (channelBalance, recovered) so the
-// caller can print the before/after delta.
-func printAccounting(channelId types.ChannelId, label string) (*u256.Uint, *u256.Uint) {
+// printAccounting prints channel balance and total locked for lockedDenom,
+// and returns channelBalance so the caller can print the before/after delta.
+func printAccounting(channelId types.ChannelId, label string) *u256.Uint {
 	channelBalance, err := zkgm.GetChannelBalanceV2(channelId, u256.Zero(), lockedDenom, []byte(remoteQuoteBase))
 	if err != nil {
 		panic(err)
@@ -123,14 +121,13 @@ func printAccounting(channelId types.ChannelId, label string) (*u256.Uint, *u256
 	if err != nil {
 		panic(err)
 	}
-	recovered := recoveryimpl.RecoveredLockedAmount(channelId, u256.Zero(), []byte(lockedDenom), []byte(remoteQuoteBase))
 
 	bk := banker.NewReadonlyBanker()
 	proxyBalance := bk.GetCoin(zkgm.ProxyAddress(), lockedDenom)
 
-	ufmt.Printf("[INFO] %s: channel balance=%s locked total=%s recovered ledger=%s proxy real balance=%d\n", label, channelBalance.ToString(), locked.ToString(), recovered.ToString(), proxyBalance)
+	ufmt.Printf("[INFO] %s: channel balance=%s locked total=%s proxy real balance=%d\n", label, channelBalance.ToString(), locked.ToString(), proxyBalance)
 
-	return channelBalance, recovered
+	return channelBalance
 }
 
 func bootstrap(cur realm) types.ChannelId {
@@ -221,7 +218,7 @@ func (e mockError) Error() string { return string(e) }
 // [SCENARIO] 1. Bootstrap IBC host and open a zkgm channel (impl = v1)
 //
 // [SCENARIO] 2. Sender locks 1000ugnot via a native ESCROW send (active, real use)
-// [INFO] after send: channel balance=1000 locked total=0 recovered ledger=0 proxy real balance=1000
+// [INFO] after send: channel balance=1000 locked total=0 proxy real balance=1000
 //
 // [SCENARIO] 3. Union halts: admin pauses the app
 // [INFO] app paused by admin
@@ -231,8 +228,7 @@ func (e mockError) Error() string { return string(e) }
 //
 // [SCENARIO] 5. Admin unpauses so SendRaw can reach the recovery impl, then recovers the escrow
 // [INFO] locked escrow released
-// [INFO] after recovery: channel balance=0 locked total=0 recovered ledger=1000 proxy real balance=0
+// [INFO] after recovery: channel balance=0 locked total=0 proxy real balance=0
 // [INFO] channel balance change: 1000 -> 0 (-1000)
-// [INFO] recovered ledger change: 0 -> 1000 (+1000)
 // [INFO] recipient native balance: 1000
 // [EXPECTED] recipient native balance should be 1000 (released from escrow)

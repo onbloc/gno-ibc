@@ -16,7 +16,7 @@ import (
 // scaled ibc vouchers — see adminRecoverLockedToken/ledgerAmountOf.
 const AdminRecoveredLockedTokenEvent = "AdminRecoveredLockedToken"
 
-func emitAdminRecoveredLockedTokenEvent(admin address, channelId types.ChannelId, denom string, recipient address, originAmount *u256.Uint, ledgerAmount int64, recoveredLedgerTotal string) {
+func emitAdminRecoveredLockedTokenEvent(admin address, channelId types.ChannelId, denom string, recipient address, originAmount *u256.Uint, ledgerAmount int64) {
 	chain.Emit(
 		AdminRecoveredLockedTokenEvent,
 		"admin", admin.String(),
@@ -25,6 +25,5 @@ func emitAdminRecoveredLockedTokenEvent(admin address, channelId types.ChannelId
 		"recipient", recipient.String(),
 		"origin_amount", originAmount.ToString(),
 		"ledger_amount", strconv.FormatInt(ledgerAmount, 10),
-		"recovered_ledger_total", recoveredLedgerTotal,
 	)
 }

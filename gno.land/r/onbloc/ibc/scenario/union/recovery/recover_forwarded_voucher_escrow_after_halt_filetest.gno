@@ -24,7 +24,7 @@ import (
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
-	recoveryimpl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v2_locked_recovery"
+	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v2_locked_recovery"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
 )
@@ -62,7 +62,7 @@ func main(cur realm) {
 
 	println("[SCENARIO] 3. Holder escrows the voucher onward into a second channel's escrow")
 	sendVoucherEscrowOrder(cur, channelId, voucherDenom)
-	channelBalanceBefore, recoveredBefore := printVoucherAccounting(channelId, voucherDenom, "after escrow")
+	channelBalanceBefore := printVoucherAccounting(channelId, voucherDenom, "after escrow")
 	println("")
 
 	println("[SCENARIO] 4. Union halts: admin pauses the app")
@@ -82,9 +82,8 @@ func main(cur realm) {
 	zkgm.Pausable(cross(cur), false)
 	zkgm.SendRaw(cross(cur), uint32(channelId), uint64(1<<62), voucherZeroSaltHex, z.INSTR_VERSION_2, z.OP_TOKEN_ORDER, voucherRecoveryOperandHex([]byte(voucherDenom), []byte(voucherOnwardQuote), voucherAmount, voucherRecipientAddr))
 	println("[INFO] locked voucher released")
-	channelBalanceAfter, recoveredAfter := printVoucherAccounting(channelId, voucherDenom, "after recovery")
+	channelBalanceAfter := printVoucherAccounting(channelId, voucherDenom, "after recovery")
 	printDelta("channel balance", channelBalanceBefore, channelBalanceAfter)
-	printDelta("recovered ledger", recoveredBefore, recoveredAfter)
 	ufmt.Printf("[INFO] recipient voucher balance: %d\n", zkgm.VoucherBalanceOf(voucherDenom, voucherRecipientAddr))
 	ufmt.Println("[EXPECTED] recipient voucher balance should be 1000 (released from escrow)")
 }
@@ -133,18 +132,17 @@ func sendVoucherEscrowOrder(cur realm, channelId types.ChannelId, voucherDenom s
 	zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, mustOrderInstruction(order))
 }
 
-// printVoucherAccounting prints channel balance and the recovery ledger for
-// voucherDenom, and returns (channelBalance, recovered) for delta printing.
-func printVoucherAccounting(channelId types.ChannelId, voucherDenom string, label string) (*u256.Uint, *u256.Uint) {
+// printVoucherAccounting prints channel balance for voucherDenom, and returns
+// channelBalance for delta printing.
+func printVoucherAccounting(channelId types.ChannelId, voucherDenom string, label string) *u256.Uint {
 	channelBalance, err := zkgm.GetChannelBalanceV2(channelId, u256.Zero(), voucherDenom, []byte(voucherOnwardQuote))
 	if err != nil {
 		panic(err)
 	}
-	recovered := recoveryimpl.RecoveredLockedAmount(channelId, u256.Zero(), []byte(voucherDenom), []byte(voucherOnwardQuote))
 
-	ufmt.Printf("[INFO] %s: channel balance=%s recovered ledger=%s proxy voucher balance=%d\n", label, channelBalance.ToString(), recovered.ToString(), zkgm.VoucherBalanceOf(voucherDenom, zkgm.ProxyAddress()))
+	ufmt.Printf("[INFO] %s: channel balance=%s proxy voucher balance=%d\n", label, channelBalance.ToString(), zkgm.VoucherBalanceOf(voucherDenom, zkgm.ProxyAddress()))
 
-	return channelBalance, recovered
+	return channelBalance
 }
 
 func bootstrap(cur realm) types.ChannelId {
@@ -270,7 +268,7 @@ func (e mockVoucherError) Error() string { return string(e) }
 // [INFO] holder voucher balance: 1000
 //
 // [SCENARIO] 3. Holder escrows the voucher onward into a second channel's escrow
-// [INFO] after escrow: channel balance=1000 recovered ledger=0 proxy voucher balance=1000
+// [INFO] after escrow: channel balance=1000 proxy voucher balance=1000
 //
 // [SCENARIO] 4. Union halts: admin pauses the app
 // [INFO] app paused by admin
@@ -280,8 +278,7 @@ func (e mockVoucherError) Error() string { return string(e) }
 //
 // [SCENARIO] 6. Admin unpauses so SendRaw can reach the recovery impl, then recovers the escrow
 // [INFO] locked voucher released
-// [INFO] after recovery: channel balance=0 recovered ledger=1000 proxy voucher balance=0
+// [INFO] after recovery: channel balance=0 proxy voucher balance=0
 // [INFO] channel balance change: 1000 -> 0 (-1000)
-// [INFO] recovered ledger change: 0 -> 1000 (+1000)
 // [INFO] recipient voucher balance: 1000
 // [EXPECTED] recipient voucher balance should be 1000 (released from escrow)

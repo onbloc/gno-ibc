@@ -22,7 +22,7 @@ import (
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
-	recoveryimpl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v2_locked_recovery"
+	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v2_locked_recovery"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
 )
@@ -53,7 +53,7 @@ func main(cur realm) {
 
 	println("[SCENARIO] 2. Sender locks 1000ugnot via a native ESCROW send (active, real use)")
 	partialSendNativeEscrowOrder(cur, channelId)
-	channelBalance0, recovered0 := partialPrintAccounting(channelId, "after send")
+	channelBalance0 := partialPrintAccounting(channelId, "after send")
 	println("")
 
 	println("[SCENARIO] 3. Union halts: admin pauses, installs the recovery impl, then unpauses")
@@ -66,14 +66,12 @@ func main(cur realm) {
 
 	println("[SCENARIO] 4. Admin recovers the escrow in two installments: 400 then 600")
 	zkgm.SendRaw(cross(cur), uint32(channelId), uint64(1<<62), partialZeroSaltHex, z.INSTR_VERSION_2, z.OP_TOKEN_ORDER, partialRecoveryOperandHex([]byte(partialDenom), []byte(partialRemoteQuote), partialFirstAmount, partialRecipientAddr))
-	channelBalance1, recovered1 := partialPrintAccounting(channelId, "after 1st installment (400)")
+	channelBalance1 := partialPrintAccounting(channelId, "after 1st installment (400)")
 	partialPrintDelta("channel balance", channelBalance0, channelBalance1)
-	partialPrintDelta("recovered ledger", recovered0, recovered1)
 
 	zkgm.SendRaw(cross(cur), uint32(channelId), uint64(1<<62), partialZeroSaltHex, z.INSTR_VERSION_2, z.OP_TOKEN_ORDER, partialRecoveryOperandHex([]byte(partialDenom), []byte(partialRemoteQuote), partialSecondAmount, partialRecipientAddr))
-	channelBalance2, recovered2 := partialPrintAccounting(channelId, "after 2nd installment (600)")
+	channelBalance2 := partialPrintAccounting(channelId, "after 2nd installment (600)")
 	partialPrintDelta("channel balance", channelBalance1, channelBalance2)
-	partialPrintDelta("recovered ledger", recovered1, recovered2)
 
 	bk := banker.NewReadonlyBanker()
 	ufmt.Printf("[INFO] recipient native balance: %d\n", bk.GetCoin(partialRecipientAddr, partialDenom))
@@ -109,18 +107,17 @@ func partialSendNativeEscrowOrder(cur realm, channelId types.ChannelId) {
 	zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, partialMustOrderInstruction(order))
 }
 
-// partialPrintAccounting prints channel balance and the recovery ledger for
-// partialDenom, and returns (channelBalance, recovered) for delta printing.
-func partialPrintAccounting(channelId types.ChannelId, label string) (*u256.Uint, *u256.Uint) {
+// partialPrintAccounting prints channel balance for partialDenom, and returns
+// channelBalance for delta printing.
+func partialPrintAccounting(channelId types.ChannelId, label string) *u256.Uint {
 	channelBalance, err := zkgm.GetChannelBalanceV2(channelId, u256.Zero(), partialDenom, []byte(partialRemoteQuote))
 	if err != nil {
 		panic(err)
 	}
-	recovered := recoveryimpl.RecoveredLockedAmount(channelId, u256.Zero(), []byte(partialDenom), []byte(partialRemoteQuote))
 
-	ufmt.Printf("[INFO] %s: channel balance=%s recovered ledger=%s\n", label, channelBalance.ToString(), recovered.ToString())
+	ufmt.Printf("[INFO] %s: channel balance=%s\n", label, channelBalance.ToString())
 
-	return channelBalance, recovered
+	return channelBalance
 }
 
 func partialBootstrap(cur realm) types.ChannelId {
@@ -211,17 +208,15 @@ func (e partialMockError) Error() string { return string(e) }
 // [SCENARIO] 1. Bootstrap IBC host and open a zkgm channel (impl = v1)
 //
 // [SCENARIO] 2. Sender locks 1000ugnot via a native ESCROW send (active, real use)
-// [INFO] after send: channel balance=1000 recovered ledger=0
+// [INFO] after send: channel balance=1000
 //
 // [SCENARIO] 3. Union halts: admin pauses, installs the recovery impl, then unpauses
 // [INFO] impl switched to v2_locked_recovery and app unpaused
 //
 // [SCENARIO] 4. Admin recovers the escrow in two installments: 400 then 600
-// [INFO] after 1st installment (400): channel balance=600 recovered ledger=400
+// [INFO] after 1st installment (400): channel balance=600
 // [INFO] channel balance change: 1000 -> 600 (-400)
-// [INFO] recovered ledger change: 0 -> 400 (+400)
-// [INFO] after 2nd installment (600): channel balance=0 recovered ledger=1000
+// [INFO] after 2nd installment (600): channel balance=0
 // [INFO] channel balance change: 600 -> 0 (-600)
-// [INFO] recovered ledger change: 400 -> 1000 (+600)
 // [INFO] recipient native balance: 1000
 // [EXPECTED] recipient native balance should be 1000 (400+600, fully released)

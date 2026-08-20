@@ -65,13 +65,7 @@ func (v *ucs03ZkgmV2LockedRecovery) adminRecoverLockedToken(_ int, rlm realm, ch
 		panic(err)
 	}
 
-	key := ChannelBalanceKeyV2(channelId, path, baseToken, quoteToken)
-	recoveredTotal, err := addRecoveredLockedAmount(key, u256.NewUint(uint64(amount)))
-	if err != nil {
-		panic(err)
-	}
-
-	emitAdminRecoveredLockedTokenEvent(rlm.Previous().Address(), channelId, denom, recipient, originAmount, amount, recoveredTotal.ToString())
+	emitAdminRecoveredLockedTokenEvent(rlm.Previous().Address(), channelId, denom, recipient, originAmount, amount)
 }
 
 // releaseLockedToken moves amount (channelBalanceV2/ledger precision) of denom
@@ -89,35 +83,4 @@ func (v *ucs03ZkgmV2LockedRecovery) releaseLockedToken(_ int, rlm realm, tokenTy
 	}
 
 	return v.sendNative(0, rlm, denom, recipient, u256.NewUint(uint64(amount)))
-}
-
-// addRecoveredLockedAmount adds amount to key's cumulative total and returns
-// it. Runs only after funds have actually moved.
-func addRecoveredLockedAmount(key string, amount *u256.Uint) (*u256.Uint, error) {
-	total := u256.Zero()
-	if existing := recoveredLockedAmounts.Get(key); existing != nil {
-		total = u256.Zero().Set(existing.(*u256.Uint))
-	}
-
-	calculatedTotal, overflow := u256.Zero().AddOverflow(total, amount)
-	if overflow {
-		return nil, makeError(errRecoveredAmountOverflow)
-	}
-
-	recoveredLockedAmounts.Set(key, calculatedTotal.Clone())
-
-	return calculatedTotal, nil
-}
-
-// RecoveredLockedAmount returns the cumulative amount recovered for this key
-// (zero if none). Query via a named import — not exposed via the proxy's IAppGetter.
-func RecoveredLockedAmount(channelId types.ChannelId, path *u256.Uint, baseToken, quoteToken []byte) *u256.Uint {
-	key := ChannelBalanceKeyV2(channelId, path, baseToken, quoteToken)
-
-	v := recoveredLockedAmounts.Get(key)
-	if v == nil {
-		return u256.Zero()
-	}
-
-	return v.(*u256.Uint).Clone()
 }

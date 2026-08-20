@@ -22,7 +22,7 @@ import (
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
-	recoveryimpl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v2_locked_recovery"
+	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v2_locked_recovery"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
 )
@@ -64,7 +64,7 @@ func main(cur realm) {
 
 	println("[SCENARIO] 3. Holder escrows the voucher onward into a second channel's escrow")
 	overflowSendVoucherEscrowOrder(cur, channelId, voucherDenom)
-	channelBalanceBefore, recoveredBefore := overflowPrintAccounting(channelId, voucherDenom, "after escrow")
+	channelBalanceBefore := overflowPrintAccounting(channelId, voucherDenom, "after escrow")
 	println("")
 
 	println("[SCENARIO] 4. Union halts: admin pauses, installs the recovery impl, then unpauses")
@@ -78,9 +78,8 @@ func main(cur realm) {
 	println("[SCENARIO] 5. Admin recovers using the raw origin amount, which itself overflows int64")
 	zkgm.SendRaw(cross(cur), uint32(channelId), uint64(1<<62), overflowZeroSaltHex, z.INSTR_VERSION_2, z.OP_TOKEN_ORDER, overflowRecoveryOperandHex([]byte(voucherDenom), []byte(overflowOnwardQuote), u256.NewUint(overflowOriginAmount), overflowRecipientAddr))
 	println("[INFO] locked voucher released")
-	channelBalanceAfter, recoveredAfter := overflowPrintAccounting(channelId, voucherDenom, "after recovery")
+	channelBalanceAfter := overflowPrintAccounting(channelId, voucherDenom, "after recovery")
 	overflowPrintDelta("channel balance", channelBalanceBefore, channelBalanceAfter)
-	overflowPrintDelta("recovered ledger", recoveredBefore, recoveredAfter)
 	ufmt.Printf("[INFO] recipient voucher ledger balance: %d\n", zkgm.VoucherBalanceOf(voucherDenom, overflowRecipientAddr))
 	ufmt.Println("[EXPECTED] 15000000: the origin amount's u256 representation never narrows to int64")
 }
@@ -128,18 +127,17 @@ func overflowSendVoucherEscrowOrder(cur realm, channelId types.ChannelId, vouche
 	zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, overflowMustOrderInstruction(order))
 }
 
-// overflowPrintAccounting prints channel balance and the recovery ledger for
-// voucherDenom, and returns (channelBalance, recovered) for delta printing.
-func overflowPrintAccounting(channelId types.ChannelId, voucherDenom string, label string) (*u256.Uint, *u256.Uint) {
+// overflowPrintAccounting prints channel balance for voucherDenom, and
+// returns channelBalance for delta printing.
+func overflowPrintAccounting(channelId types.ChannelId, voucherDenom string, label string) *u256.Uint {
 	channelBalance, err := zkgm.GetChannelBalanceV2(channelId, u256.Zero(), voucherDenom, []byte(overflowOnwardQuote))
 	if err != nil {
 		panic(err)
 	}
-	recovered := recoveryimpl.RecoveredLockedAmount(channelId, u256.Zero(), []byte(voucherDenom), []byte(overflowOnwardQuote))
 
-	ufmt.Printf("[INFO] %s: channel balance=%s recovered ledger=%s proxy voucher ledger balance=%d\n", label, channelBalance.ToString(), recovered.ToString(), zkgm.VoucherBalanceOf(voucherDenom, zkgm.ProxyAddress()))
+	ufmt.Printf("[INFO] %s: channel balance=%s proxy voucher ledger balance=%d\n", label, channelBalance.ToString(), zkgm.VoucherBalanceOf(voucherDenom, zkgm.ProxyAddress()))
 
-	return channelBalance, recovered
+	return channelBalance
 }
 
 func overflowBootstrap(cur realm) types.ChannelId {
@@ -266,15 +264,14 @@ func (e overflowMockError) Error() string { return string(e) }
 // [EXPECTED] 15000000 (1.5e19 origin / 10^12 ScaleExp)
 //
 // [SCENARIO] 3. Holder escrows the voucher onward into a second channel's escrow
-// [INFO] after escrow: channel balance=15000000 recovered ledger=0 proxy voucher ledger balance=15000000
+// [INFO] after escrow: channel balance=15000000 proxy voucher ledger balance=15000000
 //
 // [SCENARIO] 4. Union halts: admin pauses, installs the recovery impl, then unpauses
 // [INFO] impl switched to v2_locked_recovery and app unpaused
 //
 // [SCENARIO] 5. Admin recovers using the raw origin amount, which itself overflows int64
 // [INFO] locked voucher released
-// [INFO] after recovery: channel balance=0 recovered ledger=15000000 proxy voucher ledger balance=0
+// [INFO] after recovery: channel balance=0 proxy voucher ledger balance=0
 // [INFO] channel balance change: 15000000 -> 0 (-15000000)
-// [INFO] recovered ledger change: 0 -> 15000000 (+15000000)
 // [INFO] recipient voucher ledger balance: 15000000
 // [EXPECTED] 15000000: the origin amount's u256 representation never narrows to int64

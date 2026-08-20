@@ -11,7 +11,6 @@ const (
 
 	errRecoveryUnsupportedTokenType = "zkgm/recovery: only native coin or ibc voucher escrow is supported"
 	errRecoveryUnrecognizedKind     = "zkgm/recovery: only ESCROW-kind orders are supported"
-	errRecoveredAmountOverflow      = "zkgm/recovery: recovered amount overflows uint256"
 	errInvalidRecipient             = "zkgm/recovery: recipient is not a valid address"
 	errRecoveryZeroAmount           = "zkgm/recovery: amount must be positive"
 	errBaseTokenRequired            = "zkgm/recovery: base token is required"

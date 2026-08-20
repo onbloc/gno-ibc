@@ -20,7 +20,7 @@ import (
 	"gno.land/r/onbloc/ibc/union/access"
 	zkgm "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm"
 	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v1"
-	recoveryimpl "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v2_locked_recovery"
+	_ "gno.land/r/onbloc/ibc/union/apps/ucs03_zkgm/v2_locked_recovery"
 	core "gno.land/r/onbloc/ibc/union/core"
 	_ "gno.land/r/onbloc/ibc/union/core/v1"
 )
@@ -60,7 +60,7 @@ func main(cur realm) {
 
 	println("[SCENARIO] 3. Holder escrows the voucher onward into a second channel's escrow")
 	indivisibleSendVoucherEscrowOrder(cur, channelId, voucherDenom)
-	channelBalanceBefore, recoveredBefore := indivisiblePrintAccounting(channelId, voucherDenom, "after escrow")
+	channelBalanceBefore := indivisiblePrintAccounting(channelId, voucherDenom, "after escrow")
 	println("")
 
 	println("[SCENARIO] 4. Union halts: admin pauses, installs the recovery impl, then unpauses")
@@ -72,7 +72,7 @@ func main(cur realm) {
 	println("")
 
 	println("[SCENARIO] 5. Admin attempts recovery with one sub-ledger unit of dust (2_500_000_000_000_000_001) -> rejected before any state moves")
-	ufmt.Printf("[INFO] escrowed before the attempt: channel balance=%s recovered ledger=%s\n", channelBalanceBefore.ToString(), recoveredBefore.ToString())
+	ufmt.Printf("[INFO] escrowed before the attempt: channel balance=%s\n", channelBalanceBefore.ToString())
 	zkgm.SendRaw(cross(cur), uint32(channelId), uint64(1<<62), indivisibleZeroSaltHex, z.INSTR_VERSION_2, z.OP_TOKEN_ORDER, indivisibleRecoveryOperandHex([]byte(voucherDenom), []byte(indivisibleOnwardQuote), indivisibleBadOriginAmount, indivisibleRecipientAddr))
 }
 
@@ -109,18 +109,17 @@ func indivisibleSendVoucherEscrowOrder(cur realm, channelId types.ChannelId, vou
 	zkgm.Send(cross(cur), channelId, types.Timestamp(1<<62), [32]byte{}, indivisibleMustOrderInstruction(order))
 }
 
-// indivisiblePrintAccounting prints channel balance and the recovery ledger for
-// voucherDenom, and returns (channelBalance, recovered) for before/after comparison.
-func indivisiblePrintAccounting(channelId types.ChannelId, voucherDenom string, label string) (*u256.Uint, *u256.Uint) {
+// indivisiblePrintAccounting prints channel balance for voucherDenom, and
+// returns channelBalance for before/after comparison.
+func indivisiblePrintAccounting(channelId types.ChannelId, voucherDenom string, label string) *u256.Uint {
 	channelBalance, err := zkgm.GetChannelBalanceV2(channelId, u256.Zero(), voucherDenom, []byte(indivisibleOnwardQuote))
 	if err != nil {
 		panic(err)
 	}
-	recovered := recoveryimpl.RecoveredLockedAmount(channelId, u256.Zero(), []byte(voucherDenom), []byte(indivisibleOnwardQuote))
 
-	ufmt.Printf("[INFO] %s: channel balance=%s recovered ledger=%s\n", label, channelBalance.ToString(), recovered.ToString())
+	ufmt.Printf("[INFO] %s: channel balance=%s\n", label, channelBalance.ToString())
 
-	return channelBalance, recovered
+	return channelBalance
 }
 
 func indivisibleBootstrap(cur realm) types.ChannelId {
@@ -245,13 +244,13 @@ func (e indivisibleMockError) Error() string { return string(e) }
 // [SCENARIO] 2. Recv mints 2.5 units (18 origin decimals) of a wrapped voucher to the holder
 //
 // [SCENARIO] 3. Holder escrows the voucher onward into a second channel's escrow
-// [INFO] after escrow: channel balance=2500000 recovered ledger=0
+// [INFO] after escrow: channel balance=2500000
 //
 // [SCENARIO] 4. Union halts: admin pauses, installs the recovery impl, then unpauses
 // [INFO] impl switched to v2_locked_recovery and app unpaused
 //
 // [SCENARIO] 5. Admin attempts recovery with one sub-ledger unit of dust (2_500_000_000_000_000_001) -> rejected before any state moves
-// [INFO] escrowed before the attempt: channel balance=2500000 recovered ledger=0
+// [INFO] escrowed before the attempt: channel balance=2500000
 
 // Error:
 // zkgm: amount not divisible by token scale factor

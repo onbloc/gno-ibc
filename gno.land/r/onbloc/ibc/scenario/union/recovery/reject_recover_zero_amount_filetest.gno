@@ -3,8 +3,8 @@ package recovery
 
 // reject_recover_zero_amount_filetest: a zero (or negative) amount is
 // rejected upfront rather than silently succeeding as a no-op — otherwise the
-// channel balance and recovery ledger stay unchanged but an
-// AdminRecoveredLockedToken event still fires, polluting the audit trail.
+// channel balance stays unchanged but an AdminRecoveredLockedToken event
+// still fires, polluting the audit trail.
 
 import (
 	"encoding/hex"
